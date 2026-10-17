@@ -26,6 +26,7 @@
 
 #include "llscripteditorws.h"
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 
 // file include
 #define LLSELECTMGR_CPP
@@ -764,7 +765,7 @@ bool LLSelectMgr::linkObjects()
     S32 object_count = LLSelectMgr::getInstance()->getSelection()->getObjectCount();
 // <FS:CR> Aurora Sim
     //if (object_count > MAX_CHILDREN_PER_TASK + 1)
-    S32 object_max = LLWorld::getInstance()->getMaxLinkedPrims();
+    S32 object_max = vs_region_limits().getMaxLinkedPrims();
 
     if (object_count > object_max + 1)
 // </FS:CR> Aurora Sim

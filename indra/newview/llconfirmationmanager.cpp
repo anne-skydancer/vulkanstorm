@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llconfirmationmanager.h"
+#include <memory>
 
 #include "lluictrlfactory.h"
 
@@ -40,48 +41,48 @@ LLConfirmationManager::ListenerBase::~ListenerBase()
 }
 
 
-static bool onConfirmAlert(const LLSD& notification, const LLSD& response, LLConfirmationManager::ListenerBase* listener)
+// Notifications own the pending listener; removal releases it without invoking a
+// purchase. Consume once before dispatch, so reentrant/duplicate callbacks cannot
+// execute the same confirmed action twice.
+struct ConfirmationOwner
 {
-    S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
-    if (option == 0)
-    {
+    std::unique_ptr<LLConfirmationManager::ListenerBase> listener;
+};
+static bool onConfirmAlert(const LLSD& notification,const LLSD& response,
+    const std::shared_ptr<ConfirmationOwner>& owner)
+{
+    auto listener=std::move(owner->listener);
+    if(listener && LLNotificationsUtil::getSelectedOption(notification,response)==0)
         listener->confirmed("");
-    }
-
-    delete listener;
     return false;
 }
-
-static bool onConfirmAlertPassword(const LLSD& notification, const LLSD& response, LLConfirmationManager::ListenerBase* listener)
+static bool onConfirmAlertPassword(const LLSD& notification,const LLSD& response,
+    const std::shared_ptr<ConfirmationOwner>& owner)
 {
-    std::string text = response["message"].asString();
-    S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
-
-    if (option == 0)
-    {
-        listener->confirmed(text);
-    }
-
-    delete listener;
+    auto listener=std::move(owner->listener);
+    if(listener && LLNotificationsUtil::getSelectedOption(notification,response)==0)
+        listener->confirmed(response["message"].asString());
     return false;
 }
-
 
 void LLConfirmationManager::confirm(Type type,
     const std::string& action,
     ListenerBase* listener)
 {
+    auto owner=std::make_shared<ConfirmationOwner>();
+    owner->listener.reset(listener);
+    if(!listener)return;
     LLSD args;
     args["ACTION"] = action;
 
     switch (type)
     {
         case TYPE_CLICK:
-            LLNotificationsUtil::add("ConfirmPurchase", args, LLSD(), boost::bind(onConfirmAlert, _1, _2, listener));
+            LLNotificationsUtil::add("ConfirmPurchase", args, LLSD(), boost::bind(onConfirmAlert, _1, _2, owner));
           break;
 
         case TYPE_PASSWORD:
-            LLNotificationsUtil::add("ConfirmPurchasePassword", args, LLSD(), boost::bind(onConfirmAlertPassword, _1, _2, listener));
+            LLNotificationsUtil::add("ConfirmPurchasePassword", args, LLSD(), boost::bind(onConfirmAlertPassword, _1, _2, owner));
           break;
         case TYPE_NONE:
         default:

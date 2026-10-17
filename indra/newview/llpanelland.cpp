@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
 
 #include "llpanelland.h"
 
@@ -130,7 +131,7 @@ void LLPanelLandInfo::refreshAll()
 void LLPanelLandInfo::refresh()
 {
     LLParcel *parcel = LLViewerParcelMgr::getInstance()->getParcelSelection()->getParcel();
-    LLViewerRegion *regionp = LLViewerParcelMgr::getInstance()->getSelectionRegion();
+    const auto regionp=LLViewerParcelMgr::getInstance()->getSelectionRegionContext();
 
     if (!parcel || !regionp)
     {

@@ -36,6 +36,7 @@
 //#include "llviewertexturelist.h"
 #include "llsafehandle.h"
 #include "llremoteparcelrequest.h"
+#include "vsregioncontext.h"
 
 typedef std::set<LLUUID, lluuid_less> uuid_list_t;
 const F32 CACHE_REFRESH_TIME    = 2.5f;
@@ -111,6 +112,7 @@ protected:
 
 
 protected:
+    boost::signals2::scoped_connection mVisibilityConnection;
     static LLParcelSelectionObserver* sObserver;
     static S32 sLastTab;
 
@@ -242,7 +244,7 @@ protected:
     // This pointer is needed to avoid parcel deselection until buying pass is completed or canceled.
     // Deselection happened because of zero references to parcel selection, which took place when
     // "Buy Pass" was called from popup menu(EXT-6464)
-    static LLPointer<LLParcelSelection> sSelectionForBuyPass;
+
 
     static LLHandle<LLFloater> sBuyPassDialogHandle;
 
@@ -315,6 +317,8 @@ protected:
     LLPointer<LLUIImage>    mIconGroup;
 
     bool            mFirstReply;
+    std::function<bool()> mOwnersCurrent=[] { return false; };
+    std::optional<VSRegionContext> mOwnersRegion;
 
     uuid_list_t     mSelectedOwners;
     std::string     mSelectedName;

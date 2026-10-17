@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
 
 #include "llenvironment.h"
 
@@ -856,6 +859,37 @@ std::string env_selection_to_string(LLEnvironment::EnvSelection_t sel)
 }
 
 //-------------------------------------------------------------------------
+namespace
+{
+bool vs_environment_native()
+{
+    return gViewerWindow && gViewerWindow->isNativeVulkan();
+}
+std::function<bool()> vs_environment_model_guard(const LLEnvironment* identity)
+{
+    const auto agent=gAgent.getID(),session=gAgent.getSessionID();
+    const bool connected=vs_environment_native() && bool(vs_current_region_context());
+    const auto account=vs_native_im_guard();
+    return [identity,agent,session,connected,account]
+    {
+        return !LLApp::isExiting() && LLEnvironment::instanceExists() &&
+            &LLEnvironment::instance()==identity && gAgent.getID()==agent && gAgent.getSessionID()==session &&
+            (!connected || account());
+    };
+}
+std::function<bool()> vs_environment_region_guard(const LLEnvironment* identity)
+{
+    const auto model=vs_environment_model_guard(identity);
+    const auto region=vs_current_region_context();
+    return [model,region]
+    {
+        if(!model() || !region || !region->current())return false;
+        const auto now=vs_current_region_context();
+        return now && *now==*region;
+    };
+}
+}
+
 LLEnvironment::LLEnvironment():
     mCloudScrollDelta(),
     mCloudScrollPaused(false),
@@ -1097,6 +1131,11 @@ void LLEnvironment::onRegionChange()
     clearExperienceEnvironment(LLUUID::null, TRANSITION_DEFAULT);
 //     }
 
+    if(vs_environment_native())
+    {
+        if(vs_current_region_context())requestRegion();
+        return;
+    }
     LLViewerRegion* cur_region = gAgent.getRegion();
     if (!cur_region)
     {
@@ -1142,7 +1181,7 @@ F32 LLEnvironment::getCamHeight() const
 
 F32 LLEnvironment::getWaterHeight() const
 {
-    LLViewerRegion* cur_region = gAgent.getRegion();
+    const auto cur_region=vs_current_region_context();
     return cur_region ? cur_region->getWaterHeight() : DEFAULT_WATER_HEIGHT;
 }
 
@@ -1403,8 +1442,10 @@ void LLEnvironment::setEnvironment(EnvSelection_t env,
                                    S32 env_version)
 {
     LLSettingsVOBase::getSettingsAsset(assetId,
-        [this, env, env_version, transition](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat)
+        [this, env, env_version, transition, current=vs_environment_model_guard(this)](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat)
         {
+            if(!current())return;
+
             onSetEnvAssetLoaded(env, asset_id, settings, transition, status, env_version);
         });
 }
@@ -1649,7 +1690,7 @@ void LLEnvironment::updateEnvironment(LLSettingsBase::Seconds transition, bool f
             mCurrentEnvironment = pinstance;
         }
 
-        updateSettingsUniforms();
+        if(!vs_environment_native())updateSettingsUniforms();
     }
 }
 
@@ -1779,6 +1820,7 @@ void LLEnvironment::update(const LLViewerCamera * cam)
         mLastCamYaw = cam->getYaw() + SUN_DELTA_YAW;
     }
 
+    if(vs_environment_native())return;
     updateSettingsUniforms();
 
     LLViewerShaderMgr::shader_iter shaders_iter, end_shaders;
@@ -1873,14 +1915,15 @@ void LLEnvironment::updateSettingsUniforms()
 
 void LLEnvironment::recordEnvironment(S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envinfo, LLSettingsBase::Seconds transition)
 {
-    if (!gAgent.getRegion())
+    const auto region=vs_current_region_context();
+    if (!envinfo || !region)
     {
         return;
     }
     // mRegionId id can be null, no specification as to why and if it's valid so check valid ids only
-    if (gAgent.getRegion()->getRegionID() != envinfo->mRegionId && envinfo->mRegionId.notNull())
+    if (region->getRegionID() != envinfo->mRegionId && envinfo->mRegionId.notNull())
     {
-        LL_INFOS("ENVIRONMENT") << "Requested environmend region id: " << envinfo->mRegionId << " agent is on: " << gAgent.getRegion()->getRegionID() << LL_ENDL;
+        LL_INFOS("ENVIRONMENT") << "Requested environmend region id: " << envinfo->mRegionId << " agent is on: " << region->getRegionID() << LL_ENDL;
         return;
     }
 
@@ -2039,15 +2082,19 @@ void LLEnvironment::requestParcel(S32 parcel_id, environment_apply_fn cb)
         cb = [this, transition](S32 pid, EnvironmentInfo::ptr_t envinfo) { recordEnvironment(pid, envinfo, transition); };
     }
 
+    const auto current=vs_environment_region_guard(this);
+    if(!current())return;
     LLCoros::instance().launch("LLEnvironment::coroRequestEnvironment",
-        [this, parcel_id, cb]() { coroRequestEnvironment(parcel_id, cb); });
+        [this, parcel_id, cb,current]() { if(current())coroRequestEnvironment(parcel_id, cb); });
 }
 
 void LLEnvironment::updateParcel(S32 parcel_id, const LLUUID &asset_id, std::string display_name, S32 track_num, S32 day_length, S32 day_offset, U32 flags, LLEnvironment::altitudes_vect_t altitudes, environment_apply_fn cb)
 {
     UpdateInfo::ptr_t updates(std::make_shared<UpdateInfo>(asset_id, display_name, day_length, day_offset, altitudes, flags));
+    const auto current=vs_environment_region_guard(this);
+    if(!current())return;
     LLCoros::instance().launch("LLEnvironment::coroUpdateEnvironment",
-        [this, parcel_id, track_num, updates, cb]() { coroUpdateEnvironment(parcel_id, track_num, updates, cb); });
+        [this, parcel_id, track_num, updates, cb,current]() { if(current())coroUpdateEnvironment(parcel_id, track_num, updates, cb); });
 }
 
 void LLEnvironment::onUpdateParcelAssetLoaded(LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, S32 parcel_id, S32 day_length, S32 day_offset, LLEnvironment::altitudes_vect_t altitudes)
@@ -2098,8 +2145,10 @@ void LLEnvironment::updateParcel(S32 parcel_id, const LLSettingsDay::ptr_t &pday
 {
     UpdateInfo::ptr_t updates(std::make_shared<UpdateInfo>(pday, day_length, day_offset, altitudes));
 
+    const auto current=vs_environment_region_guard(this);
+    if(!current())return;
     LLCoros::instance().launch("LLEnvironment::coroUpdateEnvironment",
-        [this, parcel_id, track_num, updates, cb]() { coroUpdateEnvironment(parcel_id, track_num, updates, cb); });
+        [this, parcel_id, track_num, updates, cb,current]() { if(current())coroUpdateEnvironment(parcel_id, track_num, updates, cb); });
 }
 
 void LLEnvironment::updateParcel(S32 parcel_id, const LLSettingsDay::ptr_t &pday, S32 day_length, S32 day_offset, LLEnvironment::altitudes_vect_t altitudes, environment_apply_fn cb)
@@ -2109,12 +2158,17 @@ void LLEnvironment::updateParcel(S32 parcel_id, const LLSettingsDay::ptr_t &pday
 
 void LLEnvironment::resetParcel(S32 parcel_id, environment_apply_fn cb)
 {
+    const auto current=vs_environment_region_guard(this);
+    if(!current())return;
     LLCoros::instance().launch("LLEnvironment::coroResetEnvironment",
-        [this, parcel_id, cb]() { coroResetEnvironment(parcel_id, NO_TRACK, cb); });
+        [this, parcel_id, cb,current]() { if(current())coroResetEnvironment(parcel_id, NO_TRACK, cb); });
 }
 
 void LLEnvironment::coroRequestEnvironment(S32 parcel_id, LLEnvironment::environment_apply_fn apply)
 {
+    const auto current=vs_environment_region_guard(this);
+    if(!current())return;
+
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("ResetEnvironment", httpPolicy);
@@ -2135,6 +2189,7 @@ void LLEnvironment::coroRequestEnvironment(S32 parcel_id, LLEnvironment::environ
     }
 
     LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    if(!current())return;
     // results that come back may contain the new settings
 
     LLSD httpResults = result["http_result"];
@@ -2154,6 +2209,7 @@ void LLEnvironment::coroRequestEnvironment(S32 parcel_id, LLEnvironment::environ
         {
             LLAppViewer::instance()->postToMainCoro([=]()
                 {
+                    if(!current())return;
                     EnvironmentInfo::ptr_t envinfo = LLEnvironment::EnvironmentInfo::extract(environment);
                     apply(parcel_id, envinfo);
                 });
@@ -2163,6 +2219,9 @@ void LLEnvironment::coroRequestEnvironment(S32 parcel_id, LLEnvironment::environ
 
 void LLEnvironment::coroUpdateEnvironment(S32 parcel_id, S32 track_no, UpdateInfo::ptr_t updates, environment_apply_fn apply)
 {
+    const auto current=vs_environment_region_guard(this);
+    if(!current())return;
+
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("ResetEnvironment", httpPolicy);
@@ -2235,6 +2294,7 @@ void LLEnvironment::coroUpdateEnvironment(S32 parcel_id, S32 track_no, UpdateInf
     }
 
     LLSD result = httpAdapter->putAndSuspend(httpRequest, url, body);
+    if(!current())return;
     // results that come back may contain the new settings
 
     if (LLApp::isExiting())
@@ -2279,6 +2339,9 @@ void LLEnvironment::coroUpdateEnvironment(S32 parcel_id, S32 track_no, UpdateInf
 
 void LLEnvironment::coroResetEnvironment(S32 parcel_id, S32 track_no, environment_apply_fn apply)
 {
+    const auto current=vs_environment_region_guard(this);
+    if(!current())return;
+
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("ResetEnvironment", httpPolicy);
@@ -2308,6 +2371,7 @@ void LLEnvironment::coroResetEnvironment(S32 parcel_id, S32 track_no, environmen
     }
 
     LLSD result = httpAdapter->deleteAndSuspend(httpRequest, url);
+    if(!current())return;
     // results that come back may contain the new settings
 
     if (LLApp::isExiting())
@@ -2567,8 +2631,8 @@ void LLEnvironment::onAgentPositionHasChanged(const LLVector3 &localpos)
 
     mCurrentTrack = trackno;
 
-    LLViewerRegion* cur_region = gAgent.getRegion();
-    if (!cur_region || !cur_region->capabilitiesReceived())
+    const auto cur_region=vs_current_region_context();
+    if (!cur_region || !cur_region->current())
     {
         // Environment not ready, environment will be updated later, don't cause 'blend' yet.
         // But keep mCurrentTrack updated in case we won't get new altitudes for some reason
@@ -2667,8 +2731,10 @@ void LLEnvironment::setSharedEnvironment()
 void LLEnvironment::setExperienceEnvironment(LLUUID experience_id, LLUUID asset_id, F32 transition_time)
 {
     LLSettingsVOBase::getSettingsAsset(asset_id,
-        [this, experience_id, transition_time](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat)
+        [this, experience_id, transition_time, current=vs_environment_model_guard(this)](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat)
     {
+            if(!current())return;
+
         onSetExperienceEnvAssetLoaded(experience_id, settings, transition_time, status);
     });
 
@@ -3202,8 +3268,10 @@ bool LLEnvironment::loadFromSettings()
         LLUUID assetId = env_data["day_id"].asUUID();
 
         LLSettingsVOBase::getSettingsAsset(assetId,
-            [this, env_data](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat)
+            [this, env_data, current=vs_environment_model_guard(this)](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat)
         {
+            if(!current())return;
+
             // Day should be always applied first,
             // otherwise it will override sky or water that was set earlier
             // so wait for asset to load before applying sky/water

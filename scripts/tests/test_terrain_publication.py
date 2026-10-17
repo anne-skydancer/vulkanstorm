@@ -22,6 +22,7 @@ class TerrainPublication(unittest.TestCase):
 #include <vector>
 using U32=unsigned;using U64=unsigned long long;using S32=int;using F32=float;
 struct Origin{double mdV[3]{};};Origin from_region_handle(U64){return {};}
+struct RegionLimits{bool water=true;bool getAllowRenderWater(){return water;}}limits;RegionLimits& vs_region_limits(){return limits;}
 struct Settings{float getF32(const char*){return 16;}bool getBOOL(const char*){return false;}}gSavedSettings;
 struct LLUUID {int id=0;bool notNull()const{return id!=0;}bool isNull()const{return id==0;}std::string asString()const{return std::to_string(id);}};
 LLUUID vs_native_image_id(LLUUID id){return id;}
@@ -63,6 +64,9 @@ int main(){Scene s;auto mesh=std::make_shared<int>(1);s.ground[0]={mesh,16};
  assert(packets.size()==2 && packets[1].image==s.resources.fallback && retained.image==material);
  s.resources.fallback.reset();packets.clear();s.surfaces(packets,{8,8,16});assert(packets.size()==2 && packets[1].mesh==mesh);
  for(unsigned c=0;c<3;++c)assert(std::abs(packets[1].color[c]-127.f/255)<1e-6f);
+ s.waterKnown=true;packets.clear();s.surfaces(packets,{8,8,16});assert(packets.size()==3);
+ limits.water=false;packets.clear();s.surfaces(packets,{8,8,16});assert(packets.size()==2);
+ s.waterKnown=false;
  s.ground[0].mesh.reset();packets.clear();s.surfaces(packets,{8,8,16});assert(packets.size()==1); // Never invent missing heights/geometry.
 }
 '''.replace('BODY',body)

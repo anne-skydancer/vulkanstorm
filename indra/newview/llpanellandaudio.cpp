@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
 
 #include "llpanellandaudio.h"
 
@@ -141,7 +142,7 @@ void LLPanelLandAudio::refresh()
 
         bool allow_voice = parcel->getParcelFlagAllowVoice();
 
-        LLViewerRegion* region = LLViewerParcelMgr::getInstance()->getSelectionRegion();
+        const auto region=LLViewerParcelMgr::getInstance()->getSelectionRegionContext();
         if (region && region->isVoiceEnabled())
         {
             mCheckEstateDisabledVoice->setVisible(false);

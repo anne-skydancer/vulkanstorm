@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
 
 #include "fsfloaterplacedetails.h"
 
@@ -65,11 +66,12 @@ static bool fs_is_agent_in_selected_parcel(LLParcel* parcel)
 {
     LLViewerParcelMgr* parcel_mgr = LLViewerParcelMgr::getInstance();
 
-    LLViewerRegion* region = parcel_mgr->getSelectionRegion();
+    const auto region=parcel_mgr->getSelectionRegionContext();
     if (!region || !parcel)
         return false;
 
-    return  region == gAgent.getRegion() &&
+    const auto current=vs_current_region_context();
+    return  current && *region==*current &&
             parcel->getLocalID() == parcel_mgr->getAgentParcel()->getLocalID();
 }
 
@@ -880,7 +882,7 @@ void FSFloaterPlaceDetails::changedParcelSelection()
     LLViewerParcelMgr* parcel_mgr = LLViewerParcelMgr::getInstance();
     mParcel = parcel_mgr->getFloatingParcelSelection();
     LLParcel* parcel = mParcel->getParcel();
-    LLViewerRegion* region = parcel_mgr->getSelectionRegion();
+    const auto region=parcel_mgr->getSelectionRegionContext();
     if (!region || !parcel)
     {
         return;
@@ -912,7 +914,7 @@ void FSFloaterPlaceDetails::changedParcelSelection()
         mResetInfoTimer.setTimerExpirySec(FS_PLACE_INFO_UPDATE_INTERVAL);
     }
 
-    mPanelPlaceInfo->displaySelectedParcelInfo(parcel, region, mGlobalPos, is_current_parcel);
+    mPanelPlaceInfo->displaySelectedParcelInfo(parcel, *region, mGlobalPos, is_current_parcel);
 
     updateVerbs();
 }

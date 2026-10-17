@@ -199,7 +199,7 @@ struct VSNativeSession {
 CHECKS = r"""
 LLSD parcel(){LLSD p;p["parcel_flags"]=123;p["see_avatars"]=0;p["result"]=0;p["sequence"]=11;p["id"]=31;p["name"]="CPU parcel";p["music"]="http://127.0.0.1/music";p["media"]="http://127.0.0.1/video";p["type"]="video/mp4";return p;}
 int main(){
- VSNativeSession owner;auto p=parcel();
+ VSNativeSession owner;owner.mCircuits[LLHost{1}]={true,true};auto p=parcel();
  assert(owner.admit("RegionInfo",LLHost{1}));assert(!owner.admit("RegionInfo",LLHost{2}));
  owner.mSeedReady=false;assert(!owner.admit("RegionInfo",LLHost{1}));owner.mSeedReady=true;
  owner.mHandshake=false;assert(!owner.admit("RegionInfo",LLHost{1}));owner.mHandshake=true;

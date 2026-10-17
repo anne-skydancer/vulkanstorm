@@ -26,6 +26,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
+#include "vsestatecovenant.h"
 #include "llfloaterregioninfo.h"
 
 #include <algorithm>
@@ -1233,7 +1235,7 @@ bool LLPanelRegionOpenSettingsInfo::refreshFromRegion(LLViewerRegion* region)
     // Data gets filled in by hippo manager
     bool allow_modify = gAgent.isGodlike() || (region && region->canManageEstate());
 
-    LLWorld *regionlimits = LLWorld::getInstance();
+    VSRegionLimits* regionlimits=&vs_region_limits();
 
     childSetValue("draw_distance", LLSD(regionlimits->getDrawDistance()));
     childSetValue("force_draw_distance", LLSD(regionlimits->getLockedDrawDistance()));
@@ -2835,12 +2837,18 @@ bool LLPanelEstateCovenant::refreshFromRegion(LLViewerRegion* region)
 
     // let the parent class handle the general data collection.
     bool rv = LLPanelRegionInfo::refreshFromRegion(region);
-    LLMessageSystem *msg = gMessageSystem;
-    msg->newMessage("EstateCovenantRequest");
-    msg->nextBlockFast(_PREHASH_AgentData);
-    msg->addUUIDFast(_PREHASH_AgentID,  gAgent.getID());
-    msg->addUUIDFast(_PREHASH_SessionID,gAgent.getSessionID());
-    msg->sendReliable(region->getHost());
+    const auto context=vs_region_context(region->getHost());
+    if(!context)return rv;
+    VSCovenantCallbacks callbacks;
+    callbacks.estateName=[](const std::string& value){updateEstateName(value);LLPanelEstateInfo::updateEstateName(value);};
+    callbacks.ownerName=[](const std::string& value){updateEstateOwnerName(value);LLPanelEstateInfo::updateEstateOwnerName(value);};
+    callbacks.lastModified=[](const std::string& value){updateLastModified(value);};
+    callbacks.content=[](const LLTextBase* text,const LLUUID& id){updateCovenant(text,id);};
+    callbacks.text=[](const std::string& text,const LLUUID& id){updateCovenantText(text,id);};
+    vs_request_covenant(*context,*this,std::move(callbacks),[id=context->getRegionID()]
+    {
+        const auto current=vs_current_region_context();return current && current->getRegionID()==id;
+    });
     return rv;
 }
 

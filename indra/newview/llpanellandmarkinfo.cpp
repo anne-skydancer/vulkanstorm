@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
 
 #include "llpanellandmarkinfo.h"
 
@@ -151,7 +152,7 @@ void LLPanelLandmarkInfo::setInfoType(EInfoType type, const LLUUID &folder_id)
                 S32 region_z = ll_round(agent_pos.mV[VZ]);
 
                 std::string region_name;
-                LLViewerRegion* region = parcel_mgr->getSelectionRegion();
+                const auto region=parcel_mgr->getSelectionRegionContext();
                 if (region)
                 {
                     region_name = region->getName();

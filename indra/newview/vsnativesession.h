@@ -19,6 +19,7 @@
 #include <boost/signals2/connection.hpp>
 
 class LLMessageSystem;
+class LLParcel;
 class VSRegionLimits;
 class LLEventPoll;
 class VSPlainChat;
@@ -73,6 +74,7 @@ public:
     const LLHost& host() const { return mHost; }
     std::string capability(const std::string&) const;
     VSRegionLimits& regionLimits();
+    bool publishRegionOwner(const LLHost&,U64 circuit,const LLUUID&);
     std::string capability(const LLHost&, const std::string&) const;
     LLSD evidence() const;
     const LLSD& simulatorFeatures() const { return mSimulatorFeatures; }
@@ -137,7 +139,7 @@ public:
     void cameraResetRoll();
     void cameraFirstPerson(bool);
     F32 cameraZoomFraction() const { return mCamera.zoomFraction(); }
-    void cameraZoomFraction(F32 value) { mCamera.setZoomFraction(value); mAgentUpdateTime = 0; }
+    void cameraZoomFraction(F32 value) { mCamera.setZoomFraction(value); synchronizeCameraMode(); mAgentUpdateTime = 0; }
     void cameraControls(F32 dt);
     bool canFly() const;
     bool updateAgentPosition(const LLVector3&, const LLHost&, U64 generation, U64 regionEpoch);
@@ -145,6 +147,7 @@ public:
     U64 handle() const { return mHandle; }
     U8 access() const { return mAccess; }
     U64 regionFlags() const { return mFlags; }
+    void publishAgentParcel(const LLParcel&);
     VSParcelPermissions parcelPermissions() const
     { return regionReady() && mParcelPermissionsKnown ? VSParcelPermissions::from(mFlags, mParcelFlags, mParcelSeeAvatars) : VSParcelPermissions{}; }
     std::string locationURL() const;
@@ -179,6 +182,7 @@ public:
     void expireDeadlineForReplay() { mDeadline = 0; }
 #endif
 private:
+    void synchronizeCameraMode(bool reset_mode = false);
     bool send(const std::string&, const LLSD&);
     void seedCoro(std::string, U64, U64);
     static void simulatorFeaturesCoro(std::weak_ptr<VSNativeSession>, std::string, U64, U64);

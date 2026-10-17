@@ -861,6 +861,7 @@ set(viewer_SOURCE_FILES
     llviewerpartsim.cpp
     llviewerpartsource.cpp
     vscapabilities.cpp
+    vsestatecovenant.cpp
     vsregioncontext.cpp
     llviewerregion.cpp
     llviewershadermgr.cpp
@@ -1755,6 +1756,7 @@ set(viewer_HEADER_FILES
     llviewerpartsource.h
     llviewerprecompiledheaders.h
     vscapabilities.h
+    vsestatecovenant.h
     vsregioncontext.h
     llviewerregion.h
     llviewershadermgr.h

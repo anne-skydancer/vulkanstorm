@@ -418,6 +418,7 @@ private:
 
     void                        updateCloudScroll();
 
+    friend class VSNativeSession;
     void                        onRegionChange();
     void                        onParcelChange();
 

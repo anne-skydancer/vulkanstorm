@@ -9,6 +9,12 @@
 #include "llfloaterprofiletexture.h"
 #include "llfloatercamera.h"
 #include "llstatusbar.h"
+#include "llfloaterbuyland.h"
+#include "llfloatersellland.h"
+#include "llviewerparcelmgr.h"
+#include "llparcelselection.h"
+#include "llparcel.h"
+#include "vsregioncontext.h"
 #include "lllocationinputctrl.h"
 #include "lljoystickbutton.h"
 #include "llagentcamera.h"
@@ -211,6 +217,10 @@ struct Replay : public LLAvatarPropertiesObserver
     unsigned step = 0;
     unsigned utilityCheck = 0;
     LLHandle<LLFloater> utilityFloater;
+    unsigned landDialogCheck=0;
+    std::unique_ptr<LLParcel> landDialogParcel;
+    LLParcelSelectionHandle landDialogSelection;
+    LLHandle<LLFloater> landDialog;
     bool keyboardChecked = false;
     unsigned cameraCheck = 0;
     unsigned landCheck = 0;
@@ -649,6 +659,57 @@ struct Replay : public LLAvatarPropertiesObserver
                 return false;
             }
             evidence["connected_utility_floaters"] = true;
+            if(landDialogCheck<4)
+            {
+                const bool buying=landDialogCheck<2;
+                const char* name=buying?"buy_land":"sell_land";
+                if(!(landDialogCheck&1))
+                {
+                    const auto region=vs_current_region_context();
+                    require(region && region->current(),"Land replay has no actual connected circuit");
+                    // Real LLParcel/controller outside the approved manager selection:
+                    // this diagnostic never authorizes a land or money operation.
+                    LLViewerParcelMgr::instance().deselectLand();
+                    landDialogParcel=std::make_unique<LLParcel>(peer,false,false,false,0,0,0,512,15000,1.f);
+                    landDialogParcel->setLocalID(73);
+                    landDialogParcel->setRegionID(region->getRegionID());
+                    landDialogParcel->setName("Unapproved diagnostic parcel");
+                    landDialogSelection=new LLParcelSelection(landDialogParcel.get());
+                    if(buying)LLFloaterBuyLand::buyLand(*region,landDialogSelection,false);
+                    else LLFloaterSellLand::sellLand(*region,landDialogSelection);
+                    auto* floater=LLFloaterReg::findInstance(name);
+                    require(floater && floater->isInVisibleChain() && !floater->getChildList()->empty(),"Real prepared land dialog did not open shared XUI");
+                    landDialog=floater->getHandle();
+                }
+                else
+                {
+                    auto* floater=landDialog.get();
+                    require(floater && floater->isInVisibleChain(),"Land dialog retired before presentation");
+                    auto* action=floater->findChild<LLButton>(buying?"buy_btn":"sell_btn");
+                    auto* cancel=floater->findChild<LLButton>("cancel_btn");
+                    require(action && cancel && cancel->getEnabled(),"Actual land dialog controls unavailable");
+                    if(buying)
+                    {
+                        auto* reason=floater->findChild<LLTextBox>("error_message");
+                        require(!action->getEnabled() && reason && !reason->getText().empty(),"Unsaleable parcel lost shared purchase policy/explanation");
+                    }
+                    else
+                    {
+                        require(!LLViewerParcelMgr::instance().selectionGuard()(),"Fixture unexpectedly approved a land transaction");
+                        action->onCommit();
+                        require(!landDialogParcel->getForSale(),"Rejected stale sale changed the parcel model");
+                    }
+                    cancel->onCommit();
+                    require(!landDialog.get() || !landDialog.get()->getVisible(),"Actual land Cancel failed to close dialog");
+                    if(auto* remaining=LLFloaterReg::findInstance(name))LLFloaterReg::destroyInstance(name,remaining->getKey());
+                    require(landDialog.isDead(),"Land controller retained observers after retirement");
+                    landDialogSelection=nullptr;
+                    landDialogParcel.reset();
+                    evidence[buying?"connected_land_buy_policy_cancel":"connected_land_sell_stale_intent_cancel"]=true;
+                }
+                ++landDialogCheck;
+                return false;
+            }
             if (!keyboardChecked)
             {
                 require(gKeyboard != nullptr, "Actual keyboard owner is missing");
@@ -656,6 +717,12 @@ struct Replay : public LLAvatarPropertiesObserver
                 gSavedSettings.setBOOL("LetterKeysAffectsMovementNotFocusChatBar", true);
                 if (gMenuHolder) gMenuHolder->hideMenus();
                 gFocusMgr.setKeyboardFocus(nullptr);
+                const bool enableMouselook = gSavedSettings.getBOOL("EnableMouselook");
+                gSavedSettings.setBOOL("EnableMouselook", true);
+                gAgentCamera.changeCameraToMouselook(false);
+                require(owner.cameraState().firstPerson && gAgentCamera.cameraMouselook() &&
+                    gViewerInput.getMode() == MODE_FIRST_PERSON,
+                    "Native mouselook did not complete shared camera/keyboard mode");
                 const auto before = owner.cameraState();
                 // Enter through the actual platform keyboard -> window callback ->
                 // shared arbitration -> scan -> existing registered action chain.
@@ -675,6 +742,11 @@ struct Replay : public LLAvatarPropertiesObserver
                 owner.cameraControls(.1f);
                 require((owner.cameraState().at - turned.at).magVecSquared() < .000001f,
                     "Released keyboard turn remained active");
+                gAgentCamera.changeCameraToThirdPerson(false);
+                require(!owner.cameraState().firstPerson && gAgentCamera.cameraThirdPerson() &&
+                    gViewerInput.getMode() == MODE_THIRD_PERSON,
+                    "Native third-person restore left stale keyboard mode");
+                gSavedSettings.setBOOL("EnableMouselook", enableMouselook);
                 gKeyboard->handleTranslatedKeyDown(KEY_RETURN, MASK_NONE);
                 gViewerWindow->handleUnicodeChar(13, MASK_NONE);
                 gKeyboard->scanKeyboard();

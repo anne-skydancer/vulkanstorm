@@ -24,6 +24,12 @@
 
 #include "rlvactions.h"
 #include "vsobjectcontext.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "llviewerwindow.h"
+#include "vsvulkancontext.h"
+#include "vsworldavatar.h"
+#endif
 #include "rlvhelper.h"
 #include "rlvhandler.h"
 #include "rlvinventory.h"
@@ -533,6 +539,27 @@ bool RlvActions::canGroundSit(const LLUUID& idRlvObjExcept)
     return (!gRlvHandler.hasBehaviourExcept(RLV_BHVR_SIT, idRlvObjExcept)) && (canStand(idRlvObjExcept));
 }
 
+namespace
+{
+bool agentAvatarStanding()
+{
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=VSNativeSession::active();
+        auto* context=gViewerWindow->nativeContext();
+        if (!owner || owner->phase()!=VSNativeSession::Phase::Connected || !context) return false;
+        const auto account=owner->account();
+        const auto token=context->world().object(account.agent);
+        const auto* avatar=context->world().selfAvatar();
+        return token && token->account==account.agent && token->accountGeneration==account.generation &&
+            owner->current(account) && avatar && !avatar->sitting();
+    }
+#endif
+    return isAgentAvatarValid() && !gAgentAvatarp->isSitting();
+}
+}
+
 bool RlvActions::canSit(const LLViewerObject* pObj, const LLVector3& posOffset /*=LLVector3::zero*/)
 {
     // User can sit on the specified object if:
@@ -547,7 +574,7 @@ bool RlvActions::canSit(const LLViewerObject* pObj, const LLVector3& posOffset /
         ( (pObj) && (LL_PCODE_VOLUME == pObj->getPCode()) ) &&
         (!hasBehaviour(RLV_BHVR_SIT)) &&
         ( ((!hasBehaviour(RLV_BHVR_UNSIT)) && (!hasBehaviour(RLV_BHVR_STANDTP))) ||
-          ((isAgentAvatarValid()) && (!gAgentAvatarp->isSitting())) ) &&
+          agentAvatarStanding() ) &&
         ( ( (NULL != gRlvHandler.getCurrentCommand()) && (RLV_BHVR_SIT == gRlvHandler.getCurrentCommand()->getBehaviourType()) ) ||
           ( ((!hasBehaviour(RLV_BHVR_SITTP)) || (dist_vec_squared(gAgent.getPositionGlobal(), pObj->getPositionGlobal() + LLVector3d(posOffset)) < s_nSitTpDist * s_nSitTpDist)) &&
             ((!hasBehaviour(RLV_BHVR_FARTOUCH)) || (dist_vec_squared(gAgent.getPositionGlobal(), pObj->getPositionGlobal() + LLVector3d(posOffset)) < s_nFarTouchDist * s_nFarTouchDist)) ) );
@@ -698,13 +725,13 @@ bool RlvActions::canTouch(const VSObjectContext& object, const LLVector3& posOff
 bool RlvActions::canStand()
 {
     // NOTE: return false only if we're @unsit=n restricted and the avie is currently sitting on something and true for everything else
-    return (!gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) || ((isAgentAvatarValid()) && (!gAgentAvatarp->isSitting()));
+    return (!gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) || agentAvatarStanding();
 }
 
 bool RlvActions::canStand(const LLUUID& idRlvObjExcept)
 {
     // NOTE: must match generic function above
-    return (!gRlvHandler.hasBehaviourExcept(RLV_BHVR_UNSIT, idRlvObjExcept)) || ((isAgentAvatarValid()) && (!gAgentAvatarp->isSitting()));
+    return (!gRlvHandler.hasBehaviourExcept(RLV_BHVR_UNSIT, idRlvObjExcept)) || agentAvatarStanding();
 }
 
 // Checked: 2014-02-24 (RLVa-1.4.10)

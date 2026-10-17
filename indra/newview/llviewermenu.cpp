@@ -26,6 +26,7 @@
 
 #include "llscripteditorws.h"
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
 #include <stdexcept>
 
 #ifdef INCLUDE_VLD
@@ -6241,7 +6242,9 @@ void handle_force_parcel_to_content()
 
 void handle_claim_public_land()
 {
-    if (LLViewerParcelMgr::getInstance()->getSelectionRegion() != gAgent.getRegion())
+    const auto selected=LLViewerParcelMgr::instance().getSelectionRegionContext();
+    const auto current=vs_current_region_context();
+    if (!selected || !current || *selected!=*current)
     {
         LLNotificationsUtil::add("ClaimPublicLand");
         return;

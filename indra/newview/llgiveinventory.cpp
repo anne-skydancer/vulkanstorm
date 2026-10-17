@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 #include "llgiveinventory.h"
 
 // library includes
@@ -84,7 +85,7 @@ S32 inventory_give_limit()
     // The native text session has no LLWorld. Retain the protocol-safe
     // bucket bound used by the standard simulator instead of creating it.
     if (gViewerWindow && gViewerWindow->isNativeVulkan()) return MAX_ITEMS;
-    return LLWorld::getInstance()->getMaxInventoryItemsTransfer();
+    return vs_region_limits().getMaxInventoryItemsTransfer();
 }
 }
 

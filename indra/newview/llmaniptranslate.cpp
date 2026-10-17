@@ -29,6 +29,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 
 #include "llmaniptranslate.h"
 
@@ -543,8 +544,8 @@ bool LLManipTranslate::handleHover(S32 x, S32 y, MASK mask)
 // <FS:CR> Aurora Sim
         F32 max_drag_distance = gSavedSettings.getF32("MaxDragDistance");
 
-        if (max_drag_distance > LLWorld::getInstance()->getMaxDragDistance())
-            max_drag_distance = LLWorld::getInstance()->getMaxDragDistance();
+        if (max_drag_distance > vs_region_limits().getMaxDragDistance())
+            max_drag_distance = vs_region_limits().getMaxDragDistance();
 // </FS:CR> Aurora Sim
 
         if (relative_move.magVecSquared() > max_drag_distance * max_drag_distance)
@@ -758,9 +759,9 @@ bool LLManipTranslate::handleHover(S32 x, S32 y, MASK mask)
 //                    {
 //                        new_position_global.mdV[VZ] = MAX_OBJECT_Z;
 //                    }
-                    if (new_position_global.mdV[VZ] > LLWorld::getInstance()->getRegionMaxHeight())
+                    if (new_position_global.mdV[VZ] > vs_region_limits().getRegionMaxHeight())
                     {
-                        new_position_global.mdV[VZ] = LLWorld::getInstance()->getRegionMaxHeight();
+                        new_position_global.mdV[VZ] = vs_region_limits().getRegionMaxHeight();
                     }
 
 // </AW: opensim-limits>

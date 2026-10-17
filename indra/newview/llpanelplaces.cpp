@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
 
 #include "llpanelplaces.h"
 
@@ -1197,7 +1198,7 @@ void LLPanelPlaces::changedParcelSelection()
     LLViewerParcelMgr* parcel_mgr = LLViewerParcelMgr::getInstance();
     mParcel = parcel_mgr->getFloatingParcelSelection();
     LLParcel* parcel = mParcel->getParcel();
-    LLViewerRegion* region = parcel_mgr->getSelectionRegion();
+    const auto region=parcel_mgr->getSelectionRegionContext();
     if (!region || !parcel)
         return;
 
@@ -1227,7 +1228,7 @@ void LLPanelPlaces::changedParcelSelection()
         mResetInfoTimer.setTimerExpirySec(PLACE_INFO_UPDATE_INTERVAL);
     }
 
-    mPlaceProfile->displaySelectedParcelInfo(parcel, region, mPosGlobal, is_current_parcel);
+    mPlaceProfile->displaySelectedParcelInfo(parcel, *region, mPosGlobal, is_current_parcel);
 
     updateVerbs();
 }
@@ -1465,11 +1466,12 @@ static bool is_agent_in_selected_parcel(LLParcel* parcel)
 {
     LLViewerParcelMgr* parcel_mgr = LLViewerParcelMgr::getInstance();
 
-    LLViewerRegion* region = parcel_mgr->getSelectionRegion();
+    const auto region=parcel_mgr->getSelectionRegionContext();
     if (!region || !parcel)
         return false;
 
-    return  region == gAgent.getRegion() &&
+    const auto current=vs_current_region_context();
+    return  current && *region==*current &&
             parcel->getLocalID() == parcel_mgr->getAgentParcel()->getLocalID();
 }
 

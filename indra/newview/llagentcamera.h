@@ -98,6 +98,10 @@ private:
     // Mode
     //--------------------------------------------------------------------
 public:
+#if VS_NATIVE_VULKAN
+    // Complete the real native pose transition before shared UI/input queries.
+    bool            completeNativeCameraMode(bool first_person, bool reset_mode = false);
+#endif
     void            changeCameraToDefault();
     void            changeCameraToMouselook(bool animate = true);
     void            changeCameraToThirdPerson(bool animate = true);

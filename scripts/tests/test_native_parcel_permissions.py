@@ -16,7 +16,8 @@ class ParcelPermissionsTest(unittest.TestCase):
         header = re.sub(r'^#.*$', '', header, flags=re.M)
         source = (ROOT/'indra/newview/llviewerparcelmgr.cpp').read_text()
         names = ['Voice', 'Fly', 'Push', 'Scripts', 'Damage']
-        methods = '\n'.join(method(source, 'bool LLViewerParcelMgr::allowAgent'+name+'(const LLViewerRegion*') for name in names)
+        helpers='\n'.join('template<class Region>\n'+method(source, 'bool vs_allow_parcel_'+name.lower()+'(') for name in names)
+        methods = helpers+'\n'+'\n'.join(method(source, 'bool LLViewerParcelMgr::allowAgent'+name+'(const LLViewerRegion*') for name in names)
         methods += '\n'+method(source, 'bool LLViewerParcelMgr::allowAgentBuild(const LLParcel*')
         flags = '\n'.join(re.findall(r'constexpr U64 REGION_FLAGS_.*?;', (ROOT/'indra/llmessage/llregionflags.h').read_text(), re.S))
         parcel_flags = '\n'.join(re.findall(r'const U32 PF_.*?;', (ROOT/'indra/llinventory/llparcelflags.h').read_text(), re.S))

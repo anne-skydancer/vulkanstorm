@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 
 #include "llsurface.h"
 
@@ -267,7 +268,7 @@ void LLSurface::initTextures()
     //
 // <FS:CR> Aurora Sim
     //if (gSavedSettings.getBOOL("RenderWater") )
-    if (gSavedSettings.getBOOL("RenderWater") && LLWorld::getInstance()->getAllowRenderWater())
+    if (gSavedSettings.getBOOL("RenderWater") && vs_region_limits().getAllowRenderWater())
 // </FS:CR> Aurora Sim
     {
         mWaterObjp = (LLVOWater *)gObjectList.createObjectViewer(LLViewerObject::LL_VO_WATER, mRegionp);
@@ -282,7 +283,7 @@ void LLSurface::initTextures()
 
 void LLSurface::rebuildWater()
 {
-    bool renderwater = gSavedSettings.getBOOL("RenderWater") && LLWorld::getInstance()->getAllowRenderWater();
+    bool renderwater = gSavedSettings.getBOOL("RenderWater") && vs_region_limits().getAllowRenderWater();
     bool prev_renderwater = !mWaterObjp.isNull();
 
     if(prev_renderwater && !renderwater)

@@ -1,3 +1,4 @@
+class VSRegionContext;
 /**
  * @file llfloaterauction.h
  * @author James Cook, Ian Wilkes
@@ -67,7 +68,7 @@ private:
 
     void doResetParcel();
     void doSellToAnyone();
-    void clearParcelAccessList( LLParcel* parcel, LLViewerRegion* region, U32 list);
+    void clearParcelAccessList( LLParcel* parcel, const VSRegionContext& region, U32 list);
     void cleanupAndClose();
 
 private:

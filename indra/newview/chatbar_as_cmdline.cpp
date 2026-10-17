@@ -30,6 +30,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 
 #include "chatbar_as_cmdline.h"
 
@@ -2093,8 +2094,8 @@ void cmdline_rezplat(bool use_saved_value, F32 visual_radius) //cmdline_rezplat(
     {
         visual_radius = sFSCmdLinePlatformSize;
     }
-    F32 max_scale = LLWorld::getInstance()->getRegionMaxPrimScale();
-    F32 min_scale = LLWorld::getInstance()->getRegionMinPrimScale();
+    F32 max_scale = vs_region_limits().getRegionMaxPrimScale();
+    F32 min_scale = vs_region_limits().getRegionMinPrimScale();
     F32 realsize = visual_radius;
     if (realsize < min_scale)
     {

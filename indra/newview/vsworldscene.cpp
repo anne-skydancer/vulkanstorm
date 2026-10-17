@@ -1,5 +1,6 @@
 // Native CPU primitive scene, independent of GL drawables. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 #include "vsworldscene.h"
 #include "llcamera.h"
 #include "vsmaterialassets.h"
@@ -853,7 +854,7 @@ struct VSWorldScene::Impl
             p.surface=surface;
             packets.push_back(std::move(p));
         }
-        if (waterKnown)
+        if (waterKnown && vs_region_limits().getAllowRenderWater())
         {
             if (!water) water=renderer.upload({{0,0,waterHeight,0,0,1,0,0},{float(width),0,waterHeight,0,0,1,1,0},
                 {float(width),float(regionHeight),waterHeight,0,0,1,1,1},{0,float(regionHeight),waterHeight,0,0,1,0,1}},{0,1,2,0,2,3});

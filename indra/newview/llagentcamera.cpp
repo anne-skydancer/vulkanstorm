@@ -2570,6 +2570,47 @@ void LLAgentCamera::resetCamera()
 //-----------------------------------------------------------------------------
 // changeCameraToMouselook()
 //-----------------------------------------------------------------------------
+#if VS_NATIVE_VULKAN
+bool LLAgentCamera::completeNativeCameraMode(bool first_person, bool reset_mode)
+{
+    const ECameraMode target = first_person ? CAMERA_MODE_MOUSELOOK : CAMERA_MODE_THIRD_PERSON;
+    if (first_person && mCameraMode != target &&
+        (!gSavedSettings.getBOOL("EnableMouselook") ||
+         (RlvActions::isRlvEnabled() && !RlvActions::canChangeToMouselook()) ||
+         LLViewerJoystick::getInstance()->getOverrideCamera()))
+    {
+        return false;
+    }
+    // Follow/customize are distinct logical modes. An unchanged third-person
+    // native pose must not silently replace a mode selected by their controllers.
+    if (!first_person && !reset_mode && mCameraMode != CAMERA_MODE_MOUSELOOK)
+        return true;
+    if (mCameraMode != target)
+    {
+        if (gViewerWindow) gViewerWindow->getWindow()->resetBusyCount();
+        if (first_person)
+        {
+            if (LLMenuGL::sMenuContainer) LLMenuGL::sMenuContainer->hideMenus();
+            LLUI::getInstance()->clearPopups();
+            gFocusMgr.setKeyboardFocus(nullptr);
+        }
+        gAgent.unpauseAnimation();
+        updateLastCamera();
+        mCameraMode = target;
+        mCameraAnimating = false;
+        AOEngine::getInstance()->inMouselook(first_person);
+        if (first_person) gAgent.setControlFlags(AGENT_CONTROL_MOUSELOOK);
+        else gAgent.clearControlFlags(AGENT_CONTROL_MOUSELOOK);
+        // Reuse the reference toolbar/chat/floater visibility and mode signals.
+        // Native poses complete immediately, without the GL camera animation loop.
+        gAgent.endAnimationUpdateUI();
+    }
+    mLastCameraMode = mCameraMode;
+    mCameraAnimating = false;
+    return true;
+}
+#endif
+
 void LLAgentCamera::changeCameraToMouselook(bool animate)
 {
     if (!gSavedSettings.getBOOL("EnableMouselook")
@@ -2583,7 +2624,7 @@ void LLAgentCamera::changeCameraToMouselook(bool animate)
     }
 
 #if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraFirstPerson(true); mCameraMode = CAMERA_MODE_MOUSELOOK; return; }
+    if (const auto native = VSNativeSession::active()) { native->cameraFirstPerson(true); return; }
 #endif
 
     // visibility changes at end of animation
@@ -2639,7 +2680,11 @@ void LLAgentCamera::changeCameraToMouselook(bool animate)
 void LLAgentCamera::changeCameraToDefault()
 {
 #if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraReset(); mCameraMode = CAMERA_MODE_THIRD_PERSON; return; }
+    if (const auto native = VSNativeSession::active())
+    {
+        if (!LLViewerJoystick::getInstance()->getOverrideCamera()) native->cameraReset();
+        return;
+    }
 #endif
     if (LLViewerJoystick::getInstance()->getOverrideCamera())
     {
@@ -2725,7 +2770,11 @@ void LLAgentCamera::changeCameraToFollow(bool animate)
 void LLAgentCamera::changeCameraToThirdPerson(bool animate)
 {
 #if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraFirstPerson(false); mCameraMode = CAMERA_MODE_THIRD_PERSON; return; }
+    if (const auto native = VSNativeSession::active())
+    {
+        if (!LLViewerJoystick::getInstance()->getOverrideCamera()) native->cameraFirstPerson(false);
+        return;
+    }
 #endif
     if (LLViewerJoystick::getInstance()->getOverrideCamera())
     {

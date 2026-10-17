@@ -32,6 +32,9 @@
 #include "llsingleton.h"
 #include "llparcelselection.h"
 #include "llui.h"
+#include "vsregioncontext.h"
+#include "vsparcelbitmap.h"
+#include "vsparcelrequests.h"
 
 #include <boost/signals2.hpp>
 
@@ -95,6 +98,26 @@ public:
     F32     getSelectionHeight() const  { return F32(mEastNorth.mdV[VY] - mWestSouth.mdV[VY]); }
     bool    getSelection(LLVector3d &min, LLVector3d &max) { min = mWestSouth; max = mEastNorth; return !selectionEmpty();}
     LLViewerRegion* getSelectionRegion();
+    std::optional<VSRegionContext> getSelectionRegionContext() const;
+    VSParcelBitmap::Snapshot nativeAgentBitmap() const { return mNativeAgentBitmap; }
+    VSParcelBitmap::Snapshot nativeCollisionBitmap() const { return mNativeCollisionBitmap; }
+    VSParcelBitmap::Snapshot nativeSelectionBitmap() const { return mNativeSelectionBitmap; }
+    std::optional<VSRegionContext> nativeCollisionRegion() const { return mNativeCollisionRegion; }
+    void resetNativeAccount();
+    struct NativeParcelBoundary
+    {
+        VSRegionContext region;
+        VSParcelBitmap::Snapshot bitmap; // null means the actual rectangular/public selection
+        LLVector3d westSouth,eastNorth;
+        bool collision=false,usePass=false;
+        S32 banState=0;
+        std::function<bool()> current;
+    };
+    std::optional<NativeParcelBoundary> nativeSelectionBoundary() const;
+    std::optional<NativeParcelBoundary> nativeCollisionBoundary();
+    static void clearObjectHighlights();
+    std::function<bool()> selectionGuard() const;
+    boost::signals2::connection setSpatialCollisionCallback(const boost::signals2::signal<void(const VSRegionContext&)>::slot_type& cb) { return mSpatialCollisionSignal.connect(cb); }
     F32     getDwelling() const { return mSelectedDwell;}
 
     void    getDisplayInfo(S32* area, S32* claim, S32* rent, bool* for_sale, F32* dwell);
@@ -109,7 +132,7 @@ public:
 
     // Write highlight segments from a packed bitmap of the appropriate
     // parcel.
-    void writeSegmentsFromBitmap(U8* bitmap, U8* segments);
+    void writeSegmentsFromBitmap(const U8* bitmap, U8* segments);
 
     void writeAgentParcelFromBitmap(U8* bitmap);
 
@@ -167,8 +190,8 @@ public:
 
     LLParcel*   getCollisionParcel() const;
 // [SL:KB] - Patch: World-MinimapOverlay | Checked: 2012-06-20 (Catznip-3.3)
-    const U8*   getCollisionBitmap() const { return mCollisionBitmap; }
-    size_t      getCollisionBitmapSize() const { return mParcelsPerEdge * mParcelsPerEdge / 8; }
+    const U8*   getCollisionBitmap() const { return mNativeCpu ? (mNativeCollisionBitmap?mNativeCollisionBitmap->bytes().data():nullptr) : mCollisionBitmap; }
+    size_t      getCollisionBitmapSize() const { return mNativeCpu ? (mNativeCollisionBitmap?mNativeCollisionBitmap->bytes().size():0) : size_t(mParcelsPerEdge)*mParcelsPerEdge/8; }
     U64         getCollisionRegionHandle() const { return mCollisionRegionHandle; }
 
     typedef boost::signals2::signal<void (const LLViewerRegion*)> collision_update_signal_t;
@@ -184,6 +207,7 @@ public:
     // Used for parcel property icons in nav bar.
     bool    allowAgentVoice() const;
     bool    allowAgentVoice(const LLViewerRegion* region, const LLParcel* parcel) const;
+    bool allowAgentVoice(const VSRegionContext* region,const LLParcel* parcel) const;
 
     // Returns true if this parcel is using private voice channel
     bool isVoiceRestricted() const;
@@ -194,18 +218,22 @@ public:
     // Can this agent start flying on this parcel?
     // Used for parcel property icons in nav bar.
     bool    allowAgentFly(const LLViewerRegion* region, const LLParcel* parcel) const;
+    bool allowAgentFly(const VSRegionContext* region,const LLParcel* parcel) const;
 
     // Can this agent be pushed by llPushObject() on this parcel?
     // Used for parcel property icons in nav bar.
     bool    allowAgentPush(const LLViewerRegion* region, const LLParcel* parcel) const;
+    bool allowAgentPush(const VSRegionContext* region,const LLParcel* parcel) const;
 
     // Can scripts written by non-parcel-owners run on the agent's current
     // parcel?  Used for parcel property icons in nav bar.
     bool    allowAgentScripts(const LLViewerRegion* region, const LLParcel* parcel) const;
+    bool allowAgentScripts(const VSRegionContext* region,const LLParcel* parcel) const;
 
     // Can the agent be damaged here?
     // Used for parcel property icons in nav bar.
     bool    allowAgentDamage(const LLViewerRegion* region, const LLParcel* parcel) const;
+    bool allowAgentDamage(const VSRegionContext* region,const LLParcel* parcel) const;
 
     F32     getHoverParcelWidth() const
                 { return F32(mHoverEastNorth.mdV[VX] - mHoverWestSouth.mdV[VX]); }
@@ -280,7 +308,7 @@ public:
                                   bool remove_contribution);
         // callers responsibility to call deleteParcelBuy() on return value
     void sendParcelBuy(ParcelBuyInfo*);
-    void deleteParcelBuy(ParcelBuyInfo* *info);
+    static void deleteParcelBuy(ParcelBuyInfo* *info);
 
     void sendParcelDeed(const LLUUID& group_id);
 
@@ -322,7 +350,7 @@ public:
     static bool isParcelModifiableByAgent(const LLParcel* parcelp, U64 group_proxy_power);
 
 private:
-    static void sendParcelAccessListUpdate(U32 flags, const std::map<LLUUID, class LLAccessEntry>& entries, LLViewerRegion* region, S32 parcel_local_id);
+    static void sendParcelAccessListUpdate(U32 flags, const std::map<LLUUID, class LLAccessEntry>& entries, const VSRegionContext* region, S32 parcel_local_id);
     static void sendParcelExperienceUpdate( const U32 flags, uuid_vec_t experience_ids, LLViewerRegion* region, S32 parcel_local_id );
     static bool releaseAlertCB(const LLSD& notification, const LLSD& response);
 
@@ -380,6 +408,19 @@ private:
     // WEST_MASK = draw west edge
     // SOUTH_MASK = draw south edge
     S32                         mParcelsPerEdge;
+    bool                        mNativeCpu=false;
+    S32                         mNativeParcelRows=64;
+    std::vector<U8>              mNativeHighlightStorage,mNativeCollisionStorage;
+    std::shared_ptr<const VSResourceBudget::Reservation> mNativeHighlightResidency,mNativeCollisionResidency;
+    bool configureNativeSegments(S32 columns,S32 rows,bool collision);
+    VSParcelRequests            mNativeRequests;
+    LLParcelSelectionHandle     mNativeSelectionRequestHandle,mNativeAccessRequestHandle,mNativeDwellRequestHandle;
+    std::optional<VSRegionContext> mNativeDwellRequestRegion;
+    S32 mNativeDwellLocal=-1;
+    std::optional<VSRegionContext> mNativeSelectionRequestRegion,mNativeHoverRequestRegion,mNativeAccessRequestRegion;
+    boost::signals2::signal<void(const VSRegionContext&)> mSpatialCollisionSignal;
+    VSParcelBitmap::Snapshot    mNativeAgentBitmap,mNativeSelectionBitmap,mNativeCollisionBitmap;
+    std::optional<VSRegionContext> mNativeAgentRegion,mNativeCollisionRegion;
     U8*                         mHighlightSegments;
     U8*                         mAgentParcelOverlay;
 
@@ -396,6 +437,7 @@ private:
     collision_update_signal_t*  mCollisionUpdateSignal;
 // [/SL:KB]
     U8*                         mCollisionSegments;
+    bool collisionVisible();
     bool                        mRenderCollision;
     bool                        mRenderSelection;
     S32                         mCollisionBanned;

@@ -18,6 +18,7 @@ struct LLViewerCamera{
 };
 struct VSNativeSession{enum class Phase{Login,Connected};bool mShutdown=false,mChangingRegion=false;Phase mPhase=Phase::Connected;
  struct State{LLVector3 center{10,20,30},at{1,0,0},left{0,1,0},up{0,0,1};Rotation bodyRotation;}state;
+ void synchronizeCameraMode(bool=false){}
  State cameraState(){return state;}bool publishCamera();};
 METHOD
 int main(){

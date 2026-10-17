@@ -25,6 +25,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
+#include "vsestatecovenant.h"
 
 #include "llpanelplaceprofile.h"
 
@@ -348,12 +350,21 @@ void LLPanelPlaceProfile::onVisibilityChange(bool new_visibility)
     }
 }
 
+void LLPanelPlaceProfile::displaySelectedParcelInfo(LLParcel* parcel,LLViewerRegion* region,
+    const LLVector3d& position,bool current)
+{
+    if(!region)return;
+    const auto context=vs_region_context(region->getHost());
+    if(context)displaySelectedParcelInfo(parcel,*context,position,current);
+}
+
 void LLPanelPlaceProfile::displaySelectedParcelInfo(LLParcel* parcel,
-                                                    LLViewerRegion* region,
+                                                    const VSRegionContext& context,
                                                     const LLVector3d& pos_global,
                                                     bool is_current_parcel)
 {
-    if (!region || !parcel)
+    const auto* region=&context;
+    if (!region->current() || !parcel)
         return;
 
     if (mLastSelectedRegionID != region->getRegionID()
@@ -362,12 +373,14 @@ void LLPanelPlaceProfile::displaySelectedParcelInfo(LLParcel* parcel,
         // send EstateCovenantInfo message
         // Note: LLPanelPlaceProfile doesn't change Covenant's content and any
         // changes made by Estate floater should be requested by Estate floater
-        LLMessageSystem *msg = gMessageSystem;
-        msg->newMessage("EstateCovenantRequest");
-        msg->nextBlockFast(_PREHASH_AgentData);
-        msg->addUUIDFast(_PREHASH_AgentID,  gAgent.getID());
-        msg->addUUIDFast(_PREHASH_SessionID,gAgent.getSessionID());
-        msg->sendReliable(region->getHost());
+        mLastSelectedRegionID=region->getRegionID();
+        VSCovenantCallbacks callbacks;
+        callbacks.estateName=[this](const std::string& value){updateEstateName(value);};
+        callbacks.ownerName=[this](const std::string& value){updateEstateOwnerName(value);};
+        callbacks.content=[this](const LLTextBase* text,const LLUUID&){updateCovenant(text);};
+        callbacks.text=[this](const std::string& text,const LLUUID&){updateCovenantText(text);};
+        vs_request_covenant(*region,*this,std::move(callbacks),[this,id=region->getRegionID()]
+            {return mLastSelectedRegionID==id;});
         mNextCovenantUpdateTime = LLTimer::getElapsedSeconds() + COVENANT_REFRESH_TIME_SEC;
     }
 
@@ -669,7 +682,7 @@ void LLPanelPlaceProfile::onForSaleBannerClick()
 {
     LLViewerParcelMgr* mgr = LLViewerParcelMgr::getInstance();
     LLParcel* parcel = mgr->getFloatingParcelSelection()->getParcel();
-    LLViewerRegion* selected_region =  mgr->getSelectionRegion();
+    const auto selected_region=mgr->getSelectionRegionContext();
     if(parcel && selected_region)
     {
         if(parcel->getLocalID() == mSelectedParcelID &&
@@ -706,7 +719,7 @@ void LLPanelPlaceProfile::updateYouAreHereBanner(void* userdata)
     if(!self->getVisible())
         return;
 
-    if(!gDisconnected && gAgent.getRegion())
+    if(!gDisconnected && vs_current_region_context())
     {
         static F32 radius = gSavedSettings.getF32("YouAreHereDistance");
 

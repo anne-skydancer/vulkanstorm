@@ -144,3 +144,32 @@ Local integration checkpoint: actual region and camera owners
 - Shared CPU region limits now come from the reference LLWorld values and setters; LLWorld retains its ordinary role while native sessions own a separate real CPU limits model. VSRegionContext exposes actual peer regions and scoped capabilities/parcel cells without creating a native LLViewerRegion. Native RegionInfo replies require the current authenticated host, agent/session, handshake and circuit acknowledgement before updating the existing shared model and notifying observers.
 - Camera initialization now runs the existing LLAgentCamera initialization at native connection. Both peers use the original display draw-distance computation, including customization, memory-pressure optimization and region locks. The existing interest-list distance/ramp computation is shared too. Native rendering and picking consume the published far plane and reference camera range instead of a separate saved-value/1024-metre cap. RenderFarClip updates the actual shared camera owner and avoids entering LLWorld on the native path, including window retirement.
 - Actual-source CPU tests compare the original reference camera policies, exercise current/forged/retired region authority, grid defaults, metadata publication and setting effects. Canonical-header syntax checks pass for the new owners and consumers. These changes have not yet been rebuilt or replay-qualified at this checkpoint. The broader local source run also exposed the host's private-window-station restriction; no foreground fallback is permitted. Full connected UI/keyboard, land/estate/maps, visual publication and platform acceptance remain open.
+
+
+### Shared land/controller and keyboard-mode checkpoint
+
+The canonical `RelWithDebInfo` viewer built from `9b93a377bc` passed the strict
+headless connected-session replay (`.tmp/uk13`) in 56.9 seconds using AnsaStorm
+Modern/base/en at UI scale 1.5. This covers the preceding shared region/camera
+checkpoint, not the subsequently added land-controller work, all skins, or native
+presentation qualification.
+
+The next production checkpoint transposes the existing full parcel parsers,
+selection and request lifetimes, land Buy/Sell controllers, covenant and estate
+models, environment CPU processing and region-limit consumers. Buy/Sell use their
+real shared XUI/controllers; actions retain ordinary transaction and selection
+policy. Refused, stale and retired intents do not become successful transactions.
+AboutLand and other families remain incomplete until their actual nested controls,
+services and visual consumers are wired and exercised.
+
+Native camera pose changes now complete the shared current/last camera mode,
+AO, simulator-control and UI transition before keyboard routing. Mouselook
+restrictions remain effective for wheel/held-key transitions too. Compiled tests
+execute this transition and the unchanged shared keyboard mode selector. The
+connected replay now checks actual first-person keyboard input and third-person
+restoration. Runtime acceptance of this new checkpoint is still pending.
+
+The acceptance rule remains 100% production connected UI and keyboard navigation.
+No CPU model checkpoint, constructed controller, admission count, or passing subset
+constitutes completion. Remaining native object tools, parcel visual feedback,
+map/appearance/snapshot and other documented families remain open.

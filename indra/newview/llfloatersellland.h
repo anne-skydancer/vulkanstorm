@@ -27,10 +27,12 @@
 #define LL_LLFLOATERSELLLAND_H
 
 #include "llsafehandle.h"
+#include <typeinfo>
 
 class LLFloater;
 class LLParcel;
 class LLViewerRegion;
+class VSRegionContext;
 class LLParcelSelection;
 
 class LLFloaterSellLand
@@ -39,6 +41,8 @@ public:
     static void sellLand(LLViewerRegion* region,
                         LLSafeHandle<LLParcelSelection> parcel);
 
+    static void sellLand(const VSRegionContext&, LLSafeHandle<LLParcelSelection>);
+    static bool isNativeInternalType(const std::type_info&);
     static LLFloater* buildFloater(const LLSD& key);
 };
 

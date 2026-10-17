@@ -28,6 +28,8 @@
 #include "llviewerprecompiledheaders.h"
 #include "llviewercontrol.h"
 #include "llsettingsvo.h"
+#include "vsregioncontext.h"
+#include "llviewerwindow.h"
 
 #include "pipeline.h"
 
@@ -201,7 +203,7 @@ void LLSettingsVOBase::onInventoryItemCreated(const LLUUID &inventoryId, LLSetti
 
 void LLSettingsVOBase::updateInventoryItem(const LLSettingsBase::ptr_t &settings, LLUUID inv_item_id, inventory_result_fn callback, bool update_name)
 {
-    const LLViewerRegion* region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
     if (!region)
     {
         LL_WARNS("SETTINGS") << "Not connected to a region, cannot save setting." << LL_ENDL;
@@ -261,7 +263,7 @@ void LLSettingsVOBase::updateInventoryItem(const LLSettingsBase::ptr_t &settings
 
 void LLSettingsVOBase::updateInventoryItem(const LLSettingsBase::ptr_t &settings, LLUUID object_id, LLUUID inv_item_id, inventory_result_fn callback)
 {
-    const LLViewerRegion* region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
     if (!region)
     {
         LL_WARNS("SETTINGS") << "Not connected to a region, cannot save setting." << LL_ENDL;
@@ -675,6 +677,7 @@ void LLSettingsVOSky::updateSettings()
     F32 sun_dynamic_range = llmax(sdr(), 0.0001f);
     mSceneLightStrength = 2.0f * (0.75f + sun_dynamic_range * dp);
 
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())return;
     gSky.setSunAndMoonDirectionsCFR(sun_direction, moon_direction);
     gSky.setSunTextures(getSunTextureId(), getNextSunTextureId());
     gSky.setMoonTextures(getMoonTextureId(), getNextMoonTextureId());
@@ -1149,6 +1152,7 @@ void LLSettingsVOWater::updateSettings()
     // base class clears dirty flag so as to not trigger recursive update
     LLSettingsBase::updateSettings();
 
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())return;
     LLDrawPoolWater* pwaterpool = (LLDrawPoolWater*)gPipeline.getPool(LLDrawPool::POOL_WATER);
     if (pwaterpool)
     {

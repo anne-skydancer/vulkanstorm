@@ -98,6 +98,20 @@ jobs:
       - run: python scripts/tests/test_native_region_limits.py
       - run: python scripts/tests/test_native_region_context.py
       - run: python scripts/tests/test_native_region_info.py
+      - run: python scripts/tests/test_native_avatar_standing.py
+      - run: python scripts/tests/test_native_camera_mode.py
+      - run: python scripts/tests/test_native_parcel_cpu.py
+      - run: python scripts/tests/test_native_parcel_parser.py
+      - run: python scripts/tests/test_native_land_lifecycle.py
+      - run: python scripts/tests/test_native_parcel_replies.py
+      - run: python scripts/tests/test_native_covenant_lifecycle.py
+      - run: python scripts/tests/test_native_environment_cpu.py
+      - run: python scripts/tests/test_native_parcel_boundaries.py
+      - run: python scripts/tests/test_native_parcel_transactions.py
+      - run: python scripts/tests/test_native_open_region_settings.py
+      - run: python scripts/tests/test_native_confirmation_lifecycle.py
+      - run: python scripts/tests/test_native_estate_model.py
+      - run: python scripts/tests/test_native_land_deferred_callbacks.py
       - run: python scripts/tests/test_shared_object_properties.py
       - run: python scripts/tests/test_connected_utility_xui.py
       - run: python scripts/tests/test_native_object_selection.py

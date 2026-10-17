@@ -34,6 +34,8 @@
 
 // viewer
 #include "llagent.h"
+#include "vsregioncontext.h"
+#include "vsnativeim.h"
 #include "llfloaterregioninfo.h" // for invoice id
 #include "llviewerregion.h"
 
@@ -88,6 +90,9 @@ void LLEstateInfoModel::setDenyScriptedAgents(bool val)     { setFlag(REGION_FLA
 
 void LLEstateInfoModel::update(const strings_t& strings)
 {
+    if(strings.size()<5)return;
+    const auto context=vs_current_region_context();
+    if(!context || !context->current())return;
     // NOTE: LLDispatcher extracts strings with an extra \0 at the
     // end.  If we pass the std::string direct to the UI/renderer
     // it draws with a weird character at the end of the string.
@@ -103,8 +108,7 @@ void LLEstateInfoModel::update(const strings_t& strings)
     LL_DEBUGS() << getInfoDump() << LL_ENDL;
 
     // Update region owner.
-    LLViewerRegion* regionp = gAgent.getRegion();
-    regionp->setOwner(mOwnerID);
+    if(!vs_publish_region_owner(*context,mOwnerID))return;
 
     // Let interested parties know that estate info has been updated.
     mUpdateSignal();
@@ -120,26 +124,18 @@ void LLEstateInfoModel::notifyCommit()
 // tries to send estate info using a cap; returns true if it succeeded
 bool LLEstateInfoModel::commitEstateInfoCaps()
 {
-    std::string url = gAgent.getRegionCapability("EstateChangeInfo");
+    const auto context=vs_current_region_context();
+    if(!context || !context->current())return false;
+    const auto account=vs_native_im_guard();const auto identity=this;
+    auto current=[context,account,identity]{return account() && context->current() &&
+        LLEstateInfoModel::instanceExists() && &LLEstateInfoModel::instance()==identity;};
+    std::string url=context->getCapability("EstateChangeInfo");
 
     if (url.empty())
     {
         // whoops, couldn't find the cap, so bail out
         return false;
     }
-
-    LLCoros::instance().launch("LLEstateInfoModel::commitEstateInfoCapsCoro",
-        boost::bind(&LLEstateInfoModel::commitEstateInfoCapsCoro, this, url));
-
-    return true;
-}
-
-void LLEstateInfoModel::commitEstateInfoCapsCoro(std::string url)
-{
-    LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
-    LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
-        httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("EstateChangeInfo", httpPolicy);
-    LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
     LLSD body;
     body["estate_name"] = getName();
@@ -163,8 +159,23 @@ void LLEstateInfoModel::commitEstateInfoCapsCoro(std::string url)
         << ", sun_hour = " << getSunHour() << LL_ENDL;
     LL_DEBUGS() << body << LL_ENDL;
 
+    LLCoros::instance().launch("LLEstateInfoModel::commitEstateInfoCapsCoro",
+        [url,body,current]{commitEstateInfoCapsCoro(url,body,current);});
+
+    return true;
+}
+
+void LLEstateInfoModel::commitEstateInfoCapsCoro(std::string url,LLSD body,std::function<bool()> current)
+{
+    if(!current())return;
+    LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
+    LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
+        httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("EstateChangeInfo", httpPolicy);
+    LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
+
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, body);
 
+    if(!current())return;
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -188,6 +199,8 @@ void LLEstateInfoModel::commitEstateInfoCapsCoro(std::string url)
 // strings[3] = str((S32)(sun_hour * 1024.f))
 void LLEstateInfoModel::commitEstateInfoDataserver()
 {
+    const auto context=vs_current_region_context();
+    if(!context || !context->current())return;
     LL_DEBUGS("WindlightSync") << "Sending estate info: "
         << "is_sun_fixed = " << getUseFixedSun()
         << ", sun_hour = " << getSunHour() << LL_ENDL;
@@ -213,7 +226,7 @@ void LLEstateInfoModel::commitEstateInfoDataserver()
     msg->nextBlock("ParamList");
     msg->addString("Parameter", llformat("%d", (S32) (getSunHour() * 1024.0f)));
 
-    gAgent.sendMessage();
+    msg->sendReliable(context->getHost());
 }
 
 std::string LLEstateInfoModel::getInfoDump()
@@ -235,4 +248,9 @@ std::string LLEstateInfoModel::getInfoDump()
     std::stringstream dump_str;
     dump_str << dump;
     return dump_str.str();
+}
+
+void LLEstateInfoModel::reset()
+{
+    mName.clear();mOwnerID.setNull();mID=0;mFlags=0;mSunHour=0;
 }

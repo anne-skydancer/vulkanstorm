@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
 
 #include "llfloatertools.h"
 
@@ -1513,7 +1514,7 @@ void LLFloaterTools::updateLandImpacts()
     // <FS:Ansariel> Bring back remaining capacity info
     S32 rezzed_prims = parcel->getSimWidePrimCount();
     S32 total_capacity = parcel->getSimWideMaxPrimCapacity();
-    LLViewerRegion* region = LLViewerParcelMgr::getInstance()->getSelectionRegion();
+    const auto region=LLViewerParcelMgr::getInstance()->getSelectionRegionContext();
     if (region)
     {
         S32 max_tasks_per_region = (S32)region->getMaxTasks();

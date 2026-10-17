@@ -21,8 +21,11 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 
 #include "llhttpnode.h"
+#include "vsregioncontext.h"
+#include "llviewerwindow.h"
 #include "llviewercontrol.h"
 #include "llagent.h"
 #include "llsurface.h"
@@ -54,10 +57,18 @@ class OpenRegionInfoUpdate : public LLHTTPNode
             return;
         }
 
+        const auto region=vs_current_region_context();
+        if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        {
+            if(!region || !region->current() || LLHost(input["sender"].asString())!=region->getHost() || !input["body"].isMap())return;
+            for(const char* field:{"DrawDistance","TerrainDetailScale","MaxDragDistance","MinHoleSize","MaxHollowSize",
+                "MaxPosX","MaxPosY","MaxPosZ","MinPosX","MinPosY","MinPosZ","MaxPrimScale","MaxPhysPrimScale","MinPrimScale"})
+                if(input["body"].has(field) && !std::isfinite(input["body"][field].asReal()))return;
+        }
         std::string dump = input["body"].asString();
         LL_WARNS() << dump << LL_ENDL;
 
-        LLWorld * regionlimits = LLWorld::getInstance();
+        VSRegionLimits* regionlimits=&vs_region_limits();
 
         LLSD body = input["body"];
         //LL_INFOS() << "data: " << LLSDNotationStreamer(body) << LL_ENDL;
@@ -83,7 +94,7 @@ class OpenRegionInfoUpdate : public LLHTTPNode
                 if (draw_distance > 0)
                 {
                     gAgentCamera.mDrawDistance = draw_distance;
-                    LLWorld::getInstance()->setLandFarClip(draw_distance);
+                    if(!(gViewerWindow && gViewerWindow->isNativeVulkan()))LLWorld::getInstance()->setLandFarClip(draw_distance);
                 }
                 regionlimits->setDrawDistance((F32)body["DrawDistance"].asReal());
             }
@@ -201,7 +212,7 @@ class OpenRegionInfoUpdate : public LLHTTPNode
             regionlimits->setAllowParcelWindLight(body["AllowParcelWindLight"].asInteger() == 1);
         }
 
-        regionlimits->updateLimits();
+        vs_apply_region_limits();
     }
 };
 

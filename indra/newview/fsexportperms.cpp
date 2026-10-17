@@ -23,6 +23,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 
 #include "fsexportperms.h"
 #include "lfsimfeaturehandler.h"
@@ -52,7 +53,7 @@ bool FSExportPermsCheck::canExportNode(LLSelectNode* node, bool dae)
         if (!exportable)
         {
             // Megaprim check
-            F32 max_object_size = LLWorld::getInstance()->getRegionMaxPrimScale();
+            F32 max_object_size = vs_region_limits().getRegionMaxPrimScale();
             LLVector3 vec = object->getScale();
             if (vec.mV[VX] > max_object_size || vec.mV[VY] > max_object_size || vec.mV[VZ] > max_object_size)
             {

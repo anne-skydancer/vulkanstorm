@@ -27,6 +27,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 
 #include "llslurl.h"
 
@@ -426,7 +427,7 @@ LLSLURL::LLSLURL(const std::string& slurl)
 //              (F32(mPosition[VY]) < 0.f) ||
 //              (mPosition[VY] > REGION_WIDTH_METERS) ||
 //              (F32(mPosition[VZ]) < 0.f) ||
-//              (mPosition[VZ] > LLWorld::getInstance()->getRegionMaxHeight()))
+//              (mPosition[VZ] > vs_region_limits().getRegionMaxHeight()))
 //              {
 //                  mType = INVALID;
 //                  return;

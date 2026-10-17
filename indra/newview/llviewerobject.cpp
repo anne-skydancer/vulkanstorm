@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 #include "vsobjectinteraction.h"
 
 #include "llviewerobject.h"
@@ -1353,7 +1354,7 @@ U32 LLViewerObject::processUpdateMessage(LLMessageSystem *mesgsys,
     //const F32 size = LLWorld::getInstance()->getRegionWidthInMeters();
     const F32 size = mRegionp->getWidth();
 // </FS:CR> Aurora Sim
-    const F32 MAX_HEIGHT = LLWorld::getInstance()->getRegionMaxHeight();
+    const F32 MAX_HEIGHT = vs_region_limits().getRegionMaxHeight();
     const F32 MIN_HEIGHT = LLWorld::getInstance()->getRegionMinHeight();
     S32 length = 0;
     S32 count = 0;
@@ -2731,7 +2732,7 @@ void LLViewerObject::interpolateLinearMotion(const F64SecondsImplicit& frame_tim
             static LLCachedControl<bool> no_fly_height_limit(gSavedSettings, "FSRemoveFlyHeightLimit");
             if(!no_fly_height_limit)
             {
-                new_pos.mV[VZ] = llmin(LLWorld::getInstance()->getRegionMaxHeight(), new_pos.mV[VZ]);
+                new_pos.mV[VZ] = llmin(vs_region_limits().getRegionMaxHeight(), new_pos.mV[VZ]);
             }
         }
 

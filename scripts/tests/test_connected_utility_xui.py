@@ -8,6 +8,25 @@ ROOT = Path(__file__).resolve().parents[2]
 SKINS = ROOT / 'indra/newview/skins'
 
 class ConnectedUtilityXUI(unittest.TestCase):
+    def test_land_purchase_controller_fields_and_every_shipped_overlay(self):
+        for kind in ('buy', 'sell'):
+            base_path=SKINS/f'default/xui/en/floater_{kind}_land.xml'
+            base=ET.parse(base_path).getroot()
+            names={node.get('name') for node in base.iter() if node.get('name')}
+            source=(ROOT/f'indra/newview/llfloater{kind}land.cpp').read_text(encoding='utf-8')
+            fields=re.findall(r'getChild(?:View|<[^>]+>)\(\s*"([^"]+)"',source)
+            for field in fields:
+                with self.subTest(kind=kind,field=field):self.assertIn(field,names)
+            def compare(expected,actual,path):
+                self.assertEqual((expected.tag,expected.get('name')),(actual.tag,actual.get('name')),str(path))
+                for child in actual:
+                    candidates=[node for node in expected if (node.tag,node.get('name'))==(child.tag,child.get('name'))]
+                    self.assertEqual(len(candidates),1,f'{path}: orphan/misnested {child.tag} {child.get("name")}')
+                    compare(candidates[0],child,path)
+            for path in sorted(SKINS.rglob(f'floater_{kind}_land.xml')):
+                if path==base_path:continue  # base widget fields were checked above
+                with self.subTest(path=str(path.relative_to(SKINS))):compare(base,ET.parse(path).getroot(),path)
+
     def test_currency_controller_uses_existing_fields(self):
         base = ET.parse(SKINS / 'default/xui/en/floater_buy_currency.xml').getroot()
         names = {node.get('name') for node in base.iter() if node.get('name')}

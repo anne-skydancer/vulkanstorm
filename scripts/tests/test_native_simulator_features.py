@@ -156,6 +156,7 @@ struct LLInventoryModelBackgroundFetch {
  void start(){++starts;}
 };
 struct VSNativeAppearance {explicit VSNativeAppearance(int){} void fallback(int){}};
+struct LLEnvironment {int changes=0;static LLEnvironment& instance(){static LLEnvironment value;return value;}void onRegionChange(){++changes;}};
 struct VSNativeSession {
  enum class Phase {Connecting,Connected,Logout};Phase mPhase=Phase::Connecting;
  enum class Startup {Precache,Complete};Startup mStartup=Startup::Precache;
@@ -180,6 +181,7 @@ int main(){
  assert(fetch.starts==1&&!s.mChangingRegion&&window.hides==1);
  s.mPhase=VSNativeSession::Phase::Logout;s.connected();assert(fetch.starts==1);
  assert(FSLSLBridge::instance().starts==2 && gAgentCamera.inits==0);
+ assert(LLEnvironment::instance().changes==2);
  VSNativeSession fresh;fresh.mHandshake=fresh.mMovement=fresh.mSeedReady=fresh.mCircuitAck=true;
  fresh.connected();assert(fetch.starts==2 && LLViewerCamera::instanceExists());
  auto* camera=LLViewerCamera::getInstance();assert(camera->heights==1 && camera->aspects==1 && camera->views==1);

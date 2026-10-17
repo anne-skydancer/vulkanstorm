@@ -7,6 +7,11 @@
 #include "llselectmgr.h"
 #include "xform.h"
 #include "llworld.h"
+#include "llagent.h"
+#include "llfloatertools.h"
+#include "llfloaterreg.h"
+#include "llviewerregion.h"
+#include "llviewerwindow.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #include "llviewerwindow.h"
@@ -304,4 +309,100 @@ VSRegionLimits& vs_region_limits()
     }
 #endif
     return LLWorld::instance();
+}
+
+void vs_apply_region_limits()
+{
+    if(!LLGridManager::getInstance())
+    {
+        return;
+    }
+
+    /*
+    mRegionMaxHeight
+    getRegionMinPrimScale
+    getRegionMaxPrimScale
+    getMinPrimXPos
+    getMinPrimYPos
+    getMinPrimZPos
+    getMaxPrimXPos
+    getMaxPrimYPos
+    getMaxPrimZPos
+    getRegionMaxHollowSize
+    getRegionMinHoleSize
+    getAllowPhysicalPrims
+    mRegionMaxPrimScaleNoMesh // not implemented
+    */
+    if(gFloaterTools)gFloaterTools->updateToolsSizeLimits();
+
+    /*
+    mAllowMinimap
+    */
+    if(vs_region_limits().getAllowMinimap() && LLFloaterReg::instanceVisible("mini_map")) LLFloaterReg::showInstance("mini_map");
+    else LLFloaterReg::hideInstance("mini_map");
+
+    /*
+    mMaxLinkedPrims;
+    mMaxPhysLinkedPrims; // not implemented
+    */
+    //done in llselectmgr.cpp
+
+    /*
+    mMaxDragDistance;
+    */
+    //done in llmaniptranslate.cpp
+
+    /*
+    mAllowRenderWater
+    */
+    if(!(gViewerWindow && gViewerWindow->isNativeVulkan()))
+        if(auto* region=gAgent.getRegion())region->rebuildWater();
+
+    /*
+    mMaxInventoryItemsTransfer
+    */
+    //done in llgiveinventory.cpp
+
+    /*
+    drawdistance // set in kowopenregionssettings.cpp
+    mLockedDrawDistance
+    mAllowRenderName;
+    */
+    //done in llviewerdisplay.cpp
+
+    /*
+    skyUseClassicClouds
+    */
+    //can't implement, classic clouds are removed from v3 viewers
+
+    /*
+    mEnableTeenMode
+    */
+    //this is enabletoggle, not set, done in llviewermenu.cpp
+
+    /*
+    mMaxPhysPrimScale
+    */
+    //todo
+
+    /*
+    mEnforceMaxBuild
+    */
+    // not used as long as there is no gSavedSettings.getBOOL("DisableMaxBuildConstraints") to overwrite default settings
+
+    /*
+    mAllowParcelWindLight
+    */
+    // not implemented setting
+
+    /*
+    //Update the floater if its around
+    LLPanelRegionOpenSettingsInfo* floater = LLFloaterRegionInfo::getPanelOpenSettings();
+
+    if (floater != NULL)
+    {
+        floater->refreshFromRegion(gAgent.getRegion());
+    }
+    */
+
 }

@@ -26,6 +26,7 @@
 
 #ifndef LL_LLESTATEINFOMODEL_H
 #define LL_LLESTATEINFOMODEL_H
+#include <functional>
 
 class LLMessageSystem;
 
@@ -46,6 +47,7 @@ public:
     boost::signals2::connection setUpdateCallback(const update_signal_t::slot_type& cb); /// the model has been externally updated
     boost::signals2::connection setCommitCallback(const update_signal_t::slot_type& cb); /// our changes have been applied
 
+    void reset();
     void sendEstateInfo(); /// send estate info to the simulator
 
     // getters
@@ -105,7 +107,7 @@ private:
     update_signal_t mUpdateSignal; /// emitted when we receive update from sim
     update_signal_t mCommitSignal; /// emitted when our update gets applied to sim
 
-    void commitEstateInfoCapsCoro(std::string url);
+    static void commitEstateInfoCapsCoro(std::string url,LLSD body,std::function<bool()> current);
 };
 
 inline bool LLEstateInfoModel::getFlag(U64 flag) const

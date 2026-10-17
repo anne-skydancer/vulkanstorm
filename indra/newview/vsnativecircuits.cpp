@@ -304,3 +304,12 @@ bool VSNativeSession::applyRegionInfo(LLMessageSystem& message)
     // An observer may synchronously change account/region or close the session.
     return accountCurrent() && mRegionEpoch==epoch && mHost==sender && regionReady() && circuitGeneration(sender)==incarnation;
 }
+
+bool VSNativeSession::publishRegionOwner(const LLHost& host,U64 incarnation,const LLUUID& owner)
+{
+    if(!regionReady() || host!=mHost || circuitGeneration(host)!=incarnation)return false;
+    const auto found=mCircuits.find(host);
+    if(found==mCircuits.end() || !found->second.acknowledged || !found->second.handshake)return false;
+    found->second.owner=owner;
+    return true;
+}

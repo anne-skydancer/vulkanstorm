@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 
 #include "llmodelpreview.h"
 
@@ -847,7 +848,7 @@ void LLModelPreview::rebuildUploadData()
 
     // <FS:AW> OpenSim limits
     //F32 max_import_scale = (DEFAULT_MAX_PRIM_SCALE - 0.1f) / max_scale;
-    F32 region_max_prim_scale = LLWorld::getInstance()->getRegionMaxPrimScale();
+    F32 region_max_prim_scale = vs_region_limits().getRegionMaxPrimScale();
     F32 max_import_scale = region_max_prim_scale/max_scale;
     // </FS:AW>
 

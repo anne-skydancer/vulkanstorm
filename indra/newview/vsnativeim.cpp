@@ -130,7 +130,7 @@ void vs_native_im_reset()
     if (LLNotificationsUI::LLChannelManager::instanceExists())
         LLNotificationsUI::LLChannelManager::instance().resetNativeAccount();
     LLFloaterBuyCurrency::resetAccountRequests();
-    for (const char* name : {"buy_currency", "buy_currency_html", "add_payment_method", "money_tracker"})
+    for (const char* name : {"buy_land", "sell_land", "buy_currency", "buy_currency_html", "add_payment_method", "money_tracker"})
         LLFloaterReg::destroyInstance(name);
     LLUploadDialog::modalUploadFinished();
     sOfflineGeneration = 0;

@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 
 #include "llnetmap.h"
 
@@ -324,7 +325,7 @@ void LLNetMap::draw()
     // </FS:Ansariel>: Synchronize netmap scale throughout instances
 
     // <FS:Ansariel> Aurora Sim
-    if (!LLWorld::getInstance()->getAllowMinimap())
+    if (!vs_region_limits().getAllowMinimap())
     {
         return;
     }

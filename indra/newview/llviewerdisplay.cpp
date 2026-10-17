@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 #if VS_VULKAN_DIAGNOSTICS
 #include "vsparitybaseline.h"
 #include "vsparityscene.h"
@@ -1126,7 +1127,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         LLPipeline::sUnderWaterRender = LLViewerCamera::getInstance()->cameraUnderWater();
 
 // <FS:CR> Aurora Sim
-        if (!LLWorld::getInstance()->getAllowRenderWater())
+        if (!vs_region_limits().getAllowRenderWater())
         {
             LLPipeline::sUnderWaterRender = false;
         }
