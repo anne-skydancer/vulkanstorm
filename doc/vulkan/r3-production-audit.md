@@ -698,3 +698,14 @@ archive readbacks reject absent or substituted evidence. The cases remain
 headless with bounded stage deadlines. Source regressions and real viewer
 translation-unit compilation pass; actual plugin runtime acceptance is pending
 its rebuilt canonical executable.
+
+Actual plugin execution at `5c274b45fd` passed the full headless image replay
+in 32.6 seconds (`.tmp/r3-media-resize-observed`). The real CEF plugin supplied
+BGRA/OpenGL-origin buffers at 64x64 and 78x46; all independently expected GPU
+pixels, increasing immutable generations, shared-manager/surface ownership,
+last-source retirement and account retirement passed. The first attempt at
+`9fb65c6d97` had passed initial/update pixels but timed out at resize; the UI
+control's temporary-invalid-buffer path still erased source-owned publication.
+That erase is now removed as well. Stage diagnostics record actual plugin,
+stride and publication dimensions rather than extending deadlines or relaxing
+pixel checks. This local result does not certify all R3 work or platform CI.
