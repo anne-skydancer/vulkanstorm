@@ -743,6 +743,13 @@ struct Replay
             if (!accountSetupStarted)
             {
                 if (LLStartUp::getStartupState() != STATE_LOGIN_WAIT) return;
+                if(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE"))
+                {
+                    const auto retired=vs_ui_texture_cache_evidence(true);
+                    if(imageWorkPending(retired)) return;
+                    require(retired["images"].size()==0,"Logged-out account retained native images");
+                    imEvidence["retired_texture_cache"]=retired;
+                }
                 auto* root = gViewerWindow->getRootView();
                 auto* username = root->findChild<LLComboBox>("username_combo");
                 auto* password = root->findChild<LLLineEditor>("password_edit");
@@ -1012,6 +1019,13 @@ struct Replay
             if (!reloginSubmitted)
             {
                 if (LLStartUp::getStartupState() != STATE_LOGIN_WAIT) return;
+                if(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE"))
+                {
+                    const auto retired=vs_ui_texture_cache_evidence(true);
+                    if(imageWorkPending(retired)) return;
+                    require(retired["images"].size()==0,"Logged-out account retained native images");
+                    imEvidence["retired_texture_cache"]=retired;
+                }
                 auto* root = gViewerWindow->getRootView();
                 auto* username = root->findChild<LLComboBox>("username_combo");
                 auto* password = root->findChild<LLLineEditor>("password_edit");
@@ -1131,7 +1145,6 @@ struct Replay
                 report["startup_work"] = startupWork;
                 report["startup_warning_acknowledgements"] = startupWarnings;
                 report["texture_cache"]=vs_ui_texture_cache_evidence(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE")!=nullptr);
-                if(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE")) report["retired_texture_cache"]=report["texture_cache"];
                 // Snapshot transport evidence before appending verified fixture witnesses.
                 report["native_location_lookup"] = locationResolved;
                 report["native_landmark_v2"] = handleResolved;
@@ -1269,6 +1282,8 @@ struct Replay
             owner.begin(); owner.expireDeadlineForReplay(); owner.tick();
             report["connection_timeout"] = owner.phase() == VSNativeSession::Phase::Disconnected;
             require(report["connection_timeout"].asBoolean(), "Connection deadline did not disconnect");
+            if(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE"))
+                report["final_texture_cache"]=vs_ui_texture_cache_evidence(true);
             report["passed"] = true;
             std::filesystem::path path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"));
             std::filesystem::create_directories(path);

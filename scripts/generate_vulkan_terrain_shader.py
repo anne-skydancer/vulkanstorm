@@ -2,7 +2,7 @@
 from pathlib import Path
 import argparse
 root=Path(__file__).resolve().parents[1]
-reference=(root/'indra/newview/app_settings/shaders/class1/deferred/pbrterrainUtilF.glsl').read_text()
+reference=(root/'indra/newview/app_settings/shaders/class1/deferred/pbrterrainUtilF.glsl').read_text(encoding="utf-8")
 # Preserve the reference functions and their complete LGPL/MIT attribution.
 reference=reference.replace('in vec3 vary_vertex_normal;', '#define vary_vertex_normal worldNormal')
 for name in ('tex_col','tex_orm','tex_vNt','tex_emissive'):
@@ -116,15 +116,26 @@ void main() {
 """
 header='// Native terrain material adapter around the shared reference sampler. LGPL-2.1.\n#pragma once\n#include <string>\nnamespace VSTerrainShader {\n'
 source=prolog+reference+wrapper
-chunks=[source[i:i+8000] for i in range(0,len(source),8000)]
+# MSVC bounds raw string literals by encoded bytes, not Unicode code points.
+# Cut only between complete UTF-8 characters so all host encodings emit exactly
+# the same source and remain below the compiler's literal-size ceiling.
+chunks=[]
+chunk=[]
+encoded_size=0
+for character in source:
+    width=len(character.encode('utf-8'))
+    if encoded_size+width>8000:
+        chunks.append(''.join(chunk));chunk=[];encoded_size=0
+    chunk.append(character);encoded_size+=width
+if chunk:chunks.append(''.join(chunk))
 header+='inline std::string source(int detail) { return "#define TERRAIN_PBR_DETAIL "+std::to_string(detail)+"\\n" + '+' + '.join('std::string(R"VS_TERRAIN('+part+')VS_TERRAIN")' for part in chunks)+'; }\n}\n'
 destination=root/'indra/newview/vsterrainshader.h'
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--check',action='store_true')
 args=parser.parse_args()
 if args.check:
-    if not destination.exists() or destination.read_text()!=header:
+    if not destination.exists() or destination.read_text(encoding="utf-8")!=header:
         raise SystemExit('Native terrain shader is stale; run scripts/generate_vulkan_terrain_shader.py')
     print('PASS: native terrain uses the current reference sampler')
 else:
-    destination.write_text(header)
+    destination.write_text(header,encoding="utf-8",newline="\n")

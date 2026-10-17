@@ -111,6 +111,23 @@ class TextureCacheEvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'Truncated'):
                 cache.validate_image(row,folder)
 
+    def test_retirement_keeps_distinct_snapshots_and_all_http_counts(self):
+        import copy
+        snapshot=dict(images=[],pending_fetches=0,pending_uploads=0,process_instance='same',network_requests=2)
+        record=dict(texture_cache=dict(process_instance='same'),retired_texture_cache=snapshot,
+                    final_texture_cache=dict(snapshot,network_requests=3))
+        requests=[dict(query=dict(texture_id=['identity'])) for _ in range(4)]
+        cache.validate_retirement(record,requests,1)
+        for field in ('retired_texture_cache','final_texture_cache'):
+            for key,value in (('images',[dict(id='still-published')]),('pending_fetches',1),
+                              ('pending_uploads',1),('process_instance','different')):
+                changed=copy.deepcopy(record);changed[field][key]=value
+                with self.subTest(field=field,key=key),self.assertRaises(ValueError):
+                    cache.validate_retirement(changed,requests,1)
+        for count in (1,4):
+            changed=copy.deepcopy(record);changed['final_texture_cache']['network_requests']=count
+            with self.assertRaises(ValueError):cache.validate_retirement(changed,requests,1)
+
     def test_cache_reuse_requires_actual_account_and_grid_transition(self):
         import copy
         cold=dict(texture_cache=dict(grid_identity='util.agni.lindenlab.com',
