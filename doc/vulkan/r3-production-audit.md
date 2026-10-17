@@ -1109,3 +1109,24 @@ the same discard. Pressure references now decode the shared policy's exact
 clamped byte window, as the earlier streaming cases already do. Viewer fetch,
 decode, residency behavior and pixel tolerances are unchanged. The failed run
 is retained; final runtime and three-platform acceptance remain required.
+
+
+### Complete local committed-runner acceptance (2026-10-17)
+
+At 54fa455f68, the fully staged canonical viewer passed all nine restart/cache
+cases in 476.8 seconds, then the actual concurrent primary/sibling ownership
+check. The primary remained live for 105.0 seconds and the sibling completed in
+54.5 seconds, read-only with unchanged cache bytes and zero texture HTTP. The
+independent archive validators accepted 7,359 actual collected files and
+rejected omissions of the regional override, pressure readback and shutdown
+write-completion artifact while their source files still existed locally.
+
+The new bounded-prefix reference produces exactly the observed discard-two
+pressure pixels (SHA-256 f0fd992ee7a368ea05868eb0d35cbafd01c9e2cea5f398abd2fda30ec97942dc).
+The same source passed R1 in 60.8 seconds and R2 plus received-terrain publication
+in 122.7 seconds headlessly. The deterministic receipt regression fails on the
+previous racy implementation and passes on the corrected producer.
+
+These are local Windows software-device results. Hosted Windows native-window
+qualification, Linux SwiftShader/Lavapipe, and uploaded archive validation still
+must pass on the final source before R3 is declared qualified.
