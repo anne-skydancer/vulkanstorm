@@ -1,5 +1,5 @@
 {
-  "source_commit": "2a8d3aea965215f1e66a6575e7f8a2ebf1602ea0",
+  "source_commit": "e7a126be74269eb482674cd653ac2e694aa01239",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -440,7 +440,7 @@
       ]
     },
     "indra/newview/vsuiresources.cpp": {
-      "sha256": "1d33eb059f6df759936da4ae6dd96f4c11985618061e1567b34ac028aee531ef",
+      "sha256": "cbd85c181eea65bcb89afe9988ed56feb922ba423e82de23578d14694c160b0b",
       "anchors": [
         "VSUIResources::publish",
         "VSUIResources::fontBatch",
@@ -632,14 +632,14 @@
       ]
     },
     "indra/newview/vsuiimageprovider.cpp": {
-      "sha256": "8198f9c642b3f727f69fadfd265a9c04424422c7971c4a53dd442a83227dfc74",
+      "sha256": "6309e9aace8e5d55084cd3a3c7edd43377da2c5ca85f1dc8009a925046a777c9",
       "anchors": [
         "VSUIImageProvider::getUIImage",
         "VSUIImageProvider::getUIImageByID"
       ]
     },
     "indra/newview/vsuiimageprovider.h": {
-      "sha256": "b902a7a8e5b3035b940e8d53e76fd0b6aabbd76c41286f6a53d6a5b9dc91170a",
+      "sha256": "a1d49d2758727afa1ced0b10facebf386dca56f7f09a07a12ed913c85388a611",
       "anchors": [
         "class VSUIImageProvider"
       ]
