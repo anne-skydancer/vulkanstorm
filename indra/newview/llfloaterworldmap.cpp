@@ -640,7 +640,7 @@ void LLFloaterWorldMap::reshape( S32 width, S32 height, bool called_from_parent 
 void LLFloaterWorldMap::draw()
 {
     // <FS:Ansariel> Performance improvement
-    static LLButton* track_region_btn     = getChild<LLButton>("track_region");
+    LLButton* track_region_btn = getChild<LLButton>("track_region");
 
     static LLUIColor map_track_color = LLUIColorTable::instance().getColor("MapTrackColor", LLColor4::white);
     static LLUIColor map_track_disabled_color = LLUIColorTable::instance().getColor("MapTrackDisabledColor", LLColor4::white);
@@ -2127,8 +2127,7 @@ LLPanelHideBeacon::LLPanelHideBeacon() :
 // static
 LLPanelHideBeacon* LLPanelHideBeacon::getInstance()
 {
-    static LLPanelHideBeacon* panel = getPanelHideBeacon();
-    return panel;
+    return getPanelHideBeacon();
 }
 
 

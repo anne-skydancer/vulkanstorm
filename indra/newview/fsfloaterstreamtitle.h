@@ -124,6 +124,7 @@ private:
     LLHandle<LLFloater> mHistory{};
 
     boost::signals2::connection mUpdateConnection{};
+    boost::signals2::scoped_connection mVisibilityConnection;
 
     std::string mCurrentTitle{};
     std::string mCurrentDrawnTitle{};

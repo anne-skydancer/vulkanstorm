@@ -457,11 +457,36 @@ LLWindowSDL::LLWindowSDL(LLWindowCallbacks* callbacks,
     mKeyModifiers = KMOD_NONE;
 }
 
+// SDL's selected composition range is distinct from the full preedit string.
+// https://wiki.libsdl.org/SDL2/Tutorials-TextInput
+static void update_native_preedit(LLPreeditor* editor, const char* text, S32 start, S32 selected)
+{
+    if (!editor) return;
+    const auto composition = utf8str_to_wstring(text ? text : "");
+    S32 position = 0, length = 0;
+    editor->getPreeditRange(&position, &length);
+    // Empty cancellation must not erase an ordinary committed selection.
+    if (!composition.empty() || length > 0) editor->resetPreedit();
+    if (composition.empty()) return;
+    const S32 size = S32(composition.size());
+    const S32 caret = llclamp(start, 0, size);
+    const S32 count = llclamp(selected, 0, size - caret);
+    LLPreeditor::segment_lengths_t segments;
+    LLPreeditor::standouts_t standouts;
+    if (caret > 0) { segments.push_back(caret); standouts.push_back(false); }
+    if (count > 0) { segments.push_back(count); standouts.push_back(true); }
+    if (caret + count < size) { segments.push_back(size - caret - count); standouts.push_back(false); }
+    editor->updatePreedit(composition, segments, standouts, caret);
+}
+
 bool LLWindowSDL::createNativeWindow(S32 x, S32 y, S32 width, S32 height)
 {
     // IME policy belongs to the SDL window, independently of GL context setup.
     mIMEEnabled = gSavedSettings.getBOOL("SDL2IMEEnabled");
     SDL_SetHint(SDL_HINT_IME_INTERNAL_EDITING, mIMEEnabled ? "1" : "0");
+#ifdef SDL_HINT_IME_SUPPORT_EXTENDED_TEXT
+    SDL_SetHint(SDL_HINT_IME_SUPPORT_EXTENDED_TEXT, "1");
+#endif
     SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
     if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) return false;
     mSDLFlags = SDL_WINDOW_RESIZABLE;
@@ -1907,20 +1932,17 @@ void LLWindowSDL::gatherInput()
 
             case SDL_TEXTEDITING:
             {
-                if (!mUseGL && mPreeditor)
-                {
-                    const auto composition = utf8str_to_wstring(event.edit.text);
-                    S32 position = 0, length = 0;
-                    mPreeditor->getPreeditRange(&position, &length);
-                    // resetPreedit also deletes ordinary selected text. An
-                    // empty composition/cancel must leave committed text intact.
-                    if (!composition.empty() || length > 0) mPreeditor->resetPreedit();
-                    if (!composition.empty())
-                        mPreeditor->updatePreedit(composition, {S32(composition.size())}, {true},
-                            llclamp(event.edit.start, 0, S32(composition.size())));
-                }
+                if (!mUseGL) update_native_preedit(mPreeditor, event.edit.text, event.edit.start, event.edit.length);
                 break;
             }
+#if SDL_VERSION_ATLEAST(2, 0, 22)
+            case SDL_TEXTEDITING_EXT:
+            {
+                if (!mUseGL) update_native_preedit(mPreeditor, event.editExt.text, event.editExt.start, event.editExt.length);
+                SDL_free(event.editExt.text);
+                break;
+            }
+#endif
             case SDL_TEXTINPUT:
             {
                 if (!mUseGL && mPreeditor) mPreeditor->resetPreedit();

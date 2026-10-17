@@ -1222,6 +1222,7 @@ set(viewer_HEADER_FILES
     vsvegetation.h
     vsavatarmotions.h
     vsavatarservices.h
+    vscoarselocations.h
     vswindfield.h
     llfloater360capture.h
     llfloaterabout.h

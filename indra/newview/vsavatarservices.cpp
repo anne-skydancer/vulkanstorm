@@ -191,11 +191,12 @@ std::vector<VSAvatarLocation> vs_avatar_locations(const LLVector3d& relativeTo, 
         const auto session = VSNativeSession::active();
         if (!session || !session->regionReady() || !gViewerWindow->nativeContext() || !relativeTo.isFinite() ||
             !std::isfinite(radius) || radius < 0) return result;
-        const F64 squaredRadius = F64(radius) * radius;
-        std::set<LLUUID> seen;
-        for (const auto& avatar : gViewerWindow->nativeContext()->world().avatarLocations())
-            if ((avatar.position - relativeTo).lengthSquared() <= squaredRadius && seen.insert(avatar.id).second)
-                result.push_back({avatar.id, avatar.position});
+        std::vector<VSCoarseSample<LLUUID>> precise;
+        for(const auto& avatar:gViewerWindow->nativeContext()->world().avatarLocations())
+            precise.push_back({avatar.id,{avatar.position.mdV[0],avatar.position.mdV[1],avatar.position.mdV[2]},true});
+        for(const auto& avatar:vs_merge_coarse(precise,session->coarseAvatarLocations(),
+            std::array<double,3>{relativeTo.mdV[0],relativeTo.mdV[1],relativeTo.mdV[2]},F64(radius)))
+            result.push_back({avatar.id,LLVector3d(avatar.position[0],avatar.position[1],avatar.position[2])});
         return result;
     }
 #endif

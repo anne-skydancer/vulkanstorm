@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llworldmap.h"
 
@@ -85,6 +88,10 @@ LLSimInfo::LLSimInfo(U64 handle)
 
 void LLSimInfo::setLandForSaleImage (LLUUID image_id)
 {
+#if VS_NATIVE_VULKAN
+    // The CPU model retains image identity; native frontend publication is separate.
+    if(VSNativeSession::active()){mMapImageID=image_id;mOverlayImage=nullptr;return;}
+#endif
 // <FS:CR> Aurora Sim
     if (mMapImageID.isNull() && image_id.notNull())
     {
@@ -114,6 +121,9 @@ void LLSimInfo::setLandForSaleImage (LLUUID image_id)
 
 LLPointer<LLViewerFetchedTexture> LLSimInfo::getLandForSaleImage ()
 {
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())return nullptr;
+#endif
     if (mOverlayImage.isNull() && mMapImageID.notNull())
     {
         // Fetch the image if it hasn't been done yet (unlikely but...)
@@ -276,6 +286,8 @@ LLWorldMap::~LLWorldMap()
 
 void LLWorldMap::reset()
 {
+    cancelTracking();
+    mTrackingLocation.clearVec();
     clearItems(true);       // Clear the items lists
     clearImageRefs();       // Clear the world mipmap and the land for sale tiles
     clearSimFlags();        // Clear the block info flags array
@@ -283,6 +295,7 @@ void LLWorldMap::reset()
     // Finally, clear the region map itself
     for_each(mSimInfoMap.begin(), mSimInfoMap.end(), DeletePairedPointer());
     mSimInfoMap.clear();
+    mFirstRequest = true;
 }
 
 // Returns true if the items have been cleared

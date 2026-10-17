@@ -13,6 +13,8 @@
 #include "lleventpoll.h"
 #include "workqueue.h"
 #include "message.h"
+#include "llcallingcard.h"
+#include "llregionhandle.h"
 #include <utility>
 namespace
 {
@@ -21,6 +23,66 @@ bool circuitURL(const std::string& url)
     return url.size()<=4096 && (url.compare(0,8,"https://")==0 || url.compare(0,7,"http://")==0) && !LLURI(url).hostName().empty();
 }
 }
+// Native CPU spatial snapshots; no legacy region or scene ownership.
+std::vector<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshots() const
+{
+    std::vector<RegionSnapshot> result;
+    if(mShutdown || mPhase!=Phase::Connected)return result;
+    for(const auto& [host,region]:mCircuits)
+    {
+        if(!region.acknowledged || !region.handshake)continue;
+        RegionSnapshot row;
+        row.account=account();row.host=host;row.handle=region.handle;row.circuit=region.incarnation;
+        row.width=region.width;row.height=region.height;row.id=region.id;row.owner=region.owner;
+        row.name=region.name;row.flags=region.flags;row.access=region.access;
+        row.waterHeight=region.waterHeight;row.waterKnown=region.waterKnown;row.current=host==mHost;
+        row.coarse=region.coarse.avatars;
+        result.push_back(std::move(row));
+    }
+    return result;
+}
+std::vector<VSCoarseSample<LLUUID>> VSNativeSession::coarseAvatarLocations() const
+{
+    std::vector<VSCoarseSample<LLUUID>> result;
+    if(mShutdown || mPhase!=Phase::Connected)return result;
+    for(const auto& [host,region]:mCircuits)
+        if(region.acknowledged && region.handshake)
+            result.insert(result.end(),region.coarse.avatars.begin(),region.coarse.avatars.end());
+    return result;
+}
+bool VSNativeSession::receiveCoarse(const LLSD& body,const LLHost& host,U64 account,U64 incarnation,bool legacyUDP)
+{
+    const auto found=mCircuits.find(host);
+    if(mShutdown || mPhase!=Phase::Connected || account!=mGeneration || !incarnation ||
+        found==mCircuits.end() || found->second.incarnation!=incarnation ||
+        !found->second.acknowledged || !found->second.handshake)return false;
+    if(!body.isMap() || !body["Location"].isArray() || body["Location"].size()>4096 ||
+        !body["Index"].isArray() || body["Index"].size()!=1 ||
+        !body["Index"][0]["You"].isInteger() || !body["Index"][0]["Prey"].isInteger())return false;
+    const bool identified=body.has("AgentData");
+    if(identified && (!body["AgentData"].isArray() || body["AgentData"].size()!=body["Location"].size()))return false;
+    std::vector<VSCoarseInput<LLUUID>> rows;
+    for(S32 i=0;i<body["Location"].size();++i)
+    {
+        const auto& location=body["Location"][i];
+        if(!location.isMap() || !location["X"].isInteger() || !location["Y"].isInteger() || !location["Z"].isInteger())return false;
+        if(identified && !body["AgentData"][i]["AgentID"].isUUID())return false;
+        rows.push_back({identified?body["AgentData"][i]["AgentID"].asUUID():LLUUID::null,
+            location["X"].asInteger(),location["Y"].asInteger(),location["Z"].asInteger()});
+    }
+    const auto origin=from_region_handle(found->second.handle);
+    VSCoarseSnapshot<LLUUID> snapshot;
+    if(!vs_decode_coarse(rows,body["Index"][0]["You"].asInteger(),body["Index"][0]["Prey"].asInteger(),
+        found->second.width,found->second.height,{origin.mdV[0],origin.mdV[1],origin.mdV[2]},legacyUDP,snapshot))return false;
+    found->second.coarse=std::move(snapshot);
+    if(found->second.coarse.prey)
+    {
+        const auto& position=*found->second.coarse.prey;
+        LLAvatarTracker::instance().setTrackedCoarseLocation(LLVector3d(position[0],position[1],position[2]));
+    }
+    return true;
+}
+
 U64 VSNativeSession::circuitGeneration(const LLHost& host) const
 {
     if (mShutdown || mPhase==Phase::Disconnected || mPhase==Phase::Login) return 0;
