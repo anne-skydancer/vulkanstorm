@@ -108,6 +108,17 @@ namespace
 {
 std::weak_ptr<VSNativeSession> sOwner;
 double now() { return LLFrameTimer::getTotalSeconds(); }
+void restore_native_account_policies()
+{
+    // LLAgent::init performs these same account-only transitions for OpenGL.
+    // Native startup omits that method's reference scene bootstrap.
+    gAgent.selectAutorespond(gSavedPerAccountSettings.getBOOL("FSAutorespondMode"));
+    gAgent.selectAutorespondNonFriends(gSavedPerAccountSettings.getBOOL("FSAutorespondNonFriendsMode"));
+    gAgent.selectRejectTeleportOffers(gSavedPerAccountSettings.getBOOL("FSRejectTeleportOffersMode"));
+    gAgent.selectRejectFriendshipRequests(gSavedPerAccountSettings.getBOOL("FSRejectFriendshipRequestsMode"));
+    gAgent.selectRejectAllGroupInvites(gSavedPerAccountSettings.getBOOL("FSRejectAllGroupInvitesMode"));
+}
+
 const std::set<std::string> transport = {"StartPingCheck", "CompletePingCheck", "PacketAck"};
 const std::set<std::string>    worldMessages = {
     "ObjectUpdate",      "ObjectUpdateCompressed", "ObjectUpdateCached", "ImprovedTerseObjectUpdate", "KillObject",
@@ -1654,6 +1665,7 @@ void VSNativeSession::connected()
     LLAppViewer::instance()->handleLoginComplete();
     FSAvatarRenderPersistence::instance().init();
     AOEngine::onLoginComplete();
+    restore_native_account_policies();
     FSPanelLogin::closePanel();
     gViewerWindow->setNativeConnected(true);
     // Finish through the shared skinned progress/fade and input release path.
@@ -2101,6 +2113,9 @@ void VSNativeSession::reset()
     }
     if (auto* assets = dynamic_cast<LLViewerAssetStorage*>(gAssetStorage)) assets->resetAccountRequests();
     LLLandmark::resetRegionHandles(); gLandmarkList.resetAccount();
+    // Availability is temporary account state; release its notification mute
+    // while the retiring account's IM/storage owners still exist.
+    if (gAgent.isDoNotDisturb()) gAgent.setDoNotDisturb(false);
     vs_native_im_reset(); clearBalance();
     if (LLTeleportHistory::instanceExists()) LLTeleportHistory::instance().resetNativeSession();
     LLAgentBenefitsMgr::resetAccountBenefits();

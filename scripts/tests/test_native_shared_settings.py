@@ -7,6 +7,39 @@ import unittest
 from test_native_simulator_features import method
 ROOT=Path(__file__).resolve().parents[2]
 class NativeSharedSettings(unittest.TestCase):
+    def test_account_policies_restore_each_login(self):
+        source=(ROOT/'indra/newview/vsnativesession.cpp').read_text()
+        restore=method(source,'void restore_native_account_policies(')
+        fixture=r'''
+#include <cassert>
+#include <map>
+#include <string>
+struct Settings {std::map<std::string,bool> values;
+ bool getBOOL(const char* key){return values.at(key);}}gSavedPerAccountSettings;
+struct Agent {bool autoReply=false,nonFriends=false,teleports=false,friends=false,groups=false;
+ void selectAutorespond(bool v){autoReply=v;}void selectAutorespondNonFriends(bool v){nonFriends=v;}
+ void selectRejectTeleportOffers(bool v){teleports=v;}void selectRejectFriendshipRequests(bool v){friends=v;}
+ void selectRejectAllGroupInvites(bool v){groups=v;}}gAgent;
+RESTORE
+int main(){
+ gSavedPerAccountSettings.values={{"FSAutorespondMode",true},{"FSAutorespondNonFriendsMode",false},
+ {"FSRejectTeleportOffersMode",true},{"FSRejectFriendshipRequestsMode",false},{"FSRejectAllGroupInvitesMode",true}};
+ restore_native_account_policies();
+ assert(gAgent.autoReply && !gAgent.nonFriends && gAgent.teleports && !gAgent.friends && gAgent.groups);
+ for(auto& value:gSavedPerAccountSettings.values)value.second=!value.second;
+ restore_native_account_policies();
+ assert(!gAgent.autoReply && gAgent.nonFriends && !gAgent.teleports && gAgent.friends && !gAgent.groups);
+}
+'''.replace('RESTORE',restore)
+        compiler=shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'account_policy.cpp';path.write_text(fixture);exe=Path(temp)/'account_policy.exe'
+            built=subprocess.run([compiler,'-std=c++17',str(path),'-o',str(exe)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+            ran=subprocess.run([str(exe)],capture_output=True,text=True)
+            self.assertEqual(ran.returncode,0,ran.stdout+ran.stderr)
+
     def test_inventory_accounts_for_every_registration(self):
         import csv,json
         records=json.loads((ROOT/'doc/vulkan/milestone1-boundaries.json').read_text())['registries']['settings']

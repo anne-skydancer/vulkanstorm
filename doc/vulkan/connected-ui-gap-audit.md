@@ -447,3 +447,12 @@ Concrete remaining integration dependencies found during this pass:
 This list records concrete observed dependencies, not an exhaustive declaration
 that every remaining UI route has been qualified. No full connected-UI parity
 claim follows from first-world rendering or this checkpoint.
+
+
+Saved autoresponse and refusal policies are restored at native connection using
+exactly the account selectors and setting names used by LLAgent::init. Temporary
+Do Not Disturb state is cleared before retiring that account's IM/notification
+owners. This avoids carrying the previous account's availability into relogin.
+The connected replay deliberately logs out while DND is active and requires it
+to be cleared; a controller fixture checks restoration of two different account
+policy configurations.

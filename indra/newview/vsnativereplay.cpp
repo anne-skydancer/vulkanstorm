@@ -921,6 +921,7 @@ struct Replay
             {
                 if (auto current = weak.lock()) queuedExpired = !current->deliver("ChatFromSimulator", LLSD::emptyMap(), current->host(), generation);
             });
+            gAgent.setDoNotDisturb(true);
             owner.requestLogout(false);
             auto* progress = gViewerWindow->getProgressView();
             require(progress && progress->getVisible() &&
@@ -934,6 +935,7 @@ struct Replay
             require(owner.phase() == VSNativeSession::Phase::Login && !chat->getVisible() &&
                     (!FSFloaterNearbyChat::findInstance() || !FSFloaterNearbyChat::findInstance()->isInVisibleChain()),
                 "Logout did not detach both shared and diagnostic nearby frontends");
+            require(!gAgent.isDoNotDisturb(), "Logout leaked temporary account availability");
             require(!LLFloaterReg::findInstance("animation_overrider"), "Logout retained the old account AO editor");
             require(vs_native_im_replay_expired(), "Logout retained a live IM callback generation");
             vs_r1_replay_retired(owner,imEvidence);
