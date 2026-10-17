@@ -52,16 +52,19 @@ struct AgentCamera{LLVector3 offset{0,0,-.2f},focus{1,0,.2f};float scale=.75f;
  LLVector3 getCameraOffsetInitial(){return offset;}LLVector3 getFocusOffsetInitial(){return focus;}float getCameraOffsetScale(){return scale;}}gAgentCamera;
 struct ViewerInput{void resetNativeKeys(){}}gViewerInput;
 struct Settings{float getF32(const char*){return 128;}}gSavedSettings;
+constexpr int STATE_MISC=10;
+struct LLStartUp {static int getStartupState(){return STATE_MISC;}};
+float vs_agent_draw_distance(bool arriving){return arriving?64.f:128.f;}
 template<class T>T llclamp(T v,T a,T b){return std::clamp(v,a,b);}
 struct LLMessageSystem{
  std::string message;LLHost host;std::map<std::string,LLVector3> vectors;std::map<std::string,U32> ints;
- std::map<std::string,LLQuaternion> quaternions;int sends=0;bool reliable=false;
+ std::map<std::string,float> floats;std::map<std::string,LLQuaternion> quaternions;int sends=0,result=1;bool reliable=false;
  void newMessage(const char* s){message=s;}void nextBlock(const char*){}void addUUID(const char*,LLUUID){}
  void addU32(const char* s,U32 value){ints[s]=value;}void addU8(const char* s,U8 value){ints[s]=value;}
  void addS32(const char* s,S32 value){ints[s]=value;}void addString(const char*,const std::string&){}
- void addF32(const char*,float){}void addQuat(const char* s,LLQuaternion q){quaternions[s]=q;}
- void addVector3(const char* s,LLVector3 v){vectors[s]=v;}int sendReliable(LLHost h){reliable=true;host=h;++sends;return 1;}
- int sendMessage(LLHost h){reliable=false;host=h;++sends;return 1;}
+ void addF32(const char* s,float value){floats[s]=value;}void addQuat(const char* s,LLQuaternion q){quaternions[s]=q;}
+ void addVector3(const char* s,LLVector3 v){vectors[s]=v;}int sendReliable(LLHost h){reliable=true;host=h;++sends;return result;}
+ int sendMessage(LLHost h){reliable=false;host=h;++sends;return result;}
 } messages,*gMessageSystem=&messages;
 '''
 
@@ -79,7 +82,7 @@ class NativeCameraTransportTests(unittest.TestCase):
             'bool VSNativeSession::updateAgentPosition(', 'bool VSNativeSession::send('))
         fixture = STUBS + constants + header + r'''
 struct VSNativeSession{
- enum class Phase{Login,Connected,Disconnected};Phase mPhase=Phase::Connected;bool mChangingRegion=false,mFrozen=false;
+ enum class Phase{Login,Connected,Disconnected};Phase mPhase=Phase::Connected;bool mChangingRegion=false,mFrozen=false,mInterestListArriving=true;
  LLHost mHost;LLUUID mAgent,mSession;U32 mCircuit=99,mMouseControls=0;U64 mGeneration=3,mRegionEpoch=7,mSent=0;
  VSNativeCamera mCamera;LLVector3 mPosition{100,100,20};double mAgentUpdateTime=1;
  VSNativeCamera::State cameraState()const;
@@ -102,6 +105,11 @@ int main(){
  assert(owner.movementAction(2,"push_forward",true));owner.movementAction(1,"",false);assert(owner.mCamera.controls()&AGENT_CONTROL_AT_POS);
  assert(owner.send("AgentUpdate",{}));assert(!messages.reliable&&messages.message=="AgentUpdate"&&messages.host.id==1&&messages.ints["ControlFlags"]&AGENT_CONTROL_AT_POS);
  assert(close(messages.vectors["CameraCenter"].mV[0],initial.center.mV[0]));
+ assert(messages.floats["Far"]==64 && !owner.mInterestListArriving);
+ assert(owner.send("AgentUpdate",{}));assert(messages.floats["Far"]==128);
+ messages.result=0;owner.mInterestListArriving=true;
+ assert(!owner.send("AgentUpdate",{}));assert(owner.mInterestListArriving);
+ messages.result=1;assert(owner.send("AgentUpdate",{}));assert(!owner.mInterestListArriving);
  owner.movementAction(2,"",false);assert(!(owner.mCamera.controls()&AGENT_CONTROL_AT_POS));
  owner.movementAction(3,"toggle_fly",true);owner.movementAction(3,"toggle_fly",true,true);assert(owner.mCamera.controls()&AGENT_CONTROL_FLY);
  gAgent.flags=AGENT_CONTROL_STAND_UP;assert(owner.send("AgentUpdate",{}));

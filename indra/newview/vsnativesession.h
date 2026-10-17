@@ -19,6 +19,7 @@
 #include <boost/signals2/connection.hpp>
 
 class LLMessageSystem;
+class VSRegionLimits;
 class LLEventPoll;
 class VSPlainChat;
 class LLFloater;
@@ -71,6 +72,7 @@ public:
     VSObjectSelection* objectSelection();
     const LLHost& host() const { return mHost; }
     std::string capability(const std::string&) const;
+    VSRegionLimits& regionLimits();
     std::string capability(const LLHost&, const std::string&) const;
     LLSD evidence() const;
     const LLSD& simulatorFeatures() const { return mSimulatorFeatures; }
@@ -102,10 +104,14 @@ public:
         std::vector<VSCoarseSample<LLUUID>> coarse;
         VSParcelOverlay::Snapshot parcelOverlay;
     };
-    std::vector<RegionSnapshot> regionSnapshots() const;
+    // CPU-only descriptor queries can omit spatial vectors/bitmaps; exact-host lookup is logarithmic.
+    VSParcelOverlay::Snapshot parcelOverlay(const LLHost&) const;
+    std::optional<RegionSnapshot> regionSnapshot(const LLHost&,bool includeSpatial=true) const;
+    std::vector<RegionSnapshot> regionSnapshots(bool includeSpatial=true) const;
     bool current(const RegionSnapshot&) const;
     std::vector<VSCoarseSample<LLUUID>> coarseAvatarLocations() const;
     bool receiveParcelOverlay(const LLHost&,U64 account,U64 circuit,S32 sequence,const std::vector<U8>&);
+    bool applyRegionInfo(LLMessageSystem&);
     bool applyRegionStats(const LLHost&,U64 account,U64 circuit,U64 flags,U32 capacity);
     bool receiveCoarse(const LLSD&, const LLHost&, U64 account, U64 circuit, bool legacyUDP=false);
     U64 circuitGeneration(const LLHost&) const;
@@ -210,6 +216,7 @@ private:
     U64 mGeneration = 1;
     U64 mRegionEpoch = 1;
     bool mChangingRegion = false;
+    bool mInterestListArriving = true;
     bool mAppearanceOwnerInitialized=false,mWearablesKnown=false;
     U32 mWearablesSerial=0;
     LLSD mWearablesMetadata;
@@ -284,6 +291,7 @@ private:
     bool mSimulatorFeaturesReceived = false;
     std::function<void()> mCancelSimulatorFeatures;
     std::unique_ptr<LLEventPoll> mPoll;
+    std::unique_ptr<VSRegionLimits> mRegionLimits;
     VSPlainChat* mChat = nullptr; // Root owns the panel; detach before root teardown.
     double mDeadline = 0;
     double mTypingDeadline = 0;

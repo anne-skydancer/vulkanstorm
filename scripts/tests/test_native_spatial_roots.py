@@ -57,7 +57,7 @@ int main(){
         methods_path=ROOT/"indra/newview/vsnativecircuits.cpp" if installed.exists() else Path(__file__).with_name("spatial_session_methods.cpp")
         methods_source=methods_path.read_text(encoding="utf-8-sig")
         methods=[]
-        for signature in ("std::vector<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshots()", "std::vector<VSCoarseSample<LLUUID>> VSNativeSession::coarseAvatarLocations()", "bool VSNativeSession::receiveCoarse("):
+        for signature in ("std::optional<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshot(", "std::vector<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshots(", "std::vector<VSCoarseSample<LLUUID>> VSNativeSession::coarseAvatarLocations()", "bool VSNativeSession::receiveCoarse("):
             begin=methods_source.index(signature);start=methods_source.index("{",begin);depth=0
             for index in range(start,len(methods_source)):
                 if methods_source[index]=="{":depth+=1

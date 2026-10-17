@@ -77,12 +77,13 @@ public:
 
 protected:
     friend class LLViewerRegion;
+    friend class VSNativeSession;
 
 
     /**
      * Refresh model with data from the incoming server message.
      */
-    void update(LLMessageSystem* msg);
+    void update(LLMessageSystem* msg,bool notify=true);
 
 private:
     void reset();

@@ -74,7 +74,7 @@ struct VSNativeSession {static bool running;static bool active(){return running;
 HELPER
 CALLBACKS
 int main(){
- for(bool native:{false,true})for(const auto& name:{"ChatFontSize","ShowNavbarFavoritesPanel","SpellCheck","AudioLevelVoice","FSOutputDeviceUUID","FSDiskCacheSize","RenderAnisotropic","RenderShadowDetail","OctreeDistanceFactor","UnknownFutureSetting"}){
+ for(bool native:{false,true})for(const auto& name:{"RenderFarClip","ChatFontSize","ShowNavbarFavoritesPanel","SpellCheck","AudioLevelVoice","FSOutputDeviceUUID","FSDiskCacheSize","RenderAnisotropic","RenderShadowDetail","OctreeDistanceFactor","UnknownFutureSetting"}){
   VSNativeSession::running=native;LLControlGroup group;int values=0,empty=0;
   setting_setup_signal_listener(group,name,std::function<void(const LLSD&)>([&](const LLSD& value){assert(value.value==2);++values;}));
   setting_setup_signal_listener(group,name,std::function<void()>([&](){++empty;}));

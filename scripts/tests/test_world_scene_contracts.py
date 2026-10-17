@@ -6,6 +6,11 @@ import tempfile
 import unittest
 from test_native_simulator_features import method
 ROOT = Path(__file__).resolve().parents[2]
+def camera_far_constants():
+    import re
+    header=(ROOT/'indra/llmath/llcamera.h').read_text(encoding='utf-8')
+    return '\n'.join(re.search(r'constexpr F32 '+name+r'\s*=\s*[^;]+;',header).group().replace(' F32 ',' float ') for name in ('MIN_FAR_PLANE','MAX_FAR_PLANE'))+'\n'
+
 class WorldSceneContracts(unittest.TestCase):
     def compile(self, text):
         compiler = shutil.which('clang++') or shutil.which('g++')
@@ -79,7 +84,7 @@ int main() {
 }''')
     def test_camera_clip_depth_and_region_axes(self):
         source=(ROOT/'indra/newview/vsworldscene.cpp').read_text(encoding='utf-8')
-        definitions=method(source,'bool finiteVector(')+'\n'+method(source,'VSWorldRenderer::View VSWorldScene::view(')
+        definitions=camera_far_constants()+method(source,'bool finiteVector(')+'\n'+method(source,'VSWorldRenderer::View VSWorldScene::view(')
         self.compile('''#include <array>
 #include <cmath>
 #include <algorithm>
@@ -139,7 +144,7 @@ int main(){
 }''')
     def test_camera_basis_projection(self):
         source=(ROOT/'indra/newview/vsworldscene.cpp').read_text(encoding='utf-8')
-        definitions=method(source,'bool finiteVector(')+'\n'+method(source,'VSWorldRenderer::View VSWorldScene::cameraView(')
+        definitions=camera_far_constants()+method(source,'bool finiteVector(')+'\n'+method(source,'VSWorldRenderer::View VSWorldScene::cameraView(')
         self.compile('''#include <array>
 #include <cmath>
 #include <algorithm>
@@ -166,6 +171,7 @@ int main(){
 }''')
     def test_authenticated_current_region_and_phase_admission(self):
         source=(ROOT/'indra/newview/vsnativesession.cpp').read_text(encoding='utf-8')
+        ready=method((ROOT/'indra/newview/vsnativesession.h').read_text(encoding='utf-8'),'bool regionReady() const')
         definitions=method(source,'bool VSNativeSession::admit(')
         self.compile('''#include <cassert>
 #include <set>
@@ -176,24 +182,32 @@ struct LLHost {int value=1;bool isOk()const{return value!=0;}bool operator==(con
 std::ostringstream sink;
 #define LL_WARNS(x) sink
 #define LL_ENDL ""
-const std::set<std::string> transport={"PacketAck"},session={"ChatFromSimulator"},worldMessages={"ObjectUpdate","KillObject","LayerData"};
+const std::set<std::string> transport={"PacketAck"},session={"ChatFromSimulator","RegionInfo"},worldMessages={"ObjectUpdate","KillObject","LayerData"};
 struct VSNativeSession {
  enum class Phase {Login,Connecting,Connected,Logout,Disconnected};
  LLHost mHost;Phase mPhase=Phase::Login;bool mChangingRegion=false;unsigned mRejected=0;
+ bool mSeedReady=false,mHandshake=false,mCircuitAck=false;
  struct Region {bool acknowledged=false,handshake=false;};std::map<LLHost,Region> mCircuits;
  bool admit(const std::string&,const LLHost&);
+'''+ready+'''
 };
 '''+definitions+'''
 int main(){
  VSNativeSession s;assert(!s.admit("ObjectUpdate",{1}));
+ assert(!s.admit("RegionInfo",{1}));
  s.mPhase=VSNativeSession::Phase::Connecting;assert(s.admit("ObjectUpdate",{1}));assert(s.admit("LayerData",{1}));assert(!s.admit("LayerData",{2}));
  s.mPhase=VSNativeSession::Phase::Connected;assert(s.admit("ObjectUpdate",{1}));
+ assert(!s.admit("RegionInfo",{1}));s.mSeedReady=true;assert(!s.admit("RegionInfo",{1}));
+ s.mHandshake=true;assert(!s.admit("RegionInfo",{1}));s.mCircuitAck=true;
+ assert(s.admit("RegionInfo",{1}));assert(!s.admit("RegionInfo",{2}));
  assert(!s.admit("ObjectUpdate",{2}));assert(s.admit("LayerData",{1}));
  s.mChangingRegion=true;assert(s.admit("KillObject",{1}));
+ assert(!s.admit("RegionInfo",{1}));
  s.mCircuits[{2}]={};assert(!s.admit("ObjectUpdate",{2}));
  s.mCircuits[{2}].acknowledged=true;assert(!s.admit("ObjectUpdate",{2}));
  s.mCircuits[{2}].handshake=true;assert(s.admit("ObjectUpdate",{2}));
  s.mCircuits.erase({2});assert(!s.admit("ObjectUpdate",{2}));
  s.mChangingRegion=false;s.mPhase=VSNativeSession::Phase::Logout;assert(!s.admit("ObjectUpdate",{1}));
+ assert(!s.admit("RegionInfo",{1}));
 }''')
 if __name__=='__main__':unittest.main()

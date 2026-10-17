@@ -728,6 +728,7 @@ set(viewer_SOURCE_FILES
     llsecapi.cpp
     llsechandler_basic.cpp
     llselectmgr.cpp
+    vscameraview.cpp
     vsobjectcontext.cpp
     vsobjectproperties.cpp
     llsetkeybinddialog.cpp
@@ -860,6 +861,7 @@ set(viewer_SOURCE_FILES
     llviewerpartsim.cpp
     llviewerpartsource.cpp
     vscapabilities.cpp
+    vsregioncontext.cpp
     llviewerregion.cpp
     llviewershadermgr.cpp
     llviewerstats.cpp
@@ -901,6 +903,7 @@ set(viewer_SOURCE_FILES
     llwindowlistener.cpp
     llwlhandlers.cpp
     llworld.cpp
+    vsregionlimits.cpp
     llworldmap.cpp
     llworldmapmessage.cpp
     llworldmipmap.cpp
@@ -1614,6 +1617,7 @@ set(viewer_HEADER_FILES
     llsecapi.h
     llsechandler_basic.h
     llselectmgr.h
+    vscameraview.h
     vsobjectcontext.h
     vsobjectproperties.h
     llsetkeybinddialog.h
@@ -1751,6 +1755,7 @@ set(viewer_HEADER_FILES
     llviewerpartsource.h
     llviewerprecompiledheaders.h
     vscapabilities.h
+    vsregioncontext.h
     llviewerregion.h
     llviewershadermgr.h
     llviewerstats.h
@@ -1791,6 +1796,7 @@ set(viewer_HEADER_FILES
     llwindowlistener.h
     llwlhandlers.h
     llworld.h
+    vsregionlimits.h
     llworldmap.h
     llworldmapmessage.h
     llworldmipmap.h

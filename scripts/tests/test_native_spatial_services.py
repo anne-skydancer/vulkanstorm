@@ -28,7 +28,7 @@ class SpatialServiceTest(unittest.TestCase):
   fixture=fixture.replace('bool mShutdown=false;', 'bool mShutdown=false,mChangingRegion=false;U64 mFlags=0;')
   fixture=fixture.replace('    bool receiveCoarse(', '    bool applyRegionStats(const LLHost&,U64,U64,U64,U32);\n    bool receiveCoarse(')
   source=(ROOT/'indra/newview/vsnativecircuits.cpp').read_text(encoding='utf-8-sig')
-  methods='\n'.join(method(source,signature) for signature in ['bool VSNativeSession::applyRegionStats(', 'std::vector<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshots()'])
+  methods='\n'.join(method(source,signature) for signature in ['bool VSNativeSession::applyRegionStats(', 'std::optional<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshot(', 'std::vector<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshots('])
   main=(HERE/'native_region_stats_fixture.cpp').read_text(encoding='utf-8-sig')
   with tempfile.TemporaryDirectory() as tmp:
    cpp=Path(tmp)/'stats.cpp';exe=Path(tmp)/'stats.exe';cpp.write_text(fixture+methods+'\n'+main)

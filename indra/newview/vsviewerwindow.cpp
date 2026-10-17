@@ -377,7 +377,7 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
     LLVector3   direction = camera.at - camera.left * (x * tangent * float(rect.getWidth()) / rect.getHeight()) + camera.up * (y * tangent);
     if (direction.normalize() < 1.e-6f)
         return false;
-    const float distance = llclamp(gSavedSettings.getF32("RenderFarClip"), 16.f, 1024.f);
+    const float distance = LLViewerCamera::getInstance()->getFar();
     auto        pick     = mVulkanContext->world().pickHUD(x, y, float(rect.getWidth()) / rect.getHeight(), gAgentCamera.mHUDCurZoom);
     if (!pick)
         pick = mVulkanContext->world().pick(camera.center, camera.center + direction * distance, info.mPickTransparent,

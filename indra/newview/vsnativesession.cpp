@@ -1,5 +1,6 @@
 // Native CPU session and nearby transport. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
+#include "vscameraview.h"
 #include "llagentcamera.h"
 #include "llviewerinput.h"
 #include "llfloatercamera.h"
@@ -69,6 +70,8 @@
 #include "llvieweraudio.h"
 #include "llaudioengine.h"
 #include "llviewerparcelmedia.h"
+#include "llregioninfomodel.h"
+#include "llagent.h"
 #include "llparcel.h"
 #include "indra_constants.h"
 #include "llfloaterwebcontent.h"
@@ -77,6 +80,7 @@
 #include "llpluginclassmedia.h"
 #include "llviewermessage.h"
 #include "llworldmap.h"
+#include "vsregionlimits.h"
 #include "llviewercamera.h"
 #include "lltracker.h"
 #include "llworldmapview.h"
@@ -151,6 +155,7 @@ const std::set<std::string>    worldMessages = {
     "ReplyTaskInventory", "GenericStreamingMessage"
 };
 const std::set<std::string> session = { "SimStats",
+                                        "RegionInfo",
                                         "ParcelProperties",
                                         "ParcelMediaUpdate",
                                         "ParcelMediaCommandMessage",
@@ -360,7 +365,7 @@ void VSNativeSession::install(LLMessageSystem& msg)
     for (const auto& name : worldMessages) msg.setHandlerFunc(name.c_str(), receiveMessage);
     msg.setHandlerFunc("AgentWearablesUpdate",receiveMessage);
     msg.setHandlerFunc("EnableSimulator",receiveMessage);
-    for (const char* name : {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "MapItemReply", "ParcelOverlay", "CoarseLocationUpdate", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
+    for (const char* name : {"SimStats", "RegionInfo", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "MapItemReply", "ParcelOverlay", "CoarseLocationUpdate", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
          "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "MoneyBalanceReply", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
         msg.setHandlerFunc(name, receiveMessage);
     msg.setHandlerFunc("ObjectProperties", receiveMessage);
@@ -431,6 +436,15 @@ void VSNativeSession::install(LLMessageSystem& msg)
             LLGlobalEconomy::processEconomyData(message, LLGlobalEconomy::getInstance());
     });
     vs_native_im_install(msg);
+}
+VSRegionLimits& VSNativeSession::regionLimits()
+{
+    if(!mRegionLimits)
+    {
+        mRegionLimits=std::make_unique<VSRegionLimits>();
+        mRegionLimits->refreshLimits();
+    }
+    return *mRegionLimits;
 }
 bool VSNativeSession::acceptLogin(const LLSD& response)
 {
@@ -957,7 +971,7 @@ bool VSNativeSession::publishCamera()
     camera->setOrigin(state.center);camera->setAxes(state.at,state.left,state.up);
     // The shared CameraAngle observer and FOV/RLVa clamps own the lens.
     // Rendering, UI projection and native picking all consume that same view.
-    camera->setNear(.1f);camera->setFar(llclamp(gSavedSettings.getF32("RenderFarClip"),16.f,1024.f));
+    camera->setNear(.1f);camera->setFar(vs_camera_far_clip());
     camera->setAspect(F32(viewport.getWidth())/viewport.getHeight());
     camera->setViewHeightInPixels(viewport.getHeight());
     const auto forward=LLVector3::x_axis*state.bodyRotation;
@@ -1182,7 +1196,7 @@ bool VSNativeSession::changeRegion(const LLSD& body)
         mPreviousHost=LLHost();
     }
     mWidth = body.has("width") ? U32(body["width"].asInteger()) : 256; mHeight = body.has("height") ? U32(body["height"].asInteger()) : 256;
-    mChangingRegion = true; mNavigationDeadline = now() + 60;
+    mChangingRegion = true; mInterestListArriving = true; mNavigationDeadline = now() + 60;
     mHandshake = mMovement = mCircuitAck = mSeedReady = false;
     auto cancel = std::move(mCancelSeed); if (cancel) cancel();
     mPoll.reset(); mCapabilities = LLSD::emptyMap();
@@ -1215,6 +1229,7 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
     const auto peer=mCircuits.find(sender);
     const bool known=sender==mHost || peer!=mCircuits.end();
     if (transport.count(name)) return mHost.isOk() && known && mPhase != Phase::Disconnected;
+    if(name=="RegionInfo")return regionReady() && sender==mHost;
     if (name=="LayerData") return mHost.isOk() && known && (mPhase==Phase::Connecting || mPhase==Phase::Connected);
     if (name=="ParcelOverlay" || name=="CoarseLocationUpdate") return mPhase==Phase::Connected && peer!=mCircuits.end() &&
         peer->second.acknowledged && peer->second.handshake;
@@ -1234,6 +1249,7 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
 void VSNativeSession::receive(LLMessageSystem* msg)
 {
     const std::string name = msg->getMessageName();
+    if(name=="RegionInfo"){if(!applyRegionInfo(*msg))++mRejected;return;}
     if (name=="ObjectProperties" || name=="ObjectPropertiesFamily" || name=="ForceObjectSelect")
     {
         if (mObjectSelection && admit(name,msg->getSender()))mObjectSelection->receive(*msg);
@@ -1794,7 +1810,7 @@ void VSNativeSession::connected()
     if (auto circuit=mCircuits.find(mHost);circuit!=mCircuits.end()) circuit->second.deadline=0;
     if (mChangingRegion)
     {
-        mChangingRegion = false; mNavigationDeadline = 0; mDeadline = now() + 1;
+        mChangingRegion = false; mInterestListArriving = true; mNavigationDeadline = 0; mDeadline = now() + 1;
         if(gViewerWindow && mStartup == Startup::Complete)gViewerWindow->setShowProgress(false,true);
         // The former current simulator remains an independently owned neighbour.
         // DisableSimulator or circuit retirement, not crossing, removes its scene.
@@ -1818,6 +1834,7 @@ void VSNativeSession::connected()
             camera->setViewHeightInPixels(gViewerWindow->getWorldViewHeightRaw());
             camera->setAspect(gViewerWindow->getWorldViewAspectRatio());
         }
+        gAgentCamera.init(); // Same CPU camera/settings initialization as ordinary startup.
         camera->setDefaultFOV(gSavedSettings.getF32("CameraAngle"));
     }
     if (!mAppearance)
@@ -2174,7 +2191,7 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
         msg->addQuat("BodyRotation", camera.bodyRotation); msg->addQuat("HeadRotation", camera.headRotation); msg->addU8("State", 0);
         msg->addVector3("CameraCenter", camera.center); msg->addVector3("CameraAtAxis", camera.at);
         msg->addVector3("CameraLeftAxis", camera.left); msg->addVector3("CameraUpAxis", camera.up);
-        msg->addF32("Far", llclamp(gSavedSettings.getF32("RenderFarClip"), 16.f, 1024.f));
+        msg->addF32("Far", vs_agent_draw_distance(mInterestListArriving || LLStartUp::getStartupState()<STATE_MISC));
         msg->addU32("ControlFlags", mFrozen ? 0 : mCamera.controls() | mMouseControls | gAgent.getControlFlags());
         msg->addU8("Flags", 0);
     }
@@ -2183,6 +2200,7 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
     if ((name == "AgentUpdate" ? msg->sendMessage(mHost) : msg->sendReliable(mHost)) <= 0) return false;
     if (name == "AgentUpdate")
     {
+        mInterestListArriving=false;
         mMouseControls &= ~(AGENT_CONTROL_LBUTTON_UP | AGENT_CONTROL_ML_LBUTTON_UP);
         if (!mFrozen)
             gAgent.resetControlFlags();
@@ -2355,6 +2373,8 @@ void VSNativeSession::reset()
     if (mShutdown) return;
     // Retire CPU tracking without sending an untrack on the retiring circuit.
     // The old account's buddy owner is cleared below, before another login.
+    mRegionLimits.reset();
+    if(LLRegionInfoModel::instanceExists())LLRegionInfoModel::instance().reset();
     LLTracker::cleanupInstance();
     LLFloaterReg::destroyInstance("world_map");LLFloaterReg::destroyInstance("mini_map");
     LLWorldMapView::cleanupClass();
@@ -2372,7 +2392,7 @@ void VSNativeSession::reset()
         AOEngine::instance().resetAccount();
     gAgent.clearScriptControlState();
     gAgent.clearControlFlags(std::numeric_limits<U32>::max());
-    mCamera.reset(); mCameraTime = mAgentUpdateTime = 0;
+    mCamera.reset(); mCameraTime = mAgentUpdateTime = 0; mInterestListArriving=true;
     mLogoutPresented = mLogoutReply = false;
     if (mAgent.notNull() && (mPhase == Phase::Connected || mPhase == Phase::Logout || mPhase == Phase::Disconnected))
     {
