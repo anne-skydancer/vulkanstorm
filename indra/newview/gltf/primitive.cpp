@@ -433,9 +433,15 @@ bool Primitive::prep(Asset& asset)
     {
         const Material& material = asset.mMaterials[mMaterial];
         LLColor4 baseColor(glm::value_ptr(material.mPbrMetallicRoughness.mBaseColorFactor));
-        for (auto& dst : mColors)
+        // The GL batching path bakes the factor into its color stream. Native
+        // consumers retain vertex colors and apply the factor in their material
+        // constants, including its alpha, exactly once.
+        if (asset.mLoadIntoVRAM)
         {
-            dst = LLColor4U(baseColor * LLColor4(dst));
+            for (auto& dst : mColors)
+            {
+                dst = LLColor4U(baseColor * LLColor4(dst));
+            }
         }
 
         if (material.mUnlit.mPresent)

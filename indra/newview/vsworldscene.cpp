@@ -1343,7 +1343,10 @@ bool VSWorldScene::loadGLTF(const ObjectHandle& token, const std::string& filena
     auto candidate =
         std::make_shared<VSWorldGLTF>(filename, mImpl->renderer, mImpl->resources, mImpl->budgets->primitiveBytes, guard(token));
     if (!candidate->ready())
+    {
+        LL_WARNS("NativeGLTF") << "Local scene import rejected: " << candidate->evidence()["error"].asString() << LL_ENDL;
         return false;
+    }
     auto& object       = mImpl->objects.at(token.local);
     object.pendingGLTF = std::move(candidate);
     object.renderable  = true;
