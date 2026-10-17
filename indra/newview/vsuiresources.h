@@ -41,6 +41,7 @@ public:
     void erase(const std::string& key);
     std::uint64_t generation(const std::string& key) const;
     VSUIRenderer::Image image(const std::string& key) const;
+    VSUIRenderer::Image defaultWorldImage();
     LLUIImagePtr facade(const std::string& key) const;
 #if defined(VS_VULKAN_DIAGNOSTICS) && VS_VULKAN_DIAGNOSTICS
     std::vector<std::uint8_t> readbackImage(const std::string& key);

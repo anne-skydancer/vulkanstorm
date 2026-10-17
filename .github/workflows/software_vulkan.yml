@@ -409,7 +409,7 @@ jobs:
           python scripts/run_vulkan_session_replay.py \
             --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
             --harness-evidence .ci/evidence/results.json --evidence .ci/r2-session-evidence \
-            --skin ansastorm_modern --ui-scale 1.5 --headless --r2-contracts "${manifest_args[@]}"
+            --skin ansastorm_modern --ui-scale 1.5 --headless --r2-contracts --terrain-contracts "${manifest_args[@]}"
       - name: Production R3 texture streaming and persistent-cache restart matrix
         timeout-minutes: 15
         shell: bash

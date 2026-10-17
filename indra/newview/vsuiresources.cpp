@@ -235,6 +235,17 @@ struct VSUIResources::Impl
 };
 VSUIResources::VSUIResources(VSUIRenderer& r) : mImpl(std::make_shared<Impl>(r)) {}
 VSUIResources::~VSUIResources() = default;
+VSUIRenderer::Image VSUIResources::defaultWorldImage()
+{
+    // Transpose LLViewerTextureManager::init / bindDefaultImage: known scene
+    // geometry remains visible while its asynchronous texture is unavailable.
+    const std::string key="native-default-world-texture";
+    if (auto existing=image(key)) return existing;
+    LLPointer<LLImageRaw> raw=new LLImageRaw(128,128,3);
+    raw->clear(0x7f,0x7f,0x7f,0xff);
+    publish(key,*raw);
+    return image(key);
+}
 VSUIResources::PreparedImage VSUIResources::prepareImage(const LLImageRaw& raw,VSWorldContracts::ImageRole role,bool compress)
 {
     const auto width=raw.getWidth();const auto height=raw.getHeight();const auto components=raw.getComponents();

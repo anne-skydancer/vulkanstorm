@@ -8,6 +8,80 @@ from test_native_simulator_features import method
 ROOT=Path(__file__).resolve().parents[2]
 
 class TerrainPublication(unittest.TestCase):
+    def test_pending_detail_texture_keeps_received_ground_visible(self):
+        body=method((ROOT/'indra/newview/vsworldscene.cpp').read_text(), 'void surfaces(')
+        fixture=r'''
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <cmath>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+using U32=unsigned;using U64=unsigned long long;using S32=int;
+struct LLUUID {int id=0;bool notNull()const{return id!=0;}std::string asString()const{return std::to_string(id);}};
+LLUUID vs_native_image_id(LLUUID id){return id;}
+struct LLUI {static void getUIImageByID(LLUUID){}};
+struct LLVector3 {float x,y,z;LLVector3(float a,float b,float c):x(a),y(b),z(c){}
+ LLVector3 operator-(const LLVector3& v)const{return {x-v.x,y-v.y,z-v.z};}
+ float lengthSquared()const{return x*x+y*y+z*z;}};
+struct VSWorldRenderer {
+ using Mesh=std::shared_ptr<int>;
+ struct Vertex{float x,y,z,nx,ny,nz,u,v;};
+ struct Packet{Mesh mesh;std::shared_ptr<int> image;bool background=false,fullbright=false,terrain=false,alpha=false;
+ U64 terrainKey=0,objectGeneration=0;std::array<float,4> color{1,1,1,1};float distanceSquared=0;};
+ Mesh upload(const std::vector<Vertex>&,const std::vector<unsigned>&){return std::make_shared<int>(80);}
+};
+struct Resources {
+ std::map<std::string,std::shared_ptr<int>> images;std::shared_ptr<int> fallback=std::make_shared<int>(99);
+ std::shared_ptr<int> image(const std::string& k){return images[k];}
+ std::shared_ptr<int> defaultWorldImage(){return fallback;}
+};
+struct Scene {
+ VSWorldRenderer renderer;Resources resources;VSWorldRenderer::Mesh sky,water;
+ struct Ground {VSWorldRenderer::Mesh mesh;unsigned size=16;};std::map<U64,Ground> ground;
+ std::array<float,4> terrainStarts{},terrainRanges{1,1,1,1};std::array<LLUUID,4> terrainTextures{{{1},{2},{3},{4}}};
+ U64 incarnation=7;bool waterKnown=false;float waterHeight=0;unsigned width=256,regionHeight=256;
+ float height(int,int,float){return 0;}
+BODY
+};
+int main(){Scene s;auto mesh=std::make_shared<int>(1);s.ground[0]={mesh,16};
+ std::vector<VSWorldRenderer::Packet> packets;s.surfaces(packets,{8,8,16});
+ assert(packets.size()==2 && packets[1].terrain && packets[1].mesh==mesh && packets[1].image==s.resources.fallback);
+ auto material=std::make_shared<int>(123);s.resources.images["remote:1"]=material;
+ packets.clear();s.surfaces(packets,{8,8,16});assert(packets.size()==2 && packets[1].image==material && packets[1].mesh==mesh);
+ auto retained=packets[1];s.resources.images.erase("remote:1");packets.clear();s.surfaces(packets,{8,8,16});
+ assert(packets.size()==2 && packets[1].image==s.resources.fallback && retained.image==material);
+ s.resources.fallback.reset();packets.clear();s.surfaces(packets,{8,8,16});assert(packets.size()==2 && packets[1].mesh==mesh);
+ for(unsigned c=0;c<3;++c)assert(std::abs(packets[1].color[c]-127.f/255)<1e-6f);
+ s.ground[0].mesh.reset();packets.clear();s.surfaces(packets,{8,8,16});assert(packets.size()==1); // Never invent missing heights/geometry.
+}
+'''.replace('BODY',body)
+        compiler=shutil.which('clang++') or shutil.which('g++');self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'terrain_surface.cpp';binary=path.with_suffix('.exe');path.write_text(fixture)
+            built=subprocess.run([compiler,'-std=c++20','-Wall','-Wextra','-Werror',str(path),'-o',str(binary)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+            result=subprocess.run([str(binary)],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
+    def test_terrain_evidence_rejects_missing_and_wrong_pixels(self):
+        import sys
+        sys.path.insert(0,str(ROOT/'scripts'))
+        from run_vulkan_session_replay import terrain_contracts_passed
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'terrain').mkdir()
+            record={'terrain_publication':{'complete':True}}
+            for phase,color in (('pending',(127,127,127,255)),('published',(32,160,64,255)),('retired',(127,127,127,255))):
+                name='terrain/'+phase+'.rgba';(root/name).write_bytes(bytes(color)*64*64)
+                record['terrain_publication'][phase]={'file':name,'draw_packets':1,'pixels_verified':True}
+            (root/'terrain/detail.j2c').write_bytes(b'fixture')
+            self.assertTrue(terrain_contracts_passed(record,root))
+            path=root/'terrain/published.rgba';data=path.read_bytes();path.write_bytes(bytes([255])+data[1:])
+            self.assertFalse(terrain_contracts_passed(record,root));path.write_bytes(data);path.unlink()
+            self.assertFalse(terrain_contracts_passed(record,root))
+
     def test_entire_region_frame_survives_partial_gpu_refusal(self):
         source=(ROOT/'indra/newview/vsworldscene.cpp').read_text()
         prepare=method(source,'bool prepareGround(')
