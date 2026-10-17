@@ -1,5 +1,5 @@
 {
-  "source_commit": "9abc97540fbe029f7dcdbca12630f2d9f9b8835f",
+  "source_commit": "36faf72069818188e96eec2575f2a0b2ea6c96de",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -61170,6 +61170,42 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
+      "start": 433,
+      "end": 434,
+      "sha256": "f4a2a8fd0b471b8ea0a61cdba376dbc033a58f1aeb2c20d0f3cd28ce7bff5691",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
+      "start": 445,
+      "end": 445,
+      "sha256": "f4a2a8fd0b471b8ea0a61cdba376dbc033a58f1aeb2c20d0f3cd28ce7bff5691",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
+      "start": 447,
+      "end": 448,
+      "sha256": "f4a2a8fd0b471b8ea0a61cdba376dbc033a58f1aeb2c20d0f3cd28ce7bff5691",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
+      "start": 468,
+      "end": 471,
+      "sha256": "f4a2a8fd0b471b8ea0a61cdba376dbc033a58f1aeb2c20d0f3cd28ce7bff5691",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     }
   ]
 }
