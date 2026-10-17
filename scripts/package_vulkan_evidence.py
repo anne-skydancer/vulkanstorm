@@ -6,7 +6,7 @@ from pathlib import Path
 import stat
 import zipfile
 from run_vulkan_geometry_tests import required_checks
-from run_vulkan_session_replay import r2_contracts_passed
+from run_vulkan_session_replay import r2_contracts_passed, local_image_contracts_passed
 from run_software_vulkan_tests import MATERIAL_READBACKS
 from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES, validate_case as validate_texture_cache_case, texture_requests
 
@@ -23,11 +23,13 @@ def texture_cache_completeness(files, source, executable_digest):
     errors=[];processes=set()
     try:
         matrix=json.loads(summary.read_text())
+        if not isinstance(matrix,dict):raise ValueError('Invalid R3 matrix record')
         if (matrix.get('passed') is not True or matrix.get('complete') is not True or
             matrix.get('planned_cases')!=list(TEXTURE_CACHE_CASES) or set(matrix.get('cases',{}))!=set(TEXTURE_CACHE_CASES)):
             return ['Incomplete R3 texture-cache restart matrix']
         for case in TEXTURE_CACHE_CASES:
             row=matrix['cases'][case]
+            if not isinstance(row,dict):raise ValueError('Invalid R3 case record')
             relative=str(row['evidence']).replace('\\','/')
             if relative.startswith('/') or ':' in relative or '..' in relative.split('/') or relative.split('/')[-1]!=case:
                 raise ValueError('Unsafe R3 case evidence path')
@@ -38,6 +40,8 @@ def texture_cache_completeness(files, source, executable_digest):
                 if folder+'/'+name not in files:raise ValueError('Missing R3 cache artifact: '+folder+'/'+name)
             child=json.loads(files[folder+'/results.json'].read_text())
             traffic=json.loads(files[folder+'/http-replay.json'].read_text())
+            if not isinstance(child,dict) or not isinstance(traffic,list) or any(not isinstance(item,dict) for item in traffic):
+                raise ValueError('Invalid R3 case or HTTP records')
             if child.get('source_commit')!=source or child.get('viewer_executable_sha256')!=executable_digest:
                 raise ValueError('R3 cache source/executable differs from build: '+case)
             actual=files[folder+'/results.json'].parent
@@ -57,6 +61,11 @@ def texture_cache_completeness(files, source, executable_digest):
             paths.extend(stages['references'].values())
             for path in paths:
                 if folder+'/'+str(path).replace('\\','/') not in files:raise ValueError('R3 readback omitted from archive: '+str(path))
+            if case=='cold':
+                if not local_image_contracts_passed(child,actual):raise ValueError('Missing R3 local file/GPU evidence')
+                for name in ('initial','replaced','refused','recovered'):
+                    path=child['r3_local_images'][name]['file']
+                    if folder+'/'+str(path).replace('\\','/') not in files:raise ValueError('R3 local image omitted from archive: '+str(path))
     except (OSError,ValueError,KeyError,TypeError) as error:
         errors.append('Invalid R3 texture-cache evidence: '+str(error))
     return errors

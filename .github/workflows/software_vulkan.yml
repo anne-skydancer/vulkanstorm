@@ -83,6 +83,8 @@ jobs:
       - run: python scripts/tests/test_native_http_body_limit.py
       - run: python scripts/tests/test_native_texture_cache.py
       - run: python scripts/tests/test_native_material_basis.py
+      - run: python scripts/tests/test_native_local_images.py
+      - run: python scripts/tests/test_vulkan_local_image_evidence.py
       - run: python scripts/tests/test_vulkan_texture_cache_evidence.py
       - run: python scripts/vulkan_parity_inventory.py
       - run: python scripts/tests/test_vulkan_parity_baseline.py

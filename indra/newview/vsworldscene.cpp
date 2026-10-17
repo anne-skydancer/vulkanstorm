@@ -772,7 +772,7 @@ struct VSWorldScene::Impl
             const float h=height(x0+n/2,y0+n/2,0),start=terrainStarts[0],range=std::max(terrainRanges[0],1.f);
             const unsigned level=unsigned(std::clamp((h-start)/range*4.f,0.f,3.f));const auto& texture=terrainTextures[level];
             if (texture.notNull()) LLUI::getUIImageByID(texture);
-            VSWorldRenderer::Packet p;p.mesh=g.mesh;p.image=resources.image("remote:"+texture.asString());
+            VSWorldRenderer::Packet p;p.mesh=g.mesh;p.image=resources.image("remote:"+vs_native_image_id(texture).asString());
             p.terrain                                      = true;
             p.terrainKey                                   = key;
             p.objectGeneration                             = incarnation;
@@ -1144,7 +1144,7 @@ struct VSWorldScene::Impl
             const auto  id    = entry.getID();
             if (id.notNull())
                 textures.insert(id);
-            const auto image = resources.image("remote:" + id.asString());
+            const auto image = resources.image("remote:" + vs_native_image_id(id).asString());
             if (entry.getColor().mV[3] < 1 || (image && VSUIRenderer::imageDescription(image).alpha == VSWorldContracts::AlphaMode::Blend))
                 alpha = 1;
             if (id == IMG_INVISIBLE)
@@ -1168,7 +1168,7 @@ struct VSWorldScene::Impl
     }
     F32 textureCost(const LLUUID& id) const
     {
-        const auto image  = resources.image("remote:" + id.asString());
+        const auto image  = resources.image("remote:" + vs_native_image_id(id).asString());
         const auto extent = VSUIRenderer::imageExtent(image);
         return F32(256 + S32(16 * (extent[0] / 128.f + extent[1] / 128.f)));
     }
@@ -1405,7 +1405,7 @@ std::optional<VSWorldContracts::Material> VSWorldScene::material(const FaceHandl
     std::copy(material.getColor().mV, material.getColor().mV + 4, result.diffuse.begin());
     result.fullbright        = material.getFullbright();
     result.generation        = token.generation;
-    const auto image         = mImpl->resources.image("remote:" + material.getID().asString());
+    const auto image         = mImpl->resources.image("remote:" + vs_native_image_id(material.getID()).asString());
     result.diffuseImageKnown = material.getID().isNull() || bool(image);
     result.alpha=result.diffuse[3]<.999f?VSWorldContracts::AlphaMode::Blend:
         image?VSUIRenderer::imageDescription(image).alpha:VSWorldContracts::AlphaMode::Opaque;
@@ -2558,7 +2558,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                 auto publishVegetation = [&]
                 {
                     LLUI::getUIImageByID(texture);
-                    auto image = mImpl->resources.image("remote:" + texture.asString());
+                    auto image = mImpl->resources.image("remote:" + vs_native_image_id(texture).asString());
                     if (!image)
                         return;
                     auto working = mImpl->budgets->primitiveBytes.reserve(8 * 1024 * 1024);
@@ -2927,7 +2927,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                 const float distance=std::max((position-eye).length(),1.f);
                 const unsigned demand=unsigned(std::clamp(o.scale.length()*std::max(viewportHeight,1u)/distance,1.f,4096.f));
                 vs_request_world_image(texture,demand);
-                channelImages[channel]=mImpl->resources.image("remote:"+texture.asString());
+                channelImages[channel]=mImpl->resources.image("remote:"+vs_native_image_id(texture).asString());
                 if(!channelImages[channel]) channelsReady=false;
             }
             if(o.media && face.material.hasMedia())

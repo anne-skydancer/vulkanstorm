@@ -297,3 +297,25 @@ before/after hash witnesses are retained explicitly. Cross-platform acceptance,
 actual concurrent-instance arbitration, distinct-account/grid policy and shutdown
 with pending cache I/O remain separate open requirements. This records the
 completed cache subset without marking R3 complete.
+
+## Local bitmap file reload production path
+
+Native local bitmap creation/reload now reuses `LLLocalBitmap`'s decoder,
+timestamp checks, incomplete-file retries and watcher. Successful publication
+keeps a stable UUID/UI facade while replacing an immutable mipmapped native
+image. Refused publication leaves the last valid image and file timestamp intact.
+Local images do not enter the HTTP fetch/cache queue or expire with an account.
+Deleting a local file owner retires its resource and supplies a bounded alias to
+the ordinary default asset for existing native consumers; callbacks retain the
+normal deletion notifications. Static faces, glTF, sculpting, terrain,
+vegetation and avatar consumers resolve that alias at the resource boundary.
+OpenGL retains its existing local-texture implementation.
+
+A diagnostic replay uses the actual production file decoder/watcher and held UI
+facade, with initial PNG, resized file, incomplete write, recovery and deletion.
+Independent GPU quadrant/orientation checks and generation transitions are
+required; an old retained generation must remain unchanged. The cold-cache CI
+case runs this production reload exercise, and archive acceptance requires its
+pixel artifacts. Selected production/replay sources compile and publication/
+artifact regressions pass. Rebuilt-viewer runtime acceptance remains pending.
+Local glTF material-file reload is a separate remaining production path.

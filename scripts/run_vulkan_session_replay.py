@@ -106,6 +106,32 @@ def body_lods_passed(body):
         return False
 
 
+def local_image_contracts_passed(record,directory):
+    """Check actual PNG file reloads against independently specified GPU bytes."""
+    from run_vulkan_texture_cache_tests import u64
+    try:
+        data=record['r3_local_images'];folder=Path(directory).resolve()
+        if any(data.get(key) is not True for key in ('stable_facade','retained_generation_unchanged','default_alias')):
+            return False
+        if data['updates']!=2 or data['retirements']!=2:return False
+        generations=[];identity=None
+        for name,width,height,phase in (('initial',32,32,0),('replaced',32,16,1),('refused',32,16,1),('recovered',16,32,2)):
+            row=data[name]
+            if (row['width'],row['height'],row['phase'])!=(width,height,phase):return False
+            if identity is None:identity=row['id']
+            if not identity or row['id']!=identity:return False
+            generations.append(u64(row['generation']))
+            relative=Path(row['file']);path=(folder/relative).resolve()
+            if relative.is_absolute() or '..' in relative.parts or not path.is_relative_to(folder) or (folder/relative).is_symlink():return False
+            expected=bytearray()
+            for y in range(height-1,-1,-1):
+                for x in range(width):expected.extend((255 if x<width//2 else 0,255 if y<height//2 else 0,0 if phase==0 else 255 if phase==1 else 128,255))
+            if path.read_bytes()!=expected:return False
+        return 0<generations[0]<generations[1]==generations[2]<generations[3]
+    except (OSError,ValueError,KeyError,TypeError,AttributeError):
+        return False
+
+
 def r2_contracts_passed(record, requests, directory=None, *, write_manifest=True):
     """Never promote a passing R1/UI replay into R2 qualification."""
     if not isinstance(requests, list) or any(not isinstance(request, dict) for request in requests):
@@ -914,6 +940,7 @@ def main():
     parser.add_argument('--cache-size', type=int, help='Texture cache size in MiB for qualification')
     parser.add_argument('--cache-clear', action='store_true', help='Exercise the normal next-startup cache purge setting')
     parser.add_argument('--texture-cache-contracts', action='store_true', help='Exercise native streaming/preferences and archive GPU image readbacks')
+    parser.add_argument('--local-image-contracts', action='store_true', help='Exercise actual local bitmap decode, reload, replacement and retirement')
     parser.add_argument('--texture-cache-read-only', action='store_true', help='Exercise the native sibling texture-cache policy in an isolated headless replay')
     parser.add_argument('--texture-fixture', type=Path, help='Nontransparent local J2C fixture for ordinary replay image requests')
     parser.add_argument('--r1-contracts', action='store_true', help='Replay R1 owner, region, resource and lifecycle contracts through production viewer code')
@@ -1028,7 +1055,8 @@ def main():
         env.pop('DISPLAY', None); env.pop('WAYLAND_DISPLAY', None)
     else:
         env.pop('VS_VULKAN_DIAGNOSTIC_HEADLESS', None)
-    for key, enabled in [('VS_VULKAN_REPLAY_TEXTURE_CACHE', args.texture_cache_contracts),
+    for key, enabled in [('VS_VULKAN_REPLAY_LOCAL_IMAGES', args.local_image_contracts),
+                         ('VS_VULKAN_REPLAY_TEXTURE_CACHE', args.texture_cache_contracts),
                          ('VS_VULKAN_REPLAY_TEXTURE_CACHE_READ_ONLY', args.texture_cache_read_only)]:
         if enabled:env[key]='1'
         else:env.pop(key,None)
@@ -1092,6 +1120,8 @@ def main():
                 raise RuntimeError('Missing production R1 ownership/lifecycle or actual mesh replacement evidence')
             if args.r2_contracts and not r2_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing complete production R2 geometry/appearance/lifecycle evidence')
+            if args.local_image_contracts and not local_image_contracts_passed(report,directory):
+                raise RuntimeError('Missing production local bitmap reload, immutable generation or GPU pixel evidence')
             report['conference_start_request'] = conference_start_observed(server.requests)
             if not report['conference_start_request']:
                 raise RuntimeError('Missing or incorrect actual authenticated conference start request')

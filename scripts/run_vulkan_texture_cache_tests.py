@@ -38,6 +38,7 @@ def image_rows(record):
     return {row['id']:row for row in rows}
 
 def validate_image(row,folder):
+    if not isinstance(row,dict):raise ValueError('Invalid GPU image record')
     if row.get('gpu_matches_cpu') is not True:raise ValueError('Cached GPU pixels do not match publication')
     if not (type(row['width']) is int and type(row['height']) is int and 0<row['width']<=4096 and 0<row['height']<=4096):
         raise ValueError('Invalid GPU readback dimensions')
@@ -49,9 +50,13 @@ def validate_image(row,folder):
     with path.open('rb') as source:digest=hashlib.file_digest(source,'sha256').hexdigest()
     if digest!=row['gpu_rgba_sha256']:raise ValueError('GPU artifact checksum mismatch')
 
-def texture_requests(requests):return [row for row in requests if row.get('query',{}).get('texture_id')]
+def texture_requests(requests):
+    if not isinstance(requests,list) or any(not isinstance(row,dict) or not isinstance(row.get('query',{}),dict) for row in requests):
+        raise ValueError('Invalid texture HTTP request records')
+    return [row for row in requests if row.get('query',{}).get('texture_id')]
 
 def validate_case(record,requests,folder,cache_directory,readonly=False):
+    if not isinstance(record,dict):raise ValueError('Invalid cache case record')
     if record.get('passed') is not True or record.get('source_qualified') is not True:raise ValueError('Missing source-qualified viewer acceptance')
     cache=record['texture_cache']
     if cache.get('cache_policy')!='shared_LLTextureFetch' or Path(cache['cache_path']).resolve()!=cache_directory.resolve():
@@ -59,6 +64,7 @@ def validate_case(record,requests,folder,cache_directory,readonly=False):
     if cache.get('read_only') is not readonly:raise ValueError('Unexpected texture cache read-only policy')
     if cache.get('pending_fetches')!=0:raise ValueError('Unfinished texture fetches at capture')
     if u64(cache['maximum_body_bytes'])<=0 or cache['maximum_entries']<=0:raise ValueError('Missing effective cache capacity')
+    if not isinstance(cache['process_instance'],str):raise ValueError('Invalid cache process identity')
     UUID(cache['process_instance'])
     rows=image_rows(record)
     if not {PROFILE,STREAM}.issubset(rows):raise ValueError('Required cache images were not published')
@@ -158,6 +164,7 @@ def main():
                      '--headless','--texture-cache-contracts','--cache-directory',str(cache),
                      '--texture-fixture',str(ROOT/'indra/newview/skins/default/textures/uv_test1.j2c')]
             if policy:command.extend(['--cache-policy',str(policy)])
+            if case=='cold':command.append('--local-image-contracts')
             if case=='read-only':command.append('--texture-cache-read-only')
             if case=='clear':command.append('--cache-clear')
             if case=='resize':

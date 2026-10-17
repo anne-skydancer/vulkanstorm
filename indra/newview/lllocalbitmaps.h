@@ -99,6 +99,7 @@ class LLLocalBitmap
         LLUUID      mTrackingID;
         LLUUID      mWorldID;
         bool        mValid;
+        bool        mNative=false;
         LLSD        mLastModified;
         EExtension  mExtension;
         ELinkStatus mLinkStatus;

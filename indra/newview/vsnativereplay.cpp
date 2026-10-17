@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsr1replay.h"
 #include "vsr2replay.h"
+#include "vsr3replay.h"
 #include "vsnativereplay.h"
 #include "vsnativeimreplay.h"
 #include "vsnativesession.h"
@@ -804,6 +805,7 @@ struct Replay
                 captureRequested = true; return;
             }
             if (!*readback) return;
+            vs_r3_local_images(imEvidence);
             if (!vs_native_im_replay_tick(owner, imEvidence)) return;
             if (!imCaptureRequested)
             {

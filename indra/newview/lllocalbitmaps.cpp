@@ -30,6 +30,10 @@
 
 /* own header */
 #include "lllocalbitmaps.h"
+#if VS_NATIVE_VULKAN
+#include "vsuiimageprovider.h"
+#include "vsnativesession.h"
+#endif
 
 /* boost: will not compile unless equivalent is undef'd, beware. */
 #include "fix_macros.h"
@@ -86,6 +90,9 @@ LLLocalBitmap::LLLocalBitmap(std::string filename)
     : mFilename(filename)
     , mShortName(gDirUtilp->getBaseFileName(filename, true))
     , mValid(false)
+#if VS_NATIVE_VULKAN
+    , mNative(VSNativeSession::active()!=nullptr)
+#endif
     , mLastModified()
     , mLinkStatus(LS_ON)
     , mUpdateRetries(LL_LOCAL_UPDATE_RETRIES)
@@ -130,6 +137,20 @@ LLLocalBitmap::LLLocalBitmap(std::string filename)
 
 LLLocalBitmap::~LLLocalBitmap()
 {
+#if VS_NATIVE_VULKAN
+    if(mNative)
+    {
+        if(mWorldID.notNull()) vs_retire_local_image(mWorldID);
+        for(auto& mat:mGLTFMaterialWithLocalTextures)
+        {
+            if(mValid) mat->LLGLTFMaterial::replaceLocalTexture(mTrackingID,mWorldID,IMG_DEFAULT);
+            mat->removeLocalTextureTracking(mTrackingID);
+        }
+        if(mValid) mChangedSignal(mTrackingID,mWorldID,IMG_DEFAULT);
+        mChangedSignal(mTrackingID,mWorldID,LLUUID::null);mChangedSignal.disconnect_all_slots();
+        return;
+    }
+#endif
     // replace IDs with defaults, if set to do so.
     if(LL_LOCAL_REPLACE_ON_DEL && mValid && gAgentAvatarp) // fix for STORM-1837
     {
@@ -207,6 +228,20 @@ bool LLLocalBitmap::updateSelf(EUpdateType optional_firstupdate)
                 LLPointer<LLImageRaw> raw_image = new LLImageRaw();
                 if (decodeBitmap(raw_image))
                 {
+#if VS_NATIVE_VULKAN
+                    if(mNative)
+                    {
+                        LLUUID identity=mWorldID;
+                        if(identity.isNull()) identity.generate();
+                        if(!vs_publish_local_image(identity,*raw_image)) return false;
+                        const LLUUID previous=mWorldID;
+                        mWorldID=identity;mLastModified=new_last_modified;mUpdateRetries=LL_LOCAL_UPDATE_RETRIES;
+                        // Resource generations change while the UUID remains stable;
+                        // native faces and previews all observe the same publication.
+                        if(optional_firstupdate!=UT_FIRSTUSE) mChangedSignal(mTrackingID,previous,mWorldID);
+                        return true;
+                    }
+#endif
                     // decode is successful, we can safely proceed.
                     LLUUID old_id = LLUUID::null;
                     if ((optional_firstupdate != UT_FIRSTUSE) && !mWorldID.isNull())

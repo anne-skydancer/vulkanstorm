@@ -430,7 +430,7 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
                 const bool required = uuid.notNull() && uuid != IMG_DEFAULT_AVATAR && uuid != IMG_INVISIBLE;
                 if (required)
                     LLUI::getUIImageByID(uuid);
-                const auto key   = "remote:" + uuid.asString();
+                const auto key   = "remote:" + vs_native_image_id(uuid).asString();
                 const auto image = resources.image(key);
                 if (required && !image)
                     ready = false;
@@ -505,7 +505,7 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
                                           }
                                           LLPointer<LLImageRaw> raw;
                                           {
-                                              const auto image = resources.image("remote:" + uuid.asString());
+                                              const auto image = resources.image("remote:" + vs_native_image_id(uuid).asString());
                                               if (!image)
                                                   return nullptr;
                                               const auto extent = VSUIRenderer::imageExtent(image);
@@ -1343,7 +1343,7 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const 
             if (texture.isNull() || texture == IMG_DEFAULT_AVATAR || texture == IMG_INVISIBLE)
                 continue;
             LLUI::getUIImageByID(texture);
-            image = a.resources.image("remote:" + texture.asString());
+            image = a.resources.image("remote:" + vs_native_image_id(texture).asString());
         }
         if (!image && a.visibility != Visibility::Jellydoll)
         {
