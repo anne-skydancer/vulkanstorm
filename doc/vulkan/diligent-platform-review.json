@@ -1,5 +1,5 @@
 {
-  "source_commit": "113e5b93cbaaf602eb99f8e8b2b168afe35ddcec",
+  "source_commit": "a4eb1cb2a060e8cc963629305dfae17f341cdbdd",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -38752,25 +38752,25 @@
       "path": "indra/newview/llmediactrl.cpp",
       "start": 34,
       "end": 34,
-      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
+      "sha256": "7ccdbda297b5e66ec3b686352079f246a680d913cd034eaf73244a6b5c61702d",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
     },
     {
       "path": "indra/newview/llmediactrl.cpp",
-      "start": 865,
-      "end": 867,
-      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
+      "start": 866,
+      "end": 871,
+      "sha256": "7ccdbda297b5e66ec3b686352079f246a680d913cd034eaf73244a6b5c61702d",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
     },
     {
       "path": "indra/newview/llmediactrl.cpp",
-      "start": 876,
-      "end": 877,
-      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
+      "start": 880,
+      "end": 881,
+      "sha256": "7ccdbda297b5e66ec3b686352079f246a680d913cd034eaf73244a6b5c61702d",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
@@ -43161,8 +43161,8 @@
     {
       "path": "scripts/tests/test_native_gltf_image_lifecycle.py",
       "start": 1,
-      "end": 91,
-      "sha256": "f6e3cc07762ef43d91c062e510a7fc8242c8be1bea15e550453411fbf3c03939",
+      "end": 134,
+      "sha256": "4bc7af358821108809921655d4beba8979af019da5a3c1d9683c917585d4d30f",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44629,7 +44629,7 @@
       "path": "indra/newview/llmediactrl.cpp",
       "start": 167,
       "end": 168,
-      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
+      "sha256": "7ccdbda297b5e66ec3b686352079f246a680d913cd034eaf73244a6b5c61702d",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
@@ -44753,18 +44753,18 @@
     },
     {
       "path": "indra/newview/llmediactrl.cpp",
-      "start": 881,
-      "end": 882,
-      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
+      "start": 885,
+      "end": 886,
+      "sha256": "7ccdbda297b5e66ec3b686352079f246a680d913cd034eaf73244a6b5c61702d",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
     },
     {
       "path": "indra/newview/llmediactrl.cpp",
-      "start": 884,
-      "end": 884,
-      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
+      "start": 888,
+      "end": 888,
+      "sha256": "7ccdbda297b5e66ec3b686352079f246a680d913cd034eaf73244a6b5c61702d",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
@@ -45780,8 +45780,8 @@
     {
       "path": "indra/newview/vsr3gltfreplay.cpp",
       "start": 1,
-      "end": 151,
-      "sha256": "f45881f89c868303e34981447f7cefa36fc7b4ecf96dd8c8aa31d879a14c349b",
+      "end": 153,
+      "sha256": "c10eb4f8f9acbf07187a444818426eb4b57b98d2b032e95dfc43f9e7213a4ee4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only execution of the actual production local file decoder/watcher, immutable native image generations, UI facades and GPU pixel/orientation evidence. Complete R3 acceptance remains open."
@@ -48850,7 +48850,7 @@
       "path": "indra/newview/vsr3gltfreplay.cpp",
       "start": 10,
       "end": 10,
-      "sha256": "f45881f89c868303e34981447f7cefa36fc7b4ecf96dd8c8aa31d879a14c349b",
+      "sha256": "c10eb4f8f9acbf07187a444818426eb4b57b98d2b032e95dfc43f9e7213a4ee4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48859,7 +48859,7 @@
       "path": "indra/newview/vsr3gltfreplay.cpp",
       "start": 34,
       "end": 35,
-      "sha256": "f45881f89c868303e34981447f7cefa36fc7b4ecf96dd8c8aa31d879a14c349b",
+      "sha256": "c10eb4f8f9acbf07187a444818426eb4b57b98d2b032e95dfc43f9e7213a4ee4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48868,52 +48868,52 @@
       "path": "indra/newview/vsr3gltfreplay.cpp",
       "start": 43,
       "end": 44,
-      "sha256": "f45881f89c868303e34981447f7cefa36fc7b4ecf96dd8c8aa31d879a14c349b",
+      "sha256": "c10eb4f8f9acbf07187a444818426eb4b57b98d2b032e95dfc43f9e7213a4ee4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
     },
     {
       "path": "indra/newview/vsr3gltfreplay.cpp",
-      "start": 117,
-      "end": 117,
-      "sha256": "f45881f89c868303e34981447f7cefa36fc7b4ecf96dd8c8aa31d879a14c349b",
+      "start": 118,
+      "end": 118,
+      "sha256": "c10eb4f8f9acbf07187a444818426eb4b57b98d2b032e95dfc43f9e7213a4ee4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
     },
     {
       "path": "indra/newview/vsr3gltfreplay.cpp",
-      "start": 120,
-      "end": 130,
-      "sha256": "f45881f89c868303e34981447f7cefa36fc7b4ecf96dd8c8aa31d879a14c349b",
+      "start": 122,
+      "end": 132,
+      "sha256": "c10eb4f8f9acbf07187a444818426eb4b57b98d2b032e95dfc43f9e7213a4ee4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
     },
     {
       "path": "indra/newview/vsr3gltfreplay.cpp",
-      "start": 134,
-      "end": 135,
-      "sha256": "f45881f89c868303e34981447f7cefa36fc7b4ecf96dd8c8aa31d879a14c349b",
+      "start": 136,
+      "end": 137,
+      "sha256": "c10eb4f8f9acbf07187a444818426eb4b57b98d2b032e95dfc43f9e7213a4ee4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
     },
     {
       "path": "indra/newview/vsr3gltfreplay.cpp",
-      "start": 139,
-      "end": 142,
-      "sha256": "f45881f89c868303e34981447f7cefa36fc7b4ecf96dd8c8aa31d879a14c349b",
+      "start": 141,
+      "end": 144,
+      "sha256": "c10eb4f8f9acbf07187a444818426eb4b57b98d2b032e95dfc43f9e7213a4ee4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
     },
     {
       "path": "indra/newview/vsr3gltfreplay.cpp",
-      "start": 146,
-      "end": 147,
-      "sha256": "f45881f89c868303e34981447f7cefa36fc7b4ecf96dd8c8aa31d879a14c349b",
+      "start": 148,
+      "end": 149,
+      "sha256": "c10eb4f8f9acbf07187a444818426eb4b57b98d2b032e95dfc43f9e7213a4ee4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49331,10 +49331,64 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare the actual reference terrain producer with native coordinates over 65536 samples; exercise production four-layer GPU blend seams and live scale without reupload, requiring every readback artifact. Preserve transactional ground admission and texture replacement tests."
+    },
+    {
+      "path": "indra/newview/llmediactrl.cpp",
+      "start": 865,
+      "end": 865,
+      "sha256": "7ccdbda297b5e66ec3b686352079f246a680d913cd034eaf73244a6b5c61702d",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
+    },
+    {
+      "path": "indra/newview/llmediactrl.cpp",
+      "start": 867,
+      "end": 869,
+      "sha256": "7ccdbda297b5e66ec3b686352079f246a680d913cd034eaf73244a6b5c61702d",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
+    },
+    {
+      "path": "indra/newview/vsr3gltfreplay.cpp",
+      "start": 43,
+      "end": 43,
+      "sha256": "c10eb4f8f9acbf07187a444818426eb4b57b98d2b032e95dfc43f9e7213a4ee4",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
+    },
+    {
+      "path": "indra/newview/vsr3gltfreplay.cpp",
+      "start": 46,
+      "end": 46,
+      "sha256": "c10eb4f8f9acbf07187a444818426eb4b57b98d2b032e95dfc43f9e7213a4ee4",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
+    },
+    {
+      "path": "indra/newview/vsr3gltfreplay.cpp",
+      "start": 120,
+      "end": 120,
+      "sha256": "c10eb4f8f9acbf07187a444818426eb4b57b98d2b032e95dfc43f9e7213a4ee4",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
+    },
+    {
+      "path": "scripts/tests/test_native_gltf_image_lifecycle.py",
+      "start": 13,
+      "end": 55,
+      "sha256": "4bc7af358821108809921655d4beba8979af019da5a3c1d9683c917585d4d30f",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "75ccd98a096d44bb46b07946f5e73b7324694170",
+    "previous_source_commit": "739bf75f8e43bf4ea68bc6a9046012c6ad638818",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
