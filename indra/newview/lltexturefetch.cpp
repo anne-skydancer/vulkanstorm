@@ -304,9 +304,10 @@ private:
         {
             setImage(image);
         }
+        bool scopedTextureRead() const override { return mOperation!=0; }
 
         // Threads:  Ttc
-        virtual void completed(bool success)
+        void completed(bool success) override
         {
             LL_PROFILE_ZONE_SCOPED;
             LLTextureFetchWorker* worker = mFetcher->getWorker(mID);
@@ -332,7 +333,7 @@ private:
         }
 
         // Threads:  Ttc
-        virtual void completed(bool success)
+        void completed(bool success) override
         {
             LL_PROFILE_ZONE_SCOPED;
             LLTextureFetchWorker* worker = mFetcher->getWorker(mID);
