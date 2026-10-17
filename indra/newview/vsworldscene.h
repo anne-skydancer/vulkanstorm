@@ -51,6 +51,8 @@ public:
     struct ObjectSnapshot
     {
         ObjectHandle object;
+        LLUUID rootEditID,rootID;
+        bool hud=false;
         LLUUID owner;
         bool ownerKnown=false;
         std::string nameValues,mediaVersion;

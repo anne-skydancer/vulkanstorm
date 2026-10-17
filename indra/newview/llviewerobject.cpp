@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsobjectcontext.h"
 
 #include "llviewerobject.h"
 
@@ -7000,18 +7001,7 @@ bool LLViewerObject::permYouOwner() const
 {
     if (isRootEdit())
     {
-#ifdef HACKED_GODLIKE_VIEWER
-        return true;
-#else
-# ifdef TOGGLE_HACKED_GODLIKE_VIEWER
-        if (LLGridManager::getInstance()->isInSLBeta()
-            && (gAgent.getGodLevel() >= GOD_MAINTENANCE))
-        {
-            return true;
-        }
-# endif
-        return flagObjectYouOwner();
-#endif
+        return VSObjectContext::ownedByAgent(mFlags);
     }
     else
     {

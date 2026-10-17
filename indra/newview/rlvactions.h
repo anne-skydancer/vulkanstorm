@@ -29,6 +29,7 @@ class LLInventoryCategory;
 class LLInventoryItem;
 class LLViewerObject;
 class LLVOAvatar;
+struct VSObjectContext;
 
 // ============================================================================
 // RlvActions class declaration - developer-friendly non-RLVa code facing class, use in lieu of RlvHandler whenever possible
@@ -324,6 +325,7 @@ public:
      * Returns true if the user can touch the specified object (with an optional offset relative to its center)
      */
     static bool canTouch(const LLViewerObject* pObj, const LLVector3& posOffset = LLVector3::zero);
+    static bool canTouch(const VSObjectContext&, const LLVector3& posOffset = LLVector3::zero);
 
     // ===============
     // World (General)
