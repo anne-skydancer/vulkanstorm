@@ -595,3 +595,11 @@ native image owners, object retirement and account-registry retirement. The
 cold-cache CI case requires those actual HTTP bytes and archived fixture inputs.
 Runtime acceptance of this new remote material checkpoint remains pending its
 canonical rebuild.
+
+The source-qualified `0cef4cb0e3` canonical viewer passed the actual remote
+material/image replay in 14.5 seconds and the combined R2/R3 production replay in
+76.2 seconds. The valid HTTP material produced all six native PBR faces;
+malformed and oversized HTTP assets remained unloaded. Object and account
+registry retirement passed. These results qualify this checkpoint on the local
+Windows software device. Recovery of a corrupt material asset-cache entry and
+the remaining R3 obligations still require implementation/qualification.
