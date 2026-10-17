@@ -158,6 +158,35 @@ def local_material_contracts_passed(record,directory):
     except (OSError,ValueError,KeyError,TypeError,AttributeError):return False
 
 
+def remote_material_contracts_passed(record,requests,directory):
+    """Require actual asset HTTP bytes and successful/failed native publication."""
+    try:
+        data=record['r3_remote_materials'];root=Path(directory).resolve()
+        if data.get('actual_object_faces')!=6 or any(data.get(key) is not True for key in
+                ('object_retired','native_only','shared_parser_factors','account_retired')):return False
+        assets=data['assets']
+        if len(assets)!=3 or [row['loaded'] for row in assets]!=[True,False,False]:return False
+        for index,row in enumerate(assets,1):
+            identity=f'b3100000-0000-0000-0000-{index:012d}'
+            if row['id']!=identity or row['file']!=f'r3/remote-materials/{identity}.asset':return False
+            original=root/row['file'];path=original.resolve()
+            if original.is_symlink() or not path.is_relative_to(root) or not path.is_file():return False
+            payload=path.read_bytes()
+            received=[item for item in requests if item.get('query',{}).get('material_id')==[identity]]
+            if len(received)!=1 or received[0].get('bytes')!=len(payload) or received[0].get('sha256')!=hashlib.sha256(payload).hexdigest():return False
+            if index==1:
+                asset=read_llsd(ET.fromstring(payload))
+                material=json.loads(asset['data'])['materials'][0]
+                factors=material['pbrMetallicRoughness']
+                if factors['baseColorFactor']!=[.25,.5,.75,.625] or not material['doubleSided'] or material['alphaMode']!='MASK':return False
+                if abs(factors['metallicFactor']-.3)>1.e-6 or abs(factors['roughnessFactor']-.6)>1.e-6:return False
+            elif index==2:
+                if read_llsd(ET.fromstring(payload))['data']!='invalid native material fixture':return False
+            elif payload!=b' '*(1024*1024+1):return False
+        return True
+    except (OSError,ValueError,KeyError,TypeError,ET.ParseError):return False
+
+
 def world_bump_contracts_passed(record,directory):
     """Actual ObjectUpdate faces must retain scoped, generation-cached normals."""
     from run_vulkan_texture_cache_tests import u64
@@ -631,6 +660,14 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_response(206);self.send_header('Content-Type','image/jp2')
                     self.send_header('Content-Range',f'bytes {start}-{end}/{len(data)}')
                     self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload);return
+            elif query.get('material_id') and getattr(self.server,'r3_directory',None):
+                identities=[f'b3100000-0000-0000-0000-{index:012d}' for index in range(1,4)]
+                if len(query['material_id'])!=1 or query['material_id'][0] not in identities:
+                    self.send_error(404);return
+                fixture=self.server.r3_directory/'remote-materials'/(query['material_id'][0]+'.asset')
+                if not fixture.is_file() or fixture.stat().st_size>2*1024*1024:
+                    self.send_error(404);return
+                data=fixture.read_bytes()
             elif query.get('landmark_id') == ['60000000-0000-0000-0000-000000000020']:
                 data = b'Landmark version 2\nregion_id 40000000-0000-0000-0000-000000000004\nlocal_pos 128 128 25\n'
             elif query.get('lsltext_id') == ['60000000-0000-0000-0000-000000000009']:
@@ -643,6 +680,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             self.server.requests.append(dict(path=path, method='GET', query=query, bytes=len(data)))
+            if query.get('material_id'):self.server.requests[-1]['sha256']=hashlib.sha256(data).hexdigest()
             self.send_response(200)
             self.send_header('Content-Type', 'application/octet-stream')
             self.send_header('Content-Length', str(len(data)))
@@ -1193,6 +1231,7 @@ def main():
     report = {}; log = ''; code = None; passed = False
     with SimulatorHTTP() as server:
         server.texture_fixture=args.texture_fixture.resolve() if args.texture_fixture else None
+        server.r3_directory=directory/'r3' if args.local_image_contracts else None
         server.stream_texture=directory/'r3/texture.j2c' if args.texture_cache_contracts else None
         server.r1_directory=directory/'r1' if args.r1_contracts else None
         r2_fixture.configure(server,directory/'r2' if args.r2_contracts else None)
@@ -1217,6 +1256,8 @@ def main():
                 raise RuntimeError('Missing complete production R2 geometry/appearance/lifecycle evidence')
             if args.local_image_contracts and (not local_image_contracts_passed(report,directory) or not local_material_contracts_passed(report,directory) or not world_bump_contracts_passed(report,directory)):
                 raise RuntimeError('Missing production local bitmap/material reload, immutable generation or GPU pixel evidence')
+            if args.local_image_contracts and not remote_material_contracts_passed(report,server.requests,directory):
+                raise RuntimeError('Missing production remote PBR transport, parse failure or account retirement evidence')
             report['conference_start_request'] = conference_start_observed(server.requests)
             if not report['conference_start_request']:
                 raise RuntimeError('Missing or incorrect actual authenticated conference start request')

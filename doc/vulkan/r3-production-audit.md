@@ -566,3 +566,32 @@ omitted sibling GPU readback failed it. Evidence is retained under
 `.tmp/r3-concurrent-cache-qualified`; dedicated CI now requires this case on all
 three software jobs. This is local Windows software-device acceptance of actual
 multiple-instance cache arbitration, not complete R3 or cross-platform parity.
+
+## Remote PBR preparation and account ownership
+
+Remote native materials continue to use the shared asset service, disk cache,
+TinyGLTF parser, LLGLTFMaterial conversion and material registry. Native requests
+now carry account guards through background decoding and main-thread publication.
+Account reset removes only tracked remote entries, preserving local file-watcher
+replacements in that registry. Late work cannot publish or invoke subscribers
+from a retired account. A failed decode or refused worker post remains unloaded;
+three bounded attempts with backoff can recover transient failure.
+
+Native metadata is limited to 4096 entries; only unreferenced inactive entries
+may be reclaimed at capacity. Material input is limited to 1 MiB and 64 JSON
+nesting levels before the shared parser. Preparation reservations total at most
+128 MiB and survive queued publication. Native remote material parsing accepts
+texture UUID references and refuses external filesystem reads, embedded image
+decoding and geometry payloads; those have their own production owners. Existing
+OpenGL material loading retains its original path.
+
+Production-method regressions exercise valid/failed publication, refused work,
+decode exceptions, finite retries, delayed completion after account reset,
+registry replacement, disconnected ownership and a fully pinned metadata cache.
+Viewer compilation passes. A viewer replay now serves valid, malformed and
+oversized material assets through the actual ViewerAsset HTTP path and admits
+six ObjectUpdate PBR faces using the fetched material. It checks shared factors,
+native image owners, object retirement and account-registry retirement. The
+cold-cache CI case requires those actual HTTP bytes and archived fixture inputs.
+Runtime acceptance of this new remote material checkpoint remains pending its
+canonical rebuild.

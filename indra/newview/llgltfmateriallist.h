@@ -49,6 +49,9 @@ public:
     void removeMaterial(const LLUUID& id);
 
     void flushMaterials();
+#if VS_NATIVE_VULKAN
+    void resetNativeMaterials();
+#endif
 
     // Queue an modification of a material that we want to send to the simulator.  Call "flushUpdates" to flush pending updates.
     //  id - ID of object to modify
@@ -136,6 +139,17 @@ protected:
 
     typedef std::unordered_map<LLUUID, LLPointer<LLFetchedGLTFMaterial > > uuid_mat_map_t;
     uuid_mat_map_t mList;
+#if VS_NATIVE_VULKAN
+    struct NativeMaterial
+    {
+        LLFetchedGLTFMaterial* material=nullptr;
+        unsigned attempts=0;
+        double retryAt=0;
+    };
+    std::unordered_map<LLUUID,NativeMaterial> mNativeMaterials;
+    LLFetchedGLTFMaterial* getNativeMaterial(const LLUUID& id);
+    static void onNativeAssetLoadComplete(const LLUUID& id,LLAssetType::EType type,void* input,S32 status);
+#endif
 
     typedef std::vector<LLPointer<LLGLTFMaterial> > override_list_t;
     typedef std::unordered_map<LLUUID, override_list_t > queued_override_map_t;
