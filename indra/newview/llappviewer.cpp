@@ -5273,6 +5273,12 @@ bool LLAppViewer::initCache()
     LL_PROFILE_ZONE_SCOPED;
     mPurgeCache = false;
     bool read_only = mSecondInstance;
+#if VS_VULKAN_DIAGNOSTICS && VS_NATIVE_VULKAN
+    // Exercise the same cache policy as a sibling instance in an isolated,
+    // credential-free native replay. Ordinary startup still uses mSecondInstance.
+    if(VSNativeSession::active() && VSVulkanContext::headlessReplay() &&
+        std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE_READ_ONLY")) read_only=true;
+#endif
     LLAppViewer::getTextureCache()->setReadOnly(read_only) ;
     LLVOCache::initParamSingleton(read_only);
 

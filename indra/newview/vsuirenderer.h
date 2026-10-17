@@ -59,6 +59,9 @@ public:
     // are synchronized before the frame's draws and observer, like the GPU page.
     static const std::vector<std::uint8_t>& imagePixels(const Image&);
     static std::array<unsigned,2> imageExtent(const Image&);
+#if defined(VS_VULKAN_DIAGNOSTICS) && VS_VULKAN_DIAGNOSTICS
+    std::vector<std::uint8_t> readbackImage(const Image&);
+#endif
     // Borrowed view; callers retain the exact Image generation through completion.
     static Diligent::ITextureView* imageView(const Image&);
     static Diligent::ITextureView* imageView(const Image&,const VSWorldContracts::Sampler&);

@@ -405,6 +405,33 @@ VSUIRenderer::Statistics VSUIRenderer::statistics() const
 }
 VSWorldContracts::Image VSUIRenderer::imageDescription(const Image& image)
 { return image?image->description:VSWorldContracts::Image{}; }
+#if defined(VS_VULKAN_DIAGNOSTICS) && VS_VULKAN_DIAGNOSTICS
+std::vector<std::uint8_t> VSUIRenderer::readbackImage(const Image& image)
+{
+    check(image && imageOwnedBy(image,mImpl->device),"Invalid native image readback owner");
+    auto desc=image->resource->GetDesc();
+    check(desc.Format==TEX_FORMAT_RGBA8_UNORM && desc.Width && desc.Height,"Unsupported native image readback format");
+    desc.Name="Native cached-image diagnostic readback";desc.MipLevels=1;
+    desc.Usage=USAGE_STAGING;desc.BindFlags=BIND_NONE;desc.CPUAccessFlags=CPU_ACCESS_READ;
+    desc.MiscFlags=MISC_TEXTURE_FLAG_NONE;
+    RefCntAutoPtr<ITexture> staging;mImpl->device->CreateTexture(desc,nullptr,&staging);
+    check(staging!=nullptr,"Native cached-image staging allocation failed");
+    std::vector<std::uint8_t> pixels(std::size_t(desc.Width)*desc.Height*4);
+    auto* context=mImpl->context.RawPtr();
+    context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    CopyTextureAttribs copy{};copy.pSrcTexture=image->resource;copy.pDstTexture=staging;
+    copy.SrcTextureTransitionMode=copy.DstTextureTransitionMode=RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+    context->CopyTexture(copy);context->Flush();context->WaitForIdle();
+    MappedTextureSubresource mapped{};
+    context->MapTextureSubresource(staging,0,0,MAP_READ,MAP_FLAG_NONE,nullptr,mapped);
+    check(mapped.pData!=nullptr,"Native cached-image mapping failed");
+    for(unsigned row=0;row<desc.Height;++row)
+        std::copy_n(static_cast<const std::uint8_t*>(mapped.pData)+row*mapped.Stride,desc.Width*4,
+                    pixels.data()+std::size_t(row)*desc.Width*4);
+    context->UnmapTextureSubresource(staging,0,0);
+    return pixels;
+}
+#endif
 Diligent::ITextureView* VSUIRenderer::imageView(const Image& image,const VSWorldContracts::Sampler& input)
 {
     if(!image) return nullptr;

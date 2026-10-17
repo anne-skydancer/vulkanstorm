@@ -505,7 +505,24 @@ class Handler(BaseHTTPRequestHandler):
         if path.rstrip('/') == '/asset':
             query = parse_qs(urlsplit(self.path).query)
             if query.get('texture_id'):
-                data = (Path(__file__).resolve().parents[1] / 'indra/newview/skins/default/textures/transparent.j2c').read_bytes()
+                stream=getattr(self.server,'stream_texture',None)
+                streaming=bool(stream and query['texture_id']==['a3000000-0000-0000-0000-000000000001'])
+                fixture=stream if streaming else getattr(self.server,'texture_fixture',None)
+                data=(fixture or (Path(__file__).resolve().parents[1]/'indra/newview/skins/default/textures/transparent.j2c')).read_bytes()
+                if streaming and self.headers.get('Range'):
+                    import re
+                    match=re.fullmatch(r'bytes=(\d+)-(\d*)',self.headers['Range'])
+                    if not match:self.send_error(400);return
+                    start=int(match[1]);end=min(int(match[2]) if match[2] else len(data)-1,len(data)-1)
+                    if start> end or start>=len(data):
+                        self.send_response(416);self.send_header('Content-Range',f'bytes */{len(data)}')
+                        self.send_header('Content-Length','0');self.end_headers();return
+                    payload=data[start:end+1]
+                    self.server.requests.append(dict(path=path,method='GET',query=query,bytes=len(payload),
+                        range_start=start,range_end=end,total_bytes=len(data)))
+                    self.send_response(206);self.send_header('Content-Type','image/jp2')
+                    self.send_header('Content-Range',f'bytes {start}-{end}/{len(data)}')
+                    self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload);return
             elif query.get('landmark_id') == ['60000000-0000-0000-0000-000000000020']:
                 data = b'Landmark version 2\nregion_id 40000000-0000-0000-0000-000000000004\nlocal_pos 128 128 25\n'
             elif query.get('lsltext_id') == ['60000000-0000-0000-0000-000000000009']:
@@ -892,10 +909,23 @@ def main():
                         help='Viewer UI scale used for connected skin/readback qualification')
     parser.add_argument('--all-skins', action='store_true', help='Run the complete connected replay for every packaged skin/theme and German overlay')
     parser.add_argument('--headless', action='store_true', help='Replay production viewer integration offscreen without a native window; does not qualify presentation')
+    parser.add_argument('--cache-directory', type=Path, help='Explicit isolated cache shared by sequential qualification processes')
+    parser.add_argument('--cache-policy', type=Path, help='Prior process cache-version metadata for restart qualification')
+    parser.add_argument('--cache-size', type=int, help='Texture cache size in MiB for qualification')
+    parser.add_argument('--cache-clear', action='store_true', help='Exercise the normal next-startup cache purge setting')
+    parser.add_argument('--texture-cache-contracts', action='store_true', help='Exercise native streaming/preferences and archive GPU image readbacks')
+    parser.add_argument('--texture-cache-read-only', action='store_true', help='Exercise the native sibling texture-cache policy in an isolated headless replay')
+    parser.add_argument('--texture-fixture', type=Path, help='Nontransparent local J2C fixture for ordinary replay image requests')
     parser.add_argument('--r1-contracts', action='store_true', help='Replay R1 owner, region, resource and lifecycle contracts through production viewer code')
     parser.add_argument('--r2-contracts',action='store_true',help='Replay production R2 geometry and connected appearance actions')
     parser.add_argument('--native-backtrace', action='store_true', help='Run Linux replay under GDB; ordinary qualification runs directly')
     args = parser.parse_args()
+    if args.cache_size is not None and not 256 <= args.cache_size <= 100*1024:
+        parser.error('--cache-size must be between 256 and 102400 MiB')
+    if args.texture_cache_read_only and not (args.headless and args.texture_cache_contracts):
+        parser.error('Read-only cache injection requires isolated headless cache qualification')
+    if args.texture_fixture and (not args.texture_fixture.is_file() or args.texture_fixture.stat().st_size>16*1024*1024):
+        parser.error('Expected a bounded local texture fixture')
     started = time.monotonic()
     if not .75 <= args.ui_scale <= 4:
         parser.error('--ui-scale must be between 0.75 and 4')
@@ -998,6 +1028,10 @@ def main():
         env.pop('DISPLAY', None); env.pop('WAYLAND_DISPLAY', None)
     else:
         env.pop('VS_VULKAN_DIAGNOSTIC_HEADLESS', None)
+    for key, enabled in [('VS_VULKAN_REPLAY_TEXTURE_CACHE', args.texture_cache_contracts),
+                         ('VS_VULKAN_REPLAY_TEXTURE_CACHE_READ_ONLY', args.texture_cache_read_only)]:
+        if enabled:env[key]='1'
+        else:env.pop(key,None)
     if args.r2_contracts:env['VS_VULKAN_REPLAY_R2']='1'
     else:env.pop('VS_VULKAN_REPLAY_R2',None)
     if args.r1_contracts:env['VS_VULKAN_REPLAY_R1']='1'
@@ -1009,19 +1043,34 @@ def main():
                '--set', 'QuitAfterSeconds', str(VIEWER_REPLAY_SECONDS), '--set', 'RenderDebugGLSession', 'true',
                '--set', 'UpdaterShowReleaseNotes', '0', '--set', 'FSShowWhitelistReminder', 'false']
     selection = ET.Element('llsd')
-    append_llsd(selection, {name: dict(Type='String', Persist=0, Comment='Replay skin selection', Value=value)
-                           for name, value in [('SkinCurrent', args.skin),
-                                               ('SkinCurrentTheme', args.theme), ('Language', args.language)]})
+    selection_values = {name: dict(Type='String', Persist=0, Comment='Replay skin selection', Value=value)
+                        for name,value in [('SkinCurrent',args.skin),('SkinCurrentTheme',args.theme),('Language',args.language)]}
+    if args.cache_policy:
+        policy=json.loads(args.cache_policy.read_text())
+        rules={'LocalCacheVersion':('S32',int),'DiskCacheVersion':('S32',int),'LastJ2CVersion':('String',str)}
+        if set(policy)!=set(rules) or any(type(policy[key]) is not value_type for key,(_,value_type) in rules.items()):
+            raise RuntimeError('Invalid restart cache policy metadata')
+        selection_values.update({key:dict(Type=kind,Persist=0,Comment='Isolated cache restart policy',Value=policy[key])
+                                 for key,(kind,_) in rules.items()})
+    append_llsd(selection,selection_values)
     selection_file = directory / 'ui-selection.xml'
     selection_file.write_bytes(ET.tostring(selection, encoding='utf-8'))
     # Empty theme strings cannot survive the viewer's command-line tokenizer.
     command.extend(['--sessionsettings', str(selection_file)])
     command.extend(['--set', 'UIScaleFactor', str(args.ui_scale)])
-    command.extend(['--set', 'CacheLocation', str(isolated_profile / 'cache'),
-                    '--set', 'NewCacheLocation', str(isolated_profile / 'cache'),
+    cache_directory=args.cache_directory.resolve() if args.cache_directory else isolated_profile/'cache'
+    cache_directory.mkdir(parents=True,exist_ok=True)
+    command.extend(['--set', 'CacheLocation', str(cache_directory),
+                    '--set', 'NewCacheLocation', str(cache_directory),
                     '--set', 'FSUseNearbyChatConsole', 'true'])
+    if args.cache_size is not None:command.extend(['--set','CacheSize',str(args.cache_size)])
+    if args.cache_clear:command.extend(['--set','PurgeCacheOnNextStartup','true'])
+    if args.texture_cache_contracts:command.extend(['--set','RenderCompressTextures','false',
+        '--set','RenderMaxTextureResolution','2048','--set','TextureLoadFullRes','false'])
     report = {}; log = ''; code = None; passed = False
     with SimulatorHTTP() as server:
+        server.texture_fixture=args.texture_fixture.resolve() if args.texture_fixture else None
+        server.stream_texture=directory/'r3/texture.j2c' if args.texture_cache_contracts else None
         server.r1_directory=directory/'r1' if args.r1_contracts else None
         r2_fixture.configure(server,directory/'r2' if args.r2_contracts else None)
         server.r2_categories = [dict(row) for row in INVENTORY_SKELETON]

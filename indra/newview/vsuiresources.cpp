@@ -286,6 +286,12 @@ std::vector<VSUIRenderer::Packet> VSUIResources::finish()
     return std::move(mImpl->packets);
 }
 void VSUIResources::erase(const std::string& key) { mImpl->assets.erase(key); }
+#if defined(VS_VULKAN_DIAGNOSTICS) && VS_VULKAN_DIAGNOSTICS
+std::vector<std::uint8_t> VSUIResources::readbackImage(const std::string& key)
+{
+    return mImpl->renderer.readbackImage(image(key));
+}
+#endif
 LLUIImagePtr VSUIResources::facade(const std::string& key) const
 {
     const auto found = mImpl->assets.find(key);
