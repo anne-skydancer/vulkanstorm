@@ -1,5 +1,5 @@
 {
-  "source_commit": "d2dca175ddc64cc32b25213c1fc6783ac0dc6aeb",
+  "source_commit": "2a8d3aea965215f1e66a6575e7f8a2ebf1602ea0",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "697f82474d54c4c36595b7f1123996b6421c5cc667b7a9889b5f75c874c118d8",
+      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -440,7 +440,7 @@
       ]
     },
     "indra/newview/vsuiresources.cpp": {
-      "sha256": "b1b868c60805f777b43e859b7bc00609217fca93990c75e4b7bf6300e3f4fae3",
+      "sha256": "1d33eb059f6df759936da4ae6dd96f4c11985618061e1567b34ac028aee531ef",
       "anchors": [
         "VSUIResources::publish",
         "VSUIResources::fontBatch",
@@ -448,7 +448,7 @@
       ]
     },
     "indra/newview/vsuiresources.h": {
-      "sha256": "08bae022d12aecd47de942d5a5c8a94ef454c967c52f050f8adaa325259d49d5",
+      "sha256": "bbdfdefafa50120bad3776fd0ecfe313bc3f46a6eccd732d67a12025d2ae2898",
       "anchors": [
         "class VSUIResources"
       ]
@@ -793,7 +793,7 @@
       ]
     },
     "indra/newview/vsnativereplay.cpp": {
-      "sha256": "ae2ff462313e306e090c15088d85365c8d944cda26686f0c4f34fcaf8c8bbbf4",
+      "sha256": "93f26a8d2921724879006c069f37a33affe60f9ca91d7d68c7a2d6df5a052a28",
       "anchors": [
         "vs_native_replay_tick()",
         "inspectOutgoing("
