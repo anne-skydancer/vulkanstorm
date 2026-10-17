@@ -1624,6 +1624,9 @@ bool LLAppViewer::initNativeVulkanLogin()
     LLUrlFloaterDispatchHandler::registerInDispatcher();
     LLFolderViewItem::initClass();
     LLKeyboard::setStringTranslatorFunc(LLTrans::getKeyboardString);
+    // The peer startup loads user bindings with shipped defaults as its fallback.
+    // Native input dispatch consumes that same table, including global and mouse bindings.
+    loadKeyBindings();
     LLUrlAction::setOpenURLCallback(boost::bind(&LLWeb::loadURL, _1, LLStringUtil::null, LLStringUtil::null));
     LLUrlAction::setOpenURLInternalCallback(boost::bind(&LLWeb::loadURLInternal, _1, LLStringUtil::null, LLStringUtil::null, false));
     LLUrlAction::setOpenURLExternalCallback(boost::bind(&LLWeb::loadURLExternal, _1, true, LLStringUtil::null));
