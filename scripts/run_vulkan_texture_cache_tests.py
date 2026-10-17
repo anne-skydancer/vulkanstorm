@@ -139,7 +139,7 @@ def main():
     for case in CASES:
         folder=run/case;folder.mkdir()
         cache=base_cache if case in ('cold','warm') else run/('cache-'+case)
-        record=dict(passed=False,evidence=str(folder))
+        record=dict(passed=False,evidence=folder.relative_to(directory).as_posix())
         try:
             if case not in ('cold','warm'):
                 cache.mkdir();shutil.copytree(base_cache/'texturecache',cache/'texturecache')
@@ -151,6 +151,7 @@ def main():
                 policy=folder/'cache-policy.json';policy.write_text(json.dumps(values,indent=2)+'\n')
             if case in ('truncated','corrupt-header'):record['mutation']=mutate_entry(cache,case)
             before=snapshot(cache) if case=='read-only' else None
+            if before is not None:record['cache_before']=before
             command=[sys.executable,str(ROOT/'scripts/run_vulkan_session_replay.py'),
                      '--build-directory',str(args.build_directory.resolve()),'--runtime',str(args.runtime.resolve()),
                      '--harness-evidence',str(args.harness_evidence.resolve()),'--evidence',str(folder),

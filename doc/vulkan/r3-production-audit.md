@@ -276,3 +276,24 @@ publication, R2 fixture and evidence regressions pass. Full rebuilt-viewer cache
 restarts and real production material transport/override acceptance remain
 required, alongside the remaining R3 terrain, compression, reload, settings and
 lifecycle work. This checkpoint is not complete R3 qualification.
+
+## Measured persistent-cache restart acceptance
+
+The complete nine-case restart matrix passed against the staged viewer at
+`9c90683b5f` in 123.1 seconds on the local pinned software Vulkan runtime. Every
+case used a fresh process and source-qualified build evidence. Cold startup
+issued a real initial partial range and continuation; warm, read-only and resize
+runs issued zero texture HTTP requests. Read-only left encoded cache files
+unchanged. Truncated bodies, corrupted header bytes, clear and both version
+changes recovered through the shared fetcher. Discard/preference stages matched
+the exact reference-codec windows; full-resolution GPU bytes matched the original
+lossless pattern. Every case verified account resource retirement after relogin.
+
+The dedicated three-platform workflow now runs this bounded matrix and archives
+its case logs, settings, encoded fixtures, reference pixels and GPU readbacks.
+Evidence packaging independently requires every case, source/executable identity,
+unique process identity, network policy and the actual pixel files. Read-only
+before/after hash witnesses are retained explicitly. Cross-platform acceptance,
+actual concurrent-instance arbitration, distinct-account/grid policy and shutdown
+with pending cache I/O remain separate open requirements. This records the
+completed cache subset without marking R3 complete.

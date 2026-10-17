@@ -7,11 +7,59 @@ import stat
 import zipfile
 from run_vulkan_geometry_tests import required_checks
 from run_vulkan_session_replay import r2_contracts_passed
+from run_software_vulkan_tests import MATERIAL_READBACKS
+from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES, validate_case as validate_texture_cache_case, texture_requests
 
 
 EVIDENCE_DIRECTORIES = ('evidence', 'headless-evidence', 'viewer-evidence',
                         'session-evidence', 'r1-session-evidence', 'r2-session-evidence', 'parity-evidence',
-                        'world-parity-evidence', 'geometry-evidence')
+                        'world-parity-evidence', 'geometry-evidence', 'r3-texture-cache-evidence')
+
+
+def texture_cache_completeness(files, source, executable_digest):
+    prefix='.ci/r3-texture-cache-evidence'
+    summary=files.get(prefix+'/results.json')
+    if summary is None:return ['Missing R3 texture-cache restart evidence']
+    errors=[];processes=set()
+    try:
+        matrix=json.loads(summary.read_text())
+        if (matrix.get('passed') is not True or matrix.get('complete') is not True or
+            matrix.get('planned_cases')!=list(TEXTURE_CACHE_CASES) or set(matrix.get('cases',{}))!=set(TEXTURE_CACHE_CASES)):
+            return ['Incomplete R3 texture-cache restart matrix']
+        for case in TEXTURE_CACHE_CASES:
+            row=matrix['cases'][case]
+            relative=str(row['evidence']).replace('\\','/')
+            if relative.startswith('/') or ':' in relative or '..' in relative.split('/') or relative.split('/')[-1]!=case:
+                raise ValueError('Unsafe R3 case evidence path')
+            folder=prefix+'/'+relative
+            if row.get('passed') is not True or row.get('source_commit')!=source:
+                raise ValueError('Unqualified R3 cache case: '+case)
+            for name in ('results.json','session-replay.xml','viewer.log','http-replay.json','vk_layer_settings.txt','r3/texture.j2c'):
+                if folder+'/'+name not in files:raise ValueError('Missing R3 cache artifact: '+folder+'/'+name)
+            child=json.loads(files[folder+'/results.json'].read_text())
+            traffic=json.loads(files[folder+'/http-replay.json'].read_text())
+            if child.get('source_commit')!=source or child.get('viewer_executable_sha256')!=executable_digest:
+                raise ValueError('R3 cache source/executable differs from build: '+case)
+            actual=files[folder+'/results.json'].parent
+            cache=actual.parent/('shared-cache' if case in ('cold','warm') else 'cache-'+case)
+            validate_texture_cache_case(child,traffic,actual,cache,case=='read-only')
+            identity=child['texture_cache']['process_instance']
+            if identity in processes or identity!=row['process_instance']:raise ValueError('Reused R3 viewer process identity')
+            processes.add(identity)
+            count=len(texture_requests(traffic))
+            if row['texture_requests']!=count or (case in ('warm','read-only','resize') and count) or (case not in ('warm','read-only','resize') and not count):
+                raise ValueError('R3 cache network policy failed: '+case)
+            if case=='read-only' and (not row.get('cache_before') or row['cache_before']!=row['cache_files']):
+                raise ValueError('Read-only R3 cache file witnesses differ')
+            paths=[image['gpu_rgba_file'] for image in child['texture_cache']['images']]
+            stages=child['r3_texture_streaming']
+            paths.extend(stages[name]['gpu_rgba_file'] for name in ('coarse','full_resolution_preference','coarse_after_preference','resolution_limit','restored'))
+            paths.extend(stages['references'].values())
+            for path in paths:
+                if folder+'/'+str(path).replace('\\','/') not in files:raise ValueError('R3 readback omitted from archive: '+str(path))
+    except (OSError,ValueError,KeyError,TypeError) as error:
+        errors.append('Invalid R3 texture-cache evidence: '+str(error))
+    return errors
 
 
 def inputs(viewer):
@@ -81,6 +129,7 @@ def completeness(files, viewer):
     provenance = read(f'{viewer}/parity-build-provenance.json')
     source_file = files.get('.ci/evidence/source.txt')
     source = source_file.read_text().strip() if source_file else ''
+    errors.extend(texture_cache_completeness(files,source,provenance.get('executable_sha256')))
     if (provenance.get('complete') is not True or provenance.get('source_commit') != source or not source or
             len(provenance.get('executable_sha256', '')) != 64):
         errors.append('Incomplete or mismatched source/build provenance')
@@ -138,6 +187,8 @@ def completeness(files, viewer):
             if mode in ('world', 'offscreen', 'present'):
                 for image in ('first.ppm', 'replacement.ppm'):
                     require(prefix + '/' + mode + '/' + image)
+            if mode=='world':
+                for image in MATERIAL_READBACKS:require(prefix+'/world/'+image)
     viewer_result = read('.ci/viewer-evidence/results.json')
     if not viewer_result.get('tests'):
         errors.append('Missing viewer presentation cases')
