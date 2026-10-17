@@ -20,6 +20,32 @@ import run_vulkan_session_replay as session_runner
 from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment, conference_start_observed
 
 class SessionEvidenceTests(unittest.TestCase):
+    def test_default_environment_uses_exact_shared_asset_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary, SimulatorHTTP() as server:
+            source = Path(temporary) / 'default-environment.llsd'
+            payload = b'<llsd><map><key>type</key><string>daycycle</string></map></llsd>'
+            source.write_bytes(payload)
+            server.environment_fixture = source
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            connection = http.client.HTTPConnection(*server.server_address, timeout=5)
+            try:
+                connection.request('GET', '/asset/?settings_id=' + session_runner.DEFAULT_ENVIRONMENT_ASSET)
+                response = connection.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.read(), payload)
+                self.assertTrue(session_runner.default_environment_asset_observed(server.requests, source))
+                source.write_bytes(payload + b' ')
+                self.assertFalse(session_runner.default_environment_asset_observed(server.requests, source))
+                connection.request('GET', '/asset/?settings_id=00000000-0000-0000-0000-000000000000')
+                response = connection.getresponse()
+                self.assertEqual(response.status, 404)
+                response.read()
+            finally:
+                connection.close()
+                server.shutdown()
+                worker.join(timeout=5)
+
     def test_headless_viewer_retains_xvfb_for_real_cef_without_enabling_presentation(self):
         env = {'DISPLAY': ':99', 'WAYLAND_DISPLAY': 'wayland-0', 'XDG_SESSION_TYPE': 'wayland'}
         session_runner.configure_replay_window_environment(env, headless=True, windows=False, require_media=True)

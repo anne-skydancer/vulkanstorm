@@ -50,6 +50,8 @@
 #include "vsvulkancontext.h"
 #include "vsworldscene.h"
 #include "llsdserialize.h"
+#include "llenvironment.h"
+#include "llsettingsvo.h"
 #include "llsdutil_math.h"
 #include "llchat.h"
 #include "llagent.h"
@@ -540,6 +542,7 @@ struct Replay
     U32 originalTextureLimit=2048;
     unsigned loggedStep = ~0u;
     bool accountSetupStarted = false;
+    bool environmentFixturePrepared = false;
     bool challengeAcknowledged = false;
     bool reloginSubmitted = false;
     bool reloginHandshake = false;
@@ -684,6 +687,21 @@ struct Replay
     }
     void tick(VSNativeSession& owner)
     {
+        if (!environmentFixturePrepared)
+        {
+            // Use the real shared default-day builder/serializer. The loopback
+            // asset service supplies these bytes through ordinary ViewerAsset.
+            const auto day = LLSettingsVODay::buildDefaultDayCycle();
+            require(bool(day), "Reference default day-cycle construction failed");
+            const auto folder = std::filesystem::path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"));
+            std::filesystem::create_directories(folder);
+            std::ofstream asset(folder / "default-environment.llsd", std::ios::binary);
+            LLSDSerialize::toXML(day->getSettings(), asset);
+            require(asset.good(), "Reference default day-cycle fixture could not be written");
+            asset.close();
+            require(!asset.fail(), "Reference default day-cycle fixture did not close");
+            environmentFixturePrepared = true;
+        }
         if (owner.phase() == VSNativeSession::Phase::Connected &&
             LLStartUp::getStartupState() == STATE_STARTED && !gViewerWindow->getShowProgress() &&
             startupWarningGeneration != owner.generation())
@@ -945,6 +963,12 @@ struct Replay
                 if (!vs_r1_replay_tick(owner, imEvidence) || !vs_r2_replay_tick(owner, imEvidence))
                     return;
                 if (!imEvidence["terrain_publication"]["complete"].asBoolean() && !vs_terrain_replay_tick(owner,imEvidence)) return;
+                require(LLEnvironment::instanceExists(), "Shared environment owner is missing");
+                const auto day = LLEnvironment::instance().getEnvironmentDay(LLEnvironment::ENV_REGION);
+                if (!day) return;
+                require(day->getAssetId() == LLSettingsDay::GetDefaultAssetId(),
+                    "Region environment did not load its actual default settings asset");
+                imEvidence["connected_default_environment_asset"] = true;
                 qualifyConnectedSkinGeometry(imEvidence);
                 qualifyScriptNotifications(imEvidence, owner.host());
                 const std::string path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"));

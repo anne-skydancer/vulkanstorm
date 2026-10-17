@@ -198,3 +198,14 @@ real parcel completion/failure callbacks retire teleport-dependent state.
 Compiled tests compare the original reference admission matrix and execute the
 actual wire producers. These fixes do not close the remaining world tool,
 autopilot, nested editor or complete keyboard/UI requirements by themselves.
+
+
+The `2eec7370b5` canonical build/stage completed, and `.tmp/uk15` passed the earlier
+region-crossing crash point. Its nominal cursor check then correctly rejected an
+active modal: the newly initialized shared environment requested the standard
+default-day asset, which the old loopback fixture returned as missing. The real
+settings-load error dialog captured the mouse. This failure is retained; its
+notification and capture checks are not suppressed. The replay now serializes
+the actual shared default-day builder, serves only its exact settings identity
+through ViewerAsset, verifies accepted region-day identity, and requires matching
+HTTP length/SHA evidence. Unknown settings remain failures. Runtime rerun pending.
