@@ -104,6 +104,7 @@ bool LLPanelSettingsWaterMainTab::postBuild()
     getChild<LLUICtrl>(FIELD_WATER_SCALE_BELOW)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onScaleBelowChanged(); });
     getChild<LLUICtrl>(FIELD_WATER_BLUR_MULTIP)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onBlurMultipChanged(); });
 
+    mChildrenReady = true;
     refresh();
 
     return true;
@@ -113,6 +114,11 @@ bool LLPanelSettingsWaterMainTab::postBuild()
 void LLPanelSettingsWaterMainTab::setEnabled(bool enabled)
 {
     LLPanelSettingsWater::setEnabled(enabled);
+    // LLPanel::initFromParams dispatches virtually before constructing XUI
+    // children. Retain the panel state then, and address real controls only
+    // after their normal postBuild callback binding has completed.
+    if (!mChildrenReady) return;
+
     getChild<LLUICtrl>(FIELD_WATER_FOG_DENSITY)->setEnabled(enabled);
     getChild<LLUICtrl>(FIELD_WATER_UNDERWATER_MOD)->setEnabled(enabled);
     getChild<LLUICtrl>(FIELD_WATER_FRESNEL_SCALE)->setEnabled(enabled);
