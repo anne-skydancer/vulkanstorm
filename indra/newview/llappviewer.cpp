@@ -95,6 +95,7 @@
 #include "llviewerparcelmedia.h"
 #include "llviewershadermgr.h"
 #include "llviewermediafocus.h"
+#include "lltoolpie.h"
 #include "llviewermessage.h"
 #include "llviewerobjectlist.h"
 #include "llworldmap.h"
@@ -1651,6 +1652,9 @@ bool LLAppViewer::initNativeVulkanLogin()
         std::bind(&LLControlGroup::declareU32, std::ref(gSavedSettings), std::placeholders::_1, std::placeholders::_2,
                   std::placeholders::_3, LLControlVariable::PERSIST_ALWAYS));
     gServicePump = new LLPumpIO(gAPRPoolp);
+    // These shared media request clients own queues and HTTP only. Native
+    // object adapters supply simulator identities without creating GL objects.
+    LLVOVolume::initClass();
     LLVoiceChannel::initClass();
     LLVoiceClient::initParamSingleton(gServicePump);
     LLAgentLanguage::init();
@@ -1747,6 +1751,13 @@ bool LLAppViewer::frameNativeVulkanLogin()
             gAudiop->idle();
         }
 #endif
+#if VS_NATIVE_VULKAN
+        if(mNativeSession && mNativeSession->phase()==VSNativeSession::Phase::Connected)
+        {
+            if(LLToolPie::instanceExists())LLToolPie::instance().updateNativeMediaCapture();
+            LLViewerMediaFocus::instance().update();
+        }
+#endif
         gViewerWindow->drawNativeUI();
     }
     const F32 quit_after = gSavedSettings.getF32("QuitAfterSeconds");
@@ -1821,6 +1832,8 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
     SUBSYSTEM_CLEANUP(LLDirPickerThread);
     delete gKeyboard;gKeyboard=nullptr;
     if (gAudiop) { gAudiop->shutdown(); delete gAudiop; gAudiop = nullptr; }
+    // No request queue may outlive the native objects, plugins or HTTP pump.
+    LLVOVolume::cleanupClass();
     LLViewerMedia::deleteSingleton();
     LLPluginProcessParent::shutdown();
     LLVoiceClient::deleteSingleton();

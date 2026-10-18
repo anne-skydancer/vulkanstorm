@@ -54,6 +54,9 @@
 #include "vspickpolicy.h"
 #include "llbutton.h"
 #include "lltoolpipette.h"
+#include "vsobjectselection.h"
+#include "lltoolmgr.h"
+#include "lltoolpie.h"
 #include "llimview.h"
 #include "llconsole.h"
 #include "llchannelmanager.h"
@@ -73,6 +76,29 @@
 #include <stdexcept>
 namespace
 {
+LLToolPie* nativeMediaTool()
+{
+    if(!LLToolMgr::instanceExists() || !LLToolPie::instanceExists())return nullptr;
+    auto& tools=LLToolMgr::instance();
+    return tools.nativeToolsReady() && tools.nativeCurrentTool()==LLToolPie::getInstance()
+        ?LLToolPie::getInstance():nullptr;
+}
+bool nativeMediaHover(LLViewerWindow& window,const LLCoordGL& point,MASK mask)
+{
+    auto* tool=nativeMediaTool();
+    if(!tool)return false;
+    const auto owner=VSNativeSession::active();
+    if(!owner || !window.nativeContext() || owner->phase()!=VSNativeSession::Phase::Connected)return false;
+    const auto pick=window.pickImmediate(point.mX,point.mY,false,false);
+    if(owner->objectSelection())
+    {
+        const auto selection=owner->retainObjectSelection();
+        if(!selection)return false;
+        const auto object=window.nativeContext()->world().object(pick.mObjectID);
+        selection->setHoverObject(object,pick.mObjectFace);
+    }
+    return tool->handleNativeMediaHover(pick);
+}
 void require(bool v, const char* m)
 {
     if (!v)
@@ -519,6 +545,15 @@ bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type,
         if (auto owner = VSNativeSession::active()) owner->releaseMovement();
     if (mNativeCameraDrag && !down) { mNativeCameraDrag = false; return true; }
     auto* target = gFocusMgr.getMouseCapture();
+    // A real media capture owns the matching release even after the pointer
+    // leaves the face. Avoid the legacy world-object mouse-up controller.
+    if(LLToolPie::instanceExists() && target==LLToolPie::getInstance() &&
+       LLToolPie::instance().hasNativeMediaCapture())
+    {
+        if(!down && (type==CLICK_LEFT || type==CLICK_DOUBLELEFT))
+            LLToolPie::instance().retireNativeMediaCapture();
+        return true;
+    }
     if (!target) target = mRootView;
     S32 x, y;
     target->screenPointToLocal(pos.mX, pos.mY, &x, &y);
@@ -532,6 +567,9 @@ bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type,
         owner->releaseMovement();
         if (down && ((type == CLICK_LEFT && ((mask & MASK_ALT) || LLFloaterCamera::inFreeCameraMode())) || type == CLICK_RIGHT))
         { mNativeCameraDrag = true; return true; }
+        if(down && type==CLICK_DOUBLELEFT)
+            if(auto* tool=nativeMediaTool())
+                if(tool->handleNativeMediaClick(tool->getPick(),true))return true;
         if (down && type == CLICK_LEFT)
         {
             owner->mouseButton(true);
@@ -539,6 +577,8 @@ bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type,
                 return true;
             mLastPick = LLPickInfo(pos, mask, true, true, false, false, true, false, nullptr);
             nativePick(mLastPick);
+            if(auto* tool=nativeMediaTool())
+                if(tool->handleNativeMediaClick(mLastPick))return true;
             return true;
         }
     }
@@ -579,7 +619,10 @@ void LLViewerWindow::nativeHoverUpdate(MASK mask)
     {
         S32 local_x, local_y;
         captor->screenPointToLocal(x, y, &local_x, &local_y);
-        captor->handleHover(local_x, local_y, mask);
+        if(LLToolPie::instanceExists() && captor==LLToolPie::getInstance() &&
+           LLToolPie::instance().hasNativeMediaCapture())
+            nativeMediaHover(*this,mCurrentMousePoint,mask);
+        else captor->handleHover(local_x, local_y, mask);
         if (LLToolPipette::instanceExists() && LLToolPipette::instance().hasMouseCapture())
             LLToolPipette::instance().handleToolTip(local_x, local_y, mask);
         return;
@@ -590,10 +633,14 @@ void LLViewerWindow::nativeHoverUpdate(MASK mask)
         top->screenPointToLocal(x, y, &local_x, &local_y);
         if (top->pointInView(local_x, local_y) && top->handleHover(local_x, local_y, mask)) return;
     }
-    if (!mRootView->handleHover(x, y, mask) && LLToolPipette::instanceExists() && LLToolPipette::instance().nativeActive())
+    if(!mRootView->handleHover(x,y,mask))
     {
-        LLToolPipette::instance().handleHover(x, y, mask);
-        LLToolPipette::instance().handleToolTip(x, y, mask);
+        if(LLToolPipette::instanceExists() && LLToolPipette::instance().nativeActive())
+        {
+            LLToolPipette::instance().handleHover(x,y,mask);
+            LLToolPipette::instance().handleToolTip(x,y,mask);
+        }
+        else nativeMediaHover(*this,mCurrentMousePoint,mask);
     }
 }
 void LLViewerWindow::nativeScroll(S32 clicks, bool horizontal)
@@ -605,11 +652,16 @@ void LLViewerWindow::nativeScroll(S32 clicks, bool horizontal)
         target = mRootView;
     S32 x, y;
     target->screenPointToLocal(mCurrentMousePoint.mX, mCurrentMousePoint.mY, &x, &y);
-    if (horizontal)
-        target->handleScrollHWheel(x, y, clicks);
-    else if (!target->handleScrollWheel(x, y, clicks))
-        if (!gFocusMgr.getTopCtrl())
-            if (auto owner = VSNativeSession::active()) owner->cameraZoom(clicks);
+    bool handled=false;
+    if(LLToolPie::instanceExists() && target==LLToolPie::getInstance() &&
+       LLToolPie::instance().hasNativeMediaCapture())
+        handled=LLToolPie::instance().handleScrollWheelAny(x,y,horizontal?clicks:0,horizontal?0:clicks);
+    else handled=horizontal?target->handleScrollHWheel(x,y,clicks):target->handleScrollWheel(x,y,clicks);
+    if(handled || gFocusMgr.getTopCtrl())return;
+    if(auto* tool=nativeMediaTool())
+        if(tool->handleScrollWheelAny(mCurrentMousePoint.mX,mCurrentMousePoint.mY,horizontal?clicks:0,horizontal?0:clicks))return;
+    if(!horizontal)
+        if(auto owner=VSNativeSession::active())owner->cameraZoom(clicks);
 }
 
 void LLViewerWindow::setNativeConnected(bool connected)

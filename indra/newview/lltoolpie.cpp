@@ -28,6 +28,9 @@
 
 #include "lltoolpie.h"
 #if VS_NATIVE_VULKAN
+#include "vsprimmediatarget.h"
+#endif
+#if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #include "vsobjectselection.h"
 #endif
@@ -1943,10 +1946,69 @@ static void handle_click_action_play()
     }
 }
 
-bool LLToolPie::shouldAllowFirstMediaInteraction(const LLPickInfo& pick, bool moap_flag)
+namespace
+{
+struct ReferencePieMediaTarget
+{
+    LLPointer<LLViewerObject> object;
+    bool present() const{return object.notNull();}
+    static bool stillCurrent(){return true;}
+    S32 faceCount() const{return object->getNumTEs();}
+    const LLMediaEntry* metadata(S32 face)const
+    {
+        const auto* entry=object->getTE(face);
+        return entry && entry->hasMedia()?entry->getMediaData():nullptr;
+    }
+    bool hud()const{return object->isHUDAttachment();}
+    std::optional<LLVector3d> position()const{return object->getPositionGlobal();}
+    static std::optional<std::pair<LLUUID,LLUUID>> hoverOwners()
+    {
+        const auto* node=LLSelectMgr::instance().getHoverNode();
+        if(!node || !node->mPermissions)return {};
+        return std::pair(node->mPermissions->getOwner(),node->mPermissions->getGroup());
+    }
+    bool focused(S32 face)const{return LLViewerMediaFocus::instance().isFocusedOnFace(object,face);}
+    bool hovered(S32 face)const{return LLViewerMediaFocus::instance().isHoveringOverFace(object,face);}
+    void focus(S32 face,viewer_media_t impl,LLVector3 normal)const
+    {LLViewerMediaFocus::instance().setFocusFace(object,face,impl,normal);}
+    void hover(S32 face,viewer_media_t impl,LLVector3 normal)const
+    {LLViewerMediaFocus::instance().setHoverFace(object,face,impl,normal);}
+    static std::function<bool()> guard(){return {};}
+};
+#if VS_NATIVE_VULKAN
+struct NativePieMediaTarget
+{
+    struct ClickProperties {LLUUID id;bool firstClick;const LLUUID& getMediaID()const{return id;}bool getFirstClickInteract()const{return firstClick;}};
+    std::optional<VSPrimMediaTarget> object;
+    bool present()const{return object && object->current();}
+    bool stillCurrent()const{return present();}
+    S32 faceCount()const{return object?object->faceCount():0;}
+    std::optional<ClickProperties> metadata(S32)const
+    {
+        const auto* entry=present()?object->metadata():nullptr;
+        return entry?std::optional<ClickProperties>(ClickProperties{entry->getMediaID(),entry->getFirstClickInteract()}):std::nullopt;
+    }
+    bool hud()const{return present() && object->hud();}
+    std::optional<LLVector3d> position()const{return object->position();}
+    auto hoverOwners()const{return object->hoverOwners();}
+    bool focused(S32 face)const
+    {return present() && LLViewerMediaFocus::instance().isNativeFocusedOnFace(*object,face);}
+    bool hovered(S32 face)const
+    {return present() && LLViewerMediaFocus::instance().isNativeHoveringOverFace(*object,face);}
+    void focus(S32 face,viewer_media_t impl,LLVector3 normal)const
+    {LLViewerMediaFocus::instance().setNativeFocusFace(object?&*object:nullptr,face,impl,normal);}
+    void hover(S32 face,viewer_media_t impl,LLVector3 normal)const
+    {LLViewerMediaFocus::instance().setNativeHoverFace(object?&*object:nullptr,face,impl,normal);}
+    std::function<bool()> guard()const{return object?object->guard():std::function<bool()>{};}
+};
+#endif
+}
+
+template<class Target>
+bool LLToolPie::shouldAllowFirstMediaInteractionTarget(const LLPickInfo& pick,bool moap_flag,const Target& target)
 {
     // Early failure cases
-    if(!pick.getObject())
+    if(!target.present())
     {
         LL_WARNS() << "pick.getObject() is NULL" << LL_ENDL;
         return false;
@@ -1975,35 +2037,25 @@ bool LLToolPie::shouldAllowFirstMediaInteraction(const LLPickInfo& pick, bool mo
     }
 
     // The following checks require some object information so we obtain that
-    LLPointer<LLViewerObject> object = pick.getObject();
-    if(object.isNull())
+    const auto& object=target;
+    if(!object.present())
     {
         LL_WARNS() << "pick.getObject() is NULL" << LL_ENDL;
         return false;
     }
 
     // HUD attachments
-    if((FirstClickPref & MEDIA_FIRST_CLICK_HUD) && object->isHUDAttachment())
+    if((FirstClickPref & MEDIA_FIRST_CLICK_HUD) && object.hud())
     {
         LL_DEBUGS_ONCE() << "FirstClickPref & MEDIA_FIRST_CLICK_HUD" << LL_ENDL;
         return true;
     }
 
     // Further object detail required beyond this point
-    LLSelectNode* hover_node = LLSelectMgr::instance().getHoverNode();
-    if (hover_node == nullptr)
-    {
-        LL_WARNS() << "No Hover node" << LL_ENDL;
-        return false;
-    }
-    LLPermissions* perms = hover_node->mPermissions;
-    if(perms == nullptr)
-    {
-        LL_WARNS() << "LLSelectMgr::getInstance()->getHoverNode()->mPermissions is NULL" << LL_ENDL;
-        return false;
-    }
-    LLUUID owner_id = perms->getOwner();
-    LLUUID group_id = perms->getGroup();
+    const auto owners=object.hoverOwners();
+    if(!owners)return false;
+    const LLUUID owner_id=owners->first;
+    const LLUUID group_id=owners->second;
     if(owner_id.isNull() && group_id.isNull())
     {
         LL_WARNS() << "Owner information was not reliably obtained" << LL_ENDL;
@@ -2054,7 +2106,8 @@ bool LLToolPie::shouldAllowFirstMediaInteraction(const LLPickInfo& pick, bool mo
         }
 
         // Same parcel as the agent only
-        if(!LLViewerParcelMgr::getInstance()->inAgentParcel(object->getPositionGlobal()))
+        const auto position=object.position();
+        if(!position || !LLViewerParcelMgr::getInstance()->inAgentParcel(*position))
         {
             LL_WARNS_ONCE() << "Object is not in the same parcel as the agent" << LL_ENDL;
             return false;
@@ -2078,18 +2131,27 @@ bool LLToolPie::shouldAllowFirstMediaInteraction(const LLPickInfo& pick, bool mo
     }
     return false;
 }
+bool LLToolPie::shouldAllowFirstMediaInteraction(const LLPickInfo& pick,bool moap_flag)
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        return shouldAllowFirstMediaInteractionTarget(pick,moap_flag,NativePieMediaTarget{VSPrimMediaTarget::resolve(pick.mObjectID,pick.mObjectFace)});
+#endif
+    return shouldAllowFirstMediaInteractionTarget(pick,moap_flag,ReferencePieMediaTarget{pick.getObject()});
+}
 
-bool LLToolPie::handleMediaClick(const LLPickInfo& pick)
+template<class Target>
+bool LLToolPie::handleMediaClickTarget(const LLPickInfo& pick,const Target& target)
 {
     //FIXME: how do we handle object in different parcel than us?
     LLParcel* parcel = LLViewerParcelMgr::getInstance()->getAgentParcel();
-    LLPointer<LLViewerObject> objectp = pick.getObject();
+    const auto& objectp=target;
 
 
     if (!parcel ||
-        objectp.isNull() ||
+        !objectp.present() ||
         pick.mObjectFace < 0 ||
-        pick.mObjectFace >= objectp->getNumTEs())
+        pick.mObjectFace >= objectp.faceCount())
     {
         LLViewerMediaFocus::getInstance()->clearFocus();
 
@@ -2097,11 +2159,7 @@ bool LLToolPie::handleMediaClick(const LLPickInfo& pick)
     }
 
     // Does this face have media?
-    const LLTextureEntry* tep = objectp->getTE(pick.mObjectFace);
-    if (!tep)
-        return false;
-
-    LLMediaEntry* mep = (tep->hasMedia()) ? tep->getMediaData() : NULL;
+    const auto mep=objectp.metadata(pick.mObjectFace);
     if (!mep)
         return false;
 
@@ -2109,17 +2167,21 @@ bool LLToolPie::handleMediaClick(const LLPickInfo& pick)
 
     if (gSavedSettings.getBOOL("MediaOnAPrimUI"))
     {
-        if (!LLViewerMediaFocus::getInstance()->isFocusedOnFace(pick.getObject(), pick.mObjectFace) || media_impl.isNull())
+        if (!objectp.focused(pick.mObjectFace) || media_impl.isNull())
         {
             // It's okay to give this a null impl
-            LLViewerMediaFocus::getInstance()->setFocusFace(pick.getObject(), pick.mObjectFace, media_impl, pick.mNormal);
-            if (shouldAllowFirstMediaInteraction(pick, mep->getFirstClickInteract()))
+            objectp.focus(pick.mObjectFace,media_impl,pick.mNormal);
+            if(!objectp.stillCurrent())return true;
+            if (shouldAllowFirstMediaInteractionTarget(pick,mep->getFirstClickInteract(),objectp))
             {
                 if (media_impl.notNull())
                 {
                     media_impl->mouseDown(pick.mUVCoords, gKeyboard->currentMask(true));
+            if(!objectp.stillCurrent()){media_impl->onMouseCaptureLost();return true;}
                     mMediaMouseCaptureID = mep->getMediaID();
+                    mNativeMediaCaptureCurrent=objectp.guard();
                     setMouseCapture(true);
+            if(!objectp.stillCurrent()){setMouseCapture(false);handleMediaMouseUp();return true;}
                     return true;
                 }
             }
@@ -2131,8 +2193,11 @@ bool LLToolPie::handleMediaClick(const LLPickInfo& pick)
             LLEditMenuHandler::gEditMenuHandler = LLViewerMediaFocus::instance().getFocusedMediaImpl();
 
             media_impl->mouseDown(pick.mUVCoords, gKeyboard->currentMask(true));
+            if(!objectp.stillCurrent()){media_impl->onMouseCaptureLost();return true;}
             mMediaMouseCaptureID = mep->getMediaID();
-            setMouseCapture(true);  // This object will send a mouse-up to the media when it loses capture.
+                    mNativeMediaCaptureCurrent=objectp.guard();
+            setMouseCapture(true);
+            if(!objectp.stillCurrent()){setMouseCapture(false);handleMediaMouseUp();return true;}  // This object will send a mouse-up to the media when it loses capture.
         }
 
         return true;
@@ -2142,18 +2207,27 @@ bool LLToolPie::handleMediaClick(const LLPickInfo& pick)
 
     return false;
 }
+bool LLToolPie::handleMediaClick(const LLPickInfo& pick)
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        return handleMediaClickTarget(pick,NativePieMediaTarget{VSPrimMediaTarget::resolve(pick.mObjectID,pick.mObjectFace)});
+#endif
+    return handleMediaClickTarget(pick,ReferencePieMediaTarget{pick.getObject()});
+}
 
-bool LLToolPie::handleMediaDblClick(const LLPickInfo& pick)
+template<class Target>
+bool LLToolPie::handleMediaDblClickTarget(const LLPickInfo& pick,const Target& target)
 {
     //FIXME: how do we handle object in different parcel than us?
     LLParcel* parcel = LLViewerParcelMgr::getInstance()->getAgentParcel();
-    LLPointer<LLViewerObject> objectp = pick.getObject();
+    const auto& objectp=target;
 
 
     if (!parcel ||
-        objectp.isNull() ||
+        !objectp.present() ||
         pick.mObjectFace < 0 ||
-        pick.mObjectFace >= objectp->getNumTEs())
+        pick.mObjectFace >= objectp.faceCount())
     {
         LLViewerMediaFocus::getInstance()->clearFocus();
 
@@ -2161,11 +2235,7 @@ bool LLToolPie::handleMediaDblClick(const LLPickInfo& pick)
     }
 
     // Does this face have media?
-    const LLTextureEntry* tep = objectp->getTE(pick.mObjectFace);
-    if (!tep)
-        return false;
-
-    LLMediaEntry* mep = (tep->hasMedia()) ? tep->getMediaData() : NULL;
+    const auto mep=objectp.metadata(pick.mObjectFace);
     if (!mep)
         return false;
 
@@ -2173,10 +2243,11 @@ bool LLToolPie::handleMediaDblClick(const LLPickInfo& pick)
 
     if (gSavedSettings.getBOOL("MediaOnAPrimUI"))
     {
-        if (!LLViewerMediaFocus::getInstance()->isFocusedOnFace(pick.getObject(), pick.mObjectFace) || media_impl.isNull())
+        if (!objectp.focused(pick.mObjectFace) || media_impl.isNull())
         {
             // It's okay to give this a null impl
-            LLViewerMediaFocus::getInstance()->setFocusFace(pick.getObject(), pick.mObjectFace, media_impl, pick.mNormal);
+            objectp.focus(pick.mObjectFace,media_impl,pick.mNormal);
+            if(!objectp.stillCurrent())return true;
         }
         else
         {
@@ -2185,8 +2256,11 @@ bool LLToolPie::handleMediaDblClick(const LLPickInfo& pick)
             LLEditMenuHandler::gEditMenuHandler = LLViewerMediaFocus::instance().getFocusedMediaImpl();
 
             media_impl->mouseDoubleClick(pick.mUVCoords, gKeyboard->currentMask(true));
+            if(!objectp.stillCurrent()){media_impl->onMouseCaptureLost();return true;}
             mMediaMouseCaptureID = mep->getMediaID();
-            setMouseCapture(true);  // This object will send a mouse-up to the media when it loses capture.
+                    mNativeMediaCaptureCurrent=objectp.guard();
+            setMouseCapture(true);
+            if(!objectp.stillCurrent()){setMouseCapture(false);handleMediaMouseUp();return true;}  // This object will send a mouse-up to the media when it loses capture.
         }
 
         return true;
@@ -2196,31 +2270,36 @@ bool LLToolPie::handleMediaDblClick(const LLPickInfo& pick)
 
     return false;
 }
+bool LLToolPie::handleMediaDblClick(const LLPickInfo& pick)
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        return handleMediaDblClickTarget(pick,NativePieMediaTarget{VSPrimMediaTarget::resolve(pick.mObjectID,pick.mObjectFace)});
+#endif
+    return handleMediaDblClickTarget(pick,ReferencePieMediaTarget{pick.getObject()});
+}
 
-bool LLToolPie::handleMediaHover(const LLPickInfo& pick)
+template<class Target>
+bool LLToolPie::handleMediaHoverTarget(const LLPickInfo& pick,const Target& target)
 {
     //FIXME: how do we handle object in different parcel than us?
     LLParcel* parcel = LLViewerParcelMgr::getInstance()->getAgentParcel();
     if (!parcel) return false;
 
-    LLPointer<LLViewerObject> objectp = pick.getObject();
+    const auto& objectp=target;
 
     // Early out cases.  Must clear media hover.
     // did not hit an object or did not hit a valid face
-    if ( objectp.isNull() ||
+    if ( !objectp.present() ||
         pick.mObjectFace < 0 ||
-        pick.mObjectFace >= objectp->getNumTEs() )
+        pick.mObjectFace >= objectp.faceCount() )
     {
         LLViewerMediaFocus::getInstance()->clearHover();
         return false;
     }
 
     // Does this face have media?
-    const LLTextureEntry* tep = objectp->getTE(pick.mObjectFace);
-    if(!tep)
-        return false;
-
-    const LLMediaEntry* mep = tep->hasMedia() ? tep->getMediaData() : NULL;
+    const auto mep=objectp.metadata(pick.mObjectFace);
     if (mep
         && gSavedSettings.getBOOL("MediaOnAPrimUI"))
     {
@@ -2229,13 +2308,13 @@ bool LLToolPie::handleMediaHover(const LLPickInfo& pick)
         if(media_impl.notNull())
         {
             // Update media hover object
-            if (!LLViewerMediaFocus::getInstance()->isHoveringOverFace(objectp, pick.mObjectFace))
+            if (!objectp.hovered(pick.mObjectFace))
             {
-                LLViewerMediaFocus::getInstance()->setHoverFace(objectp, pick.mObjectFace, media_impl, pick.mNormal);
+                objectp.hover(pick.mObjectFace,media_impl,pick.mNormal);
             }
 
             // If this is the focused media face, send mouse move events.
-            if (LLViewerMediaFocus::getInstance()->isFocusedOnFace(objectp, pick.mObjectFace) || (shouldAllowFirstMediaInteraction(pick, mep->getFirstClickInteract())))
+            if (objectp.focused(pick.mObjectFace) || (shouldAllowFirstMediaInteractionTarget(pick,mep->getFirstClickInteract(),objectp)))
             {
                 media_impl->mouseMove(pick.mUVCoords, gKeyboard->currentMask(true));
                 gViewerWindow->setCursor(media_impl->getLastSetCursor());
@@ -2255,9 +2334,28 @@ bool LLToolPie::handleMediaHover(const LLPickInfo& pick)
 
     return false;
 }
+bool LLToolPie::handleMediaHover(const LLPickInfo& pick)
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        return handleMediaHoverTarget(pick,NativePieMediaTarget{VSPrimMediaTarget::resolve(pick.mObjectID,pick.mObjectFace)});
+#endif
+    return handleMediaHoverTarget(pick,ReferencePieMediaTarget{pick.getObject()});
+}
 
 bool LLToolPie::handleMediaMouseUp()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const LLUUID texture=mMediaMouseCaptureID;
+        mMediaMouseCaptureID.setNull();mNativeMediaCaptureCurrent={};
+        if(texture.isNull())return false;
+        viewer_media_t impl=LLViewerMedia::instance().getMediaImplFromTextureID(texture);
+        if(impl)impl->onMouseCaptureLost();
+        return texture.notNull();
+    }
+#endif
     bool result = false;
     if(mMediaMouseCaptureID.notNull())
     {
@@ -2779,3 +2877,29 @@ bool LLToolPie::handleTooltipObjectById( LLUUID hoverObjectId, std::string line,
 }
 
 // </FS:ND>
+
+#if VS_NATIVE_VULKAN
+void LLToolPie::updateNativeMediaCapture()
+{
+    if(mNativeMediaCaptureCurrent && !mNativeMediaCaptureCurrent())retireNativeMediaCapture();
+}
+void LLToolPie::retireNativeMediaCapture()
+{
+    if(hasMouseCapture())setMouseCapture(false);
+    else handleMediaMouseUp();
+}
+bool LLToolPie::hasNativeMediaCapture()const
+{return mMediaMouseCaptureID.notNull();}
+bool LLToolPie::handleNativeMediaClick(const LLPickInfo& pick,bool doubleClick)
+{
+    updateNativeMediaCapture();
+    mPick=pick;
+    return doubleClick?handleMediaDblClick(mPick):handleMediaClick(mPick);
+}
+bool LLToolPie::handleNativeMediaHover(const LLPickInfo& pick)
+{
+    updateNativeMediaCapture();
+    mHoverPick=pick;
+    return handleMediaHover(mHoverPick);
+}
+#endif

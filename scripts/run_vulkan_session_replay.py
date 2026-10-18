@@ -532,7 +532,7 @@ DEFAULT_ENVIRONMENT_ASSET = '5646d39e-d3d7-6aff-ed71-30fc87d64a91'
 
 from vulkan_environment_evidence import environment_pixels_passed
 
-REQUIRED = ('connected_region_authorized_update', 'connected_region_readonly_update', 'connected_region_nine_tabs', 'connected_region_encoded_model', 'connected_topobjects_encoded_beacon', 'connected_console_http', 'connected_region_ui_retirement', 'connected_my_environments_filters', 'connected_fixed_environment_editors', 'connected_environment_gpu_consumption', 'connected_parcel_request_echo', 'connected_parcel_rectangle_pixels', 'connected_environment_capability_edit', 'connected_about_land_all_tabs', 'connected_environment_nested_dialogs', 'connected_land_media_url_cancel', 'connected_default_environment_asset', 'connected_land_buy_policy_cancel', 'connected_land_sell_stale_intent_cancel', 'connected_utility_floaters', 'connected_keyboard_first_person_strafe', 'connected_keyboard_window_dispatch', 'connected_camera_controls', 'connected_land_permissions', 'connected_native_statistics', 'connected_script_notification_controls', 'connected_script_dialog_encoded', 'connected_script_textbox_encoded', 'connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
+REQUIRED = ('connected_script_debug_controls', 'connected_script_icon_gpu', 'connected_script_icon_pick', 'connected_script_icon_retirement', 'connected_region_authorized_update', 'connected_region_readonly_update', 'connected_region_nine_tabs', 'connected_region_encoded_model', 'connected_topobjects_encoded_beacon', 'connected_console_http', 'connected_region_ui_retirement', 'connected_my_environments_filters', 'connected_fixed_environment_editors', 'connected_environment_gpu_consumption', 'connected_parcel_request_echo', 'connected_parcel_rectangle_pixels', 'connected_environment_capability_edit', 'connected_about_land_all_tabs', 'connected_environment_nested_dialogs', 'connected_land_media_url_cancel', 'connected_default_environment_asset', 'connected_land_buy_policy_cancel', 'connected_land_sell_stale_intent_cancel', 'connected_utility_floaters', 'connected_keyboard_first_person_strafe', 'connected_keyboard_window_dispatch', 'connected_camera_controls', 'connected_land_permissions', 'connected_native_statistics', 'connected_script_notification_controls', 'connected_script_dialog_encoded', 'connected_script_textbox_encoded', 'connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
             'connected_inventory_texture_upload', 'connected_inventory_sound_upload',
             'connected_group_titles', 'connected_group_directory_search',
             'connected_inventory_share', 'connected_resident_pay', 'connected_payment_balance_gate',
@@ -642,6 +642,38 @@ def parcel_rectangle_contracts_passed(report, directory):
                     for index in range(0, len(pixels), 4))
         return posts > 0 and row.get('opaque_post_pixels') == posts
     except (KeyError, TypeError, ValueError, OSError):
+        return False
+
+
+def hud_icon_contracts_passed(record, directory):
+    """Require the actual submitted icon's complete immutable RGBA evidence."""
+    try:
+        row = record['script_icon_readback']
+        width, height = row['width'], row['height']
+        if type(width) is not int or type(height) is not int or not 2 < width <= 1024 or not 2 < height <= 1024:
+            return False
+        if row['pixels_verified'] is not True or row['mismatched_components'] != 0:
+            return False
+        generation = base64.b64decode(row['image_generation'], validate=True)
+        if len(generation) != 8 or int.from_bytes(generation, 'big') == 0:
+            return False
+        root = Path(directory).resolve()
+        actual_path = (root / row['actual']).resolve()
+        expected_path = (root / row['expected']).resolve()
+        if not actual_path.is_relative_to(root) or not expected_path.is_relative_to(root) or actual_path == expected_path:
+            return False
+        metadata = read_llsd(ET.parse(root / 'script-icon/readback.xml').getroot())
+        if metadata != row:
+            return False
+        actual, expected = actual_path.read_bytes(), expected_path.read_bytes()
+        if len(actual) != width * height * 4 or len(expected) != len(actual):
+            return False
+        if any(abs(a - b) > 3 for a, b in zip(actual, expected)):
+            return False
+        # An empty/transparent draw must not pass by reproducing the clear color.
+        visible = sum(expected[index:index + 3] != b'\xff\x00\xff' for index in range(0, len(expected), 4))
+        return visible >= max(4, width * height // 16)
+    except (KeyError, TypeError, ValueError, OSError, ET.ParseError):
         return False
 
 
@@ -1652,6 +1684,8 @@ def main():
             report['process_isolation'] = process_isolation_evidence(process)
             report['native_debugger'] = getattr(process, 'native_debugger', None)
             passed = assess(report, code, log)
+            if not hud_icon_contracts_passed(report,directory):
+                raise RuntimeError('Missing or corrupt actual script icon GPU readback evidence')
             if not ui_environment_fixture.exchange_observed(server.requests):
                 raise RuntimeError('Missing actual selected-parcel ExtEnvironment GET/PUT request and accepted reply')
             region_edits=[row.get('request') for row in server.requests if row.get('path') == '/ui-open-region-settings']

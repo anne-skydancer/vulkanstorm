@@ -2004,6 +2004,26 @@ std::optional<VSCameraFocusObject> VSWorldScene::focusObject(const ObjectHandle&
     };
     return result;
 }
+S32 VSWorldScene::textureEntryCount(const ObjectHandle& token) const
+{
+    if(mImpl->retired || !current(token))return 0;
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->textureEntryCount(token);
+    return S32(mImpl->objects.at(token.local).faces.size());
+}
+LLUUID VSWorldScene::mediaTexture(const ObjectHandle& token,U32 face) const
+{
+    if(mImpl->retired || !current(token))return {};
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->mediaTexture(token,face);
+    const auto& object=mImpl->objects.at(token.local);
+    return object.media && face<object.faces.size()?object.media->texture(face):LLUUID::null;
+}
+const LLMediaEntry* VSWorldScene::mediaEntry(const ObjectHandle& token,U32 face) const
+{
+    if(mImpl->retired || !current(token))return nullptr;
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->mediaEntry(token,face);
+    const auto& object=mImpl->objects.at(token.local);
+    return object.media && face<object.faces.size()?object.media->entry(face):nullptr;
+}
 std::optional<std::array<LLVector3,8>> VSWorldScene::mediaFaceBounds(const ObjectHandle& token,U32 faceIndex,const LLVector3d& agentOrigin) const
 {
     if(!current(token))return {};

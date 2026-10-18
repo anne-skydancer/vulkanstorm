@@ -47,6 +47,9 @@
 #include "llviewercamera.h"
 #include "llviewerobjectlist.h"
 #include "llpanelprimmediacontrols.h"
+#if VS_NATIVE_VULKAN
+#include "vsprimmediatarget.h"
+#endif
 #include "llpluginclassmedia.h"
 #include "llprogressbar.h"
 #include "llsliderctrl.h"
@@ -252,6 +255,31 @@ void LLPanelPrimMediaControls::setMediaFace(LLPointer<LLViewerObject> objectp, S
     updateShape();
 }
 
+#if VS_NATIVE_VULKAN
+void LLPanelPrimMediaControls::setNativeMediaFace(const VSPrimMediaTarget* target,S32 face,viewer_media_t impl,LLVector3 normal)
+{
+    if(impl.notNull() && target && target->current())
+    {
+        const LLUUID previous=mTargetImplID;
+        const bool same_owner=mTargetObjectID==target->id() && mTargetObjectFace==face &&
+            previous==impl->getMediaTextureID() && mNativeTargetCurrent && mNativeTargetCurrent();
+        mTargetImplID=impl->getMediaTextureID();mTargetObjectID=target->id();
+        mTargetObjectFace=face;mTargetObjectNormal=normal;
+        if(!same_owner)mNativeTargetCurrent=target->guard();
+        mClearFaceOnFade=false;
+        if(previous!=mTargetImplID)mVolumeSliderCtrl->setValue(impl->getVolume());
+    }
+    else
+    {
+        // Keep the previous owner guard while its controls fade. An empty
+        // guard would turn an expired object into an unrestricted texture-ID
+        // lookup, allowing a detached plugin to receive stale input.
+        mClearFaceOnFade=true;
+    }
+    updateShape();
+}
+#endif
+
 void LLPanelPrimMediaControls::focusOnTarget()
 {
     // Sets the media focus to the current target of the LLPanelPrimMediaControls.
@@ -262,14 +290,25 @@ void LLPanelPrimMediaControls::focusOnTarget()
         if (!media_impl->hasFocus())
         {
             // The current target doesn't have media focus -- focus on it.
-            LLViewerObject* objectp = getTargetObject();
-            LLViewerMediaFocus::getInstance()->setFocusFace(objectp, mTargetObjectFace, media_impl, mTargetObjectNormal);
+#if VS_NATIVE_VULKAN
+            if(gViewerWindow && gViewerWindow->isNativeVulkan())
+            {
+                const auto target=mNativeTargetCurrent && mNativeTargetCurrent()?VSPrimMediaTarget::resolve(mTargetObjectID,mTargetObjectFace):std::nullopt;
+                if(target)LLViewerMediaFocus::getInstance()->setNativeFocusFace(&*target,mTargetObjectFace,media_impl,mTargetObjectNormal);
+            }
+            else
+#endif
+            {
+                LLViewerObject* objectp = getTargetObject();
+                LLViewerMediaFocus::getInstance()->setFocusFace(objectp,mTargetObjectFace,media_impl,mTargetObjectNormal);
+            }
         }
     }
 }
 
 LLViewerMediaImpl* LLPanelPrimMediaControls::getTargetMediaImpl()
 {
+    if(mNativeTargetCurrent && !mNativeTargetCurrent())return nullptr;
     return LLViewerMedia::getInstance()->getMediaImplFromTextureID(mTargetImplID);
 }
 
@@ -292,7 +331,20 @@ LLPluginClassMedia* LLPanelPrimMediaControls::getTargetMediaPlugin()
 void LLPanelPrimMediaControls::updateShape()
 {
     LLViewerMediaImpl* media_impl = getTargetMediaImpl();
-    LLViewerObject* objectp = getTargetObject();
+#if VS_NATIVE_VULKAN
+    viewer_media_t nativeMediaOwner;
+    std::shared_ptr<LLPluginClassMedia> nativePluginOwner;
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() && media_impl)
+    {nativeMediaOwner=media_impl;nativePluginOwner=media_impl->retainMediaPlugin();}
+#endif
+    LLViewerObject* objectp = nullptr;
+#if VS_NATIVE_VULKAN
+    const bool native=gViewerWindow && gViewerWindow->isNativeVulkan();
+    const auto nativeTarget=native && mNativeTargetCurrent && mNativeTargetCurrent()?VSPrimMediaTarget::resolve(mTargetObjectID,mTargetObjectFace):std::nullopt;
+    if(!native)objectp=getTargetObject();
+#else
+    objectp=getTargetObject();
+#endif
 
     if(!media_impl || (gFloaterTools && gFloaterTools->getVisible()))
     {
@@ -318,11 +370,24 @@ void LLPanelPrimMediaControls::updateShape()
     bool has_focus = (gSavedSettings.getBOOL("PrimMediaControlsUseHoverControlSet")) ? media_impl->hasFocus() : true;
     setVisible(enabled);
 
-    if (objectp)
+    if (objectp
+#if VS_NATIVE_VULKAN
+        || nativeTarget
+#endif
+       )
     {
         bool hasPermsControl = true;
         bool mini_controls = false;
-        LLMediaEntry *media_data = objectp->getTEref(mTargetObjectFace).getMediaData();
+        const LLMediaEntry* media_data=objectp?objectp->getTEref(mTargetObjectFace).getMediaData():nullptr;
+#if VS_NATIVE_VULKAN
+        if(nativeTarget)media_data=nativeTarget->metadata();
+        if(nativeTarget && media_data)
+        {
+            enabled=nativeTarget->permission(false);hasPermsControl=enabled;
+            mini_controls=LLMediaEntry::MINI==media_data->getControls();
+        }
+        else
+#endif
         if (media_data && NULL != dynamic_cast<LLVOVolume*>(objectp))
         {
             // Don't show the media controls if we do not have permissions
@@ -330,8 +395,14 @@ void LLPanelPrimMediaControls::updateShape()
             hasPermsControl = dynamic_cast<LLVOVolume*>(objectp)->hasMediaPermission(media_data, LLVOVolume::MEDIA_PERM_CONTROL);
             mini_controls = (LLMediaEntry::MINI == media_data->getControls());
         }
-        const bool is_hud = objectp->isHUDAttachment();
+        const bool is_hud = objectp?objectp->isHUDAttachment():
+#if VS_NATIVE_VULKAN
+            nativeTarget->hud();
+#else
+            false;
+#endif
 
+        const bool whitelist_enabled=media_data && media_data->getWhiteListEnable();
         //
         // Set the state of the buttons
         //
@@ -350,7 +421,7 @@ void LLPanelPrimMediaControls::updateShape()
         mMediaPlaySliderPanel->setVisible(has_focus && !mini_controls);
         mVolumeCtrl->setVisible(false);
 
-        mWhitelistIcon->setVisible(!mini_controls && (media_data)?media_data->getWhiteListEnable():false);
+        mWhitelistIcon->setVisible(!mini_controls && whitelist_enabled);
         // Disable zoom if HUD
         mZoomCtrl->setEnabled(!is_hud);
         mUnzoomCtrl->setEnabled(!is_hud);
@@ -613,7 +684,15 @@ void LLPanelPrimMediaControls::updateShape()
         std::vector<LLVector3>::iterator vert_end;
         std::vector<LLVector3> vect_face;
 
-        LLVolume* volume = objectp->getVolume();
+#if VS_NATIVE_VULKAN
+        if(nativeTarget)
+        {
+            const auto bounds=nativeTarget->faceBounds();
+            if(!bounds){setVisible(false);return;}
+            vect_face.assign(bounds->begin(),bounds->end());
+        }
+#endif
+        LLVolume* volume = objectp?objectp->getVolume():nullptr;
 
         if (volume)
         {
@@ -650,10 +729,27 @@ void LLPanelPrimMediaControls::updateShape()
         glm::mat4 mat = glm::identity<glm::mat4>();
         if (!is_hud)
         {
-            mat = get_current_projection() * get_current_modelview();
+#if VS_NATIVE_VULKAN
+            if(nativeTarget)
+                mat=LLViewerCamera::getInstance()->getUIProjection()*LLViewerCamera::getInstance()->getUIModelview();
+            else
+#endif
+                mat = get_current_projection() * get_current_modelview();
         }
         else {
             glm::mat4 proj, modelview;
+#if VS_NATIVE_VULKAN
+            if(nativeTarget)
+            {
+                // Same XY projection as the actual native HUD draw. Depth is
+                // irrelevant to the existing screen-space rectangle reduction.
+                const F32 zoom=gAgentCamera.mHUDCurZoom;
+                const F32 aspect=LLViewerCamera::getInstance()->getAspect();
+                mat=glm::mat4(0.f);mat[1][0]=-2.f*zoom/aspect;
+                mat[2][1]=2.f*zoom;mat[3][3]=1.f;
+            }
+            else
+#endif
             if (get_hud_matrices(proj, modelview))
                 mat = proj * modelview;
         }
@@ -812,13 +908,23 @@ void LLPanelPrimMediaControls::draw()
 
     // draw control background UI image
 
-    LLViewerObject* objectp = getTargetObject();
-    LLMediaEntry *media_data(0);
-
-    if( objectp )
-        media_data = objectp->getTEref(mTargetObjectFace).getMediaData();
-
-    if( !dynamic_cast<LLVOVolume*>(objectp) || !media_data || dynamic_cast<LLVOVolume*>(objectp)->hasMediaPermission(media_data, LLVOVolume::MEDIA_PERM_CONTROL) )
+    LLViewerObject* objectp = nullptr;
+    const LLMediaEntry* media_data=nullptr;
+    bool draw_background=true;
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto target=mNativeTargetCurrent && mNativeTargetCurrent()?VSPrimMediaTarget::resolve(mTargetObjectID,mTargetObjectFace):std::nullopt;
+        if(target){media_data=target->metadata();draw_background=!media_data || target->permission(false);}
+    }
+    else
+#endif
+    {
+        objectp=getTargetObject();
+        if(objectp)media_data=objectp->getTEref(mTargetObjectFace).getMediaData();
+        draw_background=!dynamic_cast<LLVOVolume*>(objectp) || !media_data || dynamic_cast<LLVOVolume*>(objectp)->hasMediaPermission(media_data,LLVOVolume::MEDIA_PERM_CONTROL);
+    }
+    if(draw_background)
         mBackgroundImage->draw( controls_bg_area, UI_VERTEX_COLOR % alpha);
 
     // draw volume slider background UI image
@@ -1081,8 +1187,20 @@ void LLPanelPrimMediaControls::onClickZoom()
 
 void LLPanelPrimMediaControls::nextZoomLevel()
 {
-    LLViewerObject* objectp = getTargetObject();
-    if(objectp && objectp->isHUDAttachment())
+    LLViewerObject* objectp=nullptr;
+    bool is_hud=false;
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto target=mNativeTargetCurrent && mNativeTargetCurrent()?VSPrimMediaTarget::resolve(mTargetObjectID,mTargetObjectFace):std::nullopt;
+        is_hud=target && target->hud();
+    }
+    else
+#endif
+    {
+        objectp=getTargetObject();is_hud=objectp && objectp->isHUDAttachment();
+    }
+    if(is_hud)
     {
         // Never allow zooming on HUD attachments.
         return;
@@ -1149,6 +1267,14 @@ void LLPanelPrimMediaControls::updateZoom()
     if (zoom_padding > 0.0f)
     {
         // since we only zoom into medium for now, always set zoom_in constraint to true
+#if VS_NATIVE_VULKAN
+        if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        {
+            const auto target=mNativeTargetCurrent && mNativeTargetCurrent()?VSPrimMediaTarget::resolve(mTargetObjectID,mTargetObjectFace):std::nullopt;
+            mZoomedCameraPos=LLViewerMediaFocus::setNativeCameraZoom(target?&*target:nullptr,mTargetObjectNormal,zoom_padding,true);
+        }
+        else
+#endif
         mZoomedCameraPos = LLViewerMediaFocus::setCameraZoom(getTargetObject(), mTargetObjectNormal, zoom_padding, true);
     }
 

@@ -11,6 +11,8 @@
 #include "lfsimfeaturehandler.h"
 #include "llviewergenericmessage.h"
 #include "vsnativesession.h"
+#include "lltoolpie.h"
+#include "llviewermediafocus.h"
 #include "vscapabilities.h"
 #include "vsnativeappearance.h"
 #include "vstaskinventory.h"
@@ -940,6 +942,9 @@ void VSNativeSession::applyParcelMediaState()
     if (mPhase != Phase::Connected || mChangingRegion || !mMediaRequested || mMediaUserStopped) return;
     auto window = mParcelMediaWindow.get();
     auto browser = window ? window->findChild<LLMediaCtrl>("webbrowser", true) : nullptr;
+    if(browser)
+        if(auto* impl=LLViewerMedia::instance().getMediaImplFromTextureID(browser->getTextureID()))
+            impl->setIsParcelMedia(true);
     auto plugin = browser ? browser->getMediaPlugin() : nullptr;
     // Consent and plugin startup are asynchronous. Retain seek/pause/loop until
     // this current parcel's actual plugin is ready; never fetch to satisfy them.
@@ -2500,6 +2505,15 @@ void VSNativeSession::reset()
     if(LLWorldMapMessage::instanceExists())LLWorldMapMessage::instance().resetNativeAccount();
     if(LLWorldMap::instanceExists())LLWorldMap::instance().reset();
     gViewerInput.resetNativeGlobalKeys();
+    // Drop focus, paired plugin capture and the selection lease while their
+    // actual object/face and account owners are still alive. Never instantiate
+    // a controller or a selection merely to tear an account down.
+    if(LLToolPie::instanceExists())LLToolPie::instance().retireNativeMediaCapture();
+    if(LLViewerMediaFocus::instanceExists())
+    {
+        LLViewerMediaFocus::instance().clearHover();
+        LLViewerMediaFocus::instance().clearFocus();
+    }
     if(LLToolMgr::instanceExists())LLToolMgr::instance().retireNativeTools();
     mObjectAttention.reset();
     if(mObjectSelection)mObjectSelection->reset();

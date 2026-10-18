@@ -29,20 +29,32 @@
 
 #include "llfloater.h"
 #include "llpanel.h"
+#if VS_NATIVE_VULKAN
+#include "vsregioncontext.h"
+#include "llcorehttputil.h"
+#endif
 
 class LLFloaterMyScripts : public LLFloater
 {
 public:
     LLFloaterMyScripts(const LLSD& seed);
+    ~LLFloaterMyScripts() override;
 
     bool postBuild() override;
     void onOpen(const LLSD& key) override;
+    void draw() override;
     void setAttachmentDetails(LLSD content);
     void setAttachmentSummary(LLSD content);
     bool requestAttachmentDetails();
     void clearList();
 
 private:
+#if VS_NATIVE_VULKAN
+    std::optional<VSRegionContext> mNativeRegion;
+    std::string mNativeCapability;
+    LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t mNativeRequest;
+    U64 mNativeRequestSerial = 0;
+#endif
     void getAttachmentLimitsCoro(std::string url);
 
     bool mGotAttachmentMemoryUsed;
