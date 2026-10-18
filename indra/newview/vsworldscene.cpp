@@ -2,6 +2,8 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsregionlimits.h"
 #include "vsworldscene.h"
+#include "vscamerafocusobject.h"
+#include "vssurfacecoordinates.h"
 #include "vsobjectindex.h"
 #include "vsparcelgeometry.h"
 #include "llcamera.h"
@@ -208,6 +210,20 @@ struct VSWorldScene::Budgets
 };
 struct VSWorldScene::Impl
 {
+    struct PickSurface
+    {
+        // Keep the immutable source generation already owned by CPU geometry;
+        // no duplicate per-vertex arrays. Its residency survives refused replacement.
+        LLPointer<LLVolume> volume;
+        std::shared_ptr<const VSWorldAssets::Geometry> asset;
+        std::shared_ptr<const VSResourceBudget::Reservation> volumeResidency;
+        S32 face=0;
+        LLVector4a center;
+        LLVector3 position,scale;
+        LLQuaternion rotation;
+        bool volumeGlobal=false,normalGlobal=false;
+        std::shared_ptr<const VSResourceBudget::Reservation> residency;
+    };
     struct Face
     {
         VSWorldRenderer::Mesh                     mesh;
@@ -219,6 +235,8 @@ struct VSWorldScene::Impl
         LLTextureEntry                            publishedMaterial;
         VSUIRenderer::Image                       publishedImage;
         bool                                      published = false;
+        std::shared_ptr<const PickSurface> pickSurface;
+        std::optional<LLMatrix4> pickTextureMatrix;
         std::optional<VSWorldContracts::Material> sceneMaterial;
     };
     struct Object
@@ -277,7 +295,7 @@ struct VSWorldScene::Impl
         {
             for (auto& face : faces)
             {
-                face.mesh.reset();
+                { face.mesh.reset(); face.pickSurface.reset(); face.pickTextureMatrix.reset(); }
                 face.publishedImage.reset();
                 face.publishedChannels = {};
                 face.pbrAsset=nullptr;
@@ -1844,6 +1862,61 @@ std::optional<VSWorldScene::ObjectTransform> VSWorldScene::objectTransform(const
     if (!mImpl->transform(token.local, position, rotation, visited)) return {};
     return ObjectTransform{from_region_handle(mImpl->handle) + LLVector3d(position), rotation, mImpl->objects.at(token.local).scale};
 }
+std::optional<VSCameraFocusObject> VSWorldScene::focusObject(const ObjectHandle& token,const LLVector3d& agentOrigin) const
+{
+    if(!current(token))return {};
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->focusObject(token,agentOrigin);
+    const auto& object=mImpl->objects.at(token.local);
+    if(!mImpl->linksCurrent(object))return {};
+    LLVector3 renderPosition,officialPosition;LLQuaternion renderRotation,officialRotation;std::set<U32> visited;
+    if(!mImpl->transform(token.local,renderPosition,renderRotation,visited,true))return {};
+    visited.clear();if(!mImpl->transform(token.local,officialPosition,officialRotation,visited,false))return {};
+    const LLVector3 regionOffset=mImpl->hudObject(object)?LLVector3::zero:LLVector3(from_region_handle(mImpl->handle)-agentOrigin);
+    VSCameraFocusObject result;result.renderPosition=renderPosition+regionOffset;result.renderRotation=renderRotation;
+    result.rawScale=object.scale;result.renderMatrix.initAll(object.scale,renderRotation,result.renderPosition);
+    result.officialBounds=LLBBox(officialPosition+regionOffset,officialRotation,object.scale*-.5f,object.scale*.5f);
+    result.isAvatar=object.pcode==LL_PCODE_LEGACY_AVATAR;result.isRoot=object.parent==0;
+    const Impl::Object* root=&object;visited.clear();
+    while(root->parent)
+    {
+        if(!visited.insert(root->parent).second)return {};
+        const auto parent=mImpl->objects.find(root->parent);if(parent==mImpl->objects.end())return {};
+        if(parent->second.pcode==LL_PCODE_LEGACY_AVATAR)break;
+        root=&parent->second;
+    }
+    result.isAnimated=root->pcode==LL_PCODE_VOLUME && (root->extendedMeshFlags & LLExtendedMeshParams::ANIMATED_MESH_ENABLED_FLAG);
+    result.hasControlAvatar=bool(root->controlAvatar);
+    if(result.isAvatar)
+    {
+        const auto avatar=mImpl->avatars.find(object.id);if(avatar==mImpl->avatars.end())return {};
+        result.characterAgentPosition=avatar->second->character().getCharacterPosition()+regionOffset;
+    }
+    const std::weak_ptr<Impl> weak=mImpl;const auto live=guard(token);
+    result.valid=[weak,live,token]
+    {
+        const auto owner=weak.lock();if(!owner || !live())return false;
+        const auto found=owner->objects.find(token.local);return found!=owner->objects.end() && owner->linksCurrent(found->second);
+    };
+    return result;
+}
+std::optional<std::array<LLVector3,8>> VSWorldScene::mediaFaceBounds(const ObjectHandle& token,U32 faceIndex,const LLVector3d& agentOrigin) const
+{
+    if(!current(token))return {};
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->mediaFaceBounds(token,faceIndex,agentOrigin);
+    const auto& object=mImpl->objects.at(token.local);
+    if(!mImpl->linksCurrent(object) || faceIndex>=object.admittedFaces.size())return {};
+    const auto raw=object.admittedFaces[faceIndex].pickSurface;
+    if(!raw || !raw->volume || raw->face<0 || raw->face>=raw->volume->getNumVolumeFaces())return {};
+    const auto& geometry=raw->volume->getVolumeFace(raw->face);
+    const LLVector3 offset=mImpl->hudObject(object)?LLVector3::zero:LLVector3(from_region_handle(mImpl->handle)-agentOrigin);
+    const auto result=VSSurfaceCoordinates::volumeBounds(LLVector3(geometry.mExtents[0].getF32ptr()),
+        LLVector3(geometry.mExtents[1].getF32ptr()),[&](LLVector3 point)
+        {
+            if(!raw->volumeGlobal)point.scaleVec(raw->scale);
+            return point*raw->rotation+raw->position+offset;
+        });
+    return current(token)?std::optional<std::array<LLVector3,8>>(result):std::nullopt;
+}
 std::optional<std::array<std::array<float, 3>, 2>> VSWorldScene::selectionBounds(const ObjectHandle& token) const
 {
     if (!current(token))
@@ -2105,7 +2178,7 @@ void VSWorldScene::replaceAsset(const LLUUID& id)
                 }
                 object.asset.reset();object.volume=nullptr;object.dirty=true;
                 object.revision=region.nextRevision++;
-                for(auto& face:object.faces)face.mesh.reset();
+                for(auto& face:object.faces){ face.mesh.reset(); face.pickSurface.reset(); face.pickTextureMatrix.reset(); }
             }
     };
     replace(*mImpl);for (auto& [host,region]:mNeighbours) replace(*region->mImpl);
@@ -2879,7 +2952,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
         const auto start = packets.size();
         avatar->append(packets, eye, farClip, viewportHeight, mImpl->timeDilation, viewportWidth, visibleAvatars);
         for (auto& face : owner->faces)
-            face.mesh.reset();
+            { face.mesh.reset(); face.pickSurface.reset(); face.pickTextureMatrix.reset(); }
         for (auto index=start;index<packets.size();++index)
         { std::copy(id.mData,id.mData+UUID_BYTES,packets[index].objectIdentity.begin());
             packets[index].objectGeneration = owner->generation;
@@ -3476,12 +3549,23 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                 surface=VSMaterial::legacy(face.material,legacy.get());
                 explicitAlpha=bool(legacy);
             }
+            face.pickTextureMatrix.reset();
             if(o.animation && o.textureAnimation && (o.animation->mFace<0 || o.animation->mFace==f))
             {
                 const auto& animation=*o.animation;
                 const bool translating=(o.textureAnimMode & LLViewerTextureAnim::TRANSLATE)!=0;
                 const bool scaling=(o.textureAnimMode & LLViewerTextureAnim::SCALE)!=0;
                 const bool rotating=(o.textureAnimMode & LLViewerTextureAnim::ROTATE)!=0;
+                LLMatrix4 textureMatrix;
+                textureMatrix.setIdentity();textureMatrix.translate(LLVector3(-.5f,-.5f,0));
+                LLQuaternion textureRotation;textureRotation.setQuat(rotating?animation.mRot:face.material.getRotation(),0,0,-1.f);
+                textureMatrix.rotate(textureRotation);
+                LLMatrix4 textureScale;textureScale.initAll(LLVector3(scaling?animation.mScaleS:face.material.getScaleS(),
+                    scaling?animation.mScaleT:face.material.getScaleT(),1),LLQuaternion(),LLVector3());
+                textureMatrix*=textureScale;
+                textureMatrix.translate(LLVector3((translating?animation.mOffS:face.material.getOffsetS())+.5f,
+                    (translating?animation.mOffT:face.material.getOffsetT())+.5f,0));
+                face.pickTextureMatrix=textureMatrix;
                 const auto animated=VSMaterial::legacyUV(scaling?animation.mScaleS:face.material.getScaleS(),
                     scaling?animation.mScaleT:face.material.getScaleT(),translating?animation.mOffS:face.material.getOffsetS(),
                     translating?animation.mOffT:face.material.getOffsetT(),rotating?animation.mRot:face.material.getRotation());
@@ -3577,12 +3661,38 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                     }
                     vertices.push_back(vertex);
                 }
+                auto pickSurface=std::make_shared<Impl::PickSurface>();
+                pickSurface->residency=mImpl->budgets->primitiveBytes.reserve(sizeof(Impl::PickSurface));
+                if(!pickSurface->residency || !geometry.mCenter) {uploadDeferred=true;continue;}
+                pickSurface->volume=o.volume;pickSurface->face=f;
+                if(o.asset && o.asset->volume==o.volume)pickSurface->asset=o.asset;
+                else pickSurface->volumeResidency=o.primitiveResidency;
+                pickSurface->center=*geometry.mCenter;pickSurface->position=position;pickSurface->rotation=rotation;
+                pickSurface->scale=o.scale;pickSurface->volumeGlobal=bool(o.flexible)||bool(riggedOwner && geometry.mWeights);
+                pickSurface->normalGlobal=bool(o.flexible)||bool(riggedOwner && geometry.mWeights);
+                for(S32 vertex=0;vertex<geometry.mNumVertices;++vertex)
+                {
+                    // Native vertex UVs are top-left; retain original ST before
+                    // projecting planar texture coordinates for rendering.
+                    if(face.material.getTexGen()==LLTextureEntry::TEX_GEN_PLANAR)
+                    {
+                        LLVector2 tc=geometry.mTexCoords[vertex];LLVector4a point=geometry.mPositions[vertex],normal=geometry.mNormals[vertex];
+                        // Reference LLFace projects source volume positions and
+                        // normals before skinning, including rigged volume faces.
+                        LLVector4a scale;scale.load3((pickSurface->volumeGlobal?LLVector3(1,1,1):o.scale).mV);point.mul(scale);
+                        VSSurfaceCoordinates::planarProjection(tc,normal,pickSurface->center,point);
+                        vertices[vertex].u=tc.mV[0];vertices[vertex].v=1-tc.mV[1];
+                    }
+                }
                 std::vector<unsigned> indices(geometry.mIndices,geometry.mIndices+geometry.mNumIndices);
                 unsigned attributes=VSWorldContracts::Position|VSWorldContracts::Normal|VSWorldContracts::UV0;
                 if(geometry.mTangents) attributes|=VSWorldContracts::Tangent;
                 if (!mImpl->renderer.publishMesh(face.mesh, vertices, indices,VSWorldRenderer::Topology::Triangles,attributes)) uploadDeferred = true;
                 else
+                {
                     face.poseGeneration = poseGeneration;
+                    face.pickSurface=std::move(pickSurface);
+                }
             }
             if (!face.mesh)
             {
@@ -3814,8 +3924,73 @@ std::optional<VSWorldScene::Pick> VSWorldScene::pick(const LLVector3& start, con
         pick.face     = handle;
         pick.fraction = hit.fraction;
         pick.normal   = LLVector3(hit.normal.data());
-        pick.uv       = hit.uv;
+        pick.uv       = {-1,-1};
         pick.hud      = hud;
+        const VSWorldScene* region=object->host==mImpl->host?this:mNeighbours.at(object->host).get();
+        const auto& published=region->mImpl->objects.at(object->local).admittedFaces;
+        if(handle.face<published.size() && published[handle.face].mesh==mesh && hit.triangleKnown)
+        {
+            const auto& face=published[handle.face];const auto raw=face.pickSurface;
+            if(raw && raw->volume && raw->face>=0 && raw->face<raw->volume->getNumVolumeFaces())
+            {
+                const auto& geometry=raw->volume->getVolumeFace(raw->face);
+                if(!geometry.mTexCoords || !geometry.mNormals || !std::all_of(hit.triangle.begin(),hit.triangle.end(),
+                    [&](unsigned index){return index<unsigned(geometry.mNumVertices);}))continue;
+                LLVector2 st;LLVector4a normal,tangent;normal.clear();tangent.clear();
+                for(unsigned vertex=0;vertex<3;++vertex)
+                {
+                    const auto index=hit.triangle[vertex];const F32 weight=hit.barycentric[vertex];
+                    st.mV[0]+=geometry.mTexCoords[index].mV[0]*weight;st.mV[1]+=geometry.mTexCoords[index].mV[1]*weight;
+                    if(!raw->normalGlobal)
+                    {
+                        LLVector4a n=geometry.mNormals[index],t;t.clear();if(geometry.mTangents)t=geometry.mTangents[index];
+                        n.mul(weight);t.mul(weight);normal.add(n);tangent.add(t);
+                    }
+                }
+                if(raw->normalGlobal)
+                {
+                    normal.load3(hit.rawNormal.data());tangent.set(hit.tangent[0],hit.tangent[1],hit.tangent[2],hit.tangent[3]);
+                }
+                else
+                {
+                    const auto transform=[&](const LLVector4a& direction)
+                    {
+                        LLVector3 value(direction.getF32ptr());value.scaleVec(LLVector3(1/raw->scale.mV[0],1/raw->scale.mV[1],1/raw->scale.mV[2]));
+                        return value*raw->rotation;
+                    };
+                    const auto n=transform(normal),t=transform(tangent);const F32 handedness=tangent.getF32ptr()[3];
+                    normal.load3(n.mV);tangent.set(t.mV[0],t.mV[1],t.mV[2],handedness);
+                }
+                normal.normalize3fast();tangent.normalize3fast();
+                struct SurfaceFace
+                {
+                    const Impl::Face& face;const Impl::PickSurface& raw;
+                    const LLTextureEntry* textureEntry()const{return &face.publishedMaterial;}
+                    const LLVector4a& center()const{return raw.center;}
+                    bool volumeGlobal()const{return raw.volumeGlobal;}
+                    LLVector3 scale()const{return raw.scale;}
+                    LLVector3 positionToVolume(const LLVector3& point)const
+                    {
+                        auto value=(point-raw.position)*~raw.rotation;
+                        if(!raw.volumeGlobal)value.scaleVec(LLVector3(1/raw.scale.mV[0],1/raw.scale.mV[1],1/raw.scale.mV[2]));return value;
+                    }
+                    LLVector3 directionToVolume(const LLVector3& direction)const
+                    {
+                        auto value=direction*~raw.rotation;if(!raw.volumeGlobal)value.scaleVec(raw.scale);return value;
+                    }
+                    const LLMatrix4* textureMatrix()const{return face.pickTextureMatrix?&*face.pickTextureMatrix:nullptr;}
+                };
+                LLVector4a point;point.load3(hit.point.data());
+                const auto uv=VSSurfaceCoordinates::surfaceToTexture(SurfaceFace{face,*raw},st,point,normal);
+                pick.st={st.mV[0],st.mV[1]};pick.uv={uv.mV[0],uv.mV[1]};pick.normal.set(normal.getF32ptr());
+                std::copy_n(tangent.getF32ptr(),4,pick.tangent.begin());pick.surfaceKnown=true;
+                if(image && uv.mV[0]>=0 && uv.mV[1]>=0)
+                {
+                    const auto extent=VSUIRenderer::imageExtent(image);
+                    pick.xy={ll_round(uv.mV[0]*extent[0]),ll_round((1-uv.mV[1])*extent[1])};
+                }
+            }
+        }
         for (unsigned axis = 0; axis < 3; ++axis)
             pick.position.mV[axis] = hit.point[axis] + (hud ? 0 : packet.regionOffset[axis]);
         pick.gltfNode      = packet.gltfNode;

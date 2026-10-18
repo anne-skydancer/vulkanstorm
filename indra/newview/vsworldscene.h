@@ -1,6 +1,7 @@
 // Native CPU primitive scene, independent of GL drawables. LGPL-2.1.
 #pragma once
 #include "vsworldrenderer.h"
+#include "vscamerafocusobject.h"
 #include "vsparceloverlay.h"
 #include "vsregionterrain.h"
 #include <boost/signals2.hpp>
@@ -107,7 +108,10 @@ public:
     {
         FaceHandle           face;
         LLVector3            position, normal;
-        std::array<float, 2> uv{};
+        std::array<float, 2> uv{-1,-1},st{-1,-1};
+        std::array<float,4> tangent{};
+        std::array<S32,2> xy{-1,-1};
+        bool surfaceKnown=false;
         S32                  gltfNode = -1, gltfPrimitive = -1;
         float                fraction = 1;
         bool                 hud      = false;
@@ -129,6 +133,8 @@ public:
     bool current(const ObjectHandle&) const;
     struct ObjectTransform { LLVector3d position; LLQuaternion rotation; LLVector3 scale; };
     std::optional<ObjectTransform> objectTransform(const ObjectHandle&) const;
+    std::optional<VSCameraFocusObject> focusObject(const ObjectHandle&,const LLVector3d& agentOrigin) const;
+    std::optional<std::array<LLVector3,8>> mediaFaceBounds(const ObjectHandle&,U32 faceIndex,const LLVector3d& agentOrigin) const;
     bool freeze(const ObjectHandle&, bool);
     bool freezeObject(const ObjectHandle&,bool);
     bool setSelectionState(const ObjectHandle&,bool);

@@ -25,7 +25,7 @@ class WorldSurfacePicking(unittest.TestCase):
 #include <vector>
 class VSWorldRenderer {
 public:
- struct Vertex {float x,y,z,nx,ny,nz,u,v;};
+ struct Vertex {float x,y,z,nx,ny,nz,u,v;float tx=1,ty=0,tz=0,tw=-1;};
  enum class Topology {Triangles,Lines,Points};
  struct Geometry {
   std::vector<Vertex> cpuVertices;std::vector<unsigned> cpuIndices;
@@ -33,7 +33,7 @@ public:
   Topology topology=Topology::Triangles;
  };
  using Mesh=std::shared_ptr<const Geometry>;
- struct SurfaceHit {float fraction=1;std::array<float,3> point{},normal{};std::array<float,2> uv{};};
+ struct SurfaceHit {float fraction=1;std::array<float,3> point{},normal{};std::array<float,2> uv{};std::array<float,4> tangent{};std::array<float,3>rawNormal{};std::array<unsigned,3> triangle{};std::array<float,3>barycentric{};bool triangleKnown=false;};
  static bool intersect(const Mesh&,const std::array<float,3>&,const std::array<float,3>&,
                        SurfaceHit&,float=0,const std::function<bool(const SurfaceHit&)>&={});
 };
@@ -48,9 +48,12 @@ int main() {
  assert(VSWorldRenderer::intersect(triangles,start,end,hit));
  assert(std::abs(hit.fraction-.25f)<1e-6f && hit.point[2]==1);
  assert(std::abs(hit.uv[0]-.5f)<1e-6f && std::abs(hit.uv[1]-.5f)<1e-6f && hit.normal[2]==1);
+ assert(hit.triangleKnown && hit.triangle[0]==3 && hit.triangle[1]==4 && hit.triangle[2]==5);
+ assert(hit.barycentric[0]==.25f && hit.barycentric[1]==.25f && hit.barycentric[2]==.5f);
+ assert(hit.tangent[0]==1 && hit.tangent[1]==0 && hit.tangent[2]==0 && hit.tangent[3]==-1);
  // A clipped first surface must not conceal a valid farther triangle of the same mesh.
  assert(VSWorldRenderer::intersect(triangles,start,end,hit,0,[](const auto& candidate){return candidate.point[2]<.5f;}));
- assert(std::abs(hit.fraction-.5f)<1e-6f && hit.point[2]==0);
+ assert(std::abs(hit.fraction-.5f)<1e-6f && hit.point[2]==0);assert(hit.triangleKnown && hit.triangle[0]==0);
  assert(!VSWorldRenderer::intersect(triangles,start,end,hit,0,[](const auto&){return false;}));
  assert(!VSWorldRenderer::intersect(triangles,{3,0,2},{3,0,-2},hit));
  assert(!VSWorldRenderer::intersect(triangles,{0,0,2},{0,0,2},hit));
@@ -64,7 +67,7 @@ int main() {
  auto line=std::make_shared<VSWorldRenderer::Geometry>();line->topology=VSWorldRenderer::Topology::Lines;
  line->cpuVertices={{-1,0,0,0,0,1,0,0},{1,0,0,0,0,1,1,0}};line->cpuIndices={0,1};line->bounds={{{-1,0,0},{1,0,0}}};
  assert(VSWorldRenderer::intersect(line,{0,.05f,1},{0,.05f,-1},hit,.1f));
- assert(std::abs(hit.uv[0]-.5f)<1e-6f);
+ assert(std::abs(hit.uv[0]-.5f)<1e-6f);assert(!hit.triangleKnown);
  assert(!VSWorldRenderer::intersect(line,{0,.2f,1},{0,.2f,-1},hit,.1f));
  auto point=std::make_shared<VSWorldRenderer::Geometry>(*line);point->topology=VSWorldRenderer::Topology::Points;
  point->cpuIndices={0};

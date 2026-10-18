@@ -79,6 +79,12 @@ public:
         float                fraction = 1;
         std::array<float, 3> point{}, normal{};
         std::array<float, 2> uv{};
+        // CPU-only hit witnesses; GPU Vertex layout remains unchanged.
+        std::array<float,4> tangent{};
+        std::array<float,3> rawNormal{};
+        std::array<unsigned,3> triangle{};
+        std::array<float,3> barycentric{};
+        bool triangleKnown=false;
     };
     struct Statistics
     {

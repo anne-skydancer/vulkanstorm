@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import stat
 import zipfile
+from run_vulkan_session_replay import assess as assess_session
 from run_vulkan_geometry_tests import required_checks
 from run_vulkan_session_replay import terrain_contracts_passed, r3_terrain_contracts_passed, r2_contracts_passed, local_image_contracts_passed, local_material_contracts_passed, world_bump_contracts_passed, remote_material_contracts_passed, legacy_material_contracts_passed, media_contracts_passed, shared_settings_contracts_passed
 import vulkan_r3_gltf_fixture as r3_gltf_fixture
@@ -14,9 +15,65 @@ from run_vulkan_texture_cache_instances import validate_instances
 
 
 EVIDENCE_DIRECTORIES = ('evidence', 'headless-evidence', 'viewer-evidence',
-                        'session-evidence', 'r1-session-evidence', 'r2-session-evidence', 'parity-evidence',
+                        'session-evidence', 'r1-session-evidence', 'r2-session-evidence', 'ui-console-async-evidence', 'parity-evidence',
                         'world-parity-evidence', 'geometry-evidence', 'r3-texture-cache-evidence',
                         'r3-texture-cache-instances')
+
+
+ASYNC_CONSOLE_PREFIX='.ci/ui-console-async-evidence'
+
+def async_console_payloads(report,requests,log,read,source,digest):
+    if not isinstance(source,str)or len(source)!=40 or any(c not in '0123456789abcdef'for c in source)or not isinstance(digest,str)or len(digest)!=64 or any(c not in '0123456789abcdef'for c in digest):raise ValueError('Missing immutable source/executable identity')
+    if not assess_session(report,report.get('exit_code'),log):raise ValueError('Actual connected session did not qualify')
+    if report.get('source_qualified')is not True or report.get('source_commit')!=source or report.get('viewer_executable_sha256')!=digest:raise ValueError('Source/executable mismatch')
+    if report.get('console_api')!='async' or report.get('connected_console_http')is not True:raise ValueError('Missing actual asynchronous console qualification')
+    output=report.get('console_output')
+    if not isinstance(output,str) or 'native qualification'not in output or 'native console accepted'not in output:raise ValueError('Missing actual console display output')
+    from urllib.parse import urlsplit
+    capability=urlsplit(report.get('console_capability',''))
+    if capability.scheme!='http' or capability.hostname!='127.0.0.1' or not capability.port or capability.path!='/ui-sim-console-async' or capability.username or capability.password or capability.query or capability.fragment:raise ValueError('Wrong admitted asynchronous capability')
+    if not isinstance(requests,list):raise ValueError('Invalid HTTP evidence')
+    commands=[row for row in requests if isinstance(row,dict)and row.get('path')in('/ui-sim-console','/ui-sim-console-async')]
+    if len(commands)!=1 or commands[0].get('path')!='/ui-sim-console-async' or commands[0].get('request')!='native qualification':raise ValueError('Missing exact asynchronous HTTP command')
+    if not any(isinstance(row,dict)and row.get('path')=='/seed'and isinstance(row.get('request'),list)and 'SimConsoleAsync'in row['request'] for row in requests):raise ValueError('Asynchronous capability was not requested through seed')
+    hashes=report.get('readback_sha256',{})
+    if not isinstance(hashes,dict)or len(hashes)!=10 or not report.get('loaded_library_sha256'):raise ValueError('Missing ordinary session readback/library witnesses')
+    for relative,sha in hashes.items():
+        if not isinstance(relative,str)or not relative or relative.startswith(('/', '\\'))or ':'in relative or '\\'in relative or any(part in ('','.','..')for part in relative.split('/')):raise ValueError('Unsafe async readback path')
+        if not isinstance(sha,str)or len(sha)!=64 or hashlib.sha256(read(relative)).hexdigest()!=sha:raise ValueError('Missing/corrupt asynchronous session readback')
+    return True
+
+def async_console_completeness(files,source,digest):
+    prefix=ASYNC_CONSOLE_PREFIX
+    def read(relative):
+        path=files.get(prefix+'/'+relative)
+        if path is None or path.is_symlink()or not path.is_file():raise ValueError('Missing asynchronous evidence: '+relative)
+        payload=path.read_bytes()
+        if not payload:raise ValueError('Empty asynchronous evidence: '+relative)
+        return payload
+    try:
+        report=json.loads(read('results.json'));requests=json.loads(read('http-replay.json'));log=read('viewer.log').decode('utf-8')
+        for name in ('session-replay.xml','vk_layer_settings.txt'):read(name)
+        async_console_payloads(report,requests,log,read,source,digest)
+    except(KeyError,TypeError,ValueError,AttributeError,OSError,OverflowError)as error:return ['Asynchronous console evidence incomplete: '+str(error)]
+    return []
+
+def verify_async_console_archive(archive,manifest,viewer):
+    members=manifest.get('files',{})
+    def read_key(key):
+        metadata=members.get(key)
+        if not isinstance(metadata,dict):raise ValueError('Missing archived asynchronous evidence: '+key)
+        data=archive.read(key)
+        if archive.getinfo(key).file_size!=metadata.get('bytes')or len(data)!=metadata.get('bytes')or hashlib.sha256(data).hexdigest()!=metadata.get('sha256'):raise ValueError('Archived asynchronous evidence checksum/size mismatch: '+key)
+        return data
+    def read(relative):return read_key(ASYNC_CONSOLE_PREFIX+'/'+relative)
+    try:
+        source=read_key('.ci/evidence/source.txt').decode('utf-8').strip();provenance=json.loads(read_key(viewer+'/parity-build-provenance.json'))
+        report=json.loads(read('results.json'));requests=json.loads(read('http-replay.json'));log=read('viewer.log').decode('utf-8')
+        for name in ('session-replay.xml','vk_layer_settings.txt'):read(name)
+        async_console_payloads(report,requests,log,read,source,provenance.get('executable_sha256'))
+    except(KeyError,TypeError,ValueError,AttributeError,OSError,OverflowError,zipfile.BadZipFile)as error:return ['Asynchronous console archive incomplete: '+str(error)]
+    return []
 
 
 def concurrent_cache_completeness(files, source, executable_digest):
@@ -254,6 +311,7 @@ def completeness(files, viewer):
     provenance = read(f'{viewer}/parity-build-provenance.json')
     source_file = files.get('.ci/evidence/source.txt')
     source = source_file.read_text().strip() if source_file else ''
+    errors.extend(async_console_completeness(files,source,provenance.get('executable_sha256')))
     errors.extend(texture_cache_completeness(files,source,provenance.get('executable_sha256')))
     errors.extend(concurrent_cache_completeness(files,source,provenance.get('executable_sha256')))
     if (provenance.get('complete') is not True or provenance.get('source_commit') != source or not source or
@@ -426,6 +484,9 @@ def package(root, output, patterns, viewer, require_complete):
                 while chunk := source.read(1024 * 1024):
                     target.write(chunk); digest.update(chunk); size += len(chunk)
             manifest['files'][name] = dict(bytes=size, sha256=digest.hexdigest())
+    if require_complete:
+        with zipfile.ZipFile(output / 'qualification-evidence.zip') as archive:
+            errors.extend(verify_async_console_archive(archive,manifest,viewer))
     with (output / 'qualification-evidence.zip').open('rb') as source:
         manifest['archive_sha256'] = hashlib.file_digest(source, 'sha256').hexdigest()
     if require_complete:

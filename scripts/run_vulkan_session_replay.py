@@ -874,8 +874,9 @@ def landstat_event(payload):
 class SimulatorHTTP(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self,account_id='10000000-0000-0000-0000-000000000001'):
+    def __init__(self,account_id='10000000-0000-0000-0000-000000000001',console_async=False):
         self.account_id=account_id
+        self.console_async=console_async
         super().__init__(('127.0.0.1', 0), Handler)
         self.auth_requests = 0
         self.seed_requests = 0
@@ -1229,6 +1230,11 @@ class Handler(BaseHTTPRequestHandler):
         request = read_llsd(ET.fromstring(payload))
         self.server.requests.append({'path': self.path, 'request': request})
         if r2_fixture.post(self,path,request):return
+        if path == '/ui-sim-console-async':
+            if request != 'native qualification':self.send_error(400);return
+            event=ET.Element('map');ET.SubElement(event,'key').text='message';ET.SubElement(event,'string').text='SimConsoleResponse';ET.SubElement(event,'key').text='body';ET.SubElement(event,'string').text='native console accepted'
+            with self.server.region_event_lock:self.server.region_events.append(ET.tostring(event,encoding='utf-8'))
+            self.respond_llsd({});return
         if path == '/ui-sim-console':
             if request != 'native qualification':self.send_error(400);return
             self.respond_llsd('native console accepted');return
@@ -1288,7 +1294,7 @@ class Handler(BaseHTTPRequestHandler):
                                 ('UpdateScriptAgent', '/script-request'), ('ViewerAsset', '/asset'),
                                 ('GetMetadata', '/metadata'), ('RemoteParcelRequest', '/remote-parcel'),
                                 ('DispatchOpenRegionSettings', '/ui-open-region-settings'),
-                                ('SimConsole', '/ui-sim-console'),
+                                (('SimConsoleAsync' if self.server.console_async else 'SimConsole'), ('/ui-sim-console-async' if self.server.console_async else '/ui-sim-console')),
                                 ('RegionExperiences', '/region-experiences'),
                                 ('ExtEnvironment', '/ui-environment')]:
                 ET.SubElement(mapping, 'key').text = name
@@ -1440,6 +1446,7 @@ def main():
     parser.add_argument('--language', default='en')
     parser.add_argument('--ui-scale', type=float, default=1.0,
                         help='Viewer UI scale used for connected skin/readback qualification')
+    parser.add_argument('--console-async',action='store_true',help='Advertise actual SimConsoleAsync instead of deprecated synchronous fallback in the isolated simulator fixture')
     parser.add_argument('--all-skins', action='store_true', help='Run the complete connected replay for every packaged skin/theme and German overlay')
     parser.add_argument('--headless', action='store_true', help='Replay production viewer integration offscreen without a native window; does not qualify presentation')
     parser.add_argument('--cache-directory', type=Path, help='Explicit isolated cache shared by sequential qualification processes')
@@ -1503,6 +1510,7 @@ def main():
                        '--ui-scale', str(ui_scale)]
             if args.register_windows_manifests:
                 command.append('--register-windows-manifests')
+            if args.console_async:command.append('--console-async')
             if args.native_backtrace:
                 command.append('--native-backtrace')
             if args.headless:
@@ -1617,7 +1625,7 @@ def main():
         '--set','RenderMaxTextureResolution','2048','--set','TextureLoadFullRes','false'])
     report = {}; log = ''; code = None; passed = False
     account_id='10000000-0000-0000-0000-00000000000'+('1' if args.cache_account=='primary' else '2')
-    with SimulatorHTTP(account_id) as server:
+    with SimulatorHTTP(account_id,console_async=args.console_async) as server:
         env['VS_VULKAN_REPLAY_ACCOUNT_ID']=account_id
         server.texture_fixture=args.texture_fixture.resolve() if args.texture_fixture else None
         server.terrain_fixture=directory/'terrain/detail.j2c' if args.terrain_contracts else None
@@ -1649,7 +1657,10 @@ def main():
             region_edits=[row.get('request') for row in server.requests if row.get('path') == '/ui-open-region-settings']
             if len(region_edits)!=2 or any(not isinstance(row,dict) or not isinstance(row.get('enable_teen_mode'),bool) for row in region_edits) or {row.get('enforce_max_build') for row in region_edits}!={False,True}:
                 raise RuntimeError('Missing actual shared Aurora Apply/restore HTTP transactions')
-            if not any(row.get('path') == '/ui-sim-console' and row.get('request') == 'native qualification' for row in server.requests):
+            console_route='/ui-sim-console-async' if args.console_async else '/ui-sim-console'
+            if report.get('console_api')!=('async' if args.console_async else 'sync'):
+                raise RuntimeError('Viewer used unexpected simulator console API')
+            if not any(row.get('path') == console_route and row.get('request') == 'native qualification' for row in server.requests):
                 raise RuntimeError('Missing actual shared simulator-console HTTP request')
             if not default_environment_asset_observed(server.requests, server.environment_fixture):
                 raise RuntimeError('Missing real shared default environment asset HTTP acquisition')

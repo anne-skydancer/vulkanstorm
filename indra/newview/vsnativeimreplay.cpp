@@ -432,14 +432,14 @@ struct Replay : public LLAvatarPropertiesObserver
         {
             LLTracker::stopTracking(false);
             auto* view=topUI.get();const auto key=view->getKey();view->closeFloater();LLFloaterReg::destroyInstance("top_objects",key);
-            auto* console=LLFloaterReg::showInstance("region_debug_console");require(console,"Actual simulator console failed to open");consoleUI=console->getHandle();auto* input=console->getChild<LLLineEditor>("region_debug_console_input");input->setText(LLStringExplicit("native qualification"));input->onCommit();
+            auto* console=LLFloaterReg::showInstance("region_debug_console");require(console,"Actual simulator console failed to open");consoleUI=console->getHandle();auto* input=console->getChild<LLLineEditor>("region_debug_console_input");evidence["console_api"]=gAgent.getRegionCapability("SimConsoleAsync").empty()?"sync":"async";evidence["console_capability"]=gAgent.getRegionCapability(evidence["console_api"].asString()=="async"?"SimConsoleAsync":"SimConsole");input->setText(LLStringExplicit("native qualification"));input->onCommit();
             ++regionUIStage;return false;
         }
         if(regionUIStage==5)
         {
             require(topUI.isDead(),"TopObjects retained real controls after deferred retirement");
             auto* console=consoleUI.get();require(console,"Simulator console retired before HTTP response");if(console->getChild<LLTextEditor>("region_debug_console_output")->getText().find("native console accepted")==std::string::npos)return false;
-            evidence["connected_console_http"]=true;const auto key=console->getKey();console->closeFloater();LLFloaterReg::destroyInstance("region_debug_console",key);
+            evidence["console_output"]=console->getChild<LLTextEditor>("region_debug_console_output")->getText();evidence["connected_console_http"]=true;const auto key=console->getKey();console->closeFloater();LLFloaterReg::destroyInstance("region_debug_console",key);
             auto* view=regionUI.get();const auto regionKey=view->getKey();view->closeFloater();LLFloaterReg::destroyInstance("region_info",regionKey);
             ++regionUIStage;estateInvoice=LLFloaterRegionInfo::getLastInvoice();publishEstateUI(owner);return false;
         }

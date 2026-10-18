@@ -26,6 +26,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llagentcamera.h"
+#include "vscamerafocusobject.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #endif
@@ -475,26 +476,42 @@ void LLAgentCamera::slamLookAt(const LLVector3 &look_at)
 //-----------------------------------------------------------------------------
 // calcFocusOffset()
 //-----------------------------------------------------------------------------
-LLVector3 LLAgentCamera::calcFocusOffset(LLViewerObject *object, LLVector3 original_focus_point, S32 x, S32 y)
+namespace
 {
-    LLMatrix4 obj_matrix = object->getRenderMatrix();
-    LLQuaternion obj_rot = object->getRenderRotation();
-    LLVector3 obj_pos = object->getRenderPosition();
+struct ReferenceFocusObject
+{
+    LLViewerObject* object;
+    LLMatrix4 matrix()const{return object->getRenderMatrix();}
+    LLQuaternion rotation()const{return object->getRenderRotation();}
+    LLVector3 position()const{return object->getRenderPosition();}
+    bool avatar()const{return object->isAvatar();}
+    bool root()const{return object->isRoot();}
+    bool animated()const{return object->isAnimatedObject();}
+    bool controlAvatar()const{return object->getControlAvatar()!=nullptr;}
+    LLVector3 characterPosition()const{return object->asAvatar()->getCharacterPosition();}
+    LLVector3 scale()const{return object->getScale();}
+    LLBBox bounds()const{return object->getBoundingBoxAgent();}
+};
+template<class Object,class VirtualCamera>
+LLVector3 sharedFocusOffset(const Object& object,LLVector3 original_focus_point,S32 x,S32 y,const VirtualCamera& virtualCamera)
+{
+    LLMatrix4 obj_matrix = object.matrix();
+    LLQuaternion obj_rot = object.rotation();
+    LLVector3 obj_pos = object.position();
 
     // if is avatar - don't do any funk heuristics to position the focal point
     // see DEV-30589
-    if ((object->isAvatar() && !object->isRoot()) || (object->isAnimatedObject() && object->getControlAvatar()))
+    if ((object.avatar() && !object.root()) || (object.animated() && object.controlAvatar()))
     {
         return original_focus_point - obj_pos;
     }
-    if (object->isAvatar())
+    if (object.avatar())
     {
-        LLVOAvatar* av = object->asAvatar();
-        return original_focus_point - av->getCharacterPosition();
+        return original_focus_point - object.characterPosition();
     }
 
     LLQuaternion inv_obj_rot = ~obj_rot; // get inverse of rotation
-    LLVector3 object_extents = object->getScale();
+    LLVector3 object_extents = object.scale();
 
     // make sure they object extents are non-zero
     object_extents.clamp(0.001f, F32_MAX);
@@ -614,7 +631,7 @@ LLVector3 LLAgentCamera::calcFocusOffset(LLViewerObject *object, LLVector3 origi
     // NOTE: leave focus point in middle of avatars, since the behavior you want when alt-zooming on avatars
     // is almost always "tumble about middle" and not "spin around surface point"
     {
-        LLVector3 obj_rel = original_focus_point - object->getRenderPosition();
+        LLVector3 obj_rel = original_focus_point - object.position();
 
         //now that we have the object relative position, we should bias toward the center of the object
         //based on the distance of the camera to the focus point vs. the distance of the camera to the focus
@@ -623,12 +640,12 @@ LLVector3 LLAgentCamera::calcFocusOffset(LLViewerObject *object, LLVector3 origi
         F32 viewDist = dist_vec(obj_pos + obj_rel, LLViewerCamera::getInstance()->getOrigin());
 
 
-        LLBBox obj_bbox = object->getBoundingBoxAgent();
+        LLBBox obj_bbox = object.bounds();
         F32 bias = 0.f;
 
         // virtual_camera_pos is the camera position we are simulating by backing the camera off
         // and adjusting the FOV
-        LLVector3 virtual_camera_pos = gAgent.getPosAgentFromGlobal(mFocusTargetGlobal + (getCameraPositionGlobal() - mFocusTargetGlobal) / (1.f + mCameraFOVZoomFactor));
+        LLVector3 virtual_camera_pos = virtualCamera();
 
         // if the camera is inside the object (large, hollow objects, for example)
         // leave focus point all the way to destination depth, away from object center
@@ -643,6 +660,25 @@ LLVector3 LLAgentCamera::calcFocusOffset(LLViewerObject *object, LLVector3 origi
     }
 
     return focus_offset_from_object_center;
+}
+}
+LLVector3 LLAgentCamera::calcFocusOffset(LLViewerObject *object, LLVector3 original_focus_point, S32 x, S32 y)
+{
+    return sharedFocusOffset(ReferenceFocusObject{object},original_focus_point,x,y,[this]
+    {
+        return gAgent.getPosAgentFromGlobal(mFocusTargetGlobal + (getCameraPositionGlobal() - mFocusTargetGlobal) / (1.f + mCameraFOVZoomFactor));
+    });
+}
+
+std::optional<LLVector3> LLAgentCamera::calcNativeFocusOffset(const VSCameraFocusObject& object,
+    LLVector3 point,S32 x,S32 y)
+{
+    if (!object.current()) return {};
+    const auto offset=sharedFocusOffset(object,point,x,y,[this]
+    {
+        return gAgent.getPosAgentFromGlobal(mFocusTargetGlobal + (getCameraPositionGlobal() - mFocusTargetGlobal) / (1.f + mCameraFOVZoomFactor));
+    });
+    return object.current()?std::optional<LLVector3>(offset):std::nullopt;
 }
 
 //-----------------------------------------------------------------------------

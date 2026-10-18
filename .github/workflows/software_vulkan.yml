@@ -57,6 +57,7 @@ jobs:
       - run: python scripts/tests/test_world_scene_replacement.py
       - run: python scripts/tests/test_world_motion_contracts.py
       - run: python scripts/tests/test_world_surface_picking.py
+      - run: python scripts/tests/test_native_pick_coordinates.py
       - run: python scripts/tests/test_terrain_geometry.py
       - run: python scripts/tests/test_terrain_publication.py
       - run: python scripts/tests/test_terrain_materials.py
@@ -111,6 +112,8 @@ jobs:
       - run: python scripts/tests/test_native_region_height.py
       - run: python scripts/tests/test_native_region_lifetimes.py
       - run: python scripts/tests/test_native_region_console.py
+      - run: python scripts/tests/test_native_console_async_http.py
+      - run: python scripts/tests/test_native_console_archive.py
       - run: python scripts/tests/test_native_region_avatar_pickers.py
       - run: python scripts/tests/test_native_estate_experience_wire.py
       - run: python scripts/tests/test_native_region_xui.py
@@ -494,25 +497,52 @@ jobs:
         run: |
           set -euo pipefail
           manifest_args=()
+          display_args=()
           # Elevated Windows runners ignore Vulkan loader environment overrides.
           # Register the pinned manifests, as in the other viewer test stages.
           if [[ "$RUNNER_OS" == Windows ]]; then
             manifest_args+=(--register-windows-manifests)
+          else
+            # The native viewer is headless; its CEF child still needs X11.
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
           fi
-          python scripts/run_vulkan_session_replay.py \
+          "${display_args[@]}" python scripts/run_vulkan_session_replay.py \
             --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
             --harness-evidence .ci/evidence/results.json --evidence .ci/r1-session-evidence \
             --skin ansastorm_modern --ui-scale 1.5 --headless --r1-contracts "${manifest_args[@]}"
+      - name: Production asynchronous simulator console replay
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=()
+          display_args=()
+          # Elevated Windows runners ignore Vulkan loader environment overrides.
+          # Register the pinned manifests, as in the other viewer test stages.
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          else
+            # The native viewer is headless; its CEF child still needs X11.
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
+          fi
+          "${display_args[@]}" python scripts/run_vulkan_session_replay.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/ui-console-async-evidence \
+            --skin ansastorm_modern --ui-scale 1.5 --headless --console-async "${manifest_args[@]}"
       - name: Production R2 geometry and appearance replay
         timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail
           manifest_args=()
+          display_args=()
           if [[ "$RUNNER_OS" == Windows ]]; then
             manifest_args+=(--register-windows-manifests)
+          else
+            # The native viewer is headless; its CEF child still needs X11.
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
           fi
-          python scripts/run_vulkan_session_replay.py \
+          "${display_args[@]}" python scripts/run_vulkan_session_replay.py \
             --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
             --harness-evidence .ci/evidence/results.json --evidence .ci/r2-session-evidence \
             --skin ansastorm_modern --ui-scale 1.5 --headless --r2-contracts --terrain-contracts "${manifest_args[@]}"
