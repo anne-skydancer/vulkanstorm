@@ -22,6 +22,9 @@ namespace boost::signals2{
 struct connection{};template<class>class signal;
 template<>class signal<void()>{std::vector<std::function<void()>> callbacks;public:connection connect(std::function<void()> f){callbacks.push_back(std::move(f));return {};}void operator()(){const auto copy=callbacks;for(const auto& f:copy)f();}};
 }
+// CPU model declarations used by the actual controller's retained state.
+// The added geometry/attention methods are exercised by their own fixtures.
+struct LLAnimPauseRequest{};struct LLBBox{};struct LLVector3d{void clearVec(){}};
 class LLMessageSystem;
 struct LLCategory{void unpackMultiMessage(LLMessageSystem*,const char*,S32){}void unpackMessage(LLMessageSystem*,const char*){}};
 struct LLSaleInfo:LLCategory{};
@@ -55,6 +58,8 @@ struct VSWorldScene{
  bool current(const ObjectHandle& token)const{auto found=objects.find(token.id);return found!=objects.end() && found->second.generation==token.generation && found->second.host==token.host && found->second.local==token.local && found->second.region==token.region && found->second.account==token.account && found->second.accountGeneration==token.accountGeneration;}
  std::optional<ObjectHandle> object(LLHost host,U32 local){for(const auto& [id,value]:objects)if(value.host==host && value.local==local)return value;return {};}
  bool freeze(const ObjectHandle& token,bool selected){if(!current(token) || orphan.count(token.id))return false;frozen[token.id]=selected;return true;}
+ bool setSelectionState(const ObjectHandle& token,bool selected){if(!current(token))return false;frozen[token.id]=selected;return true;}
+ std::optional<U32>faceCount(const ObjectHandle& token)const{return current(token)?std::optional<U32>(4):std::nullopt;}
  std::shared_ptr<const VSResourceBudget::Reservation> reserveSpatialBytes(std::size_t bytes){return refuse?nullptr:budget.reserve(bytes);}
  std::function<bool()> guard(ObjectHandle token){return [this,token]{return current(token);};}
 } world;

@@ -27,6 +27,10 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "lltoolpie.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#endif
 #include "vsobjectinteraction.h"
 
 #include "indra_constants.h"
@@ -1825,6 +1829,14 @@ void LLToolPie::handleDeselect()
         setMouseCapture( false );  // Calls onMouseCaptureLost() indirectly
     }
     // remove temporary selection for pie menu
+    #if VS_NATIVE_VULKAN
+    const auto native=VSNativeSession::active();
+    if(native && gViewerWindow->isNativeVulkan())
+    {
+        if(auto* selection=native->existingObjectSelection())selection->setHoverObject({});
+    }
+    else
+    #endif
     LLSelectMgr::getInstance()->setHoverObject(NULL);
 
     // Menu may be still up during transfer to different tool.
@@ -1834,6 +1846,13 @@ void LLToolPie::handleDeselect()
     {
         // in most cases menu is useless without correct selection, so either keep both or discard both
         gMenuHolder->hideMenus();
+        #if VS_NATIVE_VULKAN
+        if(native && gViewerWindow->isNativeVulkan())
+        {
+            if(auto* selection=native->existingObjectSelection())selection->validateSelection();
+        }
+        else
+        #endif
         LLSelectMgr::getInstance()->validateSelection();
     }
 }

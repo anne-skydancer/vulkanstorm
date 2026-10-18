@@ -61,6 +61,9 @@ public:
         bool orphaned=false,attachment=false,hud=false;
     };
     std::optional<ObjectAdmission> objectAdmission(const ObjectHandle&) const;
+    std::optional<U32> faceCount(const ObjectHandle&) const;
+    std::optional<ObjectHandle> rootObject(const ObjectHandle&,bool stopAtAvatar=true) const;
+    std::optional<std::vector<ObjectHandle>> directChildren(const ObjectHandle&) const;
     struct ObjectSnapshot
     {
         ObjectHandle object;

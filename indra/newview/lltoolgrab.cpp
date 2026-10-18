@@ -28,6 +28,10 @@
 #include "vsregionlimits.h"
 
 #include "lltoolgrab.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#endif
 #include "vsobjectcontext.h"
 
 // library headers
@@ -124,6 +128,14 @@ void LLToolGrabBase::handleDeselect()
     if (!mValidSelection && (override_mask != MASK_NONE || (gFloaterTools && gFloaterTools->getVisible())))
     {
         LLMenuGL::sMenuContainer->hideMenus();
+        #if VS_NATIVE_VULKAN
+        const auto native=VSNativeSession::active();
+        if(native && gViewerWindow->isNativeVulkan())
+        {
+            if(auto* selection=native->existingObjectSelection())selection->validateSelection();
+        }
+        else
+        #endif
         LLSelectMgr::getInstance()->validateSelection();
     }
 

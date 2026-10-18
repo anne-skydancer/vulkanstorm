@@ -31,6 +31,7 @@ class LLViewerMediaImpl;
 class VSNativeAppearance;
 class VSTaskInventory;
 class VSObjectSelection;
+class VSObjectAttention;
 
 // Deliberately does not own LLWorld, LLViewerRegion or scene resources.
 // All asynchronous deliveries carry an owner and a session generation.
@@ -74,6 +75,9 @@ public:
     bool requestTaskInventory(const VSWorldScene::ObjectHandle&);
     VSTaskInventory* taskInventory();
     VSObjectSelection* objectSelection();
+    VSObjectSelection* existingObjectSelection() const noexcept { return mObjectSelection.get(); }
+    std::shared_ptr<VSObjectSelection> retainObjectSelection() const noexcept { return mObjectSelection; }
+    VSObjectAttention* objectAttention();
     const LLHost& host() const { return mHost; }
     std::string capability(const std::string&) const;
     VSRegionLimits& regionLimits();
@@ -233,7 +237,8 @@ private:
     LLSD mWearablesMetadata;
     std::unique_ptr<VSNativeAppearance> mAppearance;
     std::unique_ptr<VSTaskInventory> mTaskInventory;
-    std::unique_ptr<VSObjectSelection> mObjectSelection;
+    std::shared_ptr<VSObjectSelection> mObjectSelection;
+    std::unique_ptr<VSObjectAttention> mObjectAttention;
     LLHost mPreviousHost;
     struct RegionCircuit
     {

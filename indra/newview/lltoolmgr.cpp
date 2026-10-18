@@ -223,6 +223,7 @@ void LLToolMgr::setCurrentToolset(LLToolset* current)
     if (!current)
         return;
 
+    const U64 nativeGeneration=mNativeToolGeneration;
     // switching toolsets?
     if (current != mCurrentToolset)
     {
@@ -230,6 +231,7 @@ void LLToolMgr::setCurrentToolset(LLToolset* current)
         if (mSelectedTool)
         {
             mSelectedTool->handleDeselect();
+            if(mNativeToolsInitialized && (!mNativeToolsReady || nativeGeneration!=mNativeToolGeneration))return;
         }
         mCurrentToolset = current;
         // select first tool of new toolset only if toolset changed
@@ -260,6 +262,8 @@ void LLToolMgr::setCurrentTool( LLTool* tool )
 
 LLTool* LLToolMgr::getCurrentTool()
 {
+    if(mNativeToolsInitialized && !mNativeToolsReady)return gToolNull;
+    const U64 nativeGeneration=mNativeToolGeneration;
     MASK override_mask = gKeyboard ? gKeyboard->currentMask(true) : 0;
 
     LLTool* cur_tool = NULL;
@@ -292,6 +296,7 @@ LLTool* LLToolMgr::getCurrentTool()
         if (prev_tool)
         {
             prev_tool->handleDeselect();
+            if(mNativeToolsInitialized && (!mNativeToolsReady || nativeGeneration!=mNativeToolGeneration))return mSelectedTool;
         }
         if (cur_tool)
         {
@@ -640,3 +645,48 @@ void LLToolset::selectPrevTool()
 ////////////////////////////////////////////////////////////////////////////
 
 
+
+void LLToolMgr::initNativeTools()
+{
+    if(!mNativeToolsInitialized)
+    {
+        // Register actual CPU-safe owners. The complete legacy initTools also
+        // constructs GPU manipulators (notably Translate::restoreGL); those
+        // registrations join here only with their native resource consumers.
+        // No alternate tool/mode object substitutes for these real instances.
+        gBasicToolset->addTool(LLToolPie::getInstance());
+        gBasicToolset->addTool(LLToolCamera::getInstance());
+        gCameraToolset->addTool(LLToolCamera::getInstance());
+        gBasicToolset->addTool(LLToolGrab::getInstance());
+        gBasicToolset->addTool(LLToolCompInspect::getInstance());
+        gMouselookToolset->addTool(LLToolCompGun::getInstance());
+        gFaceEditToolset->addTool(LLToolCamera::getInstance());
+        mNativeToolsInitialized=true;
+    }
+    const auto generation=++mNativeToolGeneration;
+    mNativeToolsReady=true;
+    setCurrentToolset(gBasicToolset);
+    if(!mNativeToolsReady || generation!=mNativeToolGeneration)return;
+    gBasicToolset->selectTool(LLToolPie::getInstance());
+}
+void LLToolMgr::retireNativeTools()
+{
+    if(!mNativeToolsReady)return;
+    // Capture loss must reach the actual captured tool while the retiring
+    // account's media/selection owners are still available.
+    mNativeToolsReady=false;
+    const auto generation=++mNativeToolGeneration;
+    auto* previous=mSelectedTool;
+    mTransientTool=nullptr;mOverrideTool=nullptr;mSavedTool=nullptr;
+    mBaseTool=gToolNull;mSelectedTool=gToolNull;
+    if(previous && previous->hasMouseCapture())previous->setMouseCapture(false);
+    if(mNativeToolGeneration!=generation)return;
+    if(previous && previous!=gToolNull)previous->handleDeselect();
+}
+bool LLToolMgr::nativeToolsReady()const{return mNativeToolsReady;}
+LLTool* LLToolMgr::nativeCurrentTool()
+{
+    if(!mNativeToolsReady)return nullptr;
+    auto* tool=getCurrentTool();
+    return mNativeToolsReady?tool:nullptr;
+}

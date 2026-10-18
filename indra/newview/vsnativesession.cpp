@@ -15,6 +15,8 @@
 #include "vsnativeappearance.h"
 #include "vstaskinventory.h"
 #include "vsobjectselection.h"
+#include "vsobjectattention.h"
+#include "lltoolmgr.h"
 #include "aoengine.h"
 #include "fsavatarrenderpersistence.h"
 #include "vsvulkancontext.h"
@@ -1947,6 +1949,7 @@ void VSNativeSession::connected()
         gInventory.createCommonSystemCategories();
     restore_native_account_policies();
     FSPanelLogin::closePanel();
+    LLToolMgr::instance().initNativeTools();
     gViewerWindow->setNativeConnected(true);
     requestParcel();
     if (!LLGridManager::instance().isInSecondLife())
@@ -2042,9 +2045,16 @@ VSTaskInventory* VSNativeSession::taskInventory()
 VSObjectSelection* VSNativeSession::objectSelection()
 {
     if (mPhase != Phase::Connected || !gViewerWindow || !gViewerWindow->nativeContext()) return nullptr;
-    if (!mObjectSelection) mObjectSelection = std::make_unique<VSObjectSelection>(shared_from_this());
+    if (!mObjectSelection) mObjectSelection = std::make_shared<VSObjectSelection>(shared_from_this());
     return mObjectSelection.get();
 }
+VSObjectAttention* VSNativeSession::objectAttention()
+{
+    if(mPhase!=Phase::Connected || !gViewerWindow || !gViewerWindow->nativeContext())return nullptr;
+    if(!mObjectAttention)mObjectAttention=std::make_unique<VSObjectAttention>(weak_from_this());
+    return mObjectAttention.get();
+}
+
 
 void VSNativeSession::advanceStartup()
 {
@@ -2306,6 +2316,7 @@ void VSNativeSession::tick()
 {
     if (mTaskInventory) mTaskInventory->tick();
     if (mObjectSelection) mObjectSelection->tick();
+    if (mObjectAttention) mObjectAttention->tick();
     if (mAppearance)
         mAppearance->tick();
     if (mPhase == Phase::Connected && AOEngine::instanceExists())
@@ -2487,6 +2498,9 @@ void VSNativeSession::reset()
     if(LLWorldMapMessage::instanceExists())LLWorldMapMessage::instance().resetNativeAccount();
     if(LLWorldMap::instanceExists())LLWorldMap::instance().reset();
     gViewerInput.resetNativeGlobalKeys();
+    if(LLToolMgr::instanceExists())LLToolMgr::instance().retireNativeTools();
+    mObjectAttention.reset();
+    if(mObjectSelection)mObjectSelection->reset();
     mObjectSelection.reset();
     mTaskInventory.reset();
     mAppearance.reset();

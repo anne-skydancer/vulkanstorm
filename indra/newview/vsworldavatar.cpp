@@ -1,6 +1,7 @@
 // CPU avatar owner and native geometry publication. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsworldavatar.h"
+#include "vsattentionmotion.h"
 #include "llviewernetwork.h"
 #include "llviewercontrol.h"
 #include "vswearable.h"
@@ -675,6 +676,7 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
             if (!target || (deadline && LLFrameTimer::getTotalSeconds() > deadline))
             {
                 removeAnimationData(name);
+                if(target && !point)vs_attention_motion(*this,false,false,false,ANIM_AGENT_HEAD_ROT,ANIM_AGENT_EDITING);
                 target = {};
                 return;
             }
@@ -682,16 +684,19 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
             if (!position || !position->isFinite())
             {
                 removeAnimationData(name);
+                if(target && !point)vs_attention_motion(*this,false,false,false,ANIM_AGENT_HEAD_ROT,ANIM_AGENT_EDITING);
                 target = {};
                 return;
             }
             if (!point && gSavedSettings.getBOOL("DisableLookAtAnimation"))
             {
                 removeAnimationData(name);
+                vs_attention_motion(*this,false,true,true,ANIM_AGENT_HEAD_ROT,ANIM_AGENT_EDITING);
                 return;
             }
             value = getPosAgentFromGlobal(*position) - (point ? this->position : mHeadp->getWorldPosition());
             setAnimationData(name, &value);
+            vs_attention_motion(*this,point,true,false,ANIM_AGENT_HEAD_ROT,ANIM_AGENT_EDITING);
         };
         attention(lookTarget, lookDeadline, "LookAtPoint", lookPoint, false);
         attention(pointTarget, pointDeadline, "PointAtPoint", pointPoint, true);
@@ -1002,6 +1007,7 @@ void VSWorldAvatar::attention(bool point, Attention target, F32 duration)
     if (!std::isfinite(duration) || duration < 0)
         return;
     auto& avatar                                         = *mImpl;
+    if(!point && !target)vs_attention_motion(avatar,false,false,false,ANIM_AGENT_HEAD_ROT,ANIM_AGENT_EDITING);
     (point ? avatar.pointTarget : avatar.lookTarget)     = std::move(target);
     (point ? avatar.pointDeadline : avatar.lookDeadline) = duration ? LLFrameTimer::getTotalSeconds() + duration : 0;
     avatar.motionFrameKnown                              = false;
