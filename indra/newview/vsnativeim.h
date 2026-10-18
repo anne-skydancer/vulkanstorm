@@ -38,6 +38,21 @@ auto vs_native_im_account_callback(Callback callback)
         return callback(std::forward<decltype(arguments)>(arguments)...);
     };
 }
+// Delayed UI work additionally belongs to its original view/model intent.
+template<class Current, class Callback>
+auto vs_native_im_lifetime_callback(Current current, Callback callback)
+{
+    return vs_native_im_account_callback([current, callback](auto&&... arguments) mutable
+    {
+        using Result = std::invoke_result_t<Callback, decltype(arguments)...>;
+        if (!current())
+        {
+            if constexpr (!std::is_void_v<Result>) return Result{};
+            else return;
+        }
+        return callback(std::forward<decltype(arguments)>(arguments)...);
+    });
+}
 // Notification responders can outlive the producing panel. Hold only its
 // handle and admit the response only in the login that created it.
 template<class View, class Callback>

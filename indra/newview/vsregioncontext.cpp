@@ -205,3 +205,8 @@ bool vs_publish_region_owner(const VSRegionContext& context,const LLUUID& owner)
     region->setOwner(owner);
     return true;
 }
+
+bool VSRegionContext::getAllowEnvironmentOverride() const
+{
+    return getRegionFlag(REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE);
+}

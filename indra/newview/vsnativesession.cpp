@@ -2050,6 +2050,8 @@ void VSNativeSession::advanceStartup()
         LLStartUp::setStartupState(STATE_MISC);
         return;
     case Startup::Misc:
+        // Same per-account local settings restoration as ordinary STATE_MISC.
+        LLEnvironment::instance().loadFromSettings();
         init_audio();
         LLStartUp::initActiveGestures();
         FSGroupTitleRegionMgr::getInstance()->loadFromDisk();
@@ -2517,6 +2519,7 @@ void VSNativeSession::reset()
     vs_native_im_reset();
     mRegionLimits.reset();
     if(LLRegionInfoModel::instanceExists())LLRegionInfoModel::instance().reset();
+    if(LLEnvironment::instanceExists())LLEnvironment::instance().saveToSettings();
     LLEnvironment::deleteSingleton();
     vs_reset_covenants();
     if(LLViewerParcelMgr::instanceExists())LLViewerParcelMgr::instance().resetNativeAccount();

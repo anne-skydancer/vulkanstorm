@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llfloatereditextdaycycle.h"
 
@@ -195,6 +196,8 @@ LLFloaterEditExtDayCycle::LLFloaterEditExtDayCycle(const LLSD &key) :
 
 LLFloaterEditExtDayCycle::~LLFloaterEditExtDayCycle()
 {
+    ++mCallbackEpoch;
+    if(auto* picker=mTrackFloater.get())delete picker;
     // Todo: consider remaking mFlyoutControl into full view class that initializes intself with floater,
     // complete with postbuild, e t c...
     delete mFlyoutControl;
@@ -267,6 +270,7 @@ bool LLFloaterEditExtDayCycle::postBuild()
 
 void LLFloaterEditExtDayCycle::onOpen(const LLSD& key)
 {
+    ++mCallbackEpoch;
     if (!mEditDay)
     {
         LLEnvironment::instance().saveBeaconsState();
@@ -402,6 +406,7 @@ void LLFloaterEditExtDayCycle::onOpen(const LLSD& key)
 
 void LLFloaterEditExtDayCycle::onClose(bool app_quitting)
 {
+    ++mCallbackEpoch;
     doCloseInventoryFloater(app_quitting);
     doCloseTrackFloater(app_quitting);
     // there's no point to change environment if we're quitting
@@ -473,6 +478,7 @@ void LLFloaterEditExtDayCycle::setEditSettingsAndUpdate(const LLSettingsBase::pt
 
 void LLFloaterEditExtDayCycle::setEditDayCycle(const LLSettingsDay::ptr_t &pday)
 {
+    ++mCallbackEpoch;
     mExpectingAssetId.setNull();
     mEditDay = pday->buildDeepCloneAndUncompress();
 
@@ -503,11 +509,12 @@ void LLFloaterEditExtDayCycle::setEditDayCycle(const LLSettingsDay::ptr_t &pday)
 
 void LLFloaterEditExtDayCycle::setEditDefaultDayCycle()
 {
+    ++mCallbackEpoch;
     mInventoryItem = nullptr;
     mInventoryId.setNull();
     mExpectingAssetId = LLSettingsDay::GetDefaultAssetId();
     LLSettingsVOBase::getSettingsAsset(LLSettingsDay::GetDefaultAssetId(),
-        [this](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat) { onAssetLoaded(asset_id, settings, status); });
+        vs_native_im_lifetime_callback(requestGuard(),[this](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat) { onAssetLoaded(asset_id, settings, status); }));
 }
 
 std::string LLFloaterEditExtDayCycle::getEditName() const
@@ -670,7 +677,7 @@ void LLFloaterEditExtDayCycle::onButtonApply(LLUICtrl *ctrl)
     {
         LLSD args;
         args["DESC"] = dayclone->getName();
-        LLNotificationsUtil::add("SaveSettingAs", args, LLSD(), boost::bind(&LLFloaterEditExtDayCycle::onSaveAsCommit, this, _1, _2, dayclone));
+        LLNotificationsUtil::add("SaveSettingAs", args, LLSD(), vs_native_im_lifetime_callback(requestGuard(), [this,dayclone](const LLSD&notice,const LLSD&response){ onSaveAsCommit(notice,response,dayclone); }));
     }
     else if ((ctrl_action == ACTION_APPLY_LOCAL) ||
         (ctrl_action == ACTION_APPLY_PARCEL) ||
@@ -1522,7 +1529,7 @@ bool LLFloaterEditExtDayCycle::isAddingFrameAllowed()
 
 void LLFloaterEditExtDayCycle::doImportFromDisk()
 {   // Load a a legacy Windlight XML from disk.
-    LLFilePickerReplyThread::startPicker(boost::bind(&LLFloaterEditExtDayCycle::loadSettingFromFile, this, _1), LLFilePicker::FFLOAD_XML, false);
+    LLFilePickerReplyThread::startPicker(vs_native_im_lifetime_callback(requestGuard(), [this](const std::vector<std::string>&files,auto&&...ignored){ loadSettingFromFile(files); }), LLFilePicker::FFLOAD_XML, false);
 }
 
 void LLFloaterEditExtDayCycle::loadSettingFromFile(const std::vector<std::string>& filenames)
@@ -1642,9 +1649,11 @@ void LLFloaterEditExtDayCycle::doOpenTrackFloater(const LLSD &args)
 
         mTrackFloater = picker->getHandle();
 
-        picker->setCommitCallback([this](LLUICtrl *, const LLSD &data){ onPickerCommitTrackId(data.asInteger()); });
+
     }
 
+    picker->setCommitCallback(vs_native_im_lifetime_callback(requestGuard(),
+        [this](LLUICtrl *, const LLSD &data){ onPickerCommitTrackId(data.asInteger()); }));
     picker->showPicker(args);
 }
 
@@ -1670,7 +1679,7 @@ LLFloaterSettingsPicker * LLFloaterEditExtDayCycle::getSettingsPicker()
 
         mInventoryFloater = picker->getHandle();
 
-        picker->setCommitCallback([this](LLUICtrl *, const LLSD &data){ onPickerCommitSetting(data["ItemId"].asUUID(), data["Track"].asInteger()); });
+
     }
     return picker;
 }
@@ -1683,6 +1692,8 @@ void LLFloaterEditExtDayCycle::onPickerCommitTrackId(U32 track_id)
 void LLFloaterEditExtDayCycle::doOpenInventoryFloater(LLSettingsType::type_e type, LLUUID curritem)
 {
     LLFloaterSettingsPicker *picker = getSettingsPicker();
+    picker->setCommitCallback(vs_native_im_lifetime_callback(requestGuard(),
+        [this](LLUICtrl *, const LLSD &data){ onPickerCommitSetting(data["ItemId"].asUUID(), data["Track"].asInteger()); }));
     picker->setSettingsFilter(type);
     picker->setSettingsItemId(curritem);
     if (type == LLSettingsType::ST_DAYCYCLE)
@@ -1704,7 +1715,7 @@ void LLFloaterEditExtDayCycle::onPickerCommitSetting(LLUUID item_id, S32 track)
     if (itemp)
     {
         LLSettingsVOBase::getSettingsAsset(itemp->getAssetUUID(),
-            [this, track, frame, item_id](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat) { onAssetLoadedForInsertion(item_id, asset_id, settings, status, track, mCurrentTrack, frame); });
+            vs_native_im_lifetime_callback(requestGuard(),[this, track, frame, item_id](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat) { onAssetLoadedForInsertion(item_id, asset_id, settings, status, track, mCurrentTrack, frame); }));
     }
 }
 
@@ -1736,7 +1747,7 @@ void LLFloaterEditExtDayCycle::showHDRNotification(const LLSettingsDay::ptr_t &p
 
 void LLFloaterEditExtDayCycle::onAssetLoadedForInsertion(LLUUID item_id, LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, S32 source_track, S32 dest_track, LLSettingsBase::TrackPosition frame)
 {
-    std::function<void()> cb = [this, settings, frame, source_track, dest_track]()
+    std::function<void()> cb = vs_native_im_lifetime_callback(requestGuard(),[this, settings, frame, source_track, dest_track]()
     {
         if (settings->getSettingsType() == "daycycle")
         {
@@ -1797,7 +1808,7 @@ void LLFloaterEditExtDayCycle::onAssetLoadedForInsertion(LLUUID item_id, LLUUID 
         }
         reblendSettings();
         synchronizeTabs();
-    };
+    });
 
     if (!settings || status)
     {
@@ -1834,7 +1845,7 @@ void LLFloaterEditExtDayCycle::onAssetLoadedForInsertion(LLUUID item_id, LLUUID 
 
             // create and show confirmation textbox
             LLNotificationsUtil::add("SettingsMakeNoTrans", args, LLSD(),
-                [this, cb](const LLSD&notif, const LLSD&resp)
+                vs_native_im_lifetime_callback(requestGuard(),[this, cb](const LLSD&notif, const LLSD&resp)
             {
                 S32 opt = LLNotificationsUtil::getSelectedOption(notif, resp);
                 if (opt == 0)
@@ -1843,7 +1854,7 @@ void LLFloaterEditExtDayCycle::onAssetLoadedForInsertion(LLUUID item_id, LLUUID 
                     mEditDay->setFlag(LLSettingsBase::FLAG_NOTRANS);
                     cb();
                 }
-            });
+            }));
             return;
         }
     }

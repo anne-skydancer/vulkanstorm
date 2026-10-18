@@ -135,6 +135,7 @@ protected:
     void                        onDayLenOffsetMouseUp();
     void                        commitDayLenOffsetChanges(bool need_callback);
 
+    std::function<bool()>       requestGuard();
     void                        onPickerAssetDownloaded(LLSettingsBase::ptr_t settings);
     void                        onEnvironmentReceived(S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo);
     static void                 onEnvironmentReceived(LLHandle<LLPanel> that_h, S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo);

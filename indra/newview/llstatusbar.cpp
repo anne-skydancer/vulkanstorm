@@ -1853,7 +1853,6 @@ void LLStatusBar::onContextMenuItemClicked(const LLSD::String& item)
 
 void LLStatusBar::onInfoButtonClicked()
 {
-    if (native_status_bar()) { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
     if (gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC))
     {
         return;

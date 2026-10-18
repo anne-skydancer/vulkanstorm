@@ -25,6 +25,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
 
 #include "llfloatereditenvironmentbase.h"
 
@@ -63,11 +65,15 @@ const std::string LLFloaterEditEnvironmentBase::KEY_INVENTORY_ID("inventory_id")
 class LLFixedSettingCopiedCallback : public LLInventoryCallback
 {
 public:
-    LLFixedSettingCopiedCallback(LLHandle<LLFloater> handle) : mHandle(handle) {}
+    LLFixedSettingCopiedCallback(LLHandle<LLFloater> handle) : mHandle(handle)
+    {
+        auto* view=dynamic_cast<LLFloaterEditEnvironmentBase*>(handle.get());
+        mCurrent=view ? view->requestGuard() : []{return false;};
+    }
 
     virtual void fire(const LLUUID& inv_item_id)
     {
-        if (!mHandle.isDead())
+        if (!mHandle.isDead() && mCurrent())
         {
             LLViewerInventoryItem* item = gInventory.getItem(inv_item_id);
             if (item)
@@ -80,6 +86,7 @@ public:
 
 private:
     LLHandle<LLFloater> mHandle;
+    std::function<bool()> mCurrent;
 };
 
 //=========================================================================
@@ -97,6 +104,25 @@ LLFloaterEditEnvironmentBase::LLFloaterEditEnvironmentBase(const LLSD &key) :
 
 LLFloaterEditEnvironmentBase::~LLFloaterEditEnvironmentBase()
 {
+    ++mCallbackEpoch;
+    if(auto* picker=mInventoryFloater.get())delete picker;
+}
+
+std::function<bool()> LLFloaterEditEnvironmentBase::requestGuard()
+{
+    const auto weak=getHandle();
+    const auto agent=gAgent.getID(),session=gAgent.getSessionID();
+    const auto inventory=mInventoryId;
+    const auto epoch=mCallbackEpoch;
+    const auto settings=getEditSettings();
+    return [weak,agent,session,inventory,epoch,settings]()
+    {
+        auto* view=dynamic_cast<LLFloaterEditEnvironmentBase*>(weak.get());
+        return view && gAgent.getID()==agent && gAgent.getSessionID()==session &&
+            view->mCallbackEpoch==epoch && view->mInventoryId==inventory &&
+            view->getEditSettings()==settings &&
+            (inventory.isNull() || gInventory.getItem(inventory)==view->mInventoryItem.get());
+    };
 }
 
 void LLFloaterEditEnvironmentBase::onFocusReceived()
@@ -107,7 +133,8 @@ void LLFloaterEditEnvironmentBase::onFocusReceived()
         LLEnvironment::instance().setSelectedEnvironment(LLEnvironment::ENV_EDIT, LLEnvironment::TRANSITION_FAST);
 
         // HACK -- resume reflection map manager because setSelectedEnvironment may pause it (SL-20456)
-        gPipeline.mReflectionMapManager.resume();
+        if(!gViewerWindow || !gViewerWindow->isNativeVulkan())
+            gPipeline.mReflectionMapManager.resume();
     }
 }
 
@@ -117,6 +144,7 @@ void LLFloaterEditEnvironmentBase::onFocusLost()
 
 void LLFloaterEditEnvironmentBase::loadInventoryItem(const LLUUID  &inventoryId, bool can_trans)
 {
+    ++mCallbackEpoch;
     if (inventoryId.isNull())
     {
         mInventoryItem = nullptr;
@@ -160,12 +188,13 @@ void LLFloaterEditEnvironmentBase::loadInventoryItem(const LLUUID  &inventoryId,
 
     mExpectingAssetId = mInventoryItem->getAssetUUID();
     LLSettingsVOBase::getSettingsAsset(mInventoryItem->getAssetUUID(),
-        [this](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat) { onAssetLoaded(asset_id, settings, status); });
+        vs_native_im_lifetime_callback(requestGuard(),[this](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat) { onAssetLoaded(asset_id, settings, status); }));
 }
 
 
 void LLFloaterEditEnvironmentBase::checkAndConfirmSettingsLoss(LLFloaterEditEnvironmentBase::on_confirm_fn cb)
 {
+    cb=vs_native_im_lifetime_callback(requestGuard(),std::move(cb));
     if (isDirty())
     {
         LLSD args(LLSDMap("TYPE", getEditSettings()->getSettingsType())
@@ -188,6 +217,14 @@ void LLFloaterEditEnvironmentBase::checkAndConfirmSettingsLoss(LLFloaterEditEnvi
 
 void LLFloaterEditEnvironmentBase::onAssetLoaded(LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status)
 {
+    // The same inventory item can receive another asset while the fetch runs.
+    // Apply only the asset still owned by the real current inventory model.
+    if(mInventoryId.notNull())
+    {
+        const auto* item=gInventory.getItem(mInventoryId);
+        if(!item || item->getAssetUUID()!=asset_id)return;
+    }
+
     if (asset_id != mExpectingAssetId)
     {
         LL_WARNS("ENVDAYEDIT") << "Expecting {" << mExpectingAssetId << "} got {" << asset_id << "} - throwing away." << LL_ENDL;
@@ -300,14 +337,14 @@ void LLFloaterEditEnvironmentBase::doApplyCreateNewInventory(std::string setting
         LLUUID parent_id = mInventoryItem->getParentUUID();
         U32 next_owner_perm = mInventoryItem->getPermissions().getMaskNextOwner();
         LLSettingsVOBase::createInventoryItem(settings, next_owner_perm, parent_id, settings_name,
-            [this](LLUUID asset_id, LLUUID inventory_id, LLUUID, LLSD results) { onInventoryCreated(asset_id, inventory_id, results); });
+            vs_native_im_lifetime_callback(requestGuard(),[this](LLUUID asset_id, LLUUID inventory_id, LLUUID, LLSD results) { onInventoryCreated(asset_id, inventory_id, results); }));
     }
     else
     {
         LLUUID parent_id = gInventory.findCategoryUUIDForType(LLFolderType::FT_SETTINGS);
         // This method knows what sort of settings object to create.
         LLSettingsVOBase::createInventoryItem(settings, parent_id, settings_name,
-            [this](LLUUID asset_id, LLUUID inventory_id, LLUUID, LLSD results) { onInventoryCreated(asset_id, inventory_id, results); });
+            vs_native_im_lifetime_callback(requestGuard(),[this](LLUUID asset_id, LLUUID inventory_id, LLUUID, LLSD results) { onInventoryCreated(asset_id, inventory_id, results); }));
     }
 }
 
@@ -317,12 +354,12 @@ void LLFloaterEditEnvironmentBase::doApplyUpdateInventory(const LLSettingsBase::
     if (mInventoryId.isNull())
     {
         LLSettingsVOBase::createInventoryItem(settings, gInventory.findCategoryUUIDForType(LLFolderType::FT_SETTINGS), std::string(),
-            [this](LLUUID asset_id, LLUUID inventory_id, LLUUID, LLSD results) { onInventoryCreated(asset_id, inventory_id, results); });
+            vs_native_im_lifetime_callback(requestGuard(),[this](LLUUID asset_id, LLUUID inventory_id, LLUUID, LLSD results) { onInventoryCreated(asset_id, inventory_id, results); }));
     }
     else
     {
         LLSettingsVOBase::updateInventoryItem(settings, mInventoryId,
-            [this](LLUUID asset_id, LLUUID inventory_id, LLUUID, LLSD results) { onInventoryUpdated(asset_id, inventory_id, results); });
+            vs_native_im_lifetime_callback(requestGuard(),[this](LLUUID asset_id, LLUUID inventory_id, LLUUID, LLSD results) { onInventoryUpdated(asset_id, inventory_id, results); }));
     }
 }
 

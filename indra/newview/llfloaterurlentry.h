@@ -29,6 +29,7 @@
 
 #include "llfloater.h"
 #include "llpanellandmedia.h"
+#include "vsnativeim.h"
 #include "lleventcoro.h"
 #include "llcoros.h"
 
@@ -41,6 +42,8 @@ public:
     // Can only be shown by LLPanelLandMedia, and pushes data back into
     // that panel via the handle.
     static LLHandle<LLFloater> show(LLHandle<LLPanel> panel_land_media_handle, const std::string media_url);
+    static void resetAccount();
+    void draw() override;
     bool    postBuild() override;
     void onClose( bool app_quitting ) override;
     void headerFetchComplete(S32 status, const std::string& mime_type);
@@ -53,6 +56,9 @@ private:
     void buildURLHistory();
 
 private:
+    std::function<bool()>mAccountCurrent=vs_native_im_guard(),mSelectionCurrent=[] {return false;};
+    U64 mRequest=0;
+    bool mBusy=false;
     LLComboBox*     mMediaURLEdit;
     LLHandle<LLPanel> mPanelLandMediaHandle;
 
@@ -61,7 +67,7 @@ private:
     static void     onBtnClear(void*);
     bool            callback_clear_url_list(const LLSD& notification, const LLSD& response);
 
-    static void     getMediaTypeCoro(std::string url, LLHandle<LLFloater> parentHandle);
+    static void     getMediaTypeCoro(std::string url, LLHandle<LLFloater> parentHandle,std::function<bool()> current);
 
 };
 

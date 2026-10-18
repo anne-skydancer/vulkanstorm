@@ -60,6 +60,8 @@ public:
     virtual bool            isDirty() const override            { return getIsDirty(); }
 
 protected:
+    std::function<bool()> requestGuard();
+    U64 mCallbackEpoch=0;
     typedef std::function<void()> on_confirm_fn;
 
     virtual void            setEditSettingsAndUpdate(const LLSettingsBase::ptr_t &settings) = 0;
@@ -82,7 +84,7 @@ protected:
     bool                    canApplyParcel() const;
 
     LLUUID                  mInventoryId;
-    LLInventoryItem *       mInventoryItem;
+    LLPointer<LLInventoryItem> mInventoryItem;
     LLHandle<LLFloater>     mInventoryFloater;
     bool                    mCanCopy;
     bool                    mCanMod;

@@ -1009,7 +1009,8 @@ void LLEnvironment::initSingleton()
         gGenericDispatcher.addHandler(MESSAGE_PUSHENVIRONMENT, &environment_push_dispatch_handler);
     }
 
-    gSavedSettings.getControl("RenderSkyAutoAdjustProbeAmbiance")->getSignal()->connect(
+    mSkyAutoAdjustConnection.disconnect();
+    mSkyAutoAdjustConnection = gSavedSettings.getControl("RenderSkyAutoAdjustProbeAmbiance")->getSignal()->connect(
         [](LLControlVariable*, const LLSD& new_val, const LLSD& old_val)
         {
             LLSettingsSky::sAutoAdjustProbeAmbiance = (F32)new_val.asReal();
@@ -1023,6 +1024,7 @@ void LLEnvironment::initSingleton()
 
 void LLEnvironment::cleanupSingleton()
 {
+    mSkyAutoAdjustConnection.disconnect();
     if (mParcelCallbackConnection.connected())
     {
         mParcelCallbackConnection.disconnect();

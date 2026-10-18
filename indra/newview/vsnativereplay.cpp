@@ -672,7 +672,7 @@ struct Replay
             auto owner = weak.lock();
             const bool clientFixture = name == "RegionHandleRequest" || name == "AgentPause" || name == "AgentResume" || name == "ScriptDialogReply" || name == "MapBlockRequest" || name == "MapNameRequest" || name == "TeleportLocationRequest" || name == "TeleportLandmarkRequest" || name == "ChatFromViewer" || name == "MuteListRequest" ||
                 name == "GroupMembersRequest" || name == "GroupRoleDataRequest" || name == "GroupRoleMembersRequest" ||
-                name == "GroupTitlesRequest" || name == "GroupTitleUpdate" || name == "ActivateGroup" || name == "DirFindQuery" || name == "MoneyTransferRequest" || name == "UpdateInventoryItem" || name == "EconomyDataRequest";
+                name == "ParcelPropertiesRequest" || name == "GroupTitlesRequest" || name == "GroupTitleUpdate" || name == "ActivateGroup" || name == "DirFindQuery" || name == "MoneyTransferRequest" || name == "UpdateInventoryItem" || name == "EconomyDataRequest";
             const bool r2Fixture = std::getenv("VS_VULKAN_REPLAY_R2") &&
                                    (name == "AgentAnimation" || name == "AssetUploadRequest" || name == "ForceScriptControlRelease" ||
                                     name == "RezMultipleAttachmentsFromInv" || name == "DetachAttachmentIntoInv");
