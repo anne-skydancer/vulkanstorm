@@ -671,7 +671,7 @@ struct Replay
         gMessageSystem->setMessageAdmission([weak](const std::string& name, const LLHost& sender)
         {
             auto owner = weak.lock();
-            const bool clientFixture = name == "RegionHandleRequest" || name == "AgentPause" || name == "AgentResume" || name == "ScriptDialogReply" || name == "MapBlockRequest" || name == "MapNameRequest" || name == "TeleportLocationRequest" || name == "TeleportLandmarkRequest" || name == "ChatFromViewer" || name == "MuteListRequest" ||
+            const bool clientFixture = name == "RequestRegionInfo" || name == "LandStatRequest" || name == "RegionHandleRequest" || name == "AgentPause" || name == "AgentResume" || name == "ScriptDialogReply" || name == "MapBlockRequest" || name == "MapNameRequest" || name == "TeleportLocationRequest" || name == "TeleportLandmarkRequest" || name == "ChatFromViewer" || name == "MuteListRequest" ||
                 name == "GroupMembersRequest" || name == "GroupRoleDataRequest" || name == "GroupRoleMembersRequest" ||
                 name == "ParcelPropertiesRequest" || name == "GroupTitlesRequest" || name == "GroupTitleUpdate" || name == "ActivateGroup" || name == "DirFindQuery" || name == "MoneyTransferRequest" || name == "UpdateInventoryItem" || name == "EconomyDataRequest";
             const bool r2Fixture = std::getenv("VS_VULKAN_REPLAY_R2") &&
