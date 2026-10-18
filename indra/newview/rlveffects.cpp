@@ -26,9 +26,11 @@
 
 #include "rlveffects.h"
 #include "rlvhandler.h"
+#if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #include "vsuiimageprovider.h"
 #include "vspickpolicy.h"
+#endif
 
 // ====================================================================================
 // RlvOverlayEffect class
@@ -99,6 +101,7 @@ bool RlvOverlayEffect::hitTest(const LLCoordGL& ptMouse) const
     if (!m_pImage)
         return false;
 
+    #if VS_NATIVE_VULKAN
     if(LLRender2D::isNativeUI())
     {
         const auto owner=VSNativeSession::active();
@@ -110,13 +113,17 @@ bool RlvOverlayEffect::hitTest(const LLCoordGL& ptMouse) const
         return VSPickPolicy::textureMask(extent[0],extent[1],VSUIRenderer::imagePixels(mNativePresentedImage),
             float(ptMouse.mX)/gViewerWindow->getWorldViewWidthScaled(),float(ptMouse.mY)/gViewerWindow->getWorldViewHeightScaled());
     }
+    #endif
     return (m_fBlockTouch) && (m_pImage->getMask(LLVector2((float)ptMouse.mX / gViewerWindow->getWorldViewWidthScaled(), (float)ptMouse.mY / gViewerWindow->getWorldViewHeightScaled())));
 }
 
 void RlvOverlayEffect::setImage(const LLUUID& idTexture)
 {
+    U64 account=0;
+    #if VS_NATIVE_VULKAN
     const auto owner=VSNativeSession::active();
-    const U64 account=owner?owner->generation():0;
+    account=owner?owner->generation():0;
+    #endif
     if ( (m_pImage) && (m_pImage->getID() == idTexture) && (!LLRender2D::isNativeUI() || mNativeAccount==account) )
         return;
 
@@ -130,6 +137,7 @@ void RlvOverlayEffect::setImage(const LLUUID& idTexture)
 
 void RlvOverlayEffect::run(const LLVisualEffectParams*)
 {
+    #if VS_NATIVE_VULKAN
     if(LLRender2D::isNativeUI())
     {
         const auto owner=VSNativeSession::active();
@@ -151,6 +159,7 @@ void RlvOverlayEffect::run(const LLVisualEffectParams*)
         return;
     }
 
+    #endif
     if (m_pImage)
     {
         gUIProgram.bind();

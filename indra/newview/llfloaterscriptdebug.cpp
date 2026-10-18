@@ -44,8 +44,10 @@
 #include "llviewerobjectlist.h"
 #include "llviewertexturelist.h"
 #include "llviewerwindow.h"
+#if VS_NATIVE_VULKAN
 #include "vsvulkancontext.h"
 #include "vsworldscene.h"
+#endif
 #include "llagent.h"
 #include "llviewernetwork.h"
 
@@ -166,6 +168,7 @@ void LLFloaterScriptDebug::addScriptLine(const LLChat& chat)
     // std::string message = (prefix == "/me " || prefix == "/me'") ? user_name + utf8mesg.substr(3) : utf8mesg;
 
     bool nativeLabel=false;
+    #if VS_NATIVE_VULKAN
     if(LLRender2D::isNativeUI() && gViewerWindow && gViewerWindow->nativeContext())
     {
         auto& world=gViewerWindow->nativeContext()->world();
@@ -180,6 +183,7 @@ void LLFloaterScriptDebug::addScriptLine(const LLChat& chat)
             }
         }
     }
+    #endif
     if (objectp && !LLRender2D::isNativeUI())
     {
         // <FS:Kadah> [FSllOwnerSayToScriptDebugWindow]

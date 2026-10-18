@@ -17,7 +17,7 @@ class NativeOverlay(unittest.TestCase):
   compiler=shutil.which('clang++')or shutil.which('g++');self.assertIsNotNone(compiler)
   with tempfile.TemporaryDirectory()as directory:
    cpp=Path(directory)/'overlay.cpp';exe=cpp.with_suffix('.exe');cpp.write_text(text)
-   result=subprocess.run([compiler,'-std=c++20',str(cpp),'-o',str(exe)],capture_output=True,text=True,timeout=60);self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+   result=subprocess.run([compiler,'-std=c++20','-DVS_NATIVE_VULKAN=1',str(cpp),'-o',str(exe)],capture_output=True,text=True,timeout=60);self.assertEqual(result.returncode,0,result.stdout+result.stderr)
    result=subprocess.run([str(exe)],capture_output=True,text=True,timeout=20);self.assertEqual(result.returncode,0,result.stdout+result.stderr)
  def test_actual_overlay_drawn_generation_and_account_retirement(self):
   source=viewer('rlveffects.cpp');text=(FIXTURES/'overlay_fixture.cpp').read_text()
