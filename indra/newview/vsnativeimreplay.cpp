@@ -139,6 +139,8 @@
 #include <stdexcept>
 #include <fstream>
 #include <filesystem>
+#include <array>
+#include <optional>
 
 namespace
 {
@@ -348,6 +350,7 @@ struct Replay : public LLAvatarPropertiesObserver
     LLParcelSelectionHandle landDialogSelection;
     LLHandle<LLFloater> landDialog;
     bool keyboardChecked = false;
+    std::optional<std::array<bool,2>> keyboardSettings;
     unsigned cameraCheck = 0;
     unsigned landCheck = 0;
     bool savedLandIndicators = false;
@@ -1109,16 +1112,40 @@ struct Replay : public LLAvatarPropertiesObserver
             if (!keyboardChecked)
             {
                 require(gKeyboard != nullptr, "Actual keyboard owner is missing");
-                const bool letterMovement = gSavedSettings.getBOOL("LetterKeysAffectsMovementNotFocusChatBar");
-                gSavedSettings.setBOOL("LetterKeysAffectsMovementNotFocusChatBar", true);
-                if (gMenuHolder) gMenuHolder->hideMenus();
-                gFocusMgr.setKeyboardFocus(nullptr);
-                const bool enableMouselook = gSavedSettings.getBOOL("EnableMouselook");
-                gSavedSettings.setBOOL("EnableMouselook", true);
-                gAgentCamera.changeCameraToMouselook(false);
-                require(owner.cameraState().firstPerson && gAgentCamera.cameraMouselook() &&
-                    gViewerInput.getMode() == MODE_FIRST_PERSON,
-                    "Native mouselook did not complete shared camera/keyboard mode");
+                if (!keyboardSettings)
+                {
+                    keyboardSettings=std::array<bool,2>{
+                        gSavedSettings.getBOOL("LetterKeysAffectsMovementNotFocusChatBar"),
+                        gSavedSettings.getBOOL("EnableMouselook")};
+                    gSavedSettings.setBOOL("LetterKeysAffectsMovementNotFocusChatBar", true);
+                    if (gMenuHolder) gMenuHolder->hideMenus();
+                    gFocusMgr.setKeyboardFocus(nullptr);
+                    gSavedSettings.setBOOL("EnableMouselook", true);
+                    gAgentCamera.changeCameraToMouselook(false);
+                    require(owner.cameraState().firstPerson && gAgentCamera.cameraMouselook() &&
+                        gViewerInput.getMode() == MODE_FIRST_PERSON,
+                        "Native mouselook did not complete shared camera/keyboard mode");
+                    // The shipped reference map strafes with Left in mouselook.
+                    // Exercise that mode through the actual platform callback,
+                    // then allow its real frame/update/release to complete.
+                    gKeyboard->handleTranslatedKeyDown(KEY_LEFT, MASK_NONE);
+                    gKeyboard->scanKeyboard();
+                    require(gAgentCamera.getLeftKey()>0 && gAgentCamera.getYawKey()==0 &&
+                        (gAgent.getControlFlags() & AGENT_CONTROL_NUDGE_LEFT_POS),
+                        "Window first-person Left did not publish reference strafe intent");
+                    gKeyboard->handleTranslatedKeyUp(KEY_LEFT, MASK_NONE);
+                    gKeyboard->scanKeyboard();
+                    evidence["connected_keyboard_first_person_strafe"]=true;
+                    return false;
+                }
+                const bool letterMovement=(*keyboardSettings)[0];
+                const bool enableMouselook=(*keyboardSettings)[1];
+                require(!(gAgent.getControlFlags() & AGENT_CONTROL_NUDGE_LEFT_POS),
+                    "Released first-person strafe survived reference frame retirement");
+                gAgentCamera.changeCameraToThirdPerson(false);
+                require(!owner.cameraState().firstPerson && gAgentCamera.cameraThirdPerson() &&
+                    gViewerInput.getMode()==MODE_THIRD_PERSON,
+                    "Native third-person restore left stale keyboard mode");
                 const auto before = owner.cameraState();
                 // Enter through the actual platform keyboard -> window callback ->
                 // shared arbitration -> scan -> existing registered action chain.
