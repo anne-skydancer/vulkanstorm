@@ -31,6 +31,11 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "quickprefs.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
 
 #include "fscommon.h"
 #include "llagent.h"
@@ -120,6 +125,7 @@ FloaterQuickPrefs::FloaterQuickPrefs(const LLSD& key)
 
 FloaterQuickPrefs::~FloaterQuickPrefs()
 {
+    mSettingsConnections.clear();
     if (mRlvBehaviorCallbackConnection.connected())
     {
         mRlvBehaviorCallbackConnection.disconnect();
@@ -143,6 +149,7 @@ FloaterQuickPrefs::~FloaterQuickPrefs()
 
 void FloaterQuickPrefs::onOpen(const LLSD& key)
 {
+    mAccountCurrent = vs_native_im_guard();
     loadPresets();
     setSelectedEnvironment();
 
@@ -212,14 +219,14 @@ void FloaterQuickPrefs::initCallbacks()
     // Phototools additions
     if (getIsPhototools())
     {
-        gSavedSettings.getControl("RenderObjectBump")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this));
-        gSavedSettings.getControl("WindLightUseAtmosShaders")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this));
-        gSavedSettings.getControl("RenderDeferred")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this));
-        gSavedSettings.getControl("RenderShadowDetail")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this));
-        gSavedSettings.getControl("FSRenderVignette")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this));
-        gSavedSettings.getControl("RenderShadowSplitExponent")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this));
-        gSavedSettings.getControl("RenderShadowGaussian")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this));
-        gSavedSettings.getControl("RenderSSAOEffect")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this));
+        mSettingsConnections.emplace_back(gSavedSettings.getControl("RenderObjectBump")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this)));
+        mSettingsConnections.emplace_back(gSavedSettings.getControl("WindLightUseAtmosShaders")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this)));
+        mSettingsConnections.emplace_back(gSavedSettings.getControl("RenderDeferred")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this)));
+        mSettingsConnections.emplace_back(gSavedSettings.getControl("RenderShadowDetail")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this)));
+        mSettingsConnections.emplace_back(gSavedSettings.getControl("FSRenderVignette")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this)));
+        mSettingsConnections.emplace_back(gSavedSettings.getControl("RenderShadowSplitExponent")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this)));
+        mSettingsConnections.emplace_back(gSavedSettings.getControl("RenderShadowGaussian")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this)));
+        mSettingsConnections.emplace_back(gSavedSettings.getControl("RenderSSAOEffect")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::refreshSettings, this)));
 
         // Vignette UI controls
         getChild<LLSpinCtrl>("VignetteSpinnerX")->setCommitCallback(boost::bind(&FloaterQuickPrefs::onChangeVignetteSpinnerX, this));
@@ -250,20 +257,20 @@ void FloaterQuickPrefs::initCallbacks()
     else
     {
         getChild<LLButton>("Restore_Btn")->setCommitCallback(boost::bind(&FloaterQuickPrefs::onClickRestoreDefaults, this));
-        gSavedSettings.getControl("QuickPrefsEditMode")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::onEditModeChanged, this));    // <FS:Zi> Dynamic Quickprefs
+        mSettingsConnections.emplace_back(gSavedSettings.getControl("QuickPrefsEditMode")->getSignal()->connect(boost::bind(&FloaterQuickPrefs::onEditModeChanged, this))); // <FS:Zi> Dynamic Quickprefs
 
         mAvatarZOffsetSlider->setSliderMouseUpCallback(boost::bind(&FloaterQuickPrefs::onAvatarZOffsetFinalCommit, this));
         mAvatarZOffsetSlider->setSliderEditorCommitCallback(boost::bind(&FloaterQuickPrefs::onAvatarZOffsetFinalCommit, this));
         mAvatarZOffsetSlider->setCommitCallback(boost::bind(&FloaterQuickPrefs::onAvatarZOffsetSliderMoved, this));
 
         mMaxComplexitySlider->setCommitCallback(boost::bind(&FloaterQuickPrefs::updateMaxComplexity, this));
-        gSavedSettings.getControl("RenderAvatarMaxComplexity")->getCommitSignal()->connect(boost::bind(&FloaterQuickPrefs::updateMaxComplexityLabel, this, _2));
+        mSettingsConnections.emplace_back(gSavedSettings.getControl("RenderAvatarMaxComplexity")->getCommitSignal()->connect(boost::bind(&FloaterQuickPrefs::updateMaxComplexityLabel, this, _2)));
 
         syncAvatarZOffsetFromPreferenceSetting();
         // Update slider on future pref changes.
         if (gSavedPerAccountSettings.getControl("AvatarHoverOffsetZ"))
         {
-            gSavedPerAccountSettings.getControl("AvatarHoverOffsetZ")->getCommitSignal()->connect(boost::bind(&FloaterQuickPrefs::syncAvatarZOffsetFromPreferenceSetting, this));
+            mSettingsConnections.emplace_back(gSavedPerAccountSettings.getControl("AvatarHoverOffsetZ")->getCommitSignal()->connect(boost::bind(&FloaterQuickPrefs::syncAvatarZOffsetFromPreferenceSetting, this)));
         }
         else
         {
@@ -277,7 +284,7 @@ void FloaterQuickPrefs::initCallbacks()
     }
 
     mRlvBehaviorCallbackConnection = gRlvHandler.setBehaviourCallback(boost::bind(&FloaterQuickPrefs::updateRlvRestrictions, this, _1, _2));
-    gSavedSettings.getControl("IndirectMaxNonImpostors")->getCommitSignal()->connect(boost::bind(&FloaterQuickPrefs::updateMaxNonImpostors, this, _2));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("IndirectMaxNonImpostors")->getCommitSignal()->connect(boost::bind(&FloaterQuickPrefs::updateMaxNonImpostors, this, _2)));
 
     mEnvChangedConnection = LLEnvironment::instance().setEnvironmentChanged([this](LLEnvironment::EnvSelection_t env, S32 version){ setSelectedEnvironment(); });
 }
@@ -578,6 +585,19 @@ void FloaterQuickPrefs::setSelectedEnvironment()
     setDefaultPresetsEnabled(false);
 }
 
+void FloaterQuickPrefs::draw()
+{
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && !getIsPhototools() && mAvatarZOffsetSlider)
+    {
+        // Features can arrive after construction and change on region crossing.
+        // Refresh availability without overwriting an editor/drag in progress.
+        if (auto owner = VSNativeSession::active())
+            mAvatarZOffsetSlider->setEnabled(mAccountCurrent() && owner->appearance() && owner->appearance()->hoverEnabled());
+    }
+#endif
+    LLTransientDockableFloater::draw();
+}
 bool FloaterQuickPrefs::postBuild()
 {
     // Phototools additions
@@ -834,6 +854,9 @@ void FloaterQuickPrefs::stepComboBox(LLComboBox* ctrl, bool forward)
 
 void FloaterQuickPrefs::selectSkyPreset(const LLSD& preset)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && (!mAccountCurrent() || gRlvHandler.hasBehaviour(RLV_BHVR_SETENV) || gRlvHandler.hasBehaviour(RLV_BHVR_SETSPHERE))) return;
+#endif
     auto& instance = LLEnvironment::instance();
 
     // Opensim continued W/L support
@@ -865,6 +888,9 @@ void FloaterQuickPrefs::selectSkyPreset(const LLSD& preset)
 
 void FloaterQuickPrefs::selectWaterPreset(const LLSD& preset)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && (!mAccountCurrent() || gRlvHandler.hasBehaviour(RLV_BHVR_SETENV) || gRlvHandler.hasBehaviour(RLV_BHVR_SETSPHERE))) return;
+#endif
     auto& instance = LLEnvironment::instance();
 
 #ifdef OPENSIM
@@ -895,6 +921,9 @@ void FloaterQuickPrefs::selectWaterPreset(const LLSD& preset)
 
 void FloaterQuickPrefs::selectDayCyclePreset(const LLSD& preset)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && (!mAccountCurrent() || gRlvHandler.hasBehaviour(RLV_BHVR_SETENV) || gRlvHandler.hasBehaviour(RLV_BHVR_SETSPHERE))) return;
+#endif
     auto& instance = LLEnvironment::instance();
 
 #ifdef OPENSIM
@@ -1010,6 +1039,9 @@ void FloaterQuickPrefs::onClickDayCycleNext()
 
 void FloaterQuickPrefs::onClickResetToRegionDefault()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && (!mAccountCurrent() || gRlvHandler.hasBehaviour(RLV_BHVR_SETENV) || gRlvHandler.hasBehaviour(RLV_BHVR_SETSPHERE))) return;
+#endif
     mWLPresetsCombo->setValue(LLSD(PRESET_NAME_REGION_DEFAULT));
     mWaterPresetsCombo->setValue(LLSD(PRESET_NAME_REGION_DEFAULT));
     LLEnvironment::instance().setSharedEnvironment();
@@ -1100,6 +1132,13 @@ void FloaterQuickPrefs::updateRlvRestrictions(ERlvBehaviour behavior, ERlvParamT
 {
     if (behavior == RLV_BHVR_SETENV || behavior == RLV_BHVR_SETSPHERE)
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            enableWindlightButtons(!gRlvHandler.hasBehaviour(RLV_BHVR_SETENV) && !gRlvHandler.hasBehaviour(RLV_BHVR_SETSPHERE));
+            return;
+        }
+#endif
         enableWindlightButtons(type != RLV_TYPE_ADD);
     }
 }
@@ -2058,6 +2097,7 @@ void FloaterQuickPrefs::onClickResetRenderSSAOEffectX()
 
 void FloaterQuickPrefs::callbackRestoreDefaults(const LLSD& notification, const LLSD& response)
 {
+    if (!mAccountCurrent()) return;
     if (S32 option = LLNotificationsUtil::getSelectedOption(notification, response); option == 0) // YES
     {
         selectControl("");
@@ -2079,7 +2119,8 @@ void FloaterQuickPrefs::callbackRestoreDefaults(const LLSD& notification, const 
 
 void FloaterQuickPrefs::onClickRestoreDefaults()
 {
-    LLNotificationsUtil::add("ConfirmRestoreQuickPrefsDefaults", LLSD(), LLSD(), boost::bind(&FloaterQuickPrefs::callbackRestoreDefaults, this, _1, _2));
+    LLNotificationsUtil::add("ConfirmRestoreQuickPrefsDefaults", LLSD(), LLSD(), vs_native_im_ui_callback(this, [this](const LLSD& notification, const LLSD& response)
+        { callbackRestoreDefaults(notification, response); }));
 }
 
 void FloaterQuickPrefs::dockToToolbarButton()
@@ -2120,6 +2161,17 @@ void FloaterQuickPrefs::dockToToolbarButton()
 
 void FloaterQuickPrefs::onAvatarZOffsetSliderMoved()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (!mAccountCurrent() || !owner->appearance() || !owner->appearance()->hoverEnabled()) return;
+        const F32 value = mAvatarZOffsetSlider->getValueF32();
+        if (!owner->simulatorFeatures()["AvatarHoverHeightEnabled"].asBoolean())
+            gSavedPerAccountSettings.setF32("AvatarHoverOffsetZ", value);
+        owner->appearance()->setHoverHeight(value, false);
+        return;
+    }
+#endif
     F32 value = mAvatarZOffsetSlider->getValueF32();
     LLVector3 offset(0.0f, 0.0f, llclamp(value, MIN_HOVER_Z, MAX_HOVER_Z));
     LL_INFOS("Avatar") << "setting hover from slider moved" << offset[VZ] << LL_ENDL;
@@ -2142,6 +2194,16 @@ void FloaterQuickPrefs::onAvatarZOffsetSliderMoved()
 
 void FloaterQuickPrefs::onAvatarZOffsetFinalCommit()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (!mAccountCurrent() || !owner->appearance() || !owner->appearance()->hoverEnabled()) return;
+        const F32 value = llclamp(mAvatarZOffsetSlider->getValueF32(), MIN_HOVER_Z, MAX_HOVER_Z);
+        gSavedPerAccountSettings.setF32("AvatarHoverOffsetZ", value);
+        owner->appearance()->setHoverHeight(value, true);
+        return;
+    }
+#endif
     F32 value = mAvatarZOffsetSlider->getValueF32();
     LLVector3 offset(0.0f, 0.0f, llclamp(value,MIN_HOVER_Z,MAX_HOVER_Z));
     gSavedPerAccountSettings.setF32("AvatarHoverOffsetZ",value);
@@ -2151,6 +2213,15 @@ void FloaterQuickPrefs::onAvatarZOffsetFinalCommit()
 
 void FloaterQuickPrefs::updateAvatarZOffsetEditEnabled()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        const bool enabled = mAccountCurrent() && owner->appearance() && owner->appearance()->hoverEnabled();
+        mAvatarZOffsetSlider->setEnabled(enabled);
+        if (enabled && !mAvatarZOffsetSlider->isMouseHeldDown()) syncAvatarZOffsetFromPreferenceSetting();
+        return;
+    }
+#endif
     bool enabled = gAgent.getRegion() && gAgent.getRegion()->avatarHoverHeightEnabled();
     if (!enabled && isAgentAvatarValid() && !gAgentAvatarp->isUsingServerBakes())
     {
@@ -2165,6 +2236,9 @@ void FloaterQuickPrefs::updateAvatarZOffsetEditEnabled()
 
 void FloaterQuickPrefs::onRegionChanged()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { updateAvatarZOffsetEditEnabled(); return; }
+#endif
     LLViewerRegion* region = gAgent.getRegion();
     if (region && region->simulatorFeaturesReceived())
     {
@@ -2178,6 +2252,9 @@ void FloaterQuickPrefs::onRegionChanged()
 
 void FloaterQuickPrefs::onSimulatorFeaturesReceived(const LLUUID &region_id)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { updateAvatarZOffsetEditEnabled(); return; }
+#endif
     LLViewerRegion *region = gAgent.getRegion();
     if (region && (region->getRegionID() == region_id))
     {

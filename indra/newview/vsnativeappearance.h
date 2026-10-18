@@ -17,6 +17,9 @@ public:
     bool startupReady() const;
     void fallback(const LLSD& wearables);
     void refresh();
+    bool hoverEnabled() const;
+    bool setHoverHeight(F32, bool send);
+    void syncHoverHeight();
     bool canWear(const std::vector<LLUUID>&, bool replace = false, bool replaceOutfit = false) const;
     bool wear(const std::vector<LLUUID>&, bool replace, LLPointer<LLInventoryCallback> callback = {});
     bool remove(const std::vector<LLUUID>&, LLPointer<LLInventoryCallback> callback = {});

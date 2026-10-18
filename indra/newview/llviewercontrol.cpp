@@ -28,6 +28,7 @@
 #include "llviewerprecompiledheaders.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
+#include "vsnativeappearance.h"
 #endif
 
 #include "llviewercontrol.h"
@@ -255,6 +256,13 @@ static bool handleDebugQualityPerformanceChanged(const LLSD& newvalue)
 
 static bool handleAvatarHoverOffsetChanged(const LLSD& newvalue)
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (owner->appearance()) owner->appearance()->syncHoverHeight();
+        return true;
+    }
+#endif
     if (isAgentAvatarValid())
     {
         gAgentAvatarp->setHoverIfRegionEnabled();
@@ -1320,6 +1328,7 @@ bool native_shared_setting_callback(const std::string& setting)
         "MuteVoice",
         "MuteAmbient",
         "MuteUI",
+        "AvatarHoverOffsetZ",
         "EnableVoiceChat",
         "PTTCurrentlyEnabled",
         "PushToTalkButton",

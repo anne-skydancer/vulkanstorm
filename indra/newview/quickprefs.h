@@ -33,6 +33,8 @@
 #include "llenvironment.h"
 #include "lltransientdockablefloater.h"
 #include "rlvdefines.h"
+#include <functional>
+#include <vector>
 
 const std::string PHOTOTOOLS_FLOATER = "phototools";
 
@@ -98,6 +100,7 @@ private:
 
 public:
     bool postBuild() override;
+    void draw() override;
     void onOpen(const LLSD& key) override;
 
     void setSelectedSky(const std::string& preset_name);
@@ -153,6 +156,8 @@ private:
     LLSettingsWater::ptr_t      mLiveWater;
     LLSettingsDay::ptr_t        mLiveDay;
     LLEnvironment::connection_t mEnvChangedConnection;
+    std::vector<boost::signals2::scoped_connection> mSettingsConnections;
+    std::function<bool()> mAccountCurrent = [] { return true; };
 
     // Vignette UI callbacks
     void onChangeVignetteX();

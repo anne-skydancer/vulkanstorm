@@ -124,6 +124,7 @@ jobs:
       - run: python scripts/tests/test_native_accordion_lifecycle.py
       - run: python scripts/tests/test_native_script_recovery.py
       - run: python scripts/tests/test_native_personal_lighting.py
+      - run: python scripts/tests/test_native_quickprefs.py
       - run: python scripts/tests/test_native_utility_lifecycle.py
       - run: python scripts/tests/test_native_currency_lifecycle.py
       - run: python scripts/tests/test_native_currency_ui_contract.py

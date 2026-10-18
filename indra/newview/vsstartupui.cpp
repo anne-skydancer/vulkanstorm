@@ -242,6 +242,7 @@
 #include "fsnearbychatvoicemonitor.h"
 #include "llfavoritesbar.h"
 #include "llfloater.h"
+#include "quickprefs.h"
 #include "llfloaterenvironmentadjust.h"
 #include "llfloaterscriptrecover.h"
 #include "llfloaterabout.h"
@@ -285,7 +286,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 t == typeid(FSFloaterWhiteListHelper) || t == typeid(LLFloaterSettingsColor) ||
                 t == typeid(FSFloaterSplashScreenSettings) || t == typeid(FSFloaterVolumeControls) ||
                 t == typeid(LLFloaterFontTest) || t == typeid(LLFloaterHUD) || t == typeid(RlvFloaterStrings) ||
-                t == typeid(FloaterAO) || t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
+                t == typeid(FloaterQuickPrefs) || t == typeid(FloaterAO) || t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
                 t == typeid(LLPanelMainInventory) || LLPanelMainInventory::isNativeInternalType(t) ||
                 t == typeid(LLPanelMarketplaceInbox) || t == typeid(LLInboxInventoryPanel) ||
                 t == typeid(LLInboxFolderViewFolder) || t == typeid(LLInboxFolderViewItem) || t == typeid(LLInventoryGallery) || t == typeid(LLInventoryGalleryItem) ||
@@ -397,7 +398,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "chat_mention_picker" || name == "emoji_complete" || name == "preview_trash" || name == "new_feature_notification" ||
             name == "fs_whitelist_floater" || name == "settings_color" || name == "fs_splash_screen_settings" || name == "fs_volume_controls" ||
             name == "font_test" || name == "hud" || name == "rlv_strings" ||
-            name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "inventory_settings" || name == "marketplace_listings" || name == "associate_listing" ||
+            name == "quickprefs" || name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "inventory_settings" || name == "marketplace_listings" || name == "associate_listing" ||
             name == "marketplace_validation" || name == "linkreplace" || name == "emoji_picker" || name == "event" || name == "experiences" || name == "experience_profile" || name == "experience_search" || name == "marketplace" || name == "grid_status" || name == "destinations" || name == "fs_teleporthistory" || name == "stats" || name == "lagmeter" || name == "inspect_remote_object" || name == "web_content" || name == "search_replace" || name == "fs_nearby_chat" || name == "people" || name == "search" || name == "toybox" || name == "inventory" || name == "secondary_inventory" || name == "sl_about" || name == "message_critical" || name == "message_tos" ||
             name == "fs_impanel" || name == "fs_im_container" || name == "imcontacts" || name == "avatar_picker" ||
             name == "fs_blocklist" || name == "fs_add_contact" || name == "fs_contact_set_config" ||
@@ -435,7 +436,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         },
         [](std::string_view name)
         {
-            return name == "aboutland" || name == "fly" || name == "groundsit" || name == "resync_animations" || name == "derender_animated_objects" || name == "stop_animations" || name == "marketplacelistings" || name == "view" || name == "phototools_view" || name == "mouselook_view" || name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
+            return name == "quickprefs" || name == "aboutland" || name == "fly" || name == "groundsit" || name == "resync_animations" || name == "derender_animated_objects" || name == "stop_animations" || name == "marketplacelistings" || name == "view" || name == "phototools_view" || name == "mouselook_view" || name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
                    name == "preferences" || name == "profile" || name == "contact_sets" ||
                    name == "conversation_log" || name == "block_list" || name == "group_titles";
         },
