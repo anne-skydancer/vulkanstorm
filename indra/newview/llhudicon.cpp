@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llhudicon.h"
+#include "llagent.h"
+#include <utility>
 
 #include "llgl.h"
 #include "llrender.h"
@@ -68,6 +70,7 @@ LLHUDIcon::icon_instance_t LLHUDIcon::sScriptErrorIconInstances;
 LLHUDIcon::LLHUDIcon(const U8 type) :
             LLHUDObject(type),
             mImagep(NULL),
+            mDistance(0.f),
             mScale(0.1f),
             mHidden(false),
             mScriptError(false) // <FS:Ansariel> Mark script error icons
@@ -189,6 +192,9 @@ void LLHUDIcon::setScale(F32 fraction_of_fov)
 
 void LLHUDIcon::markDead()
 {
+    LLPointer<LLHUDIcon> keepAlive(this);auto retire=std::exchange(mNativeRetire,{});
+    mNativeSource={};mNativeImageQuery={};mNativeImage.reset();mNativeMesh.reset();mNativeQuadKnown=false;
+    if(retire)retire();
     if (mSourceObject)
     {
         mSourceObject->clearIcon();
@@ -384,3 +390,130 @@ bool LLHUDIcon::scriptIconsNearby()
     return !sScriptErrorIconInstances.empty();
 }
 // </FS:Ansariel> Mark script error icons
+
+void LLHUDIcon::setNativeSource(NativeSourceQuery source,const VSUIRenderer::Image& image,std::shared_ptr<const void> residency,std::function<void()> retire,std::function<VSUIRenderer::Image()> imageQuery)
+{
+    mNativeImageQuery=std::move(imageQuery);
+    mNativeResidency=std::move(residency);mNativeRetire=std::move(retire);
+    mNativeSource=std::move(source);mNativeImage=image;mNativeQuadKnown=false;
+}
+LLUUID LLHUDIcon::getSourceID() const
+{
+    if(mDead)return LLUUID::null;
+    if(mNativeSource){const auto source=mNativeSource();return source?source->id:LLUUID::null;}
+    return mSourceObject?mSourceObject->getID():LLUUID::null;
+}
+bool LLHUDIcon::nativeQuad(std::array<LLVector3,4>& quad,F32& alpha)
+{
+    if(mDead || mHidden)return false;
+    const auto source=mNativeSource?mNativeSource():std::optional<NativeSource>{};
+    if(!source){markDead();return false;}
+    if(mLifeTimer.getElapsedTimeF32()>MAX_VISIBLE_TIME){markDead();return false;}
+    if(!mNativeImage && mNativeImageQuery)mNativeImage=mNativeImageQuery();
+    if(!mNativeImage)return false;
+    setPositionGlobal(source->globalPosition);
+    auto* camera=LLViewerCamera::getInstance();
+    LLVector3 icon_relative_pos=camera->getUpAxis()*~source->rotation;icon_relative_pos.abs();
+    const F32 distance_scale=llmin(source->scale.mV[VX]/icon_relative_pos.mV[VX],
+        source->scale.mV[VY]/icon_relative_pos.mV[VY],source->scale.mV[VZ]/icon_relative_pos.mV[VZ]);
+    const F32 up_distance=.5f*distance_scale;
+    LLVector3 icon_position=source->position+(up_distance*camera->getUpAxis())*1.2f;
+    LLVector3 icon_to_cam=camera->getOrigin()-icon_position;icon_to_cam.normVec();
+    icon_position+=icon_to_cam*source->radius*1.1f;
+    mDistance=dist_vec(icon_position,camera->getOrigin());
+    alpha=clamp_rescale(mDistance,DIST_START_FADE,DIST_END_FADE,1.f,0.f);
+    LLVector3 x_pixel_vec,y_pixel_vec;camera->getPixelVectors(icon_position,y_pixel_vec,x_pixel_vec);
+    F32 scale_factor=1.f;
+    if(mAnimTimer.getElapsedTimeF32()<ANIM_TIME)
+        scale_factor=llmax(0.f,calc_bouncy_animation(mAnimTimer.getElapsedTimeF32()/ANIM_TIME));
+    const F32 time_elapsed=mLifeTimer.getElapsedTimeF32();
+    if(time_elapsed>MAX_VISIBLE_TIME){markDead();return false;}
+    if(time_elapsed>MAX_VISIBLE_TIME-FADE_OUT_TIME)
+        alpha*=clamp_rescale(time_elapsed,MAX_VISIBLE_TIME-FADE_OUT_TIME,MAX_VISIBLE_TIME,1.f,0.f);
+    const auto extent=VSUIRenderer::imageExtent(mNativeImage);
+    const F32 image_aspect=F32(extent[0])/F32(extent[1]);
+    const LLVector3 x_scale=image_aspect*F32(gViewerWindow->getWindowHeightScaled())*mScale*scale_factor*x_pixel_vec;
+    const LLVector3 y_scale=F32(gViewerWindow->getWindowHeightScaled())*mScale*scale_factor*y_pixel_vec;
+    quad={icon_position-x_scale*.5f,icon_position+x_scale*.5f,
+        icon_position-x_scale*.5f+y_scale,icon_position+x_scale*.5f+y_scale};
+    return true;
+}
+void LLHUDIcon::appendNative(VSWorldRenderer& renderer,const LLVector3d& regionOrigin,std::vector<VSWorldRenderer::Packet>& packets)
+{
+    const auto agentOrigin=gAgent.getPosGlobalFromAgent(LLVector3::zero);
+    const LLVector3 agentToRegion(agentOrigin-regionOrigin);
+    std::vector<LLHUDIcon*> visible;visible.reserve(sIconInstances.size());
+    for(auto& icon:sIconInstances)
+    {
+        if(!icon->mNativeSource)continue;
+        std::array<LLVector3,4> quad;F32 alpha;
+        if(!icon->nativeQuad(quad,alpha))continue;
+        // Publication refusal retains both the rendered and picked generation.
+        bool changed=!icon->mNativeQuadKnown || icon->mNativeRegionOrigin!=regionOrigin;
+        for(unsigned i=0;i<4;++i)changed=changed || quad[i]!=icon->mNativeQuad[i];
+        if(changed)
+        {
+            std::vector<VSWorldRenderer::Vertex> vertices;vertices.reserve(4);
+            constexpr float u[]={0,1,0,1},v[]={1,1,0,0};
+            for(unsigned i=0;i<4;++i){const auto p=quad[i]+agentToRegion;vertices.push_back({p.mV[0],p.mV[1],p.mV[2],0,0,1,u[i],v[i]});}
+            VSWorldRenderer::Mesh next;
+            if(renderer.publishMesh(next,vertices,{2,0,1,2,1,3}))
+            {icon->mNativeMesh=std::move(next);icon->mNativeQuad=quad;icon->mNativeQuadKnown=true;icon->mNativeRegionOrigin=regionOrigin;icon->mNativeAgentOrigin=agentOrigin;}
+            else if(!icon->mNativeMesh)continue;
+        }
+        icon->mNativeAlpha=alpha;
+        visible.push_back(icon.get());
+    }
+    std::stable_sort(visible.begin(),visible.end(),[](const auto* a,const auto* b){return a->mDistance>b->mDistance;});
+    for(const auto* icon:visible)if(auto packet=icon->nativePacket(regionOrigin))packets.push_back(std::move(*packet));
+    cleanupDeadIcons();LLHUDObject::cleanupUnreferenced();
+}
+LLHUDIcon* LLHUDIcon::intersectNative(const LLVector4a& start,const LLVector4a& end,LLVector4a* intersection)
+{
+    LLHUDIcon* result=nullptr;LLVector4a localEnd=end;
+    for(auto& icon:sIconInstances)
+    {
+        if(icon->mDead || icon->mHidden || !icon->mNativeQuadKnown || !icon->mNativeSource)continue;
+        if(!icon->mNativeSource()){icon->markDead();continue;}
+        if(icon->mLifeTimer.getElapsedTimeF32()>MAX_VISIBLE_TIME){icon->markDead();continue;}
+        LLVector4a lowerLeft,lowerRight,upperLeft,upperRight,direction;
+        std::array<LLVector3,4> quad;
+        for(unsigned i=0;i<4;++i)quad[i]=gAgent.getPosAgentFromGlobal(icon->mNativeAgentOrigin+LLVector3d(icon->mNativeQuad[i]));
+        lowerLeft.load3(quad[0].mV);lowerRight.load3(quad[1].mV);
+        upperLeft.load3(quad[2].mV);upperRight.load3(quad[3].mV);
+        direction.setSub(localEnd,start);F32 a,b,t;
+        if(LLTriangleRayIntersect(upperRight,upperLeft,lowerRight,start,direction,a,b,t) ||
+           LLTriangleRayIntersect(upperLeft,lowerLeft,lowerRight,start,direction,a,b,t))
+        {
+            direction.mul(t);localEnd.setAdd(start,direction);result=icon;
+            if(intersection)*intersection=localEnd;
+        }
+    }
+    return result;
+}
+
+std::optional<LLVector3> LLHUDIcon::nativePickPoint() const
+{
+    if(mDead || mHidden || !mNativeQuadKnown || !mNativeSource || !mNativeSource())return {};
+    return gAgent.getPosAgentFromGlobal(mNativeAgentOrigin+LLVector3d((mNativeQuad[0]+mNativeQuad[3])*.5f));
+}
+LLPointer<LLHUDIcon> LLHUDIcon::findNative(const LLUUID& id)
+{
+    for(auto& icon:sIconInstances)if(icon->mNativeSource && icon->getSourceID()==id)return icon;
+    return nullptr;
+}
+std::optional<VSWorldRenderer::Packet> LLHUDIcon::nativePacket(const LLVector3d& regionOrigin) const
+{
+    if(mDead || mHidden || !mNativeQuadKnown || !mNativeMesh || !mNativeImage || !mNativeSource)return {};
+    const auto source=mNativeSource();if(!source)return {};
+    VSWorldRenderer::Packet packet;packet.mesh=mNativeMesh;packet.image=mNativeImage;
+    const LLVector3 regionOffset(mNativeRegionOrigin-regionOrigin);
+    packet.regionOffset={regionOffset.mV[0],regionOffset.mV[1],regionOffset.mV[2],0};
+    packet.imageSampler.u=packet.imageSampler.v=VSWorldContracts::AddressMode::Clamp;
+    packet.imageSampler.mipmaps=true;
+    packet.color={1,1,1,mNativeAlpha};packet.fullbright=true;packet.alpha=true;packet.overlay=true;
+    packet.depthTest=true;packet.depthWriteAlpha=true;packet.doubleSided=true;
+    packet.distanceSquared=mDistance*mDistance;
+    std::copy_n(source->id.mData,16,packet.objectIdentity.begin());
+    return packet;
+}

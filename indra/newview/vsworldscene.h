@@ -119,10 +119,19 @@ public:
         float                fraction = 1;
         bool                 hud      = false;
         bool                 land     = false;
+        bool                 avatar   = false;
     };
+    struct PickOptions
+    {
+        bool transparent=false,rigged=false,unselectable=false,reflectionProbe=false;
+        std::function<bool()> buildVisible;
+        std::function<bool(const ObjectHandle&)> canSelect;
+        std::function<bool()> renderSelfAvatar;
+    };
+    std::optional<Pick> pick(const LLVector3& start,const LLVector3& end,const PickOptions&,float lineRadius=0,bool hud=false) const;
     std::optional<Pick>       pick(const LLVector3& start, const LLVector3& end, bool transparent = true, float lineRadius = 0,
                                    bool hud = false) const;
-    std::optional<Pick>       pickHUD(float normalizedX, float normalizedY, float aspect, float zoom) const;
+    std::optional<Pick>       pickHUD(float normalizedX, float normalizedY, float aspect, float zoom,const PickOptions* options=nullptr) const;
     std::optional<FaceHandle> face(const ObjectHandle&, U32 index) const;
     bool current(const FaceHandle&) const;
     std::optional<VSWorldContracts::Material> material(const FaceHandle&) const;
@@ -134,7 +143,8 @@ public:
     std::optional<ObjectHandle>          object(const LLUUID&) const;
     bool                                 loadGLTF(const ObjectHandle&, const std::string& filename);
     bool current(const ObjectHandle&) const;
-    struct ObjectTransform { LLVector3d position; LLQuaternion rotation; LLVector3 scale; };
+    bool setIcon(const ObjectHandle&,const std::string& imageName,bool scriptError=false);
+    struct ObjectTransform { LLVector3d position; LLQuaternion rotation; LLVector3 scale; LLVector3 regionPosition; };
     std::optional<ObjectTransform> objectTransform(const ObjectHandle&) const;
     std::optional<VSCameraFocusObject> focusObject(const ObjectHandle&,const LLVector3d& agentOrigin) const;
     std::optional<std::array<LLVector3,8>> mediaFaceBounds(const ObjectHandle&,U32 faceIndex,const LLVector3d& agentOrigin) const;

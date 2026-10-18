@@ -18,6 +18,7 @@
 
 #include "llvisualeffect.h"
 #include "rlvhelper.h"
+#include "vsuirenderer.h"
 
 // ============================================================================
 // Forward declarations
@@ -59,6 +60,8 @@ protected:
 
     LLPointer<LLViewerFetchedTexture> m_pImage = nullptr;
     int      m_nImageOrigBoost = 0;
+    VSUIRenderer::Image mNativePresentedImage;
+    U64 mNativeAccount = 0;
 };
 
 // ====================================================================================

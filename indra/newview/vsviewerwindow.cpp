@@ -36,9 +36,22 @@
 #include "lllocationinputctrl.h"
 #include "vsnativesession.h"
 #include "llagentcamera.h"
+#include "llhudicon.h"
+#include "rlveffects.h"
+#include "rlvactions.h"
 #include "llviewercamera.h"
 #include "llfloatercamera.h"
 #include "llagent.h"
+#include "vsobjectselection.h"
+#include "llselectmgr.h"
+#include "llfloatertools.h"
+#include "lltoolmgr.h"
+#include "lltoolfocus.h"
+#include "lltoolpie.h"
+#include "lltooldraganddrop.h"
+#include "llviewerdisplay.h"
+#include "rlvhandler.h"
+#include "vspickpolicy.h"
 #include "llbutton.h"
 #include "lltoolpipette.h"
 #include "llimview.h"
@@ -363,7 +376,7 @@ void LLViewerWindow::reshapeNative(S32 width, S32 height, F32 system_scale)
 bool LLViewerWindow::nativePick(LLPickInfo& info)
 {
     info.mPickType = LLPickInfo::PICK_INVALID;
-    info.mObjectID.setNull();
+    info.mObjectID.setNull();info.mParticleOwnerID.setNull();info.mParticleSourceID.setNull();info.mHUDIcon=nullptr;info.mHUDIconOwner=nullptr;
     info.mObjectFace    = -1;
     info.mUVCoords=LLVector2(-1,-1);info.mSTCoords=LLVector2(-1,-1);info.mXYCoords=LLCoordScreen(-1,-1);
     info.mNormal=LLVector3::zero;info.mTangent=LLVector4(0,0,0,0);info.mBinormal=LLVector3::zero;
@@ -383,13 +396,67 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
     LLVector3   direction = camera.at - camera.left * (x * tangent * float(rect.getWidth()) / rect.getHeight()) + camera.up * (y * tangent);
     if (direction.normalize() < 1.e-6f)
         return false;
-    const float distance = LLViewerCamera::getInstance()->getFar();
-    auto        pick     = mVulkanContext->world().pickHUD(x, y, float(rect.getWidth()) / rect.getHeight(), gAgentCamera.mHUDCurZoom);
+    const float distance=512.f; // original LLPickInfo cursor ray depth
+    const F32 denominator=direction*camera.at;
+    if(denominator<=0)return false;
+    const LLVector3 rayStart=camera.center+direction*(LLViewerCamera::getInstance()->getNear()/denominator);
+    VSWorldScene::PickOptions options;
+    options.transparent=info.mPickTransparent;options.rigged=info.mPickRigged;
+    options.unselectable=info.mPickUnselectable;options.reflectionProbe=info.mPickReflectionProbe;
+    options.buildVisible=[]{return LLFloater::isVisible(gFloaterTools);};
+    options.renderSelfAvatar=[]{return gAgent.needsRenderAvatar();};
+    options.canSelect=[owner](const VSWorldScene::ObjectHandle& object)
+    {
+        const bool forced=LLSelectMgr::instanceExists() && LLSelectMgr::getInstance()->forceSelection();
+        auto* selection=owner->objectSelection();return selection && selection->canSelect(object,forced,true);
+    };
+    auto        pick     = mVulkanContext->world().pickHUD(x, y, float(rect.getWidth()) / rect.getHeight(), gAgentCamera.mHUDCurZoom,&options);
+    const auto cameraCaptured=[]
+    {return LLToolCamera::instanceExists() && LLToolCamera::getInstance()->hasMouseCapture();};
+    if(rlv_handler_t::isEnabled() && pick && cameraCaptured() && gKeyboard && (gKeyboard->currentMask(true)&MASK_ALT))pick.reset();
     if (!pick)
-        pick = mVulkanContext->world().pick(camera.center, camera.center + direction * distance, info.mPickTransparent,
+        pick = mVulkanContext->world().pick(rayStart, rayStart + direction * distance, options,
                                             distance * tangent / rect.getHeight());
-    if (!pick)
-        return false;
+    if(pick && (gTeleportDisplay || (rlv_handler_t::isEnabled() && gRlvHandler.hasBehaviour(RLV_BHVR_INTERACT))))
+    {
+        LLTool* current=nullptr;
+        if(LLToolMgr::instanceExists())
+        {
+            auto* manager=LLToolMgr::getInstance();
+            if(manager->nativeToolsReady())current=manager->nativeCurrentTool();
+        }
+        struct Tools
+        {
+            LLTool* current;
+            bool dragAndDrop()const{return LLToolDragAndDrop::instanceExists() && current==LLToolDragAndDrop::getInstance();}
+            bool cameraCaptured()const{return LLToolCamera::instanceExists() && LLToolCamera::getInstance()->hasMouseCapture();}
+            bool pie()const{return LLToolPie::instanceExists() && current==LLToolPie::getInstance();}
+        } tools{current};
+        if(!VSPickPolicy::interaction(tools,pick->face.object.id==gAgent.getID()))pick.reset();
+    }
+    if(pick && !pick->hud && RlvActions::hasBehaviour(RLV_BHVR_SETOVERLAY))
+    {
+        std::list<RlvOverlayEffect*> effects;
+        LLVfxManager::instance().getEffects<RlvOverlayEffect>(effects);
+        for(const auto* effect:effects)if(effect->getEnabled() && effect->hitTest(info.mMousePt)){pick.reset();break;}
+    }
+    // Icons have their own original camera-origin ray and compete by camera
+    // distance after ordinary world restrictions; HUD attachments stay peers.
+    const LLVector3 cameraAgent=gAgent.getPosAgentFromGlobal(from_region_handle(owner->handle())+LLVector3d(camera.center));
+    LLVector4a iconStart,iconEnd,iconIntersection;iconStart.load3(cameraAgent.mV);
+    const auto iconRayEnd=cameraAgent+direction*distance;iconEnd.load3(iconRayEnd.mV);
+    auto* icon=LLHUDIcon::intersectNative(iconStart,iconEnd,&iconIntersection);
+    if(icon)
+    {
+        LLVector4a iconDelta;iconDelta.setSub(iconIntersection,iconStart);
+        const auto worldPoint=pick?(pick->hud?pick->position:
+            gAgent.getPosAgentFromGlobal(from_region_handle(owner->handle())+LLVector3d(pick->position))):LLVector3::zero;
+        if(!pick || iconDelta.getLength3().getF32()<(worldPoint-cameraAgent).length())
+        {
+            info.mHUDIcon=icon;info.mHUDIconOwner=icon;info.mPickType=LLPickInfo::PICK_ICON;info.mPosGlobal=icon->getPositionGlobal();return true;
+        }
+    }
+    if(!pick)return false;
     const auto global=pick->hud?gAgent.getPosGlobalFromAgent(pick->position):
         from_region_handle(owner->handle())+LLVector3d(pick->position);
     const auto intersection=pick->hud?pick->position:gAgent.getPosAgentFromGlobal(global);
@@ -408,7 +475,7 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
     }
     info.mPickType           = pick->land?LLPickInfo::PICK_LAND:(flora?LLPickInfo::PICK_FLORA:LLPickInfo::PICK_OBJECT);
     info.mObjectID           = pick->face.object.id;
-    info.mObjectFace         = pick->land?-1:S32(pick->face.face);
+    info.mObjectFace         = (pick->land || pick->avatar)?-1:S32(pick->face.face);
     info.mGLTFNodeIndex      = pick->gltfNode;
     info.mGLTFPrimitiveIndex = pick->gltfPrimitive;
     info.mPickHUD            = pick->hud;
@@ -549,6 +616,7 @@ void LLViewerWindow::setNativeConnected(bool connected)
 {
     if (!mRootView || mNativeConnectedUI == connected) return;
     mNativeConnectedUI = connected;
+    if(!connected){mLastPick=LLPickInfo{};mPicks.clear();}
     if (!connected && LLToolPipette::instanceExists()) LLToolPipette::instance().setNativeActive(false);
     if (gConsole)
     {

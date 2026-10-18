@@ -47,6 +47,7 @@
 #include "llinitparam.h"
 #include "lltrace.h"
 #include "llsnapshotmodel.h"
+#include "llpointer.h"
 
 #include <boost/signals2.hpp>
 
@@ -128,6 +129,8 @@ public:
     S32             mGLTFNodeIndex = -1;
     S32             mGLTFPrimitiveIndex = -1;
     LLHUDIcon*      mHUDIcon;
+    // Pin the actual icon while a saved pick/context callback retains its borrow.
+    LLPointer<LLRefCount> mHUDIconOwner;
     LLVector3       mIntersection;
     LLVector2       mUVCoords;
     LLVector2       mSTCoords;

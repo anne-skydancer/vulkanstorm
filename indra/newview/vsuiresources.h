@@ -53,6 +53,7 @@ public:
     void releaseFontPages();
     void triangle(const std::array<std::array<float, 6>, 3>& physical_bottom_left);
     void rectangle(const LLRectf& physical_bottom_left,const LLColor4&);
+    void imageRectangle(const VSUIRenderer::Image&,const LLRectf& logical_bottom_left,const LLColor4&);
     void screenClip(const LLRect* logical_bottom_left);
 private:
     struct Impl;

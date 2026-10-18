@@ -606,3 +606,14 @@ LLSD VSUIResources::evidence() const
     result["rgba8"]=caps.rgba8;result["bgra8"]=caps.bgra8;result["depth32"]=caps.depth32;
     return result;
 }
+
+void VSUIResources::imageRectangle(const VSUIRenderer::Image& image,const LLRectf& rect,const LLColor4& color)
+{
+    auto& canvas=*mImpl;check(canvas.active,"Native image outside collection");
+    if(!image || rect.getWidth()<=0 || rect.getHeight()<=0)return;
+    VSUIRenderer::Packet packet;packet.image=image;packet.blend=VSUIRenderer::Blend::StraightAlpha;
+    packet.bounds={rect.mLeft,canvas.logical_height-rect.mTop,rect.mRight,canvas.logical_height-rect.mBottom};
+    packet.clip=canvas.clip;packet.sampling=VSUIRenderer::Sampling::Linear;
+    std::transform(color.mV,color.mV+4,packet.color.begin(),nativeVertexColor);
+    canvas.packets.push_back(std::move(packet));
+}

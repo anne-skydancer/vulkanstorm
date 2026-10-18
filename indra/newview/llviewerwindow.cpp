@@ -7600,7 +7600,8 @@ LLPickInfo::LLPickInfo()
       mHUDIcon(nullptr),
       mPickTransparent(false),
       mPickRigged(false),
-      mPickParticle(false)
+      mPickParticle(false),
+    mPickUnselectable(false)
 {
 }
 
@@ -7645,6 +7646,7 @@ void LLPickInfo::fetchResults()
         return;
     }
 #endif
+    mHUDIcon=nullptr;mHUDIconOwner=nullptr;
     S32 face_hit = -1;
 
     LLVector4a intersection, normal;
@@ -7714,7 +7716,7 @@ void LLPickInfo::fetchResults()
         icon_dist < delta.getLength3().getF32()))
     {
         // was this name referring to a hud icon?
-        mHUDIcon = hit_icon;
+        mHUDIcon = hit_icon;mHUDIconOwner=hit_icon;
         mPickType = PICK_ICON;
         mPosGlobal = mHUDIcon->getPositionGlobal();
 

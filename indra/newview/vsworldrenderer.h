@@ -104,7 +104,7 @@ public:
     bool       publishMesh(Mesh&, const std::vector<Vertex>&, const std::vector<unsigned>&, Topology = Topology::Triangles,
                            unsigned attributes=VSWorldContracts::Position|VSWorldContracts::Normal|VSWorldContracts::UV0);
     void draw(Diligent::ITextureView*, unsigned width, unsigned height,
-              const View&, const std::vector<Packet>&);
+              const View&, const std::vector<Packet>&,const std::function<void()>& beforeHud = {});
     void retire();
     Statistics statistics() const;
     static VSWorldContracts::Geometry geometryDescription(const Mesh&);

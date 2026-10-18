@@ -786,7 +786,7 @@ bool VSWorldRenderer::intersect(const Mesh& mesh, const std::array<float, 3>& st
     }
     return found;
 }
-void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,const View& view,const std::vector<Packet>& packets)
+void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,const View& view,const std::vector<Packet>& packets,const std::function<void()>& beforeHud)
 {
     const auto started=std::chrono::steady_clock::now();
     mImpl->statistics={};mImpl->statistics.meshUploads=mImpl->pendingMeshUploads;
@@ -796,7 +796,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
     requireWorld(target->GetTexture()->GetDesc().Width==width && target->GetTexture()->GetDesc().Height==height,"World extent mismatch");
     for (float f:view.projection) requireWorld(std::isfinite(f),"Non-finite world camera");
     retire();
-    if (packets.empty()) return;
+    if (packets.empty()) {if(beforeHud)beforeHud();return;}
     auto* context=mImpl->context.RawPtr();
     if (!mImpl->depth || mImpl->depth->GetDesc().Width!=width || mImpl->depth->GetDesc().Height!=height)
     {
@@ -861,6 +861,18 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
     const std::array<float, 16> hudProjection{ 0, 0, .01f * zoom, 0, -2.f * zoom * height / width, 0, 0, 0, 0, 2.f * zoom,
                                                0, 0, 0,           0, .01f * hudShift - 1.f,        1 };
     bool                        drawingHud = false;
+    bool composedBeforeHud=false;
+    const auto composeBeforeHud=[&]
+    {
+        if(composedBeforeHud)return;
+        composedBeforeHud=true;
+        if(beforeHud)
+        {
+            beforeHud();
+            context->SetRenderTargets(1,&target,depth,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            context->SetViewports(1,&viewport,width,height);
+        }
+    };
     for (const auto& p:submitted.packets)
     {
         requireWorld(p.mesh && p.mesh->owner.RawPtr()==mImpl->device.RawPtr(),"World mesh belongs to another device");
@@ -903,6 +915,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         {
             if (!drawingHud)
             {
+                composeBeforeHud();
                 context->ClearDepthStencil(depth, CLEAR_DEPTH_FLAG, 1, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
                 drawingHud = true;
             }
@@ -1014,6 +1027,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         DrawIndexedAttribs draw{};draw.NumIndices=p.mesh->count;draw.IndexType=VT_UINT32;draw.Flags=DRAW_FLAG_VERIFY_ALL;
         context->DrawIndexed(draw);submitted.draws.push_back(std::move(resources));++mImpl->statistics.draws;
     }
+    composeBeforeHud();
     // Recorded draws and submission packets own the buffers through completion;
     // the CPU context must not retain uncharged last-bound geometry afterwards.
     context->SetVertexBuffers(0, 0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE,

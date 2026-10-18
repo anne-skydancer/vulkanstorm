@@ -80,6 +80,7 @@ public:
     static void reshapeAll();
 
     static void cleanupHUDObjects();
+    static void cleanupUnreferenced();
 
     enum
     {
