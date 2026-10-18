@@ -242,6 +242,7 @@
 #include "fsnearbychatvoicemonitor.h"
 #include "llfavoritesbar.h"
 #include "llfloater.h"
+#include "llfloaterscriptrecover.h"
 #include "llfloaterabout.h"
 #include "llhudview.h"
 #include "lltabcontainer.h"
@@ -328,7 +329,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 t == typeid(LLFloaterTexturePicker) || t == typeid(LLFloaterColorPicker) ||
                 LLFloaterPreference::isPrivacyPanelType(t) ||
                 t == typeid(FSFloaterGroup) || t == typeid(FSFloaterGroupTitles) || t == typeid(VSGroupSearch) || t == typeid(LLPanelDirGroups) || t == typeid(LLSearchComboBox) ||
-                t == typeid(LLPreviewLSL) || t == typeid(LLScriptEdCore) || t == typeid(LLScriptEditor) ||
+                t == typeid(LLFloaterScriptRecover) || t == typeid(LLPreviewLSL) || t == typeid(LLScriptEdCore) || t == typeid(LLScriptEditor) ||
                 t == typeid(FSLSLPreProcViewer) || t == typeid(LLFloaterGotoLine) || t == typeid(LLFloaterScriptEdPrefs) || t == typeid(LLPreviewSound) || t == typeid(LLFloaterProperties) || t == typeid(LLFloaterItemProperties) ||
                 t == typeid(LLSidepanelItemInfo) || t == typeid(LLFloaterChangeItemThumbnail) || t == typeid(LLFloaterImagePreview) || t == typeid(LLFloaterSoundPreview) || t == typeid(LLFloaterNameDesc) || t == typeid(LLUploadDialog) || t == typeid(LLFloaterProfile) || LLFloaterDisplayNameUtil::isNativeFloaterType(t) || LLFloaterPayUtil::isNativeFloaterType(t) ||
                 t == typeid(LLPanelProfile) ||
@@ -404,7 +405,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "preview_texture" || name == "preview_notecard" || name == "preview_conversation" || name == "script_floater" ||
             // Exact reviewed CPU inventory/account owners; scene/task variants stay excluded.
             name == "fs_partial_inventory" || name == "properties" || name == "item_properties" ||
-            name == "change_item_thumbnail" || name == "preview_sound" || name == "preview_script" ||
+            name == "change_item_thumbnail" || name == "preview_sound" || name == "preview_script" || name == "script_recover" ||
             name == "script_colors" || name == "upload_image" || name == "upload_sound" ||
             name == "pay_resident" || name == "display_name" || name == "animation_overrider" || name == "camera_presets" || name == "save_camera_preset" || name == "camera" || name == "fs_camera_small" || name == "phototools_camera"; },
         [](std::string_view name) { return

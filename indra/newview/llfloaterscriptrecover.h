@@ -18,6 +18,8 @@
 #define LL_FLOATERSCRIPTRECOVER_H
 
 #include "llfloater.h"
+#include <functional>
+#include <memory>
 
 // ============================================================================
 // LLFloaterScriptRecover
@@ -42,13 +44,14 @@ public:
 protected:
     void onBtnCancel();
     void onBtnRecover();
+    std::function<bool()> mAccountCurrent;
 };
 
 // ============================================================================
 // LLScriptRecoverQueue
 //
 
-class LLScriptRecoverQueue
+class LLScriptRecoverQueue : public std::enable_shared_from_this<LLScriptRecoverQueue>
 {
     friend class LLCreateRecoverScriptCallback;
     friend class LLFloaterScriptRecover;
@@ -57,16 +60,24 @@ protected:
 
 public:
     static void recoverIfNeeded();
+    static void start(const LLSD& files);
+    static void resetAccount();
 
 protected:
     bool recoverNext();
 
-    void onCreateScript(const LLUUID& idItem);
+    void onCreateScript(const LLUUID& idItem, const std::string& path);
+    void failed(const std::string& path);
+    void finish();
+    bool current() const;
     void onSavedScript(LLUUID itemId, LLUUID newAssetId, LLUUID newItemId, LLSD response);
 
 protected:
     typedef std::map<std::string, LLSD> filename_queue_t;
     filename_queue_t m_FileQueue;
+    std::function<bool()> mAccountCurrent;
+    std::string mPendingPath;
+    bool mRetired = false;
 };
 
 // ============================================================================
