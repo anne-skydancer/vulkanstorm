@@ -58,6 +58,8 @@ struct VSReceivedChatContext
 };
 // Original RLVa receive/name/location policy, before translation or delivery.
 bool vs_filter_received_chat(LLChat&, std::string&, const LLUUID& owner, const VSReceivedChatContext&);
+enum class VSOwnerChatResult { NotCommand, Consumed, Display };
+VSOwnerChatResult vs_process_owner_chat(LLChat&, std::string&, const std::function<bool()>& sourceAllowed, const std::function<bool()>& current = {});
 class LLColor4;
 class LLInventoryObject;
 class LLInventoryItem;
