@@ -1,5 +1,5 @@
 {
-  "source_commit": "167b693ac79fe68807f6f187e9ca7be9c0e32ce3",
+  "source_commit": "74620e4483896dcaf307417e631e6824cc42f85f",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -701,7 +701,7 @@
       ]
     },
     "indra/newview/vsvulkancontext.cpp": {
-      "sha256": "a0c51256ba697dc1a1fe7f4972370024918417e93af4291c1e9ce73952b8ee40",
+      "sha256": "8272767564a6f49ded0cecaab0e8a92cad6f8f19900fe0840d5df9f79acd4d88",
       "anchors": [
         "VSVulkanContext::VSVulkanContext",
         "CreateDeviceAndContextsVk",
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "1b8e02228b5cce391ab1fcc85252e6cea251b79b64b22845eb3eb47fc3e6da09",
+      "sha256": "e19d492d7062bec7699ffe600ea4d4ebb710627be0317a961e0f1594b167d6d4",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -841,7 +841,7 @@
       ]
     },
     "indra/newview/vsnativeim.cpp": {
-      "sha256": "69dd1fe72954d6e5bbe19db66edf01a7f97227cde6ccbaa17a284d3722547920",
+      "sha256": "d856a50b67e8a9b7998dd83ea6026fadec656ddb1efe87451d6147dbc043b1bf",
       "anchors": [
         "vs_native_im_receive",
         "vs_native_im_guard",
@@ -867,7 +867,7 @@
       ]
     },
     "indra/newview/vsnativeimreplay.cpp": {
-      "sha256": "a8d24e6b144e8096599b8abbde74ffe9a96a3ad3d270b6f1c180c8bdf658c603",
+      "sha256": "3c27304308b03b5f20b290c95aa19b06e4d6e560eb967273303dc1bcf070ec38",
       "anchors": [
         "vs_native_im_replay_tick",
         "vs_native_im_replay_expired",
