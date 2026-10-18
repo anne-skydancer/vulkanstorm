@@ -11,6 +11,7 @@
 #include "vsuiresources.h"
 #include "vsworldrenderer.h"
 #include "vsworldscene.h"
+#include "vsparcelpresentation.h"
 #include "vsnativesession.h"
 #include "llagentcamera.h"
 #include "llviewercamera.h"
@@ -155,6 +156,7 @@ struct VSVulkanContext::Impl
     Diligent::RefCntAutoPtr<Diligent::ITexture>       replayTarget;
     std::unique_ptr<VSUIRenderer>                     renderer;
     std::unique_ptr<VSUIResources>                    resources;
+    std::unique_ptr<VSParcelPresentation> parcelPresentation;
     std::unique_ptr<VSWorldRenderer>                  worldRenderer;
     std::unique_ptr<VSWorldScene>                     worldScene;
     std::string                                       adapter;
@@ -267,6 +269,7 @@ struct VSVulkanContext::Impl
             resources = std::make_unique<VSUIResources>(*renderer);
             worldRenderer = std::make_unique<VSWorldRenderer>(device, context);
             worldScene = std::make_unique<VSWorldScene>(*worldRenderer, *resources);
+            parcelPresentation=std::make_unique<VSParcelPresentation>(*worldRenderer,*resources,*worldScene);
         }
         catch (...)
         {
@@ -281,6 +284,7 @@ struct VSVulkanContext::Impl
             context->SetRenderTargets(0, nullptr, nullptr, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             context->WaitForIdle();
         }
+        parcelPresentation.reset();
         worldScene.reset();
         if (worldRenderer) { worldRenderer->retire(); worldRenderer.reset(); }
         resources.reset();
@@ -408,6 +412,7 @@ struct VSVulkanContext::Impl
             const auto packetStart = profileFrames ? ProfileClock::now() : ProfileClock::time_point{};
 #endif
             auto scene = worldScene->packets(eye, distance, size.mY, size.mX);
+            parcelPresentation->append(*session,view,size.mX,size.mY,scene);
 #if VS_VULKAN_DIAGNOSTICS
             const auto submitStart = profileFrames ? ProfileClock::now() : ProfileClock::time_point{};
             if (profileFrames)
@@ -425,6 +430,8 @@ struct VSVulkanContext::Impl
 #if VS_VULKAN_DIAGNOSTICS
         const auto uiStart = profileFrames ? ProfileClock::now() : ProfileClock::time_point{};
 #endif
+        if(const auto owner=VSNativeSession::active(); !owner || owner->phase()!=VSNativeSession::Phase::Connected)
+            parcelPresentation->reset();
         if (sceneObserver) sceneObserver(device, context, target, size.mX, size.mY);
         resources->begin(size.mX, size.mY, dpi);
 #if VS_VULKAN_DIAGNOSTICS

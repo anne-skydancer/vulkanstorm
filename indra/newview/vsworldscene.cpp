@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsregionlimits.h"
 #include "vsworldscene.h"
+#include "vsparcelgeometry.h"
 #include "llcamera.h"
 #include "vsmaterialassets.h"
 #include "vsobjectmedia.h"
@@ -509,6 +510,7 @@ struct VSWorldScene::Impl
     };
     std::shared_ptr<const VSResourceBudget::Reservation> groundCandidateResidency;
     std::optional<std::map<U64, GroundPublication>>      groundCandidate;
+    U64 terrainRevision=0;
     unsigned patchSize=0;
     std::array<LLUUID,4> terrainTextures;
     std::array<float,4> terrainStarts{},terrainRanges{};
@@ -631,6 +633,7 @@ struct VSWorldScene::Impl
                     if (object.pcode == LL_PCODE_LEGACY_GRASS)
                         object.dirty = true;
             }
+        if (!decoded.empty()) ++terrainRevision;
         return true;
     }
     void dirtyTerrainNeighbours()
@@ -1284,6 +1287,7 @@ void VSWorldScene::reset(bool preserveAssets)
 {
     mNeighbours.clear();if (!preserveAssets) mImpl->assets->reset();
     mImpl->avatars.clear();
+    ++mImpl->terrainRevision;
     mImpl->ground.clear();
     mImpl->dirtyTerrainNeighbours();
     mImpl->patchSize                      = 0;
@@ -1297,6 +1301,51 @@ void VSWorldScene::reset(bool preserveAssets)
     mImpl->accepted=mImpl->rejected=mImpl->unsupported=0;
     if(mRoot && !preserveAssets) {mImpl->budgets->account.setNull();mImpl->budgets->accountGeneration=0;}
 }
+std::optional<U64> VSWorldScene::terrainRevision(const LLHost& host) const
+{
+    if (host!=mImpl->host)
+    {
+        const auto found=mNeighbours.find(host);
+        return found==mNeighbours.end()?std::nullopt:found->second->terrainRevision(host);
+    }
+    return mImpl->retired?std::nullopt:std::optional<U64>(mImpl->terrainRevision);
+}
+std::optional<VSWorldScene::TerrainField> VSWorldScene::terrainField(const LLHost& host) const
+{
+    if (host!=mImpl->host)
+    {
+        const auto found=mNeighbours.find(host);
+        return found==mNeighbours.end()?std::nullopt:found->second->terrainField(host);
+    }
+    if (mImpl->retired) return {};
+    TerrainField result;
+    result.revision=mImpl->terrainRevision;result.incarnation=mImpl->incarnation;
+    result.width=mImpl->width;result.height=mImpl->regionHeight;
+    const auto weak=std::weak_ptr<Impl>(mImpl);
+    const auto revision=result.revision,incarnation=result.incarnation;
+    result.current=[weak,revision,incarnation]
+    {
+        const auto owner=weak.lock();
+        return owner && !owner->retired && owner->incarnation==incarnation && owner->terrainRevision==revision;
+    };
+    result.sample=[weak,revision,incarnation](float x,float y)->std::optional<float>
+    {
+        const auto owner=weak.lock();
+        if (!owner || owner->retired || owner->incarnation!=incarnation || owner->terrainRevision!=revision ||
+            !std::isfinite(x) || !std::isfinite(y) || x<0 || y<0 || x>=owner->width || y>=owner->regionHeight) return {};
+        bool received=true;
+        const float value=VSParcelGeometry::terrainHeight(x,y,1.f,S32(owner->width),S32(owner->regionHeight),
+            [&received,&owner](S32 column,S32 row)
+            {
+                const float height=owner->heightLocal(column,row,std::numeric_limits<float>::quiet_NaN());
+                received=received && std::isfinite(height);
+                return height;
+            });
+        return received && std::isfinite(value)?std::optional<float>(value):std::nullopt;
+    };
+    return result;
+}
+
 bool VSWorldScene::openRegion(const LLHost& host,U64 handle,U32 width,U32 height,U64 incarnation)
 {
     if (!host.isOk() || width<16 || height<16 || width>65536 || height>65536 || !incarnation) return false;

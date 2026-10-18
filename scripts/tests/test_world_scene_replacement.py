@@ -282,6 +282,7 @@ struct Scene;
 struct Budgets {VSResourceBudget terrainBytes{sizeof(Ground)*2};std::map<int,std::weak_ptr<Scene>> regions;};
 struct Scene {
  bool retired=false;
+ U64 terrainRevision=0;
  U32 width=256,regionHeight=256;unsigned patchSize=0;std::map<U64,Ground> ground;
  struct Object {int pcode=0;bool dirty=false;};std::map<U32,Object> objects;
  std::shared_ptr<Budgets> budgets=std::make_shared<Budgets>();
@@ -293,7 +294,7 @@ int main(){
  neighbor->objects[4]={LL_PCODE_LEGACY_GRASS,false};scene.budgets->regions[1]=neighbor;
  auto retired=std::make_shared<Scene>();retired->retired=true;retired->ground[0].dirty=false;
  scene.budgets->regions[2]=retired;
- assert(scene.terrain({},0));assert(scene.ground.size()==1);
+ assert(scene.terrain({},0));assert(scene.ground.size()==1 && scene.terrainRevision==1);
  assert(neighbor->ground.at(0).dirty&&neighbor->objects.at(4).dirty&&!retired->ground.at(0).dirty);
  auto& first=scene.ground.at(0);assert(!first.mesh&&first.dirty&&first.heights[0]==2);
  first.mesh=std::make_shared<int>(99);first.dirty=false;
@@ -302,16 +303,19 @@ int main(){
  assert(scene.terrain({},0));
  assert(scene.ground.at(0).mesh==mesh&&scene.ground.at(0).residency==lease);
  assert(scene.ground.at(0).dirty&&scene.ground.at(0).heights[0]==3);
- assert(scene.budgets->terrainBytes.used()==sizeof(Ground));
+ assert(scene.budgets->terrainBytes.used()==sizeof(Ground) && scene.terrainRevision==2);
  patch.x=1;VSTerrain::supplied={patch};assert(scene.terrain({},0));
  assert(!scene.ground.at(U64(16)<<32).mesh&&scene.ground.at(U64(16)<<32).dirty);
  assert(scene.ground.at(0).mesh==mesh&&scene.budgets->terrainBytes.used()==sizeof(Ground)*2);
+ const auto acceptedRevision=scene.terrainRevision;
  // Refused new-patch admission leaves previously admitted content unchanged.
  scene.ground.at(0).dirty=false;patch.x=2;VSTerrain::supplied={patch};
  assert(!scene.terrain({},0)&&scene.ground.size()==2&&!scene.ground.at(0).dirty);
+ assert(scene.terrainRevision==acceptedRevision);
  assert(scene.ground.at(0).mesh==mesh&&scene.ground.at(0).residency==lease);
  patch.x=0;patch.offset=std::numeric_limits<float>::quiet_NaN();VSTerrain::supplied={patch};
  assert(!scene.terrain({},0)&&scene.ground.at(0).heights[0]==3);
+ assert(scene.terrainRevision==acceptedRevision);
  assert(scene.ground.at(0).mesh==mesh&&scene.ground.at(0).residency==lease);
 }
 '''.replace('TERRAIN', terrain))

@@ -88,7 +88,7 @@ struct VSWorldRenderer::Impl
     RefCntAutoPtr<IDeviceContext> context;
     RefCntAutoPtr<IShader> vertex, fragment;
     RefCntAutoPtr<IShader> terrainFragments[4];
-    RefCntAutoPtr<IPipelineState> pipelines[2][3][3][2][2][5];
+    RefCntAutoPtr<IPipelineState> pipelines[2][4][3][2][2][5];
     RefCntAutoPtr<ITexture> depth, white, flatNormal;
     RefCntAutoPtr<ISampler> terrainClamp;
     RefCntAutoPtr<IFence> fence;
@@ -141,10 +141,10 @@ struct VSWorldRenderer::Impl
         device->CreateSampler(sampler,&terrainClamp);
         requireWorld(terrainClamp!=nullptr,"Terrain clamp sampler creation failed");
     }
-    IPipelineState* pipeline(TEXTURE_FORMAT format, bool alpha, bool background, Topology topology, bool doubleSided, bool terrain, unsigned terrainProgram)
+    IPipelineState* pipeline(TEXTURE_FORMAT format, bool alpha, bool background, Topology topology, bool doubleSided, bool terrain, unsigned terrainProgram, bool depthWriteAlpha)
     {
         requireWorld(format==TEX_FORMAT_RGBA8_UNORM || format==TEX_FORMAT_BGRA8_UNORM,"Unsupported world target format");
-        auto& result = pipelines[format == TEX_FORMAT_BGRA8_UNORM][background ? 2 : unsigned(alpha)][unsigned(topology)][doubleSided][terrain][terrainProgram];
+        auto& result = pipelines[format == TEX_FORMAT_BGRA8_UNORM][background ? 2 : alpha ? (depthWriteAlpha ? 3 : 1) : 0][unsigned(topology)][doubleSided][terrain][terrainProgram];
         if (result) return result;
         const char* vs = R"(
 layout(location=0) in vec3 position;
@@ -162,7 +162,35 @@ layout(location=4) out vec2 texUV1;
 layout(location=5) out vec4 worldTangent;
 layout(location=6) out vec4 faceColor;
 void main() {
-    vec4 p=material.w>0.5 ? vec4(position,1) : projection*vec4(position+regionOffset.xyz,1);
+    vec4 p;
+    if(material.w>1.5) {
+        // Triangle-encoded wide lines use actual world endpoints, so camera
+        // movement only updates ordinary draw constants, never their meshes.
+        vec4 a=projection*vec4(position+regionOffset.xyz,1);
+        vec4 b=projection*vec4(normal+regionOffset.xyz,1);
+        float first=0.0,last=1.0;
+        bool visible=true;
+        for(int axis=0;axis<3;++axis) for(int side=0;side<2;++side) {
+            float sign=side==0?-1.0:1.0;
+            float av=a.w+sign*a[axis],bv=b.w+sign*b[axis];
+            if(av<0.0 && bv<0.0) visible=false;
+            if(av<0.0 && bv>=0.0) first=max(first,av/(av-bv));
+            if(bv<0.0 && av>=0.0) last=min(last,av/(av-bv));
+        }
+        vec4 initial=a;
+        a=mix(initial,b,first);b=mix(initial,b,last);
+        p=vec4(2,2,2,1);
+        if(visible && first<=last && a.w>0.0 && b.w>0.0) {
+            vec3 start=a.xyz/a.w,end=b.xyz/b.w;
+            vec2 delta=(end.xy-start.xy)*normalOcclusion.yz;
+            float distance=length(delta);
+            if(distance>1e-12) {
+                vec2 offset=vec2(-delta.y,delta.x)/distance*normalOcclusion.x/normalOcclusion.yz;
+                p=vec4(mix(start,end,uv.x),1);
+                p.xy+=uv.y*offset;
+            }
+        }
+    } else p=material.w>0.5 ? vec4(position,1) : projection*vec4(position+regionOffset.xyz,1);
     p.z=(p.z+p.w)*0.5;
     gl_Position=p; texUV=uv; texUV1=uv1; worldTangent=tangent; faceColor=vertexColor; worldNormal=normal; worldPosition=position+regionOffset.xyz;
     if(surfaceFlags.x>.5 && dot(tangent.xyz,tangent.xyz)>1e-20) {
@@ -222,7 +250,7 @@ vec3 mappedNormal(vec2 uv) {
     return normalize(mat3(t*inversesqrt(scale),-b*inversesqrt(scale),n)*value);
 }
 void main() {
-    if (material.w>0.5) {
+    if (material.w>0.5 && material.w<1.5) {
         result=vec4(mix(vec3(0.65,0.8,0.95),vec3(0.08,0.22,0.48),clamp(texUV.y,0.0,1.0)),1);
         return;
     }
@@ -301,7 +329,7 @@ void main() {
         // The shared terrain strip producer uses the opposite winding from
         // LLVolume faces. Preserve its indices and front-face normal semantics.
         gp.RasterizerDesc.FrontCounterClockwise=terrain;
-        gp.DepthStencilDesc.DepthEnable=!background;gp.DepthStencilDesc.DepthWriteEnable=!alpha && !background;
+        gp.DepthStencilDesc.DepthEnable=!background;gp.DepthStencilDesc.DepthWriteEnable=(!alpha || depthWriteAlpha) && !background;
         gp.DepthStencilDesc.DepthFunc=COMPARISON_FUNC_LESS_EQUAL;
         const LayoutElement layout[]={{0,0,3,VT_FLOAT32,false},{1,0,3,VT_FLOAT32,false},{2,0,2,VT_FLOAT32,false},
             {3,0,2,VT_FLOAT32,false},{4,0,4,VT_FLOAT32,false},{5,0,4,VT_FLOAT32,false}};
@@ -604,6 +632,9 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
                              return !a.hud;
                          if (a.background != b.background)
                              return a.background;
+                         if (a.overlay != b.overlay)
+                             return !a.overlay;
+                         if (a.overlay) return false; // Preserve shared overlay paint order.
                          if (a.alpha != b.alpha)
                              return !a.alpha;
                          return a.alpha ? a.distanceSquared > b.distanceSquared : false;
@@ -638,15 +669,17 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         requireWorld(p.mesh && p.mesh->owner.RawPtr()==mImpl->device.RawPtr(),"World mesh belongs to another device");
         requireWorld(!p.image || VSUIRenderer::imageOwnedBy(p.image,mImpl->device),"World image belongs to another device");
         for (float f:p.color) requireWorld(std::isfinite(f),"Non-finite world material");
-        auto* pipeline = mImpl->pipeline(target->GetTexture()->GetDesc().Format, p.alpha, p.background, p.mesh->topology, !p.surface || p.doubleSided || p.background, p.terrain, p.terrainMaterial?unsigned(std::clamp(int(p.terrainMaterial->detail),-3,0)+4):0u);
+        auto* pipeline = mImpl->pipeline(target->GetTexture()->GetDesc().Format, p.alpha, p.background, p.mesh->topology, !p.surface || p.doubleSided || p.background, p.terrain, p.terrainMaterial?unsigned(std::clamp(int(p.terrainMaterial->detail),-3,0)+4):0u,p.depthWriteAlpha);
         for (float f:p.regionOffset) requireWorld(std::isfinite(f),"Non-finite world region translation");
         requireWorld(std::isfinite(p.alphaCutoff) && p.alphaCutoff >= 0 && p.alphaCutoff <= 1, "Invalid world alpha cutoff");
         Constants constants{ view.projection,
                              view.sun,
                              view.ambient,
                              p.color,
-                             { p.fullbright ? 1.f : 0.f, p.masked ? 1.f : 0.f, p.alphaCutoff, p.background ? 1.f : 0.f },
+                             { p.fullbright ? 1.f : 0.f, p.masked ? 1.f : 0.f, p.alphaCutoff, p.background ? 1.f : p.screenLinePixels>0 ? 2.f : 0.f },
                              p.regionOffset };
+        requireWorld(std::isfinite(p.screenLinePixels) && p.screenLinePixels>=0,"Invalid native screen-line width");
+        if(p.screenLinePixels>0) constants.normalOcclusion={p.screenLinePixels,float(width),float(height),0};
         if (p.surface)
         {
             const auto& surface=*p.surface;
@@ -756,7 +789,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         {
         auto* texture=resources.binding->GetVariableByName(SHADER_TYPE_PIXEL,"g_Texture");
         requireWorld(texture!=nullptr,"World texture binding missing");
-        texture->Set(p.image ? VSUIRenderer::imageView(p.image,p.surface?p.surface->samplers[0]:VSWorldContracts::Sampler{}) : mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
+        texture->Set(p.image ? VSUIRenderer::imageView(p.image,p.surface?p.surface->samplers[0]:p.imageSampler) : mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
                      SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
         const char* channels[]{"g_Normal","g_ORM","g_Emissive","g_Occlusion"};
         for (unsigned channel=0;channel<VSMaterial::ChannelCount-1;++channel)

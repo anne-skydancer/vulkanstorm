@@ -20,6 +20,34 @@ import run_vulkan_session_replay as session_runner
 from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment, conference_start_observed
 
 class SessionEvidenceTests(unittest.TestCase):
+    def test_parcel_rectangle_requires_independent_actual_pixels(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / 'parcel/rectangle.rgba'
+            path.parent.mkdir()
+            pixels = bytearray(bytes((255, 0, 255, 255)) * (64 * 64))
+            pixels[(32 * 64 + 32) * 4:(32 * 64 + 32) * 4 + 4] = bytes((255, 92, 163, 255))
+            pixels[0:4] = bytes((255, 255, 0, 255))
+            report = {'parcel_rectangle': dict(file='parcel/rectangle.rgba', width=64,
+                height=64, pixels_verified=True, opaque_post_pixels=1)}
+            self.assertFalse(session_runner.parcel_rectangle_contracts_passed(report, root))
+            path.write_bytes(pixels)
+            self.assertTrue(session_runner.parcel_rectangle_contracts_passed(report, root))
+            for key, value in (('file', '../rectangle.rgba'), ('width', 65),
+                               ('pixels_verified', False), ('opaque_post_pixels', 2)):
+                changed = copy.deepcopy(report)
+                changed['parcel_rectangle'][key] = value
+                self.assertFalse(session_runner.parcel_rectangle_contracts_passed(changed, root))
+            path.write_bytes(pixels[:-1])
+            self.assertFalse(session_runner.parcel_rectangle_contracts_passed(report, root))
+            pixels[(32 * 64 + 32) * 4 + 1] = 0
+            path.write_bytes(pixels)
+            self.assertFalse(session_runner.parcel_rectangle_contracts_passed(report, root))
+            pixels[(32 * 64 + 32) * 4 + 1] = 92
+            pixels[0:4] = bytes((255, 0, 255, 255))
+            path.write_bytes(pixels)
+            self.assertFalse(session_runner.parcel_rectangle_contracts_passed(report, root))
+
     def test_default_environment_uses_exact_shared_asset_bytes(self):
         with tempfile.TemporaryDirectory() as temporary, SimulatorHTTP() as server:
             source = Path(temporary) / 'default-environment.llsd'

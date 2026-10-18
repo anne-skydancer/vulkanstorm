@@ -23,7 +23,7 @@ namespace
 void check(bool condition,const char* text) { if (!condition) throw std::runtime_error(text); }
 VSWorldContracts::ImageRole imageRole(const std::string& key)
 { return key.compare(0, 17, "avatar-composite:") == 0 ? VSWorldContracts::ImageRole::AvatarComposite
-                      : (key.compare(0, 7, "remote:") == 0 || key.compare(0, 17, "gltf-scene-image:") == 0)
+                      : (key.compare(0, 7, "remote:") == 0 || key.compare(0, 17, "gltf-scene-image:") == 0 || key.compare(0, 13, "world-static:") == 0)
                           ? VSWorldContracts::ImageRole::RemoteAsset
                           : key.compare(0, 6, "media:") == 0 ? VSWorldContracts::ImageRole::Media
                           : VSWorldContracts::ImageRole::CoreUI; }

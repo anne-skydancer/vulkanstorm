@@ -118,16 +118,16 @@ protected:
     static LLParcelSelectionObserver* sObserver;
     static S32 sLastTab;
 
-    LLTabContainer*         mTabLand;
-    LLPanelLandGeneral*     mPanelGeneral;
-    LLPanelLandObjects*     mPanelObjects;
-    LLPanelLandOptions*     mPanelOptions;
-    LLPanelLandAudio*       mPanelAudio;
-    LLPanelLandMedia*       mPanelMedia;
-    LLPanelLandAccess*      mPanelAccess;
-    LLPanelLandCovenant*    mPanelCovenant;
-    LLPanelLandExperiences* mPanelExperiences;
-    LLPanelLandEnvironment *mPanelEnvironment;
+    LLTabContainer*         mTabLand = nullptr;
+    LLPanelLandGeneral*     mPanelGeneral = nullptr;
+    LLPanelLandObjects*     mPanelObjects = nullptr;
+    LLPanelLandOptions*     mPanelOptions = nullptr;
+    LLPanelLandAudio*       mPanelAudio = nullptr;
+    LLPanelLandMedia*       mPanelMedia = nullptr;
+    LLPanelLandAccess*      mPanelAccess = nullptr;
+    LLPanelLandCovenant*    mPanelCovenant = nullptr;
+    LLPanelLandExperiences* mPanelExperiences = nullptr;
+    LLPanelLandEnvironment *mPanelEnvironment = nullptr;
 
     LLSafeHandle<LLParcelSelection> mParcel;
 

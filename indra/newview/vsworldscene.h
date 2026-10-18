@@ -76,6 +76,16 @@ public:
     };
     std::vector<MapObjectSnapshot> mapObjectSnapshots() const;
     std::shared_ptr<const VSResourceBudget::Reservation> reserveSpatialBytes(std::size_t);
+    struct TerrainField
+    {
+        U64 revision=0,incarnation=0;
+        U32 width=0,height=0;
+        std::function<bool()> current;
+        std::function<std::optional<float>(float,float)> sample;
+    };
+    std::optional<U64> terrainRevision(const LLHost&) const;
+    std::optional<TerrainField> terrainField(const LLHost&) const;
+
     struct Pick
     {
         FaceHandle           face;

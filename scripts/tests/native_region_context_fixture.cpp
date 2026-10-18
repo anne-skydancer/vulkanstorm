@@ -11,7 +11,7 @@
 #define VS_NATIVE_VULKAN 1
 using F32=float;using F64=double;using U64=unsigned long long;using U32=unsigned;using U8=unsigned char;using S32=int;using LLHost=int;
 constexpr float PARCEL_GRID_STEP_METERS=4;constexpr U8 PARCEL_WEST_LINE=64,PARCEL_SOUTH_LINE=128;
-constexpr int VX=0,VY=1,VZ=2;constexpr U64 REGION_FLAGS_ALLOW_DAMAGE=1,REGION_FLAGS_BLOCK_FLY=2,REGION_FLAGS_ALLOW_VOICE=4,REGION_FLAGS_RESTRICT_PUSHOBJECT=8;
+constexpr int VX=0,VY=1,VZ=2;constexpr U64 REGION_FLAGS_ALLOW_DAMAGE=1,REGION_FLAGS_BLOCK_FLY=2,REGION_FLAGS_ALLOW_VOICE=4,REGION_FLAGS_RESTRICT_PUSHOBJECT=8,REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE=16;
 struct LLUUID{int value=0;bool operator==(const LLUUID& o)const{return value==o.value;}bool operator!=(const LLUUID& o)const{return !(*this==o);}bool operator<(const LLUUID& o)const{return value<o.value;}};
 struct LLVector3d;
 struct LLVector3{float mV[3]{};LLVector3()=default;explicit LLVector3(const LLVector3d&);};
@@ -49,6 +49,9 @@ int main(){
  auto owner=std::make_shared<VSNativeSession>();VSNativeSession::selected=owner;owner->mCircuits[1]={};
  auto& circuit=owner->mCircuits.at(1);circuit.flags=3;circuit.metadata.billableFactor=0;circuit.metadata.billableKnown=true;circuit.metadata.productName="Mainland";circuit.metadata.productKnown=true;circuit.objectCapacityKnown=true;
  auto context=vs_current_region_context();assert(context && context->current() && context->getWidth()==512 && context->getHeight()==256);assert(context->billableKnown() && context->getBillableFactor()==0 && context->objectCapacityKnown() && context->getMaxTasks()==0);assert(context->getLocalizedSimProductName()=="localized-Mainland");assert(context->getAllowDamage() && context->getBlockFly());
+ assert(!context->getAllowEnvironmentOverride());circuit.flags|=REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE;
+ assert(vs_current_region_context()->getAllowEnvironmentOverride());circuit.flags&=~REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE;
+ assert(!vs_current_region_context()->getAllowEnvironmentOverride());
  assert(context->pointInRegionGlobal({1000,2000,-2000}) && context->pointInRegionGlobal({1511.99,2255.99,10000}));assert(!context->pointInRegionGlobal({1512,2000,0}) && !context->pointInRegionGlobal({1000,2256,0}));assert(!vs_region_context(LLVector3d(1600,2000,0)) && vs_region_context(LLVector3d(1500,2000,0)));assert(vs_region_context(LLUUID{10}) && !vs_region_context(LLUUID{99}));
  assert(context->getCapability("ParcelPropertiesUpdate")=="https://native.invalid/1/ParcelPropertiesUpdate");assert(!context->canManageEstate());circuit.estateManager=true;assert(!context->canManageEstate());circuit.estateManagerKnown=true;assert(context->canManageEstate());circuit.estateManager=false;assert(!context->canManageEstate());gAgent.god=true;assert(context->canManageEstate());gAgent.god=false;
  assert(!context->dynamicPathfindingEnabled());owner->features.enabled=true;assert(vs_current_region_context()->dynamicPathfindingEnabled());assert(vs_publish_region_owner(*context,LLUUID{71}));assert(circuit.owner.value==71);
@@ -61,5 +64,5 @@ int main(){
  auto previous=*context;circuit.metadata.productName="changed";assert(previous.getLocalizedSimProductName()=="localized-Mainland");
  ++circuit.incarnation;assert(!vs_publish_region_owner(previous,LLUUID{99}));assert(circuit.owner.value==71);assert(!previous.current() && previous.getCapability("ParcelPropertiesUpdate").empty());context=vs_current_region_context();++owner->mGeneration;assert(!context->current());context=vs_current_region_context();gAgent.session={3};assert(!context->current());gAgent.session={2};context=vs_current_region_context();owner->mChangingRegion=true;assert(!context->current() && !vs_current_region_context());owner->mChangingRegion=false;
  context=vs_current_region_context();owner->mCircuits.clear();assert(!context->current());
- window.native=false;LLViewerRegion legacy;LLWorld::instance().regions[1]=&legacy;gAgent.region=&legacy;auto shared=vs_current_region_context();assert(shared && shared->current() && shared->getCapability("LandResources")=="https://legacy.invalid/LandResources");gAgent.session={77};assert(!shared->current() && shared->getCapability("LandResources").empty());
+ window.native=false;LLViewerRegion legacy;legacy.flags=REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE;LLWorld::instance().regions[1]=&legacy;gAgent.region=&legacy;auto shared=vs_current_region_context();assert(shared && shared->current() && shared->getCapability("LandResources")=="https://legacy.invalid/LandResources");assert(shared->getAllowEnvironmentOverride());gAgent.session={77};assert(!shared->current() && shared->getCapability("LandResources").empty());
 }

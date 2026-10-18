@@ -398,7 +398,10 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "change_item_thumbnail" || name == "preview_sound" || name == "preview_script" ||
             name == "script_colors" || name == "upload_image" || name == "upload_sound" ||
             name == "pay_resident" || name == "display_name" || name == "animation_overrider" || name == "camera_presets" || name == "save_camera_preset" || name == "camera" || name == "fs_camera_small" || name == "phototools_camera"; },
-        [](std::string_view name) { return name == "panel_settings_water" || name == "panel_settings_atmos" || name == "panel_settings_cloud" ||
+        [](std::string_view name) { return
+            name == "land_general_panel" || name == "land_covenant_panel" || name == "land_objects_panel" ||
+            name == "land_options_panel" || name == "land_audio_panel" || name == "land_media_panel" ||
+            name == "land_access_panel" || name == "land_experiences_panel" || name == "land_environment_panel" || name == "panel_settings_water" || name == "panel_settings_atmos" || name == "panel_settings_cloud" ||
                 name == "panel_settings_sunmoon" || name == "panel_settings_density" || name == "panel_experience_list_editor" || name == "camera_zoom_panel" || name == "experiences_panel" || name == "llpanelexperiencepicker" || name == "experience_log" || name == "llpanelmarketplacelistings" || name == "marketplace_listings_panel" || name == "panel_people" || name == "sidepanel_inventory" || name == "panel_main_inventory" ||
             name == "panel_marketplace_inbox" || name == "inventory_gallery" || name == "progress_view" || name == "progress_view_mini" || name == "popup_holder" ||
             name == "status" || name == "volumepulldown_floater" || name == "navigation_bar" || name == "toolbar_view" || name == "toolbar view" || name == "native_nearby_chat" || name == "script panel" || name == "sidepanel_item_info" || name == "fs_panel_block_list_sidetray" || name == "panel_im_control_panel" || name == "panel_dir_groups" || name == "contact_sets_panel" ||

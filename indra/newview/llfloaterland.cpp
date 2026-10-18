@@ -360,17 +360,26 @@ LLFloaterLand::LLFloaterLand(const LLSD& seed)
 
 bool LLFloaterLand::postBuild()
 {
-    mVisibilityConnection=setVisibleCallback(boost::bind(&LLFloaterLand::onVisibilityChanged,this,_2));
-
-    LLTabContainer* tab = getChild<LLTabContainer>("landtab");
-
-    mTabLand = (LLTabContainer*) tab;
-
-    if (tab)
+    mTabLand = findChild<LLTabContainer>("landtab", true);
+    // The callback map creates the actual controllers. A generic LLPanel with
+    // the same XUI name is not a substitute: refresh and observers require the
+    // specialized instance owned by each factory callback.
+    if (!mTabLand ||
+        !mPanelGeneral || mTabLand->getPanelByName("land_general_panel") != mPanelGeneral ||
+        !mPanelCovenant || mTabLand->getPanelByName("land_covenant_panel") != mPanelCovenant ||
+        !mPanelObjects || mTabLand->getPanelByName("land_objects_panel") != mPanelObjects ||
+        !mPanelOptions || mTabLand->getPanelByName("land_options_panel") != mPanelOptions ||
+        !mPanelAudio || mTabLand->getPanelByName("land_audio_panel") != mPanelAudio ||
+        !mPanelMedia || mTabLand->getPanelByName("land_media_panel") != mPanelMedia ||
+        !mPanelAccess || mTabLand->getPanelByName("land_access_panel") != mPanelAccess ||
+        !mPanelExperiences || mTabLand->getPanelByName("land_experiences_panel") != mPanelExperiences ||
+        !mPanelEnvironment || mTabLand->getPanelByName("land_environment_panel") != mPanelEnvironment)
     {
-        tab->selectTab(sLastTab);
+        LL_WARNS("Land") << "About Land requires all nine specialized parcel panels" << LL_ENDL;
+        return false;
     }
-
+    mVisibilityConnection = setVisibleCallback(boost::bind(&LLFloaterLand::onVisibilityChanged, this, _2));
+    mTabLand->selectTab(sLastTab);
     return true;
 }
 

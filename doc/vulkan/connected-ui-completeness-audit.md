@@ -209,3 +209,40 @@ notification and capture checks are not suppressed. The replay now serializes
 the actual shared default-day builder, serves only its exact settings identity
 through ViewerAsset, verifies accepted region-day identity, and requires matching
 HTTP length/SHA evidence. Unknown settings remain failures. Runtime rerun pending.
+
+
+### Actual land factories, EEP transactions and parcel feedback
+
+The canonical viewer built/staged at `849d906366`, but `.tmp/uk17` rejected an
+immediate destruction assertion after BuyLand's normal deferred close. The
+replay now retains its parcel/selection until the next ordinary mortician pump,
+then requires observer removal and weak-handle death. No controller callback
+forces deletion of its own active stack.
+
+The next canonical build at `10384a3d72` built/staged successfully; `.tmp/uk18`
+then exposed missing admission of all nine actual AboutLand factory names.
+Admitting types alone had left its specialized panels unconstructed. The
+follow-up admits exactly those factories, initializes their members and checks
+that every named tab is the controller instance its factory created.
+
+The shared editor replay now advertises a real loopback environment capability,
+uses authenticated selected-parcel request/reply, commits a day-length edit and
+requires the server-normalized response to update the actual control. Typed LLSD
+UUIDs remain UUIDs through the real settings payload. This is distinct from
+constructing a picker or cancelling a dialog; runtime requalification remains
+required.
+
+Native parcel feedback now consumes the shared parcel model and actual received
+CPU heights, with the reference initial zero grid only where LLSurface does the
+same. It preserves rectangular posts/walls, selected bitmap boundaries and
+textured access-wall rules. Pixel-width posts retain world-space meshes while
+the camera moves. Geometry tests compare the original shared implementations;
+actual GPU replay and independently assessed readback remain required. Access
+wall GPU tests, native environment rendering, object tools/autopilot and the
+other previously open UI/keyboard families are not certified by this checkpoint.
+
+The separate R3 run `39073748457` at `28a31c06e8` has not qualified. Its Windows
+cache suite reached passing restart/recovery cases but hit the workflow's
+15-minute aggregate step deadline while running the codec-version case. This
+is not a graphics assertion failure or permission to advance UI changes. The
+push hold remains until all three jobs and their uploaded evidence qualify.
