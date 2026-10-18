@@ -1,20 +1,20 @@
 {
-  "source_commit": "07eec29f5e68d288d6e6b686329ed5f7b3d9cb41",
+  "source_commit": "e8c0dd56359056a161cf2c067c567a504d067922",
   "tracked_source_paths_scanned": 27925,
-  "candidate_files": 1815,
-  "candidate_sites": 29082,
+  "candidate_files": 1817,
+  "candidate_sites": 29091,
   "original_GL_candidate_files": 223,
-  "additional_candidate_files": 1592,
+  "additional_candidate_files": 1594,
   "shader_registration_rows_verified": 690,
   "dispositions": {
     "mapped-gate": 498,
-    "mapped": 1535,
+    "mapped": 1541,
     "interface-only": 4272,
-    "mapped-boundary": 22355,
+    "mapped-boundary": 22354,
     "cpu-only": 4,
     "conditional": 4,
     "mapped-module": 225,
-    "test-only": 189
+    "test-only": 193
   },
   "source_coverage_accepted": true,
   "runtime_parity_qualified": false
