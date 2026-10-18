@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsregionlimits.h"
 #include "vsworldscene.h"
+#include "vsobjectindex.h"
 #include "vsparcelgeometry.h"
 #include "llcamera.h"
 #include "llenvironment.h"
@@ -315,7 +316,8 @@ struct VSWorldScene::Impl
         return true;
     }
     struct Request { double deadline=0; unsigned attempts=0;std::shared_ptr<const VSResourceBudget::Reservation> slot; };
-    std::map<U32,Object> objects;std::map<U32,Request> pending;
+    std::map<U32,Object> objects;
+    VSObjectIndex<LLUUID> objectIndex;std::map<U32,Request> pending;
     VSWorldAvatar*                                     skeletonOwner(const Object& object) const
     {
         const Object* owner = &object;
@@ -954,6 +956,7 @@ struct VSWorldScene::Impl
             avatars.erase(object->second.id);
         if (const auto object = objects.find(id); object != objects.end())
             pendingAnimations.erase(object->second.id);
+        if(const auto found=objects.find(id);found!=objects.end())objectIndex.erase(id,found->second);
         objects.erase(id);pending.erase(id);pendingMaterialOverrides.erase(id);
     }
     void eraseAnimated()
@@ -1074,6 +1077,7 @@ struct VSWorldScene::Impl
                 }
                 pendingAnimations.erase(animations);
             }
+        objectIndex.replace(id,previous!=objects.end()?&previous->second:nullptr,object);
         objects[id]=std::move(object);pending.erase(id);dirtyChildren(id);
         return true;
     }
@@ -1341,6 +1345,7 @@ void VSWorldScene::reset(bool preserveAssets)
     mImpl->terrainAssets.reset();
     if(mRoot && !preserveAssets) mImpl->resources.erase("terrain:local-paint");
     mImpl->objects.clear();mImpl->pending.clear();mImpl->nextRequest=0;
+    mImpl->objectIndex.clear();
     mImpl->pendingAnimations.clear();
     mImpl->visiblePackets.clear();
     mImpl->accepted=mImpl->rejected=mImpl->unsupported=0;
@@ -1520,9 +1525,13 @@ bool VSWorldScene::current(const ObjectHandle& token) const
 }
 std::optional<VSWorldScene::ObjectHandle> VSWorldScene::object(const LLUUID& identity) const
 {
-    for (const auto& [local, value] : mImpl->objects)
-        if (value.id == identity && mImpl->linksCurrent(value))
-            return object(mImpl->host, local);
+    const auto [begin,end]=mImpl->objectIndex.identities(identity);
+    for(auto it=begin;it!=end;++it)
+    {
+        const auto found=mImpl->objects.find(it->second);
+        if(found!=mImpl->objects.end() && mImpl->linksCurrent(found->second))
+            return object(mImpl->host,it->second);
+    }
     for (const auto& [host, region] : mNeighbours)
         if (auto value = region->object(identity))
             return value;
@@ -3611,10 +3620,16 @@ std::optional<VSWorldScene::Pick> VSWorldScene::pick(const LLVector3& start, con
         }
         auto locate = [&](const VSWorldScene& scene) -> std::optional<ObjectHandle>
         {
-            for (const auto& [local, object] : scene.mImpl->objects)
-                if (std::equal(packet.objectIdentity.begin(), packet.objectIdentity.end(), object.id.mData) &&
-                    object.generation == packet.objectGeneration && object.revision == packet.faceGeneration)
-                    return scene.object(scene.mImpl->host, local);
+            LLUUID identity;
+            std::copy(packet.objectIdentity.begin(),packet.objectIdentity.end(),identity.mData);
+            const auto [begin,end]=scene.mImpl->objectIndex.identities(identity);
+            for(auto it=begin;it!=end;++it)
+            {
+                const auto found=scene.mImpl->objects.find(it->second);
+                if(found!=scene.mImpl->objects.end() && found->second.generation==packet.objectGeneration &&
+                   found->second.revision==packet.faceGeneration)
+                    return scene.object(scene.mImpl->host,it->second);
+            }
             return {};
         };
         auto object = locate(*this);

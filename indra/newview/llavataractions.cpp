@@ -33,6 +33,8 @@
 #endif
 
 #include "llavataractions.h"
+#include "vsavatarcontext.h"
+#include "vsregioncontext.h"
 
 #include "llavatarnamecache.h"  // IDEVO
 #include "llsd.h"
@@ -2088,6 +2090,10 @@ inline bool getRegionFromAgentID(const LLUUID& idAgent, const LLViewerRegion** p
 // static - Checked: 2010-12-03 (Catznip-2.4.0g) | Added: Catznip-2.4.0g
 inline bool getPosGlobalFromAgentID(const LLUUID& idAgent, LLVector3d& posGlobal)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {const auto target=VSAvatarContext::resolve(idAgent);if(!target || !target->current())return false;posGlobal=target->position();return true;}
+#endif
     return getRegionAndPosGlobalFromAgentID(idAgent, NULL, &posGlobal);
 }
 
@@ -2108,14 +2114,13 @@ bool LLAvatarActions::canLandFreezeOrEjectMultiple(uuid_vec_t& idAgents, bool fF
     uuid_vec_t::iterator itAgent = idAgents.begin(); bool fCanFreeze = false;
     while ( (itAgent != idAgents.end()) && ((fFilter) || (!fCanFreeze)) )
     {
-        const LLViewerRegion* pRegion = NULL; LLVector3d posGlobal;
-        if (getRegionAndPosGlobalFromAgentID(*itAgent, &pRegion, &posGlobal))
+        const auto target=VSAvatarContext::resolve(*itAgent);
+        if(target && target->current())
         {
             // NOTE: we actually don't always need the parcel, but attempting to get it now will help with setting fBanEnabled when ejecting
-            const LLParcel* pParcel = LLViewerParcelMgr::getInstance()->selectParcelAt(posGlobal)->getParcel();
-            const LLVector3 posRegion = pRegion->getPosRegionFromGlobal(posGlobal);
-            if ( (pRegion->getOwner() == gAgent.getID()) || (pRegion->isEstateManager()) || (pRegion->isOwnedSelf(posRegion)) ||
-                 ((pRegion->isOwnedGroup(posRegion)) && (pParcel) && (gAgent.hasPowerInGroup(pParcel->getOwnerID(), GP_LAND_ADMIN))) )
+            const LLParcel* pParcel = LLViewerParcelMgr::getInstance()->selectParcelAt(target->position())->getParcel();
+            if ( (target->getOwner() == gAgent.getID()) || (target->isEstateManager()) || (target->isOwnedSelf()) ||
+                 ((target->isOwnedGroup()) && (pParcel) && (gAgent.hasPowerInGroup(pParcel->getOwnerID(), GP_LAND_ADMIN))) )
             {
                 fCanFreeze = true;
                 ++itAgent;
@@ -2177,7 +2182,7 @@ void LLAvatarActions::landEjectMultiple(const uuid_vec_t& idAgents)
     }
 
     payload["ban_enabled"] = fBanEnabled;
-    LLNotificationsUtil::add(strMsgName, args, payload, &callbackLandEject);
+    LLNotificationsUtil::add(strMsgName,args,payload,vs_native_im_account_callback(&callbackLandEject));
 }
 
 // static - Checked: 2010-12-03 (Catznip-2.4.0g) | Added: Catznip-2.4.0g
@@ -2193,8 +2198,8 @@ bool LLAvatarActions::callbackLandEject(const LLSD& notification, const LLSD& re
         const LLSD& idAgents = notification["payload"]["ids"];
         for (LLSD::array_const_iterator itAgent = idAgents.beginArray(); itAgent != idAgents.endArray(); ++itAgent)
         {
-            const LLUUID idAgent = itAgent->asUUID(); const LLViewerRegion* pAgentRegion = NULL;
-            if (getRegionFromAgentID(idAgent, &pAgentRegion))
+            const LLUUID idAgent=itAgent->asUUID();const auto target=VSAvatarContext::resolve(idAgent);
+            if(target && target->current())
             {
                 // This is tricky. It is similar to say if it is not an 'Eject' button, and it is also not an 'Cancel' button,
                 // and ban_enabled==true, it should be the 'Eject and Ban' button.
@@ -2207,7 +2212,7 @@ bool LLAvatarActions::callbackLandEject(const LLSD& notification, const LLSD& re
                 gMessageSystem->nextBlock("Data");
                 gMessageSystem->addUUID("TargetID", idAgent);
                 gMessageSystem->addU32("Flags", flags);
-                gMessageSystem->sendReliable(pAgentRegion->getHost());
+                gMessageSystem->sendReliable(target->host());
             }
         }
     }
@@ -2251,7 +2256,7 @@ void LLAvatarActions::landFreezeMultiple(const uuid_vec_t& idAgents)
         strMsgName = "FreezeAvatarMultiple";
     }
 
-    LLNotificationsUtil::add(strMsgName, args, payload, &callbackLandFreeze);
+    LLNotificationsUtil::add(strMsgName,args,payload,vs_native_im_account_callback(&callbackLandFreeze));
 }
 
 // static - Checked: 2010-12-03 (Catznip-2.4.0g) | Added: Catznip-2.4.0g
@@ -2265,8 +2270,8 @@ bool LLAvatarActions::callbackLandFreeze(const LLSD& notification, const LLSD& r
         const LLSD& idAgents = notification["payload"]["ids"];
         for (LLSD::array_const_iterator itAgent = idAgents.beginArray(); itAgent != idAgents.endArray(); ++itAgent)
         {
-            const LLUUID idAgent = itAgent->asUUID(); const LLViewerRegion* pAgentRegion = NULL;
-            if (getRegionFromAgentID(idAgent, &pAgentRegion))
+            const LLUUID idAgent=itAgent->asUUID();const auto target=VSAvatarContext::resolve(idAgent);
+            if(target && target->current())
             {
                 gMessageSystem->newMessage("FreezeUser");
                 gMessageSystem->nextBlock("AgentData");
@@ -2275,7 +2280,7 @@ bool LLAvatarActions::callbackLandFreeze(const LLSD& notification, const LLSD& r
                 gMessageSystem->nextBlock("Data");
                 gMessageSystem->addUUID("TargetID", idAgent);
                 gMessageSystem->addU32("Flags", flags);
-                gMessageSystem->sendReliable(pAgentRegion->getHost());
+                gMessageSystem->sendReliable(target->host());
             }
         }
     }
@@ -2289,9 +2294,9 @@ bool LLAvatarActions::callbackLandFreeze(const LLSD& notification, const LLSD& r
 typedef std::vector<std::string> strings_t;
 
 // Copy/paste from LLPanelRegionInfo::sendEstateOwnerMessage
-void sendEstateOwnerMessage(const LLViewerRegion* pRegion, const std::string& request, const LLUUID& invoice, const strings_t& strings)
+void sendEstateOwnerMessage(const LLHost& host, const std::string& request, const LLUUID& invoice, const strings_t& strings)
 {
-    if (pRegion)
+    if(host.isOk())
     {
         LL_INFOS() << "Sending estate request '" << request << "'" << LL_ENDL;
         gMessageSystem->newMessage("EstateOwnerMessage");
@@ -2317,9 +2322,14 @@ void sendEstateOwnerMessage(const LLViewerRegion* pRegion, const std::string& re
                 gMessageSystem->addString("Parameter", *it);
             }
         }
-        gMessageSystem->sendReliable(pRegion->getHost());
+        gMessageSystem->sendReliable(host);
     }
 }
+void sendEstateOwnerMessage(const LLViewerRegion* region,const std::string& request,const LLUUID& invoice,const strings_t& strings)
+{if(region)sendEstateOwnerMessage(region->getHost(),request,invoice,strings);}
+void sendEstateOwnerMessage(const VSAvatarContext& target,const std::string& request,const LLUUID& invoice,const strings_t& strings)
+{if(target.current())sendEstateOwnerMessage(target.host(),request,invoice,strings);}
+
 
 // static - Checked: 2010-12-03 (Catznip-2.4.0g) | Added: Catznip-2.4.0g
 bool LLAvatarActions::canEstateKickOrTeleportHome(const LLUUID& idAgent)
@@ -2338,8 +2348,8 @@ bool LLAvatarActions::canEstateKickOrTeleportHomeMultiple(uuid_vec_t& idAgents, 
     uuid_vec_t::iterator itAgent = idAgents.begin(); bool fCanKick = false;
     while ( (itAgent != idAgents.end()) && ((fFilter) || (!fCanKick)) )
     {
-        const LLViewerRegion* pRegion = NULL;
-        if ( (getRegionFromAgentID(*itAgent, &pRegion)) && ((pRegion->getOwner() == gAgent.getID()) || (pRegion->isEstateManager())) )
+        const auto target=VSAvatarContext::resolve(*itAgent);
+        if(target && target->current() && ((target->getOwner()==gAgent.getID()) || target->isEstateManager()))
         {
             fCanKick = true;
             ++itAgent;      // Estate owners/managers can kick
@@ -2391,7 +2401,7 @@ void LLAvatarActions::estateKickMultiple(const uuid_vec_t& idAgents)
         strMsgName = "EstateKickMultiple";
     }
 
-    LLNotificationsUtil::add(strMsgName, args, payload, &callbackEstateKick);
+    LLNotificationsUtil::add(strMsgName,args,payload,vs_native_im_account_callback(&callbackEstateKick));
 }
 
 // static - Checked: 2010-12-03 (Catznip-2.4.0g) | Added: Catznip-2.4.0g
@@ -2403,13 +2413,13 @@ bool LLAvatarActions::callbackEstateKick(const LLSD& notification, const LLSD& r
         const LLSD& idAgents = notification["payload"]["ids"];
         for (LLSD::array_const_iterator itAgent = idAgents.beginArray(); itAgent != idAgents.endArray(); ++itAgent)
         {
-            const LLViewerRegion* pRegion = NULL;
-            if (getRegionFromAgentID(itAgent->asUUID(), &pRegion))
+            const auto target=VSAvatarContext::resolve(itAgent->asUUID());
+            if(target && target->current())
             {
                 strings_t strings;
                 strings.push_back(itAgent->asString());
 
-                sendEstateOwnerMessage(pRegion, "kickestate", LLUUID::generateNewID(), strings);
+                sendEstateOwnerMessage(*target, "kickestate", LLUUID::generateNewID(), strings);
             }
         }
     }
@@ -2453,7 +2463,7 @@ void LLAvatarActions::estateTeleportHomeMultiple(const uuid_vec_t& idAgents)
         strMsgName = "EstateTeleportHomeMultiple";
     }
 
-    LLNotificationsUtil::add(strMsgName, args, payload, &callbackEstateTeleportHome);
+    LLNotificationsUtil::add(strMsgName,args,payload,vs_native_im_account_callback(&callbackEstateTeleportHome));
 }
 
 // static - Checked: 2010-12-03 (Catznip-2.4.0g) | Added: Catznip-2.4.0g
@@ -2465,14 +2475,14 @@ bool LLAvatarActions::callbackEstateTeleportHome(const LLSD& notification, const
         const LLSD& idAgents = notification["payload"]["ids"];
         for (LLSD::array_const_iterator itAgent = idAgents.beginArray(); itAgent != idAgents.endArray(); ++itAgent)
         {
-            const LLViewerRegion* pRegion = NULL;
-            if (getRegionFromAgentID(itAgent->asUUID(), &pRegion))
+            const auto target=VSAvatarContext::resolve(itAgent->asUUID());
+            if(target && target->current())
             {
                 strings_t strings;
                 strings.push_back(gAgent.getID().asString());
                 strings.push_back(itAgent->asString());
 
-                sendEstateOwnerMessage(pRegion, "teleporthomeuser", LLUUID::generateNewID(), strings);
+                sendEstateOwnerMessage(*target, "teleporthomeuser", LLUUID::generateNewID(), strings);
             }
         }
     }
@@ -2490,7 +2500,7 @@ void LLAvatarActions::estateBan(const LLUUID& idAgent)
 
 void LLAvatarActions::estateBanMultiple(const uuid_vec_t& idAgents)
 {
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
     if (!region)
     {
         return;
@@ -2539,12 +2549,17 @@ void LLAvatarActions::estateBanMultiple(const uuid_vec_t& idAgents)
         strMsgName = "EstateBanUserMultiple";
     }
 
-    LLNotificationsUtil::add(strMsgName, args, payload, &callbackEstateBan);
+    const auto account=vs_native_im_guard();
+    LLNotificationsUtil::add(strMsgName,args,payload,vs_native_im_lifetime_callback([account,region]
+    {
+        const auto current=vs_current_region_context();
+        return account() && region && region->current() && current && *current==*region;
+    },&callbackEstateBan));
 }
 
 bool LLAvatarActions::callbackEstateBan(const LLSD& notification, const LLSD& response)
 {
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
     if (!region) return false; // Region may have retired while confirmation was open.
     S32 idxOption = LLNotificationsUtil::getSelectedOption(notification, response);
 

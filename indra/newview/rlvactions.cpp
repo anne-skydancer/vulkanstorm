@@ -471,7 +471,28 @@ bool RlvActions::canEdit(ERlvCheckType eCheckType)
 }
 
 // Handles: @edit, @editobj, @editattach and @editworld
-bool RlvActions::canEdit(const LLViewerObject* pObj)
+namespace
+{
+struct ReferenceEditObject
+{
+    const LLViewerObject* object;
+    bool present()const{return object!=nullptr;}
+    const LLUUID& rootEditID()const{return object->getRootEdit()->getID();}
+    bool attachment()const{return object->isAttachment();}
+    bool hud()const{return object->isHUDAttachment();}
+    LLVector3d position()const{return object->getPositionGlobal();}
+};
+struct NativeEditObject
+{
+    const VSObjectContext& object;
+    bool present()const{return true;}
+    const LLUUID& rootEditID()const{return object.rootEditID;}
+    bool attachment()const{return object.attachment;}
+    bool hud()const{return object.hud;}
+    const LLVector3d& position()const{return object.position;}
+};
+template<class Object>
+bool sharedObjectEdit(const Object& object)
 {
     // User can edit the specified object if:
     //   - not generally restricted from editing (or the object's root is an exception)
@@ -482,15 +503,14 @@ bool RlvActions::canEdit(const LLViewerObject* pObj)
     // NOTE-RLVa: edit checks should *never* be subject to @fartouch distance checks since we don't have the pick offset so
     //            instead just implicitly rely on the presence of a (transient) selection
     return
-        (pObj) &&
-        ( (!RlvHandler::instance().hasBehaviour(RLV_BHVR_EDIT)) || (RlvHandler::instance().isException(RLV_BHVR_EDIT, pObj->getRootEdit()->getID())) ) &&
-        ( (!RlvHandler::instance().hasBehaviour(RLV_BHVR_EDITOBJ)) || (!RlvHandler::instance().isException(RLV_BHVR_EDITOBJ, pObj->getRootEdit()->getID())) ) &&
-        ( (pObj->isAttachment()) ? !RlvHandler::instance().hasBehaviour(RLV_BHVR_EDITATTACH)
+        (object.present()) &&
+        ( (!RlvHandler::instance().hasBehaviour(RLV_BHVR_EDIT)) || (RlvHandler::instance().isException(RLV_BHVR_EDIT, object.rootEditID())) ) &&
+        ( (!RlvHandler::instance().hasBehaviour(RLV_BHVR_EDITOBJ)) || (!RlvHandler::instance().isException(RLV_BHVR_EDITOBJ, object.rootEditID())) ) &&
+        ( (object.attachment()) ? !RlvHandler::instance().hasBehaviour(RLV_BHVR_EDITATTACH)
                                  : !RlvHandler::instance().hasBehaviour(RLV_BHVR_EDITWORLD) );
 }
-
-// Handles: @fartouch and @interact
-bool RlvActions::canInteract(const LLViewerObject* pObj, const LLVector3& posOffset /*=LLVector3::zero*/)
+template<class Object>
+bool sharedObjectInteract(const Object& object, const LLVector3& posOffset)
 {
     static RlvCachedBehaviourModifier<float> s_nFartouchDist(RLV_MODIFIER_FARTOUCHDIST);
 
@@ -499,9 +519,28 @@ bool RlvActions::canInteract(const LLViewerObject* pObj, const LLVector3& posOff
     //   - not prevented from touching faraway objects (or the object's center + pick offset is within range)
     RlvHandler& rlvHandler = RlvHandler::instance();
     return
-        (!pObj) ||
-        ( ( (!rlvHandler.hasBehaviour(RLV_BHVR_INTERACT)) || (pObj->isHUDAttachment())) &&
-          ( (!rlvHandler.hasBehaviour(RLV_BHVR_FARTOUCH)) || (pObj->isHUDAttachment()) || (dist_vec_squared(gAgent.getPositionGlobal(), pObj->getPositionGlobal() + LLVector3d(posOffset)) <= s_nFartouchDist * s_nFartouchDist)) );
+        (!object.present()) ||
+        ( ( (!rlvHandler.hasBehaviour(RLV_BHVR_INTERACT)) || (object.hud())) &&
+          ( (!rlvHandler.hasBehaviour(RLV_BHVR_FARTOUCH)) || (object.hud()) || (dist_vec_squared(gAgent.getPositionGlobal(), object.position() + LLVector3d(posOffset)) <= s_nFartouchDist * s_nFartouchDist)) );
+}
+}
+bool RlvActions::canEdit(const LLViewerObject* pObj)
+{
+    return sharedObjectEdit(ReferenceEditObject{pObj});
+}
+bool RlvActions::canEdit(const VSObjectContext& object)
+{
+    return object.current && object.current() && sharedObjectEdit(NativeEditObject{object});
+}
+
+// Handles: @fartouch and @interact
+bool RlvActions::canInteract(const LLViewerObject* pObj, const LLVector3& posOffset /*=LLVector3::zero*/)
+{
+    return sharedObjectInteract(ReferenceEditObject{pObj},posOffset);
+}
+bool RlvActions::canInteract(const VSObjectContext& object, const LLVector3& posOffset /*=LLVector3::zero*/)
+{
+    return object.current && object.current() && sharedObjectInteract(NativeEditObject{object},posOffset);
 }
 
 // Handles: @pay

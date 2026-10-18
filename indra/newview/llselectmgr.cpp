@@ -26,6 +26,7 @@
 
 #include "llscripteditorws.h"
 #include "llviewerprecompiledheaders.h"
+#include "vsselectionpolicy.h"
 #include "vsregionlimits.h"
 
 // file include
@@ -8046,55 +8047,32 @@ void LLSelectMgr::validateSelection()
     getSelection()->applyToObjects(&func);
 }
 
-bool LLSelectMgr::canSelectObject(LLViewerObject* object, bool ignore_select_owned)
+namespace
 {
-    // Never select dead objects
-    if (!object || object->isDead())
-    {
-        return false;
-    }
-
-    if (mForceSelection)
-    {
-        return true;
-    }
-
-    if(!ignore_select_owned)
-    {
-        if ((gSavedSettings.getBOOL("SelectOwnedOnly") && !object->permYouOwner()) ||
-                (gSavedSettings.getBOOL("SelectMovableOnly") && (!object->permMove() ||  object->isPermanentEnforced())))
-        {
-            // only select my own objects
-            return false;
-        }
-
-        // <FS:Ansariel> FIRE-14593: Option to select only copyable objects
-        if (!object->permCopy() && gSavedSettings.getBOOL("FSSelectCopyableOnly"))
-        {
-            return false;
-        }
-        // </FS:Ansariel>
-        // <FS:Ansariel> FIRE-17696: Option to select only locked objects
-        if (gSavedSettings.getBOOL("FSSelectLockedOnly") && object->permMove() && !object->isPermanentEnforced())
-        {
-            return false;
-        }
-        // </FS:Ansariel>
-    }
-
-    // Can't select orphans
-    if (object->isOrphaned()) return false;
-
-    // Can't select avatars
-    if (object->isAvatar()) return false;
-
-    // Can't select land
-    if (object->getPCode() == LLViewerObject::LL_VO_SURFACE_PATCH) return false;
-
-    ESelectType selection_type = getSelectTypeForObject(object);
-    if (mSelectedObjects->getObjectCount() > 0 && mSelectedObjects->mSelectType != selection_type) return false;
-
-    return true;
+template<class SelectionType>
+struct ReferenceSelectObject
+{
+    LLViewerObject* object;
+    SelectionType getSelectionType;
+    bool present()const{return object!=nullptr;}
+    bool dead()const{return object->isDead();}
+    bool youOwner()const{return object->permYouOwner();}
+    bool move()const{return object->permMove();}
+    bool permanent()const{return object->isPermanentEnforced();}
+    bool copy()const{return object->permCopy();}
+    bool orphaned()const{return object->isOrphaned();}
+    bool avatar()const{return object->isAvatar();}
+    U8 pcode()const{return object->getPCode();}
+    ESelectType selectionType()const{return getSelectionType();}
+};
+}
+bool LLSelectMgr::canSelectObject(LLViewerObject* object,bool ignore_select_owned)
+{
+    const auto selectionType=[this,object]{return getSelectTypeForObject(object);};
+    struct Selection{LLObjectSelection* value;bool hasSelection()const{return value->getObjectCount()>0;}ESelectType type()const{return value->mSelectType;}};
+    return vs_can_select_object(ReferenceSelectObject<decltype(selectionType)>{object,selectionType},mForceSelection,ignore_select_owned,
+        Selection{mSelectedObjects.get()},LLViewerObject::LL_VO_SURFACE_PATCH,
+        [](const char* setting){return gSavedSettings.getBOOL(setting);});
 }
 
 bool LLSelectMgr::setForceSelection(bool force)

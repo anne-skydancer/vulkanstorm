@@ -88,6 +88,14 @@ jobs:
       - run: python scripts/tests/test_native_bake_callback.py
       - run: python scripts/tests/test_native_camera_transport.py
       - run: python scripts/tests/test_native_camera_retirement.py
+      - run: python scripts/tests/test_native_world_selection.py
+      - run: python scripts/tests/test_native_region_frontend.py
+      - run: python scripts/tests/test_native_topobjects_lifetime.py
+      - run: python scripts/tests/test_native_rlv_edit.py
+      - run: python scripts/tests/test_native_avatar_context.py
+      - run: python scripts/tests/test_native_avatar_moderation_policy.py
+      - run: python scripts/tests/test_native_avatar_moderation_wire.py
+      - run: python scripts/tests/test_native_avatar_moderation_ban.py
       - run: python scripts/tests/test_native_navigation_reference.py
       - run: python scripts/tests/test_native_navigation_lifecycle.py
       - run: python scripts/tests/test_native_region_height.py

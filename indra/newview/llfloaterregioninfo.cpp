@@ -260,6 +260,16 @@ private:
 
 
 
+bool LLFloaterRegionInfo::isNativeInternalType(const std::type_info& type)
+{
+    return type==typeid(LLFloaterRegionInfo) || type==typeid(LLPanelRegionInfo) ||
+        type==typeid(LLPanelRegionGeneralInfo) || type==typeid(LLPanelRegionDebugInfo) ||
+        type==typeid(LLPanelRegionTerrainInfo) || type==typeid(LLPanelRegionOpenSettingsInfo) ||
+        type==typeid(LLPanelEstateInfo) || type==typeid(LLPanelEstateAccess) ||
+        type==typeid(LLPanelEstateCovenant) || type==typeid(LLPanelRegionExperiences) ||
+        type==typeid(LLPanelRegionEnvironment);
+}
+
 bool estate_dispatch_initialized = false;
 
 
@@ -640,7 +650,7 @@ void LLFloaterRegionInfo::sRefreshFromRegion(LLViewerRegion* region)
 // static
 LLPanelEstateInfo* LLFloaterRegionInfo::getPanelEstate()
 {
-    LLFloaterRegionInfo* floater = LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info");
+    LLFloaterRegionInfo* floater = (gViewerWindow && gViewerWindow->isNativeVulkan()?LLFloaterReg::findTypedInstance<LLFloaterRegionInfo>("region_info"):LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info"));
     if (!floater) return NULL;
     LLTabContainer* tab = floater->getChild<LLTabContainer>("region_panels");
     LLPanelEstateInfo* panel = (LLPanelEstateInfo*)tab->getChild<LLPanel>("Estate");
@@ -650,7 +660,7 @@ LLPanelEstateInfo* LLFloaterRegionInfo::getPanelEstate()
 // static
 LLPanelEstateAccess* LLFloaterRegionInfo::getPanelAccess()
 {
-    LLFloaterRegionInfo* floater = LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info");
+    LLFloaterRegionInfo* floater = (gViewerWindow && gViewerWindow->isNativeVulkan()?LLFloaterReg::findTypedInstance<LLFloaterRegionInfo>("region_info"):LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info"));
     if (!floater) return NULL;
     LLTabContainer* tab = floater->getChild<LLTabContainer>("region_panels");
     LLPanelEstateAccess* panel = (LLPanelEstateAccess*)tab->getChild<LLPanel>("Access");
@@ -660,7 +670,7 @@ LLPanelEstateAccess* LLFloaterRegionInfo::getPanelAccess()
 // static
 LLPanelEstateCovenant* LLFloaterRegionInfo::getPanelCovenant()
 {
-    LLFloaterRegionInfo* floater = LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info");
+    LLFloaterRegionInfo* floater = (gViewerWindow && gViewerWindow->isNativeVulkan()?LLFloaterReg::findTypedInstance<LLFloaterRegionInfo>("region_info"):LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info"));
     if (!floater) return NULL;
     LLTabContainer* tab = floater->getChild<LLTabContainer>("region_panels");
     LLPanelEstateCovenant* panel = (LLPanelEstateCovenant*)tab->getChild<LLPanel>("Covenant");
@@ -670,7 +680,7 @@ LLPanelEstateCovenant* LLFloaterRegionInfo::getPanelCovenant()
 // static
 LLPanelRegionGeneralInfo* LLFloaterRegionInfo::getPanelGeneral()
 {
-    LLFloaterRegionInfo* floater = LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info");
+    LLFloaterRegionInfo* floater = (gViewerWindow && gViewerWindow->isNativeVulkan()?LLFloaterReg::findTypedInstance<LLFloaterRegionInfo>("region_info"):LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info"));
     if (!floater) return NULL;
     LLTabContainer* tab = floater->getChild<LLTabContainer>("region_panels");
     LLPanelRegionGeneralInfo* panel = (LLPanelRegionGeneralInfo*)tab->getChild<LLPanel>("General");
@@ -680,7 +690,7 @@ LLPanelRegionGeneralInfo* LLFloaterRegionInfo::getPanelGeneral()
 // static
 LLPanelRegionEnvironment* LLFloaterRegionInfo::getPanelEnvironment()
 {
-    LLFloaterRegionInfo* floater = LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info");
+    LLFloaterRegionInfo* floater = (gViewerWindow && gViewerWindow->isNativeVulkan()?LLFloaterReg::findTypedInstance<LLFloaterRegionInfo>("region_info"):LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info"));
     if (!floater) return NULL;
     LLTabContainer* tab = floater->getChild<LLTabContainer>("region_panels");
     LLPanelRegionEnvironment* panel = (LLPanelRegionEnvironment*)tab->getChild<LLPanel>("panel_env_info");
@@ -700,10 +710,10 @@ void material_type_to_ctrl(LLCheckBoxCtrl* ctrl, LLTerrainMaterials::Type new_ty
 // static
 LLPanelRegionTerrainInfo* LLFloaterRegionInfo::getPanelRegionTerrain()
 {
-    LLFloaterRegionInfo* floater = LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info");
+    LLFloaterRegionInfo* floater = (gViewerWindow && gViewerWindow->isNativeVulkan()?LLFloaterReg::findTypedInstance<LLFloaterRegionInfo>("region_info"):LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info"));
     if (!floater)
     {
-        llassert(floater);
+        if(!gViewerWindow || !gViewerWindow->isNativeVulkan()){llassert(floater);}
         return NULL;
     }
 
@@ -716,10 +726,10 @@ LLPanelRegionTerrainInfo* LLFloaterRegionInfo::getPanelRegionTerrain()
 
 LLPanelRegionExperiences* LLFloaterRegionInfo::getPanelExperiences()
 {
-    LLFloaterRegionInfo* floater = LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info");
+    LLFloaterRegionInfo* floater = (gViewerWindow && gViewerWindow->isNativeVulkan()?LLFloaterReg::findTypedInstance<LLFloaterRegionInfo>("region_info"):LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info"));
     if (!floater) return NULL;
     LLTabContainer* tab = floater->getChild<LLTabContainer>("region_panels");
-    return (LLPanelRegionExperiences*)tab->getChild<LLPanel>("Experiences");
+    return (LLPanelRegionExperiences*)(gViewerWindow && gViewerWindow->isNativeVulkan()?tab->findChild<LLPanel>("Experiences",true):tab->getChild<LLPanel>("Experiences"));
 }
 
 void LLFloaterRegionInfo::disableTabCtrls()
@@ -738,10 +748,10 @@ void LLFloaterRegionInfo::disableTabCtrls()
 // static
 LLPanelRegionOpenSettingsInfo* LLFloaterRegionInfo::getPanelOpenSettings()
 {
-    LLFloaterRegionInfo* floater = LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info");
+    LLFloaterRegionInfo* floater = (gViewerWindow && gViewerWindow->isNativeVulkan()?LLFloaterReg::findTypedInstance<LLFloaterRegionInfo>("region_info"):LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info"));
     if (!floater) return NULL;
     LLTabContainer* tab = floater->getChild<LLTabContainer>("region_panels");
-    LLPanelRegionOpenSettingsInfo* panel = (LLPanelRegionOpenSettingsInfo*)tab->getChild<LLPanel>("RegionSettings");
+    LLPanelRegionOpenSettingsInfo* panel = (LLPanelRegionOpenSettingsInfo*)(gViewerWindow && gViewerWindow->isNativeVulkan()?tab->findChild<LLPanel>("RegionSettings",true):tab->getChild<LLPanel>("RegionSettings"));
     return panel;
 }
 // </FS:CR> Aurora Sim - Region Settings Console

@@ -29,6 +29,7 @@
 
 #include "llfloater.h"
 #include <functional>
+#include <boost/signals2/connection.hpp>
 #include "llavatarname.h"
 
 class LLUICtrl;
@@ -68,6 +69,7 @@ public:
 
     void onRefresh();
     void beginReply();
+    void onClose(bool app_quitting) override;
     std::function<bool()> requestGuard(bool modify=false);
 
     static void setMode(U32 mode);
@@ -112,6 +114,10 @@ private:
     //void teleportToSelectedObject();
 
 private:
+    bool modelCurrent() const;
+    void retireReply();
+    U64 mReplyEpoch=0;
+    boost::signals2::scoped_connection mNativeRegionConnection;
     std::function<bool()> mReplyCurrent;
     std::string mMethod;
 

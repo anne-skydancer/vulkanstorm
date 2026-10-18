@@ -29,6 +29,9 @@
 #include "llfloatertopobjects.h"
 #include "vsregioncontext.h"
 #include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 // library includes
 #include "message.h"
@@ -151,7 +154,7 @@ void LLFloaterTopObjects::handle_land_reply(LLMessageSystem* msg, void** data)
     }
     else
     {
-        LLFloaterRegionInfo* region_info_floater = LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info");
+        LLFloaterRegionInfo* region_info_floater = (gViewerWindow && gViewerWindow->isNativeVulkan()?LLFloaterReg::findTypedInstance<LLFloaterRegionInfo>("region_info"):LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info"));
         if(region_info_floater)
         {
             region_info_floater->enableTopButtons();
@@ -307,7 +310,7 @@ void LLFloaterTopObjects::handleReply(LLMessageSystem *msg, void** data)
         getChild<LLUICtrl>("title_text")->setValue(LLSD(format));
     }
 
-    LLFloaterRegionInfo* region_info_floater = LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info");
+    LLFloaterRegionInfo* region_info_floater = (gViewerWindow && gViewerWindow->isNativeVulkan()?LLFloaterReg::findTypedInstance<LLFloaterRegionInfo>("region_info"):LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info"));
     if(region_info_floater)
     {
         region_info_floater->enableTopButtons();
@@ -322,6 +325,7 @@ void LLFloaterTopObjects::onCommitObjectsList()
 
 void LLFloaterTopObjects::updateSelectionInfo()
 {
+    if(!modelCurrent())return;
     LLScrollListCtrl* list = getChild<LLScrollListCtrl>("objects_list");
 
     if (!list) return;
@@ -375,6 +379,7 @@ void LLFloaterTopObjects::onClickShowBeacon()
 
 void LLFloaterTopObjects::returnObjects(bool all)
 {
+    if(!modelCurrent())return;
     LLMessageSystem *msg = gMessageSystem;
 
     const auto region=vs_current_region_context();
@@ -438,6 +443,7 @@ bool LLFloaterTopObjects::callbackReturnAll(const LLSD& notification, const LLSD
 
 void LLFloaterTopObjects::onReturnAll()
 {
+    if(!modelCurrent())return;
     LLNotificationsUtil::add("ReturnAllTopObjects",LLSD(),LLSD(),vs_native_im_lifetime_callback(requestGuard(true),boost::bind(&LLFloaterTopObjects::callbackReturnAll,this,_1,_2)));
 }
 
@@ -468,14 +474,52 @@ void LLFloaterTopObjects::clearList()
 std::function<bool()> LLFloaterTopObjects::requestGuard(bool modify)
 {
     const auto weak=getHandle();const auto region=vs_current_region_context();const auto account=vs_native_im_guard();
-    return [weak,region,account,modify]
+    const U64 epoch=mReplyEpoch;
+    const bool native=gViewerWindow && gViewerWindow->isNativeVulkan();
+    return [weak,region,account,modify,epoch,native]
     {
+        const auto view=dynamic_cast<LLFloaterTopObjects*>(weak.get());
+        if(native && (!view || view->mReplyEpoch!=epoch))return false;
         const auto current=vs_current_region_context();
         return weak.get() && account() && region && region->current() && current && *current==*region &&
             (!modify || current->canManageEstate());
     };
 }
-void LLFloaterTopObjects::beginReply(){mReplyCurrent=requestGuard();}
+bool LLFloaterTopObjects::modelCurrent() const
+{
+    return !gViewerWindow || !gViewerWindow->isNativeVulkan() || (mReplyCurrent && mReplyCurrent());
+}
+void LLFloaterTopObjects::retireReply()
+{
+    ++mReplyEpoch;
+    mReplyCurrent={};
+    clearList();
+    getChildView("refresh_btn")->setEnabled(true);
+}
+void LLFloaterTopObjects::onClose(bool)
+{
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        mNativeRegionConnection.disconnect();
+        retireReply();
+    }
+}
+void LLFloaterTopObjects::beginReply()
+{
+    ++mReplyEpoch;
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() && !mNativeRegionConnection.connected())
+    {
+        const auto weak=getHandle();
+        if(const auto owner=VSNativeSession::active())
+            mNativeRegionConnection=owner->observeCurrentRegion(vs_native_im_account_callback([weak]
+            {
+                if(auto* view=dynamic_cast<LLFloaterTopObjects*>(weak.get()))view->retireReply();
+            }));
+    }
+#endif
+    mReplyCurrent=requestGuard();
+}
 
 void LLFloaterTopObjects::onRefresh()
 {
@@ -501,7 +545,7 @@ void LLFloaterTopObjects::onRefresh()
     msg->addStringFast(_PREHASH_Filter, filter);
     msg->addS32Fast(_PREHASH_ParcelLocalID, 0);
 
-    LLFloaterRegionInfo* region_info_floater = LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info");
+    LLFloaterRegionInfo* region_info_floater = (gViewerWindow && gViewerWindow->isNativeVulkan()?LLFloaterReg::findTypedInstance<LLFloaterRegionInfo>("region_info"):LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info"));
     if(region_info_floater)
     {
         region_info_floater->disableTopButtons();
@@ -544,6 +588,7 @@ void LLFloaterTopObjects::onGetByParcelName()
 
 void LLFloaterTopObjects::showBeacon()
 {
+    if(!modelCurrent())return;
     LLScrollListCtrl* list = getChild<LLScrollListCtrl>("objects_list");
     if (!list) return;
 
@@ -601,7 +646,7 @@ void LLFloaterTopObjects::showBeacon()
 //
 void LLFloaterTopObjects::onSelectionChanged()
 {
-    bool enabled = mObjectsScrollList->getNumSelected() == 1;
+    bool enabled = modelCurrent() && mObjectsScrollList->getNumSelected() == 1;
     childSetEnabled("teleport_to_btn", enabled);
     childSetEnabled("profile_btn", enabled);
     childSetEnabled("script_info_btn", enabled);
@@ -610,6 +655,7 @@ void LLFloaterTopObjects::onSelectionChanged()
 
 void LLFloaterTopObjects::onTeleportToObject()
 {
+    if(!modelCurrent())return;
     LLScrollListItem* first_selected = mObjectsScrollList->getFirstSelected();
     if (!first_selected) return;
 
@@ -629,6 +675,7 @@ void LLFloaterTopObjects::onTeleportToObject()
 // <FS:Ansariel> Estate kick avatar
 void LLFloaterTopObjects::onKick()
 {
+    if(!modelCurrent())return;
     LLScrollListItem* first_selected = mObjectsScrollList->getFirstSelected();
     if (!first_selected) return;
 
@@ -640,6 +687,7 @@ void LLFloaterTopObjects::onKick()
 // <FS:Ansariel> Show profile
 void LLFloaterTopObjects::onProfile()
 {
+    if(!modelCurrent())return;
     LLScrollListItem* first_selected = mObjectsScrollList->getFirstSelected();
     if (!first_selected) return;
 
@@ -651,6 +699,7 @@ void LLFloaterTopObjects::onProfile()
 // <FS:Ansariel> Enable avatar-specific buttons if current selection is an avatar
 void LLFloaterTopObjects::onAvatarCheck(const LLUUID& avatar_id, LLAvatarName av_name)
 {
+    if(!modelCurrent())return;
     LLScrollListItem* first_selected = mObjectsScrollList->getFirstSelected();
     if (!first_selected) return;
 
@@ -666,6 +715,7 @@ void LLFloaterTopObjects::onAvatarCheck(const LLUUID& avatar_id, LLAvatarName av
 // <FS:Ansariel> Script info
 void LLFloaterTopObjects::onScriptInfo()
 {
+    if(!modelCurrent())return;
     LLScrollListItem* first_selected = mObjectsScrollList->getFirstSelected();
     if (!first_selected) return;
 

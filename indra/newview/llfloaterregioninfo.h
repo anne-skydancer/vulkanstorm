@@ -29,6 +29,7 @@
 #define LL_LLFLOATERREGIONINFO_H
 
 #include <vector>
+#include <typeinfo>
 #include "llagent.h"
 #include "llassettype.h"
 #include "llfloater.h"
@@ -85,6 +86,7 @@ public:
     void onOpen(const LLSD& key) override;
     void onClose(bool app_quitting) override;
     bool postBuild() override;
+    static bool isNativeInternalType(const std::type_info&);
 
     static void processEstateOwnerRequest(LLMessageSystem* msg, void**);
 

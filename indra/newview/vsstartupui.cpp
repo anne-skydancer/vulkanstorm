@@ -13,6 +13,10 @@
 #include "llvirtualtrackball.h"
 #include "llxyvector.h"
 #include "llfloaterland.h"
+#include "llfloaterregioninfo.h"
+#include "llfloaterregiondebugconsole.h"
+#include "llfloaterregionrestartschedule.h"
+#include "llfloatertopobjects.h"
 #include "llfloaterbanduration.h"
 #include "llfloaterurlentry.h"
 #include "llpanelenvironment.h"
@@ -260,6 +264,8 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             const bool admitted =
                 // These existing controllers use shared UI, local settings,
                 // account inventory or the already-owned browser/audio service.
+                LLFloaterRegionInfo::isNativeInternalType(t) || t==typeid(LLFloaterRegionDebugConsole) ||
+                t==typeid(LLFloaterRegionRestartSchedule) || t==typeid(LLFloaterTopObjects) || t==typeid(LLIconsComboBox) ||
                 LLFloaterBuyCurrency::isNativeInternalType(t) ||
                 LLFloaterBuyLand::isNativeInternalType(t) ||
                 t==typeid(LLFloaterMyEnvironment) || t==typeid(LLFloaterFixedEnvironmentSky) || t==typeid(LLFloaterFixedEnvironmentWater) || t==typeid(LLFloaterEditExtDayCycle) || t==typeid(LLFloaterSettingsPicker) ||
@@ -384,7 +390,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             return admitted;
         },
         [](std::string_view name) { return
-            name == "about_land" || name == "ban_duration" || name == "my_environments" || name == "env_fixed_environmentent_sky" || name == "env_fixed_environmentent_water" || name == "env_edit_extdaycycle" || name == "buy_land" || name == "sell_land" || name == "buy_currency" || name == "buy_currency_html" || name == "add_payment_method" || name == "money_tracker" ||
+            name == "region_info" || name == "region_debug_console" || name == "top_objects" || name == "about_land" || name == "ban_duration" || name == "my_environments" || name == "env_fixed_environmentent_sky" || name == "env_fixed_environmentent_water" || name == "env_edit_extdaycycle" || name == "buy_land" || name == "sell_land" || name == "buy_currency" || name == "buy_currency_html" || name == "add_payment_method" || name == "money_tracker" ||
             name == "window_size" || name == "fs_protectedfolders" || name == "fs_streamtitle" || name == "fs_streamtitlehistory" ||
             name == "chat_mention_picker" || name == "emoji_complete" || name == "preview_trash" || name == "new_feature_notification" ||
             name == "fs_whitelist_floater" || name == "settings_color" || name == "fs_splash_screen_settings" || name == "fs_volume_controls" ||
@@ -501,6 +507,11 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             }
             static const std::string_view callbacks[] = {
                 // Shared account/notification policy; none requires a scene renderer.
+                "RegionInfo.ManageRestart",
+                "TopObjects.CommitObjectsList", "TopObjects.GetByObjectName", "TopObjects.GetByOwnerName",
+                "TopObjects.GetByParcelName", "TopObjects.Kick", "TopObjects.Profile", "TopObjects.Refresh",
+                "TopObjects.ReturnAll", "TopObjects.ReturnSelected", "TopObjects.ScriptInfo",
+                "TopObjects.ShowBeacon", "TopObjects.TeleportToObject",
                 "World.SetDoNotDisturb", "World.GetBusy", "View.Status.CheckDoNotDisturb",
                 "World.SetAutorespond", "World.GetAutorespond",
                 "World.SetAutorespondNonFriends", "World.GetAutorespondNonFriends",
