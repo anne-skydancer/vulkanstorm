@@ -30,6 +30,7 @@
 #define FS_FLOATER_AVATAR_ALIGN_H
 
 #include "llfloater.h"
+#include <functional>
 
 class LLVOAvatar;
 
@@ -47,6 +48,8 @@ public:
 
     // Face a specific avatar. Safe to call with nullptr (no-op).
     void faceAvatar(LLVOAvatar* avatar);
+    void faceAvatar(const LLUUID& avatar);
+    bool isAvatarInRange(const LLUUID& avatar) const;
     // Face the nearest non-flying avatar within MAX_FACE_DISTANCE.
     void onClickFaceNearestAvatar();
     // Returns true if avatar is alive and within MAX_FACE_DISTANCE.
@@ -88,6 +91,7 @@ protected:
     CompassLayout buildCompassLayout() const;
     void          drawCompass();
 
+    std::function<bool()> mAccountCurrent;
     LLVOAvatar* mTargetAvatar = nullptr;
     std::string mLabelMini;
     std::string mLabelFull;

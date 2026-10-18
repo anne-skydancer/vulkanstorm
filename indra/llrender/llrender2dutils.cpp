@@ -132,19 +132,7 @@ class NativePrimitive
     std::array<F32, 2> mSavedOffset{};
     bool mPushed = false;
 
-    static void line(const Vertex& a, const Vertex& b)
-    {
-        const F32 dx = b[0] - a[0], dy = b[1] - a[1];
-        const F32 length = std::hypot(dx, dy);
-        if (length == 0.f) return;
-        const F32 half = native_line_width * .5f / length;
-        const F32 nx = -dy * half, ny = dx * half;
-        auto aa = a, ab = a, ba = b, bb = b;
-        aa[0] += nx; aa[1] += ny; ab[0] -= nx; ab[1] -= ny;
-        ba[0] += nx; ba[1] += ny; bb[0] -= nx; bb[1] -= ny;
-        LLRender2D::nativeTriangle({aa, ba, ab});
-        LLRender2D::nativeTriangle({ab, ba, bb});
-    }
+    static void line(const Vertex& a, const Vertex& b) { LLRender2D::nativeLine(a, b); }
 public:
     void pushUIMatrix()
     {
@@ -201,6 +189,20 @@ public:
     }
 };
 }
+
+void LLRender2D::nativeLine(const std::array<F32, 6>& a, const std::array<F32, 6>& b)
+    {
+        const F32 dx = b[0] - a[0], dy = b[1] - a[1];
+        const F32 length = std::hypot(dx, dy);
+        if (length == 0.f) return;
+        const F32 half = native_line_width * .5f / length;
+        const F32 nx = -dy * half, ny = dx * half;
+        auto aa = a, ab = a, ba = b, bb = b;
+        aa[0] += nx; aa[1] += ny; ab[0] -= nx; ab[1] -= ny;
+        ba[0] += nx; ba[1] += ny; bb[0] -= nx; bb[1] -= ny;
+        LLRender2D::nativeTriangle({aa, ba, ab});
+        LLRender2D::nativeTriangle({ab, ba, bb});
+    }
 
 //
 // Globals

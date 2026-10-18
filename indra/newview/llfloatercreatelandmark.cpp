@@ -28,6 +28,7 @@
 #include "vsregioncontext.h"
 
 #include "llfloatercreatelandmark.h"
+#include "vsnativeim.h"
 
 #include "llagent.h"
 #include "llagentui.h"
@@ -289,7 +290,7 @@ void LLFloaterCreateLandmark::onCommitTextChanges()
 void LLFloaterCreateLandmark::onCreateFolderClicked()
 {
     LLNotificationsUtil::add("CreateLandmarkFolder", LLSD(), LLSD(),
-        [this](const LLSD&notif, const LLSD&resp)
+        vs_native_im_ui_callback(this, [this, current = vs_native_im_guard()](const LLSD&notif, const LLSD&resp)
     {
         S32 opt = LLNotificationsUtil::getSelectedOption(notif, resp);
         if (opt == 0)
@@ -297,12 +298,13 @@ void LLFloaterCreateLandmark::onCreateFolderClicked()
             std::string folder_name = resp["message"].asString();
             if (!folder_name.empty())
             {
-                inventory_func_type func = boost::bind(&LLFloaterCreateLandmark::folderCreatedCallback, this, _1);
+                inventory_func_type func = vs_native_im_lifetime_callback([weak = getHandle()] { return weak.get() != nullptr; },
+                    boost::bind(&LLFloaterCreateLandmark::folderCreatedCallback, this, _1));
                 gInventory.createNewCategory(mLandmarksID, LLFolderType::FT_NONE, folder_name, func);
-                gInventory.notifyObservers();
+                if (current()) gInventory.notifyObservers();
             }
         }
-    });
+    }));
 }
 
 void LLFloaterCreateLandmark::folderCreatedCallback(LLUUID folder_id)

@@ -29,6 +29,13 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsfloateravataralign.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
+
 
 #include "llagent.h"
 #include "llviewercontrol.h"
@@ -42,12 +49,41 @@
 #include "llviewermessage.h"
 #include "lltrans.h"
 
+namespace
+{
+class VSCompassDraw
+{
+    const bool mNative = LLRender2D::isNativeUI();
+    U32 mMode = LLRender::TRIANGLES;
+    unsigned mCount = 0;
+    std::array<F32, 6> mPrevious{}, mBeforePrevious{};
+public:
+    void unbind() { if (!mNative) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE); }
+    void color4f(F32 r, F32 g, F32 b, F32 a)
+    { if (mNative) LLRender2D::setNativeColor(LLColor4(r,g,b,a)); else gGL.color4f(r,g,b,a); }
+    void begin(U32 mode) { mMode = mode; mCount = 0; if (!mNative) gGL.begin(mode); }
+    void vertex2f(F32 x, F32 y)
+    {
+        if (!mNative) { gGL.vertex2f(x,y); return; }
+        const auto& tint = LLRender2D::nativeColor();
+        const std::array<F32,6> vertex{x,y,tint.mV[0],tint.mV[1],tint.mV[2],tint.mV[3]};
+        if (mMode == LLRender::TRIANGLES && mCount % 3 == 2)
+            LLRender2D::nativeTriangle({mBeforePrevious,mPrevious,vertex});
+        else if (mMode == LLRender::LINES && (mCount & 1))
+            LLRender2D::nativeLine(mPrevious,vertex);
+        mBeforePrevious=mPrevious; mPrevious=vertex; ++mCount;
+    }
+    void end() { if (!mNative) gGL.end(); }
+};
+}
+
 // ============================================================
 // FSAvatarAlignBase
 // ============================================================
 
 FSAvatarAlignBase::FSAvatarAlignBase(const LLSD& key)
     : LLFloater(key)
+    , mAccountCurrent(vs_native_im_guard())
     , mLabelMini(LLTrans::getString("FSAvatarAlignToggleMini"))
     , mLabelFull(LLTrans::getString("FSAvatarAlignToggleFull"))
 {
@@ -111,37 +147,38 @@ void FSAvatarAlignBase::drawCompass()
     F32 cy = lo.cy;
     F32 fR = (F32)lo.R;
 
-    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+    VSCompassDraw draw;
+    draw.unbind();
 
     // Background circle
-    gGL.color4f(0.08f, 0.08f, 0.10f, 0.90f);
+    draw.color4f(0.08f, 0.08f, 0.10f, 0.90f);
     gl_circle_2d(cx, cy, fR, 64, TRUE);
 
     // Outer ring
-    gGL.color4f(0.45f, 0.45f, 0.45f, 1.f);
+    draw.color4f(0.45f, 0.45f, 0.45f, 1.f);
     gl_circle_2d(cx, cy, fR, 64, FALSE);
 
     // Inner ring at half radius
-    gGL.color4f(0.25f, 0.25f, 0.25f, 1.f);
+    draw.color4f(0.25f, 0.25f, 0.25f, 1.f);
     gl_circle_2d(cx, cy, fR * 0.5f, 48, FALSE);
 
     // Tick marks at 45° intervals
-    gGL.begin(LLRender::LINES);
-    gGL.color4f(0.35f, 0.35f, 0.35f, 1.f);
+    draw.begin(LLRender::LINES);
+    draw.color4f(0.35f, 0.35f, 0.35f, 1.f);
     for (S32 i = 0; i < 8; ++i)
     {
         F32 a  = i * F_PI / 4.f;
         F32 sa = sinf(a), ca = cosf(a);
-        gGL.vertex2f(cx + (fR - 7.f) * sa, cy + (fR - 7.f) * ca);
-        gGL.vertex2f(cx +  fR        * sa, cy +  fR        * ca);
+        draw.vertex2f(cx + (fR - 7.f) * sa, cy + (fR - 7.f) * ca);
+        draw.vertex2f(cx +  fR        * sa, cy +  fR        * ca);
     }
-    gGL.end();
+    draw.end();
 
     // Hover highlight: a semi-transparent light overlay drawn on whichever zone the mouse is over
     if (mHoverOctant == -2)
     {
         // Center zone: fill the inner circle
-        gGL.color4f(1.f, 1.f, 1.f, 0.18f);
+        draw.color4f(1.f, 1.f, 1.f, 0.18f);
         gl_circle_2d(cx, cy, fR * 0.25f, 24, TRUE);
     }
     else if (mHoverOctant >= 0)
@@ -152,22 +189,22 @@ void FSAvatarAlignBase::drawCompass()
         F32 halfSpan   = F_PI / 8.f;                       // half of 45° in radians
         F32 innerR     = fR * 0.25f;                       // inner boundary (center zone edge)
         S32 segs       = 8;                                // subdivisions for a smooth arc
-        gGL.begin(LLRender::TRIANGLES);
-        gGL.color4f(1.f, 1.f, 1.f, 0.13f);
+        draw.begin(LLRender::TRIANGLES);
+        draw.color4f(1.f, 1.f, 1.f, 0.13f);
         for (S32 i = 0; i < segs; ++i)
         {
             // Two adjacent arc angles for this subdivision
             F32 a0 = hoverAngle - halfSpan + (F32)i       * (2.f * halfSpan / segs);
             F32 a1 = hoverAngle - halfSpan + (F32)(i + 1) * (2.f * halfSpan / segs);
             // Two triangles forming a trapezoid between innerR and fR for this strip
-            gGL.vertex2f(cx + innerR * sinf(a0), cy + innerR * cosf(a0));
-            gGL.vertex2f(cx + fR     * sinf(a0), cy + fR     * cosf(a0));
-            gGL.vertex2f(cx + fR     * sinf(a1), cy + fR     * cosf(a1));
-            gGL.vertex2f(cx + innerR * sinf(a0), cy + innerR * cosf(a0));
-            gGL.vertex2f(cx + fR     * sinf(a1), cy + fR     * cosf(a1));
-            gGL.vertex2f(cx + innerR * sinf(a1), cy + innerR * cosf(a1));
+            draw.vertex2f(cx + innerR * sinf(a0), cy + innerR * cosf(a0));
+            draw.vertex2f(cx + fR     * sinf(a0), cy + fR     * cosf(a0));
+            draw.vertex2f(cx + fR     * sinf(a1), cy + fR     * cosf(a1));
+            draw.vertex2f(cx + innerR * sinf(a0), cy + innerR * cosf(a0));
+            draw.vertex2f(cx + fR     * sinf(a1), cy + fR     * cosf(a1));
+            draw.vertex2f(cx + innerR * sinf(a1), cy + innerR * cosf(a1));
         }
-        gGL.end();
+        draw.end();
     }
 
     // Draw the 4 cardinal arms as kite (diamond) shapes.
@@ -183,7 +220,7 @@ void FSAvatarAlignBase::drawCompass()
     F32 tipR  = fR - 4.f;    // how far out the arm tip reaches
     F32 sideR = fR * 0.245f; // half-width of the arm at its base (center of compass)
 
-    gGL.begin(LLRender::TRIANGLES);
+    draw.begin(LLRender::TRIANGLES);
     for (const auto& arm : ARMS)
     {
         F32 a  = arm.angle_deg * DEG_TO_RAD;
@@ -196,11 +233,11 @@ void FSAvatarAlignBase::drawCompass()
         F32 rx = cx + sideR * sinf(ar);  F32 ry = cy + sideR * cosf(ar);
 
         // two triangles: tip->center->left, tip->right->center
-        gGL.color4f(arm.r, arm.g, arm.b, 1.f);
-        gGL.vertex2f(tx, ty); gGL.vertex2f(cx, cy); gGL.vertex2f(lx, ly);
-        gGL.vertex2f(tx, ty); gGL.vertex2f(rx, ry); gGL.vertex2f(cx, cy);
+        draw.color4f(arm.r, arm.g, arm.b, 1.f);
+        draw.vertex2f(tx, ty); draw.vertex2f(cx, cy); draw.vertex2f(lx, ly);
+        draw.vertex2f(tx, ty); draw.vertex2f(rx, ry); draw.vertex2f(cx, cy);
     }
-    gGL.end();
+    draw.end();
 
     // Intercardinal arms (NE, SE, SW, NW): same kite shape as cardinals but shorter and narrower.
     // Skipped entirely when the floater is in compact mini mode (too small to be legible).
@@ -210,8 +247,8 @@ void FSAvatarAlignBase::drawCompass()
 
     if (!lo.mini_compact)
     {
-        gGL.begin(LLRender::TRIANGLES);
-        gGL.color4f(0.55f, 0.55f, 0.55f, 1.f);
+        draw.begin(LLRender::TRIANGLES);
+        draw.color4f(0.55f, 0.55f, 0.55f, 1.f);
         for (F32 angle_deg : INTER_ANGLES)
         {
             F32 a  = angle_deg * DEG_TO_RAD;
@@ -223,16 +260,16 @@ void FSAvatarAlignBase::drawCompass()
             F32 lx = cx + sideR2 * sinf(al);  F32 ly = cy + sideR2 * cosf(al);
             F32 rx = cx + sideR2 * sinf(ar);  F32 ry = cy + sideR2 * cosf(ar);
 
-            gGL.vertex2f(tx, ty); gGL.vertex2f(cx, cy); gGL.vertex2f(lx, ly);
-            gGL.vertex2f(tx, ty); gGL.vertex2f(rx, ry); gGL.vertex2f(cx, cy);
+            draw.vertex2f(tx, ty); draw.vertex2f(cx, cy); draw.vertex2f(lx, ly);
+            draw.vertex2f(tx, ty); draw.vertex2f(rx, ry); draw.vertex2f(cx, cy);
         }
-        gGL.end();
+        draw.end();
     }
 
     // Center dot
-    gGL.color4f(0.20f, 0.20f, 0.20f, 1.f);
+    draw.color4f(0.20f, 0.20f, 0.20f, 1.f);
     gl_circle_2d(cx, cy, 5.f, 16, TRUE);
-    gGL.color4f(0.50f, 0.50f, 0.50f, 1.f);
+    draw.color4f(0.50f, 0.50f, 0.50f, 1.f);
     gl_circle_2d(cx, cy, 5.f, 16, FALSE);
 
     // Heading needle: a yellow triangle pointing in the direction the agent is currently facing.
@@ -250,10 +287,10 @@ void FSAvatarAlignBase::drawCompass()
         F32 bx1 = cx - at.mV[VY] * pw;  F32 by1 = cy + at.mV[VX] * pw;
         F32 bx2 = cx + at.mV[VY] * pw;  F32 by2 = cy - at.mV[VX] * pw;
 
-        gGL.begin(LLRender::TRIANGLES);
-        gGL.color4f(1.f, 0.85f, 0.f, 0.95f); // yellow
-        gGL.vertex2f(nx, ny); gGL.vertex2f(bx1, by1); gGL.vertex2f(bx2, by2);
-        gGL.end();
+        draw.begin(LLRender::TRIANGLES);
+        draw.color4f(1.f, 0.85f, 0.f, 0.95f); // yellow
+        draw.vertex2f(nx, ny); draw.vertex2f(bx1, by1); draw.vertex2f(bx2, by2);
+        draw.end();
     }
 
     // Cardinal labels: only in full mode and when compass is large enough
@@ -295,9 +332,9 @@ void FSAvatarAlignBase::drawCompass()
     mToggleBtnRect.set(btn_x, btn_yt, btn_x + btn_w, btn_yt - btn_h);
 
     // Dark fill, then a white border that brightens on hover
-    gGL.color4f(0.f, 0.f, 0.f, 0.55f);
+    draw.color4f(0.f, 0.f, 0.f, 0.55f);
     gl_rect_2d(mToggleBtnRect, true);
-    gGL.color4f(1.f, 1.f, 1.f, mHoverToggle ? 1.f : 0.65f);
+    draw.color4f(1.f, 1.f, 1.f, mHoverToggle ? 1.f : 0.65f);
     gl_rect_2d(mToggleBtnRect, false);
 
     // Label centered inside the button
@@ -407,6 +444,18 @@ void FSAvatarAlignBase::snapRemoteAvatarBody(LLVOAvatar* avatar)
 
 void FSAvatarAlignBase::applyRotation(const LLVector3& direction)
 {
+    if (!mAccountCurrent()) return;
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active())
+    {
+        if (!session->regionReady()) return;
+        session->faceBody(direction);
+        // The native avatar root consumes this authoritative body rotation in
+        // its ordinary pose update; no legacy LLVOAvatar root is retained.
+        mTargetAvatar = nullptr;
+        return;
+    }
+#endif
     // Rotate the agent camera/frame, tell the server, then fix up both avatar bodies visually
     gAgent.resetAxes(direction);
     send_agent_update(true, false);
@@ -475,6 +524,25 @@ void FSAvatarAlignBase::faceAvatar(LLVOAvatar* avatar)
 
 void FSAvatarAlignBase::onClickFaceNearestAvatar()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        if (!mAccountCurrent()) return;
+        const auto origin = gAgent.getPositionGlobal();
+        LLUUID nearest;
+        F64 distance = F64_MAX;
+        for (const auto& avatar : vs_avatar_locations(origin, MAX_FACE_DISTANCE))
+        {
+            LLVector3d precise;
+            if (avatar.id == gAgentID || !vs_avatar_precise_location(avatar.id, precise)) continue;
+            const F64 candidate = dist_vec_squared(precise, origin);
+            if (candidate <= MAX_FACE_DISTANCE * MAX_FACE_DISTANCE && candidate < distance)
+            { nearest = avatar.id; distance = candidate; }
+        }
+        if (nearest.notNull()) faceAvatar(nearest);
+        return;
+    }
+#endif
     if (!isAgentAvatarValid())
         return;
 
@@ -554,6 +622,7 @@ bool FSFloaterAvatarAlign::postBuild()
 
 void FSFloaterAvatarAlign::onOpen(const LLSD& key)
 {
+    mAccountCurrent = vs_native_im_guard();
 }
 
 void FSFloaterAvatarAlign::onToggleMode()
@@ -587,6 +656,7 @@ bool FSFloaterAvatarAlignMini::postBuild()
 
 void FSFloaterAvatarAlignMini::onOpen(const LLSD& key)
 {
+    mAccountCurrent = vs_native_im_guard();
 }
 
 void FSFloaterAvatarAlignMini::onToggleMode()
@@ -597,4 +667,21 @@ void FSFloaterAvatarAlignMini::onToggleMode()
     closeFloater(false);
     FSFloaterAvatarAlign* full = LLFloaterReg::showTypedInstance<FSFloaterAvatarAlign>("avatar_align");
     if (full) { repositionOnToggle(full, rect); }
+}
+
+bool FSAvatarAlignBase::isAvatarInRange(const LLUUID& id) const
+{
+    if (id.isNull() || id == gAgentID || !mAccountCurrent()) return false;
+    LLVector3d position;
+    return vs_avatar_precise_location(id, position) && dist_vec(position, gAgent.getPositionGlobal()) <= MAX_FACE_DISTANCE;
+}
+
+void FSAvatarAlignBase::faceAvatar(const LLUUID& id)
+{
+    if (!isAvatarInRange(id)) return;
+    LLVector3d position;
+    if (!vs_avatar_precise_location(id, position)) return;
+    LLVector3 direction(position - gAgent.getPositionGlobal());
+    direction.mV[VZ] = 0.f;
+    if (direction.normalize() > 0.f) applyRotation(direction);
 }

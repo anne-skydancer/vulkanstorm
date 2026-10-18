@@ -136,6 +136,8 @@ jobs:
       - run: python scripts/tests/test_native_attachment_resources.py
       - run: python scripts/tests/test_native_land_resources.py
       - run: python scripts/tests/test_native_maps.py
+      - run: python scripts/tests/test_native_minimap.py
+      - run: python scripts/tests/test_native_map_inspector.py
       - run: python scripts/tests/test_native_default_pie_dispatch.py
       - run: python scripts/tests/test_native_selection_continuation.py
       - run: python scripts/tests/test_native_media_policy.py
