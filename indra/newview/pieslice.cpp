@@ -28,6 +28,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "pieslice.h"
+#include "vsuiadmission.h"
 
 // pick up parameters from the XUI definition
 PieSlice::Params::Params() :
@@ -55,17 +56,23 @@ PieSlice::PieSlice(const PieSlice::Params& p) :
 void PieSlice::initFromParams(const Params& p)
 {
     // add a callback if on_click is provided
-    if (p.on_click.isProvided())
+    const bool on_click_allowed=VSUIAdmission::callback(p.on_click.function_name(),p.on_click.parameter());
+    if(p.on_click.isProvided() && !on_click_allowed)mNativeCallbacksAllowed=false;
+    if (p.on_click.isProvided() && on_click_allowed)
     {
         setCommitCallback(initCommitCallback(p.on_click));
     }
     // add a callback if on_visible is provided
-    if (p.on_visible.isProvided())
+    const bool on_visible_allowed=VSUIAdmission::callback(p.on_visible.function_name(),p.on_visible.parameter());
+    if(p.on_visible.isProvided() && !on_visible_allowed)mNativeCallbacksAllowed=false;
+    if (p.on_visible.isProvided() && on_visible_allowed)
     {
         mVisibleSignal.connect(initEnableCallback(p.on_visible));
     }
     // add a callback if on_enable is provided
-    if (p.on_enable.isProvided())
+    const bool on_enable_allowed=VSUIAdmission::callback(p.on_enable.function_name(),p.on_enable.parameter());
+    if(p.on_enable.isProvided() && !on_enable_allowed)mNativeCallbacksAllowed=false;
+    if (p.on_enable.isProvided() && on_enable_allowed)
     {
         setEnableCallback(initEnableCallback(p.on_enable));
         // Set the enabled control variable (for backwards compatability)
@@ -80,11 +87,13 @@ void PieSlice::initFromParams(const Params& p)
     }
 
     LLUICtrl::initFromParams(p);
+    if(!mNativeCallbacksAllowed)setEnabled(false);
 }
 
 // call this to make the menu update its "enabled" status
 void PieSlice::updateEnabled()
 {
+    if(!mNativeCallbacksAllowed){setEnabled(false);return;}
     if (mDoUpdateEnabled && mEnableSignal.num_slots() > 0)
     {
         bool enabled = mEnableSignal(this, LLSD());
@@ -142,4 +151,10 @@ void PieSlice::setLabel(std::string_view newLabel)
 void PieSlice::resetUpdateEnabledCheck()
 {
     mDoUpdateEnabled = true;
+}
+
+void PieSlice::onCommit()
+{
+    if(!mNativeCallbacksAllowed)return;
+    LLUICtrl::onCommit();
 }

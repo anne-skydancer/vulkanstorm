@@ -35,11 +35,11 @@
 #endif
 
 #include "llviewermenu.h"
+#include "vsavatarservices.h"
 #if VS_NATIVE_VULKAN
 #include "vsplainchat.h"
 #include "vsnativesession.h"
 #include "vsnativeappearance.h"
-#include "vsavatarservices.h"
 #include "vsworldavatar.h"
 #include "vsvulkancontext.h"
 #include "llpanelpeople.h"
@@ -603,9 +603,83 @@ void fit_native_menu_bar(LLMenuBarGL& menu, const LLView& holder)
 }
 }
 
+namespace
+{
+void init_world_context_menus()
+{
+    if(gMenuObject)return;
+    const widget_registry_t& registry=LLViewerMenuHolderGL::child_registry_t::instance();
+    gMenuAvatarSelf = LLUICtrlFactory::createFromFile<LLContextMenu>(
+        "menu_avatar_self.xml", gMenuHolder, registry);
+    gMenuAvatarOther = LLUICtrlFactory::createFromFile<LLContextMenu>(
+        "menu_avatar_other.xml", gMenuHolder, registry);
+
+    gDetachScreenPieMenu = gMenuHolder->getChild<LLContextMenu>("Object Detach HUD", true);
+    gDetachPieMenu = gMenuHolder->getChild<LLContextMenu>("Object Detach", true);
+
+    gMenuObject = LLUICtrlFactory::createFromFile<LLContextMenu>(
+        "menu_object.xml", gMenuHolder, registry);
+
+    gAttachScreenPieMenu = gMenuHolder->getChild<LLContextMenu>("Object Attach HUD");
+    gAttachPieMenu = gMenuHolder->getChild<LLContextMenu>("Object Attach");
+
+    gMenuAttachmentSelf = LLUICtrlFactory::createFromFile<LLContextMenu>(
+        "menu_attachment_self.xml", gMenuHolder, registry);
+    gMenuAttachmentOther = LLUICtrlFactory::createFromFile<LLContextMenu>(
+        "menu_attachment_other.xml", gMenuHolder, registry);
+
+    gDetachHUDAttSelfMenu = gMenuHolder->getChild<LLContextMenu>("Detach Self HUD", true);
+    gDetachAttSelfMenu = gMenuHolder->getChild<LLContextMenu>("Detach Self", true);
+
+    gMenuLand = LLUICtrlFactory::createFromFile<LLContextMenu>(
+        "menu_land.xml", gMenuHolder, registry);
+
+    gMenuMuteParticle = LLUICtrlFactory::createFromFile<LLContextMenu>(
+        "menu_mute_particle.xml", gMenuHolder, registry);
+
+// <FS:Zi> Pie menu
+    gPieMenuAvatarSelf = LLUICtrlFactory::createFromFile<PieMenu>(
+        "menu_pie_avatar_self.xml", gMenuHolder, registry);
+    gPieMenuAvatarOther = LLUICtrlFactory::createFromFile<PieMenu>(
+        "menu_pie_avatar_other.xml", gMenuHolder, registry);
+
+    // added "Pie" to the control names to keep them unique
+    gPieDetachScreenMenu = gMenuHolder->getChild<PieMenu>("Pie Object Detach HUD", true);
+    gPieDetachMenu = gMenuHolder->getChild<PieMenu>("Pie Object Detach", true);
+
+    gPieMenuObject = LLUICtrlFactory::createFromFile<PieMenu>(
+        "menu_pie_object.xml", gMenuHolder, registry);
+
+    // added "Pie" to the control names to keep them unique
+    gPieAttachScreenMenu = gMenuHolder->getChild<PieMenu>("Pie Object Attach HUD");
+    gPieAttachMenu = gMenuHolder->getChild<PieMenu>("Pie Object Attach");
+
+    gPieMenuAttachmentSelf = LLUICtrlFactory::createFromFile<PieMenu>(
+        "menu_pie_attachment_self.xml", gMenuHolder, registry);
+    gPieMenuAttachmentOther = LLUICtrlFactory::createFromFile<PieMenu>(
+        "menu_pie_attachment_other.xml", gMenuHolder, registry);
+
+    gPieMenuLand = LLUICtrlFactory::createFromFile<PieMenu>(
+        "menu_pie_land.xml", gMenuHolder, registry);
+
+    gPieMenuMuteParticle = LLUICtrlFactory::createFromFile<PieMenu>(
+        "menu_pie_mute_particle.xml", gMenuHolder, registry);
+// </FS:Zi> Pie menu
+
+    // <FS:Ansariel> FIRE-7893: Detach function on inspect self toast without function
+    gMenuInspectSelf = LLUICtrlFactory::createFromFile<LLToggleableMenu>(
+        "menu_inspect_self_gear.xml", gMenuHolder, registry);
+
+    gInspectSelfDetachScreenMenu = gMenuHolder->getChild<LLContextMenu>("Inspect Self Detach HUD", true);
+    gInspectSelfDetachMenu = gMenuHolder->getChild<LLContextMenu>("Inspect Self Detach", true);
+}
+}
+
 void init_native_connected_menus()
 {
     if (gMenuBarView) return;
+    init_world_context_menus();
+    if(!gMenuParcelObserver)gMenuParcelObserver=new LLMenuParcelObserver();
 #if VS_NATIVE_VULKAN
     // Vintage's People layout is a scene radar. Keep its existing skinned
     // Contacts frontend for native account operations and menu check states.
@@ -688,69 +762,7 @@ void init_menus()
     const widget_registry_t& registry =
         LLViewerMenuHolderGL::child_registry_t::instance();
     gEditMenu = LLUICtrlFactory::createFromFile<LLMenuGL>("menu_edit.xml", gMenuHolder, registry);
-    gMenuAvatarSelf = LLUICtrlFactory::createFromFile<LLContextMenu>(
-        "menu_avatar_self.xml", gMenuHolder, registry);
-    gMenuAvatarOther = LLUICtrlFactory::createFromFile<LLContextMenu>(
-        "menu_avatar_other.xml", gMenuHolder, registry);
-
-    gDetachScreenPieMenu = gMenuHolder->getChild<LLContextMenu>("Object Detach HUD", true);
-    gDetachPieMenu = gMenuHolder->getChild<LLContextMenu>("Object Detach", true);
-
-    gMenuObject = LLUICtrlFactory::createFromFile<LLContextMenu>(
-        "menu_object.xml", gMenuHolder, registry);
-
-    gAttachScreenPieMenu = gMenuHolder->getChild<LLContextMenu>("Object Attach HUD");
-    gAttachPieMenu = gMenuHolder->getChild<LLContextMenu>("Object Attach");
-
-    gMenuAttachmentSelf = LLUICtrlFactory::createFromFile<LLContextMenu>(
-        "menu_attachment_self.xml", gMenuHolder, registry);
-    gMenuAttachmentOther = LLUICtrlFactory::createFromFile<LLContextMenu>(
-        "menu_attachment_other.xml", gMenuHolder, registry);
-
-    gDetachHUDAttSelfMenu = gMenuHolder->getChild<LLContextMenu>("Detach Self HUD", true);
-    gDetachAttSelfMenu = gMenuHolder->getChild<LLContextMenu>("Detach Self", true);
-
-    gMenuLand = LLUICtrlFactory::createFromFile<LLContextMenu>(
-        "menu_land.xml", gMenuHolder, registry);
-
-    gMenuMuteParticle = LLUICtrlFactory::createFromFile<LLContextMenu>(
-        "menu_mute_particle.xml", gMenuHolder, registry);
-
-// <FS:Zi> Pie menu
-    gPieMenuAvatarSelf = LLUICtrlFactory::createFromFile<PieMenu>(
-        "menu_pie_avatar_self.xml", gMenuHolder, registry);
-    gPieMenuAvatarOther = LLUICtrlFactory::createFromFile<PieMenu>(
-        "menu_pie_avatar_other.xml", gMenuHolder, registry);
-
-    // added "Pie" to the control names to keep them unique
-    gPieDetachScreenMenu = gMenuHolder->getChild<PieMenu>("Pie Object Detach HUD", true);
-    gPieDetachMenu = gMenuHolder->getChild<PieMenu>("Pie Object Detach", true);
-
-    gPieMenuObject = LLUICtrlFactory::createFromFile<PieMenu>(
-        "menu_pie_object.xml", gMenuHolder, registry);
-
-    // added "Pie" to the control names to keep them unique
-    gPieAttachScreenMenu = gMenuHolder->getChild<PieMenu>("Pie Object Attach HUD");
-    gPieAttachMenu = gMenuHolder->getChild<PieMenu>("Pie Object Attach");
-
-    gPieMenuAttachmentSelf = LLUICtrlFactory::createFromFile<PieMenu>(
-        "menu_pie_attachment_self.xml", gMenuHolder, registry);
-    gPieMenuAttachmentOther = LLUICtrlFactory::createFromFile<PieMenu>(
-        "menu_pie_attachment_other.xml", gMenuHolder, registry);
-
-    gPieMenuLand = LLUICtrlFactory::createFromFile<PieMenu>(
-        "menu_pie_land.xml", gMenuHolder, registry);
-
-    gPieMenuMuteParticle = LLUICtrlFactory::createFromFile<PieMenu>(
-        "menu_pie_mute_particle.xml", gMenuHolder, registry);
-// </FS:Zi> Pie menu
-
-    // <FS:Ansariel> FIRE-7893: Detach function on inspect self toast without function
-    gMenuInspectSelf = LLUICtrlFactory::createFromFile<LLToggleableMenu>(
-        "menu_inspect_self_gear.xml", gMenuHolder, registry);
-
-    gInspectSelfDetachScreenMenu = gMenuHolder->getChild<LLContextMenu>("Inspect Self Detach HUD", true);
-    gInspectSelfDetachMenu = gMenuHolder->getChild<LLContextMenu>("Inspect Self Detach", true);
+    init_world_context_menus();
     // </FS:Ansariel>
 
     ///
@@ -11786,6 +11798,7 @@ bool LLViewerMenuHolderGL::hideMenus()
     // drop pie menu selection
     mParcelSelection = NULL;
     mObjectSelection = NULL;
+    mNativeObjectSelection.reset();
 
     if (gMenuBarView)
     {
@@ -11805,6 +11818,11 @@ void LLViewerMenuHolderGL::setObjectSelection(LLSafeHandle<LLObjectSelection> se
 {
     mObjectSelection = selection;
 }
+void LLViewerMenuHolderGL::setNativeObjectSelection(std::shared_ptr<const void> selection)
+{
+    mNativeObjectSelection=std::move(selection);
+}
+
 
 
 const LLRect LLViewerMenuHolderGL::getMenuRect() const

@@ -19,10 +19,14 @@
 #include "vsobjectselection.h"
 #include "vsobjectattention.h"
 #include "lltoolmgr.h"
+#include "llviewermenu.h"
 #include "aoengine.h"
 #include "fsavatarrenderpersistence.h"
 #include "vsvulkancontext.h"
 #include "vsworldscene.h"
+#include "vsobjectcontext.h"
+#include "vsregioncontext.h"
+#include "llslurl.h"
 #include "vsworldavatar.h"
 #include "llhudobject.h"
 #include "llcharacter.h"
@@ -2180,7 +2184,7 @@ void VSNativeSession::appendChat(LLSD chat, U64 generation)
     if (!chat["text"].isString() || !chat["from"].isString() || chat["text"].asString().size() > 4096) return;
     const auto source = chat["source"].asUUID(), owner = chat["owner"].asUUID();
     const auto kind = chat["kind"].asInteger(), type = chat["type"].asInteger();
-    if (kind < CHAT_SOURCE_SYSTEM || kind > CHAT_SOURCE_OBJECT || type < CHAT_TYPE_WHISPER || type > CHAT_TYPE_OWNER || type == CHAT_TYPE_START || type == CHAT_TYPE_STOP) return;
+    if (kind < CHAT_SOURCE_SYSTEM || kind > CHAT_SOURCE_REGION || type < CHAT_TYPE_WHISPER || type > CHAT_TYPE_RADAR || type == CHAT_TYPE_START || type == CHAT_TYPE_STOP) return;
     if (chat["audible"].asInteger() != CHAT_AUDIBLE_FULLY) return;
     // The reference bridge protocol is object owner-chat, consumed before
     // ordinary chat history/translation. Its controller validates the actual attachment.
@@ -2211,6 +2215,33 @@ void VSNativeSession::appendChat(LLSD chat, U64 generation)
                 }));
         }
     }
+    LLChat received;
+    received.mFromID = source; received.mOwnerID = owner;
+    received.mFromName = chat["from"].asString();
+    received.mSourceType = static_cast<EChatSourceType>(kind);
+    received.mChatType = static_cast<EChatType>(type);
+    if (chat["position"].isArray() && chat["position"].size() == 3)
+        received.mPosAgent = ll_vector3_from_sd(chat["position"]);
+    const auto chatObject = VSObjectContext::resolve(source);
+    if (chatObject) received.mPosAgent = gAgent.getPosAgentFromGlobal(chatObject->position);
+    std::string text = chat["text"].asString();
+    const VSReceivedChatContext receive_context{
+        [chatObject]
+        {
+            const bool current = chatObject && chatObject->current && chatObject->current();
+            return VSReceivedChatContext::Source{current && chatObject->attachment, current && chatObject->youOwner};
+        },
+        [&received, this]() -> std::optional<std::string>
+        {
+            const auto position = from_region_handle(mHandle) + LLVector3d(received.mPosAgent);
+            const auto region = vs_region_context(position);
+            if (!region) return {};
+            return LLSLURL(region->getName(), received.mPosAgent).getLocationString();
+        }};
+    if (!vs_filter_received_chat(received, text, owner, receive_context)) return;
+    chat["text"] = text; chat["from"] = received.mFromName;
+    chat["url"] = received.mURL; chat["rlv_names_filtered"] = received.mRlvNamesFiltered;
+    chat["position"] = ll_sd_from_vector3(received.mPosAgent);
     if (gSavedSettings.getBOOL("TranslateChat") && LLTranslate::isTranslationConfigured() && source != mAgent)
     {
         const auto original = chat["text"].asString();
@@ -2228,6 +2259,8 @@ void VSNativeSession::publishChat(const LLSD& chat, const std::string& text, U64
     LLChat message;
     message.mFromName = chat["from"].asString(); message.mFromID = chat["source"].asUUID();
     message.mOwnerID = chat["owner"].asUUID(); message.mText = text;
+    message.mURL = chat["url"].asString();
+    message.mRlvNamesFiltered = chat["rlv_names_filtered"].asBoolean();
     message.mSourceType = static_cast<EChatSourceType>(chat["kind"].asInteger());
     message.mChatType = static_cast<EChatType>(chat["type"].asInteger());
     if (chat["position"].isArray() && chat["position"].size() == 3)
@@ -2515,6 +2548,7 @@ void VSNativeSession::reset()
         LLViewerMediaFocus::instance().clearHover();
         LLViewerMediaFocus::instance().clearFocus();
     }
+    if(gMenuHolder)gMenuHolder->hideMenus();
     if(LLToolMgr::instanceExists())LLToolMgr::instance().retireNativeTools();
     mObjectAttention.reset();
     if(mObjectSelection)mObjectSelection->reset();

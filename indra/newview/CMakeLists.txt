@@ -1627,6 +1627,10 @@ set(viewer_HEADER_FILES
     vsteleportpolicy.h
     vsagentnavigation.h
     vsobjectcontext.h
+    vscontextselection.h
+    vsselectionflow.h
+    vsattentionpolicy.h
+    vsattentionmotion.h
     vsmediapolicy.h
     vsmediaevent.h
     vsobjectproperties.h
@@ -2362,6 +2366,7 @@ if(VS_VULKAN_DIAGNOSTICS)
           vsr3gltfreplay.cpp vsr3gltfreplay.h
           vsr3terrainreplay.cpp vsr3terrainreplay.h
             vshudiconreplay.cpp vshudiconreplay.h
+            vstooltipreplay.cpp vstooltipreplay.h
           vsr3pressurereplay.cpp vsr3pressurereplay.h
           vsr3cachereplay.cpp vsr3cachereplay.h
           vsterrainreplay.cpp vsterrainreplay.h

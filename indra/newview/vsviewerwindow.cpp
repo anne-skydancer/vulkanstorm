@@ -72,6 +72,7 @@
 #include "vsuicontext.h"
 #include "vsstartupui.h"
 #include "vsplainchat.h"
+#include "lltooltip.h"
 #include "vsuiadmission.h"
 #include <stdexcept>
 namespace
@@ -312,6 +313,14 @@ void LLViewerWindow::initNativeBase()
     popups.mouse_opaque = false;
     mPopupView = LLUICtrlFactory::create<LLPopupView>(popups, mRootView);
     require(mPopupView != nullptr, "Native popup owner creation failed");
+    LLToolTipView::Params tooltips;
+    tooltips.name="tooltip view";
+    tooltips.rect=mWindowRectScaled;
+    tooltips.follows.flags=FOLLOWS_ALL;
+    tooltips.mouse_opaque=false;
+    tooltips.tab_group=-2;
+    gToolTipView=LLUICtrlFactory::create<LLToolTipView>(tooltips,mRootView);
+    require(gToolTipView!=nullptr,"Required native tooltip owner creation failed");
     mProgressViewMini->setVisible(false);
     mProgressView->setVisible(false);
 }
@@ -357,6 +366,9 @@ void LLViewerWindow::drawNativeUI()
             area.mBottom - root.mBottom + 10 + height, width, height);
         if (mNativeChat->getRect() != rect) mNativeChat->setShape(rect);
     }
+    // Keep the shared tooltip layer above dynamically constructed chrome.
+    // Transition progress remains the final input-covering surface.
+    if(gToolTipView)mRootView->sendChildToFront(gToolTipView);
     // Progress is an input-covering transition surface, including logout.
     // Later connected popups/chrome must not cover its skinned controls.
     if (mProgressView && mProgressView->getVisible()) mRootView->sendChildToFront(mProgressView);
@@ -527,6 +539,7 @@ bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type,
     // Preserve ordinary non-consuming bindings (notably push-to-talk) before
     // shared controls or an active drag consume the pointer event.
     gViewerInput.handleGlobalBindsMouse(type, mask, down);
+    LLUI::getInstance()->resetMouseIdleTimer();
     if (!mRootView)
         return false;
     pos.mX             = ll_round(pos.mX / mDisplayScale.mV[VX]);
@@ -565,6 +578,16 @@ bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type,
     {
         gFocusMgr.setKeyboardFocus(nullptr);
         owner->releaseMovement();
+        if(type==CLICK_RIGHT)
+            if(auto* tool=nativeMediaTool())
+            {
+                // The actual default tool owns the shared context controller;
+                // UI/capture already had first refusal above. Keep ordinary
+                // mouselook policy and the paired real tool release.
+                if(down)tool->handleRightMouseDown(pos.mX,pos.mY,mask);
+                else tool->handleRightMouseUp(pos.mX,pos.mY,mask);
+                return true;
+            }
         if (down && ((type == CLICK_LEFT && ((mask & MASK_ALT) || LLFloaterCamera::inFreeCameraMode())) || type == CLICK_RIGHT))
         { mNativeCameraDrag = true; return true; }
         if(!down && type==CLICK_LEFT)
@@ -610,6 +633,7 @@ void LLViewerWindow::nativeHover(LLCoordGL pos, MASK mask)
     pos.mX             = ll_round(pos.mX / mDisplayScale.mV[VX]);
     pos.mY             = ll_round(pos.mY / mDisplayScale.mV[VY]);
     const LLCoordGL previous = mCurrentMousePoint;
+    if(pos!=previous)LLUI::getInstance()->resetMouseIdleTimer();
     mCurrentMousePoint = pos;
     mMouseInWindow     = true;
     if (mNativeCameraDrag)
@@ -625,40 +649,44 @@ void LLViewerWindow::nativeHover(LLCoordGL pos, MASK mask)
 void LLViewerWindow::nativeHoverUpdate(MASK mask)
 {
     if (!mRootView) return;
-    const S32 x = mCurrentMousePoint.mX, y = mCurrentMousePoint.mY;
-    updateMouseHoverViews(x, y, mask, mMouseInWindow);
-    if (!mMouseInWindow) return;
+    const S32 x=mCurrentMousePoint.mX,y=mCurrentMousePoint.mY;
+    updateMouseHoverViews(x,y,mask,mMouseInWindow);
+    if(!mMouseInWindow)return;
     mWindow->setCursor(UI_CURSOR_ARROW);
-    if (auto* captor = gFocusMgr.getMouseCapture())
+    auto* captor=gFocusMgr.getMouseCapture();
+    auto* top=gFocusMgr.getTopCtrl();
+    bool handled=false;
+    if(captor)
     {
-        S32 local_x, local_y;
-        captor->screenPointToLocal(x, y, &local_x, &local_y);
-        if(LLToolPie::instanceExists() && captor==LLToolPie::getInstance() &&
-           LLToolPie::instance().hasNativeMediaCapture())
-            nativeMediaHover(*this,mCurrentMousePoint,mask);
-        else captor->handleHover(local_x, local_y, mask);
-        if (LLToolPipette::instanceExists() && LLToolPipette::instance().hasMouseCapture())
-            LLToolPipette::instance().handleToolTip(local_x, local_y, mask);
-        return;
+        S32 local_x,local_y;
+        captor->screenPointToLocal(x,y,&local_x,&local_y);
+        if(LLToolPie::instanceExists() && captor==LLToolPie::getInstance() && LLToolPie::instance().hasNativeMediaCapture())
+            handled=nativeMediaHover(*this,mCurrentMousePoint,mask);
+        else handled=captor->handleHover(local_x,local_y,mask);
     }
-    if (auto* top = gFocusMgr.getTopCtrl())
+    else
     {
-        S32 local_x, local_y;
-        top->screenPointToLocal(x, y, &local_x, &local_y);
-        if (top->pointInView(local_x, local_y) && top->handleHover(local_x, local_y, mask)) return;
-    }
-    if(!mRootView->handleHover(x,y,mask))
-    {
-        if(LLToolPipette::instanceExists() && LLToolPipette::instance().nativeActive())
+        if(top)
         {
-            LLToolPipette::instance().handleHover(x,y,mask);
-            LLToolPipette::instance().handleToolTip(x,y,mask);
+            S32 local_x,local_y;
+            top->screenPointToLocal(x,y,&local_x,&local_y);
+            handled=top->pointInView(local_x,local_y) && top->handleHover(local_x,local_y,mask);
         }
-        else nativeMediaHover(*this,mCurrentMousePoint,mask);
+        if(!handled)handled=mRootView->handleHover(x,y,mask);
+        if(!handled)
+        {
+            if(LLToolPipette::instanceExists() && LLToolPipette::instance().nativeActive())
+                handled=LLToolPipette::instance().handleHover(x,y,mask);
+            else handled=nativeMediaHover(*this,mCurrentMousePoint,mask);
+        }
     }
+    // Same eligibility, captor exclusion, sticky rectangle and control ordering
+    // as the reference path; the real LLToolTipView draws/pumps its own timers.
+    updateToolTip(handled,top,captor,mask);
 }
 void LLViewerWindow::nativeScroll(S32 clicks, bool horizontal)
 {
+    LLUI::getInstance()->resetMouseIdleTimer();
     if (!mRootView)
         return;
     auto* target = gFocusMgr.getMouseCapture();
@@ -689,6 +717,7 @@ void LLViewerWindow::setNativeConnected(bool connected)
         if (!connected) { gConsole->clear(); gConsole->clearSessions(); }
         gConsole->setVisible(connected && gSavedSettings.getBOOL("FSUseNearbyChatConsole"));
     }
+    if(!connected && LLToolTipMgr::instanceExists())LLToolTipMgr::instance().resetToolTips();
     if (!connected && LLHints::instanceExists()) LLHints::deleteSingleton();
     if (!connected && mNativeUI) mNativeUI->resetAccountImages();
     if (LLFavoritesOrderStorage::instanceExists())

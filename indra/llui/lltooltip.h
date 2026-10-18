@@ -153,6 +153,8 @@ public:
     void blockToolTips();
 
     void hideToolTips();
+    // Retire root/account-bound callbacks as well as the visible child.
+    void resetToolTips();
     bool toolTipVisible();
     LLRect getToolTipRect();
     LLRect getMouseNearRect();

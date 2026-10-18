@@ -60,6 +60,7 @@ public:
 
     // call these before checking on enabled/visible status
     void updateEnabled();
+    void onCommit() override;
     void updateVisible();
 
     // initialisation, taking care of optional parameters and setting up the callback
@@ -90,6 +91,7 @@ protected:
     std::string mLabel;
     bool mCheckEnableOnce;
     bool mDoUpdateEnabled;
+    bool mNativeCallbacksAllowed=true;
 
 private:
     enable_signal_t mEnableSignal;
