@@ -73,6 +73,7 @@ protected:
 
 private:
 
+    bool mChildrenReady = false;
     LLColorSwatchCtrl *     mClrFogColor;
 //     LLSlider *              mSldFogDensity;
 //     LLSlider *              mSldUnderWaterMod;
