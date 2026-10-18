@@ -4137,6 +4137,9 @@ void LLViewerWindow::updateUI()
 {
     if (mNativeVulkan)
     {
+        // Shared connected controls defer their arrange work until this pump.
+        // Drain it before layout and focus traversal, as the reference path does.
+        LLAccordionCtrl::updateClass();
         LLLayoutStack::updateClass();
         updateKeyboardFocus();
         nativeHoverUpdate(gKeyboard ? gKeyboard->currentMask(true) : MASK_NONE);

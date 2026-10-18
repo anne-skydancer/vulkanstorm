@@ -121,6 +121,7 @@ jobs:
       - run: python scripts/tests/test_native_debug_beacons.py
       - run: python scripts/tests/test_native_tracker_geometry.py
       - run: python scripts/tests/test_native_keyboard_dispatch.py
+      - run: python scripts/tests/test_native_accordion_lifecycle.py
       - run: python scripts/tests/test_native_utility_lifecycle.py
       - run: python scripts/tests/test_native_currency_lifecycle.py
       - run: python scripts/tests/test_native_currency_ui_contract.py
