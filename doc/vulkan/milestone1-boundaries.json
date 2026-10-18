@@ -1,5 +1,5 @@
 {
-  "source_commit": "a9e852d2e870f5c88385e0be71929a687f487b50",
+  "source_commit": "e70b2ba5d910ce67986586c53fa17635fcdb4111",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -562,7 +562,7 @@
       ]
     },
     "indra/llrender/llrender2dutils.cpp": {
-      "sha256": "0e3d8e3eace83b1c2e1113bdf295b2181d34c5b06c2c86a6d2e90afb5976e800",
+      "sha256": "226988efc68640e8c45f6b8348e9d41fcef8c13f8c498da453e16803a1312e30",
       "anchors": [
         "LLRender2D::setNativeUI",
         "LLRender2D::setSceneBlendType",
@@ -570,7 +570,7 @@
       ]
     },
     "indra/llrender/llrender2dutils.h": {
-      "sha256": "34368fbe097c94a1cc47ea4f60ad80e00f5e2448cc6d10494476876c68ba4ad0",
+      "sha256": "e62de24d5dcb25111d3fc77b4695c640206105ae3936069ad5774642ee2c6243",
       "anchors": [
         "setNativeUI",
         "setSceneBlendType"
@@ -717,7 +717,7 @@
       ]
     },
     "indra/newview/vsviewerwindow.cpp": {
-      "sha256": "234f22834180fd8d8719a22342335f50f871fcdaff17302e678e22ffb87b7e59",
+      "sha256": "279f8a11e39c3506f97d26791879cc578504e96b2f27c2e1b61d52768d802d56",
       "anchors": [
         "initNativeWindow",
         "initNativeBase",
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "1f2277687ad3ffb4dbe75aece6f1bce0533cbec5377a6b2a3bd624937c96d433",
+      "sha256": "2d84bced5bcb98048732cff5ba964cf8311828b155a6db15dc5d82386c6830b0",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -784,7 +784,7 @@
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "d4d13bb2f6998a6ca50e44e97a0ef00dabfbf1dd391ef0a8e879f831887f04e8",
+      "sha256": "9a316f6c236865c6e3fce08b3f3782bce2c70b475ab1607bc6810b1428f650fb",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
@@ -841,7 +841,7 @@
       ]
     },
     "indra/newview/vsnativeim.cpp": {
-      "sha256": "d30fdc9424092c69b1d9d775041b32a138b1478efdbae597bceab96bf0fe6c19",
+      "sha256": "8d34bc758fff449dfc2fb3132c6b05565d4267adcdb6fd600e28f94c7664de24",
       "anchors": [
         "vs_native_im_receive",
         "vs_native_im_guard",
