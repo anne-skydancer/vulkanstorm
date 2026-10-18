@@ -1278,13 +1278,21 @@ bool LLPanelRegionOpenSettingsInfo::refreshFromRegion(const std::optional<VSRegi
     childSetValue("show_tags", LLSD(regionlimits->getAllowRenderName()));
     childSetValue("max_groups", LLSD(gMaxAgentGroups));
     childSetValue("allow_parcel_windlight", LLSD(regionlimits->getAllowParcelWindLight()));
-    childSetValue("enable_teen_mode", LLSD(regionlimits->getEnableTeenMode()));
+    // Current shipped layouts omit the obsolete Teen toggle. Preserve the
+    // accepted simulator policy; never create an invisible dummy control.
+    if(auto* teen=findChild<LLUICtrl>("enable_teen_mode",true))teen->setValue(LLSD(regionlimits->getEnableTeenMode()));
     childSetValue("enforce_max_build", LLSD(regionlimits->getEnforceMaxBuild()));
     childSetValue("terrain_detail_scale", LLSD(regionlimits->getTerrainDetailScale()));
 
     setCtrlsEnabled(allow_modify);
 
     return LLPanelRegionInfo::refreshFromRegion(region);
+}
+
+void LLPanelRegionOpenSettingsInfo::onChangeAnything()
+{
+    enableButton("apply_ors_btn");
+    refresh();
 }
 
 bool LLPanelRegionOpenSettingsInfo::postBuild()
@@ -1305,7 +1313,8 @@ bool LLPanelRegionOpenSettingsInfo::postBuild()
     initCtrl("render_water");
     initCtrl("allow_minimap");
     initCtrl("allow_physical_prims");
-    initCtrl("enable_teen_mode");
+    if(findChild<LLUICtrl>("enable_teen_mode",true))initCtrl("enable_teen_mode");
+    initCtrl("enforce_max_build");
     initCtrl("show_tags");
     initCtrl("allow_parcel_windlight");
     initCtrl("terrain_detail_scale");
@@ -1352,7 +1361,8 @@ void LLPanelRegionOpenSettingsInfo::onClickOrs(void* userdata)
         body["show_tags"] = (LLSD::Real)self->childGetValue("show_tags");
         body["max_groups"] = (LLSD::Real)self->childGetValue("max_groups");
         body["allow_parcel_windlight"] = (LLSD::Boolean)self->childGetValue("allow_parcel_windlight");
-        body["enable_teen_mode"] = (LLSD::Boolean)self->childGetValue("enable_teen_mode");
+        body["enable_teen_mode"]=vs_region_limits().getEnableTeenMode();
+        if(const auto* teen=self->findChild<LLUICtrl>("enable_teen_mode",true))body["enable_teen_mode"]=(LLSD::Boolean)teen->getValue();
         body["enforce_max_build"] = (LLSD::Boolean)self->childGetValue("enforce_max_build");
 
         LLCoreHttpUtil::HttpCoroutineAdapter::messageHttpPost(url, body, "Posted onClickOrs", "Error posting onClickOrs");

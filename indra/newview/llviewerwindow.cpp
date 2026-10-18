@@ -3639,7 +3639,11 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
         return true;
     }
 
-    if (!mNativeVulkan && LLToolMgr::getInstance()->getCurrentTool()->handleKey(key, mask))
+    // Native UI drags own the real mouse capture. Route their keys through
+    // that owner without selecting a legacy world tool as a side effect.
+    LLTool* keyboardTool = mNativeVulkan ? dynamic_cast<LLTool*>(gFocusMgr.getMouseCapture())
+                                       : LLToolMgr::getInstance()->getCurrentTool();
+    if (keyboardTool && keyboardTool->handleKey(key, mask))
     {
         LL_DEBUGS() << "LLviewerWindow::handleKey toolbar handling?" << LL_ENDL;
         LLViewerEventRecorder::instance().logKeyEvent(key,mask);

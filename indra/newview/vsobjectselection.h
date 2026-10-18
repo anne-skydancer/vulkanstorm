@@ -21,6 +21,9 @@ public:
     using FamilyCallback=std::function<void(const std::optional<Publication>&)>;
     explicit VSObjectSelection(std::weak_ptr<VSNativeSession>);
     ~VSObjectSelection();
+    enum class SelectionType { World, Attachment, HUD };
+    struct SelectionTypeState {bool selected=false;std::optional<SelectionType> type;};
+    SelectionTypeState selectionType() const;
     bool canSelect(const VSWorldScene::ObjectHandle&,bool forceSelection=false,bool ignoreSelectOwned=false) const;
     bool select(const std::vector<VSWorldScene::ObjectHandle>&);
     std::vector<VSWorldScene::ObjectHandle> selected() const;

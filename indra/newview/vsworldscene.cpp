@@ -1571,6 +1571,37 @@ std::shared_ptr<const VSResourceBudget::Reservation> VSWorldScene::reserveSpatia
     if(mImpl->retired)return {};
     return mImpl->budgets->terrainBytes.reserve(bytes);
 }
+// Flags/type queries deliberately do not evaluate transforms or copy strings.
+std::optional<VSWorldScene::ObjectAdmission> VSWorldScene::objectAdmission(const ObjectHandle& token) const
+{
+    if(!current(token))return {};
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->objectAdmission(token);
+    const auto& source=mImpl->objects.at(token.local);
+    ObjectAdmission result;result.updateFlags=source.updateFlags;result.rootUpdateFlags=source.updateFlags;result.pcode=source.pcode;
+    const Impl::Object* child=&source;
+    std::array<U32,256> visited{};unsigned count=1;visited[0]=token.local;
+    while(child->parent)
+    {
+        if(child->parentRetired || count==visited.size() || std::find(visited.begin(),visited.begin()+count,child->parent)!=visited.begin()+count)
+        {result.orphaned=true;break;}
+        visited[count++]=child->parent;
+        const auto parent=mImpl->objects.find(child->parent);
+        if(parent==mImpl->objects.end() || (child->parentGeneration && child->parentGeneration!=parent->second.generation))
+        {result.orphaned=true;break;}
+        if(parent->second.pcode==LL_PCODE_LEGACY_AVATAR)
+        {
+            result.attachment=true;
+            const auto avatar=mImpl->avatars.find(parent->second.id);
+            if(avatar==mImpl->avatars.end())return {}; // actual attachment-point metadata not available yet
+            const unsigned state=child->attachment;
+            result.hud=avatar->second->hudAttachment(((state&15)<<4)|(state>>4));
+            break;
+        }
+        child=&parent->second;result.rootUpdateFlags=child->updateFlags;
+    }
+    return result;
+}
+
 std::optional<VSWorldScene::ObjectSnapshot> VSWorldScene::objectSnapshot(const ObjectHandle& token) const
 {
     if(!current(token))return {};

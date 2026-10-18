@@ -154,7 +154,7 @@ public:
 
     void onBtnSet();
     void onChangeChildCtrl(LLUICtrl* ctrl);
-    void onChangeAnything();
+    virtual void onChangeAnything();
     static void onChangeText(LLLineEditor* caller, void* user_data);
 
     virtual bool refreshFromRegion(const std::optional<VSRegionContext>& region);
@@ -203,6 +203,7 @@ public:
     LLPanelRegionOpenSettingsInfo()
         :   LLPanelRegionInfo() {}
     ~LLPanelRegionOpenSettingsInfo() {}
+    void onChangeAnything() override;
 
     virtual bool refreshFromRegion(const std::optional<VSRegionContext>& region);
 

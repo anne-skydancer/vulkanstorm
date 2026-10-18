@@ -16,6 +16,12 @@
 #include "llfloaterfixedenvironment.h"
 #include "llsliderctrl.h"
 #include "llfloaterland.h"
+#include "llfloaterregioninfo.h"
+#include "llfloatertopobjects.h"
+#include "llregioninfomodel.h"
+#include "llestateinfomodel.h"
+#include "lltracker.h"
+#include "llscrolllistctrl.h"
 #include "llfloatereditextdaycycle.h"
 #include "llfloaterurlentry.h"
 #include "llsettingspicker.h"
@@ -313,6 +319,125 @@ void incoming(VSNativeSession& owner, EInstantMessage dialog, const LLUUID& id, 
 }
 struct Replay : public LLAvatarPropertiesObserver
 {
+    unsigned regionUIStage=0,regionUITab=0,regionRequests=0,regionReplies=0,landStatRequests=0;
+    LLUUID estateInvoice;
+    LLHandle<LLFloater> regionUI,consoleUI,topUI;
+    static void regionRequest(LLMessageSystem* message,void** data)
+    {
+        auto& state=*reinterpret_cast<Replay*>(data);LLUUID agent,session;
+        message->getUUID("AgentData","AgentID",agent);message->getUUID("AgentData","SessionID",session);
+        require(agent==gAgentID && session==gAgentSessionID,"Encoded RegionInfo request lost account identity");
+        ++state.regionRequests;
+    }
+    static void estatePacket(LLMessageSystem* message,void** data)
+    {
+        auto& state=*reinterpret_cast<Replay*>(data);std::string method;LLUUID invoice;
+        message->getString("MethodData","Method",method);message->getUUID("MethodData","Invoice",invoice);
+        if(method=="getinfo")
+        {
+            LLUUID agent,session;message->getUUID("AgentData","AgentID",agent);message->getUUID("AgentData","SessionID",session);
+            require(agent==gAgentID && session==gAgentSessionID,"Encoded estate request lost account identity");
+            state.estateInvoice=invoice;return;
+        }
+        if(const auto owner=VSNativeSession::active())owner->receive(message);
+    }
+    static void landStatRequest(LLMessageSystem* message,void** data)
+    {
+        auto& state=*reinterpret_cast<Replay*>(data);LLUUID agent,session;U32 mode,flags;S32 parcel;std::string filter;
+        message->getUUID("AgentData","AgentID",agent);message->getUUID("AgentData","SessionID",session);
+        message->getU32("RequestData","ReportType",mode);message->getU32("RequestData","RequestFlags",flags);
+        message->getString("RequestData","Filter",filter);message->getS32("RequestData","ParcelLocalID",parcel);
+        require(agent==gAgentID && session==gAgentSessionID && mode==STAT_REPORT_TOP_SCRIPTS && flags==0 && filter.empty() && parcel==0,
+            "Actual TopObjects Refresh encoded unexpected request");++state.landStatRequests;
+    }
+    void publishRegionUI(VSNativeSession& owner)
+    {
+        const auto current=vs_current_region_context();require(current && current->current(),"RegionInfo replay lost current simulator");
+        LLMessageSystem* msg=gMessageSystem;msg->newMessage("RegionInfo");msg->nextBlock("AgentData");msg->addUUID("AgentID",gAgentID);msg->addUUID("SessionID",gAgentSessionID);
+        msg->nextBlock("RegionInfo");msg->addString("SimName",current->getName());msg->addU32("EstateID",1000);msg->addU32("ParentEstateID",1000);
+        msg->addU32("RegionFlags",U32(current->getRegionFlags()));msg->addU8("SimAccess",current->getSimAccess());msg->addU8("MaxAgents",40);
+        msg->addF32("BillableFactor",1.f);msg->addF32("ObjectBonusFactor",1.f);msg->addF32("WaterHeight",current->getWaterHeight());
+        msg->addF32("TerrainRaiseLimit",4.f);msg->addF32("TerrainLowerLimit",-4.f);msg->addS32("PricePerMeter",1);msg->addS32("RedirectGridX",0);msg->addS32("RedirectGridY",0);
+        msg->addBOOL("UseEstateSun",true);msg->addF32("SunHour",6.f);
+        msg->nextBlock("RegionInfo2");msg->addString("ProductSKU","native-ui");msg->addString("ProductName","Native qualification simulator");msg->addU32("MaxAgents32",40);msg->addU32("HardMaxAgents",100);msg->addU32("HardMaxObjects",15000);
+        msg->nextBlock("RegionInfo3");msg->addU64("RegionFlagsExtended",current->getRegionFlags());msg->sendReliable(owner.host());
+        ++regionReplies;
+    }
+    void publishEstateUI(VSNativeSession& owner)
+    {
+        const auto current=vs_current_region_context();require(current && current->current(),"Estate replay lost current simulator");
+        LLMessageSystem* msg=gMessageSystem;msg->newMessage("EstateOwnerMessage");msg->nextBlock("AgentData");msg->addUUID("AgentID",gAgentID);msg->addUUID("SessionID",gAgentSessionID);msg->addUUID("TransactionID",LLUUID::null);
+        msg->nextBlock("MethodData");msg->addString("Method","estateupdateinfo");msg->addUUID("Invoice",estateInvoice);
+        for(const auto& value:std::array<std::string,10>{"Native qualification estate",current->getOwner().asString(),"1000",std::to_string(current->getRegionFlags()),"6144","1000",LLUUID::null.asString(),"0","0",""})
+        {msg->nextBlock("ParamList");msg->addString("Parameter",value);}
+        msg->sendReliable(owner.host());estateInvoice.setNull();
+    }
+    bool qualifyRegionUI(VSNativeSession& owner,LLSD& evidence)
+    {
+        if(regionUIStage==12)return true;
+        if(regionUIStage==0)
+        {
+            gMessageSystem->setHandlerFunc("RequestRegionInfo",regionRequest,reinterpret_cast<void**>(this));
+            gMessageSystem->setHandlerFunc("EstateOwnerMessage",estatePacket,reinterpret_cast<void**>(this));
+            gMessageSystem->setHandlerFunc("LandStatRequest",landStatRequest,reinterpret_cast<void**>(this));
+            auto* view=LLFloaterReg::showInstance("region_info");require(view && view->getVisible(),"Actual Region/Estate frontend failed to open");regionUI=view->getHandle();
+            ++regionUIStage;return false;
+        }
+        if(regionRequests>regionReplies)publishRegionUI(owner);
+        if(estateInvoice.notNull())publishEstateUI(owner);
+        if(regionUIStage==1)
+        {
+            if(!regionRequests || LLRegionInfoModel::instance().mHardAgentLimit!=100 || LLEstateInfoModel::instance().getName()!="Native qualification estate")return false;
+            auto* view=regionUI.get();require(view,"Region frontend retired before reply");auto* tabs=view->getChild<LLTabContainer>("region_panels");
+            require(tabs->getTabCount()==9,"Actual region capabilities omitted one of nine Region/Estate tabs");
+            if(regionUITab<9){require(tabs->selectTab(regionUITab++),"Actual Region/Estate tab could not be selected");return false;}
+            const auto current=vs_current_region_context();require(bool(current),"Region model lost current owner");
+            require(LLFloaterRegionInfo::getPanelGeneral()->getChild<LLUICtrl>("agent_limit_spin")->getValue().asInteger()==40,
+                "Encoded RegionInfo did not update real General controls");
+            require(LLFloaterRegionInfo::getPanelGeneral()->getChild<LLUICtrl>("agent_limit_spin")->isInEnabledChain()==current->canManageEstate(),
+                "Region controls differ from ordinary reference estate authority");
+            evidence["connected_region_nine_tabs"]=true;evidence["connected_region_encoded_model"]=true;
+            auto* top=LLFloaterReg::showInstance("top_objects");require(top,"Actual TopObjects frontend failed to open");topUI=top->getHandle();top->getChild<LLButton>("refresh_btn")->onCommit();
+            ++regionUIStage;return false;
+        }
+        if(regionUIStage==2)
+        {
+            if(!landStatRequests)return false;
+            LLMessageSystem* msg=gMessageSystem;msg->newMessage("LandStatReply");msg->nextBlock("RequestData");msg->addU32("ReportType",STAT_REPORT_TOP_SCRIPTS);msg->addU32("RequestFlags",STAT_REQUEST_LAST_ENTRY);msg->addU32("TotalObjectCount",1);
+            msg->nextBlock("ReportData");msg->addU32("TaskLocalID",123);msg->addUUID("TaskID",peer);msg->addF32("LocationX",8.f);msg->addF32("LocationY",8.f);msg->addF32("LocationZ",25.f);msg->addF32("Score",.25f);msg->addString("TaskName","Native tracked CPU target");msg->addString("OwnerName","CPU Sender");msg->sendReliable(owner.host());
+            ++regionUIStage;return false;
+        }
+        if(regionUIStage==3)
+        {
+            auto* view=topUI.get();require(view,"TopObjects retired before encoded reply");auto* list=view->getChild<LLScrollListCtrl>("objects_list");if(list->getItemCount()!=1)return false;
+            require(list->selectByID(peer),"TopObjects could not select genuine decoded row");view->getChild<LLButton>("show_beacon_btn")->onCommit();
+            require(LLTracker::getTrackingStatus()==LLTracker::TRACKING_LOCATION,"Actual TopObjects Show Beacon did not publish shared tracker target");
+            evidence["connected_topobjects_encoded_beacon"]=true;++regionUIStage;return false;
+        }
+        if(regionUIStage==4)
+        {
+            LLTracker::stopTracking(false);
+            auto* view=topUI.get();const auto key=view->getKey();view->closeFloater();LLFloaterReg::destroyInstance("top_objects",key);
+            auto* console=LLFloaterReg::showInstance("region_debug_console");require(console,"Actual simulator console failed to open");consoleUI=console->getHandle();auto* input=console->getChild<LLLineEditor>("region_debug_console_input");input->setText(LLStringExplicit("native qualification"));input->onCommit();
+            ++regionUIStage;return false;
+        }
+        if(regionUIStage==5)
+        {
+            require(topUI.isDead(),"TopObjects retained real controls after deferred retirement");
+            auto* console=consoleUI.get();require(console,"Simulator console retired before HTTP response");if(console->getChild<LLTextEditor>("region_debug_console_output")->getText().find("native console accepted")==std::string::npos)return false;
+            evidence["connected_console_http"]=true;const auto key=console->getKey();console->closeFloater();LLFloaterReg::destroyInstance("region_debug_console",key);
+            auto* view=regionUI.get();const auto regionKey=view->getKey();view->closeFloater();LLFloaterReg::destroyInstance("region_info",regionKey);
+            ++regionUIStage;return false;
+        }
+        if(regionUIStage==6)
+        {
+            require(regionUI.isDead() && consoleUI.isDead(),"Actual Region/console controls survived deferred retirement");
+            require(!LLFloaterRegionInfo::getPanelEstate() && !LLFloaterRegionInfo::getPanelExperiences(),"Late model access manufactured retired Region frontend");
+            evidence["connected_region_ui_retirement"]=true;regionUIStage=12;return true;
+        }
+        return false;
+    }
+
     unsigned step = 0;
     unsigned utilityCheck = 0;
     LLHandle<LLFloater> utilityFloater;
@@ -1108,6 +1233,8 @@ struct Replay : public LLAvatarPropertiesObserver
                 }
 
             }
+
+            if(!qualifyRegionUI(owner,evidence))return false;
 
             if (!keyboardChecked)
             {
