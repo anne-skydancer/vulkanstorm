@@ -492,6 +492,7 @@ set(viewer_SOURCE_FILES
     llhttpretrypolicy.cpp
     llhudeffect.cpp
     llhudeffectbeam.cpp
+    vsattentionpolicy.cpp
     llhudeffectlookat.cpp
     llhudeffectpointat.cpp
     llhudeffecttrail.cpp
@@ -2325,6 +2326,7 @@ if(USE_DILIGENTCORE)
           vsnativeappearance.cpp vsnativeappearance.h
           vstaskinventory.cpp vstaskinventory.h
           vsobjectselection.cpp vsobjectselection.h
+          vsobjectattention.cpp vsobjectattention.h
           vsbridgeadapter.cpp vsbridgeadapter.h
           vsnativecircuits.cpp vsworldcontracts.h)
 endif()

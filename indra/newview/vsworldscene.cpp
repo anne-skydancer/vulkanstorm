@@ -4262,3 +4262,44 @@ bool VSWorldScene::skyCurrent() const
     const auto sky=LLEnvironment::instance().getCurrentSky();
     return sky && mImpl->skyDetail==llclamp(gSavedSettings.getU32("WLSkyDetail"),8u,180u) && mImpl->skyRadius==sky->getDomeRadius();
 }
+
+std::optional<U32> VSWorldScene::faceCount(const ObjectHandle& token) const
+{
+    if(mImpl->retired || !current(token))return {};
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->faceCount(token);
+    return U32(mImpl->objects.at(token.local).faces.size());
+}
+std::optional<std::vector<VSWorldScene::ObjectHandle>> VSWorldScene::directChildren(const ObjectHandle& token) const
+{
+    if(mImpl->retired || !current(token))return {};
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->directChildren(token);
+    std::vector<ObjectHandle> result;
+    const auto [begin,end]=mImpl->objectIndex.children(token.local);
+    for(auto edge=begin;edge!=end;++edge)
+    {
+        const auto child=mImpl->objects.find(edge->second);
+        if(child==mImpl->objects.end() || child->second.parent!=token.local || child->second.parentRetired ||
+            (child->second.parentGeneration && child->second.parentGeneration!=token.generation))continue;
+        if(auto handle=object(mImpl->host,edge->second))result.push_back(*handle);
+    }
+    return result;
+}
+std::optional<VSWorldScene::ObjectHandle> VSWorldScene::rootObject(const ObjectHandle& token,bool stopAtAvatar) const
+{
+    if(mImpl->retired || !current(token))return {};
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->rootObject(token,stopAtAvatar);
+    auto root=token;
+    std::set<U32> visited;
+    while(true)
+    {
+        const auto& child=mImpl->objects.at(root.local);
+        if(!child.parent || (stopAtAvatar && child.pcode==LL_PCODE_LEGACY_AVATAR))return root;
+        if(child.parentRetired || !visited.insert(root.local).second)return {};
+        const auto parent=mImpl->objects.find(child.parent);
+        if(parent==mImpl->objects.end() || (child.parentGeneration && child.parentGeneration!=parent->second.generation))return {};
+        if(stopAtAvatar && parent->second.pcode==LL_PCODE_LEGACY_AVATAR)return root;
+        const auto handle=object(mImpl->host,parent->first);
+        if(!handle)return {};
+        root=*handle;
+    }
+}

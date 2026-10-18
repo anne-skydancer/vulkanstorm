@@ -26,6 +26,10 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llagentcamera.h"
+#if VS_NATIVE_VULKAN
+#include "vsobjectattention.h"
+#include "vsvulkancontext.h"
+#endif
 #include "vscamerafocusobject.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
@@ -3296,6 +3300,20 @@ void LLAgentCamera::setFocusOnAvatar(bool focus_on_avatar, bool animate, bool re
 
 bool LLAgentCamera::setLookAt(ELookAtType target_type, LLViewerObject *object, LLVector3 position)
 {
+    #if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto session=VSNativeSession::active();
+        if(!session || !gViewerWindow->nativeContext())return false;
+        auto* attention=session->objectAttention();
+        if(!attention)return false;
+        auto& world=gViewerWindow->nativeContext()->world();
+        const auto target=object?world.object(object->getID()):std::nullopt;
+        if(object && !target)return false;
+        return attention->look(U8(target_type),target,position);
+    }
+    #endif
+
     static LLCachedControl<bool> isLocalPrivate(gSavedSettings, "PrivateLocalLookAtTarget", false);
 
     // AO, set to absolutely nothing if local lookats are disabled.
@@ -3419,6 +3437,20 @@ bool LLAgentCamera::isfollowCamLocked()
 
 bool LLAgentCamera::setPointAt(EPointAtType target_type, LLViewerObject *object, LLVector3 position)
 {
+    #if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto session=VSNativeSession::active();
+        if(!session || !gViewerWindow->nativeContext())return false;
+        auto* attention=session->objectAttention();
+        if(!attention)return false;
+        auto& world=gViewerWindow->nativeContext()->world();
+        const auto target=object?world.object(object->getID()):std::nullopt;
+        if(object && !target)return false;
+        return attention->point(U8(target_type),target,position);
+    }
+    #endif
+
     // <FS:Ansariel> Remember the current object point pointed at - we might need it later
     mPointAtObject = object;
 

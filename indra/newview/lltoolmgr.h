@@ -48,6 +48,10 @@ public:
 
     // Must be called after gSavedSettings set up.
     void            initTools();
+    void            initNativeTools();
+    void            retireNativeTools();
+    bool            nativeToolsReady() const;
+    LLTool*         nativeCurrentTool();
 
     LLTool*         getCurrentTool(); // returns active tool, taking into account keyboard state
     LLTool*         getBaseTool(); // returns active tool when overrides are deactivated
@@ -84,6 +88,8 @@ protected:
     void            updateToolStatus();
 
 protected:
+    bool            mNativeToolsInitialized=false,mNativeToolsReady=false;
+    U64             mNativeToolGeneration=0;
     LLTool*         mBaseTool;
     LLTool*         mSavedTool;     // The current tool at the time application focus was lost.
     LLTool*         mTransientTool;

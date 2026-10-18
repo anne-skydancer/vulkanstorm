@@ -1764,6 +1764,9 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
 #endif
     // Retire RLVa while account services and the application fiber runtime are
     // alive. Its global destructor must not query LLApp during static teardown.
+    // Real tool callbacks may validate RLVa selection while releasing capture.
+    // Retire them before the policy owner, with the account services alive.
+    if(LLToolMgr::instanceExists())LLToolMgr::instance().retireNativeTools();
     SUBSYSTEM_CLEANUP(RlvHandler);
 #if VS_NATIVE_VULKAN
     if (mNativeSession) mNativeSession->shutdown();

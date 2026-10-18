@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsattentionmotion.h"
+#include "vsavatarmotions.h"
+#include "vsattentionpolicy.h"
 
 #include "llhudeffectpointat.h"
 
@@ -127,35 +130,8 @@ void LLHUDEffectPointAt::packData(LLMessageSystem *mesgsys)
     LLHUDEffect::packData(mesgsys);
 
     // Pack the type-specific data.  Uses a fun packed binary format.  Whee!
-    U8 packed_data[PKT_SIZE];
-    memset(packed_data, 0, PKT_SIZE);
-
-    if (mSourceObject)
-    {
-        htolememcpy(&(packed_data[SOURCE_AVATAR]), mSourceObject->mID.mData, MVT_LLUUID, 16);
-    }
-    else
-    {
-        htolememcpy(&(packed_data[SOURCE_AVATAR]), LLUUID::null.mData, MVT_LLUUID, 16);
-    }
-
-    // pack both target object and position
-    // position interpreted as offset if target object is non-null
-    if (mTargetObject)
-    {
-        htolememcpy(&(packed_data[TARGET_OBJECT]), mTargetObject->mID.mData, MVT_LLUUID, 16);
-    }
-    else
-    {
-        htolememcpy(&(packed_data[TARGET_OBJECT]), LLUUID::null.mData, MVT_LLUUID, 16);
-    }
-
-    htolememcpy(&(packed_data[TARGET_POS]), mTargetOffsetGlobal.mdV, MVT_LLVector3d, 24);
-
-    U8 pointAtTypePacked = (U8)mTargetType;
-    htolememcpy(&(packed_data[POINTAT_TYPE]), &pointAtTypePacked, MVT_U8, 1);
-
-    mesgsys->addBinaryDataFast(_PREHASH_TypeData, packed_data, PKT_SIZE);
+    const auto packed_data=vs_attention_wire(mSourceObject?mSourceObject->mID:LLUUID::null,mTargetObject?mTargetObject->mID:LLUUID::null,mTargetOffsetGlobal,U8(mTargetType));
+    mesgsys->addBinaryDataFast(_PREHASH_TypeData,packed_data.data(),PKT_SIZE);
 
     mLastSendTime = mTimer.getElapsedTimeF32();
 }
@@ -420,7 +396,7 @@ void LLHUDEffectPointAt::update()
         {
             if (calcTargetPosition())
             {
-                ((LLVOAvatar*)(LLViewerObject*)mSourceObject)->startMotion(ANIM_AGENT_EDITING);
+                vs_attention_motion(*((LLVOAvatar*)(LLViewerObject*)mSourceObject),true,true,false,ANIM_AGENT_HEAD_ROT,ANIM_AGENT_EDITING);
             }
         }
     }

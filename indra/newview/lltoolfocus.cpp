@@ -28,6 +28,10 @@
 
 // File includes
 #include "lltoolfocus.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#endif
 
 // Library includes
 #include "v3math.h"
@@ -109,6 +113,14 @@ void LLToolCamera::handleDeselect()
     if (!mValidSelection && (override_mask != MASK_NONE || (gFloaterTools && gFloaterTools->getVisible())))
     {
         LLMenuGL::sMenuContainer->hideMenus();
+        #if VS_NATIVE_VULKAN
+        const auto native=VSNativeSession::active();
+        if(native && gViewerWindow->isNativeVulkan())
+        {
+            if(auto* selection=native->existingObjectSelection())selection->validateSelection();
+        }
+        else
+        #endif
         LLSelectMgr::getInstance()->validateSelection();
     }
 }

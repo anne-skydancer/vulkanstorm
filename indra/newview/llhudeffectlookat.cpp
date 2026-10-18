@@ -25,6 +25,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsattentionmotion.h"
+#include "vsattentionpolicy.h"
 
 #include "llhudeffectlookat.h"
 
@@ -246,6 +248,14 @@ static bool loadAttentions()
 //-----------------------------------------------------------------------------
 // LLHUDEffectLookAt()
 //-----------------------------------------------------------------------------
+VSAttentionPolicy vs_look_attention_policy(bool male,U8 type)
+{
+    loadAttentions();
+    if(type>=LOOKAT_NUM_TARGETS)return {};
+    const auto& row=(male?gBoyAttentions:gGirlAttentions)[type];
+    return {row.mTimeout,row.mPriority,row.mName,row.mColor};
+}
+
 LLHUDEffectLookAt::LLHUDEffectLookAt(const U8 type) :
     LLHUDEffect(type),
     mKillTime(0.f),
@@ -325,36 +335,8 @@ void LLHUDEffectLookAt::packData(LLMessageSystem *mesgsys)
     LLHUDEffect::packData(mesgsys);
 
     // Pack the type-specific data.  Uses a fun packed binary format.  Whee!
-    U8 packed_data[PKT_SIZE];
-    memset(packed_data, 0, PKT_SIZE);
-
-    if (mSourceObject)
-    {
-        htolememcpy(&(packed_data[SOURCE_AVATAR]), mSourceObject->mID.mData, MVT_LLUUID, 16);
-    }
-    else
-    {
-        htolememcpy(&(packed_data[SOURCE_AVATAR]), LLUUID::null.mData, MVT_LLUUID, 16);
-    }
-
-    // pack both target object and position
-    // position interpreted as offset if target object is non-null
-    if (mTargetObject)
-    {
-        htolememcpy(&(packed_data[TARGET_OBJECT]), target_object->mID.mData, MVT_LLUUID, 16);
-    }
-    else
-    {
-        htolememcpy(&(packed_data[TARGET_OBJECT]), LLUUID::null.mData, MVT_LLUUID, 16);
-    }
-
-    htolememcpy(&(packed_data[TARGET_POS]), target_offset_global.mdV, MVT_LLVector3d, 24);
-
-    U8 lookAtTypePacked = (U8)target_type;
-
-    htolememcpy(&(packed_data[LOOKAT_TYPE]), &lookAtTypePacked, MVT_U8, 1);
-
-    mesgsys->addBinaryDataFast(_PREHASH_TypeData, packed_data, PKT_SIZE);
+    const auto packed_data=vs_attention_wire(mSourceObject?mSourceObject->mID:LLUUID::null,mTargetObject?target_object->mID:LLUUID::null,target_offset_global,U8(target_type));
+    mesgsys->addBinaryDataFast(_PREHASH_TypeData,packed_data.data(),PKT_SIZE);
 
     mLastSendTime = mTimer.getElapsedTimeF32();
 }
@@ -837,18 +819,7 @@ void LLHUDEffectLookAt::update()
         if (calcTargetPosition())
         {
             static LLCachedControl<bool> disable_look_at(gSavedSettings, "DisableLookAtAnimation", true);
-            LLMotion* head_motion = ((LLVOAvatar*)(LLViewerObject*)mSourceObject)->findMotion(ANIM_AGENT_HEAD_ROT);
-            if (disable_look_at())
-            {
-                if (head_motion)
-                {
-                    ((LLVOAvatar*)(LLViewerObject*)mSourceObject)->stopMotion(ANIM_AGENT_HEAD_ROT);
-                }
-            }
-            else if (!head_motion || head_motion->isStopped())
-            {
-                ((LLVOAvatar*)(LLViewerObject*)mSourceObject)->startMotion(ANIM_AGENT_HEAD_ROT);
-            }
+            vs_attention_motion(*((LLVOAvatar*)(LLViewerObject*)mSourceObject),false,true,disable_look_at(),ANIM_AGENT_HEAD_ROT,ANIM_AGENT_EDITING);
         }
     }
 

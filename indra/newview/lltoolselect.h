@@ -28,6 +28,7 @@
 #define LL_TOOLSELECT_H
 
 #include "lltool.h"
+#include <memory>
 #include "v3math.h"
 #include "lluuid.h"
 #include "llviewerwindow.h" // for LLPickInfo
@@ -45,6 +46,7 @@ public:
     virtual void        stopEditing();
 
     static LLSafeHandle<LLObjectSelection>  handleObjectSelection(const LLPickInfo& pick, bool ignore_group, bool temp_select, bool select_root = false);
+    static std::shared_ptr<const void> handleNativeObjectSelection(const LLPickInfo&,bool ignore_group,bool temp_select,bool select_root=false);
 
     virtual void        onMouseCaptureLost();
     virtual void        handleDeselect();
