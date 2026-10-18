@@ -6946,4 +6946,3 @@ void LLAgent::sendAgentSetAppearance()
 }
 // </FS:Ansariel> [Legacy Bake]
 // EOF
-

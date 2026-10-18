@@ -128,6 +128,7 @@ jobs:
       - run: python scripts/tests/test_native_my_environments.py
       - run: python scripts/tests/test_native_environment_rendering.py
       - run: python scripts/tests/test_native_water_construction.py
+      - run: python scripts/tests/test_native_sky_construction.py
       - run: python scripts/tests/test_native_environment_bindings.py
       - run: python scripts/tests/test_native_environment_widgets.py
       - run: python scripts/tests/test_native_ui_primitives.py

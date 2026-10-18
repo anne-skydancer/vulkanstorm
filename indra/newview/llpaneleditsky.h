@@ -35,6 +35,7 @@
 class LLSlider;
 class LLColorSwatchCtrl;
 class LLTextureCtrl;
+class LLVirtualTrackball;
 
 //=========================================================================
 class LLPanelSettingsSky : public LLSettingsEditPanel
@@ -50,6 +51,7 @@ public:
     void                    setSky(const LLSettingsSky::ptr_t &sky)                 { mSkySettings = sky; clearIsDirty(); refresh(); }
 
 protected:
+    bool mChildrenReady=false;
     LLSettingsSky::ptr_t  mSkySettings;
 };
 
@@ -122,6 +124,10 @@ protected:
     virtual void            refresh() override;
 
 private:
+    LLVirtualTrackball* mSunRotation=nullptr;
+    LLVirtualTrackball* mMoonRotation=nullptr;
+    LLView* mSunLayout=nullptr;
+    LLView* mMoonLayout=nullptr;
     void                    onSunMoonColorChanged();
     void                    onGlowChanged();
     void                    onStarBrightnessChanged();
