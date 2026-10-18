@@ -1,5 +1,5 @@
 {
-  "source_commit": "e70b2ba5d910ce67986586c53fa17635fcdb4111",
+  "source_commit": "b0ed0f09fe7b7df1431e73219253e2e4ae02f055",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -33,7 +33,7 @@
       ]
     },
     "indra/newview/llviewerwindow.cpp": {
-      "sha256": "79648deabf4b43415d35b769289ab408c776b643662a711db89ff5e8c5f8d890",
+      "sha256": "a3e0916c32bd15708039eb1c64e7db9b64b21f59c30de8d441adb413b06af634",
       "anchors": [
         "LLViewerWindow::LLViewerWindow",
         "LLViewerWindow::initBase",
@@ -115,7 +115,7 @@
       ]
     },
     "indra/newview/llviewermessage.cpp": {
-      "sha256": "381c5b8d97a09b0919d18a924cffcc059d89ef97adf7d77b114a890d00546b5e",
+      "sha256": "0dda5118fbc7e5448172dec5bb01c32b308f77a04a5697df47c3bdc0e2ff7085",
       "anchors": [
         "process_chat_from_simulator",
         "process_agent_movement_complete",
@@ -701,7 +701,7 @@
       ]
     },
     "indra/newview/vsvulkancontext.cpp": {
-      "sha256": "6e4102b9c974e01928d05db215a7078ea603507130617317101716b661d97c9f",
+      "sha256": "582f95fc4a76a243bb7768b19b84a44b2a62bea04e3a0eefa95bcecd074518d1",
       "anchors": [
         "VSVulkanContext::VSVulkanContext",
         "CreateDeviceAndContextsVk",
@@ -710,14 +710,14 @@
       ]
     },
     "indra/newview/vsvulkancontext.h": {
-      "sha256": "f33e322d05c64f18a15729afe45a064a1f9d68520fed0223a38b94b0e73c82ea",
+      "sha256": "0e5f3b54c313eef33db96c477d297ce434ec3fe86dcd29addd04a8255cecb3c0",
       "anchors": [
         "class VSVulkanContext",
         "FrameObserver"
       ]
     },
     "indra/newview/vsviewerwindow.cpp": {
-      "sha256": "279f8a11e39c3506f97d26791879cc578504e96b2f27c2e1b61d52768d802d56",
+      "sha256": "705f242824b1542a581648131327c34abd26366647b269d78e4f93655a20347f",
       "anchors": [
         "initNativeWindow",
         "initNativeBase",
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "2d84bced5bcb98048732cff5ba964cf8311828b155a6db15dc5d82386c6830b0",
+      "sha256": "364fb4fbbeeba874f279f791485324f8a688f50cf68ea0853d401612d487cc17",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -784,7 +784,7 @@
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "9a316f6c236865c6e3fce08b3f3782bce2c70b475ab1607bc6810b1428f650fb",
+      "sha256": "a742f4048d1fd2a6fe8172c8b9cc23721ba06362a20619713a4bc4dce19e7496",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
@@ -793,7 +793,7 @@
       ]
     },
     "indra/newview/vsnativereplay.cpp": {
-      "sha256": "3c7d3d4909df92f163d0720e88fddd3c4b62b2899b16b6f2369cec10fd509e11",
+      "sha256": "2e2b23dc4a77c9b1b8f940b7857a0904ab500c5ec030118517b4a8ae29d06a46",
       "anchors": [
         "vs_native_replay_tick()",
         "inspectOutgoing("
@@ -841,7 +841,7 @@
       ]
     },
     "indra/newview/vsnativeim.cpp": {
-      "sha256": "8d34bc758fff449dfc2fb3132c6b05565d4267adcdb6fd600e28f94c7664de24",
+      "sha256": "a28ec75133966313f7b2f4ab4a43b8839b931a85d5bfc4e57e1bbe60875cc0fd",
       "anchors": [
         "vs_native_im_receive",
         "vs_native_im_guard",
@@ -919,7 +919,7 @@
       ]
     },
     "indra/newview/llfloaterpreference.cpp": {
-      "sha256": "80646237734ea869d9a43c13cb43cc8ef7a6b7fe9e2744c7b271cf5dd4ee20f9",
+      "sha256": "fa23069ff527c7ab43138ff38c7049a76389cb9d92e870f92c66253da6ca7289",
       "anchors": [
         "LLFloaterPreference::refreshEnabledState",
         "vs_native_im_guard"
