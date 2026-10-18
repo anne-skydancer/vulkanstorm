@@ -272,6 +272,7 @@ public:
      * Returns true if the user can edit the specified object (with an optional relative offset)
      */
     static bool canEdit(const LLViewerObject* pObj);
+    static bool canEdit(const VSObjectContext& object);
 
     /*
      * Returns true if the user can sit on the ground
@@ -284,6 +285,7 @@ public:
      * (returns true if pObj == nullptr to not short circuit calling code)
      */
     static bool canInteract(const LLViewerObject* pObj, const LLVector3& posOffset = LLVector3::zero);
+    static bool canInteract(const VSObjectContext& object, const LLVector3& posOffset = LLVector3::zero);
 
     /*
      * Returns true if the user can pay an avatar

@@ -28,6 +28,7 @@
 #include "vsregionlimits.h"
 
 #include "lltoolgrab.h"
+#include "vsobjectcontext.h"
 
 // library headers
 #include "indra_constants.h"        // for agent control flags
@@ -1183,11 +1184,30 @@ LLVector3d LLToolGrabBase::getGrabPointGlobal()
 }
 
 
-void send_ObjectGrab_message(LLViewerObject* object, const LLPickInfo & pick, const LLVector3 &grab_offset)
+namespace
+{
+struct ReferenceGrabObject
+{
+    LLViewerObject* object;
+    bool present()const{return object!=nullptr;}
+    bool region()const{return object->getRegion()!=nullptr;}
+    U32 localID()const{return object->mLocalID;}
+    LLHost host()const{return object->getRegion()->getHost();}
+};
+struct NativeGrabObject
+{
+    const VSObjectContext& object;
+    bool present()const{return true;}
+    bool region()const{return object.current && object.current();}
+    U32 localID()const{return object.localID;}
+    LLHost host()const{return object.host;}
+};
+template<class Object>
+void shared_send_ObjectGrab_message(const Object& object, const LLPickInfo & pick, const LLVector3 &grab_offset)
 {
     // <FS:Ansariel> Crash fix
     //if (!object) return;
-    if (!object || !object->getRegion()) return;
+    if (!object.present() || !object.region()) return;
 
     LLMessageSystem *msg = gMessageSystem;
 
@@ -1196,7 +1216,7 @@ void send_ObjectGrab_message(LLViewerObject* object, const LLPickInfo & pick, co
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
     msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
     msg->nextBlockFast( _PREHASH_ObjectData);
-    msg->addU32Fast(    _PREHASH_LocalID, object->mLocalID);
+    msg->addU32Fast(    _PREHASH_LocalID, object.localID());
     msg->addVector3Fast(_PREHASH_GrabOffset, grab_offset);
     msg->nextBlock("SurfaceInfo");
     msg->addVector3("UVCoord", LLVector3(pick.mUVCoords));
@@ -1205,7 +1225,7 @@ void send_ObjectGrab_message(LLViewerObject* object, const LLPickInfo & pick, co
     msg->addVector3("Position", pick.mIntersection);
     msg->addVector3("Normal", pick.mNormal);
     msg->addVector3("Binormal", pick.mBinormal);
-    msg->sendMessage( object->getRegion()->getHost());
+    msg->sendMessage( object.host());
 
     /*  Diagnostic code
     LL_INFOS() << "mUVCoords: " << pick.mUVCoords
@@ -1220,13 +1240,12 @@ void send_ObjectGrab_message(LLViewerObject* object, const LLPickInfo & pick, co
     LL_INFOS() << "Object pos: " << object->getPosition() << LL_ENDL;
     */
 }
-
-
-void send_ObjectDeGrab_message(LLViewerObject* object, const LLPickInfo & pick)
+template<class Object>
+void shared_send_ObjectDeGrab_message(const Object& object, const LLPickInfo & pick)
 {
     // <FS:Ansariel> Crash fix
     //if (!object) return;
-    if (!object || !object->getRegion()) return;
+    if (!object.present() || !object.region()) return;
 
     LLMessageSystem *msg = gMessageSystem;
 
@@ -1235,7 +1254,7 @@ void send_ObjectDeGrab_message(LLViewerObject* object, const LLPickInfo & pick)
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
     msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
     msg->nextBlockFast(_PREHASH_ObjectData);
-    msg->addU32Fast(_PREHASH_LocalID, object->mLocalID);
+    msg->addU32Fast(_PREHASH_LocalID, object.localID());
     msg->nextBlock("SurfaceInfo");
     msg->addVector3("UVCoord", LLVector3(pick.mUVCoords));
     msg->addVector3("STCoord", LLVector3(pick.mSTCoords));
@@ -1243,7 +1262,27 @@ void send_ObjectDeGrab_message(LLViewerObject* object, const LLPickInfo & pick)
     msg->addVector3("Position", pick.mIntersection);
     msg->addVector3("Normal", pick.mNormal);
     msg->addVector3("Binormal", pick.mBinormal);
-    msg->sendMessage(object->getRegion()->getHost());
+    msg->sendMessage(object.host());
+}
+}
+
+void send_ObjectGrab_message(LLViewerObject* object, const LLPickInfo & pick, const LLVector3 &grab_offset)
+{
+    shared_send_ObjectGrab_message(ReferenceGrabObject{object}, pick, grab_offset);
+}
+void send_ObjectGrab_message(const VSObjectContext& object, const LLPickInfo & pick, const LLVector3 &grab_offset)
+{
+    shared_send_ObjectGrab_message(NativeGrabObject{object}, pick, grab_offset);
+}
+
+
+void send_ObjectDeGrab_message(LLViewerObject* object, const LLPickInfo & pick)
+{
+    shared_send_ObjectDeGrab_message(ReferenceGrabObject{object}, pick);
+}
+void send_ObjectDeGrab_message(const VSObjectContext& object, const LLPickInfo & pick)
+{
+    shared_send_ObjectDeGrab_message(NativeGrabObject{object}, pick);
 }
 
 

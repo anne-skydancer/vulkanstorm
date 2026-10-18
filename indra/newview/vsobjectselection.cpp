@@ -2,6 +2,14 @@
 // LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
 #include "vsobjectselection.h"
+#include "vsselectionpolicy.h"
+#include "vsobjectcontext.h"
+#include "vsobjectinteraction.h"
+#include "llselectmgr.h"
+#include "llviewerobject.h"
+#include "llviewercontrol.h"
+#include "llagent.h"
+#include "llviewernetwork.h"
 #include "vsnativesession.h"
 #include "llviewerwindow.h"
 #include "vsvulkancontext.h"
@@ -113,6 +121,50 @@ struct VSObjectSelection::Impl
 VSObjectSelection::VSObjectSelection(std::weak_ptr<VSNativeSession> session)
     :mImpl(std::make_shared<Impl>(std::move(session))){}
 VSObjectSelection::~VSObjectSelection(){reset();}
+bool VSObjectSelection::canSelect(const VSWorldScene::ObjectHandle& object,bool forceSelection,bool ignoreSelectOwned) const
+{
+    const auto owner=mImpl->session.lock();
+    auto* world=scene();
+    if(!owner || !world || !mImpl->current(object))return false;
+    const auto row=world->objectSnapshot(object);
+    if(!row)return false;
+    struct Object
+    {
+        const VSWorldScene::ObjectSnapshot& row;
+        const VSNativeSession& session;
+        bool present()const{return true;}
+        bool dead()const{return false;} // checked against the real scene/account owner above
+        bool youOwner()const{return VSObjectContext::ownedByAgent(row.rootUpdateFlags);}
+        bool permission(U32 flag)const
+        {
+            return vs_object_you_owner((row.rootUpdateFlags&flag)!=0,[]
+            {return LLGridManager::getInstance()->isInSLBeta() && gAgent.getGodLevel()>=GOD_MAINTENANCE;});
+        }
+        bool move()const{return permission(FLAGS_OBJECT_MOVE);}
+        bool copy()const{return permission(FLAGS_OBJECT_COPY);}
+        bool permanent()const{return (row.updateFlags&FLAGS_AFFECTS_NAVMESH) && row.object.host!=session.host() && !gAgent.isGodlike();}
+        bool orphaned()const{return false;} // objectSnapshot requires current real ancestry
+        bool avatar()const{return row.pcode==LL_PCODE_LEGACY_AVATAR;}
+        U8 pcode()const{return row.pcode;}
+        ESelectType selectionType()const{return row.hud?SELECT_TYPE_HUD:row.attachment?SELECT_TYPE_ATTACHMENT:SELECT_TYPE_WORLD;}
+    };
+    struct Selection
+    {
+        const VSObjectSelection& selection;
+        VSWorldScene& world;
+        bool hasSelection()const{return !selection.selected().empty();}
+        ESelectType type()const
+        {
+            const auto selected=selection.selected();
+            if(!selected.empty())
+                if(const auto row=world.objectSnapshot(selected.front()))
+                    return row->hud?SELECT_TYPE_HUD:row->attachment?SELECT_TYPE_ATTACHMENT:SELECT_TYPE_WORLD;
+            return SELECT_TYPE_WORLD;
+        }
+    };
+    return vs_can_select_object(Object{*row,*owner},forceSelection,ignoreSelectOwned,Selection{*this,*world},
+        LLViewerObject::LL_VO_SURFACE_PATCH,[](const char* setting){return gSavedSettings.getBOOL(setting);});
+}
 bool VSObjectSelection::select(const std::vector<VSWorldScene::ObjectHandle>& objects)
 {
     const auto state=mImpl;

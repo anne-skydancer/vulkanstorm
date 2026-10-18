@@ -12,6 +12,7 @@
 #include "v3dmath.h"
 #include <memory>
 #include <optional>
+#include <utility>
 #include <string>
 #include <vector>
 #include <functional>
@@ -114,6 +115,7 @@ public:
     std::vector<RegionSnapshot> regionSnapshots(bool includeSpatial=true) const;
     bool current(const RegionSnapshot&) const;
     std::vector<VSCoarseSample<LLUUID>> coarseAvatarLocations() const;
+    std::optional<std::pair<LLHost,VSCoarseSample<LLUUID>>> coarseAvatarLocation(const LLUUID&) const;
     bool receiveParcelOverlay(const LLHost&,U64 account,U64 circuit,S32 sequence,const std::vector<U8>&);
     bool applyRegionInfo(LLMessageSystem&);
     bool applyRegionStats(const LLHost&,U64 account,U64 circuit,U64 flags,U32 capacity);

@@ -67,6 +67,15 @@ bool VSNativeSession::current(const RegionSnapshot& snapshot) const
         found->second.incarnation==snapshot.circuit && found->second.handle==snapshot.handle &&
         found->second.id==snapshot.id;
 }
+std::optional<std::pair<LLHost,VSCoarseSample<LLUUID>>> VSNativeSession::coarseAvatarLocation(const LLUUID& id) const
+{
+    if(mShutdown || mPhase!=Phase::Connected || id.isNull())return {};
+    for(const auto& [host,region]:mCircuits)
+        if(region.acknowledged && region.handshake)
+            for(const auto& avatar:region.coarse.avatars)
+                if(avatar.id==id)return std::make_pair(host,avatar);
+    return {};
+}
 std::vector<VSCoarseSample<LLUUID>> VSNativeSession::coarseAvatarLocations() const
 {
     std::vector<VSCoarseSample<LLUUID>> result;

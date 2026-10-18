@@ -141,7 +141,7 @@ void vs_native_im_reset()
         LLFloaterReg::destroyInstance(name);
     }
     if(auto* regionInfo=LLFloaterReg::findInstance("region_info"))regionInfo->closeFloater(true);
-    for (const char* name : {"region_info", "telehubs", "top_objects", "about_land", "ban_duration", "my_environments", "buy_land", "sell_land", "buy_currency", "buy_currency_html", "add_payment_method", "money_tracker"})
+    for (const char* name : {"region_info", "region_debug_console", "telehubs", "top_objects", "about_land", "ban_duration", "my_environments", "buy_land", "sell_land", "buy_currency", "buy_currency_html", "add_payment_method", "money_tracker"})
         LLFloaterReg::destroyInstance(name);
     LLTracker::cleanupInstance();
     LLUploadDialog::modalUploadFinished();

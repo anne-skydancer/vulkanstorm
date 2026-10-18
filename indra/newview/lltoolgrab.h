@@ -41,8 +41,11 @@ class LLPickInfo;
 
 
 // Message utilities
+struct VSObjectContext;
 void send_ObjectGrab_message(LLViewerObject* object, const LLPickInfo & pick, const LLVector3 &grab_offset);
+void send_ObjectGrab_message(const VSObjectContext& object, const LLPickInfo & pick, const LLVector3 &grab_offset);
 void send_ObjectDeGrab_message(LLViewerObject* object, const LLPickInfo & pick);
+void send_ObjectDeGrab_message(const VSObjectContext& object, const LLPickInfo & pick);
 
 const MASK DEFAULT_GRAB_MASK = MASK_CONTROL;
 
