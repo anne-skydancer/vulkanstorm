@@ -13,7 +13,7 @@ class EEPHTTP(unittest.TestCase):
  def test_actual_seed_typed_get_put_and_reset_require_accepted_protocol(self):
   with tempfile.TemporaryDirectory() as tmp,module.SimulatorHTTP() as server:
    server.environment_fixture=Path(tmp)/'day.llsd'
-   server.environment_fixture.write_text('<llsd><map><key>type</key><string>daycycle</string><key>frames</key><map><key>sky:0</key><map><key>sun_id</key><uuid>30000000-0000-0000-0000-000000000003</uuid></map></map></map></llsd>')
+   server.environment_fixture.write_text('<llsd><map><key>type</key><string>daycycle</string><key>asset_id</key><undef /><key>frames</key><map><key>sky:0</key><map><key>asset_id</key><undef /><key>sun_id</key><uuid>30000000-0000-0000-0000-000000000003</uuid></map></map></map></llsd>')
    service.configure(server,module.read_llsd)
    worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
    connection=http.client.HTTPConnection(*server.server_address,timeout=5)
@@ -31,9 +31,16 @@ class EEPHTTP(unittest.TestCase):
     experiences,_=request('/region-experiences')
     self.assertEqual(experiences,dict(allowed=[],blocked=[],trusted=[]))
     self.assertEqual(seed['RegionExperiences'],server.url+'/region-experiences')
+    self.assertEqual(seed['RemoteParcelRequest'],server.url+'/remote-parcel')
+    parcel,_=request('/remote-parcel','POST',dict(region_id='20000000-0000-0000-0000-000000000002',location=[6,6,0]))
+    self.assertIsInstance(parcel['parcel_id'],service.uuid.UUID)
+    repeated,_=request('/remote-parcel','POST',dict(region_id='20000000-0000-0000-0000-000000000002',location=[128,128,0]))
+    self.assertEqual(parcel,repeated)
     initial,wire=request(service.ROUTE+'?parcelid=31')
     self.assertIn(b'<uuid>',wire);self.assertIsInstance(initial['environment']['day_cycle']['frames']['sky:0']['sun_id'],service.uuid.UUID)
     self.assertEqual(initial['environment']['day_length'],14400)
+    self.assertIsNone(initial['environment']['day_cycle']['frames']['sky:0']['asset_id'])
+    self.assertIn(b'<undef',wire)
     response,wire=request(service.ROUTE+'?parcelid=31','PUT',{'environment':{'day_length':19800,'flags':0}})
     self.assertTrue(response['success']);self.assertEqual(response['environment']['day_length'],21600)
     self.assertFalse(response['environment']['is_default']);self.assertEqual(response['environment']['env_version'],1)

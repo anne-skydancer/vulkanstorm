@@ -11,6 +11,21 @@ def method(source,signature):
  raise AssertionError(signature)
 
 class MetadataTest(unittest.TestCase):
+ def test_unavailable_product_metadata_uses_actual_shared_unknown_label(self):
+  source=(ROOT/'indra/newview/vsregioncontext.cpp').read_text()
+  body=method(source,'std::string VSRegionContext::getLocalizedSimProductName() const')
+  fixture='''#include <cassert>
+#include <string>
+struct LLTrans{static inline int finds=0;static std::string getString(std::string key){assert(key=="land_type_unknown");return "Localized unknown";}static bool findString(std::string&out,std::string key){++finds;if(key=="Homestead"){out="Localized Homestead";return true;}return false;}};
+struct VSRegionContext{bool mProductKnown=false;std::string mProductName="unknown";std::string getLocalizedSimProductName()const;};
+'''+body+'''
+int main(){VSRegionContext current;assert(current.getLocalizedSimProductName()=="Localized unknown" && LLTrans::finds==0);current.mProductKnown=true;current.mProductName="Homestead";assert(current.getLocalizedSimProductName()=="Localized Homestead");current.mProductName="Actual custom grid product";assert(current.getLocalizedSimProductName()==current.mProductName);}'''
+  compiler=shutil.which('clang++')or shutil.which('g++');self.assertIsNotNone(compiler)
+  with tempfile.TemporaryDirectory()as tmp:
+   cpp=Path(tmp)/'product.cpp';exe=Path(tmp)/'product.exe';cpp.write_text(fixture)
+   result=subprocess.run([compiler,'-std=c++17',str(cpp),'-o',str(exe)],capture_output=True,text=True);self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+   result=subprocess.run([str(exe)],capture_output=True,text=True);self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
  def test_actual_metadata_parser(self):
   h=(ROOT/'indra/newview/vsnativesession.h').read_text(encoding='utf-8-sig');a=h.index('    struct RegionMetadata');b=h.index('    struct RegionSnapshot',a);metadata=h[a:b]
   source=(ROOT/'indra/newview/vsnativesession.cpp').read_text(encoding='utf-8-sig');a=source.index('std::optional<VSNativeSession::RegionMetadata> nativeRegionMetadata(');b=source.index('\n}\nbool VSNativeSession::deliver',a);parser=source[a:b]

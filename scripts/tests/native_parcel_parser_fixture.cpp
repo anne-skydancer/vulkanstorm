@@ -103,6 +103,23 @@ int main(){
   if(channel==1){assert(actual.mNativeSelectionBitmap && actual.selection.mSelectedSelfCount==1 && actual.selection.mSelectedOtherCount==2 && actual.selection.mSelectedPublicCount==3 && actual.access==1 && actual.dwell==1 && actual.notifications==1);actual.mNativeRequests.retire();auto n=got->unpacks;LLViewerParcelMgr::processParcelProperties(&input,nullptr);assert(got->unpacks==n);}
   if(channel==3)assert(actual.mNativeCollisionBitmap && actual.mNativeCollisionRegion && actual.collisionsNotified==1 && actual.mCollisionBanned==BA_BANNED);
  }
+ // Exact selected wire is scoped to the requesting handle; hover replies
+ // cannot populate it. Rectangle false and whole-parcel true preserve wire semantics.
+ for(bool snap:{false,true}){
+  LLViewerParcelMgr actual;actual.mNativeCpu=true;actual.mSelected=true;LLViewerParcelMgr::selected=&actual;
+  actual.mNativeSelectionRequestRegion=nativeRegion;actual.mNativeHoverRequestRegion=nativeRegion;
+  LLMessageSystem input;input.snap=snap;
+  const auto selected=actual.mNativeRequests.issue(VSParcelRequests::Channel::Selection,SELECTED_PARCEL_SEQ_ID,[]{return true;});
+  const auto hovered=actual.mNativeRequests.issue(VSParcelRequests::Channel::Hover,HOVERED_PARCEL_SEQ_ID,[]{return true;});
+  input.sequence=*hovered;LLViewerParcelMgr::processParcelProperties(&input,nullptr);
+  assert(actual.mCurrentParcel->unpacks==0 && actual.mHoverParcel->unpacks==1);
+  input.sequence=*selected;Selection other;actual.mNativeSelectionRequestHandle=&other;
+  LLViewerParcelMgr::processParcelProperties(&input,nullptr);assert(actual.mCurrentParcel->unpacks==0);
+  actual.mNativeSelectionRequestHandle=actual.mCurrentParcelSelection;
+  LLViewerParcelMgr::processParcelProperties(&input,nullptr);
+  assert(actual.mCurrentParcel->unpacks==1 && actual.mCurrentParcel->local==input.local && actual.mCurrentParcel->region==nativeRegion.id);
+  assert(bool(actual.mNativeSelectionBitmap)==snap && actual.selection.mWholeParcelSelected==snap);
+ }
  // Real rectangular region coverage remains independent for every parcel channel.
  nativeRegion.width=512;nativeRegion.height=256;
  for(int channel:{0,1,2,3}){
