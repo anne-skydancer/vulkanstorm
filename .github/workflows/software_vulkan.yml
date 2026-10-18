@@ -89,6 +89,8 @@ jobs:
       - run: python scripts/tests/test_native_camera_transport.py
       - run: python scripts/tests/test_native_camera_retirement.py
       - run: python scripts/tests/test_native_world_selection.py
+      - run: python scripts/tests/test_plugin_shutdown_lifetime.py
+      - run: python scripts/tests/test_media_plugin_crash_evidence.py
       - run: python scripts/tests/test_native_selection_admission.py
       - run: python scripts/tests/test_native_keyboard_tool_dispatch.py
       - run: python scripts/tests/test_native_region_frontend.py
