@@ -252,6 +252,87 @@ def validate_driver(folder):
         raise ValueError('Missing cache replay driver output')
 
 
+def matrix_invocation(args):
+    """Bind separately bounded cases to the same source, staged binary and runtime."""
+    build=args.build_directory.resolve()
+    windows=sys.platform=='win32'
+    stage=build/'newview'/('RelWithDebInfo' if windows else 'packaged')
+    binaries=list(stage.glob('*-bin.exe')) if windows else list((stage/'bin').glob('*-bin'))
+    if len(binaries)!=1:raise RuntimeError('Cache matrix requires one staged viewer')
+    files=dict(runtime=args.runtime.resolve(),harness=args.harness_evidence.resolve(),
+               provenance=build/'parity-build-provenance.json',staging=build/'newview/vulkan-ci-staging.json',
+               executable=binaries[0])
+    fingerprint=dict(source_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
+                     build=str(build),register_windows_manifests=args.register_windows_manifests)
+    for key,path in files.items():
+        if path.is_symlink() or not path.is_file():raise RuntimeError('Missing regular cache matrix input: '+key)
+        with path.open('rb') as stream:digest=hashlib.file_digest(stream,'sha256').hexdigest()
+        fingerprint[key]=dict(path=str(path.resolve()),sha256=digest)
+    return fingerprint
+
+
+def resume_matrix(directory,invocation,next_case):
+    """Revalidate prior evidence; a partial run can never qualify the full matrix."""
+    progress=directory/'progress.json'
+    if progress.is_symlink():raise ValueError('Cache matrix progress must be a regular file')
+    state=json.loads(progress.read_text(encoding='utf-8'))
+    if state.get('invocation')!=invocation:raise ValueError('Cache matrix source, executable or runtime changed')
+    name=state['run']
+    if not re.fullmatch(r'run-[0-9a-f]{32}',name):raise ValueError('Invalid cache matrix run directory')
+    run=directory/name
+    if run.is_symlink() or not run.is_dir():raise ValueError('Missing regular cache matrix run directory')
+    results=state['cases']
+    completed=[case for case in CASES if case in results]
+    if (len(completed)>=len(CASES) or set(results)!=set(CASES[:len(completed)]) or
+            next_case!=CASES[len(completed)]):
+        raise ValueError('Cache matrix must resume at the next unexecuted case')
+    reports={};processes=set()
+    for case in completed:
+        row=results[case];folder=run/case
+        if (folder.is_symlink() or not folder.resolve().is_relative_to(run.resolve()) or
+                row.get('passed') is not True or row.get('evidence')!=folder.relative_to(directory).as_posix()):
+            raise ValueError('Cannot resume failed or mismatched cache evidence')
+        validate_driver(folder)
+        report=json.loads((folder/'results.json').read_text(encoding='utf-8'))
+        requests=json.loads((folder/'http-replay.json').read_text(encoding='utf-8'))
+        cache=run/'shared-cache' if case in ('cold','warm') else run/('cache-'+case)
+        validate_case(report,requests,folder,cache,case=='read-only')
+        instance=report['texture_cache']['process_instance']
+        if (instance in processes or instance!=row['process_instance'] or
+                report.get('source_commit')!=invocation['source_commit'] or row['source_commit']!=invocation['source_commit'] or
+                report.get('viewer_executable_sha256')!=invocation['executable']['sha256']):
+            raise ValueError('Cache case source or process identity changed')
+        if case=='cold':
+            validate_pressure(report,folder);validate_shutdown(report,folder,requests)
+        if case=='warm':
+            validate_restart(report,folder);validate_identity_transition(reports['cold'],report)
+        if reports:
+            reference=image_rows(reports['cold']);rows=image_rows(report)
+            if any(rows[identity]['gpu_rgba_sha256']!=reference[identity]['gpu_rgba_sha256'] for identity in (PROFILE,STREAM)):
+                raise ValueError('Prior restart image pixels changed')
+        traffic=texture_requests(requests)
+        if case in ('warm','read-only','resize') and traffic:raise ValueError('Prior warm case unexpectedly used the network')
+        if case in ('cold','truncated','corrupt-header','clear','cache-version','codec-version') and not traffic:
+            raise ValueError('Prior recovery case lost network evidence')
+        if case=='cold':
+            ranges=[request for request in traffic if request['query']['texture_id']==[STREAM]]
+            if not any(request.get('range_start')==0 for request in ranges) or not any(request.get('range_start',0)>0 for request in ranges):
+                raise ValueError('Prior cold case lost progressive continuation evidence')
+        if case=='read-only' and snapshot(cache)!=row['cache_before']:raise ValueError('Prior read-only cache changed')
+        if case not in ('cold','warm') and snapshot(cache)!=row['cache_files']:raise ValueError('Prior case cache changed')
+        if case=='resize':
+            old=reports['cold']['texture_cache'];new=report['texture_cache']
+            if old['maximum_body_bytes']==new['maximum_body_bytes'] or old['maximum_entries']==new['maximum_entries']:
+                raise ValueError('Prior cache size preference lost effective capacity change')
+        reports[case]=report;processes.add(instance)
+    base=results['warm' if 'warm' in results else 'cold']['cache_files']
+    if snapshot(run/'shared-cache')!=base:raise ValueError('Shared cache changed between bounded cases')
+    seconds=state['seconds']
+    if type(seconds) not in (int,float) or not (0<=seconds<float('inf')):
+        raise ValueError('Invalid cache matrix elapsed time')
+    return run,results,reports,processes,seconds
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build-directory',type=Path,required=True)
@@ -259,11 +340,20 @@ def main():
     parser.add_argument('--harness-evidence',type=Path,required=True)
     parser.add_argument('--evidence',type=Path,required=True)
     parser.add_argument('--register-windows-manifests',action='store_true')
+    parser.add_argument('--case',choices=CASES,help='Run exactly the next case, retaining validated matrix state')
     args=parser.parse_args()
     directory=args.evidence.resolve();directory.mkdir(parents=True,exist_ok=True)
-    run=directory/('run-'+uuid4().hex);run.mkdir()
-    base_cache=run/'shared-cache';results={};reports={};reference=None;processes=set();started=time.monotonic()
-    for case in CASES:
+    invocation=matrix_invocation(args)
+    elapsed=0
+    if args.case and args.case!='cold':
+        run,results,reports,processes,elapsed=resume_matrix(directory,invocation,args.case)
+        reference=image_rows(reports['cold'])
+    else:
+        run=directory/('run-'+uuid4().hex);run.mkdir()
+        results={};reports={};reference=None;processes=set()
+    base_cache=run/'shared-cache';started=time.monotonic()
+    planned=(args.case,) if args.case else CASES
+    for case in planned:
         folder=run/case;folder.mkdir()
         cache=base_cache if case in ('cold','warm') else run/('cache-'+case)
         record=dict(passed=False,evidence=folder.relative_to(directory).as_posix())
@@ -337,10 +427,13 @@ def main():
         print(('PASS' if record['passed'] else 'FAIL')+f': R3 texture cache {case}'+('' if record['passed'] else ': '+record['failure']),flush=True)
         if not record['passed']:break
     complete=set(results)==set(CASES);passed=complete and all(case['passed'] for case in results.values())
+    elapsed+=time.monotonic()-started
+    progress=dict(invocation=invocation,run=run.name,cases=results,seconds=elapsed)
+    (directory/'progress.json').write_text(json.dumps(progress,indent=2)+'\n',encoding='utf-8')
     report=dict(passed=passed,complete=complete,planned_cases=list(CASES),cases=results,
-                seconds=time.monotonic()-started,live_server_qualified=False,
+                seconds=elapsed,live_server_qualified=False,
                 qualification_limit='Read-only exercises the shared sibling cache policy; concurrent live viewer arbitration is separate.')
     (directory/'results.json').write_text(json.dumps(report,indent=2)+'\n')
-    return 0 if passed else 1
+    return 0 if passed or (args.case and all(row['passed'] for row in results.values())) else 1
 
 if __name__=='__main__':raise SystemExit(main())
