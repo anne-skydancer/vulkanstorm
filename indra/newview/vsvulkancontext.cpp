@@ -11,6 +11,8 @@
 #include "vsuiresources.h"
 #include "vsworldrenderer.h"
 #include "vsworldscene.h"
+#include "vsenvironmentstate.h"
+#include "llenvironment.h"
 #include "vsparcelpresentation.h"
 #include "vsnativesession.h"
 #include "llagentcamera.h"
@@ -408,6 +410,14 @@ struct VSVulkanContext::Impl
             auto view    = VSWorldScene::cameraView(eye, camera.at, camera.up, size.mX, size.mY, distance,
                 LLViewerCamera::getInstance()->getView());
             view.hudZoom = gAgentCamera.mHUDCurZoom;
+            view.environment=vs_environment_state(eye,camera.at,camera.up,float(size.mX)/size.mY,
+                LLViewerCamera::getInstance()->getView(),LLEnvironment::instance().getWaterHeight());
+            if(view.environment.values[0][0]>.5f) {
+                const auto direction=LLEnvironment::instance().getLightDirection();
+                view.sun={direction.mV[0],direction.mV[1],direction.mV[2],0};
+                view.ambient=view.environment.values[7];
+            }
+
 #if VS_VULKAN_DIAGNOSTICS
             const auto packetStart = profileFrames ? ProfileClock::now() : ProfileClock::time_point{};
 #endif

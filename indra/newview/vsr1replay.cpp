@@ -239,7 +239,7 @@ struct Replay
             require(task["serial"].asInteger()==42 && task["filename"].asString()=="r1-task.txt" &&
                 owner.evidence()["appearance_owner_initialized"].asBoolean(),"R1 task/appearance startup identity mismatch");
             evidence["task_inventory"]=task;evidence["appearance_startup"]=owner.evidence()["wearable_metadata"];
-            LLSD handshake;handshake["name"]="R1 neighbor";handshake["id"]=LLUUID::generateNewID();handshake["access"]=13;handshake["flags"]=ll_sd_from_U64(REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE);
+            LLSD handshake;handshake["name"]="R1 neighbor";handshake["id"]=LLUUID::generateNewID();handshake["access"]=13;handshake["flags64"]=ll_sd_from_U64(REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE);
             require(owner.deliver("RegionHandshake",handshake,peer->host,owner.generation()),"R1 neighbor handshake failed");
             if(!owner.admit("ObjectUpdate",peer->host))return false;
             objectPacket(peer->host,peerHandle,950,objectID);terrainPacket(peer->host);objectPacket(original,originalHandle,950,replacementID);++step;return false;
@@ -291,7 +291,7 @@ struct Replay
         }
         if(step==6)
         {
-            LLSD handshake;handshake["name"]="R1 neighbor";handshake["id"]=LLUUID::generateNewID();handshake["access"]=13;handshake["flags"]=ll_sd_from_U64(REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE);
+            LLSD handshake;handshake["name"]="R1 neighbor";handshake["id"]=LLUUID::generateNewID();handshake["access"]=13;handshake["flags64"]=ll_sd_from_U64(REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE);
             owner.deliver("RegionHandshake",handshake,peer->host,owner.generation());
             LLSD movement;movement["agent"]=owner.account().agent;movement["session"]=owner.account().session;
             movement["handle"]=ll_sd_from_U64(peerHandle);movement["position"]=ll_sd_from_vector3(LLVector3(10,20,30));
@@ -303,7 +303,7 @@ struct Replay
         }
         if(step==7)
         {
-            LLSD handshake;handshake["name"]="Native replay region";handshake["id"]=LLUUID::generateNewID();handshake["access"]=13;handshake["flags"]=ll_sd_from_U64(REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE);
+            LLSD handshake;handshake["name"]="Native replay region";handshake["id"]=LLUUID::generateNewID();handshake["access"]=13;handshake["flags64"]=ll_sd_from_U64(REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE);
             owner.deliver("RegionHandshake",handshake,original,owner.generation());
             LLSD movement;movement["agent"]=owner.account().agent;movement["session"]=owner.account().session;
             movement["handle"]=ll_sd_from_U64(originalHandle);movement["position"]=ll_sd_from_vector3(LLVector3(10,20,30));

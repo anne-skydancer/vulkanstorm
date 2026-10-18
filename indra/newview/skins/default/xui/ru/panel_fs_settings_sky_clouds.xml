@@ -11,7 +11,7 @@
 		<text name="cloud_scale_label">Масштаб:</text>
 		<text name="cloud_variance_label">Различие:</text>
 	</panel>
-	<panel name="P_Cloud_Density">
+	<panel name="P_Cloud_Position">
 		<text name="cloud_density_label" tool_tip="Плотность облаков - используйте ползунки X и Y, чтобы изменить горизонтальное положение всех облаков на небе. Ползунок D влияет на общую плотность отдельных облаков; при низких настройках вы увидите тонкие, дымчатые облака, а при более высоких настройках - более плотные облака.">Плотность облаков:</text>
 	</panel>
 	<panel name="P_Cloud_Detail">

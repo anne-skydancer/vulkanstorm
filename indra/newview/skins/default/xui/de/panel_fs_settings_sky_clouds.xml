@@ -24,7 +24,7 @@
 		<slider name="cloud_variance" width="161"/>
 	</panel>
 
-	<panel name="P_Cloud_Density">
+	<panel name="P_Cloud_Position">
 		<text name="cloud_density_label" tool_tip="Wolken-XY/Dichte - Die X- und Y-Schieber verändern die horizontale Position aller Wolken. Mit dem D-Schieber wird die Dichte angepasst.">
 			Wolkendichte:
 		</text>

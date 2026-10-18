@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llfloatermyenvironment.h"
 
@@ -44,6 +45,7 @@
 #include "llviewerparcelmgr.h"
 
 //=========================================================================
+bool can_delete(const LLUUID& id);
 namespace
 {
     const std::string CHECK_DAYS("chk_days");
@@ -142,6 +144,7 @@ void LLFloaterMyEnvironment::refresh()
 
 void LLFloaterMyEnvironment::onOpen(const LLSD& key)
 {
+    ++mRequestEpoch;
     LLFloater::onOpen(key);
 
     if (key.has("asset_id") && mInventoryList)
@@ -164,6 +167,21 @@ void LLFloaterMyEnvironment::onOpen(const LLSD& key)
 }
 
 //-------------------------------------------------------------------------
+std::function<bool()> LLFloaterMyEnvironment::requestGuard()
+{
+    const auto weak=getHandle();const auto agent=gAgent.getID(),session=gAgent.getSessionID();
+    const auto epoch=mRequestEpoch;
+    return [weak,agent,session,epoch]() {
+        auto* view=dynamic_cast<LLFloaterMyEnvironment*>(weak.get());
+        return view && view->mRequestEpoch==epoch && gAgent.getID()==agent && gAgent.getSessionID()==session;
+    };
+}
+void LLFloaterMyEnvironment::onClose(bool app_quitting)
+{
+    ++mRequestEpoch;
+    LLFloater::onClose(app_quitting);
+}
+
 void LLFloaterMyEnvironment::onShowFoldersChange()
 {
     bool show_check(getChild<LLCheckBoxCtrl>(CHECK_SHOWFOLDERS)->getValue().asBoolean());
@@ -235,7 +253,7 @@ void LLFloaterMyEnvironment::onItemsRemovalConfirmation(const LLSD& notification
     {
         LLInventoryItem* inv_item = gInventory.getItem(itemid);
 
-        if (inv_item && inv_item->getInventoryType() == LLInventoryType::IT_SETTINGS)
+        if (inv_item && inv_item->getInventoryType() == LLInventoryType::IT_SETTINGS && can_delete(itemid))
         {
             LLInventoryModel::update_list_t update;
             LLInventoryModel::LLCategoryUpdate old_folder(inv_item->getParentUUID(), -1);
@@ -268,10 +286,10 @@ void LLFloaterMyEnvironment::onDeleteSelected()
         "DeleteItems",
         args,
         LLSD(),
-        [this, selected](const LLSD& notification, const LLSD& response)
+        vs_native_im_lifetime_callback(requestGuard(),[this, selected](const LLSD& notification, const LLSD& response)
         {
             onItemsRemovalConfirmation(notification, response, selected);
-        });
+        }));
 }
 
 

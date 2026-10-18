@@ -19,7 +19,7 @@
 			Zmienność:
 		</text>
 	</panel>
-	<panel name="P_Cloud_Density">
+	<panel name="P_Cloud_Position">
 		<text name="cloud_density_label" tool_tip="Gęstość XY chmur - Użyj suwaków X i Y, aby zmienić poziomą pozycję wszystkich chmur na niebie. Suwak D wpływa na ogólną gęstość poszczególnych chmur; przy niskich ustawieniach zobaczysz cienkie, delikatne chmury, a przy wyższych - grubsze, bardziej zwarte chmury.">
 			Gęstość:
 		</text>

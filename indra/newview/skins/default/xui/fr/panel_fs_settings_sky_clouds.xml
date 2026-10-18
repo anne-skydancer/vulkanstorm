@@ -19,7 +19,7 @@
 			Variation nuages :
 		</text>
 	</panel>
-	<panel name="P_Cloud_Density">
+	<panel name="P_Cloud_Position">
 		<text name="cloud_density_label" tool_tip="Nuage XY/Densité - Utilisez les curseurs X et Y pour modifier la position horizontale de tous les nuages dans le ciel. Le curseur D affecte la densité globale des nuages individuels ; avec des réglages faibles, vous verrez des nuages fins et vaporeux, et avec des réglages plus élevés, vous verrez des nuages plus épais et plus solides.">
 			Densité des nuages :
 		</text>

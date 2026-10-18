@@ -149,7 +149,7 @@ top="0">
 	</panel>
 
 	<panel
-	name="P_Cloud_Density"
+	name="P_Cloud_Position"
 	follows="left|top"
 	layout="topleft"
 	top_pad="1"

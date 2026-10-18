@@ -274,3 +274,26 @@ projected original geometry, including vertical orientation, and retains the
 same one-unit tolerance. Failure readbacks are saved before assertions. The
 source regression also checks native ordered vertices for varied corner heights;
 these checks do not replace the pending actual Vulkan readback rerun.
+
+
+The `427a66d493` build/stage succeeded. `.tmp/uk22` preserved an actual parcel
+readback whose one/two/three-layer reference samples match exactly, including
+orientation. The run was stopped as failed after a confirmed R1 fixture field
+error removed real environment-override permission during region crossing:
+`flags` contained a binary U64 intended for `flags64`. Its disabled controls
+were correct for that published state. The producer now uses the proper field;
+a compiled regression exercises the actual U64 decoder, native publication,
+shared region getter and environment-panel gate. Production permissions stay
+unchanged. The stopped run is not a passing UI replay.
+
+The next local source checkpoint wires My Environments and fixed sky/water
+editors, callback retirement and all relevant shipped XUI hierarchies. The
+expanded environment schema test checks253 paths. Current sky CPU uniforms and
+the original dome geometry now feed native rendering through one immutable
+submission-owned environment buffer per frame; the per-draw world ABI stays
+unchanged. Publication retains real accepted domes on replacement refusal and
+never reinterprets a startup quad as a dome. Independent CPU/source checks pass;
+actual UI-driven day/night/color readbacks are required by the next replay.
+Full cloud/celestial/HDR/water rendering, environment inventory create/edit/save,
+Region/Estate, navigation/object tools and other documented UI families remain
+open. This checkpoint does not certify100% UI or keyboard parity.

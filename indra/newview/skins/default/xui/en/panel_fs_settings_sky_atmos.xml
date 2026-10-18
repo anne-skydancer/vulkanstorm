@@ -113,7 +113,7 @@ top="0">
 	</panel>
 
 	<panel
-	name="P_Atmosphere_Header"
+	name="P_Atmosphere_Controls_Header"
 	follows="left|top"
 	layout="topleft"
 	top_pad="3"
@@ -125,7 +125,7 @@ top="0">
 	background_visible="true">
 
 		<text
-		name="T_Atmosphere_Header"
+		name="T_Atmosphere_Controls_Header"
 		follows="left|top"
 		layout="topleft"
 		left="5"

@@ -4,6 +4,8 @@
 #include "vsworldscene.h"
 #include "vsparcelgeometry.h"
 #include "llcamera.h"
+#include "llenvironment.h"
+#include "vsskygeometry.h"
 #include "vsmaterialassets.h"
 #include "vsobjectmedia.h"
 #include "llgltfmateriallist.h"
@@ -515,6 +517,7 @@ struct VSWorldScene::Impl
     std::array<LLUUID,4> terrainTextures;
     std::array<float,4> terrainStarts{},terrainRanges{};
     VSWorldRenderer::Mesh water,sky;
+    unsigned skyDetail=0;float skyRadius=0;
     std::array<float, 256>                               windX{}, windY{};
     bool                                                 windKnown = false;
     float waterHeight=20;bool waterKnown=false;
@@ -807,7 +810,40 @@ struct VSWorldScene::Impl
     }
     void surfaces(std::vector<VSWorldRenderer::Packet>& packets,const LLVector3& eye,unsigned viewportHeight=768)
     {
-        if (!sky)
+        const auto activeSky=LLEnvironment::instanceExists()?LLEnvironment::instance().getCurrentSky():nullptr;
+        const unsigned detail=activeSky?llclamp(gSavedSettings.getU32("WLSkyDetail"),8u,180u):0;
+        const float radius=activeSky?activeSky->getDomeRadius():0;
+        // Startup's clip-space quad and the reference sky dome have different
+        // geometry domains. Never shade the quad as a dome on first refusal.
+        if(activeSky && !skyDetail)sky.reset();
+        if(activeSky && (!sky || skyDetail!=detail || skyRadius!=radius)) {
+            const U32 slices=detail*2,stacks=detail;
+            const std::size_t vertexCount=std::size_t(stacks+1)*slices;
+            const std::size_t stripCount=1+std::size_t(stacks)*(2+2*slices);
+            const std::size_t bytes=vertexCount*(sizeof(LLVector3)+sizeof(LLVector2)+sizeof(VSWorldRenderer::Vertex))+
+                (stripCount+(stripCount-2)*3)*sizeof(unsigned);
+            // Charge all CPU staging vectors before allocation. GPU/retained
+            // mesh data is charged by publishMesh; refusal keeps the old mesh.
+            const auto skyWorking=budgets->terrainBytes.reserve(bytes);
+            if(skyWorking) {
+            std::vector<LLVector3> positions(vertexCount);
+            std::vector<LLVector2> coordinates(positions.size());
+            std::vector<unsigned> strips(1+stacks*(2+2*slices));
+            auto* position=positions.data();auto* coordinate=coordinates.data();auto* index=strips.data();
+            vs_sky_strips(0,stacks,position,coordinate,index,radius,slices,stacks);
+            std::vector<VSWorldRenderer::Vertex> vertices;vertices.reserve(positions.size());
+            for(unsigned i=0;i<positions.size();++i)vertices.push_back({positions[i].mV[0],positions[i].mV[1],positions[i].mV[2],
+                0,1,0,coordinates[i].mV[0],coordinates[i].mV[1]});
+            std::vector<unsigned> triangles;triangles.reserve((strips.size()-2)*3);
+            for(unsigned i=2;i<strips.size();++i) {
+                unsigned a=strips[i-2],b=strips[i-1],c=strips[i];if(i&1)std::swap(a,b);
+                if(a!=b && b!=c && a!=c)triangles.insert(triangles.end(),{a,b,c});
+            }
+            if(renderer.publishMesh(sky,vertices,triangles)){skyDetail=detail;skyRadius=radius;}
+            }
+        }
+        if(!activeSky && skyDetail){sky.reset();skyDetail=0;skyRadius=0;}
+        if (!sky && !activeSky)
             sky = renderer.upload(
                 { { -1, -1, 0, 0, 0, 1, 0, 0 }, { 1, -1, 0, 0, 0, 1, 1, 0 }, { 1, 1, 0, 0, 0, 1, 1, 1 }, { -1, 1, 0, 0, 0, 1, 0, 1 } },
                 { 0, 1, 2, 0, 2, 3 });
@@ -817,6 +853,15 @@ struct VSWorldScene::Impl
             background.mesh       = sky;
             background.background = true;
             background.fullbright = true;
+            if(activeSky) {
+                auto opticalImage=[&](const LLUUID& id) {
+                    if(id.isNull())return VSUIRenderer::Image{};
+                    vs_request_world_image(id,512);
+                    return resources.image("remote:"+vs_native_image_id(id).asString());
+                };
+                background.image=opticalImage(activeSky->getRainbowTextureId());
+                background.channels[0]=opticalImage(activeSky->getHaloTextureId());
+            }
             packets.push_back(background);
         }
         auto surface=std::make_shared<VSMaterial::State>();
@@ -3867,4 +3912,11 @@ LLSD VSWorldScene::evidence() const
     result["region_generation"]=ll_sd_from_U64(mImpl->incarnation);result["width"]=S32(mImpl->width);result["height"]=S32(mImpl->regionHeight);
     result["neighbours"]=LLSD::emptyArray();for (const auto& [host,region]:mNeighbours) result["neighbours"].append(region->evidence());
     return result;
+}
+
+bool VSWorldScene::skyCurrent() const
+{
+    if(mImpl->retired || !mImpl->sky || !mImpl->skyDetail || !LLEnvironment::instanceExists())return false;
+    const auto sky=LLEnvironment::instance().getCurrentSky();
+    return sky && mImpl->skyDetail==llclamp(gSavedSettings.getU32("WLSkyDetail"),8u,180u) && mImpl->skyRadius==sky->getDomeRadius();
 }

@@ -112,8 +112,10 @@ struct VSWorldRenderer::Impl
         std::vector<Packet> packets;
         std::vector<DrawResources> draws;
         RefCntAutoPtr<ITexture> depth;
+        RefCntAutoPtr<IBuffer> environment;
     };
     std::deque<Submission> submitted;
+    std::vector<RefCntAutoPtr<IBuffer>> environmentAvailable;
     Impl(IRenderDevice* d, IDeviceContext* c, std::size_t meshBudgetBytes) :
         device(d),
         context(c),
@@ -154,6 +156,7 @@ layout(location=3) in vec2 uv1;
 layout(location=4) in vec4 tangent;
 layout(location=5) in vec4 vertexColor;
 layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; vec4 regionOffset; vec4 surfaceFlags; vec4 surfaceParams; vec4 emissive; vec4 specular; vec4 channelSets; vec4 normalOcclusion; vec4 normalTangent; vec4 uvTransform[10]; };
+layout(std140) uniform EnvironmentView { vec4 environment[23]; };
 layout(location=0) out vec2 texUV;
 layout(location=1) out vec3 light;
 layout(location=2) out vec3 worldNormal;
@@ -161,7 +164,103 @@ layout(location=3) out vec3 worldPosition;
 layout(location=4) out vec2 texUV1;
 layout(location=5) out vec4 worldTangent;
 layout(location=6) out vec4 faceColor;
+layout(location=7) out vec3 skyColor;
+layout(location=8) out float skyLightDot;
+// Same CPU publication and equations as class1/deferred/skyV.glsl.
+vec3 environmentSky(vec3 position,out float lightDot) {
+    vec3 lightnorm=environment[4].xyz;
+    vec3 sunlight_color=environment[5].xyz,moonlight_color=environment[6].xyz;
+    vec3 ambient_color=environment[7].xyz,blue_horizon=environment[8].xyz,blue_density=environment[9].xyz;
+    float haze_horizon=environment[10].x,haze_density=environment[10].y;
+    float density_multiplier=environment[10].z,max_y=environment[10].w;
+    vec3 glow=environment[11].xyz;
+    float cloud_shadow=environment[12].x,sun_moon_glow_factor=environment[12].z;
+    int sun_up_factor=int(environment[12].y);
+    vec3 rel_pos=position-vec3(0,environment[0].w,0)+vec3(0,50,0);
+    // Adj position vector to clamp altitude
+    if (rel_pos.y > 0.)
+    {
+        rel_pos *= (max_y / rel_pos.y);
+    }
+    if (rel_pos.y < 0.)
+    {
+        rel_pos *= (-32000. / rel_pos.y);
+    }
+
+    // Normalized
+    vec3  rel_pos_norm = normalize(rel_pos);
+    float rel_pos_len  = length(rel_pos);
+
+    // Grab this value and pass to frag shader for rainbows
+    float rel_pos_lightnorm_dot = dot(rel_pos_norm, lightnorm.xyz);
+    lightDot = rel_pos_lightnorm_dot;
+
+    // Initialize temp variables
+    vec3 sunlight = (sun_up_factor == 1) ? sunlight_color : moonlight_color * 0.7; //magic 0.7 to match legacy color
+
+    // Sunlight attenuation effect (hue and brightness) due to atmosphere
+    // this is used later for sunlight modulation at various altitudes
+    vec3 light_atten = (blue_density + vec3(haze_density * 0.25)) * (density_multiplier * max_y);
+
+    // Calculate relative weights
+    vec3 combined_haze = max(abs(blue_density) + vec3(abs(haze_density)), vec3(1e-6));
+    vec3 blue_weight   = blue_density / combined_haze;
+    vec3 haze_weight   = haze_density / combined_haze;
+
+    // Compute sunlight from rel_pos & lightnorm (for long rays like sky)
+    float off_axis = 1.0 / max(1e-6, max(0., rel_pos_norm.y) + lightnorm.y);
+    sunlight *= exp(-light_atten * off_axis);
+
+    // Distance
+    float density_dist = rel_pos_len * density_multiplier;
+
+    // Transparency (-> combined_haze)
+    // ATI Bugfix -- can't store combined_haze*density_dist in a variable because the ati
+    // compiler gets confused.
+    combined_haze = exp(-combined_haze * density_dist);
+
+    // Compute haze glow
+    float haze_glow = 1.0 - rel_pos_lightnorm_dot;
+    // haze_glow is 0 at the sun and increases away from sun
+    haze_glow = max(haze_glow, .001);
+    // Set a minimum "angle" (smaller glow.y allows tighter, brighter hotspot)
+    haze_glow *= glow.x;
+    // Higher glow.x gives dimmer glow (because next step is 1 / "angle")
+    haze_glow = pow(haze_glow, glow.z);
+    // glow.z should be negative, so we're doing a sort of (1 / "angle") function
+
+    // Add "minimum anti-solar illumination"
+    // For sun, add to glow.  For moon, remove glow entirely. SL-13768
+    haze_glow = (sun_moon_glow_factor < 1.0) ? 0.0 : (sun_moon_glow_factor * (haze_glow + 0.25));
+
+    // Haze color above cloud
+    vec3 color = (blue_horizon * blue_weight * (sunlight + ambient_color)
+               + (haze_horizon * haze_weight) * (sunlight * haze_glow + ambient_color));
+
+    // Final atmosphere additive
+    color *= (1. - combined_haze);
+
+    // Increase ambient when there are more clouds
+    vec3 ambient = ambient_color + max(vec3(0), (1. - ambient_color)) * cloud_shadow * 0.5;
+
+    // Dim sunlight by cloud shadow percentage
+    sunlight *= max(0.0, (1. - cloud_shadow));
+
+    // Haze color below cloud
+    vec3 add_below_cloud = (blue_horizon * blue_weight * (sunlight + ambient)
+                         + (haze_horizon * haze_weight) * (sunlight * haze_glow + ambient));
+
+    // Attenuate cloud color by atmosphere
+    combined_haze = sqrt(combined_haze);  // less atmos opacity (more transparency) below clouds
+
+    // At horizon, blend high altitude sky color towards the darker color below the clouds
+    color += (add_below_cloud - color) * (1. - sqrt(combined_haze));
+
+    // Haze color above cloud
+    return color;
+}
 void main() {
+    skyColor=vec3(0);skyLightDot=0;
     vec4 p;
     if(material.w>1.5) {
         // Triangle-encoded wide lines use actual world endpoints, so camera
@@ -191,6 +290,14 @@ void main() {
             }
         }
     } else p=material.w>0.5 ? vec4(position,1) : projection*vec4(position+regionOffset.xyz,1);
+    if(material.w>.5 && material.w<1.5 && environment[0].x>.5) {
+        vec3 relative=position-vec3(0,environment[0].w,0);
+        vec3 world=environment[13].xyz+.333*relative.zxy;
+        p=projection*vec4(world,1);
+        // LLGLSquashToFarClip's reference layer-zero projection, before Vulkan depth conversion.
+        p.z=.99999*p.w;
+        skyColor=environmentSky(position,skyLightDot);
+    }
     p.z=(p.z+p.w)*0.5;
     gl_Position=p; texUV=uv; texUV1=uv1; worldTangent=tangent; faceColor=vertexColor; worldNormal=normal; worldPosition=position+regionOffset.xyz;
     if(surfaceFlags.x>.5 && dot(tangent.xyz,tangent.xyz)>1e-20) {
@@ -199,7 +306,7 @@ void main() {
         worldTangent=vec4(normalize(normalTangent.x*t+normalTangent.y*b),tangent.w*normalTangent.z);
     }
     gl_PointSize=1.0;
-    light=material.x>0.5 ? vec3(1) : ambient.rgb+(vec3(1)-ambient.rgb)*max(dot(normalize(normal),normalize(sun.xyz)),0.0);
+    light=material.x>0.5 ? vec3(1) : ambient.rgb+(environment[0].x>.5?environment[16].rgb:vec3(1)-ambient.rgb)*max(dot(normalize(normal),normalize(sun.xyz)),0.0);
 }
 )";
         const char* fs=R"(
@@ -210,13 +317,40 @@ layout(location=3) in vec3 worldPosition;
 layout(location=4) in vec2 texUV1;
 layout(location=5) in vec4 worldTangent;
 layout(location=6) in vec4 faceColor;
+layout(location=7) in vec3 skyColor;
+layout(location=8) in float skyLightDot;
 layout(location=0) out vec4 result;
 layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; vec4 regionOffset; vec4 surfaceFlags; vec4 surfaceParams; vec4 emissive; vec4 specular; vec4 channelSets; vec4 normalOcclusion; vec4 normalTangent; vec4 uvTransform[10]; };
+layout(std140) uniform EnvironmentView { vec4 environment[23]; };
 uniform sampler2D g_Texture;
 uniform sampler2D g_Normal;
 uniform sampler2D g_ORM;
 uniform sampler2D g_Emissive;
 uniform sampler2D g_Occlusion;
+vec3 rainbow(float d)
+{
+    // 'Interesting' values of d are -0.75 .. -0.825, i.e. when view vec nearly opposite of sun vec
+    // Rainbox tex is mapped with REPEAT, so -.75 as tex coord is same as 0.25.  -0.825 -> 0.175. etc.
+    // SL-13629
+    // Unfortunately the texture is inverted, so we need to invert the y coord, but keep the 'interesting'
+    // part within the same 0.175..0.250 range, i.e. d = (1 - d) - 1.575
+    d         = clamp(-0.575 - d, 0.0, 1.0);
+
+    // With the colors in the lower 1/4 of the texture, inverting the coords leaves most of it inaccessible.
+    // So, we can stretch the texcoord above the colors (ie > 0.25) to fill the entire remaining coordinate
+    // space. This improves gradation, reduces banding within the rainbow interior. (1-0.25) / (0.425/0.25) = 4.2857
+    float interior_coord = max(0.0, d - 0.25) * 4.2857;
+    d = clamp(d, 0.0, 0.25) + interior_coord;
+
+    float rad = (environment[18].y - 5.0f) / 1024.0f;
+    return pow(texture(g_Texture, vec2(rad+0.5, d)).rgb, vec3(1.8)) * environment[18].x;
+}
+vec3 halo22(float d)
+{
+    d       = clamp(d, 0.1, 1.0);
+    float v = sqrt(clamp(1 - (d * d), 0, 1));
+    return texture(g_Normal, vec2(0, v)).rgb * environment[18].z;
+}
 vec2 channelUV(int i) {
     float set=i==4 ? normalOcclusion.z : channelSets[i];
     vec2 rawUV=set>.5?texUV1:texUV;
@@ -251,7 +385,10 @@ vec3 mappedNormal(vec2 uv) {
 }
 void main() {
     if (material.w>0.5 && material.w<1.5) {
-        result=vec4(mix(vec3(0.65,0.8,0.95),vec3(0.08,0.22,0.48),clamp(texUV.y,0.0,1.0)),1);
+        if(environment[0].x>.5) {
+            vec3 color=skyColor+(normalOcclusion.w>.5?rainbow(skyLightDot):vec3(0))+(normalOcclusion.x>.5?halo22(skyLightDot):vec3(0));
+            result=vec4(clamp(color*2.0,vec3(0),vec3(5)),1);
+        } else result=vec4(mix(vec3(0.65,0.8,0.95),vec3(0.08,0.22,0.48),clamp(texUV.y,0.0,1.0)),1);
         return;
     }
     if (surfaceFlags.x<-.5) {
@@ -275,7 +412,7 @@ void main() {
     if (surfaceFlags.x<0.5) { result=vec4(c.rgb*light,c.a); return; }
     vec3 n=mappedNormal(channelUV(1));
     if (!gl_FrontFacing) n=-n;
-    vec3 illumination=material.x>0.5 ? vec3(1) : ambient.rgb+(vec3(1)-ambient.rgb)*max(dot(n,normalize(sun.xyz)),0.0);
+    vec3 illumination=material.x>0.5 ? vec3(1) : ambient.rgb+(environment[0].x>.5?environment[16].rgb:vec3(1)-ambient.rgb)*max(dot(n,normalize(sun.xyz)),0.0);
     vec3 base=toLinear(sampleColor.rgb)*(surfaceFlags.y>0.5 ? tint.rgb : toLinear(tint.rgb))*faceColor.rgb;
     vec3 emission=emissive.rgb*toLinear(texture(g_Emissive,channelUV(3)).rgb);
     if (surfaceParams.w>0.5) emission+=base*sampleColor.a;
@@ -296,6 +433,19 @@ void main() {
             device->CreateShader(shader,&fragment);
             requireWorld(vertex && fragment,"World shader creation failed");
             checkWorldABI(*vertex);checkWorldABI(*fragment);
+            for(auto* shader:{vertex.RawPtr(),fragment.RawPtr()}) {
+                bool present=false;
+                for(Uint32 i=0;i<shader->GetResourceCount();++i) {
+                    ShaderResourceDesc resource{};shader->GetResourceDesc(i,resource);
+                    if(!resource.Name || std::strcmp(resource.Name,"EnvironmentView"))continue;
+                    const auto* block=shader->GetConstantBufferDesc(i);
+                    requireWorld(block && block->Size==sizeof(VSEnvironmentState::values) && block->NumVariables==1 &&
+                        block->pVariables[0].Offset==0 && !std::strcmp(block->pVariables[0].Name,"environment"),"Native environment ABI mismatch");
+                    present=true;
+                }
+                requireWorld(present,"Native environment reflection missing");
+            }
+
         }
         auto& terrainFragment=terrainFragments[terrainProgram?terrainProgram-1:0];
         if(terrainProgram && !terrainFragment)
@@ -445,6 +595,8 @@ void VSWorldRenderer::retire()
                 mImpl->available[draw.pipeline].push_back(std::move(draw));
                 ++mImpl->availableCount;
             }
+        if(mImpl->submitted.front().environment && mImpl->environmentAvailable.size()<32)
+            mImpl->environmentAvailable.push_back(std::move(mImpl->submitted.front().environment));
         mImpl->submitted.pop_front();
     }
 }
@@ -624,6 +776,18 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
     context->ClearDepthStencil(depth,CLEAR_DEPTH_FLAG,1,0,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     Viewport viewport{0.f,0.f,float(width),float(height)};context->SetViewports(1,&viewport,width,height);
     mImpl->submitted.emplace_back();auto& submitted=mImpl->submitted.back();
+    if(!mImpl->environmentAvailable.empty()) {
+        submitted.environment=std::move(mImpl->environmentAvailable.back());mImpl->environmentAvailable.pop_back();
+    } else {
+        BufferDesc desc{};desc.Name="Native frame environment";desc.Size=sizeof(view.environment.values);
+        desc.Usage=USAGE_DEFAULT;desc.BindFlags=BIND_UNIFORM_BUFFER;
+        mImpl->device->CreateBuffer(desc,nullptr,&submitted.environment);
+        requireWorld(submitted.environment!=nullptr,"Native frame environment allocation failed");
+        ++mImpl->statistics.constantBuffersCreated;
+    }
+    context->UpdateBuffer(submitted.environment,0,sizeof(view.environment.values),view.environment.values.data(),RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    mImpl->statistics.constantUploadBytes+=sizeof(view.environment.values);
+
     submitted.depth=mImpl->depth;submitted.packets=packets;
     std::stable_sort(submitted.packets.begin(), submitted.packets.end(),
                      [](const Packet& a, const Packet& b)
@@ -680,6 +844,10 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
                              p.regionOffset };
         requireWorld(std::isfinite(p.screenLinePixels) && p.screenLinePixels>=0,"Invalid native screen-line width");
         if(p.screenLinePixels>0) constants.normalOcclusion={p.screenLinePixels,float(width),float(height),0};
+        if(p.background) {
+            constants.normalOcclusion[3]=p.image?1.f:0.f;
+            constants.normalOcclusion[0]=p.channels[0]?1.f:0.f;
+        }
         if (p.surface)
         {
             const auto& surface=*p.surface;
@@ -787,6 +955,8 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         }
         else
         {
+        for(const auto stage:{SHADER_TYPE_VERTEX,SHADER_TYPE_PIXEL})
+            if(auto* environment=resources.binding->GetVariableByName(stage,"EnvironmentView"))environment->Set(submitted.environment,SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
         auto* texture=resources.binding->GetVariableByName(SHADER_TYPE_PIXEL,"g_Texture");
         requireWorld(texture!=nullptr,"World texture binding missing");
         texture->Set(p.image ? VSUIRenderer::imageView(p.image,p.surface?p.surface->samplers[0]:p.imageSampler) : mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),

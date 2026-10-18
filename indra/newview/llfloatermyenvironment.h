@@ -47,8 +47,11 @@ public:
     virtual void                    refresh() override;
 
     virtual void                    onOpen(const LLSD& key) override;
+    void onClose(bool app_quitting) override;
 
 private:
+    U64 mRequestEpoch=0;
+    std::function<bool()> requestGuard();
     LLInventoryPanel *              mInventoryList;
     LLFilterEditor *                mFilterEdit;
     U64                             mTypeFilter;

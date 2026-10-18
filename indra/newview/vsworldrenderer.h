@@ -2,6 +2,7 @@
 #pragma once
 #include "vsuirenderer.h"
 #include "vsmaterial.h"
+#include "vsenvironmentstate.h"
 #include <array>
 #include <cstddef>
 #include <memory>
@@ -70,6 +71,7 @@ public:
         std::array<float,4> sun{0,0,1,0};
         std::array<float,4> ambient{.25f,.25f,.25f,0};
         float                hudZoom = 1;
+        VSEnvironmentState environment;
     };
     struct SurfaceHit
     {

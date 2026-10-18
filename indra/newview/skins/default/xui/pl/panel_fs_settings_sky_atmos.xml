@@ -23,8 +23,8 @@
 			Gęstość błękitu:
 		</text>
 	</panel>
-	<panel name="P_Atmosphere_Header">
-		<text name="T_Atmosphere_Header" value="Ustawienia atmosfery" />
+	<panel name="P_Atmosphere_Controls_Header">
+		<text name="T_Atmosphere_Controls_Header" value="Ustawienia atmosfery" />
 	</panel>
 	<panel name="P_Atmosphere_OtherSettings">
 		<text name="haze_horizon_label">

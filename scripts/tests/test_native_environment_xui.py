@@ -6,7 +6,9 @@ FILES=['floater_about_land.xml','floater_url_entry.xml','floater_ban_duration.xm
  'floater_edit_ext_day_cycle.xml','floater_settings_picker.xml','floater_pick_track.xml',
  'panel_region_environment.xml','panel_region_experiences.xml','panel_experience_list_editor.xml',
  'panel_settings_water.xml','panel_settings_sky_atmos.xml','panel_settings_sky_clouds.xml',
- 'panel_settings_sky_sunmoon.xml','panel_settings_sky_density.xml','menu_save_settings.xml']
+ 'panel_settings_sky_sunmoon.xml','panel_settings_sky_density.xml','menu_save_settings.xml',
+ 'floater_my_environments.xml','floater_fs_fixedenvironment.xml','panel_fs_settings_sky_atmos.xml',
+ 'panel_fs_settings_sky_clouds.xml','panel_fs_settings_sky_sunmoon.xml','menu_settings_add.xml','menu_settings_gear.xml','panel_fs_settings_water.xml']
 def defects(expected,actual):
  if (expected.tag,expected.get('name'))!=(actual.tag,actual.get('name')):return True
  for child in actual:

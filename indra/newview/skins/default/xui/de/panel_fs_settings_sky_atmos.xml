@@ -25,8 +25,8 @@
 		</text>
 	</panel>
 
-	<panel name="P_Atmosphere_Header">
-		<text name="T_Atmosphere_Header" value="Einstellungen Atmosphäre"/>
+	<panel name="P_Atmosphere_Controls_Header">
+		<text name="T_Atmosphere_Controls_Header" value="Einstellungen Atmosphäre"/>
 	</panel>
 	<panel name="P_Atmosphere_OtherSettings">
 		<text name="haze_horizon_label" width="130">

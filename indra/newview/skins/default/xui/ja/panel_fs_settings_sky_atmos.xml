@@ -17,8 +17,8 @@
 			青の濃度：
 		</text>
 	</panel>
-	<panel name="P_Atmosphere_Header">
-		<text name="T_Atmosphere_Header" value="大気の設定"/>
+	<panel name="P_Atmosphere_Controls_Header">
+		<text name="T_Atmosphere_Controls_Header" value="大気の設定"/>
 	</panel>
 	<panel name="P_Atmosphere_OtherSettings">
 		<text name="haze_horizon_label">

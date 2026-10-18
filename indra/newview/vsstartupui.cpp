@@ -4,6 +4,8 @@
 #include "llfloaterbuycurrency.h"
 #include "llfloaterbuyland.h"
 #include "llfloatereditextdaycycle.h"
+#include "llfloaterfixedenvironment.h"
+#include "llfloatermyenvironment.h"
 #include "llpaneleditsky.h"
 #include "llpaneleditwater.h"
 #include "llsettingspicker.h"
@@ -259,7 +261,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 // account inventory or the already-owned browser/audio service.
                 LLFloaterBuyCurrency::isNativeInternalType(t) ||
                 LLFloaterBuyLand::isNativeInternalType(t) ||
-                t==typeid(LLFloaterEditExtDayCycle) || t==typeid(LLFloaterSettingsPicker) ||
+                t==typeid(LLFloaterMyEnvironment) || t==typeid(LLFloaterFixedEnvironmentSky) || t==typeid(LLFloaterFixedEnvironmentWater) || t==typeid(LLFloaterEditExtDayCycle) || t==typeid(LLFloaterSettingsPicker) ||
                 t==typeid(LLFloaterTrackPicker) || t==typeid(LLPanelSettingsWaterMainTab) ||
                 t==typeid(LLPanelSettingsSkyAtmosTab) || t==typeid(LLPanelSettingsSkyCloudTab) ||
                 t==typeid(LLPanelSettingsSkySunMoonTab) || t==typeid(LLPanelSettingsSkyDensityTab) ||
@@ -381,7 +383,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             return admitted;
         },
         [](std::string_view name) { return
-            name == "about_land" || name == "ban_duration" || name == "env_edit_extdaycycle" || name == "buy_land" || name == "sell_land" || name == "buy_currency" || name == "buy_currency_html" || name == "add_payment_method" || name == "money_tracker" ||
+            name == "about_land" || name == "ban_duration" || name == "my_environments" || name == "env_fixed_environmentent_sky" || name == "env_fixed_environmentent_water" || name == "env_edit_extdaycycle" || name == "buy_land" || name == "sell_land" || name == "buy_currency" || name == "buy_currency_html" || name == "add_payment_method" || name == "money_tracker" ||
             name == "window_size" || name == "fs_protectedfolders" || name == "fs_streamtitle" || name == "fs_streamtitlehistory" ||
             name == "chat_mention_picker" || name == "emoji_complete" || name == "preview_trash" || name == "new_feature_notification" ||
             name == "fs_whitelist_floater" || name == "settings_color" || name == "fs_splash_screen_settings" || name == "fs_volume_controls" ||
@@ -434,6 +436,10 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             if (LLPanelMainInventory::isNativeCallback(name, parameter) ||
                 LLPanelPeople::isNativeCallback(std::string(name), parameter) || FSChatHistory::isNativeCallback(std::string(name), parameter)) return true;
             if (name == "DayCycle.Track" || name == "DayCycle.PlayActions") return true;
+            if(name=="World.EnvSettings")return parameter.asString()=="my_environs";
+            if(name=="MyEnvironments.DoCreate" || name=="MyEnvironments.DoEdit" || name=="MyEnvironments.DoApply" ||
+                name=="MyEnvironments.CopyPaste" || name=="MyEnvironments.EnableAction" ||
+                name=="MyEnvironments.CanApply" || name=="MyEnvironments.EnvironmentEnabled")return true;
             if (name == "Land.BuyPass" || name == "Land.EnableBuyPass") return true;
             if (name == "BuyCurrency" || name == "Land.Buy" || name == "World.EnableBuyLand") return true;
             if (name == "MoneyTrackerList.Action") return parameter.asString() == "copy" || parameter.asString() == "delete";

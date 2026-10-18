@@ -19,7 +19,7 @@
 			雲層變換：
 		</text>
 	</panel>
-	<panel name="P_Cloud_Density">
+	<panel name="P_Cloud_Position">
 		<text name="cloud_density_label" tool_tip="雲層XY/密度 - X和Y滑塊改變所有雲層的水平位置。D滑塊調整密度。">
 			雲層密度：
 		</text>

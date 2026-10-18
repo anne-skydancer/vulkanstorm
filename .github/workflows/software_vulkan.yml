@@ -119,6 +119,10 @@ jobs:
       - run: python scripts/tests/test_native_environment_editors.py
       - run: python scripts/tests/test_native_url_entry_lifecycle.py
       - run: python scripts/tests/test_native_environment_xui.py
+      - run: python scripts/tests/test_native_my_environments.py
+      - run: python scripts/tests/test_native_environment_rendering.py
+      - run: python scripts/tests/test_vulkan_environment_evidence.py
+      - run: python scripts/tests/test_native_region_environment_flags.py
       - run: python scripts/tests/test_native_source_fixture.py
       - run: python scripts/tests/test_native_parcel_boundaries.py
       - run: python scripts/tests/test_native_parcel_transactions.py
