@@ -4,6 +4,7 @@
 #include "llagent.h"
 #include "llappviewer.h"
 #include "llworld.h"
+#include "llsurface.h"
 #include "llviewerregion.h"
 #include "llviewerwindow.h"
 #include "llregionhandle.h"
@@ -13,6 +14,8 @@
 #include "lltrans.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "vsworldscene.h"
 #endif
 namespace
 {
@@ -212,4 +215,24 @@ bool vs_publish_region_owner(const VSRegionContext& context,const LLUUID& owner)
 bool VSRegionContext::getAllowEnvironmentOverride() const
 {
     return getRegionFlag(REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE);
+}
+
+std::optional<F32> vs_region_height(const LLVector3d& global)
+{
+    const auto region=vs_region_context(global);
+    if(!region || !region->current())return {};
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        auto* context=gViewerWindow->nativeContext();if(!context)return {};
+        const auto field=context->world().terrainField(region->getHost());
+        if(!field || !field->current || !field->current() || !field->referenceHeight)return {};
+        const auto local=region->getPosRegionFromGlobal(global);
+        const auto result=field->referenceHeight(local.mV[VX],local.mV[VY]);
+        return region->current() && field->current()?result:std::nullopt;
+    }
+#endif
+    const auto owner=LLWorld::instance().getRegion(region->getHost());
+    if(!owner || owner->getRegionID()!=region->getRegionID())return {};
+    return owner->getLand().resolveHeightGlobal(global);
 }

@@ -64,6 +64,7 @@ public:
     U64                                  ownerGeneration() const;
     void                                 sitting(bool);
     bool                                 sitting() const;
+    bool                                 inAir() const;
     void                                 environment(const LLVector3& wind, F32 waterHeight, const LLVector3& eye, const LLVector3& at);
     enum class Visibility
     {

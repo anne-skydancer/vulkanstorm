@@ -1,5 +1,6 @@
 // Native CPU session and nearby transport. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
+#include "llagentpilot.h"
 #include "vscameraview.h"
 #include "vsteleportpolicy.h"
 #include "llagentcamera.h"
@@ -1031,6 +1032,13 @@ void VSNativeSession::mouseButton(bool down)
     mWorldMouseDown  = down;
     mMouseControls   = mWorldMouseMouselook ? (down ? AGENT_CONTROL_ML_LBUTTON_DOWN : AGENT_CONTROL_ML_LBUTTON_UP)
                                             : (down ? AGENT_CONTROL_LBUTTON_DOWN : AGENT_CONTROL_LBUTTON_UP);
+    mAgentUpdateTime = 0;
+}
+void VSNativeSession::faceBody(const LLVector3& direction)
+{
+    if (!regionReady() || !direction.isFinite() || direction.isNull()) return;
+    const auto forward = LLVector3::x_axis * cameraState().bodyRotation;
+    mCamera.turnBody(std::atan2(direction.mV[VY], direction.mV[VX]) - std::atan2(forward.mV[VY], forward.mV[VX]));
     mAgentUpdateTime = 0;
 }
 void VSNativeSession::cameraOrbit(F32 yaw, F32 pitch)
@@ -2349,6 +2357,11 @@ void VSNativeSession::tick()
             mCamera.step(F32(cameraTime - mCameraTime), gAgent.rotateGrabbed(),
                 gAgentCamera.getCameraOffsetInitial(), LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale());
         cameraControls(mCameraTime > 0 ? F32(cameraTime - mCameraTime) : 0.f);
+        // The same CPU pilot controls feed the real simulator AgentUpdate.
+        gAgentPilot.updateTarget();
+        F32 yaw = 0;
+        gAgent.autoPilot(&yaw);
+        mCamera.turnBody(yaw);
         publishCamera();
         if (cameraTime - mParcelQueryTime >= 1 &&
             (S32(mPosition.mV[VX] / 4) != mParcelCellX || S32(mPosition.mV[VY] / 4) != mParcelCellY))
@@ -2459,6 +2472,7 @@ void VSNativeSession::reset()
     mStartupTime = 0;
     mStartupTimedOut = false;
     if (mShutdown) return;
+    gAgent.retireNativeAutoPilot();
     // Retire CPU tracking without sending an untrack on the retiring circuit.
     // The old account's buddy owner is cleared below, before another login.
     LLTracker::cleanupInstance();

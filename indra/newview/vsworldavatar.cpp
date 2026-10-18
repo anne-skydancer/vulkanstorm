@@ -883,6 +883,13 @@ void VSWorldAvatar::environment(const LLVector3& wind, F32 waterHeight, const LL
     avatar.cloth.eye = eye;
     avatar.cloth.at  = at;
 }
+bool VSWorldAvatar::inAir() const
+{
+    const auto& avatar=*mImpl;
+    LLVector3 floor,normal;
+    return !avatar.ground(avatar.position,floor,normal) ||
+        avatar.position.mV[VZ]+avatar.hover.mV[VZ]-avatar.mPelvisToFoot-floor.mV[VZ]>.25f;
+}
 bool VSWorldAvatar::sitting() const
 { return mImpl->sitting; }
 void VSWorldAvatar::sitting(bool sitting)
@@ -1270,9 +1277,7 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const 
         bool walking = false;
         for (S32 index = 0; index < NUM_AGENT_WALK_ANIMS; ++index)
             walking |= a.animations.count(AGENT_WALK_ANIMS[index]) != 0;
-        LLVector3  floor, normal;
-        const bool inAir =
-            !a.ground(a.position, floor, normal) || a.position.mV[VZ] + a.hover.mV[VZ] - a.mPelvisToFoot - floor.mV[VZ] > .25f;
+        const bool inAir = this->inAir();
         if (walking || !inAir || a.sitting)
             a.LLCharacter::stopMotion(ANIM_AGENT_FLY_ADJUST);
         else

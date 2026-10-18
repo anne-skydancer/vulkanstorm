@@ -87,6 +87,9 @@ jobs:
       - run: python scripts/tests/test_avatar_image_pool.py
       - run: python scripts/tests/test_native_bake_callback.py
       - run: python scripts/tests/test_native_camera_transport.py
+      - run: python scripts/tests/test_native_navigation_reference.py
+      - run: python scripts/tests/test_native_navigation_lifecycle.py
+      - run: python scripts/tests/test_native_region_height.py
       - run: python scripts/tests/test_native_keyboard_dispatch.py
       - run: python scripts/tests/test_native_utility_lifecycle.py
       - run: python scripts/tests/test_native_currency_lifecycle.py
