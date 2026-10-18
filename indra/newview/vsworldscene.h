@@ -50,6 +50,13 @@ public:
     std::vector<Attachment> attachments() const;
     struct AvatarLocation { LLUUID id; LLVector3d position; };
     std::vector<AvatarLocation> avatarLocations() const;
+    struct ObjectAdmission
+    {
+        U32 updateFlags=0,rootUpdateFlags=0;
+        U8 pcode=0;
+        bool orphaned=false,attachment=false,hud=false;
+    };
+    std::optional<ObjectAdmission> objectAdmission(const ObjectHandle&) const;
     struct ObjectSnapshot
     {
         ObjectHandle object;

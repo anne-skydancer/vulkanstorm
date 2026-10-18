@@ -4,11 +4,11 @@
 #include <optional>
 #include <string>
 #include <vector>
-using U8=unsigned char;using U32=unsigned;
+using U8=unsigned char;using U32=unsigned;using LLHost=int;
 enum ESelectType{SELECT_TYPE_WORLD,SELECT_TYPE_HUD,SELECT_TYPE_ATTACHMENT};
 constexpr U32 FLAGS_OBJECT_COPY=1,FLAGS_OBJECT_MOVE=2,FLAGS_AFFECTS_NAVMESH=4;
 constexpr U8 LL_PCODE_LEGACY_AVATAR=5;
-unsigned bits=0;bool live=true,hasRow=true;
+unsigned bits=0,selectionReads=0;bool live=true,hasRow=true,typeKnown=true,overrideSelectionType=false;
 struct Agent{bool isGodlike()const{return bits&(1<<9);}int getGodLevel()const{return 0;}}gAgent;
 constexpr int GOD_MAINTENANCE=200;
 struct LLGridManager{static LLGridManager*getInstance(){static LLGridManager x;return &x;}bool isInSLBeta(){return false;}};
@@ -16,9 +16,11 @@ template<class Override>bool vs_object_you_owner(bool value,Override){return val
 struct Settings{bool getBOOL(const char*name)const{return bits&(std::string(name)=="SelectOwnedOnly"?1:std::string(name)=="SelectMovableOnly"?2:std::string(name)=="FSSelectCopyableOnly"?4:8);}}gSavedSettings;
 struct VSWorldScene{
  struct ObjectHandle{int host=1;};
- struct ObjectSnapshot{ObjectHandle object;U32 rootUpdateFlags=0,updateFlags=0;bool hud=false,attachment=false;U8 pcode=0;};
+ struct ObjectSnapshot{ObjectHandle object;U32 rootUpdateFlags=0,updateFlags=0;bool hud=false,attachment=false,orphaned=false;U8 pcode=0;};
+ using ObjectAdmission=ObjectSnapshot;
  ObjectSnapshot row;
- std::optional<ObjectSnapshot>objectSnapshot(ObjectHandle)const{return hasRow?std::optional<ObjectSnapshot>(row):std::nullopt;}
+ std::optional<ObjectSnapshot>objectSnapshot(ObjectHandle)const{assert(false);return {};}
+ std::optional<ObjectAdmission>objectAdmission(ObjectHandle)const{return hasRow?std::optional<ObjectAdmission>(row):std::nullopt;}
 }world;
 VSWorldScene*scene(){return &world;}
 struct VSObjectContext{static bool ownedByAgent(U32 flags){return flags&8;}};
@@ -28,7 +30,7 @@ struct LLViewerObject{
  bool isDead()const{return !live;}bool permYouOwner()const{return VSObjectContext::ownedByAgent(world.row.rootUpdateFlags);}
  bool permMove()const{return world.row.rootUpdateFlags&FLAGS_OBJECT_MOVE;}bool permCopy()const{return world.row.rootUpdateFlags&FLAGS_OBJECT_COPY;}
  bool isPermanentEnforced()const{return(world.row.updateFlags&FLAGS_AFFECTS_NAVMESH)&&world.row.object.host!=1&&!gAgent.isGodlike();}
- bool isOrphaned()const{return false;}bool isAvatar()const{return world.row.pcode==LL_PCODE_LEGACY_AVATAR;}U8 getPCode()const{return world.row.pcode;}
+ bool isOrphaned()const{return world.row.orphaned;}bool isAvatar()const{return world.row.pcode==LL_PCODE_LEGACY_AVATAR;}U8 getPCode()const{return world.row.pcode;}
 };
 struct LLObjectSelection{ESelectType mSelectType=SELECT_TYPE_WORLD;int getObjectCount()const{return bits&(1<<10)?1:0;}};
 struct LLSelectMgr{
@@ -39,9 +41,12 @@ struct LLSelectMgr{
 REFERENCE_METHOD
 SHARED
 struct VSObjectSelection{
+ enum class SelectionType{World,Attachment,HUD};
+ struct SelectionTypeState{bool selected=false;std::optional<SelectionType>type;};
+ SelectionTypeState selectionType()const{++selectionReads;return {bool(bits&(1<<10)),typeKnown?std::optional<SelectionType>(overrideSelectionType?SelectionType::HUD:world.row.hud?SelectionType::HUD:world.row.attachment?SelectionType::Attachment:SelectionType::World):std::nullopt};}
  struct Impl{std::weak_ptr<VSNativeSession>session;bool current(VSWorldScene::ObjectHandle)const{return live;}};
  std::shared_ptr<Impl>mImpl=std::make_shared<Impl>();
- std::vector<VSWorldScene::ObjectHandle>selected()const{return bits&(1<<10)?std::vector<VSWorldScene::ObjectHandle>{{}}:std::vector<VSWorldScene::ObjectHandle>{};}
+ std::vector<VSWorldScene::ObjectHandle>selected()const{assert(false);return {};}
  bool canSelect(const VSWorldScene::ObjectHandle&,bool,bool)const;
 };
 CURRENT_METHOD
@@ -55,5 +60,11 @@ int main(){
   LLViewerObject object;
   for(bool ignore:{false,true})assert(reference.canSelectObject(&object,ignore)==native.canSelect(world.row.object,reference.mForceSelection,ignore));
  }
- live=false;assert(!native.canSelect({},true,true));live=true;hasRow=false;assert(!native.canSelect({},true,true));hasRow=true;owner.reset();assert(!native.canSelect({},true,true));
+ bits=1;world.row.rootUpdateFlags=0;world.row.updateFlags=0;world.row.pcode=0;world.row.hud=false;world.row.attachment=false;selectionReads=0;
+ assert(!native.canSelect({},false,false)&&selectionReads==0); // ownership rejection never scans selection
+ assert(native.canSelect({},true,false)&&selectionReads==0); // force never scans metadata/selection
+ bits=1<<10;overrideSelectionType=true;assert(!native.canSelect({},false,false)&&selectionReads==1); // genuine mixed world/HUD
+ overrideSelectionType=false;typeKnown=false;selectionReads=0;assert(!native.canSelect({},false,false)&&selectionReads==1); // retired type never becomes empty selection
+ typeKnown=true;
+ live=false;assert(!native.canSelect({},true,true));live=true;hasRow=false;assert(native.canSelect({},true,true));assert(!native.canSelect({},false,true));hasRow=true;world.row.orphaned=true;assert(native.canSelect({},true,true));assert(!native.canSelect({},false,true));world.row.orphaned=false;owner.reset();assert(!native.canSelect({},true,true));
 }

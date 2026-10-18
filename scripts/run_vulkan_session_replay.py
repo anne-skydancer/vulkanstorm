@@ -532,7 +532,7 @@ DEFAULT_ENVIRONMENT_ASSET = '5646d39e-d3d7-6aff-ed71-30fc87d64a91'
 
 from vulkan_environment_evidence import environment_pixels_passed
 
-REQUIRED = ('connected_my_environments_filters', 'connected_fixed_environment_editors', 'connected_environment_gpu_consumption', 'connected_parcel_request_echo', 'connected_parcel_rectangle_pixels', 'connected_environment_capability_edit', 'connected_about_land_all_tabs', 'connected_environment_nested_dialogs', 'connected_land_media_url_cancel', 'connected_default_environment_asset', 'connected_land_buy_policy_cancel', 'connected_land_sell_stale_intent_cancel', 'connected_utility_floaters', 'connected_keyboard_first_person_strafe', 'connected_keyboard_window_dispatch', 'connected_camera_controls', 'connected_land_permissions', 'connected_native_statistics', 'connected_script_notification_controls', 'connected_script_dialog_encoded', 'connected_script_textbox_encoded', 'connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
+REQUIRED = ('connected_region_nine_tabs', 'connected_region_encoded_model', 'connected_topobjects_encoded_beacon', 'connected_console_http', 'connected_region_ui_retirement', 'connected_my_environments_filters', 'connected_fixed_environment_editors', 'connected_environment_gpu_consumption', 'connected_parcel_request_echo', 'connected_parcel_rectangle_pixels', 'connected_environment_capability_edit', 'connected_about_land_all_tabs', 'connected_environment_nested_dialogs', 'connected_land_media_url_cancel', 'connected_default_environment_asset', 'connected_land_buy_policy_cancel', 'connected_land_sell_stale_intent_cancel', 'connected_utility_floaters', 'connected_keyboard_first_person_strafe', 'connected_keyboard_window_dispatch', 'connected_camera_controls', 'connected_land_permissions', 'connected_native_statistics', 'connected_script_notification_controls', 'connected_script_dialog_encoded', 'connected_script_textbox_encoded', 'connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
             'connected_inventory_texture_upload', 'connected_inventory_sound_upload',
             'connected_group_titles', 'connected_group_directory_search',
             'connected_inventory_share', 'connected_resident_pay', 'connected_payment_balance_gate',
@@ -1166,6 +1166,12 @@ class Handler(BaseHTTPRequestHandler):
         request = read_llsd(ET.fromstring(payload))
         self.server.requests.append({'path': self.path, 'request': request})
         if r2_fixture.post(self,path,request):return
+        if path == '/ui-sim-console':
+            if request != 'native qualification':self.send_error(400);return
+            self.respond_llsd('native console accepted');return
+        if path == '/ui-open-region-settings':
+            if not isinstance(request,dict):self.send_error(400);return
+            self.respond_llsd({'success':True});return
         if path == '/metadata':
             if request.get('fields') != ['experience'] or not request.get('item-id'):
                 self.send_error(400)
@@ -1218,6 +1224,8 @@ class Handler(BaseHTTPRequestHandler):
                                 ('NewFileAgentInventory', '/upload-request'),
                                 ('UpdateScriptAgent', '/script-request'), ('ViewerAsset', '/asset'),
                                 ('GetMetadata', '/metadata'), ('RemoteParcelRequest', '/remote-parcel'),
+                                ('DispatchOpenRegionSettings', '/ui-open-region-settings'),
+                                ('SimConsole', '/ui-sim-console'),
                                 ('RegionExperiences', '/region-experiences'),
                                 ('ExtEnvironment', '/ui-environment')]:
                 ET.SubElement(mapping, 'key').text = name
@@ -1566,6 +1574,8 @@ def main():
             passed = assess(report, code, log)
             if not ui_environment_fixture.exchange_observed(server.requests):
                 raise RuntimeError('Missing actual selected-parcel ExtEnvironment GET/PUT request and accepted reply')
+            if not any(row.get('path') == '/ui-sim-console' and row.get('request') == 'native qualification' for row in server.requests):
+                raise RuntimeError('Missing actual shared simulator-console HTTP request')
             if not default_environment_asset_observed(server.requests, server.environment_fixture):
                 raise RuntimeError('Missing real shared default environment asset HTTP acquisition')
             if args.r1_contracts and not r1_contracts_passed(report,server.requests):

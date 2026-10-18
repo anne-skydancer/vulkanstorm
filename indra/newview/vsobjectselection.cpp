@@ -121,17 +121,32 @@ struct VSObjectSelection::Impl
 VSObjectSelection::VSObjectSelection(std::weak_ptr<VSNativeSession> session)
     :mImpl(std::make_shared<Impl>(std::move(session))){}
 VSObjectSelection::~VSObjectSelection(){reset();}
+VSObjectSelection::SelectionTypeState VSObjectSelection::selectionType() const
+{
+    for(const auto& node:mImpl->nodes)
+        if(mImpl->current(node.object))
+        {
+            auto* world=scene();const auto row=world?world->objectAdmission(node.object):std::nullopt;
+            if(!row)return {true,{}};
+            return {true,row->hud?SelectionType::HUD:row->attachment?SelectionType::Attachment:SelectionType::World};
+        }
+    return {};
+}
+
 bool VSObjectSelection::canSelect(const VSWorldScene::ObjectHandle& object,bool forceSelection,bool ignoreSelectOwned) const
 {
     const auto owner=mImpl->session.lock();
     auto* world=scene();
     if(!owner || !world || !mImpl->current(object))return false;
-    const auto row=world->objectSnapshot(object);
+    // Reference force overrides permission/type/orphan checks after live identity.
+    if(forceSelection)return true;
+    const auto row=world->objectAdmission(object);
     if(!row)return false;
     struct Object
     {
-        const VSWorldScene::ObjectSnapshot& row;
+        const VSWorldScene::ObjectAdmission& row;
         const VSNativeSession& session;
+        const LLHost& host;
         bool present()const{return true;}
         bool dead()const{return false;} // checked against the real scene/account owner above
         bool youOwner()const{return VSObjectContext::ownedByAgent(row.rootUpdateFlags);}
@@ -142,27 +157,31 @@ bool VSObjectSelection::canSelect(const VSWorldScene::ObjectHandle& object,bool 
         }
         bool move()const{return permission(FLAGS_OBJECT_MOVE);}
         bool copy()const{return permission(FLAGS_OBJECT_COPY);}
-        bool permanent()const{return (row.updateFlags&FLAGS_AFFECTS_NAVMESH) && row.object.host!=session.host() && !gAgent.isGodlike();}
-        bool orphaned()const{return false;} // objectSnapshot requires current real ancestry
+        bool permanent()const{return (row.updateFlags&FLAGS_AFFECTS_NAVMESH) && host!=session.host() && !gAgent.isGodlike();}
+        bool orphaned()const{return row.orphaned;}
         bool avatar()const{return row.pcode==LL_PCODE_LEGACY_AVATAR;}
         U8 pcode()const{return row.pcode;}
         ESelectType selectionType()const{return row.hud?SELECT_TYPE_HUD:row.attachment?SELECT_TYPE_ATTACHMENT:SELECT_TYPE_WORLD;}
     };
     struct Selection
     {
-        const VSObjectSelection& selection;
-        VSWorldScene& world;
-        bool hasSelection()const{return !selection.selected().empty();}
-        ESelectType type()const
+        const VSObjectSelection& owner;
+        mutable std::optional<SelectionTypeState> cached;
+        const SelectionTypeState& state()const
         {
-            const auto selected=selection.selected();
-            if(!selected.empty())
-                if(const auto row=world.objectSnapshot(selected.front()))
-                    return row->hud?SELECT_TYPE_HUD:row->attachment?SELECT_TYPE_ATTACHMENT:SELECT_TYPE_WORLD;
-            return SELECT_TYPE_WORLD;
+            if(!cached)cached=owner.selectionType();
+            return *cached;
+        }
+        bool hasSelection()const{return state().selected;}
+        std::optional<ESelectType> type()const
+        {
+            const auto& value=state();
+            if(!value.type)return {};
+            return *value.type==SelectionType::HUD?SELECT_TYPE_HUD:
+                *value.type==SelectionType::Attachment?SELECT_TYPE_ATTACHMENT:SELECT_TYPE_WORLD;
         }
     };
-    return vs_can_select_object(Object{*row,*owner},forceSelection,ignoreSelectOwned,Selection{*this,*world},
+    return vs_can_select_object(Object{*row,*owner,object.host},forceSelection,ignoreSelectOwned,Selection{*this,{}},
         LLViewerObject::LL_VO_SURFACE_PATCH,[](const char* setting){return gSavedSettings.getBOOL(setting);});
 }
 bool VSObjectSelection::select(const std::vector<VSWorldScene::ObjectHandle>& objects)
