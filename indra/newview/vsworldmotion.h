@@ -51,6 +51,15 @@ public:
         return position != mPosition || rotation != mRotation;
     }
     void freeze(bool selected) { mSelected = selected; }
+    void setSelectionState(bool selected) {mSelected=selected;resetSelectionRotation();}
+    void resetSelectionRotation(){mAngularDelta.loadIdentity();mBaseRotation=mRotation;}
+    void initializeSelection()
+    {
+        mVelocity=LLVector3();mAcceleration=LLVector3();
+        // Preserve the displayed pose when clearing accumulated angular motion.
+        resetSelectionRotation();
+    }
+    void initializeDeselection(){mAngular=LLVector3();mVelocity=LLVector3();}
     bool selected() const { return mSelected; }
     const LLVector3& position() const { return mPosition; }
     const LLVector3& authoritative() const { return mAuthoritative; }

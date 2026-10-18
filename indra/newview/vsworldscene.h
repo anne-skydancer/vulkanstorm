@@ -40,6 +40,9 @@ public:
         VSWorldContracts::OwnerKind kind = VSWorldContracts::OwnerKind::Object;
         LLUUID account;U64 accountGeneration=0;
     };
+    // Identity-only, same non-joint DFS as LLViewerObject; no pose/mesh dependency.
+    enum class FamilyTraversal {NonJoint,AllChildren};
+    std::optional<std::vector<ObjectHandle>> linkedFamily(const ObjectHandle&,bool rootEdit=true,bool includeChildren=true,FamilyTraversal=FamilyTraversal::NonJoint) const;
     struct FaceHandle { ObjectHandle object; U32 face=0; U64 generation=0; };
     struct Attachment
     {
@@ -127,6 +130,10 @@ public:
     struct ObjectTransform { LLVector3d position; LLQuaternion rotation; LLVector3 scale; };
     std::optional<ObjectTransform> objectTransform(const ObjectHandle&) const;
     bool freeze(const ObjectHandle&, bool);
+    bool freezeObject(const ObjectHandle&,bool);
+    bool setSelectionState(const ObjectHandle&,bool);
+    bool initializeSelectionMotion(const ObjectHandle&);
+    bool initializeDeselectionMotion(const ObjectHandle&);
     std::function<bool()> guard(const ObjectHandle&) const;
     std::function<bool()> guard(const FaceHandle&) const;
     bool initializeSelf(const LLUUID& agent,U64 accountGeneration=0);

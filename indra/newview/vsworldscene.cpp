@@ -1537,6 +1537,60 @@ std::optional<VSWorldScene::ObjectHandle> VSWorldScene::object(const LLUUID& ide
             return value;
     return std::nullopt;
 }
+std::optional<std::vector<VSWorldScene::ObjectHandle>> VSWorldScene::linkedFamily(const ObjectHandle& token,bool rootEdit,bool includeChildren,FamilyTraversal traversal) const
+{
+    if(mImpl->retired || !current(token))return {};
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->linkedFamily(token,rootEdit,includeChildren,traversal);
+    U32 root=token.local;
+    std::set<U32> visited;
+    if(rootEdit)
+    {
+        // Reference selection ascends only non-avatar links; an avatar itself
+        // remains a singleton, never a temporary selection of its attachments.
+        while(mImpl->objects.at(root).pcode!=LL_PCODE_LEGACY_AVATAR)
+        {
+            const auto& child=mImpl->objects.at(root);
+            if(!child.parent)break;
+            if(child.parentRetired || !visited.insert(root).second)return {};
+            const auto parent=mImpl->objects.find(child.parent);
+            if(parent==mImpl->objects.end() || (child.parentGeneration && child.parentGeneration!=parent->second.generation))return {};
+            if(parent->second.pcode==LL_PCODE_LEGACY_AVATAR)break;
+            root=parent->first;
+        }
+    }
+    visited.clear();
+    std::vector<ObjectHandle> result;
+    using Iterator=decltype(mImpl->objectIndex.children(root).first);
+    std::vector<std::pair<Iterator,Iterator>> pending;
+    auto append=[&](U32 local)->bool
+    {
+        if(!visited.insert(local).second)return false;
+        const auto handle=object(mImpl->host,local);
+        if(!handle)return false;
+        result.push_back(*handle);
+        if(includeChildren && (traversal==FamilyTraversal::AllChildren || mImpl->objects.at(local).pcode!=LL_PCODE_LEGACY_AVATAR))
+            pending.push_back(mImpl->objectIndex.children(local));
+        return true;
+    };
+    if(!append(root))return {};
+    while(!pending.empty())
+    {
+        auto& range=pending.back();
+        if(range.first==range.second){pending.pop_back();continue;}
+        const auto edge=range.first++;
+        const U32 parentLocal=edge->first.first,local=edge->second;
+        const auto child=mImpl->objects.find(local);
+        if(child==mImpl->objects.end() || child->second.pcode==LL_PCODE_LEGACY_AVATAR)continue;
+        // Parent generation belongs to this circuit, never a reused local-ID
+        // incarnation. Index rows alone do not confer current ancestry.
+        const auto parent=mImpl->objects.find(child->second.parent);
+        if(child->second.parent!=parentLocal || child->second.parentRetired || parent==mImpl->objects.end() ||
+            (child->second.parentGeneration && child->second.parentGeneration!=parent->second.generation))continue;
+        if(!append(local))return {};
+    }
+    return result;
+}
+
 bool VSWorldScene::loadGLTF(const ObjectHandle& token, const std::string& filename)
 {
     if (!current(token) || filename.empty())
@@ -1877,6 +1931,35 @@ LLSD VSWorldScene::taskInventory(const ObjectHandle& token) const
     result["serial"]=S32(object.taskSerial);result["known"]=object.taskKnown;
     result["pending"]=bool(object.taskRequest);result["filename"]=object.taskFile;return result;
 }
+bool VSWorldScene::freezeObject(const ObjectHandle& token,bool selected)
+{
+    if(mImpl->retired || !current(token))return false;
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->freezeObject(token,selected);
+    mImpl->objects.at(token.local).motion.freeze(selected);return true;
+}
+bool VSWorldScene::setSelectionState(const ObjectHandle& token,bool selected)
+{
+    if(mImpl->retired || !current(token))return false;
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->setSelectionState(token,selected);
+    mImpl->objects.at(token.local).motion.setSelectionState(selected);return true;
+}
+bool VSWorldScene::initializeSelectionMotion(const ObjectHandle& token)
+{
+    if(mImpl->retired || !current(token))return false;
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->initializeSelectionMotion(token);
+    auto& object=mImpl->objects.at(token.local);
+    object.velocity=LLVector3::zero;object.acceleration=LLVector3::zero;
+    object.motion.initializeSelection();return true;
+}
+bool VSWorldScene::initializeDeselectionMotion(const ObjectHandle& token)
+{
+    if(mImpl->retired || !current(token))return false;
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->initializeDeselectionMotion(token);
+    auto& object=mImpl->objects.at(token.local);
+    object.angularVelocity=LLVector3::zero;object.velocity=LLVector3::zero;
+    object.motion.initializeDeselection();return true;
+}
+
 bool VSWorldScene::freeze(const ObjectHandle& token,bool selected)
 {
     if (!current(token)) return false;
