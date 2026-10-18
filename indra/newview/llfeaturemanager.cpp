@@ -28,10 +28,28 @@
 
 #include <iostream>
 #include <fstream>
+#include <optional>
 
 #include <boost/regex.hpp>
 
 #include "llfeaturemanager.h"
+#include "vsgraphicssettings.h"
+#include "llviewerwindow.h"
+#if VS_NATIVE_VULKAN
+#include "vsvulkancontext.h"
+#endif
+namespace
+{
+std::optional<VSGraphicsCapabilities> native_graphics_capabilities()
+{
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        return gViewerWindow->nativeContext() ? gViewerWindow->nativeContext()->graphicsCapabilities() : VSGraphicsCapabilities{};
+#endif
+    return {};
+}
+}
+
 #include "llgraphicsidentity.h"
 #include "lldir.h"
 
@@ -440,6 +458,17 @@ bool checkRDNA35()
 
 bool LLFeatureManager::loadGPUClass()
 {
+    if (const auto caps = native_graphics_capabilities())
+    {
+        // Preserve the viewer's existing SkipBenchmark fallback; a GL shader
+        // benchmark is not evidence about a native Vulkan adapter.
+        mGPUClass = GPU_CLASS_1;
+        mGPUMemoryBandwidth = 0.f;
+        mGPUString = caps->adapter;
+        mGPUSupported = caps->ready;
+        mSkipProfiling = true;
+        return caps->ready;
+    }
     // This is a hack for certain AMD GPUs in newer driver versions on certain APUs.
     // These GPUs will show inconsistent freezes when attempting to run shader profiles against them.
     // This is extremely problematic as it can lead to:
@@ -551,7 +580,7 @@ bool LLFeatureManager::loadGPUClass()
 bool LLFeatureManager::graphicsIdentityChanged() const
 {
     return LLGraphicsIdentity::changed(gSavedSettings.getString("LastGPUString"), mGPUString,
-        gSavedSettings.getString("LastGraphicsRendererFamily"), false);
+        gSavedSettings.getString("LastGraphicsRendererFamily"), native_graphics_capabilities().has_value());
 }
 
 void LLFeatureManager::cleanupFeatureTables()
@@ -610,6 +639,7 @@ void LLFeatureManager::applyFeatures(bool skipFeatures)
         mIt != mFeatures.end();
         ++mIt)
     {
+        if (native_graphics_capabilities() && !mIt->second.mAvailable) continue;
         // skip features you want to skip
         // do this for when you don't want to change certain settings
         if(skipFeatures)
@@ -654,6 +684,13 @@ void LLFeatureManager::applyFeatures(bool skipFeatures)
 
 void LLFeatureManager::setGraphicsLevel(U32 level, bool skipFeatures)
 {
+    if (native_graphics_capabilities())
+    {
+        applyBaseMasks();
+        maskFeatures(isValidGraphicsLevel(level) ? getNameForGraphicsLevel(level) : "Low");
+        applyFeatures(skipFeatures);
+        return;
+    }
     LLViewerShaderMgr::sSkipReload = true;
     flush_glerror(); // Whatever may have already happened (e.g., to cause us to change), don't let confuse it with new initializations.
     applyBaseMasks();
@@ -683,6 +720,12 @@ void LLFeatureManager::applyBaseMasks()
     }
 
     mFeatures = maskp->getFeatures();
+    if (const auto caps = native_graphics_capabilities())
+    {
+        if (mGPUClass >= 0 && mGPUClass < 6) maskFeatures(llformat("Class%d", S32(mGPUClass)));
+        vs_graphics_limit_features(mFeatures, *caps);
+        return;
+    }
 
     // mask class
     if (mGPUClass >= 0 && mGPUClass < 6)
@@ -834,6 +877,7 @@ LLSD LLFeatureManager::getRecommendedSettingsMap()
 
     for (feature_map_t::iterator mIt = mFeatures.begin(); mIt != mFeatures.end(); ++mIt)
     {
+        if (native_graphics_capabilities() && !mIt->second.mAvailable) continue;
         LLControlVariable* ctrl = gSavedSettings.getControl(mIt->first);
         if (ctrl == NULL)
         {

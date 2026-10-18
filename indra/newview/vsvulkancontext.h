@@ -1,5 +1,6 @@
 // Viewer-owned native Vulkan device, swapchain and ordered UI submission. LGPL-2.1.
 #pragma once
+#include "vsgraphicssettings.h"
 #include <functional>
 #include "vsuirenderer.h"
 #include <memory>
@@ -31,6 +32,7 @@ public:
     // Cached facts from the selected device; safe for About/crash reports.
     LLSD rendererInfo() const;
     const std::string& adapter() const;
+    VSGraphicsCapabilities graphicsCapabilities() const;
     const Diligent::GraphicsAdapterInfo& adapterInfo() const;
 
 private:

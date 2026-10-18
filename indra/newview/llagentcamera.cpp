@@ -3061,6 +3061,14 @@ void LLAgentCamera::clearFocusObject()
     }
 }
 
+// The displayed native pose publishes into the same CPU focus value read by
+// ordinary controllers. Desired focus remains mFocusTargetGlobal; no getter
+// reconstructs a competing pose or resolves a legacy object on native paths.
+void LLAgentCamera::publishNativeFocus(const LLVector3d& focus)
+{
+    mFocusGlobal=focus;
+}
+
 void LLAgentCamera::setFocusObject(LLViewerObject* object)
 {
     mFocusObject = object;

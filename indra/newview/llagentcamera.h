@@ -258,6 +258,7 @@ public:
     void            setAllowChangeToFollow(bool focus)  { mAllowChangeToFollow = focus; }
     void            setObjectTracking(bool track)   { mTrackFocusObject = track; }
     const LLVector3d &getFocusGlobal() const        { return mFocusGlobal; }
+    void publishNativeFocus(const LLVector3d& focus);
     const LLVector3d &getFocusTargetGlobal() const  { return mFocusTargetGlobal; }
 private:
     LLVector3d      mCameraFocusOffset;             // Offset from focus point in build mode

@@ -59,7 +59,7 @@ bool LLFloaterSavePrefPreset::postBuild()
 
     getChild<LLButton>("cancel")->setCommitCallback(boost::bind(&LLFloaterSavePrefPreset::onBtnCancel, this));
 
-    LLPresetsManager::instance().setPresetListChangeCallback(boost::bind(&LLFloaterSavePrefPreset::onPresetsListChange, this));
+    mPresetListConnection = LLPresetsManager::instance().setPresetListChangeCallback(boost::bind(&LLFloaterSavePrefPreset::onPresetsListChange, this));
 
     mSaveButton = getChild<LLButton>("save");
     mPresetCombo = getChild<LLComboBox>("preset_combo");

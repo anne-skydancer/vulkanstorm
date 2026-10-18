@@ -44,6 +44,7 @@ class LLPanelPresetsPulldown : public LLPanelPulldown
     void onAutofpsButtonClick(const LLSD& user_data);
     void onRowClick(const LLSD& user_data);
 
+    boost::signals2::scoped_connection mPresetListConnection;
     std::list<std::string> mPresetNames;
     LOG_CLASS(LLPanelPresetsPulldown);
 };

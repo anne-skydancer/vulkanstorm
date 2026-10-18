@@ -59,7 +59,7 @@ LLPanelPresetsPulldown::LLPanelPresetsPulldown()
 bool LLPanelPresetsPulldown::postBuild()
 {
     LLPresetsManager* presetsMgr = LLPresetsManager::getInstance();
-    presetsMgr->setPresetListChangeCallback(boost::bind(&LLPanelPresetsPulldown::populatePanel, this));
+    mPresetListConnection = presetsMgr->setPresetListChangeCallback(boost::bind(&LLPanelPresetsPulldown::populatePanel, this));
     // Make sure there is a default preference file
     presetsMgr->createMissingDefault(PRESETS_GRAPHIC);
 

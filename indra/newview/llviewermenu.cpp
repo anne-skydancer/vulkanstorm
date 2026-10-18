@@ -1608,6 +1608,10 @@ class LLAdvancedToggleWireframe : public view_listener_t
 // Called from rlvhandler.cpp
 void set_use_wireframe(bool useWireframe)
     {
+#if VS_NATIVE_VULKAN
+        if (useWireframe && gViewerWindow && gViewerWindow->isNativeVulkan() &&
+            (!gViewerWindow->nativeContext() || !gViewerWindow->nativeContext()->graphicsCapabilities().wireframe)) return;
+#endif
         if (gUseWireframe == useWireframe)
             return;
 
