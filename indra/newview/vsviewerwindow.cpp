@@ -365,6 +365,9 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
     info.mPickType = LLPickInfo::PICK_INVALID;
     info.mObjectID.setNull();
     info.mObjectFace    = -1;
+    info.mUVCoords=LLVector2(-1,-1);info.mSTCoords=LLVector2(-1,-1);info.mXYCoords=LLCoordScreen(-1,-1);
+    info.mNormal=LLVector3::zero;info.mTangent=LLVector4(0,0,0,0);info.mBinormal=LLVector3::zero;
+    info.mObjectOffset=LLVector3::zero;info.mIntersection=LLVector3::zero;info.mPickHUD=false;
     info.mPickPt        = info.mMousePt;
     info.mGLTFNodeIndex = info.mGLTFPrimitiveIndex = -1;
     const auto owner                               = VSNativeSession::active();
@@ -387,17 +390,43 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
                                             distance * tangent / rect.getHeight());
     if (!pick)
         return false;
-    info.mPickType           = pick->land ? LLPickInfo::PICK_LAND : LLPickInfo::PICK_OBJECT;
+    const auto global=pick->hud?gAgent.getPosGlobalFromAgent(pick->position):
+        from_region_handle(owner->handle())+LLVector3d(pick->position);
+    const auto intersection=pick->hud?pick->position:gAgent.getPosAgentFromGlobal(global);
+    LLVector3 objectOffset;bool flora=false;
+    if(!pick->land)
+    {
+        const auto admission=mVulkanContext->world().objectAdmission(pick->face.object);
+        if(!admission)return false;
+        flora=admission->pcode==LL_PCODE_LEGACY_GRASS || admission->pcode==LL_PCODE_LEGACY_TREE || admission->pcode==LL_PCODE_TREE_NEW;
+        const auto origin=gAgent.getPosGlobalFromAgent(LLVector3::zero);
+        const auto focus=mVulkanContext->world().focusObject(pick->face.object,origin);
+        if(!focus)return false;
+        const auto offset=gAgentCamera.calcNativeFocusOffset(*focus,intersection,info.mPickPt.mX,info.mPickPt.mY);
+        if(!offset)return false;
+        objectOffset=*offset;
+    }
+    info.mPickType           = pick->land?LLPickInfo::PICK_LAND:(flora?LLPickInfo::PICK_FLORA:LLPickInfo::PICK_OBJECT);
     info.mObjectID           = pick->face.object.id;
-    info.mObjectFace         = S32(pick->face.face);
-    info.mIntersection       = pick->position;
-    info.mNormal             = pick->normal;
-    info.mUVCoords           = LLVector2(pick->uv.data());
-    info.mSTCoords           = info.mUVCoords;
+    info.mObjectFace         = pick->land?-1:S32(pick->face.face);
     info.mGLTFNodeIndex      = pick->gltfNode;
     info.mGLTFPrimitiveIndex = pick->gltfPrimitive;
     info.mPickHUD            = pick->hud;
-    info.mPosGlobal          = from_region_handle(owner->handle()) + LLVector3d(pick->position);
+    info.mPosGlobal=pick->hud?gAgent.getPosGlobalFromAgent(pick->position):
+        from_region_handle(owner->handle())+LLVector3d(pick->position);
+    info.mObjectOffset=objectOffset;
+    if(pick->land)info.mPosGlobal+=LLVector3d(0,0,.1);
+    if(info.wantsSurfaceInfo() && pick->surfaceKnown)
+    {
+        info.mIntersection=intersection;
+        info.mSTCoords=LLVector2(pick->st.data());info.mUVCoords=LLVector2(pick->uv.data());
+        info.mXYCoords=LLCoordScreen(pick->xy[0],pick->xy[1]);
+        LLVector4a normal,tangent,binormal;normal.load3(pick->normal.mV);
+        tangent.set(pick->tangent[0],pick->tangent[1],pick->tangent[2],pick->tangent[3]);
+        binormal.setCross3(normal,tangent);binormal.mul(tangent.getF32ptr()[3]);
+        info.mNormal.set(normal.getF32ptr());info.mTangent.set(tangent.getF32ptr());info.mBinormal.set(binormal.getF32ptr());
+        info.mNormal.normalize();info.mTangent.normalize();info.mBinormal.normalize();
+    }
     return true;
 }
 bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type, bool down)

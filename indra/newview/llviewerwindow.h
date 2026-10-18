@@ -108,6 +108,7 @@ public:
     LLPointer<LLViewerObject> getObject() const;
     LLUUID getObjectID() const { return mObjectID; }
     bool isValid() const { return mPickType != PICK_INVALID; }
+    bool wantsSurfaceInfo() const { return mWantSurfaceInfo; }
 
     static bool isFlora(LLViewerObject* object);
 

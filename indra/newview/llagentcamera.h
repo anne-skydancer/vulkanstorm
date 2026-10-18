@@ -32,6 +32,8 @@
 #include "llhudeffectpointat.h"     // ELookAtType
 
 class LLPickInfo;
+struct VSCameraFocusObject;
+#include <optional>
 class LLVOAvatarSelf;
 class LLControlVariable;
 
@@ -241,6 +243,7 @@ private:
 public:
     LLVector3d      calcFocusPositionTargetGlobal();
     LLVector3       calcFocusOffset(LLViewerObject *object, LLVector3 pos_agent, S32 x, S32 y);
+    std::optional<LLVector3> calcNativeFocusOffset(const VSCameraFocusObject&, LLVector3 pos_agent, S32 x, S32 y);
     bool            getFocusOnAvatar() const        { return mFocusOnAvatar; }
     LLPointer<LLViewerObject>&  getFocusObject()    { return mFocusObject; }
     F32             getFocusObjectDist() const      { return mFocusObjectDist; }

@@ -731,11 +731,16 @@ bool VSWorldRenderer::intersect(const Mesh& mesh, const std::array<float, 3>& st
                 candidate.point[axis] = start[axis] + fraction * direction[axis];
             candidate.normal   = { (1 - u - v) * a.nx + u * b.nx + v * c.nx, (1 - u - v) * a.ny + u * b.ny + v * c.ny,
                                    (1 - u - v) * a.nz + u * b.nz + v * c.nz };
+            candidate.rawNormal=candidate.normal;
             const float length = std::sqrt(dot(candidate.normal, candidate.normal));
             if (length > 0)
                 for (float& value : candidate.normal)
                     value /= length;
             candidate.uv = { (1 - u - v) * a.u + u * b.u + v * c.u, (1 - u - v) * a.v + u * b.v + v * c.v };
+            candidate.triangle={indices[i],indices[i+1],indices[i+2]};
+            candidate.barycentric={1-u-v,u,v};candidate.triangleKnown=true;
+            candidate.tangent={(1-u-v)*a.tx+u*b.tx+v*c.tx,(1-u-v)*a.ty+u*b.ty+v*c.ty,
+                (1-u-v)*a.tz+u*b.tz+v*c.tz,(1-u-v)*a.tw+u*b.tw+v*c.tw};
             if (accept && !accept(candidate))
                 continue;
             closest = fraction;

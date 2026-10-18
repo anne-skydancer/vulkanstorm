@@ -28,6 +28,7 @@
 
 #include "lldrawable.h" // lldrawable needs to be included before llface
 #include "llface.h"
+#include "vssurfacecoordinates.h"
 #include "llviewertextureanim.h"
 
 #include "llviewercontrol.h"
@@ -93,36 +94,7 @@ The resulting texture coordinate <u,v> is:
 void planarProjection(LLVector2 &tc, const LLVector4a& normal,
                       const LLVector4a &center, const LLVector4a& vec)
 {
-    LLVector4a binormal;
-    F32 d = normal[0];
-
-    if (d >= 0.5f || d <= -0.5f)
-    {
-        if (d < 0)
-        {
-            binormal.set(0,-1,0);
-        }
-        else
-        {
-            binormal.set(0, 1, 0);
-        }
-    }
-    else
-    {
-        if (normal[1] > 0)
-        {
-            binormal.set(-1,0,0);
-        }
-        else
-        {
-            binormal.set(1,0,0);
-        }
-    }
-    LLVector4a tangent;
-    tangent.setCross3(binormal,normal);
-
-    tc.mV[1] = -((tangent.dot3(vec).getF32())*2 - 0.5f);
-    tc.mV[0] = 1.0f+((binormal.dot3(vec).getF32())*2 - 0.5f);
+    VSSurfaceCoordinates::planarProjection(tc,normal,center,vec);
 }
 
 ////////////////////
@@ -759,29 +731,7 @@ void LLFace::printDebugInfo() const
 // Transform the texture coordinates for this face.
 static void xform(LLVector2 &tex_coord, F32 cosAng, F32 sinAng, F32 offS, F32 offT, F32 magS, F32 magT)
 {
-    // New, good way
-    F32 s = tex_coord.mV[0];
-    F32 t = tex_coord.mV[1];
-
-    // Texture transforms are done about the center of the face.
-    s -= 0.5;
-    t -= 0.5;
-
-    // Handle rotation
-    F32 temp = s;
-    s  = s     * cosAng + t * sinAng;
-    t  = -temp * sinAng + t * cosAng;
-
-    // Then scale
-    s *= magS;
-    t *= magT;
-
-    // Then offset
-    s += offS + 0.5f;
-    t += offT + 0.5f;
-
-    tex_coord.mV[0] = s;
-    tex_coord.mV[1] = t;
+    VSSurfaceCoordinates::xform(tex_coord,cosAng,sinAng,offS,offT,magS,magT);
 }
 
 // Transform the texture coordinates for this face.
@@ -903,61 +853,18 @@ bool LLFace::genVolumeBBoxes(const LLVolume &volume, S32 f,
 // with the implications.
 LLVector2 LLFace::surfaceToTexture(LLVector2 surface_coord, const LLVector4a& position, const LLVector4a& normal)
 {
-    LLVector2 tc = surface_coord;
-
-    const LLTextureEntry *tep = getTextureEntry();
-
-    if (tep == NULL)
+    struct ReferenceSurface
     {
-        // can't do much without the texture entry
-        return surface_coord;
-    }
-
-    //VECTORIZE THIS
-    // see if we have a non-default mapping
-    U8 texgen = tep->getTexGen();
-    if (texgen != LLTextureEntry::TEX_GEN_DEFAULT)
-    {
-        LLVector4a& center = *(mDrawablep->getVOVolume()->getVolume()->getVolumeFace(mTEOffset).mCenter);
-
-        LLVector4a volume_position;
-        LLVector3 v_position(position.getF32ptr());
-
-        volume_position.load3(mDrawablep->getVOVolume()->agentPositionToVolume(v_position).mV);
-
-        if (!mDrawablep->getVOVolume()->isVolumeGlobal())
-        {
-            LLVector4a scale;
-            scale.load3(mVObjp->getScale().mV);
-            volume_position.mul(scale);
-        }
-
-        LLVector4a volume_normal;
-        LLVector3 v_normal(normal.getF32ptr());
-        volume_normal.load3(mDrawablep->getVOVolume()->agentDirectionToVolume(v_normal).mV);
-        volume_normal.normalize3fast();
-
-        if (texgen == LLTextureEntry::TEX_GEN_PLANAR)
-        {
-            planarProjection(tc, volume_normal, center, volume_position);
-        }
-    }
-
-    if (mTextureMatrix) // if we have a texture matrix, use it
-    {
-        LLVector3 tc3(tc);
-        tc3 = tc3 * *mTextureMatrix;
-        tc = LLVector2(tc3);
-    }
-
-    else // otherwise use the texture entry parameters
-    {
-        xform(tc, cos(tep->getRotation()), sin(tep->getRotation()),
-              tep->mOffsetS, tep->mOffsetT, tep->mScaleS, tep->mScaleT);
-    }
-
-
-    return tc;
+        LLFace* face;
+        const LLTextureEntry* textureEntry()const{return face->getTextureEntry();}
+        const LLVector4a& center()const{return *face->getDrawable()->getVOVolume()->getVolume()->getVolumeFace(face->getTEOffset()).mCenter;}
+        LLVector3 positionToVolume(const LLVector3& v)const{return face->getDrawable()->getVOVolume()->agentPositionToVolume(v);}
+        LLVector3 directionToVolume(const LLVector3& v)const{return face->getDrawable()->getVOVolume()->agentDirectionToVolume(v);}
+        bool volumeGlobal()const{return face->getDrawable()->getVOVolume()->isVolumeGlobal();}
+        LLVector3 scale()const{return face->getViewerObject()->getScale();}
+        const LLMatrix4* textureMatrix()const{return face->mTextureMatrix;}
+    };
+    return VSSurfaceCoordinates::surfaceToTexture(ReferenceSurface{this},surface_coord,position,normal);
 }
 
 // Returns scale compared to default texgen, and face orientation as calculated
