@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from test_native_graphics_settings import NativeGraphicsSettingsTests
 from test_native_map_inspector import NativeMapInspectorTests
 from test_native_minimap import NativeMinimapTests
 from test_native_maps import NativeMapsTests

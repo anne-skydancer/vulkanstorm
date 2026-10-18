@@ -52,6 +52,7 @@ private:
     void onPresetsListChange();
     void onPresetNameEdited();
 
+    boost::signals2::scoped_connection mPresetListConnection;
     std::string mSubdirectory;
 };
 

@@ -201,6 +201,7 @@ struct VSVulkanContext::Impl
             factory->EnumerateAdapters({ 1, 1 }, count, adapters.data());
             EngineVkCreateInfo info{};
             info.Features.TextureCompressionBC=DEVICE_FEATURE_STATE_OPTIONAL;
+            info.Features.WireframeFill=DEVICE_FEATURE_STATE_OPTIONAL;
             info.EnableValidation = validation;
             info.AdapterId        = 0;
             const char* layer     = "VK_LAYER_KHRONOS_validation";
@@ -423,6 +424,7 @@ struct VSVulkanContext::Impl
             auto view    = VSWorldScene::cameraView(eye, camera.at, camera.up, size.mX, size.mY, distance,
                 LLViewerCamera::getInstance()->getView());
             view.hudZoom = gAgentCamera.mHUDCurZoom;
+            view.wireframe = gUseWireframe;
             view.environment=vs_environment_state(eye,camera.at,camera.up,float(size.mX)/size.mY,
                 LLViewerCamera::getInstance()->getView(),LLEnvironment::instance().getWaterHeight());
             if(view.environment.values[0][0]>.5f) {
@@ -577,4 +579,18 @@ void VSVulkanContext::setSceneObserver(SceneObserver observer) { mImpl->sceneObs
 const Diligent::GraphicsAdapterInfo& VSVulkanContext::adapterInfo() const
 {
     return mImpl->device->GetAdapterInfo();
+}
+
+VSGraphicsCapabilities VSVulkanContext::graphicsCapabilities() const
+{
+    VSGraphicsCapabilities result;
+    if (!mImpl || !mImpl->device) return result;
+    const auto& adapter = mImpl->device->GetAdapterInfo();
+    result.ready = true;
+    result.compression = mImpl->device->GetDeviceInfo().Features.TextureCompressionBC == Diligent::DEVICE_FEATURE_STATE_ENABLED;
+    result.adapter = adapter.Description;
+    result.anisotropy = adapter.Sampler.MaxAnisotropy;
+    result.maximumTextureDimension = adapter.Texture.MaxTexture2DDimension;
+    result.wireframe = mImpl->device->GetDeviceInfo().Features.WireframeFill == Diligent::DEVICE_FEATURE_STATE_ENABLED;
+    return result;
 }

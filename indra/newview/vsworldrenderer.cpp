@@ -1,6 +1,7 @@
 // Native indexed world geometry and submission ownership. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsworldrenderer.h"
+#include "vsgraphicssettings.h"
 #include "vsresourcebudget.h"
 #include "vsterrainshader.h"
 #pragma push_macro("Bool")
@@ -88,7 +89,7 @@ struct VSWorldRenderer::Impl
     RefCntAutoPtr<IDeviceContext> context;
     RefCntAutoPtr<IShader> vertex, fragment, terrainVertex;
     RefCntAutoPtr<IShader> terrainFragments[4];
-    RefCntAutoPtr<IPipelineState> pipelines[2][6][3][2][2][5];
+    RefCntAutoPtr<IPipelineState> pipelines[2][6][3][2][2][5][2];
     RefCntAutoPtr<ITexture> depth, white, flatNormal;
     RefCntAutoPtr<ISampler> terrainClamp;
     RefCntAutoPtr<IFence> fence;
@@ -143,10 +144,10 @@ struct VSWorldRenderer::Impl
         device->CreateSampler(sampler,&terrainClamp);
         requireWorld(terrainClamp!=nullptr,"Terrain clamp sampler creation failed");
     }
-    IPipelineState* pipeline(TEXTURE_FORMAT format, bool alpha, bool background, Topology topology, bool doubleSided, bool terrain, unsigned terrainProgram, bool depthWriteAlpha,bool depthTest)
+    IPipelineState* pipeline(TEXTURE_FORMAT format, bool alpha, bool background, Topology topology, bool doubleSided, bool terrain, unsigned terrainProgram, bool depthWriteAlpha,bool depthTest,bool wireframe)
     {
         requireWorld(format==TEX_FORMAT_RGBA8_UNORM || format==TEX_FORMAT_BGRA8_UNORM,"Unsupported world target format");
-        auto& result = pipelines[format == TEX_FORMAT_BGRA8_UNORM][background ? 2 : !depthTest ? (alpha?4:5) : alpha ? (depthWriteAlpha ? 3 : 1) : 0][unsigned(topology)][doubleSided][terrain][terrainProgram];
+        auto& result = pipelines[format == TEX_FORMAT_BGRA8_UNORM][background ? 2 : !depthTest ? (alpha?4:5) : alpha ? (depthWriteAlpha ? 3 : 1) : 0][unsigned(topology)][doubleSided][terrain][terrainProgram][wireframe];
         if (result) return result;
         const char* vs = R"(
 layout(location=0) in vec3 position;
@@ -504,6 +505,7 @@ void main() {
                                          : topology == Topology::Lines   ? PRIMITIVE_TOPOLOGY_LINE_LIST
                                                                          : PRIMITIVE_TOPOLOGY_POINT_LIST;
         gp.RasterizerDesc.CullMode=doubleSided ? CULL_MODE_NONE : CULL_MODE_BACK;
+        gp.RasterizerDesc.FillMode = wireframe ? FILL_MODE_WIREFRAME : FILL_MODE_SOLID;
         // The shared terrain strip producer uses the opposite winding from
         // LLVolume faces. Preserve its indices and front-face normal semantics.
         gp.RasterizerDesc.FrontCounterClockwise=terrain;
@@ -878,7 +880,9 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         requireWorld(p.mesh && p.mesh->owner.RawPtr()==mImpl->device.RawPtr(),"World mesh belongs to another device");
         requireWorld(!p.image || VSUIRenderer::imageOwnedBy(p.image,mImpl->device),"World image belongs to another device");
         for (float f:p.color) requireWorld(std::isfinite(f),"Non-finite world material");
-        auto* pipeline = mImpl->pipeline(target->GetTexture()->GetDesc().Format, p.alpha, p.background, p.mesh->topology, !p.surface || p.doubleSided || p.background, p.terrain, p.terrainMaterial?unsigned(std::clamp(int(p.terrainMaterial->detail),-3,0)+4):0u,p.depthWriteAlpha,p.depthTest);
+        auto* pipeline = mImpl->pipeline(target->GetTexture()->GetDesc().Format, p.alpha, p.background, p.mesh->topology, !p.surface || p.doubleSided || p.background, p.terrain, p.terrainMaterial?unsigned(std::clamp(int(p.terrainMaterial->detail),-3,0)+4):0u,p.depthWriteAlpha,p.depthTest,
+            vs_graphics_wireframe_pass(view.wireframe,p.background,unsigned(p.mesh->topology),
+                mImpl->device->GetDeviceInfo().Features.WireframeFill==DEVICE_FEATURE_STATE_ENABLED));
         for (float f:p.regionOffset) requireWorld(std::isfinite(f),"Non-finite world region translation");
         requireWorld(std::isfinite(p.alphaCutoff) && p.alphaCutoff >= 0 && p.alphaCutoff <= 1, "Invalid world alpha cutoff");
         Constants constants{ view.projection,

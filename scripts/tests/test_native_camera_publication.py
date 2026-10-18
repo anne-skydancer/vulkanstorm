@@ -14,7 +14,7 @@ def method(source,signature):
 class CameraPublication(unittest.TestCase):
     def test_exact_cpu_frame_and_retirement(self):
         compiler=shutil.which('clang++') or shutil.which('g++');self.assertIsNotNone(compiler)
-        fixture=(HERE/'native_camera_publication_fixture.cpp').read_text(encoding='utf-8-sig').replace('METHOD',method((ROOT/'indra/newview/vsnativesession.cpp').read_text(encoding='utf-8-sig'),'bool VSNativeSession::publishCamera()'))
+        fixture=(HERE/'native_camera_publication_fixture.cpp').read_text(encoding='utf-8-sig').replace('METHOD',method((ROOT/'indra/newview/vsnativesession.cpp').read_text(encoding='utf-8-sig'),'bool VSNativeSession::publishCamera()')).replace('FOCUS_BODY',method((ROOT/'indra/newview/llagentcamera.cpp').read_text(encoding='utf-8-sig'),'void LLAgentCamera::publishNativeFocus('))
         with tempfile.TemporaryDirectory() as tmp:
             cpp=Path(tmp)/'camera.cpp';exe=Path(tmp)/'camera.exe';cpp.write_text(fixture)
             result=subprocess.run([compiler,'-std=c++17',str(cpp),'-o',str(exe)],capture_output=True,text=True);self.assertEqual(result.returncode,0,result.stdout+result.stderr)

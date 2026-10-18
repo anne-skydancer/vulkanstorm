@@ -988,10 +988,11 @@ bool VSNativeSession::publishCamera()
     const auto state=cameraState();
     const auto viewport=gViewerWindow->getWindowRectRaw();
     if(viewport.getWidth()<=0 || viewport.getHeight()<=0 || !state.center.isFinite() ||
-       !state.at.isFinite() || !state.left.isFinite() || !state.up.isFinite() || !state.bodyRotation.isFinite())return false;
+       !state.focus.isFinite() || !state.at.isFinite() || !state.left.isFinite() || !state.up.isFinite() || !state.bodyRotation.isFinite())return false;
     if(!LLViewerCamera::instanceExists())LLViewerCamera::createInstance();
     auto* camera=LLViewerCamera::getInstance();
     camera->setOrigin(state.center);camera->setAxes(state.at,state.left,state.up);
+    gAgentCamera.publishNativeFocus(from_region_handle(mHandle)+LLVector3d(state.focus));
     // The shared CameraAngle observer and FOV/RLVa clamps own the lens.
     // Rendering, UI projection and native picking all consume that same view.
     camera->setNear(.1f);camera->setFar(vs_camera_far_clip());

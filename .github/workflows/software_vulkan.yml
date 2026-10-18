@@ -141,6 +141,8 @@ jobs:
       - run: python scripts/tests/test_native_default_pie_dispatch.py
       - run: python scripts/tests/test_native_selection_continuation.py
       - run: python scripts/tests/test_native_tooltips.py
+      - run: python scripts/tests/test_native_tool_focus.py
+      - run: python scripts/tests/test_native_graphics_settings.py
       - run: python scripts/tests/test_native_context_flow.py
       - run: python scripts/tests/test_native_pie_slice_admission.py
       - run: python scripts/tests/test_native_received_chat_policy.py

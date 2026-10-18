@@ -249,6 +249,10 @@
 #include "fsnearbychatvoicemonitor.h"
 #include "llfavoritesbar.h"
 #include "llfloater.h"
+#include "llfloatersaveprefpreset.h"
+#include "llpanelpresetspulldown.h"
+#include "llfloaterloadprefpreset.h"
+#include "llfloaterdeleteprefpreset.h"
 #include "llinspectavatar.h"
 #include "fsfloateravataralign.h"
 #include "llfloatermap.h"
@@ -314,7 +318,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 t == typeid(FSFloaterWhiteListHelper) || t == typeid(LLFloaterSettingsColor) ||
                 t == typeid(FSFloaterSplashScreenSettings) || t == typeid(FSFloaterVolumeControls) ||
                 t == typeid(LLFloaterFontTest) || t == typeid(LLFloaterHUD) || t == typeid(RlvFloaterStrings) ||
-                t == typeid(FloaterQuickPrefs) || t == typeid(LLFloaterCreateLandmark) || t == typeid(LLFloaterWorldMap) || t == typeid(LLWorldMapView) || t == typeid(FSFloaterPlaceDetails) || t == typeid(LLPanelPlaces) || t == typeid(LLPanelPlaceInfo) || t == typeid(LLPanelPlaceProfile) || t == typeid(LLPanelLandmarkInfo) || t == typeid(LLLandmarksPanel) || t == typeid(LLFavoritesPanel) || t == typeid(LLTeleportHistoryPanel) || t == typeid(LLPlacesInventoryPanel) || t == typeid(LLPlacesFolderView) || t == typeid(LLFloaterMap) || t == typeid(LLNetMap) || LLInspectAvatarUtil::isNativeInternalType(t) || t == typeid(FSFloaterAvatarAlign) || t == typeid(FSFloaterAvatarAlignMini) || t == typeid(FloaterAO) || t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
+                t == typeid(FloaterQuickPrefs) || t == typeid(LLFloaterCreateLandmark) || t == typeid(LLFloaterWorldMap) || t == typeid(LLWorldMapView) || t == typeid(FSFloaterPlaceDetails) || t == typeid(LLPanelPlaces) || t == typeid(LLPanelPlaceInfo) || t == typeid(LLPanelPlaceProfile) || t == typeid(LLPanelLandmarkInfo) || t == typeid(LLLandmarksPanel) || t == typeid(LLFavoritesPanel) || t == typeid(LLTeleportHistoryPanel) || t == typeid(LLPlacesInventoryPanel) || t == typeid(LLPlacesFolderView) || t == typeid(LLFloaterMap) || t == typeid(LLNetMap) || LLInspectAvatarUtil::isNativeInternalType(t) || t == typeid(FSFloaterAvatarAlign) || t == typeid(FSFloaterAvatarAlignMini) || t == typeid(LLPanelPresetsPulldown) || t == typeid(LLFloaterSavePrefPreset) || t == typeid(LLFloaterLoadPrefPreset) || t == typeid(LLFloaterDeletePrefPreset) || t == typeid(FloaterAO) || t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
                 t == typeid(LLPanelMainInventory) || LLPanelMainInventory::isNativeInternalType(t) ||
                 t == typeid(LLPanelMarketplaceInbox) || t == typeid(LLInboxInventoryPanel) ||
                 t == typeid(LLInboxFolderViewFolder) || t == typeid(LLInboxFolderViewItem) || t == typeid(LLInventoryGallery) || t == typeid(LLInventoryGalleryItem) ||
@@ -427,7 +431,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "chat_mention_picker" || name == "emoji_complete" || name == "preview_trash" || name == "new_feature_notification" ||
             name == "fs_whitelist_floater" || name == "settings_color" || name == "fs_splash_screen_settings" || name == "fs_volume_controls" ||
             name == "font_test" || name == "hud" || name == "rlv_strings" ||
-            name == "quickprefs" || name == "add_landmark" || name == "world_map" || name == "places" || name == "fs_placedetails" || name == "mini_map" || name == "inspect_avatar" || name == "avatar_align" || name == "avatar_align_mini" || name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "inventory_settings" || name == "marketplace_listings" || name == "associate_listing" ||
+            name == "quickprefs" || name == "add_landmark" || name == "world_map" || name == "places" || name == "fs_placedetails" || name == "mini_map" || name == "inspect_avatar" || name == "avatar_align" || name == "avatar_align_mini" || name == "save_pref_preset" || name == "load_pref_preset" || name == "delete_pref_preset" || name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "inventory_settings" || name == "marketplace_listings" || name == "associate_listing" ||
             name == "marketplace_validation" || name == "linkreplace" || name == "emoji_picker" || name == "event" || name == "experiences" || name == "experience_profile" || name == "experience_search" || name == "marketplace" || name == "grid_status" || name == "destinations" || name == "fs_teleporthistory" || name == "stats" || name == "lagmeter" || name == "inspect_remote_object" || name == "web_content" || name == "search_replace" || name == "fs_nearby_chat" || name == "people" || name == "search" || name == "toybox" || name == "inventory" || name == "secondary_inventory" || name == "sl_about" || name == "message_critical" || name == "message_tos" ||
             name == "fs_impanel" || name == "fs_im_container" || name == "imcontacts" || name == "avatar_picker" ||
             name == "fs_blocklist" || name == "fs_add_contact" || name == "fs_contact_set_config" ||
@@ -472,6 +476,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         [](std::string_view name, const LLSD& parameter)
         {
             if (name == "RecreateLSLBridge") return true;
+            if (name == "Advanced.ToggleWireframe" || name == "Advanced.CheckWireframe") return true;
             if (name == "InspectAvatar.ViewProfile" || name == "InspectAvatar.AddFriend" || name == "InspectAvatar.IM" || name == "InspectAvatar.Call" || name == "InspectAvatar.Teleport" || name == "InspectAvatar.TeleportRequest" || name == "InspectAvatar.InviteToGroup" || name == "InspectAvatar.FaceTowards" || name == "InspectAvatar.Pay" || name == "InspectAvatar.Share" || name == "InspectAvatar.ToggleMute" || name == "InspectAvatar.Freeze" || name == "InspectAvatar.Eject" || name == "InspectAvatar.Kick" || name == "InspectAvatar.CSR" || name == "InspectAvatar.FindOnMap" || name == "InspectAvatar.ZoomIn" || name == "InspectAvatar.DisableVoice" || name == "InspectAvatar.EnableVoice" || name == "InspectAvatar.EnableGod" || name == "InspectAvatar.VisibleFindOnMap" || name == "InspectAvatar.VisibleEject" || name == "InspectAvatar.VisibleFreeze" || name == "InspectAvatar.VisibleZoomIn" || name == "InspectAvatar.Gear.Enable" || name == "InspectAvatar.Gear.EnableCall" || name == "InspectAvatar.Gear.EnableTeleportOffer" || name == "InspectAvatar.Gear.EnableTeleportRequest" || name == "InspectAvatar.Gear.EnablePay" || name == "InspectAvatar.EnableMute" || name == "InspectAvatar.EnableUnmute") return true;
             if (name == "Minimap.FaceTowards" || name == "Minimap.CanFaceTowards") return true;
             if (name == "Minimap.Zoom.Check" || name == "Minimap.Zoom.Set" || name == "Minimap.Tracker" || name == "Minimap.Center.Activate" || name == "Minimap.MapOrientation.Check" || name == "Minimap.MapOrientation.Set" || name == "Minimap.AboutLand" || name == "Minimap.Mark" || name == "Minimap.ClearMark" || name == "Minimap.ClearMarks" || name == "Minimap.Cam" || name == "Minimap.StartTracking" || name == "Minimap.ShowProfile" || name == "Minimap.ToggleOverlay" || name == "Minimap.AddFriend" || name == "Minimap.AddToContactSet" || name == "Minimap.RemoveFriend" || name == "Minimap.IM" || name == "Minimap.Map" || name == "Minimap.Share" || name == "Minimap.Pay" || name == "Minimap.OfferTeleport" || name == "Minimap.RequestTeleport" || name == "Minimap.TeleportToAvatar" || name == "Minimap.GroupInvite" || name == "Minimap.BlockUnblock" || name == "Minimap.CanAddFriend" || name == "Minimap.CanRemoveFriend" || name == "Minimap.CanMap" || name == "Minimap.CanShare" || name == "Minimap.CanOfferTeleport" || name == "Minimap.CanRequestTeleport" || name == "Minimap.IsBlocked" || name == "Minimap.CanBlock" || name == "Minimap.Call" || name == "Minimap.CanCall" || name == "Minimap.GetScriptInfo" || name == "Minimap.Freeze" || name == "Minimap.Eject" || name == "Minimap.Kick" || name == "Minimap.TeleportHome" || name == "Minimap.EstateBan" || name == "Minimap.VisibleFreezeEject" || name == "Minimap.VisibleKickTeleportHome") return true;
@@ -512,7 +517,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                     action == "can_show_on_map" || action == "copy_uri" || action == "preview";
             }
             if (name == "Profile.CheckItem") return parameter.asString() == "toggle_block_agent";
-            if (name == "TopInfoBar.Action") return parameter.asString() == "copy";
+            if (name == "TopInfoBar.Action") return parameter.asString() == "copy" || parameter.asString() == "landmark";
             if (name == "Toolbars.EnableSetting" || name == "Toolbars.CheckSetting")
                 return parameter.asString() == "icons_with_text" || parameter.asString() == "icons_only" || parameter.asString() == "text_only";
             if (name == "Toolbars.SetAlignment" || name == "Toolbars.CheckAlignment")

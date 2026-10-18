@@ -442,14 +442,10 @@ bool LLStatusBar::postBuild()
     addChild(mPanelPresetsCameraPulldown);
     mPanelPresetsCameraPulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
     mPanelPresetsCameraPulldown->setVisible(false);
-    if (!native_status_bar())
-    {
-        mPanelPresetsPulldown = new LLPanelPresetsPulldown();
-        addChild(mPanelPresetsPulldown);
-        mPanelPresetsPulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
-        if (mPanelPresetsPulldown) mPanelPresetsPulldown->setVisible(false);
-
-    }
+    mPanelPresetsPulldown = new LLPanelPresetsPulldown();
+    addChild(mPanelPresetsPulldown);
+    mPanelPresetsPulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
+    mPanelPresetsPulldown->setVisible(false);
     mPanelVolumePulldown = new LLPanelVolumePulldown();
     addChild(mPanelVolumePulldown);
     mPanelVolumePulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
@@ -1072,7 +1068,6 @@ void LLStatusBar::onMouseEnterPresetsCamera()
 
 void LLStatusBar::onMouseEnterPresets()
 {
-    if (native_status_bar()) { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
     LLView* popup_holder = gViewerWindow->getRootView()->getChildView("popup_holder");
     // <FS:Ansariel> Changed presets icon to LLButton
     //LLIconCtrl* icon =  getChild<LLIconCtrl>( "presets_icon_graphic" );
@@ -1796,7 +1791,6 @@ void LLStatusBar::onAgentParcelChange()
 
 void LLStatusBar::onContextMenuItemClicked(const LLSD::String& item)
 {
-    if (native_status_bar() && item == "landmark") { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
     if (item == "landmark")
     {
         if (!gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC))
@@ -1805,11 +1799,11 @@ void LLStatusBar::onContextMenuItemClicked(const LLSD::String& item)
 
             if(landmark == NULL)
             {
-                LLFloaterSidePanelContainer::showPanel("panel_places", LLSD().with("type", "create_landmark"));
+                LLFloaterSidePanelContainer::showPanel("places", LLSD().with("type", "create_landmark"));
             }
             else
             {
-                LLFloaterSidePanelContainer::showPanel("panel_places",
+                LLFloaterSidePanelContainer::showPanel("places",
                         LLSD().with("type", "landmark").with("id",landmark->getUUID()));
             }
         }

@@ -50,7 +50,7 @@ bool LLFloaterLoadPrefPreset::postBuild()
     }
     getChild<LLButton>("ok")->setCommitCallback(boost::bind(&LLFloaterLoadPrefPreset::onBtnOk, this));
     getChild<LLButton>("cancel")->setCommitCallback(boost::bind(&LLFloaterLoadPrefPreset::onBtnCancel, this));
-    LLPresetsManager::instance().setPresetListChangeCallback(boost::bind(&LLFloaterLoadPrefPreset::onPresetsListChange, this));
+    mPresetListConnection = LLPresetsManager::instance().setPresetListChangeCallback(boost::bind(&LLFloaterLoadPrefPreset::onPresetsListChange, this));
 
     return true;
 }

@@ -1667,6 +1667,9 @@ void LLViewerWindow::handleFocus(LLWindow *window)
     {
         gFocusMgr.setAppHasFocus(true);
         LLModalDialog::onAppFocusGained();
+        gAgent.onAppFocusGained();
+        if(LLToolMgr::instanceExists() && LLToolMgr::instance().nativeToolsReady())
+            LLToolMgr::instance().onAppFocusGained();
         if (gKeyboard) gKeyboard->resetMaskKeys();
         gForegroundTime.unpause();
         return;
@@ -1694,6 +1697,8 @@ void LLViewerWindow::handleFocusLost(LLWindow *window)
     if (mNativeVulkan)
     {
         gFocusMgr.setAppHasFocus(false);
+        if(LLToolMgr::instanceExists() && LLToolMgr::instance().nativeToolsReady())
+            LLToolMgr::instance().onAppFocusLost();
         if (gMenuBarView) gMenuBarView->resetMenuTrigger();
         if (gLoginMenuBarView) gLoginMenuBarView->resetMenuTrigger();
         gForegroundTime.pause();
@@ -1780,7 +1785,18 @@ bool LLViewerWindow::handleTranslatedKeyUp(KEY key,  MASK mask)
     // Never affects event processing.
     gViewerInput.handleGlobalBindsKeyUp(key, mask);
 
-    if (mNativeVulkan) return gViewerInput.handleKeyUp(key, mask);
+    if (mNativeVulkan)
+    {
+        // The genuine Inspect composite must see ALT release before shared
+        // key state is retired, exactly as on the reference path. Never create
+        // a tool or select a legacy world owner when native tools are absent.
+        if(LLToolMgr::instanceExists() && LLToolMgr::instance().nativeToolsReady() && LLToolCompInspect::instanceExists())
+        {
+            auto* inspect=LLToolCompInspect::getInstance();
+            if(LLToolMgr::instance().nativeCurrentTool()==inspect)inspect->keyUp(key,mask);
+        }
+        return gViewerInput.handleKeyUp(key, mask);
+    }
 
     // Let the inspect tool code check for ALT key to set LLToolSelectRect active instead LLToolCamera
     LLToolCompInspect * tool_inspectp = LLToolCompInspect::getInstance();

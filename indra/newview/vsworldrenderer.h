@@ -72,6 +72,7 @@ public:
         std::array<float,4> sun{0,0,1,0};
         std::array<float,4> ambient{.25f,.25f,.25f,0};
         float                hudZoom = 1;
+        bool wireframe = false;
         VSEnvironmentState environment;
     };
     struct SurfaceHit
