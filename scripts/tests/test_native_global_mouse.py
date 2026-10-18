@@ -59,9 +59,12 @@ int main(){
  LLSetKeyBindDialog::recording=false;input.mode=0;original.clear();
  // Focus loss releases keyboard and mouse exactly once and preserves reentrant new owners.
  input.handleGlobalBindsMouse(CLICK_MIDDLE,1,true);
- input.mNativeHeldGlobalBindings[1]={[&](EKeystate s){assert(s==KEYSTATE_UP);assert(input.mNativeHeldGlobalMouseBindings.empty());return true;}};
+ unsigned reentrantReleases=0;
+ input.mNativeHeldGlobalBindings[1]={[&](EKeystate s){assert(s==KEYSTATE_UP);assert(input.mNativeHeldGlobalMouseBindings.empty());
+  input.mNativeHeldGlobalMouseBindings[CLICK_RIGHT]={CLICK_RIGHT,0,[&](EKeystate edge){assert(edge==KEYSTATE_UP);++reentrantReleases;return true;},"voice_follow_key"};return true;}};
  input.resetNativeGlobalKeys();assert(original.size()==2&&original.back()==KEYSTATE_UP);
- input.resetNativeGlobalKeys();assert(original.size()==2);
+ assert(reentrantReleases==0&&input.mNativeHeldGlobalMouseBindings.count(CLICK_RIGHT));
+ input.resetNativeGlobalKeys();assert(original.size()==2&&reentrantReleases==1);
  assert(!input.handleGlobalBindsMouse(CLICK_MIDDLE,1,false));
  // A false-returning binding still owns a press/release without consuming UI.
  input.mGlobalMouseBindings[0][0].mFunction=[&](EKeystate s){original.push_back(s);return false;};
