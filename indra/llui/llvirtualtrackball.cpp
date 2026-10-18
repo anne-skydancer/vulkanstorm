@@ -207,7 +207,9 @@ bool LLVirtualTrackball::pointInTouchCircle(S32 x, S32 y) const
     S32 centerX = mTouchArea->getRect().getCenterX();
     S32 centerY = mTouchArea->getRect().getCenterY();
 
-    bool in_circle = pow(x - centerX, 2) + pow(y - centerY, 2) <= pow(mTouchArea->getRect().getWidth() / 2, 2);
+    const S32 radius = mTouchArea->getRect().getWidth() / 2;
+    bool in_circle = radius > 0 && mTouchArea->getRect().getHeight() > 0
+        && pow(F64(x) - centerX, 2) + pow(F64(y) - centerY, 2) <= pow(F64(radius), 2);
     return in_circle;
 }
 
@@ -244,7 +246,7 @@ void LLVirtualTrackball::draw()
 
 void LLVirtualTrackball::onRotateTopClick()
 {
-    if (getEnabled())
+    if (isInEnabledChain())
     {
         LLQuaternion delta;
         delta.setAngleAxis(mIncrementBtn, 1, 0, 0);
@@ -257,7 +259,7 @@ void LLVirtualTrackball::onRotateTopClick()
 
 void LLVirtualTrackball::onRotateBottomClick()
 {
-    if (getEnabled())
+    if (isInEnabledChain())
     {
         LLQuaternion delta;
         delta.setAngleAxis(mIncrementBtn, -1, 0, 0);
@@ -270,7 +272,7 @@ void LLVirtualTrackball::onRotateBottomClick()
 
 void LLVirtualTrackball::onRotateLeftClick()
 {
-    if (getEnabled())
+    if (isInEnabledChain())
     {
         LLQuaternion delta;
         delta.setAngleAxis(mIncrementBtn, 0, 1, 0);
@@ -283,7 +285,7 @@ void LLVirtualTrackball::onRotateLeftClick()
 
 void LLVirtualTrackball::onRotateRightClick()
 {
-    if (getEnabled())
+    if (isInEnabledChain())
     {
         LLQuaternion delta;
         delta.setAngleAxis(mIncrementBtn, 0, -1, 0);
@@ -388,6 +390,11 @@ bool LLVirtualTrackball::handleHover(S32 x, S32 y, MASK mask)
 {
     if (hasMouseCapture())
     {
+        if (!isInEnabledChain())
+        {
+            gFocusMgr.setMouseCapture(NULL);
+            return true;
+        }
         if (mDragMode == DRAG_SCROLL)
         { // trackball (move to roll) mode
             LLQuaternion delta;
@@ -421,10 +428,18 @@ bool LLVirtualTrackball::handleHover(S32 x, S32 y, MASK mask)
             F32 yy = (F32)(y - mTouchArea->getRect().getCenterY());
             F32 dist = (F32)(sqrt(pow(xx, 2) + pow(yy, 2)));
 
-            F32 azimuth = llclamp(acosf(xx / dist), 0.0f, F_PI);
-            F32 altitude = llclamp(acosf(dist / radius), 0.0f, F_PI_BY_TWO);
+            // At the pole azimuth is indeterminate. Preserve the current heading
+            // instead of committing a NaN quaternion into the environment model.
+            F32 azimuth;
+            F32 previous_elevation;
+            getAzimuthAndElevation(mValue, azimuth, previous_elevation);
+            if (dist > 0.f)
+            {
+                azimuth = acosf(llclamp(xx / dist, -1.f, 1.f));
+            }
+            F32 altitude = acosf(llclamp(dist / radius, 0.f, 1.f));
 
-            if (yy < 0)
+            if (dist > 0.f && yy < 0)
             {
                 azimuth = F_TWO_PI - azimuth;
             }
@@ -464,19 +479,25 @@ bool LLVirtualTrackball::handleMouseUp(S32 x, S32 y, MASK mask)
         mPrevY = 0;
         gFocusMgr.setMouseCapture(NULL);
         make_ui_sound("UISndClickRelease");
+        return true;
     }
     return LLView::handleMouseUp(x, y, mask);
 }
 
 bool LLVirtualTrackball::handleMouseDown(S32 x, S32 y, MASK mask)
 {
-    if (pointInTouchCircle(x, y))
+    if (isInEnabledChain() && pointInTouchCircle(x, y))
     {
+        if (!getIsChrome())
+        {
+            setFocus(true);
+        }
         mPrevX = x;
         mPrevY = y;
         gFocusMgr.setMouseCapture(this);
         mDragMode = (mask == MASK_CONTROL) ? DRAG_SCROLL : DRAG_SET;
         make_ui_sound("UISndClick");
+        return true;
     }
     return LLView::handleMouseDown(x, y, mask);
 }
@@ -493,6 +514,10 @@ bool LLVirtualTrackball::handleRightMouseDown(S32 x, S32 y, MASK mask)
 
 bool LLVirtualTrackball::handleKeyHere(KEY key, MASK mask)
 {
+    if (!isInEnabledChain())
+    {
+        return false;
+    }
     bool handled = false;
     switch (key)
     {

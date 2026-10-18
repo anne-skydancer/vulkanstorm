@@ -10,6 +10,67 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class UIPublicationRetryTest(unittest.TestCase):
+    def test_solid_rectangle_and_triangle_retry_without_incomplete_capture(self):
+        source = (ROOT/'indra/newview/vsuiresources.cpp').read_text(encoding='utf-8')
+        methods = '\n'.join(method(source, name) for name in
+            ('void VSUIResources::rectangle(', 'void VSUIResources::triangle('))
+        self.compile(r'''
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <map>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <vector>
+using U8=unsigned char;
+template<class T>struct LLPointer:std::shared_ptr<T>{LLPointer(T* p):std::shared_ptr<T>(p){}};
+struct LLImageRaw{LLImageRaw(int,int,int){}void clear(int,int,int,int){}};
+struct LLRectf{float mLeft,mTop,mRight,mBottom;float getWidth()const{return mRight-mLeft;}float getHeight()const{return mTop-mBottom;}};
+struct LLColor4{float mV[4];};
+float nativeVertexColor(float c){return U8(std::clamp(c,0.f,1.f)*255)/255.f;}
+int nativeBlend(){return 2;}
+void check(bool ok,const char* text){if(!ok)throw std::runtime_error(text);}
+struct VSUIRenderer{
+ using Image=std::shared_ptr<int>;
+ struct Vertex{float x,y,u,v,r,g,b,a;};
+ struct Packet{int blend;Image image;std::array<float,4> bounds,clip,color;std::optional<std::array<Vertex,6>> triangles;};
+};
+struct VSUIResources{
+ struct Asset{VSUIRenderer::Image image;};
+ struct Entry{std::shared_ptr<Asset> asset;};
+ struct Impl{bool active=true;unsigned deferred_draw_batches=0;float dpi=2,logical_height=10;
+  std::array<float,4> clip{1,2,3,4};std::map<std::string,Entry> assets;std::vector<VSUIRenderer::Packet> packets;};
+ std::unique_ptr<Impl> mImpl=std::make_unique<Impl>();
+ bool refuse=true;unsigned uploads=0;
+ bool publish(const std::string& key,const LLImageRaw&){++uploads;if(refuse)return false;
+  mImpl->assets[key]={std::make_shared<Asset>(Asset{std::make_shared<int>(int(uploads))})};return true;}
+ void rectangle(const LLRectf&,const LLColor4&);
+ void triangle(const std::array<std::array<float,6>,3>&);
+};
+METHODS
+int main(){
+ for(bool triangle:{false,true}){
+  VSUIResources ui;
+  auto draw=[&]{if(triangle)ui.triangle({{{2,4,.1f,.2f,.3f,.4f},{4,4,.2f,.3f,.4f,.5f},{2,6,.3f,.4f,.5f,.6f}}});
+   else ui.rectangle({2,6,4,4},{{.1f,.2f,.3f,.4f}});};
+  draw();draw();assert(ui.mImpl->packets.empty()&&ui.mImpl->assets.empty());
+  assert(ui.mImpl->deferred_draw_batches==2&&ui.uploads==2);
+  ui.refuse=false;ui.mImpl->deferred_draw_batches=0;draw();
+  assert(ui.mImpl->packets.size()==1&&ui.mImpl->deferred_draw_batches==0);
+  auto original=ui.mImpl->packets.front().image;draw();
+  assert(ui.uploads==3&&ui.mImpl->packets.size()==2&&ui.mImpl->packets.back().image==original);
+  assert(ui.mImpl->packets.front().clip==ui.mImpl->clip&&ui.mImpl->packets.front().blend==2);
+  if(triangle){auto v=(*ui.mImpl->packets[0].triangles)[0];assert(v.x==1&&v.y==8&&v.r==nativeVertexColor(.1f));
+   auto tail=(*ui.mImpl->packets[0].triangles)[5];assert(tail.x==1&&tail.y==7);}
+  ui.mImpl->assets.clear();ui.refuse=true;draw();
+  assert(ui.mImpl->packets.size()==2&&ui.mImpl->deferred_draw_batches==1&&*original==3);
+  ui.refuse=false;draw();assert(ui.mImpl->packets.back().image!=original);
+ }
+}
+'''.replace('METHODS', methods))
+
     def test_captures_wait_for_complete_frame_and_retry_state_resets(self):
         resources = (ROOT/'indra/newview/vsuiresources.cpp').read_text()
         context = (ROOT/'indra/newview/vsvulkancontext.cpp').read_text()

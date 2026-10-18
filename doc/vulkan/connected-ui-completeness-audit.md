@@ -6,6 +6,24 @@ Status: **unqualified**. This is an independent source audit, not a declaration 
 
 ## Findings
 
+### Integration work: shared primitive and environment controls
+
+The headless connected replay reached the real parcel environment PUT, then
+crashed because `LLXYVector::draw()` called the remaining GL circle helper.
+Circle, arc, washer, washer-segment, corner and simple-rectangle geometry now
+uses one shared copy of the original vertex sequences with separate GL and
+native submission sinks. Native inherited colour no longer accesses an absent
+GL vertex buffer or shader. Triangle solid-image publication now follows the
+same refusal/retry and incomplete-frame capture rules as rectangles.
+
+Shared XY and trackball controls retain normal editor/button callbacks and
+disabled-ancestor policy, consume owned pointer capture, initialize drag state
+and avoid collapsed-size division and center-point NaNs. Permanent headless
+tests execute both actual control draw/input paths and compare both primitive
+sinks with frozen original GL geometry. These source checks do not qualify GPU
+rasterization or complete UI/keyboard parity; the full staged replay and the
+remaining controller/service families are still required.
+
 The native connected UI is still governed by startup-era closed admission lists. These lists reject whole floater/controller families, remove toolbar commands and permanently disable menu items. Separate service and input gates also refuse actions that survive construction. A successful test of the admitted connected-session subset cannot demonstrate complete UI integration.
 
 The requested outcome is functional UI parity: the same shared control, layout, selection and authorization logic used by OpenGL, connected to actual native services. Legitimate shared permission, selection, maturity, RLVa, account, media-availability and hardware conditions must remain. Removing a native blanket gate without integrating its controller or renderer is not a fix.

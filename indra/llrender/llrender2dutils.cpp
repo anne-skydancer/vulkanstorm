@@ -40,6 +40,7 @@
 // Project includes
 #include "llrender2dutils.h"
 #include "lluiimage.h"
+#include "vsuiprimitive.h"
 #include <stdexcept>
 
 namespace
@@ -50,13 +51,14 @@ std::function<void(const LLRender2D::native_triangle_t&)> native_triangle;
 std::vector<std::array<F32,2>> native_origins;
 F32 native_line_width=1.f;
 U8 native_blend=LLRender::BT_ALPHA;
+LLColor4 native_color(1.f, 1.f, 1.f, 1.f);
 }
 void LLRender2D::setNativeUI(native_rect_t rectangle,native_clip_t clip)
 {
     if (bool(rectangle)!=bool(clip) || (rectangle && native_rectangle))
         throw std::logic_error("Native UI drawing requires exclusive rectangle/clip ownership");
     native_rectangle=std::move(rectangle);native_clip=std::move(clip);
-    native_blend=LLRender::BT_ALPHA;native_line_width=1.f;native_origins.clear();if (native_rectangle) native_origins.push_back({0,0});
+    native_blend=LLRender::BT_ALPHA;native_color=LLColor4::white;native_line_width=1.f;native_origins.clear();if (native_rectangle) native_origins.push_back({0,0});
 }
 void LLRender2D::setNativeTriangles(std::function<void(const native_triangle_t&)> callback)
 {
@@ -76,6 +78,8 @@ void LLRender2D::nativeTriangle(const native_triangle_t& vertices)
     native_triangle(physical);
 }
 bool LLRender2D::isNativeUI() { return bool(native_rectangle); }
+void LLRender2D::setNativeColor(const LLColor4& color) { native_color = color; }
+const LLColor4& LLRender2D::nativeColor() { return native_color; }
 void LLRender2D::setSceneBlendType(U8 type)
 {
     if (!isNativeUI()) { gGL.setSceneBlendType(static_cast<LLRender::eBlendType>(type));return; }
@@ -115,6 +119,88 @@ void LLRender2D::nativeRectangle(S32 left,S32 top,S32 right,S32 bottom,const LLC
     }
 }
 
+
+namespace
+{
+class NativePrimitive
+{
+    using Vertex = std::array<F32, 6>;
+    U32 mMode = LLRender::TRIANGLES;
+    std::size_t mCount = 0;
+    Vertex mFirst{}, mPrevious{}, mBeforePrevious{};
+    std::array<F32, 2> mOffset{};
+    std::array<F32, 2> mSavedOffset{};
+    bool mPushed = false;
+
+    static void line(const Vertex& a, const Vertex& b)
+    {
+        const F32 dx = b[0] - a[0], dy = b[1] - a[1];
+        const F32 length = std::hypot(dx, dy);
+        if (length == 0.f) return;
+        const F32 half = native_line_width * .5f / length;
+        const F32 nx = -dy * half, ny = dx * half;
+        auto aa = a, ab = a, ba = b, bb = b;
+        aa[0] += nx; aa[1] += ny; ab[0] -= nx; ab[1] -= ny;
+        ba[0] += nx; ba[1] += ny; bb[0] -= nx; bb[1] -= ny;
+        LLRender2D::nativeTriangle({aa, ba, ab});
+        LLRender2D::nativeTriangle({ab, ba, bb});
+    }
+public:
+    void pushUIMatrix()
+    {
+        if (mPushed) throw std::logic_error("Nested UI primitive transform");
+        mSavedOffset = mOffset; mPushed = true;
+    }
+    void popUIMatrix()
+    {
+        if (!mPushed) throw std::logic_error("Unbalanced UI primitive transform");
+        mOffset = mSavedOffset; mPushed = false;
+    }
+    void translateUI(F32 x, F32 y, F32 z)
+    {
+        if (z != 0.f) throw std::logic_error("UI primitive requires a planar transform");
+        mOffset[0] += x; mOffset[1] += y;
+    }
+    void color4fv(const F32* color) { gGL.color4fv(color); }
+    void begin(U32 mode) { mMode = mode; mCount = 0; }
+    void vertex2i(S32 x, S32 y) { vertex2f(F32(x), F32(y)); }
+    void vertex2f(F32 x, F32 y)
+    {
+        const auto& c = LLRender2D::nativeColor();
+        const Vertex v{x + mOffset[0], y + mOffset[1], c.mV[0], c.mV[1], c.mV[2], c.mV[3]};
+        switch (mMode)
+        {
+        case LLRender::TRIANGLE_FAN:
+            if (mCount >= 2) LLRender2D::nativeTriangle({mFirst, mPrevious, v});
+            break;
+        case LLRender::TRIANGLE_STRIP:
+            if (mCount >= 2)
+            {
+                if (mCount & 1) LLRender2D::nativeTriangle({mPrevious, mBeforePrevious, v});
+                else LLRender2D::nativeTriangle({mBeforePrevious, mPrevious, v});
+            }
+            break;
+        case LLRender::TRIANGLES:
+            if (mCount % 3 == 2) LLRender2D::nativeTriangle({mBeforePrevious, mPrevious, v});
+            break;
+        case LLRender::LINES:
+            if (mCount & 1) line(mPrevious, v);
+            break;
+        case LLRender::LINE_STRIP:
+        case LLRender::LINE_LOOP:
+            if (mCount) line(mPrevious, v);
+            break;
+        default: throw std::logic_error("Unsupported UI primitive topology");
+        }
+        if (!mCount) mFirst = v;
+        mBeforePrevious = mPrevious; mPrevious = v; ++mCount;
+    }
+    void end()
+    {
+        if (mMode == LLRender::LINE_LOOP && mCount > 1) line(mPrevious, mFirst);
+    }
+};
+}
 
 //
 // Globals
@@ -198,7 +284,10 @@ void gl_rect_2d_offset_local( S32 left, S32 top, S32 right, S32 bottom, S32 pixe
 void gl_rect_2d(S32 left, S32 top, S32 right, S32 bottom, bool filled )
 {
     if (LLRender2D::isNativeUI())
-        throw std::logic_error("Native UI rectangle requires explicit color");
+    {
+        LLRender2D::nativeRectangle(left, top, right, bottom, LLRender2D::nativeColor(), filled);
+        return;
+    }
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     // Counterclockwise quad will face the viewer
@@ -230,6 +319,7 @@ void gl_rect_2d(S32 left, S32 top, S32 right, S32 bottom, bool filled )
 
 void gl_rect_2d(S32 left, S32 top, S32 right, S32 bottom, const LLColor4 &color, bool filled )
 {
+    if (LLRender2D::isNativeUI()) gGL.color4fv(color.mV);
     if (LLRender2D::isNativeUI()) { LLRender2D::nativeRectangle(left,top,right,bottom,color,filled);return; }
     gGL.color4fv( color.mV );
     gl_rect_2d( left, top, right, bottom, filled );
@@ -238,6 +328,7 @@ void gl_rect_2d(S32 left, S32 top, S32 right, S32 bottom, const LLColor4 &color,
 
 void gl_rect_2d( const LLRect& rect, const LLColor4& color, bool filled )
 {
+    if (LLRender2D::isNativeUI()) gGL.color4fv(color.mV);
     if (LLRender2D::isNativeUI()) { LLRender2D::nativeRectangle(rect.mLeft,rect.mTop,rect.mRight,rect.mBottom,color,filled);return; }
     gGL.color4fv( color.mV );
     gl_rect_2d( rect.mLeft, rect.mTop, rect.mRight, rect.mBottom, filled );
@@ -349,7 +440,15 @@ void gl_drop_shadow(S32 left, S32 top, S32 right, S32 bottom, const LLColor4 &st
 
 void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2 )
 {
-    if (LLRender2D::isNativeUI()) throw std::logic_error("Native UI line requires explicit color");
+    if (LLRender2D::isNativeUI())
+    {
+        NativePrimitive draw;
+        draw.begin(LLRender::LINES);
+        draw.vertex2i(x1, y1);
+        draw.vertex2i(x2, y2);
+        draw.end();
+        return;
+    }
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     gGL.begin(LLRender::LINES);
@@ -360,6 +459,7 @@ void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2 )
 
 void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2, const LLColor4 &color )
 {
+    if (LLRender2D::isNativeUI()) gGL.color4fv(color.mV);
     if (LLRender2D::isNativeUI())
     {
         // Center all widget strokes on their shared vertices, retaining the
@@ -389,6 +489,7 @@ void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2, const LLColor4 &color )
 
 void gl_triangle_2d(S32 x1, S32 y1, S32 x2, S32 y2, S32 x3, S32 y3, const LLColor4& color, bool filled)
 {
+    if (LLRender2D::isNativeUI()) gGL.color4fv(color.mV);
     if (LLRender2D::isNativeUI())
     {
         if (filled)
@@ -424,35 +525,17 @@ void gl_triangle_2d(S32 x1, S32 y1, S32 x2, S32 y2, S32 x3, S32 y3, const LLColo
 
 void gl_corners_2d(S32 left, S32 top, S32 right, S32 bottom, S32 length, F32 max_frac)
 {
-    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
-
-    length = llmin((S32)(max_frac*(right - left)), length);
-    length = llmin((S32)(max_frac*(top - bottom)), length);
-    gGL.begin(LLRender::LINES);
-    gGL.vertex2i(left, top);
-    gGL.vertex2i(left + length, top);
-
-    gGL.vertex2i(left, top);
-    gGL.vertex2i(left, top - length);
-
-    gGL.vertex2i(left, bottom);
-    gGL.vertex2i(left + length, bottom);
-
-    gGL.vertex2i(left, bottom);
-    gGL.vertex2i(left, bottom + length);
-
-    gGL.vertex2i(right, top);
-    gGL.vertex2i(right - length, top);
-
-    gGL.vertex2i(right, top);
-    gGL.vertex2i(right, top - length);
-
-    gGL.vertex2i(right, bottom);
-    gGL.vertex2i(right - length, bottom);
-
-    gGL.vertex2i(right, bottom);
-    gGL.vertex2i(right, bottom + length);
-    gGL.end();
+    if (LLRender2D::isNativeUI())
+    {
+        NativePrimitive draw;
+        VSUIPrimitive::gl_corners_2d(draw, left, top, right, bottom, length, max_frac);
+    }
+    else
+    {
+        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        auto& draw = gGL;
+        VSUIPrimitive::gl_corners_2d(draw, left, top, right, bottom, length, max_frac);
+    }
 }
 
 
@@ -984,84 +1067,31 @@ void gl_line_3d( const LLVector3& start, const LLVector3& end, const LLColor4& c
 
 void gl_arc_2d(F32 center_x, F32 center_y, F32 radius, S32 steps, bool filled, F32 start_angle, F32 end_angle)
 {
-    if (end_angle < start_angle)
+    if (LLRender2D::isNativeUI())
     {
-        end_angle += F_TWO_PI;
+        NativePrimitive draw;
+        VSUIPrimitive::gl_arc_2d(draw, center_x, center_y, radius, steps, filled, start_angle, end_angle);
     }
-
-    gGL.pushUIMatrix();
+    else
     {
-        gGL.translateUI(center_x, center_y, 0.f);
-
-        // Inexact, but reasonably fast.
-        F32 delta = (end_angle - start_angle) / steps;
-        F32 sin_delta = sin( delta );
-        F32 cos_delta = cos( delta );
-        F32 x = cosf(start_angle) * radius;
-        F32 y = sinf(start_angle) * radius;
-
-        if (filled)
-        {
-            gGL.begin(LLRender::TRIANGLE_FAN);
-            gGL.vertex2f(0.f, 0.f);
-            // make sure circle is complete
-            steps += 1;
-        }
-        else
-        {
-            gGL.begin(LLRender::LINE_STRIP);
-        }
-
-        while( steps-- )
-        {
-            // Successive rotations
-            gGL.vertex2f( x, y );
-            F32 x_new = x * cos_delta - y * sin_delta;
-            y = x * sin_delta +  y * cos_delta;
-            x = x_new;
-        }
-        gGL.end();
+        auto& draw = gGL;
+        VSUIPrimitive::gl_arc_2d(draw, center_x, center_y, radius, steps, filled, start_angle, end_angle);
     }
-    gGL.popUIMatrix();
 }
 
 void gl_circle_2d(F32 center_x, F32 center_y, F32 radius, S32 steps, bool filled)
 {
-    gGL.pushUIMatrix();
+    if (LLRender2D::isNativeUI())
+    {
+        NativePrimitive draw;
+        VSUIPrimitive::gl_circle_2d(draw, center_x, center_y, radius, steps, filled);
+    }
+    else
     {
         gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
-        gGL.translateUI(center_x, center_y, 0.f);
-
-        // Inexact, but reasonably fast.
-        F32 delta = F_TWO_PI / steps;
-        F32 sin_delta = sin( delta );
-        F32 cos_delta = cos( delta );
-        F32 x = radius;
-        F32 y = 0.f;
-
-        if (filled)
-        {
-            gGL.begin(LLRender::TRIANGLE_FAN);
-            gGL.vertex2f(0.f, 0.f);
-            // make sure circle is complete
-            steps += 1;
-        }
-        else
-        {
-            gGL.begin(LLRender::LINE_LOOP);
-        }
-
-        while( steps-- )
-        {
-            // Successive rotations
-            gGL.vertex2f( x, y );
-            F32 x_new = x * cos_delta - y * sin_delta;
-            y = x * sin_delta +  y * cos_delta;
-            x = x_new;
-        }
-        gGL.end();
+        auto& draw = gGL;
+        VSUIPrimitive::gl_circle_2d(draw, center_x, center_y, radius, steps, filled);
     }
-    gGL.popUIMatrix();
 }
 
 // Renders a ring with sides (tube shape)
@@ -1144,73 +1174,34 @@ void gl_rect_2d_checkerboard(const LLRect& rect, GLfloat alpha)
 // a doughnut or washer.
 void gl_washer_2d(F32 outer_radius, F32 inner_radius, S32 steps, const LLColor4& inner_color, const LLColor4& outer_color)
 {
-    const F32 DELTA = F_TWO_PI / steps;
-    const F32 SIN_DELTA = sin( DELTA );
-    const F32 COS_DELTA = cos( DELTA );
-
-    F32 x1 = outer_radius;
-    F32 y1 = 0.f;
-    F32 x2 = inner_radius;
-    F32 y2 = 0.f;
-
-    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
-
-    gGL.begin( LLRender::TRIANGLE_STRIP  );
+    if (LLRender2D::isNativeUI())
     {
-        steps += 1; // An extra step to close the circle.
-        while( steps-- )
-        {
-            gGL.color4fv(outer_color.mV);
-            gGL.vertex2f( x1, y1 );
-            gGL.color4fv(inner_color.mV);
-            gGL.vertex2f( x2, y2 );
-
-            F32 x1_new = x1 * COS_DELTA - y1 * SIN_DELTA;
-            y1 = x1 * SIN_DELTA +  y1 * COS_DELTA;
-            x1 = x1_new;
-
-            F32 x2_new = x2 * COS_DELTA - y2 * SIN_DELTA;
-            y2 = x2 * SIN_DELTA +  y2 * COS_DELTA;
-            x2 = x2_new;
-        }
+        NativePrimitive draw;
+        VSUIPrimitive::gl_washer_2d(draw, outer_radius, inner_radius, steps, inner_color, outer_color);
     }
-    gGL.end();
+    else
+    {
+        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        auto& draw = gGL;
+        VSUIPrimitive::gl_washer_2d(draw, outer_radius, inner_radius, steps, inner_color, outer_color);
+    }
 }
 
 // Draws the area between two concentric circles, like
 // a doughnut or washer.
 void gl_washer_segment_2d(F32 outer_radius, F32 inner_radius, F32 start_radians, F32 end_radians, S32 steps, const LLColor4& inner_color, const LLColor4& outer_color)
 {
-    const F32 DELTA = (end_radians - start_radians) / steps;
-    const F32 SIN_DELTA = sin( DELTA );
-    const F32 COS_DELTA = cos( DELTA );
-
-    F32 x1 = outer_radius * cos( start_radians );
-    F32 y1 = outer_radius * sin( start_radians );
-    F32 x2 = inner_radius * cos( start_radians );
-    F32 y2 = inner_radius * sin( start_radians );
-
-    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
-    gGL.begin( LLRender::TRIANGLE_STRIP  );
+    if (LLRender2D::isNativeUI())
     {
-        steps += 1; // An extra step to close the circle.
-        while( steps-- )
-        {
-            gGL.color4fv(outer_color.mV);
-            gGL.vertex2f( x1, y1 );
-            gGL.color4fv(inner_color.mV);
-            gGL.vertex2f( x2, y2 );
-
-            F32 x1_new = x1 * COS_DELTA - y1 * SIN_DELTA;
-            y1 = x1 * SIN_DELTA +  y1 * COS_DELTA;
-            x1 = x1_new;
-
-            F32 x2_new = x2 * COS_DELTA - y2 * SIN_DELTA;
-            y2 = x2 * SIN_DELTA +  y2 * COS_DELTA;
-            x2 = x2_new;
-        }
+        NativePrimitive draw;
+        VSUIPrimitive::gl_washer_segment_2d(draw, outer_radius, inner_radius, start_radians, end_radians, steps, inner_color, outer_color);
     }
-    gGL.end();
+    else
+    {
+        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        auto& draw = gGL;
+        VSUIPrimitive::gl_washer_segment_2d(draw, outer_radius, inner_radius, start_radians, end_radians, steps, inner_color, outer_color);
+    }
 }
 
 void gl_rect_2d_simple_tex( S32 width, S32 height )
@@ -1240,15 +1231,16 @@ void gl_rect_2d_simple_tex( S32 width, S32 height )
 
 void gl_rect_2d_simple( S32 width, S32 height )
 {
-    gGL.begin( LLRender::TRIANGLES );
-        gGL.vertex2i(width, height);
-        gGL.vertex2i(0, height);
-        gGL.vertex2i(0, 0);
-
-        gGL.vertex2i(width, height);
-        gGL.vertex2i(0, 0);
-        gGL.vertex2i(width, 0);
-    gGL.end();
+    if (LLRender2D::isNativeUI())
+    {
+        NativePrimitive draw;
+        VSUIPrimitive::gl_rect_2d_simple(draw, width, height);
+    }
+    else
+    {
+        auto& draw = gGL;
+        VSUIPrimitive::gl_rect_2d_simple(draw, width, height);
+    }
 }
 
 void gl_segmented_rect_2d_tex(const S32 left,

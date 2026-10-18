@@ -160,6 +160,7 @@ template<class T>T llmax(T a,T b){return std::max(a,b);}
 struct LLColor4{float mV[4]{.2f,.4f,.6f,.5f};};
 struct LLRectf{float l,t,r,b;LLRectf(float a,float c,float d,float e):l(a),t(c),r(d),b(e){}};
 struct LLFontGL{static constexpr float sScaleX=1.25f,sScaleY=1.25f;};
+struct{void color4fv(const float*){}}gGL;
 std::vector<LLRectf> rectangles;
 void native_rectangle(const LLRectf&r,const LLColor4&){rectangles.push_back(r);}
 float native_line_width=2.25f;

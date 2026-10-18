@@ -135,6 +135,8 @@ public:
     static void setNativeTriangles(std::function<void(const native_triangle_t&)>);
     static void nativeTriangle(const native_triangle_t&);
     static bool isNativeUI();
+    static void setNativeColor(const LLColor4&);
+    static const LLColor4& nativeColor();
     static void setSceneBlendType(U8 type);
     static U8 nativeBlend();
     static std::array<F32,2> nativeOrigin();

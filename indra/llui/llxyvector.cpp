@@ -144,8 +144,12 @@ LLXYVector::~LLXYVector()
 
 bool LLXYVector::postBuild()
 {
-    mLogScaleX = (2 * log(mMaxValueX)) / mTouchArea->getRect().getWidth();
-    mLogScaleY = (2 * log(mMaxValueY)) / mTouchArea->getRect().getHeight();
+    const S32 width = mTouchArea->getRect().getWidth();
+    const S32 height = mTouchArea->getRect().getHeight();
+    mLogScaleX = width > 0 ? (2 * log(mMaxValueX)) / width : 0.f;
+    mLogScaleY = height > 0 ? (2 * log(mMaxValueY)) / height : 0.f;
+    mGhostX = mTouchArea->getRect().getCenterX();
+    mGhostY = mTouchArea->getRect().getCenterY();
 
     return true;
 }
@@ -172,6 +176,11 @@ void drawArrow(S32 tailX, S32 tailY, S32 tipX, S32 tipY, LLColor4 color)
 
 void LLXYVector::draw()
 {
+    if (mTouchArea->getRect().getWidth() <= 0 || mTouchArea->getRect().getHeight() <= 0)
+    {
+        LLView::draw();
+        return;
+    }
     S32 centerX = mTouchArea->getRect().getCenterX();
     S32 centerY = mTouchArea->getRect().getCenterY();
     S32 pointX;
@@ -230,7 +239,7 @@ void LLXYVector::draw()
 
 void LLXYVector::onEditChange()
 {
-    if (getEnabled())
+    if (isInEnabledChain())
     {
         setValueAndCommit((F32)mXEntry->getValue().asReal(), (F32)mYEntry->getValue().asReal());
     }
@@ -279,6 +288,12 @@ bool LLXYVector::handleHover(S32 x, S32 y, MASK mask)
 {
     if (hasMouseCapture())
     {
+        if (!isInEnabledChain() || mTouchArea->getRect().getWidth() <= 0
+            || mTouchArea->getRect().getHeight() <= 0)
+        {
+            gFocusMgr.setMouseCapture(NULL);
+            return true;
+        }
         if (mLogarithmic)
         {
             F32 valueX = llfastpow(F_E, mLogScaleX*(llabs(x - mTouchArea->getRect().getCenterX()))) - 1;
@@ -307,6 +322,7 @@ bool LLXYVector::handleMouseUp(S32 x, S32 y, MASK mask)
     {
         gFocusMgr.setMouseCapture(NULL);
         make_ui_sound("UISndClickRelease");
+        return true;
     }
 
     if (mTouchArea->getRect().pointInRect(x, y))
@@ -322,7 +338,8 @@ bool LLXYVector::handleMouseUp(S32 x, S32 y, MASK mask)
 bool LLXYVector::handleMouseDown(S32 x, S32 y, MASK mask)
 {
 
-    if (mTouchArea->getRect().pointInRect(x, y))
+    if (isInEnabledChain() && mTouchArea->getRect().getWidth() > 0
+        && mTouchArea->getRect().getHeight() > 0 && mTouchArea->getRect().pointInRect(x, y))
     {
         gFocusMgr.setMouseCapture(this);
         make_ui_sound("UISndClick");
