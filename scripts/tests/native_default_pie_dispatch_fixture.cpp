@@ -16,12 +16,16 @@ struct Handler
  void screenPointToLocal(int x,int y,int* a,int* b){*a=x;*b=y;}
  bool handleAnyMouseClick(int,int,MASK,EMouseClickType,bool){return consumes;}
 };
+struct LLUI{int resets=0;static LLUI*getInstance(){static LLUI ui;return &ui;}void resetMouseIdleTimer(){++resets;}};
 struct Focus{Handler* capture=nullptr;Handler* getMouseCapture(){return capture;}void setKeyboardFocus(void*){}}gFocusMgr;
 struct LLPickInfo{LLPickInfo()=default;template<class...Args>LLPickInfo(Args&&...){}};
 struct LLToolPie:Handler
 {
  static inline bool exists=true;static LLToolPie& instance(){static LLToolPie p;return p;}static LLToolPie* getInstance(){return &instance();}static bool instanceExists(){return exists;}
  LLPickInfo pick;LLPickInfo& getPick(){return pick;}
+ int rightDowns=0,rightUps=0;
+ bool handleRightMouseDown(int,int,MASK){++rightDowns;return false;}
+ bool handleRightMouseUp(int,int,MASK){++rightUps;return false;}
  int downs=0,ups=0,updates=0,manualMedia=0;bool mediaCapture=false;
  bool hasNativeMediaCapture(){return mediaCapture;}void retireNativeMediaCapture(){mediaCapture=false;}
  void updateNativeMediaCapture(){++updates;}
@@ -68,4 +72,9 @@ int main()
  actualPieSelected=false;w.nativeMouse({9,8},0,CLICK_LEFT,true);assert(pie.downs==3&&w.picks==1);
  actualPieSelected=true;VSNativeSession::active()->connected=false;w.nativeMouse({9,8},0,CLICK_LEFT,true);assert(pie.downs==3);
  assert(gViewerInput.globals==8);
+ VSNativeSession::active()->connected=true;
+ assert(w.nativeMouse({9,8},0,CLICK_RIGHT,true));
+ assert(w.nativeMouse({9,8},0,CLICK_RIGHT,false));
+ assert(pie.rightDowns==1&&pie.rightUps==1&&!w.mNativeCameraDrag);
+ assert(LLUI::getInstance()->resets==gViewerInput.globals&&gViewerInput.globals==10);
 }

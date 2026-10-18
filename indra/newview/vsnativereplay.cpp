@@ -14,6 +14,7 @@
 #include "vsterrainreplay.h"
 #include "vsnativereplay.h"
 #include "vshudiconreplay.h"
+#include "vstooltipreplay.h"
 #include "vsnativeimreplay.h"
 #include "vsnativesession.h"
 #include "vsuiimageprovider.h"
@@ -952,6 +953,7 @@ struct Replay
                     : chat->isInVisibleChain()),
                 "Active connected nearby frontend is missing or hidden");
             if (chat->transcript()->getText().find("Native nearby:") == std::string::npos || chat->transcript()->getText().find("Native event queue chat") == std::string::npos) return;
+            if(!vs_tooltip_replay_tick(imEvidence))return;
             if(!vs_hud_icon_replay_tick(owner,imEvidence))return;
             if (!captureRequested)
             {

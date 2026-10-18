@@ -29,6 +29,7 @@
 
 #include "llmenugl.h"
 #include "llsafehandle.h"
+#include <memory>
 #include "lltoggleablemenu.h" // <FS:Ansariel> FIRE-7893: Detach function on inspect self toast without function
 #include "piemenu.h"
 
@@ -163,12 +164,14 @@ public:
 
     void setParcelSelection(LLSafeHandle<LLParcelSelection> selection);
     void setObjectSelection(LLSafeHandle<LLObjectSelection> selection);
+    void setNativeObjectSelection(std::shared_ptr<const void>);
 
     virtual const LLRect getMenuRect() const;
 
 protected:
     LLSafeHandle<LLParcelSelection> mParcelSelection;
     LLSafeHandle<LLObjectSelection> mObjectSelection;
+    std::shared_ptr<const void> mNativeObjectSelection;
 };
 
 extern LLMenuBarGL*     gMenuBarView;

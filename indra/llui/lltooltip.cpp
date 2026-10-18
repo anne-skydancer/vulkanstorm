@@ -544,6 +544,19 @@ void LLToolTipMgr::blockToolTips()
     mToolTipsBlocked = true;
 }
 
+void LLToolTipMgr::resetToolTips()
+{
+    // Delete while the actual root and callback targets are still alive. Hide
+    // alone leaves deferred Params callbacks and a raw child pointer behind.
+    delete mToolTip;
+    mToolTip=nullptr;
+    mNeedsToolTip=false;
+    mLastToolTipParams=LLToolTip::Params();
+    mNextToolTipParams=LLToolTip::Params();
+    mMouseNearRect=LLRect();
+    mToolTipsBlocked=false;
+}
+
 void LLToolTipMgr::hideToolTips()
 {
     if (mToolTip)

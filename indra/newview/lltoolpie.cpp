@@ -27,6 +27,11 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "lltoolpie.h"
+#include "fsavatarrenderpersistence.h"
+#if VS_NATIVE_VULKAN
+#include "vsobjectcontext.h"
+#include "vsvulkancontext.h"
+#endif
 #if VS_NATIVE_VULKAN
 #include "vsprimmediatarget.h"
 #endif
@@ -2438,250 +2443,147 @@ static ECursorType cursor_from_parcel_media(U8 click_action)
 
 
 // True if we handled the event.
+#include "vscontextselection.h"
+namespace
+{
+struct ReferenceContextSelectionPeer
+{
+    std::function<void()> onFeedback;
+    LLToolPie& tool;
+    bool current()const{return true;}
+    LLViewerObject* object(const LLPickInfo& pick)const{return pick.getObject();}
+    void select(const LLPickInfo& pick)const{LLToolSelect::handleObjectSelection(pick,false,true);}
+    void retainMenuSelection()const{gMenuHolder->setObjectSelection(LLSelectMgr::instance().getSelection());}
+    bool attachment(LLViewerObject* object)const{return object->isAttachment();}
+    bool hud(LLViewerObject* object)const{return object->isHUDAttachment();}
+    bool youOwner(LLViewerObject* object)const{return object->permYouOwner();}
+    bool avatar(LLViewerObject* object)const{return object->isAvatar();}
+    LLViewerObject* parent(LLViewerObject* object)const{return static_cast<LLViewerObject*>(object->getParent());}
+    std::string fullname(LLViewerObject* object)const{return static_cast<LLVOAvatar*>(object)->getFullname();}
+    LLUUID id(LLViewerObject* object)const{return object->getID();}
+    bool selectionEmpty()const{return LLSelectMgr::instance().getSelection()->isEmpty();}
+    bool renderMode(U32 mode)const{return check_avatar_render_mode(mode);}
+    std::string firstRootName()const
+    {
+        const auto node=LLSelectMgr::instance().getSelection()->getFirstRootNode();
+        return node?node->mName:std::string();
+    }
+    S32 rootObjectCount()const{return LLSelectMgr::instance().getSelection()->getRootObjectCount();}
+    void feedback(const LLPickInfo&)const{onFeedback();}
+    void baseMouseDown(S32 x,S32 y,MASK mask)const{tool.LLTool::handleRightMouseDown(x,y,mask);}
+};
+}
+
+#if VS_NATIVE_VULKAN
+namespace
+{
+struct NativeContextSelectionPeer
+{
+    using Object=std::optional<VSWorldScene::ObjectHandle>;
+    std::shared_ptr<VSNativeSession> session;
+    std::shared_ptr<VSObjectSelection> selection;
+    std::function<bool()> account;
+    std::function<void()> onFeedback;
+    LLToolPie& tool;
+    VSWorldScene& world;
+    bool current()const{return account && account() && session->phase()==VSNativeSession::Phase::Connected &&
+        session->existingObjectSelection()==selection.get() && bool(selection->retainSelection());}
+    Object object(const LLPickInfo& pick)const{return current()?world.object(pick.mObjectID):Object();}
+    void select(const LLPickInfo& pick)const{LLToolSelect::handleNativeObjectSelection(pick,false,true);}
+    void retainMenuSelection()const{if(current())gMenuHolder->setNativeObjectSelection(selection->retainSelection());}
+    bool attachment(const Object& object)const{const auto row=current()?world.objectAdmission(*object):std::nullopt;return row && row->attachment;}
+    bool hud(const Object& object)const{const auto row=current()?world.objectAdmission(*object):std::nullopt;return row && row->hud;}
+    bool youOwner(const Object& object)const{const auto row=current()?world.objectAdmission(*object):std::nullopt;return row && VSObjectContext::ownedByAgent(row->rootUpdateFlags);}
+    bool avatar(const Object& object)const{const auto row=current()?world.objectAdmission(*object):std::nullopt;return row && row->pcode==LL_PCODE_LEGACY_AVATAR;}
+    Object parent(const Object& object)const
+    {
+        if(!current())return {};
+        const auto root=world.rootObject(*object,false);
+        return root && root->id!=object->id?root:Object();
+    }
+    LLUUID id(const Object& object)const{return current() && world.current(*object)?object->id:LLUUID::null;}
+    std::string fullname(const Object& object)const
+    {
+        LLAvatarName name;
+        if(current() && LLAvatarNameCache::get(object->id,&name))return name.getLegacyName();
+        return {};
+    }
+    bool selectionEmpty()const{return !current() || selection->selected().empty();}
+    Object firstRoot()const
+    {
+        if(!current())return {};
+        for(const auto& token:selection->selected())
+        {
+            const auto node=selection->node(token);
+            if(!node || node->individual)continue;
+            const auto root=world.rootObject(token,true);
+            if(root && root->id==token.id)return token;
+        }
+        return {};
+    }
+    std::string firstRootName()const
+    {
+        const auto root=firstRoot();
+        const auto row=root?selection->properties(*root):std::nullopt;
+        return row?row->properties->name:std::string();
+    }
+    S32 rootObjectCount()const
+    {
+        if(!current())return 0;
+        S32 count=0;
+        for(const auto& token:selection->selected())
+        {
+            const auto node=selection->node(token);
+            if(!node || node->individual)continue;
+            const auto root=world.rootObject(token,true);
+            if(root && root->id==token.id)++count;
+        }
+        return count;
+    }
+    bool renderMode(U32 mode)const
+    {
+        Object primary;
+        for(const auto& token:selection->selected())
+        {
+            const auto row=selection->node(token);
+            if(row && row->primary){primary=token;break;}
+        }
+        if(!primary)return false;
+        const auto root=world.rootObject(*primary,false);
+        if(!root || !avatar(root))return false;
+        const auto actual=FSAvatarRenderPersistence::instance().getAvatarRenderSettings(root->id);
+        switch(mode)
+        {
+            case 0:return actual==LLVOAvatar::AV_RENDER_NORMALLY;
+            case 1:return actual==LLVOAvatar::AV_DO_NOT_RENDER;
+            case 2:return actual==LLVOAvatar::AV_ALWAYS_RENDER;
+            case 4:return actual!=LLVOAvatar::AV_RENDER_NORMALLY;
+            default:return false;
+        }
+    }
+    void feedback(const LLPickInfo&)const{if(current())onFeedback();}
+    void baseMouseDown(S32 x,S32 y,MASK mask)const{tool.LLTool::handleRightMouseDown(x,y,mask);}
+};
+}
+
+#endif
 bool LLToolPie::handleRightClickPick()
 {
-    S32 x = mPick.mMousePt.mX;
-    S32 y = mPick.mMousePt.mY;
-    MASK mask = mPick.mKeyMask;
-
-    if (mPick.mPickType != LLPickInfo::PICK_LAND)
+    #if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
     {
-        LLViewerParcelMgr::getInstance()->deselectLand();
+        const auto session=VSNativeSession::active();
+        if(!session || !gViewerWindow->nativeContext())return false;
+        auto* selected=session->objectSelection();
+        const auto lifetime=session->retainObjectSelection();
+        if(!selected || !lifetime)return false;
+        NativeContextSelectionPeer peer{session,lifetime,session->accountGuard(),[this]{showVisualContextMenuEffect();},
+            *this,gViewerWindow->nativeContext()->world()};
+        return vs_show_object_context_menu(peer,mPick);
     }
-
-    // didn't click in any UI object, so must have clicked in the world
-    LLViewerObject *object = mPick.getObject();
-
-    // Can't ignore children here.
-    LLToolSelect::handleObjectSelection(mPick, false, true);
-
-    // Spawn pie menu
-    if (mPick.mPickType == LLPickInfo::PICK_LAND)
-    {
-        LLParcelSelectionHandle selection = LLViewerParcelMgr::getInstance()->selectParcelAt( mPick.mPosGlobal );
-        gMenuHolder->setParcelSelection(selection);
-        // <FS:Zi> Pie menu
-        if (gSavedSettings.getBOOL("UsePieMenu"))
-        {
-            gPieMenuLand->show(x, y);
-        }
-        // </FS:Zi> Pie menu
-        else
-        gMenuLand->show(x, y);
-
-        showVisualContextMenuEffect();
-
-    }
-    else if (mPick.mObjectID == gAgent.getID() )
-    {
-        // <FS:Zi> Pie menu
-        if (gSavedSettings.getBOOL("UsePieMenu"))
-        {
-            if (!gPieMenuAvatarSelf)
-            {
-                //either at very early startup stage or at late quitting stage,
-                //this event is ignored.
-                return true;
-            }
-
-            gPieMenuAvatarSelf->show(x, y);
-        }
-        // </FS:Zi> Pie menu
-        else
-        {
-            if(!gMenuAvatarSelf)
-            {
-                //either at very early startup stage or at late quitting stage,
-                //this event is ignored.
-                return true ;
-            }
-
-            gMenuAvatarSelf->show(x, y);
-        }
-    }
-    else if (object)
-    {
-        gMenuHolder->setObjectSelection(LLSelectMgr::getInstance()->getSelection());
-
-        bool is_other_attachment = (object->isAttachment() && !object->isHUDAttachment() && !object->permYouOwner());
-        if (object->isAvatar() || is_other_attachment)
-        {
-            // Find the attachment's avatar
-            while( object && object->isAttachment())
-            {
-                object = (LLViewerObject*)object->getParent();
-                llassert(object);
-            }
-
-            if (!object)
-            {
-                return true; // unexpected, but escape
-            }
-
-            // Object is an avatar, so check for mute by id.
-            LLVOAvatar* avatar = (LLVOAvatar*)object;
-            std::string name = avatar->getFullname();
-            std::string mute_msg;
-            if (LLMuteList::getInstance()->isMuted(avatar->getID(), avatar->getFullname()))
-            {
-                mute_msg = LLTrans::getString("UnmuteAvatar");
-            }
-            else
-            {
-                mute_msg = LLTrans::getString("MuteAvatar");
-            }
-
-// [RLVa:KB] - Checked: 2010-04-11 (RLVa-1.2.0e) | Modified: RLVa-1.1.0l
-            // Don't show the context menu on empty selection when fartouch restricted [see LLToolSelect::handleObjectSelection()]
-            if ( (!rlv_handler_t::isEnabled()) || (!LLSelectMgr::getInstance()->getSelection()->isEmpty()) ||
-                 (!gRlvHandler.hasBehaviour(RLV_BHVR_FARTOUCH)) )
-            {
-// [/RLVa:KB]
-                if (is_other_attachment)
-                {
-                    // <FS:Zi> Pie menu
-                    // gMenuAttachmentOther->getChild<LLUICtrl>("Avatar Mute")->setValue(mute_msg);
-                    // gMenuAttachmentOther->show(x, y);
-                    if(gSavedSettings.getBOOL("UsePieMenu"))
-                    {
-                        gPieMenuAttachmentOther->getChild<LLUICtrl>("Avatar Mute")->setValue(mute_msg);
-
-                        static std::string checkmark("\xE2\x9C\x94");
-                        gPieMenuAttachmentOther->getChild<LLUICtrl>("RenderNormally")->setValue((check_avatar_render_mode(0) ? (checkmark + " ") : "") + LLTrans::getString("Pie_av_render_normally"));
-                        gPieMenuAttachmentOther->getChild<LLUICtrl>("DoNotRender")->setValue((check_avatar_render_mode(1) ? (checkmark + " ") : "") + LLTrans::getString("Pie_av_render_never"));
-                        gPieMenuAttachmentOther->getChild<LLUICtrl>("AlwaysRenderFully")->setValue((check_avatar_render_mode(2) ? (checkmark + " ") : "") + LLTrans::getString("Pie_av_render_fully"));
-
-                        gPieMenuAttachmentOther->show(x, y);
-                    }
-                    else
-                    {
-                        // getChild() seems to fail for LLMenuItemCallGL items, so we changed the XML instead
-                        // gMenuAttachmentOther->getChild<LLUICtrl>("Avatar Mute")->setValue(mute_msg);
-                        gMenuAttachmentOther->show(x, y);
-                    }
-                    // </FS:Zi>
-                }
-                else
-                {
-                    // <FS:Zi> Pie menu
-                    // gMenuAvatarOther->getChild<LLUICtrl>("Avatar Mute")->setValue(mute_msg);
-                    // gMenuAvatarOther->show(x, y);
-                    if(gSavedSettings.getBOOL("UsePieMenu"))
-                    {
-                        gPieMenuAvatarOther->getChild<LLUICtrl>("Avatar Mute")->setValue(mute_msg);
-
-                        static std::string checkmark("\xE2\x9C\x94");
-                        gPieMenuAvatarOther->getChild<LLUICtrl>("RenderNormally")->setValue((check_avatar_render_mode(0) ? (checkmark + " ") : "") + LLTrans::getString("Pie_av_render_normally"));
-                        gPieMenuAvatarOther->getChild<LLUICtrl>("DoNotRender")->setValue((check_avatar_render_mode(1) ? (checkmark + " ") : "") + LLTrans::getString("Pie_av_render_never"));
-                        gPieMenuAvatarOther->getChild<LLUICtrl>("AlwaysRenderFully")->setValue((check_avatar_render_mode(2) ? (checkmark + " ") : "") + LLTrans::getString("Pie_av_render_fully"));
-
-                        gPieMenuAvatarOther->show(x, y);
-                    }
-                    else
-                    {
-                        // getChild() seems to fail for LLMenuItemCallGL items, so we changed the XML instead
-                        // gMenuAvatarOther->getChild<LLUICtrl>("Avatar Mute")->setValue(mute_msg);
-                        gMenuAvatarOther->show(x, y);
-                    }
-                    // </FS:Zi>
-                }
-// [RLVa:KB] - Checked: 2010-04-11 (RLVa-1.2.0e) | Modified: RLVa-1.1.0l
-            }
-            else
-            {
-                make_ui_sound("UISndInvalidOp");
-            }
-// [/RLVa:KB]
-        }
-        else if (object->isAttachment())
-        {
-            // <FS:Zi> Pie menu
-            if (gSavedSettings.getBOOL("UsePieMenu"))
-            {
-                gPieMenuAttachmentSelf->show(x, y);
-            }
-            // </FS:Zi> Pie menu
-            else
-            gMenuAttachmentSelf->show(x, y);
-        }
-        else
-        {
-            // BUG: What about chatting child objects?
-            std::string name;
-            LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->getFirstRootNode();
-            if (node)
-            {
-                name = node->mName;
-            }
-
-// [RLVa:KB] - Checked: 2010-04-11 (RLVa-1.2.el) | Modified: RLVa-1.1.0l
-            // Don't show the pie menu on empty selection when fartouch/interaction restricted
-            // (not entirely accurate in case of Tools / Select Only XXX [see LLToolSelect::handleObjectSelection()]
-            if ( (!rlv_handler_t::isEnabled()) || (!LLSelectMgr::getInstance()->getSelection()->isEmpty()) ||
-                 (!gRlvHandler.hasBehaviour(RLV_BHVR_FARTOUCH)) )
-            {
-// [/RLVa:KB]
-                // <FS:Zi> Pie menu
-                // gMenuHolder->getChild<LLUICtrl>("Object Mute")->setValue(mute_msg);
-                // gMenuObject->show(x, y);
-                if (gSavedSettings.getBOOL("UsePieMenu"))
-                {
-                    std::string mute_msg;
-                    if (LLMuteList::getInstance()->isMuted(object->getID(), name))
-                    {
-                        mute_msg = LLTrans::getString("UnmuteObject");
-                    }
-                    else
-                    {
-                        mute_msg = LLTrans::getString("MuteObject2");
-                    }
-                    gPieMenuObject->getChild<LLUICtrl>("Object Mute")->setValue(mute_msg);
-                    gPieMenuObject->show(x, y);
-                }
-                else
-                {
-                    gMenuObject->setItemVisible("Take Multiple", (LLSelectMgr::getInstance()->getSelection()->getRootObjectCount() > 1));
-                    gMenuObject->show(x, y);
-                }
-                // </FS:Zi>
-
-                showVisualContextMenuEffect();
-// [RLVa:KB] - Checked: 2010-04-11 (RLVa-1.2.el) | Modified: RLVa-1.1.0l
-            }
-            else
-            {
-                make_ui_sound("UISndInvalidOp");
-            }
-// [/RLVa:KB]
-        }
-    }
-    else if (mPick.mParticleOwnerID.notNull())
-    {
-        // <FS:Ansariel> FIRE-12355: Pie menu for mute particle menu
-        if (gSavedSettings.getBOOL("UsePieMenu"))
-        {
-            if (gPieMenuMuteParticle && mPick.mParticleOwnerID != gAgent.getID())
-            {
-                gPieMenuMuteParticle->show(x, y);
-            }
-        }
-        else
-        // </FS:Ansariel>
-        if (gMenuMuteParticle && mPick.mParticleOwnerID != gAgent.getID())
-        {
-            gMenuMuteParticle->show(x,y);
-        }
-    }
-
-    // non UI object - put focus back "in world"
-    if (gFocusMgr.getKeyboardFocus())
-    {
-        gFocusMgr.setKeyboardFocus(NULL);
-    }
-
-    LLTool::handleRightMouseDown(x, y, mask);
-    // We handled the event.
-    return true;
+    #endif
+    ReferenceContextSelectionPeer peer{[this]{showVisualContextMenuEffect();},*this};
+    return vs_show_object_context_menu(peer,mPick);
 }
 
 void LLToolPie::showVisualContextMenuEffect()

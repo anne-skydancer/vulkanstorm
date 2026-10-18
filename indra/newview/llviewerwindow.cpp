@@ -2684,6 +2684,8 @@ void LLViewerWindow::shutdownViews()
         gLoginMenuBarView = nullptr;
         gEditMenu = nullptr;
         gPopupMenuView = nullptr;
+        if(LLToolTipMgr::instanceExists())LLToolTipMgr::instance().resetToolTips();
+        gToolTipView=nullptr; // Root-owned, retired before its children and callback targets.
         mNativeChat = nullptr;
         gConsole = nullptr; // The native root owns it; retire async observers before deletion.
         mNativeUI.reset();
@@ -4133,6 +4135,110 @@ void LLViewerWindow::updateMouseHoverViews(S32 x, S32 y, MASK mask, bool enabled
 
 // Update UI based on stored mouse position from mouse-move
 // event processing.
+void LLViewerWindow::updateToolTip(bool handled, LLUICtrl* top_ctrl, LLMouseHandler* mouse_captor, MASK mask)
+{
+    const S32 x=mCurrentMousePoint.mX, y=mCurrentMousePoint.mY;
+        // Show a new tool tip (or update one that is already shown)
+        bool tool_tip_handled = false;
+        std::string tool_tip_msg;
+        if( handled
+            && !mWindow->isCursorHidden())
+        {
+            LLRect screen_sticky_rect = mRootView->getLocalRect();
+            S32 local_x, local_y;
+
+            static LLCachedControl<bool> debug_show_xui_names(gSavedSettings, "DebugShowXUINames", 0);
+            if (debug_show_xui_names)
+            {
+                LLToolTip::Params params;
+
+                LLView* tooltip_view = mRootView;
+                LLView::tree_iterator_t end_it = mRootView->endTreeDFS();
+                for (LLView::tree_iterator_t it = mRootView->beginTreeDFS(); it != end_it; ++it)
+                {
+                    LLView* viewp = *it;
+                    LLRect screen_rect;
+                    viewp->localRectToScreen(viewp->getLocalRect(), &screen_rect);
+                    if (!(viewp->getVisible()
+                         && screen_rect.pointInRect(x, y)))
+                    {
+                        it.skipDescendants();
+                    }
+                    // only report xui names for LLUICtrls,
+                    // and blacklist the various containers we don't care about
+                    else if (dynamic_cast<LLUICtrl*>(viewp)
+                            && viewp != gMenuHolder
+                            && viewp != gFloaterView
+                            && viewp != gConsole)
+                    {
+                        if (dynamic_cast<LLFloater*>(viewp))
+                        {
+                            // constrain search to descendants of this (frontmost) floater
+                            // by resetting iterator
+                            it = viewp->beginTreeDFS();
+                        }
+
+                        // if we are in a new part of the tree (not a descendent of current tooltip_view)
+                        // then push the results for tooltip_view and start with a new potential view
+                        // NOTE: this emulates visiting only the leaf nodes that meet our criteria
+                        if (!viewp->hasAncestor(tooltip_view))
+                        {
+                            append_xui_tooltip(tooltip_view, params);
+                            screen_sticky_rect.intersectWith(tooltip_view->calcScreenRect());
+                        }
+                        tooltip_view = viewp;
+                    }
+                }
+
+                append_xui_tooltip(tooltip_view, params);
+                params.styled_message.add().text("\n");
+
+                screen_sticky_rect.intersectWith(tooltip_view->calcScreenRect());
+
+                params.sticky_rect = screen_sticky_rect;
+                params.max_width = 400;
+
+                LLToolTipMgr::instance().show(params);
+            }
+            // if there is a mouse captor, nothing else gets a tooltip
+            else if (mouse_captor)
+            {
+                mouse_captor->screenPointToLocal(x, y, &local_x, &local_y);
+                tool_tip_handled = mouse_captor->handleToolTip(local_x, local_y, mask);
+            }
+            else
+            {
+                // next is top_ctrl
+                if (!tool_tip_handled && top_ctrl)
+                {
+                    top_ctrl->screenPointToLocal(x, y, &local_x, &local_y);
+                    tool_tip_handled = top_ctrl->handleToolTip(local_x, local_y, mask );
+                }
+
+                if (!tool_tip_handled)
+                {
+                    local_x = x; local_y = y;
+                    tool_tip_handled = mRootView->handleToolTip(local_x, local_y, mask );
+                }
+
+                LLTool* current_tool = nullptr;
+#if VS_NATIVE_VULKAN
+                if(mNativeVulkan)
+                {
+                    if(LLToolMgr::instanceExists())current_tool=LLToolMgr::instance().nativeCurrentTool();
+                }
+                else
+#endif
+                    current_tool=LLToolMgr::getInstance()->getCurrentTool();
+                if (!tool_tip_handled && current_tool)
+                {
+                    current_tool->screenPointToLocal(x, y, &local_x, &local_y);
+                    tool_tip_handled = current_tool->handleToolTip(local_x, local_y, mask );
+                }
+            }
+        }
+}
+
 void LLViewerWindow::updateUI()
 {
     if (mNativeVulkan)
@@ -4329,97 +4435,7 @@ void LLViewerWindow::updateUI()
             }
         }
 
-        // Show a new tool tip (or update one that is already shown)
-        bool tool_tip_handled = false;
-        std::string tool_tip_msg;
-        if( handled
-            && !mWindow->isCursorHidden())
-        {
-            LLRect screen_sticky_rect = mRootView->getLocalRect();
-            S32 local_x, local_y;
-
-            static LLCachedControl<bool> debug_show_xui_names(gSavedSettings, "DebugShowXUINames", 0);
-            if (debug_show_xui_names)
-            {
-                LLToolTip::Params params;
-
-                LLView* tooltip_view = mRootView;
-                LLView::tree_iterator_t end_it = mRootView->endTreeDFS();
-                for (LLView::tree_iterator_t it = mRootView->beginTreeDFS(); it != end_it; ++it)
-                {
-                    LLView* viewp = *it;
-                    LLRect screen_rect;
-                    viewp->localRectToScreen(viewp->getLocalRect(), &screen_rect);
-                    if (!(viewp->getVisible()
-                         && screen_rect.pointInRect(x, y)))
-                    {
-                        it.skipDescendants();
-                    }
-                    // only report xui names for LLUICtrls,
-                    // and blacklist the various containers we don't care about
-                    else if (dynamic_cast<LLUICtrl*>(viewp)
-                            && viewp != gMenuHolder
-                            && viewp != gFloaterView
-                            && viewp != gConsole)
-                    {
-                        if (dynamic_cast<LLFloater*>(viewp))
-                        {
-                            // constrain search to descendants of this (frontmost) floater
-                            // by resetting iterator
-                            it = viewp->beginTreeDFS();
-                        }
-
-                        // if we are in a new part of the tree (not a descendent of current tooltip_view)
-                        // then push the results for tooltip_view and start with a new potential view
-                        // NOTE: this emulates visiting only the leaf nodes that meet our criteria
-                        if (!viewp->hasAncestor(tooltip_view))
-                        {
-                            append_xui_tooltip(tooltip_view, params);
-                            screen_sticky_rect.intersectWith(tooltip_view->calcScreenRect());
-                        }
-                        tooltip_view = viewp;
-                    }
-                }
-
-                append_xui_tooltip(tooltip_view, params);
-                params.styled_message.add().text("\n");
-
-                screen_sticky_rect.intersectWith(tooltip_view->calcScreenRect());
-
-                params.sticky_rect = screen_sticky_rect;
-                params.max_width = 400;
-
-                LLToolTipMgr::instance().show(params);
-            }
-            // if there is a mouse captor, nothing else gets a tooltip
-            else if (mouse_captor)
-            {
-                mouse_captor->screenPointToLocal(x, y, &local_x, &local_y);
-                tool_tip_handled = mouse_captor->handleToolTip(local_x, local_y, mask);
-            }
-            else
-            {
-                // next is top_ctrl
-                if (!tool_tip_handled && top_ctrl)
-                {
-                    top_ctrl->screenPointToLocal(x, y, &local_x, &local_y);
-                    tool_tip_handled = top_ctrl->handleToolTip(local_x, local_y, mask );
-                }
-
-                if (!tool_tip_handled)
-                {
-                    local_x = x; local_y = y;
-                    tool_tip_handled = mRootView->handleToolTip(local_x, local_y, mask );
-                }
-
-                LLTool* current_tool = LLToolMgr::getInstance()->getCurrentTool();
-                if (!tool_tip_handled && current_tool)
-                {
-                    current_tool->screenPointToLocal(x, y, &local_x, &local_y);
-                    tool_tip_handled = current_tool->handleToolTip(local_x, local_y, mask );
-                }
-            }
-        }
+        updateToolTip(handled,top_ctrl,mouse_captor,mask);
     }
     else
     {   // just have tools handle hover when UI is turned off

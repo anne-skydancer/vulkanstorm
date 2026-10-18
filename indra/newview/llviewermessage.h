@@ -40,6 +40,8 @@
 #include <boost/signals2.hpp>
 
 #include <functional>
+#include <optional>
+#include <string>
 
 #include "llinventorymodel.h" // <FS:Ansariel> For LLOpenAgentOffer
 #include "llinventoryobserver.h" // <FS:Ansariel> For LLOpenAgentOffer
@@ -47,6 +49,15 @@
 //
 // Forward declarations
 //
+class LLChat;
+struct VSReceivedChatContext
+{
+    struct Source { bool attachment = false, owned = false; };
+    std::function<Source()> source;
+    std::function<std::optional<std::string>()> location;
+};
+// Original RLVa receive/name/location policy, before translation or delivery.
+bool vs_filter_received_chat(LLChat&, std::string&, const LLUUID& owner, const VSReceivedChatContext&);
 class LLColor4;
 class LLInventoryObject;
 class LLInventoryItem;

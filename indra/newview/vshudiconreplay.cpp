@@ -3,6 +3,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "vshudiconreplay.h"
 #include "vsnativesession.h"
+#include "vsplainchat.h"
 #include "vsvulkancontext.h"
 #include "vsworldscene.h"
 #include "vsworldrenderer.h"
@@ -147,11 +148,13 @@ bool vs_hud_icon_replay_tick(VSNativeSession& session,LLSD& report)
         const auto point=state->icon->nativePickPoint();requireIcon(bool(point),"Published icon lost current pick geometry");LLCoordGL screen;requireIcon(LLViewerCamera::getInstance()->projectPosAgentToScreen(*point,screen,false),"Actual icon cannot project into viewer");LLPickInfo pick(screen,MASK_NONE,true,true,false,false,true,true,nullptr);requireIcon(gViewerWindow->nativePick(pick)&&pick.mPickType==LLPickInfo::PICK_ICON&&pick.mHUDIcon==state->icon.get(),"Actual icon pick did not select its submitted shared owner");
         requireIcon(pick.mHUDIcon->getSourceID()==sourceID,"Icon pick lost source controller identity");auto* host=LLFloaterReg::findInstance("script_debug");requireIcon(host!=nullptr,"Script debug host vanished before icon click");host->closeFloater();
         auto* nearby=FSFloaterNearbyChat::findInstance();const bool nearbyVisible=nearby&&nearby->getVisible();if(nearby)nearby->setVisible(false);
+        auto* plain=gViewerWindow->nativeChat();const bool plainVisible=plain&&plain->getVisible();if(plain)plain->setVisible(false);
         requireIcon(!gFocusMgr.getMouseCapture(),"Actual icon click is blocked by an unfinished input capture");
         LLCoordGL physical;LLUI::getInstance()->screenPointToGL(screen.mX,screen.mY,&physical.mX,&physical.mY);
         requireIcon(gViewerWindow->handleMouseDown(gViewerWindow->getWindow(),physical,MASK_NONE),"Native world icon rejected real mouse down");
         requireIcon(gViewerWindow->handleMouseUp(gViewerWindow->getWindow(),physical,MASK_NONE),"Native world icon rejected real mouse up");
         requireIcon(host->isInVisibleChain()&&LLFloaterReg::findInstance("script_debug_output",sourceID)->isInVisibleChain(),"Icon selected source did not open actual script debug editor through window input");
+        if(plain)plain->setVisible(plainVisible);
         if(nearby)nearby->setVisible(nearbyVisible);report["connected_script_icon_pick"]=true;
         LLMessageSystem* msg=gMessageSystem;msg->newMessage("KillObject");msg->nextBlock("ObjectData");msg->addU32("ID",localID);msg->sendReliable(session.host());state->step=4;return false;}
     if(world.object(sourceID))return false;requireIcon(state->icon->getSourceID().isNull()&&!state->icon->nativePickPoint(),"Retired simulator object retained clickable icon source");
