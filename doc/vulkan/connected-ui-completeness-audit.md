@@ -262,3 +262,15 @@ corners normally. Separate received-coverage queries still report missing data.
 Tests compare the original interpolator and enforce account/revision retirement.
 These fixes require another actual staged replay; full UI and keyboard parity,
 all skins and cross-platform qualification remain open.
+
+
+The `c14d356c6c` build/stage succeeded; `.tmp/uk21` passed the repaired parcel
+model publication and reached actual GPU feedback. Its old center-pixel oracle
+failed. Independent software-only OpenGL bitmap rendering of the original
+`renderRect` calls showed that its reversed southwest strip pair yields one or
+three layers at the center, not the assumed two. Production strip geometry is
+preserved. The revised oracle checks three fixed pixels against independently
+projected original geometry, including vertical orientation, and retains the
+same one-unit tolerance. Failure readbacks are saved before assertions. The
+source regression also checks native ordered vertices for varied corner heights;
+these checks do not replace the pending actual Vulkan readback rerun.
