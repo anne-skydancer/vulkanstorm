@@ -37,6 +37,11 @@
 #include "llenvironment.h"
 #include "llviewercontrol.h"
 #include "pipeline.h"
+#include "vsnativeim.h"
+#include "rlvhandler.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 //=========================================================================
 namespace
@@ -81,7 +86,13 @@ LLFloaterEnvironmentAdjust::LLFloaterEnvironmentAdjust(const LLSD &key):
 {}
 
 LLFloaterEnvironmentAdjust::~LLFloaterEnvironmentAdjust()
-{}
+{
+    if (mBeaconsSaved) LLEnvironment::instance().revertBeaconsState();
+}
+bool LLFloaterEnvironmentAdjust::canEditEnvironment() const
+{
+    return !mEditingNative || (mAccountCurrent() && !gRlvHandler.hasBehaviour(RLV_BHVR_SETENV));
+}
 
 //-------------------------------------------------------------------------
 bool LLFloaterEnvironmentAdjust::postBuild()
@@ -127,16 +138,31 @@ bool LLFloaterEnvironmentAdjust::postBuild()
 
 void LLFloaterEnvironmentAdjust::onOpen(const LLSD& key)
 {
-    if (!mLiveSky)
+#if VS_NATIVE_VULKAN
+    mEditingNative = static_cast<bool>(VSNativeSession::active());
+#endif
+    mAccountCurrent = vs_native_im_guard();
+    if (!canEditEnvironment()) { closeFloater(); return; }
+    if (mEditingNative)
+    {
+        const auto handle = getHandle();
+        mRlvConnection = gRlvHandler.setBehaviourCallback([handle](ERlvBehaviour behavior, ERlvParamType)
+        {
+            if (behavior != RLV_BHVR_SETENV) return;
+            if (auto* self = dynamic_cast<LLFloaterEnvironmentAdjust*>(handle.get())) self->refresh();
+        });
+    }
+    if (!mBeaconsSaved)
     {
         LLEnvironment::instance().saveBeaconsState();
+        mBeaconsSaved = true;
     }
     captureCurrentEnvironment();
 
     mEventConnection = LLEnvironment::instance().setEnvironmentChanged([this](LLEnvironment::EnvSelection_t env, S32 version){ onEnvironmentUpdated(env, version); });
 
     // HACK -- resume reflection map manager because "setEnvironmentChanged" may pause it (SL-20456)
-    gPipeline.mReflectionMapManager.resume();
+    if (!mEditingNative) gPipeline.mReflectionMapManager.resume();
 
     LLFloater::onOpen(key);
     refresh();
@@ -144,8 +170,10 @@ void LLFloaterEnvironmentAdjust::onOpen(const LLSD& key)
 
 void LLFloaterEnvironmentAdjust::onClose(bool app_quitting)
 {
-    LLEnvironment::instance().revertBeaconsState();
+    if (mBeaconsSaved) LLEnvironment::instance().revertBeaconsState();
+    mBeaconsSaved = false;
     mEventConnection.disconnect();
+    mRlvConnection.disconnect();
     mLiveSky.reset();
     mLiveWater.reset();
     LLFloater::onClose(app_quitting);
@@ -162,7 +190,7 @@ void LLFloaterEnvironmentAdjust::refresh()
     }
 
     setEnabled(true);
-    setAllChildrenEnabled(true);
+    setAllChildrenEnabled(canEditEnvironment());
 
     getChild<LLColorSwatchCtrl>(FIELD_SKY_AMBIENT_LIGHT)->set(mLiveSky->getAmbientColor() / SLIDER_SCALE_SUN_AMBIENT);
     getChild<LLColorSwatchCtrl>(FIELD_SKY_BLUE_HORIZON)->set(mLiveSky->getBlueHorizon() / SLIDER_SCALE_BLUE_HORIZON_DENSITY);
@@ -247,9 +275,11 @@ void LLFloaterEnvironmentAdjust::captureCurrentEnvironment()
 
 void LLFloaterEnvironmentAdjust::onButtonReset()
 {
+    if (!canEditEnvironment()) return;
     LLNotificationsUtil::add("PersonalSettingsConfirmReset", LLSD(), LLSD(),
-        [this](const LLSD&notif, const LLSD&resp)
+        vs_native_im_ui_callback(this, [this](const LLSD&notif, const LLSD&resp)
     {
+        if (!canEditEnvironment()) return;
         S32 opt = LLNotificationsUtil::getSelectedOption(notif, resp);
         if (opt == 0)
         {
@@ -257,12 +287,13 @@ void LLFloaterEnvironmentAdjust::onButtonReset()
             LLEnvironment::instance().clearEnvironment(LLEnvironment::ENV_LOCAL);
             LLEnvironment::instance().setSelectedEnvironment(LLEnvironment::ENV_LOCAL);
         }
-    });
+    }));
 
 }
 //-------------------------------------------------------------------------
 void LLFloaterEnvironmentAdjust::onAmbientLightChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     mLiveSky->setAmbientColor(LLColor3(getChild<LLColorSwatchCtrl>(FIELD_SKY_AMBIENT_LIGHT)->get() * SLIDER_SCALE_SUN_AMBIENT));
@@ -271,6 +302,7 @@ void LLFloaterEnvironmentAdjust::onAmbientLightChanged()
 
 void LLFloaterEnvironmentAdjust::onBlueHorizonChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     mLiveSky->setBlueHorizon(LLColor3(getChild<LLColorSwatchCtrl>(FIELD_SKY_BLUE_HORIZON)->get() * SLIDER_SCALE_BLUE_HORIZON_DENSITY));
@@ -279,6 +311,7 @@ void LLFloaterEnvironmentAdjust::onBlueHorizonChanged()
 
 void LLFloaterEnvironmentAdjust::onBlueDensityChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     mLiveSky->setBlueDensity(LLColor3(getChild<LLColorSwatchCtrl>(FIELD_SKY_BLUE_DENSITY)->get() * SLIDER_SCALE_BLUE_HORIZON_DENSITY));
@@ -287,6 +320,7 @@ void LLFloaterEnvironmentAdjust::onBlueDensityChanged()
 
 void LLFloaterEnvironmentAdjust::onHazeHorizonChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     mLiveSky->setHazeHorizon((F32)getChild<LLUICtrl>(FIELD_SKY_HAZE_HORIZON)->getValue().asReal());
@@ -295,6 +329,7 @@ void LLFloaterEnvironmentAdjust::onHazeHorizonChanged()
 
 void LLFloaterEnvironmentAdjust::onHazeDensityChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     mLiveSky->setHazeDensity((F32)getChild<LLUICtrl>(FIELD_SKY_HAZE_DENSITY)->getValue().asReal());
@@ -303,6 +338,7 @@ void LLFloaterEnvironmentAdjust::onHazeDensityChanged()
 
 void LLFloaterEnvironmentAdjust::onSceneGammaChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     mLiveSky->setGamma((F32)getChild<LLUICtrl>(FIELD_SKY_SCENE_GAMMA)->getValue().asReal());
@@ -311,6 +347,7 @@ void LLFloaterEnvironmentAdjust::onSceneGammaChanged()
 
 void LLFloaterEnvironmentAdjust::onCloudColorChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     mLiveSky->setCloudColor(LLColor3(getChild<LLColorSwatchCtrl>(FIELD_SKY_CLOUD_COLOR)->get()));
@@ -319,6 +356,7 @@ void LLFloaterEnvironmentAdjust::onCloudColorChanged()
 
 void LLFloaterEnvironmentAdjust::onCloudCoverageChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     mLiveSky->setCloudShadow((F32)getChild<LLUICtrl>(FIELD_SKY_CLOUD_COVERAGE)->getValue().asReal());
@@ -327,6 +365,7 @@ void LLFloaterEnvironmentAdjust::onCloudCoverageChanged()
 
 void LLFloaterEnvironmentAdjust::onCloudScaleChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     mLiveSky->setCloudScale((F32)getChild<LLUICtrl>(FIELD_SKY_CLOUD_SCALE)->getValue().asReal());
@@ -335,6 +374,7 @@ void LLFloaterEnvironmentAdjust::onCloudScaleChanged()
 
 void LLFloaterEnvironmentAdjust::onGlowChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     LLColor3 glow((F32)getChild<LLUICtrl>(FIELD_SKY_GLOW_SIZE)->getValue().asReal(), 0.0f, (F32)getChild<LLUICtrl>(FIELD_SKY_GLOW_FOCUS)->getValue().asReal());
@@ -349,6 +389,7 @@ void LLFloaterEnvironmentAdjust::onGlowChanged()
 
 void LLFloaterEnvironmentAdjust::onStarBrightnessChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     mLiveSky->setStarBrightness((F32)getChild<LLUICtrl>(FIELD_SKY_STAR_BRIGHTNESS)->getValue().asReal());
@@ -357,6 +398,7 @@ void LLFloaterEnvironmentAdjust::onStarBrightnessChanged()
 
 void LLFloaterEnvironmentAdjust::onSunRotationChanged()
 {
+    if (!canEditEnvironment()) return;
     LLQuaternion quat = getChild<LLVirtualTrackball>(FIELD_SKY_SUN_ROTATION)->getRotation();
     F32 azimuth;
     F32 elevation;
@@ -372,6 +414,7 @@ void LLFloaterEnvironmentAdjust::onSunRotationChanged()
 
 void LLFloaterEnvironmentAdjust::onSunAzimElevChanged()
 {
+    if (!canEditEnvironment()) return;
     F32 azimuth = (F32)getChild<LLUICtrl>(FIELD_SKY_SUN_AZIMUTH)->getValue().asReal();
     F32 elevation = (F32)getChild<LLUICtrl>(FIELD_SKY_SUN_ELEVATION)->getValue().asReal();
     LLQuaternion quat;
@@ -400,6 +443,7 @@ void LLFloaterEnvironmentAdjust::onSunAzimElevChanged()
 
 void LLFloaterEnvironmentAdjust::onSunScaleChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     mLiveSky->setSunScale((F32)(getChild<LLUICtrl>(FIELD_SKY_SUN_SCALE)->getValue().asReal()));
@@ -408,6 +452,7 @@ void LLFloaterEnvironmentAdjust::onSunScaleChanged()
 
 void LLFloaterEnvironmentAdjust::onMoonRotationChanged()
 {
+    if (!canEditEnvironment()) return;
     LLQuaternion quat = getChild<LLVirtualTrackball>(FIELD_SKY_MOON_ROTATION)->getRotation();
     F32 azimuth;
     F32 elevation;
@@ -423,6 +468,7 @@ void LLFloaterEnvironmentAdjust::onMoonRotationChanged()
 
 void LLFloaterEnvironmentAdjust::onMoonAzimElevChanged()
 {
+    if (!canEditEnvironment()) return;
     F32 azimuth = (F32)getChild<LLUICtrl>(FIELD_SKY_MOON_AZIMUTH)->getValue().asReal();
     F32 elevation = (F32)getChild<LLUICtrl>(FIELD_SKY_MOON_ELEVATION)->getValue().asReal();
     LLQuaternion quat;
@@ -451,6 +497,7 @@ void LLFloaterEnvironmentAdjust::onMoonAzimElevChanged()
 
 void LLFloaterEnvironmentAdjust::onCloudMapChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
     {
         return;
@@ -479,6 +526,7 @@ void LLFloaterEnvironmentAdjust::onCloudMapChanged()
 
 void LLFloaterEnvironmentAdjust::onWaterMapChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveWater)
         return;
     mLiveWater->setNormalMapID(getChild<LLTextureCtrl>(FIELD_WATER_NORMAL_MAP)->getValue().asUUID());
@@ -487,6 +535,7 @@ void LLFloaterEnvironmentAdjust::onWaterMapChanged()
 
 void LLFloaterEnvironmentAdjust::onSunColorChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky)
         return;
     LLColor3 color(getChild<LLColorSwatchCtrl>(FIELD_SKY_SUN_COLOR)->get());
@@ -499,6 +548,7 @@ void LLFloaterEnvironmentAdjust::onSunColorChanged()
 
 void LLFloaterEnvironmentAdjust::onReflectionProbeAmbianceChanged()
 {
+    if (!canEditEnvironment()) return;
     if (!mLiveSky) return;
     F32 ambiance = (F32)getChild<LLUICtrl>(FIELD_REFLECTION_PROBE_AMBIANCE)->getValue().asReal();
     mLiveSky->setReflectionProbeAmbiance(ambiance);
@@ -527,6 +577,7 @@ void LLFloaterEnvironmentAdjust::updateGammaLabel()
 
 void LLFloaterEnvironmentAdjust::onEnvironmentUpdated(LLEnvironment::EnvSelection_t env, S32 version)
 {
+    if (!canEditEnvironment()) return;
     if (env == LLEnvironment::ENV_LOCAL)
     {   // a new local environment has been applied
         if (version != FLOATER_ENVIRONMENT_UPDATE)
