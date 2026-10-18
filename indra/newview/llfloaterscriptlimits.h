@@ -35,6 +35,10 @@
 #include "llremoteparcelrequest.h"
 #include "lleventcoro.h"
 #include "llcoros.h"
+#if VS_NATIVE_VULKAN
+#include "llcorehttputil.h"
+#include <functional>
+#endif
 
 class LLPanelScriptLimitsInfo;
 class LLTabContainer;
@@ -108,6 +112,7 @@ public:
     void setRegionSummary(LLSD content);
 
     bool StartRequestChain();
+    void draw() override;
 
     bool getLandScriptResources();
     void clearList();
@@ -122,6 +127,17 @@ private:
     void onNameCache(const LLUUID& id,
                          const std::string& name);
 
+#if VS_NATIVE_VULKAN
+    std::function<bool()> mNativeQueryCurrent;
+    std::vector<LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t> mNativeRequests;
+    U64 mNativeRequestSerial = 0;
+    unsigned mNativePendingStages = 0;
+    bool mNativeRequestFailed = false;
+    void retireNativeRequests();
+    bool requestNativeResources(const std::string&);
+    void requestNativeResourceStage(const std::string&, bool, U64, std::function<bool()>);
+    void finishNativeResourceStage(U64, const std::function<bool()>&, bool);
+#endif
     LLSD mContent;
     LLUUID mParcelId;
     bool mGotParcelMemoryUsed;
