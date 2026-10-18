@@ -97,6 +97,8 @@ jobs:
       - run: python scripts/tests/test_native_region_aurora.py
       - run: python scripts/tests/test_native_region_replay.py
       - run: python scripts/tests/test_native_region_replay_admission.py
+      - run: python scripts/tests/test_native_landstat_http.py
+      - run: python scripts/tests/test_native_global_mouse.py
       - run: python scripts/tests/test_native_topobjects_lifetime.py
       - run: python scripts/tests/test_native_rlv_edit.py
       - run: python scripts/tests/test_native_avatar_context.py

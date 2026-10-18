@@ -1,6 +1,7 @@
 // Native graphics and required startup views in LLViewerWindow. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "llviewerwindow.h"
+#include "llviewerinput.h"
 #include "llwindow.h"
 #include "lldir.h"
 #include "vsuiresources.h"
@@ -401,6 +402,9 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
 }
 bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type, bool down)
 {
+    // Preserve ordinary non-consuming bindings (notably push-to-talk) before
+    // shared controls or an active drag consume the pointer event.
+    gViewerInput.handleGlobalBindsMouse(type, mask, down);
     if (!mRootView)
         return false;
     pos.mX             = ll_round(pos.mX / mDisplayScale.mV[VX]);

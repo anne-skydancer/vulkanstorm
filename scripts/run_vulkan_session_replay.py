@@ -835,6 +835,42 @@ def default_environment_asset_observed(requests, fixture):
         for row in requests)
 
 
+def landstat_event(payload):
+    """Preserve LLSD wire types when the simulator fixture returns its report."""
+    def mapping(element):
+        if element.tag!='map':raise ValueError('Expected LLSD map')
+        children=list(element)
+        if len(children)%2 or any(children[i].tag!='key' for i in range(0,len(children),2)):raise ValueError('Malformed LLSD map')
+        result={children[i].text:children[i+1] for i in range(0,len(children),2)}
+        if len(result)*2!=len(children):raise ValueError('Duplicate LLSD map key')
+        return result
+    def u32(element):
+        if element.tag!='binary':raise ValueError('U32 must retain LLSD binary wire type')
+        data=base64.b64decode(element.text or '',validate=True)
+        if len(data)!=4:raise ValueError('Invalid U32 wire size')
+        return int.from_bytes(data,'big')
+    root=ET.fromstring(payload)
+    if root.tag!='llsd' or len(root)!=1:raise ValueError('Invalid LLSD envelope')
+    envelope=mapping(root[0])
+    if set(envelope)!={'message','body'} or envelope['message'].tag!='string' or envelope['message'].text!='LandStatReply':raise ValueError('Wrong report envelope')
+    body=mapping(envelope['body'])
+    if set(body)!={'RequestData','ReportData'}:raise ValueError('Unexpected report blocks')
+    if any(element.tag!='array' or len(element)!=1 for element in body.values()):raise ValueError('Expected one report row')
+    request=mapping(body['RequestData'][0]);row=mapping(body['ReportData'][0])
+    if set(request)!={'ReportType','RequestFlags','TotalObjectCount'} or [u32(request[key]) for key in ('ReportType','RequestFlags','TotalObjectCount')]!=[0,0x80000000,1]:raise ValueError('Incorrect report request metadata')
+    if set(row)!={'TaskLocalID','TaskID','LocationX','LocationY','LocationZ','Score','TaskName','OwnerName'}:raise ValueError('Incomplete actual report row')
+    if u32(row['TaskLocalID'])!=123 or row['TaskID'].tag!='uuid' or row['TaskID'].text!='50000000-0000-0000-0000-000000000005':raise ValueError('Wrong actual report identity')
+    for key in ('LocationX','LocationY','LocationZ','Score'):
+        if row[key].tag!='real' or not math.isfinite(float(row[key].text or 'nan')):raise ValueError('Invalid actual report coordinate/score')
+    if float(row['Score'].text)!=.25:raise ValueError('Wrong actual report score')
+    for key,value in (('TaskName','Native tracked CPU target'),('OwnerName','CPU Sender')):
+        if row[key].tag!='string' or row[key].text!=value:raise ValueError('Wrong actual report text')
+    # Body bytes retain binary U32 and UUID types. Rebuilding the parsed evidence
+    # dictionary through append_llsd would silently turn U32 binaries into strings.
+    event=ET.Element('map');ET.SubElement(event,'key').text='message';ET.SubElement(event,'string').text='LandStatReply';ET.SubElement(event,'key').text='body';event.append(envelope['body'])
+    return ET.tostring(event,encoding='utf-8')
+
+
 class SimulatorHTTP(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -844,6 +880,8 @@ class SimulatorHTTP(ThreadingHTTPServer):
         self.auth_requests = 0
         self.seed_requests = 0
         self.event_requests = 0
+        self.region_events=[]
+        self.region_event_lock=threading.Lock()
         self.requests = []
         self.profile_updates = {}
         self.upload_requests = {}
@@ -1322,6 +1360,10 @@ class Handler(BaseHTTPRequestHandler):
                         if element.tag=='key' and element.text=='descendents':list(result)[idx+1].text=str(len(children)+len(landmark_items))
                 ET.SubElement(result, 'key').text = 'items'; append_llsd(result, landmark_items)
         elif self.path == '/message':
+            if request.get('message')=='LandStatReply':
+                try:event=landstat_event(payload)
+                except(ValueError,TypeError,KeyError,ET.ParseError):self.send_error(400);return
+                with self.server.region_event_lock:self.server.region_events.append(event)
             root = ET.Element('llsd'); append_llsd(root, {})
         elif self.path in ('/user-info', '/agent-info', '/agent-language'):
             root = ET.Element('llsd'); append_llsd(root, dict(request, success=True))
@@ -1345,6 +1387,10 @@ class Handler(BaseHTTPRequestHandler):
             ET.SubElement(mapping, 'integer').text = str(self.server.event_requests)
             ET.SubElement(mapping, 'key').text = 'events'
             events = ET.SubElement(mapping, 'array')
+            with self.server.region_event_lock:
+                queued=self.server.region_events
+                self.server.region_events=[]
+            for event in queued:events.append(ET.fromstring(event))
             if self.server.event_requests == 1:
                 event = ET.SubElement(events, 'map')
                 ET.SubElement(event, 'key').text = 'message'

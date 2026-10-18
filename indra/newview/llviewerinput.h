@@ -191,6 +191,7 @@ private:
     std::set<KEY>   mKeysSkippedByUI;
     mutable std::map<KEY, LLKeyboardBinding> mNativeHeldBindings;
     mutable std::map<KEY, LLKeyboardBinding> mNativeHeldGlobalBindings;
+    mutable std::map<EMouseClickType, LLMouseBinding> mNativeHeldGlobalMouseBindings;
     mutable LLFocusableElement* mNativeKeyFocus = nullptr;
     bool            mKeyHandledByUI[KEY_COUNT];     // key processed successfully by UI
 
