@@ -1307,16 +1307,9 @@ void LLPanelProfileClassified::sendClickMessage(const std::string& type)
 
 void LLPanelProfileClassified::onMapClick()
 {
-    if (LLRender2D::isNativeUI())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
-
     sendClickMessage("map");
-    if (!LLRender2D::isNativeUI())
-        if (auto* map = LLFloaterWorldMap::getInstance()) map->trackLocation(getPosGlobal());
-    if (!LLRender2D::isNativeUI()) LLFloaterReg::showInstance("world_map", "center");
+    if (auto* map = LLFloaterWorldMap::getInstance()) map->trackLocation(getPosGlobal());
+    LLFloaterReg::showInstance("world_map", "center");
 }
 
 void LLPanelProfileClassified::onTeleportClick()
@@ -1326,7 +1319,6 @@ void LLPanelProfileClassified::onTeleportClick()
     {
         sendClickMessage("teleport");
         gAgent.teleportViaLocation(getPosGlobal());
-        if (!LLRender2D::isNativeUI())
         if (auto* map = LLFloaterWorldMap::getInstance()) map->trackLocation(getPosGlobal());
     }
 }

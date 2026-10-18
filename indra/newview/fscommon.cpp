@@ -29,6 +29,7 @@
 #include "llviewerwindow.h"
 
 #include "fscommon.h"
+#include "vsavatarservices.h"
 #include "fsradar.h"
 #include "llagent.h"
 #include "llagentbenefits.h"
@@ -340,7 +341,11 @@ bool FSCommon::checkIsActionEnabled(const LLUUID& av_id, EFSRegistrarFunctionAct
     // menu registrar admission. These three actions require scene/radar owners.
     if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
         (action == EFSRegistrarFunctionActionType::FS_RGSTR_ACT_TRACK_AVATAR ||
-         action == EFSRegistrarFunctionActionType::FS_RGSTR_ACT_TELEPORT_TO)) return false;
+         action == EFSRegistrarFunctionActionType::FS_RGSTR_ACT_TELEPORT_TO))
+    {
+        LLVector3d position;
+        return !isSelf && vs_avatar_nearby_location(av_id, position);
+    }
 
     switch (action)
     {

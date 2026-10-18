@@ -26,6 +26,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "lllandmarkactions.h"
+#include "vsregioncontext.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #endif
@@ -311,7 +312,7 @@ void LLLandmarkActions::createLandmarkHere(
     const std::string& desc,
     const LLUUID& folder_id)
 {
-    if(!gAgent.getRegion())
+    if(!vs_current_region_context())
     {
         LL_WARNS() << "No agent region" << LL_ENDL;
         return;

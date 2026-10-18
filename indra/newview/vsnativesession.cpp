@@ -2321,6 +2321,7 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
 }
 void VSNativeSession::tick()
 {
+    LLTracker::updateFollowLocation();
     if (mTaskInventory) mTaskInventory->tick();
     if (mObjectSelection) mObjectSelection->tick();
     if (mObjectAttention) mObjectAttention->tick();

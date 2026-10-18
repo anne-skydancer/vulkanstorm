@@ -261,6 +261,19 @@ bool LLToolPie::handleScrollHWheel(S32 x, S32 y, S32 clicks)
 }
 
 // True if you selected an object.
+namespace
+{
+bool show_script_error_icon(LLHUDIcon* icon)
+{
+    if(!icon || !icon->getScriptError())return false;
+    // Both peers expose their genuine current source identity. Native icons
+    // have no legacy source object and must not manufacture one to activate.
+    const auto id=icon->getSourceID();
+    if(id.isNull())return false;
+    LLFloaterScriptDebug::show(id);
+    return true;
+}
+}
 bool LLToolPie::handleLeftClickPick()
 {
     S32 x = mPick.mMousePt.mX;
@@ -484,13 +497,7 @@ bool LLToolPie::handleLeftClickPick()
         return LLToolGrab::getInstance()->handleObjectHit( mPick );
     }
 
-    LLHUDIcon* last_hit_hud_icon = mPick.mHUDIcon;
-    // <FS:Ansariel> FIRE-11024: Only open script debug floater if it's a script error
-    //if (!object && last_hit_hud_icon && last_hit_hud_icon->getSourceObject())
-    if (!object && last_hit_hud_icon && last_hit_hud_icon->getScriptError() && last_hit_hud_icon->getSourceObject())
-    {
-        LLFloaterScriptDebug::show(last_hit_hud_icon->getSourceObject()->getID());
-    }
+    if(!object)show_script_error_icon(mPick.mHUDIcon);
 
     // If left-click never selects or spawns a menu
     // Eat the event.

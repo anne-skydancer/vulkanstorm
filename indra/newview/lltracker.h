@@ -37,6 +37,7 @@
 #include "llstring.h"
 #include "lluuid.h"
 #include "v3dmath.h"
+#include <functional>
 
 class LLHUDText;
 
@@ -77,6 +78,8 @@ public:
     static ETrackingLocationType getTrackedLocationType() { return instance()->mTrackingLocationType; }
     static bool isTracking(void*) { return instance()->mTrackingStatus != TRACKING_NOTHING; }
     static void stopTracking(bool);
+    static void followLocation(const LLVector3d&, const std::string&, std::function<bool(LLVector3d&)>);
+    static void updateFollowLocation();
     static void clearFocus();
 
     static const LLUUID& getTrackedLandmarkAssetID() { return instance()->mTrackedLandmarkAssetID; }
@@ -137,6 +140,8 @@ protected:
     S32 mHUDArrowCenterY;
 
     LLVector3d              mTrackedPositionGlobal;
+    std::function<bool(LLVector3d&)> mFollowLocation;
+    U64 mFollowSerial = 0;
 
     std::string             mLabel;
     std::string             mToolTip;

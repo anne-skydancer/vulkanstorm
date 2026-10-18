@@ -32,6 +32,8 @@
 
 #include "fsradar.h"
 #include "llavataractions.h"
+#include "llagent.h"
+#include "vsavatarservices.h"
 #include "lllogchat.h"
 #include "llmenugl.h"
 #include "llslurl.h"
@@ -89,7 +91,11 @@ bool FSContactsFriendsMenu::enableContextMenuItem(const LLSD& userdata)
 {
     std::string item = userdata.asString();
     if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
-        (item == "teleport_to" || item == "track_avatar")) return false;
+        (item == "teleport_to" || item == "track_avatar"))
+    {
+        LLVector3d position;
+        return mUUIDs.size() == 1 && mUUIDs.front() != gAgentID && vs_avatar_nearby_location(mUUIDs.front(), position);
+    }
 
 
     if (item == "remove_friend")

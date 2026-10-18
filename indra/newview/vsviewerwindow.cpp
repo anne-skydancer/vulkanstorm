@@ -567,6 +567,12 @@ bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type,
         owner->releaseMovement();
         if (down && ((type == CLICK_LEFT && ((mask & MASK_ALT) || LLFloaterCamera::inFreeCameraMode())) || type == CLICK_RIGHT))
         { mNativeCameraDrag = true; return true; }
+        if(!down && type==CLICK_LEFT)
+            if(auto* tool=nativeMediaTool())
+            {
+                tool->handleMouseUp(pos.mX,pos.mY,mask);
+                return true;
+            }
         if(down && type==CLICK_DOUBLELEFT)
             if(auto* tool=nativeMediaTool())
                 if(tool->handleNativeMediaClick(tool->getPick(),true))return true;
@@ -575,10 +581,18 @@ bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type,
             owner->mouseButton(true);
             if (gAgent.leftButtonGrabbed())
                 return true;
+            if(auto* tool=nativeMediaTool())
+            {
+                // The genuine current default tool runs its normal two-pick
+                // priority and left-click controller, including media exactly
+                // once. This also activates actual script-error icons without
+                // a window-owned synthetic action or a legacy object stand-in.
+                tool->updateNativeMediaCapture();
+                tool->handleMouseDown(pos.mX,pos.mY,mask);
+                return true;
+            }
             mLastPick = LLPickInfo(pos, mask, true, true, false, false, true, false, nullptr);
             nativePick(mLastPick);
-            if(auto* tool=nativeMediaTool())
-                if(tool->handleNativeMediaClick(mLastPick))return true;
             return true;
         }
     }

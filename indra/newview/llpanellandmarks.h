@@ -29,6 +29,8 @@
 #define LL_LLPANELLANDMARKS_H
 
 #include "lllandmark.h"
+#include <functional>
+#include <set>
 
 // newview
 #include "llinventorymodel.h"
@@ -156,6 +158,8 @@ private:
 
     bool                        isLandmarksPanel;
 
+    std::function<bool()> mAccountCurrent = [] { return true; };
+    std::set<LLUUID> mRequestedParcels;
     LLUUID                      mCreatePickItemId; // item we requested a pick for
 };
 

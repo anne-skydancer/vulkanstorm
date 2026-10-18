@@ -29,6 +29,7 @@
 #include "vsregioncontext.h"
 
 #include "fsfloaterplacedetails.h"
+#include "vsnativeim.h"
 
 #include "llbutton.h"
 #include "llcombobox.h"
@@ -111,6 +112,8 @@ public:
     {}
 
     ~FSPlaceDetailsRemoteParcelInfoObserver()
+    { reset(); }
+    void reset()
     {
         // remove any in-flight observers
         std::set<LLUUID>::iterator it;
@@ -120,6 +123,7 @@ public:
             LLRemoteParcelInfoProcessor::getInstance()->removeObserver(id, this);
         }
         mParcelIDs.clear();
+        mObserverHandle.unbind(); mObserverHandle.bind(this);
     }
 
     /*virtual*/ void processParcelInfo(const LLParcelData& parcel_data)
@@ -276,6 +280,9 @@ bool FSFloaterPlaceDetails::postBuild()
 
 void FSFloaterPlaceDetails::onOpen(const LLSD& key)
 {
+    mAccountCurrent = vs_native_im_guard();
+    ++mIntentSerial;
+    mRemoteParcelObserver->reset();
     mIsInCreateMode = false;
     mIsInEditMode = false;
     mExpectedLandmarkItemId.setNull();
@@ -567,7 +574,11 @@ void FSFloaterPlaceDetails::setItem(LLInventoryItem* item)
     mPanelLandmarkInfo->displayItemInfo(mItem);
 
     LLLandmark* lm = gLandmarkList.getAsset(mItem->getAssetUUID(),
-                                            boost::bind(&FSFloaterPlaceDetails::onLandmarkLoaded, this, _1));
+                                            [handle = getHandle(), current = mAccountCurrent, intent = mIntentSerial](LLLandmark* landmark)
+        {
+            auto* self = dynamic_cast<FSFloaterPlaceDetails*>(handle.get());
+            if (self && current() && self->mIntentSerial == intent) self->onLandmarkLoaded(landmark);
+        });
     if (lm)
     {
         onLandmarkLoaded(lm);
@@ -593,6 +604,7 @@ void FSFloaterPlaceDetails::showPlaceDetails(const LLSD& key)
 
 void FSFloaterPlaceDetails::onTeleportButtonClicked()
 {
+    if (!mAccountCurrent()) return;
     if (mDisplayInfo == LANDMARK || mDisplayInfo == CREATE_LANDMARK)
     {
         if (mItem.isNull())
@@ -619,6 +631,7 @@ void FSFloaterPlaceDetails::onTeleportButtonClicked()
 
 void FSFloaterPlaceDetails::onShowOnMapButtonClicked()
 {
+    if (!mAccountCurrent()) return;
     LLFloaterWorldMap* worldmap_instance = LLFloaterWorldMap::getInstance();
     if(!worldmap_instance)
         return;
@@ -651,6 +664,7 @@ void FSFloaterPlaceDetails::onShowOnMapButtonClicked()
 
 void FSFloaterPlaceDetails::onEditButtonClicked()
 {
+    if (!mAccountCurrent()) return;
     mPanelLandmarkInfo->toggleLandmarkEditMode(true);
     mIsInEditMode = true;
     mIsInCreateMode = false;
@@ -670,6 +684,7 @@ void FSFloaterPlaceDetails::onCancelButtonClicked()
 
 void FSFloaterPlaceDetails::onSaveButtonClicked()
 {
+    if (!mAccountCurrent()) return;
     if (mItem.isNull())
     {
         return;
@@ -776,7 +791,11 @@ void FSFloaterPlaceDetails::onOverflowMenuItemClicked(const LLSD& param)
     }
     else if (item == "copy")
     {
-        LLLandmarkActions::getSLURLfromPosGlobal(mGlobalPos, boost::bind(&FSFloaterPlaceDetails::onSLURLBuilt, this, _1));
+        LLLandmarkActions::getSLURLfromPosGlobal(mGlobalPos, [handle = getHandle(), current = mAccountCurrent, intent = mIntentSerial](std::string& url)
+        {
+            auto* self = dynamic_cast<FSFloaterPlaceDetails*>(handle.get());
+            if (self && current() && self->mIntentSerial == intent) self->onSLURLBuilt(url);
+        });
     }
     else if (item == "delete")
     {

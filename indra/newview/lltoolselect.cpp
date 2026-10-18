@@ -230,7 +230,8 @@ struct NativeSelectionPeer
     VSWorldScene& world;
     VSObjectSelection& owner;
     std::function<bool()> account;
-    bool current()const{return account && account() && session->phase()==VSNativeSession::Phase::Connected;}
+    bool current()const{return account && account() && session->phase()==VSNativeSession::Phase::Connected &&
+        session->existingObjectSelection()==lifetime.get() && bool(owner.retainSelection());}
     Object object(const LLPickInfo& pick)const{return current()?world.object(pick.mObjectID):Object();}
     Object rootEdit(const Object& object)const{return object?world.rootObject(*object,true):Object();}
     bool rlvEnabled()const{return RlvActions::isRlvEnabled();}

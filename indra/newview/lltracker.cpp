@@ -365,6 +365,8 @@ void LLTracker::trackLocation(const LLVector3d& pos_global, const std::string& f
     instance()->stopTrackingAvatar();
     instance()->stopTrackingLandmark();
 
+    ++instance()->mFollowSerial;
+    instance()->mFollowLocation = {};
     instance()->mTrackedPositionGlobal = pos_global;
     instance()->mTrackedLocationName = full_name;
     instance()->mIsTrackingLocation = true;
@@ -374,6 +376,29 @@ void LLTracker::trackLocation(const LLVector3d& pos_global, const std::string& f
     instance()->mToolTip = tooltip;
 }
 
+
+void LLTracker::followLocation(const LLVector3d& position, const std::string& name,
+                              std::function<bool(LLVector3d&)> follow)
+{
+    trackLocation(position, name, "", LOCATION_AVATAR);
+    instance()->mFollowLocation = std::move(follow);
+}
+
+void LLTracker::updateFollowLocation()
+{
+    // Never create a tracking singleton merely to run the frame pump.
+    if (!sTrackerp || !sTrackerp->mFollowLocation) return;
+    auto* owner = sTrackerp;
+    const auto serial = owner->mFollowSerial;
+    auto follow = owner->mFollowLocation;
+    LLVector3d position;
+    const bool valid = follow(position) && position.isFinite();
+    if (sTrackerp != owner || owner->mFollowSerial != serial) return;
+    if (valid)
+        sTrackerp->mTrackedPositionGlobal = position;
+    else
+        sTrackerp->stopTrackingLocation();
+}
 
 // static
 bool LLTracker::handleMouseDown(S32 x, S32 y)
@@ -611,6 +636,8 @@ void LLTracker::stopTrackingLandmark(bool clear_ui)
 
 void LLTracker::stopTrackingLocation(bool clear_ui, bool dest_reached)
 {
+    ++mFollowSerial;
+    mFollowLocation = {};
     purgeBeaconText();
     mTrackedLocationName.assign("");
     mIsTrackingLocation = false;
@@ -622,6 +649,8 @@ void LLTracker::stopTrackingLocation(bool clear_ui, bool dest_reached)
 
 void LLTracker::clearFocus()
 {
+    ++instance()->mFollowSerial;
+    instance()->mFollowLocation = {};
     instance()->mTrackingStatus = TRACKING_NOTHING;
 }
 

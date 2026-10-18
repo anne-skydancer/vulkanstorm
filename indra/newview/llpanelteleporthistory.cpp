@@ -66,13 +66,6 @@ namespace
 {
 bool native_history_scene_unavailable()
 {
-#if VS_NATIVE_VULKAN
-    if (VSNativeSession::active())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return true;
-    }
-#endif
     return false;
 }
 bool history_index_valid(S32 index, size_t size)

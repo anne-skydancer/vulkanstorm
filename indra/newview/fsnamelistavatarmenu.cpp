@@ -33,6 +33,7 @@
 #include "fsradar.h"
 #include "llagent.h"
 #include "llavataractions.h"
+#include "vsavatarservices.h"
 #include "lllogchat.h"
 #include "llmenugl.h"
 #include "llslurl.h"
@@ -87,7 +88,11 @@ bool FSNameListAvatarMenu::enableContextMenuItem(const LLSD& userdata)
 {
     std::string item = userdata.asString();
     if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
-        (item == "teleport_to" || item == "track_avatar")) return false;
+        (item == "teleport_to" || item == "track_avatar"))
+    {
+        LLVector3d position;
+        return mUUIDs.size() == 1 && mUUIDs.front() != gAgentID && vs_avatar_nearby_location(mUUIDs.front(), position);
+    }
 
     bool isSelf = !mUUIDs.empty() && mUUIDs.front() == gAgentID;
 
