@@ -132,6 +132,7 @@ jobs:
       - run: python scripts/tests/test_native_pick_admission.py
       - run: python scripts/tests/test_native_overlay.py
       - run: python scripts/tests/test_native_hud.py
+      - run: python scripts/tests/test_native_selection_script_icon.py
       - run: python scripts/tests/test_native_utility_lifecycle.py
       - run: python scripts/tests/test_native_currency_lifecycle.py
       - run: python scripts/tests/test_native_currency_ui_contract.py

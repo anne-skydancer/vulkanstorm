@@ -262,8 +262,18 @@ struct NativeSelectionPeer
     void setting(const char* name,bool value)const{gSavedSettings.setBOOL(name,value);}
     bool allowSelectAvatar()const{return owner.allowSelectAvatar();}
     void forceSelection(bool value)const{owner.setForceSelection(value);}
-    bool scriptIcon(const LLPickInfo& pick)const{return pick.mHUDIcon && pick.mHUDIcon->getSourceObject();}
-    void showScriptDebug(const LLPickInfo& pick)const{LLFloaterScriptDebug::show(pick.mHUDIcon->getSourceObject()->getID());}
+    bool scriptIcon(const LLPickInfo& pick)const
+    {
+        if(!current() || !pick.mHUDIcon)return false;
+        const auto id=pick.mHUDIcon->getSourceID();
+        return current() && id.notNull();
+    }
+    void showScriptDebug(const LLPickInfo& pick)const
+    {
+        if(!current() || !pick.mHUDIcon)return;
+        const auto id=pick.mHUDIcon->getSourceID();
+        if(current() && id.notNull())LLFloaterScriptDebug::show(id);
+    }
     bool selected(const Object& object)const{return owner.node(*object).has_value();}
     S32 faceCount(const Object& object)const{return S32(world.faceCount(*object).value_or(0));}
     bool containsAllFaces(const Object& object)const{return owner.contains(*object);}
