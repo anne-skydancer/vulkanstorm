@@ -20169,6 +20169,7 @@
       "evidence": [],
       "remaining_gap": "Review reference callback handleAnisotropicChanged; saving a value is not applying its effect.",
       "native_source_references": [
+        "indra/newview/vsparcelpresentation.cpp",
         "indra/newview/vsr3gltfreplay.cpp",
         "indra/newview/vsterrainassets.cpp",
         "indra/newview/vsworldgltf.cpp",
