@@ -176,12 +176,18 @@ def inputs(viewer):
             f'{viewer}/newview/vulkan-ci-staging.json']
 
 
-def collect(root, patterns):
+def collect(root, patterns, errors=None):
     files, excluded = {}, []
 
     def visit(path):
         relative = path.relative_to(root).as_posix()
-        mode = path.lstat().st_mode
+        try:
+            mode = path.lstat().st_mode
+        except FileNotFoundError:
+            if errors is None:
+                raise
+            errors.append('Evidence entry disappeared during collection: ' + relative)
+            return
         # Windows' viewer instance marker uses a mandatory byte-range lock.
         # It is process coordination, not a cache/readback/qualification witness.
         # Record this exact profile leaf rather than attempting to archive it
@@ -194,7 +200,14 @@ def collect(root, patterns):
         if stat.S_ISREG(mode):
             files[relative] = path
         elif stat.S_ISDIR(mode):
-            for child in sorted(path.iterdir()):
+            try:
+                children = sorted(path.iterdir())
+            except FileNotFoundError:
+                if errors is None:
+                    raise
+                errors.append('Evidence directory disappeared during collection: ' + relative)
+                return
+            for child in children:
                 visit(child)
         else:
             kind = ('symlink' if stat.S_ISLNK(mode) else 'socket' if stat.S_ISSOCK(mode)
@@ -380,8 +393,13 @@ def package(root, output, patterns, viewer, require_complete):
         for path in root.glob(pattern):
             if path.is_dir() and (output == path.resolve() or path.resolve() in output.parents):
                 raise ValueError('Package output overlaps an input directory')
-    files, excluded = collect(root, patterns)
-    errors = completeness(files, viewer) if require_complete else []
+    errors = []
+    files, excluded = collect(root, patterns, errors)
+    if require_complete:
+        try:
+            errors.extend(completeness(files, viewer))
+        except OSError as error:
+            errors.append('Qualification evidence could not be validated: ' + str(error))
     output.mkdir(parents=True, exist_ok=True)
     manifest = dict(schema=1, require_complete=require_complete,
                     complete=not errors if require_complete else None,
@@ -390,9 +408,19 @@ def package(root, output, patterns, viewer, require_complete):
                          compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for name, path in sorted(files.items()):
             # Recheck before opening: special files must never reach the archiver.
-            if not stat.S_ISREG(path.lstat().st_mode):
-                raise RuntimeError('Evidence entry changed type: ' + name)
-            with path.open('rb') as source, archive.open(name, 'w', force_zip64=True) as target:
+            try:
+                if not stat.S_ISREG(path.lstat().st_mode):
+                    errors.append('Evidence entry changed type: ' + name)
+                    continue
+                source = path.open('rb')
+            except OSError as error:
+                # A timed-out viewer may still retire cache leaves. Preserve
+                # the other diagnostics and an explicit error manifest instead
+                # of abandoning the entire failure archive. This never turns
+                # missing evidence into qualification success.
+                errors.append('Evidence entry could not be opened: ' + name + ': ' + str(error))
+                continue
+            with source, archive.open(name, 'w', force_zip64=True) as target:
                 digest = hashlib.sha256()
                 size = 0
                 while chunk := source.read(1024 * 1024):
@@ -400,6 +428,8 @@ def package(root, output, patterns, viewer, require_complete):
             manifest['files'][name] = dict(bytes=size, sha256=digest.hexdigest())
     with (output / 'qualification-evidence.zip').open('rb') as source:
         manifest['archive_sha256'] = hashlib.file_digest(source, 'sha256').hexdigest()
+    if require_complete:
+        manifest['complete'] = not errors
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     if errors:
         raise RuntimeError('Qualification evidence incomplete: ' + '; '.join(errors))
