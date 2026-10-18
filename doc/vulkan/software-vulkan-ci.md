@@ -428,3 +428,25 @@ and R0 baseline evidence. Missing required evidence fails packaging and therefor
 the job; the partial bundle and error manifest are still uploaded. Jobs already
 failing retain available regular diagnostic files without claiming complete
 qualification. `if-no-files-found: error` remains enabled on the upload action.
+
+
+### Independently bounded R3 cache cases
+
+The nine persistent-cache cases run in order as separate workflow steps with
+`--case`, each retaining the existing 15-minute workflow bound, 540-second driver
+bound and 500-second viewer bound. They share the same isolated run/cache and
+preserve all cold/warm, corruption, read-only, clear, capacity and version tests.
+The job's overall bound is unchanged.
+
+A resumed case must match the original source, staged executable, provenance,
+staging manifest, runtime and harness hashes. It revalidates prior driver logs,
+readbacks, source/process identity, recovery/retirement evidence and cache state.
+It must be exactly the next planned case. A partial report remains
+`complete: false` and `passed: false`; only all nine successful cases produce full
+matrix acceptance. The final qualification archive continues to require that
+complete report and its regular, hashed evidence files.
+
+This avoids an aggregate-step scheduling error: run 39073748457 completed eight
+Windows cases but exhausted its original single 15-minute step while the last
+case was running. The correction changes CI orchestration, not viewer behavior,
+image oracles or per-viewer time limits.

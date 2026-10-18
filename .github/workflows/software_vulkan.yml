@@ -158,6 +158,7 @@ jobs:
       - run: python scripts/tests/test_vulkan_texture_cache_instances.py
       - run: python scripts/tests/test_vulkan_local_image_evidence.py
       - run: python scripts/tests/test_vulkan_texture_cache_evidence.py
+      - run: python scripts/tests/test_vulkan_texture_cache_case_steps.py
       - run: python scripts/vulkan_parity_inventory.py
       - run: python scripts/tests/test_vulkan_parity_baseline.py
       - run: python scripts/tests/test_terrain_packet.py
@@ -470,7 +471,7 @@ jobs:
             --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
             --harness-evidence .ci/evidence/results.json --evidence .ci/r2-session-evidence \
             --skin ansastorm_modern --ui-scale 1.5 --headless --r2-contracts --terrain-contracts "${manifest_args[@]}"
-      - name: Production R3 texture streaming and persistent-cache restart matrix
+      - name: Production R3 texture cache cold
         timeout-minutes: 15
         shell: bash
         run: |
@@ -485,7 +486,143 @@ jobs:
           fi
           "${display_args[@]}" python scripts/run_vulkan_texture_cache_tests.py \
             --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
-            --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence --case cold \
+            "${manifest_args[@]}"
+      - name: Production R3 texture cache warm
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=()
+          display_args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          else
+            # The Vulkan viewer stays headless; its real CEF child needs X11.
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
+          fi
+          "${display_args[@]}" python scripts/run_vulkan_texture_cache_tests.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence --case warm \
+            "${manifest_args[@]}"
+      - name: Production R3 texture cache read-only
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=()
+          display_args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          else
+            # The Vulkan viewer stays headless; its real CEF child needs X11.
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
+          fi
+          "${display_args[@]}" python scripts/run_vulkan_texture_cache_tests.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence --case read-only \
+            "${manifest_args[@]}"
+      - name: Production R3 texture cache truncated
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=()
+          display_args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          else
+            # The Vulkan viewer stays headless; its real CEF child needs X11.
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
+          fi
+          "${display_args[@]}" python scripts/run_vulkan_texture_cache_tests.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence --case truncated \
+            "${manifest_args[@]}"
+      - name: Production R3 texture cache corrupt-header
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=()
+          display_args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          else
+            # The Vulkan viewer stays headless; its real CEF child needs X11.
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
+          fi
+          "${display_args[@]}" python scripts/run_vulkan_texture_cache_tests.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence --case corrupt-header \
+            "${manifest_args[@]}"
+      - name: Production R3 texture cache clear
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=()
+          display_args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          else
+            # The Vulkan viewer stays headless; its real CEF child needs X11.
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
+          fi
+          "${display_args[@]}" python scripts/run_vulkan_texture_cache_tests.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence --case clear \
+            "${manifest_args[@]}"
+      - name: Production R3 texture cache resize
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=()
+          display_args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          else
+            # The Vulkan viewer stays headless; its real CEF child needs X11.
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
+          fi
+          "${display_args[@]}" python scripts/run_vulkan_texture_cache_tests.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence --case resize \
+            "${manifest_args[@]}"
+      - name: Production R3 texture cache cache-version
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=()
+          display_args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          else
+            # The Vulkan viewer stays headless; its real CEF child needs X11.
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
+          fi
+          "${display_args[@]}" python scripts/run_vulkan_texture_cache_tests.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence --case cache-version \
+            "${manifest_args[@]}"
+      - name: Production R3 texture cache codec-version
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=()
+          display_args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          else
+            # The Vulkan viewer stays headless; its real CEF child needs X11.
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
+          fi
+          "${display_args[@]}" python scripts/run_vulkan_texture_cache_tests.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence --case codec-version \
             "${manifest_args[@]}"
       - name: Production R3 concurrent texture-cache instances
         timeout-minutes: 10
