@@ -931,7 +931,7 @@ struct Replay : public LLAvatarPropertiesObserver
                     settingsPicker->closeFloater();settingsPicker.reset();
                     trackPicker=std::make_unique<LLFloaterTrackPicker>(aboutLandFloater.get());
                     LLSD tracks=LLSD::emptyArray();
-                    for(S32 i=0;i<5;++i){LLSD track;track["id"]=i;track["enabled"]=true;tracks.append(track);}
+                    for(U32 i=1;i<LLSettingsDay::TRACK_MAX;++i){LLSD track;track["id"]=LLSD::Integer(i);track["enabled"]=true;tracks.append(track);}
                     trackPicker->showPicker(tracks);++aboutLandStage;return false;
                 }
                 if(aboutLandStage==5)

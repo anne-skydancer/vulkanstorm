@@ -130,6 +130,7 @@ public:
     void                  setFlying(bool);
     void                  mouseButton(bool down);
     void cameraOrbit(F32 yaw, F32 pitch);
+    void faceBody(const LLVector3& direction);
     void cameraZoom(S32 clicks);
     void cameraPan(const LLVector3&);
     void cameraRoll(F32);

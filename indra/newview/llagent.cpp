@@ -26,6 +26,8 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "vsagentnavigation.h"
+#include <utility>
 #include "vsregionlimits.h"
 #include "vsteleportpolicy.h"
 #include "vsavatarservices.h"
@@ -2137,7 +2139,8 @@ void LLAgent::startAutoPilotGlobal(
     F32 rot_threshold,
     bool allow_flying)
 {
-    if (!isAgentAvatarValid())
+    VSAgentNavigation navigation;
+    if (!navigation.valid())
     {
         return;
     }
@@ -2146,6 +2149,28 @@ void LLAgent::startAutoPilotGlobal(
     {
         LL_WARNS() << "Canceling attempt to start autopilot towards invalid position" << LL_ENDL;
         return;
+    }
+
+
+    if (navigation.native())
+    {
+        if (mNativeAutoPilotRetiring)
+        {
+            if (finish_callback) finish_callback(false, callback_data);
+            return;
+        }
+        const U64 intent = ++mNativeAutoPilotIntent;
+        auto previous = std::exchange(mAutoPilotFinishedCallback, nullptr);
+        void* previousData = std::exchange(mAutoPilotCallbackData, nullptr);
+        if (previous)
+            previous(dist_vec(getPositionGlobal(), mAutoPilotTargetGlobal) < mAutoPilotStopDistance, previousData);
+        const auto current = navigation.accountGuard();
+        if (intent != mNativeAutoPilotIntent || !current || !current())
+        {
+            if (finish_callback) finish_callback(false, callback_data);
+            return;
+        }
+        mNativeAutoPilotAccount = current;
     }
 
     // Are there any pending callbacks from previous auto pilot requests?
@@ -2168,9 +2193,7 @@ void LLAgent::startAutoPilotGlobal(
     trace_target.mdV[VZ] -= 10.f;
 
     LLVector3d intersection;
-    LLVector3 normal;
-    LLViewerObject *hit_obj;
-    F32 heightDelta = LLWorld::getInstance()->resolveStepHeightGlobal(NULL, target_global, trace_target, intersection, normal, &hit_obj);
+    F32 heightDelta = navigation.stepHeight(target_global,trace_target,intersection);
 
     if (stop_distance > 0.f)
     {
@@ -2234,6 +2257,7 @@ void LLAgent::startAutoPilotGlobal(
 //-----------------------------------------------------------------------------
 void LLAgent::setAutoPilotTargetGlobal(const LLVector3d &target_global)
 {
+    VSAgentNavigation navigation;
     if (mAutoPilot)
     {
         mAutoPilotTargetGlobal = target_global;
@@ -2243,13 +2267,11 @@ void LLAgent::setAutoPilotTargetGlobal(const LLVector3d &target_global)
         traceEndPt.mdV[VZ] -= 20.f;
 
         LLVector3d targetOnGround;
-        LLVector3 groundNorm;
-        LLViewerObject *obj;
 
-        LLWorld::getInstance()->resolveStepHeightGlobal(NULL, target_global, traceEndPt, targetOnGround, groundNorm, &obj);
+        navigation.stepHeight(target_global,traceEndPt,targetOnGround);
         // Note: this might malfunction for sitting agent, since pelvis stays same, but agent's position becomes lower
         // But for autopilot to work we assume that agent is standing and ready to go.
-        F64 target_height = llmax((F64)gAgentAvatarp->getPelvisToFoot(), target_global.mdV[VZ] - targetOnGround.mdV[VZ]);
+        F64 target_height = llmax((F64)navigation.pelvisToFoot(), target_global.mdV[VZ] - targetOnGround.mdV[VZ]);
 
         // clamp z value of target to minimum height above ground
         mAutoPilotTargetGlobal.mdV[VZ] = targetOnGround.mdV[VZ] + target_height;
@@ -2262,17 +2284,18 @@ void LLAgent::setAutoPilotTargetGlobal(const LLVector3d &target_global)
 //-----------------------------------------------------------------------------
 void LLAgent::startFollowPilot(const LLUUID &leader_id, bool allow_flying, F32 stop_distance)
 {
+    VSAgentNavigation navigation;
     mLeaderID = leader_id;
     if ( mLeaderID.isNull() ) return;
 
-    LLViewerObject* object = gObjectList.findObject(mLeaderID);
+    const auto object = navigation.objectPosition(mLeaderID);
     if (!object)
     {
         mLeaderID = LLUUID::null;
         return;
     }
 
-    startAutoPilotGlobal(object->getPositionGlobal(),
+    startAutoPilotGlobal(*object,
                          std::string(), // behavior_name
                          NULL,          // target_rotation
                          NULL,          // finish_callback
@@ -2287,6 +2310,38 @@ void LLAgent::startFollowPilot(const LLUUID &leader_id, bool allow_flying, F32 s
 //-----------------------------------------------------------------------------
 void LLAgent::stopAutoPilot(bool user_cancel)
 {
+
+    if (mNativeAutoPilotAccount)
+    {
+        if (!mAutoPilot) return;
+        mAutoPilot = false;
+        ++mNativeAutoPilotIntent;
+        const bool current = mNativeAutoPilotAccount();
+        auto callback = std::exchange(mAutoPilotFinishedCallback, nullptr);
+        void* data = std::exchange(mAutoPilotCallbackData, nullptr);
+        mNativeAutoPilotAccount = {};
+        mLeaderID = LLUUID::null;
+        if (current && mAutoPilotUseRotation && !user_cancel)
+        {
+            resetAxes(mAutoPilotTargetFacing);
+            VSAgentNavigation().face(mAutoPilotTargetFacing);
+        }
+        if (current && !user_cancel) setFlying(mAutoPilotFlyOnStop);
+        setControlFlags(AGENT_CONTROL_STOP);
+        if (current && user_cancel && !mAutoPilotBehaviorName.empty())
+        {
+            if (mAutoPilotBehaviorName == "Sit")
+                LL_INFOS("Agent") << "Autopilot-Sit was canceled by user action" << LL_ENDL;
+            else if (mAutoPilotBehaviorName == "Attach")
+                LLNotificationsUtil::add("CancelledAttach");
+            else
+                LLNotificationsUtil::add("Cancelled");
+        }
+        // Detach the finished intent before client callbacks can start another.
+        if (callback)
+            callback(current && !user_cancel && dist_vec(getPositionGlobal(), mAutoPilotTargetGlobal) < mAutoPilotStopDistance, data);
+        return;
+    }
     if (mAutoPilot)
     {
         mAutoPilot = false;
@@ -2323,28 +2378,49 @@ void LLAgent::stopAutoPilot(bool user_cancel)
     }
 }
 
+// Release raw callback ownership while the retiring account's clients still live.
+void LLAgent::retireNativeAutoPilot()
+{
+    if (!mNativeAutoPilotAccount) return;
+    mNativeAutoPilotRetiring = true;
+    ++mNativeAutoPilotIntent;
+    mAutoPilot = false;
+    mNativeAutoPilotAccount = {};
+    mLeaderID = LLUUID::null;
+    auto callback = std::exchange(mAutoPilotFinishedCallback, nullptr);
+    void* data = std::exchange(mAutoPilotCallbackData, nullptr);
+    if (callback) callback(false, data);
+    mNativeAutoPilotRetiring = false;
+}
+
 // Returns necessary agent pitch and yaw changes, radians.
 //-----------------------------------------------------------------------------
 // autoPilot()
 //-----------------------------------------------------------------------------
 void LLAgent::autoPilot(F32 *delta_yaw)
 {
+    VSAgentNavigation navigation;
+    if (mNativeAutoPilotAccount && !mNativeAutoPilotAccount())
+    {
+        retireNativeAutoPilot();
+        return;
+    }
     if (mAutoPilot)
     {
         if (!mLeaderID.isNull())
         {
-            LLViewerObject* object = gObjectList.findObject(mLeaderID);
+            const auto object = navigation.objectPosition(mLeaderID);
             if (!object)
             {
                 stopAutoPilot();
                 return;
             }
-            mAutoPilotTargetGlobal = object->getPositionGlobal();
+            mAutoPilotTargetGlobal = *object;
         }
 
-        if (!isAgentAvatarValid()) return;
+        if (!navigation.valid()) return;
 
-        if (gAgentAvatarp->mInAir && mAutoPilotAllowFlying)
+        if (navigation.inAir() && mAutoPilotAllowFlying)
         {
             setFlying(true);
         }
@@ -2427,9 +2503,9 @@ void LLAgent::autoPilot(F32 *delta_yaw)
         // If we're flying, handle autopilot points above or below you.
         if (getFlying() && xy_distance < AUTOPILOT_HEIGHT_ADJUST_DISTANCE)
         {
-            if (isAgentAvatarValid())
+            if (navigation.valid())
             {
-                F64 current_height = gAgentAvatarp->getPositionGlobal().mdV[VZ];
+                F64 current_height = navigation.avatarPosition().mdV[VZ];
                 F32 delta_z = (F32)(mAutoPilotTargetGlobal.mdV[VZ] - current_height);
                 F32 slope = delta_z / xy_distance;
                 if (slope > 0.45f && delta_z > 6.f)
@@ -6870,3 +6946,4 @@ void LLAgent::sendAgentSetAppearance()
 }
 // </FS:Ansariel> [Legacy Bake]
 // EOF
+

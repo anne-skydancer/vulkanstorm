@@ -83,3 +83,6 @@ std::optional<VSRegionContext> vs_region_context(const LLUUID&);
 std::optional<VSRegionContext> vs_current_region_context();
 
 bool vs_publish_region_owner(const VSRegionContext&,const LLUUID&);
+
+// No invented fallback: callers retain their own reference missing-region policy.
+std::optional<F32> vs_region_height(const LLVector3d&);

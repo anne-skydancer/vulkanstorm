@@ -683,10 +683,14 @@ public:
                                          bool allow_flying = true);
     void            startFollowPilot(const LLUUID &leader_id, bool allow_flying = true, F32 stop_distance = 0.5f);
     void            stopAutoPilot(bool user_cancel = false);
+    void            retireNativeAutoPilot();
     void            setAutoPilotTargetGlobal(const LLVector3d &target_global);
     void            autoPilot(F32 *delta_yaw);          // Autopilot walking action, angles in radians
     void            renderAutoPilotTarget();
 private:
+    U64             mNativeAutoPilotIntent = 0;
+    bool            mNativeAutoPilotRetiring = false;
+    std::function<bool()> mNativeAutoPilotAccount;
     bool            mAutoPilot;
     bool            mAutoPilotFlyOnStop;
     bool            mAutoPilotAllowFlying;
