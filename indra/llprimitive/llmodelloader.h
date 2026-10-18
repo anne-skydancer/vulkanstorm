@@ -26,6 +26,7 @@
 
 #ifndef LL_LLMODELLOADER_H
 #define LL_LLMODELLOADER_H
+#include <memory>
 
 #include "llmodel.h"
 #include "llthread.h"
@@ -49,6 +50,8 @@ const U32 LEGACY_RIG_FLAG_UNKNOWN_JOINT = 2;
 class LLModelLoader : public LLThread
 {
 public:
+    void retainCallbackOwner(std::shared_ptr<void> owner) { mCallbackOwner=std::move(owner); }
+
 
     typedef std::map<std::string, LLImportMaterial> material_map;
     typedef std::vector<LLPointer<LLModel>> model_list;
@@ -209,6 +212,7 @@ protected:
     LLModelLoader::texture_load_func_t  mTextureLoadFunc;
     LLModelLoader::state_callback_t     mStateCallback;
     void*                               mOpaqueData;
+    std::shared_ptr<void> mCallbackOwner;
 
     bool        mRigValidJointUpload;
     U32         mLegacyRigFlags;

@@ -50,6 +50,9 @@ public:
         }
         return position != mPosition || rotation != mRotation;
     }
+    // Local editor mutation does not invent a simulator update timestamp.
+    void previewPosition(const LLVector3& position){mPosition=position;}
+    void previewRotation(const LLQuaternion& rotation){mBaseRotation=mRotation=rotation;mAngularDelta.loadIdentity();}
     void freeze(bool selected) { mSelected = selected; }
     void setSelectionState(bool selected) {mSelected=selected;resetSelectionRotation();}
     void resetSelectionRotation(){mAngularDelta.loadIdentity();mBaseRotation=mRotation;}

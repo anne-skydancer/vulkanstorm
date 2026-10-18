@@ -22,6 +22,7 @@
 #include <boost/signals2/signal.hpp>
 
 class LLMessageSystem;
+class LLChat;
 class LLParcel;
 class VSRegionLimits;
 class LLEventPoll;
@@ -30,8 +31,12 @@ class LLFloater;
 class LLViewerMediaImpl;
 class VSNativeAppearance;
 class VSTaskInventory;
+class VSObjectPhysics;
+class VSObjectCosts;
 class VSObjectSelection;
 class VSObjectAttention;
+class VSWorldSound;
+class VSParticleEffects;
 
 // Deliberately does not own LLWorld, LLViewerRegion or scene resources.
 // All asynchronous deliveries carry an owner and a session generation.
@@ -52,6 +57,7 @@ public:
     void logoutFramePresented();
     void disconnect(const std::string& reason);
     bool admit(const std::string&, const LLHost&);
+    void recordNearbyChat(const LLChat&, U64 generation);
     bool sendChat(const std::string&, U8 type = 1, S32 channel = 0);
     bool sendChatProcessed(const std::string&, U8 type, S32 channel);
     bool                  requestAnimations(const std::vector<LLUUID>&, bool start);
@@ -74,7 +80,11 @@ public:
     std::function<bool()> interactionGuard(const VSWorldScene::FaceHandle&) const;
     bool requestTaskInventory(const VSWorldScene::ObjectHandle&);
     VSTaskInventory* taskInventory();
+    VSObjectPhysics* objectPhysics();
+    VSObjectCosts* objectCosts();
     VSObjectSelection* objectSelection();
+    VSParticleEffects* particles();
+    VSParticleEffects* existingParticles() const noexcept {return mParticles.get();}
     VSObjectSelection* existingObjectSelection() const noexcept { return mObjectSelection.get(); }
     std::shared_ptr<VSObjectSelection> retainObjectSelection() const noexcept { return mObjectSelection; }
     VSObjectAttention* objectAttention();
@@ -86,7 +96,13 @@ public:
     LLSD evidence() const;
     const LLSD& simulatorFeatures() const { return mSimulatorFeatures; }
     bool simulatorFeaturesReceived() const { return mSimulatorFeaturesReceived; }
+    bool capabilitiesReceived(const LLHost&) const;
+    std::optional<LLSD> simulatorFeatures(const LLHost&) const;
     bool applySimulatorFeatures(const LLSD&, U64 generation, U64 regionEpoch);
+    boost::signals2::connection observeSimulatorFeatures(const boost::signals2::signal<void()>::slot_type& slot)
+    { return mSimulatorFeaturesChanged.connect(slot); }
+    void updateInterestListMode();
+    bool setRegionVoiceEnabled(const LLHost&, U64 circuit, bool);
     struct RegionMetadata
     {
         F32 billableFactor=1.f;
@@ -119,6 +135,7 @@ public:
     std::vector<RegionSnapshot> regionSnapshots(bool includeSpatial=true) const;
     bool current(const RegionSnapshot&) const;
     std::vector<VSCoarseSample<LLUUID>> coarseAvatarLocations() const;
+    std::optional<std::size_t> coarseAvatarCount(const LLHost&) const;
     std::optional<std::pair<LLHost,VSCoarseSample<LLUUID>>> coarseAvatarLocation(const LLUUID&) const;
     bool receiveParcelOverlay(const LLHost&,U64 account,U64 circuit,S32 sequence,const std::vector<U8>&);
     bool applyRegionInfo(LLMessageSystem&);
@@ -129,9 +146,11 @@ public:
     const std::string& regionName() const { return mName; }
     const LLVector3& position() const { return mPosition; }
     U64 regionEpoch() const { return mRegionEpoch; }
+    VSWorldSound* worldSound();
     boost::signals2::connection observeCurrentRegion(const boost::signals2::signal<void()>::slot_type& slot) { return mCurrentRegionChanged.connect(slot); }
     bool regionReady() const { return mPhase == Phase::Connected && !mChangingRegion && mSeedReady && mHandshake && mCircuitAck; }
     VSNativeCamera::State cameraState() const;
+    LLVector3d cameraTargetGlobal() const;
     bool publishCamera();
     bool movementAction(U32 key, const std::string& action, bool down, bool repeated = false);
     void releaseMovement();
@@ -202,6 +221,7 @@ private:
     void retireNeighbour(const LLHost&);
     void neighbourCircuitResult(const LLHost&, U64 account, U64 circuit, S32 result);
     void neighbourSeedCoro(LLHost, std::string, U64 account, U64 circuit);
+    static void neighbourFeaturesCoro(std::weak_ptr<VSNativeSession>, LLHost, std::string, U64 account, U64 circuit);
     bool teleportRequest(U64, const LLVector3&, const LLVector3* lookAt = nullptr);
     void initializeEnvironment();
     void connected();
@@ -218,7 +238,7 @@ private:
     bool updateParcelMediaMetadata(const LLSD& body);
     void applyParcelMediaState();
     void appendChat(LLSD, U64);
-    void publishChat(const LLSD&, const std::string&, U64);
+    void publishChat(const LLChat&, const LLSD&, U64);
     void finishLogout();
     void unbind();
     Phase mPhase = Phase::Login;
@@ -237,8 +257,12 @@ private:
     LLSD mWearablesMetadata;
     std::unique_ptr<VSNativeAppearance> mAppearance;
     std::unique_ptr<VSTaskInventory> mTaskInventory;
+    std::unique_ptr<VSObjectPhysics> mObjectPhysics;
+    std::unique_ptr<VSObjectCosts> mObjectCosts;
     std::shared_ptr<VSObjectSelection> mObjectSelection;
     std::unique_ptr<VSObjectAttention> mObjectAttention;
+    std::unique_ptr<VSWorldSound> mWorldSound;
+    std::unique_ptr<VSParticleEffects> mParticles;
     LLHost mPreviousHost;
     struct RegionCircuit
     {
@@ -258,7 +282,15 @@ private:
         bool objectCapacityKnown=false;
         VSCoarseSnapshot<LLUUID> coarse;
         VSParcelOverlay::Snapshot parcelOverlay;
-        LLSD capabilities;
+        LLSD capabilities, simulatorFeatures;
+        std::string interestListMode="default";
+        bool capabilitiesReady=false, featuresReceived=false;
+        struct FeaturesRequest
+        {
+            std::function<void()> cancel;
+            ~FeaturesRequest() { if (cancel) cancel(); }
+        };
+        std::shared_ptr<FeaturesRequest> featuresRequest;
         std::function<void()> cancel;
         std::unique_ptr<LLEventPoll> poll;
     };
@@ -308,6 +340,7 @@ private:
     LLSD mCapabilities;
     std::function<void()> mCancelSeed;
     LLSD mSimulatorFeatures;
+    boost::signals2::signal<void()> mSimulatorFeaturesChanged;
     bool mSimulatorFeaturesReceived = false;
     std::function<void()> mCancelSimulatorFeatures;
     std::unique_ptr<LLEventPoll> mPoll;

@@ -1471,6 +1471,11 @@ bool LLGestureMgr::hasLoadingAssets(LLMultiGesture* gesture)
     return false;
 }
 
+void LLGestureMgr::forgetPreviewGesture(LLMultiGesture* gesture)
+{
+    mPlaying.erase(std::remove(mPlaying.begin(), mPlaying.end(), gesture), mPlaying.end());
+}
+
 void LLGestureMgr::stopGesture(LLMultiGesture* gesture)
 {
     if (!gesture) return;

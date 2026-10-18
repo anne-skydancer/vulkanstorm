@@ -54,8 +54,12 @@ set(llrender_HEADER_FILES
     llgltexture.h
     llgltypes.h
     llimagegl.h
+    vsimagealphamask.h
     llpostprocess.h
     llrender.h
+    vsselectionlightgeometry.h
+    vsreferencegeometry.h
+    vsrenderprimitivegeometry.h
     llrender2dutils.h
     vsuiprimitive.h
     llrendernavprim.h
@@ -64,6 +68,7 @@ set(llrender_HEADER_FILES
     lltexture.h
     lltexturemanagerbridge.h
     lluiimage.h
+    vsimage3dgeometry.h
     lluiimage.inl
     llvertexbuffer.h
     llglcommonfunc.h

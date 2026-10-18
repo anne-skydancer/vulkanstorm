@@ -379,6 +379,8 @@ public:
     micro_changed_signal_t mMicroChangedSignal;
 
     void terminate();   // Call this to clean up during shutdown
+    void authorizeNativeAccount(const std::string& user_id, const LLUUID& agentID);
+    void retireNativeAccount();
 
     const LLVoiceVersionInfo getVersion();
 

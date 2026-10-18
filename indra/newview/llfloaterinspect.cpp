@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterinspect.h"
+#include "vsobjectinspection.h"
+#include "vsappearanceui.h"
 
 #include "llfloaterreg.h"
 #include "llfloatertools.h"
@@ -76,6 +78,8 @@ LLFloaterInspect::LLFloaterInspect(const LLSD& key)
     mLastResizeDelta(0)
     // </FS:Ansariel>
 {
+    mAccountCurrent = vs_native_im_guard();
+    mObjectSelection = std::make_shared<VSInspectionSelection>();
     mCommitCallbackRegistrar.add("Inspect.OwnerProfile",    boost::bind(&LLFloaterInspect::onClickOwnerProfile, this));
     mCommitCallbackRegistrar.add("Inspect.CreatorProfile",  boost::bind(&LLFloaterInspect::onClickCreatorProfile, this));
     mCommitCallbackRegistrar.add("Inspect.SelectObject",    boost::bind(&LLFloaterInspect::onSelectObject, this));
@@ -105,8 +109,8 @@ bool LLFloaterInspect::postBuild()
     LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
     LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
 
-    registrar.add("Inspect.ToggleColumn",           boost::bind(&LLFloaterInspect::onColumnVisibilityChecked, this, _2));
-    enable_registrar.add("Inspect.EnableColumn",    boost::bind(&LLFloaterInspect::onEnableColumnVisibilityChecked, this, _2));
+    registrar.add("Inspect.ToggleColumn",           vs_appearance_ui_callback(this, boost::bind(&LLFloaterInspect::onColumnVisibilityChecked, this, _2)));
+    enable_registrar.add("Inspect.EnableColumn",    vs_appearance_ui_callback(this, boost::bind(&LLFloaterInspect::onEnableColumnVisibilityChecked, this, _2)));
 
     mOptionsButton = getChild<LLMenuButton>("options_btn");
 
@@ -117,7 +121,7 @@ bool LLFloaterInspect::postBuild()
         mOptionsButton->setMenu(options_menu, LLMenuButton::MP_BOTTOM_LEFT);
     }
 
-    mFSInspectColumnConfigConnection = gSavedSettings.getControl("FSInspectColumnConfig")->getSignal()->connect(boost::bind(&LLFloaterInspect::onColumnDisplayModeChanged, this));
+    mFSInspectColumnConfigConnection = gSavedSettings.getControl("FSInspectColumnConfig")->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterInspect::onColumnDisplayModeChanged, this)));
     onColumnDisplayModeChanged();
     // </FS:Ansariel>
 
@@ -136,6 +140,8 @@ LLFloaterInspect::~LLFloaterInspect(void)
     {
         mCreatorNameCacheConnection.disconnect();
     }
+    if (mAccountCurrent())
+    {
     if(!LLFloaterReg::instanceVisible("build"))
     {
         if(LLToolMgr::getInstance()->getBaseTool() == LLToolCompInspect::getInstance())
@@ -150,6 +156,8 @@ LLFloaterInspect::~LLFloaterInspect(void)
         LLFloaterReg::showInstance("build", LLSD(), true);
     }
 
+    }
+
     // <FS:Ansariel> FIRE-22292: Configurable columns
     if (mFSInspectColumnConfigConnection.connected())
     {
@@ -162,42 +170,34 @@ LLFloaterInspect::~LLFloaterInspect(void)
 
 void LLFloaterInspect::onOpen(const LLSD& key)
 {
+    if (!mAccountCurrent()) return;
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active(); owner && owner->objectSelection())
+        mNativeSelectionConnection = owner->objectSelection()->changed(vs_appearance_ui_callback(this, [this]{ setDirty(); }));
+#endif
+
     bool forcesel = LLSelectMgr::getInstance()->setForceSelection(true);
     LLToolMgr::getInstance()->setTransientTool(LLToolCompInspect::getInstance());
     LLSelectMgr::getInstance()->setForceSelection(forcesel);    // restore previouis value
-    mObjectSelection = LLSelectMgr::getInstance()->getSelection();
+    mObjectSelection = std::make_shared<VSInspectionSelection>();
     refresh();
     mDirty = false;
 }
 
 // [RLVa:KB] - Checked: RLVa-2.0.1
-const LLSelectNode* LLFloaterInspect::getSelectedNode() /*const*/
+const VSInspectionNode* LLFloaterInspect::getSelectedNode()
 {
-    if(mObjectList->getAllSelected().size() == 0)
-    {
-        return NULL;
-    }
-    LLScrollListItem* first_selected =mObjectList->getFirstSelected();
-
-    if (first_selected)
-    {
-        struct f : public LLSelectedNodeFunctor
-        {
-            LLUUID obj_id;
-            f(const LLUUID& id) : obj_id(id) {}
-            virtual bool apply(LLSelectNode* node)
-            {
-                return (obj_id == node->getObject()->getID());
-            }
-        } func(first_selected->getUUID());
-        return mObjectSelection->getFirstNode(&func);
-    }
-    return NULL;
+    if (!mAccountCurrent() || !mObjectSelection || !mObjectSelection->current()) return nullptr;
+    auto* row = mObjectList->getFirstSelected();
+    if (!row) return nullptr;
+    for (auto i = mObjectSelection->valid_begin(); i != mObjectSelection->valid_end(); ++i)
+        if ((*i)->getObject()->getID() == row->getUUID()) return *i;
+    return nullptr;
 }
 
 void LLFloaterInspect::onClickCreatorProfile()
 {
-        const LLSelectNode* node = getSelectedNode();
+        const auto* node = getSelectedNode();
         if(node)
         {
             // Only anonymize the creator if they're also the owner or if they're a nearby avie
@@ -212,7 +212,7 @@ void LLFloaterInspect::onClickCreatorProfile()
 
 void LLFloaterInspect::onClickOwnerProfile()
 {
-        const LLSelectNode* node = getSelectedNode();
+        const auto* node = getSelectedNode();
         if(node)
         {
             if(node->mPermissions->isGroupOwned())
@@ -242,7 +242,7 @@ void LLFloaterInspect::onSelectObject()
         }
         else
         {
-            const LLSelectNode* node = getSelectedNode();
+            const auto* node = getSelectedNode();
             const LLUUID& idOwner = (node) ? node->mPermissions->getOwner() : LLUUID::null;
             const LLUUID& idCreator = (node) ? node->mPermissions->getCreator() : LLUUID::null;
 
@@ -342,13 +342,14 @@ LLUUID LLFloaterInspect::getSelectedUUID()
 
 void LLFloaterInspect::refresh()
 {
+    if (!mAccountCurrent()) return;
+    mObjectSelection = std::make_shared<VSInspectionSelection>();
     LLUUID creator_id;
     std::string creator_name;
     S32 pos = mObjectList->getScrollPos();
     // PoundLife - Improved Object Inspect
     LLLocale locale("");
     LLResMgr& res_mgr = LLResMgr::instance();
-    LLSelectMgr& sel_mgr = LLSelectMgr::instance();
     S32 fcount = 0;
     S32 fcount_visible = 0;
     S32 tcount = 0;
@@ -380,10 +381,10 @@ void LLFloaterInspect::refresh()
     mObjectList->operateOnAll(LLScrollListCtrl::OP_DELETE);
     //List all transient objects, then all linked objects
 
-    for (LLObjectSelection::valid_iterator iter = mObjectSelection->valid_begin();
+    for (auto iter = mObjectSelection->valid_begin();
          iter != mObjectSelection->valid_end(); iter++)
     {
-        LLSelectNode* obj = *iter;
+        auto* obj = *iter;
         LLSD row;
         std::string owner_name, creator_name;
         auto vobj{obj->getObject()};
@@ -421,7 +422,7 @@ void LLFloaterInspect::refresh()
                 {
                     mOwnerNameCacheConnection.disconnect();
                 }
-                mOwnerNameCacheConnection = gCacheName->getGroup(idGroup, boost::bind(&LLFloaterInspect::onGetOwnerNameCallback, this));
+                mOwnerNameCacheConnection = gCacheName->getGroup(idGroup, vs_appearance_ui_callback(this, boost::bind(&LLFloaterInspect::onGetOwnerNameCallback, this)));
             }
         }
         else
@@ -444,7 +445,7 @@ void LLFloaterInspect::refresh()
                 {
                     mOwnerNameCacheConnection.disconnect();
                 }
-                mOwnerNameCacheConnection = LLAvatarNameCache::get(idOwner, boost::bind(&LLFloaterInspect::onGetOwnerNameCallback, this));
+                mOwnerNameCacheConnection = LLAvatarNameCache::get(idOwner, vs_appearance_ui_callback(this, boost::bind(&LLFloaterInspect::onGetOwnerNameCallback, this)));
             }
         }
 
@@ -464,7 +465,7 @@ void LLFloaterInspect::refresh()
             {
                 mCreatorNameCacheConnection.disconnect();
             }
-            mCreatorNameCacheConnection = LLAvatarNameCache::get(idCreator, boost::bind(&LLFloaterInspect::onGetCreatorNameCallback, this));
+            mCreatorNameCacheConnection = LLAvatarNameCache::get(idCreator, vs_appearance_ui_callback(this, boost::bind(&LLFloaterInspect::onGetCreatorNameCallback, this)));
         }
 
         row["id"] = vobj->getID();
@@ -549,8 +550,8 @@ void LLFloaterInspect::refresh()
         row["columns"][15]["type"] = "text";
         row["columns"][15]["value"] = LLSD::Integer(vram_memory / 1024);
 
-        primcount = sel_mgr.getSelection()->getObjectCount();
-        objcount = sel_mgr.getSelection()->getRootObjectCount();
+        primcount = mObjectSelection->getObjectCount();
+        objcount = mObjectSelection->getRootObjectCount();
         fcount += vobj->getNumFaces();
         fcount_visible += vobj->getNumVisibleFaces();
         tcount += vobj->getNumIndices() / 3;
@@ -561,41 +562,8 @@ void LLFloaterInspect::refresh()
     }
 
     // <FS:Ansariel> Show complexity in inspect window
-    for (LLObjectSelection::valid_root_iterator root_it = mObjectSelection->valid_root_begin(); root_it != mObjectSelection->valid_root_end(); ++root_it)
-    {
-        LLSelectNode* obj = *root_it;
-        LLVOVolume* volume = dynamic_cast<LLVOVolume*>(obj->getObject());
-        if (volume)
-        {
-            LLVOVolume::texture_cost_t textures;
-            F32 attachment_total_cost = 0;
-            F32 attachment_volume_cost = 0;
-            F32 attachment_texture_cost = 0;
-            F32 attachment_children_cost = 0;
-
-            attachment_volume_cost += volume->getRenderCost(textures);
-
-            for (const auto& child_obj : volume->getChildren())
-            {
-                LLVOVolume *child = dynamic_cast<LLVOVolume*>(child_obj.get());
-                if (child)
-                {
-                    attachment_children_cost += child->getRenderCost(textures);
-                }
-            }
-
-            for (auto texture : textures)
-            {
-                // add the cost of each individual texture in the linkset
-                attachment_texture_cost += LLVOVolume::getTextureCost(texture);
-            }
-
-            attachment_total_cost = attachment_volume_cost + attachment_texture_cost + attachment_children_cost;
-
-            // Limit attachment complexity to avoid signed integer flipping of the wearer's ACI
-            complexity += (U32)llclamp(attachment_total_cost, 0.f, max_attachment_complexity);
-        }
-    }
+    for (auto root_it = mObjectSelection->valid_root_begin(); root_it != mObjectSelection->valid_root_end(); ++root_it)
+        complexity += U32(llclamp((*root_it)->getObject()->linksetRenderCost(), 0.f, max_attachment_complexity));
     // </FS:Ansariel>
 
     if(selected_index > -1 && mObjectList->getItemIndex(selected_uuid) == selected_index)
@@ -750,6 +718,7 @@ void LLFloaterInspect::calculateTextureMemory(LLViewerTexture* texture, uuid_vec
 
 void LLFloaterInspect::onFocusReceived()
 {
+    if (!mAccountCurrent()) return;
     LLToolMgr::getInstance()->setTransientTool(LLToolCompInspect::getInstance());
     LLFloater::onFocusReceived();
 }
@@ -773,6 +742,19 @@ void LLFloaterInspect::onGetCreatorNameCallback()
 
 void LLFloaterInspect::draw()
 {
+    if (!mAccountCurrent()) return;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto signature = VSInspectionSelection::nativeFingerprint();
+        if (signature != mNativeDataSignature)
+        {
+            mNativeDataSignature = signature;
+            mDirty = true;
+        }
+    }
+#endif
+
     if (mDirty)
     {
         refresh();
@@ -881,3 +863,48 @@ bool LLFloaterInspect::onEnableColumnVisibilityChecked(const LLSD& userdata)
     return (mColumnBits[column] & column_config);
 }
 // </FS:Ansariel>
+
+void LLFloaterInspect::getObjectTextureMemory(VSInspectionObject* object, U32& bytes, U32& gpuBytes)
+{
+    if (!object) return;
+    if (auto* legacy = object->legacy()) { getObjectTextureMemory(legacy, bytes, gpuBytes); return; }
+#if VS_NATIVE_VULKAN
+    auto* native = object->native();
+    if (!native) return;
+    uuid_vec_t textures;
+    for (S32 face = 0; face < native->getNumTEs(); ++face)
+    {
+        const auto* entry = native->getTE(face);
+        if (!entry) continue;
+        if (const auto* material = entry->getGLTFRenderMaterial())
+            for (const auto& id : material->mTextureId) calculateNativeTextureMemory(id, textures, bytes, gpuBytes);
+        else
+        {
+            calculateNativeTextureMemory(entry->getID(), textures, bytes, gpuBytes);
+            if (entry->getMaterialParams().notNull())
+            {
+                calculateNativeTextureMemory(entry->getMaterialParams()->getNormalID(), textures, bytes, gpuBytes);
+                calculateNativeTextureMemory(entry->getMaterialParams()->getSpecularID(), textures, bytes, gpuBytes);
+            }
+        }
+    }
+    if (const auto* sculpt = native->getSculptParams(); sculpt && !native->isMesh())
+        calculateNativeTextureMemory(sculpt->getSculptTexture(), textures, bytes, gpuBytes);
+#endif
+}
+void LLFloaterInspect::calculateNativeTextureMemory(const LLUUID& id, uuid_vec_t& textures, U32& bytes, U32& gpuBytes)
+{
+#if VS_NATIVE_VULKAN
+    if (id.isNull()) return;
+    const auto image = vs_ui_image_snapshot(id);
+    const auto dimensions = vs_ui_image_dimensions(id);
+    const auto components = vs_ui_image_components(id);
+    if (!image || dimensions.first <= 0 || dimensions.second <= 0 || components <= 0) return;
+    const U32 cpu = U32(U64(dimensions.first) * dimensions.second * components);
+    const U32 gpu = U32(VSUIRenderer::imageDescription(image).gpuBytes);
+    if (std::find(mTextureList.begin(), mTextureList.end(), id) == mTextureList.end())
+    { mTextureList.push_back(id); mTextureMemory += cpu; mTextureVRAMMemory += gpu; }
+    if (std::find(textures.begin(), textures.end(), id) == textures.end())
+    { textures.push_back(id); bytes += cpu; gpuBytes += gpu; }
+#endif
+}

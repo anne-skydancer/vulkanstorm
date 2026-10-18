@@ -31,9 +31,12 @@
 #ifndef LL_LLUIPREVIEW_H
 #define LL_LLUIPREVIEW_H
 
+#include <typeinfo>
+
 namespace LLFloaterUIPreviewUtil
 {
     void registerFloater();
+    bool isNativeType(const std::type_info&);
 }
 
 #endif // LL_LLUIPREVIEW_H

@@ -34,6 +34,10 @@
 
 #include "llagent.h"
 #include "llfloater.h"
+#include "vsregioncontext.h"
+#if VS_NATIVE_VULKAN
+#include "vsworldscene.h"
+#endif
 #include "llpathfindingmanager.h"
 #include "llpathfindingobject.h"
 #include "llpathfindingobjectlist.h"
@@ -167,6 +171,13 @@ private:
     LLPathfindingObjectListPtr         mObjectList;
 
     LLObjectSelectionHandle            mObjectsSelection;
+    std::function<bool()> mAccountCurrent = [] { return true; };
+    std::optional<VSRegionContext> mListRegion;
+    std::shared_ptr<const void> mNativeSelectionLease;
+#if VS_NATIVE_VULKAN
+    std::map<LLUUID, VSWorldScene::ObjectHandle> mNativeRows;
+#endif
+
 
     bool                               mHasObjectsToBeSelected;
     uuid_vec_t                         mObjectsToBeSelected;

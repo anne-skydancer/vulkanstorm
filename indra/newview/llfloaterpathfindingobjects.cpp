@@ -28,6 +28,13 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterpathfindingobjects.h"
+#include "vsappearanceui.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vseditselection.h"
+#include "llviewerwindow.h"
+#include "vsvulkancontext.h"
+#endif
 
 #include <string>
 #include <map>
@@ -76,23 +83,31 @@
 void LLFloaterPathfindingObjects::onOpen(const LLSD &pKey)
 {
     LLFloater::onOpen(pKey);
+    mAccountCurrent = vs_native_im_guard();
+    if (!mAccountCurrent()) return;
+    mListRegion = vs_current_region_context();
 
     selectNoneObjects();
     mObjectsScrollList->setCommitOnSelectionChange(true);
 
     if (!mSelectionUpdateSlot.connected())
     {
-        mSelectionUpdateSlot = LLSelectMgr::getInstance()->mUpdateSignal.connect(boost::bind(&LLFloaterPathfindingObjects::onInWorldSelectionListChanged, this));
+#if VS_NATIVE_VULKAN
+        if (const auto owner = VSNativeSession::active(); owner && owner->objectSelection())
+            mSelectionUpdateSlot = owner->objectSelection()->changed(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onInWorldSelectionListChanged, this)));
+        else
+#endif
+        mSelectionUpdateSlot = LLSelectMgr::getInstance()->mUpdateSignal.connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onInWorldSelectionListChanged, this)));
     }
 
     if (!mRegionBoundaryCrossingSlot.connected())
     {
-        mRegionBoundaryCrossingSlot = gAgent.addRegionChangedCallback(boost::bind(&LLFloaterPathfindingObjects::onRegionBoundaryCrossed, this));
+        mRegionBoundaryCrossingSlot = gAgent.addRegionChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onRegionBoundaryCrossed, this)));
     }
 
     if (!mGodLevelChangeSlot.connected())
     {
-        mGodLevelChangeSlot = gAgent.registerGodLevelChanageListener(boost::bind(&LLFloaterPathfindingObjects::onGodLevelChange, this, _1));
+        mGodLevelChangeSlot = gAgent.registerGodLevelChanageListener(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onGodLevelChange, this, _1)));
     }
 
     requestGetObjects();
@@ -100,6 +115,8 @@ void LLFloaterPathfindingObjects::onOpen(const LLSD &pKey)
 
 void LLFloaterPathfindingObjects::onClose(bool pIsAppQuitting)
 {
+    ++mMessagingRequestId;
+    mNativeSelectionLease.reset();
     if (mGodLevelChangeSlot.connected())
     {
         mGodLevelChangeSlot.disconnect();
@@ -152,6 +169,20 @@ void LLFloaterPathfindingObjects::draw()
             {
                 const LLScrollListItem *selectedItem = *selectedItemIter;
 
+#if VS_NATIVE_VULKAN
+                if (VSNativeSession::active())
+                {
+                    const auto found = mNativeRows.find(selectedItem->getUUID());
+                    if (found != mNativeRows.end())
+                    {
+                        VSEditObject object(found->second);
+                        if (object)
+                            gObjectList.addDebugBeacon(gAgent.getPosAgentFromGlobal(object.getPositionGlobal()),
+                                selectedItem->getColumn(nameColumnIndex)->getValue().asString(), beaconColor, beaconTextColor, beaconWidth);
+                    }
+                    continue;
+                }
+#endif
                 LLViewerObject *viewerObject = gObjectList.findObject(selectedItem->getUUID());
                 if (viewerObject != NULL)
                 {
@@ -194,6 +225,10 @@ LLFloaterPathfindingObjects::LLFloaterPathfindingObjects(const LLSD &pSeed)
 
 LLFloaterPathfindingObjects::~LLFloaterPathfindingObjects()
 {
+    mSelectionUpdateSlot.disconnect(); mRegionBoundaryCrossingSlot.disconnect(); mGodLevelChangeSlot.disconnect();
+    mAccountCurrent = [] { return false; };
+    mObjectsScrollList->setCommitOnSelectionChange(false);
+    mNativeSelectionLease.reset();
     clearAllObjects();
 }
 
@@ -206,7 +241,7 @@ bool LLFloaterPathfindingObjects::postBuild()
 
     mObjectsScrollList = findChild<LLScrollListCtrl>("objects_scroll_list");
     llassert(mObjectsScrollList != NULL);
-    mObjectsScrollList->setCommitCallback(boost::bind(&LLFloaterPathfindingObjects::onScrollListSelectionChanged, this));
+    mObjectsScrollList->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onScrollListSelectionChanged, this)));
     mObjectsScrollList->sortByColumnIndex(static_cast<U32>(getNameColumnIndex()), true);
 
     mMessagingStatus = findChild<LLTextBase>("messaging_status");
@@ -214,38 +249,38 @@ bool LLFloaterPathfindingObjects::postBuild()
 
     mRefreshListButton = findChild<LLButton>("refresh_objects_list");
     llassert(mRefreshListButton != NULL);
-    mRefreshListButton->setCommitCallback(boost::bind(&LLFloaterPathfindingObjects::onRefreshObjectsClicked, this));
+    mRefreshListButton->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onRefreshObjectsClicked, this)));
 
     mSelectAllButton = findChild<LLButton>("select_all_objects");
     llassert(mSelectAllButton != NULL);
-    mSelectAllButton->setCommitCallback(boost::bind(&LLFloaterPathfindingObjects::onSelectAllObjectsClicked, this));
+    mSelectAllButton->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onSelectAllObjectsClicked, this)));
 
     mSelectNoneButton = findChild<LLButton>("select_none_objects");
     llassert(mSelectNoneButton != NULL);
-    mSelectNoneButton->setCommitCallback(boost::bind(&LLFloaterPathfindingObjects::onSelectNoneObjectsClicked, this));
+    mSelectNoneButton->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onSelectNoneObjectsClicked, this)));
 
     mShowBeaconCheckBox = findChild<LLCheckBoxCtrl>("show_beacon");
     llassert(mShowBeaconCheckBox != NULL);
 
     mTakeButton = findChild<LLButton>("take_objects");
     llassert(mTakeButton != NULL);
-    mTakeButton->setCommitCallback(boost::bind(&LLFloaterPathfindingObjects::onTakeClicked, this));
+    mTakeButton->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onTakeClicked, this)));
 
     mTakeCopyButton = findChild<LLButton>("take_copy_objects");
     llassert(mTakeCopyButton != NULL);
-    mTakeCopyButton->setCommitCallback(boost::bind(&LLFloaterPathfindingObjects::onTakeCopyClicked, this));
+    mTakeCopyButton->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onTakeCopyClicked, this)));
 
     mReturnButton = findChild<LLButton>("return_objects");
     llassert(mReturnButton != NULL);
-    mReturnButton->setCommitCallback(boost::bind(&LLFloaterPathfindingObjects::onReturnClicked, this));
+    mReturnButton->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onReturnClicked, this)));
 
     mDeleteButton = findChild<LLButton>("delete_objects");
     llassert(mDeleteButton != NULL);
-    mDeleteButton->setCommitCallback(boost::bind(&LLFloaterPathfindingObjects::onDeleteClicked, this));
+    mDeleteButton->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onDeleteClicked, this)));
 
     mTeleportButton = findChild<LLButton>("teleport_me_to_object");
     llassert(mTeleportButton != NULL);
-    mTeleportButton->setCommitCallback(boost::bind(&LLFloaterPathfindingObjects::onTeleportClicked, this));
+    mTeleportButton->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::onTeleportClicked, this)));
 
     return LLFloater::postBuild();
 }
@@ -262,6 +297,7 @@ LLPathfindingManager::request_id_t LLFloaterPathfindingObjects::getNewRequestId(
 
 void LLFloaterPathfindingObjects::handleNewObjectList(LLPathfindingManager::request_id_t pRequestId, LLPathfindingManager::ERequestStatus pRequestStatus, LLPathfindingObjectListPtr pObjectList)
 {
+    if (!mAccountCurrent() || (mListRegion && !mListRegion->current())) return;
     llassert(pRequestId <= mMessagingRequestId);
     if (pRequestId == mMessagingRequestId)
     {
@@ -294,6 +330,7 @@ void LLFloaterPathfindingObjects::handleNewObjectList(LLPathfindingManager::requ
 
 void LLFloaterPathfindingObjects::handleUpdateObjectList(LLPathfindingManager::request_id_t pRequestId, LLPathfindingManager::ERequestStatus pRequestStatus, LLPathfindingObjectListPtr pObjectList)
 {
+    if (!mAccountCurrent() || (mListRegion && !mListRegion->current())) return;
     // We current assume that handleUpdateObjectList is called only when objects are being SET
     llassert(pRequestId <= mMessagingRequestId);
     if (pRequestId == mMessagingRequestId)
@@ -352,6 +389,9 @@ void LLFloaterPathfindingObjects::rebuildObjectsScrollList(bool update_if_needed
 
     S32 origScrollPosition = mObjectsScrollList->getScrollPos();
     mObjectsScrollList->deleteAllItems();
+#if VS_NATIVE_VULKAN
+    mNativeRows.clear();
+#endif
     mMissingNameObjectsScrollListItems.clear();
 
     if ((mObjectList != NULL) && !mObjectList->isEmpty())
@@ -413,11 +453,17 @@ void LLFloaterPathfindingObjects::addObjectToScrollList(const LLPathfindingObjec
     }
 
     LLScrollListItem *scrollListItem = mObjectsScrollList->addRow(rowParams);
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && mListRegion && mListRegion->current() && gViewerWindow && gViewerWindow->nativeContext())
+        if (const auto token = gViewerWindow->nativeContext()->world().object(mListRegion->getHost(), pObjectPtr->getUUID()))
+            mNativeRows[pObjectPtr->getUUID()] = *token;
+#endif
+
 
     if (pObjectPtr->hasOwner() && !pObjectPtr->hasOwnerName())
     {
         mMissingNameObjectsScrollListItems.insert(scroll_list_item_map::value_type(pObjectPtr->getUUID().asString(), scrollListItem));
-        pObjectPtr->registerOwnerNameListener(boost::bind(&LLFloaterPathfindingObjects::handleObjectNameResponse, this, _1));
+        pObjectPtr->registerOwnerNameListener(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::handleObjectNameResponse, this, _1)));
     }
 }
 
@@ -470,6 +516,14 @@ void LLFloaterPathfindingObjects::showFloaterWithSelectionObjects()
 {
     mObjectsToBeSelected.clear();
 
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active(); owner && owner->objectSelection())
+    {
+        for (const auto& token : owner->objectSelection()->selected()) mObjectsToBeSelected.push_back(token.id);
+    }
+    else
+#endif
+    {
     LLObjectSelectionHandle selectedObjectsHandle = LLSelectMgr::getInstance()->getSelection();
     if (selectedObjectsHandle.notNull())
     {
@@ -484,6 +538,7 @@ void LLFloaterPathfindingObjects::showFloaterWithSelectionObjects()
                 mObjectsToBeSelected.push_back(viewerObject->getID());
             }
         }
+    }
     }
     mHasObjectsToBeSelected = true;
 
@@ -513,6 +568,9 @@ void LLFloaterPathfindingObjects::clearAllObjects()
 {
     selectNoneObjects();
     mObjectsScrollList->deleteAllItems();
+#if VS_NATIVE_VULKAN
+    mNativeRows.clear();
+#endif
     mMissingNameObjectsScrollListItems.clear();
     mObjectList.reset();
 }
@@ -537,6 +595,28 @@ void LLFloaterPathfindingObjects::teleportToSelectedObject()
         const LLScrollListItem *selectedItem = selectedItemRef;
         llassert(mObjectList != NULL);
         LLVector3d teleportLocation;
+
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            if (!mAccountCurrent() || !mListRegion || !mListRegion->current()) return;
+            const auto found = mNativeRows.find(selectedItem->getUUID());
+            if (found != mNativeRows.end())
+            {
+                VSEditObject object(found->second);
+                if (!object) return;
+                teleportLocation = object.getPositionGlobal();
+            }
+            else
+            {
+                const auto object = mObjectList->find(selectedItem->getUUID().asString());
+                if (!object) return;
+                teleportLocation = mListRegion->getPosGlobalFromRegion(object->getLocation());
+            }
+            gAgent.teleportViaLocationLookAt(teleportLocation);
+            return;
+        }
+#endif
         LLViewerObject *viewerObject = gObjectList.findObject(selectedItem->getUUID());
         if (viewerObject == NULL)
         {
@@ -639,7 +719,18 @@ void LLFloaterPathfindingObjects::onTakeCopyClicked()
 void LLFloaterPathfindingObjects::onReturnClicked()
 {
     LLNotification::Params params("PathfindingReturnMultipleItems");
-    params.functor.function(boost::bind(&LLFloaterPathfindingObjects::handleReturnItemsResponse, this, _1, _2));
+    auto response = vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::handleReturnItemsResponse, this, _1, _2));
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active(); owner && owner->objectSelection())
+    {
+        const auto selected = owner->objectSelection()->selectionGuard();
+        const auto lease = owner->objectSelection()->retainSelection();
+        params.functor.function([response, selected, lease](const LLSD& notification, const LLSD& answer) mutable
+            { if (selected()) response(notification, answer); });
+    }
+    else
+#endif
+        params.functor.function(response);
 
     LLSD substitutions;
     int numItems = getNumSelectedObjects();
@@ -659,7 +750,18 @@ void LLFloaterPathfindingObjects::onReturnClicked()
 void LLFloaterPathfindingObjects::onDeleteClicked()
 {
     LLNotification::Params params("PathfindingDeleteMultipleItems");
-    params.functor.function(boost::bind(&LLFloaterPathfindingObjects::handleDeleteItemsResponse, this, _1, _2));
+    auto response = vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingObjects::handleDeleteItemsResponse, this, _1, _2));
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active(); owner && owner->objectSelection())
+    {
+        const auto selected = owner->objectSelection()->selectionGuard();
+        const auto lease = owner->objectSelection()->retainSelection();
+        params.functor.function([response, selected, lease](const LLSD& notification, const LLSD& answer) mutable
+            { if (selected()) response(notification, answer); });
+    }
+    else
+#endif
+        params.functor.function(response);
 
     LLSD substitutions;
     int numItems = getNumSelectedObjects();
@@ -693,6 +795,7 @@ void LLFloaterPathfindingObjects::onInWorldSelectionListChanged()
 
 void LLFloaterPathfindingObjects::onRegionBoundaryCrossed()
 {
+    mListRegion = vs_current_region_context();
     requestGetObjects();
 }
 
@@ -855,6 +958,25 @@ void LLFloaterPathfindingObjects::updateStateOnActionControls()
 
 void LLFloaterPathfindingObjects::selectScrollListItemsInWorld()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (!mAccountCurrent() || !mListRegion || !mListRegion->current() || !owner->objectSelection()) return;
+        const auto selector = owner->retainObjectSelection();
+        const auto weak = getHandle(); const auto account = mAccountCurrent;
+        mNativeSelectionLease.reset();
+        selector->deselectAll();
+        if (!weak.get() || !account()) return;
+        bool append = false;
+        for (const auto* row : mObjectsScrollList->getAllSelected())
+        {
+            const auto token = mNativeRows.find(row->getUUID());
+            if (token != mNativeRows.end() && selector->selectFamily(token->second, append)) append = true;
+        }
+        if (append) mNativeSelectionLease = selector->retainSelection();
+        return;
+    }
+#endif
     mObjectsSelection.clear();
     LLSelectMgr::getInstance()->deselectAll();
 

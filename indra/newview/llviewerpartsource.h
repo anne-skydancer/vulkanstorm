@@ -39,6 +39,8 @@
 //
 //
 
+#include <functional>
+#include <optional>
 class LLViewerTexture;
 class LLViewerObject;
 class LLViewerPart;
@@ -66,6 +68,17 @@ public:
     bool isSuspended() const        { return mIsSuspended; }
     U32 getType() const             { return mType; }
     static void updatePart(LLViewerPart &part, const F32 dt);
+#if VS_NATIVE_VULKAN
+    using NativePosition=std::function<std::optional<LLVector3>()>;
+    void setNativePosition(NativePosition query) { mNativePosition=std::move(query); }
+    NativePosition mNativePosition;
+    LLUUID mNativeSourceID;
+    std::function<std::optional<LLQuaternion>()> mNativeRotation;
+    bool mNativeHUD=false;
+    std::function<bool()> mNativeAllowed;
+#endif
+    bool sourcePosition(LLVector3&) const;
+    std::optional<LLQuaternion> sourceRotation() const;
     void setOwnerUUID(const LLUUID& owner_id) { mOwnerUUID = owner_id; }
     LLUUID getOwnerUUID() const { return mOwnerUUID; }
     U32 getID() const { return mID; }
@@ -108,6 +121,12 @@ class LLViewerPartSourceScript : public LLViewerPartSource
 {
 public:
     LLViewerPartSourceScript(LLViewerObject *source_objp);
+#if VS_NATIVE_VULKAN
+    explicit LLViewerPartSourceScript(const LLVector3&);
+    void setNativeParameters(const LLPartSysData&,bool fullMessage);
+    NativePosition mNativeTarget;
+    std::function<bool()> mNativeAppearanceAllowed;
+#endif
     /*virtual*/ void update(const F32 dt);
 
     /*virtual*/ void setDead();
@@ -176,6 +195,9 @@ public:
     void setColor(const LLColor4 &color);
 
     static void updatePart(LLViewerPart &part, const F32 dt);
+#if VS_NATIVE_VULKAN
+    NativePosition mNativeTarget;
+#endif
     LLPointer<LLViewerObject>   mTargetObjectp;
     LLVector3d      mLKGTargetPosGlobal;
     LLColor4 mColor;

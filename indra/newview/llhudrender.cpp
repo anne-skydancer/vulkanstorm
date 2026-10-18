@@ -38,6 +38,9 @@
 #include "llviewerwindow.h"
 #include "llui.h"
 
+#if VS_NATIVE_VULKAN
+#include "vsuiimageprovider.h"
+#endif
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -113,9 +116,18 @@ void hud_render_text(const LLWString &wstr, const LLVector3 &pos_agent,
         // Preserve the same floating screen projection, floored pixel offsets,
         // scale and baseline as the reference orthographic glyph submission.
         if(!std::isfinite(win_coord.x) || !std::isfinite(win_coord.y) || !std::isfinite(win_coord.z) || win_coord.z<0.f || win_coord.z>1.f)return;
+#if VS_NATIVE_VULKAN
+        // World billboard glyphs retain the actual projected depth and full
+        // target viewport origin. Unscoped UI/beacon callers keep their path.
+        const bool world=vs_ui_world_depth().has_value();
+        std::optional<VSUIWorldDepthScope> depth;
+        if(world)depth.emplace(win_coord.z);
+#else
+        const bool world=false;
+#endif
         LLUI::pushMatrix();LLUI::loadIdentity();
-        LLUI::translate((win_coord.x-world_view_rect.mLeft)/LLFontGL::sScaleX,
-            (win_coord.y-world_view_rect.mBottom)/LLFontGL::sScaleY);
+        LLUI::translate((win_coord.x-(world?0:world_view_rect.mLeft))/LLFontGL::sScaleX,
+            (win_coord.y-(world?0:world_view_rect.mBottom))/LLFontGL::sScaleY);
         F32 right_x;
         font.render(wstr,0,0,1,color,LLFontGL::LEFT,LLFontGL::BASELINE,style,shadow,
             static_cast<S32>(wstr.length()),1000,&right_x,false,true);

@@ -25,6 +25,13 @@
  */
 #include "llviewerprecompiledheaders.h"
 #include "vsregioncontext.h"
+#include "llviewerwindow.h"
+#if VS_NATIVE_VULKAN
+#include "vseditselection.h"
+#include "vsnativeim.h"
+#include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#endif
 
 #include "llfloaterobjectweights.h"
 
@@ -121,6 +128,19 @@ bool LLFloaterObjectWeights::postBuild()
 // virtual
 void LLFloaterObjectWeights::onOpen(const LLSD& key)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        mAccountCurrent = vs_native_im_guard();
+        const auto weak = getHandle();
+        const auto current = mAccountCurrent;
+        mSelectionChanged = owner->objectSelection()->changed([weak, current]
+        {
+            auto* panel = dynamic_cast<LLFloaterObjectWeights*>(weak.get());
+            if (current() && panel) panel->refresh();
+        });
+    }
+#endif
     refresh();
     updateLandImpacts(LLViewerParcelMgr::getInstance()->getFloatingParcelSelection()->getParcel());
 }
@@ -128,11 +148,35 @@ void LLFloaterObjectWeights::onOpen(const LLSD& key)
 // virtual
 void LLFloaterObjectWeights::onWeightsUpdate(const SelectionCost& selection_cost)
 {
+    if (!mAccountCurrent() || !mSelectionCurrent()) return;
     mSelectedDownloadWeight->setText(llformat("%.1f", selection_cost.mNetworkCost));
     mSelectedPhysicsWeight->setText(llformat("%.1f", selection_cost.mPhysicsCost));
     mSelectedServerWeight->setText(llformat("%.1f", selection_cost.mSimulationCost));
 
     S32 render_cost = LLSelectMgr::getInstance()->getSelection()->getSelectedObjectRenderCost();
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && gViewerWindow && gViewerWindow->nativeContext())
+    {
+        F32 cost = 0;
+        VSEditSelection selection;
+        std::set<LLUUID> computed;
+        auto& world = gViewerWindow->nativeContext()->world();
+        for (const auto* node : selection)
+            if (const auto* object = node->getObject(); object && object->isRootEdit())
+            {
+                cost += world.objectLinksetRenderCost(object->task().nativeObject()).value_or(0);
+                computed.insert(object->getID());
+                for (const auto* child : object->getChildren()) computed.insert(child->getID());
+            }
+        for (const auto* node : selection)
+            if (const auto* object = node->getObject(); object && computed.insert(object->getID()).second)
+            {
+                const auto metrics = world.objectMetrics(object->task().nativeObject());
+                if (metrics && metrics->renderCost) cost += F32(*metrics->renderCost);
+            }
+        render_cost = S32(cost);
+    }
+#endif
     mSelectedDisplayWeight->setText(llformat("%d", render_cost));
 
     toggleWeightsLoadingIndicators(false);
@@ -141,6 +185,7 @@ void LLFloaterObjectWeights::onWeightsUpdate(const SelectionCost& selection_cost
 //virtual
 void LLFloaterObjectWeights::setErrorStatus(S32 status, const std::string& reason)
 {
+    if (!mAccountCurrent() || !mSelectionCurrent()) return;
     const std::string text = getString("nothing_selected");
 
     mSelectedDownloadWeight->setText(text);
@@ -153,6 +198,10 @@ void LLFloaterObjectWeights::setErrorStatus(S32 status, const std::string& reaso
 
 void LLFloaterObjectWeights::draw()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { drawNative(); LLFloater::draw(); return; }
+#endif
+
     // Normally it's a bad idea to set text and visibility inside draw
     // since it can cause rect updates go to different, already drawn elements,
     // but floater is very simple and these elements are supposed to be isolated
@@ -216,7 +265,11 @@ void LLFloaterObjectWeights::draw()
 
 void LLFloaterObjectWeights::updateLandImpacts(const LLParcel* parcel)
 {
-    if (!parcel || LLSelectMgr::getInstance()->getSelection()->isEmpty())
+    bool empty = LLSelectMgr::getInstance()->getSelection()->isEmpty();
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) empty = VSEditSelection().isEmpty();
+#endif
+    if (!mAccountCurrent() || !parcel || empty)
     {
         updateIfNothingSelected();
     }
@@ -243,6 +296,10 @@ void LLFloaterObjectWeights::updateLandImpacts(const LLParcel* parcel)
 
 void LLFloaterObjectWeights::refresh()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { refreshNative(); return; }
+#endif
+
     LLSelectMgr* sel_mgr = LLSelectMgr::getInstance();
 
     if (sel_mgr->getSelection()->isEmpty())
@@ -366,4 +423,71 @@ void LLFloaterObjectWeights::updateIfNothingSelected()
     toggleWeightsLoadingIndicators(false);
     toggleLandImpactsLoadingIndicators(false);
     toggleRenderLoadingIndicators(false);
+}
+
+
+void LLFloaterObjectWeights::refreshNative()
+{
+#if VS_NATIVE_VULKAN
+    if (!mAccountCurrent()) return;
+    VSEditSelection selection;
+    mSelectionCurrent = selection.guard();
+    if (selection.isEmpty()) { updateIfNothingSelected(); return; }
+    mSelectedObjects->setText(llformat("%d", selection.getRootObjectCount()));
+    mSelectedPrims->setText(llformat("%d", selection.getObjectCount()));
+    mSelectedOnLand->setText(llformat("%.1d", S32(selection.getSelectedLinksetCost())));
+    updateLandImpacts(LLViewerParcelMgr::getInstance()->getFloatingParcelSelection()->getParcel());
+    if (selection.objectsCrossParcel())
+    {
+        const auto text = getString("nothing_selected");
+        mRezzedOnLand->setText(text); mRemainingCapacity->setText(text); mTotalCapacity->setText(text);
+        toggleLandImpactsLoadingIndicators(false);
+    }
+    const auto region = vs_current_region_context();
+    const auto url = region ? region->getCapability("ResourceCostSelected") : std::string();
+    if (url.empty()) { setErrorStatus(0, "ResourceCostSelected unavailable"); return; }
+    uuid_set_t objects;
+    for (auto iter = selection.root_begin(); iter != selection.root_end(); ++iter)
+        if (const auto* object = (*iter)->getObject()) objects.insert(object->getID());
+    generateTransactionID();
+    const auto account = mAccountCurrent, selected = mSelectionCurrent;
+    const auto guard = [account, selected, region] { return account() && selected() && region && region->current(); };
+    toggleWeightsLoadingIndicators(true);
+    LLAccountingCostManager::instance().fetchSelectionCosts(Roots, url, getObserverHandle(), objects, guard);
+#endif
+}
+
+void LLFloaterObjectWeights::drawNative()
+{
+#if VS_NATIVE_VULKAN
+    if (!mAccountCurrent() || !gViewerWindow || !gViewerWindow->nativeContext()) return;
+    VSEditSelection selection;
+    if (selection.isEmpty()) { updateIfNothingSelected(); return; }
+    S32 object_lod = -1; bool multiple_lods = false, ready = true;
+    U64 triangles = 0; F32 pixel_area = 0;
+    auto& world = gViewerWindow->nativeContext()->world();
+    for (auto iter = selection.root_begin(); iter != selection.root_end(); ++iter)
+    {
+        const auto* object = (*iter)->getObject(); if (!object) continue;
+        const auto metrics = world.objectMetrics(object->task().nativeObject());
+        if (!metrics || metrics->lod < 0) { ready = false; continue; }
+        if (object_lod < 0) object_lod = metrics->lod;
+        else if (object_lod != metrics->lod) multiple_lods = true;
+        if (!object->isRootEdit()) continue;
+        const auto count = [&](const VSEditObject& item) -> void
+        {
+            const auto row = world.objectMetrics(item.task().nativeObject());
+            if (!row || !row->triangles) ready = false;
+            else triangles += *row->triangles;
+        };
+        count(*object);
+        for (const auto* child : object->getChildren()) count(*child);
+        if (metrics->pixelArea) pixel_area += *metrics->pixelArea; else ready = false;
+    }
+    toggleRenderLoadingIndicators(!ready && !multiple_lods);
+    if (multiple_lods) mLodLevel->setText(getString("multiple_lods"));
+    else if (object_lod >= 0 && object_lod < 4) mLodLevel->setText(getString(lod_strings[object_lod]));
+    mTrianglesShown->setText(llformat("%llu", static_cast<unsigned long long>(triangles)));
+    mPixelArea->setText(llformat("%lld", static_cast<long long>(pixel_area)));
+#endif
 }

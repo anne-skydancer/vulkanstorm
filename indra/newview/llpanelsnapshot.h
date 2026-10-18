@@ -30,6 +30,7 @@
 //#include "llfloatersnapshot.h"
 #include "llpanel.h"
 #include "llsnapshotmodel.h"
+#include <typeinfo>
 
 class LLSpinCtrl;
 class LLSideTrayPanelContainer;
@@ -43,6 +44,7 @@ class LLPanelSnapshot: public LLPanel
 {
 public:
     LLPanelSnapshot();
+    static bool isNativeInternalType(const std::type_info&);
 
     // <FS:Ansariel> Store settings at logout
     /*virtual*/ ~LLPanelSnapshot() {}

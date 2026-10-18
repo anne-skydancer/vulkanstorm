@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llfloateravatarwelcomepack.h"
 #include "llmediactrl.h"
@@ -110,7 +111,9 @@ void LLFloaterAvatarWelcomePack::onOpen(const LLSD& key)
     // region the avatar logs into as well.
     if (!mAvatarPickerUrlChangedSignal.connected())
     {
-        mAvatarPickerUrlChangedSignal = LFSimFeatureHandler::instance().setAvatarPickerCallback(boost::bind(&LLFloaterAvatarWelcomePack::handleUrlChanged, this, _1));
+        const auto weak=getHandle();const auto account=vs_native_im_guard();
+        mAvatarPickerUrlChangedSignal = LFSimFeatureHandler::instance().setAvatarPickerCallback(
+            [this,weak,account](const std::string& url){if(weak.get() && account())handleUrlChanged(url);});
     }
 }
 

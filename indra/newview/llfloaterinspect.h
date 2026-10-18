@@ -30,6 +30,8 @@
 #define LL_LLFLOATERINSPECT_H
 
 #include "llavatarname.h"
+#include <memory>
+#include <functional>
 #include "llfloater.h"
 #include "llviewerobject.h" // PoundLife - Improved Object Inspect
 
@@ -39,6 +41,9 @@ class LLScrollListCtrl;
 class LLUICtrl;
 // [RLVa:KB] - Checked: RLVa-2.0.1
 class LLSelectNode;
+struct VSInspectionNode;
+class VSInspectionObject;
+class VSInspectionSelection;
 // [/RLVa:KB]
 class LLMenuButton; // <FS:Ansariel> FIRE-22292: Configurable columns
 
@@ -69,12 +74,14 @@ protected:
     bool mDirty;
 
 // [RLVa:KB] - Checked: RLVa-2.0.1
-    const LLSelectNode* getSelectedNode() /*const*/;
+    const VSInspectionNode* getSelectedNode() /*const*/;
 // [/RLVa:KB]
 
 private:
     // PoundLife - Improved Object Inspect
     void getObjectTextureMemory(LLViewerObject* object, U32& object_texture_memory, U32& object_vram_memory);
+    void getObjectTextureMemory(VSInspectionObject*, U32&, U32&);
+    void calculateNativeTextureMemory(const LLUUID&, uuid_vec_t&, U32&, U32&);
     void calculateTextureMemory(LLViewerTexture* texture, uuid_vec_t& object_texture_list, U32& object_texture_memory, U32& object_vram_memory);
     uuid_vec_t mTextureList;
     U32 mTextureMemory;
@@ -86,7 +93,10 @@ private:
     LLFloaterInspect(const LLSD& key);
     virtual ~LLFloaterInspect(void);
 
-    LLSafeHandle<LLObjectSelection> mObjectSelection;
+    std::shared_ptr<VSInspectionSelection> mObjectSelection;
+    boost::signals2::scoped_connection mNativeSelectionConnection;
+    std::function<bool()> mAccountCurrent;
+    std::vector<std::string> mNativeDataSignature;
     boost::signals2::connection mOwnerNameCacheConnection;
     boost::signals2::connection mCreatorNameCacheConnection;
 

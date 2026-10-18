@@ -33,6 +33,8 @@
 #include "llavatarappearancedefines.h"
 #include "llwearabletype.h"
 
+#include <memory>
+#include <functional>
 #include "llwearable.h" // <FS:ND/> for LLWearable::LLWearableObserver
 class LLAccordionCtrl;
 class LLCheckBoxCtrl;
@@ -66,7 +68,8 @@ public:
     // changes camera angle to default for selected subpart
     void                changeCamera(U8 subpart);
 
-    LLViewerWearable*   getWearable() { return mWearablePtr; }
+    LLViewerWearable*   getWearable();
+    static bool isNativeInternalType(const std::type_info&);
     void                setWearable(LLViewerWearable *wearable, bool disable_camera_switch = false);
 
     void                saveChanges(bool force_save_as = false);
@@ -132,6 +135,9 @@ private:
 
     // the pointer to the wearable we're editing. NULL means we're not editing a wearable.
     LLViewerWearable *mWearablePtr;
+    std::shared_ptr<LLViewerWearable> mNativeWearableOwner;
+    std::function<bool()> mAccountCurrent;
+    boost::signals2::scoped_connection mHeightUnitsConnection;
     LLViewerInventoryItem* mWearableItem;
 
     // these are constant no matter what wearable we're editing

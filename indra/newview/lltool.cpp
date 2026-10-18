@@ -33,6 +33,7 @@
 #include "llview.h"
 
 #include "llviewerwindow.h"
+#include "llviewerobject.h"
 #include "llviewercontrol.h"
 #include "lltoolcomp.h"
 #include "lltoolfocus.h"
@@ -207,4 +208,10 @@ LLTool* LLTool::getOverrideTool(MASK mask)
         }
     }
     return NULL;
+}
+
+LLUUID LLTool::getEditingObjectID()
+{
+    const auto* object = getEditingObject();
+    return object ? object->getID() : LLUUID::null;
 }

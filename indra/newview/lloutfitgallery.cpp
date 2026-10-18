@@ -25,7 +25,9 @@
  * $/LicenseInfo$
  */
 
-#include "llviewerprecompiledheaders.h" // must be first include
+#include "llviewerprecompiledheaders.h"
+#include "llrender2dutils.h"
+#include "vsappearanceui.h" // must be first include
 #include "lloutfitgallery.h"
 
 // llcommon
@@ -95,7 +97,7 @@ LLOutfitGallery::LLOutfitGallery(const LLOutfitGallery::Params& p)
     LLControlVariable* ctrl = gSavedSettings.getControl("InventoryFavoritesColorText");
     if (ctrl)
     {
-        mSavedSettingInvFavColor = ctrl->getSignal()->connect(boost::bind(&LLOutfitGallery::handleInvFavColorChange, this));
+        mSavedSettingInvFavColor = ctrl->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLOutfitGallery::handleInvFavColorChange, this)));
     }
 }
 
@@ -372,7 +374,7 @@ void LLOutfitGallery::onFocusReceived()
 
 void LLOutfitGallery::onRemoveOutfit(const LLUUID& outfit_cat_id)
 {
-    LLNotificationsUtil::add("DeleteOutfits", LLSD(), LLSD(), boost::bind(onOutfitsRemovalConfirmation, _1, _2, outfit_cat_id));
+    LLNotificationsUtil::add("DeleteOutfits", LLSD(), LLSD(), [current=vs_native_im_guard(), outfit_cat_id](const LLSD& notification, const LLSD& response) { if (current()) onOutfitsRemovalConfirmation(notification, response, outfit_cat_id); });
 }
 
 void LLOutfitGallery::onOutfitsRemovalConfirmation(const LLSD& notification, const LLSD& response, const LLUUID& outfit_cat_id)
@@ -762,6 +764,7 @@ void LLOutfitGallery::moveRowPanel(LLPanel* stack, int left, int bottom)
 
 LLOutfitGallery::~LLOutfitGallery()
 {
+    delete mSortMenu;
     delete mOutfitGalleryMenu;
 
     while (!mUnusedRowPanels.empty())
@@ -1047,7 +1050,14 @@ void LLOutfitGalleryItem::draw()
     border.mRight = border.mRight + 1;
     gl_rect_2d(border, border_color, false);
 
-    if (mTexturep)
+    if (mNativeTexture)
+    {
+        LLRect interior = border;
+        interior.stretch(-1);
+        const F32 alpha = getTransparencyType() == TT_ACTIVE ? 1.0f : getCurrentTransparency();
+        mNativeTexture->draw(interior.mLeft - 1, interior.mBottom, interior.getWidth(), interior.getHeight(), UI_VERTEX_COLOR % alpha);
+    }
+    else if (mTexturep)
     {
         LLRect interior = border;
         interior.stretch(-1);
@@ -1070,9 +1080,8 @@ void LLOutfitGalleryItem::draw()
         static LLPointer<LLUIImage> fav_img = LLRender2D::getInstance()->getUIImage("Inv_Favorite_Star_Full");
 
         const F32 alpha = getTransparencyType() == TT_ACTIVE ? 1.0f : getCurrentTransparency();
-        gl_draw_scaled_image(
-            border.getWidth() - image_size - HPAD, image_size + VPAD + mOutfitNameText->getRect().getHeight(),
-            image_size, image_size, fav_img->getImage(), UI_VERTEX_COLOR % alpha);
+        fav_img->draw(border.getWidth() - image_size - HPAD,
+            image_size + VPAD + mOutfitNameText->getRect().getHeight(), image_size, image_size, UI_VERTEX_COLOR % alpha);
      }
 }
 
@@ -1209,6 +1218,18 @@ bool LLOutfitGalleryItem::openOutfitsContent()
 
 bool LLOutfitGalleryItem::setImageAssetId(LLUUID image_asset_id)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        auto image = LLUI::getUIImageByID(image_asset_id);
+        if (!image) return false;
+        mImageAssetId = image_asset_id;
+        mNativeTexture = image;
+        mTexturep = nullptr;
+        mPreviewIcon->setVisible(false);
+        mDefaultImage = false;
+        return true;
+    }
+
     LLPointer<LLViewerFetchedTexture> texture = LLViewerTextureManager::getFetchedTexture(image_asset_id, FTT_DEFAULT, MIPMAP_YES, LLGLTexture::BOOST_NONE, LLViewerTexture::FETCHED_TEXTURE);
     if (texture)
     {
@@ -1234,6 +1255,7 @@ LLUUID LLOutfitGalleryItem::getImageAssetId()
 void LLOutfitGalleryItem::setDefaultImage()
 {
     mTexturep = NULL;
+    mNativeTexture = nullptr;
     mImageAssetId.setNull();
     mPreviewIcon->setVisible(true);
     mDefaultImage = true;
@@ -1245,21 +1267,18 @@ LLContextMenu* LLOutfitGalleryContextMenu::createMenu()
     LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
     LLUUID selected_id = mUUIDs.front();
 
-    registrar.add("Outfit.WearReplace",
-                  boost::bind(&LLAppearanceMgr::replaceCurrentOutfit, &LLAppearanceMgr::instance(), selected_id));
-    registrar.add("Outfit.WearAdd",
-                  boost::bind(&LLAppearanceMgr::addCategoryToCurrentOutfit, &LLAppearanceMgr::instance(), selected_id));
-    registrar.add("Outfit.TakeOff",
-                  boost::bind(&LLAppearanceMgr::takeOffOutfit, &LLAppearanceMgr::instance(), selected_id));
-    registrar.add("Outfit.Edit", boost::bind(editOutfit));
-    registrar.add("Outfit.Rename", boost::bind(renameOutfit, selected_id));
-    registrar.add("Outfit.Delete", boost::bind(LLOutfitGallery::onRemoveOutfit, selected_id));
-    registrar.add("Outfit.Create", boost::bind(&LLOutfitGalleryContextMenu::onCreate, this, _2));
-    registrar.add("Outfit.Thumbnail", boost::bind(&LLOutfitGalleryContextMenu::onThumbnail, this, selected_id));
-    registrar.add("Outfit.Favorite", boost::bind(&LLOutfitGalleryContextMenu::onFavorite, this, selected_id));
-    registrar.add("Outfit.Save", boost::bind(&LLOutfitGalleryContextMenu::onSave, this, selected_id));
-    enable_registrar.add("Outfit.OnEnable", boost::bind(&LLOutfitGalleryContextMenu::onEnable, this, _2));
-    enable_registrar.add("Outfit.OnVisible", boost::bind(&LLOutfitGalleryContextMenu::onVisible, this, _2));
+    registrar.add("Outfit.WearReplace", vs_appearance_ui_callback(ownerView(), boost::bind(&LLAppearanceMgr::replaceCurrentOutfit, &LLAppearanceMgr::instance(), selected_id)));
+    registrar.add("Outfit.WearAdd", vs_appearance_ui_callback(ownerView(), boost::bind(&LLAppearanceMgr::addCategoryToCurrentOutfit, &LLAppearanceMgr::instance(), selected_id)));
+    registrar.add("Outfit.TakeOff", vs_appearance_ui_callback(ownerView(), boost::bind(&LLAppearanceMgr::takeOffOutfit, &LLAppearanceMgr::instance(), selected_id)));
+    registrar.add("Outfit.Edit", vs_appearance_ui_callback(ownerView(), boost::bind(editOutfit)));
+    registrar.add("Outfit.Rename", vs_appearance_ui_callback(ownerView(), boost::bind(renameOutfit, selected_id)));
+    registrar.add("Outfit.Delete", vs_appearance_ui_callback(ownerView(), boost::bind(LLOutfitGallery::onRemoveOutfit, selected_id)));
+    registrar.add("Outfit.Create", vs_appearance_ui_callback(ownerView(), boost::bind(&LLOutfitGalleryContextMenu::onCreate, this, _2)));
+    registrar.add("Outfit.Thumbnail", vs_appearance_ui_callback(ownerView(), boost::bind(&LLOutfitGalleryContextMenu::onThumbnail, this, selected_id)));
+    registrar.add("Outfit.Favorite", vs_appearance_ui_callback(ownerView(), boost::bind(&LLOutfitGalleryContextMenu::onFavorite, this, selected_id)));
+    registrar.add("Outfit.Save", vs_appearance_ui_callback(ownerView(), boost::bind(&LLOutfitGalleryContextMenu::onSave, this, selected_id)));
+    enable_registrar.add("Outfit.OnEnable", vs_appearance_ui_callback(ownerView(), boost::bind(&LLOutfitGalleryContextMenu::onEnable, this, _2)));
+    enable_registrar.add("Outfit.OnVisible", vs_appearance_ui_callback(ownerView(), boost::bind(&LLOutfitGalleryContextMenu::onVisible, this, _2)));
 
     return createFromFile("menu_gallery_outfit_tab.xml");
 }
@@ -1449,8 +1468,8 @@ LLOutfitGallerySortMenu::LLOutfitGallerySortMenu(LLOutfitListBase* parent_panel)
     LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
     LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
 
-    registrar.add("Sort.OnSort", boost::bind(&LLOutfitGallerySortMenu::onSort, this, _2));
-    enable_registrar.add("Sort.OnEnable", boost::bind(&LLOutfitGallerySortMenu::onEnable, this, _2));
+    registrar.add("Sort.OnSort", vs_appearance_ui_callback(parent_panel, boost::bind(&LLOutfitGallerySortMenu::onSort, this, _2)));
+    enable_registrar.add("Sort.OnEnable", vs_appearance_ui_callback(parent_panel, boost::bind(&LLOutfitGallerySortMenu::onEnable, this, _2)));
 
     mMenu = LLUICtrlFactory::getInstance()->createFromFile<LLToggleableMenu>(
         "menu_outfit_gallery_sort.xml", gMenuHolder, LLViewerMenuHolderGL::child_registry_t::instance());

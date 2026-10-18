@@ -115,6 +115,10 @@ private:
     void updateRadarList();
     void updateTracking();
     void checkTracking();
+    void queueRadarAlert(const LLUUID&, const std::string&);
+    std::shared_ptr<void> mLifetime = std::make_shared<int>(0);
+    std::function<bool()> mAccountCurrent;
+    boost::signals2::scoped_connection mDisplayNamesConnection;
     void radarAlertMsg(const LLUUID& agent_id, const LLAvatarName& av_name, std::string_view postMsg);
     void updateAgeAlertCheck();
 

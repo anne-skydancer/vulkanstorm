@@ -1,8 +1,10 @@
 // Native indexed world geometry and submission ownership. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "llperfstats.h"
 #include "vsworldrenderer.h"
 #include "vsgraphicssettings.h"
 #include "vsresourcebudget.h"
+#include "vsgputimingledger.h"
 #include "vsterrainshader.h"
 #pragma push_macro("Bool")
 #pragma push_macro("True")
@@ -14,6 +16,7 @@
 #undef MAP_TYPE
 #include <DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h>
 #include <DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h>
+#include <DiligentCore/Graphics/GraphicsEngine/interface/Query.h>
 #include <DiligentCore/Common/interface/RefCntAutoPtr.hpp>
 #pragma pop_macro("MAP_TYPE")
 #pragma pop_macro("False")
@@ -90,7 +93,10 @@ struct VSWorldRenderer::Impl
     RefCntAutoPtr<IShader> vertex, fragment, terrainVertex;
     RefCntAutoPtr<IShader> terrainFragments[4];
     RefCntAutoPtr<IPipelineState> pipelines[2][6][3][2][2][5][2];
-    RefCntAutoPtr<ITexture> depth, white, flatNormal;
+    using BlendKey=std::array<unsigned,15>;
+    std::map<BlendKey,RefCntAutoPtr<IPipelineState>> blendPipelines;
+
+    RefCntAutoPtr<ITexture> depth, glow, white, flatNormal;
     RefCntAutoPtr<ISampler> terrainClamp;
     RefCntAutoPtr<IFence> fence;
     Uint64 next = 1,nextGeometryGeneration=1;
@@ -102,7 +108,45 @@ struct VSWorldRenderer::Impl
     };
     std::map<IPipelineState*,std::vector<DrawResources>> available;
     std::size_t availableCount=0;
+    struct TimingSpan
+    {
+        RefCntAutoPtr<IQuery> query;
+        std::shared_ptr<const VSResourceBudget::Reservation> residency;
+    };
+    using TimingFrame=VSGPUTimingLedger<AvatarTiming,TimingSpan>;
+    std::deque<std::shared_ptr<TimingFrame>> timingFrames;
+    std::vector<TimingSpan> timingAvailable;
+    std::optional<std::uint64_t> lastTimingFrame;
     Statistics statistics;
+    TimingSpan timingQuery()
+    {
+        if(!timingAvailable.empty())
+        {auto result=std::move(timingAvailable.back());timingAvailable.pop_back();return result;}
+        TimingSpan result;
+        result.residency=snapshotBudget.reserve(sizeof(TimingSpan)*2+sizeof(QueryDataDuration)+sizeof(QueryDesc)+sizeof(AvatarTiming)+sizeof(VSGPUTimingResult)+8*sizeof(void*));
+        if(!result.residency)return {};
+        QueryDesc desc{};desc.Name="Actual avatar draw duration";desc.Type=QUERY_TYPE_DURATION;
+        device->CreateQuery(desc,&result.query);
+        return result.query?std::move(result):TimingSpan{};
+    }
+    void retireTimings()
+    {
+        while(!timingFrames.empty())
+        {
+            const auto frame=timingFrames.front();
+            const bool complete=frame->poll([&](const TimingSpan& span)
+            {
+                QueryDataDuration data{};
+                if(!span.query->GetData(&data,sizeof(data)))return VSGPUTimingResult{};
+                const double ms=data.Frequency?double(data.Duration)*1000./double(data.Frequency):0;
+                ++statistics.avatarTimingCompletions;
+                return VSGPUTimingResult{true,data.Frequency!=0 && std::isfinite(ms),ms};
+            },[&](TimingSpan span){timingAvailable.push_back(std::move(span));});
+            if(!complete)break; // Never publish an older measurement after a newer frame.
+            timingFrames.pop_front();
+        }
+    }
+
     VSResourceBudget meshBudget;
     VSResourceBudget                                     snapshotBudget;
     Uint64 pendingMeshUploads=0,pendingMeshBytes=0,meshAllocationRefusals=0;
@@ -112,7 +156,7 @@ struct VSWorldRenderer::Impl
         Uint64 completion = 0;
         std::vector<Packet> packets;
         std::vector<DrawResources> draws;
-        RefCntAutoPtr<ITexture> depth;
+        RefCntAutoPtr<ITexture> depth,glow;
         RefCntAutoPtr<IBuffer> environment;
     };
     std::deque<Submission> submitted;
@@ -144,10 +188,14 @@ struct VSWorldRenderer::Impl
         device->CreateSampler(sampler,&terrainClamp);
         requireWorld(terrainClamp!=nullptr,"Terrain clamp sampler creation failed");
     }
-    IPipelineState* pipeline(TEXTURE_FORMAT format, bool alpha, bool background, Topology topology, bool doubleSided, bool terrain, unsigned terrainProgram, bool depthWriteAlpha,bool depthTest,bool wireframe)
+    IPipelineState* pipeline(TEXTURE_FORMAT format, bool alpha, bool background, Topology topology, bool doubleSided, bool terrain, unsigned terrainProgram, bool depthWriteAlpha,bool depthTest,bool wireframe,const std::optional<Blend>& customBlend,DepthCompare depthCompare,const std::optional<bool>& depthWrite,bool cullFront)
     {
-        requireWorld(format==TEX_FORMAT_RGBA8_UNORM || format==TEX_FORMAT_BGRA8_UNORM,"Unsupported world target format");
-        auto& result = pipelines[format == TEX_FORMAT_BGRA8_UNORM][background ? 2 : !depthTest ? (alpha?4:5) : alpha ? (depthWriteAlpha ? 3 : 1) : 0][unsigned(topology)][doubleSided][terrain][terrainProgram][wireframe];
+        requireWorld(format==TEX_FORMAT_RGBA8_UNORM || format==TEX_FORMAT_BGRA8_UNORM || (format==TEX_FORMAT_RGBA16_FLOAT && customBlend.has_value()),"Unsupported world target format");
+        const unsigned mode=background ? 2 : !depthTest ? (alpha?4:5) : alpha ? (depthWriteAlpha ? 3 : 1) : 0;
+        if(customBlend)requireWorld(customBlend->source<10 && customBlend->destination<10 && customBlend->sourceAlpha<10 && customBlend->destinationAlpha<10 && customBlend->writeMask<16,"Invalid world blend state");
+        const BlendKey key{unsigned(format),mode,unsigned(topology),unsigned(doubleSided),unsigned(terrain),terrainProgram,unsigned(wireframe),
+            customBlend?customBlend->source:0,customBlend?customBlend->destination:0,customBlend?customBlend->sourceAlpha:0,customBlend?customBlend->destinationAlpha:0,customBlend?customBlend->writeMask:0,unsigned(depthCompare),depthWrite?(*depthWrite?2u:1u):0u,unsigned(cullFront)};
+        auto& result=(customBlend || depthCompare!=DepthCompare::LessEqual || depthWrite.has_value() || cullFront)?blendPipelines[key]:pipelines[format == TEX_FORMAT_BGRA8_UNORM][mode][unsigned(topology)][doubleSided][terrain][terrainProgram][wireframe];
         if (result) return result;
         const char* vs = R"(
 layout(location=0) in vec3 position;
@@ -267,7 +315,10 @@ void main() {
     skyColor=vec3(0);skyLightDot=0;
 #endif
     vec4 p;
-    if(material.w>1.5) {
+    if(material.w>2.5) {
+        p=projection*vec4(position+regionOffset.xyz,1);
+        p.xy+=uv*normalOcclusion.x/normalOcclusion.yz*p.w;
+    } else if(material.w>1.5) {
         // Triangle-encoded wide lines use actual world endpoints, so camera
         // movement only updates ordinary draw constants, never their meshes.
         vec4 a=projection*vec4(position+regionOffset.xyz,1);
@@ -398,6 +449,8 @@ void main() {
         } else result=vec4(mix(vec3(0.65,0.8,0.95),vec3(0.08,0.22,0.48),clamp(texUV.y,0.0,1.0)),1);
         return;
     }
+    if (surfaceFlags.x<-2.5) { result=max(tint*texture(g_Texture,channelUV(0)),vec4(0)); return; }
+    if (surfaceFlags.x<-1.5) { result=max(tint,vec4(0)); return; }
     if (surfaceFlags.x<-.5) {
         // terrainF.glsl's four swatches and shipped two-dimensional alpha ramp.
         vec2 coord=vec2(texUV.x,1.0-texUV.y);
@@ -504,19 +557,35 @@ void main() {
         gp.PrimitiveTopology           = topology == Topology::Triangles ? PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
                                          : topology == Topology::Lines   ? PRIMITIVE_TOPOLOGY_LINE_LIST
                                                                          : PRIMITIVE_TOPOLOGY_POINT_LIST;
-        gp.RasterizerDesc.CullMode=doubleSided ? CULL_MODE_NONE : CULL_MODE_BACK;
+        gp.RasterizerDesc.CullMode=doubleSided ? CULL_MODE_NONE : cullFront?CULL_MODE_FRONT:CULL_MODE_BACK;
         gp.RasterizerDesc.FillMode = wireframe ? FILL_MODE_WIREFRAME : FILL_MODE_SOLID;
         // The shared terrain strip producer uses the opposite winding from
         // LLVolume faces. Preserve its indices and front-face normal semantics.
         gp.RasterizerDesc.FrontCounterClockwise=terrain;
         gp.DepthStencilDesc.DepthEnable=depthTest && !background;gp.DepthStencilDesc.DepthWriteEnable=depthTest && (!alpha || depthWriteAlpha) && !background;
-        gp.DepthStencilDesc.DepthFunc=COMPARISON_FUNC_LESS_EQUAL;
+        if(depthWrite)gp.DepthStencilDesc.DepthWriteEnable=depthTest && *depthWrite && !background;
+        gp.DepthStencilDesc.DepthFunc=depthCompare==DepthCompare::Always?COMPARISON_FUNC_ALWAYS:depthCompare==DepthCompare::Greater?COMPARISON_FUNC_GREATER:depthCompare==DepthCompare::GreaterEqual?COMPARISON_FUNC_GREATER_EQUAL:COMPARISON_FUNC_LESS_EQUAL;
         const LayoutElement layout[]={{0,0,3,VT_FLOAT32,false},{1,0,3,VT_FLOAT32,false},{2,0,2,VT_FLOAT32,false},
             {3,0,2,VT_FLOAT32,false},{4,0,4,VT_FLOAT32,false},{5,0,4,VT_FLOAT32,false}};
         gp.InputLayout.LayoutElements=layout;gp.InputLayout.NumElements=6;
         auto& blend=gp.BlendDesc.RenderTargets[0];blend.BlendEnable=alpha;
         blend.SrcBlend=BLEND_FACTOR_SRC_ALPHA;blend.DestBlend=BLEND_FACTOR_INV_SRC_ALPHA;
         blend.SrcBlendAlpha=BLEND_FACTOR_ONE;blend.DestBlendAlpha=BLEND_FACTOR_INV_SRC_ALPHA;
+        if(customBlend)
+        {
+            // Same factors as LLRender::blendFunc; alpha components of color
+            // factors are explicitly mapped to their legal alpha equivalents.
+            constexpr BLEND_FACTOR factors[]{BLEND_FACTOR_ONE,BLEND_FACTOR_ZERO,BLEND_FACTOR_DEST_COLOR,BLEND_FACTOR_SRC_COLOR,
+                BLEND_FACTOR_INV_DEST_COLOR,BLEND_FACTOR_INV_SRC_COLOR,BLEND_FACTOR_DEST_ALPHA,BLEND_FACTOR_SRC_ALPHA,
+                BLEND_FACTOR_INV_DEST_ALPHA,BLEND_FACTOR_INV_SRC_ALPHA};
+            constexpr BLEND_FACTOR alphaFactors[]{BLEND_FACTOR_ONE,BLEND_FACTOR_ZERO,BLEND_FACTOR_DEST_ALPHA,BLEND_FACTOR_SRC_ALPHA,
+                BLEND_FACTOR_INV_DEST_ALPHA,BLEND_FACTOR_INV_SRC_ALPHA,BLEND_FACTOR_DEST_ALPHA,BLEND_FACTOR_SRC_ALPHA,
+                BLEND_FACTOR_INV_DEST_ALPHA,BLEND_FACTOR_INV_SRC_ALPHA};
+            blend.SrcBlend=factors[customBlend->source];blend.DestBlend=factors[customBlend->destination];
+            blend.SrcBlendAlpha=alphaFactors[customBlend->sourceAlpha];blend.DestBlendAlpha=alphaFactors[customBlend->destinationAlpha];
+            blend.RenderTargetWriteMask=COLOR_MASK(customBlend->writeMask);
+        }
+
         ci.PSODesc.ResourceLayout.DefaultVariableType=SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
         device->CreateGraphicsPipelineState(ci,&result);requireWorld(result!=nullptr,"World pipeline creation failed");
         return result;
@@ -594,6 +663,8 @@ bool VSWorldRenderer::publishMesh(Mesh& current, const std::vector<Vertex>& vert
 }
 void VSWorldRenderer::retire()
 {
+    mImpl->retireTimings();
+
     const auto complete=mImpl->fence->GetCompletedValue();
     while (!mImpl->submitted.empty() && mImpl->submitted.front().completion && mImpl->submitted.front().completion<=complete)
     {
@@ -630,6 +701,8 @@ void VSWorldRenderer::retire()
         mImpl->submitted.pop_front();
     }
 }
+bool VSWorldRenderer::pending() const
+{ return !mImpl->submitted.empty() || !mImpl->timingFrames.empty(); }
 VSWorldRenderer::Statistics VSWorldRenderer::statistics() const
 {
     auto result=mImpl->statistics;
@@ -798,17 +871,45 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
     requireWorld(target->GetTexture()->GetDesc().Width==width && target->GetTexture()->GetDesc().Height==height,"World extent mismatch");
     for (float f:view.projection) requireWorld(std::isfinite(f),"Non-finite world camera");
     retire();
-    if (packets.empty()) {if(beforeHud)beforeHud();return;}
     auto* context=mImpl->context.RawPtr();
+    mImpl->statistics.avatarTimingSupported=mImpl->device->GetDeviceInfo().Features.DurationQueries==DEVICE_FEATURE_STATE_ENABLED;
+    std::shared_ptr<Impl::TimingFrame> timingFrame;
+    if(view.timingFrame && mImpl->lastTimingFrame!=view.timingFrame && mImpl->statistics.avatarTimingSupported)
+    {
+        auto residency=mImpl->snapshotBudget.reserve(sizeof(Impl::TimingFrame));
+        if(residency)
+        {
+            timingFrame=std::make_shared<Impl::TimingFrame>();timingFrame->residency=std::move(residency);
+            mImpl->timingFrames.push_back(timingFrame);mImpl->lastTimingFrame=view.timingFrame;
+        }
+        else ++mImpl->statistics.avatarTimingRefusals;
+    }
+
     if (!mImpl->depth || mImpl->depth->GetDesc().Width!=width || mImpl->depth->GetDesc().Height!=height)
     {
         TextureDesc desc{};desc.Name="Native world depth generation";desc.Type=RESOURCE_DIM_TEX_2D;
         desc.Width=width;desc.Height=height;desc.Format=TEX_FORMAT_D32_FLOAT;desc.BindFlags=BIND_DEPTH_STENCIL;
         mImpl->device->CreateTexture(desc,nullptr,&mImpl->depth);requireWorld(mImpl->depth!=nullptr,"World depth creation failed");
     }
+    const bool glowActive=view.glow && std::any_of(packets.begin(),packets.end(),[](const Packet& p){return p.glowOnly;});
+    if(mImpl->glow && (mImpl->glow->GetDesc().Width!=width || mImpl->glow->GetDesc().Height!=height))mImpl->glow.Release();
+    if(glowActive && !mImpl->glow)
+    {
+        TextureDesc desc{};desc.Name="Native original emissive glow generation";desc.Type=RESOURCE_DIM_TEX_2D;
+        desc.Width=width;desc.Height=height;desc.Format=TEX_FORMAT_RGBA16_FLOAT;desc.BindFlags=BIND_RENDER_TARGET|BIND_SHADER_RESOURCE;
+        mImpl->device->CreateTexture(desc,nullptr,&mImpl->glow);requireWorld(mImpl->glow!=nullptr,"Native emissive glow creation failed");
+        mImpl->glow->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(mImpl->terrainClamp);
+    }
+    auto* glowTarget=mImpl->glow?mImpl->glow->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET):nullptr;
+    if(glowTarget)
+    {
+        const float zero[]{0,0,0,0};context->SetRenderTargets(1,&glowTarget,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        context->ClearRenderTarget(glowTarget,zero,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
     auto* depth=mImpl->depth->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
     context->SetRenderTargets(1,&target,depth,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     context->ClearDepthStencil(depth,CLEAR_DEPTH_FLAG,1,0,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    if (packets.empty()) {if(beforeHud)beforeHud();return;}
     Viewport viewport{0.f,0.f,float(width),float(height)};context->SetViewports(1,&viewport,width,height);
     mImpl->submitted.emplace_back();auto& submitted=mImpl->submitted.back();
     if(!mImpl->environmentAvailable.empty()) {
@@ -823,8 +924,8 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
     context->UpdateBuffer(submitted.environment,0,sizeof(view.environment.values),view.environment.values.data(),RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     mImpl->statistics.constantUploadBytes+=sizeof(view.environment.values);
 
-    submitted.depth=mImpl->depth;submitted.packets=packets;
-    std::stable_sort(submitted.packets.begin(), submitted.packets.end(),
+    submitted.depth=mImpl->depth;submitted.glow=mImpl->glow;submitted.packets=packets;
+    if(!view.preserveOrder) std::stable_sort(submitted.packets.begin(), submitted.packets.end(),
                      [](const Packet& a, const Packet& b)
                      {
                          if (a.hud != b.hud)
@@ -875,23 +976,44 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
             context->SetViewports(1,&viewport,width,height);
         }
     };
-    for (const auto& p:submitted.packets)
+    for (const auto& original:submitted.packets)
     {
+      if(original.alphaOnly && !original.glowOnly)continue;
+      if(original.clearDepthBefore)context->ClearDepthStencil(depth,CLEAR_DEPTH_FLAG,1,0,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+      for(unsigned pass=0;pass<2;++pass)
+      {
+        const bool emissiveTarget=pass==1;
+        if(!emissiveTarget && original.glowOnly)continue;
+        if(emissiveTarget && (!glowActive || original.background || (original.overlay && !original.glowOnly) || (!original.alpha && !original.glowOnly)))continue;
+        std::optional<Packet> glowPacket;
+        if(emissiveTarget)
+        {
+            glowPacket=original;
+            // Original alpha pass suppresses prior glow by (1-srcAlpha).
+            // Original emissive pass adds textureAlpha*quantizedGlow instead.
+            glowPacket->blend=Blend{1,0,original.glowOnly?0u:1u,original.glowOnly?0u:9u,8};
+        }
+        const auto& p=glowPacket?*glowPacket:original;
+        auto* drawTarget=emissiveTarget?glowTarget:target;
+
         requireWorld(p.mesh && p.mesh->owner.RawPtr()==mImpl->device.RawPtr(),"World mesh belongs to another device");
         requireWorld(!p.image || VSUIRenderer::imageOwnedBy(p.image,mImpl->device),"World image belongs to another device");
         for (float f:p.color) requireWorld(std::isfinite(f),"Non-finite world material");
-        auto* pipeline = mImpl->pipeline(target->GetTexture()->GetDesc().Format, p.alpha, p.background, p.mesh->topology, !p.surface || p.doubleSided || p.background, p.terrain, p.terrainMaterial?unsigned(std::clamp(int(p.terrainMaterial->detail),-3,0)+4):0u,p.depthWriteAlpha,p.depthTest,
+        auto* pipeline = mImpl->pipeline(drawTarget->GetTexture()->GetDesc().Format, p.alpha, p.background, p.mesh->topology, p.cull ? !*p.cull : (!p.surface || p.doubleSided || p.background), p.terrain, p.terrainMaterial?unsigned(std::clamp(int(p.terrainMaterial->detail),-3,0)+4):0u,p.depthWriteAlpha,p.depthTest,
             vs_graphics_wireframe_pass(view.wireframe,p.background,unsigned(p.mesh->topology),
-                mImpl->device->GetDeviceInfo().Features.WireframeFill==DEVICE_FEATURE_STATE_ENABLED));
+                mImpl->device->GetDeviceInfo().Features.WireframeFill==DEVICE_FEATURE_STATE_ENABLED),p.blend,p.depthCompare,p.depthWrite,p.cullFront);
         for (float f:p.regionOffset) requireWorld(std::isfinite(f),"Non-finite world region translation");
         requireWorld(std::isfinite(p.alphaCutoff) && p.alphaCutoff >= 0 && p.alphaCutoff <= 1, "Invalid world alpha cutoff");
-        Constants constants{ view.projection,
+        if(p.projectionOverride)for(float value:*p.projectionOverride)requireWorld(std::isfinite(value),"Non-finite immediate projection");
+        Constants constants{ p.projectionOverride?*p.projectionOverride:view.projection,
                              view.sun,
                              view.ambient,
                              p.color,
-                             { p.fullbright ? 1.f : 0.f, p.masked ? 1.f : 0.f, p.alphaCutoff, p.background ? 1.f : p.screenLinePixels>0 ? 2.f : 0.f },
+                             { p.fullbright ? 1.f : 0.f, p.masked ? 1.f : 0.f, p.alphaCutoff, p.background ? 1.f : p.screenPointPixels>0 ? 3.f : p.screenLinePixels>0 ? 2.f : 0.f },
                              p.regionOffset };
         requireWorld(std::isfinite(p.screenLinePixels) && p.screenLinePixels>=0,"Invalid native screen-line width");
+        requireWorld(std::isfinite(p.screenPointPixels) && p.screenPointPixels>=0,"Invalid native screen-point width");
+        if(p.screenPointPixels>0) constants.normalOcclusion={p.screenPointPixels,float(width),float(height),0};
         if(p.screenLinePixels>0) constants.normalOcclusion={p.screenLinePixels,float(width),float(height),0};
         if(p.background) {
             constants.normalOcclusion[3]=p.image?1.f:0.f;
@@ -915,6 +1037,14 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
             }
         }
         if (p.terrain) constants.surfaceFlags[0]=-1;
+        if (p.constantColor) constants.surfaceFlags[0]=-2;
+        if(p.highlightUV)
+        {
+            constants.surfaceFlags[0]=-3;
+            constants.channelSets[0]=0;
+            constants.uv[0]=p.highlightUV->matrix;
+            constants.uv[1]={p.highlightUV->offset[0],p.highlightUV->offset[1],0,0};
+        }
         if (p.hud)
         {
             if (!drawingHud)
@@ -923,7 +1053,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
                 context->ClearDepthStencil(depth, CLEAR_DEPTH_FLAG, 1, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
                 drawingHud = true;
             }
-            constants.projection   = hudProjection;
+            constants.projection   = p.projectionOverride?*p.projectionOverride:hudProjection;
             constants.regionOffset = {};
         }
         BufferDesc bd{};bd.Name="Native world draw constants";bd.Size=sizeof(constants);
@@ -1022,6 +1152,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
                 mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
         }
         }
+        context->SetRenderTargets(1,&drawTarget,depth,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         context->SetPipelineState(pipeline);
         IBuffer* vertex=p.mesh->vertices.RawPtr();Uint64 offset=0;
         context->SetVertexBuffers(0,1,&vertex,&offset,RESOURCE_STATE_TRANSITION_MODE_TRANSITION,SET_VERTEX_BUFFERS_FLAG_RESET);
@@ -1029,7 +1160,45 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         context->CommitShaderResources(resources.binding,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         ++mImpl->statistics.resourceCommits;
         DrawIndexedAttribs draw{};draw.NumIndices=p.mesh->count;draw.IndexType=VT_UINT32;draw.Flags=DRAW_FLAG_VERIFY_ALL;
-        context->DrawIndexed(draw);submitted.draws.push_back(std::move(resources));++mImpl->statistics.draws;
+        std::optional<LLPerfStats::RecordTime<LLPerfStats::ObjType_t::OT_AVATAR>> avatarCPU;
+        std::optional<LLPerfStats::RecordSceneTime> hudCPU;
+        if(!p.hud && p.avatarTiming && p.avatarTiming->current())
+        {
+            LLUUID id;std::copy(p.avatarTiming->identity.begin(),p.avatarTiming->identity.end(),id.mData);
+            avatarCPU.emplace(id,id,LLPerfStats::StatType_t::RENDER_GEOMETRY);
+        }
+        if(p.hud)hudCPU.emplace(LLPerfStats::StatType_t::RENDER_HUDS);
+        Impl::TimingSpan span;
+        const auto avatarTiming=p.avatarTiming && p.avatarTiming->current()?p.avatarTiming:nullptr;
+        const auto attachmentTiming=p.attachmentTiming && p.attachmentTiming->current()?p.attachmentTiming:nullptr;
+        if(timingFrame && (avatarTiming || attachmentTiming))
+        {
+            span=mImpl->timingQuery();
+            if(span.query){context->BeginQuery(span.query);++mImpl->statistics.avatarTimingQueries;}
+            else
+            {
+                if(avatarTiming)timingFrame->refuse(avatarTiming);
+                if(attachmentTiming)timingFrame->refuse(attachmentTiming);
+                ++mImpl->statistics.avatarTimingRefusals;
+            }
+        }
+        context->DrawIndexed(draw);
+        const double submittedSeconds=std::chrono::duration<double>(started.time_since_epoch()).count();
+        VSUIRenderer::markBound(p.image,submittedSeconds);
+        for(const auto& image:p.channels)VSUIRenderer::markBound(image,submittedSeconds);
+        if(p.terrainMaterial)
+        {
+            VSUIRenderer::markBound(p.terrainMaterial->blend,submittedSeconds);
+            for(const auto& layer:p.terrainMaterial->images)
+                for(const auto& image:layer)VSUIRenderer::markBound(image,submittedSeconds);
+        }
+        if(span.query)
+        {
+            context->EndQuery(span.query);
+            timingFrame->addShared({avatarTiming,attachmentTiming},std::move(span));
+        }
+        submitted.draws.push_back(std::move(resources));++mImpl->statistics.draws;
+      }
     }
     composeBeforeHud();
     // Recorded draws and submission packets own the buffers through completion;
@@ -1041,3 +1210,8 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
     context->SetRenderTargets(1,&target,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     mImpl->statistics.cpuMilliseconds=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
 }
+
+Diligent::ITextureView* VSWorldRenderer::glowView() const
+{ return mImpl->glow?mImpl->glow->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE):nullptr; }
+ITextureView* VSWorldRenderer::depthView() const
+{ return mImpl->depth?mImpl->depth->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL):nullptr; }

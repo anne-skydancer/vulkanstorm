@@ -2105,3 +2105,32 @@ void LLAudioEngine::removeAudioData(const LLUUID& audio_uuid)
     }
 }
 // </FS:Ansariel>
+
+LLAudioSource* LLAudioEngine::findAudioSourceByLogID(const LLUUID& log_id)
+{
+    for (const auto& [id, source] : mAllSources)
+        if (source->getLogID() == log_id) return source;
+    return nullptr;
+}
+void LLAudioEngine::clearAccountSources()
+{
+    // Account SFX/ambient sources include triggered sources with generated IDs.
+    // UI previews are explicitly stopped by their retiring real floaters; UI
+    // clicks belonging to the application retain their ordinary short lifetime.
+    for (auto found = mAllSources.begin(); found != mAllSources.end();)
+    {
+        auto* source = found->second;
+        ++found;
+        if (source->getType() != AUDIO_TYPE_UI) cleanupAudioSource(source);
+    }
+    gSoundHistory.clear();
+    LLAudioSource::sSoundHistoryPruneCounter = 0;
+}
+
+std::vector<LLVector3d> LLAudioEngine::sourcePositions() const
+{
+    std::vector<LLVector3d> result;
+    result.reserve(mAllSources.size());
+    for (const auto& [id,source] : mAllSources) if (source) result.push_back(source->getPositionGlobal());
+    return result;
+}

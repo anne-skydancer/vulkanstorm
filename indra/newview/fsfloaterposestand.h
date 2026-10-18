@@ -15,6 +15,7 @@
 
 #include "llfloater.h"
 #include "llcombobox.h"
+#include <functional>
 
 class FSFloaterPoseStand
 :   public LLFloater
@@ -27,11 +28,13 @@ public:
     void onCommitCombo();
 
 private:
-    ~FSFloaterPoseStand() = default;
+    ~FSFloaterPoseStand() override;
     void onOpen(const LLSD& key) override;
     void onClose(bool app_quitting) override;
     void loadPoses();
 
+    bool mSessionActive = false;
+    std::function<bool()> mCurrent = [] { return true; };
     bool mAOPaused;
     bool mPoseStandLock;
     LLComboBox* mComboPose;

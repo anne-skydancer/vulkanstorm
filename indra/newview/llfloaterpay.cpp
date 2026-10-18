@@ -29,6 +29,11 @@
 
 #include "llfloaterpay.h"
 #include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsobjectpurchase.h"
+#include "llviewermessage.h"
+#include "vsnativesession.h"
+#endif
 
 #include "message.h"
 #include "llfloater.h"
@@ -74,6 +79,7 @@ struct LLGiveMoneyInfo
     LLHandle<LLFloater> mFloater;
     std::function<bool()> mCurrent;
     S32 mAmount;
+    U64 mRevision=0;
     LLGiveMoneyInfo(LLFloaterPay* floater, S32 amount);
 };
 
@@ -96,6 +102,10 @@ public:
 
     static void payViaObject(money_callback callback, LLSafeHandle<LLObjectSelection> selection);
 
+#if VS_NATIVE_VULKAN
+    static void payNativeObject(money_callback, const VSObjectContext&);
+    static void nativePriceReply(LLMessageSystem*);
+#endif
     static void payDirectly(money_callback callback,
                             const LLUUID& target_id,
                             bool is_group);
@@ -123,6 +133,11 @@ protected:
     give_money_ptr mQuickPayInfo[MAX_PAY_BUTTONS];
 
     LLSafeHandle<LLObjectSelection> mObjectSelection;
+    U64 mPaymentRevision=0;
+#if VS_NATIVE_VULKAN
+    std::shared_ptr<VSObjectPurchase> mNativePurchase;
+    std::optional<VSObjectContext> mNativePayTarget;
+#endif
 
     // <FS:Ansariel> FIRE-16812: Remember last amount paid
     static S32 sLastAmount;
@@ -160,7 +175,8 @@ LLFloaterPay::~LLFloaterPay()
     // Name callbacks will be automatically disconnected since LLFloater is trackable
 
     // In case this floater is currently waiting for a reply.
-    gMessageSystem->setHandlerFuncFast(_PREHASH_PayPriceReply, 0, 0);
+    if(!gViewerWindow || !gViewerWindow->isNativeVulkan())
+        gMessageSystem->setHandlerFuncFast(_PREHASH_PayPriceReply, 0, 0);
 }
 
 bool LLFloaterPay::postBuild()
@@ -243,6 +259,10 @@ void LLFloaterPay::onClose(bool app_quitting)
 {
     // Deselect the objects
     mObjectSelection = NULL;
+    ++mPaymentRevision;
+#if VS_NATIVE_VULKAN
+    mNativePayTarget.reset();mNativePurchase.reset();
+#endif
 }
 
 // static
@@ -374,7 +394,7 @@ void LLFloaterPay::processPayPriceReply(LLMessageSystem* msg, void **userdata)
 
         self->reshape( self->getRect().getWidth() + padding_required, self->getRect().getHeight(), false );
     }
-    msg->setHandlerFunc("PayPriceReply",NULL,NULL);
+    if(!gViewerWindow || !gViewerWindow->isNativeVulkan())msg->setHandlerFunc("PayPriceReply",NULL,NULL);
 }
 
 // static
@@ -389,6 +409,7 @@ void LLFloaterPay::payViaObject(money_callback callback, LLSafeHandle<LLObjectSe
     if (!floater)
         return;
 
+    ++floater->mPaymentRevision;
     floater->setCallback(callback);
     // Hold onto the selection until we close
     floater->mObjectSelection = selection;
@@ -437,6 +458,10 @@ void LLFloaterPay::payDirectly(money_callback callback,
     if (!floater)
         return;
 
+    ++floater->mPaymentRevision;
+#if VS_NATIVE_VULKAN
+    floater->mNativePayTarget.reset();floater->mNativePurchase.reset();
+#endif
     floater->setCallback(callback);
     floater->mObjectSelection = NULL;
 
@@ -466,6 +491,7 @@ bool LLFloaterPay::payConfirmationCallback(const LLSD& notification, const LLSD&
     if (option == 0)
     {
         auto* floater = static_cast<LLFloaterPay*>(info->mFloater.get());
+        if(info->mRevision && info->mRevision!=floater->mPaymentRevision)return false;
         floater->give(info->mAmount);
         floater->closeFloater();
     }
@@ -528,6 +554,10 @@ void LLFloaterPay::onGive(give_money_ptr info)
     }
 
     LLFloaterPay* floater = static_cast<LLFloaterPay*>(info->mFloater.get());
+#if VS_NATIVE_VULKAN
+    if(floater->mNativePayTarget && (!floater->mNativePayTarget->current() || !floater->mNativePurchase || !floater->mNativePurchase->current()))
+    {floater->closeFloater();return;}
+#endif
     S32 amount = info->mAmount;
     if (amount == 0)
     {
@@ -546,6 +576,14 @@ void LLFloaterPay::onGive(give_money_ptr info)
     {
         LLUUID payee_id = LLUUID::null;
         bool is_group = false;
+#if VS_NATIVE_VULKAN
+        if(floater->mNativePurchase)
+        {
+            const auto permissions=floater->mNativePurchase->publication.properties->permissions();
+            permissions.getOwnership(payee_id,is_group);
+        }
+        else
+#endif
         if (floater->mObjectSelection.notNull())
         {
             LLSelectNode* node = floater->mObjectSelection->getFirstRootNode();
@@ -579,7 +617,9 @@ void LLFloaterPay::onGive(give_money_ptr info)
             args["TARGET"] = LLSLURL(is_group ? "group" : "agent", payee_id, "completename").getSLURLString();
             args["AMOUNT"] = amount;
 
-            LLNotificationsUtil::add("PayConfirmation", args, LLSD(), boost::bind(&LLFloaterPay::payConfirmationCallback, _1, _2, info));
+            auto confirmation=std::make_shared<LLGiveMoneyInfo>(*info);
+            confirmation->mAmount=amount;confirmation->mRevision=floater->mPaymentRevision;
+            LLNotificationsUtil::add("PayConfirmation", args, LLSD(), boost::bind(&LLFloaterPay::payConfirmationCallback, _1, _2, confirmation));
         }
         else
         {
@@ -597,6 +637,28 @@ void LLFloaterPay::onGive(give_money_ptr info)
 
 void LLFloaterPay::give(S32 amount)
 {
+#if VS_NATIVE_VULKAN
+    if(mNativePayTarget)
+    {
+        const auto target=*mNativePayTarget;
+        const auto purchase=mNativePurchase;
+        if(!mCallback || !purchase || !purchase->current() || !target.current())return;
+        if(!amount)amount=atoi(getChild<LLUICtrl>("amount")->getValue().asString().c_str());
+        sLastAmount=amount;
+        if(mCallback==&give_money)vs_give_money_to_object(target,amount,purchase->publication.properties->name);
+        else mCallback(target.id,nullptr,amount,false,TRANS_PAY_OBJECT,purchase->publication.properties->name);
+        // Preserve the reference owner-unmute request, bound to the paid source.
+        if(!purchase->current() || !target.current())return;
+        const auto owner=VSNativeSession::active();
+        const auto paidObject=VSTaskInventoryObject::find(target.id);
+        if(owner && paidObject)owner->objectSelection()->requestFamily(paidObject.nativeObject(),OBJECT_PAY_REQUEST,
+            [](const std::optional<VSObjectSelection::Publication>& result)
+            {
+                if(result)LLMuteList::instance().autoRemove(result->properties->owner_id,LLMuteList::AR_MONEY);
+            });
+        return;
+    }
+#endif
     if(mCallback)
     {
         // if the amount is 0, that menas that we should use the
@@ -687,3 +749,44 @@ bool LLFloaterPayUtil::isNativeFloaterType(const std::type_info& type)
 {
     return type == typeid(LLFloaterPay);
 }
+
+#if VS_NATIVE_VULKAN
+void LLFloaterPay::payNativeObject(money_callback callback,const VSObjectContext& source)
+{
+    if(!source.current || !source.current())return;
+    const auto purchase=VSObjectPurchase::capture(false);
+    if(!purchase)return;
+    auto* floater=LLFloaterReg::showTypedInstance<LLFloaterPay>("pay_object",source.id);
+    if(!floater || !source.current() || !purchase->current())return;
+    ++floater->mPaymentRevision;
+    floater->mNativePurchase=purchase;floater->mNativePayTarget=source;
+    floater->mObjectSelection=nullptr;floater->setCallback(callback);
+    const auto weak=floater->getHandle();const auto revision=floater->mPaymentRevision;
+    purchase->selectionChanged=purchase->selection->changed([weak,revision]
+    {
+        auto* view=dynamic_cast<LLFloaterPay*>(weak.get());
+        if(view && view->mPaymentRevision==revision && view->mNativePurchase && !view->mNativePurchase->current())view->closeFloater();
+    });
+    LLUUID owner;bool group=false;
+    purchase->publication.properties->permissions().getOwnership(owner,group);
+    floater->getChild<LLUICtrl>("object_name_text")->setValue(purchase->publication.properties->name);
+    floater->finishPayUI(owner,group);
+    LLMessageSystem* msg=gMessageSystem;
+    msg->newMessageFast(_PREHASH_RequestPayPrice);
+    msg->nextBlockFast(_PREHASH_ObjectData);
+    msg->addUUIDFast(_PREHASH_ObjectID,source.id);
+    msg->sendReliable(source.host);
+}
+void LLFloaterPay::nativePriceReply(LLMessageSystem* msg)
+{
+    LLUUID target;msg->getUUIDFast(_PREHASH_ObjectData,_PREHASH_ObjectID,target);
+    auto* view=LLFloaterReg::findTypedInstance<LLFloaterPay>("pay_object",target);
+    if(!view || !view->mNativePayTarget || !view->mNativePurchase || !view->mNativePurchase->current() ||
+       !view->mNativePayTarget->current() || view->mNativePayTarget->host!=msg->getSender())return;
+    processPayPriceReply(msg,reinterpret_cast<void**>(view));
+}
+void LLFloaterPayUtil::payViaObject(money_callback callback,const VSObjectContext& source)
+{LLFloaterPay::payNativeObject(callback,source);}
+void LLFloaterPayUtil::processNativePriceReply(LLMessageSystem* msg)
+{LLFloaterPay::nativePriceReply(msg);}
+#endif

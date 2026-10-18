@@ -32,6 +32,10 @@
 #include "llviewerobject.h"
 #include "llvoinventorylistener.h"
 #include "lluuid.h"
+#include "vstaskinventoryobject.h"
+#include <map>
+#include <functional>
+#include <boost/signals2/connection.hpp>
 
 #include "llfloater.h"
 #include "llscrolllistctrl.h"
@@ -61,11 +65,11 @@ private:
                                  void* queue) override;
 
     // This is called by inventoryChanged
-    void handleInventory(LLViewerObject* viewer_obj,
+    void handleInventory(const VSTaskInventoryObject& viewer_obj,
                                 LLInventoryObject::object_list_t* inv);
 
 
-    void updateInventory(LLViewerObject* object,
+    void updateInventory(const VSTaskInventoryObject& object,
                                 LLViewerInventoryItem* item,
                                 U8 key,
                                 bool is_new);
@@ -85,6 +89,9 @@ private:
     void doCheckUncheckAll(bool check);
 
 private:
+    std::function<bool()> mAccountCurrent;
+    std::map<LLUUID,VSTaskInventoryObject> mNativeObjects;
+    U64 mBatch=0;
     // UI
     LLScrollListCtrl* mQueueOutputList = nullptr;
     LLButton* mCloseBtn;

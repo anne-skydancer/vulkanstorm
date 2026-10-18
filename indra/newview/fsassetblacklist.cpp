@@ -403,3 +403,12 @@ void FSAssetBlacklist::saveBlacklist()
     LLSDSerialize::toPrettyXML(savedata, save_file);
     save_file.close();
 }
+
+void FSAssetBlacklist::clearAccount()
+{
+    if (!mBlacklistFileName.empty()) saveBlacklist();
+    mBlacklistData.clear();
+    mBlacklistTypeContainer.clear();
+    mBlacklistFileName.clear();
+    gObjectList.clearAccountDerendered();
+}

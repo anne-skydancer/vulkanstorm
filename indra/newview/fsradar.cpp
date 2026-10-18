@@ -27,6 +27,16 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsradar.h"
+#include "vsnativeim.h"
+#include "vsavatarservices.h"
+#include "vsregioncontext.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "vsworldavatar.h"
+#include "llviewerwindow.h"
+#endif
+
 
 // libs
 #include "llavatarnamecache.h"
@@ -101,17 +111,27 @@ FSRadar::FSRadar() :
     mRegionChangedCallbackConnection()
 {
     // Use the callback from LLAvatarNameCache here or we might update the names too early!
-    LLAvatarNameCache::getInstance()->addUseDisplayNamesCallback(boost::bind(&FSRadar::updateNames, this));
+    mAccountCurrent = vs_native_im_guard();
+    mDisplayNamesConnection = LLAvatarNameCache::getInstance()->connectUseDisplayNamesCallback(
+        vs_native_im_account_callback(boost::bind(&FSRadar::updateNames, this)));
     mShowUsernamesCallbackConnection = gSavedSettings.getControl("NameTagShowUsernames")->getSignal()->connect(boost::bind(&FSRadar::updateNames, this));
 
     mNameFormatCallbackConnection = gSavedSettings.getControl("RadarNameFormat")->getSignal()->connect(boost::bind(&FSRadar::updateNames, this));
     mAgeAlertCallbackConnection = gSavedSettings.getControl("RadarAvatarAgeAlertValue")->getSignal()->connect(boost::bind(&FSRadar::updateAgeAlertCheck, this));
 
-    mRegionChangedCallbackConnection = gAgent.addRegionChangedCallback([this]() { onRegionChanged(); });
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+        mRegionChangedCallbackConnection = owner->observeCurrentRegion([this]() { onRegionChanged(); });
+    else
+#endif
+        mRegionChangedCallbackConnection = gAgent.addRegionChangedCallback([this]() { onRegionChanged(); });
 }
 
 FSRadar::~FSRadar()
 {
+    mLifetime.reset();
+    mRadarListUpdater.reset();
+    mDisplayNamesConnection.disconnect();
     gAgent.removeRegionChangedCallback(mRegionChangedCallbackConnection);
     if (mRegionCapabilitiesReceivedCallbackConnection.connected())
     {
@@ -153,7 +173,7 @@ void FSRadar::radarAlertMsg(const LLUUID& agent_id, const LLAvatarName& av_name,
         LLNotificationsUtil::add("RadarAlert",
                                     args,
                                     payload.with("respond_on_mousedown", true),
-                                    boost::bind(&LLAvatarActions::zoomIn, agent_id));
+                                    vs_native_im_account_callback(boost::bind(&LLAvatarActions::zoomIn, agent_id)));
     }
     else
     {
@@ -177,8 +197,13 @@ void FSRadar::radarAlertMsg(const LLUUID& agent_id, const LLAvatarName& av_name,
 
 void FSRadar::updateRadarList()
 {
-    //Configuration
-    LLWorld* world = LLWorld::getInstance();
+    if (!mAccountCurrent()) return;
+    // Retain the reference registry/policies; only world getters have native peers.
+    bool native = false;
+#if VS_NATIVE_VULKAN
+    native = bool(VSNativeSession::active());
+#endif
+    LLWorld* world = native ? nullptr : LLWorld::getInstance();
     LLMuteList* mutelist = LLMuteList::getInstance();
     FSAssetBlacklist* blacklist = FSAssetBlacklist::getInstance();
     LGGContactSets* contactsets = LGGContactSets::getInstance();
@@ -224,10 +249,7 @@ void FSRadar::updateRadarList()
     F32 drawRadius(sRenderFarClip);
     const LLVector3d& posSelf = gAgent.getPositionGlobal();
     LLUUID regionSelf;
-    if (LLViewerRegion* own_reg = gAgent.getRegion(); own_reg)
-    {
-        regionSelf = own_reg->getRegionID();
-    }
+    if (auto own_reg = vs_current_region_context()) regionSelf = own_reg->getRegionID();
     bool alertScripts = mRadarAlertRequest; // save the current value, so it doesn't get changed out from under us by another thread
     time_t now = time(nullptr);
 
@@ -243,14 +265,18 @@ void FSRadar::updateRadarList()
     uuid_vec_t avatar_ids;
     if (RlvActions::canShowNearbyAgents())
     {
-        if (sLimitRange)
+        if (native)
         {
+            for (const auto& avatar : vs_avatar_locations(posSelf, sLimitRange ? F32(sNearMeRange) : F32_MAX))
+            {
+                avatar_ids.push_back(avatar.id);
+                positions.push_back(avatar.position);
+            }
+        }
+        else if (sLimitRange)
             world->getAvatars(&avatar_ids, &positions, posSelf, sNearMeRange);
-        }
         else
-        {
             world->getAvatars(&avatar_ids, &positions);
-        }
     }
 
     // Determine lists of new added and removed avatars
@@ -310,7 +336,25 @@ void FSRadar::updateRadarList()
         }
 
         // Try to get the avatar's viewer object - we will need it anyway later
-        LLVOAvatar* avVo = static_cast<LLVOAvatar*>(gObjectList.findObject(avId));
+        LLVOAvatar* avVo = native ? nullptr : static_cast<LLVOAvatar*>(gObjectList.findObject(avId));
+        bool preciseAvatar = avVo != nullptr;
+        bool typing = avVo && avVo->isTyping();
+        bool sitting = avVo && (avVo->getParent() || avVo->isMotionActive(ANIM_AGENT_SIT_GROUND) ||
+            avVo->isMotionActive(ANIM_AGENT_SIT_GROUND_CONSTRAINED));
+#if VS_NATIVE_VULKAN
+        if (native && gViewerWindow && gViewerWindow->nativeContext())
+        {
+            auto& scene = gViewerWindow->nativeContext()->world();
+            if (auto* avatar = scene.avatarForObject(avId))
+            {
+                preciseAvatar = true;
+                typing = scene.nameTagTyping(avId);
+                sitting = avatar->sitting();
+            }
+        }
+#endif
+        // Seed-cap readiness can follow the first accepted coarse update.
+        ent->requestProperties();
 
         static LLUICachedControl<bool> sFSShowDummyAVsinRadar("FSShowDummyAVsinRadar");
         if (!sFSShowDummyAVsinRadar && avVo && avVo->mIsDummy)
@@ -328,7 +372,7 @@ void FSRadar::updateRadarList()
         }
 
         LLUUID avRegion;
-        if (LLViewerRegion* reg = world->getRegionFromPosGlobal(avPos))
+        if (auto reg = vs_region_context(avPos))
         {
             avRegion = reg->getRegionID();
         }
@@ -394,7 +438,7 @@ void FSRadar::updateRadarList()
                 args["DISTANCE"] = llformat("%3.2f", avRange);
                 std::string message = FSCommon::format_string(str_chat_entering, args);
                 make_ui_sound("UISndRadarChatEnter"); // <FS:PP> FIRE-6069: Radar alerts sounds
-                LLAvatarNameCache::get(avId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, message));
+                queueRadarAlert(avId, message);
             }
             if (sRadarReportDrawRangeEnter && (avRange <= drawRadius) && avRange > AVATAR_UNKNOWN_RANGE)
             {
@@ -402,7 +446,7 @@ void FSRadar::updateRadarList()
                 args["DISTANCE"] = llformat("%3.2f", avRange);
                 std::string message = FSCommon::format_string(str_draw_distance_entering, args);
                 make_ui_sound("UISndRadarDrawEnter"); // <FS:PP> FIRE-6069: Radar alerts sounds
-                LLAvatarNameCache::get(avId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, message));
+                queueRadarAlert(avId, message);
             }
             if (sRadarReportSimRangeEnter && isInSameRegion)
             {
@@ -412,11 +456,11 @@ void FSRadar::updateRadarList()
                     LLStringUtil::format_map_t args;
                     args["DISTANCE"] = llformat("%3.2f", avRange);
                     std::string message = FSCommon::format_string(str_region_entering_distance, args);
-                    LLAvatarNameCache::get(avId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, message));
+                    queueRadarAlert(avId, message);
                 }
                 else
                 {
-                    LLAvatarNameCache::get(avId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, str_region_entering));
+                    queueRadarAlert(avId, str_region_entering);
                 }
             }
             if (sRadarEnterChannelAlert || (alertScripts))
@@ -451,12 +495,12 @@ void FSRadar::updateRadarList()
                     args["DISTANCE"] = llformat("%3.2f", avRange);
                     std::string message = FSCommon::format_string(str_chat_entering, args);
                     make_ui_sound("UISndRadarChatEnter"); // <FS:PP> FIRE-6069: Radar alerts sounds
-                    LLAvatarNameCache::get(avId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, message));
+                    queueRadarAlert(avId, message);
                 }
                 else if (sRadarReportChatRangeLeave && (avRange > chat_range_say || avRange == AVATAR_UNKNOWN_RANGE) && (rf.lastDistance <= chat_range_say && rf.lastDistance > AVATAR_UNKNOWN_RANGE))
                 {
                     make_ui_sound("UISndRadarChatLeave"); // <FS:PP> FIRE-6069: Radar alerts sounds
-                    LLAvatarNameCache::get(avId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, str_chat_leaving));
+                    queueRadarAlert(avId, str_chat_leaving);
                 }
             }
             if (sRadarReportDrawRangeEnter || sRadarReportDrawRangeLeave)
@@ -467,12 +511,12 @@ void FSRadar::updateRadarList()
                     args["DISTANCE"] = llformat("%3.2f", avRange);
                     std::string message = FSCommon::format_string(str_draw_distance_entering, args);
                     make_ui_sound("UISndRadarDrawEnter"); // <FS:PP> FIRE-6069: Radar alerts sounds
-                    LLAvatarNameCache::get(avId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, message));
+                    queueRadarAlert(avId, message);
                 }
                 else if (sRadarReportDrawRangeLeave && (avRange > drawRadius || avRange == AVATAR_UNKNOWN_RANGE) && (rf.lastDistance <= drawRadius && rf.lastDistance > AVATAR_UNKNOWN_RANGE))
                 {
                     make_ui_sound("UISndRadarDrawLeave"); // <FS:PP> FIRE-6069: Radar alerts sounds
-                    LLAvatarNameCache::get(avId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, str_draw_distance_leaving));
+                    queueRadarAlert(avId, str_draw_distance_leaving);
                 }
             }
             if (sRadarReportSimRangeEnter || sRadarReportSimRangeLeave)
@@ -485,17 +529,17 @@ void FSRadar::updateRadarList()
                         LLStringUtil::format_map_t args;
                         args["DISTANCE"] = llformat("%3.2f", avRange);
                         std::string message = FSCommon::format_string(str_region_entering_distance, args);
-                        LLAvatarNameCache::get(avId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, message));
+                        queueRadarAlert(avId, message);
                     }
                     else
                     {
-                        LLAvatarNameCache::get(avId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, str_region_entering));
+                        queueRadarAlert(avId, str_region_entering);
                     }
                 }
                 else if (sRadarReportSimRangeLeave && rf.lastRegion == regionSelf && !isInSameRegion && avRegion.notNull())
                 {
                     make_ui_sound("UISndRadarSimLeave"); // <FS:PP> FIRE-6069: Radar alerts sounds
-                    LLAvatarNameCache::get(avId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, str_region_leaving));
+                    queueRadarAlert(avId, str_region_leaving);
                 }
             }
             //If we were manually asked to update an external source for all existing avatars, add them to the queue.
@@ -523,8 +567,8 @@ void FSRadar::updateRadarList()
         entry["flags"] = avFlag;
         entry["seen"] = avSeenStr;
         entry["range"] = (avRange > AVATAR_UNKNOWN_RANGE ? llformat("%3.2f", avRange) : llformat(">%3.2f", drawRadius));
-        entry["typing"] = (avVo && avVo->isTyping());
-        entry["sitting"] = (avVo && (avVo->getParent() || avVo->isMotionActive(ANIM_AGENT_SIT_GROUND) || avVo->isMotionActive(ANIM_AGENT_SIT_GROUND_CONSTRAINED)));
+        entry["typing"] = typing;
+        entry["sitting"] = sitting;
 
         if (!gRlvHandler.hasBehaviour(RLV_BHVR_SHOWNAMES))
         {
@@ -545,7 +589,7 @@ void FSRadar::updateRadarList()
                     LLStringUtil::format_map_t args;
                     args["AGE"] = llformat("%d", avAge);
                     std::string message = FSCommon::format_string(str_avatar_age_alert, args);
-                    LLAvatarNameCache::get(avId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, message));
+                    queueRadarAlert(avId, message);
                 }
                 ent->mAgeAlertPerformed = true;
             }
@@ -581,7 +625,7 @@ void FSRadar::updateRadarList()
         entry_options["range_color"] = range_color.get().getValue();
 
         // Check if avatar is in draw distance and a VOAvatar instance actually exists
-        if (avRange <= drawRadius && avRange > AVATAR_UNKNOWN_RANGE && avVo)
+        if (avRange <= drawRadius && avRange > AVATAR_UNKNOWN_RANGE && preciseAvatar)
         {
             entry_options["range_style"] = LLFontGL::BOLD;
         }
@@ -667,7 +711,9 @@ void FSRadar::updateRadarList()
             if (++updatesPerRequest > FSRADAR_MAX_OFFSET_REQUESTS)
             {
                 msg = msg.substr(0, msg.size() - 1);
-                bridge.viewerToLSL(prefix + msg, FSLSLBridgeRequestRadarPos_Success);
+                bridge.viewerToLSL(prefix + msg,
+                    vs_native_im_lifetime_callback([weak = std::weak_ptr<void>(mLifetime)] { return !weak.expired(); },
+                        FSLSLBridgeRequestRadarPos_Success));
                 //LL_INFOS() << " OFFSET REQUEST SEGMENT"<< prefix << msg << LL_ENDL;
                 msg.clear();
                 updatesPerRequest = 0;
@@ -676,7 +722,9 @@ void FSRadar::updateRadarList()
         if (updatesPerRequest > 0)
         {
             msg = msg.substr(0, msg.size() - 1);
-            bridge.viewerToLSL(prefix + msg, FSLSLBridgeRequestRadarPos_Success);
+            bridge.viewerToLSL(prefix + msg,
+                    vs_native_im_lifetime_callback([weak = std::weak_ptr<void>(mLifetime)] { return !weak.expired(); },
+                        FSLSLBridgeRequestRadarPos_Success));
             //LL_INFOS() << " OFFSET REQUEST FINAL " << prefix << msg << LL_ENDL;
         }
 
@@ -698,17 +746,17 @@ void FSRadar::updateRadarList()
                 if (sRadarReportChatRangeLeave && (rf.lastDistance <= chat_range_say) && rf.lastDistance > AVATAR_UNKNOWN_RANGE)
                 {
                     make_ui_sound("UISndRadarChatLeave"); // <FS:PP> FIRE-6069: Radar alerts sounds
-                    LLAvatarNameCache::get(prevId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, str_chat_leaving));
+                    queueRadarAlert(prevId, str_chat_leaving);
                 }
                 if (sRadarReportDrawRangeLeave && (rf.lastDistance <= drawRadius) && rf.lastDistance > AVATAR_UNKNOWN_RANGE)
                 {
                     make_ui_sound("UISndRadarDrawLeave"); // <FS:PP> FIRE-6069: Radar alerts sounds
-                    LLAvatarNameCache::get(prevId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, str_draw_distance_leaving));
+                    queueRadarAlert(prevId, str_draw_distance_leaving);
                 }
                 if (sRadarReportSimRangeLeave && (rf.lastRegion == regionSelf || rf.lastRegion.isNull()))
                 {
                     make_ui_sound("UISndRadarSimLeave"); // <FS:PP> FIRE-6069: Radar alerts sounds
-                    LLAvatarNameCache::get(prevId, boost::bind(&FSRadar::radarAlertMsg, this, _1, _2, str_region_leaving));
+                    queueRadarAlert(prevId, str_region_leaving);
                 }
 
                 if (sRadarLeaveChannelAlert)
@@ -797,7 +845,7 @@ void FSRadar::updateRadarList()
         rf.lastRegion.setNull();
         if (!entry->mGlobalPos.isNull())
         {
-            if (LLViewerRegion* lastRegion = world->getRegionFromPosGlobal(entry->mGlobalPos))
+            if (auto lastRegion = vs_region_context(entry->mGlobalPos))
             {
                 rf.lastRegion = lastRegion->getRegionID();
             }
@@ -811,7 +859,7 @@ void FSRadar::updateRadarList()
     //
     if (RlvActions::canShowNearbyAgents())
     {
-        mAvatarStats["total"] = llformat("%d", mLastRadarSweep.size() - 1);
+        mAvatarStats["total"] = llformat("%d", S32(mLastRadarSweep.size() - mLastRadarSweep.count(gAgentID)));
         mAvatarStats["region"] = llformat("%d", inSameRegion);
         mAvatarStats["chatrange"] = llformat("%d", inChatRange);
     }
@@ -864,10 +912,10 @@ void FSRadar::teleportToAvatar(const LLUUID& targetAv)
         {
             // <FS:TS> FIRE-20862: Teleport the configured offset toward the center of the region from the
             //         avatar's reported position
-            LLViewerRegion* avreg = LLWorld::getInstance()->getRegionFromPosGlobal(avpos);
+            auto avreg = vs_region_context(avpos);
             if (avreg)
             {
-                LLVector3d region_center = avreg->getCenterGlobal();
+                LLVector3d region_center = avreg->getOriginGlobal() + LLVector3d(avreg->getWidth() * .5, avreg->getHeight() * .5, 0);
                 LLVector3d offset = avpos - region_center;
                 LLVector3d destination;
                 F32 lateral_distance = gSavedSettings.getF32("FSTeleportToOffsetLateral");
@@ -1057,6 +1105,15 @@ void FSRadar::updateNotes(const LLUUID& avatar_id, std::string_view notes)
 
 void FSRadar::onRegionChanged()
 {
+    if (!mAccountCurrent()) return;
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (owner->regionReady())
+            for (auto& [id, entry] : mEntryList) entry->requestProperties();
+        return;
+    }
+#endif
     if (mRegionCapabilitiesReceivedCallbackConnection.connected())
     {
         mRegionCapabilitiesReceivedCallbackConnection.disconnect();
@@ -1080,4 +1137,11 @@ void FSRadar::onRegionChanged()
                 });
         }
     }
+}
+
+void FSRadar::queueRadarAlert(const LLUUID& id, const std::string& message)
+{
+    LLAvatarNameCache::get(id, vs_native_im_lifetime_callback(
+        [weak = std::weak_ptr<void>(mLifetime)] { return !weak.expired(); },
+        [this, message](const LLUUID& avatar, const LLAvatarName& name) { radarAlertMsg(avatar, name, message); }));
 }

@@ -25,6 +25,12 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsavatarservices.h"
+#include "vsappearanceui.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
 
 #include "lloutfitslist.h"
 
@@ -242,7 +248,7 @@ LLOutfitsList::LLOutfitsList()
     LLControlVariable* ctrl = gSavedSettings.getControl("InventoryFavoritesColorText");
     if (ctrl)
     {
-        mSavedSettingInvFavColor = ctrl->getSignal()->connect(boost::bind(&LLOutfitsList::handleInvFavColorChange, this));
+        mSavedSettingInvFavColor = ctrl->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLOutfitsList::handleInvFavColorChange, this)));
     }
 }
 
@@ -305,7 +311,7 @@ void LLOutfitsList::onOpen(const LLSD& info)
     if (!mIsInitialized)
     {
         // Start observing changes in Current Outfit category.
-        LLOutfitObserver::instance().addCOFChangedCallback(boost::bind(&LLOutfitsList::onCOFChanged, this));
+        mOutfitConnections.emplace_back(LLOutfitObserver::instance().addCOFChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLOutfitsList::onCOFChanged, this))));
     }
 
     LLOutfitListBase::onOpen(info);
@@ -881,7 +887,7 @@ void LLOutfitsList::applyFilterToTab(
 
 bool LLOutfitsList::canWearSelected()
 {
-    if (!isAgentAvatarValid())
+    if (!vs_avatar_appearance())
     {
         return false;
     }
@@ -913,6 +919,10 @@ bool LLOutfitsList::canWearSelected()
     }
 
     // All selected items can be worn. But do we have enough space for them?
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+        return nonreplacable_objects == 0 || (owner->appearance() && owner->appearance()->canWear(selected_items));
+#endif
     return nonreplacable_objects == 0 || gAgentAvatarp->canAttachMoreObjects(nonreplacable_objects);
 }
 
@@ -1171,6 +1181,7 @@ LLOutfitListBase::LLOutfitListBase()
 
 LLOutfitListBase::~LLOutfitListBase()
 {
+    gIdleCallbacks.deleteFunction(onIdle, this);
     delete mOutfitMenu;
     delete mGearMenu;
 
@@ -1206,8 +1217,8 @@ void LLOutfitListBase::onOpen(const LLSD& info)
         // Start observing changes in Current Outfit category.
         //mCategoriesObserver->addCategory(cof, boost::bind(&LLOutfitsList::onCOFChanged, this));
 
-        LLOutfitObserver::instance().addBOFChangedCallback(boost::bind(&LLOutfitListBase::highlightBaseOutfit, this));
-        LLOutfitObserver::instance().addBOFReplacedCallback(boost::bind(&LLOutfitListBase::highlightBaseOutfit, this));
+        mOutfitConnections.emplace_back(LLOutfitObserver::instance().addBOFChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLOutfitListBase::highlightBaseOutfit, this))));
+        mOutfitConnections.emplace_back(LLOutfitObserver::instance().addBOFReplacedCallback(vs_appearance_ui_callback(this, boost::bind(&LLOutfitListBase::highlightBaseOutfit, this))));
 
         // Fetch "My Outfits" contents and refresh the list to display
         // initially fetched items. If not all items are fetched now
@@ -1505,11 +1516,11 @@ void LLOutfitListBase::removeSelected()
     {
         LLSD args;
         args["NAME"] = cat->getName();
-        LLNotificationsUtil::add("DeleteOutfitsWithName", args, LLSD(), boost::bind(&LLOutfitsList::onOutfitsRemovalConfirmation, this, _1, _2));
+        LLNotificationsUtil::add("DeleteOutfitsWithName", args, LLSD(), vs_appearance_ui_callback(this, [this, selected=mSelectedOutfitUUID](const LLSD& notification, const LLSD& response) { if (LLNotificationsUtil::getSelectedOption(notification, response) == 0 && selected.notNull()) gInventory.removeCategory(selected); }));
     }
     else
     // </FS:Ansariel>
-    LLNotificationsUtil::add("DeleteOutfits", LLSD(), LLSD(), boost::bind(&LLOutfitListBase::onOutfitsRemovalConfirmation, this, _1, _2));
+    LLNotificationsUtil::add("DeleteOutfits", LLSD(), LLSD(), vs_appearance_ui_callback(this, [this, selected=mSelectedOutfitUUID](const LLSD& notification, const LLSD& response) { if (LLNotificationsUtil::getSelectedOption(notification, response) == 0 && selected.notNull()) gInventory.removeCategory(selected); }));
 }
 
 void LLOutfitListBase::onOutfitsRemovalConfirmation(const LLSD& notification, const LLSD& response)
@@ -1608,21 +1619,18 @@ LLContextMenu* LLOutfitContextMenu::createMenu()
     LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
     LLUUID selected_id = mUUIDs.front();
 
-    registrar.add("Outfit.WearReplace",
-        boost::bind(&LLAppearanceMgr::replaceCurrentOutfit, &LLAppearanceMgr::instance(), selected_id));
-    registrar.add("Outfit.WearAdd",
-        boost::bind(&LLAppearanceMgr::addCategoryToCurrentOutfit, &LLAppearanceMgr::instance(), selected_id));
-    registrar.add("Outfit.TakeOff",
-        boost::bind(&LLAppearanceMgr::takeOffOutfit, &LLAppearanceMgr::instance(), selected_id));
-    registrar.add("Outfit.Edit", boost::bind(editOutfit));
-    registrar.add("Outfit.Rename", boost::bind(renameOutfit, selected_id));
-    registrar.add("Outfit.Delete", boost::bind(&LLOutfitListBase::removeSelected, mOutfitList));
-    registrar.add("Outfit.Thumbnail", boost::bind(&LLOutfitContextMenu::onThumbnail, this, selected_id));
-    registrar.add("Outfit.Favorite", boost::bind(&LLOutfitContextMenu::onFavorite, this, selected_id));
-    registrar.add("Outfit.Save", boost::bind(&LLOutfitContextMenu::onSave, this, selected_id));
+    registrar.add("Outfit.WearReplace", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLAppearanceMgr::replaceCurrentOutfit, &LLAppearanceMgr::instance(), selected_id)));
+    registrar.add("Outfit.WearAdd", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLAppearanceMgr::addCategoryToCurrentOutfit, &LLAppearanceMgr::instance(), selected_id)));
+    registrar.add("Outfit.TakeOff", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLAppearanceMgr::takeOffOutfit, &LLAppearanceMgr::instance(), selected_id)));
+    registrar.add("Outfit.Edit", vs_appearance_ui_callback(mOutfitList, boost::bind(editOutfit)));
+    registrar.add("Outfit.Rename", vs_appearance_ui_callback(mOutfitList, boost::bind(renameOutfit, selected_id)));
+    registrar.add("Outfit.Delete", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListBase::removeSelected, mOutfitList)));
+    registrar.add("Outfit.Thumbnail", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitContextMenu::onThumbnail, this, selected_id)));
+    registrar.add("Outfit.Favorite", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitContextMenu::onFavorite, this, selected_id)));
+    registrar.add("Outfit.Save", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitContextMenu::onSave, this, selected_id)));
 
-    enable_registrar.add("Outfit.OnEnable", boost::bind(&LLOutfitContextMenu::onEnable, this, _2));
-    enable_registrar.add("Outfit.OnVisible", boost::bind(&LLOutfitContextMenu::onVisible, this, _2));
+    enable_registrar.add("Outfit.OnEnable", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitContextMenu::onEnable, this, _2)));
+    enable_registrar.add("Outfit.OnVisible", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitContextMenu::onVisible, this, _2)));
 
     return createFromFile("menu_outfit_tab.xml");
 
@@ -1716,8 +1724,9 @@ void LLOutfitContextMenu::onSave(const LLUUID &outfit_cat_id)
     if (outfit_cat_id.notNull())
     {
         LLNotificationsUtil::add("ConfirmOverwriteOutfit", LLSD(), LLSD(),
-            [outfit_cat_id](const LLSD &notif, const LLSD &resp)
+            [outfit_cat_id, current=vs_native_im_guard()](const LLSD &notif, const LLSD &resp)
         {
+            if (!current()) return;
             S32 opt = LLNotificationsUtil::getSelectedOption(notif, resp);
             if (opt == 0)
             {
@@ -1736,21 +1745,21 @@ LLOutfitListGearMenuBase::LLOutfitListGearMenuBase(LLOutfitListBase* olist)
     LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
     LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
 
-    registrar.add("Gear.Wear", boost::bind(&LLOutfitListGearMenuBase::onWear, this));
-    registrar.add("Gear.TakeOff", boost::bind(&LLOutfitListGearMenuBase::onTakeOff, this));
-    registrar.add("Gear.Rename", boost::bind(&LLOutfitListGearMenuBase::onRename, this));
-    registrar.add("Gear.Delete", boost::bind(&LLOutfitListBase::removeSelected, mOutfitList));
-    registrar.add("Gear.Create", boost::bind(&LLOutfitListGearMenuBase::onCreate, this, _2));
+    registrar.add("Gear.Wear", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListGearMenuBase::onWear, this)));
+    registrar.add("Gear.TakeOff", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListGearMenuBase::onTakeOff, this)));
+    registrar.add("Gear.Rename", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListGearMenuBase::onRename, this)));
+    registrar.add("Gear.Delete", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListBase::removeSelected, mOutfitList)));
+    registrar.add("Gear.Create", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListGearMenuBase::onCreate, this, _2)));
 
-    registrar.add("Gear.WearAdd", boost::bind(&LLOutfitListGearMenuBase::onAdd, this));
-    registrar.add("Gear.Save", boost::bind(&LLOutfitListGearMenuBase::onSave, this));
+    registrar.add("Gear.WearAdd", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListGearMenuBase::onAdd, this)));
+    registrar.add("Gear.Save", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListGearMenuBase::onSave, this)));
 
-    registrar.add("Gear.Thumbnail", boost::bind(&LLOutfitListGearMenuBase::onThumbnail, this));
-    registrar.add("Gear.Favorite", boost::bind(&LLOutfitListGearMenuBase::onFavorite, this));
-    registrar.add("Gear.SortByImage", boost::bind(&LLOutfitListGearMenuBase::onChangeSortOrder, this));
+    registrar.add("Gear.Thumbnail", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListGearMenuBase::onThumbnail, this)));
+    registrar.add("Gear.Favorite", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListGearMenuBase::onFavorite, this)));
+    registrar.add("Gear.SortByImage", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListGearMenuBase::onChangeSortOrder, this)));
 
-    enable_registrar.add("Gear.OnEnable", boost::bind(&LLOutfitListGearMenuBase::onEnable, this, _2));
-    enable_registrar.add("Gear.OnVisible", boost::bind(&LLOutfitListGearMenuBase::onVisible, this, _2));
+    enable_registrar.add("Gear.OnEnable", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListGearMenuBase::onEnable, this, _2)));
+    enable_registrar.add("Gear.OnVisible", vs_appearance_ui_callback(mOutfitList, boost::bind(&LLOutfitListGearMenuBase::onVisible, this, _2)));
 
     mMenu = LLUICtrlFactory::getInstance()->createFromFile<LLToggleableMenu>(
         "menu_outfit_gear.xml", gMenuHolder, LLViewerMenuHolderGL::child_registry_t::instance());
@@ -1819,8 +1828,9 @@ void LLOutfitListGearMenuBase::onSave()
 {
     const LLUUID &selected_id = getSelectedOutfitID();
     LLNotificationsUtil::add("ConfirmOverwriteOutfit", LLSD(), LLSD(),
-        [selected_id](const LLSD &notif, const LLSD &resp)
+        [selected_id, current=vs_native_im_guard()](const LLSD &notif, const LLSD &resp)
     {
+        if (!current()) return;
         S32 opt = LLNotificationsUtil::getSelectedOption(notif, resp);
         if (opt == 0)
         {
@@ -1938,10 +1948,10 @@ LLOutfitListSortMenu::LLOutfitListSortMenu(LLOutfitListBase* parent_panel)
     LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
     LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
 
-    registrar.add("Sort.Collapse", boost::bind(&LLOutfitListBase::onCollapseAllFolders, parent_panel));
-    registrar.add("Sort.Expand", boost::bind(&LLOutfitListBase::onExpandAllFolders, parent_panel));
-    registrar.add("Sort.OnSort", boost::bind(&LLOutfitListBase::onChangeSortOrder, parent_panel, _2));
-    enable_registrar.add("Sort.OnEnable", boost::bind(&LLOutfitListSortMenu::onEnable, this, _2));
+    registrar.add("Sort.Collapse", vs_appearance_ui_callback(parent_panel, boost::bind(&LLOutfitListBase::onCollapseAllFolders, parent_panel)));
+    registrar.add("Sort.Expand", vs_appearance_ui_callback(parent_panel, boost::bind(&LLOutfitListBase::onExpandAllFolders, parent_panel)));
+    registrar.add("Sort.OnSort", vs_appearance_ui_callback(parent_panel, boost::bind(&LLOutfitListBase::onChangeSortOrder, parent_panel, _2)));
+    enable_registrar.add("Sort.OnEnable", vs_appearance_ui_callback(parent_panel, boost::bind(&LLOutfitListSortMenu::onEnable, this, _2)));
 
     mMenu = LLUICtrlFactory::getInstance()->createFromFile<LLToggleableMenu>(
         "menu_outfit_list_sort.xml", gMenuHolder, LLViewerMenuHolderGL::child_registry_t::instance());

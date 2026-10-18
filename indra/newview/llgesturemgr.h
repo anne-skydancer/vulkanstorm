@@ -112,6 +112,7 @@ public:
     // Stop all requested or playing anims for this gesture
     // Also remove from playing list
     void stopGesture(LLMultiGesture* gesture);
+    void forgetPreviewGesture(LLMultiGesture* gesture); // Retire a UI-owned old-account pointer without simulator actions.
     void stopGesture(const LLUUID& item_id);
     /**
      * Add cb into callbackMap.

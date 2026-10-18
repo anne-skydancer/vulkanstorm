@@ -527,6 +527,7 @@ LLAgent::LLAgent() :
     mMouselookModeInSignal(nullptr),
     mMouselookModeOutSignal(nullptr),
     mFSAreaSearchActive(false), // <FS:minerjr> - Flag was not initialized
+    m360CaptureActive(false),
     mPhantom(false),
     restoreToWorld(false)
 {
@@ -1387,6 +1388,14 @@ void LLAgent::removeRegionChangedCallback(boost::signals2::connection callback)
 //-----------------------------------------------------------------------------
 bool LLAgent::inPrelude()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto region = vs_current_region_context();
+        return region && is_prelude(region->getRegionFlags());
+    }
+#endif
+
     return mRegionp && mRegionp->isPrelude();
 }
 
@@ -1823,7 +1832,13 @@ void LLAgent::resetControlFlags()
 //-----------------------------------------------------------------------------
 void LLAgent::setAFK()
 {
-    if (gNonInteractive || !gAgent.getRegion())
+    if (gNonInteractive || ![]
+    {
+#if VS_NATIVE_VULKAN
+        if(const auto native=VSNativeSession::active())return native->regionReady();
+#endif
+        return gAgent.getRegion()!=nullptr;
+    }())
     {
         // Don't set AFK if we're not talking to a region yet.
         return;
@@ -1840,7 +1855,13 @@ void LLAgent::setAFK()
         // <FS:AO> Gsit on away, antigrief protection
         if (gSavedSettings.getBOOL("AvatarSitOnAway"))
         {
-            if (isAgentAvatarValid() && !gAgentAvatarp->isSitting() && !gRlvHandler.hasBehaviour(RLV_BHVR_SIT))
+            if ([]
+            {
+#if VS_NATIVE_VULKAN
+                if(VSNativeSession::active())return vs_avatar_character() && !gAgent.isSitting();
+#endif
+                return isAgentAvatarValid() && !gAgentAvatarp->isSitting();
+            }() && !gRlvHandler.hasBehaviour(RLV_BHVR_SIT))
             {
                 gAgent.sitDown();
                 gAgent.setIsAfkSitting(true);
@@ -1860,8 +1881,17 @@ void LLAgent::clearAFK()
     // Gods can sometimes get into away state (via gestures)
     // without setting the appropriate control flag. JC
     if (mControlFlags & AGENT_CONTROL_AWAY
-        || (isAgentAvatarValid()
-            && (gAgentAvatarp->mSignaledAnimations.find(ANIM_AGENT_AWAY) != gAgentAvatarp->mSignaledAnimations.end())))
+        || ([]
+        {
+#if VS_NATIVE_VULKAN
+            if(VSNativeSession::active())
+            {
+                const auto& animations=vs_avatar_signaled_animations();
+                return animations.find(ANIM_AGENT_AWAY)!=animations.end();
+            }
+#endif
+            return isAgentAvatarValid() && gAgentAvatarp->mSignaledAnimations.find(ANIM_AGENT_AWAY)!=gAgentAvatarp->mSignaledAnimations.end();
+        }()))
     {
         sendAnimationRequest(ANIM_AGENT_AWAY, ANIM_REQUEST_STOP);
         clearControlFlags(AGENT_CONTROL_AWAY);
@@ -3472,6 +3502,20 @@ bool LLAgent::canAccessAdult() const
 
 bool LLAgent::canAccessMaturityInRegion( U64 region_handle ) const
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto region = vs_region_context(from_region_handle(region_handle));
+        if (!region) return true;
+        switch (region->getSimAccess())
+        {
+        case SIM_ACCESS_PG: return true;
+        case SIM_ACCESS_MATURE: return canAccessMature();
+        case SIM_ACCESS_ADULT: return canAccessAdult();
+        default: return true;
+        }
+    }
+#endif
     LLViewerRegion *regionp = LLWorld::getInstance()->getRegionFromHandle( region_handle );
     if( regionp )
     {
@@ -3752,6 +3796,9 @@ void LLAgent::changeInterestListMode(const std::string &new_mode)
         LL_DEBUGS("360Capture") << "Setting Agent interest list mode to " << new_mode << " and updating regions" << LL_ENDL;
     // </FS:Beq>
         mInterestListMode = new_mode;
+#if VS_NATIVE_VULKAN
+        if(const auto session=VSNativeSession::active()){session->updateInterestListMode();return;}
+#endif
         // Change interest list mode for all regions.  If they are already set for the current mode,
         // the setting will have no effect.
         for (LLWorld::region_list_t::const_iterator iter = LLWorld::getInstance()->getRegionList().begin();

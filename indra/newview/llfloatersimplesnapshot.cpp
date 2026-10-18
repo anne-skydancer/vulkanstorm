@@ -398,7 +398,7 @@ void LLFloaterSimpleSnapshot::draw()
 
     if (previewp && !isMinimized() && mThumbnailPlaceholder->getVisible())
     {
-        if(previewp->getThumbnailImage())
+        if(previewp->hasThumbnailImage())
         {
             bool working = impl->getStatus() == ImplBase::STATUS_WORKING;
             const S32 thumbnail_w = previewp->getThumbnailWidth();
@@ -408,13 +408,10 @@ void LLFloaterSimpleSnapshot::draw()
             S32 offset_x = (local_rect.getWidth() - thumbnail_w) / 2;
             S32 offset_y = PREVIEW_OFFSET_Y;
 
-            gGL.matrixMode(LLRender::MM_MODELVIEW);
-            // Apply floater transparency to the texture unless the floater is focused.
+                // Apply floater transparency to the texture unless the floater is focused.
             F32 alpha = getTransparencyType() == TT_ACTIVE ? 1.0f : getCurrentTransparency();
             LLColor4 color = working ? LLColor4::grey4 : LLColor4::white;
-            gl_draw_scaled_image(offset_x, offset_y,
-                thumbnail_w, thumbnail_h,
-                previewp->getThumbnailImage(), color % alpha);
+            previewp->drawThumbnail(offset_x,offset_y,thumbnail_w,thumbnail_h,color % alpha);
         }
     }
     impl->updateLayout(this);

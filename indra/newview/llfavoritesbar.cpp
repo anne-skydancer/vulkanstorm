@@ -1621,11 +1621,6 @@ void LLFavoritesBarCtrl::doToSelected(const LLSD& userdata)
     }
     else if (action == "about")
     {
-        if (gViewerWindow && gViewerWindow->isNativeVulkan())
-        {
-            LLFloaterReg::showInstance("properties", LLSD().with("item_id", item->getUUID()));
-            return;
-        }
         LLSD key;
         key["type"] = "landmark";
         key["id"] = mSelectedItemID;

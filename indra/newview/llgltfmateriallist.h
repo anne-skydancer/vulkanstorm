@@ -33,6 +33,7 @@
 #include "llpointer.h"
 
 #include <unordered_map>
+#include <functional>
 
 class LLFetchedGLTFMaterial;
 class LLGLTFOverrideCacheEntry;
@@ -44,6 +45,8 @@ public:
 
 
     LLFetchedGLTFMaterial* getMaterial(const LLUUID& id);
+    // CPU metadata borrow; never creates or requests an asset.
+    LLFetchedGLTFMaterial* findMaterial(const LLUUID& id) const;
 
     void addMaterial(const LLUUID& id, LLFetchedGLTFMaterial* material);
     void removeMaterial(const LLUUID& id);
@@ -60,6 +63,7 @@ public:
     //
     // NOTE: do not use to revert to asset when applying a new asset id, use queueApply below
     static void queueModify(const LLViewerObject* obj, S32 side, const LLGLTFMaterial* mat);
+    static void queueModify(const LLUUID&, S32, const LLGLTFMaterial*, std::function<bool()>, const std::string& capability);
 
     // Queue an application of a material asset we want to send to the simulator.
     //  Call "flushUpdates" to flush pending updates immediately.
@@ -80,11 +84,13 @@ public:
     //  asset_id - ID of material asset to apply, or LLUUID::null to disassociate current material asset
     //  mat - override material, if null, will clear most override data
     static void queueApply(const LLViewerObject* obj, S32 side, const LLUUID& asset_id, const LLGLTFMaterial* mat);
+    static void queueApply(const LLUUID&,S32,const LLUUID&,const LLGLTFMaterial*,std::function<bool()>,const std::string& capability);
 
     // flush pending material updates to the simulator
     // Automatically called once per frame, but may be called explicitly
     // for cases that care about the done_callback forwarded to LLCoros::instance().launch
     static void flushUpdates(void(*done_callback)(bool) = nullptr);
+    static void flushUpdates(std::function<void(bool)>, std::function<bool()> current);
 
     static void addSelectionUpdateCallback(void(*update_callback)(const LLUUID& object_id, S32 side));
 
@@ -116,14 +122,15 @@ private:
     class CallbackHolder
     {
     public:
-        CallbackHolder(void(*done_callback)(bool))
-            : mCallback(done_callback)
+        CallbackHolder(std::function<void(bool)> done_callback, std::function<bool()> current = {})
+            : mCallback(std::move(done_callback)), mCurrent(std::move(current))
         {}
         ~CallbackHolder()
         {
-            if (mCallback) mCallback(mSuccess);
+            if (mCallback && (!mCurrent || mCurrent())) mCallback(mSuccess);
         }
         std::function<void(bool)> mCallback = nullptr;
+        std::function<bool()> mCurrent;
         bool mSuccess = true;
     };
     static void flushUpdatesOnce(std::shared_ptr<CallbackHolder> callback_holder);
@@ -164,6 +171,8 @@ protected:
         LLGLTFMaterial override_data;
 
         bool has_override = false;
+        std::function<bool()> current = {};
+        std::string capability = {};
     };
 
     typedef std::list<ModifyMaterialData> modify_queue_t;
@@ -176,6 +185,8 @@ protected:
         LLUUID asset_id;
         LLPointer<LLGLTFMaterial> override_data;
         std::string override_json;
+        std::function<bool()> current = {};
+        std::string capability = {};
     };
 
     typedef std::list<ApplyMaterialAssetData> apply_queue_t;

@@ -45,6 +45,7 @@
 #include "lluictrlfactory.h"
 
 #include "llpanelpeople.h"
+#include "vsavatarservices.h"
 #include "fsfloatercontacts.h"
 
 // newview
@@ -598,7 +599,8 @@ void LLPanelPeople::showNativeAccountTab(const std::string& requested)
     if (tab == "groups") tab = GROUP_TAB_NAME;
     if (tab == "contact_sets") tab = CONTACT_SETS_TAB_NAME;
     if (tab == "blocked") tab = BLOCKED_TAB_NAME;
-    if (tab == "nearby_panel") tab = FRIENDS_TAB_NAME;
+    if (tab == "nearby") tab = NEARBY_TAB_NAME;
+    if (tab == NEARBY_TAB_NAME) { LLFloaterReg::showInstance("fs_radar"); return; }
     if (gSavedSettings.getString("FSInternalSkinCurrent") == "Vintage" || !gSavedSettings.getBOOL("FSUseV2Friends"))
     {
         if (tab == BLOCKED_TAB_NAME) LLFloaterReg::showInstance("fs_blocklist");
@@ -612,7 +614,12 @@ void LLPanelPeople::showNativeAccountTab(const std::string& requested)
 bool LLPanelPeople::nativeAccountTabVisible(std::string_view requested)
 {
     std::string tab(requested);
-    if (tab == "friends" || tab == "people" || tab == "nearby_panel") tab = FRIENDS_TAB_NAME;
+    if (tab == "nearby" || tab == NEARBY_TAB_NAME)
+    {
+        auto* radar = LLFloaterReg::findInstance("fs_radar");
+        return radar && radar->isInVisibleChain();
+    }
+    if (tab == "friends" || tab == "people") tab = FRIENDS_TAB_NAME;
     if (tab == "groups") tab = GROUP_TAB_NAME;
     if (tab == "contact_sets") tab = CONTACT_SETS_TAB_NAME;
     if (tab == "blocked") tab = BLOCKED_TAB_NAME;
@@ -651,9 +658,9 @@ bool LLPanelPeople::isNativeCallback(const std::string& name, const LLSD& data)
     if (name == "ContactSet.Enable") return item == "has_mutable_set" || item == "has_selection" || item == "has_mutable_set_and_selection" || item == "has_single_selection" || item == "has_pseudonym" || item == "has_display_name";
     if (name == "Conversation.IsConversationLoggingAllowed") return true;
     if (name == "CheckControl") return item == "FriendsListShowIcons" || item == "FriendsListShowPermissions" || item == "GroupListShowIcons" || item == "RecentPeopleListShowIcons";
-    if (name == "Avatar.EnableItem") return item == "can_add" || item == "can_delete" || item == "can_open_inventory" || item == "can_block" || item == "can_callog" || item == "can_pay" || item == "can_im" || item == "can_invite" || item == "can_share";
+    if (name == "Avatar.EnableItem") return item == "can_add" || item == "can_delete" || item == "can_open_inventory" || item == "can_block" || item == "can_callog" || item == "can_pay" || item == "can_im" || item == "can_invite" || item == "can_share" || item == "can_call";
     if (name == "Avatar.CheckItem") return item == "is_blocked";
-    return name == "Avatar.Profile" || name == "Avatar.AddFriend" || name == "Avatar.AddToContactSet" || name == "Avatar.RemoveFriend" || name == "Avatar.IM" || name == "Avatar.Share" || name == "Avatar.Pay" || name == "Avatar.InviteToGroup" || name == "Avatar.GroupInvite" || name == "Avatar.BlockUnblock" || name == "Avatar.Calllog";
+    return name == "Avatar.Profile" || name == "Avatar.AddFriend" || name == "Avatar.AddToContactSet" || name == "Avatar.RemoveFriend" || name == "Avatar.IM" || name == "Avatar.Share" || name == "Avatar.Pay" || name == "Avatar.InviteToGroup" || name == "Avatar.GroupInvite" || name == "Avatar.BlockUnblock" || name == "Avatar.Calllog" || name == "Avatar.Call" || name == "Avatar.EnableCall";
 }
 
 LLPanelPeople::LLPanelPeople()
@@ -813,11 +820,7 @@ bool LLPanelPeople::postBuild()
     mAllFriendList->showPermissions(gSavedSettings.getBOOL("FriendsListShowPermissions"));
     mAllFriendList->setShowCompleteName(!gSavedSettings.getBOOL("FriendsListHideUsernames"));
 
-#if VS_NATIVE_VULKAN
-    LLPanel* nearby_tab = VSNativeSession::active() ? nullptr : getChild<LLPanel>(NEARBY_TAB_NAME);
-#else
     LLPanel* nearby_tab = getChild<LLPanel>(NEARBY_TAB_NAME);
-#endif
     if (nearby_tab)
     {
     // <FS:Ansariel> Firestorm radar
@@ -970,11 +973,7 @@ bool LLPanelPeople::postBuild()
     // </FS:Ansariel> Friend list accordion replacement
 
     // Must go after setting commit callback and initializing all pointers to children.
-#if VS_NATIVE_VULKAN
-    mTabContainer->selectTabByName(VSNativeSession::active() ? FRIENDS_TAB_NAME : NEARBY_TAB_NAME);
-#else
     mTabContainer->selectTabByName(NEARBY_TAB_NAME);
-#endif
 
     // <FS:PP> FIRE-21531: Sort Contact Sets by Online Status
     // LLVoiceClient::addObserver(this);
@@ -1374,7 +1373,7 @@ void LLPanelPeople::onFilterEdit(const std::string& search_string)
     const std::string& cur_tab = getActiveTabName();
     if (cur_tab == NEARBY_TAB_NAME)
     {
-        mNearbyList->setNameFilter(filter);
+        if (mNearbyList) mNearbyList->setNameFilter(filter);
     }
     else if (cur_tab == FRIENDS_TAB_NAME)
     {
@@ -1820,9 +1819,6 @@ void LLPanelPeople::onMoreButtonClicked()
 void LLPanelPeople::onOpen(const LLSD& key)
 {
     std::string tab_name = key["people_panel_tab_name"];
-#if VS_NATIVE_VULKAN
-    if (VSNativeSession::active() && tab_name == NEARBY_TAB_NAME) tab_name = FRIENDS_TAB_NAME;
-#endif
     if (!tab_name.empty())
     {
         mTabContainer->selectTabByName(tab_name);
@@ -1952,7 +1948,14 @@ bool LLPanelPeople::isAccordionCollapsedByUser(const std::string& name)
 bool LLPanelPeople::updateNearbyArrivalTime()
 {
 #if VS_NATIVE_VULKAN
-    if (VSNativeSession::active()) return false;
+    if (VSNativeSession::active())
+    {
+        uuid_vec_t uuids;
+        for (const auto& avatar : vs_avatar_locations(gAgent.getPositionGlobal(), gSavedSettings.getF32("NearMeRange")))
+            uuids.push_back(avatar.id);
+        LLRecentPeople::instance().updateAvatarsArrivalTime(uuids);
+        return LLApp::isExiting();
+    }
 #endif
     std::vector<LLVector3d> positions;
     std::vector<LLUUID> uuids;

@@ -96,6 +96,13 @@ public:
 private:
     bool outsideSlop        (S32 x, S32 y, S32 start_x, S32 start_y);
     bool handleLeftClickPick();
+    template<class Target>bool handleLeftClickPickTarget(const Target&);
+#if VS_NATIVE_VULKAN
+    struct NativeClickIntent;
+    std::unique_ptr<NativeClickIntent> mNativeClickIntent;
+    U64 mNativeClickGeneration=0;
+    void beginNativeClickAction(const LLPickInfo&,const LLUUID&,std::function<bool()>,bool selectRoot);
+#endif
     bool handleRightClickPick();
     bool useClickAction     (MASK mask, LLViewerObject* object,LLViewerObject* parent);
 

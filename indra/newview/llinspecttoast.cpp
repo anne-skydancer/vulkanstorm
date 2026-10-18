@@ -82,6 +82,11 @@ LLInspectToast::~LLInspectToast()
 void LLInspectToast::onOpen(const LLSD& notification_id)
 {
     LLInspect::onOpen(notification_id);
+    // Resolve the actual active channel on every open. Construction may precede
+    // channel creation, and account teardown can retire a prior channel.
+    mScreenChannel=dynamic_cast<LLScreenChannel*>(LLChannelManager::instance().findChannelByID(NOTIFICATION_CHANNEL_UUID));
+    if(!mScreenChannel)return;
+
     LLToast* toast = mScreenChannel->getToastByNotificationID(notification_id);
     if (toast == NULL)
     {
@@ -150,3 +155,6 @@ void LLNotificationsUI::registerFloater()
             &LLFloaterReg::build<LLInspectToast>);
 }
 
+
+bool LLNotificationsUI::isInspectToastType(const std::type_info& type)
+{return type==typeid(LLInspectToast);}

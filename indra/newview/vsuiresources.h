@@ -36,6 +36,8 @@ public:
                unsigned height, const std::vector<std::uint8_t>& rgba);
     void begin(unsigned width, unsigned height, float dpi);
     void setClip(std::array<float,4> top_left_logical);
+    std::optional<float> worldDepth() const;
+    void setWorldDepth(std::optional<float>);
     std::vector<VSUIRenderer::Packet> finish();
     LLPointer<LLImageRaw> rawImage(const std::string& key) const;
     void erase(const std::string& key);
@@ -54,6 +56,8 @@ public:
     void triangle(const std::array<std::array<float, 6>, 3>& physical_bottom_left);
     void rectangle(const LLRectf& physical_bottom_left,const LLColor4&);
     void imageRectangle(const VSUIRenderer::Image&,const LLRectf& logical_bottom_left,const LLColor4&);
+    void imageLocalRectangle(const VSUIRenderer::Image&,const LLRectf&,const LLColor4&);
+    void deferDraw();
     void screenClip(const LLRect* logical_bottom_left);
 private:
     struct Impl;

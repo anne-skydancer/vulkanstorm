@@ -25,6 +25,14 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
+#include "vsappearanceui.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#include "llavatarappearance.h"
+#endif
 
 #include "llpaneleditwearable.h"
 #include "llpanel.h"
@@ -642,11 +650,42 @@ static void set_enabled_texture_ctrl(bool enabled, LLPanel* panel, const LLEditW
 
 // LLPanelEditWearable
 
+namespace
+{
+void nativeWearableChanged(LLViewerWearable* wearable)
+{
+    if (!wearable || !wearable->currentNativeOwner()) return;
+    if (auto* avatar = vs_avatar_appearance())
+    {
+        wearable->writeToAvatar(avatar);
+        avatar->updateVisualParams();
+        wearable->setUpdated();
+    }
+}
+void nativeWearableTexture(LLViewerWearable* wearable, S32 texture, const LLUUID& id)
+{
+    if (!wearable || !wearable->currentNativeOwner()) return;
+    U32 index;
+    if (!gAgentWearables.getWearableIndex(wearable, index)) return;
+    LLLocalTextureObject local(nullptr, id);
+    wearable->setLocalTextureObject(texture, local);
+    nativeWearableChanged(wearable);
+}
+LLPointer<LLInventoryCallback> wearableCustomizeCallback()
+{
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+        return owner->appearance() ? owner->appearance()->customizeCallback() : LLPointer<LLInventoryCallback>();
+#endif
+    return isAgentAvatarValid() ? gAgentAvatarp->mEndCustomizeCallback : LLPointer<LLInventoryCallback>();
+}
+}
 LLPanelEditWearable::LLPanelEditWearable()
         : LLPanel()
         , mWearablePtr(NULL)
         , mWearableItem(NULL)
 {
+    mAccountCurrent = vs_native_im_guard();
         mCommitCallbackRegistrar.add("ColorSwatch.Commit", boost::bind(&LLPanelEditWearable::onColorSwatchCommit, this, _1));
         mCommitCallbackRegistrar.add("TexturePicker.Commit", boost::bind(&LLPanelEditWearable::onTexturePickerCommit, this, _1));
 }
@@ -876,7 +915,7 @@ bool LLPanelEditWearable::postBuild()
         mAvatarHeightLabelColor = LLUIColorTable::instance().getColor(color, LLColor4::green);
         color = mPanelShape->getString("height_value_label_color");
         mAvatarHeightValueLabelColor = LLUIColorTable::instance().getColor(color, LLColor4::green);
-        gSavedSettings.getControl("HeightUnits")->getSignal()->connect(boost::bind(&LLPanelEditWearable::changeHeightUnits, this, _2));
+        mHeightUnitsConnection = gSavedSettings.getControl("HeightUnits")->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLPanelEditWearable::changeHeightUnits, this, _2)));
         updateMetricLayout(gSavedSettings.getBOOL("HeightUnits"));
 
         return true;
@@ -886,6 +925,7 @@ bool LLPanelEditWearable::postBuild()
 // LLUICtrl
 bool LLPanelEditWearable::isDirty() const
 {
+        if (!mAccountCurrent() || (mWearablePtr && !mWearablePtr->currentNativeOwner())) return false;
         bool isDirty = false;
         if (mWearablePtr)
         {
@@ -902,6 +942,21 @@ bool LLPanelEditWearable::isDirty() const
 //virtual
 void LLPanelEditWearable::draw()
 {
+        if (!mAccountCurrent()) return;
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active() && mWearablePtr && mWearablePtr->currentNativeOwner())
+        {
+            auto* current = gAgentWearables.getWearableFromItemID(mWearablePtr->getItemID());
+            if (current && current != mWearablePtr) setWearable(current, true);
+        }
+#endif
+        if (mWearablePtr && !mWearablePtr->currentNativeOwner())
+        {
+            const auto item = mWearablePtr->getItemID();
+            setWearable(nullptr, true);
+            gAgentWearables.requestEditingWearable(item);
+        }
+
         updateVerbs();
         if (getWearable() && getWearable()->getType() == LLWearableType::WT_SHAPE)
         {
@@ -929,10 +984,20 @@ void LLPanelEditWearable::setVisible(bool visible)
 
 void LLPanelEditWearable::setWearable(LLViewerWearable *wearable, bool disable_camera_switch)
 {
-        showWearable(mWearablePtr, false, disable_camera_switch);
+        std::shared_ptr<LLViewerWearable> retained;
+#if VS_NATIVE_VULKAN
+        if (const auto owner = VSNativeSession::active(); owner && wearable)
+        {
+            if (owner->appearance()) retained = owner->appearance()->retainWearable(wearable);
+            if (!retained) wearable = nullptr;
+        }
+#endif
+
+        if (!mWearablePtr || mWearablePtr->currentNativeOwner()) showWearable(mWearablePtr, false, disable_camera_switch);
         if (mWearablePtr)
             mWearablePtr->unregisterObserver(this);
         mWearablePtr = wearable;
+        mNativeWearableOwner = std::move(retained);
         if( mWearablePtr )
             mWearablePtr->registerObserver( this );
         showWearable(mWearablePtr, true, disable_camera_switch);
@@ -960,7 +1025,7 @@ void LLPanelEditWearable::onSaveAsButtonClicked()
         LLSD args;
         args["DESC"] = mNameEditor->getText();
 
-        LLNotificationsUtil::add("SaveWearableAs", args, LLSD(), boost::bind(&LLPanelEditWearable::saveAsCallback, this, _1, _2));
+        LLNotificationsUtil::add("SaveWearableAs", args, LLSD(), [owner=getHandle(), current=mAccountCurrent, wearable=mWearablePtr](const LLSD& notification, const LLSD& response) { if (!current()) return false; auto* view = dynamic_cast<LLPanelEditWearable*>(owner.get()); if (view && view->getWearable() == wearable) view->saveAsCallback(notification, response); return false; });
 }
 
 void LLPanelEditWearable::saveAsCallback(const LLSD& notification, const LLSD& response)
@@ -980,7 +1045,8 @@ void LLPanelEditWearable::saveAsCallback(const LLSD& notification, const LLSD& r
 
 void LLPanelEditWearable::onCommitSexChange()
 {
-        if (!isAgentAvatarValid())
+        if (!mAccountCurrent() || !getWearable()) return;
+        if (!vs_avatar_appearance())
         {
                 return;
         }
@@ -993,7 +1059,7 @@ void LLPanelEditWearable::onCommitSexChange()
                 return;
         }
 
-        LLViewerVisualParam* param = static_cast<LLViewerVisualParam*>(gAgentAvatarp->getVisualParam( "male" ));
+        LLViewerVisualParam* param = static_cast<LLViewerVisualParam*>(vs_avatar_appearance()->getVisualParam( "male" ));
         if (!param)
         {
                 return;
@@ -1013,16 +1079,21 @@ void LLPanelEditWearable::onCommitSexChange()
         //gAgentAvatarp->updateSexDependentLayerSets();
         param->setWeight( is_new_sex_male, false);
 
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active()) nativeWearableChanged(getWearable());
+        else
+#endif
         gAgentAvatarp->updateSexDependentLayerSets(false);
         // </FS:Ansariel> [Legacy Bake]
 
-        gAgentAvatarp->updateVisualParams();
+        vs_avatar_appearance()->updateVisualParams();
         showWearable(mWearablePtr, true, true);
         updateScrollingPanelUI();
 }
 
 void LLPanelEditWearable::onTexturePickerCommit(const LLUICtrl* ctrl)
 {
+        if (!getWearable()) return;
         const LLTextureCtrl* texture_ctrl = dynamic_cast<const LLTextureCtrl*>(ctrl);
         if (!texture_ctrl)
         {
@@ -1038,6 +1109,16 @@ void LLPanelEditWearable::onTexturePickerCommit(const LLUICtrl* ctrl)
                         = find_picker_ctrl_entry_if<LLTextureCtrl, PickerControlEntryNamePredicate>(type, name_pred);
                 if (entry)
                 {
+#if VS_NATIVE_VULKAN
+                        if (VSNativeSession::active())
+                        {
+                            LLUUID id = texture_ctrl->getImageAssetID();
+                            if (id == IMG_DEFAULT) id = IMG_DEFAULT_AVATAR;
+                            nativeWearableTexture(getWearable(), entry->mTextureIndex, id);
+                            LLVisualParamHint::requestHintUpdates();
+                            return;
+                        }
+#endif
                         // Set the new version
                         LLViewerFetchedTexture* image = LLViewerTextureManager::getFetchedTexture(texture_ctrl->getImageAssetID());
                         if (image->getID() == IMG_DEFAULT)
@@ -1070,6 +1151,7 @@ void LLPanelEditWearable::onTexturePickerCommit(const LLUICtrl* ctrl)
 
 void LLPanelEditWearable::onColorSwatchCommit(const LLUICtrl* ctrl)
 {
+        if (!getWearable()) return;
         if (getWearable())
         {
                 LLWearableType::EType type = getWearable()->getType();
@@ -1088,6 +1170,10 @@ void LLPanelEditWearable::onColorSwatchCommit(const LLUICtrl* ctrl)
                                 LLVisualParamHint::requestHintUpdates();
                                 // <FS:Ansariel> [Legacy Bake]
                                 //gAgentAvatarp->wearableUpdated(getWearable()->getType());
+                                #if VS_NATIVE_VULKAN
+                                if (VSNativeSession::active()) nativeWearableChanged(getWearable());
+                                else
+#endif
                                 gAgentAvatarp->wearableUpdated(getWearable()->getType(), false);
                         }
                 }
@@ -1134,6 +1220,7 @@ void LLPanelEditWearable::incrementCofVersionLegacy()
 
 void LLPanelEditWearable::saveChanges(bool force_save_as)
 {
+        if (!getWearable()) return;
         if (!mWearablePtr || !isDirty())
         {
                 // do nothing if no unsaved changes
@@ -1166,7 +1253,7 @@ void LLPanelEditWearable::saveChanges(bool force_save_as)
         if (force_save_as)
         {
                 // the name of the wearable has changed, re-save wearable with new name
-                LLAppearanceMgr::instance().removeCOFItemLinks(mWearablePtr->getItemID(), gAgentAvatarp->mEndCustomizeCallback);
+                LLAppearanceMgr::instance().removeCOFItemLinks(mWearablePtr->getItemID(), wearableCustomizeCallback());
                 gAgentWearables.saveWearableAs(mWearablePtr->getType(), index, new_name, description, false);
                 mNameEditor->setText(mWearableItem->getName());
         }
@@ -1186,9 +1273,9 @@ void LLPanelEditWearable::saveChanges(bool force_save_as)
                         obj_array.push_back(LLConstPointer<LLInventoryObject>(link_item));
                         link_inventory_array(LLAppearanceMgr::instance().getCOF(),
                                 obj_array,
-                                gAgentAvatarp->mEndCustomizeCallback);
+                                wearableCustomizeCallback());
                         // Remove old link
-                        remove_inventory_item(link_item->getUUID(), gAgentAvatarp->mEndCustomizeCallback);
+                        remove_inventory_item(link_item->getUUID(), wearableCustomizeCallback());
                 }
                 // <FS:Ansariel> [Legacy Bake]
                 //gAgentWearables.saveWearable(mWearablePtr->getType(), index, new_name);
@@ -1198,6 +1285,7 @@ void LLPanelEditWearable::saveChanges(bool force_save_as)
 
 void LLPanelEditWearable::revertChanges()
 {
+        if (!getWearable()) return;
         if (!mWearablePtr || !isDirty())
         {
                 // no unsaved changes to revert
@@ -1210,6 +1298,10 @@ void LLPanelEditWearable::revertChanges()
         updateTypeSpecificControls(mWearablePtr->getType());
         // <FS:Ansariel> [Legacy Bake]
         //gAgentAvatarp->wearableUpdated(mWearablePtr->getType());
+        #if VS_NATIVE_VULKAN
+        if (VSNativeSession::active()) nativeWearableChanged(getWearable());
+        else
+#endif
         gAgentAvatarp->wearableUpdated(mWearablePtr->getType(), false);
 
         // <FS:AR> [FIRE-30703] Undo Changes does not undo (when hints disabled)
@@ -1308,7 +1400,7 @@ void LLPanelEditWearable::showWearable(LLViewerWearable* wearable, bool show, bo
                         LLScrollingPanelList *panel_list = panel_it->second;
 
                         // Don't show female subparts if you're not female, etc.
-                        if (!(gAgentAvatarp->getSex() & subpart_entry->mSex))
+                        if (!(vs_avatar_appearance()->getSex() & subpart_entry->mSex))
                         {
                                 tab->setVisible(false);
                                 continue;
@@ -1325,10 +1417,10 @@ void LLPanelEditWearable::showWearable(LLViewerWearable* wearable, bool show, bo
                         value_map_t sorted_params;
                         getSortedParams(sorted_params, edit_group);
 
-                        LLJoint* jointp = gAgentAvatarp->getJoint( subpart_entry->mTargetJoint );
+                        LLJoint* jointp = vs_avatar_appearance()->getJoint( subpart_entry->mTargetJoint );
                         if (!jointp)
                         {
-                            jointp = gAgentAvatarp->getJoint( "mHead" );
+                            jointp = vs_avatar_appearance()->getJoint( "mHead" );
                         }
 
                         buildParamList(panel_list, sorted_params, tab, jointp);
@@ -1445,7 +1537,7 @@ void LLPanelEditWearable::changeCamera(U8 subpart)
         }
 
         // Update the camera
-        gMorphView->setCameraTargetJoint( gAgentAvatarp->getJoint( subpart_entry->mTargetJoint ) );
+        gMorphView->setCameraTargetJoint( vs_avatar_appearance()->getJoint( subpart_entry->mTargetJoint ) );
         gMorphView->setCameraTargetOffset( subpart_entry->mTargetOffset );
         gMorphView->setCameraOffset( subpart_entry->mCameraOffset );
         if (gSavedSettings.getBOOL("AppearanceCameraMovement"))
@@ -1483,7 +1575,7 @@ void LLPanelEditWearable::updateTypeSpecificControls(LLWearableType::EType type)
                 // The .195 is a fudge factor derived by measuring against
                 // prims inworld, carried forward from Phoenix and adjusted
                 // after LL's calculation change for shape sizes. -- TS
-                F32 new_size = gAgentAvatarp->mBodySize.mV[VZ] + .195f;
+                F32 new_size = vs_avatar_appearance()->mBodySize.mV[VZ] + .195f;
 
                 if (!gSavedSettings.getBOOL("HeightUnits"))
                 {
@@ -1611,7 +1703,7 @@ LLPanel* LLPanelEditWearable::getPanel(LLWearableType::EType type)
 void LLPanelEditWearable::getSortedParams(value_map_t &sorted_params, const std::string &edit_group)
 {
         LLWearable::visual_param_vec_t param_list;
-        ESex avatar_sex = gAgentAvatarp->getSex();
+        ESex avatar_sex = vs_avatar_appearance()->getSex();
 
         mWearablePtr->getVisualParams(param_list);
 
@@ -1687,11 +1779,11 @@ void LLPanelEditWearable::updateVerbs()
         // no modify, but what the hell, check anyways.
         childSetEnabled("import_btn", mWearableItem->getPermissions().allowModifyBy(gAgentID));
 
-        if (isAgentAvatarValid())
+        if (vs_avatar_appearance())
         {
                 // Update viewer's radio buttons (of RadioGroup with control_name="AvatarSex") of Avatar's gender
                 // with value from "AvatarSex" setting
-                gSavedSettings.setU32("AvatarSex", (gAgentAvatarp->getSex() == SEX_MALE) );
+                gSavedSettings.setU32("AvatarSex", (vs_avatar_appearance()->getSex() == SEX_MALE) );
         }
 
         // update back button and title according to dirty state.
@@ -1728,6 +1820,7 @@ void LLPanelEditWearable::configureAlphaCheckbox(LLAvatarAppearanceDefines::ETex
 
 void LLPanelEditWearable::onInvisibilityCommit(LLCheckBoxCtrl* checkbox_ctrl, LLAvatarAppearanceDefines::ETextureIndex te)
 {
+        if (!getWearable()) return;
         if (!checkbox_ctrl || !getWearable())
         {
                 return;
@@ -1742,6 +1835,26 @@ void LLPanelEditWearable::onInvisibilityCommit(LLCheckBoxCtrl* checkbox_ctrl, LL
                 return;
         }
 
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            LLUUID id;
+            if (checkbox_ctrl->get())
+            {
+                if (const auto* local = getWearable()->getLocalTextureObject(te)) mPreviousAlphaTexture[te] = local->getID();
+                id = IMG_INVISIBLE;
+            }
+            else
+            {
+                id = mPreviousAlphaTexture[te];
+                if (id.isNull() || id == IMG_INVISIBLE) id = LLUUID(gSavedSettings.getString("UIImgDefaultAlphaUUID"));
+                if (id.isNull()) return;
+            }
+            nativeWearableTexture(getWearable(), te, id);
+            updatePanelPickerControls(getWearable()->getType());
+            return;
+        }
+#endif
         bool new_invis_state = checkbox_ctrl->get();
         if (new_invis_state)
         {
@@ -1752,7 +1865,11 @@ void LLPanelEditWearable::onInvisibilityCommit(LLCheckBoxCtrl* checkbox_ctrl, LL
                 gAgentAvatarp->setLocalTexture(te, image, false, index);
                 // <FS:Ansariel> [Legacy Bake]
                 //gAgentAvatarp->wearableUpdated(getWearable()->getType());
-                gAgentAvatarp->wearableUpdated(getWearable()->getType(), false);
+                #if VS_NATIVE_VULKAN
+                                if (VSNativeSession::active()) nativeWearableChanged(getWearable());
+                                else
+#endif
+                                gAgentAvatarp->wearableUpdated(getWearable()->getType(), false);
         }
         else
         {
@@ -1776,7 +1893,11 @@ void LLPanelEditWearable::onInvisibilityCommit(LLCheckBoxCtrl* checkbox_ctrl, LL
                 gAgentAvatarp->setLocalTexture(te, image, false, index);
                 // <FS:Ansariel> [Legacy Bake]
                 //gAgentAvatarp->wearableUpdated(getWearable()->getType());
-                gAgentAvatarp->wearableUpdated(getWearable()->getType(), false);
+                #if VS_NATIVE_VULKAN
+                                if (VSNativeSession::active()) nativeWearableChanged(getWearable());
+                                else
+#endif
+                                gAgentAvatarp->wearableUpdated(getWearable()->getType(), false);
         }
 
         updatePanelPickerControls(getWearable()->getType());
@@ -1790,6 +1911,17 @@ void LLPanelEditWearable::updateAlphaCheckboxes()
                 LLCheckBoxCtrl* ctrl = check_pair.first;
                 if (ctrl)
                 {
+                        #if VS_NATIVE_VULKAN
+                        if (VSNativeSession::active())
+                        {
+                            U32 index;
+                            const auto* local = getWearable() ? getWearable()->getLocalTextureObject(te) : nullptr;
+                            const bool visible = getWearable() && gAgentWearables.getWearableIndex(getWearable(), index) &&
+                                ((!local || local->getID() != IMG_INVISIBLE) || LLDrawPoolAlpha::sShowDebugAlpha);
+                            ctrl->set(!visible);
+                        }
+                        else
+#endif
                         ctrl->set(!gAgentAvatarp->isTextureVisible(te, mWearablePtr));
                 }
         }
@@ -1816,11 +1948,18 @@ void LLPanelEditWearable::initPreviousAlphaTextureEntry(LLAvatarAppearanceDefine
 // [FS:CR] FIRE-10986
 void LLPanelEditWearable::onClickedImportBtn()
 {
-    LLFilePickerReplyThread::startPicker(boost::bind(&LLPanelEditWearable::onClickedImportBtnCallback, this, _1), LLFilePicker::FFLOAD_XML, false);
+    LLFilePickerReplyThread::startPicker(
+        [owner=getHandle(), current=mAccountCurrent, wearable=mWearablePtr](const std::vector<std::string>& files, LLFilePicker::ELoadFilter, LLFilePicker::ESaveFilter)
+        {
+            if (!current() || files.empty()) return;
+            if (auto* view = dynamic_cast<LLPanelEditWearable*>(owner.get()); view && view->getWearable() == wearable)
+                view->onClickedImportBtnCallback(files);
+        }, LLFilePicker::FFLOAD_XML, false);
 }
 
 void LLPanelEditWearable::onClickedImportBtnCallback(const std::vector<std::string>& filenames)
 {
+    if (!mAccountCurrent() || !getWearable() || filenames.empty()) return;
     const std::string filename = filenames[0];
     LLXmlTree tree;
     if (!tree.parseFile(filename, false))
@@ -1876,10 +2015,10 @@ void LLPanelEditWearable::onClickedImportBtnCallback(const std::vector<std::stri
         {
             LLNotificationsUtil::add("ShapeImportGenericFail", LLSD().with("FILENAME", filename));
         }
-        if (isAgentAvatarValid())
+        if (vs_avatar_appearance())
         {
-            getWearable()->writeToAvatar(gAgentAvatarp);
-            gAgentAvatarp->updateVisualParams();
+            getWearable()->writeToAvatar(vs_avatar_appearance());
+            vs_avatar_appearance()->updateVisualParams();
             updateScrollingPanelUI();
             LL_INFOS("ShapeImport") << "Shape import has finished with great success!" << LL_ENDL;
         }
@@ -1912,3 +2051,19 @@ public:
 LLMetricSystemHandler gMetricSystemHandler;
 
 // EOF
+
+LLViewerWearable* LLPanelEditWearable::getWearable()
+
+{
+    if (!mAccountCurrent() || !mWearablePtr || !mWearablePtr->currentNativeOwner()) return nullptr;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && gAgentWearables.getWearableFromItemID(mWearablePtr->getItemID()) != mWearablePtr)
+        return nullptr;
+#endif
+    return mWearablePtr;
+}
+
+bool LLPanelEditWearable::isNativeInternalType(const std::type_info& type)
+{
+    return type == typeid(LLLabledBackButton);
+}

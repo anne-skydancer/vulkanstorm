@@ -28,12 +28,16 @@
 #define LL_LLFLOATERHOVERHEIGHT_H
 
 #include "llfloater.h"
+#include <functional>
+#include <boost/signals2/connection.hpp>
 
 class LLFloaterHoverHeight: public LLFloater
 {
 public:
     LLFloaterHoverHeight(const LLSD& key);
     bool postBuild();
+    void onOpen(const LLSD&) override;
+    void draw() override;
 
     static void onSliderMoved(LLUICtrl* ctrl, void* userData);
 
@@ -54,6 +58,8 @@ public:
 
     /*virtual*/ void onClose(bool app_quitting);
     boost::signals2::connection mRegionChangedSlot;
+    boost::signals2::scoped_connection mPreferenceChanged, mNativeFeaturesChanged, mNativeRegionChanged;
+    std::function<bool()> mAccountCurrent;
 };
 
 #endif

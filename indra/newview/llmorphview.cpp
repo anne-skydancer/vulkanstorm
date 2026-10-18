@@ -44,6 +44,15 @@
 #include "llvoavatarself.h"
 #include "llviewercontrol.h"        // ## Zi: Optional Edit Appearance Lighting
 #include "llviewerwindow.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
+#include "llcharacter.h"
+#include "llavatarappearance.h"
+#include "lluictrlfactory.h"
+#include "llrootview.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "pipeline.h"
 
 LLMorphView *gMorphView = NULL;
@@ -72,13 +81,14 @@ void    LLMorphView::initialize()
     mCameraPitch = 0.f;
     mCameraYaw = 0.f;
 
-    if (!isAgentAvatarValid() || gAgentAvatarp->isDead())
+    auto* avatar = vs_avatar_character();
+    if (!avatar)
     {
         gAgentCamera.changeCameraToDefault();
         return;
     }
 
-    gAgentAvatarp->stopMotion( ANIM_AGENT_BODY_NOISE );
+    avatar->stopMotion( ANIM_AGENT_BODY_NOISE );
 
     //gAgentAvatarp->mSpecialRenderMode = 3; // <FS:Ansariel> Removed by SL-13522 09/20/2020
 
@@ -92,9 +102,9 @@ void    LLMorphView::initialize()
 //-----------------------------------------------------------------------------
 void    LLMorphView::shutdown()
 {
-    if (isAgentAvatarValid())
+    if (auto* avatar = vs_avatar_character())
     {
-        gAgentAvatarp->startMotion( ANIM_AGENT_BODY_NOISE );
+        avatar->startMotion( ANIM_AGENT_BODY_NOISE );
         //gAgentAvatarp->mSpecialRenderMode = 0; // <FS:Ansariel> Removed by SL-13522 09/20/2020
         // reset camera
         LLViewerCamera::getInstance()->setNear(mOldCameraNearClip);
@@ -129,13 +139,21 @@ void LLMorphView::setVisible(bool visible)
 
 void LLMorphView::updateCamera()
 {
+    auto* avatar = vs_avatar_character();
+    if (!avatar) return;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+        mCameraTargetJoint = avatar->getJoint(mNativeTargetJointName.empty() ? "mHead" : mNativeTargetJointName);
+#endif
+
     if (!mCameraTargetJoint)
     {
-        setCameraTargetJoint( gAgentAvatarp->getJoint( "mHead" ) );
+        setCameraTargetJoint( avatar->getJoint( "mHead" ) );
     }
-    if (!isAgentAvatarValid()) return;
 
-    LLJoint* root_joint = gAgentAvatarp->getRootJoint();
+
+    if (!mCameraTargetJoint) return;
+    LLJoint* root_joint = avatar->getRootJoint();
     if( !root_joint )
     {
         return;
@@ -165,4 +183,42 @@ void LLMorphView::setCameraDrivenByKeys(bool b)
         }
         mCameraDrivenByKeys = b;
     }
+}
+
+LLMorphView* LLMorphView::ensureNativeOwner()
+{
+#if VS_NATIVE_VULKAN
+    if (!VSNativeSession::active() || !gViewerWindow || !gViewerWindow->getRootView()) return nullptr;
+    if (!gMorphView)
+    {
+        LLMorphView::Params p;
+        p.name = "morph_view";
+        p.rect = gViewerWindow->getRootView()->getLocalRect();
+        p.follows.flags = FOLLOWS_ALL;
+        p.visible = false;
+        p.mouse_opaque = false;
+        gMorphView = LLUICtrlFactory::create<LLMorphView>(p, gViewerWindow->getRootView());
+    }
+    return gMorphView;
+#else
+    return nullptr;
+#endif
+}
+void LLMorphView::retireNativeAccount()
+{
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() && gMorphView)
+    {
+        auto* view = gMorphView;
+        view->setVisible(false);
+        gMorphView = nullptr;
+        delete view;
+    }
+#endif
+}
+
+void LLMorphView::setCameraTargetJoint(LLJoint* joint)
+{
+    mCameraTargetJoint = joint;
+    mNativeTargetJointName = joint ? joint->getName() : std::string();
 }

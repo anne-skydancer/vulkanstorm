@@ -78,6 +78,7 @@ protected:
     void initDefaultGesture();
 
     void loadAsset();
+    void stopPreview();
 
     static void onLoadComplete(const LLUUID& asset_uuid,
                                LLAssetType::EType type,

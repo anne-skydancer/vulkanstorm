@@ -207,7 +207,6 @@ void LLPanelExperienceLog::onProfileExperience()
 
 void LLPanelExperienceLog::onReportExperience()
 {
-    if (LLRender2D::isNativeUI()) return;
     LLSD event = getSelectedEvent();
     if(event.isDefined())
     {

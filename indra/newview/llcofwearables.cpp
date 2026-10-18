@@ -25,6 +25,11 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsappearanceui.h"
+#include "llagentbenefits.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llcofwearables.h"
 
@@ -141,15 +146,15 @@ protected:
     {
         LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
 
-        registrar.add("Attachment.Touch", boost::bind(handleMultiple, handle_attachment_touch, mUUIDs));
-        registrar.add("Attachment.Edit", boost::bind(handleMultiple, handle_item_edit, mUUIDs));
+        registrar.add("Attachment.Touch", vs_appearance_ui_callback(mCOFWearables, boost::bind(handleMultiple, handle_attachment_touch, mUUIDs)));
+        registrar.add("Attachment.Edit", vs_appearance_ui_callback(mCOFWearables, boost::bind(handleMultiple, handle_item_edit, mUUIDs)));
 // [SL:KB] - Patch: Appearance-Misc | Checked: 2015-05-05 (Catznip-3.7)
         //registrar.add("Attachment.Detach", boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), mUUIDs, no_op));
-        registrar.add("Attachment.Detach", boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), mUUIDs));
+        registrar.add("Attachment.Detach", vs_appearance_ui_callback(mCOFWearables, boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), mUUIDs)));
 // [/SL:KB]
 
         LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
-        enable_registrar.add("Attachment.OnEnable", boost::bind(&CofAttachmentContextMenu::onEnable, this, _2));
+        enable_registrar.add("Attachment.OnEnable", vs_appearance_ui_callback(mCOFWearables, boost::bind(&CofAttachmentContextMenu::onEnable, this, _2)));
 
         return createFromFile("menu_cof_attachment.xml");
     }
@@ -201,13 +206,13 @@ protected:
 
 // [SL:KB] - Patch: Appearance-Misc | Checked: 2015-05-05 (Catznip-3.7)
         //registrar.add("Clothing.TakeOff", boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), mUUIDs, no_op));
-        registrar.add("Clothing.TakeOff", boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), mUUIDs));
+        registrar.add("Clothing.TakeOff", vs_appearance_ui_callback(mCOFWearables, boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), mUUIDs)));
 // [/SL:KB]
-        registrar.add("Clothing.Replace", boost::bind(replaceWearable, selected_id));
-        registrar.add("Clothing.Edit", boost::bind(LLAgentWearables::editWearable, selected_id));
-        registrar.add("Clothing.Create", boost::bind(&CofClothingContextMenu::createNew, this, selected_id));
+        registrar.add("Clothing.Replace", vs_appearance_ui_callback(mCOFWearables, boost::bind(replaceWearable, selected_id)));
+        registrar.add("Clothing.Edit", vs_appearance_ui_callback(mCOFWearables, boost::bind(LLAgentWearables::editWearable, selected_id)));
+        registrar.add("Clothing.Create", vs_appearance_ui_callback(mCOFWearables, boost::bind(&CofClothingContextMenu::createNew, this, selected_id)));
 
-        enable_registrar.add("Clothing.OnEnable", boost::bind(&CofClothingContextMenu::onEnable, this, _2));
+        enable_registrar.add("Clothing.OnEnable", vs_appearance_ui_callback(mCOFWearables, boost::bind(&CofClothingContextMenu::onEnable, this, _2)));
 
         LLContextMenu* menu = createFromFile("menu_cof_clothing.xml");
         llassert(menu);
@@ -258,11 +263,11 @@ protected:
         LLUUID selected_id = mUUIDs.back();
 
         LLPanelOutfitEdit* panel_oe = dynamic_cast<LLPanelOutfitEdit*>(LLFloaterSidePanelContainer::getPanel("appearance", "panel_outfit_edit"));
-        registrar.add("BodyPart.Replace", boost::bind(&LLPanelOutfitEdit::onReplaceMenuItemClicked, panel_oe, selected_id));
-        registrar.add("BodyPart.Edit", boost::bind(LLAgentWearables::editWearable, selected_id));
-        registrar.add("BodyPart.Create", boost::bind(&CofBodyPartContextMenu::createNew, this, selected_id));
+        registrar.add("BodyPart.Replace", vs_appearance_ui_callback(mCOFWearables, boost::bind(&LLPanelOutfitEdit::onReplaceMenuItemClicked, panel_oe, selected_id)));
+        registrar.add("BodyPart.Edit", vs_appearance_ui_callback(mCOFWearables, boost::bind(LLAgentWearables::editWearable, selected_id)));
+        registrar.add("BodyPart.Create", vs_appearance_ui_callback(mCOFWearables, boost::bind(&CofBodyPartContextMenu::createNew, this, selected_id)));
 
-        enable_registrar.add("BodyPart.OnEnable", boost::bind(&CofBodyPartContextMenu::onEnable, this, _2));
+        enable_registrar.add("BodyPart.OnEnable", vs_appearance_ui_callback(mCOFWearables, boost::bind(&CofBodyPartContextMenu::onEnable, this, _2)));
 
         LLContextMenu* menu = createFromFile("menu_cof_body_part.xml");
         llassert(menu);
@@ -369,7 +374,13 @@ void LLCOFWearables::setAttachmentsTitle()
 {
     if (mAttachmentsTab)
     {
-        U32 free_slots = gAgentAvatarp->getMaxAttachments() - mAttachments->size();
+        U32 maximum = 0;
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active()) maximum = U32(llmax(LLAgentBenefitsMgr::current().getAttachmentLimit(), 0));
+        else
+#endif
+        if (isAgentAvatarValid()) maximum = gAgentAvatarp->getMaxAttachments();
+        U32 free_slots = maximum > mAttachments->size() ? maximum - U32(mAttachments->size()) : 0;
 
         LLStringUtil::format_map_t args_attachments;
         args_attachments["[COUNT]"] = llformat ("%d", free_slots);

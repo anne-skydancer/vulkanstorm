@@ -4216,13 +4216,6 @@ void LLInventoryAction::removeItemFromDND(LLFolderView* root)
 
 void LLInventoryAction::fileUploadLocation(const LLUUID& dest_id, const std::string& action)
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
-        (action == "upload_model" || action == "upload_pbr_material" || action == "upload_animation"))
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
-
     if (action == "def_model")
     {
         gSavedPerAccountSettings.setString("ModelUploadFolder", dest_id.asString());

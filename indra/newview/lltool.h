@@ -30,6 +30,7 @@
 #include "llkeyboard.h"
 #include "llmousehandler.h"
 #include "llcoord.h"
+#include "lluuid.h"
 #include "v3math.h"
 #include "v3dmath.h"
 
@@ -73,6 +74,7 @@ public:
 
     // New virtual functions
     virtual LLViewerObject* getEditingObject()      { return NULL; }
+    virtual LLUUID          getEditingObjectID();
     virtual LLVector3d      getEditingPointGlobal() { return LLVector3d(); }
     virtual bool            isEditing()             { return (getEditingObject() != NULL); }
     virtual void            stopEditing()           {}

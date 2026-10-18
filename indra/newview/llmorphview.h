@@ -47,11 +47,13 @@ public:
     LLMorphView(const LLMorphView::Params&);
 
     void        shutdown();
+    static LLMorphView* ensureNativeOwner();
+    static void retireNativeAccount();
 
     // inherited methods
     void        setVisible(bool visible) override;
 
-    void        setCameraTargetJoint(LLJoint *joint)        {mCameraTargetJoint = joint;}
+    void        setCameraTargetJoint(LLJoint *joint);
     LLJoint*    getCameraTargetJoint()                      {return mCameraTargetJoint;}
 
     void        setCameraOffset(const LLVector3d& camera_offset)    {mCameraOffset = camera_offset;}
@@ -64,6 +66,7 @@ protected:
     void        initialize();
 
     LLJoint*    mCameraTargetJoint;
+    std::string mNativeTargetJointName;
     LLVector3d  mCameraOffset;
     LLVector3d  mCameraTargetOffset;
     LLVector3d  mOldCameraPos;

@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vstaskinventoryobject.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llfloaterchangeitemthumbnail.h"
 
@@ -201,6 +205,11 @@ bool LLFloaterChangeItemThumbnail::postBuild()
 
 void LLFloaterChangeItemThumbnail::onOpen(const LLSD& key)
 {
+    ++mTaskOpenRevision;
+    mNativeTaskConnection.disconnect();
+    mTaskCurrent = {};
+    mNativeTaskPending = false;
+    mTaskId.setNull();
     if (!key.has("item_id") && !key.isUUID() && !key.isArray())
     {
         closeFloater();
@@ -255,12 +264,12 @@ void LLFloaterChangeItemThumbnail::onOpen(const LLSD& key)
 
 void LLFloaterChangeItemThumbnail::onFocusReceived()
 {
-    mPasteFromClipboardBtn->setEnabled(LLClipboard::instance().hasContents());
+    mPasteFromClipboardBtn->setEnabled(mTaskId.isNull() && LLClipboard::instance().hasContents());
 }
 
 void LLFloaterChangeItemThumbnail::onMouseEnter(S32 x, S32 y, MASK mask)
 {
-    mPasteFromClipboardBtn->setEnabled(LLClipboard::instance().hasContents());
+    mPasteFromClipboardBtn->setEnabled(mTaskId.isNull() && LLClipboard::instance().hasContents());
 }
 
 bool LLFloaterChangeItemThumbnail::handleDragAndDrop(
@@ -340,7 +349,7 @@ void LLFloaterChangeItemThumbnail::inventoryChanged(LLViewerObject* object,
 
 LLInventoryObject* LLFloaterChangeItemThumbnail::getInventoryObject()
 {
-    if (!mThumbnailCurrent()) return nullptr;
+    if (!mThumbnailCurrent() || (mTaskCurrent && !mTaskCurrent())) return nullptr;
     if (mItemList.size() == 0)
     {
         return NULL;
@@ -361,6 +370,45 @@ LLInventoryObject* LLFloaterChangeItemThumbnail::getInventoryObject()
     }
     else
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            const auto object = VSTaskInventoryObject::find(mTaskId);
+            auto* inventory = object->nativeInventory();
+            if (!object || !inventory) return nullptr;
+            const auto weak = getHandle();
+            const auto query = mTaskOpenRevision;
+            if (!mTaskCurrent) mTaskCurrent = object->objectGuard();
+            const auto account = mThumbnailCurrent;
+            const auto current = mTaskCurrent;
+            if (!current()) return nullptr;
+            if (!mNativeTaskConnection.connected())
+                mNativeTaskConnection = inventory->observe(object->nativeObject(),
+                    [weak, query, account, current](const auto&)
+                    {
+                        auto* self = dynamic_cast<LLFloaterChangeItemThumbnail*>(weak.get());
+                        if (account() && current() && self && self->mTaskOpenRevision == query)
+                            self->refreshFromInventory();
+                    });
+            if (!inventory->snapshot(object->nativeObject()))
+            {
+                if (!mNativeTaskPending)
+                {
+                    mNativeTaskPending = true;
+                    inventory->request(object->nativeObject(), [weak, query, account, current](const auto& result)
+                    {
+                        auto* self = dynamic_cast<LLFloaterChangeItemThumbnail*>(weak.get());
+                        if (!account() || !self || self->mTaskOpenRevision != query) return;
+                        self->mNativeTaskPending = false;
+                        if (current() && result.success) self->refreshFromInventory();
+                        else self->closeFloater();
+                    });
+                }
+                return nullptr;
+            }
+            return object->getInventoryObject(item_id);
+        }
+#endif
         LLViewerObject* object = gObjectList.findObject(mTaskId);
         if (object)
         {
@@ -379,6 +427,7 @@ LLInventoryObject* LLFloaterChangeItemThumbnail::getInventoryObject()
 void LLFloaterChangeItemThumbnail::refreshFromInventory()
 {
     LLInventoryObject* obj = getInventoryObject();
+    if (!obj && mNativeTaskPending) return;
     if (!obj)
     {
         closeFloater();
@@ -511,10 +560,17 @@ void LLFloaterChangeItemThumbnail::refreshFromObject(LLInventoryObject* obj)
         mItemNameText->setToolTip(items_str);
     }
 
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && mTaskId.notNull())
+    {
+        for (const char* name : {"upload_local", "upload_snapshot", "use_texture", "paste_from_clipboard", "remove_image"})
+            if (auto* control = findChild<LLUICtrl>(name)) control->setEnabled(false);
+    }
+#endif
     mThumbnailCtrl->setValue(thumbnail_id);
 
     mCopyToClipboardBtn->setEnabled(thumbnail_id.notNull() && !mMultipleThumbnails);
-    mPasteFromClipboardBtn->setEnabled(LLClipboard::instance().hasContents());
+    mPasteFromClipboardBtn->setEnabled(mTaskId.isNull() && LLClipboard::instance().hasContents());
 
     // todo: some elements might not support setting thumbnails
     // since they already have them
@@ -554,10 +610,6 @@ void LLFloaterChangeItemThumbnail::onUploadSnapshot(void *userdata)
 {
     LLFloaterChangeItemThumbnail *self = (LLFloaterChangeItemThumbnail*)userdata;
     if (!self->mThumbnailCurrent()) return;
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable"); return;
-    }
 
     LLFloater* floaterp = self->mSnapshotHandle.get();
     // Show the dialog
@@ -580,9 +632,9 @@ void LLFloaterChangeItemThumbnail::onUploadSnapshot(void *userdata)
             uuid_set_t inventory_ids = self->mItemList;
             LLHandle<LLFloater> handle = self->getHandle();
             snapshot_floater->setComplectionCallback(
-                [inventory_ids, task_id, handle](const LLUUID& asset_id)
+                [inventory_ids, task_id, handle, current = self->mThumbnailCurrent](const LLUUID& asset_id)
                 {
-                    onUploadComplete(asset_id, task_id, inventory_ids, handle);
+                    if (current()) onUploadComplete(asset_id, task_id, inventory_ids, handle);
                 });
         }
     }
@@ -1122,6 +1174,13 @@ void LLFloaterChangeItemThumbnail::setThumbnailId(const LLUUID &new_thumbnail_id
 
     if (mTaskId.notNull())
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            LL_WARNS("Inventory") << "Task inventory thumbnails are read-only." << LL_ENDL;
+            return;
+        }
+#endif
         LL_ERRS() << "Not implemented yet" << LL_ENDL;
         return;
     }

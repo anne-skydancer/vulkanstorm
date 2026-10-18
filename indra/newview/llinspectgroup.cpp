@@ -26,6 +26,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llinspectgroup.h"
+#include "vsnativeim.h"
+#include "llcachename.h"
 
 // viewer files
 #include "llgroupactions.h"
@@ -89,6 +91,9 @@ public:
 
 private:
     LLUUID              mGroupID;
+    std::function<bool()> mAccountCurrent=[] {return false;};
+    U64 mRequestSerial=0;
+    boost::signals2::scoped_connection mNameConnection;
 };
 
 
@@ -109,6 +114,7 @@ LLInspectGroup::LLInspectGroup(const LLSD& sd)
 
 LLInspectGroup::~LLInspectGroup()
 {
+    mNameConnection.disconnect();
     LLGroupMgr::getInstance()->removeObserver(this);
 }
 
@@ -118,6 +124,9 @@ LLInspectGroup::~LLInspectGroup()
 //virtual
 void LLInspectGroup::onOpen(const LLSD& data)
 {
+    mAccountCurrent=vs_native_im_guard();
+    ++mRequestSerial;
+    mNameConnection.disconnect();
     // start fade animation
     LLInspect::onOpen(data);
 
@@ -132,12 +141,16 @@ void LLInspectGroup::onOpen(const LLSD& data)
 // virtual
 void LLInspectGroup::onClose(bool app_quitting)
 {
+    mAccountCurrent=[] {return false;};
+    ++mRequestSerial;
+    mNameConnection.disconnect();
     LLGroupMgr::getInstance()->removeObserver(this);
     // *TODO: If we add a gear menu, close it here
 }
 
 void LLInspectGroup::requestUpdate()
 {
+    if(!mAccountCurrent())return;
     // Don't make network requests when spawning from the debug menu at the
     // login screen (which is useful to work on the layout).
     if (mGroupID.isNull())
@@ -172,9 +185,19 @@ void LLInspectGroup::requestUpdate()
     }
 
     // Name lookup will be faster out of cache, use that
-    gCacheName->getGroup(mGroupID,
-        boost::bind(&LLInspectGroup::nameUpdatedCallback,
-            this, _1, _2, _3));
+    if(gCacheName)
+    {
+        const auto weak=getDerivedHandle<LLInspectGroup>();
+        const auto account=mAccountCurrent;
+        const auto serial=mRequestSerial;
+        const auto group=mGroupID;
+        mNameConnection=gCacheName->getGroup(group,[weak,account,serial,group](const LLUUID& id,const std::string& name,bool isGroup)
+        {
+            auto* owner=weak.get();
+            if(!owner||!account()||owner->mRequestSerial!=serial||owner->mGroupID!=group)return;
+            owner->nameUpdatedCallback(id,name,isGroup);
+        });
+    }
 }
 
 void LLInspectGroup::setGroupID(const LLUUID& group_id)
@@ -202,6 +225,7 @@ void LLInspectGroup::nameUpdatedCallback(
 
 void LLInspectGroup::changed(LLGroupChange gc)
 {
+    if(!mAccountCurrent())return;
     if (gc == GC_PROPERTIES)
     {
         processGroupData();
@@ -210,6 +234,7 @@ void LLInspectGroup::changed(LLGroupChange gc)
 
 void LLInspectGroup::processGroupData()
 {
+    if(!mAccountCurrent())return;
     LLGroupMgrGroupData* data =
         LLGroupMgr::getInstance()->getGroupData(mGroupID);
 
@@ -264,20 +289,29 @@ void LLInspectGroup::processGroupData()
 
 void LLInspectGroup::onClickViewProfile()
 {
+    if(!mAccountCurrent())return;
+    const auto account=mAccountCurrent;
+    const auto group=mGroupID;
     closeFloater();
-    LLGroupActions::show(mGroupID);
+    if(account())LLGroupActions::show(group);
 }
 
 void LLInspectGroup::onClickJoin()
 {
+    if(!mAccountCurrent())return;
+    const auto account=mAccountCurrent;
+    const auto group=mGroupID;
     closeFloater();
-    LLGroupActions::join(mGroupID);
+    if(account())LLGroupActions::join(group);
 }
 
 void LLInspectGroup::onClickLeave()
 {
+    if(!mAccountCurrent())return;
+    const auto account=mAccountCurrent;
+    const auto group=mGroupID;
     closeFloater();
-    LLGroupActions::leave(mGroupID);
+    if(account())LLGroupActions::leave(group);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -288,3 +322,6 @@ void LLInspectGroupUtil::registerFloater()
     LLFloaterReg::add("inspect_group", "inspect_group.xml",
                       &LLFloaterReg::build<LLInspectGroup>);
 }
+
+bool LLInspectGroupUtil::isNativeType(const std::type_info& type)
+{return type==typeid(LLInspectGroup);}

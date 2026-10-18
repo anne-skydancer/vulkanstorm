@@ -28,6 +28,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsfloaterdiscord.h"
+#include "vsnativeim.h"
 
 #include "fsdiscordconnect.h"
 #include "llcheckboxctrl.h"
@@ -44,11 +45,21 @@ void FSFloaterDiscord::onVisibilityChange(bool visible)
 {
     if (visible)
     {
-        LLEventPumps::instance().obtain("DiscordConnectState").stopListening("FSDiscordAccountPanel");
-        LLEventPumps::instance().obtain("DiscordConnectState").listen("FSDiscordAccountPanel", boost::bind(&FSFloaterDiscord::onDiscordConnectStateChange, this, _1));
+        const LLHandle<LLFloater> weak=getHandle();
+        const auto current=vs_native_im_guard();
+        mStateListener.disconnect();
+        mStateListener=LLEventPumps::instance().obtain("DiscordConnectState").listen("FSDiscordAccountPanel", [weak,current](const LLSD& data)
+        {
+            if(current())if(auto* owner=dynamic_cast<FSFloaterDiscord*>(weak.get()))return owner->onDiscordConnectStateChange(data);
+            return false;
+        });
 
-        LLEventPumps::instance().obtain("DiscordConnectInfo").stopListening("FSDiscordAccountPanel");
-        LLEventPumps::instance().obtain("DiscordConnectInfo").listen("FSDiscordAccountPanel", boost::bind(&FSFloaterDiscord::onDiscordConnectInfoChange, this));
+        mInfoListener.disconnect();
+        mInfoListener=LLEventPumps::instance().obtain("DiscordConnectInfo").listen("FSDiscordAccountPanel", [weak,current](const LLSD&)
+        {
+            if(current())if(auto* owner=dynamic_cast<FSFloaterDiscord*>(weak.get()))return owner->onDiscordConnectInfoChange();
+            return false;
+        });
 
         LLSD info = FSDiscordConnect::instance().getInfo();
 
@@ -75,8 +86,8 @@ void FSFloaterDiscord::onVisibilityChange(bool visible)
     }
     else
     {
-        LLEventPumps::instance().obtain("DiscordConnectState").stopListening("FSDiscordAccountPanel");
-        LLEventPumps::instance().obtain("DiscordConnectInfo").stopListening("FSDiscordAccountPanel");
+        mStateListener.disconnect();
+        mInfoListener.disconnect();
     }
 }
 

@@ -27,6 +27,14 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llhudeffecttrail.h"
+#if VS_NATIVE_VULKAN
+#include "vsparticleeffects.h"
+#include "vsnativesession.h"
+#include "vsobjectcontext.h"
+#include "vsworldscene.h"
+#include "vsvulkancontext.h"
+#include "llviewerwindow.h"
+#endif
 
 #include "llviewercontrol.h"
 #include "message.h"
@@ -41,6 +49,15 @@
 #include "llviewerpartsource.h"
 #include "llvoavatar.h"
 #include "llworld.h"
+
+#if VS_NATIVE_VULKAN
+struct LLHUDEffectSpiral::NativeEndpoints
+{
+    LLUUID source,target;
+    std::function<bool()> current;
+    std::shared_ptr<const VSResourceBudget::Reservation> residency;
+};
+#endif
 
 LLHUDEffectSpiral::LLHUDEffectSpiral(const U8 type) : LLHUDEffect(type), mbInit(false)
 {
@@ -89,10 +106,20 @@ void LLHUDEffectSpiral::packData(LLMessageSystem *mesgsys)
     {
         htolememcpy(packed_data, mSourceObject->mID.mData, MVT_LLUUID, 16);
     }
+#if VS_NATIVE_VULKAN
+    else if(mNativeEndpoints)
+    {
+        if(!mNativeEndpoints->current()){markDead();return;}
+        htolememcpy(packed_data,mNativeEndpoints->source.mData,MVT_LLUUID,16);
+    }
+#endif
     if (mTargetObject)
     {
         htolememcpy(packed_data + 16, mTargetObject->mID.mData, MVT_LLUUID, 16);
     }
+#if VS_NATIVE_VULKAN
+    else if(mNativeEndpoints)htolememcpy(packed_data+16,mNativeEndpoints->target.mData,MVT_LLUUID,16);
+#endif
     if (!mPositionGlobal.isExactlyZero())
     {
         htolememcpy(packed_data + 32, mPositionGlobal.mdV, MVT_LLVector3d, 24);
@@ -120,6 +147,13 @@ void LLHUDEffectSpiral::unpackData(LLMessageSystem *mesgsys, S32 blocknum)
     htolememcpy(target_object_id.mData, packed_data + 16, MVT_LLUUID, 16);
     htolememcpy(mPositionGlobal.mdV, packed_data + 32, MVT_LLVector3d, 24);
 
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if(!setNativeEndpoints(object_id,target_object_id)){markDead();return;}
+        triggerLocal();return;
+    }
+#endif
     LLViewerObject *objp = NULL;
 
     if (object_id.isNull())
@@ -165,6 +199,10 @@ void LLHUDEffectSpiral::unpackData(LLMessageSystem *mesgsys, S32 blocknum)
 
 void LLHUDEffectSpiral::triggerLocal()
 {
+#if VS_NATIVE_VULKAN
+    if(mNativeEndpoints){triggerNative();return;}
+#endif
+
     mKillTime = mTimer.getElapsedTimeF32() + mDuration;
 
     bool show_beam = gSavedSettings.getBOOL("ShowSelectionBeam");
@@ -262,6 +300,10 @@ void LLHUDEffectSpiral::setTargetObject(LLViewerObject *objp)
 
 void LLHUDEffectSpiral::render()
 {
+#if VS_NATIVE_VULKAN
+    if(mNativeEndpoints && !mNativeEndpoints->current()){markDead();return;}
+#endif
+
     F32 time = mTimer.getElapsedTimeF32();
 
     static LLCachedControl<bool> showSelectionBeam(gSavedSettings, "ShowSelectionBeam"); // <FS:Ansariel> Performance tweak
@@ -281,3 +323,65 @@ void LLHUDEffectSpiral::renderForTimer()
 {
     render();
 }
+
+#if VS_NATIVE_VULKAN
+bool LLHUDEffectSpiral::setNativeEndpoints(const LLUUID& source,const LLUUID& target)
+{
+    const auto owner=VSNativeSession::active();
+    if(!owner || !gViewerWindow || !gViewerWindow->nativeContext())return false;
+    auto& world=gViewerWindow->nativeContext()->world();
+    const auto sourceObject=source.notNull()?world.object(source):std::nullopt;
+    const auto targetObject=target.notNull()?world.object(target):std::nullopt;
+    if((source.notNull() && !sourceObject) || (target.notNull() && !targetObject))return false;
+    if(mNativeEndpoints && mNativeEndpoints->source==source && mNativeEndpoints->target==target && mNativeEndpoints->current())return true;
+    auto residency=world.reserveSpatialBytes(sizeof(NativeEndpoints)+sizeof(VSWorldScene::ObjectHandle)*2);
+    if(!residency)return false;
+    const auto account=owner->accountGuard();
+    const auto sourceCurrent=sourceObject?world.guard(*sourceObject):std::function<bool()>([]{return true;});
+    const auto targetCurrent=targetObject?world.guard(*targetObject):std::function<bool()>([]{return true;});
+    auto endpoints=std::make_shared<NativeEndpoints>();endpoints->source=source;endpoints->target=target;endpoints->residency=std::move(residency);
+    endpoints->current=[account,sourceCurrent,targetCurrent]{return account() && sourceCurrent() && targetCurrent();};
+    if(!endpoints->current())return false;
+    if(mPartSourcep){mPartSourcep->setDead();mPartSourcep=nullptr;}
+    mNativeEndpoints=std::move(endpoints);return true;
+}
+bool LLHUDEffectSpiral::triggerNative()
+{
+    if(!mNativeEndpoints || !mNativeEndpoints->current()){markDead();return false;}
+    mKillTime=mTimer.getElapsedTimeF32()+mDuration;
+    const auto owner=VSNativeSession::active();auto* particles=owner?owner->particles():nullptr;
+    if(!particles)return false;
+    const LLColor4 color(mColor);
+    const bool beam=mNativeEndpoints->source.notNull() && (mNativeEndpoints->target.notNull() || !mPositionGlobal.isExactlyZero());
+    if(!mPartSourcep)
+    {
+        if(beam)
+        {
+            if(gSavedSettings.getBOOL("ShowSelectionBeam"))
+                mPartSourcep=particles->beam(mNativeEndpoints->source,mNativeEndpoints->target,mPositionGlobal,color);
+        }
+        else
+        {
+            auto source=mNativeEndpoints->source.isNull()?std::optional<VSObjectContext>{}:VSObjectContext::resolve(mNativeEndpoints->source);
+            const auto position=source?gAgent.getPosAgentFromGlobal(source->position):gAgent.getPosAgentFromGlobal(mPositionGlobal);
+            LLPointer<LLViewerPartSourceSpiral> spiral=new LLViewerPartSourceSpiral(position);
+            spiral->setColor(color);spiral->setOwnerUUID(gAgent.getID());spiral->mNativeSourceID=mNativeEndpoints->source;
+            if(mNativeEndpoints->source.notNull())
+            {
+                const auto id=mNativeEndpoints->source;const auto current=mNativeEndpoints->current;
+                const auto query=[id,current]()->std::optional<LLVector3>
+                {
+                    if(!current() || !gViewerWindow || !gViewerWindow->nativeContext())return {};
+                    auto& world=gViewerWindow->nativeContext()->world();const auto object=world.object(id);
+                    return object?world.particlePosition(*object):std::nullopt;
+                };
+                if(!particles->positionSource(spiral,query,position,particles->sourcePolicy(id,gAgent.getID())))return false;
+            }
+            LLViewerPartSim::instance().addPartSource(spiral);mPartSourcep=spiral;
+        }
+    }
+    else if(auto* source=dynamic_cast<LLViewerPartSourceBeam*>(mPartSourcep.get()))
+    {source->setColor(color);if(mNativeEndpoints->target.isNull())source->mLKGTargetPosGlobal=mPositionGlobal;}
+    mbInit=true;return true;
+}
+#endif

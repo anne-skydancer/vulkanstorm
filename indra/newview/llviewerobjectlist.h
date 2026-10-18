@@ -263,6 +263,8 @@ public:
     void resetDerenderList(bool force = false);
     void addDerenderedItem( LLUUID const &, bool );
     void removeDerenderedItem( LLUUID const & );
+    bool isDerendered(const LLUUID& id) const { return mDerendered.contains(id); }
+    void clearAccountDerendered() { mDerendered.clear(); }
 // </FS:ND>
 
 };

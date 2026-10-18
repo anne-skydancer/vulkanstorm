@@ -36,6 +36,7 @@ public:
     void setSession(const std::string& region, std::function<void()> logout);
     void append(const std::string& text);
     void appendChat(const LLChat& chat);
+    void recordChat(const LLChat& chat); // Transcript only; the shared handler owns presentation.
     // Use the actual skinned nearby floater for a normal connected viewer.
     // The diagnostic transcript remains available to protocol/pixel fixtures.
     bool useSharedFrontend(bool enabled);

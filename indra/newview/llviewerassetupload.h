@@ -275,12 +275,13 @@ private:
 };
 
 //=========================================================================
+class VSTaskInventoryObject;
 class LLViewerAssetUpload
 {
 public:
-    static LLUUID EnqueueInventoryUpload(const std::string &url, const LLResourceUploadInfo::ptr_t &uploadInfo);
+    static LLUUID EnqueueInventoryUpload(const std::string &url, const LLResourceUploadInfo::ptr_t &uploadInfo, std::shared_ptr<const VSTaskInventoryObject> source = {});
 
-    static void AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, const LLUUID &id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo, std::function<bool()> current);
+    static void AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, const LLUUID &id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo, std::function<bool()> current, std::shared_ptr<const VSTaskInventoryObject> source = {});
 
 private:
     static void HandleUploadError(LLCore::HttpStatus status, LLSD &result, LLResourceUploadInfo::ptr_t &uploadInfo);

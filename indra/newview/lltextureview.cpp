@@ -29,6 +29,19 @@
 #include <set>
 
 #include "lltextureview.h"
+#include "vstexturedebug.h"
+#include <optional>
+#if VS_NATIVE_VULKAN
+#include "vsvulkancontext.h"
+#include "vsuiresources.h"
+#include "vsuiimageprovider.h"
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#include "vsnativeim.h"
+#include "vsavatarservices.h"
+#include "vsworldavatar.h"
+#endif
+#include <chrono>
 
 #include "llrect.h"
 #include "llerror.h"
@@ -61,6 +74,31 @@
 #include "lltexlayer.h"
 
 LLTextureView *gTextureView = NULL;
+namespace
+{
+
+S32 texture_resident_bytes(LLViewerFetchedTexture* texture)
+{return texture->hasGLTexture()?texture->getTextureMemory().value():0;}
+bool texture_selected(LLViewerFetchedTexture* image)
+{
+
+    struct Selected:LLSelectedTEFunctor
+    {
+        LLViewerFetchedTexture* image;
+        explicit Selected(LLViewerFetchedTexture* value):image(value){}
+        bool apply(LLViewerObject* object,S32 side)override{return image==object->getTEImage(side);}
+    } selected(image);
+    return LLSelectMgr::instance().getSelection()->applyToTEs(&selected,true);
+}
+bool texture_hovered(LLViewerFetchedTexture* image)
+{
+
+    const auto* node=LLSelectMgr::instance().getHoverNode();const auto* object=node?node->getObject():nullptr;
+    if(object)for(S32 side=0;side<object->getNumTEs();++side)if(image==object->getTEImage(side))return true;
+    return false;
+}
+}
+
 
 #define HIGH_PRIORITY 100000000.f
 
@@ -87,6 +125,14 @@ class LLTextureBar : public LLView
 {
 public:
     LLPointer<LLViewerFetchedTexture> mImagep;
+    std::optional<VSTextureDebugInfo> mNative;
+    std::function<bool()> mSourceCurrent=[] {return true;};
+    static VSTextureDebugInfo describe(LLViewerFetchedTexture*);
+    VSTextureDebugInfo describe() const{return mNative?*mNative:describe(mImagep);}
+    LLUUID id() const{return mNative?mNative->id:mImagep->getID();}
+    F32 area() {return mNative?mNative->area:mImagep->getMaxVirtualSize();}
+    U32 priority() const{return mNative?mNative->fetchPriority:mImagep->getFetchPriority();}
+
     S32 mHilite;
 
 public:
@@ -116,16 +162,14 @@ public:
         {
             LLTextureBar* bar1p = (LLTextureBar*)i1;
             LLTextureBar* bar2p = (LLTextureBar*)i2;
-            LLViewerFetchedTexture *i1p = bar1p->mImagep;
-            LLViewerFetchedTexture *i2p = bar2p->mImagep;
-            F32 pri1 = i1p->getMaxVirtualSize();
-            F32 pri2 = i2p->getMaxVirtualSize();
+            F32 pri1 = bar1p->area();
+            F32 pri2 = bar2p->area();
             if (pri1 > pri2)
                 return true;
             else if (pri2 > pri1)
                 return false;
             else
-                return i1p->getID() < i2p->getID();
+                return bar1p->id() < bar2p->id();
         }
     };
 
@@ -135,31 +179,41 @@ public:
         {
             LLTextureBar* bar1p = (LLTextureBar*)i1;
             LLTextureBar* bar2p = (LLTextureBar*)i2;
-            LLViewerFetchedTexture *i1p = bar1p->mImagep;
-            LLViewerFetchedTexture *i2p = bar2p->mImagep;
-            U32 pri1 = i1p->getFetchPriority() ;
-            U32 pri2 = i2p->getFetchPriority() ;
+            U32 pri1 = bar1p->priority();
+            U32 pri2 = bar2p->priority();
             if (pri1 > pri2)
                 return true;
             else if (pri2 > pri1)
                 return false;
             else
-                return i1p->getID() < i2p->getID();
+                return bar1p->id() < bar2p->id();
         }
     };
 private:
     LLTextureView* mTextureView;
 };
 
+VSTextureDebugInfo LLTextureBar::describe(LLViewerFetchedTexture* image)
+{
+    VSTextureDebugInfo row;if(!image)return row;
+    row.id=image->getID();row.area=image->getMaxVirtualSize();
+    row.desired=image->mDesiredDiscardLevel;row.requested=image->mRequestedDiscardLevel;
+    row.discard=image->getDiscardLevel();row.width=image->getWidth();row.height=image->getHeight();
+    row.minDiscard=image->mMinDiscardLevel;row.fetchState=image->mFetchState;row.fetchPriority=image->getFetchPriority();
+    row.needsCreate=image->mNeedsCreateTexture;row.fullyLoaded=image->mFullyLoaded;row.missing=image->mIsMissingAsset;
+    row.fetching=image->mIsFetching;row.dontDiscard=image->mDontDiscard;row.missed=image->getMissed();
+    row.progress=image->mDownloadProgress;row.fetchDelta=image->mFetchDeltaTime;row.requestDelta=image->mRequestDeltaTime;
+    row.lastPacket=image->mLastPacketTimer.getElapsedTimeF32();row.lastBound=image->getTimePassedSinceLastBound();
+    row.residentBytes=texture_resident_bytes(image);return row;
+}
+
 void LLTextureBar::draw()
 {
-    if (!mImagep)
-    {
-        return;
-    }
+    if(!mSourceCurrent() || (!mImagep && !mNative))return;
+    const auto row=describe();
 
     LLColor4 color;
-    if (mImagep->getID() == LLAppViewer::getTextureFetch()->mDebugID)
+    if (row.id == LLAppViewer::getTextureFetch()->mDebugID)
     {
         color = LLColor4::cyan2;
     }
@@ -170,11 +224,11 @@ void LLTextureBar::draw()
         else if (idx==2) color = LLColor4::yellow;
         else color = LLColor4::pink2;
     }
-    else if (mImagep->mDontDiscard)
+    else if (row.dontDiscard)
     {
         color = LLColor4::green4;
     }
-    else if (mImagep->getMaxVirtualSize() <= 0.0f)
+    else if (row.area <= 0.0f)
     {
         color = LLColor4::grey; color[VALPHA] = .7f;
     }
@@ -197,14 +251,14 @@ void LLTextureBar::draw()
 
     // Name, pixel_area, requested pixel area, decode priority
     std::string uuid_str;
-    mImagep->mID.toString(uuid_str);
+    row.id.toString(uuid_str);
     uuid_str = uuid_str.substr(0,7);
 
     tex_str = llformat("%s %7.0f %d(%d)",
         uuid_str.c_str(),
-        mImagep->mMaxVirtualSize,
-        mImagep->mDesiredDiscardLevel,
-        mImagep->mRequestedDiscardLevel);
+        row.area,
+        row.desired,
+        row.requested);
 
 
     LLFontGL::getFontMonospace()->renderUTF8(tex_str, 0, title_x1, getRect().getHeight(),
@@ -241,15 +295,15 @@ void LLTextureBar::draw()
     };
     const S32 fetch_state_desc_size = (S32)LL_ARRAY_SIZE(fetch_state_desc);
     S32 state =
-        mImagep->mNeedsCreateTexture ? LAST_STATE+1 :
-        mImagep->mFullyLoaded ? LAST_STATE+2 :
-        mImagep->mMinDiscardLevel > 0 ? LAST_STATE+3 :
-        mImagep->mIsMissingAsset ? LAST_STATE+4 :
-        !mImagep->mIsFetching ? LAST_STATE+5 :
-        mImagep->mFetchState;
+        row.needsCreate ? LAST_STATE+1 :
+        row.fullyLoaded ? LAST_STATE+2 :
+        row.minDiscard > 0 ? LAST_STATE+3 :
+        row.missing ? LAST_STATE+4 :
+        !row.fetching ? LAST_STATE+5 :
+        row.fetchState;
     state = llclamp(state,0,fetch_state_desc_size-1);
 
-    LLFontGL::getFontMonospace()->renderUTF8(fetch_state_desc[state].desc, 0, title_x2, getRect().getHeight(),
+    LLFontGL::getFontMonospace()->renderUTF8(row.error?"ERR":fetch_state_desc[state].desc, 0, title_x2, getRect().getHeight(),
                                      fetch_state_desc[state].color,
                                      LLFontGL::LEFT, LLFontGL::TOP);
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
@@ -263,7 +317,7 @@ void LLTextureBar::draw()
     gGL.color4f(0.f, 0.f, 0.f, 0.75f);
     gl_rect_2d(left, top, right, bottom);
 
-    F32 data_progress = mImagep->mDownloadProgress;
+    F32 data_progress = row.progress;
 
     if (data_progress > 0.0f)
     {
@@ -282,21 +336,21 @@ void LLTextureBar::draw()
 
     // Draw the packet pip
     const F32 pip_max_time = 5.f;
-    F32 last_event = mImagep->mLastPacketTimer.getElapsedTimeF32();
+    F32 last_event = row.lastPacket;
     if (last_event < pip_max_time)
     {
         clr = LLColor4::white;
     }
     else
     {
-        last_event = mImagep->mRequestDeltaTime;
+        last_event = row.requestDelta;
         if (last_event < pip_max_time)
         {
             clr = LLColor4::green;
         }
         else
         {
-            last_event = mImagep->mFetchDeltaTime;
+            last_event = row.fetchDelta;
             if (last_event < pip_max_time)
             {
                 clr = LLColor4::yellow;
@@ -312,13 +366,14 @@ void LLTextureBar::draw()
     pip_x += pip_width + pip_space;
 
     // we don't want to show bind/resident pips for textures using the default texture
-    if (mImagep->hasGLTexture())
+    if (row.residentBytes)
     {
-        // Draw the bound pip
-        last_event = mImagep->getTimePassedSinceLastBound();
+        // Draw the bound pip from the selected backend's actual submissions.
+        last_event = row.lastBound;
+
         if (last_event < 1.f)
         {
-            clr = mImagep->getMissed() ? LLColor4::red : LLColor4::magenta1;
+            clr = row.missed ? LLColor4::red : LLColor4::magenta1;
             clr.setAlpha(1.f - last_event);
             gGL.color4fv(clr.mV);
             gl_rect_2d(pip_x, top, pip_x + pip_width, bottom);
@@ -331,8 +386,8 @@ void LLTextureBar::draw()
         LLGLSUIDefault gls_ui;
         // draw the image size at the end
         {
-            std::string num_str = llformat("%3dx%3d (%2d) %7d", mImagep->getWidth(), mImagep->getHeight(),
-                mImagep->getDiscardLevel(), mImagep->hasGLTexture() ? mImagep->getTextureMemory().value() : 0);
+            std::string num_str = llformat("%3dx%3d (%2d) %7d", row.width, row.height,
+                row.discard, row.residentBytes);
             LLFontGL::getFontMonospace()->renderUTF8(num_str, 0, title_x4, getRect().getHeight(), color,
                                             LLFontGL::LEFT, LLFontGL::TOP);
         }
@@ -342,9 +397,10 @@ void LLTextureBar::draw()
 
 bool LLTextureBar::handleMouseDown(S32 x, S32 y, MASK mask)
 {
+    if(!mSourceCurrent())return true;
     if ((mask & (MASK_CONTROL|MASK_SHIFT|MASK_ALT)) == MASK_ALT)
     {
-        LLAppViewer::getTextureFetch()->mDebugID = mImagep->getID();
+        LLAppViewer::getTextureFetch()->mDebugID = id();
         return true;
     }
     return LLView::handleMouseDown(x,y,mask);
@@ -395,6 +451,21 @@ void LLAvatarTexBar::draw()
     static LLCachedControl<bool> debugAvatarRezTime(gSavedSettings, "DebugAvatarRezTime");
     if (!debugAvatarRezTime) return;
 
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active();owner && gViewerWindow && gViewerWindow->nativeContext())
+    {
+        const auto avatar=gViewerWindow->nativeContext()->world().avatarForObject(owner->account().agent);
+        if(!avatar)return;
+        const S32 height=LLFontGL::getFontMonospace()->getLineHeight();S32 row=1;
+        for(const auto& bake:avatar->localBakes())
+        {
+            const auto dimensions=bake.image?VSUIRenderer::imageExtent(bake.image):std::array<unsigned,2>{};
+            const auto text=llformat("Bake %u: %ux%u generation %llu",bake.index,dimensions[0],dimensions[1],static_cast<unsigned long long>(bake.generation));
+            LLFontGL::getFontMonospace()->renderUTF8(text,0,3,height*row++,LLColor4::white,LLFontGL::LEFT,LLFontGL::TOP);
+        }
+        return;
+    }
+#endif
     LLVOAvatarSelf* avatarp = gAgentAvatarp;
     if (!avatarp) return;
 
@@ -512,6 +583,11 @@ void LLGLTexMemBar::draw()
     U32 total_active_cached_objects = LLWorld::getInstance()->getNumOfActiveCachedObjects();
     U32 total_objects = gObjectList.getNumObjects();
     F32 x_right = 0.0;
+#if VS_NATIVE_VULKAN
+    auto* nativeContext=gViewerWindow?gViewerWindow->nativeContext():nullptr;
+    const auto nativeRows=nativeContext?vs_native_texture_debug():std::vector<VSTextureDebugInfo>{};
+    if(nativeContext)total_objects=U32(nativeContext->world().objectSnapshots().size());
+#endif
 
     U32 image_count = gTextureList.getNumImages();
     U32 raw_image_count = 0;
@@ -523,6 +599,9 @@ void LLGLTexMemBar::draw()
     U32 aux_raw_image_count = 0;
     U64 aux_raw_image_bytes = 0;
 
+#if VS_NATIVE_VULKAN
+    if(!nativeContext)
+#endif
     for (auto& image : gTextureList)
     {
         const LLImageRaw* raw_image = image->getRawImage();
@@ -554,6 +633,13 @@ void LLGLTexMemBar::draw()
    F64 texture_bytes_alloc = LLImageGL::getTextureBytesAllocated() / 1024.0 / 512.0;
    F64 vertex_bytes_alloc = LLVertexBuffer::getBytesAllocated() / 1024.0 / 512.0;
    F64 render_bytes_alloc = LLRenderTarget::sBytesAllocated / 1024.0 / 512.0;
+#if VS_NATIVE_VULKAN
+    if(nativeContext)
+    {
+        texture_bytes_alloc=nativeContext->uiStatistics().residentGPUImageBytes/(1024.*512.);
+        vertex_bytes_alloc=nativeContext->worldStatistics().residentMeshBytes/(1024.*512.);
+    }
+#endif
 
     //----------------------------------------------------------------------------
     LLGLSUIDefault gls_ui;
@@ -595,6 +681,15 @@ void LLGLTexMemBar::draw()
                     discard_bias,
                     cache_usage,
                     cache_max_usage);
+#if VS_NATIVE_VULKAN
+    if(nativeContext)
+    {
+        const auto& memory=nativeContext->resources().textureMemoryPolicy();
+        text=llformat("Est. Free: %.0f MB Sys Free: %d MB Vulkan Tex: %.1f MB Mesh: %.1f MB Bias: %.2f Cache: %.1f/%.1f MB",
+            memory.freeMiB,S32(LLMemory::getAvailableMemKB()/1024),texture_bytes_alloc*.5,vertex_bytes_alloc*.5,
+            memory.bias,cache_usage,cache_max_usage);
+    }
+#endif
     // <FS:Ansariel> Texture memory bars
     //LLFontGL::getFontMonospace()->renderUTF8(text, 0, 0, v_offset + line_height*7,
     LLFontGL::getFontMonospace()->renderUTF8(text, 0, 0, v_offset + line_height*9,
@@ -623,13 +718,21 @@ void LLGLTexMemBar::draw()
     gGL.color4f(0.5f, 0.5f, 0.5f, 0.75f);
     gl_rect_2d(left, top, right, bottom);
 
-    U32 gpu_used = gGLManager.mVRAM - (S32)LLViewerTexture::sFreeVRAMMegabytes;
-    color = (gpu_used < (U32)llfloor(gGLManager.mVRAM * 0.85f)) ? LLColor4::green :
-        (gpu_used < gGLManager.mVRAM) ? LLColor4::yellow : LLColor4::red;
+    F64 gpu_budget=gGLManager.mVRAM;
+    F64 gpu_used=gGLManager.mVRAM-(S32)LLViewerTexture::sFreeVRAMMegabytes;
+#if VS_NATIVE_VULKAN
+    if(nativeContext)
+    {
+        const auto& memory=nativeContext->resources().textureMemoryPolicy();
+        gpu_budget=memory.targetMiB;gpu_used=memory.usedMiB;
+    }
+#endif
+    color = (gpu_used < llfloor(F32(gpu_budget * 0.85))) ? LLColor4::green :
+        (gpu_used < gpu_budget) ? LLColor4::yellow : LLColor4::red;
     color[VALPHA] = .75f;
 
-    bar_scale = (F32)bar_width / gGLManager.mVRAM;
-    right = left + llfloor(gpu_used * bar_scale);
+    bar_scale = gpu_budget>0?F32(bar_width/gpu_budget):0;
+    right = left + llfloor(F32(gpu_used * bar_scale));
 
     gl_rect_2d(left, top, right, bottom, color);
     // </FS:Ansariel>
@@ -660,6 +763,21 @@ void LLGLTexMemBar::draw()
     text = llformat("Images: %d   Raw: %d (%.2f MB)  Saved: %d (%.2f MB) Aux: %d (%.2f MB)", image_count, raw_image_count, raw_image_bytes_MB,
         saved_raw_image_count, saved_raw_image_bytes_MB,
         aux_raw_image_count, aux_raw_image_bytes_MB);
+#if VS_NATIVE_VULKAN
+    if(nativeContext)
+    {
+        const auto& rows=nativeRows;
+        U64 snapshots=0,auxiliary=0;U32 snapshotCount=0,auxiliaryCount=0;
+        for(const auto& row:rows)
+        {
+            snapshots+=row.snapshotBytes;auxiliary+=row.auxiliaryBytes;
+            snapshotCount+=row.snapshotBytes>0;auxiliaryCount+=row.auxiliaryBytes>0;
+        }
+        text=llformat("Images: %u CPU snapshots: %u (%.2f MB) Aux: %u (%.2f MB) Decoder: %.2f MB",
+            U32(rows.size()),snapshotCount,snapshots/(1024.*1024.),auxiliaryCount,auxiliary/(1024.*1024.),
+            LLAppViewer::getTextureFetch()->nativeDecodeBytesUsed()/(1024.*1024.));
+    }
+#endif
     LLFontGL::getFontMonospace()->renderUTF8(text, 0, 0, v_offset + line_height * 7,
         text_color, LLFontGL::LEFT, LLFontGL::TOP);
 
@@ -668,6 +786,10 @@ void LLGLTexMemBar::draw()
                     vertex_bytes_alloc,
                     render_bytes_alloc,
         texture_bytes_alloc+vertex_bytes_alloc);
+#if VS_NATIVE_VULKAN
+    if(nativeContext)text=llformat("Vulkan Textures: %.2f MB Geometry: %.2f MB Total: %.2f MB",
+        texture_bytes_alloc,vertex_bytes_alloc,texture_bytes_alloc+vertex_bytes_alloc);
+#endif
     LLFontGL::getFontMonospace()->renderUTF8(text, 0, 0, v_offset + line_height * 6,
         text_color, LLFontGL::LEFT, LLFontGL::TOP);
 
@@ -729,6 +851,18 @@ void LLGLTexMemBar::draw()
                     (S32)gTextureList.mFastCacheList.size());
                     // </FS:Ansariel>
     // </FS:minerjr>
+#if VS_NATIVE_VULKAN
+    if(nativeContext)
+    {
+        U32 creating=0;for(const auto& row:nativeRows)creating+=row.needsCreate;
+        text=llformat("Tex: %u Fetch: %d(%d) Pkts:%d(%d) CAC R/W: %d/%d LFS:%d RAW:%d HTTP:%d DEC:%d Publish:%u",
+            U32(nativeRows.size()),LLAppViewer::getTextureFetch()->getNumRequests(),LLAppViewer::getTextureFetch()->getNumDeletes(),
+            LLAppViewer::getTextureFetch()->mPacketCount,LLAppViewer::getTextureFetch()->mBadPacketCount,
+            LLAppViewer::getTextureCache()->getNumReads(),LLAppViewer::getTextureCache()->getNumWrites(),
+            S32(LLLFSThread::sLocal->getPending()),S32(LLImageRaw::sRawImageCount),
+            LLAppViewer::getTextureFetch()->getNumHTTPRequests(),S32(LLAppViewer::getImageDecodeThread()->getPending()),creating);
+    }
+#endif
     x_right = 550.0f;
     LLFontGL::getFontMonospace()->renderUTF8(text, 0, 0.f, (F32)(v_offset + line_height*3),
                                              text_color, LLFontGL::LEFT, LLFontGL::TOP,
@@ -912,6 +1046,13 @@ struct KillView
 
 void LLTextureView::draw()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if(mNativeAccountCurrent && !mNativeAccountCurrent())mFreezeView=false;
+        mNativeAccountCurrent=vs_native_im_guard();
+    }
+#endif
     if (!mFreezeView)
     {
 //      LLViewerObject *objectp;
@@ -942,6 +1083,57 @@ void LLTextureView::draw()
             LL_INFOS() << "ID\tMEM\tBOOST\tPRI\tWIDTH\tHEIGHT\tDISCARD" << LL_ENDL;
         }
 
+#if VS_NATIVE_VULKAN
+        if(gViewerWindow->isNativeVulkan())
+        {
+            auto rows=vs_native_texture_debug();
+            std::vector<std::pair<F32,const VSTextureDebugInfo*>> ordered;
+            ordered.reserve(rows.size());
+            const auto owner=VSNativeSession::active();
+            auto* selection=owner?owner->existingObjectSelection():nullptr;
+            auto* context=gViewerWindow->nativeContext();
+            std::set<LLUUID> selectedTextures,hoverTextures;
+            const auto collect=[&](const VSWorldScene::ObjectHandle& token,std::set<LLUUID>& ids,bool selected)
+            {
+                if(!context)return;
+                auto& world=context->world();
+                for(S32 side=0;side<world.textureEntryCount(token);++side)
+                {
+                    if(selected && (!selection || !selection->contains(token,side)))continue;
+                    const auto texture=world.diffuseTexture(token,U32(side));
+                    if(texture)ids.insert(texture.asset);
+                }
+            };
+            if(selection)
+            {
+                for(const auto& token:selection->selected())collect(token,selectedTextures,true);
+                if(const auto hover=selection->hoverObject())collect(*hover,hoverTextures,false);
+            }
+            for(const auto& row:rows)
+            {
+                F32 priority=mOrderFetch?F32(row.fetchPriority)/256.f:row.area;
+                priority=llclamp(priority,0.f,HIGH_PRIORITY-1.f);
+                if(!mOrderFetch)
+                {
+                    if(priority<HIGH_PRIORITY && selectedTextures.count(row.id))priority+=3*HIGH_PRIORITY;
+                    if(priority<HIGH_PRIORITY && (row.discard<0 || row.desired<row.discard) && hoverTextures.count(row.id))priority+=2*HIGH_PRIORITY;
+                    if(priority>0 && priority<HIGH_PRIORITY && (row.lastPacket<1 || row.fetchDelta<.25f))priority+=HIGH_PRIORITY;
+                }
+                if(priority>0)ordered.emplace_back(priority,&row);
+                if(mPrintList)LL_INFOS()<<row.id<<"\t"<<row.residentBytes<<"\t"<<row.area<<"\t"<<row.width<<"\t"<<row.height<<"\t"<<row.discard<<LL_ENDL;
+            }
+            std::stable_sort(ordered.begin(),ordered.end(),[](const auto& left,const auto& right){return left.first>right.first;});
+            S32 count=0;mNumTextureBars=0;
+            for(const auto& [priority,row]:ordered)
+            {
+                const S32 highlight=priority>=HIGH_PRIORITY?S32((priority+1)/HIGH_PRIORITY)-1:0;
+                if((highlight || count<40) && count<50 && addBar(*row,highlight))++count;
+            }
+            mPrintList=false;
+        }
+        else
+#endif
+        {
         for (LLViewerTextureList::image_list_t::iterator iter = gTextureList.mImageList.begin();
              iter != gTextureList.mImageList.end(); )
         {
@@ -956,7 +1148,7 @@ void LLTextureView::draw()
 
             if (mPrintList)
             {
-                S32 tex_mem = imagep->hasGLTexture() ? imagep->getTextureMemory().value() : 0 ;
+                S32 tex_mem = texture_resident_bytes(imagep);
                 LL_INFOS() << imagep->getID()
                         << "\t" << tex_mem
                         << "\t" << imagep->getBoostLevel()
@@ -993,17 +1185,7 @@ void LLTextureView::draw()
             {
                 if (pri < HIGH_PRIORITY && LLSelectMgr::getInstance())
                 {
-                    struct f : public LLSelectedTEFunctor
-                    {
-                        LLViewerFetchedTexture* mImage;
-                        f(LLViewerFetchedTexture* image) : mImage(image) {}
-                        virtual bool apply(LLViewerObject* object, S32 te)
-                        {
-                            return (mImage == object->getTEImage(te));
-                        }
-                    } func(imagep);
-                    const bool firstonly = true;
-                    bool match = LLSelectMgr::getInstance()->getSelection()->applyToTEs(&func, firstonly);
+                    bool match=texture_selected(imagep);
                     if (match)
                     {
                         pri += 3*HIGH_PRIORITY;
@@ -1012,23 +1194,7 @@ void LLTextureView::draw()
 
                 if (pri < HIGH_PRIORITY && (cur_discard< 0 || desired_discard < cur_discard))
                 {
-                    LLSelectNode* hover_node = LLSelectMgr::instance().getHoverNode();
-                    if (hover_node)
-                    {
-                        LLViewerObject *objectp = hover_node->getObject();
-                        if (objectp)
-                        {
-                            S32 tex_count = objectp->getNumTEs();
-                            for (S32 i = 0; i < tex_count; i++)
-                            {
-                                if (imagep == objectp->getTEImage(i))
-                                {
-                                    pri += 2*HIGH_PRIORITY;
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                    if(texture_hovered(imagep))pri+=2*HIGH_PRIORITY;
                 }
 
                 if (pri > 0.f && pri < HIGH_PRIORITY)
@@ -1073,6 +1239,8 @@ void LLTextureView::draw()
                 }
             }
         }
+
+        } // Reference fetched-texture list.
 
         if (mOrderFetch)
             sortChildren(LLTextureBar::sort_fetch());
@@ -1178,3 +1346,19 @@ bool LLTextureView::handleKey(KEY key, MASK mask, bool called_from_parent)
 }
 
 
+
+bool LLTextureView::isNativeInternalType(const std::type_info& type)
+{
+    return type==typeid(LLTextureView) || type==typeid(LLTextureBar) ||
+        type==typeid(LLGLTexMemBar) || type==typeid(LLAvatarTexBar);
+}
+
+bool LLTextureView::addBar(const VSTextureDebugInfo& source,S32 highlight)
+{
+    LLTextureBar::Params parameters;parameters.name="texture bar";
+    parameters.rect=LLRect(0,0,getRect().getWidth(),0);parameters.texture_view=this;
+    auto* bar=LLUICtrlFactory::create<LLTextureBar>(parameters);if(!bar)return false;
+    bar->mNative=source;bar->mHilite=highlight;
+    bar->mSourceCurrent=mNativeAccountCurrent?mNativeAccountCurrent:[] {return false;};
+    addChild(bar);mTextureBars.push_back(bar);++mNumTextureBars;return true;
+}

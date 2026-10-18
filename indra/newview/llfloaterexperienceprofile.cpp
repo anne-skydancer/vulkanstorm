@@ -172,7 +172,6 @@ bool LLFloaterExperienceProfile::postBuild()
     childSetAction(BTN_CLEAR_LOCATION, boost::bind(&LLFloaterExperienceProfile::onClickClear, this));
     childSetAction(BTN_SET_GROUP, boost::bind(&LLFloaterExperienceProfile::onPickGroup, this));
     childSetAction(BTN_REPORT, boost::bind(&LLFloaterExperienceProfile::onReportExperience, this));
-    if (LLRender2D::isNativeUI()) getChild<LLButton>(BTN_REPORT)->setEnabled(false);
 
     getChild<LLTextEditor>(EDIT TF_DESC)->setKeystrokeCallback(boost::bind(&LLFloaterExperienceProfile::onFieldChanged, this));
     getChild<LLUICtrl>(EDIT TF_MATURITY)->setCommitCallback(boost::bind(&LLFloaterExperienceProfile::onFieldChanged, this));
@@ -872,7 +871,6 @@ void LLFloaterExperienceProfile::setEditGroup( LLUUID group_id )
 
 void LLFloaterExperienceProfile::onReportExperience()
 {
-    if (LLRender2D::isNativeUI()) return;
     LLFloaterReporter::showFromExperience(mExperienceId);
 }
 

@@ -38,6 +38,8 @@
 #include "llviewerinventory.h"
 #include "llavatarappearancedefines.h"
 #include "llwearabledata.h"
+#include <memory>
+#include <functional>
 #include "llinitdestroyclass.h"
 
 class LLInventoryItem;
@@ -81,6 +83,23 @@ public:
 
     bool            isWearableCopyable(LLWearableType::EType type, U32 index /*= 0*/) const;
     bool            areWearablesLoaded() const;
+    LLWearable* getWearable(LLWearableType::EType, U32 index = 0);
+    const LLWearable* getWearable(LLWearableType::EType, U32 index = 0) const;
+    U32 getWearableCount(LLWearableType::EType) const;
+    U32 getWearableCount(U32 texture_index) const;
+    bool getWearableIndex(const LLWearable*, U32&) const;
+    LLWearable* getTopWearable(LLWearableType::EType);
+    const LLWearable* getTopWearable(LLWearableType::EType) const;
+    LLWearable* getBottomWearable(LLWearableType::EType);
+    const LLWearable* getBottomWearable(LLWearableType::EType) const;
+    U32 getClothingLayerCount() const;
+    bool canAddWearable(LLWearableType::EType) const;
+    bool isOnTop(LLWearable*) const;
+    void resetNativeAccount();
+    void nativeWearablesLoaded();
+
+    void setWearable(LLWearableType::EType, U32, LLWearable*);
+
 // [SL:KB] - Patch: Appearance-InitialWearablesLoadedCallback | Checked: 2010-08-14 (Catznip-2.1)
     bool            areInitalWearablesLoaded() const { return mInitialWearablesLoaded; }
 // [/SL:KB]
@@ -330,6 +349,8 @@ private:
         U32 mTodo;
         LLPointer<LLRefCount> mCB;
         std::string mDescription;
+        std::function<bool()> mAccountCurrent;
+        std::shared_ptr<LLViewerWearable> mNativeWearableOwner;
     };
 
 }; // LLAgentWearables

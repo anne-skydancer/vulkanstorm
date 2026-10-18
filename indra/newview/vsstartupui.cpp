@@ -34,6 +34,22 @@
 #include "llfloaterevent.h"
 #include "llfloateremojipicker.h"
 #include "llfloatercamera.h"
+#include "llfloatersnapshot.h"
+#include "llfloatersimplesnapshot.h"
+#include "llfloaterbigpreview.h"
+#include "llfloaterflickr.h"
+#include "fsfloaterprimfeed.h"
+#include "llsnapshotlivepreview.h"
+#include "llpanelsnapshot.h"
+#include "llfloaterreporter.h"
+#include "llpanelcontents.h"
+#include "llpanelobjectinventory.h"
+#include "llfloaterbulkpermission.h"
+#include "fsfloatervoicecontrols.h"
+#include "llfloatervoicevolume.h"
+#include "llfloaterchatvoicevolume.h"
+#include "llfloatervoiceeffect.h"
+#include "llpanelvoiceeffect.h"
 #include "llfloatercamerapresets.h"
 #include "llfloatersavecamerapreset.h"
 #include "llpanelpresetscamerapulldown.h"
@@ -105,11 +121,34 @@
 #include "fsfloatergrouptitles.h"
 #include "vsgroupsearch.h"
 #include "llpaneldirgroups.h"
+#include "llfloaterdirectory.h"
+#include "llfloaterclassified.h"
+#include "llpanelclassified.h"
+#include "llpaneleventinfo.h"
+#include "llpaneldirbrowser.h"
+#include "llpaneldirweb.h"
+#include "llpaneldirpeople.h"
+#include "llpaneldirplaces.h"
+#include "llpaneldirclassified.h"
+#include "llpaneldirevents.h"
+#include "llpaneldirland.h"
 #include "llsearchcombobox.h"
 #include "llfloaterprofile.h"
 #include "llfloaterdisplayname.h"
 #include "llfloaterpay.h"
 #include "llfloaterimagepreview.h"
+#include "llfloatermodelpreview.h"
+#include "llfloaterbvhpreview.h"
+#include "llfloatergesture.h"
+#include "llfloaterbuy.h"
+#include "llfloaterbuycontents.h"
+#include "llfloateropenobject.h"
+#include "omnifilter.h"
+#include "fsfloaterdiscord.h"
+#include "fsfloaterperformance.h"
+#include "llfloater360capture.h"
+#include "fsfloateravatarrendersettings.h"
+#include "alfloaterregiontracker.h"
 #include "llfloaternamedesc.h"
 #include "lluploaddialog.h"
 #include "llpanelprofile.h"
@@ -152,10 +191,13 @@
 #include "llfloaterspellchecksettings.h"
 #include "llfloaterperms.h"
 #include "llpreview.h"
+#include "llmaterialeditor.h"
 #include "llpreviewnotecard.h"
 #include "llpreviewtexture.h"
 #include "llpreviewsound.h"
 #include "llpreviewscript.h"
+#include "llpreviewgesture.h"
+#include "llpreviewanim.h"
 #include "llscripteditor.h"
 #include "fslslpreprocviewer.h"
 #include "llfloatergotoline.h"
@@ -163,6 +205,7 @@
 #include "llfloaterproperties.h"
 #include "llfloatermarketplacelistings.h"
 #include "llsidepaneliteminfo.h"
+#include "llsidepaneltaskinfo.h"
 #include "llfloaterchangeitemthumbnail.h"
 #include "llinventorypanel.h"
 #include "llfolderview.h"
@@ -215,6 +258,10 @@
 #include <iterator>
 #include "lltoolbarview.h"
 #include "llpanelpeople.h"
+#include "fsfloaterradar.h"
+#include "fspanelradar.h"
+#include "fsradarlistctrl.h"
+#include "fsradarmenu.h"
 #include "fsfloaternearbychat.h"
 #include "llsidetraypanelcontainer.h"
 #include "llfloatersearch.h"
@@ -248,17 +295,48 @@
 #include "fsnearbychatcontrol.h"
 #include "fsnearbychatvoicemonitor.h"
 #include "llfavoritesbar.h"
+#include "llmorphview.h"
+#include "llsidepanelappearance.h"
+#include "llpaneloutfitedit.h"
+#include "llpaneloutfitsinventory.h"
+#include "llpaneleditwearable.h"
+#include "llcofwearables.h"
+#include "lloutfitslist.h"
+#include "lloutfitgallery.h"
+#include "llpanelwearing.h"
+#include "llscrollingpanelparam.h"
+#include "llscrollingpanelparambase.h"
+#include "llscrollingpanellist.h"
+
+#include "fsfloaterwearablefavorites.h"
+#include "llwearableitemslist.h"
 #include "llfloater.h"
 #include "llfloatersaveprefpreset.h"
 #include "llpanelpresetspulldown.h"
+#include "NACLfloaterexploresounds.h"
+#include "fsfloaterassetblacklist.h"
 #include "llfloaterloadprefpreset.h"
 #include "llfloaterdeleteprefpreset.h"
 #include "llinspectavatar.h"
+#include "llinspectgroup.h"
+#include "fsnamelistavatarmenu.h"
 #include "fsfloateravataralign.h"
 #include "llfloatermap.h"
 #include "llnetmap.h"
 #include "llfloatercreatelandmark.h"
 #include "llfloaterworldmap.h"
+#include "llfloaterinspect.h"
+#include "fsareasearch.h"
+#include "llcompilequeue.h"
+#include "llfloaterbeacons.h"
+#include "llfloaterbump.h"
+#include "llfloaterpathfindinglinksets.h"
+#include "llfloaterpathfindingconsole.h"
+#include "llpathinglib.h"
+#include "llfloaterpathfindingcharacters.h"
+#include "fsfloaterposestand.h"
+#include "llfloaterlandholdings.h"
+#include "llfloaterobjectweights.h"
 #include "llworldmapview.h"
 #include "fsfloaterplacedetails.h"
 #include "llpanelplaces.h"
@@ -270,6 +348,33 @@
 #include "llplacesinventorypanel.h"
 #include "llplacesfolderview.h"
 #include "quickprefs.h"
+#include "lldebugview.h"
+#include "lltextureview.h"
+#include "llfasttimerview.h"
+#include "llsceneview.h"
+#include "llscenemonitor.h"
+#include "floatermedialists.h"
+#include "llfloatersounddevices.h"
+#include "llfloaterpreferenceviewadvanced.h"
+#include "llfloaterregionrestarting.h"
+#include "llfloatergodtools.h"
+#include "llfloatersceneloadstats.h"
+#include "llfloaterslapptest.h"
+#include "llfloateravatarwelcomepack.h"
+#include "llfloatermemleak.h"
+#include "llfloateruipreview.h"
+#include "llfloaterpostprocess.h"
+#include "lggbeammapfloater.h"
+#include "lggbeamcolormapfloater.h"
+#include "llfloaterinventorythumbnailshelper.h"
+#include "llfloaternotificationsconsole.h"
+#include "llfloatermediasettings.h"
+#include "llfloaterwhitelistentry.h"
+#include "llpanelmediasettingsgeneral.h"
+#include "llpanelmediasettingspermissions.h"
+#include "llpanelmediasettingssecurity.h"
+#include "llinspecttoast.h"
+#include "llfloaterhoverheight.h"
 #include "llfloaterenvironmentadjust.h"
 #include "llfloaterscriptrecover.h"
 #include "llfloatermyscripts.h"
@@ -297,6 +402,24 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             const bool admitted =
                 // These existing controllers use shared UI, local settings,
                 // account inventory or the already-owned browser/audio service.
+                t==typeid(LLFloaterPostProcess) || LLFloaterUIPreviewUtil::isNativeType(t) || t==typeid(LLFloaterSceneLoadStats) || t==typeid(LLFloaterSLappTest) ||
+                t==typeid(LLFloaterAvatarWelcomePack) || t==typeid(LLFloaterMemLeak) ||
+                t==typeid(lggBeamMapFloater) || t==typeid(lggBeamColorMapFloater) || t==typeid(LLFloaterScriptPreview) ||
+                t==typeid(LLFloaterGodTools) || t==typeid(LLPanelGridTools) || t==typeid(LLPanelRegionTools) ||
+                t==typeid(LLPanelObjectTools) || t==typeid(LLPanelRequestTools) || t==typeid(LLFloaterDirectory) || t==typeid(LLFloaterClassified) || t==typeid(LLPanelClassifiedInfo) ||
+                t==typeid(LLPanelEventInfo) || t==typeid(LLPanelDirBrowser) || t==typeid(LLPanelDirWeb) ||
+                t==typeid(LLPanelDirPeople) || t==typeid(LLPanelDirPlaces) || t==typeid(LLPanelDirClassified) ||
+                t==typeid(LLPanelDirEvents) || t==typeid(LLPanelDirLand) || t==typeid(LLFloaterMediaSettings) || t==typeid(LLFloaterWhiteListEntry) ||
+                t==typeid(LLPanelMediaSettingsGeneral) || t==typeid(LLPanelMediaSettingsPermissions) ||
+                t==typeid(LLPanelMediaSettingsSecurity) || t==typeid(FloaterMediaLists) || t==typeid(LLFloaterSoundDevices) ||
+                t==typeid(LLFloaterPreferenceViewAdvanced) || t==typeid(LLFloaterRegionRestarting) ||
+                t==typeid(LLFloaterInventoryThumbnailsHelper) || t==typeid(LLFloaterNotificationConsole) ||
+                LLFloaterNotificationConsole::isNativeInternalType(t) || LLNotificationsUI::isInspectToastType(t) ||
+                t==typeid(LLDebugView) || LLTextureView::isNativeInternalType(t) ||
+                t==typeid(LLFastTimerView) || t==typeid(LLSceneView) || t==typeid(LLSceneMonitorView) ||
+                t==typeid(FSFloaterVoiceControls) || t==typeid(LLIncomingCallDialog) || t==typeid(LLOutgoingCallDialog) ||
+                t==typeid(LLFloaterChatVoiceVolume) || t==typeid(LLFloaterVoiceEffect) || t==typeid(LLPanelVoiceEffect) ||
+                LLFloaterVoiceVolumeUtil::isNativeType(t) ||
                 t==typeid(LLPanelNearByMedia) ||
                 t==typeid(LLPanelPrimMediaControls) || t==typeid(LLWindowShade) ||
                 LLFloaterRegionInfo::isNativeInternalType(t) || t==typeid(LLFloaterRegionDebugConsole) ||
@@ -318,7 +441,12 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 t == typeid(FSFloaterWhiteListHelper) || t == typeid(LLFloaterSettingsColor) ||
                 t == typeid(FSFloaterSplashScreenSettings) || t == typeid(FSFloaterVolumeControls) ||
                 t == typeid(LLFloaterFontTest) || t == typeid(LLFloaterHUD) || t == typeid(RlvFloaterStrings) ||
-                t == typeid(FloaterQuickPrefs) || t == typeid(LLFloaterCreateLandmark) || t == typeid(LLFloaterWorldMap) || t == typeid(LLWorldMapView) || t == typeid(FSFloaterPlaceDetails) || t == typeid(LLPanelPlaces) || t == typeid(LLPanelPlaceInfo) || t == typeid(LLPanelPlaceProfile) || t == typeid(LLPanelLandmarkInfo) || t == typeid(LLLandmarksPanel) || t == typeid(LLFavoritesPanel) || t == typeid(LLTeleportHistoryPanel) || t == typeid(LLPlacesInventoryPanel) || t == typeid(LLPlacesFolderView) || t == typeid(LLFloaterMap) || t == typeid(LLNetMap) || LLInspectAvatarUtil::isNativeInternalType(t) || t == typeid(FSFloaterAvatarAlign) || t == typeid(FSFloaterAvatarAlignMini) || t == typeid(LLPanelPresetsPulldown) || t == typeid(LLFloaterSavePrefPreset) || t == typeid(LLFloaterLoadPrefPreset) || t == typeid(LLFloaterDeletePrefPreset) || t == typeid(FloaterAO) || t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
+                t == typeid(FloaterQuickPrefs) || t == typeid(LLFloaterHoverHeight) || t == typeid(LLFloaterCreateLandmark) || t == typeid(LLFloaterObjectWeights) || t == typeid(LLFloaterLandHoldings) || t == typeid(FSFloaterPoseStand) || (!LLPathingLib::isFunctional() && t == typeid(LLFloaterPathfindingConsole)) || t == typeid(LLFloaterPathfindingLinksets) || t == typeid(LLFloaterPathfindingCharacters) || t == typeid(LLFloaterBump) || t == typeid(LLFloaterBeacons) || t == typeid(LLFloaterCompileQueue) || t == typeid(LLFloaterResetQueue) || t == typeid(LLFloaterRunQueue) || t == typeid(LLFloaterNotRunQueue) || t == typeid(LLFloaterDeleteQueue) || t == typeid(FSAreaSearch) || t == typeid(FSPanelAreaSearchList) || t == typeid(FSPanelAreaSearchFind) || t == typeid(FSPanelAreaSearchFilter) || t == typeid(FSPanelAreaSearchAdvanced) || t == typeid(FSPanelAreaSearchOptions) || t == typeid(LLFloaterInspect) || t == typeid(LLFloaterWorldMap) || t == typeid(LLWorldMapView) || t == typeid(FSFloaterPlaceDetails) || t == typeid(LLPanelPlaces) || t == typeid(LLPanelPlaceInfo) || t == typeid(LLPanelPlaceProfile) || t == typeid(LLPanelLandmarkInfo) || t == typeid(LLLandmarksPanel) || t == typeid(LLFavoritesPanel) || t == typeid(LLTeleportHistoryPanel) || t == typeid(LLPlacesInventoryPanel) || t == typeid(LLPlacesFolderView) || t == typeid(LLFloaterMap) || t == typeid(LLNetMap) || LLInspectAvatarUtil::isNativeInternalType(t) || LLInspectGroupUtil::isNativeType(t) || t == typeid(FSFloaterAvatarAlign) || t == typeid(FSFloaterAvatarAlignMini) || t == typeid(LLFloaterSnapshot) || t == typeid(LLFloaterSimpleSnapshot) ||
+                t == typeid(LLFloaterBigPreview) || t == typeid(LLFloaterFlickr) || t == typeid(FSFloaterPrimfeed) ||
+                t == typeid(LLSnapshotLivePreview) || t == typeid(LLFlickrPhotoPanel) || t == typeid(LLFlickrAccountPanel) ||
+                t == typeid(FSPrimfeedPhotoPanel) || t == typeid(FSPrimfeedAccountPanel) || LLPanelSnapshot::isNativeInternalType(t) ||
+                t == typeid(LLPanelContents) || t == typeid(LLPanelObjectInventory) || t == typeid(LLFloaterBulkPermission) ||
+                t == typeid(LLFloaterReporter) || t == typeid(NACLFloaterExploreSounds) || t == typeid(FSFloaterAssetBlacklist) || t == typeid(LLPanelPresetsPulldown) || t == typeid(LLFloaterSavePrefPreset) || t == typeid(LLFloaterLoadPrefPreset) || t == typeid(LLFloaterDeletePrefPreset) || t == typeid(FloaterAO) || t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
                 t == typeid(LLPanelMainInventory) || LLPanelMainInventory::isNativeInternalType(t) ||
                 t == typeid(LLPanelMarketplaceInbox) || t == typeid(LLInboxInventoryPanel) ||
                 t == typeid(LLInboxFolderViewFolder) || t == typeid(LLInboxFolderViewItem) || t == typeid(LLInventoryGallery) || t == typeid(LLInventoryGalleryItem) ||
@@ -329,10 +457,12 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 t == typeid(LLFloaterExperienceProfile) || t == typeid(LLFloaterExperiencePicker) ||
                 t == typeid(LLPanelExperiences) || t == typeid(LLPanelExperiencePicker) || t == typeid(LLPanelExperienceLog) || t == typeid(LLFloaterMarketplace) || t == typeid(LLFloaterGridStatus) || t == typeid(LLFloaterDestinations) || t == typeid(FSFloaterTeleportHistory) || t == typeid(LLTeleportHistoryPanel) || t == typeid(LLStatBar) || t == typeid(LLStatView) || t == typeid(LLContainerView) || t == typeid(LLFloaterLagMeter) || t == typeid(FSFloaterStatistics) ||
                 t == typeid(LLPanelVolumePulldown) || t == typeid(LLPanelPulldown) || t == typeid(LLToolBarView) || t == typeid(LLToolBar) ||
-                t == typeid(LLToolBarVertical) || t == typeid(LLToolBarButton) || LLToolBar::isNativeInternalType(t) || LLNavigationBar::isNativeInternalType(t) || t == typeid(FSNearbyChatControl) || t == typeid(FSNearbyChatVoiceControl) || t == typeid(FSFloaterNearbyChat) || t == typeid(LLPanelPeople) || t == typeid(LLSideTrayPanelContainer) || t == typeid(LLFloaterSearchReplace) || t == typeid(LLFloaterSearch) || t == typeid(LLFloaterWebContent) || t == typeid(LLFloaterToybox) ||
+                t == typeid(LLToolBarVertical) || t == typeid(LLToolBarButton) || LLToolBar::isNativeInternalType(t) || LLNavigationBar::isNativeInternalType(t) || t == typeid(FSNearbyChatControl) || t == typeid(FSNearbyChatVoiceControl) || t == typeid(FSFloaterNearbyChat) || t == typeid(FSFloaterRadar) || t == typeid(FSPanelRadar) || t == typeid(FSRadarListCtrl) || t == typeid(LLPanelPeople) || t == typeid(LLSideTrayPanelContainer) || t == typeid(LLFloaterSearchReplace) || t == typeid(LLFloaterSearch) || t == typeid(LLFloaterWebContent) || t == typeid(LLFloaterToybox) ||
                 t == typeid(LLPullButton) || t == typeid(LLLocationInputCtrl) || t == typeid(LLURLLineEditor) ||
-                t == typeid(LLFavoritesBarCtrl) || LLFavoritesBarCtrl::isNativeInternalType(t) ||
-                t == typeid(LLMultiPreview) || t == typeid(LLPreview) || t == typeid(LLPreviewTexture) || t == typeid(LLPreviewNotecard) || t == typeid(LLInventoryPanel) || t == typeid(LLAssetFilteredInventoryPanel) ||
+                t == typeid(FSFloaterWearableFavorites) || t == typeid(FSWearableFavoritesItemsList) ||
+                t == typeid(LLWearableItemsList) || t == typeid(LLPanelWearableOutfitItem) || t == typeid(LLMorphView) ||
+                t == typeid(LLSidepanelAppearance) || t == typeid(LLPanelOutfitEdit) || t == typeid(LLPanelOutfitsInventory) || t == typeid(LLPanelEditWearable) || t == typeid(LLCOFWearables) || t == typeid(LLOutfitsList) || t == typeid(LLOutfitGallery) || t == typeid(LLOutfitGalleryItem) || t == typeid(LLOutfitAccordionCtrlTab) || t == typeid(LLPanelWearing) || t == typeid(LLScrollingPanelList) || t == typeid(LLScrollingPanelParam) || t == typeid(LLScrollingPanelParamBase) || t == typeid(LLPanelClothingListItem) || t == typeid(LLPanelBodyPartsListItem) || t == typeid(LLPanelDeletableWearableListItem) || t == typeid(FSPanelCOFWearableOutfitListItem) || t == typeid(LLPanelDummyClothingListItem) || LLPanelEditWearable::isNativeInternalType(t) || t == typeid(LLFavoritesBarCtrl) || LLFavoritesBarCtrl::isNativeInternalType(t) ||
+                t == typeid(LLFloaterBuy) || t == typeid(LLFloaterBuyContents) || t == typeid(LLFloaterOpenObject) || t == typeid(LLFloater360Capture) || t == typeid(FSFloaterPerformance) || t == typeid(FSFloaterAvatarRenderSettings) || t == typeid(FSFloaterDiscord) || t == typeid(LLFloaterGesture) || t == typeid(Omnifilter) || t == typeid(ALFloaterRegionTracker) || t == typeid(LLMaterialEditor) || t == typeid(LLFloaterComboOptions) || t == typeid(LLMultiPreview) || t == typeid(LLPreview) || t == typeid(LLPreviewTexture) || t == typeid(LLPreviewNotecard) || t == typeid(LLInventoryPanel) || t == typeid(LLAssetFilteredInventoryPanel) ||
                 t == typeid(LLInventorySingleFolderPanel) || t == typeid(LLFolderView) ||
                 t == typeid(LLFolderViewItem) || t == typeid(LLFolderViewFolder) ||
                 t == typeid(LLFolderViewScrollContainer) || t == typeid(FSFloaterBlocklist) || t == typeid(FSPanelBlockList) ||
@@ -364,9 +494,9 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 LLFloaterPreference::isPrivacyPanelType(t) ||
                 t == typeid(FSFloaterGroup) || t == typeid(FSFloaterGroupTitles) || t == typeid(VSGroupSearch) || t == typeid(LLPanelDirGroups) || t == typeid(LLSearchComboBox) ||
                 t == typeid(LLFloaterScriptDebug) || t == typeid(LLFloaterScriptDebugOutput) ||
-                t == typeid(LLFloaterScriptLimits) || t == typeid(LLPanelScriptLimitsInfo) || t == typeid(LLPanelScriptLimitsRegionMemory) || t == typeid(LLFloaterMyScripts) || t == typeid(LLFloaterScriptRecover) || t == typeid(LLPreviewLSL) || t == typeid(LLScriptEdCore) || t == typeid(LLScriptEditor) ||
+                t == typeid(LLFloaterScriptLimits) || t == typeid(LLPanelScriptLimitsInfo) || t == typeid(LLPanelScriptLimitsRegionMemory) || t == typeid(LLFloaterMyScripts) || t == typeid(LLFloaterScriptRecover) || t == typeid(LLPreviewLSL) || t == typeid(LLLiveLSLEditor) || t == typeid(LLPreviewGesture) || t == typeid(LLPreviewAnim) || t == typeid(LLScriptEdCore) || t == typeid(LLScriptEditor) ||
                 t == typeid(FSLSLPreProcViewer) || t == typeid(LLFloaterGotoLine) || t == typeid(LLFloaterScriptEdPrefs) || t == typeid(LLPreviewSound) || t == typeid(LLFloaterProperties) || t == typeid(LLFloaterItemProperties) ||
-                t == typeid(LLSidepanelItemInfo) || t == typeid(LLFloaterChangeItemThumbnail) || t == typeid(LLFloaterImagePreview) || t == typeid(LLFloaterSoundPreview) || t == typeid(LLFloaterNameDesc) || t == typeid(LLUploadDialog) || t == typeid(LLFloaterProfile) || LLFloaterDisplayNameUtil::isNativeFloaterType(t) || LLFloaterPayUtil::isNativeFloaterType(t) ||
+                t == typeid(LLSidepanelTaskInfo) || t == typeid(LLSidepanelItemInfo) || t == typeid(LLFloaterChangeItemThumbnail) || t == typeid(LLFloaterModelPreview) || t == typeid(LLFloaterImagePreview) || t == typeid(LLFloaterBvhPreview) || t == typeid(LLFloaterAnimPreview) || t == typeid(LLFloaterSoundPreview) || t == typeid(LLFloaterNameDesc) || t == typeid(LLUploadDialog) || t == typeid(LLFloaterProfile) || LLFloaterDisplayNameUtil::isNativeFloaterType(t) || LLFloaterPayUtil::isNativeFloaterType(t) ||
                 t == typeid(LLPanelProfile) ||
                 t == typeid(LLPanelProfileSecondLife) ||
                 t == typeid(LLPanelProfileFirstLife) ||
@@ -407,7 +537,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 t == typeid(LLSystemNotificationListItem) || t == typeid(LLToastGroupNotifyPanel) ||
                 t == typeid(LLScriptFloater) || t == typeid(LLToastScriptTextbox) ||
                 t == typeid(LLToastScriptQuestion) || t == typeid(LLToastPanel) || t == typeid(LLCheckBoxToastPanel) ||
-                t == typeid(FSFloaterIM) || t == typeid(FSFloaterIMContainer) || t == typeid(FSPanelContactSets) || t == typeid(FSFloaterContacts) || t == typeid(FSFloaterPartialInventory) || t == typeid(FSChatHistory) || t == typeid(FSPanelIMControlPanel) || t == typeid(FSPanelGroupControlPanel) || t == typeid(FSPanelAdHocControlPanel) || t == typeid(FSScrollListCtrl) || t == typeid(LLChicletBar) || t == typeid(LLChicletPanel) || t == typeid(LLChicletNotificationCounterCtrl) || t == typeid(LLChicletAvatarIconCtrl) || t == typeid(LLChicletGroupIconCtrl) || t == typeid(LLChicletInvOfferIconCtrl) || t == typeid(LLChicletSpeakerCtrl) || t == typeid(LLScriptChiclet) || t == typeid(LLInvOfferChiclet) || t == typeid(LLIMP2PChiclet) || t == typeid(LLAdHocChiclet) || t == typeid(LLIMGroupChiclet) || t == typeid(LLNotificationChiclet) || t == typeid(LLIMWellChiclet) || t == typeid(LLAvatarList) || t == typeid(LLAvatarListItem) || t == typeid(LLAvatarIconCtrl) || t == typeid(LLGroupIconCtrl) || t == typeid(LLGroupList) || t == typeid(LLGroupListItem) || t == typeid(LLChatEntry) || t == typeid(LLFilterEditor) || t == typeid(LLMenuButton) || t == typeid(LLOutputMonitorCtrl) || t == typeid(LLSliderCtrl) || t == typeid(LLFlatListView) || t == typeid(LLFlatListViewEx) || t == typeid(LLMultiFloater) || t == typeid(LLDockableFloater) || t == typeid(LLContextMenu) || t == typeid(PieMenu) || t == typeid(PieSlice) || t == typeid(PieSeparator) || t == typeid(LLIMWellWindow) || t == typeid(LLNotificationWellWindow) || t == typeid(LLSysWellItem) || t == typeid(LLFloaterNotificationsTabbed) || t == typeid(LLToastIMPanel) || t == typeid(LLToastNotifyPanel) || t == typeid(LLIMToastNotifyPanel) || t == typeid(LLFloaterAvatarPicker) || t == typeid(LLFloaterGroupPicker) || t == typeid(LLPanelEmojiComplete) || LLTabContainer::isNativeTabButtonType(t) || LLFloaterAboutUtil::isFloaterType(t) || t == typeid(LLTabContainer) || t == typeid(VSPlainChat) || t == typeid(VSChatInput) || LLMenuBarGL::isNativeLoginItemType(t) || t == typeid(LLViewerMenuHolderGL) || t == typeid(LLMenuHolderGL) || t == typeid(LLMenuGL) ||
+                t == typeid(FSFloaterIM) || t == typeid(FSFloaterIMContainer) || t == typeid(FSPanelContactSets) || t == typeid(FSFloaterContacts) || t == typeid(FSFloaterPartialInventory) || t == typeid(FSChatHistory) || t == typeid(FSPanelIMControlPanel) || t == typeid(FSPanelGroupControlPanel) || t == typeid(FSPanelAdHocControlPanel) || t == typeid(FSScrollListCtrl) || t == typeid(LLChicletBar) || t == typeid(LLChicletPanel) || t == typeid(LLChicletNotificationCounterCtrl) || t == typeid(LLChicletAvatarIconCtrl) || t == typeid(LLChicletGroupIconCtrl) || t == typeid(LLChicletInvOfferIconCtrl) || t == typeid(LLChicletSpeakerCtrl) || t == typeid(LLScriptChiclet) || t == typeid(LLInvOfferChiclet) || t == typeid(LLIMP2PChiclet) || t == typeid(LLAdHocChiclet) || t == typeid(LLIMGroupChiclet) || t == typeid(LLNotificationChiclet) || t == typeid(LLIMWellChiclet) || t == typeid(LLAvatarList) || t == typeid(LLAvatarListItem) || t == typeid(LLAvatarIconCtrl) || t == typeid(LLGroupIconCtrl) || t == typeid(LLGroupList) || t == typeid(LLGroupListItem) || t == typeid(LLChatEntry) || t == typeid(LLFilterEditor) || t == typeid(LLMenuButton) || t == typeid(NearbyVoiceMonitor) || t == typeid(LLOutputMonitorCtrl) || t == typeid(LLSliderCtrl) || t == typeid(LLFlatListView) || t == typeid(LLFlatListViewEx) || t == typeid(LLMultiFloater) || t == typeid(LLDockableFloater) || t == typeid(LLContextMenu) || t == typeid(PieMenu) || t == typeid(PieSlice) || t == typeid(PieSeparator) || t == typeid(LLIMWellWindow) || t == typeid(LLNotificationWellWindow) || t == typeid(LLSysWellItem) || t == typeid(LLFloaterNotificationsTabbed) || t == typeid(LLToastIMPanel) || t == typeid(LLToastNotifyPanel) || t == typeid(LLIMToastNotifyPanel) || t == typeid(LLFloaterAvatarPicker) || t == typeid(LLFloaterGroupPicker) || t == typeid(LLPanelEmojiComplete) || LLTabContainer::isNativeTabButtonType(t) || LLFloaterAboutUtil::isFloaterType(t) || t == typeid(LLTabContainer) || t == typeid(VSPlainChat) || t == typeid(VSChatInput) || LLMenuBarGL::isNativeLoginItemType(t) || t == typeid(LLViewerMenuHolderGL) || t == typeid(LLMenuHolderGL) || t == typeid(LLMenuGL) ||
                    t == typeid(LLMenuBarGL) || t == typeid(LLMenuItemGL) || t == typeid(LLMenuItemCallGL) ||
                    t == typeid(LLMenuItemCheckGL) || t == typeid(LLMenuItemSeparatorGL) ||
                    t == typeid(LLMenuItemBranchGL) || t == typeid(LLContextMenuBranch) || t == typeid(LLMenuItemTearOffGL) ||
@@ -415,7 +545,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                    LLUICtrlFactory::isNativeLayoutType(t) || t == typeid(LLFlyoutButton) || t == typeid(LLButton) || t == typeid(LLDragAndDropButton) || t == typeid(LLBadge) || t == typeid(LLCheckBoxCtrl) || t == typeid(LLComboBox) || t == typeid(LLIconCtrl) ||
                    t == typeid(LLLineEditor) || t == typeid(LLTextEditor) || t == typeid(LLViewerTextEditor) || t == typeid(LLTextBox) || t == typeid(LLConsole) || t == typeid(LLLayoutStack) ||
                    t == typeid(LLLayoutPanel) || t == typeid(LLProgressBar) || t == typeid(LLScrollbar) || t == typeid(LLScrollContainer) ||
-                   t == typeid(LLScrollListCtrl) || t == typeid(LLScrollColumnHeader) || t == typeid(LLViewBorder) || t == typeid(LLFloaterView) || t == typeid(LLFloater) ||
+                   t == typeid(LLScrollListCtrl) || t == typeid(LLScrollColumnHeader) || t == typeid(LLViewBorder) || t == typeid(LLFloaterView) || t == typeid(LLSnapshotFloaterView) || t == typeid(LLFloater) ||
                    t == typeid(LLModalDialog) || t == typeid(LLFloaterTOS) ||
                    t == typeid(LLNotificationsUI::LLToast) || t == typeid(LLToastAlertPanel) ||
                    t == typeid(LLNotificationsUI::LLScreenChannel) || t == typeid(LLNotificationsUI::LLScreenChannelBase) ||
@@ -430,8 +560,13 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "window_size" || name == "fs_protectedfolders" || name == "fs_streamtitle" || name == "fs_streamtitlehistory" ||
             name == "chat_mention_picker" || name == "emoji_complete" || name == "preview_trash" || name == "new_feature_notification" ||
             name == "fs_whitelist_floater" || name == "settings_color" || name == "fs_splash_screen_settings" || name == "fs_volume_controls" ||
+            name == "env_post_process" || name == "ui_preview" || name == "scene_load_stats" || name == "slapp_test" || name == "avatar_welcome_pack" ||
+            name == "mem_leaking" || name == "lgg_beamshape" || name == "lgg_beamcolormap" || name == "upload_script" ||
+            name == "god_tools" || name == "legacy_search" || name == "classified" || name == "media_settings" || name == "whitelist_entry" || name == "media_lists" || name == "sound_devices" || name == "prefs_view_advanced" ||
+            name == "region_restarting" || name == "inventory_thumbnails_helper" || name == "notifications_console" || name == "inspect_toast" ||
             name == "font_test" || name == "hud" || name == "rlv_strings" ||
-            name == "quickprefs" || name == "add_landmark" || name == "world_map" || name == "places" || name == "fs_placedetails" || name == "mini_map" || name == "inspect_avatar" || name == "avatar_align" || name == "avatar_align_mini" || name == "save_pref_preset" || name == "load_pref_preset" || name == "delete_pref_preset" || name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "inventory_settings" || name == "marketplace_listings" || name == "associate_listing" ||
+            name == "block_timers" || name == "quickprefs" || name == "edit_hover_height" || name == "add_landmark" || name == "object_weights" || name == "land_holdings" || name == "fs_posestand" || (!LLPathingLib::isFunctional() && name == "pathfinding_console") || name == "pathfinding_linksets" || name == "pathfinding_characters" || name == "bumps" || name == "beacons" || name == "compile_queue" || name == "reset_queue" || name == "start_queue" || name == "stop_queue" || name == "delete_queue" || name == "area_search" || name == "inspect" || name == "world_map" || name == "places" || name == "fs_placedetails" || name == "mini_map" || name == "inspect_avatar" || name == "inspect_group" || name == "avatar_align" || name == "avatar_align_mini" || name == "fs_radar" || name == "fs_asset_blacklist" || name == "appearance" || name == "outfits" || name == "editoutfit" || name == "nowwearing" || name == "snapshot" || name == "simple_snapshot" || name == "big_preview" || name == "flickr" ||
+            name == "primfeed" || name == "snapshot_guide_settings" || name == "reporter" || name == "sound_explorer" || name == "save_pref_preset" || name == "load_pref_preset" || name == "delete_pref_preset" || name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "inventory_settings" || name == "marketplace_listings" || name == "associate_listing" ||
             name == "marketplace_validation" || name == "linkreplace" || name == "emoji_picker" || name == "event" || name == "experiences" || name == "experience_profile" || name == "experience_search" || name == "marketplace" || name == "grid_status" || name == "destinations" || name == "fs_teleporthistory" || name == "stats" || name == "lagmeter" || name == "inspect_remote_object" || name == "web_content" || name == "search_replace" || name == "fs_nearby_chat" || name == "people" || name == "search" || name == "toybox" || name == "inventory" || name == "secondary_inventory" || name == "sl_about" || name == "message_critical" || name == "message_tos" ||
             name == "fs_impanel" || name == "fs_im_container" || name == "imcontacts" || name == "avatar_picker" ||
             name == "fs_blocklist" || name == "fs_add_contact" || name == "fs_contact_set_config" ||
@@ -439,22 +574,29 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "prefs_spellchecker" || name == "prefs_spellchecker_import" || name == "perms_default" || name == "keybind_dialog" || name == "im_well_window" || name == "notification_well_window" || name == "conversation" ||
             name == "preview_texture" || name == "preview_notecard" || name == "preview_conversation" || name == "script_floater" ||
             // Exact reviewed CPU inventory/account owners; scene/task variants stay excluded.
-            name == "fs_partial_inventory" || name == "properties" || name == "item_properties" ||
-            name == "change_item_thumbnail" || name == "preview_sound" || name == "preview_script" || name == "script_debug" || name == "script_debug_output" || name == "script_limits" || name == "my_scripts" || name == "script_recover" ||
-            name == "script_colors" || name == "upload_image" || name == "upload_sound" ||
+            name == "appearance" || name == "fs_wearable_favorites" || name == "fs_partial_inventory" || name == "properties" || name == "task_properties" || name == "item_properties" ||
+            name == "fs_voice_controls" || name == "incoming_call" || name == "outgoing_call" || name == "floater_voice_volume" || name == "chat_voice" || name == "voice_effect" ||
+            name == "buy_object" || name == "buy_object_contents" || name == "openobject" || name == "360capture" || name == "performance" || name == "fs_avatar_render_settings" || name == "fs_discord" || name == "wearable_favorites" || name == "gestures" || name == "omnifilter" || name == "region_tracker" || name == "material_editor" || name == "live_material_editor" || name == "bulk_perms" || name == "change_item_thumbnail" || name == "preview_sound" || name == "preview_script" || name == "preview_scriptedit" || name == "preview_gesture" || name == "preview_anim" || name == "script_debug" || name == "script_debug_output" || name == "script_limits" || name == "my_scripts" || name == "script_recover" ||
+            name == "script_colors" || name == "upload_anim_bvh" || name == "upload_anim_anim" || name == "upload_model" || name == "upload_image" || name == "upload_sound" ||
             name == "pay_resident" || name == "display_name" || name == "animation_overrider" || name == "camera_presets" || name == "save_camera_preset" || name == "camera" || name == "fs_camera_small" || name == "phototools_camera"; },
         [](std::string_view name) { return
+            name == "sidepanel_appearance" || name == "panel_outfits_inventory" || name == "panel_outfit_edit" || name == "panel_edit_wearable" || name == "outfits_list" || name == "outfit_gallery" || name == "panel_wearing" || name == "cof_wearables" ||
+            name == "llpanelsnapshotinventory" || name == "llpanelsnapshotlocal" || name == "llpanelsnapshotoptions" ||
+            name == "llpanelsnapshotpostcard" || name == "llpanelsnapshotprofile" ||
             name == "land_general_panel" || name == "land_covenant_panel" || name == "land_objects_panel" ||
             name == "land_options_panel" || name == "land_audio_panel" || name == "land_media_panel" ||
             name == "land_access_panel" || name == "land_experiences_panel" || name == "land_environment_panel" || name == "panel_settings_water" || name == "panel_settings_atmos" || name == "panel_settings_cloud" ||
-                name == "panel_settings_sunmoon" || name == "panel_settings_density" || name == "panel_experience_list_editor" || name == "camera_zoom_panel" || name == "experiences_panel" || name == "llpanelexperiencepicker" || name == "experience_log" || name == "llpanelmarketplacelistings" || name == "marketplace_listings_panel" || name == "objects_mapview" || name == "panel_places" || name == "panel_place_profile" || name == "panel_landmark_info" || name == "panel_people" || name == "sidepanel_inventory" || name == "panel_main_inventory" ||
+                name == "panel_settings_sunmoon" || name == "panel_settings_density" || name == "panel_experience_list_editor" || name == "camera_zoom_panel" || name == "experiences_panel" || name == "llpanelexperiencepicker" || name == "experience_log" || name == "llpanelmarketplacelistings" || name == "marketplace_listings_panel" || name == "objects_mapview" || name == "panel_places" || name == "panel_place_profile" || name == "panel_landmark_info" || name == "fs_panel_radar" || name == "panel_people" || name == "sidepanel_inventory" || name == "panel_main_inventory" ||
             name == "panel_marketplace_inbox" || name == "inventory_gallery" || name == "progress_view" || name == "progress_view_mini" || name == "popup_holder" ||
-            name == "status" || name == "volumepulldown_floater" || name == "navigation_bar" || name == "toolbar_view" || name == "toolbar view" || name == "native_nearby_chat" || name == "script panel" || name == "sidepanel_item_info" || name == "fs_panel_block_list_sidetray" || name == "panel_im_control_panel" || name == "panel_dir_groups" || name == "contact_sets_panel" ||
+            name == "status" || name == "volumepulldown_floater" || name == "navigation_bar" || name == "toolbar_view" || name == "toolbar view" || name == "native_nearby_chat" || name == "script panel" || name == "script ed panel" || name == "sidepanel_task_info" || name == "sidepanel_item_info" || name == "fs_panel_block_list_sidetray" || name == "panel_im_control_panel" || name == "panel_dir_groups" || name == "contact_sets_panel" ||
             name == "panel_preference" || name == "panel_preference_graphics" || name == "panel_preference_privacy" ||
             name == "panel_preference_controls" || name == "panel_preference_crashreports" || name == "panel_preference_skins" ||
             name == "panel_preference_backup" || name == "panel_preference_opensim" || name == "panel_preference_sounds" ||
             name == "panel_preference_firestorm" || name == "fs_panel_preference_ui_sounds" || name == "panel_voice_device_settings" ||
-            name == "panel_profile" || name == "panel_profile_secondlife" || name == "panel_profile_web" ||
+            name == "area_search_list_panel" || name == "area_search_find_panel" || name == "area_search_filter_panel" || name == "area_search_advanced_panel" || name == "area_search_options_panel" || name == "panel_profile" || name == "panel_profile_secondlife" || name == "panel_profile_web" ||
+            name == "panel_dir_web" || name == "panel_dir_people" || name == "panel_dir_places" ||
+            name == "panel_dir_classified" || name == "panel_dir_events" || name == "panel_dir_land" ||
+            name == "panel_dir_groups" || name == "panel_classified_info" || name == "panel_event_info" ||
             name == "panel_profile_picks" || name == "panel_profile_pick" || name == "panel_profile_classifieds" ||
             name == "panel_profile_classified" || name == "panel_profile_firstlife" || name == "panel_profile_notes" ||
             name == "panel_group_info_sidetray" || name == "panel_group_creation_sidetray" || name == "panel_group_general" ||
@@ -469,16 +611,66 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         },
         [](std::string_view name)
         {
-            return name == "quickprefs" || name == "map" || name == "places" || name == "minimap" || name == "aboutland" || name == "fly" || name == "groundsit" || name == "resync_animations" || name == "derender_animated_objects" || name == "stop_animations" || name == "marketplacelistings" || name == "view" || name == "phototools_view" || name == "mouselook_view" || name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
+            return name == "areasearch" || name == "snapshot" || name == "snapshot_to_disk" || name == "flickr" || name == "primfeed" ||
+                   name == "reporter" || name == "voice" || name == "soundexplorer" || name == "assetblacklist" ||
+                   name == "radar" || name == "regioninfo" || name == "landmark_here" || name == "myenvironments" ||
+                   name == "360capture" || name == "performance" || name == "discord" || name == "gestures" || name == "omnifilter" || name == "regiontracker" || name == "avatar_align" || name == "face_nearest_avatar" || name == "speak" || name == "quickprefs" || name == "map" || name == "places" || name == "minimap" || name == "aboutland" || name == "fly" || name == "groundsit" || name == "resync_animations" || name == "derender_animated_objects" || name == "stop_animations" || name == "marketplacelistings" || name == "view" || name == "phototools_view" || name == "mouselook_view" || name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
                    name == "preferences" || name == "profile" || name == "contact_sets" ||
                    name == "conversation_log" || name == "block_list" || name == "group_titles";
         },
         [](std::string_view name, const LLSD& parameter)
         {
+            if (LLSidepanelAppearance::isNativeCallback(name, parameter)) return true;
+            if (FSFloaterPerformance::isNativeCallback(name,parameter) || FSFloaterAvatarRenderSettings::isNativeCallback(name,parameter)) return true;
+            if (name == "OpenObject.CopyAction" || name == "OpenObject.Cancel") return true;
+            if (name == "FSDiscord.Connect" || name == "FSDiscord.Disconnect" || name == "FSDiscord.Add" || name == "FSDiscord.Rem") return true;
+            if (LLFloaterGesture::isNativeCallback(name,parameter)) return true;
+            if (name == "World.SetAway" || name == "View.Status.CheckAway") return true;
+            if (name == "Object.Touch" || name == "Object.EnableTouch" || name == "Object.SitOrStand" || name == "Object.EnableSit" ||
+                name == "Self.ToggleSitStand" || name == "Self.EnableSitStand" || name == "Self.StandUp" || name == "Self.EnableStandUp" ||
+                name == "Self.SitDown" || name == "Self.EnableSitDown" || name == "Self.ShowSitDown") return true;
+            if (name == "ShowAgentProfile") return parameter.asString() == "agent";
+            if (FSNameListAvatarMenu::isNativeCallback(name,parameter)) return true;
+            if (name == "Tools.EnablePathfinding" || name == "Tools.DoPathfindingRebakeRegion" || name == "Tools.EnablePathfindingRebakeRegion" || name == "Pathfinding.Linksets.Select" || name == "EnableSelectInPathfindingLinksets" || name == "VisibleSelectInPathfindingLinksets" || name == "Pathfinding.Characters.Select" || name == "EnableSelectInPathfindingCharacters") return true;
+            if (name == "BumpList.Action") return parameter.asString() == "show_profile" || parameter.asString() == "sendim" || parameter.asString() == "zoom" || parameter.asString() == "teleportto" || parameter.asString() == "block" || parameter.asString() == "report" || parameter.asString() == "copy";
+            if (name == "BumpList.Enable") return parameter.asString() == "can_show_profile" || parameter.asString() == "can_sendim" || parameter.asString() == "can_zoom" || parameter.asString() == "can_teleportto" || parameter.asString() == "can_block" || parameter.asString() == "is_blocked" || parameter.asString() == "can_report" || parameter.asString() == "can_copy";
+            if (name == "Beacons.UICheck") return true;
+            if (name == "Tools.SelectedScriptAction") return parameter.asString()=="compile mono" || parameter.asString()=="compile lsl" || parameter.asString()=="reset" || parameter.asString()=="start" || parameter.asString()=="stop" || parameter.asString()=="delete";
+            if (name == "EditableSelected" || name == "EditableSelectedMono") return true;
+            if (name == "Object.Inspect" || name == "Object.EnableInspect") return true;
+            if (name == "Inspect.OwnerProfile" || name == "Inspect.CreatorProfile" || name == "Inspect.SelectObject") return true;
+            if ((name == "Inspect.ToggleColumn" || name == "Inspect.EnableColumn") && (parameter.asString() == "object_name" || parameter.asString() == "description" || parameter.asString() == "owner_name" || parameter.asString() == "creator_name" || parameter.asString() == "facecount" || parameter.asString() == "vertexcount" || parameter.asString() == "trianglecount" || parameter.asString() == "tramcount" || parameter.asString() == "vramcount" || parameter.asString() == "creation_date")) return true;
+            if (name == "InspectGroup.ViewProfile" || name == "InspectGroup.Join" || name == "InspectGroup.Leave") return true;
+            if (name == "Inventory.NewWindow" || name == "ReportAbuse" || name == "InspectAvatar.Report" ||
+                name == "ShowAgentProfilePicks" || name == "World.CreateLandmark" ||
+                name == "World.EnableCreateLandmark" || name == "World.TeleportHome" || name == "World.EnableTeleportHome" ||
+                name == "View.DefaultUISize" || name == "ToggleTeleportHistory" || name == "File.TakeSnapshotToDisk" ||
+                name == "Avatar.AlignToggle" || name == "Avatar.AlignIsOpen" || name == "Avatar.FaceNearest") return true;
             if (name == "RecreateLSLBridge") return true;
+            if(name=="Advanced.ToggleConsole" || name=="Advanced.CheckConsole")
+            {
+                const auto action=parameter.asString();
+                return action=="texture" || action=="debug" || action=="fast timers" || action=="scene view" || action=="scene monitor";
+            }
+            if(name=="Advanced.ToggleHUDInfo" || name=="Advanced.CheckHUDInfo")
+            {
+                const auto action=parameter.asString();
+                return action=="camera" || action=="wind" || action=="fov" || action=="badge" || action=="cookies" || action=="motd";
+            }
+            if(name=="Advanced.ToggleShowColor" || name=="Advanced.CheckShowColor")return true;
             if (name == "Advanced.ToggleWireframe" || name == "Advanced.CheckWireframe") return true;
             if (name == "InspectAvatar.ViewProfile" || name == "InspectAvatar.AddFriend" || name == "InspectAvatar.IM" || name == "InspectAvatar.Call" || name == "InspectAvatar.Teleport" || name == "InspectAvatar.TeleportRequest" || name == "InspectAvatar.InviteToGroup" || name == "InspectAvatar.FaceTowards" || name == "InspectAvatar.Pay" || name == "InspectAvatar.Share" || name == "InspectAvatar.ToggleMute" || name == "InspectAvatar.Freeze" || name == "InspectAvatar.Eject" || name == "InspectAvatar.Kick" || name == "InspectAvatar.CSR" || name == "InspectAvatar.FindOnMap" || name == "InspectAvatar.ZoomIn" || name == "InspectAvatar.DisableVoice" || name == "InspectAvatar.EnableVoice" || name == "InspectAvatar.EnableGod" || name == "InspectAvatar.VisibleFindOnMap" || name == "InspectAvatar.VisibleEject" || name == "InspectAvatar.VisibleFreeze" || name == "InspectAvatar.VisibleZoomIn" || name == "InspectAvatar.Gear.Enable" || name == "InspectAvatar.Gear.EnableCall" || name == "InspectAvatar.Gear.EnableTeleportOffer" || name == "InspectAvatar.Gear.EnableTeleportRequest" || name == "InspectAvatar.Gear.EnablePay" || name == "InspectAvatar.EnableMute" || name == "InspectAvatar.EnableUnmute") return true;
+            if (name == "VoiceEffect.Record" || name == "VoiceEffect.Play" || name == "VoiceEffect.Stop" || name == "Voice.CommitVoiceEffect" ||
+                name == "BulkPermission.Ok" || name == "BulkPermission.Apply" || name == "BulkPermission.Close" ||
+                name == "BulkPermission.CheckAll" || name == "BulkPermission.UncheckAll" || name == "BulkPermission.CommitCopy") return true;
             if (name == "Minimap.FaceTowards" || name == "Minimap.CanFaceTowards") return true;
+            if (name == "Snapshot.SaveToProfile" || name == "Snapshot.SaveToEmail" || name == "Snapshot.SaveToInventory" ||
+                name == "Snapshot.SaveToComputer" || name == "Snapshot.SendToFlickr" || name == "Snapshot.SendToPrimfeed" ||
+                name == "Inventory.Save" || name == "Inventory.Cancel" || name == "Postcard.Send" || name == "Postcard.Cancel" ||
+                name == "PostToProfile.Send" || name == "PostToProfile.Cancel" || name == "Local.Cancel" ||
+                name == "SocialSharing.SendPhoto" || name == "SocialSharing.RefreshPhoto" || name == "SocialSharing.BigPreview" ||
+                name == "SocialSharing.Connect" || name == "SocialSharing.Disconnect" || name == "SocialSharing.Cancel" ||
+                name == "Primfeed.Info") return true;
             if (name == "Minimap.Zoom.Check" || name == "Minimap.Zoom.Set" || name == "Minimap.Tracker" || name == "Minimap.Center.Activate" || name == "Minimap.MapOrientation.Check" || name == "Minimap.MapOrientation.Set" || name == "Minimap.AboutLand" || name == "Minimap.Mark" || name == "Minimap.ClearMark" || name == "Minimap.ClearMarks" || name == "Minimap.Cam" || name == "Minimap.StartTracking" || name == "Minimap.ShowProfile" || name == "Minimap.ToggleOverlay" || name == "Minimap.AddFriend" || name == "Minimap.AddToContactSet" || name == "Minimap.RemoveFriend" || name == "Minimap.IM" || name == "Minimap.Map" || name == "Minimap.Share" || name == "Minimap.Pay" || name == "Minimap.OfferTeleport" || name == "Minimap.RequestTeleport" || name == "Minimap.TeleportToAvatar" || name == "Minimap.GroupInvite" || name == "Minimap.BlockUnblock" || name == "Minimap.CanAddFriend" || name == "Minimap.CanRemoveFriend" || name == "Minimap.CanMap" || name == "Minimap.CanShare" || name == "Minimap.CanOfferTeleport" || name == "Minimap.CanRequestTeleport" || name == "Minimap.IsBlocked" || name == "Minimap.CanBlock" || name == "Minimap.Call" || name == "Minimap.CanCall" || name == "Minimap.GetScriptInfo" || name == "Minimap.Freeze" || name == "Minimap.Eject" || name == "Minimap.Kick" || name == "Minimap.TeleportHome" || name == "Minimap.EstateBan" || name == "Minimap.VisibleFreezeEject" || name == "Minimap.VisibleKickTeleportHome") return true;
             if (name == "Places.OverflowMenu.Action")
                 return parameter.asString() == "landmark" || parameter.asString() == "copy" || parameter.asString() == "delete" || parameter.asString() == "pick" || parameter.asString() == "add_to_favbar";
@@ -492,10 +684,23 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                     action == "teleport" || action == "show_on_map" || action == "create_pick" || action == "share" || action == "restore" || action == "move_to_landmarks" || action == "move_to_favorites" ||
                     action == "copy_slurl" || action == "rename" || action == "add_landmark_root" || action == "category_root" || action == "expand_all" || action == "collapse_all" || action == "expand" || action == "collapse" || action == "sort_by_date";
             }
-            if (LLPanelMainInventory::isNativeCallback(name, parameter) ||
+            if (FSAreaSearch::isNativeCallback(name,parameter) || LLPanelMainInventory::isNativeCallback(name, parameter) ||
                 LLPanelPeople::isNativeCallback(std::string(name), parameter) || FSChatHistory::isNativeCallback(std::string(name), parameter)) return true;
             if (name == "DayCycle.Track" || name == "DayCycle.PlayActions") return true;
-            if(name=="World.EnvSettings")return parameter.asString()=="my_environs";
+            if(name=="HoverHeight" || name=="Edit.EnableHoverHeight")return true;
+            if(name=="World.EnvSettings" || name=="World.EnableEnvSettings")
+            {
+                const auto action=parameter.asString();
+                return action=="sunrise" || action=="noon" || action=="legacy noon" ||
+                    action=="sunset" || action=="midnight" || action=="region" ||
+                    action=="pause_clouds" || action=="adjust_tool" || action=="my_environs";
+            }
+            if(name=="World.EnvPreset" || name=="World.EnableEnvPreset")
+            {
+                const auto action=parameter.asString();
+                return action=="new_water" || action=="edit_water" || action=="new_sky" ||
+                    action=="edit_sky" || action=="new_day_cycle" || action=="edit_day_cycle";
+            }
             if(name=="MyEnvironments.DoCreate" || name=="MyEnvironments.DoEdit" || name=="MyEnvironments.DoApply" ||
                 name=="MyEnvironments.CopyPaste" || name=="MyEnvironments.EnableAction" ||
                 name=="MyEnvironments.CanApply" || name=="MyEnvironments.EnvironmentEnabled")return true;
@@ -506,9 +711,10 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             if (name == "Profile.Commit" || name == "Profile.EnableItem")
             {
                 // Existing profile callbacks own ordinary account/text/image
-                // actions. Scene map/moderation/voice commands stay excluded.
+                // actions, including the shared authenticated voice and teleport owners.
                 const std::string action = parameter.asString();
-                return action == "im" || action == "chat_history" || action == "add_friend" ||
+                return action == "voice_call" || action == "offer_teleport" || action == "request_teleport" ||
+                    action == "im" || action == "chat_history" || action == "add_friend" ||
                     action == "remove_friend" || action == "invite_to_group" || action == "share" ||
                     action == "pay" || action == "toggle_block_agent" || action == "copy_user_id" ||
                     action == "agent_permissions" || action == "copy_display_name" || action == "copy_username" ||
@@ -517,6 +723,29 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                     action == "can_show_on_map" || action == "copy_uri" || action == "preview";
             }
             if (name == "Profile.CheckItem") return parameter.asString() == "toggle_block_agent";
+            if (FSFloaterRadarMenu::FSRadarMenu::isNativeCallback(std::string(name), parameter)) return true;
+            if (name == "Radar.AddFriend" || name == "Radar.Gear") return true;
+            if (name == "Radar.NameFmt" || name == "Radar.NameFmtCheck")
+                return parameter.asString() == "DN" || parameter.asString() == "UN" || parameter.asString() == "DNUN" || parameter.asString() == "UNDN";
+            if (name == "Radar.ReportTo" || name == "Radar.ReportToCheck")
+                return parameter.asString() == "radar_nearby_chat" || parameter.asString() == "radar_toasts";
+            if (name == "Radar.ToggleColumn" || name == "Radar.EnableColumn")
+                return parameter.asString() == "voice_level" || parameter.asString() == "in_region" || parameter.asString() == "typing_status" ||
+                    parameter.asString() == "sitting_status" || parameter.asString() == "flags" || parameter.asString() == "has_notes" ||
+                    parameter.asString() == "age" || parameter.asString() == "seen";
+            if (name == "Radar.Option.Action") return parameter.asString().empty() || parameter.asString() == "panel_block_list_sidetray";
+            if (name == "RLV.EnableIfNot") return parameter.asString() == "showminimap" || parameter.asString() == "setenv";
+            if (name == "EnableBridgeFunction") return true;
+            if ((name == "ToggleControl" || name == "CheckControl") &&
+                (parameter.asString() == "ShowRadarMinimap" || parameter.asString() == "LimitRadarByRange" ||
+                 parameter.asString() == "FSRadarShowMutedAndDerendered" || parameter.asString() == "FSRadarColorNamesByDistance" ||
+                 parameter.asString() == "MiniMapChatRing" || parameter.asString() == "RadarReportDrawRangeEnter" ||
+                 parameter.asString() == "RadarReportDrawRangeLeave" || parameter.asString() == "RadarReportChatRangeEnter" ||
+                 parameter.asString() == "RadarReportChatRangeLeave" || parameter.asString() == "RadarReportSimRangeEnter" ||
+                 parameter.asString() == "RadarReportSimRangeLeave" || parameter.asString() == "RadarAvatarAgeAlert" ||
+                 parameter.asString() == "RadarEnterChannelAlert" || parameter.asString() == "RadarLeaveChannelAlert" ||
+                 parameter.asString() == "FSRadarEnhanceByBridge")) return true;
+            if (name == "Blacklist.Remove") return parameter.asString() == "remove";
             if (name == "TopInfoBar.Action") return parameter.asString() == "copy" || parameter.asString() == "landmark";
             if (name == "Toolbars.EnableSetting" || name == "Toolbars.CheckSetting")
                 return parameter.asString() == "icons_with_text" || parameter.asString() == "icons_only" || parameter.asString() == "text_only";
@@ -536,7 +765,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             if (name == "SideTray.PanelPeopleTab" || name == "SideTray.CheckPanelPeopleTab")
             {
                 const std::string tab = parameter.asString();
-                return tab == "friends_panel" || tab == "groups_panel" || tab == "contact_sets_panel" || tab == "blocked_panel";
+                return tab == "nearby_panel" || tab == "friends_panel" || tab == "groups_panel" || tab == "contact_sets_panel" || tab == "blocked_panel";
             }
             if (name == "ToggleControl" || name == "CheckControl")
             {
@@ -557,7 +786,13 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 return action == "map" || action == "profile" || action == "teleport" || action == "copy_slurl" || action == "remove" ||
                        action == "clear_history" || action == "expand_all" || action == "collapse_all";
             }
+            if (name == "FavWearables.Action" || name == "FavWearables.CheckAction")
+            {
+                const auto action = parameter.asString();
+                return action == "sort_by_name" || action == "sort_by_most_recent" || action == "sort_by_type_name";
+            }
             static const std::string_view callbacks[] = {
+                "Wearable.Wear", "Wearable.Add", "Wearable.TakeOffDetach", "Clothing.TakeOff", "Attachment.Detach", "Attachment.Favorite", "Object.Attach", "Attachment.Label",
                 // Shared account/notification policy; none requires a scene renderer.
                 "RegionInfo.ManageRestart",
                 "TopObjects.CommitObjectsList", "TopObjects.GetByObjectName", "TopObjects.GetByOwnerName",
@@ -585,7 +820,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 "Toybox.RestoreDefaults", "Toybox.ClearAll", "Toolbars.RemoveSelectedCommand",
                 "File.Quit", "File.CloseWindow", "File.EnableCloseWindow", "File.CloseAllWindows",
                 "File.EnableCloseAllWindows", "File.CloseWindowGroup", "File.EnableCloseWindowGroup",
-                "File.UploadImage", "File.UploadSound", "File.UploadBulk", "File.EnableUpload",
+                "File.UploadImage", "File.UploadSound", "File.UploadAnim", "File.UploadModel", "File.EnableUploadModel", "File.VisibleUploadModel", "File.MeshEnabled", "File.UploadBulk", "File.EnableUpload",
                 "Edit.Copy", "Edit.Cut", "Edit.Delete", "Edit.Deselect", "Edit.Paste", "Edit.Redo",
                 "Edit.SelectAll", "Edit.Undo", "Edit.EnableCopy", "Edit.EnableCut", "Edit.EnableDelete",
                 "Edit.EnableDeselect", "Edit.EnablePaste", "Edit.EnableRedo", "Edit.EnableSelectAll", "Edit.EnableUndo",
@@ -598,7 +833,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 "ChatOptions.Visible", "ChatOptions.Enable", "IMWellChicletMenu.Action", "IMWellChicletMenu.EnableItem",
                 "NotificationWellChicletMenu.Action", "NotificationWellChicletMenu.EnableItem",
                 "Advanced.ShowDebugSettings", "ToggleSettingsDebug", "ToggleWebBrowser", "Help.ToggleHowTo",
-                "SettingSelect", "CommitSettings", "ClickDefault", "UpdateFilter", "ClickCopy", "ClickSanityIcon",
+                "MemLeak.ChangeLeakingSpeed", "MemLeak.ChangeMaxMemLeaking", "MemLeak.Start", "MemLeak.Stop", "MemLeak.Release", "MemLeak.Close", "GridTools.FlushMapVisibilityCaches", "GodTools.Request", "Media.CommitHomeURL", "Media.whitelistAdd", "Media.whitelistDelete", "ClickAdd", "SettingSelect", "CommitSettings", "ClickDefault", "UpdateFilter", "ClickCopy", "ClickSanityIcon",
                 "LagMeter.ClickShrink", "InvOfferChiclet.Action", "Mention.CopyURI", "Mention.Chat",
                 "Url.Open", "Url.OpenInternal", "Url.OpenExternal", "Url.Execute", "Url.Teleport", "Url.Block", "Url.Unblock",
                 "Url.CopyLabel", "Url.CopyUrl", "Url.ShowProfile", "Url.SendIM", "Url.AddFriend", "Url.RemoveFriend",
@@ -609,14 +844,10 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             };
             return std::find(std::begin(callbacks), std::end(callbacks), name) != std::end(callbacks);
         },
-        [](std::string_view filename, std::string_view child)
+        [](std::string_view, std::string_view)
         {
-            const auto separator=filename.find_last_of("/\\");
-            const auto file=separator==std::string_view::npos?filename:filename.substr(separator+1);
-            // Spatial speaker updates require LLWorld and avatars. Vintage
-            // exposes this leaf directly in its otherwise shared CPU toolbar.
-            // Omit it before construction, retaining all ordinary skin controls.
-            return !((file=="panel_people.xml" && child=="nearby_panel") ||
-                     (file=="panel_toolbar_view.xml" && child=="nearby_voice_output_monitor"));
+            // Exact native type/controller gates above now cover the genuine
+            // Radar and spatial voice controls; no skin children are omitted.
+            return true;
         });
 }

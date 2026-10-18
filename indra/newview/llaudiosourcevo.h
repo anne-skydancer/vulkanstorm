@@ -30,6 +30,7 @@
 
 #include "llaudioengine.h"
 #include "llviewerobject.h"
+#include "vsobjectsoundstate.h"
 
 class LLViewerObject;
 
@@ -37,6 +38,7 @@ class LLAudioSourceVO : public LLAudioSource
 {
 public:
     LLAudioSourceVO(const LLUUID &sound_id, const LLUUID& owner_id, const F32 gain, LLViewerObject *objectp);
+    LLAudioSourceVO(const LLUUID& sound_id, const LLUUID& owner_id, F32 gain, VSAudioObjectQuery object);
     virtual ~LLAudioSourceVO();
     /*virtual*/ void update();
     /*virtual*/ void setGain(const F32 gain);
@@ -44,12 +46,16 @@ public:
     void checkCutOffRadius();
 
 private:
-    LLVector3d getPosGlobal() const;
+    template<class Peer> LLVector3d getPosGlobalFor(const Peer&) const;
+    template<class Peer> void checkCutOffRadiusFor(const Peer&);
+    template<class Peer> void updateMuteFor(const Peer&);
+    template<class Peer> void updateFor(Peer&);
     bool isInCutOffRadius(LLVector3d pos_global, const F32 cutoff) const;
-    void updateMute();
+
 
 private:
     LLPointer<LLViewerObject>   mObjectp;
+    VSAudioObjectQuery mNativeObject;
 };
 
 #endif // LL_LLAUDIOSOURCEVO_H

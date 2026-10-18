@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 
 #include "llviewertexturelist.h"
+#include "vsbuiltintextures.h"
 
 #include "llagent.h"
 #include "llgl.h" // fot gathering stats from GL
@@ -173,26 +174,16 @@ void LLViewerTextureList::doPreloadImages()
         image->setAddressMode(LLTexUnit::TAM_WRAP);
         mImagePreloads.insert(image);
     }
-    image = LLViewerTextureManager::getFetchedTextureFromFile("transparent.j2c", FTT_LOCAL_FILE, MIPMAP_YES, LLViewerFetchedTexture::BOOST_UI, LLViewerTexture::FETCHED_TEXTURE,
-        0, 0, IMG_TRANSPARENT);
-    if (image)
+    for(const auto& source:vs_builtin_textures())
     {
-        image->setAddressMode(LLTexUnit::TAM_WRAP);
-        mImagePreloads.insert(image);
-    }
-    image = LLViewerTextureManager::getFetchedTextureFromFile("alpha_gradient.tga", FTT_LOCAL_FILE, MIPMAP_YES, LLViewerFetchedTexture::BOOST_UI, LLViewerTexture::FETCHED_TEXTURE,
-        GL_ALPHA8, GL_ALPHA, IMG_ALPHA_GRAD);
-    if (image)
-    {
-        image->setAddressMode(LLTexUnit::TAM_CLAMP);
-        mImagePreloads.insert(image);
-    }
-    image = LLViewerTextureManager::getFetchedTextureFromFile("alpha_gradient_2d.j2c", FTT_LOCAL_FILE, MIPMAP_YES, LLViewerFetchedTexture::BOOST_UI, LLViewerTexture::FETCHED_TEXTURE,
-        GL_ALPHA8, GL_ALPHA, IMG_ALPHA_GRAD_2D);
-    if (image)
-    {
-        image->setAddressMode(LLTexUnit::TAM_CLAMP);
-        mImagePreloads.insert(image);
+        image=LLViewerTextureManager::getFetchedTextureFromFile(source.file,FTT_LOCAL_FILE,MIPMAP_YES,
+            LLViewerFetchedTexture::BOOST_UI,LLViewerTexture::FETCHED_TEXTURE,
+            source.alphaOnly?GL_ALPHA8:0,source.alphaOnly?GL_ALPHA:0,source.id);
+        if(image)
+        {
+            image->setAddressMode(source.clamp?LLTexUnit::TAM_CLAMP:LLTexUnit::TAM_WRAP);
+            mImagePreloads.insert(image);
+        }
     }
 }
 

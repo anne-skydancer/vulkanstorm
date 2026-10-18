@@ -34,6 +34,15 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpanelobjectinventory.h"
+#include "vstaskinventoryobject.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#include "vsobjectproperties.h"
+#include "vsvulkancontext.h"
+#endif
 
 #include "llmenugl.h"
 #include "llnotificationsutil.h"
@@ -191,8 +200,7 @@ LLTaskInvFVBridge::LLTaskInvFVBridge(
 
 LLInventoryObject* LLTaskInvFVBridge::findInvObject() const
 {
-    const LLUUID& id = mPanel->getTaskUUID();
-    if (LLViewerObject* object = gObjectList.findObject(id))
+    if (auto object = mPanel->taskObject())
     {
         return object->getInventoryObject(mUUID);
     }
@@ -298,8 +306,8 @@ void LLTaskInvFVBridge::openItem()
 bool LLTaskInvFVBridge::isItemRenameable() const
 {
 // [RLVa:KB] - Checked: 2010-09-28 (RLVa-1.2.1f) | Modified: RLVa-1.0.5a
-    LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID());
-    if (rlv_handler_t::isEnabled() && object && gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit()))
+    auto object = mPanel->taskObject();
+    if (rlv_handler_t::isEnabled() && object && object->attachmentLocked())
     {
         return false;
     }
@@ -307,7 +315,7 @@ bool LLTaskInvFVBridge::isItemRenameable() const
 
     if(gAgent.isGodlike())
         return true;
-    //if (LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID()))
+    //if (auto object = mPanel->taskObject())
     if(object)
     {
         if (LLInventoryItem* item = (LLInventoryItem*)(object->getInventoryObject(mUUID)))
@@ -325,14 +333,14 @@ bool LLTaskInvFVBridge::isItemRenameable() const
 bool LLTaskInvFVBridge::renameItem(const std::string& new_name)
 {
 // [RLVa:KB] - Checked: 2010-09-28 (RLVa-1.2.1f) | Modified: RLVa-1.0.5a
-    LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID());
-    if (rlv_handler_t::isEnabled() && object && gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit()))
+    auto object = mPanel->taskObject();
+    if (rlv_handler_t::isEnabled() && object && object->attachmentLocked())
     {
         return false;
     }
 // [/RLVa:KB]
 
-    //if (LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID()))
+    //if (auto object = mPanel->taskObject())
     if(object)
     {
         if (LLViewerInventoryItem* item = (LLViewerInventoryItem*)object->getInventoryObject(mUUID))
@@ -351,7 +359,7 @@ bool LLTaskInvFVBridge::renameItem(const std::string& new_name)
 
 bool LLTaskInvFVBridge::isItemMovable() const
 {
-    //LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID());
+    //auto object = mPanel->taskObject();
     //if(object && (object->permModify() || gAgent.isGodlike()))
     //{
     //  return true;
@@ -360,16 +368,16 @@ bool LLTaskInvFVBridge::isItemMovable() const
 // [RLVa:KB] - Checked: 2010-04-01 (RLVa-1.2.0c) | Modified: RLVa-1.0.5a
     if (rlv_handler_t::isEnabled())
     {
-        const LLViewerObject* pObj = gObjectList.findObject(mPanel->getTaskUUID());
+        auto pObj = mPanel->taskObject();
         if (pObj)
         {
-            if (gRlvAttachmentLocks.isLockedAttachment(pObj->getRootEdit()))
+            if (pObj->attachmentLocked())
             {
                 return false;
             }
             else if ( (gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) || (gRlvHandler.hasBehaviour(RLV_BHVR_SITTP)) )
             {
-                if ( (isAgentAvatarValid()) && (gAgentAvatarp->isSitting()) && (gAgentAvatarp->getRoot() == pObj->getRootEdit()) )
+                if ( pObj->agentSittingOnRoot() )
                     return false;
             }
         }
@@ -380,23 +388,23 @@ bool LLTaskInvFVBridge::isItemMovable() const
 
 bool LLTaskInvFVBridge::isItemRemovable(bool check_worn) const
 {
-    const LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID());
+    auto object = mPanel->taskObject();
 // [RLVa:KB] - Checked: 2010-04-01 (RLVa-1.2.0c) | Modified: RLVa-1.0.5a
     if (object && rlv_handler_t::isEnabled())
     {
-        if (gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit()))
+        if (object->attachmentLocked())
         {
             return false;
         }
         else if ( (gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) || (gRlvHandler.hasBehaviour(RLV_BHVR_SITTP)) )
         {
-            if ( (isAgentAvatarValid()) && (gAgentAvatarp->isSitting()) && (gAgentAvatarp->getRoot() == object->getRootEdit()) )
+            if ( object->agentSittingOnRoot() )
                 return false;
         }
     }
 // [/RLVa:KB]
 
-    //if (const LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID()))
+    //if (auto object = mPanel->taskObject())
     if (object)
     {
         return object->permModify() || object->permYouOwner();
@@ -410,7 +418,7 @@ bool remove_task_inventory_callback(const LLSD& notification, const LLSD& respon
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     if (option == 0)
     {
-        if (LLViewerObject* object = gObjectList.findObject(notification["payload"]["task_id"].asUUID()))
+        if (auto object = panel->taskObject(); object && object->getID() == notification["payload"]["task_id"].asUUID())
         {
             // yes
             const LLSD& inventory_ids = notification["payload"]["inventory_ids"];
@@ -437,7 +445,7 @@ bool LLTaskInvFVBridge::removeItem()
 {
     if (isItemRemovable() && mPanel)
     {
-        if (LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID()))
+        if (auto object = mPanel->taskObject())
         {
             if (object->permModify())
             {
@@ -461,7 +469,7 @@ void LLTaskInvFVBridge::removeBatch(std::vector<LLFolderViewModelItem*>& batch)
         return;
     }
 
-    LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID());
+    auto object = mPanel->taskObject();
     if (!object)
     {
         return;
@@ -528,7 +536,7 @@ bool LLTaskInvFVBridge::startDrag(EDragAndDropType* type, LLUUID* id) const
     if (!mPanel)
         return false;
 
-    if (LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID()))
+    if (auto object = mPanel->taskObject())
     {
         if (LLInventoryItem* inv = (LLInventoryItem*)object->getInventoryObject(mUUID))
         {
@@ -536,7 +544,7 @@ bool LLTaskInvFVBridge::startDrag(EDragAndDropType* type, LLUUID* id) const
             bool can_copy = gAgent.allowOperation(PERM_COPY, perm, GP_OBJECT_MANIPULATE);
 // [RLVa:KB] - Checked: 2009-10-10 (RLVa-1.2.1f) | Modified: RLVa-1.0.5a
             // Kind of redundant due to the note below, but in case that ever gets fixed
-            if ( (rlv_handler_t::isEnabled()) && (gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit())) )
+            if ( (rlv_handler_t::isEnabled()) && (object->attachmentLocked()) )
             {
                 return false;
             }
@@ -604,8 +612,8 @@ void LLTaskInvFVBridge::buildContextMenu(LLMenuGL& menu, U32 flags)
 // [RLVa:KB] - Checked: 2010-03-01 (RLVa-1.2.0b) | Modified: RLVa-1.1.0a
         if (rlv_handler_t::isEnabled())
         {
-            LLViewerObject* pAttachObj = gObjectList.findObject(mPanel->getTaskUUID());
-            bool fLocked = (pAttachObj) ? gRlvAttachmentLocks.isLockedAttachment(pAttachObj->getRootEdit()) : false;
+            auto pAttachObj = mPanel->taskObject();
+            bool fLocked = (pAttachObj) ? pAttachObj->attachmentLocked() : false;
             if ( ((LLAssetType::AT_NOTECARD == item->getType()) && ((gRlvHandler.hasBehaviour(RLV_BHVR_VIEWNOTE)) || (fLocked))) ||
                  ((LLAssetType::AT_LSL_TEXT == item->getType()) && ((gRlvHandler.hasBehaviour(RLV_BHVR_VIEWSCRIPT)) || (fLocked))) ||
                  ((LLAssetType::AT_TEXTURE == item->getType()) && (!RlvActions::canPreviewTextures())))
@@ -717,7 +725,7 @@ const std::string& LLTaskCategoryBridge::getDisplayName() const
         //mSearchableName.assign(name);
         if (cat->getParentUUID().isNull() && cat->getName() == "Contents")
         {
-            if (LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID()))
+            if (auto object = mPanel->taskObject())
             {
                 LLInventoryObject::object_list_t contents;
 
@@ -782,7 +790,7 @@ bool LLTaskCategoryBridge::startDrag(EDragAndDropType* type, LLUUID* id) const
     //LL_INFOS() << "LLTaskInvFVBridge::startDrag()" << LL_ENDL;
     if (mPanel && mUUID.notNull())
     {
-        if (LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID()))
+        if (auto object = mPanel->taskObject())
         {
             const LLInventoryObject* cat = object->getInventoryObject(mUUID);
             if (cat && move_inv_category_world_to_agent(mUUID, LLUUID::null, false))
@@ -804,7 +812,7 @@ bool LLTaskCategoryBridge::dragOrDrop(MASK mask, bool drop,
 {
     //LL_INFOS() << "LLTaskCategoryBridge::dragOrDrop()" << LL_ENDL;
     bool accept = false;
-    LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID());
+    auto object = mPanel->taskObject();
     if(object)
     {
         switch(cargo_type)
@@ -886,7 +894,7 @@ void LLTaskTextureBridge::openItem()
 {
     LL_INFOS() << "LLTaskTextureBridge::openItem()" << LL_ENDL;
     // <FS:Ansariel> FIRE-17096 / BUG-10486 / MAINT-5753: Viewer crashes when opening a texture from object contents
-    LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID());
+    auto object = mPanel->taskObject();
     if(!object || object->isInventoryPending())
     {
         return;
@@ -927,7 +935,7 @@ public:
 void LLTaskSoundBridge::openItem()
 {
     // <FS:Ansariel> FIRE-17096 / BUG-10486 / MAINT-5753: Viewer crashes when opening a texture from object contents
-    LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID());
+    auto object = mPanel->taskObject();
     if(!object || object->isInventoryPending())
     {
         return;
@@ -1081,13 +1089,13 @@ public:
 void LLTaskLSLBridge::openItem()
 {
     LL_INFOS() << "LLTaskLSLBridge::openItem() " << mUUID << LL_ENDL;
-    LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID());
+    auto object = mPanel->taskObject();
     if(!object || object->isInventoryPending())
     {
         return;
     }
 // [RLVa:KB] - Checked: 2010-03-27 (RLVa-1.2.0b) | Modified: RLVa-1.1.0a
-    if ( (rlv_handler_t::isEnabled()) && (gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit())) )
+    if ( (rlv_handler_t::isEnabled()) && (object->attachmentLocked()) )
     {
         RlvUtil::notifyBlockedViewXXX(LLAssetType::AT_SCRIPT);
         return;
@@ -1102,10 +1110,23 @@ void LLTaskLSLBridge::openItem()
         LLLiveLSLEditor* preview = LLFloaterReg::showTypedInstance<LLLiveLSLEditor>("preview_scriptedit", floater_key, TAKE_FOCUS_YES);
         if (preview)
         {
+#if VS_NATIVE_VULKAN
+            if (object.native())
+            {
+                const auto owner=VSNativeSession::active();
+                const auto selection=owner ? owner->retainObjectSelection() : nullptr;
+                if (selection)
+                    if (const auto property=selection->findProperties(object.nativeObject()))
+                        preview->setObjectName(property->properties->name);
+            }
+            else
+#endif
+            {
             LLSelectNode *node = LLSelectMgr::getInstance()->getSelection()->getFirstRootNode(NULL, true);
             if (node && node->mValid)
             {
                 preview->setObjectName(node->mName);
+            }
             }
             preview->setObjectID(mPanel->getTaskUUID());
         }
@@ -1157,14 +1178,14 @@ public:
 // virtual
 void LLTaskNotecardBridge::openItem()
 {
-    LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID());
+    auto object = mPanel->taskObject();
     if(!object || object->isInventoryPending())
     {
         return;
     }
 
 // [RLVa:KB] - Checked: 2010-03-27 (RLVa-1.2.0b) | Modified: RLVa-1.2.0b
-    if ( (rlv_handler_t::isEnabled()) && (gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit())) )
+    if ( (rlv_handler_t::isEnabled()) && (object->attachmentLocked()) )
     {
         RlvUtil::notifyBlockedViewXXX(LLAssetType::AT_NOTECARD);
         return;
@@ -1216,7 +1237,7 @@ public:
 // virtual
 void LLTaskGestureBridge::openItem()
 {
-    LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID());
+    auto object = mPanel->taskObject();
     if(!object || object->isInventoryPending())
     {
         return;
@@ -1252,8 +1273,7 @@ public:
 // virtual
 void LLTaskAnimationBridge::openItem()
 {
-    const LLUUID& task_id = mPanel->getTaskUUID();
-    LLViewerObject* object = gObjectList.findObject(task_id);
+    auto object = mPanel->taskObject();
     if (!object || object->isInventoryPending())
     {
         return;
@@ -1344,7 +1364,7 @@ public:
 // virtual
 void LLTaskMaterialBridge::openItem()
 {
-    LLViewerObject* object = gObjectList.findObject(mPanel->getTaskUUID());
+    auto object = mPanel->taskObject();
     if(!object || object->isInventoryPending())
     {
         return;
@@ -1491,6 +1511,7 @@ void do_nothing()
 // Default constructor
 LLPanelObjectInventory::LLPanelObjectInventory(const LLPanelObjectInventory::Params& p) :
     LLPanel(p),
+    mAccountCurrent(vs_native_im_guard()),
     mScroller(NULL),
     mFolders(NULL),
     mHaveInventory(false),
@@ -1516,6 +1537,8 @@ LLPanelObjectInventory::LLPanelObjectInventory(const LLPanelObjectInventory::Par
 // Destroys the object
 LLPanelObjectInventory::~LLPanelObjectInventory()
 {
+    mNativeInventoryChanged.disconnect();
+    mNativeObject.reset();
     if (!gIdleCallbacks.deleteFunction(idle, this))
     {
         LL_WARNS() << "LLPanelObjectInventory::~LLPanelObjectInventory() failed to delete callback" << LL_ENDL;
@@ -1535,10 +1558,11 @@ bool LLPanelObjectInventory::postBuild()
 
 void LLPanelObjectInventory::doToSelected(const LLSD& userdata)
 {
+    if (!mAccountCurrent()) return;
     std::string action = userdata.asString();
     if ("rename" == action || "delete" == action)
     {
-        LLViewerObject* objectp = gObjectList.findObject(mTaskUUID);
+        auto objectp = taskObject();
         if (objectp && !objectp->permModify())
         {
             LLNotificationsUtil::add("CantModifyContentInNoModTask");
@@ -1637,13 +1661,18 @@ void LLPanelObjectInventory::inventoryChanged(LLViewerObject* object,
                                         S32 serial_num,
                                         void* data)
 {
-    if (!object)
-        return;
+    if (!object) return;
+    inventoryChangedForTask(object->getID(), inventory);
+}
 
+void LLPanelObjectInventory::inventoryChangedForTask(const LLUUID& objectID,
+                                                    const LLInventoryObject::object_list_t* inventory)
+{
+    if (!mAccountCurrent()) return;
     //LL_INFOS() << "invetnory arrived: \n"
     //      << " panel UUID: " << panel->mTaskUUID << "\n"
     //      << " task  UUID: " << object->mID << LL_ENDL;
-    if (mTaskUUID == object->mID)
+    if (mTaskUUID == objectID)
     {
         mInventoryNeedsUpdate = true;
     }
@@ -1684,7 +1713,7 @@ void LLPanelObjectInventory::updateInventory()
         }
     }
 
-    if (LLViewerObject* objectp = gObjectList.findObject(mTaskUUID))
+    if (auto objectp = taskObject())
     {
         LLInventoryObject* inventory_root = objectp->getInventoryRoot();
         LLInventoryObject::object_list_t contents;
@@ -1900,6 +1929,8 @@ void LLPanelObjectInventory::createViewsForCategory(LLInventoryObject::object_li
 
 void LLPanelObjectInventory::refresh()
 {
+    if (!mAccountCurrent()) return;
+    if (refreshNativeInventory()) return;
     //LL_INFOS() << "LLPanelObjectInventory::refresh()" << LL_ENDL;
     bool has_inventory = false;
     const bool non_root_ok = true;
@@ -1970,6 +2001,8 @@ void LLPanelObjectInventory::refresh()
 
 void LLPanelObjectInventory::clearInventoryTask()
 {
+    mNativeInventoryChanged.disconnect();
+    mNativeObject.reset();
     mTaskUUID = LLUUID::null;
     mAttachmentUUID = LLUUID::null;
     removeVOInventoryListener();
@@ -2051,6 +2084,7 @@ void LLPanelObjectInventory::idle(void* user_data)
 {
     LLPanelObjectInventory* self = (LLPanelObjectInventory*)user_data;
 
+    if (!self->mAccountCurrent()) return;
     if (self->mFolders)
     {
         self->mFolders->update();
@@ -2112,6 +2146,7 @@ void LLPanelObjectInventory::clearItemIDs()
 
 bool LLPanelObjectInventory::handleKeyHere( KEY key, MASK mask )
 {
+    if (!mAccountCurrent()) return false;
     bool handled = false;
     switch (key)
     {
@@ -2163,4 +2198,62 @@ bool LLPanelObjectInventory::isSelectionRemovable()
     }
 
     return true;
+}
+
+VSTaskInventoryObject LLPanelObjectInventory::taskObject() const
+{
+    if (!mAccountCurrent()) return {};
+    if (mNativeObject) return *mNativeObject ? *mNativeObject : VSTaskInventoryObject{};
+    return VSTaskInventoryObject::find(mTaskUUID);
+}
+
+bool LLPanelObjectInventory::refreshNativeInventory()
+{
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=VSNativeSession::active();
+        const auto selection=owner ? owner->retainObjectSelection() : nullptr;
+        const auto token=selection ? selection->firstRootObject(true) : std::nullopt;
+        const auto property=token ? selection->properties(*token) : std::nullopt;
+        if (!token || !property || (selection->rootObjectCount()!=1 && selection->objectCount()!=1))
+        { clearInventoryTask();mInventoryViewModel.setTaskID(mTaskUUID);return true; }
+        auto* context=gViewerWindow->nativeContext();
+        auto* inventory=owner->taskInventory();
+        const auto object=VSTaskInventoryObject::find(token->id);
+        if (!context || !inventory || !object) { clearInventoryTask();return true; }
+        bool request=!mHaveInventory;
+        const LLUUID attachment=object->getAttachmentItemID();
+        bool changedObject=false;
+        if (mTaskUUID!=token->id || !mNativeObject || !*mNativeObject ||
+            mNativeObject->nativeObject().generation!=token->generation ||
+            mNativeObject->nativeObject().region!=token->region)
+        {
+            clearInventoryTask();
+            mTaskUUID=token->id;
+            mAttachmentUUID=attachment;
+            changedObject=true;
+            mNativeObject=std::make_shared<VSTaskInventoryObject>(object);
+            const auto weak=getHandle();
+            const auto current=mAccountCurrent;
+            const auto source=object.objectGuard();
+            mNativeInventoryChanged=inventory->observe(*token,[weak,current,source](const VSTaskInventory::Result& result)
+            {
+                auto* view=dynamic_cast<LLPanelObjectInventory*>(weak.get());
+                if (view && current() && source()) view->inventoryChangedForTask(result.object.id,&result.contents);
+            });
+            request=true;
+        }
+        if (!changedObject && mAttachmentUUID!=attachment)
+        {
+            mAttachmentUUID=attachment;
+            if (attachment.notNull()) selection->sendSelect();
+        }
+        if (property->properties->inv_serial!=object->getInventorySerial() || object->isInventoryDirty()) request=true;
+        if (request && !object->isInventoryPending()) object->requestInventory();
+        mInventoryViewModel.setTaskID(mTaskUUID);
+        return true;
+    }
+#endif
+    return false;
 }

@@ -36,6 +36,7 @@ public:
     void setData(FSPanelPrefs* data);
 
     void draw() override;
+    void onClose(bool quitting) override;
 
 protected:
     // UI Handlers
@@ -55,6 +56,8 @@ protected:
     F32                 mContextConeOutAlpha;
     F32                 mContextConeFadeTime;
     FSPanelPrefs*       mFSPanel;
+    LLHandle<LLView> mFSPanelHandle;
+    U64 mPickerRevision=0;
     lggBeamsColors      mData;
     LLSliderCtrl*       mColorSlider;
     LLColorSwatchCtrl*  mBeamColorPreview;

@@ -30,6 +30,7 @@
 #include "llfloaternamedesc.h"
 #include "llfloatermodeluploadbase.h"
 #include "llmeshrepository.h"
+#include <atomic>
 
 class LLComboBox;
 class LLJoint;
@@ -56,8 +57,15 @@ public:
     class DecompRequest : public LLPhysicsDecomp::Request
     {
     public:
-        S32 mContinue;
+        std::atomic<S32> mContinue{1};
         LLPointer<LLModel> mModel;
+        struct StatusOwner
+        {
+            LLHandle<LLFloater> view;
+            LLHandle<LLModelPreview> preview;
+            std::function<bool()> current;
+        };
+        std::shared_ptr<const StatusOwner> mStatusOwner;
 
         DecompRequest(const std::string& stage, LLModel* mdl);
         virtual S32 statusCallback(const char* status, S32 p1, S32 p2);
@@ -206,6 +214,8 @@ protected:
 
 private:
     void onClickCalculateBtn();
+    U64 mQuoteRevision=0;
+    std::function<bool()> mQuoteCurrent;
     void onJointListSelection();
 
     void onLoDSourceCommit(S32 lod);

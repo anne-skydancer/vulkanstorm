@@ -45,9 +45,12 @@ public:
     void updateEffects();
     void sendEffects();
     void cleanupEffects();
+    void updateNativeParticles();
+    void retireNativeEffects();
 
     static void shutdownClass();
 
+    static void processViewerEffectBlock(LLMessageSystem*,S32 block);
     static void processViewerEffect(LLMessageSystem *mesgsys, void **user_data);
 
     static LLColor4 sParentColor;

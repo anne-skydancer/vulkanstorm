@@ -133,6 +133,7 @@ class OmnifilterEngine
         void setDirty(bool dirty);
 
         void init();
+        void ensureInitialized();
 
         bool setCurrentRuleSet(std::string_view rule_set_name);
         S32 removeCurrentRuleSet();

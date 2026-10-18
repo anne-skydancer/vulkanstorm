@@ -30,8 +30,10 @@
 #include "llcorehttputil.h"
 
 #include "exoflickrauth.h"
+#include "vsnativeim.h"
+#include <utility>
 
-bool exoFlickrAuth::sAuthorisationInProgress = false;
+std::shared_ptr<exoFlickrAuth> exoFlickrAuth::sOwner;
 
 void exoFlickrAuthResponse(const LLSD& aData, exoFlickrAuth::authorized_callback_t aCallback)
 {
@@ -47,42 +49,49 @@ void exoFlickrAuthResponse(const LLSD& aData, exoFlickrAuth::authorized_callback
     aCallback((status.getType() == HTTP_OK), resultLLSD);
 }
 
-exoFlickrAuth::exoFlickrAuth(authorized_callback_t callback) : mCallback(callback)
+exoFlickrAuth::exoFlickrAuth(authorized_callback_t callback)
+    : mCallback(std::move(callback)), mCurrent(vs_native_im_guard())
+{}
+
+exoFlickrAuth::~exoFlickrAuth() = default;
+
+void exoFlickrAuth::retireAccount()
 {
-    // Avoid doubled authentication attempts.
-    if (sAuthorisationInProgress)
-    {
-        delete this;
-        return;
-    }
-    mAuthenticating          = true;
-    sAuthorisationInProgress = true;
-    if (gSavedPerAccountSettings.getString("ExodusFlickrToken").empty() ||
-        gSavedPerAccountSettings.getString("ExodusFlickrTokenSecret").empty())
-    {
-        beginAuthorisation();
-    }
-    else
-    {
-        checkAuthorisation();
-    }
+    const auto old = std::exchange(sOwner, {});
+    if (old) { old->mRetired = true; old->mCallback = {}; }
 }
 
-exoFlickrAuth::~exoFlickrAuth()
+void exoFlickrAuth::create(authorized_callback_t callback)
 {
-    if (mAuthenticating)
-    {
-        sAuthorisationInProgress = false;
-    }
+    if (sOwner && sOwner->current()) return;
+    retireAccount();
+    auto owner = std::shared_ptr<exoFlickrAuth>(new exoFlickrAuth(std::move(callback)));
+    if (!owner->current()) return;
+    sOwner = owner;
+    if (gSavedPerAccountSettings.getString("ExodusFlickrToken").empty() ||
+        gSavedPerAccountSettings.getString("ExodusFlickrTokenSecret").empty()) owner->beginAuthorisation();
+    else owner->checkAuthorisation();
+}
+
+void exoFlickrAuth::complete(bool success, const LLSD& response)
+{
+    if (!current()) return;
+    const auto keep = shared_from_this();
+    auto callback = std::exchange(mCallback, {});
+    mRetired = true;
+    if (sOwner.get() == this) sOwner.reset();
+    if (callback) callback(success, response);
 }
 
 void exoFlickrAuth::checkAuthorisation()
 {
-    exoFlickr::request("flickr.test.login", LLSD(), boost::bind(&exoFlickrAuth::checkResult, this, _1, _2));
+    if (!current()) return;
+    exoFlickr::request("flickr.test.login", LLSD(), [owner = shared_from_this()](bool ok, const LLSD& value) { owner->checkResult(ok, value); });
 }
 
 void exoFlickrAuth::checkResult(bool success, const LLSD& response)
 {
+    if (!current()) return;
     if (!success)
     {
         LL_WARNS("Flickr") << "Login test failed (HTTP). Reauthenticating." << LL_ENDL;
@@ -99,8 +108,7 @@ void exoFlickrAuth::checkResult(bool success, const LLSD& response)
         else
         {
             LL_INFOS("Flickr") << "Stored Flickr tokens are valid." << LL_ENDL;
-            mCallback(true, LLSD());
-            delete this;
+            complete(true, LLSD());
             return;
         }
     }
@@ -108,13 +116,15 @@ void exoFlickrAuth::checkResult(bool success, const LLSD& response)
 
 void exoFlickrAuth::beginAuthorisation()
 {
+    if (!current()) return;
     // Explain and confirm the process to the user.
     LLNotificationsUtil::add("ExodusFlickrVerificationExplanation", LLSD(), LLSD(),
-                             boost::bind(&exoFlickrAuth::explanationCallback, this, _1, _2));
+                             [owner = shared_from_this()](const LLSD& note, const LLSD& response) { owner->explanationCallback(note, response); });
 }
 
 void exoFlickrAuth::explanationCallback(const LLSD& notification, const LLSD& response)
 {
+    if (!current()) return;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     if (option == 0) // OK
     {
@@ -130,24 +140,23 @@ void exoFlickrAuth::explanationCallback(const LLSD& notification, const LLSD& re
 
         std::string url = LLURI::buildHTTP("https://www.flickr.com/services/oauth/request_token", LLSD::emptyArray(), params).asString();
 
-        exoFlickrAuth::authorized_callback_t callback = boost::bind(&exoFlickrAuth::gotRequestToken, this, _1, _2);
+        exoFlickrAuth::authorized_callback_t callback = [owner = shared_from_this()](bool ok, const LLSD& value) { owner->gotRequestToken(ok, value); };
         FSCoreHttpUtil::callbackHttpGetRaw(url, boost::bind(exoFlickrAuthResponse, _1, callback));
     }
     else
     {
-        mCallback(false, LLSD());
-        delete this;
+        complete(false, LLSD());
         return;
     }
 }
 
 void exoFlickrAuth::gotRequestToken(bool success, const LLSD& params)
 {
+    if (!current()) return;
     LL_INFOS("Flickr") << "Got request token, success = " << success << LL_ENDL;
     if (!success)
     {
-        mCallback(false, LLSD());
-        delete this;
+        complete(false, LLSD());
         return;
     }
     std::string token  = params["oauth_token"].asString();
@@ -161,16 +170,16 @@ void exoFlickrAuth::gotRequestToken(bool success, const LLSD& params)
     // browser prompt. This would a) be redundant to our earlier notice, and b)
     // is unclickable because we have also presented a modal dialog.
     gViewerWindow->getWindow()->spawnWebBrowser("https://www.flickr.com/services/oauth/authorize?perms=write&oauth_token=" + token, true);
-    LLNotificationsUtil::add("ExodusFlickrVerificationPrompt", LLSD(), LLSD(), boost::bind(&exoFlickrAuth::gotVerifier, this, _1, _2));
+    LLNotificationsUtil::add("ExodusFlickrVerificationPrompt", LLSD(), LLSD(), [owner = shared_from_this()](const LLSD& note, const LLSD& response) { owner->gotVerifier(note, response); });
 }
 
 void exoFlickrAuth::gotVerifier(const LLSD& notification, const LLSD& response)
 {
+    if (!current()) return;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     if (option == 1) // Cancel
     {
-        mCallback(false, LLSD());
-        delete this;
+        complete(false, LLSD());
         return;
     }
 
@@ -181,12 +190,13 @@ void exoFlickrAuth::gotVerifier(const LLSD& notification, const LLSD& response)
 
     std::string url = LLURI::buildHTTP("https://www.flickr.com/services/oauth/access_token", LLSD::emptyArray(), params).asString();
 
-    exoFlickrAuth::authorized_callback_t callback = boost::bind(&exoFlickrAuth::gotAccessToken, this, _1, _2);
+    exoFlickrAuth::authorized_callback_t callback = [owner = shared_from_this()](bool ok, const LLSD& value) { owner->gotAccessToken(ok, value); };
     FSCoreHttpUtil::callbackHttpGetRaw(url, boost::bind(exoFlickrAuthResponse, _1, callback));
 }
 
 void exoFlickrAuth::gotAccessToken(bool success, const LLSD& params)
 {
+    if (!current()) return;
     if (success)
     {
         // Save all the information we got back.
@@ -195,13 +205,12 @@ void exoFlickrAuth::gotAccessToken(bool success, const LLSD& params)
         gSavedPerAccountSettings.setString("ExodusFlickrFullName", params["fullname"].asString());
         gSavedPerAccountSettings.setString("ExodusFlickrNSID", params["user_nsid"].asString());
         gSavedPerAccountSettings.setString("ExodusFlickrUsername", params["username"].asString());
-        mCallback(true, params);
+        complete(true, params);
     }
     else
     {
         LLNotificationsUtil::add("ExodusFlickrVerificationFailed");
-        mCallback(false, params);
+        complete(false, params);
     }
 
-    delete this;
 }

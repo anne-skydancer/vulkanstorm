@@ -26,6 +26,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "alfloaterregiontracker.h"
+#include "vsregioncontext.h"
+#include "vsnativeim.h"
 
 // library
 #include "llbutton.h"
@@ -116,7 +118,8 @@ void ALFloaterRegionTracker::refresh()
     S32 saved_scroll_pos = mRegionScrollList->getScrollPos();
     mRegionScrollList->deleteAllItems();
 
-    const std::string& cur_region_name = gAgent.getRegion() ? gAgent.getRegion()->getName() : LLStringUtil::null;
+    const auto current_region=vs_current_region_context();
+    const std::string cur_region_name=current_region ? current_region->getName() : LLStringUtil::null;
 
     F64 time_now = LLTimer::getElapsedSeconds();
     bool request_region_update = (time_now - mLastRegionUpdate > REGION_UPDATE_TIMER);
@@ -296,4 +299,16 @@ void ALFloaterRegionTracker::openMap()
             LLFloaterReg::showInstance("world_map", "center");
         }
     }
+}
+
+std::function<void(const LLSD&,const LLSD&)> ALFloaterRegionTracker::regionAddedCallback()
+{
+    const LLHandle<LLFloater> weak=getHandle();
+    const auto current=vs_native_im_guard();
+    return [weak,current](const LLSD& notification,const LLSD& response)
+    {
+        if(!current())return;
+        if(auto* owner=dynamic_cast<ALFloaterRegionTracker*>(weak.get()))
+            owner->onRegionAddedCallback(notification,response);
+    };
 }

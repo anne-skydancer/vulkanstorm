@@ -26,6 +26,14 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
+#include "llmenugl.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "vsworldscene.h"
+#endif
 
 #include "fsfloateravatarrendersettings.h"
 
@@ -51,6 +59,7 @@ FSFloaterAvatarRenderSettings::FSFloaterAvatarRenderSettings(const LLSD& key)
 
 FSFloaterAvatarRenderSettings::~FSFloaterAvatarRenderSettings()
 {
+    removePicker();
     if (mRenderSettingChangedCallbackConnection.connected())
     {
         mRenderSettingChangedCallbackConnection.disconnect();
@@ -172,8 +181,11 @@ void FSFloaterAvatarRenderSettings::onClickAdd(const LLSD& userdata)
 
     LLView* button = findChild<LLButton>("plus_btn", true);
     LLFloater* root_floater = gFloaterView->getParentFloater(this);
-    LLFloaterAvatarPicker* picker = LLFloaterAvatarPicker::show(boost::bind(&FSFloaterAvatarRenderSettings::callbackAvatarPicked, this, _1, render_setting),
-                                                                    true, true, true, root_floater->getName(), button);
+    const LLHandle<LLFloater> weak=getHandle();const auto current=vs_native_im_guard();
+    LLFloaterAvatarPicker* picker = LLFloaterAvatarPicker::show([weak,current,render_setting](const uuid_vec_t& ids,const std::vector<LLAvatarName>&)
+    {
+        if(current())if(auto* owner=dynamic_cast<FSFloaterAvatarRenderSettings*>(weak.get()))owner->callbackAvatarPicked(ids,render_setting);
+    },true,true,true,root_floater?root_floater->getName():getName(),button);
 
     if (root_floater)
     {
@@ -199,6 +211,10 @@ void FSFloaterAvatarRenderSettings::callbackAvatarPicked(const uuid_vec_t& ids, 
             FSAvatarRenderPersistence::instance().setAvatarRenderSettings(avatar_id, render_setting);
         }
     }
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active() && gViewerWindow && gViewerWindow->nativeContext())gViewerWindow->nativeContext()->world().refreshAvatarRenderSettings();
+#endif
+
 }
 
 
@@ -215,7 +231,8 @@ namespace FSFloaterAvatarRenderPersistenceMenu
         // set up the callbacks for all of the avatar menu items
         LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
 
-        registrar.add("Avatar.ChangeRenderSetting", boost::bind(&FSAvatarRenderPersistenceMenu::changeRenderSetting, this, _2));
+        mIntent=std::make_shared<char>();const std::weak_ptr<const void> intent=mIntent;
+        registrar.add("Avatar.ChangeRenderSetting", vs_native_im_lifetime_callback([intent]{return !intent.expired();},boost::bind(&FSAvatarRenderPersistenceMenu::changeRenderSetting, this, _2)));
 
         // create the context menu from the XUI
         return createFromFile("menu_fs_avatar_render_setting.xml");
@@ -241,6 +258,24 @@ namespace FSFloaterAvatarRenderPersistenceMenu
             }
         }
 
+#if VS_NATIVE_VULKAN
+        if(VSNativeSession::active())
+        {
+            if(gViewerWindow && gViewerWindow->nativeContext())gViewerWindow->nativeContext()->world().refreshAvatarRenderSettings();
+        }
+        else
+#endif
         LLVOAvatar::cullAvatarsByPixelArea();
     }
+}
+
+void FSFloaterAvatarRenderPersistenceMenu::FSAvatarRenderPersistenceMenu::resetAccount()
+{
+    mIntent.reset();if(auto* menu=mMenuHandle.get())menu->die();mMenuHandle.markDead();mUUIDs.clear();
+}
+bool FSFloaterAvatarRenderSettings::isNativeCallback(std::string_view name,const LLSD& parameter)
+{
+    if(name=="Settings.AddNewEntry")return parameter.asString()=="never" || parameter.asString()=="always";
+    if(name!="Avatar.ChangeRenderSetting")return false;
+    const auto value=parameter.asInteger();return value>=LLVOAvatar::AV_RENDER_NORMALLY && value<=LLVOAvatar::AV_ALWAYS_RENDER;
 }

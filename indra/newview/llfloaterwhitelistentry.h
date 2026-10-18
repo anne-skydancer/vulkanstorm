@@ -28,6 +28,7 @@
 #define LL_LLFLOATERWHITELISTENTRY_H
 
 #include "llfloater.h"
+#include <functional>
 
 class LLLineEditor;
 
@@ -39,9 +40,12 @@ class LLFloaterWhiteListEntry :
         ~LLFloaterWhiteListEntry();
 
         bool postBuild() override;
+        void onOpen(const LLSD&) override;
 
     private:
         LLLineEditor* mWhiteListEdit;
+        LLHandle<LLFloater> mOrigin;
+        std::function<bool()> mCurrent=[]{return false;};
 
         static void onBtnOK(void*);
         static void onBtnCancel(void*);

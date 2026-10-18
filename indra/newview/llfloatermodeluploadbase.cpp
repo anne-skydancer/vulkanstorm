@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloatermodeluploadbase.h"
+#include "vsnativeim.h"
 #include "llagent.h"
 #include "llviewerregion.h"
 #include "llnotificationsutil.h"
@@ -36,6 +37,7 @@ LLFloaterModelUploadBase::LLFloaterModelUploadBase(const LLSD& key)
 :LLFloater(key),
  mHasUploadPerm(false)
 {
+    mAccountCurrent=vs_native_im_guard();
 }
 
 void LLFloaterModelUploadBase::requestAgentUploadPermissions()
@@ -49,7 +51,7 @@ void LLFloaterModelUploadBase::requestAgentUploadPermissions()
                   << "::requestAgentUploadPermissions() requesting for upload model permissions from: "
                   << url << LL_ENDL;
         LLCoros::instance().launch("LLFloaterModelUploadBase::requestAgentUploadPermissionsCoro",
-            boost::bind(&LLFloaterModelUploadBase::requestAgentUploadPermissionsCoro, this, url, getPermObserverHandle()));
+            boost::bind(&LLFloaterModelUploadBase::requestAgentUploadPermissionsCoro, url, getPermObserverHandle(), mAccountCurrent));
     }
     else
     {
@@ -62,8 +64,9 @@ void LLFloaterModelUploadBase::requestAgentUploadPermissions()
 }
 
 void LLFloaterModelUploadBase::requestAgentUploadPermissionsCoro(std::string url,
-    LLHandle<LLUploadPermissionsObserver> observerHandle)
+    LLHandle<LLUploadPermissionsObserver> observerHandle,std::function<bool()> current)
 {
+    if(!current())return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("MeshUploadFlag", httpPolicy);
@@ -75,6 +78,7 @@ void LLFloaterModelUploadBase::requestAgentUploadPermissionsCoro(std::string url
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
+    if(!current())return;
     LLUploadPermissionsObserver* observer = observerHandle.get();
 
     if (!observer)

@@ -27,6 +27,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llviewerpartsim.h"
+#if VS_NATIVE_VULKAN
+#include "vsparticleeffects.h"
+#endif
 
 #include "llviewercontrol.h"
 
@@ -87,6 +90,10 @@ LLViewerPart::LLViewerPart() :
 
 LLViewerPart::~LLViewerPart()
 {
+#if VS_NATIVE_VULKAN
+    vs_native_particle_release(this);
+#endif
+
     if (mPartSourcep.notNull() && mPartSourcep->mLastPart == this)
     {
         mPartSourcep->mLastPart = NULL;
@@ -136,6 +143,23 @@ void LLViewerPart::init(LLPointer<LLViewerPartSource> sourcep, LLViewerTexture *
 LLViewerPartGroup::LLViewerPartGroup(const LLVector3 &center_agent, const F32 box_side, bool hud)
  : mHud(hud)
 {
+    static U32 id_seed=0;
+    mID=++id_seed;
+#if VS_NATIVE_VULKAN
+    if(vs_native_particle_peer())
+    {
+        mNative=true;mVOPartGroupp=nullptr;mRegionp=nullptr;mUniformParticles=true;
+        llassert_always(center_agent.isFinite());
+        mCenterAgent=center_agent;mBoxRadius=F_SQRT3*box_side*.5f;mBoxSide=box_side;
+        const LLVector3 extents(mBoxRadius,mBoxRadius,mBoxRadius);
+        mMinObjPos=center_agent-extents;mMaxObjPos=center_agent+extents;
+        mSkippedTime=0.f;
+        mNativeGroup=vs_native_particle_group(center_agent,box_side,hud);
+        // The original shared ID is initialized before either graphics peer.
+        return;
+    }
+#endif
+
     mVOPartGroupp = NULL;
     mUniformParticles = true;
 
@@ -190,8 +214,6 @@ LLViewerPartGroup::LLViewerPartGroup(const LLVector3 &center_agent, const F32 bo
 
     mSkippedTime = 0.f;
 
-    static U32 id_seed = 0;
-    mID = ++id_seed;
 }
 
 LLViewerPartGroup::~LLViewerPartGroup()
@@ -249,6 +271,10 @@ bool LLViewerPartGroup::posInGroup(const LLVector3 &pos, const F32 desired_size)
 
 bool LLViewerPartGroup::addPart(LLViewerPart* part, F32 desired_size)
 {
+#if VS_NATIVE_VULKAN
+    if(mNative && !vs_native_particle_group_current(mNativeGroup))return false;
+#endif
+
     if (part->mFlags & LLPartData::LL_PART_HUD && !mHud)
     {
         return false;
@@ -264,7 +290,7 @@ bool LLViewerPartGroup::addPart(LLViewerPart* part, F32 desired_size)
         return false;
     }
 
-    gPipeline.markRebuild(mVOPartGroupp->mDrawable, LLDrawable::REBUILD_ALL);
+    if(mVOPartGroupp.notNull())gPipeline.markRebuild(mVOPartGroupp->mDrawable, LLDrawable::REBUILD_ALL);
 
     mParticles.push_back(part);
     part->mSkipOffset=mSkippedTime;
@@ -315,7 +341,11 @@ void LLViewerPartGroup::updateParticles(const F32 lastdt)
         if (part->mFlags & LLPartData::LL_PART_WIND_MASK)
         {
             part->mVelocity *= 1.f - 0.1f*dt;
-            part->mVelocity += 0.1f*dt*regionp->mWind.getVelocity(regionp->getPosRegionFromAgent(part->mPosAgent));
+#if VS_NATIVE_VULKAN
+            if(mNative)part->mVelocity+=0.1f*dt*vs_native_particle_wind(mNativeGroup,part->mPosAgent);
+            else
+#endif
+                part->mVelocity += 0.1f*dt*regionp->mWind.getVelocity(regionp->getPosRegionFromAgent(part->mPosAgent));
         }
 
         // Now do interpolation towards a target
@@ -461,7 +491,7 @@ void LLViewerPartGroup::updateParticles(const F32 lastdt)
     // Kill the viewer object if this particle group is empty
     if (mParticles.empty())
     {
-        gObjectList.killObject(mVOPartGroupp);
+        if(mVOPartGroupp.notNull())gObjectList.killObject(mVOPartGroupp);
         mVOPartGroupp = NULL;
     }
 
@@ -612,6 +642,10 @@ bool LLViewerPartSim::shouldAddPart()
 
 void LLViewerPartSim::addPart(LLViewerPart* part)
 {
+#if VS_NATIVE_VULKAN
+    if(vs_native_particle_peer() && !vs_native_particle_admit(part)){delete part;return;}
+#endif
+
     if (LLViewerPartSim::sParticleCount < MAX_PART_COUNT)
     {
         put(part);
@@ -760,6 +794,9 @@ void LLViewerPartSim::updateSimulation()
         if (!mViewerPartSources[i]->isDead())
         {
             bool upd = true;
+#if VS_NATIVE_VULKAN
+            if(mViewerPartSources[i]->mNativeAllowed)upd=mViewerPartSources[i]->mNativeAllowed();
+#endif
             LLViewerObject* vobj = mViewerPartSources[i]->mSourceObjectp;
 
             if (vobj && vobj->isAvatar() && ((LLVOAvatar*)vobj)->isInMuteList())
@@ -808,9 +845,18 @@ void LLViewerPartSim::updateSimulation()
     count = (S32) mViewerPartGroups.size();
     for (i = 0; i < count; i++)
     {
+#if VS_NATIVE_VULKAN
+        if(mViewerPartGroups[i]->mNative && !vs_native_particle_group_current(mViewerPartGroups[i]->mNativeGroup))
+        {
+            delete mViewerPartGroups[i];mViewerPartGroups.erase(mViewerPartGroups.begin()+i);--i;--count;continue;
+        }
+#endif
         LLViewerObject* vobj = mViewerPartGroups[i]->mVOPartGroupp;
 
         S32 visirate = 1;
+#if VS_NATIVE_VULKAN
+        if(mViewerPartGroups[i]->mNative && !vs_native_particle_group_visible(mViewerPartGroups[i]->mNativeGroup))visirate=8;
+#endif
         if (vobj && !vobj->isDead() && vobj->mDrawable && !vobj->mDrawable->isDead())
         {
             LLSpatialGroup* group = vobj->mDrawable->getSpatialGroup();
@@ -899,6 +945,10 @@ void LLViewerPartSim::updatePartBurstRate()
 
 void LLViewerPartSim::addPartSource(LLPointer<LLViewerPartSource> sourcep)
 {
+#if VS_NATIVE_VULKAN
+    if(sourcep && vs_native_particle_peer() && !vs_native_particle_source(sourcep)){sourcep->setDead();return;}
+#endif
+
     if (!sourcep)
     {
         LL_WARNS() << "Null part source!" << LL_ENDL;

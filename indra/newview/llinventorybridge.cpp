@@ -34,6 +34,7 @@
 #endif
 #include "vsnativeim.h"
 #include "llinventorybridge.h"
+#include "vstaskinventoryobject.h"
 
 // external projects
 #include "lltransfersourceasset.h"
@@ -3558,8 +3559,11 @@ bool LLFolderBridge::dragCategoryIntoFolder(LLInventoryCategory* inv_cat,
     return accept;
 }
 
-void warn_move_inventory(LLViewerObject* object, std::shared_ptr<LLMoveInv> move_inv)
+void warn_move_inventory(const VSTaskInventoryObject& object, std::shared_ptr<LLMoveInv> move_inv)
 {
+    if (!object) return;
+    if (!move_inv->mTaskCurrent) move_inv->mTaskCurrent = object->objectGuard();
+    if (!move_inv->mTaskCurrent()) return;
     const char* dialog = NULL;
     if (object->flagScripted())
     {
@@ -3579,6 +3583,7 @@ void warn_move_inventory(LLViewerObject* object, std::shared_ptr<LLMoveInv> move
     if (notification_ptr == NULL
         || !notification_ptr->isActive()
         || LLNotificationsUtil::find(notification_ptr->getID()) == NULL
+        || !inv_ptr || (inv_ptr->mTaskCurrent && !inv_ptr->mTaskCurrent())
         || inv_ptr->mCategoryID != move_inv->mCategoryID
         || inv_ptr->mObjectID != move_inv->mObjectID)
     {
@@ -3594,9 +3599,15 @@ void warn_move_inventory(LLViewerObject* object, std::shared_ptr<LLMoveInv> move
             ++move_it)
         {
             inv_ptr->mMoveList.push_back(*move_it);
+            if (const auto current = move_inv->mTaskItems.find(move_it->second); current != move_inv->mTaskItems.end()) inv_ptr->mTaskItems[move_it->second] = current->second;
         }
         move_inv.reset();
     }
+}
+
+void warn_move_inventory(LLViewerObject* object, std::shared_ptr<LLMoveInv> move_inv)
+{
+    if (object) warn_move_inventory(VSTaskInventoryObject::find(object->getID()), std::move(move_inv));
 }
 
 // Move/copy all inventory items from the Contents folder of an in-world
@@ -3612,7 +3623,7 @@ bool move_inv_category_world_to_agent(const LLUUID& object_id,
     // anonymous objects, it would be possible to bypass
     // permissions.
     // content category has same ID as object itself
-    LLViewerObject* object = gObjectList.findObject(object_id);
+    const auto object = VSTaskInventoryObject::find(object_id);
     if (!object)
     {
         LL_INFOS() << "Object not found for drop." << LL_ENDL;
@@ -3686,6 +3697,10 @@ bool move_inv_category_world_to_agent(const LLUUID& object_id,
         move_inv->mCategoryID = category_id;
         move_inv->mCallback = callback;
         move_inv->mUserData = user_data;
+        move_inv->mTaskCurrent = object->objectGuard();
+        for (const auto& entry : inventory_objects)
+            if (dynamic_cast<const LLViewerInventoryItem*>(entry.get()))
+                move_inv->mTaskItems[entry->getUUID()] = object->itemGuard(entry->getUUID());
 
         for (LLPointer<LLInventoryObject> obj : inventory_objects)
         {
@@ -6140,8 +6155,10 @@ LLFontGL::StyleFlags LLMarketplaceFolderBridge::getLabelStyle() const
 // helper stuff
 bool move_task_inventory_callback(const LLSD& notification, const LLSD& response, std::shared_ptr<LLMoveInv> move_inv)
 {
+    if (move_inv->mTaskCurrent && !move_inv->mTaskCurrent()) return false;
+    for (const auto& entry : move_inv->mTaskItems) if (!entry.second()) return false;
     LLFloaterOpenObject::LLCatAndWear* cat_and_wear = (LLFloaterOpenObject::LLCatAndWear* )move_inv->mUserData;
-    LLViewerObject* object = gObjectList.findObject(move_inv->mObjectID);
+    const auto object = VSTaskInventoryObject::find(move_inv->mObjectID);
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
 
     if(option == 0 && object)
@@ -6162,6 +6179,8 @@ bool move_task_inventory_callback(const LLSD& notification, const LLSD& response
              move_it != move_inv->mMoveList.end();
              ++move_it)
         {
+            if (move_inv->mTaskCurrent && !move_inv->mTaskCurrent()) return false;
+            if (const auto item = move_inv->mTaskItems.find(move_it->second); item != move_inv->mTaskItems.end() && !item->second()) return false;
             object->moveInventory(move_it->first, move_it->second);
         }
 

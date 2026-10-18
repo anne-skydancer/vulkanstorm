@@ -26,12 +26,27 @@
 
 #include "llscripteditorws.h"
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#endif
 #include "vsselectionpolicy.h"
+#include "vsselectedobjectpermissions.h"
 #include "vsregionlimits.h"
 
 // file include
 #define LLSELECTMGR_CPP
 #include "llselectmgr.h"
+#if VS_NATIVE_VULKAN
+#include "vseditselection.h"
+#include "vsnativesession.h"
+#include "vsregioncontext.h"
+#endif
+#include "vseditdelete.h"
+#include "vslinkactions.h"
+#include "vsmultipleupdate.h"
+#include "vsbuildselectionpolicy.h"
+#include "vsbuildobjectflags.h"
 #include "vsobjectproperties.h"
 #include "llmaterialmgr.h"
 
@@ -757,95 +772,18 @@ bool LLSelectMgr::removeObjectFromSelections(const LLUUID &id)
 
 bool LLSelectMgr::linkObjects()
 {
-    if (!LLSelectMgr::getInstance()->selectGetAllRootsValid())
-    {
-        LLNotificationsUtil::add("UnableToLinkWhileDownloading");
-        return true;
-    }
-
-    S32 object_count = LLSelectMgr::getInstance()->getSelection()->getObjectCount();
-// <FS:CR> Aurora Sim
-    //if (object_count > MAX_CHILDREN_PER_TASK + 1)
-    S32 object_max = vs_region_limits().getMaxLinkedPrims();
-
-    if (object_count > object_max + 1)
-// </FS:CR> Aurora Sim
-    {
-        LLSD args;
-        args["COUNT"] = llformat("%d", object_count);
-// <FS:CR> Aurora Sim
-        //int max = MAX_CHILDREN_PER_TASK+1;
-        int max = object_max+1;
-// </FS:CR> Aurora Sim
-        args["MAX"] = llformat("%d", max);
-        LLNotificationsUtil::add("UnableToLinkObjects", args);
-        return true;
-    }
-
-    if (LLSelectMgr::getInstance()->getSelection()->getRootObjectCount() < 2)
-    {
-        LLNotificationsUtil::add("CannotLinkIncompleteSet");
-        return true;
-    }
-
-    if (!LLSelectMgr::getInstance()->selectGetRootsModify())
-    {
-        LLNotificationsUtil::add("CannotLinkModify");
-        return true;
-    }
-
-    if (!LLSelectMgr::getInstance()->selectGetRootsNonPermanentEnforced())
-    {
-        LLNotificationsUtil::add("CannotLinkPermanent");
-        return true;
-    }
-
-    LLUUID owner_id;
-    std::string owner_name;
-    if (!LLSelectMgr::getInstance()->selectGetOwner(owner_id, owner_name))
-    {
-        // we don't actually care if you're the owner, but novices are
-        // the most likely to be stumped by this one, so offer the
-        // easiest and most likely solution.
-        LLNotificationsUtil::add("CannotLinkDifferentOwners");
-        return true;
-    }
-
-    if (!LLSelectMgr::getInstance()->selectGetSameRegion())
-    {
-        LLNotificationsUtil::add("CannotLinkAcrossRegions");
-        return true;
-    }
-
-    LLSelectMgr::getInstance()->sendLink();
-
-    return true;
+#if VS_NATIVE_VULKAN
+    if (auto owner=VSNativeSession::active()) return owner->objectSelection() && owner->objectSelection()->linkObjects();
+#endif
+    return vs_link_objects(*this);
 }
 
 bool LLSelectMgr::unlinkObjects()
 {
-
-    // <FS:PP>
-    if (gSavedSettings.getBOOL("FSUnlinkConfirmEnabled"))
-    {
-    // </FS:PP>
-
-        S32 min_objects_for_confirm = gSavedSettings.getS32("MinObjectsForUnlinkConfirm");
-        S32 unlink_object_count = mSelectedObjects->getObjectCount(); // clears out nodes with NULL objects
-        if (unlink_object_count >= min_objects_for_confirm
-            && unlink_object_count > mSelectedObjects->getRootObjectCount())
-        {
-            // total count > root count means that there are childer inside and that there are linksets that will be unlinked
-            LLNotificationsUtil::add("ConfirmUnlink", LLSD(), LLSD(), boost::bind(&LLSelectMgr::confirmUnlinkObjects, this, _1, _2));
-            return true;
-        }
-
-    // <FS:PP>
-    }
-    // </FS:PP>
-
-    LLSelectMgr::getInstance()->sendDelink();
-    return true;
+#if VS_NATIVE_VULKAN
+    if (auto owner=VSNativeSession::active()) return owner->objectSelection() && owner->objectSelection()->unlinkObjects();
+#endif
+    return vs_unlink_objects(*this,[this]{ LLNotificationsUtil::add("ConfirmUnlink", LLSD(), LLSD(), boost::bind(&LLSelectMgr::confirmUnlinkObjects,this,_1,_2)); });
 }
 
 void LLSelectMgr::confirmUnlinkObjects(const LLSD& notification, const LLSD& response)
@@ -875,6 +813,9 @@ void LLSelectMgr::confirmUnlinkObjects(const LLSD& notification, const LLSD& res
 // triangle count cannot exceed the designated limit.
 bool LLSelectMgr::enableLinkObjects()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner=VSNativeSession::active()) return owner->objectSelection() && owner->objectSelection()->enableLinkObjects();
+#endif
     bool new_value = false;
     // check if there are at least 2 objects selected, and that the
     // user can modify at least one of the selected objects.
@@ -916,6 +857,9 @@ bool LLSelectMgr::enableLinkObjects()
 
 bool LLSelectMgr::enableUnlinkObjects()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner=VSNativeSession::active()) return owner->objectSelection() && owner->objectSelection()->enableUnlinkObjects();
+#endif
     LLViewerObject* first_editable_object = LLSelectMgr::getInstance()->getSelection()->getFirstEditableObject();
     LLViewerObject *root_object = (first_editable_object == NULL) ? NULL : first_editable_object->getRootEdit();
 
@@ -1353,6 +1297,10 @@ void LLSelectMgr::unhighlightObjectAndFamily(LLViewerObject* objectp)
 
 void LLSelectMgr::unhighlightAll()
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active())
+    {if(auto* selection=owner->existingObjectSelection())selection->clearRectangle();return;}
+#endif
     mRectSelectedObjects.clear();
     mHighlightedObjects->deleteAllNodes();
 }
@@ -1458,6 +1406,9 @@ void LLSelectMgr::addGridObject(LLViewerObject* objectp)
 
 void LLSelectMgr::clearGridObjects()
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){if(auto* selection=owner->existingObjectSelection())selection->clearGridObjects();return;}
+#endif
     mGridObjects.deleteAllNodes();
 }
 
@@ -1465,11 +1416,21 @@ void LLSelectMgr::setGridMode(EGridMode mode)
 {
     mGridMode = mode;
     gSavedSettings.setS32("GridMode", mode);
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){if(auto* selection=owner->existingObjectSelection())selection->updateSelectionCenter();return;}
+#endif
     updateSelectionCenter();
 }
 
 void LLSelectMgr::getGrid(LLVector3& origin, LLQuaternion &rotation, LLVector3 &scale, bool for_snap_guides)
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active())
+    {
+        if(auto* selection=owner->objectSelection())selection->getGrid(mGridMode,mGridOrigin,mGridRotation,mGridScale,for_snap_guides);
+        origin=mGridOrigin;rotation=mGridRotation;scale=mGridScale;return;
+    }
+#endif
     mGridObjects.cleanupNodes();
 
     LLViewerObject* first_grid_object = mGridObjects.getFirstObject();
@@ -3514,21 +3475,7 @@ bool LLSelectMgr::selectGetAllValidAndObjectsFound()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetModify()
 {
-    for (LLObjectSelection::iterator iter = getSelection()->begin();
-         iter != getSelection()->end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        LLViewerObject* object = node->getObject();
-        if( !object || !node->mValid )
-        {
-            return false;
-        }
-        if( !object->permModify() )
-        {
-            return false;
-        }
-    }
-    return true;
+    return vs_build_selectGetModify(*this);
 }
 
 //-----------------------------------------------------------------------------
@@ -3537,22 +3484,7 @@ bool LLSelectMgr::selectGetModify()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetRootsModify()
 {
-    for (LLObjectSelection::root_iterator iter = getSelection()->root_begin();
-         iter != getSelection()->root_end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        LLViewerObject* object = node->getObject();
-        if( !node->mValid )
-        {
-            return false;
-        }
-        if( !object->permModify() )
-        {
-            return false;
-        }
-    }
-
-    return true;
+    return vs_build_selectGetRootsModify(*this);
 }
 
 //-----------------------------------------------------------------------------
@@ -3591,21 +3523,7 @@ bool LLSelectMgr::selectGetSameRegion()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetNonPermanentEnforced()
 {
-    for (LLObjectSelection::iterator iter = getSelection()->begin();
-         iter != getSelection()->end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        LLViewerObject* object = node->getObject();
-        if( !object || !node->mValid )
-        {
-            return false;
-        }
-        if( object->isPermanentEnforced())
-        {
-            return false;
-        }
-    }
-    return true;
+    return vs_build_selectGetNonPermanentEnforced(*this);
 }
 
 //-----------------------------------------------------------------------------
@@ -3614,22 +3532,7 @@ bool LLSelectMgr::selectGetNonPermanentEnforced()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetRootsNonPermanentEnforced()
 {
-    for (LLObjectSelection::root_iterator iter = getSelection()->root_begin();
-         iter != getSelection()->root_end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        LLViewerObject* object = node->getObject();
-        if( !node->mValid )
-        {
-            return false;
-        }
-        if( object->isPermanentEnforced())
-        {
-            return false;
-        }
-    }
-
-    return true;
+    return vs_build_selectGetRootsNonPermanentEnforced(*this);
 }
 
 //-----------------------------------------------------------------------------
@@ -3637,21 +3540,7 @@ bool LLSelectMgr::selectGetRootsNonPermanentEnforced()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetPermanent()
 {
-    for (LLObjectSelection::iterator iter = getSelection()->begin();
-         iter != getSelection()->end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        LLViewerObject* object = node->getObject();
-        if( !object || !node->mValid )
-        {
-            return false;
-        }
-        if( !object->flagObjectPermanent())
-        {
-            return false;
-        }
-    }
-    return true;
+    return vs_build_selectGetPermanent(*this);
 }
 
 //-----------------------------------------------------------------------------
@@ -3660,22 +3549,7 @@ bool LLSelectMgr::selectGetPermanent()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetRootsPermanent()
 {
-    for (LLObjectSelection::root_iterator iter = getSelection()->root_begin();
-         iter != getSelection()->root_end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        LLViewerObject* object = node->getObject();
-        if( !node->mValid )
-        {
-            return false;
-        }
-        if( !object->flagObjectPermanent())
-        {
-            return false;
-        }
-    }
-
-    return true;
+    return vs_build_selectGetRootsPermanent(*this);
 }
 
 //-----------------------------------------------------------------------------
@@ -3683,21 +3557,7 @@ bool LLSelectMgr::selectGetRootsPermanent()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetCharacter()
 {
-    for (LLObjectSelection::iterator iter = getSelection()->begin();
-         iter != getSelection()->end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        LLViewerObject* object = node->getObject();
-        if( !object || !node->mValid )
-        {
-            return false;
-        }
-        if( !object->flagCharacter())
-        {
-            return false;
-        }
-    }
-    return true;
+    return vs_build_selectGetCharacter(*this);
 }
 
 //-----------------------------------------------------------------------------
@@ -3706,22 +3566,7 @@ bool LLSelectMgr::selectGetCharacter()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetRootsCharacter()
 {
-    for (LLObjectSelection::root_iterator iter = getSelection()->root_begin();
-         iter != getSelection()->root_end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        LLViewerObject* object = node->getObject();
-        if( !node->mValid )
-        {
-            return false;
-        }
-        if( !object->flagCharacter())
-        {
-            return false;
-        }
-    }
-
-    return true;
+    return vs_build_selectGetRootsCharacter(*this);
 }
 
 //-----------------------------------------------------------------------------
@@ -3729,21 +3574,7 @@ bool LLSelectMgr::selectGetRootsCharacter()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetNonPathfinding()
 {
-    for (LLObjectSelection::iterator iter = getSelection()->begin();
-         iter != getSelection()->end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        LLViewerObject* object = node->getObject();
-        if( !object || !node->mValid )
-        {
-            return false;
-        }
-        if( object->flagObjectPermanent() || object->flagCharacter())
-        {
-            return false;
-        }
-    }
-    return true;
+    return vs_build_selectGetNonPathfinding(*this);
 }
 
 //-----------------------------------------------------------------------------
@@ -3752,22 +3583,7 @@ bool LLSelectMgr::selectGetNonPathfinding()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetRootsNonPathfinding()
 {
-    for (LLObjectSelection::root_iterator iter = getSelection()->root_begin();
-         iter != getSelection()->root_end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        LLViewerObject* object = node->getObject();
-        if( !node->mValid )
-        {
-            return false;
-        }
-        if( object->flagObjectPermanent() || object->flagCharacter())
-        {
-            return false;
-        }
-    }
-
-    return true;
+    return vs_build_selectGetRootsNonPathfinding(*this);
 }
 
 //-----------------------------------------------------------------------------
@@ -3869,6 +3685,40 @@ bool LLSelectMgr::selectGetRootsNonCharacter()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetEditableLinksets()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        VSEditSelection selection;
+        const auto region = vs_current_region_context();
+
+    for (auto iter = selection.begin();
+         iter != selection.end(); iter++ )
+    {
+        auto* node = *iter;
+        auto* object = node->getObject();
+        if( !object || !node->mValid )
+        {
+            return false;
+        }
+        if (object->flagUsePhysics() ||
+            object->flagTemporaryOnRez() ||
+            object->flagCharacter() ||
+            object->flagVolumeDetect() ||
+            object->flagAnimSource() ||
+            (!region || object->task().getHost() != region->getHost()) ||
+            (!gAgent.isGodlike() &&
+            !gAgent.canManageEstate() &&
+            !object->permYouOwner() &&
+            !object->permMove()))
+        {
+            return false;
+        }
+    }
+    return true;
+
+    }
+#endif
+
     for (LLObjectSelection::iterator iter = getSelection()->begin();
          iter != getSelection()->end(); iter++ )
     {
@@ -3901,6 +3751,32 @@ bool LLSelectMgr::selectGetEditableLinksets()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetViewableCharacters()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        VSEditSelection selection;
+        const auto region = vs_current_region_context();
+
+    for (auto iter = selection.begin();
+         iter != selection.end(); iter++ )
+    {
+        auto* node = *iter;
+        auto* object = node->getObject();
+        if( !object || !node->mValid )
+        {
+            return false;
+        }
+        if( !object->flagCharacter() ||
+            (!region || object->task().getHost() != region->getHost()))
+        {
+            return false;
+        }
+    }
+    return true;
+
+    }
+#endif
+
     for (LLObjectSelection::iterator iter = getSelection()->begin();
          iter != getSelection()->end(); iter++ )
     {
@@ -3925,21 +3801,7 @@ bool LLSelectMgr::selectGetViewableCharacters()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetRootsTransfer()
 {
-    for (LLObjectSelection::root_iterator iter = getSelection()->root_begin();
-         iter != getSelection()->root_end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        LLViewerObject* object = node->getObject();
-        if( !node->mValid )
-        {
-            return false;
-        }
-        if(!object->permTransfer())
-        {
-            return false;
-        }
-    }
-    return true;
+    return vs_build_selectGetRootsTransfer(*this);
 }
 
 //-----------------------------------------------------------------------------
@@ -3948,21 +3810,7 @@ bool LLSelectMgr::selectGetRootsTransfer()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetRootsCopy()
 {
-    for (LLObjectSelection::root_iterator iter = getSelection()->root_begin();
-         iter != getSelection()->root_end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        LLViewerObject* object = node->getObject();
-        if( !node->mValid )
-        {
-            return false;
-        }
-        if(!object->permCopy())
-        {
-            return false;
-        }
-    }
-    return true;
+    return vs_build_selectGetRootsCopy(*this);
 }
 
 struct LLSelectGetFirstTest
@@ -4213,64 +4061,7 @@ bool LLSelectMgr::selectIsGroupOwned()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::selectGetPerm(U8 which_perm, U32* mask_on, U32* mask_off)
 {
-    U32 mask;
-    U32 mask_and    = 0xffffffff;
-    U32 mask_or     = 0x00000000;
-    bool all_valid  = false;
-
-    for (LLObjectSelection::root_iterator iter = getSelection()->root_begin();
-         iter != getSelection()->root_end(); iter++)
-    {
-        LLSelectNode* node = *iter;
-
-        if (!node->mValid)
-        {
-            all_valid = false;
-            break;
-        }
-
-        all_valid = true;
-
-        switch( which_perm )
-        {
-        case PERM_BASE:
-            mask = node->mPermissions->getMaskBase();
-            break;
-        case PERM_OWNER:
-            mask = node->mPermissions->getMaskOwner();
-            break;
-        case PERM_GROUP:
-            mask = node->mPermissions->getMaskGroup();
-            break;
-        case PERM_EVERYONE:
-            mask = node->mPermissions->getMaskEveryone();
-            break;
-        case PERM_NEXT_OWNER:
-            mask = node->mPermissions->getMaskNextOwner();
-            break;
-        default:
-            mask = 0x0;
-            break;
-        }
-        mask_and &= mask;
-        mask_or  |= mask;
-    }
-
-    if (all_valid)
-    {
-        // ...true through all ANDs means all true
-        *mask_on  = mask_and;
-
-        // ...false through all ORs means all false
-        *mask_off = ~mask_or;
-        return true;
-    }
-    else
-    {
-        *mask_on  = 0;
-        *mask_off = 0;
-        return false;
-    }
+    return vs_build_selectGetPerm(*this, which_perm, mask_on, mask_off);
 }
 
 
@@ -4307,111 +4098,11 @@ bool LLSelectMgr::selectGetPermissions(LLPermissions& result_perm)
 
 void LLSelectMgr::selectDelete()
 {
-// [RLVa:KB] - Checked: 2010-03-23 (RLVa-1.2.0e) | Added: RLVa-1.2.0a
-    if ( (rlv_handler_t::isEnabled()) && (!rlvCanDeleteOrReturn()) )
-    {
-        make_ui_sound("UISndInvalidOp");
-        if (!gFloaterTools->getVisible())
-            deselectAll();
-        return;
-    }
-// [/RLVa:KB]
-
-    S32 deleteable_count = 0;
-
-    bool locked_but_deleteable_object = false;
-    bool no_copy_but_deleteable_object = false;
-    bool all_owned_by_you = true;
-
-    for (LLObjectSelection::iterator iter = getSelection()->begin();
-         iter != getSelection()->end(); iter++)
-    {
-        LLViewerObject* obj = (*iter)->getObject();
-
-        if( obj->isAttachment() )
-        {
-            continue;
-        }
-
-        deleteable_count++;
-
-        // Check to see if you can delete objects which are locked.
-        if(!obj->permMove())
-        {
-            locked_but_deleteable_object = true;
-        }
-        if(!obj->permCopy())
-        {
-            no_copy_but_deleteable_object = true;
-        }
-        if(!obj->permYouOwner())
-        {
-            all_owned_by_you = false;
-        }
-    }
-
-    if( 0 == deleteable_count )
-    {
-        make_ui_sound("UISndInvalidOp");
-        return;
-    }
-
-    LLNotification::Params params("ConfirmObjectDeleteLock");
-    params.functor.function(boost::bind(&LLSelectMgr::confirmDelete, _1, _2, getSelection()));
-
-    if(locked_but_deleteable_object ||
-       no_copy_but_deleteable_object ||
-       !all_owned_by_you)
-    {
-        // convert any transient pie-menu selections to full selection so this operation
-        // has some context
-        // NOTE: if user cancels delete operation, this will potentially leave objects selected outside of build mode
-        // but this is ok, if not ideal
-        convertTransient();
-
-        //This is messy, but needed to get all english our of the UI.
-        if(locked_but_deleteable_object && !no_copy_but_deleteable_object && all_owned_by_you)
-        {
-            //Locked only
-            params.name("ConfirmObjectDeleteLock");
-        }
-        else if(!locked_but_deleteable_object && no_copy_but_deleteable_object && all_owned_by_you)
-        {
-            //No Copy only
-            params.name("ConfirmObjectDeleteNoCopy");
-        }
-        else if(!locked_but_deleteable_object && !no_copy_but_deleteable_object && !all_owned_by_you)
-        {
-            //not owned only
-            params.name("ConfirmObjectDeleteNoOwn");
-        }
-        else if(locked_but_deleteable_object && no_copy_but_deleteable_object && all_owned_by_you)
-        {
-            //locked and no copy
-            params.name("ConfirmObjectDeleteLockNoCopy");
-        }
-        else if(locked_but_deleteable_object && !no_copy_but_deleteable_object && !all_owned_by_you)
-        {
-            //locked and not owned
-            params.name("ConfirmObjectDeleteLockNoOwn");
-        }
-        else if(!locked_but_deleteable_object && no_copy_but_deleteable_object && !all_owned_by_you)
-        {
-            //no copy and not owned
-            params.name("ConfirmObjectDeleteNoCopyNoOwn");
-        }
-        else
-        {
-            //locked, no copy and not owned
-            params.name("ConfirmObjectDeleteLockNoCopyNoOwn");
-        }
-
-        LLNotifications::instance().add(params);
-    }
-    else
-    {
-        LLNotifications::instance().forceResponse(params, 0);
-    }
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){if(auto* selection=owner->objectSelection())selection->selectDelete();return;}
+#endif
+    struct Manager{LLSelectMgr& source;LLObjectSelection* getSelection(){return source.getSelection().get();}bool canDeleteOrReturn(){return rlvCanDeleteOrReturn();}void deselectAll(){source.deselectAll();}void convertTransient(){source.convertTransient();}}manager{*this};
+    vs_delete_selection(manager,boost::bind(&LLSelectMgr::confirmDelete,_1,_2,getSelection()));
 }
 
 // static
@@ -4481,56 +4172,10 @@ void LLSelectMgr::selectForceDelete()
         SEND_ONLY_ROOTS);
 }
 
-bool LLSelectMgr::selectGetEditMoveLinksetPermissions(bool &move, bool &modify)
+bool LLSelectMgr::selectGetEditMoveLinksetPermissions(bool& move,bool& modify)
 {
-    move = true;
-    modify = true;
-    // <FS:Ansariel> gSavedSettings replacement
-    //bool selecting_linked_set = !gSavedSettings.getBOOL("EditLinkedParts");
-    static LLCachedControl<bool> editLinkedParts(gSavedSettings, "EditLinkedParts");
-    bool selecting_linked_set = !editLinkedParts();
-    // </FS:Ansariel>
-
-    for (LLObjectSelection::iterator iter = getSelection()->begin();
-        iter != getSelection()->end(); iter++)
-    {
-        LLSelectNode* nodep = *iter;
-        LLViewerObject* object = nodep->getObject();
-        if (!object || !nodep->mValid)
-        {
-            move = false;
-            modify = false;
-            return false;
-        }
-
-        LLViewerObject *root_object = object->getRootEdit();
-        bool this_object_movable = false;
-        if (object->permMove() && !object->isPermanentEnforced() &&
-            ((root_object == NULL) || !root_object->isPermanentEnforced()) &&
-            (object->permModify() || selecting_linked_set))
-        {
-            this_object_movable = true;
-
-// [RLVa:KB] - Checked: 2010-03-31 (RLVa-1.2.0c) | Modified: RLVa-1.0.0g
-            if ( (rlv_handler_t::isEnabled()) && ((gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) || (gRlvHandler.hasBehaviour(RLV_BHVR_SITTP))) )
-            {
-                if ( (isAgentAvatarValid()) && (gAgentAvatarp->isSitting()) && (gAgentAvatarp->getRoot() == object->getRootEdit()) )
-                    move = modify = false;
-            }
-// [/RLVa:KB]
-        }
-        move = move && this_object_movable;
-        modify = modify && object->permModify();
-
-        // <FS:Ansariel> Optimize: Once move and modify are both false, there is no reason to continue checking - neither will become true again
-        if (!move && !modify)
-        {
-            return true;
-        }
-        // </FS:Ansariel>
-    }
-
-    return true;
+    return vs_build_selectGetEditMoveLinksetPermissions(*this,move,modify,[](LLViewerObject* object)
+    {return isAgentAvatarValid() && gAgentAvatarp->isSitting() && gAgentAvatarp->getRoot()==object->getRootEdit();});
 }
 
 void LLSelectMgr::selectGetAggregateSaleInfo(U32 &num_for_sale,
@@ -4539,78 +4184,14 @@ void LLSelectMgr::selectGetAggregateSaleInfo(U32 &num_for_sale,
                                              S32 &total_sale_price,
                                              S32 &individual_sale_price)
 {
-    num_for_sale = 0;
-    is_for_sale_mixed = false;
-    is_sale_price_mixed = false;
-    total_sale_price = 0;
-    individual_sale_price = 0;
-
-
-    // Empty set.
-    if (getSelection()->root_begin() == getSelection()->root_end())
-        return;
-
-    LLSelectNode *node = *(getSelection()->root_begin());
-    const bool first_node_for_sale = node->mSaleInfo.isForSale();
-    const S32 first_node_sale_price = node->mSaleInfo.getSalePrice();
-
-    for (LLObjectSelection::root_iterator iter = getSelection()->root_begin();
-         iter != getSelection()->root_end(); iter++)
-    {
-        LLSelectNode* node = *iter;
-        const bool node_for_sale = node->mSaleInfo.isForSale();
-        const S32 node_sale_price = node->mSaleInfo.getSalePrice();
-
-        // Set mixed if the fields don't match the first node's fields.
-        if (node_for_sale != first_node_for_sale)
-            is_for_sale_mixed = true;
-        if (node_sale_price != first_node_sale_price)
-            is_sale_price_mixed = true;
-
-        if (node_for_sale)
-        {
-            total_sale_price += node_sale_price;
-            num_for_sale ++;
-        }
-    }
-
-    individual_sale_price = first_node_sale_price;
-    if (is_for_sale_mixed)
-    {
-        is_sale_price_mixed = true;
-        individual_sale_price = 0;
-    }
+    vs_build_selectGetAggregateSaleInfo(*this, num_for_sale, is_for_sale_mixed, is_sale_price_mixed, total_sale_price, individual_sale_price);
 }
 
 // returns true if all nodes are valid. method also stores an
 // accumulated sale info.
 bool LLSelectMgr::selectGetSaleInfo(LLSaleInfo& result_sale_info)
 {
-    bool first = true;
-    LLSaleInfo sale_info;
-    for (LLObjectSelection::root_iterator iter = getSelection()->root_begin();
-         iter != getSelection()->root_end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        if (!node->mValid)
-        {
-            return false;
-        }
-
-        if (first)
-        {
-            sale_info = node->mSaleInfo;
-            first = false;
-        }
-        else
-        {
-            sale_info.accumulate(node->mSaleInfo);
-        }
-    }
-
-    result_sale_info = sale_info;
-
-    return true;
+    return vs_build_selectGetSaleInfo(*this, result_sale_info);
 }
 
 bool LLSelectMgr::selectGetAggregatePermissions(LLAggregatePermissions& result_perm)
@@ -4642,35 +4223,8 @@ bool LLSelectMgr::selectGetAggregatePermissions(LLAggregatePermissions& result_p
     return true;
 }
 
-bool LLSelectMgr::selectGetAggregateTexturePermissions(LLAggregatePermissions& result_perm)
-{
-    bool first = true;
-    LLAggregatePermissions perm;
-    for (LLObjectSelection::root_iterator iter = getSelection()->root_begin();
-         iter != getSelection()->root_end(); iter++ )
-    {
-        LLSelectNode* node = *iter;
-        if (!node->mValid)
-        {
-            return false;
-        }
-
-        LLAggregatePermissions t_perm = node->getObject()->permYouOwner() ? node->mAggregateTexturePermOwner : node->mAggregateTexturePerm;
-        if (first)
-        {
-            perm = t_perm;
-            first = false;
-        }
-        else
-        {
-            perm.aggregate(t_perm);
-        }
-    }
-
-    result_perm = perm;
-
-    return true;
-}
+bool LLSelectMgr::selectGetAggregateTexturePermissions(LLAggregatePermissions& result)
+{return vs_build_selectGetAggregateTexturePermissions(*this,result);}
 
 bool LLSelectMgr::isMovableAvatarSelected()
 {
@@ -4699,6 +4253,9 @@ struct LLDuplicateData
 
 void LLSelectMgr::selectDuplicate(const LLVector3& offset, bool select_copy)
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){if(auto* selection=owner->existingObjectSelection())selection->selectDuplicate(offset,select_copy); return;}
+#endif
 //  if (mSelectedObjects->isAttachment())
 // [RLVa:KB] - Checked: 2010-03-24 (RLVa-1.2.0e) | Added: RLVa-1.2.0a
     if ( (mSelectedObjects->isAttachment()) || ((rlv_handler_t::isEnabled()) && (!rlvCanDeleteOrReturn())) )
@@ -4746,6 +4303,9 @@ void LLSelectMgr::selectDuplicate(const LLVector3& offset, bool select_copy)
 
 void LLSelectMgr::repeatDuplicate()
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){if(auto* selection=owner->existingObjectSelection())selection->repeatDuplicate(); return;}
+#endif
     if (mSelectedObjects->isAttachment())
     {
         //RN: do not duplicate attachments
@@ -4914,42 +4474,18 @@ void LLSelectMgr::sendMultipleUpdate(U32 type)
 }
 
 // static
-void LLSelectMgr::packMultipleUpdate(LLSelectNode* node, void *user_data)
+void LLSelectMgr::packMultipleUpdate(LLSelectNode* node,void* user_data)
 {
-    LLViewerObject* object = node->getObject();
-    U32 *type32 = (U32 *)user_data;
-    U8 type = (U8)*type32;
-    U8  data[256];
-
-    gMessageSystem->nextBlockFast(_PREHASH_ObjectData);
-    gMessageSystem->addU32Fast(_PREHASH_ObjectLocalID,  object->getLocalID() );
-    gMessageSystem->addU8Fast(_PREHASH_Type, type );
-
-    S32 offset = 0;
-
-    // JC: You MUST pack the data in this order.  The receiving
-    // routine process_multiple_update_message on simulator will
-    // extract them in this order.
-
-    if (type & UPD_POSITION)
+    struct Object
     {
-        htolememcpy(&data[offset], &(object->getPosition().mV), MVT_LLVector3, 12);
-        offset += 12;
-    }
-    if (type & UPD_ROTATION)
-    {
-        LLQuaternion quat = object->getRotation();
-        LLVector3 vec = quat.packToVector3();
-        htolememcpy(&data[offset], &(vec.mV), MVT_LLQuaternion, 12);
-        offset += 12;
-    }
-    if (type & UPD_SCALE)
-    {
-        //LL_INFOS() << "Sending object scale " << object->getScale() << LL_ENDL;
-        htolememcpy(&data[offset], &(object->getScale().mV), MVT_LLVector3, 12);
-        offset += 12;
-    }
-    gMessageSystem->addBinaryDataFast(_PREHASH_Data, data, offset);
+        LLViewerObject* value;
+        U32 localID()const{return value->getLocalID();}
+        const LLVector3& position()const{return value->getPosition();}
+        LLQuaternion rotation()const{return value->getRotation();}
+        const LLVector3& scale()const{return value->getScale();}
+    }object{node->getObject()};
+    LLMessageSystem* messages=gMessageSystem;
+    vs_pack_multiple_update(*messages,object,U8(*static_cast<U32*>(user_data)));
 }
 
 //------------------------------------------------------------------------
@@ -5089,6 +4625,9 @@ void LLSelectMgr::sendSelect()
 
 void LLSelectMgr::deselectAll()
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){if(auto* selection=owner->existingObjectSelection())selection->deselectAll();return;}
+#endif
     if (!mSelectedObjects->getNumNodes())
     {
         return;
@@ -5387,6 +4926,14 @@ void LLSelectMgr::sendAttach(LLObjectSelectionHandle selection_handle, U8 attach
 
 void LLSelectMgr::sendDetach()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (owner->objectSelection()) owner->objectSelection()->sendDetach();
+        return;
+    }
+#endif
+
     if (!mSelectedObjects->getNumNodes() || mSelectedObjects->mSelectType == SELECT_TYPE_WORLD)
     {
         return;
@@ -5436,6 +4983,9 @@ void LLSelectMgr::sendDropAttachment()
 
 void LLSelectMgr::sendLink()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner=VSNativeSession::active()) { if(auto selection=owner->objectSelection()) selection->sendLink(); return; }
+#endif
     if (!mSelectedObjects->getNumNodes())
     {
         return;
@@ -5452,6 +5002,9 @@ void LLSelectMgr::sendLink()
 
 void LLSelectMgr::sendDelink()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner=VSNativeSession::active()) { if(auto selection=owner->objectSelection()) selection->sendDelink(); return; }
+#endif
     if (!mSelectedObjects->getNumNodes())
     {
         return;
@@ -5699,19 +5252,8 @@ struct LLSelectMgrApplyFlags : public LLSelectedObjectFunctor
     bool mState;
     virtual bool apply(LLViewerObject* object)
     {
-        if ( object->permModify())
-        {
-            if (object->isRoot())       // don't send for child objects
-            {
-                object->setFlags( mFlags, mState);
-            }
-            else if (FLAGS_WORLD & mFlags && ((LLViewerObject*)object->getRoot())->isSelected())
-            {
-                // FLAGS_WORLD are shared by all items in linkset
-                object->setFlagsWithoutUpdate(FLAGS_WORLD & mFlags, mState);
-            }
-        };
-        return true;
+        return vs_build_apply_flags(object,mFlags,mState,[](LLViewerObject* value)
+        {return static_cast<LLViewerObject*>(value->getRoot());});
     }
 };
 
@@ -7352,93 +6894,7 @@ void LLSelectNode::saveTextureScaleRatios(LLRender::eTexIndex index_to_query)
 // This implementation should be similar to LLTask::allowOperationOnTask
 bool LLSelectNode::allowOperationOnNode(PermissionBit op, U64 group_proxy_power) const
 {
-    // Extract ownership.
-    bool object_is_group_owned = false;
-    LLUUID object_owner_id;
-    mPermissions->getOwnership(object_owner_id, object_is_group_owned);
-
-    // Operations on invalid or public objects is not allowed.
-    if (!mObject || (mObject->isDead()) || !mPermissions->isOwned())
-    {
-        return false;
-    }
-
-    // The transfer permissions can never be given through proxy.
-    if (PERM_TRANSFER == op)
-    {
-        // The owner of an agent-owned object can transfer to themselves.
-        if ( !object_is_group_owned
-            && (gAgent.getID() == object_owner_id) )
-        {
-            return true;
-        }
-        else
-        {
-            // Otherwise check aggregate permissions.
-            return mObject->permTransfer();
-        }
-    }
-
-    if (PERM_MOVE == op
-        || PERM_MODIFY == op)
-    {
-        // only owners can move or modify their attachments
-        // no proxy allowed.
-        if (mObject->isAttachment() && object_owner_id != gAgent.getID())
-        {
-            return false;
-        }
-    }
-
-    // Calculate proxy_agent_id and group_id to use for permissions checks.
-    // proxy_agent_id may be set to the object owner through group powers.
-    // group_id can only be set to the object's group, if the agent is in that group.
-    LLUUID group_id = LLUUID::null;
-    LLUUID proxy_agent_id = gAgent.getID();
-
-    // Gods can always operate.
-    if (gAgent.isGodlike())
-    {
-        return true;
-    }
-
-    // Check if the agent is in the same group as the object.
-    LLUUID object_group_id = mPermissions->getGroup();
-    if (object_group_id.notNull() &&
-        gAgent.isInGroup(object_group_id))
-    {
-        // Assume the object's group during this operation.
-        group_id = object_group_id;
-    }
-
-    // Only allow proxy powers for PERM_COPY if the actual agent can
-    // receive the item (ie has PERM_TRANSFER permissions).
-    // NOTE: op == PERM_TRANSFER has already been handled, but if
-    // that ever changes we need to BLOCK proxy powers for PERM_TRANSFER.  DK 03/28/06
-    if (PERM_COPY != op || mPermissions->allowTransferTo(gAgent.getID()))
-    {
-        // Check if the agent can assume ownership through group proxy or agent-granted proxy.
-        if (   ( object_is_group_owned
-                && gAgent.hasPowerInGroup(object_owner_id, group_proxy_power))
-                // Only allow proxy for move, modify, and copy.
-                || ( (PERM_MOVE == op || PERM_MODIFY == op || PERM_COPY == op)
-                    && (!object_is_group_owned
-                        && gAgent.isGrantedProxy(*mPermissions))))
-        {
-            // This agent is able to assume the ownership role for this operation.
-            proxy_agent_id = object_owner_id;
-        }
-    }
-
-    // We now have max ownership information.
-    if (PERM_OWNER == op)
-    {
-        // This this was just a check for ownership, we can now return the answer.
-        return proxy_agent_id == object_owner_id;
-    }
-
-    // check permissions to see if the agent can operate
-    return (mPermissions->allowOperationBy(op, proxy_agent_id, group_id));
+    return vs_selected_allow_operation(mObject.get(), mPermissions, op, group_proxy_power, gAgent);
 }
 
 //-----------------------------------------------------------------------------
@@ -7619,14 +7075,14 @@ void LLSelectNode::renderOneSilhouette(const LLColor4 &color)
 // *DEPRECATED: See header comment.
 void dialog_refresh_all()
 {
-    // This helper refreshes object-selection dialogs and their scene menus.
-    // Connected native name/account controls own their independent updates.
-    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return;
+    // The renderer-specific selection owns its update signal. The actual
+    // shared dialogs and menus still need their normal refresh in both modes.
+    const bool native = gViewerWindow && gViewerWindow->isNativeVulkan();
     // This is the easiest place to fire the update signal, as it will
     // make cleaning up the functions below easier.  Also, sometimes entities
     // outside the selection manager change properties of selected objects
     // and call into this function.  Yuck.
-    LLSelectMgr::getInstance()->mUpdateSignal();
+    if (!native) LLSelectMgr::getInstance()->mUpdateSignal();
 
     // *TODO: Eliminate all calls into outside classes below, make those
     // objects register with the update signal.
@@ -7636,13 +7092,13 @@ void dialog_refresh_all()
         gFloaterTools->dirty();
     }
 
-    gMenuObject->needsArrange();
+    if (gMenuObject) gMenuObject->needsArrange();
 
-    if( gMenuAttachmentSelf->getVisible() )
+    if( gMenuAttachmentSelf && gMenuAttachmentSelf->getVisible() )
     {
         gMenuAttachmentSelf->arrange();
     }
-    if( gMenuAttachmentOther->getVisible() )
+    if( gMenuAttachmentOther && gMenuAttachmentOther->getVisible() )
     {
         gMenuAttachmentOther->arrange();
     }
@@ -7909,6 +7365,9 @@ LLBBox LLSelectMgr::getBBoxOfSelection() const
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::canUndo() const
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){return owner->existingObjectSelection() && owner->existingObjectSelection()->canUndo();}
+#endif
     // Can edit or can move
     return const_cast<LLSelectMgr*>(this)->mSelectedObjects->getFirstUndoEnabledObject() != NULL; // HACK: casting away constness - MG;
 }
@@ -7918,6 +7377,9 @@ bool LLSelectMgr::canUndo() const
 //-----------------------------------------------------------------------------
 void LLSelectMgr::undo()
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){if(auto* selection=owner->existingObjectSelection())selection->undo(); return;}
+#endif
     bool select_linked_set = !gSavedSettings.getBOOL("EditLinkedParts");
     LLUUID group_id(gAgent.getGroupID());
     sendListToRegions("Undo", packAgentAndSessionAndGroupID, packObjectID, logNoOp, &group_id, select_linked_set ? SEND_ONLY_ROOTS : SEND_CHILDREN_FIRST);
@@ -7928,6 +7390,9 @@ void LLSelectMgr::undo()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::canRedo() const
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){return owner->existingObjectSelection() && owner->existingObjectSelection()->canRedo();}
+#endif
     return const_cast<LLSelectMgr*>(this)->mSelectedObjects->getFirstEditableObject() != NULL; // HACK: casting away constness - MG
 }
 
@@ -7936,6 +7401,9 @@ bool LLSelectMgr::canRedo() const
 //-----------------------------------------------------------------------------
 void LLSelectMgr::redo()
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){if(auto* selection=owner->existingObjectSelection())selection->redo(); return;}
+#endif
     bool select_linked_set = !gSavedSettings.getBOOL("EditLinkedParts");
     LLUUID group_id(gAgent.getGroupID());
     sendListToRegions("Redo", packAgentAndSessionAndGroupID, packObjectID, logNoOp, &group_id, select_linked_set ? SEND_ONLY_ROOTS : SEND_CHILDREN_FIRST);
@@ -7946,6 +7414,9 @@ void LLSelectMgr::redo()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::canDoDelete() const
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){return owner->existingObjectSelection() && owner->existingObjectSelection()->canDoDelete();}
+#endif
     bool can_delete = false;
     // This function is "logically const" - it does not change state in
     // a way visible outside the selection manager.
@@ -7980,6 +7451,9 @@ void LLSelectMgr::doDelete()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::canDeselect() const
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){return owner->existingObjectSelection() && owner->existingObjectSelection()->canDeselect();}
+#endif
     return !mSelectedObjects->isEmpty();
 }
 
@@ -7988,6 +7462,9 @@ bool LLSelectMgr::canDeselect() const
 //-----------------------------------------------------------------------------
 void LLSelectMgr::deselect()
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){if(auto* selection=owner->existingObjectSelection())selection->deselectAll();return;}
+#endif
     deselectAll();
 }
 //-----------------------------------------------------------------------------
@@ -7995,6 +7472,9 @@ void LLSelectMgr::deselect()
 //-----------------------------------------------------------------------------
 bool LLSelectMgr::canDuplicate() const
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){return owner->existingObjectSelection() && owner->existingObjectSelection()->canDuplicate();}
+#endif
 //  return const_cast<LLSelectMgr*>(this)->mSelectedObjects->getFirstCopyableObject() != NULL; // HACK: casting away constness - MG
 // [RLVa:KB] - Checked: 2010-03-24 (RLVa-1.2.0e) | Added: RLVa-1.2.0a
     return

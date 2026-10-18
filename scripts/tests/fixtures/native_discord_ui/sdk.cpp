@@ -1,0 +1,25 @@
+#include <cassert>
+#include <functional>
+#include <map>
+#include <string>
+#include <fstream>
+#include <filesystem>
+#include <sstream>
+#include <cstring>
+#include <memory>
+struct LLUUID{std::string value;LLUUID()=default;LLUUID(std::string s):value(s){}bool operator==(const LLUUID&o)const{return value==o.value;}bool isNull(){return value.empty();}};std::istream&operator>>(std::istream&s,LLUUID&id){return s>>id.value;}std::ostream&operator<<(std::ostream&s,const LLUUID&id){return s<<id.value;}LLUUID gAgentID{"A"};using llifstream=std::ifstream;using llofstream=std::ofstream;struct LLFile{static bool isfile(const std::string&p){return std::filesystem::is_regular_file(p);}static void remove(const std::string&p){std::filesystem::remove(p);}};
+struct LLSD{std::map<std::string,LLSD>map;std::string text;LLSD&operator[](const std::string&k){return map[k];}LLSD&operator=(const char*s){text=s;return*this;}};
+int generation=1;std::function<bool()>vs_native_im_guard(){auto expected=generation;return[expected]{return generation==expected;};}struct Settings{bool enabled=false;bool getBOOL(const char*){return enabled;}}gSavedPerAccountSettings;
+struct DiscordUser{const char*username;};struct DiscordEventHandlers{void(*ready)(const DiscordUser*);void(*errored)(int,const char*);void(*disconnected)(int,const char*);};DiscordEventHandlers handlers{};bool sdkActive=false;int initCalls=0,stopCalls=0,clearCalls=0,pumpCalls=0;
+void Discord_Initialize(const char*,DiscordEventHandlers*h,int,const char*){assert(!sdkActive);sdkActive=true;handlers=*h;++initCalls;}void Discord_ClearPresence(){++clearCalls;}void Discord_Shutdown(){assert(sdkActive);sdkActive=false;++stopCalls;}void Discord_RunCallbacks(){++pumpCalls;}
+#define DISCORD_API_KEY "test"
+#define LL_INFOS(x) std::ostringstream()
+#define LL_ENDL '\n'
+static void handleDiscordReady(const DiscordUser*);static void handleDiscordDisconnected(int,const char*);static void handleDiscordError(int,const char*){}
+struct FSDiscordConnect{enum EConnectionState{DISCORD_NOT_CONNECTED,DISCORD_CONNECTION_IN_PROGRESS,DISCORD_CONNECTED,DISCORD_CONNECTION_FAILED,DISCORD_DISCONNECTING};static inline FSDiscordConnect*owner=nullptr;bool mConnected=false,mRpcActive=false,mRetiring=false;int mConnectTime=0,presence=0,infoClears=0;std::string mMarkerFilename="marker";EConnectionState mConnectionState=DISCORD_NOT_CONNECTED;std::function<bool()>mCurrent=[]{return false;},mAutoCurrent=[]{return false;};std::function<void(EConnectionState)>stateHook;std::function<void()>infoHook;static bool instanceExists(){return owner;}static FSDiscordConnect&instance(){return*owner;}static FSDiscordConnect*getInstance(){return owner;}bool isConnected(){return mConnected;}bool acceptsCallbacks(){return mRpcActive&&mCurrent();}void setConnectionState(EConnectionState s){mConnectionState=s;if(s==DISCORD_CONNECTED){mConnected=true;setMarkerFile();}if(s==DISCORD_NOT_CONNECTED){mConnected=false;clearMarkerFile();}if(stateHook)stateHook(s);}void storeInfo(const LLSD&){if(infoHook)infoHook();}void clearInfo(){++infoClears;}void updateRichPresence(){++presence;}
+bool checkMarkerFile()const;void setMarkerFile();void clearMarkerFile();void discordConnectCoro();void discordDisconnectCoro();void discordConnectedCoro(bool);void connectToDiscord();void disconnectFromDiscord();void checkConnectionToDiscord(bool);void retireAccount();bool Tick(const LLSD&);void onNativeSelfFullyVisible();};
+METHODS
+int main(){FSDiscordConnect service;FSDiscordConnect::owner=&service;
+assert(!service.checkMarkerFile());service.setMarkerFile();{std::ifstream f("marker");std::string owner;f>>owner;assert(owner=="A");}service.clearMarkerFile();assert(!std::filesystem::exists("marker"));{std::ofstream f("marker");f<<"Other";}service.setMarkerFile();service.clearMarkerFile();{std::ifstream f("marker");std::string owner;f>>owner;assert(owner=="Other");}std::filesystem::remove("marker");
+service.onNativeSelfFullyVisible();assert(!initCalls);gSavedPerAccountSettings.enabled=true;service.onNativeSelfFullyVisible();assert(!initCalls);service.checkConnectionToDiscord(true);assert(initCalls==1&&sdkActive);DiscordUser user{"real-sdk-user"};handleDiscordReady(&user);assert(service.isConnected());service.Tick({});assert(service.presence==1&&pumpCalls==1);service.disconnectFromDiscord();assert(stopCalls==1&&!service.acceptsCallbacks());handleDiscordReady(&user);assert(!service.isConnected());service.checkConnectionToDiscord(true);assert(initCalls==2);++generation;service.Tick({});assert(stopCalls==2&&service.presence==1);service.onNativeSelfFullyVisible();assert(initCalls==3);service.onNativeSelfFullyVisible();assert(initCalls==3);service.retireAccount();assert(stopCalls==3);
+service.stateHook=[&](auto state){if(state==FSDiscordConnect::DISCORD_CONNECTION_IN_PROGRESS)++generation;};service.checkConnectionToDiscord(true);assert(initCalls==3);service.stateHook={};service.checkConnectionToDiscord(true);assert(initCalls==4);service.infoHook=[&]{++generation;service.retireAccount();};handleDiscordReady(&user);assert(!service.isConnected()&&stopCalls==4);service.infoHook={};service.retireAccount();assert(stopCalls==4);}

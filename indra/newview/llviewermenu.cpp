@@ -27,6 +27,7 @@
 #include "llscripteditorws.h"
 #include "llviewerprecompiledheaders.h"
 #include "vsregioncontext.h"
+#include "vsobjectselection.h"
 #include <stdexcept>
 
 #ifdef INCLUDE_VLD
@@ -38,6 +39,7 @@
 #include "vsavatarservices.h"
 #if VS_NATIVE_VULKAN
 #include "vsplainchat.h"
+#include "vsobjectpurchase.h"
 #include "vsnativesession.h"
 #include "vsnativeappearance.h"
 #include "vsworldavatar.h"
@@ -113,6 +115,10 @@
 #include "llpanelmaininventory.h"
 #include "llmarketplacefunctions.h"
 #include "llmaterialeditor.h"
+#include "vsmaterialselection.h"
+#if VS_NATIVE_VULKAN
+#include "vseditselection.h"
+#endif
 #include "llmenuoptionpathfindingrebakenavmesh.h"
 #include "llmoveview.h"
 #include "llnavigationbar.h"
@@ -3779,16 +3785,58 @@ class LLObjectEnableReportAbuse : public view_listener_t
 };
 
 
-void handle_object_touch()
+namespace
 {
-    LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
+struct ReferenceMenuTouch
+{
+    using Object=LLViewerObject*;
+    Object primary()const{return LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();}
+    bool current(Object)const{return true;}
+    bool canTouch(Object object,const LLVector3& offset)const{return RlvActions::canTouch(object,offset);}
+    void grab(Object object,const LLPickInfo& pick)const{send_ObjectGrab_message(object,pick,LLVector3::zero);}
+    void release(Object object,const LLPickInfo& pick)const{send_ObjectDeGrab_message(object,pick);}
+};
+#if VS_NATIVE_VULKAN
+struct NativeMenuTouch
+{
+    using Object=std::optional<VSObjectContext>;
+    std::shared_ptr<VSNativeSession> owner;
+    Object primary()const
+    {
+        const auto* selection=owner->existingObjectSelection();if(!selection)return {};
+        const auto primary=selection->primaryObject();if(!primary)return {};
+        if(!gViewerWindow || !gViewerWindow->nativeContext() || !gViewerWindow->nativeContext()->world().guard(*primary)())return {};
+        return VSObjectContext::resolve(primary->id);
+    }
+    bool current(const Object& object)const{return owner==VSNativeSession::active() && object && object->current();}
+    bool canTouch(const Object& object,const LLVector3& offset)const{return RlvActions::canTouch(*object,offset);}
+    void grab(const Object& object,const LLPickInfo& pick)const{send_ObjectGrab_message(*object,pick,LLVector3::zero);}
+    void release(const Object& object,const LLPickInfo& pick)const{send_ObjectDeGrab_message(*object,pick);}
+};
+std::optional<VSWorldScene::Attachment> native_worn_attachment(const LLUUID& item)
+{
+    const auto owner=VSNativeSession::active();
+    if(!owner || !owner->regionReady() || !vs_avatar_character() || !gViewerWindow || !gViewerWindow->nativeContext())return {};
+    const LLUUID linked=gInventory.getLinkedItemID(item);
+    for(const auto& attachment:gViewerWindow->nativeContext()->world().attachments())
+        if(attachment.item==linked)return attachment;
+    return {};
+}
+#endif
+}
+
+namespace
+{
+template<class Peer>void requestObjectTouch(const Peer& peer)
+{
+    const auto object=peer.primary();
     if (!object) return;
 
     LLPickInfo pick = LLToolPie::getInstance()->getPick();
 
 // [RLVa:KB] - Checked: 2010-04-11 (RLVa-1.2.0e) | Modified: RLVa-1.1.0l
     // NOTE: fallback code since we really shouldn't be getting an active selection if we can't touch this
-    if ( (RlvActions::isRlvEnabled()) && (!RlvActions::canTouch(object, pick.mObjectOffset)) )
+    if ( (RlvActions::isRlvEnabled()) && (!peer.canTouch(object,pick.mObjectOffset)) )
     {
         RLV_ASSERT(false);
         return;
@@ -3798,8 +3846,22 @@ void handle_object_touch()
     // *NOTE: Hope the packets arrive safely and in order or else
     // there will be some problems.
     // *TODO: Just fix this bad assumption.
-    send_ObjectGrab_message(object, pick, LLVector3::zero);
-    send_ObjectDeGrab_message(object, pick);
+    if(!peer.current(object))return;
+    peer.grab(object,pick);
+    if(!peer.current(object))return;
+    peer.release(object,pick);
+}
+}
+void handle_object_touch()
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=VSNativeSession::active();if(owner && owner->regionReady())requestObjectTouch(NativeMenuTouch{owner});
+        return;
+    }
+#endif
+    requestObjectTouch(ReferenceMenuTouch{});
 }
 
 void handle_object_show_original()
@@ -3902,6 +3964,34 @@ static LLStringExplicit get_default_item_label(const std::string& item_name)
 
 bool enable_object_touch(LLUICtrl* ctrl)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        bool enabled=false;std::string label;
+        const auto owner=VSNativeSession::active();const auto* selection=owner?owner->existingObjectSelection():nullptr;
+        if(selection && owner->regionReady() && gViewerWindow->nativeContext())
+        {
+            auto& world=gViewerWindow->nativeContext()->world();const auto object=selection->primaryObject();
+            if(object)
+            {
+                const auto metadata=world.objectAdmission(*object);const auto parent=world.parentObject(*object);
+                const auto parentMetadata=parent?world.objectAdmission(*parent):std::optional<VSWorldScene::ObjectAdmission>{};
+                enabled=(metadata && (metadata->updateFlags&FLAGS_HANDLE_TOUCH)) || (parentMetadata && (parentMetadata->updateFlags&FLAGS_HANDLE_TOUCH));
+                if(RlvActions::isRlvEnabled() && enabled)
+                {
+                    const auto context=VSObjectContext::resolve(object->id);
+                    enabled=context && RlvActions::canTouch(*context,LLToolPie::getInstance()->getPick().mObjectOffset);
+                }
+            }
+            const auto root=selection->firstRootObject();const auto publication=root?selection->findProperties(*root):std::optional<VSObjectSelection::Publication>{};
+            if(publication)label=publication->properties->touch_name;
+        }
+        init_default_item_label(ctrl);
+        ctrl->setValue(label.empty()?get_default_item_label(ctrl->getName()):LLStringExplicit(label));
+        return enabled;
+    }
+#endif
+
     bool new_value = false;
     LLViewerObject* obj = LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
     if (obj)
@@ -3993,6 +4083,10 @@ void handle_object_open()
 
 bool enable_object_inspect()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { VSEditSelection selection; return selection.getFirstRootObject() != nullptr; }
+#endif
+
     LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
     LLViewerObject* selected_objectp = selection->getFirstRootObject();
     return selected_objectp != NULL;
@@ -4006,7 +4100,9 @@ struct LLSelectedTEGetmatIdAndPermissions : public LLSelectedTEFunctor
         , mCanTransfer(true)
         , mHasNonPbrFaces(false)
     {}
-    bool apply(LLViewerObject* objectp, S32 te_index)
+    bool apply(LLViewerObject* objectp, S32 te_index) override
+    { return apply(VSMaterialObject(objectp), te_index); }
+    bool apply(VSMaterialObject objectp, S32 te_index)
     {
         mCanCopy &= (bool)objectp->permCopy();
         mCanTransfer &= (bool)objectp->permTransfer();
@@ -4037,7 +4133,7 @@ bool enable_object_edit_gltf_material()
     }
 
     LLSelectedTEGetmatIdAndPermissions func;
-    LLSelectMgr::getInstance()->getSelection()->applyToTEs(&func);
+    VSMaterialSelection()->applyToTEs(&func);
     return func.mCanModify && !func.mHasNonPbrFaces;
 }
 
@@ -4192,6 +4288,23 @@ void handle_attachment_edit(const LLUUID& inv_item_id)
 
 void handle_attachment_touch(const LLUUID& inv_item_id)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if(!enable_attachment_touch(inv_item_id))return;
+        const auto attachment=native_worn_attachment(inv_item_id);const auto owner=VSNativeSession::active();if(!attachment || !owner)return;
+        const auto account=owner->accountGuard();const auto source=gViewerWindow->nativeContext()->world().guard(attachment->object);
+        auto* selection=owner->objectSelection();if(!selection || !source())return;
+        selection->deselectAll();if(!account() || !source())return;
+        if(!selection->selectFamily(attachment->object) || !account() || !source())return;
+        auto lease=selection->retainSelection();
+        if(!LLToolMgr::getInstance()->inBuildMode())
+            for(const auto& object:selection->selected())selection->setTransient(object,true);
+        if(account() && source())handle_object_touch();
+        return;
+    }
+#endif
+
     if ( (isAgentAvatarValid()) && (enable_attachment_touch(inv_item_id)) )
     {
         if (LLViewerObject* attach_obj = gAgentAvatarp->getWornAttachment(gInventory.getLinkedItemID(inv_item_id)))
@@ -4219,6 +4332,15 @@ void handle_attachment_touch(const LLUUID& inv_item_id)
 
 bool enable_attachment_touch(const LLUUID& inv_item_id)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto attachment=native_worn_attachment(inv_item_id);if(!attachment)return false;
+        const auto context=VSObjectContext::resolve(attachment->object.id);
+        return context && (context->flags&FLAGS_HANDLE_TOUCH) && (!RlvActions::isRlvEnabled() || RlvActions::canTouch(*context));
+    }
+#endif
+
     if (isAgentAvatarValid())
     {
         const LLViewerObject* attach_obj = gAgentAvatarp->getWornAttachment(gInventory.getLinkedItemID(inv_item_id));
@@ -4232,6 +4354,15 @@ bool enable_attachment_touch(const LLUUID& inv_item_id)
 
 void handle_object_inspect()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        VSEditSelection selection;
+        if (selection.getFirstRootObject()) LLFloaterReg::showInstance("task_properties");
+        return;
+    }
+#endif
+
     LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
     LLViewerObject* selected_objectp = selection->getFirstRootObject();
     if (selected_objectp)
@@ -5322,7 +5453,7 @@ class LLSelfStandUp : public view_listener_t
 bool enable_standup_self()
 {
 // [RLVa:KB] - Checked: 2010-04-01 (RLVa-1.2.0c) | Modified: RLVa-1.0.0g
-    return isAgentAvatarValid() && gAgentAvatarp->isSitting() && RlvActions::canStand();
+    return vs_avatar_character() && gAgent.isSitting() && RlvActions::canStand();
 // [/RLVa:KB]
 //  return isAgentAvatarValid() && gAgentAvatarp->isSitting();
 }
@@ -5343,10 +5474,35 @@ bool show_sitdown_self()
     return vs_avatar_character() && !gAgent.isSitting();
 }
 
+namespace
+{
+bool sit_avatar_is_editing()
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=VSNativeSession::active();const auto appearance=owner?owner->appearance():nullptr;
+        return appearance && appearance->isEditing();
+    }
+#endif
+    return isAgentAvatarValid() && gAgentAvatarp->isEditingAppearance();
+}
+bool sit_pick_allowed(const LLPickInfo& pick)
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto source=VSObjectContext::resolve(pick.mObjectID);
+        return source && source->current && source->current() && RlvActions::canSit(*source,pick.mObjectOffset);
+    }
+#endif
+    return RlvActions::canSit(pick.getObject(),pick.mObjectOffset);
+}
+}
 bool enable_sitdown_self()
 {
 // [RLVa:KB] - Checked: 2010-08-28 (RLVa-1.2.1a) | Added: RLVa-1.2.1a
-    return show_sitdown_self() && (!isAgentAvatarValid() || !gAgentAvatarp->isEditingAppearance()) && !gAgent.getFlying() && !gRlvHandler.hasBehaviour(RLV_BHVR_SIT);
+    return show_sitdown_self() && !sit_avatar_is_editing() && !gAgent.getFlying() && !gRlvHandler.hasBehaviour(RLV_BHVR_SIT);
 // [/RLVa:KB]
 //  return show_sitdown_self() && (!isAgentAvatarValid() || !gAgentAvatarp->isEditingAppearance()) && !gAgent.getFlying();
 }
@@ -5882,6 +6038,10 @@ class LLEnableHoverHeight : public view_listener_t
     {
         // <FS:Ansariel> Legacy baking avatar z-offset
         //return gAgent.getRegion() && gAgent.getRegion()->avatarHoverHeightEnabled();
+#if VS_NATIVE_VULKAN
+        if (const auto owner = VSNativeSession::active())
+            return owner->appearance() && owner->appearance()->hoverEnabled();
+#endif
         return (gAgent.getRegion() && gAgent.getRegion()->avatarHoverHeightEnabled()) || (isAgentAvatarValid() && !gAgentAvatarp->isUsingServerBakes());
         // </FS:Ansariel>
     }
@@ -5903,11 +6063,20 @@ bool is_object_sittable()
     if (rlv_handler_t::isEnabled())
     {
         const LLPickInfo& pick = LLToolPie::getInstance()->getPick();
-        if ( (pick.mObjectID.notNull()) && (!RlvActions::canSit(pick.getObject(), pick.mObjectOffset)) )
+        if ( (pick.mObjectID.notNull()) && (!sit_pick_allowed(pick)) )
             return false;
     }
 // [/RLVa:KB]
 
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=VSNativeSession::active();const auto selection=owner?owner->retainObjectSelection():nullptr;
+        const auto primary=selection?selection->primaryObject():std::nullopt;
+        const auto source=primary?VSObjectContext::resolve(primary->id):std::nullopt;
+        return source && source->current && source->current() && source->pcode==LL_PCODE_VOLUME;
+    }
+#endif
     LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
 
     if (object && object->getPCode() == LL_PCODE_VOLUME)
@@ -5921,20 +6090,50 @@ bool is_object_sittable()
 }
 
 // only works on pie menu
-void handle_object_sit(LLViewerObject* object, const LLVector3& offset)
+namespace
+{
+struct ReferenceMenuSit
+{
+    LLViewerObject* value;
+    bool valid()const{return value!=nullptr;}
+    bool current()const{return true;}
+    U8 pcode()const{return value->getPCode();}
+    bool canSit(const LLVector3& offset)const{return RlvActions::canSit(value,offset);}
+    bool avatarValid()const{return isAgentAvatarValid();}
+    bool sitting()const{return gAgentAvatarp->isSitting();}
+    const LLUUID& id()const{return value->mID;}
+    void send()const{value->getRegion()->sendReliableMessage();}
+};
+struct NativeMenuSit
+{
+    const VSObjectContext& value;
+    bool valid()const{return current();}
+    bool current()const{return value.current && value.current();}
+    U8 pcode()const{return value.pcode;}
+    bool canSit(const LLVector3& offset)const{return RlvActions::canSit(value,offset);}
+    bool avatarValid()const{return vs_avatar_character()!=nullptr;}
+    bool sitting()const{return gAgent.isSitting();}
+    const LLUUID& id()const{return value.id;}
+    void send()const{if(current())gMessageSystem->sendReliable(value.host);}
+};
+}
+
+namespace
+{
+template<class Peer>void requestObjectSit(const Peer& peer,const LLVector3& offset)
 {
     // get object selection offset
 
-//  if (object && object->getPCode() == LL_PCODE_VOLUME)
+//  if (peer.valid() && peer.pcode() == LL_PCODE_VOLUME)
 // [RLVa:KB] - Checked: 2010-03-06 (RLVa-1.2.0c) | Modified: RLVa-1.2.0c
-    if ( (object && object->getPCode() == LL_PCODE_VOLUME) &&
-         ((!rlv_handler_t::isEnabled()) || (RlvActions::canSit(object, offset))) )
+    if ( (peer.valid() && peer.pcode() == LL_PCODE_VOLUME) &&
+         ((!rlv_handler_t::isEnabled()) || (peer.canSit(offset))) )
 // [/RLVa:KB]
     {
 // [RLVa:KB] - Checked: 2010-08-29 (RLVa-1.2.1c) | Added: RLVa-1.2.1c
-        if ( (gRlvHandler.hasBehaviour(RLV_BHVR_STANDTP)) && (isAgentAvatarValid()) )
+        if ( (gRlvHandler.hasBehaviour(RLV_BHVR_STANDTP)) && (peer.avatarValid()) )
         {
-            if (gAgentAvatarp->isSitting())
+            if (peer.sitting())
             {
                 gAgent.standUp();
                 return;
@@ -5943,20 +6142,38 @@ void handle_object_sit(LLViewerObject* object, const LLVector3& offset)
         }
 // [/RLVa:KB]
 
+        if(!peer.current())return;
         gMessageSystem->newMessageFast(_PREHASH_AgentRequestSit);
         gMessageSystem->nextBlockFast(_PREHASH_AgentData);
         gMessageSystem->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
         gMessageSystem->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
         gMessageSystem->nextBlockFast(_PREHASH_TargetObject);
-        gMessageSystem->addUUIDFast(_PREHASH_TargetID, object->mID);
+        gMessageSystem->addUUIDFast(_PREHASH_TargetID, peer.id());
         gMessageSystem->addVector3Fast(_PREHASH_Offset, offset);
 
-        object->getRegion()->sendReliableMessage();
+        peer.send();
     }
+}
+}
+void handle_object_sit(LLViewerObject* object, const LLVector3& offset)
+{
+    requestObjectSit(ReferenceMenuSit{object},offset);
 }
 
 void handle_object_sit_or_stand()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto pick=LLToolPie::instance().getPick();
+        if(pick.mPickType==LLPickInfo::PICK_FLORA || (pick.mNativeObjectCurrent && !pick.mNativeObjectCurrent()))return;
+        const auto object=VSObjectContext::resolve(pick.mObjectID);if(!object)return;
+        if(sitting_on_selection()){gAgent.standUp();return;}
+        requestObjectSit(NativeMenuSit{*object},pick.mObjectOffset);
+        return;
+    }
+#endif
+
     LLPickInfo pick = LLToolPie::getInstance()->getPick();
     LLViewerObject *object = pick.getObject();
     if (!object || pick.mPickType == LLPickInfo::PICK_FLORA)
@@ -5975,6 +6192,14 @@ void handle_object_sit_or_stand()
 
 void handle_object_sit(const LLUUID& object_id)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if(const auto object=VSObjectContext::resolve(object_id))requestObjectSit(NativeMenuSit{*object},LLVector3::zero);
+        return;
+    }
+#endif
+
     LLViewerObject* obj = gObjectList.findObject(object_id);
     if (!obj)
     {
@@ -7078,6 +7303,22 @@ void show_buy_currency(const char* extra)
 
 void handle_buy()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto source=VSObjectPurchase::capture();
+        if(!source || !source->current())return;
+        const auto sale=source->publication.properties->sale_info;
+        const S32 price=sale.getSalePrice();
+        if(price>0 && price>gStatusBar->getBalance())
+        {
+            LLStringUtil::format_map_t args;args["AMOUNT"]=llformat("%d",price);
+            LLBuyCurrencyHTML::openCurrencyFloater(LLTrans::getString("this_object_costs",args),price);return;
+        }
+        if(sale.getSaleType()==LLSaleInfo::FS_CONTENTS)handle_buy_contents(sale);else handle_buy_object(sale);
+        return;
+    }
+#endif
     if (LLSelectMgr::getInstance()->getSelection()->isEmpty()) return;
 
     LLSaleInfo sale_info;
@@ -7121,6 +7362,16 @@ bool for_sale_selection(LLSelectNode* nodep)
 
 bool sitting_on_selection()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=VSNativeSession::active();const auto selection=owner?owner->retainObjectSelection():nullptr;
+        if(!selection)return false;
+        const auto root=selection->firstRootObject();
+        return root && selection->findProperties(*root) && vs_avatar_character() && gAgent.isSitting() && vs_avatar_root_id()==root->id;
+    }
+#endif
+
     LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->getFirstRootNode();
     if (!node)
     {
@@ -8844,6 +9095,32 @@ bool complete_give_money(const LLSD& notification, const LLSD& response, LLObjec
 
 void handle_give_money_dialog()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=VSNativeSession::active();
+        const auto selection=owner?owner->retainObjectSelection():nullptr;
+        const auto primary=selection?selection->primaryObject():std::nullopt;
+        const auto source=primary?VSObjectContext::resolve(primary->id):std::nullopt;
+        if(!source || !source->current())return;
+        const auto current=selection->selectionGuard();
+        const auto lease=selection->retainSelection();
+        LLNotification::Params params("DoNotDisturbModePay");
+        params.functor.function([source=*source,current,lease](const LLSD& notification,const LLSD& response)
+        {
+            if(!current() || !source.current())return false;
+            if(LLNotificationsUtil::getSelectedOption(notification,response)==0)gAgent.setDoNotDisturb(false);
+            const auto target=source.attachment?VSObjectContext::resolve(source.rootID):std::optional<VSObjectContext>(source);
+            if(!target || !target->current())return false;
+            if(target->pcode==LL_PCODE_LEGACY_AVATAR)
+                LLFloaterPayUtil::payDirectly(&give_money,target->id,false);
+            else LLFloaterPayUtil::payViaObject(&give_money,*target);
+            return false;
+        });
+        if(gAgent.isDoNotDisturb())LLNotifications::instance().add(params);else LLNotifications::instance().forceResponse(params,1);
+        return;
+    }
+#endif
     LLNotification::Params params("DoNotDisturbModePay");
     params.functor.function(boost::bind(complete_give_money, _1, _2, LLSelectMgr::getInstance()->getSelection()));
 
@@ -8904,6 +9181,18 @@ bool enable_object_sit(LLUICtrl* ctrl)
         init_default_item_label(ctrl);
 
         // Update label
+#if VS_NATIVE_VULKAN
+        if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        {
+            const auto owner=VSNativeSession::active();const auto selection=owner?owner->retainObjectSelection():nullptr;
+            const auto root=selection?selection->firstRootObject():std::nullopt;
+            const auto properties=root?selection->findProperties(*root):std::nullopt;
+            if(properties && !properties->properties->sit_name.empty())ctrl->setValue(properties->properties->sit_name);
+            else ctrl->setValue(get_default_item_label(ctrl->getName()));
+        }
+        else
+#endif
+        {
         LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->getFirstRootNode();
         if (node && node->mValid && !node->mSitName.empty())
         {
@@ -8913,6 +9202,7 @@ bool enable_object_sit(LLUICtrl* ctrl)
         {
             ctrl->setValue(get_default_item_label(ctrl->getName()));
         }
+        }
     }
 
 // [RLVa:KB] - Checked: 2010-04-01 (RLVa-1.2.0c) | Modified: RLVa-1.2.0c
@@ -8921,7 +9211,7 @@ bool enable_object_sit(LLUICtrl* ctrl)
         {
             const LLPickInfo& pick = LLToolPie::getInstance()->getPick();
             if (pick.mObjectID.notNull())
-                sitting_on_sel = !RlvActions::canSit(pick.getObject(), pick.mObjectOffset);
+                sitting_on_sel = !sit_pick_allowed(pick);
         }
 // [/RLVa:KB]
 
@@ -9718,6 +10008,33 @@ class LLAttachmentDetachFromPoint : public view_listener_t
 
 static bool onEnableAttachmentLabel(LLUICtrl* ctrl, const LLSD& data)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (!owner->regionReady()) return false;
+        const S32 point = data["index"].asInteger();
+        const auto points = vs_avatar_attachment_points();
+        if (std::none_of(points.begin(), points.end(), [point](const auto& entry) { return entry.first == unsigned(point); })) return false;
+        if (auto* menu = dynamic_cast<LLMenuItemGL*>(ctrl))
+        {
+            std::string label = data["label"].asString();
+            for (const auto& attachment : vs_avatar_attachments())
+            {
+                if (attachment.point != unsigned(point)) continue;
+                auto* item = gInventory.getItem(attachment.item);
+                if (item && !(FSLSLBridge::instance().getBridge() &&
+                    FSLSLBridge::instance().getBridge()->getUUID() == item->getUUID() && point == FS_BRIDGE_POINT))
+                {
+                    label += " (" + item->getName() + ")";
+                    break;
+                }
+            }
+            menu->setLabel(label);
+        }
+        return !rlv_handler_t::isEnabled() || !gRlvAttachmentLocks.isLockedAttachmentPoint(point, RLV_LOCK_ADD);
+    }
+#endif
+
 // [RLVa:KB] - Checked: 2010-09-28 (RLVa-1.2.1f) | Modified: RLVa-1.2.1f
     // RELEASE-RLVa: [SL-2.2.0] When attaching to a specific point the object will be "add attached" [see LLSelectMgr::sendAttach()]
     bool fRlvEnable = true;
@@ -10092,6 +10409,21 @@ class LLAvatarCall : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+#if VS_NATIVE_VULKAN
+        if (const auto session=VSNativeSession::active())
+        {
+            const auto identity=session->account();
+            const auto selection=session->retainObjectSelection();
+            const auto primary=selection ? selection->primaryObject() : std::nullopt;
+            auto* context=gViewerWindow ? gViewerWindow->nativeContext() : nullptr;
+            auto* avatar=context && primary ? context->world().avatarForObject(primary->id) : nullptr;
+            if(avatar && RlvActions::canShowName(RlvActions::SNC_DEFAULT,avatar->character().getID()) &&
+               session->current(identity) && context->world().current(*primary) &&
+               selection->node(*primary) && selection->node(*primary)->primary)
+                LLAvatarActions::startCall(avatar->character().getID());
+            return true;
+        }
+#endif
         LLVOAvatar* avatar = find_avatar_from_object( LLSelectMgr::getInstance()->getSelection()->getPrimaryObject() );
 //      if(avatar)
 // [RLVa:KB] - Checked: RLVa-1.2.0
@@ -10107,6 +10439,20 @@ class LLAvatarCall : public view_listener_t
 // [RLVa:KB] - Checked: RLVa-1.2.1
 bool enable_avatar_call()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session=VSNativeSession::active())
+    {
+        if(RlvActions::isRlvEnabled())
+        {
+            const auto selection=session->retainObjectSelection();
+            const auto primary=selection ? selection->primaryObject() : std::nullopt;
+            auto* context=gViewerWindow ? gViewerWindow->nativeContext() : nullptr;
+            auto* avatar=context && primary ? context->world().avatarForObject(primary->id) : nullptr;
+            if(!avatar || !RlvActions::canShowName(RlvActions::SNC_DEFAULT,avatar->character().getID()))return false;
+        }
+        return LLAvatarActions::canCall();
+    }
+#endif
     if (RlvActions::isRlvEnabled())
     {
         const LLVOAvatar* pAvatar = find_avatar_from_object(LLSelectMgr::getInstance()->getSelection()->getPrimaryObject());
@@ -10145,15 +10491,49 @@ namespace
                 return true; // fail: stop applying
             }
         }
+#if VS_NATIVE_VULKAN
+        bool apply(VSEditNode* node)
+{
+            auto* obj = node->getObject();
+            if (!obj)
+            {
+                return true;
+            }
+            scripted = obj->task().flagScripted();
+            modifiable = obj->permModify();
+
+            if( scripted && modifiable )
+            {
+                mQueue->addObject(obj->task(), node->mName);
+                return false;
+            }
+            else
+            {
+                return true; // fail: stop applying
+            }
+        }
+#endif
     };
 }
 
 bool queue_actions(LLFloaterScriptQueue* q, const std::string& msg)
 {
     QueueObjects func(q);
-    LLSelectMgr *mgr = LLSelectMgr::getInstance();
-    LLObjectSelectionHandle selectHandle = mgr->getSelection();
-    bool fail = selectHandle->applyToNodes(&func);
+    bool fail = false;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        VSEditSelection selection;
+        for (auto it=selection.begin();it!=selection.end();++it)
+            if (func.apply(*it)) { fail=true; break; }
+    }
+    else
+#endif
+    {
+        LLSelectMgr *mgr = LLSelectMgr::getInstance();
+        LLObjectSelectionHandle selectHandle = mgr->getSelection();
+        fail = selectHandle->applyToNodes(&func);
+    }
     if(fail)
     {
         if ( !func.scripted )
@@ -10248,12 +10628,27 @@ void handle_selected_script_action(const std::string& action)
 {
 // [RLVa:KB] - Checked: 2010-04-19 (RLVa-1.2.0f) | Modified: RLVa-1.0.5a
         // We'll allow resetting the scripts of objects on a non-attachable attach point since they wouldn't be able to circumvent anything
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            if (rlv_handler_t::isEnabled() && gRlvAttachmentLocks.hasLockedAttachmentPoint(RLV_LOCK_REMOVE))
+            {
+                VSEditSelection selection;
+                if (selection.isAttachment())
+                    for (auto it=selection.begin();it!=selection.end();++it)
+                        if (auto* object=(*it)->getObject(); object && object->task().attachmentLocked()) return;
+            }
+        }
+        else
+#endif
+        {
         if ( (rlv_handler_t::isEnabled()) && (gRlvAttachmentLocks.hasLockedAttachmentPoint(RLV_LOCK_REMOVE)) )
         {
             LLObjectSelectionHandle hSel = LLSelectMgr::getInstance()->getSelection();
             RlvSelectHasLockedAttach f;
             if ( (hSel->isAttachment()) && (hSel->getFirstNode(&f) != NULL) )
                 return;
+        }
         }
 // [/RLVa:KB]
 
@@ -10916,6 +11311,32 @@ class LLSomethingSelectedNoHUD : public view_listener_t
 
 static bool is_editable_selected()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        VSEditSelection selection;
+        if (rlv_handler_t::isEnabled())
+        {
+            if (selection.isAttachment())
+            {
+                if (gRlvAttachmentLocks.hasLockedAttachmentPoint(RLV_LOCK_REMOVE))
+                    for (auto it=selection.root_begin();it!=selection.root_end();++it)
+                        if (auto* object=(*it)->getObject(); object && object->task().attachmentLocked()) return false;
+            }
+            else
+                for (auto it=selection.root_begin();it!=selection.root_end();++it)
+                    if (auto* object=(*it)->getObject())
+                    {
+                        const auto context=VSObjectContext::resolve(object->task().nativeObject());
+                        if (context && !RlvActions::canEdit(*context)) return false;
+                    }
+        }
+        for (auto it=selection.begin();it!=selection.end();++it)
+            if (auto* object=(*it)->getObject(); object && object->permModify()) return true;
+        return false;
+    }
+#endif
+
 // [RLVa:KB] - Checked: 2010-09-28 (RLVa-1.2.1f) | Modified: RLVa-1.0.5a
     // Changed for Firestorm because of script reset function in object menus (see FIRE-8213)
     if (rlv_handler_t::isEnabled())
@@ -10961,6 +11382,13 @@ class LLEditableSelectedMono : public view_listener_t
     bool handleEvent(const LLSD& userdata)
     {
         bool new_value = false;
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            const auto region=vs_current_region_context();
+            return region && gMenuHolder && !region->getCapability("UpdateScriptTask").empty() && is_editable_selected();
+        }
+#endif
         LLViewerRegion* region = gAgent.getRegion();
         if(region && gMenuHolder)
         {
@@ -11136,8 +11564,8 @@ class LLWorldEnableTeleportHome : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
-        LLViewerRegion* regionp = gAgent.getRegion();
-        bool agent_on_prelude = (regionp && regionp->isPrelude());
+        const auto region=vs_current_region_context();
+        bool agent_on_prelude=region&&is_prelude(region->getRegionFlags());
         bool enable_teleport_home = gAgent.isGodlike() || !agent_on_prelude;
 // [RLVa:KB] - Checked: 2010-09-28 (RLVa-1.2.1f) | Modified: RLVa-1.2.1f
         enable_teleport_home &=
@@ -12024,6 +12452,11 @@ class LLViewHighlightTransparent : public view_listener_t
         LLDrawPoolAlpha::sShowDebugAlpha = (!LLDrawPoolAlpha::sShowDebugAlpha) && (RlvActions::canHighlightTransparent());
 // [/RLVa:KB]
 
+#if VS_NATIVE_VULKAN
+        // Native material/feedback packets read this shared flag every frame;
+        // no legacy drawable batches exist to rebuild.
+        if(VSNativeSession::active())return true;
+#endif
         // invisible objects skip building their render batches unless sShowDebugAlpha is true, so rebuild batches whenever toggling this flag
         gPipeline.rebuildDrawInfo();
         return true;
@@ -12035,6 +12468,11 @@ class LLViewHighlightTransparentProbe : public view_listener_t
     bool handleEvent(const LLSD& userdata)
     {
         gSavedSettings.setBOOL("RenderReflectionProbeShowTransparent", !gSavedSettings.getBOOL("RenderReflectionProbeShowTransparent"));
+#if VS_NATIVE_VULKAN
+        // Native material/feedback packets read this shared flag every frame;
+        // no legacy drawable batches exist to rebuild.
+        if(VSNativeSession::active())return true;
+#endif
         // invisible objects skip building their render batches unless sShowDebugAlpha is true, so rebuild batches whenever toggling this flag
         gPipeline.rebuildDrawInfo();
         return true;

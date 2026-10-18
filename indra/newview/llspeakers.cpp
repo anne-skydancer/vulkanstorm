@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsavatarservices.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llspeakers.h"
 
@@ -1049,7 +1053,20 @@ void LLLocalSpeakerMgr::updateSpeakerList()
     std::vector<LLVector3d> positions;
 // <FS:CR> Opensim
     //LLWorld::getInstance()->getAvatars(&avatar_ids, &positions, gAgent.getPositionGlobal(), CHAT_NORMAL_RADIUS);
-    LLWorld::getInstance()->getAvatars(&avatar_ids, &positions, gAgent.getPositionGlobal(), (F32)LFSimFeatureHandler::getInstance()->sayRange());
+    bool native = false;
+#if VS_NATIVE_VULKAN
+    native = bool(VSNativeSession::active());
+#endif
+    if (native)
+    {
+        for (const auto& avatar : vs_avatar_locations(gAgent.getPositionGlobal(), (F32)LFSimFeatureHandler::getInstance()->sayRange()))
+        {
+            avatar_ids.push_back(avatar.id);
+            positions.push_back(avatar.position);
+        }
+    }
+    else
+        LLWorld::getInstance()->getAvatars(&avatar_ids, &positions, gAgent.getPositionGlobal(), (F32)LFSimFeatureHandler::getInstance()->sayRange());
 // </FS:CR> Opensim
 #ifdef LL_DISCORD
     if (gSavedSettings.getBOOL("EnableDiscord"))
@@ -1067,10 +1084,13 @@ void LLLocalSpeakerMgr::updateSpeakerList()
         LLPointer<LLSpeaker> speakerp = speaker_it->second;
         if (speakerp.notNull() && speakerp->mStatus == LLSpeaker::STATUS_TEXT_ONLY)
         {
-            LLVOAvatar* avatarp = (LLVOAvatar*)gObjectList.findObject(speaker_id);
+            LLVOAvatar* avatarp = native ? nullptr : (LLVOAvatar*)gObjectList.findObject(speaker_id);
+            LLVector3d native_position;
+            const bool native_precise = native && vs_avatar_precise_location(speaker_id, native_position);
 // <FS:CR> Opensim
             F32 say_distance_squared = (F32)(LFSimFeatureHandler::getInstance()->sayRange() * LFSimFeatureHandler::getInstance()->sayRange());
-            if (!avatarp || dist_vec_squared(avatarp->getPositionAgent(), gAgent.getPositionAgent()) > say_distance_squared)
+            if (native ? (!native_precise || dist_vec_squared(native_position, gAgent.getPositionGlobal()) > say_distance_squared)
+                       : (!avatarp || dist_vec_squared(avatarp->getPositionAgent(), gAgent.getPositionAgent()) > say_distance_squared))
             //if (!avatarp || dist_vec_squared(avatarp->getPositionAgent(), gAgent.getPositionAgent()) > CHAT_NORMAL_RADIUS * CHAT_NORMAL_RADIUS)
 // </FS:CR> Opensim
             {

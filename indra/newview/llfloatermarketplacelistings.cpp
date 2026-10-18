@@ -1072,6 +1072,8 @@ void LLFloaterItemProperties::onOpen(const LLSD& key)
     LLSidepanelTaskInfo* task_panel = dynamic_cast<LLSidepanelTaskInfo*>(panel);
     if (task_panel)
     {
+        if (gViewerWindow && gViewerWindow->isNativeVulkan()) task_panel->refreshSelection();
+        else
         task_panel->setObjectSelection(LLSelectMgr::getInstance()->getSelection());
     }
 }

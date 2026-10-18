@@ -14,6 +14,7 @@
 #define FS_POSE_H
 
 #include "llsingleton.h"
+#include <functional>
 
 class FSPose : public LLSingleton<FSPose>
 {
@@ -25,9 +26,11 @@ class FSPose : public LLSingleton<FSPose>
 public:
     void setPose(const std::string& new_pose, bool save_state = true);
     void stopPose();
+    void retireAccount();
 
 private:
     LLUUID  mCurrentPose;
+    std::function<bool()> mCurrent = [] { return true; };
 };
 
 #endif // FS_POSE_H

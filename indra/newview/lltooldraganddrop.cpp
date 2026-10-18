@@ -26,6 +26,11 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "lltooldraganddrop.h"
+#include "vstaskinventoryobject.h"
+#include "vsobjectcontext.h"
+#if VS_NATIVE_VULKAN
+void vs_native_beam_effect(const LLUUID&, const LLUUID&, const LLColor4U&, F32);
+#endif
 
 // library headers
 #include "llnotificationsutil.h"
@@ -211,7 +216,8 @@ public:
         const LLUUID& obj_id, LLToolDragAndDrop::ESource src) :
         LLInventoryFetchItemsObserver(ids),
         mObjectID(obj_id),
-        mSource(src)
+        mSource(src),
+        mObjectCurrent(VSTaskInventoryObject::find(obj_id)->objectGuard())
     {}
     ~LLCategoryDropObserver() {}
     virtual void done();
@@ -219,13 +225,14 @@ public:
 protected:
     LLUUID mObjectID;
     LLToolDragAndDrop::ESource mSource;
+    std::function<bool()> mObjectCurrent;
 };
 
 void LLCategoryDropObserver::done()
 {
     gInventory.removeObserver(this);
-    LLViewerObject* dst_obj = gObjectList.findObject(mObjectID);
-    if (dst_obj)
+    const auto dst_obj = VSTaskInventoryObject::find(mObjectID);
+    if (dst_obj && mObjectCurrent())
     {
         // *FIX: coalesce these...
         LLInventoryItem* item = NULL;
@@ -234,7 +241,7 @@ void LLCategoryDropObserver::done()
         for(; it < end; ++it)
         {
             item = gInventory.getItem(*it);
-            if (item)
+            if (item && mObjectCurrent())
             {
                 LLToolDragAndDrop::dropInventory(
                     dst_obj,
@@ -3622,4 +3629,533 @@ void pack_permissions_slam(LLMessageSystem* msg, U32 flags, const LLPermissions&
     msg->addU32Fast(_PREHASH_GroupMask, group_mask);
     msg->addU32Fast(_PREHASH_EveryoneMask, everyone_mask);
     msg->addU32Fast(_PREHASH_NextOwnerMask, next_owner_mask);
+}
+
+
+void LLToolDragAndDrop::dropInventory(const VSTaskInventoryObject& hit_obj,
+                                      LLInventoryItem* item,
+                                      LLToolDragAndDrop::ESource source,
+                                      const LLUUID& src_id)
+{
+    if (!hit_obj->native()) { dropInventory(hit_obj->legacy(), item, source, src_id); return; }
+    // *HACK: In order to resolve SL-22177, we need to block drags
+    // from notecards and objects onto other objects.
+    if ((SOURCE_WORLD == LLToolDragAndDrop::getInstance()->mSource)
+       || (SOURCE_NOTECARD == LLToolDragAndDrop::getInstance()->mSource))
+    {
+        LL_WARNS() << "Call to LLToolDragAndDrop::dropInventory() from world"
+            << " or notecard." << LL_ENDL;
+        return;
+    }
+
+    LLPointer<LLViewerInventoryItem> new_item = new LLViewerInventoryItem(item);
+    time_t creation_date = time_corrected();
+    new_item->setCreationDate(creation_date);
+
+    if (!item->getPermissions().allowCopyBy(gAgent.getID()))
+    {
+        if (SOURCE_AGENT == source)
+        {
+            // Remove the inventory item from local inventory. The
+            // server will actually remove the item from agent
+            // inventory.
+            gInventory.deleteObject(item->getUUID());
+            gInventory.notifyObservers();
+        }
+        else if (SOURCE_WORLD == source)
+        {
+            // *FIX: if the objects are in different regions, and the
+            // source region has crashed, you can bypass these
+            // permissions.
+            const auto src_obj = VSTaskInventoryObject::find(src_id);
+            if (src_obj)
+            {
+                src_obj->removeInventory(item->getUUID());
+            }
+            else
+            {
+                LL_WARNS() << "Unable to find source object." << LL_ENDL;
+                return;
+            }
+        }
+    }
+    if (!hit_obj) return;
+    hit_obj->updateInventory(new_item, TASK_INVENTORY_ITEM_KEY, true);
+    if (LLFloaterReg::instanceVisible("build"))
+    {
+        // *FIX: only show this if panel not expanded?
+        LLFloaterReg::showInstance("build", "Contents");
+    }
+
+    // VEFFECT: AddToInventory
+    #if VS_NATIVE_VULKAN
+    vs_native_beam_effect(gAgent.getID(), hit_obj->getID(), LLColor4U(gAgent.getEffectColor()), LL_HUD_DUR_SHORT);
+#endif
+    if (gFloaterTools)
+    {
+        gFloaterTools->dirty();
+    }
+}
+
+void LLToolDragAndDrop::dropScript(const VSTaskInventoryObject& hit_obj,
+                                   LLInventoryItem* item,
+                                   bool active,
+                                   ESource source,
+                                   const LLUUID& src_id)
+{
+    if (!hit_obj->native()) { dropScript(hit_obj->legacy(), item, active, source, src_id); return; }
+    // *HACK: In order to resolve SL-22177, we need to block drags
+    // from notecards and objects onto other objects.
+    if ((SOURCE_WORLD == LLToolDragAndDrop::getInstance()->mSource)
+       || (SOURCE_NOTECARD == LLToolDragAndDrop::getInstance()->mSource))
+    {
+        LL_WARNS() << "Call to LLToolDragAndDrop::dropScript() from world"
+            << " or notecard." << LL_ENDL;
+        return;
+    }
+    if (hit_obj && item)
+    {
+        LLPointer<LLViewerInventoryItem> new_script = new LLViewerInventoryItem(item);
+        if (!item->getPermissions().allowCopyBy(gAgent.getID()))
+        {
+            if (SOURCE_AGENT == source)
+            {
+                // Remove the script from local inventory. The server
+                // will actually remove the item from agent inventory.
+                gInventory.deleteObject(item->getUUID());
+                gInventory.notifyObservers();
+            }
+            else if (SOURCE_WORLD == source)
+            {
+                // *FIX: if the objects are in different regions, and
+                // the source region has crashed, you can bypass
+                // these permissions.
+                const auto src_obj = VSTaskInventoryObject::find(src_id);
+                if (src_obj)
+                {
+                    src_obj->removeInventory(item->getUUID());
+                }
+                else
+                {
+                    LL_WARNS() << "Unable to find source object." << LL_ENDL;
+                    return;
+                }
+            }
+        }
+        if (!hit_obj) return;
+        hit_obj->saveScript(new_script, active, true);
+        if (gFloaterTools)
+        {
+            gFloaterTools->dirty();
+        }
+
+        // VEFFECT: SetScript
+        #if VS_NATIVE_VULKAN
+    vs_native_beam_effect(gAgent.getID(), hit_obj->getID(), LLColor4U(gAgent.getEffectColor()), LL_HUD_DUR_SHORT);
+#endif
+    }
+}
+
+EAcceptance LLToolDragAndDrop::willObjectAcceptInventory(const VSTaskInventoryObject& obj, LLInventoryItem* item, EDragAndDropType type)
+{
+    // check the basics
+    if (!item || !obj)
+        return ACCEPT_NO;
+
+    // HACK: downcast
+    LLViewerInventoryItem* vitem = (LLViewerInventoryItem*)item;
+    if (!vitem->isFinished() && (type != DAD_CATEGORY))
+    {
+        // Note: for DAD_CATEGORY we assume that folder version check passed and folder
+        // is complete, meaning that items inside are up to date.
+        // (isFinished() == false) at the moment shows that item was loaded from cache.
+        // Library or agent inventory only.
+        return ACCEPT_NO;
+    }
+    if (vitem->getIsLinkType())
+        return ACCEPT_NO; // No giving away links
+
+    // deny attempts to drop from an object onto itself. This is to
+    // help make sure that drops that are from an object to an object
+    // don't have to worry about order of evaluation. Think of this
+    // like check for self in assignment.
+    if (obj->getID() == item->getParentUUID())
+    {
+        return ACCEPT_NO;
+    }
+
+    //bool copy = (perm.allowCopyBy(gAgent.getID(),
+    //                            gAgent.getGroupID())
+    //           && (obj->mPermModify || obj->mFlagAllowInventoryAdd));
+    bool worn = false;
+    switch (item->getType())
+    {
+    case LLAssetType::AT_OBJECT:
+        if(obj->wearing(item->getUUID()))
+        {
+                worn = true;
+        }
+        break;
+    case LLAssetType::AT_BODYPART:
+    case LLAssetType::AT_CLOTHING:
+        if (gAgentWearables.isWearingItem(item->getUUID()))
+        {
+            worn = true;
+        }
+        break;
+    case LLAssetType::AT_CALLINGCARD:
+        // Calling Cards in object are disabled for now
+        // because of incomplete LSL support. See STORM-1117.
+        return ACCEPT_NO;
+    default:
+        break;
+    }
+    const LLPermissions& perm = item->getPermissions();
+    bool modify = (obj->permModify() || obj->flagAllowInventoryAdd());
+    bool transfer = false;
+    if ((obj->permYouOwner() && (perm.getOwner() == gAgent.getID()))
+       || perm.allowOperationBy(PERM_TRANSFER, gAgent.getID()))
+    {
+        transfer = true;
+    }
+    bool volume = (LL_PCODE_VOLUME == obj->getPCode());
+    bool attached = obj->isAttachment();
+    bool unrestricted = (perm.getMaskBase() & PERM_ITEM_UNRESTRICTED) == PERM_ITEM_UNRESTRICTED;
+
+// [RLVa:KB] - Checked: 2010-03-31 (RLVa-1.2.0c) | Modified: RLVa-1.0.0c
+    if (rlv_handler_t::isEnabled())
+    {
+        const auto pObjRoot = obj->getRootEdit();
+        if (pObjRoot->attachmentLocked())
+        {
+            return ACCEPT_NO_LOCKED;        // Disallow inventory drops on a locked attachment
+        }
+        else if ( (gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) || (gRlvHandler.hasBehaviour(RLV_BHVR_SITTP)) )
+        {
+            if ( pObjRoot->agentSittingOnRoot() )
+                return ACCEPT_NO_LOCKED;    // ... or on a linkset the avie is sitting on under @unsit=n/@sittp=n
+        }
+    }
+// [/RLVa:KB]
+
+    if(attached && !unrestricted)
+    {
+        // Attachments are in world and in inventory simultaneously,
+        // at the moment server doesn't support such a situation.
+        return ACCEPT_NO_LOCKED;
+    }
+    else if(modify && transfer && volume && !worn)
+    {
+        return ACCEPT_YES_MULTI;
+    }
+    else if(!modify)
+    {
+        return ACCEPT_NO_LOCKED;
+    }
+    return ACCEPT_NO;
+}
+
+bool LLToolDragAndDrop::dadUpdateInventory(const VSTaskInventoryObject& obj, bool drop)
+{
+    LL_DEBUGS() << "LLToolDragAndDrop::dadUpdateInventory()" << LL_ENDL;
+
+    // *HACK: In order to resolve SL-22177, we need to block drags
+    // from notecards and objects onto other objects.
+    if((SOURCE_WORLD == mSource) || (SOURCE_NOTECARD == mSource))
+    {
+        return false;
+    }
+
+    LLViewerInventoryItem* item;
+    LLViewerInventoryCategory* cat;
+    locateInventory(item, cat);
+    if (!item || !item->isFinished())
+        return false;
+
+    auto root_object = obj;
+    if (obj && obj->getParent())
+    {
+        const auto parent_obj = obj->getParent();
+        if (!parent_obj->isAvatar())
+        {
+            root_object = parent_obj;
+        }
+    }
+
+    EAcceptance rv = willObjectAcceptInventory(root_object, item);
+    if (root_object && drop && (ACCEPT_YES_COPY_SINGLE <= rv))
+    {
+        dropInventory(root_object, item, mSource, mSourceID);
+    }
+
+    return rv >= ACCEPT_YES_COPY_SINGLE;
+}
+
+bool LLToolDragAndDrop::dadUpdateInventoryCategory(const VSTaskInventoryObject& obj, bool drop)
+{
+    LL_DEBUGS() << "LLToolDragAndDrop::dad3dUpdateInventoryCategory()" << LL_ENDL;
+    if (!obj)
+    {
+        LL_WARNS() << "obj is NULL; aborting func with ACCEPT_NO" << LL_ENDL;
+        return false;
+    }
+
+    if ((mSource != SOURCE_AGENT) && (mSource != SOURCE_LIBRARY))
+    {
+        return false;
+    }
+    if (obj->isAttachment())
+    {
+        return false;
+    }
+
+    LLViewerInventoryItem* item = NULL;
+    LLViewerInventoryCategory* cat = NULL;
+    locateInventory(item, cat);
+    if (!cat)
+    {
+        return false;
+    }
+
+    // Find all the items in the category
+    LLDroppableItem droppable(!obj->permYouOwner());
+    LLInventoryModel::cat_array_t cats;
+    LLInventoryModel::item_array_t items;
+    gInventory.collectDescendentsIf(cat->getUUID(),
+                    cats,
+                    items,
+                    LLInventoryModel::EXCLUDE_TRASH,
+                    droppable);
+    cats.push_back(cat);
+    if (droppable.countNoCopy() > 0)
+    {
+        LL_WARNS() << "*** Need to confirm this step" << LL_ENDL;
+    }
+    auto root_object = obj;
+    if (obj->getParent())
+    {
+        const auto parent_obj = obj->getParent();
+        if (!parent_obj->isAvatar())
+        {
+            root_object = parent_obj;
+        }
+    }
+
+    EAcceptance rv = ACCEPT_NO;
+
+    // Check for accept
+    for (LLInventoryModel::cat_array_t::const_iterator cat_iter = cats.begin();
+         cat_iter != cats.end();
+         ++cat_iter)
+    {
+        const LLViewerInventoryCategory *cat = (*cat_iter);
+        rv = gInventory.isCategoryComplete(cat->getUUID()) ? ACCEPT_YES_MULTI : ACCEPT_NO;
+        if(rv < ACCEPT_YES_SINGLE)
+        {
+            LL_DEBUGS() << "Category " << cat->getUUID() << "is not complete." << LL_ENDL;
+            break;
+        }
+    }
+    if (ACCEPT_YES_COPY_SINGLE <= rv)
+    {
+        for (LLInventoryModel::item_array_t::const_iterator item_iter = items.begin();
+             item_iter != items.end();
+             ++item_iter)
+        {
+            LLViewerInventoryItem *item = (*item_iter);
+            /*
+            // Pass the base objects, not the links.
+            if (item && item->getIsLinkType())
+            {
+                item = item->getLinkedItem();
+                (*item_iter) = item;
+            }
+            */
+            rv = willObjectAcceptInventory(root_object, item, DAD_CATEGORY);
+            if (rv < ACCEPT_YES_COPY_SINGLE)
+            {
+                LL_DEBUGS() << "Object will not accept " << item->getUUID() << LL_ENDL;
+                break;
+            }
+        }
+    }
+
+    // If every item is accepted, send it on
+    if (drop && (ACCEPT_YES_COPY_SINGLE <= rv))
+    {
+        uuid_vec_t ids;
+        for (LLInventoryModel::item_array_t::const_iterator item_iter = items.begin();
+             item_iter != items.end();
+             ++item_iter)
+        {
+            const LLViewerInventoryItem *item = (*item_iter);
+            ids.push_back(item->getUUID());
+        }
+        LLCategoryDropObserver* dropper = new LLCategoryDropObserver(ids, obj->getID(), mSource);
+        dropper->startFetch();
+        if (dropper->isFinished())
+        {
+            dropper->done();
+        }
+        else
+        {
+            gInventory.addObserver(dropper);
+        }
+    }
+    return rv >= ACCEPT_YES_COPY_SINGLE;
+}
+
+
+bool LLToolDragAndDrop::handleDropMaterialProtections(const VSTaskInventoryObject& target,
+                                                     LLInventoryItem* item,
+                                                     LLToolDragAndDrop::ESource source,
+                                                     const LLUUID& src_id)
+{
+    if(!target || !item)return false;
+    if(!target.native())return handleDropMaterialProtections(target.legacy(),item,source,src_id);
+    const auto current=target.objectGuard();if(!current())return false;
+    const auto* hit_obj=&target;
+
+    // Always succeed if....
+    // material is from the library
+    // or already in the contents of the object
+    if (SOURCE_LIBRARY == source)
+    {
+        // dropping a material from the library always just works.
+        return true;
+    }
+
+    // In case the inventory has not been loaded (e.g. due to some recent operation
+    // causing a dirty inventory) and we can do an update, stall the user
+    // while fetching the inventory.
+    //
+    // Fetch if inventory is dirty and listener is present (otherwise we will not receive update)
+    if (hit_obj->requiresInventoryFetch())
+    {
+        hit_obj->requestInventory();
+        if(!current())return false;
+        LLSD args;
+        if (LLAssetType::AT_MATERIAL == item->getType())
+        {
+            args["ERROR_MESSAGE"] = "Unable to add material.\nPlease wait a few seconds and try again.";
+        }
+        else
+        {
+            args["ERROR_MESSAGE"] = "Unable to add texture.\nPlease wait a few seconds and try again.";
+        }
+        LLNotificationsUtil::add("ErrorMessage", args);
+        return false;
+    }
+    // Make sure to verify both id and type since 'null'
+    // is a shared default for some asset types.
+    if (hit_obj->getInventoryItemByAsset(item->getAssetUUID(), item->getType()))
+    {
+        // if the asset is already in the object's inventory
+        // then it can always be added to a side.
+        // This saves some work if the task's inventory is already loaded
+        // and ensures that the asset item is only added once.
+        return true;
+    }
+
+    LLPointer<LLViewerInventoryItem> new_item = new LLViewerInventoryItem(item);
+    if (!item->getPermissions().allowOperationBy(PERM_COPY, gAgent.getID()))
+    {
+        // Check that we can add the material as inventory to the object
+        if (willObjectAcceptInventory(target,item) < ACCEPT_YES_COPY_SINGLE )
+        {
+            return false;
+        }
+        // make sure the object has the material in it's inventory.
+        if (SOURCE_AGENT == source)
+        {
+            // Remove the material from local inventory. The server
+            // will actually remove the item from agent inventory.
+            gInventory.deleteObject(item->getUUID());
+            gInventory.notifyObservers();
+            if(!current())return false;
+        }
+        else if (SOURCE_WORLD == source)
+        {
+            // *FIX: if the objects are in different regions, and the
+            // source region has crashed, you can bypass these
+            // permissions.
+            const auto src_obj = VSTaskInventoryObject::find(src_id);
+            if (src_obj)
+            {
+                const auto sourceCurrent=src_obj.itemGuard(item->getUUID());
+                if(!sourceCurrent() || !current())return false;
+                src_obj->removeInventory(item->getUUID());
+                if(!current())return false;
+            }
+            else
+            {
+                LL_WARNS() << "Unable to find source object." << LL_ENDL;
+                return false;
+            }
+        }
+        // Add the asset item to the target object's inventory.
+        if (LLAssetType::AT_TEXTURE == new_item->getType()
+            || LLAssetType::AT_MATERIAL == new_item->getType())
+        {
+            hit_obj->updateMaterialInventory(new_item, TASK_INVENTORY_ITEM_KEY, true);
+        }
+        else
+        {
+            hit_obj->updateInventory(new_item, TASK_INVENTORY_ITEM_KEY, true);
+        }
+        // Force the object to update and refetch its inventory so it has this asset.
+        hit_obj->dirtyInventory();
+        hit_obj->requestInventory();
+        // TODO: Check to see if adding the item was successful; if not, then
+        // we should return false here. This will requre a separate listener
+        // since without listener, we have no way to receive update
+    }
+    else if (!item->getPermissions().allowOperationBy(PERM_TRANSFER,
+                                                     gAgent.getID()))
+    {
+        // Check that we can add the asset as inventory to the object
+        if (willObjectAcceptInventory(target,item) < ACCEPT_YES_COPY_SINGLE )
+        {
+            return false;
+        }
+        // *FIX: may want to make sure agent can paint hit_obj.
+
+        // Add the asset item to the target object's inventory.
+        if (LLAssetType::AT_TEXTURE == new_item->getType()
+            || LLAssetType::AT_MATERIAL == new_item->getType())
+        {
+            hit_obj->updateMaterialInventory(new_item, TASK_INVENTORY_ITEM_KEY, true);
+        }
+        else
+        {
+            hit_obj->updateInventory(new_item, TASK_INVENTORY_ITEM_KEY, true);
+        }
+        // Force the object to update and refetch its inventory so it has this asset.
+        hit_obj->dirtyInventory();
+        hit_obj->requestInventory();
+        // TODO: Check to see if adding the item was successful; if not, then
+        // we should return false here. This will requre a separate listener
+        // since without listener, we have no way to receive update
+    }
+    else if (LLAssetType::AT_MATERIAL == new_item->getType() &&
+             !item->getPermissions().allowOperationBy(PERM_MODIFY, gAgent.getID()))
+    {
+        // Check that we can add the material as inventory to the object
+        if (willObjectAcceptInventory(target,item) < ACCEPT_YES_COPY_SINGLE )
+        {
+            return false;
+        }
+        // *FIX: may want to make sure agent can paint hit_obj.
+
+        // Add the material item to the target object's inventory.
+        hit_obj->updateMaterialInventory(new_item, TASK_INVENTORY_ITEM_KEY, true);
+
+        // Force the object to update and refetch its inventory so it has this material.
+        hit_obj->dirtyInventory();
+        hit_obj->requestInventory();
+        // TODO: Check to see if adding the item was successful; if not, then
+        // we should return false here. This will requre a separate listener
+        // since without listener, we have no way to receive update
+    }
+    return current();
 }

@@ -92,6 +92,7 @@ public:
     //--------------------------------------------------------------------
 public:
     /*virtual*/ LLJoint*        getCharacterJoint(U32 num);
+    LLJoint* getJoint(std::string_view name) override;
 
     /*virtual*/ const char*     getAnimationPrefix() { return "avatar"; }
     /*virtual*/ LLVector3       getVolumePos(S32 joint_index, LLVector3& volume_offset);
@@ -336,6 +337,7 @@ public:
     LLWearableData*         getWearableData() { return mWearableData; }
     const LLWearableData*   getWearableData() const { return mWearableData; }
     virtual bool isTextureDefined(LLAvatarAppearanceDefines::ETextureIndex te, U32 index = 0 ) const = 0;
+    bool visualParamWeightsAreDefault();
     virtual bool            isWearingWearableType(LLWearableType::EType type ) const;
 
 private:

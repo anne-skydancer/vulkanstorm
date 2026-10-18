@@ -43,6 +43,9 @@
 #define LL_VOICE_VISUALIZER_H
 
 #include "llhudeffect.h"
+#if VS_NATIVE_VULKAN
+#include "vsworldrenderer.h"
+#endif
 
 //-----------------------------------------------------------------------------------------------
 // The values of voice gesticulation represent energy levels for avatar animation, based on
@@ -89,6 +92,9 @@ class LLVoiceVisualizer : public LLHUDEffect
         void                    unpackData(LLMessageSystem *mesgsys, S32 blocknum);     // inherited from HUD Effect
         void                    markDead();                                         // inherited from HUD Effect
 
+#if VS_NATIVE_VULKAN
+        void appendNative(VSWorldRenderer&,const LLVector3d&,std::vector<VSWorldRenderer::Packet>&);
+#endif
         //----------------------------------------------------------------------------------------------
         // "setMaxGesticulationAmplitude" and "setMinGesticulationAmplitude" allow for the tuning of the
         // gesticulation level detector to be responsive to different kinds of signals. For instance, we
@@ -106,6 +112,14 @@ class LLVoiceVisualizer : public LLHUDEffect
     // private members
     //---------------------------------------------------
     private:
+        template<class Painter> void renderSymbol(Painter&);
+#if VS_NATIVE_VULKAN
+        struct NativeDraw {std::vector<VSWorldRenderer::Vertex> vertices;LLColor4 color;};
+        std::array<NativeDraw,NUM_VOICE_SYMBOL_WAVES+1> mNativeDraws;
+        struct NativePublication {VSWorldRenderer::Mesh mesh;LLVector3d origin;LLColor4 color;};
+        std::array<NativePublication,NUM_VOICE_SYMBOL_WAVES+1> mNativePublications;
+        std::array<VSUIRenderer::Image,2> mNativeImages;
+#endif
         static bool             handleVoiceVisualizerPrefsChanged(const LLSD& newvalue);
         static void             setPreferences( );
         static void             lipStringToF32s ( std::string& in_string, F32*& out_F32s, U32& count_F32s ); // convert a string of digits to an array of floats

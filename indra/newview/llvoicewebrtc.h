@@ -76,6 +76,8 @@ public:
     ///  @see LLVoiceModuleInterface
     //@{
     void init(LLPumpIO *pump) override;    // Call this once at application startup (creates connector)
+    std::weak_ptr<const void> peerLifetime() const { return mPeerOwner; }
+    void retireNativeAccount();
     void terminate() override;    // Call this to clean up during shutdown
 
     static bool isShuttingDown() { return sShuttingDown; }
@@ -468,7 +470,7 @@ private:
 
     // Coroutine support methods
     //---
-    void voiceConnectionCoro();
+    void voiceConnectionCoro(U64 coroutineSerial);
 
     //---
     /// Clean up objects created during a voice session.
@@ -559,6 +561,10 @@ private:
     bool    mIsInTuningMode;
     bool    mIsProcessingChannels;
     bool    mIsCoroutineActive;
+    U64 mCoroutineSerial = 0;
+    std::shared_ptr<const void> mPeerOwner;
+    bool mAccountAuthorized = false;
+    std::function<bool()> mAccountCurrent = [] { return false; };
 
     // These variables can last longer than WebRTC in coroutines so we need them as static
     static bool sShuttingDown;
@@ -636,6 +642,7 @@ class LLVoiceWebRTCConnection :
 
     void OnDataReceivedImpl(const std::string &data, bool binary);
 
+    bool accountCurrent() const { return mAccountCurrent(); }
     void sendJoin();
     void sendData(const std::string &data);
     const std::string& getVersion();
@@ -738,6 +745,8 @@ class LLVoiceWebRTCConnection :
     std::string mChannelSDP;
     std::string mRemoteChannelSDP;
 
+    std::function<bool()> mAccountCurrent;
+    std::weak_ptr<const void> mPeerOwner;
     bool mMuted;
     F32  mSpeakerVolume;
 

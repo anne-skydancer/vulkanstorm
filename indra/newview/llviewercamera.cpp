@@ -28,6 +28,8 @@
 
 #define LLVIEWERCAMERA_CPP
 #include "llviewercamera.h"
+#include "vsvolumevisibility.h"
+#include "vsviewprojection.h"
 
 // Viewer includes
 #include "llagent.h"
@@ -202,11 +204,11 @@ void LLViewerCamera::calcProjection(const F32 far_distance) const
 // height.
 
 //static
-void LLViewerCamera::updateFrustumPlanes(LLCamera& camera, bool ortho, bool zflip, bool no_hacks)
+namespace
 {
-    glm::ivec4 viewport = glm::make_vec4((GLint*) gGLViewport);
-    glm::mat4 model = get_current_modelview();
-    glm::mat4 proj = get_current_projection();
+void updateCameraFrustum(LLCamera& camera,const glm::ivec4& viewport,const glm::mat4& model,const glm::mat4& proj,bool ortho,bool zflip,bool no_hacks)
+{
+
 
     LLVector3 frust[8];
 
@@ -290,6 +292,20 @@ void LLViewerCamera::updateFrustumPlanes(LLCamera& camera, bool ortho, bool zfli
 
     camera.calcAgentFrustumPlanes(frust);
 }
+}
+void LLViewerCamera::updateFrustumPlanes(LLCamera& camera, bool ortho, bool zflip, bool no_hacks)
+{
+    updateCameraFrustum(camera,glm::make_vec4((GLint*)gGLViewport),get_current_modelview(),get_current_projection(),ortho,zflip,no_hacks);
+}
+void LLViewerCamera::updateNativeFrustum()
+{
+#if VS_NATIVE_VULKAN
+    if(!gViewerWindow || !gViewerWindow->isNativeVulkan())return;
+    const auto rect=gViewerWindow->getWorldViewRectRaw();
+    if(rect.getWidth()<=0 || rect.getHeight()<=0)return;
+    updateCameraFrustum(*this,glm::ivec4(rect.mLeft,rect.mBottom,rect.getWidth(),rect.getHeight()),getUIModelview(),getUIProjection(),false,false,false);
+#endif
+}
 
 void LLViewerCamera::setPerspective(bool for_selection,
                                     S32 x, S32 y_from_bot, S32 width, S32 height,
@@ -326,7 +342,7 @@ void LLViewerCamera::setPerspective(bool for_selection,
             gViewerWindow->getWorldViewRectRaw().getWidth(),
             gViewerWindow->getWorldViewRectRaw().getHeight());
 
-        proj_mat = glm::pickMatrix(glm::vec2(x + width / 2.f, y_from_bot + height / 2.f), glm::vec2((GLfloat)width, (GLfloat)height), viewport);
+        proj_mat=vs_pick_projection(viewport,x,y_from_bot,width,height);
 
         if (limit_select_distance)
         {
@@ -361,24 +377,9 @@ void LLViewerCamera::setPerspective(bool for_selection,
         gGLViewport[3] = height;
     }
 
-    if (mZoomFactor > 1.f)
-    {
-        float offset = mZoomFactor - 1.f;
-        int pos_y = mZoomSubregion / llceil(mZoomFactor);
-        int pos_x = mZoomSubregion - (pos_y*llceil(mZoomFactor));
-
-        glm::mat4 translate;
-        translate = glm::translate(glm::vec3(offset - (F32)pos_x * 2.f, offset - (F32)pos_y * 2.f, 0.f));
-        glm::mat4 scale;
-        scale = glm::scale(glm::vec3(mZoomFactor, mZoomFactor, 1.f));
-
-        proj_mat = scale * proj_mat;
-        proj_mat = translate * proj_mat;
-    }
-
     calcProjection(z_far); // Update the projection matrix cache
 
-    proj_mat *= glm::perspective(fov_y,aspect,z_near,z_far);
+    proj_mat=vs_view_projection(proj_mat,mZoomFactor,mZoomSubregion,fov_y,aspect,z_near,z_far);
 
     gGL.loadMatrix(glm::value_ptr(proj_mat));
 
@@ -767,7 +768,6 @@ bool LLViewerCamera::cameraUnderWater() const
 
 bool LLViewerCamera::areVertsVisible(LLViewerObject* volumep, bool all_verts)
 {
-    S32 i, num_faces;
     LLDrawable* drawablep = volumep->mDrawable;
 
     if (!drawablep)
@@ -788,38 +788,8 @@ bool LLViewerCamera::areVertsVisible(LLViewerObject* volumep, bool all_verts)
 
     LLMatrix4 render_mat(vo_volume->getRenderRotation(), LLVector4(vo_volume->getRenderPosition()));
 
-    LLMatrix4a render_mata;
-    render_mata.loadu(render_mat);
-    LLMatrix4a mata;
-    mata.loadu(mat);
-
-    num_faces = volume->getNumVolumeFaces();
-    for (i = 0; i < num_faces; i++)
-    {
-        const LLVolumeFace& face = volume->getVolumeFace(i);
-
-        for (S32 v = 0; v < face.mNumVertices; v++)
-        {
-            const LLVector4a& src_vec = face.mPositions[v];
-            LLVector4a vec;
-            mata.affineTransform(src_vec, vec);
-
-            if (drawablep->isActive())
-            {
-                LLVector4a t = vec;
-                render_mata.affineTransform(t, vec);
-            }
-
-            bool in_frustum = pointInFrustum(LLVector3(vec.getF32ptr())) > 0;
-
-            if (( !in_frustum && all_verts) ||
-                 (in_frustum && !all_verts))
-            {
-                return !all_verts;
-            }
-        }
-    }
-    return all_verts;
+    return vs_volume_vertices_visible(*volume,mat,render_mat,drawablep->isActive(),all_verts,
+        [&](const LLVector3& vertex){return pointInFrustum(vertex)>0;});
 }
 
 extern bool gCubeSnapshot;
@@ -887,3 +857,22 @@ bool LLViewerCamera::isDefaultFOVChanged()
     return false;
 }
 
+
+std::optional<LLCamera> LLViewerCamera::selectionFrustum(S32 x,S32 y,S32 width,S32 height,
+                                                        F32 nearPlane,F32 farPlane,F32 projectionFar)const
+{
+    if(!gViewerWindow || width<=0 || height<=0)return std::nullopt;
+    const auto rect=gViewerWindow->getWorldViewRectRaw();
+    if(rect.getWidth()<=0 || rect.getHeight()<=0 || !std::isfinite(nearPlane) ||
+       !std::isfinite(farPlane) || !std::isfinite(projectionFar))return std::nullopt;
+    LLCamera result(*this);
+    result.setNear(nearPlane);
+    result.setFar(farPlane);
+    const glm::ivec4 viewport(rect.mLeft,rect.mBottom,rect.getWidth(),rect.getHeight());
+    const auto projection=vs_view_projection(vs_pick_projection(viewport,x,y,width,height),
+        mZoomFactor,mZoomSubregion,getView(),getAspect(),result.getNear(),projectionFar);
+    // Reference selection uses its separately clamped camera far plane for
+    // the radial far corners, not the perspective's MaxSelectDistance value.
+    updateCameraFrustum(result,viewport,getUIModelview(),projection,false,false,false);
+    return result;
+}

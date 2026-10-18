@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llviewerwindow.h"
+#include "vsnativeim.h"
+#include "vsregioncontext.h"
+#include "llrender2dutils.h"
 
 #include "llapr.h"
 #include "apr_portable.h"
@@ -2692,6 +2696,10 @@ LLMeshUploadThread::LLMeshUploadThread(LLMeshUploadThread::instance_list_t& data
     mFeeObserverHandle(fee_observer),
     mUploadObserverHandle(upload_observer)
 {
+    mLifetime=std::make_shared<Lifetime>();
+    mLifetime->owner.store(this,std::memory_order_release);
+    mAccountCurrent=vs_native_im_guard();
+    mNativeCompletion=(gViewerWindow && gViewerWindow->isNativeVulkan());
     mInstanceList = data;
     mLodSources = sources_list;
     mUploadTextures = upload_textures;
@@ -2722,6 +2730,7 @@ LLMeshUploadThread::LLMeshUploadThread(LLMeshUploadThread::instance_list_t& data
 
 LLMeshUploadThread::~LLMeshUploadThread()
 {
+    mLifetime->owner.store(nullptr,std::memory_order_release);
     delete mHttpRequest;
     mHttpRequest = NULL;
     delete mMutex;
@@ -2734,30 +2743,30 @@ LLMeshUploadThread::DecompRequest::DecompRequest(LLModel* mdl, LLModel* base_mod
     mModel = mdl;
     mDecompID = &mdl->mDecompID;
     mBaseModel = base_model;
-    mThread = thread;
+    mLifetime=thread->mLifetime;
 
     //copy out positions and indices
     assignData(mdl) ;
 
-    mThread->mFinalDecomp = this;
-    mThread->mPhysicsComplete = false;
+
 }
 
 void LLMeshUploadThread::DecompRequest::completed()
 {
-    if (mThread->mFinalDecomp == this)
-    {
-        mThread->mPhysicsComplete = true;
-    }
-
-    llassert(mHull.size() == 1);
-
-    mThread->mHullMap[mBaseModel] = mHull[0];
+    auto* thread=mLifetime->owner.load(std::memory_order_acquire);
+    if(!thread || thread->isDiscarded())return;
+    if(mHull.size()==1)thread->mHullMap[mBaseModel]=mHull[0];
+    else thread->mPhysicsFailed.store(true,std::memory_order_relaxed);
+    // All requested hulls, not whichever request happened to be constructed
+    // last, must complete before the worker reads the real hull map.
+    if(thread->mPendingHulls.fetch_sub(1,std::memory_order_acq_rel)==1)
+        thread->mPhysicsComplete.store(true,std::memory_order_release);
 }
 
 //called in the main thread.
 void LLMeshUploadThread::preStart()
 {
+    mCompletionOwner=std::make_shared<CompletionOwner>(CompletionOwner{mFeeObserverHandle,mUploadObserverHandle,mAccountCurrent});
     //build map of LLModel refs to instances for callbacks
     for (instance_list_t::iterator iter = mInstanceList.begin(); iter != mInstanceList.end(); ++iter)
     {
@@ -2779,6 +2788,7 @@ bool LLMeshUploadThread::isDiscarded() const
 
 void LLMeshUploadThread::run()
 {
+    if(isDiscarded()){mFinished=true;return;}
     if (mDoUpload)
     {
         doWholeModelUpload();
@@ -2787,6 +2797,7 @@ void LLMeshUploadThread::run()
     {
         requestWholeModelFee();
     }
+    mFinished=true;
 }
 
 void dump_llsd_to_file(const LLSD& content, std::string filename)
@@ -3153,7 +3164,9 @@ void LLMeshUploadThread::wholeModelToLLSD(LLSD& dest, std::vector<std::string>& 
 
 void LLMeshUploadThread::generateHulls()
 {
-    bool has_valid_requests = false ;
+    std::vector<LLPointer<DecompRequest>> requests;
+    mPhysicsFailed=false;
+    mPhysicsComplete=false;
 
     for (instance_map_t::iterator iter = mInstance.begin(); iter != mInstance.end(); ++iter)
     {
@@ -3189,15 +3202,16 @@ void LLMeshUploadThread::generateHulls()
 
         llassert(physics != NULL);
 
-        DecompRequest* request = new DecompRequest(physics, data.mBaseModel, this);
+        LLPointer<DecompRequest> request = new DecompRequest(physics, data.mBaseModel, this);
         if(request->isValid())
         {
-            gMeshRepo.mDecompThread->submitRequest(request);
-            has_valid_requests = true ;
+            requests.push_back(request);
         }
     }
 
-    if (has_valid_requests)
+    mPendingHulls.store(U32(requests.size()),std::memory_order_release);
+    for(const auto& request:requests)gMeshRepo.mDecompThread->submitRequest(request);
+    if (!requests.empty())
     {
         // *NOTE:  Interesting livelock condition on shutdown.  If there
         // is an upload request in generateHulls() when shutdown starts,
@@ -3212,6 +3226,26 @@ void LLMeshUploadThread::generateHulls()
     }
 }
 
+bool LLMeshUploadThread::finishHullFailure()
+{
+    if(!mPhysicsFailed.load(std::memory_order_acquire))return false;
+    doOnIdleOneTime([completion=mCompletionOwner,upload=mDoUpload]
+    {
+        if(!completion || !completion->current())return;
+        const std::string message="Physics decomposition failed";
+        LLSD args;args["MESSAGE"]=message;args["IDENTIFIER"]="PhysicsDecompositionError";
+        LLNotificationsUtil::add("MeshUploadError",args);
+        if(!completion->current())return;
+        if(upload){if(auto* owner=completion->upload.get())owner->onModelUploadFailure();}
+        else if(auto* owner=completion->fee.get())
+        {
+            LLSD error;error["message"]=message;
+            owner->setModelPhysicsFeeErrorStatus(0,message,error); // Local SDK failure, no HTTP response.
+        }
+    });
+    return true;
+}
+
 void LLMeshUploadThread::doWholeModelUpload()
 {
     LL_DEBUGS(LOG_MESH) << "Starting model upload.  Instances:  " << mInstance.size() << LL_ENDL;
@@ -3224,6 +3258,7 @@ void LLMeshUploadThread::doWholeModelUpload()
     else
     {
         generateHulls();
+        if(isDiscarded() || finishHullFailure())return;
         LL_DEBUGS(LOG_MESH) << "Hull generation completed." << LL_ENDL;
 
         mModelData = LLSD::emptyMap();
@@ -3233,6 +3268,7 @@ void LLMeshUploadThread::doWholeModelUpload()
 
         dump_llsd_to_file(body, make_dump_name("whole_model_body_", dump_num));
 
+        if(isDiscarded())return;
         LLCore::HttpHandle handle = LLCoreHttpUtil::requestPostWithLLSD(mHttpRequest,
                                                                         mHttpPolicyClass,
                                                                         mWholeModelUploadURL,
@@ -3279,11 +3315,13 @@ void LLMeshUploadThread::requestWholeModelFee()
     dump_num++;
 
     generateHulls();
+    if(isDiscarded() || finishHullFailure())return;
 
     mModelData = LLSD::emptyMap();
     mTextureFiles.clear();
     wholeModelToLLSD(mModelData, mTextureFiles, false);
     dump_llsd_to_file(mModelData, make_dump_name("whole_model_fee_request_", dump_num));
+    if(isDiscarded())return;
     LLCore::HttpHandle handle = LLCoreHttpUtil::requestPostWithLLSD(mHttpRequest,
                                                                     mHttpPolicyClass,
                                                                     mWholeModelFeeCapability,
@@ -3319,24 +3357,46 @@ void LLMeshUploadThread::requestWholeModelFee()
 
 
 // Does completion duty for both fee queries and actual uploads.
-void LLMeshUploadThread::onCompleted(LLCore::HttpHandle handle, LLCore::HttpResponse * response)
+void LLMeshUploadThread::onCompleted(LLCore::HttpHandle,LLCore::HttpResponse* response)
+{
+    mFinished=true;
+    if(isDiscarded())return;
+    const auto status=response->getStatus();
+    LLSD body;LLCoreHttpUtil::responseToLLSD(response,true,body);
+    if(!mNativeCompletion)
+    {
+        completeResponse(status,body,mDoUpload,mModelData,mTextureFiles,mFeeObserverHandle,mUploadObserverHandle,mAccountCurrent);
+        return;
+    }
+    // HTTP's worker owns the response; UI/inventory owners belong to main.
+    // Transfer response values and observer handles, never the thread or the
+    // non-thread-safe HttpResponse reference count across the worker boundary.
+    doOnIdleOneTime([status,body,doUpload=mDoUpload,data=mModelData,files=mTextureFiles,
+        completion=mCompletionOwner]
+    {
+        if(completion && completion->current())completeResponse(status,body,doUpload,data,files,completion->fee,completion->upload,completion->current);
+    });
+}
+void LLMeshUploadThread::completeResponse(LLCore::HttpStatus status,LLSD body,bool doUpload,LLSD modelData,
+    std::vector<std::string> textureFiles,LLHandle<LLWholeModelFeeObserver> feeObserver,
+    LLHandle<LLWholeModelUploadObserver> uploadObserver,std::function<bool()> current)
 {
     // QA/Devel:  0x2 to enable fake error import on upload, 0x1 on fee check
-    const S32 fake_error(gSavedSettings.getS32("MeshUploadFakeErrors") & (mDoUpload ? 0xa : 0x5));
-    LLCore::HttpStatus status(response->getStatus());
+    const S32 fake_error(gSavedSettings.getS32("MeshUploadFakeErrors") & (doUpload ? 0xa : 0x5));
     if (fake_error)
     {
         status = (fake_error & 0x0c) ? LLCore::HttpStatus(500) : LLCore::HttpStatus(200);
     }
     std::string reason(status.toString());
-    LLSD body;
 
-    mFinished = true;
+    if(!current())return;
+    if(!status)body=LLSD();
+    std::string uploadURL;
 
-    if (mDoUpload)
+    if (doUpload)
     {
         // model upload case
-        LLWholeModelUploadObserver * observer(mUploadObserverHandle.get());
+        LLWholeModelUploadObserver * observer(uploadObserver.get());
 
         if (! status)
         {
@@ -3348,11 +3408,11 @@ void LLMeshUploadThread::onCompleted(LLCore::HttpHandle handle, LLCore::HttpResp
             body["error"] = LLSD::emptyMap();
             body["error"]["message"] = reason;
             body["error"]["identifier"] = "NetworkError";       // from asset-upload/upload_util.py
-            log_upload_error(status, body, "upload", mModelData["name"].asString(), mTextureFiles);
+            log_upload_error(status, body, "upload", modelData["name"].asString(), textureFiles);
 
             if (observer)
             {
-                doOnIdleOneTime(boost::bind(&LLWholeModelUploadObserver::onModelUploadFailure, observer));
+                doOnIdleOneTime([uploadObserver,current]{if(current())if(auto* owner=uploadObserver.get())owner->onModelUploadFailure();});
             }
         }
         else
@@ -3364,7 +3424,7 @@ void LLMeshUploadThread::onCompleted(LLCore::HttpHandle handle, LLCore::HttpResp
             else
             {
                 // *TODO:  handle error in conversion process
-                LLCoreHttpUtil::responseToLLSD(response, true, body);
+                // Actual response body was copied at the HTTP completion boundary.
             }
             dump_llsd_to_file(body, make_dump_name("whole_model_upload_response_", dump_num));
 
@@ -3372,22 +3432,22 @@ void LLMeshUploadThread::onCompleted(LLCore::HttpHandle handle, LLCore::HttpResp
             {
                 // requested "mesh" asset type isn't actually the type
                 // of the resultant object, fix it up here.
-                mModelData["asset_type"] = "object";
-                gMeshRepo.updateInventory(LLMeshRepository::inventory_data(mModelData, body));
+                modelData["asset_type"] = "object";
+                gMeshRepo.updateInventory(LLMeshRepository::inventory_data(modelData, body,current));
 
                 if (observer)
                 {
-                    doOnIdleOneTime(boost::bind(&LLWholeModelUploadObserver::onModelUploadSuccess, observer));
+                    doOnIdleOneTime([uploadObserver,current]{if(current())if(auto* owner=uploadObserver.get())owner->onModelUploadSuccess();});
                 }
             }
             else
             {
                 LL_WARNS(LOG_MESH) << "Upload failed.  Not in expected 'complete' state." << LL_ENDL;
-                log_upload_error(status, body, "upload", mModelData["name"].asString(), mTextureFiles);
+                log_upload_error(status, body, "upload", modelData["name"].asString(), textureFiles);
 
                 if (observer)
                 {
-                    doOnIdleOneTime(boost::bind(&LLWholeModelUploadObserver::onModelUploadFailure, observer));
+                    doOnIdleOneTime([uploadObserver,current]{if(current())if(auto* owner=uploadObserver.get())owner->onModelUploadFailure();});
                 }
             }
         }
@@ -3395,8 +3455,8 @@ void LLMeshUploadThread::onCompleted(LLCore::HttpHandle handle, LLCore::HttpResp
     else
     {
         // model fee case
-        LLWholeModelFeeObserver* observer(mFeeObserverHandle.get());
-        mWholeModelUploadURL.clear();
+        LLWholeModelFeeObserver* observer(feeObserver.get());
+        uploadURL.clear();
 
         if (! status)
         {
@@ -3408,7 +3468,7 @@ void LLMeshUploadThread::onCompleted(LLCore::HttpHandle handle, LLCore::HttpResp
             body["error"] = LLSD::emptyMap();
             body["error"]["message"] = reason;
             body["error"]["identifier"] = "NetworkError";       // from asset-upload/upload_util.py
-            log_upload_error(status, body, "fee", mModelData["name"].asString(), mTextureFiles);
+            log_upload_error(status, body, "fee", modelData["name"].asString(), textureFiles);
 
             if (observer)
             {
@@ -3424,24 +3484,24 @@ void LLMeshUploadThread::onCompleted(LLCore::HttpHandle handle, LLCore::HttpResp
             else
             {
                 // *TODO:  handle error in conversion process
-                LLCoreHttpUtil::responseToLLSD(response, true, body);
+                // Actual response body was copied at the HTTP completion boundary.
             }
             dump_llsd_to_file(body, make_dump_name("whole_model_fee_response_", dump_num));
 
             if (body["state"].asString() == "upload")
             {
-                mWholeModelUploadURL = body["uploader"].asString();
+                uploadURL = body["uploader"].asString();
 
                 if (observer)
                 {
                     body["data"]["upload_price"] = body["upload_price"];
-                    observer->onModelPhysicsFeeReceived(body["data"], mWholeModelUploadURL);
+                    observer->onModelPhysicsFeeReceived(body["data"], uploadURL);
                 }
             }
             else
             {
                 LL_WARNS(LOG_MESH) << "Fee request failed.  Not in expected 'upload' state." << LL_ENDL;
-                log_upload_error(status, body, "fee", mModelData["name"].asString(), mTextureFiles);
+                log_upload_error(status, body, "fee", modelData["name"].asString(), textureFiles);
 
                 if (observer)
                 {
@@ -4411,6 +4471,7 @@ S32 LLMeshRepository::update()
     auto size = mUploadWaitList.size() ;
     for (size_t i = 0; i < size; ++i)
     {
+        if(!mUploadWaitList[i]->mAccountCurrent()){delete mUploadWaitList[i];continue;}
         mUploads.push_back(mUploadWaitList[i]);
         mUploadWaitList[i]->preStart() ;
         mUploadWaitList[i]->start() ;
@@ -4418,6 +4479,117 @@ S32 LLMeshRepository::update()
     mUploadWaitList.clear() ;
 
     return static_cast<S32>(size);
+}
+
+void LLMeshRepository::notifyUploadServices()
+{
+    if(!mMeshMutex || !mDecompThread)return;
+    //clean up completed upload threads
+    for (std::vector<LLMeshUploadThread*>::iterator iter = mUploads.begin(); iter != mUploads.end(); )
+    {
+        LLMeshUploadThread* thread = *iter;
+
+        if (thread->isStopped() && thread->finished())
+        {
+            iter = mUploads.erase(iter);
+            delete thread;
+        }
+        else
+        {
+            ++iter;
+        }
+    }
+
+    //update inventory
+    if (!mInventoryQ.empty())
+    {
+        LLMutexLock lock(mMeshMutex);
+        while (!mInventoryQ.empty())
+        {
+            inventory_data data = mInventoryQ.front();
+            mInventoryQ.pop();
+            if(data.mCurrent && !data.mCurrent())continue;
+
+            LLAssetType::EType asset_type = LLAssetType::lookup(data.mPostData["asset_type"].asString());
+            LLInventoryType::EType inventory_type = LLInventoryType::lookup(data.mPostData["inventory_type"].asString());
+
+            // Handle addition of texture, if any.
+            if ( data.mResponse.has("new_texture_folder_id") )
+            {
+                const LLUUID& new_folder_id = data.mResponse["new_texture_folder_id"].asUUID();
+
+                if ( new_folder_id.notNull() )
+                {
+                    LLUUID parent_id = gInventory.findUserDefinedCategoryUUIDForType(LLFolderType::FT_TEXTURE);
+
+                    std::string name;
+                    // Check if the server built a different name for the texture folder
+                    if ( data.mResponse.has("new_texture_folder_name") )
+                    {
+                        name = data.mResponse["new_texture_folder_name"].asString();
+                    }
+                    else
+                    {
+                        name = data.mPostData["name"].asString();
+                    }
+
+                    // Add the category to the internal representation
+                    LLPointer<LLViewerInventoryCategory> cat =
+                        new LLViewerInventoryCategory(new_folder_id, parent_id,
+                            LLFolderType::FT_NONE, name, gAgent.getID());
+                    cat->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+
+                    LLInventoryModel::LLCategoryUpdate update(cat->getParentUUID(), 1);
+                    gInventory.accountForUpdate(update);
+                    gInventory.updateCategory(cat);
+                }
+            }
+
+            on_new_single_inventory_upload_complete(
+                asset_type,
+                inventory_type,
+                data.mPostData["asset_type"].asString(),
+                data.mPostData["folder_id"].asUUID(),
+                data.mPostData["name"],
+                data.mPostData["description"],
+                data.mResponse,
+                data.mResponse["upload_price"]);
+            //}
+
+        }
+    }
+
+    //call completed callbacks on finished decompositions
+    mDecompThread->notifyCompleted();
+
+    LLMutexLock lock(mMeshMutex);
+        //popup queued error messages from background threads
+        while (!mUploadErrorQ.empty())
+        {
+            LLSD substitutions(mUploadErrorQ.front());
+            if (substitutions.has("DETAILS"))
+            {
+                LLNotificationsUtil::add("MeshUploadErrorDetails", substitutions);
+            }
+            else
+            {
+                LLNotificationsUtil::add("MeshUploadError", substitutions);
+            }
+            mUploadErrorQ.pop();
+        }
+
+}
+void LLMeshRepository::retireNativeUploads()
+{
+    for(auto* thread:mUploads)thread->discard();
+    for(auto* thread:mUploadWaitList)delete thread;
+    mUploadWaitList.clear();
+    if(mMeshMutex)
+    {
+        LLMutexLock lock(mMeshMutex);
+        while(!mInventoryQ.empty())mInventoryQ.pop();
+        while(!mUploadErrorQ.empty())mUploadErrorQ.pop();
+    }
 }
 
 void LLMeshRepository::unregisterMesh(LLVOVolume* vobj, const LLVolumeParams& mesh_params, S32 detail)
@@ -4644,82 +4816,7 @@ void LLMeshRepository::notifyLoadedMeshes()
     }
     // </FS:Ansariel> [UDP Assets]
 
-    //clean up completed upload threads
-    for (std::vector<LLMeshUploadThread*>::iterator iter = mUploads.begin(); iter != mUploads.end(); )
-    {
-        LLMeshUploadThread* thread = *iter;
-
-        if (thread->isStopped() && thread->finished())
-        {
-            iter = mUploads.erase(iter);
-            delete thread;
-        }
-        else
-        {
-            ++iter;
-        }
-    }
-
-    //update inventory
-    if (!mInventoryQ.empty())
-    {
-        LLMutexLock lock(mMeshMutex);
-        while (!mInventoryQ.empty())
-        {
-            inventory_data& data = mInventoryQ.front();
-
-            LLAssetType::EType asset_type = LLAssetType::lookup(data.mPostData["asset_type"].asString());
-            LLInventoryType::EType inventory_type = LLInventoryType::lookup(data.mPostData["inventory_type"].asString());
-
-            // Handle addition of texture, if any.
-            if ( data.mResponse.has("new_texture_folder_id") )
-            {
-                const LLUUID& new_folder_id = data.mResponse["new_texture_folder_id"].asUUID();
-
-                if ( new_folder_id.notNull() )
-                {
-                    LLUUID parent_id = gInventory.findUserDefinedCategoryUUIDForType(LLFolderType::FT_TEXTURE);
-
-                    std::string name;
-                    // Check if the server built a different name for the texture folder
-                    if ( data.mResponse.has("new_texture_folder_name") )
-                    {
-                        name = data.mResponse["new_texture_folder_name"].asString();
-                    }
-                    else
-                    {
-                        name = data.mPostData["name"].asString();
-                    }
-
-                    // Add the category to the internal representation
-                    LLPointer<LLViewerInventoryCategory> cat =
-                        new LLViewerInventoryCategory(new_folder_id, parent_id,
-                            LLFolderType::FT_NONE, name, gAgent.getID());
-                    cat->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
-
-                    LLInventoryModel::LLCategoryUpdate update(cat->getParentUUID(), 1);
-                    gInventory.accountForUpdate(update);
-                    gInventory.updateCategory(cat);
-                }
-            }
-
-            on_new_single_inventory_upload_complete(
-                asset_type,
-                inventory_type,
-                data.mPostData["asset_type"].asString(),
-                data.mPostData["folder_id"].asUUID(),
-                data.mPostData["name"],
-                data.mPostData["description"],
-                data.mResponse,
-                data.mResponse["upload_price"]);
-            //}
-
-            mInventoryQ.pop();
-        }
-    }
-
-    //call completed callbacks on finished decompositions
-    mDecompThread->notifyCompleted();
+    notifyUploadServices();
 
     if (mSkinInfoCullTimer.checkExpirationAndReset(10.f))
     {
@@ -4805,21 +4902,6 @@ void LLMeshRepository::notifyLoadedMeshes()
                                     << LL_ENDL;
                 // <FS:Ansariel> [UDP Assets]
             }
-        }
-
-        //popup queued error messages from background threads
-        while (!mUploadErrorQ.empty())
-        {
-            LLSD substitutions(mUploadErrorQ.front());
-            if (substitutions.has("DETAILS"))
-            {
-                LLNotificationsUtil::add("MeshUploadErrorDetails", substitutions);
-            }
-            else
-            {
-                LLNotificationsUtil::add("MeshUploadError", substitutions);
-            }
-            mUploadErrorQ.pop();
         }
 
         // mPendingRequests go into queues, queues go into active http requests.
@@ -5281,11 +5363,12 @@ void LLMeshRepository::uploadModel(std::vector<LLModelInstance>& data, const std
                                    LLVector3& scale, bool upload_textures,
                                    bool upload_skin, bool upload_joints, bool lock_scale_if_joint_position,
                                    std::string upload_url, const LLUUID& destination_folder_id, bool do_upload,
-                                   LLHandle<LLWholeModelFeeObserver> fee_observer, LLHandle<LLWholeModelUploadObserver> upload_observer)
+                                   LLHandle<LLWholeModelFeeObserver> fee_observer, LLHandle<LLWholeModelUploadObserver> upload_observer,std::function<bool()> operationCurrent)
 {
     LLMeshUploadThread* thread = new LLMeshUploadThread(data, lod_sources, scale, upload_textures,
                                                         upload_skin, upload_joints, lock_scale_if_joint_position,
                                                         upload_url, destination_folder_id, do_upload, fee_observer, upload_observer);
+    if(operationCurrent)thread->mAccountCurrent=std::move(operationCurrent);
     mUploadWaitList.push_back(thread);
 }
 
@@ -6295,17 +6378,11 @@ void LLMeshRepository::buildPhysicsMesh(LLModel::Decomposition& decomp)
 
 bool LLMeshRepository::meshUploadEnabled()
 {
-    LLViewerRegion *region = gAgent.getRegion();
-    // <FS:Ansariel> Use faster LLCachedControls for frequently visited locations
-    //if(gSavedSettings.getBOOL("MeshEnabled") &&
-    static LLCachedControl<bool> meshEnabled(gSavedSettings, "MeshEnabled");
-    if(meshEnabled &&
-    // </FS:Ansariel>
-       region)
-    {
-        return region->meshUploadEnabled();
-    }
-    return false;
+    static LLCachedControl<bool> meshEnabled(gSavedSettings,"MeshEnabled");
+    const auto region=vs_current_region_context();
+    if(!meshEnabled || !region)return false;
+    LLSD features;region->getSimulatorFeatures(features);
+    return features.has("MeshUploadEnabled") && features["MeshUploadEnabled"].asBoolean();
 }
 
 bool LLMeshRepository::meshRezEnabled()

@@ -36,6 +36,7 @@ class LLFloaterBeacons : public LLFloater
 
 public:
 
+    static void initializeSettings();
     bool postBuild() override;
 
     // Needed to make the floater visibility toggle the beacons.

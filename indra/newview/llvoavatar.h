@@ -89,6 +89,9 @@ class LLVOAvatar :
     public LLViewerObject,
     public boost::signals2::trackable
 {
+    friend struct VSAvatarVoicePolicy;
+    friend struct VSAvatarNameTagPolicy;
+
     LL_ALIGN_NEW;
     LOG_CLASS(LLVOAvatar);
 

@@ -39,6 +39,12 @@ class LLUICtrl;
 class LLButton;
 class LLMenuButton;
 class LLViewerObject;
+#if VS_NATIVE_VULKAN
+class VSEditObject;
+class VSEditSelection;
+#endif
+#include <memory>
+#include <functional>
 class LLComboBox;
 class LLTextureCtrl;
 class LLInventoryItem;
@@ -101,6 +107,19 @@ public:
 
 protected:
     void            getState();
+    template<class Selection> void getStateController(Selection*);
+    template<class Action> void withBuildObject(Action&&);
+    void activateMeshRadius(F32);
+    bool sameCurrentObject(LLViewerObject* object)const{return mObject.get()==object;}
+#if VS_NATIVE_VULKAN
+    bool sameCurrentObject(VSEditObject*)const;
+    void activateMeshFields(VSEditObject*);
+    std::shared_ptr<VSEditSelection> mNativeSelection;
+    VSEditObject* mNativeObject=nullptr;
+    VSEditObject* mNativeRootObject=nullptr;
+    LLUUID mNativeLastObject;
+    std::function<bool()> mNativeLastCurrent;
+#endif
     //<FS:Beq> FIRE-21445 + Mesh Info in object panel
     void            deactivateStandardFields();
     void            activateMeshFields(LLViewerObject * objectp);

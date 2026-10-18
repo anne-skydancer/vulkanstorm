@@ -1,0 +1,15 @@
+#include <cassert>
+#include <optional>
+#include <vector>
+#include <map>
+#include <memory>
+#include <functional>
+struct Vec{static Vec zero;int x=0;void setZero(){x=0;}};struct LLBBox{int x=0;};Vec Vec::zero;using LLVector3=Vec;struct Agent{Vec getPosGlobalFromAgent(Vec){return{};}}gAgent;Vec zero; // actual zero member below
+struct VSResourceBudget{struct Reservation{};};
+struct VSWorldScene{struct ObjectHandle{int id=1;};struct EditorTransform{Vec localPosition,scale,globalPosition,rotation;};bool refuse=false,failPose=false;std::map<int,EditorTransform>poses;std::shared_ptr<const VSResourceBudget::Reservation>reserveSpatialBytes(std::size_t){return refuse?nullptr:std::make_shared<VSResourceBudget::Reservation>();}std::optional<EditorTransform>editorTransform(ObjectHandle h,int,Vec){return failPose?std::nullopt:std::optional{poses[h.id]};}}world;VSWorldScene*scene(){return&world;}
+struct VSObjectSelection{struct SavedTransform{Vec mSavedPositionLocal,mSavedPositionGlobal,mSavedRotation,mSavedScale,mLastMoveLocal{7};};struct Node{VSWorldScene::ObjectHandle object;struct Metadata{int gltfNode=-1;}metadata;};struct Impl{bool retired=false;std::vector<Node>nodes;std::optional<LLBBox>savedSelectionBounds;LLBBox bounds{42};bool current(VSWorldScene::ObjectHandle){return!retired;}};std::shared_ptr<Impl>mImpl=std::make_shared<Impl>();std::map<int,std::shared_ptr<SavedTransform>>saved;bool refuseSaved=false,valid=true;std::function<bool()>selectionGuard(){return[this]{return valid&&!mImpl->retired;};}std::shared_ptr<SavedTransform>savedTransform(VSWorldScene::ObjectHandle h){if(refuseSaved)return{};auto&v=saved[h.id];if(!v)v=std::make_shared<SavedTransform>();return v;}bool saveSelectedObjectTransform();std::optional<LLBBox>savedSelectionBBox()const;};
+int calls=0,failRatioAt=0;bool reenter=false;
+bool vs_capture_selected_texture_ratios(VSObjectSelection&s,VSWorldScene::ObjectHandle){++calls;if(reenter)s.valid=false;return calls!=failRatioAt;}
+METHODS
+int main(){VSObjectSelection s;s.mImpl->nodes={{{1},{-1}},{{2},{3}},{{3},{-1}}};for(int id=1;id<4;++id)world.poses[id]={{id*10},{id*20},{id*30},{id*40}};assert(s.saveSelectedObjectTransform()&&calls==2);for(int id=1;id<4;++id){const auto&v=*s.saved[id];assert(v.mSavedPositionLocal.x==id*10&&v.mSavedScale.x==id*20&&v.mSavedPositionGlobal.x==id*30&&v.mSavedRotation.x==id*40&&v.mLastMoveLocal.x==(id==2?0:7));}assert(s.savedSelectionBBox()->x==42);
+world.poses[1].localPosition={999};world.refuse=true;assert(!s.saveSelectedObjectTransform()&&s.saved[1]->mSavedPositionLocal.x==10);world.refuse=false;world.failPose=true;assert(!s.saveSelectedObjectTransform());world.failPose=false;s.refuseSaved=true;assert(!s.saveSelectedObjectTransform());s.refuseSaved=false;failRatioAt=calls+1;assert(!s.saveSelectedObjectTransform()&&s.saved[1]->mSavedPositionLocal.x==10);failRatioAt=0;reenter=true;assert(!s.saveSelectedObjectTransform()&&s.saved[1]->mSavedPositionLocal.x==10);s.mImpl->retired=true;assert(!s.savedSelectionBBox()&&!s.saveSelectedObjectTransform());}

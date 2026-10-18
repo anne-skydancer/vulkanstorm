@@ -28,6 +28,7 @@
 #define LL_LLVIEWERCAMERA_H
 
 #include "llcamera.h"
+#include <optional>
 #include <glm/mat4x4.hpp>
 #include "llsingleton.h"
 #include "lltimer.h"
@@ -65,6 +66,9 @@ public:
                                 const LLVector3 &up_direction,
                                 const LLVector3 &point_of_interest);
 
+    void updateNativeFrustum();
+    std::optional<LLCamera> selectionFrustum(S32 x,S32 y,S32 width,S32 height,
+                                            F32 nearPlane,F32 farPlane,F32 projectionFar) const;
     static void updateFrustumPlanes(LLCamera& camera, bool ortho = false, bool zflip = false, bool no_hacks = false);
     void setPerspective(bool for_selection, S32 x, S32 y_from_bot, S32 width, S32 height, bool limit_select_distance, F32 z_near = 0, F32 z_far = 0);
 

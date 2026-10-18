@@ -1741,7 +1741,7 @@ void LLFloaterWorldMap::onTrackRegion()
                 args["REGION"] = sim_name;
                 args["LABEL"] = !temp_label.empty() ? temp_label : sim_name;
                 payload["name"] = sim_name;
-                LLNotificationsUtil::add("RegionTrackerAdd", args, payload, boost::bind(&ALFloaterRegionTracker::onRegionAddedCallback, floaterp, _1, _2));
+                LLNotificationsUtil::add("RegionTrackerAdd", args, payload, floaterp->regionAddedCallback());
             }
             else
             {

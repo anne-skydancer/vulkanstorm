@@ -26,12 +26,19 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "vsnativeim.h"
+#include "vsregioncontext.h"
 #include "fspanelblocklist.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #endif
 #include <limits>
 #include "llviewermessage.h"
+#include "vsavatarservices.h"
+#include "vsobjectcontext.h"
+#if VS_NATIVE_VULKAN
+#include "vsworldsound.h"
+#include "vsvulkancontext.h"
+#endif
 #include "vsestatecovenant.h"
 
 // Linden libraries
@@ -470,25 +477,10 @@ static LLNotificationFunctorRegistration friendship_offer_callback_reg_nm("Offer
 // Functions
 //
 
-void give_money(const LLUUID& uuid, LLViewerRegion* region, S32 amount, bool is_group,
-                S32 trx_type, const std::string& desc)
+namespace
 {
-    if (amount == 0 || amount == std::numeric_limits<S32>::min()) return;
-    LLHost destination = region ? region->getHost() : LLHost();
-#if VS_NATIVE_VULKAN
-    if (auto owner = VSNativeSession::active())
-    {
-        if (owner->phase() != VSNativeSession::Phase::Connected ||
-            !owner->host().isOk() || uuid.isNull() || amount < 0) return;
-        if (!owner->balanceKnown())
-        {
-            LLNotificationsUtil::add("NativePaymentBalanceUnavailable");
-            return;
-        }
-        destination = owner->host();
-    }
-#endif
-    if (!destination.isOk()) return;
+void give_money_to_host(const LLUUID& uuid,const LLHost& destination,S32 amount,bool is_group,S32 trx_type,const std::string& desc)
+{
     amount = abs(amount);
     LL_INFOS("Messaging") << "give_money(" << uuid << "," << amount << ")"<< LL_ENDL;
     if(can_afford_transaction(amount))
@@ -522,6 +514,40 @@ void give_money(const LLUUID& uuid, LLViewerRegion* region, S32 amount, bool is_
         LLBuyCurrencyHTML::openCurrencyFloater( LLTrans::getString("giving", args), amount );
     }
 }
+
+}
+void give_money(const LLUUID& uuid, LLViewerRegion* region, S32 amount, bool is_group,
+                S32 trx_type, const std::string& desc)
+{
+    if (amount == 0 || amount == std::numeric_limits<S32>::min()) return;
+    LLHost destination = region ? region->getHost() : LLHost();
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (owner->phase() != VSNativeSession::Phase::Connected ||
+            !owner->host().isOk() || uuid.isNull() || amount < 0) return;
+        if (!owner->balanceKnown())
+        {
+            LLNotificationsUtil::add("NativePaymentBalanceUnavailable");
+            return;
+        }
+        destination = owner->host();
+    }
+#endif
+    if (!destination.isOk()) return;
+    give_money_to_host(uuid,destination,amount,is_group,trx_type,desc);
+}
+#if VS_NATIVE_VULKAN
+void vs_give_money_to_object(const VSObjectContext& source,S32 amount,const std::string& description)
+{
+    const auto account=VSNativeSession::active();
+    if(!account || account->phase()!=VSNativeSession::Phase::Connected || !source.current || !source.current() ||
+       !source.host.isOk() || source.id.isNull() || amount<=0)return;
+    if(!account->balanceKnown())
+    {LLNotificationsUtil::add("NativePaymentBalanceUnavailable");return;}
+    give_money_to_host(source.id,source.host,amount,false,TRANS_PAY_OBJECT,description);
+}
+#endif
 
 void send_complete_agent_movement(const LLHost& sim_host)
 {
@@ -2811,7 +2837,7 @@ void process_decline_callingcard(LLMessageSystem* msg, void**)
     LLNotificationsUtil::add("CallingCardDeclined");
 }
 
-void translateSuccess(LLChat chat, LLSD toastArgs, std::string originalMsg, std::string expectLang, std::string translation, const std::string detected_language)
+void translateSuccess(LLChat chat, LLSD toastArgs, std::string originalMsg, std::string expectLang, std::string translation, const std::string detected_language, const VSChatDelivery& deliver)
 {
     // filter out non-interesting responses
     if (!translation.empty()
@@ -2822,17 +2848,17 @@ void translateSuccess(LLChat chat, LLSD toastArgs, std::string originalMsg, std:
     }
 
     LLTranslate::instance().logSuccess(1);
-    LLNotificationsUI::LLNotificationManager::instance().onChat(chat, toastArgs);
+    deliver(chat, toastArgs);
 }
 
-void translateFailure(LLChat chat, LLSD toastArgs, int status, const std::string err_msg)
+void translateFailure(LLChat chat, LLSD toastArgs, int status, const std::string err_msg, const VSChatDelivery& deliver)
 {
     std::string msg = LLTrans::getString("TranslationFailed", LLSD().with("[REASON]", err_msg));
     LLStringUtil::replaceString(msg, "\n", " "); // we want one-line error messages
     chat.mText += " (" + msg + ")";
 
     LLTranslate::instance().logFailure(1);
-    LLNotificationsUI::LLNotificationManager::instance().onChat(chat, toastArgs);
+    deliver(chat, toastArgs);
 }
 
 
@@ -3009,37 +3035,14 @@ VSOwnerChatResult vs_process_owner_chat(LLChat& chat, std::string& mesg,
     return VSOwnerChatResult::NotCommand;
 }
 
-void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
+void vs_receive_chat(LLChat chat, const std::string& from_name, const LLUUID& owner_id, const VSChatReceiveServices& services)
 {
-    if (gNonInteractive)
-    {
-        return;
-    }
-    LLChat  chat;
-    std::string     mesg;
-    std::string     from_name;
-    U8          source_temp;
-    U8          type_temp;
-    U8          audible_temp;
-    LLColor4    color(1.0f, 1.0f, 1.0f, 1.0f);
-    LLUUID      from_id;
-    LLUUID      owner_id;
-    LLViewerObject* chatter;
-
-    msg->getString("ChatData", "FromName", from_name);
-
-    msg->getUUID("ChatData", "SourceID", from_id);
-    chat.mFromID = from_id;
-
-    // Object owner for objects
-    msg->getUUID("ChatData", "OwnerID", owner_id);
-
-    msg->getU8Fast(_PREHASH_ChatData, _PREHASH_SourceType, source_temp);
-    chat.mSourceType = (EChatSourceType)source_temp;
-
-    msg->getU8("ChatData", "ChatType", type_temp);
-    chat.mChatType = (EChatType)type_temp;
-
+    const auto current = [&services] { return !services.current || services.current(); };
+    if (gNonInteractive || !current()) return;
+    const LLUUID from_id = chat.mFromID;
+    std::string mesg;
+    LLColor4 color(1.f, 1.f, 1.f, 1.f);
+    std::shared_ptr<VSChatReceiveObject> chatter;
     // NaCL - Antispam Registry
     static LLCachedControl<bool> useAntiSpam(gSavedSettings, "UseAntiSpam");
     static LLCachedControl<bool> useAntiSpamMine(gSavedSettings, "FSUseAntiSpamMine");
@@ -3048,7 +3051,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
     {
         if (chat.mSourceType == CHAT_SOURCE_OBJECT)
         {
-            LLViewerObject* source = gObjectList.findObject(from_id);
+            const auto source = services.findObject(from_id);
             if (source)
             {
                 if (source->permYouOwner() && useAntiSpamMine)
@@ -3070,8 +3073,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
     }
     // NaCl End
 
-    msg->getU8Fast(_PREHASH_ChatData, _PREHASH_Audible, audible_temp);
-    chat.mAudible = (EChatAudible)audible_temp;
+    chat.mAudible = services.audible();
 
     chat.mTime = LLFrameTimer::getElapsedSeconds();
 
@@ -3140,7 +3142,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
     }
 
     bool is_audible = (CHAT_AUDIBLE_FULLY == chat.mAudible);
-    chatter = gObjectList.findObject(from_id);
+    chatter = services.findObject(from_id);
     if (chatter)
     {
         chat.mPosAgent = chatter->getPositionAgent();
@@ -3159,13 +3161,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
              ((!rlv_handler_t::isEnabled()) || (CHAT_TYPE_OWNER != chat.mChatType)) )
 // [/RLVa:KB]
         {
-            LLPointer<LLViewerPartSourceChat> psc = new LLViewerPartSourceChat(chatter->getPositionAgent());
-            psc->setSourceObject(chatter);
-            psc->setColor(color);
-            //We set the particles to be owned by the object's owner,
-            //just in case they should be muted by the mute list
-            psc->setOwnerUUID(owner_id);
-            LLViewerPartSim::getInstance()->addPartSource(psc);
+            chatter->chatParticles(color, owner_id);
         }
 
         // record last audible utterance
@@ -3186,7 +3182,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
         std::string verb;
 
         color.setVec(1.f,1.f,1.f,1.f);
-        msg->getStringFast(_PREHASH_ChatData, _PREHASH_Message, mesg);
+        mesg = services.message();
 
         // NaCl - Newline flood protection
         static LLCachedControl<bool> useAntiSpam(gSavedSettings, "UseAntiSpam");
@@ -3226,13 +3222,11 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
 // [RLVa:KB] - Checked: 2010-04-23 (RLVa-1.2.0f) | Modified: RLVa-1.2.0f
         const VSReceivedChatContext receive_context{
             [chatter] { return VSReceivedChatContext::Source{chatter && chatter->isAttachment(), chatter && chatter->permYouOwner()}; },
-            [&chat]() -> std::optional<std::string>
+            [&chat, &services]() -> std::optional<std::string>
             {
-                const auto* region = LLWorld::getInstance()->getRegionFromPosAgent(chat.mPosAgent);
-                if (!region) return {};
-                return LLSLURL(region->getName(), chat.mPosAgent).getLocationString();
+                return services.location(chat.mPosAgent);
             }};
-        if (!vs_filter_received_chat(chat, mesg, owner_id, receive_context)) return;
+        if (!vs_filter_received_chat(chat, mesg, owner_id, receive_context) || !current()) return;
 // [/RLVa:KB]
 
         bool ircstyle = false;
@@ -3256,7 +3250,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
             // Might not have the avatar constructed yet, eg on login.
             if (chatter && chatter->isAvatar())
             {
-                ((LLVOAvatar*)chatter)->startTyping();
+                chatter->startTyping();
             }
             return;
         }
@@ -3267,7 +3261,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
             // Might not have the avatar constructed yet, eg on login.
             if (chatter && chatter->isAvatar())
             {
-                ((LLVOAvatar*)chatter)->stopTyping();
+                chatter->stopTyping();
             }
             return;
         }
@@ -3291,7 +3285,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
             case CHAT_TYPE_OWNER:
                 // <FS:TT> Client LSL Bridge
                 {
-                    if (FSLSLBridge::instance().lslToViewer(mesg, from_id, owner_id))
+                    if (FSLSLBridge::instance().lslToViewer(mesg, from_id, owner_id) || !current())
                     {
                         return;
                     }
@@ -3299,7 +3293,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
                 // </FS:TT>
 
                 // <FS:KC> cmdline packager
-                if (cmdline_packager(mesg, from_id, owner_id))
+                if (cmdline_packager(mesg, from_id, owner_id) || !current())
                 {
                     return;
                 }
@@ -3311,9 +3305,9 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
                     {
                         return !chatter || !chatter->isAttachment() || !chatter->isTempAttachment() ||
                                RlvSettings::getEnableTemporaryAttachments();
-                    }); result != VSOwnerChatResult::NotCommand)
+                    }, services.current); result != VSOwnerChatResult::NotCommand)
                 {
-                    if (result == VSOwnerChatResult::Consumed) return;
+                    if (result == VSOwnerChatResult::Consumed || !current()) return;
                     break;
                 }
 // [/RLVa:KB]
@@ -3322,13 +3316,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
                 if  ( (rlv_handler_t::isEnabled()) && (chatter) && (chat.mSourceType == CHAT_SOURCE_OBJECT) &&
                       (gSavedSettings.getBOOL("EffectScriptChatParticles")) )
                 {
-                    LLPointer<LLViewerPartSourceChat> psc = new LLViewerPartSourceChat(chatter->getPositionAgent());
-                    psc->setSourceObject(chatter);
-                    psc->setColor(color);
-                    //We set the particles to be owned by the object's owner,
-                    //just in case they should be muted by the mute list
-                    psc->setOwnerUUID(owner_id);
-                    LLViewerPartSim::getInstance()->addPartSource(psc);
+                    chatter->chatParticles(color, owner_id);
                 }
 // [/RLVa:KB]
             case CHAT_TYPE_DEBUG_MSG:
@@ -3405,7 +3393,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
                     if (chatter && chatter->isAvatar())
                     {
                         LLLocalSpeakerMgr::getInstance()->setSpeakerTyping(from_id, false);
-                        ((LLVOAvatar*)chatter)->stopTyping();
+                        chatter->stopTyping();
                     }
 
                     if (needle->mChatReplace.empty())       // no replacement defined, just suppress the message
@@ -3433,7 +3421,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
         if (chatter && chatter->isAvatar())
         {
             LLLocalSpeakerMgr::getInstance()->setSpeakerTyping(from_id, false);
-            ((LLVOAvatar*)chatter)->stopTyping();
+            chatter->stopTyping();
 
             if (!is_muted && !is_do_not_disturb)
             {
@@ -3443,7 +3431,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
                 LLChat chat_bubble = chat;
 
                 chat_bubble.mText = formated_msg;
-                ((LLVOAvatar*)chatter)->addChat(chat_bubble);
+                chatter->addChat(chat_bubble);
             }
         }
 
@@ -3478,6 +3466,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
         }
         // </FS:PP>
 
+        if (!current()) return;
         LLTranslate::instance().logCharsSeen(mesg.size());
         // <FS:PP> gSavedSettings to LLCachedControl
         // if (gSavedSettings.getBOOL("TranslateChat") && chat.mSourceType != CHAT_SOURCE_SYSTEM)
@@ -3494,14 +3483,24 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
 
             LLTranslate::instance().logCharsSent(mesg.size());
             LLTranslate::translateMessage(from_lang, to_lang, mesg,
-                boost::bind(&translateSuccess, chat, args, mesg, from_lang, _1, _2),
-                boost::bind(&translateFailure, chat, args, _1, _2));
+                [chat, args, mesg, from_lang, deliver = services.deliver, alive = services.current](std::string translated, std::string detected)
+                {
+                    if (alive && !alive()) return;
+                    translateSuccess(chat, args, mesg, from_lang, translated, detected, deliver);
+                },
+                [chat, args, deliver = services.deliver, alive = services.current](int status, std::string error)
+                {
+                    if (alive && !alive()) return;
+                    translateFailure(chat, args, status, error, deliver);
+                });
 
         }
         else
         {
-            LLNotificationsUI::LLNotificationManager::instance().onChat(chat, args);
+            services.deliver(chat, args);
         }
+
+        if (!current()) return;
 
         // don't call notification for debug messages from not owned objects
         if (chat.mChatType == CHAT_TYPE_DEBUG_MSG)
@@ -3548,6 +3547,78 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
     }
 }
 
+
+namespace
+{
+class VSReferenceChatObject final : public VSChatReceiveObject
+{
+public:
+    explicit VSReferenceChatObject(LLViewerObject* object) : mObject(object) {}
+    bool permYouOwner() const override { return mObject->permYouOwner(); }
+    bool isAttachment() const override { return mObject->isAttachment(); }
+    bool isTempAttachment() const override { return mObject->isTempAttachment(); }
+    bool isAvatar() const override { return mObject->isAvatar(); }
+    LLVector3 getPositionAgent() const override { return mObject->getPositionAgent(); }
+    void startTyping() override { static_cast<LLVOAvatar*>(mObject.get())->startTyping(); }
+    void stopTyping() override { static_cast<LLVOAvatar*>(mObject.get())->stopTyping(); }
+    void addChat(const LLChat& chat) override { static_cast<LLVOAvatar*>(mObject.get())->addChat(chat); }
+    void chatParticles(const LLColor4& color, const LLUUID& owner) override
+    {
+        LLPointer<LLViewerPartSourceChat> source = new LLViewerPartSourceChat(mObject->getPositionAgent());
+        source->setSourceObject(mObject);
+        source->setColor(color);
+        source->setOwnerUUID(owner);
+        LLViewerPartSim::getInstance()->addPartSource(source);
+    }
+private:
+    LLPointer<LLViewerObject> mObject;
+};
+}
+
+void process_chat_from_simulator(LLMessageSystem* msg, void** user_data)
+{
+    if (gNonInteractive) return;
+    LLChat chat;
+    std::string from_name;
+    LLUUID owner_id;
+    U8 source, type;
+    msg->getString("ChatData", "FromName", from_name);
+    msg->getUUID("ChatData", "SourceID", chat.mFromID);
+    msg->getUUID("ChatData", "OwnerID", owner_id);
+    msg->getU8Fast(_PREHASH_ChatData, _PREHASH_SourceType, source);
+    chat.mSourceType = static_cast<EChatSourceType>(source);
+    msg->getU8("ChatData", "ChatType", type);
+    chat.mChatType = static_cast<EChatType>(type);
+    VSChatReceiveServices services;
+    services.findObject = [](const LLUUID& id) -> std::shared_ptr<VSChatReceiveObject>
+    {
+        if (auto* object = gObjectList.findObject(id)) return std::make_shared<VSReferenceChatObject>(object);
+        return {};
+    };
+    services.audible = [msg]
+    {
+        U8 value;
+        msg->getU8Fast(_PREHASH_ChatData, _PREHASH_Audible, value);
+        return static_cast<EChatAudible>(value);
+    };
+    services.message = [msg]
+    {
+        std::string text;
+        msg->getStringFast(_PREHASH_ChatData, _PREHASH_Message, text);
+        return text;
+    };
+    services.location = [](const LLVector3& position) -> std::optional<std::string>
+    {
+        const auto* region = LLWorld::getInstance()->getRegionFromPosAgent(position);
+        if (!region) return {};
+        return LLSLURL(region->getName(), position).getLocationString();
+    };
+    services.deliver = [](const LLChat& chat, const LLSD& args)
+    {
+        LLNotificationsUI::LLNotificationManager::instance().onChat(chat, args);
+    };
+    vs_receive_chat(chat, from_name, owner_id, services);
+}
 
 // Simulator we're on is informing the viewer that the agent
 // is starting to teleport (perhaps to another sim, perhaps to the
@@ -4956,6 +5027,17 @@ static bool is_sound_blacklisted(const LLUUID& sound_id, const LLUUID& object_id
         // Gesture sound
         return blacklist.isBlacklisted(owner_id, LLAssetType::AT_SOUND, FSAssetBlacklist::eBlacklistFlag::GESTURE);
     }
+#if VS_NATIVE_VULKAN
+    else if (auto owner = VSNativeSession::active())
+    {
+        const auto* sounds = owner->worldSound();
+        const auto flag = sounds && sounds->isAttachment(object_id) ? FSAssetBlacklist::eBlacklistFlag::WORN : FSAssetBlacklist::eBlacklistFlag::REZZED;
+        // Match reference unknown-object policy: an unknown object is neither
+        // classified as attachment nor rezzed merely by receiving a sound.
+        if (!gViewerWindow || !gViewerWindow->nativeContext() || !gViewerWindow->nativeContext()->world().object(object_id)) return false;
+        return blacklist.isBlacklisted(owner_id, LLAssetType::AT_SOUND, flag);
+    }
+#endif
     else if (LLViewerObject* object = gObjectList.findObject(object_id))
     {
         if (object->isAttachment())
@@ -5128,6 +5210,13 @@ void process_preload_sound(LLMessageSystem *msg, void **user_data)
     }
     // NaCl End
 
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (auto* sounds = owner->worldSound()) sounds->preload(object_id, sound_id, owner_id, msg->getSender());
+        return;
+    }
+#endif
     LLViewerObject* objectp = gObjectList.findObject(object_id);
     if (!objectp) return;
 
@@ -5187,6 +5276,13 @@ void process_attached_sound(LLMessageSystem *msg, void **user_data)
     msg->getU8Fast(_PREHASH_DataBlock, _PREHASH_Flags, flags);
     gain = llclampf(gain); // <FS> INT-141: Clamp gain to valid range
 
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (auto* sounds = owner->worldSound()) sounds->attached(object_id, sound_id, owner_id, gain, flags, msg->getSender());
+        return;
+    }
+#endif
     LLViewerObject *objectp = gObjectList.findObject(object_id);
     if (objectp)
     {
@@ -5216,6 +5312,15 @@ void process_attached_sound_gain_change(LLMessageSystem *mesgsys, void **user_da
     LLViewerObject *objectp = NULL;
 
     mesgsys->getUUIDFast(_PREHASH_DataBlock, _PREHASH_ObjectID, object_guid);
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        mesgsys->getF32Fast(_PREHASH_DataBlock, _PREHASH_Gain, gain);
+        gain = llclampf(gain);
+        if (auto* sounds = owner->worldSound()) sounds->gain(object_guid, gain, mesgsys->getSender());
+        return;
+    }
+#endif
 
     if (!((objectp = gObjectList.findObject(object_guid))))
     {
@@ -5579,7 +5684,58 @@ void near_sit_object(bool success, void *data)
     }
 }
 
-void process_avatar_sit_response(LLMessageSystem *mesgsys, void **user_data)
+namespace
+{
+struct ReferenceSitResponse
+{
+    using Object=LLViewerObject*;
+    bool current()const{return true;}
+    bool avatarValid()const{return isAgentAvatarValid();}
+    Object object(const LLUUID& id)const{return gObjectList.findObject(id);}
+    LLVector3 position(Object object)const{return object->getPositionAgent();}
+    LLQuaternion rotation(Object object)const{return object->getRotation();}
+    bool sittingOnRoot(Object object)const{return isAgentAvatarValid() && gAgentAvatarp->isSitting() && gAgentAvatarp->getRoot()==object->getRoot();}
+    void autopilot(Object,const LLVector3& position,const LLQuaternion& rotation)const
+    {gAgent.startAutoPilotGlobal(gAgent.getPosGlobalFromAgent(position),"Sit",&rotation,near_sit_object,nullptr,.5f);}
+};
+#if VS_NATIVE_VULKAN
+struct NativeSitResponse
+{
+    using Object=std::optional<VSWorldScene::ManipulationObject>;
+    std::shared_ptr<VSNativeSession> owner;
+    VSNativeSession::AccountHandle account;
+    U64 circuit;
+    VSWorldScene& world;
+    bool current()const{return owner->current(account) && owner->regionEpoch()==circuit && owner->regionReady();}
+    bool avatarValid()const{return vs_avatar_character()!=nullptr;}
+    Object object(const LLUUID& id)const
+    {
+        const auto token=world.object(id);
+        return token?world.manipulationObject(*token,gAgent.getPosGlobalFromAgent(LLVector3::zero)):Object{};
+    }
+    LLVector3 position(const Object& object)const{return gAgent.getPosAgentFromGlobal(object->position);}
+    LLQuaternion rotation(const Object& object)const{return object->rotation;}
+    bool sittingOnRoot(const Object& object)const{return avatarValid() && gAgent.isSitting() && vs_avatar_root_id()==object->root.id;}
+    void autopilot(const Object& object,const LLVector3& position,const LLQuaternion& rotation)const
+    {
+        struct Arrival{std::function<bool()> account,object;std::weak_ptr<VSNativeSession> owner;U64 circuit;};
+        auto arrival=std::make_unique<Arrival>();arrival->account=owner->accountGuard();arrival->object=world.guard(object->object);arrival->owner=owner;arrival->circuit=circuit;
+        auto callback=[](bool success,void* raw)
+        {
+            std::unique_ptr<Arrival> intent(static_cast<Arrival*>(raw));
+            const auto owner=intent->owner.lock();
+            if(success && owner && intent->account() && intent->object() && owner->regionEpoch()==intent->circuit)
+                near_sit_object(true,nullptr);
+        };
+        gAgent.startAutoPilotGlobal(gAgent.getPosGlobalFromAgent(position),"Sit",&rotation,callback,arrival.release(),.5f);
+    }
+};
+#endif
+}
+
+namespace
+{
+template<class Peer>void sharedAvatarSitResponse(LLMessageSystem* mesgsys,const Peer& peer)
 {
     LLVector3 sitPosition;
     LLQuaternion sitRotation;
@@ -5596,33 +5752,50 @@ void process_avatar_sit_response(LLMessageSystem *mesgsys, void **user_data)
     bool force_mouselook;
     mesgsys->getBOOLFast(_PREHASH_SitTransform, _PREHASH_ForceMouselook, force_mouselook);
 
-    if (isAgentAvatarValid() && dist_vec_squared(camera_eye, camera_at) > CAMERA_POSITION_THRESHOLD_SQUARED)
+    if(!peer.current())return;
+    if (peer.avatarValid() && dist_vec_squared(camera_eye, camera_at) > CAMERA_POSITION_THRESHOLD_SQUARED)
     {
         gAgentCamera.setSitCamera(sitObjectID, camera_eye, camera_at);
     }
 
+    if(!peer.current())return;
     gAgentCamera.setForceMouselook(force_mouselook);
     // Forcing turning off flying here to prevent flying after pressing "Stand"
     // to stand up from an object. See EXT-1655.
     gAgent.setFlying(false);
 
-    LLViewerObject* object = gObjectList.findObject(sitObjectID);
+    if(!peer.current())return;
+    const auto object=peer.object(sitObjectID);
     if (object)
     {
-        LLVector3 sit_spot = object->getPositionAgent() + (sitPosition * object->getRotation());
-        if (!use_autopilot || (isAgentAvatarValid() && gAgentAvatarp->isSitting() && gAgentAvatarp->getRoot() == object->getRoot()))
+        LLVector3 sit_spot = peer.position(object) + (sitPosition * peer.rotation(object));
+        if (!use_autopilot || (peer.sittingOnRoot(object)))
         {
             //we're already sitting on this object, so don't autopilot
         }
         else
         {
-            gAgent.startAutoPilotGlobal(gAgent.getPosGlobalFromAgent(sit_spot), "Sit", &sitRotation, near_sit_object, NULL, 0.5f);
+            peer.autopilot(object,sit_spot,sitRotation);
         }
     }
     else
     {
         LL_WARNS("Messaging") << "Received sit approval for unknown object " << sitObjectID << LL_ENDL;
     }
+}
+}
+void process_avatar_sit_response(LLMessageSystem *mesgsys, void **user_data)
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=VSNativeSession::active();
+        if(!owner || !owner->regionReady() || !gViewerWindow->nativeContext())return;
+        sharedAvatarSitResponse(mesgsys,NativeSitResponse{owner,owner->account(),owner->regionEpoch(),gViewerWindow->nativeContext()->world()});
+        return;
+    }
+#endif
+    sharedAvatarSitResponse(mesgsys,ReferenceSitResponse{});
 }
 
 void process_clear_follow_cam_properties(LLMessageSystem *mesgsys, void **user_data)
@@ -6694,7 +6867,7 @@ bool attempt_standard_notification(LLMessageSystem* msgsystem)
             }
 
             // <FS:Ansariel> Optional new region restart notification
-            if (!gSavedSettings.getBOOL("FSUseNewRegionRestartNotification") || gViewerWindow->isNativeVulkan())
+            if (!gSavedSettings.getBOOL("FSUseNewRegionRestartNotification"))
             {
                 notificationID += "Toast";
             }
@@ -6920,7 +7093,7 @@ void process_alert_core(const std::string& message, bool modal)
             seconds = mins * 60;
             is_region_restart = true;
 
-            if (!gSavedSettings.getBOOL("FSUseNewRegionRestartNotification") || gViewerWindow->isNativeVulkan())
+            if (!gSavedSettings.getBOOL("FSUseNewRegionRestartNotification"))
             {
                 LLSD args;
                 args["MINUTES"] = llformat("%d", mins);
@@ -6932,7 +7105,7 @@ void process_alert_core(const std::string& message, bool modal)
             LLStringUtil::convertToS32(text.substr(18), seconds);
             is_region_restart = true;
 
-            if (!gSavedSettings.getBOOL("FSUseNewRegionRestartNotification") || gViewerWindow->isNativeVulkan())
+            if (!gSavedSettings.getBOOL("FSUseNewRegionRestartNotification"))
             {
                 LLSD args;
                 args["SECONDS"] = llformat("%d", seconds);
@@ -6941,7 +7114,7 @@ void process_alert_core(const std::string& message, bool modal)
         }
         if (is_region_restart)
         {
-            if (gSavedSettings.getBOOL("FSUseNewRegionRestartNotification") && !gViewerWindow->isNativeVulkan())
+            if (gSavedSettings.getBOOL("FSUseNewRegionRestartNotification"))
             {
                 LLFloaterRegionRestarting* floaterp = LLFloaterReg::findTypedInstance<LLFloaterRegionRestarting>("region_restarting");
 
@@ -6952,9 +7125,9 @@ void process_alert_core(const std::string& message, bool modal)
                 else
                 {
                     std::string region_name;
-                    if (gAgent.getRegion())
+                    if (const auto region=vs_current_region_context())
                     {
-                        region_name = gAgent.getRegion()->getName();
+                        region_name = region->getName();
                     }
                     else
                     {
@@ -7046,6 +7219,13 @@ void process_alert_core(const std::string& message, bool modal)
 mean_collision_list_t               gMeanCollisionList;
 time_t                              gLastDisplayedTime = 0;
 
+void reset_mean_collision_account()
+{
+    for (auto* collision : gMeanCollisionList) delete collision;
+    gMeanCollisionList.clear();
+    gLastDisplayedTime = 0;
+}
+
 void handle_show_mean_events(void *)
 {
     LLFloaterReg::showInstance("bumps");
@@ -7104,10 +7284,10 @@ void process_mean_collision_alert_message(LLMessageSystem *msgsystem, void **use
 
     for (i = 0; i < num; i++)
     {
-        msgsystem->getUUIDFast(_PREHASH_MeanCollision, _PREHASH_Perp, perp);
-        msgsystem->getU32Fast(_PREHASH_MeanCollision, _PREHASH_Time, time);
-        msgsystem->getF32Fast(_PREHASH_MeanCollision, _PREHASH_Mag, mag);
-        msgsystem->getU8Fast(_PREHASH_MeanCollision, _PREHASH_Type, u8type);
+        msgsystem->getUUIDFast(_PREHASH_MeanCollision, _PREHASH_Perp, perp, i);
+        msgsystem->getU32Fast(_PREHASH_MeanCollision, _PREHASH_Time, time, i);
+        msgsystem->getF32Fast(_PREHASH_MeanCollision, _PREHASH_Mag, mag, i);
+        msgsystem->getU8Fast(_PREHASH_MeanCollision, _PREHASH_Type, u8type, i);
 
         type = (EMeanCollisionType)u8type;
 
@@ -7187,7 +7367,9 @@ void process_mean_collision_alert_message(LLMessageSystem *msgsystem, void **use
         {
             LLMeanCollisionData *mcd = new LLMeanCollisionData(gAgentID, perp, time, type, mag);
             gMeanCollisionList.push_front(mcd);
-            LLAvatarNameCache::get(perp, boost::bind(&mean_name_callback, _1, _2));
+            const auto current = vs_native_im_guard();
+            LLAvatarNameCache::get(perp, [current](const LLUUID& id, const LLAvatarName& name)
+            { if (current()) mean_name_callback(id, name); });
         }
         // <FS:Ansariel> Instant bump list floater update
         else

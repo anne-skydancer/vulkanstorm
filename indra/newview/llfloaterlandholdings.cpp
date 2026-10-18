@@ -35,6 +35,11 @@
 #include "message.h"
 
 #include "llagent.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "llfloaterreg.h"
 #include "llfloaterworldmap.h"
 #include "llproductinforequest.h"
@@ -110,6 +115,17 @@ LLFloaterLandHoldings::~LLFloaterLandHoldings()
 
 void LLFloaterLandHoldings::onOpen(const LLSD& key)
 {
+    mAccountCurrent = vs_native_im_guard();
+    if (!mAccountCurrent()) return;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        mTransaction.generate();
+        mActualArea = mBillableArea = 0;
+        mFirstPacketReceived = false;
+    }
+#endif
+
     LLScrollListCtrl *list = getChild<LLScrollListCtrl>("parcel list");
     list->clearRows();
 
@@ -120,7 +136,7 @@ void LLFloaterLandHoldings::onOpen(const LLSD& key)
     U32 query_flags = DFQ_AGENT_OWNED;
 
     send_places_query(query_id,
-                      LLUUID::null,
+                      mTransaction,
                       "",
                       query_flags,
                       LLParcel::C_ANY,
@@ -138,6 +154,7 @@ void LLFloaterLandHoldings::draw()
 // public
 void LLFloaterLandHoldings::refresh()
 {
+    if (!mAccountCurrent()) return;
     LLCtrlSelectionInterface *list = childGetSelectionInterface("parcel list");
     bool enable_btns = false;
     if (list && list->getFirstSelectedIndex()> -1)
@@ -156,6 +173,7 @@ void LLFloaterLandHoldings::refresh()
 void LLFloaterLandHoldings::processPlacesReply(LLMessageSystem* msg, void**)
 {
     LLFloaterLandHoldings* self = LLFloaterReg::findTypedInstance<LLFloaterLandHoldings>("land_holdings");
+    if (self && !self->acceptsReply(msg)) return;
     S32 count = msg->getNumberOfBlocks("QueryData");
     std::string land_sku;
     sHasLindenHome = false;
@@ -280,6 +298,7 @@ void LLFloaterLandHoldings::processPlacesReply(LLMessageSystem* msg, void**)
 
 void LLFloaterLandHoldings::buttonCore(S32 which)
 {
+    if (!mAccountCurrent()) return;
     LLScrollListCtrl *list = getChild<LLScrollListCtrl>("parcel list");
     if (!list) return;
 
@@ -335,7 +354,7 @@ void LLFloaterLandHoldings::onGrantList(void* data)
 {
     LLFloaterLandHoldings* self = (LLFloaterLandHoldings*)data;
     LLCtrlSelectionInterface *list = self->childGetSelectionInterface("grant list");
-    if (!list) return;
+    if (!list || !self->mAccountCurrent()) return;
     LLUUID group_id = list->getCurrentID();
     if (group_id.notNull())
     {
@@ -345,6 +364,8 @@ void LLFloaterLandHoldings::onGrantList(void* data)
 
 void LLFloaterLandHoldings::refreshAggregates()
 {
+    if (!mAccountCurrent()) return;
+    if (!gStatusBar) return;
     S32 allowed_area = gStatusBar->getSquareMetersCredit();
     S32 current_area = gStatusBar->getSquareMetersCommitted();
     S32 available_area = gStatusBar->getSquareMetersLeft();
@@ -352,4 +373,22 @@ void LLFloaterLandHoldings::refreshAggregates()
     getChild<LLUICtrl>("allowed_text")->setTextArg("[AREA]", llformat("%d",allowed_area));
     getChild<LLUICtrl>("current_text")->setTextArg("[AREA]", llformat("%d",current_area));
     getChild<LLUICtrl>("available_text")->setTextArg("[AREA]", llformat("%d",available_area));
+}
+
+bool LLFloaterLandHoldings::acceptsReply(LLMessageSystem* msg) const
+{
+    if (!mAccountCurrent()) return false;
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        LLUUID agent, query, transaction;
+        msg->getUUID("AgentData", "AgentID", agent);
+        msg->getUUID("AgentData", "QueryID", query);
+        msg->getUUID("TransactionData", "TransactionID", transaction);
+        return owner->phase() == VSNativeSession::Phase::Connected &&
+            agent == gAgent.getID() && query.isNull() &&
+            transaction == mTransaction && msg->getSender() == owner->host();
+    }
+#endif
+    return true;
 }

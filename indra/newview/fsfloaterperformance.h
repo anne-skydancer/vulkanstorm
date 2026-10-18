@@ -30,6 +30,7 @@
 
 #include "llfloater.h"
 #include "lllistcontextmenu.h"
+#include <string_view>
 
 class LLCharacter;
 class LLNameListCtrl;
@@ -56,6 +57,7 @@ public:
     bool isActionChecked(const LLSD& userdata, const LLUUID& av_id);
     void onExtendedAction(const LLSD& userdata, const LLUUID& av_id);
     void resetMaxArtSlider();
+    static bool isNativeCallback(std::string_view,const LLSD&);
     void savePreset();
     void loadPreset();
     void setHardwareDefaults();
@@ -65,6 +67,8 @@ private:
     void populateHUDList();
     void populateObjectList();
     void populateNearbyList();
+    void populateNativeNearby();
+    void populateNativeAttachments(bool hud);
 
     void onChangeQuality(const LLSD& data);
     void onClickHideAvatars();

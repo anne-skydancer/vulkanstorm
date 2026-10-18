@@ -34,6 +34,10 @@
 #define LL_LLFLOATERBUYCONTENTS_H
 
 #include "llfloater.h"
+#include <memory>
+#if VS_NATIVE_VULKAN
+struct VSObjectPurchase;
+#endif
 #include "llvoinventorylistener.h"
 #include "llinventory.h"
 
@@ -49,6 +53,7 @@ public:
     LLFloaterBuyContents(const LLSD& key);
     ~LLFloaterBuyContents();
     bool postBuild() override;
+    void onClose(bool app_quitting) override;
 
 protected:
     void inventoryChanged(LLViewerObject* obj,
@@ -56,11 +61,15 @@ protected:
         S32 serial_num,
         void* data) override;
 
+    void populateInventory(const LLInventoryObject::object_list_t*);
     void onClickBuy();
     void onClickCancel();
 
 protected:
     LLSafeHandle<LLObjectSelection> mObjectSelection;
+#if VS_NATIVE_VULKAN
+    std::shared_ptr<VSObjectPurchase> mNativePurchase;
+#endif
     LLSaleInfo mSaleInfo;
 };
 

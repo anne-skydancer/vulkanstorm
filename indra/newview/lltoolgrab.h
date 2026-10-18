@@ -28,6 +28,7 @@
 #define LL_TOOLGRAB_H
 
 #include "lltool.h"
+#include <memory>
 #include "v3math.h"
 #include "llquaternion.h"
 #include "llsingleton.h"
@@ -78,6 +79,8 @@ public:
 
     virtual void            onMouseCaptureLost();
 
+    LLUUID          editingObjectID() const;
+    LLUUID getEditingObjectID() override { return editingObjectID(); }
     bool            hasGrabOffset()  { return true; }   // HACK
     LLVector3       getGrabOffset(S32 x, S32 y);        // HACK
 
@@ -105,6 +108,9 @@ private:
     void            handleHoverFailed(S32 x, S32 y, MASK mask);
 
 private:
+    struct NativeGrab;
+    std::shared_ptr<NativeGrab> mNativeGrab;
+    void captureNativeObject(const LLPickInfo&);
     enum            EGrabMode { GRAB_INACTIVE, GRAB_ACTIVE_CENTER, GRAB_NONPHYSICAL, GRAB_LOCKED, GRAB_NOOBJECT };
 
     EGrabMode       mMode;

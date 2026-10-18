@@ -25,6 +25,16 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsappearanceui.h"
+#include "vsavatarservices.h"
+#include "vsregioncontext.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#include "vsvulkancontext.h"
+#include "vsworldscene.h"
+#include "llviewerwindow.h"
+#endif
 
 #include "llpanelwearing.h"
 
@@ -73,13 +83,13 @@ public:
         LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
         LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
 
-        registrar.add("Gear.TouchAttach", boost::bind(&LLWearingGearMenu::handleMultiple, this, handle_attachment_touch));
-        registrar.add("Gear.EditItem", boost::bind(&LLWearingGearMenu::handleMultiple, this, handle_item_edit));
-        registrar.add("Gear.EditOutfit", boost::bind(&edit_outfit));
-        registrar.add("Gear.TakeOff", boost::bind(&LLPanelWearing::onRemoveItem, mPanelWearing));
-        registrar.add("Gear.Copy", boost::bind(&LLPanelWearing::copyToClipboard, mPanelWearing));
+        registrar.add("Gear.TouchAttach", vs_appearance_ui_callback(mPanelWearing, boost::bind(&LLWearingGearMenu::handleMultiple, this, handle_attachment_touch)));
+        registrar.add("Gear.EditItem", vs_appearance_ui_callback(mPanelWearing, boost::bind(&LLWearingGearMenu::handleMultiple, this, handle_item_edit)));
+        registrar.add("Gear.EditOutfit", vs_appearance_ui_callback(mPanelWearing, boost::bind(&edit_outfit)));
+        registrar.add("Gear.TakeOff", vs_appearance_ui_callback(mPanelWearing, boost::bind(&LLPanelWearing::onRemoveItem, mPanelWearing)));
+        registrar.add("Gear.Copy", vs_appearance_ui_callback(mPanelWearing, boost::bind(&LLPanelWearing::copyToClipboard, mPanelWearing)));
 
-        enable_registrar.add("Gear.OnEnable", boost::bind(&LLPanelWearing::isActionEnabled, mPanelWearing, _2));
+        enable_registrar.add("Gear.OnEnable", vs_appearance_ui_callback(mPanelWearing, boost::bind(&LLPanelWearing::isActionEnabled, mPanelWearing, _2)));
 
         mMenu = LLUICtrlFactory::getInstance()->createFromFile<LLToggleableMenu>(
             "menu_wearing_gear.xml", gMenuHolder, LLViewerMenuHolderGL::child_registry_t::instance());
@@ -173,8 +183,11 @@ protected:
             {
                 attachments_selected = true;
             }
-            can_favorite |= !linked_item->getIsFavorite();
-            can_unfavorite |= linked_item->getIsFavorite();
+            if (linked_item)
+            {
+                can_favorite |= !linked_item->getIsFavorite();
+                can_unfavorite |= linked_item->getIsFavorite();
+            }
 // [RLVa:KB] - Checked: 2012-07-28 (RLVa-1.4.7)
             if ( (rlv_handler_t::isEnabled()) && (!rlvPredCanRemoveItem(*it)) )
             {
@@ -225,8 +238,8 @@ protected:
     {
         LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
 
-        registrar.add("Wearing.EditItem", boost::bind(&LLPanelWearing::onEditAttachment, mPanelWearing));
-        registrar.add("Wearing.Detach", boost::bind(&LLPanelWearing::onRemoveAttachment, mPanelWearing));
+        registrar.add("Wearing.EditItem", vs_appearance_ui_callback(mPanelWearing, boost::bind(&LLPanelWearing::onEditAttachment, mPanelWearing)));
+        registrar.add("Wearing.Detach", vs_appearance_ui_callback(mPanelWearing, boost::bind(&LLPanelWearing::onRemoveAttachment, mPanelWearing)));
         LLContextMenu* menu = createFromFile("menu_wearing_tab.xml");
 
         updateMenuItemsVisibility(menu);
@@ -337,7 +350,7 @@ void LLPanelWearing::onOpen(const LLSD& /*info*/)
             return;
 
         // Start observing changes in Current Outfit category.
-        LLOutfitObserver::instance().addCOFChangedCallback(boost::bind(&LLWearableItemsList::updateList, mCOFItemsList, cof));
+        mCOFConnection = LLOutfitObserver::instance().addCOFChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLWearableItemsList::updateList, mCOFItemsList, cof)));
 
         // Fetch Current Outfit contents and refresh the list to display
         // initially fetched items. If not all items are fetched now
@@ -443,10 +456,19 @@ bool LLPanelWearing::isActionEnabled(const LLSD& userdata)
 
 void LLPanelWearing::updateAttachmentsList()
 {
-    std::vector<LLViewerObject*> attachs = LLAgentWearables::getTempAttachments();
+    bool have_attachments;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto attachments = vs_avatar_attachments();
+        have_attachments = std::any_of(attachments.begin(), attachments.end(), [](const auto& item) { return item.item.isNull(); });
+    }
+    else
+#endif
+        have_attachments = !LLAgentWearables::getTempAttachments().empty();
     mTempItemsList->deleteAllItems();
     mAttachmentsMap.clear();
-    if(!attachs.empty())
+    if (have_attachments)
     {
         if(!populateAttachmentsList())
         {
@@ -466,6 +488,46 @@ void LLPanelWearing::updateAttachmentsList()
 
 bool LLPanelWearing::populateAttachmentsList(bool update)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        bool populated = true;
+        if (!mTempItemsList) return populated;
+        mTempItemsList->deleteAllItems();
+        mAttachmentsMap.clear();
+        const auto icon = LLInventoryIcon::getIconName(LLAssetType::AT_OBJECT, LLInventoryType::IT_OBJECT);
+        for (const auto& attachment : vs_avatar_attachments())
+        {
+            if (attachment.item.notNull()) continue;
+            LLSD row;
+            row["id"] = attachment.object;
+            row["columns"][0]["column"] = "icon";
+            row["columns"][0]["type"] = "icon";
+            row["columns"][0]["value"] = icon;
+            row["columns"][1]["column"] = "text";
+            const auto name = mObjectNames.find(attachment.object);
+            if (name != mObjectNames.end() && !name->second.empty()) row["columns"][1]["value"] = name->second;
+            else
+            {
+                row["columns"][1]["value"] = update ? attachment.object.asString() : LLTrans::getString("LoadingData");
+                populated = false;
+            }
+            row["columns"][2]["column"] = "weight";
+            const auto cost = mTempItemComplexityMap.find(attachment.object);
+            if (cost != mTempItemComplexityMap.end())
+            {
+                std::string value;
+                LLLocale locale("");
+                LLResMgr::getInstance()->getIntegerString(value, cost->second);
+                row["columns"][2]["value"] = value;
+            }
+            row["columns"][2]["halign"] = "right";
+            mTempItemsList->addElement(row);
+        }
+        return populated;
+    }
+#endif
+
     bool populated = true;
     if(mTempItemsList)
     {
@@ -517,24 +579,36 @@ bool LLPanelWearing::populateAttachmentsList(bool update)
 }
 
 void LLPanelWearing::requestAttachmentDetails()
+
 {
-    LLSD body;
-    std::string url = gAgent.getRegionCapability("AttachmentResources");
-    if (!url.empty())
+    const auto region = vs_current_region_context();
+    if (!region) return;
+    const std::string url = region->getCapability("AttachmentResources");
+    if (url.empty()) return;
+    const auto account = vs_native_im_guard();
+    const auto current = [account, region]
     {
-        LLCoros::instance().launch("LLPanelWearing::getAttachmentLimitsCoro",
-        boost::bind(&LLPanelWearing::getAttachmentLimitsCoro, this, url));
-    }
+        const auto now = vs_current_region_context();
+        return account() && region->current() && now && *now == *region;
+    };
+    const auto owner = getHandle();
+    const auto request = ++mDetailsRequest;
+    LLCoros::instance().launch("LLPanelWearing::getAttachmentLimitsCoro",
+        [owner, current, request, url] { getAttachmentLimitsCoro(owner, current, request, url); });
 }
 
-void LLPanelWearing::getAttachmentLimitsCoro(std::string url)
+void LLPanelWearing::getAttachmentLimitsCoro(LLHandle<LLPanel> owner, std::function<bool()> current, U64 request, std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
     httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("getAttachmentLimitsCoro", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
+    if (!current()) return;
     LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    if (!current()) return;
+    auto* panel = dynamic_cast<LLPanelWearing*>(owner.get());
+    if (!panel || panel->mDetailsRequest != request) return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -546,7 +620,7 @@ void LLPanelWearing::getAttachmentLimitsCoro(std::string url)
     }
 
     result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);
-    setAttachmentDetails(result);
+    panel->setAttachmentDetails(result);
 }
 
 
@@ -615,6 +689,20 @@ void LLPanelWearing::getSelectedItemsUUIDs(uuid_vec_t& selected_uuids) const
 
 void LLPanelWearing::onEditAttachment()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        auto* item = mTempItemsList->getFirstSelected();
+        if (!item || !owner->objectSelection() || !gViewerWindow || !gViewerWindow->nativeContext()) return;
+        auto& world = gViewerWindow->nativeContext()->world();
+        const auto object = world.object(item->getUUID());
+        if (!object || !world.objectAttachment(*object)) return;
+        owner->objectSelection()->deselectAll();
+        if (owner->objectSelection()->selectFamily(*object)) handle_object_edit();
+        return;
+    }
+#endif
+
     LLScrollListItem* item = mTempItemsList->getFirstSelected();
     if (item)
     {
@@ -626,6 +714,20 @@ void LLPanelWearing::onEditAttachment()
 
 void LLPanelWearing::onRemoveAttachment()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        auto* item = mTempItemsList->getFirstSelected();
+        if (!item || !owner->objectSelection() || !gViewerWindow || !gViewerWindow->nativeContext()) return;
+        auto& world = gViewerWindow->nativeContext()->world();
+        const auto object = world.object(item->getUUID());
+        if (!object || !world.objectAttachment(*object)) return;
+        owner->objectSelection()->deselectAll();
+        if (owner->objectSelection()->selectFamily(*object)) owner->objectSelection()->sendDetach();
+        return;
+    }
+#endif
+
     LLScrollListItem* item = mTempItemsList->getFirstSelected();
     if (item && item->getUUID().notNull())
     {

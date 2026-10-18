@@ -42,6 +42,11 @@ class LLViewerObject;
 class LLComboBox;
 class LLColorSwatchCtrl;
 class LLVOVolume;
+#if VS_NATIVE_VULKAN
+class VSEditSelection;
+class VSEditObject;
+#endif
+#include <memory>
 
 class LLPanelVolume : public LLPanel
 {
@@ -101,6 +106,17 @@ public:
 
 protected:
     void            getState();
+    template<class Selection> void getStateController(Selection*);
+    template<class Action> void withBuildObject(Action&&);
+    std::function<void(const LLSD&,const LLSD&)> buildConfirmation(void(LLPanelVolume::*)(const LLSD&,const LLSD&));
+#if VS_NATIVE_VULKAN
+    static void setLightTextureID(const LLUUID&,const LLUUID&,VSEditObject*);
+#endif
+#if VS_NATIVE_VULKAN
+    std::shared_ptr<VSEditSelection> mNativeSelection;
+    VSEditObject* mNativeObject=nullptr;
+    VSEditObject* mNativeRootObject=nullptr;
+#endif
     void            refreshCost();
 
 protected:

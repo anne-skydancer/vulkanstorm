@@ -90,10 +90,19 @@ public:
     void put(const LLUUID& object_id, const U8 te, const LLMaterial& material);
     void remove(const LLUUID& object_id, const U8 te);
 
+    void retireNativeAccount();
+
     //explicitly add new material to material manager
     void setLocalMaterial(const LLUUID& region_id, LLMaterialPtr material_ptr);
 
 private:
+    struct NativeState;
+    std::shared_ptr<NativeState> mNative;
+    std::shared_ptr<NativeState> nativeState();
+    LLMaterialPtr nativeGet(const LLUUID&,const LLMaterialID&);
+    boost::signals2::connection nativeGet(const LLUUID&,const LLMaterialID&,get_callback_t::slot_type);
+    boost::signals2::connection nativeGetAll(const LLUUID&,getall_callback_t::slot_type);
+    void nativeIdle();
     void clearGetQueues(const LLUUID& region_id);
     bool isGetPending(const LLUUID& region_id, const LLMaterialID& material_id) const;
     bool isGetAllPending(const LLUUID& region_id) const;

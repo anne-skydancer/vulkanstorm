@@ -193,7 +193,7 @@ private:
     std::map<S32, LLOutfitGalleryItem*>                 mIndexToItemMap;
     std::set<LLUUID>                                  mPendingOutfitRefreshes;
 
-    boost::signals2::connection mSavedSettingInvFavColor;
+    boost::signals2::scoped_connection mSavedSettingInvFavColor;
 };
 class LLOutfitGalleryContextMenu : public LLOutfitContextMenu
 {
@@ -264,6 +264,7 @@ public:
 private:
     LLOutfitGallery* mGallery;
     LLPointer<LLViewerFetchedTexture> mTexturep;
+    LLUIImagePtr mNativeTexture;
     LLUUID mUUID;
     LLUUID mImageAssetId;
     LLTextBox* mOutfitNameText;

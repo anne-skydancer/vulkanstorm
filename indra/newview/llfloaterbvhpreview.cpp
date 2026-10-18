@@ -27,6 +27,15 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterbvhpreview.h"
+#include "vsavatarservices.h"
+#include "llavatarappearance.h"
+#include "vsavatarmotions.h"
+#if VS_NATIVE_VULKAN
+#include "vsscenepreview.h"
+#include "vsvulkancontext.h"
+#include "vsworldavatar.h"
+#include "vsuiresources.h"
+#endif
 
 #include "llbvhloader.h"
 #include "lldatapacker.h"
@@ -219,7 +228,7 @@ void LLFloaterBvhPreview::setAnimCallbacks()
 
 std::map<std::string, std::string, std::less<>> LLFloaterBvhPreview::getJointAliases()
 {
-    LLPointer<LLVOAvatar> av = (LLVOAvatar*)mAnimPreview->getDummyAvatar();
+    auto* av = mAnimPreview->getDummyAvatar();
     return av->getJointAliases();
 }
 
@@ -298,6 +307,7 @@ bool LLFloaterBvhPreview::postBuild()
 //-----------------------------------------------------------------------------
 bool LLFloaterBvhPreview::loadBVH()
 {
+    if (!mUploadCurrent()) return false;
     LLKeyframeMotion* motionp = NULL;
     LLBVHLoader* loaderp = NULL;
 
@@ -511,6 +521,7 @@ bool LLFloaterBvhPreview::loadBVH()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::unloadMotion()
 {
+    if (!mUploadCurrent()) return;
     if (mMotionID.notNull() && mAnimPreview && mUseOwnAvatar)
     {
         resetMotion();
@@ -543,15 +554,19 @@ LLFloaterBvhPreview::~LLFloaterBvhPreview()
             LLKeyframeDataCache::removeKeyframeData(mMotionID);
         }
 
-        if (sOwnAvatarInstanceCount == 0 && isAgentAvatarValid())
+        if (sOwnAvatarInstanceCount == 0 && mUploadCurrent())
         {
-            gAgentAvatarp->deactivateAllMotions();
-            gAgentAvatarp->startDefaultMotions();
-            gAgentAvatarp->startMotion(ANIM_AGENT_STAND);
+            if (auto* avatar = vs_avatar_character())
+            {
+                avatar->deactivateAllMotions();
+                if (gViewerWindow && gViewerWindow->isNativeVulkan()) vs_start_avatar_default_motions(*avatar);
+                else gAgentAvatarp->startDefaultMotions();
+                avatar->startMotion(ANIM_AGENT_STAND);
+            }
         }
 
         // Switch FS AO back on if it was disabled during preview
-        if (mAOEnabled)
+        if (mAOEnabled && mUploadCurrent())
         {
             AOEngine::getInstance()->enable(true);
         }
@@ -566,6 +581,7 @@ LLFloaterBvhPreview::~LLFloaterBvhPreview()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::draw()
 {
+    if (!mUploadCurrent()) return;
     LLFloater::draw();
     LLRect r = getRect();
 
@@ -577,6 +593,10 @@ void LLFloaterBvhPreview::draw()
         if (!mUseOwnAvatar)
         {
         // </FS>
+        const LLRect preview(PREVIEW_HPAD, PREVIEW_TEXTURE_HEIGHT + PREVIEW_VPAD,
+            r.getWidth() - PREVIEW_HPAD, PREVIEW_HPAD + PREF_BUTTON_HEIGHT + PREVIEW_HPAD);
+        if (!mAnimPreview->drawNative(preview))
+        {
         gGL.color3f(1.f, 1.f, 1.f);
         gGL.getTexUnit(0)->bind(mAnimPreview);
 
@@ -599,10 +619,11 @@ void LLFloaterBvhPreview::draw()
         gGL.end();
 
         gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        }
         // <FS> Preview on own avatar
         //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
         }
-        LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+        auto* avatarp = mAnimPreview->getPreviewAvatar(this);
         // </FS>
         if (!avatarp->areAnimationsPaused())
         {
@@ -623,12 +644,13 @@ void LLFloaterBvhPreview::draw()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::resetMotion()
 {
+    if (!mUploadCurrent()) return;
     if (!mAnimPreview)
         return;
 
     // <FS> Preview on own avatar
     //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
-    LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+    auto* avatarp = mAnimPreview->getPreviewAvatar(this);
     // </FS>
     bool paused = avatarp->areAnimationsPaused();
 
@@ -797,6 +819,7 @@ void LLFloaterBvhPreview::onMouseCaptureLost()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onBtnPlay()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled())
         return;
 
@@ -804,7 +827,7 @@ void LLFloaterBvhPreview::onBtnPlay()
     {
         // <FS> Preview on own avatar
         //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
-        LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+        auto* avatarp = mAnimPreview->getPreviewAvatar(this);
         // </FS>
 
         if (!avatarp->isMotionActive(mMotionID))
@@ -824,6 +847,7 @@ void LLFloaterBvhPreview::onBtnPlay()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onBtnPause()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled())
         return;
 
@@ -831,7 +855,7 @@ void LLFloaterBvhPreview::onBtnPause()
     {
         // <FS> Preview on own avatar
         //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
-        LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+        auto* avatarp = mAnimPreview->getPreviewAvatar(this);
         // </FS>
 
         if (avatarp->isMotionActive(mMotionID))
@@ -849,6 +873,7 @@ void LLFloaterBvhPreview::onBtnPause()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onBtnStop()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled())
         return;
 
@@ -856,7 +881,7 @@ void LLFloaterBvhPreview::onBtnStop()
     {
         // <FS> Preview on own avatar
         //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
-        LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+        auto* avatarp = mAnimPreview->getPreviewAvatar(this);
         // </FS>
         resetMotion();
         mPauseRequest = avatarp->requestPause();
@@ -868,6 +893,7 @@ void LLFloaterBvhPreview::onBtnStop()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onSliderMove()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled())
         return;
 
@@ -875,7 +901,7 @@ void LLFloaterBvhPreview::onSliderMove()
     {
         // <FS> Preview on own avatar
         //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
-        LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+        auto* avatarp = mAnimPreview->getPreviewAvatar(this);
         // </FS>
         F32 slider_value = (F32)getChild<LLUICtrl>("playback_slider")->getValue().asReal();
         LLUUID base_id = mIDList[getChild<LLUICtrl>("preview_base_anim")->getValue().asString()];
@@ -901,6 +927,7 @@ void LLFloaterBvhPreview::onSliderMove()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onCommitBaseAnim()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled())
         return;
 
@@ -908,7 +935,7 @@ void LLFloaterBvhPreview::onCommitBaseAnim()
     {
         // <FS> Preview on own avatar
         //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
-        LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+        auto* avatarp = mAnimPreview->getPreviewAvatar(this);
         // </FS>
 
         bool paused = avatarp->areAnimationsPaused();
@@ -933,13 +960,14 @@ void LLFloaterBvhPreview::onCommitBaseAnim()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onCommitLoop()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled() || !mAnimPreview)
         return;
 
     // <FS> Preview on own avatar
     //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
     //LLKeyframeMotion* motionp = (LLKeyframeMotion*)avatarp->findMotion(mMotionID);
-    LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+    auto* avatarp = mAnimPreview->getPreviewAvatar(this);
     LLKeyframeMotion* motionp = dynamic_cast<LLKeyframeMotion*>(avatarp->findMotion(mMotionID));
     // </FS>
 
@@ -956,13 +984,14 @@ void LLFloaterBvhPreview::onCommitLoop()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onCommitLoopIn()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled() || !mAnimPreview)
         return;
 
     // <FS> Preview on own avatar
     //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
     //LLKeyframeMotion* motionp = (LLKeyframeMotion*)avatarp->findMotion(mMotionID);
-    LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+    auto* avatarp = mAnimPreview->getPreviewAvatar(this);
     LLKeyframeMotion* motionp = dynamic_cast<LLKeyframeMotion*>(avatarp->findMotion(mMotionID));
     // </FS>
 
@@ -983,13 +1012,14 @@ void LLFloaterBvhPreview::onCommitLoopIn()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onCommitLoopOut()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled() || !mAnimPreview)
         return;
 
     // <FS> Preview on own avatar
     //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
     //LLKeyframeMotion* motionp = (LLKeyframeMotion*)avatarp->findMotion(mMotionID);
-    LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+    auto* avatarp = mAnimPreview->getPreviewAvatar(this);
     LLKeyframeMotion* motionp = dynamic_cast<LLKeyframeMotion*>(avatarp->findMotion(mMotionID));
     // </FS>
 
@@ -1011,11 +1041,12 @@ void LLFloaterBvhPreview::onCommitLoopOut()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onCommitLoopInFrames()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled() || !mAnimPreview)
         return;
 
     // Preview on own avatar
-    LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+    auto* avatarp = mAnimPreview->getPreviewAvatar(this);
     LLKeyframeMotion* motionp = dynamic_cast<LLKeyframeMotion*>(avatarp->findMotion(mMotionID));
 
     if (motionp)
@@ -1033,11 +1064,12 @@ void LLFloaterBvhPreview::onCommitLoopInFrames()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onCommitLoopOutFrames()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled() || !mAnimPreview)
         return;
 
     // Preview on own avatar
-    LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+    auto* avatarp = mAnimPreview->getPreviewAvatar(this);
     LLKeyframeMotion* motionp = dynamic_cast<LLKeyframeMotion*>(avatarp->findMotion(mMotionID));
 
     if (motionp)
@@ -1055,13 +1087,14 @@ void LLFloaterBvhPreview::onCommitLoopOutFrames()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onCommitName()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled() || !mAnimPreview)
         return;
 
     // <FS> Preview on own avatar
     //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
     //LLKeyframeMotion* motionp = (LLKeyframeMotion*)avatarp->findMotion(mMotionID);
-    LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+    auto* avatarp = mAnimPreview->getPreviewAvatar(this);
     LLKeyframeMotion* motionp = dynamic_cast<LLKeyframeMotion*>(avatarp->findMotion(mMotionID));
     // </FS>
 
@@ -1078,6 +1111,7 @@ void LLFloaterBvhPreview::onCommitName()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onCommitHandPose()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled())
         return;
 
@@ -1089,6 +1123,7 @@ void LLFloaterBvhPreview::onCommitHandPose()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onCommitEmote()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled())
         return;
 
@@ -1100,13 +1135,14 @@ void LLFloaterBvhPreview::onCommitEmote()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onCommitPriority()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled() || !mAnimPreview)
         return;
 
     // <FS> Preview on own avatar
     //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
     //LLKeyframeMotion* motionp = (LLKeyframeMotion*)avatarp->findMotion(mMotionID);
-    LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+    auto* avatarp = mAnimPreview->getPreviewAvatar(this);
     LLKeyframeMotion* motionp = dynamic_cast<LLKeyframeMotion*>(avatarp->findMotion(mMotionID));
     // </FS>
 
@@ -1121,13 +1157,14 @@ void LLFloaterBvhPreview::onCommitPriority()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onCommitEaseIn()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled() || !mAnimPreview)
         return;
 
     // <FS> Preview on own avatar
     //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
     //LLKeyframeMotion* motionp = (LLKeyframeMotion*)avatarp->findMotion(mMotionID);
-    LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+    auto* avatarp = mAnimPreview->getPreviewAvatar(this);
     LLKeyframeMotion* motionp = dynamic_cast<LLKeyframeMotion*>(avatarp->findMotion(mMotionID));
     // </FS>
 
@@ -1143,13 +1180,14 @@ void LLFloaterBvhPreview::onCommitEaseIn()
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::onCommitEaseOut()
 {
+    if (!mUploadCurrent()) return;
     if (!getEnabled() || !mAnimPreview)
         return;
 
     // <FS> Preview on own avatar
     //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
     //LLKeyframeMotion* motionp = (LLKeyframeMotion*)avatarp->findMotion(mMotionID);
-    LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+    auto* avatarp = mAnimPreview->getPreviewAvatar(this);
     LLKeyframeMotion* motionp = dynamic_cast<LLKeyframeMotion*>(avatarp->findMotion(mMotionID));
     // </FS>
 
@@ -1171,7 +1209,7 @@ bool LLFloaterBvhPreview::validateEaseIn(const LLSD& data)
     // <FS> Preview on own avatar
     //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
     //LLKeyframeMotion* motionp = (LLKeyframeMotion*)avatarp->findMotion(mMotionID);
-    LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+    auto* avatarp = mAnimPreview->getPreviewAvatar(this);
     LLKeyframeMotion* motionp = dynamic_cast<LLKeyframeMotion*>(avatarp->findMotion(mMotionID));
     // </FS>
 
@@ -1195,7 +1233,7 @@ bool LLFloaterBvhPreview::validateEaseOut(const LLSD& data)
     // <FS> Preview on own avatar
     //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
     //LLKeyframeMotion* motionp = (LLKeyframeMotion*)avatarp->findMotion(mMotionID);
-    LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+    auto* avatarp = mAnimPreview->getPreviewAvatar(this);
     LLKeyframeMotion* motionp = dynamic_cast<LLKeyframeMotion*>(avatarp->findMotion(mMotionID));
     // </FS>
 
@@ -1349,6 +1387,7 @@ bool LLFloaterBvhPreview::validateLoopOutFrames(const LLSD& data)
 //-----------------------------------------------------------------------------
 void LLFloaterBvhPreview::refresh()
 {
+    if (!mUploadCurrent()) return;
     // Are we showing the play button (default) or the pause button?
     bool show_play = true;
     if (!mAnimPreview)
@@ -1367,7 +1406,7 @@ void LLFloaterBvhPreview::refresh()
         mStopButton->setEnabled(true);
         // <FS> Preview on own avatar
         //LLVOAvatar* avatarp = mAnimPreview->getDummyAvatar();
-        LLVOAvatar* avatarp = mAnimPreview->getPreviewAvatar(this);
+        auto* avatarp = mAnimPreview->getPreviewAvatar(this);
         // </FS>
         if (avatarp->isMotionActive(mMotionID))
         {
@@ -1405,7 +1444,7 @@ void LLFloaterBvhPreview::refresh()
 void LLFloaterBvhPreview::onBtnOK(void* userdata)
 {
     LLFloaterBvhPreview* floaterp = (LLFloaterBvhPreview*)userdata;
-    if (!floaterp->getEnabled()) return;
+    if (!floaterp->mUploadCurrent() || !floaterp->getEnabled()) return;
 
     if (floaterp->mAnimPreview)
     {
@@ -1482,7 +1521,7 @@ void LLFloaterBvhPreview::onBtnOK(void* userdata)
 void LLFloaterBvhPreview::onBtnReload(void* userdata)
 {
     LLFloaterBvhPreview* floaterp = (LLFloaterBvhPreview*)userdata;
-    if (!floaterp->getEnabled()) return;
+    if (!floaterp->mUploadCurrent() || !floaterp->getEnabled()) return;
 
     floaterp->unloadMotion();
     floaterp->loadBVH();
@@ -1501,6 +1540,19 @@ LLPreviewAnimation::LLPreviewAnimation(S32 width, S32 height) : LLViewerDynamicT
     mCameraPitch = 0.f;
     mCameraZoom = 1.f;
 
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        mNativePreview = std::make_unique<VSScenePreview>(*gViewerWindow->nativeContext());
+        auto& owner = mNativePreview->avatar();
+        mNativeAvatar = &owner.appearanceOwner();
+        owner.transform(LLVector3::zero, LLQuaternion::DEFAULT, LLVector3::zero, LLVector3::zero);
+        mNativeAvatar->startMotion(ANIM_AGENT_STAND, BASE_ANIM_TIME_OFFSET);
+        for (const auto& id : {ANIM_AGENT_HEAD_ROT, ANIM_AGENT_EYE, ANIM_AGENT_BODY_NOISE, ANIM_AGENT_BREATHE_ROT})
+            mNativeAvatar->stopMotion(id, true);
+        return;
+    }
+#endif
     mDummyAvatar = (LLVOAvatar*)gObjectList.createObjectViewer(LL_PCODE_LEGACY_AVATAR, gAgent.getRegion(), LLViewerObject::CO_FLAG_UI_AVATAR);
     mDummyAvatar->mSpecialRenderMode = 1;
     mDummyAvatar->startMotion(ANIM_AGENT_STAND, BASE_ANIM_TIME_OFFSET);
@@ -1523,7 +1575,29 @@ LLPreviewAnimation::LLPreviewAnimation(S32 width, S32 height) : LLViewerDynamicT
 //-----------------------------------------------------------------------------
 LLPreviewAnimation::~LLPreviewAnimation()
 {
-    mDummyAvatar->markDead();
+    if (mDummyAvatar) mDummyAvatar->markDead();
+}
+
+LLAvatarAppearance* LLPreviewAnimation::getDummyAvatar()
+{
+#if VS_NATIVE_VULKAN
+    if (mNativeAvatar) return mNativeAvatar;
+#endif
+    return mDummyAvatar.get();
+}
+bool LLPreviewAnimation::drawNative(const LLRect& rect)
+{
+#if VS_NATIVE_VULKAN
+    if (mNativePreview && mNativePreview->current())
+    {
+        if (mNeedsUpdate || !mNativePreview->image()) render();
+        if (mNativePreview->image())
+            gViewerWindow->nativeContext()->resources().imageLocalRectangle(mNativePreview->image(),
+                LLRectf(F32(rect.mLeft), F32(rect.mTop), F32(rect.mRight), F32(rect.mBottom)), LLColor4::white);
+        return true;
+    }
+#endif
+    return false;
 }
 
 //virtual
@@ -1537,6 +1611,24 @@ S8 LLPreviewAnimation::getType() const
 //-----------------------------------------------------------------------------
 bool    LLPreviewAnimation::render()
 {
+#if VS_NATIVE_VULKAN
+    if (mNativePreview)
+    {
+        if (!mNativePreview->current()) return false;
+        const auto target = mNativeAvatar->getRootJoint()->getWorldPosition();
+        const LLQuaternion orbit = LLQuaternion(mCameraPitch, LLVector3::y_axis) * LLQuaternion(mCameraYaw, LLVector3::z_axis);
+        const LLQuaternion rotation = mNativeAvatar->getRootJoint()->getWorldRotation() * orbit;
+        const LLVector3 eye = target + ((LLVector3(mCameraDistance, 0, 0) + mCameraOffset) * rotation);
+        const LLVector3 focus = target + mCameraOffset * rotation;
+        auto* camera = LLViewerCamera::getInstance();
+        std::vector<VSWorldRenderer::Packet> packets;
+        mNativePreview->avatar().append(packets, eye, camera->getFar(), mFullHeight, 1.f, mFullWidth);
+        const bool success = mNativePreview->render(mFullWidth, mFullHeight, eye, focus, LLVector3::z_axis,
+            camera->getDefaultFOV() / mCameraZoom, camera->getNear(), camera->getFar(), packets, {.15f, .2f, .3f, 1.f});
+        if (success) mNeedsUpdate = false;
+        return success;
+    }
+#endif
     mNeedsUpdate = false;
     LLVOAvatar* avatarp = mDummyAvatar;
 
@@ -1649,8 +1741,16 @@ void LLPreviewAnimation::pan(F32 right, F32 up)
 }
 
 // <FS> Preview on own avatar
-LLVOAvatar* LLPreviewAnimation::getPreviewAvatar(LLFloaterBvhPreview* floaterp)
+LLAvatarAppearance* LLPreviewAnimation::getPreviewAvatar(LLFloaterBvhPreview* floaterp)
 {
+#if VS_NATIVE_VULKAN
+    if (mNativeAvatar)
+    {
+        if (floaterp && floaterp->mUseOwnAvatar)
+            if (auto* self = dynamic_cast<LLAvatarAppearance*>(vs_avatar_character())) return self;
+        return mNativeAvatar;
+    }
+#endif
     if (!floaterp)
     {
         // Don't return null - missing safety checks all around the code!

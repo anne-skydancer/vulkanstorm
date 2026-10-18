@@ -40,6 +40,7 @@
 #include "gltf/common.h"
 
 #include <map>
+#include <functional>
 #include <list>
 
 // <FS:Ansariel> Max texture resolution
@@ -284,6 +285,20 @@ protected:
 public:
     LLViewerFetchedTexture(const LLUUID& id, FTType f_type, const LLHost& host = LLHost(), bool usemipmaps = true);
     LLViewerFetchedTexture(const LLImageRaw* raw, FTType f_type, bool usemipmaps);
+#if VS_NATIVE_VULKAN
+    struct NativeLocalImage {};
+    LLViewerFetchedTexture(const LLUUID&, FTType, bool, NativeLocalImage);
+    std::function<bool()> mNativeLocalImageCurrent;
+    U64 mNativeLocalDecodeRevision = 0;
+    bool mNativeLocalPending = true;
+    bool mNativeLocalCallbacksQueued = false;
+    bool mNativeLocalRetired = false;
+    bool hasCPULocalCallbacks() const { return !mLoadedCallbackList.empty(); }
+    void completeCPULocalImage(LLImageRaw*);
+    void startCPUFileDecode(const std::string&);
+    void postCPULocalCallbacks();
+    void retireCPULocalImage();
+#endif
     LLViewerFetchedTexture(const std::string& url, FTType f_type, const LLUUID& id, bool usemipmaps = true);
 
 public:
@@ -666,6 +681,13 @@ public:
     static LLPointer<LLViewerTexture> getLocalTexture(const U32 width, const U32 height, const U8 components, bool usemipmaps, bool generate_gl_tex = true) ;
 
     static LLViewerFetchedTexture* getFetchedTexture(const LLImageRaw* raw, FTType type, bool usemipmaps);
+#if VS_NATIVE_VULKAN
+    static LLViewerFetchedTexture* getCPUFetchedTexture(const LLImageRaw*, FTType, bool, const LLUUID& = LLUUID::null);
+    static LLViewerFetchedTexture* getCPUFileTexture(const std::string&, FTType, bool, const LLUUID& = LLUUID::null);
+    static LLViewerFetchedTexture* findCPULocalTexture(const LLUUID&);
+    static bool cancelCPULocalCallbackList(LLLoadedCallbackEntry::source_callback_list_t*);
+    static void resetCPULocalImages();
+#endif
 
     static LLViewerFetchedTexture* getFetchedTexture(const LLUUID &image_id,
                                      FTType f_type = FTT_DEFAULT,

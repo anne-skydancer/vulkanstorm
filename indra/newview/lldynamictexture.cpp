@@ -56,7 +56,7 @@ LLViewerDynamicTexture::LLViewerDynamicTexture(S32 width, S32 height, S32 compon
 {
     llassert((1 <= components) && (components <= 4));
 
-    generateGLTexture();
+    if (!gViewerWindow || !gViewerWindow->isNativeVulkan()) generateGLTexture();
 
     llassert( 0 <= order && order < ORDER_COUNT );
     LLViewerDynamicTexture::sInstances[ order ].insert(this);

@@ -1,0 +1,12 @@
+#include <cassert>
+#include <optional>
+#include <memory>
+#include <map>
+#include <cmath>
+#include <limits>
+using U32=unsigned;using U64=unsigned long long;struct LLVector3{float v=0;bool isFinite()const{return std::isfinite(v);}};using LLQuaternion=LLVector3;
+struct Motion{LLVector3 p{1},q{3};const LLVector3&position()const{return p;}const LLQuaternion&rotation()const{return q;}double timestamp=9;bool selected=true;void previewPosition(LLVector3 p){this->p=p;}void previewRotation(LLQuaternion r){q=r;}};
+struct VSWorldScene{struct ObjectHandle{int host=1,local=2,generation=3;};struct LocalTransform{LLVector3 position,scale;LLQuaternion rotation;};struct Object{LLVector3 position{1},scale{2};LLQuaternion rotation{3};Motion motion;bool dirty=false;int generation=3;U64 revision=1;};struct Impl{int host=1;std::map<int,Object>objects;int dirtied=0;U64 nextRevision=2;void dirtyChildren(int){++dirtied;}};std::unique_ptr<Impl>mImpl=std::make_unique<Impl>();std::map<int,std::unique_ptr<VSWorldScene>>mNeighbours;bool live=true;bool current(ObjectHandle t)const{if(!live)return false;if(t.host!=mImpl->host){auto n=mNeighbours.find(t.host);return n!=mNeighbours.end()&&n->second->current(t);}auto p=mImpl->objects.find(t.local);return p!=mImpl->objects.end()&&p->second.generation==t.generation;}std::optional<LocalTransform>objectLocalTransform(const ObjectHandle&)const;bool previewLocalTransform(const ObjectHandle&,const LocalTransform&,U32);};
+QUERY
+PREVIEW
+int main(){for(U32 mask=0;mask<8;++mask){VSWorldScene w;w.mImpl->objects[2]={};VSWorldScene::ObjectHandle token;VSWorldScene::LocalTransform edit{{10},{20},{30}};assert(w.previewLocalTransform(token,edit,mask));auto result=w.objectLocalTransform(token);assert(result);assert(result->position.v==(mask&1?10:1)&&result->rotation.v==(mask&2?30:3)&&result->scale.v==(mask&4?20:2));auto&source=w.mImpl->objects[2];assert(source.motion.timestamp==9&&source.motion.selected);assert(source.dirty==bool(mask)&&source.revision==(mask?2:1));++token.generation;assert(!w.previewLocalTransform(token,edit,7)&&!w.objectLocalTransform(token));}VSWorldScene w;w.mImpl->objects[2]={};VSWorldScene::LocalTransform invalid{{4},{std::numeric_limits<float>::quiet_NaN()},{5}};assert(!w.previewLocalTransform({},invalid,7));assert(w.mImpl->objects[2].position.v==1&&!w.mImpl->objects[2].dirty);assert(w.previewLocalTransform({},invalid,3));w.live=false;assert(!w.previewLocalTransform({},invalid,3));}

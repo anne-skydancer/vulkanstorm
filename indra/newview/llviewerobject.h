@@ -931,6 +931,7 @@ protected:
 
     // do the update/caching logic. called by saveScript and
     // updateInventory.
+    struct TaskInventoryPeer;
     void doUpdateInventory(LLPointer<LLViewerInventoryItem>& item, U8 key, bool is_new);
 
     static LLViewerObject *createObject(const LLUUID &id, LLPCode pcode, LLViewerRegion *regionp, S32 flags = 0);

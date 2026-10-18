@@ -30,6 +30,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsfloatervoicecontrols.h"
+#include "vsnativeim.h"
 
 #include "llnotificationsutil.h"
 #include "lltrans.h"
@@ -83,13 +84,15 @@ FSFloaterVoiceControls::FSFloaterVoiceControls(const LLSD& key)
     LLTransientFloaterMgr::getInstance()->addControlView(this);
 
     // update the agent's name if display name setting change
-    LLAvatarNameCache::getInstance()->addUseDisplayNamesCallback(boost::bind(&FSFloaterVoiceControls::updateAgentModeratorState, this));
+    mDisplayNamesConnection = LLAvatarNameCache::getInstance()->connectUseDisplayNamesCallback(boost::bind(&FSFloaterVoiceControls::updateAgentModeratorState, this));
 
-    LLViewerDisplayName::addNameChangedCallback(boost::bind(&FSFloaterVoiceControls::updateAgentModeratorState, this));
+    mNameChangedConnection = LLViewerDisplayName::addNameChangedCallback(boost::bind(&FSFloaterVoiceControls::updateAgentModeratorState, this));
 }
 
 FSFloaterVoiceControls::~FSFloaterVoiceControls()
 {
+    mDisplayNamesConnection.disconnect();
+    mNameChangedConnection.disconnect();
     resetVoiceRemoveTimers();
     delete mSpeakerDelayRemover;
 
@@ -416,8 +419,10 @@ void FSFloaterVoiceControls::updateTitle()
         if (im_session)
         {
             LLAvatarNameCache::get(im_session->mOtherParticipantID,
-                boost::bind(&FSFloaterVoiceControls::onAvatarNameCache,
-                    this, _1, _2));
+                vs_native_im_lifetime_callback([weak = getHandle(), session_id] {
+                    return weak.get() && LLVoiceChannel::getCurrentVoiceChannel() &&
+                        LLVoiceChannel::getCurrentVoiceChannel()->getSessionID() == session_id;
+                }, [this](const LLUUID& id, const LLAvatarName& name) { onAvatarNameCache(id, name); }));
             return;
         }
     }
@@ -504,7 +509,9 @@ void FSFloaterVoiceControls::onModeratorNameCache(const LLAvatarName& av_name)
 
 void FSFloaterVoiceControls::updateAgentModeratorState()
 {
-    LLAvatarNameCache::get(gAgentID, boost::bind(&FSFloaterVoiceControls::onModeratorNameCache, this, _2));
+    LLAvatarNameCache::get(gAgentID, vs_native_im_lifetime_callback(
+        [weak = getHandle()] { return weak.get() != nullptr; },
+        [this](const LLUUID&, const LLAvatarName& name) { onModeratorNameCache(name); }));
 }
 
 static void get_voice_participants_uuids(uuid_vec_t& speakers_uuids)

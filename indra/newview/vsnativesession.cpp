@@ -1,5 +1,6 @@
 // Native CPU session and nearby transport. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
+#include "llmeshrepository.h"
 #include "llagentpilot.h"
 #include "vscameraview.h"
 #include "vsteleportpolicy.h"
@@ -11,17 +12,29 @@
 #include "lfsimfeaturehandler.h"
 #include "llviewergenericmessage.h"
 #include "vsnativesession.h"
+#include "llfloaterbeacons.h"
+#include "llpathfindingmanager.h"
+#include "llmenuoptionpathfindingrebakenavmesh.h"
+#include "llfloaterpay.h"
+#include "vssnapshot.h"
+#include "vsworldsound.h"
+#include "vsparticleeffects.h"
+#include "fsassetblacklist.h"
 #include "lltoolpie.h"
 #include "llviewermediafocus.h"
 #include "vscapabilities.h"
 #include "vsnativeappearance.h"
 #include "vstaskinventory.h"
+#include "vsobjectphysics.h"
+#include "vsobjectcosts.h"
+#include "llmaterialmgr.h"
 #include "vsobjectselection.h"
 #include "vsobjectattention.h"
 #include "lltoolmgr.h"
 #include "llviewermenu.h"
 #include "aoengine.h"
 #include "fsavatarrenderpersistence.h"
+#include "llperfstats.h"
 #include "vsvulkancontext.h"
 #include "vsworldscene.h"
 #include "vsobjectcontext.h"
@@ -36,6 +49,9 @@
 #include "chatbar_as_cmdline.h"
 #include "fslslbridge.h"
 #include "vsnativeim.h"
+#include "fsareasearch.h"
+#include "llvoiceclient.h"
+#include "vsscenepreview.h"
 #include "llcallingcard.h"
 #include "llfriendcard.h"
 #include "llappearancemgr.h"
@@ -51,6 +67,7 @@
 #include "llinventorymodelbackgroundfetch.h"
 #include "llviewerassetstorage.h"
 #include "llgltfmateriallist.h"
+#include "llviewertexture.h"
 #include "llviewerinventory.h"
 #include "lllandmarklist.h"
 #include "llexperiencecache.h"
@@ -60,6 +77,7 @@
 #include "vsplainchat.h"
 #include "llappviewer.h"
 #include "llviewerwindow.h"
+#include "llpreviewscript.h"
 #include "llwindow.h"
 #include "llviewercontrol.h"
 #include "llstartup.h"
@@ -86,6 +104,7 @@
 #include "llregioninfomodel.h"
 #include "llestateinfomodel.h"
 #include "llfloaterregioninfo.h"
+#include "llfloatergodtools.h"
 #include "llfloatertelehub.h"
 #include "llfloatertopobjects.h"
 #include "llagent.h"
@@ -110,6 +129,7 @@
 #include "fspanellogin.h"
 #include "llprogressview.h"
 #include "llnotificationsutil.h"
+#include "llnotificationmanager.h"
 #include "lltrans.h"
 #include "llurlentry.h"
 #include "llcorehttputil.h"
@@ -176,8 +196,8 @@ const std::set<std::string>    worldMessages = {
     "LayerData",         "AvatarAppearance",       "AvatarAnimation",    "ObjectAnimation",           "ViewerEffect",
     "ReplyTaskInventory", "GenericStreamingMessage"
 };
-const std::set<std::string> session = { "SimStats",
-                                        "RegionInfo", "EstateOwnerMessage", "TelehubInfo", "LandStatReply",
+const std::set<std::string> session = { "SoundTrigger", "PreloadSound", "AttachedSound", "AttachedSoundGainChange", "MeanCollisionAlertMessage", "SimStats",
+                                        "AvatarSitResponse", "RegionInfo", "EstateOwnerMessage", "TelehubInfo", "LandStatReply",
                                         "ParcelProperties",
                                         "ParcelMediaUpdate",
                                         "ParcelMediaCommandMessage",
@@ -219,6 +239,7 @@ const std::set<std::string> session = { "SimStats",
                                         "EventInfoReply",
                                         "ScriptQuestion",
                                         "ScriptDialog",
+                                        "ScriptRunningReply",
                                         "ScriptControlChange",
                                         "LoadURL",
                                         "EconomyData",
@@ -252,6 +273,11 @@ const std::set<std::string> session = { "SimStats",
                                         "GroupRoleDataReply",
                                         "GroupRoleMembersReply",
                                         "DirGroupsReply",
+                                        "DirPeopleReply",
+                                        "DirPlacesReply",
+                                        "DirEventsReply",
+                                        "DirClassifiedReply",
+                                        "DirLandReply",
                                         "GroupTitlesReply",
                                         "GroupNoticesListReply",
                                         "GroupAccountSummaryReply",
@@ -268,11 +294,14 @@ const std::set<std::string> session = { "SimStats",
                                         "FetchInventoryReply",
                                         "SetDisplayNameReply",
                                         "DisplayNameUpdate",
+                                        "NavMeshStatusUpdate",
+                                        "AgentStateUpdate",
                                         "ChatterBoxSessionStartReply",
                                         "ChatterBoxSessionEventReply",
                                         "ChatterBoxSessionAgentListUpdates",
                                         "ChatterBoxSessionUpdate",
                                         "ChatterBoxInvitation",
+                                        "ParcelVoiceInfo",
                                         "ForceCloseChatterBoxSession" };
 struct CircuitDelivery { std::weak_ptr<VSNativeSession> owner; U64 generation; U64 regionEpoch; };
 void circuitCallback(void** userdata, S32 result)
@@ -387,17 +416,24 @@ void VSNativeSession::install(LLMessageSystem& msg)
     for (const auto& name : worldMessages) msg.setHandlerFunc(name.c_str(), receiveMessage);
     msg.setHandlerFunc("AgentWearablesUpdate",receiveMessage);
     msg.setHandlerFunc("EnableSimulator",receiveMessage);
-    for (const char* name : {"SimStats", "RegionInfo", "EstateOwnerMessage", "TelehubInfo", "LandStatReply", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "MapItemReply", "ParcelOverlay", "CoarseLocationUpdate", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
+    for (const char* name : {"SimStats", "AvatarSitResponse", "RegionInfo", "EstateOwnerMessage", "TelehubInfo", "LandStatReply", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "MapItemReply", "ParcelOverlay", "CoarseLocationUpdate", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
          "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "MoneyBalanceReply", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
         msg.setHandlerFunc(name, receiveMessage);
+    msg.setHandlerFunc("PayPriceReply", receiveMessage);
     msg.setHandlerFunc("ObjectProperties", receiveMessage);
     msg.setHandlerFunc("ObjectPropertiesFamily", receiveMessage);
     msg.setHandlerFunc("ForceObjectSelect", receiveMessage);
     LLAvatarTracker::instance().registerCallbacks(&msg);
     LLInventoryModel::registerCallbacks(&msg);
+    msg.setHandlerFunc("SoundTrigger", process_sound_trigger);
+    msg.setHandlerFunc("PreloadSound", process_preload_sound);
+    msg.setHandlerFunc("AttachedSound", process_attached_sound);
+    msg.setHandlerFunc("AttachedSoundGainChange", process_attached_sound_gain_change);
     msg.setHandlerFunc("SimStats", process_sim_stats);
+    msg.setHandlerFunc("MeanCollisionAlertMessage", process_mean_collision_alert_message);
     msg.setHandlerFunc("ScriptQuestion", process_script_question);
     msg.setHandlerFunc("ScriptDialog", process_script_dialog);
+    msg.setHandlerFunc("ScriptRunningReply", LLLiveLSLEditor::processScriptRunningReply);
     msg.setHandlerFunc("ScriptControlChange", LLAgent::processScriptControlChange);
     msg.setHandlerFunc("LoadURL", process_load_url);
     msg.setHandlerFunc("AlertMessage", process_alert_message);
@@ -409,12 +445,17 @@ void VSNativeSession::install(LLMessageSystem& msg)
         if (!owner || owner->phase() != Phase::Connected || owner->host() != message->getSender()) return;
         std::string method;
         message->getString("MethodData", "Method", method);
-        if (method == "ExperienceEvent") process_generic_message(message, context);
+        if ((method == "ExperienceEvent" || method == "URLFloater")) process_generic_message(message, context);
     });
     msg.setHandlerFunc("AgentDataUpdate", LLAgent::processAgentDataUpdate);
     msg.setHandlerFunc("AgentGroupDataUpdate", LLAgent::processAgentGroupDataUpdate);
     msg.setHandlerFunc("AgentDropGroup", LLAgent::processAgentDropGroup);
     msg.setHandlerFunc("DirGroupsReply", LLPanelDirBrowser::processDirGroupsReply);
+    msg.setHandlerFunc("DirPeopleReply", LLPanelDirBrowser::processDirPeopleReply);
+    msg.setHandlerFunc("DirPlacesReply", LLPanelDirBrowser::processDirPlacesReply);
+    msg.setHandlerFunc("DirEventsReply", LLPanelDirBrowser::processDirEventsReply);
+    msg.setHandlerFunc("DirClassifiedReply", LLPanelDirBrowser::processDirClassifiedReply);
+    msg.setHandlerFunc("DirLandReply", LLPanelDirBrowser::processDirLandReply);
     // These CPU services normally register during the world startup path,
     // which native text startup deliberately does not execute. Admission
     // alone cannot substitute for installing their production reply handlers.
@@ -431,9 +472,9 @@ void VSNativeSession::install(LLMessageSystem& msg)
     msg.setHandlerFunc("GroupAccountSummaryReply", LLPanelGroupLandMoney::processGroupAccountSummaryReply);
     msg.setHandlerFunc("GroupAccountDetailsReply", LLPanelGroupLandMoney::processGroupAccountDetailsReply);
     msg.setHandlerFunc("GroupAccountTransactionsReply", LLPanelGroupLandMoney::processGroupAccountTransactionsReply);
-    // Group land listings are CPU rows. Null/personal land queries do not
-    // instantiate the deferred scene Land Holdings floater in this route.
-    msg.setHandlerFunc("PlacesReply", LLPanelGroupLandMoney::processPlacesReply);
+    // The original dispatcher routes null-query account holdings and genuine
+    // group queries; both use authenticated current-account CPU controllers.
+    msg.setHandlerFunc("PlacesReply", process_places_reply);
     msg.setHandlerFunc("AvatarPropertiesReply", LLAvatarPropertiesProcessor::processAvatarLegacyPropertiesReply);
     msg.setHandlerFunc("AvatarInterestsReply", LLAvatarPropertiesProcessor::processAvatarInterestsReply);
     msg.setHandlerFunc("AvatarGroupsReply", LLAvatarPropertiesProcessor::processAvatarGroupsReply);
@@ -539,12 +580,17 @@ void VSNativeSession::begin()
 {
     if (!mHost.isOk() || !gMessageSystem) { disconnect(LLTrans::getString("NativeSessionInvalidLogin")); return; }
     install(*static_cast<LLMessageSystem*>(gMessageSystem));
+    // Account paths/identity are installed before begin(); load the genuine
+    // asset policy before enabling circuit traffic or native texture requests.
+    FSAssetBlacklist::instance().init();
     mPhase = Phase::Connecting; mDeadline = now() + 60;
     auto& circuit=mCircuits[mHost];circuit.handle=mHandle;circuit.width=mWidth;circuit.height=mHeight;
     circuit.incarnation=mNextCircuitGeneration++;circuit.deadline=now()+60;
     if (gViewerWindow && gViewerWindow->nativeContext() &&
         !gViewerWindow->nativeContext()->world().activateRegion(mHost,mHandle,mWidth,mHeight,circuit.incarnation))
     { disconnect(LLTrans::getString("NativeSessionInvalidLogin"));return; }
+    FSAvatarRenderPersistence::instance().init();
+    LLPerfStats::resetNativeStats();
     if (gViewerWindow && gViewerWindow->nativeContext() && !gViewerWindow->nativeContext()->world().initializeSelf(mAgent,mGeneration))
     { disconnect(LLTrans::getString("NativeSessionInvalidLogin"));return; }
     mAppearanceOwnerInitialized=true;
@@ -635,7 +681,8 @@ void VSNativeSession::capabilities(const LLSD& caps, U64 generation, U64 regionE
     // LLSD messages are sent through the host's granted HTTP transport.
     // LLAgent, cache-name and asset services retain copies of this host.
     mHost.setUntrustedSimulatorCap(capability("UntrustedSimulatorMessage"));
-    if (auto circuit=mCircuits.find(mHost);circuit!=mCircuits.end()) circuit->second.capabilities=mCapabilities;
+    if (auto circuit=mCircuits.find(mHost);circuit!=mCircuits.end())
+    { circuit->second.capabilities=mCapabilities;circuit->second.capabilitiesReady=true; }
     if (gCacheName) gCacheName->setUpstream(mHost);
     if (gAssetStorage) gAssetStorage->setUpstream(mHost);
     LLAvatarNameCache::getInstance()->setNameLookupURL(capability("GetDisplayNames"));
@@ -664,8 +711,12 @@ bool VSNativeSession::applySimulatorFeatures(const LLSD& features, U64 generatio
     if (mShutdown || generation != mGeneration || regionEpoch != mRegionEpoch ||
         (mPhase != Phase::Connecting && mPhase != Phase::Connected) || !features.isMap()) return false;
     mSimulatorFeatures = features; mSimulatorFeaturesReceived = true;
+    if (const auto circuit=mCircuits.find(mHost);circuit!=mCircuits.end())
+    { circuit->second.simulatorFeatures=features;circuit->second.featuresReceived=true; }
     LFSimFeatureHandler::instance().setSupportedFeatures(mSimulatorFeatures, false);
-    return true;
+    if (mShutdown || generation!=mGeneration || regionEpoch!=mRegionEpoch) return false;
+    mSimulatorFeaturesChanged();
+    return !mShutdown && generation==mGeneration && regionEpoch==mRegionEpoch;
 }
 void VSNativeSession::simulatorFeaturesCoro(std::weak_ptr<VSNativeSession> weak, std::string url, U64 generation, U64 regionEpoch)
 {
@@ -1001,6 +1052,7 @@ bool VSNativeSession::publishCamera()
     camera->setNear(.1f);camera->setFar(vs_camera_far_clip());
     camera->setAspect(F32(viewport.getWidth())/viewport.getHeight());
     camera->setViewHeightInPixels(viewport.getHeight());
+    camera->updateNativeFrustum();
     const auto forward=LLVector3::x_axis*state.bodyRotation;
     if(forward.isFinite() && !forward.isNull())gAgent.resetAxes(forward);
     return true;
@@ -1008,9 +1060,22 @@ bool VSNativeSession::publishCamera()
 
 VSNativeCamera::State VSNativeSession::cameraState() const
 {
-    return mCamera.state(mPosition, gAgentCamera.getCameraOffsetInitial(),
-        LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale());
+    auto view=mCamera.state(mPosition,gAgentCamera.getCameraOffsetInitial(),LLVector3(gAgentCamera.getFocusOffsetInitial()),gAgentCamera.getCameraOffsetScale());
+    LLVector3d eye,focus;LLVector3 up;
+    if(gAgentCamera.nativeCameraPose(eye,focus,up))
+    {
+        view.center=LLVector3(eye-from_region_handle(mHandle));view.focus=LLVector3(focus-from_region_handle(mHandle));
+        LLCoordFrame frame;frame.lookAt(view.center,view.focus,up);
+        view.at=frame.getAtAxis();view.left=frame.getLeftAxis();view.up=frame.getUpAxis();view.headRotation=frame.getQuaternion();
+    }
+    return view;
 }
+LLVector3d VSNativeSession::cameraTargetGlobal() const
+{
+    const auto target=mCamera.state(mPosition,gAgentCamera.getCameraOffsetInitial(),LLVector3(gAgentCamera.getFocusOffsetInitial()),gAgentCamera.getCameraOffsetScale());
+    return from_region_handle(mHandle)+LLVector3d(target.center);
+}
+
 bool VSNativeSession::movementAction(U32 key, const std::string& action, bool down, bool repeated)
 {
     if (!down) { const bool handled = mCamera.action(key, action, false, repeated); if (handled) mAgentUpdateTime = 0; return handled; }
@@ -1067,28 +1132,27 @@ void VSNativeSession::synchronizeCameraMode(bool reset_mode)
         mCamera.setZoomFraction(1.f); // Remain at the nearest third-person zoom.
 }
 void VSNativeSession::cameraZoom(S32 clicks)
-{ if (mPhase == Phase::Connected && !mChangingRegion) { mCamera.zoom(clicks); synchronizeCameraMode(); mAgentUpdateTime = 0; } }
+{
+    if(!regionReady())return;
+    if(!gAgentCamera.getFocusOnAvatar()){gAgentCamera.handleScrollWheel(clicks);mAgentUpdateTime=0;return;}
+    mCamera.zoom(clicks);synchronizeCameraMode();mAgentUpdateTime=0;
+}
 void VSNativeSession::cameraPan(const LLVector3& displacement)
 {
     if (!regionReady()) return;
     mCamera.pan(displacement, gAgentCamera.getCameraOffsetInitial(), LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale());
     mAgentUpdateTime = 0;
 }
-void VSNativeSession::cameraRoll(F32 angle) { if (regionReady()) { mCamera.roll(angle); mAgentUpdateTime = 0; } }
-bool VSNativeSession::cameraLookAt(const LLVector3d& eye, const LLVector3d& target)
+void VSNativeSession::cameraRoll(F32 angle) { if(regionReady()) { gAgentCamera.cameraRollOver(angle);mAgentUpdateTime=0; } }
+bool VSNativeSession::cameraLookAt(const LLVector3d& eye,const LLVector3d& focus)
 {
-    if (!regionReady() || !eye.isFinite() || !target.isFinite()) return false;
-    const auto origin = from_region_handle(mHandle);
-    if (!mCamera.lookAt(mPosition, LLVector3(eye - origin), LLVector3(target - origin), gAgentCamera.getCameraOffsetInitial(),
-                        LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale())) return false;
-    gAgentCamera.changeCameraToThirdPerson(false);
-    mAgentUpdateTime = 0;
-    return true;
+    if(!gAgentCamera.setNativeCameraPose(eye,focus,LLUUID::null,false))return false;
+    gAgentCamera.changeCameraToThirdPerson(false);mAgentUpdateTime=0;return true;
 }
 void VSNativeSession::cameraReset() { mCamera.resetView(); synchronizeCameraMode(true); mAgentUpdateTime = 0; }
 void VSNativeSession::cameraResetOrbit() { mCamera.resetOrbit(); mAgentUpdateTime = 0; }
 void VSNativeSession::cameraResetPan() { mCamera.resetPan(); mAgentUpdateTime = 0; }
-void VSNativeSession::cameraResetRoll() { mCamera.resetRoll(); mAgentUpdateTime = 0; }
+void VSNativeSession::cameraResetRoll() { gAgentCamera.resetCameraRoll();mAgentUpdateTime=0; }
 void VSNativeSession::cameraFirstPerson(bool first) { mCamera.setFirstPerson(first); synchronizeCameraMode(true); mAgentUpdateTime = 0; }
 void VSNativeSession::cameraControls(F32 dt)
 {
@@ -1098,14 +1162,19 @@ void VSNativeSession::cameraControls(F32 dt)
         if (!gAgent.rotateGrabbed()) mCamera.turnBody(gAgentCamera.getYawKey() * elapsed * 1.57079632679f);
         mCamera.orbit(0, -gAgentCamera.getPitchKey() * elapsed * 1.57079632679f);
     }
+    if(!gAgentCamera.getFocusOnAvatar() || gAgentCamera.nativeHUDSelection())
+    {
+        gAgentCamera.applyNativeCameraKeyboard();gAgentCamera.clearGeneralKeys();return;
+    }
     mCamera.controls(dt, gAgentCamera.getOrbitLeftKey() - gAgentCamera.getOrbitRightKey(),
         gAgentCamera.getOrbitUpKey() - gAgentCamera.getOrbitDownKey(),
         gAgentCamera.getOrbitInKey() - gAgentCamera.getOrbitOutKey(),
         LLVector3(gAgentCamera.getPanInKey() - gAgentCamera.getPanOutKey(),
                   gAgentCamera.getPanLeftKey() - gAgentCamera.getPanRightKey(),
                   gAgentCamera.getPanUpKey() - gAgentCamera.getPanDownKey()),
-        gAgentCamera.getRollRightKey() - gAgentCamera.getRollLeftKey(),
+        0.f, // The original shared LLAgentCamera owns roll and its reset.
         gAgentCamera.getCameraOffsetInitial(), LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale());
+    gAgentCamera.cameraRollOver((gAgentCamera.getRollRightKey()-gAgentCamera.getRollLeftKey())*45.f*DEG_TO_RAD/gFPSClamped);
     // The reference updateCamera also publishes input to the joystick artwork
     // and camera mode selection. Do this before consuming the held UI keys.
     synchronizeCameraMode();
@@ -1279,14 +1348,17 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
     const auto peer=mCircuits.find(sender);
     const bool known=sender==mHost || peer!=mCircuits.end();
     if (transport.count(name)) return mHost.isOk() && known && mPhase != Phase::Disconnected;
+    if(name=="AvatarSitResponse")return regionReady() && peer!=mCircuits.end() && peer->second.acknowledged && peer->second.handshake;
     if(name=="RegionInfo" || name=="EstateOwnerMessage" || name=="TelehubInfo" || name=="LandStatReply" || name=="SimConsoleResponse")return regionReady() && sender==mHost;
+    if (name=="NavMeshStatusUpdate") return mPhase==Phase::Connected && peer!=mCircuits.end() && peer->second.acknowledged && peer->second.handshake;
+    if (name=="AgentStateUpdate") return regionReady() && sender==mHost;
     if (name=="LayerData") return mHost.isOk() && known && (mPhase==Phase::Connecting || mPhase==Phase::Connected);
     if(name=="ParcelProperties" || name=="ParcelAccessListReply" || name=="ParcelDwellReply" || name=="ParcelObjectOwnersReply" || name=="EstateCovenantReply")
         return mPhase==Phase::Connected && !mChangingRegion && peer!=mCircuits.end() &&
             peer->second.acknowledged && peer->second.handshake;
     if (name=="ParcelOverlay" || name=="CoarseLocationUpdate") return mPhase==Phase::Connected && peer!=mCircuits.end() &&
         peer->second.acknowledged && peer->second.handshake;
-    if (name=="ObjectProperties" || name=="ObjectPropertiesFamily" || name=="ForceObjectSelect")
+    if (name=="ObjectPhysicsProperties" || name=="PayPriceReply" || name=="ObjectProperties" || name=="ObjectPropertiesFamily" || name=="ForceObjectSelect")
         return mPhase==Phase::Connected && peer!=mCircuits.end() && peer->second.acknowledged && peer->second.handshake;
     if (worldMessages.count(name)) return (mPhase==Phase::Connecting || mPhase==Phase::Connected) &&
         (sender==mHost || (peer!=mCircuits.end() && peer->second.acknowledged && peer->second.handshake));
@@ -1302,7 +1374,20 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
 void VSNativeSession::receive(LLMessageSystem* msg)
 {
     const std::string name = msg->getMessageName();
-    if(name=="RegionInfo"){if(!applyRegionInfo(*msg))++mRejected;return;}
+    if(name=="PayPriceReply")
+    {if(admit(name,msg->getSender()))LLFloaterPayUtil::processNativePriceReply(msg);return;}
+    if(name=="AvatarSitResponse")
+    {
+        if(admit(name,msg->getSender()))process_avatar_sit_response(msg,nullptr);
+        else ++mRejected;
+        return;
+    }
+    if(name=="RegionInfo")
+    {
+        if(!applyRegionInfo(*msg))++mRejected;
+        else if(LLFloaterReg::instanceVisible("god_tools"))LLFloaterGodTools::processRegionInfo(msg);
+        return;
+    }
     if(name=="TelehubInfo"){if(admit(name,msg->getSender()))LLFloaterTelehub::processTelehubInfo(msg,nullptr);return;}
     if(name=="LandStatReply"){if(admit(name,msg->getSender()))LLFloaterTopObjects::handle_land_reply(msg,nullptr);return;}
     if(name=="EstateOwnerMessage")
@@ -1311,9 +1396,17 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         else ++mRejected;
         return;
     }
-    if (name=="ObjectProperties" || name=="ObjectPropertiesFamily" || name=="ForceObjectSelect")
+    if (name=="PayPriceReply" || name=="ObjectProperties" || name=="ObjectPropertiesFamily" || name=="ForceObjectSelect")
     {
-        if (mObjectSelection && admit(name,msg->getSender()))mObjectSelection->receive(*msg);
+        if (!admit(name,msg->getSender())) return;
+        const auto current=accountGuard();
+        if (mObjectSelection) mObjectSelection->receive(*msg);
+        if (current() && name=="ObjectProperties")
+            if (auto* view=LLFloaterReg::findTypedInstance<FSAreaSearch>("area_search"))
+            {
+                const auto viewCurrent=view->accountGuard();
+                if (viewCurrent && viewCurrent()) view->processObjectProperties(msg);
+            }
         return;
     }
     if (worldMessages.count(name))
@@ -1324,6 +1417,7 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         {
             auto& world = gViewerWindow->nativeContext()->world();
             const auto circuit=mCircuits.find(msg->getSender());
+            worldSound(); // Subscribe before accepted object updates publish sound state.
             world.receive(*msg,circuit==mCircuits.end()?mHandle:circuit->second.handle,mAgent);
             if (name == "ReplyTaskInventory" && mTaskInventory)
             {
@@ -1663,6 +1757,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         gMessageSystem->newMessage("RegionHandshakeReply");gMessageSystem->nextBlock("AgentData");
         gMessageSystem->addUUID("AgentID",mAgent);gMessageSystem->addUUID("SessionID",mSession);
         gMessageSystem->nextBlock("RegionInfo");gMessageSystem->addU32("Flags",0);gMessageSystem->sendReliable(sender);
+        updateInterestListMode();
         ++mReceived;return true;
     }
     if (name == "ParcelProperties" && mPhase == Phase::Connected && !mChangingRegion)
@@ -1846,6 +1941,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         if (body["agent"].asUUID() != mAgent || !body["position"].isArray() || body["position"].size() != 3) return false;
         const auto pos = ll_vector3_from_sd(body["position"]); if (!pos.isFinite()) return false;
         mPosition = pos; gAgent.setPositionAgent(pos); releaseMovement(); mNavigationDeadline = 0;
+        if (LLVoiceClient::instanceExists()) LLVoiceClient::instance().setHidden(false);
         if(gViewerWindow && mStartup == Startup::Complete)gViewerWindow->setShowProgress(false,true);
         LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
         const U64 accountGeneration=mGeneration;
@@ -1858,6 +1954,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
     {
         if (body["agent"].asUUID() != mAgent) return false;
         mRequestedRegion.clear(); mNavigationDeadline = 0;mTeleportFlags=0;
+        if (LLVoiceClient::instanceExists()) LLVoiceClient::instance().setHidden(false);
         const U64 accountGeneration=mGeneration;
         LLViewerParcelMgr::instance().onTeleportFailed();
         if(mGeneration!=accountGeneration || mPhase!=Phase::Connected)return false;
@@ -1867,6 +1964,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
     else if ((name == "TeleportStart" || name == "TeleportProgress") && mPhase==Phase::Connected)
     {
         if(name=="TeleportProgress" && body["agent"].asUUID()!=mAgent)return false;
+        if (LLVoiceClient::instanceExists()) LLVoiceClient::instance().setHidden(true);
         mTeleportFlags = ll_U32_from_sd(body["flags"]);
         mNavigationDeadline=now()+60;
         const std::string text=body["text"].asString().substr(0,4096);
@@ -1914,6 +2012,7 @@ void VSNativeSession::connected()
         LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
         if(std::exchange(mTeleportArrival,false))
         {
+            if (LLVoiceClient::instanceExists()) LLVoiceClient::instance().setHidden(false);
             const U64 accountGeneration=mGeneration;
             LLViewerParcelMgr::instance().onTeleportFinished(false,gAgent.getPositionGlobal());
             if(mGeneration!=accountGeneration || mPhase!=Phase::Connected)return;
@@ -1922,10 +2021,13 @@ void VSNativeSession::connected()
         requestParcel();
         LLEnvironment::instance().onRegionChange();
         if (gSavedSettings.getBOOL("UseLSLBridge")) FSLSLBridge::instance().initBridge();
+        updateInterestListMode();
         mCurrentRegionChanged();
         return;
     }
     mPhase = Phase::Connected; mDeadline = now() + 1;
+    LLMaterialMgr::instance(); // Existing idle pump, shared regional material owner.
+    particles();
     initializeEnvironment();
     if (gViewerWindow)
     {
@@ -1965,6 +2067,11 @@ void VSNativeSession::connected()
     FSPanelLogin::closePanel();
     LLToolMgr::instance().initNativeTools();
     gViewerWindow->setNativeConnected(true);
+    // Same genuine credential/account source as ordinary STATE_AGENT_SEND.
+    // A protocol fixture without credentials must not fabricate authorization.
+    const std::string voiceUser = LLStartUp::getUserId();
+    if (!voiceUser.empty())
+        LLVoiceClient::instance().authorizeNativeAccount(voiceUser, mAgent);
     requestParcel();
     if (!LLGridManager::instance().isInSecondLife())
     {
@@ -2004,6 +2111,7 @@ void VSNativeSession::connected()
     LLAgentLanguage::update();
     LL_INFOS("NativeSession") << "Native CPU region ready: " << mName << LL_ENDL;
     publishProgress();
+    updateInterestListMode();
     mCurrentRegionChanged();
 }
 std::function<bool()> VSNativeSession::accountGuard(bool allowConnecting) const
@@ -2056,6 +2164,18 @@ VSTaskInventory* VSNativeSession::taskInventory()
     if (!mTaskInventory) mTaskInventory = std::make_unique<VSTaskInventory>(shared_from_this());
     return mTaskInventory.get();
 }
+VSObjectCosts* VSNativeSession::objectCosts()
+{
+    if(!regionReady())return nullptr;
+    if(!mObjectCosts)mObjectCosts=std::make_unique<VSObjectCosts>(shared_from_this());
+    return mObjectCosts.get();
+}
+VSObjectPhysics* VSNativeSession::objectPhysics()
+{
+    if(!regionReady())return nullptr;
+    if(!mObjectPhysics)mObjectPhysics=std::make_unique<VSObjectPhysics>(shared_from_this());
+    return mObjectPhysics.get();
+}
 VSObjectSelection* VSNativeSession::objectSelection()
 {
     if (mPhase != Phase::Connected || !gViewerWindow || !gViewerWindow->nativeContext()) return nullptr;
@@ -2091,6 +2211,9 @@ void VSNativeSession::advanceStartup()
         // Same per-account local settings restoration as ordinary STATE_MISC.
         LLEnvironment::instance().loadFromSettings();
         init_audio();
+        LLFloaterBeacons::initializeSettings();
+        LLPathfindingManager::instance().initSystem();
+        LLMenuOptionPathfindingRebakeNavmesh::instance().initialize();
         LLStartUp::initActiveGestures();
         FSGroupTitleRegionMgr::getInstance()->loadFromDisk();
         FSFavoriteGroups::getInstance()->loadFavorites();
@@ -2183,122 +2306,124 @@ void VSNativeSession::publishProgress()
     }
     LLEventPumps::instance().obtain("native_session_progress").post(progress);
 }
-void VSNativeSession::appendChat(LLSD chat, U64 generation)
+namespace
 {
-    if (!chat["text"].isString() || !chat["from"].isString() || chat["text"].asString().size() > 4096) return;
-    const auto source = chat["source"].asUUID(), owner = chat["owner"].asUUID();
-    const auto kind = chat["kind"].asInteger(), type = chat["type"].asInteger();
-    if (kind < CHAT_SOURCE_SYSTEM || kind > CHAT_SOURCE_REGION || type < CHAT_TYPE_WHISPER || type > CHAT_TYPE_RADAR || type == CHAT_TYPE_START || type == CHAT_TYPE_STOP) return;
-    if (chat["audible"].asInteger() != CHAT_AUDIBLE_FULLY) return;
-    if (LLMuteList::getInstance()->isMuted(source, chat["from"].asString(), LLMute::flagTextChat)
-        || LLMuteList::getInstance()->isMuted(owner, LLMute::flagTextChat)) return;
-    if (gSavedSettings.getBOOL("UseAntiSpam") && NACLAntiSpamRegistry::instance().checkQueue(
-        ANTISPAM_QUEUE_CHAT, source, kind == CHAT_SOURCE_OBJECT ? ANTISPAM_SOURCE_OBJECT : ANTISPAM_SOURCE_AGENT)) return;
-    const std::weak_ptr<VSNativeSession> weak = shared_from_this();
-    if (kind == CHAT_SOURCE_AGENT && source.notNull())
+class VSNativeChatObject final : public VSChatReceiveObject
+{
+public:
+    explicit VSNativeChatObject(VSObjectContext source) : mSource(std::move(source)) {}
+    bool permYouOwner() const override
     {
-        LLAvatarName name;
-        if (auto found = mNames.find(source); found != mNames.end()) chat["from"] = found->second;
-        else if (LLAvatarNameCache::get(source, &name)) chat["from"] = name.getCompleteName();
-        else if (mNameConnections.size() < 1024 && mPendingNames.insert(source).second)
-        {
-            // Keep immediate simulator-name delivery ordered. Resolved names are
-            // used by subsequent messages, and never publish into a later login.
-            mNameConnections.emplace_back(LLAvatarNameCache::get(source,
-                [weak, generation](const LLUUID& id, const LLAvatarName& resolved)
-                {
-                    if (auto session = weak.lock())
-                    {
-                        if (session->generation() != generation || session->phase() != Phase::Connected) { ++session->mExpired; return; }
-                        session->mNames[id] = resolved.getCompleteName(); session->mPendingNames.erase(id);
-                    }
-                }));
-        }
+        const auto source = currentSource();
+        return source && source->youOwner;
     }
-    const auto receiveCurrent = accountGuard();
-    LLChat received;
-    received.mFromID = source; received.mOwnerID = owner;
-    received.mFromName = chat["from"].asString();
-    received.mSourceType = static_cast<EChatSourceType>(kind);
-    received.mChatType = static_cast<EChatType>(type);
-    if (chat["position"].isArray() && chat["position"].size() == 3)
-        received.mPosAgent = ll_vector3_from_sd(chat["position"]);
-    const auto chatObject = VSObjectContext::resolve(source);
-    if (chatObject) received.mPosAgent = gAgent.getPosAgentFromGlobal(chatObject->position);
-    std::string text = chat["text"].asString();
-    const VSReceivedChatContext receive_context{
-        [chatObject]
-        {
-            const bool current = chatObject && chatObject->current && chatObject->current();
-            return VSReceivedChatContext::Source{current && chatObject->attachment, current && chatObject->youOwner};
-        },
-        [&received, this]() -> std::optional<std::string>
-        {
-            const auto position = from_region_handle(mHandle) + LLVector3d(received.mPosAgent);
-            const auto region = vs_region_context(position);
-            if (!region) return {};
-            return LLSLURL(region->getName(), received.mPosAgent).getLocationString();
-        }};
-    if (!vs_filter_received_chat(received, text, owner, receive_context)) return;
-    if (!receiveCurrent()) return;
-    const bool emote = FSCommon::is_irc_me_prefix(text);
-    if (!emote && type == CHAT_TYPE_OWNER)
+    bool isAttachment() const override
     {
-        // Same owner-chat order as the reference: filtered receive policy,
-        // actual bridge, command packager, then RLVa command controller.
-        if (FSLSLBridge::instance().lslToViewer(text, source, owner) || !receiveCurrent()) return;
-        if (cmdline_packager(text, source, owner) || !receiveCurrent()) return;
-        const auto result = vs_process_owner_chat(received, text, [this, source, chatObject, receiveCurrent]
-        {
-            if (!receiveCurrent()) return false;
-            if (!chatObject || !chatObject->attachment) return true;
-            if (!chatObject->current || !chatObject->current() || !gViewerWindow || !gViewerWindow->nativeContext()) return false;
-            auto& world = gViewerWindow->nativeContext()->world();
-            const auto object = world.object(source);
-            const auto item = object ? world.objectInventoryItem(*object) : std::optional<LLUUID>{};
-            if (!item) return false;
-            return *item != source || RlvSettings::getEnableTemporaryAttachments();
-        }, receiveCurrent);
-        if (!receiveCurrent() || result == VSOwnerChatResult::Consumed) return;
+        const auto source = currentSource();
+        return source && source->attachment;
     }
-    if (emote) chat["style"] = CHAT_STYLE_IRC;
-    else if (type == CHAT_TYPE_WHISPER) received.mText = LLTrans::getString("whisper") + " ";
-    else if (type == CHAT_TYPE_SHOUT) received.mText = LLTrans::getString("shout") + " ";
-    chat["prefix"] = received.mText;
-    chat["text"] = text; chat["from"] = received.mFromName;
-    chat["url"] = received.mURL; chat["rlv_names_filtered"] = received.mRlvNamesFiltered;
-    chat["position"] = ll_sd_from_vector3(received.mPosAgent);
-    if (gSavedSettings.getBOOL("TranslateChat") && LLTranslate::isTranslationConfigured() && source != mAgent)
+    bool isTempAttachment() const override
     {
-        const auto original = chat["text"].asString();
-        LLTranslate::translateMessage("", LLTranslate::getTranslateLanguage(), original,
-            [weak, generation, chat, original](std::string translated, std::string)
-            { if (auto session = weak.lock()) session->publishChat(chat, original + " (" + translated + ")", generation); },
-            [weak, generation, chat, original](int, std::string)
-            { if (auto session = weak.lock()) session->publishChat(chat, original, generation); });
+        if (!currentSource() || !gViewerWindow || !gViewerWindow->nativeContext()) return true;
+        auto& world = gViewerWindow->nativeContext()->world();
+        const auto object = world.object(mSource.id);
+        const auto item = object ? world.objectInventoryItem(*object) : std::optional<LLUUID>{};
+        return !item || *item == mSource.id;
     }
-    else publishChat(chat, chat["text"].asString(), generation);
+    bool isAvatar() const override
+    {
+        const auto source = currentSource();
+        return source && source->pcode == LL_PCODE_LEGACY_AVATAR;
+    }
+    LLVector3 getPositionAgent() const override
+    {
+        const auto source = currentSource();
+        return source ? gAgent.getPosAgentFromGlobal(source->position) : LLVector3::zero;
+    }
+    void startTyping() override { typing(true); }
+    void stopTyping() override { typing(false); }
+    void addChat(const LLChat& chat) override
+    {
+        if (isAvatar() && gViewerWindow && gViewerWindow->nativeContext())
+            gViewerWindow->nativeContext()->world().nameTagChat(chat);
+    }
+    void chatParticles(const LLColor4& color, const LLUUID& owner) override
+    {
+        if (const auto source = currentSource()) vs_native_chat_particles(*source, color, owner);
+    }
+private:
+    std::optional<VSObjectContext> currentSource() const
+    {
+        // The initial guard admits this exact incarnation, never a reused UUID.
+        if (!mSource.current || !mSource.current()) return {};
+        return VSObjectContext::resolve(mSource.id);
+    }
+    void typing(bool active)
+    {
+        if (isAvatar() && gViewerWindow && gViewerWindow->nativeContext())
+            gViewerWindow->nativeContext()->world().nameTagTyping(mSource.id, active);
+    }
+    VSObjectContext mSource;
+};
 }
-void VSNativeSession::publishChat(const LLSD& chat, const std::string& text, U64 generation)
+
+void VSNativeSession::appendChat(LLSD data, U64 generation)
+{
+    if (generation != mGeneration || mPhase != Phase::Connected) return;
+    if (!data["text"].isString() || !data["from"].isString() || data["text"].asString().size() > 4096) return;
+    if (!data["kind"].isInteger() || !data["type"].isInteger() || !data["audible"].isInteger()) return;
+    const auto kind = data["kind"].asInteger(), type = data["type"].asInteger();
+    if (kind < CHAT_SOURCE_SYSTEM || kind > CHAT_SOURCE_REGION || type < CHAT_TYPE_WHISPER || type > CHAT_TYPE_RADAR) return;
+    LLChat chat;
+    chat.mFromID = data["source"].asUUID();
+    chat.mSourceType = static_cast<EChatSourceType>(kind);
+    chat.mChatType = static_cast<EChatType>(type);
+    if (data["position"].isArray() && data["position"].size() == 3)
+    {
+        const auto position = ll_vector3_from_sd(data["position"]);
+        if (position.isFinite()) chat.mPosAgent = position;
+    }
+    const auto alive = accountGuard();
+    const std::weak_ptr<VSNativeSession> weak = shared_from_this();
+    VSChatReceiveServices services;
+    services.current = alive;
+    services.findObject = [alive](const LLUUID& id) -> std::shared_ptr<VSChatReceiveObject>
+    {
+        if (!alive()) return {};
+        if (const auto object = VSObjectContext::resolve(id)) return std::make_shared<VSNativeChatObject>(*object);
+        return {};
+    };
+    services.audible = [data] { return static_cast<EChatAudible>(data["audible"].asInteger()); };
+    services.message = [data] { return data["text"].asString(); };
+    services.location = [weak, alive](const LLVector3& position) -> std::optional<std::string>
+    {
+        const auto session = weak.lock();
+        if (!session || !alive()) return {};
+        const auto region = vs_region_context(from_region_handle(session->handle()) + LLVector3d(position));
+        if (!region) return {};
+        return LLSLURL(region->getName(), position).getLocationString();
+    };
+    services.deliver = [weak, generation, alive](const LLChat& message, const LLSD& args)
+    {
+        if (!alive()) return;
+        if (const auto session = weak.lock()) session->publishChat(message, args, generation);
+    };
+    vs_receive_chat(chat, data["from"].asString(), data["owner"].asUUID(), services);
+}
+void VSNativeSession::publishChat(const LLChat& message, const LLSD& args, U64 generation)
 {
     if (generation != mGeneration || mPhase != Phase::Connected || !mChat) { ++mExpired; return; }
-    LLChat message;
-    message.mFromName = chat["from"].asString(); message.mFromID = chat["source"].asUUID();
-    message.mOwnerID = chat["owner"].asUUID(); message.mText = chat["prefix"].asString() + text;
-    message.mChatStyle = static_cast<EChatStyle>(chat["style"].asInteger());
-    message.mURL = chat["url"].asString();
-    message.mRlvNamesFiltered = chat["rlv_names_filtered"].asBoolean();
-    message.mSourceType = static_cast<EChatSourceType>(chat["kind"].asInteger());
-    message.mChatType = static_cast<EChatType>(chat["type"].asInteger());
-    if (chat["position"].isArray() && chat["position"].size() == 3)
-    {
-        const auto position = ll_vector3_from_sd(chat["position"]);
-        if (position.isFinite()) message.mPosAgent = position;
-    }
-    if(LLFloaterScriptDebug::routeChat(message))return;
-    mChat->appendChat(message);
-    FSConsoleUtils::ProcessChatMessage(message, LLSD());
-    if (gSavedPerAccountSettings.getBOOL("LogNearbyChat")) LLLogChat::saveHistory("chat", chat["from"].asString(), chat["source"].asUUID(), text);
+    LLChat delivered(message);
+    LLSD delivery(args);
+    delivery["native_receive_generation"] = std::to_string(generation);
+    // The same handler owns RLVa presentation filtering, script output, logging,
+    // console/history, recent speakers and toasts for both renderer peers.
+    LLNotificationsUI::LLNotificationManager::instance().onChat(delivered, delivery);
+}
+void VSNativeSession::recordNearbyChat(const LLChat& chat, U64 generation)
+{
+    if (generation == mGeneration && mPhase == Phase::Connected && mChat && !chat.mMuted)
+        mChat->recordChat(chat);
 }
 bool VSNativeSession::sendChat(const std::string& input, U8 type, S32 channel)
 {
@@ -2379,11 +2504,32 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
     }
     ++mSent; return true;
 }
+VSWorldSound* VSNativeSession::worldSound()
+{
+    if (!mWorldSound && (mPhase == Phase::Connecting || mPhase == Phase::Connected) && gViewerWindow && gViewerWindow->nativeContext())
+        mWorldSound = std::make_unique<VSWorldSound>(weak_from_this());
+    return mWorldSound.get();
+}
+VSParticleEffects* VSNativeSession::particles()
+{
+    if(!mParticles && mPhase==Phase::Connected && gViewerWindow && gViewerWindow->nativeContext())
+        mParticles=std::make_unique<VSParticleEffects>(weak_from_this());
+    return mParticles.get();
+}
 void VSNativeSession::tick()
 {
+    if (mWorldSound) mWorldSound->tick();
+    if (mParticles) mParticles->tick();
     LLTracker::updateFollowLocation();
     if (mTaskInventory) mTaskInventory->tick();
-    if (mObjectSelection) mObjectSelection->tick();
+    if (mObjectPhysics) mObjectPhysics->tick();
+    if (mObjectCosts) mObjectCosts->tick();
+    if (mObjectSelection)
+    {
+        mObjectSelection->tick();
+        mObjectSelection->overrideAvatarUpdates();
+        mObjectSelection->overrideObjectUpdates();
+    }
     if (mObjectAttention) mObjectAttention->tick();
     if (mAppearance)
         mAppearance->tick();
@@ -2447,6 +2593,9 @@ void VSNativeSession::tick()
         F32 yaw = 0;
         gAgent.autoPilot(&yaw);
         mCamera.turnBody(yaw);
+        const auto target=mCamera.state(mPosition,gAgentCamera.getCameraOffsetInitial(),LLVector3(gAgentCamera.getFocusOffsetInitial()),gAgentCamera.getCameraOffsetScale());
+        const auto origin=from_region_handle(mHandle);
+        gAgentCamera.updateNativeCamera(origin+LLVector3d(target.center),origin+LLVector3d(target.focus),target.up);
         publishCamera();
         if (cameraTime - mParcelQueryTime >= 1 &&
             (S32(mPosition.mV[VX] / 4) != mParcelCellX || S32(mPosition.mV[VY] / 4) != mParcelCellY))
@@ -2576,10 +2725,27 @@ void VSNativeSession::reset()
         LLViewerMediaFocus::instance().clearFocus();
     }
     if(gMenuHolder)gMenuHolder->hideMenus();
+    if (LLVoiceClient::instanceExists()) LLVoiceClient::instance().retireNativeAccount();
+    vs_retire_native_object_ui();
+    if (LLMaterialMgr::instanceExists()) LLMaterialMgr::instance().retireNativeAccount();
+    vs_retire_snapshot_floaters();
+    vs_retire_scene_preview_floaters();
+    gMeshRepo.retireNativeUploads();
     if(LLToolMgr::instanceExists())LLToolMgr::instance().retireNativeTools();
+    mParticles.reset();
+    mWorldSound.reset();
+    if (gAudiop)
+    {
+        gAudiop->mMaxWindGain = 0.f;
+        gAudiop->updateWind(LLVector3::zero, 0.f);
+        gAudiop->setListener(LLVector3::zero, LLVector3::zero, LLVector3::z_axis, LLVector3::x_axis);
+    }
+    gWindVec = gRelativeWindVec = LLVector3::zero;
     mObjectAttention.reset();
     if(mObjectSelection)mObjectSelection->reset();
     mObjectSelection.reset();
+    mObjectCosts.reset();
+    mObjectPhysics.reset();
     mTaskInventory.reset();
     mAppearance.reset();
     if (LLGestureMgr::instanceExists()) LLGestureMgr::instance().resetNativeAccount();
@@ -2622,6 +2788,7 @@ void VSNativeSession::reset()
     mMusicUserStopped = mMediaUserStopped = false;
     if (LLViewerParcelMedia::instanceExists()) LLViewerParcelMedia::deleteSingleton();
     ++mGeneration; ++mRegionEpoch; clearSimulatorFeatures(); mLocationRequests.clear(); mChangingRegion = false; mRequestedRegion.clear(); mNavigationDeadline = 0; unbind();
+    LLViewerTextureManager::resetCPULocalImages();
     gGLTFMaterialList.resetNativeMaterials();
     if (LLNotifications::instanceExists())
     {

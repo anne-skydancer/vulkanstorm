@@ -1,6 +1,17 @@
 // CPU avatar owner and native geometry publication. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "pipeline.h"
 #include "vsworldavatar.h"
+#include "fsassetblacklist.h"
+#include "vsavatarnametag.h"
+#include "vsavatarvoicepolicy.h"
+#include "llgesturemgr.h"
+#include "llvoiceclient.h"
+#include "llvoicevisualizer.h"
+#include "vsavatarrigginginfo.h"
+#include "llviewercamera.h"
+#include "llavatarjoint.h"
+#include "llchat.h"
 #include "vsattentionmotion.h"
 #include "llviewernetwork.h"
 #include "llviewercontrol.h"
@@ -38,7 +49,12 @@
 #include "vsavatarmotions.h"
 #include "aoengine.h"
 #include "llagent.h"
+#include "llagentcamera.h"
+#include "llperfstats.h"
+#include "rlvactions.h"
+#include "rlvmodifiers.h"
 #include "vsnativesession.h"
+#include "vsnativeappearance.h"
 #include "rlvhandler.h"
 #include "vscontrolconstraints.h"
 #include "vsresourcebudget.h"
@@ -146,6 +162,11 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
     LLUUID id;
     bool self=false,positionKnown=false,appearanceKnown=false,serverBakes=false;
     bool                                                   control       = false;
+    bool preview = false;
+    std::weak_ptr<VSNativeSession> appearanceSession;
+    std::function<bool()> appearanceCurrent;
+    std::set<S32> previewMeshes;
+    VSUIRenderer::Image previewImage;
     bool                                                   sitting       = false;
     bool                                                   objectSitting = false;
     U64 handle=0,generation=nextAvatarGeneration++;
@@ -165,10 +186,74 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
     Visibility                                             visibility     = Visibility::Normal;
     U32                                                    complexity     = 0;
     F32                                                    attachmentArea = 0;
+    bool animatedAttachments = false;
+    U32 attachedBakedMask = 0;
+    std::optional<F32> gpuMilliseconds;
+    bool tooSlow = false, tooSlowWithoutShadows = false, tuned = false;
+    mutable bool cachedMute = false, cachedSilhouette = false;
+    mutable F64 muteUpdate = 0, silhouetteUpdate = 0;
+    inline static std::vector<Impl*> performanceOwners;
+    inline static std::vector<LLUUID> ignoringARTLimit;
+    inline static S32 avatarsNearby = 0;
+    inline static LLFrameTimer nearbyUpdate;
+    bool nameTyping=false;
+    LLFrameTimer nameTypingTimer;
+    std::unique_ptr<VSAvatarNameTag> nameTag;
+    LLPointer<LLVoiceVisualizer> mVoiceVisualizer;
+    std::shared_ptr<const void> voiceResidency;
+    std::shared_ptr<const std::function<bool()>> voiceCurrent;
+    LLVisualParam* mOohMorph=nullptr;
+    LLVisualParam* mAahMorph=nullptr;
+    bool mLipSyncActive=false;
+    int mCurrentGesticulationLevel=0;
+    S32 mLastRezzedStatus=0;
+    bool firstFullyVisible=true;
+    LLFrameTimer fullyLoadedTimer;
+    struct LoadFacts { bool missing=false,fullyBaked=true;S32 rezStatus=0; };
+    LoadFacts loadFacts(unsigned attachmentCount);
+
+    bool isInMuteList() const{return LLMuteList::instance().isMuted(id);}
+    bool ensureVoice()
+    {
+        if(mVoiceVisualizer)return true;
+        if(control||!nameBudget)return false;
+        auto charge=nameBudget->reserve(sizeof(LLVoiceVisualizer)+8*6*sizeof(VSWorldRenderer::Vertex));
+        if(!charge){++nameBudgetRefusals;return false;}
+        mVoiceVisualizer=new LLVoiceVisualizer(LLHUDObject::LL_HUD_EFFECT_VOICE_VISUALIZER);
+        voiceResidency=std::move(charge);
+        mOohMorph=getVisualParam("Lipsync_Ooh");if(!mOohMorph)mOohMorph=getVisualParam("Express_Kiss");
+        mAahMorph=getVisualParam("Lipsync_Aah");if(!mAahMorph)mAahMorph=getVisualParam("Express_Open_Mouth");
+        return true;
+    }
+    void retireVoice()
+    {if(mVoiceVisualizer)mVoiceVisualizer->markDead();mVoiceVisualizer=nullptr;voiceCurrent={};voiceResidency={};}
+    void updateVoice(bool enabled,const LLVector3& position)
+    {
+        if(!mVoiceVisualizer&&(!enabled||!ensureVoice()))return;
+        VSAvatarVoicePolicy::update(*this,enabled,position);
+        VSAvatarVoicePolicy::lipSync(*this,enabled);
+    }
+
+    std::optional<VSResourceBudget> nameBudget;
+    U64 nameBudgetRefusals=0;
+    struct NameRiggingCombined
+    {std::shared_ptr<const VSResourceBudget::Reservation> residency;LLJointRiggingInfoTab joints;};
+    std::shared_ptr<const NameRiggingCombined> nameRiggingCombined;
+    U32 nameRiggingSkeleton=0;
+    std::vector<std::shared_ptr<const VSAvatarRiggingInfo>> nameRiggingInputs;
+    bool ensureNameTag()
+    {
+        if(nameTag)return true;
+        if(control||!nameBudget)return false;
+        const auto reservation=nameBudget->reserve(VSAvatarNameTag::allocationBytes());
+        if(!reservation){++nameBudgetRefusals;return false;}
+        nameTag=std::make_unique<VSAvatarNameTag>(id,animations,nameTyping,nameTypingTimer,reservation,[budget=*nameBudget](std::size_t bytes) mutable -> std::shared_ptr<const void> {return budget.reserve(bytes);});return true;
+    }
     Attention                                              lookTarget, pointTarget;
     LLVector3                                              lookPoint, pointPoint;
     double                                                 lookDeadline = 0, pointDeadline = 0;
     F32 pixelArea=0,timeDilation=1;
+    std::optional<F32> spatialBinRadius;
     std::map<EBakedTextureIndex,LLPointer<LLImageRaw>> appliedMasks;
     std::map<EBakedTextureIndex, LLPointer<LLImageRaw>>    appliedLocalMasks;
     S32 cofVersion=-1;
@@ -208,17 +293,22 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
     U32                        motionFrame      = 0;
     bool                       motionFrameKnown = false;
     bool shapeDirty=true;
-    Impl(const LLUUID& uuid, bool is_self, U64 region, VSWorldRenderer& r, VSUIResources& u, GroundQuery g, bool isControl) :
+    Impl(const LLUUID& uuid, bool is_self, U64 region, VSWorldRenderer& r, VSUIResources& u, GroundQuery g, bool isControl, bool isPreview) :
         LLWearableData(),
         LLAvatarAppearance(static_cast<LLWearableData*>(this)),
         id(uuid),
         self(is_self),
         control(isControl),
+        preview(isPreview),
         handle(region),
         renderer(r),
         resources(u),
         ground(std::move(g))
     {
+        if(self && !preview)
+            if(const auto owner=VSNativeSession::active();owner && owner->account().agent==id)
+            {appearanceSession=owner;appearanceCurrent=owner->accountGuard();}
+        mIsDummy = preview;
         setAvatarAppearance(this);textures.setNumTEs(TEX_NUM_INDICES);
         vs_register_avatar_motions(*this);
         initInstance();
@@ -234,7 +324,8 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
                 continue;
             auto* parent = info->mIsHUDAttachment ? screen.get() : mRoot->findJoint(info->mJointName);
             if (!parent) continue;
-            auto joint=std::make_unique<NativeJoint>();joint->setName(info->mName);parent->addChild(joint.get());
+            auto joint=std::make_unique<NativeJoint>(info->mAttachmentID+mNumBones+mNumCollisionVolumes-1);
+            joint->setName(info->mName);parent->addChild(joint.get());
             if (info->mHasPosition) joint->setPosition(info->mPosition);
             if (info->mHasRotation)
             {
@@ -251,9 +342,21 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
         LLCharacter::sInstances.push_back(this);
         if (!control)
             vs_start_avatar_default_motions(*this);
+        if (!preview) performanceOwners.push_back(this);
     }
     ~Impl() override
     {
+        std::erase(performanceOwners, this);
+        std::erase(ignoringARTLimit, id);
+        if (tuned) --LLPerfStats::tunedAvatars;
+        if (performanceOwners.empty())
+        {
+            ignoringARTLimit.clear();
+            avatarsNearby = 0;
+            nearbyUpdate.reset();
+        }
+        retireVoice();
+        nameTag.reset();
         mWearableDatas.clear();
         for (const auto& [baked, key] : composites)
             resources.erase(key);
@@ -261,10 +364,167 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
         flushAllMotions();
         attachments.clear();
     }
+    LLVector3d positionGlobal() const
+    {
+        F32 x, y;
+        from_region_handle(handle, &x, &y);
+        return LLVector3d(F64(x) + position.mV[0], F64(y) + position.mV[1], position.mV[2]);
+    }
+    bool inMuteList() const
+    {
+        const auto now = LLFrameTimer::getTotalSeconds();
+        if (now >= muteUpdate)
+        {
+            cachedMute = LLMuteList::instance().isMuted(id);
+            muteUpdate = now + 1;
+        }
+        return cachedMute;
+    }
+    bool silhouette() const
+    {
+        if (!RlvActions::hasBehaviour(RLV_BHVR_SETCAM_AVDIST)) return false;
+        static RlvCachedBehaviourModifier<float> distance(RLV_MODIFIER_SETCAM_AVDIST);
+        const auto now = LLFrameTimer::getTotalSeconds();
+        if (now >= silhouetteUpdate)
+        {
+            cachedSilhouette = dist_vec_squared(gAgent.getPositionGlobal(), positionGlobal()) > distance() * distance();
+            silhouetteUpdate = now + .5;
+        }
+        return cachedSilhouette;
+    }
+    bool buddy() const { return LLAvatarTracker::instance().isBuddy(id); }
+    LLVOAvatar::VisualMuteSettings visualMute() const
+    { return FSAvatarRenderPersistence::instance().getAvatarRenderSettings(id); }
+    bool complex() const
+    {
+        // LLVOAvatar::isTooComplex, with the same priority and exclusions.
+        if (silhouette()) return true;
+        static LLCachedControl<S32> mode(gSavedSettings, "RenderAvatarComplexityMode");
+        const bool renderFriend = buddy() && mode > LLVOAvatar::AV_RENDER_LIMIT_BY_COMPLEXITY;
+        if (self || renderFriend || visualMute() == LLVOAvatar::AV_ALWAYS_RENDER) return false;
+        if (mode == LLVOAvatar::AV_RENDER_ONLY_SHOW_FRIENDS && !control) return true;
+        static LLCachedControl<U32> exclusions(gSavedSettings, "FSImpostorAvatarExclude", 0);
+        if ((control && exclusions >= 2) || (animatedAttachments && (exclusions & 1))) return false;
+        static LLCachedControl<U32> maximum(gSavedSettings, "RenderAvatarMaxComplexity", 0U);
+        static LLCachedControl<F32> area(gSavedSettings, "RenderAutoMuteSurfaceAreaLimit", 1000.f);
+        return maximum > 0 && (complexity > maximum || (area > 0 && attachmentArea > area));
+    }
+    bool slow() const
+    {
+        if (control) return tooSlow;
+        static LLCachedControl<S32> mode(gSavedSettings, "RenderAvatarComplexityMode");
+        static LLCachedControl<bool> friendsOnly(gSavedSettings, "RenderAvatarFriendsOnly", false);
+        const bool isFriend = buddy();
+        if ((isFriend && mode > LLVOAvatar::AV_RENDER_LIMIT_BY_COMPLEXITY) || visualMute() == LLVOAvatar::AV_ALWAYS_RENDER)
+            return false;
+        if (mode == LLVOAvatar::AV_RENDER_ONLY_SHOW_FRIENDS) return true;
+        if (!isFriend && friendsOnly()) return true;
+        return tooSlow;
+    }
+    bool visuallyMuted() const
+    {
+        // The reference GPU accessor uses isVisuallyMuted, not overall appearance.
+        if (!self && inMuteList()) return true;
+        if (self || visualMute() == LLVOAvatar::AV_ALWAYS_RENDER) return false;
+        static LLCachedControl<U32> exclusions(gSavedSettings, "FSImpostorAvatarExclude", 0);
+        if (visualMute() == LLVOAvatar::AV_DO_NOT_RENDER)
+            return !((control && exclusions >= 2) || (animatedAttachments && (exclusions & 1)));
+        if (control) return exclusions < 2 && slow();
+        return !(animatedAttachments && (exclusions & 1)) && complex();
+    }
+    F32 renderTime() const { return visuallyMuted() ? 0.f : gpuMilliseconds.value_or(0.f); }
+    Visibility overallAppearance() const
+    {
+        // LLVOAvatar::getOverallAppearance: friends-only is not an invisible mute.
+        if (self) return Visibility::Normal;
+        if (inMuteList()) return Visibility::Invisible;
+        if (visualMute() == LLVOAvatar::AV_ALWAYS_RENDER) return Visibility::Normal;
+        if (visualMute() == LLVOAvatar::AV_DO_NOT_RENDER || complex() || tooSlowWithoutShadows)
+            return Visibility::Jellydoll;
+        return Visibility::Normal;
+    }
+    void updatePerformance()
+    {
+        // Original nearby/autotune policy, over actual native owners rather than
+        // casting CPU characters to OpenGL LLVOAvatar objects.
+        constexpr S32 minimumUntuned = 5;
+        const bool autotune = LLPerfStats::tunables.userAutoTuneEnabled && !control && !self;
+        if (autotune)
+        {
+            const F32 radius = LLVOAvatar::sRenderDistance * LLVOAvatar::sRenderDistance;
+            const auto nearby = [radius](const Impl& avatar)
+            {
+                return dist_vec_squared(avatar.positionGlobal(), gAgent.getPositionGlobal()) <= radius ||
+                    dist_vec_squared(avatar.positionGlobal(), gAgentCamera.getCameraPositionGlobal()) <= radius;
+            };
+            if (nearby(*this) && ignoringARTLimit.size() < minimumUntuned)
+            {
+                if (std::find(ignoringARTLimit.begin(), ignoringARTLimit.end(), id) == ignoringARTLimit.end())
+                    ignoringARTLimit.push_back(id);
+            }
+            else if (!nearby(*this)) std::erase(ignoringARTLimit, id);
+            if (nearbyUpdate.getElapsedTimeF32() > 1.f)
+            {
+                avatarsNearby = S32(std::count_if(performanceOwners.begin(), performanceOwners.end(),
+                    [&nearby](const Impl* avatar) { return !avatar->control && avatar->positionKnown && nearby(*avatar); }));
+                nearbyUpdate.reset();
+            }
+        }
+        bool ignoreTune = false;
+        if (autotune && !ignoringARTLimit.empty())
+        {
+            const auto found = std::find(ignoringARTLimit.begin(), ignoringARTLimit.end(), id);
+            if (found != ignoringARTLimit.end())
+                ignoreTune = S32(found - ignoringARTLimit.begin()) < minimumUntuned - avatarsNearby + 1 + LLPerfStats::tunedAvatars;
+        }
+        static LLCachedControl<S32> mode(gSavedSettings, "RenderAvatarComplexityMode");
+        static LLCachedControl<bool> allowSelf(gSavedSettings, "AllowSelfImpostor");
+        const F32 maximum = F32(LLPerfStats::renderAvatarMaxART_ns / 1000000.0);
+        const bool exceeds = LLPerfStats::renderAvatarMaxART_ns > 0 && gpuMilliseconds && *gpuMilliseconds >= maximum;
+        if (exceeds && !ignoreTune)
+        {
+            tooSlow = true;
+            if (!tooSlowWithoutShadows)
+            {
+                const bool exception = (mode > LLVOAvatar::AV_RENDER_LIMIT_BY_COMPLEXITY && buddy()) ||
+                    visualMute() == LLVOAvatar::AV_ALWAYS_RENDER;
+                if ((!self || allowSelf) && !exception)
+                    tooSlowWithoutShadows = renderTime() * 2.f >= maximum ||
+                        (mode == LLVOAvatar::AV_RENDER_ONLY_SHOW_FRIENDS && !control);
+            }
+        }
+        else
+        {
+            tooSlow = false;
+            tooSlowWithoutShadows = false;
+            if (ignoreTune) return;
+        }
+        if (tooSlow && !tuned) { ++LLPerfStats::tunedAvatars; tuned = true; }
+        else if (!tooSlow && tuned) { --LLPerfStats::tunedAvatars; tuned = false; }
+        // Native append consumes the current appearance each frame; no GL
+        // drawable rebuild is needed to publish an accepted policy transition.
+    }
     bool usesGraphicsContext() const override { return false; }
+    LLJoint* getJoint(std::string_view name) override
+    {
+        auto* joint=LLAvatarAppearance::getJoint(name);
+        // Same self-only secondary hierarchy as LLVOAvatarSelf::getJoint.
+        // HUD attachment joints are owned by mScreen, outside the body root.
+        if(!joint&&screen)
+        {
+            joint=screen->findJoint(name);
+            if(joint)mJointMap[std::string(name)]=joint;
+        }
+        return joint;
+    }
     bool isSelf() const override { return self; }
     bool isUsingLocalAppearance() const override { return localAppearance; }
-    bool isEditingAppearance() const override { return false; }
+    bool isEditingAppearance() const override
+    {
+        const auto owner=appearanceSession.lock();
+        return self && !preview && owner && appearanceCurrent && appearanceCurrent() &&
+            owner->appearance() && owner->appearance()->isEditing();
+    }
     bool isUsingServerBakes() const override { return serverBakes; }
     F32 getAvatarOffset() override
     {
@@ -402,11 +662,11 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
     bool isTextureDefined(ETextureIndex te,U32) const override
     {
         if (unsigned(te)>=textures.getNumTEs()) return false;
-        const LLUUID& uuid=textures.getTE(U8(te))->getID();return uuid.notNull() && uuid!=IMG_DEFAULT_AVATAR;
+        const LLUUID& uuid=textures.getTE(U8(te))->getID();return uuid.notNull() && uuid!=IMG_DEFAULT_AVATAR && uuid!=IMG_DEFAULT;
     }
     std::vector<U64> bakeSignature(const LLAvatarAppearanceDictionary::BakedEntry& entry, bool& ready)
     {
-        std::vector<U64> result{ U64(getSex()) };
+        std::vector<U64> result{ static_cast<U64>(getSex()) };
         const auto       relevant = [&](S32 type)
         {
             return type < 0 || std::find(entry.mWearables.begin(), entry.mWearables.end(), type) != entry.mWearables.end();
@@ -414,7 +674,7 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
         for (auto* param = getFirstVisualParam(); param; param = getNextVisualParam())
             if (auto* layer = dynamic_cast<LLTexLayerParam*>(param); layer && relevant(layer->getWearableType()))
             {
-                result.push_back(U64(layer->getID()));
+                result.push_back(static_cast<U64>(layer->getID()));
                 result.push_back(std::bit_cast<U32>(layer->getWeight()));
             }
         for (const auto& wearable : ownedWearables)
@@ -422,11 +682,11 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
             if (!relevant(wearable->getType()))
                 continue;
             result.push_back(0xffffffffffffffffULL);
-            result.push_back(U64(wearable->getType()));
+            result.push_back(static_cast<U64>(wearable->getType()));
             for (const auto& [index, param] : wearable->mVisualParamIndexMap)
                 if (auto* layer = dynamic_cast<LLTexLayerParam*>(param))
                 {
-                    result.push_back(U64(index));
+                    result.push_back(static_cast<U64>(index));
                     result.push_back(std::bit_cast<U32>(layer->getWeight()));
                 }
             result.push_back(0xfffffffffffffffeULL);
@@ -438,7 +698,7 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
                 const auto& uuid = texture->getID();
                 U64         identity[2];
                 std::memcpy(identity, uuid.mData, UUID_BYTES);
-                result.push_back(U64(index));
+                result.push_back(static_cast<U64>(index));
                 result.insert(result.end(), identity, identity + 2);
                 const bool required = uuid.notNull() && uuid != IMG_DEFAULT_AVATAR && uuid != IMG_INVISIBLE;
                 if (required)
@@ -464,8 +724,8 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
             if (index == BAKED_SKIRT && !isWearingWearableType(LLWearableType::WT_SKIRT))
                 continue;
             auto value = bakeSignature(*entry, dependenciesReady);
-            signature.push_back(U64(index));
-            signature.push_back(U64(value.size()));
+            signature.push_back(static_cast<U64>(index));
+            signature.push_back(static_cast<U64>(value.size()));
             signature.insert(signature.end(), value.begin(), value.end());
             wanted.emplace(index, std::move(value));
         }
@@ -803,6 +1063,31 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
         return !indices.empty();
     }
 };
+void VSWorldAvatar::advancePreview()
+{
+    auto& a=*mImpl;
+    if(a.preview && (!a.motionFrameKnown || a.motionFrame!=LLFrameTimer::getFrameCount()))a.pose();
+}
+std::optional<std::array<LLVector3,2>> VSWorldAvatar::previewBounds()
+{
+    auto& a=*mImpl;if(!a.preview)return {};
+    advancePreview();
+    bool known=false;LLVector3 minimum,maximum;
+    for(const auto index:a.previewMeshes)
+    {
+        if(unsigned(index)>=a.mMeshLOD.size() || !a.mMeshLOD[index] || a.mMeshLOD[index]->mMeshParts.empty())continue;
+        std::vector<VSWorldRenderer::Vertex> vertices;std::vector<unsigned> indices;
+        if(!a.skin(*a.mMeshLOD[index]->mMeshParts.front(),vertices,indices))continue;
+        for(const auto& vertex:vertices)
+        {
+            const LLVector3 point(vertex.x,vertex.y,vertex.z);
+            if(!known){minimum=maximum=point;known=true;}
+            else for(unsigned axis=0;axis<3;++axis){minimum[axis]=std::min(minimum[axis],point[axis]);maximum[axis]=std::max(maximum[axis],point[axis]);}
+        }
+    }
+    if(!known)return {};
+    return std::array<LLVector3,2>{minimum,maximum};
+}
 void VSWorldAvatar::initializeClass()
 {
     if (!LLAvatarAppearance::getDictionary()) { LLAvatarAppearance::initClass("avatar_lad.xml","avatar_skeleton.xml");ownsAppearanceClass=true; }
@@ -812,9 +1097,9 @@ void VSWorldAvatar::cleanupClass()
     if (ownsAppearanceClass) { LLAvatarAppearance::cleanupClass();LLPolyMesh::freeAllMeshes();ownsAppearanceClass=false; }
 }
 VSWorldAvatar::VSWorldAvatar(const LLUUID& id, bool self, U64 region, VSWorldRenderer& r, VSUIResources& u, GroundQuery g,
-                             std::shared_ptr<const void> ownerReservation, bool controlAvatar) :
+                             std::shared_ptr<const void> ownerReservation, bool controlAvatar, bool uiPreview) :
     mOwnerReservation(std::move(ownerReservation)),
-    mImpl(std::make_unique<Impl>(id, self, region, r, u, std::move(g), controlAvatar))
+    mImpl(std::make_unique<Impl>(id, self, region, r, u, std::move(g), controlAvatar, uiPreview))
 {
 }
 VSWorldAvatar::~VSWorldAvatar()=default;
@@ -935,32 +1220,14 @@ VSWorldAvatar::Visibility VSWorldAvatar::updateVisibility(U32 attachmentCost, F3
                 continue;
             const auto id = avatar.textures.getTE(U8(baked->mTextureIndex))->getID();
             if (id.notNull() && id != IMG_DEFAULT_AVATAR && id != IMG_INVISIBLE)
-                cost = U32(std::min<U64>(U64(cost) + 200, std::numeric_limits<U32>::max()));
+                cost = U32(std::min<U64>(static_cast<U64>(cost) + 200, std::numeric_limits<U32>::max()));
         }
     avatar.complexity     = cost;
     avatar.attachmentArea = attachmentArea;
-    Visibility state      = Visibility::Normal;
-    if (!avatar.self)
-    {
-        const bool friendAvatar = LLAvatarTracker::instance().isBuddy(avatar.id);
-        const auto setting      = FSAvatarRenderPersistence::instance().getAvatarRenderSettings(avatar.id);
-        if ((!avatar.control && gSavedSettings.getBOOL("RenderAvatarFriendsOnly") && !friendAvatar) ||
-            (LLMuteList::instanceExists() && LLMuteList::instance().isMuted(avatar.id)))
-            state = Visibility::Invisible;
-        else if (setting != LLVOAvatar::AV_ALWAYS_RENDER)
-        {
-            const S32  mode          = gSavedSettings.getS32("RenderAvatarComplexityMode");
-            const U32  maximum       = gSavedSettings.getU32("RenderAvatarMaxComplexity");
-            const F32  maxArea       = gSavedSettings.getF32("RenderAutoMuteSurfaceAreaLimit");
-            const bool friendExempt  = friendAvatar && mode > LLVOAvatar::AV_RENDER_LIMIT_BY_COMPLEXITY;
-            const U32  exclusions    = gSavedSettings.getU32("FSImpostorAvatarExclude");
-            const bool animeshExempt = (avatar.control && exclusions >= 2) || (animatedAttachments && (exclusions & 1));
-            if (setting == LLVOAvatar::AV_DO_NOT_RENDER ||
-                (!friendExempt && ((mode == LLVOAvatar::AV_RENDER_ONLY_SHOW_FRIENDS && !avatar.control) ||
-                                   (!animeshExempt && maximum && (cost > maximum || (maxArea > 0 && attachmentArea > maxArea))))))
-                state = Visibility::Jellydoll;
-        }
-    }
+    if (avatar.preview) return avatar.visibility = Visibility::Normal;
+    avatar.animatedAttachments = animatedAttachments;
+    avatar.updatePerformance();
+    const Visibility state = avatar.overallAppearance();
     if (state != avatar.visibility && !avatar.control)
     {
         const bool wasJelly = avatar.visibility == Visibility::Jellydoll;
@@ -1004,6 +1271,17 @@ VSWorldAvatar::Visibility VSWorldAvatar::updateVisibility(U32 attachmentCost, F3
 }
 VSWorldAvatar::Visibility VSWorldAvatar::visibility() const
 { return mImpl->visibility; }
+void VSWorldAvatar::gpuRenderTime(F32 milliseconds)
+{
+    if (!std::isfinite(milliseconds) || milliseconds < 0.f) return;
+    mImpl->gpuMilliseconds = milliseconds;
+    mImpl->updatePerformance();
+}
+F32 VSWorldAvatar::gpuRenderTime() const { return mImpl->renderTime(); }
+bool VSWorldAvatar::isTooSlow() const { return mImpl->slow(); }
+bool VSWorldAvatar::isTooComplex() const { return mImpl->complex(); }
+bool VSWorldAvatar::particleAppearanceNormal() const
+{ return mImpl->overallAppearance() == Visibility::Normal; }
 void VSWorldAvatar::attention(bool point, Attention target, F32 duration)
 {
     if (!std::isfinite(duration) || duration < 0)
@@ -1064,8 +1342,8 @@ std::vector<LLUUID> VSWorldAvatar::wearableItems(unsigned type) const
         return result;
     for (const auto& wearable : mImpl->ownedWearables)
         if (unsigned(wearable->getType()) == type)
-            if (const auto* native = dynamic_cast<const VSWearable*>(wearable.get()))
-                result.push_back(native->item());
+            if (const auto* native = dynamic_cast<const LLViewerWearable*>(wearable.get()))
+                result.push_back(native->getItemID());
     return result;
 }
 bool VSWorldAvatar::wearables(const std::vector<std::shared_ptr<LLWearable>>& wearables, S32 cofVersion)
@@ -1191,6 +1469,14 @@ bool VSWorldAvatar::animations(LLMessageSystem& msg)
         S32    sequence;
         msg.getUUID("AnimationList", "AnimID", animation, i);
         msg.getS32("AnimationList", "AnimSequenceID", sequence, i);
+        // Same authenticated AvatarAnimation policy as process_avatar_animation:
+        // reject the asset, send its real STOP request, and do not publish its
+        // animation-source association. ObjectAnimation retains its own policy.
+        if (FSAssetBlacklist::instance().isBlacklisted(animation, LLAssetType::AT_ANIMATION))
+        {
+            gAgent.sendAnimationRequest(animation, ANIM_REQUEST_STOP);
+            continue;
+        }
         if (animation.notNull())
             next[animation] = sequence;
         if (i < sourceCount && animation.notNull())
@@ -1260,9 +1546,11 @@ bool VSWorldAvatar::visibleFrom(const LLVector3& eye, float farClip) const
 bool VSWorldAvatar::isControlAvatar() const
 { return mImpl->control; }
 void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const LLVector3& eye, float farClip, unsigned viewportHeight,
-                           float timeDilation, unsigned viewportWidth, unsigned visibleAvatars)
+                           float timeDilation, unsigned viewportWidth, unsigned visibleAvatars, bool appearanceHint)
 {
     auto& a = *mImpl;
+    std::optional<LLPerfStats::RecordTime<LLPerfStats::ObjType_t::OT_AVATAR>> cpuTime;
+    if(!a.preview)cpuTime.emplace(a.id,a.id,LLPerfStats::StatType_t::RENDER_IDLE);
     if (a.screen)
     {
         const F32 aspect = viewportHeight && viewportWidth ? F32(viewportWidth) / viewportHeight : 1;
@@ -1271,7 +1559,7 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const 
     }
     if (!a.positionKnown || !a.appearanceKnown)
         return;
-    if (a.visibility == Visibility::Invisible)
+    if (!appearanceHint && a.visibility == Visibility::Invisible)
     {
         a.meshes.clear();
         a.publications.clear();
@@ -1290,7 +1578,7 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const 
     const auto session    = VSNativeSession::active();
     const bool fullDetail = a.self && session && session->cameraState().firstPerson;
     const F32 lodArea = vs_avatar_lod_area(a.pixelArea, gSavedSettings.getF32("RenderAvatarLODFactor"), visibleAvatars, a.self, fullDetail);
-    if (!a.control && a.visibility != Visibility::Jellydoll)
+    if (!a.control && !a.preview && (appearanceHint || a.visibility != Visibility::Jellydoll))
     {
         bool walking = false;
         for (S32 index = 0; index < NUM_AGENT_WALK_ANIMS; ++index)
@@ -1302,7 +1590,8 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const 
             a.LLCharacter::startMotion(ANIM_AGENT_FLY_ADJUST);
     }
     a.pose();
-    a.compose();
+    if (!a.preview) a.compose();
+    if (!a.preview && !LLPipeline::hasRenderTypeControl(LLPipeline::RENDER_TYPE_AVATAR)) return;
     // Apply every newly decoded mask before publishing any body part. A mask
     // can invalidate other meshes, not just the part that uses its texture.
     for (const auto& [bakedIndex, baked] : LLAvatarAppearance::getDictionary()->getBakedTextures())
@@ -1335,9 +1624,27 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const 
     std::vector<Selection>     selected;
     std::map<S32, Replacement> replacements;
     bool                       ready        = true;
+    // LLVOAvatar::updateMeshVisibility: a real BOM attachment hides the
+    // corresponding system body, but a visually muted avatar retains its
+    // reference jellydoll body. Eyelashes share the head bake, not eyes.
+    const auto hiddenByBake = [&](S32 index)
+    {
+        if (a.visibility != Visibility::Normal) return false;
+        S32 baked = BAKED_NUM_INDICES;
+        switch (index)
+        {
+        case MESH_ID_HAIR: baked = BAKED_HAIR; break;
+        case MESH_ID_HEAD: case MESH_ID_EYELASH: baked = BAKED_HEAD; break;
+        case MESH_ID_SKIRT: baked = BAKED_SKIRT; break;
+        case MESH_ID_UPPER_BODY: baked = BAKED_UPPER; break;
+        case MESH_ID_LOWER_BODY: baked = BAKED_LOWER; break;
+        case MESH_ID_EYEBALL_LEFT: case MESH_ID_EYEBALL_RIGHT: baked = BAKED_EYES; break;
+        }
+        return baked < BAKED_NUM_INDICES && (a.attachedBakedMask & (1u << baked));
+    };
     const auto                 hiddenByView = [&](S32 index)
     {
-        if (!a.self)
+        if (!a.self || appearanceHint)
             return false;
         const auto session     = VSNativeSession::active();
         const bool firstPerson = session && session->cameraState().firstPerson;
@@ -1349,26 +1656,28 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const 
     };
     for (const auto& [index,entry]:LLAvatarAppearance::getDictionary()->getMeshEntries())
     {
-        if (hiddenByView(index))
+        if (hiddenByView(index) || hiddenByBake(index) || (a.preview && !a.previewMeshes.contains(index)))
             continue;
         if (entry->mBakedID==BAKED_NUM_INDICES || unsigned(index)>=a.mMeshLOD.size()) continue;
-        if (index == MESH_ID_SKIRT && !a.isWearingWearableType(LLWearableType::WT_SKIRT))
+        if (!a.preview && index == MESH_ID_SKIRT && !a.isWearingWearableType(LLWearableType::WT_SKIRT))
             continue;
-        if (a.visibility == Visibility::Jellydoll && index == MESH_ID_HAIR)
+        if ((!appearanceHint && a.visibility == Visibility::Jellydoll) && index == MESH_ID_HAIR)
             continue;
         const auto* baked=LLAvatarAppearance::getDictionary()->getBakedTexture(entry->mBakedID);
         const LLUUID& texture=a.textures.getTE(U8(baked->mTextureIndex))->getID();
         VSUIRenderer::Image image;
-        if (a.localAppearance && a.composites.count(entry->mBakedID))
+        if (a.preview)
+            image = a.previewImage ? a.previewImage : a.resources.defaultWorldImage();
+        else if (a.localAppearance && a.composites.count(entry->mBakedID))
             image = a.resources.image(a.composites.at(entry->mBakedID));
-        else if (a.visibility != Visibility::Jellydoll)
+        else if ((appearanceHint || a.visibility != Visibility::Jellydoll))
         {
             if (texture.isNull() || texture == IMG_DEFAULT_AVATAR || texture == IMG_INVISIBLE)
                 continue;
             LLUI::getUIImageByID(texture);
             image = a.resources.image("remote:" + vs_native_image_id(texture).asString());
         }
-        if (!image && a.visibility != Visibility::Jellydoll)
+        if (!image && (appearanceHint || a.visibility != Visibility::Jellydoll))
         {
             if (a.meshes.count(index) && a.publications[index].image)
             {
@@ -1407,6 +1716,7 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const 
             replacements[index] = { std::move(mesh), { part, a.poseGeneration, a.shapeGeneration, image } };
         }
     }
+    if(a.preview && !ready)a.resources.deferDraw();
     // A rejected body generation must not mix old and new poses across eyes,
     // head, torso, limbs, hair and skirt. Commit every candidate together.
     if (ready)
@@ -1446,7 +1756,9 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const 
         packet.masked    = true;
         packet.faceIndex = unsigned(index);
         packet.alpha     = published->second.part->isTransparent();
-        if (a.visibility == Visibility::Jellydoll)
+        if (a.preview)
+            published->second.part->getColor(&packet.color[0], &packet.color[1], &packet.color[2], &packet.color[3]);
+        if ((!appearanceHint && a.visibility == Visibility::Jellydoll))
         {
             packet.image.reset();
             const auto colour = LLColor4::grey4;
@@ -1459,8 +1771,31 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const 
         packets.push_back(std::move(packet));
     }
 }
+void VSWorldAvatar::configurePreview(const std::vector<S32>& meshes, VSUIRenderer::Image image)
+{
+    auto& avatar = *mImpl;
+    if (!avatar.preview) throw std::logic_error("Preview configuration requires a UI avatar owner");
+    avatar.previewMeshes = {meshes.begin(), meshes.end()};
+    avatar.previewImage = std::move(image);
+    avatar.appearanceKnown = true;
+    avatar.shapeDirty = true;
+    avatar.positionKnown = true;
+}
 U64 VSWorldAvatar::poseGeneration() const
 { return mImpl->poseGeneration; }
+bool VSWorldAvatar::configurePreview(const std::string& mesh, VSUIRenderer::Image image)
+{
+    auto& avatar = *mImpl;
+    if (!avatar.preview) return false;
+    for (const auto& [index, entry] : LLAvatarAppearance::getDictionary()->getMeshEntries())
+        for (auto* part : avatar.mMeshLOD[index]->mMeshParts)
+            if (part->getName() == mesh)
+            {
+                configurePreview(std::vector<S32>{index}, std::move(image));
+                return true;
+            }
+    return false;
+}
 bool VSWorldAvatar::hudAttachment(unsigned point) const
 { return mImpl->self && mImpl->hudPoints.count(point); }
 unsigned VSWorldAvatar::attachmentPoint(const std::string& name) const
@@ -1576,7 +1911,7 @@ bool VSWorldAvatar::skinRiggedFace(const LLVolumeFace& face,const LLSD& metadata
     std::vector<LLMatrix4a> palette(skin.mJointNames.size());
     for (unsigned i=0;i<palette.size();++i)
     {
-        auto* joint=a.mRoot->findJoint(skin.mJointNames[i]);
+        auto* joint=a.getJoint(skin.mJointNames[i]);
         if (!joint) joint=a.mRoot->findJoint("mPelvis");
         if (!joint) return false;
         matMulUnsafe(skin.mInvBindMatrix[i],joint->getWorldMatrix4a(),palette[i]);
@@ -1693,6 +2028,8 @@ LLSD VSWorldAvatar::qualifyBodyLODs(const LLVector3& eye)
 LLSD VSWorldAvatar::evidence() const
 {
     const auto& a=*mImpl;LLSD result;result["id"]=a.id;result["self"]=a.self;result["position_known"]=a.positionKnown;
+    result["name_tag_admission_refusals"]=ll_sd_from_U64(a.nameBudgetRefusals);
+    result["name_tag_owner_present"]=bool(a.nameTag);
     result["control_avatar"]                                                                         = a.control;
     result["sitting"]                                                                                = a.sitting;
     result["owner_generation"]=ll_sd_from_U64(a.generation);result["region_handle"]=ll_sd_from_U64(a.handle);
@@ -1803,6 +2140,256 @@ std::optional<VSWorldRenderer::SurfaceHit> VSWorldAvatar::collisionPick(const LL
             std::copy_n(glm::value_ptr(n),3,hit.normal.begin());
             hit.fraction=((LLVector3(hit.point.data())-start)*direction)/direction.lengthSquared();
             return hit;
+        }
+    }
+    return {};
+}
+
+std::optional<std::array<LLVector3,2>> VSWorldAvatar::nameTagBaseBounds()
+{
+    auto& a=*mImpl;if(!a.positionKnown)return {};
+    if(!a.motionFrameKnown||a.motionFrame!=LLFrameTimer::getFrameCount())a.pose();
+    LLVector4a minimum,maximum;
+    const auto pelvis=a.mPelvisp->getWorldPosition();
+    minimum.load3((dist_vec(LLVector3::zero,pelvis)<.001f?a.position:pelvis).mV);maximum=minimum;
+    if(!a.control)
+        for(const auto& [name,mesh]:a.mPolyMeshes)
+            for(auto* data:mesh->mJointRenderData)
+            {LLVector4a point;point.load3(data->mWorldMatrix->getTranslation().mV);update_min_max(minimum,maximum,point);}
+    const LLVector4a padding(.25f);minimum.sub(padding);maximum.add(padding);
+    return std::array<LLVector3,2>{LLVector3(minimum.getF32ptr()),LLVector3(maximum.getF32ptr())};
+}
+bool VSWorldAvatar::extendRiggingBounds(const std::vector<std::shared_ptr<const VSAvatarRiggingInfo>>& sources,
+    std::array<LLVector3,2>& bounds)
+{
+    auto& a=*mImpl;
+    if(sources.empty()){a.nameRiggingCombined.reset();a.nameRiggingInputs.clear();return true;}
+    if(!a.nameRiggingCombined||a.nameRiggingInputs!=sources||a.nameRiggingSkeleton!=a.skeletonSerial)
+    {
+        if(!a.nameBudget)return false;
+        const auto reservation=a.nameBudget->reserve(sizeof(Impl::NameRiggingCombined)+sizeof(LLJointRiggingInfo)*LL_CHARACTER_MAX_ANIMATED_JOINTS+sources.size()*sizeof(sources.front()));
+        if(!reservation){++a.nameBudgetRefusals;return false;}
+        auto combined=std::make_shared<Impl::NameRiggingCombined>();combined->residency=reservation;
+        combined->joints.resize(LL_CHARACTER_MAX_ANIMATED_JOINTS);
+        for(const auto& source:sources)for(const auto& entry:source->joints)
+        {
+            if(!entry.bounds.isRiggedTo())continue;
+            auto* joint=a.getJoint(entry.name);const S32 number=joint?joint->getJointNum():0;
+            if(number<0||number>=LL_CHARACTER_MAX_ANIMATED_JOINTS)return false;
+            combined->joints[number].merge(entry.bounds);
+        }
+        // Publish the complete joint-space union only after admission succeeds.
+        a.nameRiggingInputs=sources;a.nameRiggingCombined=std::move(combined);a.nameRiggingSkeleton=a.skeletonSerial;
+    }
+    const auto& source=*a.nameRiggingCombined;LLVector4a minimum,maximum;minimum.load3(bounds[0].mV);maximum.load3(bounds[1].mV);
+    for(S32 i=0;i<source.joints.size();++i)
+    {
+        LLJoint* joint=nullptr;
+        if(i<a.mNumBones)joint=a.mSkeleton[i];
+        else if(i<a.mNumBones+a.mNumCollisionVolumes)joint=&a.mCollisionVolumes[i-a.mNumBones];
+        else
+        {
+            const unsigned point=unsigned(i-a.mNumBones-a.mNumCollisionVolumes+1);
+            if(a.hudPoints.count(point))continue;
+            const auto found=a.attachments.find(point);if(found!=a.attachments.end())joint=found->second.get();
+        }
+        const auto& info=source.joints[i];
+        if(!joint||!info.isRiggedTo())continue;
+        LLMatrix4a matrix;matrix.loadu(joint->getWorldMatrix());LLVector4a extents[2];
+        matMulBoundBox(matrix,info.getRiggedExtents(),extents);
+        update_min_max(minimum,maximum,extents[0]);update_min_max(minimum,maximum,extents[1]);
+    }
+    bounds={LLVector3(minimum.getF32ptr()),LLVector3(maximum.getF32ptr())};
+    return true;
+}
+void VSWorldAvatar::updateNameTag(const std::string& names,std::shared_ptr<const std::function<bool()>> current,const LLVector3& offset,
+    F32 water,const std::array<LLVector3,2>& bounds,unsigned attachmentCount)
+{
+    auto& a=*mImpl;if(a.control||!a.positionKnown)return;
+    a.spatialBinRadius = (bounds[1] - bounds[0]).length();
+    if(!a.ensureNameTag())return;
+    VSAvatarNameTag::Frame f;f.id=a.id;f.self=a.self;f.appearance=&a;f.head=a.mHeadp;
+    f.position=a.position+offset;f.agentOffset=offset;f.globalPosition=from_region_handle(a.handle)+LLVector3d(a.position);
+    f.waterHeight=water+offset.mV[2];f.radius=(bounds[1]-bounds[0]).length()*.5f;
+    const F32 range=ll_round(((bounds[1]+bounds[0])*.5f+offset-LLViewerCamera::instance().getOrigin()).length(),.01f);
+    f.angularExtent=range<.001f?180.f:F32(std::atan2(f.radius,range))*RAD_TO_DEG;
+    LLVector4a center,half;center.load3(((bounds[1]+bounds[0])*.5f+offset).mV);
+    half.load3(((bounds[1]-bounds[0])*.5f).mV);
+    const bool friendsOnly=gSavedSettings.getBOOL("RenderAvatarFriendsOnly");
+    f.visible=LLViewerCamera::instance().AABBInFrustum(center,half)!=0&&
+        (!friendsOnly||a.self||LLAvatarTracker::instance().isBuddy(a.id));
+    f.complexity=a.complexity;f.attachmentArea=a.attachmentArea;
+    f.tooComplex=a.visibility==Visibility::Jellydoll;
+    const auto loaded=a.loadFacts(attachmentCount);
+    f.missingParts=loaded.missing;f.rezStatus=loaded.rezStatus;
+    if(!LLGridManager::instance().isInSecondLife())
+    {
+        const auto* entry=a.textures.getTE(U8(TEX_HEAD_BODYPAINT));
+        f.clientTag["uuid"]=entry->getID().asString();f.clientTag["id_based"]=entry->getGlow()!=0;
+        f.clientTag["tex_color"]=entry->getColor().getValue();
+    }
+    a.mLastRezzedStatus=f.rezStatus;
+    a.voiceCurrent=current;
+    f.current=std::move(current);a.nameTag->update(std::move(f),names);
+    if(const auto position=a.nameTag->voicePosition())
+    {
+        static LLUICachedControl<bool> visualizersInCalls("ShowVoiceVisualizersInCalls",false);
+        const bool enabled=LLVoiceClient::instanceExists()&&
+            (visualizersInCalls||LLVoiceClient::instance().inProximalChannel())&&LLVoiceClient::instance().getVoiceEnabled(a.id);
+        a.updateVoice(enabled,*position);
+    }
+}
+void VSWorldAvatar::invalidateNameTag(){if(mImpl->nameTag)mImpl->nameTag->invalidate();}
+void VSWorldAvatar::suspendNameTag(){if(mImpl->nameTag)mImpl->nameTag->suspend();mImpl->retireVoice();}
+void VSWorldAvatar::nameTagChat(const LLChat& chat)
+{
+    if(mImpl->control)return;
+    if(!mImpl->ensureNameTag())return;
+    mImpl->nameTag->chat(chat);
+}
+void VSWorldAvatar::nameTagTyping(bool typing)
+{
+    if(mImpl->control)return;
+    // Actual character state survives temporary UI/budget refusal; the shared
+    // tag policy borrows this same state instead of inventing a motion proxy.
+    if(typing)mImpl->nameTypingTimer.reset();
+    mImpl->nameTyping=typing;
+}
+bool VSWorldAvatar::pickNameTag(const LLVector4a& start,const LLVector4a& end,LLVector4a& hit) const
+{return mImpl->nameTag&&mImpl->nameTag->intersect(start,end,hit);}
+
+void VSWorldAvatar::nameTagBudget(VSResourceBudget budget){mImpl->nameBudget=std::move(budget);}
+
+bool VSWorldAvatar::nameTagTyping() const {return !mImpl->control&&mImpl->nameTyping;}
+
+void VSWorldAvatar::appendVoice(std::vector<VSWorldRenderer::Packet>& packets,const LLVector3d& origin)
+{
+    auto& a=*mImpl;
+    if(!a.voiceCurrent||!(*a.voiceCurrent)()){a.retireVoice();return;}
+    if(a.mVoiceVisualizer)a.mVoiceVisualizer->appendNative(a.renderer,origin,packets);
+}
+
+VSWorldAvatar::Impl::LoadFacts VSWorldAvatar::Impl::loadFacts(unsigned attachmentCount)
+{
+    LoadFacts result;
+    result.missing=visualParamWeightsAreDefault() || !isTextureDefined(TEX_LOWER_BAKED,0) ||
+        !isTextureDefined(TEX_UPPER_BAKED,0) || !isTextureDefined(TEX_HEAD_BAKED,0);
+    bool textured=true,downloaded=true;
+    for(const auto& [index,entry]:LLAvatarAppearance::getDictionary()->getMeshEntries())
+    {
+        if(index>=mMeshLOD.size() || !mMeshLOD[index] || mMeshLOD[index]->mMeshParts.empty() ||
+           !*mMeshLOD[index]->mMeshParts.begin() || entry->mBakedID==BAKED_NUM_INDICES ||
+           (index==MESH_ID_SKIRT && !isWearingWearableType(LLWearableType::WT_SKIRT)))continue;
+        const auto texture=LLAvatarAppearance::getDictionary()->bakedToLocalTextureIndex(entry->mBakedID);
+        const auto id=textures.getTE(U8(texture))->getID();
+        const auto local=composites.find(entry->mBakedID);
+        const bool composite=localAppearance && local!=composites.end() && bool(resources.image(local->second));
+        textured &= composite || id==IMG_INVISIBLE || vs_ui_image_ready(id);
+    }
+    for(const auto& [index,entry]:LLAvatarAppearance::getDictionary()->getBakedTextures())
+    {
+        const auto id=textures.getTE(U8(entry->mTextureIndex))->getID();
+        if(id!=IMG_DEFAULT && id!=IMG_DEFAULT_AVATAR && id!=IMG_INVISIBLE)
+            downloaded &= vs_ui_image_discard(id)==0;
+        if(!isTextureDefined(entry->mTextureIndex,0) &&
+           (index!=BAKED_SKIRT || isWearingWearableType(LLWearableType::WT_SKIRT)) &&
+           index!=BAKED_LEFT_ARM && index!=BAKED_LEFT_LEG && index!=BAKED_AUX1 && index!=BAKED_AUX2 && index!=BAKED_AUX3)
+            result.fullyBaked=false;
+    }
+    result.rezStatus=result.missing?0:!textured?1:!downloaded?2:attachmentCount!=simAttachments.size()?3:4;
+    return result;
+}
+
+bool VSWorldAvatar::updateFirstFullyVisible(unsigned attachmentCount,bool pendingAttachment,const std::function<bool()>& pendingMeshes)
+{
+    auto& a=*mImpl;
+    if(!a.self || a.control || a.preview || !a.firstFullyVisible)return false;
+    const auto facts=a.loadFacts(attachmentCount);
+    // Original SELF callback list is always empty; the sixty-second callback
+    // timeout and remote attachment stability policies therefore do not apply.
+    bool loading=facts.rezStatus<2 || pendingAttachment || (facts.rezStatus<3 && !facts.fullyBaked);
+    if(!loading)loading=pendingMeshes();
+    a.mLastRezzedStatus=facts.rezStatus;
+    if(loading)a.fullyLoadedTimer.reset();
+    // Original FIRST_APPEARANCE_CLOUD_MIN_DELAY, with the same strict boundary.
+    if(a.fullyLoadedTimer.getElapsedTimeF32()<=3.f)return false;
+    a.firstFullyVisible=false;
+    return true;
+}
+
+bool VSWorldAvatar::needsFirstVisibility() const
+{
+    const auto& a=*mImpl;
+    return a.self && !a.control && !a.preview && a.firstFullyVisible;
+}
+
+std::optional<F32> VSWorldAvatar::measuredGpuRenderTime() const {return mImpl->gpuMilliseconds;}
+U32 VSWorldAvatar::visualComplexity() const {return mImpl->complexity;}
+bool VSWorldAvatar::isTooSlowWithoutShadows() const {return mImpl->tooSlowWithoutShadows;}
+
+void VSWorldAvatar::refreshRenderSettings()
+{
+    mImpl->updatePerformance();mImpl->visibility=mImpl->overallAppearance();invalidateNameTag();
+}
+
+void VSWorldAvatar::attachedBakedTextures(U32 mask)
+{
+    mImpl->attachedBakedMask = mask;
+}
+
+std::optional<F32> VSWorldAvatar::spatialBinRadius() const
+{
+    return mImpl->spatialBinRadius;
+}
+void VSWorldAvatar::spatialBounds(const std::array<LLVector3,2>& bounds)
+{
+    mImpl->spatialBinRadius = (bounds[1] - bounds[0]).length();
+}
+
+bool VSWorldAvatar::faceRiggingBounds(const VSAvatarRiggingInfo& source, std::array<LLVector3, 2>& bounds)
+{
+    // Exact LLFace::calcPixelArea joint-space envelope, resolved against this
+    // actual current native skeleton. No aggregate body/name-tag approximation.
+    LLVector4a minimum(FLT_MAX, FLT_MAX, FLT_MAX), maximum(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+    bool found = false;
+    for (const auto& entry : source.joints)
+    {
+        if (!entry.bounds.isRiggedTo()) continue;
+        auto* joint = mImpl->getJoint(entry.name);
+        if (!joint) continue;
+        LLMatrix4a matrix; matrix.loadu(joint->getWorldMatrix());
+        LLVector4a extents[2]; matMulBoundBox(matrix, entry.bounds.getRiggedExtents(), extents);
+        update_min_max(minimum, maximum, extents[0]);
+        update_min_max(minimum, maximum, extents[1]);
+        found = true;
+    }
+    if (found) bounds = {LLVector3(minimum.getF32ptr()), LLVector3(maximum.getF32ptr())};
+    return found;
+}
+
+VSWorldAvatar::BakedTexture VSWorldAvatar::bakedTexture(unsigned index,S32 supportedBakes,bool includePixels) const
+{
+    const auto& avatar=*mImpl;
+    if(index>=unsigned(llmax(supportedBakes,0)) || index>=avatar.mBakedTextureDatas.size())return {};
+    const auto texture=avatar.mBakedTextureDatas[index].mTextureIndex;
+    const bool editing=avatar.isEditingAppearance();
+    if(!editing && avatar.isTextureDefined(texture,0))
+    {
+        BakedTexture result;result.present=true;result.asset=avatar.textures.getTE(U8(texture))->getID();
+        // Synchronous metadata borrow: request dispatch belongs to the guarded
+        // scene service after this unique avatar owner has returned.
+        result.missing=vs_ui_image_failed(result.asset);
+        result.image=vs_ui_image_snapshot(result.asset);if(includePixels)result.raw=vs_ui_image_raw(result.asset);
+        return result;
+    }
+    if(editing)
+    {
+        // The same real layer-set composite as the body, not an invented asset.
+        const auto composite=localBake(index);
+        if(composite.image || composite.color)
+        {
+            BakedTexture result;result.present=true;result.image=composite.image;
+            result.raw=composite.color;result.generation=composite.generation;return result;
         }
     }
     return {};

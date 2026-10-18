@@ -3658,11 +3658,11 @@ bool LLPanelMainInventory::isNativeCallback(std::string_view name, const LLSD& p
         "Inventory.FilterPermissions.Set", "Inventory.FilterPermissions.Check", "Inventory.SearchType.Set", "Inventory.SearchType.Check",
         "Inventory.SortBy.Set", "Inventory.SortBy.Check", "Inventory.CoalescedObjects.Toggle", "Inventory.CoalescedObjects.Check",
         "Inventory.ShowFilters.Check", "Inventory.OpenNewFolderWindow", "Inventory.Share", "Inventory.FileUploadLocation",
-        "Inventory.FileUploadLocation.Check", "Inventory.CanSetUploadLocation", "Inventory.AttachObject" })
+        "Inventory.FileUploadLocation.Check", "Inventory.CanSetUploadLocation", "Inventory.AttachObject", "Inventory.MaterialsEnabled" })
         if (name == safe) return true;
     const auto action = payload.asString();
     if (name == "Inventory.DoCreate")
-        return action == "category" || action == "lsl" || action == "notecard";
+        return action == "category" || action == "lsl" || action == "notecard" || action == "material";
     if (name == "Inventory.DoToSelected")
         return action == "wear" || action == "wear_add" || action == "attach" || action == "detach" || action == "take_off" || action == "open" || action == "properties" || action == "rename" || action == "delete" ||
             action == "copy" || action == "cut" || action == "paste" || action == "goto" ||

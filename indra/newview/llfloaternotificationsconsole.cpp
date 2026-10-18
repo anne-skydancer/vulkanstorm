@@ -49,6 +49,7 @@ private:
     static void toggleClick(void* user_data);
     static void onClickNotification(void* user_data);
     LLNotificationChannelPtr mChannelPtr;
+    boost::signals2::scoped_connection mChanged;
 };
 
 LLNotificationChannelPanel::LLNotificationChannelPanel(const LLNotificationChannelPanel::Params& p)
@@ -60,6 +61,7 @@ LLNotificationChannelPanel::LLNotificationChannelPanel(const LLNotificationChann
 
 LLNotificationChannelPanel::~LLNotificationChannelPanel()
 {
+    mChanged.disconnect();
     // Userdata for all records is a LLNotification* we need to clean up
     std::vector<LLScrollListItem*> data_list = getChild<LLScrollListCtrl>("notifications_list")->getAllData();
     std::vector<LLScrollListItem*>::iterator data_itor;
@@ -78,7 +80,7 @@ bool LLNotificationChannelPanel::postBuild()
     header_button->setLabel(mChannelPtr->getName());
     header_button->setClickedCallback(toggleClick, this);
 
-    mChannelPtr->connectChanged(boost::bind(&LLNotificationChannelPanel::update, this, _1));
+    mChanged=mChannelPtr->connectChanged(boost::bind(&LLNotificationChannelPanel::update, this, _1));
 
     LLScrollListCtrl* scroll = getChild<LLScrollListCtrl>("notifications_list");
     scroll->setDoubleClickCallback(onClickNotification, this);
@@ -235,10 +237,12 @@ void LLFloaterNotificationConsole::onClickAdd()
 
 LLFloaterNotification::LLFloaterNotification(LLNotification* note)
 :   LLFloater(LLSD()),
-    mNote(note)
+    mNote(note?std::make_unique<LLNotification>(note->asLLSD()):nullptr)
 {
     buildFromFile("floater_notification.xml");
 }
+
+LLFloaterNotification::~LLFloaterNotification()=default;
 
 bool LLFloaterNotification::postBuild()
 {
@@ -277,4 +281,9 @@ void LLFloaterNotification::respond()
     LLSD response = mNote->getResponseTemplate();
     response[trigger] = true;
     mNote->respond(response);
+}
+
+bool LLFloaterNotificationConsole::isNativeInternalType(const std::type_info& type)
+{
+    return type==typeid(LLNotificationChannelPanel) || type==typeid(LLFloaterNotification);
 }

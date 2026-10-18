@@ -44,6 +44,10 @@
 #include "llviewerinventory.h"
 // [/SL:KB]
 #include "llwindow.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 static S32 sSeconds;
 static U32 sShakeState;
@@ -63,7 +67,17 @@ LLFloaterRegionRestarting::~LLFloaterRegionRestarting()
 
 bool LLFloaterRegionRestarting::postBuild()
 {
-    mRegionChangedConnection = gAgent.addRegionChangedCallback(boost::bind(&LLFloaterRegionRestarting::regionChange, this));
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto session=VSNativeSession::active();
+        if(!session)return false;
+        const auto weak=getHandle();const auto current=vs_native_im_guard();
+        mRegionChangedConnection=session->observeCurrentRegion([this,weak,current]{if(weak.get() && current())regionChange();});
+    }
+    else
+#endif
+        mRegionChangedConnection = gAgent.addRegionChangedCallback(boost::bind(&LLFloaterRegionRestarting::regionChange, this));
 
 // [SL:KB] - Patch: UI-RegionRestart | Checked: 2014-03-15 (Catznip-3.6)
     const LLUUID idLandmarks = gInventory.findCategoryUUIDForType(LLFolderType::FT_LANDMARK);

@@ -34,6 +34,10 @@
 #define LL_LLFLOATERBUY_H
 
 #include "llfloater.h"
+#include <memory>
+#if VS_NATIVE_VULKAN
+struct VSObjectPurchase;
+#endif
 #include "llvoinventorylistener.h"
 #include "llsaleinfo.h"
 #include "llinventory.h"
@@ -65,11 +69,15 @@ protected:
     void onSelectionChanged();
     void showViews(bool show);
 
+    void populateInventory(const LLInventoryObject::object_list_t*);
     void onClickBuy();
     void onClickCancel();
 
 private:
     LLSafeHandle<LLObjectSelection> mObjectSelection;
+#if VS_NATIVE_VULKAN
+    std::shared_ptr<VSObjectPurchase> mNativePurchase;
+#endif
     LLSaleInfo mSaleInfo;
 
     boost::signals2::connection mSelectionUpdateSlot;

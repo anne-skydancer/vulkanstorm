@@ -28,6 +28,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsavatarsearchmenu.h"
+#include "vsnativeim.h"
 
 #include "llagent.h"
 #include "llavataractions.h"
@@ -52,7 +53,7 @@ LLContextMenu* FSAvatarSearchMenu::createMenu()
         registrar.add("Avatar.AddFriend",                       boost::bind(&LLAvatarActions::requestFriendshipDialog,      id));
         registrar.add("Avatar.RemoveFriend",                    boost::bind(&LLAvatarActions::removeFriendDialog,           id));
         registrar.add("Avatar.IM",                              boost::bind(&LLAvatarActions::startIM,                      id));
-        registrar.add("Avatar.Call",                            boost::bind(&LLAvatarActions::startCall,                    id));
+        registrar.add("Avatar.Call",                            vs_native_im_account_callback(boost::bind(&LLAvatarActions::startCall,                    id)));
         registrar.add("Avatar.OfferTeleport",                   boost::bind(&FSAvatarSearchMenu::offerTeleport,             this));
         registrar.add("Avatar.TeleportRequest",                 boost::bind(&LLAvatarActions::teleportRequest,              id));
         registrar.add("Avatar.GroupInvite",                     boost::bind(&LLAvatarActions::inviteToGroup,                id));
@@ -60,7 +61,7 @@ LLContextMenu* FSAvatarSearchMenu::createMenu()
         registrar.add("Avatar.Pay",                             boost::bind(&LLAvatarActions::pay,                          id));
         registrar.add("Avatar.BlockUnblock",                    boost::bind(&LLAvatarActions::toggleBlock,                  id));
 
-        enable_registrar.add("Avatar.EnableItem",               boost::bind(&FSAvatarSearchMenu::onContextMenuItemEnable,   this, _2));
+        enable_registrar.add("Avatar.EnableItem",               vs_native_im_account_callback(boost::bind(&FSAvatarSearchMenu::onContextMenuItemEnable,   this, _2)));
         enable_registrar.add("Avatar.CheckItem",                boost::bind(&FSAvatarSearchMenu::onContextMenuItemCheck,    this, _2));
 
         // create the context menu from the XUI
@@ -70,12 +71,12 @@ LLContextMenu* FSAvatarSearchMenu::createMenu()
     {
         // Set up for multi-selected People
         registrar.add("Avatar.IM",                              boost::bind(&LLAvatarActions::startConference,                      mUUIDs, LLUUID::null));
-        registrar.add("Avatar.Call",                            boost::bind(&LLAvatarActions::startAdhocCall,                       mUUIDs, LLUUID::null));
+        registrar.add("Avatar.Call",                            vs_native_im_account_callback(boost::bind(&LLAvatarActions::startAdhocCall,                       mUUIDs, LLUUID::null)));
         registrar.add("Avatar.OfferTeleport",                   boost::bind(&FSAvatarSearchMenu::offerTeleport,                     this));
         registrar.add("Avatar.RemoveFriend",                    boost::bind(&LLAvatarActions::removeFriendsDialog,                  mUUIDs));
         registrar.add("Avatar.AddToContactSet",                 boost::bind(&FSAvatarSearchMenu::addToContactSet,                   this));
 
-        enable_registrar.add("Avatar.EnableItem",               boost::bind(&FSAvatarSearchMenu::onContextMenuItemEnable,           this, _2));
+        enable_registrar.add("Avatar.EnableItem",               vs_native_im_account_callback(boost::bind(&FSAvatarSearchMenu::onContextMenuItemEnable,           this, _2)));
 
         // create the context menu from the XUI
         return createFromFile("menu_fs_avatar_search_multiselect.xml");

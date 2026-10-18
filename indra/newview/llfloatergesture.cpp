@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloatergesture.h"
+#include "vsnativeim.h"
 
 #include "llinventory.h"
 #include "llinventorybridge.h"
@@ -81,11 +82,13 @@ private:
 
 class GestureShowCallback : public LLInventoryCallback
 {
+    std::function<bool()> mCurrent=vs_native_im_guard();
 public:
     void fire(const LLUUID &inv_item)
     {
+        if(!mCurrent())return;
         LLPreviewGesture::show(inv_item, LLUUID::null);
-
+        if(!mCurrent())return;
         LLInventoryItem* item = gInventory.getItem(inv_item);
         if (item)
         {
@@ -102,22 +105,24 @@ public:
 class GestureCopiedCallback : public LLInventoryCallback
 {
 private:
-    LLFloaterGesture* mFloater;
+    LLHandle<LLFloater> mFloater;
+    std::function<bool()> mCurrent=vs_native_im_guard();
 
 public:
-    GestureCopiedCallback(LLFloaterGesture* floater): mFloater(floater)
+    GestureCopiedCallback(LLFloaterGesture* floater): mFloater(floater->getHandle())
     {}
     void fire(const LLUUID &inv_item)
     {
-        if(mFloater)
+        if(!mCurrent())return;
+        if(auto* floater=dynamic_cast<LLFloaterGesture*>(mFloater.get()))
         {
-            mFloater->addGesture(inv_item,NULL,mFloater->getChild<LLScrollListCtrl>("gesture_list"));
+            floater->addGesture(inv_item,NULL,floater->getChild<LLScrollListCtrl>("gesture_list"));
 
             // EXP-1909 (Pasted gesture displayed twice)
             // The problem is that addGesture is called here for the second time for the same item (which is copied)
             // First time addGesture is called from LLFloaterGestureObserver::changed(), which is a callback for inventory
             // change. So we need to refresh the gesture list to avoid duplicates.
-            mFloater->refreshAll();
+            if(mCurrent() && mFloater.get())floater->refreshAll();
         }
     }
 };
@@ -542,7 +547,7 @@ void LLFloaterGesture::onClickPlay()
         // we need to inform server about gesture activating to be consistent with LLPreviewGesture and  LLGestureComboList.
         bool inform_server = true;
         bool deactivate_similar = false;
-        LLGestureMgr::instance().setGestureLoadedCallback(item_id, boost::bind(&LLFloaterGesture::playGesture, this, item_id));
+        LLGestureMgr::instance().setGestureLoadedCallback(item_id, gestureLoadedCallback(item_id));
         LLViewerInventoryItem *item = gInventory.getItem(item_id);
         llassert(item);
         if (item)
@@ -629,6 +634,7 @@ void LLFloaterGesture::onRenameSelected()
 
     LLSD payload;
     payload["gesture_id"] = mGestureList->getCurrentID();
+    vs_native_im_stamp_notification(payload);
 
     LLNotificationsUtil::add("RenameGesture", args, payload, boost::bind(onGestureRename, _1, _2));
 
@@ -636,6 +642,7 @@ void LLFloaterGesture::onRenameSelected()
 
 void LLFloaterGesture::onGestureRename(const LLSD& notification, const LLSD& response)
 {
+    if(!vs_native_im_notification_current(notification["payload"]))return;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     if (option != 0) return; // canceled
 
@@ -906,3 +913,22 @@ bool LLFloaterGesture::updateItem( LLUUID const &aItem, LLSD const &aData )
     return true;
 }
 // </FS:ND>
+
+std::function<void(LLMultiGesture*)> LLFloaterGesture::gestureLoadedCallback(const LLUUID& item_id)
+{
+    const LLHandle<LLFloater> weak=getHandle();
+    const auto current=vs_native_im_guard();
+    return [weak,current,item_id](LLMultiGesture*)
+    {
+        if(!current())return;
+        if(auto* owner=dynamic_cast<LLFloaterGesture*>(weak.get()))owner->playGesture(item_id);
+    };
+}
+
+bool LLFloaterGesture::isNativeCallback(std::string_view name,const LLSD& parameter)
+{
+    const auto action=parameter.asString();
+    if(name=="Gesture.Action.CopyPaste")return action=="copy_gesture"||action=="paste"||action=="copy_uuid";
+    if(name=="Gesture.EnableAction")return action=="copy_gesture"||action=="paste"||action=="copy_uuid"||action=="edit_gesture"||action=="rename_gesture";
+    return name=="Gesture.Action.ToggleActiveState"||name=="Gesture.Action.ShowPreview"||name=="Gesture.Action.SaveToCOF"||name=="Gesture.Action.Rename"||name=="Gesture.Action.RefreshList";
+}

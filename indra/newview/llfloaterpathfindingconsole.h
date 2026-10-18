@@ -97,6 +97,7 @@ public:
 protected:
 
 private:
+    bool showUnavailableLibrary();
     typedef enum
     {
         kConsoleStateUnknown,

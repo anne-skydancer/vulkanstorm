@@ -27,6 +27,10 @@
 
 #ifndef LLHUDNAMETAG_H
 #define LLHUDNAMETAG_H
+#include <functional>
+#include <optional>
+#include <array>
+#include <memory>
 
 #include "llpointer.h"
 
@@ -41,6 +45,7 @@
 #include <set>
 #include <vector>
 
+class LLSD;
 class LLHUDNameTag;
 class LLUIImage;
 
@@ -86,6 +91,16 @@ public:
         ALIGN_VERT_CENTER
     } EVertAlignment;
 
+    struct NativeSource {LLUUID id;LLVector3 position;F32 radius=0;};
+    using NativeSourceQuery=std::function<std::optional<NativeSource>()>;
+    void setNativeSource(NativeSourceQuery query,std::shared_ptr<const void> residency={})
+    {mNativeSource=std::move(query);mNativeResidency=std::move(residency);mNativePresented=false;mNativePending=false;}
+    static void renderNative();
+    static void finishNative(bool submitted);
+#if VS_VULKAN_DIAGNOSTICS
+    static LLPointer<LLHUDNameTag> findNative(const LLUUID&);
+    LLSD nativeEvidence() const;
+#endif
     static const F32 NAMETAG_MAX_WIDTH; // 298px, made to fit 31 M's
     static const F32 HUD_TEXT_MAX_WIDTH; // 190px
 
@@ -153,6 +168,11 @@ protected:
 
 private:
     ~LLHUDNameTag();
+    NativeSourceQuery mNativeSource;
+    std::shared_ptr<const void> mNativeResidency;
+    bool mNativePresented=false,mNativePending=false;
+    std::array<LLVector3,4> mNativePickQuad{};
+    void recordNativePick();
     bool            mDoFade;
     F32             mFadeRange;
     F32             mFadeDistance;

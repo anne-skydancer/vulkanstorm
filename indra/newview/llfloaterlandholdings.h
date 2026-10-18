@@ -28,6 +28,7 @@
 #define LL_LLFLOATERLANDHOLDINGS_H
 
 #include "llfloater.h"
+#include <functional>
 
 class LLMessageSystem;
 class LLTextBox;
@@ -61,6 +62,10 @@ public:
 
 protected:
     void refreshAggregates();
+    bool acceptsReply(LLMessageSystem*) const;
+    std::function<bool()> mAccountCurrent = [] { return true; };
+    LLUUID mTransaction;
+
 
 protected:
     // Sum up as packets arrive the total holdings

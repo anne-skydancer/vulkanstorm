@@ -26,6 +26,7 @@
  * $/LicenseInfo$
 */
 #include "fsprimfeedconnect.h"
+#include "vsnativeim.h"
 #include "fsprimfeedauth.h"
 #include "llviewercontrol.h"
 #include "llcoros.h"
@@ -47,16 +48,21 @@ void FSPrimfeedConnect::uploadPhoto(const LLSD& params, LLImageFormatted* image,
     }
     LL_DEBUGS("primfeed") << "Authorization successful" << LL_ENDL;
 
-    mPostCallback = callback;
     LL_DEBUGS("primfeed") << "Launching upload coroutine" << LL_ENDL;
     LLCoros::instance().launch(
         "FSPrimfeedConnect::uploadPhotoCoro",
-        [this, params, image]() { uploadPhotoCoro(params, image); }
+        [this, params, image = LLPointer<LLImageFormatted>(image), callback, current = vs_native_im_guard(),
+         token = gSavedPerAccountSettings.getString("FSPrimfeedOAuthToken"),
+         apiKey = gSavedSettings.getString("FSPrimfeedViewerApiKey")]() {
+            uploadPhotoCoro(params, image, callback, current, token, apiKey);
+        }
     );
 }
 
-void FSPrimfeedConnect::uploadPhotoCoro(const LLSD& params, LLImageFormatted* image)
+void FSPrimfeedConnect::uploadPhotoCoro(LLSD params, LLPointer<LLImageFormatted> image, post_callback_t completed,
+                                      std::function<bool()> current, std::string token, std::string apiKey)
 {
+    if (!current() || image.isNull()) return;
     LL_DEBUGS("primfeed") << "Entered uploadPhotoCoro" << LL_ENDL;
     setConnectionState(PRIMFEED_POSTING);
     LL_DEBUGS("primfeed") << "Connection state set to PRIMFEED_POSTING" << LL_ENDL;
@@ -79,7 +85,7 @@ void FSPrimfeedConnect::uploadPhotoCoro(const LLSD& params, LLImageFormatted* im
              << val << sep;
     };
 
-    addPart("commercial", params["commercial"].asBoolean() ? "true" : "false");
+    addPart("commercial", params["is_commercial"].asBoolean() ? "true" : "false");
     addPart("rating",     params["rating"].asString());
     addPart("content",    params["content"].asString());
     addPart("publicGallery", params["post_to_public_gallery"].asBoolean()? "true" : "false");
@@ -118,8 +124,6 @@ void FSPrimfeedConnect::uploadPhotoCoro(const LLSD& params, LLImageFormatted* im
 
     LL_DEBUGS("primfeed") << "Setting HTTP headers" << LL_ENDL;
     LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>();
-    std::string token  = gSavedPerAccountSettings.getString("FSPrimfeedOAuthToken");
-    std::string apiKey = gSavedSettings.getString("FSPrimfeedViewerApiKey");
     headers->append(HTTP_OUT_HEADER_USER_AGENT, FS_PF_USER_AGENT);
     headers->append("Authorization",    "Bearer " + token);
     headers->append("pf-viewer-api-key", apiKey);
@@ -136,6 +140,7 @@ void FSPrimfeedConnect::uploadPhotoCoro(const LLSD& params, LLImageFormatted* im
         raw,
         options,
         headers);
+    if (!current()) return;
     LL_DEBUGS("primfeed") << "HTTP POST complete" << LL_ENDL;
 
     const LLSD::Binary &rawData = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW].asBinary();
@@ -158,7 +163,8 @@ void FSPrimfeedConnect::uploadPhotoCoro(const LLSD& params, LLImageFormatted* im
     }
 
     LL_DEBUGS("primfeed") << "Invoking callback" << LL_ENDL;
-    mPostCallback(success, url);
+    if (completed) completed(success, url);
+    if (!current()) return;
     setConnectionState(success ? PRIMFEED_POSTED : PRIMFEED_POST_FAILED);
     LL_DEBUGS("primfeed") << "Final state set" << LL_ENDL;
 }

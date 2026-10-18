@@ -145,6 +145,7 @@ private:
 
     LLUUID mAvatarId;
     LLUUID mClassifiedId;
+    U64 mSearchStatRevision=0;
     LLVector3d mPosGlobal;
     LLUUID mParcelId;
     std::string mSimName;

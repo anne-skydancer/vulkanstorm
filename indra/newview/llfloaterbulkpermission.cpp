@@ -28,6 +28,12 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llfloaterbulkpermission.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#endif
 #include "llfloaterperms.h" // for utilities
 #include "llagent.h"
 #include "llchat.h"
@@ -53,6 +59,7 @@
 
 LLFloaterBulkPermission::LLFloaterBulkPermission(const LLSD& seed)
 :   LLFloater(seed),
+    mAccountCurrent(vs_native_im_guard()),
     mDone(false)
 {
     mID.generate();
@@ -96,12 +103,25 @@ bool LLFloaterBulkPermission::postBuild()
 
 void LLFloaterBulkPermission::onClose(bool app_quitting)
 {
+    ++mBatch;
+    mNativeObjects.clear();
     removeVOInventoryListener();
     LLFloater::onClose(app_quitting);
 }
 
 void LLFloaterBulkPermission::doApply()
 {
+    if (!mAccountCurrent()) return;
+    ++mBatch;
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        mNativeObjects.clear();
+        mObjectIDs.clear();
+        mCurrentObjectID.setNull();
+        mDone = false;
+    }
+#endif
     // Inspects a stream of selected object contents and adds modifiable ones to the given array.
     class ModifiableGatherer : public LLSelectedNodeFunctor
     {
@@ -121,6 +141,21 @@ void LLFloaterBulkPermission::doApply()
     LLScrollListCtrl* list = getChild<LLScrollListCtrl>("queue output");
     list->deleteAllItems();
     ModifiableGatherer gatherer(mObjectIDs);
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=VSNativeSession::active();
+        const auto selection=owner ? owner->retainObjectSelection() : nullptr;
+        if (selection)
+            for (const auto& token:selection->selected())
+                if (selection->allowOperationOnNode(token,PERM_MODIFY,GP_OBJECT_MANIPULATE))
+                {
+                    const auto object=VSTaskInventoryObject::find(token.id);
+                    if (object) { mObjectIDs.push_back(token.id);mNativeObjects.insert_or_assign(token.id,object); }
+                }
+    }
+    else
+#endif
     LLSelectMgr::getInstance()->getSelection()->applyToNodes(&gatherer);
     if(mObjectIDs.empty())
     {
@@ -163,7 +198,7 @@ void LLFloaterBulkPermission::inventoryChanged(LLViewerObject* viewer_object,
 
     if (viewer_object && inv && (viewer_object->getID() == mCurrentObjectID) )
     {
-        handleInventory(viewer_object, inv);
+        handleInventory(VSTaskInventoryObject::find(viewer_object->getID()), inv);
     }
     else
     {
@@ -177,8 +212,9 @@ void LLFloaterBulkPermission::inventoryChanged(LLViewerObject* viewer_object,
 
 void LLFloaterBulkPermission::onOkBtn()
 {
+    const auto weak=getHandle();
     doApply();
-    closeFloater();
+    if (!weak.isDead()) closeFloater();
 }
 
 void LLFloaterBulkPermission::onApplyBtn()
@@ -231,6 +267,10 @@ bool LLFloaterBulkPermission::start()
 // Go to the next object and start if found. Returns false if no objects left, true otherwise.
 bool LLFloaterBulkPermission::nextObject()
 {
+    const auto weak=getHandle();
+    const auto current=mAccountCurrent;
+    if (!current()) return false;
+    const auto batch = mBatch;
     size_t count;
     bool successful_start = false;
     do
@@ -241,6 +281,7 @@ bool LLFloaterBulkPermission::nextObject()
         if(count > 0)
         {
             successful_start = popNext();
+            if (weak.isDead() || !current() || mBatch != batch) return false;
             //LL_INFOS() << (successful_start ? "successful" : "unsuccessful") << LL_ENDL;
         }
     } while((mObjectIDs.size() > 0) && !successful_start);
@@ -265,6 +306,32 @@ bool LLFloaterBulkPermission::popNext()
         mCurrentObjectID = mObjectIDs.at(0);
         //LL_INFOS() << "mCurrentID: " << mCurrentObjectID << LL_ENDL;
         mObjectIDs.erase(mObjectIDs.begin());
+#if VS_NATIVE_VULKAN
+        if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        {
+            const auto found=mNativeObjects.find(mCurrentObjectID);
+            if (found==mNativeObjects.end() || !found->second) return false;
+            const auto object=found->second;
+            auto* inventory=object.nativeInventory();
+            if (!inventory) return false;
+            const auto current=mAccountCurrent;
+            const auto weak=getHandle();
+            const auto batch=mBatch;
+            return object->requestInventory(
+                [weak,current,object,batch](const VSTaskInventory::Result& result)
+                {
+                    auto* self=dynamic_cast<LLFloaterBulkPermission*>(weak.get());
+                    if (!self || !current() || self->mBatch!=batch || self->mCurrentObjectID!=result.object.id) return;
+                    if (object && result.success)
+                    {
+                        auto contents=result.contents;
+                        self->handleInventory(object,&contents);
+                    }
+                    else self->nextObject();
+                });
+
+        }
+#endif
         LLViewerObject* obj = gObjectList.findObject(mCurrentObjectID);
         if(obj)
         {
@@ -300,8 +367,12 @@ void LLFloaterBulkPermission::doCheckUncheckAll(bool check)
 }
 
 
-void LLFloaterBulkPermission::handleInventory(LLViewerObject* viewer_obj, LLInventoryObject::object_list_t* inv)
+void LLFloaterBulkPermission::handleInventory(const VSTaskInventoryObject& viewer_obj, LLInventoryObject::object_list_t* inv)
 {
+    const auto weak=getHandle();
+    const auto current=mAccountCurrent;
+    if (!current() || !viewer_obj || !inv) return;
+    const auto batch = mBatch;
     LLInventoryObject::object_list_t::const_iterator it = inv->begin();
     LLInventoryObject::object_list_t::const_iterator end = inv->end();
     for ( ; it != end; ++it)
@@ -320,7 +391,7 @@ void LLFloaterBulkPermission::handleInventory(LLViewerObject* viewer_obj, LLInve
             ( asstype == LLAssetType::AT_MATERIAL  && gSavedSettings.getBOOL("BulkChangeIncludeMaterials")) ||
             ( asstype == LLAssetType::AT_TEXTURE   && gSavedSettings.getBOOL("BulkChangeIncludeTextures"  )))
         {
-            LLViewerObject* object = gObjectList.findObject(viewer_obj->getID());
+            const auto object=viewer_obj;
 
             if (object)
             {
@@ -359,6 +430,7 @@ void LLFloaterBulkPermission::handleInventory(LLViewerObject* viewer_obj, LLInve
                     perm.setMaskGroup(LLFloaterPerms::getGroupPerms("BulkChange"));
                     new_item->setPermissions(perm); // here's the beef
                     updateInventory(object,new_item,TASK_INVENTORY_ITEM_KEY,false);
+                    if (weak.isDead() || !current() || !viewer_obj || mBatch != batch) return;
                     //status_text.setArg("[STATUS]", getString("status_ok_text"));
                     status_text.setArg("[STATUS]", "");
                 }
@@ -387,6 +459,11 @@ void LLFloaterBulkPermission::handleInventory(LLViewerObject* viewer_obj, LLInve
         }
     }
 
+#if VS_NATIVE_VULKAN
+    if (viewer_obj.native())
+        if (auto* inventory=viewer_obj.nativeInventory()) inventory->publishLocalChanges(viewer_obj.nativeObject());
+#endif
+    if (weak.isDead() || !current() || !viewer_obj || mBatch != batch) return;
     nextObject();
 }
 
@@ -395,8 +472,9 @@ void LLFloaterBulkPermission::handleInventory(LLViewerObject* viewer_obj, LLInve
 // we could do this via LLViewerObject::updateInventory but that uses inventory call backs and buggers
 // us up and we would have a dodgy item iterator
 
-void LLFloaterBulkPermission::updateInventory(LLViewerObject* object, LLViewerInventoryItem* item, U8 key, bool is_new)
+void LLFloaterBulkPermission::updateInventory(const VSTaskInventoryObject& object, LLViewerInventoryItem* item, U8 key, bool is_new)
 {
+    if (!mAccountCurrent() || !object) return;
     // This slices the object into what we're concerned about on the viewer.
     // The simulator will take the permissions and transfer ownership.
     LLPointer<LLViewerInventoryItem> task_item =
@@ -414,10 +492,10 @@ void LLFloaterBulkPermission::updateInventory(LLViewerObject* object, LLViewerIn
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
     msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
     msg->nextBlockFast(_PREHASH_UpdateData);
-    msg->addU32Fast(_PREHASH_LocalID, object->mLocalID);
+    msg->addU32Fast(_PREHASH_LocalID, object->getLocalID());
     msg->addU8Fast(_PREHASH_Key, key);
     msg->nextBlockFast(_PREHASH_InventoryData);
     task_item->packMessage(msg);
-    msg->sendReliable(object->getRegion()->getHost());
+    msg->sendReliable(object->getHost());
 }
 

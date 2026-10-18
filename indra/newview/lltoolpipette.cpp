@@ -44,6 +44,9 @@
 #include "vsnativesession.h"
 #include "vsvulkancontext.h"
 #include "vsworldscene.h"
+#include "vsobjectselection.h"
+#include "llview.h"
+#include <utility>
 
 //
 // Member functions
@@ -62,49 +65,79 @@ LLToolPipette::~LLToolPipette()
 
 bool LLToolPipette::nativeActive() const
 {
-    return mNativeActive && mNativeAccount && mNativeAccount();
-}
-
-void LLToolPipette::setNativeActive(bool active)
-{
-    mNativeActive = false;
-    mNativeAccount = {};
-    if (!active) { setMouseCapture(false); return; }
 #if VS_NATIVE_VULKAN
-    if (const auto owner = VSNativeSession::active(); owner && owner->regionReady())
-    {
-        mNativeAccount = owner->accountGuard();
-        mNativeActive = true;
-        mSuccess = true;
-        mTooltipMsg.clear();
-    }
+    if(LLToolMgr::instance().nativeCurrentTool()!=this)return false;
+    const auto* consumer=mNativeConsumer.get();
+    return mNativeAccount && mNativeAccount() && consumer && consumer->isInVisibleChain() &&
+        (!mNativeOperation || mNativeOperation());
+#else
+    return false;
 #endif
 }
+bool LLToolPipette::nativeConsumer(const LLView* view) const
+{return nativeActive() && mNativeConsumer.get()==view;}
 
-bool LLToolPipette::nativeSample(S32 x, S32 y, MASK mask)
+
+void LLToolPipette::setNativeActive(bool active,LLView* consumer,std::function<bool()> operation)
 {
 #if VS_NATIVE_VULKAN
-    if (!nativeActive() || !gViewerWindow || !gViewerWindow->nativeContext()) return false;
-    LLPickInfo pick(LLCoordGL(x, y), mask, true, true, false, false, true, false, nullptr);
-    if (!gViewerWindow->nativePick(pick) || pick.mObjectFace < 0) return false;
-    auto& world = gViewerWindow->nativeContext()->world();
-    const auto object = world.object(pick.mObjectID);
-    if (!object) return false;
-    const auto face = world.face(*object, U32(pick.mObjectFace));
-    LLTextureEntry entry;
-    if (!face || !world.copyTextureEntry(*face, entry)) return false;
-    // Reuse the same signal and picker callbacks. Texture picking still
-    // resolves inventory and enforces its ordinary asset permission rules.
-    mSuccess = true;
-    setTextureEntry(&entry);
-    return true;
+    const bool highlighted=std::exchange(mNativeHighlightOwned,false);
+    mNativeAccount={};mNativeOperation={};mNativeConsumer=LLHandle<LLView>();
+    if(highlighted)
+        if(const auto owner=VSNativeSession::active();owner && owner->existingObjectSelection())owner->existingObjectSelection()->clearHighlights();
+    if(hasMouseCapture())setMouseCapture(false);
+    auto& tools=LLToolMgr::instance();
+    if(tools.nativeCurrentTool()==this)tools.clearTransientTool();
+    if(!active || !consumer || !consumer->isInVisibleChain() || !tools.nativeToolsReady())return;
+    const auto owner=VSNativeSession::active();if(!owner || !owner->regionReady())return;
+    const auto account=owner->accountGuard();const auto view=consumer->getHandle();
+    if(!account() || view.isDead() || (operation && !operation()))return;
+    mNativeAccount=account;mNativeConsumer=view;mNativeOperation=std::move(operation);
+    mSuccess=true;mTooltipMsg.clear();
+    tools.setTransientTool(this);
+    if(!nativeActive())setNativeActive(false);
+#else
+    (void)active;(void)consumer;(void)operation;
+#endif
+}
+void LLToolPipette::handleDeselect()
+{
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())setNativeActive(false);
+    LLTool::handleDeselect();
+}
+
+
+bool LLToolPipette::nativeSample(S32 x,S32 y,MASK mask)
+{
+#if VS_NATIVE_VULKAN
+    if(!nativeActive() || !gViewerWindow || !gViewerWindow->nativeContext())return false;
+    const auto owner=VSNativeSession::active();if(!owner)return false;
+    auto* selection=owner->objectSelection();if(!selection)return false;
+    selection->clearHighlights();mNativeHighlightOwned=false;
+    if(!nativeActive())return false;
+    LLPickInfo pick(LLCoordGL(x,y),mask,true,true,false,false,true,false,nullptr);
+    if(!gViewerWindow->nativePick(pick) || !pick.mNativeObjectCurrent || !pick.mNativeObjectCurrent() || pick.mObjectFace<0)return false;
+    auto& world=gViewerWindow->nativeContext()->world();
+    const auto object=world.object(pick.mObjectID);if(!object)return false;
+    const auto source=world.objectAdmission(*object);if(!source || source->pcode!=LL_PCODE_VOLUME)return false;
+    const auto face=world.face(*object,U32(pick.mObjectFace));LLTextureEntry entry;
+    if(!face || !world.copyTextureEntry(*face,entry) || !nativeActive() || !pick.mNativeObjectCurrent())return false;
+    const auto account=mNativeAccount,operation=mNativeOperation;const auto consumer=mNativeConsumer;
+    if(!selection->beginHighlightRequest([account,operation,consumer]
+        {return account && account() && !consumer.isDead() && (!operation || operation());}))return false;
+    mNativeHighlightOwned=true;
+    if(!selection->highlight({*object},true) || !nativeActive() || !pick.mNativeObjectCurrent())return false;
+    mSuccess=true;setTextureEntry(&entry);return true;
 #else
     return false;
 #endif
 }
 
+
 bool LLToolPipette::handleMouseDown(S32 x, S32 y, MASK mask)
 {
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() && !nativeActive())
+    {setNativeActive(false);return false;}
     mSuccess = true;
     mTooltipMsg.clear();
     setMouseCapture(true);
@@ -134,14 +167,15 @@ bool LLToolPipette::handleMouseUp(S32 x, S32 y, MASK mask)
 
 void LLToolPipette::onMouseCaptureLost()
 {
-    // Focus manager already transferred capture. Do not release its new owner.
-    mNativeActive = false;
-    mNativeAccount = {};
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())setNativeActive(false);
     LLTool::onMouseCaptureLost();
 }
 
+
 bool LLToolPipette::handleHover(S32 x, S32 y, MASK mask)
 {
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() && !nativeActive())
+    {setNativeActive(false);return false;}
     gViewerWindow->setCursor(mSuccess ? UI_CURSOR_PIPETTE : UI_CURSOR_NO);
     if (hasMouseCapture()) // mouse button is down
     {

@@ -204,6 +204,7 @@ protected:
     std::set<LLUUID>                mChangedItems;
     std::set<LLUUID>                mPendingOutfitRefreshes;
 
+    std::vector<boost::signals2::scoped_connection> mOutfitConnections;
     bool                            mIsInitialized;
     LLInventoryCategoriesObserver*  mCategoriesObserver;
     LLUUID                          mSelectedOutfitUUID;
@@ -228,6 +229,7 @@ public:
         mOutfitList(outfit_list)
     {}
 protected:
+    LLOutfitListBase* ownerView() const { return mOutfitList; }
     /* virtual */ LLContextMenu* createMenu();
 
     bool onEnable(LLSD::String param);

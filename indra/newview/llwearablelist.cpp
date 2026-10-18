@@ -72,7 +72,12 @@ LLWearableList::~LLWearableList()
 
 void LLWearableList::cleanup()
 {
-    for_each(mList.begin(), mList.end(), DeletePairedPointer());
+    for (const auto& [asset, wearable] : mList)
+    {
+        const auto retained = mNativeOwners.find(asset);
+        if (retained == mNativeOwners.end() || retained->second.get() != wearable) delete wearable;
+    }
+    mNativeOwners.clear();
     mList.clear();
 }
 
@@ -306,6 +311,24 @@ LLViewerWearable *LLWearableList::generateNewWearable()
     LLAssetID new_asset_id = tid.makeAssetID(gAgent.getSecureSessionID());
 
     LLViewerWearable* wearable = new LLViewerWearable(tid);
+    if (!wearable->usesGraphicsContext()) mNativeOwners[new_asset_id] = std::shared_ptr<LLViewerWearable>(wearable);
     mList[new_asset_id] = wearable;
     return wearable;
+}
+
+std::shared_ptr<LLViewerWearable> LLWearableList::retainNativeWearable(const LLViewerWearable* wearable) const
+{
+    if (!wearable || !wearable->currentNativeOwner()) return {};
+    const auto found = mNativeOwners.find(wearable->getAssetID());
+    return found != mNativeOwners.end() && found->second.get() == wearable ? found->second : std::shared_ptr<LLViewerWearable>{};
+}
+
+void LLWearableList::retireNativeAccount()
+{
+    for (const auto& [asset, wearable] : mNativeOwners)
+    {
+        const auto found = mList.find(asset);
+        if (found != mList.end() && found->second == wearable.get()) mList.erase(found);
+    }
+    mNativeOwners.clear();
 }

@@ -29,6 +29,7 @@
 
 #include "llfloater.h"
 #include <functional>
+#include <boost/signals2/connection.hpp>
 #include "llinventoryobserver.h"
 #include "llvoinventorylistener.h"
 
@@ -129,6 +130,10 @@ private:
     std::function<bool()> mThumbnailCurrent;
     LLUUID mNativePendingImage;
     bool mNativePendingSilent = false;
+    boost::signals2::scoped_connection mNativeTaskConnection;
+    std::function<bool()> mTaskCurrent;
+    U64 mTaskOpenRevision = 0;
+    bool mNativeTaskPending = false;
     bool mObserverInitialized;
     bool mMultipleThumbnails; // for multiselection
     EToolTipState mTooltipState;

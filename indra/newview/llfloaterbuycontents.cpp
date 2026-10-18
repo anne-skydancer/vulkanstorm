@@ -33,6 +33,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterbuycontents.h"
+#if VS_NATIVE_VULKAN
+#include "vsobjectpurchase.h"
+#endif
 
 #include "llcachename.h"
 
@@ -87,9 +90,20 @@ LLFloaterBuyContents::~LLFloaterBuyContents()
 // static
 void LLFloaterBuyContents::show(const LLSaleInfo& sale_info)
 {
-    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
-
-    if (selection->getRootObjectCount() != 1)
+    const bool native=gViewerWindow && gViewerWindow->isNativeVulkan();
+    LLObjectSelectionHandle selection;
+#if VS_NATIVE_VULKAN
+    const auto purchase=native?VSObjectPurchase::capture():nullptr;
+    if(!native)
+#endif
+        selection=LLSelectMgr::getInstance()->getSelection();
+    if (native ?
+#if VS_NATIVE_VULKAN
+        !purchase
+#else
+        true
+#endif
+        : selection->getRootObjectCount()!=1)
     {
         LLNotificationsUtil::add("BuyContentsOneOnly");
         return;
@@ -104,13 +118,27 @@ void LLFloaterBuyContents::show(const LLSaleInfo& sale_info)
         list->deleteAllItems();
 
 // [RLVa:KB] - Checked: RLVa-2.0.0
-    floater->mObjectSelection = LLSelectMgr::getInstance()->getSelection();
+#if VS_NATIVE_VULKAN
+    floater->mNativePurchase=purchase;
+    if(native)
+    {
+        floater->getChildView("buy_btn")->setEnabled(false);
+        floater->getChildView("wear_check")->setEnabled(false);
+        floater->getChild<LLUICtrl>("wear_check")->setValue(false);
+    }
+#endif
+    if(!native) floater->mObjectSelection=LLSelectMgr::getInstance()->getSelection();
 // [/RLVa:KB]
 //  floater->mObjectSelection = LLSelectMgr::getInstance()->getEditSelection();
 
     LLUUID owner_id;
     std::string owner_name;
-    bool owners_identical = LLSelectMgr::getInstance()->selectGetOwner(owner_id, owner_name);
+    bool owners_identical=false;
+#if VS_NATIVE_VULKAN
+    if(native)owners_identical=purchase->owner(owner_id,owner_name);
+    else
+#endif
+        owners_identical=LLSelectMgr::getInstance()->selectGetOwner(owner_id,owner_name);
     if (!owners_identical)
     {
         LLNotificationsUtil::add("BuyContentsOneOwner");
@@ -120,20 +148,49 @@ void LLFloaterBuyContents::show(const LLSaleInfo& sale_info)
     floater->mSaleInfo = sale_info;
 
     // Update the display
-    LLSelectNode* node = selection->getFirstRootNode();
-    if (!node) return;
-    if(node->mPermissions->isGroupOwned())
+    LLSelectNode* node=native?nullptr:selection->getFirstRootNode();
+    if(!native && !node)return;
+    std::string objectName;
+    LLPermissions permissions;
+#if VS_NATIVE_VULKAN
+    if(native){objectName=purchase->publication.properties->name;permissions=purchase->publication.properties->permissions();}
+    else
+#endif
+    {objectName=node->mName;permissions=*node->mPermissions;}
+    if(permissions.isGroupOwned())
     {
         gCacheName->getGroupName(owner_id, owner_name);
     }
 
-    floater->getChild<LLUICtrl>("contains_text")->setTextArg("[NAME]", node->mName);
+    floater->getChild<LLUICtrl>("contains_text")->setTextArg("[NAME]", objectName);
     floater->getChild<LLUICtrl>("buy_text")->setTextArg("[AMOUNT]", llformat("%d", sale_info.getSalePrice()));
     floater->getChild<LLUICtrl>("buy_text")->setTextArg("[NAME]", owner_name);
 
     // Must do this after the floater is created, because
     // sometimes the inventory is already there and
     // the callback is called immediately.
+#if VS_NATIVE_VULKAN
+    if(native)
+    {
+        floater->removeVOInventoryListener();
+        const auto weak=floater->getHandle();
+        const auto state=std::weak_ptr<VSObjectPurchase>(purchase);
+        purchase->inventoryChanged=purchase->object.nativeInventory()->observe(purchase->object.nativeObject(),[weak,state](const VSTaskInventory::Result& result)
+        {
+            const auto owner=state.lock();
+            auto* view=dynamic_cast<LLFloaterBuyContents*>(weak.get());
+            if(owner && owner->current() && view && view->mNativePurchase==owner && result.success)
+                view->populateInventory(&result.contents);
+        });
+        purchase->selectionChanged=purchase->selection->changed([weak,state]
+        {
+            const auto owner=state.lock();auto* view=dynamic_cast<LLFloaterBuyContents*>(weak.get());
+            if(owner && view && view->mNativePurchase==owner && !owner->current())view->closeFloater();
+        });
+        purchase->object.requestInventory();
+        return;
+    }
+#endif
     LLViewerObject* obj = selection->getFirstRootObject();
     floater->registerVOInventoryListener(obj,NULL);
     floater->requestVOInventory();
@@ -150,6 +207,19 @@ void LLFloaterBuyContents::inventoryChanged(LLViewerObject* obj,
         LL_WARNS() << "No object in LLFloaterBuyContents::inventoryChanged" << LL_ENDL;
         return;
     }
+    populateInventory(inv);
+}
+
+void LLFloaterBuyContents::populateInventory(const LLInventoryObject::object_list_t* inv)
+{
+#if VS_NATIVE_VULKAN
+    if(mNativePurchase)
+    {
+        getChildView("buy_btn")->setEnabled(false);
+        getChildView("wear_check")->setEnabled(false);
+        getChild<LLUICtrl>("wear_check")->setValue(false);
+    }
+#endif
 
     LLScrollListCtrl* item_list = getChild<LLScrollListCtrl>("item_list");
     if (!item_list)
@@ -267,6 +337,9 @@ void LLFloaterBuyContents::inventoryChanged(LLViewerObject* obj,
 
 void LLFloaterBuyContents::onClickBuy()
 {
+#if VS_NATIVE_VULKAN
+    if(mNativePurchase && !mNativePurchase->current()){closeFloater();return;}
+#endif
     // Make sure this wasn't selected through other mechanisms
     // (ie, being the default button and pressing enter.
     if(!getChildView("buy_btn")->getEnabled())
@@ -289,6 +362,13 @@ void LLFloaterBuyContents::onClickBuy()
     // *NOTE: doesn't work for multiple object buy, which UI does not
     // currently support sale info is used for verification only, if
     // it doesn't match region info then sale is canceled.
+#if VS_NATIVE_VULKAN
+    if(mNativePurchase)
+    {
+        if(!mNativePurchase->buy(category_id,mSaleInfo)){closeFloater();return;}
+    }
+    else
+#endif
     LLSelectMgr::getInstance()->sendBuy(gAgent.getID(), category_id, mSaleInfo);
 
     // NOTE: do this here instead of on receipt of object, since contents are transfered
@@ -301,4 +381,13 @@ void LLFloaterBuyContents::onClickBuy()
 void LLFloaterBuyContents::onClickCancel()
 {
     closeFloater();
+}
+
+void LLFloaterBuyContents::onClose(bool)
+{
+    removeVOInventoryListener();
+    mObjectSelection.clear();
+#if VS_NATIVE_VULKAN
+    mNativePurchase.reset();
+#endif
 }

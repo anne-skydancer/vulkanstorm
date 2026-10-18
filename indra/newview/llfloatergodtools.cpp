@@ -27,6 +27,11 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloatergodtools.h"
+#include "vsregioncontext.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vseditselection.h"
+#endif
 
 #include "llavatarnamecache.h"
 #include "llcoord.h"
@@ -72,6 +77,21 @@
 
 #include "lltransfertargetfile.h"
 #include "lltransfersourcefile.h"
+
+namespace
+{
+template<class Callback> auto vs_god_confirmation(Callback callback)
+{
+    const auto account=vs_native_im_guard();const auto origin=vs_current_region_context();
+    return [account,origin,callback](const LLSD& notification,const LLSD& response)->bool
+    {
+        const auto current=vs_current_region_context();
+        if(!account() || !origin || !origin->current() || !current ||
+            origin->getHost()!=current->getHost() || origin->getRegionID()!=current->getRegionID())return false;
+        return callback(notification,response);
+    };
+}
+}
 
 const F32 SECONDS_BETWEEN_UPDATE_REQUESTS = 5.0f;
 
@@ -166,7 +186,8 @@ LLFloaterGodTools::~LLFloaterGodTools()
 
 U64 LLFloaterGodTools::computeRegionFlags() const
 {
-    U64 flags = gAgent.getRegion()->getRegionFlags();
+    const auto region=vs_current_region_context();if(!region)return 0;
+    U64 flags = region->getRegionFlags();
     if (mPanelRegionTools) flags = mPanelRegionTools->computeRegionFlags(flags);
     if (mPanelObjectTools) flags = mPanelObjectTools->computeRegionFlags(flags);
     return flags;
@@ -286,8 +307,8 @@ void LLFloaterGodTools::processRegionInfo(LLMessageSystem* msg)
     msg->getS32Fast(_PREHASH_RegionInfo, _PREHASH_RedirectGridY, redirect_grid_y);
 
     // push values to the current LLViewerRegion
-    LLViewerRegion *regionp = gAgent.getRegion();
-    if (regionp)
+    LLViewerRegion* regionp=gAgent.getRegion();
+    if (!gViewerWindow->isNativeVulkan() && regionp)
     {
         regionp->setRegionNameAndZone(sim_name);
         regionp->setRegionFlags(region_flags);
@@ -323,7 +344,7 @@ void LLFloaterGodTools::processRegionInfo(LLMessageSystem* msg)
         otool->setCheckFlags(region_flags);
         otool->enableAllWidgets();
 
-        LLViewerRegion *regionp = gAgent.getRegion();
+        const auto regionp=vs_current_region_context();
         if ( !regionp )
         {
             // -1 implies non-existent
@@ -365,7 +386,7 @@ void LLFloaterGodTools::sendGodUpdateRegionInfo()
     LLFloaterGodTools* god_tools = LLFloaterReg::getTypedInstance<LLFloaterGodTools>("god_tools");
     if (!god_tools) return;
 
-    LLViewerRegion *regionp = gAgent.getRegion();
+    const auto regionp=vs_current_region_context();
     if (gAgent.isGodlike()
         && god_tools->mPanelRegionTools
         && regionp
@@ -774,7 +795,7 @@ void LLPanelRegionTools::onRefresh()
 {
     LLFloaterGodTools* god_tools = LLFloaterReg::getTypedInstance<LLFloaterGodTools>("god_tools");
     if(!god_tools) return;
-    LLViewerRegion *region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
     if (region && gAgent.isGodlike())
     {
         god_tools->sendRegionInfoRequest();
@@ -787,7 +808,7 @@ void LLPanelRegionTools::onApplyChanges()
 {
     LLFloaterGodTools* god_tools = LLFloaterReg::getTypedInstance<LLFloaterGodTools>("god_tools");
     if(!god_tools) return;
-    LLViewerRegion *region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
     if (region && gAgent.isGodlike())
     {
         getChildView("Apply")->setEnabled(false);
@@ -816,7 +837,7 @@ void LLPanelRegionTools::onSelectRegion()
 {
     LL_INFOS() << "LLPanelRegionTools::onSelectRegion" << LL_ENDL;
 
-    LLViewerRegion *regionp = LLWorld::getInstance()->getRegionFromPosGlobal(gAgent.getPositionGlobal());
+    const auto regionp=vs_region_context(gAgent.getPositionGlobal());
     if (!regionp)
     {
         return;
@@ -873,7 +894,7 @@ void LLPanelGridTools::refresh()
 
 void LLPanelGridTools::onClickFlushMapVisibilityCaches()
 {
-    LLNotificationsUtil::add("FlushMapVisibilityCaches", LLSD(), LLSD(), flushMapVisibilityCachesConfirm);
+    LLNotificationsUtil::add("FlushMapVisibilityCaches", LLSD(), LLSD(), vs_god_confirmation(flushMapVisibilityCachesConfirm));
 }
 
 // static
@@ -954,6 +975,7 @@ bool LLPanelObjectTools::postBuild()
 
 void LLPanelObjectTools::setTargetAvatar(const LLUUID &target_id)
 {
+    ++mTargetRevision;
     mTargetAvatar = target_id;
     if (target_id.isNull())
     {
@@ -964,7 +986,7 @@ void LLPanelObjectTools::setTargetAvatar(const LLUUID &target_id)
 
 void LLPanelObjectTools::refresh()
 {
-    LLViewerRegion *regionp = gAgent.getRegion();
+    const auto regionp=vs_current_region_context();
     if (regionp)
     {
         getChild<LLUICtrl>("region name")->setValue(regionp->getName());
@@ -1091,7 +1113,7 @@ void LLPanelObjectTools::onClickDeletePublicOwnedBy()
         LLNotificationsUtil::add( "GodDeleteAllScriptedPublicObjectsByUser",
                                 args,
                                 payload,
-                                callbackSimWideDeletes);
+                                vs_god_confirmation(callbackSimWideDeletes));
     }
 }
 
@@ -1111,7 +1133,7 @@ void LLPanelObjectTools::onClickDeleteAllScriptedOwnedBy()
         LLNotificationsUtil::add( "GodDeleteAllScriptedObjectsByUser",
                                 args,
                                 payload,
-                                callbackSimWideDeletes);
+                                vs_god_confirmation(callbackSimWideDeletes));
     }
 }
 
@@ -1131,7 +1153,7 @@ void LLPanelObjectTools::onClickDeleteAllOwnedBy()
         LLNotificationsUtil::add( "GodDeleteAllObjectsByUser",
                                 args,
                                 payload,
-                                callbackSimWideDeletes);
+                                vs_god_confirmation(callbackSimWideDeletes));
     }
 }
 
@@ -1154,7 +1176,11 @@ void LLPanelObjectTools::onClickSet()
 {
     LLView * button = findChild<LLButton>("Set Target");
     LLFloater * root_floater = gFloaterView->getParentFloater(this);
-    LLFloaterAvatarPicker* picker = LLFloaterAvatarPicker::show(boost::bind(&LLPanelObjectTools::callbackAvatarID, this, _1,_2), false, false, false, root_floater->getName(), button);
+    const auto weak=getHandle();const auto account=vs_native_im_guard();const auto revision=++mTargetRevision;
+    LLFloaterAvatarPicker* picker = LLFloaterAvatarPicker::show(
+        [this,weak,account,revision](const uuid_vec_t& ids,const std::vector<LLAvatarName>& names)
+        {if(weak.get() && account() && revision==mTargetRevision)callbackAvatarID(ids,names);},
+        false, false, false, root_floater->getName(), button);
     // grandparent is a floater, which can have a dependent
     if (picker)
     {
@@ -1167,17 +1193,28 @@ void LLPanelObjectTools::onClickSetBySelection(void* data)
     LLPanelObjectTools* panelp = (LLPanelObjectTools*) data;
     if (!panelp) return;
 
-    const bool non_root_ok = true;
-    LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->getFirstRootNode(NULL, non_root_ok);
-    if (!node) return;
-
-    std::string owner_name;
+    std::string object_name,owner_name;
     LLUUID owner_id;
-    LLSelectMgr::getInstance()->selectGetOwner(owner_id, owner_name);
-
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow->isNativeVulkan())
+    {
+        VSEditSelection selection;
+        const auto node=selection.getFirstRootNode()?selection.getFirstRootNode():selection.getFirstNode();
+        if(!node || !selection.guard()())return;
+        object_name=node->mName;selection.selectGetOwner(owner_id,owner_name);
+    }
+    else
+#endif
+    {
+        const bool non_root_ok=true;
+        const auto* node=LLSelectMgr::instance().getSelection()->getFirstRootNode(NULL,non_root_ok);
+        if(!node)return;
+        object_name=node->mName;LLSelectMgr::instance().selectGetOwner(owner_id,owner_name);
+    }
+    ++panelp->mTargetRevision;
     panelp->mTargetAvatar = owner_id;
     LLStringUtil::format_map_t args;
-    args["[OBJECT]"] = node->mName;
+    args["[OBJECT]"] = object_name;
     args["[OWNER]"] = owner_name;
     std::string name = LLTrans::getString("GodToolsObjectOwnedBy", args);
     panelp->getChild<LLUICtrl>("target_avatar_name")->setValue(name);
@@ -1203,7 +1240,7 @@ void LLPanelObjectTools::onApplyChanges()
 {
     LLFloaterGodTools* god_tools = LLFloaterReg::getTypedInstance<LLFloaterGodTools>("god_tools");
     if(!god_tools) return;
-    LLViewerRegion *region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
     if (region && gAgent.isGodlike())
     {
         // TODO -- implement this
@@ -1251,10 +1288,9 @@ void LLPanelRequestTools::refresh()
     list->selectItemRange(2,last_item);
     list->operateOnSelection(LLCtrlListInterface::OP_DELETE);
     }
-    for (LLWorld::region_list_t::const_iterator iter = LLWorld::getInstance()->getRegionList().begin();
-         iter != LLWorld::getInstance()->getRegionList().end(); ++iter)
+    for(const auto& region:vs_region_contexts())
     {
-        LLViewerRegion* regionp = *iter;
+        const auto* regionp=&region;
         std::string name = regionp->getName();
         if (!name.empty())
         {
@@ -1301,7 +1337,11 @@ void LLPanelRequestTools::onClickRequest()
         std::string req =getChild<LLUICtrl>("request")->getValue();
         req = req.substr(0, req.find_first_of(" "));
         std::string param = getChild<LLUICtrl>("parameter")->getValue();
-        LLSelectMgr::getInstance()->sendGodlikeRequest(req, param);
+#if VS_NATIVE_VULKAN
+        if(gViewerWindow->isNativeVulkan())VSEditSelection().sendGodlikeRequest(req,param);
+        else
+#endif
+            LLSelectMgr::getInstance()->sendGodlikeRequest(req, param);
     }
     else if(dest == AGENT_REGION)
     {
@@ -1310,10 +1350,9 @@ void LLPanelRequestTools::onClickRequest()
     else
     {
         // find region by name
-        for (LLWorld::region_list_t::const_iterator iter = LLWorld::getInstance()->getRegionList().begin();
-             iter != LLWorld::getInstance()->getRegionList().end(); ++iter)
+        for(const auto& region:vs_region_contexts())
         {
-            LLViewerRegion* regionp = *iter;
+            const auto* regionp=&region;
             if(dest == regionp->getName())
             {
                 // found it

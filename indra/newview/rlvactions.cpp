@@ -599,7 +599,23 @@ bool agentAvatarStanding()
 }
 }
 
-bool RlvActions::canSit(const LLViewerObject* pObj, const LLVector3& posOffset /*=LLVector3::zero*/)
+namespace
+{
+struct ReferenceSitObject
+{
+    const LLViewerObject* value;
+    bool valid()const{return value!=nullptr;}
+    U8 pcode()const{return value->getPCode();}
+    LLVector3d position()const{return value->getPositionGlobal();}
+};
+struct NativeSitObject
+{
+    const VSObjectContext& value;
+    bool valid()const{return value.current && value.current();}
+    U8 pcode()const{return value.pcode;}
+    LLVector3d position()const{return value.position;}
+};
+template<class Object>bool sharedObjectSit(const Object& object,const LLVector3& posOffset)
 {
     // User can sit on the specified object if:
     //   - not prevented from sitting
@@ -610,14 +626,24 @@ bool RlvActions::canSit(const LLViewerObject* pObj, const LLVector3& posOffset /
     static RlvCachedBehaviourModifier<float> s_nFarTouchDist(RLV_MODIFIER_FARTOUCHDIST);
     static RlvCachedBehaviourModifier<float> s_nSitTpDist(RLV_MODIFIER_SITTPDIST);
     return
-        ( (pObj) && (LL_PCODE_VOLUME == pObj->getPCode()) ) &&
-        (!hasBehaviour(RLV_BHVR_SIT)) &&
-        ( ((!hasBehaviour(RLV_BHVR_UNSIT)) && (!hasBehaviour(RLV_BHVR_STANDTP))) ||
+        ( object.valid() && (LL_PCODE_VOLUME == object.pcode()) ) &&
+        (!RlvActions::hasBehaviour(RLV_BHVR_SIT)) &&
+        ( ((!RlvActions::hasBehaviour(RLV_BHVR_UNSIT)) && (!RlvActions::hasBehaviour(RLV_BHVR_STANDTP))) ||
           agentAvatarStanding() ) &&
         ( ( (NULL != gRlvHandler.getCurrentCommand()) && (RLV_BHVR_SIT == gRlvHandler.getCurrentCommand()->getBehaviourType()) ) ||
-          ( ((!hasBehaviour(RLV_BHVR_SITTP)) || (dist_vec_squared(gAgent.getPositionGlobal(), pObj->getPositionGlobal() + LLVector3d(posOffset)) < s_nSitTpDist * s_nSitTpDist)) &&
-            ((!hasBehaviour(RLV_BHVR_FARTOUCH)) || (dist_vec_squared(gAgent.getPositionGlobal(), pObj->getPositionGlobal() + LLVector3d(posOffset)) < s_nFarTouchDist * s_nFarTouchDist)) ) );
+          ( ((!RlvActions::hasBehaviour(RLV_BHVR_SITTP)) || (dist_vec_squared(gAgent.getPositionGlobal(), object.position() + LLVector3d(posOffset)) < s_nSitTpDist * s_nSitTpDist)) &&
+            ((!RlvActions::hasBehaviour(RLV_BHVR_FARTOUCH)) || (dist_vec_squared(gAgent.getPositionGlobal(), object.position() + LLVector3d(posOffset)) < s_nFarTouchDist * s_nFarTouchDist)) ) );
 }
+}
+bool RlvActions::canSit(const LLViewerObject* pObj, const LLVector3& posOffset /*=LLVector3::zero*/)
+{
+    return sharedObjectSit(ReferenceSitObject{pObj},posOffset);
+}
+bool RlvActions::canSit(const VSObjectContext& object,const LLVector3& posOffset)
+{
+    return sharedObjectSit(NativeSitObject{object},posOffset);
+}
+
 
 // Handles: @showhovertextall, @showhovertextworld, @showhovertexthud and @showhovertext
 bool RlvActions::canShowHoverText(const LLViewerObject *pObj)

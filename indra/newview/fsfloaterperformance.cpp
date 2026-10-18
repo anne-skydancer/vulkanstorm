@@ -24,6 +24,15 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "vsworldscene.h"
+#include "vsworldavatar.h"
+#include "vsobjectselection.h"
+#include "vsobjectattention.h"
+#endif
 #include "fsfloaterperformance.h"
 
 #include "llagent.h"
@@ -76,17 +85,22 @@ public:
 protected:
     LLContextMenu* createMenu()
     {
+        if(mUUIDs.empty())return nullptr;
+        mIntent=std::make_shared<char>();const std::weak_ptr<const void> intent=mIntent;
+        const auto weak=mFloaterPerformance->getHandle();
+        const auto current=[weak,intent]{return weak.get() && !intent.expired();};
         LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
         LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
-        registrar.add("Settings.SetRendering", boost::bind(&FSFloaterPerformance::onCustomAction, mFloaterPerformance, _2, mUUIDs.front()));
-        enable_registrar.add("Settings.IsSelected", boost::bind(&FSFloaterPerformance::isActionChecked, mFloaterPerformance, _2, mUUIDs.front()));
-        registrar.add("Avatar.Extended", boost::bind(&FSFloaterPerformance::onExtendedAction, mFloaterPerformance, _2, mUUIDs.front()));
+        registrar.add("Settings.SetRendering", vs_native_im_lifetime_callback(current,boost::bind(&FSFloaterPerformance::onCustomAction, mFloaterPerformance, _2, mUUIDs.front())));
+        enable_registrar.add("Settings.IsSelected", vs_native_im_lifetime_callback(current,boost::bind(&FSFloaterPerformance::isActionChecked, mFloaterPerformance, _2, mUUIDs.front())));
+        registrar.add("Avatar.Extended", vs_native_im_lifetime_callback(current,boost::bind(&FSFloaterPerformance::onExtendedAction, mFloaterPerformance, _2, mUUIDs.front())));
         LLContextMenu* menu = createFromFile("menu_perf_avatar_rendering_settings.xml");
 
         return menu;
     }
 
     FSFloaterPerformance* mFloaterPerformance;
+    std::shared_ptr<const void> mIntent;
 };
 
 
@@ -101,6 +115,7 @@ FSFloaterPerformance::FSFloaterPerformance(const LLSD& key)
 FSFloaterPerformance::~FSFloaterPerformance()
 {
     mComplexityChangedSignal.disconnect();
+    mMaxARTChangedSignal.disconnect();
     delete mContextMenu;
     delete mUpdateTimer;
 }
@@ -279,7 +294,8 @@ void FSFloaterPerformance::draw()
         auto tot_avatar_time_ns         = LLPerfStats::raw_to_ns( tot_avatar_time_raw );
         auto tot_huds_time_ns           = LLPerfStats::raw_to_ns( tot_huds_time_raw );
         // UI time includes HUD time so dedut that before we calc percentages
-        auto tot_ui_time_ns             = LLPerfStats::raw_to_ns( tot_ui_time_raw - tot_huds_time_raw);
+        const bool native = gViewerWindow && gViewerWindow->isNativeVulkan();
+        auto tot_ui_time_ns = LLPerfStats::raw_to_ns(native ? tot_ui_time_raw : tot_ui_time_raw - tot_huds_time_raw);
 
         // auto tot_sleep_time_ns          = LLPerfStats::raw_to_ns( tot_sleep_time_raw );
         // auto tot_limit_time_ns          = LLPerfStats::raw_to_ns( tot_limit_time_raw );
@@ -287,7 +303,19 @@ void FSFloaterPerformance::draw()
         // auto tot_render_time_ns         = LLPerfStats::raw_to_ns( tot_render_time_raw );
         auto tot_idle_time_ns   = LLPerfStats::raw_to_ns( tot_idle_time_raw );
         auto tot_swap_time_ns   = LLPerfStats::raw_to_ns( tot_swap_time_raw );
-        auto tot_scene_time_ns  = LLPerfStats::raw_to_ns( tot_render_time_raw - tot_avatar_time_raw - tot_swap_time_raw - tot_ui_time_raw);
+        auto scene_time_raw = tot_render_time_raw;
+        if (native)
+        {
+            // Avatar idle time precedes display; HUD submission is in world draw,
+            // whereas native UI timing contains only the actual 2D UI pass.
+            U64 avatar_idle;
+            {std::lock_guard<std::mutex> lock(LLPerfStats::bufferToggleLock);avatar_idle=LLPerfStats::StatsRecorder::getSum(AvType,LLPerfStats::StatType_t::RENDER_IDLE);}
+            const auto avatar_draw = tot_avatar_time_raw > avatar_idle ? tot_avatar_time_raw-avatar_idle : 0;
+            for (U64 part : {avatar_draw,tot_huds_time_raw,tot_swap_time_raw,tot_ui_time_raw})
+                scene_time_raw = scene_time_raw > part ? scene_time_raw-part : 0;
+        }
+        else scene_time_raw -= tot_avatar_time_raw + tot_swap_time_raw + tot_ui_time_raw;
+        auto tot_scene_time_ns = LLPerfStats::raw_to_ns(scene_time_raw);
         // auto tot_overhead_time_ns  = LLPerfStats::raw_to_ns( tot_frame_time_raw - tot_render_time_raw - tot_idle_time_raw );
 
         // // remove time spent sleeping for fps limit or out of focus.
@@ -458,6 +486,9 @@ void FSFloaterPerformance::initBackBtn(LLPanel* panel)
 
 void FSFloaterPerformance::populateHUDList()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan()){populateNativeAttachments(true);return;}
+#endif
     S32 prev_pos = mHUDList->getScrollPos();
     LLUUID prev_selected_id = mHUDList->getSelectedSpecialId();
     mHUDList->clearRows();
@@ -568,6 +599,9 @@ void FSFloaterPerformance::populateHUDList()
 
 void FSFloaterPerformance::populateObjectList()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan()){populateNativeAttachments(false);return;}
+#endif
     S32 prev_pos = mObjectList->getScrollPos();
     auto prev_selected_id = mObjectList->getSelectedSpecialId();
 
@@ -691,6 +725,9 @@ void FSFloaterPerformance::populateObjectList()
 
 void FSFloaterPerformance::populateNearbyList()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan()){populateNativeNearby();return;}
+#endif
     LL_PROFILE_ZONE_SCOPED_CATEGORY_APP;
     static LLCachedControl<bool> showTunedART(gSavedSettings, "ShowTunedART");
     S32 prev_pos = mNearbyList->getScrollPos();
@@ -888,6 +925,17 @@ void FSFloaterPerformance::populateNearbyList()
 
 void FSFloaterPerformance::detachItem(const LLUUID& item_id)
 {
+#if VS_NATIVE_VULKAN
+    if(const auto session=VSNativeSession::active())
+    {
+        if(!gViewerWindow || !gViewerWindow->nativeContext())return;
+        auto& world=gViewerWindow->nativeContext()->world();const auto token=world.object(item_id);
+        const auto attachment=token?world.objectAttachment(*token):std::nullopt;
+        if(attachment && attachment->item.notNull() && world.current(attachment->object))
+            LLAppearanceMgr::instance().removeItemFromAvatar(attachment->item);
+        return;
+    }
+#endif
     LLAppearanceMgr::instance().removeItemFromAvatar(item_id);
 }
 
@@ -983,6 +1031,14 @@ void FSFloaterPerformance::onCustomAction(const LLSD& userdata, const LLUUID& av
         new_setting = LLVOAvatar::AV_ALWAYS_RENDER;
     }
 
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())
+    {
+        FSAvatarRenderPersistence::instance().setAvatarRenderSettings(av_id,new_setting);
+        if(gViewerWindow && gViewerWindow->nativeContext())gViewerWindow->nativeContext()->world().refreshAvatarRenderSettings();
+        return;
+    }
+#endif
     LLVOAvatar *avatarp = find_avatar(av_id);
     if (avatarp)
     {
@@ -1038,66 +1094,8 @@ void FSFloaterPerformance::onAvatarListRightClick(LLUICtrl* ctrl, S32 x, S32 y)
     }
 }
 
-void FSFloaterPerformance::onExtendedAction(const LLSD& userdata, const LLUUID& av_id)
+static void zoomPerformanceAvatar(const LLUUID& identity,const LLBBox& bbox)
 {
-    const std::string command_name = userdata.asString();
-
-    LLViewerObject* objectp = gObjectList.findObject(av_id);
-    if (!objectp)
-    {
-        return;
-    }
-    auto avp = objectp->asAvatar();
-    if ("inspect" == command_name)
-    {
-        for (LLVOAvatar::attachment_map_t::iterator iter = avp->mAttachmentPoints.begin();
-             iter != avp->mAttachmentPoints.end();
-             ++iter)
-        {
-            LLViewerJointAttachment* attachment = iter->second;
-
-            if (!attachment)
-            {
-                continue;
-            }
-
-            for (LLViewerJointAttachment::attachedobjs_vec_t::iterator attachment_iter = attachment->mAttachedObjects.begin();
-                 attachment_iter != attachment->mAttachedObjects.end();
-                 ++attachment_iter)
-            {
-                LLViewerObject* attached_object = attachment_iter->get();
-
-                if ( attached_object && !attached_object->isDead() )
-                {
-                    LLSelectMgr::getInstance()->selectObjectAndFamily(attached_object);
-                }
-            }
-        }
-        LLFloaterReg::showInstance("inspect");
-    }
-    else if ("zoom" == command_name)
-    {
-        // Disable flycam if active.  Without this, the requested look-at doesn't happen because the flycam code overrides all other camera motion.
-        bool fly_cam_status(LLViewerJoystick::getInstance()->getOverrideCamera());
-        if (fly_cam_status)
-        {
-            LLViewerJoystick::getInstance()->setOverrideCamera(false);
-            LLPanelStandStopFlying::clearStandStopFlyingMode(LLPanelStandStopFlying::SSFM_FLYCAM);
-            // *NOTE: Above may not be the proper way to disable flycam.  What I really want to do is just be able to move the camera and then leave the flycam in the the same state it was in, just moved to the new location. ~Cron
-        }
-
-        LLViewerJoystick::getInstance()->setCameraNeedsUpdate(true); // Fixes an edge case where if the user has JUST disabled flycam themselves, the camera gets stuck waiting for input.
-
-        gAgentCamera.setFocusOnAvatar(false, ANIMATE);
-
-        gAgentCamera.setLookAt(LOOKAT_TARGET_SELECT, objectp);
-
-        // Place the camera looking at the object, along the line from the camera to the object,
-        //  and sufficiently far enough away for the object to fill 3/4 of the screen,
-        //  but not so close that the bbox's nearest possible vertex goes inside the near clip.
-        // Logic C&P'd from LLViewerMediaFocus::setCameraZoom() and then edited as needed
-
-        LLBBox bbox = objectp->getBoundingBoxAgent();
         LLVector3d center(gAgent.getPosGlobalFromAgent(bbox.getCenterAgent()));
         F32 height;
         F32 width;
@@ -1176,7 +1174,100 @@ void FSFloaterPerformance::onExtendedAction(const LLSD& userdata, const LLUUID& 
             camera_pos += 0.01 * len * delta;
         }
 
-        gAgentCamera.setCameraPosAndFocusGlobal(camera_pos, target_pos, objectp->getID());
+        gAgentCamera.setCameraPosAndFocusGlobal(camera_pos, target_pos, identity);
+
+}
+
+void FSFloaterPerformance::onExtendedAction(const LLSD& userdata, const LLUUID& av_id)
+{
+    const std::string command_name = userdata.asString();
+#if VS_NATIVE_VULKAN
+    if(const auto session=VSNativeSession::active())
+    {
+        if(!gViewerWindow || !gViewerWindow->nativeContext())return;
+        auto& world=gViewerWindow->nativeContext()->world();const auto token=world.object(av_id);
+        if(!token || !world.current(*token) || token->kind!=VSWorldContracts::OwnerKind::Avatar)return;
+        if(command_name=="inspect")
+        {
+            const auto selection=session->retainObjectSelection();if(!selection)return;
+            const auto children=world.directChildren(*token);if(!children)return;
+            for(const auto& child:*children)
+                if(world.objectAttachment(child))selection->selectFamily(child);
+            if(world.current(*token))LLFloaterReg::showInstance("inspect");
+        }
+        else if(command_name=="zoom")
+        {
+            const auto focus=world.focusObject(*token,gAgent.getPosGlobalFromAgent(LLVector3::zero));if(!focus)return;
+            if(LLViewerJoystick::instance().getOverrideCamera())
+            {
+                LLViewerJoystick::instance().setOverrideCamera(false);
+                LLPanelStandStopFlying::clearStandStopFlyingMode(LLPanelStandStopFlying::SSFM_FLYCAM);
+            }
+            LLViewerJoystick::instance().setCameraNeedsUpdate(true);
+            gAgentCamera.setFocusOnAvatar(false,ANIMATE);
+            if(auto* attention=session->objectAttention())attention->look(LOOKAT_TARGET_SELECT,token,LLVector3::zero);
+            zoomPerformanceAvatar(av_id,focus->officialBounds);
+        }
+        return;
+    }
+#endif
+
+    LLViewerObject* objectp = gObjectList.findObject(av_id);
+    if (!objectp)
+    {
+        return;
+    }
+    auto avp = objectp->asAvatar();
+    if ("inspect" == command_name)
+    {
+        for (LLVOAvatar::attachment_map_t::iterator iter = avp->mAttachmentPoints.begin();
+             iter != avp->mAttachmentPoints.end();
+             ++iter)
+        {
+            LLViewerJointAttachment* attachment = iter->second;
+
+            if (!attachment)
+            {
+                continue;
+            }
+
+            for (LLViewerJointAttachment::attachedobjs_vec_t::iterator attachment_iter = attachment->mAttachedObjects.begin();
+                 attachment_iter != attachment->mAttachedObjects.end();
+                 ++attachment_iter)
+            {
+                LLViewerObject* attached_object = attachment_iter->get();
+
+                if ( attached_object && !attached_object->isDead() )
+                {
+                    LLSelectMgr::getInstance()->selectObjectAndFamily(attached_object);
+                }
+            }
+        }
+        LLFloaterReg::showInstance("inspect");
+    }
+    else if ("zoom" == command_name)
+    {
+        // Disable flycam if active.  Without this, the requested look-at doesn't happen because the flycam code overrides all other camera motion.
+        bool fly_cam_status(LLViewerJoystick::getInstance()->getOverrideCamera());
+        if (fly_cam_status)
+        {
+            LLViewerJoystick::getInstance()->setOverrideCamera(false);
+            LLPanelStandStopFlying::clearStandStopFlyingMode(LLPanelStandStopFlying::SSFM_FLYCAM);
+            // *NOTE: Above may not be the proper way to disable flycam.  What I really want to do is just be able to move the camera and then leave the flycam in the the same state it was in, just moved to the new location. ~Cron
+        }
+
+        LLViewerJoystick::getInstance()->setCameraNeedsUpdate(true); // Fixes an edge case where if the user has JUST disabled flycam themselves, the camera gets stuck waiting for input.
+
+        gAgentCamera.setFocusOnAvatar(false, ANIMATE);
+
+        gAgentCamera.setLookAt(LOOKAT_TARGET_SELECT, objectp);
+
+        // Place the camera looking at the object, along the line from the camera to the object,
+        //  and sufficiently far enough away for the object to fill 3/4 of the screen,
+        //  but not so close that the bbox's nearest possible vertex goes inside the near clip.
+        // Logic C&P'd from LLViewerMediaFocus::setCameraZoom() and then edited as needed
+
+        zoomPerformanceAvatar(objectp->getID(),objectp->getBoundingBoxAgent());
 
         // *TODO: Re-enable joystick flycam if we disabled it earlier...  Have to find some form of callback as re-enabling at this point causes the camera motion to not happen. ~Cron
         //if (fly_cam_status)
@@ -1187,3 +1278,88 @@ void FSFloaterPerformance::onExtendedAction(const LLSD& userdata, const LLUUID& 
 }
 
 // EOF
+
+void FSFloaterPerformance::populateNativeAttachments(bool hud)
+{
+#if VS_NATIVE_VULKAN
+    auto* list=hud?mHUDList:mObjectList;const S32 scroll=list->getScrollPos();const auto selected=list->getSelectedSpecialId();
+    const auto column=list->getSortColumnName();const bool ascending=list->getSortAscending();list->clearRows();list->updateColumns(true);
+    const auto session=VSNativeSession::active();if(!session || !gViewerWindow || !gViewerWindow->nativeContext())return;
+    auto& world=gViewerWindow->nativeContext()->world();const auto rows=world.performanceAttachments();
+    std::optional<F32> maximum;double total=0;bool complete=true;unsigned count=0;
+    for(const auto& row:rows)
+    {
+        const auto source=world.objectAdmission(row.attachment.object);if(!source || source->hud!=hud)continue;
+        const auto* item=gInventory.getItem(row.attachment.item);const std::string name=item?item->getName():std::string{};
+        if(hud && name==FSLSLBridge::instance().currentFullName())continue;
+        ++count;if(row.gpuMilliseconds){total+=*row.gpuMilliseconds;maximum=std::max(maximum.value_or(0),*row.gpuMilliseconds);}else complete=false;
+    }
+    for(const auto& row:rows)
+    {
+        const auto source=world.objectAdmission(row.attachment.object);if(!source || source->hud!=hud || !world.current(row.attachment.object))continue;
+        const auto* item=gInventory.getItem(row.attachment.item);const std::string name=item?item->getName():std::string{};
+        if(hud && name==FSLSLBridge::instance().currentFullName())continue;
+        LLSD value;value["special_id"]=row.attachment.object.id;value["target"]=LLNameListCtrl::SPECIAL;auto& columns=value["columns"];
+        columns[0]["column"]="art_visual";columns[0]["type"]="bar";
+        columns[0]["value"]["ratio"]=row.gpuMilliseconds && maximum && *maximum>0?*row.gpuMilliseconds / *maximum:0.f;
+        columns[0]["value"]["bottom"]=BAR_BOTTOM_PAD;columns[0]["value"]["left_pad"]=BAR_LEFT_PAD;columns[0]["value"]["right_pad"]=BAR_RIGHT_PAD;
+        columns[1]["column"]="art_value";columns[1]["type"]="text";
+        columns[1]["value"]=row.gpuMilliseconds?llformat(hud?"%.f":"%.2f",*row.gpuMilliseconds*1000.f):"--";
+        unsigned nameColumn=2;
+        if(!hud){columns[2]["column"]="complex_value";columns[2]["type"]="text";columns[2]["value"]=row.complexity?std::to_string(std::max(S32(*row.complexity)/1000,1)):"--";nameColumn=3;}
+        columns[nameColumn]["column"]="name";columns[nameColumn]["type"]="text";columns[nameColumn]["value"]=name;
+        if(auto* control=list->addElement(value))
+            if(auto* text=dynamic_cast<LLScrollListText*>(control->getColumn(1)))text->setAlignment(LLFontGL::RIGHT);
+    }
+    list->sortByColumn(column,ascending);list->setScrollPos(scroll);list->selectItemBySpecialId(selected);
+    if(!hud){LLStringUtil::format_map_t args;args["TOT_ATT"]=std::to_string(count);args["TOT_ATT_TIME"]=count && complete?llformat("%.2f",total*1000):"--";getChild<LLTextBox>("tot_att_count")->setText(getString("tot_att_template",args));}
+#endif
+}
+
+void FSFloaterPerformance::populateNativeNearby()
+{
+#if VS_NATIVE_VULKAN
+    const auto scroll=mNearbyList->getScrollPos();const auto selected=mNearbyList->getStringUUIDSelectedItem();
+    auto column=mNearbyList->getSortColumnName();bool ascending=mNearbyList->getSortAscending();if(column=="art_visual"){column="art_value";ascending=false;}
+    mNearbyList->clearRows();mNearbyList->updateColumns(true);mNearbyMaxGPUTime=-1;
+    const auto session=VSNativeSession::active();if(!session || !gViewerWindow || !gViewerWindow->nativeContext())return;
+    auto& world=gViewerWindow->nativeContext()->world();const auto rows=world.performanceAvatars();
+    const F64 radius=F64(LLVOAvatar::sRenderDistance)*LLVOAvatar::sRenderDistance;
+    const auto nearby=[&](const auto& row){return !row.control && (dist_vec_squared(row.position,gAgent.getPositionGlobal())<=radius || dist_vec_squared(row.position,gAgentCamera.getCameraPositionGlobal())<=radius);};
+    for(const auto& row:rows)if(nearby(row) && row.gpuMilliseconds)mNearbyMaxGPUTime=std::max(mNearbyMaxGPUTime,*row.gpuMilliseconds);
+    const bool showTuned=gSavedSettings.getBOOL("ShowTunedART");unsigned count=0;
+    for(const auto& row:rows)
+    {
+        if(!nearby(row) || !world.current(row.object))continue;++count;if(row.invisible)continue;
+        LLSD item;item["id"]=row.object.id;auto& columns=item["columns"];unsigned n=0;
+        columns[n]["column"]="art_visual";columns[n]["type"]="bar";auto& bar=columns[n++]["value"];
+        bar["ratio"]=row.gpuMilliseconds && mNearbyMaxGPUTime>0?*row.gpuMilliseconds / mNearbyMaxGPUTime:0.f;
+        bar["bottom"]=BAR_BOTTOM_PAD;bar["left_pad"]=BAR_LEFT_PAD;bar["right_pad"]=BAR_RIGHT_PAD;
+        columns[n]["column"]="art_value";columns[n]["type"]="text";columns[n++]["value"]=row.gpuMilliseconds?llformat("%.2f",*row.gpuMilliseconds*1000.f):"--";
+        if(showTuned){columns[n]["column"]="adj_art_value";columns[n]["type"]="text";columns[n++]["value"]=row.tooSlow && row.gpuMilliseconds?llformat("%.2f",*row.gpuMilliseconds*1000.f):"--";}
+        columns[n]["column"]="complex_value";columns[n]["type"]="text";columns[n++]["value"]=std::to_string(std::max(S32(row.complexity)/1000,1));
+        columns[n]["column"]="state";columns[n]["type"]="text";columns[n++]["value"]=row.tooSlow?(row.tooSlowWithoutShadows?"I":"S"):" ";
+        const unsigned name=n;columns[n++]["column"]="name";
+        U64 geometry,shadows,idle;
+        {std::lock_guard<std::mutex> lock(LLPerfStats::bufferToggleLock);geometry=LLPerfStats::StatsRecorder::get(AvType,row.object.id,LLPerfStats::StatType_t::RENDER_GEOMETRY);shadows=LLPerfStats::StatsRecorder::get(AvType,row.object.id,LLPerfStats::StatType_t::RENDER_SHADOWS);idle=LLPerfStats::StatsRecorder::get(AvType,row.object.id,LLPerfStats::StatType_t::RENDER_IDLE);}
+        columns[n]["column"]="breakdown";columns[n]["type"]="text";columns[n]["value"]=llformat("%.2f/%.2f/%.2f",LLPerfStats::raw_to_us(geometry),LLPerfStats::raw_to_us(shadows),LLPerfStats::raw_to_us(idle));
+        if(auto* control=mNearbyList->addElement(item))
+        {
+            const auto color=row.object.id==session->account().agent?"DrYellow":row.tooSlow||row.jellydoll?"LabelDisabledColor":LLAvatarActions::isFriend(row.object.id)?"ConversationFriendColor":"white";
+            if(auto* text=dynamic_cast<LLScrollListText*>(control->getColumn(name)))text->setColor(LLUIColorTable::instance().getColor(color));
+        }
+    }
+    mNearbyList->sortByColumn(column,ascending);mNearbyList->setScrollPos(scroll);mNearbyList->selectByID(selected);
+    U64 total;{std::lock_guard<std::mutex> lock(LLPerfStats::bufferToggleLock);total=LLPerfStats::StatsRecorder::getSum(AvType,LLPerfStats::StatType_t::RENDER_COMBINED);}
+    LLStringUtil::format_map_t args;args["TOT_AV"]=std::to_string(count);args["TOT_AV_TIME"]=llformat("%.2f",LLPerfStats::raw_to_us(total));getChild<LLTextBox>("tot_av_count")->setText(getString("tot_av_template",args));
+#endif
+}
+
+bool FSFloaterPerformance::isNativeCallback(std::string_view name,const LLSD& parameter)
+{
+    const auto action=parameter.asString();
+    if(name=="Settings.SetRendering")return action=="default"||action=="never"||action=="always";
+    if(name=="Settings.IsSelected")return action=="default"||action=="non_default"||action=="never"||action=="always";
+    if(name=="Avatar.Extended")return action=="inspect"||action=="zoom";
+    return false;
+}

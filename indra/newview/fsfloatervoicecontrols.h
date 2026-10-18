@@ -279,6 +279,7 @@ private:
     bool mInitParticipantsVoiceState;
 
     boost::signals2::connection mAvatarListRefreshConnection;
+    boost::signals2::scoped_connection mDisplayNamesConnection, mNameChangedConnection;
 
 
     /**

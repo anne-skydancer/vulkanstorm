@@ -47,6 +47,7 @@ struct Image
     unsigned mipLevels=1;
     ImageCompression compression=ImageCompression::Uncompressed;
     std::size_t gpuBytes=0;
+    bool alphaMask=false; // Original alpha histogram suitability; distinct from binary alpha content.
 };
 // Existing producers publish indexed region-local position/normal/UV0.
 // Optional channels are explicit schema requirements for later producers;

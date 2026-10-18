@@ -31,6 +31,7 @@
 #include "llinventory.h"
 #include "llpanel.h"
 #include "lluuid.h"
+#include <functional>
 #include "llviewerobject.h"
 #include "llvoinventorylistener.h"
 #include "v3math.h"
@@ -39,6 +40,7 @@
 class LLButton;
 class LLPanelObjectInventory;
 class LLViewerObject;
+class VSTaskInventoryObject;
 class LLCheckBoxCtrl;
 class LLSpinCtrl;
 
@@ -84,7 +86,7 @@ public:
     static const char* PERMS_ANYONE_CONTROL_KEY;
 
 protected:
-    void getState(LLViewerObject *object);
+    void getState(const VSTaskInventoryObject& object);
     void onFilterEdit();
     void onSimulatorFeaturesReceived(const LLUUID&);
     LLUUID mLastScriptObjectID;
@@ -93,6 +95,7 @@ protected:
     boost::signals2::connection mSimulatorFeaturesConnection;
     LLButton* mPublishButton{nullptr};
 
+    std::function<bool()> mAccountCurrent;
     bool mDirtyFilter { false };
 
 public:

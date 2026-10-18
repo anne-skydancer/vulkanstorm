@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpreview.h"
+#include "vstaskinventoryobject.h"
 #include "vsnativeim.h"
 
 #include "lllineeditor.h"
@@ -78,6 +79,10 @@ LLPreview::LLPreview(const LLSD& key)
     mDirty(true),
     mSaveDialogShown(false)
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() && key.has("taskid"))
+        mObjectUUID = key["taskid"].asUUID();
+#endif
     mAuxItem = new LLInventoryItem;
     // don't necessarily steal focus on creation -- sometimes these guys pop up without user action
     setAutoFocus(false);
@@ -95,12 +100,16 @@ bool LLPreview::postBuild()
 
 LLPreview::~LLPreview()
 {
+    mTaskInventoryConnection.disconnect();
     gFocusMgr.releaseFocusIfNeeded( this ); // calls onCommit()
     gInventory.removeObserver(this);
 }
 
 void LLPreview::setObjectID(const LLUUID& object_id)
 {
+    mTaskInventoryConnection.disconnect();
+    mTaskObjectBound = mTaskInventoryPending = false;
+    mTaskObjectCurrent = {};
     mObjectUUID = object_id;
     if (getAssetStatus() == PREVIEW_ASSET_UNLOADED)
     {
@@ -121,7 +130,15 @@ void LLPreview::setItem( LLInventoryItem* item )
 
 const LLInventoryItem *LLPreview::getItem() const
 {
-    if (!mPreviewCurrent()) return nullptr;
+    if (!mPreviewCurrent() || (mTaskObjectBound && !mTaskObjectCurrent())) return nullptr;
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() && mObjectUUID.notNull())
+    {
+        const auto object = VSTaskInventoryObject::find(mObjectUUID);
+        const auto* item = dynamic_cast<LLInventoryItem*>(object->getInventoryObject(mItemUUID));
+        if (item || !isTaskDraft()) return item;
+    }
+#endif
     const LLInventoryItem *item = NULL;
     if (mItem.notNull())
     {
@@ -155,7 +172,7 @@ const LLInventoryItem *LLPreview::getItem() const
     else
     {
         // it's an object's inventory item.
-        LLViewerObject* object = gObjectList.findObject(mObjectUUID);
+        auto object = VSTaskInventoryObject::find(mObjectUUID);
         if(object)
         {
             item = dynamic_cast<LLInventoryItem*>(object->getInventoryObject(mItemUUID));
@@ -194,7 +211,7 @@ void LLPreview::onCommit()
         if(mObjectUUID.notNull())
         {
             // must be in an object
-            LLViewerObject* object = gObjectList.findObject(mObjectUUID);
+            auto object = VSTaskInventoryObject::find(mObjectUUID);
             if(object)
             {
                 object->updateInventory(
@@ -282,13 +299,12 @@ void LLPreview::refreshFromItem()
 // static
 bool LLPreview::canModify(const LLUUID taskUUID, const LLInventoryItem* item)
 {
-    const LLViewerObject* object = nullptr;
     if (taskUUID.notNull())
     {
-        object = gObjectList.findObject(taskUUID);
+        const auto object = VSTaskInventoryObject::find(taskUUID);
+        if (object && !object->permModify()) return false;
     }
-
-    return canModify(object, item);
+    return item && gAgent.allowOperation(PERM_MODIFY, item->getPermissions(), GP_OBJECT_MANIPULATE);
 }
 
 // static
@@ -419,6 +435,7 @@ bool LLPreview::handleHover(S32 x, S32 y, MASK mask)
 
 void LLPreview::onOpen(const LLSD& key)
 {
+    if (!ensureTaskInventory()) return;
     if (!getFloaterHost() && !getHost() && getAssetStatus() == PREVIEW_ASSET_UNLOADED)
     {
         loadAsset();
@@ -461,7 +478,7 @@ void LLPreview::onBtnCopyToInv(void* userdata)
         else if (self->mObjectUUID.notNull())
         {
             // item is in in-world inventory
-            LLViewerObject* object = gObjectList.findObject(self->mObjectUUID);
+            auto object = VSTaskInventoryObject::find(self->mObjectUUID);
             LLPermissions perm(item->getPermissions());
             if(object
                 &&(perm.allowCopyBy(gAgent.getID(), gAgent.getGroupID())
@@ -656,11 +673,67 @@ void LLPreview::setAssetId(const LLUUID& asset_id)
     else
     {
         // Update object inventory asset_id.
-        LLViewerObject* object = gObjectList.findObject(mObjectUUID);
-        if(NULL == object)
+        auto object = VSTaskInventoryObject::find(mObjectUUID);
+        if (!object)
         {
             return;
         }
         object->updateViewerInventoryAsset(item, asset_id);
     }
+}
+
+std::function<bool()> LLPreview::inventoryItemGuard() const
+{
+    const auto account = mPreviewCurrent;
+    if (mObjectUUID.isNull()) return account;
+    const auto object = VSTaskInventoryObject::find(mObjectUUID);
+    const auto current = object->itemGuard(mItemUUID);
+    const auto intent = mTaskObjectBound ? mTaskObjectCurrent : object->objectGuard();
+    return [account, intent, current] { return account() && intent() && current(); };
+}
+bool LLPreview::ensureTaskInventory()
+{
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() && mObjectUUID.notNull())
+    {
+        if (!mPreviewCurrent() || (mTaskObjectBound && !mTaskObjectCurrent())) return false;
+        const auto object = VSTaskInventoryObject::find(mObjectUUID);
+        auto* inventory = object->nativeInventory();
+        if (!object || !inventory) { mAssetStatus = PREVIEW_ASSET_ERROR; return false; }
+        if (!mTaskObjectBound)
+        {
+            mTaskObjectCurrent = object->objectGuard();
+            mTaskObjectBound = true;
+        }
+        const auto weak = getHandle(); const auto current = mTaskObjectCurrent;
+        if (!mTaskInventoryConnection.connected())
+            mTaskInventoryConnection = inventory->observe(object->nativeObject(),
+                [weak, current](const VSTaskInventory::Result& result)
+                {
+                    auto* view = dynamic_cast<LLPreview*>(weak.get());
+                    if (!view || !current() || !result.success) return;
+                    view->mDirty = true;
+                    view->refreshFromItem();
+                    if (view->getAssetStatus() == PREVIEW_ASSET_UNLOADED || view->getAssetStatus() == PREVIEW_ASSET_LOADING) view->loadAsset();
+                });
+        if (inventory->snapshot(object->nativeObject())) return true;
+        if (!mTaskInventoryPending)
+        {
+            mTaskInventoryPending = true;
+            if (!inventory->request(object->nativeObject(), [weak, current](const VSTaskInventory::Result& result)
+                {
+                    auto* view = dynamic_cast<LLPreview*>(weak.get());
+                    if (!view || !current()) return;
+                    view->mTaskInventoryPending = false;
+                    if (!result.success) view->mAssetStatus = PREVIEW_ASSET_ERROR;
+                }))
+            {
+                mTaskInventoryPending = false;
+                mAssetStatus = PREVIEW_ASSET_ERROR;
+            }
+        }
+        return false;
+    }
+#endif
+    return true;
 }

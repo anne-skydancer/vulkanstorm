@@ -30,6 +30,8 @@
 #include "fsareasearchmenu.h"
 
 #include "fsareasearch.h"
+#include "vsnativeim.h"
+#include "llmenugl.h"
 #include "llfloaterreg.h"
 
 FSAreaSearchMenu gFSAreaSearchMenu;
@@ -39,9 +41,10 @@ LLContextMenu* FSAreaSearchMenu::createMenu()
     LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
     LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
 
-    registrar.add("AreaSearch.Action", boost::bind(&FSAreaSearchMenu::onContextMenuItemClick, this, _2));
-    enable_registrar.add("AreaSearch.Enable", boost::bind(&FSAreaSearchMenu::onContextMenuItemEnable, this, _2));
-    enable_registrar.add("AreaSearch.RLV", boost::bind(&FSAreaSearchMenu::onContextMenuItemVisibleRLV, this, _2));
+    const auto current=vs_native_im_guard();
+    registrar.add("AreaSearch.Action", [this,current](LLUICtrl*,const LLSD& data){if(current())onContextMenuItemClick(data);});
+    enable_registrar.add("AreaSearch.Enable", [this,current](LLUICtrl*,const LLSD& data){return current() && onContextMenuItemEnable(data);});
+    enable_registrar.add("AreaSearch.RLV", [this,current](LLUICtrl*,const LLSD& data){return current() && onContextMenuItemVisibleRLV(data);});
 
     return createFromFile("menu_fs_area_search.xml");
 }
@@ -73,4 +76,11 @@ bool FSAreaSearchMenu::onContextMenuItemVisibleRLV(const LLSD& userdata)
         return search->getPanelList()->onContextMenuItemVisibleRLV(userdata);
     }
     return false;
+}
+
+void FSAreaSearchMenu::resetAccount()
+{
+    if (auto* menu=mMenuHandle.get()) menu->die();
+    mMenuHandle.markDead();
+    mUUIDs.clear();
 }

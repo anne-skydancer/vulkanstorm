@@ -29,6 +29,7 @@
 #define LL_FLOATER_360CAPTURE_H
 
 #include "llfloater.h"
+#include <functional>
 #include "llmediactrl.h"
 #include "llcharacter.h"
 
@@ -54,10 +55,10 @@ class LLFloater360Capture:
         void capture360Images();
 
         const std::string makeFullPathToJS(const std::string filename);
-        void writeDataURLHeader(const std::string filename);
-        void writeDataURLFooter(const std::string filename);
+        bool writeDataURLHeader(const std::string filename);
+        bool writeDataURLFooter(const std::string filename);
         bool writeDataURL(const std::string filename, const std::string prefix, U8* data, unsigned int data_len);
-        void encodeAndSave(LLPointer<LLImageRaw> raw_image, const std::string filename, const std::string prefix);
+        bool encodeAndSave(LLPointer<LLImageRaw> raw_image, const std::string filename, const std::string prefix);
 
         std::vector<LLAnimPauseRequest> mAvatarPauseHandles;
         void freezeWorld(bool enable);
@@ -93,6 +94,8 @@ class LLFloater360Capture:
         LLPointer<LLImageRaw> mRawImages[6];
 
         std::string mStartILMode;
+        std::function<bool()> mCurrent,mAccountOwner;
+        bool mCapturing=false,mWorldFrozen=false,mOldFreezeTime=false,mOldParticles=false,mOldCloudsPaused=false;
 };
 
 #endif  // LL_FLOATER_360CAPTURE_H

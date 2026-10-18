@@ -27,7 +27,11 @@
 #ifndef LL_LLSIDEPANELAPPEARANCE_H
 #define LL_LLSIDEPANELAPPEARANCE_H
 
+#include <vector>
+#include <boost/signals2/connection.hpp>
+
 #include "llpanel.h"
+#include <string_view>
 #include "llinventoryobserver.h"
 
 #include "llinventory.h"
@@ -48,6 +52,8 @@ public:
     virtual ~LLSidepanelAppearance();
 
     /*virtual*/ bool postBuild();
+    void draw() override;
+    static bool isNativeCallback(std::string_view, const LLSD&);
     /*virtual*/ void onOpen(const LLSD& key);
     // <FS:Ansariel> CTRL-F focusses local search editor
     /*virtual*/ bool handleKeyHere(KEY key, MASK mask);
@@ -85,6 +91,8 @@ public:
     static void updateAvatarComplexity(U32 complexity, const std::map<LLUUID, U32>& item_complexity, const std::map<LLUUID, U32>& temp_item_complexity, U32 body_parts_complexity);
 
 private:
+    std::vector<boost::signals2::scoped_connection> mAppearanceConnections;
+
     void onFilterEdit(const std::string& search_string);
     void onVisibilityChanged ( const LLSD& new_visibility );
 
@@ -119,6 +127,8 @@ private:
 
     // <FS:Ansariel> Show avatar complexity in appearance floater
     U32 mLastAvatarComplexity;
+    std::map<LLUUID, U32> mNativeItemCosts, mNativeTemporaryCosts;
+    U32 mNativeBodyCost = 0;
 };
 
 #endif //LL_LLSIDEPANELAPPEARANCE_H

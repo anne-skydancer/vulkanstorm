@@ -29,6 +29,7 @@
 #define LL_LLFLOATERINVENTORYTHUMBNAILSHELPER_H
 
 #include "llfloater.h"
+#include "llviewerinventory.h"
 class LLTextEditor;
 class LLScrollListCtrl;
 class LLViewerInventoryItem;
@@ -68,8 +69,9 @@ class LLFloaterInventoryThumbnailsHelper:
         void updateDisplayList();
         void writeToLog(std::string logline, bool prepend_newline);
 
-        std::map<std::string, LLViewerInventoryItem*> mItemNamesItems;
+        std::map<std::string, LLPointer<LLViewerInventoryItem>> mItemNamesItems;
         std::map<std::string, LLUUID> mTextureNamesIDs;
+        U64 mEditRevision=0;
 
         enum EListColumnNum
         {

@@ -67,6 +67,7 @@ namespace LLPerfStats
 
     // called once per main loop iteration
     void updateClass();
+    void resetNativeStats();
 
 // Note if changing these, they should correspond with the log range of the correpsonding sliders
     static constexpr U64 ART_UNLIMITED_NANOS{50000000};

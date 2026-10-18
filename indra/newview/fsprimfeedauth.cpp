@@ -64,6 +64,7 @@
  */
 #include "llviewerprecompiledheaders.h"
 #include "fsprimfeedauth.h"
+#include "vsnativeim.h"
 #include "fsprimfeedconnect.h"
 #include "llimview.h"
 #include "llnotificationsutil.h"
@@ -100,7 +101,10 @@ void FSPrimfeedAuthResponse(LLSD const &aData, Callback callback)
     LLSD resultLLSD;
     if(!result.empty())
     {
-        resultLLSD = LlsdFromJson(boost::json::parse(result));
+        boost::system::error_code error;
+        const auto json = boost::json::parse(result, error);
+        if (error) { callback(false, LLSD()); return; }
+        resultLLSD = LlsdFromJson(json);
     }
     callback((status.getType() == HTTP_OK ||
             status.getType() == HTTP_NO_CONTENT), resultLLSD);
@@ -119,23 +123,21 @@ void FSPrimfeedAuth::initiateAuthRequest()
         return;
     }
     // If no token stored, begin the login request; otherwise check user status.
-    sPrimfeedAuth = FSPrimfeedAuth::create(
+    FSPrimfeedAuth::create(
         [](bool success, const LLSD &response) 
         {
             LLSD event_data = response;
             event_data["responseType"] = "primfeed_auth_response";
             event_data["success"] = success;
             sPrimfeedAuthPump->post(event_data);
-            // Now that auth is complete, clear the static pointer.
-            sPrimfeedAuth.reset();
+
         }
     );
-    FSPrimfeedConnect::instance().setConnectionState(FSPrimfeedConnect::PRIMFEED_CONNECTING);
 }
 
 void FSPrimfeedAuth::resetAuthStatus()
 {
-    sPrimfeedAuth.reset();
+    retireAccount();
     gSavedPerAccountSettings.setString("FSPrimfeedOAuthToken", "");
     gSavedPerAccountSettings.setString("FSPrimfeedProfileLink", "");
     gSavedPerAccountSettings.setString("FSPrimfeedPlan", "");
@@ -149,32 +151,43 @@ void FSPrimfeedAuth::resetAuthStatus()
 
 
 FSPrimfeedAuth::FSPrimfeedAuth(authorized_callback_t callback)
-    : mCallback(callback)
+    : mCallback(std::move(callback)), mCurrent(vs_native_im_guard())
 {
-    mChatMessageConnection = LLNotificationsUI::LLNotificationManager::instance().getChatHandler()->addNewChatCallback(
-        [this](const LLSD &message) {
-            LL_DEBUGS("FSPrimfeedAuth") << "Received chat message: " << message["message"].asString() << LL_ENDL;
-            this->onChatMessage(message);
-        });
 }
 
 FSPrimfeedAuth::~FSPrimfeedAuth()
 {
-    if (mChatMessageConnection.connected())
-    {
-        try
-        {
-            mChatMessageConnection.disconnect();
-        }
-        catch (const std::exception& e)
-        {
-            LL_WARNS("FSPrimfeedAuth") << "Exception during chat connection disconnect: " << e.what() << LL_ENDL;
-        }
-        catch (...)
-        {
-            LL_WARNS("FSPrimfeedAuth") << "Unknown exception during chat connection disconnect." << LL_ENDL;
-        }
-    }     
+    retire();
+}
+
+void FSPrimfeedAuth::retire()
+{
+    mRetired = true;
+    mCallback = {};
+    mOauthToken.clear();
+    mRequestId.clear();
+    mInstantMessageConnection.disconnect();
+    mChatMessageConnection.disconnect();
+}
+
+void FSPrimfeedAuth::retireAccount()
+{
+    const auto previous = std::exchange(sPrimfeedAuth, {});
+    if (previous) previous->retire();
+    if (FSPrimfeedConnect::instanceExists())
+        FSPrimfeedConnect::instance().setConnectionState(FSPrimfeedConnect::PRIMFEED_DISCONNECTED);
+}
+
+void FSPrimfeedAuth::complete(bool success, const LLSD& response)
+{
+    if (!current()) return;
+    const auto keep = shared_from_this();
+    mCompleted = true;
+    mInstantMessageConnection.disconnect();
+    mChatMessageConnection.disconnect();
+    auto callback = std::exchange(mCallback, {});
+    if (sPrimfeedAuth.get() == this) sPrimfeedAuth.reset();
+    if (callback) callback(success, response);
 }
 
 // Factory method to create a shared pointer to FSPrimfeedAuth.
@@ -192,6 +205,14 @@ std::shared_ptr<FSPrimfeedAuth> FSPrimfeedAuth::create(authorized_callback_t cal
         return nullptr;
     }
 
+    // Publish the owner before a request can synchronously complete or reenter.
+    sPrimfeedAuth = auth;
+    const auto weak = std::weak_ptr<FSPrimfeedAuth>(auth);
+    auth->mChatMessageConnection = LLNotificationsUI::LLNotificationManager::instance().getChatHandler()->addNewChatCallback(
+        [weak](const LLSD& message)
+        {
+            if (const auto owner=weak.lock(); owner && owner->current()) owner->onChatMessage(message);
+        });
     FSPrimfeedConnect::instance().setConnectionState(FSPrimfeedConnect::PRIMFEED_CONNECTING);
 
     // If no token stored, begin the login request; otherwise check user status.
@@ -209,6 +230,7 @@ std::shared_ptr<FSPrimfeedAuth> FSPrimfeedAuth::create(authorized_callback_t cal
 
 void FSPrimfeedAuth::beginLoginRequest()
 {
+    if (!current()) return;
     // Get our API key and user UUID.
     std::string viewer_api_key = gSavedSettings.getString("FSPrimfeedViewerApiKey");
     std::string user_uuid = gAgent.getID().asString();
@@ -243,6 +265,7 @@ void FSPrimfeedAuth::beginLoginRequest()
         url, 
         post_data, 
         [self](LLSD const &aData) {
+            if (!self->current()) return;
             LL_DEBUGS("FSPrimfeedAuth") << "Login request response(OK): " << aData << LL_ENDL;
             FSPrimfeedAuthResponse(aData,
                 [self](bool success, const LLSD &response) {
@@ -251,6 +274,7 @@ void FSPrimfeedAuth::beginLoginRequest()
             );
         },
         [self](LLSD const &aData) {
+            if (!self->current()) return;
             LL_DEBUGS("FSPrimfeedAuth") << "Login request response(FAIL): " << aData << LL_ENDL;
             FSPrimfeedAuthResponse(aData,
                 [self](bool success, const LLSD &response) {
@@ -265,17 +289,18 @@ void FSPrimfeedAuth::beginLoginRequest()
 
 void FSPrimfeedAuth::gotRequestId(bool success, const LLSD &response)
 {
+    if (!current()) return;
     if (!success)
     {
         LLNotificationsUtil::add("PrimfeedLoginRequestFailed");
-        mCallback(false, LLSD());
+        complete(false, LLSD());
         return;
     }
     mRequestId = response["requestId"].asString();
     if (mRequestId.empty())
     {
         LLNotificationsUtil::add("PrimfeedLoginRequestFailed");
-        mCallback(false, LLSD());
+        complete(false, LLSD());
         return;
     }
     // Open the browser for user approval.
@@ -289,9 +314,10 @@ void FSPrimfeedAuth::gotRequestId(bool success, const LLSD &response)
 /// "#PRIMFEED_OAUTH: <oauth_token>" is intercepted.
 void FSPrimfeedAuth::onOauthTokenReceived(const std::string_view& oauth_token)
 {
+    if (!current()) return;
     if (oauth_token.empty())
     {
-        mCallback(false, LLSD());
+        complete(false, LLSD());
         return;
     }
     mOauthToken = oauth_token;
@@ -300,6 +326,7 @@ void FSPrimfeedAuth::onOauthTokenReceived(const std::string_view& oauth_token)
 
 void FSPrimfeedAuth::onChatMessage(const LLSD& message)
 {
+    if (!current()) return;
     constexpr std::string_view oauth_msg_prefix = "#PRIMFEED_OAUTH: ";
     const std::string msg = message["message"].asString();
     if (msg.find(std::string(oauth_msg_prefix)) == 0)
@@ -313,6 +340,7 @@ void FSPrimfeedAuth::onChatMessage(const LLSD& message)
 
 void FSPrimfeedAuth::validateRequest()
 {
+    if (!current()) return;
     // No POST body needed.
     std::string post_data = "";
     std::string url = "https://api.primfeed.com/pf/viewer/validate-request";
@@ -347,6 +375,7 @@ void FSPrimfeedAuth::validateRequest()
             url,
             post_data,
             [self](LLSD const &aData) {
+            if (!self->current()) return;
                 LL_DEBUGS("FSPrimfeedAuth") << "Validation-request response(OK): " << aData << LL_ENDL;
                 FSPrimfeedAuthResponse(aData,
                     [self](bool success, const LLSD &response) {
@@ -355,6 +384,7 @@ void FSPrimfeedAuth::validateRequest()
                 );
             },
             [self](LLSD const &aData) {
+            if (!self->current()) return;
                 LL_INFOS("FSPrimfeedAuth") << "Validation-request response(FAIL): " << aData << LL_ENDL;
                 FSPrimfeedAuthResponse(aData,
                     [self](bool success, const LLSD &response) {
@@ -376,10 +406,11 @@ void FSPrimfeedAuth::validateRequest()
 
 void FSPrimfeedAuth::gotValidateResponse(bool success, const LLSD &response)
 {
+    if (!current()) return;
     if (!success)
     {
         LLNotificationsUtil::add("PrimfeedValidateFailed");
-        mCallback(false, response);
+        complete(false, response);
         return;
     }
     checkUserStatus();
@@ -387,6 +418,7 @@ void FSPrimfeedAuth::gotValidateResponse(bool success, const LLSD &response)
 
 void FSPrimfeedAuth::checkUserStatus()
 {
+    if (!current()) return;
     std::string viewer_api_key = gSavedSettings.getString("FSPrimfeedViewerApiKey");
 
     // Build the base URL without query parameters.
@@ -405,20 +437,23 @@ void FSPrimfeedAuth::checkUserStatus()
     options->setRetries(0);
     options->setTimeout(PRIMFEED_CONNECT_TIMEOUT);
 
+    const auto self = shared_from_this();
     // Make the HTTP GET request, passing in the headers and options.
     FSCoreHttpUtil::callbackHttpGetRaw(
         url,
-        [this](LLSD const &aData) {
+        [self](LLSD const &aData) {
+            if (!self->current()) return;
             LL_DEBUGS("FSPrimfeedAuth") << "Check-user-status response: " << aData << LL_ENDL;
-            FSPrimfeedAuthResponse(aData, [this](bool success, const LLSD &response) {
-                this->gotUserStatus(success, response);
+            FSPrimfeedAuthResponse(aData, [self](bool success, const LLSD &response) {
+                self->gotUserStatus(success, response);
             });
         },
-        [this](LLSD const &aData) {
+        [self](LLSD const &aData) {
+            if (!self->current()) return;
             LL_INFOS("FSPrimfeedAuth") << "Check-user-status response (failure): " << aData << LL_ENDL;
             // Optionally, call the same processing for failure or handle separately.
-            FSPrimfeedAuthResponse(aData, [this](bool success, const LLSD &response){
-                this->gotUserStatus(success, response);
+            FSPrimfeedAuthResponse(aData, [self](bool success, const LLSD &response){
+                self->gotUserStatus(success, response);
             });
         },
         pHeader,
@@ -427,8 +462,9 @@ void FSPrimfeedAuth::checkUserStatus()
 }
 
 
-void FSPrimfeedAuth::gotUserStatus(bool success, const LLSD &response) const
+void FSPrimfeedAuth::gotUserStatus(bool success, const LLSD &response)
 {
+    if (!current()) return;
     LL_INFOS("Primfeed") << "User status: " << response << "(" << success << ")" << LL_ENDL;
     if (success && response.has("plan") && response.has("username") && response.has("link"))
     {
@@ -440,10 +476,10 @@ void FSPrimfeedAuth::gotUserStatus(bool success, const LLSD &response) const
         LLSD event_data = response;
         event_data["responseType"] = "primfeed_user_info";
         sPrimfeedAuthPump->post(event_data);        
-        mCallback(true, response);
+        complete(true, response);
         return;
     }
     LLNotificationsUtil::add("PrimfeedUserStatusFailed");
     FSPrimfeedConnect::instance().setConnectionState(FSPrimfeedConnect::PRIMFEED_DISCONNECTED);
-    mCallback(false, response);
+    complete(false, response);
 }

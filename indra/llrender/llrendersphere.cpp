@@ -31,6 +31,7 @@
 #include "linden_common.h"
 
 #include "llrendersphere.h"
+#include "vsrenderprimitivegeometry.h"
 #include "llerror.h"
 
 #include "llglheaders.h"
@@ -45,11 +46,10 @@ void LLRenderSphere::render()
     gGL.flush();
 }
 
-inline LLVector3 polar_to_cart(F32 latitude, F32 longitude)
+inline LLVector3 polar_to_cart(F32 latitude,F32 longitude)
 {
-    return LLVector3(sin(F_TWO_PI * latitude) * cos(F_TWO_PI * longitude),
-                     sin(F_TWO_PI * latitude) * sin(F_TWO_PI * longitude),
-                     cos(F_TWO_PI * latitude));
+    const auto point=vs_sphere_point(latitude,longitude);
+    return LLVector3(point.data());
 }
 
 

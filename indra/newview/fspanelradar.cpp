@@ -41,6 +41,11 @@
 #include "llcallingcard.h"
 #include "llnetmap.h"
 #include "llpanelblockedlist.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "fspanelblocklist.h"
+#endif
 #include "llviewercontrol.h"        // for gSavedSettings
 #include "llviewermenu.h"           // for gMenuHolder
 #include "rlvactions.h"
@@ -138,14 +143,14 @@ bool FSPanelRadar::postBuild()
     LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
     LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
 
-    registrar.add("Radar.Option.Action",    boost::bind(&FSPanelRadar::onOptionsMenuItemClicked, this, _2));
-    registrar.add("Radar.NameFmt",          boost::bind(&FSRadar::onRadarNameFmtClicked, _2));
-    registrar.add("Radar.ReportTo",         boost::bind(&FSRadar::onRadarReportToClicked, _2));
-    registrar.add("Radar.ToggleColumn",     boost::bind(&FSPanelRadar::onColumnVisibilityChecked, this, _2));
+    registrar.add("Radar.Option.Action",    vs_native_im_account_callback(boost::bind(&FSPanelRadar::onOptionsMenuItemClicked, this, _1, _2)));
+    registrar.add("Radar.NameFmt",          vs_native_im_account_callback(boost::bind(&FSRadar::onRadarNameFmtClicked, _2)));
+    registrar.add("Radar.ReportTo",         vs_native_im_account_callback(boost::bind(&FSRadar::onRadarReportToClicked, _2)));
+    registrar.add("Radar.ToggleColumn",     vs_native_im_account_callback(boost::bind(&FSPanelRadar::onColumnVisibilityChecked, this, _2)));
 
-    enable_registrar.add("Radar.NameFmtCheck",  boost::bind(&FSRadar::radarNameFmtCheck, _2));
-    enable_registrar.add("Radar.ReportToCheck", boost::bind(&FSRadar::radarReportToCheck, _2));
-    enable_registrar.add("Radar.EnableColumn",  boost::bind(&FSPanelRadar::onEnableColumnVisibilityChecked, this, _2));
+    enable_registrar.add("Radar.NameFmtCheck",  vs_native_im_account_callback(boost::bind(&FSRadar::radarNameFmtCheck, _2)));
+    enable_registrar.add("Radar.ReportToCheck", vs_native_im_account_callback(boost::bind(&FSRadar::radarReportToCheck, _2)));
+    enable_registrar.add("Radar.EnableColumn",  vs_native_im_account_callback(boost::bind(&FSPanelRadar::onEnableColumnVisibilityChecked, this, _2)));
 
     mRadarGearButton = getChild<LLButton>("gear_btn");
     mOptionsButton = getChild<LLMenuButton>("options_btn");
@@ -269,13 +274,17 @@ void FSPanelRadar::onAddFriendButtonClicked()
     }
 }
 
-void FSPanelRadar::onOptionsMenuItemClicked(const LLSD& userdata)
+void FSPanelRadar::onOptionsMenuItemClicked(LLUICtrl* control, const LLSD& userdata)
 {
-    std::string chosen_item = userdata.asString();
+    const std::string chosen_item = userdata.asString().empty() && control ? control->getName() : userdata.asString();
 
     if (chosen_item == "panel_block_list_sidetray")
     {
-        LLPanelBlockedList::showPanelAndSelect();
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active()) FSPanelBlockList::showPanelAndSelect();
+        else
+#endif
+            LLPanelBlockedList::showPanelAndSelect();
     }
 }
 

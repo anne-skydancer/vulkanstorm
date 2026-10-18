@@ -13,6 +13,10 @@
 #include "v4coloru.h"
 #include "llsd.h"
 #include "llsdutil.h"
+#include "vsimage3dgeometry.h"
+#include "llviewercamera.h"
+#include "llviewerwindow.h"
+#include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -67,12 +71,27 @@ struct VSUIResources::Impl
                 auto canvas=owner.lock(); check(bool(canvas),"Native UI image owner has retired");
                 canvas->draw(*asset,x,y,w,h,color,solid,outer,center,inner);
             });
+        facade->setNativePhysicalDraw([owner,asset](S32 x,S32 y,S32 w,S32 h,const LLColor4& color,bool solid,
+            const LLRectf& outer,const LLRectf& center,bool inner)
+        {
+            auto canvas=owner.lock();check(bool(canvas),"Native raw-pixel image owner has retired");
+            canvas->draw(*asset,x,y,w,h,color,solid,outer,center,inner,true,true);
+        });
         facade->setNativeRotatedDraw([owner,asset](S32 x,S32 y,S32 w,S32 h,F32 degrees,
                                                    const LLColor4& color,const LLRectf& uv)
         {
             auto canvas=owner.lock(); check(bool(canvas),"Native UI image owner has retired");
             canvas->drawRotated(*asset,x,y,w,h,degrees,color,uv);
         });
+        facade->setNativeWorldDraw([owner,asset](const LLVector3& origin,const LLVector3& width,
+            const LLVector3& height,const LLColor4& color,const LLRectf& outer,
+            const LLRectf& center,const LLRectf& draw)
+        {
+            auto canvas=owner.lock();check(bool(canvas),"Native world image owner has retired");
+            canvas->drawWorld(*asset,origin,width,height,color,outer,center,draw);
+        });
+        facade->setNativeTrianglesDraw([owner,asset](const LLUIImage::native_triangles_t& triangle)
+        {auto canvas=owner.lock();check(bool(canvas),"Native image triangle owner has retired");canvas->drawTriangles(*asset,triangle);});
         return {asset,facade};
     }
 
@@ -123,6 +142,7 @@ struct VSUIResources::Impl
     }
     std::map<LLImageRaw*,FontPage> font_pages;
     std::array<float,4> clip{};
+    std::optional<float> worldDepth;
     unsigned                       deferred_draw_batches = 0;
     bool active=false;
     explicit Impl(VSUIRenderer& value) : renderer(value)
@@ -141,6 +161,62 @@ struct VSUIResources::Impl
         }
         check(file.eof(),"Invalid native standard bump configuration record");
     }
+    void drawWorld(const Asset& asset,const LLVector3& origin,const LLVector3& width,
+        const LLVector3& height,const LLColor4& color,const LLRectf& outer,
+        const LLRectf& center,const LLRectf& draw)
+    {
+        check(active,"Native world image outside collection");
+        struct Sink
+        {
+            std::array<LLVector3,54> positions{};std::array<LLVector2,54> uv{};
+            LLVector2 current;unsigned count=0;
+            void texCoord2f(F32 u,F32 v){current.set(u,v);}
+            void vertex3f(F32 x,F32 y,F32 z){const F32 p[]{x,y,z};vertex3fv(p);}
+            void vertex3fv(const F32* p)
+            {check(count<positions.size(),"Native world image geometry overflow");positions[count].set(p);uv[count++]=current;}
+        } sink;
+        vs_segmented_image_3d(sink,outer,center,draw,width,height);
+        check(sink.count==54,"Native world image geometry incomplete");
+        auto* camera=LLViewerCamera::getInstance();const auto& view=gViewerWindow->getWorldViewRectRaw();
+        const glm::ivec4 viewport(view.mLeft,view.mBottom,view.getWidth(),view.getHeight());
+        // Every existing draw3D caller supplies camera-plane pixel vectors.
+        // Preserve its floating projection, UV orientation and U8 vertex tint.
+        std::array<glm::vec3,54> projected;
+        for(unsigned i=0;i<sink.count;++i)
+        {
+            projected[i]=glm::project(glm::vec3(origin+sink.positions[i]),camera->getUIModelview(),camera->getUIProjection(),viewport);
+            const auto& p=projected[i];
+            if(!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.z)||p.z<0.f||p.z>1.f)return;
+            check(std::abs(p.z-projected[0].z)<1e-5f,"Native world image is not camera-plane geometry");
+        }
+        for(unsigned first=0;first<sink.count;first+=6)
+        {
+            VSUIRenderer::Packet p;p.image=asset.image;p.blend=nativeBlend();p.sampling=sampling;
+            p.clip=clip;p.worldDepth=projected[first].z;p.triangles.emplace();
+            for(unsigned j=0;j<6;++j)
+            {
+                const auto i=first+j;const auto& point=projected[i];
+                (*p.triangles)[j]={point.x/dpi,logical_height-point.y/dpi,
+                    sink.uv[i].mV[0],1.f-sink.uv[i].mV[1],nativeVertexColor(color.mV[0]),
+                    nativeVertexColor(color.mV[1]),nativeVertexColor(color.mV[2]),nativeVertexColor(color.mV[3])};
+            }
+            packets.push_back(std::move(p));
+        }
+    }
+    void drawTriangles(const Asset& asset,const LLUIImage::native_triangles_t& triangle)
+    {
+        check(active,"Native image triangle outside packet collection");
+        const auto origin=LLRender2D::nativeOrigin();
+        VSUIRenderer::Packet packet;packet.image=asset.image;packet.blend=nativeBlend();packet.sampling=sampling;
+        packet.clip=clip;packet.worldDepth=worldDepth;packet.triangles.emplace();
+        for(unsigned i=0;i<6;++i)
+        {
+            const auto& v=triangle[i];for(float value:v)check(std::isfinite(value),"Non-finite native image triangle");
+            (*packet.triangles)[i]={v[0]+origin[0],logical_height-v[1]-origin[1],v[2],1.f-v[3],
+                nativeVertexColor(v[4]),nativeVertexColor(v[5]),nativeVertexColor(v[6]),nativeVertexColor(v[7])};
+        }
+        packets.push_back(std::move(packet));
+    }
     void drawRotated(const Asset& a,S32 x,S32 y,S32 width,S32 height,F32 degrees,
                      const LLColor4& color,const LLRectf& uv)
     {
@@ -158,10 +234,12 @@ struct VSUIResources::Impl
             packets[i].transform = {c,-sn,sn,c,cx-c*cx-sn*cy,cy+sn*cx-c*cy};
     }
     void draw(const Asset& a,S32 x,S32 y,S32 width,S32 height,const LLColor4& color,
-              bool solid,const LLRectf& outer,const LLRectf& center,bool inner,bool snap_extent=true)
+              bool solid,const LLRectf& outer,const LLRectf& center,bool inner,bool snap_extent=true,bool physical=false)
     {
         check(active,"Native UI facade draw outside packet collection");
-        const auto origin=LLRender2D::isNativeUI()?LLRender2D::nativeOrigin():std::array<F32,2>{0,0};
+        const auto origin=!physical && LLRender2D::isNativeUI()?LLRender2D::nativeOrigin():std::array<F32,2>{0,0};
+        const float coordinate_scale=physical ? dpi : 1.f;
+        const float pixel_scale=physical ? 1.f : dpi;
         if (width<=0 || height<=0) return;
         for (float v: {outer.mLeft,outer.mRight,outer.mTop,outer.mBottom,
                        center.mLeft,center.mRight,center.mTop,center.mBottom})
@@ -174,7 +252,8 @@ struct VSUIResources::Impl
         {
             if (l>=r || b>=t) return;
             VSUIRenderer::Packet p; p.blend=nativeBlend(); p.image=a.image;
-            p.bounds={x+origin[0]+l,logical_height-y-origin[1]-t,x+origin[0]+r,logical_height-y-origin[1]-b};
+            p.bounds={(x+origin[0]+l)/coordinate_scale,logical_height-(y+origin[1]+t)/coordinate_scale,
+                      (x+origin[0]+r)/coordinate_scale,logical_height-(y+origin[1]+b)/coordinate_scale};
             p.uv={ul,1-vt,ur,1-vb}; p.clip=clip;
             std::transform(color.mV, color.mV + 4, p.color.begin(), nativeVertexColor);
             // drawSolid uses the image alpha mask, with RGB replaced by tint.
@@ -187,8 +266,8 @@ struct VSUIResources::Impl
             // The ordinary GL image helper rounds the physical width/height,
             // retaining its translated origin. Rotated quads retain their
             // original extents before rotation, matching the GL rotation path.
-            const float w = snap_extent ? std::floor(width * dpi + .5f) / dpi : float(width);
-            const float h = snap_extent ? std::floor(height * dpi + .5f) / dpi : float(height);
+            const float w = snap_extent ? std::floor(width * pixel_scale + .5f) / pixel_scale : float(width);
+            const float h = snap_extent ? std::floor(height * pixel_scale + .5f) / pixel_scale : float(height);
             quad(0,0,w,h,outer.mLeft,outer.mBottom,outer.mRight,outer.mTop);
             return;
         }
@@ -220,8 +299,8 @@ struct VSUIResources::Impl
         // pixels after UI translation and scaling. Preserve that contract at
         // fractional UI scales, rather than interpolating borders across a
         // half-pixel seam. Outer bounds intentionally remain unrounded.
-        auto snap = [this](float value, float offset)
-        { return std::floor((offset + value) * dpi + .5f) / dpi - offset; };
+        auto snap = [pixel_scale](float value, float offset)
+        { return std::floor((offset + value) * pixel_scale + .5f) / pixel_scale - offset; };
         c.mLeft = snap(c.mLeft, x + origin[0]);
         c.mRight = snap(c.mRight, x + origin[0]);
         c.mBottom = snap(c.mBottom, y + origin[1]);
@@ -361,6 +440,14 @@ LLUIImagePtr VSUIResources::region(const std::string& key,const std::string& nam
             catch (...) { canvas->sampling=previous; throw; }
             canvas->sampling=previous;
         });
+    facade->setNativePhysicalDraw([owner,asset,sampling](S32 x,S32 y,S32 w,S32 h,const LLColor4& color,bool solid,
+        const LLRectf& outer,const LLRectf& center,bool inner)
+    {
+        auto canvas=owner.lock();check(bool(canvas),"Native raw-pixel skin image owner has retired");
+        const auto previous=canvas->sampling;canvas->sampling=sampling;
+        try{canvas->draw(*asset,x,y,w,h,color,solid,outer,center,inner,true,true);}
+        catch(...){canvas->sampling=previous;throw;}canvas->sampling=previous;
+    });
     facade->setNativeRotatedDraw([owner,asset,sampling](S32 x,S32 y,S32 w,S32 h,F32 degrees,
                                                        const LLColor4& color,const LLRectf& clip)
     {
@@ -368,6 +455,21 @@ LLUIImagePtr VSUIResources::region(const std::string& key,const std::string& nam
         const auto previous=canvas->sampling; canvas->sampling=sampling;
         try { canvas->drawRotated(*asset,x,y,w,h,degrees,color,clip); }
         catch (...) { canvas->sampling=previous; throw; }
+        canvas->sampling=previous;
+    });
+    facade->setNativeWorldDraw([owner,asset,sampling](const LLVector3& origin,const LLVector3& width,
+        const LLVector3& height,const LLColor4& color,const LLRectf& outer,const LLRectf& center,const LLRectf& draw)
+    {
+        auto canvas=owner.lock();check(bool(canvas),"Native world image owner has retired");
+        const auto old=canvas->sampling;canvas->sampling=sampling;
+        try{canvas->drawWorld(*asset,origin,width,height,color,outer,center,draw);}
+        catch(...){canvas->sampling=old;throw;}canvas->sampling=old;
+    });
+    facade->setNativeTrianglesDraw([owner,asset,sampling](const LLUIImage::native_triangles_t& triangle)
+    {
+        auto canvas=owner.lock();check(bool(canvas),"Native image triangle owner has retired");
+        const auto previous=canvas->sampling;canvas->sampling=sampling;
+        try{canvas->drawTriangles(*asset,triangle);}catch(...){canvas->sampling=previous;throw;}
         canvas->sampling=previous;
     });
     facade->setClipRegion(uv);
@@ -389,7 +491,7 @@ bool VSUIResources::patch(const std::string& key,unsigned x,unsigned y,unsigned 
 void VSUIResources::begin(unsigned width,unsigned height,float dpi)
 {
     check(!mImpl->active && width && height && std::isfinite(dpi) && dpi>0,"Invalid native UI collection begin");
-    mImpl->packets.clear();
+    mImpl->packets.clear();mImpl->worldDepth.reset();
     mImpl->deferred_draw_batches = 0;
     mImpl->logical_height        = height / dpi;
     mImpl->logical_width         = width / dpi;
@@ -469,7 +571,7 @@ void VSUIResources::fontBatch(LLImageRaw* raw,S32 generation,const LLVector4a* p
     auto image              = page.atlas;
     for (S32 first=0;first<count;first+=6)
     {
-        VSUIRenderer::Packet p; p.blend=nativeBlend();p.image=image;p.clip=c.clip;p.triangles.emplace();
+        VSUIRenderer::Packet p; p.blend=nativeBlend();p.image=image;p.clip=c.clip;p.worldDepth=c.worldDepth;p.triangles.emplace();
         for (S32 i=0;i<6;++i)
         {
             const auto* pos=positions[first+i].getF32ptr();const auto& tex=uv[first+i];const auto& color=colors[first+i];
@@ -616,4 +718,23 @@ void VSUIResources::imageRectangle(const VSUIRenderer::Image& image,const LLRect
     packet.clip=canvas.clip;packet.sampling=VSUIRenderer::Sampling::Linear;
     std::transform(color.mV,color.mV+4,packet.color.begin(),nativeVertexColor);
     canvas.packets.push_back(std::move(packet));
+}
+
+void VSUIResources::deferDraw()
+{
+    if (mImpl->active) ++mImpl->deferred_draw_batches;
+}
+void VSUIResources::imageLocalRectangle(const VSUIRenderer::Image& image, const LLRectf& rect, const LLColor4& color)
+{
+    const auto origin = LLRender2D::nativeOrigin();
+    auto screen = rect;
+    screen.translate(origin[0], origin[1]);
+    imageRectangle(image, screen, color);
+}
+std::optional<float> VSUIResources::worldDepth() const {return mImpl->worldDepth;}
+void VSUIResources::setWorldDepth(std::optional<float> value)
+{
+    check(mImpl->active,"Native UI depth outside collection");
+    check(!value||(std::isfinite(*value)&&*value>=0.f&&*value<=1.f),"Invalid native UI depth");
+    mImpl->worldDepth=value;
 }

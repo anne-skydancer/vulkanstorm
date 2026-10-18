@@ -30,6 +30,7 @@
 #include "llcallingcard.h"
 #include "llfolderviewmodel.h"
 #include "llinventorymodel.h"
+#include <map>
 #include "llinventoryobserver.h"
 #include "llinventorypanel.h"
 #include "llviewercontrol.h"
@@ -47,6 +48,7 @@ class LLCallingCardObserver;
 class LLViewerJointAttachment;
 class LLFolderView;
 struct LLMoveInv;
+class VSTaskInventoryObject;
 
 typedef std::vector<std::string> menuentry_vec_t;
 typedef std::pair<LLUUID, LLUUID> two_uuids_t;
@@ -935,10 +937,13 @@ struct LLMoveInv
     LLUUID mCategoryID;
     two_uuids_list_t mMoveList;
     std::function<void(S32, void*, const LLMoveInv*)> mCallback;
-    void* mUserData;
+    void* mUserData = nullptr;
+    std::function<bool()> mTaskCurrent;
+    std::map<LLUUID, std::function<bool()>> mTaskItems;
 };
 
 void warn_move_inventory(LLViewerObject* object, std::shared_ptr<LLMoveInv> move_inv);
+void warn_move_inventory(const VSTaskInventoryObject& object, std::shared_ptr<LLMoveInv> move_inv);
 bool move_task_inventory_callback(const LLSD& notification, const LLSD& response, std::shared_ptr<LLMoveInv>);
 
 #endif // LL_LLINVENTORYBRIDGE_H

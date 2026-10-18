@@ -74,7 +74,7 @@ void FSFloaterBigPreview::draw()
     LLSnapshotLivePreview* previewp = static_cast<LLSnapshotLivePreview*>(mPreviewHandle.get());
 
     // Display the preview if one is available
-    if (previewp && previewp->getBigThumbnailImage())
+    if (previewp && previewp->hasBigThumbnailImage())
     {
         // Get the preview rect
         const LLRect& preview_rect = mPreviewPlaceholder->getRect();
@@ -96,15 +96,12 @@ void FSFloaterBigPreview::draw()
         S32 offset_x = preview_rect.mLeft   + local_offset_x;
         S32 offset_y = preview_rect.mBottom + local_offset_y;
 
-        gGL.matrixMode(LLRender::MM_MODELVIEW);
         // Apply floater transparency to the texture unless the floater is focused.
         F32 alpha = getTransparencyType() == TT_ACTIVE ? 1.0f : getCurrentTransparency();
         LLColor4 color = LLColor4::white;
 
         // Draw the preview texture
-        gl_draw_scaled_image(offset_x, offset_y,
-                             thumbnail_w, thumbnail_h,
-                             previewp->getBigThumbnailImage(), color % alpha);
+        previewp->drawBigThumbnail(offset_x,offset_y,thumbnail_w,thumbnail_h,color % alpha);
     }
 }
 

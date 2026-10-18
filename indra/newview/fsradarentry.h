@@ -28,6 +28,8 @@
 #define FS_RADARENTRY_H
 
 #include "llavatarnamecache.h"
+#include <memory>
+#include <functional>
 #include "llavatarpropertiesprocessor.h"
 
 class LLAvatarName;
@@ -71,6 +73,8 @@ private:
     void requestProperties();
     void processProperties(void* data, EAvatarProcessorType type);
 
+    std::shared_ptr<void> mLifetime = std::make_shared<int>(0);
+    std::function<bool()> mAccountCurrent;
     LLUUID      mID;
     std::string mName;
     std::string mUserName;

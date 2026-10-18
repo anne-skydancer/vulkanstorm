@@ -30,6 +30,8 @@
 #include "llfloater.h"
 #include "llcoord.h"
 #include "llparcelselection.h"
+#include <memory>
+#include <boost/signals2/connection.hpp>
 
 class LLButton;
 class LLComboBox;
@@ -129,6 +131,7 @@ public:
 
 private:
     void refresh();
+    template<class Selection> void refreshController(Selection*);
     static void setObjectType( LLPCode pcode );
     void onClickGridOptions();
 
@@ -233,6 +236,8 @@ public:
 
     LLParcelSelectionHandle mParcelSelection;
     LLObjectSelectionHandle mObjectSelection;
+    std::shared_ptr<const void> mNativeSelectionLease;
+    boost::signals2::scoped_connection mNativeSelectionChanged;
 
 private:
     bool                    mDirty;

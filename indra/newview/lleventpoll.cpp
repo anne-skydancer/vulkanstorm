@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
+#include "vsobjectphysics.h"
 #endif
 
 #include "lleventpoll.h"
@@ -119,6 +120,8 @@ namespace Details
             auto owner = VSNativeSession::active();
             if (!owner || owner->generation() != mNativeGeneration ||
                 !mNativeCircuitGeneration || owner->circuitGeneration(LLHost(mSenderIp))!=mNativeCircuitGeneration) return;
+            if(msg_name=="ObjectPhysicsProperties")
+            {if(auto* physics=owner->objectPhysics())physics->receive(body,LLHost(mSenderIp));return;}
             if(msg_name=="CoarseLocationUpdate")
             {owner->receiveCoarse(body,LLHost(mSenderIp),mNativeGeneration,mNativeCircuitGeneration);return;}
             if (msg_name=="EnableSimulator" || msg_name=="EstablishAgentCommunication")

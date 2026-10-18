@@ -675,6 +675,7 @@ void LLToolMgr::retireNativeTools()
     // Capture loss must reach the actual captured tool while the retiring
     // account's media/selection owners are still available.
     mNativeToolsReady=false;
+    if(LLToolPie::instanceExists())LLToolPie::getInstance()->resetSelection();
     const auto generation=++mNativeToolGeneration;
     auto* previous=mSelectedTool;
     mTransientTool=nullptr;mOverrideTool=nullptr;mSavedTool=nullptr;

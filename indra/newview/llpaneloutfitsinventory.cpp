@@ -25,6 +25,14 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llagentbenefits.h"
+#include "vsappearanceui.h"
+#include "vsavatarservices.h"
+#include "llavatarappearance.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
 
 #include "llpaneloutfitsinventory.h"
 
@@ -66,13 +74,13 @@ LLPanelOutfitsInventory::LLPanelOutfitsInventory()
     , mSortMenuPanel(nullptr)
     , mTrashMenuPanel(nullptr)
 {
-    gAgentWearables.addLoadedCallback(boost::bind(&LLPanelOutfitsInventory::onWearablesLoaded, this));
-    gAgentWearables.addLoadingStartedCallback(boost::bind(&LLPanelOutfitsInventory::onWearablesLoading, this));
+    mAppearanceConnections.emplace_back(gAgentWearables.addLoadedCallback(vs_appearance_ui_callback(this, boost::bind(&LLPanelOutfitsInventory::onWearablesLoaded, this))));
+    mAppearanceConnections.emplace_back(gAgentWearables.addLoadingStartedCallback(vs_appearance_ui_callback(this, boost::bind(&LLPanelOutfitsInventory::onWearablesLoading, this))));
 
     LLOutfitObserver& observer = LLOutfitObserver::instance();
-    observer.addBOFChangedCallback(boost::bind(&LLPanelOutfitsInventory::updateVerbs, this));
-    observer.addCOFChangedCallback(boost::bind(&LLPanelOutfitsInventory::updateVerbs, this));
-    observer.addOutfitLockChangedCallback(boost::bind(&LLPanelOutfitsInventory::updateVerbs, this));
+    mAppearanceConnections.emplace_back(observer.addBOFChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLPanelOutfitsInventory::updateVerbs, this))));
+    mAppearanceConnections.emplace_back(observer.addCOFChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLPanelOutfitsInventory::updateVerbs, this))));
+    mAppearanceConnections.emplace_back(observer.addOutfitLockChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLPanelOutfitsInventory::updateVerbs, this))));
 
     // <FS:Ansariel> FIRE-17626: Attachment count in appearance floater
     mCategoriesObserver = new LLInventoryCategoriesObserver();
@@ -260,7 +268,7 @@ void LLPanelOutfitsInventory::onSave()
     LLSD payload;
     //payload["ids"].append(*it);
 
-    LLNotificationsUtil::add("SaveOutfitAs", args, payload, boost::bind(&LLPanelOutfitsInventory::onSaveCommit, this, _1, _2));
+    LLNotificationsUtil::add("SaveOutfitAs", args, payload, vs_appearance_ui_callback(this, boost::bind(&LLPanelOutfitsInventory::onSaveCommit, this, _1, _2)));
 }
 
 // <FS:Ansariel> FIRE-17626: Attachment count in appearance floater
@@ -268,7 +276,17 @@ void LLPanelOutfitsInventory::draw()
 {
     if (mTempAttachmentUpdateTimer.checkExpirationAndReset(1.f))
     {
-        if (U32 tempAttachmentCount = (U32)LLAgentWearables::getTempAttachments().size(); tempAttachmentCount != mCurrentTempAttachmentCount)
+        U32 temporary;
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            const auto attachments = vs_avatar_attachments();
+            temporary = U32(std::count_if(attachments.begin(), attachments.end(), [](const auto& item) { return item.item.isNull(); }));
+        }
+        else
+#endif
+            temporary = U32(LLAgentWearables::getTempAttachments().size());
+        if (U32 tempAttachmentCount = temporary; tempAttachmentCount != mCurrentTempAttachmentCount)
         {
             mCurrentTempAttachmentCount = tempAttachmentCount;
             onCOFChanged();
@@ -280,7 +298,7 @@ void LLPanelOutfitsInventory::draw()
 
 void LLPanelOutfitsInventory::onCOFChanged()
 {
-    if (!isAgentAvatarValid())
+    if (!vs_avatar_appearance())
     {
         return;
     }
@@ -294,6 +312,10 @@ void LLPanelOutfitsInventory::onCOFChanged()
 
     LLStringUtil::format_map_t args;
     args["COUNT"] = llformat("%d", attachments);
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) args["MAX"] = llformat("%d", LLAgentBenefitsMgr::current().getAttachmentLimit());
+    else
+#endif
     args["MAX"] = llformat("%d", gAgentAvatarp->getMaxAttachments());
     std::string title = getString("cof_tab_label", args);
     mAppearanceTabs->setPanelTitle(mAppearanceTabs->getIndexForPanel(mCurrentOutfitPanel), title);

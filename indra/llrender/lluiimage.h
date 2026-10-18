@@ -39,6 +39,7 @@
 
 #include <type_traits>
 #include <functional>
+#include <array>
 
 extern const LLColor4 UI_VERTEX_COLOR;
 
@@ -60,9 +61,24 @@ public:
     // packet publisher and natural pixel extent; all draw variants share it.
     LLUIImage(const std::string& name, S32 width, S32 height, native_draw_t draw);
     virtual ~LLUIImage();
+    // Original setup2DRender overlays pass physical pixel extents. Keep their
+    // exact nine-slice geometry without applying the logical UI scale twice.
+    void setNativePhysicalDraw(native_draw_t draw) { mNativePhysicalDraw=std::move(draw); }
+    void drawPhysical(S32 x,S32 y,S32 width,S32 height,const LLColor4& color=UI_VERTEX_COLOR) const;
+
     using native_rotated_draw_t = std::function<void(S32, S32, S32, S32, F32,
                                                     const LLColor4&, const LLRectf&)>;
     void setNativeRotatedDraw(native_rotated_draw_t draw) { mNativeRotatedDraw = std::move(draw); }
+    using native_world_draw_t = std::function<void(const LLVector3&,const LLVector3&,
+        const LLVector3&,const LLColor4&,const LLRectf&,const LLRectf&,const LLRectf&)>;
+    void setNativeWorldDraw(native_world_draw_t draw) { mNativeWorldDraw=std::move(draw); }
+    // Logical bottom-left x,y,u,v,r,g,b,a; publisher retains actual image generation.
+    using native_triangles_t=std::array<std::array<F32,8>,6>;
+    using native_triangles_draw_t=std::function<void(const native_triangles_t&)>;
+    void setNativeTrianglesDraw(native_triangles_draw_t draw){mNativeTrianglesDraw=std::move(draw);}
+    void drawNativeTriangles(const native_triangles_t&) const;
+
+
     void drawRotated(S32 x, S32 y, S32 width, S32 height, F32 degrees,
                      const LLColor4& color = UI_VERTEX_COLOR) const;
 
@@ -126,7 +142,10 @@ protected:
     mutable S32             mCachedW;
     mutable S32             mCachedH;
     native_draw_t mNativeDraw;
+    native_draw_t mNativePhysicalDraw;
     native_rotated_draw_t mNativeRotatedDraw;
+    native_world_draw_t mNativeWorldDraw;
+    native_triangles_draw_t mNativeTrianglesDraw;
     S32 mNativeWidth = 0, mNativeHeight = 0;
 };
 

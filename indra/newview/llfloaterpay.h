@@ -32,6 +32,8 @@
 class LLObjectSelection;
 class LLUUID;
 class LLViewerRegion;
+class LLMessageSystem;
+struct VSObjectContext;
 
 typedef void (*money_callback)(const LLUUID&, LLViewerRegion*,S32,bool,S32,const std::string&);
 
@@ -46,6 +48,11 @@ namespace LLFloaterPayUtil
     /// Objects must be selected.  Recipient (primary) object may be a child.
     void payViaObject(money_callback callback,
                       LLSafeHandle<LLObjectSelection> selection);
+
+#if VS_NATIVE_VULKAN
+    void payViaObject(money_callback callback, const VSObjectContext& source);
+    void processNativePriceReply(LLMessageSystem*);
+#endif
 
     /// Pay an avatar or group directly, not via an object in the world.
     /// Scripts are not notified, L$ can be direcly transferred.

@@ -28,6 +28,16 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsareasearch.h"
+#include "vsappearanceui.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsobjectcosts.h"
+#include "vsobjecteditparams.h"
+#include "vsobjectselection.h"
+#include "vseditselection.h"
+#include "llviewerwindow.h"
+#include "vsvulkancontext.h"
+#endif
 
 #include "llavatarnamecache.h"
 #include "llscrolllistctrl.h"
@@ -91,7 +101,7 @@ static std::string RLVa_hideNameIfRestricted(std::string_view name)
         return RlvStrings::getAnonym(std::string(name));
 }
 
-F32 static calculateObjectDistance(LLVector3d agent_pos, LLViewerObject* object)
+F32 static calculateObjectDistance(LLVector3d agent_pos, VSAreaObject object)
 {
     if (object->isHUDAttachment())
     {
@@ -123,15 +133,15 @@ private:
 class FSAreaSearchTouchTimer : public LLEventTimer
 {
 public:
-    FSAreaSearchTouchTimer(const LLUUID& object_id, F32 timeout) :
+    FSAreaSearchTouchTimer(VSAreaObject object, F32 timeout) :
         LLEventTimer(timeout),
-        mObjectID(object_id)
+        mSource(std::move(object))
     {
     }
 
     bool tick() override
     {
-        LLViewerObject* objectp = gObjectList.findObject(mObjectID);
+        const auto objectp = mSource;
         if (objectp)
         {
             FSPanelAreaSearchList::touchObject(objectp);
@@ -141,13 +151,25 @@ public:
     }
 
 private:
-    LLUUID mObjectID;
+    VSAreaObject mSource;
 };
 
 FSAreaSearch::FSAreaSearch(const LLSD& key) :
     LLFloater(key)
 {
+    mAccount=gAgentID; mSession=gAgentSessionID;
+    mCurrent=vs_native_im_guard();
     gAgent.setFSAreaSearchActive(true);
+#if VS_NATIVE_VULKAN
+    if (const auto owner=VSNativeSession::active();owner && gViewerWindow && gViewerWindow->isNativeVulkan())
+        mCostConnection=owner->objectCosts()->observe(vs_appearance_ui_callback(this,
+            [this](const VSWorldScene::ObjectHandle& token,const VSObjectCostValues& cost)
+            {
+                const auto sourceObject=source(token.id);
+                if (sourceObject && sourceObject.sameSource(VSAreaObject::find(token)))
+                    updateObjectCosts(token.id,cost.object,cost.linkset,cost.physics,cost.linksetPhysics);
+            }));
+#endif
     gAgent.changeInterestListMode(IL_MODE_360);
     mFactoryMap["area_search_list_panel"] = LLCallbackMap(createPanelList, this);
     mFactoryMap["area_search_find_panel"] = LLCallbackMap(createPanelFind, this);
@@ -164,12 +186,12 @@ FSAreaSearch::FSAreaSearch(const LLSD& key) :
 
 FSAreaSearch::~FSAreaSearch()
 {
-    gAgent.setFSAreaSearchActive(false);
+    if (gAgentID==mAccount && gAgentSessionID==mSession) gAgent.setFSAreaSearchActive(false);
 
     // Tell the Simulator not to send us everything anymore
     // and revert to the regular "keyhole" frustum of interest
     // list updates.
-    if (!LLApp::isExiting())
+    if (gAgentID==mAccount && gAgentSessionID==mSession && !LLApp::isExiting())
     {
         gAgent.changeInterestListMode(IL_MODE_DEFAULT);
     }
@@ -396,6 +418,7 @@ void FSAreaSearch::onCopySlappLink()
 
 void FSAreaSearch::draw()
 {
+    if (!mCurrent || !mCurrent()) return;
     LLFloater::draw();
 
     static LLCachedControl<S32> beacon_line_width(gSavedSettings, "DebugBeaconLineWidth");
@@ -408,7 +431,7 @@ void FSAreaSearch::draw()
 
         for (const auto* item : items)
         {
-            if (LLViewerObject* objectp = gObjectList.findObject(item->getUUID()); objectp)
+            if (VSAreaObject objectp = source(item->getUUID()); objectp)
             {
                 const std::string& objectName = mObjectDetails[item->getUUID()].description;
                 gObjectList.addDebugBeacon(objectp->getPositionAgent(), objectName, mBeaconColor, mBeaconTextColor, beacon_line_width);
@@ -478,12 +501,12 @@ void FSAreaSearch::checkRegion()
     if (mActive)
     {
         // Check if we changed region, and if we did, clear the object details cache.
-        if (LLViewerRegion* region = gAgent.getRegion(); region && (region != mLastRegion))
+        if (VSAreaRegion region = VSAreaRegion::current(); region && (region != mLastRegion))
         {
             if (!mExcludeNeighborRegions)
             {
-                std::vector<LLViewerRegion*> uniqueRegions;
-                region->getNeighboringRegions(uniqueRegions);
+                std::vector<VSAreaRegion > uniqueRegions;
+                region.getNeighboringRegions(uniqueRegions);
                 if (std::find(uniqueRegions.begin(), uniqueRegions.end(), mLastRegion) != uniqueRegions.end())
                 {
                     // Crossed into a neighboring region, no need to clear everything.
@@ -533,13 +556,14 @@ void FSAreaSearch::refreshList(bool cache_clear)
 
 void FSAreaSearch::findObjects()
 {
+    if (!mCurrent || !mCurrent()) return;
     // Only loop through the gObjectList every so often. There is a performance hit if done too often.
     if (!(mActive && ((mRefresh && mLastUpdateTimer.getElapsedTimeF32() > MIN_REFRESH_INTERVAL) || mLastUpdateTimer.getElapsedTimeF32() > REFRESH_INTERVAL)))
     {
         return;
     }
 
-    LLViewerRegion* our_region = gAgent.getRegion();
+    VSAreaRegion our_region = VSAreaRegion::current();
     if (!our_region)
     {
         // Got disconnected or is in the middle of a teleport.
@@ -554,11 +578,8 @@ void FSAreaSearch::findObjects()
     checkRegion();
     mRefresh = false;
     mSearchableObjects = 0;
-    S32 object_count = gObjectList.getNumObjects();
-
-    for (S32 i = 0; i < object_count; i++)
+    for (const auto& objectp : VSAreaObject::instances())
     {
-        LLViewerObject* objectp = gObjectList.getObject(i);
         if (!objectp || !isSearchableObject(objectp, our_region))
         {
             continue;
@@ -573,11 +594,22 @@ void FSAreaSearch::findObjects()
         }
 
         mSearchableObjects++;
+        if (const auto prior=mObjectDetails.find(object_id);prior!=mObjectDetails.end() && !prior->second.source.sameSource(objectp))
+        {
+            if (prior->second.request == FSObjectProperties::NEED || prior->second.request == FSObjectProperties::SENT) --mRequested;
+            if (prior->second.listed)
+            {
+                auto* list=mPanelList->getResultList();
+                list->deleteSingleItem(list->getItemIndex(object_id));
+            }
+            mObjectDetails.erase(prior);
+        }
 
         if (mObjectDetails.count(object_id) == 0)
         {
             FSObjectProperties& details = mObjectDetails[object_id];
             details.id = object_id;
+            details.source = objectp;
             details.local_id = objectp->getLocalID();
             details.region_handle = objectp->getRegion()->getHandle();
             mRequestNeedsSent = true;
@@ -612,7 +644,7 @@ void FSAreaSearch::findObjects()
         if (object_it.second.request == FSObjectProperties::NEED || object_it.second.request == FSObjectProperties::SENT)
         {
             const LLUUID& id = object_it.second.id;
-            if (LLViewerObject* objectp = gObjectList.findObject(id); !objectp)
+            if (VSAreaObject objectp = source(id); !objectp)
             {
                 object_it.second.request = FSObjectProperties::FAILED;
                 mRequested--;
@@ -635,7 +667,7 @@ void FSAreaSearch::findObjects()
     mRequestQueuePause = false;
 }
 
-bool FSAreaSearch::isSearchableObject(LLViewerObject* objectp, LLViewerRegion* our_region) const
+bool FSAreaSearch::isSearchableObject(VSAreaObject objectp, VSAreaRegion our_region) const
 {
     // need to be connected to region object is in.
     if (!objectp->getRegion())
@@ -650,7 +682,7 @@ bool FSAreaSearch::isSearchableObject(LLViewerObject* objectp, LLViewerRegion* o
     }
 
     // Object needs to be selectable to get properties from the server
-    if (!objectp->mbCanSelect)
+    if (!objectp->canSelect())
     {
         return false;
     }
@@ -690,7 +722,7 @@ bool FSAreaSearch::isSearchableObject(LLViewerObject* objectp, LLViewerRegion* o
         return false;
     }
 
-    if (mExcludeReflectionProbe && objectp->mReflectionProbe.notNull())
+    if (mExcludeReflectionProbe && objectp->isReflectionProbe())
     {
         return false;
     }
@@ -700,6 +732,7 @@ bool FSAreaSearch::isSearchableObject(LLViewerObject* objectp, LLViewerRegion* o
 
 void FSAreaSearch::processRequestQueue()
 {
+    if (!mCurrent || !mCurrent()) return;
     if (!mActive || mRequestQueuePause)
     {
         return;
@@ -746,7 +779,7 @@ void FSAreaSearch::processRequestQueue()
     }
     mRequestNeedsSent = false;
 
-    for (const auto regionp : LLWorld::getInstance()->getRegionList())
+    for (const auto regionp : VSAreaRegion::instances())
     {
         U64 region_handle = regionp->getHandle();
         if (mRegionRequests[region_handle] > (MAX_OBJECTS_PER_PACKET + 128))
@@ -760,7 +793,7 @@ void FSAreaSearch::processRequestQueue()
 
         for (auto& object_it : mObjectDetails)
         {
-            if (object_it.second.request == FSObjectProperties::NEED && object_it.second.region_handle == region_handle)
+            if (object_it.second.request == FSObjectProperties::NEED && object_it.second.region_handle == region_handle && object_it.second.source && object_it.second.source->getRegion()==regionp)
             {
                 request_list.push_back(object_it.second.local_id);
                 object_it.second.request = FSObjectProperties::SENT;
@@ -789,8 +822,9 @@ void FSAreaSearch::processRequestQueue()
     }
 }
 
-void FSAreaSearch::requestObjectProperties(const std::vector<U32>& request_list, bool select, LLViewerRegion* regionp)
+void FSAreaSearch::requestObjectProperties(const std::vector<U32>& request_list, bool select, VSAreaRegion regionp)
 {
+    if (!mCurrent || !mCurrent() || !regionp) return;
     bool start_new_message = true;
     S32 select_count = 0;
     LLMessageSystem* msg = gMessageSystem;
@@ -821,7 +855,7 @@ void FSAreaSearch::requestObjectProperties(const std::vector<U32>& request_list,
         if (msg->isSendFull(NULL) || select_count >= MAX_OBJECTS_PER_PACKET)
         {
             LL_DEBUGS("FSAreaSearch") << "Sent one full " << (select ? "ObjectSelect" : "ObjectDeselect") << " message with " << select_count << " object data blocks." << LL_ENDL;
-            msg->sendReliable(regionp->getHost());
+            if (mCurrent() && regionp) msg->sendReliable(regionp->getHost());
             select_count = 0;
             start_new_message = true;
         }
@@ -830,18 +864,19 @@ void FSAreaSearch::requestObjectProperties(const std::vector<U32>& request_list,
     if (!start_new_message)
     {
         LL_DEBUGS("FSAreaSearch") << "Sent one partcial " << (select ? "ObjectSelect" : "ObjectDeselect") << " message with " << select_count << " object data blocks." << LL_ENDL;
-        msg->sendReliable(regionp->getHost());
+        if (mCurrent() && regionp) msg->sendReliable(regionp->getHost());
     }
 }
 
 void FSAreaSearch::processObjectProperties(LLMessageSystem* msg)
 {
+    if (!mCurrent || !mCurrent()) return;
     if (!mActive)
     {
         return;
     }
 
-    LLViewerRegion* our_region = gAgent.getRegion();
+    VSAreaRegion our_region = VSAreaRegion::current();
     bool counter_text_update = false;
 
     S32 count = msg->getNumberOfBlocksFast(_PREHASH_ObjectData);
@@ -856,15 +891,20 @@ void FSAreaSearch::processObjectProperties(LLMessageSystem* msg)
             continue;
         }
 
-        LLViewerObject* objectp = gObjectList.findObject(object_id);
-        if (!objectp)
+        const auto cached=mObjectDetails.find(object_id);
+        const auto objectp=cached!=mObjectDetails.end() ? cached->second.source : VSAreaObject::find(msg->getSender(),object_id);
+        if (!objectp || !objectp->getRegion() || objectp->getRegion()->getHost()!=msg->getSender())
         {
             continue;
         }
 
+        const auto decoded=vs_read_object_properties(*msg,i);
+        if (!decoded) continue;
         FSObjectProperties& details = mObjectDetails[object_id];
+        details.source=objectp;
         if (details.request != FSObjectProperties::FINISHED)
         {
+            details.protocol=*decoded;
             // We cache un-requested objects (to avoid having to request them later)
             // and requested objects.
 
@@ -906,7 +946,9 @@ void FSAreaSearch::processObjectProperties(LLMessageSystem* msg)
             msg->getStringFast(_PREHASH_ObjectData, _PREHASH_TouchName, details.touch_name, i);
             msg->getStringFast(_PREHASH_ObjectData, _PREHASH_SitName, details.sit_name, i);
 
-            S32 size = msg->getSizeFast(_PREHASH_ObjectData, i, _PREHASH_TextureID);
+            S32 size = llmin(msg->getSizeFast(_PREHASH_ObjectData, i, _PREHASH_TextureID),S32(SELECT_MAX_TES * UUID_BYTES));
+            size -= size % UUID_BYTES;
+            details.texture_ids.clear();
             if (size > 0)
             {
                 S8 packed_buffer[SELECT_MAX_TES * UUID_BYTES];
@@ -941,7 +983,7 @@ void FSAreaSearch::processObjectProperties(LLMessageSystem* msg)
     }
 }
 
-void FSAreaSearch::matchObject(FSObjectProperties& details, LLViewerObject* objectp)
+void FSAreaSearch::matchObject(FSObjectProperties& details, VSAreaObject objectp)
 {
     if (details.listed)
     {
@@ -1058,7 +1100,7 @@ void FSAreaSearch::matchObject(FSObjectProperties& details, LLViewerObject* obje
         return;
     }
 
-    if (mFilterReflectionProbe && !objectp->mReflectionProbe.notNull())
+    if (mFilterReflectionProbe && !objectp->isReflectionProbe())
     {
         return;
     }
@@ -1286,7 +1328,7 @@ void FSAreaSearch::getNameFromUUID(const LLUUID& id, std::string& name, bool gro
             if (!mNamesRequested.contains(id))
             {
                 mNamesRequested.emplace(id);
-                mNameCacheConnections.try_emplace(id, gCacheName->get(id, group, boost::bind(&FSAreaSearch::callbackLoadFullName, this, _1, _2))); // mNamesRequested will do the dupe check
+                mNameCacheConnections.try_emplace(id, gCacheName->get(id, group, vs_appearance_ui_callback(this,boost::bind(&FSAreaSearch::callbackLoadFullName, this, _1, _2)))); // mNamesRequested will do the dupe check
             }
             name_requested = true;
         }
@@ -1299,7 +1341,7 @@ void FSAreaSearch::getNameFromUUID(const LLUUID& id, std::string& name, bool gro
             if (!mNamesRequested.contains(id))
             {
                 mNamesRequested.emplace(id);
-                mNameCacheConnections.try_emplace(id, LLAvatarNameCache::get(id, boost::bind(&FSAreaSearch::avatarNameCacheCallback, this, _1, _2))); // mNamesRequested will do the dupe check
+                mNameCacheConnections.try_emplace(id, LLAvatarNameCache::get(id, vs_appearance_ui_callback(this,boost::bind(&FSAreaSearch::avatarNameCacheCallback, this, _1, _2)))); // mNamesRequested will do the dupe check
             }
             name_requested = true;
         }
@@ -1326,14 +1368,14 @@ void FSAreaSearch::callbackLoadFullName(const LLUUID& id, const std::string& ful
         mNameCacheConnections.erase(iter);
     }
 
-    LLViewerRegion* our_region = gAgent.getRegion();
+    VSAreaRegion our_region = VSAreaRegion::current();
 
     for (auto& entry : mObjectDetails)
     {
         if (entry.second.name_requested && !entry.second.listed)
         {
             const LLUUID& object_id = entry.second.id;
-            LLViewerObject* objectp = gObjectList.findObject(object_id);
+            VSAreaObject objectp = source(object_id);
             if (objectp && isSearchableObject(objectp, our_region))
             {
                 matchObject(entry.second, objectp);
@@ -1673,7 +1715,7 @@ void FSPanelAreaSearchList::onDoubleClick()
     }
 
     const LLUUID& object_id = item->getUUID();
-    if (LLViewerObject* objectp = gObjectList.findObject(object_id); objectp)
+    if (VSAreaObject objectp = mFSAreaSearch->source(object_id); objectp)
     {
         FSObjectProperties& details = mFSAreaSearch->mObjectDetails[object_id];
         LLTracker::trackLocation(objectp->getPositionGlobal(), details.name, "", LLTracker::LOCATION_ITEM);
@@ -1708,14 +1750,14 @@ void FSPanelAreaSearchList::updateScrollList()
 
     bool deleted = false;
     LLScrollListColumn* distance_column = mResultList->getColumn("distance");
-    LLViewerRegion* our_region = gAgent.getRegion();
+    VSAreaRegion our_region = VSAreaRegion::current();
 
     // Iterate over the rows in the list, deleting ones whose object has gone away.
     std::vector<LLScrollListItem*> items = mResultList->getAllData();
     for (const auto* item : items)
     {
         const LLUUID& row_id = item->getUUID();
-        LLViewerObject* objectp = gObjectList.findObject(row_id);
+        VSAreaObject objectp = mFSAreaSearch->source(row_id);
 
         if (!objectp || !mFSAreaSearch->isSearchableObject(objectp, our_region))
         {
@@ -1867,7 +1909,7 @@ bool FSPanelAreaSearchList::onContextMenuItemEnable(const LLSD& userdata)
         if (mResultList->getNumSelected() == 1)
         {
             const LLUUID& object_id = mResultList->getFirstSelected()->getUUID();
-            LLViewerObject* objectp = gObjectList.findObject(object_id);
+            VSAreaObject objectp = mFSAreaSearch->source(object_id);
             return (objectp && calculateObjectDistance(gAgent.getPositionGlobal(), objectp) < gAgentCamera.mDrawDistance);
         }
         else
@@ -1906,7 +1948,7 @@ bool FSPanelAreaSearchList::onContextMenuItemVisibleRLV(const LLSD& userdata)
     for (const auto* item : selected)
     {
         const LLUUID& object_id = item->getUUID();
-        LLViewerObject* objectp = gObjectList.findObject(object_id);
+        VSAreaObject objectp = mFSAreaSearch->source(object_id);
         if (!objectp)
         {
             return false;
@@ -1914,28 +1956,28 @@ bool FSPanelAreaSearchList::onContextMenuItemVisibleRLV(const LLSD& userdata)
 
         if (
             std::find(behavs.begin(), behavs.end(), "touch") != behavs.end()
-            && !RlvActions::canTouch(objectp)
+            && !objectp->canTouch()
         )
         {
             return false;
         }
         else if (
             std::find(behavs.begin(), behavs.end(), "edit") != behavs.end()
-            && !RlvActions::canEdit(objectp)
+            && !objectp->canEdit()
         )
         {
             return false;
         }
         else if (
             std::find(behavs.begin(), behavs.end(), "delete") != behavs.end()
-            && !rlvCanDeleteOrReturn(objectp)
+            && !objectp->canDeleteOrReturn()
         )
         {
             return false;
         }
         else if (
             std::find(behavs.begin(), behavs.end(), "sit") != behavs.end()
-            && !RlvActions::canSit(objectp)
+            && !objectp->canSit()
         )
         {
             return false;
@@ -1957,6 +1999,25 @@ bool FSPanelAreaSearchList::onContextMenuItemVisibleRLV(const LLSD& userdata)
     }
 
     return true;
+}
+
+
+static bool vs_area_selection_can_delete_or_return()
+{
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        VSEditSelection selection;
+        if (!selection.getRootObjectCount()) return false;
+        for (auto it=selection.root_begin();it!=selection.root_end();++it)
+        {
+            const auto source=VSAreaObject::find((*it)->source);
+            if (!source || !source.canDeleteOrReturn()) return false;
+        }
+        return true;
+    }
+#endif
+    return rlvCanDeleteOrReturn();
 }
 
 bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
@@ -1984,6 +2045,7 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
     }
 
     // NOTE that each action command MUST begin with a different letter.
+    if (action.empty()) return false;
     char c = action.at(0);
     switch(c)
     {
@@ -2000,7 +2062,7 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
             {
             case 't': // touch
             {
-                new FSAreaSearchTouchTimer(item->getUUID(), cnt * 0.2f);
+                new FSAreaSearchTouchTimer(mFSAreaSearch->source(item->getUUID()), cnt * 0.2f);
                 cnt++;
             }
                 break;
@@ -2010,15 +2072,23 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
             case 'l': // blacklist
             {
                 const LLUUID& object_id = item->getUUID();
-                LLViewerObject* objectp = gObjectList.findObject(object_id);
+                VSAreaObject objectp = mFSAreaSearch->source(object_id);
 //              if (objectp)
 // [RLVa:KB] - Checked: RLVa-2.0.0 | FS-specific
                 // Don't allow derendering of own attachments when RLVa is enabled
                 if ( (objectp) && (gAgentID != objectp->getID()) && ((!RlvActions::isRlvEnabled()) || (!objectp->isAttachment()) || (!objectp->permYouOwner())) )
 // [/RLVa:KB]
                 {
+#if VS_NATIVE_VULKAN
+                    if (objectp.native())
+                    {
+                        objectp.derender(mFSAreaSearch->mObjectDetails[object_id].name);
+                        mFSAreaSearch->mObjectDetails.erase(object_id);
+                        continue;
+                    }
+#endif
                     std::string region_name;
-                    LLViewerRegion* region = objectp->getRegion();
+                    LLViewerRegion* region = objectp.legacy()->getRegion();
                     if (region)
                     {
                         region_name = objectp->getRegion()->getName();
@@ -2026,17 +2096,18 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
                     FSAssetBlacklist::getInstance()->addNewItemToBlacklist(object_id, mFSAreaSearch->mObjectDetails[object_id].name, region_name, LLAssetType::AT_OBJECT);
 
                     mFSAreaSearch->mObjectDetails.erase(object_id);
-                    LLSelectMgr::getInstance()->deselectObjectOnly(objectp);
+                    LLSelectMgr::getInstance()->deselectObjectOnly(objectp.legacy());
                     gObjectList.addDerenderedItem(object_id, true);
-                    gObjectList.killObject(objectp);
+                    auto* referenceObject=objectp.legacy();
+                    gObjectList.killObject(referenceObject);
                     if (LLViewerRegion::sVOCacheCullingEnabled && region)
                     {
-                        region->killCacheEntry(objectp->getLocalID());
+                        region->killCacheEntry(referenceObject->getLocalID());
                     }
 
                     LLTool* tool = LLToolMgr::getInstance()->getCurrentTool();
                     LLViewerObject* tool_editing_object = tool->getEditingObject();
-                    if (tool_editing_object && tool_editing_object->mID == object_id)
+                    if (tool_editing_object && tool_editing_object->getID() == object_id)
                     {
                         tool->stopEditing();
                     }
@@ -2058,7 +2129,7 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
         if (mResultList->getNumSelected() == 1)
         {
             const LLUUID& object_id = mResultList->getFirstSelected()->getUUID();
-            LLViewerObject* objectp = gObjectList.findObject(object_id);
+            VSAreaObject objectp = mFSAreaSearch->source(object_id);
             if (objectp)
             {
                 switch (c)
@@ -2087,7 +2158,7 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
 
                     gAgentCamera.setFocusOnAvatar(false, ANIMATE);
 
-                    gAgentCamera.setLookAt(LOOKAT_TARGET_SELECT, objectp);
+                    objectp->lookAt();
 
                     // Place the camera looking at the object, along the line from the camera to the object,
                     //  and sufficiently far enough away for the object to fill 3/4 of the screen,
@@ -2196,20 +2267,35 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
     case 'r': // return
     {
         // select the objects first
-        LLSelectMgr::getInstance()->deselectAll();
+#if VS_NATIVE_VULKAN
+        if (const auto owner=VSNativeSession::active();owner && gViewerWindow && gViewerWindow->isNativeVulkan()) owner->objectSelection()->deselectAll();
+        else
+#endif
+            LLSelectMgr::getInstance()->deselectAll();
         std::vector<LLScrollListItem*> selected = mResultList->getAllSelected();
 
         for (const auto* item : selected)
         {
             const LLUUID& object_id = item->getUUID();
-            LLViewerObject* objectp = gObjectList.findObject(object_id);
+            VSAreaObject objectp = mFSAreaSearch->source(object_id);
             if (objectp)
             {
-                LLSelectMgr::getInstance()->selectObjectAndFamily(objectp);
+                #if VS_NATIVE_VULKAN
+                if (objectp.native())
+                {
+                    objectp.selectFamily(true);
+                    const auto found=mFSAreaSearch->mObjectDetails.find(object_id);
+                    const auto owner=VSNativeSession::active();
+                    if (c=='r' && owner && objectp && found!=mFSAreaSearch->mObjectDetails.end() && found->second.protocol)
+                        owner->objectSelection()->seedSelectedProperties(objectp.token(),*found->second.protocol);
+                    continue;
+                }
+#endif
+                LLSelectMgr::getInstance()->selectObjectAndFamily(objectp.legacy());
                 if (c == 'r')
                 {
                     // need to set permissions for object return
-                    LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->findNode(objectp);
+                    LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->findNode(objectp.legacy());
                     if (!node)
                     {
                         break;
@@ -2242,7 +2328,7 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
             handle_object_delete();
             break;
         case 'r': // return
-            if (RlvActions::isRlvEnabled() && !rlvCanDeleteOrReturn())
+            if (RlvActions::isRlvEnabled() && !vs_area_selection_can_delete_or_return())
             {
                 break;
             }
@@ -2261,24 +2347,32 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
 }
 
 // static
-void FSPanelAreaSearchList::touchObject(LLViewerObject* objectp)
+void FSPanelAreaSearchList::touchObject(VSAreaObject objectp)
 {
-    // *NOTE: Hope the packets arrive safely and in order or else
-    // there will be some problems.
-    if ( (!RlvActions::isRlvEnabled()) || (RlvActions::canTouch(objectp)) )
+    if (!objectp || (RlvActions::isRlvEnabled() && !objectp->canTouch())) return;
+    LLPickInfo pick;
+    if (const auto source=objectp->context())
     {
-        LLPickInfo pick; // default constructor will set sane values.
-        send_ObjectGrab_message(objectp, pick, LLVector3::zero);
-        send_ObjectDeGrab_message(objectp, pick);
+        send_ObjectGrab_message(*source,pick,LLVector3::zero);
+        if (objectp) send_ObjectDeGrab_message(*source,pick);
     }
 }
 
-void FSPanelAreaSearchList::buyObject(FSObjectProperties& details, LLViewerObject* objectp)
+void FSPanelAreaSearchList::buyObject(FSObjectProperties& details, VSAreaObject objectp)
 {
+#if VS_NATIVE_VULKAN
+    if (objectp.native())
+    {
+        const auto owner=VSNativeSession::active();
+        if (owner && objectp && details.protocol && objectp.selectFamily() && objectp &&
+            owner->objectSelection()->seedSelectedProperties(objectp.token(),*details.protocol)) handle_buy();
+        return;
+    }
+#endif
     LLSelectMgr::getInstance()->deselectAll();
-    LLSelectMgr::getInstance()->selectObjectAndFamily(objectp);
+    LLSelectMgr::getInstance()->selectObjectAndFamily(objectp.legacy());
 
-    if (LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->findNode(objectp))
+    if (LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->findNode(objectp.legacy()))
     {
         node->mValid = true;
         node->mPermissions->init(details.creator_id, details.owner_id, details.last_owner_id, details.group_id);
@@ -2297,29 +2391,20 @@ void FSPanelAreaSearchList::buyObject(FSObjectProperties& details, LLViewerObjec
     }
 }
 
-void FSPanelAreaSearchList::sitOnObject(FSObjectProperties& details, LLViewerObject* objectp)
+void FSPanelAreaSearchList::sitOnObject(FSObjectProperties& details, VSAreaObject objectp)
 {
-    if ( (!RlvActions::isRlvEnabled()) || (RlvActions::canSit(objectp)) )
-    {
-        LLSelectMgr::getInstance()->deselectAll();
-        LLSelectMgr::getInstance()->selectObjectAndFamily(objectp);
-        LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->findNode(objectp);
-        if (node)
-        {
-            gMessageSystem->newMessageFast(_PREHASH_AgentRequestSit);
-            gMessageSystem->nextBlockFast(_PREHASH_AgentData);
-            gMessageSystem->addUUIDFast(_PREHASH_AgentID, gAgentID);
-            gMessageSystem->addUUIDFast(_PREHASH_SessionID, gAgentSessionID);
-            gMessageSystem->nextBlockFast(_PREHASH_TargetObject);
-            gMessageSystem->addUUIDFast(_PREHASH_TargetID, objectp->mID);
-            gMessageSystem->addVector3Fast(_PREHASH_Offset, LLVector3::zero);
-            objectp->getRegion()->sendReliableMessage();
-        }
-        else
-        {
-            LL_WARNS("FSAreaSearch") << "No LLSelectNode node" << LL_ENDL;
-        }
-    }
+    if (!objectp || (RlvActions::isRlvEnabled() && !objectp->canSit())) return;
+    if (!objectp.selectFamily() || !objectp) return;
+    const auto region=objectp->getRegion();
+    if (!region) return;
+    gMessageSystem->newMessageFast(_PREHASH_AgentRequestSit);
+    gMessageSystem->nextBlockFast(_PREHASH_AgentData);
+    gMessageSystem->addUUIDFast(_PREHASH_AgentID,gAgentID);
+    gMessageSystem->addUUIDFast(_PREHASH_SessionID,gAgentSessionID);
+    gMessageSystem->nextBlockFast(_PREHASH_TargetObject);
+    gMessageSystem->addUUIDFast(_PREHASH_TargetID,objectp->getID());
+    gMessageSystem->addVector3Fast(_PREHASH_Offset,LLVector3::zero);
+    if (objectp) region.sendReliableMessage();
 }
 
 //---------------------------------------------------------------------------
@@ -2687,4 +2772,27 @@ bool FSPanelAreaSearchAdvanced::postBuild()
     mCheckboxClickSit = getChild<LLCheckBoxCtrl>("double_click_sit");
 
     return LLPanel::postBuild();
+}
+
+VSAreaObject FSAreaSearch::source(const LLUUID& id) const
+{
+    const auto found=mObjectDetails.find(id);
+    return mCurrent && mCurrent() && found!=mObjectDetails.end() ? found->second.source : VSAreaObject{};
+}
+
+bool FSAreaSearch::isNativeCallback(std::string_view name,const LLSD& data)
+{
+    const auto parameter=data.asString();
+    if (name=="AreaSearch.DisplayColumn" || name=="AreaSearch.EnableColumn")
+        return parameter=="distance" || parameter=="name" || parameter=="description" || parameter=="price" ||
+            parameter=="land_impact" || parameter=="prim_count" || parameter=="owner" || parameter=="group" ||
+            parameter=="creator" || parameter=="last_owner";
+    if (name=="AreaSearch.Action")
+        return parameter=="l_blacklist" || parameter=="edit" || parameter=="script" || parameter=="select_all" ||
+            parameter=="inspect" || parameter=="delete" || parameter=="q_zoom" || parameter=="return" || parameter=="p_teleport" ||
+            parameter=="filter_my_objects" || parameter=="touch" || parameter=="u_sit_on_object" || parameter=="buy" || parameter=="clear_selection";
+    if (name=="AreaSearch.Enable") return parameter=="in_dd" || parameter=="script" || parameter=="one";
+    if (name=="AreaSearch.RLV") return parameter=="edit" || parameter=="delete|touch" || parameter=="edit|buy|touch" ||
+        parameter=="sit" || parameter=="delete" || parameter=="teleport" || parameter=="touch";
+    return false;
 }

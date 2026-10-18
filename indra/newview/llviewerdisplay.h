@@ -35,6 +35,7 @@ void display_cleanup();
 void display(bool rebuild = true, F32 zoom_factor = 1.f, int subfield = 0, bool for_snapshot = false);
 
 extern bool gDisplaySwapBuffers;
+extern bool gSnapshotNoPost;
 extern bool gDepthDirty;
 extern bool gTeleportDisplay;
 extern LLFrameTimer gTeleportDisplayTimer;

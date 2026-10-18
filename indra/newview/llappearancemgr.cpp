@@ -40,6 +40,7 @@
 #include "llagentwearables.h"
 #include "llappearancelistener.h"
 #include "llappearancemgr.h"
+#include "vsnativeim.h"
 #include "llattachmentsmgr.h"
 #include "llcommandhandler.h"
 #include "lleventtimer.h"
@@ -532,13 +533,15 @@ LLUpdateAppearanceOnDestroy::LLUpdateAppearanceOnDestroy(bool enforce_item_restr
     mFireCount(0),
     mEnforceItemRestrictions(enforce_item_restrictions),
     mEnforceOrdering(enforce_ordering),
-    mPostUpdateFunc(post_update_func)
+    mPostUpdateFunc(post_update_func),
+    mAccountCurrent(vs_native_im_guard())
 {
     selfStartPhase("update_appearance_on_destroy");
 }
 
 void LLUpdateAppearanceOnDestroy::fire(const LLUUID& inv_item)
 {
+    if (!mAccountCurrent()) return;
     LLViewerInventoryItem* item = (LLViewerInventoryItem*)gInventory.getItem(inv_item);
     const std::string item_name = item ? item->getName() : "ITEM NOT FOUND";
 #ifndef LL_RELEASE_FOR_DOWNLOAD
@@ -549,7 +552,7 @@ void LLUpdateAppearanceOnDestroy::fire(const LLUUID& inv_item)
 
 LLUpdateAppearanceOnDestroy::~LLUpdateAppearanceOnDestroy()
 {
-    if (!LLApp::isExiting())
+    if (!LLApp::isExiting() && mAccountCurrent())
     {
         // speculative fix for MAINT-1150
         LL_INFOS("Avatar") << self_av_string() << "done update appearance on destroy" << LL_ENDL;
@@ -560,22 +563,28 @@ LLUpdateAppearanceOnDestroy::~LLUpdateAppearanceOnDestroy()
         bool force_restrictions(mEnforceItemRestrictions);
         bool enforce_ordering(mEnforceOrdering);
         nullary_func_t post_update_func(mPostUpdateFunc);
-        doOnIdleOneTime([force_restrictions,enforce_ordering,post_update_func]()
+        doOnIdleOneTime([force_restrictions,enforce_ordering,post_update_func,current=mAccountCurrent]()
         {
+            if (!current()) return;
             LLAppearanceMgr::instance().updateAppearanceFromCOF(force_restrictions, enforce_ordering, post_update_func);
         });
     }
 }
 
 LLUpdateAppearanceAndEditWearableOnDestroy::LLUpdateAppearanceAndEditWearableOnDestroy(const LLUUID& item_id):
-    mItemID(item_id)
+    mItemID(item_id),
+    mAccountCurrent(vs_native_im_guard())
+{
+}
+
+LLRequestServerAppearanceUpdateOnDestroy::LLRequestServerAppearanceUpdateOnDestroy() : mAccountCurrent(vs_native_im_guard())
 {
 }
 
 LLRequestServerAppearanceUpdateOnDestroy::~LLRequestServerAppearanceUpdateOnDestroy()
 {
     LL_DEBUGS("Avatar") << "ATT requesting server appearance update" << LL_ENDL;
-    if (!LLApp::isExiting())
+    if (!LLApp::isExiting() && mAccountCurrent())
     {
         LLAppearanceMgr::instance().requestServerAppearanceUpdate();
     }
@@ -601,7 +610,7 @@ void edit_wearable_and_customize_avatar(LLUUID item_id)
 
 LLUpdateAppearanceAndEditWearableOnDestroy::~LLUpdateAppearanceAndEditWearableOnDestroy()
 {
-    if (!LLApp::isExiting())
+    if (!LLApp::isExiting() && mAccountCurrent())
     {
         LLAppearanceMgr::instance().updateAppearanceFromCOF(
             true,true,
@@ -2723,8 +2732,8 @@ void LLAppearanceMgr::updateAppearanceFromCOF(bool enforce_item_restrictions,
     {
         if (auto* appearance = session->appearance())
             appearance->refresh();
-        if (post_update_func)
-            post_update_func();
+        if (post_update_func && session->appearance())
+            session->appearance()->whenReady(post_update_func);
         return;
     }
 #endif
@@ -5456,3 +5465,14 @@ public:
 LLWearFolderHandler gWearFolderHandler;
 LLAddFolderHandler gAddFolderHandler;
 LLRemoveFolderHandler gRemoveFolderHandler;
+
+void LLAppearanceMgr::resetNativeAccount()
+{
+    cleanup();
+    mOutfitIsDirty = false;
+    mOutfitLocked = false;
+    mUnlockOutfitTimer.reset();
+    mInFlightTimer.reset();
+    mCOFImageID.setNull();
+    mDoomedTempAttachmentIDs.clear();
+}

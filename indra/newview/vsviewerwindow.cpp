@@ -1,5 +1,7 @@
 // Native graphics and required startup views in LLViewerWindow. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "llperfstats.h"
+#include "omnifilterengine.h"
 #include "llviewerwindow.h"
 #include "llviewerinput.h"
 #include "llwindow.h"
@@ -11,6 +13,7 @@
 #include "llviewermenu.h"
 #include "llmenugl.h"
 #include "llfloater.h"
+#include "llfloatersnapshot.h"
 #include "llfloaterreg.h"
 #include "llfloatertos.h"
 #include "llfloaterabout.h"
@@ -35,6 +38,7 @@
 #include "fsregistrarutils.h"
 #include "lllocationinputctrl.h"
 #include "vsnativesession.h"
+#include "vsparticleeffects.h"
 #include "llagentcamera.h"
 #include "llhudicon.h"
 #include "rlveffects.h"
@@ -59,6 +63,8 @@
 #include "lltoolpie.h"
 #include "llimview.h"
 #include "llconsole.h"
+#include "lldebugview.h"
+#include "llscenemonitor.h"
 #include "llchannelmanager.h"
 #include "llfloateravatarpicker.h"
 #include "llavataractions.h"
@@ -287,6 +293,18 @@ void LLViewerWindow::initNativeBase()
     floaters.tab_stop     = false;
     gFloaterView           = LLUICtrlFactory::create<LLFloaterView>(floaters, mRootView);
     require(gFloaterView != nullptr, "Native required-dialog container creation failed");
+    // The shared snapshot controllers temporarily own input through this exact
+    // view, as in every shipped main_view.xml. It starts inactive.
+    LLSnapshotFloaterView::Params snapshots;
+    snapshots.name = "Snapshot Floater View";
+    snapshots.rect = mWindowRectScaled;
+    snapshots.follows.flags = FOLLOWS_ALL;
+    snapshots.mouse_opaque = false;
+    snapshots.tab_stop = false;
+    snapshots.enabled = false;
+    snapshots.visible = false;
+    gSnapshotFloaterView = LLUICtrlFactory::create<LLSnapshotFloaterView>(snapshots, mRootView);
+    require(gSnapshotFloaterView != nullptr, "Native snapshot container creation failed");
     // Initialize default channels before registering viewer-owned children.
     LLNotifications::instance();
     mSystemChannel.reset(new LLNotificationChannel("System", "Visible", LLNotificationFilters::includeEverything));
@@ -321,6 +339,11 @@ void LLViewerWindow::initNativeBase()
     tooltips.tab_group=-2;
     gToolTipView=LLUICtrlFactory::create<LLToolTipView>(tooltips,mRootView);
     require(gToolTipView!=nullptr,"Required native tooltip owner creation failed");
+    LLDebugView::Params debug;
+    debug.name="DebugView";debug.rect=mWindowRectScaled;debug.follows.flags=FOLLOWS_ALL;
+    gDebugView=LLUICtrlFactory::create<LLDebugView>(debug,mRootView);
+    require(gDebugView!=nullptr,"Native debug UI owner creation failed");
+    gDebugView->init();
     mProgressViewMini->setVisible(false);
     mProgressView->setVisible(false);
 }
@@ -330,7 +353,9 @@ void LLViewerWindow::drawNativeUI()
     if (mDisplayScale.mV[VX] != llclamp(gSavedSettings.getF32("UIScaleFactor") * mNativeSystemScale, .75f, 4.f))
         reshapeNative(mWindowRectRaw.getWidth(), mWindowRectRaw.getHeight());
     if(auto owner=VSNativeSession::active())owner->publishCamera();
+    const auto uiLifetime=mRootView->getHandle();
     updateUI(); // Native branch updates layout and real focus/edit-menu ownership.
+    if(uiLifetime.isDead() || gViewerWindow!=this)return;
     LLConsole::updateClass();
     if (gConsole) gConsole->setShape(getChatConsoleRect());
     // The native simulator owner deliberately has no LLViewerRegion. Refresh the
@@ -373,7 +398,19 @@ void LLViewerWindow::drawNativeUI()
     // Later connected popups/chrome must not cover its skinned controls.
     if (mProgressView && mProgressView->getVisible()) mRootView->sendChildToFront(mProgressView);
     if (mProgressViewMini && mProgressViewMini->getVisible()) mRootView->sendChildToFront(mProgressViewMini);
-    if (mVulkanContext->present(mDisplayScale.mV[VX], [&] { mRootView->draw(); }))
+    updateDebugText();
+    LLPerfStats::RecordSceneTime displayTime(LLPerfStats::StatType_t::RENDER_DISPLAY);
+    if (mVulkanContext->present(mDisplayScale.mV[VX], [&]
+    {
+        // Original draw2D paints the genuine tool overlay before the UI root.
+        if(LLToolMgr::instanceExists())
+        {
+            auto& tools=LLToolMgr::instance();
+            if(auto* tool=tools.nativeCurrentTool())tool->draw();
+        }
+        if(uiLifetime.isDead() || gViewerWindow!=this)return;
+        mRootView->draw();drawDebugText();
+    }))
         if (const auto session = VSNativeSession::active(); session && session->phase() == VSNativeSession::Phase::Logout &&
             mVulkanContext->resources().evidence()["deferred_draw_batches"].asInteger() == 0)
             session->logoutFramePresented();
@@ -411,8 +448,12 @@ void LLViewerWindow::reshapeNative(S32 width, S32 height, F32 system_scale)
     mWorldViewRectScaled = mWindowRectScaled;
     mRootView->reshape(mWindowRectScaled.getWidth(), mWindowRectScaled.getHeight());
 }
-bool LLViewerWindow::nativePick(LLPickInfo& info)
+bool LLViewerWindow::nativePick(LLPickInfo& info,bool exactObject)
 {
+    const LLUUID target=exactObject?info.mObjectID:LLUUID::null;
+    const auto targetCurrent=info.mNativeObjectCurrent;
+    info.mNativeObjectCurrent={};
+
     info.mPickType = LLPickInfo::PICK_INVALID;
     info.mObjectID.setNull();info.mParticleOwnerID.setNull();info.mParticleSourceID.setNull();info.mHUDIcon=nullptr;info.mHUDIconOwner=nullptr;
     info.mObjectFace    = -1;
@@ -422,6 +463,7 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
     info.mPickPt        = info.mMousePt;
     info.mGLTFNodeIndex = info.mGLTFPrimitiveIndex = -1;
     const auto owner                               = VSNativeSession::active();
+    if(exactObject && (target.isNull() || (targetCurrent && !targetCurrent())))return false;
     if (!owner || !owner->regionReady() || !mVulkanContext)
         return false;
     const auto rect = getWindowRectScaled();
@@ -434,11 +476,16 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
     LLVector3   direction = camera.at - camera.left * (x * tangent * float(rect.getWidth()) / rect.getHeight()) + camera.up * (y * tangent);
     if (direction.normalize() < 1.e-6f)
         return false;
-    const float distance=512.f; // original LLPickInfo cursor ray depth
+    const float distance=exactObject?1024.f:512.f; // Original getSurfaceInfo vs cursor-ray depths
     const F32 denominator=direction*camera.at;
     if(denominator<=0)return false;
     const LLVector3 rayStart=camera.center+direction*(LLViewerCamera::getInstance()->getNear()/denominator);
     VSWorldScene::PickOptions options;
+    if(exactObject)
+    {
+        options.exactObject=mVulkanContext->world().object(target);
+        if(!options.exactObject)return false;
+    }
     options.transparent=info.mPickTransparent;options.rigged=info.mPickRigged;
     options.unselectable=info.mPickUnselectable;options.reflectionProbe=info.mPickReflectionProbe;
     options.buildVisible=[]{return LLFloater::isVisible(gFloaterTools);};
@@ -451,11 +498,11 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
     auto        pick     = mVulkanContext->world().pickHUD(x, y, float(rect.getWidth()) / rect.getHeight(), gAgentCamera.mHUDCurZoom,&options);
     const auto cameraCaptured=[]
     {return LLToolCamera::instanceExists() && LLToolCamera::getInstance()->hasMouseCapture();};
-    if(rlv_handler_t::isEnabled() && pick && cameraCaptured() && gKeyboard && (gKeyboard->currentMask(true)&MASK_ALT))pick.reset();
+    if(!exactObject && rlv_handler_t::isEnabled() && pick && cameraCaptured() && gKeyboard && (gKeyboard->currentMask(true)&MASK_ALT))pick.reset();
     if (!pick)
         pick = mVulkanContext->world().pick(rayStart, rayStart + direction * distance, options,
                                             distance * tangent / rect.getHeight());
-    if(pick && (gTeleportDisplay || (rlv_handler_t::isEnabled() && gRlvHandler.hasBehaviour(RLV_BHVR_INTERACT))))
+    if(!exactObject && pick && (gTeleportDisplay || (rlv_handler_t::isEnabled() && gRlvHandler.hasBehaviour(RLV_BHVR_INTERACT))))
     {
         LLTool* current=nullptr;
         if(LLToolMgr::instanceExists())
@@ -472,18 +519,28 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
         } tools{current};
         if(!VSPickPolicy::interaction(tools,pick->face.object.id==gAgent.getID()))pick.reset();
     }
-    if(pick && !pick->hud && RlvActions::hasBehaviour(RLV_BHVR_SETOVERLAY))
+    if(!exactObject && pick && !pick->hud && RlvActions::hasBehaviour(RLV_BHVR_SETOVERLAY))
     {
         std::list<RlvOverlayEffect*> effects;
         LLVfxManager::instance().getEffects<RlvOverlayEffect>(effects);
         for(const auto* effect:effects)if(effect->getEnabled() && effect->hitTest(info.mMousePt)){pick.reset();break;}
     }
+    // The reference picks particles independently, bounded by the actual
+    // world hit before icon competition; this never replaces object selection.
+    if(!exactObject && info.mPickParticle)
+        if(auto* particles=owner->existingParticles())
+        {
+            const auto origin=from_region_handle(owner->handle())-gAgent.getPosGlobalFromAgent(LLVector3::zero);
+            const LLVector3 start=rayStart+LLVector3(origin);
+            const LLVector3 end=pick?(pick->hud?pick->position:pick->position+LLVector3(origin)):start+direction*distance;
+            particles->pick(start,end,info.mParticleOwnerID,info.mParticleSourceID);
+        }
     // Icons have their own original camera-origin ray and compete by camera
     // distance after ordinary world restrictions; HUD attachments stay peers.
     const LLVector3 cameraAgent=gAgent.getPosAgentFromGlobal(from_region_handle(owner->handle())+LLVector3d(camera.center));
     LLVector4a iconStart,iconEnd,iconIntersection;iconStart.load3(cameraAgent.mV);
     const auto iconRayEnd=cameraAgent+direction*distance;iconEnd.load3(iconRayEnd.mV);
-    auto* icon=LLHUDIcon::intersectNative(iconStart,iconEnd,&iconIntersection);
+    auto* icon=exactObject?nullptr:LLHUDIcon::intersectNative(iconStart,iconEnd,&iconIntersection);
     if(icon)
     {
         LLVector4a iconDelta;iconDelta.setSub(iconIntersection,iconStart);
@@ -513,6 +570,7 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
     }
     info.mPickType           = pick->land?LLPickInfo::PICK_LAND:(flora?LLPickInfo::PICK_FLORA:LLPickInfo::PICK_OBJECT);
     info.mObjectID           = pick->face.object.id;
+    if(!pick->land)info.mNativeObjectCurrent=mVulkanContext->world().guard(pick->face.object);
     info.mObjectFace         = (pick->land || pick->avatar)?-1:S32(pick->face.face);
     info.mGLTFNodeIndex      = pick->gltfNode;
     info.mGLTFPrimitiveIndex = pick->gltfPrimitive;
@@ -534,93 +592,33 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
     }
     return true;
 }
-bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type, bool down)
+bool LLViewerWindow::nativeMouse(LLCoordGL pos,MASK mask,EMouseClickType type,bool down,bool* toolAction)
 {
-    // Preserve ordinary non-consuming bindings (notably push-to-talk) before
-    // shared controls or an active drag consume the pointer event.
-    gViewerInput.handleGlobalBindsMouse(type, mask, down);
-    LLUI::getInstance()->resetMouseIdleTimer();
-    if (!mRootView)
-        return false;
-    pos.mX             = ll_round(pos.mX / mDisplayScale.mV[VX]);
-    pos.mY             = ll_round(pos.mY / mDisplayScale.mV[VY]);
-    mCurrentMousePoint = pos;
-    if (type == CLICK_LEFT || type == CLICK_DOUBLELEFT)
-        mLeftMouseDown = down;
-    if (!down && (type == CLICK_LEFT || type == CLICK_DOUBLELEFT))
-        if (const auto owner = VSNativeSession::active())
-            owner->mouseButton(false);
-    if (type == CLICK_RIGHT)
-        mRightMouseDown = down;
-    if (type == CLICK_MIDDLE)
-        mMiddleMouseDown = down;
-    if (down)
-        if (auto owner = VSNativeSession::active()) owner->releaseMovement();
-    if (mNativeCameraDrag && !down) { mNativeCameraDrag = false; return true; }
-    auto* target = gFocusMgr.getMouseCapture();
-    // A real media capture owns the matching release even after the pointer
-    // leaves the face. Avoid the legacy world-object mouse-up controller.
-    if(LLToolPie::instanceExists() && target==LLToolPie::getInstance() &&
-       LLToolPie::instance().hasNativeMediaCapture())
+    const bool hadRoot=bool(mRootView);
+    const auto lifetime=mRootView?mRootView->getHandle():LLHandle<LLView>{};
+    const auto owner=VSNativeSession::active();
+    const auto account=owner && owner->phase()==VSNativeSession::Phase::Connected?owner->accountGuard():std::function<bool()>{};
+    const auto current=[lifetime,account,hadRoot,self=this]
+    {return gViewerWindow==self && (!hadRoot || !lifetime.isDead()) && (!account || account());};
+    // Global bindings may synchronously close a view, logout or replace tools.
+    // Capture this event's owners before invoking them, while retaining their
+    // original priority ahead of UI/capture/tool handling.
+    gViewerInput.handleGlobalBindsMouse(type,mask,down);
+    if(!current())return true;
+    if(!hadRoot)return false;
+    // SDL's delayInputProcessing is intentionally a no-op. Resolve prior real
+    // queued DOWN picks before their UP, retaining original event ordering.
+    if(!down && !mPicks.empty())
     {
-        if(!down && (type==CLICK_LEFT || type==CLICK_DOUBLELEFT))
-            LLToolPie::instance().retireNativeMediaCapture();
-        return true;
+        performPick();if(!current())return true;
     }
-    if (!target) target = mRootView;
-    S32 x, y;
-    target->screenPointToLocal(pos.mX, pos.mY, &x, &y);
-    if (target->handleAnyMouseClick(x, y, mask, type, down)) return true;
-    if (LLToolPipette::instanceExists() && LLToolPipette::instance().nativeActive())
-        if (type == CLICK_LEFT || type == CLICK_DOUBLELEFT)
-            return LLToolPipette::instance().handleAnyMouseClick(pos.mX, pos.mY, mask, type, down);
-    if (auto owner = VSNativeSession::active(); owner && owner->phase() == VSNativeSession::Phase::Connected)
-    {
-        gFocusMgr.setKeyboardFocus(nullptr);
-        owner->releaseMovement();
-        if(type==CLICK_RIGHT)
-            if(auto* tool=nativeMediaTool())
-            {
-                // The actual default tool owns the shared context controller;
-                // UI/capture already had first refusal above. Keep ordinary
-                // mouselook policy and the paired real tool release.
-                if(down)tool->handleRightMouseDown(pos.mX,pos.mY,mask);
-                else tool->handleRightMouseUp(pos.mX,pos.mY,mask);
-                return true;
-            }
-        if (down && ((type == CLICK_LEFT && ((mask & MASK_ALT) || LLFloaterCamera::inFreeCameraMode())) || type == CLICK_RIGHT))
-        { mNativeCameraDrag = true; return true; }
-        if(!down && type==CLICK_LEFT)
-            if(auto* tool=nativeMediaTool())
-            {
-                tool->handleMouseUp(pos.mX,pos.mY,mask);
-                return true;
-            }
-        if(down && type==CLICK_DOUBLELEFT)
-            if(auto* tool=nativeMediaTool())
-                if(tool->handleNativeMediaClick(tool->getPick(),true))return true;
-        if (down && type == CLICK_LEFT)
-        {
-            owner->mouseButton(true);
-            if (gAgent.leftButtonGrabbed())
-                return true;
-            if(auto* tool=nativeMediaTool())
-            {
-                // The genuine current default tool runs its normal two-pick
-                // priority and left-click controller, including media exactly
-                // once. This also activates actual script-error icons without
-                // a window-owned synthetic action or a legacy object stand-in.
-                tool->updateNativeMediaCapture();
-                tool->handleMouseDown(pos.mX,pos.mY,mask);
-                return true;
-            }
-            mLastPick = LLPickInfo(pos, mask, true, true, false, false, true, false, nullptr);
-            nativePick(mLastPick);
-            return true;
-        }
-    }
-    return false;
+    mCurrentMousePoint=LLCoordGL(ll_round(pos.mX/mDisplayScale.mV[VX]),ll_round(pos.mY/mDisplayScale.mV[VY]));
+    bool consumedByTool=false;
+    const bool handled=dispatchAnyMouseClick(mWindow,pos,mask,type,down,consumedByTool,current);
+    if(toolAction)*toolAction=consumedByTool;
+    return handled;
 }
+
 void LLViewerWindow::nativeHover(LLCoordGL pos, MASK mask)
 {
     if (!mRootView)
@@ -644,13 +642,20 @@ void LLViewerWindow::nativeHover(LLCoordGL pos, MASK mask)
             else
                 owner->cameraOrbit(F32(previous.mX - pos.mX) * .005f, F32(pos.mY - previous.mY) * .005f);
         }
-    nativeHoverUpdate(mask);
+    // Hover/delta/timers are pumped once by the real UI frame, matching the
+    // reference input collection followed by updateUI ordering.
 }
 void LLViewerWindow::nativeHoverUpdate(MASK mask)
 {
     if (!mRootView) return;
+    const auto lifetime=mRootView->getHandle();
+    const auto owner=VSNativeSession::active();
+    const auto account=owner && owner->phase()==VSNativeSession::Phase::Connected?owner->accountGuard():std::function<bool()>{};
+    const auto current=[lifetime,account,self=this]
+        {return gViewerWindow==self && !lifetime.isDead() && (!account || account());};
     const S32 x=mCurrentMousePoint.mX,y=mCurrentMousePoint.mY;
     updateMouseHoverViews(x,y,mask,mMouseInWindow);
+    if(!current())return;
     if(!mMouseInWindow)return;
     mWindow->setCursor(UI_CURSOR_ARROW);
     auto* captor=gFocusMgr.getMouseCapture();
@@ -663,6 +668,7 @@ void LLViewerWindow::nativeHoverUpdate(MASK mask)
         if(LLToolPie::instanceExists() && captor==LLToolPie::getInstance() && LLToolPie::instance().hasNativeMediaCapture())
             handled=nativeMediaHover(*this,mCurrentMousePoint,mask);
         else handled=captor->handleHover(local_x,local_y,mask);
+        if(!current())return;
     }
     else
     {
@@ -671,18 +677,27 @@ void LLViewerWindow::nativeHoverUpdate(MASK mask)
             S32 local_x,local_y;
             top->screenPointToLocal(x,y,&local_x,&local_y);
             handled=top->pointInView(local_x,local_y) && top->handleHover(local_x,local_y,mask);
+            if(!current())return;
         }
         if(!handled)handled=mRootView->handleHover(x,y,mask);
+        if(!current())return;
         if(!handled)
         {
-            if(LLToolPipette::instanceExists() && LLToolPipette::instance().nativeActive())
-                handled=LLToolPipette::instance().handleHover(x,y,mask);
-            else handled=nativeMediaHover(*this,mCurrentMousePoint,mask);
+            LLTool* tool=LLToolMgr::instanceExists()?LLToolMgr::instance().nativeCurrentTool():nullptr;
+            if(!current())return;
+            if(tool)
+            {
+                S32 local_x,local_y;tool->screenPointToLocal(x,y,&local_x,&local_y);
+                if(LLToolPie::instanceExists() && tool==LLToolPie::getInstance())
+                    handled=nativeMediaHover(*this,mCurrentMousePoint,mask);
+                else handled=tool->handleHover(local_x,local_y,mask);
+            }
+            if(!current())return;
         }
     }
     // Same eligibility, captor exclusion, sticky rectangle and control ordering
     // as the reference path; the real LLToolTipView draws/pumps its own timers.
-    updateToolTip(handled,top,captor,mask);
+    updateToolTip(handled,gFocusMgr.getTopCtrl(),gFocusMgr.getMouseCapture(),mask);
 }
 void LLViewerWindow::nativeScroll(S32 clicks, bool horizontal)
 {
@@ -720,6 +735,13 @@ void LLViewerWindow::setNativeConnected(bool connected)
     if(!connected && LLToolTipMgr::instanceExists())LLToolTipMgr::instance().resetToolTips();
     if (!connected && LLHints::instanceExists()) LLHints::deleteSingleton();
     if (!connected && mNativeUI) mNativeUI->resetAccountImages();
+    if(!connected && mVulkanContext)mVulkanContext->resetPixelInspection();
+    if(!connected && LLSceneMonitor::instanceExists())
+    {
+        if(gSceneMonitorView)gSceneMonitorView->setVisible(false);
+        LLSceneMonitor::instance().retireAccount();
+    }
+
     if (LLFavoritesOrderStorage::instanceExists())
     {
         if (!connected) LLFavoritesOrderStorage::destroyClass();
@@ -727,6 +749,7 @@ void LLViewerWindow::setNativeConnected(bool connected)
     }
     if (connected)
     {
+        OmnifilterEngine::instance().ensureInitialized();
         // Native account startup does not broadcast legacy scene login hooks.
         // Preserve the ordinary localized account response defaults explicitly.
         LLFloaterPreference::initDoNotDisturbResponse();

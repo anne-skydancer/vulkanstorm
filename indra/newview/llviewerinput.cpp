@@ -1757,9 +1757,6 @@ bool LLViewerInput::handleMouse(LLWindow *window_impl, LLCoordGL pos, MASK mask,
 {
     bool is_toolmgr_action = false;
     bool handled = gViewerWindow->handleAnyMouseClick(window_impl, pos, mask, clicktype, down, is_toolmgr_action);
-    // Native input is owned directly by the shared UI and CPU camera controller.
-    // Do not enqueue legacy mouse binding callbacks against scene/tool owners.
-    if (gViewerWindow->isNativeVulkan()) return handled;
 
     if (clicktype != CLICK_NONE)
     {

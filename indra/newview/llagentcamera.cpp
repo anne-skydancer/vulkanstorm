@@ -26,11 +26,20 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llagentcamera.h"
+#include "vsavatarservices.h"
 #if VS_NATIVE_VULKAN
 #include "vsobjectattention.h"
 #include "vsvulkancontext.h"
 #endif
 #include "vscamerafocusobject.h"
+#include "vsregioncontext.h"
+#include "vsobjectcontext.h"
+#include "llregionhandle.h"
+#if VS_NATIVE_VULKAN
+#include "vsobjectselection.h"
+#include "vsworldavatar.h"
+#endif
+#include <set>
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #endif
@@ -127,6 +136,174 @@ LLAgentCamera gAgentCamera;
 //-----------------------------------------------------------------------------
 // LLAgentCamera()
 //-----------------------------------------------------------------------------
+// Actual native targets feeding the existing shared LLAgentCamera CPU state.
+#if VS_NATIVE_VULKAN
+struct LLAgentCamera::NativeFocusState
+{
+    std::weak_ptr<VSNativeSession> owner;
+    std::function<bool()> account;
+    LLUUID id;
+    std::function<std::optional<VSCameraFocusObject>()> query;
+    std::function<std::optional<VSCameraFocusObject>()> sitQuery;
+    std::optional<VSCameraFocusObject> object;
+    bool published=false;
+};
+void LLAgentCamera::ensureNativeFocusState()
+{
+    const auto owner=VSNativeSession::active();
+    if(!owner)return;
+    if(!mNativeFocus || mNativeFocus->owner.lock()!=owner || !mNativeFocus->account || !mNativeFocus->account())
+    {
+        mNativeFocus=std::make_shared<NativeFocusState>();
+        mNativeFocus->owner=owner;
+        mNativeFocus->account=owner->accountGuard();
+    }
+}
+const VSCameraFocusObject* LLAgentCamera::nativeFocusObject()const
+{
+    return mNativeFocus && mNativeFocus->owner.lock()==VSNativeSession::active() && mNativeFocus->account && mNativeFocus->account() &&
+        mNativeFocus->object && mNativeFocus->object->current()?&*mNativeFocus->object:nullptr;
+}
+void LLAgentCamera::bindNativeFocusObject(const LLUUID& id)
+{
+    ensureNativeFocusState();if(!mNativeFocus)return;
+    mNativeFocus->query={};mNativeFocus->object.reset();mNativeFocus->id.setNull();
+    const auto owner=VSNativeSession::active();
+    if(id.isNull() || !owner || !gViewerWindow || !gViewerWindow->nativeContext())return;
+    auto& world=gViewerWindow->nativeContext()->world();auto object=world.object(id);
+    if(!object)return;
+    // Original attachments focus on their wearing avatar, stopping at that
+    // actual avatar even when it is itself seated on a separate object.
+    std::set<LLUUID> visited;
+    for(;;)
+    {
+        if(!visited.insert(object->id).second)return;
+        const auto row=world.objectAdmission(*object);
+        if(!row || row->pcode==LL_PCODE_LEGACY_AVATAR || !row->attachment)break;
+        const auto parent=world.parentObject(*object);if(!parent)return;object=parent;
+    }
+    const auto token=*object;const auto current=owner->accountGuard();const std::weak_ptr<VSNativeSession> weak=owner;
+    mNativeFocus->query=[current,token,weak]()->std::optional<VSCameraFocusObject>
+    {
+        if(!current() || weak.lock()!=VSNativeSession::active() || !gViewerWindow || !gViewerWindow->nativeContext())return {};
+        return gViewerWindow->nativeContext()->world().focusObject(token,gAgent.getPosGlobalFromAgent(LLVector3::zero));
+    };
+    mNativeFocus->object=mNativeFocus->query();
+    if(mNativeFocus->object)mNativeFocus->id=token.id;
+    else mNativeFocus->query={};
+}
+bool LLAgentCamera::nativeCameraHUDSelection()const
+{
+    const auto owner=VSNativeSession::active();auto* selected=owner?owner->existingObjectSelection():nullptr;
+    if(!selected)return false;
+    const auto type=selected->selectionType();
+    return type.selected && type.type==VSObjectSelection::SelectionType::HUD;
+}
+void LLAgentCamera::setNativeFocusAttention(const LLUUID& id,const LLVector3d& focus)
+{
+    const auto owner=VSNativeSession::active();
+    if(!owner || !owner->regionReady() || !gViewerWindow || !gViewerWindow->nativeContext())return;
+    auto* attention=owner->objectAttention();if(!attention)return;
+    auto& world=gViewerWindow->nativeContext()->world();
+    const auto token=world.object(id);
+    const auto object=token?world.focusObject(*token,gAgent.getPosGlobalFromAgent(LLVector3::zero)):std::nullopt;
+    LLVector3 offset=gAgent.getPosAgentFromGlobal(focus);
+    if(object)offset=object->isAvatar?LLVector3::zero:(offset-object->position())*~object->rotation();
+    attention->look(LOOKAT_TARGET_FOCUS,token,offset);
+}
+bool LLAgentCamera::nativeCameraPose(LLVector3d& eye,LLVector3d& focus,LLVector3& up)const
+{
+    if(!mNativeFocus || mNativeFocus->owner.lock()!=VSNativeSession::active() || !mNativeFocus->account || !mNativeFocus->account() || !mNativeFocus->published)return false;
+    eye=mCameraSmoothingLastPositionGlobal;focus=mFocusGlobal;up=mCameraUpVector;
+    return eye.isFinite() && focus.isFinite() && up.isFinite();
+}
+bool LLAgentCamera::setNativeCameraPose(const LLVector3d& eye,const LLVector3d& focus,const LLUUID& objectID,bool animate)
+{
+    const auto owner=VSNativeSession::active();
+    if(!owner || !owner->regionReady() || !eye.isFinite() || !focus.isFinite() || (eye-focus).magVecSquared()<1e-12)return false;
+    ensureNativeFocusState();if(!mNativeFocus || !mNativeFocus->account())return false;
+    const auto previous=owner->cameraState();
+    const auto origin=from_region_handle(owner->handle());
+    if(!mNativeFocus->published)
+    {mFocusGlobal=origin+LLVector3d(previous.focus);mCameraSmoothingLastPositionGlobal=origin+LLVector3d(previous.center);mCameraUpVector=previous.up;mCameraVirtualPositionAgent=previous.center;}
+    mFocusOnAvatar=false;
+    bindNativeFocusObject(objectID);
+    mFocusTargetGlobal=focus;mCameraFocusOffsetTarget=eye-focus;mCameraFocusOffset=mCameraFocusOffsetTarget;
+    if(const auto* target=nativeFocusObject())mFocusObjectOffset=LLVector3(focus-gAgent.getPosGlobalFromAgent(target->position()));
+    else mFocusObjectOffset.clearVec();
+    if(animate)startCameraAnimation();
+    else
+    {mCameraAnimating=false;mFocusGlobal=focus;mCameraSmoothingLastPositionGlobal=eye;mCameraSmoothingLastPositionAgent=eye-gAgent.getPositionGlobal();}
+    mNativeFocus->published=true;
+    return true;
+}
+
+void LLAgentCamera::updateNativeCamera(const LLVector3d& avatarEyeInput,const LLVector3d& avatarFocusInput,const LLVector3& avatarUp)
+{
+    LLVector3d avatarEye=avatarEyeInput,avatarFocus=avatarFocusInput;
+    ensureNativeFocusState();
+    const auto owner=VSNativeSession::active();
+    if(!owner || !owner->regionReady() || !mNativeFocus || !mNativeFocus->account())return;
+    if(mSitCameraEnabled && mNativeFocus->sitQuery)
+    {
+        const auto reference=mNativeFocus->sitQuery();
+        if(!mNativeFocus || !mNativeFocus->account())return;
+        if(!reference || !reference->current())setSitCamera(LLUUID::null);
+        else if(cameraThirdPerson() && mFocusOnAvatar && vs_avatar_character() && gAgent.isSitting())
+        {
+            // The reference third-person sit targets feed the existing camera
+            // constraint, interpolation, animation and lens controller below.
+            avatarEye=gAgent.getPosGlobalFromAgent(reference->renderPosition+(mSitCameraPos*reference->renderRotation));
+            avatarFocus=gAgent.getPosGlobalFromAgent(reference->renderPosition+(mSitCameraFocus*reference->renderRotation));
+        }
+    }
+    if(!avatarEye.isFinite() || !avatarFocus.isFinite() || !avatarUp.isFinite())return;
+    if(!mNativeFocus->published)
+    {
+        mCameraSmoothingLastPositionGlobal=avatarEye;
+        mCameraSmoothingLastPositionAgent=avatarEye-gAgent.getPositionGlobal();
+        mFocusGlobal=avatarFocus;mFocusTargetGlobal=avatarFocus;
+    }
+    if(mNativeFocus->query)
+    {
+        auto object=mNativeFocus->query();
+        if(!mNativeFocus->account())return;
+        mNativeFocus->object=std::move(object);
+        if(!mNativeFocus->object)
+        {
+            // Same lifetime transition as validateFocusObject/clearFocusObject:
+            // keep the last genuine global focus while retiring its live owner.
+            clearFocusObject();mCameraFOVZoomFactor=0.f;
+        }
+    }
+    if(gRlvHandler.hasBehaviour(RLV_BHVR_SETCAM_UNLOCK) && (cameraThirdPerson() || cameraFollow()) && !mFocusOnAvatar)
+        setFocusOnAvatar(true,false);
+    mCameraUpVector=mFocusOnAvatar?avatarUp:LLVector3::z_axis;
+    LLVector3d target;
+    if(mFocusOnAvatar || cameraMouselook())
+    {
+        mFocusTargetGlobal=avatarFocus;target=avatarEye;
+        mCameraFocusOffsetTarget=target-avatarFocus;
+        mTargetCameraDistance=F32((avatarEye-gAgent.getPositionGlobal()).magVec());
+    }
+    else target=calcFocusPositionTargetGlobal()+mCameraFocusOffset;
+    mCameraFocusOffset=lerp(mCameraFocusOffset,mCameraFocusOffsetTarget,LLSmoothInterpolation::getInterpolant(CAMERA_FOCUS_HALF_LIFE));
+    if(!mFocusOnAvatar && !cameraMouselook())target=calcFocusPositionTargetGlobal()+mCameraFocusOffset;
+    const auto focus=calcFocusPositionTargetGlobal();
+    bool hit=false;
+    target=constrainCameraPosition(target,gAgent.getPositionGlobal(),LLVector3d(mThirdPersonHeadOffset),&hit);
+    applyCameraTargets(target,focus);
+    if(!mNativeFocus || !mNativeFocus->account())return;
+    LLCoordFrame frame;
+    frame.lookAt(gAgent.getPosAgentFromGlobal(mCameraSmoothingLastPositionGlobal),gAgent.getPosAgentFromGlobal(mFocusGlobal),mCameraUpVector);
+    LLQuaternion rotation=LLQuaternion(LLMatrix3(mRollAngle,0.f,0.f))*frame.getQuaternion();
+    const LLMatrix3 axes(rotation);
+    mCameraUpVector=LLVector3(axes.mMatrix[2]);
+    LLViewerCamera::getInstance()->setView(LLViewerCamera::getInstance()->getDefaultFOV()/(1.f+mCameraCurrentFOVZoomFactor));
+    mNativeFocus->published=true;
+}
+#endif
+
 LLAgentCamera::LLAgentCamera() :
     mInitialized(false),
 
@@ -260,6 +437,10 @@ void LLAgentCamera::init()
 //-----------------------------------------------------------------------------
 void LLAgentCamera::cleanup()
 {
+#if VS_NATIVE_VULKAN
+    mNativeFocus.reset();mFocusOnAvatar=true;
+#endif
+
     setSitCamera(LLUUID::null);
 
     if(mLookAt)
@@ -688,31 +869,32 @@ std::optional<LLVector3> LLAgentCamera::calcNativeFocusOffset(const VSCameraFocu
 //-----------------------------------------------------------------------------
 // calcCameraMinDistance()
 //-----------------------------------------------------------------------------
-bool LLAgentCamera::calcCameraMinDistance(F32 &obj_min_distance)
+template<class Focus>
+bool LLAgentCamera::sharedCameraMinDistance(Focus& object,F32& obj_min_distance)
 {
     bool soft_limit = false; // is the bounding box to be treated literally (volumes) or as an approximation (avatars)
 
-    if (!mFocusObject || mFocusObject->isDead() ||
-        mFocusObject->isMesh() ||
+    if (!object.exists() || object.dead() ||
+        object.mesh() ||
         isDisableCameraConstraints())
     {
         obj_min_distance = 0.f;
         return true;
     }
 
-    if (mFocusObject->mDrawable.isNull())
+    if (object.missingDrawable())
     {
 #ifdef LL_RELEASE_FOR_DOWNLOAD
         LL_WARNS() << "Focus object with no drawable!" << LL_ENDL;
 #else
-        mFocusObject->dump();
+        object.dump();
         LL_ERRS() << "Focus object with no drawable!" << LL_ENDL;
 #endif
         obj_min_distance = 0.f;
         return true;
     }
 
-    LLQuaternion inv_object_rot = ~mFocusObject->getRenderRotation();
+    LLQuaternion inv_object_rot = ~object.rotation();
     LLVector3 target_offset_origin = mFocusObjectOffset;
     LLVector3 camera_offset_target(getCameraPositionAgent() - gAgent.getPosAgentFromGlobal(mFocusTargetGlobal));
 
@@ -721,8 +903,8 @@ bool LLAgentCamera::calcCameraMinDistance(F32 &obj_min_distance)
     target_offset_origin.rotVec(inv_object_rot);
 
     // push around object extents based on target offset
-    LLVector3 object_extents = mFocusObject->getScale();
-    if (mFocusObject->isAvatar())
+    LLVector3 object_extents = object.scale();
+    if (object.avatar())
     {
         // fudge factors that lets you zoom in on avatars a bit more (which don't do FOV zoom)
         object_extents.mV[VX] *= AVATAR_ZOOM_MIN_X_FACTOR;
@@ -826,7 +1008,7 @@ bool LLAgentCamera::calcCameraMinDistance(F32 &obj_min_distance)
         object_split_axis = LLVector3::z_axis;
     }
 
-    LLVector3 camera_offset_object(getCameraPositionAgent() - mFocusObject->getPositionAgent());
+    LLVector3 camera_offset_object(getCameraPositionAgent() - object.agentPosition());
 
 
     F32 camera_offset_clip = camera_offset_object * object_split_axis;
@@ -853,16 +1035,52 @@ bool LLAgentCamera::calcCameraMinDistance(F32 &obj_min_distance)
 
     return true;
 }
+bool LLAgentCamera::calcCameraMinDistance(F32& distance)
+{
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())
+    {
+        struct Focus
+        {
+            const VSCameraFocusObject* value;
+            bool exists()const{return value;}
+            bool dead()const{return !value->current();}
+            bool mesh()const{return value->isMesh;}
+            bool missingDrawable()const{return false;}
+            void dump()const{}
+            LLQuaternion rotation()const{return value->rotation();}
+            LLVector3 scale()const{return value->scale();}
+            bool avatar()const{return value->avatar();}
+            LLVector3 agentPosition()const{return value->officialBounds.getPositionAgent();}
+        } focus{nativeFocusObject()};
+        return sharedCameraMinDistance(focus,distance);
+    }
+#endif
+    struct Focus
+    {
+        LLViewerObject* value;
+        bool exists()const{return value;}
+        bool dead()const{return value->isDead();}
+        bool mesh()const{return value->isMesh();}
+        bool missingDrawable()const{return value->mDrawable.isNull();}
+        void dump()const{value->dump();}
+        LLQuaternion rotation()const{return value->getRenderRotation();}
+        LLVector3 scale()const{return value->getScale();}
+        bool avatar()const{return value->isAvatar();}
+        LLVector3 agentPosition()const{return value->getPositionAgent();}
+    } focus{mFocusObject};
+    return sharedCameraMinDistance(focus,distance);
+}
+
 
 F32 LLAgentCamera::getCameraZoomFraction(bool get_third_person)
 {
 #if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) return native->cameraZoomFraction();
+    if (const auto native = VSNativeSession::active();native && !nativeCameraHUDSelection() && (get_third_person || (mFocusOnAvatar && cameraThirdPerson()))) return native->cameraZoomFraction();
 #endif
     // 0.f -> camera zoomed all the way out
     // 1.f -> camera zoomed all the way in
-    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
-    if (selection->getObjectCount() && selection->getSelectType() == SELECT_TYPE_HUD)
+    if (cameraHUDSelection())
     {
         // already [0,1]
         return mHUDTargetZoom;
@@ -887,9 +1105,9 @@ F32 LLAgentCamera::getCameraZoomFraction(bool get_third_person)
     }
 
     F32 distance = (F32)mCameraFocusOffsetTarget.magVec();
-    if (mFocusObject.notNull())
+    if (hasCameraFocusObject())
     {
-        if (mFocusObject->isAvatar())
+        if (cameraFocusIsAvatar())
         {
             min_zoom = AVATAR_MIN_ZOOM;
         }
@@ -909,13 +1127,12 @@ F32 LLAgentCamera::getCameraZoomFraction(bool get_third_person)
 void LLAgentCamera::setCameraZoomFraction(F32 fraction)
 {
 #if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraZoomFraction(fraction); return; }
+    if (const auto native = VSNativeSession::active();native && !nativeCameraHUDSelection() && mFocusOnAvatar && cameraThirdPerson()) { native->cameraZoomFraction(fraction); return; }
 #endif
     // 0.f -> camera zoomed all the way out
     // 1.f -> camera zoomed all the way in
-    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
 
-    if (selection->getObjectCount() && selection->getSelectType() == SELECT_TYPE_HUD)
+    if (cameraHUDSelection())
     {
         mHUDTargetZoom = fraction;
     }
@@ -938,9 +1155,9 @@ void LLAgentCamera::setCameraZoomFraction(F32 fraction)
             max_zoom = MAX_CAMERA_DISTANCE_FROM_OBJECT;
         }
 
-        if (mFocusObject.notNull())
+        if (hasCameraFocusObject())
         {
-            if (mFocusObject->isAvatar())
+            if (cameraFocusIsAvatar())
             {
                 min_zoom = AVATAR_MIN_ZOOM;
             }
@@ -967,8 +1184,7 @@ void LLAgentCamera::setCameraZoomFraction(F32 fraction)
 F32 LLAgentCamera::getAgentHUDTargetZoom()
 {
     static LLCachedControl<F32> hud_scale_factor(gSavedSettings, "HUDScaleFactor");
-    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
-    return (selection->getObjectCount() && selection->getSelectType() == SELECT_TYPE_HUD) ? hud_scale_factor*gAgentCamera.mHUDTargetZoom : hud_scale_factor;
+    return (gAgentCamera.cameraHUDSelection()) ? hud_scale_factor*gAgentCamera.mHUDTargetZoom : hud_scale_factor;
 }
 
 //-----------------------------------------------------------------------------
@@ -977,10 +1193,9 @@ F32 LLAgentCamera::getAgentHUDTargetZoom()
 void LLAgentCamera::cameraOrbitAround(const F32 radians)
 {
 #if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraOrbit(radians, 0); return; }
+    if (const auto native = VSNativeSession::active();native && mFocusOnAvatar && !nativeCameraHUDSelection()) { native->cameraOrbit(radians, 0); return; }
 #endif
-    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
-    if (selection->getObjectCount() && selection->getSelectType() == SELECT_TYPE_HUD)
+    if (cameraHUDSelection())
     {
         // do nothing for hud selection
     }
@@ -1004,10 +1219,9 @@ void LLAgentCamera::cameraOrbitAround(const F32 radians)
 void LLAgentCamera::cameraOrbitOver(const F32 angle)
 {
 #if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraOrbit(0, angle); return; }
+    if (const auto native = VSNativeSession::active();native && mFocusOnAvatar && !nativeCameraHUDSelection()) { native->cameraOrbit(0, angle); return; }
 #endif
-    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
-    if (selection->getObjectCount() && selection->getSelectType() == SELECT_TYPE_HUD)
+    if (cameraHUDSelection())
     {
         // do nothing for hud selection
     }
@@ -1038,25 +1252,19 @@ void LLAgentCamera::cameraOrbitOver(const F32 angle)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::cameraRollOver(const F32 angle)
 {
-#if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraRoll(angle); return; }
-#endif
+
     mRollAngle += fmodf(angle, F_TWO_PI);
 }
 
 void LLAgentCamera::resetCameraRoll()
 {
-#if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraResetRoll(); return; }
-#endif
+
     mRollAngle = 0.f;
 }
 // </FS:Chanayane>
 void LLAgentCamera::resetCameraOrbit()
 {
-#if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraResetOrbit(); return; }
-#endif
+
     LLVector3 camera_offset_unit(mCameraFocusOffsetTarget);
     camera_offset_unit.normalize();
 
@@ -1089,8 +1297,7 @@ void LLAgentCamera::cameraZoomIn(const F32 fraction)
         return;
     }
 
-    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
-    if (LLToolMgr::getInstance()->inBuildMode() && selection->getObjectCount() && selection->getSelectType() == SELECT_TYPE_HUD)
+    if (LLToolMgr::getInstance()->inBuildMode() && cameraHUDSelection())
     {
         // just update hud zoom level
         mHUDTargetZoom /= fraction;
@@ -1107,11 +1314,11 @@ void LLAgentCamera::cameraZoomIn(const F32 fraction)
         F32 min_zoom = LAND_MIN_ZOOM;
 
         // Don't move through focus point
-        if (mFocusObject)
+        if (hasCameraFocusObject())
         {
             LLVector3 camera_offset_dir((F32)camera_offset_unit.mdV[VX], (F32)camera_offset_unit.mdV[VY], (F32)camera_offset_unit.mdV[VZ]);
 
-            if (mFocusObject->isAvatar())
+            if (cameraFocusIsAvatar())
             {
                 calcCameraMinDistance(min_zoom);
             }
@@ -1177,6 +1384,10 @@ void LLAgentCamera::cameraOrbitIn(const F32 meters)
         {
             mCameraZoomFraction = llclamp(mCameraZoomFraction, MIN_ZOOM_FRACTION, MAX_ZOOM_FRACTION);
         }
+#if VS_NATIVE_VULKAN
+        if(const auto native=VSNativeSession::active())
+            native->cameraZoomFraction(clamp_rescale(mCameraZoomFraction,MIN_ZOOM_FRACTION,MAX_ZOOM_FRACTION,1.f,0.f));
+#endif
     }
     else
     {
@@ -1190,9 +1401,9 @@ void LLAgentCamera::cameraOrbitIn(const F32 meters)
             F32 min_zoom = LAND_MIN_ZOOM;
 
             // Don't move through focus point
-            if (mFocusObject.notNull())
+            if (hasCameraFocusObject())
             {
-                if (mFocusObject->isAvatar())
+                if (cameraFocusIsAvatar())
                 {
                     min_zoom = AVATAR_MIN_ZOOM;
                 }
@@ -1237,9 +1448,7 @@ void LLAgentCamera::cameraOrbitIn(const F32 meters)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::cameraPanIn(F32 meters)
 {
-#if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraPan(LLVector3(meters,0,0)); return; }
-#endif
+
     LLVector3d at_axis;
     at_axis.setVec(LLViewerCamera::getInstance()->getAtAxis());
 
@@ -1258,9 +1467,7 @@ void LLAgentCamera::cameraPanIn(F32 meters)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::cameraPanLeft(F32 meters)
 {
-#if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraPan(LLVector3(0,meters,0)); return; }
-#endif
+
     LLVector3d left_axis;
     left_axis.setVec(LLViewerCamera::getInstance()->getLeftAxis());
 
@@ -1283,9 +1490,7 @@ void LLAgentCamera::cameraPanLeft(F32 meters)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::cameraPanUp(F32 meters)
 {
-#if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraPan(LLVector3(0,0,meters)); return; }
-#endif
+
     LLVector3d up_axis;
     up_axis.setVec(LLViewerCamera::getInstance()->getUpAxis());
 
@@ -1305,9 +1510,7 @@ void LLAgentCamera::cameraPanUp(F32 meters)
 
 void LLAgentCamera::resetCameraPan()
 {
-#if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraResetPan(); return; }
-#endif
+
     mFocusTargetGlobal -= mPanFocusDiff;
 
     mFocusGlobal = mFocusTargetGlobal;
@@ -1323,9 +1526,7 @@ void LLAgentCamera::resetCameraPan()
 
 void LLAgentCamera::resetPanDiff()
 {
-#if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraResetPan(); return; }
-#endif
+
     mPanFocusDiff.clear();
 }
 
@@ -1411,201 +1612,10 @@ extern bool gCubeSnapshot;
 //-----------------------------------------------------------------------------
 // updateCamera()
 //-----------------------------------------------------------------------------
-void LLAgentCamera::updateCamera()
+LLVector3d LLAgentCamera::applyCameraTargets(LLVector3d camera_target_global,const LLVector3d& focus_target_global)
 {
-    LL_RECORD_BLOCK_TIME(FTM_UPDATE_CAMERA);
-    if (gCubeSnapshot)
-    {
-        return;
-    }
-
-    // - changed camera_skyward to the new global "mCameraUpVector"
-    mCameraUpVector = LLVector3::z_axis;
-    //LLVector3 camera_skyward(0.f, 0.f, 1.f);
-
-// [RLVa:KB] - Checked: RLVa-2.0.0
-    // Set focus back on our avie if something changed it
-    if ( (gRlvHandler.hasBehaviour(RLV_BHVR_SETCAM_UNLOCK)) && ((cameraThirdPerson()) || (cameraFollow())) && (!getFocusOnAvatar()) )
-    {
-        setFocusOnAvatar(true, false);
-    }
-// [/RLVa:KB]
-
-    U32 camera_mode = mCameraAnimating ? mLastCameraMode : mCameraMode;
-
-    validateFocusObject();
-
-    if (isAgentAvatarValid() &&
-        gAgentAvatarp->isSitting() &&
-        camera_mode == CAMERA_MODE_MOUSELOOK)
-    {
-        //changed camera_skyward to the new global "mCameraUpVector"
-        mCameraUpVector = mCameraUpVector * gAgentAvatarp->getRenderRotation();
-    }
-
-    if (cameraThirdPerson() && (mFocusOnAvatar || mAllowChangeToFollow) && LLFollowCamMgr::getInstance()->getActiveFollowCamParams())
-    {
-        mAllowChangeToFollow = false;
-        mFocusOnAvatar = true;
-        changeCameraToFollow();
-    }
-
-    //NOTE - this needs to be integrated into a general upVector system here within llAgent.
-    if ( camera_mode == CAMERA_MODE_FOLLOW && mFocusOnAvatar )
-    {
-        mCameraUpVector = mFollowCam.getUpVector();
-    }
-
-    if (mSitCameraEnabled)
-    {
-        if (mSitCameraReferenceObject->isDead())
-        {
-            setSitCamera(LLUUID::null);
-        }
-    }
-
-    // Update UI with our camera inputs
-    LLFloaterCamera* camera_floater = LLFloaterReg::findTypedInstance<LLFloaterCamera>("camera");
-    if (camera_floater)
-    {
-        camera_floater->mRotate->setToggleState(gAgentCamera.getOrbitRightKey() > 0.f,  // left
-                                                gAgentCamera.getOrbitUpKey() > 0.f,     // top
-                                                gAgentCamera.getOrbitLeftKey() > 0.f,   // right
-                                                gAgentCamera.getOrbitDownKey() > 0.f);  // bottom
-
-        camera_floater->mTrack->setToggleState(gAgentCamera.getPanLeftKey() > 0.f,      // left
-                                               gAgentCamera.getPanUpKey() > 0.f,            // top
-                                               gAgentCamera.getPanRightKey() > 0.f,     // right
-                                               gAgentCamera.getPanDownKey() > 0.f);     // bottom
-    }
-
-    // <FS:Ansariel> Phototools camera
-    camera_floater = LLFloaterReg::findTypedInstance<LLFloaterCamera>("phototools_camera");
-    if (camera_floater)
-    {
-        camera_floater->mRotate->setToggleState(gAgentCamera.getOrbitRightKey() > 0.f,  // left
-                                                gAgentCamera.getOrbitUpKey() > 0.f,     // top
-                                                gAgentCamera.getOrbitLeftKey() > 0.f,   // right
-                                                gAgentCamera.getOrbitDownKey() > 0.f);  // bottom
-
-        camera_floater->mTrack->setToggleState(gAgentCamera.getPanLeftKey() > 0.f,      // left
-                                               gAgentCamera.getPanUpKey() > 0.f,            // top
-                                               gAgentCamera.getPanRightKey() > 0.f,     // right
-                                               gAgentCamera.getPanDownKey() > 0.f);     // bottom
-    }
-    // </FS:Ansariel>
-
-    // <FS:Ansariel> Optional small camera floater
-    camera_floater = LLFloaterReg::findTypedInstance<LLFloaterCamera>("fs_camera_small");
-    if (camera_floater)
-    {
-        camera_floater->mRotate->setToggleState(gAgentCamera.getOrbitRightKey() > 0.f,  // left
-                                                gAgentCamera.getOrbitUpKey() > 0.f,     // top
-                                                gAgentCamera.getOrbitLeftKey() > 0.f,   // right
-                                                gAgentCamera.getOrbitDownKey() > 0.f);  // bottom
-
-        camera_floater->mTrack->setToggleState(gAgentCamera.getPanLeftKey() > 0.f,      // left
-                                               gAgentCamera.getPanUpKey() > 0.f,            // top
-                                               gAgentCamera.getPanRightKey() > 0.f,     // right
-                                               gAgentCamera.getPanDownKey() > 0.f);     // bottom
-    }
-    // </FS:Ansariel>
-
-    // Handle camera movement based on keyboard.
-    const F32 ORBIT_OVER_RATE = 90.f * DEG_TO_RAD;          // radians per second
-    const F32 ORBIT_AROUND_RATE = 90.f * DEG_TO_RAD;        // radians per second
-    const F32 PAN_RATE = 5.f;                               // meters per second
-// <FS:Chanayane> Camera roll (from Alchemy)
-    const F32 ROLL_RATE = 45.f * DEG_TO_RAD;                // radians per second
-// </FS:Chanayane>
-
-    if (gAgentCamera.getOrbitUpKey() || gAgentCamera.getOrbitDownKey())
-    {
-        F32 input_rate = gAgentCamera.getOrbitUpKey() - gAgentCamera.getOrbitDownKey();
-        cameraOrbitOver( input_rate * ORBIT_OVER_RATE / gFPSClamped );
-    }
-
-    if (gAgentCamera.getOrbitLeftKey() || gAgentCamera.getOrbitRightKey())
-    {
-        F32 input_rate = gAgentCamera.getOrbitLeftKey() - gAgentCamera.getOrbitRightKey();
-        cameraOrbitAround(input_rate * ORBIT_AROUND_RATE / gFPSClamped);
-    }
-
-    if (gAgentCamera.getOrbitInKey() || gAgentCamera.getOrbitOutKey())
-    {
-        F32 input_rate = gAgentCamera.getOrbitInKey() - gAgentCamera.getOrbitOutKey();
-
-        LLVector3d to_focus = gAgent.getPosGlobalFromAgent(LLViewerCamera::getInstance()->getOrigin()) - calcFocusPositionTargetGlobal();
-        F32 distance_to_focus = (F32)to_focus.magVec();
-        // Move at distance (in meters) meters per second
-        cameraOrbitIn( input_rate * distance_to_focus / gFPSClamped );
-    }
-
-    if (gAgentCamera.getPanInKey() || gAgentCamera.getPanOutKey())
-    {
-        F32 input_rate = gAgentCamera.getPanInKey() - gAgentCamera.getPanOutKey();
-        cameraPanIn(input_rate * PAN_RATE / gFPSClamped);
-    }
-
-    if (gAgentCamera.getPanRightKey() || gAgentCamera.getPanLeftKey())
-    {
-        F32 input_rate = gAgentCamera.getPanRightKey() - gAgentCamera.getPanLeftKey();
-        cameraPanLeft(input_rate * -PAN_RATE / gFPSClamped );
-    }
-
-    if (gAgentCamera.getPanUpKey() || gAgentCamera.getPanDownKey())
-    {
-        F32 input_rate = gAgentCamera.getPanUpKey() - gAgentCamera.getPanDownKey();
-        cameraPanUp(input_rate * PAN_RATE / gFPSClamped );
-    }
-
-// <FS:Chanayane> Camera roll (from Alchemy)
-    if (getRollLeftKey() || getRollRightKey())
-    {
-        F32 input_rate = getRollRightKey() - getRollLeftKey();
-        cameraRollOver(input_rate * ROLL_RATE / gFPSClamped);
-    }
-// </FS:Chanayane>
-
-    // Clear camera keyboard keys.
-    gAgentCamera.clearOrbitKeys();
-    gAgentCamera.clearPanKeys();
-
-    // lerp camera focus offset
-    mCameraFocusOffset = lerp(mCameraFocusOffset, mCameraFocusOffsetTarget, LLSmoothInterpolation::getInterpolant(CAMERA_FOCUS_HALF_LIFE));
-
-    if ( mCameraMode == CAMERA_MODE_FOLLOW )
-    {
-        if (isAgentAvatarValid())
-        {
-            //--------------------------------------------------------------------------------
-            // this is where the avatar's position and rotation are given to followCam, and
-            // where it is updated. All three of its attributes are updated: (1) position,
-            // (2) focus, and (3) upvector. They can then be queried elsewhere in llAgent.
-            //--------------------------------------------------------------------------------
-            // *TODO: use combined rotation of frameagent and sit object
-            LLQuaternion avatarRotationForFollowCam = gAgentAvatarp->isSitting() ? gAgentAvatarp->getRenderRotation() : gAgent.getFrameAgent().getQuaternion();
-
-            LLFollowCamParams* current_cam = LLFollowCamMgr::getInstance()->getActiveFollowCamParams();
-            if (current_cam)
-            {
-                mFollowCam.copyParams(*current_cam);
-                mFollowCam.setSubjectPositionAndRotation( gAgentAvatarp->getRenderPosition(), avatarRotationForFollowCam );
-                mFollowCam.update();
-                LLViewerJoystick::getInstance()->setCameraNeedsUpdate(true);
-            }
-            else
-            {
-                changeCameraToThirdPerson(true);
-            }
-        }
-    }
-
-    bool hit_limit;
     LLVector3d camera_pos_global;
-    LLVector3d camera_target_global = calcCameraPositionTargetGlobal(&hit_limit);
     mCameraVirtualPositionAgent = gAgent.getPosAgentFromGlobal(camera_target_global);
-    LLVector3d focus_target_global = calcFocusPositionTargetGlobal();
 
     // perform field of view correction
     mCameraFOVZoomFactor = calcCameraFOVZoomFactor();
@@ -1728,6 +1738,210 @@ void LLAgentCamera::updateCamera()
 
 //  LL_INFOS() << "Current FOV Zoom: " << mCameraCurrentFOVZoomFactor << " Target FOV Zoom: " << mCameraFOVZoomFactor << " Object penetration: " << mFocusObjectDist << LL_ENDL;
 
+    return camera_pos_global;
+}
+
+void LLAgentCamera::applyCameraKeyboard()
+{
+    // Update UI with our camera inputs
+    LLFloaterCamera* camera_floater = LLFloaterReg::findTypedInstance<LLFloaterCamera>("camera");
+    if (camera_floater)
+    {
+        camera_floater->mRotate->setToggleState(gAgentCamera.getOrbitRightKey() > 0.f,  // left
+                                                gAgentCamera.getOrbitUpKey() > 0.f,     // top
+                                                gAgentCamera.getOrbitLeftKey() > 0.f,   // right
+                                                gAgentCamera.getOrbitDownKey() > 0.f);  // bottom
+
+        camera_floater->mTrack->setToggleState(gAgentCamera.getPanLeftKey() > 0.f,      // left
+                                               gAgentCamera.getPanUpKey() > 0.f,            // top
+                                               gAgentCamera.getPanRightKey() > 0.f,     // right
+                                               gAgentCamera.getPanDownKey() > 0.f);     // bottom
+    }
+
+    // <FS:Ansariel> Phototools camera
+    camera_floater = LLFloaterReg::findTypedInstance<LLFloaterCamera>("phototools_camera");
+    if (camera_floater)
+    {
+        camera_floater->mRotate->setToggleState(gAgentCamera.getOrbitRightKey() > 0.f,  // left
+                                                gAgentCamera.getOrbitUpKey() > 0.f,     // top
+                                                gAgentCamera.getOrbitLeftKey() > 0.f,   // right
+                                                gAgentCamera.getOrbitDownKey() > 0.f);  // bottom
+
+        camera_floater->mTrack->setToggleState(gAgentCamera.getPanLeftKey() > 0.f,      // left
+                                               gAgentCamera.getPanUpKey() > 0.f,            // top
+                                               gAgentCamera.getPanRightKey() > 0.f,     // right
+                                               gAgentCamera.getPanDownKey() > 0.f);     // bottom
+    }
+    // </FS:Ansariel>
+
+    // <FS:Ansariel> Optional small camera floater
+    camera_floater = LLFloaterReg::findTypedInstance<LLFloaterCamera>("fs_camera_small");
+    if (camera_floater)
+    {
+        camera_floater->mRotate->setToggleState(gAgentCamera.getOrbitRightKey() > 0.f,  // left
+                                                gAgentCamera.getOrbitUpKey() > 0.f,     // top
+                                                gAgentCamera.getOrbitLeftKey() > 0.f,   // right
+                                                gAgentCamera.getOrbitDownKey() > 0.f);  // bottom
+
+        camera_floater->mTrack->setToggleState(gAgentCamera.getPanLeftKey() > 0.f,      // left
+                                               gAgentCamera.getPanUpKey() > 0.f,            // top
+                                               gAgentCamera.getPanRightKey() > 0.f,     // right
+                                               gAgentCamera.getPanDownKey() > 0.f);     // bottom
+    }
+    // </FS:Ansariel>
+
+    // Handle camera movement based on keyboard.
+    const F32 ORBIT_OVER_RATE = 90.f * DEG_TO_RAD;          // radians per second
+    const F32 ORBIT_AROUND_RATE = 90.f * DEG_TO_RAD;        // radians per second
+    const F32 PAN_RATE = 5.f;                               // meters per second
+// <FS:Chanayane> Camera roll (from Alchemy)
+    const F32 ROLL_RATE = 45.f * DEG_TO_RAD;                // radians per second
+// </FS:Chanayane>
+
+    if (gAgentCamera.getOrbitUpKey() || gAgentCamera.getOrbitDownKey())
+    {
+        F32 input_rate = gAgentCamera.getOrbitUpKey() - gAgentCamera.getOrbitDownKey();
+        cameraOrbitOver( input_rate * ORBIT_OVER_RATE / gFPSClamped );
+    }
+
+    if (gAgentCamera.getOrbitLeftKey() || gAgentCamera.getOrbitRightKey())
+    {
+        F32 input_rate = gAgentCamera.getOrbitLeftKey() - gAgentCamera.getOrbitRightKey();
+        cameraOrbitAround(input_rate * ORBIT_AROUND_RATE / gFPSClamped);
+    }
+
+    if (gAgentCamera.getOrbitInKey() || gAgentCamera.getOrbitOutKey())
+    {
+        F32 input_rate = gAgentCamera.getOrbitInKey() - gAgentCamera.getOrbitOutKey();
+
+        LLVector3d to_focus = gAgent.getPosGlobalFromAgent(LLViewerCamera::getInstance()->getOrigin()) - calcFocusPositionTargetGlobal();
+        F32 distance_to_focus = (F32)to_focus.magVec();
+        // Move at distance (in meters) meters per second
+        cameraOrbitIn( input_rate * distance_to_focus / gFPSClamped );
+    }
+
+    if (gAgentCamera.getPanInKey() || gAgentCamera.getPanOutKey())
+    {
+        F32 input_rate = gAgentCamera.getPanInKey() - gAgentCamera.getPanOutKey();
+        cameraPanIn(input_rate * PAN_RATE / gFPSClamped);
+    }
+
+    if (gAgentCamera.getPanRightKey() || gAgentCamera.getPanLeftKey())
+    {
+        F32 input_rate = gAgentCamera.getPanRightKey() - gAgentCamera.getPanLeftKey();
+        cameraPanLeft(input_rate * -PAN_RATE / gFPSClamped );
+    }
+
+    if (gAgentCamera.getPanUpKey() || gAgentCamera.getPanDownKey())
+    {
+        F32 input_rate = gAgentCamera.getPanUpKey() - gAgentCamera.getPanDownKey();
+        cameraPanUp(input_rate * PAN_RATE / gFPSClamped );
+    }
+
+// <FS:Chanayane> Camera roll (from Alchemy)
+    if (getRollLeftKey() || getRollRightKey())
+    {
+        F32 input_rate = getRollRightKey() - getRollLeftKey();
+        cameraRollOver(input_rate * ROLL_RATE / gFPSClamped);
+    }
+// </FS:Chanayane>
+
+    // Clear camera keyboard keys.
+    gAgentCamera.clearOrbitKeys();
+    gAgentCamera.clearPanKeys();
+
+}
+
+void LLAgentCamera::updateCamera()
+{
+    LL_RECORD_BLOCK_TIME(FTM_UPDATE_CAMERA);
+    if (gCubeSnapshot)
+    {
+        return;
+    }
+
+    // - changed camera_skyward to the new global "mCameraUpVector"
+    mCameraUpVector = LLVector3::z_axis;
+    //LLVector3 camera_skyward(0.f, 0.f, 1.f);
+
+// [RLVa:KB] - Checked: RLVa-2.0.0
+    // Set focus back on our avie if something changed it
+    if ( (gRlvHandler.hasBehaviour(RLV_BHVR_SETCAM_UNLOCK)) && ((cameraThirdPerson()) || (cameraFollow())) && (!getFocusOnAvatar()) )
+    {
+        setFocusOnAvatar(true, false);
+    }
+// [/RLVa:KB]
+
+    U32 camera_mode = mCameraAnimating ? mLastCameraMode : mCameraMode;
+
+    validateFocusObject();
+
+    if (isAgentAvatarValid() &&
+        gAgentAvatarp->isSitting() &&
+        camera_mode == CAMERA_MODE_MOUSELOOK)
+    {
+        //changed camera_skyward to the new global "mCameraUpVector"
+        mCameraUpVector = mCameraUpVector * gAgentAvatarp->getRenderRotation();
+    }
+
+    if (cameraThirdPerson() && (mFocusOnAvatar || mAllowChangeToFollow) && LLFollowCamMgr::getInstance()->getActiveFollowCamParams())
+    {
+        mAllowChangeToFollow = false;
+        mFocusOnAvatar = true;
+        changeCameraToFollow();
+    }
+
+    //NOTE - this needs to be integrated into a general upVector system here within llAgent.
+    if ( camera_mode == CAMERA_MODE_FOLLOW && mFocusOnAvatar )
+    {
+        mCameraUpVector = mFollowCam.getUpVector();
+    }
+
+    if (mSitCameraEnabled)
+    {
+        if (mSitCameraReferenceObject->isDead())
+        {
+            setSitCamera(LLUUID::null);
+        }
+    }
+
+    applyCameraKeyboard();
+
+    // lerp camera focus offset
+    mCameraFocusOffset = lerp(mCameraFocusOffset, mCameraFocusOffsetTarget, LLSmoothInterpolation::getInterpolant(CAMERA_FOCUS_HALF_LIFE));
+
+    if ( mCameraMode == CAMERA_MODE_FOLLOW )
+    {
+        if (isAgentAvatarValid())
+        {
+            //--------------------------------------------------------------------------------
+            // this is where the avatar's position and rotation are given to followCam, and
+            // where it is updated. All three of its attributes are updated: (1) position,
+            // (2) focus, and (3) upvector. They can then be queried elsewhere in llAgent.
+            //--------------------------------------------------------------------------------
+            // *TODO: use combined rotation of frameagent and sit object
+            LLQuaternion avatarRotationForFollowCam = gAgentAvatarp->isSitting() ? gAgentAvatarp->getRenderRotation() : gAgent.getFrameAgent().getQuaternion();
+
+            LLFollowCamParams* current_cam = LLFollowCamMgr::getInstance()->getActiveFollowCamParams();
+            if (current_cam)
+            {
+                mFollowCam.copyParams(*current_cam);
+                mFollowCam.setSubjectPositionAndRotation( gAgentAvatarp->getRenderPosition(), avatarRotationForFollowCam );
+                mFollowCam.update();
+                LLViewerJoystick::getInstance()->setCameraNeedsUpdate(true);
+            }
+            else
+            {
+                changeCameraToThirdPerson(true);
+            }
+        }
+    }
+
+    bool hit_limit;
+    LLVector3d camera_pos_global;
+    LLVector3d camera_target_global = calcCameraPositionTargetGlobal(&hit_limit);
+    camera_pos_global = applyCameraTargets(camera_target_global,calcFocusPositionTargetGlobal());
+
     LLVector3 focus_agent = gAgent.getPosAgentFromGlobal(mFocusGlobal);
     LLVector3 position_agent = gAgent.getPosAgentFromGlobal(camera_pos_global);
 
@@ -1836,6 +2050,11 @@ void LLAgentCamera::updateLastCamera()
 
 void LLAgentCamera::updateFocusOffset()
 {
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())
+    {if(const auto* object=nativeFocusObject())mFocusObjectOffset=LLVector3(mFocusTargetGlobal-gAgent.getPosGlobalFromAgent(object->position()));return;}
+#endif
+
     validateFocusObject();
     if (mFocusObject.notNull())
     {
@@ -1860,6 +2079,19 @@ void LLAgentCamera::validateFocusObject()
 //-----------------------------------------------------------------------------
 LLVector3d LLAgentCamera::calcFocusPositionTargetGlobal()
 {
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())
+    {
+        if(!mFocusOnAvatar)
+            if(const auto* object=nativeFocusObject())
+            {
+                if(!mTrackFocusObject)updateFocusOffset();
+                mFocusTargetGlobal=gAgent.getPosGlobalFromAgent(object->position())+LLVector3d(mFocusObjectOffset);
+            }
+        return mFocusTargetGlobal;
+    }
+#endif
+
     if (mFocusObject.notNull() && mFocusObject->isDead())
     {
         clearFocusObject();
@@ -2011,7 +2243,7 @@ F32 LLAgentCamera::calcCameraFOVZoomFactor()
     {
         return 0.f;
     }
-    else if (mFocusObject.notNull() && !mFocusObject->isAvatar() && !mFocusOnAvatar)
+    else if (hasCameraFocusObject() && !cameraFocusIsAvatar() && !mFocusOnAvatar)
     {
         // don't FOV zoom on mostly transparent objects
         F32 obj_min_dist = 0.f;
@@ -2036,8 +2268,114 @@ F32 LLAgentCamera::calcCameraFOVZoomFactor()
 //-----------------------------------------------------------------------------
 // calcCameraPositionTargetGlobal()
 //-----------------------------------------------------------------------------
+LLVector3d LLAgentCamera::constrainCameraPosition(LLVector3d camera_position_global,const LLVector3d& frame_center_global,const LLVector3d& head_offset,bool* hit_limit)
+{
+    bool isConstrained=false;
+    if (!isDisableCameraConstraints() && !gAgent.isGodlike())
+    {
+        bool constrain=true;
+#if VS_NATIVE_VULKAN
+        if(VSNativeSession::active())
+        {
+            const auto region=vs_region_context(camera_position_global);
+            if(region && region->canManageEstate())constrain=false;
+        }
+        else
+#endif
+        {
+            LLViewerRegion* regionp=LLWorld::getInstance()->getRegionFromPosGlobal(camera_position_global);
+            if(regionp && regionp->canManageEstate())constrain=false;
+        }
+        if(constrain)
+        {
+            F32 max_dist = (CAMERA_MODE_CUSTOMIZE_AVATAR == mCameraMode) ? APPEARANCE_MAX_ZOOM : mDrawDistance;
+
+            LLVector3d camera_offset = camera_position_global - gAgent.getPositionGlobal();
+            F32 camera_distance = (F32)camera_offset.magVec();
+
+            if(camera_distance > max_dist)
+            {
+                camera_position_global = gAgent.getPositionGlobal() + (max_dist/camera_distance)*camera_offset;
+                isConstrained = true;
+            }
+        }
+    }
+
+// [RLVa:KB] - Checked: RLVa-2.0.0
+    if ( (RlvActions::isRlvEnabled()) && ((CAMERA_MODE_THIRD_PERSON == mCameraMode) || (CAMERA_MODE_FOLLOW == mCameraMode)) && (RlvActions::isCameraDistanceClamped()) )
+    {
+        m_fRlvMinDist = m_fRlvMaxDist = false;
+
+        // Av-locked | Focus-locked | Result
+        // ===================================================
+        //     T     |      T       | skip focus => slam av
+        //     T     |      F       | skip focus => slam av
+        //     F     |      T       | skip av    => slam focus
+        //     F     |      F       | clamp focus then av
+        bool fCamAvDistClamped, fCamAvDistLocked = false; float nCamAvDistLimitMin, nCamAvDistLimitMax;
+        if ((fCamAvDistClamped = RlvActions::getCameraAvatarDistanceLimits(nCamAvDistLimitMin, nCamAvDistLimitMax)))
+            fCamAvDistLocked = nCamAvDistLimitMin == nCamAvDistLimitMax;
+        float nCamOriginDistLimitMin;
+        float nCamOriginDistLimitMax;
+        const bool fCamOriginDistClamped = RlvActions::getCameraOriginDistanceLimits(nCamOriginDistLimitMin, nCamOriginDistLimitMax);
+
+        // Check focus distance limits
+        if ( (fCamOriginDistClamped) && (!fCamAvDistLocked) )
+        {
+//          const LLVector3 offsetCameraLocal = mCameraZoomFraction * getCameraOffsetInitial() * gSavedSettings.getF32("CameraOffsetScale");
+// [RLVa:KB] - @setcam_eyeoffsetscale
+            const LLVector3 offsetCameraLocal = mCameraZoomFraction * getCameraOffsetInitial() * getCameraOffsetScale();
+// [/RLVa:KB]
+            const LLVector3d offsetCamera(gAgent.getFrameAgent().rotateToAbsolute(offsetCameraLocal));
+            const LLVector3d posFocusCam = frame_center_global + head_offset + offsetCamera;
+            if (clampCameraPosition(camera_position_global, posFocusCam, nCamOriginDistLimitMin, nCamOriginDistLimitMax))
+                isConstrained = true;
+        }
+
+        // Check avatar distance limits
+        if ( (fCamAvDistClamped) && (fCamAvDistLocked || !fCamOriginDistClamped) )
+        {
+            const LLVector3d posAvatarCam = gAgent.getPosGlobalFromAgent( (isAgentAvatarValid()) ? gAgentAvatarp->mHeadp->getWorldPosition() : gAgent.getPositionAgent() );
+            if (clampCameraPosition(camera_position_global, posAvatarCam, nCamAvDistLimitMin, nCamAvDistLimitMax))
+                isConstrained = true;
+        }
+    }
+// [/RLVa:KB]
+
+    // Don't let camera go underground if constrained
+    // If not constrained, permit going 1000m below 0, use case: retrieving objects
+    F32 camera_min_off_ground = getCameraMinOffGround(); // checks isDisableCameraConstraints
+    F32 camera_land_height;
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())camera_land_height=vs_region_height(camera_position_global).value_or(0.f);
+    else
+#endif
+        camera_land_height=LLWorld::getInstance()->resolveLandHeightGlobal(camera_position_global);
+    F32 minZ = camera_land_height + camera_min_off_ground;
+    if (camera_position_global.mdV[VZ] < minZ)
+    {
+        camera_position_global.mdV[VZ] = minZ;
+        isConstrained = true;
+    }
+
+    if (hit_limit)
+    {
+        *hit_limit = isConstrained;
+    }
+
+    return camera_position_global;
+}
+
 LLVector3d LLAgentCamera::calcCameraPositionTargetGlobal(bool *hit_limit)
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active())
+    {
+        if(mFocusOnAvatar)return owner->cameraTargetGlobal();
+        return constrainCameraPosition(calcFocusPositionTargetGlobal()+mCameraFocusOffset,gAgent.getPositionGlobal(),LLVector3d(mThirdPersonHeadOffset),hit_limit);
+    }
+#endif
+
     // Compute base camera position and look-at points.
     LLVector3d  frame_center_global = !isAgentAvatarValid() ?
         gAgent.getPositionGlobal() :
@@ -2255,87 +2593,7 @@ LLVector3d LLAgentCamera::calcCameraPositionTargetGlobal(bool *hit_limit)
         camera_position_global = focusPosGlobal + mCameraFocusOffset;
     }
 
-    if (!isDisableCameraConstraints() && !gAgent.isGodlike())
-    {
-        LLViewerRegion* regionp = LLWorld::getInstance()->getRegionFromPosGlobal(camera_position_global);
-        bool constrain = true;
-        if(regionp && regionp->canManageEstate())
-        {
-            constrain = false;
-        }
-        if(constrain)
-        {
-            F32 max_dist = (CAMERA_MODE_CUSTOMIZE_AVATAR == mCameraMode) ? APPEARANCE_MAX_ZOOM : mDrawDistance;
-
-            LLVector3d camera_offset = camera_position_global - gAgent.getPositionGlobal();
-            F32 camera_distance = (F32)camera_offset.magVec();
-
-            if(camera_distance > max_dist)
-            {
-                camera_position_global = gAgent.getPositionGlobal() + (max_dist/camera_distance)*camera_offset;
-                isConstrained = true;
-            }
-        }
-    }
-
-// [RLVa:KB] - Checked: RLVa-2.0.0
-    if ( (RlvActions::isRlvEnabled()) && ((CAMERA_MODE_THIRD_PERSON == mCameraMode) || (CAMERA_MODE_FOLLOW == mCameraMode)) && (RlvActions::isCameraDistanceClamped()) )
-    {
-        m_fRlvMinDist = m_fRlvMaxDist = false;
-
-        // Av-locked | Focus-locked | Result
-        // ===================================================
-        //     T     |      T       | skip focus => slam av
-        //     T     |      F       | skip focus => slam av
-        //     F     |      T       | skip av    => slam focus
-        //     F     |      F       | clamp focus then av
-        bool fCamAvDistClamped, fCamAvDistLocked = false; float nCamAvDistLimitMin, nCamAvDistLimitMax;
-        if ((fCamAvDistClamped = RlvActions::getCameraAvatarDistanceLimits(nCamAvDistLimitMin, nCamAvDistLimitMax)))
-            fCamAvDistLocked = nCamAvDistLimitMin == nCamAvDistLimitMax;
-        float nCamOriginDistLimitMin;
-        float nCamOriginDistLimitMax;
-        const bool fCamOriginDistClamped = RlvActions::getCameraOriginDistanceLimits(nCamOriginDistLimitMin, nCamOriginDistLimitMax);
-
-        // Check focus distance limits
-        if ( (fCamOriginDistClamped) && (!fCamAvDistLocked) )
-        {
-//          const LLVector3 offsetCameraLocal = mCameraZoomFraction * getCameraOffsetInitial() * gSavedSettings.getF32("CameraOffsetScale");
-// [RLVa:KB] - @setcam_eyeoffsetscale
-            const LLVector3 offsetCameraLocal = mCameraZoomFraction * getCameraOffsetInitial() * getCameraOffsetScale();
-// [/RLVa:KB]
-            const LLVector3d offsetCamera(gAgent.getFrameAgent().rotateToAbsolute(offsetCameraLocal));
-            const LLVector3d posFocusCam = frame_center_global + head_offset + offsetCamera;
-            if (clampCameraPosition(camera_position_global, posFocusCam, nCamOriginDistLimitMin, nCamOriginDistLimitMax))
-                isConstrained = true;
-        }
-
-        // Check avatar distance limits
-        if ( (fCamAvDistClamped) && (fCamAvDistLocked || !fCamOriginDistClamped) )
-        {
-            const LLVector3d posAvatarCam = gAgent.getPosGlobalFromAgent( (isAgentAvatarValid()) ? gAgentAvatarp->mHeadp->getWorldPosition() : gAgent.getPositionAgent() );
-            if (clampCameraPosition(camera_position_global, posAvatarCam, nCamAvDistLimitMin, nCamAvDistLimitMax))
-                isConstrained = true;
-        }
-    }
-// [/RLVa:KB]
-
-    // Don't let camera go underground if constrained
-    // If not constrained, permit going 1000m below 0, use case: retrieving objects
-    F32 camera_min_off_ground = getCameraMinOffGround(); // checks isDisableCameraConstraints
-    F32 camera_land_height = LLWorld::getInstance()->resolveLandHeightGlobal(camera_position_global);
-    F32 minZ = camera_land_height + camera_min_off_ground;
-    if (camera_position_global.mdV[VZ] < minZ)
-    {
-        camera_position_global.mdV[VZ] = minZ;
-        isConstrained = true;
-    }
-
-    if (hit_limit)
-    {
-        *hit_limit = isConstrained;
-    }
-
-    return camera_position_global;
+    return constrainCameraPosition(camera_position_global,frame_center_global,head_offset,hit_limit);
 }
 
 // [RLVa:KB] - Checked: RLVa-2.0.0
@@ -2473,7 +2731,13 @@ F32 LLAgentCamera::getCameraMaxZoomDistance(bool allow_disabled_constraints /* =
     static LLCachedControl<bool> disable_constraints(gSavedSettings,"DisableCameraConstraints");
     return (allow_disabled_constraints && disable_constraints) ? INT_MAX : llmin(MAX_CAMERA_DISTANCE_FROM_OBJECT,
                  mDrawDistance - 1, // convenience, don't hit draw limit when focusing on something
-                 LLWorld::getInstance()->getRegionWidthInMeters() - CAMERA_FUDGE_FROM_OBJECT);
+                 [this]{
+#if VS_NATIVE_VULKAN
+                     if(VSNativeSession::active())
+                     {const auto region=vs_current_region_context();return (region?region->getWidth():0.f)-CAMERA_FUDGE_FROM_OBJECT;}
+#endif
+                     return LLWorld::getInstance()->getRegionWidthInMeters()-CAMERA_FUDGE_FROM_OBJECT;
+                 }());
 }
 
 LLVector3 LLAgentCamera::getAvatarRootPosition()
@@ -2510,7 +2774,6 @@ void LLAgentCamera::handleScrollWheel(S32 clicks)
     }
     else
     {
-        LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
         const F32 ROOT_ROOT_TWO = sqrt(F_SQRT2);
 
         // Block if camera is animating
@@ -2519,7 +2782,7 @@ void LLAgentCamera::handleScrollWheel(S32 clicks)
             return;
         }
 
-        if (selection->getObjectCount() && selection->getSelectType() == SELECT_TYPE_HUD)
+        if (cameraHUDSelection())
         {
             F32 zoom_factor = (F32)pow(0.8, -clicks);
             cameraZoomIn(zoom_factor);
@@ -2635,6 +2898,13 @@ bool LLAgentCamera::completeNativeCameraMode(bool first_person, bool reset_mode)
             gFocusMgr.setKeyboardFocus(nullptr);
         }
         gAgent.unpauseAnimation();
+        if (mCameraMode == CAMERA_MODE_CUSTOMIZE_AVATAR)
+        {
+            if (auto* avatar = vs_avatar_character()) avatar->stopMotion(ANIM_AGENT_CUSTOMIZE);
+            gAgent.sendAnimationRequest(ANIM_AGENT_CUSTOMIZE, ANIM_REQUEST_STOP);
+            gAgent.setCustomAnim(false);
+            if (gMorphView) gMorphView->setVisible(false);
+        }
         updateLastCamera();
         mCameraMode = target;
         mCameraAnimating = false;
@@ -2888,6 +3158,48 @@ void LLAgentCamera::changeCameraToThirdPerson(bool animate)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::changeCameraToCustomizeAvatar()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        auto* avatar = vs_avatar_character();
+        if (!owner->regionReady() || !avatar || LLViewerJoystick::getInstance()->getOverrideCamera()) return;
+        if (rlv_handler_t::isEnabled() && !RlvActions::canStand()) return;
+        gAgent.standUp();
+        gViewerWindow->getWindow()->resetBusyCount();
+        if (auto selection = owner->objectSelection())
+        {
+            const auto selected = selection->selected();
+            if (!selected.empty() && std::all_of(selected.begin(), selected.end(), [](const auto& token)
+                { return gViewerWindow->nativeContext()->world().isAttachment(token.id); })) selection->deselectAll();
+        }
+        if (gFaceEditToolset) LLToolMgr::getInstance()->setCurrentToolset(gFaceEditToolset);
+        startCameraAnimation();
+        if (mCameraMode != CAMERA_MODE_CUSTOMIZE_AVATAR)
+        {
+            updateLastCamera();
+            mCameraMode = CAMERA_MODE_CUSTOMIZE_AVATAR;
+            gAgent.clearControlFlags(AGENT_CONTROL_MOUSELOOK);
+            gFocusMgr.setKeyboardFocus(nullptr);
+            gFocusMgr.setMouseCapture(nullptr);
+            if (auto* morph = LLMorphView::ensureNativeOwner()) morph->setVisible(true);
+            LLVector3 at = gAgent.getAtAxis(); at.mV[VZ] = 0.f; at.normalize(); gAgent.resetAxes(at);
+            gAgent.sendAnimationRequest(ANIM_AGENT_CUSTOMIZE, ANIM_REQUEST_START);
+            gAgent.setCustomAnim(true);
+            avatar->startMotion(ANIM_AGENT_CUSTOMIZE);
+            if (auto* turn = avatar->findMotion(ANIM_AGENT_CUSTOMIZE))
+                setAnimationDuration(turn->getDuration() + CUSTOMIZE_AVATAR_CAMERA_ANIM_SLOP);
+        }
+        LLVector3 at = gAgent.getAtAxis(); at.mV[VZ] = 0.f; at.normalize();
+        auto* head = avatar->getJoint("mHead");
+        const LLVector3 focus = head ? head->getWorldPosition() : gAgent.getPositionAgent();
+        LLVector3d offset(at * -1.f); offset.mdV[VZ] = .1f; offset *= CUSTOMIZE_AVATAR_CAMERA_DEFAULT_DIST;
+        const auto global = gAgent.getPosGlobalFromAgent(focus);
+        setAnimationDuration(gSavedSettings.getF32("ZoomTime"));
+        setCameraPosAndFocusGlobal(global + offset, global, gAgent.getID());
+        return;
+    }
+#endif
+
     if (LLViewerJoystick::getInstance()->getOverrideCamera() || !isAgentAvatarValid())
     {
         return;
@@ -3052,6 +3364,15 @@ void LLAgentCamera::stopCameraAnimation()
 
 void LLAgentCamera::clearFocusObject()
 {
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())
+    {
+        if(mNativeFocus && mNativeFocus->query)
+        {startCameraAnimation();mNativeFocus->query={};mNativeFocus->object.reset();mNativeFocus->id.setNull();mFocusObjectOffset.clearVec();}
+        return;
+    }
+#endif
+
     if (mFocusObject.notNull())
     {
         startCameraAnimation();
@@ -3080,6 +3401,15 @@ void LLAgentCamera::setFocusObject(LLViewerObject* object)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::setFocusGlobal(const LLPickInfo& pick)
 {
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())
+    {
+        const auto object=VSObjectContext::resolve(pick.mObjectID);
+        setFocusGlobal(object && pick.mGLTFNodeIndex==-1?object->position+LLVector3d(pick.mObjectOffset):pick.mPosGlobal,pick.mObjectID);
+        return;
+    }
+#endif
+
     LLViewerObject* objectp = gObjectList.findObject(pick.mObjectID);
 
     if (objectp && pick.mGLTFNodeIndex == -1)
@@ -3098,6 +3428,28 @@ void LLAgentCamera::setFocusGlobal(const LLPickInfo& pick)
 
 void LLAgentCamera::setFocusGlobal(const LLVector3d& focus, const LLUUID &object_id)
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active())
+    {
+        if(!owner->regionReady() || !gViewerWindow || !gViewerWindow->nativeContext())return;
+        LLVector3d target=focus;
+        if(focus.isExactlyZero())
+        {auto* avatar=gViewerWindow->nativeContext()->world().selfAvatar();target=avatar?gAgent.getPosGlobalFromAgent(avatar->headPosition()):gAgent.getPositionGlobal();}
+        const auto eye=getCameraPositionGlobal();
+        const auto old=mFocusTargetGlobal;
+        const bool avatar_focus=mFocusOnAvatar;
+        if(!setNativeCameraPose(eye,target,object_id,old!=focus))return;
+        mFocusOnAvatar=avatar_focus;
+        if(old!=focus && !nativeFocusObject())mCameraFOVZoomFactor=0.f;
+        if(old!=focus && !focus.isExactlyZero())
+            mCameraFocusOffsetTarget=gAgent.getPosGlobalFromAgent(mCameraVirtualPositionAgent)-target;
+        else mCameraFocusOffset=mCameraFocusOffsetTarget=(eye-target)/(1.f+mCameraFOVZoomFactor);
+        if(focus.isExactlyZero()){mCameraFOVZoomFactor=0.f;setLookAt(LOOKAT_TARGET_CLEAR);}
+        else setNativeFocusAttention(object_id,focus);
+        return;
+    }
+#endif
+
     setFocusObject(gObjectList.findObject(object_id));
     LLVector3d old_focus = mFocusTargetGlobal;
     LLViewerObject *focus_obj = mFocusObject;
@@ -3187,10 +3539,15 @@ void LLAgentCamera::setFocusGlobal(const LLVector3d& focus, const LLUUID &object
 void LLAgentCamera::setCameraPosAndFocusGlobal(const LLVector3d& camera_pos, const LLVector3d& focus, const LLUUID &object_id)
 {
 #if VS_NATIVE_VULKAN
-    if (const auto owner = VSNativeSession::active())
+    if(VSNativeSession::active())
     {
-        if (owner->cameraLookAt(camera_pos, focus))
-        { mFocusTargetGlobal = focus; mFocusOnAvatar = false; }
+        const LLVector3d old=mFocusTargetGlobal.isExactlyZero()?focus:mFocusTargetGlobal;
+        const F64 delta=(old-focus).magVecSquared();
+        if(setNativeCameraPose(camera_pos,focus,object_id,delta>0.0001))
+        {
+            setNativeFocusAttention(object_id,focus);
+            if(mCameraAnimating)setAnimationDuration(F32(llmin(llmax(.5,sqrt(delta)/10.0),1.0)));
+        }
         return;
     }
 #endif
@@ -3244,6 +3601,32 @@ void LLAgentCamera::setCameraPosAndFocusGlobal(const LLVector3d& camera_pos, con
 //-----------------------------------------------------------------------------
 void LLAgentCamera::setSitCamera(const LLUUID &object_id, const LLVector3 &camera_pos, const LLVector3 &camera_focus)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if(object_id.isNull())
+        {
+            mSitCameraPos.clearVec();mSitCameraFocus.clearVec();mSitCameraReferenceObject=nullptr;mSitCameraEnabled=false;
+            if(mNativeFocus)mNativeFocus->sitQuery={};
+            return;
+        }
+        const auto owner=VSNativeSession::active();
+        if(!owner || !owner->regionReady() || !gViewerWindow->nativeContext())return;
+        auto& world=gViewerWindow->nativeContext()->world();const auto object=world.object(object_id);if(!object)return;
+        ensureNativeFocusState();if(!mNativeFocus || !mNativeFocus->account())return;
+        const auto token=*object;const auto account=owner->accountGuard();const std::weak_ptr<VSNativeSession> weak=owner;
+        auto query=[account,token,weak]()->std::optional<VSCameraFocusObject>
+        {
+            if(!account() || weak.lock()!=VSNativeSession::active() || !gViewerWindow || !gViewerWindow->nativeContext())return {};
+            return gViewerWindow->nativeContext()->world().focusObject(token,gAgent.getPosGlobalFromAgent(LLVector3::zero));
+        };
+        if(!query())return; // Same original unknown-source behavior: retain the prior valid sit camera.
+        mSitCameraPos=camera_pos;mSitCameraFocus=camera_focus;mSitCameraEnabled=true;mSitCameraReferenceObject=nullptr;
+        mNativeFocus->sitQuery=std::move(query);
+        return;
+    }
+#endif
+
     bool camera_enabled = !object_id.isNull();
 
     if (camera_enabled)
@@ -3273,7 +3656,28 @@ void LLAgentCamera::setSitCamera(const LLUUID &object_id, const LLVector3 &camer
 void LLAgentCamera::setFocusOnAvatar(bool focus_on_avatar, bool animate, bool reset_axes)
 {
 #if VS_NATIVE_VULKAN
-    if (VSNativeSession::active()) { mFocusOnAvatar = focus_on_avatar; return; }
+    if(const auto owner=VSNativeSession::active())
+    {
+        if(focus_on_avatar!=mFocusOnAvatar)
+        {
+            if(focus_on_avatar)
+            {
+                if(reset_axes)owner->cameraReset();
+                bindNativeFocusObject(LLUUID::null);mCameraFOVZoomFactor=0.f;
+                // Native mode completion may stop mode animation; start the
+                // requested focus transition after the real mode reset.
+                if(animate)startCameraAnimation();else stopCameraAnimation();
+            }
+            else
+            {
+                const auto view=owner->cameraState();const auto origin=from_region_handle(owner->handle());
+                setNativeCameraPose(origin+LLVector3d(view.center),origin+LLVector3d(view.focus),gAgentID,animate);
+                mAllowChangeToFollow=false;
+            }
+        }
+        mFocusOnAvatar=focus_on_avatar;
+        return;
+    }
 #endif
     if (focus_on_avatar != mFocusOnAvatar)
     {
@@ -3649,3 +4053,26 @@ void LLAgentCamera::loadCameraPosition()
 // </FS:Ansariel> FIRE-7758: Save/load camera position feature
 
 // EOF
+
+bool LLAgentCamera::cameraHUDSelection() const
+{
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())return nativeCameraHUDSelection();
+#endif
+    auto selection=LLSelectMgr::getInstance()->getSelection();
+    return selection->getObjectCount() && selection->getSelectType()==SELECT_TYPE_HUD;
+}
+bool LLAgentCamera::hasCameraFocusObject() const
+{
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())return nativeFocusObject()!=nullptr;
+#endif
+    return mFocusObject.notNull();
+}
+bool LLAgentCamera::cameraFocusIsAvatar() const
+{
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active()){const auto* value=nativeFocusObject();return value && value->avatar();}
+#endif
+    return mFocusObject.notNull() && mFocusObject->isAvatar();
+}

@@ -90,6 +90,10 @@ void VSPlainChat::appendChat(const LLChat& chat)
         LLSD args; args["do_not_log"] = true; // Session/IM owner already applies account log policy.
         if (auto* floater = FSFloaterNearbyChat::findInstance()) floater->addMessage(chat, true, args);
     }
+    recordChat(chat);
+}
+void VSPlainChat::recordChat(const LLChat& chat)
+{
     // Keep protocol evidence without stripping metadata from the real frontend.
     const bool shared = mSharedFrontend;
     mSharedFrontend = false;

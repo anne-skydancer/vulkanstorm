@@ -52,6 +52,40 @@ void LLViewerAttachMenu::populateMenus(const std::string& attach_to_menu_name, c
     // *TODO: share this code with other similar menus
     // (inventory panel context menu, in-world object menu).
 
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (!owner->regionReady() || attach_to_menu_name.empty() || attach_to_hud_menu_name.empty() || !gMenuHolder) return;
+        auto* attach_menu = gMenuHolder->findChild<LLContextMenu>(attach_to_menu_name);
+        auto* attach_hud_menu = gMenuHolder->findChild<LLContextMenu>(attach_to_hud_menu_name);
+        if (!attach_menu || attach_menu->getChildCount() != 0 || !attach_hud_menu || attach_hud_menu->getChildCount() != 0) return;
+        for (const auto& [index, name] : vs_avatar_attachment_points())
+        {
+            const bool hud = vs_avatar_attachment_hud(index);
+            LLMenuItemCallGL::Params p;
+            std::string translated;
+            if (LLTrans::findString(translated, name))
+                p.name = " " + translated + (hud ? " " : " (" + std::to_string(index) + ") ");
+            else
+                p.name = hud ? name : name + " (" + std::to_string(index) + ")";
+            LLSD parameters;
+            parameters["index"] = S32(index);
+            parameters["label"] = p.name;
+            p.on_click.function_name = "Object.Attach";
+            p.on_click.parameter = name;
+            p.on_enable.function_name = "Attachment.Label";
+            p.on_enable.parameter = parameters;
+            auto* item = LLUICtrlFactory::create<LLMenuItemCallGL>(p);
+            if (item) (hud ? attach_hud_menu : attach_menu)->addChild(item);
+        }
+        if (gSavedSettings.getBOOL("FSSortAttachmentSpotsAlphabetically"))
+        {
+            attach_menu->getItems()->sort(LLViewerAttachMenu::sort());
+            attach_hud_menu->getItems()->sort(LLViewerAttachMenu::sort());
+        }
+        return;
+    }
+#endif
     if (attach_to_menu_name.empty() || attach_to_hud_menu_name.empty() || !isAgentAvatarValid()) return;
 
     LLContextMenu* attach_menu = gMenuHolder->getChild<LLContextMenu>(attach_to_menu_name);

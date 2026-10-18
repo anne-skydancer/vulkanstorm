@@ -26,6 +26,14 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
+#include "vsregioncontext.h"
+#include "llnotificationsutil.h"
+#include <functional>
+#include <stdexcept>
 
 #include "llfloater360capture.h"
 
@@ -59,6 +67,17 @@ LLFloater360Capture::LLFloater360Capture(const LLSD& key)
     // render the WebGL preview as we as host the
     // Cube Map to Equirectangular image code
     mWebBrowser = nullptr;
+    mCurrent=vs_native_im_guard();
+    mAccountOwner=mCurrent;
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active())
+    {
+        const auto generation=owner->generation();const std::weak_ptr<VSNativeSession> weak=owner;
+        // Retirement may run in Logout, before the generation changes. UI
+        // actions require Connected; restoring this account's lease does not.
+        mAccountOwner=[weak,generation]{const auto owner=weak.lock();return owner && owner->generation()==generation;};
+    }
+#endif
 
     // Ask the simulator to send us everything (and not just
     // what it thinks the connected Viewer can see) until
@@ -73,8 +92,10 @@ LLFloater360Capture::LLFloater360Capture(const LLSD& key)
 
 LLFloater360Capture::~LLFloater360Capture()
 {
+    freezeWorld(false);
     if (mWebBrowser)
     {
+        mWebBrowser->remObserver(this);
         mWebBrowser->navigateStop();
         mWebBrowser->clearCache();
         mWebBrowser->unloadMediaSource();
@@ -92,7 +113,7 @@ LLFloater360Capture::~LLFloater360Capture()
     //     gAgent.set360CaptureActive(false); // <FS:Beq/> make FS Area search work again
     //     gAgent.changeInterestListMode(mStartILMode);
     // }
-    if (!LLApp::isExiting())
+    if (!LLApp::isExiting() && mAccountOwner())
     {
         gAgent.set360CaptureActive(false); // <FS:Beq/> make FS Area search work again
         gAgent.changeInterestListMode(IL_MODE_DEFAULT);// The Change Interest Mode target mode is indicative only. If something else is holding the 360 mode open then this will be ignored.
@@ -128,6 +149,7 @@ bool LLFloater360Capture::postBuild()
 
 void LLFloater360Capture::onOpen(const LLSD& key)
 {
+    if(!mCurrent())return;
     // Construct a URL pointing to the first page to load. Although
     // we do not use this page for anything (after some significant
     // design changes), we retain the code to load the start page
@@ -305,14 +327,16 @@ const std::string LLFloater360Capture::makeFullPathToJS(const std::string filena
 // them without tweaking browser security - we'd have to do this if they
 // we stored as plain old images) This deliberately overwrites the old
 // one, if it exists
-void LLFloater360Capture::writeDataURLHeader(const std::string filename)
+bool LLFloater360Capture::writeDataURLHeader(const std::string filename)
 {
     llofstream file_handle(filename.c_str());
     if (file_handle.is_open())
     {
         file_handle << "// cube map images for Second Life Viewer panorama 360 images" << std::endl;
         file_handle.close();
+        return !file_handle.fail();
     }
+    return false;
 }
 
 // Write the footer/sequel portion of the JavaScript image code. When this is
@@ -320,7 +344,7 @@ void LLFloater360Capture::writeDataURLHeader(const std::string filename)
 // URLs, each with a well specified name.  This final piece of JavaScript code
 // creates an array from those data URLs that the main application can
 // reference and read.
-void LLFloater360Capture::writeDataURLFooter(const std::string filename)
+bool LLFloater360Capture::writeDataURLFooter(const std::string filename)
 {
     llofstream file_handle(filename.c_str(), std::ios_base::app);
     if (file_handle.is_open())
@@ -332,7 +356,9 @@ void LLFloater360Capture::writeDataURLFooter(const std::string filename)
         file_handle << "];" << std::endl;
 
         file_handle.close();
+        return !file_handle.fail();
     }
+    return false;
 }
 
 // Given a filename, a chunk of data (representing an image file) and the size
@@ -364,7 +390,7 @@ bool LLFloater360Capture::writeDataURL(const std::string filename, const std::st
 
 // Encode the image from each of the 6 snapshots and save it out to
 // the JavaScript array of data URLs
-void LLFloater360Capture::encodeAndSave(LLPointer<LLImageRaw> raw_image, const std::string filename, const std::string prefix)
+bool LLFloater360Capture::encodeAndSave(LLPointer<LLImageRaw> raw_image, const std::string filename, const std::string prefix)
 {
     // the default quality for the JPEG encoding is set quite high
     // but this still seems to be a reasonable compromise for
@@ -402,8 +428,9 @@ void LLFloater360Capture::encodeAndSave(LLPointer<LLImageRaw> raw_image, const s
         }
 
         // actually write the JPEG image to disk as a data URL
-        writeDataURL(filename, prefix, jpeg_image->getData(), jpeg_image->getDataSize());
+        return writeDataURL(filename, prefix, jpeg_image->getData(), jpeg_image->getDataSize());
     }
+    return false;
 }
 
 // Defer back to the main loop for a single rendered frame to give
@@ -452,201 +479,55 @@ void LLFloater360Capture::mockSnapShot(LLImageRaw* raw)
 // coroutine so it can be suspended at certain points.
 void LLFloater360Capture::capture360Images()
 {
-    // recheck the size of the cube map source images in case it changed
-    // since it was set when we opened the floater
-    setSourceImageSize();
-
-    // disable buttons while we are capturing
-    mCaptureBtn->setEnabled(false);
-    mSaveLocalBtn->setEnabled(false);
-
-    bool render_attached_lights = LLPipeline::sRenderAttachedLights;
-    // determine whether or not to include avatar in the scene as we capture the 360 panorama
-    if (gSavedSettings.getBOOL("360CaptureHideAvatars"))
+    if(!mCurrent() || mCapturing)return;
+    mCapturing=true;setSourceImageSize();
+    mCaptureBtn->setEnabled(false);mSaveLocalBtn->setEnabled(false);
+    auto* camera=LLViewerCamera::getInstance();
+    const auto origin=camera->getOrigin(),at=camera->getAtAxis(),left=camera->getLeftAxis(),up=camera->getUpAxis();
+    const auto aspect=camera->getAspect(),view=camera->getView();const auto height=camera->getViewHeightInPixels();
+    const S32 occlusion=LLPipeline::sUseOcclusion;const bool lights=LLPipeline::sRenderAttachedLights;
+    const bool hide=gSavedSettings.getBOOL("360CaptureHideAvatars");
+    const bool avatars=LLPipeline::hasRenderTypeControl(LLPipeline::RENDER_TYPE_AVATAR),particles=LLPipeline::hasRenderTypeControl(LLPipeline::RENDER_TYPE_PARTICLES);
+    struct Restore {std::function<void()> run;~Restore(){run();}} restore{[&]
     {
-        // Turn off the avatar if UI tells us to hide it.
-        // Note: the original call to gAvatar.hide(false) did *not* hide
-        // attachments and so for most residents, there would be some debris
-        // left behind in the snapshot.
-        // Note: this toggles so if it set to on, this will turn it off and
-        // the subsequent call to the same thing after capture is finished
-        // will turn it back on again.  Similarly, for the case where it
-        // was set to off - I think this is what we need
-        LLPipeline::toggleRenderTypeControl(LLPipeline::RENDER_TYPE_AVATAR);
-        LLPipeline::toggleRenderTypeControl(LLPipeline::RENDER_TYPE_PARTICLES);
-        LLPipeline::sRenderAttachedLights = false;
-    }
-
-    // these are the 6 directions we will point the camera - essentially,
-    // North, South, East, West, Up, Down
-    LLVector3 look_dirs[6] = { LLVector3(1, 0, 0), LLVector3(0, 1, 0), LLVector3(0, 0, 1), LLVector3(-1, 0, 0), LLVector3(0, -1, 0), LLVector3(0, 0, -1) };
-    LLVector3 look_upvecs[6] = { LLVector3(0, 0, 1), LLVector3(0, 0, 1), LLVector3(0, -1, 0), LLVector3(0, 0, 1), LLVector3(0, 0, 1), LLVector3(0, 1, 0) };
-
-    // save current view/camera settings so we can restore them afterwards
-    S32 old_occlusion = LLPipeline::sUseOcclusion;
-
-    // set new parameters specific to the 360 requirements
-    LLPipeline::sUseOcclusion = 0;
-    LLViewerCamera* camera = LLViewerCamera::getInstance();
-    F32 old_fov = camera->getView();
-    F32 old_aspect = camera->getAspect();
-    F32 old_yaw = camera->getYaw();
-
-    // stop the motion of as much of the world moving as much as we can
-    freezeWorld(true);
-
-    // Save the direction (in degrees) the camera is looking when we
-    // take the shot since that is what we write to image metadata
-    // 'GPano:InitialViewHeadingDegrees' field.
-    // We need to convert from the angle getYaw() gives us into something
-    // the XMP data field wants (N=0, E=90, S=180, W= 270 etc.)
-    mInitialHeadingDeg  = (float)((360 + 90 - (int)(camera->getYaw() * RAD_TO_DEG)) % 360);
-    LL_INFOS("360Capture") << "Recording a heading of " << (int)(mInitialHeadingDeg)
-        << " Image size: " << (S32)mSourceImageSize << LL_ENDL;
-
-    // camera constants for the square, cube map capture image
-    camera->setAspect(1.0); // must set aspect ratio first to avoid undesirable clamping of vertical FoV
-    camera->setView(F_PI_BY_TWO);
-    camera->yaw(0.0);
-
-    // record how many times we changed camera to try to understand the "all shots are the same issue"
-    unsigned int camera_changed_times = 0;
-
-    // the name of the JavaScript file written out that contains the 6 cube map images
-    // stored as a JavaScript array of data URLs.  If you change this filename, you must
-    // also change the corresponding entry in the HTML file that uses it -
-    // (newview/skins/default/html/common/equirectangular/display_eqr.html)
-    const std::string cumemap_js_filename("cubemap_img.js");
-
-    // construct the full path to this file - typically stored in the users'
-    // Second Life settings / username / eqrimg folder.
-    const std::string cubemap_js_full_path = makeFullPathToJS(cumemap_js_filename);
-
-    // Write the JavaScript file header (the top of the file before the
-    // declarations of the actual data URLs array).  In practice, all this writes
-    // is a comment - it's main purpose is to reset the file from the last time
-    // it was written
-    writeDataURLHeader(cubemap_js_full_path);
-
-    // the names of the prefixes we assign as the name to each data URL and are then
-    // consumed by the WebGL application. Nominally, they stand for positive and
-    // negative in the X/Y/Z directions.
-    static const std::string prefixes[6] =
+        freezeWorld(false);camera->setOrigin(origin);camera->setAxes(at,left,up);camera->setAspect(aspect);camera->setView(view);camera->setViewHeightInPixels(height);
+        camera->updateNativeFrustum();LLPipeline::sUseOcclusion=occlusion;
+        if(hide){if(LLPipeline::hasRenderTypeControl(LLPipeline::RENDER_TYPE_AVATAR)!=avatars)LLPipeline::toggleRenderTypeControl(LLPipeline::RENDER_TYPE_AVATAR);if(LLPipeline::hasRenderTypeControl(LLPipeline::RENDER_TYPE_PARTICLES)!=particles)LLPipeline::toggleRenderTypeControl(LLPipeline::RENDER_TYPE_PARTICLES);LLPipeline::sRenderAttachedLights=lights;}
+        mCapturing=false;if(mCurrent())mCaptureBtn->setEnabled(true);
+    }};
+    if(hide){if(avatars)LLPipeline::toggleRenderTypeControl(LLPipeline::RENDER_TYPE_AVATAR);if(particles)LLPipeline::toggleRenderTypeControl(LLPipeline::RENDER_TYPE_PARTICLES);LLPipeline::sRenderAttachedLights=false;}
+    LLPipeline::sUseOcclusion=0;freezeWorld(true);
+    mInitialHeadingDeg=float((360+90-int(camera->getYaw()*RAD_TO_DEG))%360);
+    camera->setAspect(1.f);camera->setView(F_PI_BY_TWO);camera->setViewHeightInPixels(mSourceImageSize);
+    const LLVector3 directions[6]={{1,0,0},{0,1,0},{0,0,1},{-1,0,0},{0,-1,0},{0,0,-1}};
+    const LLVector3 ups[6]={{0,0,1},{0,0,1},{0,-1,0},{0,0,1},{0,0,1},{0,1,0}};
+    static const std::string prefixes[6]={"posx","posz","posy","negx","negz","negy"};
+    const auto path=makeFullPathToJS("cubemap_img.js");
+    try
     {
-        "posx", "posz", "posy",
-        "negx", "negz", "negy",
-    };
-
-    // number of times to render the scene (display(..) inside
-    // the simple snapshot function in llViewerWindow.
-    // Note: rendering even just 1 more time (for a total of 2)
-    // has a dramatic effect on the scene contents and *much*
-    // less of it is missing. More investigation required
-    // but for the moment, this helps with missing content
-    // because of interest list issues.
-    int num_render_passes = gSavedSettings.getU32("360CaptureNumRenderPasses");
-
-    // time the encode process for later optimization
-    auto encode_time_total = 0.0;
-
-    // for each of the 6 directions we shoot...
-    for (int i = 0; i < 6; i++)
-    {
-        LLAppViewer::instance()->pauseMainloopTimeout();
-        LLViewerStats::instance().getRecording().stop();
-
-        // these buffers are where the raw, captured pixels are stored and
-        // the first time we use them, we have to make a new one
-        if (mRawImages[i] == nullptr)
+        if(!writeDataURLHeader(path))throw std::runtime_error("Cannot write panorama image header");
+        for(unsigned face=0;face<6;++face)
         {
-            mRawImages[i] = new LLImageRaw(mSourceImageSize, mSourceImageSize, 3);
+            if(!mCurrent())return;
+            LLAppViewer::instance()->pauseMainloopTimeout();LLViewerStats::instance().getRecording().stop();
+            Restore resume{[]{LLViewerStats::instance().getRecording().resume();LLAppViewer::instance()->resumeMainloopTimeout();}};
+            mRawImages[face]=new LLImageRaw(mSourceImageSize,mSourceImageSize,3);
+            camera->lookDir(directions[face],ups[face]);camera->updateNativeFrustum();
+            if(!gViewerWindow->simpleSnapshot(mRawImages[face],mSourceImageSize,mSourceImageSize,
+                                              gSavedSettings.getU32("360CaptureNumRenderPasses")))
+                throw std::runtime_error("Panorama scene capture is incomplete");
+            if(!encodeAndSave(mRawImages[face],path,prefixes[face]))throw std::runtime_error("Cannot encode or write panorama face");
+            LLAppViewer::instance()->pingMainloopTimeout("LLFloater360Capture::capture360Images");
         }
-        else
-            // subsequent capture with floater open so we resize the buffer from
-            // the previous run
-        {
-            // LLImageRaw deletes the old one via operator= but just to be
-            // sure, we delete its' large data member first...
-            mRawImages[i]->deleteData();
-            mRawImages[i] = new LLImageRaw(mSourceImageSize, mSourceImageSize, 3);
-        }
-
-        // set up camera to look in each direction
-        camera->lookDir(look_dirs[i], look_upvecs[i]);
-
-        // record if camera changed to try to understand the "all shots are the same issue"
-        if (camera->isChanged())
-        {
-            ++camera_changed_times;
-        }
-
-        // call the (very) simplified snapshot code that simply deals
-        // with a single image, no sub-images etc. but is very fast
-        gViewerWindow->simpleSnapshot(mRawImages[i],
-                                      mSourceImageSize, mSourceImageSize, num_render_passes);
-
-        // encode each image and write to disk while saving how long it took to do so
-        auto t_start = std::chrono::high_resolution_clock::now();
-        encodeAndSave(mRawImages[i], cubemap_js_full_path, prefixes[i]);
-        auto t_end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(t_end - t_start);
-        encode_time_total += duration.count();
-
-        LLViewerStats::instance().getRecording().resume();
-        LLAppViewer::instance()->resumeMainloopTimeout();
-
-        // update main loop timeout state
-        LLAppViewer::instance()->pingMainloopTimeout("LLFloater360Capture::capture360Images");
+        if(!writeDataURLFooter(path))throw std::runtime_error("Cannot complete panorama image file");
+        if(!mCurrent())return;
+        mWebBrowser->navigateTo("file:///"+getHTMLBaseFolder()+mEqrGenHTML);mSaveLocalBtn->setEnabled(true);
     }
-
-    // display time to encode all 6 images.  It tends to be a fairly linear
-    // time for each so we don't need to worry about displaying the time
-    // for each - this gives us plenty to use for optimizing
-    LL_INFOS("360Capture") << "Time to encode and save 6 images was " <<
-                           encode_time_total << " seconds" << LL_ENDL;
-
-    // Write the JavaScript file footer (the bottom of the file after the
-    // declarations of the actual data URLs array). The footer comprises of
-    // a JavaScript array declaration that references the 6 data URLs generated
-    // previously and is what is referred to in the display HTML file
-    // (newview/skins/default/html/common/equirectangular/display_eqr.html)
-    writeDataURLFooter(cubemap_js_full_path);
-
-    // unfreeze the world now we have our shots
-    freezeWorld(false);
-
-    // restore original view/camera/avatar settings settings
-    camera->setAspect(old_aspect);
-    camera->setView(old_fov);
-    camera->yaw(old_yaw);
-    LLPipeline::sUseOcclusion = old_occlusion;
-
-    // if we toggled off the avatar because the Hide check box was ticked,
-    // we should toggle it back to where it was before we started the capture
-    if (gSavedSettings.getBOOL("360CaptureHideAvatars"))
+    catch(const std::exception& error)
     {
-        LLPipeline::toggleRenderTypeControl(LLPipeline::RENDER_TYPE_AVATAR);
-        LLPipeline::toggleRenderTypeControl(LLPipeline::RENDER_TYPE_PARTICLES);
-        LLPipeline::sRenderAttachedLights = render_attached_lights;
+        LL_WARNS("360Capture")<<error.what()<<LL_ENDL;
+        if(mCurrent()){LLSD args;args["ERROR_MESSAGE"]="Unable to capture the 360-degree panorama.";LLNotificationsUtil::add("ErrorMessage",args);}
     }
-
-    // record that we missed some shots in the log for later debugging
-    // note: we use 5 and not 6 because the first shot isn't regarded
-    // as a change - only the subsequent 5 are
-    if (camera_changed_times < 5)
-    {
-        LL_WARNS("360Capture") << "360 image capture expected 5 or more images, only captured " << camera_changed_times << " images." << LL_ENDL;
-    }
-
-    // now we have the 6 shots saved in a well specified location,
-    // we can load the web content that uses them
-    std::string url = "file:///" + getHTMLBaseFolder() + mEqrGenHTML;
-    mWebBrowser->navigateTo(url);
-
-    // page is loaded and ready so we can turn on the buttons again
-    mCaptureBtn->setEnabled(true);
-    mSaveLocalBtn->setEnabled(true);
-
 }
 
 // once the request is made to navigate to the web page containing the code
@@ -654,6 +535,7 @@ void LLFloater360Capture::capture360Images()
 // loaded - we get a "navigate complete" event when that happens that we can act on
 void LLFloater360Capture::handleMediaEvent(LLPluginClassMedia* self, EMediaEvent event)
 {
+    if(!mCurrent())return;
     switch (event)
     {
         // not used right now but retaining because this event might
@@ -725,10 +607,11 @@ void LLFloater360Capture::handleMediaEvent(LLPluginClassMedia* self, EMediaEvent
 // called when the user wants to save the cube maps off to the final EQR image
 void LLFloater360Capture::onSaveLocalBtn()
 {
+    if(!mCurrent())return;
     // region name and URL
     std::string region_name; // no sensible default
     std::string region_url("https://secondlife.com");
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region = vs_current_region_context();
     if (region)
     {
         // region names can (and do) contain characters that would make passing
@@ -811,44 +694,19 @@ void LLFloater360Capture::onSaveLocalBtn()
 // we can do here - e.g. waves in the water probably won't line up.
 void LLFloater360Capture::freezeWorld(bool enable)
 {
-    static bool clouds_scroll_paused = false;
-    if (enable)
+    if(enable==mWorldFrozen)return;
+    mWorldFrozen=enable;
+    if(enable)
     {
-        // record the cloud scroll current value so we can restore it
-        clouds_scroll_paused = LLEnvironment::instance().isCloudScrollPaused();
-
-        // stop the clouds moving
+        mOldCloudsPaused=LLEnvironment::instance().isCloudScrollPaused();mOldFreezeTime=gSavedSettings.getBOOL("FreezeTime");mOldParticles=LLViewerPartSim::getMaxPartCount()>0;
         LLEnvironment::instance().pauseCloudScroll();
-
-        // freeze all avatars
-        for (LLCharacter* character : LLCharacter::sInstances)
-        {
-            mAvatarPauseHandles.push_back(character->requestPause());
-        }
-
-        // freeze everything else
-        gSavedSettings.setBOOL("FreezeTime", true);
-
-        // disable particle system
-        LLViewerPartSim::getInstance()->enable(false);
+        for(auto* character:LLCharacter::sInstances)mAvatarPauseHandles.push_back(character->requestPause());
+        gSavedSettings.setBOOL("FreezeTime",true);LLViewerPartSim::getInstance()->enable(false);
     }
-    else // turning off freeze world mode, either temporarily or not.
+    else
     {
-        // restart the clouds moving if they were not paused before
-        // we starting using the 360 capture floater
-        if (!clouds_scroll_paused)
-        {
-            LLEnvironment::instance().resumeCloudScroll();
-        }
-
-        // thaw all avatars
-        mAvatarPauseHandles.clear();
-
-        // thaw everything else
-        gSavedSettings.setBOOL("FreezeTime", false);
-
-        //enable particle system
-        LLViewerPartSim::getInstance()->enable(true);
+        if(!mOldCloudsPaused)LLEnvironment::instance().resumeCloudScroll();
+        mAvatarPauseHandles.clear();gSavedSettings.setBOOL("FreezeTime",mOldFreezeTime);LLViewerPartSim::getInstance()->enable(mOldParticles);
     }
 }
 
@@ -863,7 +721,7 @@ const std::string LLFloater360Capture::generate_proposed_filename()
     // base name
     filename << "sl360_";
 
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region = vs_current_region_context();
     if (region)
     {
         // this looks complex but it's straightforward - removes all non-alpha chars from a string

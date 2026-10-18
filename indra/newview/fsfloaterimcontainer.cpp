@@ -130,9 +130,6 @@ void FSFloaterIMContainer::initTabs()
         }
     }
 
-    // Native nearby chat is already owned by the native root/session.
-    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return;
-
     LLFloater* floater_chat = FSFloaterNearbyChat::getInstance();
     if (!LLFloater::isVisible(floater_chat) && (floater_chat->getHost() != this))
     {

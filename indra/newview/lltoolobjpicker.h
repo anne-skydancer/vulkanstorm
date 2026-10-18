@@ -30,6 +30,7 @@
 #include "lltool.h"
 #include "v3math.h"
 #include "lluuid.h"
+#include <functional>
 
 class LLPickInfo;
 
@@ -49,11 +50,17 @@ public:
 
     void        setExitCallback(void (*callback)(void *), void *callback_data);
 
+    bool hasExitCallback(void (*callback)(void*), void* data) const
+    { return mExitCallback == callback && mExitCallbackData == data; }
     LLUUID              getObjectID() const { return mHitObjectID; }
 
     static void         pickCallback(const LLPickInfo& pick_info);
 
 protected:
+#if VS_NATIVE_VULKAN
+    std::function<bool()> nativePickGuard();
+    U64 mNativePickGeneration=0;
+#endif
     bool                mPicked;
     LLUUID              mHitObjectID;
     void                (*mExitCallback)(void *callback_data);

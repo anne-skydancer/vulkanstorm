@@ -28,6 +28,16 @@
 
 // self include
 #include "llfloaterreporter.h"
+#include "vsnativeim.h"
+#include "vsregioncontext.h"
+#include "vsobjectcontext.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#include "vsobjectproperties.h"
+#include "vsvulkancontext.h"
+#include "vsuiimageprovider.h"
+#endif
 
 #include <sstream>
 
@@ -144,8 +154,23 @@ LLUUID LLARScreenShotUploader::finishUpload(LLSD &result)
 // Member functions
 //-----------------------------------------------------------------------------
 
+struct LLFloaterReporter::PickRequest
+{
+    LLHandle<LLFloater> view;
+    std::function<bool()> current;
+    U64 intent;
+};
+struct LLFloaterReporter::UploadRequest
+{
+    LLHandle<LLFloater> view;
+    std::function<bool()> current;
+    U64 intent;
+    LLFolderType::EType location;
+};
+
 LLFloaterReporter::LLFloaterReporter(const LLSD& key)
 :   LLFloater(key),
+    mCurrent(vs_native_im_guard()),
     mReportType(COMPLAINT_REPORT),
     mObjectID(),
     mScreenID(),
@@ -172,7 +197,7 @@ bool LLFloaterReporter::postBuild()
 
     // convert the position to a string
     LLVector3d pos = gAgent.getPositionGlobal();
-    LLViewerRegion *regionp = gAgent.getRegion();
+    auto regionp = vs_current_region_context();
     if (regionp)
     {
         getChild<LLUICtrl>("sim_field")->setValue(regionp->getName());
@@ -212,10 +237,9 @@ bool LLFloaterReporter::postBuild()
     getChild<LLButton>("refresh_screenshot")->setCommitCallback(boost::bind(&LLFloaterReporter::onUpdateScreenshot, this));
 
     // request categories
-    if (gAgent.getRegion()
-        && gAgent.getRegion()->capabilitiesReceived())
+    if (regionp && regionp->current())
     {
-        std::string cap_url = gAgent.getRegionCapability("AbuseCategories");
+        std::string cap_url = regionp->getCapability("AbuseCategories");
 
         if (!cap_url.empty())
         {
@@ -238,6 +262,12 @@ bool LLFloaterReporter::postBuild()
 // virtual
 LLFloaterReporter::~LLFloaterReporter()
 {
+    mRetiring = true;
+    ++mIntent;
+    cancelObjectPick();
+#if VS_NATIVE_VULKAN
+    if (mNativeScreenID.notNull()) vs_retire_local_image(mNativeScreenID);
+#endif
     if (mAvatarNameCacheConnection.connected())
     {
         mAvatarNameCacheConnection.disconnect();
@@ -247,11 +277,6 @@ LLFloaterReporter::~LLFloaterReporter()
     // child views automatically deleted
     mObjectID       = LLUUID::null;
 
-    if (mPicking)
-    {
-        closePickTool(this);
-    }
-
     mPosition.setVec(0.0f, 0.0f, 0.0f);
 
     delete mResourceDatap;
@@ -260,8 +285,9 @@ LLFloaterReporter::~LLFloaterReporter()
 void LLFloaterReporter::onIdle(void* user_data)
 {
     LLFloaterReporter* floater_reporter = (LLFloaterReporter*)user_data;
-    if (floater_reporter)
+    if (floater_reporter && floater_reporter->mCurrent() && !floater_reporter->mRetiring)
     {
+        if (floater_reporter->mScreenshotPending) floater_reporter->publishNativeScreenshot();
         static LLCachedControl<F32> screenshot_delay(gSavedSettings, "AbuseReportScreenshotDelay");
         if (floater_reporter->mSnapshotTimer.getStarted() && floater_reporter->mSnapshotTimer.getElapsedTimeF32() > screenshot_delay)
         {
@@ -320,7 +346,49 @@ void LLFloaterReporter::getObjectInfo(const LLUUID& object_id)
     // 3 can pick avatar ==> might want to indicate when a picked
     //   object is an avatar, attachment, or other category
 
+    if (!mCurrent() || mRetiring) return;
     mObjectID = object_id;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        auto object = VSObjectContext::resolve(object_id);
+        if (!object) return;
+        if (object->attachment) object = VSObjectContext::resolve(object->rootID);
+        if (!object || !object->current()) return;
+        mObjectID = object->id;
+        if (auto region = vs_region_context(object->host))
+        {
+            getChild<LLUICtrl>("sim_field")->setValue(region->getName());
+            setPosBox(LLVector3d(region->getPosRegionFromGlobal(object->position)));
+        }
+        if (object->pcode == LL_PCODE_LEGACY_AVATAR) setFromAvatarID(mObjectID);
+        else if (auto* context = gViewerWindow->nativeContext())
+        {
+            const auto session = VSNativeSession::active();
+            const auto selection = session->retainObjectSelection();
+            const auto token = context->world().object(mObjectID);
+            if (!selection || !token) return;
+            const auto weak = getHandle();
+            const auto current = mCurrent;
+            const auto source = *object;
+            const auto intent = mIntent;
+            selection->requestFamily(*token, COMPLAINT_REPORT_REQUEST,
+                [weak, current, source, intent](const auto& publication)
+                {
+                    auto* self = dynamic_cast<LLFloaterReporter*>(weak.get());
+                    if (!self || !current() || !source.current() || !publication ||
+                        self->mIntent != intent || self->mObjectID != source.id) return;
+                    const auto properties = publication->properties;
+                    if (!properties) return;
+                    // Same family-reply name policy as LLSelectMgr.
+                    LLAvatarName name;
+                    LLAvatarNameCache::get(properties->owner_id, &name);
+                    self->setPickedObjectProperties(properties->name, name.getUserName(), properties->owner_id);
+                });
+        }
+        return;
+    }
+#endif
 
     if (LLUUID::null != mObjectID)
     {
@@ -379,10 +447,11 @@ void LLFloaterReporter::getObjectInfo(const LLUUID& object_id)
 
 void LLFloaterReporter::onClickSelectAbuser()
 {
+    if (!mCurrent()) return;
     LLView * button = findChild<LLButton>("select_abuser", true);
 
     LLFloater * root_floater = gFloaterView->getParentFloater(this);
-    LLFloaterAvatarPicker* picker = LLFloaterAvatarPicker::show(boost::bind(&LLFloaterReporter::callbackAvatarID, this, _1, _2), false, true, false, root_floater->getName(), button);
+    LLFloaterAvatarPicker* picker = LLFloaterAvatarPicker::show(vs_native_im_lifetime_callback([weak=getHandle(), intent=mIntent] { const auto* self=dynamic_cast<LLFloaterReporter*>(weak.get()); return self && self->mIntent==intent; }, [this](const uuid_vec_t& ids, const std::vector<LLAvatarName>& names) { callbackAvatarID(ids, names); }), false, true, false, root_floater->getName(), button);
     if (picker)
     {
         root_floater->addDependentFloater(picker);
@@ -391,7 +460,7 @@ void LLFloaterReporter::onClickSelectAbuser()
 
 void LLFloaterReporter::callbackAvatarID(const uuid_vec_t& ids, const std::vector<LLAvatarName> names)
 {
-    if (ids.empty() || names.empty()) return;
+    if (!mCurrent() || ids.empty() || names.empty()) return;
 
     getChild<LLUICtrl>("abuser_name_edit")->setValue(names[0].getCompleteName());
 
@@ -411,7 +480,13 @@ void LLFloaterReporter::setFromAvatarID(const LLUUID& avatar_id)
     {
         mAvatarNameCacheConnection.disconnect();
     }
-    mAvatarNameCacheConnection = LLAvatarNameCache::get(avatar_id, boost::bind(&LLFloaterReporter::onAvatarNameCache, this, _1, _2));
+    const auto weak = getHandle();
+    const auto current = mCurrent;
+    const auto intent = mIntent;
+    mAvatarNameCacheConnection = LLAvatarNameCache::get(avatar_id, [weak, current, intent](const LLUUID& id, const LLAvatarName& name)
+    {
+        if (auto* self = dynamic_cast<LLFloaterReporter*>(weak.get()); self && current() && self->mIntent == intent) self->onAvatarNameCache(id, name);
+    });
 }
 
 void LLFloaterReporter::onAvatarNameCache(const LLUUID& avatar_id, const LLAvatarName& av_name)
@@ -451,7 +526,8 @@ void LLFloaterReporter::requestAbuseCategoriesCoro(std::string url, LLHandle<LLF
         return;
     }
 
-    LLFloater* floater = handle.get();
+    auto* floater = dynamic_cast<LLFloaterReporter*>(handle.get());
+    if (!floater || !floater->mCurrent()) return;
     LLComboBox* combo = floater->getChild<LLComboBox>("category_combo");
     if (!combo)
     {
@@ -491,10 +567,11 @@ void LLFloaterReporter::requestAbuseCategoriesCoro(std::string url, LLHandle<LLF
 void LLFloaterReporter::onClickSend(void *userdata)
 {
     LLFloaterReporter *self = (LLFloaterReporter *)userdata;
+    if (!self || !self->mCurrent() || self->mRetiring) return;
 
     if (self->mPicking)
     {
-        closePickTool(self);
+        closePickTool(self->mPickRequest.get());
     }
 
     if(self->validateReport())
@@ -555,13 +632,14 @@ void LLFloaterReporter::onClickSend(void *userdata)
 void LLFloaterReporter::onClickCancel(void *userdata)
 {
     LLFloaterReporter *self = (LLFloaterReporter *)userdata;
+    if (!self || !self->mCurrent() || self->mRetiring) return;
 
     // reset flag in case the next report also contains this text
     self->mCopyrightWarningSeen = false;
 
     if (self->mPicking)
     {
-        closePickTool(self);
+        self->cancelObjectPick();
     }
     self->closeFloater();
 }
@@ -571,9 +649,12 @@ void LLFloaterReporter::onClickCancel(void *userdata)
 void LLFloaterReporter::onClickObjPicker(void *userdata)
 {
     LLFloaterReporter *self = (LLFloaterReporter *)userdata;
-    LLToolObjPicker::getInstance()->setExitCallback(LLFloaterReporter::closePickTool, self);
-    LLToolMgr::getInstance()->setTransientTool(LLToolObjPicker::getInstance());
+    if (!self || !self->mCurrent() || self->mRetiring) return;
+    self->cancelObjectPick();
+    self->mPickRequest = std::make_shared<PickRequest>(PickRequest{self->getHandle(), self->mCurrent, self->mIntent});
+    LLToolObjPicker::getInstance()->setExitCallback(LLFloaterReporter::closePickTool, self->mPickRequest.get());
     self->mPicking = true;
+    LLToolMgr::getInstance()->setTransientTool(LLToolObjPicker::getInstance());
     self->getChild<LLUICtrl>("object_name")->setValue(LLStringUtil::null);
     self->getChild<LLUICtrl>("owner_name")->setValue(LLStringUtil::null);
     self->mOwnerName = LLStringUtil::null;
@@ -585,17 +666,30 @@ void LLFloaterReporter::onClickObjPicker(void *userdata)
 // static
 void LLFloaterReporter::closePickTool(void *userdata)
 {
-    LLFloaterReporter *self = (LLFloaterReporter *)userdata;
-
-    LLUUID object_id = LLToolObjPicker::getInstance()->getObjectID();
-    self->getObjectInfo(object_id);
-
-    LLToolMgr::getInstance()->clearTransientTool();
-    self->mPicking = false;
-    LLButton* pick_btn = self->getChild<LLButton>("pick_btn");
-    if (pick_btn) pick_btn->setToggleState(false);
+    auto* request = static_cast<PickRequest*>(userdata);
+    auto* self = request ? dynamic_cast<LLFloaterReporter*>(request->view.get()) : nullptr;
+    if (!self || !request->current() || request->intent != self->mIntent || self->mRetiring) return;
+    // Retain callback data while clearing the transient tool can reenter capture loss.
+    const auto keep = self->mPickRequest;
+    const LLUUID object = LLToolObjPicker::getInstance()->getObjectID();
+    self->cancelObjectPick();
+    if (LLToolMgr::instanceExists()) LLToolMgr::instance().clearTransientTool();
+    self->getObjectInfo(object);
 }
 
+void LLFloaterReporter::cancelObjectPick()
+{
+    if (!mPicking && !mPickRequest) return;
+    mPicking = false;
+    if (LLToolObjPicker::instanceExists() &&
+        LLToolObjPicker::instance().hasExitCallback(closePickTool, mPickRequest.get()))
+    {
+        LLToolObjPicker::instance().setExitCallback(nullptr, nullptr);
+        if (LLToolMgr::instanceExists()) LLToolMgr::instance().clearTransientTool();
+    }
+    mPickRequest.reset();
+    if (auto* button = findChild<LLButton>("pick_btn")) button->setToggleState(false);
+}
 
 // static
 void LLFloaterReporter::showFromMenu(EReportType report_type)
@@ -626,6 +720,7 @@ void LLFloaterReporter::show(const LLUUID& object_id, const std::string& avatar_
         gSavedPerAccountSettings.setBOOL("PreviousScreenshotForReport", false);
     }
     reporter_floater = LLFloaterReg::showTypedInstance<LLFloaterReporter>("reporter");
+    if (!reporter_floater) return;
     if (avatar_name.empty())
     {
         // Request info for this object
@@ -654,6 +749,7 @@ void LLFloaterReporter::showFromExperience( const LLUUID& experience_id )
         gSavedPerAccountSettings.setBOOL("PreviousScreenshotForReport", false);
     }
     reporter_floater = LLFloaterReg::showTypedInstance<LLFloaterReporter>("reporter");
+    if (!reporter_floater) return;
     reporter_floater->getExperienceInfo(experience_id);
 
     // Need to deselect on close
@@ -749,8 +845,8 @@ bool LLFloaterReporter::validateReport()
 
 LLSD LLFloaterReporter::gatherReport()
 {
-    LLViewerRegion *regionp = gAgent.getRegion();
-    if (!regionp) return LLSD(); // *TODO handle this failure case more gracefully
+    auto regionp = vs_current_region_context();
+    if (!mCurrent() || !regionp || !regionp->current()) return LLSD(); // *TODO handle this failure case more gracefully
 
     // reset flag in case the next report also contains this text
     mCopyrightWarningSeen = false;
@@ -814,6 +910,16 @@ LLSD LLFloaterReporter::gatherReport()
             gGLManager.mGLRenderer.c_str(),
             gGLManager.mDriverVersionVendorString.c_str());
 
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() && gViewerWindow->nativeContext())
+    {
+        const LLSD info = gViewerWindow->nativeContext()->rendererInfo();
+        version_string = llformat("%s %s %s %s %s", LLVersionInfo::instance().getShortVersion().c_str(),
+            platform, gSysCPU.getFamily().c_str(), info["GRAPHICS_CARD"].asString().c_str(),
+            info["GRAPHICS_DRIVER_VERSION"].asString().c_str());
+    }
+#endif
+
     // only send a screenshot ID if we're asked to and the email is
     // going to LL - Estate Owners cannot see the screenshot asset
     LLUUID screenshot_id = LLUUID::null;
@@ -837,8 +943,8 @@ LLSD LLFloaterReporter::gatherReport()
 
 void LLFloaterReporter::sendReportViaLegacy(const LLSD & report)
 {
-    LLViewerRegion *regionp = gAgent.getRegion();
-    if (!regionp) return;
+    auto regionp = vs_current_region_context();
+    if (!mCurrent() || !regionp || !regionp->current()) return;
     LLMessageSystem *msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_UserReport);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -879,7 +985,7 @@ void LLFloaterReporter::sendReportViaCaps(std::string url, std::string sshot_url
     }
     else
     {
-        LLCoreHttpUtil::HttpCoroutineAdapter::completionCallback_t proc = boost::bind(&LLFloaterReporter::finishedARPost, _1);
+        LLCoreHttpUtil::HttpCoroutineAdapter::completionCallback_t proc = vs_native_im_account_callback([](const LLSD& result) { finishedARPost(result); });
         LLUploadDialog::modalUploadDialog("Abuse Report");
         LLCoreHttpUtil::HttpCoroutineAdapter::callbackHttpPost(url, report, proc, proc);
     }
@@ -903,6 +1009,7 @@ void LLFloaterReporter::takeScreenshot(bool use_prev_screenshot)
     }
 
     LLPointer<LLImageJ2C> upload_data = LLViewerTextureList::convertToUploadFile(mImageRaw);
+    if (!upload_data) { childSetEnabled("send_btn", false); return; }
 
     // create a resource data
     mResourceDatap->mInventoryType = LLInventoryType::IT_NONE;
@@ -928,11 +1035,20 @@ void LLFloaterReporter::takeScreenshot(bool use_prev_screenshot)
     LLFileSystem j2c_file(mResourceDatap->mAssetInfo.mUuid, mResourceDatap->mAssetInfo.mType, LLFileSystem::WRITE);
     j2c_file.write(upload_data->getData(), upload_data->getDataSize());
 
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        mScreenshotPending = true;
+        publishNativeScreenshot();
+        return;
+    }
+#endif
     // store in the image list so it doesn't try to fetch from the server
     LLPointer<LLViewerFetchedTexture> image_in_list =
         LLViewerTextureManager::getFetchedTexture(mResourceDatap->mAssetInfo.mUuid);
     image_in_list->createGLTexture(0, mImageRaw, 0, true, LLGLTexture::OTHER);
 
+    childSetEnabled("send_btn", true);
     // the texture picker then uses that texture
     LLTextureCtrl* texture = getChild<LLTextureCtrl>("screenshot");
     if (texture)
@@ -949,7 +1065,8 @@ void LLFloaterReporter::takeScreenshot(bool use_prev_screenshot)
 void LLFloaterReporter::takeNewSnapshot(bool refresh)
 // </FS:Ansariel>
 {
-    childSetEnabled("send_btn", true);
+    if (!mCurrent() || mRetiring) return;
+    childSetEnabled("send_btn", false);
     mImageRaw = new LLImageRaw;
     const S32 IMAGE_WIDTH = 1024;
     const S32 IMAGE_HEIGHT = 768;
@@ -976,7 +1093,7 @@ void LLFloaterReporter::takeNewSnapshot(bool refresh)
         {
             if (start_image_png->decode(mPrevImageRaw, 0.0f))
             {
-                LLNotificationsUtil::add("LoadPreviousReportScreenshot", LLSD(), LLSD(), boost::bind(&LLFloaterReporter::onLoadScreenshotDialog,this, _1, _2));
+                LLNotificationsUtil::add("LoadPreviousReportScreenshot", LLSD(), LLSD(), vs_native_im_ui_callback(this, [this, intent=mIntent](const LLSD& notification, const LLSD& response) { if (mIntent == intent) onLoadScreenshotDialog(notification, response); }));
                 return;
             }
         }
@@ -987,6 +1104,8 @@ void LLFloaterReporter::takeNewSnapshot(bool refresh)
 
 void LLFloaterReporter::onOpen(const LLSD& key)
 {
+    if (!mCurrent()) return;
+    ++mIntent;
     childSetEnabled("send_btn", false);
     //Time delay to avoid UI artifacts. MAINT-7067
     mSnapshotTimer.start();
@@ -994,6 +1113,7 @@ void LLFloaterReporter::onOpen(const LLSD& key)
 
 void LLFloaterReporter::onLoadScreenshotDialog(const LLSD& notification, const LLSD& response)
 {
+    if (!mCurrent()) return;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     takeScreenshot(option == 0);
 }
@@ -1009,16 +1129,17 @@ void LLFloaterReporter::uploadImage()
     gAssetStorage->storeAssetData(mResourceDatap->mAssetInfo.mTransactionID,
                                     mResourceDatap->mAssetInfo.mType,
                                     LLFloaterReporter::uploadDoneCallback,
-                                    (void*)mResourceDatap, true);
+                                    new UploadRequest{getHandle(), mCurrent, mIntent, mResourceDatap->mPreferredLocation}, true);
 }
 
 
 // static
 void LLFloaterReporter::uploadDoneCallback(const LLUUID &uuid, void *user_data, S32 result, LLExtStat ext_status) // StoreAssetData callback (fixed)
 {
+    const std::unique_ptr<UploadRequest> data(static_cast<UploadRequest*>(user_data));
+    auto* self = data ? dynamic_cast<LLFloaterReporter*>(data->view.get()) : nullptr;
+    if (!self || !data->current() || self->mIntent != data->intent) return;
     LLUploadDialog::modalUploadFinished();
-
-    LLResourceData* data = (LLResourceData*)user_data;
 
     if(result < 0)
     {
@@ -1032,12 +1153,11 @@ void LLFloaterReporter::uploadDoneCallback(const LLUUID &uuid, void *user_data, 
         return;
     }
 
-    if (data->mPreferredLocation != LLResourceData::INVALID_LOCATION)
+    if (data->location != LLResourceData::INVALID_LOCATION)
     {
-        LL_WARNS() << "Unknown report type : " << data->mPreferredLocation << LL_ENDL;
+        LL_WARNS() << "Unknown report type : " << data->location << LL_ENDL;
     }
 
-    LLFloaterReporter *self = LLFloaterReg::findTypedInstance<LLFloaterReporter>("reporter");
     if (self)
     {
         self->mScreenID = uuid;
@@ -1061,13 +1181,44 @@ void LLFloaterReporter::setPosBox(const LLVector3d &pos)
 
 void LLFloaterReporter::onClose(bool app_quitting)
 {
+    ++mIntent;
+    cancelObjectPick();
+    mScreenshotPending = false;
     mSnapshotTimer.stop();
-    gSavedPerAccountSettings.setBOOL("PreviousScreenshotForReport", app_quitting);
+    if (mCurrent()) gSavedPerAccountSettings.setBOOL("PreviousScreenshotForReport", app_quitting);
 }
 
 // <FS:Ansariel> FIRE-15368: Don't include floater in screenshot update
 void LLFloaterReporter::onUpdateScreenshot()
 {
-    doAfterInterval(boost::bind(&LLFloaterReporter::takeNewSnapshot,this, true), gSavedSettings.getF32("AbuseReportScreenshotDelay"));
+    const auto weak = getHandle();
+    const auto current = mCurrent;
+    const auto intent = mIntent;
+    doAfterInterval([weak, current, intent]
+    {
+        auto* self = dynamic_cast<LLFloaterReporter*>(weak.get());
+        if (self && current() && self->mIntent == intent) self->takeNewSnapshot(true);
+    }, gSavedSettings.getF32("AbuseReportScreenshotDelay"));
 }
 // </FS:Ansariel>
+
+bool LLFloaterReporter::publishNativeScreenshot()
+{
+#if VS_NATIVE_VULKAN
+    if (!mCurrent() || !mImageRaw || !mScreenshotPending) return false;
+    const LLUUID id = mResourceDatap->mAssetInfo.mUuid;
+    if (!vs_publish_local_image(id, *mImageRaw)) return false;
+    if (mNativeScreenID.notNull() && mNativeScreenID != id) vs_retire_local_image(mNativeScreenID);
+    mNativeScreenID = id;
+    mScreenshotPending = false;
+    if (auto* texture = findChild<LLTextureCtrl>("screenshot"))
+    {
+        texture->setImageAssetID(id);
+        texture->setDefaultImageAssetID(id);
+    }
+    childSetEnabled("send_btn", true);
+    return true;
+#else
+    return false;
+#endif
+}

@@ -86,6 +86,11 @@ public:
     void            setLabel(const std::string& label);
     void            setLabelWidth(S32 label_width) {mLabelWidth =label_width;}
     void            setCanApplyImmediately(bool apply) { mCanApplyImmediately = apply; }
+    // Bind a picker interaction to the originating controller/selection.
+    // Empty preserves the ordinary reference control behavior.
+    std::function<bool()> pickerGuard() const {return mPickerCurrent;}
+    void setOperationGuardFactory(std::function<std::function<bool()>()> factory)
+    {mOperationGuardFactory=std::move(factory);}
     void            setOnCancelCallback(commit_callback_t cb) { mOnCancelCallback = cb; }
     void            setOnSelectCallback(commit_callback_t cb) { mOnSelectCallback = cb; }
     void            setPreviewCallback(commit_callback_t cb) { mPreviewCallback = cb; }
@@ -128,6 +133,10 @@ protected:
 
     LLUIColor               mTextEnabledColor;      // <FS:Zi> Add label/caption colors
     LLUIColor               mTextDisabledColor;     // <FS:Zi> Add label/caption colors
+private:
+    std::function<std::function<bool()>()> mOperationGuardFactory;
+    std::function<bool()> mPickerCurrent;
+
 };
 
 #endif  // LL_LLBUTTON_H

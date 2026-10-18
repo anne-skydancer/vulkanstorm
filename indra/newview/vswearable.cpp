@@ -1,6 +1,7 @@
 // CPU wearable ownership for the native connected appearance service. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vswearable.h"
+#include "vsavatarservices.h"
 #include "llavatarappearance.h"
 #include "llviewercontrol.h"
 #include "llmd5.h"
@@ -17,10 +18,12 @@ std::shared_ptr<VSWearable> VSWearable::create(const LLUUID& item, const LLUUID&
                                        });
 }
 VSWearable::VSWearable(const LLUUID& item, const LLUUID& asset, std::function<void()> changed) :
-    mItem(item),
-    mAsset(asset),
+    LLViewerWearable(asset),
     mChanged(std::move(changed))
 {
+    setItemID(item);
+    mNativeOwned = true;
+    mNativeAvatarGeneration = vs_avatar_generation();
 }
 LLUUID VSWearable::getDefaultTextureImageID(LLAvatarAppearanceDefines::ETextureIndex index) const
 {
@@ -30,8 +33,9 @@ LLUUID VSWearable::getDefaultTextureImageID(LLAvatarAppearanceDefines::ETextureI
 }
 void VSWearable::setUpdated() const
 {
+    if (!currentNativeOwner()) return;
     if (mChanged)
         mChanged();
 }
 void VSWearable::addToBakedTextureHash(LLMD5& hash) const
-{ hash.update(mAsset.mData, UUID_BYTES); }
+{ hash.update(getAssetID().mData, UUID_BYTES); }

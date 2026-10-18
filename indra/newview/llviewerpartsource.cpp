@@ -132,6 +132,15 @@ void LLViewerPartSourceScript::update(const F32 dt)
     if( mIsSuspended )
         return;
 
+#if VS_NATIVE_VULKAN
+    if(mNativePosition)
+    {
+        if(!mNativePosition()){setDead();return;}
+        if(mNativeAppearanceAllowed && !mNativeAppearanceAllowed())return;
+    }
+    else
+#endif
+    {
     if (mOwnerAvatarp.isNull() && mOwnerUUID != LLUUID::null)
     {
         mOwnerAvatarp = find_avatar(mOwnerUUID);
@@ -141,6 +150,8 @@ void LLViewerPartSourceScript::update(const F32 dt)
         return;
     }
 
+    }
+
     F32 old_update_time = mLastUpdateTime;
     mLastUpdateTime += dt;
 
@@ -148,6 +159,16 @@ void LLViewerPartSourceScript::update(const F32 dt)
 
     F32 dt_update = mLastUpdateTime - mLastPartTime;
 
+#if VS_NATIVE_VULKAN
+    if(mNativePosition)
+    {
+        sourcePosition(mPosAgent);
+        const auto target=mNativeTarget?mNativeTarget():std::nullopt;
+        mTargetPosAgent=target?*target:mPosAgent;
+    }
+    else
+#endif
+    {
     // Update this for objects which have the follow flag set...
     if (!mSourceObjectp.isNull())
     {
@@ -187,6 +208,8 @@ void LLViewerPartSourceScript::update(const F32 dt)
     if (!mTargetObjectp)
     {
         mTargetPosAgent = mPosAgent;
+    }
+
     }
 
     if (mPartSysData.mMaxAge && ((mPartSysData.mStartAge + mLastUpdateTime + dt_update) > mPartSysData.mMaxAge))
@@ -305,7 +328,11 @@ void LLViewerPartSourceScript::update(const F32 dt)
 
             part->init(this, mImagep, NULL);
             part->mFlags = mPartSysData.mPartData.mFlags;
-            if (!mSourceObjectp.isNull() && mSourceObjectp->isHUDAttachment())
+            if (
+#if VS_NATIVE_VULKAN
+                mNativePosition ? mNativeHUD :
+#endif
+                !mSourceObjectp.isNull() && mSourceObjectp->isHUDAttachment())
             {
                 part->mFlags |= LLPartData::LL_PART_HUD;
             }
@@ -316,11 +343,7 @@ void LLViewerPartSourceScript::update(const F32 dt)
                 part->mChild = mLastPart;
                 part->mAxis = LLVector3(0,0,1);
 
-                if (mSourceObjectp.notNull())
-                {
-                    LLQuaternion rot = mSourceObjectp->getRenderRotation();
-                    part->mAxis *= rot;
-                }
+                if(const auto rot=sourceRotation())part->mAxis*=*rot;
             }
 
             mLastPart = part;
@@ -406,10 +429,7 @@ void LLViewerPartSourceScript::update(const F32 dt)
                     part_dir_vector.rotVec(outerAngle, 1.0, 0.0, 0.0);
                 }
 
-                if (mSourceObjectp)
-                {
-                    part_dir_vector = part_dir_vector * mSourceObjectp->getRenderRotation();
-                }
+                if(const auto rot=sourceRotation())part_dir_vector=part_dir_vector*(*rot);
 
                 part_dir_vector = part_dir_vector * mRotation;
 
@@ -598,9 +618,8 @@ void LLViewerPartSourceSpiral::updatePart(LLViewerPart &part, const F32 dt)
     LLVector3 center_pos;
     LLPointer<LLViewerPartSource>& ps = part.mPartSourcep;
     LLViewerPartSourceSpiral *pss = (LLViewerPartSourceSpiral *)ps.get();
-    if (!pss->mSourceObjectp.isNull() && !pss->mSourceObjectp->mDrawable.isNull())
+    if (pss->sourcePosition(part.mPosAgent))
     {
-        part.mPosAgent = pss->mSourceObjectp->getRenderPosition();
     }
     else
     {
@@ -639,10 +658,7 @@ void LLViewerPartSourceSpiral::update(const F32 dt)
             return;
         }
 
-        if (!mSourceObjectp.isNull() && !mSourceObjectp->mDrawable.isNull())
-        {
-            mPosAgent = mSourceObjectp->getRenderPosition();
-        }
+        sourcePosition(mPosAgent);
         LLViewerPart* part = new LLViewerPart();
         part->init(this, mImagep, updatePart);
         part->mStartColor = mColor;
@@ -707,7 +723,11 @@ void LLViewerPartSourceBeam::updatePart(LLViewerPart &part, const F32 dt)
 
     LLViewerPartSource *ps = (LLViewerPartSource*)part.mPartSourcep;
     LLViewerPartSourceBeam *psb = (LLViewerPartSourceBeam *)ps;
-    if (psb->mSourceObjectp.isNull())
+    if (psb->mSourceObjectp.isNull()
+#if VS_NATIVE_VULKAN
+        && !psb->mNativePosition
+#endif
+       )
     {
         part.mFlags = LLPartData::LL_PART_DEAD_MASK;
         return;
@@ -715,6 +735,17 @@ void LLViewerPartSourceBeam::updatePart(LLViewerPart &part, const F32 dt)
 
     LLVector3 source_pos_agent;
     LLVector3 target_pos_agent;
+    bool hasTarget=false;
+#if VS_NATIVE_VULKAN
+    if(psb->mNativePosition)
+    {
+        if(!psb->sourcePosition(source_pos_agent)){part.mFlags=LLPartData::LL_PART_DEAD_MASK;return;}
+        const auto target=psb->mNativeTarget?psb->mNativeTarget():std::nullopt;
+        hasTarget=bool(target);if(target)target_pos_agent=*target;
+    }
+    else
+#endif
+    {
     if (!psb->mSourceObjectp.isNull() && !psb->mSourceObjectp->mDrawable.isNull())
     {
         if (psb->mSourceObjectp->isAvatar())
@@ -733,8 +764,10 @@ void LLViewerPartSourceBeam::updatePart(LLViewerPart &part, const F32 dt)
         target_pos_agent = psb->mTargetObjectp->getRenderPosition();
     }
 
+        hasTarget=psb->mTargetObjectp.notNull();
+    }
     part.mPosAgent = (1.f - frac) * source_pos_agent;
-    if (psb->mTargetObjectp.isNull())
+    if (!hasTarget)
     {
         part.mPosAgent += frac * (gAgent.getPosAgentFromGlobal(psb->mLKGTargetPosGlobal));
     }
@@ -751,6 +784,17 @@ void LLViewerPartSourceBeam::update(const F32 dt)
 
     mLastUpdateTime += dt;
 
+#if VS_NATIVE_VULKAN
+    if(mNativePosition)
+    {
+        if(!sourcePosition(mPosAgent)){setDead();return;}
+        const auto target=mNativeTarget?mNativeTarget():std::nullopt;
+        if(target)mTargetPosAgent=*target;
+        else if(!mLKGTargetPosGlobal.isExactlyZero())mTargetPosAgent=gAgent.getPosAgentFromGlobal(mLKGTargetPosGlobal);
+    }
+    else
+#endif
+    {
     if (!mSourceObjectp.isNull() && !mSourceObjectp->mDrawable.isNull())
     {
         if (mSourceObjectp->isAvatar())
@@ -772,6 +816,8 @@ void LLViewerPartSourceBeam::update(const F32 dt)
     else if (!mLKGTargetPosGlobal.isExactlyZero())
     {
         mTargetPosAgent = gAgent.getPosAgentFromGlobal(mLKGTargetPosGlobal);
+    }
+
     }
 
     F32 dt_update = mLastUpdateTime - mLastPartTime;
@@ -855,9 +901,8 @@ void LLViewerPartSourceChat::updatePart(LLViewerPart &part, const F32 dt)
     LLVector3 center_pos;
     LLViewerPartSource *ps = (LLViewerPartSource*)part.mPartSourcep;
     LLViewerPartSourceChat *pss = (LLViewerPartSourceChat *)ps;
-    if (!pss->mSourceObjectp.isNull() && !pss->mSourceObjectp->mDrawable.isNull())
+    if (pss->sourcePosition(part.mPosAgent))
     {
-        part.mPosAgent = pss->mSourceObjectp->getRenderPosition();
     }
     else
     {
@@ -906,10 +951,7 @@ void LLViewerPartSourceChat::update(const F32 dt)
             return;
         }
 
-        if (!mSourceObjectp.isNull() && !mSourceObjectp->mDrawable.isNull())
-        {
-            mPosAgent = mSourceObjectp->getRenderPosition();
-        }
+        sourcePosition(mPosAgent);
         LLViewerPart* part = new LLViewerPart();
         part->init(this, mImagep, updatePart);
         part->mStartColor = mColor;
@@ -944,3 +986,39 @@ void LLViewerPartSourceChat::setColor(const LLColor4 &color)
 }
 
 
+
+bool LLViewerPartSource::sourcePosition(LLVector3& position) const
+{
+#if VS_NATIVE_VULKAN
+    if(mNativePosition)
+    {
+        const auto value=mNativePosition();if(!value)return false;
+        position=*value;return true;
+    }
+#endif
+    if(mSourceObjectp.isNull() || mSourceObjectp->mDrawable.isNull())return false;
+    position=mSourceObjectp->getRenderPosition();return true;
+}
+
+std::optional<LLQuaternion> LLViewerPartSource::sourceRotation() const
+{
+#if VS_NATIVE_VULKAN
+    if(mNativeRotation)return mNativeRotation();
+#endif
+    if(mSourceObjectp.notNull())return mSourceObjectp->getRenderRotation();
+    return {};
+}
+#if VS_NATIVE_VULKAN
+LLViewerPartSourceScript::LLViewerPartSourceScript(const LLVector3& position):LLViewerPartSource(LL_PART_SOURCE_SCRIPT)
+{
+    mPosAgent=position;mImagep=LLViewerFetchedTexture::sDefaultParticleImagep;
+    mImagep->setAddressMode(LLTexUnit::TAM_CLAMP);
+}
+void LLViewerPartSourceScript::setNativeParameters(const LLPartSysData& data,bool fullMessage)
+{
+    const F32 previousMax=mPartSysData.mMaxAge,previousStart=mPartSysData.mStartAge;
+    mPartSysData=data;
+    if(fullMessage && data.mMaxAge && (previousMax!=data.mMaxAge || previousStart!=data.mStartAge))
+        mLastUpdateTime=mLastPartTime=0.f;
+}
+#endif

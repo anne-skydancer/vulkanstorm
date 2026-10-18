@@ -29,6 +29,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterpathfindingcharacters.h"
+#include "vsappearanceui.h"
 
 #include <string>
 
@@ -123,7 +124,7 @@ bool LLFloaterPathfindingCharacters::postBuild()
 
     mShowPhysicsCapsuleCheckBox = findChild<LLCheckBoxCtrl>("show_physics_capsule");
     llassert(mShowPhysicsCapsuleCheckBox != NULL);
-    mShowPhysicsCapsuleCheckBox->setCommitCallback(boost::bind(&LLFloaterPathfindingCharacters::onShowPhysicsCapsuleClicked, this));
+    mShowPhysicsCapsuleCheckBox->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingCharacters::onShowPhysicsCapsuleClicked, this)));
     mShowPhysicsCapsuleCheckBox->setEnabled(LLPathingLib::getInstance() != NULL);
 
     return LLFloaterPathfindingObjects::postBuild();
@@ -131,7 +132,7 @@ bool LLFloaterPathfindingCharacters::postBuild()
 
 void LLFloaterPathfindingCharacters::requestGetObjects()
 {
-    LLPathfindingManager::getInstance()->requestGetCharacters(getNewRequestId(), boost::bind(&LLFloaterPathfindingCharacters::handleNewObjectList, this, _1, _2, _3));
+    LLPathfindingManager::getInstance()->requestGetCharacters(getNewRequestId(), vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingCharacters::handleNewObjectList, this, _1, _2, _3)));
 }
 
 void LLFloaterPathfindingCharacters::buildObjectsScrollList(const LLPathfindingObjectListPtr pObjectListPtr)

@@ -441,12 +441,6 @@ public:
     {
         if (!mAccountCurrent()) return;
         std::string param = userdata.asString();
-        if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
-            (param == "voice_call" || param == "report_abuse"))
-        {
-            LLNotificationsUtil::add("NativeWorldUnavailable");
-            return;
-        }
 
         if (param == "profile")
         {
@@ -652,7 +646,7 @@ public:
         }
         else if (param == "report_abuse")
         {
-            return !(gViewerWindow && gViewerWindow->isNativeVulkan()) && gAgentID != mAvatarID;
+            return gAgentID != mAvatarID;
         }
         // [RLVa:KB] - @pay
         else if (param == "can_pay")
@@ -1163,7 +1157,7 @@ protected:
                 menu->setItemEnabled("Teleport to", FSCommon::checkIsActionEnabled(mAvatarID, EFSRegistrarFunctionActionType::FS_RGSTR_ACT_TELEPORT_TO));
                 menu->setItemEnabled("Offer Teleport", LLAvatarActions::canOfferTeleport(mAvatarID));
                 menu->setItemEnabled("Request Teleport", LLAvatarActions::canRequestTeleport(mAvatarID));
-                menu->setItemEnabled("Voice Call", !(gViewerWindow && gViewerWindow->isNativeVulkan()) && LLAvatarActions::canCall());
+                menu->setItemEnabled("Voice Call", LLAvatarActions::canCall());
                 menu->setItemEnabled("Zoom In", FSCommon::checkIsActionEnabled(mAvatarID, EFSRegistrarFunctionActionType::FS_RGSTR_ACT_ZOOM_IN));
                 menu->setItemEnabled("track", FSCommon::checkIsActionEnabled(mAvatarID, EFSRegistrarFunctionActionType::FS_RGSTR_ACT_TRACK_AVATAR));
                 menu->setItemEnabled("Block Unblock", LLAvatarActions::canBlock(mAvatarID));
@@ -1171,15 +1165,7 @@ protected:
                 menu->setItemEnabled("Chat History", LLLogChat::isTranscriptExist(mAvatarID));
             }
 
-            const bool native = gViewerWindow && gViewerWindow->isNativeVulkan();
             menu->setItemEnabled("Map", ((LLAvatarTracker::instance().isBuddyOnline(mAvatarID) && is_agent_mappable(mAvatarID)) || gAgent.isGodlike()));
-            if (native)
-            {
-                // Manual enable setters must obey the same scene boundary as
-                // registered callbacks, including the self-avatar branch.
-                for (const auto* scene : { "Voice Call" })
-                    menu->setItemEnabled(scene, false);
-            }
             menu->buildDrawLabels();
             menu->updateParent(LLMenuGL::sMenuContainer);
             LLMenuGL::showPopup(this, menu, x, y);

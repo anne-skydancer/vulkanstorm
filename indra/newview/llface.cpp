@@ -28,6 +28,7 @@
 
 #include "lldrawable.h" // lldrawable needs to be included before llface
 #include "llface.h"
+#include "vsfacealphapolicy.h"
 #include "vssurfacecoordinates.h"
 #include "llviewertextureanim.h"
 
@@ -1117,51 +1118,27 @@ void LLFace::updateRebuildFlags()
 
 bool LLFace::canRenderAsMask()
 {
-    const LLTextureEntry* te = getTextureEntry();
-    if( !te || !getViewerObject() || !getTexture() )
+    const LLTextureEntry* te=getTextureEntry();
+    if(!te)return false;
+    auto* object=getViewerObject();if(!object)return false;
+    auto* texture=getTexture();if(!texture)return false;
+    struct Face
     {
-        return false;
-    }
-
-    if (te->getGLTFRenderMaterial())
-    {
-        return false;
-    }
-
-    if (LLPipeline::sNoAlpha)
-    {
-        return true;
-    }
-
-    if (isState(LLFace::RIGGED))
-    { // never auto alpha-mask rigged faces
-        return false;
-    }
-
-
-    LLMaterial* mat = te->getMaterialParams();
-    if (mat && mat->getDiffuseAlphaMode() == LLMaterial::DIFFUSE_ALPHA_MODE_BLEND)
-    {
-        return false;
-    }
-
-    if ((te->getColor().mV[3] == 1.0f) &&           // can't treat as mask if we have face alpha
-        (te->getGlow() == 0.f) &&                   // glowing masks are hard to implement - don't mask
-        !getViewerObject()->isHUDAttachment() &&    // Fix from CoolVL: hud attachments are NOT maskable (else they would get affected by day light)
-        getTexture()->getIsAlphaMask())             // texture actually qualifies for masking (lazily recalculated but expensive)
-    {
-        // Fix from CoolVL: hud attachments are NOT maskable at all - see above
-        if (/*getViewerObject()->isHUDAttachment() ||*/ te->getFullbright())
-        { //hud attachments and fullbright objects are NOT subject to the deferred rendering pipe
-            return LLPipeline::sAutoMaskAlphaNonDeferred;
-        }
-        else
-        {
-            return LLPipeline::sAutoMaskAlphaDeferred;
-        }
-    }
-
-    return false;
+        const LLFace& face;const LLTextureEntry* entry;LLViewerObject* object;LLViewerTexture* texture;
+        bool present()const{return entry && object && texture;}
+        bool pbr()const{return entry->getGLTFRenderMaterial()!=nullptr;}
+        bool noAlpha()const{return LLPipeline::sNoAlpha;}
+        bool rigged()const{return face.isState(LLFace::RIGGED);}
+        bool legacyBlend()const{return entry->getMaterialParams() && entry->getMaterialParams()->getDiffuseAlphaMode()==LLMaterial::DIFFUSE_ALPHA_MODE_BLEND;}
+        F32 alpha()const{return entry->getColor().mV[3];}
+        F32 glow()const{return entry->getGlow();}
+        bool hud()const{return object->isHUDAttachment();}
+        bool imageMask()const{return texture->getIsAlphaMask();}
+        bool fullbright()const{return entry->getFullbright();}
+        bool autoMaskNonDeferred()const{return LLPipeline::sAutoMaskAlphaNonDeferred;}
+        bool autoMaskDeferred()const{return LLPipeline::sAutoMaskAlphaDeferred;}
+    };
+    return vs_face_can_render_as_mask(Face{*this,te,object,texture});
 }
 
 //helper function for pushing primitives for transform shaders and cleaning up

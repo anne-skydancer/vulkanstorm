@@ -41,9 +41,21 @@ FSAvatarRenderPersistence::~FSAvatarRenderPersistence()
 
 void FSAvatarRenderPersistence::init()
 {
+    const std::string filename = gDirUtilp->getExpandedFilename(LL_PATH_PER_SL_ACCOUNT, "avatar_render_settings.xml");
+    if (filename == mAccountFile) return;
+    if (!mAccountFile.empty()) retireAccount();
     LL_INFOS() << "Initializing avatar render persistence manager..." << LL_ENDL;
+    mAccountFile = filename;
     mAvatarRenderMap.clear();
     loadAvatarRenderSettings();
+}
+
+void FSAvatarRenderPersistence::retireAccount()
+{
+    saveAvatarRenderSettings();
+    mAvatarRenderMap.clear();
+    mAccountFile.clear();
+    mAvatarRenderSettingChangedCallback.disconnect_all_slots();
 }
 
 LLVOAvatar::VisualMuteSettings FSAvatarRenderPersistence::getAvatarRenderSettings(const LLUUID& avatar_id)
@@ -77,7 +89,8 @@ void FSAvatarRenderPersistence::setAvatarRenderSettings(const LLUUID& avatar_id,
 
 void FSAvatarRenderPersistence::loadAvatarRenderSettings()
 {
-    const std::string filename = gDirUtilp->getExpandedFilename(LL_PATH_PER_SL_ACCOUNT, "avatar_render_settings.xml");
+    const std::string filename = mAccountFile.empty()
+        ? gDirUtilp->getExpandedFilename(LL_PATH_PER_SL_ACCOUNT, "avatar_render_settings.xml") : mAccountFile;
 
     if (LLFile::isfile(filename))
     {
@@ -104,9 +117,10 @@ void FSAvatarRenderPersistence::loadAvatarRenderSettings()
 
 void FSAvatarRenderPersistence::saveAvatarRenderSettings()
 {
+    if (mAccountFile.empty()) return;
     LL_INFOS() << "Saving avatar render settings..." << LL_ENDL;
 
-    const std::string filename = gDirUtilp->getExpandedFilename(LL_PATH_PER_SL_ACCOUNT, "avatar_render_settings.xml");
+    const std::string& filename = mAccountFile;
 
     LLSD data(LLSD::emptyMap());
 

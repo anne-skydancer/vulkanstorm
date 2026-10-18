@@ -29,12 +29,17 @@
 #define FS_FSNAMELISTAVATARMENU_H
 
 #include "lllistcontextmenu.h"
+#include <string_view>
+#include <memory>
 
 class FSNameListAvatarMenu : public LLListContextMenu
 {
 public:
     /*virtual*/ LLContextMenu* createMenu();
+    static bool isNativeCallback(std::string_view,const LLSD&);
+    void resetAccount();
 private:
+    std::shared_ptr<const void> mMenuOwner;
     bool enableContextMenuItem(const LLSD& userdata);
     void offerTeleport();
     void teleportToAvatar();

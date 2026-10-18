@@ -472,6 +472,22 @@ void LLPipeline::initializeRenderDebugFeatures()
 
 }
 
+void LLPipeline::initializeRenderTypes()
+{
+    if (gSavedSettings.getBOOL("DisableAllRenderTypes"))
+    {
+        clearAllRenderTypes();
+    }
+    else if (gNonInteractive)
+    {
+        clearAllRenderTypes();
+    }
+    else
+    {
+        setAllRenderTypes(); // By default, all rendering types start enabled
+    }
+}
+
 void LLPipeline::init()
 {
     refreshCachedSettings();
@@ -521,18 +537,7 @@ void LLPipeline::init()
 
     sRenderParticles = true; // <FS:LO> flag to hold correct, user selected, status of particles
 
-    if (gSavedSettings.getBOOL("DisableAllRenderTypes"))
-    {
-        clearAllRenderTypes();
-    }
-    else if (gNonInteractive)
-    {
-        clearAllRenderTypes();
-    }
-    else
-    {
-        setAllRenderTypes(); // By default, all rendering types start enabled
-    }
+    initializeRenderTypes();
 
     // make sure RenderPerformanceTest persists (hackity hack hack)
     // disables non-object rendering (UI, sky, water, etc)

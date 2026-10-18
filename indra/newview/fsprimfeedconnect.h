@@ -73,10 +73,9 @@ public:
 
 private:
     // Internal coroutine entry-point for uploads
-    void uploadPhotoCoro(const LLSD& params, LLImageFormatted* image);
+    void uploadPhotoCoro(LLSD params, LLPointer<LLImageFormatted> image, post_callback_t completed,
+                         std::function<bool()> current, std::string token, std::string apiKey);
 
-    // Cached callback until coroutine completes
-    post_callback_t mPostCallback;
 
     // Current connection/post state
     EConnectionState mConnectionState = PRIMFEED_DISCONNECTED;

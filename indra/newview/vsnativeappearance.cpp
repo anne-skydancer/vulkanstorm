@@ -5,10 +5,12 @@
 #include "vsworldavatar.h"
 #include "vsavatarservices.h"
 #include "vswearable.h"
+#include "llwearablelist.h"
 #include "vsresourcebudget.h"
 #include "vsvulkancontext.h"
 #include "llviewerwindow.h"
 #include "llappearancemgr.h"
+#include "llagentwearables.h"
 #include "llinventorymodel.h"
 #include "llinventorymodelbackgroundfetch.h"
 #include "llinventoryfunctions.h"
@@ -46,6 +48,9 @@ VSWorldAvatar* selfAvatar()
 struct VSNativeAppearance::Impl : std::enable_shared_from_this<Impl>
 {
     std::weak_ptr<VSNativeSession> session;
+    LLPointer<LLInventoryCallback> endCustomize;
+    bool loadingNotified = false;
+    std::vector<std::function<void()>> afterReady;
     U64 hoverRegion = 0, hoverAvatar = 0, hoverSerial = 0, hoverSendRegion = 0, hoverSendAvatar = 0;
     bool hoverFeature = false, hoverServerBakes = false;
     std::optional<F32> hoverSaved, hoverLastSent, hoverPending;
@@ -58,7 +63,7 @@ struct VSNativeAppearance::Impl : std::enable_shared_from_this<Impl>
         LLUUID                      item, asset;
         LLWearableType::EType       type = LLWearableType::WT_NONE;
         std::string                 order, error;
-        std::shared_ptr<VSWearable> wearable;
+        std::shared_ptr<LLViewerWearable> wearable;
         bool                        requested = false;
         double                      deadline  = 0;
     };
@@ -668,7 +673,8 @@ void VSNativeAppearance::refresh()
 }
 void VSNativeAppearance::tick()
 {
-    auto&      state   = *mImpl;
+    const auto retainedState = mImpl;
+    auto&      state   = *retainedState;
     const auto session = state.session.lock();
     const auto avatar  = selfAvatar();
     if (state.hoverRequest && (!state.current() || !session->regionReady() || session->regionEpoch() != state.hoverSendRegion))
@@ -677,8 +683,14 @@ void VSNativeAppearance::tick()
     }
     if (!state.current() || !session->regionReady() || !avatar)
         return;
+    const U64 frameGeneration = avatar->ownerGeneration();
+    const auto frameCurrent = [&]
+    {
+        return state.current() && selfAvatar() == avatar && avatar->ownerGeneration() == frameGeneration;
+    };
     syncHoverHeight();
     state.tickAttachments();
+    if (!frameCurrent()) return;
     if (!state.pendingOrder && state.orderRecovery && gInventory.isCategoryComplete(state.cof))
         state.orderRecovery = false;
     if (!state.pendingOrder && !state.orderRecovery && !state.queuedRemovals.empty())
@@ -904,6 +916,12 @@ void VSNativeAppearance::tick()
     }
     if (state.dirty)
     {
+        if (!state.loadingNotified)
+        {
+            state.loadingNotified = true;
+            gAgentWearables.notifyLoadingStarted();
+            if (!frameCurrent()) return;
+        }
         std::vector<const Impl::Entry*> ordered;
         for (const auto& [id, entry] : state.entries)
         {
@@ -931,11 +949,40 @@ void VSNativeAppearance::tick()
             state.applied[entry->item] = entry->asset;
         state.dirty = false;
         state.error.clear();
+        if (state.loadingNotified)
+        {
+            state.loadingNotified = false;
+            gAgentWearables.nativeWearablesLoaded();
+            if (!frameCurrent()) return;
+            gAgentWearables.notifyLoadingFinished();
+            if (!frameCurrent()) return;
+        }
+
         for (const auto& [id, asset] : state.applied)
             gInventory.addChangedMask(LLInventoryObserver::LABEL, id);
         gInventory.notifyObservers();
+        if (!frameCurrent()) return;
     }
+    if (startupReady())
+    {
+        auto completed = std::move(state.afterReady);
+        state.afterReady.clear();
+        for (auto& callback : completed)
+        {
+            if (!frameCurrent()) return;
+            callback();
+        }
+        uuid_vec_t edit_items;
+        for (const auto& [item, asset] : state.applied) edit_items.push_back(item);
+        for (const auto& item : edit_items)
+        {
+            gAgentWearables.editWearableIfRequested(item);
+            if (!frameCurrent()) return;
+        }
+    }
+    if (!frameCurrent()) return;
     state.bake();
+    if (!frameCurrent()) return;
     state.legacyBake(*avatar);
 }
 bool VSNativeAppearance::startupReady() const
@@ -1624,4 +1671,62 @@ bool VSNativeAppearance::setHoverHeight(F32 value, bool send)
         }
     });
     return true;
+}
+
+bool VSNativeAppearance::replaceWearable(unsigned type, U32 index, LLViewerWearable* wearable)
+{
+    if (!mImpl->current() || !wearable || !wearable->currentNativeOwner() || unsigned(wearable->getType()) != type) return false;
+    const auto items = vs_avatar_wearable_items(type);
+    if (index >= items.size() || wearable->getItemID() != items[index]) return false;
+    const auto found = mImpl->entries.find(items[index]);
+    if (found == mImpl->entries.end()) return false;
+    // LLWearableList owns saved CPU viewer wearables as in the reference path;
+    // the native avatar and service retain that same real cache instance.
+    const auto retained = LLWearableList::instance().retainNativeWearable(wearable);
+    if (!retained) return false;
+    found->second.wearable = retained;
+    found->second.asset = wearable->getAssetID();
+    found->second.requested = true;
+    mImpl->dirty = true;
+    return true;
+}
+void VSNativeAppearance::editedWearable(const LLUUID& item)
+{
+    if (!mImpl->current() || !mImpl->entries.count(item)) return;
+    if (const auto avatar = selfAvatar()) avatar->invalidateLocalAppearance();
+}
+
+void VSNativeAppearance::whenReady(std::function<void()> callback)
+{
+    if (mImpl->current() && callback) mImpl->afterReady.push_back(std::move(callback));
+}
+
+void VSNativeAppearance::beginEditing()
+{
+    if (!mImpl->current()) return;
+    if (!mImpl->endCustomize) mImpl->endCustomize = new LLUpdateAppearanceOnDestroy;
+    if (const auto avatar = selfAvatar()) avatar->invalidateLocalAppearance();
+}
+void VSNativeAppearance::endEditing()
+{
+    if (!mImpl->current()) return;
+    if (const auto avatar = selfAvatar()) avatar->invalidateLocalAppearance();
+    mImpl->endCustomize = nullptr;
+}
+LLPointer<LLInventoryCallback> VSNativeAppearance::customizeCallback() const
+{
+    return mImpl->current() ? mImpl->endCustomize : LLPointer<LLInventoryCallback>();
+}
+
+bool VSNativeAppearance::isEditing() const
+{
+    return mImpl->current() && bool(mImpl->endCustomize);
+}
+
+std::shared_ptr<LLViewerWearable> VSNativeAppearance::retainWearable(const LLViewerWearable* wearable) const
+{
+    if (!mImpl->current() || !wearable || !wearable->currentNativeOwner()) return {};
+    for (const auto& [item, entry] : mImpl->entries)
+        if (entry.wearable.get() == wearable) return entry.wearable;
+    return LLWearableList::instance().retainNativeWearable(wearable);
 }

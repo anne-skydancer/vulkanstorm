@@ -36,6 +36,9 @@
 #include "llviewercontrol.h"
 #include "llviewerregion.h"
 #include "llvoicechannel.h"
+#include "vsregioncontext.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
 #include "llcorehttputil.h"
 
 LLVoiceChannel::voice_channel_map_t LLVoiceChannel::sVoiceChannelMap;
@@ -73,6 +76,7 @@ LLVoiceChannel::LLVoiceChannel(const LLUUID& session_id, const std::string& sess
 
 LLVoiceChannel::~LLVoiceChannel()
 {
+    mRequestOwner.reset();
     if (sSuspendedVoiceChannel == this)
     {
         sSuspendedVoiceChannel = NULL;
@@ -83,7 +87,8 @@ LLVoiceChannel::~LLVoiceChannel()
     }
     LLVoiceClient::removeObserver(this);
 
-    sVoiceChannelMap.erase(mSessionID);
+    const auto found = sVoiceChannelMap.find(mSessionID);
+    if (found != sVoiceChannelMap.end() && found->second == this) sVoiceChannelMap.erase(found);
 }
 
 void LLVoiceChannel::setChannelInfo(const LLSD &channelInfo)
@@ -297,7 +302,23 @@ LLVoiceChannel* LLVoiceChannel::getCurrentVoiceChannel()
 
 void LLVoiceChannel::updateSessionID(const LLUUID& new_session_id)
 {
-    sVoiceChannelMap.erase(sVoiceChannelMap.find(mSessionID));
+    const auto old = sVoiceChannelMap.find(mSessionID);
+    if (old == sVoiceChannelMap.end() || old->second != this)
+    {
+        LL_WARNS("Voice") << "Ignoring session remap for an unregistered voice channel" << LL_ENDL;
+        return;
+    }
+    if (new_session_id == mSessionID) return;
+    const auto successor = sVoiceChannelMap.find(new_session_id);
+    if (successor != sVoiceChannelMap.end() && successor->second != this)
+    {
+        LL_WARNS("Voice") << "Ignoring voice session remap onto another live channel" << LL_ENDL;
+        return;
+    }
+    // A suspended credential request belongs to its original wire session.
+    // Invalidate it before publishing the authenticated new session identity.
+    mRequestOwner = std::make_shared<char>(0);
+    sVoiceChannelMap.erase(old);
     mSessionID = new_session_id;
     sVoiceChannelMap.insert(std::make_pair(mSessionID, this));
 }
@@ -491,13 +512,14 @@ void LLVoiceChannelGroup::activate()
 
 void LLVoiceChannelGroup::requestChannelInfo()
 {
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region = vs_current_region_context();
     if (region)
     {
         std::string url = region->getCapability("ChatSessionRequest");
 
         LLCoros::instance().launch("LLVoiceChannelGroup::voiceCallCapCoro",
-            boost::bind(&LLVoiceChannelGroup::voiceCallCapCoro, this, url));
+            boost::bind(&LLVoiceChannelGroup::voiceCallCapCoro, url, mSessionID,
+                        std::weak_ptr<const void>(mRequestOwner), this, vs_native_im_guard()));
     }
 }
 
@@ -620,8 +642,11 @@ void LLVoiceChannelGroup::setState(EState state)
     }
 }
 
-void LLVoiceChannelGroup::voiceCallCapCoro(std::string url)
+void LLVoiceChannelGroup::voiceCallCapCoro(std::string url, LLUUID sessionID,
+                                          std::weak_ptr<const void> owner,
+                                          LLVoiceChannel* expected, std::function<bool()> current)
 {
+    if (owner.expired() || !current() || getChannelByID(sessionID) != expected) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("voiceCallCapCoro", httpPolicy);
@@ -629,7 +654,7 @@ void LLVoiceChannelGroup::voiceCallCapCoro(std::string url)
 
     LLSD postData;
     postData["method"] = "call";
-    postData["session-id"] = mSessionID;
+    postData["session-id"] = sessionID;
     LLSD altParams;
     std::string  preferred_voice_server_type = gSavedSettings.getString("VoiceServerType");
     if (preferred_voice_server_type.empty())
@@ -645,13 +670,14 @@ void LLVoiceChannelGroup::voiceCallCapCoro(std::string url)
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
 
+    if (owner.expired() || !current() || getChannelByID(sessionID) != expected) return;
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
-    LLVoiceChannel* channelp = LLVoiceChannel::getChannelByID(mSessionID);
+    LLVoiceChannel* channelp = LLVoiceChannel::getChannelByID(sessionID);
     if (!channelp)
     {
-        LL_WARNS("Voice") << "Unable to retrieve channel with Id = " << mSessionID << LL_ENDL;
+        LL_WARNS("Voice") << "Unable to retrieve channel with Id = " << sessionID << LL_ENDL;
         return;
     }
 
@@ -670,7 +696,8 @@ void LLVoiceChannelGroup::voiceCallCapCoro(std::string url)
                 "VoiceCallGenericError",
                 channelp->getNotifyArgs());
         }
-        channelp->deactivate();
+        if (!owner.expired() && current() && getChannelByID(sessionID) == expected)
+            channelp->deactivate();
         return;
     }
 
@@ -981,4 +1008,21 @@ void LLVoiceChannelP2P::setState(EState state)
 void LLVoiceChannelP2P::addToTheRecentPeopleList()
 {
     LLRecentPeople::instance().add(mOtherUserID);
+}
+
+void LLVoiceChannel::retireNativeAccount()
+{
+    // Preserve the real owners; IM retirement destroys its own channels next.
+    // Reentrant state observers may erase channels while deactivating them.
+    std::vector<std::pair<LLUUID,LLVoiceChannel*>> channels(sVoiceChannelMap.begin(), sVoiceChannelMap.end());
+    sSuspended = false;
+    sSuspendedVoiceChannel = nullptr;
+    sCurrentVoiceChannel = LLVoiceChannelProximal::getInstance();
+    for (const auto& [id, expected] : channels)
+        if (getChannelByID(id) == expected)
+        {
+            expected->mRequestOwner = std::make_shared<char>(0);
+            expected->deactivate();
+            if (getChannelByID(id) == expected) expected->resetChannelInfo();
+        }
 }

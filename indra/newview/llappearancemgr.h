@@ -122,6 +122,7 @@ public:
     // Debugging - get truncated LLSD summary of COF contents.
     LLSD dumpCOF() const;
     void cleanup();
+    void resetNativeAccount();
 
     // Finds the folder link to the currently worn outfit
     const LLViewerInventoryItem *getBaseOutfitLink();
@@ -344,6 +345,7 @@ private:
     bool mEnforceItemRestrictions;
     bool mEnforceOrdering;
     nullary_func_t mPostUpdateFunc;
+    std::function<bool()> mAccountCurrent;
 };
 
 class LLUpdateAppearanceAndEditWearableOnDestroy: public LLInventoryCallback
@@ -357,15 +359,18 @@ public:
 
 private:
     LLUUID mItemID;
+    std::function<bool()> mAccountCurrent;
 };
 
 class LLRequestServerAppearanceUpdateOnDestroy: public LLInventoryCallback
 {
 public:
-    LLRequestServerAppearanceUpdateOnDestroy() {}
+    LLRequestServerAppearanceUpdateOnDestroy();
     ~LLRequestServerAppearanceUpdateOnDestroy();
 
     /* virtual */ void fire(const LLUUID& item_id) {}
+private:
+    std::function<bool()> mAccountCurrent;
 };
 
 LLUUID findDescendentCategoryIDByName(const LLUUID& parent_id,const std::string& name);

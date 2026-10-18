@@ -25,6 +25,18 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsappearanceui.h"
+#include "vsavatarservices.h"
+#if VS_NATIVE_VULKAN
+#include "vsvulkancontext.h"
+#include "vsworldscene.h"
+#include "llviewerwindow.h"
+#endif
+#include "llavatarappearance.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
 #include "llsidepanelappearance.h"
 
 #include "llaccordionctrltab.h"
@@ -60,17 +72,20 @@ public:
     LLCurrentlyWornFetchObserver(const uuid_vec_t &ids,
                                  LLSidepanelAppearance *panel) :
         LLInventoryFetchItemsObserver(ids),
-        mPanel(panel)
+        mPanel(panel->getHandle()),
+        mCurrent(vs_native_im_guard())
     {}
     ~LLCurrentlyWornFetchObserver() {}
     virtual void done()
     {
-        mPanel->inventoryFetched();
+        if (mCurrent())
+            if (auto* panel = dynamic_cast<LLSidepanelAppearance*>(mPanel.get())) panel->inventoryFetched();
         gInventory.removeObserver(this);
         delete this;
     }
 private:
-    LLSidepanelAppearance *mPanel;
+    LLHandle<LLView> mPanel;
+    std::function<bool()> mCurrent;
 };
 
 LLSidepanelAppearance::LLSidepanelAppearance() :
@@ -83,12 +98,12 @@ LLSidepanelAppearance::LLSidepanelAppearance() :
     mLastAvatarComplexity(0) // <FS:Ansariel> Show avatar complexity in appearance floater
 {
     LLOutfitObserver& outfit_observer =  LLOutfitObserver::instance();
-    outfit_observer.addBOFReplacedCallback(boost::bind(&LLSidepanelAppearance::refreshCurrentOutfitName, this, ""));
-    outfit_observer.addBOFChangedCallback(boost::bind(&LLSidepanelAppearance::refreshCurrentOutfitName, this, ""));
-    outfit_observer.addCOFChangedCallback(boost::bind(&LLSidepanelAppearance::refreshCurrentOutfitName, this, ""));
+    mAppearanceConnections.emplace_back(outfit_observer.addBOFReplacedCallback(vs_appearance_ui_callback(this, boost::bind(&LLSidepanelAppearance::refreshCurrentOutfitName, this, ""))));
+    mAppearanceConnections.emplace_back(outfit_observer.addBOFChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLSidepanelAppearance::refreshCurrentOutfitName, this, ""))));
+    mAppearanceConnections.emplace_back(outfit_observer.addCOFChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLSidepanelAppearance::refreshCurrentOutfitName, this, ""))));
 
-    gAgentWearables.addLoadingStartedCallback(boost::bind(&LLSidepanelAppearance::setWearablesLoading, this, true));
-    gAgentWearables.addLoadedCallback(boost::bind(&LLSidepanelAppearance::setWearablesLoading, this, false));
+    mAppearanceConnections.emplace_back(gAgentWearables.addLoadingStartedCallback(vs_appearance_ui_callback(this, boost::bind(&LLSidepanelAppearance::setWearablesLoading, this, true))));
+    mAppearanceConnections.emplace_back(gAgentWearables.addLoadedCallback(vs_appearance_ui_callback(this, boost::bind(&LLSidepanelAppearance::setWearablesLoading, this, false))));
 }
 
 LLSidepanelAppearance::~LLSidepanelAppearance()
@@ -521,6 +536,14 @@ void LLSidepanelAppearance::fetchInventory()
         }
     }
 
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        for (const auto& attachment : vs_avatar_attachments())
+            if (attachment.item.notNull()) ids.push_back(attachment.item);
+    }
+    else
+#endif
     if (isAgentAvatarValid())
     {
         for (LLVOAvatar::attachment_map_t::const_iterator iter = gAgentAvatarp->mAttachmentPoints.begin();
@@ -603,7 +626,13 @@ bool LLSidepanelAppearance::isWearableEditPanelVisible() const
 // static
 void LLSidepanelAppearance::updateAvatarComplexity(U32 complexity, const std::map<LLUUID, U32>& item_complexity, const std::map<LLUUID, U32>& temp_item_complexity, U32 body_parts_complexity)
 {
-    LLSidepanelAppearance* instance = LLFloaterSidePanelContainer::getPanel<LLSidepanelAppearance>("appearance");
+    LLSidepanelAppearance* instance = nullptr;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) instance = dynamic_cast<LLSidepanelAppearance*>(LLFloaterSidePanelContainer::findPanel("appearance"));
+    else
+#endif
+        instance = LLFloaterSidePanelContainer::getPanel<LLSidepanelAppearance>("appearance");
+    if (!instance) return;
     if (instance->mLastAvatarComplexity != complexity)
     {
         instance->mPanelOutfitsInventory->updateAvatarComplexity(complexity, item_complexity, temp_item_complexity, body_parts_complexity);
@@ -633,3 +662,106 @@ bool LLSidepanelAppearance::handleKeyHere(KEY key, MASK mask)
     return LLPanel::handleKeyHere(key, mask);
 }
 // </FS:Ansariel>
+
+void LLSidepanelAppearance::draw()
+{
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active(); session && gViewerWindow && gViewerWindow->nativeContext())
+    {
+        auto& world = gViewerWindow->nativeContext()->world();
+        for (const auto& avatar : world.performanceAvatars())
+        {
+            if (avatar.object.id != session->account().agent) continue;
+            std::map<LLUUID, U32> items, temporary;
+            U64 attachments = 0;
+            bool complete = true;
+            for (const auto& row : world.performanceAttachments())
+            {
+                if (!row.complexity) { complete = false; continue; }
+                attachments += *row.complexity;
+                if (row.attachment.item.isNull()) temporary[row.attachment.object.id] = *row.complexity;
+                else items[row.attachment.item] = *row.complexity;
+            }
+            // The actual producer includes shared base/body costs. Subtract
+            // only a complete set of its own attachment costs, never invent
+            // a skin/body weight while any source geometry is unresolved.
+            const U32 body = complete && attachments <= avatar.complexity ? U32(avatar.complexity - attachments) : 0;
+            if (mLastAvatarComplexity != avatar.complexity || mNativeItemCosts != items ||
+                mNativeTemporaryCosts != temporary || mNativeBodyCost != body)
+            {
+                mPanelOutfitsInventory->updateAvatarComplexity(avatar.complexity, items, temporary, body);
+                mOutfitEdit->updateAvatarComplexity(avatar.complexity);
+                mLastAvatarComplexity = avatar.complexity;
+                mNativeItemCosts = std::move(items);
+                mNativeTemporaryCosts = std::move(temporary);
+                mNativeBodyCost = body;
+            }
+            break;
+        }
+    }
+#endif
+    LLPanel::draw();
+}
+
+bool LLSidepanelAppearance::isNativeCallback(std::string_view name, const LLSD& parameter)
+{
+    const auto value = parameter.asString();
+    if (name == "AddWearable.Gear.Check") return value == "by_most_recent" || value == "by_name" || value == "by_type";
+    if (name == "AddWearable.Gear.Sort") return value == "by_most_recent" || value == "by_name" || value == "by_type";
+    if (name == "AddWearable.Gear.Visible") return value == "by_type";
+    if (name == "Attachment.Detach") return value == "detach";
+    if (name == "Attachment.Edit") return value == "";
+    if (name == "Attachment.OnEnable") return value == "edit" || value == "touch";
+    if (name == "Attachment.Touch") return value == "";
+    if (name == "BodyPart.Create") return value == "";
+    if (name == "BodyPart.Edit") return value == "";
+    if (name == "BodyPart.OnEnable") return value == "create" || value == "edit";
+    if (name == "BodyPart.Replace") return value == "";
+    if (name == "Clothing.Create") return value == "";
+    if (name == "Clothing.Edit") return value == "";
+    if (name == "Clothing.OnEnable") return value == "create" || value == "edit" || value == "replace" || value == "take_off";
+    if (name == "Clothing.Replace") return value == "";
+    if (name == "Clothing.TakeOff") return value == "";
+    if (name == "ColorSwatch.Commit") return value == "";
+    if (name == "Gear.Copy") return value == "";
+    if (name == "Gear.Create") return value == "alpha" || value == "eyes" || value == "gloves" || value == "hair" || value == "jacket" || value == "pants" || value == "physics" || value == "shape" || value == "shirt" || value == "shoes" || value == "skin" || value == "skirt" || value == "socks" || value == "tattoo" || value == "underpants" || value == "undershirt" || value == "universal";
+    if (name == "Gear.Delete") return value == "";
+    if (name == "Gear.EditItem") return value == "";
+    if (name == "Gear.EditOutfit") return value == "";
+    if (name == "Gear.Favorite") return value == "";
+    if (name == "Gear.OnEnable") return value == "delete" || value == "edit_item" || value == "rename" || value == "take_off" || value == "touch_attach" || value == "wear" || value == "wear_add";
+    if (name == "Gear.OnVisible") return value == "" || value == "delete" || value == "favorites_add" || value == "favorites_remove" || value == "rename" || value == "take_off" || value == "wear";
+    if (name == "Gear.Rename") return value == "";
+    if (name == "Gear.Save") return value == "";
+    if (name == "Gear.TakeOff") return value == "";
+    if (name == "Gear.Thumbnail") return value == "";
+    if (name == "Gear.TouchAttach") return value == "";
+    if (name == "Gear.Wear") return value == "";
+    if (name == "Gear.WearAdd") return value == "";
+    if (name == "Outfit.Delete") return value == "";
+    if (name == "Outfit.Edit") return value == "";
+    if (name == "Outfit.Favorite") return value == "";
+    if (name == "Outfit.OnEnable") return value == "rename" || value == "take_off" || value == "wear_add" || value == "wear_replace";
+    if (name == "Outfit.OnVisible") return value == "delete" || value == "edit" || value == "favorites_add" || value == "favorites_remove" || value == "take_off" || value == "wear_add" || value == "wear_replace";
+    if (name == "Outfit.Rename") return value == "";
+    if (name == "Outfit.Save") return value == "";
+    if (name == "Outfit.TakeOff") return value == "";
+    if (name == "Outfit.Thumbnail") return value == "";
+    if (name == "Outfit.WearAdd") return value == "";
+    if (name == "Outfit.WearReplace") return value == "";
+    if (name == "Sort.OnEnable") return value == "by_name" || value == "favorites_to_top" || value == "images_to_top";
+    if (name == "Sort.OnSort") return value == "by_name" || value == "favorites_to_top" || value == "images_to_top";
+    if (name == "TexturePicker.Commit") return value == "";
+    if (name == "Wearing.Detach") return value == "detach";
+    if (name == "Wearing.EditItem") return value == "";
+    if (name == "Wearing.EditOutfit") return value == "";
+    if (name == "Wearing.Favorite") return value == "";
+    if (name == "Wearing.ShowOriginal") return value == "";
+    if (name == "Wearing.TakeOff") return value == "";
+    if (name == "Wearing.TakeOffDetach") return value == "";
+    if (name == "Wearing.TouchAttach") return value == "";
+    if (name == "Wearable.Create" || name == "Outfit.Create")
+        return LLWearableType::getInstance()->typeNameToType(value) != LLWearableType::WT_NONE;
+    return name == "CustomizeAvatar" || name == "NowWearing" || name == "EditOutfit" || name == "EditShape" ||
+        name == "EditPhysics" || name == "Edit.EnableCustomizeAvatar" || name == "Edit.EnableEditShape" || name == "Edit.EnableEditPhysics";
+}

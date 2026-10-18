@@ -110,6 +110,8 @@ typedef enum e_rounded_edge
 
 void gl_segmented_rect_2d_tex(const S32 left, const S32 top, const S32 right, const S32 bottom, const S32 texture_width, const S32 texture_height, const S32 border_size, const U32 edges = ROUNDED_RECT_ALL);
 void gl_segmented_rect_2d_fragment_tex(const LLRect& rect, const S32 texture_width, const S32 texture_height, const S32 border_size, const F32 start_fragment, const F32 end_fragment, const U32 edges = ROUNDED_RECT_ALL);
+class LLUIImage;
+void gl_segmented_rect_2d_fragment_image(const LLRect&,const LLUIImage&,S32 border_size,F32 start_fragment,F32 end_fragment,const LLColor4&,U32 edges=ROUNDED_RECT_ALL);
 void gl_segmented_rect_3d_tex(const LLRectf& clip_rect, const LLRectf& center_uv_rect, const LLRectf& center_draw_rect, const LLVector3& width_vec, const LLVector3& height_vec);
 
 inline void gl_rect_2d( const LLRect& rect, bool filled )
@@ -152,6 +154,7 @@ public:
     static void translate(F32 x, F32 y, F32 z = 0.0f);
 
     static void setLineWidth(F32 width);
+    static F32 getLineWidth();
 
     LLPointer<LLUIImage> getUIImageByID(const LLUUID& image_id, S32 priority = 0);
     LLPointer<LLUIImage> getUIImage(const std::string& name, S32 priority = 0);

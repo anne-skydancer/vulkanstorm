@@ -25,6 +25,13 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsavatarperformance.h"
+#include "vsavatarservices.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "vsworldscene.h"
+#endif
 #include "llperfstats.h"
 #include "llcontrol.h"
 #include "pipeline.h"
@@ -297,8 +304,47 @@ namespace LLPerfStats
     }
 
     // called once per main loop iteration on main thread
+    namespace
+    {
+        struct NativePerfMetrics {bool connected=false;LLVector3d camera;std::vector<LLVector3d> positions;std::optional<F32> totalGPU,maximumGPU;};
+        std::atomic<std::shared_ptr<const NativePerfMetrics>> nativeMetrics;
+        std::atomic<bool> nativeStatsActive=false;
+    }
+    void resetNativeStats()
+    {
+        nativeStatsActive=true;
+        nativeMetrics.store({});
+        sTotalAvatarTime=-1.f;sAverageAvatarTime=-1.f;sMaxAvatarTime=-1.f;
+        StatsRecorder::setFocusAv(LLUUID::null);
+        StatsRecorder::clearStats();
+    }
     void updateClass()
     {
+#if VS_NATIVE_VULKAN
+        if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        {
+            nativeStatsActive=true;
+            auto metrics=std::make_shared<NativePerfMetrics>();metrics->camera=gAgentCamera.getCameraPositionGlobal();
+            const auto session=VSNativeSession::active();
+            VSAvatarPerformance::Summary summary;
+            if(session && session->phase()==VSNativeSession::Phase::Connected && gViewerWindow->nativeContext())
+            {
+                metrics->connected=true;
+                summary=VSAvatarPerformance::summarize(gViewerWindow->nativeContext()->world().performanceAvatars());
+                if(tunables.userImpostorDistanceTuningEnabled)
+                    for(const auto& row:vs_avatar_locations(metrics->camera,F32_MAX))metrics->positions.push_back(row.position);
+            }
+            sTotalAvatarTime=summary.total?F32(*summary.total):-1.f;
+            sAverageAvatarTime=summary.average?F32(*summary.average):-1.f;
+            sMaxAvatarTime=summary.maximum?F32(*summary.maximum):-1.f;
+            metrics->totalGPU=summary.total?std::optional<F32>(F32(*summary.total)):std::nullopt;
+            metrics->maximumGPU=summary.maximum?std::optional<F32>(F32(*summary.maximum)):std::nullopt;
+            nativeMetrics.store(std::move(metrics));
+            return;
+        }
+#endif
+        nativeStatsActive=false;nativeMetrics.store({});
+
         LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
 
         sTotalAvatarTime = LLVOAvatar::getTotalGPURenderTime();
@@ -309,6 +355,13 @@ namespace LLPerfStats
     //static
     int StatsRecorder::countNearbyAvatars(S32 distance)
     {
+        if(nativeStatsActive)
+        {
+            const auto metrics=nativeMetrics.load();if(!metrics)return 0;
+            const F64 radius=F64(distance)*distance;S32 count=0;
+            for(const auto& position:metrics->positions)if(dist_vec_squared(position,metrics->camera)<=radius)++count;
+            return count;
+        }
         const auto our_pos = gAgentCamera.getCameraPositionGlobal();
 
         std::vector<LLVector3d> positions;
@@ -340,6 +393,10 @@ namespace LLPerfStats
     // static
     void StatsRecorder::updateAvatarParams()
     {
+        // Only completed, current native query samples can inform GPU tuning.
+        // The worker consumes immutable CPU metadata; it never enters native scenes.
+        const auto metrics=nativeStatsActive?nativeMetrics.load():nullptr;
+        if(nativeStatsActive && (!metrics || !metrics->connected))return;
         LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
 
         if(tunables.autoTuneTimeout)
@@ -395,10 +452,11 @@ namespace LLPerfStats
             }
         }
 
-        auto av_render_max_raw = ms_to_raw(sMaxAvatarTime);
+        if(metrics && (!metrics->totalGPU || !metrics->maximumGPU))return;
+        auto av_render_max_raw = ms_to_raw(metrics?*metrics->maximumGPU:sMaxAvatarTime.load());
         // Is our target frame time lower than current? If so we need to take action to reduce draw overheads.
         // cumulative avatar time (includes idle processing, attachments and base av)
-        auto tot_avatar_time_raw = ms_to_raw(sTotalAvatarTime);
+        auto tot_avatar_time_raw = ms_to_raw(metrics?*metrics->totalGPU:sTotalAvatarTime.load());
 
         // The frametime budget we have based on the target FPS selected
         auto target_frame_time_raw = (U64)llround(LLPerfStats::cpu_hertz / (target_fps == 0 ? 1 : target_fps));

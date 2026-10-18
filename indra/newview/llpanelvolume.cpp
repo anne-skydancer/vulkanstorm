@@ -28,6 +28,9 @@
 
 // file include
 #include "llpanelvolume.h"
+#include "vseditcontroller.h"
+#include "vsbuildtevalue.h"
+#include "vsbuildvolume.h"
 
 // linden library includes
 #include "llclickaction.h"
@@ -121,6 +124,14 @@ bool    LLPanelVolume::postBuild()
         if(LightColorSwatch){
             LightColorSwatch->setOnCancelCallback(boost::bind(&LLPanelVolume::onLightCancelColor, this, _2));
             LightColorSwatch->setOnSelectCallback(boost::bind(&LLPanelVolume::onLightSelectColor, this, _2));
+#if VS_NATIVE_VULKAN
+            if(gViewerWindow && gViewerWindow->isNativeVulkan())
+                LightColorSwatch->setOperationGuardFactory([owner=getHandle()]
+                {
+                    auto* view=dynamic_cast<LLPanelVolume*>(owner.get());
+                    return view && view->mNativeSelection?view->mNativeSelection->guard():std::function<bool()>([]{return false;});
+                });
+#endif
             childSetCommitCallback("colorswatch",onCommitLight,this);
         }
 
@@ -129,6 +140,14 @@ bool    LLPanelVolume::postBuild()
         {
             LightTexPicker->setOnCancelCallback(boost::bind(&LLPanelVolume::onLightCancelTexture, this, _2));
             LightTexPicker->setOnSelectCallback(boost::bind(&LLPanelVolume::onLightSelectTexture, this, _2));
+#if VS_NATIVE_VULKAN
+            if(gViewerWindow && gViewerWindow->isNativeVulkan())
+                LightTexPicker->setOperationGuardFactory([owner=getHandle()]
+                {
+                    auto* view=dynamic_cast<LLPanelVolume*>(owner.get());
+                    return view && view->mNativeSelection?view->mNativeSelection->guard():std::function<bool()>([]{return false;});
+                });
+#endif
             childSetCommitCallback("light texture control", onCommitLight, this);
         }
 
@@ -237,17 +256,17 @@ LLPanelVolume::~LLPanelVolume()
     // Children all cleaned up by default view destructor.
 }
 
-void LLPanelVolume::getState( )
+template<class Selection> void LLPanelVolume::getStateController(Selection* selectionManager)
 {
-    LLViewerObject* objectp = LLSelectMgr::getInstance()->getSelection()->getFirstRootObject();
-    LLViewerObject* root_objectp = objectp;
+    auto* objectp = selectionManager->getSelection()->getFirstRootObject();
+    auto* root_objectp = objectp;
     if(!objectp)
     {
-        objectp = LLSelectMgr::getInstance()->getSelection()->getFirstObject();
+        objectp = selectionManager->getSelection()->getFirstObject();
         // *FIX: shouldn't we just keep the child?
         if (objectp)
         {
-            LLViewerObject* parentp = objectp->getRootEdit();
+            auto* parentp = objectp->getRootEdit();
 
             if (parentp)
             {
@@ -260,16 +279,8 @@ void LLPanelVolume::getState( )
         }
     }
 
-    LLVOVolume *volobjp = NULL;
-    if ( objectp && (objectp->getPCode() == LL_PCODE_VOLUME))
-    {
-        volobjp = (LLVOVolume *)objectp;
-    }
-    LLVOVolume *root_volobjp = NULL;
-    if (root_objectp && (root_objectp->getPCode() == LL_PCODE_VOLUME))
-    {
-        root_volobjp  = (LLVOVolume *)root_objectp;
-    }
+    auto* volobjp=vs_build_volume(objectp);
+    auto* root_volobjp=vs_build_volume(root_objectp);
 
     if( !objectp )
     {
@@ -287,14 +298,14 @@ void LLPanelVolume::getState( )
 
     LLUUID owner_id;
     std::string owner_name;
-    LLSelectMgr::getInstance()->selectGetOwner(owner_id, owner_name);
+    selectionManager->selectGetOwner(owner_id, owner_name);
 
     // BUG? Check for all objects being editable?
     bool editable = root_objectp->permModify() && !root_objectp->isPermanentEnforced();
-    bool single_volume = LLSelectMgr::getInstance()->selectionAllPCode( LL_PCODE_VOLUME )
-        && LLSelectMgr::getInstance()->getSelection()->getObjectCount() == 1;
-    bool single_root_volume = LLSelectMgr::getInstance()->selectionAllPCode( LL_PCODE_VOLUME ) &&
-        LLSelectMgr::getInstance()->getSelection()->getRootObjectCount() == 1;
+    bool single_volume = selectionManager->selectionAllPCode( LL_PCODE_VOLUME )
+        && selectionManager->getSelection()->getObjectCount() == 1;
+    bool single_root_volume = selectionManager->selectionAllPCode( LL_PCODE_VOLUME ) &&
+        selectionManager->getSelection()->getRootObjectCount() == 1;
 
     // Select Single Message
     if (single_volume)
@@ -475,7 +486,7 @@ void LLPanelVolume::getState( )
         }
 #endif
         if (enabled_animated_object_box && !is_animated_mesh &&
-            root_volobjp->isAttachment() && !gAgentAvatarp->canAttachMoreAnimatedObjects())
+            root_volobjp->isAttachment() && !vs_build_can_attach_animated())
         {
             // Turning this attachment animated would cause us to exceed the limit.
             enabled_animated_object_box = false;
@@ -488,11 +499,10 @@ void LLPanelVolume::getState( )
     {
         root_volobjp->refreshBakeTexture();
 
-        LLViewerObject::const_child_list_t& child_list = root_volobjp->getChildren();
-        for (LLViewerObject::child_list_t::const_iterator iter = child_list.begin();
-            iter != child_list.end(); ++iter)
+        const auto& child_list = root_volobjp->getChildren();
+        for (const auto& child:child_list)
         {
-            LLViewerObject* objectp = *iter;
+            auto* objectp=vs_build_child(child);
             if (objectp)
             {
                 objectp->refreshBakeTexture();
@@ -536,7 +546,7 @@ void LLPanelVolume::getState( )
         getChildView("FlexForceY")->setEnabled(true);
         getChildView("FlexForceZ")->setEnabled(true);
 
-        LLFlexibleObjectData *attributes = objectp->getFlexibleObjectData();
+        auto* attributes = objectp->getFlexibleObjectData();
 
         getChild<LLUICtrl>("FlexNumSections")->setValue((F32)attributes->getSimulateLOD());
         getChild<LLUICtrl>("FlexGravity")->setValue(attributes->getGravity());
@@ -573,25 +583,18 @@ void LLPanelVolume::getState( )
     // Update material part
     // slightly inefficient - materials are unique per object, not per TE
     U8 material_code = 0;
-    struct f : public LLSelectedTEGetFunctor<U8>
-    {
-        U8 get(LLViewerObject* object, S32 te)
-        {
-            return object->getMaterial();
-        }
-    } func;
-    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
-    bool material_same = selection->getSelectedTEValue( &func, material_code );
+    auto selection = selectionManager->getSelection();
+    bool material_same=vs_build_te_value(selectionManager,[](auto* object,S32){return object->getMaterial();},material_code);
     std::string LEGACY_FULLBRIGHT_DESC = LLTrans::getString("Fullbright");
 
     bool enable_material = editable && single_volume && material_same;
     LLCachedControl<bool> edit_linked(gSavedSettings, "EditLinkedParts", false);
     if (!enable_material)
     {
-        LLViewerObject* root = selection->getPrimaryObject();
+        auto* root = selection->getPrimaryObject();
         while (root && !root->isAvatar() && root->getParent())
         {
-            LLViewerObject* parent = (LLViewerObject*)root->getParent();
+            auto* parent = vs_build_parent(root);
             if (parent->isAvatar())
             {
                 break;
@@ -647,7 +650,7 @@ void LLPanelVolume::getState( )
     mComboPhysicsShapeType->add(getString("None"), LLSD(1));
 
     bool isMesh = false;
-    LLSculptParams *sculpt_params = objectp->getSculptParams();
+    auto* sculpt_params = objectp->getSculptParams();
     if (sculpt_params)
     {
         U8 sculpt_type = sculpt_params->getSculptType();
@@ -657,7 +660,7 @@ void LLPanelVolume::getState( )
 
     if(isMesh && objectp)
     {
-        const LLVolumeParams &volume_params = objectp->getVolume()->getParams();
+        const LLVolumeParams volume_params = vs_build_volume_params(objectp);
         LLUUID mesh_id = volume_params.getSculptID();
         if(gMeshRepo.hasPhysicsShape(mesh_id))
         {
@@ -676,8 +679,12 @@ void LLPanelVolume::getState( )
     mComboPhysicsShapeType->setValue(LLSD(objectp->getPhysicsShapeType()));
     mComboPhysicsShapeType->setEnabled(editable && !objectp->isPermanentEnforced() && ((root_objectp == NULL) || !root_objectp->isPermanentEnforced()));
 
-    mObject = objectp;
-    mRootObject = root_objectp;
+#if VS_NATIVE_VULKAN
+    if constexpr(std::is_same_v<Selection,VSEditSelection>)
+    {mNativeObject=objectp;mNativeRootObject=root_objectp;}
+    else
+#endif
+    {mObject=objectp;mRootObject=root_objectp;}
 
     // <FS> Extended copy & paste buttons
     //mMenuClipboardFeatures->setEnabled(editable && single_volume && volobjp); // Note: physics doesn't need to be limited by single volume
@@ -686,6 +693,19 @@ void LLPanelVolume::getState( )
     mBtnPasteFeatures->setEnabled(editable && single_volume && volobjp && !mClipboardParams.emptyMap() && (mClipboardParams.has("features") || mClipboardParams.has("light")));
     // </FS>
 }
+void LLPanelVolume::getState()
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        auto selection=std::make_shared<VSEditSelection>();
+        mNativeSelection=selection;mNativeObject=mNativeRootObject=nullptr;
+        getStateController(selection.get());return;
+    }
+#endif
+    getStateController(LLSelectMgr::getInstance());
+}
+
 
 // static
 bool LLPanelVolume::precommitValidate( const LLSD& data )
@@ -718,6 +738,10 @@ void LLPanelVolume::refresh()
         region->getSimulatorFeatures(sim_features);
         enable_mesh = sim_features.has("PhysicsShapeTypes");
     }
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        if(const auto session=VSNativeSession::active())enable_mesh=session->simulatorFeatures().has("PhysicsShapeTypes");
+#endif
     getChildView("label physicsshapetype")->setVisible(enable_mesh);
     getChildView("Physics Shape Type Combo Ctrl")->setVisible(enable_mesh);
     getChildView("Physics Gravity")->setVisible(enable_mesh);
@@ -800,18 +824,48 @@ void LLPanelVolume::clearCtrls()
 // Static functions
 //
 
+template<class Action> void LLPanelVolume::withBuildObject(Action&& action)
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto selection=mNativeSelection;
+        if(!selection || !mNativeObject || !*mNativeObject || !selection->guard()())return;
+        action(mNativeObject,selection.get());return;
+    }
+#endif
+    const LLPointer<LLViewerObject> object=mObject;
+    action(object.get(),LLSelectMgr::getInstance());
+}
+
+std::function<void(const LLSD&,const LLSD&)> LLPanelVolume::buildConfirmation(void(LLPanelVolume::*action)(const LLSD&,const LLSD&))
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto current=mNativeSelection?mNativeSelection->guard():std::function<bool()>([]{return false;});
+        return [owner=getHandle(),current,action](const LLSD& notification,const LLSD& response)
+        {if(current())if(auto* view=dynamic_cast<LLPanelVolume*>(owner.get()))(view->*action)(notification,response);};
+    }
+#endif
+    return boost::bind(action,this,_1,_2);
+}
+
 void LLPanelVolume::sendIsLight()
 {
-    LLViewerObject* objectp = mObject;
+    withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
     if (!objectp || (objectp->getPCode() != LL_PCODE_VOLUME))
     {
         return;
     }
-    LLVOVolume *volobjp = (LLVOVolume *)objectp;
+    auto* volobjp=vs_build_volume(objectp);
 
     bool value = getChild<LLUICtrl>("Light Checkbox Ctrl")->getValue();
     volobjp->setIsLight(value);
     LL_INFOS() << "update light sent" << LL_ENDL;
+
+    });
 }
 
 void notify_cant_select_reflection_probe()
@@ -824,19 +878,20 @@ void notify_cant_select_reflection_probe()
 
 void LLPanelVolume::sendIsReflectionProbe()
 {
-    LLViewerObject* objectp = mObject;
+    withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
     if (!objectp || (objectp->getPCode() != LL_PCODE_VOLUME))
     {
         return;
     }
-    LLVOVolume* volobjp = (LLVOVolume*)objectp;
+    auto* volobjp=vs_build_volume(objectp);
 
     bool value = getChild<LLUICtrl>("Reflection Probe")->getValue();
     bool old_value = volobjp->isReflectionProbe();
 
     if (value && value != old_value)
     { // defer to notification util as to whether or not we *really* make this object a reflection probe
-        LLNotificationsUtil::add("ReflectionProbeApplied", LLSD(), LLSD(), boost::bind(&LLPanelVolume::doSendIsReflectionProbe, this, _1, _2));
+        LLNotificationsUtil::add("ReflectionProbeApplied", LLSD(), LLSD(), buildConfirmation(&LLPanelVolume::doSendIsReflectionProbe));
     }
     else
     {
@@ -846,7 +901,7 @@ void LLPanelVolume::sendIsReflectionProbe()
         }
         else if (objectp->flagPhantom())
         {
-            LLViewerObject* root = objectp->getRootEdit();
+            auto* root=objectp->getRootEdit();
             bool in_linkeset = root != objectp || objectp->numChildren() > 0;
             if (in_linkeset)
             {
@@ -856,19 +911,22 @@ void LLPanelVolume::sendIsReflectionProbe()
         }
         volobjp->setIsReflectionProbe(value);
     }
+
+    });
 }
 
 void LLPanelVolume::doSendIsReflectionProbe(const LLSD & notification, const LLSD & response)
 {
+    withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     if (option == 0) // YES
     {
-        LLViewerObject* objectp = mObject;
         if (!objectp || (objectp->getPCode() != LL_PCODE_VOLUME))
         {
             return;
         }
-        LLVOVolume* volobjp = (LLVOVolume*)objectp;
+        auto* volobjp=vs_build_volume(objectp);
 
         notify_cant_select_reflection_probe();
         volobjp->setIsReflectionProbe(true);
@@ -900,7 +958,7 @@ void LLPanelVolume::doSendIsReflectionProbe(const LLSD & notification, const LLS
             getChild<LLComboBox>("Probe Volume Type", true)->setValue(volume_type);
             // </FS:Zi>
 
-            auto* select_mgr = LLSelectMgr::getInstance();
+            auto* select_mgr=selectionManager;
 
             select_mgr->selectionUpdatePhantom(true);
             select_mgr->selectionSetGLTFMaterial(LLUUID::null);
@@ -913,7 +971,7 @@ void LLPanelVolume::doSendIsReflectionProbe(const LLSD & notification, const LLS
             params.getPathParams().setCurveType(probe_path_type);
             params.getProfileParams().setCurveType(probe_profile_type);
             // </FS:Zi>
-            mObject->updateVolume(params);
+            objectp->updateVolume(params);
         }
     }
     else
@@ -921,16 +979,19 @@ void LLPanelVolume::doSendIsReflectionProbe(const LLSD & notification, const LLS
         // cancelled, touch up UI state
         getChild<LLUICtrl>("Reflection Probe")->setValue(false);
     }
+
+    });
 }
 
 void LLPanelVolume::sendIsFlexible()
 {
-    LLViewerObject* objectp = mObject;
+    withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
     if (!objectp || (objectp->getPCode() != LL_PCODE_VOLUME))
     {
         return;
     }
-    LLVOVolume *volobjp = (LLVOVolume *)objectp;
+    auto* volobjp=vs_build_volume(objectp);
 
     bool is_flexible = getChild<LLUICtrl>("Flexible1D Checkbox Ctrl")->getValue();
     //bool is_flexible = mCheckFlexible1D->get();
@@ -941,60 +1002,78 @@ void LLPanelVolume::sendIsFlexible()
 
         if (objectp->getClickAction() == CLICK_ACTION_SIT)
         {
-            LLSelectMgr::getInstance()->selectionSetClickAction(CLICK_ACTION_NONE);
+            selectionManager->selectionSetClickAction(CLICK_ACTION_NONE);
         }
 
     }
 
     if (volobjp->setIsFlexible(is_flexible))
     {
-        mObject->sendShapeUpdate();
-        LLSelectMgr::getInstance()->selectionUpdatePhantom(volobjp->flagPhantom());
+        objectp->sendShapeUpdate();
+        selectionManager->selectionUpdatePhantom(volobjp->flagPhantom());
     }
 
     LL_INFOS() << "update flexible sent" << LL_ENDL;
+
+    });
 }
 
 void LLPanelVolume::sendPhysicsShapeType(LLUICtrl* ctrl, void* userdata)
 {
+    vs_with_edit_selection([&](auto* selectionManager)
+    {
     U8 type = ctrl->getValue().asInteger();
-    LLSelectMgr::getInstance()->selectionSetPhysicsType(type);
+    selectionManager->selectionSetPhysicsType(type);
 
     refreshCost();
+
+    });
 }
 
 void LLPanelVolume::sendPhysicsGravity(LLUICtrl* ctrl, void* userdata)
 {
+    vs_with_edit_selection([&](auto* selectionManager)
+    {
     F32 val = (F32)ctrl->getValue().asReal();
-    LLSelectMgr::getInstance()->selectionSetGravity(val);
+    selectionManager->selectionSetGravity(val);
+
+    });
 }
 
 void LLPanelVolume::sendPhysicsFriction(LLUICtrl* ctrl, void* userdata)
 {
+    vs_with_edit_selection([&](auto* selectionManager)
+    {
     F32 val = (F32)ctrl->getValue().asReal();
-    LLSelectMgr::getInstance()->selectionSetFriction(val);
+    selectionManager->selectionSetFriction(val);
+
+    });
 }
 
 void LLPanelVolume::sendPhysicsRestitution(LLUICtrl* ctrl, void* userdata)
 {
+    vs_with_edit_selection([&](auto* selectionManager)
+    {
     F32 val = (F32)ctrl->getValue().asReal();
-    LLSelectMgr::getInstance()->selectionSetRestitution(val);
+    selectionManager->selectionSetRestitution(val);
+
+    });
 }
 
 void LLPanelVolume::sendPhysicsDensity(LLUICtrl* ctrl, void* userdata)
 {
+    vs_with_edit_selection([&](auto* selectionManager)
+    {
     F32 val = (F32)ctrl->getValue().asReal();
-    LLSelectMgr::getInstance()->selectionSetDensity(val);
+    selectionManager->selectionSetDensity(val);
+
+    });
 }
 
 void LLPanelVolume::refreshCost()
 {
-    LLViewerObject* obj = LLSelectMgr::getInstance()->getSelection()->getFirstObject();
-
-    if (obj)
-    {
-        obj->getObjectCost();
-    }
+    vs_with_edit_selection([](auto* selection)
+    {if(auto* object=selection->getSelection()->getFirstObject())object->getObjectCost();});
 }
 
 void LLPanelVolume::onLightCancelColor(const LLSD& data)
@@ -1009,8 +1088,10 @@ void LLPanelVolume::onLightCancelColor(const LLSD& data)
 
 void LLPanelVolume::onLightCancelTexture(const LLSD& data)
 {
+    withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
     LLTextureCtrl* LightTextureCtrl = getChild<LLTextureCtrl>("light texture control");
-    LLVOVolume *volobjp = (LLVOVolume *) mObject.get();
+    auto* volobjp=vs_build_volume(objectp);
 
     if (volobjp && LightTextureCtrl)
     {
@@ -1031,16 +1112,19 @@ void LLPanelVolume::onLightCancelTexture(const LLSD& data)
             getChild<LLUICtrl>("Light Ambiance")->setValue(spot_params.mV[2]);
         }
     }
+
+    });
 }
 
 void LLPanelVolume::onLightSelectColor(const LLSD& data)
 {
-    LLViewerObject* objectp = mObject;
+    withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
     if (!objectp || (objectp->getPCode() != LL_PCODE_VOLUME))
     {
         return;
     }
-    LLVOVolume *volobjp = (LLVOVolume *)objectp;
+    auto* volobjp=vs_build_volume(objectp);
 
 
     LLColorSwatchCtrl*  LightColorSwatch = getChild<LLColorSwatchCtrl>("colorswatch");
@@ -1051,15 +1135,19 @@ void LLPanelVolume::onLightSelectColor(const LLSD& data)
         volobjp->setLightSRGBColor(clr3);
         mLightSavedColor = clr;
     }
+
+    });
 }
 
 void LLPanelVolume::onLightSelectTexture(const LLSD& data)
 {
-    if (mObject.isNull() || (mObject->getPCode() != LL_PCODE_VOLUME))
+    withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
+    if (!objectp || (objectp->getPCode() != LL_PCODE_VOLUME))
     {
         return;
     }
-    LLVOVolume *volobjp = (LLVOVolume *) mObject.get();
+    auto* volobjp=vs_build_volume(objectp);
 
 
     LLTextureCtrl*  LightTextureCtrl = getChild<LLTextureCtrl>("light texture control");
@@ -1068,11 +1156,14 @@ void LLPanelVolume::onLightSelectTexture(const LLSD& data)
         LLUUID id = LightTextureCtrl->getImageAssetID();
         setLightTextureID(id, LightTextureCtrl->getImageItemID(), volobjp);
     }
+
+    });
 }
 
 void LLPanelVolume::onCopyFeatures()
 {
-    LLViewerObject* objectp = mObject;
+    withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
     if (!objectp)
     {
         return;
@@ -1080,16 +1171,12 @@ void LLPanelVolume::onCopyFeatures()
 
     LLSD clipboard;
 
-    LLVOVolume *volobjp = NULL;
-    if (objectp && (objectp->getPCode() == LL_PCODE_VOLUME))
-    {
-        volobjp = (LLVOVolume *)objectp;
-    }
+    auto* volobjp=vs_build_volume(objectp);
 
     // Flexi Prim
     if (volobjp && volobjp->isFlexible())
     {
-        LLFlexibleObjectData *attributes = objectp->getFlexibleObjectData();
+        auto* attributes = objectp->getFlexibleObjectData();
         if (attributes)
         {
             clipboard["flex"]["lod"] = attributes->getSimulateLOD();
@@ -1113,14 +1200,7 @@ void LLPanelVolume::onCopyFeatures()
         clipboard["physics"]["restitution"] = objectp->getPhysicsRestitution();
 
         U8 material_code = 0;
-        struct f : public LLSelectedTEGetFunctor<U8>
-        {
-            U8 get(LLViewerObject* object, S32 te)
-            {
-                return object->getMaterial();
-            }
-        } func;
-        bool material_same = LLSelectMgr::getInstance()->getSelection()->getSelectedTEValue(&func, material_code);
+        bool material_same=vs_build_te_value(selectionManager,[](auto* object,S32){return object->getMaterial();},material_code);
         // This should always be true since material should be per object.
         if (material_same)
         {
@@ -1129,33 +1209,32 @@ void LLPanelVolume::onCopyFeatures()
     }
 
     mClipboardParams["features"] = clipboard;
+
+    });
 }
 
 void LLPanelVolume::onPasteFeatures()
 {
-    LLViewerObject* objectp = mObject;
-    if (!objectp && mClipboardParams.has("features"))
+    withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
+    if (!objectp || !mClipboardParams.has("features"))
     {
         return;
     }
 
     LLSD &clipboard = mClipboardParams["features"];
 
-    LLVOVolume *volobjp = NULL;
-    if (objectp && (objectp->getPCode() == LL_PCODE_VOLUME))
-    {
-        volobjp = (LLVOVolume *)objectp;
-    }
+    auto* volobjp=vs_build_volume(objectp);
 
     // Physics
     bool is_root = objectp->isRoot();
 
     // Not sure if phantom should go under physics, but doesn't fit elsewhere
     bool is_phantom = clipboard["is_phantom"].asBoolean() && is_root;
-    LLSelectMgr::getInstance()->selectionUpdatePhantom(is_phantom);
+    selectionManager->selectionUpdatePhantom(is_phantom);
 
     bool is_physical = clipboard["is_physical"].asBoolean() && is_root;
-    LLSelectMgr::getInstance()->selectionUpdatePhysics(is_physical);
+    selectionManager->selectionUpdatePhysics(is_physical);
 
     if (clipboard.has("physics"))
     {
@@ -1176,7 +1255,7 @@ void LLPanelVolume::onPasteFeatures()
     bool is_flexible = clipboard.has("flex");
     if (is_flexible && volobjp->canBeFlexible())
     {
-        LLVOVolume *volobjp = (LLVOVolume *)objectp;
+        auto* volobjp=vs_build_volume(objectp);
         bool update_shape = false;
 
         // do before setParameterEntry or it will think that it is already flexi
@@ -1187,7 +1266,7 @@ void LLPanelVolume::onPasteFeatures()
             objectp->setClickAction(CLICK_ACTION_NONE);
         }
 
-        LLFlexibleObjectData *attributes = objectp->getFlexibleObjectData();
+        auto* attributes = objectp->getFlexibleObjectData();
         if (attributes)
         {
             LLFlexibleObjectData new_attributes;
@@ -1207,24 +1286,27 @@ void LLPanelVolume::onPasteFeatures()
 
         if (update_shape)
         {
-            mObject->sendShapeUpdate();
-            LLSelectMgr::getInstance()->selectionUpdatePhantom(volobjp->flagPhantom());
+            objectp->sendShapeUpdate();
+            selectionManager->selectionUpdatePhantom(volobjp->flagPhantom());
         }
     }
     else
     {
-        LLVOVolume *volobjp = (LLVOVolume *)objectp;
+        auto* volobjp=vs_build_volume(objectp);
         if (volobjp->setIsFlexible(false))
         {
-            mObject->sendShapeUpdate();
-            LLSelectMgr::getInstance()->selectionUpdatePhantom(volobjp->flagPhantom());
+            objectp->sendShapeUpdate();
+            selectionManager->selectionUpdatePhantom(volobjp->flagPhantom());
         }
     }
+
+    });
 }
 
 void LLPanelVolume::onCopyLight()
 {
-    LLViewerObject* objectp = mObject;
+    withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
     if (!objectp)
     {
         return;
@@ -1232,11 +1314,7 @@ void LLPanelVolume::onCopyLight()
 
     LLSD clipboard;
 
-    LLVOVolume *volobjp = NULL;
-    if (objectp && (objectp->getPCode() == LL_PCODE_VOLUME))
-    {
-        volobjp = (LLVOVolume *)objectp;
-    }
+    auto* volobjp=vs_build_volume(objectp);
 
     // Light Source
     if (volobjp && volobjp->getIsLight())
@@ -1274,23 +1352,22 @@ void LLPanelVolume::onCopyLight()
     }
 
     mClipboardParams["light"] = clipboard;
+
+    });
 }
 
 void LLPanelVolume::onPasteLight()
 {
-    LLViewerObject* objectp = mObject;
-    if (!objectp && mClipboardParams.has("light"))
+    withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
+    if (!objectp || !mClipboardParams.has("light"))
     {
         return;
     }
 
     LLSD &clipboard = mClipboardParams["light"];
 
-    LLVOVolume *volobjp = NULL;
-    if (objectp && (objectp->getPCode() == LL_PCODE_VOLUME))
-    {
-        volobjp = (LLVOVolume *)objectp;
-    }
+    auto* volobjp=vs_build_volume(objectp);
 
     // Light Source
     if (volobjp)
@@ -1334,7 +1411,7 @@ void LLPanelVolume::onPasteLight()
         {
             if (objectp->flagPhantom())
             {
-                LLViewerObject* root = objectp->getRootEdit();
+                auto* root=objectp->getRootEdit();
                 bool in_linkeset = root != objectp || objectp->numChildren() > 0;
                 if (in_linkeset)
                 {
@@ -1346,6 +1423,8 @@ void LLPanelVolume::onPasteLight()
             volobjp->setIsReflectionProbe(false);
         }
     }
+
+    });
 }
 
 // <FS> Extended copy & paste buttons
@@ -1406,7 +1485,9 @@ void LLPanelVolume::onFSPasteFeatures()
 void LLPanelVolume::onCommitMaterial( LLUICtrl* ctrl, void* userdata )
 {
     LLPanelVolume* self = (LLPanelVolume*)userdata;
-    LLComboBox* box = (LLComboBox*) ctrl;
+    if(!self)return;
+    self->withBuildObject([&](auto* objectp,auto* selectionManager)
+    {    LLComboBox* box = (LLComboBox*) ctrl;
 
     if (box)
     {
@@ -1418,7 +1499,6 @@ void LLPanelVolume::onCommitMaterial( LLUICtrl* ctrl, void* userdata )
             U8 material_code = LLMaterialTable::basic.getMCode(material_name);
             if (self)
             {
-                LLViewerObject* objectp = self->mObject;
                 if (objectp)
                 {
                     objectp->setPhysicsGravity(DEFAULT_GRAVITY_MULTIPLIER);
@@ -1429,21 +1509,25 @@ void LLPanelVolume::onCommitMaterial( LLUICtrl* ctrl, void* userdata )
                     objectp->setPhysicsRestitution(LLMaterialTable::basic.getRestitution(material_code));
                 }
             }
-            LLSelectMgr::getInstance()->selectionSetMaterial(material_code);
+            selectionManager->selectionSetMaterial(material_code);
         }
     }
+
+    });
 }
 
 // static
 void LLPanelVolume::onCommitLight( LLUICtrl* ctrl, void* userdata )
 {
     LLPanelVolume* self = (LLPanelVolume*) userdata;
-    LLViewerObject* objectp = self->mObject;
+    if(!self)return;
+    self->withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
     if (!objectp || (objectp->getPCode() != LL_PCODE_VOLUME))
     {
         return;
     }
-    LLVOVolume *volobjp = (LLVOVolume *)objectp;
+    auto* volobjp=vs_build_volume(objectp);
 
 
     volobjp->setLightIntensity((F32)self->getChild<LLUICtrl>("Light Intensity")->getValue().asReal());
@@ -1496,18 +1580,22 @@ void LLPanelVolume::onCommitLight( LLUICtrl* ctrl, void* userdata )
     }
 
 
+
+    });
 }
 
 //static
 void LLPanelVolume::onCommitProbe(LLUICtrl* ctrl, void* userdata)
 {
     LLPanelVolume* self = (LLPanelVolume*)userdata;
-    LLViewerObject* objectp = self->mObject;
+    if(!self)return;
+    self->withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
     if (!objectp || (objectp->getPCode() != LL_PCODE_VOLUME))
     {
         return;
     }
-    LLVOVolume* volobjp = (LLVOVolume*)objectp;
+    auto* volobjp=vs_build_volume(objectp);
 
     volobjp->setReflectionProbeAmbiance((F32)self->getChild<LLUICtrl>("Probe Ambiance")->getValue().asReal());
     volobjp->setReflectionProbeNearClip((F32)self->getChild<LLUICtrl>("Probe Near Clip")->getValue().asReal());
@@ -1542,7 +1630,7 @@ void LLPanelVolume::onCommitProbe(LLUICtrl* ctrl, void* userdata)
     if (volobjp->setReflectionProbeIsBox(is_box))
     {
         // make the volume match the probe
-        auto* select_mgr = LLSelectMgr::getInstance();
+        auto* select_mgr=selectionManager;
 
         select_mgr->selectionUpdatePhantom(true);
         select_mgr->selectionSetGLTFMaterial(LLUUID::null);
@@ -1557,7 +1645,7 @@ void LLPanelVolume::onCommitProbe(LLUICtrl* ctrl, void* userdata)
 
             F32 scale = volobjp->getScale().mV[0];
             volobjp->setScale(LLVector3(scale, scale, scale), false);
-            LLSelectMgr::getInstance()->sendMultipleUpdate(UPD_ROTATION | UPD_POSITION | UPD_SCALE);
+            selectionManager->sendMultipleUpdate(UPD_ROTATION | UPD_POSITION | UPD_SCALE);
         }
         else
         {
@@ -1571,6 +1659,8 @@ void LLPanelVolume::onCommitProbe(LLUICtrl* ctrl, void* userdata)
         objectp->updateVolume(params);
     }
 
+
+    });
 }
 
 // static
@@ -1622,13 +1712,15 @@ void LLPanelVolume::onCommitIsReflectionProbe(LLUICtrl* ctrl, void* userdata)
 void LLPanelVolume::onCommitFlexible( LLUICtrl* ctrl, void* userdata )
 {
     LLPanelVolume* self = (LLPanelVolume*) userdata;
-    LLViewerObject* objectp = self->mObject;
+    if(!self)return;
+    self->withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
     if (!objectp || (objectp->getPCode() != LL_PCODE_VOLUME))
     {
         return;
     }
 
-    LLFlexibleObjectData *attributes = objectp->getFlexibleObjectData();
+    auto* attributes = objectp->getFlexibleObjectData();
     if (attributes)
     {
         LLFlexibleObjectData new_attributes;
@@ -1651,16 +1743,19 @@ void LLPanelVolume::onCommitFlexible( LLUICtrl* ctrl, void* userdata )
 
     // Values may fail validation
     self->refresh();
+
+    });
 }
 
 void LLPanelVolume::onCommitAnimatedMeshCheckbox(LLUICtrl *, void*)
 {
-    LLViewerObject* objectp = mObject;
+    withBuildObject([&](auto* objectp,auto* selectionManager)
+    {
     if (!objectp || (objectp->getPCode() != LL_PCODE_VOLUME))
     {
         return;
     }
-    LLVOVolume *volobjp = (LLVOVolume *)objectp;
+    auto* volobjp=vs_build_volume(objectp);
     bool animated_mesh = getChild<LLUICtrl>("Animated Mesh Checkbox Ctrl")->getValue();
     U32 flags = volobjp->getExtendedMeshFlags();
     U32 new_flags = flags;
@@ -1682,34 +1777,33 @@ void LLPanelVolume::onCommitAnimatedMeshCheckbox(LLUICtrl *, void*)
     {
         volobjp->refreshBakeTexture();
 
-        LLViewerObject::const_child_list_t& child_list = volobjp->getChildren();
-        for (LLViewerObject::child_list_t::const_iterator iter = child_list.begin();
-            iter != child_list.end(); ++iter)
-        {
-            LLViewerObject* objectp = *iter;
-            if (objectp)
-            {
-                objectp->refreshBakeTexture();
-            }
-        }
+        const auto& child_list=volobjp->getChildren();
+        for(const auto& child:child_list)
+            if(auto* object=vs_build_child(child))object->refreshBakeTexture();
 
         if (gAgentAvatarp)
         {
             gAgentAvatarp->updateMeshVisibility();
         }
     }
+
+    });
 }
 
 void LLPanelVolume::onCommitIsFlexible(LLUICtrl *, void*)
 {
-    if (mObject->flagObjectPermanent())
+    withBuildObject([&](auto* objectp,auto*)
     {
-        LLNotificationsUtil::add("PathfindingLinksets_ChangeToFlexiblePath", LLSD(), LLSD(), boost::bind(&LLPanelVolume::handleResponseChangeToFlexible, this, _1, _2));
+    if (!objectp)return;
+    if (objectp->flagObjectPermanent())
+    {
+        LLNotificationsUtil::add("PathfindingLinksets_ChangeToFlexiblePath", LLSD(), LLSD(), buildConfirmation(&LLPanelVolume::handleResponseChangeToFlexible));
     }
     else
     {
         sendIsFlexible();
     }
+    });
 }
 
 void LLPanelVolume::handleResponseChangeToFlexible(const LLSD &pNotification, const LLSD &pResponse)
@@ -1723,3 +1817,17 @@ void LLPanelVolume::handleResponseChangeToFlexible(const LLSD &pNotification, co
         getChild<LLUICtrl>("Flexible1D Checkbox Ctrl")->setValue(false);
     }
 }
+
+#if VS_NATIVE_VULKAN
+void LLPanelVolume::setLightTextureID(const LLUUID& asset,const LLUUID& itemID,VSEditObject* object)
+{
+    if(!object || !*object)return;
+    LLViewerInventoryItem* item=gInventory.getItem(itemID);
+    if(item && object->isAttachment() &&
+       (item->getPermissions().getMaskBase()&PERM_ITEM_UNRESTRICTED)!=PERM_ITEM_UNRESTRICTED)return;
+    const auto current=object->task().objectGuard();
+    if(item && !item->getPermissions().allowOperationBy(PERM_COPY,gAgent.getID()))
+        LLToolDragAndDrop::handleDropMaterialProtections(object->task(),item,LLToolDragAndDrop::SOURCE_AGENT,LLUUID::null);
+    if(current())object->setLightTextureID(asset);
+}
+#endif

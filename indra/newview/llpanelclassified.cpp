@@ -29,6 +29,8 @@
 // profile.
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
+#include "vsnativeim.h"
 
 #include "llpanelclassified.h"
 
@@ -184,19 +186,27 @@ void LLPanelClassifiedInfo::onOpen(const LLSD& key)
     LLAvatarPropertiesProcessor::getInstance()->sendClassifiedInfoRequest(getClassifiedId());
     gGenericDispatcher.addHandler("classifiedclickthrough", &sClassifiedClickThrough);
 
-    if (gAgent.getRegion())
+    const U64 revision=++mSearchStatRevision;
+    if (const auto region=vs_current_region_context())
     {
-        // While we're at it let's get the stats from the new table if that
-        // capability exists.
-        std::string url = gAgent.getRegion()->getCapability("SearchStatRequest");
+        // The same capability and response parser serve both renderer peers.
+        std::string url = region->getCapability("SearchStatRequest");
         if (!url.empty())
         {
             LL_INFOS() << "Classified stat request via capability" << LL_ENDL;
             LLSD body;
             LLUUID classifiedId = getClassifiedId();
             body["classified_id"] = classifiedId;
+            const auto weak=getHandle();const auto account=vs_native_im_guard();
             LLCoreHttpUtil::HttpCoroutineAdapter::callbackHttpPost(url, body,
-                boost::bind(&LLPanelClassifiedInfo::handleSearchStatResponse, classifiedId, _1));
+                [this,weak,account,origin=*region,revision,classifiedId](const LLSD& result)
+                {
+                    if(!weak.get() || !account() || !origin.current() ||
+                        revision!=mSearchStatRevision || getClassifiedId()!=classifiedId)return;
+                    const auto current=vs_current_region_context();
+                    if(!current || current->getRegionID()!=origin.getRegionID() || current->getHost()!=origin.getHost())return;
+                    handleSearchStatResponse(classifiedId,result);
+                });
         }
     }
     // Update classified click stats.
@@ -529,7 +539,7 @@ void LLPanelClassifiedInfo::sendClickMessage(
         const LLVector3d& global_pos,
         const std::string& sim_name)
 {
-    if (gAgent.getRegion())
+    if (const auto region=vs_current_region_context())
     {
         // You're allowed to click on your own ads to reassure yourself
         // that the system is working.
@@ -541,7 +551,8 @@ void LLPanelClassifiedInfo::sendClickMessage(
         body["dest_pos_global"] = global_pos.getValue();
         body["region_name"]     = sim_name;
 
-        std::string url = gAgent.getRegion()->getCapability("SearchStatTracking");
+        std::string url = region->getCapability("SearchStatTracking");
+        if(url.empty())return;
         LL_INFOS() << "Sending click msg via capability (url=" << url << ")" << LL_ENDL;
         LL_INFOS() << "body: [" << body << "]" << LL_ENDL;
         LLCoreHttpUtil::HttpCoroutineAdapter::messageHttpPost(url, body,

@@ -40,6 +40,7 @@ class FSRadarMenu : public LLListContextMenu
 {
 public:
     LLContextMenu* createMenu() override;
+    static bool isNativeCallback(const std::string&, const LLSD&);
 
 private:
     bool enableContextMenuItem(const LLSD& userdata);

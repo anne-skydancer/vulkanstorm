@@ -1,6 +1,7 @@
 // Vulkanstorm native UI substrate. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
 #include "vsuirenderer.h"
+#include "llimagegl.h"
 #include "vsimagemips.h"
 #define STB_DXT_IMPLEMENTATION
 #include "vstextureupload.h"
@@ -25,6 +26,7 @@
 #pragma pop_macro("Bool")
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <deque>
 #include <limits>
 #include <stdexcept>
@@ -52,6 +54,7 @@ struct VSUIRenderer::Texture
     std::shared_ptr<const VSResourceBudget::Reservation> residency;
     VSImageUsage::Charge usage;
     bool                                                 fontAtlas = false;
+    mutable std::optional<double> lastBoundSeconds;
     using SamplerKey=std::tuple<int,int,int,int,bool,bool,unsigned>;
     mutable std::map<SamplerKey,RefCntAutoPtr<ITextureView>> sampledViews;
 };
@@ -59,9 +62,9 @@ struct VSUIRenderer::Impl
 {
     RefCntAutoPtr<IRenderDevice> device;
     RefCntAutoPtr<IDeviceContext> context;
-    RefCntAutoPtr<IShader> vertex, fragments[2],bumpVertex,bumpFragment;
+    RefCntAutoPtr<IShader> vertex,depthVertex, fragments[2],bumpVertex,bumpFragment;
     RefCntAutoPtr<IPipelineState> bumpPipeline;
-    RefCntAutoPtr<IPipelineState> pipelines[2][5][2][2]; // format, blend, sampler, mask
+    RefCntAutoPtr<IPipelineState> pipelines[2][5][3][2][2]; // format, blend, sampler, mask, world depth
     std::uint64_t next_generation = 1;
     struct Submission
     {
@@ -69,6 +72,8 @@ struct VSUIRenderer::Impl
         std::vector<Image> images;
         std::vector<RefCntAutoPtr<IShaderResourceBinding>> bindings;
         RefCntAutoPtr<IBuffer> vertices;
+        RefCntAutoPtr<IBuffer> depthConstants;
+        RefCntAutoPtr<ITexture> depth;
     };
     RefCntAutoPtr<IFence> fence;
     Uint64 next_completion = 1;
@@ -96,12 +101,13 @@ struct VSUIRenderer::Impl
         FenceDesc desc{}; desc.Name="Native UI retirement";
         device->CreateFence(desc,&fence); check(fence != nullptr,"Native UI completion fence creation failed");
     }
-    IPipelineState* pipeline(TEXTURE_FORMAT format, Blend blend, Sampling sampling,bool mask)
+    IPipelineState* pipeline(TEXTURE_FORMAT format, Blend blend, Sampling sampling,bool mask,bool worldDepth=false)
     {
         check(format == TEX_FORMAT_RGBA8_UNORM || format == TEX_FORMAT_BGRA8_UNORM,
               "UI renderer requires an SDR UNORM target");
+        if(sampling==Sampling::Anisotropic&&(!LLImageGL::sGlobalUseAnisotropic||device->GetAdapterInfo().Sampler.MaxAnisotropy<=1))sampling=Sampling::Linear;
         auto& result = pipelines[format == TEX_FORMAT_BGRA8_UNORM]
-            [static_cast<unsigned>(blend)][sampling == Sampling::Linear][mask];
+            [static_cast<unsigned>(blend)][static_cast<unsigned>(sampling)][mask][worldDepth];
         if (result) return result;
         const char* vs = R"(
 layout(location=0) in vec2 position;
@@ -110,6 +116,15 @@ layout(location=2) in vec4 tint;
 layout(location=0) out vec2 texUV;
 layout(location=1) out vec4 color;
 void main() { gl_Position=vec4(position,0,1); texUV=uv; color=tint; }
+)";
+        const char* depth_vs = R"(
+layout(location=0) in vec2 position;
+layout(location=1) in vec2 uv;
+layout(location=2) in vec4 tint;
+layout(location=0) out vec2 texUV;
+layout(location=1) out vec4 color;
+layout(std140) uniform NativeDepth { vec4 billboardDepth; };
+void main() { gl_Position=vec4(position,billboardDepth.x,1); texUV=uv; color=tint; }
 )";
         const char* fs = R"(
 layout(location=0) in vec2 texUV;
@@ -126,25 +141,29 @@ uniform sampler2D g_Texture;
 void main() { result=vec4(color.rgb,texture(g_Texture,texUV).a*color.a); }
 )";
         auto& fragment=fragments[mask];
-        if (!vertex || !fragment)
+        auto& selectedVertex=worldDepth?depthVertex:vertex;
+        if (!selectedVertex || !fragment)
         {
             ShaderCreateInfo shader{};
             shader.SourceLanguage = SHADER_SOURCE_LANGUAGE_GLSL; shader.GLSLVersion = {4,5};
             shader.EntryPoint = "main"; shader.Desc.UseCombinedTextureSamplers = true;
-            shader.Desc.Name = "Native UI vertex"; shader.Desc.ShaderType = SHADER_TYPE_VERTEX; shader.Source = vs;
-            if (!vertex) device->CreateShader(shader, &vertex);
+            shader.Desc.Name = "Native UI vertex"; shader.Desc.ShaderType = SHADER_TYPE_VERTEX; shader.Source = worldDepth?depth_vs:vs;
+            if (!selectedVertex) device->CreateShader(shader, &selectedVertex);
             shader.Desc.Name = "Native UI fragment"; shader.Desc.ShaderType = SHADER_TYPE_PIXEL; shader.Source = mask ? mask_fs : fs;
-            device->CreateShader(shader, &fragment);
-            check(vertex && fragment, "Native UI shader creation failed");
+            if (!fragment) device->CreateShader(shader, &fragment);
+            check(selectedVertex && fragment, "Native UI shader creation failed");
         }
         GraphicsPipelineStateCreateInfo ci{};
         ci.PSODesc.Name = "Native ordered UI"; ci.PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
-        ci.pVS = vertex; ci.pPS = fragment;
+        ci.pVS = selectedVertex; ci.pPS = fragment;
         auto& gp = ci.GraphicsPipeline;
         gp.NumRenderTargets = 1; gp.RTVFormats[0] = format;
         gp.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         gp.RasterizerDesc.CullMode = CULL_MODE_NONE; gp.RasterizerDesc.ScissorEnable = true;
-        gp.DepthStencilDesc.DepthEnable = false;
+        gp.DepthStencilDesc.DepthEnable = worldDepth;
+        gp.DepthStencilDesc.DepthWriteEnable = false;
+        gp.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
+        gp.DSVFormat=worldDepth?TEX_FORMAT_D32_FLOAT:TEX_FORMAT_UNKNOWN;
         const LayoutElement layout[] = {{0,0,2,VT_FLOAT32,false}, {1,0,2,VT_FLOAT32,false}, {2,0,4,VT_FLOAT32,false}};
         gp.InputLayout.LayoutElements = layout; gp.InputLayout.NumElements = 3;
         auto& rt = gp.BlendDesc.RenderTargets[0]; rt.BlendEnable = blend != Blend::Replace;
@@ -155,6 +174,11 @@ void main() { result=vec4(color.rgb,texture(g_Texture,texUV).a*color.a); }
         SamplerDesc sampler{};
         sampler.MinFilter = sampler.MagFilter = sampling == Sampling::Nearest ? FILTER_TYPE_POINT : FILTER_TYPE_LINEAR;
         sampler.MipFilter = FILTER_TYPE_POINT;
+        if(sampling==Sampling::Anisotropic)
+        {
+            sampler.MinFilter=sampler.MagFilter=sampler.MipFilter=FILTER_TYPE_ANISOTROPIC;
+            sampler.MaxAnisotropy=device->GetAdapterInfo().Sampler.MaxAnisotropy;
+        }
         // LLUIImageList::getUIImageByID/loadUIImageByID uses MIPMAP_NO.
         // A world subscriber may share this image's mip chain, but UI draws
         // sample its base level independently of the world sampler view.
@@ -242,12 +266,51 @@ VSUIRenderer::FontAtlas VSUIRenderer::uploadPreparedTexture(const VSTextureUploa
     image->description.alpha=alphaMode(rgba);
     image->description.mipLevels=desc.MipLevels;
     image->description.compression=prepared.compressed?VSWorldContracts::ImageCompression::BC3:VSWorldContracts::ImageCompression::Uncompressed;
+    image->description.alphaMask=prepared.alphaMask;
     image->description.gpuBytes=gpuBytes;
     image->pixels=rgba;
     image->usage.attach(mImpl->imageUsage,gpuBytes,rgba.size());
     // A newly uploaded image may be replaced or refused by its producer before
     // its first draw. Keep its charged owner through an upload-completion fence.
     mImpl->pendingUploads.push_back(image);
+    return image;
+}
+
+VSUIRenderer::Image VSUIRenderer::renderImage(unsigned width, unsigned height,
+    const std::function<void(ITextureView*)>& render)
+{
+    auto& impl = *mImpl;
+    const auto maximum = impl.device->GetAdapterInfo().Texture.MaxTexture2DDimension;
+    if (!render || !width || !height || width > maximum || height > maximum ||
+        std::size_t(width) > std::numeric_limits<std::size_t>::max() / height / 4)
+        return {};
+    const auto bytes = std::size_t(width) * height * 4;
+    auto residency = impl.coreImages.reserve(bytes);
+    if (!residency) { ++impl.imageAllocationRefusals; return {}; }
+    auto image = std::make_shared<Texture>();
+    image->owner = impl.device;
+    image->residency = std::move(residency);
+    image->generation = impl.next_generation++;
+    image->description = {width, height, 4, VSWorldContracts::ImageOrigin::TopLeft,
+        VSWorldContracts::ColorEncoding::EncodedSRGB, VSWorldContracts::AlphaMode::Blend,
+        VSWorldContracts::ImageRole::CoreUI, image->generation};
+    image->description.gpuBytes = bytes;
+    image->usage.attach(impl.imageUsage, bytes, 0);
+    TextureDesc desc;
+    desc.Name = "Native preview image generation";
+    desc.Type = RESOURCE_DIM_TEX_2D;
+    desc.Width = width;
+    desc.Height = height;
+    desc.Format = TEX_FORMAT_RGBA8_UNORM;
+    desc.MipLevels = 1;
+    desc.Usage = USAGE_DEFAULT;
+    desc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE;
+    impl.device->CreateTexture(desc, nullptr, &image->resource);
+    check(image->resource != nullptr, "Native preview target allocation failed");
+    // Retain even if the callback throws or its caller closes before sampling:
+    // already submitted GPU writes still own this charged generation.
+    impl.pendingUploads.push_back(image);
+    render(image->resource->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET));
     return image;
 }
 
@@ -416,29 +479,52 @@ VSUIRenderer::Image VSUIRenderer::replace(const Image& old,unsigned x,unsigned y
     image->generation=mImpl->next_generation++;
     image->description=old->description;image->description.generation=image->generation;
     image->description.alpha=alphaMode(image->pixels);
+    image->description.alphaMask=image->description.role==VSWorldContracts::ImageRole::RemoteAsset &&
+        vs_image_alpha_mask(image->pixels.data(),desc.Width,desc.Height,4,3);
     image->usage.attach(mImpl->imageUsage,image->description.gpuBytes,image->pixels.size());
     submission.completion=mImpl->next_completion++;
     mImpl->context->EnqueueSignal(mImpl->fence,submission.completion);
     return image;
 }
-void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, float dpi, const std::vector<Packet>& packets)
+void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, float dpi, const std::vector<Packet>& packets,ITextureView* worldDepth)
 {
     mImpl->statistics={};mImpl->statistics.packets=packets.size();
+    const double submittedSeconds=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     check(target && width && height && std::isfinite(dpi) && dpi > 0, "Invalid native UI target or DPI");
     const auto& desc = target->GetTexture()->GetDesc();
     check(desc.Width == width && desc.Height == height, "Native UI target extent differs");
     retire();
-    struct Draw { const Packet* packet; Rect clip; Uint32 first; };
+    struct Draw { const Packet* packet; Rect clip; Uint32 first; Uint64 depthOffset=0; };
+    const std::size_t alignment=std::max(16u,mImpl->device->GetAdapterInfo().Buffer.ConstantBufferOffsetAlignment);
+    check(alignment%16==0,"Invalid native constant-buffer alignment");
+    std::vector<std::array<float,4>> depths;
+    auto depthOffset=[&](const Packet& packet)->Uint64
+    {
+        if(!packet.worldDepth)return 0;
+        const auto offset=depths.size();
+        check(offset<=std::numeric_limits<std::size_t>::max()-alignment/16,"Native billboard constants overflow");
+        depths.resize(offset+alignment/16);depths[offset][0]=*packet.worldDepth;
+        return Uint64(offset)*16;
+    };
     std::vector<Draw> draws;
     std::vector<Vertex> vertices;
     auto* context = mImpl->context.RawPtr();
     for (const auto& p : packets)
     {
+        if(p.worldDepth)
+        {
+            check(std::isfinite(*p.worldDepth) && *p.worldDepth>=0.f && *p.worldDepth<=1.f,
+                "Invalid native billboard depth");
+            check(worldDepth && worldDepth->GetTexture(),"Native billboard requires actual world depth");
+            const auto& depthDesc=worldDepth->GetTexture()->GetDesc();
+            check(depthDesc.Width==width && depthDesc.Height==height && depthDesc.Format==TEX_FORMAT_D32_FLOAT,
+                "Native billboard depth owner/extent differs");
+        }
         check(p.image != nullptr, "Native UI packet has no texture generation");
         check(p.image->owner.RawPtr() == mImpl->device.RawPtr(),"Native UI texture belongs to a different device");
         check((p.blend == Blend::StraightAlpha || p.blend == Blend::PremultipliedAlpha ||
                p.blend == Blend::Additive || p.blend == Blend::AdditiveAlpha || p.blend == Blend::Replace) &&
-              (p.sampling == Sampling::Nearest || p.sampling == Sampling::Linear),"Invalid native UI packet state");
+              (p.sampling == Sampling::Nearest || p.sampling == Sampling::Linear || p.sampling==Sampling::Anisotropic),"Invalid native UI packet state");
         for (const auto* values : {&p.bounds, &p.uv, &p.color, &p.clip})
             for (float value : *values) check(std::isfinite(value), "Non-finite native UI packet");
         for (float value : p.transform) check(std::isfinite(value), "Non-finite native UI transform");
@@ -460,7 +546,7 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
         if (p.triangles)
         {
             check(vertices.size() <= std::numeric_limits<Uint32>::max()-6,"Native UI vertex count overflow");
-            draws.push_back({&p,clip,Uint32(vertices.size())});
+            draws.push_back({&p,clip,Uint32(vertices.size()),depthOffset(p)});
             for (auto v:*p.triangles)
             {
                 for (float value: {v.x,v.y,v.u,v.v,v.r,v.g,v.b,v.a})
@@ -488,7 +574,7 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
                         p.color[0],p.color[1],p.color[2],p.color[3]};
         }
         check(vertices.size() <= std::numeric_limits<Uint32>::max()-6,"Native UI vertex count overflow");
-        draws.push_back({&p,clip,Uint32(vertices.size())});
+        draws.push_back({&p,clip,Uint32(vertices.size()),depthOffset(p)});
         vertices.insert(vertices.end(),{corners[0],corners[1],corners[2],corners[2],corners[1],corners[3]});
     }
     if (draws.empty()) return;
@@ -500,6 +586,18 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
     BufferData data{vertices.data(),bd.Size};
     mImpl->device->CreateBuffer(bd,&data,&submission.vertices);
     check(submission.vertices != nullptr,"Native UI vertex upload failed");
+    if(!depths.empty())
+    {
+        // One immutable aligned upload for all billboard draws. Individual
+        // ranges use the unchanged Vertex ABI and cannot overwrite a live draw.
+        BufferDesc constants{};constants.Name="Native billboard depths";
+        constants.Size=depths.size()*16;constants.Usage=USAGE_IMMUTABLE;constants.BindFlags=BIND_UNIFORM_BUFFER;
+        const BufferData initial{depths.data(),constants.Size};
+        mImpl->device->CreateBuffer(constants,&initial,&submission.depthConstants);
+        check(submission.depthConstants!=nullptr,"Native billboard depth upload failed");
+        submission.depth=worldDepth->GetTexture();
+    }
+
     context->SetRenderTargets(1,&target,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     Viewport viewport{0.f,0.f,float(width),float(height)}; context->SetViewports(1,&viewport,width,height);
     IBuffer* buffers[]{submission.vertices.RawPtr()}; const Uint64 offsets[]{0};
@@ -516,21 +614,29 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
         while (next<draws.size())
         {
             const auto& candidate=draws[next];const auto& q=*candidate.packet;
-            if (q.image!=p.image || q.blend!=p.blend || q.sampling!=p.sampling || q.alpha_mask!=p.alpha_mask ||
+            if (q.image!=p.image || q.blend!=p.blend || q.sampling!=p.sampling || q.alpha_mask!=p.alpha_mask || q.worldDepth!=p.worldDepth ||
                 candidate.clip.left!=draw.clip.left || candidate.clip.right!=draw.clip.right ||
                 candidate.clip.top!=draw.clip.top || candidate.clip.bottom!=draw.clip.bottom ||
                 candidate.first!=draw.first+count) break;
             count+=6;++next;
         }
-        auto* pipeline=mImpl->pipeline(desc.Format,p.blend,p.sampling,p.alpha_mask);
+        auto* pipeline=mImpl->pipeline(desc.Format,p.blend,p.sampling,p.alpha_mask,p.worldDepth.has_value());
         RefCntAutoPtr<IShaderResourceBinding> binding; pipeline->CreateShaderResourceBinding(&binding,true);
         check(binding != nullptr,"Native UI resource binding creation failed");
         auto* variable=binding->GetVariableByName(SHADER_TYPE_PIXEL,"g_Texture");
         check(variable != nullptr,"Native UI texture binding missing");
         variable->Set(p.image->resource->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+        if(p.worldDepth)
+        {
+            auto* depthVariable=binding->GetVariableByName(SHADER_TYPE_VERTEX,"NativeDepth");
+            check(depthVariable!=nullptr,"Native billboard depth binding missing");
+            depthVariable->SetBufferRange(submission.depthConstants,draw.depthOffset,16);
+        }
+        context->SetRenderTargets(1,&target,p.worldDepth?worldDepth:nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         context->SetPipelineState(pipeline); context->SetScissorRects(1,&draw.clip,width,height);
         context->CommitShaderResources(binding,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         context->Draw(DrawAttribs{count,DRAW_FLAG_VERIFY_ALL,1,draw.first});
+        markBound(p.image,submittedSeconds);
         ++mImpl->statistics.draws;
         submission.images.push_back(p.image); submission.bindings.push_back(binding);
         index=next;
@@ -633,3 +739,8 @@ void VSUIRenderer::retire()
     while (!mImpl->submitted.empty() && mImpl->submitted.front().completion &&
            mImpl->submitted.front().completion <= completed) mImpl->submitted.pop_front();
 }
+
+void VSUIRenderer::markBound(const Image& image,double seconds)
+{if(image)image->lastBoundSeconds=seconds;}
+std::optional<double> VSUIRenderer::lastBound(const Image& image)
+{return image?image->lastBoundSeconds:std::nullopt;}

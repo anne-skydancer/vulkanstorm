@@ -34,6 +34,7 @@
 class LLPickInfo;
 struct VSCameraFocusObject;
 #include <optional>
+#include <memory>
 class LLVOAvatarSelf;
 class LLControlVariable;
 
@@ -91,9 +92,32 @@ public:
     void            init();
     void            cleanup();
     void            setAvatarObject(LLVOAvatarSelf* avatar);
+#if VS_NATIVE_VULKAN
+    bool nativeCameraPose(LLVector3d&,LLVector3d&,LLVector3&) const;
+    bool setNativeCameraPose(const LLVector3d&,const LLVector3d&,const LLUUID&,bool animate);
+    void updateNativeCamera(const LLVector3d&,const LLVector3d&,const LLVector3&);
+    void applyNativeCameraKeyboard() { applyCameraKeyboard(); }
+    bool nativeHUDSelection() const { return nativeCameraHUDSelection(); }
+#endif
     bool            isInitialized() { return mInitialized; }
 private:
     bool            mInitialized;
+    LLVector3d applyCameraTargets(LLVector3d,const LLVector3d&);
+    LLVector3d constrainCameraPosition(LLVector3d,const LLVector3d&,const LLVector3d&,bool*);
+    bool cameraHUDSelection() const;
+    bool hasCameraFocusObject() const;
+    bool cameraFocusIsAvatar() const;
+    template<class Focus> bool sharedCameraMinDistance(Focus&,F32&);
+    void applyCameraKeyboard();
+#if VS_NATIVE_VULKAN
+    struct NativeFocusState;
+    std::shared_ptr<NativeFocusState> mNativeFocus;
+    void ensureNativeFocusState();
+    const VSCameraFocusObject* nativeFocusObject() const;
+    void bindNativeFocusObject(const LLUUID&);
+    void setNativeFocusAttention(const LLUUID&,const LLVector3d&);
+    bool nativeCameraHUDSelection() const;
+#endif
 
 
     //--------------------------------------------------------------------
