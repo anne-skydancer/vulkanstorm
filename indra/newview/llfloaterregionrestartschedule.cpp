@@ -28,6 +28,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterregionrestartschedule.h"
+#include "vsnativeim.h"
+#include "vsregioncontext.h"
 
 #include "llagent.h"
 #include "llbutton.h"
@@ -109,13 +111,33 @@ bool LLFloaterRegionRestartSchedule::postBuild()
     return true;
 }
 
+std::function<bool()> LLFloaterRegionRestartSchedule::requestGuard(bool modify)
+{
+    const auto weak=getHandle();const auto owner=mOwnerHandle;
+    const auto account=vs_native_im_guard();const auto region=vs_current_region_context();
+    const auto epoch=mRequestEpoch;
+    return [weak,owner,account,region,epoch,modify]
+    {
+        auto* view=dynamic_cast<LLFloaterRegionRestartSchedule*>(weak.get());
+        if(!view || !owner.get() || !account() || !region || !region->current() || view->mRequestEpoch!=epoch)return false;
+        const auto current=vs_current_region_context();
+        return current && *current==*region && (!modify || current->canManageEstate());
+    };
+}
+void LLFloaterRegionRestartSchedule::onClose(bool app_quitting)
+{
+    ++mRequestEpoch;
+    LLFloater::onClose(app_quitting);
+}
+
 void LLFloaterRegionRestartSchedule::onOpen(const LLSD& key)
 {
+    ++mRequestEpoch;
     std::string url = gAgent.getRegionCapability("RegionSchedule");
     if (!url.empty())
     {
         LLCoros::instance().launch("LLFloaterRegionRestartSchedule::requestRegionShcheduleCoro",
-            boost::bind(&LLFloaterRegionRestartSchedule::requestRegionShcheduleCoro, url, getHandle()));
+            boost::bind(&LLFloaterRegionRestartSchedule::requestRegionShcheduleCoro, url, getHandle(),requestGuard()));
 
         mSaveButton->setEnabled(false);
     }
@@ -146,6 +168,9 @@ void LLFloaterRegionRestartSchedule::onPMAMButtonClicked()
 
 void LLFloaterRegionRestartSchedule::onSaveButtonClicked()
 {
+    const auto region=vs_current_region_context();
+    if(!region || !region->canManageEstate())return;
+    ++mRequestEpoch;
     std::string url = gAgent.getRegionCapability("RegionSchedule");
     if (!url.empty())
     {
@@ -188,7 +213,7 @@ void LLFloaterRegionRestartSchedule::onSaveButtonClicked()
         LLSD body;
         body["restart"] = restart; // event name, at the moment only "restart" is supported
         LLCoros::instance().launch("LLFloaterRegionRestartSchedule::setRegionShcheduleCoro",
-            boost::bind(&LLFloaterRegionRestartSchedule::setRegionShcheduleCoro, url, body, getHandle()));
+            boost::bind(&LLFloaterRegionRestartSchedule::setRegionShcheduleCoro, url, body, getHandle(),requestGuard(true)));
 
         mSaveButton->setEnabled(false);
     }
@@ -205,11 +230,11 @@ void LLFloaterRegionRestartSchedule::onCommitHours(const LLSD& value)
     {
         // 0:00 equals 12:00 AM 1:00 equals 1:00 AM, 12am < 1am < 2am < 3am...
         if (hours == 0) hours = 12;
-        llclamp(hours, 1, 12);
+        hours=llclamp(hours, 1, 12);
     }
     else
     {
-        llclamp(hours, 0, 23);
+        hours=llclamp(hours, 0, 23);
     }
     mHoursLineEditor->setText(llformat("%02d", hours));
     mSaveButton->setEnabled(true);
@@ -218,7 +243,7 @@ void LLFloaterRegionRestartSchedule::onCommitHours(const LLSD& value)
 void LLFloaterRegionRestartSchedule::onCommitMinutes(const LLSD& value)
 {
     S32 minutes = value.asInteger();
-    llclamp(minutes, 0, 59);
+    minutes=llclamp(minutes, 0, 59);
     mMinutesLineEditor->setText(llformat("%02d", minutes));
     mSaveButton->setEnabled(true);
 }
@@ -268,8 +293,9 @@ bool LLFloaterRegionRestartSchedule::canUse()
     return !url.empty();
 }
 
-void LLFloaterRegionRestartSchedule::requestRegionShcheduleCoro(std::string url, LLHandle<LLFloater> handle)
+void LLFloaterRegionRestartSchedule::requestRegionShcheduleCoro(std::string url, LLHandle<LLFloater> handle,std::function<bool()> current)
 {
+    if(!current())return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("RegionShcheduleRequest", httpPolicy);
@@ -280,6 +306,7 @@ void LLFloaterRegionRestartSchedule::requestRegionShcheduleCoro(std::string url,
 
     LLSD result = httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
 
+    if(!current())return;
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -363,8 +390,9 @@ void LLFloaterRegionRestartSchedule::requestRegionShcheduleCoro(std::string url,
     }
 }
 
-void LLFloaterRegionRestartSchedule::setRegionShcheduleCoro(std::string url, LLSD body, LLHandle<LLFloater> handle)
+void LLFloaterRegionRestartSchedule::setRegionShcheduleCoro(std::string url, LLSD body, LLHandle<LLFloater> handle,std::function<bool()> current)
 {
+    if(!current())return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("RegionShcheduleSetter", httpPolicy);
@@ -375,6 +403,7 @@ void LLFloaterRegionRestartSchedule::setRegionShcheduleCoro(std::string url, LLS
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, body, httpOpts);
 
+    if(!current())return;
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 

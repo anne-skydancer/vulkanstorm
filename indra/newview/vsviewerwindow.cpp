@@ -49,6 +49,8 @@
 #include "lluictrlfactory.h"
 #include "vsvulkancontext.h"
 #include "vsworldscene.h"
+#include "llhudview.h"
+#include "llworldmapview.h"
 #include "llregionhandle.h"
 #include "vsuicontext.h"
 #include "vsstartupui.h"
@@ -572,6 +574,16 @@ void LLViewerWindow::setNativeConnected(bool connected)
         status_holder->addChildInBack(gStatusBar);
         LLNavigationBar::instance();
     }
+    if(connected && !gHUDView)
+    {
+        LLRect rect(0,mWindowRectScaled.getHeight(),mWindowRectScaled.getWidth(),0);
+        rect.mBottom+=50;
+        if(gMenuBarView && gMenuBarView->isInVisibleChain())rect.mTop-=gMenuBarView->getRect().getHeight();
+        gHUDView=new LLHUDView(rect);
+        mRootView->addChild(gHUDView);mRootView->sendChildToBack(gHUDView);
+        LLWorldMapView::initClass(); // Shared real skin arrow image owners.
+    }
+    if(gHUDView)gHUDView->setVisible(connected);
     gSavedSettings.setBOOL("FSInternalShowNavbarNavigationPanel", connected && gSavedSettings.getBOOL("ShowNavbarNavigationPanel"));
     gSavedSettings.setBOOL("FSInternalShowNavbarFavoritesPanel", connected && gSavedSettings.getBOOL("ShowNavbarFavoritesPanel"));
     if (navigation) navigation->setVisible(connected);

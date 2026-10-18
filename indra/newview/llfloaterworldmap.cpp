@@ -1353,6 +1353,9 @@ void LLFloaterWorldMap::buildLandmarkIDLists()
 
 F32 LLFloaterWorldMap::getDistanceToDestination(const LLVector3d &destination,
                                                 F32 z_attenuation) const
+{ return distanceToDestination(destination,z_attenuation); }
+F32 LLFloaterWorldMap::distanceToDestination(const LLVector3d &destination,
+                                                F32 z_attenuation)
 {
     LLVector3d delta = destination - gAgent.getPositionGlobal();
     // by attenuating the z-component we effectively

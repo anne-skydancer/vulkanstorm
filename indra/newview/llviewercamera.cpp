@@ -436,6 +436,9 @@ glm::mat4 uiCameraProjection(const LLViewerCamera& camera)
 }
 }
 
+glm::mat4 LLViewerCamera::getUIModelview() const{return uiCameraModelview(*this);}
+glm::mat4 LLViewerCamera::getUIProjection() const{return uiCameraProjection(*this);}
+
 void LLViewerCamera::projectScreenToPosAgent(const S32 screen_x, const S32 screen_y, LLVector3* pos_agent) const
 {
     if(!pos_agent)return;

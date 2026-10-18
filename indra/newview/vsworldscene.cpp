@@ -1346,6 +1346,39 @@ void VSWorldScene::reset(bool preserveAssets)
     mImpl->accepted=mImpl->rejected=mImpl->unsupported=0;
     if(mRoot && !preserveAssets) {mImpl->budgets->account.setNull();mImpl->budgets->accountGeneration=0;}
 }
+boost::signals2::connection VSWorldScene::observeTerrainSettings(const LLHost& host,const boost::signals2::signal<void()>::slot_type& slot)
+{
+    if(host!=mImpl->host)
+    {
+        const auto found=mNeighbours.find(host);
+        return found==mNeighbours.end()?boost::signals2::connection():found->second->observeTerrainSettings(host,slot);
+    }
+    if(mImpl->retired)return {};
+    if(!mImpl->terrainAssets)mImpl->terrainAssets=std::make_unique<VSTerrainAssets>(host);
+    return mImpl->terrainAssets->observeSettings(slot);
+}
+std::optional<VSRegionTerrain> VSWorldScene::terrainSettings(const LLHost& host)
+{
+    if(host!=mImpl->host)
+    {
+        const auto found=mNeighbours.find(host);
+        return found==mNeighbours.end()?std::nullopt:found->second->terrainSettings(host);
+    }
+    if(mImpl->retired)return {};
+    if(!mImpl->terrainAssets)mImpl->terrainAssets=std::make_unique<VSTerrainAssets>(host);
+    VSRegionTerrain result;result.assets=mImpl->terrainTextures;result.starts=mImpl->terrainStarts;result.ranges=mImpl->terrainRanges;
+    const auto ready=mImpl->terrainAssets->settings(result.assets,result.overrides);
+    result.texturesReady=ready.first;result.materialsReady=ready.second;
+    const auto weak=std::weak_ptr<Impl>(mImpl);const auto incarnation=mImpl->incarnation;
+    const auto assets=result.assets;const auto starts=result.starts,ranges=result.ranges;
+    result.current=[weak,incarnation,assets,starts,ranges]
+    {
+        const auto state=weak.lock();
+        return state && !state->retired && state->incarnation==incarnation && state->terrainTextures==assets &&
+            state->terrainStarts==starts && state->terrainRanges==ranges;
+    };
+    return result;
+}
 std::optional<U64> VSWorldScene::terrainRevision(const LLHost& host) const
 {
     if (host!=mImpl->host)

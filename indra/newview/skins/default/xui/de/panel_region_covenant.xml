@@ -21,13 +21,13 @@
 	<text name="covenant_timestamp_text" width="320">
 		Letzte Änderung am Mittwoch, den 31. Dez. 1969, 16:00:00
 	</text>
-	<button label="?" name="covenant_help"/>
+
 	<text_editor bottom="-247" height="162" name="covenant_editor">
 		Für diesen Grundbesitz fehlt der Vertrag.
 	</text_editor>
 	<button label="Zurücksetzen" name="reset_covenant"/>
 	<text name="covenant_help_text">
-		Änderungen am Vertrag werden für alle Parzellen auf dem 
+		Änderungen am Vertrag werden für alle Parzellen auf dem
 Grundbesitz übernommen.
 	</text>
 	<text bottom_delta="-36" name="covenant_instructions">
@@ -66,18 +66,8 @@ Grundbesitz übernommen.
 	<text name="changeable_clause" width="366">
 		Land in dieser Region kann nicht zusammengelegt/geteilt werden.
 	</text>
-	<string name="can_resell">
-		Gekauftes Land in dieser Region kann wiederverkauft werden.
-	</string>
-	<string name="can_not_resell">
-		Gekauftes Land in dieser Region kann nicht wiederverkauft werden.
-	</string>
-	<string name="can_change">
-		Gekauftes Land in dieser Region kann zusammengelegt und
-geteilt werden.
-	</string>
-	<string name="can_not_change">
-		Gekauftes Land in dieser Region kann nicht zusammengelegt
-und geteilt werden.
-	</string>
+
+
+
+
 </panel>

@@ -29,6 +29,11 @@
 #include "vsregionlimits.h"
 #include "vsestatecovenant.h"
 #include "llfloaterregioninfo.h"
+#include "vsregionterrain.h"
+#include "vsnativesession.h"
+#include "vsworldscene.h"
+#include "vsvulkancontext.h"
+#include "vsnativeim.h"
 
 #include <algorithm>
 #include <functional>
@@ -109,6 +114,33 @@
 #include "llstartup.h"
 // </FS:CR> Aurora Sim - Region Settings Console
 #include "llviewermenufile.h"
+
+namespace
+{
+// The invoking real view and current actual region own delayed UI work. Read
+// requests retain ordinary read access; mutations recheck the same authority
+// used by these controllers' reference enabled predicates.
+std::function<bool()> region_info_guard(LLView* view,bool ownerOnly=false,bool modify=false)
+{
+    const auto weak=view?view->getHandle():LLHandle<LLView>();
+    const auto region=vs_current_region_context();const auto account=vs_native_im_guard();
+    return [weak,region,account,ownerOnly,modify]
+    {
+        if(!weak.get() || !account() || !region || !region->current())return false;
+        const auto latest=vs_current_region_context();
+        if(!latest || *latest!=*region)return false;
+        if(ownerOnly)return gAgent.isGodlike() || latest->getOwner()==gAgent.getID();
+        return !modify || latest->canManageEstate();
+    };
+}
+struct RegionCovenantRequest
+{
+    LLHandle<LLView> view;
+    std::function<bool()> current;
+    U64 epoch=0;
+    LLUUID item,asset;
+};
+}
 
 const S32 CORNER_COUNT = 4;
 
@@ -203,7 +235,7 @@ public:
     virtual bool        canEdit() override { return LLEnvironment::instance().canAgentUpdateRegionEnvironment(); }
     virtual bool        isLargeEnough() override { return true; }   // regions are always large enough.
 
-    bool                refreshFromRegion(LLViewerRegion* region);
+    bool                refreshFromRegion(const std::optional<VSRegionContext>& region);
 
     virtual bool        postBuild() override;
     virtual void        onOpen(const LLSD& key) override {};
@@ -323,12 +355,29 @@ bool LLFloaterRegionInfo::postBuild()
         mTab->addTabPanel(panel);
     }
 
-    gMessageSystem->setHandlerFunc(
-        "EstateOwnerMessage",
-        &processEstateOwnerRequest);
+    if(!gViewerWindow || !gViewerWindow->isNativeVulkan())
+    {
+        gMessageSystem->setHandlerFunc("EstateOwnerMessage",&processEstateOwnerRequest);
+    }
 
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto weak=getHandle();
+        if(const auto session=VSNativeSession::active())
+        {
+            mNativeRegionConnection=session->observeCurrentRegion(vs_native_im_account_callback([weak]
+            {
+                if(auto* view=dynamic_cast<LLFloaterRegionInfo*>(weak.get()))view->onRegionChanged();
+            }));
+        }
+        mRegionInfoConnection=LLRegionInfoModel::instance().setUpdateCallback(vs_native_im_account_callback([weak]
+        {
+            if(weak.get())LLFloaterRegionInfo::processRegionInfo(nullptr);
+        }));
+    }
     // Request region info when agent region changes.
-    mRegionChangedCallback = gAgent.addRegionChangedCallback(boost::bind(&LLFloaterRegionInfo::onRegionChanged, this));
+    if(!gViewerWindow || !gViewerWindow->isNativeVulkan())
+        mRegionChangedCallback = gAgent.addRegionChangedCallback(boost::bind(&LLFloaterRegionInfo::onRegionChanged, this));
 
     return true;
 }
@@ -348,7 +397,8 @@ void LLFloaterRegionInfo::onOpen(const LLSD& key)
         disableTabCtrls();
         return;
     }
-    refreshFromRegion(gAgent.getRegion());
+    observeNativeRegion();
+    refreshFromRegion(vs_current_region_context());
     requestRegionInfo();
 
     if (!mGodLevelChangeSlot.connected())
@@ -365,10 +415,29 @@ void LLFloaterRegionInfo::onClose(bool app_quitting)
     }
 }
 
+void LLFloaterRegionInfo::observeNativeRegion()
+{
+    mNativeTerrainConnection.disconnect();
+    if(!gViewerWindow || !gViewerWindow->isNativeVulkan())return;
+    auto* context=gViewerWindow->nativeContext();
+    auto* scene=context?&context->world():nullptr;
+    const auto target=vs_current_region_context();
+    if(!scene || !target)return;
+    const auto weak=getHandle();const auto current=region_info_guard(this);
+    mNativeTerrainConnection=scene->observeTerrainSettings(target->getHost(),[weak,current]
+    {
+        if(!current())return;
+        auto* view=dynamic_cast<LLFloaterRegionInfo*>(weak.get());
+        if(view && view->getVisible())view->refreshFromRegion(vs_current_region_context());
+    });
+}
+
 void LLFloaterRegionInfo::onRegionChanged()
 {
+    observeNativeRegion();
     if (getVisible()) //otherwise onOpen will do request
     {
+        refreshFromRegion(vs_current_region_context());
         requestRegionInfo();
     }
 }
@@ -441,7 +510,7 @@ void LLFloaterRegionInfo::processEstateOwnerRequest(LLMessageSystem* msg,void**)
     // </FS:Ansariel>
     if (panel)
     {
-        panel->updateControls(gAgent.getRegion());
+        panel->updateControls(vs_current_region_context());
     }
 }
 
@@ -464,78 +533,20 @@ void LLFloaterRegionInfo::processRegionInfo(LLMessageSystem* msg)
 #endif
     LLTabContainer* tab = floater->getChild<LLTabContainer>("region_panels");
 
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
     bool allow_modify = gAgent.isGodlike() || (region && region->canManageEstate());
 
     // *TODO: Replace parsing msg with accessing the region info model.
     LLRegionInfoModel& region_info = LLRegionInfoModel::instance();
 
-    // extract message
-    std::string sim_name;
-    std::string sim_type = LLTrans::getString("land_type_unknown");
-    U64 region_flags;
-    U8 agent_limit;
-    S32 hard_agent_limit;
-    F32 object_bonus_factor;
-    U8 sim_access;
-    F32 water_height;
-    F32 terrain_raise_limit;
-    F32 terrain_lower_limit;
-    bool use_estate_sun;
-    F32 sun_hour;
-    msg->getString("RegionInfo", "SimName", sim_name);
-    msg->getU8("RegionInfo", "MaxAgents", agent_limit);
-    msg->getS32("RegionInfo2", "HardMaxAgents", hard_agent_limit);
-    msg->getF32("RegionInfo", "ObjectBonusFactor", object_bonus_factor);
-    msg->getU8("RegionInfo", "SimAccess", sim_access);
-    msg->getF32Fast(_PREHASH_RegionInfo, _PREHASH_WaterHeight, water_height);
-    msg->getF32Fast(_PREHASH_RegionInfo, _PREHASH_TerrainRaiseLimit, terrain_raise_limit);
-    msg->getF32Fast(_PREHASH_RegionInfo, _PREHASH_TerrainLowerLimit, terrain_lower_limit);
-    msg->getBOOL("RegionInfo", "UseEstateSun", use_estate_sun);
-    // actually the "last set" sun hour, not the current sun hour. JC
-    msg->getF32("RegionInfo", "SunHour", sun_hour);
-    // the only reasonable way to decide if we actually have any data is to
-    // check to see if any of these fields have nonzero sizes
-    if (msg->getSize("RegionInfo2", "ProductSKU") > 0 ||
-        msg->getSize("RegionInfo2", "ProductName") > 0)
-    {
-        msg->getString("RegionInfo2", "ProductName", sim_type);
-        LLTrans::findString(sim_type, sim_type); // try localizing sim product name
-    }
-
-    if (msg->has(_PREHASH_RegionInfo3))
-    {
-        msg->getU64("RegionInfo3", "RegionFlagsExtended", region_flags);
-    }
-    else
-    {
-        U32 flags = 0;
-        msg->getU32("RegionInfo", "RegionFlags", flags);
-        region_flags = flags;
-    }
-
-    if (msg->has(_PREHASH_RegionInfo5))
-    {
-        F32 chat_whisper_range;
-        F32 chat_normal_range;
-        F32 chat_shout_range;
-        F32 chat_whisper_offset;
-        F32 chat_normal_offset;
-        F32 chat_shout_offset;
-        U32 chat_flags;
-
-        msg->getF32Fast(_PREHASH_RegionInfo5, _PREHASH_ChatWhisperRange, chat_whisper_range);
-        msg->getF32Fast(_PREHASH_RegionInfo5, _PREHASH_ChatNormalRange, chat_normal_range);
-        msg->getF32Fast(_PREHASH_RegionInfo5, _PREHASH_ChatShoutRange, chat_shout_range);
-        msg->getF32Fast(_PREHASH_RegionInfo5, _PREHASH_ChatWhisperOffset, chat_whisper_offset);
-        msg->getF32Fast(_PREHASH_RegionInfo5, _PREHASH_ChatNormalOffset, chat_normal_offset);
-        msg->getF32Fast(_PREHASH_RegionInfo5, _PREHASH_ChatShoutOffset, chat_shout_offset);
-        msg->getU32Fast(_PREHASH_RegionInfo5, _PREHASH_ChatFlags, chat_flags);
-
-        LL_INFOS() << "Whisper range: " << chat_whisper_range << " normal range: " << chat_normal_range << " shout range: " << chat_shout_range
-            << " whisper offset: " << chat_whisper_offset << " normal offset: " << chat_normal_offset << " shout offset: " << chat_shout_offset
-            << " chat flags: " << chat_flags << LL_ENDL;
-    }
+    const std::string sim_name=region_info.mSimName;
+    std::string sim_type=region_info.mSimType.empty()?LLTrans::getString("land_type_unknown"):region_info.mSimType;
+    LLTrans::findString(sim_type,sim_type);
+    const U64 region_flags=region_info.mRegionFlags;
+    const U8 agent_limit=region_info.mAgentLimit;
+    const S32 hard_agent_limit=region_info.mHardAgentLimit;
+    const F32 object_bonus_factor=region_info.mObjectBonusFactor;
+    const U8 sim_access=region_info.mSimAccess;
 
     // GENERAL PANEL
     panel = tab->getChild<LLPanel>("General");
@@ -565,8 +576,7 @@ void LLFloaterRegionInfo::processRegionInfo(LLMessageSystem* msg)
 
     // detect teen grid for maturity
 
-    U32 parent_estate_id;
-    msg->getU32("RegionInfo", "ParentEstateID", parent_estate_id);
+    const U32 parent_estate_id=region_info.mParentEstateID;
     bool teen_grid = (parent_estate_id == 5);  // *TODO add field to estate table and test that
     panel->getChildView("access_combo")->setEnabled(gAgent.isGodlike() || (region && region->canManageEstate() && !teen_grid));
     panel->setCtrlsEnabled(allow_modify);
@@ -607,7 +617,7 @@ void LLFloaterRegionInfo::processRegionInfo(LLMessageSystem* msg)
     {
         // Note: region info also causes LLRegionInfoModel::instance().update(msg); -> requestRegion(); -> changed message
         // we need to know env version here and in update(msg) to know when to request and when not to, when to filter 'changed'
-        floater->refreshFromRegion(gAgent.getRegion());
+        floater->refreshFromRegion(vs_current_region_context());
     } // else will rerequest on onOpen either way
 }
 
@@ -621,7 +631,7 @@ void LLFloaterRegionInfo::sRefreshFromRegion(LLViewerRegion* region)
 
     if (floater->getVisible() && region == gAgent.getRegion())
     {
-        floater->refreshFromRegion(region);
+        floater->refreshFromRegion(region?vs_region_context(region->getHost()):std::nullopt);
     }
 }
 
@@ -740,7 +750,7 @@ void LLFloaterRegionInfo::onTabSelected(const LLSD& param)
     active_panel->onOpen(LLSD());
 }
 
-void LLFloaterRegionInfo::refreshFromRegion(LLViewerRegion* region)
+void LLFloaterRegionInfo::refreshFromRegion(const std::optional<VSRegionContext>& region)
 {
     if (!region)
     {
@@ -783,7 +793,7 @@ void LLFloaterRegionInfo::onGodLevelChange(U8 god_level)
     LLFloaterRegionInfo* floater = LLFloaterReg::getTypedInstance<LLFloaterRegionInfo>("region_info");
     if (floater && floater->getVisible())
     {
-        refreshFromRegion(gAgent.getRegion());
+        refreshFromRegion(vs_current_region_context());
     }
 }
 
@@ -853,7 +863,7 @@ void LLPanelRegionInfo::updateChild(LLUICtrl* child_ctr)
 }
 
 // virtual
-bool LLPanelRegionInfo::refreshFromRegion(LLViewerRegion* region)
+bool LLPanelRegionInfo::refreshFromRegion(const std::optional<VSRegionContext>& region)
 {
     if (region) mHost = region->getHost();
     return true;
@@ -937,6 +947,8 @@ void LLPanelRegionInfo::onClickManageRestartSchedule()
     if (!floaterp)
     {
         floaterp = new LLFloaterRegionRestartSchedule(this);
+        mFloaterRestartScheduleHandle=floaterp->getHandle();
+        if(auto* parent=gFloaterView->getParentFloater(this))parent->addDependentFloater(floaterp);
     }
 
     if (floaterp->getVisible())
@@ -952,7 +964,7 @@ void LLPanelRegionInfo::onClickManageRestartSchedule()
 /////////////////////////////////////////////////////////////////////////////
 // LLPanelRegionGeneralInfo
 //
-bool LLPanelRegionGeneralInfo::refreshFromRegion(LLViewerRegion* region)
+bool LLPanelRegionGeneralInfo::refreshFromRegion(const std::optional<VSRegionContext>& region)
 {
     bool allow_modify = gAgent.isGodlike() || (region && region->canManageEstate());
     setCtrlsEnabled(allow_modify);
@@ -1016,7 +1028,7 @@ void LLPanelRegionGeneralInfo::onBtnSet()
     }
     else
     {
-        LLNotificationsUtil::add("ChangeObjectBonusFactor", LLSD(), LLSD(), boost::bind(&LLPanelRegionGeneralInfo::onChangeObjectBonus, this, _1, _2));
+        LLNotificationsUtil::add("ChangeObjectBonusFactor", LLSD(), LLSD(), vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelRegionGeneralInfo::onChangeObjectBonus, this, _1, _2)));
     }
 }
 
@@ -1041,7 +1053,7 @@ void LLPanelRegionGeneralInfo::onClickKick()
     // in order to set up floater dependency
     LLView * button = findChild<LLButton>("kick_btn");
     LLFloater* parent_floater = gFloaterView->getParentFloater(this);
-    LLFloater* child_floater = LLFloaterAvatarPicker::show(boost::bind(&LLPanelRegionGeneralInfo::onKickCommit, this, _1),
+    LLFloater* child_floater = LLFloaterAvatarPicker::show(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelRegionGeneralInfo::onKickCommit, this, _1)),
                                                                                 false, true, false, parent_floater->getName(), button);
     if (child_floater)
     {
@@ -1076,7 +1088,7 @@ void LLPanelRegionGeneralInfo::onClickKickAll(void* userdata)
     LLNotificationsUtil::add("KickUsersFromRegion",
                                     LLSD(),
                                     LLSD(),
-                                    boost::bind(&LLPanelRegionGeneralInfo::onKickAllCommit, (LLPanelRegionGeneralInfo*)userdata, _1, _2));
+                                    vs_native_im_lifetime_callback(region_info_guard((LLPanelRegionGeneralInfo*)userdata,false,true),boost::bind(&LLPanelRegionGeneralInfo::onKickAllCommit, (LLPanelRegionGeneralInfo*)userdata, _1, _2)));
 }
 
 bool LLPanelRegionGeneralInfo::onKickAllCommit(const LLSD& notification, const LLSD& response)
@@ -1104,7 +1116,7 @@ void LLPanelRegionGeneralInfo::onClickMessage(void* userdata)
     LLNotificationsUtil::add("MessageRegion",
         LLSD(),
         LLSD(),
-        boost::bind(&LLPanelRegionGeneralInfo::onMessageCommit, (LLPanelRegionGeneralInfo*)userdata, _1, _2));
+        vs_native_im_lifetime_callback(region_info_guard((LLPanelRegionGeneralInfo*)userdata,false,true),boost::bind(&LLPanelRegionGeneralInfo::onMessageCommit, (LLPanelRegionGeneralInfo*)userdata, _1, _2)));
 }
 
 // static
@@ -1152,7 +1164,7 @@ bool LLPanelRegionGeneralInfo::sendUpdate()
     LL_INFOS() << "LLPanelRegionGeneralInfo::sendUpdate()" << LL_ENDL;
 
     // <FS:Ansariel> Crash fix
-    if (!gAgent.getRegion())
+    if (!vs_current_region_context())
     {
         return false;
     }
@@ -1217,7 +1229,7 @@ bool LLPanelRegionGeneralInfo::sendUpdate()
     }
 
     // if we changed access levels, tell user about it
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
     if (region && (getChild<LLUICtrl>("access_combo")->getValue().asInteger() != region->getSimAccess()) )
     {
         LLNotificationsUtil::add("RegionMaturityChange");
@@ -1230,7 +1242,7 @@ bool LLPanelRegionGeneralInfo::sendUpdate()
 /////////////////////////////////////////////////////////////////////////////
 // LLPanelRegionOpenSettingsInfo
 /////////////////////////////////////////////////////////////////////////////
-bool LLPanelRegionOpenSettingsInfo::refreshFromRegion(LLViewerRegion* region)
+bool LLPanelRegionOpenSettingsInfo::refreshFromRegion(const std::optional<VSRegionContext>& region)
 {
     // Data gets filled in by hippo manager
     bool allow_modify = gAgent.isGodlike() || (region && region->canManageEstate());
@@ -1288,7 +1300,7 @@ bool LLPanelRegionOpenSettingsInfo::postBuild()
 
     childSetAction("apply_ors_btn", onClickOrs, this);
 
-    refreshFromRegion(gAgent.getRegion());
+    refreshFromRegion(vs_current_region_context());
 
     return LLPanelRegionInfo::postBuild();
 }
@@ -1359,7 +1371,7 @@ bool LLPanelRegionDebugInfo::postBuild()
 }
 
 // virtual
-bool LLPanelRegionDebugInfo::refreshFromRegion(LLViewerRegion* region)
+bool LLPanelRegionDebugInfo::refreshFromRegion(const std::optional<VSRegionContext>& region)
 {
     bool allow_modify = gAgent.isGodlike() || (region && region->canManageEstate());
     setCtrlsEnabled(allow_modify);
@@ -1419,7 +1431,7 @@ void LLPanelRegionDebugInfo::callbackAvatarID(const uuid_vec_t& ids, const std::
     if (ids.empty() || names.empty()) return;
     mTargetAvatar = ids[0];
     getChild<LLUICtrl>("target_avatar_name")->setValue(LLSD(names[0].getCompleteName()));
-    refreshFromRegion( gAgent.getRegion() );
+    refreshFromRegion( vs_current_region_context() );
 }
 
 // static
@@ -1447,7 +1459,7 @@ void LLPanelRegionDebugInfo::onClickReturn(void* data)
     payload["flags"] = int(flags);
     payload["return_estate_wide"] = panelp->getChild<LLUICtrl>("return_estate_wide")->getValue().asBoolean();
     LLNotificationsUtil::add("EstateObjectReturn", args, payload,
-                                    boost::bind(&LLPanelRegionDebugInfo::callbackReturn, panelp, _1, _2));
+                                    vs_native_im_lifetime_callback(region_info_guard(panelp,false,true),boost::bind(&LLPanelRegionDebugInfo::callbackReturn, panelp, _1, _2)));
 }
 
 bool LLPanelRegionDebugInfo::callbackReturn(const LLSD& notification, const LLSD& response)
@@ -1491,6 +1503,7 @@ void LLPanelRegionDebugInfo::onClickTopColliders(void* data)
     LLFloaterTopObjects* instance = LLFloaterReg::getTypedInstance<LLFloaterTopObjects>("top_objects");
     if(!instance) return;
     LLFloaterReg::showInstance("top_objects");
+    instance->beginReply();
     instance->clearList();
     instance->disableRefreshBtn();
 
@@ -1510,6 +1523,7 @@ void LLPanelRegionDebugInfo::onClickTopScripts(void* data)
     LLFloaterTopObjects* instance = LLFloaterReg::getTypedInstance<LLFloaterTopObjects>("top_objects");
     if(!instance) return;
     LLFloaterReg::showInstance("top_objects");
+    instance->beginReply();
     instance->clearList();
     instance->disableRefreshBtn();
 
@@ -1531,7 +1545,7 @@ void LLPanelRegionDebugInfo::onClickRestart(void* data)
     // </Ansariel FIRE-1073>
 
     LLNotificationsUtil::add("ConfirmRestart", LLSD(), LLSD(),
-        boost::bind(&LLPanelRegionDebugInfo::callbackRestart, (LLPanelRegionDebugInfo*)data, _1, _2, delay));
+        vs_native_im_lifetime_callback(region_info_guard((LLPanelRegionDebugInfo*)data,false,true),boost::bind(&LLPanelRegionDebugInfo::callbackRestart, (LLPanelRegionDebugInfo*)data, _1, _2, delay)));
 }
 
 bool LLPanelRegionDebugInfo::callbackRestart(const LLSD& notification, const LLSD& response, const LLSD& seconds)
@@ -1580,11 +1594,11 @@ bool LLPanelRegionTerrainInfo::validateTextureSizes()
         if (!texture_ctrl) continue;
 
         LLUUID image_asset_id = texture_ctrl->getImageAssetID();
-        LLViewerFetchedTexture* img = LLViewerTextureManager::getFetchedTexture(image_asset_id);
-        S32 components = img->getComponents();
-        // Must ask for highest resolution version's width. JC
-        S32 width = img->getFullWidth();
-        S32 height = img->getFullHeight();
+        const auto img=vs_region_terrain_texture(image_asset_id);
+        const S32 components=img.components;
+        // The actual source image dimensions, not the decoded swatch mip.
+        const S32 width=img.width;
+        const S32 height=img.height;
 
         //LL_INFOS() << "texture detail " << i << " is " << width << "x" << height << "x" << components << LL_ENDL;
 
@@ -1601,7 +1615,7 @@ bool LLPanelRegionTerrainInfo::validateTextureSizes()
 
         if (components == 4)
         {
-            if (!img->hasSavedRawImage())
+            if (!img.raw)
             {
                 // Raw image isn't loaded yet
                 // Assume it's invalid due to presence of alpha channel
@@ -1617,7 +1631,7 @@ bool LLPanelRegionTerrainInfo::validateTextureSizes()
                 // for GLTF materials, which use alphaMode to determine
                 // transparency)
                 // Raw image is pretty much guaranteed to be saved due to the texture swatches
-                LLImageRaw* raw = img->getSavedRawImage();
+                LLImageRaw* raw = img.raw;
                 if (raw->checkHasTransparentPixels())
                 {
                     LLSD args;
@@ -1874,7 +1888,7 @@ void LLPanelRegionTerrainInfo::updateForMaterialType()
 }
 
 // virtual
-bool LLPanelRegionTerrainInfo::refreshFromRegion(LLViewerRegion* region)
+bool LLPanelRegionTerrainInfo::refreshFromRegion(const std::optional<VSRegionContext>& region)
 {
     bool owner_or_god = gAgent.isGodlike()
                         || (region && (region->getOwner() == gAgent.getID()));
@@ -1888,12 +1902,14 @@ bool LLPanelRegionTerrainInfo::refreshFromRegion(LLViewerRegion* region)
     {
         getChild<LLUICtrl>("region_text")->setValue(LLSD(region->getName()));
 
-        LLVLComposition* compp = region->getComposition();
+        const auto terrain=vs_region_terrain(*region);
+        if(!terrain || !terrain->current || !terrain->current())return false;
+        const auto* compp=&*terrain;
 
         static LLCachedControl<bool> feature_pbr_terrain_enabled(gSavedSettings, "RenderTerrainPBREnabled", false);
 
-        const bool textures_ready = compp->makeTexturesReady(false, false);
-        const bool materials_ready = feature_pbr_terrain_enabled() && compp->makeMaterialsReady(false, false);
+        const bool textures_ready = compp->texturesReady;
+        const bool materials_ready = feature_pbr_terrain_enabled() && compp->materialsReady;
 
         bool set_texture_swatches;
         bool set_material_swatches;
@@ -1912,7 +1928,7 @@ bool LLPanelRegionTerrainInfo::refreshFromRegion(LLViewerRegion* region)
         }
         else
         {
-            material_type = compp->getMaterialType();
+            material_type = (compp->texturesReady || !compp->materialsReady?LLTerrainMaterials::Type::TEXTURE:LLTerrainMaterials::Type::PBR);
             set_texture_swatches = material_type == LLTerrainMaterials::Type::TEXTURE;
             set_material_swatches = !set_texture_swatches;
             reset_texture_swatches = !set_texture_swatches;
@@ -1934,8 +1950,8 @@ bool LLPanelRegionTerrainInfo::refreshFromRegion(LLViewerRegion* region)
                 if(asset_ctrl)
                 {
                     LL_DEBUGS("Terrain", "Texture") << "Detail Texture " << i << ": "
-                             << compp->getDetailAssetID(i) << LL_ENDL;
-                    LLUUID tmp_id(compp->getDetailAssetID(i));
+                             << compp->assets[i] << LL_ENDL;
+                    LLUUID tmp_id(compp->assets[i]);
                     asset_ctrl->setImageAssetID(tmp_id);
                 }
             }
@@ -1948,8 +1964,8 @@ bool LLPanelRegionTerrainInfo::refreshFromRegion(LLViewerRegion* region)
                 if(asset_ctrl)
                 {
                     LL_DEBUGS("Terrain", "Material") << "Detail Material " << i << ": "
-                             << compp->getDetailAssetID(i) << LL_ENDL;
-                    LLUUID tmp_id(compp->getDetailAssetID(i));
+                             << compp->assets[i] << LL_ENDL;
+                    LLUUID tmp_id(compp->assets[i]);
                     asset_ctrl->setImageAssetID(tmp_id);
                 }
             }
@@ -1984,7 +2000,7 @@ bool LLPanelRegionTerrainInfo::refreshFromRegion(LLViewerRegion* region)
         for(S32 i = 0; i < LLTerrainMaterials::ASSET_COUNT; ++i)
         {
             if (!mMaterialScaleUCtrl[i] || !mMaterialScaleVCtrl[i] || !mMaterialRotationCtrl[i] || !mMaterialOffsetUCtrl[i] || !mMaterialOffsetVCtrl[i]) { continue; }
-            const LLGLTFMaterial* mat_override = compp->getMaterialOverride(i);
+            const LLGLTFMaterial* mat_override = compp->overrides[i].get();
             if (!mat_override) { mat_override = &LLGLTFMaterial::sDefault; }
 
             // Assume all texture transforms have the same value
@@ -2000,9 +2016,9 @@ bool LLPanelRegionTerrainInfo::refreshFromRegion(LLViewerRegion* region)
         for(S32 i = 0; i < CORNER_COUNT; ++i)
         {
             buffer = llformat("height_start_spin_%d", i);
-            getChild<LLUICtrl>(buffer)->setValue(LLSD(compp->getStartHeight(i)));
+            getChild<LLUICtrl>(buffer)->setValue(LLSD(compp->starts[i]));
             buffer = llformat("height_range_spin_%d", i);
-            getChild<LLUICtrl>(buffer)->setValue(LLSD(compp->getHeightRange(i)));
+            getChild<LLUICtrl>(buffer)->setValue(LLSD(compp->ranges[i]));
         }
     }
     else
@@ -2060,7 +2076,7 @@ bool LLPanelRegionTerrainInfo::sendUpdate()
     {
         if (!mAskedTextureHeights)
         {
-            LLNotificationsUtil::add("ConfirmTextureHeights", LLSD(), LLSD(), boost::bind(&LLPanelRegionTerrainInfo::callbackTextureHeights, this, _1, _2));
+            LLNotificationsUtil::add("ConfirmTextureHeights", LLSD(), LLSD(), vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelRegionTerrainInfo::callbackTextureHeights, this, _1, _2)));
             mAskedTextureHeights = true;
             return false;
         }
@@ -2179,7 +2195,7 @@ bool LLPanelRegionTerrainInfo::sendUpdate()
         //   viewer: POST ModifyRegion
         //   simulator: RegionHandshake
         //   viewer: GET ModifyRegion
-        LLViewerRegion* region = gAgent.getRegion();
+        const auto region=vs_current_region_context();
         llassert(region);
         if (region)
         {
@@ -2272,11 +2288,12 @@ bool LLPanelRegionTerrainInfo::callbackTextureHeights(const LLSD& notification, 
 void LLPanelRegionTerrainInfo::onClickDownloadRaw(void* data)
 {
     LLPanelRegionTerrainInfo* self = (LLPanelRegionTerrainInfo*)data;
-    LLFilePickerReplyThread::startPicker(boost::bind(&LLPanelRegionTerrainInfo::onDownloadRawFilepickerCB, self, _1), LLFilePicker::FFSAVE_RAW, "terrain.raw");
+    LLFilePickerReplyThread::startPicker(vs_native_im_lifetime_callback(region_info_guard(self,true,true),boost::bind(&LLPanelRegionTerrainInfo::onDownloadRawFilepickerCB, self, _1)), LLFilePicker::FFSAVE_RAW, "terrain.raw");
 }
 
 void LLPanelRegionTerrainInfo::onDownloadRawFilepickerCB(const std::vector<std::string>& filenames)
 {
+    if(filenames.empty())return;
     std::string filepath = filenames[0];
     gXferManager->expectFileForRequest(filepath);
 
@@ -2291,11 +2308,12 @@ void LLPanelRegionTerrainInfo::onDownloadRawFilepickerCB(const std::vector<std::
 void LLPanelRegionTerrainInfo::onClickUploadRaw(void* data)
 {
     LLPanelRegionTerrainInfo* self = (LLPanelRegionTerrainInfo*)data;
-    LLFilePickerReplyThread::startPicker(boost::bind(&LLPanelRegionTerrainInfo::onUploadRawFilepickerCB, self, _1), LLFilePicker::FFLOAD_RAW, false);
+    LLFilePickerReplyThread::startPicker(vs_native_im_lifetime_callback(region_info_guard(self,true,true),boost::bind(&LLPanelRegionTerrainInfo::onUploadRawFilepickerCB, self, _1)), LLFilePicker::FFLOAD_RAW, false);
 }
 
 void LLPanelRegionTerrainInfo::onUploadRawFilepickerCB(const std::vector<std::string>& filenames)
 {
+    if(filenames.empty())return;
     std::string filepath = filenames[0];
     gXferManager->expectFileForTransfer(filepath);
 
@@ -2312,7 +2330,7 @@ void LLPanelRegionTerrainInfo::onUploadRawFilepickerCB(const std::vector<std::st
 // static
 void LLPanelRegionTerrainInfo::onClickBakeTerrain(void* data)
 {
-    LLNotificationsUtil::add("ConfirmBakeTerrain", LLSD(), LLSD(), boost::bind(&LLPanelRegionTerrainInfo::callbackBakeTerrain, (LLPanelRegionTerrainInfo*)data, _1, _2));
+    LLNotificationsUtil::add("ConfirmBakeTerrain", LLSD(), LLSD(), vs_native_im_lifetime_callback(region_info_guard((LLPanelRegionTerrainInfo*)data,true,true),boost::bind(&LLPanelRegionTerrainInfo::callbackBakeTerrain, (LLPanelRegionTerrainInfo*)data, _1, _2)));
 }
 
 bool LLPanelRegionTerrainInfo::callbackBakeTerrain(const LLSD& notification, const LLSD& response)
@@ -2413,7 +2431,7 @@ void LLPanelEstateInfo::onKickUserCommit(const uuid_vec_t& ids)
     args["EVIL_USER"] = LLSLURL("agent", ids[0], "completename").getSLURLString();
     LLSD payload;
     payload["agent_id"] = ids[0];
-    LLNotificationsUtil::add("EstateKickUser", args, payload, boost::bind(&LLPanelEstateInfo::kickUserConfirm, this, _1, _2));
+    LLNotificationsUtil::add("EstateKickUser", args, payload, vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateInfo::kickUserConfirm, this, _1, _2)));
 
 }
 
@@ -2451,7 +2469,7 @@ std::string all_estates_text()
     LLStringUtil::format_map_t args;
     std::string owner = panel->getOwnerName();
 
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
     if (gAgent.isGodlike())
     {
         args["[OWNER]"] = owner.c_str();
@@ -2536,7 +2554,7 @@ void LLPanelEstateInfo::updateEstateName(const std::string& name)
     }
 }
 
-void LLPanelEstateInfo::updateControls(LLViewerRegion* region)
+void LLPanelEstateInfo::updateControls(const std::optional<VSRegionContext>& region)
 {
     bool god = gAgent.isGodlike();
     bool owner = (region && (region->getOwner() == gAgent.getID()));
@@ -2551,7 +2569,7 @@ void LLPanelEstateInfo::updateControls(LLViewerRegion* region)
     refresh();
 }
 
-bool LLPanelEstateInfo::refreshFromRegion(LLViewerRegion* region)
+bool LLPanelEstateInfo::refreshFromRegion(const std::optional<VSRegionContext>& region)
 {
     updateControls(region);
 
@@ -2579,7 +2597,7 @@ bool LLPanelEstateInfo::refreshFromRegion(LLViewerRegion* region)
 void LLPanelEstateInfo::updateChild(LLUICtrl* child_ctrl)
 {
     // Ensure appropriate state of the management ui.
-    updateControls(gAgent.getRegion());
+    updateControls(vs_current_region_context());
 }
 
 bool LLPanelEstateInfo::estateUpdate(LLMessageSystem* msg)
@@ -2646,7 +2664,7 @@ void LLPanelEstateInfo::refreshFromEstate()
     getChild<LLUICtrl>("limit_bots")->setValue(estate_info.getDenyScriptedAgents());
 
     // Ensure appriopriate state of the management UI
-    updateControls(gAgent.getRegion());
+    updateControls(vs_current_region_context());
     refresh();
 }
 
@@ -2655,7 +2673,7 @@ bool LLPanelEstateInfo::sendUpdate()
     LL_INFOS() << "LLPanelEsateInfo::sendUpdate()" << LL_ENDL;
 
     LLNotification::Params params("ChangeLindenEstate");
-    params.functor.function(boost::bind(&LLPanelEstateInfo::callbackChangeLindenEstate, this, _1, _2));
+    params.functor.function(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateInfo::callbackChangeLindenEstate, this, _1, _2)));
 
     if (isLindenEstate())
     {
@@ -2753,7 +2771,7 @@ void LLPanelEstateInfo::setOwnerName(const std::string& name)
 void LLPanelEstateInfo::onClickMessageEstate(void* userdata)
 {
     LL_INFOS() << "LLPanelEstateInfo::onClickMessageEstate" << LL_ENDL;
-    LLNotificationsUtil::add("MessageEstate", LLSD(), LLSD(), boost::bind(&LLPanelEstateInfo::onMessageCommit, (LLPanelEstateInfo*)userdata, _1, _2));
+    LLNotificationsUtil::add("MessageEstate", LLSD(), LLSD(), vs_native_im_lifetime_callback(region_info_guard((LLPanelEstateInfo*)userdata,false,true),boost::bind(&LLPanelEstateInfo::onMessageCommit, (LLPanelEstateInfo*)userdata, _1, _2)));
 }
 
 bool LLPanelEstateInfo::onMessageCommit(const LLSD& notification, const LLSD& response)
@@ -2790,7 +2808,7 @@ LLPanelEstateCovenant::LLPanelEstateCovenant()
 }
 
 // virtual
-bool LLPanelEstateCovenant::refreshFromRegion(LLViewerRegion* region)
+bool LLPanelEstateCovenant::refreshFromRegion(const std::optional<VSRegionContext>& region)
 {
     LLTextBox* region_name = getChild<LLTextBox>("region_name_text");
     if (region_name)
@@ -2869,7 +2887,7 @@ bool LLPanelEstateCovenant::postBuild()
     mEditor = getChild<LLViewerTextEditor>("covenant_editor");
     LLButton* reset_button = getChild<LLButton>("reset_covenant");
     reset_button->setEnabled(gAgent.canManageEstate());
-    reset_button->setClickedCallback(LLPanelEstateCovenant::resetCovenantID, NULL);
+    reset_button->setClickedCallback(LLPanelEstateCovenant::resetCovenantID, this);
 
     return LLPanelRegionInfo::postBuild();
 }
@@ -2903,7 +2921,7 @@ bool LLPanelEstateCovenant::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop
             LLSD payload;
             payload["item_id"] = item->getUUID();
             LLNotificationsUtil::add("EstateChangeCovenant", LLSD(), payload,
-                                    LLPanelEstateCovenant::confirmChangeCovenantCallback);
+                                    vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateCovenant::confirmChangeCovenantCallback,this,_1,_2)));
         }
         break;
     default:
@@ -2919,7 +2937,7 @@ bool LLPanelEstateCovenant::confirmChangeCovenantCallback(const LLSD& notificati
 {
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     LLInventoryItem* item = gInventory.getItem(notification["payload"]["item_id"].asUUID());
-    LLPanelEstateCovenant* self = LLFloaterRegionInfo::getPanelCovenant();
+    LLPanelEstateCovenant* self = this;
 
     if (!item || !self) return false;
 
@@ -2937,13 +2955,14 @@ bool LLPanelEstateCovenant::confirmChangeCovenantCallback(const LLSD& notificati
 // static
 void LLPanelEstateCovenant::resetCovenantID(void* userdata)
 {
-    LLNotificationsUtil::add("EstateChangeCovenant", LLSD(), LLSD(), confirmResetCovenantCallback);
+    LLNotificationsUtil::add("EstateChangeCovenant",LLSD(),LLSD(),
+        vs_native_im_lifetime_callback(region_info_guard((LLPanelEstateCovenant*)userdata,false,true),boost::bind(&LLPanelEstateCovenant::confirmResetCovenantCallback,(LLPanelEstateCovenant*)userdata,_1,_2)));
 }
 
 // static
 bool LLPanelEstateCovenant::confirmResetCovenantCallback(const LLSD& notification, const LLSD& response)
 {
-    LLPanelEstateCovenant* self = LLFloaterRegionInfo::getPanelCovenant();
+    LLPanelEstateCovenant* self = this;
     if (!self) return false;
 
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
@@ -2961,8 +2980,11 @@ bool LLPanelEstateCovenant::confirmResetCovenantCallback(const LLSD& notificatio
 void LLPanelEstateCovenant::loadInvItem(LLInventoryItem *itemp)
 {
     const bool high_priority = true;
+    const U64 epoch=++mCovenantRequestEpoch;
     if (itemp)
     {
+        auto* request=new RegionCovenantRequest{getHandle(),region_info_guard(this,false,true),epoch,itemp->getUUID(),itemp->getAssetUUID()};
+        mAssetStatus=ASSET_LOADING;
         gAssetStorage->getInvItemAsset(gAgent.getRegionHost(),
                                     gAgent.getID(),
                                     gAgent.getSessionID(),
@@ -2972,9 +2994,8 @@ void LLPanelEstateCovenant::loadInvItem(LLInventoryItem *itemp)
                                     itemp->getAssetUUID(),
                                     itemp->getType(),
                                     onLoadComplete,
-                                    (void*)this,
+                                    request,
                                     high_priority);
-        mAssetStatus = ASSET_LOADING;
     }
     else
     {
@@ -2990,7 +3011,11 @@ void LLPanelEstateCovenant::onLoadComplete(const LLUUID& asset_uuid,
                                            void* user_data, S32 status, LLExtStat ext_status)
 {
     LL_INFOS() << "LLPanelEstateCovenant::onLoadComplete()" << LL_ENDL;
-    LLPanelEstateCovenant* panelp = (LLPanelEstateCovenant*)user_data;
+    std::unique_ptr<RegionCovenantRequest> request(static_cast<RegionCovenantRequest*>(user_data));
+    auto* panelp=request?dynamic_cast<LLPanelEstateCovenant*>(request->view.get()):nullptr;
+    if(!panelp || !request->current() || panelp->mCovenantRequestEpoch!=request->epoch || asset_uuid!=request->asset)return;
+    auto* item=gInventory.getItem(request->item);
+    if(!item || item->getAssetUUID()!=request->asset)return;
     if( panelp )
     {
         if(0 == status)
@@ -3314,7 +3339,7 @@ bool LLPanelRegionExperiences::experienceCoreConfirm(const LLSD& notification, c
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     const U32 originalFlags = (U32)notification["payload"]["operation"].asInteger();
 
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
 
     LLSD::array_const_iterator end_it = notification["payload"]["allowed_ids"].endArray();
 
@@ -3389,14 +3414,14 @@ void LLPanelRegionExperiences::infoCallback(LLHandle<LLPanelRegionExperiences> h
 }
 
 /*static*/
-std::string LLPanelRegionExperiences::regionCapabilityQuery(LLViewerRegion* region, const std::string &cap)
+std::string LLPanelRegionExperiences::regionCapabilityQuery(const std::optional<VSRegionContext>& region, const std::string &cap)
 {
     // region->getHandle()  How to get a region * from a handle?
 
-    return region->getCapability(cap);
+    return region && region->current()?region->getCapability(cap):std::string();
 }
 
-bool LLPanelRegionExperiences::refreshFromRegion(LLViewerRegion* region)
+bool LLPanelRegionExperiences::refreshFromRegion(const std::optional<VSRegionContext>& region)
 {
     bool allow_modify = gAgent.isGodlike() || (region && region->canManageEstate());
 
@@ -3420,7 +3445,7 @@ bool LLPanelRegionExperiences::refreshFromRegion(LLViewerRegion* region)
     mTrusted->setReadonly(!allow_modify);
 
     LLExperienceCache::instance().getRegionExperiences(boost::bind(&LLPanelRegionExperiences::regionCapabilityQuery, region, _1),
-        boost::bind(&LLPanelRegionExperiences::infoCallback, getDerivedHandle<LLPanelRegionExperiences>(), _1));
+        vs_native_im_lifetime_callback(region_info_guard(this),boost::bind(&LLPanelRegionExperiences::infoCallback, getDerivedHandle<LLPanelRegionExperiences>(), _1)));
 
     return LLPanelRegionInfo::refreshFromRegion(region);
 }
@@ -3439,7 +3464,7 @@ LLSD LLPanelRegionExperiences::addIds(LLPanelExperienceListEditor* panel)
 
 bool LLPanelRegionExperiences::sendUpdate()
 {
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
 
     LLSD content;
 
@@ -3448,7 +3473,7 @@ bool LLPanelRegionExperiences::sendUpdate()
     content["trusted"]=addIds(mTrusted);
 
     LLExperienceCache::instance().setRegionExperiences(boost::bind(&LLPanelRegionExperiences::regionCapabilityQuery, region, _1),
-        content, boost::bind(&LLPanelRegionExperiences::infoCallback, getDerivedHandle<LLPanelRegionExperiences>(), _1));
+        content, vs_native_im_lifetime_callback(region_info_guard(this),boost::bind(&LLPanelRegionExperiences::infoCallback, getDerivedHandle<LLPanelRegionExperiences>(), _1)));
 
     return true;
 }
@@ -3586,7 +3611,7 @@ bool LLPanelEstateAccess::postBuild()
     return true;
 }
 
-void LLPanelEstateAccess::updateControls(LLViewerRegion* region)
+void LLPanelEstateAccess::updateControls(const std::optional<VSRegionContext>& region)
 {
     bool god = gAgent.isGodlike();
     bool owner = (region && (region->getOwner() == gAgent.getID()));
@@ -3681,7 +3706,7 @@ void LLPanelEstateAccess::onClickAddAllowedGroup()
     }
 
     LLNotification::Params params("ChangeLindenAccess");
-    params.functor.function(boost::bind(&LLPanelEstateAccess::addAllowedGroup, this, _1, _2));
+    params.functor.function(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateAccess::addAllowedGroup, this, _1, _2)));
     if (LLPanelEstateInfo::isLindenEstate())
     {
         LLNotifications::instance().add(params);
@@ -3703,7 +3728,7 @@ bool LLPanelEstateAccess::addAllowedGroup(const LLSD& notification, const LLSD& 
     if (widget)
     {
         widget->removeNoneOption();
-        widget->setSelectGroupCallback(boost::bind(&LLPanelEstateAccess::addAllowedGroup2, this, _1));
+        widget->setSelectGroupCallback(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateAccess::addAllowedGroup2, this, _1)));
         if (parent_floater)
         {
             LLRect new_rect = gFloaterView->findNeighboringPosition(parent_floater, widget);
@@ -3806,7 +3831,7 @@ void LLPanelEstateAccess::addAllowedGroup2(LLUUID id)
     LLNotification::Params params("EstateAllowedGroupAdd");
     params.payload(payload)
         .substitutions(args)
-        .functor.function(accessCoreConfirm);
+        .functor.function(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateAccess::accessCoreConfirm,this,_1,_2)));
     if (LLPanelEstateInfo::isLindenEstate())
     {
         LLNotifications::instance().forceResponse(params, 0);
@@ -3827,7 +3852,7 @@ void LLPanelEstateAccess::accessAddCore(U32 operation_flag, const std::string& d
 
     LLNotification::Params params("ChangeLindenAccess");
     params.payload(payload)
-        .functor.function(accessAddCore2);
+        .functor.function(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateAccess::accessAddCore2,this,_1,_2)));
 
     if (LLPanelEstateInfo::isLindenEstate())
     {
@@ -3850,9 +3875,9 @@ bool LLPanelEstateAccess::accessAddCore2(const LLSD& notification, const LLSD& r
         return false;
     }
 
-    LLEstateAccessChangeInfo* change_info = new LLEstateAccessChangeInfo(notification["payload"]);
+    auto change_info=std::make_shared<LLEstateAccessChangeInfo>(notification["payload"]);
     //Get parent floater name
-    LLPanelEstateAccess* panel = LLFloaterRegionInfo::getPanelAccess();
+    LLPanelEstateAccess* panel = this;
     LLFloater* parent_floater = panel ? gFloaterView->getParentFloater(panel) : NULL;
     const std::string& parent_floater_name = parent_floater ? parent_floater->getName() : "";
 
@@ -3875,11 +3900,11 @@ bool LLPanelEstateAccess::accessAddCore2(const LLSD& notification, const LLSD& r
     }
 
     // avatar picker yes multi-select, yes close-on-select
-    LLFloater* child_floater = LLFloaterAvatarPicker::show(boost::bind(&LLPanelEstateAccess::accessAddCore3, _1, _2, (void*)change_info),
+    LLFloater* child_floater = LLFloaterAvatarPicker::show(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateAccess::accessAddCore3,this,_1,_2,change_info)),
         true, true, false, parent_floater_name, button);
 
     //Allows the closed parent floater to close the child floater (avatar picker)
-    if (child_floater)
+    if (child_floater && parent_floater)
     {
         parent_floater->addDependentFloater(child_floater);
     }
@@ -3888,23 +3913,21 @@ bool LLPanelEstateAccess::accessAddCore2(const LLSD& notification, const LLSD& r
 }
 
 // static
-void LLPanelEstateAccess::accessAddCore3(const uuid_vec_t& ids, std::vector<LLAvatarName> names, void* data)
+void LLPanelEstateAccess::accessAddCore3(const uuid_vec_t& ids,std::vector<LLAvatarName> names,std::shared_ptr<LLEstateAccessChangeInfo> change_info)
 {
-    LLEstateAccessChangeInfo* change_info = (LLEstateAccessChangeInfo*)data;
     if (!change_info) return;
+    names.resize(ids.size());
     if (ids.empty())
     {
         // User didn't select a name.
-        delete change_info;
-        change_info = NULL;
         return;
     }
     // User did select a name.
     change_info->mAgentOrGroupIDs = ids;
     // Can't put estate owner on ban list
-    LLPanelEstateAccess* panel = LLFloaterRegionInfo::getPanelAccess();
+    LLPanelEstateAccess* panel = this;
     if (!panel) return;
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
     if (!region) return;
 
     if (change_info->mOperationFlag & ESTATE_ACCESS_ALLOWED_AGENT_ADD)
@@ -3919,7 +3942,6 @@ void LLPanelEstateAccess::accessAddCore3(const uuid_vec_t& ids, std::vector<LLAv
             args["LIST_TYPE"] = LLTrans::getString("RegionInfoListTypeAllowedAgents");
             args["NUM_EXCESS"] = llformat("%d", (ids.size() + currentCount) - ESTATE_MAX_ACCESS_IDS);
             LLNotificationsUtil::add("MaxAgentOnRegionBatch", args);
-            delete change_info;
             return;
         }
 
@@ -3953,7 +3975,6 @@ void LLPanelEstateAccess::accessAddCore3(const uuid_vec_t& ids, std::vector<LLAv
             LLNotificationsUtil::add(single ? "AgentIsAlreadyInList" : "AgentsAreAlreadyInList", args);
             if (ids_allowed.empty())
             {
-                delete change_info;
                 return;
             }
         }
@@ -3973,7 +3994,6 @@ void LLPanelEstateAccess::accessAddCore3(const uuid_vec_t& ids, std::vector<LLAv
             args["LIST_TYPE"] = LLTrans::getString("RegionInfoListTypeBannedAgents");
             args["NUM_EXCESS"] = llformat("%d", (ids.size() + currentCount) - (LLGridManager::instance().isInSecondLife() ? ESTATE_MAX_BANNED_IDS : ESTATE_MAX_BANNED_IDS_OS)); // <FS:Ansariel> OpenSim
             LLNotificationsUtil::add("MaxAgentOnRegionBatch", args);
-            delete change_info;
             return;
         }
 
@@ -4021,7 +4041,6 @@ void LLPanelEstateAccess::accessAddCore3(const uuid_vec_t& ids, std::vector<LLAv
             LLNotificationsUtil::add("ProblemBanningEstateManager", args);
             if (ids_allowed.empty())
             {
-                delete change_info;
                 return;
             }
         }
@@ -4033,7 +4052,6 @@ void LLPanelEstateAccess::accessAddCore3(const uuid_vec_t& ids, std::vector<LLAv
             LLNotificationsUtil::add(single ? "AgentIsAlreadyInList" : "AgentsAreAlreadyInList", args);
             if (ids_allowed.empty())
             {
-                delete change_info;
                 return;
             }
         }
@@ -4046,7 +4064,7 @@ void LLPanelEstateAccess::accessAddCore3(const uuid_vec_t& ids, std::vector<LLAv
     LLNotification::Params params(change_info->mDialogName);
     params.substitutions(args)
         .payload(change_info->asLLSD())
-        .functor.function(accessCoreConfirm);
+        .functor.function(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateAccess::accessCoreConfirm,this,_1,_2)));
 
     if (LLPanelEstateInfo::isLindenEstate())
     {
@@ -4063,7 +4081,7 @@ void LLPanelEstateAccess::accessAddCore3(const uuid_vec_t& ids, std::vector<LLAv
 // static
 void LLPanelEstateAccess::accessRemoveCore(U32 operation_flag, const std::string& dialog_name, const std::string& list_ctrl_name)
 {
-    LLPanelEstateAccess* panel = LLFloaterRegionInfo::getPanelAccess();
+    LLPanelEstateAccess* panel = this;
     if (!panel) return;
     LLNameListCtrl* name_list = panel->getChild<LLNameListCtrl>(list_ctrl_name);
     if (!name_list) return;
@@ -4086,7 +4104,7 @@ void LLPanelEstateAccess::accessRemoveCore(U32 operation_flag, const std::string
 
     LLNotification::Params params("ChangeLindenAccess");
     params.payload(payload)
-        .functor.function(accessRemoveCore2);
+        .functor.function(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateAccess::accessRemoveCore2,this,_1,_2)));
 
     if (LLPanelEstateInfo::isLindenEstate())
     {
@@ -4123,7 +4141,7 @@ bool LLPanelEstateAccess::accessRemoveCore2(const LLSD& notification, const LLSD
         LLNotificationsUtil::add(notification["payload"]["dialog_name"],
             args,
             notification["payload"],
-            accessCoreConfirm);
+            vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateAccess::accessCoreConfirm,this,_1,_2)));
     }
     return false;
 }
@@ -4137,7 +4155,7 @@ bool LLPanelEstateAccess::accessCoreConfirm(const LLSD& notification, const LLSD
     const U32 originalFlags = (U32)notification["payload"]["operation"].asInteger();
     U32 flags = originalFlags;
 
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
 
     if (option == 2) // cancel
     {
@@ -4253,7 +4271,7 @@ bool LLPanelEstateAccess::accessCoreConfirm(const LLSD& notification, const LLSD
         }
     }
 
-    LLPanelEstateAccess* panel = LLFloaterRegionInfo::getPanelAccess();
+    LLPanelEstateAccess* panel = this;
     if (panel)
     {
         panel->setPendingUpdate(true);
@@ -4300,7 +4318,7 @@ void LLPanelEstateAccess::sendEstateAccessDelta(U32 flags, const LLUUID& agent_o
 void LLPanelEstateAccess::updateChild(LLUICtrl* child_ctrl)
 {
     // Ensure appropriate state of the management ui.
-    updateControls(gAgent.getRegion());
+    updateControls(vs_current_region_context());
 }
 
 void LLPanelEstateAccess::updateLists()
@@ -4308,11 +4326,18 @@ void LLPanelEstateAccess::updateLists()
     std::string cap_url = gAgent.getRegionCapability("EstateAccess");
     if (!cap_url.empty())
     {
-        LLCoros::instance().launch("LLFloaterRegionInfo::requestEstateGetAccessCoro", boost::bind(LLPanelEstateAccess::requestEstateGetAccessCoro, cap_url));
+        const auto weak=getHandle();const auto lifetime=region_info_guard(this);const auto epoch=++mAccessEpoch;
+        auto current=[weak,lifetime,epoch]
+        {
+            auto* panel=dynamic_cast<LLPanelEstateAccess*>(weak.get());
+            return panel && lifetime() && panel->mAccessEpoch==epoch;
+        };
+        LLCoros::instance().launch("LLFloaterRegionInfo::requestEstateGetAccessCoro",
+            [cap_url,weak,current]{if(current())requestEstateGetAccessCoro(cap_url,weak,current);});
     }
 }
 
-void LLPanelEstateAccess::requestEstateGetAccessCoro(std::string url)
+void LLPanelEstateAccess::requestEstateGetAccessCoro(std::string url,LLHandle<LLView> view,std::function<bool()> current)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("requestEstateGetAccessoCoro", httpPolicy);
@@ -4323,8 +4348,9 @@ void LLPanelEstateAccess::requestEstateGetAccessCoro(std::string url)
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
-    LLPanelEstateAccess* panel = LLFloaterRegionInfo::getPanelAccess();
-    if (!panel) return;
+    if(!current())return;
+    auto* panel=dynamic_cast<LLPanelEstateAccess*>(view.get());
+    if(!panel)return;
 
     LLNameListCtrl* allowed_agent_name_list = panel->getChild<LLNameListCtrl>("allowed_avatar_name_list");
     if (allowed_agent_name_list && result.has("AllowedAgents"))
@@ -4369,7 +4395,7 @@ void LLPanelEstateAccess::requestEstateGetAccessCoro(std::string url)
 
             std::string ban_date = (*it)["ban_date"].asString();
             columns[2]["column"] = "ban_date";
-            columns[2]["value"] = ban_date[0] != '0' ? ban_date.substr(0, 16) : LLTrans::getString("na"); // server returns the "0000-00-00 00:00:00" date in case it doesn't know it
+            columns[2]["value"] = !ban_date.empty() && ban_date[0] != '0' ? ban_date.substr(0, 16) : LLTrans::getString("na"); // server returns the "0000-00-00 00:00:00" date in case it doesn't know it
 
             columns[3]["column"] = "bannedby";
             LLUUID banning_id = (*it)["banning_id"].asUUID();
@@ -4427,7 +4453,7 @@ void LLPanelEstateAccess::requestEstateGetAccessCoro(std::string url)
     }
 
 
-    panel->updateControls(gAgent.getRegion());
+    panel->updateControls(vs_current_region_context());
 }
 
 //---------------------------------------------------------------------------
@@ -4501,7 +4527,7 @@ void LLPanelEstateAccess::copyListToClipboard(std::string list_name)
     LLClipboard::instance().copyToClipboard(utf8str_to_wstring(list_to_copy), 0, static_cast<S32>(list_to_copy.length()));
 }
 
-bool LLPanelEstateAccess::refreshFromRegion(LLViewerRegion* region)
+bool LLPanelEstateAccess::refreshFromRegion(const std::optional<VSRegionContext>& region)
 {
     updateLists();
     return LLPanelRegionInfo::refreshFromRegion(region);
@@ -4558,7 +4584,7 @@ void LLPanelRegionEnvironment::refresh()
     mCheckAllowOverride->setValue(mAllowOverride);
 }
 
-bool LLPanelRegionEnvironment::refreshFromRegion(LLViewerRegion* region)
+bool LLPanelRegionEnvironment::refreshFromRegion(const std::optional<VSRegionContext>& region)
 {
     if (!region)
     {
@@ -4566,14 +4592,12 @@ bool LLPanelRegionEnvironment::refreshFromRegion(LLViewerRegion* region)
         setControlsEnabled(false);
         mCurEnvVersion = INVALID_PARCEL_ENVIRONMENT_VERSION;
         getChild<LLUICtrl>("region_text")->setValue(LLSD(""));
+        return false;
     }
-    else
-    {
-        getChild<LLUICtrl>("region_text")->setValue(LLSD(region->getName()));
-    }
+    getChild<LLUICtrl>("region_text")->setValue(LLSD(region->getName()));
     setNoSelection(false);
-
-    if (gAgent.getRegion()->getRegionID() != region->getRegionID())
+    const auto current=vs_current_region_context();
+    if (!current || current->getRegionID() != region->getRegionID())
     {
         setCrossRegion(true);
         mCurEnvVersion = INVALID_PARCEL_ENVIRONMENT_VERSION;
@@ -4596,7 +4620,7 @@ void LLPanelRegionEnvironment::refreshFromSource()
     }
 
     LLEnvironment::instance().requestRegion(
-        [that_h](S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo) { onEnvironmentReceived(that_h, parcel_id, envifo); });
+        [that_h,current=region_info_guard(this)](S32 parcel_id,LLEnvironment::EnvironmentInfo::ptr_t envifo) { if(current())onEnvironmentReceived(that_h,parcel_id,envifo); });
 
     setControlsEnabled(false);
 }
@@ -4644,7 +4668,7 @@ void LLPanelRegionEnvironment::onChkAllowOverride(bool value)
     args["ESTATENAME"] = LLEstateInfoModel::instance().getName();
     LLNotification::Params params(notification);
     params.substitutions(args);
-    params.functor.function([this](const LLSD& notification, const LLSD& response) { confirmUpdateEstateEnvironment(notification, response); });
+    params.functor.function(vs_native_im_lifetime_callback(region_info_guard(this,false,true),[this](const LLSD& notification, const LLSD& response) { confirmUpdateEstateEnvironment(notification, response); }));
 
     if (!value || LLPanelEstateInfo::isLindenEstate())
     {   // warn if turning off or a Linden Estate
@@ -4667,7 +4691,7 @@ void LLPanelEstateAccess::onClickExportList(LLNameListCtrl* list, const std::str
         LLNotificationsUtil::add("GenericAlert", args);
         return;
     }
-    LLFilePickerReplyThread::startPicker(boost::bind(&LLPanelEstateAccess::exportListCallback, this, list, _1), LLFilePicker::FFSAVE_CSV, filename);
+    LLFilePickerReplyThread::startPicker(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateAccess::exportListCallback, this, list, _1)), LLFilePicker::FFSAVE_CSV, filename);
 }
 
 void LLPanelEstateAccess::onClickExportEstateManagerList()
@@ -4749,7 +4773,7 @@ void LLPanelEstateAccess::onClickImportList(LLNameListCtrl* list)
         LLNotificationsUtil::add("GenericAlert", args);
         return;
     }
-    LLFilePickerReplyThread::startPicker(boost::bind(&LLPanelEstateAccess::importListCallback, this, list, _1), LLFilePicker::FFLOAD_ALL, false);
+    LLFilePickerReplyThread::startPicker(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateAccess::importListCallback, this, list, _1)), LLFilePicker::FFLOAD_ALL, false);
 }
 
 void LLPanelEstateAccess::onClickImportEstateManagerList()

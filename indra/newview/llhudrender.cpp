@@ -106,7 +106,22 @@ void hud_render_text(const LLWString &wstr, const LLVector3 &pos_agent,
     LLRect world_view_rect = gViewerWindow->getWorldViewRectRaw();
     glm::ivec4 viewport(world_view_rect.mLeft, world_view_rect.mBottom, world_view_rect.getWidth(), world_view_rect.getHeight());
 
-    glm::vec3 win_coord = glm::project(glm::vec3(render_pos), get_current_modelview(), get_current_projection(), viewport);
+    glm::vec3 win_coord = glm::project(glm::vec3(render_pos),camera->getUIModelview(),camera->getUIProjection(),viewport);
+
+    if(LLRender2D::isNativeUI())
+    {
+        // Preserve the same floating screen projection, floored pixel offsets,
+        // scale and baseline as the reference orthographic glyph submission.
+        if(!std::isfinite(win_coord.x) || !std::isfinite(win_coord.y) || !std::isfinite(win_coord.z) || win_coord.z<0.f || win_coord.z>1.f)return;
+        LLUI::pushMatrix();LLUI::loadIdentity();
+        LLUI::translate((win_coord.x-world_view_rect.mLeft)/LLFontGL::sScaleX,
+            (win_coord.y-world_view_rect.mBottom)/LLFontGL::sScaleY);
+        F32 right_x;
+        font.render(wstr,0,0,1,color,LLFontGL::LEFT,LLFontGL::BASELINE,style,shadow,
+            static_cast<S32>(wstr.length()),1000,&right_x,false,true);
+        LLUI::popMatrix();
+        return;
+    }
 
     //fonts all render orthographically, set up projection``
     gGL.matrixMode(LLRender::MM_PROJECTION);

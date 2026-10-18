@@ -393,6 +393,7 @@ public:
 
     bool hasRenderDebugFeatureMask(const U32 mask) const    { return bool(mRenderDebugFeatureMask & mask); }
     bool hasRenderDebugMask(const U64 mask) const           { return bool(mRenderDebugMask & mask); }
+    void initializeRenderDebugFeatures();
     void setAllRenderDebugFeatures() { mRenderDebugFeatureMask = 0xffffffff; }
     void clearAllRenderDebugFeatures() { mRenderDebugFeatureMask = 0x0; }
     void setAllRenderDebugDisplays() { mRenderDebugMask = 0xffffffffffffffff; }

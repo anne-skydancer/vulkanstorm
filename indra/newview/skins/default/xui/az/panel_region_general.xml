@@ -34,7 +34,7 @@
 	<check_box label="Torpağı yenidən satmağa icazə ver" name="allow_land_resell_check"/>
 	<check_box label="Torpaq hissələrini birləşdirib/ayırmağa icazə ver" name="allow_parcel_changes_check"/>
 	<check_box label="Axtarışda torpağı göstərmə" name="block_parcel_search_check" tool_tip="Hissə və regionin axtarış nəticələrində göstərilməsini dayandırın"/>
-	<check_box label="Mesh obyektlərinə icazə ver" name="mesh_rez_enabled_check" tool_tip="Yaşayıcılara bu regiondə meshlər yerləşdirməyə icazə ver"/>
+
 	<spinner label="Agent limiti" name="agent_limit_spin"/>
 	<spinner label="Obyekt bonusu" name="object_bonus_spin"/>
 	<text label="İcazə" name="access_text">

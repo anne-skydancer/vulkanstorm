@@ -18,6 +18,7 @@
 #include <map>
 #include <set>
 #include <boost/signals2/connection.hpp>
+#include <boost/signals2/signal.hpp>
 
 class LLMessageSystem;
 class LLParcel;
@@ -122,6 +123,7 @@ public:
     const std::string& regionName() const { return mName; }
     const LLVector3& position() const { return mPosition; }
     U64 regionEpoch() const { return mRegionEpoch; }
+    boost::signals2::connection observeCurrentRegion(const boost::signals2::signal<void()>::slot_type& slot) { return mCurrentRegionChanged.connect(slot); }
     bool regionReady() const { return mPhase == Phase::Connected && !mChangingRegion && mSeedReady && mHandshake && mCircuitAck; }
     VSNativeCamera::State cameraState() const;
     bool publishCamera();
@@ -313,6 +315,7 @@ private:
     U64                                             mAttentionAvatar = 0;
     bool mHandshake = false, mMovement = false, mSeedReady = false, mCircuitAck = false, mQuit = false;
     U64 mReceived = 0, mSent = 0, mRejected = 0, mExpired = 0;
+    boost::signals2::signal<void()> mCurrentRegionChanged;
     std::vector<boost::signals2::scoped_connection> mSettingConnections;
     std::vector<boost::signals2::scoped_connection> mNameConnections;
     std::map<LLUUID, std::string> mNames;

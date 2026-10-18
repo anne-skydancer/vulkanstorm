@@ -75,6 +75,8 @@
 #include "llregioninfomodel.h"
 #include "llestateinfomodel.h"
 #include "llfloaterregioninfo.h"
+#include "llfloatertelehub.h"
+#include "llfloatertopobjects.h"
 #include "llagent.h"
 #include "llparcel.h"
 #include "llviewerparcelmgr.h"
@@ -163,7 +165,7 @@ const std::set<std::string>    worldMessages = {
     "ReplyTaskInventory", "GenericStreamingMessage"
 };
 const std::set<std::string> session = { "SimStats",
-                                        "RegionInfo", "EstateOwnerMessage",
+                                        "RegionInfo", "EstateOwnerMessage", "TelehubInfo", "LandStatReply",
                                         "ParcelProperties",
                                         "ParcelMediaUpdate",
                                         "ParcelMediaCommandMessage",
@@ -373,7 +375,7 @@ void VSNativeSession::install(LLMessageSystem& msg)
     for (const auto& name : worldMessages) msg.setHandlerFunc(name.c_str(), receiveMessage);
     msg.setHandlerFunc("AgentWearablesUpdate",receiveMessage);
     msg.setHandlerFunc("EnableSimulator",receiveMessage);
-    for (const char* name : {"SimStats", "RegionInfo", "EstateOwnerMessage", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "MapItemReply", "ParcelOverlay", "CoarseLocationUpdate", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
+    for (const char* name : {"SimStats", "RegionInfo", "EstateOwnerMessage", "TelehubInfo", "LandStatReply", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "MapItemReply", "ParcelOverlay", "CoarseLocationUpdate", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
          "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "MoneyBalanceReply", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
         msg.setHandlerFunc(name, receiveMessage);
     msg.setHandlerFunc("ObjectProperties", receiveMessage);
@@ -1261,7 +1263,7 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
     const auto peer=mCircuits.find(sender);
     const bool known=sender==mHost || peer!=mCircuits.end();
     if (transport.count(name)) return mHost.isOk() && known && mPhase != Phase::Disconnected;
-    if(name=="RegionInfo" || name=="EstateOwnerMessage")return regionReady() && sender==mHost;
+    if(name=="RegionInfo" || name=="EstateOwnerMessage" || name=="TelehubInfo" || name=="LandStatReply")return regionReady() && sender==mHost;
     if (name=="LayerData") return mHost.isOk() && known && (mPhase==Phase::Connecting || mPhase==Phase::Connected);
     if(name=="ParcelProperties" || name=="ParcelAccessListReply" || name=="ParcelDwellReply" || name=="ParcelObjectOwnersReply" || name=="EstateCovenantReply")
         return mPhase==Phase::Connected && !mChangingRegion && peer!=mCircuits.end() &&
@@ -1285,6 +1287,8 @@ void VSNativeSession::receive(LLMessageSystem* msg)
 {
     const std::string name = msg->getMessageName();
     if(name=="RegionInfo"){if(!applyRegionInfo(*msg))++mRejected;return;}
+    if(name=="TelehubInfo"){if(admit(name,msg->getSender()))LLFloaterTelehub::processTelehubInfo(msg,nullptr);return;}
+    if(name=="LandStatReply"){if(admit(name,msg->getSender()))LLFloaterTopObjects::handle_land_reply(msg,nullptr);return;}
     if(name=="EstateOwnerMessage")
     {
         if(admit(name,msg->getSender()))LLFloaterRegionInfo::processEstateOwnerRequest(msg,nullptr);
@@ -1902,6 +1906,7 @@ void VSNativeSession::connected()
         requestParcel();
         LLEnvironment::instance().onRegionChange();
         if (gSavedSettings.getBOOL("UseLSLBridge")) FSLSLBridge::instance().initBridge();
+        mCurrentRegionChanged();
         return;
     }
     mPhase = Phase::Connected; mDeadline = now() + 1;
@@ -1982,6 +1987,7 @@ void VSNativeSession::connected()
     LLAgentLanguage::update();
     LL_INFOS("NativeSession") << "Native CPU region ready: " << mName << LL_ENDL;
     publishProgress();
+    mCurrentRegionChanged();
 }
 std::function<bool()> VSNativeSession::accountGuard(bool allowConnecting) const
 {

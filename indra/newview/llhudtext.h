@@ -145,6 +145,7 @@ public:
 
     static void shiftAll(const LLVector3& offset);
     static void renderAllHUD();
+    static void renderNativeBeaconLabels();
     static void reshape();
     static void setDisplayText(bool flag) { sDisplayText = flag ; }
 

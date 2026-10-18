@@ -18,7 +18,7 @@
 	<text name="covenant_timestamp_text">
 		Sidst ændret Ons Dec 31 16:00:00 1969
 	</text>
-	<button label="?" name="covenant_help"/>
+
 	<text_editor name="covenant_editor">
 		Der er ikke angivet nogen regler for denne estate.
 	</text_editor>
@@ -62,16 +62,8 @@
 	<text name="changeable_clause">
 		Land i denne region må ikke deles eller samles.
 	</text>
-	<string name="can_resell">
-		Købt land i denne region må sælges videre
-	</string>
-	<string name="can_not_resell">
-		Købt land i denne region må ikke sælges videre
-	</string>
-	<string name="can_change">
-		Købt land i denne region må deles eller samles.
-	</string>
-	<string name="can_not_change">
-		Købt land i denne region må ikke deles eller samles.
-	</string>
+
+
+
+
 </panel>

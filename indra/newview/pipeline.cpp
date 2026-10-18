@@ -458,6 +458,20 @@ void LLPipeline::connectRefreshCachedSettingsSafe(const std::string name)
     }
 }
 
+void LLPipeline::initializeRenderDebugFeatures()
+{
+    if (gSavedSettings.getBOOL("DisableAllRenderFeatures"))
+    {
+        clearAllRenderDebugFeatures();
+    }
+    else
+    {
+        setAllRenderDebugFeatures(); // By default, all debugging features on
+    }
+    clearAllRenderDebugDisplays(); // All debug displays off
+
+}
+
 void LLPipeline::init()
 {
     refreshCachedSettings();
@@ -503,15 +517,7 @@ void LLPipeline::init()
 
     resetFrameStats();
 
-    if (gSavedSettings.getBOOL("DisableAllRenderFeatures"))
-    {
-        clearAllRenderDebugFeatures();
-    }
-    else
-    {
-        setAllRenderDebugFeatures(); // By default, all debugging features on
-    }
-    clearAllRenderDebugDisplays(); // All debug displays off
+    initializeRenderDebugFeatures();
 
     sRenderParticles = true; // <FS:LO> flag to hold correct, user selected, status of particles
 

@@ -21,7 +21,7 @@
 	<text name="covenant_timestamp_text">
 		上次修改於 Wed Dec 31 16:00:00 1969
 	</text>
-	<button label="?" name="covenant_help" />
+
 	<text_editor bottom="-247" height="162" name="covenant_editor">
 		此領地沒有任何契約要求。
 	</text_editor>
@@ -65,16 +65,8 @@
 	<text name="changeable_clause">
 		這區域的土地不能合併或分割。
 	</text>
-	<string name="can_resell">
-		購買這區域的土地允許轉售。
-	</string>
-	<string name="can_not_resell">
-		購買這區域的土地不允許轉售。
-	</string>
-	<string name="can_change">
-		購買這區域的土地允許進行合併或分割。
-	</string>
-	<string name="can_not_change">
-		購買這區域的土地不允許進行合併或分割。
-	</string>
+
+
+
+
 </panel>

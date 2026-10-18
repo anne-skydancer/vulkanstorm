@@ -28,6 +28,7 @@
 #define LL_LLVIEWERCAMERA_H
 
 #include "llcamera.h"
+#include <glm/mat4x4.hpp>
 #include "llsingleton.h"
 #include "lltimer.h"
 #include "m4math.h"
@@ -69,6 +70,8 @@ public:
 
     const LLMatrix4 &getProjection() const;
     const LLMatrix4 &getModelview() const;
+    glm::mat4 getUIModelview() const;
+    glm::mat4 getUIProjection() const;
 
     // Warning!  These assume the current global matrices are correct
     void projectScreenToPosAgent(const S32 screen_x, const S32 screen_y, LLVector3* pos_agent ) const;

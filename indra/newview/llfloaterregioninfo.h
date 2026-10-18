@@ -32,6 +32,7 @@
 #include "llagent.h"
 #include "llassettype.h"
 #include "llfloater.h"
+#include "vsregioncontext.h"
 #include "llhost.h"
 #include "llpanel.h"
 #include "llextendedstatus.h"
@@ -47,6 +48,7 @@ class LLMessageSystem;
 class LLPanelRegionInfo;
 class LLTabContainer;
 class LLViewerRegion;
+struct LLEstateAccessChangeInfo;
 class LLViewerTextEditor;
 class LLInventoryItem;
 class LLCheckBoxCtrl;
@@ -122,7 +124,7 @@ private:
 protected:
     void onTabSelected(const LLSD& param);
     void disableTabCtrls();
-    void refreshFromRegion(LLViewerRegion* region);
+    void refreshFromRegion(const std::optional<VSRegionContext>& region);
     void onGodLevelChange(U8 god_level);
 
     // member data
@@ -136,6 +138,9 @@ protected:
 private:
     LLAgent::god_level_change_slot_t   mGodLevelChangeSlot;
     boost::signals2::connection mRegionChangedCallback;
+    boost::signals2::scoped_connection mRegionInfoConnection;
+    boost::signals2::scoped_connection mNativeRegionConnection,mNativeTerrainConnection;
+    void observeNativeRegion();
 };
 
 
@@ -150,7 +155,7 @@ public:
     void onChangeAnything();
     static void onChangeText(LLLineEditor* caller, void* user_data);
 
-    virtual bool refreshFromRegion(LLViewerRegion* region);
+    virtual bool refreshFromRegion(const std::optional<VSRegionContext>& region);
     virtual bool estateUpdate(LLMessageSystem* msg) { return true; }
 
     bool postBuild() override;
@@ -197,7 +202,7 @@ public:
         :   LLPanelRegionInfo() {}
     ~LLPanelRegionOpenSettingsInfo() {}
 
-    virtual bool refreshFromRegion(LLViewerRegion* region);
+    virtual bool refreshFromRegion(const std::optional<VSRegionContext>& region);
 
     // LLPanel
     virtual bool postBuild();
@@ -217,7 +222,7 @@ public:
         :   LLPanelRegionInfo() {}
     ~LLPanelRegionGeneralInfo() {}
 
-    bool refreshFromRegion(LLViewerRegion* region) override;
+    bool refreshFromRegion(const std::optional<VSRegionContext>& region) override;
 
     bool postBuild() override;
 
@@ -249,7 +254,7 @@ public:
 
     bool postBuild() override;
 
-    bool refreshFromRegion(LLViewerRegion* region) override;
+    bool refreshFromRegion(const std::optional<VSRegionContext>& region) override;
 
 protected:
     bool sendUpdate() override;
@@ -281,7 +286,7 @@ public:
 
     bool postBuild() override;
 
-    bool refreshFromRegion(LLViewerRegion* region) override;                // refresh local settings from region update from simulator
+    bool refreshFromRegion(const std::optional<VSRegionContext>& region) override;                // refresh local settings from region update from simulator
     void setEnvControls(bool available);                                    // Whether environment settings are available for this region
 
     bool validateTextureSizes();
@@ -354,12 +359,12 @@ public:
     LLPanelEstateInfo();
     ~LLPanelEstateInfo();
 
-    void updateControls(LLViewerRegion* region);
+    void updateControls(const std::optional<VSRegionContext>& region);
 
     static void updateEstateName(const std::string& name);
     static void updateEstateOwnerName(const std::string& name);
 
-    bool refreshFromRegion(LLViewerRegion* region) override;
+    bool refreshFromRegion(const std::optional<VSRegionContext>& region) override;
     bool estateUpdate(LLMessageSystem* msg) override;
 
     bool postBuild() override;
@@ -398,7 +403,7 @@ public:
 
     bool postBuild() override;
     void updateChild(LLUICtrl* child_ctrl) override;
-    bool refreshFromRegion(LLViewerRegion* region) override;
+    bool refreshFromRegion(const std::optional<VSRegionContext>& region) override;
     bool estateUpdate(LLMessageSystem* msg) override;
 
     // LLView overrides
@@ -406,9 +411,9 @@ public:
                            bool drop, EDragAndDropType cargo_type,
                            void *cargo_data, EAcceptance *accept,
                            std::string& tooltip_msg) override;
-    static bool confirmChangeCovenantCallback(const LLSD& notification, const LLSD& response);
+    bool confirmChangeCovenantCallback(const LLSD& notification, const LLSD& response);
     static void resetCovenantID(void* userdata);
-    static bool confirmResetCovenantCallback(const LLSD& notification, const LLSD& response);
+    bool confirmResetCovenantCallback(const LLSD& notification, const LLSD& response);
     void sendChangeCovenantID(const LLUUID &asset_id);
     void loadInvItem(LLInventoryItem *itemp);
     static void onLoadComplete(const LLUUID& asset_uuid,
@@ -447,6 +452,7 @@ protected:
     LLUUID                  mCovenantID;
     LLViewerTextEditor*     mEditor;
     EAssetStatus            mAssetStatus;
+    U64 mCovenantRequestEpoch=0;
 };
 
 /////////////////////////////////////////////////////////////////////////////
@@ -464,7 +470,7 @@ public:
     static void sendEstateExperienceDelta(U32 flags, const LLUUID& agent_id);
 
     static void infoCallback(LLHandle<LLPanelRegionExperiences> handle, const LLSD& content);
-    bool refreshFromRegion(LLViewerRegion* region) override;
+    bool refreshFromRegion(const std::optional<VSRegionContext>& region) override;
     void sendPurchaseRequest()const;
     void processResponse( const LLSD& content );
 
@@ -474,7 +480,7 @@ protected:
 private:
     void refreshRegionExperiences();
 
-    static std::string regionCapabilityQuery(LLViewerRegion* region, const std::string &cap);
+    static std::string regionCapabilityQuery(const std::optional<VSRegionContext>& region, const std::string &cap);
 
     LLPanelExperienceListEditor* setupList(const char* control_name, U32 add_id, U32 remove_id);
     static LLSD addIds( LLPanelExperienceListEditor* panel );
@@ -498,13 +504,13 @@ public:
     bool postBuild() override;
     void updateChild(LLUICtrl* child_ctrl) override;
 
-    void updateControls(LLViewerRegion* region);
+    void updateControls(const std::optional<VSRegionContext>& region);
     void updateLists();
 
     void setPendingUpdate(bool pending) { mPendingUpdate = pending; }
     bool getPendingUpdate() { return mPendingUpdate; }
 
-    bool refreshFromRegion(LLViewerRegion* region) override;
+    bool refreshFromRegion(const std::optional<VSRegionContext>& region) override;
 
     // <FS:Ansariel> Moved to public
     static void sendEstateAccessDelta(U32 flags, const LLUUID& agent_id);
@@ -545,25 +551,26 @@ private:
     void addAllowedGroup2(LLUUID id);
 
     // Core methods for all above add/remove button clicks
-    static void accessAddCore(U32 operation_flag, const std::string& dialog_name);
-    static bool accessAddCore2(const LLSD& notification, const LLSD& response);
-    static void accessAddCore3(const uuid_vec_t& ids, std::vector<LLAvatarName> names, void* data);
+    void accessAddCore(U32 operation_flag, const std::string& dialog_name);
+    bool accessAddCore2(const LLSD& notification, const LLSD& response);
+    void accessAddCore3(const uuid_vec_t& ids, std::vector<LLAvatarName> names, std::shared_ptr<LLEstateAccessChangeInfo> change_info);
 
-    static void accessRemoveCore(U32 operation_flag, const std::string& dialog_name, const std::string& list_ctrl_name);
-    static bool accessRemoveCore2(const LLSD& notification, const LLSD& response);
+    void accessRemoveCore(U32 operation_flag, const std::string& dialog_name, const std::string& list_ctrl_name);
+    bool accessRemoveCore2(const LLSD& notification, const LLSD& response);
 
     // used for both add and remove operations
-    static bool accessCoreConfirm(const LLSD& notification, const LLSD& response);
+    bool accessCoreConfirm(const LLSD& notification, const LLSD& response);
 
     // Send the actual EstateOwnerRequest "estateaccessdelta" message
     // <FS:Ansariel> Moved to public
     //static void sendEstateAccessDelta(U32 flags, const LLUUID& agent_id);
 
-    static void requestEstateGetAccessCoro(std::string url);
+    static void requestEstateGetAccessCoro(std::string url,LLHandle<LLView> view,std::function<bool()> current);
 
     void searchAgent(LLNameListCtrl* listCtrl, const std::string& search_string);
     void copyListToClipboard(std::string list_name);
 
+    U64 mAccessEpoch=0;
     bool mPendingUpdate;
     bool mCtrlsEnabled;
 };

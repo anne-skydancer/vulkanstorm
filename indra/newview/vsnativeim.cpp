@@ -1,6 +1,7 @@
 // Native transport admission with the existing IM model and skinned UI. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsnativeim.h"
+#include "lltracker.h"
 #include "lluploaddialog.h"
 #include "llviewerdisplayname.h"
 #include "vsnativesession.h"
@@ -139,8 +140,10 @@ void vs_native_im_reset()
         if(auto* view=LLFloaterReg::findInstance(name))view->closeFloater(true);
         LLFloaterReg::destroyInstance(name);
     }
-    for (const char* name : {"about_land", "ban_duration", "my_environments", "buy_land", "sell_land", "buy_currency", "buy_currency_html", "add_payment_method", "money_tracker"})
+    if(auto* regionInfo=LLFloaterReg::findInstance("region_info"))regionInfo->closeFloater(true);
+    for (const char* name : {"region_info", "telehubs", "top_objects", "about_land", "ban_duration", "my_environments", "buy_land", "sell_land", "buy_currency", "buy_currency_html", "add_payment_method", "money_tracker"})
         LLFloaterReg::destroyInstance(name);
+    LLTracker::cleanupInstance();
     LLUploadDialog::modalUploadFinished();
     sOfflineGeneration = 0;
     LLFloaterPermsDefault::setCapSent(false);

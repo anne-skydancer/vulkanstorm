@@ -29,6 +29,7 @@
 #define LL_LLFLOATERREGIONRESTARTSCHEDULE_H
 
 #include "llfloater.h"
+#include <functional>
 
 class LLLineEditor;
 class LLButton;
@@ -42,6 +43,8 @@ public:
 
     bool postBuild() override;
     void onOpen(const LLSD& key) override;
+    void onClose(bool app_quitting) override;
+    std::function<bool()> requestGuard(bool modify=false);
     void draw() override;
 
     void onPMAMButtonClicked();
@@ -56,8 +59,8 @@ public:
     static bool canUse();
 
 protected:
-    static void requestRegionShcheduleCoro(std::string url, LLHandle<LLFloater> handle);
-    static void setRegionShcheduleCoro(std::string url, LLSD body, LLHandle<LLFloater> handle);
+    static void requestRegionShcheduleCoro(std::string url, LLHandle<LLFloater> handle,std::function<bool()> current);
+    static void setRegionShcheduleCoro(std::string url, LLSD body, LLHandle<LLFloater> handle,std::function<bool()> current);
 
     LLHandle<LLView> mOwnerHandle;
     F32 mContextConeOpacity{ 0.f };
@@ -68,6 +71,7 @@ protected:
     LLButton* mSaveButton{ nullptr };
     LLButton* mCancelButton{ nullptr };
 
+    U64 mRequestEpoch=0;
     bool mTimeAM{ true };
 };
 

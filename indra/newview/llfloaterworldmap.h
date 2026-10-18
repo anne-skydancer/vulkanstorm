@@ -118,6 +118,7 @@ public:
     static const LLUUID& getHomeID() { return sHomeID; }
 
     // A z_attenuation of 0.0f collapses the distance into the X-Y plane
+    static F32 distanceToDestination(const LLVector3d& destination,F32 z_attenuation=0.5f);
     F32             getDistanceToDestination(const LLVector3d& pos_global, F32 z_attenuation = 0.5f) const;
 
     void            clearLocationSelection(bool clear_ui = false, bool dest_reached = false);

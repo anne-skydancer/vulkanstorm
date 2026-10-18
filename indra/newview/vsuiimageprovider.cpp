@@ -523,6 +523,13 @@ LLPointer<LLImageRaw> VSUIImageProvider::rawImage(const LLUUID& id) const
 bool vs_ui_image_ready(const LLUUID& id) { return sActiveProvider && sActiveProvider->imageReady(id); }
 bool vs_ui_image_failed(const LLUUID& id) { return sActiveProvider && sActiveProvider->imageFailed(id); }
 S32 vs_ui_image_discard(const LLUUID& id) {return sActiveProvider?sActiveProvider->imageDiscard(id):-1;}
+std::pair<S32,S32> vs_ui_image_dimensions(const LLUUID& id)
+{ return sActiveProvider?sActiveProvider->imageDimensions(id):std::pair<S32,S32>{0,0}; }
+std::pair<S32,S32> VSUIImageProvider::imageDimensions(const LLUUID& id) const
+{
+    const auto found=mImpl->remote.find(imageID(id));
+    return found!=mImpl->remote.end() && imageReady(id)?std::pair<S32,S32>{found->second.fullWidth,found->second.fullHeight}:std::pair<S32,S32>{0,0};
+}
 S32 vs_ui_image_components(const LLUUID& id)
 {return sActiveProvider?sActiveProvider->imageComponents(id):0;}
 S32 VSUIImageProvider::imageComponents(const LLUUID& id) const

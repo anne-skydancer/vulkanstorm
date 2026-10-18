@@ -122,6 +122,7 @@ public:
                         S32 line_width = 1);
     void renderObjectBeacons();
     void resetObjectBeacons();
+    const std::vector<LLDebugBeacon>& debugBeacons() const { return mDebugBeacons; }
 
     void dirtyAllObjectInventory();
 // [SL:KB] - Patch: Render-TextureToggle (Catznip-4.0)

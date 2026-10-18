@@ -28,6 +28,16 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloatertelehub.h"
+#include "vsnativeim.h"
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#include "vsobjectcontext.h"
+#include "vsregioncontext.h"
+#include "llviewerwindow.h"
+#include "vsvulkancontext.h"
+#include <map>
+#include <set>
+#include <array>
 
 #include "message.h"
 #include "llfontgl.h"
@@ -43,6 +53,55 @@
 #include "llviewerobjectlist.h"
 #include "lluictrlfactory.h"
 
+namespace
+{
+bool nativeTelehub(){return gViewerWindow && gViewerWindow->isNativeVulkan();}
+std::vector<VSObjectContext> telehubSelection()
+{
+    const auto session=VSNativeSession::active();
+    if(!session || !session->regionReady() || !session->objectSelection())return {};
+    std::vector<VSObjectContext> result;std::set<LLUUID> roots;
+    for(const auto& selected:session->objectSelection()->selected())
+    {
+        const auto object=VSObjectContext::resolve(selected.id);
+        if(!object || !object->current || !object->current())return {};
+        const auto root=VSObjectContext::resolve(object->rootEditID);
+        if(!root || !root->current || !root->current())return {};
+        if(roots.insert(root->id).second)result.push_back(*root);
+    }
+    return result;
+}
+void sendTelehubRequest(const std::string& parameter)
+{
+    const auto session=VSNativeSession::active();
+    if(!session || !session->regionReady())return;
+    const auto selection=telehubSelection();
+    std::map<LLHost,std::vector<U32>> peers;
+    for(const auto& object:selection)peers[object.host].push_back(object.localID);
+    if(peers.empty())peers[session->host()]={};
+    for(const auto& peer:peers)
+    {
+        LLMessageSystem* msg=gMessageSystem;
+        auto head=[&]
+        {
+            msg->newMessage(gAgent.isGodlike()?"GodlikeMessage":"EstateOwnerMessage");
+            msg->nextBlockFast(_PREHASH_AgentData);msg->addUUIDFast(_PREHASH_AgentID,gAgent.getID());
+            msg->addUUIDFast(_PREHASH_SessionID,gAgent.getSessionID());msg->addUUID("TransactionID",LLUUID::null);
+            msg->nextBlock("MethodData");msg->addString("Method","telehub");msg->addUUID("Invoice",LLUUID::null);
+            if(!parameter.empty()){msg->nextBlock("ParamList");msg->addString("Parameter",parameter);}
+        };
+        head();
+        for(std::size_t i=0;i<peer.second.size();++i)
+        {
+            msg->nextBlock("ParamList");msg->addString("Parameter",llformat("%u",peer.second[i]));
+            if(msg->isSendFull("ParamList") && i+1<peer.second.size())
+            {msg->sendReliable(peer.first);head();}
+        }
+        msg->sendReliable(peer.first);
+    }
+}
+}
+
 LLFloaterTelehub::LLFloaterTelehub(const LLSD& key)
 :   LLFloater(key),
     mTelehubObjectID(),
@@ -55,7 +114,7 @@ LLFloaterTelehub::LLFloaterTelehub(const LLSD& key)
 
 bool LLFloaterTelehub::postBuild()
 {
-    gMessageSystem->setHandlerFunc("TelehubInfo", processTelehubInfo);
+    if(!nativeTelehub())gMessageSystem->setHandlerFunc("TelehubInfo", processTelehubInfo);
 
     getChild<LLUICtrl>("connect_btn")->setCommitCallback(boost::bind(&LLFloaterTelehub::onClickConnect, this));
     getChild<LLUICtrl>("disconnect_btn")->setCommitCallback(boost::bind(&LLFloaterTelehub::onClickDisconnect, this));
@@ -73,19 +132,38 @@ bool LLFloaterTelehub::postBuild()
 }
 void LLFloaterTelehub::onOpen(const LLSD& key)
 {
-    // Show tools floater by selecting translate (select) tool
-    LLToolMgr::getInstance()->setCurrentToolset(gBasicToolset);
-    LLToolMgr::getInstance()->getCurrentToolset()->selectTool( LLToolCompTranslate::getInstance() );
-
+    if(nativeTelehub())
+    {
+        const auto session=VSNativeSession::active();const auto region=vs_current_region_context();
+        if(!session || !region)return;
+        if(!mNativeCurrent || !mNativeCurrent())
+        {mTelehubObjectID.setNull();mNumSpawn=0;getChild<LLScrollListCtrl>("spawn_points_list")->deleteAllItems();}
+        const auto weak=getHandle();const auto account=vs_native_im_guard();
+        mNativeCurrent=[weak,account,region]
+        {
+            const auto current=vs_current_region_context();
+            return weak.get() && account() && region->current() && current && *current==*region;
+        };
+        mNativeRegionConnection=session->observeCurrentRegion(vs_native_im_account_callback([weak]
+        {
+            if(auto* floater=dynamic_cast<LLFloaterTelehub*>(weak.get()))floater->onOpen(LLSD());
+        }));
+        // The actual native selection owner is consumed below. The normal
+        // translate/select mouse frontend remains a prerequisite for admission.
+    }
+    else
+    {
+        LLToolMgr::getInstance()->setCurrentToolset(gBasicToolset);
+        LLToolMgr::getInstance()->getCurrentToolset()->selectTool(LLToolCompTranslate::getInstance());
+        mObjectSelection=LLSelectMgr::getInstance()->getEditSelection();
+    }
     sendTelehubInfoRequest();
-
-    mObjectSelection = LLSelectMgr::getInstance()->getEditSelection();
 }
 
 LLFloaterTelehub::~LLFloaterTelehub()
 {
     // no longer interested in this message
-    gMessageSystem->setHandlerFunc("TelehubInfo", NULL);
+    if(!nativeTelehub())gMessageSystem->setHandlerFunc("TelehubInfo", NULL);
 }
 
 void LLFloaterTelehub::draw()
@@ -100,14 +178,22 @@ void LLFloaterTelehub::draw()
 // Per-frame updates, because we don't have a selection manager observer.
 void LLFloaterTelehub::refresh()
 {
-    constexpr bool children_ok = true;
-    LLViewerObject* object = mObjectSelection->getFirstRootObject(children_ok);
-
-    bool have_selection = (object != NULL);
-    bool all_volume = LLSelectMgr::getInstance()->selectionAllPCode( LL_PCODE_VOLUME );
+    bool have_selection=false,all_volume=false;
+    if(nativeTelehub())
+    {
+        const auto selected=telehubSelection();
+        have_selection=mNativeCurrent && mNativeCurrent() && !selected.empty();
+        all_volume=have_selection && std::all_of(selected.begin(),selected.end(),[](const auto& object){return object.pcode==LL_PCODE_VOLUME;});
+    }
+    else
+    {
+        constexpr bool children_ok=true;
+        have_selection=mObjectSelection->getFirstRootObject(children_ok)!=nullptr;
+        all_volume=LLSelectMgr::getInstance()->selectionAllPCode(LL_PCODE_VOLUME);
+    }
     getChildView("connect_btn")->setEnabled(have_selection && all_volume);
 
-    bool have_telehub = mTelehubObjectID.notNull();
+    bool have_telehub=mTelehubObjectID.notNull() && (!nativeTelehub() || (mNativeCurrent && mNativeCurrent()));
     getChildView("disconnect_btn")->setEnabled(have_telehub);
 
     bool space_avail = (mNumSpawn < MAX_SPAWNPOINTS_PER_TELEHUB);
@@ -126,7 +212,7 @@ bool LLFloaterTelehub::renderBeacons()
 {
     // only render if we've got a telehub
     LLFloaterTelehub* floater = LLFloaterReg::findTypedInstance<LLFloaterTelehub>("telehubs");
-    return floater && floater->mTelehubObjectID.notNull();
+    return floater && floater->mTelehubObjectID.notNull() && (!nativeTelehub() || (floater->mNativeCurrent && floater->mNativeCurrent()));
 }
 
 // static
@@ -140,12 +226,17 @@ void LLFloaterTelehub::addBeacons()
     // an updated one based on the actual object position.
     LLVector3 hub_pos_region = floater->mTelehubPos;
     LLQuaternion hub_rot = floater->mTelehubRot;
-    LLViewerObject* obj = gObjectList.findObject(floater->mTelehubObjectID);
-    if (obj)
+    if(nativeTelehub())
     {
-        hub_pos_region = obj->getPositionRegion();
-        hub_rot = obj->getRotationRegion();
+        if(!floater->mNativeCurrent || !floater->mNativeCurrent())return;
+        auto& scene=gViewerWindow->nativeContext()->world();
+        const auto object=scene.object(floater->mTelehubObjectID);
+        const auto transform=object?scene.objectTransform(*object):std::nullopt;
+        const auto region=vs_current_region_context();
+        if(transform && region){hub_pos_region=region->getPosRegionFromGlobal(transform->position);hub_rot=transform->rotation;}
     }
+    else if(auto* obj=gObjectList.findObject(floater->mTelehubObjectID))
+    {hub_pos_region=obj->getPositionRegion();hub_rot=obj->getRotationRegion();}
     // Draw nice thick 3-pixel lines.
     gObjectList.addDebugBeacon(hub_pos_region, "", LLColor4::yellow, LLColor4::white, 4);
 
@@ -163,27 +254,49 @@ void LLFloaterTelehub::addBeacons()
 
 void LLFloaterTelehub::sendTelehubInfoRequest()
 {
+    if(nativeTelehub())
+    {
+        if(mNativeCurrent && mNativeCurrent())sendTelehubRequest("info ui");
+        return;
+    }
     LLSelectMgr::getInstance()->sendGodlikeRequest("telehub", "info ui");
 }
 
 void LLFloaterTelehub::onClickConnect()
 {
+    if(nativeTelehub())
+    {
+        if(mNativeCurrent && mNativeCurrent())sendTelehubRequest("connect");
+        return;
+    }
     LLSelectMgr::getInstance()->sendGodlikeRequest("telehub", "connect");
 }
 
 void LLFloaterTelehub::onClickDisconnect()
 {
+    if(nativeTelehub())
+    {
+        if(mNativeCurrent && mNativeCurrent())sendTelehubRequest("delete");
+        return;
+    }
     LLSelectMgr::getInstance()->sendGodlikeRequest("telehub", "delete");
 }
 
 void LLFloaterTelehub::onClickAddSpawnPoint()
 {
+    if(nativeTelehub())
+    {
+        if(mNativeCurrent && mNativeCurrent())sendTelehubRequest("spawnpoint add");
+        if(const auto session=VSNativeSession::active();session && session->objectSelection())session->objectSelection()->select({});
+        return;
+    }
     LLSelectMgr::getInstance()->sendGodlikeRequest("telehub", "spawnpoint add");
     LLSelectMgr::getInstance()->deselectAll();
 }
 
 void LLFloaterTelehub::onClickRemoveSpawnPoint()
 {
+    if(nativeTelehub() && (!mNativeCurrent || !mNativeCurrent()))return;
     LLScrollListCtrl* list = getChild<LLScrollListCtrl>("spawn_points_list");
     if (!list)
         return;
@@ -225,7 +338,7 @@ void LLFloaterTelehub::onClickRemoveSpawnPoint()
 void LLFloaterTelehub::processTelehubInfo(LLMessageSystem* msg, void**)
 {
     LLFloaterTelehub* floater = LLFloaterReg::findTypedInstance<LLFloaterTelehub>("telehubs");
-    if (floater)
+    if (floater && (!nativeTelehub() || (floater->mNativeCurrent && floater->mNativeCurrent())))
     {
         floater->unpackTelehubInfo(msg);
     }
@@ -233,16 +346,20 @@ void LLFloaterTelehub::processTelehubInfo(LLMessageSystem* msg, void**)
 
 void LLFloaterTelehub::unpackTelehubInfo(LLMessageSystem* msg)
 {
-    msg->getUUID("TelehubBlock", "ObjectID", mTelehubObjectID);
-    msg->getString("TelehubBlock", "ObjectName", mTelehubObjectName);
-    msg->getVector3("TelehubBlock", "TelehubPos", mTelehubPos);
-    msg->getQuat("TelehubBlock", "TelehubRot", mTelehubRot);
-
-    mNumSpawn = msg->getNumberOfBlocks("SpawnPointBlock");
-    for (S32 i = 0; i < mNumSpawn; i++)
+    const S32 count=msg->getNumberOfBlocks("SpawnPointBlock");
+    if(count<0 || count>MAX_SPAWNPOINTS_PER_TELEHUB)return;
+    LLUUID object;std::string name;LLVector3 position;LLQuaternion rotation;
+    std::array<LLVector3,MAX_SPAWNPOINTS_PER_TELEHUB> spawns;
+    msg->getUUID("TelehubBlock","ObjectID",object);msg->getString("TelehubBlock","ObjectName",name);
+    msg->getVector3("TelehubBlock","TelehubPos",position);msg->getQuat("TelehubBlock","TelehubRot",rotation);
+    if(!position.isFinite() || !rotation.isFinite())return;
+    for(S32 i=0;i<count;++i)
     {
-        msg->getVector3("SpawnPointBlock", "SpawnPointPos", mSpawnPointPos[i], i);
+        msg->getVector3("SpawnPointBlock","SpawnPointPos",spawns[i],i);
+        if(!spawns[i].isFinite())return;
     }
+    mTelehubObjectID=object;mTelehubObjectName=std::move(name);mTelehubPos=position;mTelehubRot=rotation;mNumSpawn=count;
+    std::copy(spawns.begin(),spawns.begin()+count,mSpawnPointPos);
 
     // Update parts of the UI that change only when message received.
 

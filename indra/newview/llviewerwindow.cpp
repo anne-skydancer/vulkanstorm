@@ -2685,6 +2685,7 @@ void LLViewerWindow::shutdownViews()
         mNativeChat = nullptr;
         gConsole = nullptr; // The native root owns it; retire async observers before deletion.
         mNativeUI.reset();
+        gHUDView=nullptr;
         gStatusBar = nullptr;
         gToolBarView = nullptr;
         mFloaterSnapRegion = nullptr;

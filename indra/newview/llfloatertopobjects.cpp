@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloatertopobjects.h"
+#include "vsregioncontext.h"
+#include "vsnativeim.h"
 
 // library includes
 #include "message.h"
@@ -134,7 +136,8 @@ void LLFloaterTopObjects::setMode(U32 mode)
 // static
 void LLFloaterTopObjects::handle_land_reply(LLMessageSystem* msg, void** data)
 {
-    LLFloaterTopObjects* instance = LLFloaterReg::getTypedInstance<LLFloaterTopObjects>("top_objects");
+    LLFloaterTopObjects* instance = (gViewerWindow && gViewerWindow->isNativeVulkan()?LLFloaterReg::findTypedInstance<LLFloaterTopObjects>("top_objects"):LLFloaterReg::getTypedInstance<LLFloaterTopObjects>("top_objects"));
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() && (!instance || !instance->mReplyCurrent || !instance->mReplyCurrent()))return;
     if(instance && instance->isInVisibleChain())
     {
         instance->handleReply(msg, data);
@@ -340,7 +343,7 @@ void LLFloaterTopObjects::updateSelectionInfo()
     {
         getChild<LLButton>("profile_btn")->setEnabled(false);
         getChild<LLButton>("estate_kick_btn")->setEnabled(false);
-        LLAvatarNameCache::get(object_id, boost::bind(&LLFloaterTopObjects::onAvatarCheck, this, _1, _2));
+        LLAvatarNameCache::get(object_id,vs_native_im_lifetime_callback(requestGuard(),boost::bind(&LLFloaterTopObjects::onAvatarCheck,this,_1,_2)));
     }
     // </FS:Ansariel>
 
@@ -374,7 +377,7 @@ void LLFloaterTopObjects::returnObjects(bool all)
 {
     LLMessageSystem *msg = gMessageSystem;
 
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region=vs_current_region_context();
     if (!region) return;
 
     LLCtrlListInterface *list = getChild<LLUICtrl>("objects_list")->getListInterface();
@@ -424,7 +427,7 @@ void LLFloaterTopObjects::returnObjects(bool all)
 bool LLFloaterTopObjects::callbackReturnAll(const LLSD& notification, const LLSD& response)
 {
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
-    LLFloaterTopObjects* instance = LLFloaterReg::getTypedInstance<LLFloaterTopObjects>("top_objects");
+    LLFloaterTopObjects* instance=this;
     if(!instance) return false;
     if (option == 0)
     {
@@ -435,7 +438,7 @@ bool LLFloaterTopObjects::callbackReturnAll(const LLSD& notification, const LLSD
 
 void LLFloaterTopObjects::onReturnAll()
 {
-    LLNotificationsUtil::add("ReturnAllTopObjects", LLSD(), LLSD(), &callbackReturnAll);
+    LLNotificationsUtil::add("ReturnAllTopObjects",LLSD(),LLSD(),vs_native_im_lifetime_callback(requestGuard(true),boost::bind(&LLFloaterTopObjects::callbackReturnAll,this,_1,_2)));
 }
 
 
@@ -462,8 +465,22 @@ void LLFloaterTopObjects::clearList()
 }
 
 
+std::function<bool()> LLFloaterTopObjects::requestGuard(bool modify)
+{
+    const auto weak=getHandle();const auto region=vs_current_region_context();const auto account=vs_native_im_guard();
+    return [weak,region,account,modify]
+    {
+        const auto current=vs_current_region_context();
+        return weak.get() && account() && region && region->current() && current && *current==*region &&
+            (!modify || current->canManageEstate());
+    };
+}
+void LLFloaterTopObjects::beginReply(){mReplyCurrent=requestGuard();}
+
 void LLFloaterTopObjects::onRefresh()
 {
+    beginReply();
+    if(!mReplyCurrent())return;
     U32 mode = STAT_REPORT_TOP_SCRIPTS;
     U32 flags = 0;
     std::string filter = "";

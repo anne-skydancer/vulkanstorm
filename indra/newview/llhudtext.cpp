@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llhudtext.h"
+#include <optional>
 
 #include "llrender.h"
 
@@ -147,9 +148,12 @@ void LLHUDText::renderText()
         return;
     }
 
-    gGL.getTexUnit(0)->enable(LLTexUnit::TT_TEXTURE);
-
-    LLGLState gls_blend(GL_BLEND, true);
+    std::optional<LLGLState> gls_blend;
+    if(!LLRender2D::isNativeUI())
+    {
+        gGL.getTexUnit(0)->enable(LLTexUnit::TT_TEXTURE);
+        gls_blend.emplace(GL_BLEND,true);
+    }
 
     LLColor4 shadow_color(0.f, 0.f, 0.f, 1.f);
     F32 alpha_factor = 1.f;
@@ -743,6 +747,17 @@ void LLHUDText::markDead()
     LLPointer<LLHUDText> ptr(this);
     sTextObjects.erase(ptr);
     LLHUDObject::markDead();
+}
+
+void LLHUDText::renderNativeBeaconLabels()
+{
+    updateAll();
+    if(!sDisplayText)return;
+    // Source-less LLHUDText is the actual shared beacon label model, not a
+    // manufactured legacy scene object. World object hover text is a separate
+    // native scene service and must not be represented by fake LLViewerObject.
+    for(auto& text:sVisibleTextObjects)
+        if(!text->mSourceObject && !text->mOnHUDAttachment)text->renderText();
 }
 
 void LLHUDText::renderAllHUD()

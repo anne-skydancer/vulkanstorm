@@ -49,6 +49,7 @@ public:
         bool                doubleSided     = false;
         bool overlay=false; // Shared world feedback, after scene transparency and before HUD.
         float screenLinePixels=0; // Triangle-encoded lines; portable physical-pixel width.
+        bool depthTest=true; // Reference debug feedback can draw a translucent occluded pass.
         bool depthWriteAlpha=false; // Reference renderRect writes depth for its translucent walls.
         bool background = false; // Clip-space sky, drawn before depth-tested geometry.
         bool                hud             = false;
