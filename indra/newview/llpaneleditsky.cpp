@@ -153,6 +153,7 @@ bool LLPanelSettingsSkyAtmosTab::postBuild()
     getChild<LLUICtrl>(FIELD_SKY_DENSITY_DROPLET_RADIUS)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onDropletRadiusChanged(); });
     getChild<LLUICtrl>(FIELD_SKY_DENSITY_ICE_LEVEL)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onIceLevelChanged(); });
     getChild<LLUICtrl>(FIELD_REFLECTION_PROBE_AMBIANCE)->setCommitCallback([this](LLUICtrl*, const LLSD&) { onReflectionProbeAmbianceChanged(); });
+    mChildrenReady=true;
     refresh();
 
     return true;
@@ -164,7 +165,7 @@ void LLPanelSettingsSkyAtmosTab::setEnabled(bool enabled)
     LLPanelSettingsSky::setEnabled(enabled);
 
     // Make sure we have initialized children (initialized)
-    if (getFirstChild())
+    if (mChildrenReady)
     {
         getChild<LLUICtrl>(FIELD_SKY_HAZE_HORIZON)->setEnabled(enabled);
         getChild<LLUICtrl>(FIELD_SKY_HAZE_DENSITY)->setEnabled(enabled);
@@ -181,6 +182,7 @@ void LLPanelSettingsSkyAtmosTab::setEnabled(bool enabled)
 
 void LLPanelSettingsSkyAtmosTab::refresh()
 {
+    if(!mChildrenReady)return;
     if (!mSkySettings)
     {
         setAllChildrenEnabled(false);
@@ -375,6 +377,7 @@ bool LLPanelSettingsSkyCloudTab::postBuild()
     getChild<LLUICtrl>(FIELD_SKY_CLOUD_DETAIL_Y)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onCloudDetailChanged(); });
     getChild<LLUICtrl>(FIELD_SKY_CLOUD_DETAIL_D)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onCloudDetailChanged(); });
 
+    mChildrenReady=true;
     refresh();
 
     return true;
@@ -386,7 +389,7 @@ void LLPanelSettingsSkyCloudTab::setEnabled(bool enabled)
     LLPanelSettingsSky::setEnabled(enabled);
 
     // Make sure we have children (initialized)
-    if (getFirstChild())
+    if (mChildrenReady)
     {
         getChild<LLUICtrl>(FIELD_SKY_CLOUD_COVERAGE)->setEnabled(enabled);
         getChild<LLUICtrl>(FIELD_SKY_CLOUD_SCALE)->setEnabled(enabled);
@@ -402,6 +405,7 @@ void LLPanelSettingsSkyCloudTab::setEnabled(bool enabled)
 
 void LLPanelSettingsSkyCloudTab::refresh()
 {
+    if(!mChildrenReady)return;
     if (!mSkySettings)
     {
         setAllChildrenEnabled(false);
@@ -511,11 +515,20 @@ LLPanelSettingsSkySunMoonTab::LLPanelSettingsSkySunMoonTab() :
 
 bool LLPanelSettingsSkySunMoonTab::postBuild()
 {
+    // The LL layout supplies trackballs; the FS PhotoTools layout supplies
+    // the same quaternion edits through azimuth/elevation sliders instead.
+    mSunRotation=findChild<LLVirtualTrackball>(FIELD_SKY_SUN_ROTATION);
+    mMoonRotation=findChild<LLVirtualTrackball>(FIELD_SKY_MOON_ROTATION);
+    mSunLayout=findChildView(PANEL_SKY_SUN_LAYOUT);
+    mMoonLayout=findChildView(PANEL_SKY_MOON_LAYOUT);
+    if(!mSunLayout)mSunLayout=getChildView("P_Sun_Setting");
+    if(!mMoonLayout)mMoonLayout=getChildView("P_Moon_Setting");
+
     getChild<LLUICtrl>(FIELD_SKY_SUN_MOON_COLOR)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onSunMoonColorChanged(); });
     getChild<LLUICtrl>(FIELD_SKY_GLOW_FOCUS)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onGlowChanged(); });
     getChild<LLUICtrl>(FIELD_SKY_GLOW_SIZE)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onGlowChanged(); });
     getChild<LLUICtrl>(FIELD_SKY_STAR_BRIGHTNESS)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onStarBrightnessChanged(); });
-    getChild<LLUICtrl>(FIELD_SKY_SUN_ROTATION)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onSunRotationChanged(); });
+    if(mSunRotation)mSunRotation->setCommitCallback([this](LLUICtrl *,const LLSD&){onSunRotationChanged();});
     getChild<LLUICtrl>(FIELD_SKY_SUN_AZIMUTH)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onSunAzimElevChanged(); });
     getChild<LLUICtrl>(FIELD_SKY_SUN_ELEVATION)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onSunAzimElevChanged(); });
     getChild<LLUICtrl>(FIELD_SKY_SUN_IMAGE)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onSunImageChanged(); });
@@ -523,7 +536,7 @@ bool LLPanelSettingsSkySunMoonTab::postBuild()
     getChild<LLTextureCtrl>(FIELD_SKY_SUN_IMAGE)->setBlankImageAssetID(LLSettingsSky::GetBlankSunTextureId());
     getChild<LLTextureCtrl>(FIELD_SKY_SUN_IMAGE)->setDefaultImageAssetID(LLSettingsSky::GetBlankSunTextureId());
     getChild<LLTextureCtrl>(FIELD_SKY_SUN_IMAGE)->setAllowNoTexture(true);
-    getChild<LLUICtrl>(FIELD_SKY_MOON_ROTATION)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onMoonRotationChanged(); });
+    if(mMoonRotation)mMoonRotation->setCommitCallback([this](LLUICtrl *,const LLSD&){onMoonRotationChanged();});
     getChild<LLUICtrl>(FIELD_SKY_MOON_AZIMUTH)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onMoonAzimElevChanged(); });
     getChild<LLUICtrl>(FIELD_SKY_MOON_ELEVATION)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onMoonAzimElevChanged(); });
     getChild<LLUICtrl>(FIELD_SKY_MOON_IMAGE)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onMoonImageChanged(); });
@@ -533,6 +546,7 @@ bool LLPanelSettingsSkySunMoonTab::postBuild()
     getChild<LLUICtrl>(FIELD_SKY_MOON_SCALE)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onMoonScaleChanged(); });
     getChild<LLUICtrl>(FIELD_SKY_MOON_BRIGHTNESS)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onMoonBrightnessChanged(); });
 
+    mChildrenReady=true;
     refresh();
 
     return true;
@@ -544,7 +558,7 @@ void LLPanelSettingsSkySunMoonTab::setEnabled(bool enabled)
     LLPanelSettingsSky::setEnabled(enabled);
 
     // Make sure we have children
-    if (getFirstChild())
+    if (mChildrenReady)
     {
         getChild<LLUICtrl>(FIELD_SKY_GLOW_FOCUS)->setEnabled(enabled);
         getChild<LLUICtrl>(FIELD_SKY_GLOW_SIZE)->setEnabled(enabled);
@@ -552,17 +566,18 @@ void LLPanelSettingsSkySunMoonTab::setEnabled(bool enabled)
         getChild<LLUICtrl>(FIELD_SKY_SUN_SCALE)->setEnabled(enabled);
         getChild<LLUICtrl>(FIELD_SKY_MOON_SCALE)->setEnabled(enabled);
         getChild<LLUICtrl>(FIELD_SKY_MOON_BRIGHTNESS)->setEnabled(enabled);
-        getChildView(PANEL_SKY_SUN_LAYOUT)->setAllChildrenEnabled(true);
-        getChildView(PANEL_SKY_MOON_LAYOUT)->setAllChildrenEnabled(true);
+        mSunLayout->setAllChildrenEnabled(true);
+        mMoonLayout->setAllChildrenEnabled(true);
     }
 }
 
 void LLPanelSettingsSkySunMoonTab::refresh()
 {
+    if(!mChildrenReady)return;
     if (!mSkySettings || !getCanChangeSettings())
     {
-        getChildView(PANEL_SKY_SUN_LAYOUT)->setAllChildrenEnabled(false);
-        getChildView(PANEL_SKY_MOON_LAYOUT)->setAllChildrenEnabled(false);
+        mSunLayout->setAllChildrenEnabled(false);
+        mMoonLayout->setAllChildrenEnabled(false);
         getChildView(FIELD_SKY_SUN_BEACON)->setEnabled(true);
         getChildView(FIELD_SKY_MOON_BEACON)->setEnabled(true);
 
@@ -595,7 +610,7 @@ void LLPanelSettingsSkySunMoonTab::refresh()
     LLQuaternion quat = mSkySettings->getSunRotation();
     LLVirtualTrackball::getAzimuthAndElevationDeg(quat, azimuth, elevation);
 
-    getChild<LLVirtualTrackball>(FIELD_SKY_SUN_ROTATION)->setRotation(quat);
+    if(mSunRotation)mSunRotation->setRotation(quat);
     getChild<LLUICtrl>(FIELD_SKY_SUN_AZIMUTH)->setValue(azimuth);
     getChild<LLUICtrl>(FIELD_SKY_SUN_ELEVATION)->setValue(elevation);
 
@@ -603,7 +618,7 @@ void LLPanelSettingsSkySunMoonTab::refresh()
     quat = mSkySettings->getMoonRotation();
     LLVirtualTrackball::getAzimuthAndElevationDeg(quat, azimuth, elevation);
 
-    getChild<LLVirtualTrackball>(FIELD_SKY_MOON_ROTATION)->setRotation(quat);
+    if(mMoonRotation)mMoonRotation->setRotation(quat);
     getChild<LLUICtrl>(FIELD_SKY_MOON_AZIMUTH)->setValue(azimuth);
     getChild<LLUICtrl>(FIELD_SKY_MOON_ELEVATION)->setValue(elevation);
 
@@ -646,7 +661,8 @@ void LLPanelSettingsSkySunMoonTab::onStarBrightnessChanged()
 
 void LLPanelSettingsSkySunMoonTab::onSunRotationChanged()
 {
-    LLQuaternion quat = getChild<LLVirtualTrackball>(FIELD_SKY_SUN_ROTATION)->getRotation();
+    if(!mSunRotation)return;
+    LLQuaternion quat=mSunRotation->getRotation();
 
     F32 azimuth, elevation;
     LLVirtualTrackball::getAzimuthAndElevationDeg(quat, azimuth, elevation);
@@ -679,7 +695,7 @@ void LLPanelSettingsSkySunMoonTab::onSunAzimElevChanged()
     az_quat.setAngleAxis(F_TWO_PI - azimuth, 0, 0, 1);
     quat *= az_quat;
 
-    getChild<LLVirtualTrackball>(FIELD_SKY_SUN_ROTATION)->setRotation(quat);
+    if(mSunRotation)mSunRotation->setRotation(quat);
 
     if (mSkySettings)
     {
@@ -707,7 +723,8 @@ void LLPanelSettingsSkySunMoonTab::onSunImageChanged()
 
 void LLPanelSettingsSkySunMoonTab::onMoonRotationChanged()
 {
-    LLQuaternion quat = getChild<LLVirtualTrackball>(FIELD_SKY_MOON_ROTATION)->getRotation();
+    if(!mMoonRotation)return;
+    LLQuaternion quat=mMoonRotation->getRotation();
 
     F32 azimuth, elevation;
     LLVirtualTrackball::getAzimuthAndElevationDeg(quat, azimuth, elevation);
@@ -741,7 +758,7 @@ void LLPanelSettingsSkySunMoonTab::onMoonAzimElevChanged()
     az_quat.setAngleAxis(F_TWO_PI- azimuth, 0, 0, 1);
     quat *= az_quat;
 
-    getChild<LLVirtualTrackball>(FIELD_SKY_MOON_ROTATION)->setRotation(quat);
+    if(mMoonRotation)mMoonRotation->setRotation(quat);
 
     if (mSkySettings)
     {
@@ -801,6 +818,7 @@ bool LLPanelSettingsSkyDensityTab::postBuild()
 
     getChild<LLUICtrl>(FIELD_SKY_DENSITY_ABSORPTION_MAX_ALTITUDE)->setCommitCallback([this](LLUICtrl *, const LLSD &) { onAbsorptionMaxAltitudeChanged(); });
 
+    mChildrenReady=true;
     refresh();
     return true;
 }
@@ -810,7 +828,7 @@ void LLPanelSettingsSkyDensityTab::setEnabled(bool enabled)
     LLPanelSettingsSky::setEnabled(enabled);
 
     // Make sure we have children
-    if (getFirstChild())
+    if (mChildrenReady)
     {
         getChild<LLUICtrl>(FIELD_SKY_DENSITY_RAYLEIGH_EXPONENTIAL)->setEnabled(enabled);
         getChild<LLUICtrl>(FIELD_SKY_DENSITY_RAYLEIGH_EXPONENTIAL_SCALE)->setEnabled(enabled);
@@ -835,6 +853,7 @@ void LLPanelSettingsSkyDensityTab::setEnabled(bool enabled)
 
 void LLPanelSettingsSkyDensityTab::refresh()
 {
+    if(!mChildrenReady)return;
     if (!mSkySettings)
     {
         setAllChildrenEnabled(false);
