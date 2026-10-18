@@ -1,5 +1,5 @@
 {
-  "source_commit": "c9421cd69190fb26b48ab09cb36e62bbd7885dbb",
+  "source_commit": "908ac903d3f079939a28620b2a178a657ee31909",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "55bbe98d2fa2086b4251addcee0681a33e175aeece07681495685aaef8a57847",
+      "sha256": "17437ada21a545c25580df8f2e1d30b2b67f75eb10c275c163cdbdbad0e806c8",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -33,7 +33,7 @@
       ]
     },
     "indra/newview/llviewerwindow.cpp": {
-      "sha256": "e02e980ffe9bf38fd0eefa8157d2436e511cff771fb04ec09965d8e837617358",
+      "sha256": "5524c590e13b5e73924141c87b3b2691d873ecc737f4b8817650de7ad7dd48be",
       "anchors": [
         "LLViewerWindow::LLViewerWindow",
         "LLViewerWindow::initBase",
@@ -107,7 +107,7 @@
       ]
     },
     "indra/newview/llagent.cpp": {
-      "sha256": "9eb44ee7bffb9a468c89249d8d95dbe2fa12c19c5194775c8b1db85252c298cd",
+      "sha256": "f35632eb619c2a97c20bcec9e237b492a4a4c0cd5799f3cd411725c9d1122053",
       "anchors": [
         "LLAgent::setRegion",
         "LLAgent::startTyping",
@@ -632,14 +632,14 @@
       ]
     },
     "indra/newview/vsuiimageprovider.cpp": {
-      "sha256": "f299374966c4868e0eb4b93735dee514c1555f78718beda4d2ca843027a78773",
+      "sha256": "10b02dfb8205902cd2931e0ceb9f7b2cda240ec76e2ad3c9cbbe5eb9121e5c89",
       "anchors": [
         "VSUIImageProvider::getUIImage",
         "VSUIImageProvider::getUIImageByID"
       ]
     },
     "indra/newview/vsuiimageprovider.h": {
-      "sha256": "d94fcc7870d65cc613f3cf8adb642d31752c72a6706d95d4cc95b331d4db2191",
+      "sha256": "f076b2764d2f0636388d830bce97879624097a3f15a2e5907ad28bd8365c8c05",
       "anchors": [
         "class VSUIImageProvider"
       ]
@@ -701,7 +701,7 @@
       ]
     },
     "indra/newview/vsvulkancontext.cpp": {
-      "sha256": "8272767564a6f49ded0cecaab0e8a92cad6f8f19900fe0840d5df9f79acd4d88",
+      "sha256": "9f140b8e1aa522db95dbfa0ba8643d96bcb1537e3fe40f1b5bf7a27c75a61ea4",
       "anchors": [
         "VSVulkanContext::VSVulkanContext",
         "CreateDeviceAndContextsVk",
@@ -717,7 +717,7 @@
       ]
     },
     "indra/newview/vsviewerwindow.cpp": {
-      "sha256": "8ade243d43f21b2597b23440bd577cea46ae62bb2d896db201caaf241b0795cc",
+      "sha256": "2a97e880364eadf6dcf826a860974526538464fb969f357c98416f7966306b35",
       "anchors": [
         "initNativeWindow",
         "initNativeBase",
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "e19d492d7062bec7699ffe600ea4d4ebb710627be0317a961e0f1594b167d6d4",
+      "sha256": "074433223227c1bef8d7b3c2c76274e7391008fa5e11564c47805b6fdb0d2df3",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -784,7 +784,7 @@
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "58624f3b1d19d48ba019af114a9b864acdca9d6c8ed25e2be9d3e16a7db492dd",
+      "sha256": "5a8c2fa924c4545eac8a9b5c9e23e39602d3de48b0220334521c0af7d6a54910",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
@@ -841,7 +841,7 @@
       ]
     },
     "indra/newview/vsnativeim.cpp": {
-      "sha256": "d856a50b67e8a9b7998dd83ea6026fadec656ddb1efe87451d6147dbc043b1bf",
+      "sha256": "2aac77401790220f09ff5f4385c29574d0f5ac740827b6a058525c7a25a2eeee",
       "anchors": [
         "vs_native_im_receive",
         "vs_native_im_guard",
@@ -867,7 +867,7 @@
       ]
     },
     "indra/newview/vsnativeimreplay.cpp": {
-      "sha256": "eaeca10e0add54da2190832e395b2611386cfc2a7970ee88889ade1a2bd1ad9b",
+      "sha256": "1736c4b88e373522afeade4bccd08677712ec5965106a2a917643e23f534be88",
       "anchors": [
         "vs_native_im_replay_tick",
         "vs_native_im_replay_expired",
