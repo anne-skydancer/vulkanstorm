@@ -246,3 +246,19 @@ cache suite reached passing restart/recovery cases but hit the workflow's
 15-minute aggregate step deadline while running the codec-version case. This
 is not a graphics assertion failure or permission to advance UI changes. The
 push hold remains until all three jobs and their uploaded evidence qualify.
+
+
+The canonical `68a6e3ef4f` build/stage succeeded; `.tmp/uk20` then exposed
+an actual parcel flags mismatch (zero instead of 134217729). The replay producer
+had encoded a U32 as an LLSD integer, whereas the shared message reader requires
+its binary network representation. The correction uses the existing U32 codec;
+compiled tests execute both real codec and message reader, including high bits.
+No production permission parser or acceptance predicate is relaxed.
+
+A further reference audit found that partly received terrain cells were losing
+their known corners during parcel-height lookup. Native feedback now retains
+LLSurface's initial zero value per missing vertex and interpolates the received
+corners normally. Separate received-coverage queries still report missing data.
+Tests compare the original interpolator and enforce account/revision retirement.
+These fixes require another actual staged replay; full UI and keyboard parity,
+all skins and cross-platform qualification remain open.

@@ -138,8 +138,8 @@ struct VSParcelPresentation::Impl
             const float x1=west.mV[VX],y1=west.mV[VY],x2=east.mV[VX],y2=east.mV[VY];
             // Preserve renderRect's exact edge lookup fudge and four independent heights.
             // LLSurface::create initializes unreceived grid samples to zero.
-            const float sw=field->sample(x1,y1).value_or(0.f),se=field->sample(x2-.01f,y1).value_or(0.f),
-                        ne=field->sample(x2-.01f,y2-.01f).value_or(0.f),nw=field->sample(x1,y2-.01f).value_or(0.f);
+            const float sw=field->referenceHeight(x1,y1).value_or(0.f),se=field->referenceHeight(x2-.01f,y1).value_or(0.f),
+                        ne=field->referenceHeight(x2-.01f,y2-.01f).value_or(0.f),nw=field->referenceHeight(x1,y2-.01f).value_or(0.f);
             const std::array<std::array<float,3>,8> corners{{
                 {x1,y2,nw},{x1,y2,nw+parcelPostHeight},{x2,y2,ne},{x2,y2,ne+parcelPostHeight},
                 {x2,y1,se},{x2,y1,se+parcelPostHeight},{x1,y1,sw},{x1,y1,sw+parcelPostHeight}}};
@@ -237,7 +237,7 @@ struct VSParcelPresentation::Impl
                         {
                             // Same initial zero grid as LLSurface::create; accepted
                             // received heights remain in the actual CPU scene.
-                            return field->sample(x,y).value_or(0.f);
+                            return field->referenceHeight(x,y).value_or(0.f);
                         });
                     for(const auto& source:segment)
                     {
@@ -347,10 +347,10 @@ struct ParcelRectangleReplay
         requireParcel(bool(field),"Parcel rectangle has no current terrain owner");
         const auto west=boundary->region.getPosRegionFromGlobal(boundary->westSouth);
         const auto east=boundary->region.getPosRegionFromGlobal(boundary->eastNorth);
-        const float floor=field->sample(west.mV[VX],west.mV[VY]).value_or(0.f);
+        const float floor=field->referenceHeight(west.mV[VX],west.mV[VY]).value_or(0.f);
         for(const auto& point:std::array<std::array<float,2>,3>{{{east.mV[VX]-.01f,west.mV[VY]},
             {east.mV[VX]-.01f,east.mV[VY]-.01f},{west.mV[VX],east.mV[VY]-.01f}}})
-            requireParcel(field->sample(point[0],point[1]).value_or(0.f)==floor,"Parcel pixel fixture requires actual flat received/initial terrain");
+            requireParcel(field->referenceHeight(point[0],point[1]).value_or(0.f)==floor,"Parcel pixel fixture requires actual flat received/initial terrain");
         const auto offset=VSWorldContracts::regionOffset(session->handle(),boundary->region.getHandle());
         const float extent=std::max(east.mV[VX]-west.mV[VX],east.mV[VY]-west.mV[VY]);
         requireParcel(extent>=4 && extent<=16,"Parcel pixel fixture lost actual grid-cell selection");

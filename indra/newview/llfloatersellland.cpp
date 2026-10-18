@@ -293,7 +293,9 @@ void LLFloaterSellLandUI::setBadge(const char* id, Badge badge)
         case BADGE_ERROR:   badgeName = badgeWarn;  break;
     }
 
-    getChild<LLUICtrl>(id)->setValue(badgeName);
+    // Firestorm layouts use numbered text labels; older layouts may retain
+    // optional badge icons. Preserve either layout without manufacturing UI.
+    if(auto* badge=findChild<LLUICtrl>(id,true))badge->setValue(badgeName);
 }
 
 void LLFloaterSellLandUI::refreshUI()

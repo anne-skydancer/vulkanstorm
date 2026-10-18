@@ -223,7 +223,7 @@ void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars,S32 se
     data["LocalID"]=0;
     data["OwnerID"]=LLUUID::null;
     data["IsGroupOwned"]=false;
-    data["AuctionID"]=0;
+    data["AuctionID"]=ll_sd_from_U32(0);
     data["ClaimDate"]=0;
     data["ClaimPrice"]=0;
     data["RentPrice"]=0;
@@ -242,7 +242,7 @@ void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars,S32 se
     data["SelectedPrims"]=0;
     data["ParcelPrimBonus"]=0.0;
     data["OtherCleanTime"]=0;
-    data["ParcelFlags"]=0;
+    data["ParcelFlags"]=ll_sd_from_U32(0);
     data["SalePrice"]=0;
     data["Name"]=std::string();
     data["Desc"]=std::string();
@@ -271,7 +271,7 @@ void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars,S32 se
     data["Bitmap"]=LLSD::Binary(std::size_t(columns)*rows/8,U8(255));
     data["Area"]=S32(region->getWidth()*region->getHeight());data["Status"]=S32(LLParcel::OS_LEASED);
     data["SimWideMaxPrims"]=15000;data["MaxPrims"]=15000;data["ParcelPrimBonus"]=1.0;
-    data["ParcelFlags"]=LLSD::Integer(flags);
+    data["ParcelFlags"]=ll_sd_from_U32(flags);
     data["SeeAVs"]=seeAvatars;data["AnyAVSounds"]=true;data["GroupAVSounds"]=true;
     auto& media=body["MediaData"][0];
     media["MediaDesc"]="";media["MediaType"]="";media["MediaWidth"]=0;media["MediaHeight"]=0;media["MediaLoop"]=0;
