@@ -209,7 +209,7 @@ bool contains(const LLUUID& id, const std::string& text)
 // Complete deprecated-UDP schema carried by the real LLSD message bridge.
 // The native receiver runs LLViewerParcelMgr::processParcelProperties and the
 // existing LLParcel::unpackMessage, not the reduced diagnostic deliver() path.
-void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars,S32 sequence=0,const LLUUID& parcelOwner=peer)
+void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars,S32 sequence=0,const LLUUID& parcelOwner=peer,bool snapSelection=false)
 {
     const auto region=vs_current_region_context();
     require(region && region->current(),"Parcel replay has no authenticated current circuit");
@@ -265,7 +265,7 @@ void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars,S32 se
     data["RegionDenyTransacted"]=false;
     const S32 columns=S32(region->getWidth()/PARCEL_GRID_STEP_METERS);
     const S32 rows=S32(region->getHeight()/PARCEL_GRID_STEP_METERS);
-    data["RequestResult"]=PARCEL_RESULT_SUCCESS;data["SequenceID"]=sequence;
+    data["RequestResult"]=PARCEL_RESULT_SUCCESS;data["SequenceID"]=sequence;data["SnapSelection"]=snapSelection;
     data["LocalID"]=31;data["OwnerID"]=parcelOwner;data["Name"]="Replay parcel";
     data["AABBMax"]=ll_sd_from_vector3(LLVector3(region->getWidth(),region->getHeight(),20.f));
     data["Bitmap"]=LLSD::Binary(std::size_t(columns)*rows/8,U8(255));
@@ -281,9 +281,15 @@ void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars,S32 se
     body["ParcelEnvironmentBlock"][0]["RegionAllowEnvironmentOverride"]=true;
     event(owner,"ParcelProperties",body);
     const auto* parcel=sequence ? LLViewerParcelMgr::instance().getParcelSelection()->getParcel() : LLViewerParcelMgr::instance().getAgentParcel();
-    require(parcel && parcel->getLocalID()==31 && parcel->getRegionID()==region->getRegionID() &&
-        parcel->getParcelFlags()==flags && parcel->getHaveNewParcelLimitData() && parcel->getSeeAVs()==seeAvatars,
-        "Complete authenticated parcel did not reach the shared LLParcel model");
+    require(parcel,"Authenticated parcel reply lost its real selection model");
+    require(parcel->getLocalID()==31,("Authenticated parcel reply local ID mismatch: wire="+std::to_string(sequence)+
+        " actual="+std::to_string(parcel->getLocalID())).c_str());
+    require(parcel->getRegionID()==region->getRegionID(),("Authenticated parcel reply region mismatch: actual="+
+        parcel->getRegionID().asString()+" expected="+region->getRegionID().asString()).c_str());
+    require(parcel->getParcelFlags()==flags,("Authenticated parcel reply flags mismatch: actual="+
+        std::to_string(parcel->getParcelFlags())+" expected="+std::to_string(flags)).c_str());
+    require(parcel->getHaveNewParcelLimitData(),"Authenticated parcel reply lost its complete visibility fields");
+    require(parcel->getSeeAVs()==seeAvatars,"Authenticated parcel reply visibility value mismatch");
 }
 
 void finishServerIM()
@@ -306,20 +312,30 @@ struct Replay : public LLAvatarPropertiesObserver
     unsigned utilityCheck = 0;
     LLHandle<LLFloater> utilityFloater;
     unsigned aboutLandStage=0,aboutLandTab=0,environmentEditStage=0;
-    std::optional<S32> selectedParcelWire;
+    struct ParcelWire {S32 sequence;bool snap;F32 west,south,east,north;};
+    std::optional<ParcelWire> selectedParcelWire;
+    LLParcelSelectionHandle aboutLandSelection;
+    bool expectedParcelSnap=false;
+    bool waitingParcelSelection=false;
     LLHandle<LLFloater> aboutLandFloater,landURL,dayEditor;
     std::unique_ptr<LLFloaterSettingsPicker> settingsPicker;
     std::unique_ptr<LLFloaterTrackPicker> trackPicker;
     static void parcelRequest(LLMessageSystem* message,void** data)
     {
         auto& replay=*reinterpret_cast<Replay*>(data);
-        LLUUID agent,session;S32 sequence;
+        LLUUID agent,session;ParcelWire request{};
         message->getUUID("AgentData","AgentID",agent);
         message->getUUID("AgentData","SessionID",session);
-        message->getS32("ParcelData","SequenceID",sequence);
-        require(agent==gAgentID && session==gAgentSessionID && sequence!=0,
-            "Actual parcel selection request lost account/request ownership");
-        replay.selectedParcelWire=sequence;
+        message->getS32("ParcelData","SequenceID",request.sequence);
+        message->getBOOL("ParcelData","SnapSelection",request.snap);
+        message->getF32("ParcelData","West",request.west);message->getF32("ParcelData","South",request.south);
+        message->getF32("ParcelData","East",request.east);message->getF32("ParcelData","North",request.north);
+        require(agent==gAgentID && session==gAgentSessionID,"Actual parcel request lost account ownership");
+        // The server sees both agent/hover and selection requests. Only match
+        // the exact real shared-controller selection currently under test.
+        if(!replay.waitingParcelSelection || replay.selectedParcelWire || request.sequence>=0 ||
+            request.snap!=replay.expectedParcelSnap || request.west!=4 || request.south!=4 || request.east!=8 || request.north!=8)return;
+        replay.selectedParcelWire=request;
     }
     unsigned landDialogCheck=0;
     bool landRetirementPending=false;
@@ -825,12 +841,17 @@ struct Replay : public LLAvatarPropertiesObserver
                 ++landDialogCheck;
                 return false;
             }
-            if(aboutLandStage<9)
+            if(aboutLandStage<11)
             {
                 if(aboutLandStage==0)
                 {
                     gMessageSystem->setHandlerFunc("ParcelPropertiesRequest",parcelRequest,reinterpret_cast<void**>(this));
                     LLViewerParcelMgr::instance().deselectLand();
+                    const auto region=vs_current_region_context();require(bool(region),"Missing actual parcel request region");
+                    expectedParcelSnap=false;waitingParcelSelection=true;selectedParcelWire.reset();
+                    aboutLandSelection=LLViewerParcelMgr::instance().selectLand(
+                        region->getPosGlobalFromRegion({4,4,0}),region->getPosGlobalFromRegion({8,8,0}),false);
+                    require(aboutLandSelection.notNull(),"Actual shared rectangle selection request failed");
                     auto* floater=LLFloaterReg::showInstance("about_land");
                     require(floater && floater->getVisible(),"Actual AboutLand controller did not open");
                     aboutLandFloater=floater->getHandle();++aboutLandStage;return false;
@@ -839,7 +860,9 @@ struct Replay : public LLAvatarPropertiesObserver
                 {
                     if(!selectedParcelWire)return false;
                     gMessageSystem->setHandlerFunc("ParcelPropertiesRequest",null_message_callback);
-                    publishReplayParcel(owner,PF_ALLOW_FLY|PF_ALLOW_ALL_OBJECT_ENTRY,true,*selectedParcelWire,gAgentID);
+                    waitingParcelSelection=false;
+                    publishReplayParcel(owner,PF_ALLOW_FLY|PF_ALLOW_ALL_OBJECT_ENTRY,true,
+                        selectedParcelWire->sequence,gAgentID,selectedParcelWire->snap);
                     require(LLViewerParcelMgr::instance().selectionGuard()(),"Real selected parcel reply failed shared model publication");
                     ++aboutLandStage;return false;
                 }
@@ -934,8 +957,34 @@ struct Replay : public LLAvatarPropertiesObserver
                     require(!LLFloaterReg::findInstance("about_land",key),"Closed AboutLand remained registered");
                     ++aboutLandStage;return false;
                 }
-                require(aboutLandFloater.isDead(),"AboutLand retained parcel observers after ordinary deferred retirement");
+                if(aboutLandStage==8)
+                {
+                    require(aboutLandFloater.isDead(),"AboutLand retained parcel observers after ordinary deferred retirement");
+                    // Qualify whole-parcel bitmap publication with its own real
+                    // SnapSelection=true request after the rectangle pixel check.
+                    const auto region=vs_current_region_context();require(bool(region),"Whole parcel request lost actual region");
+                    selectedParcelWire.reset();expectedParcelSnap=true;waitingParcelSelection=true;
+                    gMessageSystem->setHandlerFunc("ParcelPropertiesRequest",parcelRequest,reinterpret_cast<void**>(this));
+                    aboutLandSelection=LLViewerParcelMgr::instance().selectLand(
+                        region->getPosGlobalFromRegion({4,4,0}),region->getPosGlobalFromRegion({8,8,0}),true);
+                    require(aboutLandSelection.notNull(),"Actual shared whole-parcel selection request failed");
+                    ++aboutLandStage;return false;
+                }
+                if(aboutLandStage==9)
+                {
+                    if(!selectedParcelWire)return false;
+                    waitingParcelSelection=false;
+                    gMessageSystem->setHandlerFunc("ParcelPropertiesRequest",null_message_callback);
+                    publishReplayParcel(owner,PF_ALLOW_FLY|PF_ALLOW_ALL_OBJECT_ENTRY,true,
+                        selectedParcelWire->sequence,gAgentID,selectedParcelWire->snap);
+                    const auto boundary=LLViewerParcelMgr::instance().nativeSelectionBoundary();
+                    require(boundary && boundary->bitmap && boundary->current() &&
+                        aboutLandSelection->getWholeParcelSelected(),"Whole-parcel reply omitted actual immutable bitmap/whole selection");
+                    evidence["connected_parcel_request_echo"]=true;
+                    ++aboutLandStage;return false;
+                }
                 LLViewerParcelMgr::instance().deselectLand();
+                aboutLandSelection=nullptr;
                 evidence["connected_about_land_all_tabs"]=true;
                 evidence["connected_environment_nested_dialogs"]=true;
                 evidence["connected_land_media_url_cancel"]=true;

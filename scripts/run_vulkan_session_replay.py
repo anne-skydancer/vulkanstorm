@@ -20,7 +20,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import xml.etree.ElementTree as ET
 import xmlrpc.client
-from uuid import UUID
+from uuid import UUID, uuid5, NAMESPACE_URL
 from urllib.parse import urlsplit, parse_qs
 
 import vulkan_r2_fixture as r2_fixture
@@ -504,7 +504,9 @@ def baseline_inventory_items(identifier):
 
 
 def append_llsd(parent, value):
-    if isinstance(value, dict):
+    if value is None:
+        ET.SubElement(parent, 'undef')
+    elif isinstance(value, dict):
         result = ET.SubElement(parent, 'map')
         for key, item in value.items():
             ET.SubElement(result, 'key').text = key
@@ -528,7 +530,7 @@ def append_llsd(parent, value):
 
 DEFAULT_ENVIRONMENT_ASSET = '5646d39e-d3d7-6aff-ed71-30fc87d64a91'
 
-REQUIRED = ('connected_parcel_rectangle_pixels', 'connected_environment_capability_edit', 'connected_about_land_all_tabs', 'connected_environment_nested_dialogs', 'connected_land_media_url_cancel', 'connected_default_environment_asset', 'connected_land_buy_policy_cancel', 'connected_land_sell_stale_intent_cancel', 'connected_utility_floaters', 'connected_keyboard_window_dispatch', 'connected_camera_controls', 'connected_land_permissions', 'connected_native_statistics', 'connected_script_notification_controls', 'connected_script_dialog_encoded', 'connected_script_textbox_encoded', 'connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
+REQUIRED = ('connected_parcel_request_echo', 'connected_parcel_rectangle_pixels', 'connected_environment_capability_edit', 'connected_about_land_all_tabs', 'connected_environment_nested_dialogs', 'connected_land_media_url_cancel', 'connected_default_environment_asset', 'connected_land_buy_policy_cancel', 'connected_land_sell_stale_intent_cancel', 'connected_utility_floaters', 'connected_keyboard_window_dispatch', 'connected_camera_controls', 'connected_land_permissions', 'connected_native_statistics', 'connected_script_notification_controls', 'connected_script_dialog_encoded', 'connected_script_textbox_encoded', 'connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
             'connected_inventory_texture_upload', 'connected_inventory_sound_upload',
             'connected_group_titles', 'connected_group_directory_search',
             'connected_inventory_share', 'connected_resident_pay', 'connected_payment_balance_gate',
@@ -1183,6 +1185,15 @@ class Handler(BaseHTTPRequestHandler):
             self.server.upload_requests[kind] = request
             self.respond_llsd(dict(state='upload', uploader=self.server.url + '/upload-data/' + kind))
             return
+        if self.path == '/remote-parcel':
+            if not isinstance(request,dict) or not {'region_id','location'}.issubset(request) or not set(request).issubset({'region_id','location','region_handle'}):
+                self.send_error(400);return
+            try:
+                region=UUID(request['region_id']);location=request['location']
+                if not region.int or not isinstance(location,list) or len(location)!=3 or not all(isinstance(v,(int,float)) and math.isfinite(v) for v in location):raise ValueError('Invalid parcel location')
+            except (TypeError,ValueError,AttributeError):self.send_error(400);return
+            self.server.requests.append(dict(path=self.path,method='POST',request=request))
+            self.respond_llsd(dict(parcel_id=uuid5(NAMESPACE_URL,str(region)+'/parcel/31')));return
         if self.path == '/seed':
             self.server.seed_requests += 1
             if not {'EventQueueGet', 'GetDisplayNames', 'ChatSessionRequest', 'GetTexture', 'AvatarPickerSearch'}.issubset(request):
@@ -1199,7 +1210,8 @@ class Handler(BaseHTTPRequestHandler):
                                 ('UploadAgentProfileImage', '/profile-upload'),
                                 ('NewFileAgentInventory', '/upload-request'),
                                 ('UpdateScriptAgent', '/script-request'), ('ViewerAsset', '/asset'),
-                                ('GetMetadata', '/metadata'), ('RegionExperiences', '/region-experiences'),
+                                ('GetMetadata', '/metadata'), ('RemoteParcelRequest', '/remote-parcel'),
+                                ('RegionExperiences', '/region-experiences'),
                                 ('ExtEnvironment', '/ui-environment')]:
                 ET.SubElement(mapping, 'key').text = name
                 ET.SubElement(mapping, 'string').text = self.server.url + route

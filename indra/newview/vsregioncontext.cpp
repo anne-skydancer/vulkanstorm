@@ -57,6 +57,9 @@ bool VSRegionContext::getRestrictPushObject() const { return getRegionFlag(REGIO
 std::string VSRegionContext::getSimAccessString() const { return LLViewerRegion::accessToString(mAccess); }
 std::string VSRegionContext::getLocalizedSimProductName() const
 {
+    // Missing native RegionInfo metadata has the same localized unknown label
+    // as the shared region-information controller, not a lookup of a raw sentinel.
+    if(!mProductKnown)return LLTrans::getString("land_type_unknown");
     std::string localized;
     return LLTrans::findString(localized,mProductName) ? localized : mProductName;
 }

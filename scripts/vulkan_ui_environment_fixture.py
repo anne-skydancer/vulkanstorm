@@ -25,6 +25,7 @@ def decode(node):
             raise ValueError('Malformed environment map')
         return {children[i].text:decode(children[i+1]) for i in range(0,len(children),2)}
     if node.tag=='array':return [decode(child) for child in node]
+    if node.tag=='undef':return None
     if node.tag=='uuid':return uuid.UUID(node.text or '00000000-0000-0000-0000-000000000000')
     if node.tag=='integer':return int(node.text or '0')
     if node.tag=='real':return float(node.text or '0')
