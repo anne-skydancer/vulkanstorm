@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpanellandmarks.h"
+#include "vsnativeim.h"
+#include "vsregioncontext.h"
 
 #include "llbutton.h"
 #include "llfloaterprofile.h"
@@ -180,6 +182,8 @@ LLLandmarksPanel::LLLandmarksPanel(bool is_landmark_panel)
 
 LLLandmarksPanel::~LLLandmarksPanel()
 {
+    for (const auto& id : mRequestedParcels)
+        LLRemoteParcelInfoProcessor::instance().removeObserver(id, this);
 }
 
 bool LLLandmarksPanel::postBuild()
@@ -374,7 +378,15 @@ void LLLandmarksPanel::doActionOnCurSelectedLandmark(LLLandmarkList::loaded_call
     LLFolderViewModelItemInventory* cur_item = getCurSelectedViewModelItem();
     if(cur_item && cur_item->getInventoryType() == LLInventoryType::IT_LANDMARK)
     {
-        LLLandmark* landmark = LLLandmarkActions::getLandmark(cur_item->getUUID(), cb);
+        const auto item = cur_item->getUUID();
+        cb = [handle = getHandle(), current = vs_native_im_guard(), item, callback = std::move(cb)](LLLandmark* landmark)
+        {
+            auto* self = dynamic_cast<LLLandmarksPanel*>(handle.get());
+            if (!self || !current()) return;
+            const auto selected = self->getCurSelectedViewModelItem();
+            if (selected && selected->getUUID() == item) callback(landmark);
+        };
+        LLLandmark* landmark = LLLandmarkActions::getLandmark(item, cb);
         if (landmark)
         {
             cb(landmark);
@@ -428,6 +440,8 @@ void LLLandmarksPanel::resetSelection()
 // virtual
 void LLLandmarksPanel::processParcelInfo(const LLParcelData& parcel_data)
 {
+    if (!mAccountCurrent() || !mRequestedParcels.erase(parcel_data.parcel_id)) return;
+    LLRemoteParcelInfoProcessor::instance().removeObserver(parcel_data.parcel_id, this);
     //this function will be called after user will try to create a pick for selected landmark.
     // We have to make request to sever to get parcel_id and snaption_id.
     if(mCreatePickItemId.notNull())
@@ -450,8 +464,10 @@ void LLLandmarksPanel::processParcelInfo(const LLParcelData& parcel_data)
 // virtual
 void LLLandmarksPanel::setParcelID(const LLUUID& parcel_id)
 {
+    if (!mAccountCurrent()) return;
     if (!parcel_id.isNull())
     {
+        mRequestedParcels.insert(parcel_id);
         LLRemoteParcelInfoProcessor::getInstance()->addObserver(parcel_id, this);
         LLRemoteParcelInfoProcessor::getInstance()->sendParcelInfoRequest(parcel_id);
     }
@@ -1183,9 +1199,14 @@ void LLLandmarksPanel::doProcessParcelInfo(LLLandmark* landmark,
 
 void LLLandmarksPanel::doCreatePick(LLLandmark* landmark, const LLUUID &item_id)
 {
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region = vs_current_region_context();
     if (!region) return;
 
+    for (const auto& id : mRequestedParcels)
+        LLRemoteParcelInfoProcessor::instance().removeObserver(id, this);
+    mRequestedParcels.clear();
+    mObserverHandle.unbind(); mObserverHandle.bind(this);
+    mAccountCurrent = vs_native_im_guard();
     mCreatePickItemId = item_id;
 
     LLGlobalVec pos_global;

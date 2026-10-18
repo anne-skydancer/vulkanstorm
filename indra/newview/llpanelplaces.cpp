@@ -28,6 +28,7 @@
 #include "vsregioncontext.h"
 
 #include "llpanelplaces.h"
+#include "vsnativeim.h"
 
 #include "llassettype.h"
 #include "lltimer.h"
@@ -200,6 +201,8 @@ public:
     {}
 
     ~LLPlacesRemoteParcelInfoObserver()
+    { reset(); }
+    void reset()
     {
         // remove any in-flight observers
         std::set<LLUUID>::iterator it;
@@ -209,6 +212,7 @@ public:
             LLRemoteParcelInfoProcessor::getInstance()->removeObserver(id, this);
         }
         mParcelIDs.clear();
+        mObserverHandle.unbind(); mObserverHandle.bind(this);
     }
 
     /*virtual*/ void processParcelInfo(const LLParcelData& parcel_data)
@@ -408,6 +412,9 @@ bool LLPanelPlaces::postBuild()
 
 void LLPanelPlaces::onOpen(const LLSD& key)
 {
+    mAccountCurrent = vs_native_im_guard();
+    ++mIntentSerial;
+    mRemoteParcelObserver->reset();
     if (!mPlaceProfile || !mLandmarkInfo)
         return;
 
@@ -484,9 +491,9 @@ void LLPanelPlaces::onOpen(const LLSD& key)
             if (mPlaceInfoType == AGENT_INFO_TYPE)
             {
                 mPlaceProfile->setInfoType(LLPanelPlaceInfo::AGENT);
-                if (gAgent.getRegion())
+                if (auto region = vs_current_region_context())
                 {
-                    mRegionId = gAgent.getRegion()->getRegionID();
+                    mRegionId = region->getRegionID();
                 }
             }
             else if (mPlaceInfoType == CREATE_LANDMARK_INFO_TYPE)
@@ -648,7 +655,11 @@ void LLPanelPlaces::setItem(LLInventoryItem* item)
     mLandmarkInfo->displayItemInfo(mItem);
 
     LLLandmark* lm = gLandmarkList.getAsset(mItem->getAssetUUID(),
-                                            boost::bind(&LLPanelPlaces::onLandmarkLoaded, this, _1));
+                                            [handle = getHandle(), current = mAccountCurrent, intent = mIntentSerial](LLLandmark* landmark)
+        {
+            auto* self = dynamic_cast<LLPanelPlaces*>(handle.get());
+            if (self && current() && self->mIntentSerial == intent) self->onLandmarkLoaded(landmark);
+        });
     if (lm)
     {
         onLandmarkLoaded(lm);
@@ -732,6 +743,7 @@ void LLPanelPlaces::onTabSelected()
 
 void LLPanelPlaces::onTeleportButtonClicked()
 {
+    if (!mAccountCurrent()) return;
     LLPanelPlaceInfo* panel = getCurrentInfoPanel();
     if (panel && panel->getVisible())
     {
@@ -771,6 +783,7 @@ void LLPanelPlaces::onTeleportButtonClicked()
 
 void LLPanelPlaces::onShowOnMapButtonClicked()
 {
+    if (!mAccountCurrent()) return;
     LLPanelPlaceInfo* panel = getCurrentInfoPanel();
     if (panel && panel->getVisible())
     {
@@ -834,6 +847,7 @@ void LLPanelPlaces::onShowOnMapButtonClicked()
 
 void LLPanelPlaces::onEditButtonClicked()
 {
+    if (!mAccountCurrent()) return;
     if (!mLandmarkInfo || isLandmarkEditModeOn)
         return;
 
@@ -846,6 +860,7 @@ void LLPanelPlaces::onEditButtonClicked()
 
 void LLPanelPlaces::onSaveButtonClicked()
 {
+    if (!mAccountCurrent()) return;
     if (!mLandmarkInfo || mItem.isNull())
         return;
 
@@ -931,8 +946,8 @@ void LLPanelPlaces::onOverflowButtonClicked()
         bool landmark_item_enabled = false;
         LLViewerParcelMgr* parcel_mgr = LLViewerParcelMgr::getInstance();
         if (is_agent_place_info_visible
-            && gAgent.getRegion()
-            && mRegionId == gAgent.getRegion()->getRegionID()
+            && vs_current_region_context()
+            && mRegionId == vs_current_region_context()->getRegionID()
             && parcel_mgr
             && parcel_mgr->getAgentParcel()->getLocalID() == mParcelLocalId)
         {
@@ -1010,7 +1025,11 @@ void LLPanelPlaces::onOverflowMenuItemClicked(const LLSD& param)
     }
     else if (item == "copy")
     {
-        LLLandmarkActions::getSLURLfromPosGlobal(mPosGlobal, boost::bind(&onSLURLBuilt, _1));
+        LLLandmarkActions::getSLURLfromPosGlobal(mPosGlobal, [handle = getHandle(), current = mAccountCurrent, intent = mIntentSerial](std::string& url)
+            {
+                auto* self = dynamic_cast<LLPanelPlaces*>(handle.get());
+                if (self && current() && self->mIntentSerial == intent) onSLURLBuilt(url);
+            });
     }
     else if (item == "delete")
     {

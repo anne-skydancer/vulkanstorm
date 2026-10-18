@@ -1579,7 +1579,7 @@ void copy_slurl_to_clipboard_cb(std::string& slurl)
 bool LLFavoritesBarCtrl::enableSelected(const LLSD& userdata)
 {
     std::string param = userdata.asString();
-    if (gViewerWindow && gViewerWindow->isNativeVulkan() && (param == "show_on_map" || param == "create_pick")) return false;
+
 
     if (param == std::string("can_paste"))
     {
@@ -1609,12 +1609,6 @@ bool LLFavoritesBarCtrl::enableSelected(const LLSD& userdata)
 void LLFavoritesBarCtrl::doToSelected(const LLSD& userdata)
 {
     std::string action = userdata.asString();
-    if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
-        (action == "show_on_map" || action == "create_pick"))
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
     LL_INFOS("FavoritesBar") << "Action = " << action << " Item = " << mSelectedItemID.asString() << LL_ENDL;
 
     LLViewerInventoryItem* item = gInventory.getItem(mSelectedItemID);

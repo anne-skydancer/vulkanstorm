@@ -245,6 +245,18 @@
 #include "fsnearbychatvoicemonitor.h"
 #include "llfavoritesbar.h"
 #include "llfloater.h"
+#include "llfloatercreatelandmark.h"
+#include "llfloaterworldmap.h"
+#include "llworldmapview.h"
+#include "fsfloaterplacedetails.h"
+#include "llpanelplaces.h"
+#include "llpanelplaceinfo.h"
+#include "llpanelplaceprofile.h"
+#include "llpanellandmarkinfo.h"
+#include "llpanellandmarks.h"
+#include "llpanelplacestab.h"
+#include "llplacesinventorypanel.h"
+#include "llplacesfolderview.h"
 #include "quickprefs.h"
 #include "llfloaterenvironmentadjust.h"
 #include "llfloaterscriptrecover.h"
@@ -294,7 +306,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 t == typeid(FSFloaterWhiteListHelper) || t == typeid(LLFloaterSettingsColor) ||
                 t == typeid(FSFloaterSplashScreenSettings) || t == typeid(FSFloaterVolumeControls) ||
                 t == typeid(LLFloaterFontTest) || t == typeid(LLFloaterHUD) || t == typeid(RlvFloaterStrings) ||
-                t == typeid(FloaterQuickPrefs) || t == typeid(FloaterAO) || t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
+                t == typeid(FloaterQuickPrefs) || t == typeid(LLFloaterCreateLandmark) || t == typeid(LLFloaterWorldMap) || t == typeid(LLWorldMapView) || t == typeid(FSFloaterPlaceDetails) || t == typeid(LLPanelPlaces) || t == typeid(LLPanelPlaceInfo) || t == typeid(LLPanelPlaceProfile) || t == typeid(LLPanelLandmarkInfo) || t == typeid(LLLandmarksPanel) || t == typeid(LLFavoritesPanel) || t == typeid(LLTeleportHistoryPanel) || t == typeid(LLPlacesInventoryPanel) || t == typeid(LLPlacesFolderView) || t == typeid(FloaterAO) || t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
                 t == typeid(LLPanelMainInventory) || LLPanelMainInventory::isNativeInternalType(t) ||
                 t == typeid(LLPanelMarketplaceInbox) || t == typeid(LLInboxInventoryPanel) ||
                 t == typeid(LLInboxFolderViewFolder) || t == typeid(LLInboxFolderViewItem) || t == typeid(LLInventoryGallery) || t == typeid(LLInventoryGalleryItem) ||
@@ -407,7 +419,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "chat_mention_picker" || name == "emoji_complete" || name == "preview_trash" || name == "new_feature_notification" ||
             name == "fs_whitelist_floater" || name == "settings_color" || name == "fs_splash_screen_settings" || name == "fs_volume_controls" ||
             name == "font_test" || name == "hud" || name == "rlv_strings" ||
-            name == "quickprefs" || name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "inventory_settings" || name == "marketplace_listings" || name == "associate_listing" ||
+            name == "quickprefs" || name == "add_landmark" || name == "world_map" || name == "places" || name == "fs_placedetails" || name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "inventory_settings" || name == "marketplace_listings" || name == "associate_listing" ||
             name == "marketplace_validation" || name == "linkreplace" || name == "emoji_picker" || name == "event" || name == "experiences" || name == "experience_profile" || name == "experience_search" || name == "marketplace" || name == "grid_status" || name == "destinations" || name == "fs_teleporthistory" || name == "stats" || name == "lagmeter" || name == "inspect_remote_object" || name == "web_content" || name == "search_replace" || name == "fs_nearby_chat" || name == "people" || name == "search" || name == "toybox" || name == "inventory" || name == "secondary_inventory" || name == "sl_about" || name == "message_critical" || name == "message_tos" ||
             name == "fs_impanel" || name == "fs_im_container" || name == "imcontacts" || name == "avatar_picker" ||
             name == "fs_blocklist" || name == "fs_add_contact" || name == "fs_contact_set_config" ||
@@ -423,7 +435,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "land_general_panel" || name == "land_covenant_panel" || name == "land_objects_panel" ||
             name == "land_options_panel" || name == "land_audio_panel" || name == "land_media_panel" ||
             name == "land_access_panel" || name == "land_experiences_panel" || name == "land_environment_panel" || name == "panel_settings_water" || name == "panel_settings_atmos" || name == "panel_settings_cloud" ||
-                name == "panel_settings_sunmoon" || name == "panel_settings_density" || name == "panel_experience_list_editor" || name == "camera_zoom_panel" || name == "experiences_panel" || name == "llpanelexperiencepicker" || name == "experience_log" || name == "llpanelmarketplacelistings" || name == "marketplace_listings_panel" || name == "panel_people" || name == "sidepanel_inventory" || name == "panel_main_inventory" ||
+                name == "panel_settings_sunmoon" || name == "panel_settings_density" || name == "panel_experience_list_editor" || name == "camera_zoom_panel" || name == "experiences_panel" || name == "llpanelexperiencepicker" || name == "experience_log" || name == "llpanelmarketplacelistings" || name == "marketplace_listings_panel" || name == "objects_mapview" || name == "panel_places" || name == "panel_place_profile" || name == "panel_landmark_info" || name == "panel_people" || name == "sidepanel_inventory" || name == "panel_main_inventory" ||
             name == "panel_marketplace_inbox" || name == "inventory_gallery" || name == "progress_view" || name == "progress_view_mini" || name == "popup_holder" ||
             name == "status" || name == "volumepulldown_floater" || name == "navigation_bar" || name == "toolbar_view" || name == "toolbar view" || name == "native_nearby_chat" || name == "script panel" || name == "sidepanel_item_info" || name == "fs_panel_block_list_sidetray" || name == "panel_im_control_panel" || name == "panel_dir_groups" || name == "contact_sets_panel" ||
             name == "panel_preference" || name == "panel_preference_graphics" || name == "panel_preference_privacy" ||
@@ -445,13 +457,25 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         },
         [](std::string_view name)
         {
-            return name == "quickprefs" || name == "aboutland" || name == "fly" || name == "groundsit" || name == "resync_animations" || name == "derender_animated_objects" || name == "stop_animations" || name == "marketplacelistings" || name == "view" || name == "phototools_view" || name == "mouselook_view" || name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
+            return name == "quickprefs" || name == "map" || name == "places" || name == "aboutland" || name == "fly" || name == "groundsit" || name == "resync_animations" || name == "derender_animated_objects" || name == "stop_animations" || name == "marketplacelistings" || name == "view" || name == "phototools_view" || name == "mouselook_view" || name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
                    name == "preferences" || name == "profile" || name == "contact_sets" ||
                    name == "conversation_log" || name == "block_list" || name == "group_titles";
         },
         [](std::string_view name, const LLSD& parameter)
         {
             if (name == "RecreateLSLBridge") return true;
+            if (name == "Places.OverflowMenu.Action")
+                return parameter.asString() == "landmark" || parameter.asString() == "copy" || parameter.asString() == "delete" || parameter.asString() == "pick" || parameter.asString() == "add_to_favbar";
+            if (name == "Places.OverflowMenu.Enable") return parameter.asString() == "can_create_pick";
+            if (name == "Places.LandmarksGear.Add.Action" || name == "Places.LandmarksGear.CopyPaste.Action" ||
+                name == "Places.LandmarksGear.Custom.Action" || name == "Places.LandmarksGear.Folding.Action" ||
+                name == "Places.LandmarksGear.Check" || name == "Places.LandmarksGear.Enable")
+            {
+                const std::string action = parameter.asString();
+                return action == "add_landmark" || action == "category" || action == "cut" || action == "copy" || action == "paste" || action == "delete" || action == "more_info" ||
+                    action == "teleport" || action == "show_on_map" || action == "create_pick" || action == "share" || action == "restore" || action == "move_to_landmarks" || action == "move_to_favorites" ||
+                    action == "copy_slurl" || action == "rename" || action == "add_landmark_root" || action == "category_root" || action == "expand_all" || action == "collapse_all" || action == "expand" || action == "collapse" || action == "sort_by_date";
+            }
             if (LLPanelMainInventory::isNativeCallback(name, parameter) ||
                 LLPanelPeople::isNativeCallback(std::string(name), parameter) || FSChatHistory::isNativeCallback(std::string(name), parameter)) return true;
             if (name == "DayCycle.Track" || name == "DayCycle.PlayActions") return true;
@@ -474,7 +498,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                     action == "agent_permissions" || action == "copy_display_name" || action == "copy_username" ||
                     action == "edit_display_name" || action == "edit_partner" || action == "upload_photo" ||
                     action == "change_photo" || action == "remove_photo" || action == "add_to_contact_set" ||
-                    action == "copy_uri" || action == "preview";
+                    action == "can_show_on_map" || action == "copy_uri" || action == "preview";
             }
             if (name == "Profile.CheckItem") return parameter.asString() == "toggle_block_agent";
             if (name == "TopInfoBar.Action") return parameter.asString() == "copy";
@@ -514,7 +538,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             if (name == "TeleportHistory.GearMenu.Action" || name == "TeleportHistory.GearMenu.Enable")
             {
                 const std::string action = parameter.asString();
-                return action == "teleport" || action == "copy_slurl" || action == "remove" ||
+                return action == "map" || action == "profile" || action == "teleport" || action == "copy_slurl" || action == "remove" ||
                        action == "clear_history" || action == "expand_all" || action == "collapse_all";
             }
             static const std::string_view callbacks[] = {

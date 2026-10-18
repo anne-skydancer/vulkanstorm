@@ -30,6 +30,7 @@
 #include "lltimer.h"
 
 #include "llpanel.h"
+#include <functional>
 
 class LLInventoryItem;
 class LLFilterEditor;
@@ -43,6 +44,7 @@ class LLPanelPlacesTab;
 class LLParcelSelection;
 class LLPlacesInventoryObserver;
 class LLPlacesParcelObserver;
+class LLPlacesRemoteParcelInfoObserver;
 class LLRemoteParcelInfoObserver;
 class LLTabContainer;
 class LLToggleableMenu;
@@ -147,7 +149,7 @@ private:
 
     LLPlacesInventoryObserver*  mInventoryObserver;
     LLPlacesParcelObserver*     mParcelObserver;
-    LLRemoteParcelInfoObserver* mRemoteParcelObserver;
+    LLPlacesRemoteParcelInfoObserver* mRemoteParcelObserver;
 
     // Pointer to a landmark item or to a linked landmark
     LLPointer<LLInventoryItem>  mItem;
@@ -175,6 +177,8 @@ private:
     LLSafeHandle<LLParcelSelection> mParcel;
 
     boost::signals2::connection mAgentParcelChangedConnection;
+    std::function<bool()> mAccountCurrent = [] { return true; };
+    U64 mIntentSerial = 0;
 };
 
 #endif //LL_LLPANELPLACES_H

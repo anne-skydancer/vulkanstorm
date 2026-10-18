@@ -865,15 +865,8 @@ void LLPanelProfilePick::setPickLocation(const std::string& location)
 
 void LLPanelProfilePick::onClickMap()
 {
-    if (LLRender2D::isNativeUI())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
-
-    if (!LLRender2D::isNativeUI())
-        if (auto* map = LLFloaterWorldMap::getInstance()) map->trackLocation(getPosGlobal());
-    if (!LLRender2D::isNativeUI()) LLFloaterReg::showInstance("world_map", "center");
+    if (auto* map = LLFloaterWorldMap::getInstance()) map->trackLocation(getPosGlobal());
+    LLFloaterReg::showInstance("world_map", "center");
 }
 
 void LLPanelProfilePick::onClickTeleport()
@@ -882,7 +875,6 @@ void LLPanelProfilePick::onClickTeleport()
     if (!getPosGlobal().isExactlyZero())
     {
         gAgent.teleportViaLocation(getPosGlobal());
-        if (!LLRender2D::isNativeUI())
         if (auto* map = LLFloaterWorldMap::getInstance()) map->trackLocation(getPosGlobal());
     }
 }

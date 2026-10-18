@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from test_native_maps import NativeMapsTests
 from unittest.mock import patch
 from render_backend_selector_fixture import SelectorTests
 from test_vulkan_ui_oracle import OracleTest

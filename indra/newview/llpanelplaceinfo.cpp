@@ -116,6 +116,8 @@ bool LLPanelPlaceInfo::postBuild()
 //virtual
 void LLPanelPlaceInfo::resetLocation()
 {
+    if (mParcelID.notNull()) LLRemoteParcelInfoProcessor::instance().removeObserver(mParcelID, this);
+    mObserverHandle.unbind(); mObserverHandle.bind(this);
     mParcelID.setNull();
     mRequestedID.setNull();
     mPosRegion.clearVec();
@@ -273,6 +275,7 @@ void LLPanelPlaceInfo::setErrorStatus(S32 status, const std::string& reason)
 // virtual
 void LLPanelPlaceInfo::processParcelInfo(const LLParcelData& parcel_data)
 {
+    if (mRequestedID.notNull() && parcel_data.parcel_id != mRequestedID) return;
     if(mSnapshotCtrl)
     {
         mSnapshotCtrl->setImageAssetID(parcel_data.snapshot_id);

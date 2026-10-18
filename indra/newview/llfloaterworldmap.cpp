@@ -309,7 +309,7 @@ void LLMapInventoryObserver::changed(U32 mask)
     if((mask & (LLInventoryObserver::CALLING_CARD | LLInventoryObserver::ADD |
                 LLInventoryObserver::REMOVE)) != 0)
     {
-        gFloaterWorldMap->inventoryChanged();
+        if (gFloaterWorldMap) gFloaterWorldMap->inventoryChanged();
     }
 }
 
@@ -401,6 +401,9 @@ LLFloaterWorldMap::LLFloaterWorldMap(const LLSD& key)
     mShowParcelInfo(false)
 {
     gFloaterWorldMap = this;
+#if VS_NATIVE_VULKAN
+    mNativeOwner = static_cast<bool>(VSNativeSession::active());
+#endif
 
     mFactoryMap["objects_mapview"] = LLCallbackMap(createWorldMapView, nullptr);
 
@@ -418,7 +421,7 @@ LLFloaterWorldMap::LLFloaterWorldMap(const LLSD& key)
     // <FS:Ansariel> Alchemy region tracker
     mCommitCallbackRegistrar.add("WMap.TrackRegion",    boost::bind(&LLFloaterWorldMap::onTrackRegion, this));
 
-    gSavedSettings.getControl("PreferredMaturity")->getSignal()->connect(boost::bind(&LLFloaterWorldMap::onChangeMaturity, this));
+    mMaturityConnection = gSavedSettings.getControl("PreferredMaturity")->getSignal()->connect(boost::bind(&LLFloaterWorldMap::onChangeMaturity, this));
 }
 
 // static
@@ -503,6 +506,21 @@ bool LLFloaterWorldMap::postBuild()
 // virtual
 LLFloaterWorldMap::~LLFloaterWorldMap()
 {
+    if (mNativeOwner)
+    {
+        if (mInventoryObserver && gInventory.containsObserver(mInventoryObserver))
+        {
+            gInventory.removeObserver(mInventoryObserver);
+        }
+        delete mInventoryObserver;
+        mInventoryObserver = nullptr;
+        if (mFriendObserver)
+        {
+            LLAvatarTracker::instance().removeObserver(mFriendObserver);
+            delete mFriendObserver;
+            mFriendObserver = nullptr;
+        }
+    }
     if (mParcelInfoObserver)
     {
         delete mParcelInfoObserver;

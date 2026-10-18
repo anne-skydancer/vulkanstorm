@@ -1,6 +1,8 @@
 // Backend-neutral CPU avatar access for ordinary viewer services. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsavatarservices.h"
+#include "llagent.h"
+#include "llviewercontrol.h"
 #include "llvoavatarself.h"
 #include "llagentwearables.h"
 #include "llinventorymodel.h"
@@ -223,4 +225,16 @@ std::vector<VSAvatarLocation> vs_avatar_locations(const LLVector3d& relativeTo, 
     LLWorld::getInstance()->getAvatars(&ids, &positions, relativeTo, radius);
     for (std::size_t i = 0; i < ids.size(); ++i) result.push_back({ids[i], positions[i]});
     return result;
+}
+
+bool vs_avatar_nearby_location(const LLUUID& id, LLVector3d& position)
+{
+    const auto origin = gAgent.getPositionGlobal();
+    // Match the ordinary radar's user-selected distance policy. The provider
+    // retains coarse altitude and circuit freshness; missing is not position 0.
+    const F32 radius = gSavedSettings.getBOOL("LimitRadarByRange")
+        ? gSavedSettings.getF32("NearMeRange") : F32_MAX;
+    for (const auto& avatar : vs_avatar_locations(origin, radius))
+        if (avatar.id == id) { position = avatar.position; return true; }
+    return false;
 }

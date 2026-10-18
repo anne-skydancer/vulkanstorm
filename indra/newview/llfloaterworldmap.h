@@ -267,6 +267,8 @@ private:
     LLPanel*                mTrackCtrlsPanel = nullptr;
 
     boost::signals2::connection mTeleportFinishConnection;
+    boost::signals2::scoped_connection mMaturityConnection;
+    bool mNativeOwner = false;
 };
 
 extern LLFloaterWorldMap* gFloaterWorldMap;

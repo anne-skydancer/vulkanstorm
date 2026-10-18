@@ -368,13 +368,6 @@ void LLTeleportHistoryStorage::goToItem(S32 idx)
 
 void LLTeleportHistoryStorage::showItemOnMap(S32 idx)
 {
-#if VS_NATIVE_VULKAN
-    if (VSNativeSession::active())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
-#endif
 
     // Validate specified index.
     if (idx < 0 || idx >= (S32)mItems.size())

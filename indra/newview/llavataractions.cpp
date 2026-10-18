@@ -33,6 +33,9 @@
 #endif
 
 #include "llavataractions.h"
+#include "vsavatarservices.h"
+#include "lltracker.h"
+#include "fscommon.h"
 #include "vsavatarcontext.h"
 #include "vsregioncontext.h"
 
@@ -634,20 +637,15 @@ void LLAvatarActions::hideProfile(const LLUUID& avatar_id)
 // static
 void LLAvatarActions::showOnMap(const LLUUID& id)
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
-
     LLAvatarName av_name;
     if (!LLAvatarNameCache::get(id, &av_name))
     {
-        LLAvatarNameCache::get(id, boost::bind(&LLAvatarActions::showOnMap, id));
+        LLAvatarNameCache::get(id, vs_native_im_account_callback([id](const LLUUID&, const LLAvatarName&)
+            { LLAvatarActions::showOnMap(id); }));
         return;
     }
 
-    gFloaterWorldMap->trackAvatar(id, av_name.getDisplayName());
+    if (auto* map = LLFloaterWorldMap::getInstance()) map->trackAvatar(id, av_name.getDisplayName());
     LLFloaterReg::showInstance("world_map", "center");
 }
 
@@ -918,7 +916,13 @@ void LLAvatarActions::track(const LLUUID& id)
 {
     if (gViewerWindow && gViewerWindow->isNativeVulkan())
     {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
+        LLVector3d position;
+        if (!vs_avatar_nearby_location(id, position)) return;
+        LLAvatarName name;
+        LLAvatarNameCache::get(id, &name);
+        LLTracker::followLocation(position, name.getDisplayName(),
+            [id, current = vs_native_im_guard()](LLVector3d& next)
+            { return current() && vs_avatar_nearby_location(id, next); });
         return;
     }
 
@@ -936,7 +940,22 @@ void LLAvatarActions::teleportTo(const LLUUID& id)
 {
     if (gViewerWindow && gViewerWindow->isNativeVulkan())
     {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
+        LLVector3d position;
+        if (!vs_avatar_nearby_location(id, position) || position.mdV[VZ] == AVATAR_UNKNOWN_Z_OFFSET)
+        { LLNotificationsUtil::add("TeleportToAvatarNotPossible"); return; }
+        const auto region = vs_region_context(position);
+        if (!region) { LLNotificationsUtil::add("TeleportToAvatarNotPossible"); return; }
+        const auto center = region->getOriginGlobal() + LLVector3d(region->getWidth() * .5, region->getHeight() * .5, 0);
+        LLVector3d offset = position - center;
+        LLVector3d destination;
+        const F32 lateral = gSavedSettings.getF32("FSTeleportToOffsetLateral");
+        const F32 vertical = gSavedSettings.getF32("FSTeleportToOffsetVertical");
+        if (offset.normalize() != 0.f)
+            destination = lateral > 0.f ? position - offset * lateral : position;
+        else
+            destination = center + LLVector3d(0.f, lateral, 0.f);
+        destination.mdV[VZ] = position.mdV[VZ] + vertical;
+        gAgent.teleportViaLocation(destination);
         return;
     }
 

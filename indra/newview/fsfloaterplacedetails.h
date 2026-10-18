@@ -29,6 +29,7 @@
 #define FS_FLOATERPLACEDETAILS_H
 
 #include "llfloater.h"
+#include <functional>
 #include "llpointer.h"
 #include "llsafehandle.h"
 #include "llinventory.h"
@@ -113,6 +114,8 @@ private:
     LLUUID              mExpectedLandmarkItemId;
 
     boost::signals2::connection mAgentParcelChangedConnection;
+    std::function<bool()> mAccountCurrent = [] { return true; };
+    U64 mIntentSerial = 0;
 };
 
 #endif // FS_FLOATERPLACEDETAILS_H
