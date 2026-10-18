@@ -52,6 +52,11 @@
 #include "llviewerregion.h"
 #include "llviewerwindow.h"
 #include "llcorehttputil.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeim.h"
+#endif
+#include <utility>
 
 ///----------------------------------------------------------------------------
 /// LLFloaterScriptLimits
@@ -150,6 +155,10 @@ void LLPanelScriptLimitsInfo::updateChild(LLUICtrl* child_ctr)
 
 LLPanelScriptLimitsRegionMemory::~LLPanelScriptLimitsRegionMemory()
 {
+#if VS_NATIVE_VULKAN
+    mNativeQueryCurrent = {};
+    retireNativeRequests();
+#endif
     if(!mParcelId.isNull())
     {
         LLRemoteParcelInfoProcessor::getInstance()->removeObserver(mParcelId, this);
@@ -159,6 +168,14 @@ LLPanelScriptLimitsRegionMemory::~LLPanelScriptLimitsRegionMemory()
 
 bool LLPanelScriptLimitsRegionMemory::getLandScriptResources()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto region = vs_current_region_context();
+        return region && mNativeQueryCurrent && mNativeQueryCurrent() &&
+            requestNativeResources(region->getCapability("LandResources"));
+    }
+#endif
     if (!gAgent.getRegion()) return false;
 
     LLSD body;
@@ -318,6 +335,9 @@ void LLPanelScriptLimitsRegionMemory::getLandScriptDetailsCoro(std::string url)
 
 void LLPanelScriptLimitsRegionMemory::processParcelInfo(const LLParcelData& parcel_data)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && (!mNativeQueryCurrent || !mNativeQueryCurrent())) return;
+#endif
     if(!getLandScriptResources())
     {
         std::string msg_error = LLTrans::getString("ScriptLimitsRequestError");
@@ -332,6 +352,9 @@ void LLPanelScriptLimitsRegionMemory::processParcelInfo(const LLParcelData& parc
 
 void LLPanelScriptLimitsRegionMemory::setParcelID(const LLUUID& parcel_id)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && (!mNativeQueryCurrent || !mNativeQueryCurrent())) return;
+#endif
     if (!parcel_id.isNull())
     {
         if(!mParcelId.isNull())
@@ -671,6 +694,16 @@ bool LLPanelScriptLimitsRegionMemory::postBuild()
 bool LLPanelScriptLimitsRegionMemory::StartRequestChain()
 {
     LLUUID region_id;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        mNativeQueryCurrent = {};
+        retireNativeRequests();
+        mObserverHandle.unbind(); mObserverHandle.bind(this);
+        if (mParcelId.notNull()) LLRemoteParcelInfoProcessor::instance().removeObserver(mParcelId, this);
+        mParcelId.setNull();
+    }
+#endif
 
     LLFloaterLand* instance = LLFloaterReg::getTypedInstance<LLFloaterLand>("about_land");
     if(!instance)
@@ -691,6 +724,14 @@ bool LLPanelScriptLimitsRegionMemory::StartRequestChain()
         LLVector3 parcel_center = parcel->getCenterpoint();
 
         region_id = region->getRegionID();
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            const auto account = vs_native_im_guard();
+            mNativeQueryCurrent = [account, region = *region]
+            { return account() && region.current(); };
+        }
+#endif
 
         if(region_id != current_region_id)
         {
@@ -795,6 +836,9 @@ void LLPanelScriptLimitsRegionMemory::onClickRefresh(void* userdata)
 
 void LLPanelScriptLimitsRegionMemory::showBeacon()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && (!mNativeQueryCurrent || !mNativeQueryCurrent())) return;
+#endif
     LLScrollListCtrl* list = getChild<LLScrollListCtrl>("scripts_list");
     if (!list) return;
 
@@ -843,8 +887,11 @@ void LLPanelScriptLimitsRegionMemory::returnObjectsFromParcel(S32 local_id)
 {
     LLMessageSystem *msg = gMessageSystem;
 
-    LLViewerRegion* region = gAgent.getRegion();
+    const auto region = vs_current_region_context();
     if (!region) return;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && (!mNativeQueryCurrent || !mNativeQueryCurrent())) return;
+#endif
 
     LLCtrlListInterface *list = childGetListInterface("scripts_list");
     if (!list || list->getItemCount() == 0) return;
@@ -944,3 +991,99 @@ void LLPanelScriptLimitsRegionMemory::onClickReturn(void* userdata)
     }
 }
 
+
+void LLPanelScriptLimitsRegionMemory::draw()
+{
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && mNativeQueryCurrent && !mNativeQueryCurrent())
+    {
+        clearList();
+        StartRequestChain();
+    }
+#endif
+    LLPanelScriptLimitsInfo::draw();
+}
+#if VS_NATIVE_VULKAN
+void LLPanelScriptLimitsRegionMemory::retireNativeRequests()
+{
+    ++mNativeRequestSerial;
+    auto requests = std::exchange(mNativeRequests, {});
+    mNativePendingStages = 0;
+    mNativeRequestFailed = false;
+    for (const auto& request : requests) request->cancelSuspendedOperation();
+}
+bool LLPanelScriptLimitsRegionMemory::requestNativeResources(const std::string& url)
+{
+    if (url.empty() || !mNativeQueryCurrent || !mNativeQueryCurrent()) return false;
+    retireNativeRequests();
+    const auto guard = mNativeQueryCurrent;
+    const auto handle = getHandle();
+    const U64 serial = mNativeRequestSerial;
+    const auto adapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>(
+        "nativeLandResources", LLCore::HttpRequest::DEFAULT_POLICY_ID);
+    mNativeRequests.push_back(adapter);
+    LLSD body; body["parcel_id"] = mParcelId;
+    LLCoros::instance().launch("nativeLandResources", [handle, guard, serial, adapter, url, body]
+    {
+        if (!guard() || !handle.get()) return;
+        auto request = std::make_shared<LLCore::HttpRequest>();
+        LLSD result = adapter->postAndSuspend(request, url, body);
+        auto* self = dynamic_cast<LLPanelScriptLimitsRegionMemory*>(handle.get());
+        if (!self || !guard() || self->mNativeRequestSerial != serial) return;
+        const auto status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(
+            result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
+        if (!status)
+        {
+            self->mNativePendingStages = 1;
+            self->finishNativeResourceStage(serial, guard, true);
+            return;
+        }
+        // The reference retrieves these independent server endpoints in parallel.
+        self->mNativePendingStages = 2;
+        self->requestNativeResourceStage(result["ScriptResourceSummary"].asString(), true, serial, guard);
+        self = dynamic_cast<LLPanelScriptLimitsRegionMemory*>(handle.get());
+        if (self && guard() && self->mNativeRequestSerial == serial)
+            self->requestNativeResourceStage(result["ScriptResourceDetails"].asString(), false, serial, guard);
+    });
+    return true;
+}
+void LLPanelScriptLimitsRegionMemory::requestNativeResourceStage(
+    const std::string& url, bool summary, U64 serial, std::function<bool()> guard)
+{
+    if (!guard() || mNativeRequestSerial != serial) return;
+    if (url.empty()) { finishNativeResourceStage(serial, guard, true); return; }
+    const auto handle = getHandle();
+    const auto adapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>(
+        "nativeLandResourceStage", LLCore::HttpRequest::DEFAULT_POLICY_ID);
+    mNativeRequests.push_back(adapter);
+    LLCoros::instance().launch("nativeLandResourceStage", [handle, guard, serial, adapter, url, summary]
+    {
+        if (!guard() || !handle.get()) return;
+        auto request = std::make_shared<LLCore::HttpRequest>();
+        LLSD result = adapter->getAndSuspend(request, url);
+        auto* self = dynamic_cast<LLPanelScriptLimitsRegionMemory*>(handle.get());
+        if (!self || !guard() || self->mNativeRequestSerial != serial) return;
+        const auto status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(
+            result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
+        if (status)
+        {
+            result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);
+            if (summary) self->setRegionSummary(result);
+            else self->setRegionDetails(result);
+        }
+        self = dynamic_cast<LLPanelScriptLimitsRegionMemory*>(handle.get());
+        if (self && guard() && self->mNativeRequestSerial == serial)
+            self->finishNativeResourceStage(serial, guard, !status);
+    });
+}
+void LLPanelScriptLimitsRegionMemory::finishNativeResourceStage(
+    U64 serial, const std::function<bool()>& guard, bool failed)
+{
+    if (!guard() || mNativeRequestSerial != serial || !mNativePendingStages) return;
+    mNativeRequestFailed = mNativeRequestFailed || failed;
+    if (--mNativePendingStages) return;
+    mNativeRequests.clear();
+    getChild<LLUICtrl>("loading_text")->setValue(mNativeRequestFailed ? LLTrans::getString("ScriptLimitsRequestError") : std::string());
+    getChild<LLButton>("refresh_list_btn")->setEnabled(true);
+}
+#endif
