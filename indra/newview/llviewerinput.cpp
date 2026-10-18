@@ -1284,6 +1284,30 @@ bool LLViewerInput::handleGlobalBindsKeyUp(KEY key, MASK mask)
 
 bool LLViewerInput::handleGlobalBindsMouse(EMouseClickType clicktype, MASK mask, bool down)
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        // The binding that received the press owns its release, even after
+        // modifiers, camera mode, preferences or key recording have changed.
+        const auto held = mNativeHeldGlobalMouseBindings.find(clicktype);
+        if (!down)
+        {
+            if (held == mNativeHeldGlobalMouseBindings.end()) return false;
+            const auto callback = held->second.mFunction;
+            mNativeHeldGlobalMouseBindings.erase(held);
+            return callback(KEYSTATE_UP);
+        }
+        if (LLSetKeyBindDialog::isRecording()) return false;
+        if (held != mNativeHeldGlobalMouseBindings.end()) return true;
+        for (const auto& binding : mGlobalMouseBindings[getMode()])
+            if (binding.mMouse == clicktype && (binding.mMask & mask) == binding.mMask)
+            {
+                mNativeHeldGlobalMouseBindings.emplace(clicktype, binding);
+                return binding.mFunction(KEYSTATE_DOWN);
+            }
+        return false;
+    }
+#endif
     if (LLSetKeyBindDialog::isRecording())
     {
         // handleGlobalBindsMouse happens before view handling, so can't
@@ -1735,8 +1759,12 @@ void LLViewerInput::resetNativeGlobalKeys() const
     // Release the callbacks captured on press even if mode, modifiers, binding
     // preferences or recording state changed while the physical key was held.
     const auto held = std::move(mNativeHeldGlobalBindings);
+    const auto heldMouse = std::move(mNativeHeldGlobalMouseBindings);
     mNativeHeldGlobalBindings.clear();
+    mNativeHeldGlobalMouseBindings.clear();
     for (const auto& [key, binding] : held)
+        binding.mFunction(KEYSTATE_UP);
+    for (const auto& [button, binding] : heldMouse)
         binding.mFunction(KEYSTATE_UP);
 }
 

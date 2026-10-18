@@ -135,6 +135,7 @@ struct LLSetKeyBindDialog{static bool recording;static bool isRecording(){return
 struct Window{bool isNativeVulkan(){return true;}}window,*gViewerWindow=&window;
 struct LLViewerInput{int mode=0;int getMode(){return mode;}std::vector<LLKeyboardBinding>mGlobalKeyBindings[2];
  mutable std::map<KEY,LLKeyboardBinding>mNativeHeldGlobalBindings;
+ using EMouseClickType=int;using LLMouseBinding=LLKeyboardBinding;mutable std::map<EMouseClickType,LLMouseBinding>mNativeHeldGlobalMouseBindings;
  bool handleGlobalBindsKeyDown(KEY,MASK);bool handleGlobalBindsKeyUp(KEY,MASK);void resetNativeGlobalKeys()const;
  bool scanKey(const std::vector<LLKeyboardBinding>&,S32,KEY,MASK,bool,bool,bool,bool){return false;}
 };
