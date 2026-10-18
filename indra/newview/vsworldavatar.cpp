@@ -1,6 +1,8 @@
 // CPU avatar owner and native geometry publication. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsworldavatar.h"
+#include "llviewernetwork.h"
+#include "llviewercontrol.h"
 #include "vswearable.h"
 #include "vsuiresources.h"
 #include "vsuiimageprovider.h"
@@ -261,6 +263,14 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
     bool isUsingLocalAppearance() const override { return localAppearance; }
     bool isEditingAppearance() const override { return false; }
     bool isUsingServerBakes() const override { return serverBakes; }
+    F32 getAvatarOffset() override
+    {
+#ifdef OPENSIM
+        if (self && !LLGridManager::getInstance()->isInSecondLife() && !serverBakes)
+            return gSavedPerAccountSettings.getF32("AvatarHoverOffsetZ");
+#endif
+        return LLAvatarAppearance::getAvatarOffset();
+    }
     bool isWearingWearableType(LLWearableType::EType type) const override
     {
         if (self)
@@ -1754,3 +1764,12 @@ bool VSWorldAvatar::sendAppearance(LLMessageSystem& message, const LLUUID& sessi
         }
     return true;
 }
+
+void VSWorldAvatar::hoverOffset(const LLVector3& offset)
+{
+    if (!mImpl->self || !finite(offset)) return;
+    mImpl->hover = offset;
+    mImpl->setHoverOffset(offset, false);
+    mImpl->computeBodySize();
+}
+LLVector3 VSWorldAvatar::hoverOffset() const { return mImpl->hover; }

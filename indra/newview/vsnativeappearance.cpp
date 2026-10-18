@@ -36,6 +36,8 @@
 #include "rlvlocks.h"
 #include "lltooldraganddrop.h"
 #include <sstream>
+#include <cmath>
+#include "llvoavatar.h"
 namespace
 {
 VSWorldAvatar* selfAvatar()
@@ -44,6 +46,11 @@ VSWorldAvatar* selfAvatar()
 struct VSNativeAppearance::Impl : std::enable_shared_from_this<Impl>
 {
     std::weak_ptr<VSNativeSession> session;
+    U64 hoverRegion = 0, hoverAvatar = 0, hoverSerial = 0, hoverSendRegion = 0, hoverSendAvatar = 0;
+    bool hoverFeature = false, hoverServerBakes = false;
+    std::optional<F32> hoverSaved, hoverLastSent, hoverPending;
+    std::string hoverCapability;
+    LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t hoverRequest;
     VSNativeSession::AccountHandle account;
     VSResourceBudget               budget{ 512 * 1024 * 1024 };
     struct Entry
@@ -133,6 +140,7 @@ struct VSNativeAppearance::Impl : std::enable_shared_from_this<Impl>
     explicit Impl(const std::shared_ptr<VSNativeSession>& owner) : session(owner), account(owner->account()) {}
     ~Impl()
     {
+        if (hoverRequest) hoverRequest->cancelSuspendedOperation();
         if (baker)
             baker->cancelSuspendedOperation();
     }
@@ -663,8 +671,13 @@ void VSNativeAppearance::tick()
     auto&      state   = *mImpl;
     const auto session = state.session.lock();
     const auto avatar  = selfAvatar();
+    if (state.hoverRequest && (!state.current() || !session->regionReady() || session->regionEpoch() != state.hoverSendRegion))
+    {
+        state.hoverRequest->cancelSuspendedOperation(); state.hoverRequest.reset(); state.hoverPending.reset(); ++state.hoverSerial;
+    }
     if (!state.current() || !session->regionReady() || !avatar)
         return;
+    syncHoverHeight();
     state.tickAttachments();
     if (!state.pendingOrder && state.orderRecovery && gInventory.isCategoryComplete(state.cof))
         state.orderRecovery = false;
@@ -1532,4 +1545,83 @@ LLSD VSNativeAppearance::evidence() const
         result["entries"].append(row);
     }
     return result;
+}
+
+// Native hover-height frontend/service adapter, using the shared protocol.
+bool VSNativeAppearance::hoverEnabled() const
+{
+    const auto owner = mImpl->session.lock();
+    const auto avatar = selfAvatar();
+    return mImpl->current() && owner->regionReady() && avatar &&
+        (owner->simulatorFeatures()["AvatarHoverHeightEnabled"].asBoolean() || !avatar->appearanceOwner().isUsingServerBakes());
+}
+void VSNativeAppearance::syncHoverHeight()
+{
+    const auto owner = mImpl->session.lock();
+    const auto avatar = selfAvatar();
+    if (!mImpl->current() || !owner->regionReady() || !avatar || !owner->simulatorFeaturesReceived()) return;
+    const F32 value = gSavedPerAccountSettings.getF32("AvatarHoverOffsetZ");
+    if (!std::isfinite(value)) return;
+    const bool feature = owner->simulatorFeatures()["AvatarHoverHeightEnabled"].asBoolean();
+    const bool serverBakes = avatar->appearanceOwner().isUsingServerBakes();
+    const std::string capability = owner->capability("AgentPreferences");
+    if (mImpl->hoverRegion == owner->regionEpoch() && mImpl->hoverAvatar == avatar->ownerGeneration() &&
+        mImpl->hoverFeature == feature && mImpl->hoverServerBakes == serverBakes && mImpl->hoverSaved == value && mImpl->hoverCapability == capability) return;
+    mImpl->hoverRegion = owner->regionEpoch(); mImpl->hoverAvatar = avatar->ownerGeneration();
+    mImpl->hoverFeature = feature; mImpl->hoverServerBakes = serverBakes; mImpl->hoverSaved = value; mImpl->hoverCapability = capability;
+    if (mImpl->hoverRequest) mImpl->hoverRequest->cancelSuspendedOperation();
+    mImpl->hoverRequest.reset(); mImpl->hoverPending.reset(); ++mImpl->hoverSerial; mImpl->hoverLastSent.reset();
+    if (feature || !serverBakes) setHoverHeight(value, true);
+    else avatar->hoverOffset(LLVector3::zero);
+}
+bool VSNativeAppearance::setHoverHeight(F32 value, bool send)
+{
+    if (!std::isfinite(value) || !hoverEnabled()) return false;
+    const auto owner = mImpl->session.lock();
+    const auto avatar = selfAvatar();
+    value = llclamp(value, MIN_HOVER_Z, MAX_HOVER_Z);
+    const bool feature = owner->simulatorFeatures()["AvatarHoverHeightEnabled"].asBoolean();
+    // Legacy local-bake hover is the shared appearance's getAvatarOffset(), not
+    // an additional server-style root translation.
+    avatar->hoverOffset(feature ? LLVector3(0, 0, value) : LLVector3::zero);
+    if (!send || !feature) return true;
+    const std::string url = owner->capability("AgentPreferences");
+    if (url.empty()) return false;
+    if (mImpl->hoverSendRegion == owner->regionEpoch() && mImpl->hoverSendAvatar == avatar->ownerGeneration())
+    {
+        if (mImpl->hoverRequest && mImpl->hoverPending && *mImpl->hoverPending == value) return true;
+        if (mImpl->hoverLastSent && *mImpl->hoverLastSent == value) return true;
+    }
+    if (mImpl->hoverRequest) mImpl->hoverRequest->cancelSuspendedOperation();
+    const auto adapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("nativeHoverHeight", LLCore::HttpRequest::DEFAULT_POLICY_ID);
+    mImpl->hoverRequest = adapter; mImpl->hoverPending = value; mImpl->hoverSendRegion = owner->regionEpoch(); mImpl->hoverSendAvatar = avatar->ownerGeneration();
+    const auto weak = std::weak_ptr<Impl>(mImpl); const auto account = mImpl->account;
+    const U64 serial = ++mImpl->hoverSerial, epoch = owner->regionEpoch(), avatarGeneration = avatar->ownerGeneration();
+    LLCoros::instance().launch("nativeHoverHeight", [weak, adapter, account, serial, epoch, avatarGeneration, value, url]()
+    {
+        auto state = weak.lock();
+        auto owner = state ? state->session.lock() : nullptr;
+        auto avatar = selfAvatar();
+        if (!state || !state->current() || !owner->current(account) || !owner->regionReady() ||
+            owner->regionEpoch() != epoch || !avatar || avatar->ownerGeneration() != avatarGeneration || state->hoverSerial != serial) return;
+        state.reset(); owner.reset(); avatar = nullptr; // no account/scene owner across suspension
+        LLSD body; body["hover_height"] = value;
+        auto request = std::make_shared<LLCore::HttpRequest>();
+        const LLSD result = adapter->postAndSuspend(request, url, body);
+        state = weak.lock(); owner = state ? state->session.lock() : nullptr; avatar = selfAvatar();
+        if (!state || !state->current() || !owner->current(account) || !owner->regionReady() || owner->regionEpoch() != epoch ||
+            !avatar || avatar->ownerGeneration() != avatarGeneration || state->hoverSerial != serial) return;
+        state->hoverRequest.reset(); state->hoverPending.reset();
+        if (LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result["http_result"]))
+            state->hoverLastSent = value;
+        else
+        {
+            // Shared HTTP policy performs transient retries. Keep this intent
+            // stamped so frame polling does not requeue endlessly; a later
+            // explicit commit can retry because success was never published.
+            state->hoverLastSent.reset();
+            LL_WARNS("NativeAppearance") << "Hover height preference update failed" << LL_ENDL;
+        }
+    });
+    return true;
 }

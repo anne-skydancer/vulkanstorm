@@ -55,6 +55,8 @@ public:
     bool                                 resetSkeleton(bool resetAnimations);
     void                                 resyncAnimations();
     LLAvatarAppearance&                  appearanceOwner();
+    void hoverOffset(const LLVector3&);
+    LLVector3 hoverOffset() const;
     const std::map<LLUUID, S32>&         signaledAnimations() const;
     const std::multimap<LLUUID, LLUUID>& animationSources() const;
     bool                                 wearables(const std::vector<std::shared_ptr<LLWearable>>&, S32 cofVersion);
