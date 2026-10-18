@@ -34,6 +34,8 @@
 #include "llpluginclassmediaowner.h"
 
 #include "llviewermediaobserver.h"
+#include "v3dmath.h"
+#include <optional>
 
 #include "llpluginclassmedia.h"
 #include "v4color.h"
@@ -122,6 +124,9 @@ public:
     F32 getVolume();
     void muteListChanged();
     bool isInterestingEnough(const LLVOVolume* object, const F64 &object_interest);
+#if VS_NATIVE_VULKAN
+    bool isNativeInterestingEnough(const LLUUID&,const F64&);
+#endif
 
     // Returns the priority-sorted list of all media impls.
     impl_list &getPriorityList();
@@ -215,6 +220,9 @@ public:
     void loadURI();
     void executeJavaScript(const std::string& code);
     LLPluginClassMedia* getMediaPlugin() { return mMediaSource.get(); }
+#if VS_NATIVE_VULKAN
+    std::shared_ptr<LLPluginClassMedia> retainMediaPlugin()const{return mMediaSource;}
+#endif
     void setSize(int width, int height);
 
     void showNotification(LLNotificationPtr notify);
@@ -383,6 +391,8 @@ public:
 #if VS_NATIVE_VULKAN
     void setNativeSurface(const LLUUID&, F64 pixels, F64 distance);
     void removeNativeSurface(const LLUUID&);
+    LLUUID getSomeNativeSurface() const;
+    std::optional<LLVector3d> nativeMediaSpatialPosition() const;
 #endif
     F64 getInterest() const { return mInterest; };
     F64 getApproximateTextureInterest();
@@ -434,6 +444,7 @@ public:
     void cancelMimeTypeProbe();
 
     bool isAttachedToHUD() const;
+    bool hasObjectSpatialAudio() const;
 
     // Is this media attached to an avatar *not* self
     bool isAttachedToAnotherAvatar() const;
@@ -479,6 +490,9 @@ private:
 #if VS_NATIVE_VULKAN
     struct NativeSurface { F64 pixels=0, distance=0, updated=0; };
     std::map<LLUUID, NativeSurface> mNativeSurfaces;
+    // Match the original addObject/removeObject insertion order. Updating an
+    // existing source must not move the first object used for proximity/audio.
+    std::list<LLUUID> mNativeSurfaceOrder;
 #endif
     ECursorType mLastSetCursor;
     EMediaNavState mMediaNavState;

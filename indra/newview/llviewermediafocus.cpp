@@ -27,6 +27,10 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llviewermediafocus.h"
+#if VS_NATIVE_VULKAN
+#include "vsprimmediatarget.h"
+#include "vsnativesession.h"
+#endif
 
 //LLViewerMediaFocus
 #include "llviewerobjectlist.h"
@@ -66,44 +70,113 @@ LLViewerMediaFocus::~LLViewerMediaFocus()
     gFocusMgr.removeKeyboardFocusWithoutCallback(this);
 }
 
-void LLViewerMediaFocus::setFocusFace(LLPointer<LLViewerObject> objectp, S32 face, viewer_media_t media_impl, LLVector3 pick_normal)
+namespace
+{
+struct ReferenceMediaTarget
+{
+    LLPointer<LLViewerObject> object;
+    bool present()const{return object.notNull();}
+    static bool stillCurrent(){return true;}
+    LLUUID id()const{return object->getID();}
+    const LLMediaEntry* metadata(S32 face)const
+    {
+        const auto* entry=object->getTE(face);
+        return entry && entry->hasMedia()?entry->getMediaData():nullptr;
+    }
+    static void deselectAll(){LLSelectMgr::getInstance()->deselectAll();}
+    void selectFace(S32 face,LLObjectSelectionHandle& selection,std::shared_ptr<const void>&)const
+    {selection=LLSelectMgr::getInstance()->selectObjectOnly(object,face);}
+    static std::function<bool()> guard(){return {};}
+    static void clearControls(LLPanelPrimMediaControls& controls){controls.setMediaFace(nullptr,0,nullptr);}
+    void updateControls(LLPanelPrimMediaControls& controls,S32 face,viewer_media_t impl,LLVector3 normal)const
+    {controls.setMediaFace(object,face,impl,normal);}
+
+    static std::shared_ptr<const void> selectionLease(){return {};}
+};
+#if VS_NATIVE_VULKAN
+struct NativeMediaTarget
+{
+    std::optional<VSPrimMediaTarget> object;
+    std::weak_ptr<VSNativeSession> session;
+    VSNativeSession::AccountHandle account;
+    explicit NativeMediaTarget(const VSPrimMediaTarget* value):object(value?std::optional<VSPrimMediaTarget>(*value):std::nullopt)
+    {
+        if(const auto owner=VSNativeSession::active()){session=owner;account=owner->account();}
+    }
+    bool stillCurrent()const
+    {
+        const auto owner=session.lock();
+        const auto active=VSNativeSession::active();
+        if(active && active!=owner)return false;
+        // Clearing focus is a local teardown operation, also during logout.
+        // It must finish for this same account without granting a retired
+        // target permission to select or dispatch another plugin event.
+        const auto latest=owner?owner->account():VSNativeSession::AccountHandle{};
+        const bool same_account=owner && latest.agent==account.agent && latest.session==account.session && latest.generation==account.generation;
+        const bool account_current=object?(owner && owner->current(account)):
+            (same_account || (!owner && account.agent.isNull() && !active));
+        return account_current && (!object || object->current());
+    }
+    bool present()const{return object && object->current();}
+    LLUUID id()const{return object->id();}
+    const LLMediaEntry* metadata(S32)const{return object->metadata();}
+    static void deselectAll(){VSPrimMediaTarget::deselectAll();}
+    void selectFace(S32,LLObjectSelectionHandle&,std::shared_ptr<const void>& lease)const
+    {if(object->selectFace())lease=object->retainSelection();}
+    std::shared_ptr<const void> selectionLease()const{return object?object->retainSelection():nullptr;}
+    std::function<bool()> guard()const{return object?object->guard():std::function<bool()>{};}
+    static void clearControls(LLPanelPrimMediaControls& controls){controls.setNativeMediaFace(nullptr,0,nullptr);}
+    void updateControls(LLPanelPrimMediaControls& controls,S32 face,viewer_media_t impl,LLVector3 normal)const
+    {controls.setNativeMediaFace(object?&*object:nullptr,face,impl,normal);}
+
+};
+#endif
+}
+
+template<class Target>
+void LLViewerMediaFocus::setFocusFaceTarget(const Target& target,S32 face,viewer_media_t media_impl,LLVector3 pick_normal)
 {
     LLParcel *parcel = LLViewerParcelMgr::getInstance()->getAgentParcel();
 
-    LLViewerMediaImpl *old_media_impl = getFocusedMediaImpl();
+    viewer_media_t old_media_impl = LLViewerMedia::getInstance()->getMediaImplFromTextureID(mFocusedImplID);
     if(old_media_impl)
     {
         old_media_impl->focus(false);
     }
 
     // Always clear the current selection.  If we're setting focus on a face, we'll reselect the correct object below.
-    LLSelectMgr::getInstance()->deselectAll();
+    if(!target.stillCurrent())return;
+    target.deselectAll();
+    if(!target.stillCurrent())return;
+    mNativeFocusedCurrent=target.guard();
     mSelection = NULL;
+    mNativeSelectionLease.reset();
 
-    if (media_impl.notNull() && objectp.notNull())
+    if (media_impl.notNull() && target.present())
     {
         bool face_auto_zoom = false;
         mPrevFocusedImplID = LLUUID::null;
         mFocusedImplID = media_impl->getMediaTextureID();
-        mFocusedObjectID = objectp->getID();
+        mFocusedObjectID = target.id();
         mFocusedObjectFace = face;
         mFocusedObjectNormal = pick_normal;
 
         // Set the selection in the selection manager so we can draw the focus ring.
-        mSelection = LLSelectMgr::getInstance()->selectObjectOnly(objectp, face);
+        target.selectFace(face,mSelection,mNativeSelectionLease);
+        if(!target.stillCurrent())return;
 
         // Focusing on a media face clears its disable flag.
         media_impl->setDisabled(false);
 
-        LLTextureEntry* tep = objectp->getTE(face);
-        if(tep && tep->hasMedia())
+        const LLMediaEntry* mep=target.metadata(face);
+        if(mep)
         {
-            LLMediaEntry* mep = tep->getMediaData();
             face_auto_zoom = mep->getAutoZoom();
             if(!media_impl->hasMedia())
             {
                 std::string url = mep->getCurrentURL().empty() ? mep->getHomeURL() : mep->getCurrentURL();
                 media_impl->navigateTo(url, "", true);
+                if(!target.stillCurrent())return;
             }
         }
         else
@@ -114,6 +187,7 @@ void LLViewerMediaFocus::setFocusFace(LLPointer<LLViewerObject> objectp, S32 fac
 
         media_impl->focus(true);
         gFocusMgr.setKeyboardFocus(this);
+        if(!target.stillCurrent())return;
         LLViewerMediaImpl* impl = getFocusedMediaImpl();
         if (impl)
         {
@@ -122,6 +196,7 @@ void LLViewerMediaFocus::setFocusFace(LLPointer<LLViewerObject> objectp, S32 fac
 
         // We must do this before  processing the media HUD zoom, or it may zoom to the wrong face.
         update();
+        if(!target.stillCurrent())return;
 
         if(mMediaControls.get())
         {
@@ -147,18 +222,18 @@ void LLViewerMediaFocus::setFocusFace(LLPointer<LLViewerObject> objectp, S32 fac
         }
 
         LLViewerMediaImpl* impl = getFocusedMediaImpl();
-        if (LLEditMenuHandler::gEditMenuHandler == impl)
+        if (LLEditMenuHandler::gEditMenuHandler == old_media_impl)
         {
             LLEditMenuHandler::gEditMenuHandler = NULL;
         }
 
 
         mFocusedImplID = LLUUID::null;
-        if (objectp.notNull())
+        if (target.present())
         {
             // Still record the focused object...it may mean we need to load media data.
             // This will aid us in determining this object is "important enough"
-            mFocusedObjectID = objectp->getID();
+            mFocusedObjectID = target.id();
             mFocusedObjectFace = face;
         }
         else {
@@ -168,17 +243,36 @@ void LLViewerMediaFocus::setFocusFace(LLPointer<LLViewerObject> objectp, S32 fac
     }
 }
 
+void LLViewerMediaFocus::setFocusFace(LLPointer<LLViewerObject> objectp,S32 face,viewer_media_t media_impl,LLVector3 pick_normal)
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() && objectp.isNull())
+    {
+        setNativeFocusFace(nullptr,face,media_impl,pick_normal);
+        return;
+    }
+#endif
+    setFocusFaceTarget(ReferenceMediaTarget{objectp},face,media_impl,pick_normal);
+}
+#if VS_NATIVE_VULKAN
+void LLViewerMediaFocus::setNativeFocusFace(const VSPrimMediaTarget* target,S32 face,viewer_media_t media_impl,LLVector3 normal)
+{setFocusFaceTarget(NativeMediaTarget{target},face,media_impl,normal);}
+#endif
+
+
 void LLViewerMediaFocus::clearFocus()
 {
     setFocusFace(NULL, 0, NULL);
 }
 
-void LLViewerMediaFocus::setHoverFace(LLPointer<LLViewerObject> objectp, S32 face, viewer_media_t media_impl, LLVector3 pick_normal)
+template<class Target>
+void LLViewerMediaFocus::setHoverFaceTarget(const Target& target,S32 face,viewer_media_t media_impl,LLVector3 pick_normal)
 {
+    mNativeHoverCurrent=target.guard();
     if (media_impl.notNull())
     {
         mHoverImplID = media_impl->getMediaTextureID();
-        mHoverObjectID = objectp->getID();
+        mHoverObjectID = target.id();
         mHoverObjectFace = face;
         mHoverObjectNormal = pick_normal;
     }
@@ -189,6 +283,20 @@ void LLViewerMediaFocus::setHoverFace(LLPointer<LLViewerObject> objectp, S32 fac
         mHoverImplID = LLUUID::null;
     }
 }
+
+void LLViewerMediaFocus::setHoverFace(LLPointer<LLViewerObject> objectp,S32 face,viewer_media_t media_impl,LLVector3 normal)
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() && objectp.isNull())
+    {setNativeHoverFace(nullptr,face,media_impl,normal);return;}
+#endif
+    setHoverFaceTarget(ReferenceMediaTarget{objectp},face,media_impl,normal);
+}
+#if VS_NATIVE_VULKAN
+void LLViewerMediaFocus::setNativeHoverFace(const VSPrimMediaTarget* target,S32 face,viewer_media_t media_impl,LLVector3 normal)
+{setHoverFaceTarget(NativeMediaTarget{target},face,media_impl,normal);}
+#endif
+
 
 void LLViewerMediaFocus::clearHover()
 {
@@ -206,7 +314,8 @@ bool LLViewerMediaFocus::getFocus()
 }
 
 // This function selects an ideal viewing distance based on the focused object, pick normal, and padding value
-LLVector3d LLViewerMediaFocus::setCameraZoom(LLViewerObject* object, LLVector3 normal, F32 padding_factor, bool zoom_in_only)
+template<class Target>
+LLVector3d mediaCameraZoom(Target* object,LLVector3 normal,F32 padding_factor,bool zoom_in_only)
 {
     LLVector3d camera_pos;
     if (object)
@@ -222,7 +331,7 @@ LLVector3d LLViewerMediaFocus::setCameraZoom(LLViewerObject* object, LLVector3 n
         F32 distance;
 
         // We need the aspect ratio, and the 3 components of the bbox as height, width, and depth.
-        F32 aspect_ratio = getBBoxAspectRatio(bbox, normal, &height, &width, &depth);
+        F32 aspect_ratio = LLViewerMediaFocus::getBBoxAspectRatio(bbox, normal, &height, &width, &depth);
         F32 camera_aspect = LLViewerCamera::getInstance()->getAspect();
 
         LL_DEBUGS() << "normal = " << normal << ", aspect_ratio = " << aspect_ratio << ", camera_aspect = " << camera_aspect << LL_ENDL;
@@ -302,6 +411,24 @@ LLVector3d LLViewerMediaFocus::setCameraZoom(LLViewerObject* object, LLVector3 n
     }
     return camera_pos;
 }
+
+LLVector3d LLViewerMediaFocus::setCameraZoom(LLViewerObject* object,LLVector3 normal,F32 padding_factor,bool zoom_in_only)
+{return mediaCameraZoom(object,normal,padding_factor,zoom_in_only);}
+#if VS_NATIVE_VULKAN
+LLVector3d LLViewerMediaFocus::setNativeCameraZoom(const VSPrimMediaTarget* target,LLVector3 normal,F32 padding_factor,bool zoom_in_only)
+{
+    const auto bounds=target?target->bounds():std::nullopt;
+    if(!bounds)return mediaCameraZoom(static_cast<LLViewerObject*>(nullptr),normal,padding_factor,zoom_in_only);
+    struct NativeZoomBounds
+    {
+        LLBBox bounds;LLUUID id;
+        LLBBox getBoundingBoxAgent()const{return bounds;}
+        const LLUUID& getID()const{return id;}
+    } object{*bounds,target->id()};
+    return mediaCameraZoom(&object,normal,padding_factor,zoom_in_only);
+}
+#endif
+
 void LLViewerMediaFocus::onFocusReceived()
 {
     LLViewerMediaImpl* media_impl = getFocusedMediaImpl();
@@ -401,6 +528,45 @@ bool LLViewerMediaFocus::handleScrollWheel(S32 x, S32 y, S32 clicks_x, S32 click
     return retval;
 }
 
+template<class Focused,class Hovered>
+void LLViewerMediaFocus::updateControlsTarget(Focused focused,Hovered hovered)
+{
+    LLViewerMediaImpl *media_impl = getFocusedMediaImpl();
+    auto target=focused();
+    S32 face = mFocusedObjectFace;
+    LLVector3 normal = mFocusedObjectNormal;
+
+    if(!media_impl || !target.present())
+    {
+        media_impl = getHoverMediaImpl();
+        target=hovered();
+        face = mHoverObjectFace;
+        normal = mHoverObjectNormal;
+    }
+
+    if(media_impl && target.present())
+    {
+        // We have an object and impl to point at.
+
+        // Make sure the media HUD object exists.
+        if(! mMediaControls.get())
+        {
+            LLPanelPrimMediaControls* media_controls = new LLPanelPrimMediaControls();
+            mMediaControls = media_controls->getHandle();
+            gHUDView->addChild(media_controls);
+        }
+        target.updateControls(*mMediaControls.get(),face,media_impl,normal);
+    }
+    else
+    {
+        // The media HUD is no longer needed.
+        if(mMediaControls.get())
+        {
+            target.clearControls(*mMediaControls.get());
+        }
+    }
+}
+
 void LLViewerMediaFocus::update()
 {
     if(mFocusedImplID.notNull())
@@ -428,41 +594,28 @@ void LLViewerMediaFocus::update()
     }
 
 
-    LLViewerMediaImpl *media_impl = getFocusedMediaImpl();
-    LLViewerObject *viewer_object = getFocusedObject();
-    S32 face = mFocusedObjectFace;
-    LLVector3 normal = mFocusedObjectNormal;
 
-    if(!media_impl || !viewer_object)
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
     {
-        media_impl = getHoverMediaImpl();
-        viewer_object = getHoverObject();
-        face = mHoverObjectFace;
-        normal = mHoverObjectNormal;
-    }
-
-    if(media_impl && viewer_object)
-    {
-        // We have an object and impl to point at.
-
-        // Make sure the media HUD object exists.
-        if(! mMediaControls.get())
+        if(mNativeFocusedCurrent && !mNativeFocusedCurrent())clearFocus();
+        if(mNativeHoverCurrent && !mNativeHoverCurrent())clearHover();
+        updateControlsTarget([this]
         {
-            LLPanelPrimMediaControls* media_controls = new LLPanelPrimMediaControls();
-            mMediaControls = media_controls->getHandle();
-            gHUDView->addChild(media_controls);
-        }
-        mMediaControls.get()->setMediaFace(viewer_object, face, media_impl, normal);
-    }
-    else
-    {
-        // The media HUD is no longer needed.
-        if(mMediaControls.get())
+            const auto target=mNativeFocusedCurrent?VSPrimMediaTarget::resolve(mFocusedObjectID,mFocusedObjectFace):std::nullopt;
+            return NativeMediaTarget{target?&*target:nullptr};
+        },[this]
         {
-            mMediaControls.get()->setMediaFace(NULL, 0, NULL);
-        }
+            const auto target=mNativeHoverCurrent?VSPrimMediaTarget::resolve(mHoverObjectID,mHoverObjectFace):std::nullopt;
+            return NativeMediaTarget{target?&*target:nullptr};
+        });
+        return;
     }
+#endif
+    updateControlsTarget([this]{return ReferenceMediaTarget{getFocusedObject()};},
+                         [this]{return ReferenceMediaTarget{getHoverObject()};});
 }
+
 
 
 // This function calculates the aspect ratio and the world aligned components of a selection bounding box.
@@ -537,6 +690,18 @@ F32 LLViewerMediaFocus::getBBoxAspectRatio(const LLBBox& bbox, const LLVector3& 
     return *width / *height;
 }
 
+#if VS_NATIVE_VULKAN
+bool LLViewerMediaFocus::isNativeFocusedOnFace(const VSPrimMediaTarget& target,S32 face)const
+{
+    return target.current() && mNativeFocusedCurrent && mNativeFocusedCurrent() &&
+        target.id()==mFocusedObjectID && face==mFocusedObjectFace;
+}
+bool LLViewerMediaFocus::isNativeHoveringOverFace(const VSPrimMediaTarget& target,S32 face)const
+{
+    return target.current() && mNativeHoverCurrent && mNativeHoverCurrent() &&
+        target.id()==mHoverObjectID && face==mHoverObjectFace;
+}
+#endif
 bool LLViewerMediaFocus::isFocusedOnFace(LLPointer<LLViewerObject> objectp, S32 face)
 {
     return objectp->getID() == mFocusedObjectID && face == mFocusedObjectFace;
@@ -550,6 +715,7 @@ bool LLViewerMediaFocus::isHoveringOverFace(LLPointer<LLViewerObject> objectp, S
 
 LLViewerMediaImpl* LLViewerMediaFocus::getFocusedMediaImpl()
 {
+    if(mNativeFocusedCurrent && !mNativeFocusedCurrent())return nullptr;
     return LLViewerMedia::getInstance()->getMediaImplFromTextureID(mFocusedImplID);
 }
 
@@ -560,6 +726,7 @@ LLViewerObject* LLViewerMediaFocus::getFocusedObject()
 
 LLViewerMediaImpl* LLViewerMediaFocus::getHoverMediaImpl()
 {
+    if(mNativeHoverCurrent && !mNativeHoverCurrent())return nullptr;
     return LLViewerMedia::getInstance()->getMediaImplFromTextureID(mHoverImplID);
 }
 
@@ -570,6 +737,29 @@ LLViewerObject* LLViewerMediaFocus::getHoverObject()
 
 void LLViewerMediaFocus::focusZoomOnMedia(LLUUID media_id)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        auto* impl=LLViewerMedia::getInstance()->getMediaImplFromTextureID(media_id);
+        const auto object=impl?impl->getSomeNativeSurface():LLUUID::null;
+        // The reference approximate-face-normal implementation returns zero;
+        // preserve its existing camera-axis fallback for this non-pick action.
+        const LLVector3 normal=-LLViewerCamera::getInstance()->getAtAxis();
+        for(S32 face=0;face<45 && object.notNull();++face)
+        {
+            const auto target=VSPrimMediaTarget::resolve(object,face);
+            if(!target || target->mediaID()!=media_id)continue;
+            setNativeFocusFace(&*target,face,impl,normal);
+            if(mMediaControls.get())
+            {
+                mMediaControls.get()->resetZoomLevel();
+                mMediaControls.get()->nextZoomLevel();
+            }
+            break;
+        }
+        return;
+    }
+#endif
     LLViewerMediaImpl* impl = LLViewerMedia::getInstance()->getMediaImplFromTextureID(media_id);
 
     if(impl)

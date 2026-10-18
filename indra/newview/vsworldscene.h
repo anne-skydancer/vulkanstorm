@@ -16,6 +16,7 @@
 #include <functional>
 class LLMessageSystem;
 class LLTextureEntry;
+class LLMediaEntry;
 class VSUIResources;
 class LLSD;
 class VSWorldAssets;
@@ -136,6 +137,9 @@ public:
     bool current(const FaceHandle&) const;
     std::optional<VSWorldContracts::Material> material(const FaceHandle&) const;
     bool copyTextureEntry(const FaceHandle&, LLTextureEntry&) const;
+    S32 textureEntryCount(const ObjectHandle&) const;
+    LLUUID mediaTexture(const ObjectHandle&,U32 face) const;
+    const LLMediaEntry* mediaEntry(const ObjectHandle&,U32 face) const;
     std::optional<std::array<std::array<float, 3>, 2>> selectionBounds(const ObjectHandle&) const;
     bool requestTaskInventory(LLMessageSystem&, const ObjectHandle&, const LLUUID& agent, const LLUUID& session);
     LLSD taskInventory(const ObjectHandle&) const;

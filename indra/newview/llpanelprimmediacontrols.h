@@ -41,6 +41,8 @@ class LLViewerMediaImpl;
 class LLWindowShade;
 class LLLineEditor;
 
+#include <functional>
+class VSPrimMediaTarget;
 class LLPanelPrimMediaControls : public LLPanel
 {
 public:
@@ -77,6 +79,9 @@ public:
 
     LLHandle<LLPanelPrimMediaControls>  getHandle() const { return mPanelHandle; }
     void setMediaFace(LLPointer<LLViewerObject> objectp, S32 face, viewer_media_t media_impl, LLVector3 pick_normal = LLVector3::zero);
+#if VS_NATIVE_VULKAN
+    void setNativeMediaFace(const VSPrimMediaTarget*,S32,viewer_media_t,LLVector3=LLVector3::zero);
+#endif
 
 
     static const EZoomLevel kZoomLevels[];
@@ -221,6 +226,7 @@ private:
     LLUUID mTargetImplID;
     LLVector3 mTargetObjectNormal;
 
+    std::function<bool()> mNativeTargetCurrent;
     LLUUID mZoomObjectID;
     S32 mZoomObjectFace;
 

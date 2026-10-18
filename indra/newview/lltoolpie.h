@@ -28,6 +28,9 @@
 #define LL_TOOLPIE_H
 
 #include "lltool.h"
+#include <functional>
+#include <optional>
+#include <utility>
 #include "lluuid.h"
 #include "llviewerwindow.h" // for LLPickInfo
 #include "llhudeffectblob.h" // for LLPointer<LLHudEffectBlob>, apparently
@@ -59,6 +62,13 @@ public:
     virtual void        stopEditing() override;
 
     virtual void        onMouseCaptureLost() override;
+#if VS_NATIVE_VULKAN
+    void updateNativeMediaCapture();
+    void retireNativeMediaCapture();
+    bool hasNativeMediaCapture()const;
+    bool handleNativeMediaClick(const LLPickInfo&,bool doubleClick=false);
+    bool handleNativeMediaHover(const LLPickInfo&);
+#endif
     virtual void        handleSelect() override;
     virtual void        handleDeselect() override;
     virtual LLTool*     getOverrideTool(MASK mask) override;
@@ -114,6 +124,11 @@ private:
     bool handleMediaDblClick(const LLPickInfo& info);
     bool handleMediaHover(const LLPickInfo& info);
     bool handleMediaMouseUp();
+    template<class Target>bool shouldAllowFirstMediaInteractionTarget(const LLPickInfo&,bool,const Target&);
+    template<class Target>bool handleMediaClickTarget(const LLPickInfo&,const Target&);
+    template<class Target>bool handleMediaDblClickTarget(const LLPickInfo&,const Target&);
+    template<class Target>bool handleMediaHoverTarget(const LLPickInfo&,const Target&);
+    std::function<bool()> mNativeMediaCaptureCurrent;
     bool handleTooltipLand(std::string line, std::string tooltip_msg);
     bool handleTooltipObject( LLViewerObject* hover_object, std::string line, std::string tooltip_msg);
 

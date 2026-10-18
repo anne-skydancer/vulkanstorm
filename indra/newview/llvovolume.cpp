@@ -29,6 +29,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llvovolume.h"
+#include "vsmediaevent.h"
+#include "vsmediapolicy.h"
 #include "vsrendercomplexity.h"
 #include "vsvolumelod.h"
 
@@ -2915,84 +2917,17 @@ void LLVOVolume::mediaNavigateBounceBack(U8 texture_index)
         mep = te->getMediaData();
     }
 
-    if (mep && impl)
-    {
-        std::string url = mep->getCurrentURL();
-        // Look for a ":", if not there, assume "https://"
-        if (!url.empty() && std::string::npos == url.find(':'))
-        {
-            url = "https://" + url;
-        }
-        // If the url we're trying to "bounce back" to is either empty or not
-        // allowed by the whitelist, try the home url.  If *that* doesn't work,
-        // set the media as failed and unload it
-        if (url.empty() || !mep->checkCandidateUrl(url))
-        {
-            url = mep->getHomeURL();
-            // Look for a ":", if not there, assume "https://"
-            if (!url.empty() && std::string::npos == url.find(':'))
-            {
-                url = "https://" + url;
-            }
-        }
-        if (url.empty() || !mep->checkCandidateUrl(url))
-        {
-            // The url to navigate back to is not good, and we have nowhere else
-            // to go.
-            LL_WARNS("MediaOnAPrim") << "FAILED to bounce back URL \"" << url << "\" -- unloading impl" << LL_ENDL;
-            impl->setMediaFailed(true);
-        }
-        // Make sure we are not bouncing to url we came from
-        else if (impl->getCurrentMediaURL() != url)
-        {
-            // Okay, navigate now
-            LL_INFOS("MediaOnAPrim") << "bouncing back to URL: " << url << LL_ENDL;
-            impl->navigateTo(url, "", false, true);
-        }
-    }
+    vs_media_bounce_back(mep,impl);
 }
 
 bool LLVOVolume::hasMediaPermission(const LLMediaEntry* media_entry, MediaPermType perm_type)
 {
-    // NOTE: This logic ALMOST duplicates the logic in the server (in particular, in llmediaservice.cpp).
-    if (NULL == media_entry ) return false; // XXX should we assert here?
-
-    // The agent has permissions if:
-    // - world permissions are on, or
-    // - group permissions are on, and agent_id is in the group, or
-    // - agent permissions are on, and agent_id is the owner
-
-    // *NOTE: We *used* to check for modify permissions here (i.e. permissions were
-    // granted if permModify() was true).  However, this doesn't make sense in the
-    // viewer: we don't want to show controls or allow interaction if the author
-    // has deemed it so.  See DEV-42115.
-
-    U8 media_perms = (perm_type == MEDIA_PERM_INTERACT) ? media_entry->getPermsInteract() : media_entry->getPermsControl();
-
-    // World permissions
-    if (0 != (media_perms & LLMediaEntry::PERM_ANYONE))
-    {
-        return true;
-    }
-
-    // Group permissions
-    else if (0 != (media_perms & LLMediaEntry::PERM_GROUP))
-    {
-        LLPermissions* obj_perm = LLSelectMgr::getInstance()->findObjectPermissions(this);
-        if (obj_perm && gAgent.isInGroup(obj_perm->getGroup()))
+    return vs_has_media_permission(media_entry,perm_type==MEDIA_PERM_INTERACT,
+        [this]
         {
-            return true;
-        }
-    }
-
-    // Owner permissions
-    else if (0 != (media_perms & LLMediaEntry::PERM_OWNER) && permYouOwner())
-    {
-        return true;
-    }
-
-    return false;
-
+            LLPermissions* permissions=LLSelectMgr::getInstance()->findObjectPermissions(this);
+            return permissions && gAgent.isInGroup(permissions->getGroup());
+        },[this]{return permYouOwner();});
 }
 
 void LLVOVolume::mediaNavigated(LLViewerMediaImpl *impl, LLPluginClassMedia* plugin, std::string new_location)
@@ -3042,83 +2977,10 @@ void LLVOVolume::mediaNavigated(LLViewerMediaImpl *impl, LLPluginClassMedia* plu
     }
 }
 
-void LLVOVolume::mediaEvent(LLViewerMediaImpl *impl, LLPluginClassMedia* plugin, LLViewerMediaObserver::EMediaEvent event)
+void LLVOVolume::mediaEvent(LLViewerMediaImpl* impl,LLPluginClassMedia* plugin,LLViewerMediaObserver::EMediaEvent event)
 {
-    switch(event)
-    {
-
-        case LLViewerMediaObserver::MEDIA_EVENT_LOCATION_CHANGED:
-        {
-            switch(impl->getNavState())
-            {
-                case LLViewerMediaImpl::MEDIANAVSTATE_FIRST_LOCATION_CHANGED:
-                {
-                    // This is the first location changed event after the start of a non-server-directed nav.  It may need to be broadcast or bounced back.
-                    mediaNavigated(impl, plugin, plugin->getLocation());
-                }
-                break;
-
-                case LLViewerMediaImpl::MEDIANAVSTATE_FIRST_LOCATION_CHANGED_SPURIOUS:
-                    // This navigate didn't change the current URL.
-                    LL_DEBUGS("MediaOnAPrim") << "  NOT broadcasting navigate (spurious)" << LL_ENDL;
-                break;
-
-                case LLViewerMediaImpl::MEDIANAVSTATE_SERVER_FIRST_LOCATION_CHANGED:
-                    // This is the first location changed event after the start of a server-directed nav.  Don't broadcast it.
-                    LL_INFOS("MediaOnAPrim") << "   NOT broadcasting navigate (server-directed)" << LL_ENDL;
-                break;
-
-                default:
-                    // This is a subsequent location-changed due to a redirect.  Don't broadcast.
-                    LL_INFOS("MediaOnAPrim") << "   NOT broadcasting navigate (redirect)" << LL_ENDL;
-                break;
-            }
-        }
-        break;
-
-        case LLViewerMediaObserver::MEDIA_EVENT_NAVIGATE_COMPLETE:
-        {
-            switch(impl->getNavState())
-            {
-                case LLViewerMediaImpl::MEDIANAVSTATE_COMPLETE_BEFORE_LOCATION_CHANGED:
-                {
-                    // This is the first location changed event after the start of a non-server-directed nav.  It may need to be broadcast or bounced back.
-                    mediaNavigated(impl, plugin, plugin->getNavigateURI());
-                }
-                break;
-
-                case LLViewerMediaImpl::MEDIANAVSTATE_COMPLETE_BEFORE_LOCATION_CHANGED_SPURIOUS:
-                    // This navigate didn't change the current URL.
-                    LL_DEBUGS("MediaOnAPrim") << "  NOT broadcasting navigate (spurious)" << LL_ENDL;
-                break;
-
-                case LLViewerMediaImpl::MEDIANAVSTATE_SERVER_COMPLETE_BEFORE_LOCATION_CHANGED:
-                    // This is the the navigate complete event from a server-directed nav.  Don't broadcast it.
-                    LL_INFOS("MediaOnAPrim") << "   NOT broadcasting navigate (server-directed)" << LL_ENDL;
-                break;
-
-                default:
-                    // For all other states, the navigate should have been handled by LOCATION_CHANGED events already.
-                break;
-            }
-        }
-        break;
-
-        case LLViewerMediaObserver::MEDIA_EVENT_FILE_DOWNLOAD:
-        {
-            // Media might be blocked, waiting for a file,
-            // send an empty response to unblock it
-            const std::vector<std::string> empty_response;
-            plugin->sendPickFileResponse(empty_response);
-
-            LLNotificationsUtil::add("MediaFileDownloadUnsupported");
-        }
-        break;
-
-        default:
-        break;
-    }
-
+    vs_media_event(impl,plugin,event,[this](auto* impl,auto* plugin,const std::string& location)
+    {mediaNavigated(impl,plugin,location);});
 }
 
 void LLVOVolume::sendMediaDataUpdate()

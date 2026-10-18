@@ -1627,6 +1627,8 @@ set(viewer_HEADER_FILES
     vsteleportpolicy.h
     vsagentnavigation.h
     vsobjectcontext.h
+    vsmediapolicy.h
+    vsmediaevent.h
     vsobjectproperties.h
     llsetkeybinddialog.h
     llsettingspicker.h
@@ -2343,7 +2345,7 @@ if(USE_DILIGENTCORE)
     vsenvironmentreplay.cpp
     vsbeaconpresentation.cpp vsbeaconpresentation.h vsdebugbeacongeometry.h
     vstrackerpresentation.cpp vstrackerpresentation.h vstrackerdraw.cpp vstrackerdraw.h vstrackergeometry.h vstrackermeshsink.h
-    vsworldrenderer.cpp vsworldrenderer.h vsparcelpresentation.cpp vsparcelpresentation.h vsparcelgeometry.h vsmaterial.cpp vsmaterial.h vsmaterialassets.cpp vsmaterialassets.h vsterrainassets.cpp vsterrainassets.h vsobjectmedia.cpp vsobjectmedia.h vsworldscene.cpp vsworldscene.h vscamerafocusobject.h vssurfacecoordinates.h vspickpolicy.h vsobjectindex.h vsselectionpolicy.h vsterrainpacket.h vsworldavatar.cpp vsworldavatar.h
+    vsworldrenderer.cpp vsworldrenderer.h vsparcelpresentation.cpp vsparcelpresentation.h vsparcelgeometry.h vsmaterial.cpp vsmaterial.h vsmaterialassets.cpp vsmaterialassets.h vsterrainassets.cpp vsterrainassets.h vsobjectmedia.cpp vsobjectmedia.h vsprimmediatarget.cpp vsprimmediatarget.h vsworldscene.cpp vsworldscene.h vscamerafocusobject.h vssurfacecoordinates.h vspickpolicy.h vsobjectindex.h vsselectionpolicy.h vsterrainpacket.h vsworldavatar.cpp vsworldavatar.h
           vsworldassets.cpp vsworldassets.h vsworldgltf.cpp vsworldgltf.h vsresourcebudget.h vsnativecamera.h vsparcelpermissions.h vsworldmotion.h
           vswearable.cpp vswearable.h
           vsnativeappearance.cpp vsnativeappearance.h
@@ -2359,6 +2361,7 @@ if(VS_VULKAN_DIAGNOSTICS)
           vsr3mediareplay.cpp vsr3mediareplay.h
           vsr3gltfreplay.cpp vsr3gltfreplay.h
           vsr3terrainreplay.cpp vsr3terrainreplay.h
+            vshudiconreplay.cpp vshudiconreplay.h
           vsr3pressurereplay.cpp vsr3pressurereplay.h
           vsr3cachereplay.cpp vsr3cachereplay.h
           vsterrainreplay.cpp vsterrainreplay.h

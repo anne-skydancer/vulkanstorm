@@ -28,6 +28,8 @@
 #if VS_NATIVE_VULKAN
 #include "vsuidrawbridge.h"
 #include "vsnativesession.h"
+#include "vsobjectselection.h"
+#include "vsvulkancontext.h"
 #endif
 
 
@@ -558,6 +560,19 @@ bool LLViewerMedia::isInterestingEnough(const LLVOVolume *object, const F64 &obj
     return result;
 }
 
+#if VS_NATIVE_VULKAN
+bool LLViewerMedia::isNativeInterestingEnough(const LLUUID& id,const F64& interest)
+{
+    const auto owner=VSNativeSession::active();
+    if(!owner || !gViewerWindow || !gViewerWindow->isNativeVulkan() || !gViewerWindow->nativeContext())return false;
+    const auto object=gViewerWindow->nativeContext()->world().object(id);
+    if(!object)return false;
+    if(LLViewerMediaFocus::instance().getFocusedObjectID()==id)return true;
+    const auto* selection=owner->existingObjectSelection();
+    if(selection && selection->contains(*object))return true;
+    return interest>=sLowestLoadableImplInterest;
+}
+#endif
 LLViewerMedia::impl_list &LLViewerMedia::getPriorityList()
 {
     return sViewerMediaImplList;
@@ -959,10 +974,7 @@ bool LLViewerMedia::isAnyMediaPlaying()
 //////////////////////////////////////////////////////////////////////////////////////////
 void LLViewerMedia::setAllMediaEnabled(bool val)
 {
-#if VS_NATIVE_VULKAN
-    if (auto owner = VSNativeSession::active())
-    { gSavedSettings.setBOOL("MediaTentativeAutoPlay", val); owner->setMediaEnabled(val); return; }
-#endif
+
     // Set "tentative" autoplay first.  We need to do this here or else
     // re-enabling won't start up the media below.
     gSavedSettings.setBOOL("MediaTentativeAutoPlay", val);
@@ -1022,10 +1034,7 @@ void LLViewerMedia::setAllMediaEnabled(bool val)
 //////////////////////////////////////////////////////////////////////////////////////////
 void LLViewerMedia::setAllMediaPaused(bool val)
 {
-#if VS_NATIVE_VULKAN
-    if (auto owner = VSNativeSession::active())
-    { gSavedSettings.setBOOL("MediaTentativeAutoPlay", !val); owner->setMediaPaused(val); return; }
-#endif
+
     // Set "tentative" autoplay first.  We need to do this here or else
     // re-enabling won't start up the media below.
     gSavedSettings.setBOOL("MediaTentativeAutoPlay", !val);
@@ -1997,7 +2006,7 @@ bool LLViewerMediaImpl::initializePlugin(const std::string& media_type)
     {
         if (mMimeType.compare(0, 6, "audio/") == 0)
         {
-            media_source->setAudioRole(!mObjectList.empty() && !mObjectList.front()->isHUDAttachment()
+            media_source->setAudioRole(hasObjectSpatialAudio()
                 ? "object" : "nonpositional");
         }
         media_source->injectOpenIDCookie();
@@ -2055,7 +2064,7 @@ void LLViewerMediaImpl::loadURI()
         }
 
         mMediaSource->setAudioRole(mMimeType.compare(0, 6, "audio/") == 0
-            ? (!mObjectList.empty() && !mObjectList.front()->isHUDAttachment() ? "object" : "nonpositional")
+            ? (hasObjectSpatialAudio() ? "object" : "nonpositional")
             : "");
         updateVolume();
         mMediaSource->loadURI( uri );
@@ -2279,12 +2288,20 @@ void LLViewerMediaImpl::updateVolume()
                 gSavedSettings.getBOOL("MuteAudio") || gSavedSettings.getBOOL("MuteMedia") ||
                 (!gViewerWindow->getActive() && gSavedSettings.getBOOL("MuteWhenMinimized"));
             mMediaSource->setAudioGain(volume, hard_mute);
-            if (!mObjectList.empty() && !mObjectList.front()->isHUDAttachment())
+            if (hasObjectSpatialAudio())
             {
                 static LLUICachedControl<S32> ear_location("MediaSoundsEarLocation", 0);
                 const LLVector3d ear_position = ear_location == 1
                     ? gAgent.getPositionGlobal() : gAgentCamera.getCameraPositionGlobal();
                 LLVector3 direction;
+#if VS_NATIVE_VULKAN
+                if(gViewerWindow && gViewerWindow->isNativeVulkan())
+                {
+                    const auto position=nativeMediaSpatialPosition();
+                    if(position)direction.setVec(*position-ear_position);
+                }
+                else
+#endif
                 direction.setVec(mObjectList.front()->getPositionGlobal() - ear_position);
                 F32 right = -(direction * LLViewerCamera::getInstance()->getLeftAxis());
                 F32 forward = direction * LLViewerCamera::getInstance()->getAtAxis();
@@ -3884,28 +3901,44 @@ bool LLViewerMediaImpl::isUpdated()
 
 static LLTrace::BlockTimerStatHandle FTM_MEDIA_CALCULATE_INTEREST("Calculate Interest");
 
+#if VS_NATIVE_VULKAN
+namespace{std::optional<VSWorldScene::ObjectSnapshot> nativeMediaObject(const LLUUID&);}
+#endif
 void LLViewerMediaImpl::calculateInterest()
 {
 #if VS_NATIVE_VULKAN
     if (!mNativeSurfaces.empty())
     {
-        mInterest=0;mProximityDistance=std::numeric_limits<F64>::max();mProximityCamera=0;mIsMuted=false;
+        mInterest=0;mProximityDistance=0;mProximityCamera=0;
         const F64 now=LLFrameTimer::getTotalSeconds();
-        bool active=false, unmuted=false;
-        for(const auto& [object,surface]:mNativeSurfaces)
+        for(const auto& [id,surface]:mNativeSurfaces)
+            if(now-surface.updated<=1.0)mInterest=std::max(mInterest,surface.pixels);
+        if(const auto position=nativeMediaSpatialPosition())
         {
-            if(now-surface.updated>1.0) continue;
-            active=true;
-            if(LLMuteList::getInstance()->isMuted(object)) continue;
-            unmuted=true;
-            mInterest=std::max(mInterest,surface.pixels);
-            mProximityDistance=std::min(mProximityDistance,surface.distance*surface.distance);
+            const auto agent=gAgent.getPositionGlobal();
+            mProximityDistance=(*position-agent).magVecSquared();
+            static LLUICachedControl<S32> ear_location("MediaSoundsEarLocation",0);
+            const auto ear=ear_location==1?agent:gAgentCamera.getCameraPositionGlobal();
+            mProximityCamera=(*position-ear).magVec();
         }
-        mIsMuted=active && !unmuted;
-        if(unmuted) mProximityCamera=std::sqrt(mProximityDistance);
-        // The shared scheduler still enforces enabled, autoplay, user mute,
-        // instance/CPU limits and focus/minimize policies using these inputs.
-        mNeedsMuteCheck=false;
+        if(mNeedsMuteCheck)
+        {
+            mIsMuted=false;
+            const auto owner=VSNativeSession::active();
+            const auto* selection=owner?owner->existingObjectSelection():nullptr;
+            for(const auto& id:mNativeSurfaceOrder)
+            {
+                const auto object=nativeMediaObject(id);
+                if(!object)continue;
+                if(LLMuteList::instance().isMuted(id))mIsMuted=true;
+                else if(selection)
+                {
+                    const auto publication=selection->findProperties(object->object);
+                    if(publication && LLMuteList::instance().isMuted(publication->properties->owner_id))mIsMuted=true;
+                }
+            }
+            mNeedsMuteCheck=false;
+        }
         return;
     }
 #endif
@@ -4019,11 +4052,18 @@ F64 LLViewerMediaImpl::getApproximateTextureInterest()
 void LLViewerMediaImpl::setNativeSurface(const LLUUID& object,F64 pixels,F64 distance)
 {
     if(!std::isfinite(pixels) || !std::isfinite(distance) || pixels<0 || distance<0) return;
+    const bool added=!mNativeSurfaces.contains(object);
     mNativeSurfaces.insert_or_assign(object,NativeSurface{pixels,distance,LLFrameTimer::getTotalSeconds()});
+    if(added){mNativeSurfaceOrder.push_back(object);mNeedsMuteCheck=true;}
+}
+LLUUID LLViewerMediaImpl::getSomeNativeSurface() const
+{
+    return mNativeSurfaceOrder.empty()?LLUUID::null:mNativeSurfaceOrder.front();
 }
 void LLViewerMediaImpl::removeNativeSurface(const LLUUID& object)
 {
-    mNativeSurfaces.erase(object);
+    if(mNativeSurfaces.erase(object))
+    {mNativeSurfaceOrder.remove(object);mNeedsMuteCheck=true;}
     if(mNativeSurfaces.empty()) mInterest=0;
 }
 #endif
@@ -4286,8 +4326,46 @@ bool LLViewerMediaImpl::isObscured() const
     return false;
 }
 
+bool LLViewerMediaImpl::hasObjectSpatialAudio()const
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())return nativeMediaSpatialPosition().has_value();
+#endif
+    return !mObjectList.empty() && !mObjectList.front()->isHUDAttachment();
+}
+
+#if VS_NATIVE_VULKAN
+namespace
+{
+std::optional<VSWorldScene::ObjectSnapshot> nativeMediaObject(const LLUUID& id)
+{
+    const auto owner=VSNativeSession::active();
+    if(!owner || owner->phase()!=VSNativeSession::Phase::Connected || !gViewerWindow || !gViewerWindow->nativeContext())return {};
+    const auto& world=gViewerWindow->nativeContext()->world();
+    const auto object=world.object(id);
+    return object?world.objectSnapshot(*object):std::nullopt;
+}
+}
+std::optional<LLVector3d> LLViewerMediaImpl::nativeMediaSpatialPosition()const
+{
+    if(mNativeSurfaceOrder.empty())return {};
+    const auto object=nativeMediaObject(mNativeSurfaceOrder.front());
+    return object && !object->hud?std::optional<LLVector3d>(object->position):std::nullopt;
+}
+#endif
 bool LLViewerMediaImpl::isAttachedToHUD() const
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        for(const auto& id:mNativeSurfaceOrder)
+        {
+            const auto object=nativeMediaObject(id);
+            if(object && object->hud)return true;
+        }
+        return false;
+    }
+#endif
     std::list< LLVOVolume* >::const_iterator iter = mObjectList.begin();
     std::list< LLVOVolume* >::const_iterator end = mObjectList.end();
     for ( ; iter != end; iter++)
@@ -4304,6 +4382,23 @@ bool LLViewerMediaImpl::isAttachedToHUD() const
 //
 bool LLViewerMediaImpl::isAttachedToAnotherAvatar() const
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        auto* context=gViewerWindow->nativeContext();
+        if(!context)return false;
+        const auto& world=context->world();
+        for(const auto& id:mNativeSurfaceOrder)
+        {
+            const auto object=nativeMediaObject(id);
+            if(!object || object->rootID==gAgent.getID())continue;
+            const auto root=world.object(object->rootID);
+            const auto row=root?world.objectAdmission(*root):std::nullopt;
+            if(row && row->pcode==LL_PCODE_LEGACY_AVATAR)return true;
+        }
+        return false;
+    }
+#endif
     bool result = false;
 
     std::list< LLVOVolume* >::const_iterator iter = mObjectList.begin();
@@ -4348,6 +4443,17 @@ bool LLViewerMediaImpl::isObjectAttachedToAnotherAvatar(LLVOVolume *obj)
 //
 bool LLViewerMediaImpl::isInAgentParcel() const
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        for(const auto& id:mNativeSurfaceOrder)
+        {
+            const auto object=nativeMediaObject(id);
+            if(object && LLViewerParcelMgr::instance().inAgentParcel(object->position))return true;
+        }
+        return false;
+    }
+#endif
     bool result = false;
 
     std::list< LLVOVolume* >::const_iterator iter = mObjectList.begin();

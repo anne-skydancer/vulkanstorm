@@ -35,6 +35,11 @@
 #include "llscrolllistctrl.h"
 #include "lltrans.h"
 #include "llviewerregion.h"
+#include <utility>
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeim.h"
+#endif
 
 constexpr S32 SIZE_OF_ONE_KB = 1024;
 
@@ -48,6 +53,37 @@ LLFloaterMyScripts::LLFloaterMyScripts(const LLSD& seed)
     mAttachmentURLsMax(0),
     mAttachmentURLsUsed(0)
 {
+}
+
+LLFloaterMyScripts::~LLFloaterMyScripts()
+{
+#if VS_NATIVE_VULKAN
+    ++mNativeRequestSerial;
+    if (mNativeRequest) mNativeRequest->cancelSuspendedOperation();
+#endif
+}
+
+void LLFloaterMyScripts::draw()
+{
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto region = vs_current_region_context();
+        const std::string capability = region ? region->getCapability("AttachmentResources") : std::string();
+        if ((mNativeRegion && !mNativeRegion->current()) ||
+            (region && (!mNativeRegion || *region != *mNativeRegion || capability != mNativeCapability)))
+        {
+            ++mNativeRequestSerial;
+            auto request = std::exchange(mNativeRequest, {});
+            if (request) request->cancelSuspendedOperation();
+            mNativeRegion = region;
+            mNativeCapability = capability;
+            clearList();
+            mAttachmentDetailsRequested = requestAttachmentDetails();
+        }
+    }
+#endif
+    LLFloater::draw();
 }
 
 bool LLFloaterMyScripts::postBuild()
@@ -73,6 +109,44 @@ void LLFloaterMyScripts::onOpen(const LLSD& key)
 
 bool LLFloaterMyScripts::requestAttachmentDetails()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto region = vs_current_region_context();
+        const std::string url = region ? region->getCapability("AttachmentResources") : std::string();
+        mNativeRegion = region;
+        mNativeCapability = url;
+        if (!region || url.empty()) return false;
+        if (mNativeRequest) return true;
+        const auto handle = getHandle();
+        const auto account = vs_native_im_guard();
+        const U64 serial = ++mNativeRequestSerial;
+        const auto adapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>(
+            "nativeAttachmentResources", LLCore::HttpRequest::DEFAULT_POLICY_ID);
+        mNativeRequest = adapter;
+        LLCoros::instance().launch("nativeAttachmentResources", [handle, account, region = *region, serial, adapter, url]
+        {
+            if (!account() || !region.current() || !handle.get()) return;
+            auto request = std::make_shared<LLCore::HttpRequest>();
+            LLSD result = adapter->getAndSuspend(request, url);
+            auto* self = dynamic_cast<LLFloaterMyScripts*>(handle.get());
+            if (!self || !account() || !region.current() || self->mNativeRequestSerial != serial) return;
+            self->mNativeRequest.reset();
+            self->getChild<LLButton>("refresh_list_btn")->setEnabled(true);
+            const auto status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(
+                result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
+            if (!status)
+            {
+                self->mAttachmentDetailsRequested = false;
+                self->getChild<LLUICtrl>("loading_text")->setValue(LLTrans::getString("ScriptLimitsRequestError"));
+                return;
+            }
+            result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);
+            self->setAttachmentDetails(result);
+        });
+        return true;
+    }
+#endif
     if (!gAgent.getRegion()) return false;
 
     LLSD body;

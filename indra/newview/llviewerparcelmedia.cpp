@@ -194,6 +194,10 @@ void LLViewerParcelMedia::update(LLParcel* parcel)
 // static
 void LLViewerParcelMedia::play(LLParcel* parcel)
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active()){if(parcel)owner->setMediaEnabled(true);return;}
+#endif
+
     LL_INFOS() << "LLViewerParcelMedia::play" << LL_ENDL;
 
     if (!parcel) return;
@@ -266,6 +270,10 @@ void LLViewerParcelMedia::play(LLParcel* parcel)
 // static
 void LLViewerParcelMedia::stop()
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active()){owner->setMediaEnabled(false);return;}
+#endif
+
     if(mMediaImpl.isNull())
     {
         return;
@@ -281,6 +289,10 @@ void LLViewerParcelMedia::stop()
 // static
 void LLViewerParcelMedia::pause()
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active()){owner->setMediaPaused(true);return;}
+#endif
+
     if(mMediaImpl.isNull())
     {
         return;
@@ -291,6 +303,10 @@ void LLViewerParcelMedia::pause()
 // static
 void LLViewerParcelMedia::start()
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active()){owner->setMediaPaused(false);return;}
+#endif
+
     if(mMediaImpl.isNull())
     {
         return;
@@ -305,6 +321,10 @@ void LLViewerParcelMedia::start()
 // static
 void LLViewerParcelMedia::seek(F32 time)
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active()){if(auto* impl=owner->parcelMedia())impl->seek(time);return;}
+#endif
+
     if(mMediaImpl.isNull())
     {
         return;
@@ -315,12 +335,24 @@ void LLViewerParcelMedia::seek(F32 time)
 // static
 void LLViewerParcelMedia::focus(bool focus)
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active()){if(auto* impl=owner->parcelMedia())impl->focus(focus);return;}
+#endif
+
     mMediaImpl->focus(focus);
 }
 
 // static
 LLPluginClassMediaOwner::EMediaStatus LLViewerParcelMedia::getStatus()
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active())
+    {
+        auto* impl=owner->parcelMedia();
+        return impl && impl->hasMedia()?impl->getMediaPlugin()->getStatus():LLPluginClassMediaOwner::MEDIA_NONE;
+    }
+#endif
+
     LLPluginClassMediaOwner::EMediaStatus result = LLPluginClassMediaOwner::MEDIA_NONE;
 
     if(mMediaImpl.notNull() && mMediaImpl->hasMedia())
@@ -334,12 +366,20 @@ LLPluginClassMediaOwner::EMediaStatus LLViewerParcelMedia::getStatus()
 // static
 std::string LLViewerParcelMedia::getMimeType()
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active()){auto* impl=owner->parcelMedia();return impl?impl->getMimeType():LLMIMETypes::getDefaultMimeType();}
+#endif
+
     return mMediaImpl.notNull() ? mMediaImpl->getMimeType() : LLMIMETypes::getDefaultMimeType();
 }
 
 //static
 std::string LLViewerParcelMedia::getURL()
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active())return owner->mediaURL();
+#endif
+
     std::string url;
     if(mMediaImpl.notNull())
         url = mMediaImpl->getMediaURL();
@@ -359,6 +399,10 @@ std::string LLViewerParcelMedia::getURL()
 //static
 std::string LLViewerParcelMedia::getName()
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active()){auto* impl=owner->parcelMedia();return impl?impl->getName():std::string();}
+#endif
+
     if(mMediaImpl.notNull())
         return mMediaImpl->getName();
     return "";
@@ -366,6 +410,10 @@ std::string LLViewerParcelMedia::getName()
 
 viewer_media_t LLViewerParcelMedia::getParcelMedia()
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active())return viewer_media_t(owner->parcelMedia());
+#endif
+
     return mMediaImpl;
 }
 
@@ -784,6 +832,10 @@ bool callback_enable_media_filter(const LLSD& notification, const LLSD& response
 
 void LLViewerParcelMedia::filterMediaUrl(LLParcel* parcel)
 {
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active()){if(parcel)owner->setMediaEnabled(true);return;}
+#endif
+
     // First use dialog
     if(gWarningSettings.getBOOL("FirstMediaFilter"))
     {

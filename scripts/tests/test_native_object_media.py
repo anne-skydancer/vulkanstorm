@@ -5,10 +5,12 @@ ROOT=Path(__file__).resolve().parents[2]
 class ObjectMediaIdentity(unittest.TestCase):
     def test_refresh_preserves_plugin_identity_and_rejects_partial_rows(self):
         source=(ROOT/'indra/newview/vsobjectmedia.cpp').read_text()
-        start=source.index('            // Validate every row')
-        body=source[start:source.index('            state->fetchedVersion=',start)]
+        start=source.index('    // Validate every row')
+        body=source[start:source.index('    fetchedVersion=',start)]
+        body=body.replace('this->','state->').replace('remObserver(this)','remObserver(nullptr)').replace('removeNativeSurface(object)','removeNativeSurface(9)')
         fixture=r'''
 #include <cassert>
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <string>
@@ -23,7 +25,7 @@ struct LLTextureEntry {
  void updateMediaData(const Row& row){if(row.undefined)value.reset();else{if(!value)value=std::make_unique<Entry>();value->url=row.url;}}
  static int getAgentIDFromMediaVersionString(const std::string&){return 1;}
 };
-struct Media {int id,removed=0;std::string previous;bool fromSelf=false;void removeNativeSurface(int){++removed;}};
+struct Media {int id,removed=0,unobserved=0;std::string previous;bool fromSelf=false;void removeNativeSurface(int){++removed;}void remObserver(void*){++unobserved;}};
 using viewer_media_t=std::shared_ptr<Media>;
 struct LLViewerMedia {
  std::map<int,std::weak_ptr<Media>> instances;static LLViewerMedia* getInstance(){static LLViewerMedia m;return &m;}
@@ -39,14 +41,15 @@ struct State {
 struct Session{struct Account{int agent=1;};Account account(){return {};}};
 int main(){
  auto state=std::make_shared<State>();auto session=std::make_shared<Session>();const std::string mediaVersion="v1";
- auto apply=[&](const Data& data){BODY};
+ auto apply=[&](const Data& data){BODY return true;};
  apply(Data{{Row{"first"}}});auto first=state->media[0];const auto* address=state->entries[0]->getMediaData();
  assert(first->previous.empty() && first->fromSelf);
  apply(Data{{Row{"second"}}});assert(state->media[0]==first && state->entries[0]->getMediaData()==address);
- assert(first->previous=="first");
+ assert(first->previous=="first" && first->removed==0 && first->unobserved==0);
+ for(int i=0;i<100;++i){apply(Data{{Row{"second"}}});assert(state->media[0]==first && first->removed==0 && first->unobserved==0);}
  apply(Data{{Row{"third"},Row{"bad",false,false}}});
  assert(state->media.size()==1 && state->entries[0]->getMediaData()->url=="second");
- apply(Data{{Row{"",true}}});assert(!state->media[0] && first->removed==2);
+ apply(Data{{Row{"",true}}});assert(!state->media[0] && first->removed==1 && first->unobserved==1);
  apply(Data{{Row{"new"}}});assert(state->media[0]!=first && state->media[0]->id!=first->id);
  apply(Data{});assert(state->media.empty() && state->entries.empty());
 }

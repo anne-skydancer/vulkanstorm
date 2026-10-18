@@ -35,6 +35,9 @@
 #include "llselectmgr.h"
 
 class LLViewerMediaImpl;
+class VSPrimMediaTarget;
+#include <functional>
+#include <memory>
 class LLPanelPrimMediaControls;
 
 class LLViewerMediaFocus :
@@ -53,6 +56,13 @@ public:
     // If a media face has focus, the media hover will be ignored.
     void setHoverFace(LLPointer<LLViewerObject> objectp, S32 face, viewer_media_t media_impl, LLVector3 pick_normal = LLVector3::zero);
     void clearHover();
+#if VS_NATIVE_VULKAN
+    void setNativeFocusFace(const VSPrimMediaTarget*,S32,viewer_media_t,LLVector3=LLVector3::zero);
+    void setNativeHoverFace(const VSPrimMediaTarget*,S32,viewer_media_t,LLVector3=LLVector3::zero);
+    static LLVector3d setNativeCameraZoom(const VSPrimMediaTarget*,LLVector3,F32,bool=false);
+    bool isNativeFocusedOnFace(const VSPrimMediaTarget&,S32)const;
+    bool isNativeHoveringOverFace(const VSPrimMediaTarget&,S32)const;
+#endif
 
     bool    getFocus();
     /*virtual*/ bool    handleKey(KEY key, MASK mask, bool called_from_parent) override;
@@ -101,6 +111,11 @@ protected:
 
 private:
 
+    template<class Target> void setFocusFaceTarget(const Target&,S32,viewer_media_t,LLVector3);
+    template<class Target> void setHoverFaceTarget(const Target&,S32,viewer_media_t,LLVector3);
+    template<class Focused,class Hovered> void updateControlsTarget(Focused,Hovered);
+    std::function<bool()> mNativeFocusedCurrent,mNativeHoverCurrent;
+    std::shared_ptr<const void> mNativeSelectionLease;
     LLHandle<LLPanelPrimMediaControls> mMediaControls;
     LLObjectSelectionHandle mSelection;
 
