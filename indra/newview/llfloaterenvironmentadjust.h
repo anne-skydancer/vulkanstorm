@@ -28,6 +28,7 @@
 #define LL_FLOATERENVIRONMENTADJUST_H
 
 #include "llfloater.h"
+#include <functional>
 #include "llsettingsbase.h"
 #include "llsettingssky.h"
 #include "llenvironment.h"
@@ -57,6 +58,7 @@ public:
 
 private:
     void                        captureCurrentEnvironment();
+    bool                        canEditEnvironment() const;
 
     void                        onAmbientLightChanged();
     void                        onBlueHorizonChanged();
@@ -90,7 +92,11 @@ private:
 
     LLSettingsSky::ptr_t        mLiveSky;
     LLSettingsWater::ptr_t      mLiveWater;
-    LLEnvironment::connection_t mEventConnection;
+    boost::signals2::scoped_connection mEventConnection;
+    boost::signals2::scoped_connection mRlvConnection;
+    std::function<bool()> mAccountCurrent = [] { return true; };
+    bool mEditingNative = false;
+    bool mBeaconsSaved = false;
 };
 
 #endif // LL_FLOATERFIXEDENVIRONMENT_H

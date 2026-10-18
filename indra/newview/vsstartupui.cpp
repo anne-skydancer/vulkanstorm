@@ -242,6 +242,7 @@
 #include "fsnearbychatvoicemonitor.h"
 #include "llfavoritesbar.h"
 #include "llfloater.h"
+#include "llfloaterenvironmentadjust.h"
 #include "llfloaterscriptrecover.h"
 #include "llfloaterabout.h"
 #include "llhudview.h"
@@ -269,7 +270,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 t==typeid(LLFloaterRegionRestartSchedule) || t==typeid(LLFloaterTopObjects) || t==typeid(LLIconsComboBox) ||
                 LLFloaterBuyCurrency::isNativeInternalType(t) ||
                 LLFloaterBuyLand::isNativeInternalType(t) ||
-                t==typeid(LLFloaterMyEnvironment) || t==typeid(LLFloaterFixedEnvironmentSky) || t==typeid(LLFloaterFixedEnvironmentWater) || t==typeid(LLFloaterEditExtDayCycle) || t==typeid(LLFloaterSettingsPicker) ||
+                t==typeid(LLFloaterEnvironmentAdjust) || t==typeid(LLFloaterMyEnvironment) || t==typeid(LLFloaterFixedEnvironmentSky) || t==typeid(LLFloaterFixedEnvironmentWater) || t==typeid(LLFloaterEditExtDayCycle) || t==typeid(LLFloaterSettingsPicker) ||
                 t==typeid(LLFloaterTrackPicker) || t==typeid(LLPanelSettingsWaterMainTab) ||
                 t==typeid(LLPanelSettingsSkyAtmosTab) || t==typeid(LLPanelSettingsSkyCloudTab) ||
                 t==typeid(LLPanelSettingsSkySunMoonTab) || t==typeid(LLPanelSettingsSkyDensityTab) ||
@@ -391,7 +392,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             return admitted;
         },
         [](std::string_view name) { return
-            name == "region_info" || name == "region_debug_console" || name == "top_objects" || name == "about_land" || name == "ban_duration" || name == "my_environments" || name == "env_fixed_environmentent_sky" || name == "env_fixed_environmentent_water" || name == "env_edit_extdaycycle" || name == "buy_land" || name == "sell_land" || name == "buy_currency" || name == "buy_currency_html" || name == "add_payment_method" || name == "money_tracker" ||
+            name == "region_info" || name == "region_debug_console" || name == "top_objects" || name == "about_land" || name == "ban_duration" || name == "env_adjust_snapshot" || name == "my_environments" || name == "env_fixed_environmentent_sky" || name == "env_fixed_environmentent_water" || name == "env_edit_extdaycycle" || name == "buy_land" || name == "sell_land" || name == "buy_currency" || name == "buy_currency_html" || name == "add_payment_method" || name == "money_tracker" ||
             name == "window_size" || name == "fs_protectedfolders" || name == "fs_streamtitle" || name == "fs_streamtitlehistory" ||
             name == "chat_mention_picker" || name == "emoji_complete" || name == "preview_trash" || name == "new_feature_notification" ||
             name == "fs_whitelist_floater" || name == "settings_color" || name == "fs_splash_screen_settings" || name == "fs_volume_controls" ||

@@ -339,7 +339,8 @@ void LLNavigationBar::setupPanel()
         setRightMouseDownCallback(boost::bind(&LLNavigationBar::onRightMouseDown, this, _2, _3, _4));
 
 #if VS_NATIVE_VULKAN
-    if (VSNativeSession::active()) mView->getChild<LLButton>("PersonalLighting")->setEnabled(false);
+    if (VSNativeSession::active())
+        mView->getChild<LLButton>("PersonalLighting")->setEnabled(!gRlvHandler.hasBehaviour(RLV_BHVR_SETENV));
 #endif
     mView->getChild<LLButton>("PersonalLighting")->setCommitCallback(boost::bind(&LLNavigationBar::onClickedLightingBtn, this)); // <FS:CR> FIRE-11847
     // </FS:Zi>
@@ -1042,7 +1043,8 @@ void LLNavigationBar::onRightMouseDown(S32 x,S32 y,MASK mask)
 void LLNavigationBar::onClickedLightingBtn()
 {
 #if VS_NATIVE_VULKAN
-    if (VSNativeSession::active()) return;
+    if (auto owner = VSNativeSession::active(); owner &&
+        (!owner->regionReady() || gRlvHandler.hasBehaviour(RLV_BHVR_SETENV))) return;
 #endif
     LLFloaterReg::showInstance("env_adjust_snapshot");
 }
@@ -1050,7 +1052,12 @@ void LLNavigationBar::onClickedLightingBtn()
 void LLNavigationBar::updateRlvRestrictions(ERlvBehaviour behavior, ERlvParamType type)
 {
 #if VS_NATIVE_VULKAN
-    if (VSNativeSession::active()) return;
+    if (VSNativeSession::active())
+    {
+        if (behavior == RLV_BHVR_SETENV && mView)
+            mView->getChild<LLButton>("PersonalLighting")->setEnabled(!gRlvHandler.hasBehaviour(RLV_BHVR_SETENV));
+        return;
+    }
 #endif
     if (behavior == RLV_BHVR_SETENV)
     {
