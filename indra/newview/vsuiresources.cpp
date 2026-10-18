@@ -526,7 +526,11 @@ void VSUIResources::triangle(const std::array<std::array<float, 6>, 3>& vertices
     {
         LLPointer<LLImageRaw> raw = new LLImageRaw(1,1,4);
         raw->clear(255,255,255,255);
-        publish(key, *raw);
+        if (!publish(key, *raw))
+        {
+            ++c.deferred_draw_batches;
+            return;
+        }
     }
     VSUIRenderer::Packet p;
     p.image = c.assets.at(key).asset->image;

@@ -57,6 +57,7 @@ set(llrender_HEADER_FILES
     llpostprocess.h
     llrender.h
     llrender2dutils.h
+    vsuiprimitive.h
     llrendernavprim.h
     llrendersphere.h
     llshadermgr.h

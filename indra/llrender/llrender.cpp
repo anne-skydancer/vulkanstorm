@@ -1983,6 +1983,11 @@ void LLRender::texCoord2fv(const GLfloat* tc)
 
 void LLRender::color4ub(const GLubyte& r, const GLubyte& g, const GLubyte& b, const GLubyte& a)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        LLRender2D::setNativeColor(LLColor4(r/255.f, g/255.f, b/255.f, a/255.f));
+        return;
+    }
     if (!LLGLSLShader::sCurBoundShaderPtr || LLGLSLShader::sCurBoundShaderPtr->mAttributeMask & LLVertexBuffer::MAP_COLOR)
     {
         mColorsp[mCount] = LLColor4U(r,g,b,a);
@@ -2022,6 +2027,11 @@ void LLRender::color3fv(const GLfloat* c)
 
 void LLRender::diffuseColor3f(F32 r, F32 g, F32 b)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        LLRender2D::setNativeColor(LLColor4(r, g, b, 1.f));
+        return;
+    }
     LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
     llassert(shader != NULL);
 
@@ -2033,6 +2043,11 @@ void LLRender::diffuseColor3f(F32 r, F32 g, F32 b)
 
 void LLRender::diffuseColor3fv(const F32* c)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        LLRender2D::setNativeColor(LLColor4(c[0], c[1], c[2], 1.f));
+        return;
+    }
     LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
     llassert(shader != NULL);
 
@@ -2044,6 +2059,11 @@ void LLRender::diffuseColor3fv(const F32* c)
 
 void LLRender::diffuseColor4f(F32 r, F32 g, F32 b, F32 a)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        LLRender2D::setNativeColor(LLColor4(r, g, b, a));
+        return;
+    }
     LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
     llassert(shader != NULL);
 
@@ -2055,6 +2075,11 @@ void LLRender::diffuseColor4f(F32 r, F32 g, F32 b, F32 a)
 
 void LLRender::diffuseColor4fv(const F32* c)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        LLRender2D::setNativeColor(LLColor4(c[0], c[1], c[2], c[3]));
+        return;
+    }
     LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
     llassert(shader != NULL);
 
@@ -2066,6 +2091,11 @@ void LLRender::diffuseColor4fv(const F32* c)
 
 void LLRender::diffuseColor4ubv(const U8* c)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        LLRender2D::setNativeColor(LLColor4(c[0]/255.f, c[1]/255.f, c[2]/255.f, c[3]/255.f));
+        return;
+    }
     LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
     llassert(shader != NULL);
 
@@ -2077,6 +2107,11 @@ void LLRender::diffuseColor4ubv(const U8* c)
 
 void LLRender::diffuseColor4ub(U8 r, U8 g, U8 b, U8 a)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        LLRender2D::setNativeColor(LLColor4(r/255.f, g/255.f, b/255.f, a/255.f));
+        return;
+    }
     LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
     llassert(shader != NULL);
 

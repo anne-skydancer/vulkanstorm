@@ -121,6 +121,8 @@ jobs:
       - run: python scripts/tests/test_native_environment_xui.py
       - run: python scripts/tests/test_native_my_environments.py
       - run: python scripts/tests/test_native_environment_rendering.py
+      - run: python scripts/tests/test_native_environment_widgets.py
+      - run: python scripts/tests/test_native_ui_primitives.py
       - run: python scripts/tests/test_vulkan_environment_evidence.py
       - run: python scripts/tests/test_native_region_environment_flags.py
       - run: python scripts/tests/test_native_source_fixture.py

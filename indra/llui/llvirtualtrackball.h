@@ -137,8 +137,8 @@ private:
     void onRotateLeftMouseEnter();
     void onRotateRightMouseEnter();
 
-    S32 mPrevX;
-    S32 mPrevY;
+    S32 mPrevX = 0;
+    S32 mPrevY = 0;
 
     LLUIImage*     mImgMoonBack;
     LLUIImage*     mImgMoonFront;
@@ -152,7 +152,7 @@ private:
 
     LLQuaternion   mValue;
     ThumbMode      mThumbMode;
-    DragMode       mDragMode;
+    DragMode       mDragMode = DRAG_SET;
 
     F32            mIncrementMouse;
     F32            mIncrementBtn;

@@ -105,8 +105,8 @@ private:
     F32 mMaxValueY;
     F32 mIncrementY;
 
-    U32 mGhostX;
-    U32 mGhostY;
+    S32 mGhostX = 0;
+    S32 mGhostY = 0;
 
     LLUIColor mArrowColor;
     LLUIColor mGhostColor;
