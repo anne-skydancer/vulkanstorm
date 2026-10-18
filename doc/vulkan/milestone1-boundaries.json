@@ -1,5 +1,5 @@
 {
-  "source_commit": "e8c0dd56359056a161cf2c067c567a504d067922",
+  "source_commit": "1f7e447d2d942a6be940d9c73cd8621998576f1c",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -440,7 +440,7 @@
       ]
     },
     "indra/newview/vsuiresources.cpp": {
-      "sha256": "94bef2343bb7c02584e17d97547ae990bdcb182d5efd11d6d3ee224bf719d8b2",
+      "sha256": "775c82a752e0c2e6fcc59941316604976b39ec2c777f6a20461c62cbf151fe60",
       "anchors": [
         "VSUIResources::publish",
         "VSUIResources::fontBatch",
@@ -701,7 +701,7 @@
       ]
     },
     "indra/newview/vsvulkancontext.cpp": {
-      "sha256": "db244144c197ec222befae6a6e3ac656aee5b536fda06e98714db6a3d75bb789",
+      "sha256": "a0c51256ba697dc1a1fe7f4972370024918417e93af4291c1e9ce73952b8ee40",
       "anchors": [
         "VSVulkanContext::VSVulkanContext",
         "CreateDeviceAndContextsVk",
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "146f5206a63070249cb88a3f1ad97e83193faf8192881dd41a74ca684c4ebc7d",
+      "sha256": "1b8e02228b5cce391ab1fcc85252e6cea251b79b64b22845eb3eb47fc3e6da09",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -793,7 +793,7 @@
       ]
     },
     "indra/newview/vsnativereplay.cpp": {
-      "sha256": "e8e61bc3d120e81dc943ec56a2dca9d823042d4ed05aed72bc528d401fc2ba44",
+      "sha256": "6416356b6aa3480947c7770ffd57d96b51e5d02d150e7d256021fd5a438427df",
       "anchors": [
         "vs_native_replay_tick()",
         "inspectOutgoing("
@@ -867,7 +867,7 @@
       ]
     },
     "indra/newview/vsnativeimreplay.cpp": {
-      "sha256": "99ee89c9527005f7c03d0d6ea85daad711bb873de1d7a2fd06ac5350bdef4147",
+      "sha256": "b125daac5894a3e792b1c79f506b94542df00627909eeea717260a65e6eee0c0",
       "anchors": [
         "vs_native_im_replay_tick",
         "vs_native_im_replay_expired",
