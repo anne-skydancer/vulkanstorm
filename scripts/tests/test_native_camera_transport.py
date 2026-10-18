@@ -27,6 +27,7 @@ STUBS = r'''
 #include <string>
 #include <vector>
 #include <limits>
+#include <optional>
 using F32=float;using U32=unsigned;using S32=int;using U8=unsigned char;using U64=unsigned long long;
 enum{VX=0,VY=1,VZ=2};
 struct LLVector3{
@@ -45,9 +46,9 @@ struct LLQuaternion{float angle=0;LLVector3 axis;LLQuaternion()=default;LLQuater
 struct LLUUID{int id=1;static const LLUUID null;};const LLUUID LLUUID::null{0};
 struct LLHost{int id=1;bool isOk()const{return id!=0;}bool operator!=(LLHost other)const{return id!=other.id;}};
 struct LLSD{const LLSD& operator[](const char*)const{return *this;}std::string asString()const{return {};}int asInteger()const{return 0;}};
-struct Agent{LLVector3 position;U32 flags=0;bool flying=false;
+struct LLAgent{LLVector3 position;U32 flags=0;bool flying=false;
  void setPositionAgent(LLVector3 p){position=p;}void setFlying(bool value){flying=value;}bool getFlying()const{return flying;}
- U32 getControlFlags(){return flags;}void resetControlFlags(){flags=0;}}gAgent;
+ U32 getControlFlags(){return flags;}void resetControlFlags();}gAgent;
 struct AgentCamera{LLVector3 offset{0,0,-.2f},focus{1,0,.2f};float scale=.75f;
  LLVector3 getCameraOffsetInitial(){return offset;}LLVector3 getFocusOffsetInitial(){return focus;}float getCameraOffsetScale(){return scale;}}gAgentCamera;
 struct ViewerInput{void resetNativeKeys(){}}gViewerInput;
@@ -76,19 +77,31 @@ class NativeCameraTransportTests(unittest.TestCase):
         constants = (ROOT / 'indra/llcommon/indra_constants.h').read_text()
         constants = '\n'.join(line for line in constants.splitlines() if line.startswith('constexpr U32 CONTROL_') or line.startswith('constexpr U32 AGENT_CONTROL_'))
         session = (ROOT / 'indra/newview/vsnativesession.cpp').read_text()
+        tick = method(session, 'void VSNativeSession::tick()')
+        dispatch = method(tick, 'if (cameraTime >= mAgentUpdateTime ||')
+        app = (ROOT / 'indra/newview/llappviewer.cpp').read_text()
+        frame = method(app, 'bool LLAppViewer::frameNativeVulkanLogin()')
+        self.assertIn('gAgent.resetControlFlags();', frame)
+        self.assertLess(frame.index('mNativeSession->tick()'), frame.index('gAgent.resetControlFlags();'))
+        self.assertNotIn('resetControlFlags', method(session, 'bool VSNativeSession::send('))
+        agent = (ROOT / 'indra/newview/llagent.cpp').read_text()
+        reset = method(agent, 'void LLAgent::resetControlFlags()').replace('mControlFlags', 'flags')
         functions = '\n'.join(method(session, declaration) for declaration in (
             'VSNativeCamera::State VSNativeSession::cameraState()', 'bool VSNativeSession::movementAction(', 'void VSNativeSession::releaseMovement()',
             'void VSNativeSession::cameraOrbit(', 'void VSNativeSession::cameraZoom(',
-            'bool VSNativeSession::updateAgentPosition(', 'bool VSNativeSession::send('))
+            'bool VSNativeSession::updateAgentPosition(', 'U32 VSNativeSession::agentControlFlags()', 'bool VSNativeSession::send('))
         fixture = STUBS + constants + header + r'''
 struct VSNativeSession{
  enum class Phase{Login,Connected,Disconnected};Phase mPhase=Phase::Connected;bool mChangingRegion=false,mFrozen=false,mInterestListArriving=true;
  LLHost mHost;LLUUID mAgent,mSession;U32 mCircuit=99,mMouseControls=0;U64 mGeneration=3,mRegionEpoch=7,mSent=0;
  VSNativeCamera mCamera;LLVector3 mPosition{100,100,20};double mAgentUpdateTime=1;
+ std::optional<U32> mLastAgentControls;U32 agentControlFlags()const;
  VSNativeCamera::State cameraState()const;
  bool movementAction(U32,const std::string&,bool,bool=false);void releaseMovement();void cameraOrbit(F32,F32);void cameraZoom(S32);void synchronizeCameraMode(bool=false){};
  bool updateAgentPosition(const LLVector3&,const LLHost&,U64,U64);bool send(const std::string&,const LLSD&);
+ void frame(double cameraTime){DISPATCH gAgent.resetControlFlags();}
 };
+RESET
 FUNCTIONS
 float dot(LLVector3 a,LLVector3 b){return a.mV[0]*b.mV[0]+a.mV[1]*b.mV[1]+a.mV[2]*b.mV[2];}
 bool close(float a,float b){return std::abs(a-b)<.001;}
@@ -113,9 +126,11 @@ int main(){
  owner.movementAction(2,"",false);assert(!(owner.mCamera.controls()&AGENT_CONTROL_AT_POS));
  owner.movementAction(3,"toggle_fly",true);owner.movementAction(3,"toggle_fly",true,true);assert(owner.mCamera.controls()&AGENT_CONTROL_FLY);
  gAgent.flags=AGENT_CONTROL_STAND_UP;assert(owner.send("AgentUpdate",{}));
- assert(messages.ints["ControlFlags"]&AGENT_CONTROL_STAND_UP);assert(gAgent.flags==0);
+ assert(messages.ints["ControlFlags"]&AGENT_CONTROL_STAND_UP);assert(gAgent.flags==AGENT_CONTROL_STAND_UP);
+ gAgent.resetControlFlags();assert(gAgent.flags==0);
  gAgent.flags=AGENT_CONTROL_SIT_ON_GROUND;assert(owner.send("AgentUpdate",{}));
- assert(messages.ints["ControlFlags"]&AGENT_CONTROL_SIT_ON_GROUND);assert(gAgent.flags==0);
+ assert(messages.ints["ControlFlags"]&AGENT_CONTROL_SIT_ON_GROUND);assert(gAgent.flags==AGENT_CONTROL_SIT_ON_GROUND);
+ gAgent.resetControlFlags();assert(gAgent.flags==0);
  owner.movementAction(3,"",false);owner.movementAction(3,"toggle_fly",true);assert(!(owner.mCamera.controls()&AGENT_CONTROL_FLY));
  owner.movementAction(4,"turn_left",true);owner.mCamera.step(.1f);auto turned=owner.cameraState();assert(turned.at.mV[1]>initial.at.mV[1]);
  owner.releaseMovement();assert(owner.mCamera.controls()==0);
@@ -160,8 +175,27 @@ int main(){
  for(int i=0;i<3;++i){assert(close(focused.center.mV[i],eye.mV[i]));assert(close(focused.focus.mV[i],target.mV[i]));}
  assert(!owner.mCamera.lookAt(owner.mPosition,target,target,gAgentCamera.offset,gAgentCamera.focus,gAgentCamera.scale));
  owner.mPhase=VSNativeSession::Phase::Login;assert(!owner.movementAction(6,"push_forward",true));
+ // Transitions are sent before the heartbeat and ephemeral flags retire every
+ // frame. Opposite turns cannot combine into a stale, mutually cancelling pair.
+ VSNativeSession movement;messages.sends=0;gAgent.flags=0;
+ movement.frame(.2);assert(messages.sends==1&&messages.ints["ControlFlags"]==0);
+ gAgent.flags=AGENT_CONTROL_YAW_NEG;movement.frame(.21);
+ assert(messages.sends==2&&messages.ints["ControlFlags"]==AGENT_CONTROL_YAW_NEG&&gAgent.flags==0);
+ gAgent.flags=AGENT_CONTROL_YAW_POS;movement.frame(.22);
+ assert(messages.sends==3&&messages.ints["ControlFlags"]==AGENT_CONTROL_YAW_POS&&gAgent.flags==0);
+ movement.frame(.23);assert(messages.sends==4&&messages.ints["ControlFlags"]==0);
+ movement.frame(.24);assert(messages.sends==4);
+ gAgent.flags=AGENT_CONTROL_FLY|AGENT_CONTROL_AWAY|AGENT_CONTROL_MOUSELOOK|AGENT_CONTROL_STAND_UP;
+ movement.frame(.25);assert(messages.ints["ControlFlags"]&AGENT_CONTROL_STAND_UP);
+ assert(gAgent.flags==(AGENT_CONTROL_FLY|AGENT_CONTROL_AWAY|AGENT_CONTROL_MOUSELOOK));
+ movement.mFrozen=true;movement.frame(.26);assert(messages.ints["ControlFlags"]==0);
+ gAgent.flags|=AGENT_CONTROL_YAW_NEG;movement.frame(.27);assert(!(gAgent.flags&AGENT_CONTROL_YAW_NEG));
+ movement.mFrozen=false;messages.result=0;auto accepted=movement.mLastAgentControls;
+ gAgent.flags|=AGENT_CONTROL_STAND_UP;movement.frame(.28);
+ assert(movement.mLastAgentControls==accepted&&!(gAgent.flags&AGENT_CONTROL_STAND_UP));
+ messages.result=1;movement.frame(.29);assert(movement.mLastAgentControls==gAgent.flags);
 }
-'''.replace('FUNCTIONS', functions)
+'''.replace('FUNCTIONS', functions).replace('RESET', reset).replace('DISPATCH', dispatch)
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler)
         with tempfile.TemporaryDirectory() as directory:

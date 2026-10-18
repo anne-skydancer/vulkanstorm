@@ -2245,6 +2245,10 @@ void VSNativeSession::typing(bool active)
     LLSD data; data["text"] = ""; data["type"] = active ? CHAT_TYPE_START : CHAT_TYPE_STOP; data["channel"] = 0;
     if (send("ChatFromViewer", data)) mTyping = active;
 }
+U32 VSNativeSession::agentControlFlags() const
+{
+    return mFrozen ? 0 : mCamera.controls() | mMouseControls | gAgent.getControlFlags();
+}
 bool VSNativeSession::send(const std::string& name, const LLSD& data)
 {
     if (!gMessageSystem || !mHost.isOk()) return false;
@@ -2270,7 +2274,7 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
         msg->addVector3("CameraCenter", camera.center); msg->addVector3("CameraAtAxis", camera.at);
         msg->addVector3("CameraLeftAxis", camera.left); msg->addVector3("CameraUpAxis", camera.up);
         msg->addF32("Far", vs_agent_draw_distance(mInterestListArriving || LLStartUp::getStartupState()<STATE_MISC));
-        msg->addU32("ControlFlags", mFrozen ? 0 : mCamera.controls() | mMouseControls | gAgent.getControlFlags());
+        msg->addU32("ControlFlags", agentControlFlags());
         msg->addU8("Flags", 0);
     }
     // Periodic movement/camera snapshots supersede older state. Reliable retries
@@ -2279,9 +2283,8 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
     if (name == "AgentUpdate")
     {
         mInterestListArriving=false;
+        mLastAgentControls = agentControlFlags();
         mMouseControls &= ~(AGENT_CONTROL_LBUTTON_UP | AGENT_CONTROL_ML_LBUTTON_UP);
-        if (!mFrozen)
-            gAgent.resetControlFlags();
     }
     ++mSent; return true;
 }
@@ -2358,8 +2361,13 @@ void VSNativeSession::tick()
             if (mCamera.firstPerson()) gAgentCamera.changeCameraToMouselook(false);
             else gAgentCamera.changeCameraToThirdPerson(false);
         }
-        if (cameraTime >= mAgentUpdateTime)
-        { send("AgentUpdate", LLSD()); mAgentUpdateTime = cameraTime + .1; }
+        // Shared callbacks republish held controls each frame. Send transitions
+        // immediately so one-shot input reaches the wire before the reference
+        // per-frame reset; unchanged poses retain the normal 10 Hz heartbeat.
+        if (cameraTime >= mAgentUpdateTime || mLastAgentControls != agentControlFlags())
+        {
+            if (send("AgentUpdate", LLSD())) mAgentUpdateTime = cameraTime + .1;
+        }
     }
     mCameraTime = cameraTime;
     if (mNavigationDeadline && now() > mNavigationDeadline)
@@ -2470,7 +2478,7 @@ void VSNativeSession::reset()
         AOEngine::instance().resetAccount();
     gAgent.clearScriptControlState();
     gAgent.clearControlFlags(std::numeric_limits<U32>::max());
-    mCamera.reset(); mCameraTime = mAgentUpdateTime = 0; mInterestListArriving=true;
+    mCamera.reset(); mCameraTime = mAgentUpdateTime = 0; mLastAgentControls.reset(); mInterestListArriving=true;
     mTeleportFlags=0;mTeleportArrival=false;
     mLogoutPresented = mLogoutReply = false;
     if (mAgent.notNull() && (mPhase == Phase::Connected || mPhase == Phase::Logout || mPhase == Phase::Disconnected))
@@ -2584,6 +2592,7 @@ void VSNativeSession::reset()
     mTyping = mFrozen = false;
     mWorldMouseDown = mWorldMouseMouselook = false;
     mMouseControls                         = 0;
+    mLastAgentControls.reset();
     mAttentionAvatar                       = 0;
     mWaterKnown                            = false;
     mWaterHeight                           = 20;

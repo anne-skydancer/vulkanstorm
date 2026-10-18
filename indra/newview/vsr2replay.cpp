@@ -1897,6 +1897,11 @@ bool vs_r2_replay_tick(VSNativeSession& session, LLSD& report)
         diagnostic["step"]          = S32(replay->step);
         diagnostic["topology_case"] = S32(replay->topologyCase);
         diagnostic["failure"]       = failure.what();
+        if (const auto appearance = session.appearance())
+            diagnostic["failure_appearance"] = appearance->evidence();
+        if (gViewerWindow && gViewerWindow->nativeContext())
+            if (const auto avatar = gViewerWindow->nativeContext()->world().selfAvatar())
+                diagnostic["failure_avatar"] = avatar->evidence();
         if (!replay->directory.empty())
         {
             std::ofstream output(replay->directory / "failure.xml");

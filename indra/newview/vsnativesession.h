@@ -11,6 +11,7 @@
 #include "v3math.h"
 #include "v3dmath.h"
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 #include <functional>
@@ -291,6 +292,8 @@ private:
     bool                                            mWaterKnown  = false;
     VSNativeCamera mCamera;
     double mCameraTime = 0, mAgentUpdateTime = 0;
+    std::optional<U32> mLastAgentControls;
+    U32 agentControlFlags() const;
     std::string mSeed, mName;
     LLSD mCapabilities;
     std::function<void()> mCancelSeed;
