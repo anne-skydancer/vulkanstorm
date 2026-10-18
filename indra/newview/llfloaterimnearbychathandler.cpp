@@ -640,55 +640,7 @@ void LLFloaterIMNearbyChatHandler::processChat(const LLChat& chat_msg,
     // errors in separate window.
     // <FS:Kadah> [FSllOwnerSayToScriptDebugWindow]
     // if (chat_msg.mChatType == CHAT_TYPE_DEBUG_MSG)
-    static LLCachedControl<bool> FSllOwnerSayToScriptDebugWindow(gSavedPerAccountSettings, "FSllOwnerSayToScriptDebugWindow");
-    if (chat_msg.mChatType == CHAT_TYPE_DEBUG_MSG || (chat_msg.mChatType == CHAT_TYPE_OWNER && FSllOwnerSayToScriptDebugWindow))
-    {
-        if (LLFloater::isQuitRequested())
-            return;
-
-        // <FS:Kadah> [FSllOwnerSayToScriptDebugWindow] Show llOwnerSays in the script debug window instead of local chat
-        // if (!gSavedSettings.getBOOL("ShowScriptErrors"))
-        if (!gSavedSettings.getBOOL("ShowScriptErrors") && chat_msg.mChatType == CHAT_TYPE_DEBUG_MSG)
-            return;
-
-        // don't process debug messages from not owned objects, see EXT-7762
-        // <FS:Ansariel> FIRE-15014: [OpenSim] osMessageObject(target, message) fails silently
-        //if (gAgentID != chat_msg.mOwnerID)
-#ifdef OPENSIM
-        if (LLGridManager::getInstance()->isInSecondLife() && gAgentID != chat_msg.mOwnerID)
-#else
-        if (gAgentID != chat_msg.mOwnerID)
-#endif
-        // </FS:Ansariel>
-        {
-            return;
-        }
-
-        // <FS:Ansariel> Script debug icon
-        //if (gSavedSettings.getS32("ShowScriptErrorsLocation") == 1)// show error in window //("ScriptErrorsAsChat"))
-        {
-            // <FS:Kadah> [FSllOwnerSayToScriptDebugWindow]
-            //LLUIColor txt_color;
-            //F32 alpha = 1.f;
-            //LLViewerChat::getChatColor(chat_msg, txt_color, alpha);
-
-            // LLFloaterScriptDebug::addScriptLine(chat_msg.mText,
-                                                // chat_msg.mFromName,
-                                                // txt_color % alpha,
-                                                // chat_msg.mFromID);
-            LLFloaterScriptDebug::addScriptLine(chat_msg);
-            // <FS:Ansariel> Script debug icon
-            //return;
-            // <FS:Kadah> [FSllOwnerSayToScriptDebugWindow]
-            // if (gSavedSettings.getS32("ShowScriptErrorsLocation") == 1)
-            if (gSavedSettings.getS32("ShowScriptErrorsLocation") == 1 || chat_msg.mChatType == CHAT_TYPE_OWNER)
-            {
-                return;
-            }
-            // </FS:Ansariel> Script debug icon
-
-        }
-    }
+    if(LLFloaterScriptDebug::routeChat(chat_msg))return;
     // <FS:Beq> Hide Primfeed OAuth message from chat to prevent accidental leak of secret.
     const std::string primfeed_oauth = "#PRIMFEED_OAUTH: ";
     if( chat_msg.mText.compare(0, primfeed_oauth.length(), primfeed_oauth) == 0 && chat_msg.mChatType == CHAT_TYPE_IM && chat_msg.mSourceType == CHAT_SOURCE_OBJECT )

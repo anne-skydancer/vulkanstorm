@@ -2,6 +2,7 @@
 #pragma once
 #include "llrender2dutils.h"
 #include "lluiimage.h"
+#include "vsuirenderer.h"
 #include <memory>
 #include <utility>
 class VSUIResources;
@@ -25,6 +26,9 @@ void vs_erase_ui_image(const std::string&);
 LLPointer<LLImageRaw> vs_ui_image_raw(const LLUUID&);
 LLPointer<LLImageRaw> vs_ui_image_aux(const LLUUID&);
 bool vs_ui_image_ready(const LLUUID&);
+VSUIRenderer::Image vs_ui_image_snapshot(const LLUUID&);
+VSUIRenderer::Image vs_ui_named_image_snapshot(const std::string&);
+void vs_draw_ui_image(const VSUIRenderer::Image&,const LLRectf&,const LLColor4&);
 bool vs_ui_image_failed(const LLUUID&);
 S32 vs_ui_image_discard(const LLUUID&);
 S32 vs_ui_image_components(const LLUUID&);
@@ -54,6 +58,9 @@ class VSUIImageProvider : public LLImageProviderInterface
     LLPointer<LLImageRaw> rawImage(const LLUUID&) const;
     LLPointer<LLImageRaw> auxiliaryImage(const LLUUID&) const;
     bool imageReady(const LLUUID&) const;
+    VSUIRenderer::Image imageSnapshot(const LLUUID&) const;
+    VSUIRenderer::Image namedImageSnapshot(const std::string&);
+    void drawImage(const VSUIRenderer::Image&,const LLRectf&,const LLColor4&);
     bool imageFailed(const LLUUID&) const;
     S32 imageDiscard(const LLUUID&) const;
     S32 imageComponents(const LLUUID&) const;

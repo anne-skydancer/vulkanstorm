@@ -365,3 +365,9 @@ void LLHUDObject::sortObjects()
 {
     sHUDObjects.sort(hud_object_further_away());
 }
+
+void LLHUDObject::cleanupUnreferenced()
+{
+    for(auto it=sHUDObjects.begin();it!=sHUDObjects.end();)
+        if((*it)->getNumRefs()==1)it=sHUDObjects.erase(it);else ++it;
+}

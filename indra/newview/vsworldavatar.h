@@ -36,6 +36,7 @@ public:
     void     append(std::vector<VSWorldRenderer::Packet>&, const LLVector3& eye, float farClip, unsigned viewportHeight, float timeDilation,
                     unsigned viewportWidth = 0, unsigned visibleAvatars = 1);
     bool     visibleFrom(const LLVector3& eye, float farClip) const;
+    std::optional<VSWorldRenderer::SurfaceHit> collisionPick(const LLVector3&,const LLVector3&,bool renderSelf) const;
     bool attachmentTransform(unsigned point, LLVector3&, LLQuaternion&);
     bool skinRiggedFace(const LLVolumeFace&,const LLSD&,std::vector<VSWorldRenderer::Vertex>&);
     U64      poseGeneration() const;

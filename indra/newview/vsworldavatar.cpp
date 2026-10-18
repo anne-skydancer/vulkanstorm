@@ -14,6 +14,8 @@
 #include "lllocaltextureobject.h"
 #include "lltexlayerparams.h"
 #include "llavatarjointmesh.h"
+#include "raytrace.h"
+#include <glm/gtc/type_ptr.hpp>
 #include "llpolymesh.h"
 #include "llpolymorph.h"
 #include "llprimitive.h"
@@ -1779,3 +1781,29 @@ void VSWorldAvatar::hoverOffset(const LLVector3& offset)
     mImpl->computeBodySize();
 }
 LLVector3 VSWorldAvatar::hoverOffset() const { return mImpl->hover; }
+
+// Original LLVOAvatar collision-volume narrow phase against the actual native
+// character joints. Control avatars have no selectable system-avatar body.
+std::optional<VSWorldRenderer::SurfaceHit> VSWorldAvatar::collisionPick(const LLVector3& start,const LLVector3& end,bool renderSelf) const
+{
+    if((mImpl->self && !renderSelf) || mImpl->control || !mImpl->positionKnown)return {};
+    const LLVector3 direction=end-start;if(direction.lengthSquared()<=0)return {};
+    for(S32 i=0;i<mImpl->mNumCollisionVolumes;++i)
+    {
+        auto& volume=mImpl->mCollisionVolumes[i];volume.updateWorldMatrix();
+        const glm::mat4 matrix(glm::make_mat4((F32*)volume.getXform()->getWorldMatrix().mMatrix));
+        const glm::mat4 inverse=glm::inverse(matrix),normalMatrix=glm::transpose(inverse);
+        glm::vec3 p1(start),p2(end);p1=mul_mat4_vec3(inverse,p1);p2=mul_mat4_vec3(inverse,p2);
+        LLVector3 position,normal;
+        if(linesegment_sphere(LLVector3(p1),LLVector3(p2),LLVector3(0,0,0),1.f,position,normal))
+        {
+            const glm::vec3 point=mul_mat4_vec3(matrix,glm::vec3(position));
+            const glm::vec3 n=glm::mat3(normalMatrix)*glm::normalize(glm::vec3(normal));
+            VSWorldRenderer::SurfaceHit hit;std::copy_n(glm::value_ptr(point),3,hit.point.begin());
+            std::copy_n(glm::value_ptr(n),3,hit.normal.begin());
+            hit.fraction=((LLVector3(hit.point.data())-start)*direction)/direction.lengthSquared();
+            return hit;
+        }
+    }
+    return {};
+}

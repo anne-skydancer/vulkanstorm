@@ -4,6 +4,10 @@
 #include "vsworldscene.h"
 #include "vscamerafocusobject.h"
 #include "vssurfacecoordinates.h"
+#include "vspickpolicy.h"
+#include "llmaterial.h"
+#include "llclickaction.h"
+#include "raytrace.h"
 #include "vsobjectindex.h"
 #include "vsparcelgeometry.h"
 #include "llcamera.h"
@@ -33,6 +37,10 @@
 #include "llgenericstreamingmessage.h"
 #include "llsdserialize.h"
 #include "llhudobject.h"
+#include "llhudicon.h"
+#include "vsuiimageprovider.h"
+#include "llagent.h"
+#include <utility>
 #include "llhudeffectlookat.h"
 #include "llhudeffectpointat.h"
 #include "llcharacter.h"
@@ -185,7 +193,7 @@ std::shared_ptr<LLViewerTextureAnim> textureAnimationData(const U8* data,U32 siz
         !std::isfinite(animation->mLength) || animation->mLength<0 || !std::isfinite(animation->mRate)) return {};
     return animation;
 }
-bool ownerExtras(const std::vector<U8>& extra,U32& meshFlags)
+bool ownerExtras(const std::vector<U8>& extra,U32& meshFlags,bool* reflectionProbe=nullptr)
 {
     meshFlags=0;if (extra.empty()) return true;
     std::size_t position=1;
@@ -197,6 +205,8 @@ bool ownerExtras(const std::vector<U8>& extra,U32& meshFlags)
         if (length>extra.size()-position) return false;
         if (type==LLNetworkData::PARAMS_EXTENDED_MESH)
         { if (length!=4) return false;meshFlags=littleU32(extra.data()+position); }
+        if(type==LLNetworkData::PARAMS_REFLECTION_PROBE)
+        {if(length!=9)return false;if(reflectionProbe)*reflectionProbe=true;}
         position+=length;
     }
     return position==extra.size();
@@ -221,7 +231,7 @@ struct VSWorldScene::Impl
         LLVector4a center;
         LLVector3 position,scale;
         LLQuaternion rotation;
-        bool volumeGlobal=false,normalGlobal=false;
+        bool volumeGlobal=false,normalGlobal=false,rigged=false;
         std::shared_ptr<const VSResourceBudget::Reservation> residency;
     };
     struct Face
@@ -239,13 +249,84 @@ struct VSWorldScene::Impl
         std::optional<LLMatrix4> pickTextureMatrix;
         std::optional<VSWorldContracts::Material> sceneMaterial;
     };
+    static std::optional<Pick> surfacePick(const Face& face,const VSWorldRenderer::SurfaceHit& hit,const VSUIRenderer::Image& image)
+    {
+        Pick pick;
+            const auto raw=face.pickSurface;
+            if(raw && raw->volume && raw->face>=0 && raw->face<raw->volume->getNumVolumeFaces())
+            {
+                const auto& geometry=raw->volume->getVolumeFace(raw->face);
+                if(!geometry.mTexCoords || !geometry.mNormals || !std::all_of(hit.triangle.begin(),hit.triangle.end(),
+                    [&](unsigned index){return index<unsigned(geometry.mNumVertices);}))return {};
+                LLVector2 st;LLVector4a normal,tangent;normal.clear();tangent.clear();
+                for(unsigned vertex=0;vertex<3;++vertex)
+                {
+                    const auto index=hit.triangle[vertex];const F32 weight=hit.barycentric[vertex];
+                    st.mV[0]+=geometry.mTexCoords[index].mV[0]*weight;st.mV[1]+=geometry.mTexCoords[index].mV[1]*weight;
+                    if(!raw->normalGlobal)
+                    {
+                        LLVector4a n=geometry.mNormals[index],t;t.clear();if(geometry.mTangents)t=geometry.mTangents[index];
+                        n.mul(weight);t.mul(weight);normal.add(n);tangent.add(t);
+                    }
+                }
+                if(raw->normalGlobal)
+                {
+                    normal.load3(hit.rawNormal.data());tangent.set(hit.tangent[0],hit.tangent[1],hit.tangent[2],hit.tangent[3]);
+                }
+                else
+                {
+                    const auto transform=[&](const LLVector4a& direction)
+                    {
+                        LLVector3 value(direction.getF32ptr());value.scaleVec(LLVector3(1/raw->scale.mV[0],1/raw->scale.mV[1],1/raw->scale.mV[2]));
+                        return value*raw->rotation;
+                    };
+                    const auto n=transform(normal),t=transform(tangent);const F32 handedness=tangent.getF32ptr()[3];
+                    normal.load3(n.mV);tangent.set(t.mV[0],t.mV[1],t.mV[2],handedness);
+                }
+                normal.normalize3fast();tangent.normalize3fast();
+                struct SurfaceFace
+                {
+                    const Impl::Face& face;const Impl::PickSurface& raw;
+                    const LLTextureEntry* textureEntry()const{return &face.publishedMaterial;}
+                    const LLVector4a& center()const{return raw.center;}
+                    bool volumeGlobal()const{return raw.volumeGlobal;}
+                    LLVector3 scale()const{return raw.scale;}
+                    LLVector3 positionToVolume(const LLVector3& point)const
+                    {
+                        auto value=(point-raw.position)*~raw.rotation;
+                        if(!raw.volumeGlobal)
+                            value.scaleVec(LLVector3(1/raw.scale.mV[0],1/raw.scale.mV[1],1/raw.scale.mV[2]));
+                        return value;
+                    }
+                    LLVector3 directionToVolume(const LLVector3& direction)const
+                    {
+                        auto value=direction*~raw.rotation;
+                        if(!raw.volumeGlobal)
+                            value.scaleVec(raw.scale);
+                        return value;
+                    }
+                    const LLMatrix4* textureMatrix()const{return face.pickTextureMatrix?&*face.pickTextureMatrix:nullptr;}
+                };
+                LLVector4a point;point.load3(hit.point.data());
+                const auto uv=VSSurfaceCoordinates::surfaceToTexture(SurfaceFace{face,*raw},st,point,normal);
+                pick.st={st.mV[0],st.mV[1]};pick.uv={uv.mV[0],uv.mV[1]};pick.normal.set(normal.getF32ptr());
+                std::copy_n(tangent.getF32ptr(),4,pick.tangent.begin());pick.surfaceKnown=true;
+                if(image && uv.mV[0]>=0 && uv.mV[1]>=0)
+                {
+                    const auto extent=VSUIRenderer::imageExtent(image);
+                    pick.xy={ll_round(uv.mV[0]*extent[0]),ll_round((1-uv.mV[1])*extent[1])};
+                }
+            }
+        return pick.surfaceKnown?std::optional<Pick>(pick):std::nullopt;
+    }
     struct Object
     {
         LLUUID id;U32 parent=0;U8 pcode=LL_PCODE_VOLUME,attachment=0;LLVector3 position,scale,velocity,acceleration,angularVelocity;LLQuaternion rotation;
         LLUUID inventoryItem,reportedOwner;
+        LLPointer<LLHUDIcon> icon;
         bool reportedOwnerKnown=false;
         U32 updateFlags=0;
-        U8 material=0,clickAction=0;
+        U8 material=0,clickAction=0;bool reflectionProbe=false,soundSource=false,selectable=true;
         std::string nameValues;
         bool nameValuesPresent=false;
         std::shared_ptr<const VSResourceBudget::Reservation> metadataResidency;
@@ -943,6 +1024,19 @@ struct VSWorldScene::Impl
         windX.fill(.5f);
         windY.fill(.5f);
     }
+    bool highlightedOrBeacon(const Object& object) const
+    {
+        if(!LLPipeline::getRenderBeacons() && !LLPipeline::getRenderHighlights())return false;
+        const bool avatar=object.pcode==LL_PCODE_LEGACY_AVATAR;
+        const bool scripted=!avatar && !object.parent && (object.updateFlags&FLAGS_SCRIPTED);
+        const bool physical=!avatar && (object.updateFlags&FLAGS_USE_PHYSICS);
+        return (object.particles && LLPipeline::getRenderParticleBeacons()) ||
+            (object.soundSource && LLPipeline::getRenderSoundBeacons()) ||
+            (!object.mediaVersion.empty() && LLPipeline::getRenderMOAPBeacons()) ||
+            (scripted && LLPipeline::getRenderScriptedBeacons()) ||
+            (scripted && (object.updateFlags&FLAGS_HANDLE_TOUCH) && LLPipeline::getRenderScriptedTouchBeacons()) ||
+            (physical && LLPipeline::getRenderPhysicalBeacons());
+    }
     void request(U32 id)
     {
         if(!id || pending.count(id) || pending.size()>=1024)return;
@@ -975,6 +1069,7 @@ struct VSWorldScene::Impl
         if (const auto object = objects.find(id); object != objects.end())
             pendingAnimations.erase(object->second.id);
         if(const auto found=objects.find(id);found!=objects.end())objectIndex.erase(id,found->second);
+        if(const auto found=objects.find(id);found!=objects.end() && found->second.icon)found->second.icon->markDead();
         objects.erase(id);pending.erase(id);pendingMaterialOverrides.erase(id);
     }
     void eraseAnimated()
@@ -1176,11 +1271,17 @@ struct VSWorldScene::Impl
             if(type==LLNetworkData::PARAMS_RENDER_MATERIAL && !renderMaterialData(scratch,U32(length),object.renderMaterials)) return false;
             if (type==LLNetworkData::PARAMS_EXTENDED_MESH)
             { if (length!=4) return false;object.extendedMeshFlags=littleU32(scratch); }
+            if(type==LLNetworkData::PARAMS_REFLECTION_PROBE)
+            {if(length!=9)return false;object.reflectionProbe=true;}
             if (type == LLNetworkData::PARAMS_LIGHT && length == 16)
                 object.light = scratch[3] != 0;
         }
-        if (flags&0x10) if (!dp.unpackUUID(owner,"SoundUUID") || !dp.unpackF32(number,"SoundGain") ||
-            !dp.unpackU8(value,"SoundFlags") || !dp.unpackF32(number,"SoundRadius")) return false;
+        if(flags&0x10)
+        {
+            if(!dp.unpackUUID(owner,"SoundUUID") || !dp.unpackF32(number,"SoundGain") ||
+                !dp.unpackU8(value,"SoundFlags") || !dp.unpackF32(number,"SoundRadius"))return false;
+            object.soundSource=owner.notNull();
+        }
         if (flags & 0x100)
         {
             if (!string("NV"))
@@ -1344,7 +1445,9 @@ VSWorldScene::VSWorldScene(VSWorldRenderer& r,VSUIResources& u,std::shared_ptr<V
 VSWorldScene::~VSWorldScene()
 {
     mNeighbours.clear();
+    for(auto& [local,object]:mImpl->objects)if(object.icon)object.icon->markDead();
     mImpl->retired = true;
+    LLHUDIcon::cleanupDeadIcons();LLHUDObject::cleanupUnreferenced();
     mImpl->dirtyTerrainNeighbours();
     mImpl.reset();
     if (mRoot)
@@ -1362,7 +1465,9 @@ void VSWorldScene::reset(bool preserveAssets)
     mImpl->materialAssets.reset();mImpl->pendingMaterialOverrides.clear();
     mImpl->terrainAssets.reset();
     if(mRoot && !preserveAssets) mImpl->resources.erase("terrain:local-paint");
+    for(auto& [local,object]:mImpl->objects)if(object.icon)object.icon->markDead();
     mImpl->objects.clear();mImpl->pending.clear();mImpl->nextRequest=0;
+    LLHUDIcon::cleanupDeadIcons();LLHUDObject::cleanupUnreferenced();
     mImpl->objectIndex.clear();
     mImpl->pendingAnimations.clear();
     mImpl->visiblePackets.clear();
@@ -1860,7 +1965,7 @@ std::optional<VSWorldScene::ObjectTransform> VSWorldScene::objectTransform(const
     if (token.host != mImpl->host) return mNeighbours.at(token.host)->objectTransform(token);
     LLVector3 position; LLQuaternion rotation; std::set<U32> visited;
     if (!mImpl->transform(token.local, position, rotation, visited)) return {};
-    return ObjectTransform{from_region_handle(mImpl->handle) + LLVector3d(position), rotation, mImpl->objects.at(token.local).scale};
+    return ObjectTransform{from_region_handle(mImpl->handle) + LLVector3d(position), rotation, mImpl->objects.at(token.local).scale,position};
 }
 std::optional<VSCameraFocusObject> VSWorldScene::focusObject(const ObjectHandle& token,const LLVector3d& agentOrigin) const
 {
@@ -2526,6 +2631,7 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
         msg.getU32("ObjectData","UpdateFlags",object.updateFlags,i);
         msg.getU8("ObjectData","Material",object.material,i);
         msg.getU8("ObjectData","ClickAction",object.clickAction,i);
+        LLUUID sound;msg.getUUID("ObjectData","Sound",sound,i);object.soundSource=sound.notNull();
         // The full message's OwnerID is only guaranteed for sounding objects;
         // a null value is unknown ownership, never evidence of public/edit rights.
         msg.getUUID("ObjectData","OwnerID",object.reportedOwner,i);
@@ -2590,7 +2696,7 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
         LLVolumeParams params;
         const char* objectBlock=LLMessageStringTable::getInstance()->getString("ObjectData");
         if (!LLVolumeMessage::unpackVolumeParams(&params,&msg,objectBlock,i)) { ++state.rejected;continue; }
-        if (!ownerExtras(extra,object.extendedMeshFlags)) {++state.rejected;continue;}
+        if (!ownerExtras(extra,object.extendedMeshFlags,&object.reflectionProbe)) {++state.rejected;continue;}
         bool materialDataValid=true;
         for (std::size_t cursor = extra.empty() ? 0 : 1; cursor + 6 <= extra.size();)
         {
@@ -3670,6 +3776,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                 pickSurface->center=*geometry.mCenter;pickSurface->position=position;pickSurface->rotation=rotation;
                 pickSurface->scale=o.scale;pickSurface->volumeGlobal=bool(o.flexible)||bool(riggedOwner && geometry.mWeights);
                 pickSurface->normalGlobal=bool(o.flexible)||bool(riggedOwner && geometry.mWeights);
+                pickSurface->rigged=bool(riggedOwner);
                 for(S32 vertex=0;vertex<geometry.mNumVertices;++vertex)
                 {
                     // Native vertex UVs are top-left; retain original ST before
@@ -3791,15 +3898,23 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
 std::optional<VSWorldScene::Pick> VSWorldScene::pick(const LLVector3& start, const LLVector3& end, bool transparent, float lineRadius,
                                                      bool hud) const
 {
+    PickOptions options;options.transparent=transparent;options.rigged=true;options.unselectable=true;
+    return pick(start,end,options,lineRadius,hud);
+}
+std::optional<VSWorldScene::Pick> VSWorldScene::pick(const LLVector3& start, const LLVector3& end, const PickOptions& options, float lineRadius,
+                                                     bool hud) const
+{
     if (!finiteVector(start) || !finiteVector(end) || mImpl->retired)
         return {};
-    std::optional<Pick>                result;
+    std::optional<Pick> result;
+    struct AvatarCandidate{FaceHandle face;const VSWorldScene* region;std::array<float,4> offset;};
+    std::map<LLUUID,AvatarCandidate> avatarCandidates;
+    const Impl::Object* lastPolicyObject=nullptr;bool lastPolicyAccepted=false;
     const std::array<std::uint8_t, 16> anonymous{};
     for (const auto& visible : mImpl->visiblePackets)
     {
         const auto& packet = visible.packet;
-        if (packet.background || packet.hud != hud || (packet.objectIdentity == anonymous && !packet.terrain) ||
-            (!transparent && packet.alpha))
+        if (packet.background || packet.hud != hud || (packet.objectIdentity == anonymous && !packet.terrain))
             continue;
         const auto mesh = visible.mesh.lock();
         if (!mesh)
@@ -3866,6 +3981,65 @@ std::optional<VSWorldScene::Pick> VSWorldScene::pick(const LLVector3& start, con
         const FaceHandle handle{ *object, packet.faceIndex, packet.faceGeneration };
         if (!current(handle))
             continue;
+        const VSWorldScene* region=object->host==mImpl->host?this:mNeighbours.at(object->host).get();
+        const auto& sourceObject=region->mImpl->objects.at(object->local);
+        if(!region->mImpl->linksCurrent(sourceObject))continue;
+        const auto& published=sourceObject.admittedFaces;
+        const Impl::Face* sourceFace=handle.face<published.size() && published[handle.face].mesh==mesh?&published[handle.face]:nullptr;
+        const bool externalGLTF=packet.gltfNode>=0;
+        if(sourceObject.pcode==LL_PCODE_LEGACY_AVATAR)
+        {if(!hud)avatarCandidates.emplace(sourceObject.id,AvatarCandidate{handle,region,packet.regionOffset});continue;}
+        const auto buildVisible=[&]{return options.buildVisible && options.buildVisible();};
+        struct ObjectPolicy
+        {
+            const Impl::Object& object;const Impl::Face* face;const PickOptions& options;const ObjectHandle& token;
+            const Impl& region;
+            bool reflectionProbe()const{return object.reflectionProbe;}
+            bool clickIgnore()const{return object.clickAction==CLICK_ACTION_IGNORE;}
+            bool canSelectFlag()const{return object.selectable;}
+            bool dead()const{return false;} // current identity + accepted visible frame checked above
+            bool rendered()const{return true;} // exact weak mesh is alive and admitted
+            bool canSelect()const{return options.canSelect && options.canSelect(token);}
+            bool rigged()const{return face && face->pickSurface && face->pickSurface->rigged;}
+            const Impl::Object* avatar()const
+            {
+                const auto* owner=&object;std::set<U32> seen;
+                while(owner->parent && seen.insert(owner->parent).second)
+                {
+                    const auto found=region.objects.find(owner->parent);if(found==region.objects.end())return nullptr;
+                    owner=&found->second;if(owner->pcode==LL_PCODE_LEGACY_AVATAR)return owner;
+                }
+                return nullptr;
+            }
+            bool hasAvatar()const{return avatar()!=nullptr;}
+            bool selfAvatar()const{const auto* owner=avatar();return owner && owner->id==region.agent;}
+        } policy{sourceObject,sourceFace,options,*object,*region->mImpl};
+        // Imported GLTF scene traversal intentionally has its original independent
+        // geometry-only policy; it never used LLVOVolume admission or TE masks.
+        if(!externalGLTF)
+        {
+            if(lastPolicyObject!=&sourceObject)
+            {
+                lastPolicyObject=&sourceObject;
+                lastPolicyAccepted=VSPickPolicy::spatial(policy,options.reflectionProbe,buildVisible) &&
+                    (sourceObject.pcode!=LL_PCODE_VOLUME || VSPickPolicy::volume(policy,options.rigged,hud || options.unselectable,buildVisible));
+            }
+            if(!lastPolicyAccepted)continue;
+        }
+        const bool transparent=options.transparent || (!externalGLTF &&
+            ((options.reflectionProbe && sourceObject.reflectionProbe) || region->mImpl->highlightedOrBeacon(sourceObject)));
+        const bool specialCursor=!sourceObject.reflectionProbe &&
+            ((sourceObject.updateFlags&(FLAGS_USE_PHYSICS|FLAGS_HANDLE_TOUCH)) || sourceObject.clickAction!=0);
+        struct VisibilityFace
+        {
+            const Impl::Face* face;
+            bool present()const{return face!=nullptr;}
+            F32 alpha()const{return face->publishedMaterial.getColor().mV[3];}
+        } visibility{sourceFace};
+        if(!externalGLTF && sourceObject.pcode==LL_PCODE_VOLUME && !VSPickPolicy::faceVisible(visibility,transparent,specialCursor))continue;
+        std::optional<Pick> acceptedSurface;
+        const auto surface=[&](const VSWorldRenderer::SurfaceHit& sample)->std::optional<Pick>
+        {return sourceFace && sample.triangleKnown?Impl::surfacePick(*sourceFace,sample,visible.image.lock()):std::nullopt;};
         std::array<float, 3> a{}, b{};
         for (unsigned axis = 0; axis < 3; ++axis)
         {
@@ -3873,35 +4047,40 @@ std::optional<VSWorldScene::Pick> VSWorldScene::pick(const LLVector3& start, con
             b[axis] = end.mV[axis] - (hud ? 0 : packet.regionOffset[axis]);
         }
         const auto image  = visible.image.lock();
-        auto       opaque = [&](const VSWorldRenderer::SurfaceHit& sample)
+        auto opaque=[&](const VSWorldRenderer::SurfaceHit& sample)
         {
-            if (!packet.masked)
-                return true;
-            if (!image)
-                return false;
-            const auto  extent = VSUIRenderer::imageExtent(image);
-            const auto& pixels = VSUIRenderer::imagePixels(image);
-            if (!extent[0] || !extent[1])
-                return false;
-            auto uv=sample.uv;
-            if(packet.surface)
+            if(externalGLTF)return true;
+            std::optional<Pick> candidateSurface;
+            const auto mask=[&]
             {
-                uv=VSMaterial::transform(packet.surface->uv[0],uv[0],1-uv[1]);uv[1]=1-uv[1];
-            }
-            const F32 x  = (uv[0] - std::floor(uv[0])) * extent[0] - .5f;
-            const F32 y  = (uv[1] - std::floor(uv[1])) * extent[1] - .5f;
-            const S32 ix = S32(std::floor(x)), iy = S32(std::floor(y));
-            const F32 dx = x - ix, dy = y - iy;
-            auto      alpha = [&](S32 px, S32 py)
-            {
-                const auto width = S32(extent[0]), height = S32(extent[1]);
-                px = (px % width + width) % width;
-                py = (py % height + height) % height;
-                return pixels[(std::size_t(py) * width + px) * 4 + 3] / 255.f;
+                const auto extent=VSUIRenderer::imageExtent(image);
+                LLVector2 uv(sample.uv[0],1-sample.uv[1]);
+                if(sourceObject.pcode==LL_PCODE_VOLUME)
+                {
+                    candidateSurface=surface(sample);
+                    if(!candidateSurface)return false;
+                    uv=LLVector2(candidateSurface->uv.data());
+                }
+                return VSPickPolicy::textureMask(extent[0],extent[1],VSUIRenderer::imagePixels(image),uv.mV[0],uv.mV[1]);
             };
-            const F32 value = (1 - dy) * ((1 - dx) * alpha(ix, iy) + dx * alpha(ix + 1, iy)) +
-                              dy * ((1 - dx) * alpha(ix, iy + 1) + dx * alpha(ix + 1, iy + 1));
-            return value * packet.color[3] >= packet.alphaCutoff;
+            if(sourceObject.pcode!=LL_PCODE_VOLUME)return transparent || !image || mask();
+            struct HitFace
+            {
+                const Impl::Face* face;const VSUIRenderer::Image& image;const decltype(mask)& query;
+                bool present()const{return face!=nullptr;}
+                bool hasLegacyMaterial()const{return face->publishedMaterial.getMaterialParams().notNull();}
+                auto legacyMode()const{return face->publishedMaterial.getMaterialParams()->getDiffuseAlphaMode();}
+                auto cutoff()const{return face->publishedMaterial.getMaterialParams()->getAlphaMaskCutoff();}
+                auto emissiveMode()const{return LLMaterial::DIFFUSE_ALPHA_MODE_EMISSIVE;}
+                auto noneMode()const{return LLMaterial::DIFFUSE_ALPHA_MODE_NONE;}
+                auto maskMode()const{return LLMaterial::DIFFUSE_ALPHA_MODE_MASK;}
+                bool hasTexture()const{return bool(image);}
+                bool uploaded()const{return bool(image);}
+                bool mask()const{return query();}
+            } hitFace{sourceFace,image,mask};
+            const bool accepted=VSPickPolicy::acceptsHit(hitFace,transparent);
+            if(accepted)acceptedSurface=std::move(candidateSurface);
+            return accepted;
         };
         VSWorldRenderer::SurfaceHit hit;
         F32                         radius = lineRadius;
@@ -3918,7 +4097,28 @@ std::optional<VSWorldScene::Pick> VSWorldScene::pick(const LLVector3& start, con
             if (rayDistance > 0)
                 radius *= std::clamp(std::sqrt(meshDistance / rayDistance), .001f, 1.f);
         }
-        if (!VSWorldRenderer::intersect(mesh, a, b, hit, radius, opaque) || (result && hit.fraction >= result->fraction))
+        bool intersected=false;
+        if(!externalGLTF && (sourceObject.pcode==LL_PCODE_LEGACY_TREE || sourceObject.pcode==LL_PCODE_TREE_NEW))
+        {
+            const auto extents=VSWorldRenderer::bounds(mesh);
+            LLVector3 center=(LLVector3(extents[1].data())+LLVector3(extents[0].data()))*.5f;
+            LLVector3 size=LLVector3(extents[1].data())-LLVector3(extents[0].data());
+            const LLVector3 begin(a.data()),finish(b.data());
+            if(LLLineSegmentBoxIntersect(begin,finish,center,size*.5f))
+            {
+                const auto rotation=sourceObject.rotation;
+                center-=LLVector3(0,0,size.magVec()*.25f)*rotation;
+                size.scaleVec(LLVector3(.25f,.25f,1));size.mV[0]=llmin(size.mV[0],1.f);size.mV[1]=llmin(size.mV[1],1.f);
+                LLVector3 point,normal;
+                if(linesegment_tetrahedron(begin,finish,center,size,rotation,point,normal))
+                {
+                    std::copy_n(point.mV,3,hit.point.begin());std::copy_n(normal.mV,3,hit.normal.begin());
+                    const auto direction=finish-begin;hit.fraction=((point-begin)*direction)/direction.lengthSquared();intersected=true;
+                }
+            }
+        }
+        else intersected=VSWorldRenderer::intersect(mesh,a,b,hit,radius,opaque);
+        if (!intersected || (result && hit.fraction >= result->fraction))
             continue;
         Pick pick;
         pick.face     = handle;
@@ -3926,75 +4126,11 @@ std::optional<VSWorldScene::Pick> VSWorldScene::pick(const LLVector3& start, con
         pick.normal   = LLVector3(hit.normal.data());
         pick.uv       = {-1,-1};
         pick.hud      = hud;
-        const VSWorldScene* region=object->host==mImpl->host?this:mNeighbours.at(object->host).get();
-        const auto& published=region->mImpl->objects.at(object->local).admittedFaces;
-        if(handle.face<published.size() && published[handle.face].mesh==mesh && hit.triangleKnown)
+        if(!acceptedSurface)acceptedSurface=surface(hit);
+        if(acceptedSurface)
         {
-            const auto& face=published[handle.face];const auto raw=face.pickSurface;
-            if(raw && raw->volume && raw->face>=0 && raw->face<raw->volume->getNumVolumeFaces())
-            {
-                const auto& geometry=raw->volume->getVolumeFace(raw->face);
-                if(!geometry.mTexCoords || !geometry.mNormals || !std::all_of(hit.triangle.begin(),hit.triangle.end(),
-                    [&](unsigned index){return index<unsigned(geometry.mNumVertices);}))continue;
-                LLVector2 st;LLVector4a normal,tangent;normal.clear();tangent.clear();
-                for(unsigned vertex=0;vertex<3;++vertex)
-                {
-                    const auto index=hit.triangle[vertex];const F32 weight=hit.barycentric[vertex];
-                    st.mV[0]+=geometry.mTexCoords[index].mV[0]*weight;st.mV[1]+=geometry.mTexCoords[index].mV[1]*weight;
-                    if(!raw->normalGlobal)
-                    {
-                        LLVector4a n=geometry.mNormals[index],t;t.clear();if(geometry.mTangents)t=geometry.mTangents[index];
-                        n.mul(weight);t.mul(weight);normal.add(n);tangent.add(t);
-                    }
-                }
-                if(raw->normalGlobal)
-                {
-                    normal.load3(hit.rawNormal.data());tangent.set(hit.tangent[0],hit.tangent[1],hit.tangent[2],hit.tangent[3]);
-                }
-                else
-                {
-                    const auto transform=[&](const LLVector4a& direction)
-                    {
-                        LLVector3 value(direction.getF32ptr());value.scaleVec(LLVector3(1/raw->scale.mV[0],1/raw->scale.mV[1],1/raw->scale.mV[2]));
-                        return value*raw->rotation;
-                    };
-                    const auto n=transform(normal),t=transform(tangent);const F32 handedness=tangent.getF32ptr()[3];
-                    normal.load3(n.mV);tangent.set(t.mV[0],t.mV[1],t.mV[2],handedness);
-                }
-                normal.normalize3fast();tangent.normalize3fast();
-                struct SurfaceFace
-                {
-                    const Impl::Face& face;const Impl::PickSurface& raw;
-                    const LLTextureEntry* textureEntry()const{return &face.publishedMaterial;}
-                    const LLVector4a& center()const{return raw.center;}
-                    bool volumeGlobal()const{return raw.volumeGlobal;}
-                    LLVector3 scale()const{return raw.scale;}
-                    LLVector3 positionToVolume(const LLVector3& point)const
-                    {
-                        auto value=(point-raw.position)*~raw.rotation;
-                        if(!raw.volumeGlobal)
-                            value.scaleVec(LLVector3(1/raw.scale.mV[0],1/raw.scale.mV[1],1/raw.scale.mV[2]));
-                        return value;
-                    }
-                    LLVector3 directionToVolume(const LLVector3& direction)const
-                    {
-                        auto value=direction*~raw.rotation;
-                        if(!raw.volumeGlobal)
-                            value.scaleVec(raw.scale);
-                        return value;
-                    }
-                    const LLMatrix4* textureMatrix()const{return face.pickTextureMatrix?&*face.pickTextureMatrix:nullptr;}
-                };
-                LLVector4a point;point.load3(hit.point.data());
-                const auto uv=VSSurfaceCoordinates::surfaceToTexture(SurfaceFace{face,*raw},st,point,normal);
-                pick.st={st.mV[0],st.mV[1]};pick.uv={uv.mV[0],uv.mV[1]};pick.normal.set(normal.getF32ptr());
-                std::copy_n(tangent.getF32ptr(),4,pick.tangent.begin());pick.surfaceKnown=true;
-                if(image && uv.mV[0]>=0 && uv.mV[1]>=0)
-                {
-                    const auto extent=VSUIRenderer::imageExtent(image);
-                    pick.xy={ll_round(uv.mV[0]*extent[0]),ll_round((1-uv.mV[1])*extent[1])};
-                }
-            }
+            pick.st=acceptedSurface->st;pick.uv=acceptedSurface->uv;pick.normal=acceptedSurface->normal;
+            pick.tangent=acceptedSurface->tangent;pick.xy=acceptedSurface->xy;pick.surfaceKnown=true;
         }
         for (unsigned axis = 0; axis < 3; ++axis)
             pick.position.mV[axis] = hit.point[axis] + (hud ? 0 : packet.regionOffset[axis]);
@@ -4002,9 +4138,34 @@ std::optional<VSWorldScene::Pick> VSWorldScene::pick(const LLVector3& start, con
         pick.gltfPrimitive = packet.gltfPrimitive;
         result             = std::move(pick);
     }
+    if(!hud)
+    {
+        for(const auto& [id,candidate]:avatarCandidates)
+        {
+            if(!candidate.region->current(candidate.face))continue;
+            const auto avatar=candidate.region->mImpl->avatars.find(id);
+            if(avatar==candidate.region->mImpl->avatars.end())continue;
+            const bool renderSelf=id!=candidate.region->mImpl->agent || !options.renderSelfAvatar || options.renderSelfAvatar();
+            const LLVector3 offset(candidate.offset.data());
+            const auto hit=avatar->second->collisionPick(start-offset,(result?result->position:end)-offset,renderSelf);
+            if(!hit || (result && result->gltfNode>=0 && hit->fraction>=1.f))continue;
+            const LLVector3 position=LLVector3(hit->point.data())+offset;
+            if(result && !result->land)
+            {
+                const auto previous=objectAdmission(result->face.object);
+                // Exact LLPipeline precedence for attachment/body collisions.
+                if(previous && previous->attachment && dist_vec(position,result->position)<=.1f)continue;
+            }
+            Pick pick;pick.face=candidate.face;pick.avatar=true;pick.surfaceKnown=true;
+            pick.position=position;pick.normal=LLVector3(hit->normal.data());
+            const LLVector3 ray=end-start;const F32 length=ray.lengthSquared();
+            pick.fraction=length>0?((position-start)*ray)/length:1;
+            result=std::move(pick);
+        }
+    }
     return result;
 }
-std::optional<VSWorldScene::Pick> VSWorldScene::pickHUD(float x, float y, float aspect, float zoom) const
+std::optional<VSWorldScene::Pick> VSWorldScene::pickHUD(float x, float y, float aspect, float zoom,const PickOptions* options) const
 {
     if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(aspect) || aspect <= 0 || !std::isfinite(zoom) || zoom <= 0)
         return {};
@@ -4030,7 +4191,8 @@ std::optional<VSWorldScene::Pick> VSWorldScene::pickHUD(float x, float y, float 
     if (!known)
         return {};
     const F32 horizontal = -x * aspect * .5f / zoom, vertical = y * .5f / zoom;
-    return pick(LLVector3(minimum - 1, horizontal, vertical), LLVector3(maximum + 1, horizontal, vertical), true, .001f, true);
+    PickOptions hudOptions=options?*options:PickOptions{};hudOptions.rigged=false;hudOptions.unselectable=true;hudOptions.reflectionProbe=false;
+    return pick(LLVector3(minimum - 1, horizontal, vertical), LLVector3(maximum + 1, horizontal, vertical), hudOptions, .001f, true);
 }
 VSWorldRenderer::View VSWorldScene::view(const LLVector3& eye,unsigned width,unsigned height,float farClip)
 {
@@ -4302,4 +4464,48 @@ std::optional<VSWorldScene::ObjectHandle> VSWorldScene::rootObject(const ObjectH
         if(!handle)return {};
         root=*handle;
     }
+}
+
+bool VSWorldScene::setIcon(const ObjectHandle& requested,const std::string& imageName,bool scriptError)
+{
+    if(!current(requested))return false;
+    if(requested.host!=mImpl->host)return mNeighbours.at(requested.host)->setIcon(requested,imageName,scriptError);
+    ObjectHandle token=requested;
+    if(mImpl->hudObject(mImpl->objects.at(token.local)))
+    {
+        const auto self=object(mImpl->agent);if(!self)return false;token=*self;
+        if(token.host!=mImpl->host)return mNeighbours.at(token.host)->setIcon(token,imageName,scriptError);
+    }
+    auto& object=mImpl->objects.at(token.local);
+    if(!mImpl->linksCurrent(object))return false;
+    if(object.icon && object.icon->getSourceID()==token.id){object.icon->restartLifeTimer();return true;}
+    const auto residency=reserveSpatialBytes(sizeof(LLHUDIcon)+sizeof(ObjectHandle)+sizeof(std::weak_ptr<Impl>));
+    if(!residency)return false;
+    const auto image=vs_ui_named_image_snapshot(imageName);
+    const std::weak_ptr<Impl> weak=mImpl;const auto current=guard(token);
+    LLPointer<LLHUDIcon> icon=static_cast<LLHUDIcon*>(LLHUDObject::addHUDObject(LLHUDObject::LL_HUD_ICON));
+    icon->setNativeSource([weak,token,current]() -> std::optional<LLHUDIcon::NativeSource>
+    {
+        if(!current())return {};
+        const auto state=weak.lock();if(!state)return {};
+        const auto found=state->objects.find(token.local);
+        if(found==state->objects.end() || !state->linksCurrent(found->second))return {};
+        const auto& source=found->second;LLVector3 position;LLQuaternion rotation;std::set<U32> visited;
+        if(!state->transform(token.local,position,rotation,visited,true))return {};
+        const auto global=from_region_handle(state->handle)+LLVector3d(position);
+        const auto scale=source.scale;
+        // Literal original volume/tree/default drawable radius assignments.
+        const F32 radius=source.pcode==LL_PCODE_VOLUME?scale.length():
+            ((source.pcode==LL_PCODE_LEGACY_TREE || source.pcode==LL_PCODE_TREE_NEW)?32.f:LLVector3(scale.mV[0],scale.mV[1],scale.mV[2]*.5f).length());
+        return LLHUDIcon::NativeSource{source.id,gAgent.getPosAgentFromGlobal(global),scale,global,rotation,radius};
+    },image,residency,[weak,token,identity=icon.get()]
+    {
+        if(const auto state=weak.lock())
+            if(const auto found=state->objects.find(token.local);found!=state->objects.end() &&
+                found->second.generation==token.generation && found->second.id==token.id && found->second.icon.get()==identity)
+                found->second.icon=nullptr;
+    },[imageName]{return vs_ui_named_image_snapshot(imageName);});
+    icon->setScale(.03f);if(scriptError)icon->setScriptError();
+    if(object.icon)object.icon->markDead();object.icon=icon;
+    return true;
 }

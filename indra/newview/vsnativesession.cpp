@@ -94,6 +94,7 @@
 #include "llworldmap.h"
 #include "vsregionlimits.h"
 #include "llviewercamera.h"
+#include "llfloaterscriptdebug.h"
 #include "lltracker.h"
 #include "llworldmapview.h"
 #include "llworldmapmessage.h"
@@ -2229,6 +2230,7 @@ void VSNativeSession::publishChat(const LLSD& chat, const std::string& text, U64
         const auto position = ll_vector3_from_sd(chat["position"]);
         if (position.isFinite()) message.mPosAgent = position;
     }
+    if(LLFloaterScriptDebug::routeChat(message))return;
     mChat->appendChat(message);
     FSConsoleUtils::ProcessChatMessage(message, LLSD());
     if (gSavedPerAccountSettings.getBOOL("LogNearbyChat")) LLLogChat::saveHistory("chat", chat["from"].asString(), chat["source"].asUUID(), text);

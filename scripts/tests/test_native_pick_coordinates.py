@@ -68,7 +68,7 @@ class NativePickCoordinates(unittest.TestCase):
             'std::optional<VSCameraFocusObject> VSWorldScene::focusObject(')))
 
     def test_actual_native_pick_consumer_and_requested_metadata(self):
-        self.run_cpp(fixture('native_pick_fixture.cpp').replace('BODY',
+        self.run_cpp(fixture('native_pick_fixture.cpp').replace('POLICY', '\n'.join(line for line in viewer('vspickpolicy.h').splitlines() if not line.startswith('#'))).replace('BODY',
             method(viewer('vsviewerwindow.cpp'), 'bool LLViewerWindow::nativePick(')))
 
     def test_actual_publication_refusal_and_retained_source_budget(self):

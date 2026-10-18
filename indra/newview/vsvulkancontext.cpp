@@ -17,6 +17,11 @@
 #include "vsbeaconpresentation.h"
 #include "vstrackerpresentation.h"
 #include "llhudtext.h"
+#include "llhudicon.h"
+#include "llagent.h"
+#include "llregionhandle.h"
+#include "rlveffects.h"
+#include "rlvactions.h"
 #include "pipeline.h"
 #include "vsnativesession.h"
 #include "llagentcamera.h"
@@ -435,6 +440,7 @@ struct VSVulkanContext::Impl
             {
                 beaconPresentation->append(*session,scene);
                 trackerPresentation->append(*session,scene);
+                LLHUDIcon::appendNative(*worldRenderer,from_region_handle(session->handle()),scene);
             }
 #if VS_VULKAN_DIAGNOSTICS
             const auto submitStart = profileFrames ? ProfileClock::now() : ProfileClock::time_point{};
@@ -445,7 +451,14 @@ struct VSVulkanContext::Impl
                 terrainPackets = unsigned(std::count_if(scene.begin(), scene.end(), [](const auto& packet){return packet.terrain;}));
             }
 #endif
-            worldRenderer->draw(target, size.mX, size.mY, view, scene);
+            worldRenderer->draw(target, size.mX, size.mY, view, scene,[&]
+            {
+                if(!RlvActions::hasBehaviour(RLV_BHVR_SETOVERLAY))return;
+                resources->begin(size.mX,size.mY,dpi);
+                LLVfxManager::instance().runEffect(EVisualEffect::RlvOverlay);
+                const auto overlays=resources->finish();
+                renderer->draw(target,size.mX,size.mY,dpi,overlays);
+            });
 #if VS_VULKAN_DIAGNOSTICS
             if (profileFrames) worldMilliseconds = std::chrono::duration<double,std::milli>(ProfileClock::now()-submitStart).count();
 #endif

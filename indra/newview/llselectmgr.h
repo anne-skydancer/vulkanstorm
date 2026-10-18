@@ -593,6 +593,7 @@ public:
 
     // Returns the previous value of mForceSelection
     bool setForceSelection(bool force);
+    bool forceSelection() const { return mForceSelection; }
 
     ////////////////////////////////////////////////////////////////
     // Selection methods

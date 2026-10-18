@@ -46,6 +46,8 @@ public:
     // <FS:Kadah> [FSllOwnerSayToScriptDebugWindow]
     // static void addScriptLine(const std::string &utf8mesg, const std::string &user_name, const LLColor4& color, const LLUUID& source_id);
     static void addScriptLine(const LLChat& chat);
+    // Shared native/OpenGL policy; true consumes a script-only/filtered message.
+    static bool routeChat(const LLChat&);
 
 protected:
     // <FS:Ansariel> Script debug icon

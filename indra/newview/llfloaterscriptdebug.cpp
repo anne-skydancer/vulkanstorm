@@ -43,6 +43,11 @@
 #include "llviewercontrol.h"
 #include "llviewerobjectlist.h"
 #include "llviewertexturelist.h"
+#include "llviewerwindow.h"
+#include "vsvulkancontext.h"
+#include "vsworldscene.h"
+#include "llagent.h"
+#include "llviewernetwork.h"
 
 //
 // Statics
@@ -160,7 +165,22 @@ void LLFloaterScriptDebug::addScriptLine(const LLChat& chat)
     // std::string prefix = utf8mesg.substr(0, 4);
     // std::string message = (prefix == "/me " || prefix == "/me'") ? user_name + utf8mesg.substr(3) : utf8mesg;
 
-    if (objectp)
+    bool nativeLabel=false;
+    if(LLRender2D::isNativeUI() && gViewerWindow && gViewerWindow->nativeContext())
+    {
+        auto& world=gViewerWindow->nativeContext()->world();
+        if(const auto token=world.object(chat.mFromID))
+        {
+            if(chat.mChatType==CHAT_TYPE_DEBUG_MSG)world.setIcon(*token,"script_error.j2c",true);
+            if(const auto transform=world.objectTransform(*token))
+            {
+                const auto position=transform->regionPosition;
+                floater_label=llformat("%s (%.0f, %.0f, %.0f)",chat.mFromName.c_str(),position.mV[0],position.mV[1],position.mV[2]);
+                nativeLabel=true;
+            }
+        }
+    }
+    if (objectp && !LLRender2D::isNativeUI())
     {
         // <FS:Kadah> [FSllOwnerSayToScriptDebugWindow]
         if (chat.mChatType == CHAT_TYPE_DEBUG_MSG)
@@ -194,7 +214,7 @@ void LLFloaterScriptDebug::addScriptLine(const LLChat& chat)
     {
         // <FS:Kadah> [FSllOwnerSayToScriptDebugWindow]
         // floater_label = user_name;
-        floater_label = chat.mFromName;
+        if(!nativeLabel)floater_label = chat.mFromName;
     }
 
     addOutputWindow(LLUUID::null); // <FS:Ansariel> Improved script debug floater
@@ -372,3 +392,18 @@ void LLFloaterScriptDebugOutput::clear()
     mHistoryEditor->clear();
 }
 // </FS:Kadah> [FSllOwnerSayToScriptDebugWindow]
+
+bool LLFloaterScriptDebug::routeChat(const LLChat& message)
+{
+    static LLCachedControl<bool> ownerSay(gSavedPerAccountSettings,"FSllOwnerSayToScriptDebugWindow");
+    if(message.mChatType!=CHAT_TYPE_DEBUG_MSG && !(message.mChatType==CHAT_TYPE_OWNER && ownerSay))return false;
+    if(LLFloater::isQuitRequested())return true;
+    if(message.mChatType==CHAT_TYPE_DEBUG_MSG && !gSavedSettings.getBOOL("ShowScriptErrors"))return true;
+#ifdef OPENSIM
+    if(LLGridManager::getInstance()->isInSecondLife() && gAgentID!=message.mOwnerID)return true;
+#else
+    if(gAgentID!=message.mOwnerID)return true;
+#endif
+    addScriptLine(message);
+    return gSavedSettings.getS32("ShowScriptErrorsLocation")==1 || message.mChatType==CHAT_TYPE_OWNER;
+}

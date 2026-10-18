@@ -26,6 +26,9 @@
 
 #include "rlveffects.h"
 #include "rlvhandler.h"
+#include "vsnativesession.h"
+#include "vsuiimageprovider.h"
+#include "vspickpolicy.h"
 
 // ====================================================================================
 // RlvOverlayEffect class
@@ -83,6 +86,7 @@ ERlvCmdRet RlvOverlayEffect::onTextureChanged(const LLUUID& idRlvObj, const boos
 
 void RlvOverlayEffect::clearImage()
 {
+    mNativePresentedImage.reset();mNativeAccount=0;
     if (m_pImage)
     {
         m_pImage->setBoostLevel(m_nImageOrigBoost);
@@ -95,12 +99,25 @@ bool RlvOverlayEffect::hitTest(const LLCoordGL& ptMouse) const
     if (!m_pImage)
         return false;
 
+    if(LLRender2D::isNativeUI())
+    {
+        const auto owner=VSNativeSession::active();
+        if(!m_fBlockTouch || !owner || owner->phase()!=VSNativeSession::Phase::Connected || owner->generation()!=mNativeAccount)return false;
+        if(!mNativePresentedImage)return true;
+        const auto extent=VSUIRenderer::imageExtent(mNativePresentedImage);
+        // Like an unallocated original GL pick mask, an image still loading
+        // blocks touch. Once drawn, use that exact immutable generation.
+        return VSPickPolicy::textureMask(extent[0],extent[1],VSUIRenderer::imagePixels(mNativePresentedImage),
+            float(ptMouse.mX)/gViewerWindow->getWorldViewWidthScaled(),float(ptMouse.mY)/gViewerWindow->getWorldViewHeightScaled());
+    }
     return (m_fBlockTouch) && (m_pImage->getMask(LLVector2((float)ptMouse.mX / gViewerWindow->getWorldViewWidthScaled(), (float)ptMouse.mY / gViewerWindow->getWorldViewHeightScaled())));
 }
 
 void RlvOverlayEffect::setImage(const LLUUID& idTexture)
 {
-    if ( (m_pImage) && (m_pImage->getID() == idTexture) )
+    const auto owner=VSNativeSession::active();
+    const U64 account=owner?owner->generation():0;
+    if ( (m_pImage) && (m_pImage->getID() == idTexture) && (!LLRender2D::isNativeUI() || mNativeAccount==account) )
         return;
 
     clearImage();
@@ -108,10 +125,32 @@ void RlvOverlayEffect::setImage(const LLUUID& idTexture)
     m_nImageOrigBoost = m_pImage->getBoostLevel();
     m_pImage->setBoostLevel(LLGLTexture::BOOST_PREVIEW);
     m_pImage->forceToSaveRawImage(0);
+    if(LLRender2D::isNativeUI())mNativeAccount=account;
 }
 
 void RlvOverlayEffect::run(const LLVisualEffectParams*)
 {
+    if(LLRender2D::isNativeUI())
+    {
+        const auto owner=VSNativeSession::active();
+        if(!m_pImage || !owner || owner->phase()!=VSNativeSession::Phase::Connected || owner->generation()!=mNativeAccount)
+        {mNativePresentedImage.reset();return;}
+        const int width=gViewerWindow->getWorldViewWidthScaled(),height=gViewerWindow->getWorldViewHeightScaled();
+        if(width<=0 || height<=0)return;
+        m_pImage->addTextureStats(F32(width*height));m_pImage->setKnownDrawSize(width,height);
+        // UI demand disables remote texture compression, retaining the same
+        // exact pixels for presentation and original pick-mask evaluation.
+        LLUI::getUIImageByID(m_pImage->getID());
+        const auto newest=vs_ui_image_snapshot(m_pImage->getID());
+        const auto image=newest?newest:mNativePresentedImage;
+        if(!image)return;
+        const auto color=m_Color.get();
+        vs_draw_ui_image(image,LLRectf(0,F32(height),F32(width),0),
+            LLColor4(color.mV[0],color.mV[1],color.mV[2],llclamp(m_nAlpha.get(),0.f,1.f)));
+        mNativePresentedImage=image;
+        return;
+    }
+
     if (m_pImage)
     {
         gUIProgram.bind();

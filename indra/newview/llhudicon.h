@@ -38,6 +38,10 @@
 #include "llfontgl.h"
 #include <set>
 #include <vector>
+#include <optional>
+#include <functional>
+#include "vsworldrenderer.h"
+#include "llquaternion.h"
 
 // Renders a 2D icon billboard floating at the location specified.
 class LLViewerTexture;
@@ -52,6 +56,23 @@ public:
     /*virtual*/ F32 getDistance() const { return mDistance; }
 
     void setImage(LLViewerTexture* imagep);
+    struct NativeSource
+    {
+        LLUUID id;
+        LLVector3 position,scale;
+        LLVector3d globalPosition;
+        LLQuaternion rotation;
+        F32 radius=0;
+    };
+    using NativeSourceQuery=std::function<std::optional<NativeSource>()>;
+    void setNativeSource(NativeSourceQuery,const VSUIRenderer::Image&,std::shared_ptr<const void> residency = {},std::function<void()> retire = {},std::function<VSUIRenderer::Image()> imageQuery = {});
+    LLUUID getSourceID() const;
+    std::optional<LLVector3> nativePickPoint() const;
+    std::optional<VSWorldRenderer::Packet> nativePacket(const LLVector3d& regionOrigin) const;
+    static LLPointer<LLHUDIcon> findNative(const LLUUID&);
+    static void appendNative(VSWorldRenderer&,const LLVector3d& regionOrigin,std::vector<VSWorldRenderer::Packet>&);
+    static LLHUDIcon* intersectNative(const LLVector4a&,const LLVector4a&,LLVector4a*);
+
     void setScale(F32 fraction_of_fov);
 
     void restartLifeTimer() { mLifeTimer.reset(); }
@@ -81,6 +102,18 @@ protected:
 
 private:
     LLPointer<LLViewerTexture> mImagep;
+    NativeSourceQuery mNativeSource;
+    std::function<VSUIRenderer::Image()> mNativeImageQuery;
+    std::function<void()> mNativeRetire;
+    std::shared_ptr<const void> mNativeResidency;
+    LLVector3d mNativeRegionOrigin,mNativeAgentOrigin;
+    VSUIRenderer::Image mNativeImage;
+    VSWorldRenderer::Mesh mNativeMesh;
+    std::array<LLVector3,4> mNativeQuad{};
+    bool mNativeQuadKnown=false;
+    F32 mNativeAlpha=0;
+    bool nativeQuad(std::array<LLVector3,4>&,F32&);
+
     LLFrameTimer    mAnimTimer;
     LLFrameTimer    mLifeTimer;
     F32             mDistance;

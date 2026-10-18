@@ -798,3 +798,31 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImage(const std::string &name, S32)
     LL_INFOS("NativeUI") << "CPU skin asset: " << path << LL_ENDL;
     return image;
 }
+
+VSUIRenderer::Image VSUIImageProvider::imageSnapshot(const LLUUID& id) const
+{
+    return imageReady(id)?mImpl->resources.image("remote:"+imageID(id).asString()):VSUIRenderer::Image{};
+}
+void VSUIImageProvider::drawImage(const VSUIRenderer::Image& image,const LLRectf& rect,const LLColor4& color)
+{mImpl->resources.imageRectangle(image,rect,color);}
+VSUIRenderer::Image vs_ui_image_snapshot(const LLUUID& id)
+{return sActiveProvider?sActiveProvider->imageSnapshot(id):VSUIRenderer::Image{};}
+void vs_draw_ui_image(const VSUIRenderer::Image& image,const LLRectf& rect,const LLColor4& color)
+{if(sActiveProvider)sActiveProvider->drawImage(image,rect,color);}
+
+VSUIRenderer::Image VSUIImageProvider::namedImageSnapshot(const std::string& name)
+{
+    getUIImage(name);
+    const auto key="remote:world-icon:"+name;
+    if(const auto image=mImpl->resources.image(key))return image;
+    const auto skin=mImpl->resources.image("skin:"+name);if(!skin)return {};
+    const auto extent=VSUIRenderer::imageExtent(skin);
+    const auto residency=mImpl->resources.reserveImagePreparation(VSImageMips::bytes(extent[0],extent[1],true)+std::size_t(extent[0])*extent[1]*8);
+    if(!residency)return {};
+    const auto raw=mImpl->resources.rawImage("skin:"+name);if(!raw)return {};
+    const auto prepared=VSUIResources::prepareImage(*raw,VSWorldContracts::ImageRole::RemoteAsset,false);
+    if(!mImpl->resources.publishPrepared(key,prepared))return {};
+    return mImpl->resources.image(key);
+}
+VSUIRenderer::Image vs_ui_named_image_snapshot(const std::string& name)
+{return sActiveProvider?sActiveProvider->namedImageSnapshot(name):VSUIRenderer::Image{};}
