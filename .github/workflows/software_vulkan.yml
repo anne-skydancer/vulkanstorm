@@ -146,6 +146,7 @@ jobs:
       - run: python scripts/tests/test_native_context_flow.py
       - run: python scripts/tests/test_native_pie_slice_admission.py
       - run: python scripts/tests/test_native_received_chat_policy.py
+      - run: python scripts/tests/test_native_owner_chat.py
       - run: python scripts/tests/test_native_media_policy.py
       - run: python scripts/tests/test_native_media_events.py
       - run: python scripts/tests/test_native_hud_runner.py

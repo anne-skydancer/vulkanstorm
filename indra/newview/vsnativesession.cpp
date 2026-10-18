@@ -31,6 +31,9 @@
 #include "llhudobject.h"
 #include "llcharacter.h"
 #include "fsconsoleutils.h"
+#include "fscommon.h"
+#include "rlvhandler.h"
+#include "chatbar_as_cmdline.h"
 #include "fslslbridge.h"
 #include "vsnativeim.h"
 #include "llcallingcard.h"
@@ -2187,10 +2190,6 @@ void VSNativeSession::appendChat(LLSD chat, U64 generation)
     const auto kind = chat["kind"].asInteger(), type = chat["type"].asInteger();
     if (kind < CHAT_SOURCE_SYSTEM || kind > CHAT_SOURCE_REGION || type < CHAT_TYPE_WHISPER || type > CHAT_TYPE_RADAR || type == CHAT_TYPE_START || type == CHAT_TYPE_STOP) return;
     if (chat["audible"].asInteger() != CHAT_AUDIBLE_FULLY) return;
-    // The reference bridge protocol is object owner-chat, consumed before
-    // ordinary chat history/translation. Its controller validates the actual attachment.
-    if (kind == CHAT_SOURCE_OBJECT && owner == mAgent &&
-        FSLSLBridge::instance().lslToViewer(chat["text"].asString(), source, owner)) return;
     if (LLMuteList::getInstance()->isMuted(source, chat["from"].asString(), LLMute::flagTextChat)
         || LLMuteList::getInstance()->isMuted(owner, LLMute::flagTextChat)) return;
     if (gSavedSettings.getBOOL("UseAntiSpam") && NACLAntiSpamRegistry::instance().checkQueue(
@@ -2216,6 +2215,7 @@ void VSNativeSession::appendChat(LLSD chat, U64 generation)
                 }));
         }
     }
+    const auto receiveCurrent = accountGuard();
     LLChat received;
     received.mFromID = source; received.mOwnerID = owner;
     received.mFromName = chat["from"].asString();
@@ -2240,6 +2240,31 @@ void VSNativeSession::appendChat(LLSD chat, U64 generation)
             return LLSLURL(region->getName(), received.mPosAgent).getLocationString();
         }};
     if (!vs_filter_received_chat(received, text, owner, receive_context)) return;
+    if (!receiveCurrent()) return;
+    const bool emote = FSCommon::is_irc_me_prefix(text);
+    if (!emote && type == CHAT_TYPE_OWNER)
+    {
+        // Same owner-chat order as the reference: filtered receive policy,
+        // actual bridge, command packager, then RLVa command controller.
+        if (FSLSLBridge::instance().lslToViewer(text, source, owner) || !receiveCurrent()) return;
+        if (cmdline_packager(text, source, owner) || !receiveCurrent()) return;
+        const auto result = vs_process_owner_chat(received, text, [this, source, chatObject, receiveCurrent]
+        {
+            if (!receiveCurrent()) return false;
+            if (!chatObject || !chatObject->attachment) return true;
+            if (!chatObject->current || !chatObject->current() || !gViewerWindow || !gViewerWindow->nativeContext()) return false;
+            auto& world = gViewerWindow->nativeContext()->world();
+            const auto object = world.object(source);
+            const auto item = object ? world.objectInventoryItem(*object) : std::optional<LLUUID>{};
+            if (!item) return false;
+            return *item != source || RlvSettings::getEnableTemporaryAttachments();
+        }, receiveCurrent);
+        if (!receiveCurrent() || result == VSOwnerChatResult::Consumed) return;
+    }
+    if (emote) chat["style"] = CHAT_STYLE_IRC;
+    else if (type == CHAT_TYPE_WHISPER) received.mText = LLTrans::getString("whisper") + " ";
+    else if (type == CHAT_TYPE_SHOUT) received.mText = LLTrans::getString("shout") + " ";
+    chat["prefix"] = received.mText;
     chat["text"] = text; chat["from"] = received.mFromName;
     chat["url"] = received.mURL; chat["rlv_names_filtered"] = received.mRlvNamesFiltered;
     chat["position"] = ll_sd_from_vector3(received.mPosAgent);
@@ -2259,7 +2284,8 @@ void VSNativeSession::publishChat(const LLSD& chat, const std::string& text, U64
     if (generation != mGeneration || mPhase != Phase::Connected || !mChat) { ++mExpired; return; }
     LLChat message;
     message.mFromName = chat["from"].asString(); message.mFromID = chat["source"].asUUID();
-    message.mOwnerID = chat["owner"].asUUID(); message.mText = text;
+    message.mOwnerID = chat["owner"].asUUID(); message.mText = chat["prefix"].asString() + text;
+    message.mChatStyle = static_cast<EChatStyle>(chat["style"].asInteger());
     message.mURL = chat["url"].asString();
     message.mRlvNamesFiltered = chat["rlv_names_filtered"].asBoolean();
     message.mSourceType = static_cast<EChatSourceType>(chat["kind"].asInteger());

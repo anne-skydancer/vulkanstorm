@@ -1749,6 +1749,13 @@ std::shared_ptr<const VSResourceBudget::Reservation> VSWorldScene::reserveSpatia
     return mImpl->budgets->terrainBytes.reserve(bytes);
 }
 // Flags/type queries deliberately do not evaluate transforms or copy strings.
+std::optional<LLUUID> VSWorldScene::objectInventoryItem(const ObjectHandle& token) const
+{
+    if (!current(token)) return {};
+    if (token.host != mImpl->host) return mNeighbours.at(token.host)->objectInventoryItem(token);
+    return mImpl->objects.at(token.local).inventoryItem;
+}
+
 std::optional<VSWorldScene::ObjectAdmission> VSWorldScene::objectAdmission(const ObjectHandle& token) const
 {
     if(!current(token))return {};
