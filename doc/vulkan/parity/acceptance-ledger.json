@@ -20172,6 +20172,7 @@
       "evidence": [],
       "remaining_gap": "Review reference callback handleAnisotropicChanged; saving a value is not applying its effect.",
       "native_source_references": [
+        "indra/newview/vsgraphicssettings.h",
         "indra/newview/vsparcelpresentation.cpp",
         "indra/newview/vsr3gltfreplay.cpp",
         "indra/newview/vsterrainassets.cpp",
@@ -20296,6 +20297,7 @@
       "evidence": [],
       "remaining_gap": "Review reference callback handleAvatarLODChanged; saving a value is not applying its effect.",
       "native_source_references": [
+        "indra/newview/vsgraphicssettings.h",
         "indra/newview/vsworldavatar.cpp"
       ],
       "native_integration_hosts": [
@@ -20376,13 +20378,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleAvatarPhysicsLODChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsgraphicssettings.h"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -20516,13 +20520,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleReleaseGLBufferChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsgraphicssettings.h"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -20630,13 +20636,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleReleaseGLBufferChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsgraphicssettings.h"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -20658,13 +20666,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleRenderFarClipChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsgraphicssettings.h"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -20770,13 +20780,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleSetShaderChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsgraphicssettings.h"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -20799,13 +20811,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleReleaseGLBufferChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsgraphicssettings.h"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -21591,6 +21605,7 @@
       "evidence": [],
       "remaining_gap": "Review reference callback handleTerrainLODChanged; saving a value is not applying its effect.",
       "native_source_references": [
+        "indra/newview/vsgraphicssettings.h",
         "indra/newview/vsworldscene.cpp"
       ],
       "native_integration_hosts": [
@@ -21621,6 +21636,7 @@
       "evidence": [],
       "remaining_gap": "Review reference callback handleSetShaderChanged; saving a value is not applying its effect.",
       "native_source_references": [
+        "indra/newview/vsgraphicssettings.h",
         "indra/newview/vsr3terrainreplay.cpp",
         "indra/newview/vsterrainassets.cpp"
       ],
@@ -21652,6 +21668,7 @@
       "evidence": [],
       "remaining_gap": "Review reference callback handleSetShaderChanged; saving a value is not applying its effect.",
       "native_source_references": [
+        "indra/newview/vsgraphicssettings.h",
         "indra/newview/vsr3terrainreplay.cpp",
         "indra/newview/vsterrainassets.cpp"
       ],
@@ -21768,13 +21785,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleRenderTransparentWaterChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsgraphicssettings.h"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -21803,6 +21822,7 @@
       "evidence": [],
       "remaining_gap": "Review reference callback handleTreeLODChanged; saving a value is not applying its effect.",
       "native_source_references": [
+        "indra/newview/vsgraphicssettings.h",
         "indra/newview/vsworldscene.cpp"
       ],
       "native_integration_hosts": [
@@ -21892,6 +21912,7 @@
       "evidence": [],
       "remaining_gap": "Review reference callback handleVolumeLODChanged; saving a value is not applying its effect.",
       "native_source_references": [
+        "indra/newview/vsgraphicssettings.h",
         "indra/newview/vsworldscene.cpp"
       ],
       "native_integration_hosts": [
@@ -22858,6 +22879,7 @@
       "evidence": [],
       "remaining_gap": "Review reference callback handleWLSkyDetailChanged; saving a value is not applying its effect.",
       "native_source_references": [
+        "indra/newview/vsgraphicssettings.h",
         "indra/newview/vsworldscene.cpp"
       ],
       "native_integration_hosts": [
@@ -26355,7 +26377,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -29869,7 +29892,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
