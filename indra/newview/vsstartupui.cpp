@@ -3,6 +3,20 @@
 #include "ao.h"
 #include "llfloaterbuycurrency.h"
 #include "llfloaterbuyland.h"
+#include "llfloatereditextdaycycle.h"
+#include "llpaneleditsky.h"
+#include "llpaneleditwater.h"
+#include "llsettingspicker.h"
+#include "lltrackpicker.h"
+#include "llvirtualtrackball.h"
+#include "llxyvector.h"
+#include "llfloaterland.h"
+#include "llfloaterbanduration.h"
+#include "llfloaterurlentry.h"
+#include "llpanelenvironment.h"
+#include "llpanelexperiencelisteditor.h"
+#include "llmultislider.h"
+#include "llmultisliderctrl.h"
 #include "llfloatersellland.h"
 #include "llfloaterbuycurrencyhtml.h"
 #include "llfloateraddpaymentmethod.h"
@@ -244,7 +258,15 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 // These existing controllers use shared UI, local settings,
                 // account inventory or the already-owned browser/audio service.
                 LLFloaterBuyCurrency::isNativeInternalType(t) ||
-                LLFloaterBuyLand::isNativeInternalType(t) || LLFloaterSellLand::isNativeInternalType(t) || t == typeid(LLFloaterBuyCurrencyHTML) ||
+                LLFloaterBuyLand::isNativeInternalType(t) ||
+                t==typeid(LLFloaterEditExtDayCycle) || t==typeid(LLFloaterSettingsPicker) ||
+                t==typeid(LLFloaterTrackPicker) || t==typeid(LLPanelSettingsWaterMainTab) ||
+                t==typeid(LLPanelSettingsSkyAtmosTab) || t==typeid(LLPanelSettingsSkyCloudTab) ||
+                t==typeid(LLPanelSettingsSkySunMoonTab) || t==typeid(LLPanelSettingsSkyDensityTab) ||
+                t==typeid(LLVirtualTrackball) || t==typeid(LLXYVector) || LLFloaterLand::isNativeInternalType(t) ||
+                t==typeid(LLFloaterBanDuration) || t==typeid(LLFloaterURLEntry) ||
+                t==typeid(LLPanelExperienceListEditor) || t==typeid(LLSettingsDropTarget) ||
+                t==typeid(LLMultiSlider) || t==typeid(LLMultiSliderCtrl) || LLFloaterSellLand::isNativeInternalType(t) || t == typeid(LLFloaterBuyCurrencyHTML) ||
                 t == typeid(LLFloaterAddPaymentMethod) || t == typeid(FSMoneyTracker) || t == typeid(LLFloaterWindowSize) || t == typeid(FSFloaterProtectedFolders) ||
                 t == typeid(FSFloaterStreamTitle) || t == typeid(FSFloaterStreamTitleHistory) ||
                 t == typeid(LLFloaterChatMentionPicker) || t == typeid(LLFloaterEmojiComplete) ||
@@ -359,7 +381,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             return admitted;
         },
         [](std::string_view name) { return
-            name == "buy_land" || name == "sell_land" || name == "buy_currency" || name == "buy_currency_html" || name == "add_payment_method" || name == "money_tracker" ||
+            name == "about_land" || name == "ban_duration" || name == "env_edit_extdaycycle" || name == "buy_land" || name == "sell_land" || name == "buy_currency" || name == "buy_currency_html" || name == "add_payment_method" || name == "money_tracker" ||
             name == "window_size" || name == "fs_protectedfolders" || name == "fs_streamtitle" || name == "fs_streamtitlehistory" ||
             name == "chat_mention_picker" || name == "emoji_complete" || name == "preview_trash" || name == "new_feature_notification" ||
             name == "fs_whitelist_floater" || name == "settings_color" || name == "fs_splash_screen_settings" || name == "fs_volume_controls" ||
@@ -376,7 +398,8 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "change_item_thumbnail" || name == "preview_sound" || name == "preview_script" ||
             name == "script_colors" || name == "upload_image" || name == "upload_sound" ||
             name == "pay_resident" || name == "display_name" || name == "animation_overrider" || name == "camera_presets" || name == "save_camera_preset" || name == "camera" || name == "fs_camera_small" || name == "phototools_camera"; },
-        [](std::string_view name) { return name == "camera_zoom_panel" || name == "experiences_panel" || name == "llpanelexperiencepicker" || name == "experience_log" || name == "llpanelmarketplacelistings" || name == "marketplace_listings_panel" || name == "panel_people" || name == "sidepanel_inventory" || name == "panel_main_inventory" ||
+        [](std::string_view name) { return name == "panel_settings_water" || name == "panel_settings_atmos" || name == "panel_settings_cloud" ||
+                name == "panel_settings_sunmoon" || name == "panel_settings_density" || name == "panel_experience_list_editor" || name == "camera_zoom_panel" || name == "experiences_panel" || name == "llpanelexperiencepicker" || name == "experience_log" || name == "llpanelmarketplacelistings" || name == "marketplace_listings_panel" || name == "panel_people" || name == "sidepanel_inventory" || name == "panel_main_inventory" ||
             name == "panel_marketplace_inbox" || name == "inventory_gallery" || name == "progress_view" || name == "progress_view_mini" || name == "popup_holder" ||
             name == "status" || name == "volumepulldown_floater" || name == "navigation_bar" || name == "toolbar_view" || name == "toolbar view" || name == "native_nearby_chat" || name == "script panel" || name == "sidepanel_item_info" || name == "fs_panel_block_list_sidetray" || name == "panel_im_control_panel" || name == "panel_dir_groups" || name == "contact_sets_panel" ||
             name == "panel_preference" || name == "panel_preference_graphics" || name == "panel_preference_privacy" ||
@@ -398,7 +421,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         },
         [](std::string_view name)
         {
-            return name == "fly" || name == "groundsit" || name == "resync_animations" || name == "derender_animated_objects" || name == "stop_animations" || name == "marketplacelistings" || name == "view" || name == "phototools_view" || name == "mouselook_view" || name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
+            return name == "aboutland" || name == "fly" || name == "groundsit" || name == "resync_animations" || name == "derender_animated_objects" || name == "stop_animations" || name == "marketplacelistings" || name == "view" || name == "phototools_view" || name == "mouselook_view" || name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
                    name == "preferences" || name == "profile" || name == "contact_sets" ||
                    name == "conversation_log" || name == "block_list" || name == "group_titles";
         },
@@ -407,6 +430,8 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             if (name == "RecreateLSLBridge") return true;
             if (LLPanelMainInventory::isNativeCallback(name, parameter) ||
                 LLPanelPeople::isNativeCallback(std::string(name), parameter) || FSChatHistory::isNativeCallback(std::string(name), parameter)) return true;
+            if (name == "DayCycle.Track" || name == "DayCycle.PlayActions") return true;
+            if (name == "Land.BuyPass" || name == "Land.EnableBuyPass") return true;
             if (name == "BuyCurrency" || name == "Land.Buy" || name == "World.EnableBuyLand") return true;
             if (name == "MoneyTrackerList.Action") return parameter.asString() == "copy" || parameter.asString() == "delete";
             if (name == "MoneyTrackerList.Enable") return parameter.asString() == "can_copy" || parameter.asString() == "can_delete";

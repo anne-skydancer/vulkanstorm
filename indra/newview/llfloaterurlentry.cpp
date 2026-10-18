@@ -38,6 +38,7 @@
 #include "lluictrlfactory.h"
 #include "llwindow.h"
 #include "llviewerwindow.h"
+#include "llviewerparcelmgr.h"
 #include "llcorehttputil.h"
 
 static LLFloaterURLEntry* sInstance = NULL;
@@ -105,6 +106,8 @@ void LLFloaterURLEntry::buildURLHistory()
 
 void LLFloaterURLEntry::headerFetchComplete(S32 status, const std::string& mime_type)
 {
+    if(!mAccountCurrent() || !mSelectionCurrent()){closeFloater();return;}
+    const auto weak=getHandle();const auto account=mAccountCurrent;
     LLPanelLandMedia* panel_media = dynamic_cast<LLPanelLandMedia*>(mPanelLandMediaHandle.get());
     if (panel_media)
     {
@@ -113,6 +116,7 @@ void LLFloaterURLEntry::headerFetchComplete(S32 status, const std::string& mime_
         panel_media->setMediaURL(mMediaURLEdit->getValue().asString());
     }
 
+    if(!weak.get() || !account())return;
     getChildView("loading_label")->setVisible( false);
     closeFloater();
 }
@@ -124,6 +128,13 @@ LLHandle<LLFloater> LLFloaterURLEntry::show(LLHandle<LLPanel> parent, const std:
     {
         sInstance = new LLFloaterURLEntry(parent);
     }
+    if(sInstance->mBusy)sInstance->onClose(false);
+    sInstance->mPanelLandMediaHandle=parent;
+    sInstance->mAccountCurrent=vs_native_im_guard();
+    sInstance->mSelectionCurrent=LLViewerParcelMgr::instance().selectionGuard();
+    ++sInstance->mRequest;
+    for(const char*name:{"ok_btn","cancel_btn","media_entry","clear_btn"})sInstance->getChildView(name)->setEnabled(true);
+    sInstance->getChildView("clear_btn")->setEnabled(LLURLHistory::getURLHistory("parcel").size()>0);
     sInstance->openFloater();
     sInstance->addURLToCombobox(media_url);
     return sInstance->getHandle();
@@ -152,6 +163,7 @@ void LLFloaterURLEntry::onBtnOK( void* userdata )
 {
     LLFloaterURLEntry *self =(LLFloaterURLEntry *)userdata;
 
+    if(self->mBusy || !self->mAccountCurrent() || !self->mSelectionCurrent())return;
     std::string media_url   = self->mMediaURLEdit->getValue().asString();
     self->mMediaURLEdit->remove(media_url);
     LLURLHistory::removeURL("parcel", media_url);
@@ -162,7 +174,8 @@ void LLFloaterURLEntry::onBtnOK( void* userdata )
     }
 
     // show progress bar here?
-    getWindow()->incBusyCount();
+    self->mBusy=true;
+    self->getWindow()->incBusyCount();
     self->getChildView("loading_label")->setVisible( true);
 
     // leading whitespace causes problems with the MIME-type detection so strip it
@@ -178,27 +191,38 @@ void LLFloaterURLEntry::onBtnOK( void* userdata )
         scheme = "https";
     }
 
+    // Grey the buttons until we get the header response
+    self->getChildView("ok_btn")->setEnabled(false);
+    self->getChildView("cancel_btn")->setEnabled(false);
+    self->getChildView("media_entry")->setEnabled(false);
+    self->getChildView("clear_btn")->setEnabled(false);
+
     if(!media_url.empty() &&
        (scheme == "http" || scheme == "https"))
     {
+        const auto weak=self->getHandle();const auto account=self->mAccountCurrent,selection=self->mSelectionCurrent;
+        const U64 request=++self->mRequest;
+        auto current=[weak,account,selection,request]
+        {
+            if(!account() || !selection())return false;
+            const auto owner=dynamic_cast<LLFloaterURLEntry*>(weak.get());
+            return owner && owner->mRequest==request;
+        };
         LLCoros::instance().launch("LLFloaterURLEntry::getMediaTypeCoro",
-            boost::bind(&LLFloaterURLEntry::getMediaTypeCoro, media_url, self->getHandle()));
+            [media_url,weak,current]{getMediaTypeCoro(media_url,weak,current);});
     }
     else
     {
         self->headerFetchComplete(0, scheme);
     }
 
-    // Grey the buttons until we get the header response
-    self->getChildView("ok_btn")->setEnabled(false);
-    self->getChildView("cancel_btn")->setEnabled(false);
-    self->getChildView("media_entry")->setEnabled(false);
-    self->getChildView("clear_btn")->setEnabled(false);
+
 }
 
 // static
-void LLFloaterURLEntry::getMediaTypeCoro(std::string url, LLHandle<LLFloater> parentHandle)
+void LLFloaterURLEntry::getMediaTypeCoro(std::string url,LLHandle<LLFloater> parentHandle,std::function<bool()> current)
 {
+    if(!current())return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("getMediaTypeCoro", httpPolicy);
@@ -216,6 +240,7 @@ void LLFloaterURLEntry::getMediaTypeCoro(std::string url, LLHandle<LLFloater> pa
 
     LLSD result = httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts, httpHeaders);
 
+    if(!current())return;
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -274,7 +299,9 @@ void LLFloaterURLEntry::onBtnCancel( void* userdata )
 void LLFloaterURLEntry::onBtnClear( void* userdata )
 {
     LLNotificationsUtil::add( "ConfirmClearMediaUrlList", LLSD(), LLSD(),
-                                    boost::bind(&LLFloaterURLEntry::callback_clear_url_list, (LLFloaterURLEntry*)userdata, _1, _2) );
+        vs_native_im_ui_callback(static_cast<LLFloaterURLEntry*>(userdata),
+            [self=static_cast<LLFloaterURLEntry*>(userdata)](const LLSD&notification,const LLSD&response)
+            {return self->callback_clear_url_list(notification,response);}));
 }
 
 bool LLFloaterURLEntry::callback_clear_url_list(const LLSD& notification, const LLSD& response)
@@ -304,5 +331,20 @@ bool LLFloaterURLEntry::callback_clear_url_list(const LLSD& notification, const 
 void LLFloaterURLEntry::onClose( bool app_quitting )
 {
     // Decrement the cursor
-    getWindow()->decBusyCount();
+    ++mRequest;
+    if(mBusy){mBusy=false;getWindow()->decBusyCount();}
+}
+
+void LLFloaterURLEntry::draw()
+{
+    if(!mAccountCurrent() || !mSelectionCurrent() || !mPanelLandMediaHandle.get()){closeFloater();return;}
+    LLFloater::draw();
+}
+void LLFloaterURLEntry::resetAccount()
+{
+    if(sInstance)
+    {
+        auto* old=sInstance;sInstance=nullptr;
+        old->closeFloater();old->destroy();
+    }
 }

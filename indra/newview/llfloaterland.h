@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "llfloater.h"
+#include <typeinfo>
 #include "llpointer.h"  // LLPointer<>
 //#include "llviewertexturelist.h"
 #include "llsafehandle.h"
@@ -77,6 +78,7 @@ class LLFloaterLand
 {
     friend class LLFloaterReg;
 public:
+    static bool isNativeInternalType(const std::type_info&);
     static void refreshAll();
 
     static LLPanelLandObjects* getCurrentPanelLandObjects();

@@ -426,6 +426,7 @@ private:
     bool                        mShowMoonBeacon;
     S32                         mEditorCounter;
 
+    connection_t                mSkyAutoAdjustConnection;
     connection_t                mParcelCallbackConnection;
     connection_t                mRegionUpdateCallbackConnection;
     connection_t                mRegionChangeCallbackConnection;

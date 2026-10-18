@@ -45,6 +45,7 @@ public:
     bool estateManagerKnown() const { return mEstateManagerKnown; }
     bool canManageEstate() const;
     bool dynamicPathfindingEnabled() const { return mDynamicPathfinding; }
+    bool getAllowEnvironmentOverride() const;
     bool getAllowDamage() const;
     bool getBlockFly() const;
     bool isVoiceEnabled() const;

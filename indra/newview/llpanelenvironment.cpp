@@ -25,6 +25,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#include "vsregioncontext.h"
 
 
 #include "llpanelprofile.h"
@@ -148,6 +150,7 @@ LLPanelEnvironmentInfo::LLPanelEnvironmentInfo():
 
 LLPanelEnvironmentInfo::~LLPanelEnvironmentInfo()
 {
+    if(auto* picker=mSettingsFloater.get())delete picker;
     if (mChangeMonitor.connected())
         mChangeMonitor.disconnect();
     if (mCommitConnection.connected())
@@ -359,7 +362,7 @@ void LLPanelEnvironmentInfo::refresh()
 
 void LLPanelEnvironmentInfo::refreshFromEstate()
 {
-    LLViewerRegion* pRegion = gAgent.getRegion();
+    const auto pRegion=vs_current_region_context();
     if (pRegion)
     {
         bool oldAO = mAllowOverride;
@@ -404,6 +407,22 @@ std::string LLPanelEnvironmentInfo::getNameForTrackIndex(U32 index)
     return invname;
 }
 
+std::function<bool()> LLPanelEnvironmentInfo::requestGuard()
+{
+    const auto weak=getHandle();
+    const auto account=vs_native_im_guard();
+    const auto agent=gAgent.getID(),session=gAgent.getSessionID();
+    const auto region=isRegion() ? vs_current_region_context() : LLViewerParcelMgr::instance().getSelectionRegionContext();
+    const auto parcel=getParcelId();
+    const auto selection=isRegion() ? std::function<bool()>() : LLViewerParcelMgr::instance().selectionGuard();
+    return [weak,account,agent,session,region,parcel,selection]()
+    {
+        auto* view=dynamic_cast<LLPanelEnvironmentInfo*>(weak.get());
+        return view && account() && gAgent.getID()==agent && gAgent.getSessionID()==session &&
+            region && region->current() && (!selection || selection()) && view->getParcelId()==parcel;
+    };
+}
+
 LLFloaterSettingsPicker * LLPanelEnvironmentInfo::getSettingsPicker(bool create)
 {
     LLFloaterSettingsPicker *picker = static_cast<LLFloaterSettingsPicker *>(mSettingsFloater.get());
@@ -416,9 +435,12 @@ LLFloaterSettingsPicker * LLPanelEnvironmentInfo::getSettingsPicker(bool create)
 
         mSettingsFloater = picker->getHandle();
 
-        picker->setCommitCallback([this](LLUICtrl *, const LLSD &data){ onPickerCommitted(data["ItemId"].asUUID()); });
+
     }
 
+    if (picker && create)
+        picker->setCommitCallback(vs_native_im_lifetime_callback(requestGuard(),
+            [this](LLUICtrl *, const LLSD &data){ if(canEdit())onPickerCommitted(data["ItemId"].asUUID()); }));
     return picker;
 }
 
@@ -440,8 +462,12 @@ LLFloaterEditExtDayCycle * LLPanelEnvironmentInfo::getEditFloater(bool create)
         mEditFloater = editor->getHandle();
     }
 
-    if (editor && !mCommitConnection.connected())
-        mCommitConnection = editor->setEditCommitSignal([this](LLSettingsDay::ptr_t pday) { onEditCommitted(pday); });
+    if (editor && create)
+    {
+        mCommitConnection.disconnect();
+        mCommitConnection = editor->setEditCommitSignal(vs_native_im_lifetime_callback(requestGuard(),
+            [this](LLSettingsDay::ptr_t pday) { if(canEdit())onEditCommitted(pday); }));
+    }
 
     return editor;
 }
@@ -763,7 +789,7 @@ void LLPanelEnvironmentInfo::commitDayLenOffsetChanges(bool need_callback)
                                                    (S32)mCurrentEnvironment->mDayLength.value(),
                                                    (S32)mCurrentEnvironment->mDayOffset.value(),
                                                    LLEnvironment::altitudes_vect_t(),
-                                                   [that_h](S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo) { onEnvironmentReceived(that_h, parcel_id, envifo); });
+                                                   [that_h,current=requestGuard()](S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo) { if(current())onEnvironmentReceived(that_h, parcel_id, envifo); });
         }
         else
         {
@@ -845,13 +871,16 @@ void LLPanelEnvironmentInfo::onBtnDefault()
     LLHandle<LLPanel> that_h = getHandle();
     S32 parcel_id = getParcelId();
     LLNotificationsUtil::add("SettingsConfirmReset", LLSD(), LLSD(),
-        [that_h, parcel_id](const LLSD&notif, const LLSD&resp)
+        [that_h, parcel_id,current=requestGuard()](const LLSD&notif, const LLSD&resp)
     {
+        if(!current())return;
+        auto* view=dynamic_cast<LLPanelEnvironmentInfo*>(that_h.get());
+        if(!view || !view->canEdit())return;
         S32 opt = LLNotificationsUtil::getSelectedOption(notif, resp);
         if (opt == 0)
         {
             LLEnvironment::instance().resetParcel(parcel_id,
-                [that_h](S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo) { onEnvironmentReceived(that_h, parcel_id, envifo); });
+                [that_h,current](S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo) { if(current())onEnvironmentReceived(that_h, parcel_id, envifo); });
         }
     });
 }
@@ -917,7 +946,7 @@ void LLPanelEnvironmentInfo::onBtnRstAltitudes()
                                                mCurrentEnvironment ? (S32)mCurrentEnvironment->mDayLength.value() : -1,
                                                mCurrentEnvironment ? (S32)mCurrentEnvironment->mDayOffset.value() : -1,
                                                alts,
-            [that_h](S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo) { onEnvironmentReceived(that_h, parcel_id, envifo); });
+            [that_h,current=requestGuard()](S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo) { if(current())onEnvironmentReceived(that_h, parcel_id, envifo); });
     }
 }
 
@@ -1023,9 +1052,9 @@ void LLPanelEnvironmentInfo::onPickerCommitted(LLUUID item_id, S32 track_num)
             mCurrentEnvironment ? (S32)mCurrentEnvironment->mDayOffset.value() : -1,
             flags,
             LLEnvironment::altitudes_vect_t(),
-            [that_h](S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo)
+            [that_h,current=requestGuard()](S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo)
             {
-                onEnvironmentReceived(that_h, parcel_id, envifo);
+                if(current())onEnvironmentReceived(that_h, parcel_id, envifo);
             }
         );
     }
@@ -1063,7 +1092,7 @@ void LLPanelEnvironmentInfo::onEditCommitted(LLSettingsDay::ptr_t newday)
                                                mCurrentEnvironment ? (S32)mCurrentEnvironment->mDayLength.value() : -1,
                                                mCurrentEnvironment ? (S32)mCurrentEnvironment->mDayOffset.value() : -1,
                                                LLEnvironment::altitudes_vect_t(),
-            [that_h](S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo) { onEnvironmentReceived(that_h, parcel_id, envifo); });
+            [that_h,current=requestGuard()](S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo) { if(current())onEnvironmentReceived(that_h, parcel_id, envifo); });
     }
 }
 
@@ -1124,15 +1153,18 @@ void LLPanelEnvironmentInfo::onEnvironmentChanged(LLEnvironment::EnvSelection_t 
 
 void LLPanelEnvironmentInfo::onPickerAssetDownloaded(LLSettingsBase::ptr_t settings)
 {
-    LLSettingsVODay::buildFromOtherSetting(settings, [this](LLSettingsDay::ptr_t pday)
+    const auto original=mCurrentEnvironment;
+    LLSettingsVODay::buildFromOtherSetting(settings, vs_native_im_lifetime_callback(requestGuard(),
+        [this,original](LLSettingsDay::ptr_t pday)
         {
+            if(!original || mCurrentEnvironment!=original)return;
             if (pday)
             {
                 mCurrentEnvironment->mDayCycle = pday;
                 setDirtyFlag(DIRTY_FLAG_DAYCYCLE);
             }
             refresh();
-        });
+        }));
 }
 
 void LLPanelEnvironmentInfo::onEnvironmentReceived(S32 parcel_id, LLEnvironment::EnvironmentInfo::ptr_t envifo)
@@ -1142,6 +1174,8 @@ void LLPanelEnvironmentInfo::onEnvironmentReceived(S32 parcel_id, LLEnvironment:
         LL_WARNS("ENVPANEL") << "Have environment for parcel " << parcel_id << " expecting " << getParcelId() << ". Discarding." << LL_ENDL;
         return;
     }
+    // A failed HTTP request has no environment; retain the last accepted model.
+    if(!envifo)return;
     mCurrentEnvironment = envifo;
     clearDirtyFlag(DIRTY_FLAG_MASK);
     if (mCurrentEnvironment->mEnvVersion > INVALID_PARCEL_ENVIRONMENT_VERSION)

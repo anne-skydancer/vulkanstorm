@@ -25,6 +25,7 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llsettingspicker.h"
 
@@ -281,20 +282,21 @@ void LLFloaterSettingsPicker::onSelectionChange(const LLFloaterSettingsPicker::i
         LLUUID item_id = mSettingItemID;
         LLHandle<LLFloater> handle = getHandle();
         LLSettingsVOBase::getSettingsAsset(asset_id,
-            [item_id, handle](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat) { LLFloaterSettingsPicker::onAssetLoadedCb(handle, item_id, asset_id, settings, status); });
+            vs_native_im_account_callback([item_id, handle](LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, LLExtStat) { LLFloaterSettingsPicker::onAssetLoadedCb(handle, item_id, asset_id, settings, status); }));
     }
 }
 
 void LLFloaterSettingsPicker::onAssetLoadedCb(LLHandle<LLFloater> handle, LLUUID item_id, LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status)
 {
-    if (handle.isDead() || status)
+    if (handle.isDead() || status || !settings)
     {
         return;
     }
 
     LLFloaterSettingsPicker *picker = static_cast<LLFloaterSettingsPicker *>(handle.get());
 
-    if (picker->mSettingItemID != item_id)
+    const auto* item=gInventory.getItem(item_id);
+    if (picker->mSettingItemID != item_id || !item || item->getAssetUUID()!=asset_id)
     {
         return;
     }

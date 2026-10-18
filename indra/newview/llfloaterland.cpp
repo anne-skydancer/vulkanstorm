@@ -4004,3 +4004,12 @@ S32 LLPanelLandEnvironment::getParcelId()
 
     return parcel->getLocalID();
 }
+
+bool LLFloaterLand::isNativeInternalType(const std::type_info& type)
+{
+    return type==typeid(LLFloaterLand) || type==typeid(LLPanelLandGeneral) ||
+        type==typeid(LLPanelLandObjects) || type==typeid(LLPanelLandOptions) ||
+        type==typeid(LLPanelLandAudio) || type==typeid(LLPanelLandMedia) ||
+        type==typeid(LLPanelLandAccess) || type==typeid(LLPanelLandCovenant) ||
+        type==typeid(LLPanelLandExperiences) || type==typeid(LLPanelLandEnvironment);
+}

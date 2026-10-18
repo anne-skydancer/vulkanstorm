@@ -10,6 +10,11 @@
 #include "llfloatercamera.h"
 #include "llstatusbar.h"
 #include "llfloaterbuyland.h"
+#include "llfloaterland.h"
+#include "llfloatereditextdaycycle.h"
+#include "llfloaterurlentry.h"
+#include "llsettingspicker.h"
+#include "lltrackpicker.h"
 #include "llfloatersellland.h"
 #include "llviewerparcelmgr.h"
 #include "llparcelselection.h"
@@ -202,7 +207,7 @@ bool contains(const LLUUID& id, const std::string& text)
 // Complete deprecated-UDP schema carried by the real LLSD message bridge.
 // The native receiver runs LLViewerParcelMgr::processParcelProperties and the
 // existing LLParcel::unpackMessage, not the reduced diagnostic deliver() path.
-void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars)
+void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars,S32 sequence=0)
 {
     const auto region=vs_current_region_context();
     require(region && region->current(),"Parcel replay has no authenticated current circuit");
@@ -258,7 +263,7 @@ void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars)
     data["RegionDenyTransacted"]=false;
     const S32 columns=S32(region->getWidth()/PARCEL_GRID_STEP_METERS);
     const S32 rows=S32(region->getHeight()/PARCEL_GRID_STEP_METERS);
-    data["RequestResult"]=PARCEL_RESULT_SUCCESS;data["SequenceID"]=0;
+    data["RequestResult"]=PARCEL_RESULT_SUCCESS;data["SequenceID"]=sequence;
     data["LocalID"]=31;data["OwnerID"]=peer;data["Name"]="Replay parcel";
     data["AABBMax"]=ll_sd_from_vector3(LLVector3(region->getWidth(),region->getHeight(),20.f));
     data["Bitmap"]=LLSD::Binary(std::size_t(columns)*rows/8,U8(255));
@@ -273,7 +278,7 @@ void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars)
     body["ParcelEnvironmentBlock"][0]["ParcelEnvironmentVersion"]=0;
     body["ParcelEnvironmentBlock"][0]["RegionAllowEnvironmentOverride"]=true;
     event(owner,"ParcelProperties",body);
-    const auto* parcel=LLViewerParcelMgr::instance().getAgentParcel();
+    const auto* parcel=sequence ? LLViewerParcelMgr::instance().getParcelSelection()->getParcel() : LLViewerParcelMgr::instance().getAgentParcel();
     require(parcel && parcel->getLocalID()==31 && parcel->getRegionID()==region->getRegionID() &&
         parcel->getParcelFlags()==flags && parcel->getHaveNewParcelLimitData() && parcel->getSeeAVs()==seeAvatars,
         "Complete authenticated parcel did not reach the shared LLParcel model");
@@ -298,7 +303,24 @@ struct Replay : public LLAvatarPropertiesObserver
     unsigned step = 0;
     unsigned utilityCheck = 0;
     LLHandle<LLFloater> utilityFloater;
+    unsigned aboutLandStage=0,aboutLandTab=0;
+    std::optional<S32> selectedParcelWire;
+    LLHandle<LLFloater> aboutLandFloater,landURL,dayEditor;
+    std::unique_ptr<LLFloaterSettingsPicker> settingsPicker;
+    std::unique_ptr<LLFloaterTrackPicker> trackPicker;
+    static void parcelRequest(LLMessageSystem* message,void** data)
+    {
+        auto& replay=*reinterpret_cast<Replay*>(data);
+        LLUUID agent,session;S32 sequence;
+        message->getUUID("AgentData","AgentID",agent);
+        message->getUUID("AgentData","SessionID",session);
+        message->getS32("ParcelData","SequenceID",sequence);
+        require(agent==gAgentID && session==gAgentSessionID && sequence!=0,
+            "Actual parcel selection request lost account/request ownership");
+        replay.selectedParcelWire=sequence;
+    }
     unsigned landDialogCheck=0;
+    bool landRetirementPending=false;
     std::unique_ptr<LLParcel> landDialogParcel;
     LLParcelSelectionHandle landDialogSelection;
     LLHandle<LLFloater> landDialog;
@@ -744,6 +766,17 @@ struct Replay : public LLAvatarPropertiesObserver
             {
                 const bool buying=landDialogCheck<2;
                 const char* name=buying?"buy_land":"sell_land";
+                if(landRetirementPending)
+                {
+                    // BuyLand unregisters synchronously in onClose(), then its
+                    // destructor runs in the ordinary next-frame mortician pump.
+                    require(landDialog.isDead(),"Land controller retained observers after deferred retirement");
+                    require(!LLFloaterReg::findInstance(name),"Retired land controller re-entered registry");
+                    landDialogSelection=nullptr;
+                    landDialogParcel.reset();
+                    evidence[buying?"connected_land_buy_policy_cancel":"connected_land_sell_stale_intent_cancel"]=true;
+                    landRetirementPending=false;++landDialogCheck;return false;
+                }
                 if(!(landDialogCheck&1))
                 {
                     const auto region=vs_current_region_context();
@@ -783,13 +816,100 @@ struct Replay : public LLAvatarPropertiesObserver
                     cancel->onCommit();
                     require(!landDialog.get() || !landDialog.get()->getVisible(),"Actual land Cancel failed to close dialog");
                     if(auto* remaining=LLFloaterReg::findInstance(name))LLFloaterReg::destroyInstance(name,remaining->getKey());
-                    require(landDialog.isDead(),"Land controller retained observers after retirement");
-                    landDialogSelection=nullptr;
-                    landDialogParcel.reset();
-                    evidence[buying?"connected_land_buy_policy_cancel":"connected_land_sell_stale_intent_cancel"]=true;
+                    require(!LLFloaterReg::findInstance(name),"Closed land dialog retained its registry entry");
+                    landRetirementPending=true;
+                    return false;
                 }
                 ++landDialogCheck;
                 return false;
+            }
+            if(aboutLandStage<9)
+            {
+                if(aboutLandStage==0)
+                {
+                    gMessageSystem->setHandlerFunc("ParcelPropertiesRequest",parcelRequest,reinterpret_cast<void**>(this));
+                    LLViewerParcelMgr::instance().deselectLand();
+                    auto* floater=LLFloaterReg::showInstance("about_land");
+                    require(floater && floater->getVisible(),"Actual AboutLand controller did not open");
+                    aboutLandFloater=floater->getHandle();++aboutLandStage;return false;
+                }
+                if(aboutLandStage==1)
+                {
+                    if(!selectedParcelWire)return false;
+                    gMessageSystem->setHandlerFunc("ParcelPropertiesRequest",null_message_callback);
+                    publishReplayParcel(owner,PF_ALLOW_FLY|PF_ALLOW_ALL_OBJECT_ENTRY,true,*selectedParcelWire);
+                    require(LLViewerParcelMgr::instance().selectionGuard()(),"Real selected parcel reply failed shared model publication");
+                    ++aboutLandStage;return false;
+                }
+                if(aboutLandStage==2)
+                {
+                    auto* floater=aboutLandFloater.get();require(floater,"AboutLand retired before tab replay");
+                    auto* tabs=floater->getChild<LLTabContainer>("landtab");
+                    if(aboutLandTab<U32(tabs->getTabCount()))
+                    {
+                        require(tabs->selectTab(aboutLandTab++),"Shared AboutLand tab selection failed");
+                        return false; // Present every real shared panel before advancing.
+                    }
+                    require(aboutLandTab>=9,"AboutLand omitted a shared reference panel");
+                    auto* media=floater->getChild<LLPanel>("land_media_panel");
+                    landURL=LLFloaterURLEntry::show(media->getHandle(),"https://example.invalid/replay-cancel");
+                    require(landURL.get(),"Real media URL controller failed construction");
+                    ++aboutLandStage;return false;
+                }
+                if(aboutLandStage==3)
+                {
+                    auto* url=landURL.get();require(url && url->getVisible(),"Real media URL dialog failed presentation");
+                    url->getChild<LLButton>("cancel_btn")->onCommit();
+                    require(!landURL.get() || !landURL.get()->getVisible(),"Real media URL Cancel failed");
+                    settingsPicker=std::make_unique<LLFloaterSettingsPicker>(aboutLandFloater.get(),LLUUID::null);
+                    settingsPicker->openFloater();++aboutLandStage;return false;
+                }
+                if(aboutLandStage==4)
+                {
+                    require(settingsPicker->getVisible(),"Real settings inventory picker failed presentation");
+                    settingsPicker->closeFloater();settingsPicker.reset();
+                    trackPicker=std::make_unique<LLFloaterTrackPicker>(aboutLandFloater.get());
+                    LLSD tracks=LLSD::emptyArray();
+                    for(S32 i=0;i<5;++i){LLSD track;track["id"]=i;track["enabled"]=true;tracks.append(track);}
+                    trackPicker->showPicker(tracks);++aboutLandStage;return false;
+                }
+                if(aboutLandStage==5)
+                {
+                    require(trackPicker->getVisible(),"Real day track picker failed presentation");
+                    trackPicker->closeFloater();trackPicker.reset();
+                    LLSD params;params[LLFloaterEditExtDayCycle::KEY_EDIT_CONTEXT]=LLFloaterEditExtDayCycle::VALUE_CONTEXT_INVENTORY;
+                    auto* editor=LLFloaterReg::showInstance("env_edit_extdaycycle",params);
+                    require(editor,"Real shared day editor failed construction");dayEditor=editor->getHandle();
+                    ++aboutLandStage;return false;
+                }
+                if(aboutLandStage==6)
+                {
+                    auto* editor=dynamic_cast<LLFloaterEditExtDayCycle*>(dayEditor.get());
+                    require(editor && editor->getVisible(),"Real shared day editor failed presentation");
+                    if(!editor->getEditSettings())return false; // Actual loopback default-day asset completes normally.
+                    require(editor->getChild<LLTabContainer>("sky_tabs")->getTabCount()>=3,
+                        "Day editor omitted shared sky subpanels");
+                    editor->closeFloater();const auto key=editor->getKey();
+                    LLFloaterReg::destroyInstance("env_edit_extdaycycle",key);
+                    require(!dayEditor.get() || !dayEditor.get()->getVisible(),"Shared day editor failed to close");
+                    require(!LLFloaterReg::findInstance("env_edit_extdaycycle",key),"Closed day editor remained registered");
+                    ++aboutLandStage;return false;
+                }
+                if(aboutLandStage==7)
+                {
+                    require(dayEditor.isDead(),"Shared day editor retained a stale owner after ordinary deferred retirement");
+                    LLFloaterURLEntry::resetAccount();
+                    auto* floater=aboutLandFloater.get();require(floater,"AboutLand retired unexpectedly");
+                    const auto key=floater->getKey();floater->closeFloater();LLFloaterReg::destroyInstance("about_land",key);
+                    require(!LLFloaterReg::findInstance("about_land",key),"Closed AboutLand remained registered");
+                    ++aboutLandStage;return false;
+                }
+                require(aboutLandFloater.isDead(),"AboutLand retained parcel observers after ordinary deferred retirement");
+                LLViewerParcelMgr::instance().deselectLand();
+                evidence["connected_about_land_all_tabs"]=true;
+                evidence["connected_environment_nested_dialogs"]=true;
+                evidence["connected_land_media_url_cancel"]=true;
+                ++aboutLandStage;return false;
             }
             if (!keyboardChecked)
             {
