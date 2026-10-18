@@ -16,6 +16,43 @@ from run_vulkan_geometry_tests import required_checks
 
 
 class EvidencePackageTest(unittest.TestCase):
+    def test_disappearing_entries_preserve_failure_archive_and_fail_closed(self):
+        import package_vulkan_evidence as evidence
+        for phase in ('collect', 'archive'):
+            for require_complete in (False, True):
+                with self.subTest(phase=phase, require_complete=require_complete), tempfile.TemporaryDirectory() as temp:
+                    root = Path(temp)
+                    folder = root/'evidence'
+                    folder.mkdir()
+                    good = folder/'viewer.log'
+                    gone = folder/'cache.texture'
+                    good.write_bytes(b'actual viewer failure diagnostics')
+                    gone.write_bytes(b'transient cache leaf')
+                    original_stat = Path.lstat
+                    original_collect = evidence.collect
+                    def disappearing_stat(path, *args, **kwargs):
+                        if path.name == gone.name and path.parent.name == 'evidence' and path.exists():
+                            path.unlink()
+                        return original_stat(path, *args, **kwargs)
+                    def disappearing_collect(*args, **kwargs):
+                        result = original_collect(*args, **kwargs)
+                        gone.unlink()
+                        return result
+                    mutation = (patch.object(Path, 'lstat', disappearing_stat) if phase == 'collect'
+                                else patch.object(evidence, 'collect', disappearing_collect))
+                    with mutation, patch.object(evidence, 'completeness', return_value=[]):
+                        with self.assertRaisesRegex(RuntimeError, 'Qualification evidence incomplete'):
+                            package(root, root/'upload', ['evidence'], 'build', require_complete)
+                    manifest = json.loads((root/'upload/manifest.json').read_text(encoding='utf-8'))
+                    self.assertTrue(manifest['errors'])
+                    self.assertIn('evidence/cache.texture', manifest['errors'][0])
+                    self.assertIs(manifest['complete'], False if require_complete else None)
+                    with zipfile.ZipFile(root/'upload/qualification-evidence.zip') as archive:
+                        self.assertIsNone(archive.testzip())
+                        self.assertEqual(archive.namelist(), ['evidence/viewer.log'])
+                        self.assertEqual(archive.read('evidence/viewer.log'), good.read_bytes())
+                    self.assertEqual(set(manifest['files']), {'evidence/viewer.log'})
+
     def test_r3_matrix_rejects_missing_cases_and_unsafe_paths(self):
         self.assertTrue(texture_cache_completeness({},'revision','digest'))
         with tempfile.TemporaryDirectory() as temporary:
@@ -118,8 +155,11 @@ class EvidencePackageTest(unittest.TestCase):
                 if path.resolve() == readback.resolve():
                     raise PermissionError('unreadable required image')
                 return original(path, *args, **kwargs)
-            with patch.object(Path, 'open', unreadable_pixels), self.assertRaises(PermissionError):
+            with patch.object(Path, 'open', unreadable_pixels), self.assertRaisesRegex(RuntimeError, 'unreadable required image'):
                 package(root, root/'upload', ['.ci/replay'], 'build', False)
+            manifest = json.loads((root/'upload/manifest.json').read_text(encoding='utf-8'))
+            self.assertTrue(manifest['errors'])
+            self.assertNotIn('.ci/replay/actual.rgba', manifest['files'])
 
     def test_special_entries_are_named_and_never_read(self):
         with tempfile.TemporaryDirectory() as temp:

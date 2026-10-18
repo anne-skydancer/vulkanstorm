@@ -113,6 +113,14 @@ class CacheCaseSteps(unittest.TestCase):
     def test_each_workflow_case_retains_bounds_and_final_archive_validation(self):
         import yaml
         workflow=yaml.safe_load((cache.ROOT/'.github/workflows/software_vulkan.yml').read_text(encoding='utf-8'))
+        source_steps=workflow['jobs']['source-evidence']['steps']
+        dependency=next(line for line in (cache.ROOT/'scripts/ci_build_requirements.txt').read_text(encoding='utf-8').splitlines()
+                        if line.startswith('PyYAML=='))
+        installer=next(index for index,step in enumerate(source_steps)
+                       if dependency in step.get('run','') and 'pip install' in step['run'])
+        regression=next(index for index,step in enumerate(source_steps)
+                        if 'test_vulkan_texture_cache_case_steps.py' in step.get('run',''))
+        self.assertLess(installer,regression)
         steps=workflow['jobs']['graphics']['steps']
         cases=[step for step in steps if step.get('name','').startswith('Production R3 texture cache ')]
         self.assertEqual(len(cases),len(cache.CASES))

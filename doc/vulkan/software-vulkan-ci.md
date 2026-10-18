@@ -450,3 +450,14 @@ This avoids an aggregate-step scheduling error: run 39073748457 completed eight
 Windows cases but exhausted its original single 15-minute step while the last
 case was running. The correction changes CI orchestration, not viewer behavior,
 image oracles or per-viewer time limits.
+
+Source checks install the same pinned `PyYAML==6.0.2` parser recorded in the
+build requirements before inspecting the workflow. The test verifies that
+ordering and the matching pin; a preinstalled workstation module is not an
+implicit CI dependency.
+
+If an interrupted viewer removes a cache entry while evidence is being
+collected or opened, packaging records the exact missing path as an error and
+still writes the remaining regular diagnostics and checksum manifest. The
+packaging step fails, and a strict manifest remains `complete: false`. A partial
+failure bundle is never promoted to successful qualification.
