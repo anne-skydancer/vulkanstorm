@@ -3972,11 +3972,16 @@ std::optional<VSWorldScene::Pick> VSWorldScene::pick(const LLVector3& start, con
                     LLVector3 positionToVolume(const LLVector3& point)const
                     {
                         auto value=(point-raw.position)*~raw.rotation;
-                        if(!raw.volumeGlobal)value.scaleVec(LLVector3(1/raw.scale.mV[0],1/raw.scale.mV[1],1/raw.scale.mV[2]));return value;
+                        if(!raw.volumeGlobal)
+                            value.scaleVec(LLVector3(1/raw.scale.mV[0],1/raw.scale.mV[1],1/raw.scale.mV[2]));
+                        return value;
                     }
                     LLVector3 directionToVolume(const LLVector3& direction)const
                     {
-                        auto value=direction*~raw.rotation;if(!raw.volumeGlobal)value.scaleVec(raw.scale);return value;
+                        auto value=direction*~raw.rotation;
+                        if(!raw.volumeGlobal)
+                            value.scaleVec(raw.scale);
+                        return value;
                     }
                     const LLMatrix4* textureMatrix()const{return face.pickTextureMatrix?&*face.pickTextureMatrix:nullptr;}
                 };
