@@ -11,6 +11,9 @@
 #include "llstatusbar.h"
 #include "llfloaterbuyland.h"
 #include "vsparcelpresentation.h"
+#include "vsenvironmentreplay.h"
+#include "llcolorswatch.h"
+#include "llfloaterfixedenvironment.h"
 #include "llsliderctrl.h"
 #include "llfloaterland.h"
 #include "llfloatereditextdaycycle.h"
@@ -312,6 +315,8 @@ struct Replay : public LLAvatarPropertiesObserver
     unsigned utilityCheck = 0;
     LLHandle<LLFloater> utilityFloater;
     unsigned aboutLandStage=0,aboutLandTab=0,environmentEditStage=0;
+    unsigned myEnvironmentStage=0,environmentTab=0;
+    LLHandle<LLFloater> myEnvironmentFloater,fixedEnvironmentFloater;
     struct ParcelWire {S32 sequence;bool snap;F32 west,south,east,north;};
     std::optional<ParcelWire> selectedParcelWire;
     LLParcelSelectionHandle aboutLandSelection;
@@ -990,6 +995,117 @@ struct Replay : public LLAvatarPropertiesObserver
                 evidence["connected_land_media_url_cancel"]=true;
                 ++aboutLandStage;return false;
             }
+            if(myEnvironmentStage<11)
+            {
+                if(myEnvironmentStage==0)
+                {
+                    auto* floater=LLFloaterReg::showInstance("my_environments");require(floater,"My Environments failed real construction");
+                    myEnvironmentFloater=floater->getHandle();++myEnvironmentStage;return false;
+                }
+                if(myEnvironmentStage==1)
+                {
+                    auto* floater=myEnvironmentFloater.get();require(floater,"My Environments lost actual view owner");
+                    auto* inventory=floater->getChild<LLInventoryPanel>("pnl_settings");
+                    const auto mask=inventory->getFilter().getFilterSettingsTypes();
+                    auto* days=floater->getChild<LLCheckBoxCtrl>("chk_days");
+                    clickCheckbox(days);require(inventory->getFilter().getFilterSettingsTypes()!=mask,"Day filter did not reach real inventory controller");
+                    clickCheckbox(days);require(inventory->getFilter().getFilterSettingsTypes()==mask,"Day filter did not restore real inventory controller");
+                    const auto key=floater->getKey();floater->closeFloater();LLFloaterReg::destroyInstance("my_environments",key);
+                    ++myEnvironmentStage;return false;
+                }
+                if(myEnvironmentStage==2)
+                {
+                    require(myEnvironmentFloater.isDead(),"My Environments retained retired inventory observers");
+                    auto* editor=LLFloaterReg::showInstance("env_fixed_environmentent_sky");require(editor,"Fixed sky failed real construction");
+                    fixedEnvironmentFloater=editor->getHandle();++myEnvironmentStage;return false;
+                }
+                if(myEnvironmentStage==8)
+                {
+                    require(fixedEnvironmentFloater.isDead(),"Fixed sky retained callbacks after deferred retirement");
+                    auto* editor=LLFloaterReg::showInstance("env_fixed_environmentent_water");require(editor,"Actual fixed water editor failed construction");
+                    fixedEnvironmentFloater=editor->getHandle();++myEnvironmentStage;return false;
+                }
+                if(myEnvironmentStage==10)
+                {
+                require(fixedEnvironmentFloater.isDead(),"Fixed water retained callbacks after deferred retirement");
+                evidence["connected_my_environments_filters"]=true;evidence["connected_fixed_environment_editors"]=true;
+                evidence["connected_environment_gpu_consumption"]=true;
+                ++myEnvironmentStage;return false;
+                }
+                auto* floater=fixedEnvironmentFloater.get();require(floater,"Actual fixed sky editor retired before preview");
+                auto* tabs=floater->getChild<LLTabContainer>("tab_settings");
+                if(myEnvironmentStage==3)
+                {
+                    require(tabs->getTabCount()==3,"Fixed sky omitted real atmosphere/cloud/sun-moon tabs");
+                    if(environmentTab<3){require(tabs->selectTab(environmentTab++),"Fixed sky rejected actual tab selection");return false;}
+                    require(tabs->selectTab(2),"Fixed sky sun/moon tab unavailable");
+                    auto* panel=tabs->getCurrentPanel();
+                    for(const auto& setting:std::array<std::pair<const char*,F32>,2>{{{"sun_elevation",45.f},{"moon_elevation",-45.f}}})
+                    {
+                        auto* control=panel->getChild<LLSliderCtrl>(setting.first);require(control->isInEnabledChain(),"Ordinary permission disabled actual sky slider");
+                        control->setValue(setting.second);control->onCommit();
+                    }
+                    ++myEnvironmentStage;return false;
+                }
+                if(myEnvironmentStage==4)
+                {
+                    const auto sky=LLEnvironment::instance().getCurrentSky();
+                    if(!sky->getIsSunUp() || sky->getIsMoonUp())return false;
+                    require(LLEnvironment::instance().getSelectedEnvironment()==LLEnvironment::ENV_EDIT,"Real fixed editor did not select ENV_EDIT");
+                    if(!vs_qualify_environment_pixels(*gViewerWindow->nativeContext(),"day",evidence))return false;
+                    auto* panel=tabs->getCurrentPanel();
+                    for(const auto& setting:std::array<std::pair<const char*,F32>,2>{{{"sun_elevation",-45.f},{"moon_elevation",45.f}}})
+                    {auto* control=panel->getChild<LLSliderCtrl>(setting.first);control->setValue(setting.second);control->onCommit();}
+                    ++myEnvironmentStage;return false;
+                }
+                if(myEnvironmentStage==5)
+                {
+                    const auto sky=LLEnvironment::instance().getCurrentSky();
+                    if(sky->getIsSunUp() || !sky->getIsMoonUp())return false;
+                    if(!vs_qualify_environment_pixels(*gViewerWindow->nativeContext(),"night",evidence))return false;
+                    auto* sunMoon=tabs->getCurrentPanel();
+                    for(const auto& setting:std::array<std::pair<const char*,F32>,2>{{{"sun_elevation",45.f},{"moon_elevation",-45.f}}})
+                    {auto* control=sunMoon->getChild<LLSliderCtrl>(setting.first);control->setValue(setting.second);control->onCommit();}
+                    require(tabs->selectTab(0),"Fixed sky atmosphere tab unavailable");
+                    auto* horizon=tabs->getCurrentPanel()->getChild<LLColorSwatchCtrl>("blue_horizon");
+                    require(horizon->isInEnabledChain(),"Actual blue horizon control lost ordinary edit permission");
+                    horizon->set(LLColor4(.9f,.01f,.01f,1));horizon->onCommit();
+                    ++myEnvironmentStage;return false;
+                }
+                if(myEnvironmentStage==6)
+                {
+                    const auto sky=LLEnvironment::instance().getCurrentSky();
+                    if(!sky->getIsSunUp() || sky->getIsMoonUp())return false;
+                    if(!vs_qualify_environment_pixels(*gViewerWindow->nativeContext(),"edit",evidence))return false;
+                    require(evidence["environment_pixels"]["day"]["sun_up"].asBoolean() &&
+                        !evidence["environment_pixels"]["night"]["sun_up"].asBoolean(),"Actual GPU captures lost day/night current-setting identity");
+                    require(evidence["environment_pixels"]["night"]["blue_horizon"]!=evidence["environment_pixels"]["edit"]["blue_horizon"],
+                        "Actual color control did not reach current sky publication");
+                    floater->getChild<LLButton>("btn_cancel")->onCommit();++myEnvironmentStage;return false;
+                }
+                if(myEnvironmentStage==7)
+                {
+                    auto* toast=dynamic_cast<LLNotificationsUI::LLToast*>(gFocusMgr.getMouseCapture());
+                    const auto notice=toast?toast->getNotification():LLNotificationPtr();
+                    require(notice && notice->getName()=="SettingsConfirmLoss","Dirty fixed sky omitted real loss confirmation");
+                    auto* panel=dynamic_cast<LLToastAlertPanel*>(toast->getPanel());
+                    auto* yes=panel?panel->findChild<LLButton>("OK_okcancelignore"):nullptr;
+                    require(yes && yes->getEnabled(),"Settings loss confirmation omitted actual Yes action");
+                    yes->onCommit();require(notice->isRespondedTo(),"Actual settings loss Yes failed to respond");
+                    require(!floater->getVisible(),"Actual Cancel/Yes failed to close fixed sky");
+                    const auto key=floater->getKey();LLFloaterReg::destroyInstance("env_fixed_environmentent_sky",key);
+                    ++myEnvironmentStage;return false;
+                }
+                if(myEnvironmentStage==9)
+                {
+                    require(tabs->getTabCount()==1,"Fixed water omitted real shared settings panel");
+                    const auto key=floater->getKey();floater->getChild<LLButton>("btn_cancel")->onCommit();
+                    require(!floater->getVisible(),"Actual unchanged water Cancel did not close editor");
+                    LLFloaterReg::destroyInstance("env_fixed_environmentent_water",key);++myEnvironmentStage;return false;
+                }
+
+            }
+
             if (!keyboardChecked)
             {
                 require(gKeyboard != nullptr, "Actual keyboard owner is missing");

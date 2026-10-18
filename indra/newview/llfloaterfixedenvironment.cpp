@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llfloaterfixedenvironment.h"
 
@@ -113,6 +114,7 @@ bool LLFloaterFixedEnvironment::postBuild()
 
 void LLFloaterFixedEnvironment::onOpen(const LLSD& key)
 {
+    ++mCallbackEpoch;
     LLUUID invid;
 
     if (key.has(KEY_INVENTORY_ID))
@@ -132,6 +134,7 @@ void LLFloaterFixedEnvironment::onOpen(const LLSD& key)
 
 void LLFloaterFixedEnvironment::onClose(bool app_quitting)
 {
+    ++mCallbackEpoch;
     doCloseInventoryFloater(app_quitting);
 
     if (!app_quitting)
@@ -178,6 +181,7 @@ void LLFloaterFixedEnvironment::refresh()
 
 void LLFloaterFixedEnvironment::setEditSettingsAndUpdate(const LLSettingsBase::ptr_t &settings)
 {
+    ++mCallbackEpoch;
     mSettings = settings; // shouldn't this do buildDeepCloneAndUncompress() ?
     updateEditEnvironment();
     syncronizeTabs();
@@ -220,9 +224,10 @@ LLFloaterSettingsPicker * LLFloaterFixedEnvironment::getSettingsPicker()
 
         mInventoryFloater = picker->getHandle();
 
-        picker->setCommitCallback([this](LLUICtrl *, const LLSD &data){ onPickerCommitSetting(data["ItemId"].asUUID() /*data["Track"]*/); });
     }
-
+    // Rebind each explicit picker opening to the current editor/inventory intent.
+    picker->setCommitCallback(vs_native_im_lifetime_callback(requestGuard(),
+        [this](LLUICtrl *, const LLSD &data){ onPickerCommitSetting(data["ItemId"].asUUID()); }));
     return picker;
 }
 
@@ -314,7 +319,8 @@ void LLFloaterFixedEnvironment::onButtonApply(LLUICtrl *ctrl, const LLSD &data)
     {
         LLSD args;
         args["DESC"] = mSettings->getName();
-        LLNotificationsUtil::add("SaveSettingAs", args, LLSD(), boost::bind(&LLFloaterFixedEnvironment::onSaveAsCommit, this, _1, _2, setting_clone));
+        LLNotificationsUtil::add("SaveSettingAs", args, LLSD(), vs_native_im_lifetime_callback(requestGuard(),[this,setting_clone](const LLSD& notification,const LLSD& response)
+            {return onSaveAsCommit(notification,response,setting_clone);}));
     }
     else if ((ctrl_action == ACTION_APPLY_LOCAL) ||
         (ctrl_action == ACTION_APPLY_PARCEL) ||
@@ -455,7 +461,7 @@ void LLFloaterFixedEnvironmentWater::onOpen(const LLSD& key)
 
 void LLFloaterFixedEnvironmentWater::doImportFromDisk()
 {   // Load a a legacy Windlight XML from disk.
-    LLFilePickerReplyThread::startPicker(boost::bind(&LLFloaterFixedEnvironmentWater::loadWaterSettingFromFile, this, _1), LLFilePicker::FFLOAD_XML, false);
+    LLFilePickerReplyThread::startPicker(vs_native_im_lifetime_callback(requestGuard(),[this](const std::vector<std::string>& files,auto&&...){loadWaterSettingFromFile(files);}), LLFilePicker::FFLOAD_XML, false);
 }
 
 void LLFloaterFixedEnvironmentWater::loadWaterSettingFromFile(const std::vector<std::string>& filenames)
@@ -550,7 +556,7 @@ void LLFloaterFixedEnvironmentSky::onClose(bool app_quitting)
 
 void LLFloaterFixedEnvironmentSky::doImportFromDisk()
 {   // Load a a legacy Windlight XML from disk.
-    LLFilePickerReplyThread::startPicker(boost::bind(&LLFloaterFixedEnvironmentSky::loadSkySettingFromFile, this, _1), LLFilePicker::FFLOAD_XML, false);
+    LLFilePickerReplyThread::startPicker(vs_native_im_lifetime_callback(requestGuard(),[this](const std::vector<std::string>& files,auto&&...){loadSkySettingFromFile(files);}), LLFilePicker::FFLOAD_XML, false);
 }
 
 void LLFloaterFixedEnvironmentSky::loadSkySettingFromFile(const std::vector<std::string>& filenames)

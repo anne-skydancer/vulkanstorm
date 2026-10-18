@@ -54,7 +54,7 @@ public:
     virtual void            onOpen(const LLSD& key)     override;
     virtual void            onClose(bool app_quitting)  override;
 
-    void                    setEditSettings(const LLSettingsBase::ptr_t &settings)  { mSettings = settings; clearDirtyFlag(); syncronizeTabs(); refresh(); }
+    void                    setEditSettings(const LLSettingsBase::ptr_t &settings)  { ++mCallbackEpoch; mSettings = settings; clearDirtyFlag(); syncronizeTabs(); refresh(); }
     virtual LLSettingsBase::ptr_t getEditSettings()   const override                { return mSettings; }
 
 protected:

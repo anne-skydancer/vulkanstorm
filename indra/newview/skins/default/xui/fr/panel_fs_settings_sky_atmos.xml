@@ -17,8 +17,8 @@
 			Densité du bleu :
 		</text>
 	</panel>
-	<panel name="P_Atmosphere_Header">
-		<text name="T_Atmosphere_Header" value="Réglages de l'atmosphère"/>
+	<panel name="P_Atmosphere_Controls_Header">
+		<text name="T_Atmosphere_Controls_Header" value="Réglages de l'atmosphère"/>
 	</panel>
 	<panel name="P_Atmosphere_OtherSettings">
 		<text name="haze_horizon_label">

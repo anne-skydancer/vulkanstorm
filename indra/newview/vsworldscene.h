@@ -137,6 +137,7 @@ public:
     LLSD evidence() const;
 #if VS_VULKAN_DIAGNOSTICS
     LLSD terrainStatus() const;
+    bool skyCurrent() const;
 #endif
 private:
     void publishGroundFrame(const LLVector3& eye);

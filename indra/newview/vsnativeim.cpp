@@ -132,7 +132,14 @@ void vs_native_im_reset()
         LLNotificationsUI::LLChannelManager::instance().resetNativeAccount();
     LLFloaterURLEntry::resetAccount();
     LLFloaterBuyCurrency::resetAccountRequests();
-    for (const char* name : {"about_land", "ban_duration", "env_edit_extdaycycle", "buy_land", "sell_land", "buy_currency", "buy_currency_html", "add_payment_method", "money_tracker"})
+    // Shared editor onClose invalidates pending file/asset/picker requests and
+    // restores saved preview controls while the actual environment still exists.
+    for(const char* name:{"env_fixed_environmentent_sky","env_fixed_environmentent_water","env_edit_extdaycycle"})
+    {
+        if(auto* view=LLFloaterReg::findInstance(name))view->closeFloater(true);
+        LLFloaterReg::destroyInstance(name);
+    }
+    for (const char* name : {"about_land", "ban_duration", "my_environments", "buy_land", "sell_land", "buy_currency", "buy_currency_html", "add_payment_method", "money_tracker"})
         LLFloaterReg::destroyInstance(name);
     LLUploadDialog::modalUploadFinished();
     sOfflineGeneration = 0;

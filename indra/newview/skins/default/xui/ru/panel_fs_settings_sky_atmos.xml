@@ -11,8 +11,8 @@
 		<text name="blue_horizon_label">Горизонт:</text>
 		<text name="blue_density_label">Плотность синего:</text>
 	</panel>
-	<panel name="P_Atmosphere_Header">
-		<text name="T_Atmosphere_Header" value="Атмосферные условия"/>
+	<panel name="P_Atmosphere_Controls_Header">
+		<text name="T_Atmosphere_Controls_Header" value="Атмосферные условия"/>
 	</panel>
 	<panel name="P_Atmosphere_OtherSettings">
 		<text name="haze_horizon_label">Дымка горизонт:</text>
