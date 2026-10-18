@@ -391,17 +391,12 @@ bool LLHUDIcon::scriptIconsNearby()
 }
 // </FS:Ansariel> Mark script error icons
 
+#if VS_NATIVE_VULKAN
 void LLHUDIcon::setNativeSource(NativeSourceQuery source,const VSUIRenderer::Image& image,std::shared_ptr<const void> residency,std::function<void()> retire,std::function<VSUIRenderer::Image()> imageQuery)
 {
     mNativeImageQuery=std::move(imageQuery);
     mNativeResidency=std::move(residency);mNativeRetire=std::move(retire);
     mNativeSource=std::move(source);mNativeImage=image;mNativeQuadKnown=false;
-}
-LLUUID LLHUDIcon::getSourceID() const
-{
-    if(mDead)return LLUUID::null;
-    if(mNativeSource){const auto source=mNativeSource();return source?source->id:LLUUID::null;}
-    return mSourceObject?mSourceObject->getID():LLUUID::null;
 }
 bool LLHUDIcon::nativeQuad(std::array<LLVector3,4>& quad,F32& alpha)
 {
@@ -516,4 +511,13 @@ std::optional<VSWorldRenderer::Packet> LLHUDIcon::nativePacket(const LLVector3d&
     packet.distanceSquared=mDistance*mDistance;
     std::copy_n(source->id.mData,16,packet.objectIdentity.begin());
     return packet;
+}
+
+#endif // VS_NATIVE_VULKAN
+
+LLUUID LLHUDIcon::getSourceID() const
+{
+    if(mDead)return LLUUID::null;
+    if(mNativeSource){const auto source=mNativeSource();return source?source->id:LLUUID::null;}
+    return mSourceObject?mSourceObject->getID():LLUUID::null;
 }
