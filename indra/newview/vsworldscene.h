@@ -82,6 +82,9 @@ public:
         U32 width=0,height=0;
         std::function<bool()> current;
         std::function<std::optional<float>(float,float)> sample;
+        // Reference LLSurface initial grid: missing vertices are individually
+        // zero until received, without discarding other received corners.
+        std::function<std::optional<float>(float,float)> referenceHeight;
     };
     std::optional<U64> terrainRevision(const LLHost&) const;
     std::optional<TerrainField> terrainField(const LLHost&) const;

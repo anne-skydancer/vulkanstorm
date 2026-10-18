@@ -105,6 +105,7 @@ jobs:
       - run: python scripts/tests/test_native_parcel_cpu.py
       - run: python scripts/tests/test_native_parcel_parser.py
       - run: python scripts/tests/test_native_parcel_request_echo.py
+      - run: python scripts/tests/test_native_land_widgets.py
       - run: python scripts/tests/test_native_land_lifecycle.py
       - run: python scripts/tests/test_native_land_retirement.py
       - run: python scripts/tests/test_native_parcel_geometry.py

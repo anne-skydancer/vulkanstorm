@@ -1328,21 +1328,26 @@ std::optional<VSWorldScene::TerrainField> VSWorldScene::terrainField(const LLHos
         const auto owner=weak.lock();
         return owner && !owner->retired && owner->incarnation==incarnation && owner->terrainRevision==revision;
     };
-    result.sample=[weak,revision,incarnation](float x,float y)->std::optional<float>
+    const auto sampler=[weak,revision,incarnation](bool initialGrid)
     {
-        const auto owner=weak.lock();
-        if (!owner || owner->retired || owner->incarnation!=incarnation || owner->terrainRevision!=revision ||
-            !std::isfinite(x) || !std::isfinite(y) || x<0 || y<0 || x>=owner->width || y>=owner->regionHeight) return {};
-        bool received=true;
-        const float value=VSParcelGeometry::terrainHeight(x,y,1.f,S32(owner->width),S32(owner->regionHeight),
-            [&received,&owner](S32 column,S32 row)
-            {
-                const float height=owner->heightLocal(column,row,std::numeric_limits<float>::quiet_NaN());
-                received=received && std::isfinite(height);
-                return height;
-            });
-        return received && std::isfinite(value)?std::optional<float>(value):std::nullopt;
+        return [weak,revision,incarnation,initialGrid](float x,float y)->std::optional<float>
+        {
+            const auto owner=weak.lock();
+            if (!owner || owner->retired || owner->incarnation!=incarnation || owner->terrainRevision!=revision ||
+                !std::isfinite(x) || !std::isfinite(y) || x<0 || y<0 || x>=owner->width || y>=owner->regionHeight) return {};
+            bool received=true;
+            const float value=VSParcelGeometry::terrainHeight(x,y,1.f,S32(owner->width),S32(owner->regionHeight),
+                [&received,&owner,initialGrid](S32 column,S32 row)
+                {
+                    const float height=owner->heightLocal(column,row,std::numeric_limits<float>::quiet_NaN());
+                    received=received && std::isfinite(height);
+                    return initialGrid && !std::isfinite(height)?0.f:height;
+                });
+            return (initialGrid || received) && std::isfinite(value)?std::optional<float>(value):std::nullopt;
+        };
     };
+    result.sample=sampler(false);
+    result.referenceHeight=sampler(true);
     return result;
 }
 

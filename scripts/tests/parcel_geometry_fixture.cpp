@@ -6,7 +6,8 @@ using F32=float;using S32=int;using U8=unsigned char;
 constexpr int VX=0,VY=1,WEST_MASK=1,SOUTH_MASK=2,EAST_MASK=4,NORTH_MASK=8;
 template<class T>T llmax(T a,T b){return std::max(a,b);}int llfloor(float a){return int(std::floor(a));}
 struct LLVector3{float mV[3];LLVector3(float x,float y,float z):mV{x,y,z}{}};
-float sample(int x,int y){return .02f*x*x+.03f*y*y+.1f*x*y;}
+int receivedLimit=1000000;
+float sample(int x,int y){return x>=receivedLimit?0.f:.02f*x*x+.03f*y*y+.1f*x*y;}
 struct LLSurface{float mMetersPerGrid=1,mMetersPerEdge=256;unsigned mGridsPerEdge=257;float getZ(int x,int y)const{return sample(x,y);}float resolveHeightRegion(float,float)const;};
 TERRAIN_REFERENCE
 
@@ -47,6 +48,12 @@ int main(){
   for(int i=0;i<6;++i){auto a=gGL.vertices[i],b=vertices[i];assert(a.x==b.x+origin && a.y==b.y-origin && a.z==b.z && a.textured==b.textured);if(a.textured)assert(a.u==b.u && a.v==b.v);}
  }
  LLSurface surface;
+ // Execute the actual reference interpolator with an unreceived neighboring
+ // patch: each unknown corner is zero, not the entire partly received cell.
+ receivedLimit=16;
+ for(float x:{15.f,15.1f,15.5f,15.9f,16.f})for(float y:{0.f,.1f,.5f,.9f,1.f})
+   assert(surface.resolveHeightRegion(x,y)==VSParcelGeometry::terrainHeight(x,y,1,256,256,sample));
+ receivedLimit=1000000;
  for(float spacing:{.5f,1.f,2.f}){
   surface.mMetersPerGrid=spacing;surface.mMetersPerEdge=256*spacing;
   for(float x:{-1.f,0.f,.1f,.5f,.9f,1.f,1.1f,17.8f,254.99f,255.f,255.99f,256.f,257.f,std::numeric_limits<float>::quiet_NaN()})
