@@ -26,6 +26,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include <cerrno>
+#include <cstdlib>
 #include "vsregionlimits.h"
 #include "vsestatecovenant.h"
 #include "llfloaterregioninfo.h"
@@ -1417,7 +1419,7 @@ void LLPanelRegionDebugInfo::onClickChooseAvatar()
 {
     LLView * button = findChild<LLButton>("choose_avatar_btn");
     LLFloater* parent_floater = gFloaterView->getParentFloater(this);
-    LLFloater * child_floater = LLFloaterAvatarPicker::show(boost::bind(&LLPanelRegionDebugInfo::callbackAvatarID, this, _1, _2),
+    LLFloater * child_floater = LLFloaterAvatarPicker::show(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelRegionDebugInfo::callbackAvatarID, this, _1, _2)),
                                                                                     false, true, false, parent_floater->getName(), button);
     if (child_floater)
     {
@@ -2414,7 +2416,7 @@ void LLPanelEstateInfo::onClickKickUser()
     // in order to set up floater dependency
     LLView * button = findChild<LLButton>("kick_user_from_estate_btn");
     LLFloater* parent_floater = gFloaterView->getParentFloater(this);
-    LLFloater* child_floater = LLFloaterAvatarPicker::show(boost::bind(&LLPanelEstateInfo::onKickUserCommit, this, _1),
+    LLFloater* child_floater = LLFloaterAvatarPicker::show(vs_native_im_lifetime_callback(region_info_guard(this,false,true),boost::bind(&LLPanelEstateInfo::onKickUserCommit, this, _1)),
                                                                         false, true, false, parent_floater->getName(), button);
     if (child_floater)
     {
@@ -3224,6 +3226,8 @@ bool LLDispatchSetEstateAccess::operator()(
 LLSD LLDispatchSetEstateExperience::getIDs( sparam_t::const_iterator it, sparam_t::const_iterator end, S32 count )
 {
     LLSD idList = LLSD::emptyArray();
+    if(count<0 || std::size_t(count)>std::size_t(end-it))return idList;
+    for(auto check=it;check<it+count;++check)if(check->size()<UUID_BYTES)return idList;
     LLUUID id;
     while (count-- > 0 && it < end)
     {
@@ -3260,11 +3264,21 @@ bool LLDispatchSetEstateExperience::operator()(
     ++it; // U32 estate_id = strtol((*it).c_str(), NULL, 10);
     ++it; // U32 send_to_agent_only = strtoul((*(++it)).c_str(), NULL, 10);
 
-    // Read 3 parameters
-    LLUUID id;
-    S32 num_blocked = strtol((*(it++)).c_str(), NULL, 10);
-    S32 num_trusted = strtol((*(it++)).c_str(), NULL, 10);
-    S32 num_allowed = strtol((*(it++)).c_str(), NULL, 10);
+    // Validate all three counts and binary UUID spans before forming offsets
+    // or publishing a partial list to the actual shared controller.
+    auto count=[&](const std::string& text,S32& result)
+    {
+        char* end=nullptr;errno=0;
+        const long value=std::strtol(text.c_str(),&end,10);
+        if(errno || end==text.c_str() || *end || value<0 ||
+            static_cast<unsigned long>(value)>strings.size()-MIN_SIZE)return false;
+        result=static_cast<S32>(value);return true;
+    };
+    S32 num_blocked,num_trusted,num_allowed;
+    if(!count(*(it++),num_blocked) || !count(*(it++),num_trusted) || !count(*(it++),num_allowed))return true;
+    const std::size_t total=std::size_t(num_blocked)+std::size_t(num_trusted)+std::size_t(num_allowed);
+    if(total>strings.size()-MIN_SIZE)return true;
+    for(std::size_t row=0;row<total;++row)if((it+row)->size()<UUID_BYTES)return true;
 
     LLSD ids = LLSD::emptyMap()
         .with("blocked", getIDs(it, strings.end(), num_blocked))

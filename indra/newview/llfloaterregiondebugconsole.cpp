@@ -28,6 +28,10 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterregiondebugconsole.h"
+#include "vsregioncontext.h"
+#include "vsnativeim.h"
+#include "vsnativesession.h"
+#include "llviewerwindow.h"
 
 #include "llagent.h"
 #include "llhttpnode.h"
@@ -81,6 +85,14 @@ namespace
         {
             LL_INFOS() << "Received response from the debug console: "
                 << input << LL_ENDL;
+#if VS_NATIVE_VULKAN
+            if(gViewerWindow && gViewerWindow->isNativeVulkan())
+            {
+                const auto owner=VSNativeSession::active();
+                if(!owner || !input["body"].isString() ||
+                    !owner->admit("SimConsoleResponse",LLHost(input["sender"].asString())))return;
+            }
+#endif
             sConsoleReplySignal(input["body"].asString());
         }
     };
@@ -94,16 +106,33 @@ boost::signals2::connection LLFloaterRegionDebugConsole::setConsoleReplyCallback
 LLFloaterRegionDebugConsole::LLFloaterRegionDebugConsole(LLSD const & key)
 : LLFloater(key), mOutput(NULL)
 {
-    mReplySignalConnection = sConsoleReplySignal.connect(
-        boost::bind(
-            &LLFloaterRegionDebugConsole::onReplyReceived,
-            this,
-            _1));
+    const auto weak=getHandle();
+    mReplySignalConnection=sConsoleReplySignal.connect([weak](const std::string& output)
+    {
+        if(auto* owner=dynamic_cast<LLFloaterRegionDebugConsole*>(weak.get()))owner->onReplyReceived(output);
+    });
 }
 
 LLFloaterRegionDebugConsole::~LLFloaterRegionDebugConsole()
 {
     mReplySignalConnection.disconnect();
+}
+
+std::function<bool()> LLFloaterRegionDebugConsole::requestGuard() const
+{
+    const auto weak=getHandle();const auto account=vs_native_im_guard();
+    const auto region=vs_current_region_context();const auto epoch=mRequestEpoch;
+    return [weak,account,region,epoch]
+    {
+        const auto* owner=dynamic_cast<LLFloaterRegionDebugConsole*>(weak.get());
+        const auto current=vs_current_region_context();
+        return owner && owner->mRequestEpoch==epoch && account() && region && region->current() &&
+            current && *current==*region;
+    };
+}
+void LLFloaterRegionDebugConsole::onClose(bool)
+{
+    ++mRequestEpoch;mAsyncCurrent={};
 }
 
 bool LLFloaterRegionDebugConsole::postBuild()
@@ -138,6 +167,7 @@ void LLFloaterRegionDebugConsole::onInput(LLUICtrl* ctrl, const LLSD& param)
 {
     LLLineEditor* input = static_cast<LLLineEditor*>(ctrl);
     std::string text = input->getText() + "\n";
+    const auto current=requestGuard();
 
     std::string url = gAgent.getRegionCapability("SimConsoleAsync");
     if (url.empty())
@@ -152,16 +182,17 @@ void LLFloaterRegionDebugConsole::onInput(LLUICtrl* ctrl, const LLSD& param)
         {
             LLSD postData = LLSD(input->getText());
             LLCoreHttpUtil::HttpCoroutineAdapter::callbackHttpPost(url, postData,
-                boost::bind(&LLFloaterRegionDebugConsole::onConsoleSuccess, this, _1),
-                boost::bind(&LLFloaterRegionDebugConsole::onConsoleError, this, _1));
+                vs_native_im_lifetime_callback(current,boost::bind(&LLFloaterRegionDebugConsole::onConsoleSuccess,this,_1)),
+                vs_native_im_lifetime_callback(current,boost::bind(&LLFloaterRegionDebugConsole::onConsoleError,this,_1)));
         }
     }
     else
     {
+        mAsyncCurrent=current;
         LLSD postData = LLSD(input->getText());
         LLCoreHttpUtil::HttpCoroutineAdapter::callbackHttpPost(url, postData,
             NULL,
-            boost::bind(&LLFloaterRegionDebugConsole::onAsyncConsoleError, this, _1));
+            vs_native_im_lifetime_callback(current,boost::bind(&LLFloaterRegionDebugConsole::onAsyncConsoleError,this,_1)));
 
     }
 
@@ -172,7 +203,8 @@ void LLFloaterRegionDebugConsole::onInput(LLUICtrl* ctrl, const LLSD& param)
 void LLFloaterRegionDebugConsole::onAsyncConsoleError(LLSD result)
 {
     LL_WARNS("Console") << UNABLE_TO_SEND_COMMAND << LL_ENDL;
-    sConsoleReplySignal(UNABLE_TO_SEND_COMMAND);
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())onReplyReceived(UNABLE_TO_SEND_COMMAND);
+    else sConsoleReplySignal(UNABLE_TO_SEND_COMMAND);
 }
 
 void LLFloaterRegionDebugConsole::onConsoleError(LLSD result)
@@ -203,6 +235,9 @@ void LLFloaterRegionDebugConsole::onConsoleSuccess(LLSD result)
 
 void LLFloaterRegionDebugConsole::onReplyReceived(const std::string& output)
 {
+    if(!mOutput)return;
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() && (!mAsyncCurrent || !mAsyncCurrent()))return;
+
     mOutput->appendText(output + PROMPT, false);
 }
 

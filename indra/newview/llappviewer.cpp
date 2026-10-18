@@ -1853,6 +1853,8 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
     removeMarkerFiles();
     LLViewerEventRecorder::deleteSingleton();
     LLCore::LLHttp::cleanup();
+    // Match reference disconnectViewer before destroying cached-control owners.
+    gAgentCamera.cleanup();
     LLSingletonBase::deleteAll();
     LL_INFOS("AppInit") << "Native Vulkan normal login shut down" << LL_ENDL;
     return true;
