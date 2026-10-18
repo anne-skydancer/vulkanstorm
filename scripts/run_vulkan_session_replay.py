@@ -1,4 +1,5 @@
 """Replay the native CPU session through the fully staged viewer, without grid credentials."""
+import vulkan_ui_environment_fixture as ui_environment_fixture
 import argparse
 import base64
 from datetime import datetime, timezone
@@ -516,6 +517,8 @@ def append_llsd(parent, value):
         ET.SubElement(parent, 'boolean').text = str(value).lower()
     elif isinstance(value, datetime):
         ET.SubElement(parent, 'date').text = value.isoformat().replace('+00:00', 'Z')
+    elif isinstance(value, UUID):
+        ET.SubElement(parent, 'uuid').text = str(value)
     elif isinstance(value, int):
         ET.SubElement(parent, 'integer').text = str(value)
     elif isinstance(value, float):
@@ -525,7 +528,7 @@ def append_llsd(parent, value):
 
 DEFAULT_ENVIRONMENT_ASSET = '5646d39e-d3d7-6aff-ed71-30fc87d64a91'
 
-REQUIRED = ('connected_about_land_all_tabs', 'connected_environment_nested_dialogs', 'connected_land_media_url_cancel', 'connected_default_environment_asset', 'connected_land_buy_policy_cancel', 'connected_land_sell_stale_intent_cancel', 'connected_utility_floaters', 'connected_keyboard_window_dispatch', 'connected_camera_controls', 'connected_land_permissions', 'connected_native_statistics', 'connected_script_notification_controls', 'connected_script_dialog_encoded', 'connected_script_textbox_encoded', 'connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
+REQUIRED = ('connected_parcel_rectangle_pixels', 'connected_environment_capability_edit', 'connected_about_land_all_tabs', 'connected_environment_nested_dialogs', 'connected_land_media_url_cancel', 'connected_default_environment_asset', 'connected_land_buy_policy_cancel', 'connected_land_sell_stale_intent_cancel', 'connected_utility_floaters', 'connected_keyboard_window_dispatch', 'connected_camera_controls', 'connected_land_permissions', 'connected_native_statistics', 'connected_script_notification_controls', 'connected_script_dialog_encoded', 'connected_script_textbox_encoded', 'connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
             'connected_inventory_texture_upload', 'connected_inventory_sound_upload',
             'connected_group_titles', 'connected_group_directory_search',
             'connected_inventory_share', 'connected_resident_pay', 'connected_payment_balance_gate',
@@ -606,6 +609,30 @@ def r3_terrain_contracts_passed(report,directory,requests):
                 return False
         return True
     except (KeyError,TypeError,ValueError,OSError):
+        return False
+
+
+def parcel_rectangle_contracts_passed(report, directory):
+    try:
+        row = report['parcel_rectangle']
+        if (row.get('file') != 'parcel/rectangle.rgba' or row.get('width') != 64 or
+                row.get('height') != 64 or row.get('pixels_verified') is not True):
+            return False
+        root = Path(directory).resolve()
+        path = Path(directory) / 'parcel/rectangle.rgba'
+        if path.is_symlink() or not path.resolve().is_relative_to(root):
+            return False
+        pixels = path.read_bytes()
+        if len(pixels) != 64 * 64 * 4:
+            return False
+        center = (32 * 64 + 32) * 4
+        if any(abs(pixels[center + channel] - expected) > 1
+               for channel, expected in enumerate((255, 92, 163, 255))):
+            return False
+        posts = sum(pixels[index:index + 3] == bytes((255, 255, 0))
+                    for index in range(0, len(pixels), 4))
+        return posts > 0 and row.get('opaque_post_pixels') == posts
+    except (KeyError, TypeError, ValueError, OSError):
         return False
 
 
@@ -822,6 +849,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if ui_environment_fixture.get(self,path,parse_qs(urlsplit(self.path).query)):return
+        if path == '/region-experiences':
+            self.server.requests.append(dict(path=path,method='GET'))
+            self.respond_llsd(dict(allowed=[],blocked=[],trusted=[]));return
         if path in ('/r3-media','/r3-media-phase') and getattr(self.server,'r3_directory',None):
             phase_file=self.server.r3_directory/'media-phase.txt'
             phase=2 if phase_file.exists() and phase_file.read_text().strip()=='2' else 1
@@ -991,6 +1022,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_DELETE(self):
+        path=urlsplit(self.path).path
+        if ui_environment_fixture.modify(self,'DELETE',path,parse_qs(urlsplit(self.path).query)):return
         if r2_fixture.modify(self,'DELETE',urlsplit(self.path).path):return
         self.send_error(404)
 
@@ -1002,6 +1035,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_PUT(self):
+        if urlsplit(self.path).path==ui_environment_fixture.ROUTE:
+            size=int(self.headers.get('Content-Length','0'))
+            if not 0<size<=65536:self.send_error(400);return
+            try:request=ui_environment_fixture.decode(ET.fromstring(self.rfile.read(size)))
+            except (ValueError,ET.ParseError):self.send_error(400);return
+            ui_environment_fixture.modify(self,'PUT',ui_environment_fixture.ROUTE,parse_qs(urlsplit(self.path).query),request)
+            return
         path = urlsplit(self.path).path
         size = int(self.headers.get('Content-Length', '0'))
         if path != '/profile/'+self.server.account_id or not 0 < size <= 65536:
@@ -1159,7 +1199,8 @@ class Handler(BaseHTTPRequestHandler):
                                 ('UploadAgentProfileImage', '/profile-upload'),
                                 ('NewFileAgentInventory', '/upload-request'),
                                 ('UpdateScriptAgent', '/script-request'), ('ViewerAsset', '/asset'),
-                                ('GetMetadata', '/metadata')]:
+                                ('GetMetadata', '/metadata'), ('RegionExperiences', '/region-experiences'),
+                                ('ExtEnvironment', '/ui-environment')]:
                 ET.SubElement(mapping, 'key').text = name
                 ET.SubElement(mapping, 'string').text = self.server.url + route
             if getattr(self.server,'r3_directory',None):
@@ -1491,6 +1532,7 @@ def main():
         server.r2_baseline_item = baseline_inventory_item
         server.upload_directory = directory / 'upload-bodies'
         server.environment_fixture = directory / 'default-environment.llsd'
+        ui_environment_fixture.configure(server,read_llsd)
         worker = threading.Thread(target=server.serve_forever, daemon=True); worker.start()
         env['VS_VULKAN_REPLAY_SEED'] = server.url + '/seed'
         env['VS_VULKAN_REPLAY_LOGIN'] = server.url + '/login'
@@ -1503,6 +1545,8 @@ def main():
             report['process_isolation'] = process_isolation_evidence(process)
             report['native_debugger'] = getattr(process, 'native_debugger', None)
             passed = assess(report, code, log)
+            if not ui_environment_fixture.exchange_observed(server.requests):
+                raise RuntimeError('Missing actual selected-parcel ExtEnvironment GET/PUT request and accepted reply')
             if not default_environment_asset_observed(server.requests, server.environment_fixture):
                 raise RuntimeError('Missing real shared default environment asset HTTP acquisition')
             if args.r1_contracts and not r1_contracts_passed(report,server.requests):
@@ -1525,6 +1569,8 @@ def main():
                 raise RuntimeError('Missing actual media plugin publication, shared ownership or GPU evidence')
             if args.local_image_contracts and not legacy_material_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing actual legacy material capability, UV/factor or channel GPU evidence')
+            if not parcel_rectangle_contracts_passed(report, directory):
+                raise RuntimeError('Missing or incorrect actual parcel rectangle GPU readback')
             report['conference_start_request'] = conference_start_observed(server.requests)
             if not report['conference_start_request']:
                 raise RuntimeError('Missing or incorrect actual authenticated conference start request')
@@ -1547,6 +1593,8 @@ def main():
                 for suffix in ('.ppm', '-expected.ppm', '-expected-products.ppm', '-scene.ppm', '-scene.rgba'):
                     image = folder / ('session-chat' + suffix)
                     report['readback_sha256'][str(image.relative_to(directory))] = hashlib.sha256(image.read_bytes()).hexdigest()
+            report['readback_sha256']['parcel/rectangle.rgba'] = hashlib.sha256(
+                (directory / 'parcel/rectangle.rgba').read_bytes()).hexdigest()
             if 'Machine Vulkan adapter: ' + harness['device']['name'] not in log:
                 raise RuntimeError('Unexpected Vulkan adapter')
             libraries = loaded_library_hashes(log)

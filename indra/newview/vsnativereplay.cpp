@@ -1,5 +1,6 @@
 // Replay ordinary login and native session dispatch against a loopback fixture. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "llregionflags.h"
 #include "ao.h"
 #include "llprogressview.h"
 #include "lltextbox.h"
@@ -479,7 +480,7 @@ void udpWorldObjects(const LLHost& host)
 void handshake(const LLHost& host)
 {
     LLSD body;
-    body["RegionInfo"][0]["RegionFlags"] = ll_sd_from_U32(0);
+    body["RegionInfo"][0]["RegionFlags"] = ll_sd_from_U32(U32(REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE));
     body["RegionInfo"][0]["SimAccess"] = 13;
     body["RegionInfo"][0]["SimName"] = "Native replay region";
     body["RegionInfo"][0]["SimOwner"] = LLUUID("30000000-0000-0000-0000-000000000003");

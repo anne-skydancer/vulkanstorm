@@ -37,6 +37,7 @@ public:
     {
         Mesh mesh;
         VSUIRenderer::Image image;
+        VSWorldContracts::Sampler imageSampler;
         std::array<VSUIRenderer::Image, VSMaterial::ChannelCount-1> channels;
         std::shared_ptr<const VSMaterial::State> surface;
         std::array<float,4> color{1,1,1,1};
@@ -45,6 +46,9 @@ public:
         bool masked = false;
         float               alphaCutoff     = .5f;
         bool                doubleSided     = false;
+        bool overlay=false; // Shared world feedback, after scene transparency and before HUD.
+        float screenLinePixels=0; // Triangle-encoded lines; portable physical-pixel width.
+        bool depthWriteAlpha=false; // Reference renderRect writes depth for its translucent walls.
         bool background = false; // Clip-space sky, drawn before depth-tested geometry.
         bool                hud             = false;
         bool                terrain         = false;

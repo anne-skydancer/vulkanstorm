@@ -64,7 +64,11 @@ struct Inventory {bool usable=false;int notices=0;bool isInventoryUsable(){retur
 struct LLInventoryModel {static inline bool ready=false;static bool isSysFoldersReady(){return ready;}};
 #define SINGLETON(T) static T& instance(){static T value;return value;}
 struct LLAppearanceMgr {SINGLETON(LLAppearanceMgr) int calls=0;void initCOFID(){++calls;}};
-struct LLEnvironment {SINGLETON(LLEnvironment)};
+struct LLEnvironment {
+ static inline LLEnvironment*live=nullptr;int loads=0;
+ static LLEnvironment&instance(){assert(live);return *live;}
+ void loadFromSettings(){++loads;}
+};
 struct LLInventoryModelBackgroundFetch {SINGLETON(LLInventoryModelBackgroundFetch) int lost=0;void findLostItems(){++lost;}};
 struct FSGroupTitleRegionMgr {static FSGroupTitleRegionMgr* getInstance(){static FSGroupTitleRegionMgr v;return &v;}void loadFromDisk(){}};
 struct FSFavoriteGroups {static FSFavoriteGroups* getInstance(){static FSFavoriteGroups v;return &v;}void loadFavorites(){}};
@@ -99,6 +103,8 @@ struct VSNativeSession {enum class Phase{Connected,Logout};enum class Startup{Id
  double mStartupTime=0;Appearance appearance,*mAppearance=&appearance;void advanceStartup();};
 PRODUCTION_STARTUP_BODY
 int main(){
+ // Real connected() already created/initialized the explicit environment owner.
+ LLEnvironment firstEnvironment;LLEnvironment::live=&firstEnvironment;
  VSNativeSession owner;owner.advanceStartup();assert(owner.mStartup==VSNativeSession::Startup::Inventory);
  gInventory.usable=true;owner.advanceStartup();assert(viewer.completed==0);
  LLInventoryModel::ready=true;owner.advanceStartup();assert(gInventory.notices==1 && viewer.completed==0);
@@ -109,13 +115,17 @@ int main(){
  clockValue=11.9;owner.advanceStartup();assert(viewer.completed==0);
  owner.appearance.ready=true;owner.advanceStartup();assert(viewer.completed==1 && !owner.mStartupTimedOut);
  owner.advanceStartup();assert(viewer.completed==1 && audioCalls==1);
+ assert(firstEnvironment.loads==1);
  // A new account gets its own wait interval; timeout is explicit, not success.
+ LLEnvironment secondEnvironment;LLEnvironment::live=&secondEnvironment;
  VSNativeSession next;clockValue=100;next.advanceStartup();next.advanceStartup();
  clockValue=102;next.advanceStartup();next.advanceStartup();assert(viewer.completed==1);
  clockValue=112;next.advanceStartup();assert(viewer.completed==2 && next.mStartupTimedOut && LLNotificationsUtil::clothing==1);
  // A quit or region transition cannot run account completion callbacks.
  next.mStartup=VSNativeSession::Startup::Wearables;next.mPhase=VSNativeSession::Phase::Logout;
  next.advanceStartup();assert(viewer.completed==2);
+ assert(firstEnvironment.loads==1 && secondEnvironment.loads==1);
+ LLEnvironment::live=nullptr;
 }
 '''.replace('PRODUCTION_STARTUP_BODY',advance))
 

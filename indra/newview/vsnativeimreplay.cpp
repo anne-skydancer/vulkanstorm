@@ -10,6 +10,8 @@
 #include "llfloatercamera.h"
 #include "llstatusbar.h"
 #include "llfloaterbuyland.h"
+#include "vsparcelpresentation.h"
+#include "llsliderctrl.h"
 #include "llfloaterland.h"
 #include "llfloatereditextdaycycle.h"
 #include "llfloaterurlentry.h"
@@ -207,7 +209,7 @@ bool contains(const LLUUID& id, const std::string& text)
 // Complete deprecated-UDP schema carried by the real LLSD message bridge.
 // The native receiver runs LLViewerParcelMgr::processParcelProperties and the
 // existing LLParcel::unpackMessage, not the reduced diagnostic deliver() path.
-void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars,S32 sequence=0)
+void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars,S32 sequence=0,const LLUUID& parcelOwner=peer)
 {
     const auto region=vs_current_region_context();
     require(region && region->current(),"Parcel replay has no authenticated current circuit");
@@ -264,7 +266,7 @@ void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars,S32 se
     const S32 columns=S32(region->getWidth()/PARCEL_GRID_STEP_METERS);
     const S32 rows=S32(region->getHeight()/PARCEL_GRID_STEP_METERS);
     data["RequestResult"]=PARCEL_RESULT_SUCCESS;data["SequenceID"]=sequence;
-    data["LocalID"]=31;data["OwnerID"]=peer;data["Name"]="Replay parcel";
+    data["LocalID"]=31;data["OwnerID"]=parcelOwner;data["Name"]="Replay parcel";
     data["AABBMax"]=ll_sd_from_vector3(LLVector3(region->getWidth(),region->getHeight(),20.f));
     data["Bitmap"]=LLSD::Binary(std::size_t(columns)*rows/8,U8(255));
     data["Area"]=S32(region->getWidth()*region->getHeight());data["Status"]=S32(LLParcel::OS_LEASED);
@@ -303,7 +305,7 @@ struct Replay : public LLAvatarPropertiesObserver
     unsigned step = 0;
     unsigned utilityCheck = 0;
     LLHandle<LLFloater> utilityFloater;
-    unsigned aboutLandStage=0,aboutLandTab=0;
+    unsigned aboutLandStage=0,aboutLandTab=0,environmentEditStage=0;
     std::optional<S32> selectedParcelWire;
     LLHandle<LLFloater> aboutLandFloater,landURL,dayEditor;
     std::unique_ptr<LLFloaterSettingsPicker> settingsPicker;
@@ -837,12 +839,13 @@ struct Replay : public LLAvatarPropertiesObserver
                 {
                     if(!selectedParcelWire)return false;
                     gMessageSystem->setHandlerFunc("ParcelPropertiesRequest",null_message_callback);
-                    publishReplayParcel(owner,PF_ALLOW_FLY|PF_ALLOW_ALL_OBJECT_ENTRY,true,*selectedParcelWire);
+                    publishReplayParcel(owner,PF_ALLOW_FLY|PF_ALLOW_ALL_OBJECT_ENTRY,true,*selectedParcelWire,gAgentID);
                     require(LLViewerParcelMgr::instance().selectionGuard()(),"Real selected parcel reply failed shared model publication");
                     ++aboutLandStage;return false;
                 }
                 if(aboutLandStage==2)
                 {
+                    if(!VSParcelPresentation::qualifyRectangle(*gViewerWindow->nativeContext(),evidence))return false;
                     auto* floater=aboutLandFloater.get();require(floater,"AboutLand retired before tab replay");
                     auto* tabs=floater->getChild<LLTabContainer>("landtab");
                     if(aboutLandTab<U32(tabs->getTabCount()))
@@ -851,6 +854,33 @@ struct Replay : public LLAvatarPropertiesObserver
                         return false; // Present every real shared panel before advancing.
                     }
                     require(aboutLandTab>=9,"AboutLand omitted a shared reference panel");
+                    require(LLEnvironment::instance().isExtendedEnvironmentEnabled(),"Actual seed did not publish ExtEnvironment");
+                    auto* environment=floater->getChild<LLPanel>("land_environment_panel");
+                    auto* length=environment->getChild<LLSliderCtrl>("sld_day_length");
+                    if(environmentEditStage==0)
+                    {
+                        // Normal shared ownership/capability checks must enable
+                        // the actual text editor; never force a UI permission.
+                        if(!length->isInEnabledChain())return false;
+                        LLLineEditor* editor=nullptr;
+                        for(auto* child:*length->getChildList())
+                            if(auto* candidate=dynamic_cast<LLLineEditor*>(child)){editor=candidate;break;}
+                        require(editor && editor->isInEnabledChain(),"Actual environment day-length editor is unavailable");
+                        editor->setText(LLStringExplicit("5.5"));editor->onCommit();
+                        require(llabs(F32(length->getValue().asReal())-5.5f)<.001f,
+                            "Actual slider editor did not commit the requested day length");
+                        ++environmentEditStage;return false;
+                    }
+                    if(environmentEditStage==1)
+                    {
+                        // The loopback simulator normalizes 5.5h to6h. Only
+                        // receipt through the real shared HTTP/model callback
+                        // can replace the optimistic edit with this value.
+                        if(llabs(F32(length->getValue().asReal())-6.f)>.001f)return false;
+                        require(length->isInEnabledChain(),"EEP reply lost real parcel edit permission");
+                        evidence["connected_environment_capability_edit"]=true;
+                        ++environmentEditStage;
+                    }
                     auto* media=floater->getChild<LLPanel>("land_media_panel");
                     landURL=LLFloaterURLEntry::show(media->getHandle(),"https://example.invalid/replay-cancel");
                     require(landURL.get(),"Real media URL controller failed construction");
