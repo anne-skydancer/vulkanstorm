@@ -3,6 +3,7 @@
 #include "llrender2dutils.h"
 #include "lluiimage.h"
 #include <memory>
+#include <utility>
 class VSUIResources;
 class LLImageRaw;
 class LLSD;
@@ -27,6 +28,7 @@ bool vs_ui_image_ready(const LLUUID&);
 bool vs_ui_image_failed(const LLUUID&);
 S32 vs_ui_image_discard(const LLUUID&);
 S32 vs_ui_image_components(const LLUUID&);
+std::pair<S32,S32> vs_ui_image_dimensions(const LLUUID&);
 class VSUIImageProvider : public LLImageProviderInterface
 {
   public:
@@ -55,6 +57,7 @@ class VSUIImageProvider : public LLImageProviderInterface
     bool imageFailed(const LLUUID&) const;
     S32 imageDiscard(const LLUUID&) const;
     S32 imageComponents(const LLUUID&) const;
+    std::pair<S32,S32> imageDimensions(const LLUUID&) const;
     LLSD textureCacheEvidence(bool includePixels=false) const;
 
   private:

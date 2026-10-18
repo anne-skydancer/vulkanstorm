@@ -61,8 +61,8 @@
 	<button label="Devolver todo" left="190" width="110" name="return_all_btn"/>
 	<button label="Teleportarse" name="teleport_to_btn" width="110" />
 	<button label="Perfil" name="profile_btn"/>
-	<button label="Desactivar lo seleccionado" name="disable_selected_btn" width="170"/>
-	<button label="Desactivar todo" left="190" width="110" name="disable_all_btn"/>
+
+
 	<button label="Info scripts" name="script_info_btn" width="110"/>
 	<button label="Expulsar del Estado" name="estate_kick_btn"/>
 </floater>

@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsterrainreadiness.h"
 
 #include "llvlcomposition.h"
 
@@ -329,7 +330,8 @@ bool LLTerrainMaterials::makeTextureReady(LLPointer<LLViewerFetchedTexture>& tex
     //llassert(tex); ??? maybe ok ???
     if (!tex) { return false; }
 
-    if (tex->getDiscardLevel() < 0)
+    const auto state=vs_terrain_texture_state(tex->getDiscardLevel(),tex->getWidth(),tex->getHeight(),tex->getComponents());
+    if (state==VSTerrainTextureState::Unloaded)
     {
         if (boost)
         {
@@ -337,9 +339,7 @@ bool LLTerrainMaterials::makeTextureReady(LLPointer<LLViewerFetchedTexture>& tex
         }
         return false;
     }
-    if ((tex->getDiscardLevel() != 0 &&
-         (tex->getWidth() < BASE_SIZE ||
-          tex->getHeight() < BASE_SIZE)))
+    if (state==VSTerrainTextureState::Insufficient)
     {
         if (boost)
         {
@@ -358,7 +358,7 @@ bool LLTerrainMaterials::makeTextureReady(LLPointer<LLViewerFetchedTexture>& tex
         }
         return false;
     }
-    if (tex->getComponents() == 0)
+    if (state==VSTerrainTextureState::Empty)
     {
         return false;
     }

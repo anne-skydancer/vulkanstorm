@@ -2,6 +2,8 @@
 #pragma once
 #include "vsworldrenderer.h"
 #include "vsparceloverlay.h"
+#include "vsregionterrain.h"
+#include <boost/signals2.hpp>
 #include "llhost.h"
 #include "lluuid.h"
 #include "v3math.h"
@@ -86,6 +88,8 @@ public:
         // zero until received, without discarding other received corners.
         std::function<std::optional<float>(float,float)> referenceHeight;
     };
+    std::optional<VSRegionTerrain> terrainSettings(const LLHost&);
+    boost::signals2::connection observeTerrainSettings(const LLHost&,const boost::signals2::signal<void()>::slot_type&);
     std::optional<U64> terrainRevision(const LLHost&) const;
     std::optional<TerrainField> terrainField(const LLHost&) const;
 

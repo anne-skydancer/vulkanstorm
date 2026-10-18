@@ -29,6 +29,8 @@
 #define LL_LLFLOATERTELEHUB_H
 
 #include "llfloater.h"
+#include <functional>
+#include <boost/signals2/connection.hpp>
 
 class LLMessageSystem;
 class LLObjectSelection;
@@ -61,6 +63,8 @@ public:
     void unpackTelehubInfo(LLMessageSystem* msg);
 
 private:
+    std::function<bool()> mNativeCurrent;
+    boost::signals2::scoped_connection mNativeRegionConnection;
     LLUUID mTelehubObjectID;    // null if no telehub
     std::string mTelehubObjectName;
     LLVector3 mTelehubPos;  // region local, fallback if viewer can't see the object

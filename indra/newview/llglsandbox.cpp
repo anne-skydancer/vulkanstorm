@@ -30,6 +30,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsdebugbeacongeometry.h"
 #include "vsregionlimits.h"
 
 #include "llviewercontrol.h"
@@ -761,45 +762,10 @@ void LLViewerParcelMgr::resetCollisionTimer()
 }
 
 void draw_line_cube(F32 width, const LLVector3& center)
-{
-    width = 0.5f * width;
-    gGL.vertex3f(center.mV[VX] + width ,center.mV[VY] + width,center.mV[VZ] + width);
-    gGL.vertex3f(center.mV[VX] - width ,center.mV[VY] + width,center.mV[VZ] + width);
-    gGL.vertex3f(center.mV[VX] - width ,center.mV[VY] + width,center.mV[VZ] + width);
-    gGL.vertex3f(center.mV[VX] - width ,center.mV[VY] - width,center.mV[VZ] + width);
-    gGL.vertex3f(center.mV[VX] - width ,center.mV[VY] - width,center.mV[VZ] + width);
-    gGL.vertex3f(center.mV[VX] + width ,center.mV[VY] - width,center.mV[VZ] + width);
-    gGL.vertex3f(center.mV[VX] + width ,center.mV[VY] - width,center.mV[VZ] + width);
-    gGL.vertex3f(center.mV[VX] + width ,center.mV[VY] + width,center.mV[VZ] + width);
-
-    gGL.vertex3f(center.mV[VX] + width ,center.mV[VY] + width,center.mV[VZ] - width);
-    gGL.vertex3f(center.mV[VX] - width ,center.mV[VY] + width,center.mV[VZ] - width);
-    gGL.vertex3f(center.mV[VX] - width ,center.mV[VY] + width,center.mV[VZ] - width);
-    gGL.vertex3f(center.mV[VX] - width ,center.mV[VY] - width,center.mV[VZ] - width);
-    gGL.vertex3f(center.mV[VX] - width ,center.mV[VY] - width,center.mV[VZ] - width);
-    gGL.vertex3f(center.mV[VX] + width ,center.mV[VY] - width,center.mV[VZ] - width);
-    gGL.vertex3f(center.mV[VX] + width ,center.mV[VY] - width,center.mV[VZ] - width);
-    gGL.vertex3f(center.mV[VX] + width ,center.mV[VY] + width,center.mV[VZ] - width);
-
-    gGL.vertex3f(center.mV[VX] + width ,center.mV[VY] + width,center.mV[VZ] + width);
-    gGL.vertex3f(center.mV[VX] + width ,center.mV[VY] + width,center.mV[VZ] - width);
-    gGL.vertex3f(center.mV[VX] - width ,center.mV[VY] + width,center.mV[VZ] + width);
-    gGL.vertex3f(center.mV[VX] - width ,center.mV[VY] + width,center.mV[VZ] - width);
-    gGL.vertex3f(center.mV[VX] - width ,center.mV[VY] - width,center.mV[VZ] + width);
-    gGL.vertex3f(center.mV[VX] - width ,center.mV[VY] - width,center.mV[VZ] - width);
-    gGL.vertex3f(center.mV[VX] + width ,center.mV[VY] - width,center.mV[VZ] + width);
-    gGL.vertex3f(center.mV[VX] + width ,center.mV[VY] - width,center.mV[VZ] - width);
-}
+{ vs_debug_beacon_cube(gGL,width,center); }
 
 void draw_cross_lines(const LLVector3& center, F32 dx, F32 dy, F32 dz)
-{
-    gGL.vertex3f(center.mV[VX] - dx, center.mV[VY], center.mV[VZ]);
-    gGL.vertex3f(center.mV[VX] + dx, center.mV[VY], center.mV[VZ]);
-    gGL.vertex3f(center.mV[VX], center.mV[VY] - dy, center.mV[VZ]);
-    gGL.vertex3f(center.mV[VX], center.mV[VY] + dy, center.mV[VZ]);
-    gGL.vertex3f(center.mV[VX], center.mV[VY], center.mV[VZ] - dz);
-    gGL.vertex3f(center.mV[VX], center.mV[VY], center.mV[VZ] + dz);
-}
+{ vs_debug_beacon_cross(gGL,center,dx,dy,dz); }
 
 void LLViewerObjectList::renderObjectBeacons()
 {

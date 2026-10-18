@@ -43,6 +43,10 @@
 // viewer includes
 #include "llappviewer.h"
 #include "lltracker.h"
+#include "vstrackerdraw.h"
+#include "vsregioncontext.h"
+#include "vsvulkancontext.h"
+#include "vstrackergeometry.h"
 #include "llagent.h"
 #include "llagentcamera.h"
 #include "llcallingcard.h"
@@ -110,10 +114,7 @@ void LLTracker::stopTracking(bool clear_ui)
 // static virtual
 void LLTracker::drawHUDArrow()
 {
-    if (!LLWorld::instanceExists())
-    {
-        return;
-    }
+    if(!LLWorld::instanceExists() && !(gViewerWindow && gViewerWindow->isNativeVulkan()))return;
 
     static LLCachedControl<bool> render_beacon(gSavedSettings, "RenderTrackerBeacon", true);
     if (!render_beacon)
@@ -154,9 +155,9 @@ void LLTracker::drawHUDArrow()
         // UNHACKED by CRO - keep location where the location is
         instance()->mTrackedPositionGlobal.mdV[VZ] =
                 0.9f * instance()->mTrackedPositionGlobal.mdV[VZ]
-                + 0.1f * (LLWorld::getInstance()->resolveLandHeightGlobal(getTrackedPositionGlobal()) + 1.5f);
+                + 0.1f * (vs_region_height(getTrackedPositionGlobal()).value_or(0.f) + 1.5f);
 #endif
-        instance()->mTrackedPositionGlobal.mdV[VZ] = llclamp((F32)instance()->mTrackedPositionGlobal.mdV[VZ], LLWorld::getInstance()->resolveLandHeightGlobal(getTrackedPositionGlobal()) + 1.5f, (F32)instance()->getTrackedPositionGlobal().mdV[VZ]);
+        instance()->mTrackedPositionGlobal.mdV[VZ] = llclamp((F32)instance()->mTrackedPositionGlobal.mdV[VZ], vs_region_height(getTrackedPositionGlobal()).value_or(0.f) + 1.5f, (F32)instance()->getTrackedPositionGlobal().mdV[VZ]);
         instance()->drawMarker( getTrackedPositionGlobal(), map_track_color );
         break;
 
@@ -173,7 +174,7 @@ void LLTracker::render3D()
     //           and also use LLCachedControl instead of the slow
     //           gSavedSettings.getBOOL() call.
     static LLCachedControl<bool> renderTrackerBeacon(gSavedSettings, "RenderTrackerBeacon");
-    if (!instance()->isTracking(NULL) || !gFloaterWorldMap || !renderTrackerBeacon)
+    if (!instance()->isTracking(NULL) || (!gFloaterWorldMap && !(gViewerWindow && gViewerWindow->isNativeVulkan())) || !renderTrackerBeacon)
     {
         return;
     }
@@ -195,7 +196,7 @@ void LLTracker::render3D()
         LLVector3d pos_global = instance()->mTrackedPositionGlobal;
         // (z-attenuation < 1) means compute "shorter" distance in z-axis,
         // so cancel tracking even if avatar is a little above or below.
-        F32 dist = gFloaterWorldMap->getDistanceToDestination(pos_global, 0.5f);
+        F32 dist = LLFloaterWorldMap::distanceToDestination(pos_global, 0.5f);
         if (dist < DESTINATION_REACHED_RADIUS)
         {
             // <FS:Ansariel> Disable stop tracking when closing in
@@ -230,7 +231,7 @@ void LLTracker::render3D()
 
         if (instance()->mHasLandmarkPosition)
         {
-            F32 dist = gFloaterWorldMap->getDistanceToDestination(instance()->mTrackedPositionGlobal, 1.0f);
+            F32 dist = LLFloaterWorldMap::distanceToDestination(instance()->mTrackedPositionGlobal, 1.0f);
 
             if (   !instance()->mLandmarkHasBeenVisited
                 && dist < DESTINATION_VISITED_RADIUS )
@@ -278,7 +279,7 @@ void LLTracker::render3D()
                 instance()->mBeaconText->setDoFade(false);
             }
 
-            F32 dist = gFloaterWorldMap->getDistanceToDestination(instance()->getTrackedPositionGlobal(), 0.0f);
+            F32 dist = LLFloaterWorldMap::distanceToDestination(instance()->getTrackedPositionGlobal(), 0.0f);
             if (dist < DESTINATION_REACHED_RADIUS)
             {
                 // <FS:Ansariel> Disable stop tracking when closing in
@@ -450,197 +451,17 @@ const std::string& LLTracker::getTrackedLocationName()
     return instance()->mTrackedLocationName;
 }
 
-F32 pulse_func(F32 t, F32 z, bool tracking_avatar, std::string direction)
+F32 pulse_func(F32 t,F32 z,bool tracking_avatar,std::string direction)
+{ return vs_tracker_pulse(t,z,tracking_avatar,direction,LLTracker::sCheesyBeacon); }
+
+void draw_shockwave(F32 center_z,F32 t,S32 steps,LLColor4 color)
+{ vs_tracker_shockwave(gGL,center_z,t,steps,color,LLTracker::sCheesyBeacon); }
+
+
+void LLTracker::drawBeacon(LLVector3 pos_agent,std::string direction,LLColor4 fogged_color,F32 dist)
 {
-    if (!LLTracker::sCheesyBeacon)
-    {
-        return 0.f;
-    }
-
-    t *= F_PI;
-    if ("DOWN" == direction)
-    {
-        z += t*64.f - 256.f;
-    }
-    else
-    {
-    z -= t*64.f - 256.f;
-    }
-
-    F32 a = cosf(z*F_PI/512.f)*10.0f;
-    a = llmax(a, 9.9f);
-    a -= 9.9f;
-    a *= 10.f;
-    return a;
-}
-
-void draw_shockwave(F32 center_z, F32 t, S32 steps, LLColor4 color)
-{
-    if (!LLTracker::sCheesyBeacon)
-    {
-        return;
-    }
-
-    t *= 0.6284f/F_PI;
-
-    t -= (F32) (S32) t;
-
-    t = llmax(t, 0.5f);
-    t -= 0.5f;
-    t *= 2.0f;
-
-    F32 radius = t*16536.f;
-
-    // Inexact, but reasonably fast.
-    F32 delta = F_TWO_PI / steps;
-    F32 sin_delta = sin( delta );
-    F32 cos_delta = cos( delta );
-    F32 x = radius;
-    F32 y = 0.f;
-
-    LLColor4 ccol = LLColor4(1,1,1,(1.f-t)*0.25f);
-    gGL.begin(LLRender::TRIANGLE_FAN);
-    gGL.color4fv(ccol.mV);
-    gGL.vertex3f(0.f, 0.f, center_z);
-    // make sure circle is complete
-    steps += 1;
-
-    color.mV[3] = (1.f-t*t);
-
-    gGL.color4fv(color.mV);
-    while( steps-- )
-    {
-        // Successive rotations
-        gGL.vertex3f( x, y, center_z );
-        F32 x_new = x * cos_delta - y * sin_delta;
-        y = x * sin_delta +  y * cos_delta;
-        x = x_new;
-    }
-    gGL.end();
-}
-
-
-void LLTracker::drawBeacon(LLVector3 pos_agent, std::string direction, LLColor4 fogged_color, F32 dist)
-{
-    const F32 MAX_HEIGHT = 5020.f;
-    const U32 BEACON_ROWS = 256;
-
-    U32 nRows;
-    F32 height;
-    F32 rowHeight;
-
-    LLColor4 c_col, col_next, col_edge, col_edge_next;
-
-    gGL.matrixMode(LLRender::MM_MODELVIEW);
-    gGL.pushMatrix();
-
-    if ("DOWN" == direction)
-    {
-        gGL.translatef(pos_agent.mV[0], pos_agent.mV[1], pos_agent.mV[2]);
-        draw_shockwave(1024.f, gRenderStartTime.getElapsedTimeF32(), 32, fogged_color);
-        height = MAX_HEIGHT - pos_agent.mV[2];
-    }
-    else
-    {
-        gGL.translatef(pos_agent.mV[0], pos_agent.mV[1], 0);
-        height = pos_agent.mV[2];
-    }
-
-    // <FS> [FIRE-35333] OpenSim allows Z coordinates to be negative based on MinSimHeight
-    if (height < 0.f)
-        nRows = 0;
-    else
-        nRows = (U32)ceil((BEACON_ROWS * height) / MAX_HEIGHT);
-    // </FS>
-    if(nRows<2) nRows=2;
-    rowHeight = height / nRows;
-
-    gGL.color4fv(fogged_color.mV);
-
-    LLVector3 x_axis = LLViewerCamera::getInstance()->getLeftAxis();
-    F32 t = gRenderStartTime.getElapsedTimeF32();
-
-    F32 x = x_axis.mV[0];
-    F32 y = x_axis.mV[1];
-    // <FS> [FIRE-35333] OpenSim allows Z coordinates to be negative based on MinSimHeight
-    //F32 z = 0.f;
-    F32 z = llmin(height, 0.f);
-    // </FS>
-    F32 z_next;
-
-    F32 a,an;
-    F32 xa,xan;
-    F32 ya,yan;
-
-    bool tracking_avatar = getTrackingStatus() == TRACKING_AVATAR;
-
-    gGL.begin(LLRender::TRIANGLES);
-
-    for (U32 i = 0; i < nRows; i++)
-    {
-        z_next = z + rowHeight;
-
-        a = pulse_func(t, z, tracking_avatar, direction);
-        an = pulse_func(t, z_next, tracking_avatar, direction);
-
-        c_col = fogged_color + LLColor4(a, a, a, a);
-        col_next = fogged_color + LLColor4(an, an, an, an);
-        col_edge = fogged_color * LLColor4(a, a, a, 0.0f);
-        col_edge_next = fogged_color * LLColor4(an, an, an, 0.0f);
-
-        a = a + a + 1.f;
-        an = an + an + 1.f;
-
-        xa = x*a;
-        ya = y*a;
-        xan = x*an;
-        yan = y*an;
-
-        gGL.color4fv(col_edge.mV);
-        gGL.vertex3f(-xa, -ya, z);
-
-        gGL.color4fv(col_next.mV);
-        gGL.vertex3f(0, 0, z_next);
-
-        gGL.color4fv(col_edge_next.mV);
-        gGL.vertex3f(-xan, -yan, z_next);
-
-
-        gGL.color4fv(col_edge.mV);
-        gGL.vertex3f(-xa, -ya, z);
-
-        gGL.color4fv(c_col.mV);
-        gGL.vertex3f(0, 0, z);
-
-        gGL.color4fv(col_next.mV);
-        gGL.vertex3f(0, 0, z_next);
-
-
-        gGL.color4fv(c_col.mV);
-        gGL.vertex3f(0, 0, z);
-
-        gGL.color4fv(col_edge_next.mV);
-        gGL.vertex3f(xan, yan, z_next);
-
-        gGL.color4fv(col_next.mV);
-        gGL.vertex3f(0, 0, z_next);
-
-
-        gGL.color4fv(c_col.mV);
-        gGL.vertex3f(0, 0, z);
-
-        gGL.color4fv(col_edge.mV);
-        gGL.vertex3f(xa, ya, z);
-
-        gGL.color4fv(col_edge_next.mV);
-        gGL.vertex3f(xan, yan, z_next);
-
-        z += rowHeight;
-    }
-
-    gGL.end();
-    gGL.popMatrix();
-}
+    if(gViewerWindow && gViewerWindow->isNativeVulkan()){VSTrackerDraw::beam(pos_agent,direction,fogged_color,dist);return;}
+ vs_tracker_beam(gGL,pos_agent,direction,fogged_color,dist,[]{return gRenderStartTime.getElapsedTimeF32();},LLViewerCamera::getInstance()->getLeftAxis(),getTrackingStatus()==TRACKING_AVATAR,sCheesyBeacon); }
 
 // static
 void LLTracker::renderBeacon(LLVector3d pos_global,
@@ -670,8 +491,9 @@ void LLTracker::renderBeacon(LLVector3d pos_global,
         color_frac = 1.f - 0.6f*(dist/LLViewerCamera::getInstance()->getFar());
     }
 
-    LLColor4 fogged_color = color_frac * color + (1 - color_frac)*gSky.getSkyFogColor();
-    LLColor4 fogged_color_under = color_frac * color_under + (1 - color_frac) * gSky.getSkyFogColor();
+    const auto fog=(gViewerWindow && gViewerWindow->isNativeVulkan())?VSTrackerDraw::fogColor():gSky.getSkyFogColor();
+    LLColor4 fogged_color=color_frac*color+(1-color_frac)*fog;
+    LLColor4 fogged_color_under=color_frac*color_under+(1-color_frac)*fog;
 
     F32 FADE_DIST = 3.f;
     fogged_color.mV[3] = llmax(0.2f, llmin(0.5f,(dist-FADE_DIST)/FADE_DIST));
@@ -680,13 +502,20 @@ void LLTracker::renderBeacon(LLVector3d pos_global,
     LLVector3 pos_agent = gAgent.getPosAgentFromGlobal(pos_global);
     LLVector3d pos_agent_3d = gAgent.getPositionGlobal();   // <FS:CR> FIRE-8234
 
-    LLGLSTracker gls_tracker;
-    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
-    LLGLDisable cull_face(GL_CULL_FACE);
-    LLGLDepthTest gls_depth(GL_TRUE, GL_FALSE);
-
-    LLTracker::drawBeacon(pos_agent, "DOWN", fogged_color, dist);
-    LLTracker::drawBeacon(pos_agent, "UP", fogged_color_under, dist);
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLTracker::drawBeacon(pos_agent,"DOWN",fogged_color,dist);
+        LLTracker::drawBeacon(pos_agent,"UP",fogged_color_under,dist);
+    }
+    else
+    {
+        LLGLSTracker gls_tracker;
+        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        LLGLDisable cull_face(GL_CULL_FACE);
+        LLGLDepthTest gls_depth(GL_TRUE,GL_FALSE);
+        LLTracker::drawBeacon(pos_agent,"DOWN",fogged_color,dist);
+        LLTracker::drawBeacon(pos_agent,"UP",fogged_color_under,dist);
+    }
 
     std::string text;
     // <FS:CR> FIRE-8234 - Show distance from avatar rather than distance from camera.
@@ -879,6 +708,10 @@ void LLTracker::drawMarker(const LLVector3d& pos_global, const LLColor4& color, 
 
         F32 angle = atan2( (F32)y, (F32)x );
 
+        if(gViewerWindow && gViewerWindow->isNativeVulkan())
+            LLWorldMapView::sTrackArrowImage->drawRotated(mHUDArrowCenterX-half_arrow_size,mHUDArrowCenterY-half_arrow_size,
+                HUD_ARROW_SIZE,HUD_ARROW_SIZE,RAD_TO_DEG*angle,color);
+        else
         gl_draw_scaled_rotated_image(mHUDArrowCenterX - half_arrow_size,
                                      mHUDArrowCenterY - half_arrow_size,
                                      HUD_ARROW_SIZE, HUD_ARROW_SIZE,
@@ -959,10 +792,10 @@ void LLTracker::cacheLandmarkPosition()
             }
         }
     }
-    if ( found_landmark && gFloaterWorldMap )
+    if (found_landmark && (gFloaterWorldMap || (gViewerWindow && gViewerWindow->isNativeVulkan())))
     {
         mHasReachedLandmark = false;
-        F32 dist = gFloaterWorldMap->getDistanceToDestination(mTrackedPositionGlobal, 1.0f);
+        F32 dist = LLFloaterWorldMap::distanceToDestination(mTrackedPositionGlobal, 1.0f);
         if ( dist < DESTINATION_UNVISITED_RADIUS )
         {
             mHasReachedLandmark = true;

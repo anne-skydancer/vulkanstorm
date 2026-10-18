@@ -1587,6 +1587,7 @@ LLTrace::BlockTimerStatHandle FTM_FRAME("Frame");
 // machine as OpenGL. Only rendering and the not-yet-created world owners differ.
 bool LLAppViewer::initNativeVulkanLogin()
 {
+    gPipeline.initializeRenderDebugFeatures(); // Shared CPU policy; no GL pipeline initialization.
 #if VS_NATIVE_VULKAN
     mNativeSession = VSNativeSession::create();
 #endif

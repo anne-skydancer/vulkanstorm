@@ -28,6 +28,7 @@
 #define LL_LLFLOATERTOPOBJECTS_H
 
 #include "llfloater.h"
+#include <functional>
 #include "llavatarname.h"
 
 class LLUICtrl;
@@ -66,6 +67,8 @@ public:
     virtual bool postBuild();
 
     void onRefresh();
+    void beginReply();
+    std::function<bool()> requestGuard(bool modify=false);
 
     static void setMode(U32 mode);
     void disableRefreshBtn();
@@ -98,7 +101,7 @@ private:
     // <FS:Ansariel> Enable avatar-specific buttons if current selection is an avatar
     void onAvatarCheck(const LLUUID& avatar_id, const LLAvatarName av_name);
 
-    static bool callbackReturnAll(const LLSD& notification, const LLSD& response);
+    bool callbackReturnAll(const LLSD& notification, const LLSD& response);
 
     void onGetByOwnerName();
     void onGetByObjectName();
@@ -109,6 +112,7 @@ private:
     //void teleportToSelectedObject();
 
 private:
+    std::function<bool()> mReplyCurrent;
     std::string mMethod;
 
     LLSD mObjectListData;

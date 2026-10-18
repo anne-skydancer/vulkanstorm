@@ -860,6 +860,7 @@ set(viewer_SOURCE_FILES
     llviewerpartsource.cpp
     vscapabilities.cpp
     vsestatecovenant.cpp
+    vsregionterrain.cpp
     vsregioncontext.cpp
     llviewerregion.cpp
     llviewershadermgr.cpp
@@ -1746,6 +1747,8 @@ set(viewer_HEADER_FILES
     llviewerprecompiledheaders.h
     vscapabilities.h
     vsestatecovenant.h
+    vsregionterrain.h
+    vsterrainreadiness.h
     vsregioncontext.h
     llviewerregion.h
     llviewershadermgr.h
@@ -2312,6 +2315,8 @@ if(USE_DILIGENTCORE)
           vsgroupsearch.cpp vsgroupsearch.h
           vsenvironmentstate.cpp
     vsenvironmentreplay.cpp
+    vsbeaconpresentation.cpp vsbeaconpresentation.h vsdebugbeacongeometry.h
+    vstrackerpresentation.cpp vstrackerpresentation.h vstrackerdraw.cpp vstrackerdraw.h vstrackergeometry.h vstrackermeshsink.h
     vsworldrenderer.cpp vsworldrenderer.h vsparcelpresentation.cpp vsparcelpresentation.h vsparcelgeometry.h vsmaterial.cpp vsmaterial.h vsmaterialassets.cpp vsmaterialassets.h vsterrainassets.cpp vsterrainassets.h vsobjectmedia.cpp vsobjectmedia.h vsworldscene.cpp vsworldscene.h vsterrainpacket.h vsworldavatar.cpp vsworldavatar.h
           vsworldassets.cpp vsworldassets.h vsworldgltf.cpp vsworldgltf.h vsresourcebudget.h vsnativecamera.h vsparcelpermissions.h vsworldmotion.h
           vswearable.cpp vswearable.h

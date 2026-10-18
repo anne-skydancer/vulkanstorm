@@ -21,13 +21,13 @@
 	<text name="covenant_timestamp_text">
 		Última modificación el miér. 31 de dic. de 1969, 16:00:00
 	</text>
-	<button label="?" name="covenant_help"/>
+
 	<text_editor bottom="-263" height="178" name="covenant_editor">
 		No se ha aportado un contrato para este estado.
 	</text_editor>
 	<button label="Cambiar" name="reset_covenant"/>
 	<text name="covenant_help_text">
-		Los cambios en el contrato se mostrarán en todas las parcelas 
+		Los cambios en el contrato se mostrarán en todas las parcelas
 del estado.
 	</text>
 	<text bottom_delta="-31" name="covenant_instructions">
@@ -66,18 +66,8 @@ del estado.
 	<text name="changeable_clause">
 		El terreno de esta región no se podrá unir/dividir.
 	</text>
-	<string name="can_resell">
-		El terreno comprado en esta región se podrá revender.
-	</string>
-	<string name="can_not_resell">
-		El terreno comprado en esta región no se podrá revender.
-	</string>
-	<string name="can_change">
-		El terreno comprado en esta región se podrá unir o 
-subdividir.
-	</string>
-	<string name="can_not_change">
-		El terreno comprado en esta región no se podrá unir ni
-subdividir.
-	</string>
+
+
+
+
 </panel>

@@ -34,7 +34,7 @@
 	<check_box label="Разрешить перепродажу земли" name="allow_land_resell_check"/>
 	<check_box label="Разрешить объединение/разделение земли" name="allow_parcel_changes_check"/>
 	<check_box label="Не показывать землю в поиске" name="block_parcel_search_check" tool_tip="Отображать регион и его участки в результатах поиска"/>
-	<check_box label="Разрешить меши-объекты" name="mesh_rez_enabled_check" tool_tip="Разрешить жителям выкладывать меши в этом регионе"/>
+
 	<spinner label="Лимит агентов" name="agent_limit_spin"/>
 	<spinner label="Бонус объекта" name="object_bonus_spin"/>
 	<text label="Дозволенность" name="access_text">

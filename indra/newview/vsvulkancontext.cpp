@@ -14,6 +14,10 @@
 #include "vsenvironmentstate.h"
 #include "llenvironment.h"
 #include "vsparcelpresentation.h"
+#include "vsbeaconpresentation.h"
+#include "vstrackerpresentation.h"
+#include "llhudtext.h"
+#include "pipeline.h"
 #include "vsnativesession.h"
 #include "llagentcamera.h"
 #include "llviewercamera.h"
@@ -159,6 +163,8 @@ struct VSVulkanContext::Impl
     std::unique_ptr<VSUIRenderer>                     renderer;
     std::unique_ptr<VSUIResources>                    resources;
     std::unique_ptr<VSParcelPresentation> parcelPresentation;
+    std::unique_ptr<VSBeaconPresentation> beaconPresentation;
+    std::unique_ptr<VSTrackerPresentation> trackerPresentation;
     std::unique_ptr<VSWorldRenderer>                  worldRenderer;
     std::unique_ptr<VSWorldScene>                     worldScene;
     std::string                                       adapter;
@@ -272,6 +278,8 @@ struct VSVulkanContext::Impl
             worldRenderer = std::make_unique<VSWorldRenderer>(device, context);
             worldScene = std::make_unique<VSWorldScene>(*worldRenderer, *resources);
             parcelPresentation=std::make_unique<VSParcelPresentation>(*worldRenderer,*resources,*worldScene);
+            beaconPresentation=std::make_unique<VSBeaconPresentation>(*worldRenderer,*worldScene);
+            trackerPresentation=std::make_unique<VSTrackerPresentation>(*worldRenderer,*worldScene);
         }
         catch (...)
         {
@@ -423,6 +431,11 @@ struct VSVulkanContext::Impl
 #endif
             auto scene = worldScene->packets(eye, distance, size.mY, size.mX);
             parcelPresentation->append(*session,view,size.mX,size.mY,scene);
+            if(gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
+            {
+                beaconPresentation->append(*session,scene);
+                trackerPresentation->append(*session,scene);
+            }
 #if VS_VULKAN_DIAGNOSTICS
             const auto submitStart = profileFrames ? ProfileClock::now() : ProfileClock::time_point{};
             if (profileFrames)
@@ -441,9 +454,18 @@ struct VSVulkanContext::Impl
         const auto uiStart = profileFrames ? ProfileClock::now() : ProfileClock::time_point{};
 #endif
         if(const auto owner=VSNativeSession::active(); !owner || owner->phase()!=VSNativeSession::Phase::Connected)
+        {
             parcelPresentation->reset();
+            beaconPresentation->reset();
+            trackerPresentation->reset();
+        }
         if (sceneObserver) sceneObserver(device, context, target, size.mX, size.mY);
         resources->begin(size.mX, size.mY, dpi);
+        if(const auto owner=VSNativeSession::active(); owner && owner->phase()==VSNativeSession::Phase::Connected &&
+            gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
+        {
+            LLHUDText::renderNativeBeaconLabels();
+        }
 #if VS_VULKAN_DIAGNOSTICS
         if (!vs_parity_scene_active())
 #endif

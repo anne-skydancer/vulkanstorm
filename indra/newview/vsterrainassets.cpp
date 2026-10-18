@@ -1,6 +1,7 @@
 // Transpose LLTerrainMaterials ownership without creating GL texture owners. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsterrainassets.h"
+#include "vsterrainreadiness.h"
 #include "vsuiresources.h"
 #include "vsuiimageprovider.h"
 #include "vsnativesession.h"
@@ -23,6 +24,7 @@ struct VSTerrainAssets::Impl
     std::array<LLPointer<LLFetchedGLTFMaterial>,4> materials;
     std::array<LLPointer<LLGLTFMaterial>,4> overrides;
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t request;
+    boost::signals2::signal<void()> changed;
     bool queried=false,retired=false;
     double retryAt=0;
     std::shared_ptr<const VSWorldRenderer::Terrain> published;
@@ -64,6 +66,7 @@ struct VSTerrainAssets::Impl
                     candidate[layer]->applyOverrideLLSD(row);
                 }
                 state->overrides=std::move(candidate);state->queried=true;
+                state->changed();
             });
         });
     }
@@ -74,6 +77,36 @@ VSTerrainAssets::~VSTerrainAssets()
     mImpl->retired=true;
     auto pending=std::exchange(mImpl->request,{});
     if(pending) pending->cancelSuspendedOperation();
+}
+std::pair<bool,bool> VSTerrainAssets::settings(const std::array<LLUUID,4>& ids,
+    std::array<LLPointer<LLGLTFMaterial>,4>& overrides)
+{
+    mImpl->query(mImpl);
+    bool texturesReady=false,materialsReady=false,defined=true;
+    for(unsigned layer=0;layer<4;++layer)
+    {
+        const auto image=ids[layer].notNull()?vs_request_world_image(ids[layer],128):nullptr;
+        texturesReady|=image && vs_terrain_texture_state(vs_ui_image_discard(ids[layer]),
+            image->getWidth(),image->getHeight(),vs_ui_image_components(ids[layer]))==VSTerrainTextureState::Ready;
+        if(mImpl->ids[layer]!=ids[layer])
+        {
+            mImpl->ids[layer]=ids[layer];
+            mImpl->materials[layer]=ids[layer].notNull()?gGLTFMaterialList.getMaterial(ids[layer]):nullptr;
+        }
+        const auto& material=mImpl->materials[layer];
+        defined=defined && bool(material);materialsReady|=material && material->isLoaded();
+        // The accepted query replaces pointers; this snapshot retains the exact
+        // immutable generation instead of reading the next simulator's overrides.
+        overrides[layer]=mImpl->overrides[layer];
+    }
+    static LLCachedControl<bool> pbr(gSavedSettings,"RenderTerrainPBREnabled",false);
+    static LLCachedControl<bool> force(gSavedSettings,"RenderTerrainPBRForce",false);
+    if(pbr && force && defined)materialsReady=true;
+    return {texturesReady,materialsReady};
+}
+boost::signals2::connection VSTerrainAssets::observeSettings(const boost::signals2::signal<void()>::slot_type& slot)
+{
+    return mImpl->changed.connect(slot);
 }
 void VSTerrainAssets::releaseImages() {mImpl->published.reset();}
 std::shared_ptr<const VSWorldRenderer::Terrain> VSTerrainAssets::snapshot(const std::array<LLUUID,4>& ids,

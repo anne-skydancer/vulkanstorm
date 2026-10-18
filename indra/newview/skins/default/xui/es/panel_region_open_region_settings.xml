@@ -7,7 +7,7 @@
 	<spinner label="Mín. escala de prim" name="min_prim_scale" tool_tip="Tamaño mínimo del que puede crearse un prim en esta región"/>
 	<spinner label="Máx. escala de prim físico" name="max_phys_prim_scale" tool_tip="Tamaño máximo del que puede crearse un prim físico en esta región"/>
 	<spinner label="Tamaño máximo de hueco" name="max_hollow_size" tool_tip="Tamaño máximo del que puede hacerse un agujero en un prim creado en esta región"/>
-	<spinner label="Tamaño mínimo de hueco" name="min_hollow_size" tool_tip="Tamaño mínimo del que puede hacerse un agujero en un prim creado en esta región"/>
+
 	<spinner label="Máximo de objetos enlazables" name="max_link_count" tool_tip="Número máximo de objetos que pueden ser enlazados en un grupo no físico en esta región"/>
 	<spinner label="Máx. obj. físicos enlazables" name="max_link_count_phys" tool_tip="Número máximo de objetos que pueden ser enlazados en un grupo físico en esta región"/>
 	<spinner label="Transferencia máx. de objetos" name="max_inventory_items_transfer" tool_tip="Número de objetos que pueden ser transferidos entre agentes de una sola vez. -1 significa número ilimitado. (Por defecto: -1)"/>

@@ -26,6 +26,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpbrterrainfeatures.h"
+#include "vsregioncontext.h"
+#include "vsnativeim.h"
 
 #include "llappviewer.h"
 #include "llgltfmaterial.h"
@@ -50,11 +52,18 @@ void LLPBRTerrainFeatures::queueQuery(LLViewerRegion& region, void(*done_callbac
 }
 
 // static
-void LLPBRTerrainFeatures::queueModify(LLViewerRegion& region, const LLModifyRegion& composition)
+void LLPBRTerrainFeatures::queueModify(LLViewerRegion& region,const LLModifyRegion& composition)
+{
+    const auto target=vs_region_context(region.getHost());
+    if(target)queueModify(*target,composition);
+}
+
+void LLPBRTerrainFeatures::queueModify(const VSRegionContext& region,const LLModifyRegion& composition)
 {
     llassert(on_main_thread());
     llassert(LLCoros::on_main_coro());
 
+    if(!region.current())return;
     LLSD updates = LLSD::emptyMap();
 
     LLSD override_updates = LLSD::emptyArray();
@@ -74,11 +83,12 @@ void LLPBRTerrainFeatures::queueModify(LLViewerRegion& region, const LLModifyReg
     }
     updates["overrides"] = override_updates;
 
-    LLCoros::instance().launch("modifyRegionCoro",
-        std::bind(&LLPBRTerrainFeatures::modifyRegionCoro,
-            region.getCapability("ModifyRegion"),
-            updates,
-            nullptr));
+    const auto current=vs_native_im_guard();
+    const auto url=region.getCapability("ModifyRegion");
+    LLCoros::instance().launch("modifyRegionCoro",[region,current,url,updates]
+    {
+        if(region.current() && current())modifyRegionCoro(url,updates,nullptr);
+    });
 }
 
 // static

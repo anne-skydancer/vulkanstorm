@@ -377,30 +377,12 @@ void LLAtmospherics::calcSkyColorWLVert(const LLSettingsSky::ptr_t &psky, LLVect
 */
 }
 
-void LLAtmospherics::updateFog(const F32 distance, const LLVector3& tosun_in)
+LLColor4 LLAtmospherics::calculateSkyFogColor(const LLSettingsSky::ptr_t& psky,const LLVector3& tosun_in)
 {
-    LLVector3 tosun = tosun_in;
-
-    if (!gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_FOG))
-    {
-        return;
-    }
-
-    LLColor4 target_fog(0.f, 0.2f, 0.5f, 0.f);
-
-    const F32 water_height = gAgent.getRegion() ? gAgent.getRegion()->getWaterHeight() : 0.f;
-    // LLWorld::getInstance()->getWaterHeight();
-    F32 camera_height = gAgentCamera.getCameraPositionAgent().mV[2];
-
-    F32 near_clip_height = LLViewerCamera::getInstance()->getAtAxis().mV[VZ] * LLViewerCamera::getInstance()->getNear();
-    camera_height += near_clip_height;
-
-    F32 fog_distance = 0.f;
+    if(!psky)return mFogColor;
+    LLVector3 tosun=tosun_in;
     LLColor3 res_color[3];
-
-    LLColor3 sky_fog_color = LLColor3::white;
-    LLColor3 render_fog_color = LLColor3::white;
-
+    LLColor3 sky_fog_color=LLColor3::white;
     const F32 tosun_z = tosun.mV[VZ];
     tosun.mV[VZ] = 0.f;
     tosun.normalize();
@@ -421,7 +403,6 @@ void LLAtmospherics::updateFog(const F32 distance, const LLVector3& tosun_in)
     // Sky colors, just slightly above the horizon in the direction of the sun, perpendicular to the sun, and at a 45 degree angle to the sun.
     AtmosphericsVars vars;
 
-    LLSettingsSky::ptr_t psky = LLEnvironment::instance().getCurrentSky();
 
     // NOTE: This is very similar to LLVOSky::cacheEnvironment()
     // Differences:
@@ -468,6 +449,35 @@ void LLAtmospherics::updateFog(const F32 distance, const LLVector3& tosun_in)
     }
 
     color_gamma_correct(sky_fog_color);
+
+    return LLColor4(sky_fog_color,1.f);
+}
+
+void LLAtmospherics::updateFog(const F32 distance, const LLVector3& tosun_in)
+{
+    LLVector3 tosun = tosun_in;
+
+    if (!gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_FOG))
+    {
+        return;
+    }
+
+    LLColor4 target_fog(0.f, 0.2f, 0.5f, 0.f);
+
+    const F32 water_height = gAgent.getRegion() ? gAgent.getRegion()->getWaterHeight() : 0.f;
+    // LLWorld::getInstance()->getWaterHeight();
+    F32 camera_height = gAgentCamera.getCameraPositionAgent().mV[2];
+
+    F32 near_clip_height = LLViewerCamera::getInstance()->getAtAxis().mV[VZ] * LLViewerCamera::getInstance()->getNear();
+    camera_height += near_clip_height;
+
+    F32 fog_distance = 0.f;
+
+    LLColor3 sky_fog_color = LLColor3::white;
+    LLColor3 render_fog_color = LLColor3::white;
+
+    const auto psky=LLEnvironment::instance().getCurrentSky();
+    sky_fog_color=LLColor3(calculateSkyFogColor(psky,tosun));
 
     render_fog_color = sky_fog_color;
 

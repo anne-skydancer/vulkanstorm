@@ -243,6 +243,7 @@ public:
 
     void init();
     void updateFog(const F32 distance, const LLVector3& tosun);
+    LLColor4 calculateSkyFogColor(const LLSettingsSky::ptr_t&,const LLVector3&);
 
     const LLHaze& getHaze() const                    { return mHaze; }
     LLHaze& getHaze()                                { return mHaze; }
