@@ -1,5 +1,5 @@
 {
-  "source_commit": "74620e4483896dcaf307417e631e6824cc42f85f",
+  "source_commit": "4c5a9e2fe64eb59035ab7ba763d05f3f6fc3be66",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -440,7 +440,7 @@
       ]
     },
     "indra/newview/vsuiresources.cpp": {
-      "sha256": "775c82a752e0c2e6fcc59941316604976b39ec2c777f6a20461c62cbf151fe60",
+      "sha256": "1900fbb31782ada39a1f6695754bb5609e2c0014f946bbf724a68506609a5e1b",
       "anchors": [
         "VSUIResources::publish",
         "VSUIResources::fontBatch",
@@ -562,7 +562,7 @@
       ]
     },
     "indra/llrender/llrender2dutils.cpp": {
-      "sha256": "4d49f543c315235a93dd5f0987dab0b308fb43dfbe37c1d6f0f7d10a47e69ed5",
+      "sha256": "0e3d8e3eace83b1c2e1113bdf295b2181d34c5b06c2c86a6d2e90afb5976e800",
       "anchors": [
         "LLRender2D::setNativeUI",
         "LLRender2D::setSceneBlendType",
@@ -570,7 +570,7 @@
       ]
     },
     "indra/llrender/llrender2dutils.h": {
-      "sha256": "f5aee55b803df81e1ef033e87204d92a0c720f084b3392789b532afb8393323d",
+      "sha256": "34368fbe097c94a1cc47ea4f60ad80e00f5e2448cc6d10494476876c68ba4ad0",
       "anchors": [
         "setNativeUI",
         "setSceneBlendType"
@@ -672,7 +672,7 @@
       ]
     },
     "indra/llrender/llrender.cpp": {
-      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
+      "sha256": "445a2415fdbe91d933083b4a2e61eadb0edf59409d453ce3b5d794334eca6d05",
       "anchors": [
         "void LLRender::begin",
         "GL geometry in native UI owner"
