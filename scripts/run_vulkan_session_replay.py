@@ -532,7 +532,7 @@ DEFAULT_ENVIRONMENT_ASSET = '5646d39e-d3d7-6aff-ed71-30fc87d64a91'
 
 from vulkan_environment_evidence import environment_pixels_passed
 
-REQUIRED = ('connected_region_nine_tabs', 'connected_region_encoded_model', 'connected_topobjects_encoded_beacon', 'connected_console_http', 'connected_region_ui_retirement', 'connected_my_environments_filters', 'connected_fixed_environment_editors', 'connected_environment_gpu_consumption', 'connected_parcel_request_echo', 'connected_parcel_rectangle_pixels', 'connected_environment_capability_edit', 'connected_about_land_all_tabs', 'connected_environment_nested_dialogs', 'connected_land_media_url_cancel', 'connected_default_environment_asset', 'connected_land_buy_policy_cancel', 'connected_land_sell_stale_intent_cancel', 'connected_utility_floaters', 'connected_keyboard_first_person_strafe', 'connected_keyboard_window_dispatch', 'connected_camera_controls', 'connected_land_permissions', 'connected_native_statistics', 'connected_script_notification_controls', 'connected_script_dialog_encoded', 'connected_script_textbox_encoded', 'connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
+REQUIRED = ('connected_region_authorized_update', 'connected_region_readonly_update', 'connected_region_nine_tabs', 'connected_region_encoded_model', 'connected_topobjects_encoded_beacon', 'connected_console_http', 'connected_region_ui_retirement', 'connected_my_environments_filters', 'connected_fixed_environment_editors', 'connected_environment_gpu_consumption', 'connected_parcel_request_echo', 'connected_parcel_rectangle_pixels', 'connected_environment_capability_edit', 'connected_about_land_all_tabs', 'connected_environment_nested_dialogs', 'connected_land_media_url_cancel', 'connected_default_environment_asset', 'connected_land_buy_policy_cancel', 'connected_land_sell_stale_intent_cancel', 'connected_utility_floaters', 'connected_keyboard_first_person_strafe', 'connected_keyboard_window_dispatch', 'connected_camera_controls', 'connected_land_permissions', 'connected_native_statistics', 'connected_script_notification_controls', 'connected_script_dialog_encoded', 'connected_script_textbox_encoded', 'connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
             'connected_inventory_texture_upload', 'connected_inventory_sound_upload',
             'connected_group_titles', 'connected_group_directory_search',
             'connected_inventory_share', 'connected_resident_pay', 'connected_payment_balance_gate',
@@ -753,6 +753,31 @@ def run_staged_viewer(command, stage, env):
     result = launch(command, cwd=stage, env=env, timeout=PROCESS_REPLAY_SECONDS)
     result.native_debugger = 'gdb' if debugger else None
     return result
+
+
+def require_no_child_process_crashes(log):
+    """A surviving viewer cannot qualify after one of its media services crashed."""
+    retiring = set()
+    for line in log.splitlines():
+        if '#LLProcess#' not in line:
+            continue
+        child = re.search(r'\bSLPlugin(?:\.exe)?\s*\((\d+)\)', line, re.IGNORECASE)
+        if not child:
+            continue
+        pid = child.group(1)
+        if re.search(r'\bkilling\s+SLPlugin(?:\.exe)?\s*\(', line, re.IGNORECASE):
+            retiring.add(pid)
+            continue
+        if 'killed with exception ' in line:
+            raise RuntimeError('Media plugin crashed: ' + line.strip())
+        fault = re.search(r'killed by signal (\d+)\b', line)
+        # LLProcess::kill requests SIGTERM. Only its preceding same-child log
+        # proves intentional retirement; an OOM/SIGKILL is never a success.
+        if fault and (int(fault.group(1)) != 15 or pid not in retiring):
+            raise RuntimeError('Media plugin crashed: ' + line.strip())
+        exited = re.search(r'exited with code (-?\d+)\b', line)
+        if exited and int(exited.group(1)) != 0 and not (int(exited.group(1)) == -1 and pid in retiring):
+            raise RuntimeError('Media plugin failed: ' + line.strip())
 
 
 def read_session_evidence(directory, returncode):
@@ -1568,12 +1593,16 @@ def main():
                 process = run_staged_viewer(command, stage, env)
             server.replay_finished.set()
             code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
+            require_no_child_process_crashes(log)
             report = read_session_evidence(directory, code)
             report['process_isolation'] = process_isolation_evidence(process)
             report['native_debugger'] = getattr(process, 'native_debugger', None)
             passed = assess(report, code, log)
             if not ui_environment_fixture.exchange_observed(server.requests):
                 raise RuntimeError('Missing actual selected-parcel ExtEnvironment GET/PUT request and accepted reply')
+            region_edits=[row.get('request') for row in server.requests if row.get('path') == '/ui-open-region-settings']
+            if len(region_edits)!=2 or any(not isinstance(row,dict) or not isinstance(row.get('enable_teen_mode'),bool) for row in region_edits) or {row.get('enforce_max_build') for row in region_edits}!={False,True}:
+                raise RuntimeError('Missing actual shared Aurora Apply/restore HTTP transactions')
             if not any(row.get('path') == '/ui-sim-console' and row.get('request') == 'native qualification' for row in server.requests):
                 raise RuntimeError('Missing actual shared simulator-console HTTP request')
             if not default_environment_asset_observed(server.requests, server.environment_fixture):

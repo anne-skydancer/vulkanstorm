@@ -320,7 +320,9 @@ void incoming(VSNativeSession& owner, EInstantMessage dialog, const LLUUID& id, 
 struct Replay : public LLAvatarPropertiesObserver
 {
     unsigned regionUIStage=0,regionUITab=0,regionRequests=0,regionReplies=0,landStatRequests=0;
-    LLUUID estateInvoice;
+    LLUUID estateInvoice,originalRegionOwner;
+    bool regionAuthorityReply=false;
+    unsigned answeredRegionRequests=0,reopenReplies=0,reopenRequests=0;
     LLHandle<LLFloater> regionUI,consoleUI,topUI;
     static void regionRequest(LLMessageSystem* message,void** data)
     {
@@ -368,7 +370,7 @@ struct Replay : public LLAvatarPropertiesObserver
         const auto current=vs_current_region_context();require(current && current->current(),"Estate replay lost current simulator");
         LLMessageSystem* msg=gMessageSystem;msg->newMessage("EstateOwnerMessage");msg->nextBlock("AgentData");msg->addUUID("AgentID",gAgentID);msg->addUUID("SessionID",gAgentSessionID);msg->addUUID("TransactionID",LLUUID::null);
         msg->nextBlock("MethodData");msg->addString("Method","estateupdateinfo");msg->addUUID("Invoice",estateInvoice);
-        for(const auto& value:std::array<std::string,10>{"Native qualification estate",current->getOwner().asString(),"1000",std::to_string(current->getRegionFlags()),"6144","1000",LLUUID::null.asString(),"0","0",""})
+        for(const auto& value:std::array<std::string,10>{"Native qualification estate",(regionUIStage>=6?originalRegionOwner:gAgentID).asString(),"1000",std::to_string(current->getRegionFlags()),"6144","1000",LLUUID::null.asString(),"0","0",""})
         {msg->nextBlock("ParamList");msg->addString("Parameter",value);}
         msg->sendReliable(owner.host());estateInvoice.setNull();
     }
@@ -377,17 +379,22 @@ struct Replay : public LLAvatarPropertiesObserver
         if(regionUIStage==12)return true;
         if(regionUIStage==0)
         {
+            const auto initial=vs_current_region_context();require(bool(initial),"Region replay has no initial ownership metadata");originalRegionOwner=initial->getOwner();
             gMessageSystem->setHandlerFunc("RequestRegionInfo",regionRequest,reinterpret_cast<void**>(this));
             gMessageSystem->setHandlerFunc("EstateOwnerMessage",estatePacket,reinterpret_cast<void**>(this));
             gMessageSystem->setHandlerFunc("LandStatRequest",landStatRequest,reinterpret_cast<void**>(this));
             auto* view=LLFloaterReg::showInstance("region_info");require(view && view->getVisible(),"Actual Region/Estate frontend failed to open");regionUI=view->getHandle();
             ++regionUIStage;return false;
         }
-        if(regionRequests>regionReplies)publishRegionUI(owner);
+        if(regionRequests>answeredRegionRequests){answeredRegionRequests=regionRequests;publishRegionUI(owner);}
         if(estateInvoice.notNull())publishEstateUI(owner);
         if(regionUIStage==1)
         {
             if(!regionRequests || LLRegionInfoModel::instance().mHardAgentLimit!=100 || LLEstateInfoModel::instance().getName()!="Native qualification estate")return false;
+            const auto role=vs_current_region_context();if(!role || role->getOwner()!=gAgentID)return false;
+            // The authoritative EstateOwnerMessage publishes real role metadata.
+            // Refresh controls only through another genuine RegionInfo packet.
+            if(!regionAuthorityReply){publishRegionUI(owner);regionAuthorityReply=true;return false;}
             auto* view=regionUI.get();require(view,"Region frontend retired before reply");auto* tabs=view->getChild<LLTabContainer>("region_panels");
             require(tabs->getTabCount()==9,"Actual region capabilities omitted one of nine Region/Estate tabs");
             if(regionUITab<9){require(tabs->selectTab(regionUITab++),"Actual Region/Estate tab could not be selected");return false;}
@@ -397,6 +404,13 @@ struct Replay : public LLAvatarPropertiesObserver
             require(LLFloaterRegionInfo::getPanelGeneral()->getChild<LLUICtrl>("agent_limit_spin")->isInEnabledChain()==current->canManageEstate(),
                 "Region controls differ from ordinary reference estate authority");
             evidence["connected_region_nine_tabs"]=true;evidence["connected_region_encoded_model"]=true;
+            require(tabs->selectTabByName("RegionSettings"),"Actual Aurora tab failed selection");
+            auto* regionSettings=LLFloaterRegionInfo::getPanelOpenSettings();require(regionSettings,"Aurora real panel missing");
+            auto* enforce=regionSettings->getChild<LLCheckBoxCtrl>("enforce_max_build");auto* apply=regionSettings->getChild<LLButton>("apply_ors_btn");
+            const bool originalEnforce=enforce->get();
+            clickCheckbox(enforce);require(enforce->get()!=originalEnforce && apply->isInEnabledChain(),"Real Aurora Enforce edit did not enable actual Apply");apply->onCommit();
+            clickCheckbox(enforce);require(enforce->get()==originalEnforce && apply->isInEnabledChain(),"Real Aurora Enforce restoration did not enable Apply");apply->onCommit();
+            evidence["connected_region_authorized_update"]=true;
             auto* top=LLFloaterReg::showInstance("top_objects");require(top,"Actual TopObjects frontend failed to open");topUI=top->getHandle();top->getChild<LLButton>("refresh_btn")->onCommit();
             ++regionUIStage;return false;
         }
@@ -427,13 +441,30 @@ struct Replay : public LLAvatarPropertiesObserver
             auto* console=consoleUI.get();require(console,"Simulator console retired before HTTP response");if(console->getChild<LLTextEditor>("region_debug_console_output")->getText().find("native console accepted")==std::string::npos)return false;
             evidence["connected_console_http"]=true;const auto key=console->getKey();console->closeFloater();LLFloaterReg::destroyInstance("region_debug_console",key);
             auto* view=regionUI.get();const auto regionKey=view->getKey();view->closeFloater();LLFloaterReg::destroyInstance("region_info",regionKey);
-            ++regionUIStage;return false;
+            ++regionUIStage;estateInvoice=LLFloaterRegionInfo::getLastInvoice();publishEstateUI(owner);return false;
         }
         if(regionUIStage==6)
         {
             require(regionUI.isDead() && consoleUI.isDead(),"Actual Region/console controls survived deferred retirement");
             require(!LLFloaterRegionInfo::getPanelEstate() && !LLFloaterRegionInfo::getPanelExperiences(),"Late model access manufactured retired Region frontend");
-            evidence["connected_region_ui_retirement"]=true;regionUIStage=12;return true;
+            const auto current=vs_current_region_context();if(!current || current->getOwner()!=originalRegionOwner)return false;
+            evidence["connected_region_ui_retirement"]=true;
+            reopenReplies=regionReplies;reopenRequests=regionRequests;
+            auto* view=LLFloaterReg::showInstance("region_info");require(view,"Actual Region frontend could not reopen after retirement");regionUI=view->getHandle();
+            ++regionUIStage;return false;
+        }
+        if(regionUIStage==7)
+        {
+            if(regionRequests<=reopenRequests || regionReplies<=reopenReplies)return false;
+            const auto current=vs_current_region_context();if(!current || current->getOwner()!=originalRegionOwner)return false;
+            auto* general=LLFloaterRegionInfo::getPanelGeneral();require(general,"Reopened real General panel unavailable");
+            require(general->getChild<LLUICtrl>("agent_limit_spin")->isInEnabledChain()==current->canManageEstate(),"Reopened Region editor retained stale owner permissions");
+            evidence["connected_region_readonly_update"]=true;
+            auto* view=regionUI.get();const auto key=view->getKey();view->closeFloater();LLFloaterReg::destroyInstance("region_info",key);++regionUIStage;return false;
+        }
+        if(regionUIStage==8)
+        {
+            require(regionUI.isDead(),"Reopened Region controller survived deferred retirement");regionUIStage=12;return true;
         }
         return false;
     }

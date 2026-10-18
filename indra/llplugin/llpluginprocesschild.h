@@ -108,6 +108,7 @@ private:
     bool    mBlockingResponseReceived;
     std::queue<std::string> mMessageQueue;
     LLTimer mWaitGoodbye;
+    bool mPluginShutdownComplete = false;
     void deliverQueuedMessages();
 
 };

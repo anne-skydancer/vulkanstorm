@@ -52,7 +52,10 @@ LLPluginProcessChild::~LLPluginProcessChild()
 {
     if (mInstance != NULL)
     {
-        sendMessageToPlugin(LLPluginMessage("base", "cleanup"));
+        // Successful cleanup/goodbye has already retired plugin-owned state.
+        // Only incomplete/error paths still need to request cleanup here.
+        if (!mPluginShutdownComplete)
+            sendMessageToPlugin(LLPluginMessage("base", "cleanup"));
 
         // IMPORTANT: under some (unknown) circumstances the apr_dso_unload() triggered when mInstance is deleted
         // appears to fail and lock up which means that a given instance of the slplugin process never exits.
@@ -240,9 +243,13 @@ void LLPluginProcessChild::idle(void)
             break;
 
         case STATE_UNLOADED:
+            mPluginShutdownComplete = true;
             killSockets();
-            delete mInstance;
-            mInstance = NULL;
+            // A plugin may leave runtime-owned worker threads alive after its
+            // cleanup/goodbye (CEF does this during a short-lived login page).
+            // The shell owns exactly one plugin and exits next; preserve its
+            // DSO until process exit terminates those threads before unloading
+            // code. The destructor already uses this lifetime on error paths.
             setState(STATE_DONE);
             break;
 
