@@ -7343,7 +7343,12 @@ F32 LLAppViewer::getMainloopTimeoutSec() const
 
 void LLAppViewer::handleLoginComplete()
 {
-    if (mNativeVulkanLogin) { mSavePerAccountSettings = true; return; }
+    if (mNativeVulkanLogin)
+    {
+        mSavePerAccountSettings = true;
+        LLScriptRecoverQueue::recoverIfNeeded();
+        return;
+    }
 
     gLoggedInTime.start();
     initMainloopTimeout("Mainloop Init");
