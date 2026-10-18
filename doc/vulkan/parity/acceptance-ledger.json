@@ -58174,7 +58174,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterregioninfo.cpp"
+        "indra/newview/llfloaterregioninfo.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -62990,7 +62991,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatertopobjects.cpp"
+        "indra/newview/llfloatertopobjects.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -63022,7 +63024,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatertopobjects.cpp"
+        "indra/newview/llfloatertopobjects.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -63054,7 +63057,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatertopobjects.cpp"
+        "indra/newview/llfloatertopobjects.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -63086,7 +63090,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatertopobjects.cpp"
+        "indra/newview/llfloatertopobjects.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -63118,7 +63123,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatertopobjects.cpp"
+        "indra/newview/llfloatertopobjects.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -63150,7 +63156,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatertopobjects.cpp"
+        "indra/newview/llfloatertopobjects.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -63182,7 +63189,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatertopobjects.cpp"
+        "indra/newview/llfloatertopobjects.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -63214,7 +63222,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatertopobjects.cpp"
+        "indra/newview/llfloatertopobjects.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -63246,7 +63255,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatertopobjects.cpp"
+        "indra/newview/llfloatertopobjects.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -63278,7 +63288,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatertopobjects.cpp"
+        "indra/newview/llfloatertopobjects.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -63310,7 +63321,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatertopobjects.cpp"
+        "indra/newview/llfloatertopobjects.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -63342,7 +63354,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatertopobjects.cpp"
+        "indra/newview/llfloatertopobjects.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
