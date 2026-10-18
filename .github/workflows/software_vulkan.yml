@@ -73,6 +73,7 @@ jobs:
       - run: python scripts/tests/test_avatar_visibility.py
       - run: python scripts/tests/test_avatar_sex_motion.py
       - run: python scripts/tests/test_specialized_motion_loading.py
+      - run: python scripts/tests/test_native_outfit_recovery.py
       - run: python scripts/tests/test_native_appearance_admission.py
       - run: python scripts/tests/test_native_appearance_queue.py
       - run: python scripts/tests/test_avatar_lock_policy.py
@@ -121,6 +122,7 @@ jobs:
       - run: python scripts/tests/test_native_environment_xui.py
       - run: python scripts/tests/test_native_my_environments.py
       - run: python scripts/tests/test_native_environment_rendering.py
+      - run: python scripts/tests/test_native_environment_bindings.py
       - run: python scripts/tests/test_native_environment_widgets.py
       - run: python scripts/tests/test_native_ui_primitives.py
       - run: python scripts/tests/test_vulkan_environment_evidence.py

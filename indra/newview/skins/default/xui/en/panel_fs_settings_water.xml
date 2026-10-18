@@ -311,7 +311,6 @@ top="0">
 		</text>
 
 		<slider
-		control_name="water_scale_above"
 		decimal_digits="2"
 		follows="left|top"
 		increment="0.01"
@@ -336,7 +335,6 @@ top="0">
 		</text>
 
 		<slider
-		control_name="water_scale_below"
 		decimal_digits="2"
 		follows="left|top"
 		height="16"
@@ -361,7 +359,6 @@ top="0">
 		</text>
 
 		<slider
-		control_name="water_blur_multip"
 		follows="left|top"
 		height="16"
 		increment="0.001"

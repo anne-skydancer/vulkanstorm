@@ -60,6 +60,8 @@ struct VSNativeAppearance::Impl : std::enable_shared_from_this<Impl>
     LLSD                                        fallback;
     LLUUID                                      cof;
     S32                                         version = -1, requestedBake = -1;
+    LLUUID                                      acceptedCOF;
+    S32                                         acceptedCOFVersion = -1;
     U64                                         revision = 1, avatarGeneration = 0, bakeRegion = 0;
     bool                                        dirty        = true;
     unsigned                                    bakeAttempts = 0;
@@ -138,6 +140,31 @@ struct VSNativeAppearance::Impl : std::enable_shared_from_this<Impl>
     {
         const auto owner = session.lock();
         return owner && owner->current(account) && owner->phase() == VSNativeSession::Phase::Connected;
+    }
+    bool authoritativeOutfit(const LLUUID& id, LLViewerInventoryCategory* category, bool complete)
+    {
+        // Preserve the already accepted outfit while the shared inventory owner
+        // resolves missing descendants. Initial login fallback is still allowed
+        // before the first authoritative outfit has been accepted.
+        if (acceptedCOF != id || acceptedCOFVersion < 0)
+            return true;
+        if (!complete)
+        {
+            LLInventoryModelBackgroundFetch::instance().start(id, true);
+            return false;
+        }
+        if (category->getVersion() < acceptedCOFVersion)
+        {
+            // AIS mutations may complete out of order. Keep the avatar's stale
+            // publication guard and fetch the actual current folder instead of
+            // retrying a known-old category forever or inventing a new version.
+            category->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+            category->setDescendentCount(-1);
+            category->setFetching(LLViewerInventoryCategory::FETCH_NONE);
+            LLInventoryModelBackgroundFetch::instance().scheduleFolderFetch(id, true);
+            return false;
+        }
+        return true;
     }
     static void loaded(const LLUUID& asset, LLAssetType::EType type, void* data, S32 status, LLExtStat)
     {
@@ -663,6 +690,8 @@ void VSNativeAppearance::tick()
     {
         state.entries.clear();
         state.applied.clear();
+        state.acceptedCOF.setNull();
+        state.acceptedCOFVersion = -1;
         state.uploads.clear();
         state.sentAppearanceRevision = 0;
         state.avatarGeneration       = avatar->ownerGeneration();
@@ -683,11 +712,13 @@ void VSNativeAppearance::tick()
     auto& manager = LLAppearanceMgr::instance();
     manager.initCOFID();
     const LLUUID                  cof      = manager.getCOF();
-    const auto*                   category = gInventory.getCategory(cof);
+    auto*                         category = gInventory.getCategory(cof);
     const bool                    complete = category && category->getVersion() >= 0 && gInventory.isCategoryComplete(cof);
     std::map<LLUUID, Impl::Entry> candidate;
     std::set<LLUUID>              actualLinks;
     const S32                     version = complete ? category->getVersion() : -1;
+    if (!state.authoritativeOutfit(cof, category, complete))
+        return;
     if (complete)
     {
         LLInventoryModel::cat_array_t  categories;
@@ -880,6 +911,8 @@ void VSNativeAppearance::tick()
             state.error = "Native avatar rejected current outfit";
             return;
         }
+        state.acceptedCOF = state.cof;
+        state.acceptedCOFVersion = state.version;
         state.applied.clear();
         for (const auto* entry : ordered)
             state.applied[entry->item] = entry->asset;
@@ -1452,6 +1485,8 @@ LLSD VSNativeAppearance::evidence() const
     LLSD result;
     result["cof"]     = mImpl->cof;
     result["version"] = mImpl->version;
+    result["accepted_cof"] = mImpl->acceptedCOF;
+    result["accepted_cof_version"] = mImpl->acceptedCOFVersion;
     if (const auto* category = gInventory.getCategory(mImpl->cof))
     {
         result["inventory_cof_version"]            = category->getVersion();

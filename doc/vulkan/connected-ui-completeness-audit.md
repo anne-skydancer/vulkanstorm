@@ -24,6 +24,26 @@ sinks with frozen original GL geometry. These source checks do not qualify GPU
 rasterization or complete UI/keyboard parity; the full staged replay and the
 remaining controller/service families are still required.
 
+The next connected replay reached the keyboard turn check. Native frames now
+use the reference per-frame ephemeral-control reset, while changed effective
+controls force an immediate unreliable AgentUpdate before clearing. Unchanged
+controls retain the normal heartbeat; successful-send state alone determines
+the last transmitted mask. CPU wire tests include opposite turns, release,
+stand/sit edges, frozen input, persistent fly/away/mouselook and send failure.
+
+Accepted native outfits now remain published while their authoritative COF is
+incomplete. An older AIS category version triggers the existing forced folder
+fetch instead of permanently retrying a version the avatar correctly rejects.
+The avatar's stale-version guard remains. Actual-source recovery tests exercise
+this path; cross-platform R2 runtime evidence is still required. R2 failure
+artifacts include the current appearance and avatar snapshots for diagnosis.
+
+All shipped EEP layout bindings were checked against actual saved controls.
+The two shared water layouts no longer bind six environment-property aliases
+as nonexistent global settings; real sun/moon beacon settings and normal water
+controller callbacks remain. The staged connected replay and full UI/keyboard
+acceptance are still pending.
+
 The native connected UI is still governed by startup-era closed admission lists. These lists reject whole floater/controller families, remove toolbar commands and permanently disable menu items. Separate service and input gates also refuse actions that survive construction. A successful test of the admitted connected-session subset cannot demonstrate complete UI integration.
 
 The requested outcome is functional UI parity: the same shared control, layout, selection and authorization logic used by OpenGL, connected to actual native services. Legitimate shared permission, selection, maturity, RLVa, account, media-availability and hardware conditions must remain. Removing a native blanket gate without integrating its controller or renderer is not a fix.

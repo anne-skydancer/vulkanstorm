@@ -1125,6 +1125,13 @@ struct Replay : public LLAvatarPropertiesObserver
                 gKeyboard->handleTranslatedKeyDown(KEY_LEFT, MASK_NONE);
                 gKeyboard->scanKeyboard();
                 const F32 turnRate = gAgentCamera.getYawKey();
+                LL_INFOS("NativeIMReplay") << "Keyboard turn state: yaw=" << turnRate
+                    << " controls=" << gAgent.getControlFlags()
+                    << " modifiers=" << gKeyboard->currentMask(false)
+                    << " repeated=" << gKeyboard->getKeyRepeated(KEY_LEFT)
+                    << " focus_locked=" << gFocusMgr.focusLocked()
+                    << " menu_keyboard=" << LLMenuGL::getKeyboardMode()
+                    << " movement_locked=" << gAgent.isMovementLocked() << LL_ENDL;
                 require(turnRate > 0 && (gAgent.getControlFlags() & AGENT_CONTROL_YAW_POS),
                     "Window keyboard callback did not publish reference turn intent");
                 owner.cameraControls(.1f);

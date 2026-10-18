@@ -1735,6 +1735,10 @@ bool LLAppViewer::frameNativeVulkanLogin()
 #if VS_NATIVE_VULKAN
         else if (LLStartUp::getStartupState() == STATE_WORLD_INIT && mNativeSession) mNativeSession->begin();
         if (mNativeSession) mNativeSession->tick();
+        // Match idle(): locomotion/turn edges belong to this frame, even when
+        // throttling, freezing or packet loss prevents a successful update.
+        // Persistent away/fly/mouselook bits are retained by the shared method.
+        gAgent.resetControlFlags();
         pump_native_account_services(mNativeSession && mNativeSession->phase() == VSNativeSession::Phase::Connected);
         if (gAudiop && mNativeSession && mNativeSession->phase() == VSNativeSession::Phase::Connected)
         {
