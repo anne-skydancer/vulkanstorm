@@ -41,20 +41,21 @@ class LLOutfitObserver: public LLInventoryObserver, public LLSingleton<LLOutfitO
 public:
 
     virtual void changed(U32 mask) override;
+    void resetAccount();
 
     void notifyOutfitLockChanged() { mOutfitLockChanged();  }
 
     typedef boost::signals2::signal<void (void)> signal_t;
 
-    void addBOFReplacedCallback(const signal_t::slot_type& cb) { mBOFReplaced.connect(cb); }
+    boost::signals2::connection addBOFReplacedCallback(const signal_t::slot_type& cb) { return mBOFReplaced.connect(cb); }
 
-    void addBOFChangedCallback(const signal_t::slot_type& cb) { mBOFChanged.connect(cb); }
+    boost::signals2::connection addBOFChangedCallback(const signal_t::slot_type& cb) { return mBOFChanged.connect(cb); }
 
-    void addCOFChangedCallback(const signal_t::slot_type& cb) { mCOFChanged.connect(cb); }
+    boost::signals2::connection addCOFChangedCallback(const signal_t::slot_type& cb) { return mCOFChanged.connect(cb); }
 
-    void addCOFSavedCallback(const signal_t::slot_type& cb) { mCOFSaved.connect(cb); }
+    boost::signals2::connection addCOFSavedCallback(const signal_t::slot_type& cb) { return mCOFSaved.connect(cb); }
 
-    void addOutfitLockChangedCallback(const signal_t::slot_type& cb) { mOutfitLockChanged.connect(cb); }
+    boost::signals2::connection addOutfitLockChangedCallback(const signal_t::slot_type& cb) { return mOutfitLockChanged.connect(cb); }
 
 protected:
 

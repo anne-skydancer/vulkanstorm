@@ -100,6 +100,7 @@ public:
     static LLVoiceChannel* getCurrentVoiceChannel();
 
     static void initClass();
+    static void retireNativeAccount();
 
     static void suspend();
     static void resume();
@@ -135,6 +136,8 @@ public:
 
 private:
     state_changed_signal_t mStateChangedCallback;
+protected:
+    std::shared_ptr<const void> mRequestOwner = std::make_shared<char>(0);
 };
 
 class LLVoiceChannelGroup : public LLVoiceChannel
@@ -157,7 +160,9 @@ protected:
     void setState(EState state) override;
 
 private:
-    void voiceCallCapCoro(std::string url);
+    static void voiceCallCapCoro(std::string url, LLUUID sessionID,
+                                 std::weak_ptr<const void> owner,
+                                 LLVoiceChannel* expected, std::function<bool()> current);
 
     U32 mRetries;
     bool mIsRetrying;

@@ -29,6 +29,8 @@
 #define FS_FSDISCORDCONNECT_H
 
 #include "llsingleton.h"
+#include "llevents.h"
+#include <functional>
 
 class LLEventPump;
 
@@ -62,6 +64,9 @@ public:
     EConnectionState getConnectionState() { return mConnectionState; }
 
     void updateRichPresence() const;
+    void retireAccount();
+    void onNativeSelfFullyVisible();
+    bool acceptsCallbacks() const { return mRpcActive && mCurrent(); }
 
     bool Tick(const LLSD&);
 
@@ -71,6 +76,10 @@ private:
     bool mConnected;
     LLSD mInfo;
     bool mRefreshInfo;
+    bool mRpcActive=false,mRetiring=false;
+    LLTempBoundListener mMainloop;
+    std::function<bool()> mCurrent=[] {return false;};
+    std::function<bool()> mAutoCurrent=[] {return false;};
 
     static std::unique_ptr<LLEventPump> sStateWatcher;
     static std::unique_ptr<LLEventPump> sInfoWatcher;

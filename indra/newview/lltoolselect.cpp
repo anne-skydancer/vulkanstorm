@@ -83,6 +83,10 @@ bool LLToolSelect::handleMouseDown(S32 x, S32 y, MASK mask)
     // Pass mousedown to agent
     LLTool::handleMouseDown(x, y, mask);
 
+    #if VS_NATIVE_VULKAN
+    if(gViewerWindow->isNativeVulkan())return mPick.mObjectID.notNull() &&
+        (!mPick.mNativeObjectCurrent || mPick.mNativeObjectCurrent());
+    #endif
     return mPick.getObject().notNull();
 }
 
@@ -183,6 +187,10 @@ bool LLToolSelect::handleMouseUp(S32 x, S32 y, MASK mask)
 {
     mIgnoreGroup = gSavedSettings.getBOOL("EditLinkedParts");
 
+    #if VS_NATIVE_VULKAN
+    if(gViewerWindow->isNativeVulkan())handleNativeObjectSelection(mPick,mIgnoreGroup,false);
+    else
+    #endif
     handleObjectSelection(mPick, mIgnoreGroup, false);
 
     return LLTool::handleMouseUp(x, y, mask);
@@ -332,13 +340,18 @@ struct NativeSelectionPeer
 }
 std::shared_ptr<const void> LLToolSelect::handleNativeObjectSelection(const LLPickInfo& pick,bool ignore_group,bool temp_select,bool select_root)
 {
+    if((pick.mNativeRequestCurrent && !pick.mNativeRequestCurrent()) ||
+       (pick.mNativeObjectCurrent && !pick.mNativeObjectCurrent()))return {};
     const auto session=VSNativeSession::active();
     if(!session || !gViewerWindow || !gViewerWindow->isNativeVulkan() || !gViewerWindow->nativeContext())return {};
     auto* owner=session->objectSelection();
     if(!owner)return {};
     const auto lifetime=session->retainObjectSelection();
     if(!lifetime)return {};
-    NativeSelectionPeer peer{session,lifetime,gViewerWindow->nativeContext()->world(),*owner,session->accountGuard()};
+    const auto account=session->accountGuard();
+    const auto current=[account,request=pick.mNativeRequestCurrent,source=pick.mNativeObjectCurrent]
+    {return account() && (!request || request()) && (!source || source());};
+    NativeSelectionPeer peer{session,lifetime,gViewerWindow->nativeContext()->world(),*owner,current};
     return vs_handle_object_selection(peer,pick,ignore_group,temp_select,select_root);
 }
 

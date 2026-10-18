@@ -33,6 +33,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterbuy.h"
+#if VS_NATIVE_VULKAN
+#include "vsobjectpurchase.h"
+#endif
 
 #include "llagent.h"            // for agent id
 #include "llinventorymodel.h"   // for gInventory
@@ -90,9 +93,20 @@ void LLFloaterBuy::reset()
 // static
 void LLFloaterBuy::show(const LLSaleInfo& sale_info)
 {
-    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
-
-    if (selection->getRootObjectCount() != 1)
+    const bool native=gViewerWindow && gViewerWindow->isNativeVulkan();
+    LLObjectSelectionHandle selection;
+#if VS_NATIVE_VULKAN
+    const auto purchase=native?VSObjectPurchase::capture():nullptr;
+    if(!native)
+#endif
+        selection=LLSelectMgr::getInstance()->getSelection();
+    if (native ?
+#if VS_NATIVE_VULKAN
+        !purchase
+#else
+        true
+#endif
+        : selection->getRootObjectCount()!=1)
     {
         LLNotificationsUtil::add("BuyOneObjectOnly");
         return;
@@ -106,13 +120,22 @@ void LLFloaterBuy::show(const LLSaleInfo& sale_info)
     floater->reset();
     floater->mSaleInfo = sale_info;
 // [RLVa:KB] - Checked: RLVa-2.0.0
-    floater->mObjectSelection = LLSelectMgr::getInstance()->getSelection();
+#if VS_NATIVE_VULKAN
+    floater->mNativePurchase=purchase;
+#endif
+    if(!native) floater->mObjectSelection=LLSelectMgr::getInstance()->getSelection();
 // [/RLVa:KB]
 //  floater->mObjectSelection = LLSelectMgr::getInstance()->getEditSelection();
 
-    LLSelectNode* node = selection->getFirstRootNode();
-    if (!node)
-        return;
+    LLSelectNode* node=native?nullptr:selection->getFirstRootNode();
+    if(!native && !node)return;
+    std::string objectName;
+    LLPermissions permissions;
+#if VS_NATIVE_VULKAN
+    if(native){objectName=purchase->publication.properties->name;permissions=purchase->publication.properties->permissions();}
+    else
+#endif
+    {objectName=node->mName;permissions=*node->mPermissions;}
 
     // Set title based on sale type
     LLUIString title;
@@ -126,12 +149,17 @@ void LLFloaterBuy::show(const LLSaleInfo& sale_info)
         title = floater->getString("title_buy_copy_text");
         break;
     }
-    title.setArg("[NAME]", node->mName);
+    title.setArg("[NAME]", objectName);
     floater->setTitle(title);
 
     LLUUID owner_id;
     std::string owner_name;
-    bool owners_identical = LLSelectMgr::getInstance()->selectGetOwner(owner_id, owner_name);
+    bool owners_identical=false;
+#if VS_NATIVE_VULKAN
+    if(native)owners_identical=purchase->owner(owner_id,owner_name);
+    else
+#endif
+        owners_identical=LLSelectMgr::getInstance()->selectGetOwner(owner_id,owner_name);
     if (!owners_identical)
     {
         LLNotificationsUtil::add("BuyObjectOneOwner");
@@ -158,8 +186,8 @@ void LLFloaterBuy::show(const LLSaleInfo& sale_info)
 
     // Append the permissions that you will acquire (not the current
     // permissions).
-    U32 next_owner_mask = node->mPermissions->getMaskNextOwner();
-    std::string text = node->mName;
+    U32 next_owner_mask = permissions.getMaskNextOwner();
+    std::string text = objectName;
     if (!(next_owner_mask & PERM_COPY))
     {
         text.append(floater->getString("no_copy_text"));
@@ -188,6 +216,28 @@ void LLFloaterBuy::show(const LLSaleInfo& sale_info)
     // Must do this after the floater is created, because
     // sometimes the inventory is already there and
     // the callback is called immediately.
+#if VS_NATIVE_VULKAN
+    if(native)
+    {
+        floater->removeVOInventoryListener();
+        const auto weak=floater->getHandle();
+        const auto state=std::weak_ptr<VSObjectPurchase>(purchase);
+        purchase->inventoryChanged=purchase->object.nativeInventory()->observe(purchase->object.nativeObject(),[weak,state](const VSTaskInventory::Result& result)
+        {
+            const auto owner=state.lock();
+            auto* view=dynamic_cast<LLFloaterBuy*>(weak.get());
+            if(owner && owner->current() && view && view->mNativePurchase==owner && result.success)
+                view->populateInventory(&result.contents);
+        });
+        purchase->selectionChanged=purchase->selection->changed([weak,state]
+        {
+            const auto owner=state.lock();auto* view=dynamic_cast<LLFloaterBuy*>(weak.get());
+            if(owner && view && view->mNativePurchase==owner && !owner->current())view->closeFloater();
+        });
+        purchase->object.requestInventory();
+        return;
+    }
+#endif
     LLViewerObject* obj = selection->getFirstRootObject();
     floater->registerVOInventoryListener(obj,NULL);
     floater->requestVOInventory();
@@ -208,6 +258,11 @@ void LLFloaterBuy::inventoryChanged(LLViewerObject* obj,
         LL_WARNS() << "No object in LLFloaterBuy::inventoryChanged" << LL_ENDL;
         return;
     }
+    populateInventory(inv);
+}
+
+void LLFloaterBuy::populateInventory(const LLInventoryObject::object_list_t* inv)
+{
 
     if (!inv)
     {
@@ -224,6 +279,9 @@ void LLFloaterBuy::inventoryChanged(LLViewerObject* obj,
         return;
     }
 
+#if VS_NATIVE_VULKAN
+    if(mNativePurchase) getChild<LLScrollListCtrl>("item_list")->deleteAllItems();
+#endif
     LLInventoryObject::object_list_t::const_iterator it = inv->begin();
     LLInventoryObject::object_list_t::const_iterator end = inv->end();
     for ( ; it != end; ++it )
@@ -327,6 +385,13 @@ void LLFloaterBuy::onClickBuy()
     // *NOTE: doesn't work for multiple object buy, which UI does not
     // currently support sale info is used for verification only, if
     // it doesn't match region info then sale is canceled.
+#if VS_NATIVE_VULKAN
+    if(mNativePurchase)
+    {
+        if(!mNativePurchase->buy(category_id,mSaleInfo)){closeFloater();return;}
+    }
+    else
+#endif
     LLSelectMgr::getInstance()->sendBuy(gAgent.getID(), category_id, mSaleInfo );
 
     closeFloater();
@@ -347,4 +412,7 @@ void LLFloaterBuy::onClose(bool app_quitting)
     }
 
     mObjectSelection.clear();
+#if VS_NATIVE_VULKAN
+    mNativePurchase.reset();
+#endif
 }

@@ -33,6 +33,11 @@
 #include "llmeshrepository.h"
 #include "llmodelloader.h" //NUM_LOD
 #include "llmodel.h"
+#include "vspreviewbuffer.h"
+#include <memory>
+#include <functional>
+class LLAvatarAppearance;
+class VSScenePreview;
 
 class LLJoint;
 class LLVOAvatar;
@@ -47,6 +52,7 @@ class domTranslate;
 class domController;
 class domSkin;
 class domMesh;
+inline constexpr F32 SKIN_WEIGHT_CAMERA_DISTANCE = 16.f;
 
 // const strings needed by classes that use model preivew
 static const std::string lod_name[NUM_LOD + 1] =
@@ -151,6 +157,7 @@ public:
     void setPhysicsFromLOD(S32 lod);
     void setPhysicsFromPreset(S32 preset);// <FS:Beq/> FIRE-30963 - better physics defaults
     bool render();
+    bool drawNative(const LLRect&);
     void update();
     void genBuffers(S32 lod, bool skinned);
     void clearBuffers();
@@ -197,7 +204,7 @@ public:
     void setLegacyRigFlags(U32 rigFlags) { mLegacyRigFlags = rigFlags; }
 
     static void textureLoadedCallback(bool success, LLViewerFetchedTexture *src_vi, LLImageRaw* src, LLImageRaw* src_aux, S32 discard_level, bool final, void* userdata);
-    static bool lodQueryCallback();
+    static bool lodQueryCallback(LLHandle<LLModelPreview>,std::function<bool()>);
 
     boost::signals2::connection setDetailsCallback(const details_signal_t::slot_type& cb){ return mDetailsSignal.connect(cb); }
     boost::signals2::connection setModelLoadedCallback(const model_loaded_signal_t::slot_type& cb){ return mModelLoadedSignal.connect(cb); }
@@ -229,7 +236,19 @@ private:
     //Creates the dummy avatar for the preview window
     void        createPreviewAvatar(void);
     //Accessor for the dummy avatar
-    LLVOAvatar* getPreviewAvatar(void) { return mPreviewAvatar; }
+    LLAvatarAppearance* getPreviewAvatar();
+#if VS_NATIVE_VULKAN
+    bool renderNative(bool textures,bool edges,bool physics,bool skin,bool jointOverrides,bool jointPositions,bool uvGuide,F32 explode);
+    std::unique_ptr<VSScenePreview> mNativePreview;
+    struct NativeModel;
+    std::shared_ptr<NativeModel> mNativeModel;
+#endif
+    std::function<bool()> mCurrent;
+    struct TextureIntent;
+    U64 mTextureRevision=0;
+    struct LoadIntent;
+    std::shared_ptr<LoadIntent> mLoadIntent;
+    static LLModelPreview* callbackOwner(void*);
     // Count amount of original models, excluding sub-models
     static U32 countRootModels(LLModelLoader::model_list models);
     LLVector3   mGroundPlane[4];
@@ -342,7 +361,7 @@ protected:
     LLLoadedCallbackEntry::source_callback_list_t mCallbackTextureList;
 
     //map of vertex buffers to models (one vertex buffer in vector per face in model
-    std::map<LLModel*, std::vector<LLPointer<LLVertexBuffer> > > mVertexBuffer[LLModel::NUM_LODS + 1];
+    std::map<LLModel*, std::vector<LLPointer<VSPreviewBuffer> > > mVertexBuffer[LLModel::NUM_LODS + 1];
 
     details_signal_t mDetailsSignal;
     model_loaded_signal_t mModelLoadedSignal;

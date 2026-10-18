@@ -48,6 +48,13 @@
 #include "llstreamingaudio.h"
 
 #include "llvoavatarself.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsregioncontext.h"
+#include "vsavatarservices.h"
+#include "vsvulkancontext.h"
+#include "vsworldscene.h"
+#endif
 #include <cmath>
 
 /////////////////////////////////////////////////////////
@@ -707,7 +714,31 @@ void audio_update_wind(bool force_update)
 #ifdef kAUDIO_ENABLE_WIND
 
     LLViewerRegion* region = gAgent.getRegion();
-    if (region)
+    bool regionReady = region != nullptr;
+    F32 waterHeight = region ? region->getWaterHeight() : 0.f;
+    bool aboveWater = isAgentAvatarValid() && !gAgentAvatarp->mBelowWater;
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        regionReady = false;
+        const auto owner = VSNativeSession::active();
+        const auto context = owner && owner->regionReady() ? vs_region_context(gAgent.getPositionGlobal()) : std::nullopt;
+        if (context && gViewerWindow->nativeContext())
+        {
+            auto& world = gViewerWindow->nativeContext()->world();
+            const auto wind = world.windVelocity(context->getHost(), context->getPosRegionFromGlobal(gAgent.getPositionGlobal()));
+            if (wind)
+            {
+                gWindVec = *wind;
+                waterHeight = context->getWaterHeight();
+                const auto self = vs_avatar_voice_pose();
+                aboveWater = self && F32(self->position.mdV[VZ]) >= waterHeight;
+                regionReady = true;
+            }
+        }
+    }
+#endif
+    if (regionReady)
     {
         // Scale down the contribution of weather-simulation wind to the
         // ambient wind noise.  Wind velocity averages 3.5 m/s, with gusts to 7 m/s
@@ -755,7 +786,7 @@ void audio_update_wind(bool force_update)
         // mute wind when not flying
         // <FS:Ansarriel> FIRE-12819: Disable wind sounds while under water
         //if (gAgent.getFlying())
-        if (gAgent.getFlying() && isAgentAvatarValid() && !gAgentAvatarp->mBelowWater)
+        if (gAgent.getFlying() && aboveWater)
         // </FS:Ansariel>
         {
             // volume increases by volume_delta, up to no more than max_wind_volume
@@ -767,7 +798,7 @@ void audio_update_wind(bool force_update)
             gAudiop->mMaxWindGain = llmax(gAudiop->mMaxWindGain - volume_delta, 0.f);
         }
 
-        gAudiop->updateWind(gRelativeWindVec, gAgentCamera.getCameraPositionAgent()[VZ] - gAgent.getRegion()->getWaterHeight());
+        gAudiop->updateWind(gRelativeWindVec, gAgentCamera.getCameraPositionAgent()[VZ] - waterHeight);
     }
 #endif
 }

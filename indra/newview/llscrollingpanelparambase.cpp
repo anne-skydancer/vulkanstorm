@@ -25,6 +25,14 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
+#include "llviewerwearable.h"
+#include "llavatarappearance.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
 
 #include "llscrollingpanelparambase.h"
 #include "llviewerjointmesh.h"
@@ -46,6 +54,11 @@ LLScrollingPanelParamBase::LLScrollingPanelParamBase( const LLPanel::Params& pan
       mAllowModify(allow_modify),
       mWearable(wearable)
 {
+    mAccountCurrent = vs_native_im_guard();
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active(); owner && owner->appearance())
+        mNativeWearableOwner = owner->appearance()->retainWearable(dynamic_cast<LLViewerWearable*>(wearable));
+#endif
     if (use_hints)
         buildFromFile( "panel_scrolling_param.xml");
     else
@@ -71,7 +84,7 @@ void LLScrollingPanelParamBase::updatePanel(bool allow_modify)
 {
     LLViewerVisualParam* param = mParam;
 
-    if (!mWearable)
+    if (!currentWearable())
     {
         // not editing a wearable just now, no update necessary
         return;
@@ -88,6 +101,7 @@ void LLScrollingPanelParamBase::onSliderMoved(LLUICtrl* ctrl, void* userdata)
 {
     LLSliderCtrl* slider = (LLSliderCtrl*) ctrl;
     LLScrollingPanelParamBase* self = (LLScrollingPanelParamBase*) userdata;
+    if (!self->currentWearable() || !vs_avatar_appearance()) return;
     LLViewerVisualParam* param = self->mParam;
 
     F32 current_weight = self->mWearable->getVisualParamWeight( param->getID() );
@@ -97,8 +111,8 @@ void LLScrollingPanelParamBase::onSliderMoved(LLUICtrl* ctrl, void* userdata)
         // <FS:Ansariel> [Legacy Bake]
         //self->mWearable->setVisualParamWeight( param->getID(), new_weight);
         self->mWearable->setVisualParamWeight( param->getID(), new_weight, false);
-        self->mWearable->writeToAvatar(gAgentAvatarp);
-        gAgentAvatarp->updateVisualParams();
+        self->mWearable->writeToAvatar(vs_avatar_appearance());
+        vs_avatar_appearance()->updateVisualParams();
     }
 }
 
@@ -112,4 +126,11 @@ F32 LLScrollingPanelParamBase::percentToWeight( F32 percent )
 {
     LLViewerVisualParam* param = mParam;
     return percent / 100.f * (param->getMaxWeight() - param->getMinWeight()) + param->getMinWeight();
+}
+
+bool LLScrollingPanelParamBase::currentWearable() const
+{
+    if (!mAccountCurrent() || !mWearable) return false;
+    const auto* wearable = dynamic_cast<LLViewerWearable*>(mWearable);
+    return !wearable || wearable->currentNativeOwner();
 }

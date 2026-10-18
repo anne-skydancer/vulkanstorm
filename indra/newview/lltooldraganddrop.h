@@ -38,6 +38,7 @@
 
 class LLToolDragAndDrop;
 class LLViewerRegion;
+class VSTaskInventoryObject;
 class LLVOAvatar;
 class LLPickInfo;
 
@@ -94,6 +95,9 @@ public:
 
     // deal with permissions of object, etc. returns true if drop can
     // proceed, otherwise false.
+    static bool handleDropMaterialProtections(const VSTaskInventoryObject&, LLInventoryItem*, ESource, const LLUUID&);
+    static bool dropTextureOneFace(const VSTaskInventoryObject&,S32,LLInventoryItem*,ESource,const LLUUID&,bool,S32 channel=-1);
+    static bool dropTextureAllFaces(const VSTaskInventoryObject&,LLInventoryItem*,ESource,const LLUUID&,bool);
     static bool handleDropMaterialProtections(LLViewerObject* hit_obj,
                          LLInventoryItem* item,
                          LLToolDragAndDrop::ESource source,
@@ -233,6 +237,14 @@ protected:
 public:
     // helper functions
     static bool isInventoryDropAcceptable(LLViewerObject* obj, LLInventoryItem* item) { return (ACCEPT_YES_COPY_SINGLE <= willObjectAcceptInventory(obj, item)); }
+    static EAcceptance willObjectAcceptInventory(const VSTaskInventoryObject&, LLInventoryItem*, EDragAndDropType = DAD_NONE);
+    static bool isInventoryDropAcceptable(const VSTaskInventoryObject& object, LLInventoryItem* item)
+    { return ACCEPT_YES_COPY_SINGLE <= willObjectAcceptInventory(object, item); }
+    static void dropScript(const VSTaskInventoryObject&, LLInventoryItem*, bool, ESource, const LLUUID&);
+    static void dropInventory(const VSTaskInventoryObject&, LLInventoryItem*, ESource, const LLUUID&);
+    bool dadUpdateInventory(const VSTaskInventoryObject&, bool);
+    bool dadUpdateInventoryCategory(const VSTaskInventoryObject&, bool);
+
 
     bool dadUpdateInventory(LLViewerObject* obj, bool drop);
     bool dadUpdateInventoryCategory(LLViewerObject* obj, bool drop);

@@ -34,10 +34,12 @@
 
 #include "lltool.h"
 #include "lltextureentry.h"
+#include "llhandle.h"
 #include <boost/signals2.hpp>
 #include <functional>
 
 class LLViewerObject;
+class LLView;
 class LLPickInfo;
 
 class LLToolPipette
@@ -59,13 +61,18 @@ public:
     void setResult(bool success, const std::string& msg);
 
     void setTextureEntry(const LLTextureEntry* entry);
-    void setNativeActive(bool);
+    void setNativeActive(bool,LLView* consumer=nullptr,std::function<bool()> operation={});
+    bool nativeConsumer(const LLView*) const;
+    bool ownsNativeConsumer(const LLView* view) const {return mNativeConsumer.get()==view;}
+    void handleDeselect() override;
     bool nativeActive() const;
     static void pickCallback(const LLPickInfo& pick_info);
 
 protected:
     bool nativeSample(S32 x, S32 y, MASK mask);
-    bool mNativeActive = false;
+    LLHandle<LLView> mNativeConsumer;
+    std::function<bool()> mNativeOperation;
+    bool mNativeHighlightOwned=false;
     std::function<bool()> mNativeAccount;
     LLTextureEntry  mTextureEntry;
     signal_t        mSignal;

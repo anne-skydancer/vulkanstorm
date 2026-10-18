@@ -35,6 +35,7 @@
 #include "llextendedstatus.h"
 #include <map>
 #include <functional>
+#include <boost/signals2/connection.hpp>
 
 class LLInventoryItem;
 class LLViewerObject;
@@ -95,8 +96,10 @@ public:
 
     void userResized() { mUserResized = true; };
 
-    virtual void loadAsset() { mAssetStatus = PREVIEW_ASSET_LOADED; }
+    virtual void loadAsset() { if (ensureTaskInventory()) mAssetStatus = PREVIEW_ASSET_LOADED; }
     virtual EAssetStatus getAssetStatus() { return mAssetStatus;}
+    std::function<bool()> inventoryItemGuard() const;
+    bool ensureTaskInventory();
 
     // Why is this at the LLPreview level?  JC
     void setNotecardInfo(const LLUUID& notecard_inv_id, const LLUUID& object_id);
@@ -111,6 +114,7 @@ public:
     static bool canModify(const LLViewerObject* object, const LLInventoryItem* item);
 
 protected:
+    virtual bool isTaskDraft() const { return false; }
     virtual void onCommit();
 
     static void onText(LLUICtrl*, void* userdata);
@@ -122,6 +126,9 @@ protected:
     bool mSaveDialogShown;
 
 protected:
+    boost::signals2::scoped_connection mTaskInventoryConnection;
+    std::function<bool()> mTaskObjectCurrent;
+    bool mTaskObjectBound = false, mTaskInventoryPending = false;
     std::function<bool()> mPreviewCurrent;
     LLUUID mItemUUID;
 

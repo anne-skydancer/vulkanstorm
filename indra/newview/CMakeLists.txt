@@ -97,6 +97,8 @@ if (HAVOK)
 endif ()
 
 set(viewer_SOURCE_FILES
+    vsplanarface.cpp
+    vsfacedrop.cpp
 # <Add FS includes below this line>
     alfloaterregiontracker.cpp
     animationexplorer.cpp
@@ -558,6 +560,10 @@ set(viewer_SOURCE_FILES
     llmenuoptionpathfindingrebakenavmesh.cpp
     llmeshrepository.cpp
     llmimetypes.cpp
+    vsmaterialselection.cpp
+    vsareaobject.cpp
+    vsfaceimagemetadata.cpp
+    vspreviewbuffer.cpp
     llmodelpreview.cpp
     llmorphview.cpp
     llmoveview.cpp
@@ -726,6 +732,7 @@ set(viewer_SOURCE_FILES
     llsecapi.cpp
     llsechandler_basic.cpp
     llselectmgr.cpp
+    vstaskinventoryobject.cpp
     vscameraview.cpp
     vsteleportpolicy.cpp
     vsagentnavigation.cpp
@@ -970,6 +977,9 @@ set(VIEWER_BINARY_NAME "vulkanstorm-bin" CACHE STRING
     "The name of the viewer executable to create.")
 
 set(viewer_HEADER_FILES
+    vsplanarface.h
+    vsfacedroppolicy.h
+    vspbrfacepolicy.h
     CMakeLists.txt
     ViewerInstall.cmake
 
@@ -1452,6 +1462,32 @@ set(viewer_HEADER_FILES
     llmenuoptionpathfindingrebakenavmesh.h
     llmeshrepository.h
     llmimetypes.h
+    vseditcontroller.h
+    vsbuildselectionpolicy.h
+    vsviewprojection.h
+    vsvolumevisibility.h
+    vstexturedebug.h
+    vsbakedtexturepolicy.h
+    vsobjectbeaconpolicy.h
+    vsfacealphapolicy.h
+    vsbuiltintextures.h
+    vslinkactions.h
+    vseditdelete.h
+    vsbuildtevalue.h
+    vsbuildvolume.h
+    vsobjectinspection.h
+    vsparcelbounds.h
+    vsbuildgeometry.h
+    vstexturescaleratio.h
+    vsappearanceui.h
+    vsbuildobjectflags.h
+    vsmultipleupdate.h
+    vsregionclip.h
+    vspieclickpolicy.h
+    vsmaterialselection.h
+    vsareaobject.h
+    vsfaceimagemetadata.h
+    vspreviewbuffer.h
     llmodelpreview.h
     llmorphview.h
     llmoveview.h
@@ -1609,6 +1645,9 @@ set(viewer_HEADER_FILES
     llsecapi.h
     llsechandler_basic.h
     llselectmgr.h
+    vstaskinventoryobject.h
+    vstaskinventorycontroller.h
+    vsselectedobjectpermissions.h
     vscameraview.h
     vsteleportpolicy.h
     vsagentnavigation.h
@@ -1632,6 +1671,7 @@ set(viewer_HEADER_FILES
     llskinningutil.h
     llsky.h
     llslurl.h
+    vssnapshotpainter.h
     llsnapshotlivepreview.h
     llsnapshotmodel.h
     llspatialpartition.h
@@ -1776,11 +1816,13 @@ set(viewer_HEADER_FILES
     llvlcomposition.h
     llvlmanager.h
     llvoavatar.h
+    vsavatarnametagpolicy.h
     llvoavatarself.h
     llvocache.h
     llvograss.h
     llvoicechannel.h
     llvoiceclient.h
+    vsavatarvoicepolicy.h
     llvoicevisualizer.h
     llvoicevivox.h
     llvoicewebrtc.h
@@ -2319,19 +2361,28 @@ if(USE_DILIGENTCORE)
          vsuiresources.cpp vsuiresources.h vsmediaimage.cpp vsmediaimage.h vsuifontcache.cpp vsuifontcache.h
           vsuifontbridge.cpp vsuifontbridge.h
           vsuidrawbridge.cpp vsuidrawbridge.h vsuiimageprovider.cpp vsuiimageprovider.h
-          vsuicontext.cpp vsuicontext.h vsvulkancontext.cpp vsvulkancontext.h vsstartupui.cpp vsstartupui.h vsviewerwindow.cpp
-          vsplainchat.cpp vsplainchat.h vsnativesession.cpp vsnativesession.h vsnativeim.cpp vsnativeim.h
+          vsuicontext.cpp vsuicontext.h vsvulkancontext.cpp vsvulkancontext.h vsscenemonitor.cpp vsscenemonitor.h vsspatialindex.cpp vsspatialindex.h vssnapshot.cpp vssnapshot.h vsstartupui.cpp vsstartupui.h vsviewerwindow.cpp
+          vsplainchat.cpp vsplainchat.h vsnativesession.cpp vsnativesession.h vsworldsound.cpp vsworldsound.h vsparticleeffects.cpp vsparticleeffects.h vsparticlegeometry.h vsparticlebounds.h vsparticlepick.h vsgputimingledger.h vsobjectsoundstate.h vsobjectsoundcontroller.h vsnativeim.cpp vsnativeim.h
           vsgroupsearch.cpp vsgroupsearch.h
           vsenvironmentstate.cpp
     vsenvironmentreplay.cpp
     vsbeaconpresentation.cpp vsbeaconpresentation.h vsdebugbeacongeometry.h
     vstrackerpresentation.cpp vstrackerpresentation.h vstrackerdraw.cpp vstrackerdraw.h vstrackergeometry.h vstrackermeshsink.h
-    vsworldrenderer.cpp vsworldrenderer.h vsparcelpresentation.cpp vsparcelpresentation.h vsparcelgeometry.h vsmaterial.cpp vsmaterial.h vsmaterialassets.cpp vsmaterialassets.h vsterrainassets.cpp vsterrainassets.h vsobjectmedia.cpp vsobjectmedia.h vsprimmediatarget.cpp vsprimmediatarget.h vsworldscene.cpp vsworldscene.h vscamerafocusobject.h vssurfacecoordinates.h vspickpolicy.h vsobjectindex.h vsselectionpolicy.h vsterrainpacket.h vsworldavatar.cpp vsworldavatar.h
+    vsworldrenderer.cpp vsworldrenderer.h vsparcelpresentation.cpp vsparcelpresentation.h vsparcelgeometry.h vsmaterial.cpp vsmaterial.h vsmaterialassets.cpp vsmaterialassets.h vsterrainassets.cpp vsterrainassets.h vsobjectmedia.cpp vsobjectmedia.h vsprimmediatarget.cpp vsprimmediatarget.h vsworldscene.cpp vsworldscene.h vscamerafocusobject.h vssurfacecoordinates.h vspickpolicy.h vsobjectindex.h vsselectionpolicy.h vsterrainpacket.h vsworldavatar.cpp vsworldavatar.h vsavatarperformance.h
+          vsavatarnametag.cpp vsavatarnametag.h vsavatarrigginginfo.cpp vsavatarrigginginfo.h
           vsworldassets.cpp vsworldassets.h vsworldgltf.cpp vsworldgltf.h vsresourcebudget.h vsnativecamera.h vsparcelpermissions.h vsworldmotion.h
           vswearable.cpp vswearable.h
           vsnativeappearance.cpp vsnativeappearance.h
+          vsscenepreview.cpp vsscenepreview.h vsmodelpreview.cpp
           vstaskinventory.cpp vstaskinventory.h
           vsobjectselection.cpp vsobjectselection.h
+          vsobjectpurchase.cpp vsobjectpurchase.h
+          vseditselection.cpp vseditselection.h
+          vsobjecteditparams.cpp vsobjecteditparams.h
+          vsobjectphysics.cpp vsobjectphysics.h
+          vsobjectcosts.cpp vsobjectcosts.h
+          vstexturescaleselection.cpp vstexturescaleselection.h
+          vsfaceselection.cpp
           vsobjectattention.cpp vsobjectattention.h
           vsbridgeadapter.cpp vsbridgeadapter.h
           vsnativecircuits.cpp vsworldcontracts.h)

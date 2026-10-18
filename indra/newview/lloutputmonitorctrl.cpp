@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "lloutputmonitorctrl.h"
 
 // library includes
@@ -425,6 +428,15 @@ NearbyVoiceMonitor::NearbyVoiceMonitor(const NearbyVoiceMonitor::Params& p)
 
 void NearbyVoiceMonitor::draw()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (owner->phase() != VSNativeSession::Phase::Connected) return;
+        // The skinned toolbar persists across accounts. The actual local
+        // speaker model is retired, so reacquire its current incarnation.
+        mSpeakerMgr = LLLocalSpeakerMgr::getInstance();
+    }
+#endif
     LLSpeakerMgr::speaker_list_t speaker_list;
     LLUUID id;
     bool draw = false;

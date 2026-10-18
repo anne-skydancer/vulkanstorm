@@ -6,6 +6,7 @@
 #define LL_LLFLOATEREXPLORESOUNDS_H
 
 #include "llfloater.h"
+#include <functional>
 #include "lleventtimer.h"
 #include "llaudioengine.h"
 #include "llavatarnamecache.h"
@@ -20,6 +21,7 @@ class NACLFloaterExploreSounds
 public:
     NACLFloaterExploreSounds(const LLSD& key);
     bool postBuild() override;
+    void onOpen(const LLSD&) override;
 
     bool tick() override;
 
@@ -31,6 +33,8 @@ private:
     void handleLookAt();
     void handleStop();
     void handleStopLocally();
+    void stopLocalSounds();
+    std::function<bool()> mAccountCurrent = [] { return true; };
     void handleSelection();
     void blacklistSound(FSAssetBlacklist::eBlacklistFlag flag);
 

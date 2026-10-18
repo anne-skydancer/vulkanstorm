@@ -29,6 +29,8 @@
 
 #include "llfloater.h"
 #include "lllayoutstack.h"
+#include <typeinfo>
+#include <memory>
 //#include "llnotificationsutil.h"
 
 class LLNotification;
@@ -43,6 +45,7 @@ public:
     // LLPanel
     bool postBuild();
 
+    static bool isNativeInternalType(const std::type_info&);
     void addChannel(const std::string& type, bool open = false);
     void updateResizeLimits(LLLayoutStack &stack);
 
@@ -62,6 +65,7 @@ class LLFloaterNotification : public LLFloater
 {
 public:
     LLFloaterNotification(LLNotification* note);
+    ~LLFloaterNotification() override;
 
     // LLPanel
     bool postBuild();
@@ -69,7 +73,7 @@ public:
 
 private:
     static void onCommitResponse(LLUICtrl* ctrl, void* data) { ((LLFloaterNotification*)data)->respond(); }
-    LLNotification* mNote;
+    std::unique_ptr<LLNotification> mNote;
 };
 #endif
 

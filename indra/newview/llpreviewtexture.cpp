@@ -1156,6 +1156,7 @@ void LLPreviewTexture::onAspectRatioCommit(LLUICtrl* ctrl, void* userdata)
 
 void LLPreviewTexture::loadAsset()
 {
+    if (!ensureTaskInventory()) return;
 #if VS_NATIVE_VULKAN
     if (LLRender2D::isNativeUI())
     {

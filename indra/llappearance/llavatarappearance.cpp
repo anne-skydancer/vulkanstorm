@@ -2329,3 +2329,72 @@ void LLAvatarAppearance::applyDefaultParams()
                          false); // Most likely false is correct here because it's used in resetSkeleton, which is a local operation
     }
 }
+
+bool LLAvatarAppearance::visualParamWeightsAreDefault()
+{
+    bool rtn = true;
+
+    bool is_wearing_skirt = isWearingWearableType(LLWearableType::WT_SKIRT);
+    for (LLVisualParam *param = getFirstVisualParam();
+         param;
+         param = getNextVisualParam())
+    {
+        if (param->isTweakable())
+        {
+            LLViewerVisualParam* vparam = dynamic_cast<LLViewerVisualParam*>(param);
+            llassert(vparam);
+            bool is_skirt_param = vparam &&
+                LLWearableType::WT_SKIRT == vparam->getWearableType();
+            if (param->getWeight() != param->getDefaultWeight() &&
+                // we have to not care whether skirt weights are default, if we're not actually wearing a skirt
+                (is_wearing_skirt || !is_skirt_param))
+            {
+                //LL_INFOS() << "param '" << param->getName() << "'=" << param->getWeight() << " which differs from default=" << param->getDefaultWeight() << LL_ENDL;
+                rtn = false;
+                break;
+            }
+        }
+    }
+
+    //LL_INFOS() << "params are default ? " << int(rtn) << LL_ENDL;
+
+    return rtn;
+}
+
+LLJoint* LLAvatarAppearance::getJoint(std::string_view name)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    //<FS:Ansariel> Joint-lookup improvements
+    //joint_map_t::iterator iter = mJointMap.find( name );
+    joint_map_t::iterator iter = mJointMap.find(name.data());
+
+    LLJoint* jointp = nullptr;
+
+    if (iter == mJointMap.end() || iter->second == nullptr)
+    {   //search for joint and cache found joint in lookup table
+        if (mJointAliasMap.empty())
+        {
+            getJointAliases();
+        }
+        joint_alias_map_t::const_iterator alias_iter = mJointAliasMap.find(name);
+        std::string canonical_name;
+        if (alias_iter != mJointAliasMap.end())
+        {
+            canonical_name = alias_iter->second;
+        }
+        else
+        {
+            canonical_name = name;
+        }
+        jointp = mRoot->findJoint(canonical_name);
+        // Native untrusted mesh names must not grow an unbounded missing-name cache.
+        // Successful skeleton/alias names are finite; preserve the GL cache unchanged.
+        if(jointp||usesGraphicsContext())mJointMap[std::string(name)] = jointp;
+    }
+    else
+    { //return cached pointer
+      jointp = iter->second;
+    }
+
+    return jointp;
+}

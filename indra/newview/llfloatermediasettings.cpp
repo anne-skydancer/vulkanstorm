@@ -36,6 +36,11 @@
 #include "llbutton.h"
 #include "llselectmgr.h"
 #include "llsdutil.h"
+#include "llviewerwindow.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vseditselection.h"
+#endif
 
 LLFloaterMediaSettings* LLFloaterMediaSettings::sInstance = NULL;
 
@@ -124,6 +129,29 @@ bool LLFloaterMediaSettings::postBuild()
     return true;
 }
 
+void LLFloaterMediaSettings::retainSelection()
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() &&
+        (!mNativeSelection || !mNativeSelection->guard()()))
+    {
+        ++mEditRevision;
+        LLFloaterReg::hideInstance("whitelist_entry");
+        mNativeSelection=std::make_shared<VSEditSelection>();
+    }
+#endif
+}
+std::function<bool()> LLFloaterMediaSettings::editGuard() const
+{
+    const auto weak=getHandle();const auto revision=mEditRevision;
+    const auto account=vs_native_im_guard();
+    std::function<bool()> selected=[]{return true;};
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        selected=mNativeSelection?mNativeSelection->guard():std::function<bool()>([]{return false;});
+#endif
+    return [this,weak,revision,account,selected]{return weak.get() && account() && selected() && revision==mEditRevision;};
+}
 //static
 LLFloaterMediaSettings* LLFloaterMediaSettings::getInstance()
 {
@@ -136,8 +164,10 @@ LLFloaterMediaSettings* LLFloaterMediaSettings::getInstance()
 }
 
 //static
-void LLFloaterMediaSettings::apply()
+bool LLFloaterMediaSettings::apply()
 {
+    if(!sInstance || !sInstance->editGuard()())return false;
+    const auto current=sInstance->editGuard();
     if (sInstance->haveValuesChanged())
     {
         LLSD settings;
@@ -148,17 +178,29 @@ void LLFloaterMediaSettings::apply()
         sInstance->mPanelMediaSettingsPermissions->preApply();
         sInstance->mPanelMediaSettingsPermissions->getValues( settings, false );
 
-        LLSelectMgr::getInstance()->selectionSetMedia( LLTextureEntry::MF_HAS_MEDIA, settings );
+#if VS_NATIVE_VULKAN
+        if(sInstance->mNativeSelection)
+        {
+            if(!sInstance->mNativeSelection->selectionSetMedia(LLTextureEntry::MF_HAS_MEDIA,settings))return false;
+        }
+        else
+#endif
+            LLSelectMgr::getInstance()->selectionSetMedia( LLTextureEntry::MF_HAS_MEDIA, settings );
+        if(!current())return false;
 
         sInstance->mPanelMediaSettingsGeneral->postApply();
+        if(!current())return false;
         sInstance->mPanelMediaSettingsSecurity->postApply();
+        if(!current())return false;
         sInstance->mPanelMediaSettingsPermissions->postApply();
     }
+    return current();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 void LLFloaterMediaSettings::onOpen(const LLSD& key)
 {
+    retainSelection();
     if (mPanelMediaSettingsGeneral)
     {
         // media is expensive, so only load it when nessesary.
@@ -171,6 +213,10 @@ void LLFloaterMediaSettings::onOpen(const LLSD& key)
 ////////////////////////////////////////////////////////////////////////////////
 void LLFloaterMediaSettings::onClose(bool app_quitting)
 {
+    ++mEditRevision;
+#if VS_NATIVE_VULKAN
+    mNativeSelection.reset();
+#endif
     if(mPanelMediaSettingsGeneral)
     {
         mPanelMediaSettingsGeneral->onClose(app_quitting);
@@ -186,10 +232,12 @@ void LLFloaterMediaSettings::initValues( const LLSD& media_settings, bool editab
     {
         return;
     }
+    sInstance->mNativeEditable=editable;
     sInstance->mIdenticalHasMediaInfo = has_media_info;
     sInstance->mMultipleMedia = multiple_media;
     sInstance->mMultipleValidMedia = multiple_valid_media;
     if (sInstance->hasFocus()) return;
+    sInstance->retainSelection();
 
     // Clear values
     sInstance->mPanelMediaSettingsGeneral->clearValues(sInstance->mPanelMediaSettingsGeneral, editable, false /*don't update preview*/);
@@ -236,6 +284,8 @@ void LLFloaterMediaSettings::clearValues( bool editable)
 {
     if (sInstance)
     {
+        sInstance->mNativeEditable=editable;
+        sInstance->retainSelection();
         // clean up all panels before updating
         sInstance->mPanelMediaSettingsGeneral    ->clearValues(sInstance->mPanelMediaSettingsGeneral,  editable);
         sInstance->mPanelMediaSettingsSecurity   ->clearValues(sInstance->mPanelMediaSettingsSecurity,  editable);
@@ -249,7 +299,7 @@ void LLFloaterMediaSettings::onBtnOK( void* userdata )
 {
     sInstance->commitFields();
 
-    sInstance->apply();
+    if(!sInstance->apply())return;
 
     sInstance->closeFloater();
 }
@@ -260,7 +310,7 @@ void LLFloaterMediaSettings::onBtnApply( void* userdata )
 {
     sInstance->commitFields();
 
-    sInstance->apply();
+    if(!sInstance->apply())return;
 
     sInstance->mInitialValues.clear();
     sInstance->mPanelMediaSettingsGeneral->getValues( sInstance->mInitialValues );
@@ -300,7 +350,15 @@ void LLFloaterMediaSettings::draw()
     if (NULL != mApplyBtn)
     {
         // Set the enabled state of the "Apply" button if values changed
-        mApplyBtn->setEnabled( haveValuesChanged() );
+        bool editable=true;
+#if VS_NATIVE_VULKAN
+        if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        {
+            editable=mNativeEditable && editGuard()();
+            mOKBtn->setEnabled(editable);
+        }
+#endif
+        mApplyBtn->setEnabled( editable && haveValuesChanged() );
     }
 
     LLFloater::draw();

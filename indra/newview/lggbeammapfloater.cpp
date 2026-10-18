@@ -14,6 +14,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "lggbeammapfloater.h"
+#include "vsnativeim.h"
 
 #include "fspanelprefs.h"
 #include "lggbeammaps.h"
@@ -50,7 +51,7 @@ bool lggBeamMapFloater::postBuild()
 
 void lggBeamMapFloater::draw()
 {
-    if (mFSPanel)
+    if (mFSPanel && !mFSPanelHandle.isDead())
     {
         static LLCachedControl<F32> max_opacity(gSavedSettings, "PickerContextOpacity", 0.4f);
         drawConeToOwner(mContextConeOpacity, max_opacity, mFSPanel->getChild<LLButton>("custom_beam_btn"), mContextConeFadeTime, mContextConeInAlpha, mContextConeOutAlpha);
@@ -141,12 +142,14 @@ LLSD lggBeamMapFloater::getDataSerialized() const
 
 void lggBeamMapFloater::onClickSave()
 {
+    const auto weak=getHandle();const auto current=vs_native_im_guard();const auto revision=++mPickerRevision;
     std::string filename(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS , "beams", "NewBeam.xml"));
-    LLFilePickerReplyThread::startPicker(boost::bind(&lggBeamMapFloater::onSaveCallback, this, _1), LLFilePicker::FFSAVE_BEAM, filename);
+    LLFilePickerReplyThread::startPicker([this,weak,current,revision](const std::vector<std::string>& files,LLFilePicker::ELoadFilter,LLFilePicker::ESaveFilter){if(weak.get() && current() && revision==mPickerRevision && !files.empty())onSaveCallback(files);}, LLFilePicker::FFSAVE_BEAM, filename);
 }
 
 void lggBeamMapFloater::onSaveCallback(const std::vector<std::string>& filenames)
 {
+    if(filenames.empty())return;
     std::string filename = filenames[0];
 
     LLSD export_data;
@@ -159,7 +162,7 @@ void lggBeamMapFloater::onSaveCallback(const std::vector<std::string>& filenames
     export_file.close();
     gSavedSettings.setString("FSBeamShape", gDirUtilp->getBaseFileName(filename, true));
 
-    if (mFSPanel)
+    if (mFSPanel && !mFSPanelHandle.isDead())
     {
         mFSPanel->refreshBeamLists();
     }
@@ -172,11 +175,13 @@ void lggBeamMapFloater::onClickClear()
 
 void lggBeamMapFloater::onClickLoad()
 {
-    LLFilePickerReplyThread::startPicker(boost::bind(&lggBeamMapFloater::onLoadCallback, this, _1), LLFilePicker::FFLOAD_XML, false);
+    const auto weak=getHandle();const auto current=vs_native_im_guard();const auto revision=++mPickerRevision;
+    LLFilePickerReplyThread::startPicker([this,weak,current,revision](const std::vector<std::string>& files,LLFilePicker::ELoadFilter,LLFilePicker::ESaveFilter){if(weak.get() && current() && revision==mPickerRevision && !files.empty())onLoadCallback(files);}, LLFilePicker::FFLOAD_XML, false);
 }
 
 void lggBeamMapFloater::onLoadCallback(const std::vector<std::string>& filenames)
 {
+    if(filenames.empty())return;
     mDots.clear();
     LLSD import_data;
     llifstream importer(filenames[0].c_str());
@@ -203,8 +208,10 @@ void lggBeamMapFloater::onLoadCallback(const std::vector<std::string>& filenames
 
 void lggBeamMapFloater::setData(FSPanelPrefs* data)
 {
+    ++mPickerRevision;
     mFSPanel = data;
-    if (mFSPanel)
+    mFSPanelHandle=data?data->getHandle():LLHandle<LLView>();
+    if (mFSPanel && !mFSPanelHandle.isDead())
     {
         gFloaterView->getParentFloater(mFSPanel)->addDependentFloater(this);
     }
@@ -213,4 +220,10 @@ void lggBeamMapFloater::setData(FSPanelPrefs* data)
 void lggBeamMapFloater::clearPoints()
 {
     mDots.clear();
+}
+
+void lggBeamMapFloater::onClose(bool quitting)
+{
+    ++mPickerRevision;
+    LLFloater::onClose(quitting);
 }

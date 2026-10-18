@@ -14,6 +14,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "lggbeamcolormapfloater.h"
+#include "vsnativeim.h"
 
 #include "fspanelprefs.h"
 #include "lggbeammaps.h"
@@ -74,7 +75,7 @@ void lggBeamColorMapFloater::draw()
     LLColor4 bColor = LLColor4(lggBeamMaps::beamColorFromData(mData));
     mBeamColorPreview->set(bColor, true);
 
-    if (mFSPanel)
+    if (mFSPanel && !mFSPanelHandle.isDead())
     {
         static LLCachedControl<F32> max_opacity(gSavedSettings, "PickerContextOpacity", 0.4f);
         drawConeToOwner(mContextConeOpacity, max_opacity, mFSPanel->getChild<LLButton>("BeamColor_new"), mContextConeFadeTime, mContextConeInAlpha, mContextConeOutAlpha);
@@ -220,8 +221,10 @@ void lggBeamColorMapFloater::fixOrder()
 
 void lggBeamColorMapFloater::setData(FSPanelPrefs* data)
 {
+    ++mPickerRevision;
     mFSPanel = data;
-    if (mFSPanel)
+    mFSPanelHandle=data?data->getHandle():LLHandle<LLView>();
+    if (mFSPanel && !mFSPanelHandle.isDead())
     {
         gFloaterView->getParentFloater(mFSPanel)->addDependentFloater(this);
     }
@@ -234,12 +237,14 @@ LLSD lggBeamColorMapFloater::getDataSerialized() const
 
 void lggBeamColorMapFloater::onClickSave()
 {
+    const auto weak=getHandle();const auto current=vs_native_im_guard();const auto revision=++mPickerRevision;
     std::string filename(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "beamsColors", "NewBeamColor.xml"));
-    LLFilePickerReplyThread::startPicker(boost::bind(&lggBeamColorMapFloater::onSaveCallback, this, _1), LLFilePicker::FFSAVE_BEAM, filename);
+    LLFilePickerReplyThread::startPicker([this,weak,current,revision](const std::vector<std::string>& files,LLFilePicker::ELoadFilter,LLFilePicker::ESaveFilter){if(weak.get() && current() && revision==mPickerRevision && !files.empty())onSaveCallback(files);}, LLFilePicker::FFSAVE_BEAM, filename);
 }
 
 void lggBeamColorMapFloater::onSaveCallback(const std::vector<std::string>& filenames)
 {
+    if(filenames.empty())return;
     std::string filename = filenames[0];
 
     LLSD export_data = getDataSerialized();
@@ -251,7 +256,7 @@ void lggBeamColorMapFloater::onSaveCallback(const std::vector<std::string>& file
 
     gSavedSettings.setString("FSBeamColorFile", gDirUtilp->getBaseFileName(filename, true));
 
-    if (mFSPanel)
+    if (mFSPanel && !mFSPanelHandle.isDead())
     {
         mFSPanel->refreshBeamLists();
     }
@@ -260,15 +265,23 @@ void lggBeamColorMapFloater::onSaveCallback(const std::vector<std::string>& file
 
 void lggBeamColorMapFloater::onClickLoad()
 {
-    LLFilePickerReplyThread::startPicker(boost::bind(&lggBeamColorMapFloater::onLoadCallback, this, _1), LLFilePicker::FFLOAD_XML, false);
+    const auto weak=getHandle();const auto current=vs_native_im_guard();const auto revision=++mPickerRevision;
+    LLFilePickerReplyThread::startPicker([this,weak,current,revision](const std::vector<std::string>& files,LLFilePicker::ELoadFilter,LLFilePicker::ESaveFilter){if(weak.get() && current() && revision==mPickerRevision && !files.empty())onLoadCallback(files);}, LLFilePicker::FFLOAD_XML, false);
 }
 
 void lggBeamColorMapFloater::onLoadCallback(const std::vector<std::string>& filenames)
 {
+    if(filenames.empty())return;
     LLSD import_data;
     llifstream importer(filenames[0].c_str());
     LLSDSerialize::fromXMLDocument(import_data, importer);
 
     mData = lggBeamsColors::fromLLSD(import_data);
     childSetValue("BeamColor_Speed", mData.mRotateSpeed * 100.f);
+}
+
+void lggBeamColorMapFloater::onClose(bool quitting)
+{
+    ++mPickerRevision;
+    LLFloater::onClose(quitting);
 }

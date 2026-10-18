@@ -1,0 +1,16 @@
+#include <cassert>
+#include <functional>
+#include <memory>
+#include <vector>
+#include <algorithm>
+#include <random>
+using F32=float;using S32=int;float clockTime=0;
+struct Timer{float start=0;void reset(){start=clockTime;}float getElapsedTimeF32(){return clockTime-start;}};
+constexpr float MAX_TEXTURE_WAIT_TIME_SEC=60,MAX_ATTACHMENT_WAIT_TIME_SEC=15,FIRST_APPEARANCE_CLOUD_MIN_DELAY=3,FIRST_APPEARANCE_CLOUD_MAX_DELAY=15,FIRST_APPEARANCE_CLOUD_IMPOSTOR_MODIFIER=1.25;
+template<class T>T llclamp(T v,T lo,T hi){return std::clamp(v,lo,hi);}void debugAvatarRezTime(const char*,const char*){}struct LLAvatarRenderNotifier{static auto getInstance(){static LLAvatarRenderNotifier i;return &i;}void updateNotificationState(){}};
+struct LLVOAvatar{bool mWaitingForMeshes=false,mFirstFullyVisible=true,mIsControlAvatar=false,mFullyLoaded=false,mPreviousFullyLoaded=false,mFullyLoadedInitialized=false,mNeedsImpostorUpdate=false;int mLastImpostorUpdateReason=0,mFullyLoadedFrameCounter=0,mLoadedCallbackTextures=0,mLastCloudAttachmentCount=0;std::vector<int>mCallbackTextureList,mPendingAttachment,mSimAttachments;Timer mLastTexCallbackAddedTime,mLastCloudAttachmentChangeTime,mFirstAppearanceMessageTimer,mFullyLoadedTimer;int rez=0;bool baked=false,pending=false;int meshQueries=0;bool isSelf(){return true;}int getRezzedStatus(){return rez;}bool isFullyBaked(){return baked;}bool hasPendingAttachedMeshes(){++meshQueries;return pending;}int getAttachmentCount(){return 0;}void updateRezzedStatusTimers(int){}void updateRuthTimer(bool){}bool shouldImpostor(){return false;}bool isImpostor(){return false;}bool updateIsFullyLoaded();bool processFullyLoadedChange(bool);};
+ORIGINAL_UPDATE
+ORIGINAL_PROCESS
+struct VSWorldAvatar{struct Impl{bool self=true,control=false,preview=false,firstFullyVisible=true;Timer fullyLoadedTimer;struct Facts{int rezStatus=0;bool fullyBaked=false;};Facts facts;int mLastRezzedStatus=0;Facts loadFacts(unsigned){return facts;}};std::unique_ptr<Impl>mImpl=std::make_unique<Impl>();bool updateFirstFullyVisible(unsigned,bool,const std::function<bool()>&);};
+NATIVE_UPDATE
+int main(){std::mt19937 rng(190287);for(int scenario=0;scenario<10000;++scenario){clockTime=0;LLVOAvatar original;VSWorldAvatar native;int nativeQueries=0;for(int step=0;step<50;++step){clockTime+=float(rng()%20)*.125f;int rez=step<25?int(rng()%5):4;bool baked=step<25?bool(rng()%2):true;bool attach=step<25?bool(rng()%2):false;bool mesh=step<25?bool(rng()%2):false;original.rez=rez;original.baked=baked;original.pending=mesh;original.mPendingAttachment.resize(attach?1:0);native.mImpl->facts={rez,baked};bool expected=false;if(original.mFirstFullyVisible){bool changed=original.updateIsFullyLoaded();if(changed&&original.mFullyLoaded){original.mFirstFullyVisible=false;expected=true;}}const bool actual=native.updateFirstFullyVisible(0,attach,[&]{++nativeQueries;return mesh;});assert(actual==expected);assert(nativeQueries==original.meshQueries);}assert(!native.mImpl->firstFullyVisible);}clockTime=0;VSWorldAvatar boundary;boundary.mImpl->facts={4,true};clockTime=3;assert(!boundary.updateFirstFullyVisible(0,false,[]{return false;}));clockTime=3.0001f;assert(boundary.updateFirstFullyVisible(0,false,[]{return false;}));assert(!boundary.updateFirstFullyVisible(0,false,[]{return false;}));}

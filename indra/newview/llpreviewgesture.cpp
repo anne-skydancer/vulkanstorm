@@ -26,6 +26,9 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llpreviewgesture.h"
+#include "vstaskinventoryobject.h"
+#include "vsnativeim.h"
+#include "vsregioncontext.h"
 
 #include "llagent.h"
 #include "llanimstatelabels.h"
@@ -73,7 +76,8 @@ void dialog_refresh_all();
 class LLInventoryGestureAvailable : public LLInventoryCompletionObserver
 {
 public:
-    LLInventoryGestureAvailable() {}
+    LLInventoryGestureAvailable() : mCurrent(vs_native_im_guard()) {}
+    std::function<bool()> mCurrent;
 
 protected:
     virtual void done();
@@ -81,6 +85,7 @@ protected:
 
 void LLInventoryGestureAvailable::done()
 {
+    if (!mCurrent()) { gInventory.removeObserver(this); delete this; return; }
     for(uuid_vec_t::iterator it = mComplete.begin(); it != mComplete.end(); ++it)
     {
         LLPreviewGesture* preview = LLFloaterReg::findTypedInstance<LLPreviewGesture>("preview_gesture", *it);
@@ -141,6 +146,7 @@ LLPreviewGesture* LLPreviewGesture::show(const LLUUID& item_id, const LLUUID& ob
 
 void LLPreviewGesture::draw()
 {
+    if (!mPreviewCurrent()) return;
     // Skip LLPreview::draw() to avoid description update
     LLFloater::draw();
 }
@@ -236,6 +242,7 @@ bool LLPreviewGesture::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop,
 // virtual
 bool LLPreviewGesture::canClose()
 {
+    if (!mPreviewCurrent()) return true;
 
     if(!mDirty || mForceClose)
     {
@@ -248,16 +255,28 @@ bool LLPreviewGesture::canClose()
             mSaveDialogShown = true;
             // Bring up view-modal dialog: Save changes? Yes, No, Cancel
             LLNotificationsUtil::add("SaveChanges", LLSD(), LLSD(),
-                    boost::bind(&LLPreviewGesture::handleSaveChangesDialog, this, _1, _2) );
+                    vs_native_im_ui_callback(this, boost::bind(&LLPreviewGesture::handleSaveChangesDialog, this, _1, _2)));
         }
         return false;
     }
 }
 
 // virtual
+void LLPreviewGesture::stopPreview()
+{
+    if (!mPreviewGesture) return;
+    if (mPreviewCurrent() && LLGestureMgr::instanceExists())
+        LLGestureMgr::instance().stopGesture(mPreviewGesture);
+    else
+    {
+        if (LLGestureMgr::instanceExists()) LLGestureMgr::instance().forgetPreviewGesture(mPreviewGesture);
+        onDonePreview(mPreviewGesture, mPreviewGesture->mCallbackData);
+    }
+}
+
 void LLPreviewGesture::onClose(bool app_quitting)
 {
-    LLGestureMgr::instance().stopGesture(mPreviewGesture);
+    stopPreview();
 }
 
 // virtual
@@ -282,13 +301,13 @@ bool LLPreviewGesture::handleSaveChangesDialog(const LLSD& notification, const L
     switch(option)
     {
     case 0:  // "Yes"
-        LLGestureMgr::instance().stopGesture(mPreviewGesture);
+        stopPreview();
         mCloseAfterSave = true;
         onClickSave(this);
         break;
 
     case 1:  // "No"
-        LLGestureMgr::instance().stopGesture(mPreviewGesture);
+        stopPreview();
         mDirty = false; // Force the dirty flag because user has clicked NO on confirm save dialog...
         closeFloater();
         break;
@@ -332,6 +351,8 @@ LLPreviewGesture::LLPreviewGesture(const LLSD& key)
 
 LLPreviewGesture::~LLPreviewGesture()
 {
+    stopPreview();
+    if (!mStepList) return;
     // Userdata for all steps is a LLGestureStep we need to clean up
     std::vector<LLScrollListItem*> data_list = mStepList->getAllData();
     std::vector<LLScrollListItem*>::iterator data_itor;
@@ -633,6 +654,7 @@ void LLPreviewGesture::addSounds()
 
 void LLPreviewGesture::refresh()
 {
+    if (!mPreviewCurrent()) return;
     LLPreview::refresh();
     // If previewing or item is incomplete, all controls are disabled
     LLViewerInventoryItem* item = (LLViewerInventoryItem*)getItem();
@@ -826,8 +848,21 @@ void LLPreviewGesture::initDefaultGesture()
 }
 
 
+namespace
+{
+struct GestureLoad
+{
+    LLHandle<LLFloater> view;
+    LLUUID item, asset;
+    std::function<bool()> current;
+};
+struct GesturePreviewCompletion { LLHandle<LLFloater> view; };
+}
+
 void LLPreviewGesture::loadAsset()
 {
+    if (!ensureTaskInventory()) return;
+    if (!mPreviewCurrent()) return;
     const LLInventoryItem* item = getItem();
     if (!item)
     {
@@ -853,7 +888,7 @@ void LLPreviewGesture::loadAsset()
 
     // Copy the UUID, because the user might close the preview
     // window if the download gets stalled.
-    LLUUID* item_idp = new LLUUID(mItemUUID);
+    auto* item_idp = new GestureLoad{getHandle(), mItemUUID, asset_id, inventoryItemGuard()};
 
     const bool high_priority = true;
     gAssetStorage->getAssetData(asset_id,
@@ -870,10 +905,11 @@ void LLPreviewGesture::onLoadComplete(const LLUUID& asset_uuid,
                                       LLAssetType::EType type,
                                       void* user_data, S32 status, LLExtStat ext_status)
 {
-    LLUUID* item_idp = (LLUUID*)user_data;
-
-    LLPreviewGesture* self = LLFloaterReg::findTypedInstance<LLPreviewGesture>("preview_gesture", *item_idp);
-    if (self)
+    std::unique_ptr<GestureLoad> item_idp(static_cast<GestureLoad*>(user_data));
+    if (!item_idp || !item_idp->current()) return;
+    auto* self = dynamic_cast<LLPreviewGesture*>(item_idp->view.get());
+    const auto* item = self ? self->getItem() : nullptr;
+    if (self && item && item->getUUID() == item_idp->item && item->getAssetUUID() == item_idp->asset && asset_uuid == item_idp->asset)
     {
         if (0 == status)
         {
@@ -915,19 +951,17 @@ void LLPreviewGesture::onLoadComplete(const LLUUID& asset_uuid,
             if( LL_ERR_ASSET_REQUEST_NOT_IN_DATABASE == status ||
                 LL_ERR_FILE_EMPTY == status)
             {
-                LLDelayedGestureError::gestureMissing( *item_idp );
+                LLDelayedGestureError::gestureMissing(item_idp->item);
             }
             else
             {
-                LLDelayedGestureError::gestureFailedToLoad( *item_idp );
+                LLDelayedGestureError::gestureFailedToLoad(item_idp->item);
             }
 
             LL_WARNS() << "Problem loading gesture: " << status << LL_ENDL;
             self->mAssetStatus = PREVIEW_ASSET_ERROR;
         }
     }
-    delete item_idp;
-    item_idp = NULL;
 }
 
 
@@ -1037,12 +1071,17 @@ void LLPreviewGesture::loadUIFromGesture(LLMultiGesture* gesture)
 // after the save finishes.
 struct LLSaveInfo
 {
-    LLSaveInfo(const LLUUID& item_id, const LLUUID& object_id, const std::string& desc,
+    LLSaveInfo(LLPreviewGesture* view, const LLUUID& item_id, const LLUUID& object_id, const std::string& desc,
                 const LLTransactionID tid)
         : mItemUUID(item_id), mObjectUUID(object_id), mDesc(desc), mTransactionID(tid)
     {
+        mCurrent = view->inventoryItemGuard();
+        mView = view->getHandle();
     }
 
+    LLHandle<LLFloater> mView;
+    std::function<bool()> mAccountCurrent = vs_native_im_guard();
+    std::function<bool()> mCurrent = vs_native_im_guard();
     LLUUID mItemUUID;
     LLUUID mObjectUUID;
     std::string mDesc;
@@ -1072,6 +1111,7 @@ void LLPreviewGesture::finishInventoryUpload(LLUUID itemId, LLUUID newAssetId)
 
 void LLPreviewGesture::saveIfNeeded()
 {
+    if (!inventoryItemGuard()()) return;
     if (!gAssetStorage)
     {
         LL_WARNS() << "Can't save gesture, no asset storage system." << LL_ENDL;
@@ -1117,16 +1157,16 @@ void LLPreviewGesture::saveIfNeeded()
     LLViewerInventoryItem* item = (LLViewerInventoryItem*) getItem();
     if (item)
     {
-        const LLViewerRegion* region = gAgent.getRegion();
+        const auto region = vs_current_region_context();
         if (!region)
         {
             LL_WARNS() << "Not connected to a region, cannot save gesture." << LL_ENDL;
             return;
         }
         std::string agent_url = region->getCapability("UpdateGestureAgentInventory");
-        std::string task_url = region->getCapability("UpdateGestureTaskInventory");
+        std::string task_url = VSTaskInventoryObject::find(mObjectUUID)->getCapability("UpdateGestureTaskInventory");
 
-        if (!agent_url.empty() && !task_url.empty())
+        if ((mObjectUUID.isNull() && !agent_url.empty()) || (mObjectUUID.notNull() && !task_url.empty()))
         {
             std::string url;
             LLResourceUploadInfo::ptr_t uploadInfo;
@@ -1141,16 +1181,31 @@ void LLPreviewGesture::saveIfNeeded()
                 item->setComplete(true);
 
                 uploadInfo = std::make_shared<LLBufferedAssetUploadInfo>(mItemUUID, LLAssetType::AT_GESTURE, buffer,
-                    [](LLUUID itemId, LLUUID newAssetId, LLUUID, LLSD)
+                    [current = mPreviewCurrent](LLUUID itemId, LLUUID newAssetId, LLUUID, LLSD)
                     {
-                        LLPreviewGesture::finishInventoryUpload(itemId, newAssetId);
+                        if (current()) LLPreviewGesture::finishInventoryUpload(itemId, newAssetId);
                     },
                     nullptr);
                 url = agent_url;
             }
             else if (!mObjectUUID.isNull() && !task_url.empty())
             {
-                uploadInfo = std::make_shared<LLBufferedAssetUploadInfo>(mObjectUUID, mItemUUID, LLAssetType::AT_GESTURE, buffer, nullptr, nullptr);
+                const auto weak = getHandle(); const auto account = mPreviewCurrent;
+                uploadInfo = std::make_shared<LLBufferedAssetUploadInfo>(mObjectUUID, mItemUUID, LLAssetType::AT_GESTURE, buffer,
+                    [weak, account](LLUUID, LLUUID, LLUUID, LLSD)
+                    {
+                        auto* view = dynamic_cast<LLPreviewGesture*>(weak.get());
+                        if (!view || !account()) return;
+                        view->onUpdateSucceeded();
+                        if (view->mCloseAfterSave) view->closeFloater();
+                    },
+                    [weak, account](LLUUID, LLUUID, LLSD, std::string)
+                    {
+                        auto* view = dynamic_cast<LLPreviewGesture*>(weak.get());
+                        if (!view || !account()) return false;
+                        view->mDirty = true; view->mCloseAfterSave = false; view->refresh();
+                        return true;
+                    });
                 url = task_url;
             }
 
@@ -1175,7 +1230,7 @@ void LLPreviewGesture::saveIfNeeded()
             file.write((U8*)buffer, size);
 
             LLLineEditor* descEditor = getChild<LLLineEditor>("desc");
-            LLSaveInfo* info = new LLSaveInfo(mItemUUID, mObjectUUID, descEditor->getText(), tid);
+            LLSaveInfo* info = new LLSaveInfo(this, mItemUUID, mObjectUUID, descEditor->getText(), tid);
             gAssetStorage->storeAssetData(tid, LLAssetType::AT_GESTURE, onSaveComplete, info, false);
         }
 
@@ -1216,6 +1271,13 @@ void LLPreviewGesture::saveIfNeeded()
 void LLPreviewGesture::onSaveComplete(const LLUUID& asset_uuid, void* user_data, S32 status, LLExtStat ext_status) // StoreAssetData callback (fixed)
 {
     LLSaveInfo* info = (LLSaveInfo*)user_data;
+    if (info && !info->mCurrent())
+    {
+        if (info->mAccountCurrent())
+            if (auto* view = dynamic_cast<LLPreviewGesture*>(info->mView.get()))
+            { view->mDirty = true; view->mCloseAfterSave = false; view->refresh(); }
+        delete info; return;
+    }
     if (info && (status == 0))
     {
         if(info->mObjectUUID.isNull())
@@ -1242,7 +1304,7 @@ void LLPreviewGesture::onSaveComplete(const LLUUID& asset_uuid, void* user_data,
         else
         {
             // Saving into in-world object inventory
-            LLViewerObject* object = gObjectList.findObject(info->mObjectUUID);
+            auto object = VSTaskInventoryObject::find(info->mObjectUUID);
             LLViewerInventoryItem* item = NULL;
             if(object)
             {
@@ -1262,8 +1324,10 @@ void LLPreviewGesture::onSaveComplete(const LLUUID& asset_uuid, void* user_data,
             }
         }
 
+        // Publication may synchronously retire its initiating account/view.
+        if (!info->mAccountCurrent()) { delete info; return; }
         // Find our window and close it if requested.
-        LLPreviewGesture* previewp = LLFloaterReg::findTypedInstance<LLPreviewGesture>("preview_gesture", info->mItemUUID);
+        auto* previewp = dynamic_cast<LLPreviewGesture*>(info->mView.get());
         if (previewp && previewp->mCloseAfterSave)
         {
             previewp->closeFloater();
@@ -1396,6 +1460,7 @@ void LLPreviewGesture::updateLabel(LLScrollListItem* item)
 void LLPreviewGesture::onCommitSetDirty(LLUICtrl* ctrl, void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
     self->mDirty = true;
     self->refresh();
 }
@@ -1404,6 +1469,7 @@ void LLPreviewGesture::onCommitSetDirty(LLUICtrl* ctrl, void* data)
 void LLPreviewGesture::onCommitLibrary(LLUICtrl* ctrl, void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
 
     LLScrollListItem* library_item = self->mLibraryList->getFirstSelected();
     if (library_item)
@@ -1418,6 +1484,7 @@ void LLPreviewGesture::onCommitLibrary(LLUICtrl* ctrl, void* data)
 void LLPreviewGesture::onCommitStep(LLUICtrl* ctrl, void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
 
     LLScrollListItem* step_item = self->mStepList->getFirstSelected();
     if (!step_item) return;
@@ -1431,6 +1498,7 @@ void LLPreviewGesture::onCommitStep(LLUICtrl* ctrl, void* data)
 void LLPreviewGesture::onCommitAnimation(LLUICtrl* ctrl, void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
 
     LLScrollListItem* step_item = self->mStepList->getFirstSelected();
     if (step_item)
@@ -1465,6 +1533,7 @@ void LLPreviewGesture::onCommitAnimation(LLUICtrl* ctrl, void* data)
 void LLPreviewGesture::onCommitAnimationTrigger(LLUICtrl* ctrl, void *data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
 
     LLScrollListItem* step_item = self->mStepList->getFirstSelected();
     if (step_item)
@@ -1496,6 +1565,7 @@ void LLPreviewGesture::onCommitAnimationTrigger(LLUICtrl* ctrl, void *data)
 void LLPreviewGesture::onCommitSound(LLUICtrl* ctrl, void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
 
     LLScrollListItem* step_item = self->mStepList->getFirstSelected();
     if (step_item)
@@ -1522,6 +1592,7 @@ void LLPreviewGesture::onCommitSound(LLUICtrl* ctrl, void* data)
 void LLPreviewGesture::onCommitChat(LLUICtrl* ctrl, void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
 
     LLScrollListItem* step_item = self->mStepList->getFirstSelected();
     if (!step_item) return;
@@ -1544,6 +1615,7 @@ void LLPreviewGesture::onCommitChat(LLUICtrl* ctrl, void* data)
 void LLPreviewGesture::onCommitWait(LLUICtrl* ctrl, void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
 
     LLScrollListItem* step_item = self->mStepList->getFirstSelected();
     if (!step_item) return;
@@ -1581,6 +1653,7 @@ void LLPreviewGesture::onCommitWait(LLUICtrl* ctrl, void* data)
 void LLPreviewGesture::onCommitWaitTime(LLUICtrl* ctrl, void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
 
     LLScrollListItem* step_item = self->mStepList->getFirstSelected();
     if (!step_item) return;
@@ -1605,6 +1678,7 @@ void LLPreviewGesture::onKeystrokeCommit(LLLineEditor* caller,
 void LLPreviewGesture::onClickAdd(void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
 
     LLScrollListItem* library_item = self->mLibraryList->getFirstSelected();
     if (!library_item) return;
@@ -1717,6 +1791,7 @@ std::string LLPreviewGesture::getLabel(std::vector<std::string> labels)
 void LLPreviewGesture::onClickUp(void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
 
     S32 selected_index = self->mStepList->getFirstSelectedIndex();
     if (selected_index > 0)
@@ -1731,6 +1806,7 @@ void LLPreviewGesture::onClickUp(void* data)
 void LLPreviewGesture::onClickDown(void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
 
     S32 selected_index = self->mStepList->getFirstSelectedIndex();
     if (selected_index < 0) return;
@@ -1748,6 +1824,7 @@ void LLPreviewGesture::onClickDown(void* data)
 void LLPreviewGesture::onClickDelete(void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
 
     LLScrollListItem* item = self->mStepList->getFirstSelected();
     S32 selected_index = self->mStepList->getFirstSelectedIndex();
@@ -1768,6 +1845,7 @@ void LLPreviewGesture::onClickDelete(void* data)
 void LLPreviewGesture::onCommitActive(LLUICtrl* ctrl, void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
     if (!LLGestureMgr::instance().isGestureActive(self->mItemUUID))
     {
         LLGestureMgr::instance().activateGesture(self->mItemUUID);
@@ -1792,6 +1870,7 @@ void LLPreviewGesture::onCommitActive(LLUICtrl* ctrl, void* data)
 void LLPreviewGesture::onClickSave(void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
     self->saveIfNeeded();
 }
 
@@ -1799,6 +1878,7 @@ void LLPreviewGesture::onClickSave(void* data)
 void LLPreviewGesture::onClickPreview(void* data)
 {
     LLPreviewGesture* self = (LLPreviewGesture*)data;
+    if (!self->mPreviewCurrent()) return;
     if (!are_gestures_enabled()) return; // <FS:PP> FIRE-36169 Gestures enable/disable switch
 
     if (!self->mPreviewGesture)
@@ -1808,7 +1888,7 @@ void LLPreviewGesture::onClickPreview(void* data)
 
         // add a callback
         self->mPreviewGesture->mDoneCallback = onDonePreview;
-        self->mPreviewGesture->mCallbackData = self;
+        self->mPreviewGesture->mCallbackData = new GesturePreviewCompletion{self->getHandle()};
 
         // set the button title
         self->mPreviewBtn->setLabel(self->getString("stop_txt"));
@@ -1821,7 +1901,7 @@ void LLPreviewGesture::onClickPreview(void* data)
     else
     {
         // Will call onDonePreview() below
-        LLGestureMgr::instance().stopGesture(self->mPreviewGesture);
+        self->stopPreview();
 
         self->refresh();
     }
@@ -1831,12 +1911,11 @@ void LLPreviewGesture::onClickPreview(void* data)
 // static
 void LLPreviewGesture::onDonePreview(LLMultiGesture* gesture, void* data)
 {
-    LLPreviewGesture* self = (LLPreviewGesture*)data;
-
+    std::unique_ptr<GesturePreviewCompletion> completion(static_cast<GesturePreviewCompletion*>(data));
+    auto* self = completion ? dynamic_cast<LLPreviewGesture*>(completion->view.get()) : nullptr;
+    if (self && self->mPreviewGesture == gesture) self->mPreviewGesture = nullptr;
+    delete gesture;
+    if (!self || !self->mPreviewCurrent()) return;
     self->mPreviewBtn->setLabel(self->getString("preview_txt"));
-
-    delete self->mPreviewGesture;
-    self->mPreviewGesture = NULL;
-
     self->refresh();
 }

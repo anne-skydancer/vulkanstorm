@@ -30,6 +30,7 @@
 #include "lluploadfloaterobservers.h"
 #include "llcoros.h"
 #include "lleventcoro.h"
+#include <functional>
 
 class LLFloaterModelUploadBase : public LLFloater, public LLUploadPermissionsObserver, public LLWholeModelFeeObserver, public LLWholeModelUploadObserver
 {
@@ -56,7 +57,8 @@ protected:
     // requests agent's permissions to upload model
     void requestAgentUploadPermissions();
 
-    void requestAgentUploadPermissionsCoro(std::string url, LLHandle<LLUploadPermissionsObserver> observerHandle);
+    static void requestAgentUploadPermissionsCoro(std::string url, LLHandle<LLUploadPermissionsObserver> observerHandle, std::function<bool()> current);
+    std::function<bool()> mAccountCurrent;
 
     std::string mUploadModelUrl;
     bool mHasUploadPerm;

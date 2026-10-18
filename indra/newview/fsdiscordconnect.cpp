@@ -28,6 +28,12 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsdiscordconnect.h"
+#include "vsregioncontext.h"
+#include "vsnativeim.h"
+#include "vsavatarservices.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llagent.h"
 #include "llevents.h"
@@ -69,7 +75,7 @@ bool FSDiscordConnect::checkMarkerFile() const
 
 void FSDiscordConnect::setMarkerFile()
 {
-    if (!checkMarkerFile())
+    if (checkMarkerFile())
     {
         return; // dont over-write another instances file
     }
@@ -80,7 +86,7 @@ void FSDiscordConnect::setMarkerFile()
 
 void FSDiscordConnect::clearMarkerFile()
 {
-    if (!checkMarkerFile())
+    if (checkMarkerFile())
     {
         return; // dont remove another instances file
     }
@@ -89,10 +95,12 @@ void FSDiscordConnect::clearMarkerFile()
 
 static void handleDiscordReady(const DiscordUser *request)
 {
+    if(!request || !FSDiscordConnect::instanceExists() || !FSDiscordConnect::instance().acceptsCallbacks())return;
     LLSD info;
     info["name"] = request->username;
     FSDiscordConnect::getInstance()->storeInfo(info);
-    FSDiscordConnect::getInstance()->setConnectionState(FSDiscordConnect::DISCORD_CONNECTED);
+    if(FSDiscordConnect::instanceExists() && FSDiscordConnect::instance().acceptsCallbacks())
+        FSDiscordConnect::instance().setConnectionState(FSDiscordConnect::DISCORD_CONNECTED);
 }
 
 static void handleDiscordError(int errorCode, const char* message)
@@ -102,6 +110,7 @@ static void handleDiscordError(int errorCode, const char* message)
 
 static void handleDiscordDisconnected(int errorCode, const char* message)
 {
+    if(!FSDiscordConnect::instanceExists() || !FSDiscordConnect::instance().acceptsCallbacks())return;
     LL_INFOS("DiscordConnect") << "Discord disconnected, errorCode: \"" << errorCode << "\", message: \"" << message << "\"" << LL_ENDL;
     FSDiscordConnect::getInstance()->setConnectionState(FSDiscordConnect::DISCORD_NOT_CONNECTED);
 }
@@ -110,6 +119,10 @@ static void handleDiscordDisconnected(int errorCode, const char* message)
 //
 void FSDiscordConnect::discordConnectCoro()
 {
+    if(mRetiring || mRpcActive)return;
+    mCurrent=vs_native_im_guard();
+    if(!mCurrent())return;
+    mRpcActive=true;
     DiscordEventHandlers handlers;
     memset(&handlers, 0, sizeof(handlers));
     handlers.ready = handleDiscordReady;
@@ -127,7 +140,10 @@ void FSDiscordConnect::discordConnectCoro()
 //
 void FSDiscordConnect::discordDisconnectCoro()
 {
-    Discord_Shutdown();
+    const bool active=mRpcActive;
+    mRpcActive=false;
+    mCurrent=[] {return false;};
+    if(active){Discord_ClearPresence();Discord_Shutdown();}
     setConnectionState(FSDiscordConnect::DISCORD_NOT_CONNECTED);
 }
 
@@ -135,9 +151,17 @@ void FSDiscordConnect::discordDisconnectCoro()
 //
 void FSDiscordConnect::discordConnectedCoro(bool autoConnect)
 {
-    if (autoConnect)
+    const auto current=vs_native_im_guard();
+    if (autoConnect && !mRetiring && current())
     {
+        if(mRpcActive)
+        {
+            if(isConnected() || mConnectionState==DISCORD_CONNECTION_IN_PROGRESS)return;
+            disconnectFromDiscord();
+            if(!current())return;
+        }
         setConnectionState(FSDiscordConnect::DISCORD_CONNECTION_IN_PROGRESS);
+        if(!current() || mRetiring)return;
         if (!checkMarkerFile())
         {
             connectToDiscord();
@@ -150,7 +174,7 @@ void FSDiscordConnect::discordConnectedCoro(bool autoConnect)
 
 }
 
-static bool isRegionVisible(LLViewerRegion* region)
+static bool isRegionVisible(const VSRegionContext* region)
 {
     U8 rating = region->getSimAccess();
     bool visible = true;
@@ -178,17 +202,24 @@ static bool isRegionVisible(LLViewerRegion* region)
 
 void FSDiscordConnect::updateRichPresence() const
 {
-    LLViewerRegion* region = gAgent.getRegion();
-    if (!isConnected() || !region)
+    const auto region=vs_current_region_context();
+    if (!acceptsCallbacks() || !isConnected() || !region)
     {
         return;
     }
     std::string region_name;
-    if (RlvActions::canShowLocation() && isRegionVisible(region))
+    if (RlvActions::canShowLocation() && isRegionVisible(&*region))
     {
-        region_name = gAgent.getRegion()->getName();
+        region_name = region->getName();
         region_name += " ";
         LLVector3 pos = gAgent.getPositionAgent();
+#if VS_NATIVE_VULKAN
+        if(VSNativeSession::active())
+        {
+            const auto pose=vs_avatar_voice_pose();if(!pose)return;
+            pos=region->getPosRegionFromGlobal(pose->position);
+        }
+#endif
 
         region_name += llformat("(%.0f, %.0f, %.0f)", pos.mV[VX], pos.mV[VY], pos.mV[VZ]);
     }
@@ -237,9 +268,18 @@ void FSDiscordConnect::updateRichPresence() const
     std::string appName = std::string("via " + APP_NAME);
     discordPresence.smallImageText = appName.c_str();
 
-    std::string regionId = gAgent.getRegion()->getRegionID().asString();
+    std::string regionId = region->getRegionID().asString();
     discordPresence.partyId = regionId.c_str();
-    discordPresence.partySize = static_cast<int>(gAgent.getRegion()->mMapAvatars.size());
+    #if VS_NATIVE_VULKAN
+    if(const auto session=VSNativeSession::active())
+    {
+        const auto count=session->coarseAvatarCount(region->getHost());
+        if(!count || !region->current())return;
+        discordPresence.partySize=static_cast<int>(*count);
+    }
+    else
+#endif
+        discordPresence.partySize = static_cast<int>(gAgent.getRegion()->mMapAvatars.size());
     discordPresence.partyMax = LLRegionInfoModel::instance().mAgentLimit;
     Discord_UpdatePresence(&discordPresence);
 }
@@ -254,38 +294,37 @@ FSDiscordConnect::FSDiscordConnect()
     mConnectTime(0)
 {
     mMarkerFilename = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "discord_in_use_marker");
-    LLEventPumps::instance().obtain("mainloop").listen("FSDiscordConnect", std::bind(&FSDiscordConnect::Tick, this, std::placeholders::_1));
+    mMainloop=LLEventPumps::instance().obtain("mainloop").listen("FSDiscordConnect", std::bind(&FSDiscordConnect::Tick, this, std::placeholders::_1));
 }
 
 FSDiscordConnect::~FSDiscordConnect()
 {
-    disconnectFromDiscord();
+    mMainloop.disconnect();
+    retireAccount();
 }
 
 void FSDiscordConnect::connectToDiscord()
 {
-    LLCoros::instance().launch("FSDiscordConnect::discordConnectCoro",
-        std::bind(&FSDiscordConnect::discordConnectCoro, this));
+    if(!mRetiring)discordConnectCoro();
 }
 
 void FSDiscordConnect::disconnectFromDiscord()
 {
+    const bool retiring=mRetiring;mRetiring=true;
     setConnectionState(FSDiscordConnect::DISCORD_DISCONNECTING);
-
-    LLCoros::instance().launch("FSDiscordConnect::discordDisconnectCoro",
-        std::bind(&FSDiscordConnect::discordDisconnectCoro, this));
+    discordDisconnectCoro();
+    mRetiring=retiring;
 }
 
 void FSDiscordConnect::checkConnectionToDiscord(bool auto_connect)
 {
-    LLCoros::instance().launch("FSDiscordConnect::discordConnectedCoro",
-        std::bind(&FSDiscordConnect::discordConnectedCoro, this, auto_connect));
+    if(!mRetiring)discordConnectedCoro(auto_connect);
 }
 
 bool FSDiscordConnect::Tick(const LLSD&)
 {
-    Discord_RunCallbacks();
-    updateRichPresence();
+    if(mRpcActive && !mCurrent())retireAccount();
+    if(acceptsCallbacks()){Discord_RunCallbacks();if(acceptsCallbacks())updateRichPresence();}
 
     return false;
 }
@@ -336,4 +375,24 @@ void FSDiscordConnect::setConnectionState(FSDiscordConnect::EConnectionState con
 void FSDiscordConnect::setConnected(bool connected)
 {
     mConnected = connected;
+}
+
+void FSDiscordConnect::retireAccount()
+{
+    mRetiring=true;
+    disconnectFromDiscord();
+    clearInfo();
+    mConnectTime=0;
+    mAutoCurrent=[] {return false;};
+    mRetiring=false;
+}
+
+void FSDiscordConnect::onNativeSelfFullyVisible()
+{
+    // Source avatars can be replaced during a region crossing; this original
+    // one-shot login action belongs to the authenticated account, not the mesh.
+    if(mAutoCurrent())return;
+    mAutoCurrent=vs_native_im_guard();
+    if(!mAutoCurrent())return;
+    checkConnectionToDiscord(gSavedPerAccountSettings.getBOOL("FSEnableDiscordIntegration"));
 }

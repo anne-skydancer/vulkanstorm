@@ -27,6 +27,7 @@
 
 #include "lleventtimer.h"
 #include "llfloater.h"
+#include <functional>
 
 class LLButton;
 class LLSD;
@@ -55,6 +56,7 @@ private:
 
 public:
     std::string getRegionLabelIfExists(const std::string& name);
+    std::function<void(const LLSD&,const LLSD&)> regionAddedCallback();
     void onRegionAddedCallback(const LLSD& notification, const LLSD& response);
 
 private:

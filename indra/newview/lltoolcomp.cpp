@@ -52,6 +52,11 @@
 #include "llagentcamera.h"
 #include "llfloatertools.h"
 #include "llviewercontrol.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#include "vsvulkancontext.h"
+#endif
 
 // NaCl - Rightclick-mousewheel zoom
 #include "llviewercamera.h"
@@ -162,6 +167,16 @@ bool LLToolCompInspect::handleMouseDown(S32 x, S32 y, MASK mask)
     else
     {
         mMouseDown = true;
+        #if VS_NATIVE_VULKAN
+        if(gViewerWindow->isNativeVulkan())
+        {
+            const auto generation=++mNativePickGeneration;
+            gViewerWindow->pickAsync(x,y,mask,pickCallback,false,false,false,false,[self=this,generation]
+            {return LLToolCompInspect::instanceExists() && LLToolCompInspect::getInstance()==self &&
+                self->mNativePickGeneration==generation;});
+        }
+        else
+        #endif
         gViewerWindow->pickAsync(x, y, mask, pickCallback);
         handled = true;
     }
@@ -178,6 +193,30 @@ bool LLToolCompInspect::handleMouseUp(S32 x, S32 y, MASK mask)
 
 void LLToolCompInspect::pickCallback(const LLPickInfo& pick_info)
 {
+    #if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if(!LLToolCompInspect::instanceExists() ||
+           (pick_info.mNativeRequestCurrent && !pick_info.mNativeRequestCurrent()) ||
+           (pick_info.mNativeObjectCurrent && !pick_info.mNativeObjectCurrent()))return;
+        const auto session=VSNativeSession::active();
+        if(!session || !gViewerWindow->nativeContext())return;
+        auto* tool=LLToolCompInspect::getInstance();
+        if(!tool->mMouseDown)
+        {
+            tool->mSelectRect->handleNativeObjectSelection(pick_info,gSavedSettings.getBOOL("EditLinkedParts"),false);
+            return;
+        }
+        const auto selection=session->retainObjectSelection();
+        if(gViewerWindow->nativeContext()->world().object(pick_info.mObjectID) && selection && selection->objectCount())
+            LLEditMenuHandler::gEditMenuHandler=LLSelectMgr::getInstance();
+        tool->setCurrentTool(tool->mSelectRect);
+        if(pick_info.mNativeRequestCurrent && !pick_info.mNativeRequestCurrent())return;
+        tool->mIsToolCameraActive=false;
+        tool->mSelectRect->handlePick(pick_info);
+        return;
+    }
+    #endif
     LLViewerObject* hit_obj = pick_info.getObject();
     LLToolCompInspect * tool_inspectp = LLToolCompInspect::getInstance();
 
@@ -1203,4 +1242,12 @@ void FSToolCompPoseTranslate::render()
         mManip->renderGuidelines(); // or something similar if your manip has it
         LLGLDepthTest gls_depth(GL_TRUE, GL_FALSE);
     }
+}
+
+void LLToolCompInspect::handleDeselect()
+{
+    #if VS_NATIVE_VULKAN
+    ++mNativePickGeneration;
+    #endif
+    LLToolComposite::handleDeselect();
 }

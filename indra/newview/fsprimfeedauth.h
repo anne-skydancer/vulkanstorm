@@ -63,12 +63,20 @@ public:
     static bool isAuthorized(){ return (!gSavedPerAccountSettings.getString("FSPrimfeedOAuthToken").empty()); }
     static void initiateAuthRequest();
     static void resetAuthStatus();
+    // Retire in-flight authentication without erasing this account's saved token.
+    static void retireAccount();
     
 private:
     static std::shared_ptr<FSPrimfeedAuth> sPrimfeedAuth;
 
     explicit FSPrimfeedAuth(authorized_callback_t callback);
     authorized_callback_t mCallback;
+    std::function<bool()> mCurrent;
+    bool mRetired = false;
+    bool mCompleted = false;
+    bool current() const { return !mRetired && !mCompleted && mCurrent(); }
+    void retire();
+    void complete(bool success, const LLSD& response);
     std::string mOauthToken;
     std::string mRequestId;
     
@@ -79,7 +87,7 @@ private:
     // Callback when the validate response is received.
     void gotValidateResponse(bool success, const LLSD &response);
     // Callback when the user status response is received.
-    void gotUserStatus(bool success, const LLSD &response) const;
+    void gotUserStatus(bool success, const LLSD &response);
 
     boost::signals2::connection mInstantMessageConnection;
     boost::signals2::connection mChatMessageConnection;

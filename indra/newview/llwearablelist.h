@@ -27,7 +27,8 @@
 #ifndef LL_LLWEARABLELIST_H
 #define LL_LLWEARABLELIST_H
 
-#include "llmemory.h"
+#include "llsingleton.h"
+#include <memory>
 #include "llviewerwearable.h"
 #include "lluuid.h"
 #include "llassetstorage.h"
@@ -55,6 +56,8 @@ public:
                                  void(*asset_arrived_callback)(LLViewerWearable*, void* userdata),
                                  void* userdata);
 
+    std::shared_ptr<LLViewerWearable> retainNativeWearable(const LLViewerWearable*) const;
+    void retireNativeAccount();
     LLViewerWearable*           createCopy(const LLViewerWearable* old_wearable, const std::string& new_name = std::string());
     LLViewerWearable*           createNewWearable(LLWearableType::EType type, LLAvatarAppearance *avatarp);
 
@@ -65,6 +68,7 @@ protected:
     LLViewerWearable* generateNewWearable(); // used for the create... functions
 private:
     std::map<LLUUID, LLViewerWearable*> mList;
+    std::map<LLUUID, std::shared_ptr<LLViewerWearable>> mNativeOwners;
 };
 
 #endif  // LL_LLWEARABLELIST_H

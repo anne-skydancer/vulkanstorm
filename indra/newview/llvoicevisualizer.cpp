@@ -41,6 +41,10 @@
 #include "llvoiceclient.h"
 #include "llrender.h"
 #include "llagent.h"
+#include "llrender2dutils.h"
+#if VS_NATIVE_VULKAN
+#include "vsuiimageprovider.h"
+#endif
 
 //brent's wave image
 //29de489d-0491-fb00-7dab-f9e686d31e83
@@ -125,13 +129,14 @@ LLVoiceVisualizer::LLVoiceVisualizer( const U8 type )
     for (int i=0; i<NUM_VOICE_SYMBOL_WAVES; i++)
     {
         mSoundSymbol.mWaveFadeOutStartTime  [i] = mCurrentTime;
-        mSoundSymbol.mTexture               [i] = LLViewerTextureManager::getFetchedTextureFromFile(sound_level_img[i], FTT_LOCAL_FILE, false, LLGLTexture::BOOST_UI);
+        if(!LLRender2D::isNativeUI())
+            mSoundSymbol.mTexture               [i] = LLViewerTextureManager::getFetchedTextureFromFile(sound_level_img[i], FTT_LOCAL_FILE, false, LLGLTexture::BOOST_UI);
         mSoundSymbol.mWaveActive            [i] = false;
         mSoundSymbol.mWaveOpacity           [i] = 1.0f;
         mSoundSymbol.mWaveExpansion         [i] = 1.0f;
     }
 
-    mSoundSymbol.mTexture[0]->setFilteringOption(LLTexUnit::TFO_ANISOTROPIC);
+    if(mSoundSymbol.mTexture[0])mSoundSymbol.mTexture[0]->setFilteringOption(LLTexUnit::TFO_ANISOTROPIC);
 
     // The first instance loads the initial state from prefs.
     if (!sPrefsInitialized)
@@ -335,7 +340,23 @@ void LLVoiceVisualizer::lipSyncOohAah( F32& ooh, F32& aah )
 //---------------------------------------------------
 // this method is inherited from HUD Effect
 //---------------------------------------------------
-void LLVoiceVisualizer::render()
+namespace
+{
+struct VoiceGLPainter
+{
+    const LLPointer<LLViewerFetchedTexture>* images;
+    std::optional<LLGLSPipelineAlpha> alpha;
+    std::optional<LLGLDepthTest> depth;
+    void pipeline(){alpha.emplace();depth.emplace(GL_TRUE,GL_FALSE);}
+    void bind(unsigned i){gGL.getTexUnit(0)->bind(images[i?i-1:0]);}
+    void color4fv(const F32* c){gGL.color4fv(c);}
+    void begin(LLRender::eGeomModes m){gGL.begin(m);}
+    void texCoord2i(S32 u,S32 v){gGL.texCoord2i(u,v);}
+    void vertex3fv(const F32* p){gGL.vertex3fv(p);}
+    void end(){gGL.end();}
+};
+}
+template<class Painter> void LLVoiceVisualizer::renderSymbol(Painter& painter)
 {
     static LLCachedControl<bool> show_visualizer(gSavedSettings, "VoiceVisualizerEnabled", true);
     if (!mVoiceEnabled || !show_visualizer)
@@ -358,8 +379,7 @@ void LLVoiceVisualizer::render()
         //---------------------------------------------------------------
         // some gl state
         //---------------------------------------------------------------
-        LLGLSPipelineAlpha alpha_blend;
-        LLGLDepthTest depth(GL_TRUE, GL_FALSE);
+        painter.pipeline();
         //LLGLDisable gls_stencil(GL_STENCIL_TEST);
 
         //-------------------------------------------------------------
@@ -377,7 +397,7 @@ void LLVoiceVisualizer::render()
         //-----------------------------
         // bind texture 0 (the dot)
         //-----------------------------
-        gGL.getTexUnit(0)->bind(mSoundSymbol.mTexture[0]);
+        painter.bind(0);
 
         // <FS:PP> FIRE-22570: Option to show visualizers as waves without the dot
         static LLCachedControl<bool> fsShowVoiceVisualizerWithDot(gSavedSettings, "FSShowVoiceVisualizerWithDot");
@@ -388,19 +408,19 @@ void LLVoiceVisualizer::render()
             //-------------------------------------------------------------
             // now render the dot
             //-------------------------------------------------------------
-            gGL.color4fv( LLColor4( 1.0f, 1.0f, 1.0f, DOT_OPACITY ).mV );
+            painter.color4fv( LLColor4( 1.0f, 1.0f, 1.0f, DOT_OPACITY ).mV );
 
-            gGL.begin( LLRender::TRIANGLE_STRIP );
-                gGL.texCoord2i( 0,  0   ); gGL.vertex3fv( bottomLeft.mV );
-                gGL.texCoord2i( 1,  0   ); gGL.vertex3fv( bottomRight.mV );
-                gGL.texCoord2i( 0,  1   ); gGL.vertex3fv( topLeft.mV );
-            gGL.end();
+            painter.begin( LLRender::TRIANGLE_STRIP );
+                painter.texCoord2i( 0,  0   ); painter.vertex3fv( bottomLeft.mV );
+                painter.texCoord2i( 1,  0   ); painter.vertex3fv( bottomRight.mV );
+                painter.texCoord2i( 0,  1   ); painter.vertex3fv( topLeft.mV );
+            painter.end();
 
-            gGL.begin( LLRender::TRIANGLE_STRIP );
-                gGL.texCoord2i( 1,  0   ); gGL.vertex3fv( bottomRight.mV );
-                gGL.texCoord2i( 1,  1   ); gGL.vertex3fv( topRight.mV );
-                gGL.texCoord2i( 0,  1   ); gGL.vertex3fv( topLeft.mV );
-            gGL.end();
+            painter.begin( LLRender::TRIANGLE_STRIP );
+                painter.texCoord2i( 1,  0   ); painter.vertex3fv( bottomRight.mV );
+                painter.texCoord2i( 1,  1   ); painter.vertex3fv( topRight.mV );
+                painter.texCoord2i( 0,  1   ); painter.vertex3fv( topLeft.mV );
+            painter.end();
 
         // <FS:PP> FIRE-22570: Option to show visualizers as waves without the dot
         }
@@ -509,24 +529,24 @@ void LLVoiceVisualizer::render()
                 LLVector3 topLeft       = mSoundSymbol.mPosition + l + u;
                 LLVector3 topRight      = mSoundSymbol.mPosition - l + u;
 
-                gGL.color4fv( LLColor4( red, green, blue, mSoundSymbol.mWaveOpacity[i] ).mV );
-                gGL.getTexUnit(0)->bind(mSoundSymbol.mTexture[i]);
+                painter.color4fv( LLColor4( red, green, blue, mSoundSymbol.mWaveOpacity[i] ).mV );
+                painter.bind(unsigned(i)+1);
 
 
                 //---------------------------------------------------
                 // now, render the mofo
                 //---------------------------------------------------
-                gGL.begin( LLRender::TRIANGLE_STRIP );
-                    gGL.texCoord2i( 0, 0 ); gGL.vertex3fv( bottomLeft.mV );
-                    gGL.texCoord2i( 1, 0 ); gGL.vertex3fv( bottomRight.mV );
-                    gGL.texCoord2i( 0, 1 ); gGL.vertex3fv( topLeft.mV );
-                gGL.end();
+                painter.begin( LLRender::TRIANGLE_STRIP );
+                    painter.texCoord2i( 0, 0 ); painter.vertex3fv( bottomLeft.mV );
+                    painter.texCoord2i( 1, 0 ); painter.vertex3fv( bottomRight.mV );
+                    painter.texCoord2i( 0, 1 ); painter.vertex3fv( topLeft.mV );
+                painter.end();
 
-                gGL.begin( LLRender::TRIANGLE_STRIP );
-                    gGL.texCoord2i( 1, 0 ); gGL.vertex3fv( bottomRight.mV );
-                    gGL.texCoord2i( 1, 1 ); gGL.vertex3fv( topRight.mV );
-                    gGL.texCoord2i( 0, 1 ); gGL.vertex3fv( topLeft.mV );
-                gGL.end();
+                painter.begin( LLRender::TRIANGLE_STRIP );
+                    painter.texCoord2i( 1, 0 ); painter.vertex3fv( bottomRight.mV );
+                    painter.texCoord2i( 1, 1 ); painter.vertex3fv( topRight.mV );
+                    painter.texCoord2i( 0, 1 ); painter.vertex3fv( topLeft.mV );
+                painter.end();
 
             } //if ( mSoundSymbol.mWaveActive[i] )
 
@@ -534,7 +554,68 @@ void LLVoiceVisualizer::render()
 
     }//if ( mSoundSymbol.mActive )
 
-}//---------------------------------------------------
+}
+void LLVoiceVisualizer::render()
+{
+    VoiceGLPainter painter{mSoundSymbol.mTexture};renderSymbol(painter);
+}
+#if VS_NATIVE_VULKAN
+void LLVoiceVisualizer::appendNative(VSWorldRenderer& renderer,const LLVector3d& origin,std::vector<VSWorldRenderer::Packet>& packets)
+{
+    if(mDead)return;
+    struct Painter
+    {
+        std::array<NativeDraw,NUM_VOICE_SYMBOL_WAVES+1>& draws;
+        unsigned image=0;F32 u=0,v=0;
+        void pipeline(){}
+        void bind(unsigned i){image=i;}
+        void color4fv(const F32* c){draws[image].color=LLColor4(c);}
+        void begin(LLRender::eGeomModes){}
+        void texCoord2i(S32 a,S32 b){u=F32(a);v=F32(b);}
+        void vertex3fv(const F32* p){draws[image].vertices.push_back({p[0],p[1],p[2],0,0,1,u,1-v});}
+        void end(){}
+    } painter{mNativeDraws};
+    for(auto& draw:mNativeDraws){draw.vertices.clear();if(draw.vertices.capacity()<6)draw.vertices.reserve(6);}
+    renderSymbol(painter);
+    const auto agentOrigin=gAgent.getPosGlobalFromAgent(LLVector3::zero);
+    const LLVector3 shift(agentOrigin-origin);
+    for(unsigned i=0;i<painter.draws.size();++i)
+    {
+        auto& draw=painter.draws[i];if(draw.vertices.empty())continue;
+        const unsigned imageIndex=i>1?1:0;
+        if(!mNativeImages[imageIndex])mNativeImages[imageIndex]=vs_ui_named_image_snapshot(imageIndex?"voice_meter_rings.j2c":"voice_meter_dot.j2c");
+        if(!mNativeImages[imageIndex])continue;
+        for(auto& vertex:draw.vertices){vertex.x+=shift.mV[0];vertex.y+=shift.mV[1];vertex.z+=shift.mV[2];}
+        auto& publication=mNativePublications[i];
+        const auto unchanged=[&]
+        {
+            if(!publication.mesh||publication.origin!=origin)return false;
+            const auto& old=VSWorldRenderer::geometryVertices(publication.mesh);
+            return old.size()==draw.vertices.size()&&std::equal(old.begin(),old.end(),draw.vertices.begin(),[](const auto& a,const auto& b)
+                {return a.x==b.x&&a.y==b.y&&a.z==b.z&&a.u==b.u&&a.v==b.v;});
+        }();
+        if(unchanged)publication.color=draw.color;
+        else
+        {
+            VSWorldRenderer::Mesh next;
+            if(renderer.publishMesh(next,draw.vertices,{0,1,2,3,4,5}))
+            {publication.mesh=std::move(next);publication.origin=origin;publication.color=draw.color;}
+        }
+        if(!publication.mesh)continue;
+        VSWorldRenderer::Packet packet;packet.mesh=publication.mesh;packet.image=mNativeImages[imageIndex];
+        const LLVector3 offset(publication.origin-origin);packet.regionOffset={offset.mV[0],offset.mV[1],offset.mV[2],0};
+        std::copy_n(publication.color.mV,4,packet.color.begin());
+        packet.alpha=true;packet.fullbright=true;packet.overlay=true;packet.doubleSided=true;
+        packet.depthTest=true;packet.depthWriteAlpha=false;
+        packet.imageSampler.u=packet.imageSampler.v=VSWorldContracts::AddressMode::Repeat;
+        packet.imageSampler.mipmaps=false;
+        static LLCachedControl<bool> anisotropic(gSavedSettings,"RenderAnisotropic",false);
+        packet.imageSampler.anisotropy=anisotropic?16u:1u;
+        packets.push_back(std::move(packet));
+    }
+}
+#endif
+//---------------------------------------------------
 
 //---------------------------------------------------
 void LLVoiceVisualizer::setVoiceSourceWorldPosition( const LLVector3 &p )

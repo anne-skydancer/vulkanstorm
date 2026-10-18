@@ -86,6 +86,7 @@ bool LLPreviewAnim::postBuild()
 // llinventorybridge also calls into here
 void LLPreviewAnim::play(const LLSD& param)
 {
+    if (!mPreviewCurrent()) return;
     const LLInventoryItem *item = getItem();
     auto*                  avatar = vs_avatar_character();
 
@@ -156,6 +157,7 @@ void LLPreviewAnim::play(const LLSD& param)
 // virtual
 void LLPreviewAnim::draw()
 {
+    if (!mPreviewCurrent()) return;
     LLPreview::draw();
     auto* avatar = vs_avatar_character();
     if (avatar && !this->mItemID.isNull())
@@ -184,6 +186,7 @@ void LLPreviewAnim::draw()
 // virtual
 void LLPreviewAnim::refreshFromItem()
 {
+    if (!mPreviewCurrent()) return;
     const LLInventoryItem* item = getItem();
     auto*                  avatar = vs_avatar_character();
     if (!item || !avatar)
@@ -224,6 +227,7 @@ void LLPreviewAnim::cleanup()
 // virtual
 void LLPreviewAnim::onClose(bool app_quitting)
 {
+    if (!mPreviewCurrent()) return;
     const LLInventoryItem *item = getItem();
     auto*                  avatar = vs_avatar_character();
 

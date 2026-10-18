@@ -41,6 +41,10 @@
 #include "pipeline.h"
 #include "llviewerparcelmgr.h"
 #include "llviewerpartsim.h"
+#if VS_NATIVE_VULKAN
+#include "vsvulkancontext.h"
+#include "vsuiresources.h"
+#endif
 
 LLSceneMonitorView* gSceneMonitorView = NULL;
 
@@ -80,6 +84,12 @@ LLSceneMonitor::~LLSceneMonitor()
 
 void LLSceneMonitor::reset()
 {
+    mForceCapture=true;
+    if(mDiffState!=VIEWER_QUITTING)mDiffState=WAITING_FOR_NEXT_DIFF;
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->nativeContext())gViewerWindow->nativeContext()->resetSceneMonitor();
+#endif
+
     delete mFrames[0];
     delete mFrames[1];
     delete mDiff;
@@ -99,6 +109,12 @@ void LLSceneMonitor::reset()
         LLOcclusionCullingGroup::releaseOcclusionQueryObjectName(mQueryObject);
         mQueryObject = 0;
     }
+}
+
+void LLSceneMonitor::retireAccount()
+{
+    mDebugViewerVisible=false;mEnabled=false;mDiffResult=0;
+    reset();
 }
 
 void LLSceneMonitor::generateDitheringTexture(S32 width, S32 height)
@@ -263,12 +279,10 @@ void LLSceneMonitor::unfreezeScene()
     LLViewerPartSim::getInstance()->enable(true);
 }
 
-void LLSceneMonitor::capture()
+void LLSceneMonitor::capture(const std::function<bool()>& nativeCopy)
 {
-    static U32 last_capture_frame = 0;
     static LLCachedControl<bool> monitor_enabled(gSavedSettings, "SceneLoadingMonitorEnabled");
     static LLCachedControl<F32>  scene_load_sample_time(gSavedSettings, "SceneLoadingMonitorSampleTime");
-    static bool force_capture = true;
 
     bool enabled = monitor_enabled || mDebugViewerVisible;
     if(mEnabled != enabled)
@@ -278,7 +292,7 @@ void LLSceneMonitor::capture()
             mEnabled = enabled;
             unfreezeScene();
             reset();
-            force_capture = true;
+            mForceCapture = true;
         }
         else
         {
@@ -294,21 +308,29 @@ void LLSceneMonitor::capture()
     {
         reset();
         freezeScene();
-        force_capture = true;
+        mForceCapture = true;
     }
 
     if(mEnabled
         && (mRecordingTimer.getElapsedTimeF32() > scene_load_sample_time()
-            || force_capture)
-        && last_capture_frame != gFrameCount)
+            || mForceCapture)
+        && mLastCaptureFrame != gFrameCount)
     {
-        force_capture = false;
+        // Admission failure retains the capture request. A partial or refused
+        // GPU generation must not advance the shared recording state.
+        if(nativeCopy && !nativeCopy())return;
+        mForceCapture = false;
 
         mSceneLoadRecording.resume();
         mMonitorRecording.resume();
 
-        last_capture_frame = gFrameCount;
+        mLastCaptureFrame = gFrameCount;
 
+        if(nativeCopy)
+        {
+            mDiffState=NEED_DIFF;
+            return;
+        }
         LLRenderTarget& cur_target = getCaptureTarget();
 
         U32 old_FBO = LLRenderTarget::sCurFBO;
@@ -337,6 +359,15 @@ static LLStaticHashedString sDitherScaleT("dither_scale_t");
 
 void LLSceneMonitor::compare()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->nativeContext())
+    {
+        if(mDiffState==NEED_DIFF && gViewerWindow->nativeContext()->compareSceneMonitor(mDiffPixelRatio,mDiffTolerance))
+            mDiffState=WAIT_ON_RESULT;
+        return;
+    }
+#endif
+
 #ifdef LL_WINDOWS
     if(mDiffState != NEED_DIFF)
     {
@@ -418,6 +449,10 @@ static LLStaticHashedString sTolerance("tolerance");
 //calculate Diff aggregate information in GPU, and enable gl occlusion query to capture it.
 void LLSceneMonitor::calcDiffAggregate()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->nativeContext())return; // Native compare includes the identical GPU filter/query.
+#endif
+
 #ifdef LL_WINDOWS
 
     if(mDiffState != EXECUTE_DIFF && !mDebugViewerVisible)
@@ -479,16 +514,27 @@ void LLSceneMonitor::fetchQueryResult()
     if(mDiffState == WAIT_ON_RESULT
         && !LLAppViewer::instance()->quitRequested())
     {
+        bool native=false;
+        F32 nativeResult=0;
+#if VS_NATIVE_VULKAN
+        if(gViewerWindow && gViewerWindow->nativeContext())
+        {
+            native=true;
+            const auto result=gViewerWindow->nativeContext()->sceneMonitorResult();
+            if(!result)return;
+            nativeResult=sqrtf(F32(result->samples)*.5f/(F32(result->width)*result->height*mDiffPixelRatio*mDiffPixelRatio));
+        }
+#endif
         mDiffState = WAITING_FOR_NEXT_DIFF;
 
-        GLuint available = 0;
-        glGetQueryObjectuiv(mQueryObject, GL_QUERY_RESULT_AVAILABLE, &available);
+        GLuint available = native?1:0;
+        if(!native)glGetQueryObjectuiv(mQueryObject, GL_QUERY_RESULT_AVAILABLE, &available);
         if(available)
         {
             GLuint count = 0;
-            glGetQueryObjectuiv(mQueryObject, GL_QUERY_RESULT, &count);
+            if(!native)glGetQueryObjectuiv(mQueryObject, GL_QUERY_RESULT, &count);
 
-            mDiffResult = sqrtf(count * 0.5f / (mDiff->getWidth() * mDiff->getHeight() * mDiffPixelRatio * mDiffPixelRatio)); //0.5 -> (front face + back face)
+            mDiffResult = native?nativeResult:sqrtf(count * 0.5f / (mDiff->getWidth() * mDiff->getHeight() * mDiffPixelRatio * mDiffPixelRatio)); //0.5 -> (front face + back face)
 
             LL_DEBUGS("SceneMonitor") << "Frame difference: " << mDiffResult << LL_ENDL;
             record(sFramePixelDiff, mDiffResult);
@@ -719,24 +765,38 @@ void LLSceneMonitorView::onVisibilityChange(bool visible)
 void LLSceneMonitorView::draw()
 {
     const LLRenderTarget* target = LLSceneMonitor::getInstance()->getDiffTarget();
-    if(!target)
+    S32 width=0,height=0;
+    bool native=false;
+#if VS_NATIVE_VULKAN
+    VSUIRenderer::Image nativeImage;
+    if(gViewerWindow && gViewerWindow->nativeContext())
     {
-        return;
+        native=true;nativeImage=gViewerWindow->nativeContext()->sceneMonitorImage();
+        if(!nativeImage)return;
+        const auto extent=VSUIRenderer::imageExtent(nativeImage);width=extent[0];height=extent[1];
     }
-
-    F32 ratio = LLSceneMonitor::getInstance()->getDiffPixelRatio();
-    S32 height = (S32)(target->getHeight() * ratio);
-    S32 width = (S32)(target->getWidth() * ratio);
+#endif
+    if(!native)
+    {
+        if(!target)return;
+        const F32 ratio=LLSceneMonitor::getInstance()->getDiffPixelRatio();
+        height=S32(target->getHeight()*ratio);width=S32(target->getWidth()*ratio);
+    }
 
     LLRect new_rect;
     new_rect.setLeftTopAndSize(getRect().mLeft, getRect().mTop, width, height);
     setRect(new_rect);
 
     //draw background
-    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+    if(!native)gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
     gl_rect_2d(0, getRect().getHeight(), getRect().getWidth(), 0, LLColor4(0.f, 0.f, 0.f, 0.25f));
 
     LLSceneMonitor::getInstance()->calcDiffAggregate();
+#if VS_NATIVE_VULKAN
+    if(native)gViewerWindow->nativeContext()->resources().imageLocalRectangle(nativeImage,
+        LLRectf(0,F32(height),F32(width),0),LLColor4::white);
+#endif
+
 
     //show some texts
     LLColor4 color = LLColor4::white;

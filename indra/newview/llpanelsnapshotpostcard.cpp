@@ -37,6 +37,8 @@
 #include "llagentui.h"
 #include "llfloatersnapshot.h" // FIXME: replace with a snapshot storage model
 #include "llpanelsnapshot.h"
+#include "vsnativeim.h"
+#include "vsregioncontext.h"
 #include "llpostcard.h"
 #include "llregex.h"
 #include "llsnapshotlivepreview.h"
@@ -201,10 +203,11 @@ void LLPanelSnapshotPostcard::sendPostcardFinished(LLSD result)
 
 void LLPanelSnapshotPostcard::sendPostcard()
 {
-    if (!gAgent.getRegion()) return;
+    const auto region = vs_current_region_context();
+    if (!region || !region->current()) return;
 
-    // upload the image
-    std::string url = gAgent.getRegion()->getCapability("SendPostcard");
+    // The capability belongs to the actual authenticated simulator owner.
+    const std::string url = region->getCapability("SendPostcard");
     if (!url.empty())
     {
         LLResourceUploadInfo::ptr_t uploadInfo(std::make_shared<LLPostcardUploadInfo>(
@@ -215,9 +218,9 @@ void LLPanelSnapshotPostcard::sendPostcard()
             getChild<LLUICtrl>("msg_form")->getValue().asString(),
             mSnapshotFloater->getPosTakenGlobal(),
             mSnapshotFloater->getImageData(),
-            [](LLUUID, LLUUID, LLUUID, LLSD response) {
+            vs_native_im_account_callback([](LLUUID, LLUUID, LLUUID, LLSD response) {
                 LLPanelSnapshotPostcard::sendPostcardFinished(response);
-            }));
+            })));
 
         LLViewerAssetUpload::EnqueueInventoryUpload(url, uploadInfo);
     }
@@ -284,7 +287,7 @@ void LLPanelSnapshotPostcard::onSend()
     std::string subject(getChild<LLUICtrl>("subject_form")->getValue().asString());
     if(subject.empty() || !mHasFirstMsgFocus)
     {
-        LLNotificationsUtil::add("PromptMissingSubjMsg", LLSD(), LLSD(), boost::bind(&LLPanelSnapshotPostcard::missingSubjMsgAlertCallback, this, _1, _2));
+        LLNotificationsUtil::add("PromptMissingSubjMsg", LLSD(), LLSD(), vs_native_im_ui_callback(this, [this](const LLSD& note, const LLSD& response) { return missingSubjMsgAlertCallback(note, response); }));
         return;
     }
 
@@ -305,3 +308,9 @@ LLPanelSnapshotPostcard::~LLPanelSnapshotPostcard()
     gSavedSettings.setS32("LastSnapshotToEmailHeight", getTypedPreviewHeight());
 }
 // </FS:Ansariel>
+
+// Exact private factory identity for the native shared snapshot graph.
+bool vs_snapshot_postcard_type(const std::type_info& type)
+{
+    return type == typeid(LLPanelSnapshotPostcard);
+}

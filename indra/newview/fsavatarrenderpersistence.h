@@ -42,6 +42,7 @@ friend class FSPanelPreferenceBackup;
 
 public:
     void init();
+    void retireAccount();
 
     LLVOAvatar::VisualMuteSettings getAvatarRenderSettings(const LLUUID& avatar_id);
     void setAvatarRenderSettings(const LLUUID& avatar_id, LLVOAvatar::VisualMuteSettings render_settings);
@@ -60,6 +61,7 @@ private:
     void saveAvatarRenderSettings();
 
     avatar_render_setting_t mAvatarRenderMap;
+    std::string mAccountFile;
 
     render_setting_changed_callback_t mAvatarRenderSettingChangedCallback;
 };

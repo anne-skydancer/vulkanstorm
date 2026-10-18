@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#include "vsregioncontext.h"
+#include "llrender2dutils.h"
 
 #include "llmodelloader.h"
 #include "llmodelpreview.h"
@@ -94,32 +97,34 @@ public:
     virtual void notify(const std::vector<std::string>& filenames);
 
 private:
-    LLModelPreview* mMP;
+    LLHandle<LLModelPreview> mMP;
+    std::function<bool()> mCurrent;
     S32 mLOD;
 };
 
 LLMeshFilePicker::LLMeshFilePicker(LLModelPreview* mp, S32 lod)
 : LLFilePickerThread(LLFilePicker::FFLOAD_MODEL)
     {
-        mMP = mp;
+        mMP = mp->getHandle();
+        mCurrent=vs_native_im_guard();
         mLOD = lod;
     }
 
 void LLMeshFilePicker::notify(const std::vector<std::string>& filenames)
 {
-    if(LLAppViewer::instance()->quitRequested())
+    if(!mCurrent() || mMP.isDead() || LLAppViewer::instance()->quitRequested())
     {
         return;
     }
 
     if (filenames.size() > 0)
     {
-        mMP->loadModel(filenames[0], mLOD);
+        mMP.get()->loadModel(filenames[0], mLOD);
     }
     else
     {
         //closes floater
-        mMP->loadModel(std::string(), mLOD);
+        mMP.get()->loadModel(std::string(), mLOD);
     }
 }
 
@@ -403,8 +408,11 @@ void LLFloaterModelPreview::initModelPreview()
     // <FS:Beq> Fix up regressions from LL's merge of uploader changes
     // S32 max_width = llmin(PREVIEW_RENDER_SIZE, (S32)gPipeline.mRT->width);
     // S32 max_height = llmin(PREVIEW_RENDER_SIZE, (S32)gPipeline.mRT->height);
-    S32 max_width = llmin(gSavedSettings.getS32("PreviewRenderSize"), (S32)gPipeline.mRT->width);
-    S32 max_height = llmin(gSavedSettings.getS32("PreviewRenderSize"), (S32)gPipeline.mRT->height);
+    const bool native=gViewerWindow && gViewerWindow->isNativeVulkan();
+    const S32 targetWidth=native?gViewerWindow->getWindowWidthRaw():S32(gPipeline.mRT->width);
+    const S32 targetHeight=native?gViewerWindow->getWindowHeightRaw():S32(gPipeline.mRT->height);
+    S32 max_width = llmin(gSavedSettings.getS32("PreviewRenderSize"), targetWidth);
+    S32 max_height = llmin(gSavedSettings.getS32("PreviewRenderSize"), targetHeight);
     // </FS:Beq>
 
     while ((tex_width << 1) <= max_width) // <FS:Beq/> Fix up regressions from LL's merge of uploader changes
@@ -576,6 +584,7 @@ void LLFloaterModelPreview::loadModel(S32 lod, const std::string& file_name, boo
 
 void LLFloaterModelPreview::onClickCalculateBtn()
 {
+    if(!mAccountCurrent())return;
     clearLogTab();
     addStringToLog("Calculating model data.", false);
     mModelPreview->rebuildUploadData();
@@ -590,11 +599,22 @@ void LLFloaterModelPreview::onClickCalculateBtn()
     lod_sources_map_t lod_sources;
     fillLODSourceStatistics(lod_sources);
 
+    if((gViewerWindow && gViewerWindow->isNativeVulkan()))
+    {
+        const auto region=vs_current_region_context();
+        const U64 revision=++mQuoteRevision;
+        mQuoteCurrent=[owner=getHandle(),model=mModelPreview->getHandle(),current=mAccountCurrent,region,revision]
+        {
+            if(!current() || !region || !region->current())return false;
+            const auto* view=dynamic_cast<LLFloaterModelPreview*>(owner.get());
+            return view && view->mQuoteRevision==revision && model.get() && view->mModelPreview==model.get();
+        };
+    }
     gMeshRepo.uploadModel(mModelPreview->mUploadData, lod_sources, mModelPreview->mPreviewScale,
                           childGetValue("upload_textures").asBoolean(),
                           upload_skinweights, upload_joint_positions, lock_scale_if_joint_position,
                           mUploadModelUrl, mDestinationFolderId, false,
-                          getWholeModelFeeObserverHandle());
+                          getWholeModelFeeObserverHandle(),LLHandle<LLWholeModelUploadObserver>(),mQuoteCurrent);
 
     toggleCalculateButton(false);
     mUploadBtn->setEnabled(false);
@@ -869,6 +889,7 @@ void LLFloaterModelPreview::onLODParamCommit(S32 lod, bool enforce_tri_limit)
 
 void LLFloaterModelPreview::draw3dPreview()
 {
+    if(mModelPreview->drawNative(mPreviewRect))return;
     gGL.color3f(1.f, 1.f, 1.f);
 
     gGL.getTexUnit(0)->bind(mModelPreview);
@@ -899,6 +920,7 @@ void LLFloaterModelPreview::draw3dPreview()
 //-----------------------------------------------------------------------------
 void LLFloaterModelPreview::draw()
 {
+    if((gViewerWindow && gViewerWindow->isNativeVulkan()) && mQuoteCurrent && !mQuoteCurrent())toggleCalculateButton(true);
     LLFloater::draw();
 
     if (!mModelPreview)
@@ -1911,11 +1933,13 @@ void LLFloaterModelPreview::onUpload(void* user_data)
     assert_main_thread();
 
     LLFloaterModelPreview* mp = (LLFloaterModelPreview*) user_data;
+    if(!mp->isModelUploadAllowed())return;
     mp->clearLogTab();
 
     mp->mUploadBtn->setEnabled(false);
 
     mp->mModelPreview->rebuildUploadData();
+    if(!mp->isModelUploadAllowed()){mp->toggleCalculateButton(true);return;}
 
     bool upload_skinweights = mp->childGetValue("upload_skin").asBoolean();
     bool upload_joint_positions = mp->childGetValue("upload_joints").asBoolean();
@@ -1945,6 +1969,7 @@ void LLFloaterModelPreview::refresh()
 
 LLFloaterModelPreview::DecompRequest::DecompRequest(const std::string& stage, LLModel* mdl)
 {
+    mStatusOwner=std::make_shared<StatusOwner>(StatusOwner{sInstance->getHandle(),sInstance->mModelPreview->getHandle(),vs_native_im_guard()});
     mStage = stage;
     mContinue = 1;
     mModel = mdl;
@@ -1994,6 +2019,7 @@ void LLFloaterModelPreview::modelUpdated(bool calculate_visible)
 
 void LLFloaterModelPreview::toggleCalculateButton(bool visible)
 {
+    if(visible && (gViewerWindow && gViewerWindow->isNativeVulkan())){++mQuoteRevision;mQuoteCurrent={};mUploadModelUrl.clear();}
     mCalculateBtn->setVisible(visible);
 
     bool uploadingSkin           = childGetValue("upload_skin").asBoolean();
@@ -2115,16 +2141,25 @@ void LLFloaterModelPreview::clearLogTab()
     mTabContainer->setTabPanelFlashing(panel, false);
 }
 
-void LLFloaterModelPreview::onModelPhysicsFeeReceived(const LLSD& result, std::string upload_url)
+void LLFloaterModelPreview::onModelPhysicsFeeReceived(const LLSD& result,std::string upload_url)
 {
-    mModelPhysicsFee = result;
-    mModelPhysicsFee["url"] = upload_url;
-
-    doOnIdleOneTime(boost::bind(&LLFloaterModelPreview::handleModelPhysicsFeeReceived,this));
+    const auto quote=mQuoteCurrent;
+    if(!mAccountCurrent() || ((gViewerWindow && gViewerWindow->isNativeVulkan()) && (!quote || !quote())))return;
+    LLSD accepted=result;accepted["url"]=upload_url;
+    doOnIdleOneTime([owner=getHandle(),current=mAccountCurrent,quote,accepted]
+    {
+        if(!current() || (quote && !quote()))return;
+        if(auto* view=dynamic_cast<LLFloaterModelPreview*>(owner.get()))
+        {
+            view->mModelPhysicsFee=accepted;
+            view->handleModelPhysicsFeeReceived();
+        }
+    });
 }
 
 void LLFloaterModelPreview::handleModelPhysicsFeeReceived()
 {
+    if(!mAccountCurrent() || ((gViewerWindow && gViewerWindow->isNativeVulkan()) && (!mQuoteCurrent || !mQuoteCurrent())))return;
     const LLSD& result = mModelPhysicsFee;
     mUploadModelUrl = result["url"].asString();
 
@@ -2155,12 +2190,13 @@ void LLFloaterModelPreview::handleModelPhysicsFeeReceived()
 
 void LLFloaterModelPreview::setModelPhysicsFeeErrorStatus(S32 status, const std::string& reason, const LLSD& result)
 {
+    if(!mAccountCurrent())return;
     std::ostringstream out;
     out << "LLFloaterModelPreview::setModelPhysicsFeeErrorStatus(" << status;
     out << " : " << reason << ")";
     LL_WARNS() << out.str() << LL_ENDL;
     LLFloaterModelPreview::addStringToLog(out, false);
-    doOnIdleOneTime(boost::bind(&LLFloaterModelPreview::toggleCalculateButton, this, true));
+    doOnIdleOneTime([owner=getHandle(),current=mAccountCurrent,quote=mQuoteCurrent]{if(current() && (!quote || quote()))if(auto* view=dynamic_cast<LLFloaterModelPreview*>(owner.get()))view->toggleCalculateButton(true);});
 
     if (result.has("upload_price"))
     {
@@ -2177,6 +2213,7 @@ void LLFloaterModelPreview::setModelPhysicsFeeErrorStatus(S32 status, const std:
 /*virtual*/
 void LLFloaterModelPreview::onModelUploadSuccess()
 {
+    if(!mAccountCurrent())return;
     assert_main_thread();
     closeFloater(false);
 }
@@ -2184,6 +2221,7 @@ void LLFloaterModelPreview::onModelUploadSuccess()
 /*virtual*/
 void LLFloaterModelPreview::onModelUploadFailure()
 {
+    if(!mAccountCurrent())return;
     assert_main_thread();
     toggleCalculateButton(true);
     mUploadBtn->setEnabled(true);
@@ -2191,7 +2229,8 @@ void LLFloaterModelPreview::onModelUploadFailure()
 
 bool LLFloaterModelPreview::isModelUploadAllowed()
 {
-    bool allow_upload = mHasUploadPerm && !mUploadModelUrl.empty();
+    bool allow_upload = mAccountCurrent() && mHasUploadPerm && !mUploadModelUrl.empty();
+    if((gViewerWindow && gViewerWindow->isNativeVulkan()))allow_upload &= mQuoteCurrent && mQuoteCurrent();
     if (mModelPreview)
     {
         allow_upload &= mModelPreview->mModelNoErrors;
@@ -2199,50 +2238,45 @@ bool LLFloaterModelPreview::isModelUploadAllowed()
     return allow_upload;
 }
 
-S32 LLFloaterModelPreview::DecompRequest::statusCallback(const char* status, S32 p1, S32 p2)
+S32 LLFloaterModelPreview::DecompRequest::statusCallback(const char* status,S32 p1,S32 p2)
 {
-    if (mContinue)
+    if(mContinue.load(std::memory_order_acquire))
     {
-        setStatusMessage(llformat("%s: %d/%d", status, p1, p2));
-        if (LLFloaterModelPreview::sInstance)
+        setStatusMessage(llformat("%s: %d/%d",status,p1,p2));
+        const auto message=mStatusMessage;
+        // This callback executes on the physics worker; no UI owner is read
+        // there. The original view/account is resolved only on main.
+        doOnIdleOneTime([statusOwner=mStatusOwner,message]
         {
-            LLFloaterModelPreview::sInstance->setStatusMessage(mStatusMessage);
-        }
+            if(statusOwner->current())if(auto* view=dynamic_cast<LLFloaterModelPreview*>(statusOwner->view.get()))
+                if(statusOwner->preview.get() && view->mModelPreview==statusOwner->preview.get())view->setStatusMessage(message);
+        });
     }
-
-    return mContinue;
+    return mContinue.load(std::memory_order_acquire);
 }
-
 void LLFloaterModelPreview::DecompRequest::completed()
-{ //called from the main thread
-    if (mContinue)
+{
+    if(!mStatusOwner->current())return;
+    auto* owner=dynamic_cast<LLFloaterModelPreview*>(mStatusOwner->view.get());
+    if(!owner)return;
+    if(!mStatusOwner->preview.get() || owner->mModelPreview!=mStatusOwner->preview.get()){owner->mCurRequest.erase(this);return;}
+    const auto& models=owner->mModelPreview->mModel[LLModel::LOD_PHYSICS];
+    if(std::find(models.begin(),models.end(),mModel)==models.end())
+    {owner->mCurRequest.erase(this);return;}
+    if(mContinue.load(std::memory_order_acquire))
     {
-        mModel->setConvexHullDecomposition(mHull, mHullMesh);
-
-        if (sInstance)
-        {
-            if (mContinue)
-            {
-                if (sInstance->mModelPreview)
-                {
-                    sInstance->mModelPreview->mDirty = true;
-                    LLFloaterModelPreview::sInstance->mModelPreview->refresh();
-                }
-            }
-
-            sInstance->mCurRequest.erase(this);
-        }
+        mModel->setConvexHullDecomposition(mHull,mHullMesh);
+        if(owner->mModelPreview){owner->mModelPreview->mDirty=true;owner->mModelPreview->refresh();}
+        owner->mCurRequest.erase(this);
     }
-    else if (sInstance)
-    {
-        llassert(sInstance->mCurRequest.find(this) == sInstance->mCurRequest.end());
-    }
+    else llassert(owner->mCurRequest.find(this)==owner->mCurRequest.end());
 }
 
 void dump_llsd_to_file(const LLSD& content, std::string filename);
 
 void LLFloaterModelPreview::onPermissionsReceived(const LLSD& result)
 {
+    if(!mAccountCurrent())return;
     dump_llsd_to_file(result,"perm_received.xml");
     std::string upload_status = result["mesh_upload_status"].asString();
     // BAP HACK: handle "" for case that  MeshUploadFlag cap is broken.
@@ -2265,6 +2299,7 @@ void LLFloaterModelPreview::onPermissionsReceived(const LLSD& result)
 
 void LLFloaterModelPreview::setPermissonsErrorStatus(S32 status, const std::string& reason)
 {
+    if(!mAccountCurrent())return;
     LL_WARNS() << "LLFloaterModelPreview::setPermissonsErrorStatus(" << status << " : " << reason << ")" << LL_ENDL;
 
     LLNotificationsUtil::add("MeshUploadPermError");

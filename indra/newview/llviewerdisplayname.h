@@ -51,7 +51,7 @@ namespace LLViewerDisplayName
 
     void setDisplayNameCoro(const std::string& cap_url, const LLSD& body);
 
-    void addNameChangedCallback(const name_changed_signal_t::slot_type& cb);
+    boost::signals2::connection addNameChangedCallback(const name_changed_signal_t::slot_type& cb);
 }
 
 #endif // LLVIEWERDISPLAYNAME_H

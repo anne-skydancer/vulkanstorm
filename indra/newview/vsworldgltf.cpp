@@ -1285,3 +1285,24 @@ LLSD VSWorldGLTF::evidence() const
         ll_sd_from_U64((mImpl->residency ? mImpl->residency->bytes() : 0) + (mImpl->typedResidency ? mImpl->typedResidency->bytes() : 0));
     return result;
 }
+
+std::optional<std::array<std::array<float,3>,2>> VSWorldGLTF::publishedBounds() const
+{
+    if(!mImpl->current()||!mImpl->publicationKnown)return {};
+    std::optional<std::array<std::array<float,3>,2>> result;
+    for(const auto& packet:mImpl->publishedPackets)
+    {
+        if(!packet.mesh)continue;const auto box=VSWorldRenderer::bounds(packet.mesh);
+        if(!result)result=box;
+        else for(unsigned axis=0;axis<3;++axis)
+        {(*result)[0][axis]=std::min((*result)[0][axis],box[0][axis]);(*result)[1][axis]=std::max((*result)[1][axis],box[1][axis]);}
+    }
+    return result;
+}
+
+bool VSWorldGLTF::nodeMatrix(S32 node,LLMatrix4a& result) const
+{
+    const auto owner=mImpl;
+    if(!owner->current() || !owner->ready || !owner->error.empty() || !owner->asset || node<0 || std::size_t(node)>=owner->asset->mNodes.size())return false;
+    result.loadu(glm::value_ptr(owner->asset->mNodes[node].mAssetMatrix));return true;
+}

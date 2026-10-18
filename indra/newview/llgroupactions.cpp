@@ -178,10 +178,6 @@ public:
         {
             if (group_id.isNull())
                 return true;
-#if VS_NATIVE_VULKAN
-            if (gViewerWindow && gViewerWindow->isNativeVulkan()) LLGroupActions::show(group_id);
-            else
-#endif
             LLGroupActions::inspect(group_id);
             return true;
         }
@@ -510,11 +506,6 @@ static bool isGroupUIVisible()
 // static
 void LLGroupActions::inspect(const LLUUID& group_id)
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        show(group_id);
-        return;
-    }
     LLFloaterReg::showInstance("inspect_group", LLSD().with("group_id", group_id));
 }
 

@@ -240,6 +240,11 @@ public:
     // necessariliy any other change.
     void setDropCallback(drag_n_drop_callback cb)   { mDropCallback = cb; }
 
+    // Bind a picker interaction to the originating controller/selection.
+    // Empty preserves the ordinary reference control behavior.
+    std::function<bool()> pickerGuard() const {return mPickerCurrent;}
+    void setOperationGuardFactory(std::function<std::function<bool()>()> factory)
+    {mOperationGuardFactory=std::move(factory);}
     void setOnCancelCallback(commit_callback_t cb)  { mOnCancelCallback = cb; }
     void setOnCloseCallback(commit_callback_t cb)   { mOnCloseCallback = cb; }
     void setOnSelectCallback(commit_callback_t cb)  { mOnSelectCallback = cb; }
@@ -322,6 +327,10 @@ private:
 
     LLUIColor                   mTextEnabledColor;      // <FS:Zi> Add label/caption colors
     LLUIColor                   mTextDisabledColor;     // <FS:Zi> Add label/caption colors
+private:
+    std::function<std::function<bool()>()> mOperationGuardFactory;
+    std::function<bool()> mPickerCurrent;
+
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////

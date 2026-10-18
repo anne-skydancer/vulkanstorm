@@ -1,6 +1,21 @@
 // Native transport admission with the existing IM model and skinned UI. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "omnifilterengine.h"
+#include "fsdiscordconnect.h"
+#include "fsfloateravatarrendersettings.h"
+#include "fsavatarrenderpersistence.h"
+#include "llperfstats.h"
 #include "vsnativeim.h"
+#include "fsareasearchmenu.h"
+#include "llpathfindingmanager.h"
+#include "llmenuoptionpathfindingrebakenavmesh.h"
+#include "fspose.h"
+#include "llfloaterlandholdings.h"
+#include "fsnamelistavatarmenu.h"
+#include "fsassetblacklist.h"
+#include "fsradar.h"
+#include "llspeakers.h"
+#include "llaudioengine.h"
 #include "llfloaterscriptrecover.h"
 #include "lltracker.h"
 #include "lluploaddialog.h"
@@ -18,6 +33,13 @@
 #include "llinstantmessage.h"
 #include "fsfloaterim.h"
 #include "llfloaterreg.h"
+#include "llscenemonitor.h"
+#include "fsfloaterwearablefavorites.h"
+#include "llmorphview.h"
+#include "llappearancemgr.h"
+#include "lloutfitobserver.h"
+#include "llagentwearables.h"
+#include "llwearablelist.h"
 #include "llfloater.h"
 #include "llmultifloater.h"
 #include "llviewercontrol.h"
@@ -116,8 +138,54 @@ void vs_native_im_request_offline()
     if (gMessageSystem->sendReliable(owner->host()) > 0)
         sOfflineGeneration = owner->generation();
 }
+void vs_retire_native_object_ui()
+{
+    gFSAreaSearchMenu.resetAccount();
+    if(gSceneMonitorView)gSceneMonitorView->setVisible(false);
+    if(LLSceneMonitor::instanceExists())LLSceneMonitor::instance().retireAccount();
+
+    for(const auto* name : {"whitelist_entry","media_settings","media_lists","sound_devices","prefs_view_advanced","region_restarting",
+                             "inventory_thumbnails_helper","notifications_console","inspect_toast"})
+        LLFloaterReg::destroyInstance(name);
+    LLFloaterReg::destroyInstance("beacons");
+    LLFloaterReg::destroyInstance("bumps");
+    reset_mean_collision_account();
+    for (const auto* name : {"pathfinding_linksets", "pathfinding_characters", "pathfinding_console"}) LLFloaterReg::destroyInstance(name);
+    if (LLMenuOptionPathfindingRebakeNavmesh::instanceExists()) LLMenuOptionPathfindingRebakeNavmesh::instance().quit();
+    if (LLPathfindingManager::instanceExists()) LLPathfindingManager::instance().resetAccount();
+    LLFloaterReg::destroyInstance("fs_posestand");
+    if (FSPose::instanceExists()) FSPose::instance().retireAccount();
+    // Close the actual object controllers while selection, task inventory,
+    // scene metadata and material services are still alive. Nested pickers are
+    // owned by these controls and retire through their existing destructors.
+    if(auto* preview=LLFloaterReg::findInstance("ui_preview"))preview->closeFloater(false);
+    LLFloaterReg::destroyInstance("ui_preview");
+    for (const char* name : {"env_post_process", "scene_load_stats", "slapp_test", "avatar_welcome_pack", "mem_leaking", "lgg_beamshape", "lgg_beamcolormap", "upload_script", "god_tools", "legacy_search", "classified", "area_search", "compile_queue", "reset_queue", "start_queue", "stop_queue", "delete_queue", "edit_hover_height", "build", "object_weights", "inspect", "task_properties",
+        "gltf_asset_editor", "media_settings", "live_material_editor", "material_editor",
+        "buy_object", "buy_object_contents", "openobject", "bulk_perms", "pay_object"})
+    {
+        std::vector<std::pair<LLHandle<LLFloater>, LLSD>> instances;
+        for (auto* view : LLFloaterReg::getFloaterList(name))
+            if (view) instances.emplace_back(view->getHandle(), view->getKey());
+        for (const auto& [weak, key] : instances)
+            if (auto* view = weak.get())
+            {
+                view->closeFloater(true);
+                LLFloaterReg::destroyInstance(name, key);
+            }
+    }
+}
+
 void vs_native_im_reset()
 {
+    LLFloaterReg::destroyInstance("fs_discord");
+    if (FSDiscordConnect::instanceExists()) FSDiscordConnect::instance().retireAccount();
+    LLFloaterReg::destroyInstance("performance");
+    LLFloaterReg::destroyInstance("fs_avatar_render_settings");
+    FSFloaterAvatarRenderPersistenceMenu::gFSAvatarRenderPersistenceMenu.resetAccount();
+    if(FSAvatarRenderPersistence::instanceExists())FSAvatarRenderPersistence::instance().retireAccount();
+    LLPerfStats::resetNativeStats();
+    gFSNameListAvatarMenu.resetAccount();
     LLScriptRecoverQueue::resetAccount();
     // Removing pinned tabs is normally a user's tear-off action. Account
     // retirement must remove live host tuples without changing that layout.
@@ -145,6 +213,18 @@ void vs_native_im_reset()
     if(auto* regionInfo=LLFloaterReg::findInstance("region_info"))regionInfo->closeFloater(true);
     for (const char* name : {"region_info", "region_debug_console", "telehubs", "top_objects", "about_land", "ban_duration", "my_environments", "buy_land", "sell_land", "buy_currency", "buy_currency_html", "add_payment_method", "money_tracker"})
         LLFloaterReg::destroyInstance(name);
+    LLFloaterReg::destroyInstance("task_properties");
+    LLFloaterReg::destroyInstance("object_weights");
+    LLFloaterReg::destroyInstance("land_holdings");
+    LLFloaterLandHoldings::sHasLindenHome = false;
+    LLFloaterReg::destroyInstance("inspect");
+    LLFloaterReg::destroyInstance("appearance");
+    LLMorphView::retireNativeAccount();
+    if (LLWearableList::instanceExists()) LLWearableList::instance().retireNativeAccount();
+    gAgentWearables.resetNativeAccount();
+    if (LLAppearanceMgr::instanceExists()) LLAppearanceMgr::instance().resetNativeAccount();
+    if (LLOutfitObserver::instanceExists()) LLOutfitObserver::instance().resetAccount();
+    FSFloaterWearableFavorites::retireNativeAccount();
     LLTracker::cleanupInstance();
     LLUploadDialog::modalUploadFinished();
     sOfflineGeneration = 0;
@@ -158,8 +238,8 @@ void vs_native_im_reset()
     gLoadUrlList.clear();
     // Panels retain pointers into shared group/profile account data. Destroy
     // them while those services still exist, before discarding the old login.
-    for (const char* name : { "window_size", "fs_protectedfolders", "fs_streamtitlehistory", "fs_streamtitle", "chat_mention_picker", "emoji_complete", "preview_trash", "new_feature_notification", "fs_whitelist_floater", "settings_color", "fs_splash_screen_settings", "fs_volume_controls", "font_test", "hud", "rlv_strings",
-        "env_adjust_snapshot", "quickprefs", "add_landmark", "places", "fs_placedetails", "inspect_avatar", "avatar_align", "avatar_align_mini", "save_pref_preset", "load_pref_preset", "delete_pref_preset", "settings_debug", "guidebook", "marketplace", "grid_status", "destinations", "fs_teleporthistory", "help_browser", "stats", "lagmeter", "web_content", "search", "inspect_remote_object", "search_replace", "fs_nearby_chat", "imcontacts", "toybox", "inventory_settings", "emoji_picker", "event", "experiences", "experience_profile", "experience_search", "marketplace_listings", "associate_listing", "marketplace_validation", "linkreplace", "inventory", "secondary_inventory", "people", "avatar_picker", "group_picker", "pay_resident", "display_name", "pay_object", "upload_image", "upload_sound", "properties", "item_properties", "change_item_thumbnail", "preview_sound", "preview_script", "script_debug_output", "script_debug", "script_limits", "my_scripts", "script_recover", "script_colors", "fs_partial_inventory", "preview_texture", "preview_notecard", "preview_conversation", "conversation", "fs_add_contact", "fs_contact_set_config", "fs_blocklist", "mute_object_by_name", "publish_classified", "fs_group_titles", "vs_group_search", "fs_group", "profile", "prefs_translation", "prefs_autoreplace", "prefs_spellchecker", "prefs_spellchecker_import", "perms_default", "preferences", "prefs_proxy", "keybind_dialog" })
+    for (const char* name : { "buy_object", "buy_object_contents", "openobject", "omnifilter", "region_tracker", "window_size", "fs_protectedfolders", "fs_streamtitlehistory", "fs_streamtitle", "chat_mention_picker", "emoji_complete", "preview_trash", "new_feature_notification", "fs_whitelist_floater", "settings_color", "fs_splash_screen_settings", "fs_volume_controls", "font_test", "hud", "rlv_strings",
+        "env_adjust_snapshot", "quickprefs", "add_landmark", "places", "fs_placedetails", "inspect_avatar", "inspect_group", "avatar_align", "avatar_align_mini", "fs_radar", "fs_asset_blacklist", "reporter", "sound_explorer", "save_pref_preset", "load_pref_preset", "delete_pref_preset", "settings_debug", "guidebook", "marketplace", "grid_status", "destinations", "fs_teleporthistory", "help_browser", "stats", "lagmeter", "web_content", "search", "inspect_remote_object", "search_replace", "fs_nearby_chat", "imcontacts", "toybox", "inventory_settings", "emoji_picker", "event", "experiences", "experience_profile", "experience_search", "marketplace_listings", "associate_listing", "marketplace_validation", "linkreplace", "inventory", "secondary_inventory", "people", "avatar_picker", "group_picker", "pay_resident", "display_name", "pay_object", "upload_image", "upload_sound", "properties", "item_properties", "change_item_thumbnail", "preview_sound", "preview_script", "preview_scriptedit", "material_editor", "live_material_editor", "preview_gesture", "preview_anim", "bulk_perms", "script_debug_output", "script_debug", "script_limits", "my_scripts", "script_recover", "script_colors", "fs_partial_inventory", "preview_texture", "preview_notecard", "preview_conversation", "conversation", "fs_add_contact", "fs_contact_set_config", "fs_blocklist", "mute_object_by_name", "publish_classified", "fs_group_titles", "vs_group_search", "fs_group", "profile", "prefs_translation", "prefs_autoreplace", "prefs_spellchecker", "prefs_spellchecker_import", "perms_default", "preferences", "prefs_proxy", "keybind_dialog" })
     {
         const auto floaters = LLFloaterReg::getFloaterList(name);
         for (auto* floater : floaters)
@@ -172,6 +252,7 @@ void vs_native_im_reset()
                 LLFloaterReg::destroyInstance(name, floater->getKey());
             }
     }
+    if(OmnifilterEngine::instanceExists())OmnifilterEngine::instance().mLog.clear();
     // Retire conversation panels/observers while shared group/profile account
     // data is still alive. Tab selection and close callbacks may query it.
     // Expire model sessions, initialization timers, pending invitations and UI
@@ -192,6 +273,10 @@ void vs_native_im_reset()
     LLFloaterEmojiPicker::resetAccount();
     if (LLMarketplaceData::instanceExists()) LLMarketplaceData::instance().resetNativeAccount();
     if (LLExperienceLog::instanceExists()) LLExperienceLog::deleteSingleton();
+    if (FSRadar::instanceExists()) FSRadar::deleteSingleton();
+    if (LLLocalSpeakerMgr::instanceExists()) LLLocalSpeakerMgr::deleteSingleton();
+    if (gAudiop) gAudiop->clearAccountSources();
+    if (FSAssetBlacklist::instanceExists()) FSAssetBlacklist::instance().clearAccount();
     LLSidepanelInventory::resetNativeAccountState();
     if (LGGContactSets::instanceExists()) LGGContactSets::instance().resetAccount();
     LLFloaterReg::destroyInstance("display_name");

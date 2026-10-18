@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llwebprofile.h"
+#include "vsnativeim.h"
 
 // libs
 #include "llbufferstream.h"
@@ -68,7 +69,8 @@ LLWebProfile::status_callback_t LLWebProfile::mStatusCallback;
 void LLWebProfile::uploadImage(LLPointer<LLImageFormatted> image, const std::string& caption, bool add_location)
 {
     LLCoros::instance().launch("LLWebProfile::uploadImageCoro",
-        boost::bind(&LLWebProfile::uploadImageCoro, image, caption, add_location));
+        boost::bind(&LLWebProfile::uploadImageCoro, image, caption, add_location,
+                    getProfileURL(std::string()), getAuthCookie(), vs_native_im_guard(), mStatusCallback));
 
 }
 
@@ -96,8 +98,12 @@ LLCore::HttpHeaders::ptr_t LLWebProfile::buildDefaultHeaders()
 
 
 /*static*/
-void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::string caption, bool addLocation)
+void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::string caption, bool addLocation,
+                                   std::string profileURL, std::string cookie,
+                                   std::function<bool()> current, status_callback_t completed)
 {
+    if (!current()) return;
+    auto report = [&](bool ok) { if (current() && completed) completed(ok); };
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("uploadImageCoro", httpPolicy);
@@ -117,16 +123,17 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
     httpOpts->setSSLVerifyPeer(false); ; // viewer's cert bundle doesn't appear to agree with web certs from "https://my.secondlife.com/"
 
     // Get upload configuration data.
-    std::string configUrl(getProfileURL(std::string()) + "snapshots/s3_upload_config");
+    std::string configUrl(profileURL + "snapshots/s3_upload_config");
     configUrl += "?caption=" + LLURI::escape(caption);
     configUrl += "&add_loc=" + std::string(addLocation ? "1" : "0");
 
     LL_DEBUGS("Snapshots") << "Requesting " << configUrl << LL_ENDL;
 
     httpHeaders = buildDefaultHeaders();
-    httpHeaders->append(HTTP_OUT_HEADER_COOKIE, getAuthCookie());
+    httpHeaders->append(HTTP_OUT_HEADER_COOKIE, cookie);
 
     LLSD result = httpAdapter->getJsonAndSuspend(httpRequest, configUrl, httpOpts, httpHeaders);
+    if (!current()) return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -134,7 +141,7 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
     if (!status)
     {
         LL_WARNS("Snapshots") << "Failed to get image upload config" << LL_ENDL;
-        LLWebProfile::reportImageUploadStatus(false);
+        report(false);
         if (image->getDataSize() > MAX_WEB_DATASIZE)
         {
             LLNotificationsUtil::add("CannotUploadSnapshotWebTooBig");
@@ -150,13 +157,14 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
 
     // a new set of headers.
     httpHeaders = LLWebProfile::buildDefaultHeaders();
-    httpHeaders->append(HTTP_OUT_HEADER_COOKIE, getAuthCookie());
+    httpHeaders->append(HTTP_OUT_HEADER_COOKIE, cookie);
     httpHeaders->remove(HTTP_OUT_HEADER_CONTENT_TYPE);
     httpHeaders->append(HTTP_OUT_HEADER_CONTENT_TYPE, "multipart/form-data; boundary=" + boundary);
 
     LLCore::BufferArray::ptr_t body = LLWebProfile::buildPostData(data, image, boundary);
 
     result = httpAdapter->postAndSuspend(httpRequest, uploadUrl, body, httpOpts, httpHeaders);
+    if (!current()) return;
 
     body.reset();
     httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
@@ -165,7 +173,7 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
     if (!status && (status != LLCore::HttpStatus(HTTP_SEE_OTHER)))
     {
         LL_WARNS("Snapshots") << "Failed to upload image data." << LL_ENDL;
-        LLWebProfile::reportImageUploadStatus(false);
+        report(false);
         if (image->getDataSize() > MAX_WEB_DATASIZE)
         {
             LLNotificationsUtil::add("CannotUploadSnapshotWebTooBig");
@@ -176,19 +184,20 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
     LLSD resultHeaders = httpResults[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_HEADERS];
 
     httpHeaders = LLWebProfile::buildDefaultHeaders();
-    httpHeaders->append(HTTP_OUT_HEADER_COOKIE, getAuthCookie());
+    httpHeaders->append(HTTP_OUT_HEADER_COOKIE, cookie);
 
     const std::string& redirUrl = resultHeaders[HTTP_IN_HEADER_LOCATION].asStringRef();
 
     if (redirUrl.empty())
     {
         LL_WARNS("Snapshots") << "Received empty redirection URL in post image." << LL_ENDL;
-        LLWebProfile::reportImageUploadStatus(false);
+        report(false);
     }
 
     LL_DEBUGS("Snapshots") << "Got redirection URL: " << redirUrl << LL_ENDL;
 
     result = httpAdapter->getRawAndSuspend(httpRequest, redirUrl, httpOpts, httpHeaders);
+    if (!current()) return;
 
     httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -196,7 +205,7 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
     if (status != LLCore::HttpStatus(HTTP_OK))
     {
         LL_WARNS("Snapshots") << "Failed to upload image." << LL_ENDL;
-        LLWebProfile::reportImageUploadStatus(false);
+        report(false);
         if (image->getDataSize() > MAX_WEB_DATASIZE)
         {
             LLNotificationsUtil::add("CannotUploadSnapshotWebTooBig");
@@ -208,7 +217,7 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
 
     LL_INFOS("Snapshots") << "Image uploaded." << LL_ENDL;
     //LL_DEBUGS("Snapshots") << "Uploading image succeeded. Response: [" << raw.asString() << "]" << LL_ENDL;
-    LLWebProfile::reportImageUploadStatus(true);
+    report(true);
 }
 
 /*static*/

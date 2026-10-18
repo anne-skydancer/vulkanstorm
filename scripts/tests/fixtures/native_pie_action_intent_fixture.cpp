@@ -1,0 +1,18 @@
+#include <memory>
+#include <functional>
+#include <optional>
+#include <cassert>
+#define VS_NATIVE_VULKAN 1
+using U8=unsigned char;
+constexpr U8 CLICK_ACTION_BUY=2,CLICK_ACTION_PAY=3,CLICK_ACTION_OPEN=4;
+struct VSWorldScene{struct ObjectHandle{int host=1,local=2,region=3,generation=4,id=5,account=6,accountGeneration=7,kind=8;};};
+bool account=true,source=true,chosen=true;int actions=0,disconnected=0;std::weak_ptr<int>held;
+struct Selection{bool valid=false;std::optional<VSWorldScene::ObjectHandle>primary=VSWorldScene::ObjectHandle{};bool selectGetAllValid(){return valid;}auto primaryObject(){return primary;}}selection;
+struct VSNativeSession{static std::shared_ptr<VSNativeSession>activeOwner;static auto active(){return activeOwner;}Selection*existingObjectSelection(){return &selection;}};std::shared_ptr<VSNativeSession>VSNativeSession::activeOwner;
+struct Window{bool native=true;bool isNativeVulkan(){return native;}}window;Window*gViewerWindow=&window;
+struct LLToolPie{struct NativeClickIntent{VSWorldScene::ObjectHandle object;std::weak_ptr<VSNativeSession>owner;std::function<bool()>account,source,selection;std::shared_ptr<const void>lease;struct Connection{void disconnect(){++disconnected;}}changed;U8 action=0;};std::unique_ptr<NativeClickIntent>mNativeClickIntent;bool mClickActionBuyEnabled=true,mClickActionPayEnabled=true;void*mLeftClickSelection=nullptr,*mClickActionObject=nullptr;int mClickAction=0;unsigned long long mNativeClickGeneration=0;static LLToolPie*getInstance(){static LLToolPie pie;return &pie;}void resetSelection();static void selectionPropertiesReceived();};
+void action(){assert(!LLToolPie::getInstance()->mNativeClickIntent);assert(!held.expired());++actions;LLToolPie::selectionPropertiesReceived();}void handle_buy(){action();}void handle_give_money_dialog(){action();}struct LLFloaterReg{static void showInstance(const char*){action();}};
+RESET
+METHOD
+void setup(int action=2){VSNativeSession::activeOwner=std::make_shared<VSNativeSession>();auto*pie=LLToolPie::getInstance();pie->resetSelection();pie->mNativeClickIntent=std::make_unique<LLToolPie::NativeClickIntent>();auto&i=*pie->mNativeClickIntent;i.owner=VSNativeSession::activeOwner;i.account=[]{return account;};i.source=[]{return source;};i.selection=[]{return chosen;};i.action=action;auto lease=std::make_shared<int>(1);held=lease;i.lease=lease;account=source=chosen=true;selection.valid=false;selection.primary=VSWorldScene::ObjectHandle{};pie->mClickActionBuyEnabled=pie->mClickActionPayEnabled=true;}
+int main(){for(int mode=0;mode<20;++mode){setup(2+mode%3);auto*pie=LLToolPie::getInstance();int before=actions;LLToolPie::selectionPropertiesReceived();assert(pie->mNativeClickIntent&&actions==before&&!held.expired());selection.valid=true;if(mode==1)account=false;if(mode==2)source=false;if(mode==3)chosen=false;if(mode>=4&&mode<12){auto&token=*selection.primary;switch(mode){case 4:++token.host;break;case 5:++token.local;break;case 6:++token.region;break;case 7:++token.generation;break;case 8:++token.id;break;case 9:++token.account;break;case 10:++token.accountGeneration;break;case 11:++token.kind;break;}}if(mode==12)selection.primary.reset();if(mode==13)VSNativeSession::activeOwner.reset();if(mode==14)VSNativeSession::activeOwner=std::make_shared<VSNativeSession>();if(mode==15)pie->mClickActionBuyEnabled=false;if(mode==16)pie->mClickActionPayEnabled=false;LLToolPie::selectionPropertiesReceived();bool expected=mode==0||mode>=17;assert(actions==before+expected);assert(!pie->mNativeClickIntent&&held.expired());LLToolPie::selectionPropertiesReceived();assert(actions==before+expected);}}

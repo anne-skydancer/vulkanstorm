@@ -25,11 +25,13 @@
 
 #ifndef LL_LLFLOATERVOICEVOLUME_H
 #define LL_LLFLOATERVOICEVOLUME_H
+#include <typeinfo>
 
 namespace LLFloaterVoiceVolumeUtil
 {
     // Register with LLFloaterReg
     void registerFloater();
+    bool isNativeType(const std::type_info&);
 }
 
 #endif // LL_LLFLOATERVOICEVOLUME_H

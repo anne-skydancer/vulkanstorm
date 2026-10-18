@@ -28,9 +28,12 @@
 #define LL_LLTEXTUREVIEW_H
 
 #include "llcontainerview.h"
+#include <functional>
+#include <typeinfo>
 
 class LLViewerFetchedTexture;
 class LLTextureBar;
+struct VSTextureDebugInfo;
 class LLGLTexMemBar;
 class LLAvatarTexBar;
 
@@ -46,6 +49,7 @@ public:
     ~LLTextureView();
 
     void draw() override;
+    static bool isNativeInternalType(const std::type_info&);
     bool handleMouseDown(S32 x, S32 y, MASK mask) override;
     bool handleMouseUp(S32 x, S32 y, MASK mask) override;
     bool handleKey(KEY key, MASK mask, bool called_from_parent) override;
@@ -56,6 +60,8 @@ public:
 
 private:
     bool addBar(LLViewerFetchedTexture *image, S32 hilight = 0);
+    bool addBar(const VSTextureDebugInfo&,S32 hilight=0);
+    std::function<bool()> mNativeAccountCurrent;
 
 private:
     bool mFreezeView;

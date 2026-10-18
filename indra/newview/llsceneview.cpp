@@ -27,6 +27,12 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llsceneview.h"
+#include "vsuiprimitive.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "vseditselection.h"
+#endif
 #include "llviewerwindow.h"
 #include "pipeline.h"
 #include "llviewerobjectlist.h"
@@ -69,6 +75,7 @@ void LLSceneView::closeFloater(bool)
 
 void LLSceneView::draw()
 {
+    VSUIPrimitive::Draw draw;
     S32 margin = 10;
     S32 height = (S32) (gViewerWindow->getWindowRectScaled().getHeight()*0.75f);
     S32 width = (S32) (gViewerWindow->getWindowRectScaled().getWidth() * 0.75f);
@@ -104,6 +111,29 @@ void LLSceneView::draw()
     std::vector<F32> physics_cost[2];
     F32 total_physics[] = { 0.f, 0.f };
 
+#if VS_NATIVE_VULKAN
+    if(const auto owner=VSNativeSession::active();owner && gViewerWindow->nativeContext())
+    {
+        auto& world=gViewerWindow->nativeContext()->world();
+        for(const auto& row:world.objectSnapshots())
+        {
+            if(row.object.host!=owner->host())continue;
+            const auto metrics=world.objectMetrics(row.object,true);if(!metrics)continue;
+            VSEditObject object(row.object);if(!object || !object.getVolume())continue;
+            const U32 idx=object.isAttachment()?1u:0u;
+            size[idx].push_back(object.getScale().length());
+            const S32 visible=S32(metrics->triangles.value_or(0));
+            const S32 high=S32(metrics->lodTriangles[3].value_or(0));
+            total_visible_triangles[idx]+=visible;total_triangles[idx]+=high;
+            visible_triangles[idx].push_back(visible);triangles[idx].push_back(high);
+            total_streaming[idx]+=metrics->streamingCost;streaming_cost[idx].push_back(metrics->streamingCost);
+            const F32 physics=object.getPhysicsCost();total_physics[idx]+=physics;physics_cost[idx].push_back(physics);
+            total_bytes[idx]+=S32(metrics->totalMeshBytes);total_visible_bytes[idx]+=S32(metrics->visibleMeshBytes);
+        }
+    }
+    else
+#endif
+    {
     LLViewerRegion* region = gAgent.getRegion();
     if (region)
     {
@@ -154,6 +184,8 @@ void LLSceneView::draw()
         }
     }
 
+    } // Reference viewer object list.
+
     const char* category[] =
     {
         "Region",
@@ -203,7 +235,7 @@ void LLSceneView::draw()
 
             F32 total = 0.f;
 
-            gGL.begin(LLRender::LINE_STRIP);
+            draw.begin(LLRender::LINE_STRIP);
 
             for (size_t i = 0; i < count; ++i)
             {
@@ -212,17 +244,17 @@ void LLSceneView::draw()
                 F32 y = (rad-size_domain[0])/size_range*size_rect.getHeight()+size_rect.mBottom;
                 F32 x = (F32) i / count * size_rect.getWidth() + size_rect.mLeft;
 
-                gGL.vertex2f(x,y);
+                draw.vertex2f(x,y);
 
                 if (i%4096 == 0)
                 {
-                    gGL.end();
+                    draw.end();
                     gGL.flush();
-                    gGL.begin(LLRender::LINE_STRIP);
+                    draw.begin(LLRender::LINE_STRIP);
                 }
             }
 
-            gGL.end();
+            draw.end();
             gGL.flush();
 
             std::string label = llformat("%s Object Sizes (m) -- [%.1f, %.1f] Mean: %.1f  Median: %.1f -- %d samples",
@@ -267,7 +299,7 @@ void LLSceneView::draw()
 
             auto count = triangles[idx].size();
 
-            gGL.begin(LLRender::LINE_STRIP);
+            draw.begin(LLRender::LINE_STRIP);
             //plot triangles
             for (size_t i = 0; i < count; ++i)
             {
@@ -275,17 +307,17 @@ void LLSceneView::draw()
                 F32 y = (F32) (tri_count-tri_domain[0])/triangle_range*tri_rect.getHeight()+tri_rect.mBottom;
                 F32 x = (F32) i / count * tri_rect.getWidth() + tri_rect.mLeft;
 
-                gGL.vertex2f(x,y);
+                draw.vertex2f(x,y);
 
                 if (i%4096 == 0)
                 {
-                    gGL.end();
+                    draw.end();
                     gGL.flush();
-                    gGL.begin(LLRender::LINE_STRIP);
+                    draw.begin(LLRender::LINE_STRIP);
                 }
             }
 
-            gGL.end();
+            draw.end();
             gGL.flush();
 
             count = visible_triangles[idx].size();
@@ -334,7 +366,7 @@ void LLSceneView::draw()
 
             F32 total = 0;
 
-            gGL.begin(LLRender::LINE_STRIP);
+            draw.begin(LLRender::LINE_STRIP);
             //plot triangles
             for (size_t i = 0; i < count; ++i)
             {
@@ -343,17 +375,17 @@ void LLSceneView::draw()
                 F32 y = (F32) (sc-streaming_domain[0])/cost_range*tri_rect.getHeight()+tri_rect.mBottom;
                 F32 x = (F32) i / count * tri_rect.getWidth() + tri_rect.mLeft;
 
-                gGL.vertex2f(x,y);
+                draw.vertex2f(x,y);
 
                 if (i%4096 == 0)
                 {
-                    gGL.end();
+                    draw.end();
                     gGL.flush();
-                    gGL.begin(LLRender::LINE_STRIP);
+                    draw.begin(LLRender::LINE_STRIP);
                 }
             }
 
-            gGL.end();
+            draw.end();
             gGL.flush();
 
             std::string label = llformat("%s Object Streaming Cost -- [%.2f, %.2f] Mean: %.2f  Total: %.2f",
@@ -400,7 +432,7 @@ void LLSceneView::draw()
 
             F32 total = 0;
 
-            gGL.begin(LLRender::LINE_STRIP);
+            draw.begin(LLRender::LINE_STRIP);
             //plot triangles
             for (size_t i = 0; i < count; ++i)
             {
@@ -409,17 +441,17 @@ void LLSceneView::draw()
                 F32 y = (F32) (pc-physics_domain[0])/cost_range*tri_rect.getHeight()+tri_rect.mBottom;
                 F32 x = (F32) i / count * tri_rect.getWidth() + tri_rect.mLeft;
 
-                gGL.vertex2f(x,y);
+                draw.vertex2f(x,y);
 
                 if (i%4096 == 0)
                 {
-                    gGL.end();
+                    draw.end();
                     gGL.flush();
-                    gGL.begin(LLRender::LINE_STRIP);
+                    draw.begin(LLRender::LINE_STRIP);
                 }
             }
 
-            gGL.end();
+            draw.end();
             gGL.flush();
 
             std::string label = llformat("%s Object Physics Cost -- [%.2f, %.2f] Mean: %.2f  Total: %.2f",

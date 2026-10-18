@@ -97,6 +97,7 @@ class LLFlickrAccountPanel : public LLPanel
 {
 public:
     LLFlickrAccountPanel();
+    ~LLFlickrAccountPanel() override;
     bool postBuild();
     void draw();
 

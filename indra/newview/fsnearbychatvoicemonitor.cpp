@@ -47,17 +47,6 @@ FSNearbyChatVoiceControl::FSNearbyChatVoiceControl(const FSNearbyChatVoiceContro
     mVoiceMonitorPadding(p.voice_monitor_padding),
     mVoiceMonitorVisible(p.nearby_voice_monitor.visible)
 {
-#if VS_NATIVE_VULKAN
-    if (VSNativeSession::active())
-    {
-        // The text renderer has no spatial speaker service. Preserve the real
-        // skinned chat editor and its full input width without creating one.
-        mVoiceMonitorVisible = false;
-        setTextPadding(mOriginalTextpadLeft, mOriginalTextpadRight);
-        return;
-    }
-#endif
-
     S32 vm_top = p.nearby_voice_monitor.top_pad + p.nearby_voice_monitor.rect.height;
     S32 vm_right = p.rect.right - p.rect.left;
     S32 vm_left = p.rect.right - p.rect.left - p.nearby_voice_monitor.rect.width;
@@ -72,10 +61,6 @@ FSNearbyChatVoiceControl::FSNearbyChatVoiceControl(const FSNearbyChatVoiceContro
 
 void FSNearbyChatVoiceControl::draw()
 {
-#if VS_NATIVE_VULKAN
-    if (VSNativeSession::active()) { FSNearbyChatControl::draw(); return; }
-#endif
-
     LLVoiceClient* voice_client = LLVoiceClient::getInstance();
     bool new_visibility_status = (voice_client->voiceEnabled() && voice_client->isVoiceWorking());
     if (mVoiceMonitorVisible != new_visibility_status)

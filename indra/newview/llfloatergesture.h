@@ -30,6 +30,8 @@
 
 #ifndef LL_LLFLOATERGESTURE_H
 #define LL_LLFLOATERGESTURE_H
+#include <string_view>
+#include <functional>
 #include <vector>
 
 #include "llfloater.h"
@@ -58,6 +60,7 @@ public:
     virtual ~LLFloaterGesture();
 
     virtual bool postBuild();
+    static bool isNativeCallback(std::string_view,const LLSD&);
     virtual void done ();
     void refreshAll();
     void refreshForActiveSort(); // <FS:PP> FIRE-5646: Option to show only active gestures
@@ -73,6 +76,7 @@ protected:
     // and puts them in this list.
     void buildGestureList();
     void playGesture(LLUUID item_id);
+    std::function<void(LLMultiGesture*)> gestureLoadedCallback(const LLUUID& item_id);
 private:
     void addToCurrentOutFit();
     /**

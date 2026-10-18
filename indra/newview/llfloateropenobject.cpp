@@ -32,6 +32,10 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloateropenobject.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsobjectpurchase.h"
+#endif
 
 #include "llcachename.h"
 #include "llbutton.h"
@@ -81,6 +85,27 @@ bool LLFloaterOpenObject::postBuild()
 
 void LLFloaterOpenObject::onOpen(const LLSD& key)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        mNativePurchase=VSObjectPurchase::capture();
+        if(!mNativePurchase)
+        {
+            LLNotificationsUtil::add("UnableToViewContentsMoreThanOne");
+            closeFloater();return;
+        }
+        const auto weak=getHandle();const auto state=std::weak_ptr<VSObjectPurchase>(mNativePurchase);
+        mNativePurchase->selectionChanged=mNativePurchase->selection->changed([weak,state]
+        {
+            const auto owner=state.lock();auto* view=dynamic_cast<LLFloaterOpenObject*>(weak.get());
+            if(owner && view && view->mNativePurchase==owner)
+            {
+                if(!owner->current())view->closeFloater();else view->dirty();
+            }
+        });
+        refresh();return;
+    }
+#endif
     LLObjectSelectionHandle object_selection = LLSelectMgr::getInstance()->getSelection();
     if (object_selection->getRootObjectCount() != 1)
     {
@@ -103,7 +128,23 @@ void LLFloaterOpenObject::refresh()
 
     std::string name = "";
     bool enabled = false;
-
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=mNativePurchase;
+        if(owner && owner->current())
+        {
+            const auto object=VSObjectContext::resolve(owner->object.getID());
+            if(RlvActions::isRlvEnabled() && object && !RlvActions::canEdit(*object))
+            {closeFloater();return;}
+            const auto property=owner->selection->properties(owner->publication.object);
+            if(property){name=property->properties->name;enabled=true;}
+        }
+        getChild<LLUICtrl>("object_name")->setTextArg("[DESC]",name);
+        getChildView("copy_flyout")->setEnabled(enabled);
+        return;
+    }
+#endif
     LLSelectNode* node = mObjectSelection->getFirstRootNode();
 // [RLVa:KB] - @edit and @editobj
     if ( (RlvActions::isRlvEnabled()) && (node) && (!RlvActions::canEdit(node->getObject())) )
@@ -154,6 +195,28 @@ void LLFloaterOpenObject::dirty()
 
 void LLFloaterOpenObject::moveToInventory(bool wear, bool replace)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=mNativePurchase;
+        if(!owner || !owner->current())return;
+        const auto object=VSObjectContext::resolve(owner->object.getID());
+        if(!object || (RlvActions::isRlvEnabled() && !RlvActions::canEdit(*object)))return;
+        const auto property=owner->selection->properties(owner->publication.object);
+        if(!property)return;
+        const auto parent=wear?gInventory.findCategoryUUIDForType(LLFolderType::FT_CLOTHING):gInventory.getRootFolderID();
+        const auto current=vs_native_im_guard();
+        // Closing the dialog after accepting Copy must not cancel the original
+        // category transaction. Retain its exact source/account, not a raw view.
+        gInventory.createNewCategory(parent,LLFolderType::FT_NONE,property->properties->name,
+            [owner,current,wear,replace](const LLUUID& category)
+            {
+                if(current() && owner->current() && category.notNull())
+                    callbackCreateInventoryCategory(category,owner->object.getID(),wear,replace,current);
+            });
+        return;
+    }
+#endif
     if (mObjectSelection->getRootObjectCount() != 1)
     {
         LLNotificationsUtil::add("OnlyCopyContentsOfSingleItem");
@@ -180,7 +243,7 @@ void LLFloaterOpenObject::moveToInventory(bool wear, bool replace)
         parent_category_id = gInventory.getRootFolderID();
     }
 
-    inventory_func_type func = boost::bind(LLFloaterOpenObject::callbackCreateInventoryCategory,_1,object_id,wear,replace);
+    inventory_func_type func = boost::bind(LLFloaterOpenObject::callbackCreateInventoryCategory,_1,object_id,wear,replace,std::function<bool()>{});
     // D567 copy thumbnail info
     gInventory.createNewCategory(
         parent_category_id,
@@ -190,10 +253,11 @@ void LLFloaterOpenObject::moveToInventory(bool wear, bool replace)
 }
 
 // static
-void LLFloaterOpenObject::callbackCreateInventoryCategory(const LLUUID& category_id, LLUUID object_id, bool wear, bool replace)
+void LLFloaterOpenObject::callbackCreateInventoryCategory(const LLUUID& category_id, LLUUID object_id, bool wear, bool replace, std::function<bool()> current)
 {
     LLCatAndWear* wear_data = new LLCatAndWear;
 
+    wear_data->mCurrent=std::move(current);
     wear_data->mCatID = category_id;
     wear_data->mWear = wear;
     wear_data->mFolderResponded = true;
@@ -223,7 +287,7 @@ void LLFloaterOpenObject::callbackMoveInventory(S32 result, void* data)
 {
     LLCatAndWear* cat = (LLCatAndWear*)data;
 
-    if (result == 0)
+    if (result == 0 && (!cat->mCurrent || cat->mCurrent()))
     {
         LLInventoryPanel *active_panel = LLInventoryPanel::getActiveInventoryPanel();
         if (active_panel)
@@ -267,3 +331,11 @@ void LLFloaterOpenObject::onClickCopy(const LLSD& value)
     closeFloater();
 }
 // </FS:Ansariel>
+
+void LLFloaterOpenObject::onClose(bool)
+{
+    mObjectSelection.clear();
+#if VS_NATIVE_VULKAN
+    mNativePurchase.reset();
+#endif
+}

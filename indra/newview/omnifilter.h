@@ -59,6 +59,8 @@ protected:
     void onNeedleCheckboxChanged(LLUICtrl* ctrl);
     void onOwnerChanged();
 
+    void connectLog();
+    boost::signals2::scoped_connection mLogConnection;
     void onLogLine(time_t time, const std::string& logLine);
 
     FSScrollListCtrl* mNeedleListCtrl{ nullptr };

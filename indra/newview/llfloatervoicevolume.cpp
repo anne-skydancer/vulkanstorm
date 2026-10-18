@@ -218,3 +218,6 @@ void LLFloaterVoiceVolumeUtil::registerFloater()
     LLFloaterReg::add("floater_voice_volume", "floater_voice_volume.xml",
                       &LLFloaterReg::build<LLFloaterVoiceVolume>);
 }
+
+bool LLFloaterVoiceVolumeUtil::isNativeType(const std::type_info& type)
+{ return type == typeid(LLFloaterVoiceVolume); }

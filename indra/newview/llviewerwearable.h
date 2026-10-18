@@ -30,12 +30,14 @@
 #include "llwearable.h"
 #include "llavatarappearancedefines.h"
 #include "llextendedstatus.h"
+#include <functional>
 
 class LLVOAvatar;
 
 class LLViewerWearable : public LLWearable
 {
     friend class LLWearableList;
+    friend class VSWearable;
 
     //--------------------------------------------------------------------
     // Constructors and destructors
@@ -59,6 +61,8 @@ public:
 public:
 
     bool                isDirty() const;
+    bool usesGraphicsContext() const override { return !mNativeOwned; }
+    bool currentNativeOwner() const { return !mNativeOwned || avatarOwner(); }
     bool                isOldVersion() const;
 
     /*virtual*/ void    writeToAvatar(LLAvatarAppearance *avatarp);
@@ -101,6 +105,10 @@ public:
     /*virtual*/void     addToBakedTextureHash(LLMD5& hash) const;
 
 protected:
+    LLAvatarAppearance* avatarOwner() const;
+    bool mNativeOwned = false;
+    U64 mNativeAvatarGeneration = 0;
+    std::function<bool()> mNativeCurrent;
     LLAssetID           mAssetID;
     LLTransactionID     mTransactionID;
 

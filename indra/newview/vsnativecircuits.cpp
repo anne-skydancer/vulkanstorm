@@ -203,6 +203,7 @@ void VSNativeSession::neighbourCircuitResult(const LLHost& host,U64 account,U64 
     if (result) { retireNeighbour(host);return; }
     auto& region=mCircuits.at(host);region.acknowledged=true;
     if (region.handshake) region.deadline=0;
+    updateInterestListMode();
 }
 bool VSNativeSession::regionEvent(const std::string& name,const LLSD& body,const LLHost& sender,U64 account,U64 circuit)
 {
@@ -262,6 +263,10 @@ void VSNativeSession::neighbourSeedCoro(LLHost host,std::string seed,U64 account
         auto& region=owner->mCircuits.at(host);if (region.requestRevision!=requestRevision) return;region.cancel={};
         region.seedFailed=!LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result["http_result"]) || !result.isMap();
         if (region.seedFailed) return;
+        region.featuresRequest.reset();
+        region.featuresReceived=false;
+        region.simulatorFeatures=LLSD::emptyMap();
+        region.capabilitiesReady=true;
         region.capabilities=LLSD::emptyMap();
         const LLSD& requestedCapabilities=wanted;
         for (auto requested=requestedCapabilities.beginArray();requested!=requestedCapabilities.endArray();++requested)
@@ -270,6 +275,10 @@ void VSNativeSession::neighbourSeedCoro(LLHost host,std::string seed,U64 account
             if (circuitURL(result[name].asString())) region.capabilities[name]=result[name];
         }
         if (circuitURL(region.capabilities["EventQueueGet"].asString())) region.poll=std::make_unique<LLEventPoll>(region.capabilities["EventQueueGet"].asString(),host);
+        owner->updateInterestListMode();
+        const std::string features=region.capabilities["SimulatorFeatures"].asString();
+        if (!features.empty()) LLCoros::instance().launch("nativeNeighbourFeatures", [weak,host,features,account,incarnation]
+            { neighbourFeaturesCoro(weak,host,features,account,incarnation); });
     });
 }
 
@@ -321,4 +330,108 @@ bool VSNativeSession::publishRegionOwner(const LLHost& host,U64 incarnation,cons
     if(found==mCircuits.end() || !found->second.acknowledged || !found->second.handshake)return false;
     found->second.owner=owner;
     return true;
+}
+
+bool VSNativeSession::capabilitiesReceived(const LLHost& host) const
+{
+    if (mShutdown || (mPhase!=Phase::Connecting && mPhase!=Phase::Connected)) return false;
+    if (host==mHost) return mSeedReady;
+    const auto found=mCircuits.find(host);
+    return found!=mCircuits.end() && found->second.acknowledged && found->second.capabilitiesReady;
+}
+std::optional<LLSD> VSNativeSession::simulatorFeatures(const LLHost& host) const
+{
+    if (mShutdown || (mPhase!=Phase::Connecting && mPhase!=Phase::Connected)) return {};
+    if (host==mHost) return mSimulatorFeaturesReceived ? std::optional<LLSD>(mSimulatorFeatures) : std::nullopt;
+    const auto found=mCircuits.find(host);
+    return found!=mCircuits.end() && found->second.acknowledged && found->second.featuresReceived
+        ? std::optional<LLSD>(found->second.simulatorFeatures) : std::nullopt;
+}
+void VSNativeSession::neighbourFeaturesCoro(std::weak_ptr<VSNativeSession> weak,LLHost host,std::string url,
+                                           U64 account,U64 incarnation)
+{
+    auto adapter=std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("nativeNeighbourFeatures",LLCore::HttpRequest::DEFAULT_POLICY_ID);
+    auto request=std::make_shared<LLCore::HttpRequest>();
+    auto options=std::make_shared<LLCore::HttpOptions>();
+    options->setTransferTimeout(15);options->setRetries(0);
+    auto token=std::make_shared<RegionCircuit::FeaturesRequest>();
+    token->cancel=[requestOwner=std::weak_ptr<LLCoreHttpUtil::HttpCoroutineAdapter>(adapter)]
+        { if (const auto request=requestOwner.lock()) request->cancelSuspendedOperation(); };
+    {
+        const auto owner=weak.lock();
+        if (!owner || owner->mShutdown || owner->mGeneration!=account || owner->circuitGeneration(host)!=incarnation) return;
+        owner->mCircuits.at(host).featuresRequest=token;
+    }
+    // The circuit owns cancellation; a suspended request does not keep a retired
+    // account or region alive. Publish only the same accepted circuit/request.
+    const std::weak_ptr<RegionCircuit::FeaturesRequest> identity=token;
+    token.reset();
+    for (unsigned attempt=0;attempt<2;++attempt)
+    {
+        const LLSD result=adapter->getAndSuspend(request,url,options);
+        const auto owner=weak.lock();
+        if (!owner || owner->mShutdown || owner->mGeneration!=account ||
+            owner->circuitGeneration(host)!=incarnation) return;
+        auto& circuit=owner->mCircuits.at(host);
+        const auto current=identity.lock();
+        if (!current || circuit.featuresRequest!=current) return;
+        if (LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result["http_result"]) && result.isMap())
+        {
+            current->cancel={};
+            circuit.featuresRequest.reset();
+            circuit.simulatorFeatures=result;
+            circuit.featuresReceived=true;
+            if (host==owner->mHost) owner->applySimulatorFeatures(result,account,owner->mRegionEpoch);
+            return;
+        }
+    }
+    if (const auto owner=weak.lock();owner && owner->mGeneration==account && owner->circuitGeneration(host)==incarnation)
+    {
+        auto& circuit=owner->mCircuits.at(host);
+        if (const auto current=identity.lock();current && circuit.featuresRequest==current)
+        { current->cancel={};circuit.featuresRequest.reset(); }
+    }
+}
+
+bool VSNativeSession::setRegionVoiceEnabled(const LLHost& host,U64 incarnation,bool enabled)
+{
+    if (!regionReady() || circuitGeneration(host)!=incarnation) return false;
+    const auto found=mCircuits.find(host);
+    if (found==mCircuits.end() || !found->second.acknowledged || !found->second.handshake) return false;
+    auto& flags=found->second.flags;
+    if (enabled) flags|=REGION_FLAGS_ALLOW_VOICE;
+    else flags&=~U64(REGION_FLAGS_ALLOW_VOICE);
+    if (host==mHost) mFlags=flags;
+    return true;
+}
+
+std::optional<std::size_t> VSNativeSession::coarseAvatarCount(const LLHost& host) const
+{
+    if(mShutdown || mPhase!=Phase::Connected)return {};
+    const auto found=mCircuits.find(host);
+    if(found==mCircuits.end() || !found->second.acknowledged || !found->second.handshake)return {};
+    return found->second.coarse.avatars.size();
+}
+
+
+void VSNativeSession::updateInterestListMode()
+{
+    if(mShutdown || mPhase!=Phase::Connected || mChangingRegion)return;
+    const auto mode=gAgent.getInterestListMode();
+    if(mode!="default" && mode!="360")return;
+    const auto weak=weak_from_this();const auto account=mGeneration;
+    for(auto& [host,region]:mCircuits)
+    {
+        if(!region.acknowledged || !region.handshake || !region.capabilitiesReady || region.interestListMode==mode)continue;
+        const auto url=capability(host,"InterestList");if(url.empty())continue;
+        region.interestListMode=mode;const auto circuit=region.incarnation;
+        LLSD body;body["mode"]=mode;
+        LLCoreHttpUtil::HttpCoroutineAdapter::callbackHttpPost(url,LLCore::HttpRequest::DEFAULT_POLICY_ID,body,
+            [weak,host,account,circuit](const LLSD& result)
+            {
+                const auto owner=weak.lock();
+                if(!owner || owner->mShutdown || owner->mGeneration!=account || owner->circuitGeneration(host)!=circuit)return;
+                LL_DEBUGS("360Capture")<<"InterestList capability responded: "<<result<<LL_ENDL;
+            });
+    }
 }

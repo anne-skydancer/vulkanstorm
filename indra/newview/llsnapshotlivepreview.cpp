@@ -49,6 +49,10 @@
 #include "llnotificationsutil.h"
 #include "llslurl.h"
 #include "llsnapshotlivepreview.h"
+#include "vssnapshotpainter.h"
+#if VS_NATIVE_VULKAN
+#include "vsuiimageprovider.h"
+#endif
 #include "lltoolfocus.h"
 #include "llviewercontrol.h"
 #include "llviewermenufile.h"   // upload_new_resource()
@@ -129,6 +133,7 @@ LLSnapshotLivePreview::LLSnapshotLivePreview (const LLSnapshotLivePreview::Param
 
 LLSnapshotLivePreview::~LLSnapshotLivePreview()
 {
+    for(U32 i=0;i<4;++i)clearNativeImage(i);
     // delete images
     mPreviewImage = NULL;
     mPreviewImageEncoded = NULL;
@@ -151,7 +156,7 @@ LLViewerTexture* LLSnapshotLivePreview::getCurrentImage()
 
 F32 LLSnapshotLivePreview::getImageAspect()
 {
-    if (!getCurrentImage())
+    if (!hasImage(mCurImageIndex))
     {
         return 0.f;
     }
@@ -220,6 +225,7 @@ void LLSnapshotLivePreview::updateSnapshot(bool new_snapshot, bool new_thumbnail
     {
         mThumbnailUpToDate = false ;
         mBigThumbnailUpToDate = false;
+        for(U32 i=2;i<4;++i){mNativeImages[i].pending=nullptr;mNativeImages[i].residency.reset();mNativeImages[i].requested=false;}
     }
 }
 
@@ -242,13 +248,12 @@ bool LLSnapshotLivePreview::setSnapshotQuality(S32 quality, bool set_by_user)
 
 void LLSnapshotLivePreview::drawPreviewRect(S32 offset_x, S32 offset_y, LLColor4 alpha_color)
 {
-    F32 line_width ;
-    glGetFloatv(GL_LINE_WIDTH, &line_width) ;
-    gGL.setLineWidth(2.0f * line_width) ; // <FS> Line width OGL core profile fix by Rye Mutt
+    const F32 line_width=LLRender2D::getLineWidth();
+    LLRender2D::setLineWidth(2.0f * line_width); // <FS> Line width OGL core profile fix by Rye Mutt
     LLColor4 color(0.0f, 0.0f, 0.0f, 1.0f) ;
     gl_rect_2d( mPreviewRect.mLeft + offset_x, mPreviewRect.mTop + offset_y,
         mPreviewRect.mRight + offset_x, mPreviewRect.mBottom + offset_y, color, false ) ;
-    gGL.setLineWidth(line_width) ; // <FS> Line width OGL core profile fix by Rye Mutt
+    LLRender2D::setLineWidth(line_width); // <FS> Line width OGL core profile fix by Rye Mutt
 
     //draw four alpha rectangles to cover areas outside of the snapshot image
     if(!mKeepAspectRatio)
@@ -281,7 +286,8 @@ void LLSnapshotLivePreview::drawPreviewRect(S32 offset_x, S32 offset_y, LLColor4
 //called when the frame is frozen.
 void LLSnapshotLivePreview::draw()
 {
-    if (getCurrentImage() &&
+    VSSnapshotPainter painter;
+    if (hasImage(mCurImageIndex) &&
         mPreviewImageEncoded.notNull() &&
         getSnapshotUpToDate())
     {
@@ -293,41 +299,40 @@ void LLSnapshotLivePreview::draw()
         gl_drop_shadow(shadow_rect.mLeft, shadow_rect.mTop, shadow_rect.mRight, shadow_rect.mBottom, LLColor4(0.f, 0.f, 0.f, mNeedsFlash ? 0.f :0.5f), 10);
 
         LLColor4 image_color(1.f, 1.f, 1.f, 1.f);
-        gGL.color4fv(image_color.mV);
-        gGL.getTexUnit(0)->bind(getCurrentImage());
+        painter.color4fv(image_color.mV);
+        painter.bind(mViewerImage[mCurImageIndex],mNativeImages[mCurImageIndex].image);
         // calculate UV scale
-        F32 uv_width = isImageScaled() ? 1.f : llmin((F32)getWidth() / (F32)getCurrentImage()->getWidth(), 1.f);
-        F32 uv_height = isImageScaled() ? 1.f : llmin((F32)getHeight() / (F32)getCurrentImage()->getHeight(), 1.f);
-        gGL.pushMatrix();
+        F32 uv_width = isImageScaled() ? 1.f : llmin((F32)getWidth() / (F32)imageWidth(mCurImageIndex), 1.f);
+        F32 uv_height = isImageScaled() ? 1.f : llmin((F32)getHeight() / (F32)imageHeight(mCurImageIndex), 1.f);
+        painter.pushMatrix();
         {
-            gGL.translatef((F32)rect.mLeft, (F32)rect.mBottom + TOP_PANEL_HEIGHT, 0.f);
-            gGL.begin(LLRender::TRIANGLES);
+            painter.translatef((F32)rect.mLeft, (F32)rect.mBottom + TOP_PANEL_HEIGHT, 0.f);
+            painter.begin(LLRender::TRIANGLES);
             {
-                gGL.texCoord2f(uv_width, uv_height);
-                gGL.vertex2i(rect.getWidth(), rect.getHeight());
+                painter.texCoord2f(uv_width, uv_height);
+                painter.vertex2i(rect.getWidth(), rect.getHeight());
 
-                gGL.texCoord2f(0.f, uv_height);
-                gGL.vertex2i(0, rect.getHeight());
+                painter.texCoord2f(0.f, uv_height);
+                painter.vertex2i(0, rect.getHeight());
 
-                gGL.texCoord2f(0.f, 0.f);
-                gGL.vertex2i(0, 0);
+                painter.texCoord2f(0.f, 0.f);
+                painter.vertex2i(0, 0);
 
 
-                gGL.texCoord2f(uv_width, uv_height);
-                gGL.vertex2i(rect.getWidth(), rect.getHeight());
+                painter.texCoord2f(uv_width, uv_height);
+                painter.vertex2i(rect.getWidth(), rect.getHeight());
 
-                gGL.texCoord2f(0.f, 0.f);
-                gGL.vertex2i(0, 0);
+                painter.texCoord2f(0.f, 0.f);
+                painter.vertex2i(0, 0);
 
-                gGL.texCoord2f(uv_width, 0.f);
-                gGL.vertex2i(rect.getWidth(), 0);
+                painter.texCoord2f(uv_width, 0.f);
+                painter.vertex2i(rect.getWidth(), 0);
             }
-            gGL.end();
+            painter.end();
         }
-        gGL.popMatrix();
+        painter.popMatrix();
 
-        gGL.color4f(1.f, 1.f, 1.f, mFlashAlpha);
-        gl_rect_2d(getRect());
+        gl_rect_2d(getRect(),LLColor4(1.f,1.f,1.f,mFlashAlpha));
         if (mNeedsFlash)
         {
             if (mFlashAlpha < 1.f)
@@ -369,35 +374,35 @@ void LLSnapshotLivePreview::draw()
                 S32 y1 = 0;
                 S32 y2 = gViewerWindow->getWindowHeightScaled() + TOP_PANEL_HEIGHT;
 
-                gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
-                gGL.begin(LLRender::TRIANGLES);
+                painter.unbind();
+                painter.begin(LLRender::TRIANGLES);
                 {
-                    gGL.color4f(1.f, 1.f, 1.f, 0.f);
-                    gGL.vertex2i(x1, y1);
-                    gGL.vertex2i(x1 + gViewerWindow->getWindowWidthScaled(), y2);
-                    gGL.color4f(1.f, 1.f, 1.f, SHINE_OPACITY);
-                    gGL.vertex2i(x2 + gViewerWindow->getWindowWidthScaled(), y2);
+                    painter.color4f(1.f, 1.f, 1.f, 0.f);
+                    painter.vertex2i(x1, y1);
+                    painter.vertex2i(x1 + gViewerWindow->getWindowWidthScaled(), y2);
+                    painter.color4f(1.f, 1.f, 1.f, SHINE_OPACITY);
+                    painter.vertex2i(x2 + gViewerWindow->getWindowWidthScaled(), y2);
 
-                    gGL.color4f(1.f, 1.f, 1.f, 0.f);
-                    gGL.vertex2i(x1, y1);
-                    gGL.color4f(1.f, 1.f, 1.f, SHINE_OPACITY);
-                    gGL.vertex2i(x2 + gViewerWindow->getWindowWidthScaled(), y2);
-                    gGL.vertex2i(x2, y1);
+                    painter.color4f(1.f, 1.f, 1.f, 0.f);
+                    painter.vertex2i(x1, y1);
+                    painter.color4f(1.f, 1.f, 1.f, SHINE_OPACITY);
+                    painter.vertex2i(x2 + gViewerWindow->getWindowWidthScaled(), y2);
+                    painter.vertex2i(x2, y1);
 
 
-                    gGL.color4f(1.f, 1.f, 1.f, SHINE_OPACITY);
-                    gGL.vertex2i(x2, y1);
-                    gGL.vertex2i(x2 + gViewerWindow->getWindowWidthScaled(), y2);
-                    gGL.color4f(1.f, 1.f, 1.f, 0.f);
-                    gGL.vertex2i(x3 + gViewerWindow->getWindowWidthScaled(), y2);
+                    painter.color4f(1.f, 1.f, 1.f, SHINE_OPACITY);
+                    painter.vertex2i(x2, y1);
+                    painter.vertex2i(x2 + gViewerWindow->getWindowWidthScaled(), y2);
+                    painter.color4f(1.f, 1.f, 1.f, 0.f);
+                    painter.vertex2i(x3 + gViewerWindow->getWindowWidthScaled(), y2);
 
-                    gGL.color4f(1.f, 1.f, 1.f, SHINE_OPACITY);
-                    gGL.vertex2i(x2, y1);
-                    gGL.color4f(1.f, 1.f, 1.f, 0.f);
-                    gGL.vertex2i(x3 + gViewerWindow->getWindowWidthScaled(), y2);
-                    gGL.vertex2i(x3, y1);
+                    painter.color4f(1.f, 1.f, 1.f, SHINE_OPACITY);
+                    painter.vertex2i(x2, y1);
+                    painter.color4f(1.f, 1.f, 1.f, 0.f);
+                    painter.vertex2i(x3 + gViewerWindow->getWindowWidthScaled(), y2);
+                    painter.vertex2i(x3, y1);
                 }
-                gGL.end();
+                painter.end();
             }
 
             // if we're at the end of the animation, stop
@@ -412,47 +417,47 @@ void LLSnapshotLivePreview::draw()
     if (mFallAnimTimer.getStarted())
     {
         S32 old_image_index = (mCurImageIndex + 1) % 2;
-        if (mViewerImage[old_image_index].notNull() && mFallAnimTimer.getElapsedTimeF32() < FALL_TIME)
+        if (hasImage(old_image_index) && mFallAnimTimer.getElapsedTimeF32() < FALL_TIME)
         {
             LL_DEBUGS("Snapshot") << "Drawing fall animation" << LL_ENDL;
             F32 fall_interp = mFallAnimTimer.getElapsedTimeF32() / FALL_TIME;
             F32 alpha = clamp_rescale(fall_interp, 0.f, 1.f, 0.8f, 0.4f);
             LLColor4 image_color(1.f, 1.f, 1.f, alpha);
-            gGL.color4fv(image_color.mV);
-            gGL.getTexUnit(0)->bind(mViewerImage[old_image_index]);
+            painter.color4fv(image_color.mV);
+            painter.bind(mViewerImage[old_image_index],mNativeImages[old_image_index].image);
             // calculate UV scale
             // *FIX get this to work with old image
-            bool rescale = !mImageScaled[old_image_index] && mViewerImage[mCurImageIndex].notNull();
-            F32 uv_width = rescale ? llmin((F32)mWidth[old_image_index] / (F32)mViewerImage[mCurImageIndex]->getWidth(), 1.f) : 1.f;
-            F32 uv_height = rescale ? llmin((F32)mHeight[old_image_index] / (F32)mViewerImage[mCurImageIndex]->getHeight(), 1.f) : 1.f;
-            gGL.pushMatrix();
+            bool rescale = !mImageScaled[old_image_index] && hasImage(mCurImageIndex);
+            F32 uv_width = rescale ? llmin((F32)mWidth[old_image_index] / (F32)imageWidth(mCurImageIndex), 1.f) : 1.f;
+            F32 uv_height = rescale ? llmin((F32)mHeight[old_image_index] / (F32)imageHeight(mCurImageIndex), 1.f) : 1.f;
+            painter.pushMatrix();
             {
                 LLRect& rect = mImageRect[old_image_index];
-                gGL.translatef((F32)rect.mLeft, (F32)rect.mBottom - ll_round(getRect().getHeight() * 2.f * (fall_interp * fall_interp)), 0.f);
-                gGL.rotatef(-45.f * fall_interp, 0.f, 0.f, 1.f);
-                gGL.begin(LLRender::TRIANGLES);
+                painter.translatef((F32)rect.mLeft, (F32)rect.mBottom - ll_round(getRect().getHeight() * 2.f * (fall_interp * fall_interp)), 0.f);
+                painter.rotatef(-45.f * fall_interp, 0.f, 0.f, 1.f);
+                painter.begin(LLRender::TRIANGLES);
                 {
-                    gGL.texCoord2f(uv_width, uv_height);
-                    gGL.vertex2i(rect.getWidth(), rect.getHeight());
+                    painter.texCoord2f(uv_width, uv_height);
+                    painter.vertex2i(rect.getWidth(), rect.getHeight());
 
-                    gGL.texCoord2f(0.f, uv_height);
-                    gGL.vertex2i(0, rect.getHeight());
+                    painter.texCoord2f(0.f, uv_height);
+                    painter.vertex2i(0, rect.getHeight());
 
-                    gGL.texCoord2f(0.f, 0.f);
-                    gGL.vertex2i(0, 0);
+                    painter.texCoord2f(0.f, 0.f);
+                    painter.vertex2i(0, 0);
 
-                    gGL.texCoord2f(uv_width, uv_height);
-                    gGL.vertex2i(rect.getWidth(), rect.getHeight());
+                    painter.texCoord2f(uv_width, uv_height);
+                    painter.vertex2i(rect.getWidth(), rect.getHeight());
 
-                    gGL.texCoord2f(0.f, 0.f);
-                    gGL.vertex2i(0, 0);
+                    painter.texCoord2f(0.f, 0.f);
+                    painter.vertex2i(0, 0);
 
-                    gGL.texCoord2f(uv_width, 0.f);
-                    gGL.vertex2i(rect.getWidth(), 0);
+                    painter.texCoord2f(uv_width, 0.f);
+                    painter.vertex2i(rect.getWidth(), 0);
                 }
-                gGL.end();
+                painter.end();
             }
-            gGL.popMatrix();
+            painter.popMatrix();
         }
     }
 }
@@ -579,11 +584,23 @@ void LLSnapshotLivePreview::generateThumbnailImage(bool force_update)
     // Invalidate the big thumbnail when we regenerate the small one
     mBigThumbnailUpToDate = false;
 
-    if(mThumbnailImage)
+    if(mThumbnailImage&&!LLRender2D::isNativeUI())
     {
-        resetThumbnailImage() ;
+        resetThumbnailImage();
     }
 
+    std::shared_ptr<const void> nativeResidency;
+#if VS_NATIVE_VULKAN
+    if(LLRender2D::isNativeUI())
+    {
+        if(mNativeImages[2].pending)
+        {mThumbnailUpToDate=retryNativeImage(2);mThumbnailUpdateLock=false;return;}
+        std::size_t bytes=std::size_t(llmax(mThumbnailWidth,mFixedThumbnailImageWidth))*llmax(mThumbnailHeight,mFixedThumbnailImageHeight)*16;
+        if(mThumbnailSubsampled&&mPreviewImage)bytes=llmax(bytes,std::size_t(mPreviewImage->getWidth())*mPreviewImage->getHeight()*16);
+        nativeResidency=vs_reserve_ui_image_bytes(bytes);
+        if(!nativeResidency){mThumbnailUpdateLock=false;return;}
+    }
+#endif
     LLPointer<LLImageRaw> raw = new LLImageRaw;
 
     if (mThumbnailSubsampled)
@@ -646,8 +663,8 @@ void LLSnapshotLivePreview::generateThumbnailImage(bool force_update)
         }
         // Scale to a power of 2 so it can be mapped to a texture
         raw->expandToPowerOfTwo();
-        mThumbnailImage = LLViewerTextureManager::getLocalTexture(raw.get(), false);
-        mThumbnailUpToDate = true ;
+        if(LLRender2D::isNativeUI())mThumbnailUpToDate=publishNativeImage(2,raw,std::move(nativeResidency));
+        else {mThumbnailImage=LLViewerTextureManager::getLocalTexture(raw.get(),false);mThumbnailUpToDate=true;}
     }
 
     //unlock updating
@@ -660,11 +677,20 @@ LLViewerTexture* LLSnapshotLivePreview::getBigThumbnailImage()
     {
         return NULL;
     }
-    if (mBigThumbnailUpToDate && mBigThumbnailImage)//already updated
+    if (mBigThumbnailUpToDate && (LLRender2D::isNativeUI()?mNativeImages[3].image.notNull():mBigThumbnailImage.notNull()))//already updated
     {
         return mBigThumbnailImage;
     }
 
+    std::shared_ptr<const void> nativeResidency;
+#if VS_NATIVE_VULKAN
+    if(LLRender2D::isNativeUI())
+    {
+        if(mNativeImages[3].pending){mBigThumbnailUpToDate=retryNativeImage(3);return nullptr;}
+        nativeResidency=vs_reserve_ui_image_bytes(std::size_t(mPreviewImage->getWidth())*mPreviewImage->getHeight()*16);
+        if(!nativeResidency)return nullptr;
+    }
+#endif
     LLPointer<LLImageRaw> raw = new LLImageRaw;
 
     if (raw)
@@ -694,8 +720,8 @@ LLViewerTexture* LLSnapshotLivePreview::getBigThumbnailImage()
         }
         // Scale to a power of 2 so it can be mapped to a texture
         raw->expandToPowerOfTwo();
-        mBigThumbnailImage = LLViewerTextureManager::getLocalTexture(raw.get(), false);
-        mBigThumbnailUpToDate = true ;
+        if(LLRender2D::isNativeUI())mBigThumbnailUpToDate=publishNativeImage(3,raw,std::move(nativeResidency));
+        else {mBigThumbnailImage=LLViewerTextureManager::getLocalTexture(raw.get(),false);mBigThumbnailUpToDate=true;}
     }
 
     return mBigThumbnailImage ;
@@ -726,6 +752,21 @@ bool LLSnapshotLivePreview::onIdle( void* snapshot_preview )
     {
         previewp->setVisible(false);
         return false;
+    }
+
+    if(LLRender2D::isNativeUI())
+    {
+        for(U32 i=0;i<4;++i)if(previewp->mNativeImages[i].pending)
+        {
+            const bool ready=previewp->retryNativeImage(i);
+            if(i==2)previewp->mThumbnailUpToDate=ready;
+            if(i==3)previewp->mBigThumbnailUpToDate=ready;
+        }
+        if(previewp->mNativeImages[previewp->mCurImageIndex].requested)
+        {
+            if(!previewp->mNativeImages[previewp->mCurImageIndex].pending)previewp->prepareFreezeFrame();
+            if(previewp->mNativeImages[previewp->mCurImageIndex].requested)return false;
+        }
     }
 
     static LLCachedControl<bool> auto_snapshot(gSavedSettings, "AutoSnapshot", false);
@@ -838,6 +879,16 @@ void LLSnapshotLivePreview::prepareFreezeFrame()
     // Get the decoded version of the formatted image
     getEncodedImage();
 
+    if(!mPreviewImageEncoded)return;
+    std::shared_ptr<const void> nativeResidency;
+#if VS_NATIVE_VULKAN
+    if(LLRender2D::isNativeUI())
+    {
+        mNativeImages[mCurImageIndex].requested=true;
+        nativeResidency=vs_reserve_ui_image_bytes(std::size_t(mPreviewImageEncoded->getWidth())*mPreviewImageEncoded->getHeight()*16);
+        if(!nativeResidency)return;
+    }
+#endif
     LLImageDataSharedLock lock(mPreviewImageEncoded);
 
     // We need to scale that a bit for display...
@@ -862,11 +913,15 @@ void LLSnapshotLivePreview::prepareFreezeFrame()
             scaled->expandToPowerOfTwo(1024, false);
         }
 
+        if(LLRender2D::isNativeUI())publishNativeImage(mCurImageIndex,scaled,std::move(nativeResidency));
+        else
+        {
         mViewerImage[mCurImageIndex] = LLViewerTextureManager::getLocalTexture(scaled.get(), false);
         LLPointer<LLViewerTexture> curr_preview_image = mViewerImage[mCurImageIndex];
         gGL.getTexUnit(0)->bind(curr_preview_image);
         curr_preview_image->setFilteringOption(getSnapshotType() == LLSnapshotModel::SNAPSHOT_TEXTURE ? LLTexUnit::TFO_ANISOTROPIC : LLTexUnit::TFO_POINT);
         curr_preview_image->setAddressMode(LLTexUnit::TAM_CLAMP);
+        }
 
 
         if (gSavedSettings.getBOOL("UseFreezeFrame") && mAllowFullScreenPreview)
@@ -1138,4 +1193,52 @@ void LLSnapshotLivePreview::saveLocal(LLPointer<LLImageFormatted> image, const s
     sSaveLocalImage = image;
 
     gViewerWindow->saveImageNumbered(sSaveLocalImage, false, success_cb, failure_cb);
+}
+
+bool LLSnapshotLivePreview::hasImage(U32 index) const
+{return LLRender2D::isNativeUI()?mNativeImages[index].image.notNull():mViewerImage[index].notNull();}
+S32 LLSnapshotLivePreview::imageWidth(U32 index) const
+{return LLRender2D::isNativeUI()?mNativeImages[index].image->getWidth():mViewerImage[index]->getWidth();}
+S32 LLSnapshotLivePreview::imageHeight(U32 index) const
+{return LLRender2D::isNativeUI()?mNativeImages[index].image->getHeight():mViewerImage[index]->getHeight();}
+bool LLSnapshotLivePreview::hasThumbnailImage() const
+{return LLRender2D::isNativeUI()?mNativeImages[2].image.notNull():mThumbnailImage.notNull();}
+bool LLSnapshotLivePreview::hasBigThumbnailImage()
+{getBigThumbnailImage();return LLRender2D::isNativeUI()?mNativeImages[3].image.notNull():mBigThumbnailImage.notNull();}
+void LLSnapshotLivePreview::drawThumbnail(S32 x,S32 y,S32 w,S32 h,const LLColor4& color) const
+{
+    if(LLRender2D::isNativeUI()){if(mNativeImages[2].image)mNativeImages[2].image->draw(x,y,w,h,color);return;}
+    gGL.matrixMode(LLRender::MM_MODELVIEW);gl_draw_scaled_image(x,y,w,h,mThumbnailImage,color);
+}
+void LLSnapshotLivePreview::drawBigThumbnail(S32 x,S32 y,S32 w,S32 h,const LLColor4& color) const
+{
+    if(LLRender2D::isNativeUI()){if(mNativeImages[3].image)mNativeImages[3].image->draw(x,y,w,h,color);return;}
+    gGL.matrixMode(LLRender::MM_MODELVIEW);gl_draw_scaled_image(x,y,w,h,mBigThumbnailImage,color);
+}
+void LLSnapshotLivePreview::resetThumbnailImage(){mThumbnailImage=nullptr;clearNativeImage(2);}
+bool LLSnapshotLivePreview::publishNativeImage(U32 index,LLPointer<LLImageRaw> raw,std::shared_ptr<const void> residency)
+{
+    auto& slot=mNativeImages[index];slot.pending=std::move(raw);slot.residency=std::move(residency);slot.requested=true;
+    return retryNativeImage(index);
+}
+bool LLSnapshotLivePreview::retryNativeImage(U32 index)
+{
+#if VS_NATIVE_VULKAN
+    auto& slot=mNativeImages[index];if(!slot.pending)return !slot.requested;
+    if(slot.key.empty())slot.key="snapshot-preview:"+LLUUID::generateNewID().asString();
+    const auto sampling=index<2?(getSnapshotType()==LLSnapshotModel::SNAPSHOT_TEXTURE?VSUIRenderer::Sampling::Anisotropic:VSUIRenderer::Sampling::Nearest):VSUIRenderer::Sampling::Anisotropic;
+    auto candidate=vs_publish_ui_image(slot.key,*slot.pending,sampling);
+    if(!candidate)return false;
+    slot.image=std::move(candidate);slot.pending=nullptr;slot.residency.reset();slot.requested=false;return true;
+#else
+    return false;
+#endif
+}
+void LLSnapshotLivePreview::clearNativeImage(U32 index)
+{
+    auto& slot=mNativeImages[index];
+#if VS_NATIVE_VULKAN
+    if(!slot.key.empty())vs_erase_ui_image(slot.key);
+#endif
+    slot={};
 }

@@ -30,6 +30,8 @@
 #include "llsnapshotmodel.h"
 #include "llviewertexture.h"
 #include "llviewerwindow.h"
+#include "lluiimage.h"
+#include <memory>
 
 class LLImageJPEG;
 
@@ -76,9 +78,13 @@ public:
 
     LLSnapshotModel::ESnapshotType getSnapshotType() const { return mSnapshotType; }
     LLSnapshotModel::ESnapshotFormat getSnapshotFormat() const { return mSnapshotFormat; }
-    bool getSnapshotUpToDate() const { return mSnapshotUpToDate; }
+    bool getSnapshotUpToDate() const { return mSnapshotUpToDate&&!mNativeImages[mCurImageIndex].requested; }
     bool isSnapshotActive() { return mSnapshotActive; }
     LLViewerTexture* getThumbnailImage() const { return mThumbnailImage ; }
+    bool hasThumbnailImage() const;
+    bool hasBigThumbnailImage();
+    void drawThumbnail(S32,S32,S32,S32,const LLColor4&) const;
+    void drawBigThumbnail(S32,S32,S32,S32,const LLColor4&) const;
     S32  getThumbnailWidth() const { return mThumbnailWidth ; }
     S32  getThumbnailHeight() const { return mThumbnailHeight ; }
     bool getThumbnailLock() const { return mThumbnailUpdateLock ; }
@@ -115,7 +121,7 @@ public:
     void setThumbnailPlaceholderRect(const LLRect& rect) {mThumbnailPlaceholderRect = rect; }
     bool setThumbnailImageSize() ;
     void generateThumbnailImage(bool force_update = false) ;
-    void resetThumbnailImage() { mThumbnailImage = NULL ; }
+    void resetThumbnailImage();
     void drawPreviewRect(S32 offset_x, S32 offset_y, LLColor4 alpha_color = LLColor4(0.5f, 0.5f, 0.5f, 0.8f));
     void prepareFreezeFrame();
 
@@ -127,6 +133,21 @@ public:
     static bool onIdle( void* snapshot_preview );
 
 private:
+    struct NativeImage
+    {
+        LLUIImagePtr image;
+        LLPointer<LLImageRaw> pending;
+        std::shared_ptr<const void> residency;
+        std::string key;
+        bool requested=false;
+    };
+    NativeImage mNativeImages[4]; // two frozen images, thumbnail, big preview
+    bool publishNativeImage(U32,LLPointer<LLImageRaw>,std::shared_ptr<const void>);
+    bool retryNativeImage(U32);
+    void clearNativeImage(U32);
+    bool hasImage(U32) const;
+    S32 imageWidth(U32) const;
+    S32 imageHeight(U32) const;
     LLView*                     mViewContainer;
 
     LLColor4                    mColor;

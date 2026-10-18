@@ -25,6 +25,13 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsappearanceui.h"
+#include "vsavatarservices.h"
+#include "llavatarappearance.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
 
 #include "llpaneloutfitedit.h"
 
@@ -420,13 +427,13 @@ LLPanelOutfitEdit::LLPanelOutfitEdit()
 
 
     LLOutfitObserver& observer = LLOutfitObserver::instance();
-    observer.addBOFReplacedCallback(boost::bind(&LLPanelOutfitEdit::updateCurrentOutfitName, this));
-    observer.addBOFChangedCallback(boost::bind(&LLPanelOutfitEdit::updateVerbs, this));
-    observer.addOutfitLockChangedCallback(boost::bind(&LLPanelOutfitEdit::updateVerbs, this));
-    observer.addCOFChangedCallback(boost::bind(&LLPanelOutfitEdit::onCOFChanged, this));
+    mAppearanceConnections.emplace_back(observer.addBOFReplacedCallback(vs_appearance_ui_callback(this, boost::bind(&LLPanelOutfitEdit::updateCurrentOutfitName, this))));
+    mAppearanceConnections.emplace_back(observer.addBOFChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLPanelOutfitEdit::updateVerbs, this))));
+    mAppearanceConnections.emplace_back(observer.addOutfitLockChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLPanelOutfitEdit::updateVerbs, this))));
+    mAppearanceConnections.emplace_back(observer.addCOFChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLPanelOutfitEdit::onCOFChanged, this))));
 
-    gAgentWearables.addLoadingStartedCallback(boost::bind(&LLPanelOutfitEdit::onOutfitChanging, this, true));
-    gAgentWearables.addLoadedCallback(boost::bind(&LLPanelOutfitEdit::onOutfitChanging, this, false));
+    mAppearanceConnections.emplace_back(gAgentWearables.addLoadingStartedCallback(vs_appearance_ui_callback(this, boost::bind(&LLPanelOutfitEdit::onOutfitChanging, this, true))));
+    mAppearanceConnections.emplace_back(gAgentWearables.addLoadedCallback(vs_appearance_ui_callback(this, boost::bind(&LLPanelOutfitEdit::onOutfitChanging, this, false))));
 
     mFolderViewItemTypes.reserve(NUM_FOLDER_VIEW_ITEM_TYPES);
     for (U32 i = 0; i < NUM_FOLDER_VIEW_ITEM_TYPES; i++)
@@ -856,7 +863,7 @@ void LLPanelOutfitEdit::onShopButtonClicked()
     // will contain the resultant URL
     std::string url;
 
-    if (isAgentAvatarValid())
+    if (vs_avatar_appearance())
     {
         // try to get wearable type from 'Add More' panel first (EXT-7639)
         selection_info_t selection_info = getAddMorePanelSelectionType();
@@ -875,7 +882,7 @@ void LLPanelOutfitEdit::onShopButtonClicked()
             type = getCOFWearablesSelectionType();
         }
 
-        ESex sex = gAgentAvatarp->getSex();
+        ESex sex = vs_avatar_appearance()->getSex();
 
         // WT_INVALID comes for attachments
         if (type != LLWearableType::WT_INVALID && type != LLWearableType::WT_NONE)

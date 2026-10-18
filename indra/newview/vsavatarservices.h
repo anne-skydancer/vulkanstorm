@@ -6,10 +6,13 @@
 #include <string>
 #include <utility>
 #include <map>
+#include <optional>
+#include "llquaternion.h"
 class LLCharacter;
 class LLAvatarAppearance;
 LLCharacter*                         vs_avatar_character();
 LLAvatarAppearance*                  vs_avatar_appearance();
+U64 vs_avatar_generation();
 const std::map<LLUUID, S32>&         vs_avatar_signaled_animations();
 const std::multimap<LLUUID, LLUUID>& vs_avatar_animation_sources();
 LLUUID                               vs_avatar_root_id();
@@ -19,6 +22,7 @@ bool                                 vs_avatar_stop_motion(const LLUUID&, bool i
 std::vector<LLUUID> vs_avatar_wearable_items(unsigned type);
 
 std::vector<std::pair<unsigned, std::string>> vs_avatar_attachment_points();
+bool vs_avatar_attachment_hud(unsigned point);
 
 struct VSAvatarAttachment
 {
@@ -33,3 +37,7 @@ bool vs_avatar_precise_location(const LLUUID&,LLVector3d&);
 bool vs_avatar_nearby_location(const LLUUID&, LLVector3d&);
 struct VSAvatarLocation { LLUUID id; LLVector3d position; };
 std::vector<VSAvatarLocation> vs_avatar_locations(const LLVector3d& relativeTo, F32 radius);
+
+// Actual self-avatar root pose used by both voice implementations.
+struct VSAvatarVoicePose { LLVector3d position; LLQuaternion rotation; };
+std::optional<VSAvatarVoicePose> vs_avatar_voice_pose();

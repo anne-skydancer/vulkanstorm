@@ -982,11 +982,6 @@ LLIMModel::LLIMSession::LLIMSession(const LLUUID& session_id,
         mSessionType = gAgent.isInGroup(mSessionID) ? GROUP_SESSION : ADHOC_SESSION;
     }
 
-    // Ordinary native text conversations are ready immediately; a missing
-    // platform voice interface must not turn them into a P2P voice handshake.
-    if (gViewerWindow && gViewerWindow->isNativeVulkan() && mType == IM_NOTHING_SPECIAL)
-        mP2PAsAdhocCall = false;
-
     initVoiceChannel(voice_channel_info);
 
     // All participants will be added to the list of people we've recently interacted with.
@@ -1969,26 +1964,13 @@ bool LLIMModel::addToHistory(const LLUUID& session_id,
         chat.mTimeStr = timestr;
         // <FS:Ansariel> [FS communication UI]
         //LLFloaterNearbyChat* nearby_chat = LLFloaterReg::getTypedInstance<LLFloaterNearbyChat>("nearby_chat", LLSD());
+        FSFloaterNearbyChat* nearby_chat = LLFloaterReg::getTypedInstance<FSFloaterNearbyChat>("fs_nearby_chat", LLSD());
+        // Both backends use the original presentation and logging controller.
+        nearby_chat->addMessage(chat, true, LLSD());
 #if VS_NATIVE_VULKAN
         if (gViewerWindow && gViewerWindow->isNativeVulkan())
-        {
-            // The native owner forwards typed chat into the actual nearby
-            // floater while retaining its diagnostic transcript.
-            if (auto* nearby = gViewerWindow->nativeChat())
-            {
-                const std::string from_name = "IM: " + chat.mFromNameGroup + chat.mFromName;
-                nearby->appendChat(chat);
-                if (gSavedPerAccountSettings.getBOOL("LogNearbyChat") && gSavedSettings.getBOOL("FSLogIMInChatHistory"))
-                    LLLogChat::saveHistory("chat", from_name, chat.mFromID, chat.mText);
-            }
-        }
-        else
+            if (auto* transcript = gViewerWindow->nativeChat()) transcript->recordChat(chat);
 #endif
-        {
-            FSFloaterNearbyChat* nearby_chat = LLFloaterReg::getTypedInstance<FSFloaterNearbyChat>("fs_nearby_chat", LLSD());
-            // </FS:Ansariel> [FS communication UI]
-            nearby_chat->addMessage(chat, true, LLSD());
-        }
     }
     // </FS:Ansariel>
 
@@ -2668,6 +2650,9 @@ LLIMMgr::showSessionStartError(
 
     LLSD payload;
     payload["session_id"] = session_id;
+    if (auto* model = LLIMModel::instance().findIMSession(session_id))
+        payload["session_instance"] = model->mErrorIdentity;
+    vs_native_im_stamp_notification(payload);
 
     LLNotificationsUtil::add(
         "ChatterBoxSessionStartError",
@@ -2711,6 +2696,9 @@ LLIMMgr::showSessionForceClose(
 
     LLSD payload;
     payload["session_id"] = session_id;
+    if (auto* model = LLIMModel::instance().findIMSession(session_id))
+        payload["session_instance"] = model->mErrorIdentity;
+    vs_native_im_stamp_notification(payload);
 
     LLNotificationsUtil::add(
         "ForceCloseChatterBoxSession",
@@ -2725,8 +2713,12 @@ LLIMMgr::onConfirmForceCloseError(
     const LLSD& notification,
     const LLSD& response)
 {
-    //only 1 option really
-    LLUUID session_id = notification["payload"]["session_id"];
+    const auto& payload = notification["payload"];
+    if (!vs_native_im_notification_current(payload)) return false;
+    const LLUUID session_id = payload["session_id"].asUUID();
+    auto* model = LLIMModel::instance().findIMSession(session_id);
+    if (!model || !payload.has("session_instance") ||
+        model->mErrorIdentity != payload["session_instance"].asUUID()) return false;
 
     // <FS:Ansariel> [FS communication UI]
     //LLFloater* floater = LLFloaterIMSession::findInstance(session_id);
@@ -2747,13 +2739,13 @@ LLIMMgr::onConfirmForceCloseError(
 LLCallDialogManager::LLCallDialogManager():
 mPreviousSessionlName(""),
 mCurrentSessionlName(""),
-mSession(NULL),
 mOldState(LLVoiceChannel::STATE_READY)
 {
 }
 
 LLCallDialogManager::~LLCallDialogManager()
 {
+    mVoiceChannelChanged.disconnect();
 }
 
 void LLCallDialogManager::initSingleton()
@@ -2769,6 +2761,9 @@ void LLCallDialogManager::onVoiceChannelChanged(const LLUUID &session_id)
 
 void LLCallDialogManager::onVoiceChannelChangedInt(const LLUUID &session_id)
 {
+    mChannelStateChanged.disconnect();
+    mSessionID.setNull();
+    if (!mAccountCurrent()) return;
     LLIMModel::LLIMSession* session = LLIMModel::getInstance()->findIMSession(session_id);
     if(!session)
     {
@@ -2777,13 +2772,16 @@ void LLCallDialogManager::onVoiceChannelChangedInt(const LLUUID &session_id)
         return;
     }
 
-    mSession = session;
-
-    static boost::signals2::connection prev_channel_state_changed_connection;
-    // disconnect previously connected callback to avoid have invalid sSession in onVoiceChannelStateChanged()
-    prev_channel_state_changed_connection.disconnect();
-    prev_channel_state_changed_connection =
-        mSession->mVoiceChannel->setStateChangedCallback(boost::bind(LLCallDialogManager::onVoiceChannelStateChanged, _1, _2, _3, _4));
+    mSessionID = session_id;
+    mChannelStateChanged = session->mVoiceChannel->setStateChangedCallback(
+        [this, expected = session->mVoiceChannel, current = mAccountCurrent](
+            const LLVoiceChannel::EState& old_state, const LLVoiceChannel::EState& new_state,
+            const LLVoiceChannel::EDirection& direction, bool ended_by_agent, const LLUUID& id)
+        {
+            if (!current() || LLVoiceChannel::getChannelByID(id) != expected) return;
+            mSessionID = id; // The real signal supplies its current/remapped ID.
+            onVoiceChannelStateChangedInt(old_state, new_state, direction, ended_by_agent);
+        });
 
     if(mCurrentSessionlName != session->mName)
     {
@@ -2797,13 +2795,13 @@ void LLCallDialogManager::onVoiceChannelChangedInt(const LLUUID &session_id)
 
         //*TODO get rid of duplicated code
         LLSD mCallDialogPayload;
-        mCallDialogPayload["session_id"] = mSession->mSessionID;
-        mCallDialogPayload["session_name"] = mSession->mName;
-        mCallDialogPayload["other_user_id"] = mSession->mOtherParticipantID;
+        mCallDialogPayload["session_id"] = session->mSessionID;
+        mCallDialogPayload["session_name"] = session->mName;
+        mCallDialogPayload["other_user_id"] = session->mOtherParticipantID;
         mCallDialogPayload["old_channel_name"] = mPreviousSessionlName;
         mCallDialogPayload["state"] = LLVoiceChannel::STATE_CALL_STARTED;
-        mCallDialogPayload["disconnected_channel_name"] = mSession->mName;
-        mCallDialogPayload["session_type"] = mSession->mSessionType;
+        mCallDialogPayload["disconnected_channel_name"] = session->mName;
+        mCallDialogPayload["session_type"] = session->mSessionType;
 
         LLOutgoingCallDialog* ocd = LLFloaterReg::getTypedInstance<LLOutgoingCallDialog>("outgoing_call", LLOutgoingCallDialog::OCD_KEY);
         if(ocd)
@@ -2822,6 +2820,14 @@ void LLCallDialogManager::onVoiceChannelStateChanged(const LLVoiceChannel::EStat
 
 void LLCallDialogManager::onVoiceChannelStateChangedInt(const LLVoiceChannel::EState& old_state, const LLVoiceChannel::EState& new_state, const LLVoiceChannel::EDirection& direction, bool ended_by_agent)
 {
+    if (!mAccountCurrent()) return;
+    auto* session = LLIMModel::instance().findIMSession(mSessionID);
+    if (!session || LLVoiceChannel::getChannelByID(mSessionID) != session->mVoiceChannel)
+    {
+        mChannelStateChanged.disconnect();
+        mSessionID.setNull();
+        return;
+    }
     LLSD mCallDialogPayload;
     LLOutgoingCallDialog* ocd = NULL;
 
@@ -2832,13 +2838,13 @@ void LLCallDialogManager::onVoiceChannelStateChangedInt(const LLVoiceChannel::ES
 
     mOldState = new_state;
 
-    mCallDialogPayload["session_id"] = mSession->mSessionID;
-    mCallDialogPayload["session_name"] = mSession->mName;
-    mCallDialogPayload["other_user_id"] = mSession->mOtherParticipantID;
+    mCallDialogPayload["session_id"] = session->mSessionID;
+    mCallDialogPayload["session_name"] = session->mName;
+    mCallDialogPayload["other_user_id"] = session->mOtherParticipantID;
     mCallDialogPayload["old_channel_name"] = mPreviousSessionlName;
     mCallDialogPayload["state"] = new_state;
-    mCallDialogPayload["disconnected_channel_name"] = mSession->mName;
-    mCallDialogPayload["session_type"] = mSession->mSessionType;
+    mCallDialogPayload["disconnected_channel_name"] = session->mName;
+    mCallDialogPayload["session_type"] = session->mSessionType;
     mCallDialogPayload["ended_by_agent"] = ended_by_agent;
 
     switch(new_state)
@@ -3381,6 +3387,7 @@ void LLIncomingCallDialog::onStartIM(void* user_data)
 // static
 void LLIncomingCallDialog::processCallResponse(S32 response, const LLSD &payload)
 {
+    if (!vs_native_im_notification_current(payload)) return;
     if (!gIMMgr || gDisconnected)
         return;
 
@@ -4264,6 +4271,7 @@ void LLIMMgr::inviteToSession(
     payload["type"] = type;
     payload["inv_type"] = inv_type;
     payload["notify_box_type"] = notify_box_type;
+    vs_native_im_stamp_notification(payload);
     payload["question_type"] = question_type;
 
     LL_WARNS("Voice") << "INVITE PAYLOAD: " << payload << LL_ENDL;
@@ -5357,3 +5365,18 @@ LLHTTPRegistration<LLViewerChatterBoxInvitation>
     gHTTPRegistrationMessageChatterBoxInvitation(
         "/message/ChatterBoxInvitation");
 
+
+void LLCallDialogManager::authorizeNativeAccount()
+{
+    retireNativeAccount();
+    mAccountCurrent = vs_native_im_guard();
+}
+void LLCallDialogManager::retireNativeAccount()
+{
+    mAccountCurrent = [] { return false; };
+    mChannelStateChanged.disconnect();
+    mSessionID.setNull();
+    mCurrentSessionlName.clear();
+    mPreviousSessionlName.clear();
+    mOldState = LLVoiceChannel::STATE_READY;
+}

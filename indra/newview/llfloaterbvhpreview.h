@@ -33,8 +33,11 @@
 #include "llcharacter.h"
 #include "llquaternion.h"
 #include "llextendedstatus.h"
+#include <memory>
 
 class LLVOAvatar;
+class LLAvatarAppearance;
+class VSScenePreview;
 class LLViewerJointMesh;
 // <FS> Preview on own avatar
 class LLFloaterBvhPreview;
@@ -57,11 +60,16 @@ public:
     void    pan(F32 right, F32 up);
     virtual bool needsUpdate() { return mNeedsUpdate; }
 
-    LLVOAvatar* getDummyAvatar() { return mDummyAvatar; }
+    LLAvatarAppearance* getDummyAvatar();
+    bool drawNative(const LLRect&);
     // <FS> Preview on own avatar
-    LLVOAvatar* getPreviewAvatar(LLFloaterBvhPreview* floaterp);
+    LLAvatarAppearance* getPreviewAvatar(LLFloaterBvhPreview* floaterp);
 
 protected:
+#if VS_NATIVE_VULKAN
+    std::unique_ptr<VSScenePreview> mNativePreview;
+    LLAvatarAppearance* mNativeAvatar = nullptr;
+#endif
     bool                mNeedsUpdate;
     F32                 mCameraDistance;
     F32                 mCameraYaw;

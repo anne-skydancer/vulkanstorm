@@ -35,6 +35,11 @@
 
 // newview
 #include "llagent.h"
+#include "vsnativeim.h"
+#include "vsavatarservices.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "llavataractions.h"
 #include "llcallingcard.h"          // for LLAvatarTracker
 #include "lllogchat.h"
@@ -54,6 +59,7 @@ FSRadarMenu gFSRadarMenu;
 
 LLContextMenu* FSRadarMenu::createMenu()
 {
+    if (mUUIDs.empty()) return nullptr;
     // set up the callbacks for all of the avatar menu items
     LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
     LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
@@ -63,45 +69,45 @@ LLContextMenu* FSRadarMenu::createMenu()
         // Set up for one person selected menu
 
         const LLUUID& id = mUUIDs.front();
-        registrar.add("Avatar.Profile",                         boost::bind(&LLAvatarActions::showProfile,                  id));
-        registrar.add("Avatar.AddFriend",                       boost::bind(&LLAvatarActions::requestFriendshipDialog,      id));
-        registrar.add("Avatar.RemoveFriend",                    boost::bind(&LLAvatarActions::removeFriendDialog,           id));
-        registrar.add("Avatar.IM",                              boost::bind(&LLAvatarActions::startIM,                      id));
-        registrar.add("Avatar.Call",                            boost::bind(&LLAvatarActions::startCall,                    id));
-        registrar.add("Avatar.OfferTeleport",                   boost::bind(&FSRadarMenu::offerTeleport,                    this));
-        registrar.add("Avatar.TeleportRequest",                 boost::bind(&LLAvatarActions::teleportRequest,              id));
-        registrar.add("Avatar.GroupInvite",                     boost::bind(&LLAvatarActions::inviteToGroup,                id));
-        registrar.add("Avatar.getScriptInfo",                   boost::bind(&LLAvatarActions::getScriptInfo,                id));
-        registrar.add("Avatar.ShowOnMap",                       boost::bind(&LLAvatarActions::showOnMap,                    id));
-        registrar.add("Avatar.Share",                           boost::bind(&LLAvatarActions::share,                        id));
-        registrar.add("Avatar.Pay",                             boost::bind(&LLAvatarActions::pay,                          id));
-        registrar.add("Avatar.BlockUnblock",                    boost::bind(&LLAvatarActions::toggleBlock,                  id));
-        registrar.add("Avatar.ZoomIn",                          boost::bind(&LLAvatarActions::zoomIn,                       id));
-        registrar.add("Avatar.Report",                          boost::bind(&LLAvatarActions::report,                       id));
-        registrar.add("Avatar.Eject",                           boost::bind(&LLAvatarActions::landEject,                    id));
-        registrar.add("Avatar.Freeze",                          boost::bind(&LLAvatarActions::landFreeze,                   id));
-        registrar.add("Avatar.Kick",                            boost::bind(&LLAvatarActions::estateKick,                   id));
-        registrar.add("Avatar.TeleportHome",                    boost::bind(&LLAvatarActions::estateTeleportHome,           id));
-        registrar.add("Avatar.EstateBan",                       boost::bind(&LLAvatarActions::estateBan,                    id));
-        registrar.add("Avatar.Derender",                        boost::bind(&LLAvatarActions::derender,                     id, false));
-        registrar.add("Avatar.DerenderPermanent",               boost::bind(&LLAvatarActions::derender,                     id, true));
-        registrar.add("Avatar.AddToContactSet",                 boost::bind(&FSRadarMenu::addToContactSet,                  this));
-        registrar.add("Avatar.Calllog",                         boost::bind(&LLAvatarActions::viewChatHistory,              id));
-        registrar.add("Nearby.People.TeleportToAvatar",         boost::bind(&FSRadarMenu::teleportToAvatar,                 this));
-        registrar.add("Nearby.People.TrackAvatar",              boost::bind(&FSRadarMenu::onTrackAvatarMenuItemClick,       this));
-        registrar.add("Nearby.People.FaceTowardsAvatar",        boost::bind(&FSRadarMenu::onFaceTowardsAvatarMenuItemClick, this));
-        registrar.add("Nearby.People.SetRenderMode",            boost::bind(&FSRadarMenu::onSetRenderMode,                  this, _2));
-        registrar.add("Nearby.People.SetAvatarMarkColor",       boost::bind(&LLNetMap::setAvatarMarkColor,                  id, _2));
-        registrar.add("Nearby.People.ClearAvatarMarkColor",     boost::bind(&LLNetMap::clearAvatarMarkColor,                id));
-        registrar.add("Nearby.People.ClearAllAvatarMarkColors", boost::bind(&LLNetMap::clearAvatarMarkColors                ));
+        registrar.add("Avatar.Profile",                         vs_native_im_account_callback(boost::bind(&LLAvatarActions::showProfile,                  id)));
+        registrar.add("Avatar.AddFriend",                       vs_native_im_account_callback(boost::bind(&LLAvatarActions::requestFriendshipDialog,      id)));
+        registrar.add("Avatar.RemoveFriend",                    vs_native_im_account_callback(boost::bind(&LLAvatarActions::removeFriendDialog,           id)));
+        registrar.add("Avatar.IM",                              vs_native_im_account_callback(boost::bind(&LLAvatarActions::startIM,                      id)));
+        registrar.add("Avatar.Call",                            vs_native_im_account_callback(boost::bind(&LLAvatarActions::startCall,                    id)));
+        registrar.add("Avatar.OfferTeleport",                   vs_native_im_account_callback(boost::bind(&FSRadarMenu::offerTeleport,                    this)));
+        registrar.add("Avatar.TeleportRequest",                 vs_native_im_account_callback(boost::bind(&LLAvatarActions::teleportRequest,              id)));
+        registrar.add("Avatar.GroupInvite",                     vs_native_im_account_callback(boost::bind(&LLAvatarActions::inviteToGroup,                id)));
+        registrar.add("Avatar.getScriptInfo",                   vs_native_im_account_callback(boost::bind(&LLAvatarActions::getScriptInfo,                id)));
+        registrar.add("Avatar.ShowOnMap",                       vs_native_im_account_callback(boost::bind(&LLAvatarActions::showOnMap,                    id)));
+        registrar.add("Avatar.Share",                           vs_native_im_account_callback(boost::bind(&LLAvatarActions::share,                        id)));
+        registrar.add("Avatar.Pay",                             vs_native_im_account_callback(boost::bind(&LLAvatarActions::pay,                          id)));
+        registrar.add("Avatar.BlockUnblock",                    vs_native_im_account_callback(boost::bind(&LLAvatarActions::toggleBlock,                  id)));
+        registrar.add("Avatar.ZoomIn",                          vs_native_im_account_callback(boost::bind(&LLAvatarActions::zoomIn,                       id)));
+        registrar.add("Avatar.Report",                          vs_native_im_account_callback(boost::bind(&LLAvatarActions::report,                       id)));
+        registrar.add("Avatar.Eject",                           vs_native_im_account_callback(boost::bind(&LLAvatarActions::landEject,                    id)));
+        registrar.add("Avatar.Freeze",                          vs_native_im_account_callback(boost::bind(&LLAvatarActions::landFreeze,                   id)));
+        registrar.add("Avatar.Kick",                            vs_native_im_account_callback(boost::bind(&LLAvatarActions::estateKick,                   id)));
+        registrar.add("Avatar.TeleportHome",                    vs_native_im_account_callback(boost::bind(&LLAvatarActions::estateTeleportHome,           id)));
+        registrar.add("Avatar.EstateBan",                       vs_native_im_account_callback(boost::bind(&LLAvatarActions::estateBan,                    id)));
+        registrar.add("Avatar.Derender",                        vs_native_im_account_callback(boost::bind(&LLAvatarActions::derender,                     id, false)));
+        registrar.add("Avatar.DerenderPermanent",               vs_native_im_account_callback(boost::bind(&LLAvatarActions::derender,                     id, true)));
+        registrar.add("Avatar.AddToContactSet",                 vs_native_im_account_callback(boost::bind(&FSRadarMenu::addToContactSet,                  this)));
+        registrar.add("Avatar.Calllog",                         vs_native_im_account_callback(boost::bind(&LLAvatarActions::viewChatHistory,              id)));
+        registrar.add("Nearby.People.TeleportToAvatar",         vs_native_im_account_callback(boost::bind(&FSRadarMenu::teleportToAvatar,                 this)));
+        registrar.add("Nearby.People.TrackAvatar",              vs_native_im_account_callback(boost::bind(&FSRadarMenu::onTrackAvatarMenuItemClick,       this)));
+        registrar.add("Nearby.People.FaceTowardsAvatar",        vs_native_im_account_callback(boost::bind(&FSRadarMenu::onFaceTowardsAvatarMenuItemClick, this)));
+        registrar.add("Nearby.People.SetRenderMode",            vs_native_im_account_callback(boost::bind(&FSRadarMenu::onSetRenderMode,                  this, _2)));
+        registrar.add("Nearby.People.SetAvatarMarkColor",       vs_native_im_account_callback(boost::bind(&LLNetMap::setAvatarMarkColor,                  id, _2)));
+        registrar.add("Nearby.People.ClearAvatarMarkColor",     vs_native_im_account_callback(boost::bind(&LLNetMap::clearAvatarMarkColor,                id)));
+        registrar.add("Nearby.People.ClearAllAvatarMarkColors", vs_native_im_account_callback(boost::bind(&LLNetMap::clearAvatarMarkColors                )));
 
-        enable_registrar.add("Avatar.EnableItem",               boost::bind(&FSRadarMenu::enableContextMenuItem,            this, _2));
-        enable_registrar.add("Avatar.CheckItem",                boost::bind(&FSRadarMenu::checkContextMenuItem,             this, _2));
-        enable_registrar.add("Avatar.VisibleZoomIn",            boost::bind(&LLAvatarActions::canZoomIn,                    id));
-        enable_registrar.add("Avatar.VisibleFreezeEject",       boost::bind(&LLAvatarActions::canLandFreezeOrEject,         id));
-        enable_registrar.add("Avatar.VisibleKickTeleportHome",  boost::bind(&LLAvatarActions::canEstateKickOrTeleportHome,  id));
-        enable_registrar.add("Nearby.People.CheckRenderMode",   boost::bind(&FSRadarMenu::checkSetRenderMode,               this, _2));
-        enable_registrar.add("Nearby.People.CanFaceTowardsAvatar", boost::bind(&FSRadarMenu::canFaceTowardsAvatar,          this));
+        enable_registrar.add("Avatar.EnableItem",               vs_native_im_account_callback(boost::bind(&FSRadarMenu::enableContextMenuItem,            this, _2)));
+        enable_registrar.add("Avatar.CheckItem",                vs_native_im_account_callback(boost::bind(&FSRadarMenu::checkContextMenuItem,             this, _2)));
+        enable_registrar.add("Avatar.VisibleZoomIn",            vs_native_im_account_callback(boost::bind(&LLAvatarActions::canZoomIn,                    id)));
+        enable_registrar.add("Avatar.VisibleFreezeEject",       vs_native_im_account_callback(boost::bind(&LLAvatarActions::canLandFreezeOrEject,         id)));
+        enable_registrar.add("Avatar.VisibleKickTeleportHome",  vs_native_im_account_callback(boost::bind(&LLAvatarActions::canEstateKickOrTeleportHome,  id)));
+        enable_registrar.add("Nearby.People.CheckRenderMode",   vs_native_im_account_callback(boost::bind(&FSRadarMenu::checkSetRenderMode,               this, _2)));
+        enable_registrar.add("Nearby.People.CanFaceTowardsAvatar", vs_native_im_account_callback(boost::bind(&FSRadarMenu::canFaceTowardsAvatar,          this)));
 
         // create the context menu from the XUI
         return createFromFile("menu_fs_radar.xml");
@@ -110,34 +116,34 @@ LLContextMenu* FSRadarMenu::createMenu()
     {
         // Set up for multi-selected People
 
-        // registrar.add("Avatar.AddFriend",                    boost::bind(&LLAvatarActions::requestFriendshipDialog,              mUUIDs)); // *TODO: unimplemented
+        // registrar.add("Avatar.AddFriend",                    vs_native_im_account_callback(boost::bind(&LLAvatarActions::requestFriendshipDialog,              mUUIDs))); // *TODO: unimplemented
 
         // <FS:ND> Explicit pass of LLUUID::null to make GCC happy
-        // registrar.add("Avatar.IM",                               boost::bind(&LLAvatarActions::startConference,                      mUUIDs));
-        registrar.add("Avatar.IM",                              boost::bind(&LLAvatarActions::startConference,                      mUUIDs, LLUUID::null));
+        // registrar.add("Avatar.IM",                               vs_native_im_account_callback(boost::bind(&LLAvatarActions::startConference,                      mUUIDs)));
+        registrar.add("Avatar.IM",                              vs_native_im_account_callback(boost::bind(&LLAvatarActions::startConference,                      mUUIDs, LLUUID::null)));
         // <FS:ND>
 
-        registrar.add("Avatar.Call",                            boost::bind(&LLAvatarActions::startAdhocCall,                       mUUIDs, LLUUID::null));
-        registrar.add("Avatar.OfferTeleport",                   boost::bind(&FSRadarMenu::offerTeleport,                            this));
-        registrar.add("Avatar.RemoveFriend",                    boost::bind(&LLAvatarActions::removeFriendsDialog,                  mUUIDs));
-        // registrar.add("Avatar.Share",                        boost::bind(&LLAvatarActions::startIM,                              mUUIDs)); // *TODO: unimplemented
-        // registrar.add("Avatar.Pay",                          boost::bind(&LLAvatarActions::pay,                                  mUUIDs)); // *TODO: unimplemented
-        registrar.add("Avatar.Eject",                           boost::bind(&LLAvatarActions::landEjectMultiple,                    mUUIDs));
-        registrar.add("Avatar.Freeze",                          boost::bind(&LLAvatarActions::landFreezeMultiple,                   mUUIDs));
-        registrar.add("Avatar.Kick",                            boost::bind(&LLAvatarActions::estateKickMultiple,                   mUUIDs));
-        registrar.add("Avatar.TeleportHome",                    boost::bind(&LLAvatarActions::estateTeleportHomeMultiple,           mUUIDs));
-        registrar.add("Avatar.EstateBan",                       boost::bind(&LLAvatarActions::estateBanMultiple,                    mUUIDs));
-        registrar.add("Avatar.Derender",                        boost::bind(&LLAvatarActions::derenderMultiple,                     mUUIDs, false));
-        registrar.add("Avatar.DerenderPermanent",               boost::bind(&LLAvatarActions::derenderMultiple,                     mUUIDs, true));
-        registrar.add("Avatar.AddToContactSet",                 boost::bind(&FSRadarMenu::addToContactSet,                          this));
-        registrar.add("Nearby.People.SetRenderMode",            boost::bind(&FSRadarMenu::onSetRenderMode,                          this, _2));
-        registrar.add("Nearby.People.SetAvatarMarkColor",       boost::bind(&LLNetMap::setAvatarMarkColors,                         mUUIDs, _2));
-        registrar.add("Nearby.People.ClearAvatarMarkColor",     boost::bind(&LLNetMap::clearAvatarMarkColors,                       mUUIDs));
-        registrar.add("Nearby.People.ClearAllAvatarMarkColors", boost::bind(&LLNetMap::clearAvatarMarkColors                        ));
+        registrar.add("Avatar.Call",                            vs_native_im_account_callback(boost::bind(&LLAvatarActions::startAdhocCall,                       mUUIDs, LLUUID::null)));
+        registrar.add("Avatar.OfferTeleport",                   vs_native_im_account_callback(boost::bind(&FSRadarMenu::offerTeleport,                            this)));
+        registrar.add("Avatar.RemoveFriend",                    vs_native_im_account_callback(boost::bind(&LLAvatarActions::removeFriendsDialog,                  mUUIDs)));
+        // registrar.add("Avatar.Share",                        vs_native_im_account_callback(boost::bind(&LLAvatarActions::startIM,                              mUUIDs))); // *TODO: unimplemented
+        // registrar.add("Avatar.Pay",                          vs_native_im_account_callback(boost::bind(&LLAvatarActions::pay,                                  mUUIDs))); // *TODO: unimplemented
+        registrar.add("Avatar.Eject",                           vs_native_im_account_callback(boost::bind(&LLAvatarActions::landEjectMultiple,                    mUUIDs)));
+        registrar.add("Avatar.Freeze",                          vs_native_im_account_callback(boost::bind(&LLAvatarActions::landFreezeMultiple,                   mUUIDs)));
+        registrar.add("Avatar.Kick",                            vs_native_im_account_callback(boost::bind(&LLAvatarActions::estateKickMultiple,                   mUUIDs)));
+        registrar.add("Avatar.TeleportHome",                    vs_native_im_account_callback(boost::bind(&LLAvatarActions::estateTeleportHomeMultiple,           mUUIDs)));
+        registrar.add("Avatar.EstateBan",                       vs_native_im_account_callback(boost::bind(&LLAvatarActions::estateBanMultiple,                    mUUIDs)));
+        registrar.add("Avatar.Derender",                        vs_native_im_account_callback(boost::bind(&LLAvatarActions::derenderMultiple,                     mUUIDs, false)));
+        registrar.add("Avatar.DerenderPermanent",               vs_native_im_account_callback(boost::bind(&LLAvatarActions::derenderMultiple,                     mUUIDs, true)));
+        registrar.add("Avatar.AddToContactSet",                 vs_native_im_account_callback(boost::bind(&FSRadarMenu::addToContactSet,                          this)));
+        registrar.add("Nearby.People.SetRenderMode",            vs_native_im_account_callback(boost::bind(&FSRadarMenu::onSetRenderMode,                          this, _2)));
+        registrar.add("Nearby.People.SetAvatarMarkColor",       vs_native_im_account_callback(boost::bind(&LLNetMap::setAvatarMarkColors,                         mUUIDs, _2)));
+        registrar.add("Nearby.People.ClearAvatarMarkColor",     vs_native_im_account_callback(boost::bind(&LLNetMap::clearAvatarMarkColors,                       mUUIDs)));
+        registrar.add("Nearby.People.ClearAllAvatarMarkColors", vs_native_im_account_callback(boost::bind(&LLNetMap::clearAvatarMarkColors                        )));
 
-        enable_registrar.add("Avatar.EnableItem",               boost::bind(&FSRadarMenu::enableContextMenuItem,                    this, _2));
-        enable_registrar.add("Avatar.VisibleFreezeEject",       boost::bind(&LLAvatarActions::canLandFreezeOrEjectMultiple,         mUUIDs, false));
-        enable_registrar.add("Avatar.VisibleKickTeleportHome",  boost::bind(&LLAvatarActions::canEstateKickOrTeleportHomeMultiple,  mUUIDs, false));
+        enable_registrar.add("Avatar.EnableItem",               vs_native_im_account_callback(boost::bind(&FSRadarMenu::enableContextMenuItem,                    this, _2)));
+        enable_registrar.add("Avatar.VisibleFreezeEject",       vs_native_im_account_callback(boost::bind(&LLAvatarActions::canLandFreezeOrEjectMultiple,         mUUIDs, false)));
+        enable_registrar.add("Avatar.VisibleKickTeleportHome",  vs_native_im_account_callback(boost::bind(&LLAvatarActions::canEstateKickOrTeleportHomeMultiple,  mUUIDs, false)));
 
         // create the context menu from the XUI
         return createFromFile("menu_fs_radar_multiselect.xml");
@@ -146,6 +152,7 @@ LLContextMenu* FSRadarMenu::createMenu()
 
 bool FSRadarMenu::enableContextMenuItem(const LLSD& userdata)
 {
+    if (mUUIDs.empty()) return false;
     std::string item = userdata.asString();
 
     // Note: can_block and can_delete is used only for one person selected menu
@@ -249,6 +256,7 @@ bool FSRadarMenu::enableContextMenuItem(const LLSD& userdata)
 
 bool FSRadarMenu::checkContextMenuItem(const LLSD& userdata)
 {
+    if (mUUIDs.empty()) return false;
     std::string item = userdata.asString();
     const LLUUID& id = mUUIDs.front();
 
@@ -271,19 +279,29 @@ void FSRadarMenu::teleportToAvatar()
 // AO: wrapper for functionality managed by LLPanelPeople, because it manages the nearby avatar list.
 // Will only work for avatars within radar range.
 {
+    if (mUUIDs.empty()) return;
     LLAvatarActions::teleportTo(mUUIDs.front());
 }
 
 // Ansariel: Avatar tracking feature
 void FSRadarMenu::onTrackAvatarMenuItemClick()
 {
+    if (mUUIDs.empty()) return;
     LLAvatarActions::track(mUUIDs.front());
 }
 
 void FSRadarMenu::onFaceTowardsAvatarMenuItemClick()
 {
-    LLVOAvatar* avatar = dynamic_cast<LLVOAvatar*>(gObjectList.findObject(mUUIDs.front()));
+    if (mUUIDs.empty()) return;
     FSAvatarAlignBase* floater = FSAvatarAlignBase::getActive();
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        if (floater) floater->faceAvatar(mUUIDs.front());
+        return;
+    }
+#endif
+    LLVOAvatar* avatar = dynamic_cast<LLVOAvatar*>(gObjectList.findObject(mUUIDs.front()));
     if (floater && avatar)
     {
         floater->faceAvatar(avatar);
@@ -292,6 +310,15 @@ void FSRadarMenu::onFaceTowardsAvatarMenuItemClick()
 
 bool FSRadarMenu::canFaceTowardsAvatar()
 {
+    if (mUUIDs.empty()) return false;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        LLVector3d position;
+        return vs_avatar_precise_location(mUUIDs.front(), position) &&
+            dist_vec(position, gAgent.getPositionGlobal()) <= FSAvatarAlignBase::MAX_FACE_DISTANCE;
+    }
+#endif
     LLVOAvatar* avatar = dynamic_cast<LLVOAvatar*>(gObjectList.findObject(mUUIDs.front()));
     return avatar && !avatar->isDead() &&
            dist_vec(avatar->getPositionAgent(), gAgent.getPositionAgent()) <= FSAvatarAlignBase::MAX_FACE_DISTANCE;
@@ -327,6 +354,13 @@ void FSRadarMenu::onSetRenderMode(const LLSD& userdata)
     {
         const LLUUID& avatar_id = *it;
 
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            FSAvatarRenderPersistence::instance().setAvatarRenderSettings(avatar_id, render_setting);
+            continue;
+        }
+#endif
         LLVOAvatar *avatarp = dynamic_cast<LLVOAvatar*>(gObjectList.findObject(avatar_id));
         if (avatarp)
         {
@@ -347,6 +381,7 @@ void FSRadarMenu::onSetRenderMode(const LLSD& userdata)
 
 bool FSRadarMenu::checkSetRenderMode(const LLSD& userdata)
 {
+    if (mUUIDs.empty()) return false;
     LLVOAvatar::VisualMuteSettings render_setting;
     U32 mode = userdata.asInteger();
     switch (mode)
@@ -369,3 +404,31 @@ bool FSRadarMenu::checkSetRenderMode(const LLSD& userdata)
 }
 
 } // namespace FSFloaterRadarMenu
+
+bool FSFloaterRadarMenu::FSRadarMenu::isNativeCallback(const std::string& name, const LLSD& data)
+{
+    if (name == "Avatar.EnableItem")
+    {
+        const std::string item = data.asString();
+        return item == "can_block" || item == "can_add" || item == "can_delete" || item == "can_call" ||
+            item == "can_show_on_map" || item == "can_offer_teleport" || item == "can_request_teleport" ||
+            item == "can_open_inventory" || item == "can_pay" || item == "can_callog";
+    }
+    if (name == "Avatar.CheckItem") return data.asString() == "is_blocked";
+    if (name == "Nearby.People.SetRenderMode" || name == "Nearby.People.CheckRenderMode")
+        return data.asString() == "0" || data.asString() == "1" || data.asString() == "2";
+    if (name == "Nearby.People.SetAvatarMarkColor")
+        return data.asString() == "Red" || data.asString() == "Green" || data.asString() == "Blue" ||
+            data.asString() == "Purple" || data.asString() == "LtYellow";
+    return name == "Avatar.Profile" || name == "Avatar.AddFriend" || name == "Avatar.RemoveFriend" ||
+        name == "Avatar.IM" || name == "Avatar.Call" || name == "Avatar.OfferTeleport" || name == "Avatar.TeleportRequest" ||
+        name == "Avatar.GroupInvite" || name == "Avatar.getScriptInfo" || name == "Avatar.ShowOnMap" || name == "Avatar.Share" ||
+        name == "Avatar.Pay" || name == "Avatar.BlockUnblock" || name == "Avatar.ZoomIn" || name == "Avatar.Report" ||
+        name == "Avatar.Eject" || name == "Avatar.Freeze" || name == "Avatar.Kick" || name == "Avatar.TeleportHome" ||
+        name == "Avatar.EstateBan" || name == "Avatar.Derender" || name == "Avatar.DerenderPermanent" ||
+        name == "Avatar.AddToContactSet" || name == "Avatar.Calllog" || name == "Avatar.VisibleZoomIn" ||
+        name == "Avatar.VisibleFreezeEject" || name == "Avatar.VisibleKickTeleportHome" ||
+        name == "Nearby.People.TeleportToAvatar" || name == "Nearby.People.TrackAvatar" ||
+        name == "Nearby.People.FaceTowardsAvatar" || name == "Nearby.People.CanFaceTowardsAvatar" ||
+        name == "Nearby.People.ClearAvatarMarkColor" || name == "Nearby.People.ClearAllAvatarMarkColors";
+}

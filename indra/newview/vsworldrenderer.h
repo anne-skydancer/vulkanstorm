@@ -34,6 +34,22 @@ public:
         float detail=0,planar=3,sharpness=8,regionWidth=256;
         bool paint=false;
     };
+    // Numeric factors retain LLRender::eBlendFactor's stable protocol values.
+    struct Blend
+    {
+        unsigned source=7,destination=9,sourceAlpha=0,destinationAlpha=9,writeMask=15;
+        bool operator==(const Blend& b) const
+        {return source==b.source && destination==b.destination && sourceAlpha==b.sourceAlpha && destinationAlpha==b.destinationAlpha && writeMask==b.writeMask;}
+        bool operator!=(const Blend& b) const {return !(*this==b);}
+    };
+    struct AvatarTiming
+    {
+        std::array<std::uint8_t,16> identity{};
+        std::function<bool()> current;
+        std::function<void(float)> publish;
+        std::shared_ptr<const void> residency;
+    };
+    enum class DepthCompare { LessEqual, Always, Greater, GreaterEqual };
     struct Packet
     {
         Mesh mesh;
@@ -43,12 +59,24 @@ public:
         std::shared_ptr<const VSMaterial::State> surface;
         std::array<float,4> color{1,1,1,1};
         bool fullbright = false;
+        bool constantColor=false; // Original flat debug/highlight fragment output; ignores vertex tint.
+        std::optional<VSMaterial::Transform> highlightUV; // Original textured highlightF; independent of lighting/vertex tint.
         bool alpha = false;
+        std::optional<Blend> blend;
         bool masked = false;
         float               alphaCutoff     = .5f;
         bool                doubleSided     = false;
+        bool cullFront=false;
+        std::shared_ptr<const std::array<float,16>> projectionOverride;
+        std::optional<bool> cull; // Preview passes retain their explicit original culling state.
+        bool alphaOnly=false; // Reserved GL_ALPHA sources feed exclusion/debug passes, not ordinary scene color.
+        bool glowOnly=false; // Original emissive pass; writes genuine separate floating-point glow.
         bool overlay=false; // Shared world feedback, after scene transparency and before HUD.
+        float screenPointPixels=0; // Triangle-encoded square points, independent of optional largePoints.
+        bool clearDepthBefore=false;
+        std::optional<bool> depthWrite;
         float screenLinePixels=0; // Triangle-encoded lines; portable physical-pixel width.
+        DepthCompare depthCompare=DepthCompare::LessEqual;
         bool depthTest=true; // Reference debug feedback can draw a translucent occluded pass.
         bool depthWriteAlpha=false; // Reference renderRect writes depth for its translucent walls.
         bool background = false; // Clip-space sky, drawn before depth-tested geometry.
@@ -60,7 +88,13 @@ public:
         // Region-local vertices never contain large grid coordinates. Apply the
         // current floating-origin translation at submission, without reupload.
         std::array<float,4> regionOffset{};
+        std::shared_ptr<const AvatarTiming> avatarTiming;
+        std::shared_ptr<const AvatarTiming> attachmentTiming;
         std::array<std::uint8_t,16> objectIdentity{};
+        // Complete source identity for picking and UI feedback. Anonymous
+        // preview geometry leaves this empty and cannot authorize object actions.
+        std::array<std::uint64_t,5> objectSource{}; // address, port, local ID, region incarnation, account generation
+        std::array<std::uint8_t,16> objectAccount{};
         std::uint64_t objectGeneration=0,faceGeneration=0;
         unsigned                    faceIndex = 0;
         int                         gltfNode = -1, gltfPrimitive = -1;
@@ -73,6 +107,9 @@ public:
         std::array<float,4> ambient{.25f,.25f,.25f,0};
         float                hudZoom = 1;
         bool wireframe = false;
+        bool glow = true;
+        bool preserveOrder = false; // Immediate preview controllers own their original pass order.
+        std::optional<std::uint64_t> timingFrame;
         VSEnvironmentState environment;
     };
     struct SurfaceHit
@@ -95,6 +132,8 @@ public:
         std::uint64_t residentMeshBytes=0,meshBudgetBytes=0,meshAllocationRefusals=0;
         std::uint64_t meshInputRejections           = 0;
         std::uint64_t residentGeometrySnapshotBytes = 0;
+        std::uint64_t avatarTimingQueries=0,avatarTimingRefusals=0,avatarTimingCompletions=0;
+        bool avatarTimingSupported=false;
         double cpuMilliseconds=0;
     };
     VSWorldRenderer(Diligent::IRenderDevice*, Diligent::IDeviceContext*, std::size_t meshBudgetBytes = 256 * 1024 * 1024);
@@ -106,7 +145,12 @@ public:
                            unsigned attributes=VSWorldContracts::Position|VSWorldContracts::Normal|VSWorldContracts::UV0);
     void draw(Diligent::ITextureView*, unsigned width, unsigned height,
               const View&, const std::vector<Packet>&,const std::function<void()>& beforeHud = {});
+    // Borrowed current world attachment. The UI submission retains its texture
+    // through its own fence; a world resize cannot invalidate an active draw.
+    Diligent::ITextureView* depthView() const;
+    Diligent::ITextureView* glowView() const;
     void retire();
+    bool pending() const;
     Statistics statistics() const;
     static VSWorldContracts::Geometry geometryDescription(const Mesh&);
     // Borrowed exact publication snapshots; retain the Mesh while using them.

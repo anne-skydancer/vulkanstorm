@@ -33,6 +33,7 @@
 
 #include "llfloatersnapshot.h" // FIXME: replace with a snapshot storage model
 #include "llpanelsnapshot.h"
+#include "vsnativeim.h"
 #include "llsnapshotlivepreview.h"
 #include "llviewercontrol.h" // gSavedSettings
 #include "llviewerwindow.h"
@@ -192,7 +193,10 @@ void LLPanelSnapshotLocal::onSaveFlyoutCommit(LLUICtrl* ctrl)
     LLFloaterSnapshot* floater = LLFloaterSnapshot::getInstance();
 
     floater->notify(LLSD().with("set-working", true));
-    floater->saveLocal((boost::bind(&LLPanelSnapshotLocal::onLocalSaved, this)), (boost::bind(&LLPanelSnapshotLocal::onLocalCanceled, this)));
+    const auto weak = getHandle();
+    auto alive = [weak] { return weak.get() != nullptr; };
+    floater->saveLocal(vs_native_im_lifetime_callback(alive, [this] { onLocalSaved(); }),
+                       vs_native_im_lifetime_callback(alive, [this] { onLocalCanceled(); }));
 }
 
 void LLPanelSnapshotLocal::onLocalSaved()
@@ -221,3 +225,9 @@ LLSnapshotModel::ESnapshotType LLPanelSnapshotLocal::getSnapshotType()
     return LLSnapshotModel::SNAPSHOT_LOCAL;
 }
 // </FS:Ansariel>
+
+// Exact private factory identity for the native shared snapshot graph.
+bool vs_snapshot_local_type(const std::type_info& type)
+{
+    return type == typeid(LLPanelSnapshotLocal);
+}

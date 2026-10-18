@@ -32,7 +32,8 @@
 
 #include "llviewerprecompiledheaders.h" // Precompiled headers
 
-#include "llfloateruipreview.h"         // Own header
+#include "llfloateruipreview.h"
+#include "vsnativeim.h"         // Own header
 
 // Internal utility
 #include "lldiriterator.h"
@@ -133,6 +134,7 @@ public:
 class LLFloaterUIPreview : public LLFloater
 {
 public:
+    U64 mPickerRevision=0;
     // Setup
     LLFloaterUIPreview(const LLSD& key);
     virtual ~LLFloaterUIPreview();
@@ -603,6 +605,7 @@ void LLFloaterUIPreview::onClickShowRectangles(const LLSD& data)
 // Close click handler -- delete my displayed floater if it exists
 void LLFloaterUIPreview::onClose(bool app_quitting)
 {
+    ++mPickerRevision;
     if(!app_quitting && mDisplayedFloater)
     {
         onClickCloseDisplayedFloater(PRIMARY_FLOATER);
@@ -1065,12 +1068,14 @@ void LLFloaterUIPreview::onClickEditFloater()
 // Respond to button click to browse for an executable with which to edit XML files
 void LLFloaterUIPreview::onClickBrowseForEditor()
 {
+    const auto weak=getHandle();const auto current=vs_native_im_guard();const auto revision=++mPickerRevision;
     // Let the user choose an executable through the file picker dialog box
-    LLFilePickerReplyThread::startPicker(boost::bind(&LLFloaterUIPreview::getExecutablePath, this, _1), LLFilePicker::FFLOAD_EXE, false);
+    LLFilePickerReplyThread::startPicker([this,weak,current,revision](const std::vector<std::string>& files,LLFilePicker::ELoadFilter,LLFilePicker::ESaveFilter){if(weak.get() && current() && revision==mPickerRevision && !files.empty())getExecutablePath(files);}, LLFilePicker::FFLOAD_EXE, false);
 }
 
 void LLFloaterUIPreview::getExecutablePath(const std::vector<std::string>& filenames)
 {
+    if(filenames.empty())return;
     // put the selected path into text field
     const std::string chosen_path = filenames[0];
     std::string executable_path = chosen_path;
@@ -1124,12 +1129,14 @@ void LLFloaterUIPreview::getExecutablePath(const std::vector<std::string>& filen
 // Respond to button click to browse for a VLT-generated diffs file
 void LLFloaterUIPreview::onClickBrowseForDiffs()
 {
+    const auto weak=getHandle();const auto current=vs_native_im_guard();const auto revision=++mPickerRevision;
     // create load dialog box
-    LLFilePickerReplyThread::startPicker(boost::bind(&LLFloaterUIPreview::getDiffsFilePath, this, _1), LLFilePicker::FFLOAD_XML, false);
+    LLFilePickerReplyThread::startPicker([this,weak,current,revision](const std::vector<std::string>& files,LLFilePicker::ELoadFilter,LLFilePicker::ESaveFilter){if(weak.get() && current() && revision==mPickerRevision && !files.empty())getDiffsFilePath(files);}, LLFilePicker::FFLOAD_XML, false);
 }
 
 void LLFloaterUIPreview::getDiffsFilePath(const std::vector<std::string>& filenames)
 {
+    if(filenames.empty())return;
     // put the selected path into text field
     const std::string chosen_path = filenames[0];
     mDiffPathTextBox->setText(std::string(chosen_path));    // copy the path to the executable to the textfield for display and later fetching
@@ -1762,4 +1769,9 @@ void LLFloaterUIPreviewUtil::registerFloater()
 {
     LLFloaterReg::add("ui_preview", "floater_ui_preview.xml",
         &LLFloaterReg::build<LLFloaterUIPreview>);
+}
+
+bool LLFloaterUIPreviewUtil::isNativeType(const std::type_info& type)
+{
+    return type==typeid(LLFloaterUIPreview) || type==typeid(LLPreviewedFloater) || type==typeid(LLOverlapPanel);
 }

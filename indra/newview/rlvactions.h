@@ -311,6 +311,7 @@ public:
      * Returns true if the user can sit on the specified object (see canGroundSit() for sitting on land)
      */
     static bool canSit(const LLViewerObject* pObj, const LLVector3& posOffset = LLVector3::zero);
+    static bool canSit(const VSObjectContext& object, const LLVector3& posOffset = LLVector3::zero);
 
     /*
      * Returns true if the user can see their in-world location

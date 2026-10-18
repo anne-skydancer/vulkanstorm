@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloatersnapshot.h"
+#include "vsnativeim.h"
 
 #include "llfloaterreg.h"
 #include "llfloaterflickr.h" // <FS:Ansariel> Share to Flickr
@@ -1162,8 +1163,12 @@ bool LLFloaterSnapshot::postBuild()
     }
     childSetCommitCallback("filters_combobox", ImplBase::onClickFilter, this);
 
-    LLWebProfile::setImageUploadResultCallback(boost::bind(&Impl::onSnapshotUploadFinished, this, _1));
-    LLPostCard::setPostResultCallback(boost::bind(&Impl::onSendingPostcardFinished, this, _1));
+    const auto weak = getHandle();
+    auto alive = [weak] { return weak.get() != nullptr; };
+    LLWebProfile::setImageUploadResultCallback(vs_native_im_lifetime_callback(alive,
+        [this](bool ok) { Impl::onSnapshotUploadFinished(this, ok); }));
+    LLPostCard::setPostResultCallback(vs_native_im_lifetime_callback(alive,
+        [this](bool ok) { Impl::onSendingPostcardFinished(this, ok); }));
 
     mThumbnailPlaceholder = getChild<LLUICtrl>("thumbnail_placeholder");
 
@@ -1219,7 +1224,7 @@ void LLFloaterSnapshotBase::draw()
 
     if (previewp && !isMinimized() && mThumbnailPlaceholder->getVisible())
     {
-        if(previewp->getThumbnailImage())
+        if(previewp->hasThumbnailImage())
         {
             bool working = impl->getStatus() == ImplBase::STATUS_WORKING;
             const LLRect& thumbnail_rect = getThumbnailPlaceholderRect();
@@ -1234,13 +1239,10 @@ void LLFloaterSnapshotBase::draw()
             S32 offset_x = thumbnail_rect.mLeft + local_offset_x;
             S32 offset_y = thumbnail_rect.mBottom + local_offset_y;
 
-            gGL.matrixMode(LLRender::MM_MODELVIEW);
-            // Apply floater transparency to the texture unless the floater is focused.
+                // Apply floater transparency to the texture unless the floater is focused.
             F32 alpha = getTransparencyType() == TT_ACTIVE ? 1.0f : getCurrentTransparency();
             LLColor4 color = working ? LLColor4::grey4 : LLColor4::white;
-            gl_draw_scaled_image(offset_x, offset_y,
-                    thumbnail_w, thumbnail_h,
-                    previewp->getThumbnailImage(), color % alpha);
+            previewp->drawThumbnail(offset_x,offset_y,thumbnail_w,thumbnail_h,color % alpha);
 
             previewp->drawPreviewRect(offset_x, offset_y) ;
 

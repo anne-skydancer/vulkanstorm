@@ -32,6 +32,7 @@ class HoverLifecycleTest(unittest.TestCase):
 #include <cassert>
 #include <iterator>
 #include <iostream>
+#include <functional>
 #include <memory>
 #include <set>
 #include <vector>
@@ -40,6 +41,7 @@ struct LLView;
 template<class T> struct LLHandle {
  T* ptr=nullptr; std::shared_ptr<bool> alive;
  T* get() const { return alive && *alive ? ptr : nullptr; }
+ bool isDead()const{return !get();}
  bool operator<(const LLHandle& other) const { return std::less<T*>()(ptr,other.ptr); }
 };
 struct LLRect {
@@ -107,6 +109,10 @@ struct LLPopupView { using popup_list_t=std::vector<LLHandle<LLView>>; popup_lis
 };
 constexpr int UI_CURSOR_ARROW=0;
 struct Window { void setCursor(int) {} };
+struct LLTool:LLMouseHandler{};
+struct LLToolPie:LLTool {static bool instanceExists(){return false;}static LLToolPie*getInstance(){static LLToolPie p;return &p;}static auto&instance(){return *getInstance();}bool hasNativeMediaCapture(){return false;}};
+struct LLToolMgr{static bool instanceExists(){return false;}static auto&instance(){static LLToolMgr m;return m;}LLTool*nativeCurrentTool(){return nullptr;}};
+struct VSNativeSession{enum class Phase{Connected};static std::shared_ptr<VSNativeSession>active(){return {};}auto phase(){return Phase::Connected;}std::function<bool()>accountGuard(){return []{return true;};}};
 struct LLViewerWindow {
  using view_handle_set_t=std::set<LLHandle<LLView>>;
  LLView* mRootView=nullptr; LLPopupView* mPopupView=nullptr; view_handle_set_t mMouseHoverViews;
@@ -114,14 +120,17 @@ struct LLViewerWindow {
  struct Point { int mX=0,mY=0; } mCurrentMousePoint;
  void updateMouseHoverViews(S32,S32,MASK,bool);
  void nativeHoverUpdate(MASK);
+ void updateToolTip(bool,LLView*,LLMouseHandler*,MASK){}
  void updateUI(){nativeHoverUpdate(0);}
  Point getCurrentMouse()const{return mCurrentMousePoint;}
 };
+LLViewerWindow*gViewerWindow=nullptr;
+bool nativeMediaHover(LLViewerWindow&,LLViewerWindow::Point,MASK){return false;}
 ''' + body + native_body + '\nvoid require(bool value,const char*) { assert(value); }\n' + r'''
 int main() {
  LLView root, first, second; LLPopupView popups; root.add(first); root.add(second);
  first.rect={0,0,40,40}; second.rect={50,0,90,40};
- LLViewerWindow viewer; viewer.mRootView=&root; viewer.mPopupView=&popups;
+ LLViewerWindow viewer;gViewerWindow=&viewer; viewer.mRootView=&root; viewer.mPopupView=&popups;
  viewer.updateMouseHoverViews(10,10,0,true); assert(first.entered==1 && first.highlight);
  viewer.updateMouseHoverViews(10,10,0,true); assert(first.entered==1 && first.left==0);
  viewer.updateMouseHoverViews(60,10,0,true); assert(!first.highlight && first.left==1 && second.entered==1);

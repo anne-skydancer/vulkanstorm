@@ -6,8 +6,94 @@
  */
 #ifndef VS_UI_PRIMITIVE_H
 #define VS_UI_PRIMITIVE_H
+#include "llrender.h"
+#include "llrender2dutils.h"
+#include <stdexcept>
 namespace VSUIPrimitive
 {
+class NativePrimitive
+{
+    using Vertex = std::array<F32, 6>;
+    U32 mMode = LLRender::TRIANGLES;
+    std::size_t mCount = 0;
+    Vertex mFirst{}, mPrevious{}, mBeforePrevious{};
+    std::array<F32, 2> mOffset{};
+    std::array<F32, 2> mSavedOffset{};
+    bool mPushed = false;
+
+    static void line(const Vertex& a, const Vertex& b) { LLRender2D::nativeLine(a, b); }
+public:
+    void pushUIMatrix()
+    {
+        if (mPushed) throw std::logic_error("Nested UI primitive transform");
+        mSavedOffset = mOffset; mPushed = true;
+    }
+    void popUIMatrix()
+    {
+        if (!mPushed) throw std::logic_error("Unbalanced UI primitive transform");
+        mOffset = mSavedOffset; mPushed = false;
+    }
+    void translateUI(F32 x, F32 y, F32 z)
+    {
+        if (z != 0.f) throw std::logic_error("UI primitive requires a planar transform");
+        mOffset[0] += x; mOffset[1] += y;
+    }
+    void color4fv(const F32* color) { gGL.color4fv(color); }
+    void begin(U32 mode) { mMode = mode; mCount = 0; }
+    void vertex2fv(const F32* value) { vertex2f(value[0],value[1]); }
+    void vertex2i(S32 x, S32 y) { vertex2f(F32(x), F32(y)); }
+    void vertex2f(F32 x, F32 y)
+    {
+        const auto& c = LLRender2D::nativeColor();
+        const Vertex v{x + mOffset[0], y + mOffset[1], c.mV[0], c.mV[1], c.mV[2], c.mV[3]};
+        switch (mMode)
+        {
+        case LLRender::TRIANGLE_FAN:
+            if (mCount >= 2) LLRender2D::nativeTriangle({mFirst, mPrevious, v});
+            break;
+        case LLRender::TRIANGLE_STRIP:
+            if (mCount >= 2)
+            {
+                if (mCount & 1) LLRender2D::nativeTriangle({mPrevious, mBeforePrevious, v});
+                else LLRender2D::nativeTriangle({mBeforePrevious, mPrevious, v});
+            }
+            break;
+        case LLRender::TRIANGLES:
+            if (mCount % 3 == 2) LLRender2D::nativeTriangle({mBeforePrevious, mPrevious, v});
+            break;
+        case LLRender::LINES:
+            if (mCount & 1) line(mPrevious, v);
+            break;
+        case LLRender::LINE_STRIP:
+        case LLRender::LINE_LOOP:
+            if (mCount) line(mPrevious, v);
+            break;
+        default: throw std::logic_error("Unsupported UI primitive topology");
+        }
+        if (!mCount) mFirst = v;
+        mBeforePrevious = mPrevious; mPrevious = v; ++mCount;
+    }
+    void end()
+    {
+        if (mMode == LLRender::LINE_LOOP && mCount > 1) line(mPrevious, mFirst);
+    }
+};
+
+// Scoped submission of the same immediate UI vertices through either peer.
+// This is deliberately local to 2D UI; gGL.begin still rejects native-world
+// geometry accidentally submitted by an unwired OpenGL controller.
+class Draw
+{
+    const bool mNative=LLRender2D::isNativeUI();
+    NativePrimitive mPrimitive;
+public:
+    void begin(U32 mode) { if(mNative)mPrimitive.begin(mode);else gGL.begin(mode); }
+    void end() { if(mNative)mPrimitive.end();else gGL.end(); }
+    void vertex2f(F32 x,F32 y) {if(mNative)mPrimitive.vertex2f(x,y);else gGL.vertex2f(x,y);}
+    void vertex2i(S32 x,S32 y) {if(mNative)mPrimitive.vertex2i(x,y);else gGL.vertex2i(x,y);}
+    void vertex2fv(const F32* v) {vertex2f(v[0],v[1]);}
+};
+
 template<class Draw>
 void gl_arc_2d(Draw& draw, F32 center_x, F32 center_y, F32 radius, S32 steps, bool filled, F32 start_angle, F32 end_angle)
 {
@@ -206,5 +292,252 @@ void gl_rect_2d_simple(Draw& draw, S32 width, S32 height)
         draw.vertex2i(width, 0);
     draw.end();
 }
+template<class Draw>
+void segmented_fragment(Draw& draw,const LLRect& rect,
+    const S32 texture_width,
+    const S32 texture_height,
+    const S32 border_size,
+    const F32 start_fragment,
+    const F32 end_fragment,
+    const U32 edges)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_UI;
+    const S32 left = rect.mLeft;
+    const S32 right = rect.mRight;
+    const S32 top = rect.mTop;
+    const S32 bottom = rect.mBottom;
+    S32 width = llabs(right - left);
+    S32 height = llabs(top - bottom);
+
+    draw.pushUIMatrix();
+
+    draw.translateUI((F32)left, (F32)bottom, 0.f);
+    LLVector2 border_uv_scale((F32)border_size / (F32)texture_width, (F32)border_size / (F32)texture_height);
+
+    if (border_uv_scale.mV[VX] > 0.5f)
+    {
+        border_uv_scale *= 0.5f / border_uv_scale.mV[VX];
+    }
+    if (border_uv_scale.mV[VY] > 0.5f)
+    {
+        border_uv_scale *= 0.5f / border_uv_scale.mV[VY];
+    }
+
+    F32 border_scale = llmin((F32)border_size, (F32)width * 0.5f, (F32)height * 0.5f);
+    LLVector2 border_width_left = ((edges & (~(U32)ROUNDED_RECT_RIGHT)) != 0) ? LLVector2(border_scale, 0.f) : LLVector2::zero;
+    LLVector2 border_width_right = ((edges & (~(U32)ROUNDED_RECT_LEFT)) != 0) ? LLVector2(border_scale, 0.f) : LLVector2::zero;
+    LLVector2 border_height_bottom = ((edges & (~(U32)ROUNDED_RECT_TOP)) != 0) ? LLVector2(0.f, border_scale) : LLVector2::zero;
+    LLVector2 border_height_top = ((edges & (~(U32)ROUNDED_RECT_BOTTOM)) != 0) ? LLVector2(0.f, border_scale) : LLVector2::zero;
+    LLVector2 width_vec((F32)width, 0.f);
+    LLVector2 height_vec(0.f, (F32)height);
+
+    F32 middle_start = border_scale / (F32)width;
+    F32 middle_end = 1.f - middle_start;
+
+    F32 u_min;
+    F32 u_max;
+    LLVector2 x_min;
+    LLVector2 x_max;
+
+    draw.begin(LLRender::TRIANGLES);
+    {
+        if (start_fragment < middle_start)
+        {
+            u_min = (start_fragment / middle_start)         * border_uv_scale.mV[VX];
+            u_max = llmin(end_fragment / middle_start, 1.f) * border_uv_scale.mV[VX];
+            x_min = (start_fragment / middle_start)         * border_width_left;
+            x_max = llmin(end_fragment / middle_start, 1.f) * border_width_left;
+
+            // draw bottom left
+            draw.texCoord2f(u_min, 0.f);
+            draw.vertex2fv(x_min.mV);
+
+            draw.texCoord2f(border_uv_scale.mV[VX], 0.f);
+            draw.vertex2fv(x_max.mV);
+
+            draw.texCoord2f(u_max, border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + border_height_bottom).mV);
+
+            draw.texCoord2f(u_min, 0.f);
+            draw.vertex2fv(x_min.mV);
+
+            draw.texCoord2f(u_max, border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + border_height_bottom).mV);
+
+            draw.texCoord2f(u_min, border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + border_height_bottom).mV);
+
+            // draw left
+            draw.texCoord2f(u_min, border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + border_height_bottom).mV);
+
+            draw.texCoord2f(u_max, border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + border_height_bottom).mV);
+
+            draw.texCoord2f(u_max, 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(u_min, border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + border_height_bottom).mV);
+
+            draw.texCoord2f(u_max, 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(u_min, 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + height_vec - border_height_top).mV);
+
+            // draw top left
+            draw.texCoord2f(u_min, 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(u_max, 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(u_max, 1.f);
+            draw.vertex2fv((x_max + height_vec).mV);
+
+            draw.texCoord2f(u_min, 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(u_max, 1.f);
+            draw.vertex2fv((x_max + height_vec).mV);
+
+            draw.texCoord2f(u_min, 1.f);
+            draw.vertex2fv((x_min + height_vec).mV);
+        }
+
+        if (end_fragment > middle_start || start_fragment < middle_end)
+        {
+            x_min = border_width_left + ((llclamp(start_fragment, middle_start, middle_end) - middle_start)) * width_vec;
+            x_max = border_width_left + ((llclamp(end_fragment, middle_start, middle_end) - middle_start)) * width_vec;
+
+            // draw bottom middle
+            draw.texCoord2f(border_uv_scale.mV[VX], 0.f);
+            draw.vertex2fv(x_min.mV);
+
+            draw.texCoord2f(1.f - border_uv_scale.mV[VX], 0.f);
+            draw.vertex2fv((x_max).mV);
+
+            draw.texCoord2f(1.f - border_uv_scale.mV[VX], border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + border_height_bottom).mV);
+
+            draw.texCoord2f(border_uv_scale.mV[VX], 0.f);
+            draw.vertex2fv(x_min.mV);
+
+            draw.texCoord2f(1.f - border_uv_scale.mV[VX], border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + border_height_bottom).mV);
+
+            draw.texCoord2f(border_uv_scale.mV[VX], border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + border_height_bottom).mV);
+
+            // draw middle
+            draw.texCoord2f(border_uv_scale.mV[VX], border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + border_height_bottom).mV);
+
+            draw.texCoord2f(1.f - border_uv_scale.mV[VX], border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + border_height_bottom).mV);
+
+            draw.texCoord2f(1.f - border_uv_scale.mV[VX], 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(border_uv_scale.mV[VX], border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + border_height_bottom).mV);
+
+            draw.texCoord2f(1.f - border_uv_scale.mV[VX], 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(border_uv_scale.mV[VX], 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + height_vec - border_height_top).mV);
+
+            // draw top middle
+            draw.texCoord2f(border_uv_scale.mV[VX], 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(1.f - border_uv_scale.mV[VX], 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(1.f - border_uv_scale.mV[VX], 1.f);
+            draw.vertex2fv((x_max + height_vec).mV);
+
+            draw.texCoord2f(border_uv_scale.mV[VX], 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(1.f - border_uv_scale.mV[VX], 1.f);
+            draw.vertex2fv((x_max + height_vec).mV);
+
+            draw.texCoord2f(border_uv_scale.mV[VX], 1.f);
+            draw.vertex2fv((x_min + height_vec).mV);
+        }
+
+        if (end_fragment > middle_end)
+        {
+            u_min = 1.f         - ((1.f - llmax(0.f, (start_fragment - middle_end) / middle_start)) * border_uv_scale.mV[VX]);
+            u_max = 1.f         - ((1.f - ((end_fragment - middle_end) / middle_start)) * border_uv_scale.mV[VX]);
+            x_min = width_vec   - ((1.f - llmax(0.f, (start_fragment - middle_end) / middle_start)) * border_width_right);
+            x_max = width_vec   - ((1.f - ((end_fragment - middle_end) / middle_start)) * border_width_right);
+
+            // draw bottom right
+            draw.texCoord2f(u_min, 0.f);
+            draw.vertex2fv((x_min).mV);
+
+            draw.texCoord2f(u_max, 0.f);
+            draw.vertex2fv(x_max.mV);
+
+            draw.texCoord2f(u_max, border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + border_height_bottom).mV);
+
+            draw.texCoord2f(u_min, 0.f);
+            draw.vertex2fv((x_min).mV);
+
+            draw.texCoord2f(u_max, border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + border_height_bottom).mV);
+
+            draw.texCoord2f(u_min, border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + border_height_bottom).mV);
+
+            // draw right
+            draw.texCoord2f(u_min, border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + border_height_bottom).mV);
+
+            draw.texCoord2f(u_max, border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + border_height_bottom).mV);
+
+            draw.texCoord2f(u_max, 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(u_min, border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + border_height_bottom).mV);
+
+            draw.texCoord2f(u_max, 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(u_min, 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + height_vec - border_height_top).mV);
+
+            // draw top right
+            draw.texCoord2f(u_min, 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(u_max, 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_max + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(u_max, 1.f);
+            draw.vertex2fv((x_max + height_vec).mV);
+
+            draw.texCoord2f(u_min, 1.f - border_uv_scale.mV[VY]);
+            draw.vertex2fv((x_min + height_vec - border_height_top).mV);
+
+            draw.texCoord2f(u_max, 1.f);
+            draw.vertex2fv((x_max + height_vec).mV);
+
+            draw.texCoord2f(u_min, 1.f);
+            draw.vertex2fv((x_min + height_vec).mV);
+        }
+    }
+    draw.end();
+
+    draw.popUIMatrix();
+}
+
 }
 #endif

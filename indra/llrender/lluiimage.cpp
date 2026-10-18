@@ -97,7 +97,8 @@ void LLUIImage::drawRotated(S32 x, S32 y, S32 width, S32 height, F32 degrees,
 void LLUIImage::draw3D(const LLVector3& origin_agent, const LLVector3& x_axis, const LLVector3& y_axis,
                         const LLRect& rect, const LLColor4& color)
 {
-    if (mNativeDraw) throw std::logic_error("3D drawing is not admitted for native UI images");
+    if (mNativeDraw && !mNativeWorldDraw) throw std::logic_error("Native world image publisher is unavailable");
+    if (rect.getWidth()<=0 || rect.getHeight()<=0) return;
     F32 border_scale = 1.f;
     F32 border_height = (1.f - mScaleRegion.getHeight()) * getHeight();
     F32 border_width = (1.f - mScaleRegion.getWidth()) * getWidth();
@@ -113,6 +114,21 @@ void LLUIImage::draw3D(const LLVector3& origin_agent, const LLVector3& x_axis, c
          }
     }
 
+    if (mNativeWorldDraw)
+    {
+        const LLRectf center_uv_rect(mClipRegion.mLeft + mScaleRegion.mLeft * mClipRegion.getWidth(),
+            mClipRegion.mBottom + mScaleRegion.mTop * mClipRegion.getHeight(),
+            mClipRegion.mLeft + mScaleRegion.mRight * mClipRegion.getWidth(),
+            mClipRegion.mBottom + mScaleRegion.mBottom * mClipRegion.getHeight());
+        const LLRectf center_draw_rect(border_width * border_scale * 0.5f / (F32)rect.getWidth(),
+            (rect.getHeight() - (border_height * border_scale * 0.5f)) / (F32)rect.getHeight(),
+            (rect.getWidth() - (border_width * border_scale * 0.5f)) / (F32)rect.getWidth(),
+            (border_height * border_scale * 0.5f) / (F32)rect.getHeight());
+        mNativeWorldDraw(origin_agent + ((F32)rect.mLeft*x_axis) + ((F32)rect.mBottom*y_axis),
+            (F32)rect.getWidth()*x_axis,(F32)rect.getHeight()*y_axis,color,
+            mClipRegion,center_uv_rect,center_draw_rect);
+        return;
+    }
     LLRender2D::pushMatrix();
     {
         LLVector3 rect_origin = origin_agent + ((F32)rect.mLeft * x_axis) + ((F32)rect.mBottom * y_axis);
@@ -202,3 +218,20 @@ namespace LLInitParam
     }
 }
 
+
+void LLUIImage::drawNativeTriangles(const native_triangles_t& triangle) const
+{
+    if(!mNativeDraw||!mNativeTrianglesDraw)throw std::logic_error("Native image triangle publisher is unavailable");
+    mNativeTrianglesDraw(triangle);
+}
+
+void LLUIImage::drawPhysical(S32 x,S32 y,S32 width,S32 height,const LLColor4& color) const
+{
+    if (mNativeDraw)
+    {
+        if (!mNativePhysicalDraw) throw std::logic_error("Native raw-pixel image publisher is unavailable");
+        mNativePhysicalDraw(x,y,width,height,color,false,mClipRegion,mScaleRegion,mScaleStyle==SCALE_INNER);
+        return;
+    }
+    draw(x,y,width,height,color);
+}

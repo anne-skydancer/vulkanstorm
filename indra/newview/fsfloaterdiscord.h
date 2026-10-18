@@ -28,6 +28,7 @@
 #define FS_FSFLOATERDISCORD_H
 
 #include "llfloater.h"
+#include "llevents.h"
 
 class LLCheckBoxCtrl;
 class LLComboBox;
@@ -64,6 +65,7 @@ private:
     LLScrollListCtrl*   mBlacklistedNames;
     LLLineEditor*       mBlacklistEntry;
     LLTextBox*          mStatusText;
+    LLTempBoundListener mStateListener,mInfoListener;
 };
 
 #endif // FS_FSFLOATERDISCORD_H

@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "lldrawable.h"
 #if VS_VULKAN_DIAGNOSTICS
 #include "vsparitybaseline.h"
 #include "vsparityscene.h"
@@ -1589,6 +1590,7 @@ LLTrace::BlockTimerStatHandle FTM_FRAME("Frame");
 bool LLAppViewer::initNativeVulkanLogin()
 {
     gPipeline.initializeRenderDebugFeatures(); // Shared CPU policy; no GL pipeline initialization.
+    gPipeline.initializeRenderTypes();
 #if VS_NATIVE_VULKAN
     mNativeSession = VSNativeSession::create();
 #endif
@@ -1622,6 +1624,9 @@ bool LLAppViewer::initNativeVulkanLogin()
     mSerialNumber = generateSerialNumber();
     initSLURLHandler();
     if (!initWindow()) return false;
+    // Construct the same CPU performance settings owner after the native
+    // window exists; avatar query policy must not use uninitialized tunables.
+    (void)LLPerfStats::StatsRecorder::getInstance();
     LLUI::getInstance()->mHelpImpl = LLViewerHelp::getInstance();
     LLUrlFloaterDispatchHandler::registerInDispatcher();
     LLFolderViewItem::initClass();
@@ -1655,6 +1660,9 @@ bool LLAppViewer::initNativeVulkanLogin()
     // These shared media request clients own queues and HTTP only. Native
     // object adapters supply simulator identities without creating GL objects.
     LLVOVolume::initClass();
+    LLPostProcess::initClass(); // Same CPU-only legacy effect model as ordinary startup.
+    gMeshRepo.init();
+    mNativeMeshInitialized=true;
     LLVoiceChannel::initClass();
     LLVoiceClient::initParamSingleton(gServicePump);
     LLAgentLanguage::init();
@@ -1691,6 +1699,13 @@ static void pump_native_account_services(bool connected)
 
 bool LLAppViewer::frameNativeVulkanLogin()
 {
+    struct EndPerformanceFrame {~EndPerformanceFrame(){LLPerfStats::StatsRecorder::endFrame();}} endPerformanceFrame;
+    LLPerfStats::RecordSceneTime frameTime(LLPerfStats::StatType_t::RENDER_FRAME);
+    std::optional<LLPerfStats::RecordSceneTime> idleTime;idleTime.emplace(LLPerfStats::StatType_t::RENDER_IDLE);
+    LLTimer frameTimer;
+    LLPerfStats::updateClass();
+    if(LLPerfStats::tunables.userAutoTuneEnabled && LLPerfStats::tunables.tuningFlag!=LLPerfStats::Tunables::Nothing)LLPerfStats::tunables.applyUpdates();
+
 #if VS_NATIVE_VULKAN
     update_native_statistics();
 #endif
@@ -1709,10 +1724,15 @@ bool LLAppViewer::frameNativeVulkanLogin()
     gViewerWindow->getWindow()->gatherInput();
     if (gKeyboard) gKeyboard->scanKeyboard();
 #if VS_NATIVE_VULKAN
+    if(mNativeSession && mNativeSession->regionReady() && gFocusMgr.getAppHasFocus() && !gFocusMgr.focusLocked())gViewerInput.scanMouse();
+#endif
+#if VS_NATIVE_VULKAN
     if (mNativeSession && mNativeSession->regionReady() && gFocusMgr.getAppHasFocus() && !gFocusMgr.focusLocked() &&
         gSavedPerAccountSettings.getBOOL("FSCrouchToggle") && gSavedPerAccountSettings.getBOOL("FSCrouchToggleStatus"))
         gAgent.moveUp(-1);
 #endif
+    if(gSimulateMemLeak)
+        if(auto* probe=LLFloaterReg::findTypedInstance<LLFloaterMemLeak>("mem_leaking"))probe->idle();
     LLEventPumps::instance().obtain("mainloop").post(LLSD());
     llcoro::suspend();
     LLCoros::instance().rethrow();
@@ -1722,6 +1742,7 @@ bool LLAppViewer::frameNativeVulkanLogin()
     if(sTextureCache)sTextureCache->update(0);
     if(sTextureFetch)sTextureFetch->update(0);
     if (gServicePump) { gServicePump->pump(); gServicePump->callback(); }
+    if(mNativeMeshInitialized){gMeshRepo.update();gMeshRepo.notifyUploadServices();}
     // Shared text UI views and CPU controllers advance through their idle queue.
     // Only services initialized for this native account register callbacks here.
     gIdleCallbacks.callFunctions();
@@ -1740,6 +1761,8 @@ bool LLAppViewer::frameNativeVulkanLogin()
 #if VS_NATIVE_VULKAN
         else if (LLStartUp::getStartupState() == STATE_WORLD_INIT && mNativeSession) mNativeSession->begin();
         if (mNativeSession) mNativeSession->tick();
+        // The reference idle loop checks actual idle/away policy once after networking.
+        if(!gDisconnected)idle_afk_check();
         // Match idle(): locomotion/turn edges belong to this frame, even when
         // throttling, freezing or packet loss prevents a successful update.
         // Persistent away/fly/mouselook bits are retained by the shared method.
@@ -1748,6 +1771,8 @@ bool LLAppViewer::frameNativeVulkanLogin()
         if (gAudiop && mNativeSession && mNativeSession->phase() == VSNativeSession::Phase::Connected)
         {
             audio_update_volume(false);
+            audio_update_listener();
+            audio_update_wind(false);
             gAudiop->idle();
         }
 #endif
@@ -1758,7 +1783,44 @@ bool LLAppViewer::frameNativeVulkanLogin()
             LLViewerMediaFocus::instance().update();
         }
 #endif
+#if VS_NATIVE_VULKAN
+        if (LLStartUp::getStartupState() == STATE_STARTED)
+        {
+            // The shared controllers may take an offscreen snapshot here.
+            // Run them once, before UI packet collection/presentation begins.
+            LLFloaterSnapshot::update();
+            LLFloaterSimpleSnapshot::update();
+            LLFloaterFlickr::update();
+            FSFloaterPrimfeed::update();
+        }
+#endif
+#if VS_NATIVE_VULKAN
+        // Match the shared simulation's visibility-frame clock once per normal
+        // world frame. Offscreen snapshots and diagnostic subcaptures do not
+        // pass through this application presentation boundary.
+        if (LLStartUp::getStartupState()==STATE_STARTED &&
+            (VSVulkanContext::headlessReplay() ||
+             (!gViewerWindow->getWindow()->getMinimized() && gViewerWindow->getWindow()->getVisible())))
+            LLDrawable::incrementVisible();
+#endif
+        idleTime.reset();
         gViewerWindow->drawNativeUI();
+    }
+    idleTime.reset();
+    if(!LLApp::isExiting() && (!gViewerWindow->getWindow()->getVisible() || !gFocusMgr.getAppHasFocus()))
+    {
+        static LLCachedControl<S32> background(gSavedSettings,"BackgroundYieldTime",40);
+        const S32 milliseconds=llclamp(S32(background),gViewerWindow->getWindow()->getMinimized()?1:0,1000);
+        if(milliseconds>0){LLPerfStats::RecordSceneTime sleep(LLPerfStats::StatType_t::RENDER_SLEEP);ms_sleep(milliseconds);}
+    }
+    static LLCachedControl<U32> maxFPS(gSavedSettings,"FramePerSecondLimit");
+    static LLCachedControl<bool> limitFPS(gSavedSettings,"FSLimitFramerate");
+    if(limitFPS && LLStartUp::getStartupState()==STATE_STARTED && !gTeleportDisplay && !logoutRequestSent() && maxFPS>F_APPROXIMATELY_ZERO)
+    {
+        LLPerfStats::RecordSceneTime limit(LLPerfStats::StatType_t::RENDER_FPSLIMIT);
+        const F32 minimum=1.f/F32(maxFPS);
+        const S32 milliseconds=llclamp(S32((minimum-frameTimer.getElapsedTimeF64())*1000.f),0,1000);
+        if(milliseconds>0)ms_sleep(milliseconds);
     }
     const F32 quit_after = gSavedSettings.getF32("QuitAfterSeconds");
     if (quit_after > 0.f && gRenderStartTime.getElapsedTimeF32() > quit_after) requestQuit();
@@ -1784,6 +1846,7 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
     if (gMessageSystem) gMessageSystem->setMessageAdmission({});
     mNativeSession.reset();
 #endif
+    if(mNativeMeshInitialized){gMeshRepo.shutdown();mNativeMeshInitialized=false;}
     if(sTextureFetch)
     {
         sTextureFetch->deleteAllRequests();
@@ -1873,6 +1936,7 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
     gAgentCamera.cleanup();
     LLSingletonBase::deleteAll();
     LL_INFOS("AppInit") << "Native Vulkan normal login shut down" << LL_ENDL;
+    LLPostProcess::cleanupClass();
     return true;
 }
 
@@ -1883,14 +1947,13 @@ bool LLAppViewer::frame()
     if (mVulkanDiagnostic) return mVulkanDiagnostic->frame();
     if (vs_parity_scene_frame()) return LLApp::isExiting();
 #endif
-    if (mNativeVulkanLogin) return frameNativeVulkanLogin();
     bool ret = false;
 
     if (gSimulateMemLeak)
     {
         try
         {
-            ret = doFrame();
+            ret = mNativeVulkanLogin ? frameNativeVulkanLogin() : doFrame();
         }
         catch (const LLContinueError&)
         {
@@ -1911,7 +1974,7 @@ bool LLAppViewer::frame()
     {
         try
         {
-            ret = doFrame();
+            ret = mNativeVulkanLogin ? frameNativeVulkanLogin() : doFrame();
         }
         catch (const LLContinueError&)
         {

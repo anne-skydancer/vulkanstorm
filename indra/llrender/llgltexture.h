@@ -106,6 +106,10 @@ public:
     void storeBoostLevel(); // Stores the current mBoostLevel in mPrevBoostLevel
     // </FS:minerjr> [FIRE-36016]
 
+    // A real CPU-decoded local image can supply shared upload metadata without
+    // owning an OpenGL texture. Native rendering owns its separate image.
+    void setCPUImageExtent(U32 width, U32 height, U8 components);
+    void invalidateCPUImage() { mCPUImageDiscard = -1; }
     S32 getFullWidth() const { return mFullWidth; }
     S32 getFullHeight() const { return mFullHeight; }
 
@@ -190,6 +194,8 @@ protected:
     // <FS:minerjr> [FIRE-36016] - Re-added Store/Restore boost levels of selected objects
     S32 mPrevBoostLevel;            // enum describing priority level (Previous Value for BOOST_SELECTION restore)
     // </FS:minerjr> [FIRE-36016]
+    bool mCPUImage = false;
+    S8 mCPUImageDiscard = -1;
     U32 mFullWidth;
     U32 mFullHeight;
     bool mUseMipMaps;

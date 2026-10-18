@@ -280,3 +280,18 @@ LLSnapshotModel::ESnapshotType LLPanelSnapshot::getSnapshotType()
 {
     return LLSnapshotModel::SNAPSHOT_WEB;
 }
+
+extern bool vs_snapshot_inventory_type(const std::type_info&);
+extern bool vs_snapshot_local_type(const std::type_info&);
+extern bool vs_snapshot_options_type(const std::type_info&);
+extern bool vs_snapshot_postcard_type(const std::type_info&);
+extern bool vs_snapshot_profile_type(const std::type_info&);
+
+bool LLPanelSnapshot::isNativeInternalType(const std::type_info& type)
+{
+    return vs_snapshot_inventory_type(type) ||
+           vs_snapshot_local_type(type) ||
+           vs_snapshot_options_type(type) ||
+           vs_snapshot_postcard_type(type) ||
+           vs_snapshot_profile_type(type);
+}

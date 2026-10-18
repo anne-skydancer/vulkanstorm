@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
 
 #include "llvoavatarself.h"
 #include "llvoavatar.h"
@@ -3265,6 +3269,16 @@ LLViewerTexLayerSet* LLVOAvatarSelf::getLayerSet(EBakedTextureIndex baked_index)
 // static
 void LLVOAvatarSelf::onCustomizeStart(bool disable_camera_switch)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (!owner->regionReady() || !owner->appearance()) return;
+        owner->appearance()->beginEditing();
+        if (gSavedSettings.getBOOL("AppearanceCameraMovement") && !disable_camera_switch) gAgentCamera.changeCameraToCustomizeAvatar();
+        return;
+    }
+#endif
+
     if (isAgentAvatarValid())
     {
         LLUIUsage::instance().logCommand("Avatar.CustomizeStart");
@@ -3289,6 +3303,20 @@ void LLVOAvatarSelf::onCustomizeStart(bool disable_camera_switch)
 // static
 void LLVOAvatarSelf::onCustomizeEnd(bool disable_camera_switch)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (!owner->regionReady() || !owner->appearance()) return;
+        if (gAgentCamera.cameraCustomizeAvatar() && !disable_camera_switch)
+        {
+            gAgentCamera.changeCameraToDefault();
+            gAgentCamera.resetView();
+        }
+        owner->appearance()->endEditing();
+        return;
+    }
+#endif
+
 
     if (isAgentAvatarValid())
     {

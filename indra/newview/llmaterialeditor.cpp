@@ -27,6 +27,12 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llmaterialeditor.h"
+#include "vstaskinventoryobject.h"
+#include "vsmaterialselection.h"
+#include "vsregioncontext.h"
+#include "vsnativeim.h"
+#include "llrender2dutils.h"
+#include <utility>
 
 #include "llagent.h"
 #include "llagentbenefits.h"
@@ -67,6 +73,17 @@
 #include <boost/iostreams/device/array.hpp>
 #include <boost/iostreams/stream.hpp>
 
+namespace
+{
+struct VSMaterialLoadRequest
+{
+    LLHandle<LLFloater> view;
+    std::function<bool()> current;
+    LLUUID asset;
+    U64 revision;
+};
+}
+
 const std::string MATERIAL_BASE_COLOR_DEFAULT_NAME = "Base Color";
 const std::string MATERIAL_NORMAL_DEFAULT_NAME = "Normal";
 const std::string MATERIAL_METALLIC_DEFAULT_NAME = "Metallic Roughness";
@@ -94,15 +111,28 @@ S32 LLMaterialEditor::mOverrideObjectTE = -1;
 bool LLMaterialEditor::mOverrideInProgress = false;
 bool LLMaterialEditor::mSelectionNeedsUpdate = true;
 
+std::vector<LLHandle<LLFloater>> LLFloaterComboOptions::sNativeOwners;
 LLFloaterComboOptions::LLFloaterComboOptions()
-    : LLFloater(LLSD())
+    : LLFloater(LLSD()), mCurrent(vs_native_im_guard())
 {
+    if (LLRender2D::isNativeUI()) sNativeOwners.push_back(getHandle());
     buildFromFile("floater_combobox_ok_cancel.xml");
 }
 
 LLFloaterComboOptions::~LLFloaterComboOptions()
 {
-
+    const auto owner = getHandle();
+    std::erase(sNativeOwners, owner);
+}
+void LLFloaterComboOptions::retireNativeAccount()
+{
+    const auto owners = std::exchange(sNativeOwners, {});
+    for (const auto& owner : owners)
+        if (auto* view = owner.get())
+        {
+            view->closeFloater(true);
+            if (owner.get()) delete owner.get();
+        }
 }
 
 bool LLFloaterComboOptions::postBuild()
@@ -167,14 +197,22 @@ LLFloaterComboOptions* LLFloaterComboOptions::showUI(
 
 void LLFloaterComboOptions::onConfirm()
 {
-    mCallback(mComboOptions->getSimple(), mComboOptions->getCurrentIndex());
-    closeFloater();
+    if (!mCurrent()) { closeFloater(); return; }
+    const auto owner = getHandle();
+    const auto label = mComboOptions->getSimple();
+    const auto index = mComboOptions->getCurrentIndex();
+    auto callback = std::move(mCallback);
+    if (callback) callback(label, index);
+    if (auto* floater = owner.get()) floater->closeFloater();
 }
 
 void LLFloaterComboOptions::onCancel()
 {
-    mCallback(std::string(), -1);
-    closeFloater();
+    if (!mCurrent()) { closeFloater(); return; }
+    const auto owner = getHandle();
+    auto callback = std::move(mCallback);
+    if (callback) callback(std::string(), -1);
+    if (auto* floater = owner.get()) floater->closeFloater();
 }
 
 class LLMaterialEditorCopiedCallback : public LLInventoryCallback
@@ -187,7 +225,10 @@ public:
         : mBuffer(buffer),
           mOldKey(old_key),
           mHasUnsavedChanges(has_unsaved_changes)
-    {}
+    {
+        if (auto* owner = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", old_key))
+            mOwner = owner->getHandle();
+    }
 
     LLMaterialEditorCopiedCallback(
         const LLSD &old_key,
@@ -195,25 +236,31 @@ public:
         : mOldKey(old_key),
           mNewName(new_name),
           mHasUnsavedChanges(false)
-    {}
+    {
+        if (auto* owner = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", old_key))
+            mOwner = owner->getHandle();
+    }
 
     virtual void fire(const LLUUID& inv_item_id)
     {
+        if (!mCurrent()) return;
         if (!mNewName.empty())
         {
             // making a copy from a notecard doesn't change name, do it now
             LLViewerInventoryItem* item = gInventory.getItem(inv_item_id);
-            if (item->getName() != mNewName)
+            if (item && item->getName() != mNewName)
             {
                 LLSD updates;
                 updates["name"] = mNewName;
                 update_inventory_item(inv_item_id, updates, NULL);
             }
         }
-        LLMaterialEditor::finishSaveAs(mOldKey, inv_item_id, mBuffer, mHasUnsavedChanges);
+        LLMaterialEditor::finishSaveAs(mOldKey, inv_item_id, mBuffer, mHasUnsavedChanges, mOwner);
     }
 
 private:
+    std::function<bool()> mCurrent = vs_native_im_guard();
+    LLHandle<LLFloater> mOwner;
     std::string mBuffer;
     LLSD mOldKey;
     std::string mNewName;
@@ -229,7 +276,9 @@ struct LLSelectedTEGetMatData : public LLSelectedTEFunctor
 {
     LLSelectedTEGetMatData(bool for_override);
 
-    bool apply(LLViewerObject* objectp, S32 te_index);
+    bool apply(LLViewerObject* objectp, S32 te_index) override
+    { return apply(VSMaterialObject(objectp), te_index); }
+    bool apply(VSMaterialObject objectp, S32 te_index);
 
     bool mIsOverride;
     bool mIdenticalTexColor;
@@ -242,7 +291,7 @@ struct LLSelectedTEGetMatData : public LLSelectedTEFunctor
     LLUUID mTexEmissiveId;
     LLUUID mTexNormalId;
     LLUUID mObjectId;
-    LLViewerObject* mObject = nullptr;
+    VSMaterialObject mObject;
     S32 mObjectTE;
     LLUUID mMaterialId;
     LLPointer<LLGLTFMaterial> mMaterial;
@@ -259,7 +308,7 @@ LLSelectedTEGetMatData::LLSelectedTEGetMatData(bool for_override)
     , mFirst(true)
 {}
 
-bool LLSelectedTEGetMatData::apply(LLViewerObject* objectp, S32 te_index)
+bool LLSelectedTEGetMatData::apply(VSMaterialObject objectp, S32 te_index)
 {
     if (!objectp)
     {
@@ -269,6 +318,7 @@ bool LLSelectedTEGetMatData::apply(LLViewerObject* objectp, S32 te_index)
     mMaterialId = mat_id;
     bool can_use = mIsOverride ? objectp->permModify() : objectp->permCopy();
     LLTextureEntry *tep = objectp->getTE(te_index);
+    if (objectp.task().native() && mat_id.notNull() && (!tep || !tep->getGLTFMaterial())) return false;
     // We might want to disable this entirely if at least
     // something in selection is no-copy or no modify
     // or has no base material
@@ -352,14 +402,16 @@ class LLSelectedTEUpdateOverrides: public LLSelectedNodeFunctor
 public:
     LLSelectedTEUpdateOverrides(LLMaterialEditor* me) : mEditor(me) {}
 
-    virtual bool apply(LLSelectNode* nodep);
+    bool apply(LLSelectNode* nodep) override
+    { VSMaterialNode node(nodep); return apply(&node); }
+    bool apply(VSMaterialNode* nodep);
 
     LLMaterialEditor* mEditor;
 };
 
-bool LLSelectedTEUpdateOverrides::apply(LLSelectNode* nodep)
+bool LLSelectedTEUpdateOverrides::apply(VSMaterialNode* nodep)
 {
-    LLViewerObject* objectp = nodep->getObject();
+    auto objectp = nodep->getObject();
     if (!objectp)
     {
         return false;
@@ -405,6 +457,11 @@ LLMaterialEditor::LLMaterialEditor(const LLSD& key)
 
 LLMaterialEditor::~LLMaterialEditor()
 {
+    mSelectionUpdateSlot.disconnect();
+    mMaterialUpdateSlot.disconnect();
+    mNativeSelectionCurrent = {};
+    for (auto& [flag, subscription] : mTextureChangesUpdates) subscription.mConnection.disconnect();
+    removeVOInventoryListener();
 }
 
 void LLMaterialEditor::setObjectID(const LLUUID& object_id)
@@ -579,6 +636,8 @@ void LLMaterialEditor::onClose(bool app_quitting)
     if (mSelectionUpdateSlot.connected())
     {
         mSelectionUpdateSlot.disconnect();
+    mMaterialUpdateSlot.disconnect();
+    mNativeSelectionCurrent = {};
     }
     for (mat_connection_map_t::value_type &cn : mTextureChangesUpdates)
     {
@@ -593,8 +652,10 @@ void LLMaterialEditor::draw()
 {
     if (mIsOverride)
     {
-        if (mSelectionNeedsUpdate)
+        const bool pending = VSMaterialSelection().materialsPending();
+        if (mSelectionNeedsUpdate || pending || mNativeMaterialPending)
         {
+            mNativeMaterialPending = pending;
             mSelectionNeedsUpdate = false;
             clearTextures();
             setFromSelection();
@@ -941,17 +1002,21 @@ void LLMaterialEditor::subscribeToLocalTexture(S32 dirty_flag, const LLUUID& tra
     {
         mTextureChangesUpdates[dirty_flag].mConnection.disconnect();
         mTextureChangesUpdates[dirty_flag].mTrackingId = tracking_id;
+        const auto weak = getHandle();
+        const auto current = mPreviewCurrent;
         mTextureChangesUpdates[dirty_flag].mConnection = LLLocalBitmapMgr::getInstance()->setOnChangedCallback(tracking_id,
-                                                                                                               [this, dirty_flag](const LLUUID& tracking_id, const LLUUID& old_id, const LLUUID& new_id)
+                                                                                                               [weak, current, dirty_flag](const LLUUID& tracking_id, const LLUUID& old_id, const LLUUID& new_id)
                                                                                                                {
+                                                                                                                   auto* view = dynamic_cast<LLMaterialEditor*>(weak.get());
+                                                                                                                   if (!view || !current()) return;
                                                                                                                    if (new_id.isNull())
                                                                                                                    {
-                                                                                                                       mTextureChangesUpdates[dirty_flag].mConnection.disconnect();
+                                                                                                                       view->mTextureChangesUpdates[dirty_flag].mConnection.disconnect();
                                                                                                                        //mTextureChangesUpdates.erase(dirty_flag);
                                                                                                                    }
                                                                                                                    else
                                                                                                                    {
-                                                                                                                       replaceLocalTexture(old_id, new_id);
+                                                                                                                       view->replaceLocalTexture(old_id, new_id);
                                                                                                                    }
                                                                                                                });
     }
@@ -1145,9 +1210,11 @@ void LLMaterialEditor::onSelectCtrl(LLUICtrl* ctrl, const LLSD& data, S32 dirty_
         {
         }
 
-        virtual bool apply(LLSelectNode* nodep)
+        bool apply(LLSelectNode* nodep) override
+        { VSMaterialNode node(nodep); return apply(&node); }
+        bool apply(VSMaterialNode* nodep)
         {
-            LLViewerObject* objectp = nodep->getObject();
+            auto objectp = nodep->getObject();
             if (!objectp)
             {
                 return false;
@@ -1216,7 +1283,7 @@ void LLMaterialEditor::onSelectCtrl(LLUICtrl* ctrl, const LLSD& data, S32 dirty_
         S32 mDirtyFlag;
     } func(ctrl, dirty_flag);
 
-    LLSelectMgr::getInstance()->getSelection()->applyToNodes(&func);
+    VSMaterialSelection()->applyToNodes(&func);
 }
 
 void LLMaterialEditor::onClickSave()
@@ -1438,12 +1505,17 @@ bool LLMaterialEditor::saveIfNeeded()
 // static
 bool LLMaterialEditor::updateInventoryItem(const std::string &buffer, const LLUUID &item_id, const LLUUID &task_id)
 {
-    const LLViewerRegion* region = gAgent.getRegion();
+    const auto region = vs_current_region_context();
     if (!region)
     {
         LL_WARNS("MaterialEditor") << "Not connected to a region, cannot save material." << LL_ENDL;
         return false;
     }
+    LLSD key(item_id);
+    if (task_id.notNull()) key = LLSD().with("taskid", task_id).with("itemid", item_id);
+    auto* owner = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", key);
+    const LLHandle<LLFloater> weak = owner ? owner->getHandle() : LLHandle<LLFloater>();
+    const auto current = vs_native_im_guard();
     std::string agent_url = region->getCapability("UpdateMaterialAgentInventory");
     std::string task_url = region->getCapability("UpdateMaterialTaskInventory");
 
@@ -1455,16 +1527,17 @@ bool LLMaterialEditor::updateInventoryItem(const std::string &buffer, const LLUU
         if (task_id.isNull() && !agent_url.empty())
         {
             uploadInfo = std::make_shared<LLBufferedAssetUploadInfo>(item_id, LLAssetType::AT_MATERIAL, buffer,
-                [](LLUUID itemId, LLUUID newAssetId, LLUUID newItemId, LLSD)
+                [weak, current, key](LLUUID itemId, LLUUID newAssetId, LLUUID newItemId, LLSD)
                 {
                     // done callback
-                    LLMaterialEditor::finishInventoryUpload(itemId, newAssetId, newItemId);
+                    if (auto* view = dynamic_cast<LLMaterialEditor*>(weak.get()); view && current() && view->getKey() == key)
+                        view->finishInventoryUpload(itemId, newAssetId, newItemId);
                 },
-                [](LLUUID itemId, LLUUID taskId, LLSD response, std::string reason)
+                [weak, current, key](LLUUID itemId, LLUUID taskId, LLSD response, std::string reason)
                 {
                     // failure callback
-                    LLMaterialEditor* me = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", LLSD(itemId));
-                    if (me)
+                    LLMaterialEditor* me = dynamic_cast<LLMaterialEditor*>(weak.get());
+                    if (me && current() && me->getKey() == key)
                     {
                         me->setEnabled(true);
                     }
@@ -1476,19 +1549,17 @@ bool LLMaterialEditor::updateInventoryItem(const std::string &buffer, const LLUU
         else if (!task_id.isNull() && !task_url.empty())
         {
             uploadInfo = std::make_shared<LLBufferedAssetUploadInfo>(task_id, item_id, LLAssetType::AT_MATERIAL, buffer,
-                [](LLUUID itemId, LLUUID task_id, LLUUID newAssetId, LLSD)
+                [weak, current, key](LLUUID itemId, LLUUID task_id, LLUUID newAssetId, LLSD)
                 {
                     // done callback
-                    LLMaterialEditor::finishTaskUpload(itemId, newAssetId, task_id);
+                    if (auto* view = dynamic_cast<LLMaterialEditor*>(weak.get()); view && current() && view->getKey() == key)
+                        view->finishTaskUpload(itemId, newAssetId, task_id);
                 },
-                [](LLUUID itemId, LLUUID task_id, LLSD response, std::string reason)
+                [weak, current, key](LLUUID itemId, LLUUID task_id, LLSD response, std::string reason)
                 {
                     // failure callback
-                    LLSD floater_key;
-                    floater_key["taskid"] = task_id;
-                    floater_key["itemid"] = itemId;
-                    LLMaterialEditor* me = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", floater_key);
-                    if (me)
+                    LLMaterialEditor* me = dynamic_cast<LLMaterialEditor*>(weak.get());
+                    if (me && current() && me->getKey() == key)
                     {
                         me->setEnabled(true);
                     }
@@ -1579,7 +1650,7 @@ public:
                 nullptr // failure callback, floater already closed
             );
 
-        const LLViewerRegion* region = gAgent.getRegion();
+        const auto region = vs_current_region_context();
         if (region)
         {
             std::string agent_url(region->getCapability("UpdateMaterialAgentInventory"));
@@ -1613,7 +1684,7 @@ void LLMaterialEditor::createInventoryItem(const std::string &buffer, const std:
 void LLMaterialEditor::finishInventoryUpload(LLUUID itemId, LLUUID newAssetId, LLUUID newItemId)
 {
     // Update the UI with the new asset.
-    LLMaterialEditor* me = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", LLSD(itemId));
+    LLMaterialEditor* me = this;
     if (me)
     {
         if (newItemId.isNull())
@@ -1649,10 +1720,7 @@ void LLMaterialEditor::finishInventoryUpload(LLUUID itemId, LLUUID newAssetId, L
 
 void LLMaterialEditor::finishTaskUpload(LLUUID itemId, LLUUID newAssetId, LLUUID taskId)
 {
-    LLSD floater_key;
-    floater_key["taskid"] = taskId;
-    floater_key["itemid"] = itemId;
-    LLMaterialEditor* me = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", floater_key);
+    LLMaterialEditor* me = this;
     if (me)
     {
         me->setAssetId(newAssetId);
@@ -1675,9 +1743,10 @@ void LLMaterialEditor::finishSaveAs(
     const LLSD &oldKey,
     const LLUUID &newItemId,
     const std::string &buffer,
-    bool has_unsaved_changes)
+    bool has_unsaved_changes, LLHandle<LLFloater> owner)
 {
-    LLMaterialEditor* me = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", oldKey);
+    LLMaterialEditor* me = dynamic_cast<LLMaterialEditor*>(owner.get());
+    if (me && me->getKey() != oldKey) me = nullptr;
     LLViewerInventoryItem* item = gInventory.getItem(newItemId);
     if (item)
     {
@@ -1763,6 +1832,18 @@ void LLMaterialEditor::refreshFromInventory(const LLUUID& new_item_id)
 }
 
 
+std::function<void(const LLSD&, const LLSD&)> LLMaterialEditor::notificationCallback(
+    void (LLMaterialEditor::*method)(const LLSD&, const LLSD&))
+{
+    const auto weak = getHandle();
+    const auto current = inventoryItemGuard();
+    return [weak, current, method](const LLSD& notification, const LLSD& response)
+    {
+        auto* view = dynamic_cast<LLMaterialEditor*>(weak.get());
+        if (view && current()) (view->*method)(notification, response);
+    };
+}
+
 void LLMaterialEditor::onClickSaveAs()
 {
     if (!LLMaterialEditor::capabilitiesAvailable())
@@ -1782,7 +1863,7 @@ void LLMaterialEditor::onClickSaveAs()
     LLSD args;
     args["DESC"] = mMaterialName;
 
-    LLNotificationsUtil::add("SaveMaterialAs", args, LLSD(), boost::bind(&LLMaterialEditor::onSaveAsMsgCallback, this, _1, _2));
+    LLNotificationsUtil::add("SaveMaterialAs", args, LLSD(), notificationCallback(&LLMaterialEditor::onSaveAsMsgCallback));
 }
 
 void LLMaterialEditor::onSaveAsMsgCallback(const LLSD& notification, const LLSD& response)
@@ -1846,10 +1927,14 @@ void LLMaterialEditor::onSaveAsMsgCallback(const LLSD& notification, const LLSD&
         }
         else
         {
-            LLNotificationsUtil::add("InvalidMaterialName", LLSD(), LLSD(), [this](const LLSD& notification, const LLSD& response)
+            const auto weak = getHandle();
+            const auto current = inventoryItemGuard();
+            LLNotificationsUtil::add("InvalidMaterialName", LLSD(), LLSD(), [weak, current](const LLSD&, const LLSD&)
                 {
-                    LLNotificationsUtil::add("SaveMaterialAs", LLSD().with("DESC", mMaterialName), LLSD(),
-                        boost::bind(&LLMaterialEditor::onSaveAsMsgCallback, this, _1, _2));
+                    auto* view = dynamic_cast<LLMaterialEditor*>(weak.get());
+                    if (!view || !current()) return;
+                    LLNotificationsUtil::add("SaveMaterialAs", LLSD().with("DESC", view->mMaterialName), LLSD(),
+                        view->notificationCallback(&LLMaterialEditor::onSaveAsMsgCallback));
                 });
         }
     }
@@ -1859,7 +1944,7 @@ void LLMaterialEditor::onClickCancel()
 {
     if (mUnsavedChanges)
     {
-        LLNotificationsUtil::add("UsavedMaterialChanges", LLSD(), LLSD(), boost::bind(&LLMaterialEditor::onCancelMsgCallback, this, _1, _2));
+        LLNotificationsUtil::add("UsavedMaterialChanges", LLSD(), LLSD(), notificationCallback(&LLMaterialEditor::onCancelMsgCallback));
     }
     else
     {
@@ -2030,8 +2115,9 @@ void LLMaterialEditor::loadMaterialFromFile(const std::string& filename, S32 ind
         material_list.push_back(LLTrans::getString("material_batch_import_text"));
 
         LLFloaterComboOptions::showUI(
-            [model_in, filename, dest_folder](const std::string& option, S32 index)
+            [model_in, filename, dest_folder, current = vs_native_im_guard()](const std::string& option, S32 index)
         {
+            if (!current()) return;
             if (index >= 0) // -1 on cancel
             {
                 LLMaterialEditor* me = (LLMaterialEditor*)LLFloaterReg::getInstance("material_editor");
@@ -2075,9 +2161,35 @@ void LLMaterialEditor::loadLive()
         // Set up for selection changes updates
         if (!me->mSelectionUpdateSlot.connected())
         {
-            me->mSelectionUpdateSlot = LLSelectMgr::instance().mUpdateSignal.connect(boost::bind(&LLMaterialEditor::onSelectionChanged, me));
+            const VSMaterialSelection selection;
+            const auto weak = me->getHandle();
+            const auto account = me->mPreviewCurrent;
+            const bool native = selection.native();
+            me->mNativeSelectionCurrent = selection.guard();
+            me->mSelectionUpdateSlot = selection.changed([weak, account, native]
+            {
+                auto* view = dynamic_cast<LLMaterialEditor*>(weak.get());
+                if (!view || !account()) return;
+                if (native)
+                {
+                    if (!view->mNativeSelectionCurrent || !view->mNativeSelectionCurrent()) view->updateLive();
+                    view->mNativeSelectionCurrent = VSMaterialSelection().guard();
+                }
+                view->onSelectionChanged();
+            });
         }
 
+        if (VSMaterialSelection().native() && !me->mMaterialUpdateSlot.connected())
+        {
+            const auto weak = me->getHandle();
+            const auto account = me->mPreviewCurrent;
+            me->mMaterialUpdateSlot = VSMaterialSelection().materialsChanged([weak, account](const LLUUID& id, S32 side)
+            {
+                auto* view = dynamic_cast<LLMaterialEditor*>(weak.get());
+                if (view && account() && id == view->mOverrideObjectId && (side == -1 || side == view->mOverrideObjectTE))
+                    view->updateLive();
+            });
+        }
         me->openFloater();
         me->setFocus(true);
     }
@@ -2136,18 +2248,18 @@ bool can_use_objects_material(LLSelectedTEGetMatData& func, const std::vector<Pe
     // associated with the build floater. This flag also excludes objects from
     // the selection that do not satisfy PERM_MODIFY.
     llassert(func.mIsOverride);
-    LLSelectMgr::getInstance()->getSelection()->applyToTEs(&func, true /*first applicable*/);
+    VSMaterialSelection()->applyToTEs(&func, true /*first applicable*/);
 
     if (item_source == ItemSource::AGENT)
     {
         func.mObjectId = LLUUID::null;
     }
-    LLViewerObject* selected_object = func.mObject;
+    auto selected_object = func.mObject;
     if (!selected_object)
     {
         // LLSelectedTEGetMatData can fail if there are no selected faces
         // with materials, but we expect at least some object is selected.
-        llassert(LLSelectMgr::getInstance()->getSelection()->getFirstObject());
+        llassert(VSMaterialSelection()->getFirstObject());
         return false;
     }
     if (selected_object->isInventoryPending())
@@ -2216,8 +2328,8 @@ bool can_use_objects_material(LLSelectedTEGetMatData& func, const std::vector<Pe
     }
 
     // Use root object for permissions checking
-    LLViewerObject* root_object = selected_object->getRootEdit();
-    LLPermissions* object_permissions_p = LLSelectMgr::getInstance()->findObjectPermissions(root_object);
+    const auto root_object = selected_object->getRootEdit();
+    const auto object_permissions_p = root_object->permissions();
     LLPermissions object_permissions;
     if (object_permissions_p)
     {
@@ -2297,20 +2409,22 @@ bool LLMaterialEditor::canSaveObjectsMaterial()
 
 bool LLMaterialEditor::canClipboardObjectsMaterial()
 {
-    if (LLSelectMgr::getInstance()->getSelection()->getObjectCount() != 1)
+    if (VSMaterialSelection()->getObjectCount() != 1)
     {
         return false;
     }
 
     struct LLSelectedTEGetNullMat : public LLSelectedTEFunctor
     {
-        bool apply(LLViewerObject* objectp, S32 te_index)
+        bool apply(LLViewerObject* objectp, S32 te_index) override
+        { return apply(VSMaterialObject(objectp), te_index); }
+        bool apply(VSMaterialObject objectp, S32 te_index)
         {
             return objectp->getRenderMaterialID(te_index).isNull();
         }
     } null_func;
 
-    if (LLSelectMgr::getInstance()->getSelection()->applyToTEs(&null_func))
+    if (VSMaterialSelection()->applyToTEs(&null_func))
     {
         return true;
     }
@@ -2936,12 +3050,12 @@ public:
     }
 
     bool apply(LLViewerObject* objectp, S32 te) override
+    { return apply(VSMaterialObject(objectp), te); }
+    bool apply(VSMaterialObject objectp, S32 te)
     {
         if (objectp && objectp->permModify() && objectp->getVolume())
         {
-            LLVOVolume* vobjp = (LLVOVolume*)objectp;
-            vobjp->setRenderMaterialID(te, mMatId, false /*preview only*/);
-            vobjp->updateTEMaterialTextures(te);
+            objectp->previewMaterial(te, mMatId);
         }
         return true;
     }
@@ -2963,9 +3077,11 @@ public:
     {
     }
 
-    virtual bool apply(LLSelectNode* nodep) override
+    bool apply(LLSelectNode* nodep) override
+    { VSMaterialNode node(nodep); return apply(&node); }
+    bool apply(VSMaterialNode* nodep)
     {
-        LLViewerObject* objectp = nodep->getObject();
+        auto objectp = nodep->getObject();
         if (!objectp || !objectp->permModify() || !objectp->getVolume())
         {
             return false;
@@ -3174,7 +3290,7 @@ public:
             {
                 mSuccess = true;
             }
-            LLGLTFMaterialList::queueModify(objectp, te, material);
+            objectp->queueModify(te, material);
         }
         return true;
     }
@@ -3209,7 +3325,8 @@ void LLMaterialEditor::applyToSelection()
         return;
     }
 
-    std::string url = gAgent.getRegionCapability("ModifyMaterialParams");
+    const auto region = vs_current_region_context();
+    std::string url = region ? region->getCapability("ModifyMaterialParams") : std::string();
     if (!url.empty())
     {
         // Don't send data if there is nothing to send.
@@ -3218,13 +3335,25 @@ void LLMaterialEditor::applyToSelection()
         if (mUnsavedChanges != 0 || mRevertedChanges != 0)
         {
             mOverrideInProgress = true;
-            LLObjectSelectionHandle selected_objects = LLSelectMgr::getInstance()->getSelection();
+            VSMaterialSelection selected_objects;
             LLRenderMaterialOverrideFunctor override_func(this, mOverrideObjectId, mOverrideObjectTE);
             selected_objects->applyToNodes(&override_func);
 
             void(*done_callback)(bool) = LLRenderMaterialOverrideFunctor::modifyCallback;
 
-            LLGLTFMaterialList::flushUpdates(done_callback);
+            if (selected_objects.native())
+            {
+                const auto weak = getHandle();
+                const auto account = mPreviewCurrent;
+                const auto selection = selected_objects.guard();
+                const auto operation = ++mMaterialEditRevision;
+                LLGLTFMaterialList::flushUpdates([weak, account, selection, operation, done_callback](bool success)
+                {
+                    auto* view = dynamic_cast<LLMaterialEditor*>(weak.get());
+                    if (view && account() && selection() && view->mMaterialEditRevision == operation) done_callback(success);
+                }, account);
+            }
+            else LLGLTFMaterialList::flushUpdates(done_callback);
 
             if (!override_func.getResult())
             {
@@ -3247,7 +3376,7 @@ void LLMaterialEditor::applyToSelection()
         static const LLUUID placeholder("984e183e-7811-4b05-a502-d79c6f978a98");
         gGLTFMaterialList.addMaterial(placeholder, mat);
         LLRenderMaterialFunctor mat_func(placeholder);
-        LLObjectSelectionHandle selected_objects = LLSelectMgr::getInstance()->getSelection();
+        VSMaterialSelection selected_objects;
         selected_objects->applyToTEs(&mat_func);
     }
 }
@@ -3323,7 +3452,7 @@ void LLMaterialEditor::setFromGLTFMaterial(LLGLTFMaterial* mat)
 
 bool LLMaterialEditor::setFromSelection()
 {
-    LLObjectSelectionHandle selected_objects = LLSelectMgr::getInstance()->getSelection();
+    VSMaterialSelection selected_objects;
     LLSelectedTEGetMatData func(mIsOverride);
 
     selected_objects->applyToTEs(&func);
@@ -3333,9 +3462,9 @@ bool LLMaterialEditor::setFromSelection()
     if (func.mMaterial.notNull())
     {
         setFromGLTFMaterial(func.mMaterial);
-        LLViewerObject* selected_object = func.mObject;
+        auto selected_object = func.mObject;
         const LLViewerInventoryItem* item = selected_object->getInventoryItemByAsset(func.mMaterialId);
-        const bool allow_modify = !item || canModify(selected_object, item);
+        const bool allow_modify = !item || canModify(selected_object->getID(), item);
         setEnableEditing(allow_modify);
 
         // todo: apply local texture data to all materials in selection
@@ -3378,6 +3507,7 @@ bool LLMaterialEditor::setFromSelection()
 
 void LLMaterialEditor::loadAsset()
 {
+    if (!mPreviewCurrent() || !ensureTaskInventory()) return;
     const LLInventoryItem* item;
     if (mNotecardInventoryID.notNull())
     {
@@ -3413,18 +3543,18 @@ void LLMaterialEditor::loadAsset()
             else
             {
                 LLHost source_sim = LLHost();
-                LLSD* user_data = new LLSD();
+
 
                 if (mNotecardInventoryID.notNull())
                 {
-                    user_data->with("objectid", mNotecardObjectID).with("notecardid", mNotecardInventoryID);
+                    // Embedded item ownership is retained by this preview.
                 }
                 else if (mObjectUUID.notNull())
                 {
-                    LLViewerObject* objectp = gObjectList.findObject(mObjectUUID);
-                    if (objectp && objectp->getRegion())
+                    const auto objectp = VSTaskInventoryObject::find(mObjectUUID);
+                    if (objectp)
                     {
-                        source_sim = objectp->getRegion()->getHost();
+                        source_sim = objectp->getHost();
                     }
                     else
                     {
@@ -3436,13 +3566,11 @@ void LLMaterialEditor::loadAsset()
                         setEnableEditing(allow_modify && !source_library);
                         return;
                     }
-                    user_data->with("taskid", mObjectUUID).with("itemid", mItemUUID);
-                }
-                else
-                {
-                    user_data = new LLSD(mItemUUID);
+
                 }
 
+                auto* user_data = new VSMaterialLoadRequest{
+                    getHandle(), inventoryItemGuard(), mAssetID, ++mAssetLoadRevision};
                 setEnableEditing(false); // wait for it to load
 
                 mAssetStatus = PREVIEW_ASSET_LOADING;
@@ -3458,7 +3586,13 @@ void LLMaterialEditor::loadAsset()
     }
     else if (mObjectUUID.notNull() && mItemUUID.notNull())
     {
-        LLViewerObject* objectp = gObjectList.findObject(mObjectUUID);
+        const auto task = VSTaskInventoryObject::find(mObjectUUID);
+        if (task && task->native())
+        {
+            if (task->isInventoryDirty()) task->requestInventory();
+            return;
+        }
+        LLViewerObject* objectp = task->legacy();
         if (objectp && (objectp->isInventoryPending() || objectp->isInventoryDirty()))
         {
             // It's a material in object's inventory and we failed to get it because inventory is not up to date.
@@ -3496,15 +3630,11 @@ void LLMaterialEditor::onLoadComplete(const LLUUID& asset_uuid,
     LLAssetType::EType type,
     void* user_data, S32 status, LLExtStat ext_status)
 {
-    LLSD* floater_key = (LLSD*)user_data;
-    LL_DEBUGS("MaterialEditor") << "loading " << asset_uuid << " for " << *floater_key << LL_ENDL;
-    LLMaterialEditor* editor = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", *floater_key);
-    if (editor)
+    std::unique_ptr<VSMaterialLoadRequest> request(static_cast<VSMaterialLoadRequest*>(user_data));
+    auto* editor = dynamic_cast<LLMaterialEditor*>(request->view.get());
+    if (!editor || !request->current() || editor->mAssetLoadRevision != request->revision ||
+        editor->mAssetID != request->asset || (status == 0 && asset_uuid != request->asset)) return;
     {
-        if (asset_uuid != editor->mAssetID)
-        {
-            LL_WARNS("MaterialEditor") << "Asset id mismatch, expected: " << editor->mAssetID << " got: " << asset_uuid << LL_ENDL;
-        }
         if (0 == status)
         {
             LLFileSystem file(asset_uuid, type, LLFileSystem::READ);
@@ -3546,11 +3676,7 @@ void LLMaterialEditor::onLoadComplete(const LLUUID& asset_uuid,
             editor->mAssetStatus = PREVIEW_ASSET_ERROR;
         }
     }
-    else
-    {
-        LL_DEBUGS("MaterialEditor") << "Floater " << *floater_key << " does not exist." << LL_ENDL;
-    }
-    delete floater_key;
+
 }
 
 void LLMaterialEditor::inventoryChanged(LLViewerObject* object,
@@ -3579,11 +3705,12 @@ void LLMaterialEditor::saveTexture(LLImageJ2C* img, const std::string& name, con
     buffer.assign((const char*) img->getData(), img->getDataSize());
 
     U32 expected_upload_cost = LLAgentBenefitsMgr::current().getTextureUploadCost(img);
-    LLSD key = getKey();
-    std::function<bool(LLUUID itemId, LLSD response, std::string reason)> failed_upload([key](LLUUID assetId, LLSD response, std::string reason)
+    const auto weak = getHandle();
+    const auto current = inventoryItemGuard();
+    std::function<bool(LLUUID itemId, LLSD response, std::string reason)> failed_upload([weak, current](LLUUID assetId, LLSD response, std::string reason)
     {
-        LLMaterialEditor* me = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", key);
-        if (me)
+        LLMaterialEditor* me = dynamic_cast<LLMaterialEditor*>(weak.get());
+        if (me && current())
         {
             me->setFailedToUploadTexture();
         }
@@ -3626,7 +3753,8 @@ S32 LLMaterialEditor::saveTextures()
     mUploadingTexturesFailure = false; // not supposed to get here if already uploading
 
     S32 work_count = 0;
-    LLSD key = getKey(); // must be locally declared for lambda's capture to work
+    const auto weak = getHandle();
+    const auto current = inventoryItemGuard();
     if (mBaseColorTextureUploadId == getBaseColorId() && mBaseColorTextureUploadId.notNull())
     {
         mUploadingTexturesCount++;
@@ -3635,10 +3763,10 @@ S32 LLMaterialEditor::saveTextures()
         // For ease of inventory management, we prepend the material name.
         std::string name = mMaterialName + ": " + mBaseColorName;
 
-        saveTexture(mBaseColorJ2C, name, mBaseColorTextureUploadId, [key](LLUUID newAssetId, LLSD response)
+        saveTexture(mBaseColorJ2C, name, mBaseColorTextureUploadId, [weak, current](LLUUID newAssetId, LLSD response)
         {
-            LLMaterialEditor* me = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", key);
-            if (me)
+            LLMaterialEditor* me = dynamic_cast<LLMaterialEditor*>(weak.get());
+            if (me && current())
             {
                 if (response["success"].asBoolean())
                 {
@@ -3677,10 +3805,10 @@ S32 LLMaterialEditor::saveTextures()
         // For ease of inventory management, we prepend the material name.
         std::string name = mMaterialName + ": " + mNormalName;
 
-        saveTexture(mNormalJ2C, name, mNormalTextureUploadId, [key](LLUUID newAssetId, LLSD response)
+        saveTexture(mNormalJ2C, name, mNormalTextureUploadId, [weak, current](LLUUID newAssetId, LLSD response)
         {
-            LLMaterialEditor* me = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", key);
-            if (me)
+            LLMaterialEditor* me = dynamic_cast<LLMaterialEditor*>(weak.get());
+            if (me && current())
             {
                 if (response["success"].asBoolean())
                 {
@@ -3719,10 +3847,10 @@ S32 LLMaterialEditor::saveTextures()
         // For ease of inventory management, we prepend the material name.
         std::string name = mMaterialName + ": " + mMetallicRoughnessName;
 
-        saveTexture(mMetallicRoughnessJ2C, name, mMetallicTextureUploadId, [key](LLUUID newAssetId, LLSD response)
+        saveTexture(mMetallicRoughnessJ2C, name, mMetallicTextureUploadId, [weak, current](LLUUID newAssetId, LLSD response)
         {
-            LLMaterialEditor* me = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", key);
-            if (me)
+            LLMaterialEditor* me = dynamic_cast<LLMaterialEditor*>(weak.get());
+            if (me && current())
             {
                 if (response["success"].asBoolean())
                 {
@@ -3762,10 +3890,10 @@ S32 LLMaterialEditor::saveTextures()
         // For ease of inventory management, we prepend the material name.
         std::string name = mMaterialName + ": " + mEmissiveName;
 
-        saveTexture(mEmissiveJ2C, name, mEmissiveTextureUploadId, [key](LLUUID newAssetId, LLSD response)
+        saveTexture(mEmissiveJ2C, name, mEmissiveTextureUploadId, [weak, current](LLUUID newAssetId, LLSD response)
         {
-            LLMaterialEditor* me = LLFloaterReg::findTypedInstance<LLMaterialEditor>("material_editor", LLSD(key));
-            if (me)
+            LLMaterialEditor* me = dynamic_cast<LLMaterialEditor*>(weak.get());
+            if (me && current())
             {
                 if (response["success"].asBoolean())
                 {
@@ -3837,7 +3965,7 @@ void LLMaterialEditor::loadDefaults()
 
 bool LLMaterialEditor::capabilitiesAvailable()
 {
-    const LLViewerRegion* region = gAgent.getRegion();
+    const auto region = vs_current_region_context();
     if (!region)
     {
         LL_WARNS("MaterialEditor") << "Not connected to a region, cannot save material." << LL_ENDL;

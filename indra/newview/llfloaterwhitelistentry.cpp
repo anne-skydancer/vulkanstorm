@@ -65,11 +65,21 @@ bool LLFloaterWhiteListEntry::postBuild()
 
 ///////////////////////////////////////////////////////////////////////////////
 // static
+void LLFloaterWhiteListEntry::onOpen(const LLSD& key)
+{
+    LLFloater::onOpen(key);
+    const auto* owner=LLFloaterReg::findTypedInstance<LLFloaterMediaSettings>("media_settings");
+    mOrigin=owner?owner->getHandle():LLHandle<LLFloater>();
+    mCurrent=owner?owner->editGuard():std::function<bool()>([]{return false;});
+}
+
 void LLFloaterWhiteListEntry::onBtnOK( void* userdata )
 {
     LLFloaterWhiteListEntry *self =(LLFloaterWhiteListEntry *)userdata;
 
-    LLPanelMediaSettingsSecurity* panel = LLFloaterReg::getTypedInstance<LLFloaterMediaSettings>("media_settings")->getPanelSecurity();
+    auto* owner=dynamic_cast<LLFloaterMediaSettings*>(self->mOrigin.get());
+    if(!owner || !self->mCurrent()){self->closeFloater();return;}
+    LLPanelMediaSettingsSecurity* panel = owner->getPanelSecurity();
     if ( panel )
     {
         std::string white_list_item = self->mWhiteListEdit->getText();

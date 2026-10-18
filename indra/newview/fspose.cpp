@@ -14,6 +14,8 @@
 #include "fspose.h"
 
 #include "llagent.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
 #include "llvoavatarself.h"
 
 FSPose::FSPose()
@@ -27,8 +29,9 @@ FSPose::~FSPose()
 
 void FSPose::setPose(const std::string& new_pose, bool save_state)
 {
-    if (isAgentAvatarValid() && LLUUID::validate(new_pose))
+    if (vs_avatar_character() && LLUUID::validate(new_pose))
     {
+        if (!mCurrent()) mCurrentPose.setNull();
         if (mCurrentPose.notNull())
         {
             gAgent.sendAnimationRequest(mCurrentPose, ANIM_REQUEST_STOP);
@@ -36,6 +39,12 @@ void FSPose::setPose(const std::string& new_pose, bool save_state)
         if (save_state)
         {
             mCurrentPose.set(new_pose);
+            const auto account = vs_native_im_guard();
+            auto* character = vs_avatar_character();
+            const U64 generation = vs_avatar_generation();
+            mCurrent = [account, character, generation]
+            { return account() && vs_avatar_character() == character && vs_avatar_generation() == generation; };
+
         }
         gAgent.sendAnimationRequest(LLUUID(new_pose), ANIM_REQUEST_START);
     }
@@ -43,9 +52,16 @@ void FSPose::setPose(const std::string& new_pose, bool save_state)
 
 void FSPose::stopPose()
 {
-    if (isAgentAvatarValid() && mCurrentPose.notNull())
+    if (!mCurrent()) { mCurrentPose.setNull(); return; }
+    if (vs_avatar_character() && mCurrentPose.notNull())
     {
         gAgent.sendAnimationRequest(mCurrentPose, ANIM_REQUEST_STOP);
         mCurrentPose.setNull();
     }
+}
+
+void FSPose::retireAccount()
+{
+    mCurrentPose.setNull();
+    mCurrent = [] { return false; };
 }

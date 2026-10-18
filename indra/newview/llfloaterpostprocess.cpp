@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llfloaterpostprocess.h"
 
@@ -154,7 +155,7 @@ void LLFloaterPostProcess::onSaveEffect(LLLineEditor* editBox)
     {
         LLSD payload;
         payload["effect_name"] = effectName;
-        LLNotificationsUtil::add("PPSaveEffectAlert", LLSD(), payload, boost::bind(&LLFloaterPostProcess::saveAlertCallback, this, _1, _2));
+        LLNotificationsUtil::add("PPSaveEffectAlert", LLSD(), payload, vs_native_im_ui_callback(this,[this](const LLSD& notification,const LLSD& response){return saveAlertCallback(notification,response);}));
     }
     else
     {

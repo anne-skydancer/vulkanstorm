@@ -26,9 +26,12 @@
 #ifndef LL_LLINSPECTTOAST_H
 #define LL_LLINSPECTTOAST_H
 
+#include <typeinfo>
+
 namespace LLNotificationsUI
 {
 void registerFloater();
+bool isInspectToastType(const std::type_info&);
 }
 
 #endif

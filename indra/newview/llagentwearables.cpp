@@ -26,6 +26,13 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llagentwearables.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
+#include "vsregioncontext.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
 
 #include "llattachmentsmgr.h"
 #include "llaccordionctrltab.h"
@@ -264,13 +271,16 @@ LLAgentWearables::AddWearableToAgentInventoryCallback::AddWearableToAgentInvento
     mWearable(wearable),
     mTodo(todo),
     mCB(cb),
-    mDescription(description)
+    mDescription(description),
+    mAccountCurrent(vs_native_im_guard())
 {
+    if (wearable && !wearable->usesGraphicsContext()) mNativeWearableOwner = LLWearableList::instance().retainNativeWearable(wearable);
     LL_INFOS() << "constructor" << LL_ENDL;
 }
 
 void LLAgentWearables::AddWearableToAgentInventoryCallback::fire(const LLUUID& inv_item)
 {
+    if (!mAccountCurrent()) return;
     if (inv_item.isNull())
         return;
 
@@ -306,6 +316,10 @@ void LLAgentWearables::AddWearableToAgentInventoryCallback::fire(const LLUUID& i
     {
         LLAppearanceMgr::instance().addCOFItemLink(inv_item,
             new LLUpdateAppearanceAndEditWearableOnDestroy(inv_item), mDescription);
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active()) gAgentWearables.requestEditingWearable(inv_item);
+        else
+#endif
         editWearable(inv_item);
     }
 }
@@ -322,6 +336,21 @@ void LLAgentWearables::addWearabletoAgentInventoryDone(const LLWearableType::ETy
 
     LLUUID old_item_id = getWearableItemID(type,index);
 
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (!wearable || !owner->appearance()) return;
+        auto* item = gInventory.getItem(item_id);
+        if (!item) return;
+        wearable->setItemID(item_id);
+        item->setAssetUUID(wearable->getAssetID());
+        item->setTransactionID(wearable->getTransactionID());
+        gInventory.addChangedMask(LLInventoryObserver::INTERNAL | LLInventoryObserver::LABEL, item_id);
+        item->updateServer(false);
+        gInventory.notifyObservers();
+        return;
+    }
+#endif
     if (wearable)
     {
         wearable->setItemID(item_id);
@@ -397,6 +426,10 @@ void LLAgentWearables::saveWearable(const LLWearableType::EType type, const U32 
                                           item->getFlags(),
                                           item->getCreationDate());
             template_item->setTransactionID(new_wearable->getTransactionID());
+            #if VS_NATIVE_VULKAN
+            if (const auto owner = VSNativeSession::active()) update_inventory_item(template_item, owner->appearance() ? owner->appearance()->customizeCallback() : LLPointer<LLInventoryCallback>());
+            else
+#endif
             update_inventory_item(template_item, gAgentAvatarp->mEndCustomizeCallback);
         }
         else
@@ -422,6 +455,13 @@ void LLAgentWearables::saveWearable(const LLWearableType::EType type, const U32 
 
         // <FS:Ansariel> [Legacy Bake]
         //gAgentAvatarp->wearableUpdated(type);
+#if VS_NATIVE_VULKAN
+        if (const auto owner = VSNativeSession::active())
+        {
+            if (owner->appearance()) owner->appearance()->refresh();
+        }
+        else
+#endif
         gAgentAvatarp->wearableUpdated(type, true);
 
         if (send_update)
@@ -1631,6 +1671,11 @@ bool LLAgentWearables::canMoveWearable(const LLUUID& item_id, bool closer_to_bod
 
 bool LLAgentWearables::areWearablesLoaded() const
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+        return owner->appearance() && owner->appearance()->startupReady();
+#endif
+
     return mWearablesLoaded;
 }
 
@@ -1713,26 +1758,35 @@ void LLAgentWearables::createWearable(LLWearableType::EType type, bool wear, con
 {
     if (type == LLWearableType::WT_INVALID || type == LLWearableType::WT_NONE) return;
 
-    if (type == LLWearableType::WT_UNIVERSAL && !gAgent.getRegion()->bakesOnMeshEnabled())
+    auto* avatar = vs_avatar_appearance();
+    if (!avatar) return;
+    bool bakes_on_mesh = false;
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+        bakes_on_mesh = owner->regionReady() && owner->simulatorFeatures()["BakesOnMeshEnabled"].asBoolean();
+    else
+#endif
+        bakes_on_mesh = gAgent.getRegion() && gAgent.getRegion()->bakesOnMeshEnabled();
+    if (type == LLWearableType::WT_UNIVERSAL && !bakes_on_mesh)
     {
         LL_WARNS("Inventory") << "Can't create WT_UNIVERSAL type " << LL_ENDL;
         return;
     }
 
-    LLViewerWearable* wearable = LLWearableList::instance().createNewWearable(type, gAgentAvatarp);
+    LLViewerWearable* wearable = LLWearableList::instance().createNewWearable(type, avatar);
     LLAssetType::EType asset_type = wearable->getAssetType();
     LLPointer<LLBoostFuncInventoryCallback> cb;
     if(wear)
     {
-        cb = new LLBoostFuncInventoryCallback(wear_and_edit_cb);
+        cb = new LLBoostFuncInventoryCallback([current=vs_native_im_guard()](const LLUUID& item) { if (current()) wear_and_edit_cb(item); });
     }
     else
     {
-        cb = new LLBoostFuncInventoryCallback(wear_cb);
+        cb = new LLBoostFuncInventoryCallback([current=vs_native_im_guard()](const LLUUID& item) { if (current()) wear_cb(item); });
     }
     if (created_cb != NULL)
     {
-        cb->addOnFireFunc(created_cb);
+        cb->addOnFireFunc([current=vs_native_im_guard(),created_cb](const LLUUID& item) { if (current()) created_cb(item); });
     }
 
     LLUUID folder_id;
@@ -2231,3 +2285,155 @@ void LLAgentWearables::updateServer()
 
 
 // EOF
+
+namespace
+{
+bool use_native_wearable_data()
+{
+#if VS_NATIVE_VULKAN
+    return bool(VSNativeSession::active());
+#else
+    return false;
+#endif
+}
+const LLWearableData* native_wearable_data()
+{
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        auto* avatar = vs_avatar_appearance();
+        return avatar ? avatar->getWearableData() : nullptr;
+    }
+#endif
+    return nullptr;
+}
+}
+LLWearable* LLAgentWearables::getWearable(LLWearableType::EType type, U32 index)
+{
+    if (use_native_wearable_data()) { const auto* data = native_wearable_data(); return data ? const_cast<LLWearable*>(data->getWearable(type, index)) : nullptr; }
+    return LLWearableData::getWearable(type, index);
+}
+const LLWearable* LLAgentWearables::getWearable(LLWearableType::EType type, U32 index) const
+{
+    if (use_native_wearable_data()) { const auto* data = native_wearable_data(); return data ? data->getWearable(type, index) : nullptr; }
+    return LLWearableData::getWearable(type, index);
+}
+U32 LLAgentWearables::getWearableCount(LLWearableType::EType type) const
+{
+    if (use_native_wearable_data()) { const auto* data = native_wearable_data(); return data ? data->getWearableCount(type) : 0; }
+    return LLWearableData::getWearableCount(type);
+}
+U32 LLAgentWearables::getWearableCount(U32 texture_index) const
+{
+    if (use_native_wearable_data()) { const auto* data = native_wearable_data(); return data ? data->getWearableCount(texture_index) : 0; }
+    return LLWearableData::getWearableCount(texture_index);
+}
+bool LLAgentWearables::getWearableIndex(const LLWearable* wearable, U32& index) const
+{
+    if (use_native_wearable_data()) { const auto* data = native_wearable_data(); return data && data->getWearableIndex(wearable, index); }
+    return LLWearableData::getWearableIndex(wearable, index);
+}
+
+void LLAgentWearables::setWearable(LLWearableType::EType type, U32 index, LLWearable* wearable)
+{
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (owner->appearance()) owner->appearance()->replaceWearable(unsigned(type), index, dynamic_cast<LLViewerWearable*>(wearable));
+        return;
+    }
+#endif
+    LLWearableData::setWearable(type, index, wearable);
+}
+
+LLWearable* LLAgentWearables::getTopWearable(LLWearableType::EType type)
+{
+    if (use_native_wearable_data())
+    {
+        const auto* data = native_wearable_data();
+        return data ? const_cast<LLWearable*>(data->getTopWearable(type)) : nullptr;
+    }
+    return LLWearableData::getTopWearable(type);
+}
+
+const LLWearable* LLAgentWearables::getTopWearable(LLWearableType::EType type) const
+{
+    if (use_native_wearable_data())
+    {
+        const auto* data = native_wearable_data();
+        return data ? data->getTopWearable(type) : nullptr;
+    }
+    return LLWearableData::getTopWearable(type);
+}
+
+LLWearable* LLAgentWearables::getBottomWearable(LLWearableType::EType type)
+{
+    if (use_native_wearable_data())
+    {
+        const auto* data = native_wearable_data();
+        return data ? const_cast<LLWearable*>(data->getBottomWearable(type)) : nullptr;
+    }
+    return LLWearableData::getBottomWearable(type);
+}
+
+const LLWearable* LLAgentWearables::getBottomWearable(LLWearableType::EType type) const
+{
+    if (use_native_wearable_data())
+    {
+        const auto* data = native_wearable_data();
+        return data ? data->getBottomWearable(type) : nullptr;
+    }
+    return LLWearableData::getBottomWearable(type);
+}
+
+U32 LLAgentWearables::getClothingLayerCount() const
+{
+    if (use_native_wearable_data())
+    {
+        const auto* data = native_wearable_data();
+        return data ? data->getClothingLayerCount() : 0;
+    }
+    return LLWearableData::getClothingLayerCount();
+}
+
+bool LLAgentWearables::canAddWearable(LLWearableType::EType type) const
+{
+    if (use_native_wearable_data())
+    {
+        const auto* data = native_wearable_data();
+        return data ? data->canAddWearable(type) : false;
+    }
+    return LLWearableData::canAddWearable(type);
+}
+
+bool LLAgentWearables::isOnTop(LLWearable* wearable) const
+{
+    if (use_native_wearable_data())
+    {
+        const auto* data = native_wearable_data();
+        return data ? data->isOnTop(wearable) : false;
+    }
+    return LLWearableData::isOnTop(wearable);
+}
+
+void LLAgentWearables::resetNativeAccount()
+{
+    mItemToEdit.setNull();
+    mWearablesLoaded = false;
+    mInitialWearablesLoaded = false;
+    mInitialWearablesUpdateReceived = false;
+    mInitialAttachmentsRequested = false;
+    mCOFChangeInProgress = false;
+    mItemsAwaitingWearableUpdate.clear();
+    // Native instances belong to the real native avatar/cache, never this
+    // legacy collection. Keep its shared global subscriptions intact.
+}
+void LLAgentWearables::nativeWearablesLoaded()
+{
+    mWearablesLoaded = true;
+    if (!mInitialWearablesLoaded)
+    {
+        mInitialWearablesLoaded = true;
+        mInitialWearablesLoadedSignal();
+    }
+}

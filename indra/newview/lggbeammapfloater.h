@@ -38,6 +38,7 @@ public:
     bool handleRightMouseDown(S32 x, S32 y, MASK mask) override;
 
     void draw() override;
+    void onClose(bool quitting) override;
 
     void setData(FSPanelPrefs* data);
 
@@ -61,6 +62,8 @@ private:
     F32                     mContextConeOutAlpha;
     F32                     mContextConeFadeTime;
     FSPanelPrefs*           mFSPanel;
+    LLHandle<LLView> mFSPanelHandle;
+    U64 mPickerRevision=0;
     LLPanel*                mBeamshapePanel;
 };
 

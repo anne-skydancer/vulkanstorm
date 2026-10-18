@@ -1306,6 +1306,16 @@ bool native_shared_setting_callback(const std::string& setting)
     // with their native controller; never enter legacy GL through a cascade.
     static const char* const shared[] = {
         "RenderFarClip",
+        "TargetFPS",
+        "AutoTuneFPS",
+        "AutoTuneLock",
+        "RenderAvatarMaxART",
+        "PerfStatsCaptureEnabled",
+        "AutoTuneRenderFarClipTarget",
+        "AutoTuneRenderFarClipMin",
+        "AutoTuneImpostorFarAwayDistance",
+        "AutoTuneImpostorByDistEnabled",
+        "TuningFPSStrategy",
         "UseLSLBridge",
         "UseLSLFlightAssist",
         "UseMoveLock",

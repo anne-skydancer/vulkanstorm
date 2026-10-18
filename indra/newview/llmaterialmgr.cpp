@@ -39,6 +39,17 @@
 #include "llhttpsdhandler.h"
 #include "httpcommon.h"
 #include "llcorehttputil.h"
+#include "llviewerwindow.h"
+#include <utility>
+#if VS_NATIVE_VULKAN
+#include "vsvulkancontext.h"
+#include "vsnativesession.h"
+#include "vsregioncontext.h"
+#include "vsmaterialassets.h"
+#include "vstaskinventoryobject.h"
+#endif
+namespace { bool nativeMaterials(){return gViewerWindow && gViewerWindow->isNativeVulkan();} }
+
 
 /**
  * Materials cap parameters
@@ -144,7 +155,7 @@ LLMaterialMgr::LLMaterialMgr():
 
     mMaterials.insert(std::pair<LLMaterialID, LLMaterialPtr>(LLMaterialID::null, LLMaterialPtr(NULL)));
     gIdleCallbacks.addFunction(&LLMaterialMgr::onIdle, NULL);
-    LLWorld::instance().setRegionRemovedCallback(boost::bind(&LLMaterialMgr::onRegionRemoved, this, _1));
+    if(!nativeMaterials())LLWorld::instance().setRegionRemovedCallback(boost::bind(&LLMaterialMgr::onRegionRemoved, this, _1));
 }
 
 LLMaterialMgr::~LLMaterialMgr()
@@ -173,6 +184,7 @@ void LLMaterialMgr::markGetPending(const LLUUID& region_id, const LLMaterialID& 
 
 const LLMaterialPtr LLMaterialMgr::get(const LLUUID& region_id, const LLMaterialID& material_id)
 {
+    if(nativeMaterials())return nativeGet(region_id,material_id);
     LL_DEBUGS("Materials") << "region " << region_id << " material id " << material_id << LL_ENDL;
     LLMaterialPtr material;
     material_map_t::const_iterator itMaterial = mMaterials.find(material_id);
@@ -204,6 +216,7 @@ const LLMaterialPtr LLMaterialMgr::get(const LLUUID& region_id, const LLMaterial
 
 boost::signals2::connection LLMaterialMgr::get(const LLUUID& region_id, const LLMaterialID& material_id, LLMaterialMgr::get_callback_t::slot_type cb)
 {
+    if(nativeMaterials())return nativeGet(region_id,material_id,cb);
     boost::signals2::connection connection;
 
     material_map_t::const_iterator itMaterial = mMaterials.find(material_id);
@@ -245,6 +258,7 @@ boost::signals2::connection LLMaterialMgr::get(const LLUUID& region_id, const LL
 
 boost::signals2::connection LLMaterialMgr::getTE(const LLUUID& region_id, const LLMaterialID& material_id, U32 te, LLMaterialMgr::get_callback_te_t::slot_type cb)
 {
+    if(nativeMaterials())return nativeGet(region_id,material_id,[cb,te](const LLMaterialID& id,const LLMaterialPtr value){cb(id,value,te);});
     boost::signals2::connection connection;
 
     material_map_t::const_iterator itMaterial = mMaterials.find(material_id);
@@ -296,6 +310,7 @@ bool LLMaterialMgr::isGetAllPending(const LLUUID& region_id) const
 
 void LLMaterialMgr::getAll(const LLUUID& region_id)
 {
+    if(nativeMaterials()){nativeGetAll(region_id,[](const LLUUID&,const material_map_t&){});return;}
     if (!isGetAllPending(region_id))
     {
         LL_DEBUGS("Materials") << "queuing for region " << region_id << LL_ENDL;
@@ -309,6 +324,7 @@ void LLMaterialMgr::getAll(const LLUUID& region_id)
 
 boost::signals2::connection LLMaterialMgr::getAll(const LLUUID& region_id, LLMaterialMgr::getall_callback_t::slot_type cb)
 {
+    if(nativeMaterials())return nativeGetAll(region_id,cb);
     if (!isGetAllPending(region_id))
     {
         mGetAllQueue.insert(region_id);
@@ -325,6 +341,15 @@ boost::signals2::connection LLMaterialMgr::getAll(const LLUUID& region_id, LLMat
 
 void LLMaterialMgr::put(const LLUUID& object_id, const U8 te, const LLMaterial& material)
 {
+#if VS_NATIVE_VULKAN
+    if(nativeMaterials())
+    {
+        const auto object=VSTaskInventoryObject::find(object_id);
+        if(object && object.native() && gViewerWindow->nativeContext())
+            if(auto* assets=gViewerWindow->nativeContext()->world().legacyMaterialAssets(object.getHost()))assets->put(object.nativeObject(),te,material);
+        return;
+    }
+#endif
     put_queue_t::iterator itQueue = mPutQueue.find(object_id);
     if (mPutQueue.end() == itQueue)
     {
@@ -575,6 +600,7 @@ void LLMaterialMgr::onPutResponse(bool success, const LLSD& content)
 
 void LLMaterialMgr::onIdle(void*)
 {
+    if(nativeMaterials()){LLMaterialMgr::instance().nativeIdle();return;}
     LL_PROFILE_ZONE_SCOPED;
 
     LLMaterialMgr* instancep = LLMaterialMgr::getInstance();
@@ -1024,3 +1050,145 @@ void LLMaterialMgr::onRegionRemoved(LLViewerRegion* regionp)
     // Put doesn't need clearing: objects that can't be found will clean up in processPutQueue()
 }
 
+
+struct LLMaterialMgr::NativeState
+{
+    struct Region
+    {
+        std::function<bool()> current;
+        std::map<LLMaterialID,std::shared_ptr<get_callback_t>> pending;
+        std::shared_ptr<getall_callback_t> all;
+    };
+    std::function<bool()> current;
+    std::map<LLUUID,Region> regions;
+    bool retired=false;
+};
+void LLMaterialMgr::retireNativeAccount()
+{
+    const auto previous=std::exchange(mNative,{});if(previous)previous->retired=true;
+    // Native data never shares its global-ID local cache with another account.
+    mMaterials.clear();mMaterials.emplace(LLMaterialID::null,LLMaterialPtr());
+}
+std::shared_ptr<LLMaterialMgr::NativeState> LLMaterialMgr::nativeState()
+{
+#if VS_NATIVE_VULKAN
+    const auto session=VSNativeSession::active();
+    if(!session || !session->regionReady()){retireNativeAccount();return {};}
+    if(mNative && (mNative->retired || !mNative->current()))retireNativeAccount();
+    if(!mNative){retireNativeAccount();mNative=std::make_shared<NativeState>();mNative->current=session->accountGuard();}
+    return mNative;
+#else
+    return {};
+#endif
+}
+namespace
+{
+#if VS_NATIVE_VULKAN
+VSMaterialAssets* nativeRegionMaterials(const LLUUID& region)
+{
+    const auto context=vs_region_context(region);
+    if(!context || !context->current() || !gViewerWindow || !gViewerWindow->nativeContext())return nullptr;
+    return gViewerWindow->nativeContext()->world().legacyMaterialAssets(context->getHost());
+}
+std::function<bool()> nativeMaterialRegionGuard(const LLUUID& region)
+{
+    const auto context=vs_region_context(region);const auto session=VSNativeSession::active();
+    if(!context || !session)return []{return false;};
+    const auto account=session->accountGuard();const auto host=context->getHost();const auto circuit=session->circuitGeneration(host);
+    const std::weak_ptr<VSNativeSession> owner=session;
+    return [owner,account,host,circuit,region]
+    {
+        const auto session=owner.lock();const auto context=vs_region_context(host);
+        return session && account() && session->circuitGeneration(host)==circuit && context && context->current() && context->getRegionID()==region;
+    };
+}
+#endif
+}
+LLMaterialPtr LLMaterialMgr::nativeGet(const LLUUID& region,const LLMaterialID& id)
+{
+#if VS_NATIVE_VULKAN
+    const auto state=nativeState();if(!state || !state->current())return {};
+    if(const auto local=mMaterials.find(id);local!=mMaterials.end())return local->second;
+    if(auto* assets=nativeRegionMaterials(region))return assets->get(id);
+#endif
+    return {};
+}
+boost::signals2::connection LLMaterialMgr::nativeGet(const LLUUID& region,const LLMaterialID& id,get_callback_t::slot_type cb)
+{
+#if VS_NATIVE_VULKAN
+    const auto state=nativeState();if(!state || !state->current())return {};
+    if(const auto material=nativeGet(region,id);material || id.isNull())
+    {
+        get_callback_t signal;signal.connect(cb);signal(id,material);return {};
+    }
+    const auto current=nativeMaterialRegionGuard(region);if(!current())return {};
+    auto& row=state->regions[region];if(row.current && !row.current())row=NativeState::Region{};
+    row.current=current;
+    auto& signal=row.pending[id];if(!signal)signal=std::make_shared<get_callback_t>();
+    return signal->connect([weak=std::weak_ptr<NativeState>(state),current,cb](const LLMaterialID& id,const LLMaterialPtr value)
+    {const auto state=weak.lock();if(state && !state->retired && state->current() && current())cb(id,value);});
+#endif
+    return {};
+}
+boost::signals2::connection LLMaterialMgr::nativeGetAll(const LLUUID& region,getall_callback_t::slot_type cb)
+{
+#if VS_NATIVE_VULKAN
+    const auto state=nativeState();if(!state || !state->current())return {};
+    auto* assets=nativeRegionMaterials(region);if(!assets)return {};
+    assets->requestAll();
+    const auto current=nativeMaterialRegionGuard(region);if(!current())return {};
+    auto& row=state->regions[region];if(row.current && !row.current())row=NativeState::Region{};
+    row.current=current;
+    if(assets->loaded())
+    {
+        // Snapshot pointer references before arbitrary callbacks can retire region.
+        const auto materials=assets->materials();getall_callback_t signal;signal.connect(cb);signal(region,materials);return {};
+    }
+    if(!row.all)row.all=std::make_shared<getall_callback_t>();
+    return row.all->connect([weak=std::weak_ptr<NativeState>(state),current,cb](const LLUUID& region,const material_map_t& values)
+    {const auto state=weak.lock();if(state && !state->retired && state->current() && current())cb(region,values);});
+#endif
+    return {};
+}
+void LLMaterialMgr::nativeIdle()
+{
+#if VS_NATIVE_VULKAN
+    const auto state=nativeState();if(!state || !state->current() || !gViewerWindow || !gViewerWindow->nativeContext())return;
+    gViewerWindow->nativeContext()->world().tickLegacyMaterials();
+    struct Dispatch
+    {
+        LLUUID region;LLMaterialID id;LLMaterialPtr material;
+        std::shared_ptr<get_callback_t> one;std::shared_ptr<getall_callback_t> all;
+        material_map_t materials;std::function<bool()> current;
+    };
+    std::vector<Dispatch> callbacks;
+    for(auto item=state->regions.begin();item!=state->regions.end();)
+    {
+        const auto region=item->first;auto& row=item->second;
+        if(!row.current()){item=state->regions.erase(item);continue;}
+        auto* assets=nativeRegionMaterials(region);if(!assets){++item;continue;}
+        for(auto pending=row.pending.begin();pending!=row.pending.end();)
+        {
+            const auto material=assets->get(pending->first);if(!material){++pending;continue;}
+            Dispatch d;d.region=region;d.id=pending->first;d.material=material;d.one=std::move(pending->second);d.current=row.current;
+            callbacks.push_back(std::move(d));pending=row.pending.erase(pending);
+        }
+        if(row.all && !assets->loaded())assets->requestAll();
+        if(row.all && assets->loaded())
+        {
+            Dispatch d;d.region=region;d.all=std::exchange(row.all,{});d.materials=assets->materials();d.current=row.current;
+            callbacks.push_back(std::move(d));
+        }
+        if(row.pending.empty() && !row.all)item=state->regions.erase(item);else ++item;
+    }
+    // Detach every signal before invoking UI callbacks: account retirement or a
+    // reentrant material request cannot invalidate a dispatch-map iterator.
+    for(const auto& d:callbacks)
+    {
+        if(state->retired || !state->current())return;
+        if(!d.current())continue;
+        if(d.one)(*d.one)(d.id,d.material);
+        if(d.all)(*d.all)(d.region,d.materials);
+    }
+#endif
+}

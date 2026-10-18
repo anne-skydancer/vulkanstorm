@@ -29,6 +29,10 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterpathfindingconsole.h"
+#include "vsappearanceui.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llagent.h"
 #include "llbutton.h"
@@ -95,7 +99,7 @@ bool LLFloaterPathfindingConsole::postBuild()
 {
     mViewTestTabContainer = findChild<LLTabContainer>("view_test_tab_container");
     llassert(mViewTestTabContainer != NULL);
-    mViewTestTabContainer->setCommitCallback(boost::bind(&LLFloaterPathfindingConsole::onTabSwitch, this));
+    mViewTestTabContainer->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::onTabSwitch, this)));
 
     mViewTab = findChild<LLPanel>("view_panel");
     llassert(mViewTab != NULL);
@@ -105,22 +109,22 @@ bool LLFloaterPathfindingConsole::postBuild()
 
     mShowWorldCheckBox = findChild<LLCheckBoxCtrl>("show_world");
     llassert(mShowWorldCheckBox != NULL);
-    mShowWorldCheckBox->setCommitCallback(boost::bind(&LLFloaterPathfindingConsole::onShowWorldSet, this));
+    mShowWorldCheckBox->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::onShowWorldSet, this)));
 
     mShowWorldMovablesOnlyCheckBox = findChild<LLCheckBoxCtrl>("show_world_movables_only");
     llassert(mShowWorldMovablesOnlyCheckBox != NULL);
-    mShowWorldMovablesOnlyCheckBox->setCommitCallback(boost::bind(&LLFloaterPathfindingConsole::onShowWorldMovablesOnlySet, this));
+    mShowWorldMovablesOnlyCheckBox->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::onShowWorldMovablesOnlySet, this)));
 
     mShowNavMeshCheckBox = findChild<LLCheckBoxCtrl>("show_navmesh");
     llassert(mShowNavMeshCheckBox != NULL);
-    mShowNavMeshCheckBox->setCommitCallback(boost::bind(&LLFloaterPathfindingConsole::onShowNavMeshSet, this));
+    mShowNavMeshCheckBox->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::onShowNavMeshSet, this)));
 
     mShowNavMeshWalkabilityLabel = findChild<LLTextBase>("show_walkability_label");
     llassert(mShowNavMeshWalkabilityLabel != NULL);
 
     mShowNavMeshWalkabilityComboBox = findChild<LLComboBox>("show_heatmap_mode");
     llassert(mShowNavMeshWalkabilityComboBox != NULL);
-    mShowNavMeshWalkabilityComboBox->setCommitCallback(boost::bind(&LLFloaterPathfindingConsole::onShowWalkabilitySet, this));
+    mShowNavMeshWalkabilityComboBox->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::onShowWalkabilitySet, this)));
 
     mShowWalkablesCheckBox = findChild<LLCheckBoxCtrl>("show_walkables");
     llassert(mShowWalkablesCheckBox != NULL);
@@ -160,7 +164,7 @@ bool LLFloaterPathfindingConsole::postBuild()
 
     mCharacterWidthSlider = findChild<LLSliderCtrl>("character_width");
     llassert(mCharacterWidthSlider != NULL);
-    mCharacterWidthSlider->setCommitCallback(boost::bind(&LLFloaterPathfindingConsole::onCharacterWidthSet, this));
+    mCharacterWidthSlider->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::onCharacterWidthSet, this)));
 
     mCharacterWidthUnitLabel = findChild<LLTextBase>("character_width_unit_label");
     llassert(mCharacterWidthUnitLabel != NULL);
@@ -170,14 +174,14 @@ bool LLFloaterPathfindingConsole::postBuild()
 
     mCharacterTypeComboBox = findChild<LLComboBox>("path_character_type");
     llassert(mCharacterTypeComboBox != NULL);
-    mCharacterTypeComboBox->setCommitCallback(boost::bind(&LLFloaterPathfindingConsole::onCharacterTypeSwitch, this));
+    mCharacterTypeComboBox->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::onCharacterTypeSwitch, this)));
 
     mPathTestingStatus = findChild<LLTextBase>("path_test_status");
     llassert(mPathTestingStatus != NULL);
 
     mClearPathButton = findChild<LLButton>("clear_path");
     llassert(mClearPathButton != NULL);
-    mClearPathButton->setCommitCallback(boost::bind(&LLFloaterPathfindingConsole::onClearPathClicked, this));
+    mClearPathButton->setCommitCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::onClearPathClicked, this)));
 
     mErrorColor = LLUIColorTable::instance().getColor("PathfindingErrorColor");
     mWarningColor = LLUIColorTable::instance().getColor("PathfindingWarningColor");
@@ -199,23 +203,20 @@ bool LLFloaterPathfindingConsole::postBuild()
 void LLFloaterPathfindingConsole::onOpen(const LLSD& pKey)
 {
     LLFloater::onOpen(pKey);
-    //make sure we have a pathing system
-    if ( LLPathingLib::getInstance() == NULL )
+    // The unavailable-library UI is original product policy on both backends.
+    // Do not acquire a path tool, parcel observer, or pipeline state for a
+    // disabled library. Functional-library Vulkan geometry is a separate owner.
+    if (showUnavailableLibrary())
     {
-        setConsoleState(kConsoleStateLibraryNotImplemented);
-        LL_WARNS() <<"Errror: cannot find pathing library implementation."<<LL_ENDL;
-
-        // <FS:TJ> Show an alert dialog if using a viewer without pathfinding view / test support
-        LLSD args;
-        args["FEATURE"] = getString("no_havok");
-        LLNotificationsUtil::add("NoHavok", args);
-        // </FS:TJ>
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active()) return;
+#endif
     }
     else
     {
         if (!mNavMeshZoneSlot.connected())
         {
-            mNavMeshZoneSlot = mNavMeshZone.registerNavMeshZoneListener(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshZoneStatus, this, _1));
+            mNavMeshZoneSlot = mNavMeshZone.registerNavMeshZoneListener(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshZoneStatus, this, _1)));
         }
 
         mIsNavMeshUpdating = false;
@@ -226,17 +227,17 @@ void LLFloaterPathfindingConsole::onOpen(const LLSD& pKey)
 
     if (!mRegionBoundarySlot.connected())
     {
-        mRegionBoundarySlot = gAgent.addRegionChangedCallback(boost::bind(&LLFloaterPathfindingConsole::onRegionBoundaryCross, this));
+        mRegionBoundarySlot = gAgent.addRegionChangedCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::onRegionBoundaryCross, this)));
     }
 
     if (!mTeleportFailedSlot.connected())
     {
-        mTeleportFailedSlot = LLViewerParcelMgr::getInstance()->setTeleportFailedCallback(boost::bind(&LLFloaterPathfindingConsole::onRegionBoundaryCross, this));
+        mTeleportFailedSlot = LLViewerParcelMgr::getInstance()->setTeleportFailedCallback(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::onRegionBoundaryCross, this)));
     }
 
     if (!mPathEventSlot.connected())
     {
-        mPathEventSlot = LLPathfindingPathTool::getInstance()->registerPathEventListener(boost::bind(&LLFloaterPathfindingConsole::onPathEvent, this));
+        mPathEventSlot = LLPathfindingPathTool::getInstance()->registerPathEventListener(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::onPathEvent, this)));
     }
 
     setDefaultInputs();
@@ -250,6 +251,14 @@ void LLFloaterPathfindingConsole::onOpen(const LLSD& pKey)
 
 void LLFloaterPathfindingConsole::onClose(bool pIsAppQuitting)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && !LLPathingLib::isFunctional())
+    {
+        LLFloater::onClose(pIsAppQuitting);
+        return;
+    }
+#endif
+
     switchOutOfTestPathMode();
 
     if (mPathEventSlot.connected())
@@ -1101,59 +1110,59 @@ void LLFloaterPathfindingConsole::registerSavedSettingsListeners()
 {
     if (!mSavedSettingRetrieveNeighborSlot.connected())
     {
-        mSavedSettingRetrieveNeighborSlot = gSavedSettings.getControl(CONTROL_NAME_RETRIEVE_NEIGHBOR)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleRetrieveNeighborChange, this, _1, _2));
+        mSavedSettingRetrieveNeighborSlot = gSavedSettings.getControl(CONTROL_NAME_RETRIEVE_NEIGHBOR)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleRetrieveNeighborChange, this, _1, _2)));
     }
     if (!mSavedSettingWalkableSlot.connected())
     {
-        mSavedSettingWalkableSlot = gSavedSettings.getControl(CONTROL_NAME_WALKABLE_OBJECTS)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingWalkableSlot = gSavedSettings.getControl(CONTROL_NAME_WALKABLE_OBJECTS)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
     if (!mSavedSettingStaticObstacleSlot.connected())
     {
-        mSavedSettingStaticObstacleSlot = gSavedSettings.getControl(CONTROL_NAME_STATIC_OBSTACLE_OBJECTS)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingStaticObstacleSlot = gSavedSettings.getControl(CONTROL_NAME_STATIC_OBSTACLE_OBJECTS)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
     if (!mSavedSettingMaterialVolumeSlot.connected())
     {
-        mSavedSettingMaterialVolumeSlot = gSavedSettings.getControl(CONTROL_NAME_MATERIAL_VOLUMES)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingMaterialVolumeSlot = gSavedSettings.getControl(CONTROL_NAME_MATERIAL_VOLUMES)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
     if (!mSavedSettingExclusionVolumeSlot.connected())
     {
-        mSavedSettingExclusionVolumeSlot = gSavedSettings.getControl(CONTROL_NAME_EXCLUSION_VOLUMES)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingExclusionVolumeSlot = gSavedSettings.getControl(CONTROL_NAME_EXCLUSION_VOLUMES)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
     if (!mSavedSettingInteriorEdgeSlot.connected())
     {
-        mSavedSettingInteriorEdgeSlot = gSavedSettings.getControl(CONTROL_NAME_INTERIOR_EDGE)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingInteriorEdgeSlot = gSavedSettings.getControl(CONTROL_NAME_INTERIOR_EDGE)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
     if (!mSavedSettingExteriorEdgeSlot.connected())
     {
-        mSavedSettingExteriorEdgeSlot = gSavedSettings.getControl(CONTROL_NAME_EXTERIOR_EDGE)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingExteriorEdgeSlot = gSavedSettings.getControl(CONTROL_NAME_EXTERIOR_EDGE)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
     if (!mSavedSettingHeatmapMinSlot.connected())
     {
-        mSavedSettingHeatmapMinSlot = gSavedSettings.getControl(CONTROL_NAME_HEATMAP_MIN)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingHeatmapMinSlot = gSavedSettings.getControl(CONTROL_NAME_HEATMAP_MIN)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
     if (!mSavedSettingHeatmapMaxSlot.connected())
     {
-        mSavedSettingHeatmapMaxSlot = gSavedSettings.getControl(CONTROL_NAME_HEATMAP_MAX)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingHeatmapMaxSlot = gSavedSettings.getControl(CONTROL_NAME_HEATMAP_MAX)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
     if (!mSavedSettingNavMeshFaceSlot.connected())
     {
-        mSavedSettingNavMeshFaceSlot = gSavedSettings.getControl(CONTROL_NAME_NAVMESH_FACE)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingNavMeshFaceSlot = gSavedSettings.getControl(CONTROL_NAME_NAVMESH_FACE)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
     if (!mSavedSettingTestPathValidEndSlot.connected())
     {
-        mSavedSettingTestPathValidEndSlot = gSavedSettings.getControl(CONTROL_NAME_TEST_PATH_VALID_END)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingTestPathValidEndSlot = gSavedSettings.getControl(CONTROL_NAME_TEST_PATH_VALID_END)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
     if (!mSavedSettingTestPathInvalidEndSlot.connected())
     {
-        mSavedSettingTestPathInvalidEndSlot = gSavedSettings.getControl(CONTROL_NAME_TEST_PATH_INVALID_END)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingTestPathInvalidEndSlot = gSavedSettings.getControl(CONTROL_NAME_TEST_PATH_INVALID_END)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
     if (!mSavedSettingTestPathSlot.connected())
     {
-        mSavedSettingTestPathSlot = gSavedSettings.getControl(CONTROL_NAME_TEST_PATH)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingTestPathSlot = gSavedSettings.getControl(CONTROL_NAME_TEST_PATH)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
     if (!mSavedSettingWaterSlot.connected())
     {
-        mSavedSettingWaterSlot = gSavedSettings.getControl(CONTROL_NAME_WATER)->getSignal()->connect(boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2));
+        mSavedSettingWaterSlot = gSavedSettings.getControl(CONTROL_NAME_WATER)->getSignal()->connect(vs_appearance_ui_callback(this, boost::bind(&LLFloaterPathfindingConsole::handleNavMeshColorChange, this, _1, _2)));
     }
 }
 
@@ -1272,4 +1281,14 @@ void LLFloaterPathfindingConsole::fillInColorsForNavMeshVisualization()
 
         LLPathingLib::getInstance()->setNavMeshColors(navMeshColors);
     }
+}
+
+bool LLFloaterPathfindingConsole::showUnavailableLibrary()
+{
+    if (LLPathingLib::getInstance() != NULL) return false;
+    setConsoleState(kConsoleStateLibraryNotImplemented);
+    LLSD args;
+    args["FEATURE"] = getString("no_havok");
+    LLNotificationsUtil::add("NoHavok", args);
+    return true;
 }

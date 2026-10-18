@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 #include <optional>
+#include <functional>
 #include "vsworldcontracts.h"
 
 namespace Diligent { struct IRenderDevice; struct IDeviceContext; struct ITextureView; }
@@ -21,7 +22,7 @@ public:
     // Only this handle permits in-place updates; ordinary images stay immutable.
     using FontAtlas = std::shared_ptr<Texture>;
     enum class Blend { StraightAlpha, PremultipliedAlpha, Additive, AdditiveAlpha, Replace };
-    enum class Sampling { Nearest, Linear };
+    enum class Sampling { Nearest, Linear, Anisotropic };
     struct Vertex { float x,y,u,v,r,g,b,a; };
     struct Packet
     {
@@ -33,6 +34,9 @@ public:
         std::array<float, 6> transform{1, 0, 0, 1, 0, 0}; // affine, before DPI
         Blend blend = Blend::StraightAlpha;
         Sampling sampling = Sampling::Nearest;
+        // Billboard UI uses the existing world depth attachment without changing
+        // the shared vertex ABI. Ordinary UI leaves this absent.
+        std::optional<float> worldDepth;
         bool alpha_mask = false; // image alpha with tint RGB, like LLUIImage::drawSolid
         std::optional<std::array<Vertex,6>> triangles; // native font geometry, same logical coordinate space
     };
@@ -44,6 +48,10 @@ public:
     Image upload(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba,
                  VSWorldContracts::ImageRole role=VSWorldContracts::ImageRole::CoreUI,bool compress=false);
     Image uploadPrepared(const std::shared_ptr<const VSTextureUpload::Prepared>&);
+    // A private render target becomes an immutable sampled generation after
+    // the producer returns. No readback or mutation of queued images is needed.
+    Image renderImage(unsigned width, unsigned height,
+                      const std::function<void(Diligent::ITextureView*)>&);
     bool supportsCompression() const;
     // Reference normgen/standard-bump kernels, rendered from the admitted source
     // generation. Standard bump height uses the original last component.
@@ -55,7 +63,7 @@ public:
     // Submission order is paint order. Positive DPI scales logical coordinates.
     // The caller owns clear/present; no ambient GL state is consulted.
     void draw(Diligent::ITextureView* target, unsigned width, unsigned height,
-              float dpi, const std::vector<Packet>& packets);
+              float dpi, const std::vector<Packet>& packets,Diligent::ITextureView* worldDepth=nullptr);
     // Nonblocking: release only submissions whose GPU fence has completed.
     // The owner waits for idle before destroying this renderer.
     void retire();
@@ -64,6 +72,10 @@ public:
     void flushUploads();
     Statistics statistics() const;
     static std::uint64_t generation(const Image&);
+    // Reference texture console bound activity, from actual draw submission.
+    static void markBound(const Image&,double steadySeconds);
+    static std::optional<double> lastBound(const Image&);
+
     // CPU pixels for an independent diagnostic raster oracle. Font atlas pixels
     // are synchronized before the frame's draws and observer, like the GPU page.
     static const std::vector<std::uint8_t>& imagePixels(const Image&);

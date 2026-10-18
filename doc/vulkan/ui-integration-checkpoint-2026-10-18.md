@@ -91,3 +91,37 @@ instructions. These are drafts and must not overwrite fresh canonical sources:
 
 The name-tag agent's final handoff is indexed in the root resume file. All
 agents are stopping for the break. Drafts have no production/runtime acceptance.
+
+
+## Subsequent implementation checkpoint — 18 October 2026
+
+The user subsequently resumed development and requested that completed R3
+implementation be committed and pushed. The earlier pause above describes the
+previous checkpoint, not the current work state. This checkpoint is source work;
+R3 and complete UI acceptance remain open. Rebuild and runtime qualification
+are deferred until the remaining production gaps are closed, as requested.
+
+The source changes since the previous checkpoint include native connected UI
+and service integrations for appearance and wearables, sound and voice, particles,
+name tags, selection and object editing services, task inventory, snapshots and
+previews, Area Search, media settings, directory search and administrative tools.
+They also include shared immediate geometry, selection-light drawing, physical
+pixel image drawing, source-aware alpha classification and local built-in image
+loading, plus utility dialogs and account/selection lifetime guards. Shared
+OpenGL policies and existing transports are retained where transposed.
+
+These are implemented components, not a declaration that their entire parent
+features are complete. In particular, the full Face panel integration, Poser,
+manipulator controllers, world drag-and-drop, land tools, object inspection and
+remaining utility paths are still open. Unapplied implementation drafts under
+`.tmp` are deliberately excluded from this commit.
+
+Source-only checks and extracted production-body regressions accompany the
+implementation. The latest image-provider, shared image drawing and rendering
+source checks are recorded locally. No full viewer rebuild, staging refresh,
+viewer launch or three-platform runtime qualification was performed for this
+checkpoint. The staged executable described above still predates these changes.
+
+The commit requests CI skipping so this explicit backup push does not initiate
+qualification ahead of implementation closure. Final qualification must use the
+completed source and its corresponding staged executable and evidence.

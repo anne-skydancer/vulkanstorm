@@ -35,6 +35,7 @@
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #include "vsnativeappearance.h"
+#include "vsvulkancontext.h"
 #endif
 
 #include "fscommon.h"
@@ -56,6 +57,7 @@
 #include "llviewercontrol.h"
 #include "llviewernetwork.h" // <FS:Beq/> for LLGridManager
 #include "llviewerregion.h"
+#include "llviewerwindow.h"
 #include "llvoavatar.h"
 #include "llvoavatarself.h"
 #include "rlvhandler.h"
@@ -115,7 +117,25 @@ FloaterQuickPrefs::FloaterQuickPrefs(const LLSD& key)
     mRegionChangedSlot()
 {
     // For Phototools
-    mCommitCallbackRegistrar.add("Quickprefs.ShaderChanged", boost::bind(&handleSetShaderChanged, LLSD()));
+    mCommitCallbackRegistrar.add("Quickprefs.ShaderChanged", [this](LLUICtrl*, const LLSD&)
+    {
+#if VS_NATIVE_VULKAN
+        if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        {
+            // Native pipelines retain their compiled shader variants; current
+            // R3 consumers read the committed settings. Refresh the same UI
+            // availability without entering the OpenGL shader reload owner.
+            if (mAccountCurrent()) refreshSettings();
+            return;
+        }
+#endif
+        handleSetShaderChanged(LLSD());
+    });
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        mCommitCallbackRegistrar.add("Pref.RenderOptionUpdate", [this](LLUICtrl*, const LLSD&)
+        { if (mAccountCurrent()) refreshSettings(); });
+#endif
 
     if (!getIsPhototools() && !FSCommon::isLegacySkin())
     {
@@ -1067,6 +1087,18 @@ void FloaterQuickPrefs::setSelectedDayCycle(const std::string& preset_name)
 // Phototools additions
 void FloaterQuickPrefs::refreshSettings()
 {
+    const bool native = gViewerWindow && gViewerWindow->isNativeVulkan();
+    const auto featureAvailable = [](const std::string& name)
+    {
+#if VS_NATIVE_VULKAN
+        if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        {
+            const auto* context = gViewerWindow->nativeContext();
+            return context && vs_graphics_feature_implemented(name, context->graphicsCapabilities());
+        }
+#endif
+        return LLFeatureManager::getInstance()->isFeatureAvailable(name);
+    };
     LLTextBox* sky_label = getChild<LLTextBox>("T_Sky_Detail");
     LLSlider* sky_slider = getChild<LLSlider>("SB_Sky_Detail");
     LLSpinCtrl* sky_spinner = getChild<LLSpinCtrl>("S_Sky_Detail");
@@ -1077,27 +1109,27 @@ void FloaterQuickPrefs::refreshSettings()
     sky_spinner->setEnabled(true);
     sky_default_button->setEnabled(true);
 
-    bool enabled = LLFeatureManager::getInstance()->isFeatureAvailable("RenderDeferredSSAO");
+    bool enabled = featureAvailable("RenderDeferredSSAO");
 
     mCtrlUseSSAO->setEnabled(enabled);
     mCtrlUseDoF->setEnabled(enabled);
 
-    enabled = enabled && LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowDetail");
+    enabled = enabled && featureAvailable("RenderShadowDetail");
 
     mCtrlShadowDetail->setEnabled(enabled);
 
     // disabled deferred SSAO
-    if (!LLFeatureManager::getInstance()->isFeatureAvailable("RenderDeferredSSAO"))
+    if (!featureAvailable("RenderDeferredSSAO"))
     {
         mCtrlUseSSAO->setEnabled(false);
-        mCtrlUseSSAO->setValue(false);
+        if (!native) mCtrlUseSSAO->setValue(false);
     }
 
     // disabled deferred shadows
-    if (!LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowDetail"))
+    if (!featureAvailable("RenderShadowDetail"))
     {
         mCtrlShadowDetail->setEnabled(false);
-        mCtrlShadowDetail->setValue(0);
+        if (!native) mCtrlShadowDetail->setValue(0);
     }
 
     // <FS:CR> FIRE-9630 - Vignette UI controls

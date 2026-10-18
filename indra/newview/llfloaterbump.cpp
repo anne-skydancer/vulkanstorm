@@ -32,6 +32,7 @@
 
 #include "llavataractions.h"
 #include "llfloaterbump.h"
+#include "vsnativeim.h"
 #include "llfloaterreg.h"
 #include "llfloaterreporter.h"
 #include "llmutelist.h"
@@ -331,6 +332,7 @@ LLFloaterBump* LLFloaterBump::getInstance()
 // <FS:Ansariel> FIRE-13888: Add copy function to bumps list
 LLContextMenu* FSBumpListMenu::createMenu()
 {
+    mAccountCurrent = vs_native_im_guard();
     LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
     LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
 
@@ -342,6 +344,7 @@ LLContextMenu* FSBumpListMenu::createMenu()
 
 void FSBumpListMenu::onContextMenuItemClick(const LLSD& userdata)
 {
+    if ((mAccountCurrent && !mAccountCurrent()) || mUUIDs.empty()) return;
     std::string item = userdata.asString();
 
     if (item == "show_profile")
@@ -391,7 +394,8 @@ void FSBumpListMenu::onContextMenuItemClick(const LLSD& userdata)
 
             if (!bumps_text.empty())
             {
-                LLClipboard::instance().copyToClipboard(utf8str_to_wstring(bumps_text), 0, static_cast<S32>(bumps_text.size()));
+                const auto text = utf8str_to_wstring(bumps_text);
+                LLClipboard::instance().copyToClipboard(text, 0, static_cast<S32>(text.size()));
             }
         }
     }
@@ -399,6 +403,7 @@ void FSBumpListMenu::onContextMenuItemClick(const LLSD& userdata)
 
 bool FSBumpListMenu::onContextMenuItemEnable(const LLSD& userdata)
 {
+    if ((mAccountCurrent && !mAccountCurrent()) || mUUIDs.empty()) return false;
     const LLFloaterBump* floater = LLFloaterReg::findTypedInstance<LLFloaterBump>("bumps");
     const std::string item = userdata.asString();
 

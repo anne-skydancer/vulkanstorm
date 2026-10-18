@@ -32,6 +32,7 @@
 #include "llviewerinventory.h"
 #include "llwearableitemslist.h"
 #include <optional>
+#include <functional>
 
 class LLButton;
 class LLFilterEditor;
@@ -86,6 +87,7 @@ public:
     static LLUUID getFavoritesFolder();
 
     static LLUUID sFolderID;
+    static void retireNativeAccount();
 
 private:
     void initialize();
@@ -102,6 +104,7 @@ private:
 
     static std::optional<LLUUID> getWearableFavoritesFolderID();
 
+    std::function<bool()> mAccountCurrent;
     bool mInitialized;
 
     boost::signals2::connection mDADCallbackConnection;

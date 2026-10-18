@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpaneleventinfo.h"
+#include "vsnativeim.h"
 
 #include "llagent.h"
 #include "llbutton.h"
@@ -85,6 +86,7 @@ bool LLPanelEventInfo::postBuild()
 
 void LLPanelEventInfo::setEventID(const U32 event_id)
 {
+    ++mLocationRevision;
     mEventID = event_id;
 
     if (event_id != 0)
@@ -110,6 +112,7 @@ bool LLPanelEventInfo::processEventInfoReply(LLEventInfo event)
 {
     if (event.mID != getEventID())
         return false;
+    const auto revision=++mLocationRevision;
 
     mTBName->setText(event.mName);
     mTBName->setToolTip(event.mName);
@@ -140,12 +143,13 @@ bool LLPanelEventInfo::processEventInfoReply(LLEventInfo event)
         mTBLocation->setText(LLTrans::getString("LoadingData"));
 
         const auto region_handle = to_region_handle(event.mPosGlobal);
+        const auto weak=getHandle();const auto account=vs_native_im_guard();
         LLWorldMapMessage::getInstance()->sendHandleRegionRequest(
             region_handle,
             [=, this](U64 requested_region_handle, const std::string&, const LLUUID&, bool)
             {
-                if (region_handle != requested_region_handle)
-                    return;
+                if(!weak.get() || !account() || revision!=mLocationRevision || event.mID!=mEventID ||
+                    region_handle != requested_region_handle)return;
 
                 if (LLSimInfo* sim_info = LLWorldMap::getInstance()->simInfoFromPosGlobal(event.mPosGlobal))
                 {

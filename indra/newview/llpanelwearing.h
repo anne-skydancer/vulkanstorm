@@ -31,6 +31,7 @@
 
 // newview
 #include "llpanelappearancetab.h"
+#include <functional>
 #include "llselectmgr.h"
 #include "lltimer.h"
 
@@ -97,7 +98,7 @@ private:
     void onWearableItemsListRightClick(LLUICtrl* ctrl, S32 x, S32 y);
     void onTempAttachmentsListRightClick(LLUICtrl* ctrl, S32 x, S32 y);
 
-    void getAttachmentLimitsCoro(std::string url);
+    static void getAttachmentLimitsCoro(LLHandle<LLPanel>, std::function<bool()>, U64, std::string url);
 
     // <FS:Ansariel> FIRE-22484: Double-click wear in outfits list
     void onDoubleClick();
@@ -124,6 +125,8 @@ private:
     boost::signals2::connection     mAttachmentsChangedConnection;
     LLFrameTimer                    mUpdateTimer;
 
+    boost::signals2::scoped_connection mCOFConnection;
+    U64 mDetailsRequest = 0;
     bool                            mIsInitialized;
 };
 

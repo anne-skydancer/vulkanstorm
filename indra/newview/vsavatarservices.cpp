@@ -2,6 +2,9 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsavatarservices.h"
 #include "llagent.h"
+#include "llcharacter.h"
+#include "lljoint.h"
+#include "vsobjectcontext.h"
 #include "llviewercontrol.h"
 #include "llvoavatarself.h"
 #include "llagentwearables.h"
@@ -37,6 +40,17 @@ LLCharacter* vs_avatar_character()
     }
 #endif
     return isAgentAvatarValid() ? gAgentAvatarp.get() : nullptr;
+}
+U64 vs_avatar_generation()
+{
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto avatar = nativeAvatar();
+        return avatar ? avatar->ownerGeneration() : 0;
+    }
+#endif
+    return 0;
 }
 LLAvatarAppearance* vs_avatar_appearance()
 {
@@ -142,6 +156,23 @@ std::vector<std::pair<unsigned, std::string>> vs_avatar_attachment_points()
     return result;
 }
 
+bool vs_avatar_attachment_hud(unsigned point)
+{
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto avatar = nativeAvatar();
+        return avatar && avatar->hudAttachment(point);
+    }
+#endif
+    if (isAgentAvatarValid())
+    {
+        const auto found = gAgentAvatarp->mAttachmentPoints.find(point);
+        return found != gAgentAvatarp->mAttachmentPoints.end() && found->second && found->second->getIsHUDAttachment();
+    }
+    return false;
+}
+
 std::vector<VSAvatarAttachment> vs_avatar_attachments()
 {
     std::vector<VSAvatarAttachment> result;
@@ -237,4 +268,19 @@ bool vs_avatar_nearby_location(const LLUUID& id, LLVector3d& position)
     for (const auto& avatar : vs_avatar_locations(origin, radius))
         if (avatar.id == id) { position = avatar.position; return true; }
     return false;
+}
+
+std::optional<VSAvatarVoicePose> vs_avatar_voice_pose()
+{
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        auto* character = vs_avatar_character();
+        const auto object = VSObjectContext::resolve(gAgentID);
+        if (!character || !character->getRootJoint() || !object || !object->current()) return {};
+        return VSAvatarVoicePose{object->position, character->getRootJoint()->getWorldRotation()};
+    }
+#endif
+    if (!isAgentAvatarValid()) return {};
+    return VSAvatarVoicePose{gAgentAvatarp->getPositionGlobal(), gAgentAvatarp->getRootJoint()->getWorldRotation()};
 }

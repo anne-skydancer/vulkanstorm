@@ -29,6 +29,7 @@
 
 #include "lluuid.h"
 #include "llpanel.h"
+#include <functional>
 #include "llselectmgr.h"
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -53,6 +54,7 @@ public:
     void onVisibilityChange (bool new_visibility) override;
 
     void setObjectSelection(LLObjectSelectionHandle selection);
+    void refreshSelection();
 
     const LLUUID& getSelectedUUID();
     LLViewerObject* getFirstSelectedObject();
@@ -61,6 +63,7 @@ public:
     void dirty();
     static void onIdle( void* user_data );
 protected:
+    template<class Selection> void refreshController(Selection*);
     void refresh() override;    // refresh all labels as needed
     void save();
     void updateVerbs();
@@ -107,6 +110,9 @@ private:
     LLUUID          mLastOwnerID;
 
     bool mIsDirty;
+    std::function<bool()> mAccountCurrent;
+    std::function<bool()> mNativeObjectCurrent;
+    LLUUID mNativeSelectedID;
 
 protected:
     void                        onOpenButtonClicked();

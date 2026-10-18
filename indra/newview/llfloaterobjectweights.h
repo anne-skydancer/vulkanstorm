@@ -72,6 +72,12 @@ public:
 
 private:
     void generateTransactionID() override;
+    void refreshNative();
+    void drawNative();
+    std::function<bool()> mAccountCurrent = [] { return true; };
+    std::function<bool()> mSelectionCurrent = [] { return true; };
+    boost::signals2::scoped_connection mSelectionChanged;
+
 
     void toggleWeightsLoadingIndicators(bool visible);
     void toggleLandImpactsLoadingIndicators(bool visible);

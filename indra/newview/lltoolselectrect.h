@@ -39,6 +39,7 @@ public:
     virtual bool    handleMouseDown(S32 x, S32 y, MASK mask);
     virtual bool    handleMouseUp(S32 x, S32 y, MASK mask);
     virtual bool    handleHover(S32 x, S32 y, MASK mask);
+    void            handleDeselect() override;
     virtual void    draw();                         // draw the select rectangle
 
     void handlePick(const LLPickInfo& pick);
@@ -57,6 +58,11 @@ protected:
     S32             mDragLastWidth;
     S32             mDragLastHeight;
 
+#if VS_NATIVE_VULKAN
+    void handleNativeRectangleSelection(S32,S32,MASK);
+    std::function<bool()> mNativeRectangleCurrent;
+    bool mNativeRectangleReleasing=false;
+#endif
     bool            mMouseOutsideSlop;      // has mouse ever gone outside slop region?
 };
 

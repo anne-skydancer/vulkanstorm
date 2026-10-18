@@ -29,6 +29,12 @@
 
 // file include
 #include "llpanelobject.h"
+#include "vseditcontroller.h"
+#include "vsbuildvolume.h"
+#include "vsbuildgeometry.h"
+#if VS_NATIVE_VULKAN
+#include "vstexturescaleselection.h"
+#endif
 
 // linden library includes
 #include "llerror.h"
@@ -303,6 +309,14 @@ bool    LLPanelObject::postBuild()
         mCtrlSculptTexture->setCommitCallback( boost::bind(&LLPanelObject::onCommitSculpt, this, _2 ));
         mCtrlSculptTexture->setOnCancelCallback( boost::bind(&LLPanelObject::onCancelSculpt, this, _2 ));
         mCtrlSculptTexture->setOnSelectCallback( boost::bind(&LLPanelObject::onSelectSculpt, this, _2 ));
+#if VS_NATIVE_VULKAN
+        if(gViewerWindow && gViewerWindow->isNativeVulkan())
+            mCtrlSculptTexture->setOperationGuardFactory([owner=getHandle()]
+            {
+                auto* view=dynamic_cast<LLPanelObject*>(owner.get());
+                return view && view->mNativeSelection?view->mNativeSelection->guard():std::function<bool()>([]{return false;});
+            });
+#endif
         mCtrlSculptTexture->setDropCallback( boost::bind(&LLPanelObject::onDropSculpt, this, _2 ));
         // Don't allow (no copy) or (no transfer) textures to be selected during immediate mode
         mCtrlSculptTexture->setImmediateFilterPermMask(PERM_COPY | PERM_TRANSFER);
@@ -452,17 +466,17 @@ void LLPanelObject::changePrecision(S32 decimal_precision)
 }
 // </FS:CR>
 
-void LLPanelObject::getState( )
+template<class Selection> void LLPanelObject::getStateController(Selection* selectionManager)
 {
-    LLViewerObject* objectp = LLSelectMgr::getInstance()->getSelection()->getFirstRootObject();
-    LLViewerObject* root_objectp = objectp;
+    auto* objectp = selectionManager->getSelection()->getFirstRootObject();
+    auto* root_objectp = objectp;
     if(!objectp)
     {
-        objectp = LLSelectMgr::getInstance()->getSelection()->getFirstObject();
+        objectp = selectionManager->getSelection()->getFirstObject();
         // *FIX: shouldn't we just keep the child?
         if (objectp)
         {
-            LLViewerObject* parentp = objectp->getRootEdit();
+            auto* parentp = objectp->getRootEdit();
 
             if (parentp)
             {
@@ -478,11 +492,7 @@ void LLPanelObject::getState( )
 
     LLCalc* calcp = LLCalc::getInstance();
 
-    LLVOVolume *volobjp = NULL;
-    if ( objectp && (objectp->getPCode() == LL_PCODE_VOLUME))
-    {
-        volobjp = (LLVOVolume *)objectp;
-    }
+    auto* volobjp=vs_build_volume(objectp);
 
     if( !objectp )
     {
@@ -498,8 +508,8 @@ void LLPanelObject::getState( )
         return;
     }
 
-    S32 selected_count = LLSelectMgr::getInstance()->getSelection()->getObjectCount();
-    bool single_volume = (LLSelectMgr::getInstance()->selectionAllPCode( LL_PCODE_VOLUME ))
+    S32 selected_count = selectionManager->getSelection()->getObjectCount();
+    bool single_volume = (selectionManager->selectionAllPCode( LL_PCODE_VOLUME ))
                          && (selected_count == 1);
 
 //<FS:TS> FIRE-8205: Unable to edit attachment to negative coordinates
@@ -510,7 +520,7 @@ void LLPanelObject::getState( )
     bool enable_move;
     bool enable_modify;
 
-    LLSelectMgr::getInstance()->selectGetEditMoveLinksetPermissions(enable_move, enable_modify);
+    selectionManager->selectGetEditMoveLinksetPermissions(enable_move, enable_modify);
 
     bool enable_scale = enable_modify;
     bool enable_rotate = enable_move; // already accounts for a case of children, which needs permModify() as well
@@ -620,10 +630,10 @@ void LLPanelObject::getState( )
 
     LLUUID owner_id;
     std::string owner_name;
-    LLSelectMgr::getInstance()->selectGetOwner(owner_id, owner_name);
+    selectionManager->selectGetOwner(owner_id, owner_name);
 
     // BUG? Check for all objects being editable?
-    S32 roots_selected = LLSelectMgr::getInstance()->getSelection()->getRootObjectCount();
+    S32 roots_selected = selectionManager->getSelection()->getRootObjectCount();
     bool editable = root_objectp->permModify();
 
     bool is_flexible = volobjp && volobjp->isFlexible();
@@ -640,7 +650,7 @@ void LLPanelObject::getState( )
     bool valid;
     U32 owner_mask_on;
     U32 owner_mask_off;
-    valid = LLSelectMgr::getInstance()->selectGetPerm(PERM_OWNER, &owner_mask_on, &owner_mask_off);
+    valid = selectionManager->selectGetPerm(PERM_OWNER, &owner_mask_on, &owner_mask_off);
 
     if(valid)
     {
@@ -694,7 +704,7 @@ void LLPanelObject::getState( )
     F32 scale_x=1.f, scale_y=1.f;
     bool isMesh = false;
 
-    if( !objectp || !objectp->getVolume() || !editable || !single_volume)
+    if( !objectp || !vs_build_has_volume(objectp) || !editable || !single_volume)
     {
         // Clear out all geometry fields.
         mComboBaseType->clear();
@@ -725,7 +735,7 @@ void LLPanelObject::getState( )
         enabled = root_objectp->permModify() && !root_objectp->isPermanentEnforced();
 
         // Volume type
-        const LLVolumeParams &volume_params = objectp->getVolume()->getParams();
+        const LLVolumeParams volume_params=vs_build_volume_params(objectp);
         U8 path = volume_params.getPathParams().getCurveType();
         U8 profile_and_hole = volume_params.getProfileParams().getCurveType();
         U8 profile  = profile_and_hole & LL_PCODE_PROFILE_MASK;
@@ -1343,12 +1353,12 @@ void LLPanelObject::getState( )
     {
 
         LLUUID id;
-        LLSculptParams *sculpt_params = objectp->getSculptParams();
+        auto* sculpt_params = objectp->getSculptParams();
 
 
         if (sculpt_params) // if we have a legal sculpt param block for this object:
         {
-            if (mObject != objectp)  // we've just selected a new object, so save for undo
+            if (!sameCurrentObject(objectp))  // we've just selected a new object, so save for undo
             {
                 mSculptTextureRevert = sculpt_params->getSculptTexture();
                 mSculptTypeRevert = sculpt_params->getSculptType();
@@ -1432,9 +1442,33 @@ void LLPanelObject::getState( )
     mCtrlSculptInvert->setVisible(sculpt_texture_visible && !isMesh);
 
     //----------------------------------------------------------------------------
-    mObject = objectp;
-    mRootObject = root_objectp;
+#if VS_NATIVE_VULKAN
+    if constexpr(std::is_same_v<Selection,VSEditSelection>)
+    {
+        mNativeObject=objectp;mNativeRootObject=root_objectp;
+        mNativeLastObject=objectp->getID();mNativeLastCurrent=objectp->task().objectGuard();
+    }
+    else
+#endif
+    {mObject=objectp;mRootObject=root_objectp;}
 }
+void LLPanelObject::getState()
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        auto selection=std::make_shared<VSEditSelection>();
+        mNativeSelection=selection;mNativeObject=mNativeRootObject=nullptr;
+        getStateController(selection.get());return;
+    }
+#endif
+    getStateController(LLSelectMgr::getInstance());
+}
+#if VS_NATIVE_VULKAN
+bool LLPanelObject::sameCurrentObject(VSEditObject* object)const
+{return object && mNativeLastObject==object->getID() && mNativeLastCurrent && mNativeLastCurrent();}
+#endif
+
 //<FS:Beq> FIRE-21445 + Mesh Info in object panel
 // Helper function duplicating the inline switch statements which ideally we'd refactor but...ugh MAINT
 void LLPanelObject::deactivateStandardFields()
@@ -1537,6 +1571,12 @@ void LLPanelObject::activateMeshFields(LLViewerObject* objectp)
         radius = objectp->getVolume() ? objectp->getVolume()->mLODScaleBias.scaledVec(objectp->getScale()).length() : objectp->getScale().length();
     }
 
+    activateMeshRadius(radius);
+}
+void LLPanelObject::activateMeshRadius(F32 radius)
+{
+    LLStringUtil::format_map_t args;
+    LLTextBox* tb=nullptr;
     constexpr F32 max_distance = 512.f;
     F32 factor;
     F32 dlowest = llmin(radius / 0.03f, max_distance);
@@ -1544,7 +1584,7 @@ void LLPanelObject::activateMeshFields(LLViewerObject* objectp)
     F32 dmid = llmin(radius / 0.24f, max_distance);
 
     childSetVisible("object_radius", true);
-    LLTextBox* tb = getChild<LLTextBox>("object_radius_value");
+    tb = getChild<LLTextBox>("object_radius_value");
     tb->setText(llformat("%.3f", radius));
     tb->setVisible(true);
 
@@ -1585,7 +1625,28 @@ void LLPanelObject::activateMeshFields(LLViewerObject* objectp)
 
     tb = getChild<LLTextBox>("LOD_swap_usr_values");
     setLODDistValues(tb, factor, dmid, dlow, dlowest);
+
 }
+
+#if VS_NATIVE_VULKAN
+void LLPanelObject::activateMeshFields(VSEditObject* object)
+{
+    auto* context=gViewerWindow?gViewerWindow->nativeContext():nullptr;
+    const auto metrics=context && object?context->world().objectMetrics(object->task().nativeObject(),true):std::nullopt;
+    if(!metrics){deactivateMeshFields();return;}
+    LLStringUtil::format_map_t args;
+    static const char* fields[4]={"LOWESTTRIS","LOWTRIS","MIDTRIS","HIGHTRIS"};
+    for(S32 lod=0;lod<4;++lod)
+        args[fields[lod]]=metrics->lodTriangles[lod]?llformat("%llu",*metrics->lodTriangles[lod]):"--";
+    auto* triangles=getChild<LLTextBox>("mesh_lod_num_tris");
+    triangles->setText(getString("mesh_lod_num_tris_values",args));triangles->setVisible(true);
+    childSetVisible("mesh_info_label",true);childSetVisible("lod_label",true);
+    childSetVisible("lod_num_tris",true);childSetVisible("mesh_lod_label",true);
+    mComboLOD->setEnabled(true);mComboLOD->setVisible(true);
+    if(metrics->lodRadius)activateMeshRadius(*metrics->lodRadius);
+}
+#endif
+
 
 void LLPanelObject::setLODDistValues(LLTextBox* tb, F32 factor, F32 dmid, F32 dlow, F32 dlowest)
 {
@@ -1643,12 +1704,28 @@ bool LLPanelObject::precommitValidate( const LLSD& data )
     return true; // false means that validation failed and new value should not be commited.
 }
 
+template<class Action> void LLPanelObject::withBuildObject(Action&& action)
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto selection=mNativeSelection;
+        if(!selection || !mNativeObject || !*mNativeObject || !selection->guard()())return;
+        action(mNativeObject,mNativeRootObject,selection.get());return;
+    }
+#endif
+    const LLPointer<LLViewerObject> object=mObject,root=mRootObject;
+    action(object.get(),root.get(),LLSelectMgr::getInstance());
+}
+
 void LLPanelObject::sendIsPhysical()
 {
+    withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
     bool value = mCheckPhysics->get();
     if( mIsPhysical != value )
     {
-        LLSelectMgr::getInstance()->selectionUpdatePhysics(value);
+        selectionManager->selectionUpdatePhysics(value);
         mIsPhysical = value;
 
         LL_INFOS("FloaterTools") << "update physics sent" << LL_ENDL;
@@ -1657,14 +1734,18 @@ void LLPanelObject::sendIsPhysical()
     {
         LL_INFOS("FloaterTools") << "update physics not changed" << LL_ENDL;
     }
+
+    });
 }
 
 void LLPanelObject::sendIsTemporary()
 {
+    withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
     bool value = mCheckTemporary->get();
     if( mIsTemporary != value )
     {
-        LLSelectMgr::getInstance()->selectionUpdateTemporary(value);
+        selectionManager->selectionUpdateTemporary(value);
         mIsTemporary = value;
 
         LL_INFOS("FloaterTools") << "update temporary sent" << LL_ENDL;
@@ -1673,15 +1754,19 @@ void LLPanelObject::sendIsTemporary()
     {
         LL_INFOS("FloaterTools") << "update temporary not changed" << LL_ENDL;
     }
+
+    });
 }
 
 
 void LLPanelObject::sendIsPhantom()
 {
+    withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
     bool value = mCheckPhantom->get();
     if( mIsPhantom != value )
     {
-        LLSelectMgr::getInstance()->selectionUpdatePhantom(value);
+        selectionManager->selectionUpdatePhantom(value);
         mIsPhantom = value;
 
         LL_INFOS("FloaterTools") << "update phantom sent" << LL_ENDL;
@@ -1690,11 +1775,21 @@ void LLPanelObject::sendIsPhantom()
     {
         LL_INFOS("FloaterTools") << "update phantom not changed" << LL_ENDL;
     }
+
+    });
 }
 
 //<FS:Beq> FIRE-21445 + Mesh Info in object panel
 void LLPanelObject::onCommitLOD()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if(mNativeObject && *mNativeObject && mNativeSelection && mNativeSelection->guard()())
+            gSavedSettings.setS32("ShowSpecificLODInEdit",mComboLOD->getValue());
+        return;
+    }
+#endif
     if (mObject.isNull())
     {
         return;
@@ -1709,20 +1804,21 @@ void LLPanelObject::onCommitLOD()
 void LLPanelObject::onCommitParametric( LLUICtrl* ctrl, void* userdata )
 {
     LLPanelObject* self = (LLPanelObject*) userdata;
-
-    if (self->mObject.isNull())
+    if(!self)return;
+    self->withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
+    if (!objectp)
     {
         return;
     }
 
-    if (self->mObject->getPCode() != LL_PCODE_VOLUME)
+    if (objectp->getPCode() != LL_PCODE_VOLUME)
     {
         // Don't allow modification of non-volume objects.
         return;
     }
 
-    LLVolume *volume = self->mObject->getVolume();
-    if (!volume)
+    if (!vs_build_has_volume(objectp))
     {
         return;
     }
@@ -1737,20 +1833,20 @@ void LLPanelObject::onCommitParametric( LLUICtrl* ctrl, void* userdata )
 
     if (selected_type == MI_SCULPT)
     {
-        self->mObject->setParameterEntryInUse(LLNetworkData::PARAMS_SCULPT, true, true);
-        LLSculptParams *sculpt_params = self->mObject->getSculptParams();
+        if (!vs_build_complete([&] { return objectp->setParameterEntryInUse(LLNetworkData::PARAMS_SCULPT, true, true); })) return;
+        auto* sculpt_params = objectp->getSculptParams();
         if (sculpt_params)
             volume_params.setSculptID(sculpt_params->getSculptTexture(), sculpt_params->getSculptType());
     }
     else
     {
-        LLSculptParams *sculpt_params = self->mObject->getSculptParams();
+        auto* sculpt_params = objectp->getSculptParams();
         if (sculpt_params)
-            self->mObject->setParameterEntryInUse(LLNetworkData::PARAMS_SCULPT, false, true);
+            if (!vs_build_complete([&] { return objectp->setParameterEntryInUse(LLNetworkData::PARAMS_SCULPT, false, true); })) return;
     }
 
     // Update the volume, if necessary.
-    self->mObject->updateVolume(volume_params);
+    objectp->updateVolume(volume_params);
 
 
     // This was added to make sure thate when changes are made, the UI
@@ -1759,10 +1855,14 @@ void LLPanelObject::onCommitParametric( LLUICtrl* ctrl, void* userdata )
     // require a refresh.
     self->refresh();
 
+
+    });
 }
 
 void LLPanelObject::getVolumeParams(LLVolumeParams& volume_params)
 {
+    withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
     // Figure out what type of volume to make
     S32 was_selected_type = mSelectedType;
     S32 selected_type = mComboBaseType->getCurrentIndex();
@@ -1895,7 +1995,7 @@ void LLPanelObject::getVolumeParams(LLVolumeParams& volume_params)
 
     if (path == LL_PCODE_PATH_LINE)
     {
-        LLVOVolume *volobjp = (LLVOVolume *)(LLViewerObject*)(mObject);
+        auto* volobjp=vs_build_volume(objectp);
         if (volobjp->isFlexible())
         {
             path = LL_PCODE_PATH_FLEXIBLE;
@@ -2128,12 +2228,16 @@ void LLPanelObject::getVolumeParams(LLVolumeParams& volume_params)
         volume_params.setSkew           (0);
     }
 
+
+    });
 }
 
 // BUG: Make work with multiple objects
 void LLPanelObject::sendRotation(bool btn_down)
 {
-    if (mObject.isNull()) return;
+    withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
+    if (!objectp) return;
 
     LLVector3 new_rot(mCtrlRotX->get(), mCtrlRotY->get(), mCtrlRotZ->get());
     new_rot.mV[VX] = ll_round(new_rot.mV[VX], OBJECT_ROTATION_PRECISION);
@@ -2145,19 +2249,19 @@ void LLPanelObject::sendRotation(bool btn_down)
 
     if (delta.magVec() >= 0.0005f)
     {
-        mCurEulerDegrees = new_rot;
+        const LLVector3 changedEuler=new_rot;
         new_rot *= DEG_TO_RAD;
 
         LLQuaternion rotation;
         rotation.setQuat(new_rot.mV[VX], new_rot.mV[VY], new_rot.mV[VZ]);
 
-        if (mRootObject != mObject)
+        if (rootObject != objectp)
         {
             // ## Zi: Building spin controls for attachments
-            if(mObject->isAttachment())
-                rotation = rotation * ~mRootObject->getRotation();
+            if(objectp->isAttachment())
+                rotation = rotation * ~rootObject->getRotation();
             else
-                rotation = rotation * ~mRootObject->getRotationRegion();
+                rotation = rotation * ~rootObject->getRotationRegion();
             // ## Zi: Building spin controls for attachments
         }
 
@@ -2165,29 +2269,37 @@ void LLPanelObject::sendRotation(bool btn_down)
         // If false, all children are selected anyway - move avatar
         // If true, not all children are selected - save positions
         bool individual_selection = gSavedSettings.getBOOL("EditLinkedParts");
-        std::vector<LLVector3>& child_positions = mObject->mUnselectedChildrenPositions ;
+        auto* savedPositions=vs_build_saved_children(objectp);if(!savedPositions)return;
+        std::vector<LLVector3>& child_positions=*savedPositions;
+        const LLQuaternion previousRotation=objectp->getRotation();
         std::vector<LLQuaternion> child_rotations;
-        if (mObject->isRootEdit() && individual_selection)
+        if (objectp->isRootEdit() && individual_selection)
         {
-            mObject->saveUnselectedChildrenRotation(child_rotations) ;
-            mObject->saveUnselectedChildrenPosition(child_positions) ;
+            if(!vs_build_complete([&]{return objectp->saveUnselectedChildrenRotation(child_rotations);}) ||
+               !vs_build_complete([&]{return objectp->saveUnselectedChildrenPosition(child_positions);}))return;
         }
 
-        mObject->setRotation(rotation);
-        LLManip::rebuild(mObject) ;
+        if(!vs_build_complete([&]{return objectp->setRotation(rotation);}))return;
+        if(!vs_build_rebuild(objectp)){objectp->setRotation(previousRotation);return;}
 
         // for individually selected roots, we need to counterrotate all the children
-        if (mObject->isRootEdit() && individual_selection)
+        if (objectp->isRootEdit() && individual_selection)
         {
-            mObject->resetChildrenRotationAndPosition(child_rotations, child_positions) ;
+            if(!vs_build_complete([&]{return objectp->resetChildrenRotationAndPosition(child_rotations,child_positions);}))
+            {
+                objectp->setRotation(previousRotation);vs_build_rebuild(objectp);return;
+            }
         }
 
+        mCurEulerDegrees=changedEuler;
         if(!btn_down)
         {
             child_positions.clear() ;
-            LLSelectMgr::getInstance()->sendMultipleUpdate(UPD_ROTATION | UPD_POSITION);
+            selectionManager->sendMultipleUpdate(UPD_ROTATION | UPD_POSITION);
         }
     }
+
+    });
 }
 
 // patch up for mesh, to be removed during real mesh merge -Zi
@@ -2204,74 +2316,75 @@ F32 llpanelobject_max_prim_scale()
 // BUG: Make work with multiple objects
 void LLPanelObject::sendScale(bool btn_down)
 {
-    if (mObject.isNull()) return;
-
-    // make sure not to send larger/smaller values than permitted -Zi
-// <AW: opensim-limits>
-//  LLVector3 newscale(llclamp(mCtrlScaleX->get(), MIN_PRIM_SCALE, llpanelobject_max_prim_scale()),
-//                     llclamp(mCtrlScaleY->get(), MIN_PRIM_SCALE, llpanelobject_max_prim_scale()),
-//                     llclamp(mCtrlScaleZ->get(), MIN_PRIM_SCALE, llpanelobject_max_prim_scale()));
-    LLVector3 newscale(llclamp(mCtrlScaleX->get(), mMinScale, llpanelobject_max_prim_scale()),
-                       llclamp(mCtrlScaleY->get(), mMinScale, llpanelobject_max_prim_scale()),
-                       llclamp(mCtrlScaleZ->get(), mMinScale, llpanelobject_max_prim_scale()));
-// </AW: opensim-limits>
-
-    LLVector3 delta = newscale - mObject->getScale();
-    if (delta.magVec() >= 0.00005f || (mSizeChanged && !btn_down))
+    withBuildObject([&](auto* objectp, auto*, auto* selectionManager)
     {
-        // scale changed by more than 1/20 millimeter
+        if (!objectp) return;
+
+        LLVector3 newscale(llclamp(mCtrlScaleX->get(), mMinScale, llpanelobject_max_prim_scale()),
+                           llclamp(mCtrlScaleY->get(), mMinScale, llpanelobject_max_prim_scale()),
+                           llclamp(mCtrlScaleZ->get(), mMinScale, llpanelobject_max_prim_scale()));
+        const LLVector3 delta = newscale - objectp->getScale();
+        if (delta.magVec() < 0.00005f && !(mSizeChanged && !btn_down)) return;
+
+        const bool dont_stretch_textures = !LLManipScale::getStretchTextures();
+        if (dont_stretch_textures && !vs_build_complete([&]
+            { return selectionManager->saveSelectedObjectTransform(SELECT_ACTION_TYPE_SCALE); }))
+            return;
+
+#if VS_NATIVE_VULKAN
+        std::shared_ptr<VSPreparedTextureAdjustment> textureAdjustment;
+        if constexpr (std::is_same_v<std::remove_pointer_t<decltype(objectp)>, VSEditObject>)
+        {
+            // Retain the original selected-node texture ratios and admit every
+            // resulting TE/material edit before changing or sending the scale.
+            textureAdjustment = vs_prepare_selected_texture_adjustment(
+                *selectionManager->nativeSelection(), {{objectp->getID(), newscale}},
+                true, !dont_stretch_textures);
+            if (!textureAdjustment) return;
+        }
+#endif
+        if (!vs_build_complete([&] { return objectp->setScale(newscale, true); })) return;
         mSizeChanged = btn_down;
+        if (!btn_down) selectionManager->sendMultipleUpdate(UPD_SCALE | UPD_POSITION);
 
-        // check to see if we aren't scaling the textures
-        // (in which case the tex coord's need to be recomputed)
-        bool dont_stretch_textures = !LLManipScale::getStretchTextures();
-        if (dont_stretch_textures)
-        {
-            LLSelectMgr::getInstance()->saveSelectedObjectTransform(SELECT_ACTION_TYPE_SCALE);
-        }
-
-        mObject->setScale(newscale, true);
-
-        if(!btn_down)
-        {
-            LLSelectMgr::getInstance()->sendMultipleUpdate(UPD_SCALE | UPD_POSITION);
-        }
-
-        LLSelectMgr::getInstance()->adjustTexturesByScale(true, !dont_stretch_textures);
-//      LL_INFOS() << "scale sent" << LL_ENDL;
-    }
-    else
-    {
-//      LL_INFOS() << "scale not changed" << LL_ENDL;
-    }
+#if VS_NATIVE_VULKAN
+        if constexpr (std::is_same_v<std::remove_pointer_t<decltype(objectp)>, VSEditObject>)
+            vs_publish_prepared_texture_adjustment(textureAdjustment);
+        else
+#endif
+            selectionManager->adjustTexturesByScale(true, !dont_stretch_textures);
+    });
 }
 
 
 void LLPanelObject::sendPosition(bool btn_down)
 {
-    if (mObject.isNull()) return;
+    withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
+    if (!objectp) return;
 
     LLVector3 newpos(mCtrlPosX->get(), mCtrlPosY->get(), mCtrlPosZ->get());
 
-    LLViewerRegion* regionp = mObject->getRegion();
+    const auto region=vs_build_region(objectp);
+    const auto* regionp=region?&*region:nullptr;
 
     if (!regionp) return;
 
     // <FS:Zi> Building spin controls for attachments
     LLVector3d new_pos_global;
 
-    if (!mObject->isAttachment())
+    if (!objectp->isAttachment())
     {
         // Clamp the Z height
         const F32 height = newpos.mV[VZ];
         // <FS:Ansariel> FIRE-12478: Clamp min Z height at new position instead of current if new position is valid
-        //const F32 min_height = LLWorld::getInstance()->getMinAllowedZ(mObject, mObject->getPositionGlobal());
-        LLVector3d height_check_pos = mObject->getPositionGlobal();
-        if (LLWorld::getInstance()->positionRegionValidGlobal(regionp->getPosGlobalFromRegion(newpos)))
+        //const F32 min_height = LLWorld::getInstance()->getMinAllowedZ(mObject, objectp->getPositionGlobal());
+        LLVector3d height_check_pos = objectp->getPositionGlobal();
+        if (vs_build_region_valid(regionp->getPosGlobalFromRegion(newpos)))
         {
             height_check_pos = regionp->getPosGlobalFromRegion(newpos);
         }
-        const F32 min_height = LLWorld::getInstance()->getMinAllowedZ(mObject, height_check_pos);
+        const F32 min_height = vs_build_min_height(objectp, height_check_pos);
         // </FS:Ansariel>
         const F32 max_height = vs_region_limits().getRegionMaxHeight();
 
@@ -2287,9 +2400,9 @@ void LLPanelObject::sendPosition(bool btn_down)
         }
 
         // Grass is always drawn on the ground, so clamp its position to the ground
-        if (mObject->getPCode() == LL_PCODE_LEGACY_GRASS)
+        if (objectp->getPCode() == LL_PCODE_LEGACY_GRASS)
         {
-            mCtrlPosZ->set(LLWorld::getInstance()->resolveLandHeightAgent(newpos) + 1.f);
+            mCtrlPosZ->set(vs_build_height_agent(newpos) + 1.f);
         }
         // Make sure new position is in a valid region, so the object
         // won't get dumped by the simulator.
@@ -2309,101 +2422,108 @@ void LLPanelObject::sendPosition(bool btn_down)
     // <FS:Zi> Building spin controls for attachments
     // partly copied from llmaniptranslate.cpp to get the positioning right
     //bool is_valid_pos = true;
-    //if (mObject->isAttachment())
+    //if (objectp->isAttachment())
     //{
-    //    LLVector3 delta_pos = mObject->getPositionEdit() - newpos;
-    //    LLVector3d attachment_pos = regionp->getPosGlobalFromRegion(mObject->getPositionRegion() + delta_pos);
-    //    is_valid_pos = LLWorld::getInstance()->positionRegionValidGlobal(attachment_pos);
+    //    LLVector3 delta_pos = objectp->getPositionEdit() - newpos;
+    //    LLVector3d attachment_pos = regionp->getPosGlobalFromRegion(objectp->getPositionRegion() + delta_pos);
+    //    is_valid_pos = vs_build_region_valid(attachment_pos);
     //}
     //else
     //{
-    //    is_valid_pos = LLWorld::getInstance()->positionRegionValidGlobal(new_pos_global);
+    //    is_valid_pos = vs_build_region_valid(new_pos_global);
     //}
     //if (is_valid_pos)
-    if (mObject->isAttachment())
+    if (objectp->isAttachment())
     {
-        LLVector3 old_position_local = mObject->getPosition();
+        LLVector3 old_position_local = objectp->getPosition();
 
-        if (mRootObject != mObject)
+        if (rootObject != objectp)
         {
-            newpos = newpos - mRootObject->getPosition();
-            newpos = newpos * ~mRootObject->getRotation();
-            mObject->setPositionParent(newpos);
+            newpos = newpos - rootObject->getPosition();
+            newpos = newpos * ~rootObject->getRotation();
+            if(!vs_build_complete([&]{return objectp->setPositionParent(newpos);}))return;
         }
         else
         {
-            mObject->setPosition(newpos);
+            if(!vs_build_complete([&]{return objectp->setPosition(newpos);}))return;
         }
-        LLManip::rebuild(mObject);
+        vs_build_rebuild(objectp);
 
-        gAgentAvatarp->clampAttachmentPositions();
+        vs_build_clamp_attachments();
 
-        LLVector3 new_position_local = mObject->getPosition();
+        LLVector3 new_position_local = objectp->getPosition();
 
         // for individually selected roots, we need to counter-translate all unselected children
-        if (mObject->isRootEdit())
+        if (objectp->isRootEdit())
         {
             // counter-translate child objects if we are moving the root as an individual
-            mObject->resetChildrenPosition(old_position_local - new_position_local, true);
+            if(!vs_build_complete([&]{return objectp->resetChildrenPosition(old_position_local-new_position_local,true);}))
+            {objectp->setPosition(old_position_local);vs_build_rebuild(objectp);return;}
         }
 
         if (!btn_down)
         {
-            LLSelectMgr::getInstance()->sendMultipleUpdate(UPD_POSITION);
+            selectionManager->sendMultipleUpdate(UPD_POSITION);
         }
 
-        LLSelectMgr::getInstance()->updateSelectionCenter();
+        selectionManager->updateSelectionCenter();
     }
-    else if (LLWorld::getInstance()->positionRegionValidGlobal(new_pos_global) )
+    else if (vs_build_region_valid(new_pos_global) )
     // </FS:Zi> Building spin controls for attachments
     {
         // send only if the position is changed, that is, the delta vector is not zero
-        LLVector3d old_pos_global = mObject->getPositionGlobal();
+        LLVector3d old_pos_global = objectp->getPositionGlobal();
         LLVector3d delta = new_pos_global - old_pos_global;
         // moved more than 1/20 millimeter
         if (delta.magVec() >= 0.00005f)
         {
-            if (mRootObject != mObject)
+            const LLVector3 previousLocal=objectp->getPosition();
+            if (rootObject != objectp)
             {
-                newpos = newpos - mRootObject->getPositionRegion();
-                newpos = newpos * ~mRootObject->getRotationRegion();
-                mObject->setPositionParent(newpos);
+                newpos = newpos - rootObject->getPositionRegion();
+                newpos = newpos * ~rootObject->getRotationRegion();
+                if(!vs_build_complete([&]{return objectp->setPositionParent(newpos);}))return;
             }
             else
             {
-                mObject->setPositionEdit(newpos);
+                if(!vs_build_complete([&]{return objectp->setPositionEdit(newpos);}))return;
             }
 
-            LLManip::rebuild(mObject) ;
+            vs_build_rebuild(objectp) ;
 
             // for individually selected roots, we need to counter-translate all unselected children
-            if (mObject->isRootEdit())
+            if (objectp->isRootEdit())
             {
                 // only offset by parent's translation
-                mObject->resetChildrenPosition(LLVector3(-delta), true, true) ;
+                if(!vs_build_complete([&]{return objectp->resetChildrenPosition(LLVector3(-delta),true,true);}))
+                {objectp->setPositionParent(previousLocal);vs_build_rebuild(objectp);return;}
             }
 
             if(!btn_down)
             {
-                LLSelectMgr::getInstance()->sendMultipleUpdate(UPD_POSITION);
+                selectionManager->sendMultipleUpdate(UPD_POSITION);
             }
 
-            LLSelectMgr::getInstance()->updateSelectionCenter();
+            selectionManager->updateSelectionCenter();
         }
     }
     else
     {
         // move failed, so we update the UI with the correct values
-        LLVector3 vec = mRootObject->getPositionRegion();
+        LLVector3 vec = rootObject->getPositionRegion();
         mCtrlPosX->set(vec.mV[VX]);
         mCtrlPosY->set(vec.mV[VY]);
         mCtrlPosZ->set(vec.mV[VZ]);
     }
+
+    });
 }
 
 void LLPanelObject::sendSculpt()
 {
-    if (mObject.isNull())
+    withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
+    if (!objectp)
         return;
 
     LLSculptParams sculpt_params;
@@ -2444,7 +2564,9 @@ void LLPanelObject::sendSculpt()
     }
 
     sculpt_params.setSculptTexture(sculpt_id, sculpt_type);
-    mObject->setParameterEntry(LLNetworkData::PARAMS_SCULPT, sculpt_params, true);
+    if (!vs_build_complete([&] { return objectp->setParameterEntry(LLNetworkData::PARAMS_SCULPT, sculpt_params, true); })) return;
+
+    });
 }
 
 void LLPanelObject::refresh()
@@ -2460,7 +2582,14 @@ void LLPanelObject::refresh()
         mRootObject = NULL;
     }
 
-    F32 max_scale = get_default_max_prim_scale(LLPickInfo::isFlora(mObject));
+    bool flora = false;
+    withBuildObject([&](auto* object, auto*, auto*)
+    {
+        if (!object) return;
+        const auto pcode = object->getPCode();
+        flora = pcode == LL_PCODE_LEGACY_GRASS || pcode == LL_PCODE_LEGACY_TREE || pcode == LL_PCODE_TREE_NEW;
+    });
+    F32 max_scale = get_default_max_prim_scale(flora);
 
     // <FS:Ansariel> Performance improvement
     //getChild<LLSpinCtrl>("Scale X")->setMaxValue(max_scale);
@@ -2583,16 +2712,15 @@ void LLPanelObject::clearCtrls()
 //
 
 // static
-void LLPanelObject::onCommitLock(LLUICtrl *ctrl, void *data)
+void LLPanelObject::onCommitLock(LLUICtrl* ctrl,void* data)
 {
-    // Checkbox will have toggled itself
-    LLPanelObject *self = (LLPanelObject *)data;
-
-    if(self->mRootObject.isNull()) return;
-
-    bool new_state = self->mCheckLock->get();
-
-    LLSelectMgr::getInstance()->selectionSetObjectPermissions(PERM_OWNER, !new_state, PERM_MOVE | PERM_MODIFY);
+    auto* self=static_cast<LLPanelObject*>(data);if(!self)return;
+    self->withBuildObject([&](auto*,auto* root,auto* selection)
+    {
+        if(!root)return;
+        const bool state=self->mCheckLock->get();
+        selection->selectionSetObjectPermissions(PERM_OWNER,!state,PERM_MOVE | PERM_MODIFY);
+    });
 }
 
 // static
@@ -2824,6 +2952,8 @@ void copy_vector_to_clipboard(const LLVector3& vec)
 
 void LLPanelObject::onCopyPos()
 {
+    withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
     mClipboardPos = LLVector3(mCtrlPosX->get(), mCtrlPosY->get(), mCtrlPosZ->get());
 
     std::string stringVec = llformat("<%g, %g, %g>", mClipboardPos.mV[VX], mClipboardPos.mV[VY], mClipboardPos.mV[VZ]);
@@ -2839,10 +2969,14 @@ void LLPanelObject::onCopyPos()
     // </FS>
 
     mHasClipboardPos = true;
+
+    });
 }
 
 void LLPanelObject::onCopySize()
 {
+    withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
     mClipboardSize = LLVector3(mCtrlScaleX->get(), mCtrlScaleY->get(), mCtrlScaleZ->get());
 
     std::string stringVec = llformat("<%g, %g, %g>", mClipboardSize.mV[VX], mClipboardSize.mV[VY], mClipboardSize.mV[VZ]);
@@ -2858,10 +2992,14 @@ void LLPanelObject::onCopySize()
     // </FS>
 
     mHasClipboardSize = true;
+
+    });
 }
 
 void LLPanelObject::onCopyRot()
 {
+    withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
     mClipboardRot = LLVector3(mCtrlRotX->get(), mCtrlRotY->get(), mCtrlRotZ->get());
 
     std::string stringVec = llformat("<%g, %g, %g>", mClipboardRot.mV[VX], mClipboardRot.mV[VY], mClipboardRot.mV[VZ]);
@@ -2877,18 +3015,23 @@ void LLPanelObject::onCopyRot()
     // </FS>
 
     mHasClipboardRot = true;
+
+    });
 }
 
 void LLPanelObject::onPastePos()
 {
+    withBuildObject([&](auto* objectp,auto*,auto*)
+    {
     if (!mHasClipboardPos) return;
-    if (mObject.isNull()) return;
+    if (!objectp) return;
 
-    LLViewerRegion* regionp = mObject->getRegion();
+    const auto region=vs_build_region(objectp);
+    const auto* regionp=region?&*region:nullptr;
     if (!regionp) return;
 
     // Clamp pos on non-attachments, just keep the prims within the region
-    if (!mObject->isAttachment())
+    if (!objectp->isAttachment())
     {
         F32 max_width = regionp->getWidth(); // meters
         mClipboardPos.mV[VX] = llclamp(mClipboardPos.mV[VX], 0.f, max_width);
@@ -2905,6 +3048,8 @@ void LLPanelObject::onPastePos()
     mCtrlPosZ->set( mClipboardPos.mV[VZ] );
 
     sendPosition(false);
+
+    });
 }
 
 void LLPanelObject::onPasteSize()
@@ -2940,7 +3085,8 @@ void LLPanelObject::onPasteRot()
 
 void LLPanelObject::onCopyParams()
 {
-    LLViewerObject* objectp = mObject;
+    withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
     if (!objectp || objectp->isMesh())
     {
         return;
@@ -2954,7 +3100,7 @@ void LLPanelObject::onCopyParams()
     mClipboardParams["volume_params"] = params.asLLSD();
 
     // Sculpted Prim
-    LLSculptParams *sculpt_params = objectp->getSculptParams();
+    auto* sculpt_params = objectp->getSculptParams();
     if (sculpt_params)
     {
         LLUUID texture_id = sculpt_params->getSculptTexture();
@@ -2973,11 +3119,14 @@ void LLPanelObject::onCopyParams()
 
     // <FS> Extended copy & paste buttons
     mBtnPasteParams->setEnabled(!mClipboardParams.emptyMap() && (mClipboardParams["volume_params"] || mClipboardParams["sculpt"]));
+
+    });
 }
 
 void LLPanelObject::onPasteParams()
 {
-    LLViewerObject* objectp = mObject;
+    withBuildObject([&](auto* objectp,auto* rootObject,auto* selectionManager)
+    {
     if (!objectp)
     {
         return;
@@ -2990,14 +3139,14 @@ void LLPanelObject::onPasteParams()
         LLUUID sculpt_id = mClipboardParams["sculpt"]["id"].asUUID();
         U8 sculpt_type = (U8)mClipboardParams["sculpt"]["type"].asInteger();
         sculpt_params.setSculptTexture(sculpt_id, sculpt_type);
-        objectp->setParameterEntry(LLNetworkData::PARAMS_SCULPT, sculpt_params, true);
+        if (!vs_build_complete([&] { return objectp->setParameterEntry(LLNetworkData::PARAMS_SCULPT, sculpt_params, true); })) return;
     }
     else
     {
-        LLSculptParams *sculpt_params = objectp->getSculptParams();
+        auto* sculpt_params = objectp->getSculptParams();
         if (sculpt_params)
         {
-            objectp->setParameterEntryInUse(LLNetworkData::PARAMS_SCULPT, false, true);
+            if (!vs_build_complete([&] { return objectp->setParameterEntryInUse(LLNetworkData::PARAMS_SCULPT, false, true); })) return;
         }
     }
 
@@ -3007,7 +3156,8 @@ void LLPanelObject::onPasteParams()
     {
         LLVolumeParams params;
         params.fromLLSD(mClipboardParams["volume_params"]);
-        LLVOVolume *volobjp = (LLVOVolume *)objectp;
+        auto* volobjp = vs_build_volume(objectp);
+        if (!volobjp) return;
         if (volobjp->isFlexible())
         {
             if (params.getPathParams().getCurveType() == LL_PCODE_PATH_LINE)
@@ -3022,6 +3172,8 @@ void LLPanelObject::onPasteParams()
 
         objectp->updateVolume(params);
     }
+
+    });
 }
 
 // <FS> Extended copy & paste buttons

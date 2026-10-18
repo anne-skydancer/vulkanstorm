@@ -28,6 +28,14 @@
 
 // file include
 #include "llpanelcontents.h"
+#include "vstaskinventoryobject.h"
+#include "vsnativeim.h"
+#include "vsavatarservices.h"
+#include "llviewerwindow.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#endif
 
 // linden library includes
 #include "llerror.h"
@@ -84,6 +92,66 @@ const char* LLPanelContents::PERMS_GROUP_CONTROL_KEY = "perms_group_control";
 const char* LLPanelContents::PERMS_ANYONE_INTERACT_KEY = "perms_anyone_interact";
 const char* LLPanelContents::PERMS_ANYONE_CONTROL_KEY = "perms_anyone_control";
 
+namespace
+{
+// Query the authoritative selection owners. This has no private selection or
+// permission cache; each getter retains the original controller's evaluation.
+class VSContentsSelection
+{
+#if VS_NATIVE_VULKAN
+    std::shared_ptr<VSObjectSelection> mNative;
+#endif
+    bool native() const { return gViewerWindow && gViewerWindow->isNativeVulkan(); }
+public:
+    VSContentsSelection()
+    {
+#if VS_NATIVE_VULKAN
+        if (const auto owner=VSNativeSession::active()) mNative=owner->retainObjectSelection();
+#endif
+    }
+    VSTaskInventoryObject firstRoot() const
+    {
+#if VS_NATIVE_VULKAN
+        if (native())
+        {
+            const auto object=mNative ? mNative->firstRootObject(true) : std::nullopt;
+            return object ? VSTaskInventoryObject::find(object->id) : VSTaskInventoryObject{};
+        }
+#endif
+        const auto* object=LLSelectMgr::instance().getSelection()->getFirstRootObject(true);
+        return object ? VSTaskInventoryObject::find(object->getID()) : VSTaskInventoryObject{};
+    }
+    void group(LLUUID& id) const
+    {
+#if VS_NATIVE_VULKAN
+        if (native()) { id.setNull();if (mNative) mNative->selectGetGroup(id);return; }
+#endif
+        LLSelectMgr::instance().selectGetGroup(id);
+    }
+    bool allVolumes() const
+    {
+#if VS_NATIVE_VULKAN
+        if (native()) return mNative && mNative->selectionAllPCode(LL_PCODE_VOLUME);
+#endif
+        return LLSelectMgr::instance().selectionAllPCode(LL_PCODE_VOLUME);
+    }
+    S32 roots() const
+    {
+#if VS_NATIVE_VULKAN
+        if (native()) return mNative ? mNative->rootObjectCount() : 0;
+#endif
+        return LLSelectMgr::instance().getSelection()->getRootObjectCount();
+    }
+    S32 objects() const
+    {
+#if VS_NATIVE_VULKAN
+        if (native()) return mNative ? mNative->objectCount() : 0;
+#endif
+        return LLSelectMgr::instance().getSelection()->getObjectCount();
+    }
+};
+}
+
 bool LLPanelContents::postBuild()
 {
     setMouseOpaque(false);
@@ -106,6 +174,7 @@ bool LLPanelContents::postBuild()
 
 LLPanelContents::LLPanelContents()
     :   LLPanel(),
+        mAccountCurrent(vs_native_im_guard()),
         mPanelInventoryObject(NULL)
 {
 }
@@ -117,8 +186,9 @@ LLPanelContents::~LLPanelContents()
 }
 
 
-void LLPanelContents::getState(LLViewerObject *objectp )
+void LLPanelContents::getState(const VSTaskInventoryObject& objectp)
 {
+    const VSContentsSelection selection;
     if( !objectp )
     {
         getChildView("button new script")->setEnabled(false);
@@ -127,29 +197,29 @@ void LLPanelContents::getState(LLViewerObject *objectp )
     }
 
     LLUUID group_id;            // used for SL-23488
-    LLSelectMgr::getInstance()->selectGetGroup(group_id);  // sets group_id as a side effect SL-23488
+    selection.group(group_id);  // sets group_id as a side effect SL-23488
 
     // BUG? Check for all objects being editable?
     bool editable = gAgent.isGodlike()
                     || (objectp->permModify() && !objectp->isPermanentEnforced()
                            && ( objectp->permYouOwner() || ( !group_id.isNull() && gAgent.isInGroup(group_id) )));  // solves SL-23488
-    bool all_volume = LLSelectMgr::getInstance()->selectionAllPCode( LL_PCODE_VOLUME );
+    bool all_volume = selection.allVolumes();
 
 // [RLVa:KB] - Checked: 2010-04-01 (RLVa-1.2.0c) | Modified: RLVa-1.0.5a
     if ( (rlv_handler_t::isEnabled()) && (editable) )
     {
         // Don't allow creation of new scripts if it's non-detachable
         if (objectp->isAttachment())
-            editable = !gRlvAttachmentLocks.isLockedAttachment(objectp->getRootEdit());
+            editable = !objectp->attachmentLocked();
 
         // Don't allow creation of new scripts if we're @unsit=n or @sittp=n restricted and we're sitting on the selection
         if ( (editable) && ((gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) || (gRlvHandler.hasBehaviour(RLV_BHVR_SITTP))) )
         {
             // Only check the first (non-)root object because nothing else would result in enabling the button (see below)
-            LLViewerObject* pObj = LLSelectMgr::getInstance()->getSelection()->getFirstRootObject(true);
+            const auto pObj=selection.firstRoot();
 
             editable =
-                (pObj) && (isAgentAvatarValid()) && ((!gAgentAvatarp->isSitting()) || (gAgentAvatarp->getRoot() != pObj->getRootEdit()));
+                (pObj) && vs_avatar_character() && !pObj->agentSittingOnRoot();
         }
     }
 // [/RLVa:KB]
@@ -159,11 +229,11 @@ void LLPanelContents::getState(LLViewerObject *objectp )
     //  getChildView("button new script")->setEnabled(
     //      editable &&
     //      all_volume &&
-    //      ((LLSelectMgr::getInstance()->getSelection()->getRootObjectCount() == 1)
-    //          || (LLSelectMgr::getInstance()->getSelection()->getObjectCount() == 1)));
+    //      ((selection.roots() == 1)
+    //          || (selection.objects() == 1)));
 
     bool objectIsOK = false;
-    if( editable && all_volume && ( (LLSelectMgr::getInstance()->getSelection()->getRootObjectCount() == 1) || (LLSelectMgr::getInstance()->getSelection()->getObjectCount() == 1) ) )
+    if( editable && all_volume && ( (selection.roots() == 1) || (selection.objects() == 1) ) )
     {
         objectIsOK = true;
     }
@@ -178,6 +248,7 @@ void LLPanelContents::getState(LLViewerObject *objectp )
 
 void LLPanelContents::onFilterEdit()
 {
+    if (!mAccountCurrent()) return;
     const std::string& filter_substring = mFilterEditor->getText();
     if (!mPanelInventoryObject->hasInventory())
     {
@@ -238,8 +309,8 @@ void LLPanelContents::onFilterEdit()
 
 void LLPanelContents::refresh()
 {
-    const bool children_ok = true;
-    LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getFirstRootObject(children_ok);
+    if (!mAccountCurrent()) return;
+    const auto object=VSContentsSelection().firstRoot();
 
     getState(object);
     if (mPanelInventoryObject)
@@ -263,20 +334,21 @@ void LLPanelContents::clearContents()
 // static
 void LLPanelContents::onClickNewScript(void *userdata)
 {
-    const bool children_ok = true;
-    LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getFirstRootObject(children_ok);
+    auto* self=static_cast<LLPanelContents*>(userdata);
+    if (!self || !self->mAccountCurrent()) return;
+    const auto object=VSContentsSelection().firstRoot();
     if(object)
     {
 // [RLVa:KB] - Checked: 2010-03-31 (RLVa-1.2.0c) | Modified: RLVa-1.0.5a
         if (rlv_handler_t::isEnabled()) // Fallback code [see LLPanelContents::getState()]
         {
-            if (gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit()))
+            if (object->attachmentLocked())
             {
                 return;                 // Disallow creating new scripts in a locked attachment
             }
             else if ( (gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) || (gRlvHandler.hasBehaviour(RLV_BHVR_SITTP)) )
             {
-                if ( (isAgentAvatarValid()) && (gAgentAvatarp->isSitting()) && (gAgentAvatarp->getRoot() == object->getRootEdit()) )
+                if ( object->agentSittingOnRoot() )
                     return;             // .. or in a linkset the avie is sitting on under @unsit=n/@sittp=n
             }
         }
@@ -338,13 +410,22 @@ void LLPanelContents::onClickNewScript(void *userdata)
 void LLPanelContents::onClickPermissions(void *userdata)
 {
     LLPanelContents* self = (LLPanelContents*)userdata;
-    gFloaterView->getParentFloater(self)->addDependentFloater(LLFloaterReg::showInstance("bulk_perms"));
+    if (!self || !self->mAccountCurrent()) return;
+    const auto weak = self->getHandle();
+    const auto current = self->mAccountCurrent;
+    const auto parent = gFloaterView->getParentFloater(self);
+    if (!parent) return;
+    const auto parentHandle = parent->getHandle();
+    auto* bulk = LLFloaterReg::showInstance("bulk_perms");
+    if (!weak.isDead() && current() && !parentHandle.isDead() && bulk) parent->addDependentFloater(bulk);
 }
 
 // <FS> Script reset in edit floater
 // static
 void LLPanelContents::onClickResetScripts(void *userdata)
 {
+    auto* self = static_cast<LLPanelContents*>(userdata);
+    if (!self || !self->mAccountCurrent()) return;
     handle_selected_script_action("reset");
 }
 // </FS>

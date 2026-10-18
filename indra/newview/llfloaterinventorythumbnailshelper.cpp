@@ -42,6 +42,7 @@
 #include "lluuid.h"
 
 #include "llfloaterinventorythumbnailshelper.h"
+#include "vsnativeim.h"
 
 LLFloaterInventoryThumbnailsHelper::LLFloaterInventoryThumbnailsHelper(const LLSD& key)
     :   LLFloater("floater_inventory_thumbnails_helper")
@@ -90,7 +91,7 @@ void LLFloaterInventoryThumbnailsHelper::recordInventoryItemEntry(LLViewerInvent
 {
     const std::string name = item->getName();
 
-    std::map<std::string, LLViewerInventoryItem*>::iterator iter = mItemNamesItems.find(name);
+    std::map<std::string, LLPointer<LLViewerInventoryItem>>::iterator iter = mItemNamesItems.find(name);
     if (iter == mItemNamesItems.end())
     {
         mItemNamesItems.insert({name, item});
@@ -114,6 +115,7 @@ void LLFloaterInventoryThumbnailsHelper::recordInventoryItemEntry(LLViewerInvent
 // CLOTHING and BODYPARTS - later versions of this tool should make that selection editable.
 void LLFloaterInventoryThumbnailsHelper::onPasteItems()
 {
+    ++mEditRevision;
     if (!LLClipboard::instance().hasContents())
     {
         return;
@@ -219,6 +221,7 @@ void LLFloaterInventoryThumbnailsHelper::recordTextureItemEntry(LLViewerInventor
 // button in the UI - iterates over textures and folders and saves details of each one.
 void LLFloaterInventoryThumbnailsHelper::onPasteTextures()
 {
+    ++mEditRevision;
     if (!LLClipboard::instance().hasContents())
     {
         return;
@@ -281,7 +284,7 @@ void LLFloaterInventoryThumbnailsHelper::updateDisplayList()
 {
     mInventoryThumbnailsList->deleteAllItems();
 
-    std::map<std::string, LLViewerInventoryItem*>::iterator item_iter = mItemNamesItems.begin();
+    std::map<std::string, LLPointer<LLViewerInventoryItem>>::iterator item_iter = mItemNamesItems.begin();
     while (item_iter != mItemNamesItems.end())
     {
         std::string item_name = (*item_iter).first;
@@ -372,16 +375,22 @@ bool writeInventoryThumbnailID(LLUUID item_id, LLUUID thumbnail_asset_id)
 // writes the thumbnail accordingly.
 void LLFloaterInventoryThumbnailsHelper::onWriteThumbnails()
 {
+    const auto revision=mEditRevision;const auto current=vs_native_im_guard();const auto weak=getHandle();
     // create and show confirmation (Yes/No) textbox since this is a destructive operation
     LLNotificationsUtil::add("WriteInventoryThumbnailsWarning", LLSD(), LLSD(),
-                             [&](const LLSD & notif, const LLSD & resp)
+                             vs_native_im_ui_callback(this,[this,revision,current,weak](const LLSD & notif, const LLSD & resp)
     {
+        if(revision!=mEditRevision)return;
         S32 opt = LLNotificationsUtil::getSelectedOption(notif, resp);
         if (opt == 0)
         {
-            std::map<std::string, LLViewerInventoryItem*>::iterator item_iter = mItemNamesItems.begin();
+            std::map<std::string, LLPointer<LLViewerInventoryItem>>::iterator item_iter = mItemNamesItems.begin();
             while (item_iter != mItemNamesItems.end())
             {
+                if(!current() || weak.isDead())return;
+                if(gInventory.getItem(item_iter->second->getUUID())!=item_iter->second.get())
+                {++item_iter;continue;}
+
                 std::string item_name = (*item_iter).first;
 
                 std::map<std::string, LLUUID>::iterator texture_iter = mTextureNamesIDs.find(item_name);
@@ -410,6 +419,8 @@ void LLFloaterInventoryThumbnailsHelper::onWriteThumbnails()
                     // This additional step (notifying AIS API) is required
                     // to make the changes persist outside of the local cache
                     writeInventoryThumbnailID(item_id, thumbnail_asset_id);
+                    if(!current() || weak.isDead())return;
+                    if(revision!=mEditRevision)return;
                 }
 
                 ++item_iter;
@@ -421,7 +432,7 @@ void LLFloaterInventoryThumbnailsHelper::onWriteThumbnails()
         {
             LL_INFOS() << "Writing new thumbnails was canceled" << LL_ENDL;
         }
-    });
+    }));
 }
 
 // Called when the Log Items with Missing Thumbnails is selected. This merely writes
@@ -430,7 +441,7 @@ void LLFloaterInventoryThumbnailsHelper::onWriteThumbnails()
 // a thumbnail
 void LLFloaterInventoryThumbnailsHelper::onLogMissingThumbnails()
 {
-    std::map<std::string, LLViewerInventoryItem*>::iterator item_iter = mItemNamesItems.begin();
+    std::map<std::string, LLPointer<LLViewerInventoryItem>>::iterator item_iter = mItemNamesItems.begin();
     while (item_iter != mItemNamesItems.end())
     {
         LLUUID thumbnail_id = (*item_iter).second->getThumbnailUUID();
@@ -455,22 +466,30 @@ void LLFloaterInventoryThumbnailsHelper::onLogMissingThumbnails()
 // whole inventory this way.
 void LLFloaterInventoryThumbnailsHelper::onClearThumbnails()
 {
+    const auto revision=mEditRevision;const auto current=vs_native_im_guard();const auto weak=getHandle();
     // create and show confirmation (Yes/No) textbox since this is a destructive operation
     LLNotificationsUtil::add("ClearInventoryThumbnailsWarning", LLSD(), LLSD(),
-                             [&](const LLSD & notif, const LLSD & resp)
+                             vs_native_im_ui_callback(this,[this,revision,current,weak](const LLSD & notif, const LLSD & resp)
     {
+        if(revision!=mEditRevision)return;
         S32 opt = LLNotificationsUtil::getSelectedOption(notif, resp);
         if (opt == 0)
         {
-            std::map<std::string, LLViewerInventoryItem*>::iterator item_iter = mItemNamesItems.begin();
+            std::map<std::string, LLPointer<LLViewerInventoryItem>>::iterator item_iter = mItemNamesItems.begin();
             while (item_iter != mItemNamesItems.end())
             {
+                if(!current() || weak.isDead())return;
+                if(gInventory.getItem(item_iter->second->getUUID())!=item_iter->second.get())
+                {++item_iter;continue;}
+
                 (*item_iter).second->setThumbnailUUID(LLUUID::null);
 
                 // This additional step (notifying AIS API) is required
                 // to make the changes persist outside of the local cache
                 const LLUUID item_id = (*item_iter).second->getUUID();
                 writeInventoryThumbnailID(item_id, LLUUID::null);
+                if(!current() || weak.isDead())return;
+                if(revision!=mEditRevision)return;
 
                 ++item_iter;
             }
@@ -481,7 +500,7 @@ void LLFloaterInventoryThumbnailsHelper::onClearThumbnails()
         {
             LL_INFOS() << "Clearing on thumbnails was canceled" << LL_ENDL;
         }
-    });
+    }));
 }
 
 // Update the endabled state of some of the UI buttons based on what has
@@ -491,7 +510,7 @@ void LLFloaterInventoryThumbnailsHelper::updateButtonStates()
 {
     size_t found_count = 0;
 
-    std::map<std::string, LLViewerInventoryItem*>::iterator item_iter = mItemNamesItems.begin();
+    std::map<std::string, LLPointer<LLViewerInventoryItem>>::iterator item_iter = mItemNamesItems.begin();
     while (item_iter != mItemNamesItems.end())
     {
         std::string item_name = (*item_iter).first;

@@ -30,6 +30,7 @@
 #include "llpanel.h"
 #include "llstyle.h"
 #include "lluuid.h"
+#include <functional>
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Class llpanelpermissions
@@ -92,6 +93,7 @@ protected:
 
 protected:
     void disableAll();
+    template<class Selection> void refreshController(Selection*);
 
 private:
     // LLNameBox*       mLabelGroupName;        // group name
@@ -106,6 +108,10 @@ private:
     //boost::signals2::connection mCreatorCacheConnection;
 
     LLPointer<LLViewerObject> mLastSelectedObject;
+#if VS_NATIVE_VULKAN
+    LLUUID mLastNativeSelectedObject;
+    std::function<bool()> mLastNativeSelectedCurrent;
+#endif
 };
 
 

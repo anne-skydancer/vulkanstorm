@@ -27,6 +27,9 @@
 #include "llviewerprecompiledheaders.h"
 #include <algorithm>
 #include "llvoicevivox.h"
+#include "vsregioncontext.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
 
 #include "llsdutil.h"
 
@@ -640,6 +643,8 @@ void LLVivoxVoiceClient::connectorShutdown()
 
 void LLVivoxVoiceClient::userAuthorized(const std::string& user_id, const LLUUID &agentID)
 {
+    mAccountCurrent = vs_native_im_guard();
+    mAccountAuthorized = true;
 
     mAccountDisplayName = user_id;
 
@@ -758,6 +763,11 @@ void LLVivoxVoiceClient::voiceControlCoro()
         // surviving longer than LLVivoxVoiceClient
         voiceControlStateMachine(state);
     }
+    catch (const AccountRetired&)
+    {
+        // Exact old coroutine retirement; successor account state is untouched.
+        return;
+    }
     catch (const LLCoros::Stop&)
     {
         LL_DEBUGS("LLVivoxVoiceClient") << "Received a shutdown exception" << LL_ENDL;
@@ -778,6 +788,7 @@ void LLVivoxVoiceClient::voiceControlCoro()
 
 void LLVivoxVoiceClient::voiceControlStateMachine(S32 &coro_state)
 {
+    const U64 accountRevision = mAccountRevision;
     if (sShuttingDown)
     {
         return;
@@ -809,6 +820,8 @@ void LLVivoxVoiceClient::voiceControlStateMachine(S32 &coro_state)
             {
                 LL_DEBUGS("Voice") << "Suspending voiceControlCoro() momentarily for teleport. Tuning: " << mTuningMode << ". Relog: " << mRelogRequested << LL_ENDL;
                 llcoro::suspendUntilTimeout(1.0);
+                if (sShuttingDown) return;
+    checkNativeAccountRevision(accountRevision);
             }
             else
             {
@@ -869,6 +882,8 @@ void LLVivoxVoiceClient::voiceControlStateMachine(S32 &coro_state)
                     // that some time passed and not to outlive voice itself
                     current_delay++;
                     llcoro::suspendUntilTimeout(1.f);
+                    if (sShuttingDown) return;
+    checkNativeAccountRevision(accountRevision);
                 }
                 coro_state = VOICE_STATE_WAIT_FOR_EXIT;
             }
@@ -890,10 +905,9 @@ void LLVivoxVoiceClient::voiceControlStateMachine(S32 &coro_state)
                 setupVADParams(vad_auto, vad_hangover, vad_noise_floor, vad_sensitivity);
 
                 // watch for changes to the VAD settings via Debug Settings UI and act on them accordingly
-                gSavedSettings.getControl("VivoxVadAuto")->getSignal()->connect(boost::bind(&LLVivoxVoiceClient::onVADSettingsChange, this));
-                gSavedSettings.getControl("VivoxVadHangover")->getSignal()->connect(boost::bind(&LLVivoxVoiceClient::onVADSettingsChange, this));
-                gSavedSettings.getControl("VivoxVadNoiseFloor")->getSignal()->connect(boost::bind(&LLVivoxVoiceClient::onVADSettingsChange, this));
-                gSavedSettings.getControl("VivoxVadSensitivity")->getSignal()->connect(boost::bind(&LLVivoxVoiceClient::onVADSettingsChange, this));
+                if (mVADSettingsConnections.empty())
+                    for (const char* name : {"VivoxVadAuto", "VivoxVadHangover", "VivoxVadNoiseFloor", "VivoxVadSensitivity"})
+                        mVADSettingsConnections.emplace_back(gSavedSettings.getControl(name)->getSignal()->connect(boost::bind(&LLVivoxVoiceClient::onVADSettingsChange, this)));
 
                 if (mTuningMode)
                 {
@@ -921,6 +935,8 @@ void LLVivoxVoiceClient::voiceControlStateMachine(S32 &coro_state)
             {
                 LL_INFOS("Voice") << "waiting for SLVoice to exit" << LL_ENDL;
                 llcoro::suspendUntilTimeout(1.0);
+                if (sShuttingDown) return;
+    checkNativeAccountRevision(accountRevision);
             }
             else if (mRelogRequested && mVoiceEnabled)
             {
@@ -944,6 +960,8 @@ void LLVivoxVoiceClient::voiceControlStateMachine(S32 &coro_state)
         return;
     }
 
+    if (sShuttingDown) return;
+    checkNativeAccountRevision(accountRevision);
     mIsCoroutineActive = false;
     LL_INFOS("Voice") << "exiting" << LL_ENDL;
 }
@@ -980,6 +998,7 @@ bool LLVivoxVoiceClient::callbackEndDaemon(const LLSD& data)
 
 bool LLVivoxVoiceClient::startAndLaunchDaemon()
 {
+    const U64 accountRevision = mAccountRevision;
     //---------------------------------------------------------------------
     // </FS:Ansariel> Bypass cached controls
     //if (!LLVoiceClient::getInstance()->voiceEnabled())
@@ -1179,6 +1198,8 @@ bool LLVivoxVoiceClient::startAndLaunchDaemon()
 
     //---------------------------------------------------------------------
     llcoro::suspendUntilTimeout(UPDATE_THROTTLE_SECONDS);
+    if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
 
     LL_DEBUGS("Voice") << "Connecting to vivox daemon:" << mDaemonHost << LL_ENDL;
 
@@ -1199,6 +1220,8 @@ bool LLVivoxVoiceClient::startAndLaunchDaemon()
         if (!sConnected)
         {
             llcoro::suspendUntilTimeout(DAEMON_CONNECT_THROTTLE_SECONDS);
+            if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
         }
     }
 
@@ -1209,10 +1232,14 @@ bool LLVivoxVoiceClient::startAndLaunchDaemon()
     }
 
     llcoro::suspendUntilTimeout(UPDATE_THROTTLE_SECONDS);
+    if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
 
     while (!sPump && !sShuttingDown)
     {   // Can't use the pump until we have it available.
         llcoro::suspend();
+        if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
     }
 
     if (sShuttingDown)
@@ -1229,7 +1256,7 @@ bool LLVivoxVoiceClient::startAndLaunchDaemon()
     LLPumpIO::chain_t readChain;
 
     readChain.push_back(LLIOPipe::ptr_t(new LLIOSocketReader(mSocket)));
-    readChain.push_back(LLIOPipe::ptr_t(new LLVivoxProtocolParser()));
+    readChain.push_back(LLIOPipe::ptr_t(new LLVivoxProtocolParser([weak = std::weak_ptr<const void>(mParserOwner)] { return !weak.expired(); })));
 
 
     sPump->addChain(readChain, NEVER_CHAIN_EXPIRY_SECS);
@@ -1237,6 +1264,8 @@ bool LLVivoxVoiceClient::startAndLaunchDaemon()
 
     //---------------------------------------------------------------------
     llcoro::suspendUntilTimeout(UPDATE_THROTTLE_SECONDS);
+    if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
 
     // Initial devices query
     getCaptureDevicesSendMessage();
@@ -1249,13 +1278,19 @@ bool LLVivoxVoiceClient::startAndLaunchDaemon()
 
 bool LLVivoxVoiceClient::provisionVoiceAccount()
 {
+    const U64 accountRevision = mAccountRevision;
+    const auto current = mAccountCurrent;
+    if (!current()) return false;
     LL_INFOS("Voice") << "Provisioning voice account." << LL_ENDL;
 
-    while ((!gAgent.getRegion() || !gAgent.getRegion()->capabilitiesReceived()) && !sShuttingDown)
+    while ((!vs_current_region_context() || !vs_current_region_context()->capabilitiesReceived()) && !sShuttingDown)
     {
         LL_DEBUGS("Voice") << "no capabilities for voice provisioning; waiting " << LL_ENDL;
         // *TODO* Pump a message for wake up.
         llcoro::suspend();
+        if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
+    if (!current()) return false;
     }
 
     if (sShuttingDown)
@@ -1263,7 +1298,7 @@ bool LLVivoxVoiceClient::provisionVoiceAccount()
         return false;
     }
 
-    std::string url = gAgent.getRegionCapability("ProvisionVoiceAccountRequest");
+    std::string url = vs_current_region_context()->getCapability("ProvisionVoiceAccountRequest");
 
     LL_DEBUGS("Voice") << "region ready for voice provisioning; url=" << url << LL_ENDL;
 
@@ -1282,6 +1317,9 @@ bool LLVivoxVoiceClient::provisionVoiceAccount()
         LLSD body;
         body["voice_server_type"] = "vivox";
         result = httpAdapter->postAndSuspend(httpRequest, url, body, httpOpts);
+        if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
+    if (!current()) return false;
 
         if (sShuttingDown)
         {
@@ -1296,6 +1334,9 @@ bool LLVivoxVoiceClient::provisionVoiceAccount()
             F32 timeout = pow(PROVISION_RETRY_TIMEOUT, static_cast<float>(retryCount));
             LL_WARNS("Voice") << "Provision CAP 404.  Retrying in " << timeout << " seconds. Retries: " << (S32)retryCount << LL_ENDL;
             llcoro::suspendUntilTimeout(timeout);
+            if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
+    if (!current()) return false;
 
             if (sShuttingDown)
             {
@@ -1356,6 +1397,7 @@ bool LLVivoxVoiceClient::provisionVoiceAccount()
 
 bool LLVivoxVoiceClient::establishVoiceConnection()
 {
+    const U64 accountRevision = mAccountRevision;
     if (!mVoiceEnabled && mIsInitialized)
     {
         LL_WARNS("Voice") << "cannot establish connection; enabled "<<mVoiceEnabled<<" initialized "<<mIsInitialized<<LL_ENDL;
@@ -1378,6 +1420,8 @@ bool LLVivoxVoiceClient::establishVoiceConnection()
     do
     {
         result = llcoro::suspendUntilEventOn(mVivoxPump);
+        if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
         LL_DEBUGS("Voice") << "event=" << ll_stream_notation_sd(result) << LL_ENDL;
 
         if (result.has("connector"))
@@ -1392,6 +1436,8 @@ bool LLVivoxVoiceClient::establishVoiceConnection()
                     timeout *= retries;
                     LL_INFOS("Voice") << "Retry connection to voice service in " << timeout << " seconds" << LL_ENDL;
                     llcoro::suspendUntilTimeout(timeout);
+                    if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
 
                     if (mVoiceEnabled) // user may have switched it off
                     {
@@ -1428,6 +1474,7 @@ bool LLVivoxVoiceClient::establishVoiceConnection()
 
 bool LLVivoxVoiceClient::breakVoiceConnection(bool corowait)
 {
+    const U64 accountRevision = mAccountRevision;
     LL_DEBUGS("Voice") << "( wait=" << corowait << ")" << LL_ENDL;
     bool retval(true);
 
@@ -1439,6 +1486,8 @@ bool LLVivoxVoiceClient::breakVoiceConnection(bool corowait)
         LLSD timeoutResult(LLSDMap("connector", "timeout"));
 
         LLSD result = llcoro::suspendUntilEventOnWithTimeout(mVivoxPump, LOGOUT_ATTEMPT_TIMEOUT, timeoutResult);
+        if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
         LL_DEBUGS("Voice") << "event=" << ll_stream_notation_sd(result) << LL_ENDL;
 
         retval = result.has("connector");
@@ -1477,6 +1526,7 @@ bool LLVivoxVoiceClient::breakVoiceConnection(bool corowait)
 
 bool LLVivoxVoiceClient::loginToVivox()
 {
+    const U64 accountRevision = mAccountRevision;
     LLSD timeoutResult(LLSDMap("login", "timeout"));
 
     int loginRetryCount(0);
@@ -1495,6 +1545,8 @@ bool LLVivoxVoiceClient::loginToVivox()
         }
 
         LLSD result = llcoro::suspendUntilEventOnWithTimeout(mVivoxPump, LOGIN_ATTEMPT_TIMEOUT, timeoutResult);
+        if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
 
         if (sShuttingDown)
         {
@@ -1539,6 +1591,8 @@ bool LLVivoxVoiceClient::loginToVivox()
                     // Todo: this is way to long, viewer can get stuck waiting during shutdown
                     // either make it listen to pump or split in smaller waits with checks for shutdown
                     llcoro::suspendUntilTimeout(timeout);
+                    if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
                 }
             }
             else if (loginresp == "failed")
@@ -1588,6 +1642,7 @@ bool LLVivoxVoiceClient::loginToVivox()
 
 void LLVivoxVoiceClient::logoutOfVivox(bool wait)
 {
+    const U64 accountRevision = mAccountRevision;
     if (mIsLoggedIn)
     {
         // Ensure that we'll re-request provisioning before logging in again
@@ -1609,6 +1664,8 @@ void LLVivoxVoiceClient::logoutOfVivox(bool wait)
                     << LL_ENDL;
 
                 result = llcoro::suspendUntilEventOnWithTimeout(mVivoxPump, LOGOUT_ATTEMPT_TIMEOUT, timeoutResult);
+                if (sShuttingDown) return;
+    checkNativeAccountRevision(accountRevision);
 
                 if (sShuttingDown)
                 {
@@ -1633,6 +1690,7 @@ void LLVivoxVoiceClient::logoutOfVivox(bool wait)
 
 bool LLVivoxVoiceClient::retrieveVoiceFonts()
 {
+    const U64 accountRevision = mAccountRevision;
     // Request the set of available voice fonts.
     refreshVoiceEffectLists(true);
 
@@ -1641,6 +1699,8 @@ bool LLVivoxVoiceClient::retrieveVoiceFonts()
     do
     {
         result = llcoro::suspendUntilEventOn(mVivoxPump);
+        if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
 
         LL_DEBUGS("Voice") << "event=" << ll_stream_notation_sd(result) << LL_ENDL;
         if (result.has("voice_fonts"))
@@ -1656,17 +1716,20 @@ bool LLVivoxVoiceClient::retrieveVoiceFonts()
 
 bool LLVivoxVoiceClient::requestParcelVoiceInfo()
 {
+    const U64 accountRevision = mAccountRevision;
+    const auto current = mAccountCurrent;
+    if (!current()) return false;
     //_INFOS("Voice") << "Requesting voice info for Parcel" << LL_ENDL;
 
-    LLViewerRegion * region = gAgent.getRegion();
-    if (region == NULL || !region->capabilitiesReceived())
+    const auto region = vs_current_region_context();
+    if (!region || !region->capabilitiesReceived())
     {
         LL_DEBUGS("Voice") << "ParcelVoiceInfoRequest capability not yet available, deferring" << LL_ENDL;
         return false;
     }
 
     // grab the cap.
-    std::string url = gAgent.getRegion()->getCapability("ParcelVoiceInfoRequest");
+    std::string url = region->getCapability("ParcelVoiceInfoRequest");
     if (url.empty())
     {
         // Region dosn't have the cap. Stop probing.
@@ -1685,6 +1748,9 @@ bool LLVivoxVoiceClient::requestParcelVoiceInfo()
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, LLSD());
+    if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
+    if (!current() || !region->current()) return false;
 
     if (sShuttingDown)
     {
@@ -1740,6 +1806,7 @@ bool LLVivoxVoiceClient::requestParcelVoiceInfo()
 
 bool LLVivoxVoiceClient::addAndJoinSession(const sessionStatePtr_t &nextSession)
 {
+    const U64 accountRevision = mAccountRevision;
     mIsJoiningSession = true;
 
     sessionStatePtr_t oldSession = mAudioSession;
@@ -1773,6 +1840,8 @@ bool LLVivoxVoiceClient::addAndJoinSession(const sessionStatePtr_t &nextSession)
     notifyStatusObservers(LLVoiceClientStatusObserver::STATUS_JOINING);
 
     llcoro::suspend();
+    if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
 
     if (sShuttingDown)
     {
@@ -1841,6 +1910,8 @@ bool LLVivoxVoiceClient::addAndJoinSession(const sessionStatePtr_t &nextSession)
     do
     {
         result = llcoro::suspendUntilEventOnWithTimeout(mVivoxPump, SESSION_JOIN_TIMEOUT, timeoutResult);
+        if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
 
         if (sShuttingDown)
         {
@@ -1930,6 +2001,7 @@ bool LLVivoxVoiceClient::addAndJoinSession(const sessionStatePtr_t &nextSession)
 
 bool LLVivoxVoiceClient::terminateAudioSession(bool wait)
 {
+    const U64 accountRevision = mAccountRevision;
 
     if (mAudioSession)
     {
@@ -1965,6 +2037,8 @@ bool LLVivoxVoiceClient::terminateAudioSession(bool wait)
                         LLSD timeoutResult(LLSDMap("session", "timeout"));
 
                         result = llcoro::suspendUntilEventOnWithTimeout(mVivoxPump, LOGOUT_ATTEMPT_TIMEOUT, timeoutResult);
+                        if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
 
                         if (sShuttingDown)
                         {
@@ -2050,6 +2124,7 @@ typedef enum e_voice_wait_for_channel_state
 
 bool LLVivoxVoiceClient::waitForChannel()
 {
+    const U64 accountRevision = mAccountRevision;
     LL_INFOS("Voice") << "Waiting for channel" << LL_ENDL;
 
     EVoiceWaitForChannelState state = VOICE_CHANNEL_STATE_LOGIN;
@@ -2099,6 +2174,8 @@ bool LLVivoxVoiceClient::waitForChannel()
 
         case VOICE_CHANNEL_STATE_START_CHANNEL_PROCESSING:
             llcoro::suspend();
+            if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
             state = VOICE_CHANNEL_STATE_PROCESS_CHANNEL;
             break;
 
@@ -2129,6 +2206,8 @@ bool LLVivoxVoiceClient::waitForChannel()
                 if (!mNextAudioSession->mIsP2P && !mProcessChannels)
                 {
                     llcoro::suspend();
+                    if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
                     break;
                 }
 
@@ -2183,6 +2262,8 @@ bool LLVivoxVoiceClient::waitForChannel()
             if (!mNextAudioSession)
             {
                 llcoro::suspendUntilTimeout(1.0);
+                if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
             }
             state = VOICE_CHANNEL_STATE_NEXT_CHANNEL_CHECK;
             break;
@@ -2251,6 +2332,7 @@ bool LLVivoxVoiceClient::waitForChannel()
 
 bool LLVivoxVoiceClient::runSession(const sessionStatePtr_t &session)
 {
+    const U64 accountRevision = mAccountRevision;
     LL_INFOS("Voice") << "running new voice session " << session->mHandle << LL_ENDL;
 
     if (sShuttingDown || !mProcessChannels)
@@ -2354,6 +2436,8 @@ bool LLVivoxVoiceClient::runSession(const sessionStatePtr_t &session)
 
         mIsInitialized = true;
         LLSD result = llcoro::suspendUntilEventOnWithTimeout(mVivoxPump, UPDATE_THROTTLE_SECONDS, timeoutEvent);
+        if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
 
         if (sShuttingDown)
         {
@@ -2416,6 +2500,7 @@ bool LLVivoxVoiceClient::runSession(const sessionStatePtr_t &session)
 
 void LLVivoxVoiceClient::sendCaptureAndRenderDevices()
 {
+    const U64 accountRevision = mAccountRevision;
     if (mCaptureDeviceDirty || mRenderDeviceDirty)
     {
         // <FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
@@ -2442,6 +2527,8 @@ void LLVivoxVoiceClient::sendCaptureAndRenderDevices()
         }
 
         llcoro::suspendUntilTimeout(UPDATE_THROTTLE_SECONDS);
+        if (sShuttingDown) return;
+    checkNativeAccountRevision(accountRevision);
         // <FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
         }
         // There are two exceptions that unique_lock can trigger, operation_not_permitted or resource_deadlock_would_occur
@@ -2476,6 +2563,7 @@ void LLVivoxVoiceClient::sendCaptureAndRenderDevices()
 
 void LLVivoxVoiceClient::recordingAndPlaybackMode()
 {
+    const U64 accountRevision = mAccountRevision;
     LL_INFOS("Voice") << "In voice capture/playback mode." << LL_ENDL;
 
     while (true)
@@ -2484,6 +2572,8 @@ void LLVivoxVoiceClient::recordingAndPlaybackMode()
         do
         {
             command = llcoro::suspendUntilEventOn(mVivoxPump);
+            if (sShuttingDown) return;
+    checkNativeAccountRevision(accountRevision);
             LL_DEBUGS("Voice") << "event=" << ll_stream_notation_sd(command) << LL_ENDL;
         } while (!command.has("recplay"));
 
@@ -2512,6 +2602,7 @@ void LLVivoxVoiceClient::recordingAndPlaybackMode()
 
 int LLVivoxVoiceClient::voiceRecordBuffer()
 {
+    const U64 accountRevision = mAccountRevision;
     LLSD timeoutResult(LLSDMap("recplay", "stop"));
 
     LL_INFOS("Voice") << "Recording voice buffer" << LL_ENDL;
@@ -2524,6 +2615,7 @@ int LLVivoxVoiceClient::voiceRecordBuffer()
     do
     {
         result = llcoro::suspendUntilEventOnWithTimeout(mVivoxPump, CAPTURE_BUFFER_MAX_TIME, timeoutResult);
+        checkNativeAccountRevision(accountRevision);
         LL_DEBUGS("Voice") << "event=" << ll_stream_notation_sd(result) << LL_ENDL;
     } while (!result.has("recplay"));
 
@@ -2541,6 +2633,7 @@ int LLVivoxVoiceClient::voiceRecordBuffer()
 
 int LLVivoxVoiceClient::voicePlaybackBuffer()
 {
+    const U64 accountRevision = mAccountRevision;
     LLSD timeoutResult(LLSDMap("recplay", "stop"));
 
     LL_INFOS("Voice") << "Playing voice buffer" << LL_ENDL;
@@ -2560,6 +2653,7 @@ int LLVivoxVoiceClient::voicePlaybackBuffer()
             notifyVoiceFontObservers();
 
             result = llcoro::suspendUntilEventOnWithTimeout(mVivoxPump, CAPTURE_BUFFER_MAX_TIME, timeoutResult);
+            checkNativeAccountRevision(accountRevision);
             LL_DEBUGS("Voice") << "event=" << ll_stream_notation_sd(result) << LL_ENDL;
         } while (!result.has("recplay"));
 
@@ -2582,12 +2676,15 @@ int LLVivoxVoiceClient::voicePlaybackBuffer()
 
 bool LLVivoxVoiceClient::performMicTuning()
 {
+    const U64 accountRevision = mAccountRevision;
     LL_INFOS("Voice") << "Entering voice tuning mode." << LL_ENDL;
     mIsInTuningMode = true;
 
     while (mTuningMode && !sShuttingDown)
     {
         llcoro::suspendUntilTimeout(UPDATE_THROTTLE_SECONDS);
+        if (sShuttingDown) return false;
+    checkNativeAccountRevision(accountRevision);
     }
 
     mIsInTuningMode = false;
@@ -5007,7 +5104,7 @@ LLVivoxVoiceClient::participantStatePtr_t LLVivoxVoiceClient::findParticipantByI
 // Check for parcel boundary crossing
 bool LLVivoxVoiceClient::checkParcelChanged(bool update)
 {
-    LLViewerRegion *region = gAgent.getRegion();
+    const auto region = vs_current_region_context();
     LLParcel *parcel = LLViewerParcelMgr::getInstance()->getAgentParcel();
 
     if(region && parcel)
@@ -5554,8 +5651,9 @@ void LLVivoxVoiceClient::enforceTether(void)
 void LLVivoxVoiceClient::updatePosition(void)
 {
 
-    LLViewerRegion *region = gAgent.getRegion();
-    if(region && isAgentAvatarValid())
+    const auto region = vs_current_region_context();
+    const auto avatar = vs_avatar_voice_pose();
+    if(region && avatar)
     {
         LLMatrix3 rot;
         LLVector3d pos;
@@ -5566,7 +5664,7 @@ void LLVivoxVoiceClient::updatePosition(void)
 
         // Send the current camera position to the voice code
         rot.setRows(LLViewerCamera::getInstance()->getAtAxis(), LLViewerCamera::getInstance()->getLeftAxis (),  LLViewerCamera::getInstance()->getUpAxis());
-        pos = gAgent.getRegion()->getPosGlobalFromRegion(LLViewerCamera::getInstance()->getOrigin());
+        pos = region->getPosGlobalFromRegion(LLViewerCamera::getInstance()->getOrigin());
 
         LLVivoxVoiceClient::getInstance()->setCameraPosition(
                                                              pos,               // position
@@ -5574,8 +5672,8 @@ void LLVivoxVoiceClient::updatePosition(void)
                                                              rot);              // rotation matrix
 
         // Send the current avatar position to the voice code
-        qrot = gAgentAvatarp->getRootJoint()->getWorldRotation();
-        pos = gAgentAvatarp->getPositionGlobal();
+        qrot = avatar->rotation;
+        pos = avatar->position;
 
         // TODO: Can we get the head offset from outside the LLVOAvatar?
         //          pos += LLVector3d(mHeadOffset);
@@ -5666,13 +5764,21 @@ void LLVivoxVoiceClient::setMuteMic(bool muted)
 
 void LLVivoxVoiceClient::setVoiceEnabled(bool enabled)
 {
+    if (enabled && !mAccountAuthorized)
+    {
+        // Saved enablement is retained, but a channel requires real login
+        // authorization. Device enumeration/tuning keep their own paths.
+        mVoiceEnabled = enabled;
+        return;
+    }
+
     LL_DEBUGS("Voice")
         << "( " << (enabled ? "enabled" : "disabled") << " )"
         << " was "<< (mVoiceEnabled ? "enabled" : "disabled")
         << " coro "<< (mIsCoroutineActive ? "active" : "inactive")
         << LL_ENDL;
 
-    if (enabled != mVoiceEnabled)
+    if (enabled != mVoiceEnabled || (enabled && !mIsCoroutineActive))
     {
         // TODO: Refactor this so we don't call into LLVoiceChannel, but simply
         // use the status observer
@@ -6547,7 +6653,7 @@ void LLVivoxVoiceClient::lookupName(const LLUUID &id)
     {
         mAvatarNameCacheConnection.disconnect();
     }
-    mAvatarNameCacheConnection = LLAvatarNameCache::get(id, boost::bind(&LLVivoxVoiceClient::onAvatarNameCache, this, _1, _2));
+    mAvatarNameCacheConnection = LLAvatarNameCache::get(id, vs_native_im_account_callback(boost::bind(&LLVivoxVoiceClient::onAvatarNameCache, this, _1, _2)));
 }
 
 void LLVivoxVoiceClient::onAvatarNameCache(const LLUUID& agent_id,
@@ -7336,7 +7442,8 @@ void LLVivoxVoiceClient::captureBufferPlayStopSendMessage()
     }
 }
 
-LLVivoxProtocolParser::LLVivoxProtocolParser()
+LLVivoxProtocolParser::LLVivoxProtocolParser(std::function<bool()> current)
+    : mCurrent(std::move(current))
 {
     parser = XML_ParserCreate(NULL);
 
@@ -7389,6 +7496,7 @@ LLIOPipe::EStatus LLVivoxProtocolParser::process_impl(
                                                       LLSD& context,
                                                       LLPumpIO* pump)
 {
+    if (!mCurrent()) { mInput.clear(); eos = true; return STATUS_STOP; }
     LL_RECORD_BLOCK_TIME(FTM_VIVOX_PROCESS);
     LLBufferStream istr(channels, buffer.get());
     std::ostringstream ostr;
@@ -7787,6 +7895,7 @@ LLDate LLVivoxProtocolParser::expiryTimeStampToLLDate(const std::string& vivox_t
 
 void LLVivoxProtocolParser::processResponse(std::string tag)
 {
+    if (!mCurrent()) return;
     LL_DEBUGS("VivoxProtocolParser") << tag << LL_ENDL;
 
     // SLIM SDK: the SDK now returns a statusCode of "200" (OK) for success.  This is a change vs. previous SDKs.
@@ -8116,3 +8225,42 @@ LLVivoxSecurity::~LLVivoxSecurity()
 bool LLVivoxVoiceP2PIncomingCall::answerInvite() { return LLVivoxVoiceClient::getInstance()->answerInvite(mCallInfo["session_handle"]); }
 
 void LLVivoxVoiceP2PIncomingCall::declineInvite() { LLVivoxVoiceClient::getInstance()->declineInvite(mCallInfo["session_handle"]); }
+
+void LLVivoxVoiceClient::retireNativeAccount()
+{
+    ++mAccountRevision;
+    mAccountAuthorized = false;
+    mParserOwner = std::make_shared<char>(0);
+    mAccountCurrent = [] { return false; };
+    mVoiceEnabled = false;
+    mRelogRequested = false;
+    mTuningMode = false;
+    mIsCoroutineActive = false;
+    mHidden = true;
+    mMuteMic = true;
+    mMuteMicDirty = true;
+    mIsInitialized = false;
+    mIsProcessingChannels = false;
+    mAvatarNameCacheConnection.disconnect();
+    closeSocket();
+    killGateway();
+    cleanUp();
+    sConnected = false;
+    mAccountLoggedIn = false;
+    mIsLoggedIn = false;
+    mIsLoggingIn = false;
+    mConnectorEstablished = false;
+    mIsInChannel = false;
+    mIsJoiningSession = false;
+    mAccountName.clear();
+    mAccountPassword.clear();
+    mAccountDisplayName.clear();
+    mVoiceSIPURIHostName.clear();
+    mVoiceAccountServerURI.clear();
+    mCurrentRegionName.clear();
+    mCurrentParcelLocalID = -1;
+    mVivoxPump.discard();
+    // Wake all old suspended request stacks so they observe their captured
+    // revision and release listeners; no synthetic remote response is forged.
+    mVivoxPump.post(LLSD().with("account_retired", true));
+}

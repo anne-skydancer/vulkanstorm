@@ -291,6 +291,7 @@ void LLColorSwatchCtrl::onColorChanged ( void* data, EColorPickOp pick_op )
     LLColorSwatchCtrl* subject = ( LLColorSwatchCtrl* )data;
     if ( subject )
     {
+        if(subject->mPickerCurrent && !subject->mPickerCurrent())return;
         LLFloaterColorPicker* pickerp = (LLFloaterColorPicker*)subject->mPickerHandle.get();
         if (pickerp)
         {
@@ -359,6 +360,8 @@ void LLColorSwatchCtrl::setValid(bool valid )
 
 void LLColorSwatchCtrl::showPicker(bool take_focus)
 {
+    mPickerCurrent=mOperationGuardFactory?mOperationGuardFactory():std::function<bool()>{};
+    if(mPickerCurrent && !mPickerCurrent())return;
     LLFloaterColorPicker* pickerp = (LLFloaterColorPicker*)mPickerHandle.get();
     if (!pickerp)
     {

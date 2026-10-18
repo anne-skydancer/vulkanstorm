@@ -29,6 +29,8 @@
 
 #include "llinventory.h"
 #include "llviewerobject.h"
+#include "vstaskinventoryobject.h"
+#include <memory>
 #include "lluuid.h"
 
 #include "llfloater.h"
@@ -46,6 +48,8 @@ struct LLScriptQueueData
     LLPointer<LLInventoryItem> mItem;
     LLUUID mExperienceId;
     std::string mExperiencename;
+    VSTaskInventoryObject mSource;
+    std::function<bool()> mCurrent;
 
     LLScriptQueueData(const LLUUID& q_id, const LLUUID& task_id, const LLUUID& experience_id, LLInventoryItem* item) :
         mQueueID(q_id),
@@ -80,6 +84,9 @@ public:
 
     // addObject() accepts an object id.
     void addObject(const LLUUID& id, std::string name);
+    void addObject(const VSTaskInventoryObject&, std::string);
+    std::function<bool()> queueGuard() const;
+    void onClose(bool) override;
 
     // start() returns true if the queue has started, otherwise false.
     bool start();
@@ -111,6 +118,7 @@ protected:
     {
         LLUUID mObjectId;
         std::string mObjectName;
+        VSTaskInventoryObject mSource;
     };
     typedef std::vector<ObjectData> object_data_list_t;
 
@@ -120,8 +128,10 @@ protected:
 
     std::string mStartString;
     bool mMono;
+    std::shared_ptr<bool> mQueueLive = std::make_shared<bool>(true);
+    std::function<bool()> mAccountCurrent;
 
-    typedef std::function<bool(const LLPointer<LLViewerObject> &, LLInventoryObject*, LLEventPump &)>   fnQueueAction_t;
+    typedef std::function<bool(const VSTaskInventoryObject &, LLInventoryObject*, LLEventPump &)>   fnQueueAction_t;
     static void objectScriptProcessingQueueCoro(std::string action, LLHandle<LLFloaterScriptQueue> hfloater, object_data_list_t objectList, fnQueueAction_t func);
 
 };
@@ -158,7 +168,7 @@ protected:
 
     virtual bool startQueue();
 
-    static bool processScript(LLHandle<LLFloaterCompileQueue> hfloater, const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump);
+    static bool processScript(LLHandle<LLFloaterCompileQueue> hfloater, const VSTaskInventoryObject &object, LLInventoryObject* inventory, LLEventPump &pump);
 
     //bool checkAssetId(const LLUUID &assetId);
     static void handleHTTPResponse(std::string pumpName, const LLSD &expresult);
@@ -186,7 +196,7 @@ protected:
     LLFloaterResetQueue(const LLSD& key);
     virtual ~LLFloaterResetQueue();
 
-    static bool resetObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump);
+    static bool resetObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, const VSTaskInventoryObject &object, LLInventoryObject* inventory, LLEventPump &pump);
 
     virtual bool startQueue();
 };
@@ -204,7 +214,7 @@ protected:
     LLFloaterRunQueue(const LLSD& key);
     virtual ~LLFloaterRunQueue();
 
-    static bool runObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump);
+    static bool runObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, const VSTaskInventoryObject &object, LLInventoryObject* inventory, LLEventPump &pump);
 
     virtual bool startQueue();
 };
@@ -222,7 +232,7 @@ protected:
     LLFloaterNotRunQueue(const LLSD& key);
     virtual ~LLFloaterNotRunQueue();
 
-    static bool stopObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump);
+    static bool stopObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, const VSTaskInventoryObject &object, LLInventoryObject* inventory, LLEventPump &pump);
 
     virtual bool startQueue();
 };
@@ -241,7 +251,7 @@ protected:
     LLFloaterDeleteQueue(const LLSD& key);
     virtual ~LLFloaterDeleteQueue();
 
-    static bool deleteObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump);
+    static bool deleteObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, const VSTaskInventoryObject &object, LLInventoryObject* inventory, LLEventPump &pump);
 
     virtual bool startQueue();
 };

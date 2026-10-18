@@ -32,6 +32,7 @@
 #include "llfloater.h"
 #include "llcharacter.h"
 #include "lltracerecording.h"
+#include <functional>
 
 class LLCharacter;
 class LLRenderTarget;
@@ -47,7 +48,7 @@ public:
     void freezeAvatar(LLCharacter* avatarp);
     void setDebugViewerVisible(bool visible);
 
-    void capture(); //capture the main frame buffer
+    void capture(const std::function<bool()>& nativeCopy = {}); //capture the main frame buffer
     void compare(); //compare the stored two buffers.
     void fetchQueryResult();
     void calcDiffAggregate();
@@ -65,6 +66,7 @@ public:
     bool hasResults() const { return mSceneLoadRecording.getResults().getDuration() != S32Seconds(0);}
 
     void reset();
+    void retireAccount();
 
 private:
     void freezeScene();
@@ -74,6 +76,8 @@ private:
     void generateDitheringTexture(S32 width, S32 height);
 
 private:
+    U32 mLastCaptureFrame=0;
+    bool mForceCapture=true;
     bool                                    mEnabled,
                                             mDebugViewerVisible;
 

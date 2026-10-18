@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llhudmanager.h"
+#include "llhudeffecttrail.h"
 
 #include "message.h"
 #include "object_flags.h"
@@ -149,14 +150,39 @@ LLHUDEffect *LLHUDManager::createViewerEffect(const U8 type, bool send_to_sim, b
 //static
 void LLHUDManager::processViewerEffect(LLMessageSystem *mesgsys, void **user_data)
 {
-    LLHUDEffect *effectp = NULL;
-    LLUUID effect_id;
-    U8 effect_type = 0;
     S32 number_blocks = mesgsys->getNumberOfBlocksFast(_PREHASH_Effect);
     S32 k;
 
     for (k = 0; k < number_blocks; k++)
     {
+        processViewerEffectBlock(mesgsys,k);
+    }
+
+    //LL_INFOS() << "Got viewer effect: " << effect_id << LL_ENDL;
+}
+
+
+void LLHUDManager::updateNativeParticles()
+{
+    // Spiral/tractor sources keep their actual CPU timer/ShowSelectionBeam
+    // semantics. This never calls the obsolete immediate-GL HUD beam painter.
+    const auto effects=mHUDEffects;
+    for(auto effect:effects)
+        if(!effect->isDead())
+            if(auto* spiral=dynamic_cast<LLHUDEffectSpiral*>(effect.get()))spiral->renderForTimer();
+    cleanupEffects();
+    sendEffects();
+}
+void LLHUDManager::retireNativeEffects()
+{
+    const auto effects=mHUDEffects;
+    for(auto effect:effects)effect->markDead();
+    cleanupEffects();
+}
+
+void LLHUDManager::processViewerEffectBlock(LLMessageSystem* mesgsys,S32 k)
+{
+    LLHUDEffect* effectp=nullptr;LLUUID effect_id;U8 effect_type=0;
         effectp = NULL;
         LLHUDEffect::getIDType(mesgsys, k, effect_id, effect_type);
         S32 i;
@@ -204,8 +230,4 @@ void LLHUDManager::processViewerEffect(LLMessageSystem *mesgsys, void **user_dat
         {
             LL_WARNS() << "Received viewer effect of type " << effect_type << " which isn't really an effect!" << LL_ENDL;
         }
-    }
-
-    //LL_INFOS() << "Got viewer effect: " << effect_id << LL_ENDL;
 }
-

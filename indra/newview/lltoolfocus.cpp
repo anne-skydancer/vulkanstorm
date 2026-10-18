@@ -28,6 +28,12 @@
 
 // File includes
 #include "lltoolfocus.h"
+#include "vsavatarservices.h"
+#if VS_NATIVE_VULKAN
+#include "vsobjectcontext.h"
+#include "vsvulkancontext.h"
+#include <set>
+#endif
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #include "vsobjectselection.h"
@@ -159,9 +165,54 @@ bool LLToolCamera::handleMouseDown(S32 x, S32 y, MASK mask)
     return true;
 }
 
-void LLToolCamera::pickCallback(const LLPickInfo& pick_info)
+namespace {
+struct ReferenceCameraPickPeer
 {
-    LLToolCamera* camera = LLToolCamera::getInstance();
+    bool current()const{return true;}
+    auto object(const LLPickInfo& pick)const{return pick.getObject();}
+    bool hud(LLViewerObject* object)const{return object->isHUDAttachment();}
+    bool hudSelection()const{auto selected=LLSelectMgr::instance().getSelection();return selected->getObjectCount() && selected->getSelectType()==SELECT_TYPE_HUD;}
+    bool self(LLViewerObject* object)const{return isAgentAvatarValid() && object==gAgentAvatarp;}
+    bool isSelfPointer(LLViewerObject* object)const{return object==gAgentAvatarp;}
+    bool attachment(LLViewerObject* object)const{return object->isAttachment();}
+    bool youOwner(LLViewerObject* object)const{return object->permYouOwner();}
+    bool attachmentSelf(LLViewerObject* object)const{return LLVOAvatar::findAvatarFromAttachment(object)->isSelf();}
+};
+#if VS_NATIVE_VULKAN
+struct NativeCameraPickPeer
+{
+    using Object=std::optional<VSWorldScene::ObjectHandle>;
+    std::shared_ptr<VSNativeSession> session;
+    std::function<bool()> account;
+    VSWorldScene& world;
+    bool current()const{return account && account() && session==VSNativeSession::active() && session->phase()==VSNativeSession::Phase::Connected;}
+    Object object(const LLPickInfo& pick)const{return current()?world.object(pick.mObjectID):Object();}
+    bool hud(const Object& object)const{const auto row=current()?world.objectAdmission(*object):std::nullopt;return row && row->hud;}
+    bool hudSelection()const{auto* owner=session->existingObjectSelection();if(!current()||!owner)return false;const auto type=owner->selectionType();return type.selected && type.type==VSObjectSelection::SelectionType::HUD;}
+    bool self(const Object& object)const{return object && current() && world.current(*object) && object->id==gAgent.getID() && vs_avatar_character();}
+    bool isSelfPointer(const Object& object)const{return self(object);}
+    bool attachment(const Object& object)const{const auto row=current()?world.objectAdmission(*object):std::nullopt;return row && row->attachment;}
+    bool youOwner(const Object& object)const{const auto row=current()?world.objectAdmission(*object):std::nullopt;return row && VSObjectContext::ownedByAgent(row->rootUpdateFlags);}
+    bool attachmentSelf(const Object& object)const
+    {
+        if(!current() || !object)return false;
+        auto cursor=object;std::set<LLUUID> visited;
+        while(cursor && current() && visited.insert(cursor->id).second)
+        {
+            const auto row=world.objectAdmission(*cursor);if(!row)return false;
+            if(row->pcode==LL_PCODE_LEGACY_AVATAR)return self(cursor);
+            cursor=world.parentObject(*cursor);
+        }
+        return false;
+    }
+};
+#endif
+}
+template<class Peer>
+void LLToolCamera::applyPick(const LLPickInfo& pick_info,Peer& peer)
+{
+    LLToolCamera* camera=this;
+    if(!peer.current())return;
     if (!camera->mClickPickPending)
     {
         return;
@@ -174,7 +225,7 @@ void LLToolCamera::pickCallback(const LLPickInfo& pick_info)
     gViewerWindow->moveCursorToCenter();
 
     // Potentially recenter if click outside rectangle
-    LLViewerObject* hit_obj = pick_info.getObject();
+    auto hit_obj=peer.object(pick_info);
 
     // Check for hit the sky, or some other invalid point
     if (!hit_obj && pick_info.mPosGlobal.isExactlyZero())
@@ -184,10 +235,9 @@ void LLToolCamera::pickCallback(const LLPickInfo& pick_info)
     }
 
     // check for hud attachments
-    if (hit_obj && hit_obj->isHUDAttachment())
+    if (hit_obj && peer.hud(hit_obj))
     {
-        LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
-        if (!selection->getObjectCount() || selection->getSelectType() != SELECT_TYPE_HUD)
+        if (!peer.hudSelection())
         {
             camera->mValidClickPoint = false;
             return;
@@ -199,12 +249,12 @@ void LLToolCamera::pickCallback(const LLPickInfo& pick_info)
         bool good_customize_avatar_hit = false;
         if( hit_obj )
         {
-            if (isAgentAvatarValid() && (hit_obj == gAgentAvatarp))
+            if (peer.self(hit_obj))
             {
                 // It's you
                 good_customize_avatar_hit = true;
             }
-            else if (hit_obj->isAttachment() && hit_obj->permYouOwner())
+            else if (peer.attachment(hit_obj) && peer.youOwner(hit_obj))
             {
                 // It's an attachment that you're wearing
                 good_customize_avatar_hit = true;
@@ -226,11 +276,11 @@ void LLToolCamera::pickCallback(const LLPickInfo& pick_info)
     else if (pick_info.mKeyMask & MASK_ALT ||
             (LLToolMgr::getInstance()->getCurrentTool()->getName() == "Camera"))
     {
-        LLViewerObject* hit_obj = pick_info.getObject();
+        auto hit_obj=peer.object(pick_info);
         if (hit_obj)
         {
             // ...clicked on a world object, so focus at its position
-            if (!hit_obj->isHUDAttachment())
+            if (!peer.hud(hit_obj))
             {
                 gAgentCamera.setFocusOnAvatar(false, ANIMATE);
                 gAgentCamera.setFocusGlobal(pick_info);
@@ -256,10 +306,10 @@ void LLToolCamera::pickCallback(const LLPickInfo& pick_info)
             //!gSavedSettings.getBOOL("FreezeTime") &&
             !sFreezeTime &&
             // </FS:Ansariel>
-            (hit_obj == gAgentAvatarp ||
-             (hit_obj && hit_obj->isAttachment() && LLVOAvatar::findAvatarFromAttachment(hit_obj)->isSelf())))
+            (peer.isSelfPointer(hit_obj) ||
+             (hit_obj && peer.attachment(hit_obj) && peer.attachmentSelf(hit_obj))))
         {
-            LLToolCamera::getInstance()->mMouseSteering = true;
+            camera->mMouseSteering = true;
         }
 
     }
@@ -274,6 +324,19 @@ void LLToolCamera::pickCallback(const LLPickInfo& pick_info)
 
         gAgentCamera.setCameraPosAndFocusGlobal( cam_pos, pick_info.mPosGlobal, pick_info.mObjectID);
     }
+}
+void LLToolCamera::pickCallback(const LLPickInfo& pick_info)
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=VSNativeSession::active();
+        if(!owner || !gViewerWindow->nativeContext())return;
+        NativeCameraPickPeer peer{owner,owner->accountGuard(),gViewerWindow->nativeContext()->world()};
+        getInstance()->applyPick(pick_info,peer);return;
+    }
+#endif
+    ReferenceCameraPickPeer peer;getInstance()->applyPick(pick_info,peer);
 }
 
 

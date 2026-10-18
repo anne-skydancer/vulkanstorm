@@ -238,6 +238,7 @@ public:
 
 protected:
     LLUUID      mTargetAvatar;
+    U64 mTargetRevision=0;
 
     // For all delete dialogs, store flags here for message.
     U32 mSimWideDeletesFlags;

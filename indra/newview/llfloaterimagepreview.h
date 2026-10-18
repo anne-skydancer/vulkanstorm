@@ -32,6 +32,11 @@
 #include "lldynamictexture.h"
 #include "llpointer.h"
 #include "llquaternion.h"
+#include <memory>
+#if VS_NATIVE_VULKAN
+#include "vsworldrenderer.h"
+#endif
+class VSScenePreview;
 
 class LLComboBox;
 class LLJoint;
@@ -56,6 +61,7 @@ protected:
     void setTexture(U32 name) { mTextureName = name; }
 
     bool render() override;
+    bool drawNative(const LLRect&);
     void refresh();
     void rotate(F32 yaw_radians, F32 pitch_radians);
     void zoom(F32 zoom_amt);
@@ -63,6 +69,12 @@ protected:
     virtual bool needsRender() override { return mNeedsUpdate; }
 
  protected:
+#if VS_NATIVE_VULKAN
+    std::unique_ptr<VSScenePreview> mNativePreview;
+    VSWorldRenderer::Mesh mNativeMesh;
+    bool mNativeMeshDirty = true;
+    bool updateNativeMesh();
+#endif
     bool        mNeedsUpdate;
     U32         mTextureName;
     F32         mCameraDistance;
@@ -88,8 +100,12 @@ public:
     void setPreviewTarget(const std::string& joint_name, const std::string& mesh_name, LLImageRaw* imagep, F32 distance, bool male);
     void setTexture(U32 name) { mTextureName = name; }
     void clearPreviewTexture(const std::string& mesh_name);
+#if VS_NATIVE_VULKAN
+    void setNativeImage(const VSUIRenderer::Image&);
+#endif
 
     bool    render() override;
+    bool drawNative(const LLRect&);
     void    refresh();
     void    rotate(F32 yaw_radians, F32 pitch_radians);
     void    zoom(F32 zoom_amt);
@@ -97,6 +113,13 @@ public:
     virtual bool needsRender() override { return mNeedsUpdate; }
 
 protected:
+#if VS_NATIVE_VULKAN
+    std::unique_ptr<VSScenePreview> mNativePreview;
+    LLPointer<LLImageRaw> mNativeSource;
+    VSUIRenderer::Image mNativeSourceImage;
+    std::string mNativeMeshName;
+    bool mNativeMeshDirty = true;
+#endif
     bool        mNeedsUpdate;
     LLJoint*    mTargetJoint;
     LLViewerJointMesh*  mTargetMesh;

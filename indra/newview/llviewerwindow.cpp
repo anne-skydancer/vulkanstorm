@@ -29,19 +29,27 @@
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #include "vsvulkancontext.h"
+#include "vssnapshot.h"
 #include "llchannelmanager.h"
 #include "vsuicontext.h"
 #include "vsstartupui.h"
 #include "vsuiadmission.h"
+#include "vsavatarservices.h"
+#include "vsobjectselection.h"
+#include "vsworldscene.h"
+#include "vsuiimageprovider.h"
+#include "llcharacter.h"
+#include "lljoint.h"
 #endif
 #include <stdexcept>
+#include <optional>
 #if !VS_NATIVE_VULKAN
 void LLViewerWindow::initNativeWindow(const Params&) { throw std::runtime_error("Native Vulkan is not built"); }
 void LLViewerWindow::initNativeBase() { throw std::runtime_error("Native Vulkan is not built"); }
 void LLViewerWindow::drawNativeUI() { throw std::runtime_error("Native Vulkan is not built"); }
 void LLViewerWindow::refreshNativeFonts() {}
 void LLViewerWindow::reshapeNative(S32, S32, F32) {}
-bool LLViewerWindow::nativeMouse(LLCoordGL, MASK, EMouseClickType, bool) { return false; }
+bool LLViewerWindow::nativeMouse(LLCoordGL, MASK, EMouseClickType, bool,bool*) { return false; }
 void LLViewerWindow::nativeHover(LLCoordGL, MASK) {}
 void LLViewerWindow::nativeHoverUpdate(MASK) {}
 void LLViewerWindow::nativeScroll(S32, bool) {}
@@ -167,6 +175,8 @@ void LLViewerWindow::nativeScroll(S32, bool) {}
 #include "llselectmgr.h"
 #include "llrootview.h"
 #include "llrendersphere.h"
+#include "vsreferencegeometry.h"
+#include "vsselectionlightgeometry.h"
 #include "llstartup.h"
 #include "llstatusbar.h"
 #include "llstatview.h"
@@ -481,6 +491,57 @@ private:
         mLineList.push_back(Line(text, x, y));
     }
 
+#if VS_NATIVE_VULKAN
+    void nativeRenderInfo(S32 x,S32& y,S32 step)
+    {
+        auto* context=mWindow->nativeContext();if(!context)return;
+        const auto worldStats=context->worldStatistics();const auto uiStats=context->uiStatistics();
+        const auto line=[&](const std::string& text){addText(x,y,text);y+=step;};
+        const auto session=VSNativeSession::active();
+        static LLCachedControl<bool> showRender(gSavedSettings,"DebugShowRenderInfo",false);
+        if(showRender())
+        {
+            line(llformat("%llu World Render Calls",static_cast<unsigned long long>(worldStats.draws)));
+            line(llformat("UI Verts/Calls: %llu/%llu",static_cast<unsigned long long>(uiStats.vertices),static_cast<unsigned long long>(uiStats.draws)));
+            line(llformat("Geometry: %.3f MB; images: %.3f MB",worldStats.residentMeshBytes/(1024.*1024.),uiStats.residentGPUImageBytes/(1024.*1024.)));
+            line(llformat("Native bindings/uniforms: %llu/%llu",static_cast<unsigned long long>(worldStats.resourceCommits),static_cast<unsigned long long>(worldStats.constantUploadBytes)));
+            if(session && session->phase()==VSNativeSession::Phase::Connected)
+            {
+                auto* selection=session->existingObjectSelection();
+                auto objects=selection?selection->selected():std::vector<VSWorldScene::ObjectHandle>{};
+                const bool selected=!objects.empty();
+                if(!selected)for(const auto& object:context->world().objectSnapshots())
+                    if(object.object.host==session->host())objects.push_back(object.object);
+                U64 triangles=0,vertices=0,count=0;
+                for(const auto& object:objects)
+                    if(const auto metrics=context->world().objectMetrics(object))
+                    {triangles+=metrics->publishedTriangles;vertices+=metrics->publishedVertices;++count;}
+                line(llformat("%s: %.3f KTris, %.3f KVerts, %llu objects",selected?"Selection":"Region",triangles/1000.,vertices/1000.,static_cast<unsigned long long>(count)));
+            }
+            // The native mesh decoder uses the shared mesh repository and cache.
+            line(llformat("%.3f MB Mesh Data Received",LLMeshRepository::sBytesReceived/(1024.*1024.)));
+            line(llformat("%d/%d Mesh HTTP Requests/Retries",LLMeshRepository::sHTTPRequestCount,LLMeshRepository::sHTTPRetryCount));
+            line(llformat("%.3f/%.3f MB Mesh Cache Read/Write",LLMeshRepository::sCacheBytesRead/(1024.*1024.),LLMeshRepository::sCacheBytesWritten/(1024.*1024.)));
+        }
+        static LLCachedControl<bool> showAvatar(gSavedSettings,"DebugShowAvatarRenderInfo",false);
+        if(showAvatar() && session && session->phase()==VSNativeSession::Phase::Connected)
+        {
+            std::map<std::string,VSWorldScene::AvatarPerformance> avatars;
+            for(const auto& avatar:context->world().performanceAvatars())
+            {
+                LLAvatarName name;const auto label=LLAvatarNameCache::get(avatar.object.id,&name)?name.getCompleteName():avatar.object.id.asString();
+                avatars.emplace(label,avatar);
+            }
+            for(auto it=avatars.rbegin();it!=avatars.rend();++it)
+            {
+                const auto& avatar=it->second;
+                const auto status=avatar.invisible?"invisible":avatar.jellydoll?"simplified":"rendered";
+                line(llformat("%s : %s, complexity %u",utf8str_truncate(it->first,16).c_str(),status,avatar.complexity));
+            }
+        }
+    }
+#endif
+
 public:
     LLDebugText(LLViewerWindow* window) : mWindow(window) {}
 
@@ -581,16 +642,25 @@ public:
             agent_center_text = llformat("AgentCenter  %f %f %f",
                                          (F32)(tvector.mdV[VX]), (F32)(tvector.mdV[VY]), (F32)(tvector.mdV[VZ]));
 
-            if (isAgentAvatarValid())
+            std::optional<LLVector3d> rootPosition;
+#if VS_NATIVE_VULKAN
+            if (mWindow->isNativeVulkan())
             {
-                tvector = gAgent.getPosGlobalFromAgent(gAgentAvatarp->mRoot->getWorldPosition());
+                auto* character = vs_avatar_character();
+                if (character && character->getRootJoint())
+                    rootPosition = gAgent.getPosGlobalFromAgent(character->getRootJoint()->getWorldPosition());
+            }
+            else
+#endif
+            if (isAgentAvatarValid())
+                rootPosition = gAgent.getPosGlobalFromAgent(gAgentAvatarp->mRoot->getWorldPosition());
+            if (rootPosition)
+            {
+                tvector = *rootPosition;
                 agent_root_center_text = llformat("AgentRootCenter %f %f %f",
                                                   (F32)(tvector.mdV[VX]), (F32)(tvector.mdV[VY]), (F32)(tvector.mdV[VZ]));
             }
-            else
-            {
-                agent_root_center_text = "---";
-            }
+            else agent_root_center_text = "---";
 
 
             tvector = LLVector4(gAgent.getFrameAgent().getAtAxis());
@@ -648,6 +718,12 @@ public:
             addText(xpos, ypos, llformat("FOV: %2.1f deg", RAD_TO_DEG * LLViewerCamera::getInstance()->getView()));
             ypos += y_inc;
         }
+
+#if VS_NATIVE_VULKAN
+        if(mWindow->isNativeVulkan())nativeRenderInfo(xpos,ypos,y_inc);
+#endif
+        if(!mWindow->isNativeVulkan())
+        {
 
         /*if (LLViewerJoystick::getInstance()->getOverrideCamera())
         {
@@ -841,6 +917,7 @@ public:
                 av_iter++;
             }
         }
+        } // Reference GL pipeline/drawable readouts.
         static LLCachedControl<bool> debug_show_render_matrices(gSavedSettings, "DebugShowRenderMatrices", false);
         if (debug_show_render_matrices())
         {
@@ -850,10 +927,16 @@ public:
             // Projection last column is always <0,0,-1.0001,0>
             // Projection last row is always <0,0,-0.2>
             mBackRectCamera1.mBottom = ypos - y_inc + 2;
-            MATRIX_ROW_N32_TO_STR(gGLProjection, 12,camera_lines[7]); addText(xpos, ypos, std::string(camera_lines[7])); ypos += y_inc;
-            MATRIX_ROW_N32_TO_STR(gGLProjection,  8,camera_lines[6]); addText(xpos, ypos, std::string(camera_lines[6])); ypos += y_inc;
-            MATRIX_ROW_N32_TO_STR(gGLProjection,  4,camera_lines[5]); addText(xpos, ypos, std::string(camera_lines[5])); ypos += y_inc; mBackRectCamera1.mTop    = ypos + 2;
-            MATRIX_ROW_N32_TO_STR(gGLProjection,  0,camera_lines[4]); addText(xpos, ypos, std::string(camera_lines[4])); ypos += y_inc; mBackRectCamera2.mBottom = ypos + 2;
+            const F32* projection=gGLProjection;const F32* modelview=gGLModelView;
+            if(mWindow->isNativeVulkan())
+            {
+                projection=&LLViewerCamera::getInstance()->getProjection().mMatrix[0][0];
+                modelview=&LLViewerCamera::getInstance()->getModelview().mMatrix[0][0];
+            }
+            MATRIX_ROW_N32_TO_STR(projection, 12,camera_lines[7]); addText(xpos, ypos, std::string(camera_lines[7])); ypos += y_inc;
+            MATRIX_ROW_N32_TO_STR(projection,  8,camera_lines[6]); addText(xpos, ypos, std::string(camera_lines[6])); ypos += y_inc;
+            MATRIX_ROW_N32_TO_STR(projection,  4,camera_lines[5]); addText(xpos, ypos, std::string(camera_lines[5])); ypos += y_inc; mBackRectCamera1.mTop    = ypos + 2;
+            MATRIX_ROW_N32_TO_STR(projection,  0,camera_lines[4]); addText(xpos, ypos, std::string(camera_lines[4])); ypos += y_inc; mBackRectCamera2.mBottom = ypos + 2;
 
             addText(xpos, ypos, "Projection Matrix");
             ypos += y_inc;
@@ -864,13 +947,13 @@ public:
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
             // View last column is always <0,0,0,1>
-            MATRIX_ROW_F32_TO_STR(gGLModelView, 12,camera_lines[3]); addText(xpos, ypos, std::string(camera_lines[3])); ypos += y_inc;
+            MATRIX_ROW_F32_TO_STR(modelview, 12,camera_lines[3]); addText(xpos, ypos, std::string(camera_lines[3])); ypos += y_inc;
 #if LL_DARWIN
 #pragma clang diagnostic pop
 #endif
-            MATRIX_ROW_N32_TO_STR(gGLModelView,  8,camera_lines[2]); addText(xpos, ypos, std::string(camera_lines[2])); ypos += y_inc;
-            MATRIX_ROW_N32_TO_STR(gGLModelView,  4,camera_lines[1]); addText(xpos, ypos, std::string(camera_lines[1])); ypos += y_inc; mBackRectCamera2.mTop = ypos + 2;
-            MATRIX_ROW_N32_TO_STR(gGLModelView,  0,camera_lines[0]); addText(xpos, ypos, std::string(camera_lines[0])); ypos += y_inc;
+            MATRIX_ROW_N32_TO_STR(modelview,  8,camera_lines[2]); addText(xpos, ypos, std::string(camera_lines[2])); ypos += y_inc;
+            MATRIX_ROW_N32_TO_STR(modelview,  4,camera_lines[1]); addText(xpos, ypos, std::string(camera_lines[1])); ypos += y_inc; mBackRectCamera2.mTop = ypos + 2;
+            MATRIX_ROW_N32_TO_STR(modelview,  0,camera_lines[0]); addText(xpos, ypos, std::string(camera_lines[0])); ypos += y_inc;
 
             addText(xpos, ypos, "View Matrix");
             ypos += y_inc;
@@ -890,9 +973,23 @@ public:
             S32 x_raw = (S32)llround(coord.mX * gViewerWindow->getWindowWidthRaw() / (F32) gViewerWindow->getWindowWidthScaled());
             S32 y_raw = (S32)llround(coord.mY * gViewerWindow->getWindowHeightRaw() / (F32) gViewerWindow->getWindowHeightScaled());
 
-            glReadPixels(x_raw, y_raw, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, color);
-            addText(xpos, ypos, llformat("Pixel <%1d, %1d> R:%1d G:%1d B:%1d A:%1d", x_raw, y_raw, color[0], color[1], color[2], color[3]));
-            ypos += y_inc;
+#if VS_NATIVE_VULKAN
+            if(mWindow->isNativeVulkan())
+            {
+                if(auto* context=mWindow->nativeContext())
+                    if(const auto pixel=context->inspectPixel(unsigned(llmax(x_raw,0)),unsigned(llmax(y_raw,0))))
+                    {
+                        addText(xpos,ypos,llformat("Pixel <%u, %u> R:%u G:%u B:%u A:%u",pixel->x,pixel->y,pixel->rgba[0],pixel->rgba[1],pixel->rgba[2],pixel->rgba[3]));
+                        ypos+=y_inc;
+                    }
+            }
+            else
+#endif
+            {
+                glReadPixels(x_raw, y_raw, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, color);
+                addText(xpos, ypos, llformat("Pixel <%1d, %1d> R:%1d G:%1d B:%1d A:%1d", x_raw, y_raw, color[0], color[1], color[2], color[3]));
+                ypos += y_inc;
+            }
         }
 
         // <FS:PP> FIRE-29880: Movelock
@@ -1009,6 +1106,38 @@ public:
         static LLCachedControl<bool> debug_show_texture_info(gSavedSettings, "DebugShowTextureInfo", false);
         if (debug_show_texture_info())
         {
+#if VS_NATIVE_VULKAN
+            if(mWindow->isNativeVulkan())
+            {
+                const auto owner=VSNativeSession::active();
+                auto* selection=owner?owner->existingObjectSelection():nullptr;
+                const auto hover=selection?selection->hoverObject():std::nullopt;
+                auto* context=mWindow->nativeContext();
+                if(hover && context)
+                {
+                    std::set<LLUUID> textures;
+                    const auto rows=vs_native_texture_debug();
+                    for(S32 face=0;face<context->world().textureEntryCount(*hover);++face)
+                    {
+                        const auto texture=context->world().diffuseTexture(*hover,U32(face));
+                        if(!texture || !textures.insert(texture.asset).second)continue;
+                        const auto row=std::find_if(rows.begin(),rows.end(),[&](const auto& value){return value.id==texture.asset;});
+                        if(row!=rows.end())
+                        {
+                            addText(xpos,ypos,llformat("ID: %s v_size: %.3f",texture.asset.asString().substr(0,7).c_str(),row->area));ypos+=y_inc;
+                            addText(xpos,ypos,llformat("discard level: %d desired level: %d Missing: %s",row->discard,row->desired,texture.missing?"Y":"N"));ypos+=y_inc;
+                        }
+                        else if(texture.image)
+                        {
+                            const auto extent=VSUIRenderer::imageExtent(texture.image);
+                            addText(xpos,ypos,llformat("Composite: %ux%u generation %llu",extent[0],extent[1],static_cast<unsigned long long>(texture.generation)));ypos+=y_inc;
+                        }
+                    }
+                }
+            }
+            else
+#endif
+            {
             LLViewerObject* objectp = NULL ;
 
             LLSelectNode* nodep = LLSelectMgr::instance().getHoverNode();
@@ -1052,6 +1181,8 @@ public:
             }
         }
 
+        } // Reference drawable-backed hovered texture.
+
         // <FS:ND> Report amount of failed texture buffer allocations if any.
         if (LLImageBase::getAllocationErrors())
         {
@@ -1088,7 +1219,7 @@ public:
 
 void LLViewerWindow::updateDebugText()
 {
-    mDebugText->update();
+    if (mDebugText) mDebugText->update();
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -1112,7 +1243,11 @@ LLViewerWindow::Params::Params()
 
 void LLViewerWindow::handlePieMenu(S32 x, S32 y, MASK mask)
 {
-    if (CAMERA_MODE_CUSTOMIZE_AVATAR != gAgentCamera.getCameraMode() && LLToolMgr::getInstance()->getCurrentTool() != LLToolPie::getInstance() && gAgent.isInitialized())
+    bool initialized=gAgent.isInitialized();
+#if VS_NATIVE_VULKAN
+    if(mNativeVulkan){const auto owner=VSNativeSession::active();initialized=owner && owner->regionReady();}
+#endif
+    if (CAMERA_MODE_CUSTOMIZE_AVATAR != gAgentCamera.getCameraMode() && LLToolMgr::getInstance()->getCurrentTool() != LLToolPie::getInstance() && initialized)
     {
         // If the current tool didn't process the click, we should show
         // the pie menu.  This can be done by passing the event to the pie
@@ -1121,8 +1256,29 @@ void LLViewerWindow::handlePieMenu(S32 x, S32 y, MASK mask)
     }
 }
 
-bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK mask, EMouseClickType clicktype, bool down, bool& is_toolmgr_action)
+bool LLViewerWindow::handleAnyMouseClick(LLWindow* window,LLCoordGL pos,MASK mask,EMouseClickType clicktype,bool down,bool& is_toolmgr_action)
 {
+    if(mNativeVulkan)return nativeMouse(pos,mask,clicktype,down,&is_toolmgr_action);
+    return dispatchAnyMouseClick(window,pos,mask,clicktype,down,is_toolmgr_action,[]{return true;});
+}
+bool LLViewerWindow::dispatchAnyMouseClick(LLWindow* window,LLCoordGL pos,MASK mask,EMouseClickType clicktype,bool down,bool& is_toolmgr_action,const std::function<bool()>& current)
+{
+    // The very same UI/capture/tool priority controller is used in both peers.
+    // Native tool resolution uses the genuine registered lifecycle, never a
+    // lazy construction of legacy GL tool resources.
+    const auto current_tool=[this,&current]()->LLTool*
+    {
+        if(!current())return nullptr;
+#if VS_NATIVE_VULKAN
+        if(mNativeVulkan)
+        {
+            auto* tool=LLToolMgr::instanceExists()?LLToolMgr::instance().nativeCurrentTool():nullptr;
+            return current()?tool:nullptr;
+        }
+#endif
+        return LLToolMgr::getInstance()->getCurrentTool();
+    };
+
     const char* buttonname = "";
     const char* buttonstatestr = "";
     S32 x = pos.mX;
@@ -1131,7 +1287,7 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
     y = ll_round((F32)y / mDisplayScale.mV[VY]);
 
     // Handle non-consuming global keybindings, like voice
-    gViewerInput.handleGlobalBindsMouse(clicktype, mask, down);
+    if(!mNativeVulkan)gViewerInput.handleGlobalBindsMouse(clicktype,mask,down);
 
     // only send mouse clicks to UI if UI is visible
     if(gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
@@ -1197,7 +1353,7 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
         LLUI::getInstance()->resetMouseIdleTimer();
 
         // Don't let the user move the mouse out of the window until mouse up.
-        if( LLToolMgr::getInstance()->getCurrentTool()->clipMouseWhenDown() )
+        if(auto* tool=current_tool();tool && tool->clipMouseWhenDown())
         {
             mWindow->setMouseClipping(down);
         }
@@ -1214,6 +1370,7 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
             }
 
             bool r = mouse_captor->handleAnyMouseClick(local_x, local_y, mask, clicktype, down);
+            if(!current())return true;
             if (r) {
 
                 LL_DEBUGS() << "LLViewerWindow::handleAnyMouseClick viewer with mousecaptor calling updatemouseeventinfo - local_x|global x  "<< local_x << " " << x  << "local/global y " << local_y << " " << y << LL_ENDL;
@@ -1238,6 +1395,7 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
         // Give the UI views a chance to process the click
 
         bool r= mRootView->handleAnyMouseClick(x, y, mask, clicktype, down) ;
+        if(!current())return true;
         if (r)
         {
 
@@ -1267,13 +1425,14 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
     }
 
     // Do not allow tool manager to handle mouseclicks if we have disconnected
-    if(!gDisconnected && LLToolMgr::getInstance()->getCurrentTool()->handleAnyMouseClick( x, y, mask, clicktype, down ) )
+    if(auto* tool=current_tool();!gDisconnected && tool && tool->handleAnyMouseClick(x,y,mask,clicktype,down))
     {
         LLViewerEventRecorder::instance().clear_xui();
         is_toolmgr_action = true;
         return true;
     }
 
+    if (!current())return true;
     if (down && clicktype == CLICK_RIGHT)
     {
         handlePieMenu(x, y, mask);
@@ -1288,7 +1447,6 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
 
 bool LLViewerWindow::handleMouseDown(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
-    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_LEFT, true);
     mAllowMouseDragging = false;
     if (!mMouseDownTimer.getStarted())
     {
@@ -1305,7 +1463,6 @@ bool LLViewerWindow::handleMouseDown(LLWindow *window,  LLCoordGL pos, MASK mask
 
 bool LLViewerWindow::handleDoubleClick(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
-    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_DOUBLELEFT, true);
     // try handling as a double-click first, then a single-click if that
     // wasn't handled.
     bool down = true;
@@ -1318,7 +1475,6 @@ bool LLViewerWindow::handleDoubleClick(LLWindow *window,  LLCoordGL pos, MASK ma
 
 bool LLViewerWindow::handleMouseUp(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
-    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_LEFT, false);
     if (mMouseDownTimer.getStarted())
     {
         mMouseDownTimer.stop();
@@ -1328,21 +1484,18 @@ bool LLViewerWindow::handleMouseUp(LLWindow *window,  LLCoordGL pos, MASK mask)
 }
 bool LLViewerWindow::handleRightMouseDown(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
-    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_RIGHT, true);
     bool down = true;
     return gViewerInput.handleMouse(window, pos, mask, CLICK_RIGHT, down);
 }
 
 bool LLViewerWindow::handleRightMouseUp(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
-    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_RIGHT, false);
     bool down = false;
     return gViewerInput.handleMouse(window, pos, mask, CLICK_RIGHT, down);
 }
 
 bool LLViewerWindow::handleMiddleMouseDown(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
-    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_MIDDLE, true);
     bool down = true;
     gViewerInput.handleMouse(window, pos, mask, CLICK_MIDDLE, down);
 
@@ -1497,7 +1650,6 @@ LLWindowCallbacks::DragNDropResult LLViewerWindow::handleDragNDrop( LLWindow *wi
 
 bool LLViewerWindow::handleMiddleMouseUp(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
-    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_MIDDLE, false);
     bool down = false;
     gViewerInput.handleMouse(window, pos, mask, CLICK_MIDDLE, down);
 
@@ -1507,7 +1659,6 @@ bool LLViewerWindow::handleMiddleMouseUp(LLWindow *window,  LLCoordGL pos, MASK 
 
 bool LLViewerWindow::handleOtherMouse(LLWindow *window, LLCoordGL pos, MASK mask, S32 button, bool down)
 {
-    if (mNativeVulkan) return false;
     switch (button)
     {
     case 4:
@@ -1535,9 +1686,24 @@ bool LLViewerWindow::handleOtherMouseUp(LLWindow *window, LLCoordGL pos, MASK ma
 }
 
 // WARNING: this is potentially called multiple times per frame
+static void clear_away_on_mouse_move()
+{
+    if (!gDisconnected)
+    {
+        if (gAwayTimer.getElapsedTimeF32() > LLAgent::MIN_AFK_TIME)
+    {
+        gAgent.clearAFK();
+    }
+        else
+        {
+            gAwayTriggerTimer.reset();
+        }
+    }
+}
+
 void LLViewerWindow::handleMouseMove(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
-    if (mNativeVulkan) { nativeHover(pos, mask); return; }
+    if (mNativeVulkan) { clear_away_on_mouse_move(); nativeHover(pos, mask); return; }
     S32 x = pos.mX;
     S32 y = pos.mY;
 
@@ -1559,17 +1725,7 @@ void LLViewerWindow::handleMouseMove(LLWindow *window,  LLCoordGL pos, MASK mask
 
     mWindow->showCursorFromMouseMove();
 
-    if (!gDisconnected)
-    {
-        if (gAwayTimer.getElapsedTimeF32() > LLAgent::MIN_AFK_TIME)
-    {
-        gAgent.clearAFK();
-    }
-        else
-        {
-            gAwayTriggerTimer.reset();
-        }
-    }
+    clear_away_on_mouse_move();
 }
 
 void LLViewerWindow::handleMouseDragged(LLWindow *window,  LLCoordGL pos, MASK mask)
@@ -1820,7 +1976,7 @@ void LLViewerWindow::handleScanKey(KEY key, bool key_down, bool key_up, bool key
 
 bool LLViewerWindow::handleActivate(LLWindow *window, bool activated)
 {
-    if (mNativeVulkan) { mActive = activated; return true; }
+    if (mNativeVulkan) { mActive = activated; if(activated)gAgent.clearAFK(); return true; }
     if (activated)
     {
         mActive = true;
@@ -2093,6 +2249,7 @@ LLViewerWindow::LLViewerWindow(const Params& p, bool native_vulkan)
     {
         mNativeVulkan = true;
         initNativeWindow(p);
+        mDebugText = new LLDebugText(this);
         return;
     }
     // gKeyboard is still NULL, so it doesn't do LLWindowListener any good to
@@ -2705,6 +2862,7 @@ void LLViewerWindow::shutdownViews()
         mNativeChat = nullptr;
         gConsole = nullptr; // The native root owns it; retire async observers before deletion.
         mNativeUI.reset();
+        gSnapshotFloaterView = nullptr;
         gHUDView=nullptr;
         gStatusBar = nullptr;
         gToolBarView = nullptr;
@@ -3095,6 +3253,11 @@ void LLViewerWindow::setMenuBackgroundColor(bool god_mode, bool dev_grid)
 
 void LLViewerWindow::drawDebugText()
 {
+    if (mNativeVulkan)
+    {
+        if (mDebugText) mDebugText->draw();
+        return;
+    }
     gUIProgram.bind();
     gGL.color4f(1,1,1,1);
     gGL.pushMatrix();
@@ -3661,6 +3824,8 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
     // that owner without selecting a legacy world tool as a side effect.
     LLTool* keyboardTool = mNativeVulkan ? dynamic_cast<LLTool*>(gFocusMgr.getMouseCapture())
                                        : LLToolMgr::getInstance()->getCurrentTool();
+    if(mNativeVulkan && !keyboardTool && LLToolMgr::instanceExists())
+        keyboardTool=LLToolMgr::instance().nativeCurrentTool();
     if (keyboardTool && keyboardTool->handleKey(key, mask))
     {
         LL_DEBUGS() << "LLviewerWindow::handleKey toolbar handling?" << LL_ENDL;
@@ -4264,7 +4429,17 @@ void LLViewerWindow::updateUI()
         LLAccordionCtrl::updateClass();
         LLLayoutStack::updateClass();
         updateKeyboardFocus();
-        nativeHoverUpdate(gKeyboard ? gKeyboard->currentMask(true) : MASK_NONE);
+        const U32 frame=LLFrameTimer::getFrameCount();
+        if(!mNativeMouseFrameKnown || mNativeMouseFrame!=frame)
+        {
+            mNativeMouseFrameKnown=true;mNativeMouseFrame=frame;
+            updateMouseDelta();
+            const auto lifetime=mRootView?mRootView->getHandle():LLHandle<LLView>{};
+            nativeHoverUpdate(gKeyboard ? gKeyboard->currentMask(true) : MASK_NONE);
+            if(lifetime.isDead() || gViewerWindow!=this)return;
+            mLastMousePoint=mCurrentMousePoint;
+            performPick();
+        }
         return;
     }
     LL_PROFILE_ZONE_SCOPED_CATEGORY_UI;
@@ -5456,26 +5631,10 @@ void LLViewerWindow::renderSelections( bool for_gl_pick, bool pick_parcel_walls,
                     if (drawable && drawable->isLight())
                     {
                         LLVOVolume* vovolume = drawable->getVOVolume();
-                        gGL.pushMatrix();
-
-                        LLVector3 center = drawable->getPositionAgent();
-                        gGL.translatef(center[0], center[1], center[2]);
-                        F32 scale = vovolume->getLightRadius();
-                        gGL.scalef(scale, scale, scale);
-
-                        LLColor4 color(vovolume->getLightSRGBColor(), .5f);
-                        gGL.color4fv(color.mV);
-
-                        //F32 pixel_area = 100000.f;
-                        // Render Outside
-                        gSphere.render();
-
-                        // Render Inside
-                        glCullFace(GL_FRONT);
-                        gSphere.render();
-                        glCullFace(GL_BACK);
-
-                        gGL.popMatrix();
+                        const LLVector3 center=drawable->getPositionAgent();
+                        const LLColor4 color(vovolume->getLightSRGBColor(),.5f);
+                        VSReferenceGeometry paint;
+                        vs_selected_light_geometry(paint,center.mV,vovolume->getLightRadius(),color.mV);
                     }
                     return true;
                 }
@@ -5593,7 +5752,8 @@ void LLViewerWindow::pickAsync( S32 x,
                                 bool pick_transparent,
                                 bool pick_rigged,
                                 bool pick_unselectable,
-                                bool pick_reflection_probes)
+                                bool pick_reflection_probes,
+                                std::function<bool()> operation_current)
 {
     static LLCachedControl<bool> select_invisible_objects(gSavedSettings, "SelectInvisibleObjects");
     // "Show Debug Alpha" means no object actually transparent
@@ -5604,11 +5764,33 @@ void LLViewerWindow::pickAsync( S32 x,
     }
 
     LLPickInfo pick_info(LLCoordGL(x, y_from_bot), mask, pick_transparent, pick_rigged, false, pick_reflection_probes, true, pick_unselectable, callback);
+    #if VS_NATIVE_VULKAN
+    if(mNativeVulkan)pick_info.mNativeRequestCurrent=std::move(operation_current);
+    #endif
     schedulePick(pick_info);
 }
 
 void LLViewerWindow::schedulePick(LLPickInfo& pick_info)
 {
+#if VS_NATIVE_VULKAN
+    if(mNativeVulkan)
+    {
+        const auto lifetime=mRootView?mRootView->getHandle():LLHandle<LLView>{};
+        const auto operation=pick_info.mNativeRequestCurrent;
+        const auto owner=VSNativeSession::active();
+        if(owner)
+        {
+            const auto account=owner->account();const std::weak_ptr<VSNativeSession> weak=owner;
+            pick_info.mNativeRequestCurrent=[lifetime,weak,account,operation]
+            {const auto active=weak.lock();return !lifetime.isDead() && active && active->current(account) && (!operation || operation());};
+        }
+        else pick_info.mNativeRequestCurrent=[lifetime,operation]{return !lifetime.isDead() && !VSNativeSession::active() && (!operation || operation());};
+    }
+#endif
+
+    #if VS_NATIVE_VULKAN
+    if(mNativeVulkan && pick_info.mNativeRequestCurrent && !pick_info.mNativeRequestCurrent())return;
+    #endif
     if (mPicks.size() >= 1024 || mWindow->getMinimized())
     { //something went wrong, picks are being scheduled but not processed
 
@@ -5629,6 +5811,26 @@ void LLViewerWindow::schedulePick(LLPickInfo& pick_info)
 
 void LLViewerWindow::performPick()
 {
+#if VS_NATIVE_VULKAN
+    if(mNativeVulkan)
+    {
+        std::vector<LLPickInfo> pending;pending.swap(mPicks);
+        const auto window=this;const auto lifetime=mRootView?mRootView->getHandle():LLHandle<LLView>{};
+        std::optional<LLPickInfo> completed;
+        for(auto& pick:pending)
+        {
+            if(lifetime.isDead() || gViewerWindow!=window)return;
+            if(pick.mNativeRequestCurrent && !pick.mNativeRequestCurrent())continue;
+            pick.fetchResults();
+            if(lifetime.isDead() || gViewerWindow!=window)return;
+            if(pick.mNativeRequestCurrent && !pick.mNativeRequestCurrent())return;
+            completed=pick;
+        }
+        if(completed)mLastPick=*completed;
+        return;
+    }
+#endif
+
     if (!mPicks.empty())
     {
         std::vector<LLPickInfo>::iterator pick_it;
@@ -5644,6 +5846,22 @@ void LLViewerWindow::performPick()
 
 void LLViewerWindow::returnEmptyPicks()
 {
+#if VS_NATIVE_VULKAN
+    if(mNativeVulkan)
+    {
+        std::vector<LLPickInfo> pending;pending.swap(mPicks);
+        const auto window=this;const auto lifetime=mRootView?mRootView->getHandle():LLHandle<LLView>{};
+        for(auto& pick:pending)
+        {
+            if(lifetime.isDead() || gViewerWindow!=window)return;
+            if(pick.mNativeRequestCurrent && !pick.mNativeRequestCurrent())continue;
+            mLastPick=pick;
+            if(pick.mPickCallback)pick.mPickCallback(pick);
+        }
+        return;
+    }
+#endif
+
     std::vector<LLPickInfo>::iterator pick_it;
     for (pick_it = mPicks.begin(); pick_it != mPicks.end(); ++pick_it)
     {
@@ -6332,6 +6550,12 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
         return false;
     }
 
+#if VS_NATIVE_VULKAN
+    if (isNativeVulkan())
+        return vs_native_snapshot(*this, *raw, image_width, image_height, keep_window_aspect,
+                                  show_ui, show_hud, no_post, show_balance, type, max_size);
+#endif
+
     //check if there is enough memory for the snapshot image
     if(image_width * image_height > (1 << 22)) //if snapshot image is larger than 2K by 2K
     {
@@ -6689,6 +6913,9 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
 
 bool LLViewerWindow::simpleSnapshot(LLImageRaw* raw, S32 image_width, S32 image_height, const int num_render_passes)
 {
+#if VS_NATIVE_VULKAN
+    if(isNativeVulkan())return raw && vs_native_simple_snapshot(*this,*raw,image_width,image_height,num_render_passes);
+#endif
     LL_PROFILE_ZONE_SCOPED_CATEGORY_APP;
     gDisplaySwapBuffers = false;
 
@@ -7672,8 +7899,9 @@ void LLPickInfo::fetchResults()
 #if VS_NATIVE_VULKAN
     if (gViewerWindow && gViewerWindow->isNativeVulkan())
     {
+        if(mNativeRequestCurrent && !mNativeRequestCurrent())return;
         gViewerWindow->nativePick(*this);
-        if (mPickCallback)
+        if (mPickCallback && (!mNativeRequestCurrent || mNativeRequestCurrent()))
             mPickCallback(*this);
         return;
     }
@@ -7850,6 +8078,19 @@ void LLPickInfo::getSurfaceInfo()
     mBinormal     = LLVector3(0,0,0);
     mTangent      = LLVector4(0,0,0,0);
 
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLPickInfo surface=*this;surface.mWantSurfaceInfo=true;
+        if(gViewerWindow->nativePick(surface,true))
+        {
+            mObjectFace=surface.mObjectFace;mGLTFNodeIndex=surface.mGLTFNodeIndex;mGLTFPrimitiveIndex=surface.mGLTFPrimitiveIndex;
+            mIntersection=surface.mIntersection;mSTCoords=surface.mSTCoords;mUVCoords=surface.mUVCoords;mXYCoords=surface.mXYCoords;
+            mNormal=surface.mNormal;mTangent=surface.mTangent;mBinormal=surface.mBinormal;
+        }
+        return;
+    }
+#endif
     LLVector4a tangent;
     LLVector4a intersection;
     LLVector4a normal;

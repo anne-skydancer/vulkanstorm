@@ -1,16 +1,16 @@
 // CPU wearable ownership for the native connected appearance service. LGPL-2.1.
 #pragma once
-#include "llwearable.h"
+#include "llviewerwearable.h"
 #include "lluuid.h"
 #include <functional>
 #include <memory>
-class VSWearable final : public LLWearable
+class VSWearable final : public LLViewerWearable
 {
 public:
     static std::shared_ptr<VSWearable> create(const LLUUID& item, const LLUUID& asset, std::function<void()> changed,
                                               std::shared_ptr<const void> residency = {});
-    const LLUUID&                      item() const { return mItem; }
-    const LLUUID&                      asset() const { return mAsset; }
+    const LLUUID&                      item() const { return getItemID(); }
+    const LLUUID&                      asset() const { return getAssetID(); }
     LLUUID                             getDefaultTextureImageID(LLAvatarAppearanceDefines::ETextureIndex) const override;
     void                               setUpdated() const override;
     void                               addToBakedTextureHash(LLMD5&) const override;
@@ -18,6 +18,5 @@ public:
 
 private:
     VSWearable(const LLUUID& item, const LLUUID& asset, std::function<void()> changed);
-    LLUUID                mItem, mAsset;
     std::function<void()> mChanged;
 };

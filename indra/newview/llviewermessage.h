@@ -40,6 +40,8 @@
 #include <boost/signals2.hpp>
 
 #include <functional>
+#include <memory>
+#include "llchat.h"
 #include <optional>
 #include <string>
 
@@ -50,6 +52,7 @@
 // Forward declarations
 //
 class LLChat;
+class LLColor4;
 struct VSReceivedChatContext
 {
     struct Source { bool attachment = false, owned = false; };
@@ -58,6 +61,34 @@ struct VSReceivedChatContext
 };
 // Original RLVa receive/name/location policy, before translation or delivery.
 bool vs_filter_received_chat(LLChat&, std::string&, const LLUUID& owner, const VSReceivedChatContext&);
+// Renderer peers provide source ownership and presentation; receive policy is shared.
+// No LLViewerObject or GL resource is fabricated for a native source.
+class VSChatReceiveObject
+{
+public:
+    virtual ~VSChatReceiveObject() = default;
+    virtual bool permYouOwner() const = 0;
+    virtual bool isAttachment() const = 0;
+    virtual bool isTempAttachment() const = 0;
+    virtual bool isAvatar() const = 0;
+    virtual LLVector3 getPositionAgent() const = 0;
+    virtual void startTyping() = 0;
+    virtual void stopTyping() = 0;
+    virtual void addChat(const LLChat&) = 0;
+    virtual void chatParticles(const LLColor4&, const LLUUID& owner) = 0;
+};
+using VSChatDelivery = std::function<void(const LLChat&, const LLSD&)>;
+struct VSChatReceiveServices
+{
+    std::function<std::shared_ptr<VSChatReceiveObject>(const LLUUID&)> findObject;
+    std::function<EChatAudible()> audible;
+    std::function<std::string()> message;
+    std::function<std::optional<std::string>(const LLVector3&)> location;
+    VSChatDelivery deliver;
+    // Native asynchronous completion and reentrant callbacks cannot cross accounts.
+    std::function<bool()> current;
+};
+void vs_receive_chat(LLChat, const std::string& simulatorName, const LLUUID& owner, const VSChatReceiveServices&);
 enum class VSOwnerChatResult { NotCommand, Consumed, Display };
 VSOwnerChatResult vs_process_owner_chat(LLChat&, std::string&, const std::function<bool()>& sourceAllowed, const std::function<bool()>& current = {});
 class LLColor4;
@@ -152,6 +183,7 @@ void process_alert_core(const std::string& message, bool modal);
 // "Mean" or player-vs-player abuse
 typedef std::list<LLMeanCollisionData*> mean_collision_list_t;
 extern mean_collision_list_t gMeanCollisionList;
+void reset_mean_collision_account();
 
 void process_mean_collision_alert_message(LLMessageSystem* msg, void**);
 
@@ -348,4 +380,9 @@ private:
 void process_feature_disabled_message(LLMessageSystem* msg, void**);
 void fs_report_region_restart_to_channel(S32 seconds); // <FS:PP> Announce region restart to a defined chat channel
 
+#endif
+
+#if VS_NATIVE_VULKAN
+struct VSObjectContext;
+void vs_give_money_to_object(const VSObjectContext&,S32 amount,const std::string& description);
 #endif

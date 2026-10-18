@@ -28,6 +28,11 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llhudnametag.h"
+#if VS_NATIVE_VULKAN
+#include "vsuiimageprovider.h"
+#include <glm/gtc/matrix_transform.hpp>
+#endif
+#include <optional>
 
 #include "llrender.h"
 #include "lltracerecording.h"
@@ -123,6 +128,16 @@ bool LLHUDNameTag::lineSegmentIntersect(const LLVector4a& start, const LLVector4
         return false;
     }
 
+    if(mNativeSource)
+    {
+        if(!sDisplayText || !mNativePresented || !mNativeSource())return false;
+        LLVector4a dir;dir.setSub(end,start);F32 a,b,t;
+        LLVector4a v[4];for(unsigned i=0;i<4;++i)v[i].load3(mNativePickQuad[i].mV);
+        if((LLTriangleRayIntersect(v[0],v[1],v[2],start,dir,a,b,t)||
+            LLTriangleRayIntersect(v[2],v[3],v[0],start,dir,a,b,t)) && t<=1.f)
+        {dir.mul(t);intersection.setAdd(start,dir);return true;}
+        return false;
+    }
     // don't pick text that isn't bound to a viewerobject
     if (!mSourceObject || mSourceObject->mDrawable.isNull())
     {
@@ -228,7 +243,8 @@ void LLHUDNameTag::render()
     LL_PROFILE_ZONE_SCOPED_CATEGORY_UI;
     if (sDisplayText)
     {
-        LLGLDepthTest gls_depth(GL_TRUE, GL_FALSE);
+        std::optional<LLGLDepthTest> gls_depth;
+    if(!LLRender2D::isNativeUI())gls_depth.emplace(GL_TRUE,GL_FALSE);
         renderText();
     }
 }
@@ -242,7 +258,8 @@ void LLHUDNameTag::renderText()
 
     LL_PROFILE_ZONE_SCOPED_CATEGORY_UI;
 
-    gGL.getTexUnit(0)->enable(LLTexUnit::TT_TEXTURE);
+    if(!LLRender2D::isNativeUI())gGL.getTexUnit(0)->enable(LLTexUnit::TT_TEXTURE);
+    if(mNativeSource){mNativePresented=false;if(!mNativeSource())return;}
 
     LLColor4 shadow_color(0.f, 0.f, 0.f, 1.f);
     F32 alpha_factor = 1.f;
@@ -292,7 +309,19 @@ void LLHUDNameTag::renderText()
             + (x_pixel_vec * screen_offset.mV[VX])
             + (y_pixel_vec * screen_offset.mV[VY]);
 
-    LLGLDepthTest gls_depth(GL_TRUE, GL_FALSE);
+    std::optional<LLGLDepthTest> gls_depth;
+    if(!LLRender2D::isNativeUI())gls_depth.emplace(GL_TRUE,GL_FALSE);
+#if VS_NATIVE_VULKAN
+    std::optional<VSUIWorldDepthScope> nativeDepth;
+    if(LLRender2D::isNativeUI())
+    {
+        auto* camera=LLViewerCamera::getInstance();const auto& view=gViewerWindow->getWorldViewRectRaw();
+        const auto projected=glm::project(glm::vec3(render_position),camera->getUIModelview(),camera->getUIProjection(),
+            glm::ivec4(view.mLeft,view.mBottom,view.getWidth(),view.getHeight()));
+        if(!std::isfinite(projected.z)||projected.z<0.f||projected.z>1.f)return;
+        nativeDepth.emplace(projected.z);
+    }
+#endif
     LLRect screen_rect;
     screen_rect.setCenterAndSize(0, static_cast<S32>(lltrunc(-mHeight / 2 + mOffsetY)), static_cast<S32>(lltrunc(mWidth)), static_cast<S32>(lltrunc(mHeight)));
     mRoundedRectImgp->draw3D(render_position, x_pixel_vec, y_pixel_vec, screen_rect, bg_color);
@@ -381,7 +410,8 @@ void LLHUDNameTag::renderText()
         }
     }
     /// Reset the default color to white.  The renderer expects this to be the default.
-    gGL.color4f(1.0f, 1.0f, 1.0f, 1.0f);
+    if(!LLRender2D::isNativeUI())gGL.color4f(1.0f, 1.0f, 1.0f, 1.0f);
+    if(mNativeSource)recordNativePick();
 }
 
 void LLHUDNameTag::setString(const std::string &text_utf8)
@@ -547,6 +577,9 @@ void LLHUDNameTag::setDoFade(const bool do_fade)
 
 void LLHUDNameTag::updateVisibility()
 {
+    const auto source=mNativeSource?mNativeSource():std::optional<NativeSource>{};
+    if(mNativeSource&&!source){mVisible=false;mNativePresented=false;return;}
+
     if (mSourceObject)
     {
         mSourceObject->updateText();
@@ -554,7 +587,7 @@ void LLHUDNameTag::updateVisibility()
 
     mPositionAgent = gAgent.getPosAgentFromGlobal(mPositionGlobal);
 
-    if (!mSourceObject)
+    if (!mSourceObject && !mNativeSource)
     {
         //LL_WARNS() << "LLHUDNameTag::updateScreenPos -- mSourceObject is NULL!" << LL_ENDL;
         mVisible = true;
@@ -563,7 +596,7 @@ void LLHUDNameTag::updateVisibility()
     }
 
     // Not visible if parent object is dead
-    if (mSourceObject->isDead())
+    if (!mNativeSource && mSourceObject->isDead())
     {
         mVisible = false;
         return;
@@ -580,13 +613,13 @@ void LLHUDNameTag::updateVisibility()
         return;
     }
 
-    if (vec_from_camera * LLViewerCamera::getInstance()->getAtAxis() <= LLViewerCamera::getInstance()->getNear() + 0.1f + mSourceObject->getVObjRadius())
+    if (vec_from_camera * LLViewerCamera::getInstance()->getAtAxis() <= LLViewerCamera::getInstance()->getNear() + 0.1f + (source?source->radius:mSourceObject->getVObjRadius()))
     {
         mPositionAgent = LLViewerCamera::getInstance()->getOrigin() + vec_from_camera * ((LLViewerCamera::getInstance()->getNear() + 0.1f) / (vec_from_camera * LLViewerCamera::getInstance()->getAtAxis()));
     }
     else
     {
-        mPositionAgent -= dir_from_camera * mSourceObject->getVObjRadius();
+        mPositionAgent -= dir_from_camera * (source?source->radius:mSourceObject->getVObjRadius());
     }
 
     mLastDistance = (mPositionAgent - LLViewerCamera::getInstance()->getOrigin()).magVec();
@@ -864,6 +897,11 @@ S32 LLHUDNameTag::getMaxLines()
 
 void LLHUDNameTag::markDead()
 {
+    LLPointer<LLHUDNameTag> retain(this);
+    if(mNativeSource)
+        sVisibleTextObjects.erase(std::remove_if(sVisibleTextObjects.begin(),sVisibleTextObjects.end(),
+            [this](const LLPointer<LLHUDNameTag>& entry){return entry.get()==this;}),sVisibleTextObjects.end());
+    mNativeSource={};mNativePresented=false;mNativePending=false;
     sTextObjects.erase(LLPointer<LLHUDNameTag>(this));
     LLHUDObject::markDead();
 }
@@ -942,3 +980,63 @@ F32 LLHUDNameTag::LLHUDTextSegment::getWidth(const LLFontGL* font)
         return width;
     }
 }
+
+void LLHUDNameTag::recordNativePick()
+{
+    const auto source=mNativeSource?mNativeSource():std::optional<NativeSource>{};if(!source)return;
+    auto* camera=LLViewerCamera::getInstance();LLVector3 position=mPositionAgent;
+    LLVector3 ray=position-camera->getOrigin();ray.normalize();
+    const auto n=camera->getAtAxis();const F32 denominator=ray*n;
+    if(std::abs(denominator)<1e-12f)return;
+    position+=ray*(((source->position-position)*n)/denominator);
+    LLVector3 x,y;camera->getPixelVectors(position,y,x);
+    const auto offset=updateScreenPos(mPositionOffset);
+    const LLVector3 width=mWidth*x,height=mHeight*y;
+    const LLVector3 lower=position+x*offset.mV[0]+y*offset.mV[1]+F32(mOffsetY)*y-width/2.f-height;
+    mNativePickQuad={lower,lower+width,lower+width+height,lower+height};
+    mNativePending=true;
+}
+void LLHUDNameTag::renderNative()
+{
+    for(const auto& entry:sTextObjects)
+    {LLHUDNameTag* text=entry;if(text->mNativeSource){text->mNativePresented=false;text->mNativePending=false;}}
+    updateAll();
+    for(auto& text:sVisibleTextObjects)
+        if(text->mNativeSource && sDisplayText)text->renderText();
+}
+
+void LLHUDNameTag::finishNative(bool submitted)
+{
+    // Collection is not presentation: an image/atlas refusal must never leave
+    // an invisible tag hit target. The real renderer commits after submission.
+    for(const auto& entry:sTextObjects)
+    {
+        LLHUDNameTag* text=entry;
+        if(!text->mNativeSource)continue;
+        text->mNativePresented=submitted&&text->mNativePending;
+        text->mNativePending=false;
+    }
+}
+
+#if VS_VULKAN_DIAGNOSTICS
+LLPointer<LLHUDNameTag> LLHUDNameTag::findNative(const LLUUID& id)
+{
+    for(const auto& tag:sTextObjects)
+        if(tag->mNativeSource)
+            if(const auto source=tag->mNativeSource();source&&source->id==id)return tag;
+    return {};
+}
+LLSD LLHUDNameTag::nativeEvidence() const
+{
+    LLSD result;
+    const auto source=mNativeSource?mNativeSource():std::optional<NativeSource>{};
+    result["source"]=source?source->id:LLUUID::null;
+    result["presented"]=source&&mNativePresented&&sDisplayText&&mVisible&&!mHidden;
+    for(const auto& line:mLabelSegments)result["label"]=(result["label"].asString()+wstring_to_utf8str(line.getText())+"\n");
+    for(const auto& line:mTextSegments)result["text"]=(result["text"].asString()+wstring_to_utf8str(line.getText())+"\n");
+    result["quad"]=LLSD::emptyArray();
+    for(const auto& point:mNativePickQuad)
+    {LLSD p=LLSD::emptyArray();for(unsigned axis=0;axis<3;++axis)p.append(point.mV[axis]);result["quad"].append(p);}
+    return result;
+}
+#endif

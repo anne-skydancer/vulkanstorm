@@ -29,6 +29,7 @@
 #include "llviewerwindow.h"
 
 #include "fsnamelistavatarmenu.h"
+#include "vsnativeim.h"
 
 #include "fsradar.h"
 #include "llagent.h"
@@ -44,41 +45,43 @@ FSNameListAvatarMenu gFSNameListAvatarMenu;
 
 LLContextMenu* FSNameListAvatarMenu::createMenu()
 {
+    mMenuOwner=std::make_shared<char>(0);
+    const auto current=[weak=std::weak_ptr<const void>(mMenuOwner)]{return !weak.expired();};
     LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
     LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enable_registrar;
 
     if (mUUIDs.size() == 1)
     {
         const LLUUID& id = mUUIDs.front();
-        registrar.add("Namelist.ShowProfile",                   boost::bind(&LLAvatarActions::showProfile,                      id));
-        registrar.add("Namelist.SendIM",                        boost::bind(&LLAvatarActions::startIM,                          id));
-        registrar.add("Namelist.Calllog",                       boost::bind(&LLAvatarActions::viewChatHistory,                  id));
-        registrar.add("Namelist.AddFriend",                     boost::bind(&LLAvatarActions::requestFriendshipDialog,          id));
-        registrar.add("Namelist.AddToContactSet",               boost::bind(&FSNameListAvatarMenu::addToContactSet,             this));
-        registrar.add("Namelist.ZoomIn",                        boost::bind(&LLAvatarActions::zoomIn,                           id));
-        registrar.add("Namelist.TeleportToTarget",              boost::bind(&FSNameListAvatarMenu::teleportToAvatar,            this));
-        registrar.add("Namelist.OfferTeleport",                 boost::bind(&FSNameListAvatarMenu::offerTeleport,               this));
-        registrar.add("Namelist.RequestTeleport",               boost::bind(&LLAvatarActions::teleportRequest,                  id));
-        registrar.add("Namelist.TrackAvatar",                   boost::bind(&FSNameListAvatarMenu::onTrackAvatarMenuItemClick,  this));
-        registrar.add("Namelist.RemoveFriend",                  boost::bind(&LLAvatarActions::removeFriendDialog,               id));
-        registrar.add("Namelist.BlockAvatar",                   boost::bind(&LLAvatarActions::toggleBlock,                      id));
-        registrar.add("Namelist.CopyLabel",                     boost::bind(&FSNameListAvatarMenu::copyNameToClipboard,         this, id));
-        registrar.add("Namelist.CopyUrl",                       boost::bind(&FSNameListAvatarMenu::copySLURLToClipboard,        this, id));
+        registrar.add("Namelist.ShowProfile",                   vs_native_im_lifetime_callback(current,boost::bind(&LLAvatarActions::showProfile,                      id)));
+        registrar.add("Namelist.SendIM",                        vs_native_im_lifetime_callback(current,boost::bind(&LLAvatarActions::startIM,                          id)));
+        registrar.add("Namelist.Calllog",                       vs_native_im_lifetime_callback(current,boost::bind(&LLAvatarActions::viewChatHistory,                  id)));
+        registrar.add("Namelist.AddFriend",                     vs_native_im_lifetime_callback(current,boost::bind(&LLAvatarActions::requestFriendshipDialog,          id)));
+        registrar.add("Namelist.AddToContactSet",               vs_native_im_lifetime_callback(current,boost::bind(&FSNameListAvatarMenu::addToContactSet,             this)));
+        registrar.add("Namelist.ZoomIn",                        vs_native_im_lifetime_callback(current,boost::bind(&LLAvatarActions::zoomIn,                           id)));
+        registrar.add("Namelist.TeleportToTarget",              vs_native_im_lifetime_callback(current,boost::bind(&FSNameListAvatarMenu::teleportToAvatar,            this)));
+        registrar.add("Namelist.OfferTeleport",                 vs_native_im_lifetime_callback(current,boost::bind(&FSNameListAvatarMenu::offerTeleport,               this)));
+        registrar.add("Namelist.RequestTeleport",               vs_native_im_lifetime_callback(current,boost::bind(&LLAvatarActions::teleportRequest,                  id)));
+        registrar.add("Namelist.TrackAvatar",                   vs_native_im_lifetime_callback(current,boost::bind(&FSNameListAvatarMenu::onTrackAvatarMenuItemClick,  this)));
+        registrar.add("Namelist.RemoveFriend",                  vs_native_im_lifetime_callback(current,boost::bind(&LLAvatarActions::removeFriendDialog,               id)));
+        registrar.add("Namelist.BlockAvatar",                   vs_native_im_lifetime_callback(current,boost::bind(&LLAvatarActions::toggleBlock,                      id)));
+        registrar.add("Namelist.CopyLabel",                     vs_native_im_lifetime_callback(current,boost::bind(&FSNameListAvatarMenu::copyNameToClipboard,         this, id)));
+        registrar.add("Namelist.CopyUrl",                       vs_native_im_lifetime_callback(current,boost::bind(&FSNameListAvatarMenu::copySLURLToClipboard,        this, id)));
 
-        enable_registrar.add("Namelist.EnableItem",             boost::bind(&FSNameListAvatarMenu::enableContextMenuItem,       this, _2));
-        enable_registrar.add("Namelist.EnableZoomIn",           boost::bind(&LLAvatarActions::canZoomIn,                        id));
-        enable_registrar.add("Namelist.CheckIsAgentBlocked",    boost::bind(&LLAvatarActions::isBlocked,                        id));
+        enable_registrar.add("Namelist.EnableItem",             vs_native_im_lifetime_callback(current,boost::bind(&FSNameListAvatarMenu::enableContextMenuItem,       this, _2)));
+        enable_registrar.add("Namelist.EnableZoomIn",           vs_native_im_lifetime_callback(current,boost::bind(&LLAvatarActions::canZoomIn,                        id)));
+        enable_registrar.add("Namelist.CheckIsAgentBlocked",    vs_native_im_lifetime_callback(current,boost::bind(&LLAvatarActions::isBlocked,                        id)));
 
         return createFromFile("menu_fs_namelist_avatar.xml");
     }
     else
     {
-        registrar.add("Namelist.SendIM",                        boost::bind(&LLAvatarActions::startConference,                  mUUIDs, LLUUID::null));
-        registrar.add("Namelist.AddToContactSet",               boost::bind(&FSNameListAvatarMenu::addToContactSet,             this));
-        registrar.add("Namelist.OfferTeleport",                 boost::bind(&FSNameListAvatarMenu::offerTeleport,               this));
-        registrar.add("Namelist.RemoveFriend",                  boost::bind(&LLAvatarActions::removeFriendsDialog,              mUUIDs));
+        registrar.add("Namelist.SendIM",                        vs_native_im_lifetime_callback(current,boost::bind(&LLAvatarActions::startConference,                  mUUIDs, LLUUID::null)));
+        registrar.add("Namelist.AddToContactSet",               vs_native_im_lifetime_callback(current,boost::bind(&FSNameListAvatarMenu::addToContactSet,             this)));
+        registrar.add("Namelist.OfferTeleport",                 vs_native_im_lifetime_callback(current,boost::bind(&FSNameListAvatarMenu::offerTeleport,               this)));
+        registrar.add("Namelist.RemoveFriend",                  vs_native_im_lifetime_callback(current,boost::bind(&LLAvatarActions::removeFriendsDialog,              mUUIDs)));
 
-        enable_registrar.add("Namelist.EnableItem",             boost::bind(&FSNameListAvatarMenu::enableContextMenuItem,       this, _2));
+        enable_registrar.add("Namelist.EnableItem",             vs_native_im_lifetime_callback(current,boost::bind(&FSNameListAvatarMenu::enableContextMenuItem,       this, _2)));
 
         return createFromFile("menu_fs_namelist_avatar_multiselect.xml");
     }
@@ -248,4 +251,26 @@ void FSNameListAvatarMenu::copyNameToClipboard(const LLUUID& id)
 void FSNameListAvatarMenu::copySLURLToClipboard(const LLUUID& id)
 {
     LLUrlAction::copyURLToClipboard(LLSLURL("agent", id, "about").getSLURLString());
+}
+
+bool FSNameListAvatarMenu::isNativeCallback(std::string_view name,const LLSD& payload)
+{
+    if(name=="Namelist.EnableItem")
+    {
+        const auto action=payload.asString();
+        return action=="remove_friend"||action=="can_add_friend"||action=="can_add_set"||action=="can_send_im"||
+            action=="teleport_to"||action=="offer_teleport"||action=="request_teleport"||action=="track_avatar"||
+            action=="can_callog"||action=="can_block";
+    }
+    return name=="Namelist.ShowProfile"||name=="Namelist.SendIM"||name=="Namelist.Calllog"||
+        name=="Namelist.AddFriend"||name=="Namelist.AddToContactSet"||name=="Namelist.ZoomIn"||
+        name=="Namelist.TeleportToTarget"||name=="Namelist.OfferTeleport"||name=="Namelist.RequestTeleport"||
+        name=="Namelist.TrackAvatar"||name=="Namelist.RemoveFriend"||name=="Namelist.BlockAvatar"||
+        name=="Namelist.CopyLabel"||name=="Namelist.CopyUrl"||name=="Namelist.EnableZoomIn"||name=="Namelist.CheckIsAgentBlocked";
+}
+void FSNameListAvatarMenu::resetAccount()
+{
+    mMenuOwner.reset();
+    if(auto* menu=mMenuHandle.get())menu->die();
+    mMenuHandle.markDead();mUUIDs.clear();
 }

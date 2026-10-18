@@ -17,6 +17,10 @@
 #include "llframetimer.h"
 #include "workqueue.h"
 #include "llsdutil.h"
+#include "llsdserialize.h"
+#include "llviewercontrol.h"
+#include <sstream>
+#include <optional>
 #include <vector>
 namespace
 {
@@ -32,16 +36,18 @@ struct VSObjectMedia::Impl : LLViewerMediaObserver,std::enable_shared_from_this<
     void navigated(LLViewerMediaImpl*,const std::string&);
     void bounceBack(U8);
     bool publish(const LLSD&,const std::string&,const std::string&,
-                 std::shared_ptr<const VSResourceBudget::Reservation>);
+                 std::shared_ptr<const VSResourceBudget::Reservation>,std::optional<bool> fromSelf={},bool updatePlayer=true,std::optional<unsigned> editedFace={});
 
     LLHost host;
     LLUUID object;
     std::function<bool()> valid;
     std::string requestedVersion;
     std::string desiredVersion;
+    std::string publishedVersion;
     bool known=false, retired=false;
     double retryAt=0;
     S32 fetchedVersion=-1;
+    U64 editRevision=0;
     std::vector<std::unique_ptr<LLTextureEntry>> entries;
     std::vector<viewer_media_t> media;
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t request;
@@ -56,7 +62,7 @@ struct VSObjectMedia::Impl : LLViewerMediaObserver,std::enable_shared_from_this<
 
 bool VSObjectMedia::Impl::publish(const LLSD& data,const std::string& mediaVersion,
                                 const std::string& version,
-                                std::shared_ptr<const VSResourceBudget::Reservation> residency)
+                                std::shared_ptr<const VSResourceBudget::Reservation> residency,std::optional<bool> updateFromSelf,bool updatePlayer,std::optional<unsigned> editedFace)
 {
     const auto session=VSNativeSession::active();
     if(retired || !valid() || !session || !residency)return false;
@@ -71,22 +77,31 @@ bool VSObjectMedia::Impl::publish(const LLSD& data,const std::string& mediaVersi
     std::vector<std::unique_ptr<LLTextureEntry>> entries;
     std::vector<viewer_media_t> media;
     entries.reserve(data.size());media.reserve(data.size());
-    const bool fromSelf=LLTextureEntry::getAgentIDFromMediaVersionString(mediaVersion)==session->account().agent;
+    const bool fromSelf=updateFromSelf.value_or(LLTextureEntry::getAgentIDFromMediaVersionString(mediaVersion)==session->account().agent);
     for(unsigned face=0;face<unsigned(data.size());++face)
     {
         auto entry=face<this->entries.size()?std::move(this->entries[face]):std::make_unique<LLTextureEntry>();
+        if(editedFace && face!=*editedFace && face<this->entries.size())
+        {
+            media.push_back(face<this->media.size()?this->media[face]:viewer_media_t{});
+            entries.push_back(std::move(entry));
+            continue;
+        }
         const auto* previous=entry->getMediaData();
         const std::string previousURL=previous?previous->getCurrentURL():"";
         entry->updateMediaData(data[face]);
         auto* metadata=entry->getMediaData();
-        media.push_back(metadata?LLViewerMedia::getInstance()->updateMediaImpl(metadata,previousURL,fromSelf):viewer_media_t{});
+        if(!metadata)media.push_back(viewer_media_t{});
+        else if(!updatePlayer && face<this->media.size())media.push_back(this->media[face]);
+        else media.push_back(LLViewerMedia::getInstance()->updateMediaImpl(metadata,previousURL,fromSelf));
         entries.push_back(std::move(entry));
+        if(retired || !valid())return false;
     }
     for(auto& previous:this->media)
         if(previous && std::none_of(media.begin(),media.end(),[&](const auto& current){return current==previous;}))
         {previous->remObserver(this);previous->removeNativeSurface(object);}
     this->entries=std::move(entries);this->media=std::move(media);
-    fetchedVersion=S32(fetched);known=true;requestedVersion=version;
+    fetchedVersion=S32(fetched);known=true;requestedVersion=version;publishedVersion=version;
     for(auto& instance:this->media)if(instance)instance->addObserver(this);
     this->residency=std::move(residency);
     return true;
@@ -193,9 +208,10 @@ VSObjectMedia::VSObjectMedia(const LLHost& host,const LLUUID& object,std::functi
 }
 VSObjectMedia::~VSObjectMedia()
 {
+    LLMediaDataClientObject::ptr_t object=new Impl::ClientObject(mImpl);
+    if(LLVOVolume::sObjectMediaClient)LLVOVolume::sObjectMediaClient->removeFromQueue(object);
     if(LLVOVolume::sObjectMediaNavigateClient)
     {
-        LLMediaDataClientObject::ptr_t object=new Impl::ClientObject(mImpl);
         LLVOVolume::sObjectMediaNavigateClient->removeFromQueue(object);
     }
     mImpl->retired=true;
@@ -203,9 +219,61 @@ VSObjectMedia::~VSObjectMedia()
     if(request) request->cancelSuspendedOperation();
     mImpl->release();
 }
+bool VSObjectMedia::known() const {return !mImpl->retired && mImpl->valid() && mImpl->known;}
+bool VSObjectMedia::known(const std::string& version) const {return known() && mImpl->publishedVersion==version;}
+bool VSObjectMedia::sync(unsigned face,unsigned count,const LLSD& data,bool merge,bool ignoreAgent,bool hud,const std::string& version,bool updatePlayer)
+{
+    const auto state=mImpl;
+    if(state->retired || !state->valid() || !count || count>45 || face>=count ||
+        (!data.isUndefined() && !data.isMap()))return false;
+    LLSD values=LLSD::emptyArray();
+    for(unsigned side=0;side<count;++side)
+    {
+        const auto* old=side<state->entries.size()?state->entries[side]->getMediaData():nullptr;
+        LLSD value=old?old->asLLSD():LLSD();
+        if(side==face)
+        {
+            if(merge && data.isMap())
+            {
+                if(!value.isMap())value=LLSD::emptyMap();
+                for(auto item=data.beginMap();item!=data.endMap();++item)value[item->first]=item->second;
+            }
+            else value=data;
+        }
+        values.append(value);
+    }
+    // Retained local edits obey the same object-metadata allocation ceiling as GET.
+    std::ostringstream serialized;
+    LLSDSerialize::toBinary(values,serialized);
+    if(serialized.tellp()>256*1024)return false;
+    auto residency=state->residency?state->residency:metadata.reserve(256*1024);
+    if(!residency)return false;
+    state->desiredVersion=version;
+    ++state->editRevision;
+    auto request=std::exchange(state->request,{});
+    if(request)request->cancelSuspendedOperation();
+    const auto active=VSNativeSession::active();if(!active || !state->valid())return false;
+    const bool fromSelf=!ignoreAgent &&
+        LLTextureEntry::getAgentIDFromMediaVersionString(state->desiredVersion)==active->account().agent;
+    if(!state->publish(values,state->desiredVersion,state->desiredVersion,residency,fromSelf,updatePlayer,face))return false;
+    static LLCachedControl<bool> autoplayHUDs(gSavedSettings,"MediaAutoPlayHuds",true);
+    if(updatePlayer && hud && autoplayHUDs && face<state->media.size())
+    {
+        auto player=state->media[face];const auto* entry=state->entries[face]->getMediaData();
+        if(player && entry && !player->hasMedia() && player->getCurrentMediaURL()!=entry->getCurrentURL())
+            player->navigateTo(entry->getCurrentURL(),"",false,true);
+    }
+    return !state->retired && state->valid();
+}
+bool VSObjectMedia::sendUpdate()
+{
+    if(!known() || !LLVOVolume::sObjectMediaClient)return false;
+    LLVOVolume::sObjectMediaClient->updateMedia(new Impl::ClientObject(mImpl));
+    return !mImpl->retired && mImpl->valid();
+}
 LLUUID VSObjectMedia::texture(unsigned face) const
 {
-    if(face>=mImpl->media.size() || !mImpl->media[face]) return {};
+    if(mImpl->retired || !mImpl->valid() || face>=mImpl->media.size() || !mImpl->media[face]) return {};
     return mImpl->media[face]->getMediaTextureID();
 }
 const LLMediaEntry* VSObjectMedia::entry(unsigned face) const
@@ -220,7 +288,7 @@ void VSObjectMedia::update(const std::string& version,double pixels,double dista
     for(auto& instance:mImpl->media)
         if(instance) instance->setNativeSurface(mImpl->object,pixels,distance);
     const auto session=VSNativeSession::active();
-    if(!session || mImpl->request || (mImpl->known && mImpl->requestedVersion==version) ||
+    if(!session || mImpl->request || (mImpl->known && mImpl->publishedVersion==version) ||
         LLFrameTimer::getTotalSeconds()<mImpl->retryAt) return;
     const auto url=session->capability(mImpl->host,"ObjectMedia");
     if(url.empty()) return;
@@ -232,21 +300,21 @@ void VSObjectMedia::update(const std::string& version,double pixels,double dista
     mImpl->request=request;mImpl->requestedVersion=version;mImpl->retryAt=LLFrameTimer::getTotalSeconds()+5;
     const auto guard=session->accountGuard();
     const auto circuit=session->circuitGeneration(mImpl->host);
-    const auto host=mImpl->host;const auto object=mImpl->object;
+    const auto host=mImpl->host;const auto object=mImpl->object;const auto editRevision=mImpl->editRevision;
     const std::weak_ptr<Impl> weak=mImpl;const std::weak_ptr<VSNativeSession> owner=session;
-    LLCoros::instance().launch("nativeObjectMedia",[weak,owner,guard,circuit,host,object,request,url,version,slot,residency]()
+    LLCoros::instance().launch("nativeObjectMedia",[weak,owner,guard,circuit,host,object,request,url,version,slot,residency,editRevision]()
     {
         auto http=std::make_shared<LLCore::HttpRequest>();
         auto options=std::make_shared<LLCore::HttpOptions>();
         options->setTransferTimeout(15);options->setRetries(0);options->setMaximumResponseBodyBytes(256*1024);
         LLSD body;body["verb"]="GET";body[LLTextureEntry::OBJECT_ID_KEY]=object;
         const auto result=request->postAndSuspend(http,url,body,options);
-        LL::WorkQueue::getInstance("mainloop")->post([weak,owner,guard,circuit,host,object,request,result,version,slot,residency]()
+        LL::WorkQueue::getInstance("mainloop")->post([weak,owner,guard,circuit,host,object,request,result,version,slot,residency,editRevision]()
         {
             const auto state=weak.lock();const auto session=owner.lock();
             if(!state || state->retired || state->request!=request) return;
             state->request.reset();
-            if(!guard() || !state->valid() || state->desiredVersion!=version || !session || session->circuitGeneration(host)!=circuit ||
+            if(!guard() || !state->valid() || state->editRevision!=editRevision || state->desiredVersion!=version || !session || session->circuitGeneration(host)!=circuit ||
                 !LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result["http_result"]) ||
                 result.has("error") || result[LLTextureEntry::OBJECT_ID_KEY].asUUID()!=object) return;
             state->publish(result[LLTextureEntry::OBJECT_MEDIA_DATA_KEY],

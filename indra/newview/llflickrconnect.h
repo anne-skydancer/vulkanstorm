@@ -74,6 +74,7 @@ public:
     void storeInfo(const LLSD& info);
     const LLSD& getInfo() const;
     void clearInfo();
+    void retireAccount();
     void setDataDirty();
 
     void setConnectionState(EConnectionState connection_state);
@@ -98,12 +99,12 @@ private:
     static std::unique_ptr<LLEventPump> sInfoWatcher;
 
     bool testShareStatus(LLSD &result);
-    void flickrConnectCoro(std::string requestToken, std::string oauthVerifier);
-    void flickrShareCoro(LLSD share);
-    void flickrShareImageCoro(LLPointer<LLImageFormatted> image, std::string title, std::string description, std::string tags, int safetyLevel);
-    void flickrDisconnectCoro();
-    void flickrConnectedCoro(bool autoConnect);
-    void flickrInfoCoro();
+    void flickrConnectCoro(std::string requestToken, std::string oauthVerifier, std::function<bool()> current);
+    void flickrShareCoro(LLSD share, std::function<bool()> current);
+    void flickrShareImageCoro(LLPointer<LLImageFormatted> image, std::string title, std::string description, std::string tags, int safetyLevel, std::function<bool()> current);
+    void flickrDisconnectCoro(std::function<bool()> current);
+    void flickrConnectedCoro(bool autoConnect, std::function<bool()> current);
+    void flickrInfoCoro(std::function<bool()> current);
 
 };
 

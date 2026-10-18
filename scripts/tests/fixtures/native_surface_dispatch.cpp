@@ -1,0 +1,10 @@
+#include <cassert>
+#include <functional>
+struct Vec{int a=0,b=0,c=0,d=0;Vec()=default;Vec(int x,int y):a(x),b(y){}Vec(int x,int y,int z):a(x),b(y),c(z){}Vec(int x,int y,int z,int w):a(x),b(y),c(z),d(w){}};
+using LLVector2=Vec;using LLVector3=Vec;using LLVector4=Vec;using LLCoordScreen=Vec;
+struct LLPickInfo{int mObjectFace=4,mObjectID=22,mPickType=9,mGLTFNodeIndex=13,mGLTFPrimitiveIndex=14;Vec mUVCoords,mSTCoords,mXYCoords,mIntersection,mNormal,mBinormal,mTangent,mPosGlobal{100,200,300},mObjectOffset{7,8,9};std::function<bool()>mNativeObjectCurrent;bool mWantSurfaceInfo=false;void getSurfaceInfo();};
+struct Window{bool succeeds=true;int requests=0,lastObject=0;bool isNativeVulkan(){return true;}bool nativePick(LLPickInfo&surface,bool exact){assert(exact&&surface.mWantSurfaceInfo);++requests;lastObject=surface.mObjectID;assert(surface.mNativeObjectCurrent&&surface.mNativeObjectCurrent());surface.mObjectID=99;surface.mPickType=8;surface.mPosGlobal={9,9,9};surface.mObjectOffset={8,8,8};surface.mObjectFace=3;surface.mGLTFNodeIndex=6;surface.mGLTFPrimitiveIndex=7;surface.mUVCoords={1,2};surface.mSTCoords={3,4};surface.mXYCoords={5,6};surface.mIntersection={7,8,9};surface.mNormal={1,0,0};surface.mTangent={0,1,0,1};surface.mBinormal={0,0,1};return succeeds;}}window;auto*gViewerWindow=&window;
+METHOD
+int main(){LLPickInfo pick;pick.mNativeObjectCurrent=[]{return true;};pick.getSurfaceInfo();assert(window.requests==1&&window.lastObject==22);assert(pick.mObjectID==22&&pick.mPickType==9&&pick.mPosGlobal.a==100&&pick.mObjectOffset.a==7&&pick.mNativeObjectCurrent());assert(pick.mObjectFace==3&&pick.mGLTFNodeIndex==6&&pick.mGLTFPrimitiveIndex==7&&pick.mUVCoords.a==1&&pick.mSTCoords.a==3&&pick.mIntersection.a==7&&pick.mNormal.a==1&&pick.mTangent.d==1&&pick.mBinormal.c==1);
+ window.succeeds=false;pick.getSurfaceInfo();assert(window.requests==2&&pick.mObjectFace==-1&&pick.mUVCoords.a==-1&&pick.mSTCoords.a==-1&&pick.mXYCoords.a==-1&&pick.mIntersection.a==0&&pick.mNormal.a==0&&pick.mTangent.d==0&&pick.mBinormal.c==0);assert(pick.mObjectID==22&&pick.mPickType==9&&pick.mPosGlobal.a==100&&pick.mObjectOffset.a==7);
+}

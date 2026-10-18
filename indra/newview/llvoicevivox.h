@@ -80,6 +80,7 @@ public:
     ///  @see LLVoiceModuleInterface
     //@{
     void init(LLPumpIO *pump) override; // Call this once at application startup (creates connector)
+    void retireNativeAccount();
     void terminate() override;  // Call this to clean up during shutdown
 
     const LLVoiceVersionInfo& getVersion() override;
@@ -923,6 +924,16 @@ private:
     bool    mIsLoggedIn;
     bool    mIsProcessingChannels;
     bool    mIsCoroutineActive;
+    std::vector<boost::signals2::scoped_connection> mVADSettingsConnections;
+    std::shared_ptr<const void> mParserOwner = std::make_shared<char>(0);
+    bool mAccountAuthorized = false;
+    U64 mAccountRevision = 1;
+    std::function<bool()> mAccountCurrent = [] { return false; };
+    struct AccountRetired {};
+    void checkNativeAccountRevision(U64 revision) const
+    {
+        if (!sShuttingDown && revision != mAccountRevision) throw AccountRetired{};
+    }
 
     // This variables can last longer than vivox in coroutines so we need them as static
     static bool sShuttingDown;
@@ -944,7 +955,7 @@ class LLVivoxProtocolParser : public LLIOPipe
 {
     LOG_CLASS(LLVivoxProtocolParser);
 public:
-    LLVivoxProtocolParser();
+    explicit LLVivoxProtocolParser(std::function<bool()> current);
     virtual ~LLVivoxProtocolParser();
 
 protected:
@@ -963,6 +974,7 @@ protected:
     //@}
 
     std::string     mInput;
+    std::function<bool()> mCurrent;
 
     // Expat control members
     XML_Parser      parser;

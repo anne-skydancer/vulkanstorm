@@ -68,6 +68,7 @@ public:
     };
 
     void init();
+    void clearAccount();
     bool isBlacklisted(const LLUUID& id, LLAssetType::EType type, eBlacklistFlag flag = eBlacklistFlag::NONE) const;
     void addNewItemToBlacklist(const LLUUID& id, const std::string& name, const std::string& region, LLAssetType::EType type, eBlacklistFlag flag = eBlacklistFlag::NONE,bool permanent = true, bool save = true);
     void addNewItemToBlacklistData(const LLUUID& id, const FSAssetBlacklistData& data, bool save = true);

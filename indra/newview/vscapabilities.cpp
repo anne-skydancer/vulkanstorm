@@ -101,6 +101,7 @@ void vs_build_capability_names(LLSD& capabilityNames)
     capabilityNames.append("RetrieveNavMeshSrc");
     capabilityNames.append("SearchStatRequest");
     capabilityNames.append("SearchStatTracking");
+    capabilityNames.append("FlickrConnect");
     capabilityNames.append("SendPostcard");
     capabilityNames.append("SendUserReport");
     capabilityNames.append("SendUserReportWithScreenshot");

@@ -68,7 +68,8 @@ protected:
     LLButton* mMapBtn;
     LLButton* mNotifyBtn;
 
-    U32 mEventID;
+    U32 mEventID=0;
+    U64 mLocationRevision=0;
     LLEventInfo mEventInfo;
     boost::signals2::connection mEventInfoConnection;
 };

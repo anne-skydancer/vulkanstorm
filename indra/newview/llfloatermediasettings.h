@@ -29,6 +29,9 @@
 
 #include "llfloater.h"
 #include "lltabcontainer.h"
+#include <functional>
+#include <memory>
+class VSEditSelection;
 
 class LLPanelMediaSettingsGeneral;
 class LLPanelMediaSettingsSecurity;
@@ -47,7 +50,11 @@ public:
 
     static LLFloaterMediaSettings* getInstance();
     static bool instanceExists();
-    static void apply();
+    static bool apply();
+    std::function<bool()> editGuard() const;
+#if VS_NATIVE_VULKAN
+    const std::shared_ptr<VSEditSelection>& nativeSelection() const {return mNativeSelection;}
+#endif
     static void initValues( const LLSD& media_settings , bool editable, bool has_media_info, bool multiple_media, bool multiple_valid_media);
     static void clearValues( bool editable);
 
@@ -84,6 +91,12 @@ private:
     bool haveValuesChanged() const;
 
     LLSD mInitialValues;
+    U64 mEditRevision=0;
+    bool mNativeEditable=false;
+#if VS_NATIVE_VULKAN
+    std::shared_ptr<VSEditSelection> mNativeSelection;
+#endif
+    void retainSelection();
 };
 
 #endif  // LL_LLFLOATERMEDIASETTINGS_H

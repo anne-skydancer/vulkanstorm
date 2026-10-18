@@ -138,6 +138,7 @@ protected:
     LLButton* mDeleteBtn = nullptr;
     LLUICtrl* mLockBtn = nullptr;
 
+    bool mTaskSaveFailed = false;
     LLUUID mAssetID;
 
     LLUUID mObjectID;

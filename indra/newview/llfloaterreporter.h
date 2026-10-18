@@ -32,6 +32,8 @@
 #include "lluuid.h"
 #include "v3math.h"
 #include "llextendedstatus.h"
+#include <functional>
+#include <memory>
 
 class LLAvatarName;
 class LLMessageSystem;
@@ -135,6 +137,16 @@ private:
     static void finishedARPost(const LLSD &);
 
 private:
+    struct PickRequest;
+    struct UploadRequest;
+    std::function<bool()> mCurrent;
+    std::shared_ptr<PickRequest> mPickRequest;
+    U64 mIntent = 0;
+    bool mRetiring = false;
+    bool mScreenshotPending = false;
+    LLUUID mNativeScreenID;
+    bool publishNativeScreenshot();
+    void cancelObjectPick();
     EReportType     mReportType;
     LLUUID          mObjectID;
     LLUUID          mScreenID;

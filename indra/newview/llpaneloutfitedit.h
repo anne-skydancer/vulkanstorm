@@ -27,6 +27,9 @@
 #ifndef LL_LLPANELOUTFITEDIT_H
 #define LL_LLPANELOUTFITEDIT_H
 
+#include <vector>
+#include <boost/signals2/connection.hpp>
+
 #include "llpanel.h"
 
 #include "v3dmath.h"
@@ -192,6 +195,8 @@ public:
     void updateAvatarComplexity(U32 complexity);
 
 private:
+    std::vector<boost::signals2::scoped_connection> mAppearanceConnections;
+
     void onAddMoreButtonClicked();
     void showFilteredWearablesListView(LLWearableType::EType type);
     void onOutfitChanging(bool started);

@@ -31,6 +31,8 @@
 #include "llfloater.h"
 #include "lllistcontextmenu.h"
 #include "llvoavatar.h"
+#include <string_view>
+#include <memory>
 
 class LLNameListCtrl;
 
@@ -42,6 +44,7 @@ public:
     virtual ~FSFloaterAvatarRenderSettings();
 
     bool postBuild() override;
+    static bool isNativeCallback(std::string_view,const LLSD&);
     bool handleKeyHere(KEY key, MASK mask) override;
     bool hasAccelerators() const override { return true; }
 
@@ -75,8 +78,10 @@ class FSAvatarRenderPersistenceMenu : public LLListContextMenu
 {
 public:
     /*virtual*/ LLContextMenu* createMenu();
+    void resetAccount();
 private:
     void changeRenderSetting(const LLSD& param);
+    std::shared_ptr<const void> mIntent;
 };
 
 extern FSAvatarRenderPersistenceMenu gFSAvatarRenderPersistenceMenu;

@@ -36,19 +36,7 @@
 LLFloaterBeacons::LLFloaterBeacons(const LLSD& seed)
 :   LLFloater(seed)
 {
-    // Initialize pipeline states from saved settings.
-    // OK to do at floater constructor time because beacons do not display unless the floater is open
-    // therefore it is OK to not initialize the pipeline state before needed.
-    // Note also that we should replace those pipeline statics with direct lookup of the saved settings
-    // eliminating the need to keep these states in sync.
-    LLPipeline::setRenderScriptedTouchBeacons(gSavedSettings.getBOOL("scripttouchbeacon"));
-    LLPipeline::setRenderScriptedBeacons(     gSavedSettings.getBOOL("scriptsbeacon"));
-    LLPipeline::setRenderPhysicalBeacons(     gSavedSettings.getBOOL("physicalbeacon"));
-    LLPipeline::setRenderSoundBeacons(        gSavedSettings.getBOOL("soundsbeacon"));
-    LLPipeline::setRenderParticleBeacons(     gSavedSettings.getBOOL("particlesbeacon"));
-    LLPipeline::setRenderHighlights(          gSavedSettings.getBOOL("renderhighlights"));
-    LLPipeline::setRenderBeacons(             gSavedSettings.getBOOL("renderbeacons"));
-    LLPipeline::setRenderMOAPBeacons(         gSavedSettings.getBOOL("moapbeacon"));
+    initializeSettings();
     mCommitCallbackRegistrar.add("Beacons.UICheck", boost::bind(&LLFloaterBeacons::onClickUICheck, this,_1));
 }
 
@@ -130,4 +118,27 @@ void LLFloaterBeacons::onClickUICheck(LLUICtrl *ctrl)
         //  getChild<LLCheckBoxCtrl>("beacons")->setValue(false);
         // }
     }
+}
+
+void LLFloaterBeacons::initializeSettings()
+{
+    // Initialize pipeline states from saved settings.
+    // OK to do at floater constructor time because beacons do not display unless the floater is open
+    // therefore it is OK to not initialize the pipeline state before needed.
+    // Note also that we should replace those pipeline statics with direct lookup of the saved settings
+    // eliminating the need to keep these states in sync.
+    LLPipeline::setRenderScriptedTouchBeacons(gSavedSettings.getBOOL("scripttouchbeacon"));
+    LLPipeline::setRenderScriptedBeacons(     gSavedSettings.getBOOL("scriptsbeacon"));
+    LLPipeline::setRenderPhysicalBeacons(     gSavedSettings.getBOOL("physicalbeacon"));
+    LLPipeline::setRenderSoundBeacons(        gSavedSettings.getBOOL("soundsbeacon"));
+    LLPipeline::setRenderParticleBeacons(     gSavedSettings.getBOOL("particlesbeacon"));
+    LLPipeline::setRenderHighlights(          gSavedSettings.getBOOL("renderhighlights"));
+    LLPipeline::setRenderBeacons(             gSavedSettings.getBOOL("renderbeacons"));
+    LLPipeline::setRenderMOAPBeacons(         gSavedSettings.getBOOL("moapbeacon"));
+    LLPipeline::setRenderRegionCornerBeacons(gSavedSettings.getBOOL("fsregioncornerbeacons"));
+    LLPipeline::DebugBeaconLineWidth = gSavedSettings.getS32("DebugBeaconLineWidth");
+    static boost::signals2::scoped_connection widthChanged;
+    if (!widthChanged.connected())
+        widthChanged = gSavedSettings.getControl("DebugBeaconLineWidth")->getSignal()->connect(
+            [](LLControlVariable*,const LLSD& value,const LLSD&) { LLPipeline::DebugBeaconLineWidth=value.asInteger(); });
 }

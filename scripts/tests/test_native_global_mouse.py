@@ -16,7 +16,7 @@ class GlobalMouseTest(unittest.TestCase):
             'bool LLViewerInput::scanMouse(\n'))
         window = (ROOT / 'indra/newview/vsviewerwindow.cpp').read_text(encoding='utf-8')
         mouse = method(window, 'bool LLViewerWindow::nativeMouse(')
-        prefix = mouse[mouse.index('{') + 1:mouse.index('    pos.mX')]
+        prefix = next(line for line in mouse.splitlines() if 'gViewerInput.handleGlobalBindsMouse(' in line) + '\n' + next(line for line in mouse.splitlines() if 'if(!hadRoot)return false;' in line).replace('hadRoot','mRootView')
         fixture = r'''
 #include <cassert>
 #include <functional>

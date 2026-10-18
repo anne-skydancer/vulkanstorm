@@ -112,6 +112,7 @@ class OmnifilterEngine
         void setDirty(bool dirty);
 
         void init();
+        void ensureInitialized();
 
         typedef boost::signals2::signal<void(time_t, const std::string&)> log_signal_t;
         log_signal_t mLogSignal;

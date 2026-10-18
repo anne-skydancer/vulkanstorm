@@ -6,10 +6,11 @@
 #include <functional>
 struct VSCameraFocusObject
 {
-    LLMatrix4 renderMatrix;
+    LLMatrix4 renderMatrix,assetToAgentMatrix;
     LLQuaternion renderRotation;
     LLVector3 renderPosition, rawScale, characterAgentPosition;
     LLBBox officialBounds;
+    bool isMesh=false;
     bool isAvatar=false, isRoot=false, isAnimated=false, hasControlAvatar=false;
     std::function<bool()> valid;
     bool current()const{return valid && valid();}

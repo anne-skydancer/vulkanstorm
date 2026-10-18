@@ -27,6 +27,16 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsradarentry.h"
+#include "vsnativeim.h"
+#include "vsavatarservices.h"
+#include "vsregioncontext.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "vsworldavatar.h"
+#include "llviewerwindow.h"
+#endif
+
 
 #include "fscommon.h"
 #include "fsradar.h"
@@ -58,12 +68,14 @@ FSRadarEntry::FSRadarEntry(const LLUUID& avid)
     mPropertiesRequested(false),
     mAvatarNameCallbackConnection()
 {
+    mAccountCurrent = vs_native_im_guard();
     requestProperties();
     updateName();
 }
 
 FSRadarEntry::~FSRadarEntry()
 {
+    mLifetime.reset();
     if (mID.notNull())
     {
         LLAvatarPropertiesProcessor::getInstance()->removeObserver(mID, this); // may try to remove null observer
@@ -76,6 +88,26 @@ FSRadarEntry::~FSRadarEntry()
 
 void FSRadarEntry::requestProperties()
 {
+    if (!mAccountCurrent()) return;
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (!mPropertiesRequested && mID.notNull() && owner->regionReady())
+        {
+            auto* processor = LLAvatarPropertiesProcessor::getInstance();
+            processor->addObserver(mID, this);
+            if (LLGridManager::instance().isInSecondLife() || !gAgent.getRegionCapability(CAPNAME).empty())
+                processor->sendAvatarPropertiesRequest(mID);
+            else
+            {
+                processor->sendAvatarLegacyPropertiesRequest(mID);
+                processor->sendAvatarNotesRequest(mID);
+            }
+            mPropertiesRequested = true;
+        }
+        return;
+    }
+#endif
     if (!mPropertiesRequested && mID.notNull())
     {
         if (auto region = gAgent.getRegion())
@@ -106,7 +138,9 @@ void FSRadarEntry::updateName()
     {
         mAvatarNameCallbackConnection.disconnect();
     }
-    mAvatarNameCallbackConnection = LLAvatarNameCache::get(mID, boost::bind(&FSRadarEntry::onAvatarNameCache, this, _1, _2));
+    mAvatarNameCallbackConnection = LLAvatarNameCache::get(mID, vs_native_im_lifetime_callback(
+        [weak = std::weak_ptr<void>(mLifetime)] { return !weak.expired(); },
+        boost::bind(&FSRadarEntry::onAvatarNameCache, this, _1, _2)));
 }
 
 void FSRadarEntry::onAvatarNameCache(const LLUUID& av_id, const LLAvatarName& av_name)
@@ -130,6 +164,7 @@ void FSRadarEntry::onAvatarNameCache(const LLUUID& av_id, const LLAvatarName& av
 
 void FSRadarEntry::processProperties(void* data, EAvatarProcessorType type)
 {
+    if (!mAccountCurrent()) return;
     if (data)
     {
         if (type == APT_PROPERTIES)

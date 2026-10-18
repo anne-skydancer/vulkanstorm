@@ -401,3 +401,8 @@ bool OmnifilterEngine::tick()
     setDirty(false);
     return false;
 }
+
+void OmnifilterEngine::ensureInitialized()
+{
+    if(mNeedlesXMLPath.empty())init();
+}

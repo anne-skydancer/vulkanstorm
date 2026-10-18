@@ -30,6 +30,7 @@
 #include "llvoinventorylistener.h"
 #include "llimagej2c.h"
 #include "llviewertexture.h"
+#include <vector>
 
 class LLButton;
 class LLColorSwatchCtrl;
@@ -55,6 +56,7 @@ public:
     LLFloaterComboOptions();
 
     virtual ~LLFloaterComboOptions();
+    static void retireNativeAccount();
     /*virtual*/ bool    postBuild();
 
     static LLFloaterComboOptions* showUI(
@@ -77,6 +79,8 @@ private:
 
 protected:
     combo_callback mCallback;
+    std::function<bool()> mCurrent;
+    static std::vector<LLHandle<LLFloater>> sNativeOwners;
 
     LLButton *mConfirmButton;
     LLButton *mCancelButton;
@@ -143,15 +147,15 @@ class LLMaterialEditor : public LLPreview, public LLVOInventoryListener
 
     bool saveIfNeeded();
 
-    static void finishInventoryUpload(LLUUID itemId, LLUUID newAssetId, LLUUID newItemId);
+    void finishInventoryUpload(LLUUID itemId, LLUUID newAssetId, LLUUID newItemId);
 
-    static void finishTaskUpload(LLUUID itemId, LLUUID newAssetId, LLUUID taskId);
+    void finishTaskUpload(LLUUID itemId, LLUUID newAssetId, LLUUID taskId);
 
     static void finishSaveAs(
         const LLSD &oldKey,
         const LLUUID &newItemId,
         const std::string &buffer,
-        bool has_unsaved_changes);
+        bool has_unsaved_changes, LLHandle<LLFloater> owner);
 
     void refreshFromInventory(const LLUUID& new_item_id = LLUUID::null);
 
@@ -239,6 +243,8 @@ class LLMaterialEditor : public LLPreview, public LLVOInventoryListener
 private:
     static void saveObjectsMaterialAs(const LLGLTFMaterial *render_material, const LLLocalGLTFMaterial *local_material, const LLPermissions& permissions, const LLUUID& object_id /* = LLUUID::null */, const LLUUID& item /* = LLUUID::null */);
 
+    std::function<void(const LLSD&, const LLSD&)> notificationCallback(
+        void (LLMaterialEditor::*)(const LLSD&, const LLSD&));
     static bool updateInventoryItem(const std::string &buffer, const LLUUID &item_id, const LLUUID &task_id);
     static void createInventoryItem(const std::string &buffer, const std::string &name, const std::string &desc, const LLPermissions& permissions, const LLUUID& upload_folder);
 
@@ -249,6 +255,7 @@ private:
 
     friend class LLMaterialFilePicker;
 
+    U64 mAssetLoadRevision = 0;
     LLUUID mAssetID;
     LLUUID mUploadFolder;
 
@@ -313,6 +320,10 @@ private:
     static bool mOverrideInProgress;
     static bool mSelectionNeedsUpdate;
     boost::signals2::connection mSelectionUpdateSlot;
+    boost::signals2::connection mMaterialUpdateSlot;
+    std::function<bool()> mNativeSelectionCurrent;
+    bool mNativeMaterialPending = false;
+    U64 mMaterialEditRevision = 0;
 
     struct LocalTextureConnection
     {

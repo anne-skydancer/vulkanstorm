@@ -41,10 +41,16 @@
 #include "llviewerwindow.h"
 #include "llsdutil.h"
 #include "llselectmgr.h"
+#include "llfloatermediasettings.h"
+#include "llfloaterreg.h"
+#if VS_NATIVE_VULKAN
+#include "vseditselection.h"
+#endif
 #include "llmediaentry.h"
 #include "llnamebox.h"
 #include "lltrans.h"
 #include "llfloatermediasettings.h"
+#include "llfloaterreg.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -95,7 +101,17 @@ void LLPanelMediaSettingsPermissions::draw()
 
     getChild<LLUICtrl>("perms_group_name")->setValue(LLStringUtil::null);
     LLUUID group_id;
-    bool groups_identical = LLSelectMgr::getInstance()->selectGetGroup(group_id);
+    bool groups_identical=false;
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto* parent=LLFloaterReg::findTypedInstance<LLFloaterMediaSettings>("media_settings");
+        const auto selection=parent?parent->nativeSelection():nullptr;
+        groups_identical=selection && parent->editGuard()() && selection->selectGetGroup(group_id);
+    }
+    else
+#endif
+        groups_identical=LLSelectMgr::getInstance()->selectGetGroup(group_id);
     if (groups_identical)
     {
         if(mPermsGroupName)

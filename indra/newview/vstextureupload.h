@@ -1,6 +1,7 @@
 // Worker-prepared native image mip chains and optional BC3 payloads. LGPL-2.1.
 #pragma once
 #include "vsimagemips.h"
+#include "vsimagealphamask.h"
 #include "vsworldcontracts.h"
 // stb_dxt implementation mode calls memcpy; do not rely on viewer PCHs.
 #include <cstring>
@@ -23,6 +24,7 @@ struct Prepared
 {
     unsigned width=0,height=0;
     bool compressed=false;
+    bool alphaMask=false;
     bool compressionRequested=false;
     VSWorldContracts::ImageRole role=VSWorldContracts::ImageRole::CoreUI;
     std::size_t gpuBytes=0;
@@ -81,6 +83,8 @@ inline Image prepare(unsigned width,unsigned height,std::vector<std::uint8_t> pi
     result->pixels=std::move(pixels);
     const bool mipmaps=role==VSWorldContracts::ImageRole::RemoteAsset || role==VSWorldContracts::ImageRole::AvatarComposite;
     auto levels=VSImageMips::build(width,height,result->pixels,mipmaps);
+    if(role==VSWorldContracts::ImageRole::RemoteAsset)
+        result->alphaMask=vs_image_alpha_mask(result->pixels.data(),width,height,4,3);
     std::size_t encodedBytes=0;
     for(const auto& level:levels) encodedBytes+=bc3Bytes(level.width,level.height);
     if(encodedBytes>=VSImageMips::bytes(width,height,mipmaps)) result->compressed=false;

@@ -27,6 +27,13 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterimagepreview.h"
+#if VS_NATIVE_VULKAN
+#include "vsscenepreview.h"
+#include "vsvulkancontext.h"
+#include "vsuiresources.h"
+#include "vsworldavatar.h"
+#include "llavatarappearance.h"
+#endif
 
 #include "llimagebmp.h"
 #include "llimagetga.h"
@@ -145,22 +152,13 @@ bool LLFloaterImagePreview::postBuild()
     const bool native = gViewerWindow && gViewerWindow->isNativeVulkan();
     if (mRawImagep.notNull() && (native || gAgent.getRegion() != NULL))
     {
-        if (!native)
-        {
-            mAvatarPreview = new LLImagePreviewAvatar(256, 256);
-            mAvatarPreview->setPreviewTarget("mPelvis", "mUpperBodyMesh0", mRawImagep, 2.f, false);
-            mSculptedPreview = new LLImagePreviewSculpted(256, 256);
-            mSculptedPreview->setPreviewTarget(mRawImagep, 2.0f);
-        }
-        else
-        {
+        mAvatarPreview = new LLImagePreviewAvatar(256, 256);
+        mAvatarPreview->setPreviewTarget("mPelvis", "mUpperBodyMesh0", mRawImagep, 2.f, false);
+        mSculptedPreview = new LLImagePreviewSculpted(256, 256);
+        mSculptedPreview->setPreviewTarget(mRawImagep, 2.0f);
 #if VS_NATIVE_VULKAN
-            mNativeImage = vs_publish_ui_image(mNativeImageKey, *mRawImagep);
+        if (native) mNativeImage = vs_publish_ui_image(mNativeImageKey, *mRawImagep);
 #endif
-            // Flat decoded texture preview is functional. Avatar clothing and
-            // sculpted mesh previews belong to the deferred world renderer.
-            getChildView("clothing_type_combo")->setEnabled(false);
-        }
 
         // <FS:Beq> BUG-228331 - lossless_check is misleading don't show it if it won't be used.
         //if (mRawImagep->getWidth() * mRawImagep->getHeight() <= LL_IMAGE_REZ_LOSSLESS_CUTOFF * LL_IMAGE_REZ_LOSSLESS_CUTOFF)
@@ -494,7 +492,25 @@ void LLFloaterImagePreview::draw()
     LLFloater::draw();
     if (gViewerWindow && gViewerWindow->isNativeVulkan())
     {
-        if (mNativeImage && mUploadCurrent())
+        if (!mUploadCurrent()) return;
+#if VS_NATIVE_VULKAN
+        if (!mNativeImage && mRawImagep)
+        {
+            mNativeImage = vs_publish_ui_image(mNativeImageKey, *mRawImagep);
+            if (!mNativeImage) gViewerWindow->nativeContext()->resources().deferDraw();
+        }
+        if (mNativeImage && mAvatarPreview)
+            mAvatarPreview->setNativeImage(vs_ui_named_image_snapshot(mNativeImageKey));
+#endif
+        const auto* selection = childGetSelectionInterface("clothing_type_combo");
+        const S32 mode = selection ? selection->getFirstSelectedIndex() : 0;
+        if (mode > 0)
+        {
+            if (mode == 9 && mSculptedPreview) mSculptedPreview->drawNative(mPreviewRect);
+            else if (mAvatarPreview) mAvatarPreview->drawNative(mPreviewRect);
+            return;
+        }
+        if (mNativeImage)
         {
             gl_rect_2d_checkerboard(mPreviewRect);
             mNativeImage->setClipRegion(mPreviewImageRect);
@@ -778,7 +794,7 @@ bool LLFloaterImagePreview::handleHover(S32 x, S32 y, MASK mask)
         {
             // pan here
             LLCtrlSelectionInterface* iface = childGetSelectionInterface("clothing_type_combo");
-            if ((native || (iface && iface->getFirstSelectedIndex() <= 0)))
+            if ((iface && iface->getFirstSelectedIndex() <= 0))
             {
                 mPreviewImageRect.translate((F32)(x - mLastMouseX) * -0.005f * mPreviewImageRect.getWidth(),
                     (F32)(y - mLastMouseY) * -0.005f * mPreviewImageRect.getHeight());
@@ -789,7 +805,7 @@ bool LLFloaterImagePreview::handleHover(S32 x, S32 y, MASK mask)
                 mSculptedPreview->pan((F32)(x - mLastMouseX) * -0.005f, (F32)(y - mLastMouseY) * -0.005f);
             }
         }
-        else if (local_mask == MASK_ORBIT && !native)
+        else if (local_mask == MASK_ORBIT)
         {
             F32 yaw_radians = (F32)(x - mLastMouseX) * -0.01f;
             F32 pitch_radians = (F32)(y - mLastMouseY) * 0.02f;
@@ -800,7 +816,7 @@ bool LLFloaterImagePreview::handleHover(S32 x, S32 y, MASK mask)
         else
         {
             LLCtrlSelectionInterface* iface = childGetSelectionInterface("clothing_type_combo");
-            if ((native || (iface && iface->getFirstSelectedIndex() <= 0)))
+            if ((iface && iface->getFirstSelectedIndex() <= 0))
             {
                 F32 zoom_amt = (F32)(y - mLastMouseY) * -0.002f;
                 mPreviewImageRect.stretch(zoom_amt);
@@ -818,7 +834,7 @@ bool LLFloaterImagePreview::handleHover(S32 x, S32 y, MASK mask)
         }
 
         LLCtrlSelectionInterface* iface = childGetSelectionInterface("clothing_type_combo");
-        if ((native || (iface && iface->getFirstSelectedIndex() <= 0)))
+        if ((iface && iface->getFirstSelectedIndex() <= 0))
         {
             if (mPreviewImageRect.getWidth() > 1.f)
             {
@@ -869,7 +885,7 @@ bool LLFloaterImagePreview::handleHover(S32 x, S32 y, MASK mask)
     {
         return LLFloater::handleHover(x, y, mask);
     }
-    else if (local_mask == MASK_ORBIT && !native)
+    else if (local_mask == MASK_ORBIT)
     {
         gViewerWindow->setCursor(UI_CURSOR_TOOLCAMERA);
     }
@@ -890,19 +906,6 @@ bool LLFloaterImagePreview::handleHover(S32 x, S32 y, MASK mask)
 //-----------------------------------------------------------------------------
 bool LLFloaterImagePreview::handleScrollWheel(S32 x, S32 y, S32 clicks)
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        if (mPreviewRect.pointInRect(x, y))
-        {
-            const F32 width = llclamp(mPreviewImageRect.getWidth() + static_cast<F32>(clicks) * .04f, .1f, 1.f);
-            const F32 height = llclamp(mPreviewImageRect.getHeight() + static_cast<F32>(clicks) * .04f, .1f, 1.f);
-            const F32 left = llclamp((mPreviewImageRect.mLeft + mPreviewImageRect.mRight - width) * .5f, 0.f, 1.f - width);
-            const F32 bottom = llclamp((mPreviewImageRect.mBottom + mPreviewImageRect.mTop - height) * .5f, 0.f, 1.f - height);
-            mPreviewImageRect.set(left, bottom + height, left + width, bottom);
-            return true;
-        }
-        return LLFloater::handleScrollWheel(x, y, clicks);
-    }
     if (mPreviewRect.pointInRect(x, y) && mAvatarPreview)
     {
         mAvatarPreview->zoom((F32)clicks * -0.2f);
@@ -938,6 +941,15 @@ LLImagePreviewAvatar::LLImagePreviewAvatar(S32 width, S32 height) : LLViewerDyna
     mCameraPitch = 0.f;
     mCameraZoom = 1.f;
 
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        mNativePreview = std::make_unique<VSScenePreview>(*gViewerWindow->nativeContext());
+        mNativePreview->avatar().transform(LLVector3::zero, LLQuaternion::DEFAULT, LLVector3::zero, LLVector3::zero);
+        mTextureName = 0;
+        return;
+    }
+#endif
     mDummyAvatar = (LLVOAvatar*)gObjectList.createObjectViewer(LL_PCODE_LEGACY_AVATAR, gAgent.getRegion(), LLViewerObject::CO_FLAG_UI_AVATAR);
     mDummyAvatar->mSpecialRenderMode = 2;
 
@@ -947,7 +959,7 @@ LLImagePreviewAvatar::LLImagePreviewAvatar(S32 width, S32 height) : LLViewerDyna
 
 LLImagePreviewAvatar::~LLImagePreviewAvatar()
 {
-    mDummyAvatar->markDead();
+    if (mDummyAvatar) mDummyAvatar->markDead();
 }
 
 //virtual
@@ -958,6 +970,29 @@ S8 LLImagePreviewAvatar::getType() const
 
 void LLImagePreviewAvatar::setPreviewTarget(const std::string& joint_name, const std::string& mesh_name, LLImageRaw* imagep, F32 distance, bool male)
 {
+#if VS_NATIVE_VULKAN
+    if (mNativePreview)
+    {
+        if (!mNativePreview->current()) return;
+        auto& appearance = mNativePreview->avatar().appearanceOwner();
+        mTargetJoint = appearance.getRootJoint()->findJoint(joint_name);
+        appearance.setVisualParamWeight("male", male ? 1.f : 0.f);
+        appearance.updateVisualParams();
+        if (mNativeSource.get() != imagep)
+        {
+            mNativeSource = imagep;
+            mNativeSourceImage.reset();
+        }
+        mNativeMeshName = mesh_name;
+        mNativeMeshDirty = true;
+        mCameraDistance = distance;
+        mCameraZoom = 1.f;
+        mCameraPitch = mCameraYaw = 0.f;
+        mCameraOffset.clearVec();
+        refresh();
+        return;
+    }
+#endif
     mTargetJoint = mDummyAvatar->mRoot->findJoint(joint_name);
     // clear out existing test mesh
     if (mTargetMesh)
@@ -1004,12 +1039,54 @@ void LLImagePreviewAvatar::clearPreviewTexture(const std::string& mesh_name)
         }
     }
 }
+#if VS_NATIVE_VULKAN
+void LLImagePreviewAvatar::setNativeImage(const VSUIRenderer::Image& image)
+{
+    if (image && image != mNativeSourceImage)
+    {
+        mNativeSourceImage = image;
+        mNativeMeshDirty = true;
+        refresh();
+    }
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // update()
 //-----------------------------------------------------------------------------
 bool LLImagePreviewAvatar::render()
 {
+#if VS_NATIVE_VULKAN
+    if (mNativePreview)
+    {
+        if (!mNativePreview->current() || !mTargetJoint || !mNativeSource) return false;
+        if (!mNativeSourceImage)
+        {
+            mNativeSourceImage = mNativePreview->sourceImage(*mNativeSource);
+            if (!mNativeSourceImage) return false;
+        }
+        auto& avatar = mNativePreview->avatar();
+        if (mNativeMeshDirty)
+        {
+            if (!avatar.configurePreview(mNativeMeshName, mNativeSourceImage)) return false;
+            mNativeMeshDirty = false;
+        }
+        const auto target = mTargetJoint->getWorldPosition();
+        const LLQuaternion orbit = LLQuaternion(mCameraPitch, LLVector3::y_axis) * LLQuaternion(mCameraYaw, LLVector3::z_axis);
+        auto* pelvis = avatar.appearanceOwner().getJoint("mPelvis");
+        const LLQuaternion rotation = (pelvis ? pelvis->getWorldRotation() : LLQuaternion::DEFAULT) * orbit;
+        const LLVector3 eye = target + ((LLVector3(mCameraDistance, 0, 0) + mCameraOffset) * rotation);
+        const LLVector3 focus = target + mCameraOffset * rotation;
+        auto* camera = LLViewerCamera::getInstance();
+        std::vector<VSWorldRenderer::Packet> packets;
+        avatar.append(packets, eye, camera->getFar(), mFullHeight, 1.f, mFullWidth);
+        for (auto& packet : packets) { packet.alpha = false; packet.masked = false; }
+        const bool success = mNativePreview->render(mFullWidth, mFullHeight, eye, focus, LLVector3::z_axis,
+            camera->getDefaultFOV() / mCameraZoom, camera->getNear(), camera->getFar(), packets, {.15f, .2f, .3f, 1.f});
+        if (success) mNeedsUpdate = false;
+        return success;
+    }
+#endif
     mNeedsUpdate = false;
     LLVOAvatar* avatarp = mDummyAvatar;
 
@@ -1083,6 +1160,21 @@ bool LLImagePreviewAvatar::render()
 //-----------------------------------------------------------------------------
 // refresh()
 //-----------------------------------------------------------------------------
+bool LLImagePreviewAvatar::drawNative(const LLRect& rect)
+{
+#if VS_NATIVE_VULKAN
+    if (mNativePreview && mNativePreview->current())
+    {
+        if (mNeedsUpdate || !mNativePreview->image()) render();
+        if (mNativePreview->image())
+            gViewerWindow->nativeContext()->resources().imageLocalRectangle(mNativePreview->image(),
+                LLRectf(F32(rect.mLeft), F32(rect.mTop), F32(rect.mRight), F32(rect.mBottom)), LLColor4::white);
+        return true;
+    }
+#endif
+    return false;
+}
+
 void LLImagePreviewAvatar::refresh()
 {
     mNeedsUpdate = true;
@@ -1132,6 +1224,10 @@ LLImagePreviewSculpted::LLImagePreviewSculpted(S32 width, S32 height) : LLViewer
 
     F32 const HIGHEST_LOD = 4.0f;
     mVolume = new LLVolume(volume_params,  HIGHEST_LOD);
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        mNativePreview = std::make_unique<VSScenePreview>(*gViewerWindow->nativeContext());
+#endif
 }
 
 
@@ -1159,6 +1255,9 @@ void LLImagePreviewSculpted::setPreviewTarget(LLImageRaw* imagep, F32 distance)
         mVolume->sculpt(imagep->getWidth(), imagep->getHeight(), imagep->getComponents(), imagep->getData(), 0, false);
     }
 
+#if VS_NATIVE_VULKAN
+    if (mNativePreview) { mNativeMeshDirty = true; refresh(); return; }
+#endif
     const LLVolumeFace &vf = mVolume->getVolumeFace(0);
     U32 num_indices = vf.mNumIndices;
     U32 num_vertices = vf.mNumVertices;
@@ -1214,6 +1313,23 @@ void LLImagePreviewSculpted::setPreviewTarget(LLImageRaw* imagep, F32 distance)
 //-----------------------------------------------------------------------------
 bool LLImagePreviewSculpted::render()
 {
+#if VS_NATIVE_VULKAN
+    if (mNativePreview)
+    {
+        if (!mNativePreview->current() || (mNativeMeshDirty && !updateNativeMesh())) return false;
+        const LLQuaternion rotation = LLQuaternion(mCameraPitch, LLVector3::y_axis) * LLQuaternion(mCameraYaw, LLVector3::z_axis);
+        const LLVector3 eye = (LLVector3(mCameraDistance, 0, 0) + mCameraOffset) * rotation;
+        const LLVector3 focus = mCameraOffset * rotation;
+        auto* camera = LLViewerCamera::getInstance();
+        VSWorldRenderer::Packet packet;
+        packet.mesh = mNativeMesh;
+        packet.color = {.9f, .9f, .9f, 1.f};
+        const bool success = mNativePreview->render(mFullWidth, mFullHeight, eye, focus, LLVector3::z_axis,
+            camera->getDefaultFOV() / mCameraZoom, camera->getNear(), camera->getFar(), {packet}, {.15f, .2f, .3f, 1.f});
+        if (success) mNeedsUpdate = false;
+        return success;
+    }
+#endif
     mNeedsUpdate = false;
     LLGLSUIDefault def;
     LLGLDisable no_blend(GL_BLEND);
@@ -1284,9 +1400,54 @@ bool LLImagePreviewSculpted::render()
     return true;
 }
 
+#if VS_NATIVE_VULKAN
+bool LLImagePreviewSculpted::updateNativeMesh()
+{
+    const auto& face = mVolume->getVolumeFace(0);
+    std::vector<VSWorldRenderer::Vertex> vertices;
+    std::vector<unsigned> indices;
+    vertices.reserve(face.mNumVertices);
+    indices.reserve(face.mNumIndices);
+    for (S32 i = 0; i < face.mNumVertices; ++i)
+    {
+        const auto* p = face.mPositions[i].getF32ptr();
+        LLVector3 normal(face.mNormals[i].getF32ptr());
+        normal.normalize();
+        const auto& uv = face.mTexCoords[i];
+        vertices.push_back({p[0] * 1.25f, p[1] * 1.25f, p[2] * 1.25f,
+            normal.mV[0], normal.mV[1], normal.mV[2], uv.mV[0], 1.f - uv.mV[1]});
+    }
+    for (S32 i = 0; i < face.mNumIndices; ++i) indices.push_back(face.mIndices[i]);
+    const auto replacement = mNativePreview->renderer().upload(vertices, indices);
+    if (!replacement)
+    {
+        gViewerWindow->nativeContext()->resources().deferDraw();
+        return false;
+    }
+    mNativeMesh = replacement;
+    mNativeMeshDirty = false;
+    return true;
+}
+#endif
+
 //-----------------------------------------------------------------------------
 // refresh()
 //-----------------------------------------------------------------------------
+bool LLImagePreviewSculpted::drawNative(const LLRect& rect)
+{
+#if VS_NATIVE_VULKAN
+    if (mNativePreview && mNativePreview->current())
+    {
+        if (mNeedsUpdate || !mNativePreview->image()) render();
+        if (mNativePreview->image())
+            gViewerWindow->nativeContext()->resources().imageLocalRectangle(mNativePreview->image(),
+                LLRectf(F32(rect.mLeft), F32(rect.mTop), F32(rect.mRight), F32(rect.mBottom)), LLColor4::white);
+        return true;
+    }
+#endif
+    return false;
+}
+
 void LLImagePreviewSculpted::refresh()
 {
     mNeedsUpdate = true;

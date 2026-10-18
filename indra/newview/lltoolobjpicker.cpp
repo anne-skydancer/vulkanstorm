@@ -43,6 +43,9 @@
 #include "llviewerwindow.h"
 #include "lldrawable.h"
 #include "llrootview.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 
 LLToolObjPicker::LLToolObjPicker()
@@ -57,14 +60,24 @@ LLToolObjPicker::LLToolObjPicker()
 // returns true if an object was selected
 bool LLToolObjPicker::handleMouseDown(S32 x, S32 y, MASK mask)
 {
+    #if VS_NATIVE_VULKAN
+    const auto operation=VSNativeSession::active()?nativePickGuard():std::function<bool()>{};
+    #endif
     LLRootView* viewp = gViewerWindow->getRootView();
     bool handled = viewp->handleMouseDown(x, y, mask);
 
+    #if VS_NATIVE_VULKAN
+    if(operation && !operation())return true;
+    #endif
     mHitObjectID.setNull();
 
     if (! handled)
     {
         // didn't click in any UI object, so must have clicked in the world
+        #if VS_NATIVE_VULKAN
+        if(operation)gViewerWindow->pickAsync(x,y,mask,pickCallback,false,false,false,false,operation);
+        else
+        #endif
         gViewerWindow->pickAsync(x, y, mask, pickCallback);
         handled = true;
     }
@@ -88,6 +101,9 @@ bool LLToolObjPicker::handleMouseDown(S32 x, S32 y, MASK mask)
 
 void LLToolObjPicker::pickCallback(const LLPickInfo& pick_info)
 {
+    #if VS_NATIVE_VULKAN
+    if(pick_info.mNativeRequestCurrent && !pick_info.mNativeRequestCurrent())return;
+    #endif
     LLToolObjPicker::getInstance()->mHitObjectID = pick_info.mObjectID;
     LLToolObjPicker::getInstance()->mPicked = pick_info.mObjectID.notNull();
 }
@@ -134,14 +150,19 @@ bool LLToolObjPicker::handleHover(S32 x, S32 y, MASK mask)
 
 void LLToolObjPicker::onMouseCaptureLost()
 {
-    if (mExitCallback)
-    {
-        mExitCallback(mExitCallbackData);
-
-        mExitCallback = NULL;
-        mExitCallbackData = NULL;
-    }
-
+    // The callback may close its real view and clear the transient tool,
+    // synchronously reentering capture loss. Retire this invocation first;
+    // keep the picked result available during the original receiver call.
+    #if VS_NATIVE_VULKAN
+    const auto retired=++mNativePickGeneration;
+    #endif
+    const auto callback=mExitCallback;
+    void* const data=mExitCallbackData;
+    mExitCallback=nullptr;mExitCallbackData=nullptr;
+    if(callback)callback(data);
+    #if VS_NATIVE_VULKAN
+    if(mNativePickGeneration!=retired)return;
+    #endif
     mPicked = false;
     mHitObjectID.setNull();
 }
@@ -149,6 +170,10 @@ void LLToolObjPicker::onMouseCaptureLost()
 // virtual
 void LLToolObjPicker::setExitCallback(void (*callback)(void *), void *callback_data)
 {
+    #if VS_NATIVE_VULKAN
+    ++mNativePickGeneration;
+    if(VSNativeSession::active()){mPicked=false;mHitObjectID.setNull();}
+    #endif
     mExitCallback = callback;
     mExitCallbackData = callback_data;
 }
@@ -156,6 +181,9 @@ void LLToolObjPicker::setExitCallback(void (*callback)(void *), void *callback_d
 // virtual
 void LLToolObjPicker::handleSelect()
 {
+    #if VS_NATIVE_VULKAN
+    ++mNativePickGeneration;
+    #endif
     LLTool::handleSelect();
     setMouseCapture(true);
 }
@@ -172,3 +200,15 @@ void LLToolObjPicker::handleDeselect()
 
 
 
+
+#if VS_NATIVE_VULKAN
+std::function<bool()> LLToolObjPicker::nativePickGuard()
+{
+    const auto generation=++mNativePickGeneration;
+    return [self=this,generation]
+    {
+        return LLToolObjPicker::instanceExists() && LLToolObjPicker::getInstance()==self &&
+            self->mNativePickGeneration==generation && self->hasMouseCapture();
+    };
+}
+#endif

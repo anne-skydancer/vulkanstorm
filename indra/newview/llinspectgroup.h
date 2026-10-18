@@ -26,10 +26,12 @@
 #ifndef LLINSPECTGROUP_H
 #define LLINSPECTGROUP_H
 
+#include <typeinfo>
 namespace LLInspectGroupUtil
 {
     // Register with LLFloaterReg
     void registerFloater();
+    bool isNativeType(const std::type_info&);
 }
 
 #endif

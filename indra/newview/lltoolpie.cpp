@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "lltoolpie.h"
+#include "vsavatarservices.h"
+#include "vspieclickpolicy.h"
 #include "fsavatarrenderpersistence.h"
 #if VS_NATIVE_VULKAN
 #include "vsobjectcontext.h"
@@ -102,6 +104,36 @@ static void handle_click_action_play();
 static void handle_click_action_open_media(LLPointer<LLViewerObject> objectp);
 static ECursorType cursor_from_parcel_media(U8 click_action);
 
+#if VS_NATIVE_VULKAN
+struct LLToolPie::NativeClickIntent
+{
+    VSWorldScene::ObjectHandle object;
+    std::weak_ptr<VSNativeSession> owner;
+    std::function<bool()> account,source,selection;
+    std::shared_ptr<const void> lease;
+    boost::signals2::scoped_connection changed;
+    U8 action=0;
+};
+void LLToolPie::beginNativeClickAction(const LLPickInfo& pick,const LLUUID& id,std::function<bool()> sourceCurrent,bool selectRoot)
+{
+    const U8 action=mClickAction;
+    const auto generation=++mNativeClickGeneration;
+    mNativeClickIntent.reset();
+    const auto owner=VSNativeSession::active();
+    if(!owner || !owner->regionReady() || !sourceCurrent() || !gViewerWindow || !gViewerWindow->nativeContext())return;
+    auto& world=gViewerWindow->nativeContext()->world();const auto token=world.object(id);if(!token)return;
+    const auto source=world.guard(*token);if(!source())return;
+    const auto account=owner->accountGuard();
+    auto intent=std::make_unique<NativeClickIntent>();intent->object=*token;intent->owner=owner;intent->account=account;intent->source=source;intent->action=action;
+    intent->lease=LLToolSelect::handleNativeObjectSelection(pick,false,true,selectRoot);
+    if(mNativeClickGeneration!=generation || !account() || !source() || !intent->lease)return;
+    auto* selection=owner->existingObjectSelection();if(!selection)return;
+    intent->selection=selection->selectionGuard();
+    intent->changed=selection->changed([]{LLToolPie::selectionPropertiesReceived();});
+    mNativeClickIntent=std::move(intent);
+}
+#endif
+
 LLToolPie::LLToolPie()
 :   LLTool(std::string("Pie")),
     mMouseButtonDown( false ),
@@ -125,8 +157,60 @@ bool LLToolPie::handleAnyMouseClick(S32 x, S32 y, MASK mask, EMouseClickType cli
     return result;
 }
 
+namespace
+{
+struct ReferencePiePriority
+{
+    using Object=LLViewerObject*;
+    Object object(const LLPickInfo& pick)const{return pick.getObject();}
+    bool same(Object a,Object b)const{return a==b;}
+    Object rootEdit(Object object)const{return object->getRootEdit();}
+    bool attachment(Object object)const{return object->isAttachment();}
+    U8 pcode(Object object)const{return object->getPCode();}
+    U8 action(Object object)const{return object->getClickAction();}
+    bool touch(Object object)const{return object->flagHandleTouch();}
+};
+#if VS_NATIVE_VULKAN
+struct NativePiePriority
+{
+    struct Object
+    {
+        std::optional<VSWorldScene::ObjectHandle> token;
+        std::optional<VSWorldScene::ObjectAdmission> metadata;
+        explicit operator bool()const{return token.has_value() && metadata.has_value() && !metadata->orphaned;}
+    };
+    VSWorldScene& world;
+    Object object(const LLPickInfo& pick)const
+    {
+        if(pick.mNativeObjectCurrent && !pick.mNativeObjectCurrent())return {};
+        const auto token=world.object(pick.mObjectID);
+        return token?Object{token,world.objectAdmission(*token)}:Object{};
+    }
+    bool same(const Object& a,const Object& b)const
+    {
+        if(!a || !b)return !a && !b;
+        const auto& x=*a.token;const auto& y=*b.token;
+        return x.host==y.host && x.local==y.local && x.region==y.region && x.generation==y.generation &&
+            x.id==y.id && x.account==y.account && x.accountGeneration==y.accountGeneration && x.kind==y.kind;
+    }
+    Object rootEdit(const Object& object)const
+    {
+        const auto token=world.rootObject(*object.token,true);
+        return token?Object{token,world.objectAdmission(*token)}:Object{};
+    }
+    bool attachment(const Object& object)const{return object.metadata->attachment;}
+    U8 pcode(const Object& object)const{return object.metadata->pcode;}
+    U8 action(const Object& object)const{return object.metadata->clickAction;}
+    bool touch(const Object& object)const{return (object.metadata->updateFlags&FLAGS_HANDLE_TOUCH)!=0;}
+};
+#endif
+}
+
 bool LLToolPie::handleMouseDown(S32 x, S32 y, MASK mask)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow->isNativeVulkan())updateNativeMediaCapture();
+#endif
     if (mDoubleClickTimer.getStarted())
     {
         mDoubleClickTimer.stop();
@@ -139,62 +223,22 @@ bool LLToolPie::handleMouseDown(S32 x, S32 y, MASK mask)
     bool pick_rigged = false; //gSavedSettings.getBOOL("AnimatedObjectsAllowLeftClick");
     LLPickInfo transparent_pick = gViewerWindow->pickImmediate(x, y, true /*includes transparent*/, pick_rigged, false, true, false);
     LLPickInfo visible_pick = gViewerWindow->pickImmediate(x, y, false, pick_rigged);
-    LLViewerObject *transp_object = transparent_pick.getObject();
-    LLViewerObject *visible_object = visible_pick.getObject();
-
-    // Current set of priorities
-    // 1. Transparent attachment pick
-    // 2. Transparent actionable pick
-    // 3. Visible attachment pick (e.x we click on attachment under invisible floor)
-    // 4. Visible actionable pick
-    // 5. Transparent pick (e.x. movement on transparent object/floor, our default pick)
-    // left mouse down always picks transparent (but see handleMouseUp).
-    // Also see LLToolPie::handleHover() - priorities are a bit different there.
-    // Todo: we need a more consistent set of rules to work with
-    if (transp_object == visible_object || !visible_object ||
-        !transp_object) // avoid potential for null dereference below, don't make assumptions about behavior of pickImmediate
+    bool visible_priority=false;
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow->isNativeVulkan() && gViewerWindow->nativeContext())
     {
-        mPick = transparent_pick;
+        NativePiePriority peer{gViewerWindow->nativeContext()->world()};
+        const auto transparent=peer.object(transparent_pick);const auto visible=peer.object(visible_pick);
+        visible_priority=vs_pie_prefer_visible(peer,mask,transparent,visible);
     }
-    // <FS:ND> FIRE-29031; Handle transparent being nullptr (due to RLVa?). visible_object cannot be invalid here or the if above had been entered
-    else if( !transp_object)
-    {
-        mPick = visible_pick;
-    }
-    // </FS:ND>
     else
+#endif
     {
-        // Select between two non-null picks
-        LLViewerObject *transp_parent = transp_object->getRootEdit();
-        LLViewerObject *visible_parent = visible_object->getRootEdit();
-        if (transp_object->isAttachment())
-        {
-            // 1. Transparent attachment
-            mPick = transparent_pick;
-        }
-        else if (transp_object->getClickAction() != CLICK_ACTION_DISABLED
-                 && (useClickAction(mask, transp_object, transp_parent) || transp_object->flagHandleTouch() || (transp_parent && transp_parent->flagHandleTouch())))
-        {
-            // 2. Transparent actionable pick
-            mPick = transparent_pick;
-        }
-        else if (visible_object->isAttachment())
-        {
-            // 3. Visible attachment pick
-            mPick = visible_pick;
-        }
-        else if (visible_object->getClickAction() != CLICK_ACTION_DISABLED
-                 && (useClickAction(mask, visible_object, visible_parent) || visible_object->flagHandleTouch() || (visible_parent && visible_parent->flagHandleTouch())))
-        {
-            // 4. Visible actionable pick
-            mPick = visible_pick;
-        }
-        else
-        {
-            // 5. Default: transparent
-            mPick = transparent_pick;
-        }
+        ReferencePiePriority peer;
+        const auto transparent=peer.object(transparent_pick);const auto visible=peer.object(visible_pick);
+        visible_priority=vs_pie_prefer_visible(peer,mask,transparent,visible);
     }
+    mPick=visible_priority?visible_pick:transparent_pick;
     LL_INFOS() << "pick_rigged is " << (S32) pick_rigged << " pick time elapsed " << pick_timer.getElapsedTimeF32() << LL_ENDL;
 
     mPick.mKeyMask = mask;
@@ -279,8 +323,129 @@ bool show_script_error_icon(LLHUDIcon* icon)
     return true;
 }
 }
-bool LLToolPie::handleLeftClickPick()
+namespace
 {
+struct ReferencePieActions:ReferencePiePriority
+{
+    static constexpr bool native=false;
+    bool current()const{return true;}
+    Object parent(Object object)const{return static_cast<LLViewerObject*>(object->getParent());}
+    bool interact(Object object,const LLVector3& offset)const{return RlvActions::canInteract(object,offset);}
+    bool canTouch(Object object,const LLVector3& offset)const{return RlvActions::canTouch(object,offset);}
+    bool avatar(Object object)const{return object->isAvatar();}
+    bool self(Object object)const{return object==gAgentAvatarp;}
+    bool hud(Object object)const{return object->isHUDAttachment();}
+    bool physical(Object object)const{return object->flagUsePhysics();}
+    bool takesMoney(Object object)const{return object->flagTakesMoney();}
+    bool allowOpen(Object object)const{return object->allowOpen();}
+    LLUUID id(Object object)const{return object->getID();}
+    bool avatarValid()const{return isAgentAvatarValid();}
+    bool sitting()const{return gAgentAvatarp->isSitting();}
+    bool allValid()const{return LLSelectMgr::getInstance()->selectGetAllValid();}
+    void openMedia(Object object)const{handle_click_action_open_media(object);}
+    void zoom(const LLPickInfo& pick)const
+    {
+                const F32 PADDING_FACTOR = 2.f;
+                LLViewerObject* object = gObjectList.findObject(pick.mObjectID);
+
+                if (object)
+                {
+                    gAgentCamera.setFocusOnAvatar(false, ANIMATE);
+
+                    LLBBox bbox = object->getBoundingBoxAgent() ;
+                    F32 angle_of_view = llmax(0.1f, LLViewerCamera::getInstance()->getAspect() > 1.f ? LLViewerCamera::getInstance()->getView() * LLViewerCamera::getInstance()->getAspect() : LLViewerCamera::getInstance()->getView());
+                    F32 distance = bbox.getExtentLocal().magVec() * PADDING_FACTOR / atan(angle_of_view);
+
+                    LLVector3 obj_to_cam = LLViewerCamera::getInstance()->getOrigin() - bbox.getCenterAgent();
+                    obj_to_cam.normVec();
+
+                    LLVector3d object_center_global = gAgent.getPosGlobalFromAgent(bbox.getCenterAgent());
+                    gAgentCamera.setCameraPosAndFocusGlobal(object_center_global + LLVector3d(obj_to_cam * distance),
+                                                      object_center_global,
+                                                      pick.mObjectID );
+                }
+
+    }
+};
+#if VS_NATIVE_VULKAN
+struct NativePieActions:NativePiePriority
+{
+    static constexpr bool native=true;
+    std::shared_ptr<VSNativeSession> owner;
+    std::function<bool()> account;
+    bool current()const{return account() && owner==VSNativeSession::active();}
+    Object parent(const Object& object)const
+    {
+        const auto token=world.parentObject(*object.token);
+        return token?Object{token,world.objectAdmission(*token)}:Object{};
+    }
+    std::optional<VSObjectContext> context(const Object& object)const
+    {if(!current() || !object || !world.guard(*object.token)())return {};return VSObjectContext::resolve(object.token->id);}
+    bool interact(const Object& object,const LLVector3& offset)const{const auto value=context(object);return value && RlvActions::canInteract(*value,offset);}
+    bool canTouch(const Object& object,const LLVector3& offset)const{const auto value=context(object);return value && RlvActions::canTouch(*value,offset);}
+    bool avatar(const Object& object)const{return pcode(object)==LL_PCODE_LEGACY_AVATAR;}
+    bool self(const Object& object)const{return avatar(object) && id(object)==gAgent.getID();}
+    bool hud(const Object& object)const{return object.metadata->hud;}
+    bool physical(const Object& object)const{return (object.metadata->updateFlags&FLAGS_USE_PHYSICS)!=0;}
+    bool takesMoney(const Object& object)const{return (object.metadata->updateFlags&FLAGS_TAKES_MONEY)!=0;}
+    bool allowOpen(const Object& object)const
+    {
+        const auto value=context(object);
+        return value && !(object.metadata->updateFlags&FLAGS_INVENTORY_EMPTY) &&
+            (value->youOwner || (object.metadata->rootUpdateFlags&FLAGS_OBJECT_MODIFY)) &&
+            (!RlvActions::isRlvEnabled() || RlvActions::canEdit(*value));
+    }
+    LLUUID id(const Object& object)const{return object.token->id;}
+    bool avatarValid()const{return vs_avatar_character()!=nullptr;}
+    bool sitting()const{return gAgent.isSitting();}
+    bool allValid()const{const auto* selection=owner->existingObjectSelection();return selection && selection->selectGetAllValid();}
+    void openMedia(const Object& object)const
+    {
+        LLParcel* parcel=LLViewerParcelMgr::getInstance()->getAgentParcel();if(!parcel)return;
+        if(!current() || !object)return;
+        const S32 face=LLToolPie::getInstance()->getPick().mObjectFace;
+        if(face<0)return;LLTextureEntry te;if(!world.copyMaterialEntry(*object.token,static_cast<U32>(face),te))return;
+        if(LLViewerMedia::getInstance()->getMediaImplFromTextureID(te.getID())!=nullptr)
+        {handle_click_action_play();return;}
+        std::string media_url(parcel->getMediaURL());std::string media_type(parcel->getMediaType());
+        LLStringUtil::trim(media_url);LLWeb::loadURL(media_url);
+    }
+    void zoom(const LLPickInfo& pick)const
+    {
+        const auto object=this->object(pick);if(!object || !current())return;
+        const auto source=world.focusObject(*object.token,gAgent.getPosGlobalFromAgent(LLVector3::zero));if(!source || !source->current())return;
+        const F32 PADDING_FACTOR=2.f;
+        gAgentCamera.setFocusOnAvatar(false,ANIMATE);if(!current() || !source->current())return;
+        const LLBBox bbox=source->officialBounds;
+        const F32 angle_of_view=llmax(0.1f,LLViewerCamera::getInstance()->getAspect()>1.f?LLViewerCamera::getInstance()->getView()*LLViewerCamera::getInstance()->getAspect():LLViewerCamera::getInstance()->getView());
+        const F32 distance=bbox.getExtentLocal().magVec()*PADDING_FACTOR/atan(angle_of_view);
+        LLVector3 obj_to_cam=LLViewerCamera::getInstance()->getOrigin()-bbox.getCenterAgent();obj_to_cam.normVec();
+        const LLVector3d object_center_global=gAgent.getPosGlobalFromAgent(bbox.getCenterAgent());
+        gAgentCamera.setCameraPosAndFocusGlobal(object_center_global+LLVector3d(obj_to_cam*distance),object_center_global,pick.mObjectID);
+    }
+};
+#endif
+
+}
+
+template<class Target>bool LLToolPie::handleLeftClickPickTarget(const Target& target)
+{
+    if(!target.current())return true;
+    auto remember=[&](const typename Target::Object& object,bool root)
+    {
+        if constexpr(Target::native)
+        {
+#if VS_NATIVE_VULKAN
+            if(object)beginNativeClickAction(mPick,target.id(object),target.world.guard(*object.token),root);
+#endif
+        }
+        else
+        {
+            mClickActionObject=object;
+            mLeftClickSelection=LLToolSelect::handleObjectSelection(mPick,false,true,root);
+        }
+    };
+
     S32 x = mPick.mMousePt.mX;
     S32 y = mPick.mMousePt.mY;
     MASK mask = mPick.mKeyMask;
@@ -309,8 +474,8 @@ bool LLToolPie::handleLeftClickPick()
     }
 
     // didn't click in any UI object, so must have clicked in the world
-    LLViewerObject *object = mPick.getObject();
-    LLViewerObject *parent = NULL;
+    auto object=target.object(mPick);
+    typename Target::Object parent{};
 
     if (mPick.mPickType != LLPickInfo::PICK_LAND)
     {
@@ -319,7 +484,7 @@ bool LLToolPie::handleLeftClickPick()
 
     if (object)
     {
-        parent = object->getRootEdit();
+        parent = target.rootEdit(object);
     }
 
     if (handleMediaClick(mPick))
@@ -327,12 +492,14 @@ bool LLToolPie::handleLeftClickPick()
         return true;
     }
 
+    if(!target.current())return true;
+
     // If it's a left-click, and we have a special action, do it.
-    if (useClickAction(mask, object, parent))
+    if (vs_pie_use_click_action(target,mask,object,parent))
     {
 // [RLVa:KB] - Checked: RLVa-1.1.0
         // Blanket block all left-click special actions on objects the user can't interact with
-        if ( (RlvActions::isRlvEnabled()) && (!RlvActions::canInteract(object, mPick.mObjectOffset)) )
+        if ( (RlvActions::isRlvEnabled()) && (!target.interact(object,mPick.mObjectOffset)) )
         {
             return true;
         }
@@ -352,21 +519,21 @@ bool LLToolPie::handleLeftClickPick()
         };
 // [/RLVa:KB]
         mClickAction = 0;
-        if (object && object->getClickAction())
+        if (object && target.action(object))
         {
-            mClickAction = object->getClickAction();
+            mClickAction = target.action(object);
 // [RLVa:KB] - @buy
-            if ( (RlvActions::isRlvEnabled()) && (!fnRlvCheck(object->getID(), mClickAction)) )
+            if ( (RlvActions::isRlvEnabled()) && (!fnRlvCheck(target.id(object), mClickAction)) )
             {
                 mClickAction = CLICK_ACTION_NONE;
             }
 // [/RLVa:KB]
         }
-        else if (parent && parent->getClickAction())
+        else if (parent && target.action(parent))
         {
-            mClickAction = parent->getClickAction();
+            mClickAction = target.action(parent);
 // [RLVa:KB] - @buy
-            if ((RlvActions::isRlvEnabled()) && (!fnRlvCheck(parent->getID(), mClickAction)))
+            if ((RlvActions::isRlvEnabled()) && (!fnRlvCheck(target.id(parent), mClickAction)))
             {
                 mClickAction = CLICK_ACTION_NONE;
             }
@@ -380,7 +547,7 @@ bool LLToolPie::handleLeftClickPick()
             break;
         case CLICK_ACTION_SIT:
             {
-                if (isAgentAvatarValid() && !gAgentAvatarp->isSitting() && !gSavedSettings.getBOOL("FSBlockClickSit")) // agent not already sitting
+                if (target.avatarValid() && !target.sitting() && !gSavedSettings.getBOOL("FSBlockClickSit")) // agent not already sitting
                 {
                     handle_object_sit_or_stand();
                     // put focus in world when sitting on an object
@@ -391,13 +558,14 @@ bool LLToolPie::handleLeftClickPick()
         case CLICK_ACTION_PAY:
             if ( mClickActionPayEnabled )
             {
-                if ((object && object->flagTakesMoney())
-                    || (parent && parent->flagTakesMoney()))
+                if ((object && target.takesMoney(object))
+                    || (parent && target.takesMoney(parent)))
                 {
                     // pay event goes to object actually clicked on
-                    mClickActionObject = object;
-                    mLeftClickSelection = LLToolSelect::handleObjectSelection(mPick, false, true);
-                    if (LLSelectMgr::getInstance()->selectGetAllValid())
+                    remember(object,false);
+                    if(!target.current())return true;
+                    if(!target.current())return true;
+                if (target.allValid())
                     {
                         // call this right away, since we have all the info we need to continue the action
                         selectionPropertiesReceived();
@@ -409,9 +577,9 @@ bool LLToolPie::handleLeftClickPick()
         case CLICK_ACTION_BUY:
             if ( mClickActionBuyEnabled )
             {
-                mClickActionObject = parent;
-                mLeftClickSelection = LLToolSelect::handleObjectSelection(mPick, false, true, true);
-                if (LLSelectMgr::getInstance()->selectGetAllValid())
+                remember(parent,true);
+                if(!target.current())return true;
+                if (target.allValid())
                 {
                     // call this right away, since we have all the info we need to continue the action
                     selectionPropertiesReceived();
@@ -420,11 +588,11 @@ bool LLToolPie::handleLeftClickPick()
             }
             break;
         case CLICK_ACTION_OPEN:
-            if (parent && parent->allowOpen())
+            if (parent && target.allowOpen(parent))
             {
-                mClickActionObject = parent;
-                mLeftClickSelection = LLToolSelect::handleObjectSelection(mPick, false, true, true);
-                if (LLSelectMgr::getInstance()->selectGetAllValid())
+                remember(parent,true);
+                if(!target.current())return true;
+                if (target.allValid())
                 {
                     // call this right away, since we have all the info we need to continue the action
                     selectionPropertiesReceived();
@@ -436,29 +604,11 @@ bool LLToolPie::handleLeftClickPick()
             return true;
         case CLICK_ACTION_OPEN_MEDIA:
             // mClickActionObject = object;
-            handle_click_action_open_media(object);
+            target.openMedia(object);
             return true;
         case CLICK_ACTION_ZOOM:
             {
-                const F32 PADDING_FACTOR = 2.f;
-                LLViewerObject* object = gObjectList.findObject(mPick.mObjectID);
-
-                if (object)
-                {
-                    gAgentCamera.setFocusOnAvatar(false, ANIMATE);
-
-                    LLBBox bbox = object->getBoundingBoxAgent() ;
-                    F32 angle_of_view = llmax(0.1f, LLViewerCamera::getInstance()->getAspect() > 1.f ? LLViewerCamera::getInstance()->getView() * LLViewerCamera::getInstance()->getAspect() : LLViewerCamera::getInstance()->getView());
-                    F32 distance = bbox.getExtentLocal().magVec() * PADDING_FACTOR / atan(angle_of_view);
-
-                    LLVector3 obj_to_cam = LLViewerCamera::getInstance()->getOrigin() - bbox.getCenterAgent();
-                    obj_to_cam.normVec();
-
-                    LLVector3d object_center_global = gAgent.getPosGlobalFromAgent(bbox.getCenterAgent());
-                    gAgentCamera.setCameraPosAndFocusGlobal(object_center_global + LLVector3d(obj_to_cam * distance),
-                                                      object_center_global,
-                                                      mPick.mObjectID );
-                }
+                target.zoom(mPick);
             }
             return true;
         case CLICK_ACTION_DISABLED:
@@ -476,18 +626,18 @@ bool LLToolPie::handleLeftClickPick()
     }
 
     bool touchable = object
-                     && (object->getClickAction() != CLICK_ACTION_DISABLED)
-                     && (object->flagHandleTouch() || (parent && parent->flagHandleTouch()));
+                     && (target.action(object) != CLICK_ACTION_DISABLED)
+                     && (target.touch(object) || (parent && target.touch(parent)));
 
     // Switch to grab tool if physical or triggerable
     if (object &&
-        !object->isAvatar() &&
-        ((object->flagUsePhysics() || (parent && !parent->isAvatar() && parent->flagUsePhysics())) || touchable)
+        !target.avatar(object) &&
+        ((target.physical(object) || (parent && !target.avatar(parent) && target.physical(parent))) || touchable)
         )
     {
 // [RLVa:KB] - Checked: RLVa-1.1.0
         // Triggered by left-clicking on a touchable object
-        if ( (RlvActions::isRlvEnabled()) && (!RlvActions::canTouch(object, mPick.mObjectOffset)) )
+        if ( (RlvActions::isRlvEnabled()) && (!target.canTouch(object,mPick.mObjectOffset)) )
         {
             return LLTool::handleMouseDown(x, y, mask);
         }
@@ -513,16 +663,16 @@ bool LLToolPie::handleLeftClickPick()
         return true;
     }
 
-    while (object && object->isAttachment() && !object->flagHandleTouch())
+    while (object && target.attachment(object) && !target.touch(object))
     {
         // don't pick avatar through hud attachment
-        if (object->isHUDAttachment())
+        if (target.hud(object))
         {
             break;
         }
-        object = (LLViewerObject*)object->getParent();
+        object = target.parent(object);
     }
-    if (object && object == gAgentAvatarp)
+    if (object && target.self(object))
     {
         // we left clicked on avatar, switch to focus mode
         mMouseButtonDown = false;
@@ -543,19 +693,25 @@ bool LLToolPie::handleLeftClickPick()
 
     return LLTool::handleMouseDown(x, y, mask);
 }
+bool LLToolPie::handleLeftClickPick()
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=VSNativeSession::active();
+        if(!owner || !owner->regionReady() || !gViewerWindow->nativeContext())return true;
+        NativePieActions target{{gViewerWindow->nativeContext()->world()},owner,owner->accountGuard()};
+        return handleLeftClickPickTarget(target);
+    }
+#endif
+    return handleLeftClickPickTarget(ReferencePieActions{});
+}
 
 bool LLToolPie::useClickAction(MASK mask,
                                LLViewerObject* object,
                                LLViewerObject* parent)
 {
-    return  mask == MASK_NONE
-            && object
-            && !object->isAttachment()
-            && LLPrimitive::isPrimitive(object->getPCode())
-                // useClickAction does not handle Touch (0) or Disabled action
-            && ((object->getClickAction() && object->getClickAction() != CLICK_ACTION_DISABLED)
-                || (parent && parent->getClickAction() && parent->getClickAction() != CLICK_ACTION_DISABLED));
-
+    return vs_pie_use_click_action(ReferencePiePriority{},mask,object,parent);
 }
 
 U8 final_click_action(LLViewerObject* obj)
@@ -643,6 +799,10 @@ ECursorType LLToolPie::cursorFromObject(LLViewerObject* object)
 
 void LLToolPie::resetSelection()
 {
+#if VS_NATIVE_VULKAN
+    ++mNativeClickGeneration;
+    mNativeClickIntent.reset();
+#endif
     mLeftClickSelection = NULL;
     mClickActionObject = NULL;
     mClickAction = 0;
@@ -808,6 +968,37 @@ bool LLToolPie::teleportToClickedLocation()
 // static
 void LLToolPie::selectionPropertiesReceived()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        auto* pie=LLToolPie::getInstance();
+        const auto* intent=pie->mNativeClickIntent.get();if(!intent)return;
+        const auto owner=intent->owner.lock();
+        if(!owner || owner!=VSNativeSession::active() || !intent->account() || !intent->source() || !intent->selection())
+        {pie->resetSelection();return;}
+        auto* selection=owner->existingObjectSelection();if(!selection){pie->resetSelection();return;}
+        if(!selection->selectGetAllValid())return;
+        const auto primary=selection->primaryObject();
+        const auto expected=intent->object;
+        const bool matches=primary && primary->host==expected.host && primary->local==expected.local && primary->region==expected.region &&
+            primary->generation==expected.generation && primary->id==expected.id && primary->account==expected.account &&
+            primary->accountGeneration==expected.accountGeneration && primary->kind==expected.kind;
+        const U8 action=intent->action;
+        // Own the selection through the original external action, but retire
+        // the one-shot subscription first: dialogs may synchronously reenter.
+        auto retained=std::move(pie->mNativeClickIntent);retained->changed.disconnect();
+        pie->resetSelection();
+        if(matches)switch(action)
+        {
+            case CLICK_ACTION_BUY:if(pie->mClickActionBuyEnabled)handle_buy();break;
+            case CLICK_ACTION_PAY:if(pie->mClickActionPayEnabled)handle_give_money_dialog();break;
+            case CLICK_ACTION_OPEN:LLFloaterReg::showInstance("openobject");break;
+            default:break;
+        }
+        return;
+    }
+#endif
+
     // Make sure all data has been received.
     // This function will be called repeatedly as the data comes in.
     if (!LLSelectMgr::getInstance()->selectGetAllValid())
@@ -983,6 +1174,9 @@ bool LLToolPie::handleHover(S32 x, S32 y, MASK mask)
 
 bool LLToolPie::handleMouseUp(S32 x, S32 y, MASK mask)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow->isNativeVulkan() && hasNativeMediaCapture()){retireNativeMediaCapture();return true;}
+#endif
     if (!mDoubleClickTimer.getStarted())
     {
         mDoubleClickTimer.start();

@@ -150,3 +150,13 @@ void LLOutfitObserver::checkBaseOutfit()
         mLastOutfitDirtiness = app_mgr.isOutfitDirty();
     }
 }
+
+void LLOutfitObserver::resetAccount()
+{
+    mCOFLastVersion = LLViewerInventoryCategory::VERSION_UNKNOWN;
+    mBaseOutfitId.setNull();
+    mBaseOutfitLastVersion = LLViewerInventoryCategory::VERSION_UNKNOWN;
+    mLastBaseOutfitName.clear();
+    mLastOutfitDirtiness = false;
+    mItemNameHash.setNull();
+}

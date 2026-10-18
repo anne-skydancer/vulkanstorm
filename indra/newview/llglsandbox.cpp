@@ -80,6 +80,9 @@ constexpr F32 PARCEL_POST_HEIGHT = 0.666f;
 // Returns true if you got at least one object
 void LLToolSelectRect::handleRectangleSelection(S32 x, S32 y, MASK mask)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow->isNativeVulkan()){handleNativeRectangleSelection(x,y,mask);return;}
+#endif
 // [RLVa:KB] - @edit* and @interact
     // Block rectangle selection if:
     //   - prevented from editing anything at all

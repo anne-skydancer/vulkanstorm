@@ -28,6 +28,8 @@
 #define LL_MESH_REPOSITORY_H
 
 #include <unordered_map>
+#include <functional>
+#include <atomic>
 #include <unordered_set>
 #include "llassettype.h"
 #include "llmodel.h"
@@ -682,13 +684,23 @@ private:
     S32 mMeshUploadTimeOut ; //maximum time in seconds to execute an uploading request.
 
 public:
+    struct Lifetime { std::atomic<LLMeshUploadThread*> owner{nullptr}; };
+    std::shared_ptr<Lifetime> mLifetime;
+    struct CompletionOwner
+    {
+        LLHandle<LLWholeModelFeeObserver> fee;
+        LLHandle<LLWholeModelUploadObserver> upload;
+        std::function<bool()> current;
+    };
+    std::shared_ptr<const CompletionOwner> mCompletionOwner;
+
     class DecompRequest : public LLPhysicsDecomp::Request
     {
     public:
         LLPointer<LLModel> mModel;
         LLPointer<LLModel> mBaseModel;
 
-        LLMeshUploadThread* mThread;
+        std::shared_ptr<Lifetime> mLifetime;
 
         DecompRequest(LLModel* mdl, LLModel* base_model, LLMeshUploadThread* thread);
 
@@ -696,8 +708,9 @@ public:
         void completed();
     };
 
-    LLPointer<DecompRequest> mFinalDecomp;
-    volatile bool   mPhysicsComplete;
+    std::atomic<U32> mPendingHulls{0};
+    std::atomic<bool> mPhysicsFailed{false};
+    std::atomic<bool> mPhysicsComplete{false};
 
     typedef std::map<LLPointer<LLModel>, std::vector<LLVector3> > hull_map_t;
     hull_map_t      mHullMap;
@@ -757,6 +770,7 @@ public:
     bool isDiscarded() const;
 
     void generateHulls();
+    bool finishHullFailure();
 
     void doWholeModelUpload();
     void requestWholeModelFee();
@@ -773,6 +787,10 @@ public:
 
     // Inherited from LLCore::HttpHandler
     virtual void onCompleted(LLCore::HttpHandle handle, LLCore::HttpResponse * response);
+    std::function<bool()> mAccountCurrent;
+    bool mNativeCompletion=false;
+    static void completeResponse(LLCore::HttpStatus,LLSD,bool,LLSD,std::vector<std::string>,
+        LLHandle<LLWholeModelFeeObserver>,LLHandle<LLWholeModelUploadObserver>,std::function<bool()>);
 
     static LLViewerFetchedTexture* FindViewerTexture(const LLImportMaterial& material);
 
@@ -903,6 +921,8 @@ public:
     S32 loadMesh(LLVOVolume* volume, const LLVolumeParams& mesh_params, S32 new_lod = 0, S32 last_lod = -1);
 
     void notifyLoadedMeshes();
+    void notifyUploadServices();
+    void retireNativeUploads();
     void notifyMeshLoaded(const LLVolumeParams& mesh_params, LLVolume* volume, S32 lod);
     void notifyMeshUnavailable(const LLVolumeParams& mesh_params, S32 request_lod, S32 volume_lod);
     void notifySkinInfoReceived(LLMeshSkinInfo* info);
@@ -931,7 +951,7 @@ public:
                      const LLUUID& destination_folder_id = LLUUID::null,
                      bool do_upload = true,
                      LLHandle<LLWholeModelFeeObserver> fee_observer= (LLHandle<LLWholeModelFeeObserver>()),
-                     LLHandle<LLWholeModelUploadObserver> upload_observer = (LLHandle<LLWholeModelUploadObserver>()));
+                     LLHandle<LLWholeModelUploadObserver> upload_observer = (LLHandle<LLWholeModelUploadObserver>()),std::function<bool()> operationCurrent={});
 
     S32 getMeshSize(const LLUUID& mesh_id, S32 lod) const;
 
@@ -989,9 +1009,10 @@ public:
     public:
         LLSD mPostData;
         LLSD mResponse;
+        std::function<bool()> mCurrent;
 
-        inventory_data(const LLSD& data, const LLSD& content)
-            : mPostData(data), mResponse(content)
+        inventory_data(const LLSD& data, const LLSD& content,std::function<bool()> current={})
+            : mPostData(data), mResponse(content),mCurrent(std::move(current))
         {
         }
     };

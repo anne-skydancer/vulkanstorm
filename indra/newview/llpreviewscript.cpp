@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpreviewscript.h"
+#include "vstaskinventoryobject.h"
+#include "vsregioncontext.h"
 #include "vsnativeim.h"
 
 #include "llassetstorage.h"
@@ -132,8 +134,8 @@ const F32 LIVE_HELP_REFRESH_TIME = 1.f;
 
 static bool have_script_upload_cap(LLUUID& object_id)
 {
-    LLViewerObject* object = gObjectList.findObject(object_id);
-    return object && (! object->getRegion()->getCapability("UpdateScriptTask").empty());
+    auto object = VSTaskInventoryObject::find(object_id);
+    return object && !object->getCapability("UpdateScriptTask").empty();
 }
 
 // [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0) | Added: Catznip-3.2.0
@@ -2071,14 +2073,15 @@ void LLLiveLSLEditor::requestExperiences()
         return;
     }
 
-    LLViewerRegion* region = gAgent.getRegion();
-    if (region)
+    const auto object = VSTaskInventoryObject::find(mObjectUUID);
+    if (object)
     {
-        std::string lookup_url=region->getCapability("GetCreatorExperiences");
+        std::string lookup_url = object->getCapability("GetCreatorExperiences");
         if(!lookup_url.empty())
         {
             LLCoreHttpUtil::HttpCoroutineAdapter::completionCallback_t success =
-                boost::bind(&LLLiveLSLEditor::receiveExperienceIds, _1, getDerivedHandle<LLLiveLSLEditor>());
+                vs_native_im_lifetime_callback(inventoryItemGuard(),
+                    boost::bind(&LLLiveLSLEditor::receiveExperienceIds, _1, getDerivedHandle<LLLiveLSLEditor>()));
 
             LLCoreHttpUtil::HttpCoroutineAdapter::callbackHttpGet(lookup_url, success);
         }
@@ -2113,7 +2116,7 @@ LLScriptEdContainer::LLScriptEdContainer(const LLSD& key) :
 LLScriptEdContainer::~LLScriptEdContainer()
 {
     // Clean up the backup file (unless we've gotten disconnected)
-    if ( (!mBackupFilename.empty()) && (gAgent.getRegion()) )
+    if ((!mBackupFilename.empty()) && vs_current_region_context())
         LLFile::remove(mBackupFilename);
     delete mBackupTimer;
 }
@@ -2866,26 +2869,32 @@ void LLLiveLSLEditor::callbackLSLCompileFailed(const LLSD& compile_errors)
     closeIfNeeded();
 }
 
+namespace
+{
+struct LiveScriptLoad
+{
+    LLHandle<LLFloater> view;
+    LLUUID item, asset;
+    std::function<bool()> current;
+};
+}
 void LLLiveLSLEditor::loadAsset()
 {
+    if (!ensureTaskInventory()) return;
     //LL_INFOS() << "LLLiveLSLEditor::loadAsset()" << LL_ENDL;
     if(!mIsNew)
     {
-        LLViewerObject* object = gObjectList.findObject(mObjectUUID);
+        auto object = VSTaskInventoryObject::find(mObjectUUID);
         if(object)
         {
             LLViewerInventoryItem* item = dynamic_cast<LLViewerInventoryItem*>(object->getInventoryObject(mItemUUID));
 
             if(item)
             {
-                LLViewerRegion* region = object->getRegion();
-                std::string url = std::string();
-                if(region)
-                {
-                    url = region->getCapability("GetMetadata");
-                }
+                const std::string url = object->getCapability("GetMetadata");
                 LLExperienceCache::instance().fetchAssociatedExperience(item->getParentUUID(), item->getUUID(), url,
-                    boost::bind(&LLLiveLSLEditor::setAssociatedExperience, getDerivedHandle<LLLiveLSLEditor>(), _1));
+                    vs_native_im_lifetime_callback(inventoryItemGuard(),
+                        boost::bind(&LLLiveLSLEditor::setAssociatedExperience, getDerivedHandle<LLLiveLSLEditor>(), _1)));
 
                 bool isGodlike = gAgent.isGodlike();
                 bool copyManipulate = gAgent.allowOperation(PERM_COPY, item->getPermissions(), GP_OBJECT_MANIPULATE);
@@ -2903,9 +2912,8 @@ void LLLiveLSLEditor::loadAsset()
                 {
                     mItem = new LLViewerInventoryItem(item);
                     // request the text from the object
-                LLSD* user_data = new LLSD();
-                user_data->with("taskid", mObjectUUID).with("itemid", mItemUUID);
-                    gAssetStorage->getInvItemAsset(object->getRegion()->getHost(),
+                    auto* user_data = new LiveScriptLoad{getHandle(), mItemUUID, item->getAssetUUID(), inventoryItemGuard()};
+                    gAssetStorage->getInvItemAsset(object->getHost(),
                         gAgent.getID(),
                         gAgent.getSessionID(),
                         item->getPermissions().getOwner(),
@@ -2921,8 +2929,9 @@ void LLLiveLSLEditor::loadAsset()
                     msg->nextBlockFast(_PREHASH_Script);
                     msg->addUUIDFast(_PREHASH_ObjectID, mObjectUUID);
                     msg->addUUIDFast(_PREHASH_ItemID, mItemUUID);
-                    msg->sendReliable(object->getRegion()->getHost());
+                    msg->sendReliable(object->getHost());
                     mAskedForRunningInfo = true;
+                    mRunningInfoCurrent = inventoryItemGuard();
                     mAssetStatus = PREVIEW_ASSET_LOADING;
                 }
             }
@@ -2987,11 +2996,11 @@ void LLLiveLSLEditor::onLoadComplete(const LLUUID& asset_id,
 {
     LL_DEBUGS() << "LLLiveLSLEditor::onLoadComplete: got uuid " << asset_id
          << LL_ENDL;
-    LLSD* floater_key = (LLSD*)user_data;
-
-    LLLiveLSLEditor* instance = LLFloaterReg::findTypedInstance<LLLiveLSLEditor>("preview_scriptedit", *floater_key);
-
-    if(instance )
+    std::unique_ptr<LiveScriptLoad> load(static_cast<LiveScriptLoad*>(user_data));
+    if (!load || !load->current()) return;
+    auto* instance = dynamic_cast<LLLiveLSLEditor*>(load->view.get());
+    const auto* item = instance ? instance->getItem() : nullptr;
+    if (instance && item && item->getUUID() == load->item && item->getAssetUUID() == load->asset && asset_id == load->asset)
     {
         if( LL_ERR_NOERR == status )
         {
@@ -3000,7 +3009,7 @@ void LLLiveLSLEditor::onLoadComplete(const LLUUID& asset_id,
             {
                 LL_WARNS() << "getItem() returns 0, item went away while loading script()" << LL_ENDL;
                 instance->mAssetStatus = PREVIEW_ASSET_ERROR;
-                delete floater_key;
+
                 return;
             }
             // </FS:ND>
@@ -3034,7 +3043,7 @@ void LLLiveLSLEditor::onLoadComplete(const LLUUID& asset_id,
         }
     }
 
-    delete floater_key;
+
 }
 
 void LLLiveLSLEditor::loadScriptText(const LLUUID &uuid, LLAssetType::EType type)
@@ -3069,14 +3078,15 @@ void LLLiveLSLEditor::loadScriptText(const LLUUID &uuid, LLAssetType::EType type
 void LLLiveLSLEditor::onRunningCheckboxClicked( LLUICtrl*, void* userdata )
 {
     LLLiveLSLEditor* self = (LLLiveLSLEditor*) userdata;
-    LLViewerObject* object = gObjectList.findObject( self->mObjectUUID );
+    if (!self->inventoryItemGuard()()) return;
+    auto object = VSTaskInventoryObject::find( self->mObjectUUID );
     LLCheckBoxCtrl* runningCheckbox = self->getChild<LLCheckBoxCtrl>("running");
     bool running =  runningCheckbox->get();
     //self->mRunningCheckbox->get();
     if( object )
     {
 // [RLVa:KB] - Checked: 2010-09-28 (RLVa-1.2.1f) | Modified: RLVa-1.0.5a
-        if ( (rlv_handler_t::isEnabled()) && (gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit())) )
+        if ( (rlv_handler_t::isEnabled()) && (object->attachmentLocked()) )
         {
             RlvUtil::notifyBlockedGeneric();
             return;
@@ -3092,7 +3102,7 @@ void LLLiveLSLEditor::onRunningCheckboxClicked( LLUICtrl*, void* userdata )
         msg->addUUIDFast(_PREHASH_ObjectID, self->mObjectUUID);
         msg->addUUIDFast(_PREHASH_ItemID, self->mItemUUID);
         msg->addBOOLFast(_PREHASH_Running, running);
-        msg->sendReliable(object->getRegion()->getHost());
+        msg->sendReliable(object->getHost());
     }
     else
     {
@@ -3105,11 +3115,12 @@ void LLLiveLSLEditor::onReset(void *userdata)
 {
     LLLiveLSLEditor* self = (LLLiveLSLEditor*) userdata;
 
-    LLViewerObject* object = gObjectList.findObject( self->mObjectUUID );
+    if (!self->inventoryItemGuard()()) return;
+    auto object = VSTaskInventoryObject::find( self->mObjectUUID );
     if(object)
     {
 // [RLVa:KB] - Checked: 2010-09-28 (RLVa-1.2.1f) | Modified: RLVa-1.0.5a
-        if ( (rlv_handler_t::isEnabled()) && (gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit())) )
+        if ( (rlv_handler_t::isEnabled()) && (object->attachmentLocked()) )
         {
             RlvUtil::notifyBlockedGeneric();
             return;
@@ -3124,7 +3135,7 @@ void LLLiveLSLEditor::onReset(void *userdata)
         msg->nextBlockFast(_PREHASH_Script);
         msg->addUUIDFast(_PREHASH_ObjectID, self->mObjectUUID);
         msg->addUUIDFast(_PREHASH_ItemID, self->mItemUUID);
-        msg->sendReliable(object->getRegion()->getHost());
+        msg->sendReliable(object->getHost());
     }
     else
     {
@@ -3134,7 +3145,7 @@ void LLLiveLSLEditor::onReset(void *userdata)
 
 void LLLiveLSLEditor::draw()
 {
-    LLViewerObject* object = gObjectList.findObject(mObjectUUID);
+    auto object = VSTaskInventoryObject::find(mObjectUUID);
     LLCheckBoxCtrl* runningCheckbox = getChild<LLCheckBoxCtrl>( "running");
     if(object && mAskedForRunningInfo && mHaveRunningInfo)
     {
@@ -3229,7 +3240,8 @@ void LLLiveLSLEditor::finishLSLUpload(LLUUID itemId, LLUUID taskId, LLUUID newAs
 // virtual
 void LLLiveLSLEditor::saveIfNeeded(bool sync /*= true*/)
 {
-    LLViewerObject* object = gObjectList.findObject(mObjectUUID);
+    if (!inventoryItemGuard()()) return;
+    auto object = VSTaskInventoryObject::find(mObjectUUID);
     if (!object)
     {
         LLNotificationsUtil::add("SaveScriptFailObjectNotFound");
@@ -3245,7 +3257,7 @@ void LLLiveLSLEditor::saveIfNeeded(bool sync /*= true*/)
     }
 
 // [RLVa:KB] - Checked: 2010-11-25 (RLVa-1.2.2b) | Modified: RLVa-1.2.2b
-    if ( (rlv_handler_t::isEnabled()) && (gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit())) )
+    if ( (rlv_handler_t::isEnabled()) && (object->attachmentLocked()) )
     {
         RlvUtil::notifyBlockedGeneric();
         return;
@@ -3268,6 +3280,14 @@ void LLLiveLSLEditor::saveIfNeeded(bool sync /*= true*/)
         return;
     }
 
+    const std::string url = object->getCapability("UpdateScriptTask");
+    if (url.empty())
+    {
+        LLSD args; args["FILE"] = mItem->getName();
+        args["REASON"] = LLTrans::getString("AssetUploadServerUnreacheble");
+        LLNotificationsUtil::add("CannotUploadReason", args);
+        return;
+    }
     mPendingUploads = 0;
 
     // save the script
@@ -3287,8 +3307,6 @@ void LLLiveLSLEditor::saveIfNeeded(bool sync /*= true*/)
     getWindow()->incBusyCount();
     mPendingUploads++;
 
-    std::string url = object->getRegion()->getCapability("UpdateScriptTask");
-
     if (!url.empty())
     {
         //<FS:KC> Script Preprocessor
@@ -3296,15 +3314,32 @@ void LLLiveLSLEditor::saveIfNeeded(bool sync /*= true*/)
         std::string buffer(mScriptEd->getScriptText());
         //</FS:KC> Script Preprocessor
         LLUUID old_asset_id = mScriptEd->getAssetID();
+        const auto weak = getHandle(); const auto account = mPreviewCurrent;
 
         LLResourceUploadInfo::ptr_t uploadInfo(std::make_shared<LLScriptAssetUpload>(mObjectUUID, mItemUUID,
                 monoChecked() ? LLScriptAssetUpload::MONO : LLScriptAssetUpload::LSL2,
                 isRunning, mScriptEd->getAssociatedExperience(), buffer,
-                [isRunning, old_asset_id](LLUUID itemId, LLUUID taskId, LLUUID newAssetId, LLSD response) {
-                        LLFileSystem::removeFile(old_asset_id, LLAssetType::AT_LSL_TEXT);
-                        LLLiveLSLEditor::finishLSLUpload(itemId, taskId, newAssetId, response, isRunning);
+                [weak, account, isRunning, old_asset_id](LLUUID itemId, LLUUID taskId, LLUUID newAssetId, LLSD response)
+                {
+                    auto* view = dynamic_cast<LLLiveLSLEditor*>(weak.get());
+                    if (!view || !account()) return;
+                    LLFileSystem::removeFile(old_asset_id, LLAssetType::AT_LSL_TEXT);
+                    view->mItem->setAssetUUID(newAssetId);
+                    view->mScriptEd->setAssetID(newAssetId);
+                    if (response["compiled"])
+                        view->callbackLSLCompileSucceeded(taskId, itemId, isRunning);
+                    else view->callbackLSLCompileFailed(response["errors"]);
                 },
-                nullptr)); // needs failure handling?
+                [weak, account](LLUUID, LLUUID, LLSD, std::string reason)
+                {
+                    auto* view = dynamic_cast<LLLiveLSLEditor*>(weak.get());
+                    if (!view || !account()) return false;
+                    view->mCloseAfterSave = false;
+                    view->mScriptEd->enableSave(true); // hasChanged retains the real source and backup.
+                    LLSD errors; errors.append(LLTrans::getString("UploadFailed") + reason);
+                    view->callbackLSLCompileFailed(errors);
+                    return true;
+                }));
 
         LLViewerAssetUpload::EnqueueInventoryUpload(url, uploadInfo);
     }
@@ -3363,6 +3398,9 @@ void LLLiveLSLEditor::processScriptRunningReply(LLMessageSystem* msg, void**)
     floater_key["itemid"] = item_id;
     if (LLLiveLSLEditor* instance = LLFloaterReg::findTypedInstance<LLLiveLSLEditor>("preview_scriptedit", floater_key))
     {
+        const auto object = VSTaskInventoryObject::find(object_id);
+        if (!instance->mPreviewCurrent() || !object || object->getHost() != msg->getSender() ||
+            !instance->mAskedForRunningInfo || (instance->mRunningInfoCurrent && !instance->mRunningInfoCurrent())) return;
         instance->mHaveRunningInfo = true;
         bool running;
         msg->getBOOLFast(_PREHASH_Script, _PREHASH_Running, running);

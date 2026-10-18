@@ -60,8 +60,20 @@ LLGLTexture::~LLGLTexture()
     cleanup();
 }
 
+void LLGLTexture::setCPUImageExtent(U32 width, U32 height, U8 components)
+{
+    llassert(mGLTexturep.isNull());
+    mCPUImage = true;
+    mCPUImageDiscard = width && height && components ? 0 : -1;
+    mFullWidth = width;
+    mFullHeight = height;
+    mComponents = components;
+    setTexelsPerImage();
+}
+
 void LLGLTexture::init()
 {
+    mCPUImage = false;
     mBoostLevel = LLGLTexture::BOOST_NONE;
     // <FS:minerjr> [FIRE-36016] - Re-added Store/Restore boost levels of selected objects
     // Added a previous boost level to allow for restoring boost after BOOST_SELECTED is applied
@@ -206,6 +218,7 @@ void LLGLTexture::setFilteringOption(LLTexUnit::eTextureFilterOptions option)
 //virtual
 S32 LLGLTexture::getWidth(S32 discard_level) const
 {
+    if (mCPUImage) return llmax(1, S32(mFullWidth) >> llmax(0, discard_level));
     llassert(mGLTexturep.notNull()) ;
     return mGLTexturep->getWidth(discard_level) ;
 }
@@ -213,22 +226,39 @@ S32 LLGLTexture::getWidth(S32 discard_level) const
 //virtual
 S32 LLGLTexture::getHeight(S32 discard_level) const
 {
+    if (mCPUImage) return llmax(1, S32(mFullHeight) >> llmax(0, discard_level));
     llassert(mGLTexturep.notNull()) ;
     return mGLTexturep->getHeight(discard_level) ;
 }
 
 S32 LLGLTexture::getMaxDiscardLevel() const
 {
+    if (mCPUImage)
+    {
+        // Match LLImageGL::setSize's logical mip extent, not GPU residency.
+        U32 width = mFullWidth, height = mFullHeight;
+        S32 level = 0;
+        if (mComponents > 0)
+            while (width > 1 && height > 1 && level < MAX_DISCARD_LEVEL)
+            {
+                ++level;
+                width >>= 1;
+                height >>= 1;
+            }
+        return level;
+    }
     llassert(mGLTexturep.notNull()) ;
     return mGLTexturep->getMaxDiscardLevel() ;
 }
 S32 LLGLTexture::getDiscardLevel() const
 {
+    if (mCPUImage) return mCPUImageDiscard;
     llassert(mGLTexturep.notNull()) ;
     return mGLTexturep->getDiscardLevel() ;
 }
 S8  LLGLTexture::getComponents() const
 {
+    if (mCPUImage) return mComponents;
     llassert(mGLTexturep.notNull()) ;
 
     return mGLTexturep->getComponents() ;

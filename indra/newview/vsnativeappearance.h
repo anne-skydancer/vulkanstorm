@@ -8,6 +8,7 @@
 class VSNativeSession;
 class LLSD;
 class LLInventoryCallback;
+class LLViewerWearable;
 class VSNativeAppearance
 {
 public:
@@ -17,6 +18,14 @@ public:
     bool startupReady() const;
     void fallback(const LLSD& wearables);
     void refresh();
+    bool replaceWearable(unsigned type, U32 index, LLViewerWearable*);
+    void editedWearable(const LLUUID&);
+    std::shared_ptr<LLViewerWearable> retainWearable(const LLViewerWearable*) const;
+    void whenReady(std::function<void()>);
+    void beginEditing();
+    void endEditing();
+    LLPointer<LLInventoryCallback> customizeCallback() const;
+    bool isEditing() const;
     bool hoverEnabled() const;
     bool setHoverHeight(F32, bool send);
     void syncHoverHeight();

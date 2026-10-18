@@ -28,6 +28,9 @@
 #ifndef LL_LLPANELOUTFITSINVENTORY_H
 #define LL_LLPANELOUTFITSINVENTORY_H
 
+#include <vector>
+#include <boost/signals2/connection.hpp>
+
 #include "llpanel.h"
 
 class LLButton;
@@ -88,6 +91,8 @@ protected:
     void updateVerbs();
 
 private:
+    std::vector<boost::signals2::scoped_connection> mAppearanceConnections;
+
     LLTabContainer*         mAppearanceTabs;
 
     // <FS:Ansariel> FIRE-17626: Attachment count in appearance floater

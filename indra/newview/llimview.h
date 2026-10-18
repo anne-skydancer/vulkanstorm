@@ -130,6 +130,7 @@ public:
         void loadHistory();
 
         LLUUID mSessionID;
+        const LLUUID mErrorIdentity = LLUUID::generateNewID();
         std::string mName;
         EInstantMessage mType;
         SType mSessionType;
@@ -596,6 +597,8 @@ class LLCallDialogManager : public LLSingleton<LLCallDialogManager>
     ~LLCallDialogManager();
 public:
     // static for convinience
+    void authorizeNativeAccount();
+    void retireNativeAccount();
     static void onVoiceChannelChanged(const LLUUID &session_id);
     static void onVoiceChannelStateChanged(const LLVoiceChannel::EState& old_state, const LLVoiceChannel::EState& new_state, const LLVoiceChannel::EDirection& direction, bool ended_by_agent);
 
@@ -607,7 +610,9 @@ private:
 protected:
     std::string mPreviousSessionlName;
     std::string mCurrentSessionlName;
-    LLIMModel::LLIMSession* mSession;
+    LLUUID mSessionID;
+    std::function<bool()> mAccountCurrent = [] { return true; };
+    boost::signals2::scoped_connection mChannelStateChanged;
     LLVoiceChannel::EState mOldState;
 
     boost::signals2::connection mVoiceChannelChanged;

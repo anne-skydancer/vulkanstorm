@@ -41,7 +41,7 @@ class LLFloaterAvatarWelcomePack:
         ~LLFloaterAvatarWelcomePack();
         bool postBuild() override;
 
-        LLMediaCtrl* mAvatarPicker;
+        LLMediaCtrl* mAvatarPicker=nullptr;
 
     // <FS:Ansariel> Avatar chooser does not change between OpenSim grids
     void onOpen(const LLSD& key) override;

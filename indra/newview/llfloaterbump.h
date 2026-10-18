@@ -27,6 +27,7 @@
 
 #ifndef LL_LLFLOATERBUMP_H
 #define LL_LLFLOATERBUMP_H
+#include <functional>
 
 #include "llfloater.h"
 #include "llmenugl.h"
@@ -94,6 +95,7 @@ class FSBumpListMenu : public LLListContextMenu
 public:
     /*virtual*/ LLContextMenu* createMenu();
 private:
+    std::function<bool()> mAccountCurrent;
     void onContextMenuItemClick(const LLSD& userdata);
     bool onContextMenuItemEnable(const LLSD& userdata);
 };

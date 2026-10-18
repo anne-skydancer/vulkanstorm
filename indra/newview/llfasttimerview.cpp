@@ -35,6 +35,7 @@
 #include "llgl.h"
 #include "llimagepng.h"
 #include "llrender.h"
+#include "vsuiprimitive.h"
 #include "llrendertarget.h"
 #include "lllocalcliprect.h"
 #include "lllayoutstack.h"
@@ -1033,6 +1034,7 @@ void LLFastTimerView::printLineStats()
 void LLFastTimerView::drawLineGraph()
 {
     LL_PROFILE_ZONE_SCOPED;
+    VSUIPrimitive::Draw draw;
     //draw line graph history
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
     LLLocalClipRect clip(mGraphRect);
@@ -1062,10 +1064,10 @@ void LLFastTimerView::drawLineGraph()
 
             gGL.color4f(0.5f,0.5f,0.5f,1);
 
-            gGL.begin(LLRender::LINES);
-            gGL.vertex2i((S32)bar, mGraphRect.mBottom);
-            gGL.vertex2i((S32)bar, mGraphRect.mTop);
-            gGL.end();
+            draw.begin(LLRender::LINES);
+            draw.vertex2i((S32)bar, mGraphRect.mBottom);
+            draw.vertex2i((S32)bar, mGraphRect.mTop);
+            draw.end();
         }
     }
 
@@ -1084,7 +1086,7 @@ void LLFastTimerView::drawLineGraph()
             // <FS> Line width OGL core profile fix by Rye Mutt
             //gGL.flush();
             //glLineWidth(3);
-            gGL.setLineWidth(3.f);
+            LLRender2D::setLineWidth(3.f);
         }
 
         llassert(idp->getIndex() < sTimerColors.size());
@@ -1104,7 +1106,7 @@ void LLFastTimerView::drawLineGraph()
         }
 
         gGL.color4f(col[0], col[1], col[2], alpha);
-        gGL.begin(LLRender::TRIANGLE_STRIP);
+        draw.begin(LLRender::TRIANGLE_STRIP);
         F32 call_scale_factor = (F32)mGraphRect.getHeight() / (F32)max_calls;
         F32 time_scale_factor = (F32)mGraphRect.getHeight() / max_time.value();
         F32 hz_scale_factor = (F32) mGraphRect.getHeight() / (1.f / max_time.value());
@@ -1137,17 +1139,17 @@ void LLFastTimerView::drawLineGraph()
                 y = mGraphRect.mBottom + (1.f / time.value()) * hz_scale_factor;
                 break;
             }
-            gGL.vertex2f(x,y);
-            gGL.vertex2f(x,(GLfloat)mGraphRect.mBottom);
+            draw.vertex2f(x,y);
+            draw.vertex2f(x,(GLfloat)mGraphRect.mBottom);
         }
-        gGL.end();
+        draw.end();
 
         if (mHoverID == idp)
         {
             // <FS> Line width OGL core profile fix by Rye Mutt
             //gGL.flush();
             //glLineWidth(1);
-            gGL.setLineWidth(1.f);
+            LLRender2D::setLineWidth(1.f);
         }
 
         if (idp->getTreeNode().mCollapsed)
@@ -1507,8 +1509,6 @@ void LLFastTimerView::drawBars()
     // Special: 0 = show running average
     LLPointer<LLUIImage> bar_image = LLUI::getUIImage("Rounded_Square");
 
-    const S32 image_width = bar_image->getTextureWidth();
-    const S32 image_height = bar_image->getTextureHeight();
 
     gGL.getTexUnit(0)->bind(bar_image->getImage());
     {
@@ -1547,7 +1547,7 @@ void LLFastTimerView::drawBars()
                                         bar_height);
         mAverageTimerRow.mTop = frame_bar_rect.mTop;
         mAverageTimerRow.mBottom = frame_bar_rect.mBottom;
-        drawBar(frame_bar_rect, mAverageTimerRow, image_width, image_height);
+        drawBar(frame_bar_rect, mAverageTimerRow, *bar_image);
         frame_bar_rect.translate(0, -(bar_height + vpad + bar_height));
 
         for(S32 bar_index = mScrollIndex; bar_index < llmin(histmax, mScrollIndex + MAX_VISIBLE_HISTORY); ++bar_index)
@@ -1558,7 +1558,7 @@ void LLFastTimerView::drawBars()
             row.mBottom = frame_bar_rect.mBottom;
             frame_bar_rect.mRight = frame_bar_rect.mLeft
                                     + (S32)ll_round((row.mBars[0].mTotalTime / mTotalTimeDisplay) * mBarRect.getWidth());
-            drawBar(frame_bar_rect, row, image_width, image_height);
+            drawBar(frame_bar_rect, row, *bar_image);
 
             frame_bar_rect.translate(0, -(bar_height + vpad));
         }
@@ -1654,7 +1654,7 @@ S32 LLFastTimerView::updateTimerBarOffsets(LLTrace::BlockTimerStatHandle* time_b
     return timer_bar_index;
 }
 
-S32 LLFastTimerView::drawBar(LLRect bar_rect, TimerBarRow& row, S32 image_width, S32 image_height, bool hovered, bool visible, S32 bar_index)
+S32 LLFastTimerView::drawBar(LLRect bar_rect, TimerBarRow& row, const LLUIImage& image, bool hovered, bool visible, S32 bar_index)
 {
     LL_PROFILE_ZONE_SCOPED;
     TimerBar& timer_bar = row.mBars[bar_index];
@@ -1677,11 +1677,14 @@ S32 LLFastTimerView::drawBar(LLRect bar_rect, TimerBarRow& row, S32 image_width,
         llassert(time_block->getIndex() < sTimerColors.size());
         LLColor4 color = sTimerColors[time_block->getIndex()];
         if (!hovered) color = lerp(color, LLColor4::grey, 0.2f);
-        gGL.color4fv(color.mV);
-        gl_segmented_rect_2d_fragment_tex(render_rect,
-            image_width, image_height,
-            16,
-            timer_bar.mStartFraction, timer_bar.mEndFraction);
+        if(LLRender2D::isNativeUI())
+            gl_segmented_rect_2d_fragment_image(render_rect,image,16,timer_bar.mStartFraction,timer_bar.mEndFraction,color);
+        else
+        {
+            gGL.color4fv(color.mV);
+            gl_segmented_rect_2d_fragment_tex(render_rect,image.getTextureWidth(),image.getTextureHeight(),
+                16,timer_bar.mStartFraction,timer_bar.mEndFraction);
+        }
     }
 
     LLRect children_rect;
@@ -1710,7 +1713,7 @@ S32 LLFastTimerView::drawBar(LLRect bar_rect, TimerBarRow& row, S32 image_width,
         do
         {
             is_last = row.mBars[bar_index].mLastChild;
-            bar_index = drawBar(children_rect, row, image_width, image_height, hovered, children_visible, bar_index);
+            bar_index = drawBar(children_rect, row, image, hovered, children_visible, bar_index);
         }
         while(!is_last && bar_index < num_bars);
     }

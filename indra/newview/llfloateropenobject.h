@@ -33,6 +33,11 @@
 #define LL_LLFLOATEROPENOBJECT_H
 
 #include "llfloater.h"
+#include <memory>
+#include <functional>
+#if VS_NATIVE_VULKAN
+struct VSObjectPurchase;
+#endif
 
 class LLObjectSelection;
 class LLPanelObjectInventory;
@@ -44,9 +49,11 @@ class LLFloaterOpenObject
 public:
 
     void dirty();
+    void onClose(bool app_quitting) override;
 
     struct LLCatAndWear
     {
+        std::function<bool()> mCurrent;
         LLUUID mCatID;
         bool mWear;
         bool mFolderResponded;
@@ -67,7 +74,7 @@ protected:
     void onClickCopy(const LLSD& value);
     // </FS:Ansariel>
     void onClickCancel();
-    static void callbackCreateInventoryCategory(const LLUUID& category_id, LLUUID object_id, bool wear, bool replace = false);
+    static void callbackCreateInventoryCategory(const LLUUID& category_id, LLUUID object_id, bool wear, bool replace = false, std::function<bool()> current = {});
     static void callbackMoveInventory(S32 result, void* data);
 
 private:
@@ -79,6 +86,9 @@ protected:
 
     LLPanelObjectInventory* mPanelInventoryObject;
     LLSafeHandle<LLObjectSelection> mObjectSelection;
+#if VS_NATIVE_VULKAN
+    std::shared_ptr<VSObjectPurchase> mNativePurchase;
+#endif
     bool mDirty;
 };
 

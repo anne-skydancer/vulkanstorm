@@ -29,6 +29,8 @@
 #define LL_SCROLLINGPANELPARAMBASE_H
 
 #include "llpanel.h"
+#include <functional>
+#include <memory>
 #include "llscrollingpanellist.h"
 
 class LLViewerJointMesh;
@@ -37,6 +39,7 @@ class LLWearable;
 class LLVisualParamHint;
 class LLViewerVisualParam;
 class LLJoint;
+class LLViewerWearable;
 
 class LLScrollingPanelParamBase : public LLScrollingPanel
 {
@@ -58,6 +61,10 @@ protected:
     LLUICtrl* mParamSlider = nullptr;
     bool mAllowModify;
     LLWearable *mWearable;
+    std::function<bool()> mAccountCurrent;
+    std::shared_ptr<LLViewerWearable> mNativeWearableOwner;
+    bool currentWearable() const;
+
 };
 
 #endif

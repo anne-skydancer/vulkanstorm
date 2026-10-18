@@ -32,6 +32,9 @@
 #include "llpartdata.h"
 #include "llviewerpartsource.h"
 
+class VSParticleEffects;
+struct VSParticleGroupState;
+#include <memory>
 class LLViewerTexture;
 class LLViewerPart;
 class LLViewerRegion;
@@ -94,6 +97,10 @@ public:
     virtual ~LLViewerPartGroup();
 
     void cleanup();
+#if VS_NATIVE_VULKAN
+    std::shared_ptr<VSParticleGroupState> mNativeGroup;
+    bool mNative=false;
+#endif
 
     bool addPart(LLViewerPart* part, const F32 desired_size = -1.f);
 
@@ -174,6 +181,7 @@ public:
     void removeLastCreatedSource();
 
     const source_list_t* getParticleSystemList() const { return &mViewerPartSources; }
+    const group_list_t& getParticleGroups() const { return mViewerPartGroups; }
 
     friend class LLViewerPartGroup;
 

@@ -55,3 +55,54 @@ void vs_sun_moon_beacon(Sink& sink,const LLVector3& pos_agent,const LLVector3& d
     vs_debug_beacon_cross(sink,pos_end,2.f,2.f,2.f);
     sink.vertex3fv(pos_agent.mV);sink.vertex3fv(pos_end.mV);
 }
+
+// Original LLSpatialPartition::drawBoxOutline vertex order. LGPL-2.1.
+template<class Sink>
+void vs_debug_box_outline(Sink& sink,const LLVector3& pos,const LLVector3& size)
+{
+    if (!pos.isFinite() || !size.isFinite())
+        return;
+
+    LLVector3 v1 = size.scaledVec(LLVector3( 1, 1,1));
+    LLVector3 v2 = size.scaledVec(LLVector3(-1, 1,1));
+    LLVector3 v3 = size.scaledVec(LLVector3(-1,-1,1));
+    LLVector3 v4 = size.scaledVec(LLVector3( 1,-1,1));
+
+
+
+    //top
+    sink.vertex3fv((pos+v1).mV);
+    sink.vertex3fv((pos+v2).mV);
+    sink.vertex3fv((pos+v2).mV);
+    sink.vertex3fv((pos+v3).mV);
+    sink.vertex3fv((pos+v3).mV);
+    sink.vertex3fv((pos+v4).mV);
+    sink.vertex3fv((pos+v4).mV);
+    sink.vertex3fv((pos+v1).mV);
+
+    //bottom
+    sink.vertex3fv((pos-v1).mV);
+    sink.vertex3fv((pos-v2).mV);
+    sink.vertex3fv((pos-v2).mV);
+    sink.vertex3fv((pos-v3).mV);
+    sink.vertex3fv((pos-v3).mV);
+    sink.vertex3fv((pos-v4).mV);
+    sink.vertex3fv((pos-v4).mV);
+    sink.vertex3fv((pos-v1).mV);
+
+    //right
+    sink.vertex3fv((pos+v1).mV);
+    sink.vertex3fv((pos-v3).mV);
+
+    sink.vertex3fv((pos+v4).mV);
+    sink.vertex3fv((pos-v2).mV);
+
+    //left
+    sink.vertex3fv((pos+v2).mV);
+    sink.vertex3fv((pos-v4).mV);
+
+    sink.vertex3fv((pos+v3).mV);
+    sink.vertex3fv((pos-v1).mV);
+
+
+}

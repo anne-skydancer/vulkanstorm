@@ -2,6 +2,8 @@
 #include "llviewerprecompiledheaders.h"
 #include "lluiimage.h"
 #include "vsuiimageprovider.h"
+#include "vsbuiltintextures.h"
+#include <chrono>
 #include "llviewernetwork.h"
 #include "lldir.h"
 #include "llimage.h"
@@ -89,12 +91,57 @@ struct VSUIImageProvider::Impl : std::enable_shared_from_this<VSUIImageProvider:
         VSUIResources::PreparedImage prepared;
         std::shared_ptr<const VSResourceBudget::Reservation> uploadResidency;
         LLPointer<LLImageRaw> pendingAuxiliary;
-        bool local=false;
+        bool local=false,builtin=false;
         std::string sourceURL;
         bool missingMapTile=false,mapVisible=false;
         LLUUID redirect;
         boost::signals2::connection redirectLoaded;
     };
+    void loadBuiltin(const VSBuiltinTexture& source,Remote& entry,U64 generation)
+    {
+        entry.builtin=true;
+        if(entry.local || entry.attempts>=3)return;
+        if(!entry.prepared)
+        {
+            const auto path=gDirUtilp->findSkinnedFilename(LLDir::TEXTURES,source.file);
+            LLPointer<LLImageFormatted> formatted=LLImageFormatted::createFromExtension(source.file);
+            if(path.empty() || !formatted || !formatted->load(path))
+            {
+                entry.failedGeneration=generation;entry.attempts=3;
+                LL_WARNS("NativeImage")<<"Missing reserved local texture "<<source.file<<LL_ENDL;
+                return;
+            }
+            const auto width=formatted->getWidth(),height=formatted->getHeight();
+            if(!width || !height || width>4096 || height>4096)
+            {entry.failedGeneration=generation;entry.attempts=3;return;}
+            auto lease=resources.reserveImagePreparation(std::size_t(width)*height*32+16384);
+            if(!lease)return;
+            LLPointer<LLImageRaw> raw=new LLImageRaw;
+            if(!formatted->decode(raw,0) || raw->getWidth()!=width || raw->getHeight()!=height ||
+                (source.alphaOnly && raw->getComponents()!=1))
+            {entry.failedGeneration=generation;entry.attempts=3;return;}
+            entry.fullWidth=width;entry.fullHeight=height;entry.components=raw->getComponents();
+            if(source.alphaOnly)
+            {
+                // GL_ALPHA samples white RGB and the single source channel as A.
+                LLPointer<LLImageRaw> rgba=new LLImageRaw(width,height,4);
+                for(std::size_t pixel=0;pixel<std::size_t(width)*height;++pixel)
+                {
+                    auto* target=rgba->getData()+pixel*4;
+                    target[0]=target[1]=target[2]=255;target[3]=raw->getData()[pixel];
+                }
+                raw=rgba;
+            }
+            entry.prepared=VSUIResources::prepareImage(*raw,VSWorldContracts::ImageRole::RemoteAsset,false);
+            entry.uploadResidency=std::move(lease);
+        }
+        const auto publication=resources.publishPrepared("remote:"+source.id.asString(),entry.prepared);
+        if(!publication)return; // Retain the prepared local generation for the next admission attempt.
+        entry.pixels=publication;entry.local=true;entry.discard=0;entry.readyGeneration=generation;
+        entry.prepared.reset();entry.uploadResidency.reset();
+        auto facade=entry.facade;
+        facade->setNativeExtent(entry.fullWidth,entry.fullHeight);facade->onImageLoaded();
+    }
     std::map<LLUUID,Remote> remote;
     U64 diskHits=0,diskMisses=0;
     bool retired = false;
@@ -149,7 +196,7 @@ struct VSUIImageProvider::Impl : std::enable_shared_from_this<VSUIImageProvider:
         for (auto found=remote.begin();found!=remote.end();++found)
         {
             const bool subscribed=found->second.facade && found->second.facade->getNumRefs()>1;
-            if (found->first==preserve || found->second.local || found->second.fetching || found->second.preparing || found->second.prepared ||
+            if (found->first==preserve || found->second.local || found->second.builtin || found->second.fetching || found->second.preparing || found->second.prepared ||
                 (metadata && subscribed)) continue;
             // A retained control can be hidden. Preserve its facade identity,
             // but only recent draw/request interest pins its cached payload.
@@ -216,7 +263,7 @@ void VSUIImageProvider::pumpImages()
         mImpl->regionEpoch=epoch;
         for(auto& [id,entry]:mImpl->remote)
         {
-            if(entry.local) continue;
+            if(entry.local || entry.builtin) continue;
             mImpl->cancelPreparation(entry);
             if(entry.fetching) fetch->deleteRequest(id,true);
             entry.fetching=false;
@@ -226,7 +273,7 @@ void VSUIImageProvider::pumpImages()
     }
     for(auto& [id,entry]:mImpl->remote)
     {
-        if(entry.local) continue;
+        if(entry.local || entry.builtin) continue;
         const bool pressure=!entry.uiDemand && !entry.exactWorld && !gSavedSettings.getBOOL("TextureLoadFullRes") &&
             mImpl->resources.textureMemoryPolicy().bias>1.9;
         const unsigned pressureTarget=mImpl->resources.worldImageDimension(entry.target,MAX_DISCARD_LEVEL);
@@ -318,7 +365,7 @@ void VSUIImageProvider::pumpImages()
     if(!owner->regionReady()) return;
     std::vector<LLUUID> pending;
     for(const auto& [id,entry]:mImpl->remote)
-        if(!entry.local && !entry.fetching && !entry.preparing && !entry.prepared && entry.attempts<3 && LLTimer::getTotalSeconds()>=entry.retryAt &&
+        if(!entry.local && !entry.builtin && !entry.fetching && !entry.preparing && !entry.prepared && entry.attempts<3 && LLTimer::getTotalSeconds()>=entry.retryAt &&
             (LLTimer::getTotalSeconds()-entry.lastUsed<1.0 ||
              (!entry.uiDemand && !entry.exactWorld && entry.readyGeneration==generation &&
               mImpl->resources.textureMemoryPolicy().bias>1.9)))
@@ -405,6 +452,11 @@ bool vs_publish_local_image(const LLUUID& id,const LLImageRaw& raw)
 { return sActiveProvider && sActiveProvider->publishLocalImage(id,raw); }
 void vs_retire_local_image(const LLUUID& id)
 { if(sActiveProvider) sActiveProvider->retireLocalImage(id); }
+LLGLenum vs_ui_image_source_format(const LLUUID& id)
+{
+    const auto* source=vs_builtin_texture(id);
+    return source && source->alphaOnly?GL_ALPHA:0;
+}
 LLUUID VSUIImageProvider::imageID(const LLUUID& id) const
 {
     const auto entry=mImpl->remote.find(id);
@@ -496,17 +548,19 @@ void vs_refresh_ui_image(const LLUUID& id)
 {
     if (sActiveProvider) sActiveProvider->refreshImage(id);
 }
-LLPointer<LLUIImage> vs_publish_ui_image(const std::string& key, const LLImageRaw& raw)
+LLPointer<LLUIImage> vs_publish_ui_image(const std::string& key, const LLImageRaw& raw,VSUIRenderer::Sampling sampling)
 {
-    return sActiveProvider ? sActiveProvider->publishImage(key, raw) : nullptr;
+    return sActiveProvider ? sActiveProvider->publishImage(key, raw,sampling) : nullptr;
 }
 void vs_erase_ui_image(const std::string& key)
 {
     if (sActiveProvider) sActiveProvider->eraseImage(key);
 }
-LLPointer<LLUIImage> VSUIImageProvider::publishImage(const std::string& key, const LLImageRaw& raw)
+LLPointer<LLUIImage> VSUIImageProvider::publishImage(const std::string& key, const LLImageRaw& raw,VSUIRenderer::Sampling sampling)
 {
-    return mImpl->resources.publish("control:" + key, raw);
+    auto image=mImpl->resources.publish("control:"+key,raw);
+    if(!image||sampling==VSUIRenderer::Sampling::Linear)return image;
+    return mImpl->resources.region("control:"+key,key,LLRectf(0.f,1.f,1.f,0.f),sampling);
 }
 void VSUIImageProvider::eraseImage(const std::string& key) { mImpl->resources.erase("control:" + key); }
 LLPointer<LLImageRaw> vs_ui_image_raw(const LLUUID& id)
@@ -573,7 +627,7 @@ void VSUIImageProvider::resetAccount()
     const auto fallback=getUIImage("Generic_Person");
     for(auto& [id,entry]:mImpl->remote)
     {
-        if(entry.local) continue;
+        if(entry.local || entry.builtin) continue;
         mImpl->cancelPreparation(entry);
         if(entry.fetching) if(auto* fetch=LLAppViewer::getTextureFetch()) fetch->deleteRequest(id,true);
         mImpl->resources.erase("remote:"+id.asString());
@@ -699,6 +753,12 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 pri
                         else found->second.pixels->draw(x, y, w, h, color);
                     }
             });
+    }
+    if(const auto* source=vs_builtin_texture(id))
+    {
+        const auto images=mImpl;auto facade=entry.facade;
+        images->loadBuiltin(*source,entry,generation);
+        return facade;
     }
     if(entry.local)
     {
@@ -826,3 +886,56 @@ VSUIRenderer::Image VSUIImageProvider::namedImageSnapshot(const std::string& nam
 }
 VSUIRenderer::Image vs_ui_named_image_snapshot(const std::string& name)
 {return sActiveProvider?sActiveProvider->namedImageSnapshot(name):VSUIRenderer::Image{};}
+
+std::optional<float> VSUIImageProvider::worldDepth() const{return mImpl->resources.worldDepth();}
+void VSUIImageProvider::setWorldDepth(std::optional<float> value){mImpl->resources.setWorldDepth(value);}
+std::optional<float> vs_ui_world_depth(){return sActiveProvider?sActiveProvider->worldDepth():std::optional<float>{};}
+void vs_set_ui_world_depth(std::optional<float> value){if(sActiveProvider)sActiveProvider->setWorldDepth(value);}
+
+std::shared_ptr<const void> vs_reserve_ui_image_bytes(std::size_t bytes)
+{return sActiveProvider?sActiveProvider->reserveImageBytes(bytes):nullptr;}
+std::shared_ptr<const void> VSUIImageProvider::reserveImageBytes(std::size_t bytes)
+{return mImpl->resources.reserveImagePreparation(bytes);}
+
+std::vector<VSTextureDebugInfo> vs_native_texture_debug()
+{return sActiveProvider?sActiveProvider->textureDebug():std::vector<VSTextureDebugInfo>{};}
+std::vector<VSTextureDebugInfo> VSUIImageProvider::textureDebug() const
+{
+    const auto owner=VSNativeSession::active();auto* fetch=LLAppViewer::getTextureFetch();
+    if(mImpl->retired || !owner || !fetch || owner->phase()!=VSNativeSession::Phase::Connected)return {};
+    std::vector<VSTextureDebugInfo> rows;rows.reserve(mImpl->remote.size());
+    const double now=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    for(const auto& [id,source]:mImpl->remote)
+    {
+        if(source.redirect.notNull())continue;
+        VSTextureDebugInfo row;row.id=id;
+        row.area=float(source.target)*source.target;row.discard=source.discard;
+        row.fetching=source.fetching;row.needsCreate=source.preparing || bool(source.prepared);
+        row.error=source.failedGeneration==owner->generation();row.missing=source.missingMapTile;
+        row.fullyLoaded=source.readyGeneration==owner->generation() && !row.fetching && !row.needsCreate;
+        row.dontDiscard=source.uiDemand || source.exactWorld;
+        if(source.auxiliary)row.auxiliaryBytes=source.auxiliary->getDataSize();
+        row.desired=source.discard;row.requested=source.discard;
+        bool http=false;
+        F32 requestedPriority=0;
+        row.fetchState=fetch->getFetchState(id,row.progress,requestedPriority,row.fetchPriority,row.fetchDelta,row.requestDelta,http);
+        if(row.fetching)
+        {
+            S32 decodedDiscard=-1;bool decoded=false;
+            fetch->getLastFetchState(id,row.requested,decodedDiscard,decoded);
+            row.desired=row.requested;
+        }
+        const auto image=mImpl->resources.image("remote:"+id.asString());
+        if(image)
+        {
+            const auto extent=VSUIRenderer::imageExtent(image);row.width=S32(extent[0]);row.height=S32(extent[1]);
+            row.residentBytes=S32(llmin<U64>(VSUIRenderer::imageDescription(image).gpuBytes,S32_MAX));
+            row.snapshotBytes=VSUIRenderer::imagePixels(image).size();
+            if(const auto bound=VSUIRenderer::lastBound(image))row.lastBound=F32(now-*bound);
+        }
+        else if(source.fullWidth>0 && source.discard>=0)
+        {row.width=source.fullWidth>>source.discard;row.height=source.fullHeight>>source.discard;}
+        rows.push_back(row);
+    }
+    return rows;
+}

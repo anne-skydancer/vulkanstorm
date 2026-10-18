@@ -108,6 +108,8 @@ void LLMenuOptionPathfindingRebakeNavmesh::quit()
         }
 
         mIsInitialized = false;
+        mCanRebakeRegion = false;
+        setMode(kRebakeNavMesh_Default);
     }
 }
 
@@ -233,8 +235,8 @@ void LLMenuOptionPathfindingRebakeNavmesh::createNavMeshStatusListenerForCurrent
         mNavMeshSlot.disconnect();
     }
 
-    LLViewerRegion *currentRegion = gAgent.getRegion();
-    if (currentRegion != NULL)
+    const auto currentRegion = vs_current_region_context();
+    if (currentRegion)
     {
         mNavMeshSlot = LLPathfindingManager::getInstance()->registerNavMeshListenerForRegion(currentRegion, boost::bind(&LLMenuOptionPathfindingRebakeNavmesh::handleNavMeshStatus, this, _2));
         LLPathfindingManager::getInstance()->requestGetNavMeshForRegion(currentRegion, true);

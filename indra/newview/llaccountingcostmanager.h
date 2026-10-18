@@ -30,6 +30,8 @@
 #include "llhandle.h"
 
 #include "llaccountingcost.h"
+#include <functional>
+#include <optional>
 
 //===============================================================================
 // An interface class for panels which display the parcel accounting information.
@@ -60,6 +62,10 @@ public:
     //Request quotas for object list
     void fetchCosts( eSelectionType selectionType, const std::string& url,
             const LLHandle<LLAccountingCostObserver>& observer_handle );
+    // Exact request-owned object set and publication intent for native selections.
+    void fetchSelectionCosts(eSelectionType, const std::string&,
+        const LLHandle<LLAccountingCostObserver>&, const uuid_set_t&,
+        std::function<bool()> current);
     //Delete a specific object from the pending list
     void removePendingObject( const LLUUID& objectID );
 
@@ -70,7 +76,10 @@ private:
     //a fetch has been instigated.
     uuid_set_t mPendingObjectQuota;
 
-    static void accountingCostCoro(std::string url, eSelectionType selectionType, const LLHandle<LLAccountingCostObserver> observerHandle);
+    static void accountingCostCoro(std::string url, eSelectionType selectionType,
+        const LLHandle<LLAccountingCostObserver> observerHandle,
+        std::optional<uuid_set_t> objects, std::function<bool()> current, LLUUID transaction);
+
 
 };
 //===============================================================================

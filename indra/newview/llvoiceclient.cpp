@@ -25,6 +25,16 @@
  */
 
 #include "llvoiceclient.h"
+#include "llvoicechannel.h"
+#include "llfloaterreg.h"
+#include "llfloater.h"
+#include "llimview.h"
+#include "vsregioncontext.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "llvoicevivox.h"
 #include "llvoicewebrtc.h"
 #include "llviewernetwork.h"
@@ -183,7 +193,16 @@ void LLVoiceClient::userAuthorized(const std::string& user_id, const LLUUID &age
     {
         mRegionChangedCallbackSlot.disconnect();
     }
-    mRegionChangedCallbackSlot = gAgent.addRegionChangedCallback(boost::bind(&LLVoiceClient::onRegionChanged, this));
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        mRegionChangedCallbackSlot = session->observeCurrentRegion(vs_native_im_account_callback([this] { onRegionChanged(); }));
+        mSimulatorFeaturesReceivedSlot.disconnect();
+        mSimulatorFeaturesReceivedSlot = session->observeSimulatorFeatures(vs_native_im_account_callback([this] { onRegionChanged(); }));
+    }
+    else
+#endif
+        mRegionChangedCallbackSlot = gAgent.addRegionChangedCallback(boost::bind(&LLVoiceClient::onRegionChanged, this));
     LLWebRTCVoiceClient::getInstance()->userAuthorized(user_id, agentID);
     LLVivoxVoiceClient::getInstance()->userAuthorized(user_id, agentID);
 }
@@ -221,7 +240,7 @@ void LLVoiceClient::handleSimulatorFeaturesReceived(const LLSD &simulatorFeature
 
 static void simulator_features_received_callback(const LLUUID& region_id)
 {
-    LLViewerRegion *region = gAgent.getRegion();
+    const auto region = vs_current_region_context();
     if (region && (region->getRegionID() == region_id))
     {
         LLSD simulatorFeatures;
@@ -235,7 +254,7 @@ static void simulator_features_received_callback(const LLUUID& region_id)
 
 void LLVoiceClient::onRegionChanged()
 {
-    LLViewerRegion *region = gAgent.getRegion();
+    const auto region = vs_current_region_context();
     if (region && region->simulatorFeaturesReceived())
     {
         LLSD simulatorFeatures;
@@ -247,12 +266,17 @@ void LLVoiceClient::onRegionChanged()
     }
     else if (region)
     {
-        if (mSimulatorFeaturesReceivedSlot.connected())
-        {
+#if VS_NATIVE_VULKAN
+        if (!VSNativeSession::active())
+#endif
             mSimulatorFeaturesReceivedSlot.disconnect();
-        }
-        mSimulatorFeaturesReceivedSlot =
-                region->setSimulatorFeaturesReceivedCallback(boost::bind(&simulator_features_received_callback, _1));
+#if VS_NATIVE_VULKAN
+        // Native has a distinct authenticated primary-features subscription,
+        // installed at authorization above; no synthetic LLViewerRegion.
+        if (!VSNativeSession::active())
+#endif
+        if (LLViewerRegion* legacy = gAgent.getRegion())
+            mSimulatorFeaturesReceivedSlot = legacy->setSimulatorFeaturesReceivedCallback(boost::bind(&simulator_features_received_callback, _1));
     }
 }
 
@@ -494,7 +518,7 @@ void LLVoiceClient::setNonSpatialChannel(
 void LLVoiceClient::setSpatialChannel(const LLSD &channelInfo)
 {
     mSpatialCredentials    = channelInfo;
-    LLViewerRegion *region = gAgent.getRegion();
+    const auto region = vs_current_region_context();
     if (region && region->simulatorFeaturesReceived())
     {
         LLSD simulatorFeatures;
@@ -1225,3 +1249,46 @@ gHTTPRegistrationMessageParcelVoiceInfo(
 LLHTTPRegistration<LLViewerRequiredVoiceVersion>
 gHTTPRegistrationMessageRequiredVoiceVersion(
                                              "/message/RequiredVoiceVersion");
+
+void LLVoiceClient::authorizeNativeAccount(const std::string& user_id, const LLUUID& agentID)
+{
+    LLCallDialogManager::instance().authorizeNativeAccount();
+    LLVoiceChannel::initClass();
+    userAuthorized(user_id, agentID);
+    setHidden(false);
+    onRegionChanged();
+    updateSettings();
+}
+
+void LLVoiceClient::retireNativeAccount()
+{
+    mRegionChangedCallbackSlot.disconnect();
+    mSimulatorFeaturesReceivedSlot.disconnect();
+    if (LLCallDialogManager::instanceExists()) LLCallDialogManager::instance().retireNativeAccount();
+    // Actual panels own participant/font pointers and async name callbacks.
+    // Retire them before the corresponding account services are discarded.
+    for (const char* name : {"incoming_call", "outgoing_call", "fs_voice_controls", "voice_effect", "floater_voice_volume", "chat_voice"})
+    {
+        const auto instances = LLFloaterReg::getFloaterList(name);
+        std::vector<LLHandle<LLFloater>> owners;
+        for (auto* floater : instances) owners.push_back(floater->getHandle());
+        for (const auto& owner : owners)
+            if (auto* floater = owner.get())
+            {
+                const LLSD key = floater->getKey();
+                floater->closeFloater(true);
+                if (owner.get()) LLFloaterReg::destroyInstance(name, key);
+            }
+    }
+    LLVoiceChannel::retireNativeAccount();
+    if (LLWebRTCVoiceClient::instanceExists()) LLWebRTCVoiceClient::instance().retireNativeAccount();
+    if (LLVivoxVoiceClient::instanceExists()) LLVivoxVoiceClient::instance().retireNativeAccount();
+    mSpatialVoiceModule = nullptr;
+    mNonSpatialVoiceModule = nullptr;
+    mSpatialCredentials = LLSD();
+    mUserPTTState = false;
+    mPTT = false;
+    mPTTDirty = true;
+    if (LLSpeakerVolumeStorage::instanceExists()) LLSpeakerVolumeStorage::deleteSingleton();
+    gAgent.setVoiceConnected(false);
+}

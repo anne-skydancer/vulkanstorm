@@ -34,6 +34,7 @@ class FSAreaSearchMenu : public LLListContextMenu
 {
 public:
     LLContextMenu* createMenu() override;
+    void resetAccount();
 
 private:
     void onContextMenuItemClick(const LLSD& userdata);

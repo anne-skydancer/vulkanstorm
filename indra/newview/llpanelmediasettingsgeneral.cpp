@@ -27,6 +27,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpanelmediasettingsgeneral.h"
+#if VS_NATIVE_VULKAN
+#include "vseditselection.h"
+#endif
 
 // library includes
 #include "llcombobox.h"
@@ -437,6 +440,53 @@ void LLPanelMediaSettingsGeneral::setParent( LLFloaterMediaSettings* parent )
 //
 bool LLPanelMediaSettingsGeneral::navigateHomeSelectedFace(bool only_if_current_is_empty)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto selection=mParent?mParent->nativeSelection():nullptr;
+        if(!selection)return false;
+        const auto current=mParent->editGuard();if(!current())return false;
+        bool first=true,firstNavigated=false;
+        for(auto* node:*selection)
+        {
+            auto* object=node->getObject();if(!object)continue;
+            for(S32 side=0;side<object->getNumTEs();++side)
+            {
+                if(!current())return false;
+                if(!node->isTESelected(side))continue;
+                bool navigated=false;
+                const auto* data=object->mediaData(U8(side));
+                if(object->permModify() && data && (!only_if_current_is_empty ||
+                    (data->getCurrentURL().empty() && data->getAutoPlay())))
+                {
+                    auto player=LLViewerMedia::getInstance()->getMediaImplFromTextureID(data->getMediaID());
+                    if(player)
+                    {
+                        player->setPriority(LLPluginClassMedia::PRIORITY_NORMAL);
+                        player->navigateHome();
+                        if(!current())return false;
+                        if(!only_if_current_is_empty)
+                        {
+                            LLSD change;change[LLMediaEntry::CURRENT_URL_KEY]=std::string();
+                            if(!object->syncMediaData(U8(side),change,true,true,false))return false;
+                        }
+                        navigated=true;
+                    }
+                }
+                if(first){firstNavigated=navigated;first=false;}
+            }
+        }
+        // Preserve getSelectedTEValue's first-face result, which controls the
+        // original whole-object synchronization independently of identicalness.
+        if(firstNavigated)for(auto* node:*selection)
+        {
+            if(!current())return false;
+            if(auto* object=node->getObject();object && !object->sendMediaDataUpdate())return false;
+        }
+        return firstNavigated && current();
+    }
+#endif
+
     struct functor_navigate_media : public LLSelectedTEGetFunctor< bool>
     {
         functor_navigate_media(bool flag) : only_if_current_is_empty(flag) {}
@@ -529,7 +579,30 @@ void LLPanelMediaSettingsGeneral::updateCurrentUrl()
         const LLMediaEntry &  mMediaEntry;
 
     } func_current_url(default_media_data);
-    bool identical = LLSelectMgr::getInstance()->getSelection()->getSelectedTEValue( &func_current_url, value_str );
+    bool identical=true;
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto selection=mParent?mParent->nativeSelection():nullptr;
+        const auto current=mParent?mParent->editGuard():std::function<bool()>([]{return false;});
+        if(!selection || !current())return;
+        bool first=true;
+        for(auto* node:*selection)
+        {
+            const auto* object=node->getObject();if(!object)continue;
+            for(S32 side=0;side<object->getNumTEs();++side)
+            {
+                if(!current())return;
+                if(!node->isTESelected(side))continue;
+                const auto* data=object->mediaData(U8(side));
+                const auto value=data?data->getCurrentURL():default_media_data.getCurrentURL();
+                if(first){value_str=value;first=false;}else identical=identical && value==value_str;
+            }
+        }
+    }
+    else
+#endif
+        identical=LLSelectMgr::getInstance()->getSelection()->getSelectedTEValue( &func_current_url, value_str );
     mCurrentURL->setText(value_str);
     mCurrentURL->setTentative(identical);
 

@@ -78,6 +78,9 @@ public:
 
     // Returns true if the attachment is RLV_LOCK_REMOVE locked
     bool isLockedAttachment(const LLViewerObject* pAttachObj) const;
+    // Actual native attachment root/point/item metadata; consult the same lock
+    // registries and temporary-attachment identity policy as the LLVO getter.
+    bool isLockedAttachment(const LLUUID& root, S32 point, const LLUUID& item) const;
     // Returns true if the attachment point is RLV_LOCK_REMOVE locked by anything other than idRlvObj
     bool isLockedAttachmentExcept(const LLViewerObject* pObj, const LLUUID& idRlvObj) const;
     // Returns true if the attachment point is eLock type locked (RLV_LOCK_ANY = RLV_LOCK_ADD *or* RLV_LOCK_REMOVE)
@@ -467,6 +470,13 @@ inline bool RlvAttachmentLocks::isLockedAttachment(const LLViewerObject* pAttach
 }
 
 // Checked: 2010-02-28 (RLVa-1.2.0a) | Added: RLVa-1.0.5a
+inline bool RlvAttachmentLocks::isLockedAttachment(const LLUUID& root, S32 point, const LLUUID& item) const
+{
+    return root.notNull() && ((m_AttachObjRem.find(root) != m_AttachObjRem.end()) ||
+        isLockedAttachmentPoint(point, RLV_LOCK_REMOVE) ||
+        (root != item && RlvFolderLocks::instance().isLockedAttachment(item)));
+}
+
 inline bool RlvAttachmentLocks::isLockedAttachmentPoint(S32 idxAttachPt, ERlvLockMask eLock) const
 {
     return

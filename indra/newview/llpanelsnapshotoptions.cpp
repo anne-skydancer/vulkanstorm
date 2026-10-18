@@ -136,3 +136,9 @@ void LLPanelSnapshotOptions::onSendToPrimfeed()
     LLFloaterReg::showInstance("primfeed");
 }
 // </FS:Beq>
+
+// Exact private factory identity for the native shared snapshot graph.
+bool vs_snapshot_options_type(const std::type_info& type)
+{
+    return type == typeid(LLPanelSnapshotOptions);
+}

@@ -5,6 +5,12 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "NACLfloaterexploresounds.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "llviewerwindow.h"
+#endif
 #include "llcheckboxctrl.h"
 #include "llscrolllistctrl.h"
 #include "llagent.h"
@@ -56,6 +62,7 @@ NACLFloaterExploreSounds::NACLFloaterExploreSounds(const LLSD& key)
 
 NACLFloaterExploreSounds::~NACLFloaterExploreSounds()
 {
+    stopLocalSounds();
     for (blacklist_avatar_name_cache_connection_map_t::iterator it = mBlacklistAvatarNameCacheConnections.begin(); it != mBlacklistAvatarNameCacheConnections.end(); ++it)
     {
         if (it->second.connected())
@@ -66,6 +73,12 @@ NACLFloaterExploreSounds::~NACLFloaterExploreSounds()
     mBlacklistAvatarNameCacheConnections.clear();
 
     mLocalPlayingAudioSourceIDs.clear();
+}
+
+void NACLFloaterExploreSounds::onOpen(const LLSD& key)
+{
+    mAccountCurrent = vs_native_im_guard();
+    LLFloater::onOpen(key);
 }
 
 bool NACLFloaterExploreSounds::postBuild()
@@ -152,6 +165,7 @@ public:
 
 bool NACLFloaterExploreSounds::tick()
 {
+    if (!mHistoryScroller || !mAccountCurrent()) return false;
     static const std::string str_playing =  getString("Playing");
     static const std::string str_not_playing = getString("NotPlaying");
     static const std::string str_type_ui =  getString("Type_UI");
@@ -307,7 +321,7 @@ bool NACLFloaterExploreSounds::tick()
     while (audio_src_id_iter != mLocalPlayingAudioSourceIDs.end())
     {
         const LLUUID& audio_src_id = *audio_src_id_iter;
-        if (LLAudioSource* audio_source = gAudiop->findAudioSource(audio_src_id); !audio_source || audio_source->isDone())
+        if (LLAudioSource* audio_source = gAudiop ? gAudiop->findAudioSource(audio_src_id) : nullptr; !audio_source || audio_source->isDone())
         {
             audio_src_id_iter = mLocalPlayingAudioSourceIDs.erase(audio_src_id_iter);
         }
@@ -324,6 +338,7 @@ bool NACLFloaterExploreSounds::tick()
 
 void NACLFloaterExploreSounds::handlePlayLocally()
 {
+    if (!mAccountCurrent() || !gAudiop) return;
     std::unordered_set<LLUUID> asset_list;
     for (const auto* selected_item : mHistoryScroller->getAllSelected())
     {
@@ -348,6 +363,7 @@ void NACLFloaterExploreSounds::handlePlayLocally()
 
 void NACLFloaterExploreSounds::handleLookAt()
 {
+    if (!mAccountCurrent()) return;
     LLUUID selection = mHistoryScroller->getSelectedValue().asUUID();
     LLSoundHistoryItem item = getItem(selection); // Single item only
     if (item.mID.isNull())
@@ -360,11 +376,19 @@ void NACLFloaterExploreSounds::handleLookAt()
     // Try to find object position
     if (item.mSourceID.notNull())
     {
-        LLViewerObject* object = gObjectList.findObject(item.mSourceID);
-        if (object)
+#if VS_NATIVE_VULKAN
+        if (const auto account = VSNativeSession::active())
         {
-            pos_global = object->getPositionGlobal();
+            if (gViewerWindow && gViewerWindow->nativeContext())
+            {
+                auto& scene = gViewerWindow->nativeContext()->world();
+                if (const auto object = scene.object(item.mSourceID))
+                    if (const auto state = scene.objectTransform(*object)) pos_global = state->position;
+            }
         }
+        else
+#endif
+        if (LLViewerObject* object = gObjectList.findObject(item.mSourceID)) pos_global = object->getPositionGlobal();
     }
 
     // Move the camera
@@ -383,12 +407,13 @@ void NACLFloaterExploreSounds::handleLookAt()
 
 void NACLFloaterExploreSounds::handleStop()
 {
+    if (!mAccountCurrent() || !gAudiop) return;
     for (const auto& selection_item : mHistoryScroller->getAllSelected())
     {
         LLSoundHistoryItem item = getItem(selection_item->getValue());
         if (item.mID.notNull() && item.mPlaying)
         {
-            if (LLAudioSource* audio_source = gAudiop->findAudioSource(item.mSourceID))
+            if (LLAudioSource* audio_source = gAudiop->findAudioSourceByLogID(item.mID))
             {
                 S32 type = item.mType;
                 audio_source->setType(LLAudioEngine::AUDIO_TYPE_UI);
@@ -423,9 +448,14 @@ void NACLFloaterExploreSounds::handleStop()
 
 void NACLFloaterExploreSounds::handleStopLocally()
 {
+    if (!mAccountCurrent()) return;
+    stopLocalSounds();
+}
+void NACLFloaterExploreSounds::stopLocalSounds()
+{
     for (const auto& audio_source_id : mLocalPlayingAudioSourceIDs)
     {
-        if (LLAudioSource* audio_source = gAudiop->findAudioSource(audio_source_id); audio_source && !audio_source->isDone())
+        if (LLAudioSource* audio_source = gAudiop ? gAudiop->findAudioSource(audio_source_id) : nullptr; audio_source && !audio_source->isDone())
         {
             audio_source->play(LLUUID::null);
         }
@@ -437,6 +467,7 @@ void NACLFloaterExploreSounds::handleStopLocally()
 //add sound to blacklist
 void NACLFloaterExploreSounds::blacklistSound(FSAssetBlacklist::eBlacklistFlag flag)
 {
+    if (!mAccountCurrent()) return;
     for (const auto* selected_item : mHistoryScroller->getAllSelected())
     {
         LLSoundHistoryItem item = getItem(selected_item->getValue());
@@ -446,10 +477,11 @@ void NACLFloaterExploreSounds::blacklistSound(FSAssetBlacklist::eBlacklistFlag f
         }
 
         std::string region_name;
-        if (LLViewerRegion* cur_region = gAgent.getRegion())
-        {
-            region_name = cur_region->getName();
-        }
+#if VS_NATIVE_VULKAN
+        if (const auto account = VSNativeSession::active()) region_name = account->regionName();
+        else
+#endif
+        if (LLViewerRegion* cur_region = gAgent.getRegion()) region_name = cur_region->getName();
 
         if (LLAvatarName av_name; LLAvatarNameCache::get(item.mOwnerID, &av_name))
         {
@@ -459,7 +491,9 @@ void NACLFloaterExploreSounds::blacklistSound(FSAssetBlacklist::eBlacklistFlag f
         {
             // Create unique UUID here instead of avatar UUID because we might be blacklisting more than one sound of the same user
             LLUUID requestId = LLUUID::generateNewID();
-            mBlacklistAvatarNameCacheConnections.try_emplace(requestId, LLAvatarNameCache::get(item.mOwnerID, boost::bind(&NACLFloaterExploreSounds::onBlacklistAvatarNameCacheCallback, this, requestId, _1, _2, item.mAssetID, region_name, flag)));
+            mBlacklistAvatarNameCacheConnections.try_emplace(requestId, LLAvatarNameCache::get(item.mOwnerID,
+                vs_native_im_lifetime_callback([weak = getHandle()] { return weak.get() != nullptr; },
+                    boost::bind(&NACLFloaterExploreSounds::onBlacklistAvatarNameCacheCallback, this, requestId, _1, _2, item.mAssetID, region_name, flag))));
         }
     }
 }

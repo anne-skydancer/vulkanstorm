@@ -59,6 +59,7 @@ protected:
     // called from handleMouseUp and onMouseCaptureLost to "let go"
     // of the mouse and make it visible JC
     void releaseMouse();
+    template<class Peer> void applyPick(const LLPickInfo&,Peer&);
 
 protected:
     S32     mAccumX;

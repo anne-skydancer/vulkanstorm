@@ -464,7 +464,7 @@ void LLFloaterColorPicker::onClickPipette( )
     if (VSNativeSession::active())
     {
         auto* tool = LLToolPipette::getInstance();
-        tool->setNativeActive(!tool->nativeActive());
+        tool->setNativeActive(!tool->nativeConsumer(this),this,mSwatch?mSwatch->pickerGuard():std::function<bool()>{});
         return;
     }
 #endif
@@ -509,6 +509,7 @@ void LLFloaterColorPicker::onImmediateCheck( LLUICtrl* ctrl, void* data)
 
 void LLFloaterColorPicker::onColorSelect( const LLTextureEntry& te )
 {
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() && !LLToolPipette::instance().nativeConsumer(this))return;
     // Pipete
     selectCurRgb(te.getColor().mV[VRED], te.getColor().mV[VGREEN], te.getColor().mV[VBLUE]);
 }
@@ -541,7 +542,7 @@ void LLFloaterColorPicker::draw()
     if (VSNativeSession::active())
     {
         mPipetteBtn->setEnabled(mActive);
-        mPipetteBtn->setToggleState(LLToolPipette::getInstance()->nativeActive());
+        mPipetteBtn->setToggleState(LLToolPipette::getInstance()->nativeConsumer(this));
     }
     else
 #endif
@@ -1211,7 +1212,7 @@ void LLFloaterColorPicker::stopUsingPipette()
 #if VS_NATIVE_VULKAN
     if (gViewerWindow && gViewerWindow->isNativeVulkan())
     {
-        LLToolPipette::getInstance()->setNativeActive(false);
+        if(LLToolPipette::getInstance()->ownsNativeConsumer(this))LLToolPipette::getInstance()->setNativeActive(false);
         return;
     }
 #endif

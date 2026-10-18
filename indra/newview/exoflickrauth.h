@@ -18,21 +18,27 @@
  */
 
 #include <functional>
+#include <memory>
 
 // This class's function is described by the flow chart at
 // https://www.flickr.com/services/api/auth.oauth.html
-class exoFlickrAuth
+class exoFlickrAuth : public std::enable_shared_from_this<exoFlickrAuth>
 {
 public:
     typedef std::function<void(bool success, const LLSD& params)> authorized_callback_t;
 
-    exoFlickrAuth(authorized_callback_t callback);
+    static void create(authorized_callback_t callback);
+    static void retireAccount();
     ~exoFlickrAuth();
 
 private:
     authorized_callback_t mCallback;
-    bool mAuthenticating;
-    static bool sAuthorisationInProgress;
+    explicit exoFlickrAuth(authorized_callback_t callback);
+    std::function<bool()> mCurrent;
+    bool mRetired = false;
+    static std::shared_ptr<exoFlickrAuth> sOwner;
+    bool current() const { return !mRetired && mCurrent(); }
+    void complete(bool success, const LLSD& response);
 
     void beginAuthorisation();
     void checkAuthorisation();

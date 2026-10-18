@@ -29,6 +29,12 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpanelpermissions.h"
+#include <type_traits>
+#include "vseditcontroller.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vseditselection.h"
+#endif
 
 // library includes
 #include "lluuid.h"
@@ -349,7 +355,8 @@ void LLPanelPermissions::disableAll()
     getChildView("F:")->setVisible(false);
 }
 
-void LLPanelPermissions::refresh()
+template<class Selection>
+void LLPanelPermissions::refreshController(Selection* selection)
 {
     LLButton*   BtnDeedToGroup = getChild<LLButton>("button deed");
     if(BtnDeedToGroup)
@@ -367,24 +374,26 @@ void LLPanelPermissions::refresh()
         BtnDeedToGroup->setLabelUnselected(deedText);
     }
     bool root_selected = true;
-    LLSelectNode* nodep = LLSelectMgr::getInstance()->getSelection()->getFirstRootNode();
-    S32 object_count = LLSelectMgr::getInstance()->getSelection()->getRootObjectCount();
+    auto* nodep = selection->getSelection()->getFirstRootNode();
+    S32 object_count = selection->getSelection()->getRootObjectCount();
     if(!nodep || 0 == object_count)
     {
-        nodep = LLSelectMgr::getInstance()->getSelection()->getFirstNode();
-        object_count = LLSelectMgr::getInstance()->getSelection()->getObjectCount();
+        nodep = selection->getSelection()->getFirstNode();
+        object_count = selection->getSelection()->getObjectCount();
         root_selected = false;
     }
 
-    //bool attachment_selected = LLSelectMgr::getInstance()->getSelection()->isAttachment();
+    //bool attachment_selected = selection->getSelection()->isAttachment();
     //attachment_selected = false;
-    LLViewerObject* objectp = NULL;
-    if(nodep) objectp = nodep->getObject();
+    auto* objectp=nodep?nodep->getObject():nullptr;
     if(!nodep || !objectp)// || attachment_selected)
     {
         // ...nothing selected
         disableAll();
         mLastSelectedObject = NULL;
+#if VS_NATIVE_VULKAN
+        mLastNativeSelectedObject.setNull();mLastNativeSelectedCurrent={};
+#endif
         return;
     }
 
@@ -392,12 +401,12 @@ void LLPanelPermissions::refresh()
     const bool is_one_object = (object_count == 1);
 
     // BUG: fails if a root and non-root are both single-selected.
-    bool is_perm_modify = (LLSelectMgr::getInstance()->getSelection()->getFirstRootNode()
-                           && LLSelectMgr::getInstance()->selectGetRootsModify())
-        || LLSelectMgr::getInstance()->selectGetModify();
-    bool is_nonpermanent_enforced = (LLSelectMgr::getInstance()->getSelection()->getFirstRootNode()
-                           && LLSelectMgr::getInstance()->selectGetRootsNonPermanentEnforced())
-        || LLSelectMgr::getInstance()->selectGetNonPermanentEnforced();
+    bool is_perm_modify = (selection->getSelection()->getFirstRootNode()
+                           && selection->selectGetRootsModify())
+        || selection->selectGetModify();
+    bool is_nonpermanent_enforced = (selection->getSelection()->getFirstRootNode()
+                           && selection->selectGetRootsNonPermanentEnforced())
+        || selection->selectGetNonPermanentEnforced();
     const LLFocusableElement* keyboard_focus_view = gFocusMgr.getKeyboardFocus();
 
     S32 string_index = 0;
@@ -427,21 +436,21 @@ void LLPanelPermissions::refresh()
 
     std::string pfAttrName;
 
-    if ((LLSelectMgr::getInstance()->getSelection()->getFirstRootNode()
-        && LLSelectMgr::getInstance()->selectGetRootsNonPathfinding())
-        || LLSelectMgr::getInstance()->selectGetNonPathfinding())
+    if ((selection->getSelection()->getFirstRootNode()
+        && selection->selectGetRootsNonPathfinding())
+        || selection->selectGetNonPathfinding())
     {
         pfAttrName = "Pathfinding_Object_Attr_None";
     }
-    else if ((LLSelectMgr::getInstance()->getSelection()->getFirstRootNode()
-        && LLSelectMgr::getInstance()->selectGetRootsPermanent())
-        || LLSelectMgr::getInstance()->selectGetPermanent())
+    else if ((selection->getSelection()->getFirstRootNode()
+        && selection->selectGetRootsPermanent())
+        || selection->selectGetPermanent())
     {
         pfAttrName = "Pathfinding_Object_Attr_Permanent";
     }
-    else if ((LLSelectMgr::getInstance()->getSelection()->getFirstRootNode()
-        && LLSelectMgr::getInstance()->selectGetRootsCharacter())
-        || LLSelectMgr::getInstance()->selectGetCharacter())
+    else if ((selection->getSelection()->getFirstRootNode()
+        && selection->selectGetRootsCharacter())
+        || selection->selectGetCharacter())
     {
         pfAttrName = "Pathfinding_Object_Attr_Character";
     }
@@ -462,9 +471,9 @@ void LLPanelPermissions::refresh()
 // [/RLVa:KB]
     std::string creator_app_link;
 // [RLVa:KB] - Checked: 2010-11-02 (RLVa-1.2.2a) | Modified: RLVa-1.2.2a
-    creators_identical = LLSelectMgr::getInstance()->selectGetCreator(mCreatorID, creator_app_link);
+    creators_identical = selection->selectGetCreator(mCreatorID, creator_app_link);
 // [/RLVa:KB]
-//  LLSelectMgr::getInstance()->selectGetCreator(mCreatorID, creator_app_link);
+//  selection->selectGetCreator(mCreatorID, creator_app_link);
 
 //  // Style for creator and owner links (both group and agent)
 //  LLStyle::Params style_params;
@@ -502,9 +511,9 @@ void LLPanelPermissions::refresh()
     getChildView("Last Owner:")->setEnabled(true);
 
     std::string owner_app_link;
-    const bool owners_identical = LLSelectMgr::getInstance()->selectGetOwner(mOwnerID, owner_app_link);
+    const bool owners_identical = selection->selectGetOwner(mOwnerID, owner_app_link);
     //KC: Always show last owner
-    //if (LLSelectMgr::getInstance()->selectIsGroupOwned())
+    //if (selection->selectIsGroupOwned())
     //{
     //  // Group owned already displayed by selectGetOwner
     //  LLGroupMgrGroupData* group_data = LLGroupMgr::getInstance()->getGroupData(mOwnerID);
@@ -529,7 +538,7 @@ void LLPanelPermissions::refresh()
     //  {
             // Display last owner if public
             std::string last_owner_app_link;
-            const bool last_owners_identical = LLSelectMgr::getInstance()->selectGetLastOwner(mLastOwnerID, last_owner_app_link);
+            const bool last_owners_identical = selection->selectGetLastOwner(mLastOwnerID, last_owner_app_link);
 
             // It should never happen that the last owner is null and the owner
             // is null, but it seems to be a bug in the simulator right now. JC
@@ -571,7 +580,7 @@ void LLPanelPermissions::refresh()
             creator_app_link = LLSLURL("agent", mCreatorID, "rlvanonym").getSLURLString();
 
         // Only anonymize the owner name if all of the selection is owned by the same avie and isn't group owned
-        if ( (owners_identical) && (!LLSelectMgr::getInstance()->selectIsGroupOwned()) && (!RlvActions::canShowName(RlvActions::SNC_DEFAULT, mOwnerID)) )
+        if ( (owners_identical) && (!selection->selectIsGroupOwned()) && (!RlvActions::canShowName(RlvActions::SNC_DEFAULT, mOwnerID)) )
             owner_app_link = LLSLURL("agent", mOwnerID, "rlvanonym").getSLURLString();
 
         // Only anonymize the last owner name if all of the selection was last owned by the same avie
@@ -593,7 +602,7 @@ void LLPanelPermissions::refresh()
     getChildView("Group:")->setEnabled(true);
     getChild<LLUICtrl>("Group Name")->setValue(LLStringUtil::null);
     LLUUID group_id;
-    bool groups_identical = LLSelectMgr::getInstance()->selectGetGroup(group_id);
+    bool groups_identical = selection->selectGetGroup(group_id);
     if (groups_identical)
     {
         getChild<LLUICtrl>("Group Name")->setValue(LLSLURL("group", group_id, "inspect").getSLURLString());
@@ -679,11 +688,21 @@ void LLPanelPermissions::refresh()
     //Check if the object selection has changed and that there is pending sale info changes
     //Prevents clearing the unsaved input on idle refresh
     bool selection_changed = false;
-    if (mLastSelectedObject != objectp)
+    if constexpr(std::is_same_v<std::remove_pointer_t<decltype(objectp)>,LLViewerObject>)
     {
-        mLastSelectedObject = objectp;
-        selection_changed = true;
+        if(mLastSelectedObject!=objectp){mLastSelectedObject=objectp;selection_changed=true;}
     }
+#if VS_NATIVE_VULKAN
+    else
+    {
+        if(mLastNativeSelectedObject!=objectp->getID() || !mLastNativeSelectedCurrent || !mLastNativeSelectedCurrent())
+        {
+            mLastNativeSelectedObject=objectp->getID();
+            mLastNativeSelectedCurrent=objectp->task().objectGuard();
+            selection_changed=true;
+        }
+    }
+#endif
     bool update_sale_info = selection_changed || !getChild<LLButton>("button mark for sale")->getEnabled();
 
     S32 total_sale_price = 0;
@@ -691,17 +710,17 @@ void LLPanelPermissions::refresh()
     bool is_for_sale_mixed = false;
     bool is_sale_price_mixed = false;
     U32 num_for_sale = false;
-    LLSelectMgr::getInstance()->selectGetAggregateSaleInfo(num_for_sale,
+    selection->selectGetAggregateSaleInfo(num_for_sale,
                                                            is_for_sale_mixed,
                                                            is_sale_price_mixed,
                                                            total_sale_price,
                                                            individual_sale_price);
 
     const bool self_owned = (gAgent.getID() == mOwnerID);
-    const bool group_owned = LLSelectMgr::getInstance()->selectIsGroupOwned() ;
-    const bool public_owned = (mOwnerID.isNull() && !LLSelectMgr::getInstance()->selectIsGroupOwned());
-    const bool can_transfer = LLSelectMgr::getInstance()->selectGetRootsTransfer();
-    const bool can_copy = LLSelectMgr::getInstance()->selectGetRootsCopy();
+    const bool group_owned = selection->selectIsGroupOwned() ;
+    const bool public_owned = (mOwnerID.isNull() && !selection->selectIsGroupOwned());
+    const bool can_transfer = selection->selectGetRootsTransfer();
+    const bool can_copy = selection->selectGetRootsCopy();
 
     if (!owners_identical)
     {
@@ -800,22 +819,22 @@ void LLPanelPermissions::refresh()
     U32 next_owner_mask_on      = 0;
     U32 next_owner_mask_off     = 0;
 
-    bool valid_base_perms       = LLSelectMgr::getInstance()->selectGetPerm(PERM_BASE,
+    bool valid_base_perms       = selection->selectGetPerm(PERM_BASE,
                                                                             &base_mask_on,
                                                                             &base_mask_off);
     //bool valid_owner_perms =//
-    LLSelectMgr::getInstance()->selectGetPerm(PERM_OWNER,
+    selection->selectGetPerm(PERM_OWNER,
                                               &owner_mask_on,
                                               &owner_mask_off);
-    bool valid_group_perms      = LLSelectMgr::getInstance()->selectGetPerm(PERM_GROUP,
+    bool valid_group_perms      = selection->selectGetPerm(PERM_GROUP,
                                                                             &group_mask_on,
                                                                             &group_mask_off);
 
-    bool valid_everyone_perms   = LLSelectMgr::getInstance()->selectGetPerm(PERM_EVERYONE,
+    bool valid_everyone_perms   = selection->selectGetPerm(PERM_EVERYONE,
                                                                             &everyone_mask_on,
                                                                             &everyone_mask_off);
 
-    bool valid_next_perms       = LLSelectMgr::getInstance()->selectGetPerm(PERM_NEXT_OWNER,
+    bool valid_next_perms       = selection->selectGetPerm(PERM_NEXT_OWNER,
                                                                             &next_owner_mask_on,
                                                                             &next_owner_mask_off);
 
@@ -847,7 +866,7 @@ void LLPanelPermissions::refresh()
         {
             if(object_count == 1)
             {
-                LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->getFirstNode();
+                auto* node = selection->getSelection()->getFirstNode();
                 if (node && node->mValid)
                 {
                     getChild<LLUICtrl>("B:")->setValue("B: " + mask_to_string( node->mPermissions->getMaskBase(), isOpenSim)); // <FS:Beq/> remove misleading X for export when not in OpenSim
@@ -1127,7 +1146,7 @@ void LLPanelPermissions::refresh()
     {
         // reflect sale information
         LLSaleInfo sale_info;
-        bool valid_sale_info = LLSelectMgr::getInstance()->selectGetSaleInfo(sale_info);
+        bool valid_sale_info = selection->selectGetSaleInfo(sale_info);
         LLSaleInfo::EForSale sale_type = sale_info.getSaleType();
 
         LLComboBox* combo_sale_type = getChild<LLComboBox>("sale type");
@@ -1161,16 +1180,16 @@ void LLPanelPermissions::refresh()
     }
 
     // Check search status of objects
-    const bool all_volume = LLSelectMgr::getInstance()->selectionAllPCode( LL_PCODE_VOLUME );
+    const bool all_volume = selection->selectionAllPCode( LL_PCODE_VOLUME );
     bool include_in_search;
-    const bool all_include_in_search = LLSelectMgr::getInstance()->selectionGetIncludeInSearch(&include_in_search);
+    const bool all_include_in_search = selection->selectionGetIncludeInSearch(&include_in_search);
     getChildView("search_check")->setEnabled(has_change_sale_ability && all_volume);
     getChild<LLUICtrl>("search_check")->setValue(include_in_search);
     getChild<LLUICtrl>("search_check")->setTentative(               !all_include_in_search);
 
     // Click action (touch, sit, buy, pay, open, play, open media, zoom, ignore)
     U8 click_action = 0;
-    if (LLSelectMgr::getInstance()->selectionGetClickAction(&click_action))
+    if (selection->selectionGetClickAction(&click_action))
     {
         LLComboBox* combo_click_action = getChild<LLComboBox>("clickaction");
         if (combo_click_action)
@@ -1180,7 +1199,7 @@ void LLPanelPermissions::refresh()
         }
     }
 
-    if (LLSelectMgr::getInstance()->getSelection()->isAttachment())
+    if (selection->getSelection()->isAttachment())
     {
         getChildView("checkbox for sale")->setEnabled(false);
         getChildView("Edit Cost")->setEnabled(false);
@@ -1243,22 +1262,65 @@ void LLPanelPermissions::refresh()
 //  mLabelCreatorName->setText(name, style_params);
 //}
 
+void LLPanelPermissions::refresh()
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {VSEditSelection selection;refreshController(&selection);return;}
+#endif
+    refreshController(LLSelectMgr::getInstance());
+}
+
 // static
 void LLPanelPermissions::onClickClaim(void*)
 {
+    vs_with_edit_selection([&](auto* edit)
+    {
     // try to claim ownership
-    LLSelectMgr::getInstance()->sendOwner(gAgent.getID(), gAgent.getGroupID());
+    edit->sendOwner(gAgent.getID(), gAgent.getGroupID());
+
+    });
 }
 
 // static
 void LLPanelPermissions::onClickRelease(void*)
 {
+    vs_with_edit_selection([&](auto* edit)
+    {
     // try to release ownership
-    LLSelectMgr::getInstance()->sendOwner(LLUUID::null, LLUUID::null);
+    edit->sendOwner(LLUUID::null, LLUUID::null);
+
+    });
 }
 
 void LLPanelPermissions::onClickGroup()
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        auto selected=std::make_shared<VSEditSelection>();
+        LLUUID owner;std::string name;
+        if(!selected->selectGetOwner(owner,name) || owner!=gAgent.getID())return;
+        auto* picker=LLFloaterReg::showTypedInstance<LLFloaterGroupPicker>("group_picker",gAgent.getID());
+        if(!picker)return;
+        const auto weak=getHandle();const auto current=selected->guard();
+        const auto lease=selected->nativeSelection()->retainSelection();
+        picker->setSelectGroupCallback([weak,selected,current,lease](LLUUID group)
+        {
+            if(!current || !current())return;
+            auto* view=dynamic_cast<LLPanelPermissions*>(weak.get());if(!view)return;
+            view->getChild<LLUICtrl>("Group Name")->setValue(LLSLURL("group",group,"inspect").getSLURLString());
+            selected->sendGroup(group);
+        });
+        if(auto* parent=gFloaterView->getParentFloater(this))
+        {
+            const auto rect=gFloaterView->findNeighboringPosition(parent,picker);
+            picker->setOrigin(rect.mLeft,rect.mBottom);parent->addDependentFloater(picker);
+        }
+        return;
+    }
+#endif
+
     LLUUID owner_id;
     std::string name;
     bool owners_identical = LLSelectMgr::getInstance()->selectGetOwner(owner_id, name);
@@ -1308,6 +1370,24 @@ bool callback_deed_to_group(const LLSD& notification, const LLSD& response)
 
 void LLPanelPermissions::onClickDeedToGroup(void* data)
 {
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        auto selected=std::make_shared<VSEditSelection>();
+        const auto current=selected->guard();
+        const auto lease=selected->nativeSelection()?selected->nativeSelection()->retainSelection():nullptr;
+        LLNotificationsUtil::add("DeedObjectToGroup",LLSD(),LLSD(),[selected,current,lease](const LLSD& notification,const LLSD& response)
+        {
+            if(!current || !current() || LLNotificationsUtil::getSelectedOption(notification,response)!=0)return false;
+            LLUUID group;
+            if(selected->selectGetGroup(group) && group.notNull() && gAgent.hasPowerInGroup(group,GP_OBJECT_DEED))
+                selected->sendOwner(LLUUID::null,group,false);
+            return false;
+        });
+        return;
+    }
+#endif
+
     LLNotificationsUtil::add( "DeedObjectToGroup", LLSD(), LLSD(), callback_deed_to_group);
 }
 
@@ -1318,7 +1398,9 @@ void LLPanelPermissions::onClickDeedToGroup(void* data)
 // static
 void LLPanelPermissions::onCommitPerm(LLUICtrl *ctrl, void *data, U8 field, U32 perm)
 {
-    LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getFirstRootObject();
+    vs_with_edit_selection([&](auto* edit)
+    {
+    auto* object = edit->getSelection()->getFirstRootObject();
     if(!object) return;
 
     // Checkbox will have toggled itself
@@ -1326,7 +1408,9 @@ void LLPanelPermissions::onCommitPerm(LLUICtrl *ctrl, void *data, U8 field, U32 
     LLCheckBoxCtrl *check = (LLCheckBoxCtrl *)ctrl;
     bool new_state = check->get();
 
-    LLSelectMgr::getInstance()->selectionSetObjectPermissions(field, new_state, perm);
+    edit->selectionSetObjectPermissions(field, new_state, perm);
+
+    });
 }
 
 // static
@@ -1380,14 +1464,16 @@ void LLPanelPermissions::onCommitExport(LLUICtrl* ctrl, void* data)
 // static
 void LLPanelPermissions::onCommitName(LLUICtrl*, void* data)
 {
+    vs_with_edit_selection([&](auto* edit)
+    {
     LLPanelPermissions* self = (LLPanelPermissions*)data;
     LLLineEditor*   tb = self->getChild<LLLineEditor>("Object Name");
     if (!tb)
     {
         return;
     }
-    LLSelectMgr::getInstance()->selectionSetObjectName(tb->getText());
-    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
+    edit->selectionSetObjectName(tb->getText());
+    auto selection = edit->getSelection();
     if (selection->isAttachment() && (selection->getNumNodes() == 1) && !tb->getText().empty())
     {
         LLUUID object_id = selection->getFirstObject()->getAttachmentItemID();
@@ -1402,20 +1488,24 @@ void LLPanelPermissions::onCommitName(LLUICtrl*, void* data)
             gInventory.notifyObservers();
         }
     }
+
+    });
 }
 
 
 // static
 void LLPanelPermissions::onCommitDesc(LLUICtrl*, void* data)
 {
+    vs_with_edit_selection([&](auto* edit)
+    {
     LLPanelPermissions* self = (LLPanelPermissions*)data;
     LLLineEditor*   le = self->getChild<LLLineEditor>("Object Description");
     if (!le)
     {
         return;
     }
-    LLSelectMgr::getInstance()->selectionSetObjectDescription(le->getText());
-    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
+    edit->selectionSetObjectDescription(le->getText());
+    auto selection = edit->getSelection();
     if (selection->isAttachment() && (selection->getNumNodes() == 1))
     {
         LLUUID object_id = selection->getFirstObject()->getAttachmentItemID();
@@ -1429,6 +1519,8 @@ void LLPanelPermissions::onCommitDesc(LLUICtrl*, void* data)
             gInventory.notifyObservers();
         }
     }
+
+    });
 }
 
 void LLPanelPermissions::onCommitForSale()
@@ -1472,6 +1564,8 @@ void LLPanelPermissions::onCommitSalePrice()
 
 void LLPanelPermissions::setAllSaleInfo()
 {
+    vs_with_edit_selection([&](auto* edit)
+    {
     LL_INFOS() << "LLPanelPermissions::setAllSaleInfo()" << LL_ENDL;
     LLSaleInfo::EForSale sale_type = LLSaleInfo::FS_NOT;
 
@@ -1494,53 +1588,38 @@ void LLPanelPermissions::setAllSaleInfo()
         sale_type = LLSaleInfo::FS_NOT;
 
     LLSaleInfo old_sale_info;
-    LLSelectMgr::getInstance()->selectGetSaleInfo(old_sale_info);
+    edit->selectGetSaleInfo(old_sale_info);
 
     LLSaleInfo new_sale_info(sale_type, price);
-    LLSelectMgr::getInstance()->selectionSetObjectSaleInfo(new_sale_info);
+    edit->selectionSetObjectSaleInfo(new_sale_info);
 
     // Note: won't work right if a root and non-root are both single-selected (here and other places).
-    bool is_perm_modify = (LLSelectMgr::getInstance()->getSelection()->getFirstRootNode()
-                           && LLSelectMgr::getInstance()->selectGetRootsModify())
-                          || LLSelectMgr::getInstance()->selectGetModify();
-    bool is_nonpermanent_enforced = (LLSelectMgr::getInstance()->getSelection()->getFirstRootNode()
-                                     && LLSelectMgr::getInstance()->selectGetRootsNonPermanentEnforced())
-                                    || LLSelectMgr::getInstance()->selectGetNonPermanentEnforced();
+    bool is_perm_modify = (edit->getSelection()->getFirstRootNode()
+                           && edit->selectGetRootsModify())
+                          || edit->selectGetModify();
+    bool is_nonpermanent_enforced = (edit->getSelection()->getFirstRootNode()
+                                     && edit->selectGetRootsNonPermanentEnforced())
+                                    || edit->selectGetNonPermanentEnforced();
 
     if (is_perm_modify && is_nonpermanent_enforced)
     {
-        struct f : public LLSelectedObjectFunctor
-        {
-            virtual bool apply(LLViewerObject* object)
-            {
-                return object->getClickAction() == CLICK_ACTION_BUY
-                    || object->getClickAction() == CLICK_ACTION_TOUCH;
-            }
-        } check_actions;
-
-        // Selection should only contain objects that are of target
-        // action already or of action we are aiming to remove.
-        bool default_actions = LLSelectMgr::getInstance()->getSelection()->applyToObjects(&check_actions);
+        bool default_actions=vs_build_apply_objects(edit,[](const auto* object)
+        {return object->getClickAction()==CLICK_ACTION_BUY || object->getClickAction()==CLICK_ACTION_TOUCH;});
 
         if (default_actions && old_sale_info.isForSale() != new_sale_info.isForSale())
         {
             // <FS:Ansariel> FIRE-5273: Change default click action to buy only for modifiable objects
             //U8 new_click_action = new_sale_info.isForSale() ? CLICK_ACTION_BUY : CLICK_ACTION_TOUCH;
-            struct f : public LLSelectedObjectFunctor
-            {
-                virtual bool apply(LLViewerObject* object)
-                {
-                    return object->permModify();
-                }
-            } modify_checks;
-            bool allow_modify = LLSelectMgr::getInstance()->getSelection()->applyToObjects(&modify_checks);
+            bool allow_modify=vs_build_apply_objects(edit,[](const auto* object){return object->permModify();});
             U8 new_click_action = (new_sale_info.isForSale() && allow_modify) ? CLICK_ACTION_BUY : CLICK_ACTION_TOUCH;
             // </FS:Ansariel>
-            LLSelectMgr::getInstance()->selectionSetClickAction(new_click_action);
+            edit->selectionSetClickAction(new_click_action);
         }
     }
 
     showMarkForSale(false);
+
+    });
 }
 
 void LLPanelPermissions::showMarkForSale(bool show)
@@ -1574,9 +1653,20 @@ struct LLSelectionPayable : public LLSelectedObjectFunctor
     }
 };
 
+namespace
+{
+bool build_object_payable(LLViewerObject* object)
+{LLSelectionPayable predicate;return predicate.apply(object);}
+#if VS_NATIVE_VULKAN
+bool build_object_payable(VSEditObject* object) {return object->payable();}
+#endif
+}
+
 // static
 void LLPanelPermissions::onCommitClickAction(LLUICtrl* ctrl, void*)
 {
+    vs_with_edit_selection([&](auto* edit)
+    {
     LLComboBox* box = (LLComboBox*)ctrl;
     if (!box) return;
     std::string value = box->getValue().asString();
@@ -1585,14 +1675,14 @@ void LLPanelPermissions::onCommitClickAction(LLUICtrl* ctrl, void*)
     if (click_action == CLICK_ACTION_BUY)
     {
         LLSaleInfo sale_info;
-        LLSelectMgr::getInstance()->selectGetSaleInfo(sale_info);
+        edit->selectGetSaleInfo(sale_info);
         if (!sale_info.isForSale())
         {
             LLNotificationsUtil::add("CantSetBuyObject");
 
             // Set click action back to its old value
             U8 click_action = 0;
-            LLSelectMgr::getInstance()->selectionGetClickAction(&click_action);
+            edit->selectionGetClickAction(&click_action);
             std::string item_value = click_action_to_string_value(click_action);
             box->setValue(LLSD(item_value));
             return;
@@ -1601,24 +1691,29 @@ void LLPanelPermissions::onCommitClickAction(LLUICtrl* ctrl, void*)
     else if (click_action == CLICK_ACTION_PAY)
     {
         // Verify object has script with money() handler
-        LLSelectionPayable payable;
-        bool can_pay = LLSelectMgr::getInstance()->getSelection()->applyToObjects(&payable);
+        bool can_pay=vs_build_apply_objects(edit,[](auto* object){return build_object_payable(object);});
         if (!can_pay)
         {
             // Warn, but do it anyway.
             LLNotificationsUtil::add("ClickActionNotPayable");
         }
     }
-    LLSelectMgr::getInstance()->selectionSetClickAction(click_action);
+    edit->selectionSetClickAction(click_action);
+
+    });
 }
 
 // static
 void LLPanelPermissions::onCommitIncludeInSearch(LLUICtrl* ctrl, void*)
 {
+    vs_with_edit_selection([&](auto* edit)
+    {
     LLCheckBoxCtrl* box = (LLCheckBoxCtrl*)ctrl;
     llassert(box);
 
-    LLSelectMgr::getInstance()->selectionSetIncludeInSearch(box->get());
+    edit->selectionSetIncludeInSearch(box->get());
+
+    });
 }
 
 

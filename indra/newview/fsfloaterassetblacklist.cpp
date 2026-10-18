@@ -29,6 +29,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsfloaterassetblacklist.h"
+#include "vsnativeim.h"
 
 #include "fscommon.h"
 #include "fsscrolllistctrl.h"
@@ -51,6 +52,7 @@ FSFloaterAssetBlacklist::FSFloaterAssetBlacklist(const LLSD& key)
 
 FSFloaterAssetBlacklist::~FSFloaterAssetBlacklist()
 {
+    onStopBtn();
     if (mBlacklistCallbackConnection.connected())
     {
         mBlacklistCallbackConnection.disconnect();
@@ -85,6 +87,7 @@ bool FSFloaterAssetBlacklist::postBuild()
 
 void FSFloaterAssetBlacklist::onOpen(const LLSD& key)
 {
+    mAccountCurrent = vs_native_im_guard();
     mResultList->clearRows();
     buildBlacklist();
 }
@@ -215,7 +218,10 @@ void FSFloaterAssetBlacklist::addElementToList(const LLUUID& id, const FSAssetBl
 
 void FSFloaterAssetBlacklist::removeElements()
 {
+    if (!mAccountCurrent()) return;
     std::map<LLUUID, S32> flags_to_remove_by_id;
+    uuid_vec_t remove_full;
+    const auto weak = getHandle(); const auto current = mAccountCurrent;
 
     for (auto listitem : mResultList->getAllSelected())
     {
@@ -230,12 +236,14 @@ void FSFloaterAssetBlacklist::removeElements()
         else
         {
             // fallback: remove full item
-            FSAssetBlacklist::instance().removeItemsFromBlacklist({ id });
+            remove_full.push_back(id);
         }
     }
 
+    if (!remove_full.empty()) FSAssetBlacklist::instance().removeItemsFromBlacklist(remove_full);
     for (const auto& [id, flags] : flags_to_remove_by_id)
     {
+        if (!weak.get() || !current()) return;
         FSAssetBlacklist::instance().removeFlagsFromItem(id, flags);
     }
 }
@@ -276,6 +284,7 @@ void FSFloaterAssetBlacklist::onRemoveBtn()
 
 void FSFloaterAssetBlacklist::onRemoveAllTemporaryBtn()
 {
+    if (!mAccountCurrent()) return;
     gObjectList.resetDerenderList(true);
 }
 
@@ -298,6 +307,7 @@ void FSFloaterAssetBlacklist::onSelectionChanged()
 
 void FSFloaterAssetBlacklist::onPlayBtn()
 {
+    if (!mAccountCurrent() || !gAudiop) return;
     const LLScrollListItem* item = mResultList->getFirstSelected();
     S32 name_column = mResultList->getColumn("asset_type")->mIndex;
 
@@ -322,7 +332,7 @@ void FSFloaterAssetBlacklist::onStopBtn()
         return;
     }
 
-    if (LLAudioSource* audio_source = gAudiop->findAudioSource(mAudioSourceID); audio_source && !audio_source->isDone())
+    if (LLAudioSource* audio_source = gAudiop ? gAudiop->findAudioSource(mAudioSourceID) : nullptr; audio_source && !audio_source->isDone())
     {
         audio_source->play(LLUUID::null);
     }
@@ -366,12 +376,13 @@ bool FSFloaterAssetBlacklist::handleKeyHere(KEY key, MASK mask)
 
 bool FSFloaterAssetBlacklist::tick()
 {
+    if (!mAccountCurrent()) return false;
     if (mAudioSourceID.isNull())
     {
         return false;
     }
 
-    if (LLAudioSource* audio_source = gAudiop->findAudioSource(mAudioSourceID); !audio_source || audio_source->isDone())
+    if (LLAudioSource* audio_source = gAudiop ? gAudiop->findAudioSource(mAudioSourceID) : nullptr; !audio_source || audio_source->isDone())
     {
         childSetVisible("play_btn", true);
         childSetVisible("stop_btn", false);
@@ -399,7 +410,8 @@ namespace FSFloaterAssetBlacklistMenu
         // set up the callbacks for all of the avatar menu items
         LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
 
-        registrar.add("Blacklist.Remove", boost::bind(&FSAssetBlacklistMenu::onContextMenuItemClick, this, _2));
+        registrar.add("Blacklist.Remove", [this, current = vs_native_im_guard()](LLUICtrl*, const LLSD& value)
+        { if (current()) onContextMenuItemClick(value); });
 
         // create the context menu from the XUI
         return createFromFile("menu_fs_asset_blacklist.xml");

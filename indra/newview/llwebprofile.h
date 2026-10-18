@@ -62,7 +62,9 @@ public:
 private:
     static LLCore::HttpHeaders::ptr_t buildDefaultHeaders();
 
-    static void uploadImageCoro(LLPointer<LLImageFormatted> image, std::string caption, bool add_location);
+    static void uploadImageCoro(LLPointer<LLImageFormatted> image, std::string caption, bool add_location,
+                                std::string profileURL, std::string cookie,
+                                std::function<bool()> current, status_callback_t completed);
     static LLCore::BufferArray::ptr_t buildPostData(const LLSD &data, LLPointer<LLImageFormatted> &image, const std::string &boundary);
 
     static void reportImageUploadStatus(bool ok);

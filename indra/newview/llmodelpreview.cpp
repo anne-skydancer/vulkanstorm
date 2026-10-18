@@ -26,6 +26,15 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "vsregionlimits.h"
+#include "llrender2dutils.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsscenepreview.h"
+#include "vsworldavatar.h"
+#include "vsvulkancontext.h"
+#include "vsuiresources.h"
+#include "llviewerwindow.h"
+#endif
 
 #include "llmodelpreview.h"
 
@@ -71,12 +80,28 @@
 #include "lltextbox.h"
 
 #include <filesystem>
+#include <atomic>
 
 #include <boost/algorithm/string.hpp>
 // <AW: opensim-limits>
 #include "llworld.h"
 // </AW: opensim-limits>
 
+struct LLModelPreview::TextureIntent
+{
+    LLHandle<LLModelPreview> owner;
+    U64 revision=0;
+    LLUUID image;
+};
+struct LLModelPreview::LoadIntent
+{
+    std::atomic<LLModelPreview*> owner{nullptr};
+};
+LLModelPreview* LLModelPreview::callbackOwner(void* opaque)
+{
+    const auto* intent=static_cast<LoadIntent*>(opaque);
+    return intent?intent->owner.load(std::memory_order_acquire):nullptr;
+}
 bool LLModelPreview::sIgnoreLoadedCallback = false;
 // <FS:Beq> fix up and restore stuff removed by lab
 // // Extra configurability, to be exposed later in xml (LLModelPreview probably
@@ -96,7 +121,6 @@ bool LLModelPreview::sIgnoreLoadedCallback = false;
 // static const F32 PREVIEW_ZOOM_LIMIT(10.f);
 // </FS:Beq>
 static const std::string DEFAULT_PHYSICS_MESH_NAME = "default_physics_shape";
-const F32 SKIN_WEIGHT_CAMERA_DISTANCE = 16.f;
 
 #include "glod/glod.h" // <FS:Beq/> More flexible LOD generation
 // <FS:Beq> mesh loader suffix configuration
@@ -229,6 +253,7 @@ LLModelPreview::LLModelPreview(S32 width, S32 height, LLFloater* fmp)
     , mTexturesNeedScaling(false)
     , mImporterDebug(LLCachedControl<bool>(gSavedSettings, "ImporterDebugVerboseLogging", false))
 {
+    mCurrent = vs_native_im_guard();
     mNeedsUpdate = true;
     mCameraDistance = 0.f;
     mCameraYaw = 0.f;
@@ -271,6 +296,8 @@ LLModelPreview::LLModelPreview(S32 width, S32 height, LLFloater* fmp)
 
 LLModelPreview::~LLModelPreview()
 {
+    ++mTextureRevision;
+    if(mLoadIntent)mLoadIntent->owner.store(nullptr,std::memory_order_release);
     LLMutexLock lock(this);
 
     if (mModelLoader)
@@ -780,10 +807,10 @@ void LLModelPreview::rebuildUploadData()
                         {
                             // in case user provided a missing file later
                             texture->setIsMissingAsset(false);
-                            texture->setLoadedCallback(LLModelPreview::textureLoadedCallback, 0, true, false, new LLHandle<LLModelPreview>(getHandle()), &mCallbackTextureList, false);
+                            ++mNumOfFetchingTextures;
+                            texture->setLoadedCallback(LLModelPreview::textureLoadedCallback, 0, true, false, new TextureIntent{getHandle(),mTextureRevision,texture->getID()}, &mCallbackTextureList, false);
                             texture->forceToSaveRawImage(0, F32_MAX);
                             texture->updateFetch();
-                            mNumOfFetchingTextures++;
                         }
                     }
                 }
@@ -956,15 +983,27 @@ void LLModelPreview::clearModel(S32 lod)
 void LLModelPreview::getJointAliases(JointMap& joint_map)
 {
     // Get all standard skeleton joints from the preview avatar.
-    LLVOAvatar *av = getPreviewAvatar();
+    LLAvatarAppearance *av = getPreviewAvatar();
 
     //Joint names and aliases come from avatar_skeleton.xml
 
     joint_map = av->getJointAliases();
 
     std::vector<std::string> cv_names, attach_names;
-    av->getSortedJointNames(1, cv_names);
-    av->getSortedJointNames(2, attach_names);
+    if(mPreviewAvatar)
+    {
+        mPreviewAvatar->getSortedJointNames(1, cv_names);
+        mPreviewAvatar->getSortedJointNames(2, attach_names);
+    }
+#if VS_NATIVE_VULKAN
+    else if(mNativePreview)
+    {
+        for(S32 i=0;i<av->mNumCollisionVolumes;++i)
+            if(auto* joint=av->findCollisionVolume(i))cv_names.push_back(joint->getName());
+        for(const auto& point:mNativePreview->avatar().attachmentPoints())attach_names.push_back(point.name);
+        std::sort(cv_names.begin(),cv_names.end());std::sort(attach_names.begin(),attach_names.end());
+    }
+#endif
     for (std::vector<std::string>::iterator it = cv_names.begin(); it != cv_names.end(); ++it)
     {
         joint_map[*it] = *it;
@@ -978,6 +1017,7 @@ void LLModelPreview::getJointAliases(JointMap& joint_map)
 void LLModelPreview::loadModel(std::string filename, S32 lod, bool force_disable_slm)
 {
     assert_main_thread();
+    if(!mCurrent())return;
 
     LLMutexLock lock(this);
 
@@ -1018,6 +1058,14 @@ void LLModelPreview::loadModel(std::string filename, S32 lod, bool force_disable
         return;
     }
 
+    // Lower LOD imports share the current base model's image owners. Replacing
+    // the base asset retires exactly its old waiters before new counters exist.
+    if(lod==LLModel::LOD_HIGH || lod==-1)
+    {
+        ++mTextureRevision;
+        LLLoadedCallbackEntry::cleanUpCallbackList(&mCallbackTextureList);
+        mNumOfFetchingTextures=0;mTexturesNeedScaling=false;
+    }
     mLODFile[lod] = filename;
     // <FS:Beq> Improved LOD generation
     if (lod == LLModel::LOD_HIGH)
@@ -1028,6 +1076,9 @@ void LLModelPreview::loadModel(std::string filename, S32 lod, bool force_disable
     std::map<std::string, std::string, std::less<>> joint_alias_map;
     getJointAliases(joint_alias_map);
 
+    if(mLoadIntent)mLoadIntent->owner.store(nullptr,std::memory_order_release);
+    mLoadIntent=std::make_shared<LoadIntent>();
+    mLoadIntent->owner.store(this,std::memory_order_release);
     LLHandle<LLModelPreview> preview_handle = getHandle();
     auto load_textures_cb =
             [preview_handle](LLImportMaterial& material, void* opaque) { return LLModelPreview::loadTextures(material, preview_handle); };
@@ -1053,7 +1104,7 @@ void LLModelPreview::loadModel(std::string filename, S32 lod, bool force_disable
             &LLModelPreview::lookupJointByName,
             load_textures_cb,
             &LLModelPreview::stateChangedCallback,
-            this,
+            mLoadIntent.get(),
             mJointTransformMap,
             mJointsFromNode,
             joint_alias_map,
@@ -1067,7 +1118,7 @@ void LLModelPreview::loadModel(std::string filename, S32 lod, bool force_disable
     }
     else
     {
-        LLVOAvatar* av = getPreviewAvatar();
+        LLAvatarAppearance* av = getPreviewAvatar();
         std::vector<LLJointData> viewer_skeleton;
         av->getJointMatricesAndHierarhy(viewer_skeleton);
         mModelLoader = new LLGLTFLoader(
@@ -1077,7 +1128,7 @@ void LLModelPreview::loadModel(std::string filename, S32 lod, bool force_disable
             &LLModelPreview::lookupJointByName,
             load_textures_cb,
             &LLModelPreview::stateChangedCallback,
-            this,
+            mLoadIntent.get(),
             mJointTransformMap,
             mJointsFromNode,
             joint_alias_map,
@@ -1103,6 +1154,7 @@ void LLModelPreview::loadModel(std::string filename, S32 lod, bool force_disable
         //initial model load (not an LoD or physics shape)
         mModelLoader->mTrySLM = gSavedSettings.getBOOL("MeshImportUseSLM") && mUploadData.empty();
     }
+    mModelLoader->retainCallbackOwner(mLoadIntent);
     mModelLoader->start();
 
     mFMP->childSetTextArg("status", "[STATUS]", mFMP->getString("status_reading_file"));
@@ -1246,7 +1298,7 @@ void LLModelPreview::clearIncompatible(S32 lod)
         // Subscribe if we have pending work and not subscribed yet
         if (!mLodsQuery.empty() && subscribe_for_generation)
         {
-            doOnIdleRepeating(lodQueryCallback);
+            doOnIdleRepeating([owner=getHandle(),current=mCurrent]{return lodQueryCallback(owner,current);});
         }
     }
 }
@@ -1719,9 +1771,9 @@ void LLModelPreview::genGlodLODs(S32 which_lod, U32 decimation, bool enforce_tri
         return;
     }
 
-    LLVertexBuffer::unbind();
+    if(!(gViewerWindow && gViewerWindow->isNativeVulkan()))LLVertexBuffer::unbind();
 
-    LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
+    LLGLSLShader* shader = (gViewerWindow && gViewerWindow->isNativeVulkan())?nullptr:LLGLSLShader::sCurBoundShaderPtr;
 
     if (shader)
     {
@@ -1839,7 +1891,7 @@ void LLModelPreview::genGlodLODs(S32 which_lod, U32 decimation, bool enforce_tri
 
             for (U32 i = 0; i < mVertexBuffer[5][mdl].size(); ++i)
             {
-                LLVertexBuffer* buff = mVertexBuffer[5][mdl][i];
+                VSPreviewBuffer* buff = mVertexBuffer[5][mdl][i];
 
                 U32 num_indices = mVertexBuffer[5][mdl][i]->getNumIndices();
                 if (num_indices > 2)
@@ -1987,7 +2039,7 @@ void LLModelPreview::genGlodLODs(S32 which_lod, U32 decimation, bool enforce_tri
             {
                 type_mask = mVertexBuffer[5][base][i]->getTypeMask();
 
-                LLPointer<LLVertexBuffer> buff = new LLVertexBuffer(type_mask);
+                LLPointer<VSPreviewBuffer> buff = new VSPreviewBuffer(type_mask,(gViewerWindow && gViewerWindow->isNativeVulkan()));
 
                 if (sizes[i * 2 + 1] > 0 && sizes[i * 2] > 0)
                 {
@@ -2124,7 +2176,7 @@ void LLModelPreview::genGlodLODs(S32 which_lod, U32 decimation, bool enforce_tri
         }
     }
 
-    LLVertexBuffer::unbind();
+    if(!(gViewerWindow && gViewerWindow->isNativeVulkan()))LLVertexBuffer::unbind();
     if (shader)
     {
         shader->bind();
@@ -3909,7 +3961,7 @@ void LLModelPreview::genBuffers(S32 lod, bool include_skin_weights)
                 continue;
             }
 
-            LLVertexBuffer* vb = NULL;
+            VSPreviewBuffer* vb = NULL;
 
 
 
@@ -3920,7 +3972,7 @@ void LLModelPreview::genBuffers(S32 lod, bool include_skin_weights)
                 mask |= LLVertexBuffer::MAP_WEIGHT4;
             }
 
-            vb = new LLVertexBuffer(mask);
+            vb = new VSPreviewBuffer(mask,(gViewerWindow && gViewerWindow->isNativeVulkan()));
 
             if (!vb->allocateBuffer(num_vertices, num_indices))
             {
@@ -4059,7 +4111,7 @@ void LLModelPreview::update()
 
         if (subscribe_for_generation)
         {
-            doOnIdleRepeating(lodQueryCallback);
+            doOnIdleRepeating([owner=getHandle(),current=mCurrent]{return lodQueryCallback(owner,current);});
         }
     }
 
@@ -4074,8 +4126,26 @@ void LLModelPreview::update()
 //-----------------------------------------------------------------------------
 // createPreviewAvatar
 //-----------------------------------------------------------------------------
+LLAvatarAppearance* LLModelPreview::getPreviewAvatar()
+{
+#if VS_NATIVE_VULKAN
+    if(mNativePreview)return &mNativePreview->avatar().appearanceOwner();
+#endif
+    return mPreviewAvatar;
+}
+
 void LLModelPreview::createPreviewAvatar(void)
 {
+#if VS_NATIVE_VULKAN
+    if((gViewerWindow && gViewerWindow->isNativeVulkan()))
+    {
+        auto* context=gViewerWindow?gViewerWindow->nativeContext():nullptr;
+        if(!context || !mCurrent())return;
+        mNativePreview=std::make_unique<VSScenePreview>(*context);
+        getPreviewAvatar()->startMotion(ANIM_AGENT_STAND);
+        return;
+    }
+#endif
     mPreviewAvatar = (LLVOAvatar*)gObjectList.createObjectViewer(LL_PCODE_LEGACY_AVATAR, gAgent.getRegion(), LLViewerObject::CO_FLAG_UI_AVATAR);
     if (mPreviewAvatar)
     {
@@ -4122,9 +4192,10 @@ void LLModelPreview::loadedCallback(
     if(LLModelPreview::sIgnoreLoadedCallback)
         return;
 
-    LLModelPreview* pPreview = static_cast<LLModelPreview*>(opaque);
+    LLModelPreview* pPreview = callbackOwner(opaque);
+    if(!pPreview || !pPreview->mCurrent())return;
     LLMutexLock lock(pPreview);
-    if (pPreview && pPreview->mModelLoader)
+    if (pPreview->mModelLoader)
     {
         // Load loader's warnings into floater's log tab
         const LLSD out = pPreview->mModelLoader->logOut();
@@ -4144,7 +4215,21 @@ void LLModelPreview::loadedCallback(
             pPreview->lookupLODModelFiles(lod);
         }
 
-        const LLVOAvatar* avatarp = pPreview->getPreviewAvatar();
+#if VS_NATIVE_VULKAN
+        if(pPreview->mNativePreview)
+        {
+            if(const auto bounds=pPreview->mNativePreview->avatar().previewBounds())
+            {
+                auto& avatar=pPreview->mNativePreview->avatar().appearanceOwner();
+                const auto& minimum=(*bounds)[0];const auto& maximum=(*bounds)[1];
+                const F32 ground=avatar.mRoot->getPosition()[2]-(maximum[2]-minimum[2])*.5f;
+                auto plane=pPreview->mGroundPlane;
+                plane[0]={minimum[0],minimum[1],ground};plane[1]={maximum[0],minimum[1],ground};
+                plane[2]={maximum[0],maximum[1],ground};plane[3]={minimum[0],maximum[1],ground};
+            }
+        }
+#endif
+        const LLVOAvatar* avatarp = pPreview->mPreviewAvatar;
         if (avatarp && avatarp->mRoot && avatarp->mDrawable)
         {
             // set up ground plane for possible rendering
@@ -4221,7 +4306,7 @@ void LLModelPreview::lookupLODModelFiles(S32 lod)
 
 void LLModelPreview::stateChangedCallback(U32 state, void* opaque)
 {
-    LLModelPreview* pPreview = static_cast< LLModelPreview* >(opaque);
+    LLModelPreview* pPreview = callbackOwner(opaque);
     if (pPreview)
     {
         pPreview->setLoadState(state);
@@ -4230,7 +4315,7 @@ void LLModelPreview::stateChangedCallback(U32 state, void* opaque)
 
 LLJoint* LLModelPreview::lookupJointByName(const std::string& str, void* opaque)
 {
-    LLModelPreview* pPreview = static_cast< LLModelPreview* >(opaque);
+    LLModelPreview* pPreview = callbackOwner(opaque);
     if (pPreview)
     {
         return pPreview->getPreviewAvatar()->getJoint(str);
@@ -4240,22 +4325,27 @@ LLJoint* LLModelPreview::lookupJointByName(const std::string& str, void* opaque)
 
 U32 LLModelPreview::loadTextures(LLImportMaterial& material, LLHandle<LLModelPreview> handle)
 {
-    if (material.mDiffuseMapFilename.size() && !handle.isDead())
+    auto* preview=handle.get();
+    if (material.mDiffuseMapFilename.size() && preview && preview->mCurrent())
     {
         material.mOpaqueData = new LLPointer< LLViewerFetchedTexture >;
         LLPointer< LLViewerFetchedTexture >& tex = (*reinterpret_cast< LLPointer< LLViewerFetchedTexture > * >(material.mOpaqueData));
 
         tex = LLViewerTextureManager::getFetchedTextureFromUrl("file://" + LLURI::unescape(material.mDiffuseMapFilename), FTT_LOCAL_FILE, true, LLGLTexture::BOOST_PREVIEW);
+        if(!tex)
+        {
+            delete reinterpret_cast<LLPointer<LLViewerFetchedTexture>*>(material.mOpaqueData);
+            material.mOpaqueData=nullptr;return 0;
+        }
         if (tex->getDiscardLevel() < tex->getMaxDiscardLevel())
         {
             // file was loaded previosly, reload image to get potential changes
             tex->clearFetchedResults();
         }
-        LLModelPreview* preview = (LLModelPreview*)handle.get();
-        tex->setLoadedCallback(LLModelPreview::textureLoadedCallback, 0, true, false, new LLHandle<LLModelPreview>(handle), &preview->mCallbackTextureList, false);
+        ++preview->mNumOfFetchingTextures;
+        tex->setLoadedCallback(LLModelPreview::textureLoadedCallback, 0, true, false, new TextureIntent{handle,preview->mTextureRevision,tex->getID()}, &preview->mCallbackTextureList, false);
         tex->forceToSaveRawImage(0, F32_MAX);
         material.setDiffuseMap(tex->getID()); // record tex ID
-        preview->mNumOfFetchingTextures++;
         return 1;
     }
 
@@ -4267,7 +4357,7 @@ void LLModelPreview::addEmptyFace(LLModel* pTarget)
 {
     U32 type_mask = LLVertexBuffer::MAP_VERTEX | LLVertexBuffer::MAP_NORMAL | LLVertexBuffer::MAP_TEXCOORD0;
 
-    LLPointer<LLVertexBuffer> buff = new LLVertexBuffer(type_mask);
+    LLPointer<VSPreviewBuffer> buff = new VSPreviewBuffer(type_mask,(gViewerWindow && gViewerWindow->isNativeVulkan()));
 
     buff->allocateBuffer(1, 3);
     memset((U8*)buff->getMappedData(), 0, buff->getSize());
@@ -4305,11 +4395,18 @@ void LLModelPreview::addEmptyFace(LLModel* pTarget)
 //-----------------------------------------------------------------------------
 // Todo: we shouldn't be setting all those UI elements on render.
 // Note: Render happens each frame with skinned avatars
+#if !VS_NATIVE_VULKAN
+bool LLModelPreview::drawNative(const LLRect&) { return false; }
+#endif
 bool LLModelPreview::render()
 {
     assert_main_thread();
 
     LLMutexLock lock(this);
+    if(!mCurrent())return false;
+#if VS_NATIVE_VULKAN
+    if((gViewerWindow && gViewerWindow->isNativeVulkan()) && !mNativePreview)return false;
+#endif
     mNeedsUpdate = false;
 
     bool show_edges = mViewOption["show_edges"];
@@ -4341,11 +4438,17 @@ bool LLModelPreview::render()
     S32 width = getWidth();
     S32 height = getHeight();
 
-    LLGLSUIDefault def;
-    LLGLDisable no_blend(GL_BLEND);
-    LLGLEnable cull(GL_CULL_FACE);
-    LLGLDepthTest depth(GL_FALSE); // SL-12781 disable z-buffer to render background color
-
+    // Keep the original GL scope alive through the complete preview render.
+    std::unique_ptr<LLGLSUIDefault> def;
+    std::unique_ptr<LLGLDisable> no_blend;
+    std::unique_ptr<LLGLEnable> cull;
+    std::unique_ptr<LLGLDepthTest> depth;
+    if(!(gViewerWindow && gViewerWindow->isNativeVulkan()))
+    {
+        def=std::make_unique<LLGLSUIDefault>();
+        no_blend=std::make_unique<LLGLDisable>(GL_BLEND);
+        cull=std::make_unique<LLGLEnable>(GL_CULL_FACE);
+        depth=std::make_unique<LLGLDepthTest>(GL_FALSE);
     {
         gUIProgram.bind();
 
@@ -4368,6 +4471,8 @@ bool LLModelPreview::render()
         gGL.matrixMode(LLRender::MM_MODELVIEW);
         gGL.popMatrix();
         gUIProgram.unbind();
+    }
+
     }
 
     LLFloaterModelPreview* fmp = LLFloaterModelPreview::sInstance;
@@ -4521,6 +4626,10 @@ bool LLModelPreview::render()
 
     F32 physics_explode = (F32)mFMP->childGetValue("physics_explode").asReal();
 
+#if VS_NATIVE_VULKAN
+    if(mNativePreview)return renderNative(show_textures,show_edges,show_physics,show_skin_weight,
+        show_joint_overrides,show_joint_positions,uv_guide,physics_explode);
+#endif
     LLGLDepthTest gls_depth(GL_TRUE); // SL-12781 re-enable z-buffer for 3D model preview
 
     LLRect preview_rect;
@@ -4541,7 +4650,7 @@ bool LLModelPreview::render()
 
     if (show_skin_weight)
     {
-        target_pos = getPreviewAvatar()->getPositionAgent() + offset;
+        target_pos = mPreviewAvatar.get()->getPositionAgent() + offset;
         z_near = 0.01f;
         z_far = 1024.f;
 
@@ -4588,10 +4697,10 @@ bool LLModelPreview::render()
         bool regen = mVertexBuffer[mPreviewLOD].empty();
         if (!regen)
         {
-            const std::vector<LLPointer<LLVertexBuffer> >& vb_vec = mVertexBuffer[mPreviewLOD].begin()->second;
+            const std::vector<LLPointer<VSPreviewBuffer> >& vb_vec = mVertexBuffer[mPreviewLOD].begin()->second;
             if (!vb_vec.empty())
             {
-                const LLVertexBuffer* buff = vb_vec[0];
+                const VSPreviewBuffer* buff = vb_vec[0];
                 regen = buff->hasDataType(LLVertexBuffer::TYPE_WEIGHT4) != show_skin_weight;
             }
             else
@@ -4674,7 +4783,7 @@ bool LLModelPreview::render()
                     // Zero this variable for an obligatory buffer initialization
                     // See https://github.com/secondlife/viewer/issues/912
                     LLVertexBuffer::sGLRenderBuffer = 0;
-                    LLVertexBuffer* buffer = mVertexBuffer[mPreviewLOD][model][i];
+                    VSPreviewBuffer* buffer = mVertexBuffer[mPreviewLOD][model][i];
                     buffer->setBuffer();
                     buffer->drawRange(LLRender::TRIANGLES, 0, buffer->getNumVerts() - 1, buffer->getNumIndices(), 0);
 
@@ -4804,7 +4913,7 @@ bool LLModelPreview::render()
                                     // Zero this variable for an obligatory buffer initialization
                                     // See https://github.com/secondlife/viewer/issues/912
                                     LLVertexBuffer::sGLRenderBuffer = 0;
-                                    LLVertexBuffer* buffer = mVertexBuffer[LLModel::LOD_PHYSICS][model][i];
+                                    VSPreviewBuffer* buffer = mVertexBuffer[LLModel::LOD_PHYSICS][model][i];
                                     buffer->setBuffer();
                                     buffer->drawRange(LLRender::TRIANGLES, 0, buffer->getNumVerts() - 1, buffer->getNumIndices(), 0);
                                     // <FS:Beq> restore changes removed by the lab
@@ -4876,7 +4985,7 @@ bool LLModelPreview::render()
                                         // Zero this variable for an obligatory buffer initialization
                                         // See https://github.com/secondlife/viewer/issues/912
                                         LLVertexBuffer::sGLRenderBuffer = 0;
-                                        LLVertexBuffer* buffer = mVertexBuffer[LLModel::LOD_PHYSICS][model][v];
+                                        VSPreviewBuffer* buffer = mVertexBuffer[LLModel::LOD_PHYSICS][model][v];
                                         buffer->setBuffer();
                                         LLStrider<LLVector3> pos_strider;
                                         buffer->getVertexStrider(pos_strider, 0);
@@ -4923,11 +5032,11 @@ bool LLModelPreview::render()
         }
         else
         {
-            target_pos = getPreviewAvatar()->getPositionAgent();
-            getPreviewAvatar()->clearAttachmentOverrides(); // removes pelvis fixup
+            target_pos = mPreviewAvatar.get()->getPositionAgent();
+            mPreviewAvatar.get()->clearAttachmentOverrides(); // removes pelvis fixup
             LLUUID fake_mesh_id;
             fake_mesh_id.generate();
-            getPreviewAvatar()->addPelvisFixup(mPelvisZOffset, fake_mesh_id);
+            mPreviewAvatar.get()->addPelvisFixup(mPelvisZOffset, fake_mesh_id);
             bool pelvis_recalc = false;
 
             LLViewerCamera::getInstance()->setOriginAndLookAt(
@@ -4945,7 +5054,7 @@ bool LLModelPreview::render()
                     if (!model->mSkinWeights.empty())
                     {
                         const LLMeshSkinInfo *skin = &model->mSkinInfo;
-                        LLSkinningUtil::initJointNums(&model->mSkinInfo, getPreviewAvatar());// inits skin->mJointNums if nessesary
+                        LLSkinningUtil::initJointNums(&model->mSkinInfo, mPreviewAvatar.get());// inits skin->mJointNums if nessesary
                         U32 joint_count = LLSkinningUtil::getMeshJointCount(skin);
                         auto bind_count = skin->mAlternateBindMatrix.size();
 
@@ -4964,7 +5073,7 @@ bool LLModelPreview::render()
                             fake_mesh_id.generate();
                             for (U32 j = 0; j < joint_count; ++j)
                             {
-                                LLJoint *joint = getPreviewAvatar()->getJoint(skin->mJointNums[j]);
+                                LLJoint *joint = mPreviewAvatar.get()->getJoint(skin->mJointNums[j]);
                                 if (joint)
                                 {
                                     const LLVector3& jointPos = LLVector3(skin->mAlternateBindMatrix[j].getTranslation());
@@ -5029,7 +5138,7 @@ bool LLModelPreview::render()
                             // Zero this variable for an obligatory buffer initialization
                             // See https://github.com/secondlife/viewer/issues/912
                             LLVertexBuffer::sGLRenderBuffer = 0;
-                            LLVertexBuffer* buffer = mVertexBuffer[mPreviewLOD][model][i];
+                            VSPreviewBuffer* buffer = mVertexBuffer[mPreviewLOD][model][i];
                             buffer->setBuffer();
                             buffer->draw(LLRender::TRIANGLES, buffer->getNumIndices(), 0);
 
@@ -5059,14 +5168,14 @@ bool LLModelPreview::render()
                 {
                     gDebugProgram.bind();
                 }
-                getPreviewAvatar()->renderCollisionVolumes();
+                mPreviewAvatar.get()->renderCollisionVolumes();
                 if (fmp->mTabContainer->getCurrentPanelIndex() == fmp->mAvatarTabIndex)
                 {
-                    getPreviewAvatar()->renderBones(fmp->mSelectedJointName);
+                    mPreviewAvatar.get()->renderBones(fmp->mSelectedJointName);
                 }
                 else
                 {
-                    getPreviewAvatar()->renderBones();
+                    mPreviewAvatar.get()->renderBones();
                 }
                 renderGroundPlane(mPelvisZOffset);
                 if (shader)
@@ -5078,7 +5187,7 @@ bool LLModelPreview::render()
             if (pelvis_recalc)
             {
                 // size/scale recalculation
-                getPreviewAvatar()->postPelvisSetRecalc();
+                mPreviewAvatar.get()->postPelvisSetRecalc();
             }
         }
     }
@@ -5213,11 +5322,18 @@ void LLModelPreview::textureLoadedCallback(
     if (!userdata)
         return;
 
-    LLHandle<LLModelPreview>* handle = (LLHandle<LLModelPreview>*)userdata;
+    auto* intent=static_cast<TextureIntent*>(userdata);
+    const auto* handle=&intent->owner;
 
     if (!handle->isDead())
     {
         LLModelPreview* preview = static_cast<LLModelPreview*>(handle->get());
+        if(!preview->mCurrent() || preview->mTextureRevision!=intent->revision ||
+            (success && (!src_vi || src_vi->getID()!=intent->image)))
+        {
+            if(final || !success)delete intent;
+            return;
+        }
         preview->refresh();
 
         if (final)
@@ -5239,19 +5355,16 @@ void LLModelPreview::textureLoadedCallback(
 
     if (final || !success)
     {
-        delete handle;
+        delete intent;
     }
 }
 
 // static
-bool LLModelPreview::lodQueryCallback()
+bool LLModelPreview::lodQueryCallback(LLHandle<LLModelPreview> owner,std::function<bool()> current)
 {
-    // not the best solution, but model preview belongs to floater
-    // so it is an easy way to check that preview still exists.
-    LLFloaterModelPreview* fmp = LLFloaterModelPreview::sInstance;
-    if (fmp && fmp->mModelPreview)
+    if(!current())return true;
+    if(auto* preview=owner.get())
     {
-        LLModelPreview* preview = fmp->mModelPreview;
         if (preview->mLodsQuery.size() > 0)
         {
             S32 lod = preview->mLodsQuery.back();

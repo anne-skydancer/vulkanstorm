@@ -57,20 +57,36 @@ std::optional<VSObjectContext> VSObjectContext::resolve(const LLUUID& id)
         auto& world=context->world();
         const auto handle=world.object(id);
         if (!handle) return {};
-        const auto row=world.objectSnapshot(*handle);
+        return resolve(*handle);
+    }
+#endif
+    const auto* object=gObjectList.findObject(id);
+    if (!object || object->isDead()) return {};
+    return fromLegacy(object);
+}
+
+#if VS_NATIVE_VULKAN
+std::optional<VSObjectContext> VSObjectContext::resolve(const VSWorldScene::ObjectHandle& handle)
+{
+    const auto owner = VSNativeSession::active();
+    auto* context = gViewerWindow ? gViewerWindow->nativeContext() : nullptr;
+    if (!owner || owner->phase() != VSNativeSession::Phase::Connected || !context) return {};
+    auto& world = context->world();
+    if (!world.current(handle)) return {};
+        const auto row=world.objectSnapshot(handle);
         if (!row) return {};
-        const auto root=world.object(row->rootID),rootEdit=world.object(row->rootEditID);
+        const auto root=world.rootObject(handle,false),rootEdit=world.rootObject(handle,true);
         if (!root || !rootEdit) return {};
         VSObjectContext value;
-        value.id=id;value.rootEditID=row->rootEditID;value.rootID=row->rootID;value.host=handle->host;
-        value.localID=handle->local;value.flags=row->rootUpdateFlags;value.pcode=row->pcode;value.material=row->material;
+        value.id=handle.id;value.rootEditID=row->rootEditID;value.rootID=row->rootID;value.host=handle.host;
+        value.localID=handle.local;value.flags=row->rootUpdateFlags;value.pcode=row->pcode;value.material=row->material;
         value.clickAction=vs_object_click_action(row->clickAction,row->rootClickAction,row->attachment);
         value.position=row->position;value.attachment=row->attachment;value.hud=row->hud;
         value.youOwner=ownedByAgent(row->rootUpdateFlags);
         const auto account=owner->account();
-        const auto objectGuard=world.guard(*handle),rootGuard=world.guard(*root),editGuard=world.guard(*rootEdit);
+        const auto objectGuard=world.guard(handle),rootGuard=world.guard(*root),editGuard=world.guard(*rootEdit);
         value.current=[weak=std::weak_ptr<VSNativeSession>(owner),account,objectGuard,rootGuard,editGuard,
-                       token=*handle,rootID=row->rootID,editID=row->rootEditID]()
+                       token=handle,rootID=row->rootID,editID=row->rootEditID]()
         {
             const auto owner=weak.lock();
             if (!owner || !owner->current(account) || owner->phase()!=VSNativeSession::Phase::Connected ||
@@ -79,9 +95,5 @@ std::optional<VSObjectContext> VSObjectContext::resolve(const LLUUID& id)
             return now && now->rootID==rootID && now->rootEditID==editID;
         };
         return value;
-    }
-#endif
-    const auto* object=gObjectList.findObject(id);
-    if (!object || object->isDead()) return {};
-    return fromLegacy(object);
 }
+#endif

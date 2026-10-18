@@ -116,3 +116,9 @@ LLPanelSnapshotProfile::~LLPanelSnapshotProfile()
     gSavedSettings.setS32("LastSnapshotToProfileHeight", getTypedPreviewHeight());
 }
 // </FS:Ansariel>
+
+// Exact private factory identity for the native shared snapshot graph.
+bool vs_snapshot_profile_type(const std::type_info& type)
+{
+    return type == typeid(LLPanelSnapshotProfile);
+}

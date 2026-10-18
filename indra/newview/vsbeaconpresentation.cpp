@@ -11,9 +11,14 @@
 #include "llsettingssky.h"
 #include "llhudtext.h"
 #include "pipeline.h"
+#include "llaudioengine.h"
+#include "llagent.h"
+#include "vsregioncontext.h"
 #include "llviewercontrol.h"
 #include <array>
 #include <optional>
+#include <map>
+#include <set>
 struct VSBeaconPresentation::Impl
 {
     VSWorldRenderer& renderer;
@@ -44,6 +49,38 @@ struct VSBeaconPresentation::Impl
             first.reset();
         }
     };
+    std::map<std::array<float,6>,VSWorldRenderer::Mesh> boxMeshes;
+    void boxes(const std::vector<VSWorldScene::DebugBox>& sources,std::vector<VSWorldRenderer::Packet>& packets)
+    {
+        std::set<std::array<float,6>> current;
+        for (const auto& source:sources)
+        {
+            std::array<float,3> half{},center{};
+            for (unsigned axis=0;axis<3;++axis)
+            {half[axis]=(source.bounds[1][axis]-source.bounds[0][axis])*.5f;center[axis]=(source.bounds[1][axis]+source.bounds[0][axis])*.5f;}
+            const std::array<float,6> key{half[0],half[1],half[2],source.hud?center[0]:0,source.hud?center[1]:0,source.hud?center[2]:0};
+            current.insert(key);
+            auto found=boxMeshes.find(key);
+            if (found==boxMeshes.end())
+            {
+                const auto reservation=world.reserveSpatialBytes(72*(sizeof(VSWorldRenderer::Vertex)+sizeof(unsigned)));
+                if (!reservation) continue;
+                Sink sink;sink.vertices.reserve(72);sink.indices.reserve(72);
+                vs_debug_box_outline(sink,source.hud?LLVector3(center.data()):LLVector3::zero,LLVector3(half.data()));
+                VSWorldRenderer::Mesh mesh;
+                if (!renderer.publishMesh(mesh,sink.vertices,sink.indices)) continue;
+                found=boxMeshes.emplace(key,std::move(mesh)).first;
+            }
+            VSWorldRenderer::Packet packet;
+            packet.mesh=found->second;packet.color=source.color;packet.fullbright=true;
+            packet.overlay=true;packet.depthTest=source.depthTest;packet.depthWrite=true;packet.hud=source.hud;
+            packet.screenLinePixels=source.width;packet.regionOffset={center[0],center[1],center[2],0};
+            packets.push_back(std::move(packet));
+        }
+        for (auto it=boxMeshes.begin();it!=boxMeshes.end();)
+            if (!current.count(it->first)) it=boxMeshes.erase(it);else ++it;
+    }
+
     static std::array<float,4> vertexColor(LLColor4 color)
     {
         std::array<float,4> result;
@@ -109,12 +146,38 @@ struct VSBeaconPresentation::Impl
 };
 VSBeaconPresentation::VSBeaconPresentation(VSWorldRenderer&r,VSWorldScene&w):mImpl(std::make_unique<Impl>(r,w)){}
 VSBeaconPresentation::~VSBeaconPresentation(){reset();}
-void VSBeaconPresentation::reset(){mImpl->retireLabels();mImpl->sky={};mImpl->cache.clear();mImpl->account={};gObjectList.resetObjectBeacons();}
+void VSBeaconPresentation::reset(){mImpl->retireLabels();mImpl->sky={};mImpl->cache.clear();mImpl->boxMeshes.clear();mImpl->account={};gObjectList.resetObjectBeacons();}
 void VSBeaconPresentation::append(const VSNativeSession& session,std::vector<VSWorldRenderer::Packet>& packets)
 {
-    if(!session.current(mImpl->account)){gObjectList.resetObjectBeacons();mImpl->retireLabels();mImpl->sky={};mImpl->cache.clear();mImpl->account=session.account();}
+    if(!session.current(mImpl->account)){gObjectList.resetObjectBeacons();mImpl->retireLabels();mImpl->sky={};mImpl->cache.clear();mImpl->boxMeshes.clear();mImpl->account=session.account();}
+    std::vector<VSWorldScene::DebugBox> boxes;
+    mImpl->world.appendObjectBeacons(packets,boxes);
+    mImpl->boxes(boxes,packets);
     // Consume the actual current-frame queue, then clear after model publication.
     if(LLFloaterTelehub::renderBeacons())LLFloaterTelehub::addBeacons();
+    // Sound feedback is sourced from the same actual engine registry as GL,
+    // not from visible objects or a separate native sound history.
+    if (LLPipeline::getRenderSoundBeacons() && LLPipeline::getRenderBeacons() && gAudiop)
+        for (const auto& position : gAudiop->sourcePositions())
+                gObjectList.addDebugBeacon(gAgent.getPosAgentFromGlobal(position),"",
+                    LLColor4(1,1,0,.5f),LLColor4(1,1,1,.5f),LLPipeline::DebugBeaconLineWidth);
+    if (LLPipeline::getRenderRegionCornerBeacons())
+        if (const auto region=vs_current_region_context())
+        {
+            const std::array<LLVector3,4> corners{{{0,0,0},{region->getWidth(),0,0},
+                {0,region->getHeight(),0},{region->getWidth(),region->getHeight(),0}}};
+            constexpr const char* labels[]{"SW","SE","NW","NE"};
+            for (unsigned corner=0;corner<corners.size();++corner)
+            {
+                auto global=region->getPosGlobalFromRegion(corners[corner]);
+                if (const auto height=vs_region_height(global))
+                {
+                    global.mdV[VZ]=*height;
+                    gObjectList.addDebugBeacon(gAgent.getPosAgentFromGlobal(global),labels[corner],
+                        LLColor4(1,1,0,.8f),LLColor4(1,1,1,1),LLPipeline::DebugBeaconLineWidth);
+                }
+            }
+        }
     const auto& sources=gObjectList.debugBeacons();
     for(std::size_t i=sources.size();i<mImpl->cache.size();++i)if(mImpl->cache[i].label)mImpl->cache[i].label->markDead();
     mImpl->cache.resize(sources.size());

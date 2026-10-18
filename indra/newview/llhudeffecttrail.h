@@ -26,6 +26,7 @@
 
 #ifndef LL_LLHUDEFFECTTRAIL_H
 #define LL_LLHUDEFFECTTRAIL_H
+#include <memory>
 
 #include "llhudeffect.h"
 
@@ -41,6 +42,7 @@ const U32 NUM_TRAIL_POINTS = 40;
 
 class LLHUDEffectSpiral : public LLHUDEffect
 {
+    friend class LLHUDManager;
 public:
     /*virtual*/ void markDead();
     /*virtual*/ void setTargetObject(LLViewerObject* objectp);
@@ -55,6 +57,9 @@ public:
 
     // Start the effect playing locally.
     void triggerLocal();
+#if VS_NATIVE_VULKAN
+    bool setNativeEndpoints(const LLUUID& source,const LLUUID& target);
+#endif
 
     friend class LLHUDObject;
 protected:
@@ -66,6 +71,11 @@ protected:
     /*virtual*/ void packData(LLMessageSystem *mesgsys);
     /*virtual*/ void unpackData(LLMessageSystem *mesgsys, S32 blocknum);
 private:
+#if VS_NATIVE_VULKAN
+    struct NativeEndpoints;
+    std::shared_ptr<NativeEndpoints> mNativeEndpoints;
+    bool triggerNative();
+#endif
     /*
     void setupParticle(const S32 i, const F32 start_time);
 

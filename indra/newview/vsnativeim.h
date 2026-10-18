@@ -13,6 +13,7 @@ std::function<bool()> vs_native_im_guard();
 void vs_native_im_install(LLMessageSystem& messages);
 void vs_native_im_receive(LLMessageSystem* message, void** context);
 void vs_native_im_request_offline();
+void vs_retire_native_object_ui();
 void vs_native_im_reset();
 void vs_native_im_stamp_notification(LLSD& payload);
 bool vs_native_im_notification_current(const LLSD& payload);

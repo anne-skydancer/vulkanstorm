@@ -15,6 +15,8 @@
 
 #include "fspose.h"
 #include "llagent.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
 #include "llvoavatarself.h"
 #include "llsdserialize.h"
 #include "lltrans.h"
@@ -41,11 +43,13 @@ bool FSFloaterPoseStand::postBuild()
 // virtual
 void FSFloaterPoseStand::onOpen(const LLSD& key)
 {
-    if (!isAgentAvatarValid())
+    mCurrent = vs_native_im_guard();
+    if (!mCurrent() || !vs_avatar_character())
     {
         return;
     }
 
+    mSessionActive = true;
     if (gSavedPerAccountSettings.getBOOL("UseAO"))
     {
         gSavedPerAccountSettings.setBOOL("UseAO", false);
@@ -53,7 +57,7 @@ void FSFloaterPoseStand::onOpen(const LLSD& key)
     }
 
     if (gSavedSettings.getBOOL("FSPoseStandLock")
-        && !gAgentAvatarp->isSitting()
+        && !gAgent.isSitting()
         && !gRlvHandler.hasBehaviour(RLV_BHVR_SIT))
     {
         setLock(true);
@@ -73,12 +77,14 @@ void FSFloaterPoseStand::onOpen(const LLSD& key)
 // virtual
 void FSFloaterPoseStand::onClose(bool app_quitting)
 {
-    if (!isAgentAvatarValid())
+    if (!mSessionActive) return;
+    mSessionActive = false;
+    if (!mCurrent() || !vs_avatar_character())
     {
         return;
     }
 
-    if (mPoseStandLock && gAgentAvatarp->isSitting())
+    if (mPoseStandLock && gAgent.isSitting())
     {
         setLock(false);
         gAgent.standUp();
@@ -118,6 +124,7 @@ void FSFloaterPoseStand::loadPoses()
 
 void FSFloaterPoseStand::onCommitCombo()
 {
+    if (!mCurrent() || !vs_avatar_character()) return;
     std::string selected_pose = mComboPose->getValue();
     gSavedSettings.setString("FSPoseStandLastSelectedPose", selected_pose);
     FSPose::getInstance()->setPose(selected_pose);
@@ -125,6 +132,7 @@ void FSFloaterPoseStand::onCommitCombo()
 
 void FSFloaterPoseStand::setLock(bool enabled)
 {
+    if (!mCurrent() || !vs_avatar_character()) return;
     if (enabled)
     {
         gAgent.sitDown();
@@ -134,4 +142,9 @@ void FSFloaterPoseStand::setLock(bool enabled)
         gAgent.standUp();
     }
     mPoseStandLock = enabled;
+}
+
+FSFloaterPoseStand::~FSFloaterPoseStand()
+{
+    onClose(true);
 }

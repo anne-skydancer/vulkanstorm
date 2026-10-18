@@ -159,6 +159,9 @@ public:
     void cleanupAudioSource(LLAudioSource *asp);
 
     LLAudioSource *findAudioSource(const LLUUID &source_id);
+    LLAudioSource* findAudioSourceByLogID(const LLUUID& log_id);
+    void clearAccountSources();
+    std::vector<LLVector3d> sourcePositions() const;
     LLAudioData *getAudioData(const LLUUID &audio_uuid);
 
     // Internet stream implementation manipulation

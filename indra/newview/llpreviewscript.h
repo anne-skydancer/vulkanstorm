@@ -408,6 +408,8 @@ private:
     virtual void loadAsset();
     /*virtual*/ void saveIfNeeded(bool sync = true);
     bool monoChecked() const;
+    bool isTaskDraft() const override { return mIsNew; }
+    std::function<bool()> mRunningInfoCurrent;
 
 
     static void onSearchReplace(void* userdata);

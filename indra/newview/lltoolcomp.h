@@ -58,6 +58,7 @@ public:
     // NaCl End
 
     virtual LLViewerObject* getEditingObject()                              { return mCur->getEditingObject(); }
+    LLUUID getEditingObjectID() override { return mCur->getEditingObjectID(); }
     virtual LLVector3d      getEditingPointGlobal()                         { return mCur->getEditingPointGlobal(); }
     virtual bool            isEditing()                                     { return mCur->isEditing(); }
     virtual void            stopEditing()                                   { mCur->stopEditing(); mCur = mDefault; }
@@ -116,6 +117,7 @@ public:
     virtual bool        handleDoubleClick(S32 x, S32 y, MASK mask) override;
     virtual bool        handleKey(KEY key, MASK mask) override;
     virtual void        onMouseCaptureLost() override;
+    void                handleDeselect() override;
             void        keyUp(KEY key, MASK mask);
 
     static void pickCallback(const LLPickInfo& pick_info);
@@ -124,6 +126,9 @@ public:
 
 private:
     bool mIsToolCameraActive;
+#if VS_NATIVE_VULKAN
+    U64 mNativePickGeneration=0;
+#endif
 };
 
 //-----------------------------------------------------------------------

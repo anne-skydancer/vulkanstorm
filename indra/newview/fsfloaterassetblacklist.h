@@ -31,6 +31,7 @@
 
 #include "fsassetblacklist.h"
 #include "llfloater.h"
+#include <functional>
 #include "lllistcontextmenu.h"
 
 class FSScrollListCtrl;
@@ -69,6 +70,7 @@ protected:
     static FSAssetBlacklist::eBlacklistFlag getFlagFromLLSD(const LLSD& data);
 
     LLUUID mAudioSourceID;
+    std::function<bool()> mAccountCurrent = [] { return true; };
 
 private:
     FSScrollListCtrl*   mResultList;

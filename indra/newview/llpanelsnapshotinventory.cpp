@@ -32,6 +32,7 @@
 
 #include "llfloatersnapshot.h" // FIXME: replace with a snapshot storage model
 #include "llpanelsnapshot.h"
+#include "vsregioncontext.h"
 #include "llsnapshotlivepreview.h"
 #include "llviewercontrol.h" // gSavedSettings
 #include "llstatusbar.h"    // can_afford_transaction()
@@ -121,11 +122,12 @@ void LLPanelSnapshotInventory::onOpen(const LLSD& key)
     updateUploadCost();
 
     // <FS:CR> FIRE-10537 - Temp texture uploads aren't functional on SSB regions
-    if (LLAgentBenefitsMgr::current().getTextureUploadCost() == 0 || gAgent.getRegion()->getCentralBakeVersion() > 0)
+    const auto region = vs_current_region_context();
+    if (LLAgentBenefitsMgr::current().getTextureUploadCost() == 0 || (region && region->current() && region->getCentralBakeVersion() > 0))
     {
         gSavedSettings.setBOOL("TemporaryUpload", false);
     }
-    getChild<LLCheckBoxCtrl>("inventory_temp_upload")->setVisible(LLAgentBenefitsMgr::current().getTextureUploadCost() > 0 && gAgent.getRegion()->getCentralBakeVersion() == 0);
+    getChild<LLCheckBoxCtrl>("inventory_temp_upload")->setVisible(LLAgentBenefitsMgr::current().getTextureUploadCost() > 0 && region && region->current() && region->getCentralBakeVersion() == 0);
     // </FS:CR>
     LLPanelSnapshot::onOpen(key);
 }
@@ -193,4 +195,10 @@ S32 LLPanelSnapshotInventory::calculateUploadCost()
     }
 
     return LLAgentBenefitsMgr::current().getTextureUploadCost(w, h);
+}
+
+// Exact private factory identity for the native shared snapshot graph.
+bool vs_snapshot_inventory_type(const std::type_info& type)
+{
+    return type == typeid(LLPanelSnapshotInventory);
 }

@@ -132,21 +132,14 @@ FSFloaterNearbyChat::~FSFloaterNearbyChat()
 void FSFloaterNearbyChat::updateFSUseNearbyChatConsole(const LLSD &data)
 {
     FSUseNearbyChatConsole = data.asBoolean();
-#if VS_NATIVE_VULKAN
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        if (gConsole) gConsole->setVisible(FSUseNearbyChatConsole);
-        return; // The shared text console has no scene toast channel.
-    }
-#endif
     if (FSUseNearbyChatConsole)
     {
         removeScreenChat();
-        gConsole->setVisible(true);
+        if (gConsole) gConsole->setVisible(true);
     }
     else
     {
-        gConsole->setVisible(false);
+        if (gConsole) gConsole->setVisible(false);
     }
 }
 
@@ -313,6 +306,18 @@ void FSFloaterNearbyChat::addMessage(const LLChat& chat,bool archive,const LLSD 
         mChatHistory->appendMessage(chat, chat_args, input_append_params);
     }
 
+#if VS_NATIVE_VULKAN
+    // Observe only actual accepted receive delivery, after shared privacy/script
+    // routing. The session transcript must not present or log it a second time.
+    if (archive && args.has("native_receive_generation"))
+        if (const auto session = VSNativeSession::active())
+        {
+            U64 generation = 0;
+            std::istringstream token(args["native_receive_generation"].asString());
+            if (token >> generation) session->recordNearbyChat(chat, generation);
+        }
+#endif
+
     if (archive)
     {
         LLChat archived(chat);
@@ -475,9 +480,8 @@ void FSFloaterNearbyChat::openFloater(const LLSD& key)
 
 void FSFloaterNearbyChat::removeScreenChat()
 {
-#if VS_NATIVE_VULKAN
-    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return;
-#endif
+    // No lazy channel creation while a preference callback retires account UI.
+    if (!LLNotificationsUI::LLChannelManager::instanceExists()) return;
     LLNotificationsUI::LLScreenChannelBase* chat_channel = LLNotificationsUI::LLChannelManager::getInstance()->findChannelByID(LLNotificationsUI::NEARBY_CHAT_CHANNEL_UUID);
     if (chat_channel)
     {
