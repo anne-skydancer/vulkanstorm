@@ -627,10 +627,15 @@ def parcel_rectangle_contracts_passed(report, directory):
         pixels = path.read_bytes()
         if len(pixels) != 64 * 64 * 4:
             return False
-        center = (32 * 64 + 32) * 4
-        if any(abs(pixels[center + channel] - expected) > 1
-               for channel, expected in enumerate((255, 92, 163, 255))):
+        if row.get('wall_samples_verified') != 3:
             return False
+        for x, y, color in ((25,32,(255,92,163,255)),
+                            (32,32,(255,51,204,255)),
+                            (32,31,(255,125,130,255))):
+            index = (y * 64 + x) * 4
+            if any(abs(pixels[index + channel] - expected) > 1
+                   for channel, expected in enumerate(color)):
+                return False
         posts = sum(pixels[index:index + 3] == bytes((255, 255, 0))
                     for index in range(0, len(pixels), 4))
         return posts > 0 and row.get('opaque_post_pixels') == posts

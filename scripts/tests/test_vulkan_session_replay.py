@@ -26,15 +26,25 @@ class SessionEvidenceTests(unittest.TestCase):
             path = root / 'parcel/rectangle.rgba'
             path.parent.mkdir()
             pixels = bytearray(bytes((255, 0, 255, 255)) * (64 * 64))
-            pixels[(32 * 64 + 32) * 4:(32 * 64 + 32) * 4 + 4] = bytes((255, 92, 163, 255))
+            for x,y,color in ((25,32,(255,92,163,255)),(32,32,(255,51,204,255)),(32,31,(255,125,130,255))):
+                pixels[(y * 64 + x) * 4:(y * 64 + x + 1) * 4] = bytes(color)
             pixels[0:4] = bytes((255, 255, 0, 255))
             report = {'parcel_rectangle': dict(file='parcel/rectangle.rgba', width=64,
-                height=64, pixels_verified=True, opaque_post_pixels=1)}
+                height=64, pixels_verified=True, opaque_post_pixels=1, wall_samples_verified=3)}
             self.assertFalse(session_runner.parcel_rectangle_contracts_passed(report, root))
             path.write_bytes(pixels)
             self.assertTrue(session_runner.parcel_rectangle_contracts_passed(report, root))
+            # Each independent wall sample is decisive; accepting the old
+            # uniform two-layer expectation or a vertically mirrored frame fails.
+            for x,y in ((25,32),(32,32),(32,31)):
+                damaged=bytearray(pixels);damaged[(y*64+x)*4+1]=0
+                path.write_bytes(damaged)
+                self.assertFalse(session_runner.parcel_rectangle_contracts_passed(report,root))
+            path.write_bytes(b''.join(pixels[row*256:(row+1)*256] for row in reversed(range(64))))
+            self.assertFalse(session_runner.parcel_rectangle_contracts_passed(report,root))
+            path.write_bytes(pixels)
             for key, value in (('file', '../rectangle.rgba'), ('width', 65),
-                               ('pixels_verified', False), ('opaque_post_pixels', 2)):
+                               ('pixels_verified', False), ('opaque_post_pixels', 2), ('wall_samples_verified', 2)):
                 changed = copy.deepcopy(report)
                 changed['parcel_rectangle'][key] = value
                 self.assertFalse(session_runner.parcel_rectangle_contracts_passed(changed, root))
@@ -43,7 +53,7 @@ class SessionEvidenceTests(unittest.TestCase):
             pixels[(32 * 64 + 32) * 4 + 1] = 0
             path.write_bytes(pixels)
             self.assertFalse(session_runner.parcel_rectangle_contracts_passed(report, root))
-            pixels[(32 * 64 + 32) * 4 + 1] = 92
+            pixels[(32 * 64 + 32) * 4 + 1] = 51
             pixels[0:4] = bytes((255, 0, 255, 255))
             path.write_bytes(pixels)
             self.assertFalse(session_runner.parcel_rectangle_contracts_passed(report, root))

@@ -388,13 +388,33 @@ struct ParcelRectangleReplay
         for(unsigned row=0;row<64;++row)
             std::memcpy(pixels.data()+row*64*4,static_cast<const U8*>(mapped.pData)+row*mapped.Stride,64*4);
         context->UnmapTextureSubresource(staging,0,0);
-        // renderRect paints the north wall before the nearer south wall. Both
-        // cover the center: two ordinary 51/255 alpha blends over magenta.
-        constexpr std::array<U8,4> expected{255,92,163,255};
-        const auto center=(32*64+32)*4;
-        for(unsigned channel=0;channel<4;++channel)
-            requireParcel(std::abs(int(pixels[center+channel])-expected[channel])<=1,
-                "Actual parcel walls differ from reference paint order/blending pixels");
+        // Preserve the actual readback before any pixel assertion, including
+        // failures: qualification evidence must not depend on a passing oracle.
+        const auto relative=std::string("parcel/rectangle.rgba");
+        const auto path=std::filesystem::path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"))/relative;
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream file(path,std::ios::binary);file.write(reinterpret_cast<const char*>(pixels.data()),pixels.size());
+        file.close();requireParcel(!file.fail(),"Parcel pixel artifact write failed");
+        // Preserve the original strip, including its reversed SW pair. At
+        // this fixed view it yields one, two and three layers at these points.
+        // A source-derived reference projection verifies their coverage and
+        // orientation independently; requantize after each ordinary UNORM blend.
+        struct WallSample {unsigned x,y,layers;std::array<U8,4> expected;};
+        constexpr std::array<WallSample,3> wallSamples{{
+            {25,32,2,{255,92,163,255}},
+            {32,32,1,{255,51,204,255}},
+            {32,31,3,{255,125,130,255}}}};
+        for(const auto& sample:wallSamples)
+            for(unsigned channel=0;channel<4;++channel)
+            {
+                const auto index=(sample.y*64+sample.x)*4+channel;
+                requireParcel(std::abs(int(pixels[index])-sample.expected[channel])<=1,
+                    ("Actual parcel walls differ from reference strip coverage/blending: x="+
+                        std::to_string(sample.x)+" y="+std::to_string(sample.y)+" layers="+
+                        std::to_string(sample.layers)+" channel="+std::to_string(channel)+
+                        " actual="+std::to_string(pixels[index])+" expected="+
+                        std::to_string(sample.expected[channel])).c_str());
+            }
         std::vector<std::array<float,4>> expectedPosts;
         const auto scale=LLUI::getScaleFactor();
         const float linePixels=scale.mV[VX]+scale.mV[VY];
@@ -438,13 +458,9 @@ struct ParcelRectangleReplay
                 if(opaque)requireParcel(boundaryPixel,"Actual parcel post pixels extend beyond reference projection");
             }
         requireParcel(yellow>0 && expectedInterior>0,"Actual projected parcel posts failed opaque yellow pixel qualification");
-        const auto relative=std::string("parcel/rectangle.rgba");
-        const auto path=std::filesystem::path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"))/relative;
-        std::filesystem::create_directories(path.parent_path());
-        std::ofstream file(path,std::ios::binary);file.write(reinterpret_cast<const char*>(pixels.data()),pixels.size());
-        file.close();requireParcel(!file.fail(),"Parcel pixel artifact write failed");
         evidence["file"]=relative;evidence["width"]=64;evidence["height"]=64;
         evidence["pixels_verified"]=true;evidence["opaque_post_pixels"]=S32(yellow);
+        evidence["wall_samples_verified"]=S32(wallSamples.size());
         complete=true;
         context->SetRenderTargets(1,&windowTarget,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         Viewport viewport{0.f,0.f,float(windowWidth),float(windowHeight)};
