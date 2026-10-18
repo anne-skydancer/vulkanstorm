@@ -134,6 +134,7 @@ public:
     using native_triangle_t = std::array<std::array<F32, 6>, 3>; // x,y,r,g,b,a
     static void setNativeTriangles(std::function<void(const native_triangle_t&)>);
     static void nativeTriangle(const native_triangle_t&);
+    static void nativeLine(const std::array<F32, 6>&, const std::array<F32, 6>&);
     static bool isNativeUI();
     static void setNativeColor(const LLColor4&);
     static const LLColor4& nativeColor();

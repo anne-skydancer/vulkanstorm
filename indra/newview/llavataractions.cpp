@@ -352,7 +352,7 @@ void LLAvatarActions::startCall(const LLUUID& id)
     }
 // [/RLVa:KB]
 
-    LLAvatarNameCache::get(id, boost::bind(&on_avatar_name_cache_start_call, _1, _2));
+    LLAvatarNameCache::get(id, vs_native_im_account_callback(boost::bind(&on_avatar_name_cache_start_call, _1, _2)));
 }
 
 // static

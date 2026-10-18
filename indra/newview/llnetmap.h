@@ -28,6 +28,8 @@
 #define LL_LLNETMAP_H
 
 #include "llmath.h"
+#include "llframetimer.h"
+#include "lluiimage.h"
 #include "lluictrl.h"
 #include "v3math.h"
 #include "v3dmath.h"
@@ -129,6 +131,15 @@ private:
     void            drawTracking( const LLVector3d& pos_global,
                                   const LLColor4& color,
                                   bool draw_arrow = true);
+#if VS_NATIVE_VULKAN
+    void drawNative();
+    void drawNativeObjects();
+    void drawNativeParcels();
+    LLUIImagePtr mNativeObjectImage, mNativeParcelImage;
+    std::string mNativeObjectKey = LLUUID::generateNewID().asString();
+    std::string mNativeParcelKey = LLUUID::generateNewID().asString();
+    LLFrameTimer mNativeRasterTimer;
+#endif
     void            drawRing(const F32 radius, LLVector3 pos_map, const LLUIColor& color);
     bool            isMouseOnPopupMenu();
     void            updateAboutLandPopupButton();

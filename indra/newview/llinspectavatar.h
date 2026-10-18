@@ -26,10 +26,12 @@
 #ifndef LLINSPECTAVATAR_H
 #define LLINSPECTAVATAR_H
 
+#include <typeinfo>
 namespace LLInspectAvatarUtil
 {
     // Register with LLFloaterReg
     void registerFloater();
+    bool isNativeInternalType(const std::type_info&);
 }
 
 #endif

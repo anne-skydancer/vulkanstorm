@@ -26,6 +26,11 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llinspectavatar.h"
+#include "vsnativeim.h"
+#include "vsavatarservices.h"
+#include "llviewerwindow.h"
+#include "fspanelblocklist.h"
+
 
 // viewer files
 #include "llagent.h"
@@ -162,7 +167,7 @@ private:
     // Is used to determine if "Add friend" option should be enabled in gear menu
     bool isNotFriend();
 
-    void moderationActionCoro(std::string url, LLSD action);
+    static void moderationActionCoro(std::string url, LLSD action, std::function<bool()> current);
 
     // </FS:Ansariel>
 
@@ -170,6 +175,7 @@ private:
                            const LLAvatarName& av_name);
 
 private:
+    std::function<bool()> mAccountCurrent = [] { return true; };
     LLUUID              mAvatarID;
     // Need avatar name information to spawn friend add request
     LLAvatarName        mAvatarName;
@@ -217,6 +223,7 @@ public:
 
     void processProperties(void* data, EAvatarProcessorType type)
     {
+        if (!mAccountCurrent()) return;
         // route the data to the inspector
         if (data
             && type == APT_PROPERTIES)
@@ -237,6 +244,7 @@ public:
     // Store avatar ID so we can un-register the observer on destruction
     LLUUID mAvatarID;
     LLInspectAvatar* mInspector;
+    std::function<bool()> mAccountCurrent = vs_native_im_guard();
 };
 
 LLInspectAvatar::LLInspectAvatar(const LLSD& sd)
@@ -328,6 +336,7 @@ bool LLInspectAvatar::postBuild(void)
 //virtual
 void LLInspectAvatar::onOpen(const LLSD& data)
 {
+    mAccountCurrent = vs_native_im_guard();
     // Start open animation
     LLInspect::onOpen(data);
 
@@ -517,6 +526,7 @@ void LLInspectAvatar::updateVolumeSlider()
 
 void LLInspectAvatar::onClickMuteVolume()
 {
+    if (!mAccountCurrent()) return;
     // By convention, we only display and toggle voice mutes, not all mutes
     LLMuteList* mute_list = LLMuteList::getInstance();
     bool is_muted = mute_list->isMuted(mAvatarID, LLMute::flagVoiceChat);
@@ -536,6 +546,7 @@ void LLInspectAvatar::onClickMuteVolume()
 
 void LLInspectAvatar::onVolumeChange(const LLSD& data)
 {
+    if (!mAccountCurrent()) return;
     F32 volume = (F32)data.asReal();
     LLVoiceClient::getInstance()->setUserVolume(mAvatarID, volume);
 }
@@ -546,6 +557,7 @@ void LLInspectAvatar::onAvatarNameCache(
 {
     mAvatarNameCacheConnection.disconnect();
 
+    if (!mAccountCurrent()) return;
     if (agent_id == mAvatarID)
     {
         getChild<LLUICtrl>("user_name")->setValue(av_name.getDisplayName());
@@ -640,7 +652,10 @@ void LLInspectAvatar::updateModeratorPanel()
 
 void LLInspectAvatar::toggleSelectedVoice(bool enabled)
 {
-    LLUUID session_id = LLVoiceChannel::getCurrentVoiceChannel()->getSessionID();
+    if (!mAccountCurrent()) return;
+    auto* channel = LLVoiceChannel::getCurrentVoiceChannel();
+    if (!channel) return;
+    LLUUID session_id = channel->getSessionID();
     LLIMSpeakerMgr* speaker_mgr = LLIMModel::getInstance()->getSpeakerManager(session_id);
 
     if (speaker_mgr)
@@ -658,7 +673,7 @@ void LLInspectAvatar::toggleSelectedVoice(bool enabled)
             data["params"]["mute_info"]["voice"] = !enabled;
 
             LLCoros::instance().launch("LLIMSpeakerMgr::moderationActionCoro",
-                boost::bind(&LLInspectAvatar::moderationActionCoro, this, url, data));
+                boost::bind(&LLInspectAvatar::moderationActionCoro, url, data, mAccountCurrent));
         }
     }
 
@@ -667,12 +682,14 @@ void LLInspectAvatar::toggleSelectedVoice(bool enabled)
 
 void LLInspectAvatar::onClickAddFriend()
 {
+    if (!mAccountCurrent()) return;
     LLAvatarActions::requestFriendshipDialog(mAvatarID, mAvatarName.getDisplayName());
     closeFloater();
 }
 
 void LLInspectAvatar::onClickViewProfile()
 {
+    if (!mAccountCurrent()) return;
     LLAvatarActions::showProfile(mAvatarID);
     closeFloater();
 }
@@ -701,35 +718,41 @@ bool LLInspectAvatar::onVisibleFreeze()
 
 bool LLInspectAvatar::onVisibleZoomIn()
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return LLAvatarActions::canZoomIn(mAvatarID);
     return gObjectList.findObject(mAvatarID);
 }
 
 void LLInspectAvatar::onClickIM()
 {
+    if (!mAccountCurrent()) return;
     LLAvatarActions::startIM(mAvatarID);
     closeFloater();
 }
 
 void LLInspectAvatar::onClickCall()
 {
+    if (!mAccountCurrent()) return;
     LLAvatarActions::startCall(mAvatarID);
     closeFloater();
 }
 
 void LLInspectAvatar::onClickTeleport()
 {
+    if (!mAccountCurrent()) return;
     LLAvatarActions::offerTeleport(mAvatarID);
     closeFloater();
 }
 
 void LLInspectAvatar::onClickTeleportRequest()
 {
+    if (!mAccountCurrent()) return;
     LLAvatarActions::teleportRequest(mAvatarID);
     closeFloater();
 }
 
 void LLInspectAvatar::onClickInviteToGroup()
 {
+    if (!mAccountCurrent()) return;
     LLAvatarActions::inviteToGroup(mAvatarID);
     closeFloater();
 }
@@ -737,6 +760,12 @@ void LLInspectAvatar::onClickInviteToGroup()
 // <FS:Chanayane> Compass floater
 void LLInspectAvatar::onClickFaceTowards()
 {
+    if (!mAccountCurrent()) return;
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if (auto* controller = FSAvatarAlignBase::getActive()) controller->faceAvatar(mAvatarID);
+        return;
+    }
     LLVOAvatar* avatar = dynamic_cast<LLVOAvatar*>(gObjectList.findObject(mAvatarID));
     if (!avatar) return;
     FSAvatarAlignBase* f = FSAvatarAlignBase::getActive();
@@ -746,18 +775,21 @@ void LLInspectAvatar::onClickFaceTowards()
 
 void LLInspectAvatar::onClickPay()
 {
+    if (!mAccountCurrent()) return;
     LLAvatarActions::pay(mAvatarID);
     closeFloater();
 }
 
 void LLInspectAvatar::onClickShare()
 {
+    if (!mAccountCurrent()) return;
     LLAvatarActions::share(mAvatarID);
     closeFloater();
 }
 
 void LLInspectAvatar::onToggleMute()
 {
+    if (!mAccountCurrent()) return;
     LLMute mute(mAvatarID, mAvatarName.getUserName(), LLMute::AGENT);
 
     if (LLMuteList::getInstance()->isMuted(mute.mID, mute.mName))
@@ -769,18 +801,21 @@ void LLInspectAvatar::onToggleMute()
         LLMuteList::getInstance()->add(mute);
     }
 
-    LLPanelBlockedList::showPanelAndSelect(mute.mID);
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) FSPanelBlockList::showPanelAndSelect(mute.mID);
+    else LLPanelBlockedList::showPanelAndSelect(mute.mID);
     closeFloater();
 }
 
 void LLInspectAvatar::onClickReport()
 {
+    if (!mAccountCurrent()) return;
     LLFloaterReporter::showFromAvatar(mAvatarID, mAvatarName.getCompleteName());
     closeFloater();
 }
 
 bool godlike_freeze(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     LLUUID avatar_id = notification["payload"]["avatar_id"].asUUID();
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
 
@@ -801,12 +836,15 @@ bool godlike_freeze(const LLSD& notification, const LLSD& response)
 
 void LLInspectAvatar::onClickFreeze()
 {
+    if (!mAccountCurrent()) return;
     if (gAgent.isGodlike())
     {
+        LLSD payload; payload["avatar_id"] = mAvatarID;
+        vs_native_im_stamp_notification(payload);
         // use godlike freeze-at-a-distance, with confirmation
         LLNotificationsUtil::add("FreezeAvatar",
             LLSD(),
-            LLSD().with("avatar_id", mAvatarID),
+            payload,
             godlike_freeze);
     }
     else
@@ -819,18 +857,21 @@ void LLInspectAvatar::onClickFreeze()
 
 void LLInspectAvatar::onClickEject()
 {
+    if (!mAccountCurrent()) return;
     handle_avatar_eject( LLSD(mAvatarID) );
     closeFloater();
 }
 
 void LLInspectAvatar::onClickKick()
 {
+    if (!mAccountCurrent()) return;
     LLAvatarActions::kick(mAvatarID);
     closeFloater();
 }
 
 void LLInspectAvatar::onClickCSR()
 {
+    if (!mAccountCurrent()) return;
     LLAvatarName av_name;
     LLAvatarNameCache::get(mAvatarID, &av_name);
     std::string name = av_name.getUserName();
@@ -840,13 +881,16 @@ void LLInspectAvatar::onClickCSR()
 
 void LLInspectAvatar::onClickZoomIn()
 {
-    handle_zoom_to_object(mAvatarID);
+    if (!mAccountCurrent()) return;
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) LLAvatarActions::zoomIn(mAvatarID);
+    else handle_zoom_to_object(mAvatarID);
     closeFloater();
 }
 
 void LLInspectAvatar::onClickFindOnMap()
 {
-    gFloaterWorldMap->trackAvatar(mAvatarID, mAvatarName.getDisplayName());
+    if (!mAccountCurrent()) return;
+    if (auto* map = LLFloaterWorldMap::getInstance()) map->trackAvatar(mAvatarID, mAvatarName.getDisplayName());
     LLFloaterReg::showInstance("world_map");
 }
 
@@ -900,8 +944,9 @@ bool LLInspectAvatar::godModeEnabled()
     return gAgent.isGodlike();
 }
 
-void LLInspectAvatar::moderationActionCoro(std::string url, LLSD action)
+void LLInspectAvatar::moderationActionCoro(std::string url, LLSD action, std::function<bool()> current)
 {
+    if (!current()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter(new LLCoreHttpUtil::HttpCoroutineAdapter("moderationActionCoro", httpPolicy));
     LLCore::HttpRequest::ptr_t httpRequest(new LLCore::HttpRequest);
@@ -912,6 +957,7 @@ void LLInspectAvatar::moderationActionCoro(std::string url, LLSD action)
     LLUUID sessionId = action["session-id"];
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, action, httpOpts);
+    if (!current()) return;
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -948,3 +994,6 @@ void LLInspectAvatarUtil::registerFloater()
     LLFloaterReg::add("inspect_avatar", "inspect_avatar.xml",
                       &LLFloaterReg::build<LLInspectAvatar>);
 }
+
+bool LLInspectAvatarUtil::isNativeInternalType(const std::type_info& type)
+{ return type == typeid(LLInspectAvatar); }

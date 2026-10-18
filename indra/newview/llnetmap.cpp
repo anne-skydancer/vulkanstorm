@@ -29,6 +29,18 @@
 #include "vsregionlimits.h"
 
 #include "llnetmap.h"
+#include "vsregioncontext.h"
+#include "vsavatarservices.h"
+#include "vsobjectinteraction.h"
+#include "llviewernetwork.h"
+#include "llworldmap.h"
+#include "llworldmipmap.h"
+#include "object_flags.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "vsuiimageprovider.h"
+#endif
 
 // Library includes (should move below)
 #include "indra_constants.h"
@@ -164,6 +176,13 @@ LLNetMap::LLNetMap (const Params & p)
 
 LLNetMap::~LLNetMap()
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        vs_erase_ui_image(mNativeObjectKey);
+        vs_erase_ui_image(mNativeParcelKey);
+    }
+#endif
     auto menu = static_cast<LLMenuGL*>(mPopupMenuHandle.get());
     if (menu)
     {
@@ -277,7 +296,7 @@ void LLNetMap::setScale( F32 scale )
     // <FS:Ansariel> Synchronize scale throughout instances
     sScale = scale;
 
-    if (mObjectImagep.notNull())
+    if (mObjectRawImagep.notNull())
     {
         F32 width = (F32)(getRect().getWidth());
         F32 height = (F32)(getRect().getHeight());
@@ -287,7 +306,7 @@ void LLNetMap::setScale( F32 scale )
         //F32 meters = region_widths * LLWorld::getInstance()->getRegionWidthInMeters();
         F32 meters = region_widths * REGION_WIDTH_METERS;
 // </FS:CR> Aurora Sim
-        F32 num_pixels = (F32)mObjectImagep->getWidth();
+        F32 num_pixels = (F32)mObjectRawImagep->getWidth();
         mObjectMapTPM = num_pixels / meters;
         mObjectMapPixels = diameter;
     }
@@ -310,6 +329,9 @@ void LLNetMap::setScale( F32 scale )
 
 void LLNetMap::draw()
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) { drawNative(); return; }
+#endif
     if (!LLWorld::instanceExists())
     {
         return;
@@ -992,6 +1014,15 @@ void LLNetMap::drawRing(const F32 radius, const LLVector3 pos_map, const LLUICol
     F32 meters_to_pixels = mScale / REGION_WIDTH_METERS;
 // </FS:CR> Aurora Sim
     F32 radius_pixels = radius * meters_to_pixels;
+    if (LLRender2D::isNativeUI())
+    {
+        LLRender2D::pushMatrix();
+        LLRender2D::translate(pos_map.mV[VX], pos_map.mV[VY]);
+        gl_washer_2d(radius_pixels, radius_pixels - WIDTH_PIXELS, CIRCLE_STEPS, color, color);
+        gl_washer_2d(radius_pixels - WIDTH_PIXELS, radius_pixels, CIRCLE_STEPS, color, color);
+        LLRender2D::popMatrix();
+        return;
+    }
 
     gGL.matrixMode(LLRender::MM_MODELVIEW);
     gGL.pushMatrix();
@@ -1064,7 +1095,7 @@ void LLNetMap::updateAboutLandPopupButton()
         return;
     }
 
-    LLViewerRegion *region = LLWorld::getInstance()->getRegionFromPosGlobal(mPopupWorldPos);
+    const auto region = vs_region_context(mPopupWorldPos);
     if (!region)
     {
         menu->setItemEnabled("About Land", false);
@@ -1181,7 +1212,7 @@ bool LLNetMap::handleToolTip(S32 x, S32 y, MASK mask)
     std::string region_name_msg;
 
     LLVector3d      posGlobal = viewPosToGlobal(x, y);
-    LLViewerRegion *region    = LLWorld::getInstance()->getRegionFromPosGlobal(posGlobal);
+    const auto region = vs_region_context(posGlobal);
     if (region)
     {
 //      std::string region_name = region->getName();
@@ -1325,7 +1356,7 @@ bool LLNetMap::handleToolTipAgent(const LLUUID& avatar_id)
 
             // <FS:Ansariel> Try to get distance from the nearby people panel
             //               aka radar when above 1020m.
-            if (isHigher1020mBug)
+            if (isHigher1020mBug && !(gViewerWindow && gViewerWindow->isNativeVulkan()))
             {
                 if (auto entry = FSRadar::getInstance()->getEntry(avatar_id); entry)
                 {
@@ -1418,8 +1449,8 @@ void LLNetMap::renderPoint(const LLVector3 &pos_local, const LLColor4U &color,
         return;
     }
 
-    const S32 image_width = (S32)mObjectImagep->getWidth();
-    const S32 image_height = (S32)mObjectImagep->getHeight();
+    const S32 image_width = (S32)mObjectRawImagep->getWidth();
+    const S32 image_height = (S32)mObjectRawImagep->getHeight();
 
     S32 x_offset = ll_round(pos_local.mV[VX] * mObjectMapTPM + image_width / 2);
     S32 y_offset = ll_round(pos_local.mV[VY] * mObjectMapTPM + image_height / 2);
@@ -1646,6 +1677,14 @@ bool LLNetMap::createImage(LLPointer<LLImageRaw>& rawimagep) const
 // [SL:KB] - Patch: World-MinimapOverlay | Checked: 2012-06-20 (Catznip-3.3)
 void LLNetMap::createObjectImage()
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        createImage(mObjectRawImagep);
+        setScale(sScale); mUpdateObjectImage = true;
+        return;
+    }
+#endif
     if (createImage(mObjectRawImagep))
         mObjectImagep = LLViewerTextureManager::getLocalTexture( mObjectRawImagep.get(), false);
     // <FS:Ansariel> Synchronize scale throughout instances
@@ -1657,6 +1696,14 @@ void LLNetMap::createObjectImage()
 
 void LLNetMap::createParcelImage()
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        createImage(mParcelRawImagep);
+        mUpdateParcelImage = true;
+        return;
+    }
+#endif
     if (createImage(mParcelRawImagep))
         mParcelImagep = LLViewerTextureManager::getLocalTexture( mParcelRawImagep.get(), false);
     mUpdateParcelImage = true;
@@ -2084,6 +2131,11 @@ void LLNetMap::handleCam()
 // <FS:Chanayane> Compass floater
 void LLNetMap::handleFaceTowards()
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if (auto* controller = FSAvatarAlignBase::getActive()) controller->faceAvatar(mClosestAgentRightClick);
+        return;
+    }
     LLVOAvatar* avatar = dynamic_cast<LLVOAvatar*>(gObjectList.findObject(mClosestAgentRightClick));
     if (!avatar)
         return;
@@ -2097,6 +2149,12 @@ void LLNetMap::handleFaceTowards()
 
 bool LLNetMap::canFaceTowards()
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLVector3d position;
+        return mClosestAgentRightClick != gAgentID && vs_avatar_precise_location(mClosestAgentRightClick, position) &&
+               dist_vec(position, gAgent.getPositionGlobal()) <= FSAvatarAlignBase::MAX_FACE_DISTANCE;
+    }
     LLVOAvatar* avatar = dynamic_cast<LLVOAvatar*>(gObjectList.findObject(mClosestAgentRightClick));
     return avatar && !avatar->isSelf() && !avatar->isDead() &&
            dist_vec(avatar->getPositionAgent(), gAgent.getPositionAgent()) <= FSAvatarAlignBase::MAX_FACE_DISTANCE;
@@ -2364,3 +2422,586 @@ void LLNetMap::handleDerender(bool permanent)
 {
     LLAvatarActions::derender(mClosestAgentRightClick, permanent);
 }
+
+#if VS_NATIVE_VULKAN
+void LLNetMap::drawNative()
+{
+    const auto session = VSNativeSession::active();
+    if (!session || !session->regionReady() || !gViewerWindow->nativeContext() || !vs_region_limits().getAllowMinimap()) return;
+    if (getRect().getWidth() <= 0 || getRect().getHeight() <= 0) return;
+    if (mScale != sScale) setScale(sScale);
+    if (!mObjectRawImagep) createObjectImage();
+    if (!mParcelRawImagep) createParcelImage();
+    const bool automatic = gSavedSettings.getBOOL("MiniMapAutoCenter") && !mPanning;
+    mCentering = mCentering && !mPanning;
+    if (automatic || mCentering)
+        mCurPan = lerp(mCurPan, LLVector2(0, 0), LLSmoothInterpolation::getInterpolant(.1f));
+    const bool centered = std::abs(mCurPan.mV[VX]) < .5f && std::abs(mCurPan.mV[VY]) < .5f;
+    if (centered) { mCurPan = LLVector2(0, 0); mCentering = false; }
+    if (auto* menu = dynamic_cast<LLMenuGL*>(mPopupMenuHandle.get()))
+        menu->setItemEnabled("Re-center map", !(centered || mCentering || automatic));
+    updateAboutLandPopupButton();
+    LLLocalClipRect clip(getLocalRect());
+    gl_rect_2d(getLocalRect(), mBackgroundColor.get());
+    const bool rotate = gSavedSettings.getBOOL("MiniMapRotate");
+    const F32 rotation = rotate ? std::atan2(LLViewerCamera::instance().getAtAxis().mV[VX], LLViewerCamera::instance().getAtAxis().mV[VY]) : 0.f;
+    const F32 pixels = mScale / REGION_WIDTH_METERS;
+    const F32 panX = llfloor(mCurPan.mV[VX]) - mCurPan.mV[VX];
+    const F32 panY = llfloor(mCurPan.mV[VY]) - mCurPan.mV[VY];
+    // Same level-one objects imagery as LLSurface::createSTexture and
+    // LLViewerRegion::getWorldMapTiles; shared HTTP provider owns throttling,
+    // retries, account cancellation and immutable native image publication.
+    LLVector3d low = viewPosToGlobal(0, 0), high = low;
+    for (const auto& corner : {LLCoordGL(0, getRect().getHeight()), LLCoordGL(getRect().getWidth(), 0), LLCoordGL(getRect().getWidth(), getRect().getHeight())})
+    {
+        const auto position = viewPosToGlobal(corner.mX, corner.mY);
+        for (int axis = 0; axis < 2; ++axis)
+        { low.mdV[axis] = llmin(low.mdV[axis], position.mdV[axis]); high.mdV[axis] = llmax(high.mdV[axis], position.mdV[axis]); }
+    }
+    const bool sl = LLGridManager::instance().isInSecondLife();
+    for (const auto& region : session->regionSnapshots(false))
+    {
+        const auto origin = from_region_handle(region.handle);
+        if (origin.mdV[0] > high.mdV[0] || origin.mdV[1] > high.mdV[1] ||
+            origin.mdV[0] + region.width < low.mdV[0] || origin.mdV[1] + region.height < low.mdV[1]) continue;
+        const LLColor4 tint = region.current ? LLColor4::white : LLColor4(.8f, .8f, .8f, 1.f);
+        U32 gridX, gridY; grid_from_region_handle(region.handle, &gridX, &gridY);
+        const S32 count = sl ? 1 : llmax(1, S32(region.width / REGION_WIDTH_U32));
+        const S32 firstX = sl ? 0 : llclamp(S32(std::floor((low.mdV[0] - origin.mdV[0]) / REGION_WIDTH_METERS)), 0, count - 1);
+        const S32 firstY = sl ? 0 : llclamp(S32(std::floor((low.mdV[1] - origin.mdV[1]) / REGION_WIDTH_METERS)), 0, count - 1);
+        const S32 lastX = sl ? 0 : llclamp(S32(std::floor((high.mdV[0] - origin.mdV[0]) / REGION_WIDTH_METERS)), 0, count - 1);
+        const S32 lastY = sl ? 0 : llclamp(S32(std::floor((high.mdV[1] - origin.mdV[1]) / REGION_WIDTH_METERS)), 0, count - 1);
+        for (S32 x = firstX; x <= lastX; ++x) for (S32 y = firstY; y <= lastY; ++y)
+        {
+            // Ordinary OpenSim delays region map tiles while teleporting.
+            if (!sl && gAgent.getTeleportState() != LLAgent::TELEPORT_NONE) continue;
+            const auto tile = vs_request_map_image(LLWorldMipmap::objectsTileURL(gridX + x, gridY + y, 1));
+            if (!tile.image) continue;
+            const F32 side = sl ? F32(region.width) : REGION_WIDTH_METERS;
+            const auto center = globalPosToView(origin + LLVector3d(x * REGION_WIDTH_METERS + side * .5f, y * REGION_WIDTH_METERS + side * .5f, 0));
+            const S32 size = ll_round(side * pixels);
+            tile.image->drawRotated(ll_round(center.mV[0] + panX - size * .5f), ll_round(center.mV[1] + panY - size * .5f), size, size, rotation * RAD_TO_DEG, tint);
+        }
+    }
+    LLVector3 centerView = globalPosToView(gAgentCamera.getCameraPositionGlobal());
+    centerView.mV[VX] -= mCurPan.mV[VX]; centerView.mV[VY] -= mCurPan.mV[VY];
+    const auto centerGlobal = viewPosToGlobal(llfloor(centerView.mV[VX]), llfloor(centerView.mV[VY]));
+    const bool refresh = mNativeRasterTimer.getElapsedTimeF32() > .5f;
+    const bool objects = gSavedSettings.getBOOL("MiniMapObjects");
+    const bool parcels = gSavedSettings.getBOOL("MiniMapShowPropertyLines");
+    if (objects && (refresh || mUpdateObjectImage || !mNativeObjectImage))
+    {
+        mObjectImageCenterGlobal = centerGlobal;
+        std::memset(mObjectRawImagep->getData(), 0, size_t(mObjectRawImagep->getWidth()) * mObjectRawImagep->getHeight() * 4);
+        drawNativeObjects();
+        mNativeObjectImage = vs_publish_ui_image(mNativeObjectKey, *mObjectRawImagep);
+        mUpdateObjectImage = false;
+    }
+    if (parcels && (refresh || mUpdateParcelImage || !mNativeParcelImage || dist_vec_squared2D(mParcelImageCenterGlobal, centerGlobal) > 9.f))
+    {
+        mParcelImageCenterGlobal = centerGlobal;
+        std::memset(mParcelRawImagep->getData(), 0, size_t(mParcelRawImagep->getWidth()) * mParcelRawImagep->getHeight() * 4);
+        drawNativeParcels();
+        mNativeParcelImage = vs_publish_ui_image(mNativeParcelKey, *mParcelRawImagep);
+        mUpdateParcelImage = false;
+    }
+    if (refresh) mNativeRasterTimer.reset();
+    const auto raster = [&](const LLUIImagePtr& image, const LLVector3d& origin)
+    {
+        if (!image) return;
+        const auto center = globalPosToView(origin);
+        const S32 side = ll_round(mObjectMapPixels);
+        image->drawRotated(ll_round(center.mV[0] + panX - side * .5f), ll_round(center.mV[1] + panY - side * .5f), side, side, rotation * RAD_TO_DEG);
+    };
+    if (objects) raster(mNativeObjectImage, mObjectImageCenterGlobal);
+    if (parcels) raster(mNativeParcelImage, mParcelImageCenterGlobal);
+    const LLVector3 camera_position = gAgentCamera.getCameraPositionAgent();
+    const auto skinColor = [](const char* name, const LLColor4& fallback) { return LLUIColorTable::instance().getColor(name, fallback); };
+    const LLUIColor map_avatar_color = skinColor("MapAvatarColor", LLColor4::white);
+    const LLUIColor map_track_color = skinColor("MapTrackColor", LLColor4::white);
+    const LLUIColor map_whisper_ring_color = skinColor("MapWhisperRingColor", LLColor4::blue);
+    const LLUIColor map_chat_ring_color = skinColor("MapChatRingColor", LLColor4::yellow);
+    const LLUIColor map_shout_ring_color = skinColor("MapShoutRingColor", LLColor4::red);
+            // Mouse pointer in local coordinates
+        S32 local_mouse_x;
+        S32 local_mouse_y;
+        //localMouse(&local_mouse_x, &local_mouse_y);
+        LLUI::getInstance()->getMousePositionLocal(this, &local_mouse_x, &local_mouse_y);
+// [SL:KB] - Patch: World-MiniMap | Checked: 2012-07-08 (Catznip-3.3)
+        bool local_mouse = this->pointInView(local_mouse_x, local_mouse_y);
+// [/SL:KB]
+        mClosestAgentToCursor.setNull();
+// [SL:KB] - Patch: World-MiniMap | Checked: 2012-07-08 (Catznip-3.3)
+        mClosestAgentsToCursor.clear();
+// [/SL:KB]
+        F32 closest_dist_squared = F32_MAX; // value will be overridden in the loop
+        // <FS:Ansariel> Configurable pick distance
+        //F32 min_pick_dist_squared = (mDotRadius * MIN_PICK_SCALE) * (mDotRadius * MIN_PICK_SCALE);
+        static LLCachedControl<F32> fsMinimapPickScale(gSavedSettings, "FSMinimapPickScale");
+        F32 min_pick_dist_squared = (mDotRadius * fsMinimapPickScale) * (mDotRadius * fsMinimapPickScale);
+        // </FS:Ansariel>
+
+        LLVector3 pos_map;
+        uuid_vec_t avatar_ids;
+        std::vector<LLVector3d> positions;
+        bool unknown_relative_z;
+
+        for (const auto& avatar : vs_avatar_locations(gAgentCamera.getCameraPositionGlobal(), F32_MAX))
+        { avatar_ids.push_back(avatar.id); positions.push_back(avatar.position); }
+
+        // Draw avatars
+        for (U32 i = 0; i < avatar_ids.size(); i++)
+        {
+            // <FS:Ansariel> Performance improvement
+            //LLUUID uuid = avatar_ids[i];
+            const LLUUID& uuid = avatar_ids.at(i);
+            // Skip self, we'll draw it later
+            if (uuid == gAgent.getID()) continue;
+
+            pos_map = globalPosToView(positions[i]);
+
+            // <FS:Ansariel> Check for unknown Z-offset => AVATAR_UNKNOWN_Z_OFFSET
+            //unknown_relative_z = positions[i].mdV[VZ] >= COARSEUPDATE_MAX_Z &&
+            //      camera_position.mV[VZ] >= COARSEUPDATE_MAX_Z;
+            unknown_relative_z = false;
+            if (positions[i].mdV[VZ] == AVATAR_UNKNOWN_Z_OFFSET)
+            {
+                if (camera_position.mV[VZ] >= COARSEUPDATE_MAX_Z)
+                {
+                    // No exact data and cam >=1020 => we don't know if
+                    // other avatar is above or below us => unknown
+                    unknown_relative_z = true;
+                }
+                else
+                {
+                    // No exact data but cam is below 1020 => other avatar
+                    // is definitely above us => bump Z-offset to F32_MAX
+                    // so we get the up chevron
+                    pos_map.mV[VZ] = F32_MAX;
+                }
+            }
+            // </FS:Ansariel>
+
+            LLColor4 color = getAvatarColor(uuid);  // <FS:CR>
+
+// [RLVa:KB] - Checked: 2010-04-19 (RLVa-1.2.0f) | Modified: RLVa-1.2.0f | FS-Specific
+            LLWorldMapView::drawAvatar(
+                pos_map.mV[VX], pos_map.mV[VY],
+                (RlvActions::canShowName(RlvActions::SNC_DEFAULT, uuid)) ? color : map_avatar_color.get(),
+                pos_map.mV[VZ], mDotRadius,
+                unknown_relative_z);
+// [/RLVa:KB]
+//          LLWorldMapView::drawAvatar(
+//              pos_map.mV[VX], pos_map.mV[VY],
+//              color,
+//              pos_map.mV[VZ], mDotRadius,
+//              unknown_relative_z);
+
+            if(uuid.notNull())
+            {
+                bool selected = false;
+                uuid_vec_t::iterator sel_iter = gmSelected.begin();
+                for (; sel_iter != gmSelected.end(); sel_iter++)
+                {
+                    if(*sel_iter == uuid)
+                    {
+                        selected = true;
+                        break;
+                    }
+                }
+                if(selected)
+                {
+                    if( (pos_map.mV[VX] < 0) ||
+                        (pos_map.mV[VY] < 0) ||
+                        (pos_map.mV[VX] >= getRect().getWidth()) ||
+                        (pos_map.mV[VY] >= getRect().getHeight()) )
+                    {
+                        S32 x = ll_round( pos_map.mV[VX] );
+                        S32 y = ll_round( pos_map.mV[VY] );
+                        LLWorldMapView::drawTrackingCircle( getRect(), x, y, color, 1, 10);
+                    } else
+                    {
+                        LLWorldMapView::drawTrackingDot(pos_map.mV[VX],pos_map.mV[VY],color,0.f);
+                    }
+                }
+            }
+
+// [SL:KB] - Patch: World-MiniMap | Checked: 2012-07-08 (Catznip-3.3)
+            if (local_mouse)
+            {
+// [/SL:KB]
+                F32 dist_to_cursor_squared = dist_vec_squared(LLVector2(pos_map.mV[VX], pos_map.mV[VY]),
+                                                LLVector2((F32)local_mouse_x, (F32)local_mouse_y));
+                if (dist_to_cursor_squared < min_pick_dist_squared)
+                {
+                    if (dist_to_cursor_squared < closest_dist_squared)
+                    {
+                        closest_dist_squared = dist_to_cursor_squared;
+                        mClosestAgentToCursor = uuid;
+                        mClosestAgentPosition = positions[i];
+                    }
+                    mClosestAgentsToCursor.push_back(uuid);
+                }
+// [SL:KB] - Patch: World-MiniMap | Checked: 2012-07-08 (Catznip-3.3)
+            }
+// [/SL:KB]
+//          F32 dist_to_cursor_squared = dist_vec_squared(LLVector2(pos_map.mV[VX], pos_map.mV[VY]),
+//                                          LLVector2(local_mouse_x,local_mouse_y));
+//          if(dist_to_cursor_squared < min_pick_dist_squared && dist_to_cursor_squared < closest_dist_squared)
+//          {
+//              closest_dist_squared = dist_to_cursor_squared;
+//              mClosestAgentToCursor = uuid;
+//          }
+        }
+
+        // Draw dot for autopilot target
+        if (gAgent.getAutoPilot())
+        {
+            drawTracking( gAgent.getAutoPilotTargetGlobal(), map_track_color );
+        }
+        else
+        {
+            LLTracker::ETrackingStatus tracking_status = LLTracker::getTrackingStatus();
+            if (  LLTracker::TRACKING_AVATAR == tracking_status )
+            {
+                drawTracking( LLAvatarTracker::instance().getGlobalPos(), map_track_color );
+            }
+            else if ( LLTracker::TRACKING_LANDMARK == tracking_status
+                    || LLTracker::TRACKING_LOCATION == tracking_status )
+            {
+                drawTracking( LLTracker::getTrackedPositionGlobal(), map_track_color );
+            }
+        }
+
+        // Draw dot for self avatar position
+        static LLUIColor self_tag_color = LLUIColorTable::instance().getColor("MapAvatarSelfColor", LLColor4::yellow); // <FS:CR> FIRE-1061
+        LLVector3d pos_global = gAgent.getPositionGlobal();
+        pos_map = globalPosToView(pos_global);
+        S32 dot_width = ll_round(mDotRadius * 2.f);
+        LLUIImagePtr you = LLWorldMapView::sAvatarYouLargeImage;
+        if (you)
+        {
+            you->draw(ll_round(pos_map.mV[VX] - mDotRadius),
+                      ll_round(pos_map.mV[VY] - mDotRadius),
+                      dot_width,
+                      dot_width,
+                      self_tag_color);  // <FS:CR> FIRE-1061
+
+            F32 dist_to_cursor_squared = dist_vec_squared(LLVector2(pos_map.mV[VX], pos_map.mV[VY]),
+                                          LLVector2((F32)local_mouse_x, (F32)local_mouse_y));
+            if(dist_to_cursor_squared < min_pick_dist_squared && dist_to_cursor_squared < closest_dist_squared)
+            {
+                mClosestAgentToCursor = gAgent.getID();
+                mClosestAgentPosition = pos_global;
+            }
+
+            // Draw chat range ring(s)
+            static LLUICachedControl<bool> chat_ring("MiniMapChatRing", true);
+            // <FS:LO> FIRE-22954 Make each chat range ring in the minimap optional
+            static LLUICachedControl<bool> fs_whisper_ring("FSMiniMapWhisperRing", true);
+            static LLUICachedControl<bool> fs_chat_ring("FSMiniMapChatRing", true);
+            static LLUICachedControl<bool> fs_shout_ring("FSMiniMapShoutRing", true);
+            // </FS:LO>
+            if(chat_ring)
+            {
+// <FS:CR> Opensim
+                //drawRing(20.0, pos_map, map_chat_ring_color);
+                //drawRing(100.0, pos_map, map_shout_ring_color);
+                if (fs_whisper_ring) drawRing((F32)LFSimFeatureHandler::getInstance()->whisperRange(), pos_map, map_whisper_ring_color);
+                if (fs_chat_ring) drawRing((F32)LFSimFeatureHandler::getInstance()->sayRange(), pos_map, map_chat_ring_color);
+                if (fs_shout_ring) drawRing((F32)LFSimFeatureHandler::getInstance()->shoutRange(), pos_map, map_shout_ring_color);
+// </FS:CR> Opensim
+            }
+        }
+
+
+    const LLColor4 frustum = skinColor("MapFrustumColor", LLColor4::white).get();
+    const auto pick = skinColor("MapPickRadiusColor", frustum);
+    LLRender2D::setNativeColor(pick.get());
+    gl_circle_2d(F32(local_mouse_x), F32(local_mouse_y), mDotRadius * fsMinimapPickScale, 32, true);
+    const auto& camera = LLViewerCamera::instance();
+    const F32 fov = camera.getView() * camera.getAspect();
+    const F32 radius = camera.getFar() * pixels;
+    const F32 angle = rotate ? 0.f : -std::atan2(camera.getAtAxis().mV[VX], camera.getAtAxis().mV[VY]);
+    const F32 start = F_PI_BY_TWO - fov * .5f + angle;
+    const S32 steps = llmax(1, S32(fov * (40.f / F_TWO_PI) + .5f));
+    const F32 cx = F32(getRect().getWidth() / 2 + llfloor(mCurPan.mV[VX]));
+    const F32 cy = F32(getRect().getHeight() / 2 + llfloor(mCurPan.mV[VY]));
+    for (S32 step = 0; step < steps; ++step)
+    {
+        const F32 a = start + fov * step / steps, b = start + fov * (step + 1) / steps;
+        LLRender2D::nativeTriangle({{{cx, cy, frustum.mV[0], frustum.mV[1], frustum.mV[2], frustum.mV[3]},
+            {cx + radius * std::cos(a), cy + radius * std::sin(a), frustum.mV[0], frustum.mV[1], frustum.mV[2], frustum.mV[3]},
+            {cx + radius * std::cos(b), cy + radius * std::sin(b), frustum.mV[0], frustum.mV[1], frustum.mV[2], frustum.mV[3]}}});
+    }
+    LLUICtrl::draw();
+}
+
+#endif
+
+#if VS_NATIVE_VULKAN
+void LLNetMap::drawNativeObjects()
+{
+    static const LLUIColor above_water_color = LLUIColorTable::instance().getColor("NetMapOtherOwnAboveWater");
+    static const LLUIColor below_water_color = LLUIColorTable::instance().getColor("NetMapOtherOwnBelowWater");
+    static const LLUIColor you_own_above_water_color = LLUIColorTable::instance().getColor("NetMapYouOwnAboveWater");
+    static const LLUIColor you_own_below_water_color = LLUIColorTable::instance().getColor("NetMapYouOwnBelowWater");
+    static const LLUIColor group_own_above_water_color = LLUIColorTable::instance().getColor("NetMapGroupOwnAboveWater");
+    static const LLUIColor group_own_below_water_color = LLUIColorTable::instance().getColor("NetMapGroupOwnBelowWater");
+
+    // <FS:CR> FIRE-1846: Firestorm netmap enhancements
+    static const LLUIColor you_own_physical_color = LLUIColorTable::instance().getColor("NetMapYouPhysical", LLColor4::red);
+    static const LLUIColor group_own_physical_color = LLUIColorTable::instance().getColor("NetMapGroupPhysical", LLColor4::green);
+    static const LLUIColor other_own_physical_color = LLUIColorTable::instance().getColor("NetMapOtherPhysical", LLColor4::green);
+    static const LLUIColor scripted_object_color = LLUIColorTable::instance().getColor("NetMapScripted", LLColor4::orange);
+    static const LLUIColor temp_on_rez_object_color = LLUIColorTable::instance().getColor("NetMapTempOnRez", LLColor4::orange);
+    static LLCachedControl<bool> fs_netmap_physical(gSavedSettings, "FSNetMapPhysical", false);
+    static LLCachedControl<bool> fs_netmap_scripted(gSavedSettings, "FSNetMapScripted", false);
+    static LLCachedControl<bool> fs_netmap_temp_on_rez(gSavedSettings, "FSNetMapTempOnRez", false);
+    static LLCachedControl<U32> fs_netmap_phantom_opacity(gSavedSettings, "FSNetMapPhantomOpacity", 100);
+    const F32 MIN_RADIUS_FOR_ACCENTED_OBJECTS = 2.f;
+    // </FS:CR>
+    static LLCachedControl<F32> max_radius(gSavedSettings, "MiniMapPrimMaxRadius");
+    static LLCachedControl<F32> max_zdistance_from_avatar(gSavedSettings, "MiniMapPrimMaxVertDistance");
+
+    const auto session = VSNativeSession::active();
+    if (!session || !session->regionReady() || !gViewerWindow->nativeContext()) return;
+    for (const auto &object : gViewerWindow->nativeContext()->world().mapObjectSnapshots())
+    {
+        if (object.attachment || object.pcode != LL_PCODE_VOLUME) continue;
+        const bool yours =
+            vs_object_you_owner(bool(object.rootUpdateFlags & FLAGS_OBJECT_YOU_OWNER),
+                                [] { return LLGridManager::instance().isInSLBeta() && gAgent.getGodLevel() >= GOD_MAINTENANCE; });
+        const bool group = bool(object.rootUpdateFlags & FLAGS_OBJECT_GROUP_OWNED);
+        const bool physical = bool(object.updateFlags & FLAGS_USE_PHYSICS);
+        const bool scripted = bool(object.updateFlags & FLAGS_SCRIPTED);
+        const bool temporary = bool(object.updateFlags & FLAGS_TEMPORARY_ON_REZ);
+        const auto &scale = object.scale;
+        if (!(yours || scale.magVecSquared() > 7.5f * 7.5f || (fs_netmap_physical && physical) || (fs_netmap_scripted && scripted) ||
+              (fs_netmap_temp_on_rez && temporary)))
+            continue;
+        const auto region = vs_region_context(object.position);
+        if (!region || !region->waterKnown()) continue;
+        const LLVector3d pos = object.position;
+        const F64 water_height = region->getWaterHeight();
+        // Skip all objects that are more than MiniMapPrimMaxVertDistance above or below the avatar
+        if (max_zdistance_from_avatar > 0.0)
+        {
+            F64 zdistance = pos.mdV[VZ] - gAgent.getPositionGlobal().mdV[VZ];
+            if (zdistance < (-max_zdistance_from_avatar) || zdistance > max_zdistance_from_avatar)
+            {
+                continue;
+            }
+        }
+
+        F32 approx_radius = (scale.mV[VX] + scale.mV[VY]) * 0.5f * 0.5f * 1.3f; // 1.3 is a fudge
+
+        // Limit the size of megaprims so they don't blot out everything on the minimap.
+        // Attempting to draw very large megaprims also causes client lag.
+        // See DEV-17370 and DEV-29869/SNOW-79 for details.
+        approx_radius = llmin(approx_radius, (F32)max_radius);
+
+        LLColor4U color = above_water_color.get();
+        if (yours)
+        {
+            const F32 MIN_RADIUS_FOR_OWNED_OBJECTS = 2.f;
+            if (approx_radius < MIN_RADIUS_FOR_OWNED_OBJECTS)
+            {
+                approx_radius = MIN_RADIUS_FOR_OWNED_OBJECTS;
+            }
+
+            if (pos.mdV[VZ] >= water_height)
+            {
+                if (group)
+                {
+                    color = group_own_above_water_color.get();
+                }
+                else
+                {
+                    color = you_own_above_water_color.get();
+                }
+            }
+            else
+            {
+                if (group)
+                {
+                    color = group_own_below_water_color.get();
+                }
+                else
+                {
+                    color = you_own_below_water_color.get();
+                }
+            }
+        }
+        else if (pos.mdV[VZ] < water_height)
+        {
+            color = below_water_color.get();
+        }
+
+        // <FS:CR> FIRE-1846: Firestorm netmap enhancements
+        if (fs_netmap_scripted && scripted)
+        {
+            color = scripted_object_color.get();
+            if (approx_radius < MIN_RADIUS_FOR_ACCENTED_OBJECTS)
+            {
+                approx_radius = MIN_RADIUS_FOR_ACCENTED_OBJECTS;
+            }
+        }
+
+        if (fs_netmap_physical && physical)
+        {
+            if (yours)
+            {
+                color = you_own_physical_color.get();
+            }
+            else if (group)
+            {
+                color = group_own_physical_color.get();
+            }
+            else
+            {
+                color = other_own_physical_color.get();
+            }
+            if (approx_radius < MIN_RADIUS_FOR_ACCENTED_OBJECTS)
+            {
+                approx_radius = MIN_RADIUS_FOR_ACCENTED_OBJECTS;
+            }
+        }
+
+        if (fs_netmap_temp_on_rez && temporary)
+        {
+            color = temp_on_rez_object_color.get();
+            if (approx_radius < MIN_RADIUS_FOR_ACCENTED_OBJECTS)
+            {
+                approx_radius = MIN_RADIUS_FOR_ACCENTED_OBJECTS;
+            }
+        }
+
+        if (bool(object.updateFlags & FLAGS_PHANTOM))
+        {
+            color.setAlpha(llclampb((U32)fs_netmap_phantom_opacity));
+        }
+        // </FS:CR>
+
+        renderScaledPointGlobal(pos, color, approx_radius);
+    }
+}
+#endif
+
+#if VS_NATIVE_VULKAN
+void LLNetMap::drawNativeParcels()
+{
+
+    const auto session = VSNativeSession::active();
+    if (!session || !session->regionReady()) return;
+    for (const auto &region : session->regionSnapshots())
+    {
+        const auto overlayData = region.parcelOverlay;
+        if (!overlayData) continue;
+        const auto clrOverlay =
+            LLColor4U(LLUIColorTable::instance().getColor("MapParcelOutlineColor", LLColor4(LLColor3(LLColor4::yellow), .5f)).get());
+        const S32 imgWidth = (S32)mParcelRawImagep->getWidth();
+        const S32 imgHeight = (S32)mParcelRawImagep->getHeight();
+
+        const LLVector3 originLocal(from_region_handle(region.handle) - mParcelImageCenterGlobal);
+        const S32 originX = ll_round(originLocal.mV[VX] * mObjectMapTPM + imgWidth / 2);
+        const S32 originY = ll_round(originLocal.mV[VY] * mObjectMapTPM + imgHeight / 2);
+
+        U32 *pTextureData = (U32 *)mParcelRawImagep->getData();
+
+        //
+        // Draw the north and east region borders
+        //
+        const F32 real_width(F32(region.width));
+        const S32 borderY = originY + ll_round(F32(region.height) * mObjectMapTPM);
+        if ((borderY >= 0) && (borderY < imgHeight))
+        {
+            S32 curX = llclamp(originX, 0, imgWidth), endX = llclamp(originX + ll_round(real_width * mObjectMapTPM), 0, imgWidth - 1);
+            for (; curX <= endX; curX++)
+                pTextureData[borderY * imgWidth + curX] = clrOverlay.asRGBA();
+        }
+        const S32 borderX = originX + ll_round(real_width * mObjectMapTPM);
+        if ((borderX >= 0) && (borderX < imgWidth))
+        {
+            S32 curY = llclamp(originY, 0, imgHeight),
+                endY = llclamp(originY + ll_round(F32(region.height) * mObjectMapTPM), 0, imgHeight - 1);
+            for (; curY <= endY; curY++)
+                pTextureData[curY * imgWidth + borderX] = clrOverlay.asRGBA();
+        }
+
+        //
+        // Render parcel lines
+        //
+        const F32 GRID_STEP = PARCEL_GRID_STEP_METERS;
+        const S32 GRIDS_PER_EDGE = (S32)(real_width / GRID_STEP);
+
+        const auto &manager = LLViewerParcelMgr::instance();
+        const U8 *pCollision = region.handle == manager.getCollisionRegionHandle() ? manager.getCollisionBitmap() : nullptr;
+        const auto collisionSize = manager.getCollisionBitmapSize();
+        for (S32 idxRow = llclamp(S32(std::floor(-originY / (GRID_STEP * mObjectMapTPM))) - 1, 0, S32(region.height / 4));
+             idxRow < llclamp(S32(std::ceil((imgHeight - originY) / (GRID_STEP * mObjectMapTPM))) + 1, 0, S32(region.height / 4)); ++idxRow)
+        {
+            for (S32 idxCol = llclamp(S32(std::floor(-originX / (GRID_STEP * mObjectMapTPM))) - 1, 0, GRIDS_PER_EDGE);
+                 idxCol < llclamp(S32(std::ceil((imgWidth - originX) / (GRID_STEP * mObjectMapTPM))) + 1, 0, GRIDS_PER_EDGE); ++idxCol)
+            {
+                const auto cell = overlayData->cell(idxCol, idxRow);
+                if (!cell) continue;
+                S32 overlay = *cell;
+                S32 idxCollision = idxRow * GRIDS_PER_EDGE + idxCol;
+                bool fForSale = ((overlay & PARCEL_COLOR_MASK) == PARCEL_FOR_SALE);
+                bool fAuction = ((overlay & PARCEL_COLOR_MASK) == PARCEL_AUCTION);
+                bool fCollision =
+                    (pCollision) && size_t(idxCollision / 8) < collisionSize && (pCollision[idxCollision / 8] & (1 << (idxCollision % 8)));
+                if ((!fForSale) && (!fCollision) && (!fAuction) && (0 == (overlay & (PARCEL_SOUTH_LINE | PARCEL_WEST_LINE)))) continue;
+
+                const S32 posX = originX + ll_round(idxCol * GRID_STEP * mObjectMapTPM);
+                const S32 posY = originY + ll_round(idxRow * GRID_STEP * mObjectMapTPM);
+
+                static LLCachedControl<bool> s_fForSaleParcels(gSavedSettings, "MiniMapForSaleParcels");
+                static LLCachedControl<bool> s_fShowCollisionParcels(gSavedSettings, "MiniMapCollisionParcels");
+                if (((s_fForSaleParcels) && (fForSale || fAuction)) || ((s_fShowCollisionParcels) && (fCollision)))
+                {
+                    S32 curY = llclamp(posY, 0, imgHeight), endY = llclamp(posY + ll_round(GRID_STEP * mObjectMapTPM), 0, imgHeight - 1);
+                    for (; curY <= endY; curY++)
+                    {
+                        S32 curX = llclamp(posX, 0, imgWidth), endX = llclamp(posX + ll_round(GRID_STEP * mObjectMapTPM), 0, imgWidth - 1);
+                        for (; curX <= endX; curX++)
+                        {
+                            U32 texcolor = LLColor4U(255, 128, 128, 192).asRGBA();
+                            if (fForSale)
+                            {
+                                texcolor = LLColor4U(255, 255, 128, 192).asRGBA();
+                            }
+                            else if (fAuction)
+                            {
+                                texcolor = LLColor4U(128, 0, 255, 102).asRGBA();
+                            }
+
+                            pTextureData[curY * imgWidth + curX] = texcolor;
+                        }
+                    }
+                }
+                if (overlay & PARCEL_SOUTH_LINE)
+                {
+                    if ((posY >= 0) && (posY < imgHeight))
+                    {
+                        S32 curX = llclamp(posX, 0, imgWidth), endX = llclamp(posX + ll_round(GRID_STEP * mObjectMapTPM), 0, imgWidth - 1);
+                        for (; curX <= endX; curX++)
+                            pTextureData[posY * imgWidth + curX] = clrOverlay.asRGBA();
+                    }
+                }
+                if (overlay & PARCEL_WEST_LINE)
+                {
+                    if ((posX >= 0) && (posX < imgWidth))
+                    {
+                        S32 curY = llclamp(posY, 0, imgHeight),
+                            endY = llclamp(posY + ll_round(GRID_STEP * mObjectMapTPM), 0, imgHeight - 1);
+                        for (; curY <= endY; curY++)
+                            pTextureData[curY * imgWidth + posX] = clrOverlay.asRGBA();
+                    }
+                }
+            }
+        }
+    }
+}
+#endif
