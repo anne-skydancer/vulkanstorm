@@ -135,7 +135,11 @@ namespace Details
     void LLEventPollImpl::handleMessage(const LLSD& content)
     {
         LL_PROFILE_ZONE_SCOPED_CATEGORY_APP;
-        if (!content.isMap() || !content["message"].isString() || !content["body"].isMap()) return;
+        if(!content.isMap() || !content["message"].isString())return;
+        // SimConsoleResponse's shared HTTP node consumes an actual string body.
+        // Other admitted simulator event models continue to require maps.
+        if(!content["body"].isMap() &&
+            !(content["message"].asString()=="SimConsoleResponse" && content["body"].isString()))return;
         handleMessage(content["message"].asString(), content["body"]);
     }
 

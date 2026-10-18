@@ -87,10 +87,14 @@ jobs:
       - run: python scripts/tests/test_avatar_image_pool.py
       - run: python scripts/tests/test_native_bake_callback.py
       - run: python scripts/tests/test_native_camera_transport.py
+      - run: python scripts/tests/test_native_camera_retirement.py
       - run: python scripts/tests/test_native_navigation_reference.py
       - run: python scripts/tests/test_native_navigation_lifecycle.py
       - run: python scripts/tests/test_native_region_height.py
       - run: python scripts/tests/test_native_region_lifetimes.py
+      - run: python scripts/tests/test_native_region_console.py
+      - run: python scripts/tests/test_native_region_avatar_pickers.py
+      - run: python scripts/tests/test_native_estate_experience_wire.py
       - run: python scripts/tests/test_native_region_xui.py
       - run: python scripts/tests/test_native_telehub.py
       - run: python scripts/tests/test_native_debug_beacons.py

@@ -27,6 +27,7 @@
 
 #ifndef LL_LLFLOATERREGIONDEBUGCONSOLE_H
 #define LL_LLFLOATERREGIONDEBUGCONSOLE_H
+#include <functional>
 
 #include <boost/signals2.hpp>
 
@@ -44,6 +45,7 @@ public:
     virtual ~LLFloaterRegionDebugConsole();
 
     bool postBuild() override;
+    void onClose(bool app_quitting) override;
 
     void onInput(LLUICtrl* ctrl, const LLSD& param);
 
@@ -53,6 +55,9 @@ public:
 
  private:
     void onReplyReceived(const std::string& output);
+    std::function<bool()> requestGuard() const;
+    std::function<bool()> mAsyncCurrent;
+    U64 mRequestEpoch=0;
 
     void onAsyncConsoleError(LLSD result);
     void onConsoleError(LLSD result);

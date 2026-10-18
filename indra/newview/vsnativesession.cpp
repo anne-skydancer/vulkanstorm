@@ -1263,7 +1263,7 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
     const auto peer=mCircuits.find(sender);
     const bool known=sender==mHost || peer!=mCircuits.end();
     if (transport.count(name)) return mHost.isOk() && known && mPhase != Phase::Disconnected;
-    if(name=="RegionInfo" || name=="EstateOwnerMessage" || name=="TelehubInfo" || name=="LandStatReply")return regionReady() && sender==mHost;
+    if(name=="RegionInfo" || name=="EstateOwnerMessage" || name=="TelehubInfo" || name=="LandStatReply" || name=="SimConsoleResponse")return regionReady() && sender==mHost;
     if (name=="LayerData") return mHost.isOk() && known && (mPhase==Phase::Connecting || mPhase==Phase::Connected);
     if(name=="ParcelProperties" || name=="ParcelAccessListReply" || name=="ParcelDwellReply" || name=="ParcelObjectOwnersReply" || name=="EstateCovenantReply")
         return mPhase==Phase::Connected && !mChangingRegion && peer!=mCircuits.end() &&
@@ -2524,6 +2524,8 @@ void VSNativeSession::reset()
         }
     }
     if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().reset();
+    // Release account camera effects while their settings and HUD owners live.
+    gAgentCamera.cleanup();
     if (FSLSLBridge::instanceExists()) FSLSLBridge::instance().resetNativeAccount();
     mMusicUserStopped = mMediaUserStopped = false;
     if (LLViewerParcelMedia::instanceExists()) LLViewerParcelMedia::deleteSingleton();

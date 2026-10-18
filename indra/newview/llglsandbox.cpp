@@ -873,19 +873,11 @@ void LLSky::renderSunMoonBeacons(const LLVector3& pos_agent, const LLVector3& di
     gUIProgram.bind();
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
-    LLVector3 pos_end;
-    for (S32 i = 0; i < 3; ++i)
-    {
-        pos_end.mV[i] = pos_agent.mV[i] + (50 * direction.mV[i]);
-    }
     gGL.setLineWidth((F32)LLPipeline::DebugBeaconLineWidth); // <FS> Line width OGL core profile fix by Rye Mutt
     gGL.begin(LLRender::LINES);
     color.mV[3] *= 0.5f;
     gGL.color4fv(color.mV);
-    draw_cross_lines(pos_agent, 0.5f, 0.5f, 0.5f);
-    draw_cross_lines(pos_end, 2.f, 2.f, 2.f);
-    gGL.vertex3fv(pos_agent.mV);
-    gGL.vertex3fv(pos_end.mV);
+    vs_sun_moon_beacon(gGL,pos_agent,direction);
     gGL.end();
 
     gGL.flush();
