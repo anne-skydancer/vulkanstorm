@@ -29,7 +29,8 @@
 
 #include "llimage.h"
 
-// This class compresses and decompressed BMP files
+// This class compresses and decompressed BMP files. The codec is the
+// vkstorm-image port of the viewer's reader and writer (vkstorm-rust track).
 
 class LLImageBMP : public LLImageFormatted
 {
@@ -43,22 +44,6 @@ public:
     /*virtual*/ bool updateData();
     /*virtual*/ bool decode(LLImageRaw* raw_image, F32 decode_time);
     /*virtual*/ bool encode(const LLImageRaw* raw_image, F32 encode_time);
-
-protected:
-    bool        decodeColorTable8( U8* dst, const U8* src );
-    bool        decodeColorMask16( U8* dst, const U8* src );
-    bool        decodeTruecolor24( U8* dst, const U8* src );
-    bool        decodeColorMask32( U8* dst, const U8* src );
-
-    U32         countTrailingZeros( U32 m );
-
-protected:
-    S32         mColorPaletteColors;
-    U8*         mColorPalette;
-    S32         mBitmapOffset;
-    S32         mBitsPerPixel;
-    U32         mBitfieldMask[4]; // rgba
-    bool        mOriginAtTop;
 };
 
 #endif

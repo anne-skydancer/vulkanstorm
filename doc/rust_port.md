@@ -433,6 +433,147 @@ slowest relative cases:
   0.91 righttri_line/base/lod1 C++=1.1 Rust=1.0
   0.91 equaltri_line/base/lod1.5 C++=1.1 Rust=1.0
   0.88 box/hollow_cutS/lod1 C++=1.7 Rust=1.5
+## Rung two: PNG, TGA, BMP, DXT (and the JPEG verdict)
+
+The raster codecs other than JPEG 2000 in `indra/llimage`, measured one by
+one against the C++ they replace and ported only where the port is at least
+as fast and reproduces the viewer's output. The crate is `vkstorm-image` in
+vkstorm-core-rust; the oracle (the viewer's C++ codecs standalone on its
+prebuilt libraries) and the harness are in its `tools/image-eval`.
+
+### Keep-or-port judgement
+
+| Codec | Decode | Encode | Judgement |
+|---|---|---|---|
+| PNG (`LLImagePNG`, was `LLPngWrapper` on libpng 1.6.44 + zlib-ng 2.2.3) | Rust | Rust | Ported. Decode byte-identical and 0.3 to 0.8 of libpng's time; encode decoded-identical, 0.3 to 0.9 of libpng's time, files within a stated size margin (below). The viewer's own code no longer uses libpng; the library stays in the build only because the prebuilt freetype decodes colour bitmap fonts with it (`FreeType.cmake` now carries that dependency). |
+| TGA (`LLImageTGA`) | Rust | Rust | Ported: a 1:1 port, byte-identical, including `decodeAndProcess` for avatar masks; equal or faster. |
+| BMP (`LLImageBMP`) | Rust | Rust | Ported: 1:1, byte-identical, faster. |
+| DXT (`LLImageDXT`, with `LLImageBase::generateMip`) | Rust | Rust | Ported: 1:1, byte-identical (padding bytes zero where the C++ left them uninitialised), faster. |
+| JPEG (`LLImageJPEG` on libjpeg-turbo 3.0.4) | C++ | C++ | Kept. The Rust candidates (zune-jpeg 0.5 decode with its x86 SIMD, jpeg-encoder 0.7 with AVX2) do not beat libjpeg-turbo at 2048x2048: decode 0.98x (grey) to 1.20x (RGB) and encode 2.4x to 4.7x the time (table below), and not bit-exact (decode up to 9 code values at the bottom image row of 4:2:0 images, interior up to 3; encode up to 59 on images smaller than one MCU). The candidate stays in the crate behind the `jpeg` feature with its measurements; `LLImageJPEG` and `LLImageDimensionsInfo`'s JPEG probe are unchanged and libjpeg-turbo stays in the build. |
+
+`image`'s TGA and BMP readers were not candidates: they cannot reproduce the
+viewer's output (its 5-bit expansion table, the opaque-alpha compaction to 3
+components, the colour-map clamping, the BMP mask handling), so the viewer's
+own code was ported instead.
+
+### What the port reproduces
+
+- PNG decode: libpng's transformations as the wrapper requested them
+  (palette and low-depth grey expansion, grey to RGB so every decode is 3 or
+  4 components, tRNS to alpha, 16-bit strip to the high byte, gamma
+  correction to a 2.2 screen when the gAMA chunk makes it significant by
+  libpng's 5% fixed-point rule, with libpng's 8-bit table and its 16-to-8
+  boundary table including the sBIT shift). Interlaced files decode. The
+  `png` crate does chunks, unfiltering and inflate; the transformations are
+  in the crate so order and rounding match. Differences only on malformed
+  input: the `png` crate rejects a CRC error in an ancillary chunk and a
+  tRNS chunk on an alpha colour type, where libpng warned and continued.
+- PNG encode: 8-bit samples, colour type by component count, libpng's
+  minimum-sum-of-absolute-differences filter choice (identical on 150/150
+  real textures), deflate level 6 filtered with libpng's reduced window for
+  small images and 8192-byte IDAT chunks, through zlib-rs. zlib-rs and the
+  viewer's zlib-ng snapshot (2.2.3-dev) choose different matches on some
+  inputs, so the files are not always byte-identical: over 500 real skin
+  textures 4.4% were identical, the rest decode identically with sizes
+  between 0.86 and 1.16 of libpng's (median 0.996, total -0.5%); over the
+  synthetic fixtures 25 of 26 were identical. zlib-ng 2.2.4 differs from the
+  viewer's snapshot the same way. Owner's decision requested on this margin.
+- TGA, BMP, DXT: the viewer's behaviour including its quirks (run-length
+  colour-mapped TGA always flipped, opaque 32-bit TGA compacted to 3
+  components, 8-bit BMP needing a 256-entry table, the BMP V4 colour-table
+  offset, `getMipData` returning one pixel). Where the C++ read or wrote
+  outside its buffers on malformed input, or aborted with `LL_ERRS`, the port
+  reports an error through `setLastError`. `LLImageDXT::encodeDXT`'s unused
+  explicit-mips path (`extractMip`) was not ported.
+- Error messages: the strings the C++ passed to `setLastError` are kept.
+
+### Measurements
+
+Ryzen 9 9950X3D, Windows, single thread, best of N runs (N = 200 at 64 px,
+5 at 2048 px), same inputs for both sides: C++ is the oracle built with MSVC
+`/O2 /arch:AVX2` on the viewer's prebuilt libraries, Rust is the cargo
+release profile with `target-cpu=x86-64-v3`. `decode` includes the header
+parse and the output allocation on both sides. Full CSV:
+vkstorm-core-rust `tools/image-eval/results/`.
+
+| Image | Codec | Op | C++ ms | Rust ms | Rust/C++ |
+|---|---|---|---:|---:|---:|
+| 64x64 RGB | PNG | decode | 0.0650 | 0.0329 | 0.51 |
+| 64x64 RGB | PNG | encode | 0.2288 | 0.1507 | 0.66 |
+| 64x64 RGB | JPEG | decode | 0.0130 | 0.0128 | 0.98 |
+| 64x64 RGB | JPEG | encode | 0.0101 | 0.0221 | 2.19 |
+| 64x64 RGB | TGA | decode | 0.0016 | 0.0012 | 0.75 |
+| 64x64 RGB | TGA | encode | 0.0014 | 0.0002 | 0.14 |
+| 64x64 RGB | BMP | decode | 0.0016 | 0.0002 | 0.12 |
+| 64x64 RGB | BMP | encode | 0.0021 | 0.0013 | 0.62 |
+| 64x64 RGB | DXT | decode | 0.0001 | 0.0002 | 2.00 |
+| 64x64 RGB | DXT | encode | 0.0031 | 0.0024 | 0.77 |
+| 64x64 RGBA | PNG | decode | 0.0811 | 0.0439 | 0.54 |
+| 64x64 RGBA | PNG | encode | 0.3044 | 0.1992 | 0.65 |
+| 64x64 RGBA | TGA | decode | 0.0022 | 0.0018 | 0.82 |
+| 64x64 RGBA | TGA | encode | 0.0103 | 0.0007 | 0.07 |
+| 64x64 RGBA | BMP | decode | 0.0016 | 0.0002 | 0.12 |
+| 64x64 RGBA | BMP | encode | 0.0024 | 0.0014 | 0.58 |
+| 64x64 RGBA | DXT | decode | 0.0002 | 0.0002 | 1.00 |
+| 64x64 RGBA | DXT | encode | 0.0039 | 0.0029 | 0.74 |
+| 64x64 gray | PNG | decode | 0.0255 | 0.0108 | 0.42 |
+| 64x64 gray | PNG | encode | 0.1058 | 0.0769 | 0.73 |
+| 64x64 gray | JPEG | decode | 0.0096 | 0.0071 | 0.74 |
+| 64x64 gray | JPEG | encode | 0.0083 | 0.0088 | 1.06 |
+| 64x64 gray | TGA | decode | 0.0001 | 0.0001 | 1.00 |
+| 64x64 gray | TGA | encode | 0.0002 | 0.0001 | 0.50 |
+| 64x64 gray | BMP | decode | 0.0024 | 0.0018 | 0.75 |
+| 64x64 gray | BMP | encode | 0.0012 | 0.0002 | 0.17 |
+| 64x64 gray | DXT | decode | 0.0001 | 0.0001 | 1.00 |
+| 64x64 gray | DXT | encode | 0.0014 | 0.0013 | 0.93 |
+| 2048x2048 RGB | PNG | decode | 41.7218 | 29.6378 | 0.71 |
+| 2048x2048 RGB | PNG | encode | 259.3951 | 193.9272 | 0.75 |
+| 2048x2048 RGB | JPEG | decode | 6.5370 | 7.8529 | 1.20 |
+| 2048x2048 RGB | JPEG | encode | 5.2671 | 24.4775 | 4.65 |
+| 2048x2048 RGB | TGA | decode | 3.2395 | 2.5690 | 0.79 |
+| 2048x2048 RGB | TGA | encode | 5.0649 | 1.9423 | 0.38 |
+| 2048x2048 RGB | BMP | decode | 3.3742 | 1.7533 | 0.52 |
+| 2048x2048 RGB | BMP | encode | 5.4968 | 2.9417 | 0.54 |
+| 2048x2048 RGB | DXT | decode | 1.9957 | 1.7389 | 0.87 |
+| 2048x2048 RGB | DXT | encode | 8.6551 | 4.8993 | 0.57 |
+| 2048x2048 RGBA | PNG | decode | 51.4445 | 41.6253 | 0.81 |
+| 2048x2048 RGBA | PNG | encode | 349.6714 | 267.5622 | 0.77 |
+| 2048x2048 RGBA | TGA | decode | 3.7370 | 2.9045 | 0.78 |
+| 2048x2048 RGBA | TGA | encode | 5.5314 | 2.3958 | 0.43 |
+| 2048x2048 RGBA | BMP | decode | 3.2403 | 1.7374 | 0.54 |
+| 2048x2048 RGBA | BMP | encode | 6.0901 | 2.8554 | 0.47 |
+| 2048x2048 RGBA | DXT | decode | 3.0874 | 2.4910 | 0.81 |
+| 2048x2048 RGBA | DXT | encode | 11.1819 | 6.4492 | 0.58 |
+| 2048x2048 gray | PNG | decode | 21.7546 | 14.9053 | 0.69 |
+| 2048x2048 gray | PNG | encode | 90.3657 | 65.8580 | 0.73 |
+| 2048x2048 gray | JPEG | decode | 6.6616 | 6.5144 | 0.98 |
+| 2048x2048 gray | JPEG | encode | 4.5907 | 10.9619 | 2.39 |
+| 2048x2048 gray | TGA | decode | 0.7257 | 0.5724 | 0.79 |
+| 2048x2048 gray | TGA | encode | 1.3457 | 0.7290 | 0.54 |
+| 2048x2048 gray | BMP | decode | 4.0630 | 3.0186 | 0.74 |
+| 2048x2048 gray | BMP | encode | 2.1220 | 0.6545 | 0.31 |
+| 2048x2048 gray | DXT | decode | 0.6109 | 0.4867 | 0.80 |
+| 2048x2048 gray | DXT | encode | 2.5043 | 1.7788 | 0.71 |
+
+Header reads (`updateData`) are microseconds on both sides and not listed.
+The DXT 64 px decode is 0.1 vs 0.2 microseconds, below the timer's
+resolution. The JPEG rows are the candidate that was not adopted.
+
+### Tests
+
+- vkstorm-core-rust `crates/vkstorm-image/tests/parity.rs` over 800
+  oracle fixtures (every PNG colour type and depth with tRNS, gAMA and sBIT,
+  every TGA type, pixel size, origin and colour map, the BMP variants, DXT
+  files from the C++ encoder, and a small real file of every variant class
+  in the viewer): decodes, headers and the TGA, BMP and DXT encodes are
+  byte-identical; the PNG encodes are byte-identical or decoded-identical
+  within 5%; the viewer's error messages match. All 13800 PNG and TGA files
+  under `newview/skins` decode identically to the C++ (CRC comparison).
+- `INTEGRATION_TEST_llimagecodecs` decodes every PNG and TGA of the default
+  skin through `LLImagePNG`/`LLImageTGA` against a CRC manifest of the C++
+  output (`llimage/tests/llimagecodecs_manifest.txt`), round-trips the four
+  encoders, runs `decodeAndProcess` on the character masks and checks the
+  error messages.
 
 ## Local build
 
@@ -447,6 +588,7 @@ cmake -S indra -B build-vc170-64 -DLL_TESTS:BOOL=ON
 cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llimagej2coj -- -m:4 -nologo
 cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llsdserialize_parity llsdserialize_tool -- -m:4 -nologo
 cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llvolume -- -m:4 -nologo
+cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llimagej2coj INTEGRATION_TEST_llimagecodecs -- -m:4 -nologo
 ```
 
 Under Git Bash pass MSBuild switches with a hyphen (`-m:4`), not a slash.
