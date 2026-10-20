@@ -2,10 +2,12 @@
 //! the boundary, and uses only plain types. The matching header is
 //! `indra/rust/include/vkstorm_ffi.h`; keep the two in step.
 //!
-//! Rung one: JPEG 2000 decoding and encoding via `vkstorm-j2c`.
-//! Rung two: LLSD serialization via `vkstorm-llsd` (the `vks_llsd_*` section).
-//! The parametric prim mesher via `vkstorm-volume` is in `volume.rs`.
+//! Rung one: JPEG 2000 decoding and encoding via `vkstorm-j2c` (this file).
+//! Rung two: LLSD serialization via `vkstorm-llsd` (the `vks_llsd_*` section),
+//! the parametric prim mesher via `vkstorm-volume` (`volume.rs`), and PNG,
+//! TGA, BMP and DXT via `vkstorm-image` (`image.rs`).
 
+mod image;
 mod volume;
 
 use std::ffi::{c_char, c_void};
