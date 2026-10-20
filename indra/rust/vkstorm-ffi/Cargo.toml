@@ -11,3 +11,4 @@ crate-type = ["staticlib"]
 
 [dependencies]
 vkstorm-j2c = { workspace = true }
+vkstorm-llsd = { workspace = true }

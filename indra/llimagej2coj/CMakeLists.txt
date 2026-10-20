@@ -19,7 +19,6 @@ set(llimagej2coj_HEADER_FILES
     CMakeLists.txt
 
     llimagej2coj.h
-    vkstorm_ffi.h
     )
 
 list(APPEND llimagej2coj_SOURCE_FILES ${llimagej2coj_HEADER_FILES})

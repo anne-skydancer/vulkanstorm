@@ -37,20 +37,26 @@ name = "vkstorm-ffi"
 version = "0.1.0"
 dependencies = [
  "vkstorm-j2c",
+ "vkstorm-llsd",
 ]
 
 [[package]]
 name = "vkstorm-j2c"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=fb9ee753dcc0cf5aacbc688dcdef4475ffb3785f#fb9ee753dcc0cf5aacbc688dcdef4475ffb3785f"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=21d1846a1be82859bb94c2d2b23c7418ad9640bd#21d1846a1be82859bb94c2d2b23c7418ad9640bd"
 dependencies = [
  "vkstorm-openjp2",
 ]
 
 [[package]]
+name = "vkstorm-llsd"
+version = "0.1.0"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=21d1846a1be82859bb94c2d2b23c7418ad9640bd#21d1846a1be82859bb94c2d2b23c7418ad9640bd"
+
+[[package]]
 name = "vkstorm-openjp2"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=fb9ee753dcc0cf5aacbc688dcdef4475ffb3785f#fb9ee753dcc0cf5aacbc688dcdef4475ffb3785f"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=21d1846a1be82859bb94c2d2b23c7418ad9640bd#21d1846a1be82859bb94c2d2b23c7418ad9640bd"
 dependencies = [
  "bitflags",
  "byteorder",
