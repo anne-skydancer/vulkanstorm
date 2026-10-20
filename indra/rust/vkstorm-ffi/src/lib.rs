@@ -1,9 +1,12 @@
 //! C ABI for the C++ viewer. Each function is `extern "C"`, catches panics at
 //! the boundary, and uses only plain types. The matching header is
-//! `indra/llcommon/vkstorm_ffi.h`; keep the two in step.
+//! `indra/rust/include/vkstorm_ffi.h`; keep the two in step.
 //!
 //! Rung one: JPEG 2000 decoding and encoding via `vkstorm-j2c`.
 //! Rung two: LLSD serialization via `vkstorm-llsd` (the `vks_llsd_*` section).
+//! The parametric prim mesher via `vkstorm-volume` is in `volume.rs`.
+
+mod volume;
 
 use std::ffi::{c_char, c_void};
 use std::panic::{catch_unwind, AssertUnwindSafe};

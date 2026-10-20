@@ -256,7 +256,6 @@ set(llcommon_HEADER_FILES
     timer.h
     tuple.h
     u64.h
-    vkstorm_ffi.h
     workqueue.h
     StackWalker.h
     )
