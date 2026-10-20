@@ -34,8 +34,24 @@
 #include <string>
 #include <vector>
 
-#ifndef VKS_VOLUME_FIXTURE
-#error VKS_VOLUME_FIXTURE must name the recorded corpus file
+#ifndef VKS_VOLUME_FIXTURE_DIR
+#error VKS_VOLUME_FIXTURE_DIR must name the directory of the recorded corpora
+#endif
+
+// One corpus per platform toolchain, recorded from the C++ mesher built by
+// that toolchain (libm and std::lerp differ between them, as they did for
+// the C++): every block must match it exactly. A platform without a
+// recording compares against the Windows corpus with a tolerance on the
+// float arrays and exact integer data.
+#if defined(_MSC_VER)
+#define VKS_VOLUME_FIXTURE VKS_VOLUME_FIXTURE_DIR "/llvolume_corpus.vksv"
+#define VKS_VOLUME_STRICT_PLATFORM true
+#elif defined(LL_LINUX)
+#define VKS_VOLUME_FIXTURE VKS_VOLUME_FIXTURE_DIR "/llvolume_corpus.linux.vksv"
+#define VKS_VOLUME_STRICT_PLATFORM true
+#else
+#define VKS_VOLUME_FIXTURE VKS_VOLUME_FIXTURE_DIR "/llvolume_corpus.vksv"
+#define VKS_VOLUME_STRICT_PLATFORM false
 #endif
 
 namespace
@@ -734,7 +750,8 @@ namespace
     struct Mismatches
     {
         S32 count = 0;
-        S32 tolerance_only = 0; // rsqrt-dependent blocks compared loosely
+        S32 tolerance_only = 0;  // blocks compared with a tolerance
+        S32 unverifiable = 0;    // hash-only blocks on a platform without a recording
         std::vector<std::string> details;
         void add(const std::string& what)
         {
@@ -766,9 +783,10 @@ namespace
         return "";
     }
 
-    // Loosely compare a block of 16-byte vectors whose values went through
-    // _mm_rsqrt_ps on a CPU with a different approximation table.
-    bool withinRsqrtTolerance(const std::vector<U8>& expected, const void* actual, size_t len)
+    // Loosely compare a block of floats: values that went through
+    // _mm_rsqrt_ps on a CPU with a different approximation table (1e-3), or
+    // any float array on a platform without its own recording (1e-4).
+    bool withinTolerance(const std::vector<U8>& expected, const void* actual, size_t len, F32 rel)
     {
         if (expected.size() != len) return false;
         const F32* e = (const F32*)expected.data();
@@ -776,7 +794,7 @@ namespace
         for (size_t i = 0; i < len / 4; ++i)
         {
             F32 d = fabsf(e[i] - a[i]);
-            if (d > 1e-3f * llmax(1.f, fabsf(e[i]))) return false;
+            if (d > rel * llmax(1.f, fabsf(e[i]))) return false;
         }
         return true;
     }
@@ -788,12 +806,19 @@ namespace
         {
             return;
         }
-        if (rsqrt_dependent && !same_rsqrt)
+        const bool floats = elem != 2; // index blocks stay exact everywhere
+        if ((rsqrt_dependent && !same_rsqrt) || (!VKS_VOLUME_STRICT_PLATFORM && floats))
         {
-            ++m.tolerance_only;
-            if (b.has_data && !withinRsqrtTolerance(b.data, actual, len))
+            if (!b.has_data)
             {
-                m.add(what + ": outside rsqrt tolerance" + firstDiff(b.data, actual, len, elem));
+                ++m.unverifiable;
+                return;
+            }
+            ++m.tolerance_only;
+            const F32 rel = (rsqrt_dependent && !same_rsqrt) ? 1e-3f : 1e-4f;
+            if (!withinTolerance(b.data, actual, len, rel))
+            {
+                m.add(what + ": outside tolerance" + firstDiff(b.data, actual, len, elem));
             }
             return;
         }
@@ -822,6 +847,15 @@ namespace
     {
         if (memcmp(expected, actual, (size_t)n * 4) != 0)
         {
+            if (!VKS_VOLUME_STRICT_PLATFORM)
+            {
+                bool close = true;
+                for (S32 i = 0; i < n; ++i)
+                {
+                    if (fabsf(expected[i] - actual[i]) > 1e-4f * llmax(1.f, fabsf(expected[i]))) close = false;
+                }
+                if (close) { ++m.tolerance_only; return; }
+            }
             std::ostringstream s;
             s << what << ": expected (";
             for (S32 i = 0; i < n; ++i) s << (i ? ", " : "") << expected[i];
@@ -1048,10 +1082,15 @@ namespace tut
         U32 here[RSQRT_SAMPLE_COUNT];
         rsqrtSignature(here);
         const bool same_rsqrt = memcmp(recorded, here, sizeof(here)) == 0;
+        std::cout << "LLVolume: corpus " << VKS_VOLUME_FIXTURE << std::endl;
         if (!same_rsqrt)
         {
             std::cout << "LLVolume: this CPU's _mm_rsqrt_ps differs from the recording machine; "
                          "normalized normals and tangents are compared with a tolerance" << std::endl;
+        }
+        if (!VKS_VOLUME_STRICT_PLATFORM)
+        {
+            std::cout << "LLVolume: no oracle recording for this platform; float arrays are compared with a tolerance" << std::endl;
         }
         U32 case_count = r.u32();
         ensure("fixture has cases", case_count > 0);
@@ -1065,12 +1104,17 @@ namespace tut
         ensure("fixture read completely", r.ok);
         std::cout << "LLVolume: " << stats.cases << " cases, " << stats.faces << " faces, " << stats.blocks
                   << " array blocks compared (" << stats.full_cases << " cases with full data), "
-                  << m.count << " mismatches, " << m.tolerance_only << " rsqrt-tolerance comparisons" << std::endl;
+                  << m.count << " mismatches, " << m.tolerance_only << " tolerance comparisons, "
+                  << m.unverifiable << " unverifiable" << std::endl;
         for (const std::string& d : m.details)
         {
             std::cout << "  " << d << std::endl;
         }
         ensure_equals("mesher output matches the recorded corpus", m.count, 0);
+        if (VKS_VOLUME_STRICT_PLATFORM && same_rsqrt)
+        {
+            ensure_equals("every block exact on the recording platform", m.tolerance_only + m.unverifiable, 0);
+        }
     }
 
     // Timing of the corpus through LLVolume (construction and tangents),

@@ -139,5 +139,5 @@ if (LL_TESTS)
   # The parametric prim mesher against the recorded corpus (vkstorm-rust).
   LL_ADD_INTEGRATION_TEST(llvolume "" "${test_libs}")
   set_property(TARGET INTEGRATION_TEST_llvolume APPEND PROPERTY
-      COMPILE_DEFINITIONS "VKS_VOLUME_FIXTURE=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/llvolume_corpus.vksv\"")
+      COMPILE_DEFINITIONS "VKS_VOLUME_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
 endif (LL_TESTS)
