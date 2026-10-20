@@ -6443,17 +6443,6 @@
       <key>Value</key>
       <integer>0</integer>
     </map>
-    <key>J2CDecoderRust</key>
-    <map>
-      <key>Comment</key>
-      <string>Decode JPEG 2000 textures with the Rust decoder (hayro-jpeg2000). Off: OpenJPEG. A failed Rust decode always falls back to OpenJPEG. Applies to new decodes immediately.</string>
-      <key>Persist</key>
-      <integer>1</integer>
-      <key>Type</key>
-      <string>Boolean</string>
-      <key>Value</key>
-      <integer>1</integer>
-    </map>
     <key>JoystickAvatarEnabled</key>
     <map>
       <key>Comment</key>

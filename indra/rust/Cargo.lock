@@ -3,76 +3,34 @@
 version = 4
 
 [[package]]
-name = "autocfg"
-version = "1.5.1"
+name = "bitflags"
+version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
+checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
-name = "bytemuck"
-version = "1.25.2"
+name = "byteorder"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
-name = "byteorder-lite"
-version = "0.1.0"
+name = "log"
+version = "0.4.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
+checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
-name = "fearless_simd"
-version = "1.1.0"
+name = "smallvec"
+version = "1.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3296eb97d869113eaf148a6bdf01884e90b3828ad7ae2340b0f93362fc158611"
+checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
 
 [[package]]
-name = "hayro-jpeg2000"
-version = "0.4.1"
+name = "sprintf"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "122c5f834c37a2260b9c851bb8be685cf539b2a8b94b704a931ef7d2525d5835"
-dependencies = [
- "fearless_simd",
- "image",
- "moxcms",
-]
-
-[[package]]
-name = "image"
-version = "0.25.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
-dependencies = [
- "bytemuck",
- "byteorder-lite",
- "moxcms",
- "num-traits",
-]
-
-[[package]]
-name = "moxcms"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
-dependencies = [
- "num-traits",
- "pxfm",
-]
-
-[[package]]
-name = "num-traits"
-version = "0.2.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
-dependencies = [
- "autocfg",
-]
-
-[[package]]
-name = "pxfm"
-version = "0.1.30"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
+checksum = "6c0cdea5a20a06e7c57f627094e7b1618e5665592cd88f2d45fa4014e348db58"
 
 [[package]]
 name = "vkstorm-ffi"
@@ -84,7 +42,19 @@ dependencies = [
 [[package]]
 name = "vkstorm-j2c"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=b65032c963b730321ed2edf3efbddf41d4673c24#b65032c963b730321ed2edf3efbddf41d4673c24"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=d8eb647c5fffb65a75ea5e1d32c669379aa0cbaf#d8eb647c5fffb65a75ea5e1d32c669379aa0cbaf"
 dependencies = [
- "hayro-jpeg2000",
+ "vkstorm-openjp2",
+]
+
+[[package]]
+name = "vkstorm-openjp2"
+version = "0.1.0"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=d8eb647c5fffb65a75ea5e1d32c669379aa0cbaf#d8eb647c5fffb65a75ea5e1d32c669379aa0cbaf"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "log",
+ "smallvec",
+ "sprintf",
 ]

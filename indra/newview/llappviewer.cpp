@@ -138,9 +138,6 @@
 #include "lldiriterator.h"
 #include "llexperiencecache.h"
 #include "llimagej2c.h"
-#if LL_J2C_RUST
-#include "llimagej2crust.h"
-#endif
 #include "llmemory.h"
 #include "llprimitive.h"
 #include "llurlaction.h"
@@ -1086,11 +1083,6 @@ bool LLAppViewer::init()
     // Various introspection concerning the libs we're using - particularly
     // the libs involved in getting to a full login screen.
     //
-#if LL_J2C_RUST
-    LLImageJ2CRust::setRustEnabled(gSavedSettings.getBOOL("J2CDecoderRust"));
-    gSavedSettings.getControl("J2CDecoderRust")->getSignal()->connect(
-        [](LLControlVariable*, const LLSD& value, const LLSD&) { LLImageJ2CRust::setRustEnabled(value.asBoolean()); });
-#endif
     LL_INFOS("InitInfo") << "J2C Engine is: " << LLImageJ2C::getEngineInfo() << LL_ENDL;
     LL_INFOS("InitInfo") << "libcurl version is: " << LLCore::LLHttp::getCURLVersion() << LL_ENDL;
 

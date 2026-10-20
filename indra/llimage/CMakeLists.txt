@@ -51,11 +51,9 @@ target_include_directories( llimage  INTERFACE   ${CMAKE_CURRENT_SOURCE_DIR})
 # Sort by high-level to low-level
 if (USE_KDU)
     target_link_libraries(llimage llkdu)
-elseif (USE_RUST_J2C)
-    target_link_libraries(llimage llimagej2crust)
-else ()
+else (USE_KDU)
     target_link_libraries(llimage llimagej2coj)
-endif ()
+endif (USE_KDU)
 
 target_link_libraries(llimage
         llfilesystem

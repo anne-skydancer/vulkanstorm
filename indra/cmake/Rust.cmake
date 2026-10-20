@@ -3,9 +3,9 @@
 # indra/rust with cargo through corrosion and exposes them as CMake targets.
 include_guard()
 
-option(USE_RUST_J2C "Decode JPEG 2000 textures with the Rust decoder (vkstorm-j2c on hayro-jpeg2000), keeping OpenJPEG as fallback" ON)
-
-if (USE_RUST_J2C)
+# JPEG 2000 (and later rungs) are Rust on this track; there is no option to
+# select another implementation.
+if (TRUE)
   include(FetchContent)
   FetchContent_Declare(
     Corrosion
@@ -31,4 +31,4 @@ if (USE_RUST_J2C)
   elseif (USE_AVX_OPTIMIZATION)
     corrosion_add_target_rustflags(vkstorm_ffi "-Ctarget-cpu=x86-64-v2" "-Ctarget-feature=+avx")
   endif ()
-endif (USE_RUST_J2C)
+endif ()
