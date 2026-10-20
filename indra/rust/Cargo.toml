@@ -11,7 +11,8 @@ edition = "2024"
 license = "LGPL-2.1-only"
 
 [workspace.dependencies]
-vkstorm-j2c = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "fb9ee753dcc0cf5aacbc688dcdef4475ffb3785f" }
+vkstorm-j2c = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "307ef6bc10c8fb3e2e7a8d776ffbc4e47e092be8" }
+vkstorm-llsd = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "307ef6bc10c8fb3e2e7a8d776ffbc4e47e092be8" }
 
 # The viewer's Release configuration links with LTO; do the same inside the
 # Rust static library. Panics abort at the C boundary anyway (caught in the
