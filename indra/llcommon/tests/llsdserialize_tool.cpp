@@ -272,7 +272,17 @@ namespace
             std::istringstream in(pc.input);
             LLPointer<llsd_oracle::OracleParser> p = oracleParser(pc.format);
             LLSD value;
-            S32 count = pc.lines ? p->parseLines(in, value) : p->parse(in, value, pc.max_bytes, pc.max_depth);
+            S32 count;
+            if (pc.runtime_edge)
+            {
+                // The product's stated behaviour, not the platform's oracle.
+                count = pc.edge_count;
+                value = pc.edge_value;
+            }
+            else
+            {
+                count = pc.lines ? p->parseLines(in, value) : p->parse(in, value, pc.max_bytes, pc.max_depth);
+            }
             writeFile(dir + "/" + base + ".in", pc.input);
             if (count > 0)
             {

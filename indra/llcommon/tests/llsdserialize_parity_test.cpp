@@ -121,8 +121,30 @@ namespace
         sameBytes(name + ": remaining stream", rust.remaining, oracle.remaining);
     }
 
+    void checkEdgeCase(const ParseCase& c)
+    {
+        // The oracle's answer is platform dependent here; the product's
+        // behaviour is the corpus's stated one, on both stream kinds.
+        for (int opaque = 0; opaque < 2; ++opaque)
+        {
+            std::istringstream ss(c.input);
+            OpaqueBuf ob(c.input);
+            std::istream os(&ob);
+            Outcome rust = parseRust(c, opaque ? os : static_cast<std::istream&>(ss));
+            std::string name = c.name + (opaque ? " [opaque]" : " [stringstream]");
+            sameCount(name, rust.count, c.edge_count);
+            tut::ensure(name + ": value (want " + describe(c.edge_value) + ", rust " + describe(rust.value) + ")",
+                        equalBits(c.edge_value, rust.value));
+            sameBytes(name + ": remaining stream", rust.remaining, std::string());
+        }
+    }
+
     void checkParseCase(const ParseCase& c)
     {
+        if (c.runtime_edge)
+        {
+            return checkEdgeCase(c);
+        }
         // A memory-backed stream (bulk feeding) ...
         {
             std::istringstream a(c.input), b(c.input);

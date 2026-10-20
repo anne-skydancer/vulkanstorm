@@ -200,9 +200,24 @@ Differences, all outside what any caller exercises:
   now fails. An odd trailing hex digit (undefined behaviour in C++) yields
   `hi << 4`.
 - A negative `s(len)`/`b(len)` crashed the C++ (huge `resize`); it fails.
-- The fixtures and parity were produced on Windows. Linux's glibc differs
-  from the UCRT for the modelled edge inputs (hex floats, `sscanf` overflow,
-  NaN spelling), where the Rust now behaves the same on both platforms.
+- Where the two C runtimes disagreed, the product now has one behaviour on
+  both platforms, stated in the corpus as "runtime edges" (the parity test
+  checks these against the stated expectation, not the platform's oracle,
+  and the fixtures carry the same expectation):
+  - an underflowing real (`r1e-999`, `<real>1e-999</real>`) is accepted
+    with the value `strtod` gives, 0 or a denormal, as glibc did; the MSVC
+    runtime rejected the whole value, failing the document, which is the
+    worse outcome and one no formatter can trigger;
+  - an overflowing real in XML (`<real>1e999</real>`) is +/-infinity, as
+    MSVC stored it (glibc stored `DBL_MAX`); in notation (`r1e999`) it
+    fails on both, as before;
+  - a hexadecimal real (`r0x1p3`) is read as MSVC's extraction did (glibc
+    stopped at the `x`, leaving junk in the stream);
+  - `sscanf("%d")` overflow saturates through a 64-bit value on both (the
+    UCRT's and glibc's `long` behaviour agree once `long` is 64-bit);
+  - NaN is spelled as the platform's C runtime spells it (`-nan(ind)` on
+    Windows, `-nan` elsewhere), so each platform's output is unchanged.
+  The fixtures were generated on Windows.
 
 ### Tests
 
