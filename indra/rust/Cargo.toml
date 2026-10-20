@@ -11,11 +11,11 @@ edition = "2024"
 license = "LGPL-2.1-only"
 
 [workspace.dependencies]
-vkstorm-j2c = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "e98d7ac778e371d5d857000e7ee84ed7636823fa" }
-vkstorm-llsd = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "e98d7ac778e371d5d857000e7ee84ed7636823fa" }
-vkstorm-volume = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "e98d7ac778e371d5d857000e7ee84ed7636823fa" }
-vkstorm-image = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "e98d7ac778e371d5d857000e7ee84ed7636823fa" }
-vkstorm-messages = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "e98d7ac778e371d5d857000e7ee84ed7636823fa" }
+vkstorm-j2c = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "a54a27fe9379488c1024a8ad466e6250641d1e93" }
+vkstorm-llsd = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "a54a27fe9379488c1024a8ad466e6250641d1e93" }
+vkstorm-volume = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "a54a27fe9379488c1024a8ad466e6250641d1e93" }
+vkstorm-image = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "a54a27fe9379488c1024a8ad466e6250641d1e93" }
+vkstorm-messages = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "a54a27fe9379488c1024a8ad466e6250641d1e93" }
 
 # The viewer's Release configuration links with LTO; do the same inside the
 # Rust static library. Panics abort at the C boundary anyway (caught in the
