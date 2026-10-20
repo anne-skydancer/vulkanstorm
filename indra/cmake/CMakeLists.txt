@@ -49,7 +49,6 @@ set(cmake_SOURCE_FILES
         NDOF.cmake
         OPENAL.cmake
         OpenGL.cmake
-        OpenJPEG.cmake
         OpenSSL.cmake
         PNG.cmake
         PluginAPI.cmake

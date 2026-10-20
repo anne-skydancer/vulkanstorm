@@ -2,7 +2,7 @@
 //! the boundary, and uses only plain types. The matching header is
 //! `indra/llimagej2crust/vkstorm_ffi.h`; keep the two in step.
 //!
-//! Rung one: JPEG 2000 decoding via `vkstorm-j2c`.
+//! Rung one: JPEG 2000 decoding and encoding via `vkstorm-j2c`.
 
 use std::ffi::c_char;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -27,8 +27,14 @@ pub struct VksJ2cDecoded {
 /// Decoder description for the engine-info display. Static, NUL-terminated.
 #[unsafe(no_mangle)]
 pub extern "C" fn vks_j2c_engine_info() -> *const c_char {
-    static INFO: &[u8] = b"hayro-jpeg2000 0.4.1 (Rust)\0";
-    INFO.as_ptr().cast()
+    // Short on purpose: LLTextureCache keeps it in a 32-byte header field.
+    static INFO: std::sync::OnceLock<std::ffi::CString> = std::sync::OnceLock::new();
+    INFO.get_or_init(|| {
+        let mut s = vkstorm_j2c::ENGINE_INFO.to_owned();
+        s.truncate(31);
+        std::ffi::CString::new(s).unwrap_or_default()
+    })
+    .as_ptr()
 }
 
 /// Parse the main header. Returns 1 on success and fills `out`, 0 on failure.
@@ -131,5 +137,75 @@ pub unsafe extern "C" fn vks_j2c_decoded_comment(d: *const VksJ2cDecoded) -> *co
 pub unsafe extern "C" fn vks_j2c_decoded_free(d: *mut VksJ2cDecoded) {
     if !d.is_null() {
         drop(unsafe { Box::from_raw(d) });
+    }
+}
+
+/// An owned encoded codestream. Opaque to C++; release with `vks_j2c_encoded_free`.
+pub struct VksJ2cEncoded {
+    bytes: Vec<u8>,
+}
+
+/// Encode `width * height * channels` interleaved, bottom-up 8-bit samples into
+/// a raw J2K codestream with the viewer upload rules. `comment` may be null
+/// (then "no comment"); `reversible != 0` selects lossless coding. Null on
+/// failure.
+///
+/// # Safety
+/// `data` must point to `len` readable bytes; `comment`, if not null, must be
+/// a NUL-terminated string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn vks_j2c_encode(
+    data: *const u8,
+    len: usize,
+    width: u32,
+    height: u32,
+    channels: u32,
+    comment: *const c_char,
+    reversible: i32,
+) -> *mut VksJ2cEncoded {
+    if data.is_null() {
+        return std::ptr::null_mut();
+    }
+    let bytes = unsafe { slice::from_raw_parts(data, len) };
+    let comment = if comment.is_null() {
+        None
+    } else {
+        unsafe { std::ffi::CStr::from_ptr(comment) }.to_str().ok().map(str::to_owned)
+    };
+    let r = catch_unwind(AssertUnwindSafe(|| {
+        vkstorm_j2c::encode(bytes, width, height, channels, comment.as_deref(), reversible != 0)
+    }));
+    match r {
+        Ok(Ok(bytes)) => Box::into_raw(Box::new(VksJ2cEncoded { bytes })),
+        _ => std::ptr::null_mut(),
+    }
+}
+
+/// Pointer to the encoded bytes, valid until freed.
+///
+/// # Safety
+/// `e` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn vks_j2c_encoded_data(e: *const VksJ2cEncoded) -> *const u8 {
+    unsafe { &*e }.bytes.as_ptr()
+}
+
+/// Length of the encoded bytes.
+///
+/// # Safety
+/// `e` must be live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn vks_j2c_encoded_len(e: *const VksJ2cEncoded) -> usize {
+    unsafe { &*e }.bytes.len()
+}
+
+/// Release an encoded codestream. Null is ignored.
+///
+/// # Safety
+/// `e` must come from `vks_j2c_encode` and not be used afterwards.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn vks_j2c_encoded_free(e: *mut VksJ2cEncoded) {
+    if !e.is_null() {
+        drop(unsafe { Box::from_raw(e) });
     }
 }

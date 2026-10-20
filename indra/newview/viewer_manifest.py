@@ -746,7 +746,6 @@ class Windows_x86_64_Manifest(ViewerManifest):
             # </VulkanStorm>
 
             # For textures
-            self.path_optional("openjp2.dll")
 
             # These need to be installed as a SxS assembly, currently a 'private' assembly.
             # See http://msdn.microsoft.com/en-us/library/ms235291(VS.80).aspx
@@ -2451,7 +2450,6 @@ class LinuxManifest(ViewerManifest):
             self.path_optional("libdirectfb*.so*")
             self.path_optional("libfusion*.so*")
             self.path_optional("libdirect*.so*")
-            self.path_optional("libopenjpeg.so*")
             self.path("libalut.so*")
             #self.path("libpng15.so.15") #use provided libpng to workaround incompatible system versions on some distros
             #self.path("libpng15.so.15.13.0") #use provided libpng to workaround incompatible system versions on some distros
