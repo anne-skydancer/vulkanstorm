@@ -183,6 +183,8 @@ list(APPEND llmessage_SOURCE_FILES ${llmessage_HEADER_FILES})
 
 add_library (llmessage ${llmessage_SOURCE_FILES})
 
+# The message template system and the data packers are Rust
+# (vkstorm-messages through vkstorm_ffi); see doc/rust_port.md.
 target_link_libraries(
         llmessage
         llcommon
@@ -190,6 +192,7 @@ target_link_libraries(
         llmath
         llcorehttp
         llxml #<FS:Ansariel> For accessing settings
+        vkstorm_ffi
 )
 target_include_directories( llmessage  INTERFACE   ${CMAKE_CURRENT_SOURCE_DIR})
 

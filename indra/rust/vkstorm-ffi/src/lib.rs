@@ -6,8 +6,11 @@
 //! Rung two: LLSD serialization via `vkstorm-llsd` (the `vks_llsd_*` section),
 //! the parametric prim mesher via `vkstorm-volume` (`volume.rs`), and PNG,
 //! TGA, BMP and DXT via `vkstorm-image` (`image.rs`).
+//! Rung three: the message template system and the data packers via
+//! `vkstorm-messages` (`messages.rs`).
 
 mod image;
+mod messages;
 mod volume;
 
 use std::ffi::{c_char, c_void};
