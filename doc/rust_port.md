@@ -254,8 +254,8 @@ Differences, all outside what any caller exercises:
   `createTangents` and `LLCalculateTangentArray` are gone; the methods that
   remain are thin wrappers. The 881-case corpus recorded from the original
   C++ (`indra/llmath/tests/fixtures/llvolume_corpus.vksv`, 2.2 MB) is the
-  oracle; regenerating it means building `INTEGRATION_TEST_llvolume` at the
-  pre-rung commit with `VKS_VOLUME_DUMP=<file>`.
+  oracle on Windows; its Linux counterpart `llvolume_corpus.linux.vksv` was
+  recorded by the same test from the Linux build (see below).
 - `LLVolume`, `LLProfile`, `LLPath` and `LLVolumeFace` stay the in-memory
   representation. Profile and path generation return pointers into
   per-thread scratch storage that the C++ copies out (a few hundred bytes);
@@ -277,27 +277,41 @@ Differences, all outside what any caller exercises:
   silhouettes, line intersection, octrees, `remap`/`optimize`, and the
   `LLVolumeFace` memory management (`resizeVertices`/`resizeIndices`,
   partial rebuilds), which is the representation itself.
-- Floating-point identity. The C++ operation order is kept; `lerp` is MSVC's
-  `std::lerp` (an `fma` at its core, so Rust's `mul_add`); `_mm_rsqrt_ps`
-  results are CPU-specific (Intel and AMD tables differ), so the fixture
-  carries a signature of the recording CPU and the tests compare the
-  rsqrt-derived arrays (cap normals, tangents, normalised normals) with a
-  tolerance only when it differs; `sinf`/`cosf` are the platform libm as in
-  the C++ (UCRT on Windows), so off Windows/MSVC the float arrays are
-  compared with a tolerance and the structural data exactly. One LLVM
-  canonicalisation (`x * -1.0` to a sign flip) had to be prevented because
-  it differs from a multiply for the NaN a zero-area cap produces.
+- Floating-point identity. The C++ operation order is kept. The C++ itself
+  does not produce the same mesh on Windows and Linux (10793 of the 27158
+  corpus blocks differ between the two builds, two of them index blocks):
+  with MSVC the unqualified `sin`/`cos`/`floor`/`fabs` of `llvolume.cpp`
+  bind the global float overloads and `std::lerp` is an `fma` at its core;
+  with GCC and libstdc++ they bind the C double functions (the surrounding
+  expression is then evaluated in double before the store to `F32`, and the
+  test path's `lerp` promotes to the double overload) and `std::lerp` is the
+  unfused `a + t * (b - a)`; GCC also folds the cap normal's `* -1.0f` into
+  a negation, which differs from a multiply only for the NaN a zero-area cap
+  produces. The crate follows each platform's resolution (`params.rs`,
+  `face.rs`), so there is one oracle corpus per toolchain:
+  `llvolume_corpus.vksv` recorded on Windows (MSVC 19.44, UCRT) and
+  `llvolume_corpus.linux.vksv` recorded on Ubuntu 26.04 (GCC 15, glibc)
+  from the pre-port C++ at the `vkstorm-rust` base commit with the CI Linux
+  configuration, both on an AMD Ryzen 9 9950X3D. `_mm_rsqrt_ps` results are
+  CPU-specific (Intel and AMD tables differ), so each fixture carries a
+  signature of the recording CPU and the tests compare the rsqrt-derived
+  arrays (cap normals, tangents, normalised normals) with a tolerance only
+  when it differs. A platform with no recording (macOS) gets the Windows
+  corpus, exact integer data and a tolerance on the float arrays, and says
+  so.
 - Parity: `cargo test -p vkstorm-volume` (crate) and
   `INTEGRATION_TEST_llvolume` (viewer, through the FFI) rebuild all 881
   cases, 3939 faces, 27158 array blocks (positions, normals, texture
   coordinates, indices, tangents, normalised normals, profile points and
   faces, path points, mesh) plus counts, extents, centres, texture
-  extents, face masks and LOD triangle estimates: all bit-identical on the
-  recording machine (Windows, MSVC 19.44, AMD Ryzen 9 9950X3D). The corpus
-  covers all six profile curves, four hole shapes, line/circle/circle2/test
-  and flexible paths, hollow, both cuts, twist, taper, shear, radius offset,
-  revolutions, skew and ratio, detail 0, 1, 1.5, 2.5 and 4, and sculpt
-  stitching (sphere, torus, plane, cylinder, invert, mirror).
+  extents, face masks and LOD triangle estimates against the platform's
+  corpus: all bit-identical on Windows and on Linux (0 mismatches, 0
+  tolerance comparisons on both). The corpus covers all six profile curves,
+  four hole shapes, line/circle/circle2/test and flexible paths, hollow,
+  both cuts, twist, taper, shear, radius offset, revolutions, skew and
+  ratio, detail 0, 1, 1.5, 2.5 and 4, and sculpt stitching (sphere, torus,
+  plane, cylinder, invert, mirror). Recording a corpus means building the
+  test at the pre-rung commit with `VKS_VOLUME_DUMP=<file>`.
 - Measurements (single thread, AMD Ryzen 9 9950X3D, RelWithDebInfo viewer
   with AVX2, the crate at `opt-level 3`, fat LTO, `x86-64-v3`): the corpus
   through `LLVolume` construction plus `genTangents` for every face, with
