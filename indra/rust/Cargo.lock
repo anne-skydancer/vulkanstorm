@@ -132,7 +132,7 @@ dependencies = [
 [[package]]
 name = "vkstorm-image"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=34ecc74d69aa5d2d6ad96e91ba3e36b57b163572#34ecc74d69aa5d2d6ad96e91ba3e36b57b163572"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=643e7a29adf47ec29634a425c2fb78a1d00a405d#643e7a29adf47ec29634a425c2fb78a1d00a405d"
 dependencies = [
  "png",
  "zlib-rs",
@@ -141,7 +141,7 @@ dependencies = [
 [[package]]
 name = "vkstorm-j2c"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=34ecc74d69aa5d2d6ad96e91ba3e36b57b163572#34ecc74d69aa5d2d6ad96e91ba3e36b57b163572"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=643e7a29adf47ec29634a425c2fb78a1d00a405d#643e7a29adf47ec29634a425c2fb78a1d00a405d"
 dependencies = [
  "vkstorm-openjp2",
 ]
@@ -149,17 +149,17 @@ dependencies = [
 [[package]]
 name = "vkstorm-llsd"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=34ecc74d69aa5d2d6ad96e91ba3e36b57b163572#34ecc74d69aa5d2d6ad96e91ba3e36b57b163572"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=643e7a29adf47ec29634a425c2fb78a1d00a405d#643e7a29adf47ec29634a425c2fb78a1d00a405d"
 
 [[package]]
 name = "vkstorm-messages"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=34ecc74d69aa5d2d6ad96e91ba3e36b57b163572#34ecc74d69aa5d2d6ad96e91ba3e36b57b163572"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=643e7a29adf47ec29634a425c2fb78a1d00a405d#643e7a29adf47ec29634a425c2fb78a1d00a405d"
 
 [[package]]
 name = "vkstorm-openjp2"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=34ecc74d69aa5d2d6ad96e91ba3e36b57b163572#34ecc74d69aa5d2d6ad96e91ba3e36b57b163572"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=643e7a29adf47ec29634a425c2fb78a1d00a405d#643e7a29adf47ec29634a425c2fb78a1d00a405d"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
@@ -171,7 +171,7 @@ dependencies = [
 [[package]]
 name = "vkstorm-volume"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=34ecc74d69aa5d2d6ad96e91ba3e36b57b163572#34ecc74d69aa5d2d6ad96e91ba3e36b57b163572"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=643e7a29adf47ec29634a425c2fb78a1d00a405d#643e7a29adf47ec29634a425c2fb78a1d00a405d"
 
 [[package]]
 name = "zlib-rs"
