@@ -63,6 +63,7 @@ namespace
         bool fail = false;
         U32 crc = 0;
         S32 width = 0, height = 0, components = 0;
+        S32 libpng_bytes = 0; // size of libpng's re-encode of the decoded raster (PNG only)
     };
 
     // The manifest: path relative to the skin directory (forward slashes) -> expectation.
@@ -83,7 +84,7 @@ namespace
             }
             std::istringstream s(line);
             std::string crc;
-            s >> crc >> e.width >> e.height >> e.components;
+            s >> crc >> e.width >> e.height >> e.components >> e.libpng_bytes;
             std::string path;
             std::getline(s, path);
             if (!path.empty() && path[0] == ' ') path.erase(0, 1);
@@ -191,6 +192,45 @@ namespace tut
         }
         ensure("checked the manifest", checked > 1000);
         ensure_equals("files the C++ refused", failures_expected, 1);
+    }
+
+    // The PNG encode gate over every PNG of the default skin: the re-encode
+    // decodes to the same raster, each file is within 20% (or 128 bytes) of
+    // libpng's size for the same raster, and the corpus does not grow in total.
+    template<> template<>
+    void codecs_object::test<5>()
+    {
+        std::map<std::string, Expected> manifest = loadManifest();
+        std::filesystem::path root(VKS_IMAGE_TEST_SKIN_DIR);
+        S64 total_ours = 0, total_libpng = 0;
+        S32 checked = 0;
+        for (const std::filesystem::path& p : listFiles(VKS_IMAGE_TEST_SKIN_DIR, ".png"))
+        {
+            const std::string rel = relativePath(p, root);
+            auto it = manifest.find(rel);
+            ensure(rel + ": in manifest", it != manifest.end());
+            if (it->second.fail || it->second.libpng_bytes <= 0) continue;
+            LLPointer<LLImagePNG> png = new LLImagePNG();
+            LLPointer<LLImageRaw> raw = new LLImageRaw();
+            ensure(rel + ": decoded", png->load(p.string()) && png->decode(raw, 0.0f));
+            LLPointer<LLImagePNG> again = new LLImagePNG();
+            ensure(rel + ": re-encoded", again->encode(raw, 0.0f));
+            LLPointer<LLImagePNG> parsed = new LLImagePNG();
+            copyEncoded(parsed, again->getData(), again->getDataSize());
+            LLPointer<LLImageRaw> back = new LLImageRaw();
+            ensure(rel + ": re-decoded", parsed->decode(back, 0.0f));
+            ensure(rel + ": re-encode decodes identically", sameRaster(raw, back));
+            // 20%, or 128 bytes for tiny files where a deflate block boundary
+            // is a large fraction of the file.
+            const F64 ratio = (F64)again->getDataSize() / (F64)it->second.libpng_bytes;
+            ensure(rel + ": within 20% or 128 bytes of libpng's size (" + std::to_string(again->getDataSize()) + " vs " + std::to_string(it->second.libpng_bytes) + ")",
+                   ratio <= 1.20 || again->getDataSize() <= it->second.libpng_bytes + 128);
+            total_ours += again->getDataSize();
+            total_libpng += it->second.libpng_bytes;
+            ++checked;
+        }
+        ensure("checked the PNG corpus", checked > 900);
+        ensure("PNG corpus does not grow (" + std::to_string(total_ours) + " vs libpng " + std::to_string(total_libpng) + ")", total_ours <= total_libpng);
     }
 
     // PNG, TGA, BMP and DXT encoders round-trip through their decoders.

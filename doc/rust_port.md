@@ -449,7 +449,7 @@ prebuilt libraries) and the harness are in its `tools/image-eval`.
 | TGA (`LLImageTGA`) | Rust | Rust | Ported: a 1:1 port, byte-identical, including `decodeAndProcess` for avatar masks; equal or faster. |
 | BMP (`LLImageBMP`) | Rust | Rust | Ported: 1:1, byte-identical, faster. |
 | DXT (`LLImageDXT`, with `LLImageBase::generateMip`) | Rust | Rust | Ported: 1:1, byte-identical (padding bytes zero where the C++ left them uninitialised), faster. |
-| JPEG (`LLImageJPEG` on libjpeg-turbo 3.0.4) | C++ | C++ | Kept. The Rust candidates (zune-jpeg 0.5 decode with its x86 SIMD, jpeg-encoder 0.7 with AVX2) do not beat libjpeg-turbo at 2048x2048: decode 0.98x (grey) to 1.20x (RGB) and encode 2.4x to 4.7x the time (table below), and not bit-exact (decode up to 9 code values at the bottom image row of 4:2:0 images, interior up to 3; encode up to 59 on images smaller than one MCU). The candidate stays in the crate behind the `jpeg` feature with its measurements; `LLImageJPEG` and `LLImageDimensionsInfo`'s JPEG probe are unchanged and libjpeg-turbo stays in the build. |
+| JPEG (`LLImageJPEG` on libjpeg-turbo 3.0.4) | C++ | C++ | Kept (owner's decision on the measurements). The Rust candidates (zune-jpeg 0.5 decode with its x86 SIMD, jpeg-encoder 0.7 with AVX2) do not beat libjpeg-turbo at 2048x2048: decode 0.98x (grey) to 1.20x (RGB) and encode 2.4x to 4.7x the time (table below), and not bit-exact (decode up to 9 code values at the bottom image row of 4:2:0 images, interior up to 3; encode up to 59 on images smaller than one MCU). The candidate stays in the crate behind the `jpeg` feature with its measurements; `LLImageJPEG` and `LLImageDimensionsInfo`'s JPEG probe are unchanged and libjpeg-turbo stays in the build. |
 
 `image`'s TGA and BMP readers were not candidates: they cannot reproduce the
 viewer's output (its 5-bit expansion table, the opaque-alpha compaction to 3
@@ -471,13 +471,27 @@ own code was ported instead.
 - PNG encode: 8-bit samples, colour type by component count, libpng's
   minimum-sum-of-absolute-differences filter choice (identical on 150/150
   real textures), deflate level 6 filtered with libpng's reduced window for
-  small images and 8192-byte IDAT chunks, through zlib-rs. zlib-rs and the
-  viewer's zlib-ng snapshot (2.2.3-dev) choose different matches on some
-  inputs, so the files are not always byte-identical: over 500 real skin
-  textures 4.4% were identical, the rest decode identically with sizes
-  between 0.86 and 1.16 of libpng's (median 0.996, total -0.5%); over the
-  synthetic fixtures 25 of 26 were identical. zlib-ng 2.2.4 differs from the
-  viewer's snapshot the same way. Owner's decision requested on this margin.
+  small images and 8192-byte IDAT chunks, through zlib-rs. The settings are
+  pinned by name in the crate (`png::DEFLATE_LEVEL`, `DEFLATE_STRATEGY`,
+  `DEFLATE_MEM_LEVEL`, `FILTER_HEURISTIC`) and `png`/`zlib-rs` are pinned to
+  exact versions; an upgrade re-runs `tools/image-eval` and re-records its
+  results.
+
+  **Deliberate exception to byte identity (owner's decision).** zlib-rs and
+  the viewer's zlib-ng snapshot (2.2.3-dev) choose different matches on some
+  inputs, so the files are not always byte-identical and matching that
+  snapshot's deflate is not worth doing: no consumer compares PNG bytes. The
+  gate is therefore decoded-identical output, each file within 20% (or 128
+  bytes, for tiny files where a deflate block boundary is a large fraction
+  of the file) of libpng's size for the same raster, and no growth of the
+  corpus total. Measured: over 500 real skin textures 4.4% byte-identical,
+  the rest 0.86 to 1.16 of libpng's size (median 0.996, total -0.5%); over
+  the 1014 PNGs of the default skin 0.85 to 1.21 (one 499-byte texture is
+  103 bytes larger; the next largest is 1.16), median 0.996, total -0.14%;
+  the synthetic fixtures 25 of 26 byte-identical. zlib-ng 2.2.4 differs
+  from the viewer's snapshot the same way. The gate is asserted by the
+  crate's `tests/parity.rs` (61 PNG encodes) and by
+  `INTEGRATION_TEST_llimagecodecs` over the default skin.
 - TGA, BMP, DXT: the viewer's behaviour including its quirks (run-length
   colour-mapped TGA always flipped, opaque 32-bit TGA compacted to 3
   components, 8-bit BMP needing a 256-entry table, the BMP V4 colour-table
