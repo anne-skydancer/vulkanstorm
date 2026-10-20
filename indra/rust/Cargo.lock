@@ -42,7 +42,7 @@ dependencies = [
 [[package]]
 name = "vkstorm-j2c"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=d8eb647c5fffb65a75ea5e1d32c669379aa0cbaf#d8eb647c5fffb65a75ea5e1d32c669379aa0cbaf"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=fb9ee753dcc0cf5aacbc688dcdef4475ffb3785f#fb9ee753dcc0cf5aacbc688dcdef4475ffb3785f"
 dependencies = [
  "vkstorm-openjp2",
 ]
@@ -50,7 +50,7 @@ dependencies = [
 [[package]]
 name = "vkstorm-openjp2"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=d8eb647c5fffb65a75ea5e1d32c669379aa0cbaf#d8eb647c5fffb65a75ea5e1d32c669379aa0cbaf"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=fb9ee753dcc0cf5aacbc688dcdef4475ffb3785f#fb9ee753dcc0cf5aacbc688dcdef4475ffb3785f"
 dependencies = [
  "bitflags",
  "byteorder",
