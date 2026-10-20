@@ -1,7 +1,7 @@
 # -*- cmake -*-
 # Rust integration for the vkstorm-rust track: builds the crates under
 # indra/rust with cargo through corrosion and exposes them as CMake targets.
-include_guard()
+include_guard(GLOBAL)
 
 # JPEG 2000 (and later rungs) are Rust on this track; there is no option to
 # select another implementation.

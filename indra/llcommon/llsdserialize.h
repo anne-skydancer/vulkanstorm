@@ -35,6 +35,15 @@
 #include "llsd.h"
 
 /**
+ * The parsers and formatters below keep their names and their public
+ * interface; since vkstorm-rust rung two their implementation is the Rust
+ * crate vkstorm-llsd (through the vkstorm-ffi C ABI), which reads from the
+ * caller's istream through a callback and writes to the caller's ostream.
+ * The in-memory LLSD class is unchanged. There is no C++ fallback; the
+ * former C++ implementation survives only as the oracle of the parity test.
+ */
+
+/**
  * @class LLSDParser
  * @brief Abstract base class for LLSD parsers.
  */
@@ -115,97 +124,11 @@ protected:
      */
     virtual void doReset()  {};
 
-    /* @name Simple istream helper methods
-     *
-     * These helper methods exist to help correctly use the
-     * mMaxBytesLeft without really thinking about it for most simple
-     * operations. Use of the streamtools in llstreamtools.h will
-     * require custom wrapping.
-     */
-    //@{
     /**
-     * @brief get a byte off the stream
-     *
-     * @param istr The istream to work with.
-     * @return returns the next character.
+     * @brief The byte budget of the current parse, or
+     * LLSDSerialize::SIZE_UNLIMITED.
      */
-    int get(std::istream& istr) const;
-
-    /**
-     * @brief get several bytes off the stream into a buffer.
-     *
-     * @param istr The istream to work with.
-     * @param s The buffer to get into
-     * @param n Extract maximum of n-1 bytes and null temrinate.
-     * @param delim Delimiter to get until found.
-     * @return Returns istr.
-     */
-    std::istream& get(
-        std::istream& istr,
-        char* s,
-        std::streamsize n,
-        char delim) const;
-
-    /**
-     * @brief get several bytes off the stream into a streambuf
-     *
-     * @param istr The istream to work with.
-     * @param sb The streambuf to read into
-     * @param delim Delimiter to get until found.
-     * @return Returns istr.
-     */
-    std::istream& get(
-        std::istream& istr,
-        std::streambuf& sb,
-        char delim) const;
-
-    /**
-     * @brief ignore the next byte on the istream
-     *
-     * @param istr The istream to work with.
-     * @return Returns istr.
-     */
-    std::istream& ignore(std::istream& istr) const;
-
-    /**
-     * @brief put the last character retrieved back on the stream
-     *
-     * @param istr The istream to work with.
-     * @param c The character to put back
-     * @return Returns istr.
-     */
-    std::istream& putback(std::istream& istr, char c) const;
-
-    /**
-     * @brief read a block of n characters into a buffer
-     *
-     * @param istr The istream to work with.
-     * @param s The buffer to read into
-     * @param n The number of bytes to read.
-     * @return Returns istr.
-     */
-    std::istream& read(std::istream& istr, char* s, std::streamsize n) const;
-    //@}
-
-protected:
-    /**
-     * @brief Accunt for bytes read outside of the istream helpers.
-     *
-     * Conceptually const since it only modifies mutable members.
-     * @param bytes The number of bytes read.
-     */
-    void account(llssize bytes) const;
-
-protected:
-    /**
-     * @brief boolean to set if byte counts should be checked during parsing.
-     */
-    bool mCheckLimits;
-
-    /**
-     * @brief The maximum number of bytes left to be parsed.
-     */
-    mutable llssize mMaxBytesLeft;
+    llssize mMaxBytes;
 
     /**
      * @brief Use line-based reading to get text
@@ -235,12 +158,6 @@ protected:
     /**
      * @brief Call this method to parse a stream for LLSD.
      *
-     * This method parses the istream for a structured data. This
-     * method assumes that the istream is a complete llsd object --
-     * for example an opened and closed map with an arbitrary nesting
-     * of elements. This method will return after reading one data
-     * object, allowing continued reading from the stream by the
-     * caller.
      * @param istr The input stream.
      * @param data[out] The newly parse structured data. Undefined on failure.
      * @param max_depth Max depth parser will check before exiting
@@ -249,45 +166,6 @@ protected:
      * data. Returns PARSE_FAILURE (-1) on parse failure.
      */
     virtual S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const;
-
-private:
-    /**
-     * @brief Parse a map from the istream
-     *
-     * @param istr The input stream.
-     * @param map The map to add the parsed data.
-     * @param max_depth Allowed parsing depth.
-     * @return Returns The number of LLSD objects parsed into data.
-     */
-    S32 parseMap(std::istream& istr, LLSD& map, S32 max_depth) const;
-
-    /**
-     * @brief Parse an array from the istream.
-     *
-     * @param istr The input stream.
-     * @param array The array to append the parsed data.
-     * @param max_depth Allowed parsing depth.
-     * @return Returns The number of LLSD objects parsed into data.
-     */
-    S32 parseArray(std::istream& istr, LLSD& array, S32 max_depth) const;
-
-    /**
-     * @brief Parse a string from the istream and assign it to data.
-     *
-     * @param istr The input stream.
-     * @param data[out] The data to assign.
-     * @return Retuns true if a complete string was parsed.
-     */
-    bool parseString(std::istream& istr, LLSD& data) const;
-
-    /**
-     * @brief Parse binary data from the stream.
-     *
-     * @param istr The input stream.
-     * @param data[out] The data to assign.
-     * @return Retuns true if a complete blob was parsed.
-     */
-    bool parseBinary(std::istream& istr, LLSD& data) const;
 };
 
 /**
@@ -312,16 +190,9 @@ protected:
     /**
      * @brief Call this method to parse a stream for LLSD.
      *
-     * This method parses the istream for a structured data. This
-     * method assumes that the istream is a complete llsd object --
-     * for example an opened and closed map with an arbitrary nesting
-     * of elements. This method will return after reading one data
-     * object, allowing continued reading from the stream by the
-     * caller.
      * @param istr The input stream.
      * @param data[out] The newly parse structured data.
-     * @param max_depth Max depth parser will check before exiting
-     *  with parse error, -1 - unlimited.
+     * @param max_depth Ignored by the XML parser, as before.
      * @return Returns the number of LLSD objects parsed into
      * data. Returns PARSE_FAILURE (-1) on parse failure.
      */
@@ -333,8 +204,13 @@ protected:
     virtual void doReset();
 
 private:
-    class Impl;
-    Impl& impl;
+    /**
+     * @brief Bytes already taken from the stream by the caller, parsed
+     * ahead of the stream by the next doParse() (LLSDSerialize::deserialize
+     * hands over the header line it read).
+     */
+    mutable std::string mPrefix;
+    bool mEmitErrors;
 
     void parsePart(const char* buf, llssize len);
     friend class LLSDSerialize;
@@ -362,12 +238,6 @@ protected:
     /**
      * @brief Call this method to parse a stream for LLSD.
      *
-     * This method parses the istream for a structured data. This
-     * method assumes that the istream is a complete llsd object --
-     * for example an opened and closed map with an arbitrary nesting
-     * of elements. This method will return after reading one data
-     * object, allowing continued reading from the stream by the
-     * caller.
      * @param istr The input stream.
      * @param data[out] The newly parse structured data.
      * @param max_depth Max depth parser will check before exiting
@@ -376,36 +246,6 @@ protected:
      * data. Returns -1 on parse failure.
      */
     virtual S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const;
-
-private:
-    /**
-     * @brief Parse a map from the istream
-     *
-     * @param istr The input stream.
-     * @param map The map to add the parsed data.
-     * @param max_depth Allowed parsing depth.
-     * @return Returns The number of LLSD objects parsed into data.
-     */
-    S32 parseMap(std::istream& istr, LLSD& map, S32 max_depth) const;
-
-    /**
-     * @brief Parse an array from the istream.
-     *
-     * @param istr The input stream.
-     * @param array The array to append the parsed data.
-     * @param max_depth Allowed parsing depth.
-     * @return Returns The number of LLSD objects parsed into data.
-     */
-    S32 parseArray(std::istream& istr, LLSD& array, S32 max_depth) const;
-
-    /**
-     * @brief Parse a string from the istream and assign it to data.
-     *
-     * @param istr The input stream.
-     * @param value[out] The string to assign.
-     * @return Retuns true if a complete string was parsed.
-     */
-    bool parseString(std::istream& istr, std::string& value) const;
 };
 
 
@@ -482,22 +322,9 @@ public:
 
 protected:
     /**
-     * @brief Implementation to format the data. This is called recursively.
-     *
-     * @param data The data to write.
-     * @param ostr The destination stream for the data.
-     * @return Returns The number of LLSD objects formatted out
+     * @brief The vkstorm_ffi.h format id (VKS_LLSD_*) of this formatter.
      */
-    virtual S32 format_impl(const LLSD& data, std::ostream& ostr, EFormatterOptions options,
-                            U32 level) const = 0;
-
-    /**
-     * @brief Helper method which appropriately obeys the real format.
-     *
-     * @param real The real value to format.
-     * @param ostr The destination stream for the data.
-     */
-    void formatReal(LLSD::Real real, std::ostream& ostr) const;
+    virtual S32 rustFormat() const = 0;
 
     bool mBoolAlpha;
     std::string mRealFormat;
@@ -537,15 +364,7 @@ public:
     static std::string escapeString(const std::string& in);
 
 protected:
-    /**
-     * @brief Implementation to format the data. This is called recursively.
-     *
-     * @param data The data to write.
-     * @param ostr The destination stream for the data.
-     * @return Returns The number of LLSD objects formatted out
-     */
-    S32 format_impl(const LLSD& data, std::ostream& ostr, EFormatterOptions options,
-                    U32 level) const override;
+    S32 rustFormat() const override;
 };
 
 
@@ -576,28 +395,8 @@ public:
      */
     static std::string escapeString(const std::string& in);
 
-    /**
-     * @brief Call this method to format an LLSD to a stream.
-     *
-     * @param data The data to write.
-     * @param ostr The destination stream for the data.
-     * @return Returns The number of LLSD objects formatted out
-     */
-    S32 format(const LLSD& data, std::ostream& ostr, EFormatterOptions options) const override;
-
-    // also pull down base-class format() method that isn't overridden
-    using LLSDFormatter::format;
-
 protected:
-    /**
-     * @brief Implementation to format the data. This is called recursively.
-     *
-     * @param data The data to write.
-     * @param ostr The destination stream for the data.
-     * @return Returns The number of LLSD objects formatted out
-     */
-    S32 format_impl(const LLSD& data, std::ostream& ostr, EFormatterOptions options,
-                    U32 level) const override;
+    S32 rustFormat() const override;
 };
 
 
@@ -641,25 +440,7 @@ public:
                         EFormatterOptions options=OPTIONS_PRETTY_BINARY);
 
 protected:
-    /**
-     * @brief Implementation to format the data. This is called recursively.
-     *
-     * @param data The data to write.
-     * @param ostr The destination stream for the data.
-     * @return Returns The number of LLSD objects formatted out
-     */
-    S32 format_impl(const LLSD& data, std::ostream& ostr, EFormatterOptions options,
-                    U32 level) const override;
-
-    /**
-     * @brief Helper method to serialize strings
-     *
-     * This method serializes a network byte order size and the raw
-     * string contents.
-     * @param string The string to write.
-     * @param ostr The destination stream for the data.
-     */
-    void formatString(const std::string& string, std::ostream& ostr) const;
+    S32 rustFormat() const override;
 };
 
 
