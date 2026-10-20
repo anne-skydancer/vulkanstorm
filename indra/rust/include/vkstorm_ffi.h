@@ -3,7 +3,8 @@
  * @brief C ABI exported by the Rust crate indra/rust/vkstorm-ffi.
  *
  * Keep in step with indra/rust/vkstorm-ffi/src/lib.rs (JPEG 2000 and
- * LLSD) and indra/rust/vkstorm-ffi/src/volume.rs (the prim mesher).
+ * LLSD), indra/rust/vkstorm-ffi/src/volume.rs (the prim mesher) and
+ * indra/rust/vkstorm-ffi/src/image.rs (PNG, TGA, BMP, DXT).
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -330,6 +331,94 @@ int32_t vks_volume_face_build(const VksFaceParams* p, const VksFaceBuffers* b, V
 int32_t vks_volume_tangents(int32_t num_vertices, const float* positions, float* normals,
                             const float* texcoords, int32_t num_indices, const uint16_t* indices,
                             float* tangents, int32_t normalize_normals);
+
+/* ---- Raster codecs: PNG, TGA, BMP, DXT (rung two) ---------------------- */
+
+typedef struct VksImageHeader
+{
+    uint32_t width;
+    uint32_t height;
+    uint32_t components;
+} VksImageHeader;
+
+typedef struct VksRaster VksRaster; /* a decoded image, rows bottom-up */
+typedef struct VksBytes VksBytes;   /* an encoded file */
+
+/* The message of the last failed vks_png_*, vks_tga_*, vks_bmp_* or vks_dxt_*
+ * call on this thread (the text the C++ codec passed to setLastError),
+ * NUL-terminated, valid until the next failing call on the thread. */
+const char* vks_image_last_error(void);
+
+uint32_t vks_raster_width(const VksRaster* r);
+uint32_t vks_raster_height(const VksRaster* r);
+uint32_t vks_raster_components(const VksRaster* r);
+/* width*height*components bytes, bottom-up, valid until freed. */
+const uint8_t* vks_raster_data(const VksRaster* r);
+size_t vks_raster_len(const VksRaster* r);
+void vks_raster_free(VksRaster* r);
+
+const uint8_t* vks_bytes_data(const VksBytes* b);
+size_t vks_bytes_len(const VksBytes* b);
+void vks_bytes_free(VksBytes* b);
+
+/* PNG: header read (1 on success), decode (3 or 4 components, as libpng with
+ * the viewer's transformations produced), encode of 1 to 4 components. */
+int32_t vks_png_header(const uint8_t* data, size_t len, VksImageHeader* out);
+VksRaster* vks_png_decode(const uint8_t* data, size_t len);
+VksBytes* vks_png_encode(const uint8_t* data, size_t len, uint32_t width, uint32_t height, uint32_t components);
+
+/* TGA */
+typedef struct VksTgaHeader
+{
+    uint32_t width;
+    uint32_t height;
+    uint32_t components;
+    uint32_t image_type;
+    uint32_t origin_top;
+    uint32_t origin_right;
+} VksTgaHeader;
+
+int32_t vks_tga_header(const uint8_t* data, size_t len, VksTgaHeader* out);
+VksRaster* vks_tga_decode(const uint8_t* data, size_t len);
+/* LLImageTGA::decodeAndProcess: monochrome run-length through the avatar
+ * alpha-gradient function. */
+VksRaster* vks_tga_decode_and_process(const uint8_t* data, size_t len, float domain, float weight);
+VksBytes* vks_tga_encode(const uint8_t* data, size_t len, uint32_t width, uint32_t height, uint32_t components);
+
+/* BMP: the header's components are what LLImageBMP reports (1 for 8-bit
+ * files); decodes always have 3. */
+int32_t vks_bmp_header(const uint8_t* data, size_t len, VksImageHeader* out);
+VksRaster* vks_bmp_decode(const uint8_t* data, size_t len);
+VksBytes* vks_bmp_encode(const uint8_t* data, size_t len, uint32_t width, uint32_t height, uint32_t components,
+                         int32_t pels_per_meter);
+
+/* DXT: the viewer's mipped container. format is LLImageDXT::EFileFormat. */
+typedef struct VksDxtHeader
+{
+    uint32_t width;
+    uint32_t height;
+    uint32_t components;
+    int32_t format;
+    int32_t header_size;
+    int32_t discard_level;
+} VksDxtHeader;
+
+int32_t vks_dxt_header(const uint8_t* data, size_t len, VksDxtHeader* out);
+VksRaster* vks_dxt_decode(const uint8_t* data, size_t len, const VksDxtHeader* header);
+VksRaster* vks_dxt_mip_data(const uint8_t* data, size_t len, const VksDxtHeader* header, int32_t discard);
+VksBytes* vks_dxt_encode(const uint8_t* data, size_t len, uint32_t width, uint32_t height, uint32_t components);
+/* Null when there is nothing to convert or on failure. */
+VksBytes* vks_dxt_convert_to_dxr(const uint8_t* data, size_t len, const VksDxtHeader* header);
+int32_t vks_dxt_data_size(const VksDxtHeader* header, int32_t discard);   /* -1 on failure */
+int32_t vks_dxt_mip_offset(int32_t format, int32_t header_size, int32_t width, int32_t height, int32_t discard); /* -1 on failure */
+int32_t vks_dxt_format_bits(int32_t format);                                /* 0 if unknown */
+int32_t vks_dxt_format_bytes(int32_t format, int32_t width, int32_t height); /* 0 if unknown */
+int32_t vks_dxt_format_components(int32_t format);                          /* 0 if unknown */
+int32_t vks_dxt_format_from_fourcc(int32_t fourcc);
+int32_t vks_dxt_fourcc(int32_t format);
+int32_t vks_dxt_calc_num_mips(int32_t width, int32_t height);
+void vks_dxt_calc_discard_width_height(int32_t discard, int32_t format, int32_t* width, int32_t* height);
+void vks_dxt_check_min_width_height(int32_t format, int32_t* width, int32_t* height);
 
 #ifdef __cplusplus
 }
