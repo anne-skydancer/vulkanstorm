@@ -2332,13 +2332,6 @@ if (WINDOWS)
       #media_plugin_example # <FS:Ansariel> Don't package example plugin
       )
 
-    # <FS:Ansariel> Only copy OpenJPEG dll if needed
-    if (NOT USE_KDU)
-        list(APPEND COPY_INPUT_DEPENDENCIES
-            ${SHARED_LIB_STAGING_DIR}/openjp2.dll
-            )
-    endif (NOT USE_KDU)
-    # </FS:Ansariel>
 
     if (ADDRESS_SIZE EQUAL 64)
        list(APPEND COPY_INPUT_DEPENDENCIES

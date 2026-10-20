@@ -1,0 +1,4 @@
+[net]
+# Fetch git dependencies with the git CLI (uses the developer's git
+# configuration and credential helpers, and avoids libgit2 limitations).
+git-fetch-with-cli = true
