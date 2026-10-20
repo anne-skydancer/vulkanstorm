@@ -416,6 +416,22 @@ namespace llsd_corpus
             v.push_back(c);
         };
         const llssize UNLIMITED = LLSDSerialize::SIZE_UNLIMITED;
+        // A runtime edge: the C++ oracle answers differently on MSVC and
+        // glibc; the product behaves as stated on both.
+        auto addEdge = [&](const std::string& name, Format f, const std::string& input, S32 count, const LLSD& value, bool lines = false)
+        {
+            ParseCase c;
+            c.name = name;
+            c.format = f;
+            c.input = input;
+            c.max_bytes = lines ? UNLIMITED : (llssize)input.size();
+            c.max_depth = -1;
+            c.lines = lines;
+            c.runtime_edge = true;
+            c.edge_count = count;
+            c.edge_value = value;
+            v.push_back(c);
+        };
 
         // ---- notation: the unit test cases
         add("n malformed map", NOTATION, "{'ha ha'");
@@ -534,14 +550,16 @@ namespace llsd_corpus
         add("n real inf", NOTATION, "rinf");
         add("n real nan", NOTATION, "rnan");
         add("n real overflow", NOTATION, "r1e999");
-        add("n real underflow", NOTATION, "r1e-999");
+        // glibc accepts an underflowing real (value 0), MSVC rejected it: accepted.
+        addEdge("n real underflow", NOTATION, "r1e-999", 1, LLSD(0.0));
         add("n real denormal", NOTATION, "r5e-324");
         add("n real sign only", NOTATION, "r-");
         add("n real empty", NOTATION, "r");
         add("n real trailing dot", NOTATION, "r1.");
         add("n real negative", NOTATION, "r-0.25");
         add("n real plus", NOTATION, "r+0.25");
-        add("n real hex", NOTATION, "r0x1p3");
+        // MSVC's extraction reads hex floats, glibc's stops at the x: read.
+        addEdge("n real hex", NOTATION, "r0x1p3", 1, LLSD(8.0));
         add("n real precise", NOTATION, "r0.1000000000000000055511151");
         add("n real long", NOTATION, "r123456789012345678901234567890");
         add("n map dangling key", NOTATION, "{'a'}");
@@ -735,7 +753,8 @@ namespace llsd_corpus
             add("x real leading space" + sfx, XML, "<llsd><real> 1.5</real></llsd>", UNLIMITED, -1, l);
             add("x real inf" + sfx, XML, "<llsd><real>inf</real></llsd>", UNLIMITED, -1, l);
             add("x real nan" + sfx, XML, "<llsd><real>nan</real></llsd>", UNLIMITED, -1, l);
-            add("x real overflow" + sfx, XML, "<llsd><real>1e999</real></llsd>", UNLIMITED, -1, l);
+            // MSVC stores infinity for an overflowing extraction, glibc DBL_MAX: infinity.
+            addEdge("x real overflow" + sfx, XML, "<llsd><real>1e999</real></llsd>", 1, LLSD(std::numeric_limits<F64>::infinity()), l);
             add("x real underflow" + sfx, XML, "<llsd><real>1e-999</real></llsd>", UNLIMITED, -1, l);
             add("x real neg zero" + sfx, XML, "<llsd><real>-0</real></llsd>", UNLIMITED, -1, l);
             add("x real exp" + sfx, XML, "<llsd><real>2.5e3</real></llsd>", UNLIMITED, -1, l);

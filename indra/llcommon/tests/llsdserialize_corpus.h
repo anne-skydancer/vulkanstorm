@@ -49,10 +49,16 @@ namespace llsd_corpus
         llssize max_bytes;   // LLSDSerialize::SIZE_UNLIMITED or a budget
         S32 max_depth;       // -1 unlimited
         bool lines;          // XML parseLines() instead of parse()
+        /// A C-runtime edge where the oracle's answer depends on the platform
+        /// (MSVC vs glibc); the product has one behaviour, stated here.
+        bool runtime_edge = false;
+        S32 edge_count = 0;
+        LLSD edge_value;
     };
 
     /// Serialized inputs, valid and malformed, with the limits to parse them
-    /// under. Expected results come from the oracle, not from this table.
+    /// under. Expected results come from the oracle, not from this table,
+    /// except for the runtime edges, which carry the product's expectation.
     std::vector<ParseCase> parseCases();
 
     /// Bit-exact LLSD equality (reals and dates compared as bits, so NaN
