@@ -35,7 +35,9 @@
 #include "llmessagetemplateparser.h"
 #include "lltemplatemessagebuilder.h"
 #include "lltemplatemessagereader.h"
+#include "llerrorcontrol.h"
 #include "message.h"
+#include "message_prehash.h"
 #include "llmath.h"
 #include "llquaternion.h"
 #include "lluuid.h"
@@ -54,6 +56,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <functional>
 #include <limits>
 #include <map>
 #include <sstream>
@@ -1727,7 +1730,7 @@ namespace tut
     {
         set_test_name("template parser parity");
         Corpus& c = corpus();
-        if (g_recording) return; // the oracle does not have the stated behaviours
+        if (g_recording || getenv("VKS_MSG_BENCH")) return; // the oracle does not have the stated behaviours; a timing run is not a parity run
         TemplateSet& ts = templates();
         Mismatches m;
         m.eq<F32>("version", c.version, ts.version);
@@ -1773,7 +1776,7 @@ namespace tut
     {
         set_test_name("builder parity");
         Corpus& c = corpus();
-        if (g_recording) return; // the oracle does not have the stated behaviours
+        if (g_recording || getenv("VKS_MSG_BENCH")) return; // the oracle does not have the stated behaviours; a timing run is not a parity run
         TemplateSet& ts = templates();
         Mismatches m;
         LLTemplateMessageBuilder builder(ts.name_map);
@@ -1821,7 +1824,7 @@ namespace tut
     {
         set_test_name("reader parity");
         Corpus& c = corpus();
-        if (g_recording) return; // the oracle does not have the stated behaviours
+        if (g_recording || getenv("VKS_MSG_BENCH")) return; // the oracle does not have the stated behaviours; a timing run is not a parity run
         TemplateSet& ts = templates();
         Mismatches m;
         LLTemplateMessageReader reader(ts.number_map);
@@ -1883,7 +1886,7 @@ namespace tut
     {
         set_test_name("zero-code expansion parity");
         Corpus& c = corpus();
-        if (g_recording) return; // the oracle does not have the stated behaviours
+        if (g_recording || getenv("VKS_MSG_BENCH")) return; // the oracle does not have the stated behaviours; a timing run is not a parity run
         Mismatches m;
         for (size_t i = 0; i < c.expands.size(); ++i)
         {
@@ -1909,7 +1912,7 @@ namespace tut
     {
         set_test_name("data packer parity");
         Corpus& c = corpus();
-        if (g_recording) return; // the oracle does not have the stated behaviours
+        if (g_recording || getenv("VKS_MSG_BENCH")) return; // the oracle does not have the stated behaviours; a timing run is not a parity run
         Mismatches m;
         for (size_t i = 0; i < c.packers.size(); ++i)
         {
@@ -1932,6 +1935,289 @@ namespace tut
         m.report("data packers");
     }
 
+    // Representative packets, built with the viewer's own builder (no real
+    // session: nothing is captured without logging in, so the payloads are
+    // constructed; see doc/rust_port.md). ObjectUpdate: RegionData and four
+    // ObjectData repeats of a typical prim (one with hover text and name
+    // values, one with two textures), AgentUpdate with a moving agent.
+    struct PacketSet
+    {
+        std::vector<U8> object_update;
+        std::vector<U8> object_update_coded;
+        std::vector<U8> agent_update;
+    };
+
+    void rng_uuid(Rng& rng, LLUUID& id)
+    {
+        for (S32 i = 0; i < 16; ++i) id.mData[i] = rng.byte();
+    }
+
+    // A TextureEntry field as LLPrimitive::packTEField writes it for faces
+    // that all share one value, or with face 0 differing.
+    void te_field(std::vector<U8>& out, const U8* value, S32 size, const U8* face0 = NULL)
+    {
+        out.insert(out.end(), value, value + size);
+        if (face0)
+        {
+            out.push_back(0x01); // exception bitmask: face 0
+            out.insert(out.end(), face0, face0 + size);
+        }
+        out.push_back(0);
+    }
+
+    std::vector<U8> texture_entry(Rng& rng, bool two_textures)
+    {
+        std::vector<U8> te;
+        LLUUID image; rng_uuid(rng, image);
+        LLUUID image0; rng_uuid(rng, image0);
+        te_field(te, image.mData, 16, two_textures ? image0.mData : NULL);
+        U8 colors[4] = { 0, 0, 0, 0 }; // white, sent as 255 - component
+        te_field(te, colors, 4);
+        F32 one = 1.f;
+        te_field(te, (U8*)&one, 4);
+        te_field(te, (U8*)&one, 4);
+        S16 zero16 = 0;
+        te_field(te, (U8*)&zero16, 2);
+        te_field(te, (U8*)&zero16, 2);
+        te_field(te, (U8*)&zero16, 2);
+        U8 bump = 0, media = 0, glow = 0;
+        te_field(te, &bump, 1);
+        te_field(te, &media, 1);
+        te_field(te, &glow, 1);
+        LLUUID material; // null for most prims
+        te.insert(te.end(), material.mData, material.mData + 16);
+        return te;
+    }
+
+    PacketSet build_packets(LLTemplateMessageBuilder& builder)
+    {
+        PacketSet ps;
+        Rng rng(20261020);
+        builder.newMessage(_PREHASH_ObjectUpdate);
+        builder.nextBlock(_PREHASH_RegionData);
+        builder.addU64(_PREHASH_RegionHandle, ((U64)256000 << 32) | 256256);
+        builder.addU16(_PREHASH_TimeDilation, 65535);
+        for (S32 i = 0; i < 4; ++i)
+        {
+            builder.nextBlock(_PREHASH_ObjectData);
+            builder.addU32(_PREHASH_ID, 1000000 + rng.next() % 100000);
+            builder.addU8(_PREHASH_State, 0);
+            LLUUID full; rng_uuid(rng, full);
+            builder.addUUID(_PREHASH_FullID, full);
+            builder.addU32(_PREHASH_CRC, rng.next());
+            builder.addU8(_PREHASH_PCode, 9); // PCODE_VOLUME
+            builder.addU8(_PREHASH_Material, 3);
+            builder.addU8(_PREHASH_ClickAction, 0);
+            builder.addVector3(_PREHASH_Scale, LLVector3(0.5f + i * 0.25f, 0.5f, 1.f + i));
+            // position, velocity, acceleration, rotation, angular velocity
+            F32 od[15] = { 128.5f + i * 2.f, 130.25f, 22.75f, 0, 0, 0, 0, 0, 0, 0, 0, 0.70710677f, 0, 0, 0 };
+            if (i == 1) { od[3] = 0.5f; od[4] = -0.25f; }
+            builder.addBinaryData(_PREHASH_ObjectData, od, sizeof(od));
+            builder.addU32(_PREHASH_ParentID, i == 3 ? 1000000 + 7 : 0);
+            builder.addU32(_PREHASH_UpdateFlags, 0x00080000 | (i == 0 ? 0x00000080 : 0));
+            builder.addU8(_PREHASH_PathCurve, 16);
+            builder.addU8(_PREHASH_ProfileCurve, 1);
+            builder.addU16(_PREHASH_PathBegin, 0);
+            builder.addU16(_PREHASH_PathEnd, 0);
+            builder.addU8(_PREHASH_PathScaleX, 100);
+            builder.addU8(_PREHASH_PathScaleY, 100);
+            builder.addU8(_PREHASH_PathShearX, 0);
+            builder.addU8(_PREHASH_PathShearY, 0);
+            builder.addS8(_PREHASH_PathTwist, 0);
+            builder.addS8(_PREHASH_PathTwistBegin, 0);
+            builder.addS8(_PREHASH_PathRadiusOffset, 0);
+            builder.addS8(_PREHASH_PathTaperX, 0);
+            builder.addS8(_PREHASH_PathTaperY, 0);
+            builder.addU8(_PREHASH_PathRevolutions, 0);
+            builder.addS8(_PREHASH_PathSkew, 0);
+            builder.addU16(_PREHASH_ProfileBegin, 0);
+            builder.addU16(_PREHASH_ProfileEnd, 0);
+            builder.addU16(_PREHASH_ProfileHollow, i == 2 ? 25000 : 0);
+            std::vector<U8> te = texture_entry(rng, i == 2);
+            builder.addBinaryData(_PREHASH_TextureEntry, te.data(), (S32)te.size());
+            U8 anim[16] = { 0 };
+            builder.addBinaryData(_PREHASH_TextureAnim, anim, i == 1 ? 16 : 0);
+            if (i == 3)
+            {
+                builder.addString(_PREHASH_NameValue, "AttachItemID STRING RW SV 4f3ea7f8-5d61-4c7e-9a52-0b2f6e8d1c3a\nAttachmentOrientation VEC3 RW DS 0, 0, 0");
+                builder.addBinaryData(_PREHASH_Data, NULL, 0);
+                builder.addString(_PREHASH_Text, "Hover text");
+                U8 color[4] = { 255, 255, 255, 255 };
+                builder.addBinaryData(_PREHASH_TextColor, color, 4);
+            }
+            else
+            {
+                builder.addBinaryData(_PREHASH_NameValue, NULL, 0);
+                builder.addBinaryData(_PREHASH_Data, NULL, 0);
+                builder.addBinaryData(_PREHASH_Text, NULL, 0);
+                U8 color[4] = { 0, 0, 0, 0 };
+                builder.addBinaryData(_PREHASH_TextColor, color, 4);
+            }
+            builder.addBinaryData(_PREHASH_MediaURL, NULL, 0);
+            builder.addBinaryData(_PREHASH_PSBlock, NULL, 0);
+            U8 extra = 0; // no extra parameters: a count of zero
+            builder.addBinaryData(_PREHASH_ExtraParams, &extra, 1);
+            builder.addUUID(_PREHASH_Sound, LLUUID::null);
+            builder.addUUID(_PREHASH_OwnerID, LLUUID::null);
+            builder.addF32(_PREHASH_Gain, 0.f);
+            builder.addU8(_PREHASH_Flags, 0);
+            builder.addF32(_PREHASH_Radius, 0.f);
+            builder.addU8(_PREHASH_JointType, 0);
+            builder.addVector3(_PREHASH_JointPivot, LLVector3::zero);
+            builder.addVector3(_PREHASH_JointAxisOrAnchor, LLVector3::zero);
+        }
+        std::vector<U8> buffer(MAX_BUFFER_SIZE, 0);
+        U32 len = builder.buildMessage(buffer.data(), MAX_BUFFER_SIZE, 0);
+        ps.object_update.assign(buffer.begin(), buffer.begin() + len);
+        U8* cptr = buffer.data();
+        U32 clen = len;
+        builder.compressMessage(cptr, clen);
+        ps.object_update_coded.assign(cptr, cptr + clen);
+
+        builder.newMessage(_PREHASH_AgentUpdate);
+        builder.nextBlock(_PREHASH_AgentData);
+        LLUUID agent; rng_uuid(rng, agent);
+        LLUUID session; rng_uuid(rng, session);
+        builder.addUUID(_PREHASH_AgentID, agent);
+        builder.addUUID(_PREHASH_SessionID, session);
+        LLQuaternion body(0.f, 0.f, 0.38268343f, 0.92387953f);
+        LLQuaternion head(0.05f, 0.f, 0.38268343f, 0.92387953f);
+        head.normalize();
+        builder.addQuat(_PREHASH_BodyRotation, body);
+        builder.addQuat(_PREHASH_HeadRotation, head);
+        builder.addU8(_PREHASH_State, 0);
+        builder.addVector3(_PREHASH_CameraCenter, LLVector3(128.3f, 130.1f, 24.9f));
+        builder.addVector3(_PREHASH_CameraAtAxis, LLVector3(0.70710677f, 0.70710677f, 0.f));
+        builder.addVector3(_PREHASH_CameraLeftAxis, LLVector3(-0.70710677f, 0.70710677f, 0.f));
+        builder.addVector3(_PREHASH_CameraUpAxis, LLVector3(0.f, 0.f, 1.f));
+        builder.addF32(_PREHASH_Far, 128.f);
+        builder.addU32(_PREHASH_ControlFlags, 0x00000001); // AGENT_CONTROL_AT_POS
+        builder.addU8(_PREHASH_Flags, 0);
+        len = builder.buildMessage(buffer.data(), MAX_BUFFER_SIZE, 0);
+        ps.agent_update.assign(buffer.begin(), buffer.begin() + len);
+        return ps;
+    }
+
+    // The getters the viewer's ObjectUpdate handler issues for a full
+    // update of a prim (LLViewerObjectList::processObjectUpdate,
+    // LLViewerObject::processUpdateMessage, LLVolumeMessage::unpackVolumeParams,
+    // LLPrimitive::unpackTEMessage), in that order.
+    U64 handler_getters(LLTemplateMessageReader& reader)
+    {
+        U64 sink = 0;
+        S32 num_objects = reader.getNumberOfBlocks(_PREHASH_ObjectData);
+        U64 region_handle; reader.getU64(_PREHASH_RegionData, _PREHASH_RegionHandle, region_handle);
+        U16 time_dilation; reader.getU16(_PREHASH_RegionData, _PREHASH_TimeDilation, time_dilation);
+        sink += region_handle + time_dilation;
+        U8 data[256];
+        U8 te[1024];
+        std::string s;
+        for (S32 i = 0; i < num_objects; ++i)
+        {
+            LLUUID fullid; reader.getUUID(_PREHASH_ObjectData, _PREHASH_FullID, fullid, i);
+            U32 local_id; reader.getU32(_PREHASH_ObjectData, _PREHASH_ID, local_id, i);
+            U8 pcode; reader.getU8(_PREHASH_ObjectData, _PREHASH_PCode, pcode, i);
+            U32 flags; reader.getU32(_PREHASH_ObjectData, _PREHASH_UpdateFlags, flags, i);
+            U32 crc; reader.getU32(_PREHASH_ObjectData, _PREHASH_CRC, crc, i);
+            U32 parent_id; reader.getU32(_PREHASH_ObjectData, _PREHASH_ParentID, parent_id, i);
+            LLUUID audio; reader.getUUID(_PREHASH_ObjectData, _PREHASH_Sound, audio, i);
+            LLUUID owner; reader.getUUID(_PREHASH_ObjectData, _PREHASH_OwnerID, owner, i);
+            F32 gain; reader.getF32(_PREHASH_ObjectData, _PREHASH_Gain, gain, i);
+            F32 cutoff; reader.getF32(_PREHASH_ObjectData, _PREHASH_Radius, cutoff, i);
+            U8 sound_flags; reader.getU8(_PREHASH_ObjectData, _PREHASH_Flags, sound_flags, i);
+            U8 material; reader.getU8(_PREHASH_ObjectData, _PREHASH_Material, material, i);
+            U8 click; reader.getU8(_PREHASH_ObjectData, _PREHASH_ClickAction, click, i);
+            LLVector3 scale; reader.getVector3(_PREHASH_ObjectData, _PREHASH_Scale, scale, i);
+            S32 length = reader.getSize(_PREHASH_ObjectData, i, _PREHASH_ObjectData);
+            reader.getBinaryData(_PREHASH_ObjectData, _PREHASH_ObjectData, data, length, i, 256);
+            U8 u8v; U16 u16v; S8 s8v;
+            reader.getU8(_PREHASH_ObjectData, _PREHASH_ProfileCurve, u8v, i); sink += u8v;
+            reader.getU16(_PREHASH_ObjectData, _PREHASH_ProfileBegin, u16v, i); sink += u16v;
+            reader.getU16(_PREHASH_ObjectData, _PREHASH_ProfileEnd, u16v, i); sink += u16v;
+            reader.getU16(_PREHASH_ObjectData, _PREHASH_ProfileHollow, u16v, i); sink += u16v;
+            reader.getU8(_PREHASH_ObjectData, _PREHASH_PathCurve, u8v, i); sink += u8v;
+            reader.getU16(_PREHASH_ObjectData, _PREHASH_PathBegin, u16v, i); sink += u16v;
+            reader.getU16(_PREHASH_ObjectData, _PREHASH_PathEnd, u16v, i); sink += u16v;
+            reader.getU8(_PREHASH_ObjectData, _PREHASH_PathScaleX, u8v, i); sink += u8v;
+            reader.getU8(_PREHASH_ObjectData, _PREHASH_PathScaleY, u8v, i); sink += u8v;
+            reader.getS8(_PREHASH_ObjectData, _PREHASH_PathShearX, s8v, i); sink += s8v;
+            reader.getS8(_PREHASH_ObjectData, _PREHASH_PathShearY, s8v, i); sink += s8v;
+            reader.getS8(_PREHASH_ObjectData, _PREHASH_PathTwist, s8v, i); sink += s8v;
+            reader.getS8(_PREHASH_ObjectData, _PREHASH_PathTwistBegin, s8v, i); sink += s8v;
+            reader.getS8(_PREHASH_ObjectData, _PREHASH_PathRadiusOffset, s8v, i); sink += s8v;
+            reader.getS8(_PREHASH_ObjectData, _PREHASH_PathTaperX, s8v, i); sink += s8v;
+            reader.getS8(_PREHASH_ObjectData, _PREHASH_PathTaperY, s8v, i); sink += s8v;
+            reader.getU8(_PREHASH_ObjectData, _PREHASH_PathRevolutions, u8v, i); sink += u8v;
+            reader.getS8(_PREHASH_ObjectData, _PREHASH_PathSkew, s8v, i); sink += s8v;
+            S32 te_size = reader.getSize(_PREHASH_ObjectData, i, _PREHASH_TextureEntry);
+            reader.getBinaryData(_PREHASH_ObjectData, _PREHASH_TextureEntry, te, 0, i, 1023);
+            reader.getU32(_PREHASH_ObjectData, _PREHASH_UpdateFlags, flags, i);
+            U8 state; reader.getU8(_PREHASH_ObjectData, _PREHASH_State, state, i);
+            S32 nv_size = reader.getSize(_PREHASH_ObjectData, i, _PREHASH_NameValue);
+            if (nv_size > 0) reader.getString(_PREHASH_ObjectData, _PREHASH_NameValue, s, i);
+            S32 data_size = reader.getSize(_PREHASH_ObjectData, i, _PREHASH_Data);
+            if (data_size > 0) reader.getBinaryData(_PREHASH_ObjectData, _PREHASH_Data, data, data_size, i);
+            S32 text_size = reader.getSize(_PREHASH_ObjectData, i, _PREHASH_Text);
+            if (text_size > 0)
+            {
+                reader.getString(_PREHASH_ObjectData, _PREHASH_Text, s, i);
+                reader.getBinaryData(_PREHASH_ObjectData, _PREHASH_TextColor, data, 4, i);
+            }
+            reader.getString(_PREHASH_ObjectData, _PREHASH_MediaURL, s, i);
+            S32 ps_size = reader.getSize(_PREHASH_ObjectData, i, _PREHASH_PSBlock);
+            if (ps_size > 0) reader.getBinaryData(_PREHASH_ObjectData, _PREHASH_PSBlock, data, ps_size, i);
+            S32 ep_size = reader.getSize(_PREHASH_ObjectData, i, _PREHASH_ExtraParams);
+            if (ep_size > 0) reader.getBinaryData(_PREHASH_ObjectData, _PREHASH_ExtraParams, data, ep_size, i);
+            S32 anim_size = reader.getSize(_PREHASH_ObjectData, i, _PREHASH_TextureAnim);
+            if (anim_size > 0) reader.getBinaryData(_PREHASH_ObjectData, _PREHASH_TextureAnim, data, anim_size, i);
+            sink += local_id + pcode + flags + crc + parent_id + (U64)gain + (U64)cutoff + sound_flags + material + click + (U64)scale.mV[0]
+                + data[0] + te[0] + te_size + state + nv_size + data_size + text_size + ps_size + ep_size + anim_size + fullid.mData[0] + audio.mData[0] + owner.mData[0];
+        }
+        return sink;
+    }
+
+    // What the pre-port C++ reader built for every packet: an LLMsgData with
+    // a block object per repeat, an indexed vector of variables per block
+    // and a heap copy per variable. Timed here through the same public
+    // classes on both builds, from a walk of the template over the packet,
+    // so the data structure's own cost is visible.
+    LLMsgData* build_msgdata(const LLMessageTemplate* t, const U8* buffer, S32 size)
+    {
+        S32 pos = LL_PACKET_ID_SIZE + (S32)t->mFrequency + buffer[PHL_OFFSET];
+        LLMsgData* md = new LLMsgData(t->mName);
+        for (LLMessageTemplate::message_block_map_t::const_iterator bit = t->mMemberBlocks.begin(); bit != t->mMemberBlocks.end(); ++bit)
+        {
+            const LLMessageBlock* b = *bit;
+            U8 repeat = b->mType == MBT_SINGLE ? 1 : (b->mType == MBT_MULTIPLE ? (U8)b->mNumber : (pos < size ? buffer[pos++] : 0));
+            for (S32 r = 0; r < repeat; ++r)
+            {
+                LLMsgBlkData* blk = new LLMsgBlkData(b->mName, repeat);
+                blk->mName = b->mName + r;
+                md->addBlock(blk);
+                for (LLMessageBlock::message_variable_map_t::const_iterator vit = b->mMemberVariables.begin(); vit != b->mMemberVariables.end(); ++vit)
+                {
+                    const LLMessageVariable* var = *vit;
+                    blk->addVariable(var->getName(), var->getType());
+                    S32 n = var->getSize();
+                    if (var->getType() == MVT_VARIABLE)
+                    {
+                        U32 tsize = 0;
+                        if (n == 1) tsize = buffer[pos]; else if (n == 2) { U16 v; memcpy(&v, &buffer[pos], 2); tsize = v; } else { memcpy(&tsize, &buffer[pos], 4); }
+                        pos += n;
+                        blk->addData(var->getName(), &buffer[pos], tsize, var->getType());
+                        pos += tsize;
+                    }
+                    else
+                    {
+                        blk->addData(var->getName(), &buffer[pos], n, var->getType());
+                        pos += n;
+                    }
+                }
+            }
+        }
+        return md;
+    }
+
     // timing of the hot paths, only when asked for (VKS_MSG_BENCH=<iterations>)
     template<> template<>
     void object::test<6>()
@@ -1941,169 +2227,179 @@ namespace tut
         if (!bench || !*bench) return;
         S32 iterations = atoi(bench);
         if (iterations <= 0) iterations = 20000;
+        // The test runner logs at LEVEL_DEBUG; the viewer runs at LEVEL_INFO.
+        // Time at the viewer's level: the pre-port reader has an LL_DEBUGS
+        // per template block, and formatting it is the runner's cost, not
+        // the viewer's.
+        LLError::setDefaultLevel(LLError::LEVEL_INFO);
         ensure_message_system();
         install_exception_counter();
         TemplateSet& ts = templates();
-        LLMessageTemplate* object_update = ts.name_map[LLMessageStringTable::getInstance()->getString("ObjectUpdate")];
-        LLMessageTemplate* agent_update = ts.name_map[LLMessageStringTable::getInstance()->getString("AgentUpdate")];
+        LLMessageTemplate* object_update = ts.name_map[_PREHASH_ObjectUpdate];
+        LLMessageTemplate* agent_update = ts.name_map[_PREHASH_AgentUpdate];
         ensure("ObjectUpdate and AgentUpdate present", object_update && agent_update);
 
-        // an ObjectUpdate of about 1 KB: RegionData and three ObjectData repeats
         LLTemplateMessageBuilder builder(ts.name_map);
-        auto fill = [&](LLMessageTemplate* t, S32 repeats_of_variable, S32 var_len)
+        PacketSet ps = build_packets(builder);
+        const char* packets_out = getenv("VKS_MSG_PACKETS_OUT");
+        if (packets_out && *packets_out)
         {
-            builder.newMessage(t->mName);
-            S32 bi = 0;
-            for (LLMessageTemplate::message_block_map_t::const_iterator bit = t->mMemberBlocks.begin(); bit != t->mMemberBlocks.end(); ++bit, ++bi)
-            {
-                const LLMessageBlock* b = *bit;
-                S32 repeats = b->mType == MBT_VARIABLE ? repeats_of_variable : (b->mType == MBT_MULTIPLE ? b->mNumber : 1);
-                for (S32 r = 0; r < repeats; ++r)
-                {
-                    builder.nextBlock(b->mName);
-                    S32 vi = 0;
-                    for (LLMessageBlock::message_variable_map_t::const_iterator vit = b->mMemberVariables.begin(); vit != b->mMemberVariables.end(); ++vit, ++vi)
-                    {
-                        const LLMessageVariable* var = *vit;
-                        S32 n = var->getType() == MVT_VARIABLE ? var_len : var->getSize();
-                        std::vector<U8> data(n);
-                        for (S32 i = 0; i < n; ++i) data[i] = ((i + vi) % 8 < 4 && var->getType() != MVT_VARIABLE) ? 0 : (U8)((i * 7 + vi + 3 * r) | (var->getType() == MVT_VARIABLE ? 1 : 0));
-                        builder.addBinaryData(var->getName(), data.empty() ? NULL : data.data(), n);
-                    }
-                }
-            }
-        };
-        fill(object_update, 3, 24);
-        std::vector<U8> packet(MAX_BUFFER_SIZE, 0);
-        U32 len = builder.buildMessage(packet.data(), MAX_BUFFER_SIZE, 0);
-        packet.resize(len);
+            std::ofstream a((std::string(packets_out) + "/objectupdate.bin").c_str(), std::ios::binary);
+            a.write((const char*)ps.object_update.data(), ps.object_update.size());
+            std::ofstream b((std::string(packets_out) + "/objectupdate_coded.bin").c_str(), std::ios::binary);
+            b.write((const char*)ps.object_update_coded.data(), ps.object_update_coded.size());
+            std::ofstream c((std::string(packets_out) + "/agentupdate.bin").c_str(), std::ios::binary);
+            c.write((const char*)ps.agent_update.data(), ps.agent_update.size());
+        }
+        const U32 len = (U32)ps.object_update.size();
+        std::vector<U8> buffer(MAX_BUFFER_SIZE, 0);
+        memcpy(buffer.data(), ps.object_update.data(), len);
         std::vector<U8> work(MAX_BUFFER_SIZE, 0);
-        memcpy(work.data(), packet.data(), len);
-        U8* cptr = work.data();
-        U32 clen = len;
-        builder.compressMessage(cptr, clen);
-        std::vector<U8> coded(cptr, cptr + clen);
+        LLTemplateMessageReader reader(ts.number_map);
 
         auto median = [](std::vector<double> v) { std::sort(v.begin(), v.end()); return v[v.size() / 2]; };
         typedef std::chrono::steady_clock clock;
-        std::vector<U8> buffer(MAX_BUFFER_SIZE, 0);
-        memcpy(buffer.data(), packet.data(), len);
-        LLTemplateMessageReader reader(ts.number_map);
-
-        std::vector<double> rounds;
-        for (S32 round = 0; round < 7; ++round)
+        auto time_it = [&](S32 reps, const std::function<void()>& f)
         {
-            clock::time_point start = clock::now();
-            for (S32 i = 0; i < iterations; ++i)
+            std::vector<double> rounds;
+            for (S32 round = 0; round < 7; ++round)
             {
-                reader.clearMessage();
-                reader.validateMessage(buffer.data(), (S32)len, LLHost(), false);
-                reader.readMessage(buffer.data(), LLHost());
+                clock::time_point start = clock::now();
+                for (S32 i = 0; i < reps; ++i) f();
+                rounds.push_back(std::chrono::duration<double, std::micro>(clock::now() - start).count() / reps);
             }
-            rounds.push_back(std::chrono::duration<double, std::micro>(clock::now() - start).count() / iterations);
-        }
-        double decode_us = median(rounds);
+            return median(rounds);
+        };
 
-        rounds.clear();
         U64 sink = 0;
-        for (S32 round = 0; round < 7; ++round)
+        // VKS_MSG_BENCH_ONLY=decode: only the validate+read loop, for a
+        // profiler to sample
+        const char* only = getenv("VKS_MSG_BENCH_ONLY");
+        if (only && std::string(only) == "decode")
         {
-            clock::time_point start = clock::now();
-            for (S32 i = 0; i < iterations; ++i)
+            double us = time_it(iterations * 5, [&]()
             {
                 reader.clearMessage();
                 reader.validateMessage(buffer.data(), (S32)len, LLHost(), false);
                 reader.readMessage(buffer.data(), LLHost());
-                for (LLMessageTemplate::message_block_map_t::const_iterator bit = object_update->mMemberBlocks.begin(); bit != object_update->mMemberBlocks.end(); ++bit)
-                {
-                    const LLMessageBlock* b = *bit;
-                    S32 n = reader.getNumberOfBlocks(b->mName);
-                    for (S32 r = 0; r < n; ++r)
-                    {
-                        for (LLMessageBlock::message_variable_map_t::const_iterator vit = b->mMemberVariables.begin(); vit != b->mMemberVariables.end(); ++vit)
-                        {
-                            const LLMessageVariable* var = *vit;
-                            S32 size = reader.getSize(b->mName, r, var->getName());
-                            U8 tmp[64];
-                            if (size > 0 && size <= 64) { reader.getBinaryData(b->mName, var->getName(), tmp, size, r); sink += tmp[0]; }
-                            sink += size;
-                        }
-                    }
-                }
-            }
-            rounds.push_back(std::chrono::duration<double, std::micro>(clock::now() - start).count() / iterations);
+            });
+            printf("decode only,%f\n", us);
+            return;
         }
-        double getters_us = median(rounds);
+        double validate_us = time_it(iterations, [&]()
+        {
+            reader.clearMessage();
+            reader.validateMessage(buffer.data(), (S32)len, LLHost(), false);
+        });
+        double decode_us = time_it(iterations, [&]()
+        {
+            reader.clearMessage();
+            reader.validateMessage(buffer.data(), (S32)len, LLHost(), false);
+            reader.readMessage(buffer.data(), LLHost());
+        });
+        double handler_us = time_it(iterations, [&]()
+        {
+            reader.clearMessage();
+            reader.validateMessage(buffer.data(), (S32)len, LLHost(), false);
+            reader.readMessage(buffer.data(), LLHost());
+            sink += handler_getters(reader);
+        });
+        reader.clearMessage();
+        reader.validateMessage(buffer.data(), (S32)len, LLHost(), false);
+        reader.readMessage(buffer.data(), LLHost());
+        double getters_only_us = time_it(iterations, [&]() { sink += handler_getters(reader); });
 
-        rounds.clear();
+        // the C++ data structure's own cost, same code on both builds
+        double msgdata_build_us = time_it(iterations, [&]()
+        {
+            LLMsgData* md = build_msgdata(object_update, buffer.data(), (S32)len);
+            sink += md->mMemberBlocks.size();
+            delete md;
+        });
+        // build and delete timed apart: 1000 live objects per round
+        std::vector<double> alloc_rounds, free_rounds;
         for (S32 round = 0; round < 7; ++round)
         {
+            std::vector<LLMsgData*> keep;
+            keep.reserve(1000);
             clock::time_point start = clock::now();
-            for (S32 i = 0; i < iterations; ++i)
-            {
-                memcpy(work.data(), coded.data(), coded.size());
-                U8* ptr = work.data();
-                S32 size = (S32)coded.size();
-                gMessageSystem->zeroCodeExpand(&ptr, &size);
-                sink += size;
-            }
-            rounds.push_back(std::chrono::duration<double, std::micro>(clock::now() - start).count() / iterations);
+            for (S32 i = 0; i < 1000; ++i) keep.push_back(build_msgdata(object_update, buffer.data(), (S32)len));
+            alloc_rounds.push_back(std::chrono::duration<double, std::micro>(clock::now() - start).count() / 1000);
+            start = clock::now();
+            for (size_t i = 0; i < keep.size(); ++i) delete keep[i];
+            free_rounds.push_back(std::chrono::duration<double, std::micro>(clock::now() - start).count() / 1000);
         }
-        double expand_us = median(rounds);
+        double msgdata_alloc_us = median(alloc_rounds);
+        double msgdata_free_us = median(free_rounds);
 
-        rounds.clear();
+        double expand_us = time_it(iterations, [&]()
+        {
+            memcpy(work.data(), ps.object_update_coded.data(), ps.object_update_coded.size());
+            U8* ptr = work.data();
+            S32 size = (S32)ps.object_update_coded.size();
+            gMessageSystem->zeroCodeExpand(&ptr, &size);
+            sink += size;
+        });
+
         std::vector<U8> out(MAX_BUFFER_SIZE, 0);
-        for (S32 round = 0; round < 7; ++round)
+        double pack_us = time_it(iterations, [&]()
         {
-            clock::time_point start = clock::now();
-            for (S32 i = 0; i < iterations; ++i)
-            {
-                fill(agent_update, 1, 0);
-                U32 n = builder.buildMessage(out.data(), MAX_BUFFER_SIZE, 0);
-                U8* ptr = out.data();
-                U32 l = n;
-                builder.compressMessage(ptr, l);
-                sink += l;
-            }
-            rounds.push_back(std::chrono::duration<double, std::micro>(clock::now() - start).count() / iterations);
-        }
-        double pack_us = median(rounds);
+            PacketSet one;
+            // the AgentUpdate half of build_packets
+            builder.newMessage(_PREHASH_AgentUpdate);
+            builder.nextBlock(_PREHASH_AgentData);
+            builder.addUUID(_PREHASH_AgentID, LLUUID("5f0d8a8e-4c53-4a3b-9c8e-1f2a3b4c5d6e"));
+            builder.addUUID(_PREHASH_SessionID, LLUUID("9a7b6c5d-4e3f-4a1b-8c9d-0e1f2a3b4c5d"));
+            builder.addQuat(_PREHASH_BodyRotation, LLQuaternion(0.f, 0.f, 0.38268343f, 0.92387953f));
+            builder.addQuat(_PREHASH_HeadRotation, LLQuaternion(0.05f, 0.f, 0.38268343f, 0.92387953f));
+            builder.addU8(_PREHASH_State, 0);
+            builder.addVector3(_PREHASH_CameraCenter, LLVector3(128.3f, 130.1f, 24.9f));
+            builder.addVector3(_PREHASH_CameraAtAxis, LLVector3(0.70710677f, 0.70710677f, 0.f));
+            builder.addVector3(_PREHASH_CameraLeftAxis, LLVector3(-0.70710677f, 0.70710677f, 0.f));
+            builder.addVector3(_PREHASH_CameraUpAxis, LLVector3(0.f, 0.f, 1.f));
+            builder.addF32(_PREHASH_Far, 128.f);
+            builder.addU32(_PREHASH_ControlFlags, 0x00000001);
+            builder.addU8(_PREHASH_Flags, 0);
+            U32 n = builder.buildMessage(out.data(), MAX_BUFFER_SIZE, 0);
+            U8* ptr = out.data();
+            U32 l = n;
+            builder.compressMessage(ptr, l);
+            sink += l;
+        });
 
         // the binary data packer: a TextureEntry-like sequence of 50 values
-        rounds.clear();
         std::vector<U8> dpbuf(4096);
-        for (S32 round = 0; round < 7; ++round)
+        double dp_us = time_it(iterations, [&]()
         {
-            clock::time_point start = clock::now();
-            for (S32 i = 0; i < iterations; ++i)
+            LLDataPackerBinaryBuffer dp(dpbuf.data(), (S32)dpbuf.size());
+            for (S32 k = 0; k < 10; ++k)
             {
-                LLDataPackerBinaryBuffer dp(dpbuf.data(), (S32)dpbuf.size());
-                for (S32 k = 0; k < 10; ++k)
-                {
-                    dp.packUUID(LLUUID::null, "id");
-                    dp.packColor4U(LLColor4U(1, 2, 3, 4), "c");
-                    dp.packF32(1.5f, "f");
-                    dp.packU8((U8)k, "u");
-                    dp.packS16((S16)-k, "s");
-                }
-                LLDataPackerBinaryBuffer up(dpbuf.data(), dp.getCurrentSize());
-                for (S32 k = 0; k < 10; ++k)
-                {
-                    LLUUID id; LLColor4U c; F32 f; U8 u; S16 s;
-                    up.unpackUUID(id, "id"); up.unpackColor4U(c, "c"); up.unpackF32(f, "f"); up.unpackU8(u, "u"); up.unpackS16(s, "s");
-                    sink += u;
-                }
+                dp.packUUID(LLUUID::null, "id");
+                dp.packColor4U(LLColor4U(1, 2, 3, 4), "c");
+                dp.packF32(1.5f, "f");
+                dp.packU8((U8)k, "u");
+                dp.packS16((S16)-k, "s");
             }
-            rounds.push_back(std::chrono::duration<double, std::micro>(clock::now() - start).count() / iterations);
-        }
-        double dp_us = median(rounds);
+            LLDataPackerBinaryBuffer up(dpbuf.data(), dp.getCurrentSize());
+            for (S32 k = 0; k < 10; ++k)
+            {
+                LLUUID id; LLColor4U c; F32 f; U8 u; S16 s;
+                up.unpackUUID(id, "id"); up.unpackColor4U(c, "c"); up.unpackF32(f, "f"); up.unpackU8(u, "u"); up.unpackS16(s, "s");
+                sink += u;
+            }
+        });
 
         std::ostringstream table;
         table << "\nVKS_MSG_BENCH iterations=" << iterations << " (median of 7 rounds, microseconds per operation; sink " << sink << ")\n";
+        table << "unpack ObjectUpdate " << len << " B (validate only)," << validate_us << "\n";
         table << "unpack ObjectUpdate " << len << " B (validate+read)," << decode_us << "\n";
-        table << "unpack ObjectUpdate " << len << " B (validate+read+every getter)," << getters_us << "\n";
-        table << "zero-code expand ObjectUpdate " << coded.size() << " B," << expand_us << "\n";
-        table << "pack AgentUpdate (new+add+build+compress)," << pack_us << "\n";
+        table << "unpack ObjectUpdate " << len << " B (validate+read+handler getters)," << handler_us << "\n";
+        table << "ObjectUpdate handler getters only," << getters_only_us << "\n";
+        table << "LLMsgData build+delete of ObjectUpdate (C++ data structure)," << msgdata_build_us << "\n";
+        table << "LLMsgData build only (allocations)," << msgdata_alloc_us << "\n";
+        table << "LLMsgData delete only," << msgdata_free_us << "\n";
+        table << "zero-code expand ObjectUpdate " << ps.object_update_coded.size() << " B," << expand_us << "\n";
+        table << "pack AgentUpdate " << ps.agent_update.size() << " B (new+add+build+compress)," << pack_us << "\n";
         table << "binary data packer 50 pack + 50 unpack," << dp_us << "\n";
         LL_INFOS() << table.str() << LL_ENDL;
         printf("%s", table.str().c_str());
