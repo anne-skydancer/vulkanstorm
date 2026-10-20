@@ -205,14 +205,57 @@ public:
 
     /*virtual*/ void dumpBufferToLog();
 protected:
-    inline void warnLength(const S32 data_size, const char *name);
-    bool packBytes(const void* value, S32 size, const char* name);
-    bool unpackBytes(void* value, S32 size, const char* name);
+    inline bool verifyLength(const S32 data_size, const char *name);
+    inline bool packBytes(const void* value, S32 size, const char* name);
+    inline bool unpackBytes(void* value, S32 size, const char* name);
 
     U8 *mBufferp;
     U8 *mCurBufferp;
     S32 mBufferSize;
 };
+
+inline bool LLDataPackerBinaryBuffer::verifyLength(const S32 data_size, const char *name)
+{
+    if (mWriteEnabled && (mCurBufferp - mBufferp) > mBufferSize - data_size)
+    {
+        LL_WARNS() << "Buffer overflow in BinaryBuffer length verify, field name " << name << "!" << LL_ENDL;
+        LL_WARNS() << "Current pos: " << (int)(mCurBufferp - mBufferp) << " Buffer size: " << mBufferSize << " Data size: " << data_size << LL_ENDL;
+        return false;
+    }
+
+    return true;
+}
+
+// The fixed-size values stay an inline bounds check and copy: measured, a
+// call into the crate per 4-byte field costs more than the copy itself
+// (see doc/rust_port.md). Strings, sized binary data and the fixed-point
+// conversion go through the crate.
+inline bool LLDataPackerBinaryBuffer::packBytes(const void* value, S32 size, const char* name)
+{
+    if (!verifyLength(size, name))
+    {
+        return false;
+    }
+    if (mWriteEnabled)
+    {
+        memcpy(mCurBufferp, value, size);
+    }
+    mCurBufferp += size;
+    return true;
+}
+
+// Reads are bounds-checked whether or not writes are enabled (the C++ read
+// past a measuring packer's buffer).
+inline bool LLDataPackerBinaryBuffer::unpackBytes(void* value, S32 size, const char* name)
+{
+    if (!verifyLength(size, name) || !mBufferp || mCurBufferp < mBufferp || (mCurBufferp - mBufferp) > mBufferSize - size)
+    {
+        return false;
+    }
+    memcpy(value, mCurBufferp, size);
+    mCurBufferp += size;
+    return true;
+}
 
 class LLDataPackerAsciiBuffer : public LLDataPacker
 {
