@@ -32,6 +32,7 @@
 #include <stdint.h>
 #endif
 #include <cmath>
+#include <cstddef>
 #include <unordered_map>
 
 #include "llerror.h"
@@ -60,6 +61,10 @@
 // and the path point layout are shared with the crate.
 static_assert(sizeof(LLPath::PathPt) == sizeof(VksPathPt), "LLPath::PathPt layout is shared with vkstorm-volume");
 static_assert(sizeof(LLVector4a) == 4 * sizeof(float), "LLVector4a layout is shared with vkstorm-volume");
+// The face result's vectors are read with aligned loads: they sit at 16-byte
+// offsets and the local record is aligned where it is declared.
+static_assert(offsetof(VksFaceResult, extents_min) == 0 && offsetof(VksFaceResult, extents_max) == 16 && offsetof(VksFaceResult, center) == 32,
+              "VksFaceResult vectors must be at 16-byte offsets for load4a");
 
 namespace
 {
@@ -4287,6 +4292,8 @@ bool LLVolumeFace::create(LLVolume* volume, bool partial_build)
 
     S32 num_vertices = 0;
     S32 num_indices = 0;
+    bool fresh_vertices = false;
+    bool fresh_indices = false;
     switch (vks_volume_face_sizes(&p, &num_vertices, &num_indices))
     {
     case VKS_FACE_SIDE:
@@ -4295,23 +4302,41 @@ bool LLVolumeFace::create(LLVolume* volume, bool partial_build)
         {
             resizeVertices(num_vertices);
             resizeIndices(num_indices);
+            fresh_vertices = fresh_indices = true;
         }
         break;
     case VKS_FACE_CAP:
         resizeVertices(num_vertices);
         resizeIndices(num_indices);
+        fresh_vertices = fresh_indices = true;
         partial_build = false;
         break;
     case VKS_FACE_UNCUT_CUBE_CAP:
         resizeVertices(num_vertices);
+        fresh_vertices = true;
         if (!partial_build)
         {
             resizeIndices(num_indices);
+            fresh_indices = true;
         }
         break;
     default:
         LL_WARNS() << "LLVolumeFace::create: the mesher rejected the face" << LL_ENDL;
         return false;
+    }
+
+    // The mesher forms slices over these buffers before it writes them, so
+    // freshly allocated storage is zeroed first (positions, normals and the
+    // padded texture coordinates are one block); a partial rebuild keeps the
+    // data it has.
+    if (fresh_vertices && mPositions)
+    {
+        const size_t tc_size = ((mNumVertices * sizeof(LLVector2)) + 0xF) & ~0xF;
+        memset(mPositions, 0, sizeof(LLVector4a) * 2 * mNumVertices + tc_size);
+    }
+    if (fresh_indices && mIndices)
+    {
+        memset(mIndices, 0, ((mNumIndices * sizeof(U16)) + 0xF) & ~0xF);
     }
 
     LL_CHECK_MEMORY
@@ -4325,7 +4350,7 @@ bool LLVolumeFace::create(LLVolume* volume, bool partial_build)
     b.num_indices = mNumIndices;
     b.write_indices = !partial_build;
 
-    VksFaceResult r;
+    alignas(16) VksFaceResult r;
     if (vks_volume_face_build(&p, &b, &r) != 1)
     {
         LL_WARNS() << "LLVolumeFace::create: the mesher could not build the face" << LL_ENDL;
@@ -5172,6 +5197,11 @@ void LLVolumeFace::createTangents()
     if (!mTangents)
     {
         allocateTangents(mNumVertices);
+        if (mTangents)
+        {
+            // the mesher forms a slice over the new buffer before writing it
+            memset(mTangents, 0, sizeof(LLVector4a) * mNumVertices);
+        }
 
         // generate tangents, then normalize the normals: bump map/planar
         // projection code requires normals to be normalized
@@ -5373,6 +5403,11 @@ void LLCalculateTangentArray(U32 vertexCount, const LLVector4a *vertex, const LL
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME;
 
+    // The mesher forms a slice over the output before writing all of it.
+    if (tangent && vertexCount)
+    {
+        memset(tangent, 0, sizeof(LLVector4a) * vertexCount);
+    }
     // The normals are only read (normalize_normals = 0).
     vks_volume_tangents((S32) vertexCount, (const F32*) vertex, (F32*) const_cast<LLVector4a*>(normal), (const F32*) texcoord,
                         (S32) (triangleCount * 3), index_array, (F32*) tangent, 0);

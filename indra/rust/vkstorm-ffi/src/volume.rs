@@ -9,13 +9,14 @@
 //! and reported as -1.
 
 use std::cell::RefCell;
+use std::mem::MaybeUninit;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::slice;
 
 use vkstorm_volume::{
     FaceBuffers, FaceDesc, FaceParams, FaceResult, Path, PathParams, PathPt, Profile,
     ProfileFace, ProfileParams, V4, build_face, calculate_tangents, face_sizes, generate_path,
-    generate_profile, path_num_points, profile_num_points, sweep,
+    generate_profile, path_num_points, profile_num_points, sweep_uninit,
 };
 
 thread_local! {
@@ -169,11 +170,13 @@ unsafe fn slice_mut_or_empty<'a, T>(p: *mut T, n: usize) -> &'a mut [T] {
 }
 
 /// The mesh sweep of `LLVolume::generate`: writes `path_count *
-/// profile_count` points into `dst`. 1 on success.
+/// profile_count` points into `dst`, which need not be initialised. 1 on
+/// success.
 ///
 /// # Safety
-/// `path`, `profile` and `dst` must point to arrays of the given sizes
-/// (`dst`: `path_count * profile_count` 16-byte aligned vectors).
+/// `path` and `profile` must point to initialised arrays of the given sizes;
+/// `dst` must point to `path_count * profile_count` 16-byte aligned
+/// vectors of writable storage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vks_volume_sweep(
     path: *const PathPt,
@@ -184,9 +187,14 @@ pub unsafe extern "C" fn vks_volume_sweep(
 ) -> i32 {
     let path = unsafe { slice_or_empty(path, path_count as usize) };
     let profile = unsafe { slice_or_empty(profile, profile_count as usize) };
-    let dst = unsafe { slice_mut_or_empty(dst, path_count as usize * profile_count as usize) };
+    let n = path_count as usize * profile_count as usize;
+    let dst: &mut [MaybeUninit<V4>] = if dst.is_null() || n == 0 {
+        &mut []
+    } else {
+        unsafe { slice::from_raw_parts_mut(dst as *mut MaybeUninit<V4>, n) }
+    };
     catch_unwind(AssertUnwindSafe(|| {
-        sweep(path, profile, dst);
+        sweep_uninit(path, profile, dst);
         1
     }))
     .unwrap_or(-1)
@@ -220,7 +228,10 @@ pub struct VksFaceParams {
 
 /// The `LLVolumeFace` buffers: `num_vertices`/`num_indices` are the
 /// allocated counts (`mNumVertices`, `mNumIndices`); the texture coordinate
-/// buffer has the even-count padding slot the viewer allocates.
+/// buffer has the even-count padding slot the viewer allocates. The builder
+/// forms slices over them, so they must be initialised memory: the viewer
+/// zeroes freshly allocated storage (`LLVolumeFace::create`) and a partial
+/// rebuild reuses storage it wrote before.
 #[repr(C)]
 pub struct VksFaceBuffers {
     pub positions: *mut V4,
@@ -346,7 +357,8 @@ pub unsafe extern "C" fn vks_volume_face_build(
 /// the normals in place as `createTangents` does. 1 on success.
 ///
 /// # Safety
-/// All arrays must hold `num_vertices` (or `num_indices`) elements.
+/// All arrays must hold `num_vertices` (or `num_indices`) elements of
+/// initialised memory (the viewer zeroes a fresh `tangents` buffer).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vks_volume_tangents(
     num_vertices: i32,

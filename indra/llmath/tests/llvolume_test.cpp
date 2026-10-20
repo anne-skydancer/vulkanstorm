@@ -30,6 +30,7 @@
 #include <cstring>
 #include <fstream>
 #include <functional>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -57,7 +58,7 @@
 namespace
 {
     constexpr U32 FIXTURE_MAGIC = 0x56534B56; // "VKSV"
-    constexpr U32 FIXTURE_VERSION = 1;
+    constexpr U32 FIXTURE_VERSION = 2;
 
     constexpr U32 FLAG_FULL = 1;      // array contents stored, not only hashes
     constexpr U32 FLAG_FLEX = 2;      // flexible path filled with the recorded points
@@ -677,13 +678,18 @@ namespace
             w.raw(f.mCenter->getF32ptr(), 16);
             w.f32(f.mTexCoordExtents[0].mV[0]); w.f32(f.mTexCoordExtents[0].mV[1]);
             w.f32(f.mTexCoordExtents[1].mV[0]); w.f32(f.mTexCoordExtents[1].mV[1]);
+            // Blocks that may be compared with a tolerance on another CPU
+            // (values through _mm_rsqrt_ps: cap normals, tangents, normalised
+            // normals) always carry their data, so such a comparison is never
+            // skipped.
+            const bool cap = (f.mTypeMask & LLVolumeFace::CAP_MASK) != 0;
             writeBlock(w, f.mPositions, (size_t)f.mNumVertices * 16, full);
-            writeBlock(w, f.mNormals, (size_t)f.mNumVertices * 16, full);
+            writeBlock(w, f.mNormals, (size_t)f.mNumVertices * 16, full || cap);
             writeBlock(w, f.mTexCoords, (size_t)f.mNumVertices * 8, full);
             writeBlock(w, f.mIndices, (size_t)f.mNumIndices * 2, full);
             vol->genTangents(i);
-            writeBlock(w, f.mTangents, (size_t)f.mNumVertices * 16, full);
-            writeBlock(w, f.mNormals, (size_t)f.mNumVertices * 16, full);
+            writeBlock(w, f.mTangents, (size_t)f.mNumVertices * 16, true);
+            writeBlock(w, f.mNormals, (size_t)f.mNumVertices * 16, true);
         }
     }
 
@@ -770,7 +776,15 @@ namespace
             {
                 std::ostringstream s;
                 s << " first difference at element " << i / elem << ": ";
-                for (size_t k = 0; k < elem; k += 4)
+                if (elem == 2)
+                {
+                    U16 e, g;
+                    memcpy(&e, &expected[i], 2);
+                    memcpy(&g, a + i, 2);
+                    s << "expected " << e << " got " << g;
+                    return s.str();
+                }
+                for (size_t k = 0; k + 4 <= elem; k += 4)
                 {
                     F32 e, g;
                     memcpy(&e, &expected[i + k], 4);
@@ -783,6 +797,20 @@ namespace
         return "";
     }
 
+    // The tolerance comparison of one value: identical bits or two NaNs are
+    // equal; otherwise any non-finite value is a difference; otherwise the
+    // relative tolerance applies (against max(1, |expected|)).
+    bool closeEnough(F32 expected, F32 actual, F32 rel)
+    {
+        U32 eb, ab;
+        memcpy(&eb, &expected, 4);
+        memcpy(&ab, &actual, 4);
+        if (eb == ab) return true;
+        if (llisnan(expected) && llisnan(actual)) return true;
+        if (!llfinite(expected) || !llfinite(actual)) return false;
+        return fabsf(expected - actual) <= rel * llmax(1.f, fabsf(expected));
+    }
+
     // Loosely compare a block of floats: values that went through
     // _mm_rsqrt_ps on a CPU with a different approximation table (1e-3), or
     // any float array on a platform without its own recording (1e-4).
@@ -793,8 +821,7 @@ namespace
         const F32* a = (const F32*)actual;
         for (size_t i = 0; i < len / 4; ++i)
         {
-            F32 d = fabsf(e[i] - a[i]);
-            if (d > rel * llmax(1.f, fabsf(e[i]))) return false;
+            if (!closeEnough(e[i], a[i], rel)) return false;
         }
         return true;
     }
@@ -811,7 +838,14 @@ namespace
         {
             if (!b.has_data)
             {
-                ++m.unverifiable;
+                if (rsqrt_dependent)
+                {
+                    m.add(what + ": no recorded data for the rsqrt tolerance comparison");
+                }
+                else
+                {
+                    ++m.unverifiable;
+                }
                 return;
             }
             ++m.tolerance_only;
@@ -829,6 +863,49 @@ namespace
         else
         {
             m.add(what + ": hash mismatch over " + std::to_string(len) + " bytes");
+        }
+    }
+
+    // Profile face records (16 bytes: index, count, scale_u, cap, flat,
+    // face id): the integer fields are compared exactly everywhere; only
+    // scale_u takes the tolerance of a platform without a recording.
+    void compareProfileFaces(Mismatches& m, const std::string& what, const Block& b, const std::vector<U8>& canon)
+    {
+        if (fnv1a(canon.data(), canon.size()) == b.hash && (!b.has_data || b.data.size() == canon.size()))
+        {
+            return;
+        }
+        if (!b.has_data)
+        {
+            m.add(what + ": hash mismatch over " + std::to_string(canon.size()) + " bytes");
+            return;
+        }
+        if (b.data.size() != canon.size())
+        {
+            m.add(what + " (length " + std::to_string(canon.size()) + " vs " + std::to_string(b.data.size()) + ")");
+            return;
+        }
+        for (size_t i = 0; i < canon.size(); i += 16)
+        {
+            const bool ints_equal = memcmp(&b.data[i], &canon[i], 8) == 0 && memcmp(&b.data[i + 12], &canon[i + 12], 4) == 0;
+            F32 e, g;
+            memcpy(&e, &b.data[i + 8], 4);
+            memcpy(&g, &canon[i + 8], 4);
+            const bool scale_equal = memcmp(&e, &g, 4) == 0 || (!VKS_VOLUME_STRICT_PLATFORM && closeEnough(e, g, 1e-4f));
+            if (!ints_equal || !scale_equal)
+            {
+                S32 ei, ec, gi, gc;
+                memcpy(&ei, &b.data[i], 4); memcpy(&ec, &b.data[i + 4], 4);
+                memcpy(&gi, &canon[i], 4); memcpy(&gc, &canon[i + 4], 4);
+                std::ostringstream s;
+                s << what << " first difference at face " << i / 16 << ": expected (index " << ei << ", count " << ec << ", scaleU " << e
+                  << ", cap " << (S32)b.data[i + 12] << ", flat " << (S32)b.data[i + 13] << ", id " << (S32)(b.data[i + 14] | (b.data[i + 15] << 8))
+                  << ") got (index " << gi << ", count " << gc << ", scaleU " << g << ", cap " << (S32)canon[i + 12] << ", flat " << (S32)canon[i + 13]
+                  << ", id " << (S32)(canon[i + 14] | (canon[i + 15] << 8)) << ")";
+                m.add(s.str());
+                return;
+            }
+            if (memcmp(&e, &g, 4) != 0) ++m.tolerance_only;
         }
     }
 
@@ -852,7 +929,7 @@ namespace
                 bool close = true;
                 for (S32 i = 0; i < n; ++i)
                 {
-                    if (fabsf(expected[i] - actual[i]) > 1e-4f * llmax(1.f, fabsf(expected[i]))) close = false;
+                    if (!closeEnough(expected[i], actual[i], 1e-4f)) close = false;
                 }
                 if (close) { ++m.tolerance_only; return; }
             }
@@ -936,7 +1013,7 @@ namespace
             compareScalar(m, tag + " profile face count", face_count, (U32)prof.mFaces.size());
             std::vector<U8> canon;
             profileFacesToCanonical(prof, canon);
-            compareBlock(m, tag + " profile faces", faces, canon.data(), canon.size(), 16, false, same_rsqrt);
+            compareProfileFaces(m, tag + " profile faces", faces, canon);
             stats.blocks += 2;
         }
         // path
@@ -1111,10 +1188,49 @@ namespace tut
             std::cout << "  " << d << std::endl;
         }
         ensure_equals("mesher output matches the recorded corpus", m.count, 0);
+        if (VKS_VOLUME_STRICT_PLATFORM)
+        {
+            ensure_equals("no unverifiable blocks on a recording platform", m.unverifiable, 0);
+        }
         if (VKS_VOLUME_STRICT_PLATFORM && same_rsqrt)
         {
-            ensure_equals("every block exact on the recording platform", m.tolerance_only + m.unverifiable, 0);
+            ensure_equals("every block exact on the recording platform", m.tolerance_only, 0);
         }
+    }
+
+    // The comparison helpers themselves: the tolerance treats NaN and
+    // infinities as differences unless both sides are NaN or identical, and
+    // the index diagnostic decodes U16.
+    template<> template<>
+    void volume_object::test<3>()
+    {
+        const F32 nan = std::numeric_limits<F32>::quiet_NaN();
+        const F32 inf = std::numeric_limits<F32>::infinity();
+        ensure("equal values are close", closeEnough(0.5f, 0.5f, 1e-4f));
+        ensure("two NaNs are close", closeEnough(nan, -nan, 1e-4f));
+        ensure("NaN against a finite value is a difference", !closeEnough(0.5f, nan, 1e-4f) && !closeEnough(nan, 0.5f, 1e-4f));
+        ensure("infinity against a finite value is a difference", !closeEnough(inf, 1e30f, 1e-4f) && !closeEnough(1.f, inf, 1e-4f));
+        ensure("identical infinities are close", closeEnough(inf, inf, 1e-4f) && closeEnough(-inf, -inf, 1e-4f));
+        ensure("opposite infinities are a difference", !closeEnough(inf, -inf, 1e-4f));
+        ensure("within the relative tolerance", closeEnough(2.f, 2.f + 1e-4f, 1e-4f) && closeEnough(0.001f, 0.001f + 5e-5f, 1e-4f));
+        ensure("outside the relative tolerance", !closeEnough(2.f, 2.f + 3e-4f, 1e-4f) && !closeEnough(0.f, 2e-4f, 1e-4f));
+
+        std::vector<U8> expected_f(8);
+        F32 ef[2] = { 1.f, 2.f };
+        memcpy(expected_f.data(), ef, 8);
+        F32 af[2] = { 1.f, nan };
+        ensure("NaN against a finite value fails the block tolerance", !withinTolerance(expected_f, af, 8, 1e-3f));
+        F32 bf[2] = { 1.f, 2.f + 1e-4f };
+        ensure("a small difference passes the block tolerance", withinTolerance(expected_f, bf, 8, 1e-3f));
+
+        std::vector<U8> expected_i(6);
+        U16 ei[3] = { 7, 8, 9 };
+        memcpy(expected_i.data(), ei, 6);
+        U16 ai[3] = { 7, 8, 1234 };
+        std::string d = firstDiff(expected_i, ai, 6, 2);
+        ensure_equals("index diagnostic decodes U16", d, std::string(" first difference at element 2: expected 9 got 1234"));
+        U16 ci[3] = { 7, 8, 9 };
+        ensure_equals("no difference, no diagnostic", firstDiff(expected_i, ci, 6, 2), std::string(""));
     }
 
     // Timing of the corpus through LLVolume (construction and tangents),

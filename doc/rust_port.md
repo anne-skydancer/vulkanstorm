@@ -253,16 +253,21 @@ Differences, all outside what any caller exercises:
   `LLVolumeFace::createSide`/`createCap`/`createUnCutCubeCap`,
   `createTangents` and `LLCalculateTangentArray` are gone; the methods that
   remain are thin wrappers. The 881-case corpus recorded from the original
-  C++ (`indra/llmath/tests/fixtures/llvolume_corpus.vksv`, 2.2 MB) is the
-  oracle on Windows; its Linux counterpart `llvolume_corpus.linux.vksv` was
-  recorded by the same test from the Linux build (see below).
+  C++ (`indra/llmath/tests/fixtures/llvolume_corpus.vksv`) is the
+  oracle on Windows (8.4 MB); its Linux counterpart
+  `llvolume_corpus.linux.vksv` was recorded by the same test from the Linux
+  build (see below).
 - `LLVolume`, `LLProfile`, `LLPath` and `LLVolumeFace` stay the in-memory
   representation. Profile and path generation return pointers into
   per-thread scratch storage that the C++ copies out (a few hundred bytes);
   the mesh sweep, the face builders and the tangents write straight into
   the caller's 16-byte aligned buffers (`mMesh`, `mPositions`, `mNormals`,
   `mTexCoords`, `mIndices`, `mTangents`), so nothing the renderer consumes
-  is copied. `LLPath::PathPt` and `LLProfile::Face` keep their layout, shared
+  is copied. The sweep writes through `MaybeUninit` (a freshly resized
+  `mMesh` is not initialised); the face builders and the tangents form
+  slices over their buffers, so `LLVolumeFace::create` and `createTangents`
+  zero freshly allocated storage (texture-coordinate padding included)
+  before the call, and a partial rebuild keeps the data it has. `LLPath::PathPt` and `LLProfile::Face` keep their layout, shared
   with the crate (`static_assert`ed).
 - Keep-or-port judgement. Ported: everything above. The SSE code it replaced
   (`LLVector4a` cross products, `_mm_min_ps`/`_mm_max_ps` extents,
@@ -296,9 +301,15 @@ Differences, all outside what any caller exercises:
   CPU-specific (Intel and AMD tables differ), so each fixture carries a
   signature of the recording CPU and the tests compare the rsqrt-derived
   arrays (cap normals, tangents, normalised normals) with a tolerance only
-  when it differs. A platform with no recording (macOS) gets the Windows
-  corpus, exact integer data and a tolerance on the float arrays, and says
-  so.
+  when it differs; the recorder always stores those arrays in full (the
+  other arrays only for the smaller cases, hashes otherwise), so such a
+  comparison is never skipped: a recording platform allows no unverifiable
+  block, and the tolerance treats a NaN or an infinity against anything but
+  an identical value (or another NaN) as a difference. Index blocks and the
+  integer fields of profile-face records are exact everywhere. A platform
+  with no recording (macOS) gets the Windows corpus, exact integer data and
+  a tolerance on the float arrays, and says so. The two corpora are 8.4 MB
+  each (fixture format 2).
 - Parity: `cargo test -p vkstorm-volume` (crate) and
   `INTEGRATION_TEST_llvolume` (viewer, through the FFI) rebuild all 881
   cases, 3939 faces, 27158 array blocks (positions, normals, texture
