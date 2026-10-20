@@ -834,7 +834,10 @@ Linux against the 0.10 us it replaced).
   `message_template.msg`): the parsed template (478 messages), 1912 packed
   messages with their zero-coded forms, 7393 reads of complete, cut and
   corrupted packets (every variable's bytes, size and repeat count), 1080
-  zero-code expansions and 40 data packer scripts. `cargo bench --bench
+  zero-code expansions and 70 data packer cases (40 from the packer
+  scripts in four forms with cut and short-buffer variants, 30 with the
+  last text value cut to its name, where every read must leave the caller's
+  value untouched). `cargo bench --bench
   hot_paths` is the crate-side harness.
 - `INTEGRATION_TEST_llmessagetemplate` (viewer): the same corpus through
   the real C++ classes into Rust and back (the builder's typed `add*`, the
@@ -846,10 +849,14 @@ Linux against the 0.10 us it replaced).
   (the comparison runs against the oracle fail on the stated entries, by
   design, and are skipped while recording). Run by CI with the other
   focused tests.
-- `lltest` (the legacy suite in `indra/test`): the 45 `LLTemplateMessageBuilder`,
-  8 `LLMessageTemplateParser`, 12 `LLDataPacker`, the `LLSDMessageBuilder`,
-  `LLSDMessageReader` and `LLMessageSystem` tests pass unchanged, with the
-  other 200-odd groups of the executable (295 tests on Windows, 302 passed and 1 known skip, the `httpdate` locale test, on Linux).
+- `lltest` (the legacy suite in `indra/test`): the `LLTemplateMessageBuilder`
+  (45 tests), `LLSDMessageBuilder`, `LLSDMessageReader`, `LLMessageSystem`
+  and `LLMessageConfig` groups pass unchanged, and `LLMessageTemplateParser`
+  (8 tests) on Linux, where alone it is built; with the other groups of the
+  executable, 295 tests on Windows, 302 passed and 1 known skip (the
+  `httpdate` locale test) on Linux. `lldatapacker_tut.cpp` is not compiled
+  into `lltest` in this tree (nor upstream); the packer classes are covered
+  by the integration test's corpus.
 - The viewer builds, stages and reaches the login screen on Windows with
   the local welcome page (`skins/default/html/en/vulkanstorm/welcome.html`);
   the message template loads through the port ("Read 478 messages"). A
