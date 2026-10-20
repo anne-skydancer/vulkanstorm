@@ -1,7 +1,8 @@
 * text eol=lf
 
-# Recorded mesher corpus (vkstorm-rust)
+# Recorded mesher and message corpora (vkstorm-rust)
 *.vksv binary
+*.vksm binary
 
 # Images
 *.bmp binary
