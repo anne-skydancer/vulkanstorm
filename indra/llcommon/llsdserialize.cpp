@@ -38,6 +38,7 @@
 #include "llpointer.h"
 #include "llstreamtools.h" // for cat_streambuf
 
+#include <exception>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -288,14 +289,34 @@ namespace
         std::streambuf* mBuf;
         SourceMode mMode;
         bool mHitEof = false;
+        // A C++ exception from the stream must not unwind through the Rust
+        // frames (undefined behaviour; Rust aborts on a foreign exception).
+        // It is captured here, the source reports end of input from then
+        // on, and the caller rethrows once the Rust call has returned.
+        std::exception_ptr mError;
 
         static size_t readCb(void* ctx, uint8_t* buf, size_t cap)
         {
             StreamSource& self = *static_cast<StreamSource*>(ctx);
-            if (cap == 0)
+            if (cap == 0 || self.mError)
             {
                 return 0;
             }
+            try
+            {
+                return self.read(buf, cap);
+            }
+            catch (...)
+            {
+                self.mError = std::current_exception();
+                self.mHitEof = true;
+                return 0;
+            }
+        }
+
+        size_t read(uint8_t* buf, size_t cap)
+        {
+            StreamSource& self = *this;
             switch (self.mMode)
             {
             case SourceMode::BULK:
@@ -349,7 +370,21 @@ namespace
         static int32_t peekCb(void* ctx)
         {
             StreamSource& self = *static_cast<StreamSource*>(ctx);
-            int c = self.mBuf->sgetc();
+            if (self.mError)
+            {
+                return -1;
+            }
+            int c;
+            try
+            {
+                c = self.mBuf->sgetc();
+            }
+            catch (...)
+            {
+                self.mError = std::current_exception();
+                self.mHitEof = true;
+                return -1;
+            }
             if (c == EOF)
             {
                 self.mHitEof = true;
@@ -392,7 +427,15 @@ namespace
         };
         std::vector<Frame> stack;
         std::string key;
-        LLSD scratch;
+
+        // A value completed: close every container that just became full.
+        auto completeValue = [&stack]()
+        {
+            while (!stack.empty() && --stack.back().remaining == 0)
+            {
+                stack.pop_back();
+            }
+        };
 
         for (size_t i = 0; i < node_count; ++i)
         {
@@ -424,8 +467,32 @@ namespace
                     slot = &map[key];
                     if (map.size() == before)
                     {
-                        scratch.clear();
-                        slot = &scratch;
+                        // A repeated key: the first value stays. Skip this
+                        // whole subtree in the node buffer rather than build
+                        // it anywhere; building it in shared scratch storage
+                        // let a nested repeated key destroy an object the
+                        // frames above still pointed into.
+                        uint32_t pending = 1;
+                        while (pending > 0 && i < node_count)
+                        {
+                            const VksLlsdNode& skipped = nodes[i];
+                            if (skipped.kind == VKS_LLSD_NODE_KEY)
+                            {
+                                ++i;
+                                continue;
+                            }
+                            --pending;
+                            if (skipped.kind == VKS_LLSD_NODE_MAP || skipped.kind == VKS_LLSD_NODE_ARRAY)
+                            {
+                                pending += skipped.len;
+                            }
+                            if (pending > 0)
+                            {
+                                ++i;
+                            }
+                        }
+                        completeValue();
+                        continue;
                     }
                 }
             }
@@ -494,11 +561,7 @@ namespace
                 stack.push_back(Frame{ slot, node.len, node.kind == VKS_LLSD_NODE_MAP });
                 continue;
             }
-            // A value completed; close every container that just became full.
-            while (!stack.empty() && --stack.back().remaining == 0)
-            {
-                stack.pop_back();
-            }
+            completeValue();
         }
     }
 
@@ -541,6 +604,14 @@ namespace
                 }
             }
         }
+        if (source.mError)
+        {
+            // The stream threw inside a callback: the Rust call has returned
+            // and nothing of it is live any more, so the exception can go on
+            // to the caller as it would have from the C++ parsers.
+            vks_llsd_doc_free(doc);
+            std::rethrow_exception(source.mError);
+        }
         if (source.mHitEof)
         {
             istr.setstate(std::ios::eofbit);
@@ -582,9 +653,32 @@ namespace
 
     // ---- formatting
 
+    // The formatter output sink. A stream with exceptions enabled (as
+    // LLSettingsVOBase::exportFile arranges) throws std::ios_base::failure on
+    // a failed write; that must not unwind through the Rust frames, so the
+    // exception is captured, further output is dropped, and format()
+    // rethrows it once the Rust formatter has been released.
+    struct OstreamSink
+    {
+        std::ostream* mStream;
+        std::exception_ptr mError;
+    };
+
     void writeToOstream(void* ctx, const uint8_t* data, size_t len)
     {
-        static_cast<std::ostream*>(ctx)->write(reinterpret_cast<const char*>(data), (std::streamsize)len);
+        OstreamSink& sink = *static_cast<OstreamSink*>(ctx);
+        if (sink.mError)
+        {
+            return;
+        }
+        try
+        {
+            sink.mStream->write(reinterpret_cast<const char*>(data), (std::streamsize)len);
+        }
+        catch (...)
+        {
+            sink.mError = std::current_exception();
+        }
     }
 
     void appendToString(void* ctx, const uint8_t* data, size_t len)
@@ -839,14 +933,20 @@ S32 LLSDFormatter::format(const LLSD& data, std::ostream& ostr, EFormatterOption
     std::ios::fmtflags ff = ostr.flags() & std::ios::floatfield;
     int32_t floatfield = (ff == std::ios::fixed) ? 1 : (ff == std::ios::scientific) ? 2 : 0;
 
+    OstreamSink sink{ &ostr, nullptr };
     VksLlsdFormatter* f = vks_llsd_formatter_new(rustFormat(), opts, (int32_t)ostr.precision(), floatfield,
-                                                 &ostr, &writeToOstream);
+                                                 &sink, &writeToOstream);
     if (!f)
     {
         return 0;
     }
     walkLLSD(data, f, mRealFormat);
-    return vks_llsd_formatter_finish(f);
+    S32 count = vks_llsd_formatter_finish(f);
+    if (sink.mError)
+    {
+        std::rethrow_exception(sink.mError);
+    }
+    return count;
 }
 
 /**

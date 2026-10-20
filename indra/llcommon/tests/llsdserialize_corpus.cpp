@@ -568,6 +568,12 @@ namespace llsd_corpus
         add("n map no comma", NOTATION, "{'a':i1 'b':i2}");
         add("n map trailing comma", NOTATION, "{'a':i1,}");
         add("n map dup keys", NOTATION, "{'a':i1,'a':i2}");
+        // Nested duplicates: the discarded second 'a' holds a map whose own
+        // duplicate 'c' is discarded while 'd' still belongs to it.
+        add("n nested dup keys", NOTATION, "{'a':i0,'a':{'b':{'c':i1,'c':i2,'d':i3}}}");
+        add("n nested dup keys container first", NOTATION, "{'a':{'b':{'c':i1,'c':i2,'d':i3}},'a':i0}");
+        add("n nested dup keys arrays", NOTATION, "{'a':[i1],'a':[{'x':i1,'x':[i2,i3],'y':i4},i5],'b':{'k':'v','k':{'z':[i6,{'q':i7,'q':i8}]},'m':i9}}");
+        add("n dup keys scalar after dup map", NOTATION, "{'a':i0,'a':{'b':{'c':i1}},'c':i2,'c':i3,'e':{'f':i4,'f':{'g':i5},'h':i6}}");
         add("n map two strings", NOTATION, "{'a' 'b':i1}");
         add("n map raw key", NOTATION, "{s(1)\"a\":i1}");
         add("n map empty key", NOTATION, "{'':i1}");
@@ -645,6 +651,9 @@ namespace llsd_corpus
         add("b map quoted keys", BINARY, binMap(2, "'amy'" + binInt(1) + "\"bob\"" + binInt(2)));
         add("b map unknown key tag", BINARY, binMap(1, "x" + binInt(1)));
         add("b map dup keys", BINARY, binMap(2, binKey("a") + binInt(1) + binKey("a") + binInt(2)));
+        add("b nested dup keys", BINARY, binMap(2, binKey("a") + binInt(0) + binKey("a") + binMap(1, binKey("b") + binMap(3, binKey("c") + binInt(1) + binKey("c") + binInt(2) + binKey("d") + binInt(3)))));
+        add("b nested dup keys container first", BINARY, binMap(2, binKey("a") + binMap(1, binKey("b") + binMap(3, binKey("c") + binInt(1) + binKey("c") + binInt(2) + binKey("d") + binInt(3))) + binKey("a") + binInt(0)));
+        add("b nested dup keys arrays", BINARY, binMap(3, binKey("a") + binArray(1, binInt(1)) + binKey("a") + binArray(2, binMap(3, binKey("x") + binInt(1) + binKey("x") + binArray(2, binInt(2) + binInt(3)) + binKey("y") + binInt(4)) + binInt(5)) + binKey("b") + binMap(3, binKey("k") + binString("v") + binKey("k") + binMap(1, binKey("z") + binArray(2, binInt(6) + binMap(2, binKey("q") + binInt(7) + binKey("q") + binInt(8)))) + binKey("m") + binInt(9))));
         add("b map value fails", BINARY, binMap(1, binKey("a") + "g"));
         add("b map value eof", BINARY, binMap(1, binKey("a")));
         add("b map nested", BINARY, binMap(1, binKey("a") + binMap(1, binKey("b") + binArray(2, binInt(1) + "!"))));
@@ -810,6 +819,8 @@ namespace llsd_corpus
             add("x dangling key inner" + sfx, XML, "<llsd><map><key>a</key><map><key>dangling</key></map><integer>5</integer></map></llsd>", UNLIMITED, -1, l);
             add("x key key" + sfx, XML, "<llsd><map><key>a</key><key>b</key><integer>1</integer></map></llsd>", UNLIMITED, -1, l);
             add("x dup keys" + sfx, XML, "<llsd><map><key>a</key><integer>1</integer><key>a</key><integer>2</integer></map></llsd>", UNLIMITED, -1, l);
+            add("x nested dup keys" + sfx, XML, "<llsd><map><key>a</key><integer>0</integer><key>a</key><map><key>b</key><map><key>c</key><integer>1</integer><key>c</key><integer>2</integer><key>d</key><integer>3</integer></map></map></map></llsd>", UNLIMITED, -1, l);
+            add("x nested dup keys container first" + sfx, XML, "<llsd><map><key>a</key><map><key>b</key><map><key>c</key><integer>1</integer><key>c</key><integer>2</integer><key>d</key><integer>3</integer></map></map><key>a</key><integer>0</integer></map></llsd>", UNLIMITED, -1, l);
             add("x map text" + sfx, XML, "<llsd><map>junk<key>a</key>junk<integer>1</integer>junk</map></llsd>", UNLIMITED, -1, l);
             add("x scalar nested" + sfx, XML, "<llsd><integer><integer>5</integer>6</integer></llsd>", UNLIMITED, -1, l);
             add("x unknown root value" + sfx, XML, "<llsd><thing>x</thing></llsd>", UNLIMITED, -1, l);
