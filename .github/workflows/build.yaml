@@ -229,7 +229,7 @@ jobs:
           cmake -S indra -B "${{ matrix.directory }}" -DLL_TESTS:BOOL=ON
           cmake --build "${{ matrix.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
             --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
-            INTEGRATION_TEST_llimagej2coj INTEGRATION_TEST_llsdserialize_parity INTEGRATION_TEST_llvolume INTEGRATION_TEST_llimagecodecs
+            INTEGRATION_TEST_llimagej2coj INTEGRATION_TEST_llsdserialize_parity INTEGRATION_TEST_llvolume INTEGRATION_TEST_llimagecodecs INTEGRATION_TEST_llmessagetemplate
 
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'
