@@ -22,9 +22,8 @@ then Vulkan.
   viewer's Release link. With `USE_AVX2_OPTIMIZATION` the crate is built for
   `x86-64-v3` (AVX2), the Release CPU baseline.
 - `indra/rust/.cargo/config.toml` makes cargo fetch git dependencies with the
-  git CLI, so private repositories work with the developer's credential
-  helper. CI needs the secret `VKSTORM_CORE_RUST_TOKEN`, a fine-grained token
-  with read access to vkstorm-core-rust, consumed in `build.yaml`.
+  git CLI. vkstorm-core-rust is public, so CI needs only the Rust toolchain
+  (`dtolnay/rust-toolchain@stable` in `build.yaml`) and no credentials.
 - Required Release configuration for this track: Inno Setup as the installer,
   AVX2, OpenJPEG, no OpenSim, LTO, WebRTC voice. Vivox is not part of the
   Release, since Second Life voice is WebRTC; it stays available in OpenSim

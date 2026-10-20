@@ -1,4 +1,4 @@
 [net]
-# Use the git CLI so private git dependencies work with the user's credential
-# helper locally and with the token-configured git on CI.
+# Fetch git dependencies with the git CLI (uses the developer's git
+# configuration and credential helpers, and avoids libgit2 limitations).
 git-fetch-with-cli = true
