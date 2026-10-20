@@ -114,22 +114,6 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Allow cargo to fetch vkstorm-core-rust
-        # The shared crates repository is private; VKSTORM_CORE_RUST_TOKEN is a
-        # fine-grained token with read access to it. cargo uses the git CLI
-        # (indra/rust/.cargo/config.toml), so a URL rewrite is enough.
-        shell: bash
-        env:
-          TOKEN: ${{ secrets.VKSTORM_CORE_RUST_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [[ -z "$TOKEN" ]]; then
-            echo 'VKSTORM_CORE_RUST_TOKEN is not set; cargo cannot fetch vkstorm-core-rust.' >&2
-            exit 1
-          fi
-          git config --global url."https://x-access-token:${TOKEN}@github.com/anne-skydancer/vkstorm-core-rust".insteadOf \
-            "https://github.com/anne-skydancer/vkstorm-core-rust"
-
       - name: Check installer version and payload
         run: |
           python scripts/tests/test_inno_payload.py
