@@ -17,12 +17,18 @@ XML files resolved through a skin search path.
 
 `LLDir::setSkinFolder` (`indra/llfilesystem/lldir.cpp:1086`) builds the
 ordered search list: `skins/default`, `skins/<skin>`,
-`skins/<skin>/themes/<theme>`, then the per-user `user_settings/skins/default`
-and `user_settings/skins/<skin>`. `LLDir::findSkinnedFilenames`
-(`lldir.cpp:813`) resolves `(subdir, filename)` to the list of existing files
-in that order, adding `xui/en` then `xui/<language>` for localized subdirs
-(`textures` is unlocalized). `CURRENT_SKIN` returns the most specific file;
-`ALL_SKINS` returns all for overlaying (colors, textures, notifications).
+`skins/<skin>/themes/<theme>`, then the per-user `<OS user app dir>/skins/default`
+and `<OS user app dir>/skins/<skin>` (`getOSUserAppDir()` plus `skins`,
+`lldir.cpp:1139`; this is a sibling of `user_settings`, not inside it).
+`LLDir::findSkinnedFilenames` (`lldir.cpp:813`) resolves `(subdir, filename)`
+to the list of existing files in that order, adding `xui/en` then
+`xui/<language>` for localized subdirs (`textures` is unlocalized).
+`CURRENT_SKIN` returns up to two files, not one: the most specific
+base-language file and, independently, the most specific current-language
+file, in that order (`lldir.cpp:913`). The two can come from different skins,
+so a user can override only the localization of a file, or only its English
+layout, without touching the other. `ALL_SKINS` returns every match for
+overlaying (colors, textures, notifications).
 Skins and themes are declared in `indra/newview/skins/skins.xml` (LLSD: name,
 folder, themes) and read by the preferences skin panel
 (`llfloaterpreference.cpp:5293`). Selection is the `SkinCurrent` and
@@ -37,7 +43,7 @@ Shipped skins: `default` (Vulkanstorm palette, see `doc/branding_defaults.md`),
 
 | Surface | Files | Loader | Binding to C++ |
 |---|---|---|---|
-| Widget layouts (floaters, panels, menus) | `skins/default/xui/en/*.xml`, 689 files; skins override by same name | `LLUICtrlFactory::createFromFile` -> `getLayeredXMLNode` (`lluictrlfactory.cpp`) merges base + language + skin trees by node name (`LLXMLNode::updateNode`, `llxmlnode.cpp:573`) | XML tag -> `LLDefaultChildRegistry::Register<T>("tag")` (99 tags registered in tree, 427 distinct tags appear in XML counting dotted sub-blocks); attributes -> `T::Params` param block via `LLXUIParser::readXUI`; `name=` -> `getChild<T>("name")` (5144 call sites in `newview`) |
+| Widget layouts (floaters, panels, menus) | `skins/default/xui/en/*.xml`, 689 files; skins override by same name | `LLUICtrlFactory::createFromFile` -> `getLayeredXMLNode` (`lluictrlfactory.cpp`, default constraint `CURRENT_SKIN`, `lluictrlfactory.h:194`): the single most specific English file replaces every less specific English file whole (a skin that removes a control removes it), then the independently selected localization file is overlaid by node name (`LLXMLNode::updateNode`, `llxmlnode.cpp:573`) | XML tag -> `LLDefaultChildRegistry::Register<T>("tag")` (99 tags registered in tree, 427 distinct tags appear in XML counting dotted sub-blocks); attributes -> `T::Params` param block via `LLXUIParser::readXUI`; `name=` -> `getChild<T>("name")` (5144 call sites in `newview`) |
 | Widget defaults | `xui/en/widgets/*.xml`, 110 files | `LLUICtrlFactory::loadWidgetTemplate`, filled into the per-type prototype (`ParamDefaults`) and inherited down the Params hierarchy | one template per registered tag, by `LLWidgetNameRegistry` |
 | Floater registry | `llviewerfloaterreg.cpp`, 231 `LLFloaterReg::add` | name -> XML filename + build functor | `Floater.Show`, `Floater.Toggle` callbacks take the name as `parameter=` |
 | Callbacks | `function="X.Y"` in XML, 1309 distinct uses | `LLUICtrl::CommitCallbackRegistry` / `EnableCallbackRegistry` (`lluictrl.h:300`), scoped registrars per floater; `view_listener_t::addMenu/addEnable` in `llviewermenu.cpp` (373) | 789 distinct commit names, 70 enable names, registered by string |
@@ -45,7 +51,7 @@ Shipped skins: `default` (Vulkanstorm palette, see `doc/branding_defaults.md`),
 | Colors | `colors.xml` per skin and theme, overlaid `ALL_SKINS`; user palette `user_settings/colors.xml` | `LLUIColorTable::loadFromSettings` (`lluicolortable.cpp:258`), `saveUserSettings` | XUI color attributes resolve names at parse time (`readUIColorValue`); `Pref.applyUIColor`/`Pref.getUIColor` (53 uses) |
 | Textures | `textures/textures.xml` per skin, overlaid (954 declarations in default; scale and clip rects for nine-slice) | `LLUIImageList` (`llviewertexturelist.cpp:1994`) | `image_*=` attributes by name; `LLUI::getUIImage` |
 | Toolbars | `app_settings/commands.xml` (70 commands: icon, `label_ref`, `tooltip_ref`, `execute_function`, `is_running_function`), default `skins/default/toolbars.xml`, saved `<account>/toolbars.xml` | `LLCommandManager::load` (`llcommandmanager.cpp:165`, `LLSimpleXUIParser`), `LLToolBarView::loadToolbars` (`lltoolbarview.cpp:227`: account file, then `LL_PATH_TOP_SKIN`, then default skin) | command functions are commit-registry names |
-| Floater positions and visibility | `save_rect`, `save_visibility`, `positioning` attributes; `floater_pos_<name>_x/_y` and visibility controls in the `floater` group | `LLFloaterReg::declareRectControl` (`llfloaterreg.cpp:431`), `LLFloater::applyRectControl`/`storeRectControl` | persisted in `user_settings/settings.xml` |
+| Floater positions, sizes and visibility | `save_rect`, `save_visibility`, `positioning` attributes; `floater_rect_<name>` (saved size), `floater_pos_<name>_x/_y`, visibility and dock controls, all in the `account` group (`LLFloater::getControlGroup`, `llfloater.cpp:644`) | `LLFloaterReg::declareRectControl`/`declarePosControl`/`declareVisibilityControl` (`llfloaterreg.cpp:431`), `LLFloater::applyRectControl`/`storeRectControl` | persisted in the per-account settings file, not the global `settings.xml` |
 | Fonts and UI scale | `xui/en/fonts.xml` (skinnable), 11 selectable `fonts/fonts_*.xml` via `FSFontSettingsFile`, user `user_settings/fonts/`; `UIScaleFactor` | `LLFontGL::initClass` (`llfontgl.cpp:870`), `LLFontRegistry`; `LLUI::setScaleFactor` (`llviewerwindow.cpp:2097`) | XUI coordinates are logical units scaled at draw |
 | Strings and localization | `strings.xml`, `language_settings.xml`, `teleport_strings.xml`, `rlva_strings.xml`; `xui/<lang>/` overlays (13 languages) | `LLTransUtil::parseStrings`; overlay merge in `getLayeredXMLNode` | `LLTrans::getString`, `[PLACEHOLDER]` substitution |
 | Notifications | `notifications.xml` (1337 templates, forms, `$yestext` form templates), `notification_visibility.xml`, `ignorable_dialogs.xml` | `LLNotifications::loadTemplates` (`llnotifications.cpp:1587`, `ALL_SKINS`), `LLSimpleXUIParser` | template name -> `LLNotificationsUtil::add` |
@@ -84,9 +90,11 @@ resolution rules, not any C++ API. A port keeps every surface if it preserves:
    sibling, `follows`), widget template defaults by inheritance chain, and
    the default-value diffing used by `writeXUI` (the XUI exporter and
    `llrngwriter.cpp` schema writer are developer tools and may lag).
-2. The search order of section 1.1 including the per-user skin directories,
-   `ALL_SKINS` overlaying for colors, textures and notifications, and
-   language overlays merged by node name with `en` as base.
+2. The search order of section 1.1 including the per-user skin directories
+   under the OS user app dir, `ALL_SKINS` overlaying for colors, textures and
+   notifications, and for widget files the two-file rule: whole-file
+   replacement of the English layout by the most specific skin, then the
+   independently chosen localization overlaid by node name.
 3. `skins.xml`, `SkinCurrent`/`SkinCurrentTheme`, and the skin `settings.xml`
    group.
 4. `colors.xml` name references resolved late enough that user palette
@@ -95,8 +103,10 @@ resolution rules, not any C++ API. A port keeps every surface if it preserves:
    `ALL_SKINS` overlay.
 6. `commands.xml` as the toolbar command registry with its named functions,
    and the three-level `toolbars.xml` lookup (account, top skin, default).
-7. `floater_pos_*` and visibility controls in the `floater` settings group,
-   plus `positioning` and dock state.
+7. `floater_rect_*` (saved size), `floater_pos_*`, visibility and dock
+   controls in the per-account `account` settings group, plus `positioning`;
+   a port must keep them in that store so existing per-account layouts carry
+   over.
 8. `strings.xml` and `[PLACEHOLDER]` substitution, `notifications.xml` form
    templates and `$yestext` style expansion, `ignorable_dialogs.xml`.
 9. `fonts.xml` and `fonts_*.xml` selection with user `fonts/` fallback,
@@ -106,9 +116,12 @@ resolution rules, not any C++ API. A port keeps every surface if it preserves:
     names directly.
 
 Everything in this list is a data contract; none of it depends on the host
-language. The risk is in reproducing semantics (item 1) exactly, which is
-testable: parse every XUI file in every shipped skin with both parsers, export
-with `writeXUI`, and compare, as the J2C rung compared decodes.
+language. The risk is in reproducing semantics (item 1) exactly. The parsing
+half is testable by export: parse every XUI file in every shipped skin with
+both parsers, export with `writeXUI`, and compare, as the J2C rung compared
+decodes. That proves parameter serialization only: the builder exports the
+params before `applyXUILayout` and widget construction (`lluictrlfactory.h:243`),
+so layout and behaviour need their own C++-oracle checks (section 3a).
 
 ## 3. Options for the UI rung
 
@@ -166,8 +179,12 @@ unchanged.
 
 Surfaces: all survive, because the file formats and resolution rules are
 reimplemented one to one and verified against the C++ oracle. Breakage risk is
-confined to semantic drift in the parser and layout, which the export-and-diff
-test catches before release.
+semantic drift in the parser, the layout and the widget behaviour. The
+export-and-diff test catches the parser half. The rest needs oracle checks per
+widget stage, recorded from the C++ build: constructed geometry after
+`applyXUILayout` and `follows` resizing at several window sizes, rendered
+output of representative floaters, input and focus traversal, callback
+dispatch by name, and persistence round trips of the `account` controls.
 
 Effort: `indra/llui` is 102k lines; `newview` holds 301 floater and panel
 classes, 287 param blocks (97 files in `newview`, 73 in `llui`), 789 named
@@ -195,8 +212,8 @@ viewer draws UI between 3D passes with shared `LLRender` state
 (`render_ui`). Surfaces that break or degrade in practice: skin textures and
 nine-slice chrome (toolkits draw their own), colors beyond what the layer
 maps, widget templates, floater positions semantics, any skin that relies on
-pixel layout of overridden floaters, and third-party skins in
-`user_settings/skins`. Effort is 3a plus the adapter plus the toolkit's
+pixel layout of overridden floaters, and third-party skins in the per-user
+`skins` directory. Effort is 3a plus the adapter plus the toolkit's
 learning curve, with a worse result for skin authors. Not justified on either
 ground; rejected.
 
