@@ -617,8 +617,8 @@ it. No feature was cut.
 |---|---|---|
 | `LLTemplateTokenizer`, `LLTemplateParser` (`message_template.msg`) | Rust (`parser.rs`) | Pure parsing; the tokenizer keeps the C++ cursor semantics the viewer's parser tests drive directly. The C++ classes turn the parsed descriptions into `LLMessageTemplate` objects. |
 | `LLMessageTemplate`, `LLMessageBlock`, `LLMessageVariable` | C++ (unchanged), plus a compiled handle | They are the viewer's representation: `message.cpp`, the dispatcher and every handler registration hold them. Each compiles itself on first use into the crate's template with its canonical name pointers as keys; adding a block drops the handle. |
-| `LLTemplateMessageBuilder` (block repeats, every `add*`, `buildMessage`, `isMessageFull`, zero-coding) | Rust (`builder.rs`, `zerocode.rs`) | 1.8-2.5x on `AgentUpdate` (table below) with no allocation after warm-up; the C++ allocated a map node and a buffer per variable. The typed `add*` keep their conversions (`htons`, `packToVector3`, bool) in C++ and hand bytes over. |
-| `LLTemplateMessageReader` (`decodeTemplate`, `decodeData`, every getter, `getNumberOfBlocks`, `getSize`) | Rust (`reader.rs`) | 58-130x to decode a 1 KB `ObjectUpdate`, 4.9-10x with every getter read; the C++ built a map of maps with a heap copy per variable. The reader records offsets into one copy of the packet. Trust and ban checks, the handler dispatch with its timing, the finite-float and quaternion checks of the getters stay in C++ around it. |
+| `LLTemplateMessageBuilder` (block repeats, every `add*`, `buildMessage`, `isMessageFull`, zero-coding) | Rust (`builder.rs`, `zerocode.rs`) | 1.9-3.8x on `AgentUpdate` (table below) with no allocation after warm-up; the C++ allocated a map node and a buffer per variable. The typed `add*` keep their conversions (`htons`, `packToVector3`, bool) in C++ and hand bytes over. |
+| `LLTemplateMessageReader` (`decodeTemplate`, `decodeData`, every getter, `getNumberOfBlocks`, `getSize`) | Rust (`reader.rs`) | 39-57x to decode a 1.2 KB `ObjectUpdate`, 5.0-7.2x with the handler's getters read (table below); the C++ built a map of maps with a heap copy per variable, which the profile shows is where its time went. The reader records offsets into one copy of the packet. Trust and ban checks, the handler dispatch with its timing, the finite-float and quaternion checks of the getters stay in C++ around it. |
 | `zeroCodeExpand`, `zeroCodeAdjustCurrentSendTotal` | Rust (`zerocode.rs`) | Byte transformation; `message.cpp` keeps the statistics and the exception callbacks. |
 | `LLDataPackerAsciiBuffer` | Rust (`datapacker.rs`, `ascii.rs`) | The C++ object keeps its buffer state (pointer, cursor, size, write and name flags) and hands it to the crate per call; the text conversions are where the work is. |
 | `LLDataPackerBinaryBuffer` | Rust for strings, sized binary data and the fixed-point conversion; **inline C++ for the fixed-size copies** (every scalar, vector, colour, UUID, `S16` and fixed binary) | Measured (table below): a call into the crate per 4-byte field costs more than the bounds check and copy it replaces (the binary packer row was 2.7x slower on Linux through the crate), so the copies stay the inline C++ they were. The crate's `BinaryBuffer` remains the reference, checked by the crate's corpus test; the C++ class is checked by the integration test. |
@@ -715,26 +715,114 @@ times back to back on an idle machine (AMD Ryzen 9 9950X3D; Windows 11, MSVC
 CI Release configuration); the crate at `opt-level 3`, fat LTO, `x86-64-v3`.
 Each cell is the median of the three runs of the median of 7 rounds of 20000
 operations, in microseconds. The Rust column is the viewer-side path: the
-C++ classes, the C ABI and the crate. The `ObjectUpdate` is built from the
-template with `RegionData` and three `ObjectData` repeats, 24-byte variable
-fields and zero runs in the fixed fields (1125 bytes, 1035 zero-coded).
+C++ classes, the C ABI and the crate. The harness runs at the viewer's log
+level (`LLError::LEVEL_INFO`; the test runner's default is `LEVEL_DEBUG`,
+see below).
+
+The packets are constructed, not captured. Nothing crosses the message
+system before a login: the fresh-profile launch to the login screen and
+back out (the launch note below) ends with the message log summary at
+0 packets sent and 0 received, and no account was logged in to record
+one. The harness builds them with `LLTemplateMessageBuilder` from
+representative values: an `ObjectUpdate` with `RegionData` and four
+`ObjectData` repeats, each a full update of a prim (local and full ids, CRC,
+`PCODE_VOLUME`, material, scale, the 60-byte `ObjectData` motion field, the
+path and profile parameters of a box or a hollow cylinder, a texture entry
+with one or two faces, a 16-byte texture animation on one, a `NameValue` and
+hover text with colour on one, an empty `ExtraParams` list, null sound and
+owner): 1274 bytes, 600 zero-coded. An `AgentUpdate` with agent and session
+ids, body and head rotation, camera position and axes, draw distance,
+control flags: 121 bytes. The builder's bytes are the same on both sides
+(the corpus test checks that over 1912 messages). The handler getters are
+the sequence `LLViewerObjectList::processObjectUpdate`,
+`LLViewerObject::processUpdateMessage`, `unpackVolumeParams` and
+`unpackTEMessage` issue for such a prim: `getNumberOfBlocks`, two region
+fields and 46 to 49 getters per object (every typed getter, `getSize`,
+`getBinaryData`, `getString`).
 
 | operation | Windows C++ us | Windows Rust us | Rust/C++ | Linux C++ us | Linux Rust us | Rust/C++ |
 |---|---:|---:|---:|---:|---:|---:|
-| unpack ObjectUpdate (1125 B, 3 object blocks): validateMessage + readMessage | 22.787 | 0.175 | 0.01 | 9.138 | 0.158 | 0.02 |
-| the same plus getSize and getBinaryData of every variable (108) | 25.361 | 2.526 | 0.10 | 11.211 | 2.283 | 0.20 |
-| zeroCodeExpand of its zero-coded form (1035 B) | 0.456 | 0.271 | 0.59 | 0.328 | 0.294 | 0.90 |
-| pack AgentUpdate: newMessage, nextBlock, 12 add*, buildMessage, compressMessage | 1.388 | 0.556 | 0.40 | 0.448 | 0.251 | 0.56 |
-| LLDataPackerBinaryBuffer: 50 packs and 50 unpacks of UUID, colour, float, U8, S16 | 0.404 | 0.320 | 0.79 | 0.101 | 0.044 | 0.43 |
+| validateMessage of the ObjectUpdate (1274 B) | 0.010 | 0.016 | 1.57 | 0.008 | 0.014 | 1.88 |
+| validateMessage + readMessage | 11.660 | 0.203 | 0.02 | 7.777 | 0.198 | 0.03 |
+| validateMessage + readMessage + the handler's getters | 14.140 | 1.958 | 0.14 | 9.561 | 1.905 | 0.20 |
+| the handler's getters alone (after a readMessage) | 2.417 | 1.699 | 0.70 | 1.560 | 1.601 | 1.03 |
+| zeroCodeExpand of its zero-coded form (600 B) | 0.290 | 0.248 | 0.85 | 0.279 | 0.286 | 1.03 |
+| pack AgentUpdate (121 B): newMessage, nextBlock, 12 add*, buildMessage, compressMessage | 1.115 | 0.294 | 0.26 | 0.428 | 0.231 | 0.54 |
+| LLDataPackerBinaryBuffer: 50 packs and 50 unpacks of UUID, colour, float, U8, S16 | 0.407 | 0.305 | 0.75 | 0.214 | 0.073 | 0.34 |
 
-Every row is at or below the C++ time on both platforms. The pre-port C++
-is slow where it allocated: the reader built a `std::map` of blocks, each
-an indexed vector of variables with a heap copy per variable, for every
-packet; the port records offsets into one copy. The binary data packer row
-is the inline C++ copies kept after the measurement described above (the
-same code before and after apart from the bounds-checked reads; its first
-port through the crate measured 0.28 us on Linux against the 0.10 us it
-replaced).
+| the C++ data structure alone (same code in both builds) | Windows pre-port us | Windows port build us | Linux pre-port us | Linux port build us |
+|---|---:|---:|---:|---:|
+| build and delete the LLMsgData of the ObjectUpdate, alternating | 11.618 | 12.042 | 7.484 | 7.183 |
+| build only, 1000 kept alive per round | 13.368 | 13.408 | 4.770 | 4.814 |
+| delete only, the same 1000 | 5.497 | 5.754 | 2.733 | 2.645 |
+
+Every row is at or below the C++ time on both platforms except the three
+noted here. `zeroCodeExpand` and the handler's getters on Linux are at
+parity (7 ns and 40 ns slower, within 3 %, consistent across runs; the
+Windows figures are 15 % and 30 % faster). `validateMessage` alone is 6 ns
+slower: it is one call into
+the crate (message number and the template's compiled handle) against an
+inline switch; it is paid once per packet and is 0.05 % of the pre-port
+decode it precedes.
+
+Where the pre-port microseconds go. The second table is the cost of the
+C++ reader's own output, `LLMsgData` (a `std::map` of block objects, each an
+`LLIndexedVector` of variables with a `std::map<const char*, size_t>` index
+and a heap copy of every variable's bytes), built by the same code in both
+executables: building and freeing it for this packet is 11.6 us on Windows
+and 7.5 us on Linux, which is the whole of the pre-port
+`validateMessage + readMessage` row (11.66 and 7.78 us). The
+breakdown on Windows (`rdtsc` probes in a scratch build of the pre-port
+`decodeData`, 280000 calls): deleting the previous `LLMsgData` 3.2 us, the
+template walk 24.7 us at the runner's log level, of which `addVariable` (map
+insert and vector growth, copying the entries) 5.1 us, `addData` (map
+lookup, `new U8[]`, copy) 3.2 us, block allocation 0.4 us, the handler call
+0.01 us. On Linux, `perf` over the decode loop alone (validate and read,
+20000 x 5 iterations at `LEVEL_INFO`, resolved with `addr2line`):
+libc 51 % (`malloc` and `free` internals: `_int_malloc`, `_int_free_create_chunk`,
+`_int_free_merge_chunk`, the tcache, `unlink_chunk`), libstdc++ 12 %
+(red-black tree insert and rebalance, `operator new` and `delete`), the
+executable 38 %, of which the `std::map<const char*, size_t>` index of
+`LLIndexedVector` 12 %, `decodeData` itself 3.7 %, `LLMsgVarData::addData`
+2.7 %, `addVariable` 1 %, `htolememcpy` 1 %.
+The port's decode loop profiles as 88 % of its samples in the executable (48 % in
+`vks_msg_reader_decode`, 12 % `decode_data`, 7 % the slot vector, 3.5 %
+each for `clear` and `set_message`) and 9 % in libc.
+
+The runner's log level, and the earlier figure. An earlier version of this
+table reported 22.8 us (Windows) and 9.1 us (Linux) for the pre-port decode
+of a smaller packet. The pre-port `decodeData` has an `LL_DEBUGS("LLMessage")`
+line per template block; the test runner (`indra/test/test.cpp`) sets
+`LLError::setDefaultLevel(LEVEL_DEBUG)` with no output, so in the test
+executable each of those lines formatted its message and went through
+`LLError::Log::flush` with nothing to write it to, which is 6.5 us per line
+on MSVC (an `ostringstream`, the log mutex, the timestamp and location
+strings) and about 1.7 us on glibc. A replica of the pre-port loop compiled
+into the test, bisected: 25.1 us with the `LL_DEBUGS` line, 24.7 us without
+the fast-timer block, 11.7 us without the `LL_DEBUGS` line, 12.1 us with
+neither. In the viewer the line is a cached `shouldLog()` check (false at
+the default level) and costs nothing measurable; the port has no per-block
+log line. The harness now sets `LEVEL_INFO` before timing, and the table
+above is at that level. The corrected ratio of the decode row is 57x on
+Windows and 39x on Linux, from 130x and 58x.
+
+What the port changed that explains the remaining difference: the reader
+keeps one copy of the packet and a slot table of (offset, size) per
+variable occurrence, filled by one pass over the template with no
+allocation after the first packet of a template (the vectors are reused);
+block and variable names are the canonical `LLMessageStringTable` pointers
+the viewer already passes, used as 64-bit keys in a small open-addressed
+index built once per template. The pre-port reader's per-packet work was
+dominated by `malloc`/`free` and red-black tree nodes, so removing them
+removes the time; what remains per packet is the template walk itself. The
+getters are of the same order on both sides (0.70x on Windows, 1.03x
+on Linux): each is a key lookup and a copy in both implementations, with
+one C ABI call in the port's.
+
+The binary data packer row is the inline C++ copies kept after the
+measurement described above (the same code before and after apart from the
+bounds-checked reads; its first port through the crate measured 0.28 us on
+Linux against the 0.10 us it replaced).
 
 ### Tests
 
@@ -752,7 +840,9 @@ replaced).
   the real C++ classes into Rust and back (the builder's typed `add*`, the
   reader's typed getters, `zeroCodeExpand` with its exception callbacks,
   the three packer classes), with `VKS_MSG_DUMP=<file>` to record and
-  `VKS_MSG_BENCH=<iterations>` to time. Passes on Windows and on Linux
+  `VKS_MSG_BENCH=<iterations>` to time (`VKS_MSG_BENCH_ONLY=decode` runs
+  only the decode loop for a profiler, `VKS_MSG_PACKETS_OUT=<dir>` writes
+  the constructed packets, which are the crate's bench fixtures). Passes on Windows and on Linux
   (the comparison runs against the oracle fail on the stated entries, by
   design, and are skipped while recording). Run by CI with the other
   focused tests.
