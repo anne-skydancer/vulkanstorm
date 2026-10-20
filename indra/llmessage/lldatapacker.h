@@ -111,6 +111,10 @@ public:
             void        setPassFlags(U32 flags) { mPassFlags = flags; }
 protected:
     LLDataPacker();
+    // The integer of a fixed-point value. `assigned` says whether a number
+    // was read: the text forms report a present but empty value as success
+    // without one, and unpackFixed then leaves the caller's value as it was.
+    virtual bool        unpackFixedBits(U32 &fixed, S32 total_bits, bool &assigned, const char *name);
 protected:
     U32 mPassFlags;
     bool mWriteEnabled; // disable this to do things like determine filesize without actually copying data
@@ -343,7 +347,10 @@ public:
 protected:
     bool getValueStr(const char *name, char *out_value, const S32 value_len);
     bool packValue(int32_t kind, const char* name, const int64_t* ints, size_t nints, const float* floats, size_t nfloats, const U8* data, size_t ndata, const char* what);
-    bool unpackInt(int32_t kind, int64_t& out, const char* name);
+    // `assigned`: a number was read; a present but empty value leaves
+    // `out` untouched and still succeeds
+    bool unpackInt(int32_t kind, int64_t& out, bool& assigned, const char* name);
+    /*virtual*/ bool unpackFixedBits(U32 &fixed, S32 total_bits, bool &assigned, const char *name);
     bool unpackFloats(float* out, size_t count, const char* name);
 
 protected:
@@ -448,7 +455,10 @@ protected:
     void writeIndentedName(const char *name);
     bool getValueStr(const char *name, char *out_value, const S32 value_len);
     void writeValue(int32_t kind, const char* name, const int64_t* ints, size_t nints, const float* floats, size_t nfloats, const U8* data, size_t ndata);
-    bool unpackInt(int32_t kind, int64_t& out, const char* name);
+    // `assigned`: a number was read; a present but empty value leaves
+    // `out` untouched and still succeeds
+    bool unpackInt(int32_t kind, int64_t& out, bool& assigned, const char* name);
+    /*virtual*/ bool unpackFixedBits(U32 &fixed, S32 total_bits, bool &assigned, const char *name);
     bool unpackFloats(float* out, size_t count, const char* name);
 
     /*virtual*/ bool        hasNext() const         { return true; }

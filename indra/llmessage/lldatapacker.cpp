@@ -113,10 +113,30 @@ bool LLDataPacker::packFixed(const F32 value, const char *name,
 bool LLDataPacker::unpackFixed(F32 &value, const char *name,
                                const bool is_signed, const U32 int_bits, const U32 frac_bits)
 {
-    bool success = true;
     S32 total_bits = vks_dp_fixed_total_bits(is_signed, int_bits, frac_bits);
+    if (total_bits > 31)
+    {
+        LL_ERRS() << "Bad bit count: " << total_bits << LL_ENDL;
+        return false;
+    }
 
     U32 fixed = 0;
+    bool assigned = false;
+    bool success = unpackFixedBits(fixed, total_bits, assigned, name);
+
+    // a value that could not be read, or a text value without a number,
+    // leaves the caller's as it was
+    if (success && assigned)
+    {
+        value = vks_dp_fixed_unpack(fixed, is_signed, int_bits, frac_bits);
+    }
+    return success;
+}
+
+// The binary form: a read succeeds only when the bytes are there.
+bool LLDataPacker::unpackFixedBits(U32 &fixed, S32 total_bits, bool &assigned, const char *name)
+{
+    bool success = false;
     if (total_bits <= 8)
     {
         U8 fixed_8 = 0;
@@ -129,22 +149,13 @@ bool LLDataPacker::unpackFixed(F32 &value, const char *name,
         success = unpackU16(fixed_16, name);
         fixed = fixed_16;
     }
-    else if (total_bits <= 31)
+    else
     {
         U32 fixed_32 = 0;
         success = unpackU32(fixed_32, name);
         fixed = fixed_32;
     }
-    else
-    {
-        LL_ERRS() << "Bad bit count: " << total_bits << LL_ENDL;
-    }
-
-    // a value that could not be read leaves the caller's as it was
-    if (success)
-    {
-        value = vks_dp_fixed_unpack(fixed, is_signed, int_bits, frac_bits);
-    }
+    assigned = success;
     return success;
 }
 
@@ -558,7 +569,7 @@ bool LLDataPackerAsciiBuffer::unpackBinaryData(U8 *value, S32 &size, const char 
     // the line holds at most (DP_BUFSIZE - 12) / 3 bytes of data; only
     // what is there is written
     U8 data[DP_BUFSIZE];
-    int32_t parsed_size = size;
+    int32_t parsed_size = 0;
     size_t ndata = 0;
     if (vks_dp_ascii_parse(VKS_DP_BINARY, (const uint8_t*)valuestr, strlen(valuestr), 0, NULL, NULL, data, sizeof(data), &parsed_size, &ndata) > 0)
     {
@@ -589,8 +600,9 @@ bool LLDataPackerAsciiBuffer::unpackBinaryDataFixed(U8 *value, S32 size, const c
     return true;
 }
 
-bool LLDataPackerAsciiBuffer::unpackInt(int32_t kind, int64_t& out, const char* name)
+bool LLDataPackerAsciiBuffer::unpackInt(int32_t kind, int64_t& out, bool& assigned, const char* name)
 {
+    assigned = false;
     char valuestr[DP_BUFSIZE];      /* Flawfinder: ignore */
     if (!getValueStr(name, valuestr, DP_BUFSIZE))
     {
@@ -600,11 +612,21 @@ bool LLDataPackerAsciiBuffer::unpackInt(int32_t kind, int64_t& out, const char* 
     if (vks_dp_ascii_parse(kind, (const uint8_t*)valuestr, strlen(valuestr), 1, &v, NULL, NULL, 0, NULL, NULL) > 0)
     {
         out = v;
+        assigned = true;
     }
-    else
+    // otherwise nothing to read: the value is left as it was
+    return true;
+}
+
+// The text forms: the number as the C++ scanned it (%d up to 16 bits, %u
+// for 32), or nothing.
+bool LLDataPackerAsciiBuffer::unpackFixedBits(U32 &fixed, S32 total_bits, bool &assigned, const char *name)
+{
+    int64_t v = 0;
+    if (!unpackInt(total_bits <= 16 ? VKS_DP_INT : VKS_DP_UINT, v, assigned, name)) return false;
+    if (assigned)
     {
-        // nothing to read: the value is left as it was
-        return true;
+        fixed = total_bits <= 8 ? (U32)(U8)v : (total_bits <= 16 ? (U32)(U16)v : (U32)v);
     }
     return true;
 }
@@ -634,9 +656,10 @@ bool LLDataPackerAsciiBuffer::packU8(const U8 value, const char *name)
 
 bool LLDataPackerAsciiBuffer::unpackU8(U8 &value, const char *name)
 {
-    int64_t v = value;
-    if (!unpackInt(VKS_DP_INT, v, name)) return false;
-    value = (U8)v;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (U8)v;
     return true;
 }
 
@@ -649,9 +672,10 @@ bool LLDataPackerAsciiBuffer::packU16(const U16 value, const char *name)
 
 bool LLDataPackerAsciiBuffer::unpackU16(U16 &value, const char *name)
 {
-    int64_t v = value;
-    if (!unpackInt(VKS_DP_INT, v, name)) return false;
-    value = (U16)v;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (U16)v;
     return true;
 }
 
@@ -664,9 +688,10 @@ bool LLDataPackerAsciiBuffer::packS16(const S16 value, const char *name)
 
 bool LLDataPackerAsciiBuffer::unpackS16(S16 &value, const char *name)
 {
-    int64_t v = value;
-    if (!unpackInt(VKS_DP_INT, v, name)) return false;
-    value = (S16)v;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (S16)v;
     return true;
 }
 
@@ -679,9 +704,10 @@ bool LLDataPackerAsciiBuffer::packU32(const U32 value, const char *name)
 
 bool LLDataPackerAsciiBuffer::unpackU32(U32 &value, const char *name)
 {
-    int64_t v = value;
-    if (!unpackInt(VKS_DP_UINT, v, name)) return false;
-    value = (U32)v;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_UINT, v, assigned, name)) return false;
+    if (assigned) value = (U32)v;
     return true;
 }
 
@@ -695,9 +721,10 @@ bool LLDataPackerAsciiBuffer::packS32(const S32 value, const char *name)
 
 bool LLDataPackerAsciiBuffer::unpackS32(S32 &value, const char *name)
 {
-    int64_t v = value;
-    if (!unpackInt(VKS_DP_INT, v, name)) return false;
-    value = (S32)v;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (S32)v;
     return true;
 }
 
@@ -870,7 +897,7 @@ bool LLDataPackerAsciiFile::unpackBinaryData(U8 *value, S32 &size, const char *n
         return false;
     }
     U8 data[DP_BUFSIZE];
-    int32_t parsed_size = size;
+    int32_t parsed_size = 0;
     size_t ndata = 0;
     if (vks_dp_ascii_parse(VKS_DP_BINARY, (const uint8_t*)valuestr, strlen(valuestr), 0, NULL, NULL, data, sizeof(data), &parsed_size, &ndata) > 0)
     {
@@ -902,9 +929,10 @@ bool LLDataPackerAsciiFile::unpackBinaryDataFixed(U8 *value, S32 size, const cha
     return true;
 }
 
-bool LLDataPackerAsciiFile::unpackInt(int32_t kind, int64_t& out, const char* name)
+bool LLDataPackerAsciiFile::unpackInt(int32_t kind, int64_t& out, bool& assigned, const char* name)
 {
-    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
+    assigned = false;
+    char valuestr[DP_BUFSIZE];      /*Flawfinder: ignore */
     if (!getValueStr(name, valuestr, DP_BUFSIZE))
     {
         return false;
@@ -913,6 +941,21 @@ bool LLDataPackerAsciiFile::unpackInt(int32_t kind, int64_t& out, const char* na
     if (vks_dp_ascii_parse(kind, (const uint8_t*)valuestr, strlen(valuestr), 1, &v, NULL, NULL, 0, NULL, NULL) > 0)
     {
         out = v;
+        assigned = true;
+    }
+    // otherwise nothing to read: the value is left as it was
+    return true;
+}
+
+// The text forms: the number as the C++ scanned it (%d up to 16 bits, %u
+// for 32), or nothing.
+bool LLDataPackerAsciiFile::unpackFixedBits(U32 &fixed, S32 total_bits, bool &assigned, const char *name)
+{
+    int64_t v = 0;
+    if (!unpackInt(total_bits <= 16 ? VKS_DP_INT : VKS_DP_UINT, v, assigned, name)) return false;
+    if (assigned)
+    {
+        fixed = total_bits <= 8 ? (U32)(U8)v : (total_bits <= 16 ? (U32)(U16)v : (U32)v);
     }
     return true;
 }
@@ -943,9 +986,10 @@ bool LLDataPackerAsciiFile::packU8(const U8 value, const char *name)
 
 bool LLDataPackerAsciiFile::unpackU8(U8 &value, const char *name)
 {
-    int64_t v = value;
-    if (!unpackInt(VKS_DP_INT, v, name)) return false;
-    value = (U8)v;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (U8)v;
     return true;
 }
 
@@ -959,9 +1003,10 @@ bool LLDataPackerAsciiFile::packU16(const U16 value, const char *name)
 
 bool LLDataPackerAsciiFile::unpackU16(U16 &value, const char *name)
 {
-    int64_t v = value;
-    if (!unpackInt(VKS_DP_INT, v, name)) return false;
-    value = (U16)v;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (U16)v;
     return true;
 }
 
@@ -975,9 +1020,10 @@ bool LLDataPackerAsciiFile::packS16(const S16 value, const char *name)
 
 bool LLDataPackerAsciiFile::unpackS16(S16 &value, const char *name)
 {
-    int64_t v = value;
-    if (!unpackInt(VKS_DP_INT, v, name)) return false;
-    value = (S16)v;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (S16)v;
     return true;
 }
 
@@ -991,9 +1037,10 @@ bool LLDataPackerAsciiFile::packU32(const U32 value, const char *name)
 
 bool LLDataPackerAsciiFile::unpackU32(U32 &value, const char *name)
 {
-    int64_t v = value;
-    if (!unpackInt(VKS_DP_UINT, v, name)) return false;
-    value = (U32)v;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_UINT, v, assigned, name)) return false;
+    if (assigned) value = (U32)v;
     return true;
 }
 
@@ -1008,9 +1055,10 @@ bool LLDataPackerAsciiFile::packS32(const S32 value, const char *name)
 
 bool LLDataPackerAsciiFile::unpackS32(S32 &value, const char *name)
 {
-    int64_t v = value;
-    if (!unpackInt(VKS_DP_INT, v, name)) return false;
-    value = (S32)v;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (S32)v;
     return true;
 }
 
