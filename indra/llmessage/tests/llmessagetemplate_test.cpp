@@ -980,6 +980,45 @@ namespace
         return scripts;
     }
 
+    // Scripts whose last value line is cut to its name alone (the text
+    // packers with names, and the file form): the unpack of the last op
+    // reads an empty value and must leave the caller's value as it was.
+    // The pre-port C++ left U8, U16, S16, fixed-point and fixed binary
+    // reads uninitialised there (a local sscanf never assigned); the
+    // stated behaviour is the sentinel, unchanged.
+    std::vector<std::vector<DpOp>> unchanged_scripts()
+    {
+        std::vector<std::vector<DpOp>> scripts;
+        std::vector<DpOp> targets;
+        targets.push_back(op_fixed("fx_u_8_8", 44.44f, false, 8, 8));
+        targets.push_back(op_fixed("fx_s_7_8", -100.25f, true, 7, 8));
+        targets.push_back(op_fixed("fx_s_3_4", 3.0f, true, 3, 4));
+        targets.push_back(op_fixed("fx_u_15_16", 12.75f, false, 15, 16));
+        targets.push_back(op_u8("u8", 200));
+        targets.push_back(op_u16("u16", 50000));
+        targets.push_back(op_s16("s16", -12345));
+        targets.push_back(op_u32("u32", 0xDEADBEEF));
+        targets.push_back(op_s32("s32", -94967295));
+        targets.push_back(op_f32("f32", 1.5f));
+        targets.push_back(op_v3("v3", LLVector3(1.f, 2.f, 3.f)));
+        targets.push_back(op_c4u("c4u", LLColor4U(1, 2, 3, 4)));
+        std::vector<U8> three = { 1, 2, 3 };
+        targets.push_back(op_bin("bin", three));
+        targets.push_back(op_binf("binf", three));
+        targets.push_back(op_str("str", "gone"));
+        for (const DpOp& t : targets)
+        {
+            std::vector<DpOp> s;
+            s.push_back(op_u8("lead", 7));
+            s.push_back(t);
+            scripts.push_back(s);
+        }
+        return scripts;
+    }
+
+    // run_packer_case: cut the text after the last op's name (and tab)
+    const S32 CUT_AFTER_LAST_NAME = std::numeric_limits<S32>::min();
+
     // Runs one pack op on a packer, returning the C++ result and cursor.
     DpOpResult run_pack(LLDataPacker& dp, const DpOp& op, S32 (*cursor)(LLDataPacker&))
     {
@@ -1020,8 +1059,9 @@ namespace
     }
 
     // Runs one unpack op. Outputs start as a sentinel so "unchanged" is
-    // observable. `text` is the text packers' value line when known
-    // (ASCII), to flag conversions the C++ left uninitialised.
+    // observable. While recording, the oracle's nondeterministic results
+    // are replaced by the stated behaviour; the product's results are
+    // compared as they are.
     DpOpResult run_unpack(LLDataPacker& dp, const DpOp& op, S32 (*cursor)(LLDataPacker&), bool ascii)
     {
         DpOpResult r;
@@ -1079,7 +1119,7 @@ namespace
         }
         r.ok = ok ? 1 : 0;
         r.cursor = cursor(dp);
-        if (ascii && ok)
+        if (ascii && ok && g_recording)
         {
             // (b) a NaN read from text: the C runtimes give different
             // payloads; the stated value is the canonical quiet NaN of the
@@ -1223,6 +1263,14 @@ namespace
             measure.reset();
             for (const DpOp& op : ops) run_pack(measure, op, cursor_ascii);
             d.measured = measure.getCurrentSize();
+            if (unpack_delta == CUT_AFTER_LAST_NAME)
+            {
+                // the text ends after the last tab: unpack_size - 1 is
+                // the NUL
+                S32 t = n - 1;
+                while (t >= 0 && d.packed[t] != '\t') --t;
+                unpack_delta = t + 2 - n;
+            }
             d.unpack_size = llmax(1, n + unpack_delta);
             std::vector<char> in(buf.begin(), buf.begin() + n);
             in.resize(llmax((S32)in.size(), d.unpack_size) + 16, 0);
@@ -1274,7 +1322,7 @@ namespace
                 DpOpResult r = run_unpack(up, op, cursor_ascii, true);
                 ensure_equals(kind + " op " + op.name + " cursor as simulated", r.cursor, pos + 1);
                 ensure_equals(kind + " op " + op.name + " result as simulated", (bool)r.ok, expect_ok);
-                flag_uninitialised_value(op, r, value);
+                if (g_recording) flag_uninitialised_value(op, r, value); // the product is compared as it is
                 d.unpack_results.push_back(r);
             }
         }
@@ -1303,7 +1351,13 @@ namespace
                 }
             }
             d.packed.assign(text.begin(), text.end());
-            d.unpack_size = (S32)text.size();
+            if (unpack_delta == CUT_AFTER_LAST_NAME)
+            {
+                size_t t = text.rfind('\t');
+                unpack_delta = (S32)(t == std::string::npos ? 0 : t + 1) - (S32)text.size();
+            }
+            d.unpack_size = llmax(0, (S32)text.size() + unpack_delta);
+            text.resize(d.unpack_size);
             std::istringstream in(text);
             LLDataPackerAsciiFile up(in, 2);
             // getline(buffer, 512): a line longer than 511 bytes is cut
@@ -1341,7 +1395,7 @@ namespace
                 }
                 DpOpResult r = run_unpack(up, op, cursor_none, true);
                 ensure_equals(kind + " op " + op.name + " result as simulated", (bool)r.ok, expect_ok);
-                flag_uninitialised_value(op, r, value);
+                if (g_recording) flag_uninitialised_value(op, r, value); // the product is compared as it is
                 d.unpack_results.push_back(r);
             }
         }
@@ -1642,6 +1696,11 @@ namespace
                         c.packers.push_back(run_packer_case(kind, ops, 64, 0));
                     }
                 }
+            }
+            for (const std::vector<DpOp>& ops : unchanged_scripts())
+            {
+                c.packers.push_back(run_packer_case("ascii_names", ops, 8192, CUT_AFTER_LAST_NAME));
+                c.packers.push_back(run_packer_case("file", ops, 8192, CUT_AFTER_LAST_NAME));
             }
         }
     }
