@@ -2,7 +2,8 @@
  * @file vkstorm_ffi.h
  * @brief C ABI exported by the Rust crate indra/rust/vkstorm-ffi.
  *
- * Keep in step with indra/rust/vkstorm-ffi/src/lib.rs.
+ * Keep in step with indra/rust/vkstorm-ffi/src/lib.rs (JPEG 2000 and
+ * LLSD) and indra/rust/vkstorm-ffi/src/volume.rs (the prim mesher).
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -161,6 +162,174 @@ int32_t vks_llsd_formatter_finish(VksLlsdFormatter* f);
 
 /* The notation (kind 0) or XML (kind 1) escape of len bytes, to write. */
 void vks_llsd_escape(int32_t kind, const uint8_t* p, size_t len, void* ctx, VksLlsdWrite write);
+
+/* ---- Parametric prim mesher ---------------------------------------------
+ *
+ * Vectors ("float*" below) are LLVector4a: four floats, 16-byte aligned.
+ * Profile and path generation return pointers into per-thread scratch
+ * storage, valid until the next generate call on the same thread; the
+ * sweep, the face builders and the tangents write into the caller's
+ * buffers. Every function returns -1 on bad arguments or an internal
+ * failure (panics are caught at the boundary).
+ */
+
+/* LLProfileParams. */
+typedef struct VksProfileParams
+{
+    uint8_t curve;
+    float begin;
+    float end;
+    float hollow;
+} VksProfileParams;
+
+/* LLPathParams. */
+typedef struct VksPathParams
+{
+    uint8_t curve;
+    float begin;
+    float end;
+    float scale_x;
+    float scale_y;
+    float shear_x;
+    float shear_y;
+    float twist_begin;
+    float twist_end;
+    float radius_offset;
+    float taper_x;
+    float taper_y;
+    float revolutions;
+    float skew;
+} VksPathParams;
+
+/* LLProfile::Face, same layout (16 bytes). */
+typedef struct VksProfileFace
+{
+    int32_t index;
+    int32_t count;
+    float scale_u;
+    uint8_t cap;
+    uint8_t flat;
+    uint16_t face_id;
+} VksProfileFace;
+
+/* LLPath::PathPt, same layout (112 bytes; the buffers are 16-byte aligned). */
+typedef struct VksPathPt
+{
+    float rot[4][4];
+    float pos[4];
+    float scale[4];
+    float tex_t;
+    float pad[3];
+} VksPathPt;
+
+typedef struct VksProfileOut
+{
+    const float* points;          /* point_count vectors */
+    uint32_t point_count;
+    const VksProfileFace* faces;
+    uint32_t face_count;
+    int32_t total;
+    int32_t total_out;
+    uint8_t open;
+    uint8_t concave;
+} VksProfileOut;
+
+typedef struct VksPathOut
+{
+    const VksPathPt* points;
+    uint32_t count;
+    uint8_t open;
+    float step;
+} VksPathOut;
+
+/* LLProfile::generate: 1 generated, 0 invalid cut (begin > end - 0.01; empty
+ * profile), -1 failure. */
+int32_t vks_volume_profile_generate(const VksProfileParams* params, int32_t path_open, float detail,
+                                    int32_t split, int32_t is_sculpted, int32_t sculpt_size,
+                                    VksProfileOut* out);
+/* LLPath::generate: 1 generated, -1 failure. */
+int32_t vks_volume_path_generate(const VksPathParams* params, float detail, int32_t split,
+                                 int32_t is_sculpted, int32_t sculpt_size, VksPathOut* out);
+/* LLProfile::getNumPoints and LLPath::getNumPoints (LOD triangle estimates). */
+int32_t vks_volume_profile_num_points(const VksProfileParams* params, int32_t path_open, float detail,
+                                      int32_t split, int32_t is_sculpted, int32_t sculpt_size);
+int32_t vks_volume_path_num_points(const VksPathParams* params, float detail);
+
+/* The mesh sweep of LLVolume::generate: path_count * profile_count vectors
+ * into dst (path-major). 1 on success. */
+int32_t vks_volume_sweep(const VksPathPt* path, uint32_t path_count, const float* profile,
+                         uint32_t profile_count, float* dst);
+
+/* What a face build reads: the volume's mesh, profile and path, the face
+ * fields LLVolume::createVolumeFaces set, and the parameters consulted. */
+typedef struct VksFaceParams
+{
+    const float* mesh;
+    uint32_t mesh_count;
+    const float* profile;
+    uint32_t profile_count;
+    int32_t profile_total;
+    uint8_t profile_open;
+    const VksPathPt* path;
+    uint32_t path_count;
+    uint8_t path_open;
+    int32_t id;
+    uint32_t type_mask;
+    int32_t begin_s;
+    int32_t num_s;
+    int32_t begin_t;
+    int32_t num_t;
+    uint8_t profile_curve;
+    uint8_t path_curve;
+    uint8_t sculpt_type;
+    float path_begin;
+    float path_end;
+} VksFaceParams;
+
+/* The LLVolumeFace buffers; num_vertices/num_indices are the allocated
+ * counts (mNumVertices, mNumIndices). The texture coordinate buffer must
+ * have the even-count padding slot resizeVertices allocates. */
+typedef struct VksFaceBuffers
+{
+    float* positions;
+    float* normals;
+    float* texcoords;   /* num_vertices pairs (+ padding) */
+    uint16_t* indices;
+    int32_t num_vertices;
+    int32_t num_indices;
+    uint8_t write_indices; /* !partial_build */
+} VksFaceBuffers;
+
+typedef struct VksFaceResult
+{
+    float extents_min[4];
+    float extents_max[4];
+    float center[4];
+    float tc_min[2];
+    float tc_max[2];
+    uint8_t tc_extents_set; /* sides set the texture coordinate extents, caps do not */
+} VksFaceResult;
+
+enum
+{
+    VKS_FACE_SIDE = 0,
+    VKS_FACE_CAP = 1,
+    VKS_FACE_UNCUT_CUBE_CAP = 2
+};
+
+/* Which builder the face takes (VKS_FACE_*) and the vertex and index counts
+ * it produces; -1 on bad arguments. */
+int32_t vks_volume_face_sizes(const VksFaceParams* p, int32_t* num_vertices, int32_t* num_indices);
+/* LLVolumeFace::create into the buffers: 1 built, 0 degenerate inputs
+ * (nothing written), -1 failure. */
+int32_t vks_volume_face_build(const VksFaceParams* p, const VksFaceBuffers* b, VksFaceResult* out);
+
+/* LLCalculateTangentArray into tangents (handedness in w); with
+ * normalize_normals the normals are normalised in place afterwards as
+ * LLVolumeFace::createTangents does (otherwise they are only read). */
+int32_t vks_volume_tangents(int32_t num_vertices, const float* positions, float* normals,
+                            const float* texcoords, int32_t num_indices, const uint16_t* indices,
+                            float* tangents, int32_t normalize_normals);
 
 #ifdef __cplusplus
 }
