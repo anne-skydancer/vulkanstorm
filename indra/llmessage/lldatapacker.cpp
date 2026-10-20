@@ -221,35 +221,11 @@ bool LLDataPacker::unpackUUIDs(LLUUID *values, S32 count, const char *name)
 #define VKS_BINARY_STATE VksDpBuffer s = { mBufferp, mBufferSize, (S32)(mCurBufferp - mBufferp), mWriteEnabled, 0 }
 #define VKS_BINARY_DONE mCurBufferp = mBufferp + s.cur
 
-inline void LLDataPackerBinaryBuffer::warnLength(const S32 data_size, const char *name)
-{
-    LL_WARNS() << "Buffer overflow in BinaryBuffer length verify, field name " << name << "!" << LL_ENDL;
-    LL_WARNS() << "Current pos: " << (int)(mCurBufferp - mBufferp) << " Buffer size: " << mBufferSize << " Data size: " << data_size << LL_ENDL;
-}
-
-bool LLDataPackerBinaryBuffer::packBytes(const void* value, S32 size, const char* name)
-{
-    VKS_BINARY_STATE;
-    bool ok = vks_dp_bin_pack(&s, (const uint8_t*)value, size) != 0;
-    if (!ok) warnLength(size, name);
-    VKS_BINARY_DONE;
-    return ok;
-}
-
-bool LLDataPackerBinaryBuffer::unpackBytes(void* value, S32 size, const char* name)
-{
-    VKS_BINARY_STATE;
-    bool ok = vks_dp_bin_unpack(&s, (uint8_t*)value, size) != 0;
-    if (!ok) warnLength(size, name);
-    VKS_BINARY_DONE;
-    return ok;
-}
-
 bool LLDataPackerBinaryBuffer::packString(const std::string& value, const char *name)
 {
     VKS_BINARY_STATE;
     bool ok = vks_dp_bin_pack_string(&s, (const uint8_t*)value.data(), value.size()) != 0;
-    if (!ok) warnLength((S32)value.length() + 1, name);
+    if (!ok) verifyLength((S32)value.length() + 1, name);
     VKS_BINARY_DONE;
     return ok;
 }
@@ -267,7 +243,7 @@ bool LLDataPackerBinaryBuffer::unpackString(std::string& value, const char *name
     }
     else
     {
-        warnLength(0, name);
+        LL_WARNS() << "Buffer overflow in BinaryBuffer length verify, field name " << name << "!" << LL_ENDL;
     }
     VKS_BINARY_DONE;
     return ok;
@@ -277,7 +253,7 @@ bool LLDataPackerBinaryBuffer::packBinaryData(const U8 *value, S32 size, const c
 {
     VKS_BINARY_STATE;
     bool ok = vks_dp_bin_pack_binary(&s, value, size) != 0;
-    if (!ok) warnLength(size + 4, name);
+    if (!ok) verifyLength(size + 4, name);
     VKS_BINARY_DONE;
     return ok;
 }
@@ -346,20 +322,27 @@ bool LLDataPackerBinaryBuffer::unpackU16(U16 &value, const char *name)
 
 bool LLDataPackerBinaryBuffer::packS16(const S16 value, const char *name)
 {
-    VKS_BINARY_STATE;
-    bool ok = vks_dp_bin_pack_s16(&s, value) != 0;
-    if (!ok) warnLength(2, name);
-    VKS_BINARY_DONE;
-    return ok;
+    // advances even when refused, as it always did
+    bool success = verifyLength(sizeof(S16), name);
+
+    if (mWriteEnabled && success)
+    {
+        memcpy(mCurBufferp, &value, 2);
+    }
+    mCurBufferp += 2;
+    return success;
 }
 
 bool LLDataPackerBinaryBuffer::unpackS16(S16 &value, const char *name)
 {
-    VKS_BINARY_STATE;
-    bool ok = vks_dp_bin_unpack_s16(&s, &value) != 0;
-    if (!ok) warnLength(2, name);
-    VKS_BINARY_DONE;
-    return ok;
+    bool success = verifyLength(sizeof(S16), name) && mBufferp && mCurBufferp >= mBufferp && (mCurBufferp - mBufferp) <= mBufferSize - 2;
+
+    if (success)
+    {
+        memcpy(&value, mCurBufferp, 2);
+    }
+    mCurBufferp += 2;
+    return success;
 }
 
 bool LLDataPackerBinaryBuffer::packU32(const U32 value, const char *name)
