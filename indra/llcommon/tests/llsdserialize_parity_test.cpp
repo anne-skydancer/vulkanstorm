@@ -24,6 +24,7 @@
 #include <fstream>
 #include <iterator>
 #include <sstream>
+#include <stdexcept>
 #include <streambuf>
 
 using namespace llsd_corpus;
@@ -45,6 +46,23 @@ namespace
         int underflow() override { return gptr() < egptr() ? (unsigned char)*gptr() : EOF; }
     private:
         std::string mData;
+    };
+
+    /// A sink that accepts nothing: with exceptions enabled on the stream,
+    /// every write throws std::ios_base::failure, as LLSettingsVOBase::exportFile
+    /// arranges for its file stream.
+    class FailingOutBuf : public std::streambuf
+    {
+    protected:
+        int overflow(int) override { return EOF; }
+        std::streamsize xsputn(const char*, std::streamsize) override { return 0; }
+    };
+
+    /// A source whose reads throw.
+    class ThrowingInBuf : public std::streambuf
+    {
+    protected:
+        int underflow() override { throw std::runtime_error("read failed"); }
     };
 
     std::string rest(std::istream& is)
@@ -481,6 +499,79 @@ namespace tut
             LLUZipHelper::EZipRresult r = LLUZipHelper::unzip_llsd(back, reinterpret_cast<const U8*>(zipped.data()), (S32)zipped.size());
             ensure(vc.name + ": unzip result", r == LLUZipHelper::ZR_OK);
             ensure(vc.name + ": unzip value", equalBits(back, vc.value));
+        }
+    }
+
+    // A stream that throws on write (exceptions enabled, as
+    // LLSettingsVOBase::exportFile does) makes the formatter throw a
+    // catchable std::ios_base::failure; a throwing read surfaces from the
+    // parser the same way. Neither may cross the Rust frames.
+    template<> template<>
+    void parity_object::test<11>()
+    {
+        LLSD value;
+        for (const ValueCase& vc : values())
+        {
+            if (vc.name == "login response") value = vc.value;
+        }
+        for (LLSDSerialize::ELLSD_Serialize t : { LLSDSerialize::LLSD_XML, LLSDSerialize::LLSD_NOTATION, LLSDSerialize::LLSD_BINARY })
+        {
+            FailingOutBuf buf;
+            std::ostream os(&buf);
+            os.exceptions(std::ios_base::failbit | std::ios_base::badbit);
+            bool threw = false;
+            try
+            {
+                LLSDSerialize::serialize(value, os, t);
+            }
+            catch (const std::ios_base::failure&)
+            {
+                threw = true;
+            }
+            ensure("failing write throws ios_base::failure " + std::to_string((int)t), threw);
+        }
+        {
+            FailingOutBuf buf;
+            std::ostream os(&buf);
+            os.exceptions(std::ios_base::failbit | std::ios_base::badbit);
+            bool threw = false;
+            try
+            {
+                LLSDSerialize::toPrettyXML(value, os);
+            }
+            catch (const std::ios_base::failure&)
+            {
+                threw = true;
+            }
+            ensure("failing pretty xml write throws", threw);
+        }
+        {
+            // Without exceptions enabled the stream just goes bad, as before.
+            FailingOutBuf buf;
+            std::ostream os(&buf);
+            LLSDSerialize::toXML(value, os);
+            ensure("failing write without exceptions sets badbit", os.bad());
+        }
+        for (int format = 0; format < 3; ++format)
+        {
+            ThrowingInBuf buf;
+            std::istream is(&buf);
+            LLSD out;
+            bool threw = false;
+            try
+            {
+                switch (format)
+                {
+                case 0: LLSDSerialize::fromNotation(out, is, LLSDSerialize::SIZE_UNLIMITED); break;
+                case 1: LLSDSerialize::fromBinary(out, is, LLSDSerialize::SIZE_UNLIMITED); break;
+                default: LLSDSerialize::fromXML(out, is); break;
+                }
+            }
+            catch (const std::runtime_error&)
+            {
+                threw = true;
+            }
+            ensure("throwing read surfaces from the parser " + std::to_string(format), threw);
         }
     }
 
