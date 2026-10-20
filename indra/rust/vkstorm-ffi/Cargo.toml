@@ -1,0 +1,13 @@
+[package]
+name = "vkstorm-ffi"
+description = "C ABI over the vkstorm-core-rust crates for the C++ viewer (vkstorm-rust track)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+vkstorm-j2c = { workspace = true }

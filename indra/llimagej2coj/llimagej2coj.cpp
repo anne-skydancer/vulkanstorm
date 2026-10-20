@@ -30,11 +30,14 @@
 // this is defined so that we get static linking.
 #include "openjpeg.h"
 
-// Factory function: see declaration in llimagej2c.cpp
+// Factory function: see declaration in llimagej2c.cpp.
+// With USE_RUST_J2C the factory lives in llimagej2crust, which wraps this class.
+#ifndef LL_J2C_RUST_FRONTEND
 LLImageJ2CImpl* fallbackCreateLLImageJ2CImpl()
 {
     return new LLImageJ2COJ();
 }
+#endif
 
 std::string LLImageJ2COJ::getEngineInfo() const
 {
