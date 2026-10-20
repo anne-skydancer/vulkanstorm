@@ -4,6 +4,7 @@ project(llmath)
 
 include(00-Common)
 include(LLCommon)
+include(Rust)
 include(bugsplat)
 include(Boost)
 include(SSE2NEON)
@@ -104,7 +105,7 @@ list(APPEND llmath_SOURCE_FILES ${llmath_HEADER_FILES})
 
 add_library (llmath ${llmath_SOURCE_FILES})
 
-target_link_libraries(llmath llcommon llmeshoptimizer ll::sse2neon)
+target_link_libraries(llmath llcommon llmeshoptimizer ll::sse2neon vkstorm_ffi)
 target_include_directories( llmath  INTERFACE   ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Add tests
@@ -135,4 +136,8 @@ if (LL_TESTS)
   LL_ADD_INTEGRATION_TEST(v3math v3math.cpp "${test_libs}")
   LL_ADD_INTEGRATION_TEST(v4math v4math.cpp "${test_libs}")
   LL_ADD_INTEGRATION_TEST(xform xform.cpp "${test_libs}")
+  # The parametric prim mesher against the recorded corpus (vkstorm-rust).
+  LL_ADD_INTEGRATION_TEST(llvolume "" "${test_libs}")
+  set_property(TARGET INTEGRATION_TEST_llvolume APPEND PROPERTY
+      COMPILE_DEFINITIONS "VKS_VOLUME_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
 endif (LL_TESTS)

@@ -734,13 +734,6 @@ public:
 protected:
     ~LLProfile();
 
-    static S32 getNumNGonPoints(const LLProfileParams& params, S32 sides, F32 offset=0.0f, F32 bevel = 0.0f, F32 ang_scale = 1.f, S32 split = 0);
-    void genNGon(const LLProfileParams& params, S32 sides, F32 offset=0.0f, F32 bevel = 0.0f, F32 ang_scale = 1.f, S32 split = 0);
-
-    Face* addHole(const LLProfileParams& params, bool flat, F32 sides, F32 offset, F32 box_hollow, F32 ang_scale, S32 split = 0);
-    Face* addCap (S16 faceID);
-    Face* addFace(S32 index, S32 count, F32 scaleU, S16 faceID, bool flat);
-
 protected:
     bool          mOpen;
     bool          mConcave;
@@ -794,9 +787,7 @@ public:
     virtual ~LLPath();
 
     static S32 getNumPoints(const LLPathParams& params, F32 detail);
-    static S32 getNumNGonPoints(const LLPathParams& params, S32 sides, F32 offset=0.0f, F32 end_scale = 1.f, F32 twist_scale = 1.f);
 
-    void genNGon(const LLPathParams& params, S32 sides, F32 offset=0.0f, F32 end_scale = 1.f, F32 twist_scale = 1.f);
     virtual bool generate(const LLPathParams& params, F32 detail=1.0f, S32 split = 0,
                           bool is_sculpted = false, S32 sculpt_size = 0);
 
@@ -1001,10 +992,6 @@ public:
 private:
     LLVolumeOctree* mOctree;
     LLVolumeTriangle* mOctreeTriangles;
-
-    bool createUnCutCubeCap(LLVolume* volume, bool partial_build = false);
-    bool createCap(LLVolume* volume, bool partial_build = false);
-    bool createSide(LLVolume* volume, bool partial_build = false);
 };
 
 class LLVolume : public LLRefCount

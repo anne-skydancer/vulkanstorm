@@ -3,7 +3,7 @@
 # indra/rust with cargo through corrosion and exposes them as CMake targets.
 include_guard(GLOBAL)
 
-# JPEG 2000 (and later rungs) are Rust on this track; there is no option to
+# JPEG 2000 and the prim mesher (and later rungs) are Rust on this track; there is no option to
 # select another implementation.
 if (TRUE)
   include(FetchContent)
@@ -21,6 +21,9 @@ if (TRUE)
     CRATES vkstorm-ffi
     PROFILE release
   )
+
+  # The C header of the ABI, for every library that calls into the crate.
+  target_include_directories(vkstorm_ffi INTERFACE ${CMAKE_SOURCE_DIR}/rust/include)
 
   # corrosion adds the system libraries Rust's std needs (kernel32, ntdll,
   # userenv, ws2_32, dbghelp on Windows) to the imported target itself.

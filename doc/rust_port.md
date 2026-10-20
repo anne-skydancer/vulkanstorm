@@ -241,6 +241,198 @@ Differences, all outside what any caller exercises:
   interoperability tests).
 - `llsdserialize_tool` (built with `LL_TESTS=ON`, not run automatically):
   `bench [iterations]` and `dump <dir>`.
+## Rung: the parametric prim mesher
+
+- The mesher of `indra/llmath/llvolume.cpp` is Rust: `vkstorm-volume` in
+  vkstorm-core-rust (`crates/vkstorm-volume`), reached through `vks_volume_*`
+  in `indra/rust/vkstorm-ffi/src/volume.rs` (header
+  `indra/rust/include/vkstorm_ffi.h`, now shared by every library that calls
+  into the crate; `llmath` links `vkstorm_ffi`). No runtime choice, no
+  fallback: the C++ bodies of `LLProfile::generate`/`genNGon`/`addHole`,
+  `LLPath::generate`/`genNGon`, the mesh sweep of `LLVolume::generate`,
+  `LLVolumeFace::createSide`/`createCap`/`createUnCutCubeCap`,
+  `createTangents` and `LLCalculateTangentArray` are gone; the methods that
+  remain are thin wrappers. The 881-case corpus recorded from the original
+  C++ (`indra/llmath/tests/fixtures/llvolume_corpus.vksv`) is the
+  oracle on Windows (8.4 MB); its Linux counterpart
+  `llvolume_corpus.linux.vksv` was recorded by the same test from the Linux
+  build (see below).
+- `LLVolume`, `LLProfile`, `LLPath` and `LLVolumeFace` stay the in-memory
+  representation. Profile and path generation return pointers into
+  per-thread scratch storage that the C++ copies out (a few hundred bytes);
+  the mesh sweep, the face builders and the tangents write straight into
+  the caller's 16-byte aligned buffers (`mMesh`, `mPositions`, `mNormals`,
+  `mTexCoords`, `mIndices`, `mTangents`), so nothing the renderer consumes
+  is copied. The sweep writes through `MaybeUninit` (a freshly resized
+  `mMesh` is not initialised); the face builders and the tangents form
+  slices over their buffers, so `LLVolumeFace::create` and `createTangents`
+  zero freshly allocated storage (texture-coordinate padding included)
+  before the call, and a partial rebuild keeps the data it has. `LLPath::PathPt` and `LLProfile::Face` keep their layout, shared
+  with the crate (`static_assert`ed).
+- Keep-or-port judgement. Ported: everything above. The SSE code it replaced
+  (`LLVector4a` cross products, `_mm_min_ps`/`_mm_max_ps` extents,
+  `normalize3fast`, `LLMatrix4a::rotate`) is written lane for lane in Rust
+  with the same IEEE operations; `_mm_rsqrt_ps` is called through
+  `core::arch` because its result is a hardware approximation. Measured
+  (table below), the Rust path is faster than the C++ on every shape and
+  LOD class, so no part was kept for performance. Kept C++: the sculpt
+  map-to-mesh step (`sculptGenerateMapVertices`, next rung; its faces
+  already go through the Rust builder with the sculpt stitching rules), mesh
+  assets (`unpackVolumeFaces`, next rung), `cacheOptimize` (out of scope),
+  silhouettes, line intersection, octrees, `remap`/`optimize`, and the
+  `LLVolumeFace` memory management (`resizeVertices`/`resizeIndices`,
+  partial rebuilds), which is the representation itself.
+- Floating-point identity. The C++ operation order is kept. The C++ itself
+  does not produce the same mesh on Windows and Linux (10793 of the 27158
+  corpus blocks differ between the two builds, two of them index blocks):
+  with MSVC the unqualified `sin`/`cos`/`floor`/`fabs` of `llvolume.cpp`
+  bind the global float overloads and `std::lerp` is an `fma` at its core;
+  with GCC and libstdc++ they bind the C double functions (the surrounding
+  expression is then evaluated in double before the store to `F32`, and the
+  test path's `lerp` promotes to the double overload) and `std::lerp` is the
+  unfused `a + t * (b - a)`; GCC also folds the cap normal's `* -1.0f` into
+  a negation, which differs from a multiply only for the NaN a zero-area cap
+  produces. The crate follows each platform's resolution (`params.rs`,
+  `face.rs`), so there is one oracle corpus per toolchain:
+  `llvolume_corpus.vksv` recorded on Windows (MSVC 19.44, UCRT) and
+  `llvolume_corpus.linux.vksv` recorded on Ubuntu 26.04 (GCC 15, glibc)
+  from the pre-port C++ at the `vkstorm-rust` base commit with the CI Linux
+  configuration, both on an AMD Ryzen 9 9950X3D. `_mm_rsqrt_ps` results are
+  CPU-specific (Intel and AMD tables differ), so each fixture carries a
+  signature of the recording CPU and the tests compare the rsqrt-derived
+  arrays (cap normals, tangents, normalised normals) with a tolerance only
+  when it differs; the recorder always stores those arrays in full (the
+  other arrays only for the smaller cases, hashes otherwise), so such a
+  comparison is never skipped: a recording platform allows no unverifiable
+  block, and the tolerance treats a NaN or an infinity against anything but
+  an identical value (or another NaN) as a difference. Index blocks and the
+  integer fields of profile-face records are exact everywhere. A platform
+  with no recording (macOS) gets the Windows corpus, exact integer data and
+  a tolerance on the float arrays, and says so. The two corpora are 8.4 MB
+  each (fixture format 2).
+- Parity: `cargo test -p vkstorm-volume` (crate) and
+  `INTEGRATION_TEST_llvolume` (viewer, through the FFI) rebuild all 881
+  cases, 3939 faces, 27158 array blocks (positions, normals, texture
+  coordinates, indices, tangents, normalised normals, profile points and
+  faces, path points, mesh) plus counts, extents, centres, texture
+  extents, face masks and LOD triangle estimates against the platform's
+  corpus: all bit-identical on Windows and on Linux (0 mismatches, 0
+  tolerance comparisons on both). The corpus covers all six profile curves,
+  four hole shapes, line/circle/circle2/test and flexible paths, hollow,
+  both cuts, twist, taper, shear, radius offset, revolutions, skew and
+  ratio, detail 0, 1, 1.5, 2.5 and 4, and sculpt stitching (sphere, torus,
+  plane, cylinder, invert, mirror). Recording a corpus means building the
+  test at the pre-rung commit with `VKS_VOLUME_DUMP=<file>`.
+- Measurements (single thread, AMD Ryzen 9 9950X3D, RelWithDebInfo viewer
+  with AVX2, the crate at `opt-level 3`, fat LTO, `x86-64-v3`): the corpus
+  through `LLVolume` construction plus `genTangents` for every face, with
+  the C++ build of `INTEGRATION_TEST_llvolume` from the pre-rung commit and
+  the Rust-backed build run back to back; minimum of 30 runs per case over
+  two rounds, summed per shape and LOD, in microseconds. The Rust column is
+  the viewer-side path, so it includes the FFI boundary (profile, path and
+  sweep calls, two calls per face, one per face for tangents) and the C++
+  wrappers. Total over the 881 cases: C++ 5459.9 us, Rust 4100.1 us
+  (0.75); 879 cases are faster, the two slower ones are LOD-4 tori with
+  square holes (28.0 vs 33.9 us and 28.3 vs 33.7 us). The crate's own
+  harness (`cargo bench --bench mesher`, same flags) takes 4311.6 us for
+  the same cases, so the boundary cost is below what the two harnesses
+  resolve (the crate harness allocates more than the C++ wrappers do); the
+  sculpt rows compare the whole C++ path, map step included, against the
+  Rust face build on the recorded mesh.
+
+| shape | LOD | cases | vertices | triangles | C++ us | Rust us | Rust/C++ |
+|---|---|---|---|---|---|---|---|
+| box | 0 | 1 | 24 | 12 | 1.7 | 1.1 | 0.65 |
+| box | 1 | 45 | 1500 | 944 | 79.4 | 56.4 | 0.71 |
+| box | 1.5 | 2 | 52 | 28 | 3.1 | 2.2 | 0.71 |
+| box | 2.5 | 5 | 627 | 698 | 18.0 | 12.8 | 0.71 |
+| box | 4 | 44 | 6176 | 7560 | 185.6 | 123.3 | 0.66 |
+| box_flex | 1 | 2 | 257 | 248 | 9.0 | 7.7 | 0.86 |
+| box_flex | 1.5 | 1 | 84 | 72 | 3.2 | 2.8 | 0.87 |
+| box_flex | 2.5 | 1 | 128 | 144 | 4.3 | 3.6 | 0.84 |
+| box_flex | 4 | 2 | 565 | 752 | 17.6 | 13.4 | 0.76 |
+| circle_circle2 | 1 | 5 | 542 | 704 | 16.6 | 12.0 | 0.72 |
+| circle_circle2 | 1.5 | 5 | 486 | 566 | 15.1 | 11.5 | 0.76 |
+| circle_circle2 | 2.5 | 5 | 1664 | 2648 | 41.4 | 30.3 | 0.73 |
+| circle_circle2 | 4 | 3 | 2374 | 4148 | 55.5 | 40.1 | 0.72 |
+| circle_test | 1 | 3 | 192 | 216 | 6.2 | 4.6 | 0.74 |
+| circle_test | 1.5 | 3 | 275 | 338 | 7.8 | 5.6 | 0.72 |
+| circle_test | 2.5 | 5 | 667 | 852 | 17.6 | 12.7 | 0.72 |
+| circle_test | 4 | 4 | 926 | 1242 | 22.4 | 15.4 | 0.69 |
+| cylinder | 1 | 47 | 1805 | 1510 | 61.2 | 47.8 | 0.78 |
+| cylinder | 1.5 | 2 | 92 | 74 | 3.3 | 2.4 | 0.73 |
+| cylinder | 2.5 | 4 | 510 | 642 | 13.2 | 9.9 | 0.75 |
+| cylinder | 4 | 46 | 9479 | 12988 | 224.8 | 158.8 | 0.71 |
+| cylinder_flex | 1 | 2 | 161 | 194 | 6.0 | 5.0 | 0.83 |
+| cylinder_flex | 1.5 | 1 | 112 | 162 | 3.6 | 2.9 | 0.81 |
+| cylinder_flex | 2.5 | 1 | 178 | 270 | 5.4 | 4.2 | 0.78 |
+| cylinder_flex | 4 | 2 | 458 | 680 | 12.8 | 9.8 | 0.77 |
+| equaltri_line | 1 | 1 | 22 | 12 | 1.2 | 1.0 | 0.83 |
+| equaltri_line | 1.5 | 4 | 174 | 136 | 6.7 | 5.4 | 0.81 |
+| equaltri_line | 2.5 | 6 | 475 | 514 | 14.2 | 11.1 | 0.78 |
+| equaltri_line | 4 | 4 | 482 | 558 | 12.7 | 9.7 | 0.76 |
+| halfcircle_circle2 | 1 | 2 | 85 | 88 | 3.5 | 2.6 | 0.74 |
+| halfcircle_circle2 | 1.5 | 6 | 397 | 416 | 14.3 | 10.8 | 0.76 |
+| halfcircle_circle2 | 2.5 | 4 | 834 | 1192 | 22.3 | 16.7 | 0.75 |
+| halfcircle_circle2 | 4 | 5 | 2135 | 3394 | 52.8 | 39.3 | 0.74 |
+| halfcircle_line | 1 | 2 | 68 | 50 | 2.7 | 2.1 | 0.78 |
+| halfcircle_line | 1.5 | 4 | 134 | 104 | 5.3 | 4.1 | 0.77 |
+| halfcircle_line | 2.5 | 3 | 270 | 322 | 7.5 | 5.7 | 0.76 |
+| halfcircle_line | 4 | 2 | 263 | 330 | 6.9 | 5.1 | 0.74 |
+| isotri_circle | 1 | 3 | 230 | 224 | 7.7 | 6.0 | 0.78 |
+| isotri_circle | 1.5 | 6 | 644 | 668 | 20.4 | 15.1 | 0.74 |
+| isotri_circle | 2.5 | 5 | 2812 | 4278 | 64.6 | 48.8 | 0.76 |
+| isotri_circle | 4 | 5 | 1216 | 1640 | 31.7 | 24.0 | 0.76 |
+| prism | 1 | 46 | 1382 | 886 | 62.9 | 50.1 | 0.80 |
+| prism | 1.5 | 7 | 258 | 186 | 10.7 | 8.6 | 0.80 |
+| prism | 2.5 | 5 | 499 | 562 | 14.2 | 10.5 | 0.74 |
+| prism | 4 | 46 | 5164 | 6126 | 141.0 | 104.2 | 0.74 |
+| righttri_circle | 1 | 4 | 191 | 152 | 7.7 | 6.0 | 0.78 |
+| righttri_circle | 1.5 | 4 | 406 | 432 | 12.6 | 9.3 | 0.74 |
+| righttri_circle | 2.5 | 3 | 1390 | 2054 | 32.0 | 24.4 | 0.76 |
+| righttri_circle | 4 | 2 | 454 | 630 | 12.3 | 9.2 | 0.75 |
+| righttri_line | 1 | 5 | 186 | 124 | 7.8 | 6.5 | 0.83 |
+| righttri_line | 1.5 | 2 | 76 | 56 | 3.1 | 2.6 | 0.84 |
+| righttri_line | 2.5 | 6 | 615 | 670 | 17.5 | 13.2 | 0.75 |
+| righttri_line | 4 | 2 | 184 | 198 | 5.2 | 4.1 | 0.79 |
+| ring | 1 | 45 | 3261 | 3228 | 109.1 | 82.3 | 0.75 |
+| ring | 1.5 | 3 | 218 | 198 | 7.9 | 5.6 | 0.71 |
+| ring | 2.5 | 4 | 1729 | 2526 | 40.9 | 30.9 | 0.76 |
+| ring | 4 | 48 | 25535 | 39184 | 621.8 | 460.5 | 0.74 |
+| sculpt_cylinder | 1 | 3 | 147 | 216 | 7.0 | 5.7 | 0.81 |
+| sculpt_cylinder | 4 | 3 | 867 | 1536 | 34.5 | 27.6 | 0.80 |
+| sculpt_plane | 1 | 3 | 147 | 216 | 6.9 | 5.6 | 0.81 |
+| sculpt_plane | 4 | 3 | 867 | 1536 | 34.6 | 27.8 | 0.80 |
+| sculpt_sphere | 1 | 3 | 147 | 216 | 7.2 | 5.7 | 0.79 |
+| sculpt_sphere | 4 | 4 | 1164 | 2048 | 46.1 | 36.7 | 0.80 |
+| sculpt_torus | 1 | 3 | 147 | 216 | 7.2 | 5.7 | 0.79 |
+| sculpt_torus | 2.5 | 1 | 297 | 512 | 11.1 | 9.2 | 0.83 |
+| sculpt_torus | 4 | 3 | 867 | 1536 | 34.6 | 27.9 | 0.81 |
+| sphere | 1 | 47 | 2772 | 3194 | 100.6 | 75.4 | 0.75 |
+| sphere | 1.5 | 4 | 244 | 304 | 9.0 | 6.6 | 0.73 |
+| sphere | 2.5 | 4 | 1304 | 1958 | 32.5 | 24.7 | 0.76 |
+| sphere | 4 | 49 | 23691 | 39516 | 619.1 | 467.9 | 0.76 |
+| square_circle2 | 1 | 5 | 332 | 302 | 11.6 | 9.0 | 0.78 |
+| square_circle2 | 1.5 | 4 | 254 | 208 | 9.3 | 7.1 | 0.76 |
+| square_circle2 | 2.5 | 5 | 1315 | 1734 | 33.5 | 25.4 | 0.76 |
+| square_circle2 | 4 | 5 | 1822 | 2478 | 44.5 | 33.8 | 0.76 |
+| torus | 1 | 46 | 3618 | 4934 | 117.7 | 87.3 | 0.74 |
+| torus | 1.5 | 5 | 867 | 1190 | 24.2 | 17.9 | 0.74 |
+| torus | 2.5 | 4 | 2660 | 4322 | 62.8 | 46.7 | 0.74 |
+| torus | 4 | 45 | 37983 | 68186 | 1051.0 | 805.3 | 0.77 |
+| tube | 1 | 45 | 3845 | 3766 | 120.7 | 92.5 | 0.77 |
+| tube | 1.5 | 1 | 80 | 72 | 2.9 | 2.0 | 0.69 |
+| tube | 2.5 | 3 | 1598 | 2334 | 36.3 | 27.3 | 0.75 |
+| tube | 4 | 48 | 30783 | 46596 | 779.0 | 587.5 | 0.75 |
+
+TOTAL: C++ 5459.9 us, Rust 4100.1 us, Rust/C++ 0.751 (sum of per-case minima over 881 cases)
+slowest relative cases:
+  1.21 torus/hollow70_squarehole/lod4 C++=28.0 Rust=33.9
+  1.19 torus/hollow50_squarehole/lod4 C++=28.3 Rust=33.7
+  0.91 righttri_line/base/lod1.5 C++=1.1 Rust=1.0
+  0.91 righttri_line/base/lod1 C++=1.1 Rust=1.0
+  0.91 equaltri_line/base/lod1.5 C++=1.1 Rust=1.0
+  0.88 box/hollow_cutS/lod1 C++=1.7 Rust=1.5
 
 ## Local build
 
@@ -254,6 +446,11 @@ cmake --build build-vc170-64 --config RelWithDebInfo --target vulkanstorm-bin --
 cmake -S indra -B build-vc170-64 -DLL_TESTS:BOOL=ON
 cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llimagej2coj -- -m:4 -nologo
 cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llsdserialize_parity llsdserialize_tool -- -m:4 -nologo
+cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llvolume -- -m:4 -nologo
 ```
 
 Under Git Bash pass MSBuild switches with a hyphen (`-m:4`), not a slash.
+The llvolume test also records the corpus (`VKS_VOLUME_DUMP=<file>`) and
+times it (`VKS_VOLUME_BENCH=<iterations>`, `VKS_VOLUME_BENCH_OUT=<csv>`);
+the same timing for the crate alone is `cargo bench --bench mesher` in
+vkstorm-core-rust with the same environment variables.
