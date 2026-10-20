@@ -1,0 +1,4 @@
+[net]
+# Use the git CLI so private git dependencies work with the user's credential
+# helper locally and with the token-configured git on CI.
+git-fetch-with-cli = true
