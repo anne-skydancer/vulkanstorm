@@ -1218,7 +1218,7 @@ classes keep their names and public interfaces (`LLTextureCache`,
 | `LLTextureFetchWorker::doWork` and its states, `onCompleted`/`callbackHttpGet`, `callbackCacheRead`, `callbackCacheWrite`, `callbackDecoded`, `deleteOK`'s state part, `setDesiredDiscard`, the HTTP semaphore and water marks, the resource waiters and their release order, the cumulative counts, the state timers | Rust (`fetch`) | The state machine. `Worker::do_work` is the C++ `doWork` with its `return doWork(param)` recursions as iterations; the C++ worker keeps the objects the machine does not own and drives it through a table of host callbacks (`VksTexFetchHost`), each one line of the old `doWork` (a cache read, an HTTP GET, a decode post, a cache write, the assembly of the formatted image from a reply, the statistics). `LLTextureFetch` holds the crate's fetcher under its own lock (deleteOK, the worker destructors and the statistics run on other threads). |
 | `LLTextureFetch`'s request map, the HTTP queue accounting, the command queue (region and metrics), `createRequest`'s plumbing, `getRequestFinished` and the state accessors, `releaseHttpWaiters`' walk over the workers | C++ | Thread, map and lock plumbing over the C++ worker objects; the decisions in it (`createRequest`'s desired size and discard, the "already done" check, the release order of waiters by priority, the data progress and requested priority an accessor reports) come from the crate. |
 | The UDP texture path (`LOAD_FROM_SIMULATOR`, `sendRequestListToSimulators`, `receiveImageHeader`/`receiveImagePacket`, the packet assembly) | Rust behind the `opensim` feature; the C++ callers compiled with `OPENSIM` | Legacy transport Second Life no longer uses; CMake forwards `OPENSIM` to the crate feature, so a Second Life build carries neither side. Without it the `ImageData`/`ImagePacket` handlers count the packet as bad and no request list is sent. |
-| `LLAdaptiveRetryPolicy` | Rust (`fetch::retry`); the C++ class is a thin wrapper that still reads the `Retry-After` header from `LLSD` or `HttpHeaders` | The backoff, the retry counting, the 4xx/5xx decision. |
+| `LLAdaptiveRetryPolicy` | Rust (`fetch::retry`); the C++ class is a thin wrapper that still reads and parses the `Retry-After` header (from `LLSD` or `HttpHeaders`; seconds or an RFC 1123 date through `curl_getdate`) | The backoff, the retry counting, the 4xx/5xx decision. The header parsing needs libcurl's date parser, which the C++ already links. |
 | `LLImageJ2C::calcDataSizeJ2C` | Rust (`fetch::budget`) | The byte budget per discard level the fetcher asks the server for (the FIRE-35987 layer walk). `calcDiscardLevelBytes` stays the C++ loop over the per-instance cached budgets (it reads the image's own rate). |
 | `LLWorkerThread`, `LLQueuedThread`, `LLImageDecodeThread` (the thread pools) | C++, driving the Rust machine | Measured and judged: the texture cache thread, the fetch thread and the decode pool are the viewer's `LLQueuedThread`/`LL::ThreadPool` instances whose pause, wake, priority and shutdown semantics the main loop depends on (`LLAppViewer::idle`, `getPending`, `runCondition`); the work they run is where the time goes and that is Rust. Rust threads would only add a second scheduler to coordinate with the first for no measured gain: the hot paths are at the C++ on the same threads. |
 | The GL upload side (`LLViewerTexture`, `LLViewerFetchedTexture`, `LLImageGL`) | C++ | Rendering. |
@@ -1333,9 +1333,12 @@ Documented as different:
 - The texture fetcher's debugging aids (`mDebugID`, `mDebugPause`) are
   copied into the crate's fetcher once per main-loop update; the
   breakpoint counter the console increments stays C++.
-- `LLTextureFetch::getStateString` and `LLAdaptiveRetryPolicy`'s
-  `Retry-After` number parsing are the crate's; a `Retry-After` date is
-  not understood, as before.
+- `LLTextureFetch::getStateString` is the crate's. The `Retry-After`
+  header stays C++, as before the port: a number of seconds through
+  `strtod`, an RFC 1123 date through libcurl's `curl_getdate`; the
+  crate's policy takes the parsed seconds. `INTEGRATION_TEST_llhttpretrypolicy`,
+  disabled upstream since the policy moved to the viewer, builds and
+  runs again and checks both forms.
 
 ### Parity corpora
 
@@ -1364,7 +1367,9 @@ attributes mark them binary).
   crate-side timing harness.
 - Viewer: `INTEGRATION_TEST_lltexturecache_parity`,
   `INTEGRATION_TEST_lltexturefetch_parity`,
-  `INTEGRATION_TEST_llmeshunpack_parity` (above), in CI's focused list;
+  `INTEGRATION_TEST_llmeshunpack_parity` (above) and
+  `INTEGRATION_TEST_llhttpretrypolicy` (the retry policy's original
+  suite, seconds and RFC 1123 dates), in CI's focused list;
   `INTEGRATION_TEST_llimagej2coj`, `INTEGRATION_TEST_llimagecodecs`,
   `INTEGRATION_TEST_llvolume`, `INTEGRATION_TEST_llmessagetemplate` and
   `INTEGRATION_TEST_llcorehttp_parity` still pass. The llprimitive unit

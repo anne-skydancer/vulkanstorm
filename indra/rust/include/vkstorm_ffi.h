@@ -1019,7 +1019,6 @@ int32_t  vks_retry_policy_on_success(VksRetryPolicy* p);
 int32_t  vks_retry_policy_on_failure(VksRetryPolicy* p, int32_t status, int32_t has_retry_after, float retry_after);
 int32_t  vks_retry_policy_should_retry(VksRetryPolicy* p, float* seconds);
 uint32_t vks_retry_policy_retry_count(VksRetryPolicy* p);
-int32_t  vks_retry_seconds_until_retry_after(const char* s, size_t len, float* seconds);
 
 /* LLDiskCache. */
 typedef struct VksDiskCache VksDiskCache;

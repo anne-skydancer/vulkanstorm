@@ -98,9 +98,29 @@ bool LLAdaptiveRetryPolicy::shouldRetry(F32& seconds_to_wait) const
 /*static*/
 bool LLAdaptiveRetryPolicy::getSecondsUntilRetryAfter(const std::string& retry_after, F32& seconds_to_wait)
 {
+    // The header is read here and the policy takes the seconds: the number
+    // of seconds through strtod, an RFC 1123 date through libcurl's date
+    // parser, as before the port.
     // Examples of Retry-After headers:
     // Retry-After: Fri, 31 Dec 1999 23:59:59 GMT
     // Retry-After: 120
-    // Only the number of seconds form is understood, as before.
-    return vks_retry_seconds_until_retry_after(retry_after.data(), retry_after.size(), &seconds_to_wait) != 0;
+
+    // Check for number of seconds version, first:
+    char* end = 0;
+    // Parse as double
+    double seconds = std::strtod(retry_after.c_str(), &end);
+    if (end != 0 && *end == 0)
+    {
+        // Successful parse
+        seconds_to_wait = (F32)seconds;
+        return true;
+    }
+
+    // Parse rfc1123 date.
+    time_t date = curl_getdate(retry_after.c_str(), NULL);
+    if (-1 == date) return false;
+
+    seconds_to_wait = (F32)((F64)date - LLTimer::getTotalSeconds());
+
+    return true;
 }

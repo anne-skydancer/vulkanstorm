@@ -17,7 +17,7 @@ use std::sync::Mutex;
 
 use vkstorm_assets::asset::{self, RequestKey, ToxicMap, Verdict};
 use vkstorm_assets::diskcache::{self, file as dfile, DiskCache};
-use vkstorm_assets::fetch::{self, budget, plan, retry::AdaptiveRetryPolicy, Env, FetchType, Fetcher, Host, HttpGet, Region, Release, State, Worker};
+use vkstorm_assets::fetch::{budget, plan, retry::AdaptiveRetryPolicy, Env, FetchType, Fetcher, Host, HttpGet, Region, Release, State, Worker};
 use vkstorm_assets::host::{LogLevel, set_logger};
 use vkstorm_assets::mesh::{self, header::{MeshHeader, NUM_LODS}, plan as mplan, skin::{Decomposition, SkinInfo}, unpack::Face};
 use vkstorm_assets::texcache::{self, Config, FastEntry, Paths, TextureCache};
@@ -988,9 +988,9 @@ fn packets_last(_w: &Worker) -> i32 {
 worker_fn!(vks_tfetch_worker_insert_packet, |w, index: i32, size: u32| -> i32, 0, w.insert_packet(index, size) as i32);
 #[cfg(feature = "opensim")]
 worker_fn!(vks_tfetch_worker_setup_packet_data, |w, data_size: i32| -> i32, 0, match w.setup_packet_data(data_size) {
-    fetch::SetupPackets::Ok => 1,
-    fetch::SetupPackets::BadSize => 0,
-    fetch::SetupPackets::Refetch => -1,
+    vkstorm_assets::fetch::SetupPackets::Ok => 1,
+    vkstorm_assets::fetch::SetupPackets::BadSize => 0,
+    vkstorm_assets::fetch::SetupPackets::Refetch => -1,
 });
 #[cfg(feature = "opensim")]
 worker_fn!(vks_tfetch_worker_receive_header, |w, codec: i32, total_packets: u16, file_size: i32| -> i32, 0, {
@@ -1230,24 +1230,6 @@ retry_fn!(vks_retry_policy_should_retry, |p, seconds: *mut f32| -> i32, 0, {
     ok as i32
 });
 retry_fn!(vks_retry_policy_retry_count, |p| -> u32, 0, p.retry_count());
-
-/// `getSecondsUntilRetryAfter`: 1 when the text is a number of seconds.
-///
-/// # Safety
-/// `s` must point to `len` bytes; `seconds` must be valid.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vks_retry_seconds_until_retry_after(s: *const c_char, len: usize, seconds: *mut f32) -> i32 {
-    let text = unsafe { str_arg(s, len) };
-    match fetch::retry::seconds_until_retry_after(text) {
-        Some(v) => {
-            if !seconds.is_null() {
-                unsafe { *seconds = v };
-            }
-            1
-        }
-        None => 0,
-    }
-}
 
 // ---------------------------------------------------------------------------
 // The asset disk cache
