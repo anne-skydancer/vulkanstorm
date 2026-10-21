@@ -1507,12 +1507,12 @@ bool LLVolume::unpackVolumeFaces(U8* in_data, S32 size, bool optimize)
         }
         if (f.num_vertices > 0)
         {
-            memcpy(face.mPositions, f.positions, sizeof(LLVector4a) * f.num_vertices);
-            memcpy(face.mNormals, f.normals, sizeof(LLVector4a) * f.num_vertices);
+            memcpy(face.mPositions->getF32ptr(), f.positions, sizeof(LLVector4a) * f.num_vertices);
+            memcpy(face.mNormals->getF32ptr(), f.normals, sizeof(LLVector4a) * f.num_vertices);
             // The texture coordinates come in pairs (the SSE code wrote them
             // four floats at a time); the buffer is allocated for the even
             // count.
-            memcpy(face.mTexCoords, f.texcoords, sizeof(F32) * 2 * f.texcoord_count);
+            memcpy(face.mTexCoords->mV, f.texcoords, sizeof(F32) * 2 * f.texcoord_count);
         }
         if (f.has_weights)
         {
@@ -1526,7 +1526,7 @@ bool LLVolume::unpackVolumeFaces(U8* in_data, S32 size, bool optimize)
             }
             if (f.num_vertices > 0)
             {
-                memcpy(face.mWeights, f.weights, sizeof(LLVector4a) * f.num_vertices);
+                memcpy(face.mWeights->getF32ptr(), f.weights, sizeof(LLVector4a) * f.num_vertices);
             }
         }
         face.mNormalizedScale.set(f.normalized_scale[0], f.normalized_scale[1], f.normalized_scale[2]);
