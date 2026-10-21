@@ -9,7 +9,9 @@
 //! Rung three: the message template system and the data packers via
 //! `vkstorm-messages` (`messages.rs`).
 //! Rung four: the HTTP layer via `vkstorm-http` (`http.rs`).
+//! Rung five: the asset pipeline via `vkstorm-assets` (`assets.rs`).
 
+mod assets;
 mod http;
 mod image;
 mod messages;
