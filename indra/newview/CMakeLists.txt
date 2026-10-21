@@ -3176,6 +3176,53 @@ if (LL_TESTS)
     "${test_libs}"
     )
 
+  # Byte-level parity of the texture cache files against the record made
+  # from the C++ implementation before its port to Rust (vkstorm-rust).
+  LL_ADD_INTEGRATION_TEST(lltexturecache_parity
+    lltexturecache.cpp
+    "llcommon;llfilesystem;llmath;llxml;llmessage;llcorehttp;llimage;llimagej2coj;llrender"
+    )
+  set_property(TARGET INTEGRATION_TEST_lltexturecache_parity APPEND PROPERTY
+      COMPILE_DEFINITIONS "VKS_TEXCACHE_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
+  # The viewer precompiled header reaches into libraries the test does not
+  # link (their unit tests are not part of this build): headers only.
+  target_include_directories(INTEGRATION_TEST_lltexturecache_parity PRIVATE
+      $<TARGET_PROPERTY:llui,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llcharacter,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llinventory,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llappearance,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llplugin,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llwindow,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:lllogin,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llaudio,INTERFACE_INCLUDE_DIRECTORIES>
+      )
+
+  # The texture fetcher's decisions (range requests, discard levels, retries,
+  # cache reads and writes) against the record made before the port, on the
+  # local mock server in tests/vksassets_mock_server.py.
+  LL_ADD_INTEGRATION_TEST(lltexturefetch_parity
+    "lltexturefetch.cpp;lltexturecache.cpp;llhttpretrypolicy.cpp;llviewerassetstats.cpp;llagentdata.cpp;tests/lltexturefetch_parity_stubs.cpp"
+    "llcommon;llfilesystem;llmath;llxml;llmessage;llcorehttp;llimage;llimagej2coj;llrender"
+    "-Dhttp_proxy"
+    ${PYTHON_EXECUTABLE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/vksassets_mock_server.py"
+    )
+  set_property(TARGET INTEGRATION_TEST_lltexturefetch_parity APPEND PROPERTY
+      COMPILE_DEFINITIONS "VKS_TEXFETCH_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
+  target_include_directories(INTEGRATION_TEST_lltexturefetch_parity PRIVATE
+      $<TARGET_PROPERTY:llui,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llprimitive,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llphysicsextensionsos,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llmeshoptimizer,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llcharacter,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llinventory,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llappearance,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llplugin,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llwindow,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:lllogin,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llaudio,INTERFACE_INCLUDE_DIRECTORIES>
+      )
+
 # LL_ADD_INTEGRATION_TEST(llhttpretrypolicy "llhttpretrypolicy.cpp" "${test_libs}")
 
   #ADD_VIEWER_BUILD_TEST(llmemoryview viewer)

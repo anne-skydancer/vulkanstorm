@@ -83,6 +83,10 @@ private:
 #endif
 
 public:
+    // The clock entries are stamped with: time(NULL) unless a test installs
+    // its own (the parity recording needs reproducible timestamps).
+    static U32 (*sClock)();
+    static U32 now() { return sClock ? sClock() : (U32)time(NULL); }
 
     class Responder : public LLResponder
     {
