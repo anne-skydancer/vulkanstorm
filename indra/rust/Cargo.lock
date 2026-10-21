@@ -133,12 +133,12 @@ dependencies = [
 [[package]]
 name = "vkstorm-http"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=2e76cfb8412765c70283683ec7908fd1a80a8565#2e76cfb8412765c70283683ec7908fd1a80a8565"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b#8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b"
 
 [[package]]
 name = "vkstorm-image"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=2e76cfb8412765c70283683ec7908fd1a80a8565#2e76cfb8412765c70283683ec7908fd1a80a8565"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b#8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b"
 dependencies = [
  "png",
  "zlib-rs",
@@ -147,7 +147,7 @@ dependencies = [
 [[package]]
 name = "vkstorm-j2c"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=2e76cfb8412765c70283683ec7908fd1a80a8565#2e76cfb8412765c70283683ec7908fd1a80a8565"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b#8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b"
 dependencies = [
  "vkstorm-openjp2",
 ]
@@ -155,17 +155,17 @@ dependencies = [
 [[package]]
 name = "vkstorm-llsd"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=2e76cfb8412765c70283683ec7908fd1a80a8565#2e76cfb8412765c70283683ec7908fd1a80a8565"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b#8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b"
 
 [[package]]
 name = "vkstorm-messages"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=2e76cfb8412765c70283683ec7908fd1a80a8565#2e76cfb8412765c70283683ec7908fd1a80a8565"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b#8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b"
 
 [[package]]
 name = "vkstorm-openjp2"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=2e76cfb8412765c70283683ec7908fd1a80a8565#2e76cfb8412765c70283683ec7908fd1a80a8565"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b#8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
@@ -177,7 +177,7 @@ dependencies = [
 [[package]]
 name = "vkstorm-volume"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=2e76cfb8412765c70283683ec7908fd1a80a8565#2e76cfb8412765c70283683ec7908fd1a80a8565"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b#8d1dbbfb2bfaaa22e69c600f464f399fdfc1a74b"
 
 [[package]]
 name = "zlib-rs"
