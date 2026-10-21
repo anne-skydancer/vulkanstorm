@@ -1804,50 +1804,6 @@ pub unsafe extern "C" fn vks_mesh_face(f: *const VksMeshFaces, i: usize, out: *m
     1
 }
 
-/// The physics shape of a mesh: positions and normals per index.
-pub struct VksMeshPhysics {
-    positions: Vec<[f32; 3]>,
-    normals: Vec<[f32; 3]>,
-}
-
-/// `physicsShapeReceived`'s extraction; null when the block does not
-/// unpack.
-///
-/// # Safety
-/// `data` must point to `len` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vks_mesh_physics_shape(data: *const u8, len: usize) -> *mut VksMeshPhysics {
-    let d = unsafe { bytes(data, len) };
-    match catch_unwind(AssertUnwindSafe(|| mesh::physics_shape(d))) {
-        Ok(Some((positions, normals))) => Box::into_raw(Box::new(VksMeshPhysics { positions, normals })),
-        _ => std::ptr::null_mut(),
-    }
-}
-
-/// # Safety
-/// `p` must come from `vks_mesh_physics_shape`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vks_mesh_physics_free(p: *mut VksMeshPhysics) {
-    if !p.is_null() {
-        drop(unsafe { Box::from_raw(p) });
-    }
-}
-
-/// # Safety
-/// `p` must be live; the pointers are valid until it is freed.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn vks_mesh_physics_data(p: *const VksMeshPhysics, positions: *mut *const f32, normals: *mut *const f32) -> usize {
-    if p.is_null() {
-        return 0;
-    }
-    let s = unsafe { &*p };
-    unsafe {
-        if !positions.is_null() { *positions = s.positions.as_ptr() as *const f32; }
-        if !normals.is_null() { *normals = s.normals.as_ptr() as *const f32; }
-    }
-    s.positions.len()
-}
-
 /// A parsed skin block.
 pub struct VksMeshSkin {
     inner: SkinInfo,

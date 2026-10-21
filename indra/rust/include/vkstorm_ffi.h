@@ -1101,7 +1101,6 @@ typedef struct VksMeshSkinInfo
 } VksMeshSkinInfo;
 
 typedef struct VksMeshFaces VksMeshFaces;
-typedef struct VksMeshPhysics VksMeshPhysics;
 typedef struct VksMeshSkin VksMeshSkin;
 typedef struct VksMeshDecomp VksMeshDecomp;
 
@@ -1121,9 +1120,6 @@ VksMeshFaces* vks_mesh_unpack(const uint8_t* data, size_t len, uint8_t sculpt_ty
 void     vks_mesh_faces_free(VksMeshFaces* f);
 size_t   vks_mesh_faces_count(const VksMeshFaces* f);
 int32_t  vks_mesh_face(const VksMeshFaces* f, size_t i, VksMeshFace* out);
-VksMeshPhysics* vks_mesh_physics_shape(const uint8_t* data, size_t len);
-void     vks_mesh_physics_free(VksMeshPhysics* p);
-size_t   vks_mesh_physics_data(const VksMeshPhysics* p, const float** positions, const float** normals);
 VksMeshSkin* vks_mesh_skin_parse(const uint8_t* data, size_t len);
 void     vks_mesh_skin_free(VksMeshSkin* s);
 int32_t  vks_mesh_skin_info(const VksMeshSkin* s, VksMeshSkinInfo* out);
