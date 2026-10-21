@@ -1352,7 +1352,7 @@ attributes mark them binary).
 |---|---|---|---|
 | `lltexturecache_parity.bin` (723 KB) and `lltexturecache_parity_events.xml` (16 KB) | three snapshots of every cache file after a scripted sequence on a scratch directory with a fixed clock: writes, reads, fast-cache reads, re-writes, removals, an over-limit purge, a reopen with body validation, a version-mismatch purge; and the script's outcomes: every write's and removal's result, every read's success, size and data checksum, every fast-cache read's dimensions, level and pixel checksum, the usage, entry counts and validation counter after each phase (the outcomes recorded from the pre-port C++ on Windows after the files, when review found them only logged) | `INTEGRATION_TEST_lltexturecache_parity` (viewer, the port's `LLTextureCache` through the real worker thread); `tests/texcache_replay.rs` (the crate alone, the files) | files byte-identical and outcomes identical on Windows and Linux, the engine string checked against the running codec, the fast cache tails masked (above) |
 | `lltexturefetch_parity.xml` + `textures/*.j2c` (36 KB + 969 KB) | fifteen scripted textures (plain, lossless, tiny, RGBA, 404, 503, one-off 503, truncated and overlapping ranges, a full 200 to a range request, 416 on ranges) fetched over three passes: per pass and texture the outcome (state, discard, raw dimensions, HTTP status, from cache) and the server's request log (ranges and statuses), then the cache's contents | `INTEGRATION_TEST_lltexturefetch_parity` (the real cache, decode thread and HTTP layer against `tests/vksassets_mock_server.py`) | 15 textures over 3 passes, 0 differences, on Windows and Linux |
-| `llmeshunpack_corpus.vksa` (6.3 MB) | 73 assets built with the viewer's own packer (`LLModel::writeModel`): twelve prim shapes at every LOD, with and without skin weights, physics shapes, convex hulls and base hulls, plus a 9216-triangle torus; for each the faces as `unpackVolumeFaces` left them and after `cacheOptimize`, the skin info with its bind pose, the decomposition | `INTEGRATION_TEST_llmeshunpack_parity` (viewer); `tests/mesh_corpus.rs` (the crate, the raw faces) | 73 cases, 2722 faces, 0 differences (viewer); 73 cases, 1361 raw faces, 0 differences (crate), on Windows and Linux |
+| `llmeshunpack_corpus.vksa` (6.3 MB) | 73 assets built with the viewer's own packer (`LLModel::writeModel`): twelve prim shapes at every LOD, with and without skin weights, physics shapes, convex hulls and base hulls, plus a 9216-triangle torus; for each the faces as `unpackVolumeFaces` left them and after `cacheOptimize`, the skin info with its bind pose, the decomposition | `INTEGRATION_TEST_llmeshunpack_parity` (viewer: the raw faces, the skin and the decomposition against the corpus bit for bit; the optimised faces against an oracle built in the same binary, the same C++ `cacheOptimize` and tangent generation run on the raw faces; the corpus' optimised faces are kept in the file but not compared, see Platform edges); `tests/mesh_corpus.rs` (the crate, the raw faces) | 73 cases: 1361 raw faces against the corpus and 1361 optimised faces against the oracle, 0 differences (viewer); 73 cases, 1361 raw faces, 0 differences (crate); on Windows (MSVC 19.44) and Linux (Ubuntu 26.04 with GCC 15 and with GCC 14.3) |
 | asset fetch request/response sequences | not recorded: the HTTP asset fetch is `assetRequestCoro`, a coroutine on `LLCoros` and `HttpCoroutineAdapter` that stays C++ (rung four's judgement); what the rung ports of `LLAssetStorage` is the request bookkeeping, covered by the crate's unit tests of the policies and strings, and `getAssetURL`, whose output the mock-server fetch test would only echo | crate unit tests | the policies agree with the C++ by construction (one implementation of each, tested) |
 
 ### Tests
@@ -1453,6 +1453,24 @@ bench does not use.
 - On Windows the texture cache's full purge renames the old directory
   aside and warns when the directory is not there yet (a fresh profile),
   as the C++ did.
+- The faces after `cacheOptimize` depend on the build and run
+  environment, the raw faces do not. CI's Linux job (Ubuntu 24.04, GCC
+  14.2, glibc 2.39) unpacked every raw face of the mesh corpus bit for
+  bit but differed from the MSVC record in all 1361 optimised faces
+  (1285 in the normals and tangents, 76 in the tangents alone). MSVC
+  19.44 and, on Ubuntu 26.04 (glibc 2.43), GCC 15 and GCC 14.3 reproduce
+  the record, so the difference did not reproduce locally; the tangents
+  come from the prebuilt MikkTSpace library, which calls the C library's
+  `acosf`, whose implementation changed between those glibc releases, the
+  likely but unproven cause. Either way it is the C++ vertex cache
+  optimisation and tangent generation the port hands its faces to, not
+  the port: the viewer test compares the optimised faces with an oracle
+  run in the same process (the same C++ applied to the raw faces, which
+  match the corpus) instead of with the record, which checks that the
+  port hands the optimisation exactly the faces the C++ unpacker did in
+  any environment. The corpus file still carries the recorded optimised
+  faces; they are not compared. A port that skipped the optimisation
+  fails all 1361 comparisons.
 - GCC's `-Werror=class-memaccess` refuses `memcpy` into `LLVector4a`
   and `LLVector2` arrays; the face copies go through the element float
   pointers.
