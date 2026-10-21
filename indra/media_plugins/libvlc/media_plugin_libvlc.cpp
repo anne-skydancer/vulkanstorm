@@ -496,18 +496,6 @@ void MediaPluginLibVLC::playMedia()
         libvlc_media_add_option(mLibVLCMedia, "input-repeat=65535");
     }
 
-    // <FS> The streaming-audio instance is created 1x1 with no visible
-    // surface. Radio doesn't care about latency, and SLPlugin runs at
-    // background priority where VLC's default ~1s network cache underruns
-    // (audible pops/thuds) whenever the viewer loads the machine — buffer
-    // deep. Visible parcel media keeps the default for responsiveness.
-    if (mWidth <= 1 && mHeight <= 1)
-    {
-        libvlc_media_add_option(mLibVLCMedia, ":network-caching=5000");
-        libvlc_media_add_option(mLibVLCMedia, ":no-video");
-    }
-    // </FS>
-
     if (libvlc_media_player_play(mLibVLCMediaPlayer) != 0)
     {
         stopPlayer();
