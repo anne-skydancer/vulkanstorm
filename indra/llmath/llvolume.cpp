@@ -1439,7 +1439,7 @@ bool LLVolume::unpackVolumeFaces(std::istream& is, S32 size)
     return unpackVolumeFacesInternal(mdl);
 }
 
-bool LLVolume::unpackVolumeFaces(U8* in_data, S32 size)
+bool LLVolume::unpackVolumeFaces(U8* in_data, S32 size, bool optimize)
 {
     //input data is now pointing at a zlib compressed block of LLSD
     //decompress block
@@ -1450,10 +1450,10 @@ bool LLVolume::unpackVolumeFaces(U8* in_data, S32 size)
         LL_DEBUGS("MeshStreaming") << "Failed to unzip LLSD blob for LoD with code " << uzip_result << " , will probably fetch from sim again." << LL_ENDL;
         return false;
     }
-    return unpackVolumeFacesInternal(mdl);
+    return unpackVolumeFacesInternal(mdl, optimize);
 }
 
-bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl)
+bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl, bool optimize)
 {
     {
         auto face_count = mdl.size();
@@ -1832,7 +1832,7 @@ bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl)
         }
     }
 
-    if (!cacheOptimize(true))
+    if (optimize && !cacheOptimize(true))
     {
         // Out of memory?
         LL_WARNS() << "Failed to optimize!" << LL_ENDL;

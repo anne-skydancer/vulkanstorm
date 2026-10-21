@@ -96,4 +96,11 @@ if (LL_TESTS)
 
     set_property(SOURCE llprimitive.cpp PROPERTY LL_TEST_ADDITIONAL_LIBRARIES llmessage)
     LL_ADD_PROJECT_UNIT_TESTS(llprimitive "${llprimitive_TEST_SOURCE_FILES}")
+
+    # Bit-level parity of mesh asset unpacking against the corpus recorded
+    # from the C++ unpackers before their port to Rust (vkstorm-rust).
+    set(test_libs llprimitive llmessage llcorehttp llxml llmath llcommon)
+    LL_ADD_INTEGRATION_TEST(llmeshunpack_parity "" "${test_libs}")
+    set_property(TARGET INTEGRATION_TEST_llmeshunpack_parity APPEND PROPERTY
+        COMPILE_DEFINITIONS "VKS_MESH_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
 endif (LL_TESTS)
