@@ -3014,7 +3014,7 @@
       <string>Vector3</string>
       <key>Value</key>
       <array>
-        <real>0.0</real>
+        <real>-2.25</real>
         <real>0.0</real>
         <real>-0.2</real>
       </array>
@@ -3028,7 +3028,7 @@
       <key>Type</key>
       <string>F32</string>
       <key>Value</key>
-      <real>0.75</real>
+      <real>1.0</real>
     </map>
     <key>CameraZoomFraction</key>
     <map>
@@ -5766,7 +5766,7 @@
       <key>Value</key>
       <array>
         <real>1.0</real>
-        <real>1.0</real>
+        <real>0.0</real>
         <real>0.2</real>
       </array>
     </map>
