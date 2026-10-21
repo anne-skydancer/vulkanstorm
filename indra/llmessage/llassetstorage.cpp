@@ -80,16 +80,25 @@ namespace
         return key;
     }
 
-    std::vector<VksAssetRequestKey> keys_of(const std::vector<LLAssetRequest*>& reqs)
+    // A pending list as the crate's policies see it: the keys in list order
+    // and an iterator per entry, so the selected entries are erased in
+    // constant time (list iterators stay valid while others are erased).
+    struct ListSnapshot
     {
+        std::vector<std::list<LLAssetRequest*>::iterator> iters;
         std::vector<VksAssetRequestKey> keys;
-        keys.reserve(reqs.size());
-        for (const LLAssetRequest* req : reqs)
+
+        explicit ListSnapshot(std::list<LLAssetRequest*>& list)
         {
-            keys.push_back(key_of(req));
+            iters.reserve(list.size());
+            keys.reserve(list.size());
+            for (std::list<LLAssetRequest*>::iterator it = list.begin(); it != list.end(); ++it)
+            {
+                iters.push_back(it);
+                keys.push_back(key_of(*it));
+            }
         }
-        return keys;
-    }
+    };
 }
 
 ///----------------------------------------------------------------------------
@@ -390,22 +399,22 @@ void LLAssetStorage::_cleanupRequests(bool all, S32 error)
     for (rt = 0; rt < RT_COUNT; rt++)
     {
         request_list_t* requests = getRequestList((ERequestType)rt);
-        std::vector<LLAssetRequest*> reqs(requests->begin(), requests->end());
-        std::vector<VksAssetRequestKey> keys = keys_of(reqs);
-        std::vector<size_t> order(reqs.size());
-        size_t count = vks_asset_timed_out_order(keys.data(), keys.size(), RT_DOWNLOAD == rt ? 1 : 0, all ? 1 : 0,
+        ListSnapshot snap(*requests);
+        std::vector<size_t> order(snap.keys.size());
+        size_t count = vks_asset_timed_out_order(snap.keys.data(), snap.keys.size(), RT_DOWNLOAD == rt ? 1 : 0, all ? 1 : 0,
                                                  mt_secs.value(), F64Seconds(LL_ASSET_STORAGE_TIMEOUT).value(), order.data(), order.size());
         std::vector<LLAssetRequest*> selected;
         selected.reserve(count);
         for (size_t i = 0; i < count; ++i)
         {
-            LLAssetRequest* tmp = reqs[order[i]];
+            request_list_t::iterator it = snap.iters[order[i]];
+            LLAssetRequest* tmp = *it;
             LL_WARNS("AssetStorage") << "Asset " << getRequestName((ERequestType)rt) << " request "
                                      << (all ? "aborted" : "timed out") << " for "
                                      << tmp->getUUID() << "."
                                      << LLAssetType::lookup(tmp->getType()) << LL_ENDL;
             selected.push_back(tmp);
-            requests->remove(tmp);
+            requests->erase(it);
         }
         timed_out.insert(timed_out.begin(), selected.begin(), selected.end());
     }
@@ -550,9 +559,8 @@ void LLAssetStorage::getAssetData(const LLUUID uuid,
         LL_PROFILE_ZONE_NAMED("gad - check pending downloads");
         // check to see if there's a pending download of this uuid already
         {
-            std::vector<LLAssetRequest*> reqs(mPendingDownloads.begin(), mPendingDownloads.end());
-            std::vector<VksAssetRequestKey> keys = keys_of(reqs);
-            const int32_t verdict = vks_asset_duplicate_verdict(keys.data(), keys.size(), uuid.mData, (int32_t)type, 0, (uint64_t)(uintptr_t)user_data);
+            ListSnapshot snap(mPendingDownloads);
+            const int32_t verdict = vks_asset_duplicate_verdict(snap.keys.data(), snap.keys.size(), uuid.mData, (int32_t)type, 0, (uint64_t)(uintptr_t)user_data);
             if (verdict == 0)
             {
                 // this is a duplicate from the same subsystem - throw it away
@@ -583,21 +591,21 @@ void LLAssetStorage::removeAndCallbackPendingDownloads(const LLUUID& file_id, LL
     // find and callback ALL pending requests for this UUID
     // SJB: We process the callbacks in reverse order, I do not know if this is important,
     //      but I didn't want to mess with it.
-    std::vector<LLAssetRequest*> pending(gAssetStorage->mPendingDownloads.begin(), gAssetStorage->mPendingDownloads.end());
-    std::vector<VksAssetRequestKey> keys = keys_of(pending);
-    std::vector<size_t> order(pending.size());
-    size_t count = vks_asset_completion_order(keys.data(), keys.size(), file_id.mData, (int32_t)file_type, order.data(), order.size());
+    ListSnapshot snap(gAssetStorage->mPendingDownloads);
+    std::vector<size_t> order(snap.keys.size());
+    size_t count = vks_asset_completion_order(snap.keys.data(), snap.keys.size(), file_id.mData, (int32_t)file_type, order.data(), order.size());
     std::vector<LLAssetRequest*> requests;
     requests.reserve(count);
     for (size_t i = 0; i < count; ++i)
     {
-        LLAssetRequest* tmp = pending[order[i]];
+        request_list_t::iterator it = snap.iters[order[i]];
+        LLAssetRequest* tmp = *it;
         if (bytes_fetched > 0)
         {
             tmp->mBytesFetched = bytes_fetched;
         }
         requests.push_back(tmp);
-        gAssetStorage->mPendingDownloads.remove(tmp);
+        gAssetStorage->mPendingDownloads.erase(it);
     }
     for (std::vector<LLAssetRequest*>::iterator iter = requests.begin();
          iter != requests.end();  )
