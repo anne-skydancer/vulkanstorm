@@ -1758,6 +1758,24 @@ void LLMeshSkinInfo::fromLLSD(LLSD& skin)
     updateHash();
 }
 
+bool LLMeshSkinInfo::fromZippedData(const U8* data, S32 size)
+{
+    LLSD skin;
+    if (size > 0)
+    {
+        U32 uzip_result = LLUZipHelper::unzip_llsd(skin, data, size);
+        if (uzip_result != LLUZipHelper::ZR_OK)
+        {
+            LL_WARNS("MESHSKININFO") << "Mesh skin info parse error.  Not a valid mesh asset!  ID:  " << mMeshID
+                << " uzip result" << uzip_result
+                << LL_ENDL;
+            return false;
+        }
+    }
+    fromLLSD(skin);
+    return true;
+}
+
 LLSD LLMeshSkinInfo::asLLSD(bool include_joints, bool lock_scale_if_joint_position) const
 {
     LLSD ret;
@@ -1876,6 +1894,24 @@ U32 LLMeshSkinInfo::sizeBytes() const
 LLModel::Decomposition::Decomposition(LLSD& data)
 {
     fromLLSD(data);
+}
+
+bool LLModel::Decomposition::fromZippedData(const U8* data, S32 size)
+{
+    LLSD decomp;
+    if (size > 0)
+    {
+        U32 uzip_result = LLUZipHelper::unzip_llsd(decomp, data, size);
+        if (uzip_result != LLUZipHelper::ZR_OK)
+        {
+            LL_WARNS("MESHSKININFO") << "Mesh decomposition parse error.  Not a valid mesh asset!  ID:  " << mMeshID
+                << " uzip result: " << uzip_result
+                << LL_ENDL;
+            return false;
+        }
+    }
+    fromLLSD(decomp);
+    return true;
 }
 
 void LLModel::Decomposition::fromLLSD(LLSD& decomp)

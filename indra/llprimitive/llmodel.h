@@ -51,6 +51,9 @@ public:
     LLMeshSkinInfo(LLSD& data);
     LLMeshSkinInfo(const LLUUID& mesh_id, LLSD& data);
     void fromLLSD(LLSD& data);
+    // The mesh repository's path: the zlib-compressed LLSD skin block of a
+    // mesh asset. Returns false when the block does not inflate or parse.
+    bool fromZippedData(const U8* data, S32 size);
     LLSD asLLSD(bool include_joints, bool lock_scale_if_joint_position) const;
     void updateHash();
     U32 sizeBytes() const;
@@ -140,6 +143,10 @@ public:
         Decomposition(LLSD& data);
         ~Decomposition() { }
         void fromLLSD(LLSD& data);
+        // The mesh repository's path: the zlib-compressed LLSD block of a
+        // mesh asset's convex decomposition. Returns false when the block
+        // does not inflate or parse.
+        bool fromZippedData(const U8* data, S32 size);
         LLSD asLLSD() const;
         bool hasHullList() const;
         U32 sizeBytes() const;
