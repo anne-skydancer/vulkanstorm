@@ -524,9 +524,7 @@ std::string LLTextureCache::getLocalFileName(const LLUUID& id)
 
 std::string LLTextureCache::getTextureFileName(const LLUUID& id)
 {
-    char buf[1024];
-    size_t len = vks_texcache_texture_file_name(mCache, id.mData, buf, sizeof(buf));
-    return std::string(buf, llmin(len, sizeof(buf)));
+    return vks_ffi_string([&](char* buf, size_t cap) { return vks_texcache_texture_file_name(mCache, id.mData, buf, cap); });
 }
 
 //debug

@@ -121,17 +121,14 @@ const std::string LLDiskCache::metaDataToFilepath(const LLUUID& id, LLAssetType:
 {
     // <FS:Ansariel> Store assets in subfolders: <dir>/<first hex>/sl_cache_<id>_0.asset
     const std::string& delim = gDirUtilp->getDirDelimiter();
-    char buf[1024];
-    size_t len = vks_diskcache_metadata_to_filepath(sCacheDir.data(), sCacheDir.size(), delim.data(), delim.size(), id.mData, buf, sizeof(buf));
-    return std::string(buf, llmin(len, sizeof(buf)));
+    return vks_ffi_string([&](char* buf, size_t cap)
+        { return vks_diskcache_metadata_to_filepath(sCacheDir.data(), sCacheDir.size(), delim.data(), delim.size(), id.mData, buf, cap); });
 }
 
 const std::string LLDiskCache::getCacheInfo()
 {
     LL_PROFILE_ZONE_SCOPED; // <FS:Beq/> add some instrumentation
-    char buf[256];
-    size_t len = vks_diskcache_info(mCache, buf, sizeof(buf));
-    return std::string(buf, llmin(len, sizeof(buf)));
+    return vks_ffi_string([&](char* buf, size_t cap) { return vks_diskcache_info(mCache, buf, cap); });
 }
 
 // <FS:Beq> Copy static items into cache and add to the skip list that prevents their purging

@@ -1645,9 +1645,7 @@ void LLTextureFetchWorker::recordTextureDone(bool is_http, F64 byte_count)
 
 std::string LLTextureFetch::getStateString(S32 state)
 {
-    char buf[64];
-    size_t len = vks_tfetch_state_string(state, buf, sizeof(buf));
-    return std::string(buf, llmin(len, sizeof(buf)));
+    return vks_ffi_string([&](char* buf, size_t cap) { return vks_tfetch_state_string(state, buf, cap); });
 }
 
 LLTextureFetch::LLTextureFetch(LLTextureCache* cache, bool threaded, bool qa_mode)

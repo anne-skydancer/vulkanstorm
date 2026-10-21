@@ -693,9 +693,8 @@ void LLViewerAssetStorage::assetRequestCoro(
 std::string LLViewerAssetStorage::getAssetURL(const std::string& cap_url, const LLUUID& uuid, LLAssetType::EType atype)
 {
     const std::string type_name = LLAssetType::lookup(atype);
-    char buf[2048];
-    size_t len = vks_asset_url(cap_url.data(), cap_url.size(), type_name.data(), type_name.size(), uuid.mData, buf, sizeof(buf));
-    return std::string(buf, llmin(len, sizeof(buf)));
+    return vks_ffi_string([&](char* buf, size_t cap)
+        { return vks_asset_url(cap_url.data(), cap_url.size(), type_name.data(), type_name.size(), uuid.mData, buf, cap); });
 }
 
 void LLViewerAssetStorage::logAssetStorageInfo()

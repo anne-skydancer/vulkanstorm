@@ -1154,6 +1154,35 @@ size_t       vks_asset_timed_out_order(const VksAssetRequestKey* keys, size_t n,
 
 #ifdef __cplusplus
 }
+
+#include <string>
+#include <vector>
+
+/* The string a vks_* function writes into (buf, cap). Those functions write
+ * at most cap - 1 bytes and a NUL and return the string's full length;
+ * vks_ffi_string calls fill(buf, cap) and calls it again with a buffer of
+ * the full length when the first was too small, so no result is cut. */
+template <typename Fill>
+inline std::string vks_ffi_string(Fill fill)
+{
+    char small[256];
+    size_t len = fill(small, sizeof(small));
+    if (len < sizeof(small))
+    {
+        return std::string(small, len);
+    }
+    std::vector<char> big;
+    for (;;)
+    {
+        big.resize(len + 1);
+        const size_t again = fill(big.data(), big.size());
+        if (again < big.size())
+        {
+            return std::string(big.data(), again);
+        }
+        len = again;
+    }
+}
 #endif
 
 #endif /* VKSTORM_FFI_H */

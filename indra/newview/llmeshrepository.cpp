@@ -1565,13 +1565,14 @@ void LLMeshRepoThread::constructUrl(LLUUID mesh_id, std::string * url, int * leg
         {
             LLMutexLock lock(mMutex);
             // <FS:Ansariel> [UDP Assets] ViewerAsset, then GetMesh2, then GetMesh
-            char buf[2048];
             int32_t version = 0;
-            size_t len = vks_mesh_construct_url(mGetMeshCapability.data(), mGetMeshCapability.size(),
-                                                mLegacyGetMeshCapability.data(), mLegacyGetMeshCapability.size(),
-                                                mLegacyGetMesh2Capability.data(), mLegacyGetMesh2Capability.size(),
-                                                mLegacyGetMeshVersion, mesh_id.mData, buf, sizeof(buf), &version);
-            res_url.assign(buf, llmin(len, sizeof(buf)));
+            res_url = vks_ffi_string([&](char* buf, size_t cap)
+                {
+                    return vks_mesh_construct_url(mGetMeshCapability.data(), mGetMeshCapability.size(),
+                                                  mLegacyGetMeshCapability.data(), mLegacyGetMeshCapability.size(),
+                                                  mLegacyGetMesh2Capability.data(), mLegacyGetMesh2Capability.size(),
+                                                  mLegacyGetMeshVersion, mesh_id.mData, buf, cap, &version);
+                });
             res_version = version;
             // </FS:Ansariel> [UDP Assets]
         }
