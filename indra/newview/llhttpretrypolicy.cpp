@@ -27,41 +27,21 @@
 #include "llviewerprecompiledheaders.h"
 #include "llhttpretrypolicy.h"
 
-namespace
-{
-    // Moved from httpconstants.h... only used in this file.
-    bool isHttpServerErrorStatus(S32 status)
-    {
-        // Status 499 is sometimes used for re-interpreted status 2xx errors.
-        // Allow retry of these, since we don't have enough information in this
-        // context to know if this will always fail.
-        if (HTTP_INTERNAL_ERROR == status) return true;
-
-        // Check for status 5xx.
-        return((500 <= status) && (status < 600));
-    }
-}
+#include "vkstorm_ffi.h"
 
 LLAdaptiveRetryPolicy::LLAdaptiveRetryPolicy(F32 min_delay, F32 max_delay, F32 backoff_factor, U32 max_retries, bool retry_on_4xx):
-    mMinDelay(min_delay),
-    mMaxDelay(max_delay),
-    mBackoffFactor(backoff_factor),
-    mMaxRetries(max_retries),
-    mRetryOn4xx(retry_on_4xx)
+    mPolicy(vks_retry_policy_new(min_delay, max_delay, backoff_factor, max_retries, retry_on_4xx ? 1 : 0))
 {
-    init();
 }
 
-void LLAdaptiveRetryPolicy::init()
+LLAdaptiveRetryPolicy::~LLAdaptiveRetryPolicy()
 {
-    mDelay = mMinDelay;
-    mRetryCount = 0;
-    mShouldRetry = true;
+    vks_retry_policy_free(mPolicy);
 }
 
 void LLAdaptiveRetryPolicy::reset()
 {
-    init();
+    vks_retry_policy_reset(mPolicy);
 }
 
 bool LLAdaptiveRetryPolicy::getRetryAfter(const LLSD& headers, F32& retry_header_time)
@@ -86,7 +66,7 @@ bool LLAdaptiveRetryPolicy::getRetryAfter(const LLCore::HttpHeaders::ptr_t &head
 
 void LLAdaptiveRetryPolicy::onSuccess()
 {
-    init();
+    vks_retry_policy_on_success(mPolicy);
 }
 
 void LLAdaptiveRetryPolicy::onFailure(S32 status, const LLSD& headers)
@@ -106,82 +86,21 @@ void LLAdaptiveRetryPolicy::onFailure(const LLCore::HttpResponse *response)
 
 void LLAdaptiveRetryPolicy::onFailureCommon(S32 status, bool has_retry_header_time, F32 retry_header_time)
 {
-    if (!mShouldRetry)
-    {
-        LL_INFOS() << "keep on failing" << LL_ENDL;
-        return;
-    }
-    if (mRetryCount > 0)
-    {
-        mDelay = llclamp(mDelay*mBackoffFactor,mMinDelay,mMaxDelay);
-    }
-    // Honor server Retry-After header.
-    // Status 503 may ask us to wait for a certain amount of time before retrying.
-    F32 wait_time = mDelay;
-    if (has_retry_header_time)
-    {
-        wait_time = retry_header_time;
-    }
-
-    if (mRetryCount>=mMaxRetries)
-    {
-        LL_INFOS() << "Too many retries " << mRetryCount << ", will not retry" << LL_ENDL;
-        mShouldRetry = false;
-    }
-    if (!mRetryOn4xx && !isHttpServerErrorStatus(status))
-    {
-        LL_INFOS() << "Non-server error " << status << ", will not retry" << LL_ENDL;
-        mShouldRetry = false;
-    }
-    if (mShouldRetry)
-    {
-        LL_INFOS() << "Retry count " << mRetryCount << " should retry after " << wait_time << LL_ENDL;
-        mRetryTimer.reset();
-        mRetryTimer.setTimerExpirySec(wait_time);
-    }
-    mRetryCount++;
+    vks_retry_policy_on_failure(mPolicy, status, has_retry_header_time ? 1 : 0, retry_header_time);
 }
-
 
 bool LLAdaptiveRetryPolicy::shouldRetry(F32& seconds_to_wait) const
 {
-    if (mRetryCount == 0)
-    {
-        // Called shouldRetry before any failure.
-        seconds_to_wait = F32_MAX;
-        return false;
-    }
-    seconds_to_wait = mShouldRetry ? (F32) mRetryTimer.getRemainingTimeF32() : F32_MAX;
-    return mShouldRetry;
+    return vks_retry_policy_should_retry(mPolicy, &seconds_to_wait) != 0;
 }
 
-// Moved from httpconstants.  Only used by this file.
 // Parses 'Retry-After' header contents and returns seconds until retry should occur.
 /*static*/
 bool LLAdaptiveRetryPolicy::getSecondsUntilRetryAfter(const std::string& retry_after, F32& seconds_to_wait)
 {
-    // *TODO:  This needs testing!   Not in use yet.
     // Examples of Retry-After headers:
     // Retry-After: Fri, 31 Dec 1999 23:59:59 GMT
     // Retry-After: 120
-
-    // Check for number of seconds version, first:
-    char* end = 0;
-    // Parse as double
-    double seconds = std::strtod(retry_after.c_str(), &end);
-    if (end != 0 && *end == 0)
-    {
-        // Successful parse
-        seconds_to_wait = (F32)seconds;
-        return true;
-    }
-
-    // Parse rfc1123 date.
-    time_t date = curl_getdate(retry_after.c_str(), NULL);
-    if (-1 == date) return false;
-
-    seconds_to_wait = (F32)((F64)date - LLTimer::getTotalSeconds());
-
-    return true;
+    // Only the number of seconds form is understood, as before.
+    return vks_retry_seconds_until_retry_after(retry_after.data(), retry_after.size(), &seconds_to_wait) != 0;
 }
-
