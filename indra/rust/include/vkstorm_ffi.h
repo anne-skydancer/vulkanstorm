@@ -4,8 +4,9 @@
  *
  * Keep in step with indra/rust/vkstorm-ffi/src/lib.rs (JPEG 2000 and
  * LLSD), indra/rust/vkstorm-ffi/src/volume.rs (the prim mesher),
- * indra/rust/vkstorm-ffi/src/image.rs (PNG, TGA, BMP, DXT) and
- * indra/rust/vkstorm-ffi/src/messages.rs (message templates, data packers).
+ * indra/rust/vkstorm-ffi/src/image.rs (PNG, TGA, BMP, DXT),
+ * indra/rust/vkstorm-ffi/src/messages.rs (message templates, data packers)
+ * and indra/rust/vkstorm-ffi/src/http.rs (the HTTP layer).
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -599,6 +600,152 @@ void vks_dp_ascii_split(const uint8_t* line, size_t len, const uint8_t** key, si
 uint32_t vks_dp_fixed_pack(float value, int32_t is_signed, uint32_t int_bits, uint32_t frac_bits, int32_t* total_bits);
 float vks_dp_fixed_unpack(uint32_t fixed, int32_t is_signed, uint32_t int_bits, uint32_t frac_bits);
 int32_t vks_dp_fixed_total_bits(int32_t is_signed, uint32_t int_bits, uint32_t frac_bits);
+
+/* ---- HTTP layer (rung four) --------------------------------------------- */
+
+/* The service of LLCore::HttpRequest: request queue, service thread, policy
+ * classes, retry queue and the libcurl transport live in the crate
+ * (vkstorm-http). One service per process. Handles are a 64-bit counter,
+ * never recycled; the C++ casts them to HttpHandle. */
+
+/* What the SSL context hook receives for a request whose connection is
+ * being set up, and where its verification callback writes its decision
+ * (a status type and code; code 0 is success). Lives as long as the
+ * request is active. */
+typedef struct VksHttpSslInfo
+{
+    uint64_t    handle;
+    void*       user;
+    const char* url;         /* NUL-terminated */
+    int32_t     verify_peer;
+    uint16_t    result_type;
+    int16_t     result_code;
+} VksHttpSslInfo;
+
+/* The host's facilities. Any function may be null. Levels: 0 debug, 1 info,
+ * 2 warning. Stat kinds: 0 bytes received, 1 bytes sent, 2 result code. */
+typedef struct VksHttpHooks
+{
+    void* ctx;
+    void (*log)(void* ctx, int32_t level, const char* text, size_t len);
+    void (*stat)(void* ctx, int32_t kind, uint64_t value);
+    void (*apply_proxy)(void* ctx, void* curl);                       /* LLProxy::applyProxySettings */
+    void (*ssl_ctx)(void* ctx, void* ssl_ctx, VksHttpSslInfo* info);  /* CURLOPT_SSL_CTX_FUNCTION body */
+    void (*thread_start)(void* ctx);
+    void (*thread_stop)(void* ctx);
+    void (*release_user)(void* ctx, void* user);                      /* user data never delivered */
+} VksHttpHooks;
+
+/* LLCore::HttpStatus by value. */
+typedef struct VksHttpStatus
+{
+    uint16_t type;
+    int16_t  code;
+} VksHttpStatus;
+
+/* LLCore::HttpOptions by value. */
+typedef struct VksHttpOptions
+{
+    int32_t  want_headers;
+    int32_t  trace;
+    uint32_t timeout;
+    uint32_t transfer_timeout;
+    uint32_t retries;
+    uint64_t min_backoff;
+    uint64_t max_backoff;
+    int32_t  use_retry_after;
+    int32_t  follow_redirects;
+    int32_t  verify_peer;
+    int32_t  verify_host;
+    int32_t  dns_cache_timeout;
+    int32_t  headers_only;
+    int64_t  last_modified;
+} VksHttpOptions;
+
+typedef struct VksHttpHeader
+{
+    const char* name;
+    size_t      name_len;
+    const char* value;
+    size_t      value_len;
+} VksHttpHeader;
+
+/* method: 0 GET, 1 POST, 2 PUT, 3 DELETE, 4 PATCH, 5 COPY, 6 MOVE. */
+typedef struct VksHttpRequestDesc
+{
+    uint32_t              policy;
+    int32_t               method;
+    const char*           url;
+    size_t                url_len;
+    const uint8_t*        body;
+    size_t                body_len;
+    int32_t               has_body;
+    uint64_t              offset;
+    uint64_t              length;
+    const VksHttpHeader*  headers;
+    size_t                header_count;
+    const VksHttpOptions* options;   /* may be null */
+} VksHttpRequestDesc;
+
+typedef struct VksHttpReplyQueue VksHttpReplyQueue;
+typedef struct VksHttpReply VksHttpReply;
+
+/* Service life cycle. States: -1 not initialised, 0 initialised, 1 running,
+ * 2 stopped. */
+int32_t  vks_http_service_create(const VksHttpHooks* hooks, const char* user_agent);
+void     vks_http_service_destroy(void);
+int32_t  vks_http_service_state(void);
+void     vks_http_service_start_thread(void);
+
+/* Policy classes and the static option interface (before the thread runs).
+ * opt is HttpRequest::EPolicyOption; pclass a class id or GLOBAL_POLICY_ID. */
+uint32_t      vks_http_policy_class_create(void);
+VksHttpStatus vks_http_policy_set_long(int32_t opt, uint32_t pclass, int64_t value, int64_t* ret);
+VksHttpStatus vks_http_policy_set_string(int32_t opt, uint32_t pclass, const char* value, size_t len);
+VksHttpStatus vks_http_policy_set_callback(int32_t opt, uint32_t pclass, int32_t set);
+VksHttpStatus vks_http_policy_get_long(int32_t opt, uint32_t pclass, int64_t* ret);
+VksHttpStatus vks_http_policy_get_string(int32_t opt, uint32_t pclass, char* buf, size_t cap, size_t* len);
+
+/* Reply queues: one per HttpRequest instance. */
+VksHttpReplyQueue* vks_http_reply_queue_new(void);
+void               vks_http_reply_queue_free(VksHttpReplyQueue* q);
+
+/* Operations. Each returns the handle, or 0 with *status set. `user` is
+ * handed back with the reply (or through release_user). */
+uint64_t vks_http_request_submit(VksHttpReplyQueue* q, const VksHttpRequestDesc* desc, void* user, VksHttpStatus* status);
+uint64_t vks_http_request_cancel(VksHttpReplyQueue* q, uint64_t target, void* user, VksHttpStatus* status);
+uint64_t vks_http_request_noop(VksHttpReplyQueue* q, void* user, VksHttpStatus* status);
+uint64_t vks_http_request_stop(VksHttpReplyQueue* q, void* user, VksHttpStatus* status);
+uint64_t vks_http_request_spin(VksHttpReplyQueue* q, int32_t mode, VksHttpStatus* status);
+uint64_t vks_http_request_set_long(VksHttpReplyQueue* q, int32_t opt, uint32_t pclass, int64_t value, void* user, VksHttpStatus* status);
+uint64_t vks_http_request_set_string(VksHttpReplyQueue* q, int32_t opt, uint32_t pclass, const char* value, size_t len, void* user, VksHttpStatus* status);
+
+/* Replies. Kinds: 0 request, 1 cancel, 2 option set/get, 3 stop, 4 no-op.
+ * Pointers returned by the accessors are valid until the reply is freed;
+ * strings are not NUL-terminated. */
+VksHttpReply* vks_http_reply_fetch(VksHttpReplyQueue* q);
+void          vks_http_reply_free(VksHttpReply* r);
+uint64_t      vks_http_reply_handle(const VksHttpReply* r);
+void*         vks_http_reply_user(const VksHttpReply* r);
+int32_t       vks_http_reply_kind(const VksHttpReply* r);
+VksHttpStatus vks_http_reply_status(const VksHttpReply* r);
+const uint8_t* vks_http_reply_body(const VksHttpReply* r, size_t* len);
+int32_t       vks_http_reply_has_headers(const VksHttpReply* r);
+size_t        vks_http_reply_header_count(const VksHttpReply* r);
+int32_t       vks_http_reply_header(const VksHttpReply* r, size_t i, VksHttpHeader* out);
+const char*   vks_http_reply_content_type(const VksHttpReply* r, size_t* len);
+int32_t       vks_http_reply_range(const VksHttpReply* r, uint64_t* offset, uint64_t* length, uint64_t* full);
+uint32_t      vks_http_reply_retries(const VksHttpReply* r);
+uint32_t      vks_http_reply_retries_503(const VksHttpReply* r);
+const char*   vks_http_reply_url(const VksHttpReply* r, size_t* len);
+const char*   vks_http_reply_method(const VksHttpReply* r, size_t* len);
+void          vks_http_reply_stats(const VksHttpReply* r, double* size_download, double* total_time, double* speed_download);
+int64_t       vks_http_reply_long(const VksHttpReply* r);
+const char*   vks_http_reply_string(const VksHttpReply* r, size_t* len);
+
+/* HttpStatus::isRetryable, and curl_version() of the linked libcurl. */
+int32_t     vks_http_status_is_retryable(uint16_t type, int16_t code);
+const char* vks_http_curl_version(void);
 
 #ifdef __cplusplus
 }
