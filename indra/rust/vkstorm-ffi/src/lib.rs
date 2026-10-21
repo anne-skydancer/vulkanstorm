@@ -8,7 +8,9 @@
 //! TGA, BMP and DXT via `vkstorm-image` (`image.rs`).
 //! Rung three: the message template system and the data packers via
 //! `vkstorm-messages` (`messages.rs`).
+//! Rung four: the HTTP layer via `vkstorm-http` (`http.rs`).
 
+mod http;
 mod image;
 mod messages;
 mod volume;
