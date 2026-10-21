@@ -450,17 +450,17 @@ namespace
     }
 }
 
-namespace tut
+namespace
 {
-    struct texfetch_data {};
-    typedef test_group<texfetch_data> texfetch_group;
-    typedef texfetch_group::object texfetch_object;
-    tut::texfetch_group texfetch_instance("lltexturefetch_parity");
-
-    template<> template<>
-    void texfetch_object::test<1>()
+    // The viewer environment the fetcher needs, once per process.
+    void setup_environment()
     {
-        set_test_name("texture fetch decisions match the recording");
+        static bool done = false;
+        if (done)
+        {
+            return;
+        }
+        done = true;
 #if LL_WINDOWS
         timeBeginPeriod(1);
 #endif
@@ -481,6 +481,21 @@ namespace tut
         // to the main loop queue and wait for it.
         FSAssetBlacklist::getInstance();
         LLGridManager::getInstance();
+    }
+}
+
+namespace tut
+{
+    struct texfetch_data {};
+    typedef test_group<texfetch_data> texfetch_group;
+    typedef texfetch_group::object texfetch_object;
+    tut::texfetch_group texfetch_instance("lltexturefetch_parity");
+
+    template<> template<>
+    void texfetch_object::test<1>()
+    {
+        set_test_name("texture fetch decisions match the recording");
+        setup_environment();
 
         const std::string record = env_or("VKS_TEXFETCH_RECORD", "");
         const bool recording = !record.empty();
@@ -564,6 +579,96 @@ namespace tut
         for (const std::string& p : problems) std::cout << "PARITY: " << p << std::endl;
         std::cout << "compared " << textures.size() << " textures over 3 passes, " << problems.size() << " differences" << std::endl;
         ensure("texture fetch decisions identical", problems.empty());
+        gDirUtilp->deleteDirAndContents(root);
+    }
+
+    // VKS_TEXFETCH_BENCH=<n>: times the assembly of one large texture from
+    // range replies, fetched at discard 5 down to 0 through the real cache,
+    // decode thread and HTTP layer against the mock server; the minimum of
+    // n runs. VKS_TEXFETCH_BENCH_OUT=<csv> appends the timing.
+    template<> template<>
+    void texfetch_object::test<2>()
+    {
+        set_test_name("texture assembly timing (VKS_TEXFETCH_BENCH)");
+        const char* bench = getenv("VKS_TEXFETCH_BENCH");
+        if (!bench || !*bench)
+        {
+            return;
+        }
+        int iterations = atoi(bench);
+        setup_environment();
+
+        std::string root = scratch_dir() + "_bench";
+        gDirUtilp->deleteDirAndContents(root);
+        LLFile::mkdir(root);
+        std::string tex_dir = root + gDirUtilp->getDirDelimiter() + "textures";
+        LLFile::mkdir(tex_dir);
+
+        Scripted big = { "bench_1024_lossless", 0x18, 1024, 1024, 3, 5, -1, 1000.f, true, LLUUID() };
+        Rng rng(0xBEEF1234ULL);
+        for (int i = 0; i < 16; ++i)
+        {
+            big.id.mData[i] = (U8)rng.next();
+        }
+        big.id.mData[0] = big.behaviour;
+        std::vector<U8> bytes = encode_j2c(big);
+        write_file(tex_dir + gDirUtilp->getDirDelimiter() + big.id.asString() + ".j2c", bytes);
+
+        LLCore::HttpRequest::createService();
+        LLCore::HttpRequest::startThread();
+        configure_server(tex_dir);
+        const std::string region_url = base_url() + "/texture";
+        LLUUID region_id("2b2c3d4e-0000-4000-8000-000000000002");
+        vks_test_set_region(region_url, "", region_id);
+
+        typedef std::chrono::steady_clock clock;
+        double best_ms = 1e18;
+        S32 final_discard = -1;
+        for (int it = 0; it < iterations; ++it)
+        {
+            std::string cache_root = root + gDirUtilp->getDirDelimiter() + "cache";
+            gDirUtilp->deleteDirAndContents(cache_root);
+            LLFile::mkdir(cache_root);
+            ensure("scratch cache dir", gDirUtilp->setCacheDir(cache_root));
+            Pipeline p(cache_root);
+            clock::time_point t0 = clock::now();
+            for (S32 discard = 5; discard >= 0; --discard)
+            {
+                p.fetch->createRequest(FTT_DEFAULT, "", big.id, LLHost(), big.priority, big.w, big.h, big.c, discard, false, true);
+                clock::time_point t1 = clock::now();
+                bool finished = false;
+                while (!finished && std::chrono::duration<double>(clock::now() - t1).count() < 60.0)
+                {
+                    p.pump();
+                    S32 discard_level = -1;
+                    S32 worker_state = -1;
+                    LLPointer<LLImageRaw> raw;
+                    LLPointer<LLImageRaw> aux;
+                    LLCore::HttpStatus status;
+                    if (p.fetch->getRequestFinished(big.id, discard_level, worker_state, raw, aux, status))
+                    {
+                        finished = true;
+                        final_discard = discard_level;
+                    }
+                }
+                ensure("request finished", finished);
+            }
+            double ms = std::chrono::duration<double, std::milli>(clock::now() - t0).count();
+            best_ms = std::min(best_ms, ms);
+            p.fetch->deleteRequest(big.id, true);
+            for (int i = 0; i < 50; ++i) p.pump();
+        }
+        vks_test_clear_region();
+        LLCore::HttpRequest::destroyService();
+
+        std::cout << "VKS_TEXFETCH_BENCH bytes=" << bytes.size() << " final_discard=" << final_discard
+                  << " six_levels_min_ms=" << best_ms << std::endl;
+        const char* out = getenv("VKS_TEXFETCH_BENCH_OUT");
+        if (out && *out)
+        {
+            std::ofstream o(out, std::ios::app);
+            o << "fetch,assemble_six_levels," << bytes.size() << "," << best_ms << "\n";
+        }
         gDirUtilp->deleteDirAndContents(root);
     }
 }
