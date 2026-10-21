@@ -32,6 +32,7 @@
 #include "lldir.h"
 #include "llfile.h"
 #include "llsd.h"
+#include "vkstorm_ffi.h"
 
 #include <algorithm>
 #include <chrono>
@@ -700,5 +701,28 @@ namespace tut
             o << "texcache,read," << read_us << "\n";
         }
         remove_tree(root);
+    }
+
+    // The strings the asset FFI writes into a caller's buffer are never cut:
+    // vks_ffi_string retries with the full length (an asset URL past 2 KB, a
+    // cache path past 1 KB).
+    template<> template<>
+    void parity_object::test<3>()
+    {
+        set_test_name("FFI strings longer than the first buffer");
+        const LLUUID id("a1234567-89ab-cdef-1032-547698badcfe");
+        const std::string cap(5000, 'c');
+        const std::string type("texture");
+        const std::string url = vks_ffi_string([&](char* buf, size_t n)
+            { return vks_asset_url(cap.data(), cap.size(), type.data(), type.size(), id.mData, buf, n); });
+        ensure_equals("asset URL", url, cap + "/?texture_id=" + id.asString());
+        const std::string dir(3000, 'd');
+        const std::string delim("/");
+        const std::string path = vks_ffi_string([&](char* buf, size_t n)
+            { return vks_diskcache_metadata_to_filepath(dir.data(), dir.size(), delim.data(), delim.size(), id.mData, buf, n); });
+        ensure_equals("cache path", path, dir + "/a/sl_cache_" + id.asString() + "_0.asset");
+        const std::string small = vks_ffi_string([&](char* buf, size_t n)
+            { return vks_asset_url("u", 1, type.data(), type.size(), id.mData, buf, n); });
+        ensure_equals("short asset URL", small, "u/?texture_id=" + id.asString());
     }
 }
