@@ -38,6 +38,8 @@
 #include "../llviewercontrol.h"
 #include "../llviewertexture.h"
 #include "../llviewerstatsrecorder.h"
+#include "../fsassetblacklist.h"
+#include "../llviewernetwork.h"
 #include "lltexturefetch_parity_stubs.h"
 
 #include "lltut.h"
@@ -287,18 +289,13 @@ namespace
 
         Pipeline(const std::string& cache_root)
         {
-            std::cout << "TRACE pipeline: cache" << std::endl;
             cache = new LLTextureCache(true);
             cache->setReadOnly(false);
             cache->initCache(LL_PATH_CACHE, 64 * 1024 * 1024, false);
-            std::cout << "TRACE pipeline: decode" << std::endl;
             decode = new LLImageDecodeThread(true);
-            std::cout << "TRACE pipeline: install app" << std::endl;
             vks_test_install_app(decode, cache, NULL);
-            std::cout << "TRACE pipeline: fetch" << std::endl;
             fetch = new LLTextureFetch(cache, true, false);
             vks_test_install_app(decode, cache, fetch);
-            std::cout << "TRACE pipeline: ready" << std::endl;
         }
 
         void pump()
@@ -333,7 +330,6 @@ namespace
             const Scripted& s = textures[i];
             S32 discard = second ? s.discard2 : s.discard;
             if (discard < 0) continue;
-            std::cout << "TRACE create " << s.name << std::endl;
             S32 res = p.fetch->createRequest(FTT_DEFAULT, "", s.id, LLHost(), s.priority, s.w, s.h, s.c, discard, false, true);
             out[s.name]["create"] = res;
             active.push_back(i);
@@ -342,20 +338,9 @@ namespace
         clock::time_point t0 = clock::now();
         std::vector<bool> done(textures.size(), false);
         size_t remaining = active.size();
-        int pumps = 0;
         while (remaining > 0 && std::chrono::duration<double>(clock::now() - t0).count() < 90.0)
         {
             p.pump();
-            if (++pumps % 200 == 0)
-            {
-                std::cout << "TRACE pump " << pumps << " pending=" << p.fetch->getPending() << " reads=" << p.cache->getNumReads()
-                          << " writes=" << p.cache->getNumWrites() << " http=" << p.fetch->getNumHTTPRequests();
-                for (size_t i : active)
-                {
-                    std::cout << " " << textures[i].name << "=" << LLTextureFetch::getStateString(p.fetch->getFetchState(textures[i].id));
-                }
-                std::cout << std::endl;
-            }
             for (size_t i : active)
             {
                 if (done[i]) continue;
@@ -491,7 +476,11 @@ namespace tut
         gSavedSettings.declareU32("TextureLoggingThreshold", 1, "", LLControlVariable::PERSIST_NO);
         LLImage::initClass(true, 50);
         LLViewerStatsRecorder::createInstance();
-        std::cout << "TRACE setup done" << std::endl;
+        // Singletons the fetch thread touches: construct them here, on the main
+        // thread, since LLSingleton would otherwise hand their construction
+        // to the main loop queue and wait for it.
+        FSAssetBlacklist::getInstance();
+        LLGridManager::getInstance();
 
         const std::string record = env_or("VKS_TEXFETCH_RECORD", "");
         const bool recording = !record.empty();
@@ -520,11 +509,9 @@ namespace tut
             ensure("texture present: " + s.name, read_file(tex_dir + gDirUtilp->getDirDelimiter() + s.id.asString() + ".j2c", bytes));
         }
 
-        std::cout << "TRACE textures ready" << std::endl;
         LLCore::HttpRequest::createService();
         LLCore::HttpRequest::startThread();
         configure_server(tex_dir);
-        std::cout << "TRACE server configured" << std::endl;
         const std::string region_url = base_url() + "/texture";
         LLUUID region_id("2b2c3d4e-0000-4000-8000-000000000001");
         vks_test_set_region(region_url, "", region_id);
