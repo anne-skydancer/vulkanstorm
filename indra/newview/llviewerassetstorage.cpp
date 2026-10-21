@@ -47,6 +47,8 @@
 
 #include "llviewernetwork.h" // <FS:Ansariel> [UDP Assets]
 
+#include "vkstorm_ffi.h"
+
 ///----------------------------------------------------------------------------
 /// LLViewerAssetRequest
 ///----------------------------------------------------------------------------
@@ -690,9 +692,10 @@ void LLViewerAssetStorage::assetRequestCoro(
 
 std::string LLViewerAssetStorage::getAssetURL(const std::string& cap_url, const LLUUID& uuid, LLAssetType::EType atype)
 {
-    std::string type_name = LLAssetType::lookup(atype);
-    std::string url = cap_url + "/?" + type_name + "_id=" + uuid.asString();
-    return url;
+    const std::string type_name = LLAssetType::lookup(atype);
+    char buf[2048];
+    size_t len = vks_asset_url(cap_url.data(), cap_url.size(), type_name.data(), type_name.size(), uuid.mData, buf, sizeof(buf));
+    return std::string(buf, llmin(len, sizeof(buf)));
 }
 
 void LLViewerAssetStorage::logAssetStorageInfo()
