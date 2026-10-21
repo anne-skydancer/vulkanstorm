@@ -500,7 +500,10 @@ namespace
     // rest from its pad buffer (stale bytes of the previous record,
     // uninitialised memory for the first), the port writes zeros. The unused
     // tail is never read; it is masked.
-    std::vector<U8> mask_engine(const std::string& rel, const std::vector<U8>& bytes, std::vector<std::string>& problems)
+    // The engine string is checked on the files the cache under test
+    // wrote (check_engine); the record's carries the engine of the day it
+    // was made and is only masked.
+    std::vector<U8> mask_engine(const std::string& rel, const std::vector<U8>& bytes, std::vector<std::string>& problems, bool check_engine)
     {
         if (rel == "texturecache/FastCache.cache")
         {
@@ -521,7 +524,7 @@ namespace
         }
         std::string engine(bytes.begin() + 8, bytes.begin() + 40);
         engine = engine.c_str();
-        if (engine != LLImageJ2C::getEngineInfo())
+        if (check_engine && engine != LLImageJ2C::getEngineInfo())
         {
             problems.push_back(rel + ": engine string \"" + engine + "\" is not the running engine \"" + LLImageJ2C::getEngineInfo() + "\"");
         }
@@ -543,7 +546,7 @@ namespace
             {
                 problems.push_back(name + ": missing " + f.first);
             }
-            else if (mask_engine(f.first, *it->second, problems) != mask_engine(f.first, f.second, problems))
+            else if (mask_engine(f.first, *it->second, problems, true) != mask_engine(f.first, f.second, problems, false))
             {
                 size_t n = std::min(it->second->size(), f.second.size());
                 size_t k = 0;
