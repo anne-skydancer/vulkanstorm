@@ -36,6 +36,12 @@ if (TRUE)
   # corrosion adds the system libraries Rust's std needs (kernel32, ntdll,
   # userenv, ws2_32, dbghelp on Windows) to the imported target itself.
 
+  # The grid profile is fixed at build time: OpenSim builds carry the legacy
+  # UDP paths of the asset pipeline (and nothing else does).
+  if (OPENSIM)
+    corrosion_set_features(vkstorm_ffi FEATURES opensim)
+  endif ()
+
   # Match the viewer's CPU baseline: the Release configuration targets AVX2.
   if (USE_AVX2_OPTIMIZATION)
     corrosion_add_target_rustflags(vkstorm_ffi "-Ctarget-cpu=x86-64-v3")

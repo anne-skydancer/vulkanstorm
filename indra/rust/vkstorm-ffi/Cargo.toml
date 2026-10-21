@@ -16,3 +16,10 @@ vkstorm-volume = { workspace = true }
 vkstorm-image = { workspace = true }
 vkstorm-messages = { workspace = true }
 vkstorm-http = { workspace = true }
+vkstorm-assets = { workspace = true }
+
+[features]
+default = []
+# OpenSim grid support (the CMake OPENSIM option): the legacy UDP paths of
+# the crates that carry them.
+opensim = ["vkstorm-assets/opensim"]
