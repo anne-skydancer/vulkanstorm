@@ -1441,16 +1441,113 @@ bool LLVolume::unpackVolumeFaces(std::istream& is, S32 size)
 
 bool LLVolume::unpackVolumeFaces(U8* in_data, S32 size, bool optimize)
 {
-    //input data is now pointing at a zlib compressed block of LLSD
-    //decompress block
-    LLSD mdl;
-    U32 uzip_result = LLUZipHelper::unzip_llsd(mdl, in_data, size);
-    if (uzip_result != LLUZipHelper::ZR_OK)
+    // The zlib-compressed LLSD block of one LOD is unpacked by vkstorm-assets
+    // (vkstorm-rust rung five): inflate, LLSD parse, the dequantisation of
+    // positions, normals, texture coordinates and joint weights, the sculpt
+    // flags and the extents, bit for bit as unpackVolumeFacesInternal left
+    // them. The faces are copied into LLVolumeFace buffers here; the cache
+    // optimisation stays C++.
+    int32_t err = 0;
+    VksMeshFaces* faces = vks_mesh_unpack(in_data, (size_t)llmax(size, 0), (uint8_t)mParams.getSculptType(), &err);
+    if (!faces)
     {
-        LL_DEBUGS("MeshStreaming") << "Failed to unzip LLSD blob for LoD with code " << uzip_result << " , will probably fetch from sim again." << LL_ENDL;
+        if (err == 1)
+        {
+            LL_DEBUGS("MeshStreaming") << "Failed to unzip LLSD blob for LoD, will probably fetch from sim again." << LL_ENDL;
+        }
+        else if (err == 2)
+        {
+            LL_WARNS() << "found no faces!" << LL_ENDL;
+        }
+        else
+        {
+            LL_WARNS() << "Failed to unpack mesh LOD (code " << err << ")" << LL_ENDL;
+        }
         return false;
     }
-    return unpackVolumeFacesInternal(mdl, optimize);
+
+    const size_t face_count = vks_mesh_faces_count(faces);
+    mVolumeFaces.resize(face_count);
+
+    for (size_t i = 0; i < face_count; ++i)
+    {
+        LLVolumeFace& face = mVolumeFaces[i];
+        VksMeshFace f;
+        if (!vks_mesh_face(faces, i, &f))
+        {
+            vks_mesh_faces_free(faces);
+            mVolumeFaces.clear();
+            return false;
+        }
+
+        face.resizeIndices(f.num_indices);
+        if (f.num_indices > 2 && !face.mIndices)
+        {
+            LL_WARNS() << "Failed to allocate " << f.num_indices << " indices for face index: " << i << " Total: " << face_count << LL_ENDL;
+            continue;
+        }
+        face.resizeVertices(f.num_vertices);
+        if (f.num_vertices > 0 && !face.mPositions)
+        {
+            LL_WARNS() << "Failed to allocate " << f.num_vertices << " vertices for face index: " << i << " Total: " << face_count << LL_ENDL;
+            face.resizeIndices(0);
+            continue;
+        }
+        if (f.incomplete)
+        {
+            // The C++ left such a face after allocating its buffers (an
+            // empty index list); so does the port.
+            LL_WARNS() << "Empty face present! Face index: " << i << " Total: " << face_count << LL_ENDL;
+            continue;
+        }
+
+        if (f.num_indices > 0)
+        {
+            memcpy(face.mIndices, f.indices, sizeof(U16) * f.num_indices);
+        }
+        if (f.num_vertices > 0)
+        {
+            memcpy(face.mPositions, f.positions, sizeof(LLVector4a) * f.num_vertices);
+            memcpy(face.mNormals, f.normals, sizeof(LLVector4a) * f.num_vertices);
+            // The texture coordinates come in pairs (the SSE code wrote them
+            // four floats at a time); the buffer is allocated for the even
+            // count.
+            memcpy(face.mTexCoords, f.texcoords, sizeof(F32) * 2 * f.texcoord_count);
+        }
+        if (f.has_weights)
+        {
+            face.allocateWeights(f.num_vertices);
+            if (!face.mWeights && f.num_vertices)
+            {
+                LL_WARNS() << "Failed to allocate " << f.num_vertices << " weights for face index: " << i << " Total: " << face_count << LL_ENDL;
+                face.resizeIndices(0);
+                face.resizeVertices(0);
+                continue;
+            }
+            if (f.num_vertices > 0)
+            {
+                memcpy(face.mWeights, f.weights, sizeof(LLVector4a) * f.num_vertices);
+            }
+        }
+        face.mNormalizedScale.set(f.normalized_scale[0], f.normalized_scale[1], f.normalized_scale[2]);
+        face.mExtents[0].set(f.extents[0], f.extents[1], f.extents[2], f.extents[3]);
+        face.mExtents[1].set(f.extents[4], f.extents[5], f.extents[6], f.extents[7]);
+        face.mTexCoordExtents[0].set(f.tc_extents[0], f.tc_extents[1]);
+        face.mTexCoordExtents[1].set(f.tc_extents[2], f.tc_extents[3]);
+    }
+    vks_mesh_faces_free(faces);
+
+    if (optimize && !cacheOptimize(true))
+    {
+        // Out of memory?
+        LL_WARNS() << "Failed to optimize!" << LL_ENDL;
+        mVolumeFaces.clear();
+        return false;
+    }
+
+    mSculptLevel = 0;  // success!
+
+    return true;
 }
 
 bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl, bool optimize)
