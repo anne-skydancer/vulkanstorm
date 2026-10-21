@@ -3221,9 +3221,12 @@ if (LL_TESTS)
   # The texture fetcher's decisions (range requests, discard levels, retries,
   # cache reads and writes) against the record made before the port, on the
   # local mock server in tests/vksassets_mock_server.py.
+  # The prebuilt library directory is on the test's library path: the
+  # executable needs the SDL the window layer links.
   LL_ADD_INTEGRATION_TEST(lltexturefetch_parity
     "lltexturefetch.cpp;lltexturecache.cpp;llhttpretrypolicy.cpp;llviewerassetstats.cpp;llagentdata.cpp;tests/lltexturefetch_parity_stubs.cpp"
     "llcommon;llfilesystem;llmath;llxml;llmessage;llcorehttp;llimage;llimagej2coj;llrender"
+    "-l${ARCH_PREBUILT_DIRS_RELEASE}"
     "-Dhttp_proxy"
     ${PYTHON_EXECUTABLE}
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/vksassets_mock_server.py"
