@@ -452,7 +452,7 @@ void MediaPluginLibVLC::playMedia()
 
     // volume level gets set before VLC is initialized (thanks media system) so we have to record
     // it in mCurVolume and set it again here so that volume levels are correctly initialized
-    setVolumeVLC();
+    setVolume(mCurVolume);
 
     setStatus(STATUS_LOADED);
 
