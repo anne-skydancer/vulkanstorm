@@ -250,21 +250,6 @@ namespace
         return read_server_log(0).size();
     }
 
-    void mark(const std::string& name)
-    {
-        // A marker in the server log, through the HTTP layer itself.
-        LLCore::HttpRequest req;
-        LLCore::HttpHandle h = req.requestGet(LLCore::HttpRequest::DEFAULT_POLICY_ID, base_url() + "/mark/" + name,
-                                              LLCore::HttpOptions::ptr_t(), LLCore::HttpHeaders::ptr_t(), LLCore::HttpHandler::ptr_t());
-        ensure("mark request", h != LLCORE_HTTP_HANDLE_INVALID);
-        for (int i = 0; i < 2000; ++i)
-        {
-            req.update(0);
-            if (!req.getStatus() || i > 50) break;
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
-        }
-    }
-
     void configure_server(const std::string& dir)
     {
         LLCore::HttpRequest req;

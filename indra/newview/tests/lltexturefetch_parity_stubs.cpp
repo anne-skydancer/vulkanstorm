@@ -168,11 +168,14 @@ boost::signals2::connection LLViewerRegion::setCapabilitiesReceivedCallback(cons
 // The agent: lltexturefetch.cpp refers to the gAgent object but calls only
 // its region accessors, which are stubbed here; the object itself is raw
 // storage that is never constructed. On Windows the linker aliases the
-// object's symbol to the storage.
+// object's symbol to the storage; on the Itanium ABI a global object's
+// symbol is its plain name, which the storage takes.
+#if LL_WINDOWS
 extern "C" unsigned char gAgentStorage[1 << 16];
 extern "C" unsigned char gAgentStorage[1 << 16] = { 0 };
-#if LL_WINDOWS
 #pragma comment(linker, "/alternatename:?gAgent@@3VLLAgent@@A=gAgentStorage")
+#else
+alignas(64) unsigned char gAgentStorage[1 << 16] __asm__("gAgent") = { 0 };
 #endif
 
 LLViewerRegion* LLAgent::getRegion() const { return g_region; }
