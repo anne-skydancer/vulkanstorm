@@ -125,13 +125,14 @@ dependencies = [
  "vkstorm-image",
  "vkstorm-j2c",
  "vkstorm-llsd",
+ "vkstorm-messages",
  "vkstorm-volume",
 ]
 
 [[package]]
 name = "vkstorm-image"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=4d71db37fe6a21a178a7112c18b2337f9db39b27#4d71db37fe6a21a178a7112c18b2337f9db39b27"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=c3c6e978212e14aae8a30a08f271e50c4cf2e8d4#c3c6e978212e14aae8a30a08f271e50c4cf2e8d4"
 dependencies = [
  "png",
  "zlib-rs",
@@ -140,7 +141,7 @@ dependencies = [
 [[package]]
 name = "vkstorm-j2c"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=4d71db37fe6a21a178a7112c18b2337f9db39b27#4d71db37fe6a21a178a7112c18b2337f9db39b27"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=c3c6e978212e14aae8a30a08f271e50c4cf2e8d4#c3c6e978212e14aae8a30a08f271e50c4cf2e8d4"
 dependencies = [
  "vkstorm-openjp2",
 ]
@@ -148,12 +149,17 @@ dependencies = [
 [[package]]
 name = "vkstorm-llsd"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=4d71db37fe6a21a178a7112c18b2337f9db39b27#4d71db37fe6a21a178a7112c18b2337f9db39b27"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=c3c6e978212e14aae8a30a08f271e50c4cf2e8d4#c3c6e978212e14aae8a30a08f271e50c4cf2e8d4"
+
+[[package]]
+name = "vkstorm-messages"
+version = "0.1.0"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=c3c6e978212e14aae8a30a08f271e50c4cf2e8d4#c3c6e978212e14aae8a30a08f271e50c4cf2e8d4"
 
 [[package]]
 name = "vkstorm-openjp2"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=4d71db37fe6a21a178a7112c18b2337f9db39b27#4d71db37fe6a21a178a7112c18b2337f9db39b27"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=c3c6e978212e14aae8a30a08f271e50c4cf2e8d4#c3c6e978212e14aae8a30a08f271e50c4cf2e8d4"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
@@ -165,7 +171,7 @@ dependencies = [
 [[package]]
 name = "vkstorm-volume"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=4d71db37fe6a21a178a7112c18b2337f9db39b27#4d71db37fe6a21a178a7112c18b2337f9db39b27"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=c3c6e978212e14aae8a30a08f271e50c4cf2e8d4#c3c6e978212e14aae8a30a08f271e50c4cf2e8d4"
 
 [[package]]
 name = "zlib-rs"

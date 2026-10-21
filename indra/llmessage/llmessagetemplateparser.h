@@ -30,10 +30,18 @@
 #include <string>
 #include "llmessagetemplate.h"
 
+struct VksMsgTokenizer;
+
+// The tokenizer and parser of message_template.msg. Both are the Rust
+// crate vkstorm-messages (vkstorm-rust rung three); these classes keep the
+// interface the viewer and its tests use.
 class LLTemplateTokenizer
 {
 public:
     LLTemplateTokenizer(const std::string & contents);
+    LLTemplateTokenizer(const LLTemplateTokenizer& other);
+    LLTemplateTokenizer& operator=(const LLTemplateTokenizer& other);
+    ~LLTemplateTokenizer();
 
     U32 line() const;
     bool atEOF() const;
@@ -41,21 +49,10 @@ public:
 
     bool want(const std::string & token);
     bool wantEOF();
+
+    VksMsgTokenizer* handle() const { return mTokenizer; }
 private:
-    void inc();
-    void dec();
-    std::string get() const;
-    void error(std::string message = "generic") const;
-
-    struct positioned_token
-    {
-        std::string str;
-        U32 line;
-    };
-
-    bool mStarted;
-    std::list<positioned_token> mTokens;
-    std::list<positioned_token>::const_iterator mCurrent;
+    VksMsgTokenizer* mTokenizer;
 };
 
 class LLTemplateParser

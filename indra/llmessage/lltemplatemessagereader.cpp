@@ -24,6 +24,13 @@
  * $/LicenseInfo$
  */
 
+// The packet is unpacked, and the message data held, by the Rust crate
+// vkstorm-messages (vkstorm-rust rung three, see doc/rust_port.md). Blocks
+// and variables are passed to it by their canonical name pointers. This
+// class keeps the number lookup, the trust and ban checks, the dispatch to
+// the handler with its timing, the getters' value checks (finite floats,
+// quaternion unpacking, port byte order) and the viewer's error reporting.
+
 #include "linden_common.h"
 #include "lltemplatemessagereader.h"
 
@@ -37,14 +44,23 @@
 #include "v3dmath.h"
 #include "v3math.h"
 #include "v4math.h"
+#include "vkstorm_ffi.h"
 
 #include "nd/ndexceptions.h" // <FS:ND/> For ndxran
 
+namespace
+{
+    inline uint64_t key_of(const char* name)
+    {
+        return (uint64_t)(uintptr_t)name;
+    }
+}
+
 LLTemplateMessageReader::LLTemplateMessageReader(message_template_number_map_t&
                                                  number_template_map) :
+    mReader(vks_msg_reader_new()),
     mReceiveSize(0),
     mCurrentRMessageTemplate(NULL),
-    mCurrentRMessageData(NULL),
     mMessageNumbers(number_template_map)
 {
 }
@@ -52,8 +68,8 @@ LLTemplateMessageReader::LLTemplateMessageReader(message_template_number_map_t&
 //virtual
 LLTemplateMessageReader::~LLTemplateMessageReader()
 {
-    delete mCurrentRMessageData;
-    mCurrentRMessageData = NULL;
+    vks_msg_reader_free(mReader);
+    mReader = NULL;
 }
 
 //virtual
@@ -61,8 +77,7 @@ void LLTemplateMessageReader::clearMessage()
 {
     mReceiveSize = -1;
     mCurrentRMessageTemplate = NULL;
-    delete mCurrentRMessageData;
-    mCurrentRMessageData = NULL;
+    vks_msg_reader_clear(mReader);
 }
 
 void LLTemplateMessageReader::getData(const char *blockname, const char *varname, void *datap, S32 size, S32 blocknum, S32 max_size)
@@ -74,79 +89,50 @@ void LLTemplateMessageReader::getData(const char *blockname, const char *varname
         return;
     }
 
-    if (!mCurrentRMessageData)
+    if (!mCurrentRMessageTemplate)
     {
         LL_ERRS() << "Invalid mCurrentMessageData in getData!" << LL_ENDL;
         return;
     }
 
-    char *bnamep = (char *)blockname + blocknum; // this works because it's just a hash.  The bnamep is never derefference
+    char *bnamep = (char *)blockname;
     char *vnamep = (char *)varname;
 
-    LLMsgData::msg_blk_data_map_t::const_iterator iter = mCurrentRMessageData->mMemberBlocks.find(bnamep);
-
-    if (iter == mCurrentRMessageData->mMemberBlocks.end())
+    int32_t actual = 0;
+    int32_t rc = vks_msg_reader_get(mReader, key_of(bnamep), blocknum, key_of(vnamep), (uint8_t*)datap, size, max_size, &actual);
+    switch (rc)
     {
-        LL_ERRS() << "Block " << blockname << " #" << blocknum
-            << " not in message " << mCurrentRMessageData->mName << LL_ENDL;
+    case 0:
         return;
-    }
-
-    LLMsgBlkData *msg_block_data = iter->second;
-    LLMsgBlkData::msg_var_data_map_t &var_data_map = msg_block_data->mMemberVarData;
-
-    if (var_data_map.find(vnamep) == var_data_map.end())
-    {
-        LL_ERRS() << "Variable "<< vnamep << " not in message "
-            << mCurrentRMessageData->mName<< " block " << bnamep << LL_ENDL;
-        return;
-    }
-
-    LLMsgVarData& vardata = msg_block_data->mMemberVarData[vnamep];
-
-    if (size && size != vardata.getSize())
-    {
-        LL_ERRS() << "Msg " << mCurrentRMessageData->mName
+    case 1:
+        LL_WARNS() << "Msg " << mCurrentRMessageTemplate->mName
             << " variable " << vnamep
-            << " is size " << vardata.getSize()
+            << " is size " << actual
+            << " but truncated to max size of " << max_size
+            << LL_ENDL;
+        return;
+    case VKS_MSG_ERR_NO_MESSAGE:
+        LL_ERRS() << "No message waiting for decode 2!" << LL_ENDL;
+        return;
+    case VKS_MSG_ERR_NOT_A_BLOCK:
+        LL_ERRS() << "Block " << blockname << " #" << blocknum
+            << " not in message " << mCurrentRMessageTemplate->mName << LL_ENDL;
+        return;
+    case VKS_MSG_ERR_NOT_A_VARIABLE:
+        LL_ERRS() << "Variable "<< vnamep << " not in message "
+            << mCurrentRMessageTemplate->mName << " block " << bnamep << LL_ENDL;
+        return;
+    case VKS_MSG_ERR_SIZE_MISMATCH:
+        LL_ERRS() << "Msg " << mCurrentRMessageTemplate->mName
+            << " variable " << vnamep
+            << " is size " << actual
             << " but copying into buffer of size " << size
             << LL_ENDL;
         return;
-    }
-
-
-    const S32 vardata_size = vardata.getSize();
-    if( max_size >= vardata_size )
-    {
-        switch( vardata_size )
-        {
-        case 1:
-            *((U8*)datap) = *((U8*)vardata.getData());
-            break;
-        case 2:
-            *((U16*)datap) = *((U16*)vardata.getData());
-            break;
-        case 4:
-            *((U32*)datap) = *((U32*)vardata.getData());
-            break;
-        case 8:
-            ((U32*)datap)[0] = ((U32*)vardata.getData())[0];
-            ((U32*)datap)[1] = ((U32*)vardata.getData())[1];
-            break;
-        default:
-            memcpy(datap, vardata.getData(), vardata_size);
-            break;
-        }
-    }
-    else
-    {
-        LL_WARNS() << "Msg " << mCurrentRMessageData->mName
-            << " variable " << vnamep
-            << " is size " << vardata.getSize()
-            << " but truncated to max size of " << max_size
-            << LL_ENDL;
-
-        memcpy(datap, vardata.getData(), max_size);
+    default:
+        LL_ERRS() << "Msg " << mCurrentRMessageTemplate->mName
+            << " variable " << vnamep << ": " << vks_msg_last_error() << LL_ENDL;
+        return;
     }
 }
 
@@ -159,22 +145,19 @@ S32 LLTemplateMessageReader::getNumberOfBlocks(const char *blockname)
         return -1;
     }
 
-    if (!mCurrentRMessageData)
+    if (!mCurrentRMessageTemplate)
     {
         LL_ERRS() << "Invalid mCurrentRMessageData in getData!" << LL_ENDL;
         return -1;
     }
 
-    char *bnamep = (char *)blockname;
-
-    LLMsgData::msg_blk_data_map_t::const_iterator iter = mCurrentRMessageData->mMemberBlocks.find(bnamep);
-
-    if (iter == mCurrentRMessageData->mMemberBlocks.end())
+    int32_t rc = vks_msg_reader_number_of_blocks(mReader, key_of(blockname));
+    if (rc < 0)
     {
-        return 0;
+        LL_ERRS() << "No message waiting for decode 3!" << LL_ENDL;
+        return -1;
     }
-
-    return (iter->second)->mBlockNumber;
+    return rc;
 }
 
 S32 LLTemplateMessageReader::getSize(const char *blockname, const char *varname)
@@ -186,33 +169,32 @@ S32 LLTemplateMessageReader::getSize(const char *blockname, const char *varname)
         return LL_MESSAGE_ERROR;
     }
 
-    if (!mCurrentRMessageData)
+    if (!mCurrentRMessageTemplate)
     {   // This is a serious error - crash
         LL_ERRS() << "Invalid mCurrentRMessageData in getData!" << LL_ENDL;
         return LL_MESSAGE_ERROR;
     }
 
     char *bnamep = (char *)blockname;
-
-    LLMsgData::msg_blk_data_map_t::const_iterator iter = mCurrentRMessageData->mMemberBlocks.find(bnamep);
-
-    if (iter == mCurrentRMessageData->mMemberBlocks.end())
-    {   // don't crash
-        LL_INFOS() << "Block " << bnamep << " not in message "
-            << mCurrentRMessageData->mName << LL_ENDL;
-        return LL_BLOCK_NOT_IN_MESSAGE;
-    }
-
     char *vnamep = (char *)varname;
 
-    LLMsgBlkData* msg_data = iter->second;
-    LLMsgVarData& vardata = msg_data->mMemberVarData[vnamep];
-
-    if (!vardata.getName())
+    int32_t rc = vks_msg_reader_size(mReader, key_of(bnamep), 0, key_of(vnamep));
+    if (rc == VKS_MSG_ERR_NOT_A_BLOCK)
+    {   // don't crash
+        LL_INFOS() << "Block " << bnamep << " not in message "
+            << mCurrentRMessageTemplate->mName << LL_ENDL;
+        return LL_BLOCK_NOT_IN_MESSAGE;
+    }
+    if (rc == VKS_MSG_ERR_NOT_A_VARIABLE)
     {   // don't crash
         LL_INFOS() << "Variable " << varname << " not in message "
-            << mCurrentRMessageData->mName << " block " << bnamep << LL_ENDL;
+            << mCurrentRMessageTemplate->mName << " block " << bnamep << LL_ENDL;
         return LL_VARIABLE_NOT_IN_BLOCK;
+    }
+    if (rc < 0)
+    {
+        LL_ERRS() << "No message waiting for decode 4!" << LL_ENDL;
+        return LL_MESSAGE_ERROR;
     }
 
     if (mCurrentRMessageTemplate->mMemberBlocks[bnamep]->mType != MBT_SINGLE)
@@ -222,7 +204,7 @@ S32 LLTemplateMessageReader::getSize(const char *blockname, const char *varname)
         return LL_MESSAGE_ERROR;
     }
 
-    return vardata.getSize();
+    return rc;
 }
 
 S32 LLTemplateMessageReader::getSize(const char *blockname, S32 blocknum, const char *varname)
@@ -234,35 +216,34 @@ S32 LLTemplateMessageReader::getSize(const char *blockname, S32 blocknum, const 
         return LL_MESSAGE_ERROR;
     }
 
-    if (!mCurrentRMessageData)
+    if (!mCurrentRMessageTemplate)
     {   // This is a serious error - crash
         LL_ERRS() << "Invalid mCurrentRMessageData in getData!" << LL_ENDL;
         return LL_MESSAGE_ERROR;
     }
 
-    char *bnamep = (char *)blockname + blocknum;
+    char *bnamep = (char *)blockname;
     char *vnamep = (char *)varname;
 
-    LLMsgData::msg_blk_data_map_t::const_iterator iter = mCurrentRMessageData->mMemberBlocks.find(bnamep);
-
-    if (iter == mCurrentRMessageData->mMemberBlocks.end())
+    int32_t rc = vks_msg_reader_size(mReader, key_of(bnamep), blocknum, key_of(vnamep));
+    if (rc == VKS_MSG_ERR_NOT_A_BLOCK)
     {   // don't crash
-        LL_INFOS() << "Block " << bnamep << " not in message "
-            << mCurrentRMessageData->mName << LL_ENDL;
+        LL_INFOS() << "Block " << bnamep << " #" << blocknum << " not in message "
+            << mCurrentRMessageTemplate->mName << LL_ENDL;
         return LL_BLOCK_NOT_IN_MESSAGE;
     }
-
-    LLMsgBlkData* msg_data = iter->second;
-    LLMsgVarData& vardata = msg_data->mMemberVarData[vnamep];
-
-    if (!vardata.getName())
+    if (rc == VKS_MSG_ERR_NOT_A_VARIABLE)
     {   // don't crash
         LL_INFOS() << "Variable " << vnamep << " not in message "
-            <<  mCurrentRMessageData->mName << " block " << bnamep << LL_ENDL;
+            <<  mCurrentRMessageTemplate->mName << " block " << bnamep << LL_ENDL;
         return LL_VARIABLE_NOT_IN_BLOCK;
     }
-
-    return vardata.getSize();
+    if (rc < 0)
+    {
+        LL_ERRS() << "No message waiting for decode 5!" << LL_ENDL;
+        return LL_MESSAGE_ERROR;
+    }
+    return rc;
 }
 
 void LLTemplateMessageReader::getBinaryData(const char *blockname,
@@ -449,52 +430,20 @@ bool LLTemplateMessageReader::decodeTemplate(
         const U8* buffer, S32 buffer_size,  // inputs
         LLMessageTemplate** msg_template ) // outputs
 {
-    const U8* header = buffer + LL_PACKET_ID_SIZE;
-
-    // is there a message ready to go?
-    if (buffer_size <= 0)
+    int64_t num = vks_msg_decode_number(buffer, buffer_size > 0 ? (size_t)buffer_size : 0);
+    if (num == -1)
     {
         LL_WARNS() << "No message waiting for decode!" << LL_ENDL;
         return(false);
     }
-
-    U32 num = 0;
-
-    if (header[0] != 255)
-    {
-        // high frequency message
-        num = header[0];
-    }
-    else if ((buffer_size >= ((S32) LL_MINIMUM_VALID_PACKET_SIZE + 1)) && (header[1] != 255))
-    {
-        // medium frequency message
-        num = (255 << 8) | header[1];
-    }
-    else if ((buffer_size >= ((S32) LL_MINIMUM_VALID_PACKET_SIZE + 3)) && (header[1] == 255))
-    {
-        // low frequency message
-        U16 message_id_U16 = 0;
-        // I think this check busts the message system.
-        // it appears that if there is a NULL in the message #, it won't copy it....
-        // what was the goal?
-        //if(header[2])
-        memcpy(&message_id_U16, &header[2], 2);
-
-        // dependant on endian-ness:
-        //      U32 temp = (255 << 24) | (255 << 16) | header[2];
-
-        // independant of endian-ness:
-        message_id_U16 = ntohs(message_id_U16);
-        num = 0xFFFF0000 | message_id_U16;
-    }
-    else // bogus packet received (too short)
+    if (num < 0) // bogus packet received (too short)
     {
         LL_WARNS() << "Packet with unusable length received (too short): "
                 << buffer_size << LL_ENDL;
         return(false);
     }
 
-    LLMessageTemplate* temp = get_ptr_in_map(mMessageNumbers,num);
+    LLMessageTemplate* temp = get_ptr_in_map(mMessageNumbers, (U32)num);
     if (temp)
     {
         *msg_template = temp;
@@ -539,179 +488,33 @@ bool LLTemplateMessageReader::decodeData(const U8* buffer, const LLHost& sender 
 
     llassert( mReceiveSize >= 0 );
     llassert( mCurrentRMessageTemplate);
-    llassert( !mCurrentRMessageData );
-    delete mCurrentRMessageData; // just to make sure
 	// <FS:Beq> storage for Tracy tag
 	#ifdef TRACY_ENABLE
 	static char msgstr[36];
 	#endif
-    // </FS:Beq>    
+    // </FS:Beq>
 
-    // The offset tells us how may bytes to skip after the end of the
-    // message name.
-    U8 offset = buffer[PHL_OFFSET];
-    S32 decode_pos = LL_PACKET_ID_SIZE + (S32)(mCurrentRMessageTemplate->mFrequency) + offset;
-
-    // create base working data set
-    mCurrentRMessageData = new LLMsgData(mCurrentRMessageTemplate->mName);
-
-    // loop through the template building the data structure as we go
-    LLMessageTemplate::message_block_map_t::const_iterator iter;
-    for(iter = mCurrentRMessageTemplate->mMemberBlocks.begin();
-        iter != mCurrentRMessageTemplate->mMemberBlocks.end();
-        ++iter)
+    int32_t events = 0;
+    int32_t has_blocks = 0;
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_NETWORK("BuildFromTemplate");
-        LLMessageBlock* mbci = *iter;
-        U8  repeat_number;
-        S32 i;
-
-        // how many of this block?
-
-        if (mbci->mType == MBT_SINGLE)
-        {
-            // just one
-            repeat_number = 1;
-        }
-        else if (mbci->mType == MBT_MULTIPLE)
-        {
-            // a known number
-            repeat_number = mbci->mNumber;
-        }
-        else if (mbci->mType == MBT_VARIABLE)
-        {
-            // need to read the number from the message
-            // repeat number is a single byte
-            if (decode_pos >= mReceiveSize)
-            {
-                // commented out - hetgrid says that missing variable blocks
-                // at end of message are legal
-                // logRanOffEndOfPacket(sender, decode_pos, 1);
-
-                // default to 0 repeats
-                repeat_number = 0;
-            }
-            else
-            {
-                repeat_number = buffer[decode_pos];
-                decode_pos++;
-            }
-        }
-        else
-        {
-            LL_ERRS() << "Unknown block type" << LL_ENDL;
-            return false;
-        }
-
-        LLMsgBlkData* cur_data_block = NULL;
-        // <FS:Beq> Tracy Message processing
-		LL_DEBUGS("LLMessage") << "Processing " << mbci->mName << " with " << repeat_number << " repetitions" << LL_ENDL;
 		#ifdef TRACY_ENABLE
-		strncpy(msgstr, mbci->mName, 35);
+		strncpy(msgstr, mCurrentRMessageTemplate->mName, 35);
 		LL_PROFILE_ZONE_TEXT(msgstr, 35);
-		#endif        
-        // </FS:Beq>
-
-        // now loop through the block
-        for (i = 0; i < repeat_number; i++)
+		#endif
+        has_blocks = vks_msg_reader_decode(mReader, buffer, mReceiveSize > 0 ? (size_t)mReceiveSize : 0, &events);
+    }
+    for (int32_t i = 0; i < events; ++i)
+    {
+        int32_t position = 0;
+        int32_t wanted = 0;
+        if (vks_msg_reader_event(mReader, (uint32_t)i, &position, &wanted))
         {
-            if (i)
-            {
-                // build new name to prevent collisions
-                // TODO: This should really change to a vector
-                cur_data_block = new LLMsgBlkData(mbci->mName, repeat_number);
-                cur_data_block->mName = mbci->mName + i;
-            }
-            else
-            {
-                cur_data_block = new LLMsgBlkData(mbci->mName, repeat_number);
-            }
-
-            // add the block to the message
-            mCurrentRMessageData->addBlock(cur_data_block);
-
-            // now read the variables
-            for (LLMessageBlock::message_variable_map_t::const_iterator iter =
-                     mbci->mMemberVariables.begin();
-                 iter != mbci->mMemberVariables.end(); iter++)
-            {
-				LL_PROFILE_ZONE_NAMED_CATEGORY_NETWORK("AddVariables");
-                const LLMessageVariable& mvci = **iter;
-
-                // ok, build out the variables
-                // add variable block
-                cur_data_block->addVariable(mvci.getName(), mvci.getType());
-
-                // what type of variable?
-                if (mvci.getType() == MVT_VARIABLE)
-                {
-                    // variable, get the number of bytes to read from the template
-                    S32 data_size = mvci.getSize();
-                    U8 tsizeb = 0;
-                    U16 tsizeh = 0;
-                    U32 tsize = 0;
-
-                    if ((decode_pos + data_size) > mReceiveSize)
-                    {
-                        logRanOffEndOfPacket(sender, decode_pos, data_size);
-
-                        // default to 0 length variable blocks
-                        tsize = 0;
-                    }
-                    else
-                    {
-                        switch(data_size)
-                        {
-                        case 1:
-                            htolememcpy(&tsizeb, &buffer[decode_pos], MVT_U8, 1);
-                            tsize = tsizeb;
-                            break;
-                        case 2:
-                            htolememcpy(&tsizeh, &buffer[decode_pos], MVT_U16, 2);
-                            tsize = tsizeh;
-                            break;
-                        case 4:
-                            htolememcpy(&tsize, &buffer[decode_pos], MVT_U32, 4);
-                            break;
-                        default:
-                            LL_ERRS() << "Attempting to read variable field with unknown size of " << data_size << LL_ENDL;
-                            break;
-                        }
-                    }
-                    decode_pos += data_size;
-
-                    cur_data_block->addData(mvci.getName(), &buffer[decode_pos], tsize, mvci.getType());
-                    decode_pos += tsize;
-                }
-                else
-                {
-                    // fixed!
-                    // so, copy data pointer and set data size to fixed size
-                    if ((decode_pos + mvci.getSize()) > mReceiveSize)
-                    {
-                        logRanOffEndOfPacket(sender, decode_pos, mvci.getSize());
-
-                        // default to 0s.
-                        U32 size = mvci.getSize();
-                        std::vector<U8> data(size, 0);
-                        cur_data_block->addData(mvci.getName(), &(data[0]),
-                                                size, mvci.getType());
-                    }
-                    else
-                    {
-                        cur_data_block->addData(mvci.getName(),
-                                                &buffer[decode_pos],
-                                                mvci.getSize(),
-                                                mvci.getType());
-                    }
-                    decode_pos += mvci.getSize();
-                }
-            }
+            logRanOffEndOfPacket(sender, position, wanted);
         }
     }
 
-    if (mCurrentRMessageData->mMemberBlocks.empty()
-        && !mCurrentRMessageTemplate->mMemberBlocks.empty())
+    if (!has_blocks && !mCurrentRMessageTemplate->mMemberBlocks.empty())
     {
         LL_DEBUGS() << "Empty message '" << mCurrentRMessageTemplate->mName << "' (no blocks)" << LL_ENDL;
         return false;
@@ -782,6 +585,7 @@ bool LLTemplateMessageReader::validateMessage(const U8* buffer,
     if(valid)
     {
         mCurrentRMessageTemplate->mReceiveCount++;
+        vks_msg_reader_set_message(mReader, mCurrentRMessageTemplate->compiled(), buffer_size);
         //LL_DEBUGS() << "MessageRecvd:"
         //                       << mCurrentRMessageTemplate->mName
         //                       << " from " << sender << LL_ENDL;
@@ -848,5 +652,32 @@ void LLTemplateMessageReader::copyToBuilder(LLMessageBuilder& builder) const
     {
         return;
     }
-    builder.copyFromMessageData(*mCurrentRMessageData);
+    // The decoded message as LLMsgData, for the builder's copy: every
+    // repeat of every block, variables as the reader holds them (no size
+    // field width, as the reader never recorded one).
+    LLMsgData data(mCurrentRMessageTemplate->mName);
+    U32 bi = 0;
+    for (LLMessageTemplate::message_block_map_t::const_iterator bit = mCurrentRMessageTemplate->mMemberBlocks.begin();
+         bit != mCurrentRMessageTemplate->mMemberBlocks.end(); ++bit, ++bi)
+    {
+        const LLMessageBlock* block = *bit;
+        S32 repeats = vks_msg_reader_block_repeats(mReader, bi);
+        for (S32 r = 0; r < repeats; ++r)
+        {
+            LLMsgBlkData* blockp = new LLMsgBlkData(block->mName, repeats);
+            blockp->mName = block->mName + r;
+            data.addBlock(blockp);
+            U32 vi = 0;
+            for (LLMessageBlock::message_variable_map_t::const_iterator vit = block->mMemberVariables.begin();
+                 vit != block->mMemberVariables.end(); ++vit, ++vi)
+            {
+                const LLMessageVariable* var = *vit;
+                blockp->addVariable(var->getName(), var->getType());
+                size_t len = 0;
+                const uint8_t* d = vks_msg_reader_slot(mReader, bi, (uint32_t)r, vi, &len);
+                blockp->addData(var->getName(), d, (S32)len, var->getType());
+            }
+        }
+    }
+    builder.copyFromMessageData(data);
 }

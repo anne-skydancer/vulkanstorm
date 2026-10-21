@@ -3,8 +3,9 @@
  * @brief C ABI exported by the Rust crate indra/rust/vkstorm-ffi.
  *
  * Keep in step with indra/rust/vkstorm-ffi/src/lib.rs (JPEG 2000 and
- * LLSD), indra/rust/vkstorm-ffi/src/volume.rs (the prim mesher) and
- * indra/rust/vkstorm-ffi/src/image.rs (PNG, TGA, BMP, DXT).
+ * LLSD), indra/rust/vkstorm-ffi/src/volume.rs (the prim mesher),
+ * indra/rust/vkstorm-ffi/src/image.rs (PNG, TGA, BMP, DXT) and
+ * indra/rust/vkstorm-ffi/src/messages.rs (message templates, data packers).
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -419,6 +420,185 @@ int32_t vks_dxt_fourcc(int32_t format);
 int32_t vks_dxt_calc_num_mips(int32_t width, int32_t height);
 void vks_dxt_calc_discard_width_height(int32_t discard, int32_t format, int32_t* width, int32_t* height);
 void vks_dxt_check_min_width_height(int32_t format, int32_t* width, int32_t* height);
+
+/* ---- Message templates and data packers (rung three) ------------------- */
+/* See indra/rust/vkstorm-ffi/src/messages.rs. Blocks and variables are
+ * identified by 64-bit keys: the viewer passes its canonical string
+ * pointers. Errors the C++ aborted on come back as codes; the text is in
+ * vks_msg_last_error() (thread-local, until the next failing call). */
+
+#define VKS_MSG_OK 0
+#define VKS_MSG_ERR_INTERNAL (-1)
+#define VKS_MSG_ERR_NO_MESSAGE (-2)
+#define VKS_MSG_ERR_NOT_A_BLOCK (-3)
+#define VKS_MSG_ERR_SINGLE_REPEATED (-4)
+#define VKS_MSG_ERR_MULTIPLE_EXCEEDED (-5)
+#define VKS_MSG_ERR_TOO_MANY_BLOCKS (-6)
+#define VKS_MSG_ERR_NO_BLOCK (-7)
+#define VKS_MSG_ERR_NOT_A_VARIABLE (-8)
+#define VKS_MSG_ERR_SIZE_MISMATCH (-9)
+#define VKS_MSG_ERR_BUILD (-10)
+
+typedef struct VksMsgTokenizer VksMsgTokenizer;
+typedef struct VksMsgDesc VksMsgDesc;
+typedef struct VksMsgTemplate VksMsgTemplate;
+typedef struct VksMsgBuilder VksMsgBuilder;
+typedef struct VksMsgReader VksMsgReader;
+
+const char* vks_msg_last_error(void);
+
+/* LLTemplateTokenizer */
+VksMsgTokenizer* vks_msg_tokenizer_new(const uint8_t* text, size_t len);
+VksMsgTokenizer* vks_msg_tokenizer_clone(const VksMsgTokenizer* t);
+void vks_msg_tokenizer_free(VksMsgTokenizer* t);
+int32_t vks_msg_tokenizer_at_eof(const VksMsgTokenizer* t);
+uint32_t vks_msg_tokenizer_line(const VksMsgTokenizer* t);
+/* 1 with the token (valid until the next call on t), 0 on error. */
+int32_t vks_msg_tokenizer_next(VksMsgTokenizer* t, const uint8_t** out, size_t* len);
+/* 1 consumed, 0 not the next token, -1 error. */
+int32_t vks_msg_tokenizer_want(VksMsgTokenizer* t, const uint8_t* tok, size_t len);
+int32_t vks_msg_tokenizer_want_eof(VksMsgTokenizer* t);
+
+/* LLTemplateParser: descriptions the viewer turns into its own objects. */
+typedef struct VksMsgInfo
+{
+    const uint8_t* name;
+    size_t name_len;
+    uint32_t number;
+    int32_t frequency;
+    int32_t trust;
+    int32_t encoding;
+    int32_t deprecation;
+    int32_t total_size;
+    uint32_t block_count;
+} VksMsgInfo;
+
+typedef struct VksMsgBlockInfo
+{
+    const uint8_t* name;
+    size_t name_len;
+    int32_t type;
+    int32_t number;
+    int32_t total_size;
+    uint32_t var_count;
+} VksMsgBlockInfo;
+
+typedef struct VksMsgVarInfo
+{
+    const uint8_t* name;
+    size_t name_len;
+    int32_t type;
+    int32_t size;
+} VksMsgVarInfo;
+
+int32_t vks_msg_parse_version(VksMsgTokenizer* t, float* out);
+/* A description with status 1; null with status 0 when the next token is
+ * not "{", null with status -1 on error. */
+VksMsgDesc* vks_msg_parse_message(VksMsgTokenizer* t, int32_t* status);
+VksMsgDesc* vks_msg_parse_block(VksMsgTokenizer* t, int32_t* status);
+VksMsgDesc* vks_msg_parse_variable(VksMsgTokenizer* t, int32_t* status);
+void vks_msg_desc_free(VksMsgDesc* d);
+int32_t vks_msg_desc_message(const VksMsgDesc* d, VksMsgInfo* out);
+int32_t vks_msg_desc_block(const VksMsgDesc* d, uint32_t block, VksMsgBlockInfo* out);
+int32_t vks_msg_desc_variable(const VksMsgDesc* d, uint32_t block, uint32_t var, VksMsgVarInfo* out);
+
+/* A template compiled from an LLMessageTemplate; builders and readers that
+ * hold it keep it alive after vks_msg_template_free. */
+VksMsgTemplate* vks_msg_template_new(const uint8_t* name, size_t name_len, uint64_t key, uint32_t number,
+                                     int32_t frequency, int32_t trust, int32_t encoding, int32_t deprecation);
+int32_t vks_msg_template_add_block(VksMsgTemplate* t, const uint8_t* name, size_t name_len, uint64_t key, int32_t type, int32_t number);
+int32_t vks_msg_template_add_variable(VksMsgTemplate* t, uint32_t block, const uint8_t* name, size_t name_len, uint64_t key, int32_t type, int32_t size);
+int32_t vks_msg_template_total_size(const VksMsgTemplate* t, int32_t block);
+void vks_msg_template_free(VksMsgTemplate* t);
+
+/* LLTemplateMessageBuilder */
+VksMsgBuilder* vks_msg_builder_new(void);
+void vks_msg_builder_free(VksMsgBuilder* b);
+/* 1 when the message is deprecated (warn), else 0. */
+int32_t vks_msg_builder_new_message(VksMsgBuilder* b, const VksMsgTemplate* t);
+void vks_msg_builder_clear(VksMsgBuilder* b);
+int32_t vks_msg_builder_next_block(VksMsgBuilder* b, uint64_t key);
+int32_t vks_msg_builder_remove_last_block(VksMsgBuilder* b);
+/* >= 0: flags (1 clamped to 255 bytes, 2 type mismatch); < 0 error. */
+int32_t vks_msg_builder_add(VksMsgBuilder* b, uint64_t key, const uint8_t* data, size_t len, int32_t type);
+int32_t vks_msg_builder_is_full(const VksMsgBuilder* b, uint64_t key, int32_t has_key);
+int32_t vks_msg_builder_message_size(const VksMsgBuilder* b);
+int32_t vks_msg_builder_is_built(const VksMsgBuilder* b);
+void vks_msg_builder_set_built(VksMsgBuilder* b, int32_t built);
+int32_t vks_msg_builder_is_clear(const VksMsgBuilder* b);
+/* The packed size, or an error code. */
+int64_t vks_msg_builder_build(VksMsgBuilder* b, uint8_t* buffer, size_t size, uint8_t offset);
+int32_t vks_msg_builder_block_repeats(const VksMsgBuilder* b, uint32_t block);
+const uint8_t* vks_msg_builder_slot(const VksMsgBuilder* b, uint32_t block, uint32_t repeat, uint32_t var, size_t* len, int32_t* data_size);
+
+/* LLTemplateMessageReader */
+VksMsgReader* vks_msg_reader_new(void);
+void vks_msg_reader_free(VksMsgReader* r);
+/* The message number (>= 0), -1 empty, -2 too short. */
+int64_t vks_msg_decode_number(const uint8_t* buffer, size_t size);
+void vks_msg_reader_set_message(VksMsgReader* r, const VksMsgTemplate* t, int32_t receive_size);
+/* 1 when the message had blocks, 0 when none; events counts the reads
+ * past the end (details through vks_msg_reader_event). */
+int32_t vks_msg_reader_decode(VksMsgReader* r, const uint8_t* buffer, size_t size, int32_t* events);
+int32_t vks_msg_reader_event(const VksMsgReader* r, uint32_t i, int32_t* position, int32_t* wanted);
+void vks_msg_reader_clear(VksMsgReader* r);
+int32_t vks_msg_reader_message_size(const VksMsgReader* r);
+/* 0 ok, 1 cut to max_size, or an error code; actual gets the size. */
+int32_t vks_msg_reader_get(const VksMsgReader* r, uint64_t block, int32_t blocknum, uint64_t var, uint8_t* dst, int32_t size, int32_t max_size, int32_t* actual);
+int32_t vks_msg_reader_number_of_blocks(const VksMsgReader* r, uint64_t block);
+int32_t vks_msg_reader_size(const VksMsgReader* r, uint64_t block, int32_t blocknum, uint64_t var);
+int32_t vks_msg_reader_block_repeats(const VksMsgReader* r, uint32_t block);
+const uint8_t* vks_msg_reader_slot(const VksMsgReader* r, uint32_t block, uint32_t repeat, uint32_t var, size_t* len);
+
+/* Zero-coding */
+/* The coded length in out (flag set), 0 when coding would not shrink the
+ * packet, -1 on bad arguments. out needs len + 1 bytes. */
+int32_t vks_msg_zero_code(const uint8_t* packet, size_t len, uint8_t* out, size_t out_len);
+int32_t vks_msg_zero_code_gain(const uint8_t* packet, size_t len);
+/* The expanded length in out (flag cleared); -1/-2 when the packet would
+ * pass the end of out. overruns counts runs written from the start. */
+int32_t vks_msg_zero_code_expand(const uint8_t* packet, size_t len, uint8_t* out, size_t out_len, int32_t* overruns);
+
+/* LLDataPacker: the buffer state the C++ object keeps, per call. */
+typedef struct VksDpBuffer
+{
+    uint8_t* data;
+    int32_t size;
+    int32_t cur;
+    int32_t write_enabled;
+    int32_t include_names;
+} VksDpBuffer;
+
+#define VKS_DP_STRING 0
+#define VKS_DP_BINARY 1
+#define VKS_DP_BINARY_FIXED 2
+#define VKS_DP_INT 3
+#define VKS_DP_UINT 4
+#define VKS_DP_FLOATS 5
+#define VKS_DP_BYTES 6
+#define VKS_DP_UUID 7
+#define VKS_DP_FLOATS_SHORT 8 /* %f cut to 19 characters, the stream file form */
+
+int32_t vks_dp_bin_pack(VksDpBuffer* s, const uint8_t* v, size_t len);
+int32_t vks_dp_bin_unpack(VksDpBuffer* s, uint8_t* dst, size_t len);
+int32_t vks_dp_bin_pack_s16(VksDpBuffer* s, int16_t v);
+int32_t vks_dp_bin_unpack_s16(VksDpBuffer* s, int16_t* out);
+int32_t vks_dp_bin_pack_string(VksDpBuffer* s, const uint8_t* v, size_t len);
+int32_t vks_dp_bin_unpack_string(VksDpBuffer* s, const uint8_t** out, size_t* len);
+int32_t vks_dp_bin_pack_binary(VksDpBuffer* s, const uint8_t* v, size_t len);
+int32_t vks_dp_bin_unpack_binary(VksDpBuffer* s, const uint8_t** out, size_t* len);
+int32_t vks_dp_ascii_pack(VksDpBuffer* s, int32_t kind, const uint8_t* name, size_t name_len,
+                          const int64_t* ints, size_t nints, const float* floats, size_t nfloats,
+                          const uint8_t* data, size_t ndata, int32_t* truncated);
+int32_t vks_dp_ascii_next_value(VksDpBuffer* s, const uint8_t* name, size_t name_len, uint8_t* out, size_t cap, size_t* len);
+int32_t vks_dp_ascii_parse(int32_t kind, const uint8_t* text, size_t len, size_t count,
+                           int64_t* ints, float* floats, uint8_t* data, size_t data_cap, int32_t* size, size_t* ndata);
+size_t vks_dp_ascii_format(int32_t kind, const int64_t* ints, size_t nints, const float* floats, size_t nfloats,
+                           const uint8_t* data, size_t ndata, uint8_t* out, size_t cap);
+void vks_dp_ascii_split(const uint8_t* line, size_t len, const uint8_t** key, size_t* key_len, const uint8_t** value, size_t* value_len);
+uint32_t vks_dp_fixed_pack(float value, int32_t is_signed, uint32_t int_bits, uint32_t frac_bits, int32_t* total_bits);
+float vks_dp_fixed_unpack(uint32_t fixed, int32_t is_signed, uint32_t int_bits, uint32_t frac_bits);
+int32_t vks_dp_fixed_total_bits(int32_t is_signed, uint32_t int_bits, uint32_t frac_bits);
 
 #ifdef __cplusplus
 }
