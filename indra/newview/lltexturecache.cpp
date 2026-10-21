@@ -923,6 +923,8 @@ bool LLTextureCache::isInLocal(const LLUUID& id)
 //////////////////////////////////////////////////////////////////////////////
 
 //static
+U32 (*LLTextureCache::sClock)() = NULL;
+//static
 F32 LLTextureCache::sHeaderCacheVersion = 1.71f;
 U32 LLTextureCache::sCacheMaxEntries = 1024 * 1024; //~1 million textures.
 S64 LLTextureCache::sCacheMaxTexturesSize = 0; // no limit
@@ -1279,7 +1281,7 @@ void LLTextureCache::updateEntryTimeStamp(S32 idx, Entry& entry)
     {
         if (!mReadOnly)
         {
-            entry.mTime = (U32)time(NULL);
+            entry.mTime = now();
             mUpdatedEntryMap[idx] = entry ;
         }
     }
@@ -1321,7 +1323,7 @@ bool LLTextureCache::updateEntry(S32& idx, Entry& entry, S32 new_image_size, S32
             mTexturesSizeTotal -= entry.mBodySize ;
             mTexturesSizeTotal += new_body_size ;
         }
-        entry.mTime = (U32)time(NULL);
+        entry.mTime = now();
         entry.mImageSize = new_image_size ;
         entry.mBodySize = new_body_size ;
 
