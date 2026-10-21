@@ -747,7 +747,440 @@ const char*   vks_http_reply_string(const VksHttpReply* r, size_t* len);
 int32_t     vks_http_status_is_retryable(uint16_t type, int16_t code);
 const char* vks_http_curl_version(void);
 
+/* ---- The asset pipeline (rung five) ------------------------------------ */
+
+/* The log sink the asset crate reports through: level 0 debug, 1 info,
+ * 2 warn; the text is not NUL-terminated. */
+void vks_assets_set_log(void (*log)(int32_t level, const char* msg, size_t len));
+
+/* The texture cache: LLTextureCache's index, entries file, header-data
+ * file, body files and fast cache, byte-compatible with the C++ files. */
+typedef struct VksTexCache VksTexCache;
+
+typedef struct VksTexCachePaths
+{
+    const char* location;       /* the cache location directory */
+    size_t      location_len;
+    const char* delim;          /* the directory delimiter */
+    size_t      delim_len;
+} VksTexCachePaths;
+
+typedef struct VksFastEntry
+{
+    int32_t        width;
+    int32_t        height;
+    int32_t        components;
+    int32_t        discard_level;
+    const uint8_t* data;
+    size_t         data_len;
+} VksFastEntry;
+
+VksTexCache* vks_texcache_new(const char* encoder, size_t encoder_len, uint32_t address_size, uint32_t (*clock)(void));
+void         vks_texcache_free(VksTexCache* c);
+int32_t      vks_texcache_set_read_only(VksTexCache* c, int32_t read_only);
+int32_t      vks_texcache_is_read_only(VksTexCache* c);
+int64_t      vks_texcache_usage(VksTexCache* c);
+int64_t      vks_texcache_max_usage(VksTexCache* c);
+uint32_t     vks_texcache_entries(VksTexCache* c);
+uint32_t     vks_texcache_max_entries(VksTexCache* c);
+int32_t      vks_texcache_is_in_cache(VksTexCache* c, const uint8_t* id);
+int32_t      vks_texcache_purge_pending(VksTexCache* c);
+int32_t      vks_texcache_purge_cache(VksTexCache* c, const VksTexCachePaths* paths, int32_t remove_dir);
+int64_t      vks_texcache_init(VksTexCache* c, const VksTexCachePaths* paths, int64_t max_size, int32_t mismatch, int32_t validate_idx);
+int32_t      vks_texcache_lazy_purge_tick(VksTexCache* c, float time_limit_sec);
+int32_t      vks_texcache_write_updated_entries(VksTexCache* c);
+int32_t      vks_texcache_shutdown(VksTexCache* c);
+int32_t      vks_texcache_remove(VksTexCache* c, const uint8_t* id);
+size_t       vks_texcache_texture_file_name(VksTexCache* c, const uint8_t* id, char* buf, size_t cap);
+/* doRead: up to `size` bytes at `offset` into `buf` (at least `size`
+ * bytes); returns the data size (0 not cached, -1 failed). */
+int32_t      vks_texcache_read(VksTexCache* c, const uint8_t* id, int32_t offset, int32_t size, uint8_t* buf, int32_t* image_size);
+int32_t      vks_texcache_fast_level(int32_t width, int32_t height, int32_t components);
+/* doWrite: 1 on success. */
+int32_t      vks_texcache_write(VksTexCache* c, const uint8_t* id, const uint8_t* data, size_t len, int32_t image_size, int32_t discard_level, const VksFastEntry* fast);
+/* readFromFastCache: `data` receives up to 1024 bytes. */
+int32_t      vks_texcache_read_fast(VksTexCache* c, const uint8_t* id, int32_t* width, int32_t* height, int32_t* components, int32_t* discard_level, uint8_t* data);
+
+/* Plain file operations: LLAPRFile by name, LLFileSystem, LLLFSThread. */
+int32_t vks_file_size(const char* path, size_t len);
+int32_t vks_file_read_at(const char* path, size_t len, int64_t offset, uint8_t* buf, size_t cap);
+int32_t vks_asset_file_exists(const char* path, size_t len);
+int32_t vks_asset_file_size(const char* path, size_t len);
+int32_t vks_asset_file_read(const char* path, size_t len, int32_t position, uint8_t* buf, size_t cap);
+int32_t vks_asset_file_write(const char* path, size_t len, int32_t mode, int32_t position, const uint8_t* data, size_t data_len);
+int32_t vks_asset_file_seek(int32_t position, int32_t offset, int32_t origin, int32_t size, int32_t* new_position);
+void    vks_asset_file_remove(const char* path, size_t len);
+int32_t vks_asset_file_rename(const char* from, size_t from_len, const char* to, size_t to_len);
+void    vks_asset_file_touch(const char* path, size_t len);
+int32_t vks_lfs_read(const char* path, size_t len, int32_t offset, uint8_t* buf, size_t cap);
+int32_t vks_lfs_write(const char* path, size_t len, int32_t offset, const uint8_t* data, size_t data_len);
+
+/* The texture fetcher: LLTextureFetch's HTTP resource accounting and
+ * LLTextureFetchWorker's state machine. */
+typedef struct VksTexFetcher VksTexFetcher;
+typedef struct VksTexFetchWorker VksTexFetchWorker;
+
+typedef struct VksTexFetchEnv
+{
+    int32_t quitting;
+    int32_t delete_requested;
+    int32_t debug_pause;
+    int32_t non_interactive;
+    int32_t blacklisted;
+    int32_t formatted_present;
+    int32_t formatted_size;
+    int32_t formatted_discard;
+    int32_t formatted_is_j2c;
+    int32_t formatted_width;
+    int32_t formatted_height;
+    int32_t can_load_from_cache;
+    int32_t use_http_textures;
+    int32_t disconnected;
+    int32_t range_requests_disabled;
+    int32_t decode_disabled;
+    int32_t raw_width;
+    int32_t raw_height;
+    float   texture_bandwidth;
+    float   max_bandwidth;
+} VksTexFetchEnv;
+
+typedef struct VksTexFetchRegion
+{
+    int32_t     present;
+    uint8_t     id[16];
+    const char* viewer_asset_url;
+    size_t      viewer_asset_url_len;
+    const char* http_url;
+    size_t      http_url_len;
+} VksTexFetchRegion;
+
+typedef struct VksTexFetchHttpGet
+{
+    const char* url;
+    size_t      url_len;
+    int32_t     offset;
+    int32_t     size;        /* 0: the rest of the file */
+    int32_t     no_range;    /* HttpRangeRequestsDisable */
+    int32_t     with_headers;
+} VksTexFetchHttpGet;
+
+/* The host's side of the state machine: the C++ worker's objects. None of
+ * the functions may throw. */
+typedef struct VksTexFetchHost
+{
+    void* ctx;
+    void     (*env)(void* ctx, VksTexFetchEnv* out);
+    void     (*region)(void* ctx, VksTexFetchRegion* out);
+    void     (*read_cache)(void* ctx, const char* local_file, size_t local_file_len, int32_t offset, int32_t size);
+    int32_t  (*cache_read_complete)(void* ctx);
+    int32_t  (*send_http)(void* ctx, const VksTexFetchHttpGet* get);
+    void     (*drop_raw_images)(void* ctx);
+    uint32_t (*decode)(void* ctx, int32_t discard, int32_t needs_aux);
+    void     (*write_cache)(void* ctx, int32_t file_size, int32_t decoded_discard);
+    int32_t  (*cache_write_complete)(void* ctx);
+    void     (*prioritize_write)(void* ctx);
+    void     (*remove_from_cache)(void* ctx);
+    void     (*reset_formatted_data)(void* ctx);
+    void     (*drop_formatted_image)(void* ctx);
+    void     (*release_http_buffer)(void* ctx);
+    int32_t  (*assemble_http_reply)(void* ctx, const char* url, size_t url_len, int32_t src_offset, int32_t cur_size, int32_t append_size, int32_t total_size);
+    void     (*add_to_http_queue)(void* ctx);
+    void     (*record_texture_start)(void* ctx, int32_t is_http);
+    void     (*record_texture_done)(void* ctx, int32_t is_http, double byte_count);
+    void     (*stat_cache_attempt)(void* ctx);
+    void     (*stat_cache_hit)(void* ctx);
+    void     (*stat_cache_hit_rate)(void* ctx, int32_t hit);
+    void     (*log)(void* ctx, int32_t level, int32_t once, const char* msg, size_t len);
+    void     (*add_to_network_queue)(void* ctx);
+    void     (*remove_from_network_queue)(void* ctx, int32_t cancel);
+    int32_t  (*assemble_packets)(void* ctx, int32_t first_packet, int32_t last_packet);
+} VksTexFetchHost;
+
+typedef struct VksTexFetchWorkerInfo
+{
+    int32_t  state;
+    int32_t  write_to_cache_state;
+    float    image_priority;
+    float    requested_priority;
+    int32_t  desired_discard;
+    int32_t  requested_discard;
+    int32_t  loaded_discard;
+    int32_t  decoded_discard;
+    int32_t  desired_size;
+    int32_t  requested_size;
+    int32_t  requested_offset;
+    int32_t  file_size;
+    int32_t  cached_size;
+    int32_t  loaded;
+    int32_t  decoded;
+    int32_t  written;
+    int32_t  needs_aux;
+    int32_t  have_all_data;
+    int32_t  in_local_cache;
+    int32_t  in_cache;
+    int32_t  can_use_http;
+    int32_t  can_use_net;
+    int32_t  retry_attempt;
+    int32_t  active_count;
+    int32_t  get_status_ok;
+    int32_t  get_status_type;
+    int32_t  http_active;
+    int32_t  http_has_resource;
+    int32_t  http_buffer_present;
+    int32_t  cache_read_pending;
+    int32_t  cache_write_pending;
+    uint32_t decode_handle;
+    int32_t  image_codec;
+    uint32_t cache_read_count;
+    uint32_t cache_write_count;
+    uint32_t resource_wait_count;
+    float    cache_read_time;
+    float    decode_time;
+    float    cache_write_time;
+    float    fetch_time;
+    float    skipped_states_time;
+    float    state_timers[15];
+    int32_t  sent_request;
+    int32_t  sim_requested_discard;
+    int32_t  total_packets;
+    int32_t  last_packet;
+} VksTexFetchWorkerInfo;
+
+VksTexFetcher* vks_tfetch_fetcher_new(void);
+void           vks_tfetch_fetcher_free(VksTexFetcher* f);
+int32_t        vks_tfetch_fetcher_set_pipelined(VksTexFetcher* f, int32_t pipelined);
+int32_t        vks_tfetch_fetcher_add_waiter(VksTexFetcher* f, const uint8_t* id);
+int32_t        vks_tfetch_fetcher_remove_waiter(VksTexFetcher* f, const uint8_t* id);
+int32_t        vks_tfetch_fetcher_is_waiter(VksTexFetcher* f, const uint8_t* id);
+int32_t        vks_tfetch_fetcher_waiters_count(VksTexFetcher* f);
+int32_t        vks_tfetch_fetcher_cancel_waiters(VksTexFetcher* f);
+int32_t        vks_tfetch_fetcher_semaphore(VksTexFetcher* f);
+uint32_t       vks_tfetch_fetcher_total_http_requests(VksTexFetcher* f);
+int32_t        vks_tfetch_fetcher_update_state_stats(VksTexFetcher* f, uint32_t reads, uint32_t writes, uint32_t waits);
+int32_t        vks_tfetch_fetcher_get_state_stats(VksTexFetcher* f, uint32_t* reads, uint32_t* writes, uint32_t* waits);
+int32_t        vks_tfetch_fetcher_set_debug(VksTexFetcher* f, int32_t pause, const uint8_t* id);
+int32_t        vks_tfetch_fetcher_debug_count(VksTexFetcher* f);
+/* releaseHttpWaiters: the waiters to look up (ids, 16 bytes each) and the
+ * number to release; then the release order of the found ones by
+ * priority. */
+size_t         vks_tfetch_fetcher_waiters_to_release(VksTexFetcher* f, int32_t* needed, uint8_t* ids, size_t cap);
+void           vks_tfetch_release_order(const float* priorities, size_t n, int32_t needed, size_t* order);
+
+VksTexFetchWorker* vks_tfetch_worker_new(int32_t ftype, const char* url, size_t url_len, const uint8_t* id, int32_t host_is_ok, float priority, int32_t in_second_life);
+void     vks_tfetch_worker_free(VksTexFetchWorker* w);
+int32_t  vks_tfetch_worker_do_work(VksTexFetchWorker* w, VksTexFetcher* f, const VksTexFetchHost* host);
+int32_t  vks_tfetch_worker_state(VksTexFetchWorker* w);
+int32_t  vks_tfetch_worker_set_state(VksTexFetchWorker* w, int32_t state);
+int32_t  vks_tfetch_worker_set_desired_discard(VksTexFetchWorker* w, int32_t discard, int32_t size, int32_t have_work);
+int32_t  vks_tfetch_worker_set_image_priority(VksTexFetchWorker* w, float priority);
+int32_t  vks_tfetch_worker_set_can_use_http(VksTexFetchWorker* w, int32_t can);
+int32_t  vks_tfetch_worker_set_needs_aux(VksTexFetchWorker* w, int32_t needs);
+int32_t  vks_tfetch_worker_set_url(VksTexFetchWorker* w, const char* url, size_t url_len);
+size_t   vks_tfetch_worker_url(VksTexFetchWorker* w, char* buf, size_t cap);
+int32_t  vks_tfetch_worker_inc_active(VksTexFetchWorker* w);
+int32_t  vks_tfetch_worker_end_work(VksTexFetchWorker* w);
+int32_t  vks_tfetch_worker_reset_timers(VksTexFetchWorker* w);
+float    vks_tfetch_worker_requested_delta_secs(VksTexFetchWorker* w);
+float    vks_tfetch_worker_fetch_delta_secs(VksTexFetchWorker* w);
+float    vks_tfetch_worker_data_progress(VksTexFetchWorker* w, int32_t formatted_present, int32_t formatted_size);
+float    vks_tfetch_worker_requested_priority_for_state(VksTexFetchWorker* w);
+int32_t  vks_tfetch_worker_cache_read_done(VksTexFetchWorker* w, int32_t success, int32_t imagesize, int32_t data_size, int32_t codec, int32_t is_local);
+int32_t  vks_tfetch_worker_cache_write_done(VksTexFetchWorker* w, int32_t success);
+/* The UDP (simulator) path, live with the opensim feature: insertPacket's
+ * bookkeeping (the host keeps the bytes), setupPacketData (1 ok, 0 bad
+ * cached size: remove from the cache and reset the formatted data, -1
+ * cached through HTTP: reset the formatted data), receiveImageHeader's
+ * fields and the "sent to the simulator" mark. */
+int32_t  vks_tfetch_worker_insert_packet(VksTexFetchWorker* w, int32_t index, uint32_t size);
+int32_t  vks_tfetch_worker_setup_packet_data(VksTexFetchWorker* w, int32_t data_size);
+int32_t  vks_tfetch_worker_receive_header(VksTexFetchWorker* w, int32_t codec, uint16_t total_packets, int32_t file_size);
+int32_t  vks_tfetch_worker_mark_sent_sim(VksTexFetchWorker* w);
+int32_t  vks_tfetch_worker_info(VksTexFetchWorker* w, VksTexFetchWorkerInfo* out);
+size_t   vks_tfetch_worker_get_reason(VksTexFetchWorker* w, char* buf, size_t cap);
+int32_t  vks_tfetch_worker_decode_done(VksTexFetchWorker* w, const VksTexFetchHost* host, int32_t success, int32_t formatted_discard, uint32_t decode_id);
+/* onCompleted: the data size, or -1 when the request is being retried. */
+int64_t  vks_tfetch_worker_http_completed(VksTexFetchWorker* w, VksTexFetcher* f, const VksTexFetchHost* host, int32_t status_ok, int32_t status_type, const char* reason, size_t reason_len, int32_t partial, int32_t body_size, int32_t has_range, uint32_t range_offset, uint32_t range_length, uint32_t range_full, int32_t has_retry_after, float retry_after);
+/* 0 released, 1 not waiting, 2 no slot. */
+int32_t  vks_tfetch_worker_try_release(VksTexFetchWorker* w, VksTexFetcher* f);
+int32_t  vks_tfetch_worker_on_destroy(VksTexFetchWorker* w, VksTexFetcher* f);
+int32_t  vks_tfetch_worker_delete_ok_state(VksTexFetchWorker* w, VksTexFetcher* f, int32_t have_work);
+void     vks_tfetch_desired_size(int32_t ftype, int32_t url_non_empty, int32_t url_is_non_j2c, int32_t w, int32_t h, int32_t c, int32_t desired_discard, int32_t* size_out, int32_t* discard_out);
+int32_t  vks_tfetch_already_done(int32_t worker_done, int32_t worker_desired_size, int32_t worker_desired_discard, int32_t desired_size, int32_t desired_discard);
+size_t   vks_tfetch_state_string(int32_t state, char* buf, size_t cap);
+int32_t  vks_j2c_calc_data_size(int32_t w, int32_t h, int32_t comp, int32_t discard_level, float rate);
+int32_t  vks_j2c_calc_discard_level_bytes(int32_t w, int32_t h, int32_t comp, int32_t bytes, int32_t reverse_percent);
+
+/* LLAdaptiveRetryPolicy. */
+typedef struct VksRetryPolicy VksRetryPolicy;
+VksRetryPolicy* vks_retry_policy_new(float min_delay, float max_delay, float backoff_factor, uint32_t max_retries, int32_t retry_on_4xx);
+void     vks_retry_policy_free(VksRetryPolicy* p);
+int32_t  vks_retry_policy_reset(VksRetryPolicy* p);
+int32_t  vks_retry_policy_on_success(VksRetryPolicy* p);
+int32_t  vks_retry_policy_on_failure(VksRetryPolicy* p, int32_t status, int32_t has_retry_after, float retry_after);
+int32_t  vks_retry_policy_should_retry(VksRetryPolicy* p, float* seconds);
+uint32_t vks_retry_policy_retry_count(VksRetryPolicy* p);
+
+/* LLDiskCache. */
+typedef struct VksDiskCache VksDiskCache;
+VksDiskCache* vks_diskcache_new(const char* dir, size_t dir_len, const char* delim, size_t delim_len, uint64_t max_size, int32_t debug, float high, float low);
+void     vks_diskcache_free(VksDiskCache* c);
+int32_t  vks_diskcache_purge(VksDiskCache* c);
+int32_t  vks_diskcache_clear(VksDiskCache* c);
+int32_t  vks_diskcache_set_max_size(VksDiskCache* c, uint64_t size);
+int32_t  vks_diskcache_set_high_water(VksDiskCache* c, float pct);
+int32_t  vks_diskcache_set_low_water(VksDiskCache* c, float pct);
+uint64_t vks_diskcache_dir_file_size(VksDiskCache* c, int32_t force);
+size_t   vks_diskcache_info(VksDiskCache* c, char* buf, size_t cap);
+int32_t  vks_diskcache_skip_list_clear(VksDiskCache* c);
+int32_t  vks_diskcache_add_static(VksDiskCache* c, const char* from_folder, size_t from_folder_len, const char* from_file, size_t from_file_len);
+size_t   vks_diskcache_filepath(VksDiskCache* c, const uint8_t* id, char* buf, size_t cap);
+size_t   vks_diskcache_metadata_to_filepath(const char* dir, size_t dir_len, const char* delim, size_t delim_len, const uint8_t* id, char* buf, size_t cap);
+void     vks_diskcache_remove_old_vfs_files(const char* path, size_t len);
+
+/* Mesh assets. */
+typedef struct VksMeshHeader
+{
+    int32_t version;
+    int32_t skin_offset;
+    int32_t skin_size;
+    int32_t skin_in_cache;
+    int32_t physics_convex_offset;
+    int32_t physics_convex_size;
+    int32_t physics_convex_in_cache;
+    int32_t physics_mesh_offset;
+    int32_t physics_mesh_size;
+    int32_t physics_mesh_in_cache;
+    int32_t lod_offset[4];
+    int32_t lod_size[4];
+    int32_t lod_in_cache[4];
+    int32_t header_size;
+    int32_t not_found;
+    uint8_t creator_id[16];
+} VksMeshHeader;
+
+typedef struct VksMeshHeaderReceipt
+{
+    VksMeshHeader header;
+    int64_t combined_header_size;
+    int32_t data_size;
+    int32_t skin_in_data;
+    size_t  skin_offset;
+    size_t  skin_size;
+    int32_t lod_in_data[4];
+    size_t  lod_offset[4];
+    size_t  lod_size[4];
+} VksMeshHeaderReceipt;
+
+typedef struct VksMeshFace
+{
+    int32_t         num_vertices;
+    int32_t         num_indices;
+    int32_t         has_weights;
+    int32_t         incomplete;
+    const float*    positions;      /* num_vertices x 4 */
+    const float*    normals;        /* num_vertices x 4 */
+    const float*    texcoords;      /* texcoord_count x 2 */
+    size_t          texcoord_count;
+    const uint16_t* indices;        /* num_indices */
+    const float*    weights;        /* num_vertices x 4, when has_weights */
+    float           extents[8];
+    float           tc_extents[4];
+    float           normalized_scale[3];
+} VksMeshFace;
+
+typedef struct VksMeshSkinInfo
+{
+    size_t  joint_count;
+    size_t  inv_bind_count;
+    size_t  alt_bind_count;
+    size_t  bind_pose_count;
+    float   pelvis_offset;
+    int32_t lock_scale_if_joint_position;
+    float   bind_shape_matrix[16];
+} VksMeshSkinInfo;
+
+typedef struct VksMeshFaces VksMeshFaces;
+typedef struct VksMeshSkin VksMeshSkin;
+typedef struct VksMeshDecomp VksMeshDecomp;
+
+int32_t  vks_mesh_header_received(const uint8_t* data, size_t len, uint32_t flags, VksMeshHeaderReceipt* out);
+uint32_t vks_mesh_header_flags(const VksMeshHeader* h);
+void     vks_mesh_header_set_from_flags(VksMeshHeader* h, uint32_t flags);
+int32_t  vks_mesh_header_actual_lod(VksMeshHeader* h, int32_t lod);
+int32_t  vks_mesh_header_cache_file_size(const VksMeshHeader* h);
+void     vks_mesh_preamble_encode(int32_t header_bytes, uint32_t flags, uint8_t* out);
+int32_t  vks_mesh_preamble_decode(const uint8_t* buf, size_t len, uint32_t* version, int32_t* header_size, uint32_t* flags);
+int32_t  vks_mesh_looks_unwritten(const uint8_t* buf, size_t len);
+size_t   vks_mesh_construct_url(const char* mesh_cap, size_t mesh_cap_len, const char* legacy1, size_t legacy1_len, const char* legacy2, size_t legacy2_len, int32_t legacy_pref_version, const uint8_t* id, char* buf, size_t cap, int32_t* legacy_version);
+int32_t  vks_mesh_policy_for(uint32_t len, int32_t legacy_cap_version);
+int32_t  vks_mesh_part_request(const VksMeshHeader* h, int32_t kind, int32_t* offset, int32_t* size, int32_t* in_cache, int32_t* disk_offset);
+int32_t  vks_mesh_response_body_offset(uint32_t request_offset, uint32_t response_offset, size_t data_size, size_t* out);
+VksMeshFaces* vks_mesh_unpack(const uint8_t* data, size_t len, uint8_t sculpt_type, int32_t* err);
+void     vks_mesh_faces_free(VksMeshFaces* f);
+size_t   vks_mesh_faces_count(const VksMeshFaces* f);
+int32_t  vks_mesh_face(const VksMeshFaces* f, size_t i, VksMeshFace* out);
+VksMeshSkin* vks_mesh_skin_parse(const uint8_t* data, size_t len);
+void     vks_mesh_skin_free(VksMeshSkin* s);
+int32_t  vks_mesh_skin_info(const VksMeshSkin* s, VksMeshSkinInfo* out);
+size_t   vks_mesh_skin_joint_name(const VksMeshSkin* s, size_t i, const char** out);
+int32_t  vks_mesh_skin_matrix(const VksMeshSkin* s, int32_t kind, size_t i, float* out);
+VksMeshDecomp* vks_mesh_decomp_parse(const uint8_t* data, size_t len);
+void     vks_mesh_decomp_free(VksMeshDecomp* d);
+void     vks_mesh_decomp_info(const VksMeshDecomp* d, size_t* hull_count, size_t* base_hull_count, int32_t* base_mesh_cleared);
+size_t   vks_mesh_decomp_hull(const VksMeshDecomp* d, size_t i, const float** points);
+
+/* The generic asset fetch. */
+typedef struct VksToxicMap VksToxicMap;
+typedef struct VksAssetRequestKey
+{
+    uint8_t  id[16];
+    int32_t  asset_type;
+    uint64_t callback;
+    uint64_t user_data;
+    double   time;
+} VksAssetRequestKey;
+
+size_t       vks_asset_url(const char* cap_url, size_t cap_len, const char* type_name, size_t type_len, const uint8_t* id, char* buf, size_t cap);
+const char*  vks_asset_error_string(int32_t status);
+VksToxicMap* vks_toxic_new(void);
+void         vks_toxic_free(VksToxicMap* m);
+int32_t      vks_toxic_is_toxic(VksToxicMap* m, const uint8_t* id, uint64_t now_us);
+void         vks_toxic_flush_old(VksToxicMap* m, uint64_t now_us, int32_t force);
+void         vks_toxic_mark(VksToxicMap* m, const uint8_t* id, uint64_t now_us);
+int32_t      vks_asset_duplicate_verdict(const VksAssetRequestKey* keys, size_t n, const uint8_t* id, int32_t asset_type, uint64_t callback, uint64_t user_data);
+size_t       vks_asset_completion_order(const VksAssetRequestKey* keys, size_t n, const uint8_t* id, int32_t asset_type, size_t* out, size_t cap);
+size_t       vks_asset_timed_out_order(const VksAssetRequestKey* keys, size_t n, int32_t is_download_list, int32_t all, double now_secs, double timeout_secs, size_t* out, size_t cap);
+
 #ifdef __cplusplus
+}
+
+#include <string>
+#include <vector>
+
+/* The string a vks_* function writes into (buf, cap). Those functions write
+ * at most cap - 1 bytes and a NUL and return the string's full length;
+ * vks_ffi_string calls fill(buf, cap) and calls it again with a buffer of
+ * the full length when the first was too small, so no result is cut. */
+template <typename Fill>
+inline std::string vks_ffi_string(Fill fill)
+{
+    char small[256];
+    size_t len = fill(small, sizeof(small));
+    if (len < sizeof(small))
+    {
+        return std::string(small, len);
+    }
+    std::vector<char> big;
+    for (;;)
+    {
+        big.resize(len + 1);
+        const size_t again = fill(big.data(), big.size());
+        if (again < big.size())
+        {
+            return std::string(big.data(), again);
+        }
+        len = again;
+    }
 }
 #endif
 

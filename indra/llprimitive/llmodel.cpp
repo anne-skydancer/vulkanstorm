@@ -27,6 +27,7 @@
 #include "linden_common.h"
 
 #include "llmodel.h"
+#include "vkstorm_ffi.h"
 #include "llmemory.h"
 #include "llconvexdecomposition.h"
 #include "llsdserialize.h"
@@ -1758,6 +1759,56 @@ void LLMeshSkinInfo::fromLLSD(LLSD& skin)
     updateHash();
 }
 
+bool LLMeshSkinInfo::fromZippedData(const U8* data, S32 size)
+{
+    // The skin block of a mesh asset is parsed by vkstorm-assets (vkstorm-rust
+    // rung five): inflate, LLSD, the matrices and the bind pose. The importer
+    // keeps fromLLSD for models it builds itself.
+    VksMeshSkin* skin = vks_mesh_skin_parse(data, (size_t)llmax(size, 0));
+    if (!skin)
+    {
+        LL_WARNS("MESHSKININFO") << "Mesh skin info parse error.  Not a valid mesh asset!  ID:  " << mMeshID << LL_ENDL;
+        return false;
+    }
+    VksMeshSkinInfo info;
+    vks_mesh_skin_info(skin, &info);
+
+    for (size_t i = 0; i < info.joint_count; ++i)
+    {
+        const char* name = NULL;
+        size_t len = vks_mesh_skin_joint_name(skin, i, &name);
+        mJointNames.push_back(std::string(name, len));
+        mJointNums.push_back(-1);
+    }
+    LLMatrix4 mat;
+    for (size_t i = 0; i < info.inv_bind_count; ++i)
+    {
+        vks_mesh_skin_matrix(skin, 0, i, &mat.mMatrix[0][0]);
+        mInvBindMatrix.push_back(LLMatrix4a(mat));
+    }
+    memcpy(&mat.mMatrix[0][0], info.bind_shape_matrix, sizeof(F32) * 16);
+    mBindShapeMatrix.loadu(mat);
+    for (size_t i = 0; i < info.alt_bind_count; ++i)
+    {
+        vks_mesh_skin_matrix(skin, 1, i, &mat.mMatrix[0][0]);
+        mAlternateBindMatrix.push_back(LLMatrix4a(mat));
+    }
+    mPelvisOffset = info.pelvis_offset;
+    mLockScaleIfJointPosition = info.lock_scale_if_joint_position != 0;
+
+    // mBindShapeMatrix and mInvBindMatrix combined into mBindPoseMatrix
+    mBindPoseMatrix.resize(info.bind_pose_count);
+    for (size_t i = 0; i < info.bind_pose_count; ++i)
+    {
+        vks_mesh_skin_matrix(skin, 2, i, &mat.mMatrix[0][0]);
+        mBindPoseMatrix[i].loadu(mat);
+    }
+    vks_mesh_skin_free(skin);
+
+    updateHash();
+    return true;
+}
+
 LLSD LLMeshSkinInfo::asLLSD(bool include_joints, bool lock_scale_if_joint_position) const
 {
     LLSD ret;
@@ -1876,6 +1927,54 @@ U32 LLMeshSkinInfo::sizeBytes() const
 LLModel::Decomposition::Decomposition(LLSD& data)
 {
     fromLLSD(data);
+}
+
+bool LLModel::Decomposition::fromZippedData(const U8* data, S32 size)
+{
+    // The convex decomposition block is parsed by vkstorm-assets (vkstorm-rust
+    // rung five).
+    VksMeshDecomp* decomp = vks_mesh_decomp_parse(data, (size_t)llmax(size, 0));
+    if (!decomp)
+    {
+        LL_WARNS("MESHSKININFO") << "Mesh decomposition parse error.  Not a valid mesh asset!  ID:  " << mMeshID << LL_ENDL;
+        return false;
+    }
+    size_t hull_count = 0;
+    size_t base_count = 0;
+    int32_t base_mesh_cleared = 0;
+    vks_mesh_decomp_info(decomp, &hull_count, &base_count, &base_mesh_cleared);
+
+    if (hull_count > 0)
+    {
+        mHull.resize(hull_count);
+        for (size_t i = 0; i < hull_count; ++i)
+        {
+            const F32* points = NULL;
+            size_t n = vks_mesh_decomp_hull(decomp, i, &points);
+            mHull[i].reserve(n);
+            for (size_t j = 0; j < n; ++j)
+            {
+                mHull[i].push_back(LLVector3(points[j * 3], points[j * 3 + 1], points[j * 3 + 2]));
+            }
+        }
+    }
+    if (base_count > 0)
+    {
+        const F32* points = NULL;
+        size_t n = vks_mesh_decomp_hull(decomp, (size_t)-1, &points);
+        for (size_t j = 0; j < n; ++j)
+        {
+            mBaseHull.push_back(LLVector3(points[j * 3], points[j * 3 + 1], points[j * 3 + 2]));
+        }
+    }
+    if (base_mesh_cleared)
+    {
+        //empty base hull mesh to indicate decomposition has been loaded
+        //but contains no base hull
+        mBaseHullMesh.clear();
+    }
+    vks_mesh_decomp_free(decomp);
+    return true;
 }
 
 void LLModel::Decomposition::fromLLSD(LLSD& decomp)

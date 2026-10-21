@@ -79,6 +79,7 @@ U8 const * LLMaterialID::get() const { return mID; }
 
 LLPrimTextureList::LLPrimTextureList() { }
 LLPrimTextureList::~LLPrimTextureList() { }
+LLTextureEntry& LLPrimTextureList::getTextureRef(const U8 index) const { static char storage[sizeof(LLTextureEntry)]; return *reinterpret_cast<LLTextureEntry*>(storage); }
 S32 LLPrimTextureList::setBumpMap(const U8 index, const U8 bump) { return TEM_CHANGE_NONE; }
 S32 LLPrimTextureList::setOffsetS(const U8 index, const F32 s) { return TEM_CHANGE_NONE; }
 S32 LLPrimTextureList::setOffsetT(const U8 index, const F32 t) { return TEM_CHANGE_NONE; }

@@ -1193,6 +1193,298 @@ caller does); the record itself is smaller than the C++ operation.
   closed, as the C++ queue did, so the service must be destroyed and
   created again to accept requests, as `LLAppCoreHttp` does.
 
+## Rung five: the asset pipeline
+
+The data side of the asset pipeline is Rust: `vkstorm-assets` in
+vkstorm-core-rust (`crates/vkstorm-assets`, no `unsafe`), reached through
+the `vks_texcache_*`, `vks_file_*`, `vks_asset_file_*`, `vks_lfs_*`,
+`vks_tfetch_*`, `vks_j2c_calc_*`, `vks_retry_*`, `vks_diskcache_*`,
+`vks_mesh_*`, `vks_asset_*` and `vks_toxic_*` functions of
+`indra/rust/vkstorm-ffi/src/assets.rs` (header `indra/rust/include/vkstorm_ffi.h`;
+`llfilesystem`, `llmath`, `llprimitive`, `llimage`, `llmessage` and the
+viewer link `vkstorm_ffi`). No runtime choice and no fallback. The C++
+classes keep their names and public interfaces (`LLTextureCache`,
+`LLTextureFetch`, `LLAdaptiveRetryPolicy`, `LLImageJ2C`, `LLDiskCache`,
+`LLFileSystem`, `LLLFSThread`, `LLVolume`, `LLMeshSkinInfo`,
+`LLModel::Decomposition`, `LLMeshRepoThread`, `LLMeshHeader`,
+`LLAssetStorage`, `LLViewerAssetStorage`), so no caller changed.
+
+### Keep-or-port judgement
+
+| Part | Decision | Why |
+|---|---|---|
+| `LLTextureCache`: the entries file, the header-data file, the body files, the fast cache, the LRU and free list, the updated-entry map, the lazy and full purges, corruption handling, the version and engine-string check | Rust (`texcache`) | The index and file logic. The on-disk format is unchanged and byte-compatible (below), so the port reads and writes the cache the C++ left behind. |
+| `LLTextureCacheWorker`, `LLTextureCacheRemoteWorker`, `LLTextureCacheLocalFileWorker`, the responders, `LLTextureCache::update` | C++ | The `LLWorkerThread` plumbing that serialises reads and writes on the cache thread and delivers completions on the main thread. A worker's read fills one buffer the responder takes over (`vks_texcache_read`), a write hands the bytes and the raw image scaled to the fast cache level (`vks_texcache_write`, `vks_texcache_fast_level`): one call per operation, the C++ states (header, body, fast cache) folded inside. |
+| `LLTextureFetchWorker::doWork` and its states, `onCompleted`/`callbackHttpGet`, `callbackCacheRead`, `callbackCacheWrite`, `callbackDecoded`, `deleteOK`'s state part, `setDesiredDiscard`, the HTTP semaphore and water marks, the resource waiters and their release order, the cumulative counts, the state timers | Rust (`fetch`) | The state machine. `Worker::do_work` is the C++ `doWork` with its `return doWork(param)` recursions as iterations; the C++ worker keeps the objects the machine does not own and drives it through a table of host callbacks (`VksTexFetchHost`), each one line of the old `doWork` (a cache read, an HTTP GET, a decode post, a cache write, the assembly of the formatted image from a reply, the statistics). `LLTextureFetch` holds the crate's fetcher under its own lock (deleteOK, the worker destructors and the statistics run on other threads). |
+| `LLTextureFetch`'s request map, the HTTP queue accounting, the command queue (region and metrics), `createRequest`'s plumbing, `getRequestFinished` and the state accessors, `releaseHttpWaiters`' walk over the workers | C++ | Thread, map and lock plumbing over the C++ worker objects; the decisions in it (`createRequest`'s desired size and discard, the "already done" check, the release order of waiters by priority, the data progress and requested priority an accessor reports) come from the crate. |
+| The UDP texture path (`LOAD_FROM_SIMULATOR`, `sendRequestListToSimulators`, `receiveImageHeader`/`receiveImagePacket`, the packet assembly) | Rust behind the `opensim` feature; the C++ callers compiled with `OPENSIM` | Legacy transport Second Life no longer uses; CMake forwards `OPENSIM` to the crate feature, so a Second Life build carries neither side. Without it the `ImageData`/`ImagePacket` handlers count the packet as bad and no request list is sent. |
+| `LLAdaptiveRetryPolicy` | Rust (`fetch::retry`); the C++ class is a thin wrapper that still reads and parses the `Retry-After` header (from `LLSD` or `HttpHeaders`; seconds or an RFC 1123 date through `curl_getdate`) | The backoff, the retry counting, the 4xx/5xx decision. The header parsing needs libcurl's date parser, which the C++ already links. |
+| `LLImageJ2C::calcDataSizeJ2C` | Rust (`fetch::budget`) | The byte budget per discard level the fetcher asks the server for (the FIRE-35987 layer walk). `calcDiscardLevelBytes` stays the C++ loop over the per-instance cached budgets (it reads the image's own rate). |
+| `LLWorkerThread`, `LLQueuedThread`, `LLImageDecodeThread` (the thread pools) | C++, driving the Rust machine | Measured and judged: the texture cache thread, the fetch thread and the decode pool are the viewer's `LLQueuedThread`/`LL::ThreadPool` instances whose pause, wake, priority and shutdown semantics the main loop depends on (`LLAppViewer::idle`, `getPending`, `runCondition`); the work they run is where the time goes and that is Rust. Rust threads would only add a second scheduler to coordinate with the first for no measured gain: the hot paths are at the C++ on the same threads. |
+| The GL upload side (`LLViewerTexture`, `LLViewerFetchedTexture`, `LLImageGL`) | C++ | Rendering. |
+| `LLImageRaw`, `LLImageFormatted`, `LLImageJ2C` as containers and codecs | C++ (the J2C decode is rung one) | The buffers the decode thread, the GL upload and the cache share by `LLPointer`; the fetcher's machine sees their sizes, discard levels and codec through the environment snapshot and the host copies bytes into them. |
+| `LLDiskCache`: naming, the purge with the high and low water marks and the static-asset skip list, the directory scans, clear, the old VFS file removal | Rust (`diskcache`) | File logic. The singleton, the API and the static-asset prepopulation (it walks the viewer's `fs_static_assets` directory) stay C++; the purge thread runs on a copy of the configuration and hands the scan result back, so the main thread never waits for the file system. |
+| `LLFileSystem` (asset files: exists, size, read, write in its modes, seek, rename, remove, access-time touch), `LLLFSThread`'s reads and writes | Rust (`diskcache::file`) | The file operations; the C++ keeps the position bookkeeping and the request thread. |
+| Mesh LOD unpacking (`LLVolume::unpackVolumeFaces` from bytes), skin info and convex decomposition parsing (`LLMeshSkinInfo::fromZippedData`, `LLModel::Decomposition::fromZippedData`) | Rust (`mesh::inflate`, `mesh::llsd`, `mesh::unpack`, `mesh::skin`) | Inflate, binary LLSD, dequantisation lane for lane as the SSE code did (the fourth lane of positions 0, of normals -1, the pairwise texture coordinates and their padding entry, the `_mm_min_ps` operand order of the extents), the joint weights, the sculpt flags. `cacheOptimize` (meshoptimizer) and the tangents stay C++; the importer's `fromLLSD` paths stay C++. |
+| `sculptGenerateMapVertices` | C++ (left by the mesher rung) | Sculpt maps are textures, not mesh assets; the judgement of the mesher rung stands. |
+| `LLMeshRepoThread`: `headerReceived`'s parsing and cache bookkeeping, `constructUrl`, the policy class of a byte range, the parts' byte ranges and cache state, the cache preamble, the all-zeros check of cached blocks, the response range check of `LLMeshHandlerBase::onCompleted`, `getActualMeshLOD`, the reserved cache file size | Rust (`mesh::header`, `mesh::plan`) | The data decisions of the repository; `LLMeshHeader` stays the C++ record the repository keeps per mesh (the cost and streaming code reads it), converted at the boundary. |
+| `LLMeshRepoThread`'s queues, threads, HTTP handlers, `LLFileSystem` reads and writes, the physics shape's triangle soup, the upload thread, `LLPhysicsDecomp` | C++ | Thread and queue plumbing, the uploader (an importer concern) and the convex decomposition library. The physics shape still goes through `LLVolume::unpackVolumeFaces` (Rust) and `cacheOptimize` (C++) as before. |
+| `LLAssetStorage`: the error strings, the toxic asset map, `getAssetData`'s duplicate verdict, the completion and time-out orders of the pending lists; `LLViewerAssetStorage::getAssetURL` | Rust (`asset`) | The bookkeeping policies. The request lists, the coroutine HTTP path (`assetRequestCoro` on `LLCoros` and `HttpCoroutineAdapter`, out of scope by rung four's judgement) and the legacy UDP transfers stay C++. |
+
+### The boundary
+
+- The texture cache is one opaque object (`VksTexCache`) created with the
+  codec's engine string and the address size, stamped by a clock the host
+  supplies (`LLTextureCache::sClock`, `time(NULL)` in the viewer, fixed in
+  the tests). `initCache`, `purgeCache`, `setReadOnly`, `isInCache`,
+  `removeFromCache`, the usage figures and the periodic
+  `writeUpdatedEntries` map one to one; the cache validation counter the
+  C++ kept in `CacheValidateCounter` is read and advanced by the C++
+  around `vks_texcache_init` as before (when a purge ran). Panics are
+  caught at every entry and reported as the operation's failure.
+- The fetch worker's machine (`VksTexFetchWorker`) runs under the C++
+  worker's work mutex, as `doWork` did; each `do_work` call takes a
+  snapshot of the environment (`VksTexFetchEnv`: quitting, pause, the
+  formatted image's size, discard level and codec, the raw image's
+  dimensions, the settings `HttpRangeRequestsDisable` and
+  `TextureDecodeDisabled`, `gDisconnected`, the bandwidth figures) and
+  acts through the callback table. Events arrive as calls:
+  `cache_read_done`, `cache_write_done`, `decode_done`, `http_completed`
+  (the response status, its type for the policy, the reason, the 206
+  flag, the body size, the `Content-Range` triple and a parsed
+  `Retry-After`). The machine says whether it kept the reply body
+  (`http_buffer_present`) and the host holds the `BufferArray` for it;
+  the assembly of the formatted image from the reply (the buffer, the
+  copy of the bytes held, the reply bytes from the overlap offset) is one
+  callback, so the bytes never cross the boundary. The fetcher
+  (`VksTexFetcher`) holds the HTTP semaphore, the water marks, the
+  waiters and the counts under a mutex in the crate.
+- The accessors the viewer reads (`getFetchState`, `getLastFetchState`,
+  `getRequestFinished`, the texture console) take a snapshot of the
+  machine's fields (`VksTexFetchWorkerInfo`) under the work mutex.
+- The disk cache (`VksDiskCache`) and the toxic map (`VksToxicMap`) are
+  opaque objects; the file operations are plain functions over paths.
+- Mesh parsing hands back opaque results (`VksMeshFaces`, `VksMeshSkin`,
+  `VksMeshDecomp`) whose buffers the C++ copies into its own
+  `LLVolumeFace`, `LLMeshSkinInfo` and `LLModel::Decomposition` and
+  frees; `headerReceived` returns a receipt (`VksMeshHeaderReceipt`): the
+  header, the combined header size, and which skin and LOD blocks the
+  received bytes already hold.
+- C++ exceptions never cross: every callback body is exception-free by
+  construction (allocation through `ll_aligned_malloc_16` returns null,
+  the cache and HTTP calls are `noexcept` in effect); a Rust panic is
+  caught at the boundary (`catch_unwind`) and reported as the call's
+  failure value.
+
+### Cache format decision
+
+The texture cache's on-disk format is kept: `texture.entries` (a 44-byte
+`EntriesInfo` of version, address size, a 32-byte engine string and the
+entry count, then 28-byte entries of id, image size, body size and time),
+`texture.cache` (600-byte header records), `texturecache/<0-f>/<uuid>.texture`
+bodies and `FastCache.cache` (1040-byte records: width, height,
+components, discard level and up to 1024 pixel bytes). No migration: the
+port opens the cache the C++ left and the C++ could open the port's. The
+engine string is still `LLImageJ2C::getEngineInfo()`, so the one-time
+purge the codec's `2.5.4` string triggers happens as before. The one
+difference is documented below (the unused tail of a fast cache record).
+The asset disk cache (`sl_cache_<uuid>_0.asset` under `<0-f>/`) and the
+mesh cache's 12-byte preamble are likewise unchanged.
+
+### Behaviour kept, settled, and documented as different
+
+Kept, and covered by the recorded corpora: the cache's index (LRU of the
+10 % oldest, the free list, the 20 % purge above the limit by age, the
+one-in-256 validation of bodies per start, the version and engine
+mismatch purge, the entry time stamps once 75 % of the entries are in
+use, the corrupted-cache reset), the fast cache level search, the
+texture fetch decisions (the discard-level byte budget, the cache read
+before the network, the `file://` local reads, the HTTP range with the
+one-byte overlap of a resumed fetch and the open-ended range past
+20 MB, the 404/503/416 handling with the region check, the capability
+retry limit of 720 s, the `Content-Range` alignment of partial replies,
+the decode and cache write states, the return to `INIT` when more data
+is wanted, the resource semaphore with its pipelined and non-pipelined
+water marks, the waiters released by priority), the server-bake retry
+policy (10 s doubling to an hour, ten retries, `Retry-After` honoured),
+the mesh header's cache flags, the part ranges, the all-zeros check, the
+URL preference (ViewerAsset, GetMesh2, GetMesh), the policy class by
+size, the mesh LOD, skin and decomposition unpacking bit for bit, the
+disk cache's purge order and skip list, the asset storage's request
+policies and strings.
+
+Documented as different:
+
+- A fast cache record's unused tail (the bytes after `16 + w*h*c`) is
+  written as zeros; the C++ wrote whatever its pad buffer held from the
+  previous record (uninitialised for the first), which is why the parity
+  test masks those bytes. No reader looks at them.
+- The inflate error codes of `LLUZipHelper` (`ZR_MEM_ERROR`,
+  `ZR_DATA_ERROR`, `ZR_SIZE_ERROR`, `ZR_PARSE_ERROR`) map to the crate's
+  `ZipResult`; the mesh repository only ever tested for `ZR_OK`, and the
+  logged code is the crate's.
+- `LLAssetStorage::getAssetData`'s duplicate check compared two
+  `LLGetAssetCallback` `std::function`s through
+  `target<LLGetAssetCallback>()`, which never matches a stored function
+  pointer or lambda, so two callbacks always compared equal and the
+  verdict was decided on the asset and the user data alone. The port
+  passes the same identity (zero) for every callback and keeps that
+  decision rather than change what the viewer discards.
+- The texture fetcher's debugging aids (`mDebugID`, `mDebugPause`) are
+  copied into the crate's fetcher once per main-loop update; the
+  breakpoint counter the console increments stays C++.
+- `LLTextureFetch::getStateString` is the crate's. The `Retry-After`
+  header stays C++, as before the port: a number of seconds through
+  `strtod`, an RFC 1123 date through libcurl's `curl_getdate`; the
+  crate's policy takes the parsed seconds. `INTEGRATION_TEST_llhttpretrypolicy`,
+  disabled upstream since the policy moved to the viewer, builds and
+  runs again and checks both forms.
+
+### Parity corpora
+
+All four were recorded from the C++ before the port, on Windows, and are
+stored under `indra/newview/tests/fixtures` and
+`indra/llprimitive/tests/fixtures` in the viewer and
+`crates/vkstorm-assets/tests/fixtures` in vkstorm-core-rust (git
+attributes mark them binary).
+
+| corpus | what it holds | test | result |
+|---|---|---|---|
+| `lltexturecache_parity.bin` (723 KB) and `lltexturecache_parity_events.xml` (16 KB) | three snapshots of every cache file after a scripted sequence on a scratch directory with a fixed clock: writes, reads, fast-cache reads, re-writes, removals, an over-limit purge, a reopen with body validation, a version-mismatch purge; and the script's outcomes: every write's and removal's result, every read's success, size and data checksum, every fast-cache read's dimensions, level and pixel checksum, the usage, entry counts and validation counter after each phase (the outcomes recorded from the pre-port C++ on Windows after the files, when review found them only logged) | `INTEGRATION_TEST_lltexturecache_parity` (viewer, the port's `LLTextureCache` through the real worker thread); `tests/texcache_replay.rs` (the crate alone, the files) | files byte-identical and outcomes identical on Windows and Linux, the engine string checked against the running codec, the fast cache tails masked (above) |
+| `lltexturefetch_parity.xml` + `textures/*.j2c` (36 KB + 969 KB) | fifteen scripted textures (plain, lossless, tiny, RGBA, 404, 503, one-off 503, truncated and overlapping ranges, a full 200 to a range request, 416 on ranges) fetched over three passes: per pass and texture the outcome (state, discard, raw dimensions, HTTP status, from cache) and the server's request log (ranges and statuses), then the cache's contents | `INTEGRATION_TEST_lltexturefetch_parity` (the real cache, decode thread and HTTP layer against `tests/vksassets_mock_server.py`) | 15 textures over 3 passes, 0 differences, on Windows and Linux |
+| `llmeshunpack_corpus.vksa` (6.3 MB) | 73 assets built with the viewer's own packer (`LLModel::writeModel`): twelve prim shapes at every LOD, with and without skin weights, physics shapes, convex hulls and base hulls, plus a 9216-triangle torus; for each the faces as `unpackVolumeFaces` left them and after `cacheOptimize`, the skin info with its bind pose, the decomposition | `INTEGRATION_TEST_llmeshunpack_parity` (viewer: the raw faces, the skin and the decomposition against the corpus bit for bit; the optimised faces against an oracle built in the same binary, the same C++ `cacheOptimize` and tangent generation run on the raw faces; the corpus' optimised faces are kept in the file but not compared, see Platform edges); `tests/mesh_corpus.rs` (the crate, the raw faces) | 73 cases: 1361 raw faces against the corpus and 1361 optimised faces against the oracle, 0 differences (viewer); 73 cases, 1361 raw faces, 0 differences (crate); on Windows (MSVC 19.44) and Linux (Ubuntu 26.04 with GCC 15 and with GCC 14.3) |
+| asset fetch request/response sequences | not recorded: the HTTP asset fetch is `assetRequestCoro`, a coroutine on `LLCoros` and `HttpCoroutineAdapter` that stays C++ (rung four's judgement); what the rung ports of `LLAssetStorage` is the request bookkeeping, covered by the crate's unit tests of the policies and strings, and `getAssetURL`, whose output the mock-server fetch test would only echo | crate unit tests | the policies agree with the C++ by construction (one implementation of each, tested) |
+
+### Tests
+
+- vkstorm-core-rust `crates/vkstorm-assets`: 44 unit tests (the cache
+  record encodings and purge rules, the fetcher's budget, retry policy,
+  waiters and state transitions, the disk cache purge and naming, the
+  mesh header, URL and plan rules, the LLSD accessors, the inflate
+  round trip, the asset policies), `tests/texcache_replay.rs` and
+  `tests/mesh_corpus.rs` against the corpora; the same with
+  `--features opensim`. `cargo bench --bench hot_paths` is the
+  crate-side timing harness.
+- Viewer: `INTEGRATION_TEST_lltexturecache_parity`,
+  `INTEGRATION_TEST_lltexturefetch_parity`,
+  `INTEGRATION_TEST_llmeshunpack_parity` (above) and
+  `INTEGRATION_TEST_llhttpretrypolicy` (the retry policy's original
+  suite, seconds and RFC 1123 dates), in CI's focused list;
+  `INTEGRATION_TEST_llimagej2coj`, `INTEGRATION_TEST_llimagecodecs`,
+  `INTEGRATION_TEST_llvolume`, `INTEGRATION_TEST_llmessagetemplate` and
+  `INTEGRATION_TEST_llcorehttp_parity` still pass. The llprimitive unit
+  tests (`llgltfmaterial`, `llprimitive`), which every test linking
+  `llprimitive` builds, were fixed to build again (two float constants,
+  a stub).
+- The viewer builds, stages and reaches the login screen on Windows with
+  empty settings and user directories (`APPDATA` and `LOCALAPPDATA`
+  redirected to scratch directories, no remembered credentials): the log
+  shows the login fields set to empty, `STATE_LOGIN_SHOW` then
+  `STATE_LOGIN_WAIT`, the J2C engine string `vkstorm-openjp2 2.5.4
+  (Rust)`, the texture cache initialised through the crate (`Headers:
+  942797 Textures size: 2621 MB`, the fresh cache cleared and purged)
+  and the asset disk cache created and prepopulated; the login panel's
+  textures and the Firestorm data fetches went through the port with no
+  error from it. The window was captured at the login screen with the
+  fields empty. Two of the three launches on the development desktop
+  were taken over by the person at the machine, who logged in on them
+  (the second with a different account) to look around; no credentials
+  were entered by the automation, and one of those sessions, 60 seconds
+  in-world, loaded 17,214 mesh fetches to quiescence and its textures
+  through the ported cache, fetcher and repository without a warning
+  from them beyond the CDN's own 403 replies, handled as before.
+
+### Measurements
+
+The viewer's three bench modes, the C++ at the recording commits and the
+port, each built in the same tree and run three times back to back on an
+otherwise idle machine (AMD Ryzen 9 9950X3D; Windows 11, MSVC 19.44, the
+RelWithDebInfo configuration; Ubuntu 26.04 under WSL, GCC 15, the CI
+configuration at RelWithDebInfo); the crate at `opt-level 3`, fat LTO,
+`x86-64-v3`. Minimum over the runs. The pre-port figures come from the
+same test sources with the pre-port C++ of the cache, the fetcher, the
+file layer and the mesh unpackers swapped in from the recording commits.
+
+| hot path | what is timed | Windows C++ | Windows Rust | Linux C++ | Linux Rust |
+|---|---|---:|---:|---:|---:|
+| mesh LOD unpack (`VKS_MESH_BENCH=5`) | the raw `unpackVolumeFaces` of all five parts of `torus_big/skin_hulls` (9216 triangles in the high LOD), before `cacheOptimize` | 0.2525 ms | 0.2372 ms | 0.1868 ms | 0.1831 ms |
+| texture cache index lookup (`VKS_TEXCACHE_BENCH=200`) | `isInCache` over 200 cached textures, 200 passes | 0.0415 µs | 0.0307 µs | 0.0133 µs | 0.0196 µs |
+| texture cache write / read (same harness) | a new 4000-byte texture through the worker thread, and a cached one read back, completion polled | 46.9 / 46.1 ms | 46.3 / 46.3 ms | 6.33 / 6.30 ms | 6.31 / 6.30 ms |
+| texture assembly (`VKS_TEXFETCH_BENCH=3`) | one 1,195,278-byte lossless 1024x1024 JPEG 2000 fetched at discard 5 down to 0 through the real cache, decode thread and HTTP layer against the mock server, per full sequence | 723.7 ms | 726.5 ms | 687.1 ms | 686.7 ms |
+
+The port is at the C++ on every row on both platforms: the mesh unpack
+within run-to-run noise (the Windows unpack 0.2525 / 0.2760 / 0.2943 ms
+before, 0.2372 / 0.2396 / 0.2511 ms after; Linux 0.1868 / 0.1875 /
+0.1887 before, 0.1831 / 0.1838 / 0.1847 after), the texture assembly
+dominated by the six decodes of a lossless megabyte and the mock
+server's replies (Windows before 723.7 / 1068.2 / 1146.8 ms, after
+726.5 / 729.4 / 764.0 ms; Linux 687.1 / 687.3 / 687.6 before, 686.7 /
+687.2 / 687.2 after). The index lookup is a hash lookup under a lock
+either way; on Linux the port's crossing of the C ABI and its mutex add
+6 ns to a 13 ns lookup, on Windows it is 11 ns faster than the C++
+`std::map` under `LLMutex`. The cache write and read rows are
+bound by the harness, which drives the real worker thread and polls its
+completion through the main-loop `update` in 2 ms steps; the figure is
+the same with either implementation and does not resolve the cache's own
+cost.
+
+The crate alone (`cargo bench --bench hot_paths -- 20` in
+vkstorm-core-rust, minimum of three runs; the default target CPU, no
+LTO) gives the cache's own cost and the fetch machine's: on Windows the
+index lookup 0.013 µs, a write 0.58 ms and a read 0.10 ms (NTFS file
+creation and reads), unpacking all parts of the same mesh including the
+skin and the decomposition 0.56 ms, and the state machine's assembly of
+1 MiB over six discard levels with the cache, decode and HTTP mocked
+0.29 ms (30 machine steps); on Linux the lookup 0.013 µs, a write
+27 µs, a read 9.7 µs, the mesh 0.17 ms and the assembly 0.04 ms. The
+difference between the crate's mesh figure and the viewer harness's is
+the viewer build's `x86-64-v3` code generation and LTO, which the crate
+bench does not use.
+
+### Platform edges
+
+- Windows and Linux agree on every corpus: the cache files byte for
+  byte, the fetch decisions and request sequences, the 73 mesh cases.
+- The cache's directory names are built as the C++ built them; the C++
+  joined `getExpandedFilename(location, "")`, which ends in a delimiter,
+  with another delimiter (`cache\\texturecache`), which both platforms'
+  file systems collapse. The port strips the trailing delimiter before
+  joining, so the paths it logs are the plain ones.
+- On Windows the texture cache's full purge renames the old directory
+  aside and warns when the directory is not there yet (a fresh profile),
+  as the C++ did.
+- The faces after `cacheOptimize` depend on the build and run
+  environment, the raw faces do not. CI's Linux job (Ubuntu 24.04, GCC
+  14.2, glibc 2.39) unpacked every raw face of the mesh corpus bit for
+  bit but differed from the MSVC record in all 1361 optimised faces
+  (1285 in the normals and tangents, 76 in the tangents alone). MSVC
+  19.44 and, on Ubuntu 26.04 (glibc 2.43), GCC 15 and GCC 14.3 reproduce
+  the record, so the difference did not reproduce locally; the tangents
+  come from the prebuilt MikkTSpace library, which calls the C library's
+  `acosf`, whose implementation changed between those glibc releases, the
+  likely but unproven cause. Either way it is the C++ vertex cache
+  optimisation and tangent generation the port hands its faces to, not
+  the port: the viewer test compares the optimised faces with an oracle
+  run in the same process (the same C++ applied to the raw faces, which
+  match the corpus) instead of with the record, which checks that the
+  port hands the optimisation exactly the faces the C++ unpacker did in
+  any environment. The corpus file still carries the recorded optimised
+  faces; they are not compared. A port that skipped the optimisation
+  fails all 1361 comparisons.
+- GCC's `-Werror=class-memaccess` refuses `memcpy` into `LLVector4a`
+  and `LLVector2` arrays; the face copies go through the element float
+  pointers.
+- The Linux C++ before the port agrees with the Windows records on
+  everything the three corpora compare (the three parity tests pass with
+  the pre-port sources swapped in on Linux); the recorded fixtures were
+  made on Windows.
+- The fetch parity test's executable needs the SDL the window layer
+  links on Linux, which is not among the staged shared libraries; the
+  prebuilt library directory is on its library path. The test's raw
+  `gAgent` storage takes the object's symbol through an asm label there
+  (the Windows build uses the linker's alternate name), which LTO
+  reports as a type mismatch warning.
+
 ## Local build
 
 Follow the project's RelWithDebInfo procedure (see `scripts/validate_soloud.sh`
@@ -1209,6 +1501,7 @@ cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_l
 cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llimagej2coj INTEGRATION_TEST_llimagecodecs -- -m:4 -nologo
 cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llmessagetemplate -- -m:4 -nologo
 cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llcorehttp_parity INTEGRATION_TEST_llcorehttp -- -m:4 -nologo
+cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llmeshunpack_parity INTEGRATION_TEST_lltexturecache_parity INTEGRATION_TEST_lltexturefetch_parity -- -m:4 -nologo
 ```
 
 Under Git Bash pass MSBuild switches with a hyphen (`-m:4`), not a slash.
@@ -1216,3 +1509,10 @@ The llvolume test also records the corpus (`VKS_VOLUME_DUMP=<file>`) and
 times it (`VKS_VOLUME_BENCH=<iterations>`, `VKS_VOLUME_BENCH_OUT=<csv>`);
 the same timing for the crate alone is `cargo bench --bench mesher` in
 vkstorm-core-rust with the same environment variables.
+The asset pipeline tests record (`VKS_MESH_RECORD`, `VKS_TEXCACHE_RECORD`,
+`VKS_TEXFETCH_RECORD=<file>`) and time (`VKS_MESH_BENCH`,
+`VKS_TEXCACHE_BENCH`, `VKS_TEXFETCH_BENCH=<iterations>`, each with a
+`_OUT=<csv>`); the two fetch tests run under
+`indra/newview/tests/vksassets_mock_server.py`, as CMake's test step
+does. The crate-side timing is `cargo bench --bench hot_paths` in
+vkstorm-core-rust.

@@ -1112,9 +1112,11 @@ protected:
     void createVolumeFaces();
 public:
     bool unpackVolumeFaces(std::istream& is, S32 size);
-    bool unpackVolumeFaces(U8* in_data, S32 size);
+    // `optimize` false leaves the faces as unpacked, without the vertex
+    // cache optimisation and the tangents (the parity tests record both).
+    bool unpackVolumeFaces(U8* in_data, S32 size, bool optimize = true);
 private:
-    bool unpackVolumeFacesInternal(const LLSD& mdl);
+    bool unpackVolumeFacesInternal(const LLSD& mdl, bool optimize = true);
 
 public:
     virtual void setMeshAssetLoaded(bool loaded);
