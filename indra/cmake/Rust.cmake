@@ -25,6 +25,14 @@ if (TRUE)
   # The C header of the ABI, for every library that calls into the crate.
   target_include_directories(vkstorm_ffi INTERFACE ${CMAKE_SOURCE_DIR}/rust/include)
 
+  # The HTTP layer (rung four) binds libcurl by hand and leaves its symbols
+  # to the final link: the viewer's prebuilt libcurl with its TLS stack.
+  include(OpenSSL)
+  include(NGHTTP2)
+  include(ZLIBNG)
+  include(CURL)
+  target_link_libraries(vkstorm_ffi INTERFACE ll::libcurl)
+
   # corrosion adds the system libraries Rust's std needs (kernel32, ntdll,
   # userenv, ws2_32, dbghelp on Windows) to the imported target itself.
 

@@ -61,6 +61,10 @@
 #include <vector>
 
 #include <curl/curl.h>
+#if LL_WINDOWS
+#include <timeapi.h>
+#pragma comment(lib, "winmm.lib")
+#endif
 
 #ifndef VKS_HTTP_FIXTURE_DIR
 #error VKS_HTTP_FIXTURE_DIR must name the directory of the recorded scenarios
@@ -142,6 +146,7 @@ namespace
 
     std::string md5_hex(const std::string& bytes)
     {
+        if (bytes.empty()) return "d41d8cd98f00b204e9800998ecf8427e";
         LLMD5 md5;
         md5.update(reinterpret_cast<const unsigned char*>(bytes.data()), static_cast<unsigned int>(bytes.size()));
         md5.finalize();
@@ -305,6 +310,18 @@ namespace
             out.push_back(w);
         }
         std::sort(out.begin(), out.end(), [](const WireRequest& a, const WireRequest& b) { return a.t < b.t; });
+        // Connections are numbered per scenario in order of first use; the
+        // server's own numbering runs across the whole run.
+        std::map<int, int> renumber;
+        for (size_t i = 0; i < out.size(); ++i)
+        {
+            std::map<int, int>::iterator it(renumber.find(out[i].conn));
+            if (it == renumber.end())
+            {
+                it = renumber.insert(std::make_pair(out[i].conn, static_cast<int>(renumber.size()) + 1)).first;
+            }
+            out[i].conn = it->second;
+        }
         return out;
     }
 
@@ -1194,6 +1211,11 @@ namespace tut
             return; // timing only when asked for
         }
         const int iterations = std::max(1, atoi(n.c_str()));
+#if LL_WINDOWS
+        // The viewer runs with the 1 ms scheduler period (LLAppViewerWin32);
+        // the service loop's 2 ms sleeps would otherwise round to 15.6 ms.
+        timeBeginPeriod(1);
+#endif
         HttpRequest::createService();
         HttpRequest::startThread();
         HttpRequest* req = new HttpRequest();
@@ -1256,7 +1278,7 @@ namespace tut
 
         // Memory per in-flight request: requests queued behind a class limit.
         HttpRequest::policy_t slowClass = HttpRequest::DEFAULT_POLICY_ID;
-        const int inflight = 2000;
+        const int inflight = 20000;
         const U64 rssBefore = LLMemory::getCurrentRSS();
         std::vector<HttpHandle> handles;
         BufferArray* kb = make_body(std::string(1024, 'k'));
