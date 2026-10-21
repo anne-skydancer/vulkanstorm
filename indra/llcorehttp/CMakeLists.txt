@@ -143,6 +143,21 @@ if (LL_TESTS AND LLCOREHTTP_TESTS)
   LL_ADD_INTEGRATION_TEST(jsonrpcws "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(wsserver "" "${test_libs}")
 
+  # Behavioural parity of the HTTP layer against the scenarios recorded from
+  # the C++ implementation before its port to Rust (vkstorm-rust), driven
+  # against the local mock server in tests/vkshttp_mock_server.py. If
+  # http_proxy is in the environment, suppress it: it breaks the loopback
+  # exchange.
+  LL_ADD_INTEGRATION_TEST(llcorehttp_parity
+                          ""
+                          "${test_libs}"
+                          "-Dhttp_proxy"
+                          ${PYTHON_EXECUTABLE}
+                          "${CMAKE_CURRENT_SOURCE_DIR}/tests/vkshttp_mock_server.py"
+                          )
+  set_property(TARGET INTEGRATION_TEST_llcorehttp_parity APPEND PROPERTY
+      COMPILE_DEFINITIONS "VKS_HTTP_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
+
   #
   # Example Programs
   #
