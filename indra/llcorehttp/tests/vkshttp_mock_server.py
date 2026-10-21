@@ -296,16 +296,6 @@ class Connection(threading.Thread):
             time.sleep(0.05)
             if kind == "reset":
                 self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
-                return False
-            # A graceful close: our FIN, then wait for the client's, so the
-            # client sees a short body (CURLE_PARTIAL_FILE), never a reset.
-            try:
-                self.sock.shutdown(socket.SHUT_WR)
-                self.sock.settimeout(5)
-                while self.sock.recv(65536):
-                    pass
-            except OSError:
-                pass
             return False
         elif kind == "redirect":
             n = int(parts[1])
