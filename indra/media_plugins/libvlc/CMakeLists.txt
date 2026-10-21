@@ -29,45 +29,6 @@ target_link_libraries(media_plugin_libvlc
         ll::libvlc
 )
 
-if (WINDOWS AND CMAKE_SIZEOF_VOID_P EQUAL 8)
-  find_program(VLC_MODULE_CC NAMES x86_64-w64-mingw32-gcc gcc REQUIRED)
-  set(SPEAKERFILL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/speakerfill-source")
-  include("${CMAKE_CURRENT_SOURCE_DIR}/prepare_speakerfill.cmake")
-  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/prepare_speakerfill.cmake")
-  set(SPEAKERFILL_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/libspeakerfill_output_plugin.dll")
-  add_custom_command(OUTPUT "${SPEAKERFILL_OUTPUT}"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>"
-    COMMAND "${VLC_MODULE_CC}" -shared -std=gnu11 -O2 -g -DHAVE_ATTRIBUTE_PACKED -D__PLUGIN__ -DMODULE_STRING="speakerfill_output"
-      -I "${AUTOBUILD_INSTALL_DIR}/include/vlc/plugins" -I "${SPEAKERFILL_SOURCE_DIR}"
-      "${SPEAKERFILL_SOURCE_DIR}/speakerfill_output.c" "${VLCCORE_LIBRARY}"
-      -lole32 -luuid -lksuser -lwinmm -lws2_32 -o "${SPEAKERFILL_OUTPUT}"
-    DEPENDS "${SPEAKERFILL_SOURCE_DIR}/speakerfill_output.c" "${CMAKE_CURRENT_SOURCE_DIR}/prepare_speakerfill.cmake"
-      "${SPEAKERFILL_SOURCE_DIR}/speakerfill_codecs.h"
-    VERBATIM)
-  add_custom_target(vlc_speakerfill_output DEPENDS "${SPEAKERFILL_OUTPUT}")
-  add_library(vlc_speakerfill MODULE vlc_speakerfill.cpp)
-  target_include_directories(vlc_speakerfill SYSTEM PRIVATE "${AUTOBUILD_INSTALL_DIR}/include/vlc/plugins")
-  target_compile_definitions(vlc_speakerfill PRIVATE __PLUGIN__ MODULE_STRING="speakerfill")
-  target_link_libraries(vlc_speakerfill PRIVATE ll::libvlc)
-  set_target_properties(vlc_speakerfill PROPERTIES PREFIX "lib" OUTPUT_NAME "speakerfill_plugin")
-  add_executable(vlc_speakerfill_test tests/vlc_speakerfill_test.cpp)
-  target_sources(vlc_speakerfill_test PRIVATE llvlcspeakerfillconfig.cpp)
-  target_sources(media_plugin_libvlc PRIVATE llvlcspeakerfillconfig.cpp)
-  target_include_directories(media_plugin_libvlc SYSTEM PRIVATE "${AUTOBUILD_INSTALL_DIR}/include/vlc/plugins")
-  target_include_directories(vlc_speakerfill_test SYSTEM PRIVATE "${AUTOBUILD_INSTALL_DIR}/include/vlc/plugins")
-  target_compile_options(vlc_speakerfill_test PRIVATE /wd4191)
-  target_link_libraries(vlc_speakerfill_test PRIVATE ll::libvlc)
-  target_include_directories(vlc_speakerfill_test SYSTEM PRIVATE "${AUTOBUILD_INSTALL_DIR}/include")
-  target_include_directories(vlc_speakerfill_test PRIVATE "${SPEAKERFILL_SOURCE_DIR}")
-  target_link_libraries(vlc_speakerfill_test PRIVATE ole32)
-  add_dependencies(vlc_speakerfill_test vlc_speakerfill vlc_speakerfill_output)
-  add_dependencies(media_plugin_libvlc vlc_speakerfill vlc_speakerfill_output)
-  add_test(NAME vlc_speakerfill COMMAND ${CMAKE_COMMAND} -E env
-    "PATH=${AUTOBUILD_INSTALL_DIR}/bin/release;$ENV{PATH}"
-    "VLC_PLUGIN_PATH=$<TARGET_FILE_DIR:vlc_speakerfill>"
-    $<TARGET_FILE:vlc_speakerfill_test> $<TARGET_FILE:vlc_speakerfill> "${SPEAKERFILL_OUTPUT}")
-endif ()
-
 if (WINDOWS)
   set_target_properties(
     media_plugin_libvlc
