@@ -32,6 +32,7 @@
 #include "lldir.h"
 #include "llfile.h"
 #include "llsd.h"
+#include "llsdserialize.h"
 #include "vkstorm_ffi.h"
 
 #include <algorithm>
@@ -50,6 +51,7 @@
 #error VKS_TEXCACHE_FIXTURE_DIR must name the directory of the recorded cache
 #endif
 #define VKS_TEXCACHE_FIXTURE VKS_TEXCACHE_FIXTURE_DIR "/lltexturecache_parity.bin"
+#define VKS_TEXCACHE_EVENTS VKS_TEXCACHE_FIXTURE_DIR "/lltexturecache_parity_events.xml"
 
 // ---------------------------------------------------------------------------
 // Stubs: the cache pauses the viewer's main-loop watchdog around purges and
@@ -568,6 +570,59 @@ namespace
 
 }
 
+namespace
+{
+    // The script's outcomes (write and read results, read sizes and data
+    // checksums, fast cache dimensions, levels and pixel checksums, usage
+    // and entry counts) against the record.
+    void compare_events(const std::string& path, const LLSD& got, const LLSD& want, std::vector<std::string>& problems)
+    {
+        if (got.type() != want.type())
+        {
+            problems.push_back(path + ": type differs");
+            return;
+        }
+        if (want.isMap())
+        {
+            for (LLSD::map_const_iterator it = want.beginMap(); it != want.endMap(); ++it)
+            {
+                if (!got.has(it->first))
+                {
+                    problems.push_back(path + "/" + it->first + ": missing");
+                    continue;
+                }
+                compare_events(path + "/" + it->first, got[it->first], it->second, problems);
+            }
+            for (LLSD::map_const_iterator it = got.beginMap(); it != got.endMap(); ++it)
+            {
+                if (!want.has(it->first))
+                {
+                    problems.push_back(path + "/" + it->first + ": unexpected");
+                }
+            }
+        }
+        else if (want.isArray())
+        {
+            if (got.size() != want.size())
+            {
+                std::ostringstream s;
+                s << path << ": " << got.size() << " entries, expected " << want.size();
+                problems.push_back(s.str());
+            }
+            for (size_t i = 0; i < std::min(got.size(), want.size()); ++i)
+            {
+                std::ostringstream s;
+                s << path << "[" << i << "]";
+                compare_events(s.str(), got[i], want[i], problems);
+            }
+        }
+        else if (got.asString() != want.asString())
+        {
+            problems.push_back(path + ": '" + got.asString() + "' expected '" + want.asString() + "'");
+        }
+    }
+}
+
 namespace tut
 {
     struct parity_data {};
@@ -578,7 +633,7 @@ namespace tut
     template<> template<>
     void parity_object::test<1>()
     {
-        set_test_name("texture cache files byte-identical to the recording");
+        set_test_name("texture cache files and outcomes identical to the recording");
         gSavedSettings.declareU32("CacheValidateCounter", 0, "", LLControlVariable::PERSIST_NO);
         std::string root = scratch_dir();
         remove_tree(root);
@@ -589,22 +644,35 @@ namespace tut
         LLSD events = run_script(root, got);
         LL_INFOS() << "events: " << events << LL_ENDL;
 
+        // VKS_TEXCACHE_RECORD=<file> records the files, VKS_TEXCACHE_RECORD_EVENTS=<file>
+        // the outcomes.
         const char* record = getenv("VKS_TEXCACHE_RECORD");
-        if (record && *record)
+        const char* record_events = getenv("VKS_TEXCACHE_RECORD_EVENTS");
+        if ((record && *record) || (record_events && *record_events))
         {
-            write_record(record, got);
-            LL_INFOS() << "recorded " << got.size() << " snapshots to " << record << LL_ENDL;
+            if (record && *record)
+            {
+                write_record(record, got);
+                LL_INFOS() << "recorded " << got.size() << " snapshots to " << record << LL_ENDL;
+            }
+            if (record_events && *record_events)
+            {
+                std::ofstream o(record_events);
+                LLSDSerialize::toPrettyXML(events, o);
+                std::cout << "recorded the outcomes to " << record_events << std::endl;
+            }
             // Run it again on a fresh directory: the script must be
             // reproducible before it can be a record.
             remove_tree(root);
             LLFile::mkdir(root);
             record_t again;
-            run_script(root, again);
+            LLSD events_again = run_script(root, again);
             std::vector<std::string> problems;
             for (size_t i = 0; i < got.size(); ++i)
             {
                 compare_snapshots(got[i].first, again[i].second, got[i].second, problems);
             }
+            compare_events("events", events_again, events, problems);
             for (const std::string& p : problems) { LL_WARNS() << p << LL_ENDL; std::cout << "PARITY: " << p << std::endl; }
             ensure("the script reproduces its own recording", problems.empty());
             remove_tree(root);
@@ -620,11 +688,20 @@ namespace tut
             ensure_equals("snapshot name", got[i].first, want[i].first);
             compare_snapshots(want[i].first, got[i].second, want[i].second, problems);
         }
+        LLSD want_events;
+        {
+            std::ifstream i(VKS_TEXCACHE_EVENTS);
+            ensure("outcomes present: " VKS_TEXCACHE_EVENTS, (bool)i);
+            ensure("outcomes parse", LLSDSerialize::fromXML(want_events, i) > 0);
+        }
+        compare_events("events", events, want_events, problems);
         for (const std::string& p : problems) { LL_WARNS() << p << LL_ENDL; std::cout << "PARITY: " << p << std::endl; }
         size_t files = 0;
         for (const auto& s : want) files += s.second.size();
         LL_INFOS() << "compared " << files << " files over " << want.size() << " snapshots, " << problems.size() << " differences" << LL_ENDL;
-        ensure("cache files byte-identical", problems.empty());
+        std::cout << "compared " << files << " files over " << want.size() << " snapshots and "
+                  << want_events.size() << " outcome groups, " << problems.size() << " differences" << std::endl;
+        ensure("cache files and outcomes identical", problems.empty());
         remove_tree(root);
     }
 
