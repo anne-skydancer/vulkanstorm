@@ -71,9 +71,6 @@ private:
     void setVolume(const F64 volume);
     void setVolumeVLC();
     void updateTitle(const char* title);
-    void updateStreamMetadata(int meta_type);
-
-    std::string mLastMetadataSent;
 
     static void* lock(void* data, void** p_pixels);
     static void unlock(void* data, void* id, void* const* raw_pixels);
@@ -86,8 +83,7 @@ private:
 
     enum EventBits : unsigned
     {
-        EventPlaying = 1, EventTime = 2, EventDuration = 4, EventTitle = 8,
-        EventNowPlaying = 16, EventArtist = 32, EventMetaTitle = 64, EventEnd = 128
+        EventPlaying = 1, EventTime = 2, EventDuration = 4, EventTitle = 8, EventEnd = 16
     };
     std::atomic<unsigned> mEvents{0};
     std::atomic<EStatus> mEventStatus{STATUS_NONE};
@@ -95,7 +91,6 @@ private:
     std::atomic<std::int64_t> mEventDuration{0};
     std::atomic<bool> mFrameReady{false};
     unsigned mAttachedPlayerEvents = 0;
-    bool mAttachedMediaEvent = false;
 
     libvlc_instance_t* mLibVLC;
     libvlc_media_t* mLibVLCMedia;
@@ -240,11 +235,6 @@ void MediaPluginLibVLC::stopPlayer()
                 ++index;
             }
         }
-        if (mLibVLCMedia && mAttachedMediaEvent)
-        {
-            auto* metadata = libvlc_media_event_manager(mLibVLCMedia);
-            if (metadata) libvlc_event_detach(metadata, libvlc_MediaMetaChanged, eventCallbacks, this);
-        }
         libvlc_media_player_stop(mLibVLCMediaPlayer);
         libvlc_media_player_release(mLibVLCMediaPlayer);
         mLibVLCMediaPlayer = nullptr;
@@ -256,12 +246,10 @@ void MediaPluginLibVLC::stopPlayer()
     }
     mLibVLCCallbackContext = {};
     mAttachedPlayerEvents = 0;
-    mAttachedMediaEvent = false;
     mFrameReady.store(false);
     mEvents.store(0);
     mEventStatus.store(STATUS_DONE);
     mVlcStatus = STATUS_DONE;
-    mLastMetadataSent.clear();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -356,14 +344,7 @@ void MediaPluginLibVLC::eventCallbacks(const libvlc_event_t* event, void* ptr)
     case libvlc_MediaPlayerTitleChanged:
         flags = EventTitle;
         break;
-    case libvlc_MediaMetaChanged:
-    {
-        const auto meta = event->u.media_meta_changed.meta_type;
-        if (meta == libvlc_meta_NowPlaying) flags = EventNowPlaying;
-        else if (meta == libvlc_meta_Title) flags = EventMetaTitle;
-        else if (meta == libvlc_meta_Artist) flags = EventArtist;
-        break;
-    }
+
     default: break;
     }
     parent->mEvents.fetch_or(flags, std::memory_order_release);
@@ -387,9 +368,6 @@ void MediaPluginLibVLC::idle()
         char* title = libvlc_media_get_meta(mLibVLCMedia, libvlc_meta_Title);
         if (title) { updateTitle(title); libvlc_free(title); }
     }
-    if (flags & EventNowPlaying) updateStreamMetadata(libvlc_meta_NowPlaying);
-    if (flags & EventMetaTitle) updateStreamMetadata(libvlc_meta_Title);
-    if (flags & EventArtist) updateStreamMetadata(libvlc_meta_Artist);
     if (mFrameReady.exchange(false, std::memory_order_acq_rel)) setDirty(0, 0, mWidth, mHeight);
     setStatus(mVlcStatus);
 }
@@ -445,17 +423,6 @@ void MediaPluginLibVLC::playMedia()
             ++index;
         }
     }
-
-    // <FS:ND> Stream metadata (ICY StreamTitle etc.) arrives on the media's
-    // own event manager, not the player's
-    libvlc_event_manager_t* mem = libvlc_media_event_manager(mLibVLCMedia);
-    if (mem)
-    {
-        if (libvlc_event_attach(mem, libvlc_MediaMetaChanged, eventCallbacks, this) != 0) eventsAttached = false;
-        else mAttachedMediaEvent = true;
-    }
-    else eventsAttached = false;
-    // </FS:ND>
 
     if (!eventsAttached)
     {
@@ -531,87 +498,6 @@ void MediaPluginLibVLC::updateTitle(const char* title)
     message.setValue("name", title);
     sendMessage(message);
 }
-
-// <FS:ND> Report stream metadata to the viewer, same message the gstreamer
-// plugin sends. Which meta field carries the track depends on the stream:
-// MP3/AAC ICY updates arrive in NowPlaying ("Artist - Title"), while
-// Ogg/Icecast chains update Title/Artist from in-band Vorbis comments (and
-// often park the static station name in NowPlaying, so a fixed precedence
-// would mask per-track updates). React to the field that actually changed.
-void MediaPluginLibVLC::updateStreamMetadata(int meta_type)
-{
-    if (!mLibVLCMedia)
-    {
-        return;
-    }
-
-    std::string artist;
-    std::string title;
-
-    if (meta_type == libvlc_meta_NowPlaying)
-    {
-        char* meta = libvlc_media_get_meta(mLibVLCMedia, libvlc_meta_NowPlaying);
-        if (meta)
-        {
-            std::string now_playing = meta;
-            libvlc_free(meta);
-
-            size_t sep = now_playing.find(" - ");
-            if (sep != std::string::npos)
-            {
-                artist = now_playing.substr(0, sep);
-                title = now_playing.substr(sep + 3);
-            }
-            else
-            {
-                title = now_playing;
-            }
-        }
-    }
-    else // Title or Artist changed
-    {
-        char* meta = libvlc_media_get_meta(mLibVLCMedia, libvlc_meta_Artist);
-        if (meta)
-        {
-            artist = meta;
-            libvlc_free(meta);
-        }
-
-        meta = libvlc_media_get_meta(mLibVLCMedia, libvlc_meta_Title);
-        if (meta)
-        {
-            title = meta;
-            libvlc_free(meta);
-        }
-
-        // Before any real meta arrives VLC uses the URL's filename as the
-        // title placeholder; that is not worth announcing
-        if (artist.empty() && !title.empty() && mURL.find(title) != std::string::npos)
-        {
-            return;
-        }
-    }
-
-    if (artist.empty() && title.empty())
-    {
-        return;
-    }
-
-    // Both metas of a track boundary land before the first event is
-    // delivered, so Title and Artist events would send the same pair twice
-    std::string dedup_key = artist + "\x01" + title;
-    if (dedup_key == mLastMetadataSent)
-    {
-        return;
-    }
-    mLastMetadataSent = dedup_key;
-
-    LLPluginMessage message(LLPLUGIN_MESSAGE_CLASS_MEDIA, "ndMediadata_change");
-    message.setValue("title", title);
-    message.setValue("artist", artist);
-    sendMessage(message);
-}
-// </FS:ND>
 
 void MediaPluginLibVLC::setVolumeVLC()
 {
