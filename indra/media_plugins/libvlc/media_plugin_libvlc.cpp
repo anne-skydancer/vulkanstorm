@@ -43,12 +43,8 @@ typedef SSIZE_T ssize_t;
 #include "vlc/libvlc_version.h"
 
 #include <atomic>
-#include <cmath>
-#include <charconv>
-#include <chrono>
 
 #if LL_WINDOWS
-#include "llvlcspeakerfillconfig.h"
 // needed for waveOut call - see below for description
 #include <mmsystem.h>
 #endif
@@ -97,7 +93,6 @@ private:
     std::atomic<EStatus> mEventStatus{STATUS_NONE};
     std::atomic<std::int64_t> mEventTime{0};
     std::atomic<std::int64_t> mEventDuration{0};
-    std::atomic<float> mBuffering{100.f};
     std::atomic<bool> mFrameReady{false};
     unsigned mAttachedPlayerEvents = 0;
     bool mAttachedMediaEvent = false;
@@ -115,24 +110,6 @@ private:
     struct mLibVLCContext mLibVLCCallbackContext;
 
     std::string mURL;
-    S32 mMusicSpeakerFill = 0;
-    bool mMusic = false;
-#if LL_WINDOWS
-    void receiveNativeMusic(const LLPluginMessage& message);
-    void idleNativeMusic();
-    void nativeMusicState(const std::string& state, const std::string& detail, std::uint32_t serial = 0);
-    std::uint64_t mNativeGeneration = 0;
-    std::uint32_t mNativeSerial = 0;
-    std::uint32_t mNativeAcknowledged = 0;
-    float mNativeInitial = 1.f;
-    float mNativeTarget = 1.f;
-    float mNativeDuration = 0.f;
-    bool mNativeMute = false;
-    bool mNativeConfigured = false;
-    std::string mNativeFailure;
-    std::string mNativeLastState;
-    std::chrono::steady_clock::time_point mNativeFadeStarted{};
-#endif
     F64 mCurVolume;
 
     bool mIsLooping;
@@ -245,7 +222,7 @@ const libvlc_event_e playerEvents[] =
     libvlc_MediaPlayerStopped, libvlc_MediaPlayerEndReached,
     libvlc_MediaPlayerEncounteredError, libvlc_MediaPlayerTimeChanged,
     libvlc_MediaPlayerPositionChanged, libvlc_MediaPlayerLengthChanged,
-    libvlc_MediaPlayerTitleChanged, libvlc_MediaPlayerBuffering
+    libvlc_MediaPlayerTitleChanged
 };
 }
 
@@ -371,10 +348,6 @@ void MediaPluginLibVLC::eventCallbacks(const libvlc_event_t* event, void* ptr)
         flags = EventTime;
         break;
 
-    case libvlc_MediaPlayerBuffering:
-        parent->mBuffering.store(event->u.media_player_buffering.new_cache);
-        break;
-
     case libvlc_MediaPlayerLengthChanged:
         parent->mEventDuration.store(event->u.media_player_length_changed.new_length);
         flags = EventDuration;
@@ -418,9 +391,6 @@ void MediaPluginLibVLC::idle()
     if (flags & EventMetaTitle) updateStreamMetadata(libvlc_meta_Title);
     if (flags & EventArtist) updateStreamMetadata(libvlc_meta_Artist);
     if (mFrameReady.exchange(false, std::memory_order_acq_rel)) setDirty(0, 0, mWidth, mHeight);
-#if LL_WINDOWS
-    idleNativeMusic();
-#endif
     setStatus(mVlcStatus);
 }
 
@@ -441,7 +411,6 @@ void MediaPluginLibVLC::playMedia()
     // or two and the plugin crashes as VLC tries to decode a frame into unallocated
     // memory.
     stopPlayer();
-    mBuffering.store(100.f);
     mEventStatus.store(STATUS_LOADING);
     mVlcStatus = STATUS_LOADING;
 
@@ -453,12 +422,6 @@ void MediaPluginLibVLC::playMedia()
         return;
     }
 
-#if LL_WINDOWS
-    if (mMusic)
-    {
-        libvlc_media_add_option(mLibVLCMedia, ":no-video");
-    }
-#endif
     mLibVLCMediaPlayer = libvlc_media_player_new_from_media(mLibVLCMedia);
     if (!mLibVLCMediaPlayer)
     {
@@ -468,21 +431,6 @@ void MediaPluginLibVLC::playMedia()
         setStatus(STATUS_ERROR);
         return;
     }
-
-#if LL_WINDOWS
-    if (mMusic &&
-        (!configureMusicGain(mLibVLCMediaPlayer, mMusicSpeakerFill, static_cast<float>(mCurVolume)) ||
-         !configureMusicFade(mLibVLCMediaPlayer, mNativeConfigured ? mNativeInitial : 1.f) ||
-         (mNativeConfigured && mNativeSerial &&
-          !setMusicFade(mLibVLCMediaPlayer, mNativeTarget, mNativeDuration, mNativeSerial)) ||
-         libvlc_audio_output_set(mLibVLCMediaPlayer, "mmdevice") != 0))
-    {
-        stopPlayer();
-        mEventStatus.store(STATUS_ERROR);
-        setStatus(STATUS_ERROR);
-        return;
-    }
-#endif
 
     // listen to events
     libvlc_event_manager_t* em = libvlc_media_player_event_manager(mLibVLCMediaPlayer);
@@ -679,16 +627,6 @@ void MediaPluginLibVLC::updateStreamMetadata(int meta_type)
 
 void MediaPluginLibVLC::setVolumeVLC()
 {
-#if LL_WINDOWS
-    if (mMusic && mLibVLCMediaPlayer)
-    {
-        if (!setMusicGain(mLibVLCMediaPlayer, static_cast<float>(mCurVolume), mNativeMute) ||
-            libvlc_audio_set_volume(mLibVLCMediaPlayer, 100) != 0 ||
-            waveOutSetVolume(NULL, 0xffffffff) != MMSYSERR_NOERROR)
-            mEventStatus.store(STATUS_ERROR);
-        return;
-    }
-#endif
     if (mLibVLCMediaPlayer)
     {
         int vlc_vol = (int)(mCurVolume * 100);
@@ -700,7 +638,7 @@ void MediaPluginLibVLC::setVolumeVLC()
         }
         else
         {
-            mEventStatus.store(STATUS_ERROR);
+            // volume change was NOT accepted by LibVLC and not actioned
         }
 
 #if LL_WINDOWS
@@ -719,7 +657,7 @@ void MediaPluginLibVLC::setVolumeVLC()
         DWORD left_channel = (DWORD)(mCurVolume * 65535.0f);
         DWORD right_channel = (DWORD)(mCurVolume * 65535.0f);
         DWORD hw_volume = left_channel << 16 | right_channel;
-        if (waveOutSetVolume(NULL, hw_volume) != MMSYSERR_NOERROR) mEventStatus.store(STATUS_ERROR);
+        waveOutSetVolume(NULL, hw_volume);
 #endif
     }
     else
@@ -734,123 +672,10 @@ void MediaPluginLibVLC::setVolumeVLC()
 //
 void MediaPluginLibVLC::setVolume(const F64 volume)
 {
-    if (!std::isfinite(volume) || volume < 0. || volume > 1.)
-    {
-        return;
-    }
     mCurVolume = volume;
 
-#if LL_WINDOWS
-    if (mMusic && mLibVLCMediaPlayer)
-    {
-        if (!setMusicGain(mLibVLCMediaPlayer, static_cast<float>(volume)))
-            mEventStatus.store(STATUS_ERROR);
-        return;
-    }
-#endif
     setVolumeVLC();
 }
-
-#if LL_WINDOWS
-namespace
-{
-bool nativeMusicId(const LLSD& value, std::uint64_t& result)
-{
-    if (!value.isString()) return false;
-    const auto text = value.asString();
-    if (text.empty() || text.size() > 20 || (text.size() > 1 && text[0] == '0')) return false;
-    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), result);
-    return parsed.ec == std::errc{} && parsed.ptr == text.data() + text.size();
-}
-}
-
-void MediaPluginLibVLC::nativeMusicState(const std::string& state, const std::string& detail, std::uint32_t serial)
-{
-    LLPluginMessage message("media_audio", "state");
-    message.setValue("generation", std::to_string(mNativeGeneration));
-    message.setValue("serial", std::to_string(serial));
-    message.setValue("state", state);
-    message.setValue("detail", detail);
-    sendMessage(message);
-}
-
-void MediaPluginLibVLC::receiveNativeMusic(const LLPluginMessage& message)
-{
-    std::uint64_t generation = 0;
-    if (!nativeMusicId(message.getValueLLSD("generation"), generation) || !generation) return;
-    if (message.getName() == "configure")
-    {
-        if (message.getValue("role") != "music" || generation <= mNativeGeneration) return;
-        stopPlayer();
-        mURL.clear();
-        mNativeGeneration = generation;
-        mNativeSerial = mNativeAcknowledged = 0;
-        mNativeInitial = mNativeTarget = 1.f;
-        mNativeDuration = 0.f;
-        mNativeMute = false;
-        mNativeConfigured = true;
-        mNativeFailure.clear();
-        mNativeLastState.clear();
-        return;
-    }
-    if (!mNativeConfigured || generation != mNativeGeneration || !mNativeFailure.empty()) return;
-    const auto targetValue = message.getValueLLSD("target");
-    const auto durationValue = message.getValueLLSD("duration");
-    const double target = targetValue.asReal();
-    const double duration = durationValue.asReal();
-    if (!targetValue.isReal() || !durationValue.isReal() || !std::isfinite(target) ||
-        !std::isfinite(duration) || target < 0. || target > 1. || duration < 0. || duration > 60.)
-    { mNativeFailure = "invalid_native_music_control"; return; }
-    if (message.getName() == "set_gain")
-    {
-        if (!message.getValueLLSD("hard_mute").isBoolean())
-        { mNativeFailure = "invalid_native_music_mute"; return; }
-        mCurVolume = target;
-        mNativeMute = message.getValueBoolean("hard_mute");
-        if (mLibVLCMediaPlayer && !setMusicGain(mLibVLCMediaPlayer, static_cast<float>(target), mNativeMute))
-            mNativeFailure = "native_music_gain_failed";
-    }
-    else if (message.getName() == "transition")
-    {
-        std::uint64_t serial = 0;
-        if (!nativeMusicId(message.getValueLLSD("serial"), serial) || serial <= mNativeSerial) return;
-        if (serial > 0x7fffffff) { mNativeFailure = "native_music_serial_overflow"; return; }
-        mNativeSerial = static_cast<std::uint32_t>(serial);
-        mNativeTarget = static_cast<float>(target);
-        mNativeDuration = static_cast<float>(duration);
-        mNativeFadeStarted = std::chrono::steady_clock::now();
-        if (!mLibVLCMediaPlayer && duration == 0.) mNativeInitial = mNativeTarget;
-        if (mLibVLCMediaPlayer && !setMusicFade(mLibVLCMediaPlayer, mNativeTarget, mNativeDuration, mNativeSerial))
-            mNativeFailure = "native_music_fade_failed";
-    }
-}
-
-void MediaPluginLibVLC::idleNativeMusic()
-{
-    if (!mNativeConfigured) return;
-    if (mLibVLCMediaPlayer && (mVlcStatus == STATUS_ERROR || musicOutputFailed(mLibVLCMediaPlayer)))
-        mNativeFailure = "native_music_output_failed";
-    if (mNativeSerial != mNativeAcknowledged && mNativeFailure.empty())
-    {
-        if (mLibVLCMediaPlayer && musicFadeComplete(mLibVLCMediaPlayer, mNativeSerial))
-        {
-            mNativeAcknowledged = mNativeSerial;
-            nativeMusicState(mNativeTarget == 0.f ? "silent" : "running", "vlc_playback_clock", mNativeSerial);
-        }
-        else if (std::chrono::duration<double>(std::chrono::steady_clock::now() - mNativeFadeStarted).count() >
-                 mNativeDuration + 30.)
-            mNativeFailure = "native_music_playback_clock_timeout";
-    }
-    const std::string state = !mNativeFailure.empty() ? "failed" : !mLibVLCMediaPlayer ? "priming" :
-        mVlcStatus == STATUS_PAUSED ? "paused" : mBuffering.load() < 100.f ? "buffering" : "running";
-    if (state != mNativeLastState)
-    {
-        nativeMusicState(state, mNativeFailure.empty() ? "vlc_native_music" : mNativeFailure,
-                         state == "failed" ? mNativeSerial : 0);
-        mNativeLastState = state;
-    }
-}
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -873,9 +698,6 @@ void MediaPluginLibVLC::receiveMessage(const char* message_string)
                 versions[LLPLUGIN_MESSAGE_CLASS_BASE] = LLPLUGIN_MESSAGE_CLASS_BASE_VERSION;
                 versions[LLPLUGIN_MESSAGE_CLASS_MEDIA] = LLPLUGIN_MESSAGE_CLASS_MEDIA_VERSION;
                 versions[LLPLUGIN_MESSAGE_CLASS_MEDIA_TIME] = LLPLUGIN_MESSAGE_CLASS_MEDIA_TIME_VERSION;
-#if LL_WINDOWS
-                versions["media_music"] = "1.0";
-#endif
                 message.setValueLLSD("versions", versions);
 
                 std::ostringstream s;
@@ -943,12 +765,6 @@ void MediaPluginLibVLC::receiveMessage(const char* message_string)
                 //std::cerr << "MediaPluginWebKit::receiveMessage: unknown base message: " << message_name << std::endl;
             }
         }
-    #if LL_WINDOWS
-        else if (message_class == "media_audio")
-        {
-            receiveNativeMusic(message_in);
-        }
-    #endif
         else if (message_class == LLPLUGIN_MESSAGE_CLASS_MEDIA)
         {
             if (message_name == "init")
@@ -1016,15 +832,6 @@ void MediaPluginLibVLC::receiveMessage(const char* message_string)
             else if (message_name == "load_uri")
             {
                 mURL = message_in.getValue("uri");
-#if LL_WINDOWS
-                if (message_in.getValue("audio_generation") != std::to_string(mNativeGeneration))
-                    mNativeConfigured = false;
-#endif
-                mMusic = message_in.getValue("audio_role") == "music";
-                const S32 layout = message_in.getValueLLSD("speaker_fill").isInteger() ?
-                    message_in.getValueS32("speaker_fill") : 0;
-                mMusicSpeakerFill = message_in.getValue("audio_role") == "music" &&
-                    (layout == 21 || layout == 41 || layout == 51 || layout == 71) ? layout : 0;
                 playMedia();
             }
         }
