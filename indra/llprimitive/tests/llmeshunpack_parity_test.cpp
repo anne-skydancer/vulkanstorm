@@ -384,6 +384,10 @@ namespace
         bool ok = false;
         std::vector<FaceRecord> faces;     // after cacheOptimize (what the renderer gets)
         std::vector<FaceRecord> raw_faces; // as unpacked, before cacheOptimize
+        // Not recorded: the raw faces put through cacheOptimize in this
+        // process, the oracle the optimised faces are compared with.
+        bool oracle_ok = false;
+        std::vector<FaceRecord> oracle_faces;
         bool operator==(const PartRecord& o) const { return present == o.present && ok == o.ok && faces == o.faces && raw_faces == o.raw_faces; }
     };
 
@@ -755,6 +759,18 @@ namespace
                     {
                         part.raw_faces.push_back(record_face(raw_volume->getVolumeFace(f)));
                     }
+                    // The oracle: the same C++ vertex cache optimisation and
+                    // tangent generation, built by the same compiler, run on
+                    // these raw faces (which the comparison holds bit for bit
+                    // to the corpus).
+                    part.oracle_ok = raw_volume->cacheOptimize(true);
+                    if (part.oracle_ok)
+                    {
+                        for (S32 f = 0; f < raw_volume->getNumVolumeFaces(); ++f)
+                        {
+                            part.oracle_faces.push_back(record_face(raw_volume->getVolumeFace(f)));
+                        }
+                    }
                 }
             }
             part.ok = volume->unpackVolumeFaces(block.data(), (S32)block.size());
@@ -803,15 +819,33 @@ namespace
                 problems.push_back(s.str());
                 continue;
             }
+            // The raw faces against the corpus; the optimised faces against
+            // the oracle of this process. The corpus' optimised faces are not
+            // compared: cacheOptimize and the MikkTSpace tangents are C++ the
+            // port hands its faces to, and their float results depend on how
+            // the compiler builds them (MSVC 19.44 and GCC 15 reproduce the
+            // record, GCC 14 differs in the normals and tangents).
+            if (g.ok && (!g.oracle_ok || g.oracle_faces.size() != g.faces.size()))
+            {
+                std::ostringstream s;
+                s << want.name << "/" << PART_NAMES[p] << ": the oracle optimisation failed or has "
+                  << g.oracle_faces.size() << " faces for " << g.faces.size();
+                problems.push_back(s.str());
+                continue;
+            }
             for (size_t f = 0; f < w.faces.size() + w.raw_faces.size(); ++f)
             {
                 const bool raw = f >= w.faces.size();
+                if (!raw && !g.ok)
+                {
+                    continue;
+                }
                 const FaceRecord& a = raw ? g.raw_faces[f - w.faces.size()] : g.faces[f];
-                const FaceRecord& e = raw ? w.raw_faces[f - w.faces.size()] : w.faces[f];
+                const FaceRecord& e = raw ? w.raw_faces[f - w.faces.size()] : g.oracle_faces[f];
                 if (!(a == e))
                 {
                     std::ostringstream s;
-                    s << want.name << "/" << PART_NAMES[p] << (raw ? " raw face " : " face ") << (raw ? f - w.faces.size() : f) << ": ";
+                    s << want.name << "/" << PART_NAMES[p] << (raw ? " raw face " : " optimised face (against the oracle) ") << (raw ? f - w.faces.size() : f) << ": ";
                     if (a.num_vertices != e.num_vertices || a.num_indices != e.num_indices) s << "counts ";
                     if (a.hash_positions != e.hash_positions) s << "positions ";
                     if (a.hash_normals != e.hash_normals) s << "normals ";
@@ -898,16 +932,22 @@ namespace tut
         ensure("corpus present: " VKS_MESH_FIXTURE, read_corpus(VKS_MESH_FIXTURE, cases));
         ensure("corpus has cases", !cases.empty());
         std::vector<std::string> problems;
-        size_t faces = 0;
+        size_t raw_faces = 0, optimised_faces = 0;
         for (size_t i = 0; i < cases.size(); ++i)
         {
             Case c = cases[i];
             unpack_case(c, false, NULL);
             compare_case(c, cases[i], problems);
-            for (int p = 0; p < NUM_PARTS; ++p) faces += cases[i].parts[p].faces.size() + cases[i].parts[p].raw_faces.size();
+            for (int p = 0; p < NUM_PARTS; ++p)
+            {
+                raw_faces += cases[i].parts[p].raw_faces.size();
+                optimised_faces += c.parts[p].faces.size();
+            }
         }
         for (const std::string& p : problems) std::cout << "PARITY: " << p << std::endl;
-        std::cout << "compared " << cases.size() << " cases, " << faces << " faces, " << problems.size() << " differences" << std::endl;
+        std::cout << "compared " << cases.size() << " cases: " << raw_faces << " raw faces against the corpus, "
+                  << optimised_faces << " optimised faces against the in-process oracle, skin and decompositions against the corpus; "
+                  << problems.size() << " differences" << std::endl;
         ensure("mesh unpacking bit-identical", problems.empty());
     }
 
