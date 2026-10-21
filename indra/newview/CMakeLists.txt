@@ -3247,7 +3247,27 @@ if (LL_TESTS)
       $<TARGET_PROPERTY:llaudio,INTERFACE_INCLUDE_DIRECTORIES>
       )
 
-# LL_ADD_INTEGRATION_TEST(llhttpretrypolicy "llhttpretrypolicy.cpp" "${test_libs}")
+  # The retry policy (its backoff in vkstorm-assets) and the Retry-After
+  # header parsing, seconds and RFC 1123 dates.
+  LL_ADD_INTEGRATION_TEST(llhttpretrypolicy
+    llhttpretrypolicy.cpp
+    "llcommon;llmessage;llcorehttp"
+    )
+  target_include_directories(INTEGRATION_TEST_llhttpretrypolicy PRIVATE
+      $<TARGET_PROPERTY:llui,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llcharacter,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llinventory,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llappearance,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llplugin,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llwindow,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:lllogin,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llaudio,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llrender,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llimage,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llmath,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llxml,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llfilesystem,INTERFACE_INCLUDE_DIRECTORIES>
+      )
 
   #ADD_VIEWER_BUILD_TEST(llmemoryview viewer)
   #ADD_VIEWER_BUILD_TEST(llagentaccess viewer)
