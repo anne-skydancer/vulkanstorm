@@ -33,6 +33,7 @@
 #include "llimagej2c.h" // for version control
 #include "llviewercontrol.h"
 #include "llmemory.h"
+#include "lldiskcache.h" // vks_assets_install_viewer_log
 
 #include "vkstorm_ffi.h"
 
@@ -452,6 +453,7 @@ LLTextureCache::LLTextureCache(bool threaded)
       mListMutex(),
       mCache(NULL)
 {
+    vks_assets_install_viewer_log();
     const std::string encoder = LLImageJ2C::getEngineInfo();
 #if defined(ADDRESS_SIZE)
     const U32 address_size = ADDRESS_SIZE;
