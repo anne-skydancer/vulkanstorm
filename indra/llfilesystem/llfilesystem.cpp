@@ -101,9 +101,9 @@ bool LLFileSystem::renameFile(const LLUUID& old_file_id, const LLAssetType::ETyp
     const std::string old_filename = LLDiskCache::metaDataToFilepath(old_file_id, old_file_type);
     const std::string new_filename = LLDiskCache::metaDataToFilepath(new_file_id, new_file_type);
 
-    // Rename needs the new file to not exist.
-    LLFileSystem::removeFile(new_file_id, new_file_type, ENOENT);
-
+    // The rename replaces an existing file, as LLFile::rename did; renaming
+    // a file onto itself (the same id under another asset type names the
+    // same cache file) leaves it as it is.
     if (!vks_asset_file_rename(old_filename.data(), old_filename.size(), new_filename.data(), new_filename.size()))
     {
         LL_WARNS() << "Failed to rename " << old_file_id << " to " << new_file_id << LL_ENDL;
