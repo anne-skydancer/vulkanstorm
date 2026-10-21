@@ -272,13 +272,19 @@ class Connection(threading.Thread):
 
 
 def serve(port, recorder, state, stop):
-    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    srv.bind(("127.0.0.1", port))
-    srv.listen(64)
-    srv.settimeout(0.2)
-    port = srv.getsockname()[1]
-    stop["port"] = port
+    # The listening socket: a failure to bind or listen is reported to the
+    # wrapper, which would otherwise wait for readiness forever.
+    try:
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind(("127.0.0.1", port))
+        srv.listen(64)
+        srv.settimeout(0.2)
+        stop["port"] = srv.getsockname()[1]
+    except OSError as e:
+        stop["error"] = e
+        stop["ready"].set()
+        return
     stop["ready"].set()
     while not stop["flag"]:
         try:
@@ -319,10 +325,13 @@ def main(argv):
         log = temp_log
     recorder = Recorder(log)
     state = State()
-    stop = dict(flag=False, ready=threading.Event(), port=None)
+    stop = dict(flag=False, ready=threading.Event(), port=None, error=None)
     thread = threading.Thread(target=serve, args=(port, recorder, state, stop), daemon=True)
     thread.start()
-    stop["ready"].wait()
+    if not stop["ready"].wait(30) or stop["error"] is not None:
+        sys.stderr.write("vksassets_mock_server: cannot listen on 127.0.0.1:%d: %s\n"
+                         % (port, stop["error"] or "no readiness within 30 s"))
+        return 2
     if serve_only:
         print("serving on 127.0.0.1:%d" % stop["port"], flush=True)
         try:
