@@ -51,12 +51,6 @@ class LLStreamingAudio_MediaPlugins : public LLStreamingAudioInterface
     /*virtual*/ F32 getGain();
     /*virtual*/ std::string getURL();
 
-    bool hasAudioFade() const override;
-    bool beginAudioFade(F32 target, F32 duration) override;
-    bool isAudioFadeComplete() const override;
-    AudioFadeResult getAudioFadeResult() const override;
-    void setAudioHardMute(bool muted) override;
-
     // <FS:ND> For FS metadata extraction
     LLSD getCurrentMetadata() const noexcept { return mMetadata; }
     // </FS:ND>
@@ -97,10 +91,6 @@ private:
     // </FS>
 
     F32 mGain;
-    bool mHardMuted = false;
-    bool mPendingFade = false;
-    F32 mFadeTarget = 1.f;
-    F32 mFadeDuration = 0.f;
 };
 
 
