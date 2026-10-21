@@ -477,17 +477,6 @@ void LLPanelProfilePicks::updateButtons()
         // </FS:Ansariel>
         mDeleteButton->setEnabled(canDeletePick());
     }
-
-    //<FS:Trish> RLVa showloc
-    for (S32 tab_idx = 0; tab_idx < mTabContainer->getTabCount(); ++tab_idx)
-    {
-        LLPanelProfilePick* pick_panel = dynamic_cast<LLPanelProfilePick*>(mTabContainer->getPanelByIndex(tab_idx));
-        if (pick_panel)
-        {
-            pick_panel->updateButtons();
-        }
-    }
-    //</FS:Trish>
 }
 
 void LLPanelProfilePicks::apply()
@@ -594,6 +583,7 @@ LLPanelProfilePick::LLPanelProfilePick()
  , mIsEditing(false)
  , mRegionCallbackConnection()
  , mParcelCallbackConnection()
+ , mRlvBehaviorCallbackConnection() //<FS:Trish/> RLVa showloc
 // <AS:Chanayane> Preview button
  , mPreview(false)
 // </AS:Chanayane>
@@ -623,6 +613,12 @@ LLPanelProfilePick::~LLPanelProfilePick()
     {
         mParcelCallbackConnection.disconnect();
     }
+    //<FS:Trish> RLVa showloc
+    if (mRlvBehaviorCallbackConnection.connected())
+    {
+        mRlvBehaviorCallbackConnection.disconnect();
+    }
+    //</FS:Trish>
 }
 
 void LLPanelProfilePick::setAvatarId(const LLUUID& avatar_id)
@@ -728,6 +724,10 @@ bool LLPanelProfilePick::postBuild()
     mCreateButton->setCommitCallback(boost::bind(&LLPanelProfilePick::onClickSave, this));
     mCancelButton->setCommitCallback(boost::bind(&LLPanelProfilePick::onClickCancel, this));
     mSetCurrentLocationButton->setCommitCallback(boost::bind(&LLPanelProfilePick::onClickSetLocation, this));
+
+    //<FS:Trish> RLVa showloc
+    mRlvBehaviorCallbackConnection = gRlvHandler.setBehaviourCallback(boost::bind(&LLPanelProfilePick::updateRlvRestrictions, this, _1, _2));
+    //</FS:Trish>
 
     // <AS:Chanayane> Preview button
     mPreviewButton->setCommitCallback(boost::bind(&LLPanelProfilePick::onClickPreview, this));
@@ -941,7 +941,7 @@ void LLPanelProfilePick::onClickSetLocation()
     {
         return;
     }
-    //<\FS:Trish>
+    //</FS:Trish>
 
     // Save location for later use.
     setPosGlobal(gAgent.getPositionGlobal());
@@ -1070,6 +1070,14 @@ void LLPanelProfilePick::updateButtons()
 {
     mSetCurrentLocationButton->setVisible(getSelfProfile());
     mSetCurrentLocationButton->setEnabled(getSelfProfile() && !gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC));
+}
+
+void LLPanelProfilePick::updateRlvRestrictions(ERlvBehaviour behavior, ERlvParamType type)
+{
+    if (behavior == RLV_BHVR_SHOWLOC)
+    {
+        updateButtons();
+    }
 }
 //</FS:Trish> RLVa showloc
 
