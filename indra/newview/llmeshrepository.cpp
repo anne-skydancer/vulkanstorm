@@ -958,7 +958,9 @@ namespace
         v.physics_mesh_offset = h.mPhysicsMeshOffset;
         v.physics_mesh_size = h.mPhysicsMeshSize;
         v.physics_mesh_in_cache = h.mPhysicsMeshInCache ? 1 : 0;
-        for (S32 i = 0; i < LLModel::NUM_LODS; ++i)
+        // The four render LODs; LLMeshHeader's fifth slot (LLModel::NUM_LODS
+        // counts the physics mesh) is never set.
+        for (S32 i = 0; i < LLVolumeLODGroup::NUM_LODS; ++i)
         {
             v.lod_offset[i] = h.mLodOffset[i];
             v.lod_size[i] = h.mLodSize[i];
@@ -983,7 +985,7 @@ namespace
         h.mPhysicsMeshOffset = v.physics_mesh_offset;
         h.mPhysicsMeshSize = v.physics_mesh_size;
         h.mPhysicsMeshInCache = v.physics_mesh_in_cache != 0;
-        for (S32 i = 0; i < LLModel::NUM_LODS; ++i)
+        for (S32 i = 0; i < LLVolumeLODGroup::NUM_LODS; ++i)
         {
             h.mLodOffset[i] = v.lod_offset[i];
             h.mLodSize[i] = v.lod_size[i];
