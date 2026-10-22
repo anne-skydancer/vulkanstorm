@@ -28,7 +28,7 @@ This directory is identical, byte for byte, in the viewer
 | `cases/index.txt` | the case ids, in run order |
 | `cases/<id>.case.xml` | LLSD XML: `id`, `set`, `title`, `agent_id`, `session_id`, `root_id`, `sched` {`call_us`, `frame_us`, `others_us`}, `large`, `seed` (sets 10 and 12), `skeleton` {`categories`, `items`}, `steps` |
 | `cases/<id>.<n>.xml` | the result of step n, raw LLSD XML (set 11 holds duplicate map keys on purpose) |
-| `cases/s10a_large_recursive.0.xml.gz` | the large result, gzipped (gzip mtime 0) |
+| `cases/s10a_large_recursive.0.xml.gz` | the large result, gzipped (gzip mtime 0). The compressed bytes depend on the zlib that wrote them (Python 3.14 on Windows and on Linux differ); the content does not: 26,734,355 bytes, SHA-256 06e0e63e59f5d0f8e688cf33fb9d47120a39d06d9953e9219bf69d66f20af7ee. `gen_cases.py` reproduces every other file byte for byte. |
 | `expected/<id>.expected.llsd` | binary LLSD: `{case, never: {ops, final}, sched: {ops, final}}` |
 | `expected/<id>.expected.txt` | review rendering of the same: a header, then one line per op / category / item in compact notation (binary as b16) |
 | `expected/s10a_large_recursive.digest.llsd` / `.txt` | the large case as digest and sample (below) |
