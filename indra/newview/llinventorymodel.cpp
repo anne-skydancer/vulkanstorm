@@ -1692,6 +1692,11 @@ U32 LLInventoryModel::updateItem(const LLViewerInventoryItem* item, U32 mask)
         // Simply add this item
         new_item = new LLViewerInventoryItem(item);
         addItem(new_item);
+        if (!is_in_map(mItemMap, new_item->getUUID()))
+        {
+            // addItem() refused it (bad type): don't list or account for it.
+            return mask;
+        }
 
         if(item->getParentUUID().isNull())
         {
