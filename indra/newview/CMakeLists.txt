@@ -38,7 +38,7 @@ include(MesaZink)
 include(NDOF)
 include(NVAPI)
 include(OPENAL)
-include(SOLOUD)
+include(VKSAudio)
 include(OpenGL)
 include(OpenSSL)
 include(OpenXR)
@@ -2385,10 +2385,12 @@ if (WINDOWS)
           )
     endif ()
 
-    if (TARGET ll::soloud)
+    if (TARGET ll::vksaudio)
       list(APPEND COPY_INPUT_DEPENDENCIES
-           ${AUTOBUILD_INSTALL_DIR}/LICENSES/soloud.txt
-           ${AUTOBUILD_INSTALL_DIR}/LICENSES/soloud-miniaudio.txt
+           ${SHARED_LIB_STAGING_DIR}/avcodec-63.dll
+           ${SHARED_LIB_STAGING_DIR}/avutil-61.dll
+           ${SHARED_LIB_STAGING_DIR}/swresample-7.dll
+           ${AUTOBUILD_INSTALL_DIR}/LICENSES/ffmpeg.txt
           )
     endif ()
 
@@ -2413,7 +2415,7 @@ if (WINDOWS)
         "--discord=${USE_DISCORD}"
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
-        "--soloud=${USE_SOLOUD}"
+        "--vksaudio=${USE_VKS_AUDIO}"
         "--mesazink=${USE_MESAZINK}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"
@@ -2457,7 +2459,7 @@ if (WINDOWS)
             "--discord=${USE_DISCORD}"
             "--fmodstudio=${USE_FMODSTUDIO}"
             "--openal=${USE_OPENAL}"
-            "--soloud=${USE_SOLOUD}"
+            "--vksaudio=${USE_VKS_AUDIO}"
             "--tracy=${USE_TRACY}"
             "--avx2=${USE_AVX2_OPTIMIZATION}"
             --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2526,7 +2528,7 @@ if (WINDOWS)
               "--discord=${USE_DISCORD}"
               "--fmodstudio=${USE_FMODSTUDIO}"
               "--openal=${USE_OPENAL}"
-              "--soloud=${USE_SOLOUD}"
+              "--vksaudio=${USE_VKS_AUDIO}"
               "--mesazink=${USE_MESAZINK}"
               "--tracy=${USE_TRACY}"
               "--inno=${USE_INNOSETUP}"
@@ -2767,7 +2769,7 @@ if (LINUX)
         "--discord=${USE_DISCORD}"
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
-        "--soloud=${USE_SOLOUD}"
+        "--vksaudio=${USE_VKS_AUDIO}"
         "--mesazink=${USE_MESAZINK}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"        
@@ -2798,7 +2800,7 @@ if (LINUX)
       "--discord=${USE_DISCORD}"
       "--fmodstudio=${USE_FMODSTUDIO}"
       "--openal=${USE_OPENAL}"
-      "--soloud=${USE_SOLOUD}"
+      "--vksaudio=${USE_VKS_AUDIO}"
         "--mesazink=${USE_MESAZINK}"
       "--tracy=${USE_TRACY}"
       "--avx2=${USE_AVX2_OPTIMIZATION}"      
@@ -2895,7 +2897,7 @@ if (DARWIN)
       "--discord=${USE_DISCORD}"
       "--fmodstudio=${USE_FMODSTUDIO}"
       "--openal=${USE_OPENAL}"
-      "--soloud=${USE_SOLOUD}"
+      "--vksaudio=${USE_VKS_AUDIO}"
       "--tracy=${USE_TRACY}"
       "--avx2=${USE_AVX2_OPTIMIZATION}"      
       --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2933,7 +2935,7 @@ if (DARWIN)
           "--discord=${USE_DISCORD}"
           "--fmodstudio=${USE_FMODSTUDIO}"
           "--openal=${USE_OPENAL}"
-          "--soloud=${USE_SOLOUD}"
+          "--vksaudio=${USE_VKS_AUDIO}"
           "--tracy=${USE_TRACY}"
           "--avx2=${USE_AVX2_OPTIMIZATION}"          
           --build=${CMAKE_CURRENT_BINARY_DIR}

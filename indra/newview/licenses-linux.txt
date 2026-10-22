@@ -1,4 +1,22 @@
 ===========
+Vulkanstorm audio engine
+===========
+
+The audio engine (vkstorm-audio, https://github.com/anne-skydancer/vkstorm-core-rust)
+contains a Rust port of parts of SoLoud, Copyright (c) 2013-2020 Jari Komppa,
+Zlib license (altered from the original), and a port of the libogg and
+libvorbis decoders, Copyright (c) 2002-2020 Xiph.org Foundation, BSD license
+(see the ogg/vorbis License below).
+
+Parcel music decoding uses Symphonia (https://github.com/pdeljanov/Symphonia),
+Mozilla Public License 2.0; its source code is available at that address.
+
+HE-AAC and Opus parcel music use FFmpeg (https://ffmpeg.org), a decoder-only
+build licensed under the GNU Lesser General Public License version 2.1 or
+later, dynamically linked; see licenses/ffmpeg.txt. The build recipe and the
+exact configuration are at https://github.com/anne-skydancer/3p-ffmpeg.
+
+===========
 APR License
 ===========
 

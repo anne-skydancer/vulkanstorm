@@ -9,7 +9,5 @@ runner="$(cygpath -u "$AUTOBUILD")"
 mkdir -p build-vc170-64/logs
 cmake "-DTEST_BINARY_DIR=$(cygpath -m "$PWD/build-vc170-64/audio-selection-tests")" -P indra/llaudio/tests/audio_backend_selection.cmake
 "$runner" configure -A 64 -c ReleaseFS_open -- --no-opensim --zink --avx2 --no-package -DUSE_DISCORD:BOOL=OFF -DOPENSIM:BOOL=FALSE -DLL_TESTS:BOOL=FALSE
-cmake --build build-vc170-64 --config RelWithDebInfo --target llsoloud_adapter_test -- /m:2 /p:CL_MPCount=2 /verbosity:minimal /nologo
-./build-vc170-64/llaudio/RelWithDebInfo/llsoloud_adapter_test.exe
 cmake --build build-vc170-64 --config RelWithDebInfo --target vulkanstorm-bin -- /m:2 /p:CL_MPCount=2 /verbosity:minimal /nologo
-echo 'PASS: SoLoud RelWithDebInfo viewer and headless adapter validation'
+echo 'PASS: audio backend selection and RelWithDebInfo viewer build (the engine is tested by INTEGRATION_TEST_llaudio_parity and INTEGRATION_TEST_llaudio_music with LL_TESTS=ON)'

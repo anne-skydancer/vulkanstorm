@@ -43,8 +43,8 @@
 
 #include "llviewermedia_streamingaudio.h"
 #include "llaudioengine.h"
-#ifdef LL_SOLOUD
-#include "llaudioengine_soloud.h"
+#ifdef LL_VKS_AUDIO
+#include "llaudioengine_vks.h"
 #endif
 
 #ifdef LL_FMODSTUDIO
@@ -1120,8 +1120,8 @@ bool idle_startup()
             delete gAudiop;
             gAudiop = NULL;
 
-#ifdef LL_SOLOUD
-            gAudiop = new LLAudioEngine_SoLoud();
+#ifdef LL_VKS_AUDIO
+            gAudiop = new LLAudioEngine_VKS();
 #elif defined(LL_FMODSTUDIO)
 #if !LL_WINDOWS
             if (NULL == getenv("LL_BAD_FMODSTUDIO_DRIVER"))

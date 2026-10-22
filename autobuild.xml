@@ -1800,7 +1800,10 @@
         <key>description</key>
         <string>Mesa Zink OpenGL-over-Vulkan runtime with MSVC release, WGL loader initialization and defensive null-guard patches</string>
       </map>
-      <key>soloud</key>
+      <key>ffmpeg</key>
+      <!-- PENDING PUBLICATION: anne-skydancer/3p-ffmpeg release v9.0.2-r1 does not exist yet.
+           The hashes are those of the archives built locally from 3p-ffmpeg 248fab18fd;
+           publish exactly those archives under these names (see doc/rust_port.md, rung six). -->
       <map>
         <key>platforms</key>
         <map>
@@ -1809,11 +1812,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>b72941b0cf61be2757e16b3fe30fe2f5eff154579417216a580dfd4fc01ccf34</string>
+              <string>7addb2ea97e51413f1f6b9d5ac6d0ee61e6c241d27868556d57bad266a38de00</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-soloud/releases/download/v202002-e82fd32c1f-3/soloud-202002.e82fd32c1f.vulkanstorm3-linux64-35538098924.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-ffmpeg/releases/download/v9.0.2-r1/ffmpeg-9.0.2.2026102101-linux64-2026102101.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -1823,30 +1826,30 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>635d4026712129471bf98df4fc2a1d26e96a7737f653ca0ec54994bab81638d8</string>
+              <string>e92208abe51f837d1d1a4118ebf837b92699d218ca2c61419da05e35525e86e9</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-soloud/releases/download/v202002-e82fd32c1f-3/soloud-202002.e82fd32c1f.vulkanstorm3-windows64-35538098924.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-ffmpeg/releases/download/v9.0.2-r1/ffmpeg-9.0.2.2026102101-windows64-2026102101.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
           </map>
         </map>
         <key>license</key>
-        <string>Zlib</string>
+        <string>LGPL-2.1-or-later</string>
         <key>license_file</key>
-        <string>LICENSES/soloud.txt</string>
+        <string>LICENSES/ffmpeg.txt</string>
         <key>copyright</key>
-        <string>Copyright (c) 2013-2020 Jari Komppa</string>
+        <string>Copyright (c) 2000-2026 the FFmpeg developers (Fabrice Bellard and contributors)</string>
         <key>version</key>
-        <string>202002.e82fd32c1f.vulkanstorm3</string>
+        <string>9.0.2.2026102101</string>
         <key>name</key>
-        <string>soloud</string>
+        <string>ffmpeg</string>
         <key>canonical_repo</key>
-        <string>https://github.com/anne-skydancer/3p-soloud</string>
+        <string>https://github.com/anne-skydancer/3p-ffmpeg</string>
         <key>description</key>
-        <string>SoLoud with bounded multichannel mixing and output device selection</string>
+        <string>Decoder-only LGPL FFmpeg shared libraries (libavcodec with the AAC/HE-AAC and Opus decoders, libavutil, libswresample)</string>
       </map>
       <key>meshoptimizer</key>
       <map>
@@ -3458,7 +3461,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE</string>
                   <string>-DROOT_PROJECT_NAME:STRING=SecondLife</string>
                   <string>-DINSTALL_PROPRIETARY=TRUE</string>
-                  <string>-DUSE_SOLOUD:BOOL=ON</string>
+                  <string>-DUSE_VKS_AUDIO:BOOL=ON</string>
                   <string>-DUSE_OPENAL:BOOL=OFF</string>
                   <string>-DUSE_FMODSTUDIO:BOOL=OFF</string>
                   <string>-DOPENAL:BOOL=OFF</string>
@@ -3504,7 +3507,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE</string>
                   <string>-DROOT_PROJECT_NAME:STRING=SecondLife</string>
                   <string>-DINSTALL_PROPRIETARY=TRUE</string>
-                  <string>-DUSE_SOLOUD:BOOL=ON</string>
+                  <string>-DUSE_VKS_AUDIO:BOOL=ON</string>
                   <string>-DUSE_OPENAL:BOOL=OFF</string>
                   <string>-DUSE_FMODSTUDIO:BOOL=OFF</string>
                   <string>-DOPENAL:BOOL=OFF</string>
@@ -4157,7 +4160,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>${AUTOBUILD_WIN_VSPLATFORM|NOTWIN}</string>
                   <string>-DINSTALL_PROPRIETARY=FALSE</string>
                   <string>-DUSE_KDU=FALSE</string>
-                  <string>-DUSE_SOLOUD:BOOL=ON</string>
+                  <string>-DUSE_VKS_AUDIO:BOOL=ON</string>
                   <string>-DUSE_OPENAL:BOOL=OFF</string>
                   <string>-DUSE_FMODSTUDIO:BOOL=OFF</string>
                   <string>-DOPENAL:BOOL=OFF</string>
@@ -4235,7 +4238,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-DUNATTENDED:BOOL=ON</string>
                   <string>-DINSTALL_PROPRIETARY=FALSE</string>
                   <string>-DUSE_KDU=FALSE</string>
-                  <string>-DUSE_SOLOUD:BOOL=ON</string>
+                  <string>-DUSE_VKS_AUDIO:BOOL=ON</string>
                   <string>-DUSE_OPENAL:BOOL=OFF</string>
                   <string>-DUSE_FMODSTUDIO:BOOL=OFF</string>
                   <string>-DOPENAL:BOOL=OFF</string>
