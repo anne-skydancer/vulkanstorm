@@ -4291,7 +4291,7 @@ void LLInventoryModel::processBulkUpdateInventory(LLMessageSystem* msg, void**)
         LL_DEBUGS("Inventory") << "unpacked item '" << titem->getName() << "' in "
                                << titem->getParentUUID() << LL_ENDL;
         U32 callback_id;
-        msg->getU32Fast(_PREHASH_ItemData, _PREHASH_CallbackID, callback_id);
+        msg->getU32Fast(_PREHASH_ItemData, _PREHASH_CallbackID, callback_id, i);
         if(titem->getUUID().notNull() ) // && callback_id.notNull() )
         {
             items.push_back(titem);
