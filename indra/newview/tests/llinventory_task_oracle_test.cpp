@@ -1508,7 +1508,11 @@ namespace
         }
         {
             std::string unknown;
-            for (int i = 0; i < 25; ++i) unknown += fmt("\tjunk%d\t0\n", i);
+            for (int i = 0; i < 24; ++i) unknown += fmt("\tjunk%d\t0\n", i);
+            // the limit is 25 unknown top-level tokens: 24, 25 and 26
+            add("unknown_24", unknown + normal);
+            add("unknown_24_between", obj + a + unknown + b);
+            unknown += "\tjunk24\t0\n";
             add("unknown_25", unknown + normal);
             add("unknown_26", unknown + "\tjunk25\t0\n" + normal);
             add("unknown_25_between", obj + a + unknown + b);
