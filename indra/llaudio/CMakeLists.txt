@@ -84,15 +84,32 @@ if( TARGET ll::vksaudio )
     target_link_libraries( llaudio ll::vksaudio )
 endif()
 
-if (LL_TESTS AND TARGET ll::soloud)
+if (LL_TESTS AND TARGET ll::vksaudio)
     include(LLAddBuildTest)
     # Parity of the engine's mixed output and of the sound asset decoder
     # against the corpora recorded from the C++ (SoLoud) implementation
-    # before its port to Rust (vkstorm-rust). The adapter sources are the
-    # only engine-specific parts of the test.
+    # before its port to Rust (vkstorm-rust rung six). The adapter sources
+    # are the only engine-specific parts of the test.
     LL_ADD_INTEGRATION_TEST(llaudio_parity
-        "tests/llaudio_parity_soloud_adapter.cpp;tests/llaudio_parity_decode_adapter.cpp"
+        "tests/llaudio_parity_vks_adapter.cpp;tests/llaudio_parity_decode_adapter.cpp"
         "llaudio;llfilesystem;llmessage;llmath;llcommon;ll::vorbis;ll::zlib-ng")
     set_property(TARGET INTEGRATION_TEST_llaudio_parity APPEND PROPERTY
         COMPILE_DEFINITIONS "VKS_AUDIO_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
+
+    # Parcel music end to end through LLStreamingAudio_VKS on the null
+    # device, against the local radio server (it runs the test and passes
+    # its port in LL_TEST_PORT). The FFmpeg libraries are staged next to the
+    # test on Windows; on Linux they are in the prebuilt library directory.
+    if (LINUX)
+        set(vks_music_test_env "-DVKS_FFMPEG_DIR=${ARCH_PREBUILT_DIRS_RELEASE}")
+    else ()
+        set(vks_music_test_env "")
+    endif ()
+    LL_ADD_INTEGRATION_TEST(llaudio_music
+        ""
+        "llaudio;llfilesystem;llmessage;llmath;llcommon"
+        ${vks_music_test_env}
+        ${PYTHON_EXECUTABLE}
+        "${CMAKE_SOURCE_DIR}/newview/tests/vksaudio_mock_stream_server.py"
+        )
 endif ()
