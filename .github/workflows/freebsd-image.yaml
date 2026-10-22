@@ -1,0 +1,95 @@
+name: FreeBSD runner image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/freebsd-runner-image']
+    paths: ['scripts/ci/freebsd/**', '.github/workflows/freebsd-image.yaml']
+  pull_request:
+    paths: ['scripts/ci/freebsd/**', '.github/workflows/freebsd-image.yaml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: freebsd-image-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Checkout pinned FreeBSD builder
+        uses: actions/checkout@v7
+        with:
+          repository: cross-platform-actions/freebsd-builder
+          ref: 6b1eb482e85a4e9d5bb2cf769412bb053f40c9c0
+          path: .freebsd-builder
+          persist-credentials: false
+      - name: Install image build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils fdisk dosfstools rsync curl libarchive-tools
+      - name: Enable KVM for the disposable hosted runner
+        run: |
+          test -c /dev/kvm
+          sudo chown "$(id -u):$(id -g)" /dev/kvm
+          sudo chmod u+rw /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
+      - uses: hashicorp/setup-packer@ce93c3c08a6c2ff2275bf4b54ff0d9a75f6c9789 # v3.4.0
+        with:
+          version: '1.9.1'
+      - name: Build custom FreeBSD 15.1 image
+        env:
+          PACKER_LOG: '1'
+          PACKER_GITHUB_API_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/freebsd/build-image.sh
+      - name: Serve image to the VM action
+        run: |
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory "$FREEBSD_IMAGE_DIRECTORY" > "$RUNNER_TEMP/freebsd-image-http.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/freebsd-image-http.pid"
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://localhost:8080/SHA256SUMS; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Boot completed image and qualify native toolchain
+        uses: cross-platform-actions/action@e0b9770014ba65d5e0815f15b74031c3a635f641 # v1.6.0
+        with:
+          operating_system: freebsd
+          architecture: x86-64
+          version: '15.1'
+          image_url: http://localhost:8080/freebsd-15.1-x86-64.qcow2
+          memory: 4G
+          cpu_count: 2
+          shell: sh
+          run: sh scripts/ci/freebsd/smoke.sh
+      - name: Verify evidence returned from guest
+        run: |
+          grep -Fx 'FreeBSD image toolchain qualification passed' freebsd-image-evidence/result.txt
+          (cd "$FREEBSD_IMAGE_DIRECTORY" && sha256sum --check SHA256SUMS)
+      - name: Upload qualified image
+        uses: actions/upload-artifact@v7
+        with:
+          name: freebsd-15.1-x86-64-image
+          path: ${{ env.FREEBSD_IMAGE_DIRECTORY }}/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Upload image qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: freebsd-image-evidence
+          path: freebsd-image-evidence/
+          if-no-files-found: warn
+      - name: Stop image server
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/freebsd-image-http.pid"; then
+            kill "$(cat "$RUNNER_TEMP/freebsd-image-http.pid")" || true
+          fi
