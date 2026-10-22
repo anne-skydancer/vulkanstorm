@@ -1064,14 +1064,15 @@ AISUpdate::AISUpdate(const LLSD& update, AISAPI::COMMAND_TYPE type, const LLSD& 
         mFetchDepth = request_body["depth"].asInteger();
     }
 
-    mTaskTimer.setTimerExpirySec(AIS_TASK_EXPIRY_SECONDS);
+    // start() resets the timer, which clears its expiry: set the expiry after it.
     mTaskTimer.start();
+    mTaskTimer.setTimerExpirySec(AIS_TASK_EXPIRY_SECONDS);
 
     U32 current_frame = LLFrameTimer::getFrameCount();
     if (sBatchFrameCount != current_frame)
     {
-        sBatchTimer.setTimerExpirySec(AIS_BATCH_EXPIRY_SECONDS);
         sBatchTimer.start();
+        sBatchTimer.setTimerExpirySec(AIS_BATCH_EXPIRY_SECONDS);
         sBatchFrameCount = current_frame;
     }
     parseUpdate(update);
