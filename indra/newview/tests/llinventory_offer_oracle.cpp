@@ -14,6 +14,7 @@
 #include "linden_common.h"
 #include "llinventory_offer_oracle.h"
 #include "llinventory_offer_oracle_copies.h"
+#include "llinventory_offer_oracle_boundary.h"
 
 #include "llapr.h"
 #include "llsdserialize.h"
@@ -36,6 +37,9 @@ namespace r4b_pack
 namespace r4b_oracle
 {
     namespace F = r4b;
+
+    // every decision goes through the W6/W7 seam
+    static r4b_boundary::Decisions& D() { return r4b_boundary::decisions(); }
 
     // ================================================================ basics
     bool is_note(const std::string& line)
@@ -309,7 +313,7 @@ namespace r4b_oracle
             }
         }
         F::ev().add(F::fmt("respond %s option=%d", p.name.c_str(), option));
-        p.functor(notification, response);
+        D().answer(p.functor, notification, response);
     }
 
     // ================================================================ items
@@ -350,6 +354,117 @@ namespace r4b_oracle
     }
 
     static const LLUUID ROOT = U(0x1f, 1);
+
+    // ===================================================== inputs (F3)
+    // The records a case runs on, as compared `input.NN` lines, so a Rust
+    // test can rebuild the case from the fixture alone.
+    static std::string perm_rec(const LLPermissions& p)
+    {
+        return F::fmt("creator=%s owner=%s last_owner=%s group=%s group_owned=%d base=%08x owner_mask=%08x group_mask=%08x everyone=%08x next=%08x",
+                      p.getCreator().asString().c_str(), p.getOwner().asString().c_str(), p.getLastOwner().asString().c_str(),
+                      p.getGroup().asString().c_str(), (S32)p.isGroupOwned(), p.getMaskBase(), p.getMaskOwner(), p.getMaskGroup(),
+                      p.getMaskEveryone(), p.getMaskNextOwner());
+    }
+
+    static std::string ids_list(const std::set<LLUUID>& v)
+    {
+        std::string out = "[";
+        for (const LLUUID& id : v) out += (out.size() > 1 ? "," : "") + id.asString();
+        return out + "]";
+    }
+
+    // the stored record (raw name and type, the item's own permissions)
+    static std::string item_rec(const LLInventoryItem* it)
+    {
+        const F::LLViewerInventoryItem* v = dynamic_cast<const F::LLViewerInventoryItem*>(it);
+        return F::fmt("item %s parent=%s type=%d inv_type=%d asset=%s flags=%u finished=%d name=\"",
+                      it->getUUID().asString().c_str(), it->getParentUUID().asString().c_str(), (S32)it->getActualType(),
+                      (S32)it->LLInventoryItem::getInventoryType(), it->LLInventoryItem::getAssetUUID().asString().c_str(),
+                      it->LLInventoryItem::getFlags(), v ? (S32)v->isFinished() : 1) +
+               F::esc(it->LLInventoryObject::getName()) + "\" " + perm_rec(it->LLInventoryItem::getPermissions());
+    }
+
+    static std::string cat_rec(const LLInventoryCategory* c)
+    {
+        return F::fmt("cat %s parent=%s pref=%d complete=%d name=\"", c->getUUID().asString().c_str(),
+                      c->getParentUUID().asString().c_str(), (S32)c->getPreferredType(),
+                      (S32)F::gInventory.isCategoryComplete(c->getUUID())) + F::esc(c->LLInventoryObject::getName()) + "\"";
+    }
+
+    struct Inputs
+    {
+        Sink& s;
+        std::string c;
+        int n = 0;
+        void line(const std::string& v) { put(s, c, F::fmt("input.%02d", n++), v); }
+    };
+
+    // the model: parents in id order, each parent's children in the order
+    // the model holds them (categories, then items)
+    static void put_model(Inputs& in)
+    {
+        std::set<LLUUID> parents;
+        for (auto& p : F::gInventory.mParentChildCategoryTree) parents.insert(p.first);
+        for (auto& p : F::gInventory.mParentChildItemTree) parents.insert(p.first);
+        for (const LLUUID& parent : parents)
+        {
+            if (auto* cats = get_ptr_in_map(F::gInventory.mParentChildCategoryTree, parent))
+                for (auto& cp : *cats) in.line(cat_rec(cp.get()));
+            if (auto* items = get_ptr_in_map(F::gInventory.mParentChildItemTree, parent))
+                for (auto& ip : *items) in.line(item_rec(ip.get()));
+        }
+    }
+
+    static void put_world(Sink& s, const std::string& c)
+    {
+        Inputs in{ s, c };
+        in.line(F::fmt("agent id=%s session=%s avatar_valid=%d fullname=\"%s\" sitting=%d dnd=%d groups=",
+                       F::gAgent.mID.asString().c_str(), F::gAgent.mSessionID.asString().c_str(), (S32)F::gAgentAvatarp->mValid,
+                       F::esc(F::gAgentAvatarp->mFullname).c_str(), (S32)F::gAgentAvatarp->mSitting, (S32)F::gAgent.mDoNotDisturb) +
+                ids_list(F::gAgent.mGroups));
+        in.line("worn attachments=" + ids_list(F::gAgentAvatarp->mAttachments) + " wearables=" + ids_list(F::gAgentWearables.worn) +
+                " active_gestures=" + ids_list(F::LLGestureMgr::instance().active));
+        std::string folders;
+        for (auto& f : F::gInventory.mSystemFolders) folders += F::fmt(" %d=%s", f.first, f.second.asString().c_str());
+        in.line(F::fmt("limits max_inventory_items_transfer=%d system_folder_overrides=[", F::LLWorld::getInstance()->mMaxInventoryItemsTransfer) +
+                folders + " ] (other folder types: 000000f0-0000-4000-8000-<type as U16>)");
+        std::string set;
+        for (auto& b : F::gSavedSettings.b) set += " " + b.first + "=" + (b.second ? "1" : "0");
+        for (auto& u : F::gSavedSettings.u) set += F::fmt(" %s=%u", u.first.c_str(), u.second);
+        in.line("settings" + set);
+        const F::World& w = F::world();
+        in.line(F::fmt("rlv enabled=%d forbid_give_to_rlv=%d shared_root=%s can_show_names=%d locked_attachment=%d unsit=%d sittp=%d share_blocked=",
+                       (S32)w.rlv_enabled, (S32)w.rlv_forbid_give_to_rlv, w.rlv_shared_root.asString().c_str(), (S32)w.rlv_can_show_names,
+                       (S32)w.rlv_locked_attachment, (S32)w.rlv_unsit, (S32)w.rlv_sittp) +
+                ids_list(w.rlv_share_blocked) + " nearby=" + ids_list(w.rlv_nearby));
+        std::string mutes;
+        for (const F::LLMute& m : F::LLMuteList::getInstance()->mMutes)
+            mutes += F::fmt(" %s:%d:%u:\"", m.mID.asString().c_str(), (S32)m.mType, m.mFlags) + F::esc(m.mName) + "\"";
+        std::string legacy;
+        for (const std::string& n : F::LLMuteList::getInstance()->mLegacyMutes) legacy += " \"" + F::esc(n) + "\"";
+        in.line("mutes [" + mutes + " ] legacy [" + legacy + " ]");
+        std::string names;
+        for (auto& n : F::LLAvatarNameCache::instance().names) names += " " + n.first.asString() + "=\"" + F::esc(n.second) + "\"";
+        in.line("im_sessions=" + ids_list(F::LLIMModel::getInstance()->open_sessions) + " avatar_names [" + names + " ]");
+        put_model(in);
+    }
+
+    // the item(s) a predicate case runs on, and what is worn
+    static void put_items(Sink& s, const std::string& c, const std::vector<const LLInventoryItem*>& items)
+    {
+        Inputs in{ s, c };
+        for (const LLInventoryItem* it : items) in.line(item_rec(it));
+        in.line(F::fmt("avatar_valid=%d attachments=", (S32)F::gAgentAvatarp->mValid) + ids_list(F::gAgentAvatarp->mAttachments) +
+                " wearables=" + ids_list(F::gAgentWearables.worn) + " active_gestures=" + ids_list(F::LLGestureMgr::instance().active) +
+                " groups=" + ids_list(F::gAgent.mGroups));
+    }
+
+    static std::string object_rec(const F::LLViewerObject& o)
+    {
+        return F::fmt("object %s perm_modify=%d allow_inventory_add=%d you_owner=%d pcode=%d attachment=%d root=%s",
+                      o.mID.asString().c_str(), (S32)o.mPermModify, (S32)o.mFlagAllowInventoryAdd, (S32)o.mPermYouOwner, (S32)o.mPCode,
+                      (S32)o.mIsAttachment, o.getRootEdit()->getID().asString().c_str());
+    }
 
     // =========================================================== set 4: items
     struct GiveItemCase
@@ -413,11 +528,13 @@ namespace r4b_oracle
         std::vector<NameCase> names = {
             { "name_empty", "", false },
             { "name_corrected", "a|b\x01" "c\xc3\xa9  ", false },
+            { "name_62", std::string(62, 'n'), false },
             { "name_63", std::string(63, 'n'), false },
             { "name_64_corrected", std::string(64, 'n'), false },
             { "name_raw_1182", std::string(1182, 'x'), true },
             { "name_raw_1183", std::string(1183, 'x'), true },
             { "name_raw_1184", std::string(1184, 'x'), true },
+            { "name_raw_1198", std::string(1198, 'x'), true },
             { "name_raw_1199", std::string(1199, 'x'), true },
             { "name_raw_1200", std::string(1200, 'x'), true },
             { "name_raw_1300", std::string(1300, 'x'), true },
@@ -489,8 +606,9 @@ namespace r4b_oracle
             setup();
             LLUUID id = c.build();
             F::ev().lines.clear(); // model setup is not part of the record
+            put_world(s, c.id);
             F::ev().add("give item " + id.asString() + " to " + OTHER.asString() + " session " + c.session.asString());
-            bool r = F::LLGiveInventory::doGiveInventoryItem(OTHER, F::gInventory.getItem(id), c.session);
+            bool r = D().give_item(OTHER, F::gInventory.getItem(id), c.session);
             F::ev().add(F::fmt("result %d", (S32)r));
             if (c.respond >= 0)
             {
@@ -595,6 +713,11 @@ namespace r4b_oracle
             return cat("Root", { cat("A", { cat("A1", { item("i1") }), item("i2") }), cat("B"), item("i3"), item("i4") }); } });
         cases.push_back({ "deep_4", []() {
             return cat("D0", { cat("D1", { cat("D2", { cat("D3", { item("deep") }) }) }), item("top") }); } });
+        cases.push_back({ "entries_41", []() {
+            std::vector<Node> v = many(39, "item");
+            v.insert(v.begin(), cat("S1", {}));
+            v.insert(v.begin(), cat("S2", {}));
+            return cat("Forty One", v); } });
         cases.push_back({ "entries_42", []() {
             std::vector<Node> v = many(40, "item");
             v.insert(v.begin(), cat("S1", {}));
@@ -608,6 +731,9 @@ namespace r4b_oracle
         FolderCase big{ "opensim_limit_100_entries_70", []() { return cat("Big", many(70, "item")); } };
         big.limit = 100;
         cases.push_back(big);
+        big.id = "opensim_limit_100_entries_99";
+        big.tree = []() { return cat("Big99", many(99, "item")); };
+        cases.push_back(big);
         big.id = "opensim_limit_100_entries_100";
         big.tree = []() { return cat("Bigger", many(100, "item")); };
         cases.push_back(big);
@@ -617,6 +743,13 @@ namespace r4b_oracle
         FolderCase longname{ "name_raw_700_entries_30", []() { return cat("x", many(30, "item")); } };
         longname.raw_name = true;
         longname.name = std::string(700, 'L');
+        cases.push_back(longname);
+        longname.id = "name_raw_1198_entries_1";
+        longname.tree = []() { return cat("x", many(1, "item")); };
+        longname.name = std::string(1198, 'L');
+        cases.push_back(longname);
+        longname.id = "name_raw_1200_entries_1";
+        longname.name = std::string(1200, 'L');
         cases.push_back(longname);
         longname.id = "name_raw_1199_entries_1";
         longname.tree = []() { return cat("x", many(1, "item")); };
@@ -703,9 +836,10 @@ namespace r4b_oracle
             F::LLWorld::getInstance()->mMaxInventoryItemsTransfer = c.limit;
             if (c.before) c.before(root);
             F::ev().lines.clear();
+            put_world(s, c.id);
             F::ev().add(F::fmt("give folder %s to %s limit %d notification \"%s\"", root.id.asString().c_str(),
                                  OTHER.asString().c_str(), c.limit, c.notification.c_str()));
-            bool r = F::LLGiveInventory::doGiveInventoryCategory(OTHER, rc, LLUUID::null, c.notification);
+            bool r = D().give_category(OTHER, rc, LLUUID::null, c.notification);
             F::ev().add(F::fmt("result %d", (S32)r));
             if (c.respond >= 0)
             {
@@ -747,19 +881,19 @@ namespace r4b_oracle
                 const std::string base = F::fmt("d%d.%s", (S32)d, txn_null ? "txn_null" : "txn");
                 struct Op { const char* id; std::function<void(F::LLOfferInfo*)> run; };
                 std::vector<Op> ops = {
-                    { "accept_dest", [dest](F::LLOfferInfo* o) { o->sendReceiveResponse(true, dest); } },
-                    { "accept_null_dest", [](F::LLOfferInfo* o) { o->sendReceiveResponse(true, LLUUID::null); } },
-                    { "decline", [dest](F::LLOfferInfo* o) { o->sendReceiveResponse(false, dest); } },
+                    { "accept_dest", [dest](F::LLOfferInfo* o) { D().send_receive_response(o, true, dest); } },
+                    { "accept_null_dest", [](F::LLOfferInfo* o) { D().send_receive_response(o, true, LLUUID::null); } },
+                    { "decline", [dest](F::LLOfferInfo* o) { D().send_receive_response(o, false, dest); } },
                     { "accept_then_decline", [dest](F::LLOfferInfo* o) {
-                        o->sendReceiveResponse(true, dest); o->sendReceiveResponse(false, dest); } },
-                    { "auto_receive", [](F::LLOfferInfo* o) { o->send_auto_receive_response(); } },
-                    { "legacy_decline", [](F::LLOfferInfo* o) { o->send_decline_response(); } },
-                    { "legacy_decline_twice", [](F::LLOfferInfo* o) { o->send_decline_response(); o->send_decline_response(); } },
+                        D().send_receive_response(o, true, dest); D().send_receive_response(o, false, dest); } },
+                    { "auto_receive", [](F::LLOfferInfo* o) { D().send_auto_receive_response(o); } },
+                    { "legacy_decline", [](F::LLOfferInfo* o) { D().send_decline_response(o); } },
+                    { "legacy_decline_twice", [](F::LLOfferInfo* o) { D().send_decline_response(o); D().send_decline_response(o); } },
                     { "accept_avatar_invalid", [dest](F::LLOfferInfo* o) {
-                        F::gAgentAvatarp->mValid = false; o->sendReceiveResponse(true, dest); } },
+                        F::gAgentAvatarp->mValid = false; D().send_receive_response(o, true, dest); } },
                     { "accept_rlv_names_hidden_nearby", [dest](F::LLOfferInfo* o) {
                         F::world().rlv_enabled = true; F::world().rlv_can_show_names = false; F::world().rlv_nearby.insert(OTHER);
-                        o->sendReceiveResponse(true, dest); } },
+                        D().send_receive_response(o, true, dest); } },
                 };
                 for (const Op& op : ops)
                 {
@@ -852,7 +986,7 @@ namespace r4b_oracle
                              (S32)c.dialog, c.from.asString().c_str(), (S32)c.from_group, c.session.asString().c_str(),
                              c.aux.asString().c_str(), size, F::hex(c.bucket.data(), c.bucket.size()).c_str(),
                              F::esc(c.name).c_str(), F::esc(c.message).c_str(), c.fill));
-        F::process_offer_im(c.from, c.from_group, c.dialog, c.session, 0, c.name, c.message, buffer.data(), size, sender, c.aux);
+        D().receive_im(c.from, c.from_group, c.dialog, c.session, 0, c.name, c.message, buffer.data(), size, sender, c.aux);
         run_idle();
     }
 
@@ -1072,14 +1206,14 @@ namespace r4b_oracle
             o.mFromName = f.from_name; o.mDesc = f.desc; o.mHost = f.host.empty() ? LLHost() : LLHost(f.host); o.mPersist = f.persist;
             std::string c = std::string("fields_") + f.id;
             put(s, c, "in", offer_fields(o));
-            LLSD sd = o.asLLSD();
+            LLSD sd = D().offer_as_llsd(&o);
             put_llsd(s, c, "asLLSD", sd);
-            F::LLOfferInfo back(sd);
-            put(s, c, "fromLLSD", offer_fields(back));
+            std::unique_ptr<F::LLOfferInfo> back(D().offer_from_llsd(sd));
+            put(s, c, "fromLLSD", offer_fields(*back));
             F::LLOfferInfo viaFrom;
-            viaFrom.fromLLSD(sd);
+            D().offer_from_llsd_assign(&viaFrom, sd);
             put(s, c, "fromLLSD_assign", offer_fields(viaFrom));
-            LLSD again = back.asLLSD();
+            LLSD again = D().offer_as_llsd(back.get());
             put(s, c, "round_trip_equal", F::sd_bin_hex(again) == F::sd_bin_hex(sd) ? "1" : "0");
         }
         // crafted documents
@@ -1109,9 +1243,9 @@ namespace r4b_oracle
             LLSDSerialize::fromNotation(sd, in, d.notation.size());
             std::string c = std::string("doc_") + d.id;
             put_llsd(s, c, "doc", sd);
-            F::LLOfferInfo o(sd);
-            put(s, c, "fromLLSD", offer_fields(o));
-            put_llsd(s, c, "asLLSD", o.asLLSD());
+            std::unique_ptr<F::LLOfferInfo> o(D().offer_from_llsd(sd));
+            put(s, c, "fromLLSD", offer_fields(*o));
+            put_llsd(s, c, "asLLSD", D().offer_as_llsd(o.get()));
         }
         F::ev().on = true;
         F::ev().lines.clear();
@@ -1140,7 +1274,7 @@ namespace r4b_oracle
             o->mPersist = true;
             F::ev().lines.clear();
             F::ev().add(F::fmt("forceResponse(%d)", r));
-            o->forceResponse((F::InventoryOfferResponse)r);
+            D().force_response(o, r);
             run_idle();
             put_events(s, F::fmt("force_%d", r));
             // the element index forceResponse used, and the button that
@@ -1200,7 +1334,7 @@ namespace r4b_oracle
             for (const Step& st : tr.steps)
             {
                 F::fake_clock() = t0 + st.t;
-                bool r = F::check_offer_throttle(st.from, st.check_only);
+                bool r = D().check_offer_throttle(st.from, st.check_only);
                 F::ev().add(F::fmt("t=%.2f check_only=%d from=\"%s\" -> %d", st.t, (S32)st.check_only, st.from, (S32)r));
             }
             put_events(s, tr.id);
@@ -1225,6 +1359,12 @@ namespace r4b_oracle
         bool dismiss;
         bool log_decline;
         bool present = false; // the offered object is already in the model and finished
+        // the response table (policy_response) only
+        bool response_table = false;
+        bool from_group = false; // a group-owned object (task) / the group flag (notices)
+        S32 late_mute = 0;       // mute added between arrival and response: 0 none, 1 by id, 2 by name
+        bool linden = false;     // the sender is named "Grid Linden"
+        bool defer = false;      // name lookups answer from idle
         std::string id() const
         {
             static const char* mutes[] = { "none", "id", "name", "id_textchat_exempt" };
@@ -1234,7 +1374,9 @@ namespace r4b_oracle
             return F::fmt("d%d.self%d.mute_%s.dnd%d.aa%d.legacy%d.rlv%d.grlv_%s.forbid%d.type_%s.%s.%s.dismiss%d.logdecl%d%s",
                             dialog, (S32)self, mutes[mute], (S32)dnd, (S32)auto_accept, (S32)legacy, (S32)rlv, grlv[give_rlv],
                             (S32)forbid, types[type], buttons[button], forced ? "forced" : "interactive", (S32)dismiss,
-                            (S32)log_decline, present ? ".present" : "");
+                            (S32)log_decline, present ? ".present" : "") +
+                   (response_table ? F::fmt(".fg%d.late_%s.linden%d.defer%d", (S32)from_group, late_mute == 0 ? "none" : late_mute == 1 ? "id" : "name",
+                                            (S32)linden, (S32)defer) : std::string());
         }
     };
 
@@ -1248,7 +1390,7 @@ namespace r4b_oracle
             "model.addObserver ", "fetch.start ", "fetch.done ", "open_inventory_offer ", "new LLOpenTaskGroupOffer",
             "new RlvGiveToRLV", "RlvGiveToRLVAgentOffer.done", "rlv.sendNotification ", "mute.add ", "mute.remove ",
             "recent_people.add ", "inventory_panel.select ", "group_panel.showNotice ", "stage ", "nearby_chat ",
-            "toasts.kill ", "blocked_list.show " };
+            "toasts.kill ", "blocked_list.show ", "offer.", "responder.deleted", "name.deferred " };
         for (const char* k : keep)
         {
             if (e.compare(0, strlen(k), k) == 0) return true;
@@ -1256,9 +1398,49 @@ namespace r4b_oracle
         return false;
     }
 
-    // notify lines lose their args (UI text): name and payload stay
+    // notify lines lose their args (UI text): name and payload stay; offer
+    // snapshots keep the offer's state (dialog, transaction, folder, object,
+    // type, group flag, host, persist) and lose the sender's id, name and the
+    // description, which the case id fixes
     static std::string policy_render(const std::string& e)
     {
+        if (e.compare(0, 6, "offer.") == 0)
+        {
+            // drop the space-separated fields from=, from_object=, and the
+            // quoted from_name="..." and desc="..." (with \-escapes)
+            std::string out;
+            size_t k = 0;
+            while (k < e.size())
+            {
+                size_t sp = e.find(' ', k);
+                if (sp == std::string::npos) { out += e.substr(k); break; }
+                out += e.substr(k, sp - k);
+                size_t f = sp + 1;
+                auto starts = [&](const char* t) { return e.compare(f, strlen(t), t) == 0; };
+                if (starts("from=") || starts("from_object="))
+                {
+                    size_t nx = e.find(' ', f);
+                    k = nx == std::string::npos ? e.size() : nx;
+                }
+                else if (starts("from_name=\"") || starts("desc=\""))
+                {
+                    size_t q = e.find('"', f) + 1;
+                    while (q < e.size() && e[q] != '"') q += e[q] == '\\' ? 2 : 1;
+                    k = q + 1;
+                }
+                else
+                {
+                    out += ' ';
+                    k = f;
+                }
+            }
+            return out;
+        }
+        if (e.compare(0, 5, "send ") == 0)
+        {
+            size_t z = e.find(" zc=");
+            if (z != std::string::npos) return e.substr(0, z);
+        }
         if (e.compare(0, 7, "notify ") == 0 || e.compare(0, 16, "notify.postponed") == 0)
         {
             size_t a = e.find(" args=");
@@ -1271,10 +1453,11 @@ namespace r4b_oracle
         return e;
     }
 
-    static void run_policy_case(const PolicyCase& pc, Sink& s, bool full_events)
+    static void run_policy_case(const PolicyCase& pc, Sink& s, bool full_events, const std::string& named = std::string())
     {
         setup();
         install_snapshot_hook();
+        F::world().defer_name_lookups = pc.defer;
         auto& b = F::gSavedSettings.b;
         b["AutoAcceptNewInventory"] = pc.auto_accept;
         b["FSUseLegacyInventoryAcceptMessages"] = pc.legacy;
@@ -1287,8 +1470,8 @@ namespace r4b_oracle
         if (pc.give_rlv == 2) F::world().rlv_shared_root.setNull();
         const bool agent = pc.dialog == IM_INVENTORY_OFFERED;
         const bool task = pc.dialog == IM_TASK_INVENTORY_OFFERED;
-        const LLUUID from = pc.self ? AGENT : OTHER;
-        const std::string name = task ? "Gadget" : "Sender";
+        const LLUUID from = (task && pc.from_group) ? GROUP : pc.self ? AGENT : OTHER;
+        const std::string name = pc.linden ? "Grid Linden" : task ? "Gadget" : "Sender";
         if (pc.mute == 1) F::LLMuteList::getInstance()->mMutes.insert(F::LLMute(from, name, F::LLMute::AGENT));
         if (pc.mute == 2) F::LLMuteList::getInstance()->mLegacyMutes.insert(name);
         if (pc.mute == 3) F::LLMuteList::getInstance()->mMutes.insert(F::LLMute(from, name, F::LLMute::AGENT, F::LLMute::flagTextChat));
@@ -1301,6 +1484,7 @@ namespace r4b_oracle
         Incoming c;
         c.dialog = (EInstantMessage)pc.dialog;
         c.from = from;
+        c.from_group = pc.from_group;
         c.name = name;
         c.session = TXN;
         if (agent)
@@ -1322,6 +1506,12 @@ namespace r4b_oracle
         F::ev().lines.clear();
         F::ev().add("stage arrival");
         run_incoming(c, false);
+        if (pc.late_mute)
+        {
+            F::ev().add(F::fmt("stage late_mute %s", pc.late_mute == 1 ? "by_id" : "by_name"));
+            if (pc.late_mute == 1) F::LLMuteList::getInstance()->mMutes.insert(F::LLMute(from, name, F::LLMute::AGENT));
+            else F::LLMuteList::getInstance()->mLegacyMutes.insert(name);
+        }
         // the response
         F::ev().add(F::fmt("stage response %s button=%d", pc.forced ? "forced" : "interactive", pc.button));
         if (pc.button == 7 && pc.forced)
@@ -1345,7 +1535,7 @@ namespace r4b_oracle
                 }
                 else if (pc.forced)
                 {
-                    info->forceResponse((F::InventoryOfferResponse)pc.button);
+                    D().force_response(info, pc.button);
                 }
                 else
                 {
@@ -1400,7 +1590,7 @@ namespace r4b_oracle
             }
             else
             {
-                info->forceResponse((F::InventoryOfferResponse)pc.button);
+                D().force_response(info, pc.button);
                 // forceResponse with an option outside the form calls nothing
                 if (F::live_responders().count(info))
                 {
@@ -1411,7 +1601,7 @@ namespace r4b_oracle
             }
         }
         run_idle();
-        const std::string cid = pc.id();
+        const std::string cid = named.empty() ? pc.id() : named;
         int n = 0;
         for (const std::string& e : F::ev().lines)
         {
@@ -1456,7 +1646,7 @@ namespace r4b_oracle
         }
     }
 
-    static const uint32_t POLICY_SAMPLE_MODULUS = 4001;
+    static const uint32_t POLICY_SAMPLE_MODULUS = 8009;
 
     static void corpus_policy(Sink& s)
     {
@@ -1480,7 +1670,159 @@ namespace r4b_oracle
         for (int forced = 0; forced < 2; ++forced)
         {
             pc.dialog = d; pc.type = type; pc.auto_accept = aa; pc.legacy = legacy; pc.button = button; pc.forced = forced;
-            run_policy_case(pc, s, in_sample(pc.id(), 8));
+            run_policy_case(pc, s, false);
+        }
+    }
+
+    // The response table (F1): what changes between arrival and response.
+    // 43,008 cases: dialog with its group flag (4; 9 and 32 and 37 with and
+    // without) x from self x sender named normally or "Grid Linden" x mute
+    // added between arrival and response (none, by id, by name) x name
+    // lookups answering at once or from idle x legacy mode x category or
+    // notecard x 8 buttons x forced/interactive x dismiss-to-Trash x
+    // LogInventoryDecline.
+    template<class Fn>
+    static void for_each_response_case(Fn fn)
+    {
+        PolicyCase pc{};
+        pc.response_table = true;
+        const S32 dialogs[][2] = { { 4, 0 }, { 9, 0 }, { 9, 1 }, { 32, 0 }, { 32, 1 }, { 37, 0 }, { 37, 1 } };
+        for (const auto& dg : dialogs)
+        for (int self = 0; self < 2; ++self)
+        for (int linden = 0; linden < 2; ++linden)
+        for (S32 late = 0; late < 3; ++late)
+        for (int defer = 0; defer < 2; ++defer)
+        for (int legacy = 0; legacy < 2; ++legacy)
+        for (S32 type = 0; type < 2; ++type)
+        for (S32 button = 0; button < 8; ++button)
+        for (int forced = 0; forced < 2; ++forced)
+        for (int dismiss = 0; dismiss < 2; ++dismiss)
+        for (int logdecl = 0; logdecl < 2; ++logdecl)
+        {
+            pc.dialog = dg[0]; pc.from_group = dg[1]; pc.self = self; pc.linden = linden; pc.late_mute = late; pc.defer = defer;
+            pc.legacy = legacy; pc.type = type; pc.button = button; pc.forced = forced; pc.dismiss = dismiss; pc.log_decline = logdecl;
+            fn(pc);
+        }
+    }
+
+    static const uint32_t RESPONSE_SAMPLE_MODULUS = 1201;
+
+    static void corpus_policy_response(Sink& s)
+    {
+        for_each_response_case([&s](const PolicyCase& pc) {
+            run_policy_case(pc, s, in_sample(pc.id(), RESPONSE_SAMPLE_MODULUS));
+        });
+    }
+
+    // Readable named cases for every survey 4 section 9 risk and every
+    // behaviour the audit's mutations target (committed in full, full logs).
+    static void corpus_policy_named(Sink& s)
+    {
+        struct Named { const char* id; std::function<void(PolicyCase&)> set; };
+        auto base = [](S32 d, S32 button, bool forced) { PolicyCase pc{}; pc.dialog = d; pc.button = button; pc.forced = forced; pc.type = 1; pc.log_decline = true; return pc; };
+        std::vector<Named> named = {
+            { "agent_offer_accepted_on_arrival_closed", [&](PolicyCase& p) { p = base(4, 7, false); } },
+            { "agent_offer_keep_sends_nothing_more", [&](PolicyCase& p) { p = base(4, 0, false); } },
+            { "agent_offer_discard_moves_to_trash_locally", [&](PolicyCase& p) { p = base(4, 1, false); } },
+            { "agent_offer_mute_button", [&](PolicyCase& p) { p = base(4, 2, false); } },
+            { "agent_offer_mute_button_deferred_names", [&](PolicyCase& p) { p = base(4, 2, false); p.response_table = true; p.defer = true; } },
+            { "agent_offer_legacy_keep_sends_accept", [&](PolicyCase& p) { p = base(4, 0, false); p.legacy = true; } },
+            { "agent_offer_legacy_discard_sends_decline_to_trash", [&](PolicyCase& p) { p = base(4, 1, false); p.legacy = true; } },
+            { "agent_offer_muted_by_id_forced_decline", [&](PolicyCase& p) { p = base(4, 0, false); p.mute = 1; } },
+            { "agent_offer_muted_by_name_forced_mute", [&](PolicyCase& p) { p = base(4, 0, false); p.mute = 2; } },
+            { "agent_offer_textchat_exempt_mute_forced_mute", [&](PolicyCase& p) { p = base(4, 0, false); p.mute = 3; } },
+            { "agent_offer_dnd_accepts_and_replies", [&](PolicyCase& p) { p = base(4, 7, false); p.dnd = true; } },
+            { "agent_offer_auto_accept", [&](PolicyCase& p) { p = base(4, 0, false); p.auto_accept = true; } },
+            { "agent_offer_invalid_type_forced_decline", [&](PolicyCase& p) { p = base(4, 0, false); p.type = 2; } },
+            { "agent_offer_forced_show_does_nothing", [&](PolicyCase& p) { p = base(4, 3, true); } },
+            { "agent_give_to_rlv_keep", [&](PolicyCase& p) { p = base(4, 0, false); p.rlv = true; p.give_rlv = 1; p.type = 0; } },
+            { "agent_give_to_rlv_not_auto_accepted", [&](PolicyCase& p) { p = base(4, 0, false); p.rlv = true; p.give_rlv = 1; p.type = 0; p.auto_accept = true; } },
+            { "agent_give_to_rlv_forbidden_auto_accepted", [&](PolicyCase& p) { p = base(4, 0, false); p.rlv = true; p.give_rlv = 1; p.type = 0; p.auto_accept = true; p.forbid = true; } },
+            { "agent_give_to_rlv_no_shared_root_auto_accepted", [&](PolicyCase& p) { p = base(4, 0, false); p.rlv = true; p.give_rlv = 2; p.type = 0; p.auto_accept = true; } },
+            { "object_offer_keep", [&](PolicyCase& p) { p = base(9, 0, false); } },
+            { "object_offer_discard_accepts_into_trash", [&](PolicyCase& p) { p = base(9, 1, false); } },
+            { "object_offer_closed_accepts_into_trash", [&](PolicyCase& p) { p = base(9, 7, false); } },
+            { "object_offer_mute_button_declines", [&](PolicyCase& p) { p = base(9, 2, false); } },
+            { "object_offer_mute_button_deferred_names_declines", [&](PolicyCase& p) { p = base(9, 2, false); p.response_table = true; p.defer = true; } },
+            { "object_offer_discard_after_late_mute_by_id_declines", [&](PolicyCase& p) { p = base(9, 1, false); p.response_table = true; p.late_mute = 1; } },
+            { "object_offer_discard_after_late_mute_by_name_declines", [&](PolicyCase& p) { p = base(9, 1, false); p.response_table = true; p.late_mute = 2; } },
+            { "object_offer_keep_after_late_mute_still_accepts", [&](PolicyCase& p) { p = base(9, 0, false); p.response_table = true; p.late_mute = 1; } },
+            { "object_offer_group_owned_mute_button_mutes_group", [&](PolicyCase& p) { p = base(9, 2, false); p.response_table = true; p.from_group = true; } },
+            { "object_offer_group_owned_mute_button_deferred", [&](PolicyCase& p) { p = base(9, 2, false); p.response_table = true; p.from_group = true; p.defer = true; } },
+            { "object_offer_own_object_keep", [&](PolicyCase& p) { p = base(9, 0, false); p.self = true; } },
+            { "object_offer_own_object_muted_by_name", [&](PolicyCase& p) { p = base(9, 0, false); p.self = true; p.mute = 2; } },
+            { "object_offer_dnd_no_reply", [&](PolicyCase& p) { p = base(9, 0, false); p.dnd = true; } },
+            { "object_offer_muted_no_reply", [&](PolicyCase& p) { p = base(9, 0, false); p.mute = 1; } },
+            { "object_offer_auto_accept", [&](PolicyCase& p) { p = base(9, 0, false); p.auto_accept = true; } },
+            { "object_offer_invalid_type_forced_decline", [&](PolicyCase& p) { p = base(9, 0, false); p.type = 2; } },
+            { "object_give_to_rlv_keep_redirects_to_root", [&](PolicyCase& p) { p = base(9, 0, false); p.rlv = true; p.give_rlv = 1; p.type = 0; } },
+            { "object_give_to_rlv_forbidden_keep", [&](PolicyCase& p) { p = base(9, 0, false); p.rlv = true; p.give_rlv = 1; p.type = 0; p.forbid = true; } },
+            { "object_give_to_rlv_discard", [&](PolicyCase& p) { p = base(9, 1, false); p.rlv = true; p.give_rlv = 1; p.type = 0; } },
+            { "object_offer_linden_discard_after_late_mute", [&](PolicyCase& p) { p = base(9, 1, false); p.response_table = true; p.late_mute = 1; p.linden = true; } },
+            { "group_notice_accept", [&](PolicyCase& p) { p = base(32, 0, true); } },
+            { "group_notice_discard_no_dismiss", [&](PolicyCase& p) { p = base(32, 1, true); } },
+            { "group_notice_discard_dismiss_accepts_into_trash", [&](PolicyCase& p) { p = base(32, 1, true); p.dismiss = true; } },
+            { "group_notice_discard_dismiss_after_late_mute_declines", [&](PolicyCase& p) { p = base(32, 1, true); p.dismiss = true; p.response_table = true; p.late_mute = 1; } },
+            { "group_notice_mute_dismiss_declines", [&](PolicyCase& p) { p = base(32, 2, true); p.dismiss = true; } },
+            { "group_notice_requested_accept_sends_33", [&](PolicyCase& p) { p = base(37, 0, true); } },
+            { "group_notice_requested_discard_dismiss", [&](PolicyCase& p) { p = base(37, 1, true); p.dismiss = true; } },
+            { "group_notice_from_group_mute", [&](PolicyCase& p) { p = base(32, 2, true); p.response_table = true; p.from_group = true; p.dismiss = true; } },
+        };
+        for (Named& n : named)
+        {
+            PolicyCase pc{};
+            n.set(pc);
+            run_policy_case(pc, s, true, n.id);
+        }
+
+        // Offers in states the IM paths do not produce (a persisted
+        // notification revived from LLSD): the Linden exemption of the
+        // decline path only shows for a group notice whose from_name is a
+        // Linden name.
+        struct Direct { const char* id; const char* from_name; bool muted; bool dismiss; S32 response; };
+        const Direct direct[] = {
+            { "direct_group_notice_discard_dismiss_muted_resident", "Grid Resident", true, true, 1 },
+            { "direct_group_notice_discard_dismiss_muted_linden", "Grid Linden", true, true, 1 },
+            { "direct_group_notice_discard_dismiss_not_muted_linden", "Grid Linden", false, true, 1 },
+            { "direct_group_notice_mute_dismiss_linden", "Grid Linden", true, true, 2 },
+            { "direct_group_notice_closed_dismiss_muted", "Grid Resident", true, true, 7 },
+        };
+        for (const Direct& d : direct)
+        {
+            setup();
+            install_snapshot_hook();
+            F::gSavedSettings.b["FSDismissGroupNoticeAttachmentsToTrash"] = d.dismiss;
+            if (d.muted) F::LLMuteList::getInstance()->mMutes.insert(F::LLMute(OTHER, d.from_name, F::LLMute::AGENT));
+            LLSD sd;
+            sd["im_type"] = (S32)IM_GROUP_NOTICE;
+            sd["from_id"] = OTHER;
+            sd["from_group"] = true;
+            sd["transaction_id"] = TXN;
+            sd["folder_id"] = U(0xf0, 7);
+            sd["type"] = "notecard";
+            sd["from_name"] = d.from_name;
+            sd["description"] = "Notice Item";
+            sd["sender"] = OFFER_HOST;
+            F::ev().lines.clear();
+            put_world(s, d.id);
+            F::ev().add("offer from LLSD " + F::sd_notation(sd));
+            F::LLOfferInfo* o = D().offer_from_llsd(sd);
+            if (d.response == 7)
+            {
+                // a closed notification: the response template
+                LLSD notification;
+                notification["name"] = "UserGiveItem";
+                notification["form"] = F::notification_form("UserGiveItem");
+                notification["id"] = U(0x6e, 999);
+                D().respond(o, notification, LLSD::emptyMap());
+            }
+            else
+            {
+                D().force_response(o, d.response);
+            }
+            run_idle();
+            if (F::live_responders().count(o)) { F::ev().on = false; delete o; F::ev().on = true; }
+            put_events(s, d.id);
         }
     }
 
@@ -1491,8 +1833,26 @@ namespace r4b_oracle
         const TypeSpec types[] = { { "object", 6, false }, { "bodypart", 13, false }, { "clothing", 5, false }, { "gesture", 21, false },
                                    { "notecard", 7, false }, { "texture", 0, false }, { "callingcard", 2, false },
                                    { "link_object", 6, true }, { "link_notecard", 7, true } };
-        const char* worns[] = { "none", "attached", "wearable", "gesture_active" };
+        const char* worns[] = { "none", "attached", "wearable", "gesture" };
         const char* owners[] = { "agent", "other", "group" };
+        {
+            // the records every matrix case shares; each case's `input` line
+            // gives the rest (masks resolved, not tokens)
+            setup();
+            F::gAgent.mGroups.insert(GROUP);
+            add_item(U(0x32, 1), ROOT, 6, make_perms(AGENT, PERM_ALL), "target");
+            Inputs in{ s, "legend" };
+            in.line("item " + U(0x31, 1).asString() + F::fmt(" parent=%s name=\"item\" (\"link\" when link=1, then type=24 and asset=%s, the target) inv_type=default for the type flags=0 finished=1",
+                                                           ROOT.asString().c_str(), U(0x32, 1).asString().c_str()));
+            in.line("perm creator=" + CREATOR.asString() + " last_owner=owner group=" + GROUP.asString() + " (the agent is in the group)");
+            in.line("owner kinds: agent=" + AGENT.asString() + " other=" + OTHER2.asString() + " group=group-owned (owner null, group_owned=1)");
+            in.line("link target: " + item_rec(F::gInventory.getItem(U(0x32, 1))) + " (its type is the link's type token)");
+            in.line("worn: attached = the worn id is attached; wearable = worn by gAgentWearables; gesture = an active gesture; the worn id is the target for links");
+            in.line("case id: <kind>.<worn>.<owner>.<owner mask: C/c copy, M/m modify, T/t transfer>.e<everyone copy>.b<f: base full, nt: base without transfer>.a<avatar valid>");
+            in.line("in: t=asset type l=link o=owner kind base/own/grp/evr/nxt = the masks after LLPermissions::initMasks");
+            in.line("out: g=isInventoryGiveAcceptable gg=isInventoryGroupGiveAcceptable tc=itemTransferCommonlyAllowed gv=LLGiveable/countNoCopy uc=LLUncopyableItems dt=LLDroppableItem(true)/countNoCopy dn=LLDroppableItem(false)/countNoCopy dc=LLDropCopyableItems");
+            F::ev().lines.clear();
+        }
         for (const TypeSpec& t : types)
         for (S32 worn = 0; worn < 4; ++worn)
         for (S32 owner = 0; owner < 3; ++owner)
@@ -1524,23 +1884,62 @@ namespace r4b_oracle
             if (worn == 2) F::gAgentWearables.worn.insert(worn_id);
             if (worn == 3) F::LLGestureMgr::instance().active.insert(worn_id);
             F::LLViewerInventoryItem* it = F::gInventory.getItem(item_id);
-            std::string c = F::fmt("%s.worn_%s.owner_%s.mask_%s%s%s.everyone_copy%d.base_%s.avatar%d", t.id, worns[worn], owners[owner],
-                                     copy ? "C" : "c", mod ? "M" : "m", transfer ? "T" : "t", everyone_copy, base_full ? "full" : "notransfer",
+            std::string c = F::fmt("%s.%s.%s.%s%s%s.e%d.b%s.a%d", t.id, worns[worn], owners[owner],
+                                     copy ? "C" : "c", mod ? "M" : "m", transfer ? "T" : "t", everyone_copy, base_full ? "f" : "nt",
                                      avatar);
+            {
+                // the item's record against the legend (case "legend")
+                const LLPermissions& pm = it->LLInventoryItem::getPermissions();
+                put(s, c, "in", F::fmt("t=%d l=%d o=%s base=%08x own=%08x grp=%08x evr=%08x nxt=%08x",
+                                       (S32)it->getActualType(), (S32)t.link, owners[owner],
+                                       pm.getMaskBase(), pm.getMaskOwner(), pm.getMaskGroup(), pm.getMaskEveryone(), pm.getMaskNextOwner()));
+            }
             S32 count = -1;
             std::string out;
-            out += F::fmt("give=%d", (S32)F::LLGiveInventory::isInventoryGiveAcceptable(it));
-            out += F::fmt(" group_give=%d", (S32)F::LLGiveInventory::isInventoryGroupGiveAcceptable(it));
-            out += F::fmt(" transfer_common=%d", (S32)F::LLInventoryCollectFunctor::itemTransferCommonlyAllowed(it));
-            bool g = F::eval_functor("giveable", nullptr, it, &count);
+            out += F::fmt("g=%d", (S32)D().is_give_acceptable(it));
+            out += F::fmt(" gg=%d", (S32)D().is_group_give_acceptable(it));
+            out += F::fmt(" tc=%d", (S32)D().transfer_commonly_allowed(it));
+            bool g = D().collect_functor("giveable", nullptr, it, &count);
+            out += F::fmt(" gv=%d/%d", (S32)g, count);
+            out += F::fmt(" uc=%d", (S32)D().collect_functor("uncopyable", nullptr, it, nullptr));
+            g = D().collect_functor("droppable_transfer", nullptr, it, &count);
+            out += F::fmt(" dt=%d/%d", (S32)g, count);
+            g = D().collect_functor("droppable_no_transfer", nullptr, it, &count);
+            out += F::fmt(" dn=%d/%d", (S32)g, count);
+            out += F::fmt(" dc=%d", (S32)D().collect_functor("drop_copyable", nullptr, it, nullptr));
+            put(s, c, "out", out);
+            F::ev().lines.clear();
+        }
+        // named permission rules: each changes the outcome against its neighbour
+        struct Rule { const char* id; std::function<LLPermissions()> perm; };
+        std::vector<Rule> rules = {
+            { "rule_owner_full_base_full", []() { return make_perms(AGENT, PERM_ALL, PERM_NONE, PERM_ALL); } },
+            { "rule_owner_copy_base_nocopy", []() { return make_perms(AGENT, PERM_ALL, PERM_NONE, PERM_ALL & ~PERM_COPY); } },
+            { "rule_owner_transfer_base_notransfer", []() { return make_perms(AGENT, PERM_ALL, PERM_NONE, PERM_ALL & ~PERM_TRANSFER); } },
+            { "rule_next_owner_copy", []() { LLPermissions p = make_perms(AGENT, PERM_ALL); p.initMasks(PERM_ALL, PERM_ALL, PERM_NONE, PERM_NONE, PERM_ALL); return p; } },
+            { "rule_next_owner_nocopy", []() { LLPermissions p = make_perms(AGENT, PERM_ALL); p.initMasks(PERM_ALL, PERM_ALL, PERM_NONE, PERM_NONE, PERM_ALL & ~PERM_COPY); return p; } },
+            { "rule_group_owned_atomic", []() { LLPermissions p = make_perms(AGENT, PERM_ALL, PERM_NONE, PERM_ALL, GROUP); p.setOwnerAndGroup(AGENT, LLUUID::null, GROUP, true); return p; } },
+            { "rule_group_owned_not_atomic", []() { LLPermissions p = make_perms(AGENT, PERM_ALL, PERM_NONE, PERM_ALL, GROUP); p.setOwnerAndGroup(AGENT, LLUUID::null, GROUP, false); return p; } },
+            { "rule_other_owner_everyone_copy", []() { return make_perms(OTHER2, PERM_ALL, PERM_COPY); } },
+            { "rule_other_owner_everyone_none", []() { return make_perms(OTHER2, PERM_ALL, PERM_NONE); } },
+        };
+        for (const Rule& r : rules)
+        {
+            setup();
+            F::gAgent.mGroups.insert(GROUP);
+            F::LLViewerInventoryItem* it = add_item(U(0x31, 1), ROOT, 7, r.perm(), "item");
+            put_items(s, r.id, { it });
+            S32 count = -1;
+            std::string out;
+            out += F::fmt("give=%d", (S32)D().is_give_acceptable(it));
+            out += F::fmt(" group_give=%d", (S32)D().is_group_give_acceptable(it));
+            bool g = D().collect_functor("giveable", nullptr, it, &count);
             out += F::fmt(" giveable=%d/%d", (S32)g, count);
-            out += F::fmt(" uncopyable=%d", (S32)F::eval_functor("uncopyable", nullptr, it, nullptr));
-            g = F::eval_functor("droppable_transfer", nullptr, it, &count);
+            out += F::fmt(" uncopyable=%d", (S32)D().collect_functor("uncopyable", nullptr, it, nullptr));
+            g = D().collect_functor("droppable_transfer", nullptr, it, &count);
             out += F::fmt(" droppable_transfer=%d/%d", (S32)g, count);
-            g = F::eval_functor("droppable_no_transfer", nullptr, it, &count);
-            out += F::fmt(" droppable_no_transfer=%d/%d", (S32)g, count);
-            out += F::fmt(" drop_copyable=%d", (S32)F::eval_functor("drop_copyable", nullptr, it, nullptr));
-            put(s, c, "result", out);
+            out += F::fmt(" drop_copyable=%d", (S32)D().collect_functor("drop_copyable", nullptr, it, nullptr));
+            put(s, r.id, "result", out);
             F::ev().lines.clear();
         }
         // categories: every functor on a category alone
@@ -1550,7 +1949,7 @@ namespace r4b_oracle
         for (const char* f : { "giveable", "uncopyable", "droppable_transfer", "droppable_no_transfer", "drop_copyable" })
         {
             S32 count = -1;
-            bool r = F::eval_functor(f, cc, nullptr, &count);
+            bool r = D().collect_functor(f, cc, nullptr, &count);
             out += F::fmt("%s%s=%d/%d", out.empty() ? "" : " ", f, (S32)r, count);
         }
         put(s, "category_only", "result", out);
@@ -1558,14 +1957,14 @@ namespace r4b_oracle
         for (const char* f : { "giveable", "uncopyable", "droppable_transfer", "droppable_no_transfer", "drop_copyable" })
         {
             S32 count = -1;
-            bool r = F::eval_functor(f, nullptr, nullptr, &count);
+            bool r = D().collect_functor(f, nullptr, nullptr, &count);
             out += F::fmt("%s%s=%d/%d", out.empty() ? "" : " ", f, (S32)r, count);
         }
         put(s, "null_both", "result", out);
         put(s, "null_item", "result", F::fmt("give=%d group_give=%d transfer_common=%d",
-                                               (S32)F::LLGiveInventory::isInventoryGiveAcceptable(nullptr),
-                                               (S32)F::LLGiveInventory::isInventoryGroupGiveAcceptable(nullptr),
-                                               (S32)F::LLInventoryCollectFunctor::itemTransferCommonlyAllowed(nullptr)));
+                                               (S32)D().is_give_acceptable(nullptr),
+                                               (S32)D().is_group_give_acceptable(nullptr),
+                                               (S32)D().transfer_commonly_allowed(nullptr)));
         F::ev().lines.clear();
     }
 
@@ -1624,7 +2023,14 @@ namespace r4b_oracle
             if (type == 6) F::gAgentAvatarp->mAttachments.insert(it->getUUID());
             else F::gAgentWearables.worn.insert(it->getUUID());
         }
-        F::EAcceptance r = F::LLToolDragAndDrop::willObjectAcceptInventory(a.null_obj ? nullptr : &obj, a.null_item ? nullptr : it,
+        {
+            const LLPermissions& pm = it->LLInventoryItem::getPermissions();
+            put(s, cid, "in", F::fmt("pcode=%d t=%d o=%s base=%08x own=%08x evr=%08x dad=%d",
+                                     (S32)obj.mPCode, (S32)it->getActualType(), a.item_owner_agent ? "agent" : "other",
+                                     pm.getMaskBase(), pm.getMaskOwner(), pm.getMaskEveryone(),
+                                     a.dad_category ? (S32)F::DAD_CATEGORY : (S32)F::DAD_NOTECARD));
+        }
+        F::EAcceptance r = D().will_object_accept(a.null_obj ? nullptr : &obj, a.null_item ? nullptr : it,
                                                                             a.dad_category ? F::DAD_CATEGORY : F::DAD_NOTECARD);
         put(s, cid, "result", F::fmt("%d %s", (S32)r, kAcceptNames[(S32)r]));
         F::ev().lines.clear();
@@ -1646,9 +2052,22 @@ namespace r4b_oracle
         }
     }
 
+    static void will_accept_legend(Sink& s)
+    {
+        Inputs in{ s, "legend" };
+        in.line("object " + U(0x41, 1).asString() + " root " + U(0x41, 2).asString() + " (sitting_on=root: the avatar sits on that root; object: on the object)");
+        in.line("item " + U(0x42, 1).asString() + " name=\"drop\" creator=" + CREATOR.asString() + " group=null flags=0; parent " + ROOT.asString() +
+                " or the object; link (type 24) to " + U(0x42, 2).asString() + " (a notecard owned by the agent, PERM_ALL)");
+        in.line("perm: next=7fffffff group=0; worn=1: attached for objects, worn by gAgentWearables otherwise");
+        in.line("owners: agent=" + AGENT.asString() + " other=" + OTHER2.asString() + "; pcode 9 = LL_PCODE_VOLUME, 47 = not a volume");
+        in.line("case id: obj_m<perm modify>_a<allow inventory drop>_o<you own it>_v<volume>_att<attachment>.item_own<owned by agent>_t<transfer in owner mask>_u<base unrestricted>_<kind>_w<worn>_f<finished>_p<parent is the object>.dad_<item|category>.rlv<0 off, 1 on, 2 locked attachment, 3 @unsit sitting on the root, 4 @sittp sitting elsewhere>");
+        in.line("in: pcode, t=asset type, o=item owner, base/own/evr = the item's masks after initMasks, dad=the EDragAndDropType passed");
+    }
+
     // committed in full: RLV off, an item drop, finished, not from the object itself
     static void corpus_will_accept(Sink& s)
     {
+        will_accept_legend(s);
         for_each_accept_case([&s](const AcceptCase& a) {
             if (a.rlv == 0 && !a.dad_category && a.finished && !a.parent_is_object) run_accept(s, a, accept_id(a));
         });
@@ -1663,12 +2082,23 @@ namespace r4b_oracle
     // every combination, digest + sample
     static void corpus_will_accept_sweep(Sink& s)
     {
+        will_accept_legend(s);
         for_each_accept_case([&s](const AcceptCase& a) { run_accept(s, a, accept_id(a)); });
     }
 
     // ============================== set 7: move_inv_category_world_to_agent
     static void corpus_world_to_agent(Sink& s)
     {
+        {
+            Inputs in{ s, "legend" };
+            in.line("object " + U(0x51, 1).asString() + " category " + U(0x54, 1).asString() + "; the task inventory root (" + U(0x51, 1).asString() +
+                    ", AT_CATEGORY \"Contents\") comes first and is filtered out");
+            in.line("contents position i (1-based): id 00000052-0000-4000-8000-<i as 12 hex digits>, a notecard named \"item <i-1>\" with asset 00000053-...-<i>, creator " +
+                    CREATOR.asString() + ", owner (and last owner) the agent if you_owner=1 else " + OTHER2.asString() + ", group null");
+            in.line(F::fmt("c: base=%08x owner_mask=%08x everyone=%08x; n: base=%08x owner_mask=%08x everyone=%08x; t: base=%08x owner_mask=%08x everyone=%08x; x: an LLInventoryObject of type AT_OBJECT named \"inv_object\" (not an item)",
+                           PERM_ALL, PERM_ALL, PERM_COPY, PERM_ALL, perm_mask(false, true, true), PERM_NONE, PERM_ALL, perm_mask(true, true, false), PERM_COPY));
+            in.line("passes: the last 12 hex digits of the ids the filter's check() accepts; filter_types 1 = FILTERTYPE_OBJECT, 8 = FILTERTYPE_DATE");
+        }
         // contents kinds: c = copy+transfer (acceptable), n = no copy, t = no transfer to agent, x = a non-item object
         const char* kinds = "cntx";
         std::vector<std::string> seqs = { "" };
@@ -1715,7 +2145,15 @@ namespace r4b_oracle
             }
             if (exists) F::gObjectList.objects[obj->mID] = obj;
             F::ev().lines.clear();
-            bool r = F::move_inv_category_world_to_agent(obj->mID, U(0x54, 1), drop, NULL, NULL, filter ? &flt : NULL);
+            {
+                const std::string cid = F::fmt("seq_%s.owned%d.filter%d.drop%d.exists%d", seq.empty() ? "empty" : seq.c_str(), owned, filter, drop, exists);
+                std::string passes;
+                for (const LLUUID& id : flt.mPasses) passes += (passes.empty() ? "" : ",") + id.asString().substr(24);
+                put(s, cid, "input", F::fmt("object found=%d you_owner=%d drop=%d filter_types=%llu passes=[%s] contents=%s",
+                                            exists, owned, drop, (unsigned long long)flt.mTypes, passes.c_str(),
+                                            seq.empty() ? "-" : seq.c_str()));
+            }
+            bool r = D().world_to_agent(obj->mID, U(0x54, 1), drop, filter ? &flt : NULL);
             F::ev().add(F::fmt("result %d", (S32)r));
             put_events(s, F::fmt("seq_%s.owned%d.filter%d.drop%d.exists%d", seq.empty() ? "empty" : seq.c_str(), owned, filter, drop, exists));
             F::gObjectList.objects.clear();
@@ -1763,7 +2201,6 @@ namespace r4b_oracle
             }
             uuid_vec_t avatars;
             for (int i = 0; i < sc.avatars; ++i) avatars.push_back(i == 0 ? OTHER : OTHER2);
-            F::share_set_avatars(avatars);
             F::ev().lines.clear();
             LLSD notification;
             notification["name"] = "ShareItemsConfirmation";
@@ -1773,8 +2210,16 @@ namespace r4b_oracle
             notification["form"].append(btn_cancel);
             LLSD response;
             response[sc.option == 0 ? "OK" : "Cancel"] = true;
+            put_world(s, sc.id);
+            {
+                Inputs in{ s, sc.id };
+                in.n = 90;
+                std::string av;
+                for (const LLUUID& a : avatars) av += " " + a.asString();
+                in.line(F::fmt("share option=%d avatars=[", sc.option) + av + " ] selected=" + ids_list(selected));
+            }
             F::ev().add(F::fmt("share option=%d selected=%d avatars=%d", sc.option, (S32)selected.size(), sc.avatars));
-            F::share_give_inventory_cb(notification, response, selected);
+            D().share(avatars, notification, response, selected);
             run_idle();
             put_events(s, sc.id);
         }
@@ -1795,8 +2240,9 @@ namespace r4b_oracle
             for (U8& x : bucket) x = (U8)rng.below(256);
             bool null_bucket = rng.below(10) == 0;
             EInstantMessage dialog = (EInstantMessage)rng.below(43);
+            bool from_group = rng.coin();
             F::ev().lines.clear();
-            F::pack_instant_message(F::gMessageSystem, AGENT, rng.coin(), SESSION, OTHER, "Oracle Tester", name, IM_ONLINE, dialog, TXN, 0,
+            F::pack_instant_message(F::gMessageSystem, AGENT, from_group, SESSION, OTHER, "Oracle Tester", name, IM_ONLINE, dialog, TXN, 0,
                                     LLUUID::null, LLVector3(1.f, 2.f, 3.f), NO_TIMESTAMP, null_bucket ? nullptr : bucket.data(), bsize);
             F::gAgent.sendReliableMessage();
             put_events(s, F::fmt("pack_%04d", i));
@@ -1828,7 +2274,10 @@ namespace r4b_oracle
             bool null_bucket = rng.below(8) == 0;
             EInstantMessage dialog = (EInstantMessage)rng.below(43);
             bool from_group = rng.coin();
-            LLVector3 pos((F32)rng.below(256), (F32)rng.below(256), (F32)rng.below(4096) / 7.f);
+            U32 pos_z = rng.below(4096);
+            U32 pos_y = rng.below(256);
+            U32 pos_x = rng.below(256);
+            LLVector3 pos((F32)pos_x, (F32)pos_y, (F32)pos_z / 7.f);
             F::ev().lines.clear();
             // live: the real pack_instant_message
             F::pack_instant_message(F::gMessageSystem, AGENT, from_group, SESSION, OTHER, "Oracle Tester", name, IM_ONLINE, dialog, TXN,
@@ -1897,17 +2346,23 @@ namespace r4b_oracle
             setup();
             s_node_counter = 0;
             std::function<Node(int)> gen = [&](int depth) {
-                Node n = cat(F::fmt("f%d", (S32)rng.below(100)));
+                U32 cat_name = rng.below(100);
+                Node n = cat(F::fmt("f%d", (S32)cat_name));
                 n.incomplete = rng.below(25) == 0;
                 int kids = (int)rng.below(depth >= 3 ? 4 : 9);
                 for (int k = 0; k < kids; ++k)
                 {
-                    if (depth < 3 && rng.below(4) == 0) n.children.push_back(gen(depth + 1));
+                    bool sub = depth < 3 && rng.below(4) == 0; // no draw at depth 3
+                    if (sub) n.children.push_back(gen(depth + 1));
                     else
                     {
                         static const S32 types[] = { 0, 5, 6, 7, 10, 13, 20, 21, 24 };
-                        Node it = item(F::fmt("i%d", (S32)rng.below(1000)), types[rng.below(9)], rng.below(4) != 0, rng.below(6) != 0,
-                                       rng.below(8) == 0 ? 1 + (S32)rng.below(2) : 0);
+                        S32 worn = rng.below(8) == 0 ? 1 + (S32)rng.below(2) : 0;
+                        bool transfer = rng.below(6) != 0;
+                        bool copy = rng.below(4) != 0;
+                        S32 type = types[rng.below(9)];
+                        U32 item_name = rng.below(1000);
+                        Node it = item(F::fmt("i%d", (S32)item_name), type, copy, transfer, worn);
                         n.children.push_back(it);
                     }
                 }
@@ -1915,11 +2370,17 @@ namespace r4b_oracle
             };
             Node root = gen(0);
             build(root, ROOT);
-            F::LLWorld::getInstance()->mMaxInventoryItemsTransfer = rng.below(5) == 0 ? 100 : 42;
+            S32 limit = rng.below(5) == 0 ? 100 : 42;
+            F::LLWorld::getInstance()->mMaxInventoryItemsTransfer = limit;
             F::ev().lines.clear();
-            bool r = F::LLGiveInventory::doGiveInventoryCategory(OTHER, F::gInventory.getCategory(root.id), LLUUID::null, std::string());
+            put_world(s, F::fmt("folder_%04d", i));
+            bool r = D().give_category(OTHER, F::gInventory.getCategory(root.id), LLUUID::null, std::string());
             F::ev().add(F::fmt("result %d", (S32)r));
-            if (!F::world().pending.empty()) respond_pending(rng.below(4) == 0 ? 1 : 0);
+            if (!F::world().pending.empty())
+            {
+                S32 option = rng.below(4) == 0 ? 1 : 0; // drawn only when a question is pending
+                respond_pending(option);
+            }
             run_idle();
             put_events(s, F::fmt("folder_%04d", i));
         }
@@ -1937,8 +2398,14 @@ namespace r4b_oracle
             LLPermissions perm;
             const LLUUID owners[] = { AGENT, OTHER2, LLUUID::null };
             S32 o = rng.below(3);
-            perm.init(CREATOR, owners[o], owners[o], rng.coin() ? GROUP : LLUUID::null);
-            perm.initMasks((U32)rng.next(), (U32)rng.next(), (U32)rng.next(), (U32)rng.next(), (U32)rng.next());
+            bool with_group = rng.coin();
+            perm.init(CREATOR, owners[o], owners[o], with_group ? GROUP : LLUUID::null);
+            U32 next_mask = (U32)rng.next();
+            U32 group_mask = (U32)rng.next();
+            U32 everyone_mask = (U32)rng.next();
+            U32 owner_mask = (U32)rng.next();
+            U32 base_mask = (U32)rng.next();
+            perm.initMasks(base_mask, owner_mask, everyone_mask, group_mask, next_mask);
             if (o == 2) perm.setOwnerAndGroup(LLUUID::null, LLUUID::null, GROUP, true);
             S32 type = types[rng.below(11)];
             add_item(U(0x71, 2), ROOT, 7, make_perms(AGENT, PERM_ALL), "target");
@@ -1952,16 +2419,211 @@ namespace r4b_oracle
             std::string out = F::fmt("perm base=%08x owner=%08x group=%08x everyone=%08x next=%08x owner_kind=%d type=%d worn=%d avatar=%d ->",
                                        perm.getMaskBase(), perm.getMaskOwner(), perm.getMaskGroup(), perm.getMaskEveryone(),
                                        perm.getMaskNextOwner(), o, type, worn, (S32)F::gAgentAvatarp->mValid);
-            out += F::fmt(" give=%d", (S32)F::LLGiveInventory::isInventoryGiveAcceptable(it));
-            out += F::fmt(" group_give=%d", (S32)F::LLGiveInventory::isInventoryGroupGiveAcceptable(it));
-            bool g = F::eval_functor("giveable", nullptr, it, &count);
+            out += F::fmt(" give=%d", (S32)D().is_give_acceptable(it));
+            out += F::fmt(" group_give=%d", (S32)D().is_group_give_acceptable(it));
+            bool g = D().collect_functor("giveable", nullptr, it, &count);
             out += F::fmt(" giveable=%d/%d", (S32)g, count);
-            out += F::fmt(" uncopyable=%d", (S32)F::eval_functor("uncopyable", nullptr, it, nullptr));
-            g = F::eval_functor("droppable_transfer", nullptr, it, &count);
+            out += F::fmt(" uncopyable=%d", (S32)D().collect_functor("uncopyable", nullptr, it, nullptr));
+            g = D().collect_functor("droppable_transfer", nullptr, it, &count);
             out += F::fmt(" droppable_transfer=%d/%d", (S32)g, count);
-            out += F::fmt(" drop_copyable=%d", (S32)F::eval_functor("drop_copyable", nullptr, it, nullptr));
+            out += F::fmt(" drop_copyable=%d", (S32)D().collect_functor("drop_copyable", nullptr, it, nullptr));
             put(s, F::fmt("pred_%05d", i), "result", out);
             F::ev().lines.clear();
+        }
+    }
+
+    // ======================================== F8: offline offers (ReadOfflineMsgs)
+    static void corpus_offline(Sink& s)
+    {
+        struct Off { const char* id; std::function<LLSD()> msg; S32 respond_button; bool forced; };
+        auto msg = [](S32 dialog, const std::vector<U8>& bucket, bool has_bucket) {
+            LLSD m;
+            m["from_agent_id"] = OTHER;
+            m["from_group"] = 0;
+            m["to_agent_id"] = AGENT;
+            m["dialog"] = dialog;
+            m["transaction-id"] = TXN;
+            m["timestamp"] = 1700000000;
+            m["from_agent_name"] = dialog == IM_TASK_INVENTORY_OFFERED ? "Gadget" : "Sender Resident";
+            m["message"] = dialog == IM_TASK_INVENTORY_OFFERED ? "'Gadget'  ( http://slurl.com/secondlife/Region/1/2/3 )" : "Gift";
+            m["region_id"] = U(0x9e, 1);
+            m["position"] = LLVector3(1.f, 2.f, 3.f).getValue();
+            if (has_bucket) m["binary_bucket"] = bucket;
+            return m;
+        };
+        std::vector<Off> cases = {
+            { "agent_offer_keep", [&]() { return msg(IM_INVENTORY_OFFERED, agent_bucket(7, OFFERED), true); }, 0, false },
+            { "agent_offer_discard", [&]() { return msg(IM_INVENTORY_OFFERED, agent_bucket(7, OFFERED), true); }, 1, false },
+            { "agent_offer_no_bucket_key", [&]() { return msg(IM_INVENTORY_OFFERED, {}, false); }, 0, false },
+            { "agent_offer_transaction_from_asset_id", [&]() { LLSD m = msg(IM_INVENTORY_OFFERED, agent_bucket(7, OFFERED), true);
+                m["transaction-id"] = LLUUID::null; m["asset_id"] = U(0xd4, 2); return m; }, 0, false },
+            { "task_offer_keep_replies_to_region_host", [&]() { return msg(IM_TASK_INVENTORY_OFFERED, { 7 }, true); }, 0, false },
+            { "task_offer_discard_replies_to_region_host", [&]() { return msg(IM_TASK_INVENTORY_OFFERED, { 7 }, true); }, 1, false },
+            { "task_offer_no_bucket_key", [&]() { return msg(IM_TASK_INVENTORY_OFFERED, {}, false); }, 0, false },
+            { "task_offer_from_group_string_Y", [&]() { LLSD m = msg(IM_TASK_INVENTORY_OFFERED, { 7 }, true); m["from_group"] = "Y"; return m; }, 0, false },
+            { "task_offer_local_position", [&]() { LLSD m = msg(IM_TASK_INVENTORY_OFFERED, { 7 }, true); m.erase("position");
+                m["local_x"] = 4.5; m["local_y"] = 5.5; m["local_z"] = 6.5; return m; }, 0, false },
+            { "group_notice_asset_id_is_group", [&]() { LLSD m = msg(IM_GROUP_NOTICE, str_bucket("7|7|Notice Item"), true);
+                m["asset_id"] = GROUP; m["message"] = "Subject|Body"; return m; }, 0, true },
+            { "group_notice_binary_bucket", [&]() { LLSD m = msg(IM_GROUP_NOTICE, notice_bucket(1, 7, GROUP, "Notice Item"), true);
+                m["message"] = "Subject|Body"; return m; }, 0, true },
+        };
+        for (const Off& c : cases)
+        {
+            setup();
+            install_snapshot_hook();
+            LLSD messages = LLSD::emptyArray();
+            messages.append(c.msg());
+            F::ev().lines.clear();
+            {
+                Inputs in{ s, c.id };
+                in.line("messages " + F::sd_notation(messages));
+                in.line("agent_region_host " + F::gAgent.mRegionHost.getIPandPort());
+            }
+            D().receive_offline(messages);
+            F::ev().add("stage main_coro");
+            run_idle();
+            F::ev().add(F::fmt("stage response %s button=%d", c.forced ? "forced" : "interactive", c.respond_button));
+            if (!F::world().posted.empty())
+            {
+                F::LLNotificationPtr n = F::LLNotifications::instance().find(F::world().posted.back().id);
+                F::LLOfferInfo* info = n ? dynamic_cast<F::LLOfferInfo*>(n->mResponder.get()) : nullptr;
+                if (info && c.forced) D().force_response(info, c.respond_button);
+                else if (n)
+                {
+                    LLSD response;
+                    LLSD form = n->getForm() ? n->getForm()->asLLSD() : LLSD::emptyArray();
+                    for (S32 i = 0; i < form.size(); ++i)
+                        if (form[i]["index"].asInteger() == c.respond_button) response[form[i]["name"].asString()] = true;
+                    n->respond(response);
+                }
+            }
+            else if (F::world().group_notice_payload.has("inventory_offer"))
+            {
+                F::LLOfferInfo* o = D().offer_from_llsd(F::world().group_notice_payload["inventory_offer"]);
+                D().force_response(o, c.respond_button);
+                if (F::live_responders().count(o)) { F::ev().on = false; delete o; F::ev().on = true; }
+            }
+            run_idle();
+            put_events(s, c.id);
+        }
+    }
+
+    // ========================================= F8: drag-and-drop give acceptance
+    static void corpus_drag_give(Sink& s)
+    {
+        const char* kinds[] = { "dad3dGiveInventoryObject", "dad3dGiveInventory", "dad3dGiveInventoryCategory" };
+        const char* accept_names[] = { "ACCEPT_POSTPONED", "ACCEPT_NO", "ACCEPT_NO_CUSTOM", "ACCEPT_NO_LOCKED",
+                                       "ACCEPT_YES_COPY_SINGLE", "ACCEPT_YES_SINGLE", "ACCEPT_YES_COPY_MULTI", "ACCEPT_YES_MULTI" };
+        // handleGiveDragAndDrop: IM sessions, profiles, the avatar picker
+        struct H { const char* id; F::EDragAndDropType type; S32 state; bool share_blocked; bool drop; bool session; bool name_cached; };
+        // state: 0 copyable item in inventory, 1 worn object, 2 not in inventory, 3 category, 4 no-transfer item
+        std::vector<H> hs;
+        const std::pair<const char*, F::EDragAndDropType> types[] = {
+            { "texture", F::DAD_TEXTURE }, { "object", F::DAD_OBJECT }, { "notecard", F::DAD_NOTECARD }, { "category", F::DAD_CATEGORY },
+            { "callingcard", F::DAD_CALLINGCARD }, { "settings", F::DAD_SETTINGS }, { "material", F::DAD_MATERIAL },
+            { "link", F::DAD_LINK }, { "widget", F::DAD_WIDGET }, { "person", F::DAD_PERSON } };
+        for (auto& t : types)
+            for (S32 state = 0; state < 5; ++state)
+                for (int blocked = 0; blocked < 2; ++blocked)
+                    hs.push_back({ nullptr, t.second, state, (bool)blocked, false, false, false });
+        int k = 0;
+        for (H& h : hs)
+        {
+            setup();
+            const LLUUID id = U(0x81, 1);
+            LLInventoryObject* cargo = nullptr;
+            if (h.state == 3) cargo = add_cat(id, ROOT, "Dragged Folder");
+            else
+            {
+                F::LLViewerInventoryItem* it = new F::LLViewerInventoryItem(id, ROOT, make_perms(AGENT, perm_mask(true, true, h.state != 4)),
+                                                                            U(0x82, 1), h.state == 1 ? LLAssetType::AT_OBJECT : LLAssetType::AT_NOTECARD,
+                                                                            LLInventoryType::IT_NOTECARD, "Dragged");
+                if (h.state != 2) F::gInventory.addItem(it);
+                cargo = it;
+                if (h.state == 1) F::gAgentAvatarp->mAttachments.insert(id);
+            }
+            LLPointer<LLInventoryObject> keep = cargo;
+            F::world().rlv_enabled = h.share_blocked;
+            if (h.share_blocked) F::world().rlv_share_blocked.insert(OTHER);
+            std::string cid = F::fmt("handle_%02d_type%d_state%d_blocked%d", k++, (S32)h.type, h.state, (S32)h.share_blocked);
+            F::ev().lines.clear();
+            put(s, cid, "input", (h.state == 3 ? cat_rec(F::gInventory.getCategory(id)) : item_rec(dynamic_cast<LLInventoryItem*>(cargo))) +
+                                 F::fmt(" | in_model=%d attached=%d rlv=%d share_blocked_for=%s dest=%s", (S32)(h.state != 2),
+                                        (S32)(h.state == 1), (S32)h.share_blocked, h.share_blocked ? OTHER.asString().c_str() : "-",
+                                        OTHER.asString().c_str()));
+            F::EAcceptance accept = F::ACCEPT_POSTPONED;
+            bool handled = D().give_drag_and_drop(OTHER, LLUUID::null, false, h.type, cargo, &accept, LLSD());
+            F::ev().add(F::fmt("result handled=%d accept=%d %s", (S32)handled, (S32)accept, accept_names[accept]));
+            put_events(s, cid);
+        }
+        // drops: the confirmation and its answer
+        struct Drop { const char* id; bool session; bool name_cached; S32 answer; bool folder; };
+        const Drop drops[] = {
+            { "drop_no_session_name_cached_ok", false, true, 0, false },
+            { "drop_no_session_name_cached_cancel", false, true, 1, false },
+            { "drop_no_session_name_lookup_ok", false, false, 0, false },
+            { "drop_in_session_ok", true, true, 0, false },
+            { "drop_folder_ok", false, true, 0, true },
+        };
+        for (const Drop& d : drops)
+        {
+            setup();
+            const LLUUID id = U(0x81, 1);
+            LLInventoryObject* cargo = nullptr;
+            if (d.folder)
+            {
+                cargo = add_cat(id, ROOT, "Dragged Folder");
+                add_item(U(0x83, 1), id, 7, make_perms(AGENT, PERM_ALL), "inside");
+            }
+            else cargo = add_item(id, ROOT, 7, make_perms(AGENT, PERM_ALL), "Dragged");
+            if (!d.name_cached) F::LLAvatarNameCache::instance().names.erase(OTHER);
+            const LLUUID session = OTHER ^ AGENT;
+            if (d.session) F::LLIMModel::getInstance()->open_sessions.insert(session);
+            F::ev().lines.clear();
+            put_world(s, d.id);
+            F::EAcceptance accept = F::ACCEPT_POSTPONED;
+            bool handled = D().give_drag_and_drop(OTHER, d.session ? session : LLUUID::null, true, d.folder ? F::DAD_CATEGORY : F::DAD_NOTECARD,
+                                                  cargo, &accept, LLSD("avatarpicker"));
+            F::ev().add(F::fmt("result handled=%d accept=%d %s", (S32)handled, (S32)accept, accept_names[accept]));
+            run_idle();
+            if (!F::world().pending.empty()) respond_pending(d.answer);
+            run_idle();
+            put_events(s, d.id);
+        }
+        // drops on an avatar in world
+        for (int kind = 0; kind < 3; ++kind)
+        for (S32 source = 0; source < 2; ++source)       // agent, world
+        for (S32 state = 0; state < 4; ++state)          // 0 ok, 1 not finished, 2 no transfer, 3 worn
+        for (int blocked = 0; blocked < 2; ++blocked)
+        for (int has_obj = 0; has_obj < 2; ++has_obj)
+        for (int drop = 0; drop < 2; ++drop)
+        {
+            setup();
+            F::LLToolDragAndDrop tool;
+            tool.mSource = source ? F::LLToolDragAndDrop::SOURCE_WORLD : F::LLToolDragAndDrop::SOURCE_AGENT;
+            F::LLViewerObject avatar_obj;
+            avatar_obj.mID = OTHER;
+            F::LLViewerInventoryItem* it = add_item(U(0x84, 1), ROOT, kind == 0 ? 6 : 7, make_perms(AGENT, perm_mask(true, true, state != 2)), "Dropped");
+            it->mFinished = state != 1;
+            if (state == 3) F::gAgentAvatarp->mAttachments.insert(it->getUUID());
+            F::LLViewerInventoryCategory* cat = add_cat(U(0x85, 1), ROOT, "Dropped Folder");
+            add_item(U(0x86, 1), cat->getUUID(), 7, make_perms(AGENT, PERM_ALL), "inside");
+            tool.mItem = kind == 2 ? nullptr : it;
+            tool.mCat = kind == 2 ? cat : nullptr;
+            F::world().rlv_enabled = blocked;
+            if (blocked) F::world().rlv_share_blocked.insert(OTHER);
+            std::string cid = F::fmt("%s.source_%s.state%d.blocked%d.obj%d.drop%d", kinds[kind], source ? "world" : "agent", state, blocked, has_obj, drop);
+            F::ev().lines.clear();
+            put(s, cid, "input", (kind == 2 ? cat_rec(cat) : item_rec(it)) +
+                                 F::fmt(" | source=%d attached=%d rlv=%d share_blocked_for=%s avatar_object=%s", (S32)tool.mSource,
+                                        (S32)(state == 3), (S32)blocked, blocked ? OTHER.asString().c_str() : "-",
+                                        has_obj ? OTHER.asString().c_str() : "null"));
+            F::EAcceptance r = D().dad3d_give(kind, tool, has_obj ? &avatar_obj : nullptr, drop);
+            F::ev().add(F::fmt("result accept=%d %s", (S32)r, accept_names[r]));
+            run_idle();
+            if (!F::world().pending.empty()) respond_pending(0);
+            put_events(s, cid);
         }
     }
 
@@ -1976,19 +2638,23 @@ namespace r4b_oracle
             { "offer", "offerinfo_llsd", "set 5: LLOfferInfo asLLSD / LLOfferInfo(LLSD) round trips and crafted documents", false, 0, corpus_offerinfo_llsd },
             { "offer", "forced_response_index", "set 6: forceResponse element indexing (Show=0 Keep=1 Discard=2 Mute=3)", false, 0, corpus_forced_index },
             { "offer", "throttle", "set 6: check_offer_throttle traces", false, 0, corpus_throttle },
-            { "offer", "policy_present", "set 6 supplement: offered object already in the model, default settings", false, 0, corpus_policy_present },
+            { "offer", "policy_present", "set 6 supplement: offered object already in the model, default settings", true, 0, corpus_policy_present, 8 },
             { "offer", "policy", "set 6: the offer policy cross product (projection; see README)", true, 0, corpus_policy, POLICY_SAMPLE_MODULUS },
+            { "offer", "policy_response", "set 6 (F1): what changes between arrival and response (projection; see README)", true, 0, corpus_policy_response, RESPONSE_SAMPLE_MODULUS },
+            { "offer", "policy_named", "set 6: a readable named case for every section 9 risk and audited behaviour", false, 0, corpus_policy_named },
+            { "offer", "offline", "set 5/6 (F8): offers through the ReadOfflineMsgs capability; replies go to the agent's region host", false, 0, corpus_offline },
+            { "give", "drag_give", "set 7 (F8): handleGiveDragAndDrop and dad3dGiveInventory* acceptance (RLVa @share -> ACCEPT_NO_LOCKED)", false, 0, corpus_drag_give },
             { "give", "predicates", "set 7: give and drop predicate matrix", false, 0, corpus_predicates },
             { "give", "will_accept", "set 7: willObjectAcceptInventory (RLV off, item drop, finished, foreign parent)", false, 0, corpus_will_accept },
-            { "give", "will_accept_sweep", "set 7: willObjectAcceptInventory, every combination", true, 0, corpus_will_accept_sweep, 101 },
+            { "give", "will_accept_sweep", "set 7: willObjectAcceptInventory, every combination", true, 0, corpus_will_accept_sweep, 401 },
             { "give", "world_to_agent", "set 7: move_inv_category_world_to_agent accept test and move list", false, 0, corpus_world_to_agent },
             { "give", "share", "set 7: the share dialog callback (give_inventory_cb)", false, 0, corpus_share },
             { "give", "pack_sweep", "set 4: pack_instant_message over random names and buckets", true, 0x52344250414b0001ull,
-              [](Sink& s) { corpus_pack_sweep(s, 0x52344250414b0001ull); }, 50 },
+              [](Sink& s) { corpus_pack_sweep(s, 0x52344250414b0001ull); }, 100 },
             { "offer", "incoming_sweep", "set 5: random received offers", true, 0x5234424f46460002ull,
-              [](Sink& s) { corpus_incoming_sweep(s, 0x5234424f46460002ull); }, 30 },
+              [](Sink& s) { corpus_incoming_sweep(s, 0x5234424f46460002ull); }, 60 },
             { "give", "folder_sweep", "set 7: random folder trees given and answered", true, 0x523442464f4c0003ull,
-              [](Sink& s) { corpus_folder_sweep(s, 0x523442464f4c0003ull); }, 15 },
+              [](Sink& s) { corpus_folder_sweep(s, 0x523442464f4c0003ull); }, 60 },
             { "give", "predicate_sweep", "set 7: random permission masks through the predicates", true, 0x5234425052450004ull,
               [](Sink& s) { corpus_predicate_sweep(s, 0x5234425052450004ull); }, 100 },
         };

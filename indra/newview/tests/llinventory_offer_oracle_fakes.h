@@ -218,6 +218,7 @@ namespace r4b
         bool isDoNotDisturb() const { return mDoNotDisturb; }
         bool isInGroup(const LLUUID& id, bool ignore_god = false) const { return mGroups.count(id) != 0; }
         LLColor4U getEffectColor() const { return LLColor4U(255, 255, 255, 255); }
+        const LLHost& getRegionHost() const { return mRegionHost; }
         void sendReliableMessage();
     };
     extern FakeAgent gAgent;
@@ -408,6 +409,7 @@ namespace r4b
     public:
         std::string mUserName;
         std::string getUserName() const { return mUserName; }
+        std::string getCompleteName() const { return mUserName; }
     };
 
     class LLAvatarNameCache
@@ -628,6 +630,7 @@ namespace r4b
         std::string mName;
     private:
         void lookupName(const LLUUID& id, bool is_group);
+        void finishLookup(const LLUUID& id, bool is_group);
     };
 
     namespace LLNotificationsUI
@@ -709,6 +712,7 @@ namespace r4b
     public:
         static LLAppViewer* instance();
         void addOnIdleCallback(const std::function<void()>& cb);
+        void postToMainCoro(const std::function<void()>& cb);
         std::string getSecondLifeTitle() const { return "Vulkanstorm"; }
         std::vector<std::function<void()> > mIdle;
     };
@@ -741,6 +745,11 @@ namespace r4b
     class LLIMProcessing
     {
     public:
+        // forwards to the harness's process_offer_im (the ReadOfflineMsgs loop calls it)
+        static void processNewMessage(LLUUID from_id, bool from_group, LLUUID to_id, U8 offline, EInstantMessage dialog,
+                                      LLUUID session_id, U32 timestamp, std::string agentName, std::string message,
+                                      U32 parent_estate_id, LLUUID region_id, LLVector3 position, U8* binary_bucket,
+                                      S32 binary_bucket_size, LLHost& sender, LLSD metadata = LLSD(), LLUUID aux_id = LLUUID());
         static std::string getAutoresponseTextForAvatar(const LLUUID& from_id, bool is_do_not_disturb, bool is_autorespond,
                                                         bool is_autorespond_nonfriends, bool is_afk, bool send_away_response, bool is_friend);
     };
@@ -759,9 +768,11 @@ namespace r4b
     public:
         static LLIMModel* getInstance();
         static LLIMModel& instance() { return *getInstance(); }
-        void* findIMSession(const LLUUID& session_id) const;
+        struct LLIMSession { std::string mName; };
+        LLIMSession* findIMSession(const LLUUID& session_id) const;
         bool logToFile(const std::string& file_name, const std::string& from, const LLUUID& from_id, const std::string& line);
         std::set<LLUUID> open_sessions;
+        mutable LLIMSession mSession;
     };
 
     void notification_group_name_cb(const std::string& group_name, const std::string& sender, const std::string& subject,
@@ -911,6 +922,9 @@ namespace r4b
         bool rlv_locked_attachment = false;
         bool rlv_unsit = false;
         bool rlv_sittp = false;
+        // name lookups (avatar names, group names, postponed notifications)
+        // answer from idle instead of at once, as the real caches usually do
+        bool defer_name_lookups = false;
         // notifications marked live (interactive responses find them)
         EStartupState startup_state = STATE_STARTED;
         std::map<LLUUID, LLOfferInfo*> group_panel_offers;

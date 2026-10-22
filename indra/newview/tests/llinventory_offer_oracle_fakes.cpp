@@ -13,6 +13,7 @@
 #include "linden_common.h"
 #include "llinventory_offer_oracle_fakes.h"
 #include "llinventory_offer_oracle_copies.h"
+#include "llinventory_offer_oracle_boundary.h"
 
 #include "llsdserialize.h"
 #include "vkstorm_ffi.h"
@@ -502,6 +503,19 @@ namespace r4b
     }
 
     // --------------------------------------------------------------- names
+    static void name_answer(const std::string& what, const std::function<void()>& cb)
+    {
+        if (world().defer_name_lookups)
+        {
+            ev().add("name.deferred " + what);
+            LLAppViewer::instance()->mIdle.push_back(cb);
+        }
+        else
+        {
+            cb();
+        }
+    }
+
     LLAvatarNameCache& LLAvatarNameCache::instance()
     {
         static LLAvatarNameCache cache;
@@ -525,7 +539,7 @@ namespace r4b
             av.mUserName = "resolved." + id.asString().substr(0, 8);
         }
         ev().add("avatarname.lookup " + id.asString() + " -> \"" + esc(av.mUserName) + "\"");
-        slot(id, av);
+        name_answer("avatar " + id.asString(), [slot, id, av]() { slot(id, av); });
         return connection();
     }
 
@@ -543,7 +557,7 @@ namespace r4b
         std::string name;
         if (!getGroupName(group_id, name)) name = "Group " + group_id.asString().substr(0, 8);
         ev().add("cachename.getGroup " + group_id.asString() + " -> \"" + esc(name) + "\"");
-        callback(group_id, name, true);
+        name_answer("group " + group_id.asString(), [callback, group_id, name]() { callback(group_id, name, true); });
     }
 
     bool LLCacheName::getGroupName(const LLUUID& id, std::string& group)
@@ -559,7 +573,7 @@ namespace r4b
         std::string name;
         if (!getGroupName(id, name)) name = "Group " + id.asString().substr(0, 8);
         ev().add(fmt("cachename.get %s group=%d -> \"%s\"", id.asString().c_str(), (S32)is_group, esc(name).c_str()));
-        callback(id, name, is_group);
+        name_answer("cachename " + id.asString(), [callback, id, name, is_group]() { callback(id, name, is_group); });
     }
 
     // --------------------------------------------------------------- mutes
@@ -657,7 +671,15 @@ namespace r4b
         snapshot_offers("respond");
         if (mResponder)
         {
-            mResponder->handleRespond(asLLSD(), response);
+            // offer notifications answer through the W6/W7 seam
+            if (LLOfferInfo* offer = dynamic_cast<LLOfferInfo*>(mResponder.get()))
+            {
+                r4b_boundary::decisions().respond(offer, asLLSD(), response);
+            }
+            else
+            {
+                mResponder->handleRespond(asLLSD(), response);
+            }
         }
         else if (mFunctor)
         {
@@ -734,6 +756,17 @@ namespace r4b
 
     void LLPostponedNotification::lookupName(const LLUUID& id, bool is_group)
     {
+        if (world().defer_name_lookups)
+        {
+            ev().add("name.deferred postponed " + id.asString());
+            LLAppViewer::instance()->mIdle.push_back([this, id, is_group]() { finishLookup(id, is_group); });
+            return;
+        }
+        finishLookup(id, is_group);
+    }
+
+    void LLPostponedNotification::finishLookup(const LLUUID& id, bool is_group)
+    {
         if (is_group)
         {
             std::string name;
@@ -787,30 +820,35 @@ namespace r4b
     // through, in form order, frozen from skins/default/xui/en/notifications.xml
     // (usetemplate forms expanded). check_r4b_copies.py confirms the table.
     // R4B-FORMS-BEGIN
-    struct FormButton { const char* notification; const char* name; S32 index; bool is_default; };
+    // kind: the form element's tag; only buttons are runtime elements here
+    struct FormButton { const char* notification; const char* kind; const char* name; S32 index; bool is_default; };
     static const FormButton FORMS[] = {
-        { "ObjectGiveItem", "Keep", 0, false },
-        { "ObjectGiveItem", "Discard", 1, false },
-        { "ObjectGiveItem", "Mute", 2, false },
-        { "OwnObjectGiveItem", "Keep", 0, false },
-        { "OwnObjectGiveItem", "Discard", 1, false },
-        { "UserGiveItem", "Show", 3, false },
-        { "UserGiveItem", "Keep", 0, false },
-        { "UserGiveItem", "Discard", 1, false },
-        { "UserGiveItem", "Mute", 2, false },
-        { "UserGiveItemLegacy", "Show", 3, false },
-        { "UserGiveItemLegacy", "Accept", 0, false },
-        { "UserGiveItemLegacy", "Discard", 1, false },
-        { "UserGiveItemLegacy", "ShowSilent", 6, false },
-        { "UserGiveItemLegacy", "AcceptSilent", 4, false },
-        { "UserGiveItemLegacy", "DiscardSilent", 5, false },
-        { "UserGiveItemLegacy", "Mute", 2, false },
-        { "CannotCopyWarning", "OK_okcancelbuttons", 0, true },
-        { "CannotCopyWarning", "Cancel_okcancelbuttons", 1, false },
-        { "CannotCopyCountItems", "OK_okcancelbuttons", 0, true },
-        { "CannotCopyCountItems", "Cancel_okcancelbuttons", 1, false },
-        { "MoveInventoryFromObject", "OK_okcancelignore", 0, true },
-        { "MoveInventoryFromObject", "Cancel_okcancelignore", 1, false },
+        { "ObjectGiveItem", "button", "Keep", 0, false },
+        { "ObjectGiveItem", "button", "Discard", 1, false },
+        { "ObjectGiveItem", "button", "Mute", 2, false },
+        { "OwnObjectGiveItem", "button", "Keep", 0, false },
+        { "OwnObjectGiveItem", "button", "Discard", 1, false },
+        { "UserGiveItem", "button", "Show", 3, false },
+        { "UserGiveItem", "button", "Keep", 0, false },
+        { "UserGiveItem", "button", "Discard", 1, false },
+        { "UserGiveItem", "button", "Mute", 2, false },
+        { "UserGiveItemLegacy", "button", "Show", 3, false },
+        { "UserGiveItemLegacy", "button", "Accept", 0, false },
+        { "UserGiveItemLegacy", "button", "Discard", 1, false },
+        { "UserGiveItemLegacy", "button", "ShowSilent", 6, false },
+        { "UserGiveItemLegacy", "button", "AcceptSilent", 4, false },
+        { "UserGiveItemLegacy", "button", "DiscardSilent", 5, false },
+        { "UserGiveItemLegacy", "button", "Mute", 2, false },
+        { "CannotCopyWarning", "button", "OK_okcancelbuttons", 0, true },
+        { "CannotCopyWarning", "button", "Cancel_okcancelbuttons", 1, false },
+        { "CannotCopyCountItems", "button", "OK_okcancelbuttons", 0, true },
+        { "CannotCopyCountItems", "button", "Cancel_okcancelbuttons", 1, false },
+        { "MoveInventoryFromObject", "button", "OK_okcancelignore", 0, true },
+        { "MoveInventoryFromObject", "button", "Cancel_okcancelignore", 1, false },
+        { "MoveInventoryFromObject", "ignore", "", -1, false },
+        { "ShareItemsConfirmation", "button", "OK_okcancelignore", 0, true },
+        { "ShareItemsConfirmation", "button", "Cancel_okcancelignore", 1, false },
+        { "ShareItemsConfirmation", "ignore", "", -1, false },
     };
     // R4B-FORMS-END
 
@@ -819,7 +857,7 @@ namespace r4b
         LLSD form;
         for (const FormButton& b : FORMS)
         {
-            if (name != b.notification) continue;
+            if (name != b.notification || std::string(b.kind) != "button") continue;
             LLSD e;
             e["type"] = "button";
             e["name"] = b.name;
@@ -896,6 +934,25 @@ namespace r4b
         mIdle.push_back(cb);
     }
 
+    void LLAppViewer::postToMainCoro(const std::function<void()>& cb)
+    {
+        ev().add("main_coro.post");
+        mIdle.push_back(cb);
+    }
+
+    void LLIMProcessing::processNewMessage(LLUUID from_id, bool from_group, LLUUID to_id, U8 offline, EInstantMessage dialog,
+                                           LLUUID session_id, U32 timestamp, std::string agentName, std::string message,
+                                           U32 parent_estate_id, LLUUID region_id, LLVector3 position, U8* binary_bucket,
+                                           S32 binary_bucket_size, LLHost& sender, LLSD metadata, LLUUID aux_id)
+    {
+        ev().add(fmt("processNewMessage offline=%u dialog=%d from=%s group=%d session=%s aux=%s sender=%s size=%d bucket=",
+                     (U32)offline, (S32)dialog, from_id.asString().c_str(), (S32)from_group, session_id.asString().c_str(),
+                     aux_id.asString().c_str(), sender.getIPandPort().c_str(), binary_bucket_size) +
+                 hex(binary_bucket, binary_bucket_size));
+        process_offer_im(from_id, from_group, dialog, session_id, timestamp, agentName, message, binary_bucket,
+                         binary_bucket_size, sender, aux_id);
+    }
+
     LLRecentPeople& LLRecentPeople::instance()
     {
         static LLRecentPeople r;
@@ -952,9 +1009,11 @@ namespace r4b
         return &m;
     }
 
-    void* LLIMModel::findIMSession(const LLUUID& session_id) const
+    LLIMModel::LLIMSession* LLIMModel::findIMSession(const LLUUID& session_id) const
     {
-        return open_sessions.count(session_id) ? (void*)this : nullptr;
+        if (!open_sessions.count(session_id)) return nullptr;
+        mSession.mName = "session " + session_id.asString().substr(0, 8);
+        return &mSession;
     }
 
     bool LLIMModel::logToFile(const std::string& file_name, const std::string& from, const LLUUID& from_id, const std::string& line)

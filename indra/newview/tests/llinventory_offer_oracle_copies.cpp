@@ -2876,6 +2876,283 @@ bool move_inv_category_world_to_agent(const LLUUID& object_id,
 }
 // R4B-COPY-END world_to_agent
 
+// R4B-COPY-BEGIN dad_share_confirm
+// source: indra/newview/lltooldraganddrop.cpp
+// function: give_inventory_cb, show_object_sharing_confirmation, get_name_cb, LLToolDragAndDrop::handleGiveDragAndDrop
+// lines: 2231-2395
+// blob: c2bb754bcbc9e7241b3e6f49f4fb646b402ea7fc
+
+
+static void give_inventory_cb(const LLSD& notification, const LLSD& response)
+{
+    S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
+    // if Cancel pressed
+    if (option == 1)
+    {
+        return;
+    }
+
+    LLSD payload = notification["payload"];
+    const LLUUID& session_id = payload["session_id"];
+    const LLUUID& agent_id = payload["agent_id"];
+    LLViewerInventoryItem * inv_item =  gInventory.getItem(payload["item_id"]);
+    LLViewerInventoryCategory * inv_cat =  gInventory.getCategory(payload["item_id"]);
+    if (NULL == inv_item && NULL == inv_cat)
+    {
+        llassert( false );
+        return;
+    }
+    bool successfully_shared;
+    if (inv_item)
+    {
+        successfully_shared = LLGiveInventory::doGiveInventoryItem(agent_id, inv_item, session_id);
+    }
+    else
+    {
+        successfully_shared = LLGiveInventory::doGiveInventoryCategory(agent_id, inv_cat, session_id);
+    }
+    if (successfully_shared)
+    {
+        if ("avatarpicker" == payload["d&d_dest"].asString())
+        {
+            LLFloaterReg::hideInstance("avatar_picker");
+        }
+        LLNotificationsUtil::add("ItemsShared");
+    }
+}
+
+static void show_object_sharing_confirmation(const std::string name,
+                       LLInventoryObject* inv_item,
+                       const LLSD& dest,
+                       const LLUUID& dest_agent,
+                       const LLUUID& session_id = LLUUID::null)
+{
+    if (!inv_item)
+    {
+        llassert(NULL != inv_item);
+        return;
+    }
+    LLSD substitutions;
+    substitutions["RESIDENTS"] = name;
+    substitutions["ITEMS"] = inv_item->getName();
+    LLSD payload;
+    payload["agent_id"] = dest_agent;
+    payload["item_id"] = inv_item->getUUID();
+    payload["session_id"] = session_id;
+    payload["d&d_dest"] = dest.asString();
+    LLNotificationsUtil::add("ShareItemsConfirmation", substitutions, payload, &give_inventory_cb);
+}
+
+static void get_name_cb(const LLUUID& id,
+                        const LLAvatarName& av_name,
+                        LLInventoryObject* inv_obj,
+                        const LLSD& dest,
+                        const LLUUID& dest_agent)
+{
+    show_object_sharing_confirmation(av_name.getUserName(),
+                                     inv_obj,
+                                     dest,
+                                     id,
+                                     LLUUID::null);
+}
+
+// function used as drag-and-drop handler for simple agent give inventory requests
+//static
+bool LLToolDragAndDrop::handleGiveDragAndDrop(LLUUID dest_agent, LLUUID session_id, bool drop,
+                                              EDragAndDropType cargo_type,
+                                              void* cargo_data,
+                                              EAcceptance* accept,
+                                              const LLSD& dest)
+{
+// [RLVa:KB] - @share
+    if ( (RlvActions::isRlvEnabled()) && (!RlvActions::canGiveInventory(dest_agent)) )
+    {
+        *accept = ACCEPT_NO_LOCKED;
+        return true;
+    }
+// [/RLVa:KB]
+
+    // check the type
+    switch(cargo_type)
+    {
+    case DAD_TEXTURE:
+    case DAD_SOUND:
+    case DAD_LANDMARK:
+    case DAD_SCRIPT:
+    case DAD_OBJECT:
+    case DAD_NOTECARD:
+    case DAD_CLOTHING:
+    case DAD_BODYPART:
+    case DAD_ANIMATION:
+    case DAD_GESTURE:
+    case DAD_CALLINGCARD:
+    case DAD_MESH:
+    case DAD_CATEGORY:
+    case DAD_SETTINGS:
+    case DAD_MATERIAL:
+    {
+        LLInventoryObject* inv_obj = (LLInventoryObject*)cargo_data;
+        if(gInventory.getCategory(inv_obj->getUUID()) || (gInventory.getItem(inv_obj->getUUID())
+            && LLGiveInventory::isInventoryGiveAcceptable(dynamic_cast<LLInventoryItem*>(inv_obj))))
+        {
+            // *TODO: get multiple object transfers working
+            *accept = ACCEPT_YES_COPY_SINGLE;
+            if(drop)
+            {
+                LLIMModel::LLIMSession * session = LLIMModel::instance().findIMSession(session_id);
+
+                // If no IM session found get the destination agent's name by id.
+                if (NULL == session)
+                {
+                    LLAvatarName av_name;
+
+                    // If destination agent's name is found in cash proceed to showing the confirmation dialog.
+                    // Otherwise set up a callback to show the dialog when the name arrives.
+                    if (LLAvatarNameCache::get(dest_agent, &av_name))
+                    {
+                        show_object_sharing_confirmation(av_name.getUserName(), inv_obj, dest, dest_agent, LLUUID::null);
+                    }
+                    else
+                    {
+                        LLAvatarNameCache::get(dest_agent, boost::bind(&get_name_cb, _1, _2, inv_obj, dest, dest_agent));
+                    }
+
+                    return true;
+                }
+                std::string dest_name = session->mName;
+                LLAvatarName av_name;
+                if(LLAvatarNameCache::get(dest_agent, &av_name))
+                {
+                    dest_name = av_name.getCompleteName();
+                }
+                // If an IM session with destination agent is found item offer will be logged in this session.
+                show_object_sharing_confirmation(dest_name, inv_obj, dest, dest_agent, session_id);
+            }
+        }
+        else
+        {
+            // It's not in the user's inventory (it's probably
+            // in an object's contents), so disallow dragging
+            // it here.  You can't give something you don't
+            // yet have.
+            *accept = ACCEPT_NO;
+        }
+        break;
+    }
+    default:
+        *accept = ACCEPT_NO;
+        break;
+    }
+
+    return true;
+}
+// R4B-COPY-END dad_share_confirm
+
+// R4B-COPY-BEGIN dad_give_3d
+// source: indra/newview/lltooldraganddrop.cpp
+// function: LLToolDragAndDrop::dad3dGiveInventoryObject, dad3dGiveInventory, dad3dGiveInventoryCategory
+// lines: 3221-3315
+// blob: c2bb754bcbc9e7241b3e6f49f4fb646b402ea7fc
+EAcceptance LLToolDragAndDrop::dad3dGiveInventoryObject(
+    LLViewerObject* obj, S32 face, MASK mask, bool drop)
+{
+    LL_DEBUGS() << "LLToolDragAndDrop::dad3dGiveInventoryObject()" << LL_ENDL;
+
+    // item has to be in agent inventory.
+    if(mSource != SOURCE_AGENT) return ACCEPT_NO;
+
+    // find the item now.
+    LLViewerInventoryItem* item;
+    LLViewerInventoryCategory* cat;
+    locateInventory(item, cat);
+    if (!item || !item->isFinished()) return ACCEPT_NO;
+    if(!item->getPermissions().allowOperationBy(PERM_TRANSFER, gAgent.getID()))
+    {
+        // cannot give away no-transfer objects
+        return ACCEPT_NO;
+    }
+    LLVOAvatarSelf* avatar = gAgentAvatarp;
+    if(avatar && avatar->isWearingAttachment( item->getUUID() ) )
+    {
+        // You can't give objects that are attached to you
+        return ACCEPT_NO;
+    }
+    if( obj && avatar )
+    {
+// [RLVa:KB] - @share
+        if ( (obj) && (RlvActions::isRlvEnabled()) && (!RlvActions::canGiveInventory(obj->getID())) )
+        {
+            return ACCEPT_NO_LOCKED;
+        }
+// [/RLVa:KB]
+        if(drop)
+        {
+            LLGiveInventory::doGiveInventoryItem(obj->getID(), item );
+        }
+        // *TODO: deal with all the issues surrounding multi-object
+        // inventory transfers.
+        return ACCEPT_YES_SINGLE;
+    }
+    return ACCEPT_NO;
+}
+
+
+EAcceptance LLToolDragAndDrop::dad3dGiveInventory(
+    LLViewerObject* obj, S32 face, MASK mask, bool drop)
+{
+    LL_DEBUGS() << "LLToolDragAndDrop::dad3dGiveInventory()" << LL_ENDL;
+    // item has to be in agent inventory.
+    if(mSource != SOURCE_AGENT) return ACCEPT_NO;
+    LLViewerInventoryItem* item;
+    LLViewerInventoryCategory* cat;
+    locateInventory(item, cat);
+    if (!item || !item->isFinished()) return ACCEPT_NO;
+    if (!LLGiveInventory::isInventoryGiveAcceptable(item))
+    {
+        return ACCEPT_NO;
+    }
+// [RLVa:KB] - @share
+    if ( (obj) && (RlvActions::isRlvEnabled()) && (!RlvActions::canGiveInventory(obj->getID())) )
+    {
+        return ACCEPT_NO_LOCKED;
+    }
+// [/RLVa:KB]
+    if (drop && obj)
+    {
+        LLGiveInventory::doGiveInventoryItem(obj->getID(), item);
+    }
+    // *TODO: deal with all the issues surrounding multi-object
+    // inventory transfers.
+    return ACCEPT_YES_SINGLE;
+}
+
+EAcceptance LLToolDragAndDrop::dad3dGiveInventoryCategory(
+    LLViewerObject* obj, S32 face, MASK mask, bool drop)
+{
+    LL_DEBUGS() << "LLToolDragAndDrop::dad3dGiveInventoryCategory()" << LL_ENDL;
+// [RLVa:KB] - @share
+    if ( (obj) && (RlvActions::isRlvEnabled()) && (!RlvActions::canGiveInventory(obj->getID())) )
+    {
+        return ACCEPT_NO_LOCKED;
+    }
+// [/RLVa:KB]
+    if(drop && obj)
+    {
+        LLViewerInventoryItem* item;
+        LLViewerInventoryCategory* cat;
+        locateInventory(item, cat);
+        if(!cat) return ACCEPT_NO;
+        LLGiveInventory::doGiveInventoryCategory(obj->getID(), cat);
+    }
+    // *TODO: deal with all the issues surrounding multi-object
+    // inventory transfers.
+    return ACCEPT_YES_SINGLE;
+}
+// R4B-COPY-END dad_give_3d
+
+// llavataractions.cpp declares these in namespace action_give_inventory.
+namespace action_give_inventory
+{
 // R4B-COPY-BEGIN share_give_cb
 // source: indra/newview/llavataractions.cpp
 // function: action_give_inventory::LLShareInfo, give_inventory_cb
@@ -2971,6 +3248,101 @@ bool move_inv_category_world_to_agent(const LLUUID& object_id,
         }
     }
 // R4B-COPY-END share_give_cb
+
+} // namespace action_give_inventory
+
+// The ReadOfflineMsgs capability's message loop: the harness supplies the
+// array of messages the coroutine has validated.
+void process_offline_messages(LLSD messages)
+{
+// R4B-COPY-BEGIN offline_loop
+// source: indra/newview/llimprocessing.cpp
+// function: LLIMProcessing::requestOfflineMessagesCoro (the message loop)
+// lines: 2502-2581
+// blob: 8fa885d340173cce97bd512894040370f970b57a
+    LLHost sender = gAgent.getRegionHost();
+
+    LLSD::array_iterator i = messages.beginArray();
+    LLSD::array_iterator iEnd = messages.endArray();
+    for (; i != iEnd; ++i)
+    {
+        const LLSD &message_data(*i);
+
+        /* RIDER: Many fields in this message are using a '_' rather than the standard '-'.  This
+         * should be changed but would require tight coordination with the simulator.
+         */
+        LLVector3 position;
+        if (message_data.has("position"))
+        {
+            position.setValue(message_data["position"]);
+        }
+        else
+        {
+            position.set((F32)message_data["local_x"].asReal(), (F32)message_data["local_y"].asReal(), (F32)message_data["local_z"].asReal());
+        }
+
+        std::vector<U8> bin_bucket;
+        if (message_data.has("binary_bucket"))
+        {
+            bin_bucket = message_data["binary_bucket"].asBinary();
+        }
+        else
+        {
+            bin_bucket.push_back(0);
+        }
+
+        // Todo: once drtsim-451 releases, remove the string option
+        bool from_group;
+        if (message_data["from_group"].isInteger())
+        {
+            from_group = message_data["from_group"].asInteger();
+        }
+        else
+        {
+            from_group = message_data["from_group"].asString() == "Y";
+        }
+
+        LLSD metadata;
+        if (message_data.has("metadata"))
+        {
+            metadata = message_data["metadata"];
+        }
+
+        EInstantMessage dialog = static_cast<EInstantMessage>(message_data["dialog"].asInteger());
+        LLUUID session_id = message_data["transaction-id"].asUUID();
+        if (session_id.isNull() && dialog == IM_FROM_TASK)
+        {
+            session_id = message_data["asset_id"].asUUID();
+        }
+
+        LLAppViewer::instance()->postToMainCoro([=]()
+            {
+                std::vector<U8> local_bin_bucket = bin_bucket;
+                LLHost local_sender = sender;
+                LLIMProcessing::processNewMessage(
+                    message_data["from_agent_id"].asUUID(),
+                    from_group,
+                    message_data["to_agent_id"].asUUID(),
+                    message_data.has("offline") ? static_cast<U8>(message_data["offline"].asInteger()) : IM_OFFLINE,
+                    dialog,
+                    session_id,
+                    static_cast<U32>(message_data["timestamp"].asInteger()),
+                    message_data["from_agent_name"].asString(),
+                    message_data["message"].asString(),
+                    static_cast<U32>((message_data.has("parent_estate_id")) ? message_data["parent_estate_id"].asInteger() : 1), // 1 - IMMainland
+                    message_data["region_id"].asUUID(),
+                    position,
+                    local_bin_bucket.data(),
+                    S32(local_bin_bucket.size()),
+                    local_sender,
+                    metadata,
+                    message_data["asset_id"].asUUID());
+            });
+
+    }
+// R4B-COPY-END offline_loop
+
+}
 
 // The instant message handler, reduced to the inventory offer and group
 // notice dialogs: the harness supplies the parameters and locals that
@@ -3347,13 +3719,13 @@ void collect_with(const std::string& functor, const LLUUID& root, LLInventoryMod
 
 void share_set_avatars(const uuid_vec_t& ids)
 {
-    LLShareInfo::instance().mAvatarUuids = ids;
-    LLShareInfo::instance().mAvatarNames.assign(ids.size(), LLAvatarName());
+    action_give_inventory::LLShareInfo::instance().mAvatarUuids = ids;
+    action_give_inventory::LLShareInfo::instance().mAvatarNames.assign(ids.size(), LLAvatarName());
 }
 
 void share_give_inventory_cb(const LLSD& notification, const LLSD& response, std::set<LLUUID> selected)
 {
-    give_inventory_cb(notification, response, selected);
+    action_give_inventory::give_inventory_cb(notification, response, selected);
 }
 
 // The class name of an observer, for the event log.

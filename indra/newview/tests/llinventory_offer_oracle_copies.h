@@ -288,8 +288,20 @@ private:
 class LLToolDragAndDrop
 {
 public:
+    enum ESource { SOURCE_AGENT, SOURCE_WORLD, SOURCE_NOTECARD, SOURCE_LIBRARY, SOURCE_VIEWER, SOURCE_PEOPLE };
     static EAcceptance willObjectAcceptInventory(LLViewerObject* obj, LLInventoryItem* item, EDragAndDropType type);
+    static bool handleGiveDragAndDrop(LLUUID dest_agent, LLUUID session_id, bool drop, EDragAndDropType cargo_type,
+                                      void* cargo_data, EAcceptance* accept, const LLSD& dest = LLSD());
+    EAcceptance dad3dGiveInventoryObject(LLViewerObject* obj, S32 face, MASK mask, bool drop);
+    EAcceptance dad3dGiveInventory(LLViewerObject* obj, S32 face, MASK mask, bool drop);
+    EAcceptance dad3dGiveInventoryCategory(LLViewerObject* obj, S32 face, MASK mask, bool drop);
+    // the drag state the harness sets (locateInventory's answer)
+    ESource mSource = SOURCE_AGENT;
+    LLViewerInventoryItem* mItem = nullptr;
+    LLViewerInventoryCategory* mCat = nullptr;
+    void locateInventory(LLViewerInventoryItem*& item, LLViewerInventoryCategory*& cat) { item = mItem; cat = mCat; }
 };
+void process_offline_messages(LLSD messages);
 bool move_inv_category_world_to_agent(const LLUUID& object_id, const LLUUID& category_id, bool drop,
                                       std::function<void(S32, void*, const LLMoveInv*)> callback = NULL,
                                       void* user_data = NULL, LLInventoryFilter* filter = NULL);
