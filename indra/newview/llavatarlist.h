@@ -193,7 +193,7 @@ private:
     boost::signals2::scoped_connection mUsernameConnection;
     boost::signals2::scoped_connection mContactColorConnection;
     boost::signals2::connection mRlvBehaviorCallbackConnection;
-    void updateRlvRestrictions(ERlvBehaviour behavior, ERlvParamType type);
+    void updateRlvRestrictions(ERlvBehaviour behavior);
     // </FS:Ansariel>
 };
 
