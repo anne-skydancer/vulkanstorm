@@ -4612,6 +4612,36 @@ void LLViewerInventoryItem::packMessage(LLMessageSystem* msg) const
 
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
+// lines: 2640-2643
+// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// copied: LLViewerInventoryItem::getCRC32 (over the frozen base classes)
+// substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// ----
+U32 LLViewerInventoryItem::getCRC32() const
+{
+    return LLInventoryItem::getCRC32();
+}
+// ---- VKS-ORACLE-COPY END
+
+// ---- VKS-ORACLE-COPY BEGIN
+// source: indra/newview/llviewerinventory.cpp
+// lines: 675-682
+// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// copied: LLViewerInventoryCategory::packMessage (over the frozen base classes)
+// substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// ----
+void LLViewerInventoryCategory::packMessage(LLMessageSystem* msg) const
+{
+    msg->addUUIDFast(_PREHASH_FolderID, mUUID);
+    msg->addUUIDFast(_PREHASH_ParentID, mParentUUID);
+    S8 type = static_cast<S8>(mPreferredType);
+    msg->addS8Fast(_PREHASH_Type, type);
+    msg->addStringFast(_PREHASH_Name, mName);
+}
+// ---- VKS-ORACLE-COPY END
+
+// ---- VKS-ORACLE-COPY BEGIN
+// source: indra/newview/llviewerinventory.cpp
 // lines: 740-743
 // blob: a13210dce6ed2561e2b18768645bcfa37068612c
 // copied: LLViewerInventoryCategory::setVersion (over the frozen base classes)
@@ -4697,6 +4727,36 @@ void LLViewerInventoryItem::packMessage(LLMessageSystem* msg) const
     msg->addS32Fast(_PREHASH_CreationDate, (S32)mCreationDate);
     U32 crc = getCRC32();
     msg->addU32Fast(_PREHASH_CRC, crc);
+}
+// ---- VKS-ORACLE-COPY END
+
+// ---- VKS-ORACLE-COPY BEGIN
+// source: indra/newview/llviewerinventory.cpp
+// lines: 2640-2643
+// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// copied: LLViewerInventoryItem::getCRC32 (over the live base classes)
+// substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// ----
+U32 LLViewerInventoryItem::getCRC32() const
+{
+    return LLInventoryItem::getCRC32();
+}
+// ---- VKS-ORACLE-COPY END
+
+// ---- VKS-ORACLE-COPY BEGIN
+// source: indra/newview/llviewerinventory.cpp
+// lines: 675-682
+// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// copied: LLViewerInventoryCategory::packMessage (over the live base classes)
+// substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// ----
+void LLViewerInventoryCategory::packMessage(LLMessageSystem* msg) const
+{
+    msg->addUUIDFast(_PREHASH_FolderID, mUUID);
+    msg->addUUIDFast(_PREHASH_ParentID, mParentUUID);
+    S8 type = static_cast<S8>(mPreferredType);
+    msg->addS8Fast(_PREHASH_Type, type);
+    msg->addStringFast(_PREHASH_Name, mName);
 }
 // ---- VKS-ORACLE-COPY END
 

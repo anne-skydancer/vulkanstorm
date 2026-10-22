@@ -61,9 +61,14 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <filesystem>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#if LL_WINDOWS
+# include <excpt.h>
+#endif
 
 #ifdef LL_USESYSTEMLIBS
 # include <zlib.h>
@@ -313,21 +318,34 @@ struct RuntimeEdge
     const char* cs;
     const char* field;
     int column;        // index among the values; -1 for a scalar line
-    const char* win;
-    const char* lin;
+    const char* win;   // the stated value with the MSVC runtime
+    const char* lin;   // the stated value with glibc and libstdc++
+    const char* crate; // the value the crate's own mapping must give (NULL: none stated)
 };
 
 // Filled from the Windows and Linux recordings (see the README).
 static const RuntimeEdge kRuntimeEdges[] = {
     // LLSD::asInteger of the String "0x10" is (int)asReal(), an istringstream >> F64:
     // the MSVC runtime reads hexadecimal floating point (16), libstdc++ stops at 'x' (0).
-    {"c7.created_at.str.0x10.1", "ret+item", 20 /* ret, then date */, "16", "0"},
-    {"c7.created_at.str.0x10.0", "ret+item", 20 /* ret, then date */, "16", "0"},
-    {"c8.type.str.0x10", "fromllsd", 1 + 3, "16", "0"},
-    {"c8.type_default.str.0x10", "fromllsd", 1 + 3, "16", "0"},
-    {"c8.version.str.0x10", "vimportllsd", 1 + 10, "16", "0"},
-    {NULL, NULL, 0, NULL, NULL},
+    // The viewer keeps the C++ LLSD coercions (per platform); the crate's mapping over
+    // vkstorm_llsd::Value follows vkstorm-llsd, which gives 16 (coordinator decision F5).
+    {"c7.created_at.str.0x10.1", "ret+item", 20 /* ret, then date */, "16", "0", "16"},
+    {"c7.created_at.str.0x10.0", "ret+item", 20 /* ret, then date */, "16", "0", "16"},
+    {"c8.type.str.0x10", "fromllsd", 1 + 3, "16", "0", "16"},
+    {"c8.type_default.str.0x10", "fromllsd", 1 + 3, "16", "0", "16"},
+    {"c8.version.str.0x10", "vimportllsd", 1 + 10, "16", "0", "16"},
+    {NULL, NULL, 0, NULL, NULL, NULL},
 };
+
+// "RT(win=..;linux=..[;crate=..])" when the platform's observed value is the stated
+// one, else "RT-MISMATCH(...)" (which fails every comparison).
+std::string stated_rt(const std::string& observed, const char* win, const char* lin, const char* crate)
+{
+    std::string stated = std::string("RT(win=") + win + ";linux=" + lin + (crate ? std::string(";crate=") + crate : std::string()) + ")";
+    const char* expect = (strcmp(PLATFORM, "win") == 0) ? win : lin;
+    if (observed == expect) return stated;
+    return std::string("RT-MISMATCH(") + PLATFORM + "=" + observed + ";stated=" + stated + ")";
+}
 
 struct EdgeIndex
 {
@@ -343,18 +361,25 @@ struct EdgeIndex
     static EdgeIndex& get() { static EdgeIndex ix; return ix; }
 };
 
-// Case-local undefined-behaviour marks (set by the C6 cases).
-static std::vector<std::pair<std::string, int> >* g_ub_marks = NULL; // (field, column)
+// Case-local undefined-behaviour marks (set by the C6 cases): the value is written
+// "UB" and not compared. (The values are not stable across builds of the same
+// compiler, so none is recorded as an expectation; README "Runtime edges".)
+struct UbMark
+{
+    std::string field;
+    int column;
+};
+static const std::vector<UbMark>* g_ub_marks = NULL;
 
 void emit(Sink& s, const std::string& cs, const std::string& field, std::vector<std::string> vals)
 {
     if (g_ub_marks)
     {
-        for (const auto& m : *g_ub_marks)
+        for (const UbMark& m : *g_ub_marks)
         {
-            if (m.first == field && m.second >= 0 && m.second < (int)vals.size())
+            if (m.field == field && m.column >= 0 && m.column < (int)vals.size())
             {
-                vals[m.second] = "UB";
+                vals[m.column] = "UB";
             }
         }
     }
@@ -368,21 +393,7 @@ void emit(Sink& s, const std::string& cs, const std::string& field, std::vector<
             {
                 if (e->column < 0 || e->column >= (int)vals.size()) continue;
                 std::string& v = vals[e->column];
-                if (!e->win && !e->lin)
-                {
-                    v = "UB";
-                    continue;
-                }
-                const char* expect = (strcmp(PLATFORM, "win") == 0) ? e->win : e->lin;
-                std::string stated = std::string("RT(win=") + e->win + ";linux=" + e->lin + ")";
-                if (v == expect)
-                {
-                    v = stated;
-                }
-                else
-                {
-                    v = std::string("RT-MISMATCH(") + PLATFORM + "=" + v + ";stated=" + stated + ")";
-                }
+                v = stated_rt(v, e->win, e->lin, e->crate);
             }
         }
     }
@@ -859,7 +870,8 @@ void init_runtime()
     {
         ll_init_apr();
     }
-    start_messaging_system(VKS_MSG_TEMPLATE_FILE, 13137, 1, 0, 0, false, "notasharedsecret", NULL, false, 5.f, 100.f);
+    // Port 0: an OS-assigned port, so that concurrent runs never share one.
+    start_messaging_system(VKS_MSG_TEMPLATE_FILE, 0, 1, 0, 0, false, "notasharedsecret", NULL, false, 5.f, 100.f);
     if (!gMessageSystem)
     {
         std::cerr << "message system failed to start" << std::endl;
@@ -1237,6 +1249,11 @@ std::vector<PermF> c3_states()
     // 7: owner A, base no-transfer, group not owned, everyone copy.
     p.base = PERM_ALL & ~T_; p.owner_mask = PERM_ALL & ~T_;
     v.push_back(p);
+    // 8: owner A whose next-owner mask has neither copy nor transfer, so that an owner
+    // change with is_atomic adds transfer to the new base (and without it does not).
+    p = PermF(); p.creator = ID_C(); p.owner = ID_A(); p.last = ID_B(); p.group = ID_G();
+    p.base = PERM_ALL; p.owner_mask = PERM_ALL; p.group_mask = 0; p.everyone = 0; p.next = M_ | V_;
+    v.push_back(p);
     return v;
 }
 
@@ -1334,8 +1351,8 @@ template<class I> void c3_permissions(Sink& s)
         }
     }
     const LLUUID ids[] = {NUL(), ID_A(), ID_B(), ID_G()};
-    // setOwnerAndGroup over the id grid, both atomic forms, from states 0, 1, 2, 3.
-    for (int si = 0; si < 4; ++si)
+    // setOwnerAndGroup over the id grid, both atomic forms, from states 0, 1, 2, 3 and 8.
+    for (int si : {0, 1, 2, 3, 8})
     {
         for (const LLUUID& agent : ids)
             for (const LLUUID& owner : ids)
@@ -1573,16 +1590,71 @@ template<class I> void c3x_fair(U32 i, U8* out)
 }
 static const U32 C3X_FAIR_CASES = 128u * 128u * 125u;
 
+// A stream's digest in chunks of `chunk` cases, named "<stream>@<first>-<end>"
+// (the chunks of a sampled stream start at its sampled cases), and in total,
+// named "<stream>". Entries: name, cases, lines (records), SHA-256.
+struct ChunkedDigest
+{
+    std::string name;
+    U64 chunk;
+    Sha256 total, part;
+    U64 cases = 0, lines = 0, part_lines = 0, start = 0;
+    std::vector<std::vector<std::string> > entries;
+
+    ChunkedDigest(const std::string& n, U64 c) : name(n), chunk(c) {}
+    void begin_case(U64 i)
+    {
+        if (i != 0 && i % chunk == 0) flush(i);
+        cases = i + 1;
+    }
+    void bytes(const void* p, size_t n)
+    {
+        total.update(p, n);
+        part.update(p, n);
+    }
+    void line(const std::string& l)
+    {
+        bytes(l.data(), l.size());
+        bytes("\n", 1);
+        ++lines;
+        ++part_lines;
+    }
+    void record(const U8* p, size_t n)
+    {
+        bytes(p, n);
+        ++lines;
+        ++part_lines;
+    }
+    void flush(U64 end)
+    {
+        entries.push_back({name + "@" + d((S64)start) + "-" + d((S64)end), d((S64)(end - start)), d((S64)part_lines), part.hex()});
+        part = Sha256();
+        part_lines = 0;
+        start = end;
+    }
+    void finish()
+    {
+        flush(cases);
+        entries.insert(entries.begin(), std::vector<std::string>{name, d((S64)cases), d((S64)lines), total.hex()});
+    }
+};
+
+static const U64 EXHAUSTIVE_CHUNK = 1ull << 20;
+
 struct ExhaustiveResult
 {
     std::string name;
     U64 cases = 0;
-    std::string digest;
+    std::vector<std::vector<std::string> > digests; // ChunkedDigest entries
     U64 diffs = 0;
     std::string first_diff;
 };
 
-// Runs the exhaustive sweeps; compares live with oracle when `compare`.
+static const char* kExhaustiveNames[] = {"c3x.fix.alpha5.go0", "c3x.fix.alpha4.go0", "c3x.fix.alpha5.go1", "c3x.fix.alpha4.go1",
+                                         "c3x.initmasks5"};
+
+// Runs the exhaustive sweeps. With `compare`, compares live with oracle and digests
+// the live output (the test); without, digests the oracle output (the dump).
 std::vector<ExhaustiveResult> run_c3_exhaustive(bool compare)
 {
     std::vector<ExhaustiveResult> results;
@@ -1590,15 +1662,16 @@ std::vector<ExhaustiveResult> run_c3_exhaustive(bool compare)
                    const std::function<void(U64, U8*)>& fl) {
         ExhaustiveResult r;
         r.name = name;
-        Sha256 sha;
+        ChunkedDigest cd(name, EXHAUSTIVE_CHUNK);
         U8 a[20], b[20];
         for (U64 i = 0; i < n; ++i)
         {
+            cd.begin_case(i);
             fo(i, a);
-            sha.update(a, 20);
             if (compare)
             {
                 fl(i, b);
+                cd.record(b, 20);
                 if (memcmp(a, b, 20) != 0)
                 {
                     if (!r.diffs)
@@ -1608,9 +1681,14 @@ std::vector<ExhaustiveResult> run_c3_exhaustive(bool compare)
                     ++r.diffs;
                 }
             }
+            else
+            {
+                cd.record(a, 20);
+            }
         }
+        cd.finish();
         r.cases = n;
-        r.digest = sha.hex();
+        r.digests = cd.entries;
         results.push_back(r);
     };
     for (int go = 0; go < 2; ++go)
@@ -1755,6 +1833,72 @@ template<class I> void c3r_case(U64 i, const C3In& in, Sink& s)
 }
 
 //============================================================================
+// Guarded legacy export (a sale type outside 0..3)
+//============================================================================
+
+// LLSaleInfo::exportLegacyStream streams lookup()'s NULL for a sale type outside
+// 0..3. libstdc++ sets badbit|failbit and drops every later write; the MSVC runtime
+// dereferences the null pointer. The harness runs such exports under a structured
+// exception handler on Windows so that the crash is observed, and records the bytes
+// written before it.
+struct GuardedWrite
+{
+    std::function<void(std::ostream&)> fn;
+    std::ostringstream os;
+};
+static void guarded_thunk(void* p)
+{
+    GuardedWrite* g = (GuardedWrite*)p;
+    g->fn(g->os);
+}
+#if LL_WINDOWS
+static int run_guarded(void (*fn)(void*), void* ctx)
+{
+    __try
+    {
+        fn(ctx);
+        return 0;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        return 1;
+    }
+}
+#else
+static int run_guarded(void (*fn)(void*), void* ctx)
+{
+    fn(ctx);
+    return 0;
+}
+#endif
+
+// The bytes written and the outcome: "crash", or the stream state ("good" or e/f/b letters).
+std::pair<std::string, std::string> guarded_export(const std::function<void(std::ostream&)>& fn)
+{
+    GuardedWrite g;
+    g.fn = fn;
+    const bool crashed = run_guarded(&guarded_thunk, &g) != 0;
+    const std::string out = g.os.str();
+    if (crashed) return {out, "crash"};
+    const std::ios::iostate st = g.os.rdstate();
+    std::string flags;
+    if (st & std::ios::eofbit) flags += "e";
+    if (st & std::ios::failbit) flags += "f";
+    if (st & std::ios::badbit) flags += "b";
+    return {out, flags.empty() ? std::string("good") : flags};
+}
+
+// The stated outcome (coordinator decision F5): the libstdc++ outcome, the stream
+// failed and bad after the prefix, is the behaviour the port must reproduce; the MSVC
+// crash has no outcome to reproduce and is accepted only as the pre-port C++ on Windows.
+std::string null_sale_outcome(const std::string& observed)
+{
+    const std::string stated = "RT(win=crash;linux=fb;required=fb)";
+    if (observed == "fb" || (strcmp(PLATFORM, "win") == 0 && observed == "crash")) return stated;
+    return std::string("RT-MISMATCH(") + PLATFORM + "=" + observed + ";stated=" + stated + ")";
+}
+
+//============================================================================
 // C4: sale info
 //============================================================================
 
@@ -1805,7 +1949,10 @@ template<class I> void c4_sale(Sink& s)
             }
             else
             {
-                emit(s, cs, "legacy", {"SKIPPED: null sale type name (runtime edge, see README)"});
+                // A sale type outside 0..3 streams lookup()'s NULL (runtime edge, README).
+                const auto r = guarded_export([&](std::ostream& os) { raw.exportLegacyStream(os); });
+                emit(s, cs, "legacy", {esc(r.first)});
+                emit(s, cs, "legacy.outcome", {null_sale_outcome(r.second)});
             }
             LLSD sd = raw.asLLSD();
             emit_llsd(s, cs, "llsd", sd);
@@ -2263,7 +2410,22 @@ template<class I> void c5_item_record(const std::string& cs, const ItemF& f, Sin
     }
     else
     {
-        emit(s, cs, "legacy", {"SKIPPED: null sale type name (runtime edge, see README)"});
+        // A sale type outside 0..3 streams lookup()'s NULL (runtime edge, README): the
+        // shared prefix, then nothing, with the stream bad (libstdc++, the required
+        // behaviour) or a crash (MSVC, no outcome to reproduce).
+        const auto key = guarded_export([&](std::ostream& os) { item->exportLegacyStream(os, true); });
+        const auto nokey = guarded_export([&](std::ostream& os) { item->exportLegacyStream(os, false); });
+        emit(s, cs, "legacy", {esc(key.first)});
+        emit(s, cs, "legacy.outcome", {null_sale_outcome(key.second), null_sale_outcome(nokey.second)});
+        emit(s, cs, "legacy.nokey.prefix", {esc(nokey.first)});
+        const std::string text = key.first.substr(key.first.find('\n') + 1);
+        std::istringstream is(text);
+        LLPointer<Item> back = make_item<I>(prev_item());
+        const bool ok = back->importLegacyStream(is);
+        emit(s, cs, "legacy.reimport", item_cols(*back));
+        std::vector<std::string> st = stream_cols(is, text);
+        st.insert(st.begin(), bl(ok));
+        emit(s, cs, "legacy.reimport.stream", st);
     }
     {
         std::ostringstream obj;
@@ -2643,8 +2805,34 @@ struct LegacyCase
     std::string id;
     std::string readers; // I item, O object, C category, P permissions, S sale info, N notecard
     std::string input;
-    std::vector<std::pair<std::string, int> > ub;
+    std::vector<UbMark> ub;
+    S32 max_text = 0; // notecards: LLNotecard's max_text (0: LLNotecard::MAX_SIZE)
 };
+
+// The fix() invariants of a permissions record, one character each:
+// owner<=base, group<=owner, everyone<=owner, next<=base, everyone without MODIFY,
+// no-transfer base and not group owned => group and everyone without COPY.
+template<class P> std::string perm_invariants(const P& p)
+{
+    const U32 b = p.getMaskBase(), o = p.getMaskOwner(), g = p.getMaskGroup(), e = p.getMaskEveryone(), n = p.getMaskNextOwner();
+    std::string r;
+    r += (o & ~b) ? '0' : '1';
+    r += (g & ~o) ? '0' : '1';
+    r += (e & ~o) ? '0' : '1';
+    r += (n & ~b) ? '0' : '1';
+    r += (e & PERM_MODIFY) ? '0' : '1';
+    r += (!(b & PERM_TRANSFER) && !p.isGroupOwned() && ((g | e) & PERM_COPY)) ? '0' : '1';
+    return r;
+}
+
+// Text up to 4096 bytes escaped; longer as its length and SHA-256.
+std::string long_text(const std::string& t)
+{
+    if (t.size() <= 4096) return esc(t);
+    Sha256 sha;
+    sha.update(t.data(), t.size());
+    return "len=" + d((S64)t.size()) + ";sha256=" + sha.hex();
+}
 
 std::vector<std::string> std_item_lines(U8 tag = 0x61)
 {
@@ -2703,13 +2891,13 @@ std::vector<LegacyCase> c6_cases()
     std::vector<LegacyCase> v;
     const std::string ALL = "IOCPS";
     auto item_case = [&](const std::string& id, const std::function<void(std::vector<std::string>&)>& mut, bool suffix = true,
-                         const std::vector<std::pair<std::string, int> >& ub = {}) {
+                         const std::vector<UbMark>& ub = {}) {
         std::vector<std::string> l = std_item_lines();
         mut(l);
         v.push_back({id, ALL, join_lines(l) + (suffix ? kSuffix : std::string()), ub});
     };
     auto raw_case = [&](const std::string& id, const std::string& input, const std::string& readers = "IOCPS",
-                        const std::vector<std::pair<std::string, int> >& ub = {}) {
+                        const std::vector<UbMark>& ub = {}) {
         v.push_back({id, readers, input, ub});
     };
     item_case("c6.good", [](std::vector<std::string>&) {});
@@ -2861,9 +3049,12 @@ std::vector<LegacyCase> c6_cases()
     item_case("c6.perm.unknown", [](std::vector<std::string>& l) { l.insert(l.begin() + L_BASE, "\t\tunknown_perm\t1"); });
     {
         // The first mask fails to parse: the uninitialised local is stored (undefined behaviour).
-        const std::vector<std::pair<std::string, int> > ub = {
-            {"item", IC_BASE}, {"item", IC_OWNER_MASK}, {"item", IC_GROUP_MASK}, {"item", IC_EVERYONE}, {"item", IC_NEXT},
-            {"perm", PC_BASE + 1}, {"perm", PC_OWNER_MASK + 1}, {"perm", PC_GROUP_MASK + 1}, {"perm", PC_EVERYONE + 1}, {"perm", PC_NEXT + 1}};
+        // The masks are undefined; the fix() invariants that hold whatever the garbage
+        // are recorded in "item.invariants" and "perm.invariants".
+        const std::vector<UbMark> ub = {
+            {"item", IC_BASE}, {"item", IC_OWNER_MASK}, {"item", IC_GROUP_MASK}, {"item", IC_EVERYONE},
+            {"item", IC_NEXT}, {"perm", PC_BASE + 1}, {"perm", PC_OWNER_MASK + 1}, {"perm", PC_GROUP_MASK + 1},
+            {"perm", PC_EVERYONE + 1}, {"perm", PC_NEXT + 1}};
         raw_case("c6.perm.mask.first_fails", "\t{\n\tpermissions 0\n\t{\n\t\tbase_mask\tzz\n\t}\n\t}\n" + std::string(kSuffix), ALL, ub);
         raw_case("c6.perm.group_owned.first_fails", "\t{\n\tpermissions 0\n\t{\n\t\tgroup_owned\tjunk\n\t}\n\t}\n" + std::string(kSuffix), ALL,
                  {{"item", IC_GROUP_OWNED}, {"perm", PC_GROUP_OWNED + 1}});
@@ -2919,6 +3110,73 @@ std::vector<LegacyCase> c6_cases()
         });
     }
     item_case("c6.types.noinv", [](std::vector<std::string>& l) { l.erase(l.begin() + L_INV_TYPE); });
+    // perm_mask fix-up against an owner mask that differs from the base mask (audit F1):
+    // perm_mask 0 takes the owner mask; a perm_mask without copy gains transfer.
+    for (const char* owner : {"0008e000", "7fffffff", "00006000"})
+    {
+        for (const char* pm : {"00000000", "00004000", "00080000", "00008000", "00002000", "0008e000"})
+        {
+            const std::string o = owner, val = pm;
+            item_case("c6.permmask.o" + o + ".pm" + val, [o, val](std::vector<std::string>& l) {
+                l[L_OWNER] = "\t\towner_mask\t" + o;
+                l.insert(l.begin() + L_SALE_PRICE + 1, "\t\tperm_mask\t" + val);
+            });
+        }
+    }
+    // The sale_info block before the permissions block: the fix-up sees the previous
+    // item's owner mask, then the permissions block re-initialises the permissions.
+    for (const char* pm : {"00000000", "00004000"})
+    {
+        const std::string val = pm;
+        item_case("c6.permmask.salefirst.pm" + val, [val](std::vector<std::string>& l) {
+            l[L_OWNER] = "\t\towner_mask\t0008e000";
+            l.insert(l.begin() + L_SALE_PRICE + 1, "\t\tperm_mask\t" + val);
+            std::vector<std::string> sale(l.begin() + L_SALE_HDR, l.begin() + L_SALE_CLOSE + 2);
+            l.erase(l.begin() + L_SALE_HDR, l.begin() + L_SALE_CLOSE + 2);
+            l.insert(l.begin() + L_PERM_HDR, sale.begin(), sale.end());
+        });
+    }
+    // A single token of 253/254/255 characters ending in '7', then a keyword-only
+    // "flags" line, which takes the stale value (audit F9: the %254s width).
+    for (int n : {253, 254, 255})
+    {
+        item_case("c6.token." + d(n), [n](std::vector<std::string>& l) {
+            l.insert(l.begin() + L_DESC + 1, std::string(n - 1, 'z') + "7");
+            l.insert(l.begin() + L_DESC + 2, "\t\tflags");
+        });
+    }
+    // Spaceless XML metadata that does not start with <llsd> (audit F9).
+    item_case("c6.meta.notprefix", [](std::vector<std::string>& l) {
+        l.insert(l.begin() + L_PERM_CLOSE + 1, "\t\tmetadata\t<!--x--><llsd><map><key>thumbnail</key><map><key>asset_id</key><uuid>" +
+                                                     u(U(0x68)) + "</uuid></map></map></llsd>");
+        l.insert(l.begin() + L_PERM_CLOSE + 2, "|");
+    });
+    item_case("c6.meta.bareMap", [](std::vector<std::string>& l) {
+        l.insert(l.begin() + L_PERM_CLOSE + 1, "\t\tmetadata\t<map><key>thumbnail</key><map><key>asset_id</key><uuid>" + u(U(0x68)) +
+                                                     "</uuid></map></map>");
+    });
+    // LLUUID::set leniency: each hyphen slot replaced on its own, other spellings (audit D02).
+    {
+        const std::string as = u(U(0x67));
+        for (size_t slot : {(size_t)8, (size_t)13, (size_t)18, (size_t)23})
+        {
+            std::string v = as;
+            v[slot] = 'g';
+            item_case("c6.uuid.slot" + d((S64)slot), [v](std::vector<std::string>& l) { l[L_ASSET] = "\t\tasset_id\t" + v; });
+        }
+        std::string mixed = as;
+        for (size_t k = 0; k < mixed.size(); k += 2) mixed[k] = (char)toupper((unsigned char)mixed[k]);
+        item_case("c6.uuid.mixedcase", [mixed](std::vector<std::string>& l) { l[L_ASSET] = "\t\tasset_id\t" + mixed; });
+        for (size_t cut : {(size_t)8, (size_t)13, (size_t)18})
+        {
+            std::string v = as;
+            v.erase(cut, 1);
+            item_case("c6.uuid.short35.at" + d((S64)cut), [v](std::vector<std::string>& l) { l[L_ASSET] = "\t\tasset_id\t" + v; });
+        }
+        std::string nonhex = as;
+        nonhex[0] = 'g';
+        item_case("c6.uuid.nonhex", [nonhex](std::vector<std::string>& l) { l[L_ASSET] = "\t\tasset_id\t" + nonhex; });
+    }
     // Objects.
     const std::string obj_good = "\t{\n\t\tobj_id\t" + u(U(0x71)) + "\n\t\tparent_id\t" + u(U(0x72)) + "\n\t\ttype\tobject\n\t\tname\tObj name|\n\t}\n";
     raw_case("c6.obj.good", obj_good + kSuffix);
@@ -3017,12 +3275,24 @@ std::vector<LegacyCase> c6_cases()
     }
     raw_case("c6.nc.garbage", "Not a notecard\n", "N");
     raw_case("c6.nc.utf8", notecard(2, {}, "caf\xc3\xa9 \xf0\x9f\x98\x80\n"), "N");
+    // Text length exactly at the reader's limit and one past it (audit F8): with
+    // LLNotecard's default limit (MAX_SIZE, 65536) and with a constructed limit of 64.
+    for (S32 limit : {64, 0})
+    {
+        const S32 max = limit ? limit : 65536;
+        for (S32 len : {max - 1, max, max + 1})
+        {
+            std::string text(len, 'x');
+            text[len - 1] = '\n';
+            v.push_back({"c6.nc.limit" + d(max) + ".len" + d(len), "N", notecard(2, {}, text), {}, limit});
+        }
+    }
     return v;
 }
 
 template<class I> void c6_run(const LegacyCase& c, Sink& s)
 {
-    g_ub_marks = const_cast<std::vector<std::pair<std::string, int> >*>(&c.ub);
+    g_ub_marks = &c.ub;
     const std::string& cs = c.id;
     for (char r : c.readers)
     {
@@ -3034,6 +3304,7 @@ template<class I> void c6_run(const LegacyCase& c, Sink& s)
             LLPointer<typename I::Item> it = make_item<I>(prev_item());
             const bool ok = it->importLegacyStream(is);
             emit(s, cs, "item", item_cols(*it));
+            if (!c.ub.empty()) emit(s, cs, "item.invariants", {perm_invariants(it->getPermissions())});
             std::vector<std::string> st = stream_cols(is, c.input);
             st.insert(st.begin(), bl(ok));
             emit(s, cs, "item.stream", st);
@@ -3066,6 +3337,7 @@ template<class I> void c6_run(const LegacyCase& c, Sink& s)
             std::vector<std::string> cols = perm_cols(p);
             cols.insert(cols.begin(), bl(ok));
             emit(s, cs, "perm", cols);
+            if (!c.ub.empty()) emit(s, cs, "perm.invariants", {perm_invariants(p)});
             emit(s, cs, "perm.stream", stream_cols(is, c.input));
             break;
         }
@@ -3085,10 +3357,10 @@ template<class I> void c6_run(const LegacyCase& c, Sink& s)
         }
         case 'N':
         {
-            typename I::Notecard nc;
+            typename I::Notecard nc(c.max_text ? c.max_text : (S32)I::Notecard::MAX_SIZE);
             const bool ok = nc.importStream(is);
             emit(s, cs, "notecard", {bl(ok), d(nc.getVersion()), d(nc.getEmbeddedVersion()), d((S64)nc.getItems().size()),
-                                     esc(nc.getText())});
+                                     long_text(nc.getText())});
             for (size_t k = 0; k < nc.getItems().size(); ++k)
             {
                 emit(s, cs, "notecard.item." + d((S64)k), item_cols(*nc.getItems()[k]));
@@ -3098,7 +3370,7 @@ template<class I> void c6_run(const LegacyCase& c, Sink& s)
             {
                 std::ostringstream os;
                 const bool eok = nc.exportStream(os);
-                emit(s, cs, "notecard.export", {bl(eok), esc(os.str())});
+                emit(s, cs, "notecard.export", {bl(eok), long_text(os.str())});
             }
             break;
         }
@@ -3266,6 +3538,35 @@ template<class I> void c7_item_llsd(Sink& s)
         it->fromLLSD(sd, true);
         emit(s, "c7.thumbs." + d(k), "item", item_cols(*it));
     }
+    // UUIDs given as Strings (LLSD String -> UUID, LLUUID::set leniency; audit D02).
+    {
+        const std::string as = u(U(0x81));
+        std::vector<std::pair<std::string, std::string> > forms = {
+            {"plain", as}, {"lead_space", " " + as}, {"trail_space", as + " "}, {"lead_tab", "\t" + as}, {"trail_nl", as + "\n"},
+            {"nohyphens", "8101234567abcdef1032547698ba81"}, {"empty", ""}, {"short34", as.substr(0, 34)}, {"long37", as + "0"},
+        };
+        std::string upper = as;
+        LLStringUtil::toUpper(upper);
+        forms.push_back({"upper", upper});
+        for (size_t slot : {(size_t)8, (size_t)13, (size_t)18, (size_t)23})
+        {
+            std::string v = as;
+            v[slot] = 'g';
+            forms.push_back({"slot" + d((S64)slot), v});
+            v = as;
+            v.erase(slot, 1);
+            forms.push_back({"short35.at" + d((S64)slot), v});
+        }
+        for (const auto& f : forms)
+        {
+            LLSD sd;
+            sd["asset_id"] = f.second;
+            sd["item_id"] = f.second;
+            LLPointer<Item> it = make_item<I>(prev_item());
+            it->fromLLSD(sd, true);
+            emit(s, "c7.uuidstr." + f.first, "item", item_cols(*it));
+        }
+    }
     // script, metadata.script, both, metadata without script.
     for (int k = 0; k < 4; ++k)
     {
@@ -3283,9 +3584,10 @@ template<class I> void c7_item_llsd(Sink& s)
     }
     // sale_info with perm_mask (Binary 0/3/4/5 bytes, Integer, absent), with and without permissions.
     {
-        LLSD::Binary b0, b3 = {0xff, 0xff, 0xff}, b4 = {0x00, 0x00, 0x60, 0x00}, b5 = {0x00, 0x00, 0x80, 0x00, 0x01}, bz = {0, 0, 0, 0};
+        LLSD::Binary b0, b3 = {0xff, 0xff, 0xff}, b4 = {0x00, 0x00, 0x60, 0x00}, b5 = {0x00, 0x00, 0x80, 0x00, 0x01}, bz = {0, 0, 0, 0}, bmod = {0x00, 0x00, 0x40, 0x00}, bmove = {0x00, 0x08, 0x00, 0x00}, bcopy = {0x00, 0x00, 0x80, 0x00};
         const std::vector<NamedSD> pms = {{"absent", LLSD()}, {"bin0", b0}, {"bin3", b3}, {"bin4", b4}, {"bin5", b5},
-                                          {"bin4zero", bz}, {"int", 0x6000}, {"str", "6000"}};
+                                          {"bin4zero", bz}, {"int", 0x6000}, {"str", "6000"},
+                                          {"bin4mod", bmod}, {"bin4move", bmove}, {"bin4copy", bcopy}};
         for (size_t i = 0; i < pms.size(); ++i)
         {
             for (int with_perm = 0; with_perm < 2; ++with_perm)
@@ -3620,6 +3922,14 @@ std::vector<std::pair<std::string, UdpItem> > c9_udp_variants()
         f.desc = names[i].second;
         v.push_back({"name." + d((S64)i), udp_from(f)});
     }
+    for (size_t len : {(size_t)254, (size_t)255, (size_t)256})
+    {
+        // The builder's Variable 1 limit (255 bytes with the NUL) at limit-1, limit, limit+1.
+        ItemF f = b;
+        f.name = std::string(len, 'n');
+        f.desc = std::string(len, 'd');
+        v.push_back({"strlen." + d((S64)len), udp_from(f)});
+    }
     {
         ItemF f = b;
         f.perm.group_owned = true;
@@ -3706,7 +4016,8 @@ template<class I> void c9_messages(Sink& s)
     // Categories: UpdateInventoryFolder from packMessage; FolderData unpack.
     for (const CatCase& c : c5_cat_cases())
     {
-        LLPointer<typename I::Category> cat = make_cat<I>(c.f);
+        // The viewer's senders pack through LLViewerInventoryCategory::packMessage (frozen copy).
+        LLPointer<typename I::VCat> cat = make_vcat<I>(c.f);
         LLMessageSystem* msg = gMessageSystem;
         msg->newMessageFast(_PREHASH_UpdateInventoryFolder);
         msg->nextBlockFast(_PREHASH_AgentData);
@@ -4015,6 +4326,14 @@ struct StreamGen
     }
 };
 
+// The digest chunk of a stream: a sampled stream's sample spacing (every chunk starts
+// at a sampled case); the matrix's inventory types per asset type.
+U64 stream_chunk(const RandomStream& r)
+{
+    if (r.every) return r.every;
+    return (U64)(sizeof(kInvTypes) / sizeof(kInvTypes[0]));
+}
+
 U64 stream_cases(const RandomStream& r)
 {
     if (std::string(r.name) == "c5mf")
@@ -4070,6 +4389,8 @@ std::vector<std::string> columns_for(const std::string& cs, const std::string& f
     else if (field == "queries") v = cols("allow helpers crc owned owner_id owner_is_group is_owned is_group_owned");
     else if (field == "agg") v = corpus("c9") ? cols("u8 copy modify transfer empty repacked") : cols("u8 copy modify transfer move empty");
     else if (field == "notecard") v = cols("ret version embedded_version items text");
+    else if (field == "legacy.outcome") v = n == 2 ? cols("key nokey") : cols("outcome");
+    else if (ends("invariants")) v = cols("owner_in_base group_in_owner everyone_in_owner next_in_base everyone_no_modify no_transfer_no_copy");
     else if (field == "matrix") v = cols("legacy_type legacy_inv_type llsd_type llsd_inv_type crc reimport_type reimport_inv_type reimport_base "
                                          "fromllsd_type fromllsd_inv_type fromllsd_base fromllsd_everyone linked_uuid");
     else if (corpus("c2") && field == "out") v = cols("name desc rna_pipe rna rename ctor_name ctor_desc set_desc cat_ctor");
@@ -4105,9 +4426,10 @@ std::string clip(const std::string& s, size_t n = 200)
     return s.substr(0, n) + "...(" + d((S64)s.size()) + " chars)";
 }
 
-bool skip_value(const std::string& a, const std::string& b)
+// Only an expected "UB" (undefined behaviour stated in the fixture) is skipped.
+bool skip_value(const std::string& expected, const std::string& /*actual*/)
 {
-    return a == "UB" || b == "UB";
+    return expected == "UB";
 }
 
 // Compares expected and actual line lists; appends readable differences to
@@ -4236,43 +4558,60 @@ std::map<std::string, std::string> read_digests(const std::string& fixture_dir)
     return m;
 }
 
+// Compares a stream's digests with digests.txt; a chunk mismatch names its case range.
+void check_digests(const std::vector<std::vector<std::string> >& entries, const std::map<std::string, std::string>& digests,
+                   CheckResult& r)
+{
+    for (const std::vector<std::string>& e : entries)
+    {
+        const std::string got = e[2] + "\t" + e[3];
+        auto it = digests.find(e[0]);
+        std::string what = e[0] + " (whole stream)";
+        const size_t at = e[0].find('@');
+        if (at != std::string::npos)
+        {
+            std::string range = e[0].substr(at + 1);
+            range.replace(range.find('-'), 1, ", ");
+            what = e[0].substr(0, at) + " cases [" + range + ")";
+        }
+        if (it == digests.end())
+        {
+            r.report += what + ": no digest in digests.txt\n";
+            r.diffs++;
+        }
+        else if (it->second != got)
+        {
+            if (r.diffs < MAX_REPORT) r.report += what + ": digest (lines, sha256) expected " + it->second + " actual " + got + "\n";
+            r.diffs++;
+        }
+    }
+}
+
 void check_random(const std::string& fixture_dir, CheckResult& r)
 {
     const std::map<std::string, std::string> digests = read_digests(fixture_dir);
     for (const RandomStream& rs : kRandom)
     {
         StreamGen gen(rs);
-        Sha256 sha;
-        U64 lines = 0;
+        ChunkedDigest cd(rs.name, stream_chunk(rs));
         std::vector<std::string> sample;
         const U64 n = stream_cases(rs);
         for (U64 i = 0; i < n; ++i)
         {
+            cd.begin_case(i);
             VecSink o, l;
             gen.step(&o, &l);
             r.diffs += compare_lines(o.lines, l.lines, std::string(rs.name) + " live vs oracle", r.report, MAX_REPORT);
             for (const std::string& line : l.lines)
             {
-                sha.update(line.data(), line.size());
-                sha.update("\n", 1);
-                ++lines;
+                cd.line(line);
                 if (rs.every && (i < rs.head || i % rs.every == 0)) sample.push_back(line);
             }
         }
+        cd.finish();
         r.groups++;
         r.cases += n;
-        const std::string got = d((S64)lines) + "\t" + sha.hex();
-        auto it = digests.find(rs.name);
-        if (it == digests.end())
-        {
-            r.report += std::string(rs.name) + ": no digest in digests.txt\n";
-            r.diffs++;
-        }
-        else if (it->second != got)
-        {
-            r.report += std::string(rs.name) + ": digest (lines, sha256) expected " + it->second + " actual " + got + "\n";
-            r.diffs++;
-        }
+        check_digests(cd.entries, digests, r);
         if (rs.every)
         {
             std::vector<std::string> body;
@@ -4302,12 +4641,76 @@ void check_exhaustive(const std::string& fixture_dir, CheckResult& r)
             r.report += e.name + " live vs oracle: " + d((S64)e.diffs) + " differences; first: " + e.first_diff + "\n";
             r.diffs += e.diffs;
         }
-        // The digest is of the oracle's output; the comparison above covers the live side.
-        const std::string got = d((S64)e.cases) + "\t" + e.digest;
-        auto it = digests.find(e.name);
-        if (it == digests.end() || it->second != got)
+        check_digests(e.digests, digests, r);
+    }
+}
+
+// The fixture tree holds exactly the expected files, and digests.txt exactly the
+// expected streams: a missing or an unexpected entry fails.
+std::vector<std::string> expected_fixture_files()
+{
+    std::vector<std::string> f = {"README.md", ".gitattributes", "digests.txt", "c10_library.txt.gz", LIBRARY_FILE};
+    for (const Structured& c : kStructured) f.push_back(c.file);
+    for (const RandomStream& rs : kRandom)
+        if (rs.every) f.push_back(rs.file);
+    std::sort(f.begin(), f.end());
+    return f;
+}
+
+void check_fixture_tree(const std::string& fixture_dir, CheckResult& r)
+{
+    namespace fs = std::filesystem;
+    const std::vector<std::string> want = expected_fixture_files();
+    std::vector<std::string> have;
+    std::error_code ec;
+    const fs::path root(fixture_dir);
+    for (fs::recursive_directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec))
+    {
+        if (it->is_regular_file()) have.push_back(it->path().lexically_relative(root).generic_string());
+    }
+    if (ec)
+    {
+        r.report += "fixture tree: cannot list " + fixture_dir + "\n";
+        r.diffs++;
+    }
+    std::sort(have.begin(), have.end());
+    r.groups++;
+    r.cases += want.size();
+    for (const std::string& w : want)
+    {
+        if (!std::binary_search(have.begin(), have.end(), w))
         {
-            r.report += e.name + ": digest expected " + (it == digests.end() ? std::string("<none>") : it->second) + " actual " + got + "\n";
+            r.report += "fixture tree: missing " + w + "\n";
+            r.diffs++;
+        }
+    }
+    for (const std::string& h : have)
+    {
+        if (!std::binary_search(want.begin(), want.end(), h))
+        {
+            r.report += "fixture tree: unexpected file " + h + "\n";
+            r.diffs++;
+        }
+    }
+    // digests.txt: every entry belongs to a known stream; every stream has its total.
+    std::set<std::string> streams;
+    for (const RandomStream& rs : kRandom) streams.insert(rs.name);
+    for (const char* e : kExhaustiveNames) streams.insert(e);
+    const std::map<std::string, std::string> digests = read_digests(fixture_dir);
+    for (const auto& kv : digests)
+    {
+        const std::string base = kv.first.substr(0, kv.first.find('@'));
+        if (!streams.count(base))
+        {
+            r.report += "digests.txt: unexpected entry " + kv.first + "\n";
+            r.diffs++;
+        }
+    }
+    for (const std::string& s : streams)
+    {
+        if (!digests.count(s))
+        {
+            r.report += "digests.txt: missing " + s + "\n";
             r.diffs++;
         }
     }
@@ -4377,6 +4780,8 @@ bool write_gz(const std::string& path, const std::string& head, const std::vecto
     return gzclose(f) == Z_OK;
 }
 
+static const int DUMP_RECORDED = 3;
+
 int dump(const std::string& dir, const std::string& source, const std::string& library)
 {
     init_runtime();
@@ -4396,64 +4801,77 @@ int dump(const std::string& dir, const std::string& source, const std::string& l
     for (const RandomStream& rs : kRandom)
     {
         StreamGen gen(rs);
-        Sha256 sha;
-        U64 lines = 0;
+        ChunkedDigest cd(rs.name, stream_chunk(rs));
         std::vector<std::string> sample;
         const U64 n = stream_cases(rs);
         for (U64 i = 0; i < n; ++i)
         {
+            cd.begin_case(i);
             VecSink o;
             gen.step(&o, NULL);
             for (const std::string& line : o.lines)
             {
-                sha.update(line.data(), line.size());
-                sha.update("\n", 1);
-                ++lines;
+                cd.line(line);
                 if (rs.every && (i < rs.head || i % rs.every == 0)) sample.push_back(line);
             }
         }
-        const std::string digest = sha.hex();
-        digest_lines.push_back(std::string(rs.name) + "\t" + d((S64)n) + "\t" + d((S64)lines) + "\t" + digest);
+        cd.finish();
+        for (const auto& e : cd.entries) digest_lines.push_back(e[0] + "\t" + e[1] + "\t" + e[2] + "\t" + e[3]);
         if (rs.every)
         {
             char seed[32];
             snprintf(seed, sizeof(seed), "0x%016llx", (unsigned long long)rs.seed);
             const std::string what = std::string(rs.what) + " (sample: cases i < " + d((S64)rs.head) + " and i % " + d((S64)rs.every) +
-                                     " == 0 of " + d((S64)n) + "; digest in digests.txt)";
-            write_text(dir + "/" + rs.file, header(what, source, seed), sample);
-            std::cout << rs.file << ": " << sample.size() << " lines of " << lines << std::endl;
+                                     " == 0 of " + d((S64)n) + "; digests in digests.txt)";
+            if (!write_text(dir + "/" + rs.file, header(what, source, seed), sample))
+            {
+                std::cerr << "cannot write " << rs.file << std::endl;
+                return 1;
+            }
+            std::cout << rs.file << ": " << sample.size() << " lines of " << cd.lines << std::endl;
         }
     }
     for (const ExhaustiveResult& e : run_c3_exhaustive(false))
     {
-        digest_lines.push_back(e.name + "\t" + d((S64)e.cases) + "\t" + d((S64)e.cases) + "\t" + e.digest);
+        for (const auto& x : e.digests) digest_lines.push_back(x[0] + "\t" + x[1] + "\t" + x[2] + "\t" + x[3]);
     }
     {
-        // digests.txt: <stream> <cases> <lines or records> <sha256>
         std::string head = header("digests of the random streams (SHA-256 of the canonical lines, each ending in \\n) and of the "
-                                  "exhaustive sweeps (SHA-256 of 20 bytes per case: the five masks as little-endian U32)",
+                                  "exhaustive sweeps (SHA-256 of 20 bytes per case: the five masks as little-endian U32), "
+                                  "per stream and per chunk of cases",
                                   source, "per stream, see README.md");
-        head += "# columns: <stream>\\t<cases>\\t<lines (records for the exhaustive sweeps)>\\t<sha256>\n";
-        write_text(dir + "/digests.txt", head, digest_lines);
+        head += "# columns: <stream>[@<first case>-<end case>]\\t<cases>\\t<lines (records for the exhaustive sweeps)>\\t<sha256>\n";
+        if (!write_text(dir + "/digests.txt", head, digest_lines))
+        {
+            std::cerr << "cannot write digests.txt" << std::endl;
+            return 1;
+        }
     }
-    if (!library.empty())
     {
+        // C10 needs the Library cache: a missing input fails.
         LLSD inventory;
         S32 version = 0;
-        if (!load_cache(library, inventory, version))
+        if (library.empty() || !load_cache(library, inventory, version))
         {
-            std::cerr << "cannot load " << library << std::endl;
+            std::cerr << "cannot load the Library cache (--library " << library << ")" << std::endl;
             return 1;
         }
         VecSink o;
         c10_library<Oracle>(inventory, &o);
-        write_gz(dir + "/c10_library.txt.gz", header("C10 the Linden Library cache (cache version " + d(version) + "): fromLLSD of every "
-                                                     "item and importLLSDMap of every category, the re-serialization's byte identity "
-                                                     "and the fields", source, "none"),
-                 o.lines);
+        if (!write_gz(dir + "/c10_library.txt.gz",
+                      header("C10 the Linden Library cache (cache version " + d(version) + "): fromLLSD of every "
+                             "item and importLLSDMap of every category, the re-serialization's byte identity "
+                             "and the fields", source, "none"),
+                      o.lines))
+        {
+            std::cerr << "cannot write c10_library.txt.gz" << std::endl;
+            return 1;
+        }
         std::cout << "c10_library.txt.gz: " << o.lines.size() << " lines" << std::endl;
     }
-    return 0;
+    // A recording is not a verification: the dump exits with DUMP_RECORDED (3) so that it
+    // can never pass for a test run; regenerate.py expects exactly that status.
+    return DUMP_RECORDED;
 }
 
 //============================================================================

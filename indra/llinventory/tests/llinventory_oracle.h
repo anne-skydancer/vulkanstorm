@@ -1632,6 +1632,7 @@ class LLViewerInventoryItem : public LLInventoryItem
 public:
     LLTransactionID mTransactionID;
     void packMessage(LLMessageSystem* msg) const override;
+    U32 getCRC32() const override;
 protected:
     ~LLViewerInventoryItem() {}
 };
@@ -1641,6 +1642,7 @@ public:
     LLUUID mOwnerID;
     S32 mVersion = -1;
     void setVersion(S32 version);
+    void packMessage(LLMessageSystem* msg) const override;
     void exportLLSD(LLSD& cat_data) const override;
     bool importLLSD(const std::string& label, const LLSD& value) override;
 protected:
@@ -1660,6 +1662,7 @@ class LLViewerInventoryItem : public ::LLInventoryItem
 public:
     LLTransactionID mTransactionID;
     void packMessage(LLMessageSystem* msg) const override;
+    U32 getCRC32() const override;
 protected:
     ~LLViewerInventoryItem() {}
 };
@@ -1669,6 +1672,7 @@ public:
     LLUUID mOwnerID;
     S32 mVersion = -1;
     void setVersion(S32 version);
+    void packMessage(LLMessageSystem* msg) const override;
     void exportLLSD(LLSD& cat_data) const override;
     bool importLLSD(const std::string& label, const LLSD& value) override;
 protected:

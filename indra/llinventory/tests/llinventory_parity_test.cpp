@@ -10,8 +10,10 @@
  *    cache);
  * 2. the live classes against the fixtures recorded before any port commit
  *    (tests/fixtures: the structured corpora line for line, the random
- *    streams by digest and committed sample, the exhaustive sweeps by
- *    digest, the Library cache field by field).
+ *    streams by chunked digests and committed sample, the exhaustive sweeps
+ *    by chunked digests, the Library cache field by field), and the
+ *    fixture tree itself (a missing or an unexpected file fails).
+ * The build also runs check_r1_copies.py after this test (CMakeLists.txt).
  * A failure names the corpus, the case, the field (and column) and the
  * expected and actual values. The corpora, the dump and the bench are in
  * llinventory_tool.cpp, compiled into this test with VKS_INV_NO_MAIN.
@@ -48,6 +50,7 @@ void check_structured(const std::string& fixture_dir, CheckResult& r);
 void check_random(const std::string& fixture_dir, CheckResult& r);
 void check_exhaustive(const std::string& fixture_dir, CheckResult& r);
 void check_library(const std::string& fixture_dir, CheckResult& r);
+void check_fixture_tree(const std::string& fixture_dir, CheckResult& r);
 }
 
 namespace tut
@@ -95,5 +98,11 @@ template<> template<> void inventory_parity_object::test<4>()
 {
     set_test_name("Linden Library cache C10");
     run("library", &vksinv::check_library);
+}
+
+template<> template<> void inventory_parity_object::test<5>()
+{
+    set_test_name("fixture tree: no missing and no unexpected files or digests");
+    run("fixture tree", &vksinv::check_fixture_tree);
 }
 }
