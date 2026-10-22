@@ -27,7 +27,22 @@ set_property(TARGET INTEGRATION_TEST_llaisupdate_parity APPEND PROPERTY
     COMPILE_DEFINITIONS
     "VKS_AISUPDATE_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/inventory/ais/update\""
     "VKS_AISUPDATE_TEMPLATE_FILE=\"${CMAKE_SOURCE_DIR}/../scripts/messages/message_template.msg\""
-    "VKS_AISUPDATE_WORK_DIR=\"${CMAKE_CURRENT_BINARY_DIR}/llaisupdate_parity_work\"")
+    "VKS_AISUPDATE_WORK_DIR=\"${CMAKE_CURRENT_BINARY_DIR}/llaisupdate_parity_work\""
+    "VKS_AISUPDATE_PYTHON=\"${PYTHON_EXECUTABLE}\""
+    "VKS_AISUPDATE_COPY_CHECK=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/check_r3a_copies.py\"")
+# The test runs as the target's post-build step: rebuild (and so rerun) it
+# when anything it checks changes, the live sources the drift guard reads
+# and the fixture tree included.
+set_property(SOURCE tests/llaisupdate_parity_test.cpp APPEND PROPERTY OBJECT_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/llviewerinventory.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/llviewerinventory.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/llinventorymodel.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/llinventorymodel.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_r3a_copies.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_r3a_fingerprints.txt"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_r3a_fence.txt"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/inventory/ais/update/cases/index.txt"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/inventory/ais/update/expected/manifest.txt")
 # The viewer headers llaisapi.cpp includes reach into libraries the test
 # does not link: headers only.
 target_include_directories(INTEGRATION_TEST_llaisupdate_parity PRIVATE

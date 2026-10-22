@@ -51,7 +51,11 @@ namespace vks_ais
     // Starts a run: clears the op list, sets the mode, starts a new frame
     // (so AISUpdate's static batch frame never matches a frame left over by
     // an earlier run) and sets the relative clock and frame to zero.
-    void begin_run(TimerMode mode, U64 call_us, U64 frame_us, const std::vector<U64>& others_us);
+    // yield_extra_us[k] is added to the clock after yield k (timer
+    // boundaries). The first run also reads AIS_BATCH_EXPIRY_SECONDS from
+    // the class.
+    void begin_run(TimerMode mode, U64 call_us, U64 frame_us, const std::vector<U64>& others_us,
+                   const std::vector<U64>& yield_extra_us);
     // Advances to the next frame, as the viewer's main loop does between
     // two AIS replies that are not processed in the same frame.
     void next_frame();
@@ -83,16 +87,23 @@ namespace vks_ais
     // ---- driving the code under test ---------------------------------------
     // The global the coroutine reads before anything else.
     void set_disconnected(bool disconnected);
-    // Runs the real AISAPI::InvokeAISCommandCoro with an invoke function
-    // that returns 'result' (the LLSD the HTTP adapter would have produced,
-    // http_result included): the error branch, AISUpdate(result, type,
-    // body) and doUpdate(), then the completion callback contract. When
-    // with_callback is set, the callback records each id it is called with.
-    // type is an AISAPI::COMMAND_TYPE value (the test does not include
-    // llaisapi.h: only the stubs' translation unit sees AISUpdate).
-    void invoke_command(int type, const std::string& url,
-                        const LLUUID& target_id, const LLSD& body,
-                        const LLSD& result, bool with_callback);
+    // Runs one step (see the README, "Steps"):
+    //  - {type, target_id, url, body, callback}: the real
+    //    AISAPI::InvokeAISCommandCoro with an invoke function that returns
+    //    'result' (the LLSD the HTTP adapter would have produced): the
+    //    error branch, AISUpdate(result, type, body), doUpdate(), the
+    //    completion callback contract;
+    //  - {call, args, caps, no_region, pending, idle, idle_pending,
+    //    callback}: the real AISAPI command function, through the
+    //    recording coprocedure manager and HTTP adapter ('result', if
+    //    defined, is what the adapter returns).
+    // "hooks" [{checkpoint|yield: k, actions: [...]}] run at the step's
+    // k-th checkTimeout() or k-th yield; a run_step action carries its own
+    // "result". A scripted shutdown (LLCoros::Stopping) ends the step as the
+    // coroutine's top level would: recorded as "abort", no callback.
+    void run_step(const LLSD& step, const LLSD& result);
+    // Write tids that were malformed, null or reused (must stay 0).
+    int tid_failures();
 
     // Command type names (the enum's names) and back; -1 if unknown.
     const char* command_name(int type);

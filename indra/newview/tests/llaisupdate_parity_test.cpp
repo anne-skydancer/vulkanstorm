@@ -47,6 +47,16 @@
 #include "llaisupdate_parity_stubs.h"
 
 #include <chrono>
+#include <cstdlib>
+#include <filesystem>
+#include <set>
+#if LL_WINDOWS
+#include <process.h>
+#define vks_getpid _getpid
+#else
+#include <unistd.h>
+#define vks_getpid getpid
+#endif
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -57,6 +67,12 @@
 #endif
 #ifndef VKS_AISUPDATE_TEMPLATE_FILE
 #error VKS_AISUPDATE_TEMPLATE_FILE must name scripts/messages/message_template.msg
+#endif
+#ifndef VKS_AISUPDATE_PYTHON
+#error VKS_AISUPDATE_PYTHON must name the Python interpreter
+#endif
+#ifndef VKS_AISUPDATE_COPY_CHECK
+#error VKS_AISUPDATE_COPY_CHECK must name tests/check_r3a_copies.py
 #endif
 #ifndef VKS_AISUPDATE_WORK_DIR
 #error VKS_AISUPDATE_WORK_DIR must name a scratch directory in the build tree
@@ -176,7 +192,14 @@ namespace
     //------------------------------------------------------------------------
     // Files and LLSD
     //------------------------------------------------------------------------
-    const std::string FIXTURES(VKS_AISUPDATE_FIXTURE_DIR);
+    // The fixture tree: the compiled-in one, or VKS_AISUPDATE_FIXTURES
+    // (regenerate.py replays a freshly written tree before it replaces the
+    // committed one).
+    std::string fixtures_dir()
+    {
+        const char* o = getenv("VKS_AISUPDATE_FIXTURES");
+        return (o && *o) ? std::string(o) : std::string(VKS_AISUPDATE_FIXTURE_DIR);
+    }
 
     bool read_file(const std::string& path, std::string& out)
     {
@@ -275,14 +298,20 @@ namespace
         {
             const std::string work(VKS_AISUPDATE_WORK_DIR);
             LLFile::mkdir(work);
-            source = work + "/gunzipped.xml";
+            // per process: concurrent test runs must not share it
+            source = work + "/gunzipped." + std::to_string(vks_getpid()) + ".xml";
             if (!gunzip_file(path, source))
             {
                 error = "cannot gunzip " + path;
                 return false;
             }
         }
-        if (!read_file(source, bytes))
+        bool ok = read_file(source, bytes);
+        if (source != path)
+        {
+            LLFile::remove(source);
+        }
+        if (!ok)
         {
             error = "cannot read " + source;
             return false;
@@ -301,7 +330,7 @@ namespace
     {
         std::vector<std::string> ids;
         std::string text;
-        if (!read_file(FIXTURES + "/cases/index.txt", text))
+        if (!read_file(fixtures_dir() + "/cases/index.txt", text))
         {
             return ids;
         }
@@ -330,81 +359,119 @@ namespace
         std::string id;
         LLSD def;
         std::vector<LLSD> responses;
+        std::set<std::string> files;    // every input file the case uses
     };
+
+    bool load_response(const std::string& name, Case& c, LLSD& out, std::string& error)
+    {
+        if (name.empty() || name.find('/') != std::string::npos || name.find('\\') != std::string::npos)
+        {
+            error = "bad response file name '" + name + "'";
+            return false;
+        }
+        c.files.insert(name);
+        return parse_xml_file(fixtures_dir() + "/cases/" + name, out, error);
+    }
 
     bool load_case(const std::string& id, Case& c, std::string& error)
     {
         c.id = id;
-        if (!parse_xml_file(FIXTURES + "/cases/" + id + ".case.xml", c.def, error))
+        c.files.insert(id + ".case.xml");
+        if (!parse_xml_file(fixtures_dir() + "/cases/" + id + ".case.xml", c.def, error))
         {
             return false;
         }
-        const LLSD& steps = c.def["steps"];
-        for (LLSD::array_const_iterator it = steps.beginArray(); it != steps.endArray(); ++it)
+        if (c.def["id"].asString() != id)
         {
+            error = "case file names id '" + c.def["id"].asString() + "'";
+            return false;
+        }
+        LLSD& steps = c.def["steps"];
+        for (S32 i = 0; i < (S32)steps.size(); ++i)
+        {
+            LLSD& step = steps[i];
             LLSD result;
-            if (!parse_xml_file(FIXTURES + "/cases/" + (*it)["response"].asString(), result, error))
+            if (step.has("response") && !load_response(step["response"].asString(), c, result, error))
             {
                 return false;
             }
-            if (vks_ais::command_from_name((*it)["type"].asString()) < 0)
+            if (!step.has("response") && !step.has("call"))
             {
-                error = "unknown command type " + (*it)["type"].asString();
+                error = "step " + std::to_string(i) + " has no response";
                 return false;
+            }
+            if (!step.has("call") && vks_ais::command_from_name(step["type"].asString()) < 0)
+            {
+                error = "unknown command type " + step["type"].asString();
+                return false;
+            }
+            // The results of the steps hooks run.
+            LLSD& hooks = step["hooks"];
+            for (S32 h = 0; h < (S32)hooks.size(); ++h)
+            {
+                LLSD& actions = hooks[h]["actions"];
+                for (S32 a = 0; a < (S32)actions.size(); ++a)
+                {
+                    if (actions[a].has("run_step"))
+                    {
+                        LLSD nested;
+                        if (!load_response(actions[a]["run_step"]["response"].asString(), c, nested, error))
+                        {
+                            return false;
+                        }
+                        actions[a]["result"] = nested;
+                    }
+                }
             }
             c.responses.push_back(result);
         }
         return true;
     }
 
-    struct RunTiming
+    std::vector<U64> u64_list(const LLSD& a)
     {
-        double never_ms = 0.0;
-        double sched_ms = 0.0;
-    };
+        std::vector<U64> out;
+        for (LLSD::array_const_iterator it = a.beginArray(); it != a.endArray(); ++it)
+        {
+            out.push_back((U64)it->asInteger());
+        }
+        return out;
+    }
 
     LLSD run_mode(const Case& c, vks_ais::TimerMode mode, double& elapsed_ms)
     {
         const LLSD& sched = c.def["sched"];
         U64 call_us = sched.has("call_us") ? (U64)sched["call_us"].asInteger() : 100;
         U64 frame_us = sched.has("frame_us") ? (U64)sched["frame_us"].asInteger() : 16667;
-
         const bool trace = getenv("VKS_AISUPDATE_TRACE") != NULL;
         if (trace)
         {
             std::cerr << "[aisupdate] " << c.id << " " << vks_ais::timer_mode_name(mode) << " load" << std::endl;
         }
         vks_ais::skeleton_load(c.def);
-        std::vector<U64> others_us;
-        for (LLSD::array_const_iterator it = sched["others_us"].beginArray(); it != sched["others_us"].endArray(); ++it)
-        {
-            others_us.push_back((U64)it->asInteger());
-        }
-        vks_ais::begin_run(mode, call_us, frame_us, others_us);
+        vks_ais::begin_run(mode, call_us, frame_us, u64_list(sched["others_us"]), u64_list(sched["yield_extra_us"]));
         auto t0 = std::chrono::steady_clock::now();
         const LLSD& steps = c.def["steps"];
-        for (S32 i = 0; i < steps.size(); ++i)
+        for (S32 i = 0; i < (S32)steps.size(); ++i)
         {
             const LLSD& step = steps[i];
             if (i > 0 && !step["same_frame"].asBoolean())
             {
                 vks_ais::next_frame();
             }
-            int type = vks_ais::command_from_name(step["type"].asString());
             LLSD marker = LLSD::emptyMap();
             marker["op"] = "step";
             marker["index"] = i;
-            marker["type"] = step["type"].asString();
+            marker["type"] = step.has("call") ? step["call"].asString() : step["type"].asString();
             vks_ais::record(marker, false);
             vks_ais::set_disconnected(step["disconnected"].asBoolean());
             if (trace)
             {
-                std::cerr << "[aisupdate] " << c.id << " step " << i << " " << step["type"].asString() << std::endl;
+                std::cerr << "[aisupdate] " << c.id << " step " << i << " " << marker["type"].asString() << std::endl;
             }
             try
             {
-                vks_ais::invoke_command(type, step["url"].asString(), step["target_id"].asUUID(), step["body"],
-                                        c.responses[i], step.has("callback") ? step["callback"].asBoolean() : true);
+                vks_ais::run_step(step, c.responses[i]);
             }
             catch (const std::exception& e)
             {
@@ -422,22 +489,74 @@ namespace
         return out;
     }
 
-    LLSD run_case(const Case& c, RunTiming& timing)
-    {
-        LLSD out = LLSD::emptyMap();
-        out["case"] = c.id;
-        out["never"] = run_mode(c, vks_ais::TIMERS_NEVER, timing.never_ms);
-        out["sched"] = run_mode(c, vks_ais::TIMERS_SCHEDULED, timing.sched_ms);
-        return out;
-    }
+    //------------------------------------------------------------------------
+    // The large case: digests and samples
+    //------------------------------------------------------------------------
+    const S32 CHUNK = 2000;
 
-    //------------------------------------------------------------------------
-    // The large case: digest and sample
-    //------------------------------------------------------------------------
     bool is_event(const std::string& op)
     {
         return op != "updateItem" && op != "updateCategory" && op != "q.getItem" && op != "q.getCategory"
             && op != "q.getVersion";
+    }
+
+    LLSD digest_of_run(const LLSD& run)
+    {
+        const LLSD& ops = run["ops"];
+        LLSD m = LLSD::emptyMap();
+        m["ops_sha256"] = sha256(to_binary(ops));
+        m["final_sha256"] = sha256(to_binary(run["final"]));
+        m["op_count"] = (LLSD::Integer)ops.size();
+        m["final_categories"] = (LLSD::Integer)run["final"]["categories"].size();
+        m["final_items"] = (LLSD::Integer)run["final"]["items"].size();
+        LLSD counts = LLSD::emptyMap();
+        LLSD head = LLSD::emptyArray();
+        LLSD tail = LLSD::emptyArray();
+        LLSD events = LLSD::emptyArray();
+        LLSD chunks = LLSD::emptyArray();
+        const S32 HEAD = 60;
+        const S32 TAIL = 40;
+        const S32 n = (S32)ops.size();
+        for (S32 i = 0; i < n; ++i)
+        {
+            const std::string kind = ops[i]["op"].asString();
+            counts[kind] = counts[kind].asInteger() + 1;
+            if (i < HEAD)
+            {
+                head.append(ops[i]);
+            }
+            if (i >= n - TAIL)
+            {
+                tail.append(ops[i]);
+            }
+            if (is_event(kind))
+            {
+                LLSD e = ops[i];
+                e["index"] = i;
+                events.append(e);
+            }
+        }
+        // Chunk digests: SHA-256 of the binary LLSD array of ops [first, last].
+        for (S32 first = 0; first < n; first += CHUNK)
+        {
+            S32 last = std::min(n, first + CHUNK) - 1;
+            LLSD part = LLSD::emptyArray();
+            for (S32 i = first; i <= last; ++i)
+            {
+                part.append(ops[i]);
+            }
+            LLSD ch = LLSD::emptyMap();
+            ch["first"] = first;
+            ch["last"] = last;
+            ch["sha256"] = sha256(to_binary(part));
+            chunks.append(ch);
+        }
+        m["counts"] = counts;
+        m["head"] = head;
+        m["tail"] = tail;
+        m["events"] = events;
+        m["chunks"] = chunks;
+        return m;
     }
 
     LLSD digest_of(const LLSD& full)
@@ -445,48 +564,8 @@ namespace
         LLSD out = LLSD::emptyMap();
         out["case"] = full["case"];
         out["sha256"] = sha256(to_binary(full));
-        const char* modes[] = {"never", "sched"};
-        for (const char* mode : modes)
-        {
-            const LLSD& run = full[mode];
-            const LLSD& ops = run["ops"];
-            LLSD m = LLSD::emptyMap();
-            m["ops_sha256"] = sha256(to_binary(ops));
-            m["final_sha256"] = sha256(to_binary(run["final"]));
-            m["op_count"] = (LLSD::Integer)ops.size();
-            m["final_categories"] = (LLSD::Integer)run["final"]["categories"].size();
-            m["final_items"] = (LLSD::Integer)run["final"]["items"].size();
-            LLSD counts = LLSD::emptyMap();
-            LLSD head = LLSD::emptyArray();
-            LLSD tail = LLSD::emptyArray();
-            LLSD events = LLSD::emptyArray();
-            const S32 HEAD = 60;
-            const S32 TAIL = 40;
-            for (S32 i = 0; i < ops.size(); ++i)
-            {
-                const std::string kind = ops[i]["op"].asString();
-                counts[kind] = counts[kind].asInteger() + 1;
-                if (i < HEAD)
-                {
-                    head.append(ops[i]);
-                }
-                if (i >= (S32)ops.size() - TAIL)
-                {
-                    tail.append(ops[i]);
-                }
-                if (is_event(kind))
-                {
-                    LLSD e = ops[i];
-                    e["index"] = i;
-                    events.append(e);
-                }
-            }
-            m["counts"] = counts;
-            m["head"] = head;
-            m["tail"] = tail;
-            m["events"] = events;
-            out[mode] = m;
-        }
+        out["never"] = digest_of_run(full["never"]);
+        out["sched"] = digest_of_run(full["sched"]);
         return out;
     }
 
@@ -548,7 +627,7 @@ namespace
             if (e.size() != a.size())
             {
                 report = path + ": expected " + std::to_string(e.size()) + " entries, actual " + std::to_string(a.size())
-                    + (e.size() > n ? "; first missing: " + short_value(e[n]) : "; first extra: " + short_value(a[n]));
+                    + ((S32)e.size() > n ? "; first missing: " + short_value(e[n]) : "; first extra: " + short_value(a[n]));
                 return true;
             }
             return false;
@@ -559,6 +638,52 @@ namespace
             return true;
         }
         return false;
+    }
+
+    // One run of one case, readable: the first differing op (by index, op
+    // kind and field path), else the final skeleton; for the large case the
+    // first differing chunk of ops, then the sample.
+    std::string describe(const LLSD& expected, const LLSD& actual, const char* mode, bool large)
+    {
+        std::string report;
+        if (large)
+        {
+            const LLSD& ec = expected["chunks"];
+            const LLSD& ac = actual["chunks"];
+            for (S32 i = 0; i < (S32)std::min(ec.size(), ac.size()); ++i)
+            {
+                if (ec[i]["sha256"].asString() != ac[i]["sha256"].asString())
+                {
+                    report = std::string(mode) + " ops [" + std::to_string(ec[i]["first"].asInteger()) + ".."
+                        + std::to_string(ec[i]["last"].asInteger()) + "] differ (chunk digest); ";
+                    break;
+                }
+            }
+            std::string detail;
+            first_diff(expected, actual, mode, detail);
+            return report + detail;
+        }
+        const LLSD& eops = expected["ops"];
+        const LLSD& aops = actual["ops"];
+        S32 n = (S32)std::min(eops.size(), aops.size());
+        for (S32 i = 0; i < n && report.empty(); ++i)
+        {
+            first_diff(eops[i], aops[i], std::string(mode) + " op " + std::to_string(i) + " (" + eops[i]["op"].asString() + ")", report);
+        }
+        if (report.empty() && eops.size() != aops.size())
+        {
+            report = std::string(mode) + ": expected " + std::to_string(eops.size()) + " ops, actual " + std::to_string(aops.size())
+                + ((S32)eops.size() > n ? "; first missing: " + short_value(eops[n]) : "; first extra: " + short_value(aops[n]));
+        }
+        if (report.empty())
+        {
+            first_diff(expected["final"], actual["final"], std::string(mode) + " final", report);
+        }
+        if (report.empty())
+        {
+            first_diff(expected, actual, mode, report);
+        }
+        return report.empty() ? std::string(mode) + ": binary bytes differ" : report;
     }
 
     //------------------------------------------------------------------------
@@ -580,6 +705,216 @@ namespace
         h += std::string("# viewer commit: ") + (commit && *commit ? commit : "unknown") + "\n";
         h += std::string("# platform: ") + platform + "\n";
         return h;
+    }
+
+    //------------------------------------------------------------------------
+    // The corpus, run once per process (case after case in index order: the
+    // 403 alert flag is a function-static of the coroutine).
+    //------------------------------------------------------------------------
+    struct Corpus
+    {
+        std::vector<std::string> ids;
+        std::vector<LLSD> records;      // the expected-file form: full, or digest for the large case
+        std::vector<bool> large;
+        std::set<std::string> case_files;
+        std::string errors;             // load failures, unexpected exceptions, tid failures
+        bool dump = false;
+    };
+
+    std::set<std::string> list_dir(const std::string& dir)
+    {
+        std::set<std::string> out;
+        std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator(std::filesystem::path(dir), ec))
+        {
+            out.insert(e.path().filename().string());
+        }
+        return out;
+    }
+
+    // The fixture tree must hold exactly what the index names: a missing or
+    // an unexpected file fails.
+    std::string check_tree(const Corpus& c)
+    {
+        std::string out;
+        const std::string root = fixtures_dir();
+        std::set<std::string> want_top = {".gitattributes", "README.md", "cases", "expected"};
+        std::set<std::string> have_top = list_dir(root);
+        std::set<std::string> want_cases = c.case_files;
+        want_cases.insert("index.txt");
+        std::set<std::string> want_expected = {"manifest.txt"};
+        for (size_t i = 0; i < c.ids.size(); ++i)
+        {
+            const std::string suffix = c.large[i] ? ".digest" : ".expected";
+            want_expected.insert(c.ids[i] + suffix + ".llsd");
+            want_expected.insert(c.ids[i] + suffix + ".txt");
+        }
+        struct { const char* name; const std::set<std::string>& want; std::set<std::string> have; } dirs[] = {
+            {"", want_top, have_top},
+            {"cases/", want_cases, list_dir(root + "/cases")},
+            {"expected/", want_expected, list_dir(root + "/expected")}};
+        for (auto& d : dirs)
+        {
+            for (const std::string& f : d.want)
+            {
+                if (!d.have.count(f))
+                {
+                    out += "missing fixture file " + std::string(d.name) + f + "\n";
+                }
+            }
+            for (const std::string& f : d.have)
+            {
+                if (!d.want.count(f))
+                {
+                    out += "unexpected fixture file " + std::string(d.name) + f + "\n";
+                }
+            }
+        }
+        return out;
+    }
+
+    const Corpus& corpus()
+    {
+        static Corpus* c = NULL;
+        if (c)
+        {
+            return *c;
+        }
+        c = new Corpus;
+        const char* dump_dir = getenv("VKS_AISUPDATE_DUMP");
+        c->dump = dump_dir && *dump_dir;
+        const char* full_dir = getenv("VKS_AISUPDATE_FULL");
+        c->ids = read_index();
+        if (c->ids.empty())
+        {
+            c->errors += "case index missing or empty: " + fixtures_dir() + "/cases/index.txt\n";
+        }
+        std::string manifest;
+        if (c->dump)
+        {
+            LLFile::mkdir(dump_dir);
+            manifest = header_text("llaisupdate_parity expected outputs: <case> <file> <sha256 of the binary file>");
+        }
+
+        // Log arguments are not evaluated: getters called only to build a
+        // warning or a debug line would otherwise appear as model queries.
+        LLError::ELevel saved_level = LLError::getDefaultLevel();
+        LLError::setDefaultLevel(LLError::LEVEL_ERROR);
+        for (const std::string& id : c->ids)
+        {
+            Case kase;
+            std::string error;
+            if (!load_case(id, kase, error))
+            {
+                c->errors += id + ": " + error + "\n";
+                c->records.push_back(LLSD());
+                c->large.push_back(false);
+                continue;
+            }
+            c->case_files.insert(kase.files.begin(), kase.files.end());
+            double never_ms = 0.0, sched_ms = 0.0;
+            LLSD actual = LLSD::emptyMap();
+            actual["case"] = id;
+            actual["never"] = run_mode(kase, vks_ais::TIMERS_NEVER, never_ms);
+            actual["sched"] = run_mode(kase, vks_ais::TIMERS_SCHEDULED, sched_ms);
+            const char* modes[] = {"never", "sched"};
+            for (const char* mode : modes)
+            {
+                const LLSD& ops = actual[mode]["ops"];
+                for (S32 i = 0; i < (S32)ops.size(); ++i)
+                {
+                    if (ops[i]["op"].asString() == "exception")
+                    {
+                        c->errors += id + " " + mode + ": exception " + ops[i]["what"].asString() + "\n";
+                    }
+                }
+            }
+            const bool large = kase.def["large"].asBoolean();
+            if (large)
+            {
+                std::cout << "\n[aisupdate] " << id << ": never " << std::fixed << std::setprecision(1) << never_ms
+                          << " ms, sched " << sched_ms << " ms, ops " << actual["never"]["ops"].size()
+                          << " / " << actual["sched"]["ops"].size() << std::endl;
+                if (full_dir && *full_dir)
+                {
+                    LLFile::mkdir(full_dir);
+                    write_file(std::string(full_dir) + "/" + id + ".full.llsd", to_binary(actual));
+                    write_file(std::string(full_dir) + "/" + id + ".full.txt", render(actual));
+                }
+            }
+            const LLSD record = large ? digest_of(actual) : actual;
+            c->records.push_back(record);
+            c->large.push_back(large);
+            if (c->dump)
+            {
+                const std::string suffix = large ? ".digest" : ".expected";
+                const std::string bytes = to_binary(record);
+                write_file(std::string(dump_dir) + "/" + id + suffix + ".llsd", bytes);
+                write_file(std::string(dump_dir) + "/" + id + suffix + ".txt",
+                           header_text("case " + id + (large ? " (digest and sample of the full output)" : "")
+                                       + "; review rendering of " + id + suffix + ".llsd, one op per line") + render(record));
+                manifest += id + " " + id + suffix + ".llsd " + sha256(bytes) + "\n";
+            }
+        }
+        LLError::setDefaultLevel(saved_level);
+        if (vks_ais::tid_failures() != 0)
+        {
+            c->errors += std::to_string(vks_ais::tid_failures()) + " write tids malformed, null or reused\n";
+        }
+        if (c->dump)
+        {
+            write_file(std::string(dump_dir) + "/manifest.txt", manifest);
+            std::cout << "\n[aisupdate] dumped " << c->ids.size() << " cases to " << dump_dir << std::endl;
+        }
+        return *c;
+    }
+
+    // Compares one run of every case with the fixtures.
+    void compare_runs(const char* mode)
+    {
+        const Corpus& c = corpus();
+        tut::ensure("AIS update corpus could not be run:\n" + c.errors, c.errors.empty());
+        tut::ensure(std::string("dump mode: fixtures written to VKS_AISUPDATE_DUMP; nothing compared (failing on purpose)"), !c.dump);
+        std::string failures = check_tree(c);
+        int failed = 0;
+        for (size_t i = 0; i < c.ids.size(); ++i)
+        {
+            const std::string& id = c.ids[i];
+            const std::string suffix = c.large[i] ? ".digest" : ".expected";
+            std::string bytes;
+            if (!read_file(fixtures_dir() + "/expected/" + id + suffix + ".llsd", bytes))
+            {
+                continue;   // reported by check_tree
+            }
+            LLSD expected = from_binary(bytes);
+            const LLSD& actual = c.records[i];
+            if (to_binary(expected[mode]) == to_binary(actual[mode]) && expected["case"].asString() == id)
+            {
+                continue;
+            }
+            ++failed;
+            failures += "case " + id + ": " + describe(expected[mode], actual[mode], mode, c.large[i]) + "\n";
+        }
+        std::cout << "\n[aisupdate] check " << mode << ": compared " << c.ids.size() << " cases, " << failed << " differ"
+                  << std::endl;
+        if (!failures.empty())
+        {
+            std::cout << failures << std::endl;
+        }
+        tut::ensure(std::string("AIS update corpus, check '") + mode + "', differs from the fixtures:\n" + failures,
+                    failures.empty());
+    }
+
+    // Runs a command line; true on exit status 0.
+    bool run_command(const std::string& cmd)
+    {
+#if LL_WINDOWS
+        // cmd.exe /c strips one pair of outer quotes.
+        int rc = std::system(("\"" + cmd + "\"").c_str());
+#else
+        int rc = std::system(cmd.c_str());
+#endif
+        return rc == 0;
     }
 }
 
@@ -607,143 +942,35 @@ namespace tut
     typedef aisupdate_group::object aisupdate_object;
     tut::aisupdate_group aisupdate_test("llaisupdate_parity");
 
-    // The corpus: every case in cases/index.txt, in order (the order is
-    // part of the record: the 403 notification's first-call flag is a
-    // function-static of the coroutine and lives for the process).
+    // Check "never": every case's op list (model calls, queries, messages,
+    // notifications, callbacks, hooks) and final skeleton with the timers
+    // never expiring; the fixture tree; the write tids. Mandatory.
     template<> template<>
     void aisupdate_object::test<1>()
     {
-        set_test_name("AIS update decision corpus");
+        set_test_name("never: op lists and query streams");
         ensure("message system", gMessageSystem && gMessageSystem->isOK());
+        compare_runs("never");
+    }
 
-        const std::vector<std::string> ids = read_index();
-        ensure("case index is present and not empty", !ids.empty());
+    // Check "sched": the same with the timers on the injected clock, which
+    // adds the yields (and the scripted shutdown aborts). A port that moves
+    // the yield points may relax this check only as the README describes.
+    template<> template<>
+    void aisupdate_object::test<2>()
+    {
+        set_test_name("sched: yield points");
+        compare_runs("sched");
+    }
 
-        const char* dump_dir = getenv("VKS_AISUPDATE_DUMP");
-        const bool dump = dump_dir && *dump_dir;
-        const char* full_dir = getenv("VKS_AISUPDATE_FULL");
-        std::string manifest;
-        if (dump)
-        {
-            LLFile::mkdir(dump_dir);
-            manifest = header_text("llaisupdate_parity expected outputs: <case> <file> <sha256 of the binary file>");
-        }
-
-        // Log arguments are not evaluated: getters called only to build a
-        // warning or a debug line would otherwise appear as model queries.
-        LLError::ELevel saved_level = LLError::getDefaultLevel();
-        LLError::setDefaultLevel(LLError::LEVEL_ERROR);
-
-        std::string failures;
-        int failed = 0;
-        int compared = 0;
-        for (const std::string& id : ids)
-        {
-            Case c;
-            std::string error;
-            if (!load_case(id, c, error))
-            {
-                failures += id + ": " + error + "\n";
-                ++failed;
-                continue;
-            }
-            RunTiming timing;
-            LLSD actual = run_case(c, timing);
-            const bool large = c.def["large"].asBoolean();
-            if (large)
-            {
-                std::cout << "\n[aisupdate] " << id << ": never " << std::fixed << std::setprecision(1) << timing.never_ms
-                          << " ms, sched " << timing.sched_ms << " ms, ops " << actual["never"]["ops"].size()
-                          << " / " << actual["sched"]["ops"].size() << std::endl;
-            }
-            if (full_dir && *full_dir && large)
-            {
-                LLFile::mkdir(full_dir);
-                write_file(std::string(full_dir) + "/" + id + ".full.llsd", to_binary(actual));
-                write_file(std::string(full_dir) + "/" + id + ".full.txt", render(actual));
-            }
-            const LLSD record = large ? digest_of(actual) : actual;
-            const std::string suffix = large ? ".digest" : ".expected";
-            const std::string bytes = to_binary(record);
-            if (dump)
-            {
-                write_file(std::string(dump_dir) + "/" + id + suffix + ".llsd", bytes);
-                write_file(std::string(dump_dir) + "/" + id + suffix + ".txt",
-                           header_text("case " + id + (large ? " (digest and sample of the full output)" : "")
-                                       + "; review rendering of " + id + suffix + ".llsd, one op per line") + render(record));
-                manifest += id + " " + id + suffix + ".llsd " + sha256(bytes) + "\n";
-                continue;
-            }
-            std::string expected_bytes;
-            const std::string expected_path = FIXTURES + "/expected/" + id + suffix + ".llsd";
-            if (!read_file(expected_path, expected_bytes))
-            {
-                failures += id + ": missing " + expected_path + "\n";
-                ++failed;
-                continue;
-            }
-            ++compared;
-            if (expected_bytes == bytes)
-            {
-                continue;
-            }
-            ++failed;
-            LLSD expected = from_binary(expected_bytes);
-            std::string report;
-            const char* modes[] = {"never", "sched"};
-            for (const char* mode : modes)
-            {
-                if (large)
-                {
-                    if (first_diff(expected[mode], record[mode], std::string(mode), report))
-                    {
-                        break;
-                    }
-                    continue;
-                }
-                const LLSD& eops = expected[mode]["ops"];
-                const LLSD& aops = record[mode]["ops"];
-                S32 n = (S32)std::min(eops.size(), aops.size());
-                for (S32 i = 0; i < n && report.empty(); ++i)
-                {
-                    first_diff(eops[i], aops[i], std::string(mode) + " op " + std::to_string(i) + " (" + eops[i]["op"].asString() + ")", report);
-                }
-                if (report.empty() && eops.size() != aops.size())
-                {
-                    report = std::string(mode) + ": expected " + std::to_string(eops.size()) + " ops, actual " + std::to_string(aops.size())
-                        + (eops.size() > n ? "; first missing: " + short_value(eops[n]) : "; first extra: " + short_value(aops[n]));
-                }
-                if (report.empty())
-                {
-                    first_diff(expected[mode]["final"], record[mode]["final"], std::string(mode) + " final", report);
-                }
-                if (!report.empty())
-                {
-                    break;
-                }
-            }
-            if (report.empty())
-            {
-                first_diff(expected, record, "", report);
-            }
-            failures += "case " + id + ": " + (report.empty() ? std::string("binary bytes differ") : report) + "\n";
-        }
-
-        LLError::setDefaultLevel(saved_level);
-
-        if (dump)
-        {
-            write_file(std::string(dump_dir) + "/manifest.txt", manifest);
-            std::cout << "\n[aisupdate] dumped " << ids.size() << " cases to " << dump_dir << std::endl;
-        }
-        else
-        {
-            std::cout << "\n[aisupdate] compared " << compared << " cases, " << failed << " differ" << std::endl;
-        }
-        if (!failures.empty())
-        {
-            std::cout << failures << std::endl;
-        }
-        ensure("AIS update corpus differs from the fixtures:\n" + failures, failed == 0);
+    // The drift guard: the frozen copies against the live source, the
+    // fingerprints of the live functions the stub emulates, the identifier
+    // fence (tests/check_r3a_copies.py).
+    template<> template<>
+    void aisupdate_object::test<3>()
+    {
+        set_test_name("drift guard: frozen copies and emulated functions");
+        const std::string cmd = std::string("\"") + VKS_AISUPDATE_PYTHON + "\" \"" + VKS_AISUPDATE_COPY_CHECK + "\"";
+        ensure("check_r3a_copies.py failed (see its output above): " + cmd, run_command(cmd));
     }
 }

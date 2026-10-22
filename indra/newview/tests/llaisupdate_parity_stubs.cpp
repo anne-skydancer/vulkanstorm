@@ -62,11 +62,21 @@
 #include "llframetimer.h"
 #include "lltimer.h"
 
+// ---- What llaisapi.cpp calls outside itself, renamed for its text only ----
+//
+// The renames below reach only the text of llaisapi.h and llaisapi.cpp:
+// every header they include is already in, behind its guard. Each renamed
+// name is a class or function of this file; the rest of the executable
+// keeps the real one.
+
 // AISUpdate's timers: LLTimer's arithmetic (lltimer.cpp) over the injected
 // clock (microsecond ticks): start() and reset() leave mExpirationTicks at 0,
 // setTimerExpirySec() adds (U64)(F32)(seconds * frequency) to now, and
 // hasExpired() is now >= mExpirationTicks. In TIMERS_NEVER mode hasExpired()
-// is always false. Only the members llaisapi.cpp uses.
+// is always false. hasExpired() on a task timer is also the harness's
+// checkpoint: AISUpdate::checkTimeout() asks the task timer first, every
+// time, so its k-th call is the k-th checkTimeout() of the update. Only the
+// members llaisapi.cpp uses.
 class vks_r3a_LLTimer
 {
 public:
@@ -89,12 +99,84 @@ namespace llcoro
     void vks_r3a_suspendUntilNextFrame();
 }
 
-// The code under test, unchanged; the renames reach only its own text.
+// LLCoros::checkStop(), the only LLCoros member llaisapi.cpp calls: throws
+// LLCoros::Stopping when the case scripts a shutdown at that yield.
+struct vks_r3a_LLCoros
+{
+    static void checkStop();
+};
+
+// LLCoreHttpUtil::HttpCoroutineAdapter as the AIS commands use it: the
+// methods they bind record the request (method, URL, body, Destination,
+// headers, options) and return the step's scripted result.
+namespace vks_r3a_http
+{
+    class HttpCoroutineAdapter
+    {
+    public:
+        typedef std::shared_ptr<HttpCoroutineAdapter> ptr_t;
+        static const std::string HTTP_RESULTS;
+        static LLCore::HttpStatus getStatusFromLLSD(const LLSD& results)
+        {
+            return LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(results);
+        }
+        LLSD postAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const LLSD& body,
+                            LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers);
+        LLSD putAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const LLSD& body,
+                           LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers);
+        LLSD patchAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const LLSD& body,
+                             LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers);
+        LLSD getAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url,
+                           LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers);
+        LLSD deleteAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url,
+                              LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers);
+        LLSD copyAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const std::string destination,
+                            LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers);
+    };
+    const std::string HttpCoroutineAdapter::HTTP_RESULTS = LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS;
+}
+
+// LLCoprocedureManager as EnqueueAISCommand() and onIdle() use it: the
+// pending count is scripted, an enqueue is recorded and the procedure runs
+// at once on a recording adapter.
+class vks_r3a_LLCoprocedureManager
+{
+public:
+    typedef std::function<void(vks_r3a_http::HttpCoroutineAdapter::ptr_t&, const LLUUID& id)> CoProcedure_t;
+    static vks_r3a_LLCoprocedureManager& instance();
+    size_t countPending(const std::string& pool) const;
+    LLUUID enqueueCoprocedure(const std::string& pool, const std::string& name, CoProcedure_t proc);
+};
+
+// gAgent as llaisapi.cpp uses it (getRegion() for the capabilities, getID()
+// for link permissions); the region answers the case's capability URLs.
+struct vks_r3a_Region
+{
+    bool isCapabilityAvailable(const std::string& name) const;
+    std::string getCapability(const std::string& name) const;
+};
+
+struct vks_r3a_Agent
+{
+    vks_r3a_Region* getRegion() const;
+    const LLUUID& getID() const { return gAgentID; }
+};
+vks_r3a_Agent vks_r3a_gAgent;
+
+// The code under test, unchanged.
 #define LLTimer vks_r3a_LLTimer
 #define suspendUntilNextFrame vks_r3a_suspendUntilNextFrame
+#define LLCoros vks_r3a_LLCoros
+#define LLCoreHttpUtil vks_r3a_http
+#define LLCoprocedureManager vks_r3a_LLCoprocedureManager
+#define gAgent vks_r3a_gAgent
 #include "../llaisapi.cpp"
 #undef LLTimer
 #undef suspendUntilNextFrame
+#undef LLCoros
+#undef LLCoreHttpUtil
+#undef LLCoprocedureManager
+#undef gAgent
 
 #include "../llagent.h"
 #include "../llagentdata.h"
@@ -135,15 +217,22 @@ namespace
         friend typename Tag::type steal(Tag) { return M; }
     };
 
-    typedef std::function<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLCore::HttpRequest::ptr_t,
+    typedef std::function<LLSD(vks_r3a_http::HttpCoroutineAdapter::ptr_t, LLCore::HttpRequest::ptr_t,
         const std::string, LLSD, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)> invoke_fn_t;
 
     struct InvokeTag
     {
-        typedef void (*type)(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, invoke_fn_t, std::string,
+        typedef void (*type)(vks_r3a_http::HttpCoroutineAdapter::ptr_t, invoke_fn_t, std::string,
                              LLUUID, LLSD, AISAPI::completion_t, AISAPI::COMMAND_TYPE);
         friend type steal(InvokeTag);
     };
+    struct BatchConstTag { typedef const F32 AISUpdate::*type; friend type steal(BatchConstTag); };
+    struct PostponedTag
+    {
+        typedef std::list<std::pair<std::string, vks_r3a_LLCoprocedureManager::CoProcedure_t> >* type;
+        friend type steal(PostponedTag);
+    };
+    struct OnIdleTag { typedef void (*type)(void*); friend type steal(OnIdleTag); };
     struct BuilderTag { typedef LLMessageBuilder* LLMessageSystem::*type; friend type steal(BuilderTag); };
     struct CatVersionTag { typedef S32 LLViewerInventoryCategory::*type; friend type steal(CatVersionTag); };
     struct BatchTimerTag { typedef vks_r3a_LLTimer* type; friend type steal(BatchTimerTag); };
@@ -160,6 +249,9 @@ template struct Steal<CatVersionTag, &LLViewerInventoryCategory::mVersion>;
 template struct Steal<CatFetchingTag, &LLViewerInventoryCategory::mFetching>;
 template struct Steal<BatchTimerTag, &AISUpdate::sBatchTimer>;
 template struct Steal<BatchFrameTag, &AISUpdate::sBatchFrameCount>;
+template struct Steal<BatchConstTag, &AISUpdate::AIS_BATCH_EXPIRY_SECONDS>;
+template struct Steal<PostponedTag, &AISAPI::sPostponedQuery>;
+template struct Steal<OnIdleTag, &AISAPI::onIdle>;
 
 // The frame counter AISUpdate reads (LLFrameTimer::getFrameCount()).
 namespace
@@ -193,14 +285,37 @@ namespace vks_ais
             U64 call_us = 100;
             U64 frame_us = 16667;
             std::vector<U64> others_us;
+            std::vector<U64> yield_extra_us;
             size_t yields = 0;
             LLSD ops = LLSD::emptyArray();
+            // the step being run: its hooks, its checkpoint and yield counts
+            LLSD hooks = LLSD::emptyArray();
+            S32 checkpoints = 0;
+            S32 step_yields = 0;
+            int nest = 0;
+            bool stop_armed = false;
+            // the command functions' environment
+            bool has_region = true;
+            std::string inv_cap;
+            std::string lib_cap;
+            S32 pending = 0;
+            LLSD next_result;
+            std::set<std::string> tids;
+            int tid_failures = 0;
+            F32 batch_expiry = -1.f;
         };
 
         State& st()
         {
             static State s;
             return s;
+        }
+
+        LLTransactionID to_txn(const LLUUID& id)
+        {
+            LLTransactionID t;
+            static_cast<LLUUID&>(t) = id;
+            return t;
         }
 
         // Calls made by the emulation itself (and by the harness) are not
@@ -311,7 +426,8 @@ namespace vks_ais
         return mode == TIMERS_SCHEDULED ? "sched" : "never";
     }
 
-    void begin_run(TimerMode mode, U64 call_us, U64 frame_us, const std::vector<U64>& others_us)
+    void begin_run(TimerMode mode, U64 call_us, U64 frame_us, const std::vector<U64>& others_us,
+                   const std::vector<U64>& yield_extra_us)
     {
         State& s = st();
         s.ops = LLSD::emptyArray();
@@ -319,7 +435,25 @@ namespace vks_ais
         s.call_us = call_us;
         s.frame_us = frame_us;
         s.others_us = others_us;
+        s.yield_extra_us = yield_extra_us;
         s.yields = 0;
+        if (s.batch_expiry < 0.f)
+        {
+            // AISUpdate::AIS_BATCH_EXPIRY_SECONDS is a const member: read it
+            // from a throwaway update (an empty result: no model call),
+            // keeping the statics its constructor touches.
+            Internal guard;
+            vks_r3a_LLTimer saved_timer = *steal(BatchTimerTag());
+            U32 saved_frame = *steal(BatchFrameTag());
+            {
+                AISUpdate probe(LLSD::emptyMap(), AISAPI::UPDATEITEM, LLSD());
+                s.batch_expiry = probe.*steal(BatchConstTag());
+            }
+            *steal(BatchTimerTag()) = saved_timer;
+            *steal(BatchFrameTag()) = saved_frame;
+        }
+        s.hooks = LLSD::emptyArray();
+        s.stop_armed = false;
         // A frame no earlier run has used: AISUpdate's static batch frame
         // can never match it, so the first update restarts the batch timer.
         FrameCount::set(FrameCount::get() + 1);
@@ -455,6 +589,10 @@ namespace vks_ais
             LLPointer<LLViewerInventoryItem> item = new LLViewerInventoryItem();
             item->LLInventoryItem::fromLLSD(m);
             item->setComplete(m.has("_complete") ? m["_complete"].asBoolean() : true);
+            if (m.has("_transaction_id"))
+            {
+                item->setTransactionID(to_txn(m["_transaction_id"].asUUID()));
+            }
             s.items[item->getUUID()] = item;
         }
         // Clears the changed-id set and the masks.
@@ -491,29 +629,289 @@ namespace vks_ais
         gDisconnected = disconnected;
     }
 
-    void invoke_command(int type, const std::string& url,
-                        const LLUUID& target_id, const LLSD& body,
-                        const LLSD& result, bool with_callback)
+    namespace
     {
-        invoke_fn_t invoke = [result](LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLCore::HttpRequest::ptr_t,
-                                      const std::string, LLSD, LLCore::HttpOptions::ptr_t,
-                                      LLCore::HttpHeaders::ptr_t) -> LLSD
+        AISAPI::completion_t recording_callback(bool with_callback)
         {
-            return result;
-        };
-        AISAPI::completion_t callback;
-        if (with_callback)
+            AISAPI::completion_t callback;
+            if (with_callback)
+            {
+                callback = [](const LLUUID& id)
+                {
+                    LLSD op = LLSD::emptyMap();
+                    op["op"] = "callback";
+                    op["id"] = id;
+                    record(op);
+                };
+            }
+            return callback;
+        }
+
+        // A command result through the real coroutine, with an invoke
+        // function that returns it.
+        void invoke_result(int type, const std::string& url, const LLUUID& target_id, const LLSD& body,
+                           const LLSD& result, bool with_callback)
         {
-            callback = [](const LLUUID& id)
+            invoke_fn_t invoke = [result](vks_r3a_http::HttpCoroutineAdapter::ptr_t, LLCore::HttpRequest::ptr_t,
+                                          const std::string, LLSD, LLCore::HttpOptions::ptr_t,
+                                          LLCore::HttpHeaders::ptr_t) -> LLSD
+            {
+                return result;
+            };
+            steal(InvokeTag())(vks_r3a_http::HttpCoroutineAdapter::ptr_t(), invoke, url, target_id, body,
+                               recording_callback(with_callback), (AISAPI::COMMAND_TYPE)type);
+        }
+
+        AISAPI::ITEM_TYPE item_type(const LLSD& args)
+        {
+            return args["item_type"].asString() == "LIBRARY" ? AISAPI::LIBRARY : AISAPI::INVENTORY;
+        }
+
+        void record_postponed()
+        {
+            size_t n = steal(PostponedTag())->size();
+            LLSD op = LLSD::emptyMap();
+            op["op"] = "postponed";
+            op["count"] = (LLSD::Integer)n;
+            op["idle_registered"] = gIdleCallbacks.containsFunction(steal(OnIdleTag()), NULL);
+            record(op, false);
+        }
+
+        // One call of a real AISAPI command function (or of isAvailable /
+        // getCapNames), in the capability and pool state the step scripts.
+        void call_command(const LLSD& step, const LLSD& result)
+        {
+            State& s = st();
+            const LLSD& caps = step["caps"];
+            s.has_region = !step["no_region"].asBoolean();
+            s.inv_cap = caps.has("inv") ? caps["inv"].asString() : std::string();
+            s.lib_cap = caps.has("lib") ? caps["lib"].asString() : std::string();
+            s.pending = step["pending"].asInteger();
+            s.next_result = result;
+            const LLSD& args = step["args"];
+            const std::string name = step["call"].asString();
+            AISAPI::completion_t cb = recording_callback(step.has("callback") ? step["callback"].asBoolean() : true);
+            if (name == "CreateInventory")
+                AISAPI::CreateInventory(args["parent_id"].asUUID(), args["new_inventory"], cb);
+            else if (name == "SlamFolder")
+                AISAPI::SlamFolder(args["folder_id"].asUUID(), args["new_inventory"], cb);
+            else if (name == "RemoveCategory")
+                AISAPI::RemoveCategory(args["category_id"].asUUID(), cb);
+            else if (name == "RemoveItem")
+                AISAPI::RemoveItem(args["item_id"].asUUID(), cb);
+            else if (name == "PurgeDescendents")
+                AISAPI::PurgeDescendents(args["category_id"].asUUID(), cb);
+            else if (name == "UpdateCategory")
+                AISAPI::UpdateCategory(args["category_id"].asUUID(), args["updates"], cb);
+            else if (name == "UpdateItem")
+                AISAPI::UpdateItem(args["item_id"].asUUID(), args["updates"], cb);
+            else if (name == "FetchItem")
+                AISAPI::FetchItem(args["item_id"].asUUID(), item_type(args), cb);
+            else if (name == "FetchCategoryChildren")
+                AISAPI::FetchCategoryChildren(args["category_id"].asUUID(), item_type(args), args["recursive"].asBoolean(),
+                                              cb, args["depth"].asInteger());
+            else if (name == "FetchCategoryChildrenByName")
+                AISAPI::FetchCategoryChildren(args["identifier"].asString(), args["recursive"].asBoolean(), cb,
+                                              args["depth"].asInteger());
+            else if (name == "FetchCategoryCategories")
+                AISAPI::FetchCategoryCategories(args["category_id"].asUUID(), item_type(args),
+                                                args["recursive"].asBoolean(), cb, args["depth"].asInteger());
+            else if (name == "FetchCategorySubset")
+            {
+                uuid_vec_t children;
+                for (LLSD::array_const_iterator it = args["children"].beginArray(); it != args["children"].endArray(); ++it)
+                {
+                    children.push_back(it->asUUID());
+                }
+                AISAPI::FetchCategorySubset(args["category_id"].asUUID(), children, item_type(args),
+                                            args["recursive"].asBoolean(), cb, args["depth"].asInteger());
+            }
+            else if (name == "FetchCOF")
+                AISAPI::FetchCOF(cb);
+            else if (name == "FetchCategoryLinks")
+                AISAPI::FetchCategoryLinks(args["category_id"].asUUID(), cb);
+            else if (name == "FetchOrphans")
+                AISAPI::FetchOrphans(cb);
+            else if (name == "CopyLibraryCategory")
+                AISAPI::CopyLibraryCategory(args["source_id"].asUUID(), args["dest_id"].asUUID(),
+                                            args["copy_subfolders"].asBoolean(), cb);
+            else if (name == "isAvailable")
             {
                 LLSD op = LLSD::emptyMap();
-                op["op"] = "callback";
-                op["id"] = id;
+                op["op"] = "isAvailable";
+                op["result"] = AISAPI::isAvailable();
                 record(op);
-            };
+            }
+            else if (name == "getCapNames")
+            {
+                LLSD names = LLSD::emptyArray();
+                AISAPI::getCapNames(names);
+                LLSD op = LLSD::emptyMap();
+                op["op"] = "getCapNames";
+                op["result"] = names;
+                record(op);
+            }
+            else
+            {
+                throw std::logic_error("unknown AISAPI call " + name);
+            }
+            record_postponed();
+            if (step["idle"].asBoolean())
+            {
+                // The main loop's idle callbacks run (AISAPI::onIdle drains
+                // the postponed commands while the pool has room).
+                s.pending = step["idle_pending"].asInteger();
+                LLSD op = LLSD::emptyMap();
+                op["op"] = "idle";
+                record(op, false);
+                gIdleCallbacks.callFunctions();
+                record_postponed();
+            }
         }
-        steal(InvokeTag())(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t(), invoke, url, target_id, body, callback,
-                           (AISAPI::COMMAND_TYPE)type);
+
+        void run_actions(const LLSD& hook, const char* where, S32 index);
+    }
+
+    void run_step(const LLSD& step, const LLSD& result)
+    {
+        State& s = st();
+        LLSD saved_hooks = s.hooks;
+        S32 saved_checkpoints = s.checkpoints;
+        S32 saved_yields = s.step_yields;
+        if (s.nest == 0)
+        {
+            s.hooks = step.has("hooks") ? step["hooks"] : LLSD::emptyArray();
+            s.checkpoints = 0;
+            s.step_yields = 0;
+        }
+        try
+        {
+            if (step.has("call"))
+            {
+                call_command(step, result);
+            }
+            else
+            {
+                invoke_result(command_from_name(step["type"].asString()), step["url"].asString(),
+                              step["target_id"].asUUID(), step["body"], result,
+                              step.has("callback") ? step["callback"].asBoolean() : true);
+            }
+        }
+        catch (const LLCoros::Stop& e)
+        {
+            // What the coroutine's top level does with it: the update ends
+            // where it is, no callback.
+            LLSD op = LLSD::emptyMap();
+            op["op"] = "abort";
+            op["what"] = std::string(e.what());
+            record(op, false);
+        }
+        if (s.nest == 0)
+        {
+            s.hooks = saved_hooks;
+            s.checkpoints = saved_checkpoints;
+            s.step_yields = saved_yields;
+            s.stop_armed = false;
+        }
+    }
+
+    int tid_failures()
+    {
+        return st().tid_failures;
+    }
+
+    namespace
+    {
+        void fire_hooks(const char* where, S32 index)
+        {
+            State& s = st();
+            if (s.nest != 0)
+            {
+                return;
+            }
+            for (LLSD::array_const_iterator it = s.hooks.beginArray(); it != s.hooks.endArray(); ++it)
+            {
+                if (it->has(where) && (*it)[where].asInteger() == index)
+                {
+                    run_actions(*it, where, index);
+                }
+            }
+        }
+
+        // Another piece of main-thread code changes the model, or another
+        // AIS reply is processed, while this update is suspended.
+        void run_actions(const LLSD& hook, const char* where, S32 index)
+        {
+            State& s = st();
+            LLSD marker = LLSD::emptyMap();
+            marker["op"] = "hook";
+            marker["at"] = where;
+            marker["index"] = index;
+            record(marker, false);
+            const LLSD& actions = hook["actions"];
+            for (LLSD::array_const_iterator it = actions.beginArray(); it != actions.endArray(); ++it)
+            {
+                const LLSD& a = *it;
+                if (a.has("set_category"))
+                {
+                    Internal guard;
+                    const LLSD& m = a["set_category"];
+                    LLViewerInventoryCategory* cat = store_cat(m["category_id"].asUUID());
+                    if (cat)
+                    {
+                        if (m.has("version")) cat->setVersion(m["version"].asInteger());
+                        if (m.has("descendents")) cat->setDescendentCount(m["descendents"].asInteger());
+                        if (m.has("name")) cat->rename(m["name"].asString());
+                        if (m.has("parent_id")) cat->setParent(m["parent_id"].asUUID());
+                    }
+                }
+                else if (a.has("set_item"))
+                {
+                    Internal guard;
+                    const LLSD& m = a["set_item"];
+                    LLViewerInventoryItem* item = store_item(m["item_id"].asUUID());
+                    if (item)
+                    {
+                        if (m.has("name")) item->rename(m["name"].asString());
+                        if (m.has("desc")) item->setDescription(m["desc"].asString());
+                        if (m.has("parent_id")) item->setParent(m["parent_id"].asUUID());
+                        if (m.has("flags")) item->setFlags((U32)m["flags"].asInteger());
+                        if (m.has("transaction_id")) item->setTransactionID(to_txn(m["transaction_id"].asUUID()));
+                    }
+                }
+                else if (a.has("delete"))
+                {
+                    Internal guard;
+                    const LLUUID id = a["delete"].asUUID();
+                    if (store_cat(id))
+                    {
+                        remove_descendents(id);
+                    }
+                    s.cats.erase(id);
+                    s.items.erase(id);
+                }
+                else if (a.has("run_step"))
+                {
+                    ++s.nest;
+                    run_step(a["run_step"], a["result"]);
+                    --s.nest;
+                }
+                else if (a.has("construct_update"))
+                {
+                    // Another update constructed now (its constructor's
+                    // batch-timer logic runs), processed later.
+                    AISUpdate other(LLSD::emptyMap(), (AISAPI::COMMAND_TYPE)command_from_name(a["construct_update"].asString()),
+                                    LLSD());
+                }
+                else if (a.has("stop"))
+                {
+                    s.stop_armed = true;
+                }
+            }
+            LLSD end = LLSD::emptyMap();
+            end["op"] = "hook_end";
+            record(end, false);
+        }
     }
 
     namespace
@@ -643,7 +1041,7 @@ bool LLGridManager::isSystemGrid(const std::string& grid) const
 }
 
 //============================================================================
-// AISUpdate's timers and yield (renamed by r3-update.cmake)
+// What llaisapi.cpp calls under the renames
 //============================================================================
 namespace
 {
@@ -651,6 +1049,8 @@ namespace
     {
         return vks_ais::st().clock;
     }
+
+    vks_r3a_Region g_region;
 }
 
 void vks_r3a_LLTimer::reset()
@@ -666,7 +1066,14 @@ void vks_r3a_LLTimer::setTimerExpirySec(F32SecondsImplicit expiration)
 
 bool vks_r3a_LLTimer::hasExpired() const
 {
-    if (vks_ais::st().mode == vks_ais::TIMERS_NEVER)
+    vks_ais::State& s = vks_ais::st();
+    if (this != steal(BatchTimerTag()) && s.nest == 0)
+    {
+        // The task timer: checkTimeout() number ++checkpoints of the step.
+        ++s.checkpoints;
+        vks_ais::fire_hooks("checkpoint", s.checkpoints);
+    }
+    if (s.mode == vks_ais::TIMERS_NEVER)
     {
         return false;
     }
@@ -678,9 +1085,10 @@ F32SecondsImplicit vks_r3a_LLTimer::getElapsedTimeF32() const
     return (F32)((F64)(fake_clock() - mLastClockCount) / 1000000.0);
 }
 
-// llcoro::suspendUntilNextFrame() as llaisapi.cpp calls it (renamed): the AIS coroutine yields to the
-// next frame. Recorded as a "yield" event; the frame counter and the clock
-// move on.
+// llcoro::suspendUntilNextFrame() as llaisapi.cpp calls it: the AIS
+// coroutine yields to the next frame. Recorded as a "yield" event; the frame
+// counter and the clock move on, then what the schedule says happened in
+// the new frame before this update resumes.
 void llcoro::vks_r3a_suspendUntilNextFrame()
 {
     LLSD op = LLSD::emptyMap();
@@ -688,21 +1096,191 @@ void llcoro::vks_r3a_suspendUntilNextFrame()
     op["frame"] = (LLSD::Integer)vks_ais::rel_frame();
     op["clock_us"] = (LLSD::Integer)(S32)vks_ais::rel_clock();
     vks_ais::State& s = vks_ais::st();
-    U64 other = s.others_us.empty() ? 0 : s.others_us[s.yields % s.others_us.size()];
+    size_t k = s.yields;
+    U64 other = s.others_us.empty() ? 0 : s.others_us[k % s.others_us.size()];
+    U64 extra = k < s.yield_extra_us.size() ? s.yield_extra_us[k] : 0;
     ++s.yields;
     op["others_us"] = (LLSD::Integer)(S32)other;
+    if (extra)
+    {
+        op["extra_us"] = (LLSD::Integer)(S32)extra;
+    }
     record(op, false);
     FrameCount::set(FrameCount::get() + 1);
     s.clock += s.frame_us;
     if (other > 0)
     {
         // Another AIS update resumed first in this frame: as its
-        // checkTimeout() does, it re-armed the shared batch timer
-        // (AIS_BATCH_EXPIRY_SECONDS, 10 ms) and took the frame, then ran.
-        steal(BatchTimerTag())->setTimerExpirySec(0.010f);
+        // checkTimeout() does, it re-armed the shared batch timer with
+        // AISUpdate::AIS_BATCH_EXPIRY_SECONDS (read from the class, see
+        // begin_run) and took the frame, then ran for 'other'.
+        steal(BatchTimerTag())->setTimerExpirySec(s.batch_expiry);
         *steal(BatchFrameTag()) = (U32)FrameCount::get();
         s.clock += other;
     }
+    s.clock += extra;
+    if (s.nest == 0)
+    {
+        ++s.step_yields;
+        vks_ais::fire_hooks("yield", s.step_yields);
+    }
+}
+
+void vks_r3a_LLCoros::checkStop()
+{
+    vks_ais::State& s = vks_ais::st();
+    if (s.stop_armed && s.nest == 0)
+    {
+        s.stop_armed = false;
+        LLSD op = LLSD::emptyMap();
+        op["op"] = "checkStop";
+        op["throws"] = "LLCoros::Stopping";
+        record(op, false);
+        throw LLCoros::Stopping("viewer is stopping (scripted)");
+    }
+}
+
+namespace
+{
+    // One request the adapter would send. The tid of a write is checked
+    // (a well-formed, non-null UUID never seen before in the process) and
+    // replaced by <tid>.
+    LLSD http_call(const char* method, const std::string& url, const LLSD* body, const std::string* destination,
+                   LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
+    {
+        vks_ais::State& s = vks_ais::st();
+        LLSD op = LLSD::emptyMap();
+        op["op"] = "http";
+        op["method"] = method;
+        std::string u = url;
+        size_t p = u.find("?tid=");
+        if (p != std::string::npos)
+        {
+            std::string tid = u.substr(p + 5, 36);
+            bool ok = tid.size() == 36 && LLUUID::validate(tid) && LLUUID(tid).notNull() && s.tids.insert(tid).second;
+            op["tid_ok"] = ok;
+            if (!ok)
+            {
+                ++s.tid_failures;
+                op["tid"] = tid;
+            }
+            u.replace(p + 5, tid.size(), "<tid>");
+        }
+        op["url"] = u;
+        if (body)
+        {
+            op["body"] = *body;
+        }
+        if (destination)
+        {
+            op["destination"] = *destination;
+        }
+        op["headers"] = headers ? "set" : "none";
+        op["timeout"] = options ? (LLSD::Integer)options->getTimeout() : (LLSD::Integer)-1;
+        record(op);
+        LLSD r = s.next_result;
+        if (!r.isMap() || !r.has("http_result"))
+        {
+            r = LLSD::emptyMap();
+            LLSD h = LLSD::emptyMap();
+            h["success"] = true;
+            h["type"] = 200;
+            h["status"] = 0;
+            h["message"] = "";
+            h["url"] = u;
+            h["headers"] = LLSD::emptyMap();
+            r["http_result"] = h;
+        }
+        return r;
+    }
+}
+
+LLSD vks_r3a_http::HttpCoroutineAdapter::postAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const LLSD& body,
+                                                       LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
+{
+    return http_call("POST", url, &body, NULL, options, headers);
+}
+
+LLSD vks_r3a_http::HttpCoroutineAdapter::putAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const LLSD& body,
+                                                      LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
+{
+    return http_call("PUT", url, &body, NULL, options, headers);
+}
+
+LLSD vks_r3a_http::HttpCoroutineAdapter::patchAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const LLSD& body,
+                                                        LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
+{
+    return http_call("PATCH", url, &body, NULL, options, headers);
+}
+
+LLSD vks_r3a_http::HttpCoroutineAdapter::getAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url,
+                                                      LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
+{
+    return http_call("GET", url, NULL, NULL, options, headers);
+}
+
+LLSD vks_r3a_http::HttpCoroutineAdapter::deleteAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url,
+                                                         LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
+{
+    return http_call("DELETE", url, NULL, NULL, options, headers);
+}
+
+LLSD vks_r3a_http::HttpCoroutineAdapter::copyAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const std::string destination,
+                                                       LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
+{
+    return http_call("COPY", url, NULL, &destination, options, headers);
+}
+
+vks_r3a_LLCoprocedureManager& vks_r3a_LLCoprocedureManager::instance()
+{
+    static vks_r3a_LLCoprocedureManager manager;
+    return manager;
+}
+
+size_t vks_r3a_LLCoprocedureManager::countPending(const std::string& pool) const
+{
+    LLSD op = LLSD::emptyMap();
+    op["op"] = "q.countPending";
+    op["pool"] = pool;
+    op["result"] = (LLSD::Integer)vks_ais::st().pending;
+    record(op);
+    return (size_t)vks_ais::st().pending;
+}
+
+// The real manager queues the procedure for a coroutine of the pool; here it
+// runs at once, on a recording adapter.
+LLUUID vks_r3a_LLCoprocedureManager::enqueueCoprocedure(const std::string& pool, const std::string& name, CoProcedure_t proc)
+{
+    LLSD op = LLSD::emptyMap();
+    op["op"] = "enqueue";
+    op["pool"] = pool;
+    op["name"] = name;
+    record(op);
+    vks_r3a_http::HttpCoroutineAdapter::ptr_t adapter = std::make_shared<vks_r3a_http::HttpCoroutineAdapter>();
+    proc(adapter, LLUUID::null);
+    return LLUUID::null;
+}
+
+vks_r3a_Region* vks_r3a_Agent::getRegion() const
+{
+    return vks_ais::st().has_region ? &g_region : NULL;
+}
+
+bool vks_r3a_Region::isCapabilityAvailable(const std::string& name) const
+{
+    return !getCapability(name).empty();
+}
+
+std::string vks_r3a_Region::getCapability(const std::string& name) const
+{
+    const vks_ais::State& s = vks_ais::st();
+    std::string url = name == "InventoryAPIv3" ? s.inv_cap : (name == "LibraryAPIv3" ? s.lib_cap : std::string());
+    LLSD op = LLSD::emptyMap();
+    op["op"] = "q.getCapability";
+    op["name"] = name;
+    op["result"] = url;
+    record(op);
+    return url;
 }
 
 //============================================================================
@@ -960,6 +1538,12 @@ U32 LLInventoryModel::updateItem(const LLViewerInventoryItem* item, U32 mask)
                     }
                     update_parent_on_server = true;
                 }
+                if (update_parent_on_server && old_parent_id != new_parent_id && vks_ais::store_cat(new_parent_id))
+                {
+                    // the real model accounts the destination (+1, version)
+                    LLInventoryModel::LLCategoryUpdate update(new_parent_id, 1);
+                    gInventory.accountForUpdate(update);
+                }
                 if (old_parent_id != new_parent_id)
                 {
                     mask |= LLInventoryObserver::STRUCTURE;
@@ -989,6 +1573,23 @@ U32 LLInventoryModel::updateItem(const LLViewerInventoryItem* item, U32 mask)
                     new_item->setParent(category_id);
                     outcome = vks_ais::store_cat(category_id) ? "added_null_parent_to_default_folder_server_move"
                                                               : "added_null_parent_no_default_folder";
+                    if (vks_ais::store_cat(category_id))
+                    {
+                        LLInventoryModel::LLCategoryUpdate update(category_id, 1);
+                        gInventory.accountForUpdate(update);
+                    }
+                }
+                else if (item->getParentUUID() == CATEGORIZE_LOST_AND_FOUND_ID)
+                {
+                    LLUUID parent_id = findCategoryUUIDForType(LLFolderType::FT_LOST_AND_FOUND);
+                    new_item->setParent(parent_id);
+                    LLInventoryModel::LLCategoryUpdate update(parent_id, 1);
+                    gInventory.accountForUpdate(update);
+                    outcome = "added_categorize_lost_and_found";
+                    if (!vks_ais::store_cat(parent_id))
+                    {
+                        outcome = "added_categorize_lost_and_found_no_lost_and_found";
+                    }
                 }
                 else if (!vks_ais::store_cat(item->getParentUUID()))
                 {
@@ -996,6 +1597,11 @@ U32 LLInventoryModel::updateItem(const LLViewerInventoryItem* item, U32 mask)
                     new_item->setParent(parent_id);
                     outcome = vks_ais::store_cat(parent_id) ? "added_unknown_parent_to_lost_and_found_server_move"
                                                             : "added_unknown_parent_no_lost_and_found";
+                    if (vks_ais::store_cat(parent_id))
+                    {
+                        LLInventoryModel::LLCategoryUpdate update(parent_id, 1);
+                        gInventory.accountForUpdate(update);
+                    }
                 }
                 vks_ais::st().items[new_item->getUUID()] = new_item;
                 mask |= LLInventoryObserver::ADD;
