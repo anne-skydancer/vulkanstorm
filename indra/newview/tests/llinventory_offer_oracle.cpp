@@ -459,12 +459,6 @@ namespace r4b_oracle
                 " groups=" + ids_list(F::gAgent.mGroups));
     }
 
-    static std::string object_rec(const F::LLViewerObject& o)
-    {
-        return F::fmt("object %s perm_modify=%d allow_inventory_add=%d you_owner=%d pcode=%d attachment=%d root=%s",
-                      o.mID.asString().c_str(), (S32)o.mPermModify, (S32)o.mFlagAllowInventoryAdd, (S32)o.mPermYouOwner, (S32)o.mPCode,
-                      (S32)o.mIsAttachment, o.getRootEdit()->getID().asString().c_str());
-    }
 
     // =========================================================== set 4: items
     struct GiveItemCase
