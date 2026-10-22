@@ -5541,17 +5541,17 @@ void LLInventoryModel::processInventoryDescendents(LLMessageSystem* msg,void**)
 
     S32 i;
     S32 count = msg->getNumberOfBlocksFast(_PREHASH_FolderData);
-    LLPointer<LLViewerInventoryCategory> tcategory = new LLViewerInventoryCategory(owner_id);
     for(i = 0; i < count; ++i)
     {
+        LLPointer<LLViewerInventoryCategory> tcategory = new LLViewerInventoryCategory(owner_id);
         tcategory->unpackMessage(msg, _PREHASH_FolderData, i);
         gInventory.updateCategory(tcategory);
     }
 
     count = msg->getNumberOfBlocksFast(_PREHASH_ItemData);
-    LLPointer<LLViewerInventoryItem> titem = new LLViewerInventoryItem;
     for(i = 0; i < count; ++i)
     {
+        LLPointer<LLViewerInventoryItem> titem = new LLViewerInventoryItem;
         titem->unpackMessage(msg, _PREHASH_ItemData, i);
         // If the item has already been added (e.g. from link prefetch), then it doesn't need to be re-added.
         if (gInventory.getItem(titem->getUUID()))
