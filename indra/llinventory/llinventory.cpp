@@ -916,7 +916,7 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
         }
         else if(0 == strcmp("creation_date", keyword))
         {
-            S32 date;
+            S32 date = 0;
             sscanf(valuestr, "%d", &date);
             mCreationDate = date;
         }
