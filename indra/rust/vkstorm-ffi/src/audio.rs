@@ -43,6 +43,25 @@ pub extern "C" fn vks_audio_last_error() -> *const c_char {
     LAST_ERROR.with(|e| e.borrow().as_ptr())
 }
 
+/// The engine's name, "SoLoud 202002 (Rust)" (`vkstorm_audio::ENGINE_INFO`).
+/// Static, NUL-terminated.
+#[unsafe(no_mangle)]
+pub extern "C" fn vks_audio_engine_info() -> *const c_char {
+    static INFO: std::sync::OnceLock<std::ffi::CString> = std::sync::OnceLock::new();
+    INFO.get_or_init(|| std::ffi::CString::new(vkstorm_audio::ENGINE_INFO).unwrap_or_default())
+        .as_ptr()
+}
+
+/// The SoLoud release the mixer is a port of, "202002"
+/// (`vkstorm_audio::UPSTREAM_BASELINE.version`). Static, NUL-terminated.
+#[unsafe(no_mangle)]
+pub extern "C" fn vks_audio_engine_version() -> *const c_char {
+    static VERSION: std::sync::OnceLock<std::ffi::CString> = std::sync::OnceLock::new();
+    VERSION
+        .get_or_init(|| std::ffi::CString::new(vkstorm_audio::UPSTREAM_BASELINE.version).unwrap_or_default())
+        .as_ptr()
+}
+
 /// Receives a UTF-8 string (not NUL-terminated) of `len` bytes.
 pub type VksAudioStrFn = Option<unsafe extern "C" fn(user: *mut c_void, s: *const c_char, len: usize)>;
 
