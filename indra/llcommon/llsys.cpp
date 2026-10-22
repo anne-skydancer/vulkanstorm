@@ -1406,6 +1406,7 @@ bool gzip_file(const std::string& srcfile, const std::string& dstfile)
     gzFile dst = NULL;
     LLFILE *src = NULL;
     S32 bytes = 0;
+    int gzerrnum = Z_OK;
     tmpfile = dstfile + ".t";
 
 #ifdef LL_WINDOWS
@@ -1434,8 +1435,16 @@ bool gzip_file(const std::string& srcfile, const std::string& dstfile)
         goto err;
     }
 
-    gzclose(dst);
+    // gzclose() writes the rest of the compressed stream, so it can fail
+    // (for example when the disk is full) and leave an incomplete file.
+    gzerrnum = gzclose(dst);
     dst = NULL;
+    if (gzerrnum != Z_OK)
+    {
+        LL_WARNS() << "gzclose failed on " << tmpfile << ": " << gzerrnum << LL_ENDL;
+        LLFile::remove(tmpfile);
+        goto err;
+    }
     if (LLFile::rename(tmpfile, dstfile) == -1) goto err;       /* Flawfinder: ignore */
     retval = true;
  err:
