@@ -3964,19 +3964,29 @@ void LLInventoryModel::processUpdateCreateInventoryItem(LLMessageSystem* msg, vo
     // do accounting and highlight new items if they arrive
     if (gInventory.messageUpdateCore(msg, true, LLInventoryObserver::UPDATE_CREATE))
     {
-        U32 callback_id;
-        LLUUID item_id;
-        msg->getUUIDFast(_PREHASH_InventoryData, _PREHASH_ItemID, item_id);
-        msg->getU32Fast(_PREHASH_InventoryData, _PREHASH_CallbackID, callback_id);
+        // Each InventoryData block carries its own item and callback.
+        std::list<InventoryCallbackInfo> cblist;
+        S32 count = msg->getNumberOfBlocksFast(_PREHASH_InventoryData);
+        for (S32 i = 0; i < count; ++i)
+        {
+            U32 callback_id;
+            LLUUID item_id;
+            msg->getUUIDFast(_PREHASH_InventoryData, _PREHASH_ItemID, item_id, i);
+            msg->getU32Fast(_PREHASH_InventoryData, _PREHASH_CallbackID, callback_id, i);
+            cblist.push_back(InventoryCallbackInfo(callback_id, item_id));
+        }
 
-        gInventoryCallbacks.fire(callback_id, item_id);
+        for (const InventoryCallbackInfo& cbinfo : cblist)
+        {
+            gInventoryCallbacks.fire(cbinfo.mCallback, cbinfo.mInvID);
 
-        // Message system at the moment doesn't support Thumbnails and potential
-        // newer features so just rerequest whole item
-        //
-        // todo: instead of unpacking message fully,
-        // grab only an item_id, then fetch
-        LLInventoryModelBackgroundFetch::instance().scheduleItemFetch(item_id, true);
+            // Message system at the moment doesn't support Thumbnails and potential
+            // newer features so just rerequest whole item
+            //
+            // todo: instead of unpacking message fully,
+            // grab only an item_id, then fetch
+            LLInventoryModelBackgroundFetch::instance().scheduleItemFetch(cbinfo.mInvID, true);
+        }
     }
 
 }
