@@ -74,4 +74,22 @@ if (LL_TESTS)
     LL_ADD_INTEGRATION_TEST(inventorymisc "" "${test_libs}")
     LL_ADD_INTEGRATION_TEST(llinventory_runtime "" "${test_libs}")
     LL_ADD_INTEGRATION_TEST(llparcel "" "${test_libs}")
+
+    # vkstorm-rust rung seven (inventory), recorder R1: the data model against
+    # its oracle (tests/llinventory_oracle.cpp, frozen copies of the C++ before
+    # the port) in process, and against the recorded fixtures (tests/fixtures).
+    set(llinventory_parity_defs
+        "VKS_MSG_TEMPLATE_FILE=\"${CMAKE_SOURCE_DIR}/../scripts/messages/message_template.msg\""
+        "VKS_INV_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
+    LL_ADD_INTEGRATION_TEST(llinventory_parity "tests/llinventory_oracle.cpp;tests/llinventory_tool.cpp" "${test_libs};llmessage;ll::zlib-ng")
+    set_property(TARGET INTEGRATION_TEST_llinventory_parity APPEND PROPERTY
+        COMPILE_DEFINITIONS ${llinventory_parity_defs} "VKS_INV_NO_MAIN=1")
+    # Fixture writer and C++ baseline benchmark for the same corpora; built, not run.
+    add_executable(llinventory_tool tests/llinventory_tool.cpp tests/llinventory_oracle.cpp)
+    target_link_libraries(llinventory_tool ${test_libs} llmessage ll::zlib-ng)
+    target_compile_definitions(llinventory_tool PRIVATE ${llinventory_parity_defs})
+    set_target_properties(llinventory_tool PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${EXE_STAGING_DIR}")
+    if (WINDOWS)
+      set_target_properties(llinventory_tool PROPERTIES LINK_FLAGS "/debug /NODEFAULTLIB:LIBCMT /SUBSYSTEM:CONSOLE")
+    endif ()
 endif (LL_TESTS)
