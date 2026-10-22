@@ -35,12 +35,14 @@ namespace vks_task_oracle
 {
 // >>> VKS-R4A-COPY V0 indra/newview/llviewerinventory.cpp lines 87-88 blob a13210dce6ed2561e2b18768645bcfa37068612c
 // LOG_INV, LOG_LOCAL
+// conditionals:
 static const char * const LOG_INV("Inventory");
 static const char * const LOG_LOCAL("InventoryLocalize");
 // <<< VKS-R4A-COPY V0
 
 // >>> VKS-R4A-COPY V1 indra/newview/llviewerinventory.cpp lines 104-233 blob a13210dce6ed2561e2b18768645bcfa37068612c
 // class LLLocalizedInventoryItemsDictionary and its constructor
+// conditionals:
 ///----------------------------------------------------------------------------
 /// Helper class to store special inventory item names and their localized values.
 ///----------------------------------------------------------------------------
@@ -175,6 +177,7 @@ LLLocalizedInventoryItemsDictionary::LLLocalizedInventoryItemsDictionary()
 
 // >>> VKS-R4A-COPY V2 indra/newview/llviewerinventory.cpp lines 335-408 blob a13210dce6ed2561e2b18768645bcfa37068612c
 // LLViewerInventoryItem constructors, destructor, copyViewerItem, copyItem
+// conditionals:
 LLViewerInventoryItem::LLViewerInventoryItem(const LLUUID& uuid,
                                              const LLUUID& parent_uuid,
                                              const LLPermissions& perm,
@@ -253,6 +256,7 @@ void LLViewerInventoryItem::copyItem(const LLInventoryItem *other)
 
 // >>> VKS-R4A-COPY V3 indra/newview/llviewerinventory.cpp lines 547-601 blob a13210dce6ed2561e2b18768645bcfa37068612c
 // LLViewerInventoryItem::unpackMessage (LLSD and message forms), setTransactionID, packMessage, importLegacyStream
+// conditionals:
 // virtual
 bool LLViewerInventoryItem::unpackMessage(const LLSD& item)
 {
@@ -312,6 +316,7 @@ bool LLViewerInventoryItem::importLegacyStream(std::istream& input_stream)
 
 // >>> VKS-R4A-COPY O1 indra/newview/llviewerobject.cpp lines 155-160 blob c9ac3bdc20301e3e43da73183f18595712912e79
 // PHYSICS_TIMESTEP, MAX_INV_FILE_READ_FAILS, MAX_OBJECT_BINARY_DATA_SIZE, INVENTORY_UPDATE_WAIT_TIME_DESYNC, INVENTORY_UPDATE_WAIT_TIME_OUTDATED
+// conditionals:
 const F32 PHYSICS_TIMESTEP = 1.f / 45.f;
 const U32 MAX_INV_FILE_READ_FAILS = 25;
 const S32 MAX_OBJECT_BINARY_DATA_SIZE = 60 + 16;
@@ -322,6 +327,7 @@ const F64 INVENTORY_UPDATE_WAIT_TIME_OUTDATED = 1;
 
 // >>> VKS-R4A-COPY O2 indra/newview/llviewerobject.cpp lines 2823-3231 blob c9ac3bdc20301e3e43da73183f18595712912e79
 // deleteInventoryItem, doUpdateInventory, saveScript, moveInventory, dirtyInventory, registerInventoryListener, removeInventoryListener, isInventoryPending, clearInventoryListeners, hasInventoryListeners, requestInventory, fetchInventoryFromServer, fetchInventoryDelayed, fetchInventoryDelayedCoro, fetchInventoryFromCapCoro
+// conditionals:
 // delete an item in the inventory, but don't tell the server. This is
 // used internally by remove, update, and savescript.
 // This will only delete the first item with an item_id in the list
@@ -735,6 +741,7 @@ void LLViewerObject::fetchInventoryFromCapCoro(const LLUUID task_inv)
 
 // >>> VKS-R4A-COPY O3 indra/newview/llviewerobject.cpp lines 3375-3978 blob c9ac3bdc20301e3e43da73183f18595712912e79
 // struct LLFilenameAndTask, processTaskInv, processTaskInvFile, loadTaskInvFile, loadTaskInvLLSD, doInventoryCallback, removeInventory, isAssetInInventory, updateMaterialInventory, updateInventory, updateInventoryLocal, getInventoryObject, getInventoryItem, getInventoryContents, getInventoryRoot, getInventoryItemByAsset (both), updateViewerInventoryAsset
+// conditionals:
 struct LLFilenameAndTask
 {
     LLUUID mTaskID;
@@ -1343,6 +1350,7 @@ void LLViewerObject::updateViewerInventoryAsset(
 
 // >>> VKS-R4A-COPY O4 indra/newview/llviewerobject.cpp lines 6252-6269 blob c9ac3bdc20301e3e43da73183f18595712912e79
 // countInventoryContents
+// conditionals:
 // Find the number of instances of this object's inventory that are of the given type
 S32 LLViewerObject::countInventoryContents(LLAssetType::EType type)
 {
@@ -1365,6 +1373,7 @@ S32 LLViewerObject::countInventoryContents(LLAssetType::EType type)
 
 // >>> VKS-R4A-COPY O5 indra/newview/llviewerobject.cpp lines 7229-7235 blob c9ac3bdc20301e3e43da73183f18595712912e79
 // LLInventoryCallbackInfo::~LLInventoryCallbackInfo
+// conditionals:
 LLViewerObject::LLInventoryCallbackInfo::~LLInventoryCallbackInfo()
 {
     if (mListener)
@@ -1376,6 +1385,7 @@ LLViewerObject::LLInventoryCallbackInfo::~LLInventoryCallbackInfo()
 
 // >>> VKS-R4A-COPY O6 indra/newview/llviewerobject.cpp lines 8204-8285 blob c9ac3bdc20301e3e43da73183f18595712912e79
 // createInventoryItem, createInventoryItemCoro
+// conditionals:
 void LLViewerObject::createInventoryItem(
     LLAssetType::EType asset_type,
     LLInventoryType::EType inventory_type,

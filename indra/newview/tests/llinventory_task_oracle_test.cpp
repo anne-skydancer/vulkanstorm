@@ -74,12 +74,37 @@ typedef LLDir_Linux PlatformDir;
 #endif
 
 #if LL_WINDOWS
+#include "llwin32headers.h"
 #include <process.h>
 #define vks_getpid _getpid
 #else
+#include <cerrno>
+#include <signal.h>
 #include <unistd.h>
 #define vks_getpid getpid
 #endif
+
+namespace
+{
+    // Whether a process with this id is running (a work directory of a
+    // running process is never removed; a reused id only keeps a stale one).
+    bool process_alive(long long pid)
+    {
+#if LL_WINDOWS
+        HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)pid);
+        if (!h)
+        {
+            return GetLastError() == ERROR_ACCESS_DENIED;
+        }
+        DWORD code = 0;
+        bool alive = GetExitCodeProcess(h, &code) && code == STILL_ACTIVE;
+        CloseHandle(h);
+        return alive;
+#else
+        return kill((pid_t)pid, 0) == 0 || errno == EPERM;
+#endif
+    }
+}
 
 #include <algorithm>
 #include <chrono>
@@ -469,6 +494,31 @@ namespace
         // directory, so that concurrent runs (a replay and a dump, two build
         // trees sharing a source) never share cache files. Removed at exit.
         LLFile::mkdir(VKS_TASK_WORK_DIR);
+        // A crashed run never reaches atexit: remove the directories of
+        // processes that are no longer running.
+        {
+            std::error_code ec;
+            std::vector<std::filesystem::path> stale;
+            for (std::filesystem::directory_iterator it(std::filesystem::path(VKS_TASK_WORK_DIR), ec), end; !ec && it != end; it.increment(ec))
+            {
+                const std::string leaf = it->path().filename().string();
+                if (leaf.compare(0, 4, "pid-") != 0 || leaf.size() == 4 || leaf.size() > 22
+                    || leaf.find_first_not_of("0123456789", 4) != std::string::npos)
+                {
+                    continue;
+                }
+                const long long pid = std::stoll(leaf.substr(4));
+                if (pid != (long long)vks_getpid() && !process_alive(pid))
+                {
+                    stale.push_back(it->path());
+                }
+            }
+            for (const std::filesystem::path& p : stale)
+            {
+                std::error_code rec;
+                std::filesystem::remove_all(p, rec);
+            }
+        }
         e->work = std::string(VKS_TASK_WORK_DIR) + "/pid-" + std::to_string((long long)vks_getpid());
         { std::error_code ec; std::filesystem::remove_all(std::filesystem::path(e->work), ec); }
         LLFile::mkdir(e->work);
@@ -880,7 +930,55 @@ namespace
             vto::LLViewerInventoryItem* found = bnd().getInventoryItemByAsset(obj, at.first, (LLAssetType::EType)at.second);
             out += found ? nm(found->getUUID()) : std::string("none");
         }
-        return out + "}\n";
+        // getInventoryObject / getInventoryItem for every id present (first
+        // match; getInventoryItem is NULL for a category or a plain object)
+        out += "} byid{";
+        std::vector<LLUUID> ids;
+        if (inv)
+        {
+            for (const LLPointer<LLInventoryObject>& p : *inv)
+            {
+                if (std::find(ids.begin(), ids.end(), p->getUUID()) == ids.end())
+                {
+                    ids.push_back(p->getUUID());
+                }
+            }
+        }
+        for (size_t i = 0; i < ids.size(); ++i)
+        {
+            LLInventoryObject* o = bnd().getInventoryObject(obj, ids[i]);
+            LLInventoryItem* it = bnd().getInventoryItem(obj, ids[i]);
+            out += (i ? "," : "") + nm(ids[i]) + ":" + (o ? (dynamic_cast<vto::LLViewerInventoryItem*>(o) ? "item" : "object") : "none")
+                + "/" + (it ? (it == o ? "same" : "other") : "null");
+        }
+        // isAssetInInventory(item, its type) for every item (pending list or
+        // contents; not called where the typed lookup would cast a plain object)
+        out += "} inasset{";
+        first = true;
+        if (inv)
+        {
+            for (const LLPointer<LLInventoryObject>& p : *inv)
+            {
+                vto::LLViewerInventoryItem* item = dynamic_cast<vto::LLViewerInventoryItem*>(p.get());
+                if (!item)
+                {
+                    continue;
+                }
+                const int t = (int)item->LLInventoryItem::getType();
+                out += first ? "" : ",";
+                first = false;
+                out += nm(item->getUUID()) + ":";
+                if (t == LLAssetType::AT_CATEGORY || plain_object_types.count(t))
+                {
+                    out += "not-called";
+                    continue;
+                }
+                out += bnd().isAssetInInventory(obj, item, (LLAssetType::EType)t) ? "1" : "0";
+            }
+        }
+        out += fmt("} state{listeners=%d dirty=%d serial=%d pending=%d}\n", (int)bnd().hasInventoryListeners(obj),
+                   (int)bnd().isInventoryDirty(obj), (int)bnd().getInventorySerial(obj), (int)bnd().isInventoryPending(obj));
+        return out;
     }
 
     // Every field of every entry, front to back, then the read helpers.
@@ -1285,6 +1383,7 @@ namespace
             return true;
         }
         if (ev == "notowner") { o->mFakeYouOwner = false; return true; }
+        if (ev == "clearlisteners") { bnd().clearInventoryListeners(o); return true; }
         if (ev.compare(0, 4, "rep.") == 0)
         {
             S16 serial;
@@ -2236,6 +2335,7 @@ namespace
             {"dirty_with_listener", false, 1, "req rep.exp xfer.ok dirty req"},
             {"dirty_without_listener", false, 0, "req rep.exp xfer.ok dirty req listen req"},
             {"two_listeners", false, 2, "req rep.exp xfer.ok unlisten upd.new"},
+            {"clear_listeners", false, 2, "req rep.exp xfer.ok clearlisteners upd.new remove req"},
         };
         return t;
     }
@@ -2292,7 +2392,7 @@ namespace
             "#  cap.nocontents 200 without contents; timer fires the oldest pending timer; upd.known updateInventory(A edited, key 0);\n"
             "#  upd.guess (C, absent); upd.new (D, is_new); upd.asset (E with A's asset, key 1); remove A; move.nocopy B; move.copy A;\n"
             "#  create.ok|fail createInventoryItem then the POST answered success true|false; die/revive the object in gObjectList;\n"
-            "#  select (selection manager holds owner=other group=othergroup); notowner (permYouOwner false); listen/unlisten;\n"
+            "#  select (selection manager holds owner=other group=othergroup); notowner (permYouOwner false); listen/unlisten; clearlisteners;\n"
             "#  set.serial=<n>/set.expected=<n> set the fields directly.\n"
             "# Standard file/contents: Contents (obj), A copyable notecard (assetA), B no-copy object (assetB).\n";
 
@@ -2489,6 +2589,51 @@ namespace
             [](Scene& s) { ItemSpec c2 = spec_a(); c2.id = ITEM_C; c2.asset = ASSET_C; c2.next = PERM_MOVE; update_item(s, c2, TASK_INVENTORY_ITEM_KEY, false); });
         add("update_notowner_object_next_move", [](Scene& s) { preload(s); s.obj->mFakeYouOwner = false; },
             [](Scene& s) { ItemSpec c2 = spec_b(); c2.id = ITEM_C; c2.asset = ASSET_C; c2.next = PERM_MOVE; update_item(s, c2, TASK_INVENTORY_ITEM_KEY, false); });
+        // ... on the group-owned branch (the old item in the contents is group
+        // owned: new owner null, so the incoming owner changes) ...
+        auto make_group_owned = [](Scene& s, const ItemSpec& old_spec)
+        {
+            ItemSpec g = old_spec;
+            g.group = OTHER_GROUP;
+            g.group_owned = true;
+            g.owner = LLUUID::null;
+            LLPointer<vto::LLViewerInventoryItem> gi = make_item(g);
+            bnd().deleteInventoryItem(s.obj, g.id);
+            s.obj->mInventory->push_front(gi.get());
+            take_actions();
+        };
+        add("update_groupowned_notecard_next_move", [make_group_owned](Scene& s) { preload(s); make_group_owned(s, spec_a()); },
+            [](Scene& s) { ItemSpec a = spec_a(); a.next = PERM_MOVE; a.desc = "atomic"; update_item(s, a, TASK_INVENTORY_ITEM_KEY, false); });
+        add("update_groupowned_object_next_move", [make_group_owned](Scene& s) { preload(s); make_group_owned(s, spec_b()); },
+            [](Scene& s) { ItemSpec b = spec_b(); b.next = PERM_MOVE; b.desc = "not atomic"; update_item(s, b, TASK_INVENTORY_ITEM_KEY, false); });
+        // ... on the known-owner branch (the old item's owner, the agent,
+        // replaces the incoming owner, other) ...
+        add("update_known_notecard_next_move", loaded,
+            [](Scene& s) { ItemSpec a = spec_a(); a.owner = OTHER; a.next = PERM_MOVE; a.desc = "atomic"; update_item(s, a, TASK_INVENTORY_ITEM_KEY, false); });
+        add("update_known_object_next_move", loaded,
+            [](Scene& s) { ItemSpec b = spec_b(); b.owner = OTHER; b.next = PERM_MOVE; b.desc = "not atomic"; update_item(s, b, TASK_INVENTORY_ITEM_KEY, false); });
+        // ... and for a script (AT_LSL_TEXT is atomic) on the selected branch
+        add("update_selected_script_next_move", [](Scene& s) { preload(s); apply(s, "select"); },
+            [](Scene& s)
+            {
+                ItemSpec sc = spec_a();
+                sc.id = ITEM_C;
+                sc.asset = ASSET_C;
+                sc.type = LLAssetType::AT_LSL_TEXT;
+                sc.inv_type = LLInventoryType::IT_LSL;
+                sc.name = "Script C";
+                sc.next = PERM_MOVE;
+                update_item(s, sc, TASK_INVENTORY_ITEM_KEY, false);
+            });
+        // deleteInventoryItem itself on a duplicated id: the first match only
+        add("delete_duplicate_id_direct", [](Scene& s)
+            {
+                ItemSpec dup = spec_a();
+                dup.name = "Duplicate A";
+                dup.asset = ASSET_E;
+                preload(s, legacy_object(OBJ, "Contents") + legacy_item(spec_a()) + legacy_item(dup) + legacy_item(spec_b()));
+            },
+            [](Scene& s) { bnd().deleteInventoryItem(s.obj, ITEM_A); });
         // deleteInventoryItem erases the first match only: a file with A twice
         add("remove_duplicate_id", [](Scene& s)
             {
@@ -2532,6 +2677,13 @@ namespace
             {
                 ItemSpec sc = spec_a(); sc.id = ITEM_C; sc.asset = ASSET_C; sc.type = LLAssetType::AT_LSL_TEXT; sc.inv_type = LLInventoryType::IT_LSL; sc.name = "Script";
                 bnd().saveScript(s.obj, make_item(sc), false, false, TEMPLATE_ITEM);
+            });
+        // a template with no asset sends NewScriptInfo whether or not the
+        // script is new (the test is on the asset and the template only)
+        add("rezscript_template_not_new", loaded, [](Scene& s)
+            {
+                ItemSpec sc = spec_a(); sc.id = ITEM_C; sc.asset = LLUUID::null; sc.type = LLAssetType::AT_LSL_TEXT; sc.inv_type = LLInventoryType::IT_LSL; sc.name = "Script";
+                bnd().saveScript(s.obj, make_item(sc), true, false, TEMPLATE_ITEM);
             });
         add("rezscript_new_no_template", none, [](Scene& s)
             {

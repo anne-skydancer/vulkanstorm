@@ -69,6 +69,23 @@ namespace vks_task_oracle
                 obj->createInventoryItem(asset_type, inventory_type, sub_type, name, description, permissions, params, callback);
             }
             void deleteInventoryItem(LLViewerObject* obj, const LLUUID& item_id) override { obj->deleteInventoryItem(item_id); }
+            void clearInventoryListeners(LLViewerObject* obj) override { obj->clearInventoryListeners(); }
+            bool hasInventoryListeners(LLViewerObject* obj) override { return obj->hasInventoryListeners(); }
+            bool isInventoryDirty(LLViewerObject* obj) override { return obj->isInventoryDirty(); }
+            S16 getInventorySerial(LLViewerObject* obj) override { return obj->getInventorySerial(); }
+            bool isInventoryPending(LLViewerObject* obj) override { return obj->isInventoryPending(); }
+            LLInventoryObject* getInventoryObject(LLViewerObject* obj, const LLUUID& item_id) override
+            {
+                return obj->getInventoryObject(item_id);
+            }
+            LLInventoryItem* getInventoryItem(LLViewerObject* obj, const LLUUID& item_id) override
+            {
+                return obj->getInventoryItem(item_id);
+            }
+            bool isAssetInInventory(LLViewerObject* obj, LLViewerInventoryItem* item, LLAssetType::EType type) override
+            {
+                return obj->isAssetInInventory(item, type);
+            }
             LLInventoryObject* getInventoryRoot(LLViewerObject* obj) override { return obj->getInventoryRoot(); }
             void getInventoryContents(LLViewerObject* obj, LLInventoryObject::object_list_t& objects) override
             {
