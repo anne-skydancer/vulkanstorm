@@ -145,17 +145,53 @@ void LLStreamingAudio_VKS::start(const std::string& url)
     LL_INFOS() << "Starting internet stream: " << url << LL_ENDL;
     mURL = url; // keep original url here for comparison purposes
 
-    // The envelope starts at exactly zero when a fade-in waits for this
-    // stream (the login hold and every faded start), at full level otherwise
-    vks_music_set_envelope(a, mPendingFade ? 0.f : 1.f);
+    // Where the new stream's envelope starts, and the transition it carries:
+    // - a fade requested before any stream existed attaches to this one,
+    //   from exactly zero (the login hold and every faded start);
+    // - a stream replacing one whose transition was requested inherits it,
+    //   so the replacement is never left without a transition (which would
+    //   read as cancelled and hard-stop it): a hold or fade-out keeps the
+    //   new stream at zero, an unfinished fade-in restarts from zero, a
+    //   finished fade-in plays at full level. This is the case of another
+    //   parcel URL arriving during the login hold;
+    // - otherwise (fades off, or none requested) it plays at full level.
+    bool fade = false;
+    F32 envelope = 1.f;
+    F32 target = mFadeTarget;
+    F32 duration = mFadeDuration;
+    if (mPendingFade)
+    {
+        fade = true;
+        envelope = 0.f;
+    }
+    else if (mFadeSerial)
+    {
+        fade = true;
+        const bool finished = vks_music_transition_state(a, mFadeSerial) == 2;
+        if (target == 0.f)
+        {
+            envelope = 0.f;
+            duration = 0.f;
+        }
+        else if (finished)
+        {
+            envelope = target;
+            duration = 0.f;
+        }
+        else
+        {
+            envelope = 0.f;
+        }
+    }
+    mPendingFade = false;
     mFadeSerial = 0;
+    vks_music_set_envelope(a, envelope);
     // The player trims the URL and drops a " label" after it, as FMOD and
     // the media plugin path did
     vks_music_start(a, url.c_str());
-    if (mPendingFade)
+    if (fade && !beginAudioFade(target, duration))
     {
-        mPendingFade = false;
-        beginAudioFade(mFadeTarget, mFadeDuration);
+        LL_WARNS() << "Could not carry the music transition to the new stream" << LL_ENDL;
     }
     LL_INFOS() << "Playing stream..." << LL_ENDL;
 }

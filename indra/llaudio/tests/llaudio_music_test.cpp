@@ -21,7 +21,9 @@
  * metadata over an "ICY 200 OK" status line and Ogg comments reach the
  * metadata signal; playlists play; a dropped live stream reconnects; video and
  * web pages are refused (state failed, a pending fade fails); the speaker fill
- * of stereo music at 5.1.
+ * of stereo music at 5.1; a second parcel URL during the login hold keeps the
+ * hold and fades in from zero afterwards, and a start while a fade-in runs
+ * carries the fade instead of cancelling it.
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -492,5 +494,82 @@ namespace tut
         ensure(w.str() + ": mains at 0.7071", fabs(fl - 0.70710678 * 0.5 / sqrt(2.0)) < 0.01 && fabs(bl - fl) < 1e-6 && fabs(br - fr) < 1e-6);
         ensure(w.str() + ": LFE silent", lfe == 0.0);
         ensure(w.str() + ": centre", fc > 0.05);
+    }
+
+    template<> template<>
+    void music_object::test<6>()
+    {
+        set_test_name("a replacement stream keeps the login hold, and no start cancels a live transition");
+        ensure("LL_TEST_PORT", !url.empty());
+        Session s;
+        ensure("engine", s.open(2));
+        typedef LLStreamingAudioInterface::AudioFadeResult Result;
+        auto ok = [&](const char* when)
+        {
+            const Result r = s.stream->getAudioFadeResult();
+            ensure(std::string(when) + ": not cancelled or failed", r == Result::Pending || r == Result::Complete);
+        };
+        // As LLViewerAudio::startInternetStreamWithAutoFade does before
+        // STATE_STARTED: startFading() holds at zero, then the stream starts
+        ensure("hold before the first stream", s.stream->beginAudioFade(0.f, 0.f));
+        s.stream->start(url + "/live/tone.ogg?loops=8&length=1&key=first");
+        // Until a second of it has been mixed (the player buffers 3 s first)
+        for (int i = 0; i < 4000 && s.stats().pulled_frames < RATE; ++i)
+        {
+            s.step();
+            ok("first stream held");
+        }
+        ensure("the first stream plays", s.stats().pulled_frames >= RATE);
+        ensure("held at zero", s.first_sound() == s.out.size() / 2);
+
+        // Another parcel URL during the login hold: startFading() again (the
+        // old stream still has a URL, so this is a live transition), then the
+        // replacement starts
+        ensure("hold before the replacement", s.stream->beginAudioFade(0.f, 0.f));
+        s.stream->start(url + "/live/tone.mp3?loops=8&length=1&key=second");
+        ensure_equals("replacement URL", s.stream->getURL(), url + "/live/tone.mp3?loops=8&length=1&key=second");
+        const U64 pulled_before = s.stats().pulled_frames;
+        for (int i = 0; i < 4000 && s.stats().pulled_frames < pulled_before + RATE; ++i)
+        {
+            s.step();
+            ok("replacement during the login hold");
+        }
+        ensure("the replacement decodes", s.stats().pulled_frames >= pulled_before + RATE);
+        ensure("the replacement is held at zero", s.first_sound() == s.out.size() / 2);
+        ensure_equals("the replacement is playing", s.stream->isPlaying(), 1);
+
+        // STATE_STARTED: the real fade-in of the replacement, from zero
+        const size_t start_frame = s.out.size() / 2;
+        ensure("fade-in accepted", s.stream->beginAudioFade(1.f, 0.5f));
+        bool complete = false;
+        for (int i = 0; i < 400 && !complete; ++i)
+        {
+            s.step();
+            ok("fade-in of the replacement");
+            complete = s.stream->getAudioFadeResult() == Result::Complete;
+        }
+        ensure("the replacement faded in", complete);
+        const size_t first = s.first_sound();
+        ensure("the fade-in starts from zero", first >= start_frame && first < start_frame + 64);
+        const double early = rms(s.out, 2, 0, first, RATE / 100);
+        const double full = rms(s.out, 2, 0, s.out.size() / 2 - RATE / 10, RATE / 20);
+        ensure("the fade-in rises", early < 0.1 * full && full > 0.3);
+
+        // General case: a start while a fade-in is still running carries it
+        ensure("second fade-in", s.stream->beginAudioFade(0.f, 0.f));
+        s.step();
+        ensure("fade-in accepted", s.stream->beginAudioFade(1.f, 1.0f));
+        s.step();
+        ensure("still fading in", s.stream->getAudioFadeResult() == Result::Pending);
+        s.stream->start(url + "/live/tone.flac?loops=8&length=1&key=third");
+        complete = false;
+        for (int i = 0; i < 600 && !complete; ++i)
+        {
+            s.step();
+            ok("start during a fade-in");
+            complete = s.stream->getAudioFadeResult() == Result::Complete;
+        }
+        ensure("the carried fade-in completed", complete);
+        s.stream->stop();
     }
 }
