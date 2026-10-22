@@ -35,6 +35,7 @@
 
 #include "llaudioengine_vks.h"
 #include "lllistener_vks.h"
+#include "llstreamingaudio_vks.h"
 
 #include "vkstorm_ffi.h"
 
@@ -262,9 +263,7 @@ std::string LLAudioEngine_VKS::getDriverName(bool verbose)
 
 LLStreamingAudioInterface* LLAudioEngine_VKS::createDefaultStreamingAudioImpl() const
 {
-    // Parcel music goes through the media plugin path until the
-    // engine's own streaming slot is wired
-    return nullptr;
+    return new LLStreamingAudio_VKS();
 }
 
 void LLAudioEngine_VKS::allocateListener()

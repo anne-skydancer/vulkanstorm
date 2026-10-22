@@ -621,6 +621,13 @@ void audio_update_volume(bool force_update)
         F32 fade_volume = LLViewerAudio::getInstance()->getFadeVolume();
 
         LLStreamingAudioInterface* stream = gAudiop->getStreamingAudioImpl();
+        if (stream)
+        {
+            // Speaker fill of stereo music, applied at once by engines that
+            // mix the music themselves (the default engine)
+            static LLCachedControl<S32> music_spatial_sound(gSavedSettings, "FSMusicSpatialSound");
+            stream->setMusicSpatialLayout(music_spatial_sound());
+        }
         if (stream && stream->hasAudioFade())
         {
             stream->setAudioHardMute(mute_audio || mute_music() ||
