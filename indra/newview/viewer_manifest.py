@@ -737,6 +737,13 @@ class Windows_x86_64_Manifest(ViewerManifest):
                 self.path("OpenAL32.dll")
                 self.path("alut.dll")
 
+            # The Vulkanstorm audio engine loads the decoder-only LGPL
+            # FFmpeg at run time for HE-AAC and Opus parcel music
+            if self.args.get('vksaudio', 'OFF').lower() == 'on':
+                self.path("avcodec-63.dll")
+                self.path("avutil-61.dll")
+                self.path("swresample-7.dll")
+
             # <VulkanStorm> Mesa Zink runtime (opt-in): stage into mesa\ so the
             # bundled opengl32.dll never shadows the native ICD by accident.
             if self.args.get('mesazink', 'OFF').lower() == 'on':
@@ -790,10 +797,10 @@ class Windows_x86_64_Manifest(ViewerManifest):
             # </FS:ND>
 
         self.path(src="licenses-win32.txt", dst="licenses.txt")
-        if self.args.get('soloud', 'OFF').lower() == 'on':
+        if self.args.get('vksaudio', 'OFF').lower() == 'on':
+            # Decoder-only LGPL FFmpeg (parcel music: HE-AAC, Opus)
             with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
-                self.path('soloud.txt')
-                self.path('soloud-miniaudio.txt')
+                self.path('ffmpeg.txt')
         self.path("featuretable.txt")
         self.path("cube.dae")
 
@@ -2396,6 +2403,15 @@ class LinuxManifest(ViewerManifest):
         with self.prefix(src=pkgdir, dst="bin"):
             self.path("ca-bundle.crt")
 
+        if self.args.get('vksaudio', 'OFF').lower() == 'on':
+            # The audio engine loads the decoder-only LGPL FFmpeg at run time
+            with self.prefix(src=os.path.join(pkgdir, 'lib', 'release'), dst="lib"):
+                self.path("libavcodec.so*")
+                self.path("libavutil.so*")
+                self.path("libswresample.so*")
+            with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
+                self.path('ffmpeg.txt')
+
         with self.prefix(src=os.path.join(pkgdir, 'lib', 'release'), dst="lib"):
             # self.path("libfreetype.so*")
             self.path("libapr-1.so*")
@@ -2700,7 +2716,7 @@ if __name__ == "__main__":
         dict(name='fmodstudio', description="""Indication if fmod studio libraries are needed""", default='OFF'),
         dict(name='mesazink', description="""Indication the Mesa Zink GL-over-Vulkan runtime is bundled""", default='OFF'),
         dict(name='openal', description="""Indication openal libraries are needed""", default='OFF'),
-        dict(name='soloud', description="""Include SoLoud package licenses""", default='OFF'),
+        dict(name='vksaudio', description="""Include the Vulkanstorm audio engine's FFmpeg libraries and license""", default='OFF'),
         dict(name='tracy', description="""Indication tracy profiler is enabled""", default='OFF'),
         dict(name='inno', description="Use Inno Setup for Windows installers", default='ON'),
         dict(name='velopack', description="""Use Velopack installer instead of NSIS""", default='OFF'),

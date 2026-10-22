@@ -1,10 +1,11 @@
 /**
- * @file llaudioengine_soloud.h
- * @brief Implementation of the audio engine using SoLoud
+ * @file llaudioengine_vks.h
+ * @brief The viewer's audio engine on vkstorm-audio (Rust): the output
+ *        device, the effects mixer, wind and parcel music.
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
- * Second Life Viewer Source Code
- * Copyright (C) 2026, Firestorm Viewer Project
+ * Vulkanstorm Viewer Source Code
+ * Copyright (C) 2026, Vulkanstorm Viewer Project
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,32 +23,27 @@
  * $/LicenseInfo$
  */
 
-#ifndef LL_AUDIOENGINE_SOLOUD_H
-#define LL_AUDIOENGINE_SOLOUD_H
+#ifndef LL_AUDIOENGINE_VKS_H
+#define LL_AUDIOENGINE_VKS_H
 
 #include "llaudioengine.h"
-#include "lllistener_soloud.h"
+#include "lllistener_vks.h"
 
-// AL/al.h leaks an empty OPENAL macro that clobbers the OPENAL enumerator
-// in SoLoud's BACKENDS enum when both headers end up in one translation unit
-#ifdef OPENAL
-#undef OPENAL
-#endif
+struct VksAudio;
+struct VksAudioWav;
 
-#include "soloud.h"
-#include "soloud_wav.h"
-
-class LLSoLoudWindSource;
-
-class LLAudioEngine_SoLoud : public LLAudioEngine
+// The default audio backend (vkstorm-rust rung six). The mixer is a port of
+// the SoLoud core the viewer used before (bit-identical output), behind the
+// same calls LLAudioEngine_SoLoud made; see doc/rust_port.md.
+class LLAudioEngine_VKS : public LLAudioEngine
 {
 public:
-    LLAudioEngine_SoLoud();
-    virtual ~LLAudioEngine_SoLoud();
+    LLAudioEngine_VKS();
+    virtual ~LLAudioEngine_VKS();
 
     virtual bool init(void *user_data, const std::string &app_title);
     virtual std::string getDriverName(bool verbose);
-    virtual LLStreamingAudioInterface* createDefaultStreamingAudioImpl() const { return nullptr; }
+    virtual LLStreamingAudioInterface* createDefaultStreamingAudioImpl() const;
     virtual void allocateListener();
 
     virtual void shutdown();
@@ -68,34 +64,40 @@ public:
     virtual void setDevice(const LLUUID& device_uuid);
     // </FS:Ansariel>
 
-    static SoLoud::Soloud* getSoloud() { return sBackendReady ? sSoloud : nullptr; }
+    // The engine while its output runs (null otherwise): every mixer call
+    // goes through it.
+    static VksAudio* getAudio() { return sBackendReady ? sAudio : nullptr; }
+    // The engine object whether or not its output runs (buffers release
+    // through it; the music player lives in it).
+    static VksAudio* getAudioObject() { return sAudio; }
 
 private:
-    friend struct LLSoLoudTestAccess;
-    bool startBackend(unsigned int backend = SoLoud::Soloud::MINIAUDIO, unsigned int channels = 2);
-    bool reinitBackend(unsigned int backend = SoLoud::Soloud::MINIAUDIO, unsigned int channels = 2);
+    friend struct LLVKSAudioTestAccess;
+    // The null device instead of hardware (tests, offline rendering).
+    bool initNull(unsigned int rate, unsigned int channels);
+    void backendStarted();
 
-    static SoLoud::Soloud* sSoloud;
+    static VksAudio* sAudio;
     static bool sBackendReady;
 
-    LLSoLoudWindSource* mWindSource;
-    SoLoud::handle mWindHandle;
+    bool mWindStarted = false;
     LLUUID mSelectedDeviceUUID;
     LLUUID mRequestedDeviceUUID;
     bool mDeviceChangePending = false;
+    S32 mLastDeviceState = 0;
     LLFrameTimer mDeviceRetryTimer;
     LLFrameTimer mDeviceListTimer;
     output_device_map_t mKnownDevices;
 };
 
-class LLAudioChannelSoLoud : public LLAudioChannel
+class LLAudioChannelVKS : public LLAudioChannel
 {
 public:
-    LLAudioChannelSoLoud();
-    virtual ~LLAudioChannelSoLoud();
+    LLAudioChannelVKS();
+    virtual ~LLAudioChannelVKS();
 
-    // Voice handles do not survive a backend reinit (device switch); the
-    // engine calls this on every channel to drop them safely
+    // Voice handles do not survive an output restart (device switch); the
+    // engine calls this on every channel to drop them
     void resetVoiceHandle() { cleanup(); }
 protected:
     /*virtual*/ void play();
@@ -110,27 +112,27 @@ protected:
     void applyVoiceParams();
     void startVoicePaused();
 
-    SoLoud::handle mHandle;
-    unsigned int mLastLoopCount;
+    U32 mHandle;
+    U32 mLastLoopCount;
     F32 mLastGain;
     bool mLastLoop;
 };
 
-class LLAudioBufferSoLoud : public LLAudioBuffer
+class LLAudioBufferVKS : public LLAudioBuffer
 {
 public:
-    LLAudioBufferSoLoud();
-    virtual ~LLAudioBufferSoLoud();
+    LLAudioBufferVKS();
+    virtual ~LLAudioBufferVKS();
 
     bool loadWAV(const std::string& filename);
     U32 getLength();
 
-    friend class LLAudioChannelSoLoud;
-    friend class LLAudioEngine_SoLoud;
+    friend class LLAudioChannelVKS;
+    friend class LLAudioEngine_VKS;
 protected:
-    SoLoud::Wav& getWav() { return mWav; }
+    VksAudioWav* getWav() const { return mWav; }
 
-    SoLoud::Wav mWav;
+    VksAudioWav* mWav;
 };
 
 #endif

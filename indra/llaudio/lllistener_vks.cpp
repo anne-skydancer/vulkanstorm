@@ -1,11 +1,10 @@
 /**
- * @file lllistener_soloud.cpp
- * @brief Implementation of LISTENER class abstracting the audio
- * support as a SoLoud implementation
+ * @file lllistener_vks.cpp
+ * @brief The listener of the vkstorm-audio engine.
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
- * Second Life Viewer Source Code
- * Copyright (C) 2026, Firestorm Viewer Project
+ * Vulkanstorm Viewer Source Code
+ * Copyright (C) 2026, Vulkanstorm Viewer Project
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,54 +23,50 @@
  */
 
 #include "linden_common.h"
-#include "llaudioengine_soloud.h"
+#include "llaudioengine_vks.h"
 
-#include "lllistener_soloud.h"
+#include "lllistener_vks.h"
+#include "vkstorm_ffi.h"
 
-LLListener_SoLoud::LLListener_SoLoud()
+LLListener_VKS::LLListener_VKS()
     : mDopplerFactor(1.0f),
       mRolloffFactor(1.0f)
 {
     init();
 }
 
-LLListener_SoLoud::~LLListener_SoLoud()
+LLListener_VKS::~LLListener_VKS()
 {
 }
 
-void LLListener_SoLoud::commitDeferredChanges()
+void LLListener_VKS::commitDeferredChanges()
 {
-    SoLoud::Soloud* soloud = LLAudioEngine_SoLoud::getSoloud();
-    if (!soloud)
+    VksAudio* audio = LLAudioEngine_VKS::getAudio();
+    if (!audio)
     {
         return;
     }
 
-    soloud->set3dListenerParameters(
-        mPosition.mV[0], mPosition.mV[1], mPosition.mV[2],
-        mListenAt.mV[0], mListenAt.mV[1], mListenAt.mV[2],
-        mListenUp.mV[0], mListenUp.mV[1], mListenUp.mV[2],
-        mVelocity.mV[0], mVelocity.mV[1], mVelocity.mV[2]);
-
-    soloud->update3dAudio();
+    vks_audio_set_listener(audio, mPosition.mV, mListenAt.mV, mListenUp.mV, mVelocity.mV);
+    vks_audio_update_3d(audio);
 }
 
-void LLListener_SoLoud::setDopplerFactor(F32 factor)
+void LLListener_VKS::setDopplerFactor(F32 factor)
 {
     mDopplerFactor = factor;
 }
 
-F32 LLListener_SoLoud::getDopplerFactor()
+F32 LLListener_VKS::getDopplerFactor()
 {
     return mDopplerFactor;
 }
 
-void LLListener_SoLoud::setRolloffFactor(F32 factor)
+void LLListener_VKS::setRolloffFactor(F32 factor)
 {
     mRolloffFactor = factor;
 }
 
-F32 LLListener_SoLoud::getRolloffFactor()
+F32 LLListener_VKS::getRolloffFactor()
 {
     return mRolloffFactor;
 }
