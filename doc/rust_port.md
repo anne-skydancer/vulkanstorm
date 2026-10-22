@@ -1705,9 +1705,14 @@ Linux is glibc 2.39, WSL 2.43).
   GCC 14, as does the rest of the focused list.
 - The viewer builds, stages (FFmpeg and its licence included) and reaches
   the login screen on Windows with empty settings and user directories; the
-  log shows `Vulkanstorm audio engine (Rust), backend WASAPI @ 48000 Hz, 6
-  channels (mask 0x3f), 1920 frame period, speakers, device Speakers (2-
+  log shows `SoLoud (Rust), version 202002, backend WASAPI @ 48000 Hz, 6
+  channels, 1920 frame buffer, mask 0x3f, speakers, device Speakers (2-
   Sound Blaster AE-7)` and `Using default impl to render streaming audio`.
+  The engine reports itself as `SoLoud 202002 (Rust)` (Audio Driver
+  Version), the SoLoud release its mixer is a port of
+  (`vkstorm_audio::UPSTREAM_BASELINE`: 202002, upstream e82fd32c1f, 3p-soloud
+  patch level vulkanstorm3), and the verbose form keeps the SoLoud backend's
+  wording.
 
 ### Measurements
 

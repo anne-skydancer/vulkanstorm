@@ -234,10 +234,19 @@ void LLAudioEngine_VKS::setDevice(const LLUUID& device_uuid)
 
 std::string LLAudioEngine_VKS::getDriverName(bool verbose)
 {
-    std::ostringstream version;
-    version << "Vulkanstorm audio engine (Rust)";
+    // The mixer is a port of SoLoud: the name and version come from the
+    // crate's record of that baseline. The verbose form is the one the
+    // SoLoud backend printed, with the channel mask, the form factor and the
+    // device appended.
+    if (!verbose)
+    {
+        return vks_audio_engine_info();
+    }
 
-    if (verbose && sAudio)
+    std::ostringstream version;
+    version << "SoLoud (Rust), version " << vks_audio_engine_version();
+
+    if (sAudio)
     {
         VksAudioFormat format{};
         std::string names;
@@ -247,8 +256,8 @@ std::string LLAudioEngine_VKS::getDriverName(bool verbose)
             const std::string backend = names.substr(0, split);
             const std::string device = split == std::string::npos ? std::string() : names.substr(split + 1);
             version << ", backend " << backend << " @ " << format.rate << " Hz, "
-                    << format.channels << " channels (mask 0x" << std::hex << format.channel_mask << std::dec
-                    << "), " << format.period_frames << " frame period, "
+                    << format.channels << " channels, " << format.period_frames << " frame buffer"
+                    << ", mask 0x" << std::hex << format.channel_mask << std::dec << ", "
                     << (format.headphones ? "headphones" : "speakers")
                     << (device.empty() ? "" : ", device ") << device;
         }

@@ -1194,6 +1194,10 @@ typedef struct VksMusicStats
 } VksMusicStats;
 
 const char* vks_audio_last_error(void);
+/* "SoLoud 202002 (Rust)" and "202002": the engine's name and the SoLoud release its
+ * mixer is a port of. Static. */
+const char* vks_audio_engine_info(void);
+const char* vks_audio_engine_version(void);
 
 /* uuid: 16 bytes (LLUUID::mData) or null / the null UUID for the default endpoint. */
 VksAudio* vks_audio_create(const uint8_t* uuid);
