@@ -7,6 +7,7 @@ include(LLAudio)
 include(FMODSTUDIO)
 include(OPENAL)
 include(SOLOUD)
+include(Rust)
 include(LLCommon)
 include(LLWindow)
 
@@ -67,6 +68,9 @@ target_link_libraries( llaudio
         llmath
         llmessage
         llfilesystem
+        # The sound asset decoder is Rust (vkstorm-audio); libvorbis stays
+        # for LLVorbisEncode (uploads) and as the parity test's oracle.
+        vkstorm_ffi
         ll::vorbis
     )
 
