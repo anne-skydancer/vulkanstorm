@@ -166,7 +166,6 @@ namespace
         return out;
     }
     std::string hex(const std::vector<U8>& v) { return hex(v.data(), v.size()); }
-    std::string hex(const std::string& s) { return hex((const U8*)s.data(), s.size()); }
 
     // Bytes as a quoted string: printable ASCII as is, '"' and '\' escaped,
     // everything else \xHH.

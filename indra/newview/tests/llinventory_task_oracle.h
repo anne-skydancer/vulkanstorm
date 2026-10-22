@@ -54,6 +54,13 @@
 class LLXferManager;
 class LLTemplateMessageReader;
 
+// LLViewerInventoryItem's packMessage/unpackMessage take this namespace's
+// LLMessageSystem (a subclass of the real one), as the frozen copies are
+// written against that name; they hide the base overloads on purpose.
+#if defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
+#endif
+
 namespace vks_task_oracle
 {
     class LLViewerObject;
