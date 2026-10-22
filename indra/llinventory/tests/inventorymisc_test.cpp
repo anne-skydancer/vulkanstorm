@@ -549,4 +549,36 @@ namespace tut
         ensure_equals("13.thumbnails::getThumbnailUUID() failed", src1->getThumbnailUUID(), src2->getThumbnailUUID());
         ensure_equals("14.favorites::getIsFavorite() failed", false, src2->getIsFavorite()); // currently not supposed to carry over
     }
+
+//******class LLSaleInfo*******//
+
+    template<> template<>
+    void inventory_object::test<15>()
+    {
+        set_test_name("legacy export of a sale type outside 0..3 writes 'not'");
+        // An unknown sale type (bad server data) used to stream lookup()'s
+        // NULL: an access violation on Windows, a bad stream elsewhere.
+        for (S32 type : { (S32)LLSaleInfo::FS_COUNT, 7 })
+        {
+            LLSaleInfo sale(static_cast<LLSaleInfo::EForSale>(type), 10);
+            std::ostringstream out;
+            ensure("sale info export returns true", sale.exportLegacyStream(out));
+            ensure("sale info export leaves the stream good", out.good());
+            ensure_equals("sale info export",
+                          out.str(),
+                          std::string("\tsale_info\t0\n\t{\n\t\tsale_type\tnot\n\t\tsale_price\t10\n\t}\n"));
+
+            LLPointer<LLInventoryItem> src = create_random_inventory_item();
+            src->setSaleInfo(sale);
+            std::ostringstream item_out;
+            src->exportLegacyStream(item_out, true);
+            ensure("item export leaves the stream good", item_out.good());
+            std::istringstream item_in(item_out.str());
+            LLPointer<LLInventoryItem> dst = new LLInventoryItem();
+            dst->importLegacyStream(item_in);
+            ensure_equals("item reimport: sale type", dst->getSaleInfo().getSaleType(), LLSaleInfo::FS_NOT);
+            ensure_equals("item reimport: sale price", dst->getSaleInfo().getSalePrice(), 10);
+            ensure_equals("item reimport: name", dst->getName(), src->getName());
+        }
+    }
 }
