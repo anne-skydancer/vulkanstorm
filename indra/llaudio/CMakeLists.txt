@@ -55,8 +55,8 @@ if (TARGET ll::openal)
 endif ()
 
 if (TARGET ll::vksaudio)
-    list(APPEND llaudio_SOURCE_FILES llaudioengine_vks.cpp lllistener_vks.cpp)
-    list(APPEND llaudio_HEADER_FILES llaudioengine_vks.h lllistener_vks.h)
+    list(APPEND llaudio_SOURCE_FILES llaudioengine_vks.cpp lllistener_vks.cpp llstreamingaudio_vks.cpp)
+    list(APPEND llaudio_HEADER_FILES llaudioengine_vks.h lllistener_vks.h llstreamingaudio_vks.h)
 endif ()
 
 list(APPEND llaudio_SOURCE_FILES ${llaudio_HEADER_FILES})

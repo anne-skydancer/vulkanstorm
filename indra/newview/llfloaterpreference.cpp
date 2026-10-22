@@ -846,11 +846,13 @@ bool LLFloaterPreference::postBuild()
 #endif
     // </FS:Ansariel>
 
-    // <FS:Ansariel> Disable options only available on Windows and not on other platforms
-#if !LL_WINDOWS
+#if !LL_VKS_AUDIO
+    // The speaker fill of parcel music is the Vulkanstorm audio engine's
+    // (Windows and Linux); other engines have no such setting
     childSetVisible("FSMusicSpatialSound", false);
     childSetVisible("spatial_sound_label", false);
 #endif
+    // <FS:Ansariel> Disable options only available on Windows and not on other platforms
 #ifndef LL_WINDOWS
     childSetEnabled("FSDisableWMIProbing", false);
 #endif
