@@ -30,6 +30,8 @@
 #include "../llappviewer.h"
 #include "../llviewerwindow.h"
 #include "../llviewerregion.h"
+#include "../llcapabilityprovider.h"
+#include "../llvoavatarself.h"
 #include "../llviewernetwork.h"
 #include "../llviewercontrol.h"
 #include "../llviewerfoldertype.h"
@@ -136,6 +138,7 @@ namespace
     VKS_STEAL(CallbackMap, callback_map_t LLInventoryCallbackManager::*);
     VKS_STEAL(CallbackLast, U32 LLInventoryCallbackManager::*);
     VKS_STEAL(RlvEnabled, bool*);
+    VKS_STEAL(StartupState, EStartupState*);
 #undef VKS_STEAL
 }
 template struct Steal<ModelCatMap, &LLInventoryModel::mCategoryMap>;
@@ -169,6 +172,7 @@ template struct Steal<NameCacheRunning, &LLAvatarNameCache::mRunning>;
 template struct Steal<CallbackMap, &LLInventoryCallbackManager::mMap>;
 template struct Steal<CallbackLast, &LLInventoryCallbackManager::mLastCallback>;
 template struct Steal<RlvEnabled, &RlvHandler::m_fEnabled>;
+template struct Steal<StartupState, &LLStartUp::gStartupState>;
 
 namespace
 {
@@ -325,6 +329,13 @@ namespace vks_inv
         gSavedSettings.declareBOOL("QAModeFakeSystemFolderIssues", false, "", LLControlVariable::PERSIST_NO);
         gSavedSettings.declareBOOL("FSDontNagWhenPurging", false, "", LLControlVariable::PERSIST_NO);
         gSavedSettings.declareU32("InventorySortOrder", 7, "", LLControlVariable::PERSIST_NO);
+        // Read only by the real llaisapi.cpp and llinventorymodelbackgroundfetch.cpp
+        // (VKS_INVMODEL_STUB_FETCH=0).
+        gSavedSettings.declareBOOL("FSUseAis3Api", true, "", LLControlVariable::PERSIST_NO);
+        gSavedSettings.declareS32("BatchSizeAIS3", 20, "", LLControlVariable::PERSIST_NO);
+        gSavedSettings.declareU32("PoolSizeAIS", 20, "", LLControlVariable::PERSIST_NO);
+        gSavedSettings.declareBOOL("DebugAvatarAppearanceMessage", false, "", LLControlVariable::PERSIST_NO);
+        gSavedSettings.declareBOOL("UseHTTPInventory", true, "", LLControlVariable::PERSIST_NO);
         gSavedPerAccountSettings.declareBOOL("LockAOFolders", true, "", LLControlVariable::PERSIST_NO);
         gSavedPerAccountSettings.declareBOOL("LockBridgeFolder", true, "", LLControlVariable::PERSIST_NO);
         gSavedPerAccountSettings.declareBOOL("LockWearableFavoritesFolders", true, "", LLControlVariable::PERSIST_NO);
@@ -460,9 +471,71 @@ namespace vks_inv
     }
 }
 
+// ---- the agent's region ------------------------------------------------------
+// LLViewerRegion cannot be constructed without llviewerregion.cpp. The
+// region is raw storage whose first word is the vtable pointer of
+// RegionShim, an LLCapabilityProvider (LLViewerRegion's primary base, at
+// offset 0): the virtual getCapability()/getHost()/getDescription() calls
+// made on the region land in RegionShim and answer from the configuration;
+// the non-virtual capability queries are defined below. Nothing else of the
+// region may be used.
+namespace
+{
+    class RegionShim : public LLCapabilityProvider
+    {
+    public:
+        std::string getCapability(const std::string& name) const override
+        {
+            std::map<std::string, std::string>::const_iterator it = g_config.capabilities.find(name);
+            return it == g_config.capabilities.end() ? std::string() : it->second;
+        }
+        const LLHost& getHost() const override { static LLHost host; return host; }
+        std::string getDescription() const override { return "inventory parity region"; }
+    };
+
+    alignas(64) unsigned char g_region_storage[sizeof(LLViewerRegion)];
+
+    LLViewerRegion* region()
+    {
+        static bool made = false;
+        if (!made)
+        {
+            memset(g_region_storage, 0, sizeof(g_region_storage));
+            RegionShim shim;
+            memcpy(g_region_storage, (const void*)&shim, sizeof(void*));
+            made = true;
+        }
+        return reinterpret_cast<LLViewerRegion*>(g_region_storage);
+    }
+}
+
+bool LLViewerRegion::isCapabilityAvailable(const std::string& name) const
+{
+    std::map<std::string, std::string>::const_iterator it = g_config.capabilities.find(name);
+    return it != g_config.capabilities.end() && !it->second.empty();
+}
+bool LLViewerRegion::capabilitiesReceived() const { return g_config.capabilities_received; }
+
+// ---- start-up state, HTTP inventory, outfit (used by the real fetch code) -------
+
+EStartupState LLStartUp::gStartupState = STATE_STARTED;
+bool use_http_inventory() { return g_config.http_inventory; }
+LLPointer<LLVOAvatarSelf> gAgentAvatarp;
+void dump_sequential_xml(const std::string, const LLSD&) {}
+const LLUUID LLAppearanceMgr::getBaseOutfitUUID() { return g_config.base_outfit; }
+
+namespace vks_inv
+{
+    void set_startup_state(S32 state) { *steal(StartupState()) = (EStartupState)state; }
+}
+
 // ---- LLAgent ------------------------------------------------------------------
 
-LLViewerRegion* LLAgent::getRegion() const { return NULL; }
+LLViewerRegion* LLAgent::getRegion() const { return g_config.region_present ? region() : NULL; }
+std::string LLAgent::getRegionCapability(const std::string& name)
+{
+    return g_config.region_present ? region()->getCapability(name) : std::string();
+}
 bool LLAgent::isGodlikeWithoutAdminMenuFakery() const { return g_config.godlike; }
 bool LLAgent::isInGroup(const LLUUID& group_id, bool) const { return g_config.agent_groups.count(group_id) > 0; }
 bool LLAgent::requestPostCapability(const std::string& cap, LLSD& body, httpCallback_t, httpCallback_t)
@@ -499,6 +572,10 @@ bool LLGridManager::isInProductionGrid() const { return g_config.production_grid
 bool LLGridManager::isSystemGrid(const std::string&) const { return g_config.system_grid; }
 std::string LLGridManager::getGridId(const std::string&) { return g_config.grid_id; }
 
+#if VKS_INVMODEL_STUB_FETCH
+// The stubbed AIS and background fetch (VKS_INVMODEL_STUB_FETCH=1, the
+// default). With 0 the test links the real llaisapi.cpp and
+// llinventorymodelbackgroundfetch.cpp instead (see the header).
 // ---- AIS ----------------------------------------------------------------------
 
 const S32 AISAPI::HTTP_TIMEOUT = 180;
@@ -549,6 +626,7 @@ boost::signals2::connection LLInventoryModelBackgroundFetch::setFetchCompletionC
     vks_inv::note("fetch.completion_callback");
     return g_fetch_done.connect(cb);
 }
+#endif // VKS_INVMODEL_STUB_FETCH
 
 // ---- marketplace -----------------------------------------------------------------
 

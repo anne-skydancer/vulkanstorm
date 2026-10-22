@@ -59,6 +59,37 @@
  *      vks_inv::set_cache_dir(dir), then drive gInventory.
  *   3. vks_inv::take_journal() after each step.
  *
+ * Real fetch code (VKS_INVMODEL_STUB_FETCH=0). By default (1) this file
+ * stubs AISAPI (isAvailable() from the configuration; the calls journaled as
+ * "ais ...", their completions kept in ais_completions()) and
+ * LLInventoryModelBackgroundFetch ("fetch.*" journal lines, folder fetch
+ * activity from the configuration). A test that drives the real
+ * llaisapi.cpp and llinventorymodelbackgroundfetch.cpp adds both sources to
+ * its target and sets the compile definition VKS_INVMODEL_STUB_FETCH=0 for
+ * the whole target; the stubs, harness and generic files then compile
+ * unchanged next to them. What the real fetch code finds here:
+ *   - the agent's region: config().region_present, config().capabilities
+ *     (name -> URL; "InventoryAPIv3", "LibraryAPIv3", "FetchInventory2",
+ *     "FetchLib2", "FetchInventoryDescendents2", "FetchLibDescendents2", ...),
+ *     config().capabilities_received. The region is a shim: only
+ *     getCapability(), isCapabilityAvailable(), capabilitiesReceived() and
+ *     gAgent.getRegionCapability() may be used on it.
+ *   - set_startup_state(): LLStartUp::getStartupState() (STATE_STARTED at
+ *     process start).
+ *   - use_http_inventory(): config().http_inventory (true, as without OPENSIM).
+ *   - LLAppearanceMgr::getBaseOutfitUUID(): config().base_outfit.
+ *   - settings FSUseAis3Api (true), BatchSizeAIS3 (20), PoolSizeAIS (20),
+ *     DebugAvatarAppearanceMessage (false), UseHTTPInventory (true), at the
+ *     app_settings defaults; tests may change them with gSavedSettings.
+ *   - gAgentAvatarp is null; dump_sequential_xml() does nothing.
+ *   - LLAppViewer::getAppCoreHttp() returns a zero-filled, never-constructed
+ *     LLAppCoreHttp: every policy class reads as DEFAULT_POLICY_ID (0).
+ *   - LLCore's request queue exists (init_environment() calls
+ *     HttpRequest::createService()); its worker thread is not started:
+ *     a test that issues HTTP requests starts it and pumps the responses.
+ *   Everything else the real fetch code reaches (coroutines, the
+ *   coprocedure pool, HTTP) is the real library code.
+ *
  * vks_inv::model:: gives read and write access to LLInventoryModel's private
  * state (maps, child trees, backlinks, change batch, broken-link lists, locks,
  * usability flag) so tests can snapshot it; nothing in the sources is changed.
@@ -71,6 +102,13 @@
  */
 #ifndef LL_LLINVENTORYMODEL_PARITY_STUBS_H
 #define LL_LLINVENTORYMODEL_PARITY_STUBS_H
+
+// 1 (default): AISAPI and LLInventoryModelBackgroundFetch are stubbed here.
+// 0: the test target links the real llaisapi.cpp and
+// llinventorymodelbackgroundfetch.cpp (see "Real fetch code" below).
+#ifndef VKS_INVMODEL_STUB_FETCH
+#define VKS_INVMODEL_STUB_FETCH 1
+#endif
 
 #include "lluuid.h"
 #include "llsd.h"
@@ -122,6 +160,14 @@ namespace vks_inv
         bool category_removable = true;     // get_is_category_removable()
         bool trash_preview_visible = false; // LLFloaterPreviewTrash::isVisible()
         std::map<std::string, std::string> translations; // LLTrans::getString(), default: the key
+        // The agent's region (gAgent.getRegion(), getRegionCapability()):
+        // absent by default. When present, a capability is available when it
+        // has a non-empty URL here.
+        bool region_present = false;
+        std::map<std::string, std::string> capabilities;
+        bool capabilities_received = true;  // LLViewerRegion::capabilitiesReceived()
+        bool http_inventory = true;         // use_http_inventory() (non-OPENSIM: true)
+        LLUUID base_outfit;                 // LLAppearanceMgr::getBaseOutfitUUID()
     };
     Config& config();
     void reset_config();
@@ -141,7 +187,13 @@ namespace vks_inv
     // RlvHandler::isEnabled().
     void set_rlv_enabled(bool enabled);
 
+    // LLStartUp::getStartupState() (an EStartupState value; STATE_STARTED
+    // at process start). Not reset by reset_config().
+    void set_startup_state(S32 state);
+
     // ---- AIS completions kept by the stubs, in call order -----------------
+    // (VKS_INVMODEL_STUB_FETCH=1 only; with 0 it stays empty and
+    // fire_fetch_completion() does nothing.)
     typedef std::function<void(const LLUUID&)> completion_t;
     std::vector<std::pair<std::string, completion_t> >& ais_completions();
 
