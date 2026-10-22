@@ -30,6 +30,7 @@
 #include "llsd.h"
 #include "llsdserialize.h"
 
+#include "../llcategory.h"
 #include "../llinventory.h"
 #include "../test/lltut.h"
 
@@ -106,6 +107,19 @@ LLPointer<LLInventoryItem> create_random_inventory_item()
     set_random_inventory_metadata(item);
     return item;
 }
+
+// Fill the stack below the caller with a pattern, so that a reader which
+// reads an uninitialised local sees the pattern rather than a lucky zero.
+// Called through a volatile pointer so that it is never inlined.
+void fill_stack(U8 pattern)
+{
+    volatile U8 area[64 * 1024];
+    for (size_t i = 0; i < sizeof(area); ++i)
+    {
+        area[i] = pattern;
+    }
+}
+void (*volatile poison_stack)(U8) = fill_stack;
 
 LLPointer<LLInventoryCategory> create_random_inventory_cat()
 {
@@ -548,5 +562,107 @@ namespace tut
         ensure_equals("5.name::getName() failed", src1->getName(), src2->getName());
         ensure_equals("13.thumbnails::getThumbnailUUID() failed", src1->getThumbnailUUID(), src2->getThumbnailUUID());
         ensure_equals("14.favorites::getIsFavorite() failed", false, src2->getIsFavorite()); // currently not supposed to carry over
+    }
+
+//******class LLSaleInfo*******//
+
+    template<> template<>
+    void inventory_object::test<15>()
+    {
+        set_test_name("legacy export of a sale type outside 0..3 writes 'not'");
+        // An unknown sale type (bad server data) used to stream lookup()'s
+        // NULL: an access violation on Windows, a bad stream elsewhere.
+        for (S32 type : { (S32)LLSaleInfo::FS_COUNT, 7 })
+        {
+            LLSaleInfo sale(static_cast<LLSaleInfo::EForSale>(type), 10);
+            std::ostringstream out;
+            ensure("sale info export returns true", sale.exportLegacyStream(out));
+            ensure("sale info export leaves the stream good", out.good());
+            ensure_equals("sale info export",
+                          out.str(),
+                          std::string("\tsale_info\t0\n\t{\n\t\tsale_type\tnot\n\t\tsale_price\t10\n\t}\n"));
+
+            LLPointer<LLInventoryItem> src = create_random_inventory_item();
+            src->setSaleInfo(sale);
+            std::ostringstream item_out;
+            src->exportLegacyStream(item_out, true);
+            ensure("item export leaves the stream good", item_out.good());
+            std::istringstream item_in(item_out.str());
+            LLPointer<LLInventoryItem> dst = new LLInventoryItem();
+            dst->importLegacyStream(item_in);
+            ensure_equals("item reimport: sale type", dst->getSaleInfo().getSaleType(), LLSaleInfo::FS_NOT);
+            ensure_equals("item reimport: sale price", dst->getSaleInfo().getSalePrice(), 10);
+            ensure_equals("item reimport: name", dst->getName(), src->getName());
+        }
+    }
+
+//******class LLCategory*******//
+
+    template<> template<>
+    void inventory_object::test<16>()
+    {
+        set_test_name("LLCategory with an unknown top byte stays inside its tables");
+        // The defined top-level categories are unchanged.
+        ensure_equals("none: count", LLCategory::none.getSubCategoryCount(), 5);
+        ensure_equals("none: name", std::string(LLCategory::none.lookupName()), std::string("(none)"));
+        ensure_equals("object: count", LLCategory(0x01000000).getSubCategoryCount(), 1);
+        ensure_equals("object: name", std::string(LLCategory(0x01000000).lookupName()), std::string("Object"));
+        ensure_equals("landmark: count", LLCategory(0x05000000).getSubCategoryCount(), 0);
+        ensure_equals("6: count", LLCategory(0x06000000).getSubCategoryCount(), 0);
+        ensure_equals("6: name", std::string(LLCategory(0x06000000).lookupName()), std::string("Component"));
+        ensure("7 with a subcategory: name", LLCategory(0x07010000).lookupName() == NULL);
+
+        // A top byte above 6 used to index past CATEGORY_INDEX (and, above 7,
+        // past CATEGORY_NAME).
+        for (U32 top = 7; top <= 255; ++top)
+        {
+            std::string id = "top byte " + std::to_string(top);
+            for (U32 rest : { 0x000000u, 0x010000u, 0x010101u })
+            {
+                LLCategory cat((top << 24) | rest);
+                ensure_equals(id + ": count", cat.getSubCategoryCount(), 0);
+                ensure(id + ": name", cat.lookupName() == NULL);
+            }
+        }
+    }
+
+//******legacy readers*******//
+
+    template<> template<>
+    void inventory_object::test<17>()
+    {
+        set_test_name("legacy readers give defined values for malformed lines");
+        // Each value below used to come from an uninitialised local.
+        {
+            std::istringstream in("\t{\n\t\tcreation_date\tabc\n\t}\n");
+            LLPointer<LLInventoryItem> item = new LLInventoryItem();
+            poison_stack(0xa5);
+            item->importLegacyStream(in);
+            ensure_equals("item: unparsable creation_date", (S64)item->getCreationDate(), (S64)0);
+        }
+        {
+            std::istringstream in("\t{\n\t\tbase_mask\tzz\n\t}\n");
+            LLPermissions perm;
+            poison_stack(0xa5);
+            perm.importLegacyStream(in);
+            ensure_equals("permissions: unparsable first mask", perm.getMaskBase(), (U32)0);
+            ensure_equals("permissions: owner mask follows the base", perm.getMaskOwner(), (U32)0);
+        }
+        {
+            std::istringstream in("\t{\n\t\tgroup_owned\tx\n\t}\n");
+            LLPermissions perm;
+            poison_stack(0xa5);
+            perm.importLegacyStream(in);
+            ensure("permissions: unparsable group_owned", !perm.isGroupOwned());
+        }
+        {
+            // The old garbage rarely formed a valid UUID, so this case
+            // states the defined value rather than catching the old code.
+            std::istringstream in("\t{\n\t\tcreator_id\n\t}\n");
+            LLPermissions perm;
+            poison_stack(0xa5);
+            perm.importLegacyStream(in);
+            ensure("permissions: value-less creator_id", perm.getCreator().isNull());
+        }
     }
 }
