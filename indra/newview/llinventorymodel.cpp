@@ -3027,6 +3027,7 @@ bool LLInventoryModel::loadSkeleton(
             inventory_filename = gDirUtilp->getTempFilename();
             remove_inventory_file = true;
         }
+        bool is_cache_obsolete = false;
         if(fp)
         {
             fclose(fp);
@@ -3041,10 +3042,12 @@ bool LLInventoryModel::loadSkeleton(
             else
             {
                 LL_INFOS(LOG_INV) << "Unable to gunzip " << gzip_filename << LL_ENDL;
+                // A corrupt or truncated cache: don't fall back to a plain
+                // file left under the same name, and remove the .gz below.
+                is_cache_obsolete = true;
             }
         }
-        bool is_cache_obsolete = false;
-        if (loadFromFile(inventory_filename, categories, items, categories_to_update, is_cache_obsolete))
+        if (!is_cache_obsolete && loadFromFile(inventory_filename, categories, items, categories_to_update, is_cache_obsolete))
         {
             LL_PROFILE_ZONE_NAMED("loadFromFile");
             // We were able to find a cache of files. So, use what we
