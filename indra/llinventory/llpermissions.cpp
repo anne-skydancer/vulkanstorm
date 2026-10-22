@@ -578,10 +578,11 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
     char keyword[256];  /* Flawfinder: ignore */
     char valuestr[256]; /* Flawfinder: ignore */
     char uuid_str[256]; /* Flawfinder: ignore */
-    U32 mask;
+    U32 mask = 0;
 
     keyword[0]  = '\0';
     valuestr[0] = '\0';
+    uuid_str[0] = '\0';
 
     while (input_stream.good())
     {
