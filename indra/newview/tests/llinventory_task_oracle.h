@@ -25,6 +25,15 @@
 #ifndef LL_LLINVENTORY_TASK_ORACLE_H
 #define LL_LLINVENTORY_TASK_ORACLE_H
 
+// LLViewerInventoryItem's packMessage/unpackMessage take this namespace's
+// LLMessageSystem (a subclass of the real one), as the frozen copies are
+// written against that name; they hide the base overloads on purpose. GCC
+// reports the warning at the base declaration, so this precedes the
+// llinventory.h include.
+#if defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
+#endif
+
 #include "linden_common.h"
 
 #include "llassettype.h"
@@ -53,13 +62,6 @@
 
 class LLXferManager;
 class LLTemplateMessageReader;
-
-// LLViewerInventoryItem's packMessage/unpackMessage take this namespace's
-// LLMessageSystem (a subclass of the real one), as the frozen copies are
-// written against that name; they hide the base overloads on purpose.
-#if defined(__GNUC__)
-#pragma GCC diagnostic ignored "-Woverloaded-virtual"
-#endif
 
 namespace vks_task_oracle
 {
