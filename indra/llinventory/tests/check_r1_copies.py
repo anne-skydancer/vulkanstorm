@@ -17,16 +17,23 @@ removal of #include lines and of the forward declarations
 "class LLMessageSystem;" and "class LLUUID;" (which inside the namespace would
 declare new, incomplete classes); the namespace itself is outside the regions.
 
-Normalisation (the same for the copy and the live file): `#if 0` blocks are
-removed; comments are removed (`//` and `/* */`, outside literals), so a
-statement folded into a comment disappears and is flagged; #include lines and
+Normalisation (the same for the copy and the live file): backslash-newline
+line splices are joined first (translation phase 2), so a statement spliced
+onto a `//` line is inside the comment; `#if 0` blocks are removed; comments
+are removed (`//` and `/* */`, outside literals), so a statement folded into a
+comment disappears and is flagged; #include lines and
 the two forward declarations are removed; within each line, runs of
 whitespace outside string ("...") and character ('...') literals become one
 space; literals are kept verbatim; blank lines are dropped.
 
 A region matches when its normalised text occurs exactly once, as a run of
 whole lines, in the normalised live file: zero matches (the code changed) and
-more than one (ambiguous) both fail.
+more than one (ambiguous) both fail. The preprocessor conditionals enclosing
+the match must also be the ones that enclosed the region in the original
+source (recorded in the region's "conditionals" line; an include guard for a
+header): a conditional that now wraps the region, such as
+"#if 1 <new> #else <original> #endif", fails, because the matched text may be
+a dead branch. A conditional that splits a region breaks the match itself.
 
 The identifier fence guards the state the copies depend on outside the copied
 functions (the viewer subclasses' members, their types, initialisers and the
@@ -42,7 +49,7 @@ the test and re-runs the check). When a port step replaces a copied source on
 purpose, it narrows that run with --only to the sources it did not replace
 (for example --only indra/newview --allow-partial, which keeps the viewer
 subclass copies and their fence checked) and checks the frozen copies once against the commit
-they were made from with --at 472ecf270d.
+they were made from with --at 040ec69cfe.
 
 A partial run (--only) is refused unless --allow-partial is also given.
 
@@ -67,7 +74,7 @@ VIEWER_IDS = ["mTransactionID", "mOwnerID", "mVersion", "INV_OWNER_ID", "INV_VER
               "packMessage", "exportLLSD", "importLLSD", "setVersion", "VERSION_UNKNOWN"]
 FENCES = [
     # The allowlists hold every line outside the copies that touches a fenced identifier, normalised,
-    # as reviewed at 472ecf270d: declarations, initialisers, copies and accessors of the members,
+    # as reviewed at 472ecf270d (unchanged at 040ec69cfe): declarations, initialisers, copies and accessors of the members,
     # the senders that call packMessage, and the version checks of the fetch logic.
     ("indra/newview/llviewerinventory.h", VIEWER_IDS, [
         'LLTransactionID getTransactionID() const { return mTransactionID; }',
@@ -184,10 +191,42 @@ def normalise_line(line):
     return "".join(out)
 
 
+def splice_lines(text):
+    """Joins backslash-newline line splices first, as translation phase 2 does, so that
+    a statement spliced onto a // comment line becomes part of the comment."""
+    return text.replace("\\\r\n", "").replace("\\\n", "")
+
+
+COND_OPEN_RE = re.compile(r"^#\s*(if|ifdef|ifndef)\b")
+COND_ELSE_RE = re.compile(r"^#\s*(else|elif)\b")
+COND_END_RE = re.compile(r"^#\s*endif\b")
+
+
+def conditional_context(lines, index):
+    """The preprocessor conditionals enclosing normalised line `index`: one entry per
+    open #if/#ifdef/#ifndef (with any #else/#elif already passed), joined with " | "."""
+    stack = []
+    for line in lines[:index]:
+        if COND_OPEN_RE.match(line):
+            stack.append([line])
+        elif COND_ELSE_RE.match(line) and stack:
+            stack[-1].append(line)
+        elif COND_END_RE.match(line) and stack:
+            stack.pop()
+    return " | ".join(" / ".join(e) for e in stack)
+
+
+def region_context(source_text, region_lines):
+    """(match count, conditional context of the first match) of a region in a source."""
+    live = normalise(source_text)
+    runs = find_runs(live, normalise("\n".join(region_lines)))
+    return len(runs), (conditional_context(live, runs[0]) if runs else None)
+
+
 def normalise(text):
     """The normalised lines of a text."""
     out = []
-    for line in strip_comments(strip_if0(text)).split("\n"):
+    for line in strip_comments(strip_if0(splice_lines(text))).split("\n"):
         if INCLUDE_RE.match(line) or FWD_RE.match(line):
             continue
         n = normalise_line(line)
@@ -287,6 +326,14 @@ def main():
             got = normalise("\n".join(body))
             runs = find_runs(live_lines, got)
             label = "%s %s:%s (%s)" % (name, src, meta["lines"], meta.get("copied", ""))
+            if len(runs) == 1 and conditional_context(live_lines, runs[0]) != meta.get("conditionals", ""):
+                # A conditional that did not enclose the region in the original source now
+                # does (for example "#if 1 <new> #else <original> #endif"): the matched text
+                # may be a dead branch.
+                failures += 1
+                print("DIFF %s: the region is now inside the preprocessor conditionals [%s]; at copy time [%s]" % (
+                    label, conditional_context(live_lines, runs[0]), meta.get("conditionals", "")))
+                continue
             if len(runs) == 1:
                 covered.setdefault(src, set()).update(range(runs[0], runs[0] + len(got)))
                 note = "" if blob == meta["blob"] else " [source blob changed from %s to %s; region text unchanged]" % (meta["blob"][:10], blob[:10])
