@@ -3492,9 +3492,13 @@ void LLInventoryModel::buildParentChildMap()
             // *HACK - fix root inventory folder
             // some accounts has pbroken inventory root folders
 
+            // The root id from login wins: look for a replacement only when
+            // it does not name a root inventory folder.
+            const LLViewerInventoryCategory* login_root = getCategory(mRootFolderID);
+            const bool fix_root = !login_root || login_root->getPreferredType() != LLFolderType::FT_ROOT_INVENTORY;
             std::string name = "My Inventory";
             for (parent_cat_map_t::const_iterator it = mParentChildCategoryTree.begin(),
-                     it_end = mParentChildCategoryTree.end(); it != it_end; ++it)
+                     it_end = mParentChildCategoryTree.end(); fix_root && it != it_end; ++it)
             {
                 cat_array_t* cat_array = it->second;
                 for (cat_array_t::const_iterator cat_it = cat_array->begin(),
