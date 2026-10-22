@@ -34,6 +34,7 @@
  *   VKS_INVMODEL_USER_CACHE=<path to an .inv.llsd.gz>  local only: the
  *                              decode/re-encode identity check and timings of
  *                              a real cache; prints counts and timings only
+ *   VKS_INVMODEL_TRACE=1       progress on stderr (to locate a crash or hang)
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
