@@ -1,0 +1,4 @@
+# Sound assets, decoded sound files and recorded mix corpora are stored as is.
+*.ogg binary
+*.dsf binary
+*.vksa binary
