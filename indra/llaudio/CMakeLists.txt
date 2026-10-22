@@ -81,3 +81,16 @@ if( TARGET ll::soloud )
     add_executable(llsoloud_adapter_test EXCLUDE_FROM_ALL tests/llsoloud_adapter_test.cpp)
     target_link_libraries(llsoloud_adapter_test PRIVATE llaudio)
 endif()
+
+if (LL_TESTS AND TARGET ll::soloud)
+    include(LLAddBuildTest)
+    # Parity of the engine's mixed output and of the sound asset decoder
+    # against the corpora recorded from the C++ (SoLoud) implementation
+    # before its port to Rust (vkstorm-rust). The adapter sources are the
+    # only engine-specific parts of the test.
+    LL_ADD_INTEGRATION_TEST(llaudio_parity
+        "tests/llaudio_parity_soloud_adapter.cpp;tests/llaudio_parity_decode_adapter.cpp"
+        "llaudio;llfilesystem;llmessage;llmath;llcommon;ll::vorbis;ll::zlib-ng")
+    set_property(TARGET INTEGRATION_TEST_llaudio_parity APPEND PROPERTY
+        COMPILE_DEFINITIONS "VKS_AUDIO_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
+endif ()
