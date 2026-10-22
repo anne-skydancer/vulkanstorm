@@ -1,6 +1,8 @@
 # -*- cmake -*-
-# Inventory rung (vkstorm-rust rung seven), recorder R4: task inventory,
-# offers, giving and the inventory messages. Owned by R4 alone. Included from
-# the LL_TESTS block of indra/newview/CMakeLists.txt; it will register
-# INTEGRATION_TEST_llinventory_task_oracle, INTEGRATION_TEST_llinventory_offer_oracle
-# and INTEGRATION_TEST_llinventory_msgs_oracle.
+# Inventory rung (vkstorm-rust rung seven), recorder R4: object contents,
+# offers and giving, split between two recorders, each owning its own
+# fragment. The inventory UDP message handlers are recorded by R2 through
+# the real model. Included from the LL_TESTS block of
+# indra/newview/CMakeLists.txt.
+include(${CMAKE_CURRENT_LIST_DIR}/r4-task.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/r4-offer.cmake)

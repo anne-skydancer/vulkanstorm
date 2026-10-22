@@ -1,5 +1,6 @@
 # -*- cmake -*-
 # Inventory rung (vkstorm-rust rung seven), recorder R3: inventory fetch and
-# AIS. Owned by R3 alone. Included from the LL_TESTS block of
-# indra/newview/CMakeLists.txt; it will register INTEGRATION_TEST_llaisupdate_parity
-# and INTEGRATION_TEST_llinvfetch_parity.
+# AIS, split between two recorders, each owning its own fragment. Included
+# from the LL_TESTS block of indra/newview/CMakeLists.txt.
+include(${CMAKE_CURRENT_LIST_DIR}/r3-update.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/r3-fetch.cmake)
