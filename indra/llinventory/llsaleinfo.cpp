@@ -80,8 +80,14 @@ U32 LLSaleInfo::getCRC32() const
 
 bool LLSaleInfo::exportLegacyStream(std::ostream& output_stream) const
 {
+    const char* type = lookup(mSaleType);
+    if (!type)
+    {
+        LL_WARNS_ONCE() << "Unknown sale type: " << mSaleType << LL_ENDL;
+        type = lookup(LLSaleInfo::FS_NOT);
+    }
     output_stream << "\tsale_info\t0\n\t{\n";
-    output_stream << "\t\tsale_type\t" << lookup(mSaleType) << "\n";
+    output_stream << "\t\tsale_type\t" << type << "\n";
     output_stream << "\t\tsale_price\t" << mSalePrice << "\n";
     output_stream <<"\t}\n";
     return true;
