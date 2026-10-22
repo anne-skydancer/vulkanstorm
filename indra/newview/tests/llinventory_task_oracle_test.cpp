@@ -439,30 +439,52 @@ namespace
         return *e;
     }
 
-    // Packets received on the loopback receiver until it has been quiet for
-    // 100 ms (at most 3 s).
+    // Every datagram sent to the loopback receiver so far. A marker
+    // (StartPingCheck, OldestUnacked = a counter) is sent through the same
+    // message-system socket and circuit after them; datagrams from one socket
+    // to one loopback address arrive in order, so reading up to the marker
+    // collects everything sent before it. The marker is not returned.
     std::vector<std::vector<U8> > receive_packets()
     {
-        std::vector<std::vector<U8> > out;
+        static U32 counter = 0x52340000;
         Env& e = env();
-        auto last = std::chrono::steady_clock::now();
-        const auto start = last;
+        const U32 marker = ++counter;
+        vto::LLMessageSystem* m = vto::gMessageSystem;
+        m->::LLMessageSystem::newMessageFast(_PREHASH_StartPingCheck);
+        m->nextBlockFast(_PREHASH_PingID);
+        m->addU8Fast(_PREHASH_PingID, 0xa5);
+        m->addU32Fast(_PREHASH_OldestUnacked, marker);
+        m->::LLMessageSystem::sendMessage(e.loopback);
+
+        std::vector<std::vector<U8> > out;
+        const auto start = std::chrono::steady_clock::now();
         std::vector<char> buf(NET_BUFFER_SIZE);
         while (true)
         {
             S32 n = receive_packet(e.rsock, buf.data());
-            auto now = std::chrono::steady_clock::now();
             if (n > 0)
             {
-                out.push_back(std::vector<U8>(buf.begin(), buf.begin() + n));
-                last = now;
+                std::vector<U8> p(buf.begin(), buf.begin() + n);
+                // StartPingCheck: High 1 -> byte 6 is 0x01; PingID, OldestUnacked
+                if (n == 12 && p[6] == 0x01 && p[7] == 0xa5)
+                {
+                    U32 got;
+                    memcpy(&got, &p[8], 4);
+                    if (got == marker)
+                    {
+                        break;
+                    }
+                    continue; // an older marker
+                }
+                out.push_back(p);
                 continue;
             }
-            if (now - last > std::chrono::milliseconds(100) || now - start > std::chrono::seconds(3))
+            if (std::chrono::steady_clock::now() - start > std::chrono::seconds(10))
             {
+                out.push_back(std::vector<U8>()); // shown as a missing marker
                 break;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         return out;
     }
@@ -752,6 +774,10 @@ namespace
     // replaced by its ordinal.
     std::string packet_text(const std::vector<U8>& wire_in, const std::map<U64, std::string>& xfer_ids)
     {
+        if (wire_in.empty())
+        {
+            return "  packet <MARKER NOT RECEIVED WITHIN 10 s>\n";
+        }
         Env& e = env();
         std::vector<U8> wire = wire_in;
         for (size_t i = 1; i < 5 && i < wire.size(); ++i)
@@ -2255,6 +2281,8 @@ namespace
                 "#  before <state>; after <state> | <side effects in order (msg.send = LLMessageSystem::sendReliable)>\n"
                 "#  packets <n>: packet <name> flags=<byte 0> zerocoded wirelen\n"
                 "#   wire <datagram, packet id (bytes 1-4) zeroed; no acks are appended: nothing is ever received>\n"
+                "#   (a StartPingCheck marker sent after each action through the same socket delimits the capture;\n"
+                "#   it is not listed)\n"
                 "#   body <zero-expanded> and every block/variable as raw bytes (Variable fields also as text)\n"
                 "#  RequestXfer/AbortXfer ids are random (LLXferManager::getNextID): shown as <xfer id real#k> and zeroed\n"
                 "#  in body (and in wire when not zero-coded)\n"
