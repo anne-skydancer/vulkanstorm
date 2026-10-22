@@ -23,6 +23,18 @@
 
 namespace
 {
+    // Expectations a step must meet (checked in code, in record and replay):
+    // a non-empty notification batch (a non-zero mask or changed ids), or
+    // none; the number of callbacks fired; journal lines that must or must
+    // not occur.
+    struct StepExpect
+    {
+        enum Batch { ANY, NONEMPTY, NONE } batch = ANY;
+        S32 callbacks = -1;
+        std::vector<std::string> present;
+        std::vector<std::string> absent;
+    };
+
     struct MsgSteps : public Steps
     {
         explicit MsgSteps(const std::string& id, const World& w = standard_world()) : Steps(id, w)
@@ -33,18 +45,63 @@ namespace
             clear_journal();
         }
 
-        void msg(const std::string& label, const std::function<void()>& fn)
+        typedef StepExpect Expect;
+
+        void msg(const std::string& label, const std::function<void()>& fn, const Expect& expect = Expect())
         {
             trace("msgs " + c.id + " " + label);
             c.lines.push_back("step " + label);
             fn();
-            take(c.lines);
+            std::vector<std::string> journal = take_journal();
+            bool nonempty = false;
+            S32 fired = 0;
+            for (const std::string& l : journal)
+            {
+                c.lines.push_back("  " + l);
+                if (l.compare(0, 6, "batch ") == 0)
+                {
+                    if (l.compare(0, 14, "batch mask=0x0") != 0 || l.find("changed=[]") == std::string::npos) nonempty = true;
+                }
+                if (l.compare(0, 9, "callback ") == 0) ++fired;
+            }
+            std::string where = c.id + "/" + label + ": ";
+            if (expect.batch == Expect::NONEMPTY) tut::ensure(where + "expected a non-empty notification batch", nonempty);
+            if (expect.batch == Expect::NONE) tut::ensure(where + "expected no non-empty notification batch", !nonempty);
+            if (expect.callbacks >= 0) tut::ensure_equals(where + "callbacks fired", fired, expect.callbacks);
+            for (const std::string& want : expect.present)
+            {
+                bool found = false;
+                for (const std::string& l : journal) if (l.find(want) != std::string::npos) found = true;
+                tut::ensure(where + "expected a journal line with " + want, found);
+            }
+            for (const std::string& bad : expect.absent)
+            {
+                for (const std::string& l : journal) tut::ensure(where + "unexpected journal line " + l, l.find(bad) == std::string::npos);
+            }
             std::string pending;
             for (U32 id : callbacks_pending()) pending += (pending.empty() ? "" : ",") + std::to_string(id);
             c.lines.push_back("callbacks_registered=[" + pending + "] busy=" + std::to_string(window()->getBusyCount()));
             dump_model_delta(c.lines, seen);
         }
     };
+
+    MsgSteps::Expect expect_batch(S32 callbacks = -1, std::vector<std::string> present = {}, std::vector<std::string> absent = {})
+    {
+        MsgSteps::Expect e;
+        e.batch = MsgSteps::Expect::NONEMPTY;
+        e.callbacks = callbacks;
+        e.present = present;
+        e.absent = absent;
+        return e;
+    }
+
+    MsgSteps::Expect expect_nothing()
+    {
+        MsgSteps::Expect e;
+        e.batch = MsgSteps::Expect::NONE;
+        e.callbacks = 0;
+        return e;
+    }
 
     U32 cb(const std::string& tag)
     {
@@ -167,11 +224,17 @@ namespace
         send_to_viewer();
     }
 
-    LLSD item_llsd(const LLViewerInventoryItem& i, U32 callback_id, const LLUUID& agent = AGENT)
+    // An item record as LLInventoryItem::fromLLSD reads it (asLLSD's keys),
+    // plus agent_id and callback_id. integer_flags writes flags as an LLSD
+    // integer (fromLLSD reads both); otherwise flags stay asLLSD's 4-byte
+    // binary, which notation writes raw (b(4)"...", with NUL bytes) or, as
+    // pretty binary, b16"...".
+    LLSD item_llsd(const LLViewerInventoryItem& i, U32 callback_id, const LLUUID& agent = AGENT, bool integer_flags = true)
     {
         LLSD sd = i.asLLSD();
         sd["agent_id"] = agent;
         sd["callback_id"] = (LLSD::Integer)callback_id;
+        if (integer_flags) sd["flags"] = (LLSD::Integer)i.LLInventoryItem::getFlags();
         return sd;
     }
 
@@ -188,11 +251,59 @@ namespace
         return sd;
     }
 
+    // The encodings LLDispatchBulkUpdateInventory's LLSDSerialize::deserialize
+    // accepts: notation (raw binary or b16 pretty binary) and XML.
     std::string notation_param(const LLSD& sd)
     {
         std::ostringstream s;
         LLSDSerialize::toNotation(sd, s);
         return s.str();
+    }
+    std::string notation_b16_param(const LLSD& sd)
+    {
+        std::ostringstream s;
+        LLSDSerialize::toPrettyBinaryNotation(sd, s);
+        return s.str();
+    }
+    std::string xml_param(const LLSD& sd)
+    {
+        std::ostringstream s;
+        LLSDSerialize::toXML(sd, s);
+        return s.str();
+    }
+
+    // LargeGenericMessage through the event queue: LLMessageSystem::dispatch
+    // with the message as LLSD ({"body": {...}}), read by the LLSD message
+    // reader (getString returns the whole LLSD string, NUL bytes included).
+    void large_generic_via_event_queue(const std::string& method, const std::vector<std::string>& params)
+    {
+        LLSD body;
+        body["AgentData"][0]["AgentID"] = AGENT;
+        body["AgentData"][0]["SessionID"] = SESSION;
+        body["AgentData"][0]["TransactionID"] = LLUUID::null;
+        body["MethodData"][0]["Method"] = method;
+        body["MethodData"][0]["Invoice"] = pid(TAG_TXN, 9);
+        for (size_t k = 0; k < params.size(); ++k) body["ParamList"][(LLSD::Integer)k]["Parameter"] = params[k];
+        LLSD message;
+        message["body"] = body;
+        message["sender"] = "127.0.0.1:13000";
+        vks_inv::note("in.event_queue LargeGenericMessage " + llsd_hex(message));
+        LLMessageSystem::dispatch("LargeGenericMessage", message);
+    }
+
+    // A folder-only notation parameter of exactly 'size' bytes (the name is
+    // padded); 0 when the record alone is longer.
+    std::string folder_param_of_size(size_t size, U64 n)
+    {
+        for (size_t pad = 0; pad < 1400; ++pad)
+        {
+            LLSD m;
+            m["folder_data"].append(folder_llsd({ F(n), F(SF_OBJECTS), "P" + std::string(pad, 'x'), LLFolderType::FT_NONE, 0 }));
+            std::string p = notation_param(m);
+            if (p.size() == size) return p;
+            if (p.size() > size) break;
+        }
+        return std::string();
     }
 
     void inventory_descendents(const LLUUID& folder, S32 version, S32 descendents, const std::vector<Folder>& folders,
@@ -271,7 +382,13 @@ namespace
                                   { new_item(915, F(SF_OBJECTS), "Multi 3"), cb("bu4") } }, pid(TAG_TXN, 7));
             });
             s.msg("item_existing_same_and_moved", [] { LLPointer<LLViewerInventoryItem> m = copy_of(I(11)); m->setParent(F(SF_OBJECTS)); bulk_update({}, { { copy_of(I(10)), cb("bu5") }, { m, cb("bu6") } }, pid(TAG_TXN, 8)); });
-            s.msg("item_into_unknown_version_fetches_parent", [] { bulk_update({}, { { new_item(916, F(42), "Into unknown"), cb("bu7") } }, pid(TAG_TXN, 9)); });
+            s.msg("item_into_unknown_version_fetches_parent", []
+            {
+                // Outfit B: version made unknown here, its fetch timer expired
+                // since it was loaded, so the parent fetch() is observable.
+                gInventory.getCategory(F(41))->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+                bulk_update({}, { { new_item(916, F(41), "Into unknown"), cb("bu7") } }, pid(TAG_TXN, 9));
+            }, expect_batch(1, { "fetch.start " + F(41).asString() }));
             s.msg("null_item_block", []
             {
                 LLPointer<LLViewerInventoryItem> n = new_item(917, F(SF_OBJECTS), "Null id");
@@ -283,10 +400,12 @@ namespace
                 config().marketplace_depth[F(920)] = 1;
                 config().marketplace_depth[F(921)] = 2;
                 config().marketplace_depth[F(922)] = 3;
+                config().marketplace_depth[F(923)] = 0;
                 config().listing_ids[F(920)] = 4242;
                 config().listing_ids[F(SF_OBJECTS)] = 4343;
                 bulk_update({ { F(920), F(SF_OBJECTS), "Listing", LLFolderType::FT_NONE, 0 }, { F(921), F(SF_OBJECTS), "Version", LLFolderType::FT_NONE, 0 },
-                              { F(922), F(SF_OBJECTS), "Stock", LLFolderType::FT_MARKETPLACE_STOCK, 0 } }, {}, pid(TAG_TXN, 11));
+                              { F(922), F(SF_OBJECTS), "Stock", LLFolderType::FT_MARKETPLACE_STOCK, 0 },
+                              { F(923), F(SF_OBJECTS), "Depth 0 (the listings root)", LLFolderType::FT_NONE, 0 } }, {}, pid(TAG_TXN, 11));
             });
             s.msg("rlv_rename_kept", []
             {
@@ -309,50 +428,130 @@ namespace
             cases.push_back(s.c);
         }
         {
+            // BulkUpdateInventory through gGenericDispatcher, which
+            // LLDispatchBulkUpdateInventory reads with LLSDSerialize::deserialize
+            // (notation, or XML/binary with their headers). Carriers:
+            //  - GenericMessage (UDP): a Variable 1 parameter, at most 255
+            //    bytes with its NUL (254 of text): a folder record fits, an
+            //    item record never does;
+            //  - LargeGenericMessage over UDP (UDPDeprecated): the template
+            //    reader's getString() keeps at most 1200 bytes of text (a
+            //    1201-byte parameter is cut) and stops at the first NUL: one item record
+            //    with integer flags fits, two do not, raw binary is cut;
+            //  - LargeGenericMessage through the event queue (the LLSD
+            //    message reader): the whole string, NULs included.
             MsgSteps s("bulk_update_generic");
             s.msg("register_dispatcher", [] { model::register_generic_dispatch(); });
-            s.msg("items_and_folder", []
+            s.msg("generic_folder_only", []
             {
                 LLSD m;
-                m["item_data"].append(item_llsd(*new_item(950, F(951), "Generic item"), cb("g1")));
-                m["item_data"].append(item_llsd(*new_item(952, F(SF_OBJECTS), "Generic item 2"), cb("g2")));
-                m["folder_data"].append(folder_llsd({ F(951), F(SF_OBJECTS), "Generic folder", LLFolderType::FT_NONE, 0 }));
+                m["folder_data"].append(folder_llsd({ F(950), F(SF_OBJECTS), "Generic folder", LLFolderType::FT_NONE, 0 }));
                 generic_message(false, "BulkUpdateInventory", { notation_param(m) });
-            });
-            s.msg("existing_folder_resets_version", []
+            }, expect_batch(0));
+            s.msg("generic_param_253_bytes", [] { generic_message(false, "BulkUpdateInventory", { folder_param_of_size(253, 951) }); }, expect_batch(0));
+            s.msg("generic_param_254_bytes_limit", [] { generic_message(false, "BulkUpdateInventory", { folder_param_of_size(254, 952) }); }, expect_batch(0));
+            s.msg("generic_param_255_bytes_cut", [] { generic_message(false, "BulkUpdateInventory", { folder_param_of_size(255, 953) }); }, expect_nothing());
+            s.msg("generic_item_does_not_fit", []
+            {
+                LLSD m;
+                m["item_data"].append(item_llsd(*new_item(954, F(SF_OBJECTS), "Too long"), cb("g0")));
+                generic_message(false, "BulkUpdateInventory", { notation_param(m) });
+            }, expect_nothing());
+            s.msg("large_udp_param_1199_bytes", [] { generic_message(true, "BulkUpdateInventory", { folder_param_of_size(1199, 955) }); }, expect_batch(0));
+            s.msg("large_udp_param_1200_bytes_limit", [] { generic_message(true, "BulkUpdateInventory", { folder_param_of_size(1200, 956) }); }, expect_batch(0));
+            s.msg("large_udp_param_1201_bytes_cut", [] { generic_message(true, "BulkUpdateInventory", { folder_param_of_size(1201, 957) }); }, expect_nothing());
+            s.msg("large_udp_one_item_integer_flags", []
+            {
+                LLSD m;
+                m["item_data"].append(item_llsd(*new_item(958, F(SF_OBJECTS), "UDP item", LLAssetType::AT_OBJECT, LLInventoryType::IT_OBJECT, 0x123), cb("g1")));
+                generic_message(true, "BulkUpdateInventory", { notation_param(m) });
+            }, expect_batch(1));
+            s.msg("large_udp_two_items_cut", []
+            {
+                LLSD m;
+                m["item_data"].append(item_llsd(*new_item(959, F(SF_OBJECTS), "UDP first"), cb("g2")));
+                m["item_data"].append(item_llsd(*new_item(960, F(SF_OBJECTS), "UDP second"), cb("g3")));
+                generic_message(true, "BulkUpdateInventory", { notation_param(m) });
+            }, expect_nothing());
+            s.msg("large_udp_raw_binary_cut_at_nul", []
+            {
+                LLSD m;
+                m["item_data"].append(item_llsd(*new_item(961, F(SF_OBJECTS), "raw binary flags"), cb("g4"), AGENT, false));
+                generic_message(true, "BulkUpdateInventory", { notation_param(m) });
+            }, expect_nothing());
+            s.msg("queue_items_and_folder", []
+            {
+                // Items before folders in the message; the first item's parent
+                // is the folder of the same message (unpacked after the items,
+                // applied before them); per-item callback ids.
+                LLSD m;
+                m["item_data"].append(item_llsd(*new_item(962, F(963), "Queued item in new folder"), cb("g5")));
+                m["item_data"].append(item_llsd(*new_item(964, F(SF_OBJECTS), "Queued item 2", LLAssetType::AT_OBJECT, LLInventoryType::IT_OBJECT, 0x123), cb("g6")));
+                m["folder_data"].append(folder_llsd({ F(963), F(SF_OBJECTS), "Queued folder", LLFolderType::FT_NONE, 0 }));
+                large_generic_via_event_queue("BulkUpdateInventory", { notation_param(m) });
+            }, expect_batch(2, { "callback g5 " + I(962).asString(), "callback g6 " + I(964).asString() }));
+            s.msg("queue_raw_binary_flags", []
+            {
+                LLSD m;
+                m["item_data"].append(item_llsd(*new_item(965, F(SF_OBJECTS), "raw binary flags", LLAssetType::AT_OBJECT, LLInventoryType::IT_OBJECT, 0x80000001), cb("g7"), AGENT, false));
+                large_generic_via_event_queue("BulkUpdateInventory", { notation_param(m) });
+            }, expect_batch(1));
+            s.msg("queue_b16_binary_flags", []
+            {
+                LLSD m;
+                m["item_data"].append(item_llsd(*new_item(966, F(SF_OBJECTS), "b16 flags", LLAssetType::AT_OBJECT, LLInventoryType::IT_OBJECT, 0x80000002), cb("g8"), AGENT, false));
+                large_generic_via_event_queue("BulkUpdateInventory", { notation_b16_param(m) });
+            }, expect_batch(1));
+            s.msg("queue_xml", []
+            {
+                LLSD m;
+                m["item_data"].append(item_llsd(*new_item(967, F(SF_OBJECTS), "XML item"), cb("g9"), AGENT, false));
+                large_generic_via_event_queue("BulkUpdateInventory", { xml_param(m) });
+            }, expect_batch(1));
+            s.msg("queue_existing_folder_resets_version", []
             {
                 LLSD m;
                 m["folder_data"].append(folder_llsd({ F(42), F(SF_OBJECTS), "Furniture", LLFolderType::FT_NONE, 0 }));
-                generic_message(false, "BulkUpdateInventory", { notation_param(m) });
-            });
-            s.msg("folder_with_folder_id_key", []
+                large_generic_via_event_queue("BulkUpdateInventory", { notation_param(m) });
+            }, expect_batch(0));
+            s.msg("queue_item_into_unknown_version_no_fetch", []
+            {
+                // Outfit B: unknown version, fetch timer expired: the UDP form
+                // would fetch() it; this form does not.
+                gInventory.getCategory(F(41))->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+                LLSD m;
+                m["item_data"].append(item_llsd(*new_item(968, F(41), "Into unknown, no fetch"), cb("g10")));
+                large_generic_via_event_queue("BulkUpdateInventory", { notation_param(m) });
+            }, expect_batch(1, {}, { "fetch." }));
+            s.msg("queue_folder_with_folder_id_key", []
             {
                 LLSD m;
-                m["folder_data"].append(folder_llsd({ F(956), F(SF_OBJECTS), "Keyed folder_id", LLFolderType::FT_NONE, 0 }, true));
-                generic_message(false, "BulkUpdateInventory", { notation_param(m) });
-            });
-            s.msg("foreign_agent_midway", []
+                m["folder_data"].append(folder_llsd({ F(969), F(SF_OBJECTS), "Keyed folder_id", LLFolderType::FT_NONE, 0 }, true));
+                large_generic_via_event_queue("BulkUpdateInventory", { notation_param(m) });
+            }, expect_nothing());
+            s.msg("queue_foreign_agent_midway", []
             {
                 LLSD m;
-                m["item_data"].append(item_llsd(*new_item(953, F(SF_OBJECTS), "Mine"), cb("g3")));
-                m["item_data"].append(item_llsd(*new_item(954, F(SF_OBJECTS), "Not mine"), cb("g4"), pid(0xbad00000, 1)));
-                generic_message(false, "BulkUpdateInventory", { notation_param(m) });
-            });
-            s.msg("wear_rule_without_transaction", []
+                m["item_data"].append(item_llsd(*new_item(970, F(SF_OBJECTS), "Mine"), cb("g11")));
+                m["item_data"].append(item_llsd(*new_item(971, F(SF_OBJECTS), "Not mine"), cb("g12"), pid(0xbad00000, 1)));
+                large_generic_via_event_queue("BulkUpdateInventory", { notation_param(m) });
+            }, expect_nothing());
+            s.msg("queue_wear_rule_without_transaction", []
             {
                 LLInventoryState::sWearNewClothing = true;
                 LLSD m;
-                m["item_data"].append(item_llsd(*new_item(955, F(SF_CLOTHING), "Generic shirt", LLAssetType::AT_CLOTHING, LLInventoryType::IT_WEARABLE, 4), cb("g5")));
-                generic_message(false, "BulkUpdateInventory", { notation_param(m) });
-            });
-            s.msg("unparsable_parameter", [] { generic_message(false, "BulkUpdateInventory", { "{not llsd" }); });
-            s.msg("large_generic", []
+                m["item_data"].append(item_llsd(*new_item(972, F(SF_CLOTHING), "Generic shirt", LLAssetType::AT_CLOTHING, LLInventoryType::IT_WEARABLE, 4), cb("g13")));
+                m["item_data"].append(item_llsd(*new_item(973, F(SF_OBJECTS), "Generic box"), cb("g14")));
+                large_generic_via_event_queue("BulkUpdateInventory", { notation_param(m) });
+            }, expect_batch(2, { "appearance.wear " + I(972).asString() }));
+            s.msg("queue_six_items", []
             {
                 LLSD m;
-                for (U64 n = 960; n < 966; ++n) m["item_data"].append(item_llsd(*new_item(n, F(SF_OBJECTS), "Large generic " + std::to_string(n)), cb("lg" + std::to_string(n))));
-                generic_message(true, "BulkUpdateInventory", { notation_param(m) });
-            });
-            s.msg("unknown_method", [] { generic_message(false, "NoSuchMethod", { "x" }); });
+                for (U64 n = 980; n < 986; ++n) m["item_data"].append(item_llsd(*new_item(n, F(SF_OBJECTS), "Queued " + std::to_string(n)), cb("q" + std::to_string(n))));
+                large_generic_via_event_queue("BulkUpdateInventory", { notation_param(m) });
+            }, expect_batch(6));
+            s.msg("queue_unparsable_parameter", [] { large_generic_via_event_queue("BulkUpdateInventory", { "{not llsd" }); }, expect_nothing());
+            s.msg("unknown_method", [] { generic_message(false, "NoSuchMethod", { "x" }); }, expect_nothing());
             cases.push_back(s.c);
         }
         {
@@ -394,6 +593,7 @@ namespace tut
 {
     template<> template<> void invmodel_object::test<5>()
     {
+        env().ran.insert(5);
         set_test_name("set 8 inventory message handlers");
         Cases cases;
         msgs_cases(cases);

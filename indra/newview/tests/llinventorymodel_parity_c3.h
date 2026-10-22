@@ -77,6 +77,76 @@ namespace
         static void operator delete(void*) {}
     };
 
+    // Items whose parent is missing when buildParentChildMap() runs go to
+    // Lost And Found with batched MoveInventoryItem messages, a new packet
+    // whenever LLMessageSystem::isSendFull() says the current one is full.
+    // Such items can only come from outside the cache load (it drops them),
+    // so they are put into the item map directly between the skeleton loads
+    // and the build, as code running in that window would.
+    Case lost_items_case(U32 count)
+    {
+        Case c;
+        c.id = "lost_items_" + std::to_string(count);
+        trace("c3 " + c.id);
+        std::string dir = join(env().work, "c3lost");
+        fresh(dir);
+        World w = standard_world();
+        LoginInput in = login_input(w);
+        gInventory.setRootFolderID(in.agent_root);
+        gInventory.setLibraryRootFolderID(in.lib_root);
+        gInventory.setLibraryOwnerID(in.lib_owner);
+        gInventory.loadSkeleton(in.lib_skel, LIB_OWNER);
+        gInventory.loadSkeleton(in.agent_skel, AGENT);
+        for (U32 n = 0; n < count; ++n)
+        {
+            LLPointer<LLViewerInventoryItem> i = item(pid(0xa7000000, n), pid(TAG_FOLDER, 0xdead00 + (n % 3)), LLAssetType::AT_NOTECARD,
+                                                      LLInventoryType::IT_NOTECARD, "Lost " + std::to_string(n), A(5000 + n));
+            model::items()[i->getUUID()] = i;
+        }
+        clear_journal();
+        gInventory.buildParentChildMap();
+        std::vector<std::string> journal = take_journal();
+        S32 messages = 0;
+        for (const std::string& l : journal)
+        {
+            c.lines.push_back("  " + l);
+            if (l.compare(0, 22, "msg MoveInventoryItem ") == 0) ++messages;
+        }
+        c.lines.push_back("move_messages=" + std::to_string(messages));
+        std::map<std::string, std::string> none;
+        std::vector<std::string> model_lines;
+        dump_model(model_lines, false);
+        for (const std::string& l : model_lines)
+        {
+            if (l.compare(0, 9, "children ") == 0 && l.find(F(SF_LOSTFOUND).asString()) == 9) c.lines.push_back(l);
+        }
+        return c;
+    }
+
+    class AddedObserver : public LLInventoryAddedObserver
+    {
+    protected:
+        void done() override { vks_inv::note("added_observer done added=" + ids(gInventory.getAddedIDs())); }
+    public:
+        static void* operator new(size_t size) { return observer_slot(2, size); }
+        static void operator delete(void*) {}
+    };
+
+    class DescendentsObserver : public LLInventoryFetchDescendentsObserver
+    {
+    public:
+        explicit DescendentsObserver(const uuid_vec_t& ids) : LLInventoryFetchDescendentsObserver(ids) {}
+        void done() override
+        {
+            std::string complete, incomplete;
+            for (const LLUUID& id : mComplete) complete += id.asString() + " ";
+            for (const LLUUID& id : mIncomplete) incomplete += id.asString() + " ";
+            vks_inv::note("descendents_observer done complete=[" + complete + "] incomplete=[" + incomplete + "]");
+        }
+        static void* operator new(size_t size) { return observer_slot(3, size); }
+        static void operator delete(void*) {}
+    };
+
     void c3_cases(Cases& cases)
     {
         {
@@ -282,6 +352,19 @@ namespace
             cases.push_back(s.c);
         }
         {
+            // checkTrashOverflow() notifies when the Trash holds at least
+            // InventoryTrashMaxCapacity objects (folders and items): counts
+            // one below, at and one above the capacity. The standard Trash
+            // starts with 5 (2 folders, 3 items).
+            Steps s("trash_capacity");
+            s.step("count_7_capacity_8", [] { gSavedSettings.setU32("InventoryTrashMaxCapacity", 8); gInventory.removeCategory(F(41)); });
+            s.step("count_10_capacity_10", [] { gSavedSettings.setU32("InventoryTrashMaxCapacity", 10); gInventory.removeCategory(F(40)); });
+            s.step("count_12_capacity_11", [] { gSavedSettings.setU32("InventoryTrashMaxCapacity", 11); gInventory.removeCategory(F(43)); });
+            s.step("preview_visible", [] { config().trash_preview_visible = true; gInventory.removeCategory(F(42)); });
+            s.step("restore", [] { gSavedSettings.setU32("InventoryTrashMaxCapacity", 5000); });
+            cases.push_back(s.c);
+        }
+        {
             Steps s("create_category");
             s.step("ais", []
             {
@@ -360,6 +443,32 @@ namespace
             cases.push_back(s.c);
         }
         {
+            Steps s("observers");
+            s.step("added_observer_install", [] { gInventory.addObserver(new AddedObserver); });
+            s.step("add_only", [] { gInventory.updateItem(item(I(1100), F(SF_OBJECTS), LLAssetType::AT_OBJECT, LLInventoryType::IT_OBJECT, "Plain add", A(1100))); gInventory.notifyObservers(); });
+            s.step("create_and_update_create_without_add", [] { gInventory.updateItem(copy_of(I(10)), LLInventoryObserver::CREATE | LLInventoryObserver::UPDATE_CREATE); gInventory.notifyObservers(); });
+            s.step("add_create_update_create", [] { gInventory.updateItem(item(I(1101), F(SF_OBJECTS), LLAssetType::AT_OBJECT, LLInventoryType::IT_OBJECT, "Created", A(1101)), LLInventoryObserver::CREATE | LLInventoryObserver::UPDATE_CREATE); gInventory.notifyObservers(); });
+            s.step("descendents_observer", []
+            {
+                // Furniture complete; Chairs reports fewer children than it
+                // holds (the observer writes the count); Outfit B unknown.
+                gInventory.getCategory(F(43))->setDescendentCount(0);
+                gInventory.getCategory(F(41))->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+                uuid_vec_t folders = { F(42), F(43), F(41) };
+                DescendentsObserver* o = new DescendentsObserver(folders);
+                o->startFetch();
+                gInventory.addObserver(o);
+                gInventory.addChangedMask(LLInventoryObserver::INTERNAL, F(42));
+                gInventory.notifyObservers();
+            });
+            s.step("descendents_observer_fetcher_idle", [] { config().everything_fetched = true; gInventory.addChangedMask(LLInventoryObserver::INTERNAL, F(42)); gInventory.notifyObservers(); });
+            cases.push_back(s.c);
+        }
+        // Lost items: isSendFull() closes a MoveInventoryItem packet after
+        // its 37th InventoryData block (1265 bytes); 36, 37 and 38 pin that
+        // limit, 74 and 75 the second packet.
+        for (U32 n : { 1u, 36u, 37u, 38u, 74u, 75u, 200u }) cases.push_back(lost_items_case(n));
+        {
             Steps s("queries");
             s.step("queries", []
             {
@@ -393,6 +502,7 @@ namespace tut
 {
     template<> template<> void invmodel_object::test<3>()
     {
+        env().ran.insert(3);
         set_test_name("C3 mutation sequences");
         Cases cases;
         c3_cases(cases);
@@ -453,8 +563,8 @@ namespace
                 case 3: if (!under(c2, c1)) gInventory.moveObject(c1, c2); break;
                 case 4: if (i1.notNull()) gInventory.changeItemParent(gInventory.getItem(i1), c1, rng.below(2) == 1); break;
                 case 5: gInventory.changeCategoryParent(gInventory.getCategory(c1), c2, false); break;
-                case 6: if (i1.notNull()) gInventory.deleteObject(i1, rng.below(2) == 1, rng.below(2) == 1); break;
-                case 7: gInventory.accountForUpdate(LLInventoryModel::LLCategoryUpdate(c1, (S32)rng.below(3) - 1, rng.below(2) == 1)); break;
+                case 6: if (i1.notNull()) { bool fix = rng.below(2) == 1; bool notify = rng.below(2) == 1; gInventory.deleteObject(i1, fix, notify); } break;
+                case 7: { S32 delta = (S32)rng.below(3) - 1; bool bump = rng.below(2) == 1; gInventory.accountForUpdate(LLInventoryModel::LLCategoryUpdate(c1, delta, bump)); } break;
                 case 8: gInventory.updateCategory(new LLViewerInventoryCategory(F(next_id), c1, LLFolderType::FT_NONE, "rc", AGENT)); ++next_id; break;
                 case 9: gInventory.notifyObservers(); break;
                 case 10: if (i1.notNull()) gInventory.updateItem(link(I(next_id), c1, i1, "rl")); ++next_id; break;
@@ -474,6 +584,7 @@ namespace tut
     // full ones).
     template<> template<> void invmodel_object::test<9>()
     {
+        env().ran.insert(9);
         set_test_name("C3 random mutation sweep");
         Cases full, digests;
         Case d;

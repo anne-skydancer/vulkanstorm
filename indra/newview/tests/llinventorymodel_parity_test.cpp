@@ -72,6 +72,13 @@
 #include <filesystem>
 #include <functional>
 #include <sstream>
+#if LL_WINDOWS
+#include <process.h>
+#define vks_getpid _getpid
+#else
+#include <unistd.h>
+#define vks_getpid getpid
+#endif
 
 #ifndef VKS_INVMODEL_FIXTURE_DIR
 #error VKS_INVMODEL_FIXTURE_DIR must name indra/newview/tests/fixtures/inventory
@@ -113,6 +120,8 @@ namespace
         std::string commit;
         std::string platform;
         bool dump() const { return !out.empty(); }
+        std::set<std::string> touched;  // fixture paths read or written (relative)
+        std::set<int> ran;              // tests that ran
     };
 
     std::string getenv_str(const char* name)
@@ -129,7 +138,8 @@ namespace
             e = new Env;
             e->fixtures = VKS_INVMODEL_FIXTURE_DIR;
             e->out = getenv_str("VKS_INVMODEL_DUMP");
-            e->work = VKS_INVMODEL_WORK_DIR;
+            // A work directory per process: concurrent runs never share files.
+            e->work = std::string(VKS_INVMODEL_WORK_DIR) + "/" + std::to_string((long)vks_getpid());
             e->library_dir = VKS_INVMODEL_LIBRARY_DIR;
             e->commit = getenv_str("VKS_INVMODEL_COMMIT");
             if (e->commit.empty()) e->commit = "unknown";
@@ -148,6 +158,17 @@ namespace
             gMessageSystem->setHandlerFunc("LargeGenericMessage", vks_inv_frozen::process_large_generic_message);
             // The stub translation table: a few dictionary entries localise to
             // a visibly different text so the localisation calls are recorded.
+            // The dictionary is built once, at its first use, which is here.
+            config().translations["New Folder"] = "Nouveau dossier";
+            config().translations["New Script"] = "Nouveau script";
+            config().translations["New Note"] = "Nouvelle note";
+            config().translations["Contents"] = "Contenu";
+            config().translations["New Shirt"] = "Nouvelle chemise";
+            {
+                LLPointer<LLViewerInventoryItem> warm = new LLViewerInventoryItem;
+                warm->unpackMessage(LLSD::emptyMap());
+            }
+            reset_config();
             gAgentID = AGENT;
             gAgentSessionID = SESSION;
         }
@@ -178,6 +199,7 @@ namespace
     // Writes (dump) or compares (replay) a text corpus.
     void corpus(const std::string& rel, const std::string& title, const std::string& seed, const Cases& actual)
     {
+        env().touched.insert(rel);
         if (env().dump())
         {
             std::string path = join(env().out, rel);
@@ -195,6 +217,7 @@ namespace
     // Writes (dump) or compares (replay) a binary fixture.
     void binary(const std::string& rel, const std::string& bytes)
     {
+        env().touched.insert(rel);
         if (env().dump())
         {
             std::string path = join(env().out, rel);
@@ -277,6 +300,8 @@ namespace
         std::vector<LLPointer<LLViewerInventoryItem> > items; // agent and library
         std::map<LLUUID, S32> count_delta;  // server count = loaded + delta (an "incomplete" folder)
         std::set<LLUUID> unknown_version;   // left at -1 after populating
+        std::map<LLUUID, LLUUID> folder_thumbnails; // set after login, as AIS does
+        std::set<LLUUID> folder_favorites;
     };
 
     LLUUID F(U64 n) { return pid(TAG_FOLDER, n); }
@@ -332,6 +357,15 @@ namespace
         add(44, SF_TRASH, "Old stuff", LLFolderType::FT_NONE, 3);
         add(45, 44, "Older stuff", LLFolderType::FT_NONE, 1);
 
+        // Folder thumbnails and favourites (they reach the model through AIS,
+        // are saved in the cache and copied back for folders whose version
+        // matches).
+        w.folder_thumbnails[F(42)] = pid(TAG_THUMB, 0x42);
+        w.folder_thumbnails[F(SF_LANDMARKS)] = pid(TAG_THUMB, 0x05);
+        w.folder_favorites.insert(F(42));
+        w.folder_favorites.insert(F(40));
+        w.folder_thumbnails[LF(3)] = pid(TAG_THUMB, 0x103);
+        w.folder_favorites.insert(LF(4));
         w.library.push_back({ LF(1), LLUUID::null, "Library", LLFolderType::FT_ROOT_INVENTORY, 11 });
         w.library.push_back({ LF(2), LF(1), "Clothing", LLFolderType::FT_CLOTHING, 5 });
         w.library.push_back({ LF(3), LF(1), "Objects", LLFolderType::FT_OBJECT, 4 });
@@ -412,6 +446,11 @@ namespace
                 // A .gz's size depends on the zlib build: only plain sizes are recorded.
                 std::string name = e.path().filename().string();
                 bool gz = name.size() > 3 && name.compare(name.size() - 3, 3, ".gz") == 0;
+                // getTempFilename() names are random: "<uuid>.tmp" stands for them.
+                if (name.size() == 40 && name.compare(36, 4, ".tmp") == 0 && LLUUID::validate(name.substr(0, 36)))
+                {
+                    name = "<uuid>.tmp";
+                }
                 names.push_back(name + " " + (gz ? std::string("gz") : std::to_string((U64)e.file_size())));
             }
         }
@@ -544,6 +583,9 @@ namespace
             auto v = versions.find(kv.first);
             if (v == versions.end() || w.unknown_version.count(kv.first)) continue;
             cat->setVersion(v->second);
+            auto t = w.folder_thumbnails.find(kv.first);
+            if (t != w.folder_thumbnails.end()) cat->setThumbnailUUID(t->second);
+            if (w.folder_favorites.count(kv.first)) cat->setFavorite(true);
             auto d = w.count_delta.find(kv.first);
             cat->setDescendentCount(cat->getViewerDescendentCount() + (d == w.count_delta.end() ? 0 : d->second));
         }
@@ -622,3 +664,5 @@ namespace tut
 #include "llinventorymodel_parity_c4.h"
 #include "llinventorymodel_parity_msgs.h"
 #include "llinventorymodel_parity_real.h"
+#include "llinventorymodel_parity_c5.h"
+#include "llinventorymodel_parity_final.h"
