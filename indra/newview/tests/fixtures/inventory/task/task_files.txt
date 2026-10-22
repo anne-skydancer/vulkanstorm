@@ -347,6 +347,24 @@ case invtype_mismatch input=files/invtype_mismatch.inv bytes=1473 sha256=c9cae65
   [0] item uuid=B parent=obj type=6 name="Object B" thumb=null fav=0 runtime="" created=1700000000 asset=assetB desc="no copy" invtype=6 flags=00000000 sale=0/10 base=7fff7fff owner=7fff7fff group=00000000 every=00000000 next=00080000 creator=creator ownerid=agent lastowner=null groupid=null groupowned=0 complete=1 txn=null running=0 faulted=0 crc=2d92f59e
   [1] item uuid=A parent=obj type=7 name="Notecard A" thumb=null fav=0 runtime="" created=1700000000 asset=assetA desc="copyable" invtype=7 flags=00000000 sale=0/10 base=7fffffff owner=7fffffff group=00000000 every=00000000 next=00082000 creator=creator ownerid=agent lastowner=null groupid=null groupowned=0 complete=1 txn=null running=0 faulted=0 crc=2b93f5a0
   [2] object uuid=obj parent=null type=8 name="Contents" thumb=null fav=0 runtime="" created=0
+case type_keyword_only input=files/type_keyword_only.inv bytes=1465 sha256=2fc69b11ff21ac8a1ea8437edcb970737addea1e6cd0ced9525643805a907ba7
+ direct returned=1 removed=1 st=S ser=0 exp=0 xid=0 dirty=0 inv=[B,A,obj] | callback L1 ser=0 inv=[B,A,obj]
+ inventory 3 entries root obj
+  [0] item uuid=B parent=obj type=6 name="Object B" thumb=null fav=0 runtime="" created=1700000000 asset=assetB desc="no copy" invtype=6 flags=00000000 sale=0/10 base=7fff7fff owner=7fff7fff group=00000000 every=00000000 next=00080000 creator=creator ownerid=agent lastowner=null groupid=null groupowned=0 complete=1 txn=null running=0 faulted=0 crc=2d92f59e
+  [1] item uuid=A parent=obj type=255 name="Notecard A" thumb=null fav=0 runtime="" created=1700000000 asset=assetA desc="copyable" invtype=255 flags=00000000 sale=0/10 base=7fffffff owner=7fffffff group=00000000 every=00000000 next=00082000 creator=creator ownerid=agent lastowner=null groupid=null groupowned=0 complete=1 txn=null running=0 faulted=0 crc=2b93f790
+  [2] object uuid=obj parent=null type=8 name="Contents" thumb=null fav=0 runtime="" created=0
+case name_keyword_only input=files/name_keyword_only.inv bytes=1462 sha256=f97905078c62a60f20b6f23e7c8f3a2b6fc7389e587410495f478cd55ce9c45b
+ direct returned=1 removed=1 st=S ser=0 exp=0 xid=0 dirty=0 inv=[B,A,obj] | callback L1 ser=0 inv=[B,A,obj]
+ inventory 3 entries root obj
+  [0] item uuid=B parent=obj type=6 name="Object B" thumb=null fav=0 runtime="" created=1700000000 asset=assetB desc="no copy" invtype=6 flags=00000000 sale=0/10 base=7fff7fff owner=7fff7fff group=00000000 every=00000000 next=00080000 creator=creator ownerid=agent lastowner=null groupid=null groupowned=0 complete=1 txn=null running=0 faulted=0 crc=2d92f59e
+  [1] item uuid=A parent=obj type=7 name="0" thumb=null fav=0 runtime="" created=1700000000 asset=assetA desc="copyable" invtype=7 flags=00000000 sale=0/10 base=7fffffff owner=7fffffff group=00000000 every=00000000 next=00082000 creator=creator ownerid=agent lastowner=null groupid=null groupowned=0 complete=1 txn=null running=0 faulted=0 crc=2b93f5a0
+  [2] object uuid=obj parent=null type=8 name="Contents" thumb=null fav=0 runtime="" created=0
+case desc_keyword_only input=files/desc_keyword_only.inv bytes=1464 sha256=757f163af84f763fadc3f79da47d789b8a1e0d23ad6bf2f295f1ce3edc5f2f09
+ direct returned=1 removed=1 st=S ser=0 exp=0 xid=0 dirty=0 inv=[B,A,obj] | callback L1 ser=0 inv=[B,A,obj]
+ inventory 3 entries root obj
+  [0] item uuid=B parent=obj type=6 name="Object B" thumb=null fav=0 runtime="" created=1700000000 asset=assetB desc="no copy" invtype=6 flags=00000000 sale=0/10 base=7fff7fff owner=7fff7fff group=00000000 every=00000000 next=00080000 creator=creator ownerid=agent lastowner=null groupid=null groupowned=0 complete=1 txn=null running=0 faulted=0 crc=2d92f59e
+  [1] item uuid=A parent=obj type=7 name="Notecard A" thumb=null fav=0 runtime="" created=1700000000 asset=assetA desc="Notecard A" invtype=7 flags=00000000 sale=0/10 base=7fffffff owner=7fffffff group=00000000 every=00000000 next=00082000 creator=creator ownerid=agent lastowner=null groupid=null groupowned=0 complete=1 txn=null running=0 faulted=0 crc=2b93f5a0
+  [2] object uuid=obj parent=null type=8 name="Contents" thumb=null fav=0 runtime="" created=0
 case invtype_missing input=files/invtype_missing.inv bytes=1454 sha256=8847aa973f017e7dc9010b3281a8a9d8613dc36db80fbbce9effa020c6af7860
  direct returned=1 removed=1 st=S ser=0 exp=0 xid=0 dirty=0 inv=[B,A,obj] | callback L1 ser=0 inv=[B,A,obj]
  inventory 3 entries root obj

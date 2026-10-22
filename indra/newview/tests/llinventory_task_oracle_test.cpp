@@ -1269,7 +1269,10 @@ namespace
         add("object_name_spaces", replace_once(obj, "\t\tname\tContents|", "\t\tname\t   Spaced Object  |") + a);
         auto with_line = [&](const std::string& from, const std::string& to) { return obj + replace_once(a, from, to) + b; };
         add("invtype_mismatch", with_line("\t\tinv_type\tnotecard", "\t\tinv_type\ttexture"));
-        add("invtype_missing", with_line("\t\tinv_type\tnotecard\n", ""));
+        add("type_keyword_only", with_line("\t\ttype\tnotecard", "\t\ttype"));
+        add("name_keyword_only", with_name("\t\tname"));
+        add("desc_keyword_only", with_desc("\t\tdesc"));
+        add("invtype_missing",with_line("\t\tinv_type\tnotecard\n", ""));
         add("invtype_unknown", with_line("\t\tinv_type\tnotecard", "\t\tinv_type\tbogus"));
         add("type_unknown", with_line("\t\ttype\tnotecard", "\t\ttype\tbogus"));
         add("sale_perm_mask_none", with_line("\t\tsale_price\t10\n", "\t\tsale_price\t10\n\t\tperm_mask\t00000000\n"));
@@ -2140,6 +2143,20 @@ namespace
                 s.obj->updateMaterialInventory(item, TASK_INVENTORY_ITEM_KEY, true);
                 s.obj->updateMaterialInventory(item, TASK_INVENTORY_ITEM_KEY, true); // already pending: nothing
             });
+        // the local-only updates (no message)
+        add("update_local_known", loaded, [](Scene& s)
+            {
+                ItemSpec a = spec_a();
+                a.desc = "local";
+                a.txn = TXN;
+                LLPointer<vto::LLViewerInventoryItem> item = make_item(a);
+                s.obj->updateInventoryLocal(item, TASK_INVENTORY_ITEM_KEY);
+            });
+        add("update_viewer_asset", loaded, [](Scene& s)
+            {
+                LLPointer<vto::LLViewerInventoryItem> item = make_item(spec_a());
+                s.obj->updateViewerInventoryAsset(item, ASSET_E);
+            });
         // RemoveTaskInventory
         add("remove_present", loaded, [](Scene& s) { s.obj->removeInventory(ITEM_A); });
         add("remove_absent", loaded, [](Scene& s) { s.obj->removeInventory(ITEM_E); });
@@ -2300,7 +2317,15 @@ namespace
                 const LLSD body = vto::pending_http_body(before);
                 const std::string path = "create/" + cc.label + ".llsd";
                 o.binary[path] = binary_llsd(body);
-                bodies += "  post " + vto::pending_http_url(before) + "\n  body " + notation(body) + "\n  body_file " + path + "\n";
+                std::ostringstream xml;
+                LLSDSerialize::toXML(body, xml);
+                std::string xml_text = xml.str();
+                while (!xml_text.empty() && (xml_text.back() == '\n' || xml_text.back() == '\r'))
+                {
+                    xml_text.pop_back();
+                }
+                bodies += "  post " + vto::pending_http_url(before) + "\n  body " + notation(body) + "\n  body_xml "
+                    + xml_text + "\n  body_file " + path + "\n";
                 LLSD reply;
                 reply["success"] = cc.success;
                 vto::complete_http(reply, ::LLCore::HttpStatus(cc.status), "POST");
