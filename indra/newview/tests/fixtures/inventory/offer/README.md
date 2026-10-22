@@ -185,5 +185,11 @@ kind, RLV observer, mute added).
 
 ## Platform differences
 
-See the recorder's report: Windows (MSVC) and Linux (GCC) outputs are
-compared byte for byte after the header.
+Recorded with MSVC 19.44 (Windows, RelWithDebInfo with the Release feature
+set), GCC 15.2 (WSL Ubuntu 26.04) and GCC 14 (CI's compiler), each dump
+compared with the committed (Windows) files after the header. Every compared
+line and every digest is identical on the three. The only difference is in
+review notes: the uninitialised legacy type (runtime edges above) took the
+stack's value 3, 4 and 0 under MSVC and 77, 8 and 8 under both GCCs
+(`task_legacy_pipe_only_*`, `task_legacy_leading_nul_*`, `task_size_0_fill0`),
+which is why those outcomes are not compared.
