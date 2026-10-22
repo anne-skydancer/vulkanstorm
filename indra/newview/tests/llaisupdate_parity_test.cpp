@@ -30,16 +30,10 @@
  * $/LicenseInfo$
  */
 
-// The renames llaisupdate_parity_stubs.cpp compiles llaisapi.cpp with, so
-// this file sees the same AISUpdate class. They must precede every include.
-#define LLTimer vks_r3a_LLTimer
-#define suspendUntilNextFrame vks_r3a_suspendUntilNextFrame
-
 #include "linden_common.h"
 
 #include "../llviewerprecompiledheaders.h"
 
-#include "../llaisapi.h"
 #include "../llviewercontrol.h"
 
 #include "httprequest.h"
@@ -396,7 +390,7 @@ namespace
             {
                 vks_ais::next_frame();
             }
-            AISAPI::COMMAND_TYPE type = (AISAPI::COMMAND_TYPE)vks_ais::command_from_name(step["type"].asString());
+            int type = vks_ais::command_from_name(step["type"].asString());
             LLSD marker = LLSD::emptyMap();
             marker["op"] = "step";
             marker["index"] = i;
@@ -620,7 +614,7 @@ namespace tut
     void aisupdate_object::test<1>()
     {
         set_test_name("AIS update decision corpus");
-        ensure("message system", gMessageSystem != NULL && gMessageSystem->isOK());
+        ensure("message system", gMessageSystem && gMessageSystem->isOK());
 
         const std::vector<std::string> ids = read_index();
         ensure("case index is present and not empty", !ids.empty());

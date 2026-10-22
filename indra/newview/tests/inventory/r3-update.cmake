@@ -11,13 +11,14 @@
 # VKS_AISUPDATE_DUMP=<dir> in the environment, writes them instead.
 #
 # AISUpdate's timers and its per-frame yield are injected without touching
-# llaisapi.cpp: llaisupdate_parity_stubs.cpp includes llaisapi.cpp verbatim
-# after renaming LLTimer to vks_r3a_LLTimer and llcoro::suspendUntilNextFrame
-# to vks_r3a_suspendUntilNextFrame (the test source does the same before its
-# includes), and defines both over an injected clock and frame counter. The
-# rest of the executable, and the viewer's own build of llaisapi.cpp, keep
-# the real ones. (Source-file compile definitions would not do: they are
-# per directory and would reach the viewer target.)
+# llaisapi.cpp: llaisupdate_parity_stubs.cpp includes every header
+# llaisapi.cpp uses, then renames LLTimer to vks_r3a_LLTimer and
+# llcoro::suspendUntilNextFrame to vks_r3a_suspendUntilNextFrame and includes
+# llaisapi.cpp verbatim, so only the text of llaisapi.h/.cpp sees the renames;
+# both are defined there over an injected clock and frame counter. The rest
+# of the executable, and the viewer's own build of llaisapi.cpp, keep the
+# real ones. (Source-file compile definitions would not do: they are per
+# directory and would reach the viewer target.)
 LL_ADD_INTEGRATION_TEST(llaisupdate_parity
   "tests/llaisupdate_parity_stubs.cpp"
   "llinventory;llmessage;llcorehttp;llfilesystem;llxml;llmath;llcommon"

@@ -20,12 +20,14 @@
  *  - The message system's outgoing side: the real LLMessageSystem on the
  *    real template builds MoveInventoryItem; gAgent.sendReliableMessage()
  *    records the encoded message instead of sending it.
- *  - AISUpdate's timers and its yield: this file compiles llaisapi.cpp
- *    (included verbatim, first) with LLTimer renamed to vks_r3a_LLTimer
- *    and llcoro::suspendUntilNextFrame renamed to
- *    vks_r3a_suspendUntilNextFrame; both are defined below over an
- *    injected clock and an injected frame counter. The test source applies
- *    the same renames before its includes, so both see one AISUpdate.
+ *  - AISUpdate's timers and its yield: this file includes every header
+ *    llaisapi.cpp uses, then renames LLTimer to vks_r3a_LLTimer and
+ *    llcoro::suspendUntilNextFrame to vks_r3a_suspendUntilNextFrame and
+ *    includes llaisapi.cpp verbatim, so the renames reach only the text of
+ *    llaisapi.h and llaisapi.cpp (every other header is already in, behind
+ *    its guard). vks_r3a_LLTimer is a class of this file with LLTimer's
+ *    arithmetic over an injected clock; the yield is defined below over an
+ *    injected frame counter. No other translation unit sees AISUpdate.
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -34,14 +36,66 @@
  * $/LicenseInfo$
  */
 
-// The renames must precede every include.
+#include "../llviewerprecompiledheaders.h"
+
+// Every header llaisapi.cpp and llaisapi.h include, before the renames.
+#include "lluuid.h"
+#include <map>
+#include <set>
+#include <string>
+#include "../llviewerinventory.h"
+#include "llcorehttputil.h"
+#include "llcoproceduremanager.h"
+#include "../llagent.h"
+#include "../llappviewer.h"
+#include "llcallbacklist.h"
+#include "../llinventorymodel.h"
+#include "../llinventoryobserver.h"
+#include "llnotificationsutil.h"
+#include "llsdutil.h"
+#include "../llviewerregion.h"
+#include "../llvoavatar.h"
+#include "../llvoavatarself.h"
+#include "../llviewercontrol.h"
+#include "../llviewernetwork.h"
+#include "lleventcoro.h"
+#include "llframetimer.h"
+#include "lltimer.h"
+
+// AISUpdate's timers: LLTimer's arithmetic (lltimer.cpp) over the injected
+// clock (microsecond ticks): start() and reset() leave mExpirationTicks at 0,
+// setTimerExpirySec() adds (U64)(F32)(seconds * frequency) to now, and
+// hasExpired() is now >= mExpirationTicks. In TIMERS_NEVER mode hasExpired()
+// is always false. Only the members llaisapi.cpp uses.
+class vks_r3a_LLTimer
+{
+public:
+    vks_r3a_LLTimer() { start(); }
+    void start() { reset(); mStarted = true; }
+    void reset();
+    void setTimerExpirySec(F32SecondsImplicit expiration);
+    bool hasExpired() const;
+    F32SecondsImplicit getElapsedTimeF32() const;
+
+private:
+    U64 mLastClockCount = 0;
+    U64 mExpirationTicks = 0;
+    bool mStarted = false;
+};
+
+namespace llcoro
+{
+    // The yield AISUpdate::checkTimeout() makes (defined below).
+    void vks_r3a_suspendUntilNextFrame();
+}
+
+// The code under test, unchanged; the renames reach only its own text.
 #define LLTimer vks_r3a_LLTimer
 #define suspendUntilNextFrame vks_r3a_suspendUntilNextFrame
-
-// The code under test, unchanged.
 #include "../llaisapi.cpp"
+#undef LLTimer
+#undef suspendUntilNextFrame
 
-#include "../llaisapi.h"
 #include "../llagent.h"
 #include "../llagentdata.h"
 #include "../llappviewer.h"
@@ -92,7 +146,7 @@ namespace
     };
     struct BuilderTag { typedef LLMessageBuilder* LLMessageSystem::*type; friend type steal(BuilderTag); };
     struct CatVersionTag { typedef S32 LLViewerInventoryCategory::*type; friend type steal(CatVersionTag); };
-    struct BatchTimerTag { typedef LLTimer* type; friend type steal(BatchTimerTag); };
+    struct BatchTimerTag { typedef vks_r3a_LLTimer* type; friend type steal(BatchTimerTag); };
     struct BatchFrameTag { typedef U32* type; friend type steal(BatchFrameTag); };
     struct CatFetchingTag
     {
@@ -437,7 +491,7 @@ namespace vks_ais
         gDisconnected = disconnected;
     }
 
-    void invoke_command(AISAPI::COMMAND_TYPE type, const std::string& url,
+    void invoke_command(int type, const std::string& url,
                         const LLUUID& target_id, const LLSD& body,
                         const LLSD& result, bool with_callback)
     {
@@ -458,7 +512,8 @@ namespace vks_ais
                 record(op);
             };
         }
-        steal(InvokeTag())(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t(), invoke, url, target_id, body, callback, type);
+        steal(InvokeTag())(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t(), invoke, url, target_id, body, callback,
+                           (AISAPI::COMMAND_TYPE)type);
     }
 
     namespace
@@ -470,7 +525,7 @@ namespace vks_ais
             "FETCHORPHANS", "FETCHCATEGORYLINKS"};
     }
 
-    const char* command_name(AISAPI::COMMAND_TYPE type)
+    const char* command_name(int type)
     {
         int i = (int)type;
         return (i >= 0 && i < (int)LL_ARRAY_SIZE(COMMAND_NAMES)) ? COMMAND_NAMES[i] : "?";
@@ -590,14 +645,6 @@ bool LLGridManager::isSystemGrid(const std::string& grid) const
 //============================================================================
 // AISUpdate's timers and yield (renamed by r3-update.cmake)
 //============================================================================
-// LLTimer here is vks_r3a_LLTimer: LLTimer's declaration from lltimer.h,
-// defined over the injected clock (microsecond ticks). The arithmetic is
-// LLTimer's (lltimer.cpp): start() and reset() leave mExpirationTicks at 0,
-// setTimerExpirySec() adds (U64)(F32)(seconds * frequency) to now, and
-// hasExpired() is now >= mExpirationTicks. In TIMERS_NEVER mode hasExpired()
-// is always false.
-LLTimer* LLTimer::sTimer = NULL;
-
 namespace
 {
     U64 fake_clock()
@@ -606,33 +653,18 @@ namespace
     }
 }
 
-LLTimer::LLTimer()
-{
-    mStarted = true;
-    reset();
-}
-
-LLTimer::~LLTimer()
-{
-}
-
-void LLTimer::reset()
+void vks_r3a_LLTimer::reset()
 {
     mLastClockCount = fake_clock();
     mExpirationTicks = 0;
 }
 
-void LLTimer::setLastClockCount(U64 current_count)
-{
-    mLastClockCount = current_count;
-}
-
-void LLTimer::setTimerExpirySec(F32SecondsImplicit expiration)
+void vks_r3a_LLTimer::setTimerExpirySec(F32SecondsImplicit expiration)
 {
     mExpirationTicks = fake_clock() + (U64)((F32)((F64)expiration.value() * 1000000.0));
 }
 
-bool LLTimer::hasExpired() const
+bool vks_r3a_LLTimer::hasExpired() const
 {
     if (vks_ais::st().mode == vks_ais::TIMERS_NEVER)
     {
@@ -641,27 +673,12 @@ bool LLTimer::hasExpired() const
     return fake_clock() >= mExpirationTicks;
 }
 
-F64SecondsImplicit LLTimer::getElapsedTimeF64() const
+F32SecondsImplicit vks_r3a_LLTimer::getElapsedTimeF32() const
 {
-    return (F64)(fake_clock() - mLastClockCount) / 1000000.0;
+    return (F32)((F64)(fake_clock() - mLastClockCount) / 1000000.0);
 }
 
-F32SecondsImplicit LLTimer::getElapsedTimeF32() const
-{
-    return (F32)getElapsedTimeF64();
-}
-
-U64MicrosecondsImplicit LLTimer::getTotalTime()
-{
-    return totalTime();
-}
-
-F64SecondsImplicit LLTimer::getTotalSeconds()
-{
-    return F64Microseconds(U64_to_F64(getTotalTime()));
-}
-
-// llcoro::suspendUntilNextFrame() (renamed): the AIS coroutine yields to the
+// llcoro::suspendUntilNextFrame() as llaisapi.cpp calls it (renamed): the AIS coroutine yields to the
 // next frame. Recorded as a "yield" event; the frame counter and the clock
 // move on.
 void llcoro::vks_r3a_suspendUntilNextFrame()

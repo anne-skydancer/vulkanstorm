@@ -22,7 +22,6 @@
 
 #include "llsd.h"
 #include "lluuid.h"
-#include "../llaisapi.h"
 
 #include <functional>
 #include <string>
@@ -89,12 +88,14 @@ namespace vks_ais
     // http_result included): the error branch, AISUpdate(result, type,
     // body) and doUpdate(), then the completion callback contract. When
     // with_callback is set, the callback records each id it is called with.
-    void invoke_command(AISAPI::COMMAND_TYPE type, const std::string& url,
+    // type is an AISAPI::COMMAND_TYPE value (the test does not include
+    // llaisapi.h: only the stubs' translation unit sees AISUpdate).
+    void invoke_command(int type, const std::string& url,
                         const LLUUID& target_id, const LLSD& body,
                         const LLSD& result, bool with_callback);
 
     // Command type names (the enum's names) and back; -1 if unknown.
-    const char* command_name(AISAPI::COMMAND_TYPE type);
+    const char* command_name(int type);
     int command_from_name(const std::string& name);
 }
 
