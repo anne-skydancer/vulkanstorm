@@ -281,7 +281,7 @@ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 [[package]]
 name = "vkstorm-assets"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8382bfc92c6201a29618e8cb6d8ff26a09bd1415#8382bfc92c6201a29618e8cb6d8ff26a09bd1415"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=41c4cf9033d3cbeca63db2dbb6c408e444282628#41c4cf9033d3cbeca63db2dbb6c408e444282628"
 dependencies = [
  "vkstorm-llsd",
  "zlib-rs",
@@ -290,7 +290,7 @@ dependencies = [
 [[package]]
 name = "vkstorm-audio"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8382bfc92c6201a29618e8cb6d8ff26a09bd1415#8382bfc92c6201a29618e8cb6d8ff26a09bd1415"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=41c4cf9033d3cbeca63db2dbb6c408e444282628#41c4cf9033d3cbeca63db2dbb6c408e444282628"
 dependencies = [
  "libloading",
  "symphonia-bundle-flac",
@@ -320,12 +320,12 @@ dependencies = [
 [[package]]
 name = "vkstorm-http"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8382bfc92c6201a29618e8cb6d8ff26a09bd1415#8382bfc92c6201a29618e8cb6d8ff26a09bd1415"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=41c4cf9033d3cbeca63db2dbb6c408e444282628#41c4cf9033d3cbeca63db2dbb6c408e444282628"
 
 [[package]]
 name = "vkstorm-image"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8382bfc92c6201a29618e8cb6d8ff26a09bd1415#8382bfc92c6201a29618e8cb6d8ff26a09bd1415"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=41c4cf9033d3cbeca63db2dbb6c408e444282628#41c4cf9033d3cbeca63db2dbb6c408e444282628"
 dependencies = [
  "png",
  "zlib-rs",
@@ -334,7 +334,7 @@ dependencies = [
 [[package]]
 name = "vkstorm-j2c"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8382bfc92c6201a29618e8cb6d8ff26a09bd1415#8382bfc92c6201a29618e8cb6d8ff26a09bd1415"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=41c4cf9033d3cbeca63db2dbb6c408e444282628#41c4cf9033d3cbeca63db2dbb6c408e444282628"
 dependencies = [
  "vkstorm-openjp2",
 ]
@@ -342,17 +342,17 @@ dependencies = [
 [[package]]
 name = "vkstorm-llsd"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8382bfc92c6201a29618e8cb6d8ff26a09bd1415#8382bfc92c6201a29618e8cb6d8ff26a09bd1415"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=41c4cf9033d3cbeca63db2dbb6c408e444282628#41c4cf9033d3cbeca63db2dbb6c408e444282628"
 
 [[package]]
 name = "vkstorm-messages"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8382bfc92c6201a29618e8cb6d8ff26a09bd1415#8382bfc92c6201a29618e8cb6d8ff26a09bd1415"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=41c4cf9033d3cbeca63db2dbb6c408e444282628#41c4cf9033d3cbeca63db2dbb6c408e444282628"
 
 [[package]]
 name = "vkstorm-openjp2"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8382bfc92c6201a29618e8cb6d8ff26a09bd1415#8382bfc92c6201a29618e8cb6d8ff26a09bd1415"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=41c4cf9033d3cbeca63db2dbb6c408e444282628#41c4cf9033d3cbeca63db2dbb6c408e444282628"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
@@ -364,12 +364,12 @@ dependencies = [
 [[package]]
 name = "vkstorm-volume"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8382bfc92c6201a29618e8cb6d8ff26a09bd1415#8382bfc92c6201a29618e8cb6d8ff26a09bd1415"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=41c4cf9033d3cbeca63db2dbb6c408e444282628#41c4cf9033d3cbeca63db2dbb6c408e444282628"
 
 [[package]]
 name = "vkstorm-vorbis"
 version = "0.1.0"
-source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=8382bfc92c6201a29618e8cb6d8ff26a09bd1415#8382bfc92c6201a29618e8cb6d8ff26a09bd1415"
+source = "git+https://github.com/anne-skydancer/vkstorm-core-rust?rev=41c4cf9033d3cbeca63db2dbb6c408e444282628#41c4cf9033d3cbeca63db2dbb6c408e444282628"
 
 [[package]]
 name = "windows"
