@@ -30,6 +30,7 @@
 #include "llsd.h"
 #include "llsdserialize.h"
 
+#include "../llcategory.h"
 #include "../llinventory.h"
 #include "../test/lltut.h"
 
@@ -579,6 +580,36 @@ namespace tut
             ensure_equals("item reimport: sale type", dst->getSaleInfo().getSaleType(), LLSaleInfo::FS_NOT);
             ensure_equals("item reimport: sale price", dst->getSaleInfo().getSalePrice(), 10);
             ensure_equals("item reimport: name", dst->getName(), src->getName());
+        }
+    }
+
+//******class LLCategory*******//
+
+    template<> template<>
+    void inventory_object::test<16>()
+    {
+        set_test_name("LLCategory with an unknown top byte stays inside its tables");
+        // The defined top-level categories are unchanged.
+        ensure_equals("none: count", LLCategory::none.getSubCategoryCount(), 5);
+        ensure_equals("none: name", std::string(LLCategory::none.lookupName()), std::string("(none)"));
+        ensure_equals("object: count", LLCategory(0x01000000).getSubCategoryCount(), 1);
+        ensure_equals("object: name", std::string(LLCategory(0x01000000).lookupName()), std::string("Object"));
+        ensure_equals("landmark: count", LLCategory(0x05000000).getSubCategoryCount(), 0);
+        ensure_equals("6: count", LLCategory(0x06000000).getSubCategoryCount(), 0);
+        ensure_equals("6: name", std::string(LLCategory(0x06000000).lookupName()), std::string("Component"));
+        ensure("7 with a subcategory: name", LLCategory(0x07010000).lookupName() == NULL);
+
+        // A top byte above 6 used to index past CATEGORY_INDEX (and, above 7,
+        // past CATEGORY_NAME).
+        for (U32 top = 7; top <= 255; ++top)
+        {
+            std::string id = "top byte " + std::to_string(top);
+            for (U32 rest : { 0x000000u, 0x010000u, 0x010101u })
+            {
+                LLCategory cat((top << 24) | rest);
+                ensure_equals(id + ": count", cat.getSubCategoryCount(), 0);
+                ensure(id + ": name", cat.lookupName() == NULL);
+            }
         }
     }
 }
