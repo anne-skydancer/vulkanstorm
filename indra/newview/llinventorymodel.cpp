@@ -525,6 +525,9 @@ bool LLInventoryModel::isObjectDescendentOf(const LLUUID& obj_id,
     if (obj_id == cat_id) return true;
 
     const LLInventoryObject* obj = getObject(obj_id);
+    // An acyclic parent chain reaches each category at most once, so more
+    // steps than there are categories means the chain loops.
+    size_t steps = 0;
     while(obj)
     {
         const LLUUID& parent_id = obj->getParentUUID();
@@ -539,6 +542,11 @@ bool LLInventoryModel::isObjectDescendentOf(const LLUUID& obj_id,
         // Since we're scanning up the parents, we only need to check
         // in the category list.
         obj = getCategory(parent_id);
+        if (obj && ++steps > mCategoryMap.size())
+        {
+            LL_WARNS(LOG_INV) << "Detected a loop on an object " << parent_id << " when checking whether " << obj_id << " descends from " << cat_id << LL_ENDL;
+            return false;
+        }
     }
     return false;
 }
@@ -1897,7 +1905,9 @@ void LLInventoryModel::moveObject(const LLUUID& object_id, const LLUUID& cat_id)
         return;
     }
 
-    if((object_id == cat_id) || !is_in_map(mCategoryMap, cat_id))
+    if((object_id == cat_id) || !is_in_map(mCategoryMap, cat_id)
+        // A folder can't move into one of its own descendants.
+        || (is_in_map(mCategoryMap, object_id) && isObjectDescendentOf(cat_id, object_id)))
     {
         LL_WARNS(LOG_INV) << "Could not move inventory object " << object_id << " to "
                           << cat_id << LL_ENDL;
