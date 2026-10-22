@@ -3,7 +3,7 @@
 
 usage: python indra/newview/tests/check_r4a_copies.py
 
-Run by INTEGRATION_TEST_llinventory_task_oracle itself (test 7), so a drift
+Run by INTEGRATION_TEST_llinventory_task_oracle itself (test 8), so a drift
 fails the build's test step.
 
 Regions. Each region of tests/llinventory_task_oracle.cpp (copied code) and

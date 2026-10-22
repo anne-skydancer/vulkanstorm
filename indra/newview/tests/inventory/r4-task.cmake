@@ -5,7 +5,7 @@
 # code of llviewerobject.cpp and llviewerinventory.cpp through one boundary
 # (tests/llinventory_task_oracle_boundary.{h,cpp}); its implementation today is
 # the frozen copies in tests/llinventory_task_oracle.cpp, checked against the
-# live source by tests/check_r4a_copies.py (run by the test itself, test 7).
+# live source by tests/check_r4a_copies.py (run by the test itself, test 8).
 # Fakes stand in for the viewer singletons; llinventory, the message system
 # and template, the xfer manager and LLDir are real. The test replays the
 # fixtures in tests/fixtures/inventory/task and, with VKS_TASK_DUMP=<dir> in

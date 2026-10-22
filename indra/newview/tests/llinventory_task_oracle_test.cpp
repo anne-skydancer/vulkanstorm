@@ -31,8 +31,8 @@
  * with the fixtures in tests/fixtures/inventory/task (text compared line by
  * line ignoring '#' header lines; binary inputs byte for byte; the large
  * sweeps by SHA-256 of their canonical text, whole and per block of 97) and
- * reports the first differences; test 6 requires the fixture tree to hold
- * exactly the produced files plus README.md and .gitattributes; test 7 runs
+ * reports the first differences; test 7 requires the fixture tree to hold
+ * exactly the produced files plus README.md and .gitattributes; test 8 runs
  * check_r4a_copies.py. With VKS_TASK_DUMP=<dir> it writes the fixtures to
  * <dir> and fails (a dump is never a passing run). VKS_TASK_ONLY=<n> runs one
  * set and is honoured only with VKS_TASK_DEV=1.
@@ -1857,8 +1857,13 @@ namespace
             scrub += run_scrub_case(raw);
         }
         o.text["scrub.txt"] = scrub;
+    }
 
-        // random sweep
+    // Set 1's random sweep, a test of its own after the named cases, so that a
+    // change which crashes on some mutated file (undefined behaviour) still
+    // reports the named cases first.
+    void build_set1_random(Outputs& o)
+    {
         Rng rng(SEED_FILES);
         const std::string base = file_cases()[4].bytes; // "normal"
         DigestBuilder digest("task_files_random");
@@ -2946,7 +2951,7 @@ namespace tut
         env();
         Outputs o;
         build_set1(o);
-        std::string report = finish(o, "digests_set1.txt");
+        std::string report = finish(o, "");
         ensure(report, report.empty());
     }
 
@@ -2992,6 +2997,18 @@ namespace tut
     template<> template<>
     void task_oracle_object_t::test<6>()
     {
+        set_test_name("set 1: random sweep of mutated task files");
+        if (skip_set(1)) return;
+        env();
+        Outputs o;
+        build_set1_random(o);
+        std::string report = finish(o, "digests_set1.txt");
+        ensure(report, report.empty());
+    }
+
+    template<> template<>
+    void task_oracle_object_t::test<7>()
+    {
         set_test_name("fixture tree: exactly the produced files, README.md and .gitattributes");
         if (dump_mode() || g_incomplete)
         {
@@ -3003,7 +3020,7 @@ namespace tut
     }
 
     template<> template<>
-    void task_oracle_object_t::test<7>()
+    void task_oracle_object_t::test<8>()
     {
         set_test_name("frozen copies identical to the live source (check_r4a_copies.py)");
         Env& e = env();
