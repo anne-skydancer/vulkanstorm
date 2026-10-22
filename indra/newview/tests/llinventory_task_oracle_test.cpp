@@ -454,6 +454,8 @@ namespace
         bool ok = false;
     };
 
+    bool warm_up_loopback();
+
     Env& env()
     {
         static Env* e = NULL;
@@ -508,7 +510,7 @@ namespace
         {
             e->loopback = LLHost(ip_string_to_u32("127.0.0.1"), e->rport);
             vto::gMessageSystem->enableCircuit(e->loopback, false);
-            e->ok = true;
+            e->ok = warm_up_loopback();
         }
 
         vto::gAgent.mID = AGENT;
@@ -534,24 +536,28 @@ namespace
     // message-system socket and circuit after them; datagrams from one socket
     // to one loopback address arrive in order, so reading up to the marker
     // collects everything sent before it. The marker is not returned.
-    std::vector<std::vector<U8> > receive_packets()
+    U32 send_marker()
     {
         static U32 counter = 0x52340000;
-        Env& e = env();
         const U32 marker = ++counter;
         vto::LLMessageSystem* m = vto::gMessageSystem;
         m->::LLMessageSystem::newMessageFast(_PREHASH_StartPingCheck);
         m->nextBlockFast(_PREHASH_PingID);
         m->addU8Fast(_PREHASH_PingID, 0xa5);
         m->addU32Fast(_PREHASH_OldestUnacked, marker);
-        m->::LLMessageSystem::sendMessage(e.loopback);
+        m->::LLMessageSystem::sendMessage(env().loopback);
+        return marker;
+    }
 
-        std::vector<std::vector<U8> > out;
+    // Reads datagrams until `marker` arrives (true) or `timeout_ms` passes
+    // (false); other datagrams are appended to `out`, older markers skipped.
+    bool read_until_marker(U32 marker, int timeout_ms, std::vector<std::vector<U8> >& out)
+    {
         const auto start = std::chrono::steady_clock::now();
         std::vector<char> buf(NET_BUFFER_SIZE);
         while (true)
         {
-            S32 n = receive_packet(e.rsock, buf.data());
+            S32 n = receive_packet(env().rsock, buf.data());
             if (n > 0)
             {
                 std::vector<U8> p(buf.begin(), buf.begin() + n);
@@ -562,19 +568,50 @@ namespace
                     memcpy(&got, &p[8], 4);
                     if (got == marker)
                     {
-                        break;
+                        return true;
                     }
                     continue; // an older marker
                 }
                 out.push_back(p);
                 continue;
             }
-            if (std::chrono::steady_clock::now() - start > std::chrono::seconds(10))
+            if (std::chrono::steady_clock::now() - start > std::chrono::milliseconds(timeout_ms))
             {
-                out.push_back(std::vector<U8>()); // shown as a missing marker
-                break;
+                return false;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+
+    // On Windows the first datagram of a new loopback flow has been seen to
+    // arrive seconds late under load. Before any capture, markers are sent
+    // (and resent every 500 ms, for at most 60 s) until one arrives; after
+    // that the flow is established. Nothing is recorded from this.
+    bool warm_up_loopback()
+    {
+        std::vector<std::vector<U8> > ignored;
+        for (int attempt = 0; attempt < 120; ++attempt)
+        {
+            if (read_until_marker(send_marker(), 500, ignored))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Every datagram sent to the loopback receiver so far. A marker
+    // (StartPingCheck, OldestUnacked = a counter) is sent through the same
+    // message-system socket and circuit after them; datagrams from one socket
+    // to one loopback address arrive in order, so reading up to the marker
+    // collects everything sent before it. The marker is not returned; a
+    // marker missing after 30 s shows as an empty datagram (a failure).
+    std::vector<std::vector<U8> > receive_packets()
+    {
+        std::vector<std::vector<U8> > out;
+        if (!read_until_marker(send_marker(), 30000, out))
+        {
+            out.push_back(std::vector<U8>());
         }
         return out;
     }
@@ -974,7 +1011,7 @@ namespace
     {
         if (wire_in.empty())
         {
-            return "  packet <MARKER NOT RECEIVED WITHIN 10 s>\n";
+            return "  packet <MARKER NOT RECEIVED WITHIN 30 s>\n";
         }
         Env& e = env();
         std::vector<U8> wire = wire_in;
