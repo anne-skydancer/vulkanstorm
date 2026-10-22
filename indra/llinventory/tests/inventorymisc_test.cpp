@@ -108,6 +108,19 @@ LLPointer<LLInventoryItem> create_random_inventory_item()
     return item;
 }
 
+// Fill the stack below the caller with a pattern, so that a reader which
+// reads an uninitialised local sees the pattern rather than a lucky zero.
+// Called through a volatile pointer so that it is never inlined.
+void fill_stack(U8 pattern)
+{
+    volatile U8 area[64 * 1024];
+    for (size_t i = 0; i < sizeof(area); ++i)
+    {
+        area[i] = pattern;
+    }
+}
+void (*volatile poison_stack)(U8) = fill_stack;
+
 LLPointer<LLInventoryCategory> create_random_inventory_cat()
 {
     LLUUID item_id;
@@ -610,6 +623,46 @@ namespace tut
                 ensure_equals(id + ": count", cat.getSubCategoryCount(), 0);
                 ensure(id + ": name", cat.lookupName() == NULL);
             }
+        }
+    }
+
+//******legacy readers*******//
+
+    template<> template<>
+    void inventory_object::test<17>()
+    {
+        set_test_name("legacy readers give defined values for malformed lines");
+        // Each value below used to come from an uninitialised local.
+        {
+            std::istringstream in("\t{\n\t\tcreation_date\tabc\n\t}\n");
+            LLPointer<LLInventoryItem> item = new LLInventoryItem();
+            poison_stack(0xa5);
+            item->importLegacyStream(in);
+            ensure_equals("item: unparsable creation_date", (S64)item->getCreationDate(), (S64)0);
+        }
+        {
+            std::istringstream in("\t{\n\t\tbase_mask\tzz\n\t}\n");
+            LLPermissions perm;
+            poison_stack(0xa5);
+            perm.importLegacyStream(in);
+            ensure_equals("permissions: unparsable first mask", perm.getMaskBase(), (U32)0);
+            ensure_equals("permissions: owner mask follows the base", perm.getMaskOwner(), (U32)0);
+        }
+        {
+            std::istringstream in("\t{\n\t\tgroup_owned\tx\n\t}\n");
+            LLPermissions perm;
+            poison_stack(0xa5);
+            perm.importLegacyStream(in);
+            ensure("permissions: unparsable group_owned", !perm.isGroupOwned());
+        }
+        {
+            // The old garbage rarely formed a valid UUID, so this case
+            // states the defined value rather than catching the old code.
+            std::istringstream in("\t{\n\t\tcreator_id\n\t}\n");
+            LLPermissions perm;
+            poison_stack(0xa5);
+            perm.importLegacyStream(in);
+            ensure("permissions: value-less creator_id", perm.getCreator().isNull());
         }
     }
 }
