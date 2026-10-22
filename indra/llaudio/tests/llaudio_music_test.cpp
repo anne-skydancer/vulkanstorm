@@ -542,7 +542,8 @@ namespace tut
         const size_t start_frame = s.out.size() / 2;
         ensure("fade-in accepted", s.stream->beginAudioFade(1.f, 0.5f));
         bool complete = false;
-        for (int i = 0; i < 400 && !complete; ++i)
+        const auto fade_give_up = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (!complete && std::chrono::steady_clock::now() < fade_give_up)
         {
             s.step();
             ok("fade-in of the replacement");
@@ -563,7 +564,11 @@ namespace tut
         ensure("still fading in", s.stream->getAudioFadeResult() == Result::Pending);
         s.stream->start(url + "/live/tone.flac?loops=8&length=1&key=third");
         complete = false;
-        for (int i = 0; i < 600 && !complete; ++i)
+        // Bounded by wall time, not by blocks: the new stream buffers 3 s
+        // before it plays (silent blocks meanwhile), however fast the test
+        // renders them
+        const auto give_up = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (!complete && std::chrono::steady_clock::now() < give_up)
         {
             s.step();
             ok("start during a fade-in");
