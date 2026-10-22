@@ -17,6 +17,9 @@ vkstorm-image = { workspace = true }
 vkstorm-messages = { workspace = true }
 vkstorm-http = { workspace = true }
 vkstorm-assets = { workspace = true }
+# The viewer links its prebuilt libcurl; the music player calls it by symbol.
+vkstorm-audio = { workspace = true, features = ["curl-symbols"] }
+vkstorm-vorbis = { workspace = true }
 
 [features]
 default = []

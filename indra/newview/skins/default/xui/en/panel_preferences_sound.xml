@@ -798,7 +798,7 @@
              left_pad="0"
              top_delta="-4"
              width="180"
-             tool_tip="Stereo music speaker layout; applies on the next stream start. Unsupported devices and headphones bypass speaker fill. LFE remains silent; bass management is provided by your sound card. Choose Stereo when using sound-card surround.">
+             tool_tip="Stereo music speaker layout; applies immediately. Layouts your output device does not have, and headphones, bypass speaker fill. LFE remains silent; bass management is provided by your sound card. Choose Stereo when using sound-card surround.">
                <combo_box.item label="Stereo" name="stereo" value="0" />
                <combo_box.item label="2.1" name="surround_21" value="21" />
                <combo_box.item label="4.1" name="surround_41" value="41" />

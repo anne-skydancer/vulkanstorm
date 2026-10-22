@@ -6,7 +6,8 @@
  * LLSD), indra/rust/vkstorm-ffi/src/volume.rs (the prim mesher),
  * indra/rust/vkstorm-ffi/src/image.rs (PNG, TGA, BMP, DXT),
  * indra/rust/vkstorm-ffi/src/messages.rs (message templates, data packers)
- * and indra/rust/vkstorm-ffi/src/http.rs (the HTTP layer).
+ * indra/rust/vkstorm-ffi/src/http.rs (the HTTP layer), assets.rs (the asset
+ * pipeline) and audio.rs (the audio engine).
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -1150,6 +1151,128 @@ void         vks_toxic_mark(VksToxicMap* m, const uint8_t* id, uint64_t now_us);
 int32_t      vks_asset_duplicate_verdict(const VksAssetRequestKey* keys, size_t n, const uint8_t* id, int32_t asset_type, uint64_t callback, uint64_t user_data);
 size_t       vks_asset_completion_order(const VksAssetRequestKey* keys, size_t n, const uint8_t* id, int32_t asset_type, size_t* out, size_t cap);
 size_t       vks_asset_timed_out_order(const VksAssetRequestKey* keys, size_t n, int32_t is_download_list, int32_t all, double now_secs, double timeout_secs, size_t* out, size_t cap);
+
+/* ---- Audio engine (rung six) -------------------------------------------- */
+/* indra/rust/vkstorm-ffi/src/audio.rs over vkstorm-audio: the mixer and
+ * output device behind LLAudioEngine_VKS, sound asset decoding for
+ * LLAudioDecodeMgr, parcel music for LLStreamingAudio_VKS. Voice handles are
+ * the mixer's (0 = none). Strings come back through callbacks that must not
+ * throw. */
+
+typedef struct VksAudio VksAudio;
+typedef struct VksAudioWav VksAudioWav;
+
+typedef void (*VksAudioStrFn)(void* user, const char* s, size_t len);
+typedef void (*VksAudioDeviceFn)(void* user, const uint8_t* uuid, const char* name, size_t name_len);
+/* kind 1: artist and title; 0: cleared (empty map). */
+typedef void (*VksMusicMetaFn)(void* user, int32_t kind, const char* artist, size_t artist_len,
+                               const char* title, size_t title_len);
+
+typedef struct VksAudioFormat
+{
+    uint32_t rate;
+    uint32_t channels;
+    uint32_t channel_mask;
+    int32_t  headphones;
+    uint32_t period_frames;
+    uint32_t buffer_frames;
+} VksAudioFormat;
+
+typedef struct VksMusicStats
+{
+    uint64_t pushed_frames;
+    uint64_t pulled_frames;
+    uint64_t underruns;
+    uint32_t reconnects;
+    uint64_t buffered_frames;
+    uint64_t bus_input_frames;
+    uint64_t bus_output_frames;
+    uint64_t bus_underrun_frames;
+    uint64_t source_frames;
+    uint64_t device_frames;
+    uint64_t expected_device_frames;
+} VksMusicStats;
+
+const char* vks_audio_last_error(void);
+/* "SoLoud 202002 (Rust)" and "202002": the engine's name and the SoLoud release its
+ * mixer is a port of. Static. */
+const char* vks_audio_engine_info(void);
+const char* vks_audio_engine_version(void);
+
+/* uuid: 16 bytes (LLUUID::mData) or null / the null UUID for the default endpoint. */
+VksAudio* vks_audio_create(const uint8_t* uuid);
+VksAudio* vks_audio_create_null(uint32_t rate, uint32_t channels, uint32_t mask, int32_t headphones);
+void      vks_audio_destroy(VksAudio* a);
+int32_t   vks_audio_restart(VksAudio* a);
+/* 0 unchanged, 1 not found (untouched), 2 switched, 3 restored previous, 4 unavailable. */
+int32_t   vks_audio_set_device(VksAudio* a, const uint8_t* uuid);
+int32_t   vks_audio_devices(VksAudioDeviceFn cb, void* user);
+/* name_cb receives backend, a NUL byte, then the device name. */
+int32_t   vks_audio_format(VksAudio* a, VksAudioFormat* out, VksAudioStrFn name_cb, void* user);
+/* -1 no output, 0 running, 1 detached, 2 lost, 3 failed. */
+int32_t   vks_audio_poll(VksAudio* a);
+void      vks_audio_set_global_volume(VksAudio* a, float volume);
+float     vks_audio_global_volume(VksAudio* a);
+int32_t   vks_audio_wind_init(VksAudio* a);
+void      vks_audio_wind_cleanup(VksAudio* a);
+void      vks_audio_wind_targets(VksAudio* a, float freq, float gain, float pan_gain_r);
+uint32_t  vks_audio_render_null(VksAudio* a, float* out, uint32_t frames);
+void      vks_audio_set_null_clock(VksAudio* a, uint64_t frames_played);
+uint64_t  vks_audio_frames_played(VksAudio* a);
+
+VksAudioWav* vks_audio_wav_load(const char* path, int32_t* missing);
+void         vks_audio_wav_free(VksAudio* a, VksAudioWav* w);
+uint32_t     vks_audio_wav_sample_count(const VksAudioWav* w);
+double       vks_audio_wav_length(const VksAudioWav* w);
+
+uint32_t vks_audio_play(VksAudio* a, const VksAudioWav* w, float volume, int32_t paused);
+uint32_t vks_audio_play_3d(VksAudio* a, const VksAudioWav* w, const float* pos, const float* vel,
+                           float volume, int32_t paused);
+void     vks_audio_voice_set_volume(VksAudio* a, uint32_t h, float volume);
+void     vks_audio_voice_set_looping(VksAudio* a, uint32_t h, int32_t looping);
+void     vks_audio_voice_set_inaudible_behavior(VksAudio* a, uint32_t h, int32_t must_tick, int32_t kill);
+void     vks_audio_voice_set_pause(VksAudio* a, uint32_t h, int32_t pause);
+int32_t  vks_audio_voice_seek(VksAudio* a, uint32_t h, double seconds);
+void     vks_audio_voice_fade_volume(VksAudio* a, uint32_t h, float to, double seconds);
+void     vks_audio_voice_schedule_stop(VksAudio* a, uint32_t h, double seconds);
+void     vks_audio_voice_stop(VksAudio* a, uint32_t h);
+void     vks_audio_voice_set_protect(VksAudio* a, uint32_t h, int32_t protect);
+int32_t  vks_audio_voice_is_valid(VksAudio* a, uint32_t h);
+uint32_t vks_audio_voice_loop_count(VksAudio* a, uint32_t h);
+double   vks_audio_voice_stream_position(VksAudio* a, uint32_t h);
+void     vks_audio_voice_set_doppler_factor(VksAudio* a, uint32_t h, float factor);
+void     vks_audio_voice_set_inverse_distance_rolloff(VksAudio* a, uint32_t h, float rolloff);
+void     vks_audio_voice_set_3d(VksAudio* a, uint32_t h, const float* pos, const float* vel);
+void     vks_audio_set_listener(VksAudio* a, const float* pos, const float* at, const float* up, const float* vel);
+void     vks_audio_update_3d(VksAudio* a);
+uint32_t vks_audio_voice_count(VksAudio* a);
+
+/* 0 ok (free *out with vks_audio_bytes_free); 1 empty asset, 2 not Ogg, 3 bad channel
+ * count, 4 no default bitstream, 5 illegal sample count, 6 illegal sample size,
+ * 7 decode error, 8 no samples; *detail = the libvorbis code or offending value. */
+int32_t vks_audio_decode_asset(const uint8_t* data, size_t len, uint8_t** out, size_t* out_len, int64_t* detail);
+void    vks_audio_bytes_free(uint8_t* p, size_t len);
+int32_t vks_audio_asset_vendor(const uint8_t* data, size_t len, VksAudioStrFn cb, void* user);
+
+int32_t  vks_music_create(VksAudio* a, const char* ca_bundle, const char* user_agent, const char* ffmpeg_dir);
+void     vks_music_start(VksAudio* a, const char* url);
+void     vks_music_stop(VksAudio* a);
+void     vks_music_pause(VksAudio* a, int32_t pause);
+int32_t  vks_music_is_playing(VksAudio* a);
+/* 0 idle, 1 connecting, 2 buffering, 3 playing, 4 paused, 5 ended, 6 failed (reason to cb), 7 stopped. */
+int32_t  vks_music_state(VksAudio* a, VksAudioStrFn cb, void* user);
+void     vks_music_url(VksAudio* a, VksAudioStrFn cb, void* user);
+int32_t  vks_music_poll_metadata(VksAudio* a, VksMusicMetaFn cb, void* user);
+int32_t  vks_music_current_metadata(VksAudio* a, VksMusicMetaFn cb, void* user);
+void     vks_music_set_volume(VksAudio* a, float volume);
+void     vks_music_set_muted(VksAudio* a, int32_t muted);
+int32_t  vks_music_set_envelope(VksAudio* a, float value);
+/* Returns the transition's serial (non-zero) or 0 if refused. */
+uint32_t vks_music_transition(VksAudio* a, float target, float seconds);
+/* 0 none (replaced or cancelled), 1 pending, 2 complete. */
+int32_t  vks_music_transition_state(VksAudio* a, uint32_t serial);
+int32_t  vks_music_set_spatial_layout(VksAudio* a, int32_t layout);
+int32_t  vks_music_stats(VksAudio* a, VksMusicStats* out, VksAudioStrFn cb, void* user);
 
 #ifdef __cplusplus
 }

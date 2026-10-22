@@ -11,13 +11,15 @@ edition = "2024"
 license = "LGPL-2.1-only"
 
 [workspace.dependencies]
-vkstorm-j2c = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "1c2a5b8c3a1c36bbc2ee7824002350f0ee6cd54b" }
-vkstorm-llsd = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "1c2a5b8c3a1c36bbc2ee7824002350f0ee6cd54b" }
-vkstorm-volume = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "1c2a5b8c3a1c36bbc2ee7824002350f0ee6cd54b" }
-vkstorm-image = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "1c2a5b8c3a1c36bbc2ee7824002350f0ee6cd54b" }
-vkstorm-messages = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "1c2a5b8c3a1c36bbc2ee7824002350f0ee6cd54b" }
-vkstorm-http = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "1c2a5b8c3a1c36bbc2ee7824002350f0ee6cd54b" }
-vkstorm-assets = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "1c2a5b8c3a1c36bbc2ee7824002350f0ee6cd54b" }
+vkstorm-j2c = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "0140e993fd7d6d747366f02cb01e67d8e1237ea0" }
+vkstorm-llsd = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "0140e993fd7d6d747366f02cb01e67d8e1237ea0" }
+vkstorm-volume = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "0140e993fd7d6d747366f02cb01e67d8e1237ea0" }
+vkstorm-image = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "0140e993fd7d6d747366f02cb01e67d8e1237ea0" }
+vkstorm-messages = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "0140e993fd7d6d747366f02cb01e67d8e1237ea0" }
+vkstorm-http = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "0140e993fd7d6d747366f02cb01e67d8e1237ea0" }
+vkstorm-audio = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "0140e993fd7d6d747366f02cb01e67d8e1237ea0" }
+vkstorm-vorbis = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "0140e993fd7d6d747366f02cb01e67d8e1237ea0" }
+vkstorm-assets = { git = "https://github.com/anne-skydancer/vkstorm-core-rust", rev = "0140e993fd7d6d747366f02cb01e67d8e1237ea0" }
 
 # The viewer's Release configuration links with LTO; do the same inside the
 # Rust static library. Panics abort at the C boundary anyway (caught in the

@@ -10,8 +10,8 @@ The design study behind the port is in the vkstorm-aleph repository under
 `docs/upstream-study/`.
 
 Rung order: the JPEG 2000 codec, LLSD and the message codec, mesh assets and
-the prim mesher, the HTTP layer, audio, textures, inventory, the object
-store, the renderer, the UI, then Vulkan.
+the prim mesher, the HTTP layer, the asset pipeline, audio (rung six),
+textures, inventory, the object store, the renderer, the UI, then Vulkan.
 
 ## Build integration
 
@@ -1485,9 +1485,383 @@ bench does not use.
   (the Windows build uses the linker's alternate name), which LTO
   reports as a type mismatch warning.
 
+## Rung six: the audio engine
+
+The viewer's default audio backend is Rust: `vkstorm-audio` in
+vkstorm-core-rust (`crates/vkstorm-audio`; Ogg Vorbis in its own crate,
+`crates/vkstorm-vorbis`), reached through the `vks_audio_*` and
+`vks_music_*` functions of `indra/rust/vkstorm-ffi/src/audio.rs` (header
+`indra/rust/include/vkstorm_ffi.h`; `llaudio` links `vkstorm_ffi`). It owns
+the output device and mixes sound effects, UI sounds, wind, attached and
+object sounds and parcel music. SoLoud is no longer part of the build and
+there is no runtime switch and no fallback engine. OpenAL (`--openal`) and
+FMOD Studio (`--fmodstudio`) remain compile-time options, untouched.
+
+The C++ classes keep their names and interfaces: `LLAudioEngine`,
+`LLAudioSource`, `LLAudioChannel`, `LLAudioBuffer`, `LLAudioData`,
+`LLListener`, `LLAudioDecodeMgr` and `LLStreamingAudioInterface`. The
+backend subclasses that replaced the SoLoud ones are `LLAudioEngine_VKS`,
+`LLAudioChannelVKS`, `LLAudioBufferVKS`, `LLListener_VKS` and the music
+slot `LLStreamingAudio_VKS` (`indra/llaudio/*_vks.*`). They keep the call
+sequences of the SoLoud adapter they replace, one mixer call per SoLoud call.
+
+Build selection: `USE_VKS_AUDIO` (`indra/cmake/VKSAudio.cmake`; default
+unless OpenAL or FMOD Studio is selected; `--vksaudio` in
+`scripts/configure_firestorm.sh`) defines `LL_VKS_AUDIO` and pulls the
+`ffmpeg` package. `indra/llaudio/tests/audio_backend_selection.cmake`
+checks the selection rules.
+
+### Scope
+
+1. Effects: the mixer is a port of the parts of SoLoud e82fd32c1f (with the
+   3p-soloud patches) the viewer used, operation for operation: voices that
+   start paused and fully configured, faders and scheduled stops (the 20 ms
+   declick), looping and loop counts, synced starts (seek into the master's
+   loop, 20 ms fade in), 64 active voices with SoLoud's active-voice
+   selection (protected wind, inaudible voices that keep ticking), the
+   linear resampler, the listener and source parameters with
+   inverse-distance attenuation (1 m to 512 m), rolloff and Doppler, the
+   panning for 1, 2, 4, 6 and 8 output channels with the viewer's 7.1
+   back/side order, the round-off clipper, the 1024-frame bounded mix, the
+   baked 64-sample head and tail ramp of every sound, and the wind
+   (`LLWindGen` ported, its targets lock-free). Output devices are chosen by
+   endpoint identity with the same UUIDs as before (MD5 of "WASAPI" and the
+   endpoint id), so saved selections stay valid; the 1 s device mutex shared
+   with voice and its retry, the 5 s device list refresh, restore-previous on
+   a failed switch and "no other engine" are kept.
+2. Sound assets: `LLVorbisDecodeState`'s decode and the decoded file it
+   writes (the 44-byte header that always says mono 44.1 kHz, the `ov_read`
+   bytes, the loop-point fade) are Rust, bit for bit.
+3. Parcel music fills the engine's own streaming slot
+   (`createDefaultStreamingAudioImpl`), as FMOD's streamer does upstream:
+   decoded in-process and mixed on the device clock. MP3, MP2, Ogg Vorbis,
+   AAC-LC and FLAC are pure Rust (symphonia 0.6.1 for MPEG audio, AAC-LC and
+   FLAC; vkstorm-vorbis for Vorbis), HE-AAC v1/v2 and Opus go through the
+   decoder-only LGPL FFmpeg 9.0.2 (below). Kept: the fade policy of
+   `llvieweraudio.cpp` (FSFadeAudioStream, 3.0 s in, 2.0 s out, the login
+   hold at zero until STATE_STARTED, completion when the final faded sample
+   has passed the device clock, failure or cancel is a hard stop), the ICY
+   handshake including the non-HTTP `ICY 200 OK` status line and
+   interleaved titles split into artist and title, Ogg comments on every
+   chain link, the Icecast status-json poller (5 s, then every 20 s, three
+   strikes, the mount path walk, the side channel wins), M3U and PLS
+   playlists, reconnects, the refusal of video and web pages, the metadata
+   reset on start and stop.
+4. Speaker fill of stereo music is the mixer's, on Windows and Linux:
+   stereo to all mains at 0.7071, the centre at 0.3536 x (L+R), LFE silent,
+   native multichannel passed through, mono on the front pair, gated by the device's
+   channel mask, the headphone form factor and FSMusicSpatialSound
+   (0/21/41/51/71) with the rear-else-side rule. The setting is shown on both
+   platforms (hidden only in OpenAL and FMOD builds) and applies immediately.
+5. `UseMediaPluginsForStreamingAudio` (default off) still selects the media
+   plugin path for music, now the stock upstream VLC path (below).
+6. Not in scope: voice, the audio of video media (VLC's own output), and
+   positional object media audio.
+
+### Keep-or-port judgement
+
+| Part | Decision | Why |
+|---|---|---|
+| SoLoud's mixing core (voices, faders, resampler, 3D, panning, clipper, active-voice selection) | Rust (`mixer/`) | The mixing. Bit-identical to SoLoud on every recorded render and 0.73-0.86 of its time (below). |
+| The SoLoud adapter (`LLAudioEngine_SoLoud`, channel, buffer, listener) | C++ (`*_vks.*`), same call sequences | It is the `LLAudioEngine` subclass the rest of the viewer drives; each method is a few mixer calls. |
+| `LLAudioEngine`'s sources, channels, priorities, queued and synced sounds, buffers, transfers, sound history | C++ (unchanged) | Application logic over `LLUUID`, `LLAudioSource` and the asset system; no data transformation; the data paths under it (mix, decode, WAV load) are Rust. |
+| `LLWindGen` and the wind voice | Rust (`mixer/wind.rs`) | It runs on the audio thread inside the mix. `updateWind`'s parameter mapping (three lines) stays C++. |
+| The output device (miniaudio inside the SoLoud package) and endpoint enumeration | Rust (`device/`: WASAPI, PulseAudio then ALSA loaded at run time, a null device) | Owning the device is what makes the music clock and speaker fill possible. |
+| WAV loading (SoLoud `Wav::load` on dr_wav) | Rust (`wav.rs`) | Identical samples on 550 files; malformed files that crashed or read uninitialised memory in dr_wav now fail cleanly. |
+| `LLVorbisDecodeState` decode and file assembly | Rust (`asset.rs` on `vkstorm-vorbis`) | Bit-identical and 0.66 of the time. The work queues, the asset cache read and the `LLLFSThread` write stay C++ (rung five's thread-plumbing judgement). |
+| `LLVorbisEncode` (uploads) | C++ (libvorbisenc) | No Rust Vorbis encoder reproduces libvorbisenc's psychoacoustic model; porting it is large for an upload-only path and lacks an oracle beyond the C itself. libvorbis stays linked, which also gives the parity test its in-process decode oracle. |
+| Parcel music (the VLC media plugin) | Rust (`stream/`) | In-process decoding mixed on the device clock: sample-timed fades with completion on the device clock, no rate change at start, metadata without a side process. |
+| HE-AAC (SBR, PS) and Opus decoding | C (FFmpeg's native decoders, dynamically loaded) | Owner's decision: no pure-Rust decoder of production quality for SBR/PS or Opus. LGPL, decoder-only, loaded at run time. |
+| MP3, MP2, AAC-LC, FLAC decoding | Rust (symphonia 0.6.1) | Pure Rust, measured at or below today's decoders. ADTS streams go to FFmpeg only when its first frames show SBR or PS. |
+| HTTP for streams | libcurl (the viewer's prebuilt, through `vkstorm-http`'s bindings) | The same TLS stack and CA bundle as the rest of the viewer (rung four's judgement). |
+| The fade policy state machine (`llvieweraudio.cpp`) | C++ (unchanged) | Viewer startup and parcel policy; the sample-timed envelope it drives is the Rust music bus. |
+| Speaker fill | Rust (music bus) | Was a patched VLC filter and output module. |
+| An off-the-shelf Rust audio engine (Kira 0.12.5) | Not adopted | Evaluated below: it renders stereo only (silence on channels 3-8), has no Doppler, a different attenuation and panning law, no endpoint selection, and costs 55x the mix time. |
+
+### The boundary
+
+- `VksAudio` is one engine object: the output device and its mixer behind
+  one mutex (the device callback takes it per chunk of at most 1024 frames,
+  as SoLoud's callback did), plus the music player whose reader feeds the
+  mixer's music bus. Restarts (device switch) keep the object, stop the
+  device thread, retire every voice (handles never alias: the play index
+  continues), keep the buffers, and restore the global volume and the wind.
+- Voices are the mixer's `u32` handles; buffers are reference-counted
+  `Wav`s, and releasing one stops the voices still playing it, as
+  `SoLoud::Wav`'s destructor did.
+- Sound assets cross as bytes in, the decoded file's bytes out
+  (`vks_audio_decode_asset`), with the error kinds the C++ logs.
+- Music: `vks_music_*` start, stop and pause the player and drive the bus
+  (gain, hard mute, envelope, transitions by serial, the speaker fill
+  layout); metadata comes back through a callback as artist and title or a
+  reset, which `LLStreamingAudio_VKS` turns into the LLSD map
+  `{ARTIST, TITLE}` the stream title consumers read.
+- Strings come back through callbacks that do not throw; panics are caught
+  at the boundary and reported as failure values. No C++ exception crosses
+  into Rust.
+
+### Behaviour kept, settled, and documented as different
+
+Kept, and covered by the corpora: everything in the scope list. Settled or
+different:
+
+- More than 64 voices that keep ticking while inaudible crashed SoLoud
+  (`calcActiveVoices` returned before assigning resample buffers, and a newly
+  active voice read through a null buffer); 30 channels plus their 20 ms
+  declick tails were enough. The mixer assigns the buffers in exactly that
+  case; every run SoLoud survived is unchanged. The mixed-scene corpus could
+  therefore not record more than 62 voices from the C++; the crate's oracle
+  scenes cover 80 voices with the tick off.
+- SoLoud set FTZ/DAZ once per process, on whichever thread mixed first, so
+  after a device switch it mixed with denormals; the mixer sets them for
+  every mix and restores the caller's mode.
+- Wind noise was `ll_frand`, per thread and seeded from the clock, never
+  reproducible; it is a seeded xorshift. The corpus compares wind by level
+  and balance.
+- A selected endpoint that is unplugged is reported and logged; the output
+  stays silent until another device is selected, as before. In default
+  endpoint mode the device follows Windows' default as miniaudio 0.10.42 did,
+  but reopens in the original format and lets WASAPI convert when the new
+  default has another channel count (miniaudio mixed the channels itself).
+- On PulseAudio sinks in ALSA order the SoLoud package passed mixer channels
+  straight through, so centre and LFE went to the rears; the device now
+  routes by speaker position (`device/layout.rs`). Linux enumerates no
+  endpoints, as before (the default device is used).
+- Music: gain and envelope advance per decoded frame, so a fade pauses
+  during an underrun instead of finishing over silence; a pending fade
+  fails when the stream fails, ends, or stalls 30 s past the fade (the VLC
+  path's bound), which llvieweraudio turns into a hard stop. A live stream
+  that played and drops reconnects after 1, 2, 4 and 8 s while buffered
+  audio plays on (VLC did not reconnect). Pause closes a live stream and
+  resumes it live, as FMOD's streamer did. ICY titles that are not UTF-8
+  are read as Latin-1. MP4/M4A, FLV, WAV, ASF, Matroska, MPEG-TS, HLS, XSPF
+  and ASX are refused with a reason.
+- The decoded sound file's tail fade has never taken effect: the C++'s
+  write-back guard can never be true. The Rust decoder reproduces that, and
+  the doc comment says so.
+
+### FFmpeg
+
+HE-AAC and Opus use the decoder-only LGPL FFmpeg 9.0.2 from
+[3p-ffmpeg](https://github.com/anne-skydancer/3p-ffmpeg) (release
+v9.0.2-r1): libavcodec with only the `aac` and `opus` decoders, libavutil,
+libswresample (required by the Opus decoder), shared, no GPL or nonfree
+parts, no demuxers (Ogg and ADTS are demuxed in Rust). The engine loads
+`avcodec-63` at run time from the viewer's directory (Windows) or `lib/`
+(Linux) and checks its major version. The libraries and
+`licenses/ffmpeg.txt` are staged next to the viewer. The Linux build uses
+glibc symbols up to 2.35.
+
+### Parity corpora
+
+All recorded from the C++ before the port (commits "Audio parity: record
+..."), on Windows, under `indra/llaudio/tests/fixtures`.
+
+| corpus | what it holds | result |
+|---|---|---|
+| decoded sound assets (`decode/`, `llaudio_decode_parity.txt`, 592 KB of input) | 58 Ogg Vorbis assets (31 encoded as the viewer encodes uploads, 27 damaged), their outcomes and the SHA-256 of every decoded file, six in full | 58/58 identical on Windows (against the record) and on Linux with GCC 15 and GCC 14 (against libvorbisfile in the same process, since libvorbis 1.3.7 decodes differently there: MSVC's float pi) |
+| mixed scenes (`llaudio_mix_{2,6,8}ch.vksa`, 8.9 MB, script and observations) | 15 scenes through `LLAudioEngine`, `LLAudioSource` and `LLAudioChannel` on the null device at 44.1 kHz and 2, 6 and 8 channels: sources passing by, a turning listener, attenuation 0.5-600 m, rolloff 0.4/1/19, Doppler, 62 voices with evictions, declicked stops and buffer switches, synced starts, loops and queued sounds, 2-D sounds, gains and mute, wind, two other block sizes | 38/38 renders bit-identical (641,214 frames, max difference 0), wind within level and balance, 1,657/1,657 observations, on Windows, Linux GCC 15 and Linux GCC 14 |
+| speaker fill (`speakerfill_matrices.txt`) | the real VLC speakerfill filter and patched WASAPI output: fill matrices for impulses over 12 masks, the negotiation over 7 device conditions, 8 masks and every layout, the gain curve, the 50 ms ramp, the 3 s and 2 s envelopes and their completion frames | 92 matrices and 240 decisions identical, the cubic curve and envelopes exact, the ramp within 6e-8 (vkstorm-audio `tests/speakerfill_record.rs`); the rows that have no counterpart (a device rejecting the surround format, 4.0 and 2.0+sides layouts no setting requests) are listed there |
+
+The crate's own oracle (`tools/soloud-oracle`: SoLoud from the patched
+source and the viewer's `llwindgen.h`) adds 150 scene renders (44.1 and 48
+kHz, 1/2/4/6/8 channels, 80 voices, odd chunk sizes) bit-identical on
+Windows, GCC 14 and GCC 15; 550 WAV files read identically to `Wav::load`;
+and the decoded file of all 1201 vkstorm-vorbis corpus files byte-identical.
+Floating-point and libm: the scenes go through `sqrt` (exact) and constant
+`sin`/`cos`; the only libm-sensitive value is the wind generator's `cosf`,
+which rounds differently in the UCRT and glibc (in the 48 kHz wind-decay
+scene, max 3.9e-7 from 7.05 s). Each platform's port matches its own
+SoLoud; the crate's parity test compares wind-only scenes by energy within
+1e-6 relative and peak within 2e-6 (500x the measured gap), and the viewer
+test compares wind by level, so neither depends on the libm version (CI's
+Linux is glibc 2.39, WSL 2.43).
+
+### Tests
+
+- vkstorm-core-rust: `cargo test -p vkstorm-vorbis` (1356 fixture traces
+  against each platform's expectations, plus the opt-in full corpus against
+  the C oracle) and `cargo test -p vkstorm-audio --features link-curl`
+  (unit tests; the device callback contract; the adapter test transcribed
+  from `llsoloud_adapter_test.cpp`; mixer parity; WAV and asset parity; the
+  speaker fill against the VLC record and the transcribed
+  `vlc_speakerfill_test.cpp` cases; every music format and behaviour end to
+  end against a mock radio server). Pass on Windows and Linux.
+- `INTEGRATION_TEST_llaudio_parity`: the three corpora through the viewer's
+  classes (above).
+- `INTEGRATION_TEST_llaudio_music`: parcel music through
+  `LLStreamingAudio_VKS` on the null device against
+  `indra/newview/tests/vksaudio_mock_stream_server.py` (fixtures in
+  `indra/newview/tests/fixtures/music`, made by `make_fixtures.sh`): every
+  format with its tones and exactly ceil(source frames x 48000 / source
+  rate) output frames per segment (no rate change, the first second
+  included); the fade-in from exactly zero along the linear envelope,
+  completed only after the device clock passed its final sample; the
+  fade-out to silence; ICY titles over `ICY 200 OK`; chained Ogg comments;
+  PLS and M3U; a reconnect; refusals of video and HTML with the pending fade
+  failed; the speaker fill at 5.1.
+- Both are in CI's focused list. With CI's configuration they pass on
+  Windows (MSVC 19.44) and in WSL (Ubuntu 26.04) with GCC 15 and with
+  GCC 14, as does the rest of the focused list.
+- The viewer builds, stages (FFmpeg and its licence included) and reaches
+  the login screen on Windows with empty settings and user directories; the
+  log shows `SoLoud (Rust), version 202002, backend WASAPI @ 48000 Hz, 6
+  channels, 1920 frame buffer, mask 0x3f, speakers, device Speakers (2-
+  Sound Blaster AE-7)` and `Using default impl to render streaming audio`.
+  The engine reports itself as `SoLoud 202002 (Rust)` (Audio Driver
+  Version), the SoLoud release its mixer is a port of
+  (`vkstorm_audio::UPSTREAM_BASELINE`: 202002, upstream e82fd32c1f, 3p-soloud
+  patch level vulkanstorm3), and the verbose form keeps the SoLoud backend's
+  wording.
+
+### Measurements
+
+AMD Ryzen 9 9950X3D; Windows 11 with MSVC 19.44; Ubuntu 26.04 under WSL.
+Rust built as the viewer builds it (fat LTO, one codegen unit,
+`x86-64-v3`). Minimum of three interleaved runs unless stated.
+
+| hot path | what is timed | Windows C++ | Windows Rust | Linux C++ (GCC 14 / 15) | Linux Rust |
+|---|---|---:|---:|---:|---:|
+| mix, 2 channels | one 1024-frame mix, 64 moving 3D voices, 48 kHz (crate bench against the SoLoud oracle) | 46.1 µs | 39.0 µs | 51.2 / 47.9 µs | 39.7 / 39.8 µs |
+| mix, 6 channels | same | 126.8 µs | 98.8 µs | 125.4 / 118.7 µs | 98.7 / 102.3 µs |
+| mix, 8 channels | same | 138.9 µs | 116.7 µs | 162.3 / 161.3 µs | 118.2 / 119.2 µs |
+| mix through the viewer (parity test, `VKS_AUDIO_BENCH`) | 2 / 6 / 8 channels, one 1024-frame block | 48.6 / 121.3 / 150.4 µs | 40.5 / 110.0 / 125.0 µs | | |
+| per-block channel updates (same harness) | `update3DPosition` and the listener commit for 64 voices, 2 / 6 / 8 channels | 2.6 / 3.0 / 3.1 µs | 3.4 / 5.0 / 5.0 µs | | |
+| sound asset decode (viewer decode step) | 31 assets, 5.52 MB of decoded files | 67.7 ms | 44.5 ms | | |
+| sound asset decode (crate, 308 files) | | 466 ms | 427 ms | 444 / 450 ms | 410 / 412 ms |
+| Vorbis decode (vkstorm-vorbis vs libvorbis) | 308 files / 5 min stereo | 623 / 256 ms | 568 / 220 ms | 599 / 604, 247 / 257 ms | 559, 220 ms |
+
+The per-block channel updates are the one row above the C++: each voice
+parameter is an FFI call taking the mixer lock (as each SoLoud call took
+its mutex), 1.5-2 µs more per 21 ms block with 64 voices, under 0.01 % of
+the block. Per-run figures of the viewer harness (2/6/8 channels): C++
+48.6/121.3/150.4, 52.7/144.3/167.1, 53.2/142.5/160.9 µs; Rust
+43.5/118.1/139.4, 42.0/110.0/125.5, 40.5/110.1/125.0 µs.
+
+Stream decode CPU (demux, decode and conversion to 48 kHz stereo, ms of CPU
+per second of audio). Today's path is VLC 3.0.21 on Windows (libvlc with
+an `amem` sink converting to 48 kHz float, the media plugin's decode work
+without the network and the device; process CPU, Windows' 15.6 ms ticks)
+and GStreamer on Linux (the viewer's Linux media plugin; `decodebin !
+audioconvert ! audioresample` to 48 kHz float into `fakesink`, about 600 s
+of audio per run). The Rust figure is the session thread's CPU (vkstorm-audio
+`tests/stream_decode_cpu.rs`, about 600 s of audio per run).
+
+| format | Windows VLC (runs) | Windows Rust | Linux GStreamer | Linux Rust |
+|---|---:|---:|---:|---:|
+| MP3 128k 44.1 kHz stereo | 2.57 (2.12-3.48) | 0.75 | 1.15 | 0.74 |
+| MP3 64k 22 kHz mono | 1.20 (1.20-2.65) | 0.57 | 0.55 | 0.57 |
+| MP2 192k 48 kHz | 1.95 (1.95-3.51) | 0.31 | 0.33 | 0.29 |
+| Ogg Vorbis q3 44.1 kHz | 2.19 | 0.91 | 2.77 | 0.82 |
+| AAC-LC 128k 44.1 kHz | 2.13 (2.13-2.32) | 0.70 | 0.90 | 0.75 |
+| HE-AAC v1 48 kHz | 2.04 (0.76-2.67) | 0.63 | 0.60 | 0.56 |
+| HE-AAC v2 44.1 kHz | 2.08 (1.89-3.02) | 0.99 | 1.29 | 0.92 |
+| Opus 96k 48 kHz | 4.14 | 0.89 | 3.69 | 0.82 |
+| FLAC 44.1 kHz | 0.86 (0.86-1.43) | 0.91 | 1.07 | 0.80 |
+
+The Rust path is at or below today's on every row but two that are within
+the measurement: FLAC on Windows (0.91 against VLC's best run of 0.86;
+its other runs 0.86-1.43, at a 15.6 ms CPU-time resolution over totals of
+0.06-0.3 s) and 22 kHz mono MP3 on Linux (0.57 against 0.55). The Rust
+figures include a polyphase sinc resampler (0.33 ms per second of stereo
+44.1 to 48 kHz; flat to 18 kHz, at least 82 dB of stopband rejection),
+where VLC and GStreamer use their default, lower-quality resamplers. VLC's
+Ogg and Opus runs are single runs (its repeat option does not loop those
+files reliably).
+
+### Kira
+
+[Kira](https://github.com/tesselode/kira) 0.12.5, the main Rust game-audio
+engine, was evaluated as the effects mixer instead of the SoLoud port, on
+its source and a benchmark (the 64-voice scene through its mock backend,
+64 spatial tracks, 1024-frame blocks at 48 kHz, `x86-64-v3`, fat LTO):
+
+- It mixes a stereo `Frame` internally and writes silence to every output
+  channel past the second (`backend/renderer.rs`): positional sound on 5.1
+  and 7.1 output, the 7.1 order and the music speaker fill are impossible
+  without rewriting its core.
+- Its spatial model is a different law: volume interpolated in decibels over
+  a normalised distance between two radii, panning from the dot product of
+  per-ear directions; there is no inverse-distance attenuation with rolloff
+  and no Doppler (no velocities anywhere). The output could not match the
+  recorded SoLoud scenes.
+- Its cpal backend opens the default output device; there is no selection
+  by endpoint identity, no form factor, no device clock.
+- It took 2.34 ms per 1024-frame block for the 64-voice scene, 60 times
+  vkstorm-audio's 39 µs (per-sample spatialisation and parameter
+  interpolation on every track).
+
+Adopting it would change what users hear and lose features; the port keeps
+SoLoud's behaviour exactly at lower cost.
+
+### What was removed from the VLC plugin, and what was kept
+
+Removed (the VLC music path is the stock upstream one again):
+
+- the retired PCM bridge and its WASAPI endpoint code (`llvlcaudio.*`,
+  `llvlcaudiobridge.*`, `llvlcwasapi.h`, `llvlcendpoint.h`,
+  `prepare_miniaudio.cmake`, `LL_VLC_PCM_AUDIO`, `LL_VLC_AUDIO_BRIDGE_TESTS`
+  and their tests);
+- the speaker-fill VLC filter and output modules (`vlc_speakerfill.cpp`,
+  `prepare_speakerfill.cmake`, `llvlcspeakerfillconfig.*`, the MinGW build of
+  the output module, their test, their staging and the `speakerfill-source`
+  LGPL bundle);
+- the `media_audio`/`media_music` protocol: generation/serial handshake,
+  configure, set_gain, spatial and transition messages, `media_audio.state`,
+  the capability negotiation (`llpluginclassmedia`, `llpluginmessageclasses.h`,
+  `media_plugin_libvlc.cpp`, `llviewermedia.cpp`'s object/nonpositional
+  roles and spatial projection, `LL_VLC_AUDIO_PROTOCOL_TESTS` and
+  `llviewermedia_audio_test.cpp`);
+- in `LLStreamingAudio_MediaPlugins`: the fade API overrides, hard mute,
+  pending fades, the FSMusicSpatialSound push, the status-json poller (now
+  in Rust) and the metadata emission; in the plugin: in-band metadata
+  (`libvlc_MediaMetaChanged`), the hidden instance's `:network-caching=5000`
+  and `:no-video`, music volume branches.
+
+Kept (general plugin fixes, not music): VLC callbacks only store atomics
+and the plugin thread does the work; the title string is freed; one
+`stopPlayer()` detaches exactly the events it attached and releases the
+player and media (upstream leaked them on every reload or resize);
+`size_change` stops before swapping the pixel buffer; `resetVLC()` is
+null-safe; stop releases the player and start rebuilds it; error paths
+report `STATUS_ERROR`; FreeBSD's `--aout=oss`. `llvieweraudio.cpp`'s fade
+policy and `llstreamingaudio.h`'s fade interface are kept (the Rust slot
+implements it; the stock VLC path does not, so llvieweraudio uses its
+frame-timed fade there, with the login hold at zero). `scripts/perf/
+test_login_music_gate.py` stays: it tests that policy, not the protocol.
+
+### Listening material
+
+Rendered by the engine on its null device from a 24 s Ogg Vorbis piece
+(chords over a 220 Hz drone) streamed from the mock server and resampled to
+48 kHz, with the viewer's fade policy (vkstorm-audio `examples/render_music.rs`):
+a fade-in after the login hold and a fade-out; a stream start under load
+(1.5 s slow answer, stalls, late device periods, eight spinning threads);
+the same start at 5.1 through the speaker fill. The checks on them: the
+drone stays at 220.000 Hz in every 2 s window (no speed change), no silent
+gap after the first sound, the envelopes within 0.042 of the linear ramps,
+BL = FL and BR = FR sample for sample at 5.1, LFE silent.
+
+### Platform edges
+
+- Windows and Linux agree on every corpus. libvorbis decodes differently on
+  the two (MSVC's `math.h` has no `M_PI`, so its MDCT tables use the float
+  constant); vkstorm-vorbis reproduces each platform's C, and the viewer
+  test compares Linux with libvorbisfile in the same process.
+- FFmpeg's Linux libraries need glibc 2.35 at most (built on Ubuntu 22.04);
+  the engine loads them from `lib/` next to the viewer, the test from the
+  prebuilt package directory (`VKS_FFMPEG_DIR`).
+- The music test needs Python for the mock server, as the asset tests do.
+  On Windows, Python 3.14 loses about a third of server-initiated FINs on
+  loopback; the server lets the client close sized responses.
+- Real devices: the WASAPI path was opened on the machine's three endpoints
+  (6-channel Sound Blaster, HDMI, S/PDIF) and PulseAudio and ALSA under
+  WSLg; unplugging, default-device moves and audible checks on speakers were
+  not exercised by the automation.
+
 ## Local build
 
-Follow the project's RelWithDebInfo procedure (see `scripts/validate_soloud.sh`
+Follow the project's RelWithDebInfo procedure (see `scripts/validate_audio.sh`
 for the canonical variables), then:
 
 ```sh
@@ -1502,6 +1876,7 @@ cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_l
 cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llmessagetemplate -- -m:4 -nologo
 cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llcorehttp_parity INTEGRATION_TEST_llcorehttp -- -m:4 -nologo
 cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llmeshunpack_parity INTEGRATION_TEST_lltexturecache_parity INTEGRATION_TEST_lltexturefetch_parity -- -m:4 -nologo
+cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llaudio_parity INTEGRATION_TEST_llaudio_music -- -m:4 -nologo
 ```
 
 Under Git Bash pass MSBuild switches with a hyphen (`-m:4`), not a slash.
@@ -1515,4 +1890,13 @@ The asset pipeline tests record (`VKS_MESH_RECORD`, `VKS_TEXCACHE_RECORD`,
 `_OUT=<csv>`); the two fetch tests run under
 `indra/newview/tests/vksassets_mock_server.py`, as CMake's test step
 does. The crate-side timing is `cargo bench --bench hot_paths` in
+vkstorm-core-rust.
+The audio tests record (`VKS_AUDIO_RECORD=<dir>`, which writes
+platform-suffixed files off Windows) and time (`VKS_AUDIO_BENCH=<blocks>`,
+`VKS_AUDIO_BENCH_OUT=<csv>`); `VKS_AUDIO_MIX_TOLERANCE`,
+`VKS_AUDIO_DECODE_REFERENCE=oracle`, `VKS_AUDIO_SCENES=<script>` and
+`VKS_AUDIO_TRACE=1` are diagnostics. The music test runs under
+`indra/newview/tests/vksaudio_mock_stream_server.py`. The crate-side tools
+are `tools/soloud-oracle`, `tools/vorbis-oracle`, `cargo bench --bench
+mixer` (with `SOLOUD_ORACLE`) and `cargo run --example render_music` in
 vkstorm-core-rust.

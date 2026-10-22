@@ -846,11 +846,13 @@ bool LLFloaterPreference::postBuild()
 #endif
     // </FS:Ansariel>
 
-    // <FS:Ansariel> Disable options only available on Windows and not on other platforms
-#if !LL_WINDOWS
+#if !LL_VKS_AUDIO
+    // The speaker fill of parcel music is the Vulkanstorm audio engine's
+    // (Windows and Linux); other engines have no such setting
     childSetVisible("FSMusicSpatialSound", false);
     childSetVisible("spatial_sound_label", false);
 #endif
+    // <FS:Ansariel> Disable options only available on Windows and not on other platforms
 #ifndef LL_WINDOWS
     childSetEnabled("FSDisableWMIProbing", false);
 #endif
@@ -6485,7 +6487,7 @@ bool FSPanelPreferenceSounds::postBuild()
     mMoapInteractionFriendObjects    = getChild<LLCheckBoxCtrl>("media_first_click_friend");
     mMoapInteractionLandownerObjects = getChild<LLCheckBoxCtrl>("media_first_click_land");
 
-#if LL_FMODSTUDIO || LL_SOLOUD
+#if LL_FMODSTUDIO || LL_VKS_AUDIO
     if (gAudiop && mOutputDevicePanel && mOutputDeviceComboBox)
     {
         gSavedSettings.getControl("FSOutputDeviceUUID")->getSignal()->connect(boost::bind(&FSPanelPreferenceSounds::onOutputDeviceChanged, this, _2));
