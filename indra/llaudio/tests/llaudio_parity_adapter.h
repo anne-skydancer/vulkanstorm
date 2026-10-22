@@ -8,7 +8,8 @@
  * LLAudioData, LLListener through LLAudioEngine::setListener. Only the
  * functions declared here know which backend is under test:
  *
- *  - ENGINE ADAPTER (llaudio_parity_soloud_adapter.cpp today): create the
+ *  - ENGINE ADAPTER (llaudio_parity_vks_adapter.cpp; the corpora were recorded
+ *    through llaudio_parity_soloud_adapter.cpp before the port): create the
  *    backend engine on a headless null output device with N channels at a
  *    given rate, render frames into a float buffer as one device callback,
  *    run the viewer's per-frame engine update, report voice counts, shut the
