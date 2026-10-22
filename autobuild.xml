@@ -1801,9 +1801,6 @@
         <string>Mesa Zink OpenGL-over-Vulkan runtime with MSVC release, WGL loader initialization and defensive null-guard patches</string>
       </map>
       <key>ffmpeg</key>
-      <!-- PENDING PUBLICATION: anne-skydancer/3p-ffmpeg release v9.0.2-r1 does not exist yet.
-           The hashes are those of the archives built locally from 3p-ffmpeg 248fab18fd;
-           publish exactly those archives under these names (see doc/rust_port.md, rung six). -->
       <map>
         <key>platforms</key>
         <map>
@@ -1812,11 +1809,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>7addb2ea97e51413f1f6b9d5ac6d0ee61e6c241d27868556d57bad266a38de00</string>
+              <string>901c8dadf9448743dff6e2e2b937a4a3556be70d5c6fdcbb86fe5795d76a35e3</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-ffmpeg/releases/download/v9.0.2-r1/ffmpeg-9.0.2.2026102101-linux64-2026102101.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-ffmpeg/releases/download/v9.0.2-r1/ffmpeg-9.0.2.39711573873-linux64-39711573873.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -1826,11 +1823,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>e92208abe51f837d1d1a4118ebf837b92699d218ca2c61419da05e35525e86e9</string>
+              <string>fa2061bc903421aa09446e58e9592e0d4540d30ec1d6c0d736c7911bb27c3e76</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-ffmpeg/releases/download/v9.0.2-r1/ffmpeg-9.0.2.2026102101-windows64-2026102101.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-ffmpeg/releases/download/v9.0.2-r1/ffmpeg-9.0.2.39711573873-windows64-39711573873.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -1843,7 +1840,7 @@
         <key>copyright</key>
         <string>Copyright (c) 2000-2026 the FFmpeg developers (Fabrice Bellard and contributors)</string>
         <key>version</key>
-        <string>9.0.2.2026102101</string>
+        <string>9.0.2.39711573873</string>
         <key>name</key>
         <string>ffmpeg</string>
         <key>canonical_repo</key>
