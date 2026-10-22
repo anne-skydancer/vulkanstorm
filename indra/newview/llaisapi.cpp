@@ -1095,7 +1095,9 @@ void AISUpdate::clearParseResults()
 
 void AISUpdate::checkTimeout()
 {
-    if (mTaskTimer.hasExpired() || sBatchTimer.hasExpired())
+    // Loop: every waiting update resumes on the same frame event, so the
+    // frame's shared batch budget may already be spent when this one runs.
+    while (mTaskTimer.hasExpired() || sBatchTimer.hasExpired())
     {
         // If we are taking too long, don't starve other tasks,
         // yield to mainloop.
