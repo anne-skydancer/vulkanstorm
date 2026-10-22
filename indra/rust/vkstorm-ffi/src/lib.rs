@@ -10,8 +10,11 @@
 //! `vkstorm-messages` (`messages.rs`).
 //! Rung four: the HTTP layer via `vkstorm-http` (`http.rs`).
 //! Rung five: the asset pipeline via `vkstorm-assets` (`assets.rs`).
+//! Rung six: the audio engine, sound asset decoding and parcel music via
+//! `vkstorm-audio` (`audio.rs`).
 
 mod assets;
+mod audio;
 mod http;
 mod image;
 mod messages;
