@@ -23,11 +23,19 @@
  *          RequestXfer/AbortXfer from the real xfer manager, the capability
  *          URL and the CreateTaskInventoryItem body.
  *
+ * The harness reaches the decision code only through the boundary in
+ * llinventory_task_oracle_boundary.h (bnd() below): the frozen copies today,
+ * the Rust decisions over FFI at W5, with the same fixtures and fakes.
+ *
  * Without VKS_TASK_DUMP the test regenerates every corpus and compares it
  * with the fixtures in tests/fixtures/inventory/task (text compared line by
  * line ignoring '#' header lines; binary inputs byte for byte; the large
- * sweeps by SHA-256 of their canonical text) and reports the first
- * differences. With VKS_TASK_DUMP=<dir> it writes the fixtures to <dir>.
+ * sweeps by SHA-256 of their canonical text, whole and per block of 97) and
+ * reports the first differences; test 6 requires the fixture tree to hold
+ * exactly the produced files plus README.md and .gitattributes; test 7 runs
+ * check_r4a_copies.py. With VKS_TASK_DUMP=<dir> it writes the fixtures to
+ * <dir> and fails (a dump is never a passing run). VKS_TASK_ONLY=<n> runs one
+ * set and is honoured only with VKS_TASK_DEV=1.
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -40,6 +48,7 @@
 #include "lltut.h"
 
 #include "llinventory_task_oracle.h"
+#include "llinventory_task_oracle_boundary.h"
 
 #include "llapr.h"
 #include "llcorehttputil.h"
@@ -64,13 +73,23 @@ typedef LLDir_Mac PlatformDir;
 typedef LLDir_Linux PlatformDir;
 #endif
 
+#if LL_WINDOWS
+#include <process.h>
+#define vks_getpid _getpid
+#else
+#include <unistd.h>
+#define vks_getpid getpid
+#endif
+
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <map>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -86,8 +105,18 @@ typedef LLDir_Linux PlatformDir;
 #ifndef VKS_TASK_WORK_DIR
 #error VKS_TASK_WORK_DIR must name a scratch directory in the build tree
 #endif
+#ifndef VKS_TASK_PYTHON
+#error VKS_TASK_PYTHON must name the Python interpreter
+#endif
+#ifndef VKS_TASK_COPY_CHECK
+#error VKS_TASK_COPY_CHECK must name indra/newview/tests/check_r4a_copies.py
+#endif
 
 namespace vto = vks_task_oracle;
+
+// Every call into the task-inventory decision code goes through this boundary
+// (llinventory_task_oracle_boundary.h): the frozen copies today, Rust at W5.
+static vto::TaskInventoryBoundary& bnd() { return vto::boundary(); }
 
 namespace
 {
@@ -323,8 +352,58 @@ namespace
     struct Digest
     {
         std::string name;
-        U64 count;
+        U64 count = 0;
         std::string sha;
+        std::vector<std::string> chunks;
+    };
+
+    // SHA-256 of a sweep's canonical text, whole and per block of
+    // SAMPLE_EVERY units (cases or traces): block k holds units
+    // k*SAMPLE_EVERY .. k*SAMPLE_EVERY+SAMPLE_EVERY-1 and starts with sample k,
+    // so a mismatch names the range to look at.
+    struct DigestBuilder
+    {
+        std::string name;
+        Sha256 total;
+        Sha256 chunk;
+        U64 count = 0;
+        std::vector<std::string> chunks;
+
+        explicit DigestBuilder(const std::string& n) : name(n) {}
+
+        void add(const std::string& unit)
+        {
+            total.update(unit);
+            chunk.update(unit);
+            ++count;
+            if (count % SAMPLE_EVERY == 0)
+            {
+                flush();
+            }
+        }
+
+        void flush()
+        {
+            const U64 k = (count - 1) / SAMPLE_EVERY;
+            chunks.push_back(name + fmt(" chunk %llu units %llu-%llu ", (unsigned long long)k,
+                                        (unsigned long long)(k * SAMPLE_EVERY), (unsigned long long)(count - 1))
+                             + chunk.hexdigest());
+            chunk = Sha256();
+        }
+
+        Digest finish()
+        {
+            if (count % SAMPLE_EVERY)
+            {
+                flush();
+            }
+            Digest d;
+            d.name = name;
+            d.count = count;
+            d.sha = total.hexdigest();
+            d.chunks = chunks;
+            return d;
+        }
     };
 
     struct Outputs
@@ -384,8 +463,19 @@ namespace
         }
         e = new Env;
         ll_init_apr();
-        e->work = VKS_TASK_WORK_DIR;
+        // A directory of this process's own under the build tree's work
+        // directory, so that concurrent runs (a replay and a dump, two build
+        // trees sharing a source) never share cache files. Removed at exit.
+        LLFile::mkdir(VKS_TASK_WORK_DIR);
+        e->work = std::string(VKS_TASK_WORK_DIR) + "/pid-" + std::to_string((long long)vks_getpid());
+        { std::error_code ec; std::filesystem::remove_all(std::filesystem::path(e->work), ec); }
         LLFile::mkdir(e->work);
+        static std::string work_to_remove = e->work;
+        atexit([]()
+        {
+            std::error_code ec;
+            std::filesystem::remove_all(std::filesystem::path(work_to_remove), ec);
+        });
         e->cache = e->work + "/cache";
         e->temp = e->work + "/temp";
         LLFile::mkdir(e->cache);
@@ -570,6 +660,16 @@ namespace
         return s;
     }
 
+    // C: a notecard with A's asset, written and then stripped of its type
+    // line (see item_type_missing_shares_asset).
+    ItemSpec spec_c_none()
+    {
+        ItemSpec s = spec_a();
+        s.id = ITEM_C;
+        s.name = "No type C";
+        return s;
+    }
+
     std::string legacy_object(const LLUUID& id, const std::string& name, LLAssetType::EType type = LLAssetType::AT_CATEGORY,
                               const LLUUID& parent = LLUUID::null)
     {
@@ -649,12 +749,110 @@ namespace
             + " groupid=" + nm(p.getGroup()) + fmt(" groupowned=%d", (int)p.isGroupOwned());
     }
 
-    // Every field of every entry, front to back.
-    std::string entries_text(LLInventoryObject::object_list_t* inv, const std::string& indent)
+    // The object's own read helpers over its contents: getInventoryRoot,
+    // getInventoryContents, countInventoryContents for every type present,
+    // and getInventoryItemByAsset (both forms) for every item's asset. The
+    // lookups cast every entry of the matching type to LLViewerInventoryItem
+    // without a check; where a plain LLInventoryObject would be cast (an
+    // inv_object of a type other than category/none), the call would read
+    // past the object (undefined behaviour), so it is not made and the line
+    // says so.
+    std::string helpers_text(vto::LLViewerObject* obj, const std::string& indent)
     {
+        LLInventoryObject::object_list_t* inv = obj->mInventory;
+        std::string out = indent + "helpers root=";
+        LLInventoryObject* root = bnd().getInventoryRoot(obj);
+        out += root ? nm(root->getUUID()) : std::string("none");
+        LLInventoryObject::object_list_t contents;
+        bnd().getInventoryContents(obj, contents);
+        out += " contents=" + inv_brief(&contents);
+        std::vector<int> types;
+        std::vector<LLUUID> assets;
+        std::vector<std::pair<LLUUID, int> > typed;
+        std::set<int> plain_object_types;
+        if (inv)
+        {
+            for (const LLPointer<LLInventoryObject>& p : *inv)
+            {
+                int t = (int)p->LLInventoryObject::getType();
+                if (std::find(types.begin(), types.end(), t) == types.end())
+                {
+                    types.push_back(t);
+                }
+                const vto::LLViewerInventoryItem* item = dynamic_cast<const vto::LLViewerInventoryItem*>(p.get());
+                if (!item)
+                {
+                    plain_object_types.insert(t);
+                    continue;
+                }
+                const LLUUID& a = item->LLInventoryItem::getAssetUUID();
+                if (std::find(assets.begin(), assets.end(), a) == assets.end())
+                {
+                    assets.push_back(a);
+                }
+                std::pair<LLUUID, int> at(a, t);
+                if (std::find(typed.begin(), typed.end(), at) == typed.end())
+                {
+                    typed.push_back(at);
+                }
+            }
+        }
+        out += " count{";
+        for (size_t i = 0; i < types.size(); ++i)
+        {
+            out += fmt("%s%d:%d", i ? "," : "", types[i], (int)bnd().countInventoryContents(obj, (LLAssetType::EType)types[i]));
+        }
+        out += "}";
+        bool asset_lookup_safe = true;
+        for (int t : plain_object_types)
+        {
+            if (t != LLAssetType::AT_CATEGORY && t != LLAssetType::AT_NONE)
+            {
+                asset_lookup_safe = false;
+            }
+        }
+        out += " byasset{";
+        if (!asset_lookup_safe)
+        {
+            out += "not-called";
+        }
+        else
+        {
+            for (size_t i = 0; i < assets.size(); ++i)
+            {
+                vto::LLViewerInventoryItem* found = bnd().getInventoryItemByAsset(obj, assets[i]);
+                out += (i ? "," : "") + nm(assets[i]) + ":" + (found ? nm(found->getUUID()) : std::string("none"));
+            }
+        }
+        out += "} bytype{";
+        bool first = true;
+        for (const auto& at : typed)
+        {
+            if (at.second == LLAssetType::AT_CATEGORY)
+            {
+                continue; // llassert(0) in the viewer
+            }
+            out += first ? "" : ",";
+            first = false;
+            out += nm(at.first) + fmt("/%d:", at.second);
+            if (plain_object_types.count(at.second))
+            {
+                out += "not-called";
+                continue;
+            }
+            vto::LLViewerInventoryItem* found = bnd().getInventoryItemByAsset(obj, at.first, (LLAssetType::EType)at.second);
+            out += found ? nm(found->getUUID()) : std::string("none");
+        }
+        return out + "}\n";
+    }
+
+    // Every field of every entry, front to back, then the read helpers.
+    std::string entries_text(vto::LLViewerObject* obj, const std::string& indent)
+    {
+        LLInventoryObject::object_list_t* inv = obj->mInventory;
         if (!inv)
         {
-            return indent + "inventory null\n";
+            return indent + "inventory null\n" + helpers_text(obj, indent);
         }
         std::string out = indent + fmt("inventory %d entries", (int)inv->size());
         out += inv->empty() ? " root none\n" : " root " + nm(inv->back()->getUUID()) + "\n";
@@ -686,7 +884,7 @@ namespace
             }
             out += "\n";
         }
-        return out;
+        return out + helpers_text(obj, indent);
     }
 
     //------------------------------------------------------------------
@@ -750,7 +948,7 @@ namespace
         e.reader->validateMessage(buf.data(), n, LLHost(), true);
         e.reader->readMessage(buf.data(), LLHost());
         Injected injected;
-        vto::LLViewerObject::processTaskInv(vto::gMessageSystem, NULL);
+        bnd().processTaskInv(vto::gMessageSystem);
     }
 
     // What processTaskInv reads from the Filename field when the sender
@@ -895,7 +1093,7 @@ namespace
             {
                 RecListener* l = new RecListener(i + 1);
                 listeners.push_back(l);
-                obj->registerInventoryListener(l, NULL);
+                bnd().registerInventoryListener(obj, l, NULL);
             }
             vto::LLSelectMgr::getInstance()->mSelectedObject = NULL;
             vto::reset_fake_xfers();
@@ -997,7 +1195,7 @@ namespace
     void update_item(Scene& s, const ItemSpec& spec, U8 key, bool is_new)
     {
         LLPointer<vto::LLViewerInventoryItem> item = make_item(spec);
-        s.obj->updateInventory(item, key, is_new);
+        bnd().updateInventory(s.obj, item, key, is_new);
     }
 
     void create_item(Scene& s, bool succeed)
@@ -1006,7 +1204,7 @@ namespace
         LLPermissions perm;
         perm.init(AGENT, AGENT, LLUUID::null, LLUUID::null);
         perm.initMasks(PERM_ALL, PERM_ALL, PERM_NONE, PERM_NONE, PERM_MOVE | PERM_TRANSFER);
-        s.obj->createInventoryItem(LLAssetType::AT_LSL_TEXT, LLInventoryType::IT_LSL, 0, "New Script", "", perm, LLSD(),
+        bnd().createInventoryItem(s.obj, LLAssetType::AT_LSL_TEXT, LLInventoryType::IT_LSL, 0, "New Script", "", perm, LLSD(),
             [](bool success, const LLSD& result)
             {
                 vto::recorder().add(fmt("create.callback success=%d message=", (int)success)
@@ -1024,21 +1222,21 @@ namespace
     bool apply(Scene& s, const std::string& ev)
     {
         vto::LLViewerObject* o = s.obj;
-        if (ev == "req") { o->requestInventory(); return true; }
-        if (ev == "dirty") { o->dirtyInventory(); return true; }
+        if (ev == "req") { bnd().requestInventory(o); return true; }
+        if (ev == "dirty") { bnd().dirtyInventory(o); return true; }
         if (ev == "timer") { vto::fire_timer(); return true; }
         if (ev == "die") { vto::gObjectList.mObjects.erase(OBJ); vto::recorder().add("object.gone"); return true; }
         if (ev == "revive") { vto::gObjectList.mObjects[OBJ] = o; vto::recorder().add("object.back"); return true; }
         if (ev == "unlisten")
         {
-            if (!s.listeners.empty()) { o->removeInventoryListener(s.listeners.back()); delete s.listeners.back(); s.listeners.pop_back(); }
+            if (!s.listeners.empty()) { bnd().removeInventoryListener(o, s.listeners.back()); delete s.listeners.back(); s.listeners.pop_back(); }
             return true;
         }
         if (ev == "listen")
         {
             RecListener* l = new RecListener((int)s.listeners.size() + 1);
             s.listeners.push_back(l);
-            o->registerInventoryListener(l, NULL);
+            bnd().registerInventoryListener(o, l, NULL);
             return true;
         }
         if (ev == "select")
@@ -1092,9 +1290,9 @@ namespace
         if (ev == "upd.guess") { ItemSpec c = spec_a(); c.id = ITEM_C; c.asset = ASSET_C; c.name = "Guessed C"; update_item(s, c, TASK_INVENTORY_ITEM_KEY, false); return true; }
         if (ev == "upd.new") { ItemSpec d = spec_a(); d.id = ITEM_D; d.asset = ASSET_D; d.name = "New D"; update_item(s, d, TASK_INVENTORY_ITEM_KEY, true); return true; }
         if (ev == "upd.asset") { ItemSpec a = spec_a(); a.id = ITEM_E; a.desc = "by asset"; update_item(s, a, TASK_INVENTORY_ASSET_KEY, false); return true; }
-        if (ev == "remove") { o->removeInventory(ITEM_A); return true; }
-        if (ev == "move.nocopy") { o->moveInventory(LLUUID::null, ITEM_B); return true; }
-        if (ev == "move.copy") { o->moveInventory(LLUUID::null, ITEM_A); return true; }
+        if (ev == "remove") { bnd().removeInventory(o, ITEM_A); return true; }
+        if (ev == "move.nocopy") { bnd().moveInventory(o, LLUUID::null, ITEM_B); return true; }
+        if (ev == "move.copy") { bnd().moveInventory(o, LLUUID::null, ITEM_A); return true; }
         if (ev == "create.ok") { create_item(s, true); return true; }
         if (ev == "create.fail") { create_item(s, false); return true; }
         if (ev.compare(0, 11, "set.serial=") == 0) { o->mInventorySerialNum = (S16)atoi(ev.c_str() + 11); return true; }
@@ -1103,6 +1301,32 @@ namespace
     }
 
     // Runs one trace; the text is one header line and one line per event.
+    // The task inventory files of the scene still in the cache (a file is
+    // removed only by a successful loadTaskInvFile; survey 4 section 5.8).
+    std::string cache_text(Scene& s)
+    {
+        std::vector<std::string> names;
+        for (const std::string& f : s.written)
+        {
+            if (!file_exists(f))
+            {
+                continue;
+            }
+            size_t slash = f.find_last_of("/\\");
+            std::string name = slash == std::string::npos ? f : f.substr(slash + 1);
+            if (std::find(names.begin(), names.end(), name) == names.end())
+            {
+                names.push_back(name);
+            }
+        }
+        std::string out = "[";
+        for (size_t i = 0; i < names.size(); ++i)
+        {
+            out += (i ? "," : "") + names[i];
+        }
+        return out + "]";
+    }
+
     std::string run_trace(bool caps, int listeners, const std::vector<std::string>& events, const std::string& label = std::string())
     {
         std::string out = "trace " + std::string(caps ? "cap" : "udp") + fmt("/L%d", listeners);
@@ -1125,7 +1349,7 @@ namespace
                 continue;
             }
             std::string actions = take_actions();
-            out += " " + e + " | " + state_line(s.obj) + " | " + actions + "\n";
+            out += " " + e + " | " + state_line(s.obj) + " cache=" + cache_text(s) + " | " + actions + "\n";
         }
         return out;
     }
@@ -1222,6 +1446,23 @@ namespace
             size_t e = bb.find('\n', p);
             bb.replace(p, e - p, desc_line_of(n));
             add(fmt("desc_line_%d", (int)n), obj + a + bb + cs);
+        }
+        // A top-level line of exactly n characters (an unknown token) between
+        // the blocks: loadTaskInvFile's own getline(buffer, 255) stops the
+        // file at 255 characters or more.
+        for (size_t n : {253, 254, 255, 256, 300})
+        {
+            add(fmt("toplevel_line_%d", (int)n), obj + a + "\t" + std::string(n - 1, 't') + "\n" + b + cs);
+        }
+        {
+            // an item without a type line keeps AT_NONE; it shares A's asset
+            std::string none = legacy_item(spec_c_none());
+            add("item_type_missing_shares_asset", obj + a + replace_once(none, "\t\ttype\tnotecard\n", "") + b);
+            // two items with A's id: the first match wins in every lookup and deletion
+            ItemSpec dup = spec_a();
+            dup.name = "Duplicate A";
+            dup.asset = ASSET_E;
+            add("duplicate_item_id", obj + a + legacy_item(dup) + b);
         }
         {
             std::string meta = "\t\tmetadata\t<llsd><map><key>script</key><map><key>runtime</key><string>"
@@ -1351,10 +1592,10 @@ namespace
             const std::string name = "task_" + fc.label + ".inv";
             const std::string path = s.cache_path(name);
             s.write_file(path, fc.bytes);
-            bool returned = s.obj->loadTaskInvFile(name);
+            bool returned = bnd().loadTaskInvFile(s.obj, name);
             out += fmt(" direct returned=%d removed=%d ", (int)returned, (int)!file_exists(path)) + state_line(s.obj)
                 + " | " + take_actions() + "\n";
-            out += entries_text(s.obj->mInventory, " ");
+            out += entries_text(s.obj, " ");
         }
         if (fc.via_xfer)
         {
@@ -1362,7 +1603,7 @@ namespace
             s.obj->mPendingInventoryItemsIDs.push_back(ASSET_PENDING);
             s.obj->mPendingInventoryItemsIDs.push_back(ASSET_E);
             s.obj->mPendingInventoryItemsIDs.push_back(ASSET_A);
-            s.obj->requestInventory();
+            bnd().requestInventory(s.obj);
             deliver_reply(OBJ, 1, "task_" + fc.label + ".inv");
             int i = oldest_live_xfer();
             if (i >= 0)
@@ -1386,9 +1627,9 @@ namespace
     std::string run_missing_file_case()
     {
         Scene s(false, 1);
-        bool returned = s.obj->loadTaskInvFile("task_absent.inv");
+        bool returned = bnd().loadTaskInvFile(s.obj, "task_absent.inv");
         return "case missing_file input=- bytes=-1\n" + fmt(" direct returned=%d ", (int)returned) + state_line(s.obj)
-            + " | " + take_actions() + "\n" + entries_text(s.obj->mInventory, " ");
+            + " | " + take_actions() + "\n" + entries_text(s.obj, " ");
     }
 
     // Scrubbed filenames through processTaskInv and the real xfer manager.
@@ -1459,7 +1700,7 @@ namespace
             {
                 ids[real->mReceiveList[i]->mID] = fmt("real#%d", (int)i + 1);
             }
-            out += entries_text(s.obj->mInventory, " ");
+            out += entries_text(s.obj, " ");
             out += packets_text(receive_packets(), ids);
         }
         vto::gMessageSystem->mCapture = false;
@@ -1520,7 +1761,14 @@ namespace
             case 4:
             {
                 std::string& l = lines[at];
-                if (!l.empty()) l[rng.below((U32)l.size())] = (char)(0x20 + rng.below(0x5f));
+                if (!l.empty())
+                {
+                    // the order the recording used (C++17 sequences the right
+                    // operand of = first): the byte, then the position
+                    const char value = (char)(0x20 + rng.below(0x5f));
+                    const U32 pos = rng.below((U32)l.size());
+                    l[pos] = value;
+                }
                 break;
             }
             case 5:
@@ -1532,7 +1780,12 @@ namespace
             default:
             {
                 std::string& l = lines[at];
-                l.insert(rng.below((U32)l.size() + 1), std::string(rng.below(300), 'm'));
+                // two statements: the recording evaluated the count before
+                // the position (MSVC and GCC take these arguments right to
+                // left); the order is fixed here for every compiler
+                const U32 count = rng.below(300);
+                const U32 pos = rng.below((U32)l.size() + 1);
+                l.insert(pos, std::string(count, 'm'));
                 break;
             }
             }
@@ -1571,9 +1824,9 @@ namespace
         // random sweep
         Rng rng(SEED_FILES);
         const std::string base = file_cases()[4].bytes; // "normal"
-        std::string stream;
+        DigestBuilder digest("task_files_random");
         std::string samples = header("set 1, random sweep of mutated task files (samples)", fmt("0x%llx xorshift64*", (unsigned long long)SEED_FILES));
-        samples += fmt("# %d files mutated from files/normal.inv; every %dth is kept here with its input; all are in digests.txt\n",
+        samples += fmt("# %d files mutated from files/normal.inv; every %dth is kept here with its input; all are in digests_set1.txt\n",
                        FILE_SWEEP_COUNT, SAMPLE_EVERY);
         for (int i = 0; i < FILE_SWEEP_COUNT; ++i)
         {
@@ -1582,7 +1835,7 @@ namespace
             fc.bytes = mutate_file(rng, base);
             const std::string input = "random/" + fc.label + ".inv";
             std::string result = run_file_case(fc, input);
-            stream += result;
+            digest.add(result);
             if (i % SAMPLE_EVERY == 0)
             {
                 o.binary[input] = std::vector<U8>(fc.bytes.begin(), fc.bytes.end());
@@ -1590,7 +1843,7 @@ namespace
             }
         }
         o.text["task_files_random_samples.txt"] = samples;
-        o.digests.push_back({"task_files_random", (U64)FILE_SWEEP_COUNT, sha256(stream)});
+        o.digests.push_back(digest.finish());
     }
 
     //------------------------------------------------------------------
@@ -1741,11 +1994,11 @@ namespace
         out += "  body " + (rc.has_body ? notation(rc.body) : std::string("<no body>")) + "\n";
         Scene s(true, 1);
         s.obj->mExpectedInventorySerialNum = rc.expected;
-        s.obj->requestInventory();
+        bnd().requestInventory(s.obj);
         out += " request " + state_line(s.obj) + " | " + take_actions() + "\n";
         vto::complete_http(rc.has_body ? rc.body : LLSD(), ::LLCore::HttpStatus(200));
         out += " reply " + state_line(s.obj) + " | " + take_actions() + "\n";
-        out += entries_text(s.obj->mInventory, " ");
+        out += entries_text(s.obj, " ");
         return out;
     }
 
@@ -1825,9 +2078,9 @@ namespace
         o.text["cap_replies.txt"] = text;
 
         Rng rng(SEED_REPLIES);
-        std::string stream;
+        DigestBuilder digest("cap_replies_random");
         std::string samples = header("set 2, random sweep of capability reply bodies (samples)", fmt("0x%llx xorshift64*", (unsigned long long)SEED_REPLIES));
-        samples += fmt("# %d bodies; every %dth is kept here with its input; all are in digests.txt\n", REPLY_SWEEP_COUNT, SAMPLE_EVERY);
+        samples += fmt("# %d bodies; every %dth is kept here with its input; all are in digests_set2.txt\n", REPLY_SWEEP_COUNT, SAMPLE_EVERY);
         for (int i = 0; i < REPLY_SWEEP_COUNT; ++i)
         {
             ReplyCase rc;
@@ -1836,7 +2089,7 @@ namespace
             rc.expected = (S16)(rng.below(5) == 0 ? (S32)rng.below(70000) - 35000 : 0);
             const std::string input = "replies_random/" + rc.label + ".llsd";
             std::string result = run_reply_case(rc, input);
-            stream += result;
+            digest.add(result);
             if (i % SAMPLE_EVERY == 0)
             {
                 o.binary[input] = binary_llsd(rc.body);
@@ -1844,7 +2097,7 @@ namespace
             }
         }
         o.text["cap_replies_random_samples.txt"] = samples;
-        o.digests.push_back({"cap_replies_random", (U64)REPLY_SWEEP_COUNT, sha256(stream)});
+        o.digests.push_back(digest.finish());
     }
 
     //------------------------------------------------------------------
@@ -1906,6 +2159,9 @@ namespace
             {"stuck_cap_no_contents_reply_does_not_unstick", true, 1, "req cap.nocontents rep.exp rep.lo rep.hi timer req"},
             {"stuck_cap_object_gone", true, 1, "req die cap.ok revive req"},
             {"stuck_aborted_xfer", false, 1, "req rep.exp rep.lo xfer.ok timer"},
+            {"xfer_completion_records_serial", false, 1, "rep.hi rep.none rep.lo xfer.ok"},
+            {"object_gone_during_delay_udp", false, 1, "req upd.new rep.lo die timer revive req"},
+            {"object_gone_during_delay_cap", true, 1, "req upd.new rep.lo die timer revive req"},
             {"cap_error_not_stuck", true, 1, "req cap.err req cap.ok"},
             {"cap_304", true, 1, "req cap.304 req cap.ok"},
             {"cap_304_after_edit", true, 1, "req cap.ok upd.new dirty req cap.304 timer cap.ok"},
@@ -1980,7 +2236,9 @@ namespace
         const std::string legend =
             "# trace <udp|cap>/<listeners> [label] : <events>\n"
             "#  <event> | st=<S stopped|W wait|P pending|X xfer> ser=<mInventorySerialNum> exp=<mExpectedInventorySerialNum>\n"
-            "#            xid=<mInvRequestXFerId> dirty=<mInventoryDirty> inv=<entries front..back, or -> | <side effects in order>\n"
+            "#            xid=<mInvRequestXFerId> dirty=<mInventoryDirty> inv=<entries front..back, or ->\n"
+            "#            cache=<task inventory files of the trace still in the cache> | <side effects in order>\n"
+            "# digests of the complete sweeps: digests_set3.txt\n"
             "# events: req requestInventory; dirty dirtyInventory; rep.lo|cur|exp|hi ReplyTaskInventory with serial expected-1 |\n"
             "#  current | expected | expected+1 and filename inv_s<serial>.tmp; rep.none empty filename; rep=<n>;\n"
             "#  xfer.ok|err|nofile complete the oldest live xfer with the standard file | error -1 | no file (xfer.ok.newest: the newest);\n"
@@ -2007,16 +2265,21 @@ namespace
         short_text += "\n# order: udp/L0, udp/L1, cap/L0, cap/L1; within each, length 1 then 2, lexicographic by alphabet index\n";
         for (int length = 1; length <= 4; ++length)
         {
-            std::string stream;
+            std::string stream; // kept for lengths 1 and 2 only
             std::string samples;
             U64 count = 0;
+            DigestBuilder digest(fmt("serial_traces_len%d", length));
             for (const Config& cfg : CONFIGS)
             {
                 const std::vector<std::string>& alphabet = cfg.caps ? cap_alphabet() : udp_alphabet();
                 for_each_sequence(alphabet, length, [&](const std::vector<std::string>& seq)
                 {
                     std::string t = run_trace(cfg.caps, cfg.listeners, seq);
-                    stream += t;
+                    digest.add(t);
+                    if (length <= 2)
+                    {
+                        stream += t;
+                    }
                     if (length >= 3 && count % SAMPLE_EVERY == 0)
                     {
                         samples += t;
@@ -2032,11 +2295,11 @@ namespace
             {
                 std::string head = header(fmt("set 3, every event sequence of length %d (sample)", length)) + legend;
                 head += fmt("# %llu traces in the order of serial_traces_len1_2.txt; every %dth (0, %d, ...) is kept here; "
-                            "the SHA-256 of all of them, concatenated, is in digests.txt\n",
-                            (unsigned long long)count, SAMPLE_EVERY, SAMPLE_EVERY);
+                            "the SHA-256 of all of them, concatenated, and of each block of %d starting at a sample, is in digests_set3.txt\n",
+                            (unsigned long long)count, SAMPLE_EVERY, SAMPLE_EVERY, SAMPLE_EVERY);
                 o.text[fmt("serial_traces_len%d_samples.txt", length)] = head + samples;
             }
-            o.digests.push_back({fmt("serial_traces_len%d", length), count, sha256(stream)});
+            o.digests.push_back(digest.finish());
         }
         o.text["serial_traces_len1_2.txt"] = short_text;
     }
@@ -2074,11 +2337,11 @@ namespace
 
     // Loads the standard contents through the UDP path with the fake xfer
     // manager (nothing sent is captured here).
-    void preload(Scene& s)
+    void preload(Scene& s, const std::string& file_bytes = std::string())
     {
         bool capture = vto::gMessageSystem->mCapture;
         vto::gMessageSystem->mCapture = false;
-        s.obj->requestInventory();
+        bnd().requestInventory(s.obj);
         deliver_reply(OBJ, s.obj->mExpectedInventorySerialNum, "inv_preload.tmp");
         int i = oldest_live_xfer();
         if (getenv("VKS_TASK_VERBOSE")) std::cerr << "preload xfers=" << vto::fake_xfers().size() << " live=" << i << std::endl;
@@ -2086,7 +2349,7 @@ namespace
         {
             vto::FakeXfer x = vto::fake_xfers()[i];
             vto::fake_xfers().erase(vto::fake_xfers().begin() + i);
-            s.write_file(x.local_filename, standard_file());
+            s.write_file(x.local_filename, file_bytes.empty() ? standard_file() : file_bytes);
             x.callback(x.user_data, 0, LLExtStat::NONE);
         }
         std::string actions = take_actions();
@@ -2145,7 +2408,7 @@ namespace
                 g.group_owned = true;
                 g.owner = LLUUID::null;
                 LLPointer<vto::LLViewerInventoryItem> gi = make_item(g);
-                s.obj->deleteInventoryItem(ITEM_A);
+                bnd().deleteInventoryItem(s.obj, ITEM_A);
                 s.obj->mInventory->push_front(gi.get());
                 take_actions();
             },
@@ -2166,9 +2429,29 @@ namespace
                 t.type = LLAssetType::AT_TEXTURE;
                 t.inv_type = LLInventoryType::IT_TEXTURE;
                 LLPointer<vto::LLViewerInventoryItem> item = make_item(t);
-                s.obj->updateMaterialInventory(item, TASK_INVENTORY_ITEM_KEY, true);
-                s.obj->updateMaterialInventory(item, TASK_INVENTORY_ITEM_KEY, true); // already pending: nothing
+                bnd().updateMaterialInventory(s.obj, item, TASK_INVENTORY_ITEM_KEY, true);
+                bnd().updateMaterialInventory(s.obj, item, TASK_INVENTORY_ITEM_KEY, true); // already pending: nothing
             });
+        // is_atomic: an owner change (selected object, or not owner) with the
+        // next-owner mask PERM_MOVE; setOwnerAndGroup adds PERM_TRANSFER to
+        // the new base only for atomic items (not AT_OBJECT)
+        add("update_selected_notecard_next_move", [](Scene& s) { preload(s); apply(s, "select"); },
+            [](Scene& s) { ItemSpec a = spec_a(); a.next = PERM_MOVE; a.desc = "atomic"; update_item(s, a, TASK_INVENTORY_ITEM_KEY, false); });
+        add("update_selected_object_next_move", [](Scene& s) { preload(s); apply(s, "select"); },
+            [](Scene& s) { ItemSpec b = spec_b(); b.next = PERM_MOVE; b.desc = "not atomic"; update_item(s, b, TASK_INVENTORY_ITEM_KEY, false); });
+        add("update_notowner_notecard_next_move", [](Scene& s) { preload(s); s.obj->mFakeYouOwner = false; },
+            [](Scene& s) { ItemSpec c2 = spec_a(); c2.id = ITEM_C; c2.asset = ASSET_C; c2.next = PERM_MOVE; update_item(s, c2, TASK_INVENTORY_ITEM_KEY, false); });
+        add("update_notowner_object_next_move", [](Scene& s) { preload(s); s.obj->mFakeYouOwner = false; },
+            [](Scene& s) { ItemSpec c2 = spec_b(); c2.id = ITEM_C; c2.asset = ASSET_C; c2.next = PERM_MOVE; update_item(s, c2, TASK_INVENTORY_ITEM_KEY, false); });
+        // deleteInventoryItem erases the first match only: a file with A twice
+        add("remove_duplicate_id", [](Scene& s)
+            {
+                ItemSpec dup = spec_a();
+                dup.name = "Duplicate A";
+                dup.asset = ASSET_E;
+                preload(s, legacy_object(OBJ, "Contents") + legacy_item(spec_a()) + legacy_item(dup) + legacy_item(spec_b()));
+            },
+            [](Scene& s) { bnd().removeInventory(s.obj, ITEM_A); });
         // the local-only updates (no message)
         add("update_local_known", loaded, [](Scene& s)
             {
@@ -2176,63 +2459,63 @@ namespace
                 a.desc = "local";
                 a.txn = TXN;
                 LLPointer<vto::LLViewerInventoryItem> item = make_item(a);
-                s.obj->updateInventoryLocal(item, TASK_INVENTORY_ITEM_KEY);
+                bnd().updateInventoryLocal(s.obj, item, TASK_INVENTORY_ITEM_KEY);
             });
         add("update_viewer_asset", loaded, [](Scene& s)
             {
                 LLPointer<vto::LLViewerInventoryItem> item = make_item(spec_a());
-                s.obj->updateViewerInventoryAsset(item, ASSET_E);
+                bnd().updateViewerInventoryAsset(s.obj, item, ASSET_E);
             });
         // RemoveTaskInventory
-        add("remove_present", loaded, [](Scene& s) { s.obj->removeInventory(ITEM_A); });
-        add("remove_absent", loaded, [](Scene& s) { s.obj->removeInventory(ITEM_E); });
+        add("remove_present", loaded, [](Scene& s) { bnd().removeInventory(s.obj, ITEM_A); });
+        add("remove_absent", loaded, [](Scene& s) { bnd().removeInventory(s.obj, ITEM_E); });
         // MoveTaskInventory
-        add("move_null_folder_copyable", loaded, [](Scene& s) { s.obj->moveInventory(LLUUID::null, ITEM_A); });
-        add("move_explicit_folder_nocopy", loaded, [](Scene& s) { s.obj->moveInventory(FOLDER, ITEM_B); });
-        add("move_absent", loaded, [](Scene& s) { s.obj->moveInventory(FOLDER, ITEM_E); });
+        add("move_null_folder_copyable", loaded, [](Scene& s) { bnd().moveInventory(s.obj, LLUUID::null, ITEM_A); });
+        add("move_explicit_folder_nocopy", loaded, [](Scene& s) { bnd().moveInventory(s.obj, FOLDER, ITEM_B); });
+        add("move_absent", loaded, [](Scene& s) { bnd().moveInventory(s.obj, FOLDER, ITEM_E); });
         // RequestTaskInventory
-        add("request_udp", none, [](Scene& s) { s.obj->requestInventory(); });
-        add("request_udp_pending_dropped", none, [](Scene& s) { s.obj->requestInventory(); s.obj->requestInventory(); });
+        add("request_udp", none, [](Scene& s) { bnd().requestInventory(s.obj); });
+        add("request_udp_pending_dropped", none, [](Scene& s) { bnd().requestInventory(s.obj); bnd().requestInventory(s.obj); });
         // RezScript
         add("rezscript_new_template", none, [](Scene& s)
             {
                 ItemSpec sc = spec_a(); sc.id = ITEM_C; sc.asset = LLUUID::null; sc.type = LLAssetType::AT_LSL_TEXT; sc.inv_type = LLInventoryType::IT_LSL; sc.name = "New Script"; sc.txn = TXN;
-                s.obj->saveScript(make_item(sc), true, true, TEMPLATE_ITEM);
+                bnd().saveScript(s.obj, make_item(sc), true, true, TEMPLATE_ITEM);
             });
         add("rezscript_asset_with_template", loaded, [](Scene& s)
             {
                 ItemSpec sc = spec_a(); sc.id = ITEM_C; sc.asset = ASSET_C; sc.type = LLAssetType::AT_LSL_TEXT; sc.inv_type = LLInventoryType::IT_LSL; sc.name = "Script";
-                s.obj->saveScript(make_item(sc), false, false, TEMPLATE_ITEM);
+                bnd().saveScript(s.obj, make_item(sc), false, false, TEMPLATE_ITEM);
             });
         add("rezscript_new_no_template", none, [](Scene& s)
             {
                 ItemSpec sc = spec_a(); sc.id = ITEM_C; sc.asset = LLUUID::null; sc.type = LLAssetType::AT_LSL_TEXT; sc.inv_type = LLInventoryType::IT_LSL; sc.name = "New Script";
-                s.obj->saveScript(make_item(sc), true, true);
+                bnd().saveScript(s.obj, make_item(sc), true, true, LLUUID::null);
             });
         // RequestXfer / AbortXfer from the real xfer manager
-        add("xfer_request", none, [](Scene& s) { s.obj->requestInventory(); deliver_reply(OBJ, 0, "inventory_obj.tmp"); });
+        add("xfer_request", none, [](Scene& s) { bnd().requestInventory(s.obj); deliver_reply(OBJ, 0, "inventory_obj.tmp"); });
         add("xfer_replaced_by_newer_reply", none, [](Scene& s)
             {
-                s.obj->requestInventory();
+                bnd().requestInventory(s.obj);
                 deliver_reply(OBJ, 0, "inventory_first.tmp");
                 deliver_reply(OBJ, 1, "inventory_second.tmp");
             });
         add("xfer_aborted_by_delayed_fetch", none, [](Scene& s)
             {
-                s.obj->requestInventory();
+                bnd().requestInventory(s.obj);
                 deliver_reply(OBJ, 0, "inventory_first.tmp");
                 s.obj->mExpectedInventorySerialNum = 3;
                 deliver_reply(OBJ, 1, "inventory_old.tmp");
             });
         // the capability path: URL, and the CreateTaskInventoryItem body
-        add("cap_request_url", none, [](Scene& s) { s.obj->requestInventory(); }, true);
+        add("cap_request_url", none, [](Scene& s) { bnd().requestInventory(s.obj); }, true);
         add("cap_request_url_after_load", [](Scene& s)
             {
-                s.obj->requestInventory();
+                bnd().requestInventory(s.obj);
                 vto::complete_http(standard_reply(9), ::LLCore::HttpStatus(200));
                 take_actions();
             },
-            [](Scene& s) { s.obj->dirtyInventory(); s.obj->requestInventory(); }, true);
+            [](Scene& s) { bnd().dirtyInventory(s.obj); bnd().requestInventory(s.obj); }, true);
         return c;
     }
 
@@ -2308,7 +2591,7 @@ namespace
                 text += "  pending " + vto::pending_http_method(0) + " " + vto::pending_http_url(0) + "\n";
             }
             text += packets_text(receive_packets(), cap.ids());
-            text += entries_text(s.obj->mInventory, "  ");
+            text += entries_text(s.obj, "  ");
         }
 
         std::string bodies = header("set 4, CreateTaskInventoryItem capability (POST body and outcome)");
@@ -2321,7 +2604,7 @@ namespace
                 s.region.mCaps.erase("CreateTaskInventoryItem");
             }
             // the standard contents through the capability
-            s.obj->requestInventory();
+            bnd().requestInventory(s.obj);
             vto::complete_http(standard_reply(0), ::LLCore::HttpStatus(200));
             take_actions();
             s.obj->mRegionp = cc.region ? &s.region : NULL;
@@ -2331,7 +2614,7 @@ namespace
             perm.initMasks(cc.masks[0], cc.masks[1], cc.masks[2], cc.masks[3], cc.masks[4]);
             bodies += "  permissions " + perm_text(perm) + "\n";
             size_t before = vto::pending_http_count();
-            s.obj->createInventoryItem(cc.asset_type, cc.inv_type, cc.sub_type, cc.name, cc.desc, perm, cc.params,
+            bnd().createInventoryItem(s.obj, cc.asset_type, cc.inv_type, cc.sub_type, cc.name, cc.desc, perm, cc.params,
                 [](bool success, const LLSD& result)
                 {
                     LLSD shown = result;
@@ -2405,10 +2688,18 @@ namespace
     std::string digests_text(const std::vector<Digest>& digests)
     {
         std::string out = header("SHA-256 of the canonical text of the large sweeps (the text each sample file excerpts)");
-        out += "# <name> <count> <sha256>\n";
+        out += "# <name> <count> <sha256 of all units>, then <name> chunk <k> units <first>-<last> <sha256 of those units>\n";
+        out += fmt("# (blocks of %d units; block k starts with the k-th sample of the sample file)\n", SAMPLE_EVERY);
         for (const Digest& d : digests)
         {
             out += d.name + fmt(" %llu ", (unsigned long long)d.count) + d.sha + "\n";
+        }
+        for (const Digest& d : digests)
+        {
+            for (const std::string& c : d.chunks)
+            {
+                out += c + "\n";
+            }
         }
         return out;
     }
@@ -2425,11 +2716,36 @@ namespace
 
     // Writes (dump) or compares (replay) one corpus. Returns the failure
     // report, empty when everything matches.
+    // Every fixture path the sets produced in this run (for the tree check).
+    std::set<std::string>& produced_paths()
+    {
+        static std::set<std::string> p;
+        return p;
+    }
+
+    bool dump_mode()
+    {
+        const char* dump = getenv("VKS_TASK_DUMP");
+        return dump && *dump;
+    }
+
+    // Writes (dump) or compares (replay) one corpus. Returns the failure
+    // report, empty when everything matches. In dump mode the report says
+    // the fixtures were written and not compared, so that a dump never
+    // passes as a test run.
     std::string finish(Outputs& o, const std::string& digest_file)
     {
         if (!o.digests.empty())
         {
             o.text[digest_file] = digests_text(o.digests);
+        }
+        for (const auto& t : o.text)
+        {
+            produced_paths().insert(t.first);
+        }
+        for (const auto& b : o.binary)
+        {
+            produced_paths().insert(b.first);
         }
         const char* dump = getenv("VKS_TASK_DUMP");
         if (dump && *dump)
@@ -2449,7 +2765,7 @@ namespace
                 f.write((const char*)b.second.data(), b.second.size());
             }
             std::cerr << "VKS_TASK_DUMP: wrote " << o.text.size() << " text and " << o.binary.size() << " binary files to " << root << std::endl;
-            return std::string();
+            return "VKS_TASK_DUMP: fixtures written to " + root + ", not compared (dump mode always fails)";
         }
         std::string report;
         int failures = 0;
@@ -2509,12 +2825,60 @@ namespace
 
 namespace
 {
-    // VKS_TASK_ONLY=<n> runs only set n (a development aid; the registered
-    // test runs every set).
+    // VKS_TASK_ONLY=<n> runs only set n: a development aid, honoured only
+    // with VKS_TASK_DEV=1; otherwise a skipped set fails. Any skip also
+    // disables the fixture-tree check.
+    bool g_incomplete = false;
+
     bool skip_set(int n)
     {
         const char* only = getenv("VKS_TASK_ONLY");
-        return only && *only && atoi(only) != n;
+        if (!(only && *only && atoi(only) != n))
+        {
+            return false;
+        }
+        g_incomplete = true;
+        const char* dev = getenv("VKS_TASK_DEV");
+        if (!(dev && std::string(dev) == "1"))
+        {
+            tut::ensure("set skipped by VKS_TASK_ONLY without VKS_TASK_DEV=1", false);
+        }
+        return true;
+    }
+
+    // The fixture tree must hold exactly the files the sets produce, plus
+    // README.md and .gitattributes.
+    std::string tree_report()
+    {
+        std::set<std::string> want = produced_paths();
+        want.insert("README.md");
+        want.insert(".gitattributes");
+        std::set<std::string> have;
+        std::error_code ec;
+        const std::filesystem::path root(VKS_TASK_FIXTURE_DIR);
+        for (std::filesystem::recursive_directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec))
+        {
+            if (it->is_regular_file())
+            {
+                have.insert(std::filesystem::relative(it->path(), root).generic_string());
+            }
+        }
+        std::string report;
+        for (const std::string& p : want)
+        {
+            if (!have.count(p))
+            {
+                report += "missing from the fixture tree: " + p + "\n";
+            }
+        }
+        for (const std::string& p : have)
+        {
+            if (!want.count(p))
+            {
+                report += "unexpected file in the fixture tree: " + p + "\n";
+            }
+        }
+        return report;
     }
 }
 
@@ -2586,5 +2950,34 @@ namespace tut
         build_set4(o);
         std::string report = finish(o, "digests_set4.txt");
         ensure(report, report.empty());
+    }
+
+    template<> template<>
+    void task_oracle_object_t::test<6>()
+    {
+        set_test_name("fixture tree: exactly the produced files, README.md and .gitattributes");
+        if (dump_mode() || g_incomplete)
+        {
+            // a dump already fails; an incomplete development run cannot know the full set
+            return;
+        }
+        std::string report = tree_report();
+        ensure(report, report.empty());
+    }
+
+    template<> template<>
+    void task_oracle_object_t::test<7>()
+    {
+        set_test_name("frozen copies identical to the live source (check_r4a_copies.py)");
+        Env& e = env();
+        const std::string out = e.work + "/check_r4a_copies.out";
+        std::string cmd = std::string("\"") + VKS_TASK_PYTHON + "\" -I \"" + VKS_TASK_COPY_CHECK + "\" > \"" + out + "\" 2>&1";
+#if LL_WINDOWS
+        cmd = "\"" + cmd + "\""; // cmd.exe /c strips one pair of outer quotes
+#endif
+        int rc = std::system(cmd.c_str());
+        std::string text;
+        read_file(out, text);
+        ensure("check_r4a_copies.py failed (rc " + std::to_string(rc) + "):\n" + text, rc == 0);
     }
 }
