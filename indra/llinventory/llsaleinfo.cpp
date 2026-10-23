@@ -152,7 +152,10 @@ bool LLSaleInfo::importLegacyStream(std::istream& input_stream, bool& has_perm_m
     while(success && input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %254s %254s",
             keyword, valuestr);
@@ -168,20 +171,29 @@ bool LLSaleInfo::importLegacyStream(std::istream& input_stream, bool& has_perm_m
         {
             break;
         }
+        else if (fields < 2)
+        {
+            // a keyword without a value counts as absent
+            continue;
+        }
         else if(0 == strcmp("sale_type", keyword))
         {
             mSaleType = lookup(valuestr);
         }
         else if(0 == strcmp("sale_price", keyword))
         {
-            sscanf(valuestr, "%d", &mSalePrice);
-            mSalePrice = llclamp(mSalePrice, 0, S32_MAX);
+            if (1 == sscanf(valuestr, "%d", &mSalePrice))
+            {
+                mSalePrice = llclamp(mSalePrice, 0, S32_MAX);
+            }
         }
         else if (!strcmp("perm_mask", keyword))
         {
             //LL_INFOS() << "found deprecated keyword perm_mask" << LL_ENDL;
-            has_perm_mask = true;
-            sscanf(valuestr, "%x", &perm_mask);
+            if (1 == sscanf(valuestr, "%x", &perm_mask))
+            {
+                has_perm_mask = true;
+            }
         }
         else
         {
