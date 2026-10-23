@@ -3714,6 +3714,9 @@ void LLViewerObject::loadTaskInvLLSD(const LLSD& inv_result)
     else
     {
         LL_WARNS() << "unable to load task inventory: " << inv_result << LL_ENDL;
+        // Fail the request as an HTTP error does in fetchInventoryFromCapCoro, so that
+        // later requests are not dropped as duplicates of this one.
+        mInvRequestState = INVENTORY_REQUEST_STOPPED;
         return;
     }
     doInventoryCallback();
