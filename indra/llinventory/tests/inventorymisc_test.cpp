@@ -632,7 +632,8 @@ namespace tut
     void inventory_object::test<17>()
     {
         set_test_name("legacy readers give defined values for malformed lines");
-        // Each value below used to come from an uninitialised local.
+        // Each value below used to come from an uninitialised local. A line
+        // that does not parse is now absent, so the field keeps its value.
         {
             std::istringstream in("\t{\n\t\tcreation_date\tabc\n\t}\n");
             LLPointer<LLInventoryItem> item = new LLInventoryItem();
@@ -645,8 +646,8 @@ namespace tut
             LLPermissions perm;
             poison_stack(0xa5);
             perm.importLegacyStream(in);
-            ensure_equals("permissions: unparsable first mask", perm.getMaskBase(), (U32)0);
-            ensure_equals("permissions: owner mask follows the base", perm.getMaskOwner(), (U32)0);
+            ensure_equals("permissions: unparsable first mask", perm.getMaskBase(), (U32)PERM_ALL);
+            ensure_equals("permissions: owner mask follows the base", perm.getMaskOwner(), (U32)PERM_ALL);
         }
         {
             std::istringstream in("\t{\n\t\tgroup_owned\tx\n\t}\n");
@@ -664,5 +665,131 @@ namespace tut
             perm.importLegacyStream(in);
             ensure("permissions: value-less creator_id", perm.getCreator().isNull());
         }
+    }
+
+    // The legacy text of an item, as exportLegacyStream() writes it.
+    std::string legacy_text(const LLInventoryItem* item)
+    {
+        std::ostringstream out;
+        item->exportLegacyStream(out, true);
+        return out.str();
+    }
+
+    // Insert text after the first occurrence of what (which must exist).
+    std::string insert_after(std::string text, const std::string& what, const std::string& extra)
+    {
+        size_t pos = text.find(what);
+        ensure("fixture text contains " + what, pos != std::string::npos);
+        text.insert(pos + what.size(), extra);
+        return text;
+    }
+
+    // Import text into a new item and check it against src and the rest of
+    // the stream: the item must end at its own closing brace.
+    void ensure_reads_as(const std::string& desc, const std::string& text, const LLInventoryItem* src)
+    {
+        std::istringstream in(text + "NEXT\tline\n");
+        LLPointer<LLInventoryItem> dst = new LLInventoryItem();
+        dst->importLegacyStream(in);
+        ensure_equals(desc + ": item id", dst->getUUID(), src->getUUID());
+        ensure_equals(desc + ": permissions", dst->getPermissions(), src->getPermissions());
+        ensure_equals(desc + ": asset id", dst->getAssetUUID(), src->getAssetUUID());
+        ensure_equals(desc + ": type", dst->getType(), src->getType());
+        ensure_equals(desc + ": flags", dst->getFlags(), src->getFlags());
+        ensure_equals(desc + ": sale type", dst->getSaleInfo().getSaleType(), src->getSaleInfo().getSaleType());
+        ensure_equals(desc + ": sale price", dst->getSaleInfo().getSalePrice(), src->getSaleInfo().getSalePrice());
+        ensure_equals(desc + ": name", dst->getName(), src->getName());
+        ensure_equals(desc + ": description", dst->getDescription(), src->getDescription());
+        ensure_equals(desc + ": creation date", dst->getCreationDate(), src->getCreationDate());
+        std::string rest;
+        std::getline(in, rest);
+        ensure_equals(desc + ": the item ends at its closing brace", rest, std::string("NEXT\tline"));
+    }
+
+    template<> template<>
+    void inventory_object::test<18>()
+    {
+        set_test_name("a blank line after the permissions block keeps the item's closing brace");
+        // The blank line used to re-run the permissions keyword: the block was
+        // read again from the defaults up to the item's own '}'.
+        LLPointer<LLInventoryItem> src = create_random_inventory_item();
+        std::string text = legacy_text(src);
+        text = insert_after(text, "\tpermissions 0\n", "");
+        text.insert(text.find("\t}\n", text.find("\tpermissions 0\n")) + 3, "\n");
+        ensure_reads_as("blank line after permissions", text, src);
+        ensure_reads_as("whitespace line after permissions",
+                        insert_after(legacy_text(src), "\t\tgroup_id\t" + src->getPermissions().getGroup().asString() + "\n\t}\n", " \t\r\n"),
+                        src);
+    }
+
+    template<> template<>
+    void inventory_object::test<19>()
+    {
+        set_test_name("a keyword-only line leaves its field unchanged");
+        // The keyword used to run again with the previous line's value.
+        LLPointer<LLInventoryItem> src = create_random_inventory_item();
+        std::string text = legacy_text(src);
+        text = insert_after(text, "\t\tdesc\t" + src->getDescription() + "|\n",
+                            "\t\ttype\n\t\tname\n\t\tdesc\t\n\t\tflags\n\t\tcreation_date\n");
+        ensure_reads_as("keyword-only lines after the values", text, src);
+
+        LLPointer<LLInventoryCategory> cat = create_random_inventory_cat();
+        std::ostringstream out;
+        cat->exportLegacyStream(out, true);
+        std::string cat_text = insert_after(out.str(), "\t\tname\t" + cat->getName() + "|\n", "\t\ttype\n\t\tpref_type\n");
+        std::istringstream in(cat_text);
+        LLPointer<LLInventoryCategory> dst = new LLInventoryCategory();
+        dst->importLegacyStream(in);
+        ensure_equals("category: type", dst->getType(), cat->getType());
+        ensure_equals("category: preferred type", dst->getPreferredType(), cat->getPreferredType());
+        ensure_equals("category: name", dst->getName(), cat->getName());
+    }
+
+    template<> template<>
+    void inventory_object::test<20>()
+    {
+        set_test_name("blank lines in and after the sale block");
+        // A blank line after the block used to re-enter the sale reader, which
+        // then read up to the item's own '}'.
+        LLPointer<LLInventoryItem> src = create_random_inventory_item();
+        std::string text = legacy_text(src);
+        text = insert_after(text, "\t\tsale_type\t", "");
+        text.insert(text.find('\n', text.find("\t\tsale_type\t")) + 1, "\n");
+        text.insert(text.find("\t}\n", text.find("\tsale_info\t0\n")) + 3, "\n");
+        ensure_reads_as("blank lines in and after the sale block", text, src);
+
+        std::istringstream in("\t{\n\n\t\tsale_type\tcopy\n\n\t\tsale_price\t10\n\n\t}\n");
+        LLSaleInfo sale;
+        bool has_perm_mask = true;
+        U32 perm_mask = 0;
+        sale.importLegacyStream(in, has_perm_mask, perm_mask);
+        ensure_equals("sale block: type", sale.getSaleType(), LLSaleInfo::FS_COPY);
+        ensure_equals("sale block: price", sale.getSalePrice(), 10);
+        ensure("sale block: no perm_mask", !has_perm_mask);
+    }
+
+    template<> template<>
+    void inventory_object::test<21>()
+    {
+        set_test_name("a well-formed item with an empty name and description reads as before");
+        // The writer emits "\t\tname\t|" for an empty name; it must still read
+        // as an empty name, and the rest of the item as written.
+        LLPointer<LLInventoryItem> src = create_random_inventory_item();
+        std::string text = legacy_text(src);
+        const std::string name_line = "\t\tname\t" + src->getName() + "|\n";
+        const std::string desc_line = "\t\tdesc\t" + src->getDescription() + "|\n";
+        text.replace(text.find(name_line), name_line.size(), "\t\tname\t|\n");
+        text.replace(text.find(desc_line), desc_line.size(), "\t\tdesc\t|\n");
+        std::istringstream in(text + "NEXT\tline\n");
+        LLPointer<LLInventoryItem> dst = create_random_inventory_item();
+        dst->importLegacyStream(in);
+        ensure_equals("empty name", dst->getName(), std::string());
+        ensure_equals("empty description", dst->getDescription(), std::string());
+        ensure_equals("item id", dst->getUUID(), src->getUUID());
+        ensure_equals("permissions", dst->getPermissions(), src->getPermissions());
+        ensure_equals("creation date", dst->getCreationDate(), src->getCreationDate());
+        std::string rest;
+        std::getline(in, rest);
+        ensure_equals("the item ends at its closing brace", rest, std::string("NEXT\tline"));
     }
 }
