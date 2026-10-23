@@ -587,10 +587,18 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
     while (input_stream.good())
     {
         input_stream.getline(buffer, BUFSIZE);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %255s %255s",
             keyword, valuestr);
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if (!strcmp("{", keyword))
         {
             continue;
@@ -599,38 +607,55 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
         {
             break;
         }
+        else if (fields < 2)
+        {
+            // a keyword without a value counts as absent
+            continue;
+        }
         else if (!strcmp("creator_mask", keyword))
         {
             // legacy support for "creator" masks
-            sscanf(valuestr, "%x", &mask);
-            mMaskBase = mask;
-            fixFairUse();
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskBase = mask;
+                fixFairUse();
+            }
         }
         else if (!strcmp("base_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskBase = mask;
-            //fixFairUse();
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskBase = mask;
+                //fixFairUse();
+            }
         }
         else if (!strcmp("owner_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskOwner = mask;
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskOwner = mask;
+            }
         }
         else if (!strcmp("group_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskGroup = mask;
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskGroup = mask;
+            }
         }
         else if (!strcmp("everyone_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskEveryone = mask;
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskEveryone = mask;
+            }
         }
         else if (!strcmp("next_owner_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskNextOwner = mask;
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskNextOwner = mask;
+            }
         }
         else if (!strcmp("creator_id", keyword))
         {
@@ -654,9 +679,11 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
         }
         else if (!strcmp("group_owned", keyword))
         {
-            sscanf(valuestr, "%d", &mask);
-            if(mask) mIsGroupOwned = true;
-            else mIsGroupOwned = false;
+            if (1 == sscanf(valuestr, "%d", &mask))
+            {
+                if(mask) mIsGroupOwned = true;
+                else mIsGroupOwned = false;
+            }
         }
         else
         {
