@@ -792,4 +792,23 @@ namespace tut
         std::getline(in, rest);
         ensure_equals("the item ends at its closing brace", rest, std::string("NEXT\tline"));
     }
+
+    template<> template<>
+    void inventory_object::test<22>()
+    {
+        set_test_name("a garbage group_owned line after the masks does not make the item group owned");
+        // The unparsable value used to reuse the last parsed mask, so any
+        // non-zero mask before it turned group ownership on.
+        std::istringstream in("\t{\n\t\tbase_mask\t00082000\n\t\towner_mask\t00082000\n\t\tgroup_owned\tjunk\n\t}\n");
+        LLPermissions perm;
+        perm.importLegacyStream(in);
+        ensure("permissions: not group owned", !perm.isGroupOwned());
+
+        LLPointer<LLInventoryItem> src = create_random_inventory_item();
+        std::string text = insert_after(legacy_text(src),
+                                        "\t\tgroup_id\t" + src->getPermissions().getGroup().asString() + "\n",
+                                        "\t\tgroup_owned\tjunk\n");
+        ensure_reads_as("item with a garbage group_owned line", text, src);
+        ensure("item: not group owned", !src->getPermissions().isGroupOwned());
+    }
 }
