@@ -35,6 +35,7 @@
  *                              decode/re-encode identity check and timings of
  *                              a real cache; prints counts and timings only
  *   VKS_INVMODEL_TRACE=1       progress on stderr (to locate a crash or hang)
+ *   VKS_INVMODEL_WORK_ROOT=<dir>  where the per-process work directory goes
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -139,7 +140,11 @@ namespace
             e->fixtures = VKS_INVMODEL_FIXTURE_DIR;
             e->out = getenv_str("VKS_INVMODEL_DUMP");
             // A work directory per process: concurrent runs never share files.
-            e->work = std::string(VKS_INVMODEL_WORK_DIR) + "/" + std::to_string((long)vks_getpid());
+            // VKS_INVMODEL_WORK_ROOT moves it (for example into a folder that
+            // scanners and indexers leave alone; see the README).
+            std::string work_root = getenv_str("VKS_INVMODEL_WORK_ROOT");
+            if (work_root.empty()) work_root = VKS_INVMODEL_WORK_DIR;
+            e->work = work_root + "/" + std::to_string((long)vks_getpid());
             e->library_dir = VKS_INVMODEL_LIBRARY_DIR;
             e->commit = getenv_str("VKS_INVMODEL_COMMIT");
             if (e->commit.empty()) e->commit = "unknown";
