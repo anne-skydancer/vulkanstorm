@@ -435,7 +435,9 @@ U64 LLXferManager::requestFile(const std::string& local_filename,
         // around.
         // Note: according to AaronB, this is here to deal with locks on files that were
         // in transit during a crash,
+        // A remote name shorter than ".tmp" cannot end in it; substr() would throw.
         if(delete_remote_on_completion &&
+           (remote_filename.length() >= 4) &&
            (remote_filename.substr(remote_filename.length()-4) == ".tmp"))
         {
             LLFile::remove(local_filename, ENOENT);
