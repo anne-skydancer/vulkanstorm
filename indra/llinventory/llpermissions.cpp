@@ -567,6 +567,15 @@ void LLPermissions::unpackMessage(LLMessageSystem* msg, const char* block, S32 b
 }
 
 
+// The mask keywords of the legacy text: a mask line that does not parse
+// (no value, or a value that is not hexadecimal) reads as PERM_NONE.
+static bool is_legacy_mask_keyword(const char* keyword)
+{
+    return !strcmp("creator_mask", keyword) || !strcmp("base_mask", keyword)
+        || !strcmp("owner_mask", keyword) || !strcmp("group_mask", keyword)
+        || !strcmp("everyone_mask", keyword) || !strcmp("next_owner_mask", keyword);
+}
+
 bool LLPermissions::importLegacyStream(std::istream& input_stream)
 {
     init(LLUUID::null, LLUUID::null, LLUUID::null, LLUUID::null);
@@ -607,7 +616,7 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
         {
             break;
         }
-        else if (fields < 2)
+        else if (fields < 2 && !is_legacy_mask_keyword(keyword))
         {
             // a keyword without a value counts as absent
             continue;
@@ -620,6 +629,11 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
                 mMaskBase = mask;
                 fixFairUse();
             }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskBase = PERM_NONE;
+            }
         }
         else if (!strcmp("base_mask", keyword))
         {
@@ -628,12 +642,22 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
                 mMaskBase = mask;
                 //fixFairUse();
             }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskBase = PERM_NONE;
+            }
         }
         else if (!strcmp("owner_mask", keyword))
         {
             if (1 == sscanf(valuestr, "%x", &mask))
             {
                 mMaskOwner = mask;
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskOwner = PERM_NONE;
             }
         }
         else if (!strcmp("group_mask", keyword))
@@ -642,6 +666,11 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
             {
                 mMaskGroup = mask;
             }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskGroup = PERM_NONE;
+            }
         }
         else if (!strcmp("everyone_mask", keyword))
         {
@@ -649,12 +678,22 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
             {
                 mMaskEveryone = mask;
             }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskEveryone = PERM_NONE;
+            }
         }
         else if (!strcmp("next_owner_mask", keyword))
         {
             if (1 == sscanf(valuestr, "%x", &mask))
             {
                 mMaskNextOwner = mask;
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskNextOwner = PERM_NONE;
             }
         }
         else if (!strcmp("creator_id", keyword))
