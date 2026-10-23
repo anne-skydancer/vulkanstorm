@@ -633,7 +633,8 @@ namespace tut
     {
         set_test_name("legacy readers give defined values for malformed lines");
         // Each value below used to come from an uninitialised local. A line
-        // that does not parse is now absent, so the field keeps its value.
+        // that does not parse is now absent, so the field keeps its value,
+        // except a permission mask, which reads as no permissions.
         {
             std::istringstream in("\t{\n\t\tcreation_date\tabc\n\t}\n");
             LLPointer<LLInventoryItem> item = new LLInventoryItem();
@@ -646,8 +647,8 @@ namespace tut
             LLPermissions perm;
             poison_stack(0xa5);
             perm.importLegacyStream(in);
-            ensure_equals("permissions: unparsable first mask", perm.getMaskBase(), (U32)PERM_ALL);
-            ensure_equals("permissions: owner mask follows the base", perm.getMaskOwner(), (U32)PERM_ALL);
+            ensure_equals("permissions: unparsable first mask", perm.getMaskBase(), (U32)PERM_NONE);
+            ensure_equals("permissions: owner mask follows the base", perm.getMaskOwner(), (U32)PERM_NONE);
         }
         {
             std::istringstream in("\t{\n\t\tgroup_owned\tx\n\t}\n");
@@ -810,5 +811,51 @@ namespace tut
                                         "\t\tgroup_owned\tjunk\n");
         ensure_reads_as("item with a garbage group_owned line", text, src);
         ensure("item: not group owned", !src->getPermissions().isGroupOwned());
+    }
+
+    template<> template<>
+    void inventory_object::test<23>()
+    {
+        set_test_name("a permission mask line that does not parse reads as no permissions");
+        // Absent would leave init()'s PERM_ALL, wider than the data allows.
+        struct MaskCase
+        {
+            const char* keyword;
+            U32 (LLPermissions::*get)() const;
+        };
+        const MaskCase cases[] = {
+            { "creator_mask", &LLPermissions::getMaskBase },
+            { "base_mask", &LLPermissions::getMaskBase },
+            { "owner_mask", &LLPermissions::getMaskOwner },
+            { "group_mask", &LLPermissions::getMaskGroup },
+            { "everyone_mask", &LLPermissions::getMaskEveryone },
+            { "next_owner_mask", &LLPermissions::getMaskNextOwner },
+        };
+        for (const MaskCase& c : cases)
+        {
+            for (const char* value : { "\tzz", "\t-", "" })
+            {
+                const std::string line = std::string(c.keyword) + value;
+                std::istringstream in("\t{\n\t\t" + line + "\n\t}\n");
+                LLPermissions perm;
+                perm.importLegacyStream(in);
+                // creator_mask's fixFairUse() would add PERM_MOVE: it must not run.
+                ensure_equals("'" + line + "' reads as no permissions", (perm.*c.get)(), (U32)PERM_NONE);
+            }
+        }
+
+        // In an item, the mask's own field is 0 and the item reads on as written.
+        LLPointer<LLInventoryItem> src = create_random_inventory_item();
+        std::string text = legacy_text(src);
+        const std::string line = "\t\teveryone_mask\t";
+        size_t pos = text.find(line);
+        ensure("item text has an everyone mask", pos != std::string::npos);
+        text.replace(pos + line.size(), text.find('\n', pos) - pos - line.size(), "zz");
+        std::istringstream in(text);
+        LLPointer<LLInventoryItem> dst = new LLInventoryItem();
+        dst->importLegacyStream(in);
+        ensure_equals("item: everyone mask", dst->getPermissions().getMaskEveryone(), (U32)PERM_NONE);
+        ensure_equals("item: base mask", dst->getPermissions().getMaskBase(), src->getPermissions().getMaskBase());
+        ensure_equals("item: name", dst->getName(), src->getName());
     }
 }
