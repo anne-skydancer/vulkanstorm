@@ -281,9 +281,19 @@ namespace
         out += path + " = " + to_line(sd) + "\n";
     }
 
+    // The sched run's final skeleton is shown in full only where it differs
+    // from the never run's (the binary file always holds both).
     std::string render(const LLSD& sd)
     {
         std::string out;
+        if (sd.has("never") && sd.has("sched") && sd["sched"].has("final")
+            && to_binary(sd["sched"]["final"]) == to_binary(sd["never"]["final"]))
+        {
+            LLSD shown = sd;
+            shown["sched"]["final"] = "(same as never/final)";
+            render_lines(shown, "", out);
+            return out;
+        }
         render_lines(sd, "", out);
         return out;
     }
@@ -448,6 +458,7 @@ namespace
         {
             std::cerr << "[aisupdate] " << c.id << " " << vks_ais::timer_mode_name(mode) << " load" << std::endl;
         }
+        vks_ais::set_case(c.id, mode);
         vks_ais::skeleton_load(c.def);
         vks_ais::begin_run(mode, call_us, frame_us, u64_list(sched["others_us"]), u64_list(sched["yield_extra_us"]));
         auto t0 = std::chrono::steady_clock::now();
@@ -823,9 +834,18 @@ namespace
                 const LLSD& ops = actual[mode]["ops"];
                 for (S32 i = 0; i < (S32)ops.size(); ++i)
                 {
-                    if (ops[i]["op"].asString() == "exception")
+                    const std::string kind = ops[i]["op"].asString();
+                    if (kind == "exception")
                     {
                         c->errors += id + " " + mode + ": exception " + ops[i]["what"].asString() + "\n";
+                    }
+                    // The shutdown contract, in both runs: after the stop no
+                    // callback and no model call, the model as it was then.
+                    if (kind == "abort" && (ops[i]["ops_after_stop"].asInteger() != 0 || !ops[i]["model_unchanged"].asBoolean()))
+                    {
+                        c->errors += id + " " + mode + " op " + std::to_string(i) + ": the shutdown contract is broken ("
+                            + std::to_string(ops[i]["ops_after_stop"].asInteger()) + " ops after the stop, model "
+                            + (ops[i]["model_unchanged"].asBoolean() ? "unchanged" : "changed") + ")\n";
                     }
                 }
             }
@@ -857,9 +877,9 @@ namespace
             }
         }
         LLError::setDefaultLevel(saved_level);
-        if (vks_ais::tid_failures() != 0)
+        for (const std::string& f : vks_ais::tid_failures())
         {
-            c->errors += std::to_string(vks_ais::tid_failures()) + " write tids malformed, null or reused\n";
+            c->errors += f + "\n";
         }
         if (c->dump)
         {

@@ -163,7 +163,20 @@ struct vks_r3a_Agent
 };
 vks_r3a_Agent vks_r3a_gAgent;
 
+// The start of AISUpdate::doUpdate(), the apply phase. doUpdate() is
+// declared, defined and called with an extra unnamed parameter of type
+// "function returning vks_r3a_apply_tag" (an abstract declarator, so the
+// declaration and the definition stay valid); at the one call site the
+// argument vks_r3a_apply_tag() converts to that pointer, and the conversion
+// tells the harness the apply phase has begun. Nothing else changes.
+struct vks_r3a_apply_tag
+{
+    typedef vks_r3a_apply_tag (*fn_t)();
+    operator fn_t() const;
+};
+
 // The code under test, unchanged.
+#define doUpdate() doUpdate(vks_r3a_apply_tag())
 #define LLTimer vks_r3a_LLTimer
 #define suspendUntilNextFrame vks_r3a_suspendUntilNextFrame
 #define LLCoros vks_r3a_LLCoros
@@ -171,6 +184,7 @@ vks_r3a_Agent vks_r3a_gAgent;
 #define LLCoprocedureManager vks_r3a_LLCoprocedureManager
 #define gAgent vks_r3a_gAgent
 #include "../llaisapi.cpp"
+#undef doUpdate
 #undef LLTimer
 #undef suspendUntilNextFrame
 #undef LLCoros
@@ -290,10 +304,20 @@ namespace vks_ais
             LLSD ops = LLSD::emptyArray();
             // the step being run: its hooks, its checkpoint and yield counts
             LLSD hooks = LLSD::emptyArray();
-            S32 checkpoints = 0;
+            bool in_apply = false;          // doUpdate() has begun
+            S32 parse_checkpoints = 0;      // checkTimeout() calls before it
+            S32 apply_checkpoints = 0;      // checkTimeout() calls in it
+            bool recheck_pending = false;   // the next task-timer test is the while loop's recheck
+            bool force_expiry = false;      // this checkTimeout() yields (a scripted stop)
             S32 step_yields = 0;
             int nest = 0;
             bool stop_armed = false;
+            // the shutdown contract: the model and the op count at the throw
+            std::string stop_dump;
+            size_t stop_op_index = 0;
+            // the case being run, for the tid messages
+            std::string case_id;
+            std::string run_mode;
             // the command functions' environment
             bool has_region = true;
             std::string inv_cap;
@@ -301,7 +325,7 @@ namespace vks_ais
             S32 pending = 0;
             LLSD next_result;
             std::set<std::string> tids;
-            int tid_failures = 0;
+            std::vector<std::string> tid_failures;
             F32 batch_expiry = -1.f;
         };
 
@@ -775,14 +799,16 @@ namespace vks_ais
     void run_step(const LLSD& step, const LLSD& result)
     {
         State& s = st();
-        LLSD saved_hooks = s.hooks;
-        S32 saved_checkpoints = s.checkpoints;
-        S32 saved_yields = s.step_yields;
         if (s.nest == 0)
         {
             s.hooks = step.has("hooks") ? step["hooks"] : LLSD::emptyArray();
-            s.checkpoints = 0;
+            s.in_apply = false;
+            s.parse_checkpoints = 0;
+            s.apply_checkpoints = 0;
+            s.recheck_pending = false;
+            s.force_expiry = false;
             s.step_yields = 0;
+            s.stop_armed = false;
         }
         try
         {
@@ -800,22 +826,35 @@ namespace vks_ais
         catch (const LLCoros::Stop& e)
         {
             // What the coroutine's top level does with it: the update ends
-            // where it is, no callback.
+            // where it is. The contract (checked by the mandatory check): no
+            // callback and no model call after the throw, the model as it
+            // was at the throw.
             LLSD op = LLSD::emptyMap();
             op["op"] = "abort";
             op["what"] = std::string(e.what());
+            op["ops_after_stop"] = (LLSD::Integer)(s.ops.size() - s.stop_op_index);
+            std::ostringstream now;
+            LLSDSerialize::toBinary(skeleton_dump(), now);
+            op["model_unchanged"] = now.str() == s.stop_dump;
             record(op, false);
         }
         if (s.nest == 0)
         {
-            s.hooks = saved_hooks;
-            s.checkpoints = saved_checkpoints;
-            s.step_yields = saved_yields;
+            s.hooks = LLSD::emptyArray();
+            s.in_apply = false;
             s.stop_armed = false;
+            s.force_expiry = false;
+            s.recheck_pending = false;
         }
     }
 
-    int tid_failures()
+    void set_case(const std::string& id, TimerMode mode)
+    {
+        st().case_id = id;
+        st().run_mode = timer_mode_name(mode);
+    }
+
+    std::vector<std::string> tid_failures()
     {
         return st().tid_failures;
     }
@@ -905,7 +944,22 @@ namespace vks_ais
                 }
                 else if (a.has("stop"))
                 {
+                    // At a checkpoint: this checkTimeout() yields (in both
+                    // runs) and LLCoros::checkStop() after the yield throws.
+                    // After a yield: the checkStop() that follows throws.
                     s.stop_armed = true;
+                    if (std::string(where) != "yield")
+                    {
+                        s.force_expiry = true;
+                    }
+                }
+                else if (a.has("advance_us"))
+                {
+                    // the other code ran this long (the sched run's clock)
+                    if (s.mode == TIMERS_SCHEDULED)
+                    {
+                        s.clock += (U64)a["advance_us"].asInteger();
+                    }
                 }
             }
             LLSD end = LLSD::emptyMap();
@@ -1069,9 +1123,36 @@ bool vks_r3a_LLTimer::hasExpired() const
     vks_ais::State& s = vks_ais::st();
     if (this != steal(BatchTimerTag()) && s.nest == 0)
     {
-        // The task timer: checkTimeout() number ++checkpoints of the step.
-        ++s.checkpoints;
-        vks_ais::fire_hooks("checkpoint", s.checkpoints);
+        // checkTimeout() tests the task timer first. A test right after a
+        // yield is its while loop's recheck (bug 51), not a new checkpoint.
+        if (s.recheck_pending)
+        {
+            s.recheck_pending = false;
+        }
+        else if (s.in_apply)
+        {
+            ++s.apply_checkpoints;
+            vks_ais::fire_hooks("apply_checkpoint", s.apply_checkpoints);
+            if (s.force_expiry)
+            {
+                s.force_expiry = false;
+                return true;
+            }
+        }
+        else
+        {
+            ++s.parse_checkpoints;
+            if (s.mode == vks_ais::TIMERS_SCHEDULED)
+            {
+                // Parse-phase hooks belong to the relaxable sched check.
+                vks_ais::fire_hooks("parse_checkpoint", s.parse_checkpoints);
+                if (s.force_expiry)
+                {
+                    s.force_expiry = false;
+                    return true;
+                }
+            }
+        }
     }
     if (s.mode == vks_ais::TIMERS_NEVER)
     {
@@ -1121,9 +1202,22 @@ void llcoro::vks_r3a_suspendUntilNextFrame()
     s.clock += extra;
     if (s.nest == 0)
     {
+        s.recheck_pending = true;
         ++s.step_yields;
-        vks_ais::fire_hooks("yield", s.step_yields);
+        if (s.mode == vks_ais::TIMERS_SCHEDULED)
+        {
+            vks_ais::fire_hooks("yield", s.step_yields);
+        }
     }
+}
+
+vks_r3a_apply_tag::operator fn_t() const
+{
+    if (vks_ais::st().nest == 0)
+    {
+        vks_ais::st().in_apply = true;
+    }
+    return NULL;
 }
 
 void vks_r3a_LLCoros::checkStop()
@@ -1136,6 +1230,10 @@ void vks_r3a_LLCoros::checkStop()
         op["op"] = "checkStop";
         op["throws"] = "LLCoros::Stopping";
         record(op, false);
+        std::ostringstream dump;
+        LLSDSerialize::toBinary(vks_ais::skeleton_dump(), dump);
+        s.stop_dump = dump.str();
+        s.stop_op_index = s.ops.size();
         throw LLCoros::Stopping("viewer is stopping (scripted)");
     }
 }
@@ -1161,7 +1259,8 @@ namespace
             op["tid_ok"] = ok;
             if (!ok)
             {
-                ++s.tid_failures;
+                s.tid_failures.push_back("case " + s.case_id + " " + s.run_mode + " op " + std::to_string(s.ops.size())
+                                         + " (http " + method + "): tid '" + tid + "' is malformed, null or reused");
                 op["tid"] = tid;
             }
             u.replace(p + 5, tid.size(), "<tid>");
@@ -1751,7 +1850,7 @@ void LLInventoryModel::accountForUpdate(const LLCategoryUpdate& update) const
 // LLViewerInventoryItem
 //============================================================================
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 107-133 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : class LLLocalizedInventoryItemsDictionary
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 107-133 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : class LLLocalizedInventoryItemsDictionary
 class LLLocalizedInventoryItemsDictionary : public LLSingleton<LLLocalizedInventoryItemsDictionary>
 {
     LLSINGLETON(LLLocalizedInventoryItemsDictionary);
@@ -1788,7 +1887,7 @@ LLLocalizedInventoryItemsDictionary::LLLocalizedInventoryItemsDictionary()
 {
 }
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 365-369 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryItem::LLViewerInventoryItem()
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 365-369 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryItem::LLViewerInventoryItem()
 LLViewerInventoryItem::LLViewerInventoryItem() :
     LLInventoryItem(),
     mIsComplete(false)
@@ -1796,7 +1895,7 @@ LLViewerInventoryItem::LLViewerInventoryItem() :
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 371-380 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryItem::LLViewerInventoryItem(const LLViewerInventoryItem*)
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 371-380 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryItem::LLViewerInventoryItem(const LLViewerInventoryItem*)
 LLViewerInventoryItem::LLViewerInventoryItem(const LLViewerInventoryItem* other) :
     LLInventoryItem()
 {
@@ -1809,13 +1908,13 @@ LLViewerInventoryItem::LLViewerInventoryItem(const LLViewerInventoryItem* other)
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 389-391 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryItem::~LLViewerInventoryItem()
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 389-391 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryItem::~LLViewerInventoryItem()
 LLViewerInventoryItem::~LLViewerInventoryItem()
 {
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 393-400 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryItem::copyViewerItem
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 393-400 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryItem::copyViewerItem
 void LLViewerInventoryItem::copyViewerItem(const LLViewerInventoryItem* other)
 {
     LLInventoryItem::copyItem(other);
@@ -1826,7 +1925,7 @@ void LLViewerInventoryItem::copyViewerItem(const LLViewerInventoryItem* other)
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 403-408 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryItem::copyItem
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 403-408 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryItem::copyItem
 void LLViewerInventoryItem::copyItem(const LLInventoryItem *other)
 {
     LLInventoryItem::copyItem(other);
@@ -1835,7 +1934,7 @@ void LLViewerInventoryItem::copyItem(const LLInventoryItem *other)
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 548-558 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryItem::unpackMessage(const LLSD&)
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 551-561 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryItem::unpackMessage(const LLSD&)
 bool LLViewerInventoryItem::unpackMessage(const LLSD& item)
 {
     bool rv = LLInventoryItem::fromLLSD(item);
@@ -1849,14 +1948,14 @@ bool LLViewerInventoryItem::unpackMessage(const LLSD& item)
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 571-574 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryItem::setTransactionID
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 574-577 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryItem::setTransactionID
 void LLViewerInventoryItem::setTransactionID(const LLTransactionID& transaction_id)
 {
     mTransactionID = transaction_id;
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 603-616 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryItem::updateParentOnServer
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 606-619 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryItem::updateParentOnServer
 void LLViewerInventoryItem::updateParentOnServer(bool restamp) const
 {
     if (vks_ais::recording()) { LLSD op = LLSD::emptyMap(); op["op"] = "updateParentOnServer"; op["id"] = mUUID; op["parent_id"] = mParentUUID; op["restamp"] = restamp; op["is_model_object"] = vks_ais::is_model_item(this); record(op); } // VKS-HARNESS
@@ -1874,7 +1973,7 @@ void LLViewerInventoryItem::updateParentOnServer(bool restamp) const
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 2446-2457 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryItem::getType
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 2449-2460 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryItem::getType
 LLAssetType::EType LLViewerInventoryItem::getType() const
 {
     if (const LLViewerInventoryItem *linked_item = getLinkedItem())
@@ -1889,7 +1988,7 @@ LLAssetType::EType LLViewerInventoryItem::getType() const
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 2503-2515 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryItem::getName
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 2506-2518 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryItem::getName
 const std::string& LLViewerInventoryItem::getName() const
 {
     if (const LLViewerInventoryItem *linked_item = getLinkedItem())
@@ -1905,7 +2004,7 @@ const std::string& LLViewerInventoryItem::getName() const
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 2700-2713 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryItem::getLinkedItem
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 2703-2716 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryItem::getLinkedItem
 LLViewerInventoryItem *LLViewerInventoryItem::getLinkedItem() const
 {
     if (mType == LLAssetType::AT_LINK)
@@ -1922,7 +2021,7 @@ LLViewerInventoryItem *LLViewerInventoryItem::getLinkedItem() const
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 2715-2723 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryItem::getLinkedCategory
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 2718-2726 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryItem::getLinkedCategory
 LLViewerInventoryCategory *LLViewerInventoryItem::getLinkedCategory() const
 {
     if (mType == LLAssetType::AT_LINK_FOLDER)
@@ -1963,7 +2062,7 @@ bool LLViewerInventoryItem::importLegacyStream(std::istream& input_stream) { vks
 // LLViewerInventoryCategory
 //============================================================================
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 646-653 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryCategory::LLViewerInventoryCategory(const LLUUID& owner_id)
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 649-656 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryCategory::LLViewerInventoryCategory(const LLUUID& owner_id)
 LLViewerInventoryCategory::LLViewerInventoryCategory(const LLUUID& owner_id) :
     mOwnerID(owner_id),
     mVersion(LLViewerInventoryCategory::VERSION_UNKNOWN),
@@ -1974,7 +2073,7 @@ LLViewerInventoryCategory::LLViewerInventoryCategory(const LLUUID& owner_id) :
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 632-644 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryCategory::LLViewerInventoryCategory(const LLUUID& uuid, ...)
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 635-647 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryCategory::LLViewerInventoryCategory(const LLUUID& uuid, ...)
 LLViewerInventoryCategory::LLViewerInventoryCategory(const LLUUID& uuid,
                                                      const LLUUID& parent_uuid,
                                                      LLFolderType::EType pref,
@@ -1990,7 +2089,7 @@ LLViewerInventoryCategory::LLViewerInventoryCategory(const LLUUID& uuid,
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 655-659 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryCategory::LLViewerInventoryCategory(const LLViewerInventoryCategory*)
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 658-662 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryCategory::LLViewerInventoryCategory(const LLViewerInventoryCategory*)
 LLViewerInventoryCategory::LLViewerInventoryCategory(const LLViewerInventoryCategory* other)
 {
     copyViewerCategory(other);
@@ -1998,13 +2097,13 @@ LLViewerInventoryCategory::LLViewerInventoryCategory(const LLViewerInventoryCate
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 661-663 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryCategory::~LLViewerInventoryCategory()
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 664-666 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryCategory::~LLViewerInventoryCategory()
 LLViewerInventoryCategory::~LLViewerInventoryCategory()
 {
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 665-672 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryCategory::copyViewerCategory
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 668-675 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryCategory::copyViewerCategory
 void LLViewerInventoryCategory::copyViewerCategory(const LLViewerInventoryCategory* other)
 {
     copyCategory(other);
@@ -2079,14 +2178,14 @@ S32 LLViewerInventoryCategory::getViewerDescendentCount() const
     return vks_ais::child_count(mUUID);
 }
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 1002-1005 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryCategory::localizeName
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 1005-1008 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryCategory::localizeName
 void LLViewerInventoryCategory::localizeName()
 {
     LLLocalizedInventoryItemsDictionary::getInstance()->localizeInventoryObjectName(mName);
 }
 // ---- VKS-COPY-END
 
-// ---- VKS-COPY-BEGIN llviewerinventory.cpp 1008-1013 blob 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335 : LLViewerInventoryCategory::unpackMessage(const LLSD&)
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 1011-1016 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryCategory::unpackMessage(const LLSD&)
 bool LLViewerInventoryCategory::unpackMessage(const LLSD& category)
 {
     bool rv = LLInventoryCategory::fromLLSD(category);
