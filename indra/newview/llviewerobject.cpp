@@ -2803,6 +2803,7 @@ struct LLViewerObject::TaskInventoryPeer
     const LLUUID& id() const { return object.mID; }
     U32 localID() const { return object.mLocalID; }
     const LLHost& host() const { return object.mRegionp->getHost(); }
+    bool hasRegion() const { return object.mRegionp != nullptr; }
     LLInventoryObject::object_list_t* inventory() const { return object.mInventory; }
     S16& expectedSerial() { return object.mExpectedInventorySerialNum; }
     LLInventoryObject* getInventoryObject(const LLUUID& id) { return object.getInventoryObject(id); }
@@ -2931,6 +2932,12 @@ void LLViewerObject::fetchInventoryFromServer()
         {
             LLCoros::instance().launch("LLViewerObject::fetchInventoryFromCapCoro()",
                                        boost::bind(&LLViewerObject::fetchInventoryFromCapCoro, mID));
+        }
+        else if (!mRegionp)
+        {
+            // Nothing to send to: fail the request as an HTTP error does in fetchInventoryFromCapCoro.
+            LL_WARNS() << "Object " << mID << " has no region, task inventory not requested" << LL_ENDL;
+            mInvRequestState = INVENTORY_REQUEST_STOPPED;
         }
         else
         {
@@ -3312,6 +3319,12 @@ void LLViewerObject::processTaskInv(LLMessageSystem* msg, void** user_data)
                 "Contents");
             object->mInventory->push_front(obj);
             object->doInventoryCallback();
+            delete ft;
+            return;
+        }
+        if (!object->mRegionp)
+        {
+            LL_WARNS() << "Object " << task_id << " has no region, task inventory file not requested" << LL_ENDL;
             delete ft;
             return;
         }
