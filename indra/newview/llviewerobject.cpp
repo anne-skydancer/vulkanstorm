@@ -2960,6 +2960,12 @@ void LLViewerObject::saveScript(const LLViewerInventoryItem* item,
                                   item->getCreationDate());
     task_item->setTransactionID(item->getTransactionID());
 
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, script " << item->getUUID() << " not saved" << LL_ENDL;
+        return;
+    }
+
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_RezScript);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -2991,6 +2997,11 @@ void LLViewerObject::moveInventory(const LLUUID& folder_id,
                                    const LLUUID& item_id)
 {
     LL_DEBUGS() << "LLViewerObject::moveInventory " << item_id << LL_ENDL;
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item_id << " not moved" << LL_ENDL;
+        return;
+    }
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_MoveTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -3109,6 +3120,12 @@ void LLViewerObject::fetchInventoryFromServer()
         {
             LLCoros::instance().launch("LLViewerObject::fetchInventoryFromCapCoro()",
                                        boost::bind(&LLViewerObject::fetchInventoryFromCapCoro, mID));
+        }
+        else if (!mRegionp)
+        {
+            // Nothing to send to: fail the request as an HTTP error does in fetchInventoryFromCapCoro.
+            LL_WARNS() << "Object " << mID << " has no region, task inventory not requested" << LL_ENDL;
+            mInvRequestState = INVENTORY_REQUEST_STOPPED;
         }
         else
         {
@@ -3494,6 +3511,12 @@ void LLViewerObject::processTaskInv(LLMessageSystem* msg, void** user_data)
             delete ft;
             return;
         }
+        if (!object->mRegionp)
+        {
+            LL_WARNS() << "Object " << task_id << " has no region, task inventory file not requested" << LL_ENDL;
+            delete ft;
+            return;
+        }
         U64 new_id = gXferManager->requestFile(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, ft->mFilename),
             ft->mFilename, LL_PATH_CACHE,
             object->mRegionp->getHost(),
@@ -3736,6 +3759,12 @@ void LLViewerObject::removeInventory(const LLUUID& item_id)
     LLFloaterReg::hideInstance("properties", item_id);
     // </FS:Ansariel>
 
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item_id << " not removed" << LL_ENDL;
+        return;
+    }
+
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_RemoveTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -3814,6 +3843,11 @@ void LLViewerObject::updateInventory(
                                   item->getFlags(),
                                   item->getCreationDate());
     task_item->setTransactionID(item->getTransactionID());
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item->getUUID() << " not updated" << LL_ENDL;
+        return;
+    }
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_UpdateTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);
