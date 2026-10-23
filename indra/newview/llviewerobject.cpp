@@ -3091,7 +3091,22 @@ void LLViewerObject::requestInventory()
     {
         // inventory is either up to date or doesn't has a listener
         // if it is dirty, leave it this way in case we gain a listener
-        doInventoryCallback();
+        if (isInventoryPending())
+        {
+            // A request or transfer is outstanding: give the listeners the
+            // contents we have, but keep the request state and xfer id that
+            // doInventoryCallback() releases, so the pending reply is still
+            // handled as such and later requests are not duplicated.
+            const EInventoryRequestState request_state = mInvRequestState;
+            const U64 request_xfer_id = mInvRequestXFerId;
+            doInventoryCallback();
+            mInvRequestState = request_state;
+            mInvRequestXFerId = request_xfer_id;
+        }
+        else
+        {
+            doInventoryCallback();
+        }
     }
     else
     {
