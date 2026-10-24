@@ -12,6 +12,7 @@ can compare what the viewer sends with the recorded pre-port behaviour.
 No external network is used.
 
 Usage: vksinventory_mock_server.py [--log FILE] [--serve] [--] EXE [ARGS...]
+(--log FILE is truncated first.)
 
 The listening socket is bound to 127.0.0.1 port 0 in the main thread before
 anything else runs; a bind or listen failure exits with status 2 at once
@@ -58,6 +59,14 @@ the request path (AIS) or body (legacy):
       children= list, always
   53  503 for the first write request of that id, then normal
   e0  legacy folder requests: 200 with an "error" map (see legacy_error)
+  4b  the first subset fetch naming a 4b... child: 404 (once in a world)
+  4c  every children fetch of that folder: 404
+
+Held replies (mode hold=1): each request is logged on arrival ("arr" with
+held=true) and answered only when POST /control/release names its seq (one
+per line) or "all"; the reply is computed at release, so writes change the
+world in release order. A request whose head does not parse is logged as a
+"bad" event (the test fails on it).
 
 Response shapes follow what the viewer accepts (llaisapi.cpp AISUpdate,
 llinventorymodelbackgroundfetch.cpp BGFolderHttpHandler); the real servers'
@@ -340,7 +349,7 @@ class Recorder:
     def __init__(self, path):
         self.lock = threading.Lock()
         self.t0 = time.perf_counter()
-        self.f = open(path, "a", encoding="utf-8") if path else None
+        self.f = open(path, "w", encoding="utf-8") if path else None
         self.conn_id = 0
         self.seq = 0
 
@@ -373,6 +382,9 @@ class Recorder:
 class State:
     def __init__(self):
         self.lock = threading.Lock()
+        # Replies held until released (mode hold=1): seq -> Event.
+        self.held = {}
+        self.held_lock = threading.Lock()
         self.world = World()
         self.mode = {}
         self.counts = {}
@@ -467,7 +479,13 @@ class Connection(threading.Thread):
         end = self.buf.index(b"\r\n\r\n")
         raw_head = self.buf[:end + 4]
         self.buf = self.buf[end + 4:]
-        method, target, version, headers = parse_head(raw_head[:-4])
+        try:
+            method, target, version, headers = parse_head(raw_head[:-4])
+        except ValueError as e:
+            # Logged, never silently dropped: the test fails on it.
+            self.rec.emit(dict(ev="bad", conn=self.conn, t_in=round(self.rec.now_ms(), 3),
+                               head=base64.b64encode(raw_head).decode("ascii"), error=str(e)))
+            raise
         t_in = self.rec.now_ms()
         expect = header(headers, "expect")
         if expect and expect.lower() == "100-continue":
@@ -510,8 +528,19 @@ class Connection(threading.Thread):
                 record = dict(ev="ctl" if control else "req", conn=self.conn, t_in=round(req["t_in"], 3),
                               method=req["method"], target=req["target"])
                 if not control:
-                    seq = self.rec.arrival(dict(ev="arr", conn=self.conn, t_in=round(req["t_in"], 3),
-                                                method=req["method"], target=req["target"]))
+                    hold = self.state.mode.get("hold", "0") == "1"
+                    ev = threading.Event()
+                    if hold:
+                        # Registered before the arrival is logged, so a release
+                        # the test sends after reading the arrival finds it.
+                        with self.state.held_lock:
+                            seq = self.rec.arrival(dict(ev="arr", conn=self.conn, t_in=round(req["t_in"], 3),
+                                                        method=req["method"], target=req["target"], held=True))
+                            self.state.held[seq] = ev
+                        ev.wait()
+                    else:
+                        seq = self.rec.arrival(dict(ev="arr", conn=self.conn, t_in=round(req["t_in"], 3),
+                                                    method=req["method"], target=req["target"]))
                     record["seq"] = seq
                 try:
                     rsp = self.respond(req)
@@ -580,6 +609,10 @@ class Connection(threading.Thread):
             st.subset_requests = 0
             return Response(200, "OK", b"ok", "text/plain")
         if parts[:1] == ["mode"]:
+            with st.held_lock:
+                for ev in st.held.values():
+                    ev.set()
+                st.held.clear()
             st.mode = {}
             for line in req["body"].decode("utf-8").splitlines():
                 k, _, v = line.partition("=")
@@ -591,6 +624,18 @@ class Connection(threading.Thread):
             return Response(200, "OK", b"ok", "text/plain")
         if parts[:1] == ["mark"]:
             return Response(200, "OK", b"", "text/plain")
+        if parts[:1] == ["release"]:
+            # Body: the seq numbers to release, one per line, or "all".
+            body = req["body"].decode("utf-8").split()
+            released = 0
+            with st.held_lock:
+                keys = list(st.held.keys()) if body == ["all"] else [int(x) for x in body]
+                for k in keys:
+                    ev = st.held.pop(k, None)
+                    if ev is not None:
+                        ev.set()
+                        released += 1
+            return Response(200, "OK", str(released).encode("ascii"), "text/plain")
         return Response(404, "Not Found", b"not found", "text/plain")
 
     # ---- AIS -----------------------------------------------------------------
@@ -623,6 +668,13 @@ class Connection(threading.Thread):
             # A subset naming a folder that is too large is refused whole.
             if any(c[:2] in ("f3", "f4") for c in q["children"].split(",")):
                 return Response(403, "Forbidden", error_body(403, "too many descendents"))
+        if is_children and has_children and any(c[:2] == "4b" for c in q["children"].split(",")) \
+                and st.count("4b-subset") < 1:
+            # The first subset naming a 4b... child fails (c02): by content,
+            # not by arrival order.
+            return Response(404, "Scripted Failure", error_body(404, "subset failed"))
+        if is_children and p == "4c":
+            return Response(404, "Not Found", error_body(404, "category not found"))
         if is_children and p == "f4" and not has_children:
             return Response(403, "Forbidden", error_body(403, "too many descendents"))
         if is_children and p == "f3" and (depth or 0) > 0 and not has_children:

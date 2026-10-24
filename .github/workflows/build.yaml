@@ -223,7 +223,7 @@ jobs:
             INTEGRATION_TEST_llmeshunpack_parity INTEGRATION_TEST_lltexturecache_parity INTEGRATION_TEST_lltexturefetch_parity \
             INTEGRATION_TEST_llhttpretrypolicy \
             INTEGRATION_TEST_llaudio_parity INTEGRATION_TEST_llaudio_music \
-            INTEGRATION_TEST_llinventory_parity
+            INTEGRATION_TEST_llinventory_parity INTEGRATION_TEST_llinvfetch_parity
 
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'
