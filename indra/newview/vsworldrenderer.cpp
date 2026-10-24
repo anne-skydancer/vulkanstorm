@@ -564,7 +564,7 @@ void main() {
         gp.RasterizerDesc.FrontCounterClockwise=terrain;
         gp.DepthStencilDesc.DepthEnable=depthTest && !background;gp.DepthStencilDesc.DepthWriteEnable=depthTest && (!alpha || depthWriteAlpha) && !background;
         if(depthWrite)gp.DepthStencilDesc.DepthWriteEnable=depthTest && *depthWrite && !background;
-        gp.DepthStencilDesc.DepthFunc=depthCompare==DepthCompare::Always?COMPARISON_FUNC_ALWAYS:depthCompare==DepthCompare::Greater?COMPARISON_FUNC_GREATER:depthCompare==DepthCompare::GreaterEqual?COMPARISON_FUNC_GREATER_EQUAL:COMPARISON_FUNC_LESS_EQUAL;
+        gp.DepthStencilDesc.DepthFunc=depthCompare==DepthCompare::AlwaysPass?COMPARISON_FUNC_ALWAYS:depthCompare==DepthCompare::Greater?COMPARISON_FUNC_GREATER:depthCompare==DepthCompare::GreaterEqual?COMPARISON_FUNC_GREATER_EQUAL:COMPARISON_FUNC_LESS_EQUAL;
         const LayoutElement layout[]={{0,0,3,VT_FLOAT32,false},{1,0,3,VT_FLOAT32,false},{2,0,2,VT_FLOAT32,false},
             {3,0,2,VT_FLOAT32,false},{4,0,4,VT_FLOAT32,false},{5,0,4,VT_FLOAT32,false}};
         gp.InputLayout.LayoutElements=layout;gp.InputLayout.NumElements=6;
