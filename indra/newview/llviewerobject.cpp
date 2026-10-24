@@ -3529,6 +3529,13 @@ void LLViewerObject::processTaskInv(LLMessageSystem* msg, void** user_data)
         if (!object->mRegionp)
         {
             LL_WARNS() << "Object " << task_id << " has no region, task inventory file not requested" << LL_ENDL;
+            // Release a pending request, as fetchInventoryFromServer() does without a
+            // region, so a later fetch is not refused as a duplicate. An active
+            // transfer (INVENTORY_XFER) completes on its own.
+            if (object->mInvRequestState == INVENTORY_REQUEST_PENDING)
+            {
+                object->mInvRequestState = INVENTORY_REQUEST_STOPPED;
+            }
             delete ft;
             return;
         }
@@ -3837,6 +3844,14 @@ void LLViewerObject::updateMaterialInventory(LLViewerInventoryItem* item, U8 key
     if (isAssetInInventory(item, item->getType()))
     {
         // already there
+        return;
+    }
+
+    if (!mRegionp)
+    {
+        // updateInventory() sends nothing without a region; don't leave the
+        // asset pending, or isAssetInInventory() refuses it from then on.
+        LL_WARNS() << "Object " << mID << " has no region, item " << item->getUUID() << " not updated" << LL_ENDL;
         return;
     }
 
