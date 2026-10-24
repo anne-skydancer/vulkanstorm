@@ -1292,6 +1292,15 @@ void LLPermissions::unpackMessage(LLMessageSystem* msg, const char* block, S32 b
 }
 
 
+// The mask keywords of the legacy text: a mask line that does not parse
+// (no value, or a value that is not hexadecimal) reads as PERM_NONE.
+static bool is_legacy_mask_keyword(const char* keyword)
+{
+    return !strcmp("creator_mask", keyword) || !strcmp("base_mask", keyword)
+        || !strcmp("owner_mask", keyword) || !strcmp("group_mask", keyword)
+        || !strcmp("everyone_mask", keyword) || !strcmp("next_owner_mask", keyword);
+}
+
 bool LLPermissions::importLegacyStream(std::istream& input_stream)
 {
     init(LLUUID::null, LLUUID::null, LLUUID::null, LLUUID::null);
@@ -1312,10 +1321,18 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
     while (input_stream.good())
     {
         input_stream.getline(buffer, BUFSIZE);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %255s %255s",
             keyword, valuestr);
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if (!strcmp("{", keyword))
         {
             continue;
@@ -1324,38 +1341,85 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
         {
             break;
         }
+        else if (fields < 2 && !is_legacy_mask_keyword(keyword))
+        {
+            // a keyword without a value counts as absent
+            continue;
+        }
         else if (!strcmp("creator_mask", keyword))
         {
             // legacy support for "creator" masks
-            sscanf(valuestr, "%x", &mask);
-            mMaskBase = mask;
-            fixFairUse();
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskBase = mask;
+                fixFairUse();
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskBase = PERM_NONE;
+            }
         }
         else if (!strcmp("base_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskBase = mask;
-            //fixFairUse();
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskBase = mask;
+                //fixFairUse();
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskBase = PERM_NONE;
+            }
         }
         else if (!strcmp("owner_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskOwner = mask;
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskOwner = mask;
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskOwner = PERM_NONE;
+            }
         }
         else if (!strcmp("group_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskGroup = mask;
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskGroup = mask;
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskGroup = PERM_NONE;
+            }
         }
         else if (!strcmp("everyone_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskEveryone = mask;
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskEveryone = mask;
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskEveryone = PERM_NONE;
+            }
         }
         else if (!strcmp("next_owner_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskNextOwner = mask;
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskNextOwner = mask;
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskNextOwner = PERM_NONE;
+            }
         }
         else if (!strcmp("creator_id", keyword))
         {
@@ -1379,9 +1443,11 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
         }
         else if (!strcmp("group_owned", keyword))
         {
-            sscanf(valuestr, "%d", &mask);
-            if(mask) mIsGroupOwned = true;
-            else mIsGroupOwned = false;
+            if (1 == sscanf(valuestr, "%d", &mask))
+            {
+                if(mask) mIsGroupOwned = true;
+                else mIsGroupOwned = false;
+            }
         }
         else
         {
@@ -1978,7 +2044,10 @@ bool LLSaleInfo::importLegacyStream(std::istream& input_stream, bool& has_perm_m
     while(success && input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %254s %254s",
             keyword, valuestr);
@@ -1994,20 +2063,29 @@ bool LLSaleInfo::importLegacyStream(std::istream& input_stream, bool& has_perm_m
         {
             break;
         }
+        else if (fields < 2)
+        {
+            // a keyword without a value counts as absent
+            continue;
+        }
         else if(0 == strcmp("sale_type", keyword))
         {
             mSaleType = lookup(valuestr);
         }
         else if(0 == strcmp("sale_price", keyword))
         {
-            sscanf(valuestr, "%d", &mSalePrice);
-            mSalePrice = llclamp(mSalePrice, 0, S32_MAX);
+            if (1 == sscanf(valuestr, "%d", &mSalePrice))
+            {
+                mSalePrice = llclamp(mSalePrice, 0, S32_MAX);
+            }
         }
         else if (!strcmp("perm_mask", keyword))
         {
             //LL_INFOS() << "found deprecated keyword perm_mask" << LL_ENDL;
-            has_perm_mask = true;
-            sscanf(valuestr, "%x", &perm_mask);
+            if (1 == sscanf(valuestr, "%x", &perm_mask))
+            {
+                has_perm_mask = true;
+            }
         }
         else
         {
@@ -2354,7 +2432,15 @@ bool LLInventoryObject::importLegacyStream(std::istream& input_stream)
     while(input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf(buffer, " %254s %254s", keyword, valuestr);  /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf(buffer, " %254s %254s", keyword, valuestr);  /* Flawfinder: ignore */
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if(0 == strcmp("{",keyword))
         {
             continue;
@@ -2362,6 +2448,12 @@ bool LLInventoryObject::importLegacyStream(std::istream& input_stream)
         if(0 == strcmp("}", keyword))
         {
             break;
+        }
+        else if (fields < 2 && 0 != strcmp("metadata", keyword))
+        {
+            // a keyword without a value counts as absent
+            // (metadata keeps its own handling)
+            continue;
         }
         else if(0 == strcmp("obj_id", keyword))
         {
@@ -2899,10 +2991,18 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
     while(success && input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %254s %254s",
             keyword, valuestr);
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if(0 == strcmp("{",keyword))
         {
             continue;
@@ -2910,6 +3010,12 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
         if(0 == strcmp("}", keyword))
         {
             break;
+        }
+        else if (fields < 2 && 0 != strcmp("permissions", keyword) && 0 != strcmp("sale_info", keyword) && 0 != strcmp("metadata", keyword))
+        {
+            // a keyword without a value counts as absent
+            // (block headers and metadata keep their own handling)
+            continue;
         }
         else if(0 == strcmp("item_id", keyword))
         {
@@ -3064,8 +3170,10 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
         else if(0 == strcmp("creation_date", keyword))
         {
             S32 date = 0;
-            sscanf(valuestr, "%d", &date);
-            mCreationDate = date;
+            if (1 == sscanf(valuestr, "%d", &date))
+            {
+                mCreationDate = date;
+            }
         }
         else
         {
@@ -3632,10 +3740,18 @@ bool LLInventoryCategory::importLegacyStream(std::istream& input_stream)
     while(input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %254s %254s",
             keyword, valuestr);
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if(0 == strcmp("{",keyword))
         {
             continue;
@@ -3643,6 +3759,12 @@ bool LLInventoryCategory::importLegacyStream(std::istream& input_stream)
         if(0 == strcmp("}", keyword))
         {
             break;
+        }
+        else if (fields < 2 && 0 != strcmp("metadata", keyword))
+        {
+            // a keyword without a value counts as absent
+            // (metadata keeps its own handling)
+            continue;
         }
         else if(0 == strcmp("cat_id", keyword))
         {
