@@ -242,6 +242,9 @@ namespace vks_fetch
         // (sorted by method, target, body), each processed with the idle
         // callbacks held. Returns false when nothing was in flight.
         bool round(const std::string& label);
+        // LOCKSTEP: wait until every active AIS coroutine's request has
+        // arrived at the mock and nothing more arrives for 100 ms.
+        void await_arrivals(const std::string& label);
         // round() until nothing is dispatched and nothing is in flight.
         void drain(const std::string& label, int max_rounds = 500);
         // Releases one held request and processes it (idle held).

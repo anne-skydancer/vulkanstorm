@@ -444,6 +444,18 @@ namespace
         r.step("walk");
     }
 
+    // The login walk of a LOCKSTEP scenario, as c05 does it: the mock holds
+    // every reply from begin() on (mock mode hold=1), and each round's replies
+    // are released one at a time. A free-running walk lets two concurrent
+    // replies (the user and Library roots) land in one observer batch or in
+    // two, depending on their arrival.
+    void lockstep_walk(Run& r)
+    {
+        vks_inv::set_startup_state(STATE_STARTED);
+        r.drain("walk");
+        r.step("walk");
+    }
+
     // The model's objects a scenario works on; a missing one ends the
     // scenario with a FAILURE line instead of a crash.
     struct Missing : public std::runtime_error
@@ -1413,12 +1425,11 @@ namespace
         Builder b(true);
         basic(b, 10, false, 1);
         std::string cache = scenario_dir(c, "c04_ais_limit", true);
-        begin(cache, 20, CAPS_ALL, b.w, "");
+        begin(cache, 20, CAPS_ALL, b.w, "hold=1\n");
         Run r("c04_ais_limit", &b.w, Run::LOCKSTEP);
         world_line(r, b.w);
         login(r, b.w.login_response(), b.w.root);
-        walk(r);
-        mock_mode("hold=1\n");
+        lockstep_walk(r);
         r.step("held_replies");
         const std::vector<LLUUID>& f = b.ids.user_sub;   // 20 folders
         clock_advance(181.0);
@@ -1443,6 +1454,9 @@ namespace
         for (const LLUUID& id : items) { itm(id)->setComplete(false); bgf().scheduleItemFetch(id); }
         r.frame_note("items_25_first");
         {
+            // Every dispatched item request at the mock first: held() lists
+            // only the arrivals, so h[0] would otherwise depend on timing.
+            r.await_arrivals("items_25");
             std::vector<int> h = r.held();
             if (!h.empty()) r.release_one(h[0]);
         }
@@ -1933,12 +1947,11 @@ namespace
         Builder b(true);
         basic(b, 20, false, 1);
         std::string cache = scenario_dir(c, "c06_lockstep_priority", true);
-        begin(cache, 20, CAPS_ALL, b.w, "");
+        begin(cache, 20, CAPS_ALL, b.w, "hold=1\n");
         Run r("c06_lockstep_priority", &b.w, Run::LOCKSTEP);
         world_line(r, b.w);
         login(r, b.w.login_response(), b.w.root);
-        walk(r);
-        mock_mode("hold=1\n");
+        lockstep_walk(r);
         clock_advance(181.0);
         // 40 folders to fetch one by one: 19 go out, 21 wait.
         for (size_t i = 0; i < 40; ++i)
@@ -1963,12 +1976,11 @@ namespace
         Builder b(true);
         basic(b, 30, false, 1);
         std::string cache = scenario_dir(c, "c07_pool_clamp", true);
-        begin(cache, 20, CAPS_ALL, b.w, "");
+        begin(cache, 20, CAPS_ALL, b.w, "hold=1\n");
         Run r("c07_pool_clamp", &b.w, Run::LOCKSTEP);
         world_line(r, b.w);
         login(r, b.w.login_response(), b.w.root);
-        walk(r);
-        mock_mode("hold=1\n");
+        lockstep_walk(r);
         for (U32 setting : { 0u, 1u, 51u, 52u })
         {
             clock_advance(181.0);

@@ -1088,19 +1088,12 @@ namespace vks_fetch
         }
     }
 
-    bool Run::round(const std::string& label)
+    void Run::await_arrivals(const std::string& label)
     {
-        ++mRound;
-        mPhaseStarts.push_back(requests());
-        frame(true);
-        vks_inv::note("round " + label + " " + std::to_string(mRound) + " dispatched=" + std::to_string(mLastAfter - mLastBefore)
-                      + " sch=" + sched_text(sched_state()));
         // Every active coroutine's request at the mock.
         auto t0 = std::chrono::steady_clock::now();
-        while (true)
+        while (held().size() < (size_t)LLCoprocedureManager::instance().countActive("AIS"))
         {
-            std::vector<int> h = held();
-            if (h.size() >= (size_t)LLCoprocedureManager::instance().countActive("AIS")) break;
             if (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() > 60.0)
             {
                 fail("round " + label + ": requests did not reach the mock");
@@ -1109,10 +1102,32 @@ namespace vks_fetch
             for (int i = 0; i < 2; ++i) llcoro::suspend();
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
-        std::vector<int> h = held();
         // The quiet wait as step() does: nothing more arrives.
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        h = held();
+        size_t last = requests();
+        auto quiet = std::chrono::steady_clock::now();
+        while (std::chrono::steady_clock::now() - quiet < std::chrono::milliseconds(100))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            size_t now = requests();
+            if (now != last) { last = now; quiet = std::chrono::steady_clock::now(); }
+        }
+    }
+
+    bool Run::round(const std::string& label)
+    {
+        ++mRound;
+        // A coroutine the previous round's replies freed takes the next queued
+        // request and sends it while that round is still releasing; which one
+        // it sends is fixed (FIFO queue, sorted releases), when it reaches the
+        // mock is not. Wait for those arrivals before the phase starts, so
+        // each request is counted in the round that caused it.
+        await_arrivals(label);
+        mPhaseStarts.push_back(requests());
+        frame(true);
+        vks_inv::note("round " + label + " " + std::to_string(mRound) + " dispatched=" + std::to_string(mLastAfter - mLastBefore)
+                      + " sch=" + sched_text(sched_state()));
+        await_arrivals(label);
+        std::vector<int> h = held();
         for (int q : h) release_one(q);
         return !h.empty();
     }
