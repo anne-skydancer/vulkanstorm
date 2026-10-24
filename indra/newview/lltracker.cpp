@@ -485,7 +485,9 @@ void draw_shockwave(F32 center_z,F32 t,S32 steps,LLColor4 color)
 
 void LLTracker::drawBeacon(LLVector3 pos_agent,std::string direction,LLColor4 fogged_color,F32 dist)
 {
+#if VS_NATIVE_VULKAN
     if(gViewerWindow && gViewerWindow->isNativeVulkan()){VSTrackerDraw::beam(pos_agent,direction,fogged_color,dist);return;}
+#endif
  vs_tracker_beam(gGL,pos_agent,direction,fogged_color,dist,[]{return gRenderStartTime.getElapsedTimeF32();},LLViewerCamera::getInstance()->getLeftAxis(),getTrackingStatus()==TRACKING_AVATAR,sCheesyBeacon); }
 
 // static
@@ -516,7 +518,11 @@ void LLTracker::renderBeacon(LLVector3d pos_global,
         color_frac = 1.f - 0.6f*(dist/LLViewerCamera::getInstance()->getFar());
     }
 
+#if VS_NATIVE_VULKAN
     const auto fog=(gViewerWindow && gViewerWindow->isNativeVulkan())?VSTrackerDraw::fogColor():gSky.getSkyFogColor();
+#else
+    const auto fog=gSky.getSkyFogColor();
+#endif
     LLColor4 fogged_color=color_frac*color+(1-color_frac)*fog;
     LLColor4 fogged_color_under=color_frac*color_under+(1-color_frac)*fog;
 
