@@ -33,7 +33,8 @@ The comparison:
   * an identifier fence guards what the copies depend on outside the copied
     functions: every live line that mentions a fenced identifier must lie
     inside a region that matched, or be in the allowlist below (with the
-    reason it does not change what the copies do).
+    reason it does not change what the copies do); an allowlisted line may
+    occur once outside the regions (a second copy of it fails).
 
 Exit status 0 when everything matches. A blob differing from the recorded
 one is reported but is not a failure when the copied text still matches.
@@ -74,10 +75,11 @@ FENCES = {
     "indra/newview/llstartup.cpp": {
         "identifiers": ["findLostItems", "loadSkeleton", "createCommonSystemCategories", "isSysFoldersReady",
                         "inventory-lib-root", "inventory-lib-owner", "inventory-skel-lib", "inventory-skeleton",
-                        "initCOFID"],
+                        "initCOFID", "LLInventoryModelBackgroundFetch"],
         "allow": {
             'LL_WARNS("AppInit") << "Problem loading inventory-skel-lib" << LL_ENDL;': "a log line inside the copied STATE_INVENTORY_SKEL",
             "LLAppearanceMgr::getInstance()->initCOFID();": "a later re-initialisation of the COF id (not on the login fetch path)",
+            "LLInventoryModelBackgroundFetch::instance().start();": "set_flags_and_update_appearance's start() after login (a no-op once the walk started; survey 3 section 2.8)",
         },
         "allow_patterns": [],
     },
@@ -263,6 +265,7 @@ def main():
         lines = strip_if0(stripped.split("\n"))
         spans = matched_spans.get(path, [])
         bad = []
+        used = {}
         for k, l in enumerate(lines):
             nl = norm_line(l)
             if not nl:
@@ -274,7 +277,9 @@ def main():
             if any(a <= ln <= b for a, b in spans):
                 continue
             if nl in fence["allow"]:
-                continue
+                used[nl] = used.get(nl, 0) + 1
+                if used[nl] == 1:
+                    continue
             if any(re.search(p, nl) for p in fence["allow_patterns"]) and not nl.startswith("void "):
                 continue
             bad.append("%d: %s" % (ln, nl))

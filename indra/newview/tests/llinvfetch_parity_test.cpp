@@ -121,6 +121,64 @@ namespace
         return out;
     }
 
+    // The first difference of two case lists, readable: the case, the line,
+    // the field (the key=value token holding the first differing column, or
+    // the line's leading tag), and a window of the two lines around it.
+    std::string field_at(const std::string& l, size_t col)
+    {
+        size_t a = l.rfind(' ', col == 0 ? 0 : col - 1);
+        a = (a == std::string::npos || col == 0) ? 0 : a + 1;
+        size_t b = l.find(' ', a);
+        std::string tok = l.substr(a, b == std::string::npos ? std::string::npos : b - a);
+        size_t eq = tok.find('=');
+        if (eq != std::string::npos && eq > 0) return tok.substr(0, eq);
+        size_t t = l.find(' ');
+        return "'" + l.substr(0, t) + "' column " + std::to_string(col);
+    }
+
+    std::string window(const std::string& l, size_t col)
+    {
+        size_t a = col > 80 ? col - 80 : 0;
+        std::string w = l.substr(a, 160);
+        return (a ? "..." : "") + w + (a + 160 < l.size() ? "..." : "");
+    }
+
+    std::string compare_report(const vks_inv::Cases& expected, const vks_inv::Cases& actual, size_t max_reports)
+    {
+        std::ostringstream report;
+        size_t reports = 0;
+        std::map<std::string, const vks_inv::Case*> by_id;
+        for (const vks_inv::Case& c : actual) by_id[c.id] = &c;
+        for (const vks_inv::Case& e : expected)
+        {
+            if (reports >= max_reports) break;
+            auto it = by_id.find(e.id);
+            if (it == by_id.end()) { report << "case " << e.id << ": not produced\n"; ++reports; continue; }
+            const vks_inv::Case& a = *it->second;
+            const size_t n = std::max(e.lines.size(), a.lines.size());
+            for (size_t i = 0; i < n; ++i)
+            {
+                const std::string ev = i < e.lines.size() ? e.lines[i] : std::string("<end of case>");
+                const std::string av = i < a.lines.size() ? a.lines[i] : std::string("<end of case>");
+                if (ev == av) continue;
+                size_t col = 0;
+                while (col < ev.size() && col < av.size() && ev[col] == av[col]) ++col;
+                report << "case " << e.id << " line " << (i + 1) << " field " << field_at(ev, col) << " (column " << col << ")\n"
+                       << "  expected: " << window(ev, col) << "\n"
+                       << "  actual:   " << window(av, col) << "\n";
+                ++reports;
+                break;
+            }
+        }
+        std::set<std::string> ids;
+        for (const vks_inv::Case& e : expected) ids.insert(e.id);
+        for (const vks_inv::Case& a : actual)
+        {
+            if (!ids.count(a.id)) report << "case " << a.id << ": produced but not in the fixture\n";
+        }
+        return report.str();
+    }
+
     // Files below dir, as paths relative to it with '/'.
     std::set<std::string> tree(const std::string& dir)
     {
@@ -180,6 +238,20 @@ namespace tut
         ensure("VKS_INVFETCH_ONLY is a developer filter: set VKS_INVFETCH_DEV=1 to use it (a subset never passes as a replay)",
                only.empty() || getenv_str("VKS_INVFETCH_DEV") == "1");
 
+        // Rule PRE_D2_SL_FALLBACKS (README, "D2"): with the CMake option
+        // VKS_INVFETCH_PRE_D2_GATES OFF, the Second Life fallback scenarios
+        // are not run. Each skip is reported; their fixtures must still be
+        // in the tree; a dump refuses to run with the rule on.
+        std::set<std::string> skip;
+#if VKS_INVFETCH_SKIP_PRE_D2
+        for (const auto& kv : vks_fetch::pre_d2_sl_fallbacks())
+        {
+            skip.insert(kv.first);
+            std::cerr << "[r3b] skip " << kv.first << ": rule PRE_D2_SL_FALLBACKS (replaced by " << kv.second << ")" << std::endl;
+        }
+#endif
+        ensure("rule PRE_D2_SL_FALLBACKS is on: a dump must record every scenario", skip.empty() || out.empty());
+
         // A work directory of this process only.
         const std::string work = std::string(VKS_INVFETCH_WORK_DIR) + "/run-" + std::to_string(vks_getpid());
         fs::remove_all(work);
@@ -197,7 +269,7 @@ namespace tut
         size_t differing = 0, compared = 0;
         std::string index, manifest;
         std::set<std::string> produced;   // relative paths a run produces
-        vks_fetch::run_scenarios(work, only, [&](const vks_fetch::ScenarioInfo& info, const vks_inv::Case& c, const std::string& responses)
+        vks_fetch::run_scenarios(work, only, skip, [&](const vks_fetch::ScenarioInfo& info, const vks_inv::Case& c, const std::string& responses)
         {
             vks_inv::Cases cases;
             cases.push_back(c);
@@ -241,7 +313,7 @@ namespace tut
             // The run's case read back as the fixture is (comment lines,
             // the informational measurements, are not compared).
             vks_inv::Cases actual = vks_inv::parse_cases(text);
-            std::string diff = vks_inv::compare_cases(expected, actual, 10);
+            std::string diff = compare_report(expected, actual, 10);
             const std::string actual_dir = getenv_str("VKS_INVFETCH_ACTUAL");
             if (!actual_dir.empty())
             {
@@ -282,6 +354,14 @@ namespace tut
         {
             // The fixture tree holds exactly what a run produces.
             std::set<std::string> want = produced;
+            // Skipped scenarios keep their fixtures (as the manifest lists them).
+            for (const std::string& l : data_lines(vks_inv::read_file(fixtures + "/manifest.txt")))
+            {
+                std::istringstream ls(l);
+                std::string id, path;
+                ls >> id >> path;
+                if (skip.count(id)) want.insert(path);
+            }
             want.insert("index.txt");
             want.insert("manifest.txt");
             want.insert("README.md");
@@ -295,7 +375,12 @@ namespace tut
             {
                 if (!want.count(f)) { report << "fixture tree: unexpected " << f << "\n"; ++differing; }
             }
-            if (data_lines(vks_inv::read_file(fixtures + "/index.txt")) != data_lines(index))
+            std::vector<std::string> recorded_index;
+            for (const std::string& l : data_lines(vks_inv::read_file(fixtures + "/index.txt")))
+            {
+                if (!skip.count(l)) recorded_index.push_back(l);
+            }
+            if (recorded_index != data_lines(index))
             {
                 report << "index.txt differs from the scenarios run, in order\n";
                 ++differing;
@@ -322,7 +407,15 @@ namespace tut
                         ++differing;
                     }
                 }
-                if (recorded.size() != produced.size())
+                size_t skipped_files = 0;
+                for (const std::string& l : data_lines(vks_inv::read_file(fixtures + "/manifest.txt")))
+                {
+                    std::istringstream ls(l);
+                    std::string id;
+                    ls >> id;
+                    if (skip.count(id)) ++skipped_files;
+                }
+                if (recorded.size() != produced.size() + skipped_files)
                 {
                     report << "manifest.txt lists " << recorded.size() << " files, a run produces " << produced.size() << "\n";
                     ++differing;

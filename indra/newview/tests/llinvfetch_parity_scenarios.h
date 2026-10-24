@@ -37,7 +37,15 @@ namespace vks_fetch
     // empty: a subset may differ from a full run, see above) and hands each
     // case and its response bodies to sink.
     typedef std::function<void(const ScenarioInfo&, const Case&, const std::string& responses)> sink_t;
-    void run_scenarios(const std::string& work_dir, const std::set<std::string>& only, const sink_t& sink);
+    // skip: scenarios not run (a named rule of the test; reported there).
+    void run_scenarios(const std::string& work_dir, const std::set<std::string>& only,
+                       const std::set<std::string>& skip, const sink_t& sink);
+
+    // The pre-D2 reference (README, "D2"): the Second Life legacy-capability
+    // and UDP fallbacks, which the D2 port removes. Rule
+    // PRE_D2_SL_FALLBACKS skips exactly these, each with the D2 targets that
+    // replace it.
+    const std::vector<std::pair<std::string, std::string> >& pre_d2_sl_fallbacks();
 }
 
 #endif

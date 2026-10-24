@@ -46,8 +46,10 @@
 #include "lluuid.h"
 #include "llsd.h"
 
+#include <chrono>
 #include <functional>
 #include <map>
+#include <stdexcept>
 #include <set>
 #include <string>
 #include <vector>
@@ -114,7 +116,17 @@ namespace vks_fetch
     std::string cap_url(const std::string& cap);  // base_url() + "/cap/" + cap
     // (Re)creates the coprocedure manager with an AIS pool of n coroutines
     // and sets PoolSizeAIS = n (the scheduler reads it on every frame).
-    void set_ais_pool(U32 n);
+    void set_ais_pool(U32 n, bool force = false);
+    // The scripted frame-budget clock of llinvfetch_parity_bgf.cpp: every
+    // LLTimer::getTotalSeconds() read of the background fetch returns it and
+    // advances it by step (0: frozen).
+    void bgf_clock(F64 now, F64 step);
+    S64 bgf_clock_reads();
+    // llinvfetch_parity_ais.cpp: LLCoros::checkStop() calls of llaisapi.cpp
+    // since the last arm; abort_at > 0 throws LLCoros::Stopping at that call.
+    void ais_stop_arm(S64 abort_at);
+    S64 ais_stop_calls();
+    S64 ais_stop_thrown();
     // Resets everything a scenario touches: gInventory, the background
     // fetch singleton, R2's configuration and journal, the callback ids,
     // the settings, the fake clock; installs the recorder.
@@ -155,6 +167,8 @@ namespace vks_fetch
         size_t rlen = 0;
         std::string rtype;
         bool answered = false;
+        bool held = false;
+        int round = 0;
     };
     void mock_world(const World& w);
     void mock_mode(const std::string& lines);
@@ -179,6 +193,11 @@ namespace vks_fetch
     class Run
     {
     public:
+        // LOCKSTEP: production concurrency with the mock holding every
+        // reply; each round dispatches (one frame), then the replies are
+        // released one at a time in request order and each is processed
+        // with the idle callbacks held (round()/drain()): the request log
+        // sorted within each round, the journal and the model in full.
         // SEQ: one request in flight at a time, everything in total order.
         // PHASED: the legacy capabilities keep several requests in flight on
         // their own (up to 12 + 4); the request log and the journal are
@@ -187,7 +206,7 @@ namespace vks_fetch
         // order-free journal lines as multisets, the model with sorted child
         // lists, the concurrency bounds. large: the journal and the model
         // as digests with a sample.
-        enum Mode { SEQ, PHASED, CONC };
+        enum Mode { SEQ, PHASED, CONC, LOCKSTEP };
         Run(const std::string& id, const World* world, Mode mode = SEQ, bool large = false);
         ~Run();
 
@@ -200,7 +219,7 @@ namespace vks_fetch
         // fetch queues to drain. Fails the scenario on timeout.
         // fetch_idle=false: the background fetch's request count may stay
         // above zero (a legacy handler nobody pumps any more).
-        bool settle(bool idle = true, bool queues_empty = false, F64 timeout = 300.0, bool fetch_idle = true);
+        bool settle(bool idle = true, bool queues_empty = false, F64 timeout = 120.0, bool fetch_idle = true);
         // Frames until pred() holds after a frame (timeout: the scenario fails).
         bool until(const std::function<bool()>& pred, bool idle = true, F64 timeout = 120.0);
         void frames(int n, bool idle = true);
@@ -210,6 +229,25 @@ namespace vks_fetch
         void frame_note(const std::string& label);
         // A journal marker with the number of requests seen so far.
         void step(const std::string& name);
+        // A line compared in every mode (a deterministic measurement or an
+        // assertion the scenario computed).
+        void fact(const std::string& line) { mFacts.push_back(line); }
+        // Held replies (mock mode hold=1). release() answers the given
+        // arrivals; held() lists the unanswered ones, sorted by request.
+        void release(const std::vector<int>& seqs);
+        void release_all();
+        std::vector<int> held();
+        // LOCKSTEP: one dispatch frame, wait until every active AIS
+        // coroutine's request has arrived, then release them one at a time
+        // (sorted by method, target, body), each processed with the idle
+        // callbacks held. Returns false when nothing was in flight.
+        bool round(const std::string& label);
+        // round() until nothing is dispatched and nothing is in flight.
+        void drain(const std::string& label, int max_rounds = 500);
+        // Releases one held request and processes it (idle held).
+        void release_one(int seq);
+        // The request lines as finish() writes them (normalised), in arrival order.
+        std::vector<std::string> wire_lines();
         void note(const std::string& line);
         // Requests the mock has received so far in this scenario.
         size_t requests();
@@ -228,6 +266,8 @@ namespace vks_fetch
     private:
         void read_log();
         bool idle_now(bool fetch_idle);
+        void check_budget();
+        std::string format_wire(const Wire& w);
 
         std::string mId;
         const World* mWorld;
@@ -247,6 +287,22 @@ namespace vks_fetch
         S32 mLastBefore = 0, mLastAfter = 0;
         S32 mFrames = 0;
         S32 mItemHandlersDone = 0;
+        std::vector<std::string> mFacts;
+        S32 mRound = 0;
+        std::chrono::steady_clock::time_point mStart;
+        F64 mBudget = 300.0;
+    public:
+        // The scenario's wall-clock budget: exceeding it, or any settle /
+        // until timeout, aborts the scenario and the run (Abort).
+        void budget(F64 seconds) { mBudget = seconds; }
+    };
+
+    // Thrown on a timeout or an exhausted budget: run_scenarios() records
+    // the scenario as failed and skips the rest of the run, so a stalled
+    // port fails in minutes.
+    struct Abort : public std::runtime_error
+    {
+        explicit Abort(const std::string& w) : std::runtime_error(w) {}
     };
 
     // The window's busy count is set high at the start of a scenario; every

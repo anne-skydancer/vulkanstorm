@@ -46,6 +46,8 @@
 #include "httpresponse.h"
 #include "bufferarray.h"
 #include "_httpservice.h"
+#include "llapr.h"
+#include "apr_network_io.h"
 
 #include <boost/json.hpp>
 
@@ -183,33 +185,61 @@ namespace vks_fetch
             int mStatus = 0;
         };
 
-        int control(const std::string& path, const std::string& body)
+        // A control request on a socket of its own (APR), never through
+        // llcorehttp: held replies may occupy every llcorehttp connection.
+        int control(const std::string& path, const std::string& body, std::string* reply = NULL)
         {
-            LLCore::HttpRequest req;
-            std::shared_ptr<DoneHandler> handler = std::make_shared<DoneHandler>();
-            LLCore::BufferArray* ba = new LLCore::BufferArray;
-            ba->append(body.data(), body.size());
-            LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>();
-            options->setTimeout(60);
-            options->setRetries(0);
-            LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>();
-            headers->append("Content-Type", "text/plain");
-            LLCore::HttpHandle h = req.requestPost(LLCore::HttpRequest::DEFAULT_POLICY_ID,
-                                                   base_url() + path, ba, options, headers, handler);
-            ba->release();
-            llassert_always(h != LLCORE_HTTP_HANDLE_INVALID);
-            auto t0 = std::chrono::steady_clock::now();
-            while (!handler->mDone)
+            apr_pool_t* pool = NULL;
+            apr_pool_create(&pool, NULL);
+            int status = -1;
+            apr_sockaddr_t* sa = NULL;
+            apr_socket_t* sock = NULL;
+            if (apr_sockaddr_info_get(&sa, "127.0.0.1", APR_INET, (apr_port_t)atoi(g_port.c_str()), 0, pool) == APR_SUCCESS
+                && apr_socket_create(&sock, APR_INET, SOCK_STREAM, APR_PROTO_TCP, pool) == APR_SUCCESS)
             {
-                req.update(0);
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                if (std::chrono::steady_clock::now() - t0 > std::chrono::seconds(60))
+                apr_socket_timeout_set(sock, (apr_interval_time_t)60 * 1000000);
+                if (apr_socket_connect(sock, sa) == APR_SUCCESS)
                 {
-                    fprintf(stderr, "[r3b] control request %s timed out\n", path.c_str());
-                    return -1;
+                    std::string req = "POST " + path + " HTTP/1.1\r\nHost: 127.0.0.1:" + g_port
+                        + "\r\nContent-Type: text/plain\r\nContent-Length: " + std::to_string(body.size())
+                        + "\r\n\r\n" + body;
+                    size_t sent = 0;
+                    bool ok = true;
+                    while (sent < req.size())
+                    {
+                        apr_size_t n = req.size() - sent;
+                        if (apr_socket_send(sock, req.data() + sent, &n) != APR_SUCCESS || n == 0) { ok = false; break; }
+                        sent += n;
+                    }
+                    std::string in;
+                    size_t need = std::string::npos;
+                    while (ok)
+                    {
+                        char buf[4096];
+                        apr_size_t n = sizeof(buf);
+                        apr_status_t rv = apr_socket_recv(sock, buf, &n);
+                        if (n) in.append(buf, n);
+                        size_t he = in.find("\r\n\r\n");
+                        if (he != std::string::npos && need == std::string::npos)
+                        {
+                            size_t cl = in.find("Content-Length: ");
+                            size_t len = cl == std::string::npos ? 0 : (size_t)atoi(in.c_str() + cl + 16);
+                            need = he + 4 + len;
+                        }
+                        if (need != std::string::npos && in.size() >= need) break;
+                        if (rv != APR_SUCCESS) { ok = false; break; }
+                    }
+                    if (ok && in.compare(0, 9, "HTTP/1.1 ") == 0)
+                    {
+                        status = atoi(in.c_str() + 9);
+                        if (reply) *reply = in.substr(in.find("\r\n\r\n") + 4);
+                    }
                 }
+                apr_socket_close(sock);
             }
-            return handler->mStatus;
+            apr_pool_destroy(pool);
+            if (status < 0) fprintf(stderr, "[r3b] control request %s failed\n", path.c_str());
+            return status;
         }
 
         U32 pool_size_query(const std::string& name)
@@ -404,6 +434,14 @@ namespace vks_fetch
 
         // The coroutines check the application status (LLCoros::checkStop).
         AppStatus::running();
+        // The default class's connection limit (8) raised to 32: with
+        // replies held (LOCKSTEP) every request the scheduler dispatched
+        // must reach the mock. Transport timing only; what the scheduler
+        // sends does not depend on it.
+        LLCore::HttpRequest::setStaticPolicyOption(LLCore::HttpRequest::PO_CONNECTION_LIMIT,
+                                                   LLCore::HttpRequest::DEFAULT_POLICY_ID, 32, NULL);
+        LLCore::HttpRequest::setStaticPolicyOption(LLCore::HttpRequest::PO_PER_HOST_CONNECTION_LIMIT,
+                                                   LLCore::HttpRequest::DEFAULT_POLICY_ID, 32, NULL);
         LLCore::HttpRequest::startThread();
 
         // Initialise llcommon's clock, then freeze LLTimer's total time.
@@ -457,10 +495,18 @@ namespace vks_fetch
         LLCore::HttpRequest::destroyService();
     }
 
-    void set_ais_pool(U32 n)
+    namespace bgf_clock_state { extern F64 now; extern F64 step; extern S64 reads; }
+    namespace ais_stop_state { extern S64 calls; extern S64 abort_at; extern S64 thrown; }
+    void bgf_clock(F64 now, F64 step) { bgf_clock_state::now = now; bgf_clock_state::step = step; bgf_clock_state::reads = 0; }
+    S64 bgf_clock_reads() { return bgf_clock_state::reads; }
+    void ais_stop_arm(S64 abort_at) { ais_stop_state::calls = 0; ais_stop_state::abort_at = abort_at; }
+    S64 ais_stop_calls() { return ais_stop_state::calls; }
+    S64 ais_stop_thrown() { return ais_stop_state::thrown; }
+
+    void set_ais_pool(U32 n, bool force)
     {
         gSavedSettings.setU32("PoolSizeAIS", n);
-        if (g_pool_size == n && LLCoprocedureManager::instanceExists())
+        if (!force && g_pool_size == n && LLCoprocedureManager::instanceExists())
         {
             return;
         }
@@ -502,6 +548,8 @@ namespace vks_fetch
         gSavedSettings.setU32("InventorySortOrder", 7);
         gDisconnected = false;
         clock_set(1000.0);
+        bgf_clock(1000.0, 0.0);
+        ais_stop_arm(0);
         // Created now so it exists before anything posts the completion
         // signal; the scenarios record every completion.
         LLInventoryModelBackgroundFetch::instance().setFetchCompletionCallback([]()
@@ -817,6 +865,13 @@ namespace vks_fetch
             mNorm.known(ids);
         }
         mItemHandlersDone = item_handlers_done();
+        mStart = std::chrono::steady_clock::now();
+        if (large) mBudget = 900.0;
+        if (const char* b = getenv("VKS_INVFETCH_BUDGET"))
+        {
+            // Diagnostics only (VKS_INVFETCH_DEV=1): a shorter budget.
+            if (getenv("VKS_INVFETCH_DEV")) mBudget = atof(b);
+        }
         vks_inv::note("step begin " + id);
         snapshot("begin");
     }
@@ -855,9 +910,16 @@ namespace vks_fetch
                 w.t_in = jnum(o, "t_in");
                 w.method = jstr(o, "method");
                 w.target = jstr(o, "target");
+                auto h = o.find("held");
+                w.held = h != o.end() && h->value().is_bool() && h->value().as_bool();
+                w.round = mRound;
                 mBySeq[w.seq] = mWire.size();
                 mWire.push_back(w);
                 ++mArrivals;
+            }
+            else if (ev == "bad")
+            {
+                fail("the mock could not parse a request head: " + jstr(o, "error"));
             }
             else if (ev == "req")
             {
@@ -925,11 +987,146 @@ namespace vks_fetch
         {
             mLastSnap = s;
             ++mSnapCount;
-            if (mMode == SEQ)
+            if (mMode == SEQ || mMode == LOCKSTEP)
             {
                 vks_inv::note("sch " + s);
             }
+            static const bool trace = getenv("VKS_INVFETCH_TRACE") != NULL;
+            if (trace)
+            {
+                fprintf(stderr, "[r3b] %s sch %s\n", mId.c_str(), s.substr(0, 1500).c_str());
+            }
         }
+    }
+
+    namespace
+    {
+        // What a stalled scenario was doing, on stderr before it aborts.
+        void stall_report(const std::string& id, const std::string& why)
+        {
+            fprintf(stderr, "[r3b] %s: %s\n[r3b]   scheduler: %s\n[r3b]   ais pool: %d pending+active\n",
+                    id.c_str(), why.c_str(), sched_text(sched_state()).substr(0, 2000).c_str(),
+                    (int)LLCoprocedureManager::instance().count("AIS"));
+            std::vector<std::string> j = vks_inv::take_journal();
+            size_t from = j.size() > 15 ? j.size() - 15 : 0;
+            for (size_t i = from; i < j.size(); ++i) fprintf(stderr, "[r3b]   journal: %s\n", j[i].substr(0, 300).c_str());
+            for (const std::string& l : j) vks_inv::note(l);
+            LLInventoryModel::cat_array_t* cats = NULL;
+            LLInventoryModel::item_array_t* items = NULL;
+            gInventory.getDirectDescendentsOf(gInventory.getRootFolderID(), cats, items);
+            for (size_t i = 0; cats && i < cats->size() && i < 30; ++i)
+            {
+                fprintf(stderr, "[r3b]   root child: %s\n", vks_inv::dump_category((*cats)[i]).substr(0, 400).c_str());
+            }
+        }
+    }
+
+    void Run::check_budget()
+    {
+        F64 used = std::chrono::duration<double>(std::chrono::steady_clock::now() - mStart).count();
+        if (used > mBudget)
+        {
+            fail("scenario budget of " + std::to_string((int)mBudget) + " s exhausted");
+            stall_report(mId, "budget exhausted");
+            throw Abort(mId + ": budget exhausted");
+        }
+    }
+
+    std::vector<int> Run::held()
+    {
+        read_log();
+        std::vector<std::pair<std::string, int> > h;
+        for (const Wire& w : mWire)
+        {
+            if (w.held && !w.answered) h.push_back(std::make_pair(w.method + " " + mNorm.apply(w.target), w.seq));
+        }
+        std::sort(h.begin(), h.end());
+        std::vector<int> out;
+        for (const auto& p : h) out.push_back(p.second);
+        return out;
+    }
+
+    void Run::release(const std::vector<int>& seqs)
+    {
+        std::string body;
+        for (int q : seqs) body += std::to_string(q) + "\n";
+        if (!body.empty()) control("/control/release", body);
+    }
+
+    void Run::release_all()
+    {
+        control("/control/release", "all");
+    }
+
+    void Run::release_one(int seq)
+    {
+        release(std::vector<int>(1, seq));
+        auto t0 = std::chrono::steady_clock::now();
+        // Processed when the mock answered it and no AIS coroutine is
+        // left on a reply that has come back.
+        while (true)
+        {
+            frame(false);
+            read_log();
+            auto it = mBySeq.find(seq);
+            bool answered = it != mBySeq.end() && mWire[it->second].answered;
+            size_t unanswered = 0;
+            for (const Wire& w : mWire) if (!w.answered) ++unanswered;
+            if (answered && (size_t)LLCoprocedureManager::instance().countActive("AIS") <= unanswered)
+            {
+                // A few more frames: the update's yields and the callback.
+                for (int i = 0; i < 4; ++i) frame(false);
+                if ((size_t)LLCoprocedureManager::instance().countActive("AIS") <= unanswered) break;
+            }
+            if (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() > 60.0)
+            {
+                fail("release of request " + std::to_string(seq) + " not processed in 60 s");
+                throw Abort(mId + ": release timeout");
+            }
+            check_budget();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+
+    bool Run::round(const std::string& label)
+    {
+        ++mRound;
+        mPhaseStarts.push_back(requests());
+        frame(true);
+        vks_inv::note("round " + label + " " + std::to_string(mRound) + " dispatched=" + std::to_string(mLastAfter - mLastBefore)
+                      + " sch=" + sched_text(sched_state()));
+        // Every active coroutine's request at the mock.
+        auto t0 = std::chrono::steady_clock::now();
+        while (true)
+        {
+            std::vector<int> h = held();
+            if (h.size() >= (size_t)LLCoprocedureManager::instance().countActive("AIS")) break;
+            if (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() > 60.0)
+            {
+                fail("round " + label + ": requests did not reach the mock");
+                throw Abort(mId + ": round timeout");
+            }
+            for (int i = 0; i < 2; ++i) llcoro::suspend();
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        std::vector<int> h = held();
+        // The quiet wait as step() does: nothing more arrives.
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        h = held();
+        for (int q : h) release_one(q);
+        return !h.empty();
+    }
+
+    void Run::drain(const std::string& label, int max_rounds)
+    {
+        for (int k = 0; k < max_rounds; ++k)
+        {
+            bool any = round(label);
+            SchedState st = sched_state();
+            if (!any && st.folder_queue.empty() && st.item_queue.empty() && st.fetch_count == 0) return;
+        }
+        fail("drain " + label + ": more than " + std::to_string(max_rounds) + " rounds");
+        throw Abort(mId + ": drain");
     }
 
     void Run::frame(bool idle)
@@ -997,12 +1194,14 @@ namespace vks_fetch
         while (true)
         {
             frame(idle);
+            check_budget();
             if (pred()) return true;
             if (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() > timeout)
             {
                 fail("until() timed out after " + std::to_string((int)timeout) + " s");
+                stall_report(mId, "until timed out");
                 fprintf(stderr, "[r3b] %s: until timed out\n", mId.c_str());
-                return false;
+                throw Abort(mId + ": until timeout");
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
@@ -1017,6 +1216,7 @@ namespace vks_fetch
         while (true)
         {
             frame(idle);
+            check_budget();
             bool ok = idle_now(fetch_idle);
             if (ok && queues_empty)
             {
@@ -1046,8 +1246,9 @@ namespace vks_fetch
             if (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() > timeout)
             {
                 fail("settle timed out after " + std::to_string((int)timeout) + " s");
+                stall_report(mId, "settle timed out");
                 fprintf(stderr, "[r3b] %s: settle timed out\n", mId.c_str());
-                return false;
+                throw Abort(mId + ": settle timeout");
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
@@ -1207,6 +1408,27 @@ namespace vks_fetch
         }
     }
 
+    std::string Run::format_wire(const Wire& w)
+    {
+        std::string rb = w.have_rbody ? mNorm.apply(w.rbody) : std::string();
+        std::string line = w.method + " " + mNorm.apply(w.target)
+            + " status=" + std::to_string(w.status)
+            + " head=" + escape_text(mNorm.apply(w.head))
+            + " body=" + escape_text(mNorm.apply(w.body))
+            + " resp=" + std::to_string(w.rlen) + ":" + (w.have_rbody ? short_sha(rb) : std::string("unlogged"))
+            + " rtype=" + w.rtype;
+        if (!w.answered) line += " UNANSWERED";
+        return line;
+    }
+
+    std::vector<std::string> Run::wire_lines()
+    {
+        read_log();
+        std::vector<std::string> out;
+        for (const Wire& w : mWire) out.push_back(format_wire(w));
+        return out;
+    }
+
     Case Run::finish(std::string& responses)
     {
         read_log();
@@ -1238,24 +1460,29 @@ namespace vks_fetch
         for (const auto& kv : by_method) { counts += (first ? "" : ",") + kv.first + ":" + std::to_string(kv.second); first = false; }
         counts += " status503=" + std::to_string(retries_503);
         out.push_back(counts);
+        // The scenario's own compared lines.
+        for (const std::string& f : mFacts) out.push_back("fact " + mNorm.apply(f));
 
         // The wire log: arrival order (sequence mode) or a sorted multiset
         // (concurrency mode).
         std::vector<std::string> wire_lines;
         std::string resp_text;
         int n = 0;
+        // Every tid-bearing request must carry a tid of its own.
+        size_t tid_requests = 0;
+        std::set<std::string> tid_values;
+        for (const Wire& w : mWire)
+        {
+            size_t k = w.target.find("tid=");
+            if (k == std::string::npos) continue;
+            ++tid_requests;
+            tid_values.insert(w.target.substr(k + 4, 36));
+        }
         for (const Wire& w : mWire)
         {
             ++n;
             std::string rb = w.have_rbody ? mNorm.apply(w.rbody) : std::string();
-            std::string line = w.method + " " + mNorm.apply(w.target)
-                + " status=" + std::to_string(w.status)
-                + " head=" + escape_text(mNorm.apply(w.head))
-                + " body=" + escape_text(mNorm.apply(w.body))
-                + " resp=" + std::to_string(w.rlen) + ":" + (w.have_rbody ? short_sha(rb) : std::string("unlogged"))
-                + " rtype=" + w.rtype;
-            if (!w.answered) line += " UNANSWERED";
-            wire_lines.push_back(line);
+            wire_lines.push_back(format_wire(w));
             if (w.have_rbody && !mLarge && mMode == SEQ)
             {
                 resp_text += "--- " + mId + " " + std::to_string(n) + " " + w.method + " " + mNorm.apply(w.target)
@@ -1268,7 +1495,7 @@ namespace vks_fetch
             for (const std::string& l : wire_lines) multiset[l]++;
             for (const auto& kv : multiset) out.push_back("wire* " + std::to_string(kv.second) + "x " + kv.first);
         }
-        else if (mMode == PHASED)
+        else if (mMode == PHASED || mMode == LOCKSTEP)
         {
             size_t begin = 0;
             std::vector<size_t> ends(mPhaseStarts);
@@ -1286,7 +1513,8 @@ namespace vks_fetch
         {
             for (size_t i = 0; i < wire_lines.size(); ++i) out.push_back("wire " + std::to_string(i + 1) + " " + wire_lines[i]);
         }
-        out.push_back("tids uses=" + std::to_string(mNorm.tid_uses()) + " distinct=" + std::to_string(mNorm.tids()));
+        out.push_back("tids requests=" + std::to_string(tid_requests) + " distinct=" + std::to_string(tid_values.size())
+                      + " fresh=" + (tid_requests == tid_values.size() ? "yes" : "NO"));
 
         // The journal (messages, notifications, observer batches, callbacks,
         // steps, scheduler snapshots), normalised.

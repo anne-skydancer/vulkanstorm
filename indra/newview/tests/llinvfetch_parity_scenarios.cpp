@@ -320,13 +320,74 @@ namespace
         return d;
     }
 
+    // The grid profile of the scenarios run next: Second Life (the stubs'
+    // default) or another grid (production_grid and system_grid false), as
+    // the OpenSim profile will be.
+    bool g_opensim = false;
+    struct OpenSimProfile
+    {
+        OpenSimProfile() { g_opensim = true; }
+        ~OpenSimProfile() { g_opensim = false; }
+    };
+
     void begin(const std::string& cache_dir, U32 pool, int caps, const World& w, const std::string& mode)
     {
         set_ais_pool(pool);
         reset_scenario(cache_dir);
+        if (g_opensim)
+        {
+            vks_inv::config().production_grid = false;
+            vks_inv::config().system_grid = false;
+            vks_inv::config().grid_id = "other.grid.example";
+        }
         set_region(true, caps);
         mock_world(w);
         mock_mode(mode);
+    }
+
+    // How many journal lines start with prefix (the journal is put back).
+    size_t journal_count(const std::string& prefix)
+    {
+        std::vector<std::string> j = vks_inv::take_journal();
+        size_t n = 0;
+        for (const std::string& l : j) if (l.compare(0, prefix.size(), prefix) == 0) ++n;
+        for (const std::string& l : j) vks_inv::note(l);
+        return n;
+    }
+
+    // A Second Life wait (D2 target): frames with the capabilities absent;
+    // nothing may be sent, by HTTP or UDP, and the queue must stay as it was.
+    void d2_wait(Run& r, const std::string& name, int frames)
+    {
+        const size_t req0 = r.requests();
+        const size_t msg0 = journal_count("msg ");
+        const std::string q0 = sched_text(sched_state());
+        r.frames(frames);
+        const size_t req1 = r.requests();
+        const size_t msg1 = journal_count("msg ");
+        const std::string q1 = sched_text(sched_state());
+        r.fact("d2 wait " + name + " frames=" + std::to_string(frames) + " requests=" + std::to_string(req1 - req0)
+               + " msgs=" + std::to_string(msg1 - msg0) + " queue_retained=" + (q0 == q1 ? "yes" : "NO"));
+        r.step(name);
+    }
+
+    // The D2 target "once AIS is there, the walk is s01's": the request log
+    // compared with s01's, line by line.
+    std::vector<std::string> g_s01_wire;
+    void same_as_s01(Run& r)
+    {
+        std::vector<std::string> w = r.wire_lines();
+        std::string verdict = "yes";
+        if (g_s01_wire.empty()) verdict = "NO (s01 not run)";
+        else if (w.size() != g_s01_wire.size()) verdict = "NO (" + std::to_string(w.size()) + " requests, s01 " + std::to_string(g_s01_wire.size()) + ")";
+        else
+        {
+            for (size_t i = 0; i < w.size(); ++i)
+            {
+                if (w[i] != g_s01_wire[i]) { verdict = "NO (request " + std::to_string(i + 1) + " differs)"; break; }
+            }
+        }
+        r.fact("d2 same_requests_as s01_login_cold: " + verdict);
     }
 
     void emit(Ctx& c, Run& r)
@@ -480,6 +541,7 @@ namespace
             if (LLViewerInventoryCategory* k = cat(f.id)) g_s01_versions[f.id] = k->getVersion();
         }
         g_s01_world = b.w;
+        g_s01_wire = r.wire_lines();
         emit(c, r);
     }
 
@@ -668,11 +730,14 @@ namespace
         login(r, b.w.login_response(), b.w.root);
         walk(r);
         const LLUUID F = b.ids.user[0], G = b.ids.user[1], H = b.ids.user[2];
-        // A normal fetch in flight, then two forced fetches of the same folder.
+        // A normal fetch in flight, then two forced fetches of the same
+        // folder. The walk's subset batch marked F (180 s): past it first,
+        // or fetch() does nothing.
+        clock_advance(181.0);
         cat(F)->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
         cat(F)->fetch();
         r.frame();
-        r.note(std::string("in flight=") + std::to_string(sched_state().fetch_count));
+        r.fact(std::string("in flight=") + std::to_string(sched_state().fetch_count));
         bgf().scheduleFolderFetch(F, true);
         bgf().scheduleFolderFetch(F, true);
         r.snapshot();
@@ -697,6 +762,36 @@ namespace
         bgf().scheduleItemFetch(b.ids.obj1, true);
         r.settle(true, true);
         r.step("forced_item_again");
+        // Forced items X, Y, X: two requests (the forced set dedupes X).
+        size_t n0 = r.requests();
+        bgf().scheduleItemFetch(b.ids.note1, true);
+        bgf().scheduleItemFetch(b.ids.tex1, true);
+        bgf().scheduleItemFetch(b.ids.note1, true);
+        r.snapshot();
+        r.settle(true, true);
+        r.fact("forced items X Y X requests=" + std::to_string(r.requests() - n0));
+        r.step("forced_items_x_y_x");
+        // A normal fetch of a complete item: no request.
+        n0 = r.requests();
+        bgf().scheduleItemFetch(b.ids.trash1, false);
+        r.settle(true, true);
+        r.fact("normal fetch of a complete item requests=" + std::to_string(r.requests() - n0));
+        r.step("complete_item_normal");
+        // The same folder scheduled twice (front dedupe) and started twice
+        // (AIS back dedupe): one queue entry each (the snapshot), one request.
+        const LLUUID D1 = b.ids.user_sub[0], D2 = b.ids.user_sub[3];
+        cat(D1)->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+        cat(D2)->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+        n0 = r.requests();
+        bgf().scheduleFolderFetch(D1);
+        bgf().scheduleFolderFetch(D1);
+        bgf().start(D2, false);
+        bgf().start(D2, false);
+        r.snapshot();
+        r.fact("dedupe queue " + sched_text(sched_state()));
+        r.settle(true, true);
+        r.fact("dedupe requests=" + std::to_string(r.requests() - n0));
+        r.step("dedupe_schedule_start");
         emit(c, r);
     }
 
@@ -778,6 +873,12 @@ namespace
         }
         done("link_array");
         {
+            LLInventoryObject::const_object_list_t objs;
+            objs.push_back(LLConstPointer<LLInventoryObject>(itm(d.pants)));
+            link_inventory_array(outfitC, objs, cb("link_array_2"));
+        }
+        done("link_array_2");
+        {
             LLSD contents = LLSD::emptyArray();
             contents.append(link_llsd(d.shirt, LLAssetType::AT_LINK, LLInventoryType::IT_WEARABLE, "Shirt"));
             contents.append(link_llsd(d.jacket, LLAssetType::AT_LINK, LLInventoryType::IT_WEARABLE, "Jacket"));
@@ -787,6 +888,12 @@ namespace
             slam_inventory_folder(SYS(LLFolderType::FT_CURRENT_OUTFIT), contents, cb("slam_cof"));
         }
         done("slam_cof");
+        {
+            LLSD contents = LLSD::emptyArray();
+            contents.append(link_llsd(d.shirt, LLAssetType::AT_LINK, LLInventoryType::IT_WEARABLE, "Shirt"));
+            slam_inventory_folder(SYS(LLFolderType::FT_CURRENT_OUTFIT), contents, cb("slam_cof_2"));
+        }
+        done("slam_cof_2");
         {
             LLSD updates;
             updates["name"] = "Renamed by update";
@@ -845,7 +952,7 @@ namespace
     }
 
     // ---- 10a: legacy capabilities on Second Life (no InventoryAPIv3) ------------------
-    void s10a_legacy_caps_sl(Ctx& c)
+    void legacy_caps_body(Ctx& c, const std::string& id)
     {
         Builder b(true);
         basic(b, 3, true);
@@ -859,9 +966,9 @@ namespace
         Folder& bad = b.w.add_folder(BAD, ROOT, LLFolderType::FT_NONE, 2, "Not at the server");
         bad.server = false;
         b.w.add_folder(X4, ROOT, LLFolderType::FT_NONE, 5, "Refused");
-        std::string cache = scenario_dir(c, "s10a_legacy_caps_sl", true);
+        std::string cache = scenario_dir(c, id, true);
         begin(cache, 2, CAPS_LEGACY, b.w, "legacy_error=3\n");
-        Run r("s10a_legacy_caps_sl", &b.w, Run::PHASED);
+        Run r(id, &b.w, Run::PHASED);
         world_line(r, b.w);
         login(r, b.w.login_response(), b.w.root);
         walk(r);
@@ -909,12 +1016,10 @@ namespace
         Builder b(true);
         basic(b, 2, true);
         std::string cache = scenario_dir(c, "s10b_legacy_caps_other_grid", true);
-        begin(cache, 2, CAPS_ALL, b.w, "");
         // Not Second Life; FSUseAis3Api off: the region's InventoryAPIv3 is
         // ignored (survey 3 section 4).
-        vks_inv::config().production_grid = false;
-        vks_inv::config().system_grid = false;
-        vks_inv::config().grid_id = "other.grid.example";
+        OpenSimProfile profile;
+        begin(cache, 2, CAPS_ALL, b.w, "");
         gSavedSettings.setBOOL("FSUseAis3Api", false);
         Run r("s10b_legacy_caps_other_grid", &b.w, Run::PHASED);
         world_line(r, b.w);
@@ -941,13 +1046,13 @@ namespace
     }
 
     // ---- 12: region_change ----------------------------------------------------------
-    void s12_region_change(Ctx& c)
+    void region_change_body(Ctx& c, const std::string& id)
     {
         Builder b(true);
         basic(b, 6, false);
-        std::string cache = scenario_dir(c, "s12_region_change", true);
+        std::string cache = scenario_dir(c, id, true);
         begin(cache, 2, CAPS_ALL, b.w, "");
-        Run r("s12_region_change", &b.w, Run::PHASED);
+        Run r(id, &b.w, Run::PHASED);
         world_line(r, b.w);
         login(r, b.w.login_response(), b.w.root);
         vks_inv::set_startup_state(STATE_STARTED);
@@ -1001,13 +1106,13 @@ namespace
     }
 
     // ---- 13: Second Life fetch fallbacks (no AIS) ----------------------------------------
-    void s13_sl_fetch_fallbacks(Ctx& c)
+    void fetch_fallbacks_body(Ctx& c, const std::string& id)
     {
         Builder b(true);
         basic(b, 3, false);
-        std::string cache = scenario_dir(c, "s13_sl_fetch_fallbacks", true);
+        std::string cache = scenario_dir(c, id, true);
         begin(cache, 2, CAPS_ALL, b.w, "");
-        Run r("s13_sl_fetch_fallbacks", &b.w, Run::PHASED);
+        Run r(id, &b.w, Run::PHASED);
         world_line(r, b.w);
         login(r, b.w.login_response(), b.w.root);
         walk(r);
@@ -1089,13 +1194,13 @@ namespace
     }
 
     // ---- 14: Second Life write fallbacks (no AIS) ----------------------------------------
-    void s14_sl_write_fallbacks(Ctx& c)
+    void write_fallbacks_body(Ctx& c, const std::string& id)
     {
         Builder b(true);
         basic(b, 3, false);
-        std::string cache = scenario_dir(c, "s14_sl_write_fallbacks", true);
+        std::string cache = scenario_dir(c, id, true);
         begin(cache, 2, CAPS_ALL, b.w, "");
-        Run r("s14_sl_write_fallbacks", &b.w);
+        Run r(id, &b.w);
         world_line(r, b.w);
         login(r, b.w.login_response(), b.w.root);
         walk(r);
@@ -1210,6 +1315,23 @@ namespace
             r.settle(true, true);
             r.step("children_" + std::to_string(kids[top].size()));
         }
+        // The clamp to 1..40: BatchSizeAIS3 0 behaves as 1 (the 19-child
+        // folder in 19 batches), 41 as 40 (the 21-child folder in one).
+        for (int setting : { 0, 41 })
+        {
+            const LLUUID top = setting == 0 ? tops[0] : tops[2];
+            gSavedSettings.setS32("BatchSizeAIS3", setting);
+            clock_advance(181.0);
+            cat(top)->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+            for (const LLUUID& k : kids[top]) cat(k)->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+            const size_t n0 = r.requests();
+            bgf().start(top);
+            r.settle(true, true);
+            r.fact("BatchSizeAIS3=" + std::to_string(setting) + " children=" + std::to_string(kids[top].size())
+                   + " requests=" + std::to_string(r.requests() - n0));
+            r.step("batch_setting_" + std::to_string(setting));
+        }
+        gSavedSettings.setS32("BatchSizeAIS3", 20);
         emit(c, r);
     }
 
@@ -1292,13 +1414,14 @@ namespace
         basic(b, 10, false, 1);
         std::string cache = scenario_dir(c, "c04_ais_limit", true);
         begin(cache, 20, CAPS_ALL, b.w, "");
-        Run r("c04_ais_limit", &b.w, Run::PHASED);
+        Run r("c04_ais_limit", &b.w, Run::LOCKSTEP);
         world_line(r, b.w);
         login(r, b.w.login_response(), b.w.root);
         walk(r);
-        mock_mode("delay_ms=1500\n");
+        mock_mode("hold=1\n");
         r.step("held_replies");
         const std::vector<LLUUID>& f = b.ids.user_sub;   // 20 folders
+        clock_advance(181.0);
         for (size_t n : { (size_t)18, (size_t)19, (size_t)20 })
         {
             for (size_t i = 0; i < n; ++i)
@@ -1308,20 +1431,58 @@ namespace
             }
             r.frame_note("queued_" + std::to_string(n) + "_first");
             r.frame_note("queued_" + std::to_string(n) + "_second");
-            r.settle(true, true);
+            r.drain("queued_" + std::to_string(n));
             r.step("queued_" + std::to_string(n));
         }
+        // Items: 25 queued, 19 in flight; one reply processed frees one slot.
+        std::vector<LLUUID> items;
+        for (const auto& kv : b.ids.items_in)
+        {
+            for (const LLUUID& id : kv.second) if (gInventory.getItem(id) && items.size() < 25) items.push_back(id);
+        }
+        for (const LLUUID& id : items) { itm(id)->setComplete(false); bgf().scheduleItemFetch(id); }
+        r.frame_note("items_25_first");
+        {
+            std::vector<int> h = r.held();
+            if (!h.empty()) r.release_one(h[0]);
+        }
+        r.frame_note("items_one_reply_processed");
+        r.drain("items");
+        r.step("items");
+        // 19 items in flight and a folder-and-links fetch on top (20): its
+        // reply processed, the scheduler is at its limit again and must not
+        // declare the folder fetch complete before the items are back.
+        items.resize(19);
+        for (const LLUUID& id : items) { itm(id)->setComplete(false); bgf().scheduleItemFetch(id); }
+        r.frame_note("items_19");
+        bgf().fetchFolderAndLinks(b.ids.outfitA, nullary("folder_and_links"));
+        r.frame_note("folder_and_links_on_top");
+        {
+            // Wait for the links request, release only it.
+            int links = -1;
+            for (int k = 0; k < 2000 && links < 0; ++k)
+            {
+                for (const Wire& w : r.wire()) if (!w.answered && w.target.find("/links") != std::string::npos) links = w.seq;
+                if (links < 0) { r.requests(); llcoro::suspend(); std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
+            }
+            if (links >= 0) r.release_one(links);
+        }
+        r.frame_note("links_reply_processed");
+        r.fact("completion with 19 items still out: fetch.completed=" + std::to_string(journal_count("fetch.completed")));
+        r.drain("items_and_links");
+        r.step("items_and_links");
+        mock_mode("");
         emit(c, r);
     }
 
     // ---- c11: the legacy limits: batch 10, in-flight threshold 12, 16 handlers -------------
-    void c11_legacy_limits(Ctx& c)
+    void legacy_limits_body(Ctx& c, const std::string& id)
     {
         Builder b(true);
         basic(b, 50, false, 8);
-        std::string cache = scenario_dir(c, "c11_legacy_limits", true);
+        std::string cache = scenario_dir(c, id, true);
         begin(cache, 20, CAPS_LEGACY, b.w, "");
-        Run r("c11_legacy_limits", &b.w, Run::PHASED);
+        Run r(id, &b.w, Run::PHASED);
         world_line(r, b.w);
         login(r, b.w.login_response(), b.w.root);
         walk(r);   // the legacy walk does not descend: every user folder stays unknown
@@ -1385,6 +1546,476 @@ namespace
         emit(c, r);
     }
 
+
+    // ---- D2 targets (Second Life waits for its capabilities) ----------------------
+    // Recorded from today's C++ where today already waits: the seed
+    // capabilities not received yet (LLViewerRegion::capabilitiesReceived()
+    // false) or no region. Nothing is sent; the queue stays; once AIS is
+    // there the walk is s01's, request for request.
+    void d2a_sl_wait_login(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 6, true);
+        std::string cache = scenario_dir(c, "d2a_sl_wait_login", true);
+        begin(cache, 2, CAPS_NONE, b.w, "");
+        set_region(true, CAPS_NONE, false);
+        Run r("d2a_sl_wait_login", &b.w);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        vks_inv::set_startup_state(STATE_STARTED);
+        d2_wait(r, "login_without_caps", 60);
+        set_region(true, CAPS_ALL);
+        cof(r, b.ids.outfitA);
+        walk(r);
+        startup::find_lost_items();
+        r.settle(true, true);
+        r.step("orphans");
+        same_as_s01(r);
+        emit(c, r);
+    }
+
+    void d2b_sl_wait_midwalk(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 6, true);
+        std::string cache = scenario_dir(c, "d2b_sl_wait_midwalk", true);
+        begin(cache, 2, CAPS_ALL, b.w, "");
+        Run r("d2b_sl_wait_midwalk", &b.w);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        cof(r, b.ids.outfitA);
+        vks_inv::set_startup_state(STATE_STARTED);
+        r.until([&]() { return r.requests() >= 4 && LLCoprocedureManager::instance().count("AIS") == 0
+                               && sched_state().fetch_count == 0; });
+        r.step("walk_started");
+        set_region(true, CAPS_NONE, false);
+        d2_wait(r, "caps_not_received", 60);
+        set_region(true, CAPS_ALL);
+        walk(r);
+        startup::find_lost_items();
+        r.settle(true, true);
+        r.step("orphans");
+        same_as_s01(r);
+        emit(c, r);
+    }
+
+    void d2c_sl_region_change_wait(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 6, true);
+        std::string cache = scenario_dir(c, "d2c_sl_region_change_wait", true);
+        begin(cache, 2, CAPS_ALL, b.w, "");
+        Run r("d2c_sl_region_change_wait", &b.w);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        cof(r, b.ids.outfitA);
+        vks_inv::set_startup_state(STATE_STARTED);
+        r.until([&]() { return r.requests() >= 4 && LLCoprocedureManager::instance().count("AIS") == 0
+                               && sched_state().fetch_count == 0; });
+        r.step("walk_started");
+        set_region(false, CAPS_NONE);
+        d2_wait(r, "no_region", 30);
+        set_region(true, CAPS_NONE, false);
+        d2_wait(r, "new_region_without_ais", 30);
+        set_region(true, CAPS_ALL);
+        walk(r);
+        startup::find_lost_items();
+        r.settle(true, true);
+        r.step("orphans");
+        same_as_s01(r);
+        emit(c, r);
+    }
+
+    // FSUseAis3Api off on Second Life: AIS all the same (the setting
+    // matters only off Second Life).
+    void d2d_sl_fsuseais3api_off(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 6, true);
+        std::string cache = scenario_dir(c, "d2d_sl_fsuseais3api_off", true);
+        begin(cache, 2, CAPS_ALL, b.w, "");
+        gSavedSettings.setBOOL("FSUseAis3Api", false);
+        Run r("d2d_sl_fsuseais3api_off", &b.w);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        cof(r, b.ids.outfitA);
+        walk(r);
+        startup::find_lost_items();
+        r.settle(true, true);
+        r.step("orphans");
+        same_as_s01(r);
+        emit(c, r);
+    }
+
+    // ---- fetch errors: no scheduler-level retry; the second depth-0 403 ----------
+    void s18_fetch_errors(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 2, false, 1);
+        const LLUUID F404 = P(0x4c000000, 1), F403 = P(0xf4000000, 9);
+        b.w.add_folder(F404, ROOT, LLFolderType::FT_NONE, 4, "Not found at the server");
+        b.w.add_folder(F403, ROOT, LLFolderType::FT_NONE, 4, "Too large");
+        std::string cache = scenario_dir(c, "s18_fetch_errors", true);
+        begin(cache, 2, CAPS_ALL, b.w, "");
+        Run r("s18_fetch_errors", &b.w);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        walk(r);
+        for (const auto& f : { std::make_pair(F404, std::string("404")), std::make_pair(F403, std::string("403")) })
+        {
+            for (bool forced : { false, true })
+            {
+                clock_advance(61.0);   // past FETCH_FAILED's 60 s
+                cat(f.first)->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+                const size_t n0 = r.requests();
+                bgf().scheduleFolderFetch(f.first, forced);
+                r.settle(true, true);
+                r.fact(std::string(forced ? "forced" : "normal") + " fetch answered " + f.second
+                       + " requests=" + std::to_string(r.requests() - n0));
+                r.step(std::string(forced ? "forced_" : "normal_") + f.second);
+            }
+        }
+        emit(c, r);
+    }
+
+    // ---- the frame budget (1 s during login, 6 ms after) ------------------------------
+    // 500 queued entries that send nothing (folders with known versions,
+    // FT_DEFAULT); the scripted clock moves 1.3 ms per read: 5 entries per
+    // frame within 6 ms, all 500 within 1 s.
+    void s19_frame_budget(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 100, false, 1);
+        std::string cache = scenario_dir(c, "s19_frame_budget", true);
+        begin(cache, 2, CAPS_ALL, b.w, "");
+        Run r("s19_frame_budget", &b.w);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        walk(r);
+        std::vector<LLUUID> known;
+        for (const LLUUID& f : b.ids.user_sub) known.push_back(f);
+        for (const LLUUID& f : b.ids.user_leaf) known.push_back(f);
+        for (const LLUUID& f : b.ids.user) known.push_back(f);
+        known.resize(500);
+        for (int phase = 0; phase < 2; ++phase)
+        {
+            const bool during_login = phase == 1;
+            vks_inv::set_startup_state(during_login ? STATE_WEARABLES_WAIT : STATE_STARTED);
+            for (const LLUUID& id : known) bgf().scheduleFolderFetch(id);
+            bgf_clock(2000.0, 0.0013);
+            std::string sizes;
+            for (int f = 0; f < 6; ++f)
+            {
+                r.frame();
+                sizes += (f ? "," : "") + std::to_string(sched_state().folder_queue.size());
+            }
+            r.fact(std::string("budget ") + (during_login ? "during_login" : "after_login")
+                   + " step_ms=1.3 queued=500 queue_after_frames=[" + sizes + "]");
+            bgf_clock(3000.0, 0.0);
+            r.settle(true, true);
+            r.step(during_login ? "during_login" : "after_login");
+        }
+        vks_inv::set_startup_state(STATE_STARTED);
+        emit(c, r);
+    }
+
+    // ---- the completion callback ids of every fetch command ------------------------------
+    void s20_callback_ids(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 2, true, 2);
+        std::string cache = scenario_dir(c, "s20_callback_ids", true);
+        begin(cache, 2, CAPS_ALL, b.w, "");
+        Run r("s20_callback_ids", &b.w);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        cof(r, b.ids.outfitA);
+        walk(r);
+        const Ids& d = b.ids;
+        auto done = [&](const std::string& name) { r.settle(true, true); r.step(name); };
+        AISAPI::FetchItem(d.cof_shirt_link, AISAPI::INVENTORY, ais_cb("fetch_item_link"));
+        done("fetch_item_link");
+        AISAPI::FetchItem(d.note1, AISAPI::INVENTORY, ais_cb("fetch_item"));
+        done("fetch_item");
+        AISAPI::FetchItem(d.lib_items[0], AISAPI::LIBRARY, ais_cb("fetch_item_library"));
+        done("fetch_item_library");
+        AISAPI::FetchItem(P(0xa0e00000, 9), AISAPI::INVENTORY, ais_cb("fetch_item_unknown"));
+        done("fetch_item_unknown");
+        AISAPI::FetchCategoryChildren(d.user[0], AISAPI::INVENTORY, false, ais_cb("children_depth1"), 1);
+        done("children_depth1");
+        AISAPI::FetchCategoryChildren(d.lib_folders[0], AISAPI::LIBRARY, true, ais_cb("children_library_recursive"), 0);
+        done("children_library_recursive");
+        AISAPI::FetchCategoryChildren(std::string("current"), false, ais_cb("children_by_name"), 0);
+        done("children_by_name");
+        AISAPI::FetchCategoryCategories(d.user[1], AISAPI::INVENTORY, false, ais_cb("categories"), 2);
+        done("categories");
+        {
+            uuid_vec_t kids;
+            kids.push_back(d.user[1]);
+            kids.push_back(d.user[0]);
+            AISAPI::FetchCategorySubset(ROOT, kids, AISAPI::INVENTORY, false, ais_cb("subset_depth3"), 3);
+            AISAPI::FetchCategorySubset(ROOT, uuid_vec_t(), AISAPI::INVENTORY, false, ais_cb("subset_empty"), 3);
+        }
+        done("subset");
+        AISAPI::FetchCOF(ais_cb("cof"));
+        done("cof");
+        AISAPI::FetchCategoryLinks(d.outfitB, ais_cb("links"));
+        done("links");
+        AISAPI::FetchOrphans(ais_cb("orphans"));
+        done("orphans");
+        // Without LibraryAPIv3: a library command calls back null at once.
+        vks_inv::config().capabilities.erase("LibraryAPIv3");
+        AISAPI::FetchItem(d.lib_items[1], AISAPI::LIBRARY, ais_cb("library_without_cap"));
+        done("library_without_cap");
+        emit(c, r);
+    }
+
+    // ---- priorities in sequence: front, back, items last ----------------------------------
+    void priority_steps(Run& r, const Ids& d)
+    {
+        // A folder scheduled (front), a folder started (AIS: back), an item
+        // the viewer has not loaded yet (item queue: after the folders).
+        bgf().scheduleFolderFetch(d.user_leaf[9]);
+        bgf().start(d.user_leaf[10], false);
+        bgf().scheduleItemFetch(d.items_in.at(d.user_leaf[11])[0]);
+        r.snapshot();
+        r.fact("priority inserted " + sched_text(sched_state()));
+    }
+
+    void s21_priority(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 6, false, 1);
+        std::string cache = scenario_dir(c, "s21_priority", true);
+        begin(cache, 2, CAPS_ALL, b.w, "");
+        Run r("s21_priority", &b.w);
+        world_line(r, b.w);
+        // Before the login start(): a schedule and a start already queued;
+        // the root's FOLDER_AND_CONTENT goes in front of them.
+        gInventory.setRootFolderID(b.w.root);
+        LLSD resp = b.w.login_response();
+        vks_inv::set_startup_state(STATE_INVENTORY_SEND);
+        startup::inventory_send(resp);
+        vks_inv::set_startup_state(STATE_INVENTORY_SKEL);
+        startup::inventory_skel(resp);
+        gInventory.buildParentChildMap();
+        bgf().scheduleFolderFetch(b.ids.user[2]);
+        bgf().start(b.ids.user[3], false);
+        vks_inv::set_startup_state(STATE_INVENTORY_SEND2);
+        startup::inventory_send2();
+        r.fact("before the first frame " + sched_text(sched_state()));
+        vks_inv::set_startup_state(STATE_INVENTORY_CALLBACKS);
+        startup::inventory_callbacks();
+        r.step("login_with_queue");
+        vks_inv::set_startup_state(STATE_STARTED);
+        r.until([&]() { return r.requests() >= 3 && LLCoprocedureManager::instance().count("AIS") == 0
+                               && sched_state().fetch_count == 0; });
+        priority_steps(r, b.ids);
+        r.step("inserted");
+        walk(r);
+        emit(c, r);
+    }
+
+    // ---- N10: login without a library; a recursive start of the root only ---------------
+    void s22_no_library(Ctx& c)
+    {
+        Builder b(false);
+        basic(b, 2, false, 0);
+        std::string cache = scenario_dir(c, "s22_no_library", true);
+        begin(cache, 2, CAPS_ALL, b.w, "");
+        Run r("s22_no_library", &b.w);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        // Without a library root, validation marks the inventory unusable
+        // (fatal "No library root folder id"); updateCategory then drops
+        // every reply, versions stay unknown and the walk requests the same
+        // folders again and again. Recorded for 24 requests, then stopped by
+        // taking the region away.
+        vks_inv::set_startup_state(STATE_STARTED);
+        r.until([&]() { return r.requests() >= 24 && LLCoprocedureManager::instance().count("AIS") == 0
+                               && sched_state().fetch_count == 0; });
+        r.fact(std::string("inventory usable=") + (gInventory.isInventoryUsable() ? "1" : "0"));
+        set_region(false, CAPS_NONE);
+        r.settle(true, false);
+        r.step("loop_stopped_after_24");
+        emit(c, r);
+    }
+
+    void s23_root_only_start(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 2, false, 1);
+        std::string cache = scenario_dir(c, "s23_root_only_start", true);
+        begin(cache, 2, CAPS_ALL, b.w, "");
+        Run r("s23_root_only_start", &b.w);
+        world_line(r, b.w);
+        gInventory.setRootFolderID(b.w.root);
+        LLSD resp = b.w.login_response();
+        startup::inventory_send(resp);
+        startup::inventory_skel(resp);
+        gInventory.buildParentChildMap();
+        // Only the root, recursively (as a UI "fetch everything" would):
+        // the library was never started, so not everything is fetched.
+        bgf().start(ROOT, true);
+        r.step("root_started");
+        walk(r);
+        emit(c, r);
+    }
+
+    // ---- the shutdown abort: LLCoros::checkStop() throws at the first yield -------------
+    void s24_shutdown_abort(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 2, false, 1);
+        std::string cache = scenario_dir(c, "s24_shutdown_abort", true);
+        begin(cache, 2, CAPS_ALL, b.w, "");
+        Run r("s24_shutdown_abort", &b.w);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        walk(r);
+        clock_advance(181.0);
+        cat(b.ids.user[0])->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+        ais_stop_arm(1);
+        bgf().scheduleFolderFetch(b.ids.user[0]);
+        r.until([&]() { return ais_stop_thrown() > 0; });
+        r.frames(30);
+        // The update died at its first yield, before applying anything: no
+        // callback, the request still counted, the pool coroutine gone.
+        r.fact("abort thrown=" + std::to_string(ais_stop_thrown()) + " checkstop_calls=" + std::to_string(ais_stop_calls())
+               + " ais_pool=" + std::to_string(LLCoprocedureManager::instance().count("AIS"))
+               + " version=" + std::to_string(cat(b.ids.user[0])->getVersion()));
+        r.step("aborted");
+        emit(c, r);
+        // The pool lost a coroutine for good: the next scenario makes a new one.
+        set_ais_pool(2, true);
+    }
+
+    // ---- OpenSim profile: the library owned by someone else --------------------------
+    void o15_library_owner(Ctx& c, const std::string& id, bool ais)
+    {
+        OpenSimProfile profile;
+        Builder b(true);
+        b.w.libowner = P(0x0b1b0000, 1);
+        b.w.folders.back().owner = b.w.libowner;   // the library root
+        basic(b, 2, false, 2);
+        std::string cache = scenario_dir(c, id, true);
+        begin(cache, 2, ais ? CAPS_ALL : CAPS_LEGACY, b.w, "");
+        gSavedSettings.setBOOL("FSUseAis3Api", ais);
+        Run r(id, &b.w, ais ? Run::SEQ : Run::PHASED);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        walk(r);
+        gInventory.fetchDescendentsOf(b.ids.lib_folders[1]);
+        r.settle(true, true);
+        r.step("library_folder");
+        emit(c, r);
+    }
+
+    // ---- c05/c06: dispatch order at production concurrency (held replies) ------------
+    void c05_lockstep_login(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 6, false);
+        std::string cache = scenario_dir(c, "c05_lockstep_login", true);
+        begin(cache, 20, CAPS_ALL, b.w, "hold=1\n");
+        Run r("c05_lockstep_login", &b.w, Run::LOCKSTEP);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        vks_inv::set_startup_state(STATE_STARTED);
+        r.drain("walk");
+        r.step("walk");
+        mock_mode("");
+        emit(c, r);
+    }
+
+    void c06_lockstep_priority(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 20, false, 1);
+        std::string cache = scenario_dir(c, "c06_lockstep_priority", true);
+        begin(cache, 20, CAPS_ALL, b.w, "");
+        Run r("c06_lockstep_priority", &b.w, Run::LOCKSTEP);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        walk(r);
+        mock_mode("hold=1\n");
+        clock_advance(181.0);
+        // 40 folders to fetch one by one: 19 go out, 21 wait.
+        for (size_t i = 0; i < 40; ++i)
+        {
+            cat(b.ids.user_sub[i])->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+            bgf().scheduleFolderFetch(b.ids.user_sub[i]);
+        }
+        r.round("first");
+        // Then the priority calls, with 21 still queued.
+        for (size_t i = 9; i <= 11; ++i) cat(b.ids.user_leaf[i])->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+        gInventory.getItem(b.ids.items_in.at(b.ids.user_leaf[11])[0])->setComplete(false);
+        priority_steps(r, b.ids);
+        r.drain("after_priority");
+        r.step("priority");
+        mock_mode("");
+        emit(c, r);
+    }
+
+    // ---- c07: the PoolSizeAIS clamp (limit = clamp(PoolSizeAIS - 1, 1, 50)) ------------
+    void c07_pool_clamp(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 30, false, 1);
+        std::string cache = scenario_dir(c, "c07_pool_clamp", true);
+        begin(cache, 20, CAPS_ALL, b.w, "");
+        Run r("c07_pool_clamp", &b.w, Run::LOCKSTEP);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        walk(r);
+        mock_mode("hold=1\n");
+        for (U32 setting : { 0u, 1u, 51u, 52u })
+        {
+            clock_advance(181.0);
+            for (const LLUUID& f : b.ids.user_sub)
+            {
+                cat(f)->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+                bgf().scheduleFolderFetch(f);
+            }
+            // The scheduler reads the setting every frame; the pool keeps
+            // its 20 coroutines.
+            gSavedSettings.setU32("PoolSizeAIS", setting);
+            r.frame_note("PoolSizeAIS_" + std::to_string(setting));
+            gSavedSettings.setU32("PoolSizeAIS", 20);
+            r.drain("PoolSizeAIS_" + std::to_string(setting));
+            r.step("PoolSizeAIS_" + std::to_string(setting));
+        }
+        mock_mode("");
+        emit(c, r);
+    }
+
+    // ---- c08: the postponed queue (2048 pending AIS commands) -------------------------
+    void c08_postponed(Ctx& c)
+    {
+        Builder b(true);
+        basic(b, 1, false, 1);
+        std::string cache = scenario_dir(c, "c08_postponed", true);
+        begin(cache, 20, CAPS_ALL, b.w, "");
+        Run r("c08_postponed", &b.w, Run::CONC);
+        world_line(r, b.w);
+        login(r, b.w.login_response(), b.w.root);
+        walk(r);
+        int k = 0;
+        for (int n : { 2047, 2048, 2049 })
+        {
+            mock_mode("hold=1\n");
+            const int fired0 = callbacks_fired();
+            const LLUUID item = P(0xa0d00000, (U64)(++k));
+            for (int i = 0; i < n; ++i) AISAPI::FetchItem(item, AISAPI::INVENTORY, ais_cb("postponed"));
+            r.fact("enqueued " + std::to_string(n) + " ais_pending=" + std::to_string(LLCoprocedureManager::instance().countPending("AIS")));
+            mock_mode("");   // releases the held, holds nothing more
+            r.settle(true, true, 300.0);
+            r.fact("enqueued " + std::to_string(n) + " callbacks=" + std::to_string(callbacks_fired() - fired0));
+            r.step("enqueued_" + std::to_string(n));
+        }
+        emit(c, r);
+    }
+
     // ---- concurrency ------------------------------------------------------------------
     void c01_login_cold(Ctx& c)
     {
@@ -1403,9 +2034,12 @@ namespace
     {
         Builder b(true);
         basic(b, 40, false, 1);
+        // The content batch naming the 4b... folder fails once (by content,
+        // so the same batch whatever the arrival order): its folders are
+        // queued one by one.
+        b.w.add_folder(P(0x4b000000, 1), ROOT, LLFolderType::FT_NONE, 3, "Fails in a batch");
         std::string cache = scenario_dir(c, "c02_saturate", true);
-        // The first content batch fails: its 20 folders are queued one by one.
-        begin(cache, 20, CAPS_ALL, b.w, "fail_subset=1\ndelay_ms=300\n");
+        begin(cache, 20, CAPS_ALL, b.w, "delay_ms=300\n");
         Run r("c02_saturate", &b.w, Run::CONC);
         world_line(r, b.w);
         login(r, b.w.login_response(), b.w.root);
@@ -1426,13 +2060,13 @@ namespace
         emit(c, r);
     }
 
-    void c10_legacy(Ctx& c)
+    void legacy_burst_body(Ctx& c, const std::string& id)
     {
         Builder b(true);
         basic(b, 30, false, 8);
-        std::string cache = scenario_dir(c, "c10_legacy", true);
+        std::string cache = scenario_dir(c, id, true);
         begin(cache, 20, CAPS_LEGACY, b.w, "delay_ms=400\n");
-        Run r("c10_legacy", &b.w, Run::CONC);
+        Run r(id, &b.w, Run::CONC);
         world_line(r, b.w);
         login(r, b.w.login_response(), b.w.root);
         walk(r);
@@ -1452,33 +2086,77 @@ namespace
         emit(c, r);
     }
 
+    void s10a_legacy_caps_sl(Ctx& c) { legacy_caps_body(c, "s10a_legacy_caps_sl"); }
+    void s12_region_change(Ctx& c) { region_change_body(c, "s12_region_change"); }
+    void s13_sl_fetch_fallbacks(Ctx& c) { fetch_fallbacks_body(c, "s13_sl_fetch_fallbacks"); }
+    void s14_sl_write_fallbacks(Ctx& c) { write_fallbacks_body(c, "s14_sl_write_fallbacks"); }
+    void c10_legacy(Ctx& c) { legacy_burst_body(c, "c10_legacy"); }
+    void c11_legacy_limits(Ctx& c) { legacy_limits_body(c, "c11_legacy_limits"); }
+    void o10a_legacy_caps(Ctx& c) { OpenSimProfile p; legacy_caps_body(c, "o10a_legacy_caps"); }
+    void o12_region_change(Ctx& c) { OpenSimProfile p; region_change_body(c, "o12_region_change"); }
+    void o13_fetch_fallbacks(Ctx& c) { OpenSimProfile p; fetch_fallbacks_body(c, "o13_fetch_fallbacks"); }
+    void o14_write_fallbacks(Ctx& c) { OpenSimProfile p; write_fallbacks_body(c, "o14_write_fallbacks"); }
+    void oc10_legacy(Ctx& c) { OpenSimProfile p; legacy_burst_body(c, "oc10_legacy"); }
+    void oc11_legacy_limits(Ctx& c) { OpenSimProfile p; legacy_limits_body(c, "oc11_legacy_limits"); }
+    void o15a_library_owner_ais(Ctx& c) { o15_library_owner(c, "o15a_library_owner_ais", true); }
+    void o15b_library_owner_legacy(Ctx& c) { o15_library_owner(c, "o15b_library_owner_legacy", false); }
+
     typedef void (*scenario_fn)(Ctx&);
     struct Entry { const char* id; const char* title; scenario_fn fn; };
     const Entry ENTRIES[] = {
+        // Second Life, AIS (these gate today and after D2)
         { "s01_login_cold", "cold login: skeleton without cache, COF and base outfit, the full AIS walk, orphans, the logout cache", s01_login_cold },
         { "s02a_login_warm_full", "warm login from s01's cache: no folder requested", s02a_login_warm_full },
         { "s02b_login_warm_partial", "warm login, two folders changed on the server: only they are requested", s02b_login_warm_partial },
         { "s03_large", "5,000 folders, 60,000 items, 300 under the root, a 60-deep chain (digests)", s03_large },
-        { "s04_forbidden", "403 on depth 50 and on depth 0: the fallback chain, version 0, the notification", s04_forbidden },
+        { "s04_forbidden", "403 on depth 50 and on depth 0: the fallback chain, version 0, the first notification", s04_forbidden },
         { "s05_transient_5xx", "503 twice then 200; 503 every time at depth 50; a PATCH answered 503 once", s05_transient_5xx },
         { "s06_outage", "the first four requests fail: version 0 for the session, the 60 s back-off", s06_outage },
-        { "s07_forced", "forced folder fetches during a normal one, the forced set, forced items", s07_forced },
+        { "s07_forced", "forced folder fetches during a normal one in flight, the forced set, forced items, dedupes", s07_forced },
         { "s08_items", "incomplete items, a link, a library item, an unknown id, the item observer", s08_items },
-        { "s09_writes", "every AIS write: create, links, slam, updates, removes (410 too), purge, library copy", s09_writes },
-        { "s10a_legacy_caps_sl", "Second Life without InventoryAPIv3: the legacy capabilities, 403 split, 200-with-error, bad_folders", s10a_legacy_caps_sl },
-        { "s10b_legacy_caps_other_grid", "another grid with FSUseAis3Api off: legacy capabilities, UDP item fetch", s10b_legacy_caps_other_grid },
-        { "s12_region_change", "capabilities lost, delayed, legacy-only and back during the walk", s12_region_change },
-        { "s13_sl_fetch_fallbacks", "Second Life fetch fallbacks without AIS: UDP folder fetch, legacy caps, COF, items", s13_sl_fetch_fallbacks },
-        { "s14_sl_write_fallbacks", "Second Life write fallbacks without AIS: UDP messages, CreateInventoryCategory", s14_sl_write_fallbacks },
-        { "s15_batch_boundaries", "subset batches of 19, 20 and 21 children (BatchSizeAIS3 20)", s15_batch_boundaries },
+        { "s09_writes", "every AIS write (each tid-bearing one twice): create, links, slam, updates, removes (410 too), purge, library copy", s09_writes },
+        { "s15_batch_boundaries", "subset batches of 19, 20 and 21 children; BatchSizeAIS3 0 and 41", s15_batch_boundaries },
         { "s16_depth_boundaries", "the depth-50 cut: chains 48/49/50 deep through a subset, 49/50/51 through the library root", s16_depth_boundaries },
         { "s17_no_library_cap_disconnected", "no LibraryAPIv3: synchronous null callbacks inside the scheduler; gDisconnected", s17_no_library_cap_disconnected },
+        { "s18_fetch_errors", "normal and forced fetches answered 404 and 403: one request each; the second depth-0 403 notification", s18_fetch_errors },
+        { "s19_frame_budget", "the dispatch budget with a scripted clock: 6 ms after login, 1 s during", s19_frame_budget },
+        { "s20_callback_ids", "the completion callback id of every fetch command", s20_callback_ids },
+        { "s21_priority", "queue priority: root before earlier entries at login; schedule front, start back, items after folders", s21_priority },
+        { "s22_no_library", "login without a library", s22_no_library },
+        { "s23_root_only_start", "a recursive start of the root alone: not everything fetched", s23_root_only_start },
+        // D2 targets: Second Life waits for its capabilities
+        { "d2a_sl_wait_login", "D2 target: no capabilities at login: nothing sent, the queue kept; then s01's walk", d2a_sl_wait_login },
+        { "d2b_sl_wait_midwalk", "D2 target: capabilities gone mid-walk: nothing sent, the queue kept; then s01's walk", d2b_sl_wait_midwalk },
+        { "d2c_sl_region_change_wait", "D2 target: region change without AIS, then with: nothing sent meanwhile; then s01's walk", d2c_sl_region_change_wait },
+        { "d2d_sl_fsuseais3api_off", "D2 target: FSUseAis3Api off on Second Life: AIS, s01's walk", d2d_sl_fsuseais3api_off },
+        // pre-D2 reference: Second Life legacy capability and UDP fallbacks (rule PRE_D2_SL_FALLBACKS)
+        { "s10a_legacy_caps_sl", "pre-D2: Second Life without InventoryAPIv3: the legacy capabilities, 403 split, 200-with-error, bad_folders", s10a_legacy_caps_sl },
+        { "s12_region_change", "pre-D2: capabilities lost, delayed, legacy-only and back during the walk", s12_region_change },
+        { "s13_sl_fetch_fallbacks", "pre-D2: Second Life fetch fallbacks without AIS: UDP folder fetch, legacy caps, COF, items", s13_sl_fetch_fallbacks },
+        { "s14_sl_write_fallbacks", "pre-D2: Second Life write fallbacks without AIS: UDP messages, CreateInventoryCategory", s14_sl_write_fallbacks },
+        // OpenSim profile (another grid): the legacy paths of this build
+        { "s10b_legacy_caps_other_grid", "OpenSim profile, FSUseAis3Api off: legacy capabilities, UDP item fetch", s10b_legacy_caps_other_grid },
+        { "o10a_legacy_caps", "OpenSim profile: s10a's steps", o10a_legacy_caps },
+        { "o12_region_change", "OpenSim profile: s12's steps", o12_region_change },
+        { "o13_fetch_fallbacks", "OpenSim profile: s13's steps", o13_fetch_fallbacks },
+        { "o14_write_fallbacks", "OpenSim profile: s14's steps", o14_write_fallbacks },
+        { "o15a_library_owner_ais", "OpenSim profile, AIS: a library owner other than ALEXANDRIA_LINDEN_ID", o15a_library_owner_ais },
+        { "o15b_library_owner_legacy", "OpenSim profile, legacy: a library owner other than ALEXANDRIA_LINDEN_ID", o15b_library_owner_legacy },
+        // concurrency (a 20-coroutine pool)
         { "c01_login_cold", "cold login on a 20-coroutine pool: request multiset and bounds", c01_login_cold },
-        { "c02_saturate", "a failed content batch queues 20 folders: 19 in flight", c02_saturate },
+        { "c02_saturate", "a failed content batch queues its folders: 19 in flight", c02_saturate },
         { "c03_large", "the large inventory on a 20-coroutine pool (digests)", c03_large },
-        { "c04_ais_limit", "18, 19 and 20 folders queued at once: 19 AIS fetches in flight", c04_ais_limit },
-        { "c11_legacy_limits", "legacy batch 9/10/11, the in-flight threshold 12, 16 handlers", c11_legacy_limits },
-        { "c10_legacy", "the legacy scheduler with many folders and items: up to 16 handlers", c10_legacy },
+        { "c04_ais_limit", "held replies: 18, 19, 20 folders queued: 19 in flight; items; completion at the limit", c04_ais_limit },
+        { "c05_lockstep_login", "held replies, released in order: the cold walk's dispatch rounds", c05_lockstep_login },
+        { "c06_lockstep_priority", "held replies: schedule front, start back, items after folders at 19 in flight", c06_lockstep_priority },
+        { "c07_pool_clamp", "PoolSizeAIS 0, 1, 51, 52: the scheduler limit clamp", c07_pool_clamp },
+        { "c08_postponed", "2047, 2048, 2049 AIS commands pending: the postponed queue", c08_postponed },
+        { "c10_legacy", "pre-D2: the legacy scheduler with many folders and items: up to 16 handlers", c10_legacy },
+        { "c11_legacy_limits", "pre-D2: legacy batch 9/10/11, the in-flight threshold 12, 16 handlers", c11_legacy_limits },
+        { "oc10_legacy", "OpenSim profile: c10's steps", oc10_legacy },
+        { "oc11_legacy_limits", "OpenSim profile: c11's steps", oc11_legacy_limits },
+        // last: it kills a pool coroutine
+        { "s24_shutdown_abort", "LLCoros::checkStop() throws at an update's first yield", s24_shutdown_abort },
     };
 }
 
@@ -1492,7 +2170,21 @@ const std::vector<ScenarioInfo>& scenarios()
     return list;
 }
 
-void run_scenarios(const std::string& work_dir, const std::set<std::string>& only, const sink_t& sink)
+const std::vector<std::pair<std::string, std::string> >& pre_d2_sl_fallbacks()
+{
+    static const std::vector<std::pair<std::string, std::string> > list = {
+        { "s10a_legacy_caps_sl", "d2b_sl_wait_midwalk, d2c_sl_region_change_wait (no InventoryAPIv3: wait); o10a_legacy_caps (the legacy paths, OpenSim profile)" },
+        { "s12_region_change", "d2b_sl_wait_midwalk, d2c_sl_region_change_wait; o12_region_change" },
+        { "s13_sl_fetch_fallbacks", "d2a_sl_wait_login, d2c_sl_region_change_wait; o13_fetch_fallbacks" },
+        { "s14_sl_write_fallbacks", "o14_write_fallbacks (Second Life writes without AIS: none after D2)" },
+        { "c10_legacy", "oc10_legacy" },
+        { "c11_legacy_limits", "oc11_legacy_limits" },
+    };
+    return list;
+}
+
+void run_scenarios(const std::string& work_dir, const std::set<std::string>& only,
+                   const std::set<std::string>& skip, const sink_t& sink)
 {
     Ctx c;
     c.work = work_dir;
@@ -1505,13 +2197,33 @@ void run_scenarios(const std::string& work_dir, const std::set<std::string>& onl
         if (only.empty() || only.count(k.id)) sink(info, k, responses);
     };
     c.sink = &filtered;
+    std::string aborted;
     for (const Entry& e : ENTRIES)
     {
         if (!want.empty() && !want.count(e.id)) continue;
+        if (skip.count(e.id)) continue;
+        if (!aborted.empty())
+        {
+            Case k;
+            k.id = e.id;
+            k.lines.push_back("FAILURE not run: the run was aborted in " + aborted);
+            filtered(c.info[e.id], k, std::string());
+            continue;
+        }
         fprintf(stderr, "[r3b] scenario %s\n", e.id);
         try
         {
             e.fn(c);
+        }
+        catch (const Abort& ex)
+        {
+            // A timeout or an exhausted budget: the port stalled; stop here.
+            Case k;
+            k.id = e.id;
+            k.lines.push_back(std::string("FAILURE aborted: ") + ex.what());
+            filtered(c.info[e.id], k, std::string());
+            aborted = e.id;
+            try { mock_mode(""); } catch (...) {}
         }
         catch (const std::exception& ex)
         {
