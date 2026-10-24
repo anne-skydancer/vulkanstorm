@@ -86,6 +86,20 @@ namespace vks_task_oracle
                                          std::function<void(bool, const LLSD&)> callback) = 0;
         virtual void deleteInventoryItem(LLViewerObject* obj, const LLUUID& item_id) = 0;
 
+        // listener and state accessors (object bookkeeping, not decisions:
+        // W5 may forward them to the C++ object unchanged)
+        virtual void clearInventoryListeners(LLViewerObject* obj) = 0;
+        virtual bool hasInventoryListeners(LLViewerObject* obj) = 0;
+        virtual bool isInventoryDirty(LLViewerObject* obj) = 0;
+        virtual S16 getInventorySerial(LLViewerObject* obj) = 0;
+
+        // request state and lookups over the contents (decision logic: the
+        // W5 implementation answers them)
+        virtual bool isInventoryPending(LLViewerObject* obj) = 0;
+        virtual LLInventoryObject* getInventoryObject(LLViewerObject* obj, const LLUUID& item_id) = 0;
+        virtual LLInventoryItem* getInventoryItem(LLViewerObject* obj, const LLUUID& item_id) = 0;
+        virtual bool isAssetInInventory(LLViewerObject* obj, LLViewerInventoryItem* item, LLAssetType::EType type) = 0;
+
         // read helpers over the contents
         virtual LLInventoryObject* getInventoryRoot(LLViewerObject* obj) = 0;
         virtual void getInventoryContents(LLViewerObject* obj, LLInventoryObject::object_list_t& objects) = 0;
