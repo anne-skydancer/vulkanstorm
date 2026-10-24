@@ -448,7 +448,7 @@ bool LLModelPreview::renderNative(bool textures, bool edges, bool physics, bool 
                                     if (!ll_is_degenerate(a, b, c))
                                         continue;
                                     auto state         = colorPacket(settingColor("MeshPreviewDegenerateFillColor"), pass != 0);
-                                    state.depthCompare = VSWorldRenderer::DepthCompare::Always;
+                                    state.depthCompare = VSWorldRenderer::DepthCompare::AlwaysPass;
                                     state.doubleSided  = true;
                                     state.cull         = false;
                                     if (!pass)
