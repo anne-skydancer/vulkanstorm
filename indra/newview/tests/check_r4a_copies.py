@@ -76,7 +76,8 @@ INVENTORY_IDS = ["mIsComplete", "mTransactionID", "mIsRunning", "mIsFaulted",
                  "LLLocalizedInventoryItemsDictionary", "localizeInventoryObjectName", "copyViewerItem"]
 
 # (live file, identifiers, allowlist of normalised lines outside the regions),
-# as reviewed at 8dbe68aa69 (the live sources unchanged since 472ecf270d).
+# as reviewed at 8dbe68aa69 (the live sources unchanged since 472ecf270d),
+# re-reviewed at 6f23ef84f0 (vkstorm-rust; no new fenced lines outside the regions).
 FENCES = [
     ("indra/newview/llviewerobject.cpp", OBJECT_IDS, [
     ]),

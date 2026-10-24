@@ -33,14 +33,14 @@
 
 namespace vks_task_oracle
 {
-// >>> VKS-R4A-COPY V0 indra/newview/llviewerinventory.cpp lines 87-88 blob a13210dce6ed2561e2b18768645bcfa37068612c
+// >>> VKS-R4A-COPY V0 indra/newview/llviewerinventory.cpp lines 87-88 blob 41e2a9b23982f076e14a5de056d443438f8980b3
 // LOG_INV, LOG_LOCAL
 // conditionals:
 static const char * const LOG_INV("Inventory");
 static const char * const LOG_LOCAL("InventoryLocalize");
 // <<< VKS-R4A-COPY V0
 
-// >>> VKS-R4A-COPY V1 indra/newview/llviewerinventory.cpp lines 104-233 blob a13210dce6ed2561e2b18768645bcfa37068612c
+// >>> VKS-R4A-COPY V1 indra/newview/llviewerinventory.cpp lines 104-233 blob 41e2a9b23982f076e14a5de056d443438f8980b3
 // class LLLocalizedInventoryItemsDictionary and its constructor
 // conditionals:
 ///----------------------------------------------------------------------------
@@ -175,7 +175,7 @@ LLLocalizedInventoryItemsDictionary::LLLocalizedInventoryItemsDictionary()
 }
 // <<< VKS-R4A-COPY V1
 
-// >>> VKS-R4A-COPY V2 indra/newview/llviewerinventory.cpp lines 335-408 blob a13210dce6ed2561e2b18768645bcfa37068612c
+// >>> VKS-R4A-COPY V2 indra/newview/llviewerinventory.cpp lines 335-408 blob 41e2a9b23982f076e14a5de056d443438f8980b3
 // LLViewerInventoryItem constructors, destructor, copyViewerItem, copyItem
 // conditionals:
 LLViewerInventoryItem::LLViewerInventoryItem(const LLUUID& uuid,
@@ -254,7 +254,7 @@ void LLViewerInventoryItem::copyItem(const LLInventoryItem *other)
 }
 // <<< VKS-R4A-COPY V2
 
-// >>> VKS-R4A-COPY V3 indra/newview/llviewerinventory.cpp lines 547-601 blob a13210dce6ed2561e2b18768645bcfa37068612c
+// >>> VKS-R4A-COPY V3 indra/newview/llviewerinventory.cpp lines 550-604 blob 41e2a9b23982f076e14a5de056d443438f8980b3
 // LLViewerInventoryItem::unpackMessage (LLSD and message forms), setTransactionID, packMessage, importLegacyStream
 // conditionals:
 // virtual
@@ -314,7 +314,7 @@ bool LLViewerInventoryItem::importLegacyStream(std::istream& input_stream)
 }
 // <<< VKS-R4A-COPY V3
 
-// >>> VKS-R4A-COPY O1 indra/newview/llviewerobject.cpp lines 155-160 blob c9ac3bdc20301e3e43da73183f18595712912e79
+// >>> VKS-R4A-COPY O1 indra/newview/llviewerobject.cpp lines 155-160 blob 0ade67da75e4367e1fcae9e53e8e6388ddb612bf
 // PHYSICS_TIMESTEP, MAX_INV_FILE_READ_FAILS, MAX_OBJECT_BINARY_DATA_SIZE, INVENTORY_UPDATE_WAIT_TIME_DESYNC, INVENTORY_UPDATE_WAIT_TIME_OUTDATED
 // conditionals:
 const F32 PHYSICS_TIMESTEP = 1.f / 45.f;
@@ -325,7 +325,7 @@ const F64 INVENTORY_UPDATE_WAIT_TIME_DESYNC = 5; // seconds
 const F64 INVENTORY_UPDATE_WAIT_TIME_OUTDATED = 1;
 // <<< VKS-R4A-COPY O1
 
-// >>> VKS-R4A-COPY O2 indra/newview/llviewerobject.cpp lines 2823-3231 blob c9ac3bdc20301e3e43da73183f18595712912e79
+// >>> VKS-R4A-COPY O2 indra/newview/llviewerobject.cpp lines 2823-3263 blob 0ade67da75e4367e1fcae9e53e8e6388ddb612bf
 // deleteInventoryItem, doUpdateInventory, saveScript, moveInventory, dirtyInventory, registerInventoryListener, removeInventoryListener, isInventoryPending, clearInventoryListeners, hasInventoryListeners, requestInventory, fetchInventoryFromServer, fetchInventoryDelayed, fetchInventoryDelayedCoro, fetchInventoryFromCapCoro
 // conditionals:
 // delete an item in the inventory, but don't tell the server. This is
@@ -465,6 +465,12 @@ void LLViewerObject::saveScript(const LLViewerInventoryItem* item,
                                   item->getCreationDate());
     task_item->setTransactionID(item->getTransactionID());
 
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, script " << item->getUUID() << " not saved" << LL_ENDL;
+        return;
+    }
+
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_RezScript);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -496,6 +502,11 @@ void LLViewerObject::moveInventory(const LLUUID& folder_id,
                                    const LLUUID& item_id)
 {
     LL_DEBUGS() << "LLViewerObject::moveInventory " << item_id << LL_ENDL;
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item_id << " not moved" << LL_ENDL;
+        return;
+    }
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_MoveTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -588,7 +599,22 @@ void LLViewerObject::requestInventory()
     {
         // inventory is either up to date or doesn't has a listener
         // if it is dirty, leave it this way in case we gain a listener
-        doInventoryCallback();
+        if (isInventoryPending())
+        {
+            // A request or transfer is outstanding: give the listeners the
+            // contents we have, but keep the request state and xfer id that
+            // doInventoryCallback() releases, so the pending reply is still
+            // handled as such and later requests are not duplicated.
+            const EInventoryRequestState request_state = mInvRequestState;
+            const U64 request_xfer_id = mInvRequestXFerId;
+            doInventoryCallback();
+            mInvRequestState = request_state;
+            mInvRequestXFerId = request_xfer_id;
+        }
+        else
+        {
+            doInventoryCallback();
+        }
     }
     else
     {
@@ -614,6 +640,12 @@ void LLViewerObject::fetchInventoryFromServer()
         {
             LLCoros::instance().launch("LLViewerObject::fetchInventoryFromCapCoro()",
                                        boost::bind(&LLViewerObject::fetchInventoryFromCapCoro, mID));
+        }
+        else if (!mRegionp)
+        {
+            // Nothing to send to: fail the request as an HTTP error does in fetchInventoryFromCapCoro.
+            LL_WARNS() << "Object " << mID << " has no region, task inventory not requested" << LL_ENDL;
+            mInvRequestState = INVENTORY_REQUEST_STOPPED;
         }
         else
         {
@@ -739,7 +771,7 @@ void LLViewerObject::fetchInventoryFromCapCoro(const LLUUID task_inv)
 }
 // <<< VKS-R4A-COPY O2
 
-// >>> VKS-R4A-COPY O3 indra/newview/llviewerobject.cpp lines 3375-3978 blob c9ac3bdc20301e3e43da73183f18595712912e79
+// >>> VKS-R4A-COPY O3 indra/newview/llviewerobject.cpp lines 3407-4045 blob 0ade67da75e4367e1fcae9e53e8e6388ddb612bf
 // struct LLFilenameAndTask, processTaskInv, processTaskInvFile, loadTaskInvFile, loadTaskInvLLSD, doInventoryCallback, removeInventory, isAssetInInventory, updateMaterialInventory, updateInventory, updateInventoryLocal, getInventoryObject, getInventoryItem, getInventoryContents, getInventoryRoot, getInventoryItemByAsset (both), updateViewerInventoryAsset
 // conditionals:
 struct LLFilenameAndTask
@@ -857,6 +889,19 @@ void LLViewerObject::processTaskInv(LLMessageSystem* msg, void** user_data)
                 "Contents");
             object->mInventory->push_front(obj);
             object->doInventoryCallback();
+            delete ft;
+            return;
+        }
+        if (!object->mRegionp)
+        {
+            LL_WARNS() << "Object " << task_id << " has no region, task inventory file not requested" << LL_ENDL;
+            // Release a pending request, as fetchInventoryFromServer() does without a
+            // region, so a later fetch is not refused as a duplicate. An active
+            // transfer (INVENTORY_XFER) completes on its own.
+            if (object->mInvRequestState == INVENTORY_REQUEST_PENDING)
+            {
+                object->mInvRequestState = INVENTORY_REQUEST_STOPPED;
+            }
             delete ft;
             return;
         }
@@ -1057,6 +1102,9 @@ void LLViewerObject::loadTaskInvLLSD(const LLSD& inv_result)
     else
     {
         LL_WARNS() << "unable to load task inventory: " << inv_result << LL_ENDL;
+        // Fail the request as an HTTP error does in fetchInventoryFromCapCoro, so that
+        // later requests are not dropped as duplicates of this one.
+        mInvRequestState = INVENTORY_REQUEST_STOPPED;
         return;
     }
     doInventoryCallback();
@@ -1101,6 +1149,12 @@ void LLViewerObject::removeInventory(const LLUUID& item_id)
     // close any associated floater properties
     LLFloaterReg::hideInstance("properties", item_id);
     // </FS:Ansariel>
+
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item_id << " not removed" << LL_ENDL;
+        return;
+    }
 
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_RemoveTaskInventory);
@@ -1159,6 +1213,14 @@ void LLViewerObject::updateMaterialInventory(LLViewerInventoryItem* item, U8 key
         return;
     }
 
+    if (!mRegionp)
+    {
+        // updateInventory() sends nothing without a region; don't leave the
+        // asset pending, or isAssetInInventory() refuses it from then on.
+        LL_WARNS() << "Object " << mID << " has no region, item " << item->getUUID() << " not updated" << LL_ENDL;
+        return;
+    }
+
     mPendingInventoryItemsIDs.push_back(item->getAssetUUID());
     updateInventory(item, key, is_new);
 }
@@ -1180,6 +1242,11 @@ void LLViewerObject::updateInventory(
                                   item->getFlags(),
                                   item->getCreationDate());
     task_item->setTransactionID(item->getTransactionID());
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item->getUUID() << " not updated" << LL_ENDL;
+        return;
+    }
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_UpdateTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -1348,7 +1415,7 @@ void LLViewerObject::updateViewerInventoryAsset(
 }
 // <<< VKS-R4A-COPY O3
 
-// >>> VKS-R4A-COPY O4 indra/newview/llviewerobject.cpp lines 6252-6269 blob c9ac3bdc20301e3e43da73183f18595712912e79
+// >>> VKS-R4A-COPY O4 indra/newview/llviewerobject.cpp lines 6319-6336 blob 0ade67da75e4367e1fcae9e53e8e6388ddb612bf
 // countInventoryContents
 // conditionals:
 // Find the number of instances of this object's inventory that are of the given type
@@ -1371,7 +1438,7 @@ S32 LLViewerObject::countInventoryContents(LLAssetType::EType type)
 }
 // <<< VKS-R4A-COPY O4
 
-// >>> VKS-R4A-COPY O5 indra/newview/llviewerobject.cpp lines 7229-7235 blob c9ac3bdc20301e3e43da73183f18595712912e79
+// >>> VKS-R4A-COPY O5 indra/newview/llviewerobject.cpp lines 7296-7302 blob 0ade67da75e4367e1fcae9e53e8e6388ddb612bf
 // LLInventoryCallbackInfo::~LLInventoryCallbackInfo
 // conditionals:
 LLViewerObject::LLInventoryCallbackInfo::~LLInventoryCallbackInfo()
@@ -1383,7 +1450,7 @@ LLViewerObject::LLInventoryCallbackInfo::~LLInventoryCallbackInfo()
 }
 // <<< VKS-R4A-COPY O5
 
-// >>> VKS-R4A-COPY O6 indra/newview/llviewerobject.cpp lines 8204-8285 blob c9ac3bdc20301e3e43da73183f18595712912e79
+// >>> VKS-R4A-COPY O6 indra/newview/llviewerobject.cpp lines 8271-8352 blob 0ade67da75e4367e1fcae9e53e8e6388ddb612bf
 // createInventoryItem, createInventoryItemCoro
 // conditionals:
 void LLViewerObject::createInventoryItem(
