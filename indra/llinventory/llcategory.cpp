@@ -116,6 +116,11 @@ U32 LLCategory::getU32() const
 
 S32 LLCategory::getSubCategoryCount() const
 {
+    if (mData[0] + 1 >= (S32)LL_ARRAY_SIZE(CATEGORY_INDEX))
+    {
+        // unknown top level category
+        return 0;
+    }
     S32 rv = CATEGORY_INDEX[mData[0] + 1] - CATEGORY_INDEX[mData[0]];
     return rv;
 }
@@ -142,6 +147,12 @@ const char* LLCategory::lookupName() const
 {
     S32 i = 0;
     S32 index = mData[i++];
+    if (index >= (S32)LL_ARRAY_SIZE(CATEGORY_NAME))
+    {
+        // unknown top level category: the table's terminating NULL, which
+        // the first unknown value (7) already gets
+        return CATEGORY_NAME[LL_ARRAY_SIZE(CATEGORY_NAME) - 1];
+    }
     while((i < CATEGORY_DEPTH) && (mData[i] != 0))
     {
         index = CATEGORY_INDEX[index];
