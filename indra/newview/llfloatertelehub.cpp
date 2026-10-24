@@ -229,11 +229,13 @@ void LLFloaterTelehub::addBeacons()
     if(nativeTelehub())
     {
         if(!floater->mNativeCurrent || !floater->mNativeCurrent())return;
+#if VS_NATIVE_VULKAN
         auto& scene=gViewerWindow->nativeContext()->world();
         const auto object=scene.object(floater->mTelehubObjectID);
         const auto transform=object?scene.objectTransform(*object):std::nullopt;
         const auto region=vs_current_region_context();
         if(transform && region){hub_pos_region=region->getPosRegionFromGlobal(transform->position);hub_rot=transform->rotation;}
+#endif
     }
     else if(auto* obj=gObjectList.findObject(floater->mTelehubObjectID))
     {hub_pos_region=obj->getPositionRegion();hub_rot=obj->getRotationRegion();}

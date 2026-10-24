@@ -33,8 +33,8 @@
 #include "vsworldavatar.h"
 #include "vsvulkancontext.h"
 #include "vsuiresources.h"
-#include "llviewerwindow.h"
 #endif
+#include "llviewerwindow.h"
 
 #include "llmodelpreview.h"
 
