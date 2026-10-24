@@ -125,6 +125,9 @@ namespace vks_fetch
     // llinvfetch_parity_ais.cpp: LLCoros::checkStop() calls of llaisapi.cpp
     // since the last arm; abort_at > 0 throws LLCoros::Stopping at that call.
     void ais_stop_arm(S64 abort_at);
+    // The next n hasExpired() calls of llaisapi.cpp's timers answer true
+    // (llinvfetch_parity_ais.cpp); 0 between scenarios.
+    void ais_timer_force_expired(S64 n);
     S64 ais_stop_calls();
     S64 ais_stop_thrown();
     // Resets everything a scenario touches: gInventory, the background

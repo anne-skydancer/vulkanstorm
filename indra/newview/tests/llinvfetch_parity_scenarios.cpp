@@ -1890,6 +1890,10 @@ namespace
         clock_advance(181.0);
         cat(b.ids.user[0])->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
         ais_stop_arm(1);
+        // Since bug 15 a new update no longer yields at once by itself: force
+        // its first checkTimeout() to find the task timer expired, so it yields
+        // there and the armed checkStop() after the yield throws.
+        ais_timer_force_expired(1);
         bgf().scheduleFolderFetch(b.ids.user[0]);
         r.until([&]() { return ais_stop_thrown() > 0; });
         r.frames(30);

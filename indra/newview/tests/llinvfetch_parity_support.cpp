@@ -497,9 +497,11 @@ namespace vks_fetch
 
     namespace bgf_clock_state { extern F64 now; extern F64 step; extern S64 reads; }
     namespace ais_stop_state { extern S64 calls; extern S64 abort_at; extern S64 thrown; }
+    namespace ais_timer_state { extern S64 force_expired; }
     void bgf_clock(F64 now, F64 step) { bgf_clock_state::now = now; bgf_clock_state::step = step; bgf_clock_state::reads = 0; }
     S64 bgf_clock_reads() { return bgf_clock_state::reads; }
     void ais_stop_arm(S64 abort_at) { ais_stop_state::calls = 0; ais_stop_state::abort_at = abort_at; }
+    void ais_timer_force_expired(S64 n) { ais_timer_state::force_expired = n; }
     S64 ais_stop_calls() { return ais_stop_state::calls; }
     S64 ais_stop_thrown() { return ais_stop_state::thrown; }
 
@@ -550,6 +552,7 @@ namespace vks_fetch
         clock_set(1000.0);
         bgf_clock(1000.0, 0.0);
         ais_stop_arm(0);
+        ais_timer_force_expired(0);
         // Created now so it exists before anything posts the completion
         // signal; the scenarios record every completion.
         LLInventoryModelBackgroundFetch::instance().setFetchCompletionCallback([]()
