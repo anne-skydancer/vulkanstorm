@@ -311,7 +311,7 @@ void FSFloaterPerformance::draw()
             U64 avatar_idle;
             {std::lock_guard<std::mutex> lock(LLPerfStats::bufferToggleLock);avatar_idle=LLPerfStats::StatsRecorder::getSum(AvType,LLPerfStats::StatType_t::RENDER_IDLE);}
             const auto avatar_draw = tot_avatar_time_raw > avatar_idle ? tot_avatar_time_raw-avatar_idle : 0;
-            for (U64 part : {avatar_draw,tot_huds_time_raw,tot_swap_time_raw,tot_ui_time_raw})
+            for (U64 part : std::initializer_list<U64>{avatar_draw,tot_huds_time_raw,tot_swap_time_raw,tot_ui_time_raw})
                 scene_time_raw = scene_time_raw > part ? scene_time_raw-part : 0;
         }
         else scene_time_raw -= tot_avatar_time_raw + tot_swap_time_raw + tot_ui_time_raw;
