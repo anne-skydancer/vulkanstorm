@@ -430,6 +430,7 @@ void LLFloaterRegionInfo::onClose(bool app_quitting)
 void LLFloaterRegionInfo::observeNativeRegion()
 {
     mNativeTerrainConnection.disconnect();
+#if VS_NATIVE_VULKAN
     if(!gViewerWindow || !gViewerWindow->isNativeVulkan())return;
     auto* context=gViewerWindow->nativeContext();
     auto* scene=context?&context->world():nullptr;
@@ -442,6 +443,7 @@ void LLFloaterRegionInfo::observeNativeRegion()
         auto* view=dynamic_cast<LLFloaterRegionInfo*>(weak.get());
         if(view && view->getVisible())view->refreshFromRegion(vs_current_region_context());
     });
+#endif
 }
 
 void LLFloaterRegionInfo::onRegionChanged()

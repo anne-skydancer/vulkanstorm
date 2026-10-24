@@ -583,7 +583,11 @@ bool VSMaterialObject::isImageAlphaBlended(U8 side) const
 {
     if(!mObject)return false;
     if(mObject.legacy())return mObject.legacy()->isImageAlphaBlended(side);
+#if VS_NATIVE_VULKAN
     const auto image=vs_face_image(this,side);
     const auto format=image?image->getPrimaryFormat():GL_RGB;
     return format==GL_RGBA || format==GL_ALPHA;
+#else
+    return false;
+#endif
 }

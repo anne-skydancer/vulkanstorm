@@ -139,7 +139,7 @@ void AnimationExplorer::startMotion(const LLUUID& motionID)
         return;
     }
 
-    LLVOAvatar* avatarp = mAnimationPreview->getDummyAvatar();
+    LLAvatarAppearance* avatarp = mAnimationPreview->getDummyAvatar();
 
     avatarp->deactivateAllMotions();
     avatarp->startMotion(ANIM_AGENT_STAND, 0.0f);
