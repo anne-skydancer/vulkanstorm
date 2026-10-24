@@ -148,9 +148,9 @@ namespace
     //------------------------------------------------------------------
     // constants of the recording
     //------------------------------------------------------------------
-    const char* const BASE_COMMIT = "472ecf270d (codex/rust-inventory)";
-    const char* const OBJECT_BLOB = "c9ac3bdc20301e3e43da73183f18595712912e79";
-    const char* const INVENTORY_BLOB = "a13210dce6ed2561e2b18768645bcfa37068612c";
+    const char* const BASE_COMMIT = "6f23ef84f0 (vkstorm-rust)";
+    const char* const OBJECT_BLOB = "0ade67da75e4367e1fcae9e53e8e6388ddb612bf";
+    const char* const INVENTORY_BLOB = "41e2a9b23982f076e14a5de056d443438f8980b3";
     const U64 SEED_FILES = 0x52344154u;     // "R4AT"
     const U64 SEED_REPLIES = 0x52344152u;   // "R4AR"
     const int FILE_SWEEP_COUNT = 3000;

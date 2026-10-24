@@ -16,7 +16,7 @@
  */
 
 #if 0
-// >>> VKS-R4A-COPY C1 indra/newview/llviewerobject.cpp lines 303-308 blob c9ac3bdc20301e3e43da73183f18595712912e79
+// >>> VKS-R4A-COPY C1 indra/newview/llviewerobject.cpp lines 303-308 blob 0ade67da75e4367e1fcae9e53e8e6388ddb612bf
 // LLViewerObject constructor: the task-inventory member initialisers
 // conditionals:
     mInventory(NULL),
@@ -27,7 +27,7 @@
     mInventoryDirty(false),
 // <<< VKS-R4A-COPY C1
 
-// >>> VKS-R4A-COPY C2 indra/newview/llviewerobject.cpp lines 370-375 blob c9ac3bdc20301e3e43da73183f18595712912e79
+// >>> VKS-R4A-COPY C2 indra/newview/llviewerobject.cpp lines 370-375 blob 0ade67da75e4367e1fcae9e53e8e6388ddb612bf
 // LLViewerObject destructor: mInventory released
 // conditionals:
     if(mInventory)
@@ -38,7 +38,7 @@
     }
 // <<< VKS-R4A-COPY C2
 
-// >>> VKS-R4A-COPY C3 indra/newview/llviewerobject.cpp lines 404-414 blob c9ac3bdc20301e3e43da73183f18595712912e79
+// >>> VKS-R4A-COPY C3 indra/newview/llviewerobject.cpp lines 404-414 blob 0ade67da75e4367e1fcae9e53e8e6388ddb612bf
 // LLViewerObject destructor, end: clearInventoryListeners()
 // conditionals:
     llassert(mChildList.size() == 0);
@@ -54,7 +54,7 @@
 }
 // <<< VKS-R4A-COPY C3
 
-// >>> VKS-R4A-COPY P1 indra/newview/llviewerobject.cpp lines 7062-7084 blob c9ac3bdc20301e3e43da73183f18595712912e79
+// >>> VKS-R4A-COPY P1 indra/newview/llviewerobject.cpp lines 7129-7151 blob 0ade67da75e4367e1fcae9e53e8e6388ddb612bf
 // LLViewerObject::permYouOwner, an input of the owner guess (faked in the oracle)
 // conditionals:
 // Owned by this viewer?
