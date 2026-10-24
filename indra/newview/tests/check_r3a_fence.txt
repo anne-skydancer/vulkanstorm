@@ -1,0 +1,37 @@
+# check_r3a_copies.py fence allowlist: count <TAB> file <TAB> reduced line
+1	llviewerinventory.cpp	cat_data[INV_OWNER_ID] = mOwnerID;
+1	llviewerinventory.cpp	cat_data[INV_VERSION] = mVersion;
+1	llviewerinventory.cpp	else if (fetching > mFetching)
+1	llviewerinventory.cpp	if (mDescendentsRequested.hasExpired() || (mFetching == FETCH_NONE))
+1	llviewerinventory.cpp	if (mDescendentsRequested.hasExpired())
+2	llviewerinventory.cpp	if(!mIsComplete)
+1	llviewerinventory.cpp	mDescendentsRequested.reset();
+1	llviewerinventory.cpp	mDescendentsRequested.setTimerExpirySec((F32)AISAPI::HTTP_TIMEOUT);
+1	llviewerinventory.cpp	mDescendentsRequested.setTimerExpirySec(FETCH_FAILURE_EXPIRY);
+1	llviewerinventory.cpp	mDescendentsRequested.setTimerExpirySec(FETCH_TIMER_EXPIRY);
+1	llviewerinventory.cpp	mDescendentsRequested.stop();
+1	llviewerinventory.cpp	mFetching = FETCH_NONE;
+3	llviewerinventory.cpp	mFetching = fetching;
+2	llviewerinventory.cpp	mIsComplete = true;
+1	llviewerinventory.cpp	mIsComplete(false)
+2	llviewerinventory.cpp	mIsComplete(true)
+1	llviewerinventory.cpp	mOwnerID = value.asUUID();
+2	llviewerinventory.cpp	msg->addUUIDFast(_PREHASH_TransactionID, mTransactionID);
+1	llviewerinventory.cpp	return mFetching;
+1	llviewerinventory.h	EFetchType mFetching;
+1	llviewerinventory.h	LLFrameTimer mDescendentsRequested;
+1	llviewerinventory.h	LLTransactionID getTransactionID() const { return mTransactionID; }
+1	llviewerinventory.h	LLTransactionID mTransactionID;
+1	llviewerinventory.h	LLUUID mOwnerID;
+1	llviewerinventory.h	S32 getDescendentCount() const { return mDescendentCount; }
+1	llviewerinventory.h	S32 mDescendentCount;
+1	llviewerinventory.h	S32 mVersion;
+1	llviewerinventory.h	bool getIsFaulted() const { return mIsFaulted; }
+1	llviewerinventory.h	bool getIsRunning() const { return mIsRunning; }
+1	llviewerinventory.h	bool isFinished() const { return mIsComplete; }
+1	llviewerinventory.h	bool mIsComplete;
+1	llviewerinventory.h	bool mIsFaulted = false;
+1	llviewerinventory.h	bool mIsRunning = false;
+1	llviewerinventory.h	const LLUUID& getOwnerID() const { return mOwnerID; }
+1	llviewerinventory.h	void setComplete(bool complete) { mIsComplete = complete; }
+1	llviewerinventory.h	void setDescendentCount(S32 descendents) { mDescendentCount = descendents; }
