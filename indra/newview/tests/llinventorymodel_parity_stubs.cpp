@@ -203,7 +203,9 @@ namespace
     std::string notation(const LLSD& sd)
     {
         std::ostringstream s;
-        LLSDSerialize::toNotation(sd, s);
+        // One line; binary as b16"..." (no raw bytes in text fixtures).
+        LLPointer<LLSDNotationFormatter> f = new LLSDNotationFormatter(false, "", LLSDFormatter::OPTIONS_PRETTY_BINARY);
+        f->format(sd, s);
         return s.str();
     }
 }
@@ -359,6 +361,11 @@ namespace vks_inv
         (*gDirUtilp).*steal(DirTemp()) = temp_dir;
         set_cache_dir(work_dir);
         apply_config();
+    }
+
+    void set_temp_dir(const std::string& dir)
+    {
+        (*gDirUtilp).*steal(DirTemp()) = dir;
     }
 
     void set_cache_dir(const std::string& dir)
@@ -774,13 +781,6 @@ std::string LLTrans::getString(std::string_view key, const LLStringUtil::format_
     return it == g_config.translations.end() ? k : it->second;
 }
 
-const std::string& LLViewerFolderType::lookupNewCategoryName(LLFolderType::EType folder_type)
-{
-    static std::map<S32, std::string> names;
-    std::string& name = names[(S32)folder_type];
-    name = "New " + LLFolderType::lookup(folder_type);
-    return name;
-}
 void LLViewerAssetType::generateDescriptionFor(LLAssetType::EType, std::string& description)
 {
     description = "(stub description)";

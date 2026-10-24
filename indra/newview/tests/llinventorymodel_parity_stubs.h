@@ -175,6 +175,9 @@ namespace vks_inv
     // ---- environment ------------------------------------------------------
     void init_environment(const std::string& template_file, const std::string& work_dir);
     void set_cache_dir(const std::string& dir);
+    // LLDir's temp directory (gDirUtilp->getTempFilename() names
+    // "<dir>/<random uuid>.tmp" there); init_environment() sets <work>/temp.
+    void set_temp_dir(const std::string& dir);
     LLWindow* window();     // the headless window behind gViewerWindow
     void set_busy_count(S32 n);
     // LLAvatarNameCache answers immediate lookups only once running (its

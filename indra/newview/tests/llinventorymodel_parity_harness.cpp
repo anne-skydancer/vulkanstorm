@@ -291,7 +291,9 @@ namespace vks_inv
     std::string llsd_notation(const LLSD& sd)
     {
         std::ostringstream s;
-        LLSDSerialize::toNotation(sd, s);
+        // One line; binary as b16"..." (no raw bytes in text fixtures).
+        LLPointer<LLSDNotationFormatter> f = new LLSDNotationFormatter(false, "", LLSDFormatter::OPTIONS_PRETTY_BINARY);
+        f->format(sd, s);
         return s.str();
     }
 

@@ -36,8 +36,21 @@ namespace
         LLPointer<LLInventoryValidationInfo> info = gInventory.validate();
         take(c.lines);
         dump_validation(c.lines, *info);
-        std::map<std::string, std::string> none;
-        dump_model(c.lines, false);
+        std::vector<std::string> model_lines;
+        dump_model(model_lines, false);
+        for (const std::string& l : model_lines)
+        {
+            // Very long child vectors are recorded by count and digest.
+            if (l.size() > 4000)
+            {
+                size_t sp = l.find(' ', 9);
+                c.lines.push_back(l.substr(0, sp) + " long=" + std::to_string(l.size()) + " sha256=" + sha256_hex(l));
+            }
+            else
+            {
+                c.lines.push_back(l);
+            }
+        }
         return c;
     }
 
@@ -61,6 +74,26 @@ namespace
     {
         World w = standard_world();
         w.agent.push_back(f);
+        return w;
+    }
+
+    World with_folders(const std::vector<Folder>& fs)
+    {
+        World w = standard_world();
+        for (const Folder& f : fs) w.agent.push_back(f);
+        return w;
+    }
+
+    // A folder of 'count' items under the root (validate() scans every
+    // entry of every item vector).
+    World with_big_folder(U32 count)
+    {
+        World w = standard_world();
+        w.agent.push_back({ F(850), F(SF_ROOT), "Big folder", LLFolderType::FT_NONE, 1 });
+        for (U32 n = 0; n < count; ++n)
+        {
+            w.items.push_back(item(pid(0xa8000000, n), F(850), LLAssetType::AT_NOTECARD, LLInventoryType::IT_NOTECARD, "Big " + std::to_string(n), A(9000 + n)));
+        }
         return w;
     }
 
@@ -136,6 +169,25 @@ namespace
             model::backlinks().insert(std::make_pair(I(30), I(812)));
         }));
         cases.push_back(validation_case("two_roots_named_my_inventory", [] {}, with_folder({ pid(TAG_FOLDER, 0x907), F(SF_ROOT), "my inventory", LLFolderType::FT_ROOT_INVENTORY, 1 })));
+        // The root-fix hack walks the child vectors in parent-UUID order and,
+        // within a vector, keeps the last match: two extra roots in the same
+        // vector (the root's; UUID order there), and two under different
+        // parents.
+        cases.push_back(validation_case("three_roots_named_my_inventory", [] {}, with_folders({
+            { pid(TAG_FOLDER, 0x908), F(SF_ROOT), "My Inventory", LLFolderType::FT_ROOT_INVENTORY, 1 },
+            { pid(TAG_FOLDER, 0x909), F(SF_ROOT), "MY INVENTORY", LLFolderType::FT_ROOT_INVENTORY, 1 } })));
+        cases.push_back(validation_case("three_roots_different_parents", [] {}, with_folders({
+            { pid(TAG_FOLDER, 0x90a), F(SF_ROOT), "My Inventory", LLFolderType::FT_ROOT_INVENTORY, 1 },
+            { pid(TAG_FOLDER, 0x90b), F(SF_OBJECTS), "MY INVENTORY", LLFolderType::FT_ROOT_INVENTORY, 1 } })));
+        // Every entry of a 20,005-item vector is checked: the wrong parent is
+        // on the last entry.
+        cases.push_back(validation_case("item_vector_20005_wrong_parent_last", []
+        {
+            LLInventoryModel::cat_array_t* cats;
+            LLInventoryModel::item_array_t* items;
+            gInventory.getDirectDescendentsOf(F(850), cats, items);
+            items->back()->setParent(F(SF_OBJECTS));
+        }, with_big_folder(20005)));
     }
 
     void c4_qa_cases(Cases& cases)
@@ -153,6 +205,7 @@ namespace tut
 {
     template<> template<> void invmodel_object::test<4>()
     {
+        env().ran.insert(4);
         set_test_name("C4 validation");
         Cases cases;
         c4_cases(cases);

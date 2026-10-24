@@ -14,7 +14,7 @@
 # message handlers) and, with VKS_INVMODEL_DUMP=<dir> in the environment, writes
 # them instead. VKS_INVMODEL_BENCH=<runs> times the cache and validation paths.
 LL_ADD_INTEGRATION_TEST(llinventorymodel_parity
-  "llinventorymodel.cpp;llviewerinventory.cpp;llinventoryobserver.cpp;tests/llinventorymodel_parity_stubs.cpp;tests/llinventorymodel_parity_harness.cpp;tests/llinventorymodel_parity_generic.cpp"
+  "llinventorymodel.cpp;llviewerinventory.cpp;llinventoryobserver.cpp;llviewerfoldertype.cpp;tests/llinventorymodel_parity_stubs.cpp;tests/llinventorymodel_parity_harness.cpp;tests/llinventorymodel_parity_generic.cpp"
   "llinventory;llmessage;llcorehttp;llfilesystem;llxml;llmath;llwindow;llcommon"
   "-l${ARCH_PREBUILT_DIRS_RELEASE}"
   )
@@ -23,7 +23,9 @@ set_property(TARGET INTEGRATION_TEST_llinventorymodel_parity APPEND PROPERTY
     "VKS_INVMODEL_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/inventory\""
     "VKS_INVMODEL_LIBRARY_DIR=\"${CMAKE_SOURCE_DIR}/llinventory/tests/fixtures/library\""
     "VKS_INVMODEL_TEMPLATE_FILE=\"${CMAKE_SOURCE_DIR}/../scripts/messages/message_template.msg\""
-    "VKS_INVMODEL_WORK_DIR=\"${CMAKE_CURRENT_BINARY_DIR}/llinventorymodel_parity_work\"")
+    "VKS_INVMODEL_WORK_DIR=\"${CMAKE_CURRENT_BINARY_DIR}/llinventorymodel_parity_work\""
+    "VKS_INVMODEL_PYTHON=\"${PYTHON_EXECUTABLE}\""
+    "VKS_INVMODEL_SOURCE_ROOT=\"${CMAKE_SOURCE_DIR}/..\"")
 # The viewer headers the three sources include reach into libraries the test
 # does not link: headers only.
 target_include_directories(INTEGRATION_TEST_llinventorymodel_parity PRIVATE

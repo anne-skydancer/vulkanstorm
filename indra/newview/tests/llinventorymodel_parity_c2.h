@@ -17,6 +17,11 @@ namespace vks_inv_frozen
 
 namespace
 {
+    // The pinned C2 case list (cache/c2/cases.txt): its count and the SHA-256
+    // of its text ("<id>\n" per case, in order).
+    const S32 C2_CASE_COUNT = 64;
+    const char* const C2_CASE_LIST_SHA256 = "04f97e4778018fbb51f2ab14e33a1c769ae4cf87148a4560ee1219029777b7db";
+
     struct C2Case
     {
         std::string id;
@@ -146,8 +151,9 @@ namespace
             cases.push_back(c);
         }
         {
-            C2Case c = base_case(base, "second_instance_valid", "second instance: the cache is read through a temp copy; the library is not saved at logout");
+            C2Case c = base_case(base, "second_instance_valid", "second instance: the cache is read through a temp copy (a sentinel plain <agent>.inv.llsd is left alone); the library is not saved at logout");
             c.second_instance = true;
+            c.files[plain_name(AGENT)] = "sentinel: a second instance must not unpack into this file\n";
             c.logout = true;
             cases.push_back(c);
         }
@@ -210,7 +216,9 @@ namespace
         cases.push_back(with_agent("gz_trailing_garbage", "a valid member followed by 16 bytes of garbage", gz(base.agent.plain()) + std::string("garbage-garbage!")));
         cases.push_back(with_agent("gz_empty_file", "a 0-byte .gz", std::string()));
         cases.push_back(with_agent("short_0", "a 0-byte cache file (gzipped)", gz(std::string())));
-        cases.push_back(with_agent("short_3", "a 3-byte cache file (gzipped)", gz(std::string("\0\0\0", 3))));
+        cases.push_back(with_agent("short_3", "a 3-byte cache file (gzipped): one byte short of the header", gz(std::string("\0\0\0", 3))));
+        cases.push_back(with_agent("short_4_header_only", "a 4-byte cache file: the version header (5) and nothing else", gz(base.agent.plain().substr(0, 4))));
+        cases.push_back(with_agent("short_5", "a 5-byte cache file: the header and one byte of LLSD", gz(base.agent.plain().substr(0, 5))));
         cases.push_back(with_agent("header_4", "cache version 4", gz(base.agent.plain(4))));
         cases.push_back(with_agent("header_6", "cache version 6", gz(base.agent.plain(6))));
         {
@@ -374,6 +382,23 @@ namespace
             C2Case c = base_case(base, "skeleton_duplicate_system_folders", "a second Trash and a second Current Outfit under the root: fatal duplicates; lookups take the smallest UUID");
             c.agent_skel.append(skel_entry(pid(TAG_FOLDER, 0), F(SF_ROOT), "Trash 2", LLFolderType::FT_TRASH, 1));
             c.agent_skel.append(skel_entry(pid(TAG_FOLDER, 0x7fff), F(SF_ROOT), "COF 2", LLFolderType::FT_CURRENT_OUTFIT, 1));
+            cases.push_back(c);
+        }
+        {
+            C2Case c = base_case(base, "skeleton_no_common_system_folders", "none of the nine folders createCommonSystemCategories ensures: one AIS creation each, in its order");
+            LLSD skel = LLSD::emptyArray();
+            std::set<LLUUID> drop = { F(SF_TRASH), F(SF_FAVORITES), F(SF_CALLING), F(SF_MYOUTFITS), F(SF_COF), F(SF_LANDMARKS), F(SF_SETTINGS), F(SF_MATERIALS), F(SF_INBOX), F(40), F(41), F(44), F(45) };
+            for (LLSD::array_const_iterator it = c.agent_skel.beginArray(); it != c.agent_skel.endArray(); ++it)
+            {
+                if (!drop.count(LLUUID((*it)["folder_id"].asString()))) skel.append(*it);
+            }
+            c.agent_skel = skel;
+            cases.push_back(c);
+        }
+        {
+            C2Case c = base_case(base, "skeleton_three_roots", "two further FT_ROOT_INVENTORY folders named My Inventory (any case): the root-fix hack keeps the last match in parent-UUID, then vector order");
+            c.agent_skel.append(skel_entry(F(78), F(SF_OBJECTS), "My Inventory", LLFolderType::FT_ROOT_INVENTORY, 1));
+            c.agent_skel.append(skel_entry(F(79), F(SF_ROOT), "MY INVENTORY", LLFolderType::FT_ROOT_INVENTORY, 1));
             cases.push_back(c);
         }
         {
@@ -564,6 +589,7 @@ namespace
         login(in, out.lines, true, dir);
         if (c.logout)
         {
+            trace("logout save");
             vks_inv_frozen::save_inventory_at_logout(c.second_instance);
             out.lines.push_back("step logout_save");
             take(out.lines);
@@ -578,6 +604,16 @@ namespace
                 out.lines.push_back("saved " + owner.asString() + " size=" + std::to_string(plain.size()) + " sha256=" + sha256_hex(plain));
             }
         }
+        // The plain files left in the cache directory, by content.
+        std::vector<std::string> plain_files;
+        for (const auto& e : fs::directory_iterator(dir))
+        {
+            std::string name = e.path().filename().string();
+            if (e.is_directory() || (name.size() > 3 && name.compare(name.size() - 3, 3, ".gz") == 0)) continue;
+            plain_files.push_back("content " + name + " sha256=" + sha256_hex(read_file(e.path().string())));
+        }
+        std::sort(plain_files.begin(), plain_files.end());
+        out.lines.insert(out.lines.end(), plain_files.begin(), plain_files.end());
         return out;
     }
 }
@@ -587,6 +623,7 @@ namespace tut
     // C2: every load and discard case at login (survey 2 sections 2.4, 2.5, 8.2).
     template<> template<> void invmodel_object::test<2>()
     {
+        env().ran.insert(2);
         set_test_name("C2 load and discard");
         std::string inputs = join(env().dump() ? env().out : env().fixtures, "cache/c2");
         std::vector<std::string> ids;
@@ -612,10 +649,25 @@ namespace tut
             }
             ensure("C2 inputs missing: " + inputs, !ids.empty());
         }
+        // The case list is pinned here, so it cannot shrink or change silently.
+        std::string list;
+        for (const std::string& id : ids) list += id + "\n";
+        trace("C2 cases " + std::to_string(ids.size()) + " sha " + sha256_hex(list));
+        ensure_equals("C2 case count", (S32)ids.size(), C2_CASE_COUNT);
+        ensure_equals("C2 case list digest (cases.txt)", sha256_hex(list), std::string(C2_CASE_LIST_SHA256));
+        env().touched.insert("cache/c2/cases.txt");
         Cases cases;
         for (const std::string& id : ids)
         {
-            cases.push_back(run_c2(read_c2_inputs(join(inputs, id), id)));
+            std::string dir = join(inputs, id);
+            for (const auto& e : fs::recursive_directory_iterator(dir))
+            {
+                if (e.is_regular_file())
+                {
+                    env().touched.insert("cache/c2/" + id + "/" + fs::relative(e.path(), dir).generic_string());
+                }
+            }
+            cases.push_back(run_c2(read_c2_inputs(dir, id)));
         }
         corpus("cache/c2_load.txt", "C2 load and discard at login", "none", cases);
     }

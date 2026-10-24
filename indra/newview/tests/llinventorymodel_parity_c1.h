@@ -155,6 +155,12 @@ namespace
         };
         feat("no-modify (shadow_id)")->setPermissions(perms(AGENT, PERM_COPY | PERM_TRANSFER | PERM_MOVE));
         feat("no-copy (shadow_id)")->setPermissions(perms(AGENT, PERM_MODIFY | PERM_TRANSFER | PERM_MOVE));
+        // The shadow_id rule is "base mask lacks one of modify, copy,
+        // transfer": exactly those three (no move) keep asset_id; each one
+        // missing switches to shadow_id.
+        feat("unrestricted without move (asset_id)")->setPermissions(perms(AGENT, PERM_MODIFY | PERM_COPY | PERM_TRANSFER));
+        feat("no-transfer (shadow_id)")->setPermissions(perms(AGENT, PERM_MODIFY | PERM_COPY | PERM_MOVE));
+        feat("owner mask differs from base")->setPermissions([] { LLPermissions p = perms(AGENT, PERM_ALL); p.initMasks(PERM_ALL, PERM_COPY | PERM_MOVE, PERM_NONE, PERM_NONE, PERM_ALL); return p; }());
         {
             LLPointer<LLViewerInventoryItem> i = feat("no-modify, null asset");
             i->setPermissions(perms(AGENT, PERM_COPY | PERM_TRANSFER));
@@ -235,8 +241,11 @@ namespace
             {
                 const auto& kind = kinds[rng.below(sizeof(kinds) / sizeof(kinds[0]))];
                 PermissionMask base = (rng.below(4) == 0) ? (PERM_COPY | PERM_MOVE | PERM_TRANSFER) : PERM_ALL;
-                LLPointer<LLViewerInventoryItem> it = item(id, parent, kind.t, kind.i, "item " + std::to_string(i), rng.uuid(), AGENT, base,
-                                                           rng.below(16), (S32)(1600000000 + rng.below(100000000)));
+                // One draw per statement (argument evaluation order is unspecified).
+                LLUUID asset = rng.uuid();
+                U32 flags = rng.below(16);
+                S32 created = (S32)(1600000000 + rng.below(100000000));
+                LLPointer<LLViewerInventoryItem> it = item(id, parent, kind.t, kind.i, "item " + std::to_string(i), asset, AGENT, base, flags, created);
                 if (rng.below(20) == 0) it->setThumbnailUUID(rng.uuid());
                 if (rng.below(25) == 0) it->setFavorite(true);
                 w.items.push_back(it);
@@ -252,6 +261,7 @@ namespace tut
     // C1: cache files of model states made through the C++ API.
     template<> template<> void invmodel_object::test<1>()
     {
+        env().ran.insert(1);
         set_test_name("C1 cache files");
         Cases cases;
         std::string dir = join(env().work, "c1");

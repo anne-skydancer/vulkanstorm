@@ -91,10 +91,14 @@ namespace
             const auto& kind = kinds[rng.below(sizeof(kinds) / sizeof(kinds[0]))];
             PermissionMask base = (rng.below(3) == 0) ? (PERM_COPY | PERM_MOVE | PERM_TRANSFER) : PERM_ALL;
             LLUUID id = item_ids.next();
+            // One draw per statement (argument evaluation order is unspecified).
             U32 flags = (kind.i == LLInventoryType::IT_WEARABLE) ? rng.below(16) : 0;
-            LLPointer<LLViewerInventoryItem> it = item(id, parent, kind.t, kind.i, prefix + " " + std::to_string(made), asset_ids.next(), AGENT, base,
-                                                       flags, (S32)(1500000000 + rng.below(250000000)),
-                                                       rng.below(4) == 0 ? "Description " + std::to_string(rng.below(1000)) : std::string());
+            LLUUID asset = asset_ids.next();
+            S32 created = (S32)(1500000000 + rng.below(250000000));
+            std::string desc;
+            if (rng.below(4) == 0) desc = "Description " + std::to_string(rng.below(1000));
+            LLPointer<LLViewerInventoryItem> it = item(id, parent, kind.t, kind.i, prefix + " " + std::to_string(made), asset, AGENT, base,
+                                                       flags, created, desc);
             if (rng.below(50) == 0) it->setThumbnailUUID(thumb_ids.next());
             if (kind.i == LLInventoryType::IT_WEARABLE) wearables.push_back(id);
             w.items.push_back(it);
@@ -135,6 +139,17 @@ namespace
         return sha256_hex(all);
     }
 
+    // Digests per chunk of 'chunk' lines, so a mismatch names a range.
+    void chunked_digests(Case& c, const std::string& label, const std::vector<std::string>& lines, size_t chunk)
+    {
+        for (size_t first = 0; first < lines.size(); first += chunk)
+        {
+            size_t last = std::min(lines.size(), first + chunk);
+            std::vector<std::string> part(lines.begin() + first, lines.begin() + last);
+            c.lines.push_back(label + "[" + std::to_string(first) + ".." + std::to_string(last - 1) + "] sha256=" + digest_lines(part));
+        }
+    }
+
     struct Summary
     {
         size_t cats = 0, cats_known = 0, items = 0, links = 0;
@@ -171,6 +186,7 @@ namespace
         c.lines.push_back(summary_line("reload", summarize()));
         c.lines.push_back("reload_login_lines sha256=" + digest_lines(lines) + " count=" + std::to_string(lines.size()));
         c.lines.push_back("reload_model sha256=" + digest_lines(model_lines) + " lines=" + std::to_string(model_lines.size()));
+        chunked_digests(c, "reload_model", model_lines, 10000);
         for (const std::string& l : lines)
         {
             if (l.compare(0, 10, "validation") == 0 || l.compare(0, 7, "usable=") == 0 || l.compare(0, 5, "step ") == 0) c.lines.push_back(l);
@@ -183,6 +199,7 @@ namespace tut
     // C1, realistic: 100k items and 8k folders.
     template<> template<> void invmodel_object::test<6>()
     {
+        env().ran.insert(6);
         set_test_name("C1 realistic 100k");
         Cases cases;
         Case c;
@@ -198,9 +215,26 @@ namespace tut
         std::string scratch = join(env().work, "realistic_scratch");
         std::string plain = gunzip_bytes(LLInventoryModel::getInvCacheAddres(AGENT) + ".gz", scratch);
         c.lines.push_back("file size=" + std::to_string(plain.size()) + " sha256=" + sha256_hex(plain));
-        // The bytes, gzipped (zlib at the viewer's default level, OS byte 3):
-        // the crate decodes them and re-encodes to the same SHA-256.
-        binary("cache/c1/realistic_100k.inv.llsd.gz", gzip_bytes(plain, scratch));
+        // The bytes, gzipped (zlib at the viewer's default level, OS byte 3),
+        // are an input for the crate (decode and re-encode to the SHA-256
+        // above). Only the decompressed content is compared: a different
+        // zlib build may compress differently.
+        {
+            const std::string rel = "cache/c1/realistic_100k.inv.llsd.gz";
+            env().touched.insert(rel);
+            if (env().dump())
+            {
+                std::string path = join(env().out, rel);
+                fs::create_directories(fs::path(path).parent_path());
+                ensure("write " + path, write_file(path, gzip_bytes(plain, scratch)));
+            }
+            else
+            {
+                std::string path = join(env().fixtures, rel);
+                ensure("fixture missing: " + path, file_exists(path));
+                ensure_equals(rel + ": decompressed SHA-256", sha256_hex(gunzip_bytes(path, scratch)), sha256_hex(plain));
+            }
+        }
         {
             std::string path = scratch + ".inv.llsd";
             write_file(path, plain);
@@ -214,6 +248,7 @@ namespace tut
             for (const auto& it : items) decoded.push_back(dump_item(it));
             c.lines.push_back(std::string("decode rv=") + (rv ? "1" : "0") + " cats=" + std::to_string(cats.size()) + " items=" + std::to_string(items.size())
                               + " cats_to_update=" + ids(to_update) + " records_sha256=" + digest_lines(decoded));
+            chunked_digests(c, "records", decoded, 10000);
             std::string again = scratch + ".again";
             model::save_to_file(again, cats, items);
             c.lines.push_back(std::string("reencode identical=") + (read_file(again) == plain ? "1" : "0"));
@@ -232,6 +267,7 @@ namespace tut
     // indra/llinventory/tests/fixtures/library/).
     template<> template<> void invmodel_object::test<7>()
     {
+        env().ran.insert(7);
         set_test_name("Library cache (real data)");
         const LLUUID owner("ba2a564a-f0f1-4b82-9c61-b7520bfcd09f");
         std::string src = join(env().library_dir, owner.asString() + ".inv.llsd.gz");
@@ -256,6 +292,7 @@ namespace tut
         for (const auto& it : items) { decoded.push_back(dump_item(it)); ++types[(S32)it->LLInventoryItem::getType()]; }
         c.lines.push_back(std::string("decode rv=") + (rv ? "1" : "0") + " obsolete=" + (obsolete ? "1" : "0") + " cats=" + std::to_string(cats.size())
                           + " items=" + std::to_string(items.size()) + " cats_to_update=" + ids(to_update) + " records_sha256=" + digest_lines(decoded));
+        chunked_digests(c, "records", decoded, 1000);
         std::string type_line = "item_types";
         for (const auto& kv : types) type_line += " " + std::to_string(kv.first) + ":" + std::to_string(kv.second);
         c.lines.push_back(type_line);
@@ -297,6 +334,7 @@ namespace tut
         c.lines.push_back(summary_line("loaded", summarize()));
         c.lines.push_back("login_lines sha256=" + digest_lines(lines) + " count=" + std::to_string(lines.size()));
         c.lines.push_back("model sha256=" + digest_lines(model_lines) + " lines=" + std::to_string(model_lines.size()));
+        chunked_digests(c, "model", model_lines, 1000);
         for (const std::string& l : lines)
         {
             if (l.compare(0, 10, "validation") == 0 || l.compare(0, 7, "usable=") == 0 || l.compare(0, 6, "files ") == 0) c.lines.push_back(l);
@@ -310,6 +348,7 @@ namespace tut
     // counts and timings only.
     template<> template<> void invmodel_object::test<8>()
     {
+        env().ran.insert(8);
         set_test_name("bench and user cache");
         S32 runs = atoi(getenv_str("VKS_INVMODEL_BENCH").c_str());
         std::string user_cache = getenv_str("VKS_INVMODEL_USER_CACHE");
