@@ -158,4 +158,34 @@ namespace tut
         write_file(paths.gz, gz);
         ensure_failed_cleanly("truncated", paths);
     }
+
+    template<> template<>
+    void object::test<5>()
+    {
+        set_test_name("gzip_file() keeps the old file when gzclose() fails");
+#if LL_LINUX
+        // A small input stays in zlib's buffer until gzclose(), so pointing
+        // the temporary file at /dev/full makes the close's flush fail with
+        // ENOSPC. Windows and macOS have no portable equivalent.
+        if (!exists("/dev/full"))
+        {
+            skip("no /dev/full");
+        }
+        GzPaths paths;
+        const std::string previous("previous cache contents\n");
+        write_file(paths.src, "new cache contents\n");
+        write_file(paths.gz, previous);
+        boost::filesystem::create_symlink("/dev/full", paths.gz + ".t");
+        ensure("gzip_file() returns false", !gzip_file(paths.src, paths.gz));
+        // Check the type before reading: /dev/full reads zeros forever.
+        ensure("the previous file is still a regular file",
+               boost::filesystem::symlink_status(paths.gz).type() == boost::filesystem::regular_file);
+        ensure("the previous file is unchanged", read_file(paths.gz) == previous);
+        boost::system::error_code ec;
+        ensure("no temporary file left",
+               boost::filesystem::symlink_status(paths.gz + ".t", ec).type() == boost::filesystem::file_not_found);
+#else
+        skip("needs /dev/full to make gzclose() fail");
+#endif
+    }
 }

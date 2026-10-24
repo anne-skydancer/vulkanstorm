@@ -44,6 +44,7 @@ namespace llinventory_oracle
 // blob: 9672a3262be33ff1955165e8307aac31a4d90006
 // copied: the whole file after its licence block
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 
 
@@ -287,6 +288,7 @@ LLSD LLAssetType::getTypeNames()
 // blob: 8fa8983d3c418f17346ede78072061e4a8cf556f
 // copied: the whole file after its licence block
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 
 
@@ -513,6 +515,7 @@ bool inventory_and_asset_types_match(LLInventoryType::EType inventory_type,
 // blob: 1be616f5fe1acd51de1b6d2cf7d68db9d5ed681b
 // copied: the whole file after its licence block
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 
 
@@ -734,6 +737,7 @@ LLSD LLFolderType::getTypeNames()
 // blob: e05e89f549e026af3cf115f1c581975f37fd7a0f
 // copied: the whole file after its licence block
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 
 
@@ -743,10 +747,11 @@ const U8 TASK_INVENTORY_ASSET_KEY = 1;
 
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/llinventory/llpermissions.cpp
-// lines: 27-1121
-// blob: c49bacf040a51c8d3c05c9849c835229d5cd1cfb
+// lines: 27-1122
+// blob: d14c81a6bb271d8ed46a328edffa5aa55d80c327
 // copied: the whole file after its licence block
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 
 
@@ -1287,6 +1292,15 @@ void LLPermissions::unpackMessage(LLMessageSystem* msg, const char* block, S32 b
 }
 
 
+// The mask keywords of the legacy text: a mask line that does not parse
+// (no value, or a value that is not hexadecimal) reads as PERM_NONE.
+static bool is_legacy_mask_keyword(const char* keyword)
+{
+    return !strcmp("creator_mask", keyword) || !strcmp("base_mask", keyword)
+        || !strcmp("owner_mask", keyword) || !strcmp("group_mask", keyword)
+        || !strcmp("everyone_mask", keyword) || !strcmp("next_owner_mask", keyword);
+}
+
 bool LLPermissions::importLegacyStream(std::istream& input_stream)
 {
     init(LLUUID::null, LLUUID::null, LLUUID::null, LLUUID::null);
@@ -1298,18 +1312,27 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
     char keyword[256];  /* Flawfinder: ignore */
     char valuestr[256]; /* Flawfinder: ignore */
     char uuid_str[256]; /* Flawfinder: ignore */
-    U32 mask;
+    U32 mask = 0;
 
     keyword[0]  = '\0';
     valuestr[0] = '\0';
+    uuid_str[0] = '\0';
 
     while (input_stream.good())
     {
         input_stream.getline(buffer, BUFSIZE);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %255s %255s",
             keyword, valuestr);
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if (!strcmp("{", keyword))
         {
             continue;
@@ -1318,38 +1341,85 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
         {
             break;
         }
+        else if (fields < 2 && !is_legacy_mask_keyword(keyword))
+        {
+            // a keyword without a value counts as absent
+            continue;
+        }
         else if (!strcmp("creator_mask", keyword))
         {
             // legacy support for "creator" masks
-            sscanf(valuestr, "%x", &mask);
-            mMaskBase = mask;
-            fixFairUse();
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskBase = mask;
+                fixFairUse();
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskBase = PERM_NONE;
+            }
         }
         else if (!strcmp("base_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskBase = mask;
-            //fixFairUse();
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskBase = mask;
+                //fixFairUse();
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskBase = PERM_NONE;
+            }
         }
         else if (!strcmp("owner_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskOwner = mask;
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskOwner = mask;
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskOwner = PERM_NONE;
+            }
         }
         else if (!strcmp("group_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskGroup = mask;
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskGroup = mask;
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskGroup = PERM_NONE;
+            }
         }
         else if (!strcmp("everyone_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskEveryone = mask;
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskEveryone = mask;
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskEveryone = PERM_NONE;
+            }
         }
         else if (!strcmp("next_owner_mask", keyword))
         {
-            sscanf(valuestr, "%x", &mask);
-            mMaskNextOwner = mask;
+            if (1 == sscanf(valuestr, "%x", &mask))
+            {
+                mMaskNextOwner = mask;
+            }
+            else
+            {
+                // a mask that does not parse reads as no permissions, never wider
+                mMaskNextOwner = PERM_NONE;
+            }
         }
         else if (!strcmp("creator_id", keyword))
         {
@@ -1373,9 +1443,11 @@ bool LLPermissions::importLegacyStream(std::istream& input_stream)
         }
         else if (!strcmp("group_owned", keyword))
         {
-            sscanf(valuestr, "%d", &mask);
-            if(mask) mIsGroupOwned = true;
-            else mIsGroupOwned = false;
+            if (1 == sscanf(valuestr, "%d", &mask))
+            {
+                if(mask) mIsGroupOwned = true;
+                else mIsGroupOwned = false;
+            }
         }
         else
         {
@@ -1843,10 +1915,11 @@ LLPermissions ll_permissions_from_sd(const LLSD& sd_perm)
 
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/llinventory/llsaleinfo.cpp
-// lines: 26-326
-// blob: b4d64bb4fb66f0f7f6f334e088937f4f981431ff
+// lines: 26-332
+// blob: 9a3b2f59648c5c7a3f1dbbf1299d48604a887ebb
 // copied: the whole file after its licence block
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 
 
@@ -1899,8 +1972,14 @@ U32 LLSaleInfo::getCRC32() const
 
 bool LLSaleInfo::exportLegacyStream(std::ostream& output_stream) const
 {
+    const char* type = lookup(mSaleType);
+    if (!type)
+    {
+        LL_WARNS_ONCE() << "Unknown sale type: " << mSaleType << LL_ENDL;
+        type = lookup(LLSaleInfo::FS_NOT);
+    }
     output_stream << "\tsale_info\t0\n\t{\n";
-    output_stream << "\t\tsale_type\t" << lookup(mSaleType) << "\n";
+    output_stream << "\t\tsale_type\t" << type << "\n";
     output_stream << "\t\tsale_price\t" << mSalePrice << "\n";
     output_stream <<"\t}\n";
     return true;
@@ -1965,7 +2044,10 @@ bool LLSaleInfo::importLegacyStream(std::istream& input_stream, bool& has_perm_m
     while(success && input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %254s %254s",
             keyword, valuestr);
@@ -1981,20 +2063,29 @@ bool LLSaleInfo::importLegacyStream(std::istream& input_stream, bool& has_perm_m
         {
             break;
         }
+        else if (fields < 2)
+        {
+            // a keyword without a value counts as absent
+            continue;
+        }
         else if(0 == strcmp("sale_type", keyword))
         {
             mSaleType = lookup(valuestr);
         }
         else if(0 == strcmp("sale_price", keyword))
         {
-            sscanf(valuestr, "%d", &mSalePrice);
-            mSalePrice = llclamp(mSalePrice, 0, S32_MAX);
+            if (1 == sscanf(valuestr, "%d", &mSalePrice))
+            {
+                mSalePrice = llclamp(mSalePrice, 0, S32_MAX);
+            }
         }
         else if (!strcmp("perm_mask", keyword))
         {
             //LL_INFOS() << "found deprecated keyword perm_mask" << LL_ENDL;
-            has_perm_mask = true;
-            sscanf(valuestr, "%x", &perm_mask);
+            if (1 == sscanf(valuestr, "%x", &perm_mask))
+            {
+                has_perm_mask = true;
+            }
         }
         else
         {
@@ -2148,9 +2239,10 @@ LLSaleInfo ll_sale_info_from_sd(const LLSD& sd)
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/llinventory/llinventory.cpp
 // lines: 26-1770
-// blob: f9f5a8a61ec120e5da3bf55b587b888a9f95d66a
+// blob: 051481e44cb9b89d3e6d93427dcd687748ef9348
 // copied: the whole file after its licence block
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 
 
@@ -2340,7 +2432,15 @@ bool LLInventoryObject::importLegacyStream(std::istream& input_stream)
     while(input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf(buffer, " %254s %254s", keyword, valuestr);  /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf(buffer, " %254s %254s", keyword, valuestr);  /* Flawfinder: ignore */
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if(0 == strcmp("{",keyword))
         {
             continue;
@@ -2348,6 +2448,12 @@ bool LLInventoryObject::importLegacyStream(std::istream& input_stream)
         if(0 == strcmp("}", keyword))
         {
             break;
+        }
+        else if (fields < 2 && 0 != strcmp("metadata", keyword))
+        {
+            // a keyword without a value counts as absent
+            // (metadata keeps its own handling)
+            continue;
         }
         else if(0 == strcmp("obj_id", keyword))
         {
@@ -2885,10 +2991,18 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
     while(success && input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %254s %254s",
             keyword, valuestr);
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if(0 == strcmp("{",keyword))
         {
             continue;
@@ -2896,6 +3010,12 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
         if(0 == strcmp("}", keyword))
         {
             break;
+        }
+        else if (fields < 2 && 0 != strcmp("permissions", keyword) && 0 != strcmp("sale_info", keyword) && 0 != strcmp("metadata", keyword))
+        {
+            // a keyword without a value counts as absent
+            // (block headers and metadata keep their own handling)
+            continue;
         }
         else if(0 == strcmp("item_id", keyword))
         {
@@ -3049,9 +3169,11 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
         }
         else if(0 == strcmp("creation_date", keyword))
         {
-            S32 date;
-            sscanf(valuestr, "%d", &date);
-            mCreationDate = date;
+            S32 date = 0;
+            if (1 == sscanf(valuestr, "%d", &date))
+            {
+                mCreationDate = date;
+            }
         }
         else
         {
@@ -3618,10 +3740,18 @@ bool LLInventoryCategory::importLegacyStream(std::istream& input_stream)
     while(input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %254s %254s",
             keyword, valuestr);
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if(0 == strcmp("{",keyword))
         {
             continue;
@@ -3629,6 +3759,12 @@ bool LLInventoryCategory::importLegacyStream(std::istream& input_stream)
         if(0 == strcmp("}", keyword))
         {
             break;
+        }
+        else if (fields < 2 && 0 != strcmp("metadata", keyword))
+        {
+            // a keyword without a value counts as absent
+            // (metadata keeps its own handling)
+            continue;
         }
         else if(0 == strcmp("cat_id", keyword))
         {
@@ -3890,10 +4026,11 @@ LLPointer<LLInventoryCategory> ll_create_category_from_sd(const LLSD& sd_cat)
 
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/llinventory/llcategory.cpp
-// lines: 25-179
-// blob: 26b3ee76c28d1de4ac5fe90048712e6efc348a04
+// lines: 25-190
+// blob: a945cdf7cc02c0ca710b6b086f996272877107d0
 // copied: the whole file after its licence block
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 
 
@@ -3986,6 +4123,11 @@ U32 LLCategory::getU32() const
 
 S32 LLCategory::getSubCategoryCount() const
 {
+    if (mData[0] + 1 >= (S32)LL_ARRAY_SIZE(CATEGORY_INDEX))
+    {
+        // unknown top level category
+        return 0;
+    }
     S32 rv = CATEGORY_INDEX[mData[0] + 1] - CATEGORY_INDEX[mData[0]];
     return rv;
 }
@@ -4012,6 +4154,12 @@ const char* LLCategory::lookupName() const
 {
     S32 i = 0;
     S32 index = mData[i++];
+    if (index >= (S32)LL_ARRAY_SIZE(CATEGORY_NAME))
+    {
+        // unknown top level category: the table's terminating NULL, which
+        // the first unknown value (7) already gets
+        return CATEGORY_NAME[LL_ARRAY_SIZE(CATEGORY_NAME) - 1];
+    }
     while((i < CATEGORY_DEPTH) && (mData[i] != 0))
     {
         index = CATEGORY_INDEX[index];
@@ -4055,6 +4203,7 @@ void LLCategory::unpackMultiMessage(LLMessageSystem* msg, const char* block,
 // blob: 2562614480d354638bca6c3050d1e07c9924d7ca
 // copied: the whole file after its licence block
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 
 
@@ -4151,6 +4300,7 @@ std::string LLSettingsType::getDefaultName(LLSettingsType::type_e type)
 // blob: 0fe7785f1a04a3275144efe6125b75dfaf29d297
 // copied: the whole file after its licence block
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 
 
@@ -4308,6 +4458,7 @@ std::string build_transfer_message_to_destination(
 // blob: d73e9c8966f6c802495f7cbcb3f23e5aadbbcae9
 // copied: the whole file after its licence block
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 
 
@@ -4575,9 +4726,10 @@ void LLNotecard::setText(const std::string& text)
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
 // lines: 91-92
-// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// blob: 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335
 // copied: the cache labels INV_OWNER_ID and INV_VERSION (over the frozen base classes)
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 static const std::string INV_OWNER_ID("owner_id");
 static const std::string INV_VERSION("version");
@@ -4586,9 +4738,10 @@ static const std::string INV_VERSION("version");
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
 // lines: 576-593
-// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// blob: 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335
 // copied: LLViewerInventoryItem::packMessage (over the frozen base classes)
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 void LLViewerInventoryItem::packMessage(LLMessageSystem* msg) const
 {
@@ -4612,10 +4765,11 @@ void LLViewerInventoryItem::packMessage(LLMessageSystem* msg) const
 
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
-// lines: 2640-2643
-// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// lines: 2647-2650
+// blob: 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335
 // copied: LLViewerInventoryItem::getCRC32 (over the frozen base classes)
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 U32 LLViewerInventoryItem::getCRC32() const
 {
@@ -4626,9 +4780,10 @@ U32 LLViewerInventoryItem::getCRC32() const
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
 // lines: 675-682
-// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// blob: 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335
 // copied: LLViewerInventoryCategory::packMessage (over the frozen base classes)
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 void LLViewerInventoryCategory::packMessage(LLMessageSystem* msg) const
 {
@@ -4643,9 +4798,10 @@ void LLViewerInventoryCategory::packMessage(LLMessageSystem* msg) const
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
 // lines: 740-743
-// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// blob: 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335
 // copied: LLViewerInventoryCategory::setVersion (over the frozen base classes)
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 void LLViewerInventoryCategory::setVersion(S32 version)
 {
@@ -4656,9 +4812,10 @@ void LLViewerInventoryCategory::setVersion(S32 version)
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
 // lines: 853-877
-// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// blob: 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335
 // copied: LLViewerInventoryCategory::exportLLSD and importLLSD (over the frozen base classes)
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 void LLViewerInventoryCategory::exportLLSD(LLSD & cat_data) const
 {
@@ -4695,9 +4852,10 @@ namespace llinventory_live_shim
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
 // lines: 91-92
-// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// blob: 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335
 // copied: the cache labels INV_OWNER_ID and INV_VERSION (over the live base classes)
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 static const std::string INV_OWNER_ID("owner_id");
 static const std::string INV_VERSION("version");
@@ -4706,9 +4864,10 @@ static const std::string INV_VERSION("version");
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
 // lines: 576-593
-// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// blob: 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335
 // copied: LLViewerInventoryItem::packMessage (over the live base classes)
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 void LLViewerInventoryItem::packMessage(LLMessageSystem* msg) const
 {
@@ -4732,10 +4891,11 @@ void LLViewerInventoryItem::packMessage(LLMessageSystem* msg) const
 
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
-// lines: 2640-2643
-// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// lines: 2647-2650
+// blob: 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335
 // copied: LLViewerInventoryItem::getCRC32 (over the live base classes)
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 U32 LLViewerInventoryItem::getCRC32() const
 {
@@ -4746,9 +4906,10 @@ U32 LLViewerInventoryItem::getCRC32() const
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
 // lines: 675-682
-// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// blob: 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335
 // copied: LLViewerInventoryCategory::packMessage (over the live base classes)
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 void LLViewerInventoryCategory::packMessage(LLMessageSystem* msg) const
 {
@@ -4763,9 +4924,10 @@ void LLViewerInventoryCategory::packMessage(LLMessageSystem* msg) const
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
 // lines: 740-743
-// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// blob: 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335
 // copied: LLViewerInventoryCategory::setVersion (over the live base classes)
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 void LLViewerInventoryCategory::setVersion(S32 version)
 {
@@ -4776,9 +4938,10 @@ void LLViewerInventoryCategory::setVersion(S32 version)
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/newview/llviewerinventory.cpp
 // lines: 853-877
-// blob: a13210dce6ed2561e2b18768645bcfa37068612c
+// blob: 5c3cd2e97772cb2f6bc2c9bcfdc6d53021131335
 // copied: LLViewerInventoryCategory::exportLLSD and importLLSD (over the live base classes)
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: 
 // ----
 void LLViewerInventoryCategory::exportLLSD(LLSD & cat_data) const
 {

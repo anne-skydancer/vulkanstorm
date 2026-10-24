@@ -48,6 +48,7 @@ namespace llinventory_oracle
 // blob: 6b785880faefb0f938aed81539b6e0dea6336f79
 // copied: the whole header between its include guard
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: #ifndef LL_LLPERMISSIONSFLAGS_H
 // ----
 
 // Flags for various permissions bits.
@@ -126,6 +127,7 @@ constexpr U8 PERM_NEXT_OWNER = 0x10;
 // blob: 17177d81c3cc86bce739f689754e40e3f953f89f
 // copied: the whole header between its include guard
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: #ifndef LL_LLASSETTYPE_H
 // ----
 
 
@@ -282,6 +284,7 @@ protected:
 // blob: e110c1dbe71d1298538bf78f6b468b7288730dd0
 // copied: the whole header between its include guard
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: #ifndef LLINVENTORYTYPE_H
 // ----
 
 
@@ -424,6 +427,7 @@ bool inventory_and_asset_types_match(LLInventoryType::EType inventory_type,
 // blob: e55c41eee9f85a04e55b5d226ccc6749fead872f
 // copied: the whole header between its include guard
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: #ifndef LL_LLFOLDERTYPE_H
 // ----
 
 
@@ -535,6 +539,7 @@ protected:
 // blob: 8e7bd87ac4332cefac3736990cd9e173145534dc
 // copied: the whole header between its include guard
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: #ifndef LL_LLINVENTORYDEFINES_H
 // ----
 
 // Consts for "key" field in the task inventory update message
@@ -616,6 +621,7 @@ public:
 // blob: 70b29cd312d1b684d196f2dee7d65fdcbd99c6d2
 // copied: the whole header between its include guard
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: #ifndef LL_LLPERMISSIONS_H
 // ----
 
 
@@ -1052,6 +1058,7 @@ LLPermissions ll_permissions_from_sd(const LLSD& sd_perm);
 // blob: 7186e8ab498b11a54cf1b3a7b70a7ef3bc083d35
 // copied: the whole header between its include guard
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: #ifndef LL_LLSALEINFO_H
 // ----
 
 
@@ -1149,6 +1156,7 @@ LLSaleInfo ll_sale_info_from_sd(const LLSD& sd);
 // blob: 76b3364a802608736f3c5d6a97298fcc5bce82b2
 // copied: the whole header between its include guard
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: #ifndef LL_LLINVENTORY_H
 // ----
 
 
@@ -1423,6 +1431,7 @@ LLPointer<LLInventoryCategory> ll_create_category_from_sd(const LLSD& sd_cat);
 // blob: a68ebaf721fb76671181c00d2a6bab0832e72856
 // copied: the whole header between its include guard
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: #ifndef LL_LLCATEGORY_H
 // ----
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1500,6 +1509,7 @@ protected:
 // blob: 6b6685d088d3d43b72e2a3c0c40d3e295125bb68
 // copied: the whole header between its include guard
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: #ifndef LL_INVENTORY_SETTINGS_H
 // ----
 
 
@@ -1539,6 +1549,7 @@ protected:
 // blob: 3c61b785a3ec8e75bd93c7f9de1e4cc66201ec7c
 // copied: the whole header between its include guard
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: #ifndef LL_LLTRANSACTIONFLAGS_H
 // ----
 
 
@@ -1584,6 +1595,7 @@ std::string build_transfer_message_to_destination(
 // blob: 764157692d4357377831e07d2367fd0a9c2ddd75
 // copied: the whole header between its include guard
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
+// conditionals: #ifndef LL_NOTECARD_H
 // ----
 
 

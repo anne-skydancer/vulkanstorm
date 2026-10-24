@@ -361,28 +361,8 @@ struct EdgeIndex
     static EdgeIndex& get() { static EdgeIndex ix; return ix; }
 };
 
-// Case-local undefined-behaviour marks (set by the C6 cases): the value is written
-// "UB" and not compared. (The values are not stable across builds of the same
-// compiler, so none is recorded as an expectation; README "Runtime edges".)
-struct UbMark
-{
-    std::string field;
-    int column;
-};
-static const std::vector<UbMark>* g_ub_marks = NULL;
-
 void emit(Sink& s, const std::string& cs, const std::string& field, std::vector<std::string> vals)
 {
-    if (g_ub_marks)
-    {
-        for (const UbMark& m : *g_ub_marks)
-        {
-            if (m.field == field && m.column >= 0 && m.column < (int)vals.size())
-            {
-                vals[m.column] = "UB";
-            }
-        }
-    }
     auto& ix = EdgeIndex::get().by_key;
     if (!ix.empty())
     {
@@ -1888,16 +1868,6 @@ std::pair<std::string, std::string> guarded_export(const std::function<void(std:
     return {out, flags.empty() ? std::string("good") : flags};
 }
 
-// The stated outcome (coordinator decision F5): the libstdc++ outcome, the stream
-// failed and bad after the prefix, is the behaviour the port must reproduce; the MSVC
-// crash has no outcome to reproduce and is accepted only as the pre-port C++ on Windows.
-std::string null_sale_outcome(const std::string& observed)
-{
-    const std::string stated = "RT(win=crash;linux=fb;required=fb)";
-    if (observed == "fb" || (strcmp(PLATFORM, "win") == 0 && observed == "crash")) return stated;
-    return std::string("RT-MISMATCH(") + PLATFORM + "=" + observed + ";stated=" + stated + ")";
-}
-
 //============================================================================
 // C4: sale info
 //============================================================================
@@ -1949,10 +1919,11 @@ template<class I> void c4_sale(Sink& s)
             }
             else
             {
-                // A sale type outside 0..3 streams lookup()'s NULL (runtime edge, README).
+                // A sale type outside 0..3: "not" since bug 1 (913990ebe3); still run guarded,
+                // so that a regression to the null name is reported, not fatal on Windows.
                 const auto r = guarded_export([&](std::ostream& os) { raw.exportLegacyStream(os); });
                 emit(s, cs, "legacy", {esc(r.first)});
-                emit(s, cs, "legacy.outcome", {null_sale_outcome(r.second)});
+                emit(s, cs, "legacy.outcome", {r.second});
             }
             LLSD sd = raw.asLLSD();
             emit_llsd(s, cs, "llsd", sd);
@@ -2410,13 +2381,12 @@ template<class I> void c5_item_record(const std::string& cs, const ItemF& f, Sin
     }
     else
     {
-        // A sale type outside 0..3 streams lookup()'s NULL (runtime edge, README): the
-        // shared prefix, then nothing, with the stream bad (libstdc++, the required
-        // behaviour) or a crash (MSVC, no outcome to reproduce).
+        // A sale type outside 0..3: written as "not" since bug 1 (913990ebe3); run
+        // guarded, so that a regression to the null name is reported, not fatal on Windows.
         const auto key = guarded_export([&](std::ostream& os) { item->exportLegacyStream(os, true); });
         const auto nokey = guarded_export([&](std::ostream& os) { item->exportLegacyStream(os, false); });
         emit(s, cs, "legacy", {esc(key.first)});
-        emit(s, cs, "legacy.outcome", {null_sale_outcome(key.second), null_sale_outcome(nokey.second)});
+        emit(s, cs, "legacy.outcome", {key.second, nokey.second});
         emit(s, cs, "legacy.nokey.prefix", {esc(nokey.first)});
         const std::string text = key.first.substr(key.first.find('\n') + 1);
         std::istringstream is(text);
@@ -2805,7 +2775,9 @@ struct LegacyCase
     std::string id;
     std::string readers; // I item, O object, C category, P permissions, S sale info, N notecard
     std::string input;
-    std::vector<UbMark> ub;
+    // Corrupt-input cases: the same input without the corrupt line. The readers then also
+    // record the fix() invariants and that the corrupt line widened no permission.
+    std::string baseline;
     S32 max_text = 0; // notecards: LLNotecard's max_text (0: LLNotecard::MAX_SIZE)
 };
 
@@ -2822,6 +2794,21 @@ template<class P> std::string perm_invariants(const P& p)
     r += (n & ~b) ? '0' : '1';
     r += (e & PERM_MODIFY) ? '0' : '1';
     r += (!(b & PERM_TRANSFER) && !p.isGroupOwned() && ((g | e) & PERM_COPY)) ? '0' : '1';
+    return r;
+}
+
+// Whether a corrupt line widened no permission against the same input without it: one
+// character per mask (base, owner, group, everyone, next: no bit added) and one for
+// group ownership (not newly set).
+template<class P> std::string no_widening(const P& p, const P& base)
+{
+    std::string r;
+    r += (p.getMaskBase() & ~base.getMaskBase()) ? '0' : '1';
+    r += (p.getMaskOwner() & ~base.getMaskOwner()) ? '0' : '1';
+    r += (p.getMaskGroup() & ~base.getMaskGroup()) ? '0' : '1';
+    r += (p.getMaskEveryone() & ~base.getMaskEveryone()) ? '0' : '1';
+    r += (p.getMaskNextOwner() & ~base.getMaskNextOwner()) ? '0' : '1';
+    r += (p.isGroupOwned() && !base.isGroupOwned()) ? '0' : '1';
     return r;
 }
 
@@ -2891,15 +2878,16 @@ std::vector<LegacyCase> c6_cases()
     std::vector<LegacyCase> v;
     const std::string ALL = "IOCPS";
     auto item_case = [&](const std::string& id, const std::function<void(std::vector<std::string>&)>& mut, bool suffix = true,
-                         const std::vector<UbMark>& ub = {}) {
+                         const std::string& baseline = std::string()) {
         std::vector<std::string> l = std_item_lines();
         mut(l);
-        v.push_back({id, ALL, join_lines(l) + (suffix ? kSuffix : std::string()), ub});
+        v.push_back({id, ALL, join_lines(l) + (suffix ? kSuffix : std::string()), baseline});
     };
     auto raw_case = [&](const std::string& id, const std::string& input, const std::string& readers = "IOCPS",
-                        const std::vector<UbMark>& ub = {}) {
-        v.push_back({id, readers, input, ub});
+                        const std::string& baseline = std::string()) {
+        v.push_back({id, readers, input, baseline});
     };
+    const std::string std_item = join_lines(std_item_lines()) + kSuffix;
     item_case("c6.good", [](std::vector<std::string>&) {});
     item_case("c6.good.eof", [](std::vector<std::string>&) {}, false);
     {
@@ -2944,10 +2932,11 @@ std::vector<LegacyCase> c6_cases()
     item_case("c6.kw.desc", [](std::vector<std::string>& l) { l[L_DESC] = "\t\tdesc"; });
     // The stale value is the description ("Standard description"): %d fails and the
     // uninitialised local is stored (undefined behaviour).
-    item_case("c6.kw.date", [](std::vector<std::string>& l) { l[L_DATE] = "\t\tcreation_date"; }, true, {{"item", IC_DATE}});
+    // The stale value is the description ("Standard description"): %d fails; 0 since bug 38.
+    item_case("c6.kw.date", [](std::vector<std::string>& l) { l[L_DATE] = "\t\tcreation_date"; });
     item_case("c6.kw.item_id", [](std::vector<std::string>& l) { l[L_ITEM_ID] = "\t\titem_id"; });
     item_case("c6.kw.metadata", [](std::vector<std::string>& l) { l.insert(l.begin() + L_PERM_CLOSE + 1, "\t\tmetadata"); });
-    raw_case("c6.kw.date.first", "\t{\n\t\tcreation_date\n\t}\n" + std::string(kSuffix), ALL, {{"item", IC_DATE}});
+    raw_case("c6.kw.date.first", "\t{\n\t\tcreation_date\n\t}\n" + std::string(kSuffix));
     raw_case("c6.kw.date.stale", "\t{\n\t\tflags\t7\n\t\tcreation_date\n\t}\n" + std::string(kSuffix));
     // Long lines.
     for (int n : {253, 254, 255, 256, 300})
@@ -3040,8 +3029,9 @@ std::vector<LegacyCase> c6_cases()
     item_case("c6.perm.creator_mask", [](std::vector<std::string>& l) { l[L_BASE] = "\t\tcreator_mask\t00006000"; });
     item_case("c6.perm.group_owned.1", [](std::vector<std::string>& l) { l.insert(l.begin() + L_GROUP_ID + 1, "\t\tgroup_owned\t1"); });
     item_case("c6.perm.group_owned.0", [](std::vector<std::string>& l) { l.insert(l.begin() + L_GROUP_ID + 1, "\t\tgroup_owned\t0"); });
-    item_case("c6.perm.group_owned.junk", [](std::vector<std::string>& l) { l.insert(l.begin() + L_GROUP_ID + 1, "\t\tgroup_owned\tjunk"); });
-    item_case("c6.perm.mask.stale", [](std::vector<std::string>& l) { l[L_OWNER] = "\t\towner_mask\tzz"; });
+    item_case("c6.perm.group_owned.junk", [](std::vector<std::string>& l) { l.insert(l.begin() + L_GROUP_ID + 1, "\t\tgroup_owned\tjunk"); },
+              true, std_item);
+    item_case("c6.perm.mask.stale", [](std::vector<std::string>& l) { l[L_OWNER] = "\t\towner_mask\tzz"; }, true, std_item);
     item_case("c6.perm.mask.0x", [](std::vector<std::string>& l) { l[L_OWNER] = "\t\towner_mask\t0x0000e000"; });
     item_case("c6.perm.mask.neg", [](std::vector<std::string>& l) { l[L_OWNER] = "\t\towner_mask\t-1"; });
     item_case("c6.perm.mask.9digits", [](std::vector<std::string>& l) { l[L_OWNER] = "\t\towner_mask\t1ffffffff"; });
@@ -3049,17 +3039,11 @@ std::vector<LegacyCase> c6_cases()
     item_case("c6.perm.unknown", [](std::vector<std::string>& l) { l.insert(l.begin() + L_BASE, "\t\tunknown_perm\t1"); });
     {
         // The first mask fails to parse: the uninitialised local is stored (undefined behaviour).
-        // The masks are undefined; the fix() invariants that hold whatever the garbage
-        // are recorded in "item.invariants" and "perm.invariants".
-        const std::vector<UbMark> ub = {
-            {"item", IC_BASE}, {"item", IC_OWNER_MASK}, {"item", IC_GROUP_MASK}, {"item", IC_EVERYONE},
-            {"item", IC_NEXT}, {"perm", PC_BASE + 1}, {"perm", PC_OWNER_MASK + 1}, {"perm", PC_GROUP_MASK + 1},
-            {"perm", PC_EVERYONE + 1}, {"perm", PC_NEXT + 1}};
-        raw_case("c6.perm.mask.first_fails", "\t{\n\tpermissions 0\n\t{\n\t\tbase_mask\tzz\n\t}\n\t}\n" + std::string(kSuffix), ALL, ub);
-        raw_case("c6.perm.group_owned.first_fails", "\t{\n\tpermissions 0\n\t{\n\t\tgroup_owned\tjunk\n\t}\n\t}\n" + std::string(kSuffix), ALL,
-                 {{"item", IC_GROUP_OWNED}, {"perm", PC_GROUP_OWNED + 1}});
-        raw_case("c6.perm.id.first_empty", "\t{\n\tpermissions 0\n\t{\n\t\tcreator_id\n\t}\n\t}\n" + std::string(kSuffix), ALL,
-                 {{"item", IC_CREATOR}, {"perm", PC_CREATOR + 1}});
+        // Defined since bug 38 (d680ea60a7): the targets start at 0 and "".
+        const std::string open = "\t{\n\tpermissions 0\n\t{\n", close = "\t}\n\t}\n" + std::string(kSuffix);
+        raw_case("c6.perm.mask.first_fails", open + "\t\tbase_mask\tzz\n" + close, ALL, open + close);
+        raw_case("c6.perm.group_owned.first_fails", open + "\t\tgroup_owned\tjunk\n" + close, ALL, open + close);
+        raw_case("c6.perm.id.first_empty", open + "\t\tcreator_id\n" + close, ALL, open + close);
     }
     // Sale info inside the item.
     for (const char* pm : {"00000000", "7fff7fff", "0000e000", "ffffffff"})
@@ -3086,7 +3070,7 @@ std::vector<LegacyCase> c6_cases()
         const std::string val = dt;
         item_case("c6.date." + val, [val](std::vector<std::string>& l) { l[L_DATE] = "\t\tcreation_date\t" + val; });
     }
-    item_case("c6.date.abc", [](std::vector<std::string>& l) { l[L_DATE] = "\t\tcreation_date\tabc"; }, true, {{"item", IC_DATE}});
+    item_case("c6.date.abc", [](std::vector<std::string>& l) { l[L_DATE] = "\t\tcreation_date\tabc"; });
     // Unknown keywords, braces.
     item_case("c6.unknown.kw", [](std::vector<std::string>& l) { l.insert(l.begin() + L_PARENT + 1, "\t\tunknown_key\tvalue"); });
     item_case("c6.brace.junk", [](std::vector<std::string>& l) { l[L_CLOSE] = "\t}junk"; });
@@ -3292,7 +3276,6 @@ std::vector<LegacyCase> c6_cases()
 
 template<class I> void c6_run(const LegacyCase& c, Sink& s)
 {
-    g_ub_marks = &c.ub;
     const std::string& cs = c.id;
     for (char r : c.readers)
     {
@@ -3304,7 +3287,14 @@ template<class I> void c6_run(const LegacyCase& c, Sink& s)
             LLPointer<typename I::Item> it = make_item<I>(prev_item());
             const bool ok = it->importLegacyStream(is);
             emit(s, cs, "item", item_cols(*it));
-            if (!c.ub.empty()) emit(s, cs, "item.invariants", {perm_invariants(it->getPermissions())});
+            if (!c.baseline.empty())
+            {
+                std::istringstream bs(c.baseline);
+                LLPointer<typename I::Item> base = make_item<I>(prev_item());
+                base->importLegacyStream(bs);
+                emit(s, cs, "item.invariants", {perm_invariants(it->getPermissions())});
+                emit(s, cs, "item.no_widening", {no_widening(it->getPermissions(), base->getPermissions())});
+            }
             std::vector<std::string> st = stream_cols(is, c.input);
             st.insert(st.begin(), bl(ok));
             emit(s, cs, "item.stream", st);
@@ -3337,7 +3327,14 @@ template<class I> void c6_run(const LegacyCase& c, Sink& s)
             std::vector<std::string> cols = perm_cols(p);
             cols.insert(cols.begin(), bl(ok));
             emit(s, cs, "perm", cols);
-            if (!c.ub.empty()) emit(s, cs, "perm.invariants", {perm_invariants(p)});
+            if (!c.baseline.empty())
+            {
+                std::istringstream bs(c.baseline);
+                typename I::Perm base = make_perm<typename I::Perm>(prev_item().perm);
+                base.importLegacyStream(bs);
+                emit(s, cs, "perm.invariants", {perm_invariants(p)});
+                emit(s, cs, "perm.no_widening", {no_widening(p, base)});
+            }
             emit(s, cs, "perm.stream", stream_cols(is, c.input));
             break;
         }
@@ -3378,7 +3375,6 @@ template<class I> void c6_run(const LegacyCase& c, Sink& s)
             break;
         }
     }
-    g_ub_marks = NULL;
 }
 
 template<class I> void c6_legacy(Sink& s)
@@ -4692,25 +4688,33 @@ void check_fixture_tree(const std::string& fixture_dir, CheckResult& r)
             r.diffs++;
         }
     }
-    // digests.txt: every entry belongs to a known stream; every stream has its total.
-    std::set<std::string> streams;
-    for (const RandomStream& rs : kRandom) streams.insert(rs.name);
-    for (const char* e : kExhaustiveNames) streams.insert(e);
+    // digests.txt holds exactly the expected keys: each stream's total and its chunks.
+    std::set<std::string> keys;
+    auto add_stream = [&](const std::string& name, U64 n, U64 chunk) {
+        keys.insert(name);
+        for (U64 a = 0; a < n; a += chunk) keys.insert(name + "@" + d((S64)a) + "-" + d((S64)std::min(n, a + chunk)));
+    };
+    for (const RandomStream& rs : kRandom) add_stream(rs.name, stream_cases(rs), stream_chunk(rs));
+    for (const char* e : kExhaustiveNames)
+    {
+        const std::string name = e;
+        const U64 n = name == "c3x.initmasks5" ? (U64)C3X_FAIR_CASES : (name.find("alpha5") != std::string::npos ? (1ull << 25) : (1ull << 20));
+        add_stream(name, n, EXHAUSTIVE_CHUNK);
+    }
     const std::map<std::string, std::string> digests = read_digests(fixture_dir);
     for (const auto& kv : digests)
     {
-        const std::string base = kv.first.substr(0, kv.first.find('@'));
-        if (!streams.count(base))
+        if (!keys.count(kv.first))
         {
             r.report += "digests.txt: unexpected entry " + kv.first + "\n";
             r.diffs++;
         }
     }
-    for (const std::string& s : streams)
+    for (const std::string& k : keys)
     {
-        if (!digests.count(s))
+        if (!digests.count(k))
         {
-            r.report += "digests.txt: missing " + s + "\n";
+            r.report += "digests.txt: missing " + k + "\n";
             r.diffs++;
         }
     }
@@ -5153,7 +5157,7 @@ int main(int argc, char** argv)
         {
             for (const vksinv::LegacyCase& c : vksinv::c6_cases())
             {
-                if (c.ub.empty()) continue;
+                if (c.baseline.empty()) continue;
                 vksinv::VecSink s;
                 vksinv::c6_run<vksinv::Live>({c.id, c.readers, c.input, {}}, s);
                 for (const std::string& l : s.lines) printf("%s\n", l.c_str());
