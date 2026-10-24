@@ -3067,8 +3067,10 @@ bool LLInventoryModel::loadSkeleton(
             {
                 LL_INFOS(LOG_INV) << "Unable to gunzip " << gzip_filename << LL_ENDL;
                 // A corrupt or truncated cache: don't fall back to a plain
-                // file left under the same name, and remove the .gz below.
+                // file left under the same name, now or at the next login.
+                // Both it and the .gz are removed below.
                 is_cache_obsolete = true;
+                remove_inventory_file = true;
             }
         }
         if (!is_cache_obsolete && loadFromFile(inventory_filename, categories, items, categories_to_update, is_cache_obsolete))
