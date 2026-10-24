@@ -779,7 +779,7 @@ void FSAreaSearch::processRequestQueue()
     }
     mRequestNeedsSent = false;
 
-    for (const auto regionp : VSAreaRegion::instances())
+    for (const auto& regionp : VSAreaRegion::instances())
     {
         U64 region_handle = regionp->getHandle();
         if (mRegionRequests[region_handle] > (MAX_OBJECTS_PER_PACKET + 128))

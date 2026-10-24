@@ -8,9 +8,9 @@ template<class View, class Callback>
 auto vs_appearance_ui_callback(View* view, Callback callback)
 {
     return [owner = view->getHandle(), current = vs_native_im_guard(), callback = std::move(callback)](auto&&... args) mutable
-        -> decltype(callback(std::forward<decltype(args)>(args)...))
+        -> decltype(std::declval<Callback&>()(std::forward<decltype(args)>(args)...))
     {
-        using Result = decltype(callback(std::forward<decltype(args)>(args)...));
+        using Result = decltype(std::declval<Callback&>()(std::forward<decltype(args)>(args)...));
         if (!current() || !owner.get())
         {
             if constexpr (!std::is_void_v<Result>) return Result{};
