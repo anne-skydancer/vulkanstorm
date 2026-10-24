@@ -49,7 +49,7 @@ public:
         std::function<void(float)> publish;
         std::shared_ptr<const void> residency;
     };
-    enum class DepthCompare { LessEqual, Always, Greater, GreaterEqual };
+    enum class DepthCompare { LessEqual, AlwaysPass, Greater, GreaterEqual }; // not "Always": X11 X.h defines it as a macro
     struct Packet
     {
         Mesh mesh;
