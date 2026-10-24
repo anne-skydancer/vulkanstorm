@@ -2960,6 +2960,12 @@ void LLViewerObject::saveScript(const LLViewerInventoryItem* item,
                                   item->getCreationDate());
     task_item->setTransactionID(item->getTransactionID());
 
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, script " << item->getUUID() << " not saved" << LL_ENDL;
+        return;
+    }
+
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_RezScript);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -2991,6 +2997,11 @@ void LLViewerObject::moveInventory(const LLUUID& folder_id,
                                    const LLUUID& item_id)
 {
     LL_DEBUGS() << "LLViewerObject::moveInventory " << item_id << LL_ENDL;
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item_id << " not moved" << LL_ENDL;
+        return;
+    }
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_MoveTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -3083,7 +3094,22 @@ void LLViewerObject::requestInventory()
     {
         // inventory is either up to date or doesn't has a listener
         // if it is dirty, leave it this way in case we gain a listener
-        doInventoryCallback();
+        if (isInventoryPending())
+        {
+            // A request or transfer is outstanding: give the listeners the
+            // contents we have, but keep the request state and xfer id that
+            // doInventoryCallback() releases, so the pending reply is still
+            // handled as such and later requests are not duplicated.
+            const EInventoryRequestState request_state = mInvRequestState;
+            const U64 request_xfer_id = mInvRequestXFerId;
+            doInventoryCallback();
+            mInvRequestState = request_state;
+            mInvRequestXFerId = request_xfer_id;
+        }
+        else
+        {
+            doInventoryCallback();
+        }
     }
     else
     {
@@ -3109,6 +3135,12 @@ void LLViewerObject::fetchInventoryFromServer()
         {
             LLCoros::instance().launch("LLViewerObject::fetchInventoryFromCapCoro()",
                                        boost::bind(&LLViewerObject::fetchInventoryFromCapCoro, mID));
+        }
+        else if (!mRegionp)
+        {
+            // Nothing to send to: fail the request as an HTTP error does in fetchInventoryFromCapCoro.
+            LL_WARNS() << "Object " << mID << " has no region, task inventory not requested" << LL_ENDL;
+            mInvRequestState = INVENTORY_REQUEST_STOPPED;
         }
         else
         {
@@ -3494,6 +3526,19 @@ void LLViewerObject::processTaskInv(LLMessageSystem* msg, void** user_data)
             delete ft;
             return;
         }
+        if (!object->mRegionp)
+        {
+            LL_WARNS() << "Object " << task_id << " has no region, task inventory file not requested" << LL_ENDL;
+            // Release a pending request, as fetchInventoryFromServer() does without a
+            // region, so a later fetch is not refused as a duplicate. An active
+            // transfer (INVENTORY_XFER) completes on its own.
+            if (object->mInvRequestState == INVENTORY_REQUEST_PENDING)
+            {
+                object->mInvRequestState = INVENTORY_REQUEST_STOPPED;
+            }
+            delete ft;
+            return;
+        }
         U64 new_id = gXferManager->requestFile(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, ft->mFilename),
             ft->mFilename, LL_PATH_CACHE,
             object->mRegionp->getHost(),
@@ -3691,6 +3736,9 @@ void LLViewerObject::loadTaskInvLLSD(const LLSD& inv_result)
     else
     {
         LL_WARNS() << "unable to load task inventory: " << inv_result << LL_ENDL;
+        // Fail the request as an HTTP error does in fetchInventoryFromCapCoro, so that
+        // later requests are not dropped as duplicates of this one.
+        mInvRequestState = INVENTORY_REQUEST_STOPPED;
         return;
     }
     doInventoryCallback();
@@ -3735,6 +3783,12 @@ void LLViewerObject::removeInventory(const LLUUID& item_id)
     // close any associated floater properties
     LLFloaterReg::hideInstance("properties", item_id);
     // </FS:Ansariel>
+
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item_id << " not removed" << LL_ENDL;
+        return;
+    }
 
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_RemoveTaskInventory);
@@ -3793,6 +3847,14 @@ void LLViewerObject::updateMaterialInventory(LLViewerInventoryItem* item, U8 key
         return;
     }
 
+    if (!mRegionp)
+    {
+        // updateInventory() sends nothing without a region; don't leave the
+        // asset pending, or isAssetInInventory() refuses it from then on.
+        LL_WARNS() << "Object " << mID << " has no region, item " << item->getUUID() << " not updated" << LL_ENDL;
+        return;
+    }
+
     mPendingInventoryItemsIDs.push_back(item->getAssetUUID());
     updateInventory(item, key, is_new);
 }
@@ -3814,6 +3876,11 @@ void LLViewerObject::updateInventory(
                                   item->getFlags(),
                                   item->getCreationDate());
     task_item->setTransactionID(item->getTransactionID());
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item->getUUID() << " not updated" << LL_ENDL;
+        return;
+    }
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_UpdateTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);
