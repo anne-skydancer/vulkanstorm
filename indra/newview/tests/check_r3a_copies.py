@@ -12,22 +12,30 @@ test; it exits non-zero on any finding. Three checks:
        ...verbatim text...
        // ---- VKS-COPY-END
 
-   Both sides are reduced the same way: comments are removed outside string
-   and character literals, `#if 0` blocks are removed from the live text,
-   whitespace runs are collapsed outside literals (literals are compared
-   verbatim), empty lines are dropped. The copy's first line (its signature)
-   must occur exactly once in the reduced live file; the live region is that
-   line through its matching closing brace. Lines ending in "// VKS-HARNESS"
-   are the recorder's additions: each must match one of HARNESS_FORMS (they
-   only record), and they are dropped before the comparison. A `//` comment
-   inside a copy that holds code punctuation (; { }) is flagged: a statement
-   folded onto a comment line would escape the comparison.
+   Both sides are reduced the same way: backslash-newline splices are
+   joined first (as the compiler does), then comments are removed outside
+   string and character literals, `#if 0` blocks are removed from the live
+   text, whitespace runs are collapsed outside literals (literals are
+   compared verbatim), empty lines are dropped. The copy's first line (its
+   signature) must occur exactly once in the reduced live file, compared
+   with all whitespace removed (a re-spaced copy of the signature counts),
+   and the live region must lie outside every preprocessor conditional
+   (`#if 1 <changed> #else <original>` cannot hide a stale copy); the live
+   region is that line through its matching closing brace. Lines ending in
+   "// VKS-HARNESS" are the recorder's additions: each must match one of
+   HARNESS_FORMS and be free of side effects (no assignment but to the op
+   being recorded, no ++/--, calls only to HARNESS_CALLS); they are dropped
+   before the comparison. A `//` comment inside a copy that holds code
+   punctuation (; { }) is flagged: a statement folded onto a comment line
+   would escape the comparison.
 
 2. Fingerprints of the live code the stub emulates instead of copying
    (the model functions gInventory stands in for, the fetch() gate, the
    default arguments the recordings depend on): SHA-256 of the reduced
-   region. A change fails until the stub is reviewed against it and the
-   fingerprint in check_r3a_fingerprints.txt is updated
+   region, and the region's enclosing preprocessor conditionals (recorded
+   in the table; a region must match exactly once, signature compared
+   without whitespace). A change fails until the stub is reviewed against
+   it and the fingerprint in check_r3a_fingerprints.txt is updated
    (--print-fingerprints prints the current table).
 
 3. Identifier fence. Every live line of llviewerinventory.cpp and
@@ -36,7 +44,10 @@ test; it exits non-zero on any finding. Three checks:
    check_r3a_fence.txt (reduced line -> count, each reviewed: they are in
    functions the harness never reaches, or declarations and accessors of
    the header). A new use elsewhere fails (--print-fence prints the lines
-   outside regions).
+   outside regions). Also every `#define` / `#undef` in the four live files
+   (llviewerinventory.cpp/.h, llinventorymodel.cpp/.h) that names a fenced
+   member or a copied, fingerprinted or recorded function fails: a macro
+   could change what a checked region compiles to.
 """
 import hashlib
 import os
@@ -55,6 +66,21 @@ HARNESS_FORMS = [
     re.compile(r"^\s*vks_ais::Internal vks_guard; // VKS-HARNESS$"),
     re.compile(r"^\s*if \(vks_ais::recording\(\)\) \{ LLSD op = LLSD::emptyMap\(\);( op\[\"\w+\"\] = [^;{}]*;)+ record\(op\); \} // VKS-HARNESS$"),
 ]
+
+# Calls a harness line may make (none has side effects on the model).
+HARNESS_CALLS = {"recording", "st", "size", "emptyMap", "record", "is_model_item", "steal", "CatVersionTag",
+                 "getDescendentCount", "Integer"}
+
+# Names a #define/#undef in the live files must not touch, besides FENCED and
+# the copied and fingerprinted functions.
+MACRO_GUARDED = {"setVersion", "getVersion", "setDescendentCount", "getDescendentCount", "accountForUpdate",
+                 "getCategory", "getItem", "updateItem", "updateCategory", "onObjectDeletedFromServer",
+                 "notifyObservers", "addChangedMask", "findCategoryUUIDForType", "fetch", "fetchDescendentsOf",
+                 "copyViewerItem", "copyItem", "copyViewerCategory", "copyCategory", "unpackMessage", "fromLLSD",
+                 "localizeName", "localizeInventoryObjectName", "updateParentOnServer", "getLinkedItem",
+                 "getLinkedCategory", "getType", "getName", "setTransactionID", "getViewerDescendentCount",
+                 "setParent", "setComplete", "LLCategoryUpdate", "getChangedIDs", "sendReliableMessage"}
+MACRO_FILES = ["llviewerinventory.cpp", "llviewerinventory.h", "llinventorymodel.cpp", "llinventorymodel.h"]
 
 # Emulated, not copied: (file, signature line, kind) -> sha256 of the reduced
 # region ("block": through the matching brace; "stmt": through the first ';').
@@ -100,6 +126,8 @@ def reduce_text(text, drop_if0=False):
     """Returns a list of (original line number, reduced line, comment text)
     with comments removed outside literals and whitespace collapsed outside
     literals; empty lines are dropped."""
+    # backslash-newline splices first, as translation phase 2 does
+    text = re.sub(r"\\\r?\n", "", text)
     out = []
     i = 0
     n = len(text)
@@ -208,10 +236,56 @@ def region(reduced, start, kind):
     return None
 
 
+def nows(s):
+    return re.sub(r"\s+", "", s.replace("\x00", ""))
+
+
 def find_once(reduced, signature):
-    sig = reduce_text(signature)[0][1]
-    hits = [k for k, (_, s, _) in enumerate(reduced) if s == sig]
+    sig = nows(reduce_text(signature)[0][1])
+    hits = [k for k, (_, s, _) in enumerate(reduced) if nows(s) == sig]
     return hits
+
+
+_conds = {}
+
+
+def conditionals(fname):
+    """For each reduced line of a live file, the stack of preprocessor
+    conditionals around it (#if 0 blocks are already gone)."""
+    if fname not in _conds:
+        stack = []
+        out = []
+        for _, s, _ in live(fname):
+            t = s.replace("\x00", "")
+            m = re.match(r"^#\s*(if|ifdef|ifndef|elif|else|endif)\b(.*)$", t)
+            if m:
+                kind = m.group(1)
+                if kind in ("if", "ifdef", "ifndef"):
+                    stack.append(t)
+                elif kind in ("elif", "else") and stack:
+                    stack[-1] = stack[-1] + " | " + t
+                elif kind == "endif" and stack:
+                    stack.pop()
+            out.append(tuple(stack))
+        _conds[fname] = out
+    return _conds[fname]
+
+
+def check_harness_line(line):
+    """None if the harness line only records; else the reason."""
+    t = re.sub(r'"[^"]*"', '""', line.split("// VKS-HARNESS")[0])
+    if "++" in t or "--" in t:
+        return "increments or decrements"
+    u = re.sub(r"(op|m)\[\"\"\]\s*=(?!=)", "", t)
+    u = re.sub(r"vks_ais::st\(\)\.ops\[\(LLSD::Integer\)vks_op_index\]\[\"\"\]\s*=(?!=)", "", u)
+    u = re.sub(r"\b(bool vks_record_it|size_t vks_op_index|LLSD op|LLSD m)\s*=(?!=)", "", u)
+    u = re.sub(r"(==|!=|<=|>=)", "", u)
+    if "=" in u:
+        return "assigns to something other than the op being recorded"
+    for name in re.findall(r"([A-Za-z_]\w*)\s*\(", t):
+        if name not in HARNESS_CALLS and name not in ("if",):
+            return "calls %s()" % name
+    return None
 
 
 _cache = {}
@@ -248,6 +322,9 @@ def check_copies(failures, covered):
             if line.rstrip().endswith("// VKS-HARNESS"):
                 if not any(form.match(line) for form in HARNESS_FORMS):
                     failures.append("copy %s %s: harness line not of an allowed form: %s" % (fname, what, line.strip()))
+                why = check_harness_line(line)
+                if why:
+                    failures.append("copy %s %s: harness line %s: %s" % (fname, what, why, line.strip()))
                 continue
             kept.append(line)
         copy = reduce_text("\n".join(kept))
@@ -263,6 +340,10 @@ def check_copies(failures, covered):
         if reg is None:
             failures.append("copy %s %s: no end of the live region" % (fname, what))
             continue
+        conds = set(conditionals(fname)[reg[0]:reg[1] + 1])
+        if conds != {()}:
+            failures.append("copy %s %s: the live region lies inside preprocessor conditionals %s" % (
+                fname, what, sorted(conds)))
         covered.setdefault(fname, set()).update(range(reg[0], reg[1] + 1))
         a = [s for _, s, _ in copy]
         b = [s for _, s, _ in reduced[reg[0]:reg[1] + 1]]
@@ -291,6 +372,8 @@ def fingerprints(covered):
             continue
         covered.setdefault(fname, set()).update(range(reg[0], reg[1] + 1))
         text = "\n".join(strip_literal_marks([s for _, s, _ in reduced[reg[0]:reg[1] + 1]]))
+        conds = sorted(set(conditionals(fname)[reg[0]:reg[1] + 1]))
+        text += "\n#conditionals " + repr(conds)
         table[(fname, sig, kind)] = hashlib.sha256(text.encode("utf-8")).hexdigest()
     return table, problems
 
@@ -319,6 +402,21 @@ def fence(covered):
             if pat.search(re.sub(r"\x00[^\x00]*\x00", "", s)):
                 key = (fname, s.replace("\x00", ""))
                 found[key] = found.get(key, 0) + 1
+    return found
+
+
+def macro_fence(names):
+    found = []
+    pat = re.compile(r"^\s*#\s*(define|undef)\b(.*)$")
+    for fname in MACRO_FILES:
+        with open(os.path.join(NEWVIEW, fname), encoding="utf-8", errors="replace") as f:
+            text = re.sub(r"\\\r?\n", " ", f.read())
+        for line in text.splitlines():
+            m = pat.match(line)
+            if m:
+                hit = set(re.findall(r"[A-Za-z_]\w*", m.group(2))) & names
+                if hit:
+                    found.append("%s: %s (names %s)" % (fname, line.strip(), ", ".join(sorted(hit))))
     return found
 
 
@@ -362,6 +460,13 @@ def main():
     for key in committed:
         if key not in table:
             failures.append("fingerprint table names an unknown region: %s '%s'" % (key[0], key[1]))
+    names = set(FENCED) | MACRO_GUARDED
+    for (fname, sig, kind) in FINGERPRINTS:
+        m = re.search(r"(\w+)\s*\(", sig)
+        if m:
+            names.add(m.group(1))
+    for f in macro_fence(names):
+        failures.append("macro fence: " + f)
     allow = read_fence_allow()
     for key, count in sorted(fence_found.items()):
         if allow.get(key) != count:

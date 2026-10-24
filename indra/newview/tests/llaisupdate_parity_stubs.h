@@ -97,13 +97,18 @@ namespace vks_ais
     //    callback}: the real AISAPI command function, through the
     //    recording coprocedure manager and HTTP adapter ('result', if
     //    defined, is what the adapter returns).
-    // "hooks" [{checkpoint|yield: k, actions: [...]}] run at the step's
-    // k-th checkTimeout() or k-th yield; a run_step action carries its own
+    // "hooks" [{apply_checkpoint|parse_checkpoint|yield: k, actions: [...]}]
+    // run at the step's k-th checkTimeout() in doUpdate() (both runs), its
+    // k-th checkTimeout() before doUpdate() (sched run only) or after its
+    // k-th yield (sched run only); a run_step action carries its own
     // "result". A scripted shutdown (LLCoros::Stopping) ends the step as the
     // coroutine's top level would: recorded as "abort", no callback.
     void run_step(const LLSD& step, const LLSD& result);
-    // Write tids that were malformed, null or reused (must stay 0).
-    int tid_failures();
+    // The case and run being recorded (named in the tid messages).
+    void set_case(const std::string& id, TimerMode mode);
+    // One message per write tid that was malformed, null or reused (case,
+    // run, op index); must stay empty.
+    std::vector<std::string> tid_failures();
 
     // Command type names (the enum's names) and back; -1 if unknown.
     const char* command_name(int type);
