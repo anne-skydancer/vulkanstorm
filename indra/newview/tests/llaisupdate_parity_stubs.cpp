@@ -1662,6 +1662,13 @@ U32 LLInventoryModel::updateItem(const LLViewerInventoryItem* item, U32 mask)
                 }
                 mask |= LLInventoryObserver::INTERNAL;
             }
+            else if (type <= LLAssetType::AT_NONE)
+            {
+                // addItem() refuses an item of no type and updateItem()
+                // returns the mask as it came: nothing listed, accounted
+                // or marked changed (bug 23).
+                outcome = "refused_bad_type";
+            }
             else
             {
                 LLPointer<LLViewerInventoryItem> new_item = new LLViewerInventoryItem(item);
@@ -1705,15 +1712,18 @@ U32 LLInventoryModel::updateItem(const LLViewerInventoryItem* item, U32 mask)
                 vks_ais::st().items[new_item->getUUID()] = new_item;
                 mask |= LLInventoryObserver::ADD;
             }
-            if (type == LLAssetType::AT_CALLINGCARD)
+            if (outcome != "refused_bad_type")
             {
-                mask |= LLInventoryObserver::CALLING_CARD;
+                if (type == LLAssetType::AT_CALLINGCARD)
+                {
+                    mask |= LLInventoryObserver::CALLING_CARD;
+                }
+                else if (type == LLAssetType::AT_GESTURE)
+                {
+                    mask |= LLInventoryObserver::GESTURE;
+                }
+                addChangedMask(mask, item->getUUID());
             }
-            else if (type == LLAssetType::AT_GESTURE)
-            {
-                mask |= LLInventoryObserver::GESTURE;
-            }
-            addChangedMask(mask, item->getUUID());
         }
     }
     if (record_it)
