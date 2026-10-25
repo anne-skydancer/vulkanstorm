@@ -81,6 +81,7 @@ struct LLWebRTCImpl
     std::atomic<int> mDevicesDeploying{0};
     std::atomic<bool> mDevicesDeployingNeedsReset{false};
     int mDeployBackoffs = 0;
+    std::shared_ptr<std::atomic<bool>> mDeployRetriesAlive = std::make_shared<std::atomic<bool>>(true);
     std::vector<std::unique_ptr<Connection>> mPeerConnections;
     int recordings = 0, playouts = 0;
     bool fail_recording = false;
@@ -207,5 +208,17 @@ int main()
     stuck.drain();
     assert(stuck.worker.delayed == 20 && stuck.mDeployBackoffs == 0);
     assert(stuck.module.stops == 2 && stuck.recordings == 1 && stuck.playouts == 1);
+
+    // Shutdown during a back-off: the delayed retry runs after terminate() and
+    // must not deploy or post completion (the threads have moved away).
+    LLWebRTCImpl quitting;
+    quitting.module.transitioning = true;
+    quitting.deployDevices(false);
+    quitting.worker.step();
+    assert(quitting.worker.delayed == 1 && quitting.worker.tasks.size() == 1);
+    quitting.mDeployRetriesAlive->store(false); // what terminate() does first
+    quitting.mSignalingThread = nullptr;        // moved to the shutdown thread
+    quitting.worker.step();
+    assert(quitting.worker.tasks.empty() && quitting.worker.delayed == 1 && quitting.recordings == 0);
 #endif
 }

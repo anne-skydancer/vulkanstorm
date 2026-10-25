@@ -558,6 +558,8 @@ class LLWebRTCImpl : public LLWebRTCDeviceInterface, public webrtc::AudioDeviceO
     std::atomic<bool>                                          mDevicesDeployingNeedsReset{ false };
     // <FS:TJ> Try and help crash on Mac with device changes
     int                                                        mDeployBackoffs{ 0 };
+    // Cleared by terminate(): a delayed deployment retry that fires afterwards must not touch this object.
+    std::shared_ptr<std::atomic<bool>>                         mDeployRetriesAlive{ std::make_shared<std::atomic<bool>>(true) };
     std::atomic<bool>                                          mDevicesUpdatePending{ false };
     // </FS:TJ>
 

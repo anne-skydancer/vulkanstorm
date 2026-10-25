@@ -416,6 +416,10 @@ void LLWebRTCImpl::init()
 
 bool LLWebRTCImpl::terminate()
 {
+    // Pending macOS deployment retries are delayed tasks; stop them before the
+    // threads and device module move to the shutdown thread below.
+    mDeployRetriesAlive->store(false);
+
     // Run all blocking WebRTC shutdown calls on a separate thread so that a
     // hung BlockingCall cannot block the viewer shutdown indefinitely.
     // Webrtc is not mission critical, we need to save personal data.
@@ -940,8 +944,12 @@ void LLWebRTCImpl::workerDeployDevices(bool reset_module)
     if (attempt == Attempt::Deferred)
     {
         // <FS:TJ> Retry outside the device lock; the request stays counted until the retry completes.
-        mWorkerThread->PostDelayedTask([this, reset_module]
+        mWorkerThread->PostDelayedTask([this, reset_module, alive = mDeployRetriesAlive]
         {
+            if (!alive->load())
+            {
+                return; // terminate() has handed the threads and device module to its shutdown thread.
+            }
             workerDeployDevices(reset_module || mDevicesDeployingNeedsReset.exchange(false, std::memory_order_relaxed));
         }, webrtc::TimeDelta::Millis(250));
         return;
