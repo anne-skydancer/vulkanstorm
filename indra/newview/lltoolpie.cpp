@@ -404,7 +404,8 @@ struct NativePieActions:NativePiePriority
         LLParcel* parcel=LLViewerParcelMgr::getInstance()->getAgentParcel();if(!parcel)return;
         if(!current() || !object)return;
         const S32 face=LLToolPie::getInstance()->getPick().mObjectFace;
-        if(face<0)return;LLTextureEntry te;if(!world.copyMaterialEntry(*object.token,static_cast<U32>(face),te))return;
+        if(face<0)return;
+        LLTextureEntry te;if(!world.copyMaterialEntry(*object.token,static_cast<U32>(face),te))return;
         if(LLViewerMedia::getInstance()->getMediaImplFromTextureID(te.getID())!=nullptr)
         {handle_click_action_play();return;}
         std::string media_url(parcel->getMediaURL());std::string media_type(parcel->getMediaType());

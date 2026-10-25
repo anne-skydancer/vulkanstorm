@@ -5620,7 +5620,8 @@ bool VSWorldScene::setIcon(const ObjectHandle& requested,const std::string& imag
                 found->second.icon=nullptr;
     },[imageName]{return vs_ui_named_image_snapshot(imageName);});
     icon->setScale(.03f);if(scriptError)icon->setScriptError();
-    if(object.icon)object.icon->markDead();object.icon=icon;
+    if(object.icon)object.icon->markDead();
+    object.icon=icon;
     return true;
 }
 
@@ -5699,7 +5700,8 @@ void VSWorldScene::refreshNameTags()
             if(object.controlAvatar)
             {
                 const auto control=envelope(*object.controlAvatar,local);
-                if(!control)return {};extend(*bounds,*control);continue;
+                if(!control)return {};
+                extend(*bounds,*control);continue;
             }
             const auto token=this->object(mImpl->host,local);if(!token)continue;
             const auto family=linkedFamily(*token,false,true);if(!family)return {};
@@ -5716,7 +5718,8 @@ void VSWorldScene::refreshNameTags()
                 for(const auto& face:part.admittedFaces)
                 {
                     if(face.pickSurface&&face.pickSurface->rigged)hasRigged=true;
-                    if(!face.mesh)continue;const auto raw=VSWorldRenderer::bounds(face.mesh);
+                    if(!face.mesh)continue;
+                    const auto raw=VSWorldRenderer::bounds(face.mesh);
                     const Bounds box{LLVector3(raw[0].data()),LLVector3(raw[1].data())};
                     if(bridge)extend(*bridge,box);else bridge=box;
                 }

@@ -2502,7 +2502,8 @@ void LLVoiceWebRTCConnection::OnIceGatheringState(llwebrtc::LLWebRTCSignalingObs
 void LLVoiceWebRTCConnection::OnIceCandidate(const llwebrtc::LLWebRTCIceCandidate& candidate)
 {
     LL::WorkQueue::postMaybe(mMainQueue, [=, this, owner = weak_from_this().lock()] {
-            if (!owner || !owner->accountCurrent()) return; mIceCandidates.push_back(candidate); });
+            if (!owner || !owner->accountCurrent()) return;
+            mIceCandidates.push_back(candidate); });
 }
 
 void LLVoiceWebRTCConnection::processIceUpdates()
@@ -3201,7 +3202,8 @@ bool LLVoiceWebRTCConnection::connectionStateMachine()
 void LLVoiceWebRTCConnection::OnDataReceived(const std::string& data, bool binary)
 {
     LL::WorkQueue::postMaybe(mMainQueue, [=, this, owner = weak_from_this().lock()] {
-            if (!owner || !owner->accountCurrent()) return; LLVoiceWebRTCConnection::OnDataReceivedImpl(data, binary); });
+            if (!owner || !owner->accountCurrent()) return;
+            LLVoiceWebRTCConnection::OnDataReceivedImpl(data, binary); });
 }
 
 //
