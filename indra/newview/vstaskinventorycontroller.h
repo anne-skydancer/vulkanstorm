@@ -107,6 +107,11 @@ void vs_update_task_inventory(Peer& peer, LLViewerInventoryItem* item, U8 key, b
                                   item->getFlags(),
                                   item->getCreationDate());
     task_item->setTransactionID(item->getTransactionID());
+    if (!peer.hasRegion())
+    {
+        LL_WARNS() << "Object " << peer.id() << " has no region, item " << item->getUUID() << " not updated" << LL_ENDL;
+        return;
+    }
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_UpdateTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -141,6 +146,12 @@ void vs_save_task_script(Peer& peer, const LLViewerInventoryItem* item, bool act
                                   item->getCreationDate());
     task_item->setTransactionID(item->getTransactionID());
 
+    if (!peer.hasRegion())
+    {
+        LL_WARNS() << "Object " << peer.id() << " has no region, script " << item->getUUID() << " not saved" << LL_ENDL;
+        return;
+    }
+
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_RezScript);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -163,6 +174,11 @@ template<class Peer>
 void vs_move_task_inventory(Peer& peer, const LLUUID& folder_id, const LLUUID& item_id)
 {
     LL_DEBUGS() << "LLViewerObject::moveInventory " << item_id << LL_ENDL;
+    if (!peer.hasRegion())
+    {
+        LL_WARNS() << "Object " << peer.id() << " has no region, item " << item_id << " not moved" << LL_ENDL;
+        return;
+    }
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_MoveTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -199,6 +215,12 @@ void vs_remove_task_inventory(Peer& peer, const LLUUID& item_id)
     // close any associated floater properties
     LLFloaterReg::hideInstance("properties", item_id);
     // </FS:Ansariel>
+
+    if (!peer.hasRegion())
+    {
+        LL_WARNS() << "Object " << peer.id() << " has no region, item " << item_id << " not removed" << LL_ENDL;
+        return;
+    }
 
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_RemoveTaskInventory);
