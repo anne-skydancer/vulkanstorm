@@ -1,5 +1,5 @@
 {
-  "source_commit": "90c45e70e6c98625c076cbca1137153040c16d0b",
+  "source_commit": "360d5b79244f578c3adb106d7dd79f8264c3f8e7",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "d54867fbc6206c9ebe64088436492d7a385bfd6d6779ebf7cfd6d328bcc170bc",
+      "sha256": "0033ecce5607d5de820dbc104559fcedac0a9439ce89f984578ca2cfe8d26377",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -70,7 +70,7 @@
       ]
     },
     "indra/newview/llstartup.cpp": {
-      "sha256": "ffcc79abb6119ddeea0a4266fccdbfb2f898f685855ed2c460e7c2e61de65ea3",
+      "sha256": "4a4d64cd50d2844a1fefd3bed55bb3cdd244b7cdb256e2e029ebfd84e5be9d3c",
       "anchors": [
         "idle_startup()",
         "do_startup_frame()",
@@ -107,7 +107,7 @@
       ]
     },
     "indra/newview/llagent.cpp": {
-      "sha256": "beb155b977f0d8a3d3399799755e8be9d48db54bb4d6cb19d25dc2ce2a5f7f8f",
+      "sha256": "c1af44edaa1943eb536dcfbf3eb9e33a7dee5fbe432cb4cbf9b9b2e13a16a89d",
       "anchors": [
         "LLAgent::setRegion",
         "LLAgent::startTyping",
@@ -605,7 +605,7 @@
       ]
     },
     "indra/llui/lltextbase.cpp": {
-      "sha256": "1033b98bb9aa21f71cf9c692a407b1b943131419b1d2efbe2774c0774b75703b",
+      "sha256": "79312a0bb1f5c2b4450adf1d18cde4ae2270c735667129d7df6fb6acc9bf8a79",
       "anchors": [
         "LLTextBase::draw",
         "isNativeUI"
@@ -717,7 +717,7 @@
       ]
     },
     "indra/newview/vsviewerwindow.cpp": {
-      "sha256": "42445705d139e36b0b622f9c83e00441c8da9db2d39c7871d43e9a8db738fe85",
+      "sha256": "4d57ef0ceeb92649e61445fd4e9abaee1448d841adf260a3f31e51cc47908afe",
       "anchors": [
         "initNativeWindow",
         "initNativeBase",
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "724cfb49adc195d51fa3cdc300bc2247da3b85fa30843b9e7d5a43b2b1a4662a",
+      "sha256": "82eafa4a2ea1f711830bf620478c6cd57d1af4f365fedcb061e82f1c48cff5c7",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
