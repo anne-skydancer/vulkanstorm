@@ -3271,6 +3271,13 @@ if (LL_TESTS)
       $<TARGET_PROPERTY:llfilesystem,INTERFACE_INCLUDE_DIRECTORIES>
       )
 
+  # The inventory oracle and parity tests (vkstorm-rust rung seven). Each
+  # recorder registers its own tests in its own fragment, so none of them
+  # edits this file.
+  include(${CMAKE_CURRENT_SOURCE_DIR}/tests/inventory/r2.cmake)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/tests/inventory/r3.cmake)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/tests/inventory/r4.cmake)
+
   #ADD_VIEWER_BUILD_TEST(llmemoryview viewer)
   #ADD_VIEWER_BUILD_TEST(llagentaccess viewer)
   #ADD_VIEWER_BUILD_TEST(lltextureinfo viewer)
