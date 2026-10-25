@@ -52,7 +52,6 @@
 
 #include "llagent.h"
 #include "llagentpicksinfo.h"
-#include "llaisapi.h"
 #include "llavatarpropertiesprocessor.h"
 #include "llcommandhandler.h"
 #include "lldndbutton.h"
@@ -871,9 +870,7 @@ void LLPanelPlaces::onSaveButtonClicked()
         {
             cb = new LLUpdateLandmarkParent(new_item, folder_id);
         }
-        // With AIS, count only: the reply sets the folder's version (see
-        // LLViewerInventoryItem::updateServer()).
-        LLInventoryModel::LLCategoryUpdate up(mItem->getParentUUID(), 0, !AISAPI::isAvailable());
+        LLInventoryModel::LLCategoryUpdate up(mItem->getParentUUID(), 0);
         gInventory.accountForUpdate(up);
         update_inventory_item(new_item, cb);
     }
