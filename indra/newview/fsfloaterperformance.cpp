@@ -311,7 +311,7 @@ void FSFloaterPerformance::draw()
             U64 avatar_idle;
             {std::lock_guard<std::mutex> lock(LLPerfStats::bufferToggleLock);avatar_idle=LLPerfStats::StatsRecorder::getSum(AvType,LLPerfStats::StatType_t::RENDER_IDLE);}
             const auto avatar_draw = tot_avatar_time_raw > avatar_idle ? tot_avatar_time_raw-avatar_idle : 0;
-            for (U64 part : {avatar_draw,tot_huds_time_raw,tot_swap_time_raw,tot_ui_time_raw})
+            for (U64 part : std::initializer_list<U64>{avatar_draw,tot_huds_time_raw,tot_swap_time_raw,tot_ui_time_raw})
                 scene_time_raw = scene_time_raw > part ? scene_time_raw-part : 0;
         }
         else scene_time_raw -= tot_avatar_time_raw + tot_swap_time_raw + tot_ui_time_raw;
@@ -1330,7 +1330,8 @@ void FSFloaterPerformance::populateNativeNearby()
     const bool showTuned=gSavedSettings.getBOOL("ShowTunedART");unsigned count=0;
     for(const auto& row:rows)
     {
-        if(!nearby(row) || !world.current(row.object))continue;++count;if(row.invisible)continue;
+        if(!nearby(row) || !world.current(row.object))continue;
+        ++count;if(row.invisible)continue;
         LLSD item;item["id"]=row.object.id;auto& columns=item["columns"];unsigned n=0;
         columns[n]["column"]="art_visual";columns[n]["type"]="bar";auto& bar=columns[n++]["value"];
         bar["ratio"]=row.gpuMilliseconds && mNearbyMaxGPUTime>0?*row.gpuMilliseconds / mNearbyMaxGPUTime:0.f;

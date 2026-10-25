@@ -1292,7 +1292,8 @@ std::optional<std::array<std::array<float,3>,2>> VSWorldGLTF::publishedBounds() 
     std::optional<std::array<std::array<float,3>,2>> result;
     for(const auto& packet:mImpl->publishedPackets)
     {
-        if(!packet.mesh)continue;const auto box=VSWorldRenderer::bounds(packet.mesh);
+        if(!packet.mesh)continue;
+        const auto box=VSWorldRenderer::bounds(packet.mesh);
         if(!result)result=box;
         else for(unsigned axis=0;axis<3;++axis)
         {(*result)[0][axis]=std::min((*result)[0][axis],box[0][axis]);(*result)[1][axis]=std::max((*result)[1][axis],box[1][axis]);}

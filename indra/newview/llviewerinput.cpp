@@ -150,6 +150,16 @@ bool agent_push_down( EKeystate s )
     return true;
 }
 
+// VSNativeSession is built only with the native renderer; OpenGL-only builds never have one.
+static bool native_session_active()
+{
+#if VS_NATIVE_VULKAN
+    return bool(VSNativeSession::active());
+#else
+    return false;
+#endif
+}
+
 static void agent_check_temporary_run(LLAgent::EDoubleTapRunMode mode)
 {
 // [RLVa:KB] - Checked: 2011-05-11 (RLVa-1.3.0i) | Added: RLVa-1.3.0i
@@ -300,7 +310,7 @@ bool agent_turn_left(EKeystate s)
 
     if(gAgent.isMovementLocked()) return false;
 
-    if (!VSNativeSession::active() && LLToolCamera::getInstance()->mouseSteerMode())
+    if (!native_session_active() && LLToolCamera::getInstance()->mouseSteerMode())
     {
         agent_slide_left(s);
     }
@@ -331,7 +341,7 @@ bool agent_turn_right( EKeystate s )
 
     if(gAgent.isMovementLocked()) return false;
 
-    if (!VSNativeSession::active() && LLToolCamera::getInstance()->mouseSteerMode())
+    if (!native_session_active() && LLToolCamera::getInstance()->mouseSteerMode())
     {
         agent_slide_right(s);
     }

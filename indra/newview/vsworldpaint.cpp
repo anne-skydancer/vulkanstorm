@@ -21,7 +21,7 @@ std::optional<VSWorldRenderer::DepthCompare> comparison(unsigned value)
     switch(value)
     {
     case 0x0203:return VSWorldRenderer::DepthCompare::LessEqual;
-    case 0x0207:return VSWorldRenderer::DepthCompare::Always;
+    case 0x0207:return VSWorldRenderer::DepthCompare::AlwaysPass;
     case 0x0204:return VSWorldRenderer::DepthCompare::Greater;
     case 0x0206:return VSWorldRenderer::DepthCompare::GreaterEqual;
     default:return {};
