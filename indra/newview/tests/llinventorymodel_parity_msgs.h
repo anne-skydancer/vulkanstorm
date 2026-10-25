@@ -586,6 +586,50 @@ namespace
             s.msg("fetch_inventory_reply_no_accounting", [] { LLPointer<LLViewerInventoryItem> i = copy_of(I(13)); i->setParent(F(SF_OBJECTS)); fetch_inventory_reply({ i, new_item(971, F(SF_OBJECTS), "Fetched item") }); });
             cases.push_back(s.c);
         }
+        {
+            // Item creation and item copy with AIS available. On Second Life
+            // both go over UDP whatever AIS offers: create_inventory_item's AIS
+            // branch is compiled only with USE_AIS_FOR_NC ("not yet implemented
+            // within AIS3"), and copy_inventory_item has none. The server's
+            // reply carries the callback id the request registered, which
+            // fires once when the item arrives.
+            MsgSteps s("create_and_copy_with_ais");
+            static U32 request_cb = 0;
+            const auto newest_cb = [] { U32 id = 0; for (U32 c : callbacks_pending()) id = std::max(id, c); return id; };
+            MsgSteps::Expect request;
+            request.batch = MsgSteps::Expect::NONE;
+            request.callbacks = 0;
+            request.absent = { "ais " };
+            request.present = { "msg CreateInventoryItem " };
+            s.msg("create_inventory_item_sends_udp", [newest_cb]
+            {
+                config().ais_available = true;
+                LLTransactionID tid;
+                static_cast<LLUUID&>(tid) = pid(TAG_TXN, 20);
+                // The harness agent is zeroed storage: its session id is null, as
+                // copy_inventory_item writes it.
+                create_inventory_item(AGENT, LLUUID::null, F(SF_OBJECTS), tid, "New Note", "A note",
+                                      LLAssetType::AT_NOTECARD, LLInventoryType::IT_NOTECARD, NO_INV_SUBTYPE, PERM_ALL,
+                                      new RecordingCallback("cr1"));
+                request_cb = newest_cb();
+            }, request);
+            s.msg("update_create_reply", []
+            {
+                update_create({ { new_item(980, F(SF_OBJECTS), "New Note", LLAssetType::AT_NOTECARD, LLInventoryType::IT_NOTECARD), request_cb } });
+            }, expect_batch(1, { "callback cr1 " + I(980).asString() }));
+            request.present = { "msg CopyInventoryItem " };
+            s.msg("copy_inventory_item_sends_udp", [newest_cb]
+            {
+                config().ais_available = true;
+                copy_inventory_item(AGENT, AGENT, I(10), F(42), "Copied chair", new RecordingCallback("cp1"));
+                request_cb = newest_cb();
+            }, request);
+            s.msg("bulk_update_reply", []
+            {
+                bulk_update({}, { { new_item(981, F(42), "Copied chair"), request_cb } }, pid(TAG_TXN, 21));
+            }, expect_batch(1, { "callback cp1 " + I(981).asString() }));
+            cases.push_back(s.c);
+        }
     }
 }
 
