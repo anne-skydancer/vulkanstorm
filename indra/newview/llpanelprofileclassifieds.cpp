@@ -327,7 +327,7 @@ bool LLPanelProfileClassifieds::postBuild()
     mDeleteButton->setCommitCallback(boost::bind(&LLPanelProfileClassifieds::onClickDelete, this));
 
     // <FS:Ansariel> RLVa support
-    mRlvBehaviorCallbackConnection = gRlvHandler.setBehaviourCallback(boost::bind(&LLPanelProfileClassifieds::updateRlvRestrictions, this, _1, _2));
+    mRlvBehaviorCallbackConnection = gRlvHandler.setBehaviourCallback(boost::bind(&LLPanelProfileClassifieds::updateRlvRestrictions, this, _1));
     // </FS:Ansariel>
 
     return true;
@@ -555,7 +555,7 @@ void LLPanelProfileClassifieds::commitUnsavedChanges()
 }
 
 // <FS:Ansariel> RLVa support
-void LLPanelProfileClassifieds::updateRlvRestrictions(ERlvBehaviour behavior, ERlvParamType type)
+void LLPanelProfileClassifieds::updateRlvRestrictions(ERlvBehaviour behavior)
 {
     if (behavior == RLV_BHVR_SHOWLOC)
     {

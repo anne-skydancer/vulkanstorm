@@ -13,6 +13,11 @@ feature that later lands on the base through its PR is only a second parent
 of that PR's merge commit, never on the chain, so an earlier merge of that
 feature into another feature (stacked branches) stays allowed.
 
+Upstream mirrors (MIRROR_LINES) are protected lines that carry only upstream's
+own commits (vkstorm-aleph mirrors Firestorm master). Their history is
+upstream's, so bringing it in is an upstream integration, which canary takes
+through integration merges (AGENTS.md); it is not checked as a base merge.
+
 usage:
   check_no_base_merges.py <base-ref> [<head-ref>]
       CI: every merge commit in <base-ref>..<head-ref> (head defaults to HEAD)
@@ -29,6 +34,9 @@ import subprocess
 import sys
 
 BASE_PREFIX = "vkstorm-"
+# Lines that only mirror upstream (no commits of their own). Merging upstream
+# brings in their history by design, so they are left out of the check.
+MIRROR_LINES = ("vkstorm-aleph",)
 
 
 def git(*args, check=True):
@@ -50,8 +58,9 @@ def resolve(name):
 
 
 def base_lines(extra=None):
-    refs = git("for-each-ref", "--format=%(refname)",
-               "refs/remotes/origin/%s*" % BASE_PREFIX).stdout.split()
+    refs = [ref for ref in git("for-each-ref", "--format=%(refname)",
+                               "refs/remotes/origin/%s*" % BASE_PREFIX).stdout.split()
+            if ref[len("refs/remotes/origin/"):] not in MIRROR_LINES]
     if extra and resolve(extra):
         refs.append(extra)
     return refs
