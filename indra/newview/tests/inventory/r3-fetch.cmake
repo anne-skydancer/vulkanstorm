@@ -20,9 +20,9 @@
 # after checking the frozen copies with tests/check_r3b_copies.py (test 1).
 # With VKS_INVFETCH_DUMP=<dir> it writes the fixtures instead (and fails, as a
 # dump is not a replay).
-# The pre-D2 Second Life fallback scenarios gate the build while the C++ still
-# has those fallbacks; the D2 port turns this OFF (rule PRE_D2_SL_FALLBACKS in
-# the README: the scenarios are then skipped by name, their fixtures kept).
+# The Second Life fallback scenarios (rule PRE_D2_SL_FALLBACKS in the README).
+# The fallbacks are kept on Second Life (the planned D2 removal was dropped),
+# so this stays ON; OFF skips the six by name and keeps their fixtures.
 option(VKS_INVFETCH_PRE_D2_GATES "llinvfetch_parity: replay the pre-D2 Second Life fallback scenarios" ON)
 if (VKS_INVFETCH_PRE_D2_GATES)
   set(VKS_INVFETCH_SKIP_PRE_D2 0)
