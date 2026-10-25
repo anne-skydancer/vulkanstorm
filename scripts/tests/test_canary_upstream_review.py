@@ -25,7 +25,7 @@ def method(source, signature):
 
 
 class CanaryUpstreamReviewTest(unittest.TestCase):
-    def run_fixture(self, fixture, source, signatures, extra=''):
+    def run_fixture(self, fixture, source, signatures, extra='', defines=()):
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler, 'A C++ compiler is required for these regressions')
         production = (ROOT / source).read_text(encoding='utf-8')
@@ -37,16 +37,20 @@ class CanaryUpstreamReviewTest(unittest.TestCase):
             executable = Path(temporary) / 'regression.exe'
             cpp.write_text(text.replace('// PRODUCTION_METHODS', functions), encoding='utf-8')
             built = subprocess.run([compiler, '-std=c++17', '-Wall', '-Wextra', '-Werror',
+                                    *('-D' + define for define in defines),
                                     str(cpp), '-o', str(executable)], capture_output=True, text=True, timeout=120)
             self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
             result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_voice_activation_and_pending_device_reset_balance_deployments(self):
-        self.run_fixture('webrtc_deployment.cpp', 'indra/llwebrtc/llwebrtc.cpp', [
-            'void LLWebRTCImpl::setVoiceEnabled(bool enable)',
-            'void LLWebRTCImpl::deployDevices(bool reset_module)',
-            'void LLWebRTCImpl::workerDeployDevices(bool reset_module)'])
+        # Once as built for Windows/Linux, once with the macOS mid-transition back-off.
+        for defines in ((), ('WEBRTC_MAC=1',)):
+            with self.subTest(defines=defines):
+                self.run_fixture('webrtc_deployment.cpp', 'indra/llwebrtc/llwebrtc.cpp', [
+                    'void LLWebRTCImpl::setVoiceEnabled(bool enable)',
+                    'void LLWebRTCImpl::deployDevices(bool reset_module)',
+                    'void LLWebRTCImpl::workerDeployDevices(bool reset_module)'], defines=defines)
 
     def test_missing_and_variable_region_extents_invalidate_or_validate_tracking(self):
         decoders = ''
