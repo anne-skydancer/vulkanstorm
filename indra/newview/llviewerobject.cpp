@@ -2803,6 +2803,7 @@ struct LLViewerObject::TaskInventoryPeer
     const LLUUID& id() const { return object.mID; }
     U32 localID() const { return object.mLocalID; }
     const LLHost& host() const { return object.mRegionp->getHost(); }
+    bool hasRegion() const { return object.mRegionp != nullptr; }
     LLInventoryObject::object_list_t* inventory() const { return object.mInventory; }
     S16& expectedSerial() { return object.mExpectedInventorySerialNum; }
     LLInventoryObject* getInventoryObject(const LLUUID& id) { return object.getInventoryObject(id); }
@@ -2905,7 +2906,22 @@ void LLViewerObject::requestInventory()
     {
         // inventory is either up to date or doesn't has a listener
         // if it is dirty, leave it this way in case we gain a listener
-        doInventoryCallback();
+        if (isInventoryPending())
+        {
+            // A request or transfer is outstanding: give the listeners the
+            // contents we have, but keep the request state and xfer id that
+            // doInventoryCallback() releases, so the pending reply is still
+            // handled as such and later requests are not duplicated.
+            const EInventoryRequestState request_state = mInvRequestState;
+            const U64 request_xfer_id = mInvRequestXFerId;
+            doInventoryCallback();
+            mInvRequestState = request_state;
+            mInvRequestXFerId = request_xfer_id;
+        }
+        else
+        {
+            doInventoryCallback();
+        }
     }
     else
     {
@@ -2931,6 +2947,12 @@ void LLViewerObject::fetchInventoryFromServer()
         {
             LLCoros::instance().launch("LLViewerObject::fetchInventoryFromCapCoro()",
                                        boost::bind(&LLViewerObject::fetchInventoryFromCapCoro, mID));
+        }
+        else if (!mRegionp)
+        {
+            // Nothing to send to: fail the request as an HTTP error does in fetchInventoryFromCapCoro.
+            LL_WARNS() << "Object " << mID << " has no region, task inventory not requested" << LL_ENDL;
+            mInvRequestState = INVENTORY_REQUEST_STOPPED;
         }
         else
         {
@@ -3315,6 +3337,19 @@ void LLViewerObject::processTaskInv(LLMessageSystem* msg, void** user_data)
             delete ft;
             return;
         }
+        if (!object->mRegionp)
+        {
+            LL_WARNS() << "Object " << task_id << " has no region, task inventory file not requested" << LL_ENDL;
+            // Release a pending request, as fetchInventoryFromServer() does without a
+            // region, so a later fetch is not refused as a duplicate. An active
+            // transfer (INVENTORY_XFER) completes on its own.
+            if (object->mInvRequestState == INVENTORY_REQUEST_PENDING)
+            {
+                object->mInvRequestState = INVENTORY_REQUEST_STOPPED;
+            }
+            delete ft;
+            return;
+        }
         U64 new_id = gXferManager->requestFile(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, ft->mFilename),
             ft->mFilename, LL_PATH_CACHE,
             object->mRegionp->getHost(),
@@ -3512,6 +3547,9 @@ void LLViewerObject::loadTaskInvLLSD(const LLSD& inv_result)
     else
     {
         LL_WARNS() << "unable to load task inventory: " << inv_result << LL_ENDL;
+        // Fail the request as an HTTP error does in fetchInventoryFromCapCoro, so that
+        // later requests are not dropped as duplicates of this one.
+        mInvRequestState = INVENTORY_REQUEST_STOPPED;
         return;
     }
     doInventoryCallback();
@@ -3591,6 +3629,14 @@ void LLViewerObject::updateMaterialInventory(LLViewerInventoryItem* item, U8 key
     if (isAssetInInventory(item, item->getType()))
     {
         // already there
+        return;
+    }
+
+    if (!mRegionp)
+    {
+        // updateInventory() sends nothing without a region; don't leave the
+        // asset pending, or isAssetInInventory() refuses it from then on.
+        LL_WARNS() << "Object " << mID << " has no region, item " << item->getUUID() << " not updated" << LL_ENDL;
         return;
     }
 

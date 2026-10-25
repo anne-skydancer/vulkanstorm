@@ -210,7 +210,15 @@ bool LLInventoryObject::importLegacyStream(std::istream& input_stream)
     while(input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf(buffer, " %254s %254s", keyword, valuestr);  /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf(buffer, " %254s %254s", keyword, valuestr);  /* Flawfinder: ignore */
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if(0 == strcmp("{",keyword))
         {
             continue;
@@ -218,6 +226,12 @@ bool LLInventoryObject::importLegacyStream(std::istream& input_stream)
         if(0 == strcmp("}", keyword))
         {
             break;
+        }
+        else if (fields < 2 && 0 != strcmp("metadata", keyword))
+        {
+            // a keyword without a value counts as absent
+            // (metadata keeps its own handling)
+            continue;
         }
         else if(0 == strcmp("obj_id", keyword))
         {
@@ -753,10 +767,18 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
     while(success && input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %254s %254s",
             keyword, valuestr);
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if(0 == strcmp("{",keyword))
         {
             continue;
@@ -764,6 +786,12 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
         if(0 == strcmp("}", keyword))
         {
             break;
+        }
+        else if (fields < 2 && 0 != strcmp("permissions", keyword) && 0 != strcmp("sale_info", keyword) && 0 != strcmp("metadata", keyword))
+        {
+            // a keyword without a value counts as absent
+            // (block headers and metadata keep their own handling)
+            continue;
         }
         else if(0 == strcmp("item_id", keyword))
         {
@@ -916,9 +944,11 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
         }
         else if(0 == strcmp("creation_date", keyword))
         {
-            S32 date;
-            sscanf(valuestr, "%d", &date);
-            mCreationDate = date;
+            S32 date = 0;
+            if (1 == sscanf(valuestr, "%d", &date))
+            {
+                mCreationDate = date;
+            }
         }
         else
         {
@@ -1467,10 +1497,18 @@ bool LLInventoryCategory::importLegacyStream(std::istream& input_stream)
     while(input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %254s %254s",
             keyword, valuestr);
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if(0 == strcmp("{",keyword))
         {
             continue;
@@ -1478,6 +1516,12 @@ bool LLInventoryCategory::importLegacyStream(std::istream& input_stream)
         if(0 == strcmp("}", keyword))
         {
             break;
+        }
+        else if (fields < 2 && 0 != strcmp("metadata", keyword))
+        {
+            // a keyword without a value counts as absent
+            // (metadata keeps its own handling)
+            continue;
         }
         else if(0 == strcmp("cat_id", keyword))
         {

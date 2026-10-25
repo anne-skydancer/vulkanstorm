@@ -28,6 +28,7 @@
 #include "linden_common.h"
 
 #include "../llxfer_file.h"
+#include "../llxfermanager.h"
 
 #include "../test/lltut.h"
 
@@ -54,5 +55,29 @@ namespace tut
         LLXfer_File xff(oversized_filename, false, 1);
         ensure("oversized local_filename nul-terminated",
                xff.getFileName().length() < LL_MAX_PATH);
+    }
+
+    template<> template<>
+    void llxfer_object::test<2>()
+    {
+        // A server-supplied remote file name of 1-3 characters (shorter than
+        // ".tmp") must not throw from the ".tmp" check in requestFile().
+        LLXferManager xfer_manager;
+        xfer_manager.setMaxIncomingXfers(0); // queue only; never sends RequestXfer
+        const char* names[] = { "a", "ab", "abc" };
+        for (const char* name : names)
+        {
+            U64 xfer_id = 0;
+            try
+            {
+                xfer_id = xfer_manager.requestFile("llxfer_file_test_local", name, LL_PATH_NONE,
+                                                   LLHost(), true, NULL, NULL, false);
+            }
+            catch (const std::exception& e)
+            {
+                fail(std::string("requestFile threw for remote name \"") + name + "\": " + e.what());
+            }
+            ensure(std::string("xfer queued for remote name \"") + name + "\"", xfer_id != 0);
+        }
     }
 }

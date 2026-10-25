@@ -114,6 +114,7 @@ struct VSTaskInventory::Impl : std::enable_shared_from_this<Impl>
         const LLUUID& id() const { return model->object.id; }
         U32 localID() const { return model->object.local; }
         const LLHost& host() const { return model->object.host; }
+        bool hasRegion() const { return model->object.host.isOk(); }
         LLInventoryObject::object_list_t* inventory() const { return model->contents.get(); }
         S16& expectedSerial() { return model->expected; }
         LLInventoryObject* getInventoryObject(const LLUUID& id) { return service.objectIn(*model, id); }
