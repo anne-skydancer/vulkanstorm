@@ -20,6 +20,18 @@ jobs:
               core.setFailed("❌ PR description is too short. Please provide at least 20 characters.");
             }
 
+  no-base-merges:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: No merges of the base line into the PR branch
+        run: python3 scripts/check_no_base_merges.py "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}"
+
   chat-ui-regression:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
