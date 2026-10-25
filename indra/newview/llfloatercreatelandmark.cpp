@@ -30,7 +30,6 @@
 
 #include "llagent.h"
 #include "llagentui.h"
-#include "llaisapi.h"
 #include "llcombobox.h"
 #include "llfloaterreg.h"
 #include "llinventoryfunctions.h"
@@ -279,9 +278,7 @@ void LLFloaterCreateLandmark::onCommitTextChanges()
         new_item->rename(current_title_value);
         new_item->setDescription(current_notes_value);
         LLPointer<LLInventoryCallback> cb;
-        // With AIS, count only: the reply sets the folder's version (see
-        // LLViewerInventoryItem::updateServer()).
-        LLInventoryModel::LLCategoryUpdate up(mItem->getParentUUID(), 0, !AISAPI::isAvailable());
+        LLInventoryModel::LLCategoryUpdate up(mItem->getParentUUID(), 0);
         gInventory.accountForUpdate(up);
         update_inventory_item(new_item, cb);
     }
@@ -343,9 +340,7 @@ void LLFloaterCreateLandmark::onSaveClicked()
         {
             cb = new LLUpdateLandmarkParent(new_item, folder_id);
         }
-        // With AIS, count only: the reply sets the folder's version (see
-        // LLViewerInventoryItem::updateServer()).
-        LLInventoryModel::LLCategoryUpdate up(mItem->getParentUUID(), 0, !AISAPI::isAvailable());
+        LLInventoryModel::LLCategoryUpdate up(mItem->getParentUUID(), 0);
         gInventory.accountForUpdate(up);
         update_inventory_item(new_item, cb);
     }
