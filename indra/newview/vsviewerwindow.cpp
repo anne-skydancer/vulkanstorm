@@ -195,7 +195,7 @@ void LLViewerWindow::initNativeBase()
     initialize_edit_menu();
     initialize_spellcheck_menu();
     initialize_volume_controls_callbacks();
-    gFSRegistrarUtils.setEnableCheckFunction([](LLUUID id, EFSRegistrarFunctionActionType action)
+    gFSRegistrarUtils.setEnableCheckFunction([](const LLUUID& id, EFSRegistrarFunctionActionType action, const LLSD& params, void* userdata)
     {
         switch (action)
         {
@@ -212,7 +212,8 @@ void LLViewerWindow::initNativeBase()
         case EFSRegistrarFunctionActionType::FS_RGSTR_CHK_CAN_LEAVE_GROUP:
         case EFSRegistrarFunctionActionType::FS_RGSTR_CHK_CAN_JOIN_GROUP:
         case EFSRegistrarFunctionActionType::FS_RGSTR_CHK_GROUP_NOT_ACTIVE:
-            return FSCommon::checkIsActionEnabled(id, action);
+        case EFSRegistrarFunctionActionType::FS_RGSTR_CHK_SHOW_MENTION_OPTION: // parent floater in userdata
+            return FSCommon::checkIsActionEnabled(id, action, params, userdata);
         default:
             return false;
         }
