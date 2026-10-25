@@ -133,6 +133,21 @@ def other_line_merged(r):
     expect("CI: another base line's tip merged into the feature is rejected", code, 1, out)
 
 
+def upstream_mirror_integration(r):
+    # vkstorm-aleph mirrors upstream; an integration branch merging upstream's
+    # tip (which the mirror also points at) is not a base merge.
+    upstream = r.commit("trunk", "upstream work")
+    r.git("branch", "vkstorm-aleph", upstream)
+    r.publish("vkstorm-aleph")
+    r.branch("codex/canary-upstream", "vkstorm-rust")
+    r.merge("codex/canary-upstream", upstream, "Merge upstream master into canary")
+    code, out = r.check("origin/vkstorm-rust", "codex/canary-upstream")
+    expect("CI: merging upstream that a mirror line tracks is allowed", code, 0, out)
+    r.git("checkout", "-q", "codex/canary-upstream")
+    code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "merge origin/vkstorm-aleph"})
+    expect("hook: merging an upstream mirror line is allowed", code, 0, out)
+
+
 def update_branch_style(r):
     # GitHub's "Update branch": the base tip merged into the PR branch.
     r.branch("codex/a", "vkstorm-rust")
@@ -190,7 +205,7 @@ def hook_pull_fetch_head(r):
 
 def main():
     for fn in (base_merged_into_feature, stacked_feature_then_landed, stacked_feature_landed_first,
-               other_line_merged, update_branch_style, clean_feature, hook_refuses_and_override,
+               other_line_merged, upstream_mirror_integration, update_branch_style, clean_feature, hook_refuses_and_override,
                hook_pull_fetch_head):
         scenario(fn)
     if FAILURES:
