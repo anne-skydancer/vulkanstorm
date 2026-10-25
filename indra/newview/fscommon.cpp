@@ -456,7 +456,9 @@ bool FSCommon::checkIsActionEnabled(const LLUUID& av_id, EFSRegistrarFunctionAct
 
                 if (option == "can_allow_text_chat")
                 {
-                    return isModerator() && getSpeakerp(av_id);
+                    // Like LLIMSpeakerMgr::allowTextChat(): the participant list is unreliable,
+                    // so text moderation does not require the target to be listed.
+                    return isModerator();
                 }
                 else if (option == "can_mute")
                 {
@@ -467,7 +469,8 @@ bool FSCommon::checkIsActionEnabled(const LLUUID& av_id, EFSRegistrarFunctionAct
                     if (!speakerp)
                         return false;
 
-                    return speakerp->isInVoiceChannel() && speakerp->mStatus != LLSpeaker::STATUS_MUTED;
+                    // STATUS_MUTED also covers a local voice block; only a moderator mute counts here.
+                    return speakerp->isInVoiceChannel() && !speakerp->mModeratorMutedVoice;
                 }
                 else if (option == "can_unmute")
                 {
@@ -475,7 +478,7 @@ bool FSCommon::checkIsActionEnabled(const LLUUID& av_id, EFSRegistrarFunctionAct
                         return false;
 
                     auto speakerp = getSpeakerp(av_id);
-                    return speakerp && speakerp->mStatus == LLSpeaker::STATUS_MUTED;
+                    return speakerp && speakerp->mModeratorMutedVoice;
                 }
                 else if (option == "show_mute")
                 {
@@ -483,12 +486,12 @@ bool FSCommon::checkIsActionEnabled(const LLUUID& av_id, EFSRegistrarFunctionAct
                     if (!speakerp)
                         return false;
 
-                    return speakerp->isInVoiceChannel() && speakerp->mStatus != LLSpeaker::STATUS_MUTED;
+                    return speakerp->isInVoiceChannel() && !speakerp->mModeratorMutedVoice;
                 }
                 else if (option == "show_unmute")
                 {
                     auto speakerp = getSpeakerp(av_id);
-                    return speakerp && speakerp->mStatus == LLSpeaker::STATUS_MUTED;
+                    return speakerp && speakerp->mModeratorMutedVoice;
                 }
                 else if (option == "can_ban_member")
                 {
