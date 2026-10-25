@@ -819,7 +819,10 @@ void LLWebRTCImpl::workerDeployDevices(bool reset_module)
 {
     // Keep every hardware exit inside the attempt so completion always retires
     // its counted request. Failed attempts do not alter connection track state.
-    const bool applied = [this, reset_module]()
+    // A deferred attempt (macOS ADM mid-transition) keeps its request counted
+    // and retries itself; the retry retires it.
+    enum class Attempt { Applied, Failed, Deferred };
+    const Attempt attempt = [this, reset_module]()
     {
         // <FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
         try // Try catch needed for uniquie lock as will throw an exception if a second lock is attempted or the mutex is invalid
@@ -830,7 +833,7 @@ void LLWebRTCImpl::workerDeployDevices(bool reset_module)
             // Prevents threads from interacting with the hardware at the same time as other audio/voice threads.
             if (!lock.owns_lock())
             {
-                return false;
+                return Attempt::Failed;
             }
             // </FS:minerjr> [FIRE-36022]
             if (!mDeviceModule)
@@ -839,8 +842,34 @@ void LLWebRTCImpl::workerDeployDevices(bool reset_module)
                 // If the device is not avaiable, then make sure the flag for the WebRTC updated devices flag is turned off for the co-routine
                 gWebRTCUpdateDevices = false;
                 // </FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
-                return false;
+                return Attempt::Failed;
             }
+
+            // <FS:TJ> Try and help crash on Mac with device changes
+            // If the ADM is mid-transition, back off and keep trying for ~5s total
+#if WEBRTC_MAC
+            const bool adm_mid_transition =
+                (mDeviceModule->PlayoutIsInitialized() && !mDeviceModule->Playing()) ||
+                (mDeviceModule->RecordingIsInitialized() && !mDeviceModule->Recording());
+            if (adm_mid_transition)
+            {
+                if (mDeployBackoffs++ < 20)
+                {
+                    RTC_LOG(LS_WARNING) << "workerDeployDevices: ADM mid-transition, backing off (" << mDeployBackoffs << ")";
+                    return Attempt::Deferred;
+                }
+                if (mDeviceModule->PlayoutIsInitialized() && !mDeviceModule->Playing())
+                {
+                    mDeviceModule->StopPlayout();
+                }
+                if (mDeviceModule->RecordingIsInitialized() && !mDeviceModule->Recording())
+                {
+                    mDeviceModule->ForceStopRecording();
+                }
+            }
+            mDeployBackoffs = 0;
+#endif
+            // </FS:TJ>
 
             // Stop first so the start helpers (which no-op when already running) will
             // re-select the now-current device.
@@ -874,7 +903,7 @@ void LLWebRTCImpl::workerDeployDevices(bool reset_module)
             gWebRTCUpdateDevices = false;
             // </FS:minerjr> [FIRE-36022]
             // <FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
-            return true;
+            return Attempt::Applied;
         }
         // There are two exceptions that unique_lock can trigger, operation_not_permitted or resource_deadlock_would_occur
         catch (const std::system_error& e)
@@ -896,17 +925,27 @@ void LLWebRTCImpl::workerDeployDevices(bool reset_module)
             }
             // Device no longer being interacted with
             gWebRTCUpdateDevices = false;
-            return false;
+            return Attempt::Failed;
         }
         catch (const std::exception& e)
         {
             mLogSink->OnLogMessage(std::string("Excepton: WebRTC: ") + e.what());
             // Device no longer being interacted with
             gWebRTCUpdateDevices = false;
-            return false;
+            return Attempt::Failed;
         }
         // </FS:minerjr> [FIRE-36022]
     }();
+    if (attempt == Attempt::Deferred)
+    {
+        // <FS:TJ> Retry outside the device lock; the request stays counted until the retry completes.
+        mWorkerThread->PostDelayedTask([this, reset_module]
+        {
+            workerDeployDevices(reset_module || mDevicesDeployingNeedsReset.exchange(false, std::memory_order_relaxed));
+        }, webrtc::TimeDelta::Millis(250));
+        return;
+    }
+    const bool applied = attempt == Attempt::Applied;
     if (!applied && reset_module)
     {
         // A failed reset must remain available to the next pending/new request.
@@ -1192,7 +1231,21 @@ void LLWebRTCImpl::OnDevicesUpdated()
 {
     // OnDevicesUpdated() is called on macOS CoreAudio's device-change callback
     // thread.  Calling updateDevices() on that thread causes a deadlock.
+    // <FS:TJ> Try and help crash on Mac with device changes
+    // Batch device change events and delay the update to avoid racing stream restarts
+#if WEBRTC_MAC
+    if (!mDevicesUpdatePending.exchange(true))
+    {
+        mWorkerThread->PostDelayedTask([this]
+        {
+            mDevicesUpdatePending.store(false);
+            updateDevices();
+        }, webrtc::TimeDelta::Millis(1500));
+    }
+#else
     mWorkerThread->PostTask([this] { updateDevices(); });
+#endif
+    // </FS:TJ>
 }
 
 
