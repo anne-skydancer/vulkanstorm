@@ -439,10 +439,7 @@ void LLViewerInventoryItem::updateServer(bool is_new) const
                           << LL_ENDL;
         return;
     }
-    // With AIS, count only: the reply's _updated_category_versions sets the
-    // parent's version, and a local bump would stay ahead of the server if
-    // the update fails (AIS versions only ever raise it).
-    LLInventoryModel::LLCategoryUpdate up(mParentUUID, is_new ? 1 : 0, !AISAPI::isAvailable());
+    LLInventoryModel::LLCategoryUpdate up(mParentUUID, is_new ? 1 : 0);
     gInventory.accountForUpdate(up);
 
     // <FS:Ansariel> [UDP-Msg]
