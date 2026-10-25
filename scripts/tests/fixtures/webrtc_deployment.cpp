@@ -16,18 +16,24 @@ using namespace std::chrono_literals;
 struct TaskQueue
 {
     std::deque<std::function<void()>> tasks;
+    int delayed = 0;
     template<class F> void PostTask(F task) { tasks.emplace_back(task); }
+    // Delays are not simulated: a delayed task runs in posting order.
+    template<class F, class D> void PostDelayedTask(F task, D) { ++delayed; tasks.emplace_back(task); }
     void step() { auto task = std::move(tasks.front()); tasks.pop_front(); task(); }
 };
+namespace webrtc { struct TimeDelta { static int Millis(int value) { return value; } }; }
 struct Device
 {
-    int initialized = 0, terminated = 0;
-    bool Playing() const { return false; }
-    bool Recording() const { return false; }
+    int initialized = 0, terminated = 0, stops = 0;
+    // Initialized but not running: the macOS ADM mid-transition state.
+    bool transitioning = false;
+    bool Playing() const { return !transitioning; }
+    bool Recording() const { return !transitioning; }
     bool RecordingIsInitialized() const { return true; }
     bool PlayoutIsInitialized() const { return true; }
-    void StopPlayout() {}
-    void ForceStopRecording() {}
+    void StopPlayout() { ++stops; }
+    void ForceStopRecording() { ++stops; }
     int Init() { ++initialized; return 0; }
     int ForceTerminate() { ++terminated; return 0; }
 };
@@ -74,6 +80,7 @@ struct LLWebRTCImpl
     bool mVoiceEnabled = false, mTuningMode = false;
     std::atomic<int> mDevicesDeploying{0};
     std::atomic<bool> mDevicesDeployingNeedsReset{false};
+    int mDeployBackoffs = 0;
     std::vector<std::unique_ptr<Connection>> mPeerConnections;
     int recordings = 0, playouts = 0;
     bool fail_recording = false;
@@ -172,4 +179,33 @@ int main()
     queued.drain(); // The queued request retries the reset after lock failure.
     assert(queued.module.terminated == 1 && queued.recordings == 1);
     assert(!queued.mDevicesDeployingNeedsReset);
+
+#if WEBRTC_MAC
+    // Mid-transition: back off without retiring the request, then deploy once
+    // the module settles. The retry keeps a reset that arrived meanwhile.
+    LLWebRTCImpl settling;
+    settling.mPeerConnections.emplace_back(std::make_unique<Connection>());
+    settling.module.transitioning = true;
+    settling.deployDevices(false);
+    for (int backoff = 1; backoff <= 3; ++backoff)
+    {
+        settling.worker.step();
+        assert(settling.worker.delayed == backoff && settling.mDeployBackoffs == backoff);
+        assert(settling.mDevicesDeploying == 1 && settling.signaling.tasks.empty());
+    }
+    settling.deployDevices(true); // Queued behind the deferred request.
+    settling.module.transitioning = false;
+    settling.drain();
+    assert(settling.mDeployBackoffs == 0 && settling.recordings >= 1);
+    assert(settling.module.terminated == 1 && !settling.mDevicesDeployingNeedsReset);
+    assert(settling.mPeerConnections[0]->mute_resets >= 1);
+
+    // Still mid-transition after 20 back-offs: force-stop and deploy anyway.
+    LLWebRTCImpl stuck;
+    stuck.module.transitioning = true;
+    stuck.deployDevices(false);
+    stuck.drain();
+    assert(stuck.worker.delayed == 20 && stuck.mDeployBackoffs == 0);
+    assert(stuck.module.stops == 2 && stuck.recordings == 1 && stuck.playouts == 1);
+#endif
 }

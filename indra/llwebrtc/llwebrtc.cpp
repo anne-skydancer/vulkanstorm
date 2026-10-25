@@ -936,6 +936,7 @@ void LLWebRTCImpl::workerDeployDevices(bool reset_module)
         }
         // </FS:minerjr> [FIRE-36022]
     }();
+#if WEBRTC_MAC
     if (attempt == Attempt::Deferred)
     {
         // <FS:TJ> Retry outside the device lock; the request stays counted until the retry completes.
@@ -945,6 +946,7 @@ void LLWebRTCImpl::workerDeployDevices(bool reset_module)
         }, webrtc::TimeDelta::Millis(250));
         return;
     }
+#endif
     const bool applied = attempt == Attempt::Applied;
     if (!applied && reset_module)
     {
