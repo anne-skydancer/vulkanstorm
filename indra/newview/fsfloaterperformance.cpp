@@ -1330,7 +1330,8 @@ void FSFloaterPerformance::populateNativeNearby()
     const bool showTuned=gSavedSettings.getBOOL("ShowTunedART");unsigned count=0;
     for(const auto& row:rows)
     {
-        if(!nearby(row) || !world.current(row.object))continue;++count;if(row.invisible)continue;
+        if(!nearby(row) || !world.current(row.object))continue;
+        ++count;if(row.invisible)continue;
         LLSD item;item["id"]=row.object.id;auto& columns=item["columns"];unsigned n=0;
         columns[n]["column"]="art_visual";columns[n]["type"]="bar";auto& bar=columns[n++]["value"];
         bar["ratio"]=row.gpuMilliseconds && mNearbyMaxGPUTime>0?*row.gpuMilliseconds / mNearbyMaxGPUTime:0.f;

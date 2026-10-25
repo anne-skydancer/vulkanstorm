@@ -155,9 +155,11 @@ bool vs_hud_icon_replay_tick(VSNativeSession& session,LLSD& report)
         requireIcon(gViewerWindow->handleMouseUp(gViewerWindow->getWindow(),physical,MASK_NONE),"Native world icon rejected real mouse up");
         requireIcon(host->isInVisibleChain()&&LLFloaterReg::findInstance("script_debug_output",sourceID)->isInVisibleChain(),"Icon selected source did not open actual script debug editor through window input");
         if(plain)plain->setVisible(plainVisible);
-        if(nearby)nearby->setVisible(nearbyVisible);report["connected_script_icon_pick"]=true;
+        if(nearby)nearby->setVisible(nearbyVisible);
+        report["connected_script_icon_pick"]=true;
         LLMessageSystem* msg=gMessageSystem;msg->newMessage("KillObject");msg->nextBlock("ObjectData");msg->addU32("ID",localID);msg->sendReliable(session.host());state->step=4;return false;}
-    if(world.object(sourceID))return false;requireIcon(state->icon->getSourceID().isNull()&&!state->icon->nativePickPoint(),"Retired simulator object retained clickable icon source");
+    if(world.object(sourceID))return false;
+    requireIcon(state->icon->getSourceID().isNull()&&!state->icon->nativePickPoint(),"Retired simulator object retained clickable icon source");
     if(auto* host=LLFloaterReg::findInstance("script_debug"))host->closeFloater();
     gSavedSettings.setBOOL("ShowScriptErrors",state->originalShow);gSavedSettings.setS32("ShowScriptErrorsLocation",state->originalLocation);
     const auto origin=from_region_handle(session.handle());requireIcon(session.cameraLookAt(origin+LLVector3d(state->camera.center),origin+LLVector3d(state->camera.focus)),"Icon replay did not restore original camera");
