@@ -58,6 +58,7 @@ namespace
 bool nativeTelehub(){return gViewerWindow && gViewerWindow->isNativeVulkan();}
 std::vector<VSObjectContext> telehubSelection()
 {
+#if VS_NATIVE_VULKAN
     const auto session=VSNativeSession::active();
     if(!session || !session->regionReady() || !session->objectSelection())return {};
     std::vector<VSObjectContext> result;std::set<LLUUID> roots;
@@ -70,9 +71,13 @@ std::vector<VSObjectContext> telehubSelection()
         if(roots.insert(root->id).second)result.push_back(*root);
     }
     return result;
+#else
+    return {};
+#endif
 }
 void sendTelehubRequest(const std::string& parameter)
 {
+#if VS_NATIVE_VULKAN
     const auto session=VSNativeSession::active();
     if(!session || !session->regionReady())return;
     const auto selection=telehubSelection();
@@ -99,6 +104,7 @@ void sendTelehubRequest(const std::string& parameter)
         }
         msg->sendReliable(peer.first);
     }
+#endif
 }
 }
 
@@ -134,6 +140,7 @@ void LLFloaterTelehub::onOpen(const LLSD& key)
 {
     if(nativeTelehub())
     {
+#if VS_NATIVE_VULKAN
         const auto session=VSNativeSession::active();const auto region=vs_current_region_context();
         if(!session || !region)return;
         if(!mNativeCurrent || !mNativeCurrent())
@@ -150,6 +157,7 @@ void LLFloaterTelehub::onOpen(const LLSD& key)
         }));
         // The actual native selection owner is consumed below. The normal
         // translate/select mouse frontend remains a prerequisite for admission.
+#endif
     }
     else
     {
@@ -229,11 +237,13 @@ void LLFloaterTelehub::addBeacons()
     if(nativeTelehub())
     {
         if(!floater->mNativeCurrent || !floater->mNativeCurrent())return;
+#if VS_NATIVE_VULKAN
         auto& scene=gViewerWindow->nativeContext()->world();
         const auto object=scene.object(floater->mTelehubObjectID);
         const auto transform=object?scene.objectTransform(*object):std::nullopt;
         const auto region=vs_current_region_context();
         if(transform && region){hub_pos_region=region->getPosRegionFromGlobal(transform->position);hub_rot=transform->rotation;}
+#endif
     }
     else if(auto* obj=gObjectList.findObject(floater->mTelehubObjectID))
     {hub_pos_region=obj->getPositionRegion();hub_rot=obj->getRotationRegion();}
@@ -287,7 +297,9 @@ void LLFloaterTelehub::onClickAddSpawnPoint()
     if(nativeTelehub())
     {
         if(mNativeCurrent && mNativeCurrent())sendTelehubRequest("spawnpoint add");
+#if VS_NATIVE_VULKAN
         if(const auto session=VSNativeSession::active();session && session->objectSelection())session->objectSelection()->select({});
+#endif
         return;
     }
     LLSelectMgr::getInstance()->sendGodlikeRequest("telehub", "spawnpoint add");

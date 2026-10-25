@@ -652,6 +652,9 @@ static void set_enabled_texture_ctrl(bool enabled, LLPanel* panel, const LLEditW
 
 namespace
 {
+#if VS_NATIVE_VULKAN
+// Native-session helpers: every caller is native-only, so an OpenGL-only build
+// leaves them unused (GCC's -Werror=unused-function).
 void nativeWearableChanged(LLViewerWearable* wearable)
 {
     if (!wearable || !wearable->currentNativeOwner()) return;
@@ -671,6 +674,7 @@ void nativeWearableTexture(LLViewerWearable* wearable, S32 texture, const LLUUID
     wearable->setLocalTextureObject(texture, local);
     nativeWearableChanged(wearable);
 }
+#endif
 LLPointer<LLInventoryCallback> wearableCustomizeCallback()
 {
 #if VS_NATIVE_VULKAN

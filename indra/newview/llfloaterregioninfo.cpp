@@ -375,6 +375,7 @@ bool LLFloaterRegionInfo::postBuild()
     if(gViewerWindow && gViewerWindow->isNativeVulkan())
     {
         const auto weak=getHandle();
+#if VS_NATIVE_VULKAN
         if(const auto session=VSNativeSession::active())
         {
             mNativeRegionConnection=session->observeCurrentRegion(vs_native_im_account_callback([weak]
@@ -382,6 +383,7 @@ bool LLFloaterRegionInfo::postBuild()
                 if(auto* view=dynamic_cast<LLFloaterRegionInfo*>(weak.get()))view->onRegionChanged();
             }));
         }
+#endif
         mRegionInfoConnection=LLRegionInfoModel::instance().setUpdateCallback(vs_native_im_account_callback([weak]
         {
             if(weak.get())LLFloaterRegionInfo::processRegionInfo(nullptr);
@@ -430,6 +432,7 @@ void LLFloaterRegionInfo::onClose(bool app_quitting)
 void LLFloaterRegionInfo::observeNativeRegion()
 {
     mNativeTerrainConnection.disconnect();
+#if VS_NATIVE_VULKAN
     if(!gViewerWindow || !gViewerWindow->isNativeVulkan())return;
     auto* context=gViewerWindow->nativeContext();
     auto* scene=context?&context->world():nullptr;
@@ -442,6 +445,7 @@ void LLFloaterRegionInfo::observeNativeRegion()
         auto* view=dynamic_cast<LLFloaterRegionInfo*>(weak.get());
         if(view && view->getVisible())view->refreshFromRegion(vs_current_region_context());
     });
+#endif
 }
 
 void LLFloaterRegionInfo::onRegionChanged()
