@@ -34,6 +34,8 @@ struct LLParcel {LLUUID getID(){return {99};}std::string getName(){return "stale
 struct LLViewerParcelMgr {static LLViewerParcelMgr*getInstance(){static LLViewerParcelMgr manager;return &manager;}
  LLParcel*getAgentParcel(){static LLParcel stale;return &stale;}};
 void createPick(LLFloaterProfile*profilefloater){CREATE_NATIVE}
+constexpr int RLV_BHVR_SHOWLOC=1;
+struct RlvHandler {bool showloc=false;bool hasBehaviour(int behaviour){return behaviour==RLV_BHVR_SHOWLOC&&showloc;}}gRlvHandler;
 struct LLPanelProfilePick {LLUUID mParcelId{77};bool mLocationChanged=false,saving=false;std::string region,parcel;Position pos;
  void setPosGlobal(Position p){pos=p;}Position getPosGlobal(){return pos;}std::string getLocationNotice(){return "";}
  std::string createLocationText(std::string,std::string p,std::string r,Position){parcel=p;region=r;return r;}
@@ -49,6 +51,8 @@ CLASSIFIED_LOCATION
 int main(){LLFloaterProfile profile;createPick(&profile);assert(profile.created==1&&profile.data.sim_name=="Current Native Region"&&profile.data.name=="Current Native Parcel"&&profile.data.pos_global.x==1040);
  VSNativeSession::active()->state=VSNativeSession::Phase::Disconnected;createPick(&profile);assert(profile.created==1);
  VSNativeSession::active()->state=VSNativeSession::Phase::Connected;
+ LLPanelProfilePick restricted;gRlvHandler.showloc=true;restricted.onClickSetLocation();
+ assert(restricted.region.empty()&&restricted.mParcelId.id==77&&!restricted.mLocationChanged&&!restricted.saving);gRlvHandler.showloc=false;
  LLPanelProfilePick pick;pick.onClickSetLocation();assert(pick.region=="Current Native Region"&&pick.parcel=="Current Native Parcel"&&pick.mParcelId.id==0&&pick.mLocationChanged&&pick.saving);
  LLPanelProfileClassified classified;classified.onSetLocationClick();assert(classified.region=="Current Native Region"&&classified.parcel.id==0&&classified.changed&&classified.pos.y==2050);
 }

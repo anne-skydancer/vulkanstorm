@@ -5,12 +5,13 @@
 constexpr int AGENT_CONTROL_AWAY=1,AGENT_CONTROL_STOP=2,ANIM_AGENT_AWAY=3,ANIM_REQUEST_START=4,ANIM_REQUEST_STOP=5,RLV_BHVR_SIT=6,RLV_BHVR_UNSIT=7;
 std::vector<int>events;bool gNonInteractive=false,ready=true,valid=true,sitting=false,sitSetting=true,noSit=false,noUnsit=false,nativeMode=true,gDisconnected=false;float awayElapsed=0;int regionReads=0,avatarReads=0;
 struct Timer{float getElapsedTimeF32(){return awayElapsed;}void start(){events.push_back(10);}void reset(){events.push_back(11);}}gAwayTimer,gAwayTriggerTimer;
+struct DurationTimer{void start(){events.push_back(14);}};
 struct Settings{bool getBOOL(const char*){events.push_back(12);return sitSetting;}}gSavedSettings;
 struct Rlv{bool hasBehaviour(int b){events.push_back(20+b);return b==RLV_BHVR_SIT?noSit:noUnsit;}}gRlvHandler;
 struct Avatar{std::map<int,int>mSignaledAnimations;bool isSitting(){events.push_back(13);return sitting;}}avatar;Avatar*gAgentAvatarp=&avatar;
 bool isAgentAvatarValid(){++avatarReads;return valid;}Avatar*vs_avatar_character(){++avatarReads;return valid?&avatar:nullptr;}const std::map<int,int>&vs_avatar_signaled_animations(){static std::map<int,int>empty;return valid?avatar.mSignaledAnimations:empty;}
 struct Session{bool regionReady(){return ready;}static Session*active(){static Session s;return nativeMode?&s:nullptr;}};using VSNativeSession=Session;
-struct LLAgent{static constexpr float MIN_AFK_TIME=2;int mControlFlags=0;bool afkSit=false;void*getRegion(){++regionReads;return ready?this:nullptr;}bool isSitting(){events.push_back(13);return sitting;}void sendAnimationRequest(int a,int r){events.push_back(100+a*10+r);}void setControlFlags(int f){mControlFlags|=f;events.push_back(30+f);}void clearControlFlags(int f){mControlFlags&=~f;events.push_back(40+f);}void sitDown(){events.push_back(50);}void standUp(){events.push_back(51);}bool isAfkSitting(){events.push_back(52);return afkSit;}void setIsAfkSitting(bool b){afkSit=b;events.push_back(53+b);}void setAFK();void clearAFK();void setAFKReference();void clearAFKReference();}gAgent;
+struct LLAgent{static constexpr float MIN_AFK_TIME=2;int mControlFlags=0;bool afkSit=false;DurationTimer mAFKDurationTimer;void*getRegion(){++regionReads;return ready?this:nullptr;}bool isSitting(){events.push_back(13);return sitting;}void sendAnimationRequest(int a,int r){events.push_back(100+a*10+r);}void setControlFlags(int f){mControlFlags|=f;events.push_back(30+f);}void clearControlFlags(int f){mControlFlags&=~f;events.push_back(40+f);}void sitDown(){events.push_back(50);}void standUp(){events.push_back(51);}bool isAfkSitting(){events.push_back(52);return afkSit;}void setIsAfkSitting(bool b){afkSit=b;events.push_back(53+b);}void setAFK();void clearAFK();void setAFKReference();void clearAFKReference();}gAgent;
 REFERENCE
 METHOD
 MOUSE

@@ -834,7 +834,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 "NotificationWellChicletMenu.Action", "NotificationWellChicletMenu.EnableItem",
                 "Advanced.ShowDebugSettings", "ToggleSettingsDebug", "ToggleWebBrowser", "Help.ToggleHowTo",
                 "MemLeak.ChangeLeakingSpeed", "MemLeak.ChangeMaxMemLeaking", "MemLeak.Start", "MemLeak.Stop", "MemLeak.Release", "MemLeak.Close", "GridTools.FlushMapVisibilityCaches", "GodTools.Request", "Media.CommitHomeURL", "Media.whitelistAdd", "Media.whitelistDelete", "ClickAdd", "SettingSelect", "CommitSettings", "ClickDefault", "UpdateFilter", "ClickCopy", "ClickSanityIcon",
-                "LagMeter.ClickShrink", "InvOfferChiclet.Action", "Mention.CopyURI", "Mention.Chat",
+                "LagMeter.ClickShrink", "InvOfferChiclet.Action", "Mention.CopyURI", "Mention.Chat", "FS.EnableMentionOption",
                 "Url.Open", "Url.OpenInternal", "Url.OpenExternal", "Url.Execute", "Url.Teleport", "Url.Block", "Url.Unblock",
                 "Url.CopyLabel", "Url.CopyUrl", "Url.ShowProfile", "Url.SendIM", "Url.AddFriend", "Url.RemoveFriend",
                 "Url.EnableShowProfile", "Url.EnableSendIM", "Url.EnableAddFriend", "Url.EnableRemoveFriend",

@@ -12,6 +12,8 @@ void LLAgent::setAFK()
         setControlFlags(AGENT_CONTROL_AWAY | AGENT_CONTROL_STOP);
         gAwayTimer.start();
 
+        mAFKDurationTimer.start(); // <FS:Beq/> [FIRE-37058] Keep logout duration independent of activity confirmation.
+
         // <FS:AO> Gsit on away, antigrief protection
         if (gSavedSettings.getBOOL("AvatarSitOnAway"))
         {
