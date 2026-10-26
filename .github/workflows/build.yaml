@@ -2,6 +2,14 @@ name: Build
 
 on:
   workflow_dispatch:
+    inputs:
+      experimental_release:
+        description: >-
+          vkstorm-canary only: build a Release package (Release configuration, AVX2,
+          LTO, Inno Setup, no development hooks) and publish it as the experimental
+          pre-release, moving the experimental tag. Never touches latest.
+        type: boolean
+        default: false
   workflow_call:
   pull_request:
   push:
@@ -41,7 +49,7 @@ jobs:
           g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I indra/newview indra/newview/tests/llscripteditorposixfile_test.cpp -o "$RUNNER_TEMP/challenge-file-test"
           "$RUNNER_TEMP/challenge-file-test"
       - name: Keep development hooks out of release
-        if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release'
+        if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)
         run: python3 scripts/tests/check_release_hooks.py
 
   build:
@@ -56,8 +64,10 @@ jobs:
             directory: build-linux-x86_64
     runs-on: ${{ matrix.os }}
     env:
-      VIEWER_BUILD_TYPE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life')) && 'Release' || 'RelWithDebInfo' }}
-      VIEWER_PACKAGE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life')) && 'ON' || 'OFF' }}
+      # Release packages: vkstorm-release pushes, Second_Life tags, and the manually
+      # dispatched experimental build of vkstorm-canary.
+      VIEWER_BUILD_TYPE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)) && 'Release' || 'RelWithDebInfo' }}
+      VIEWER_PACKAGE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)) && 'ON' || 'OFF' }}
       AUTOBUILD_ADDRSIZE: 64
       AUTOBUILD_CONFIGURATION: ReleaseFS_open
       AUTOBUILD_VSVER: "170"
@@ -291,6 +301,38 @@ jobs:
           script: |
             const publish = require('./scripts/ci_publish_latest.cjs');
             await publish({ github, context, core, directory: 'installers' });
+
+  experimental:
+    # The manually dispatched Release build of vkstorm-canary: publishes the
+    # experimental pre-release and moves the experimental tag, after both
+    # platforms succeed. It never publishes to latest (canary builds must not
+    # advance latest).
+    if: >-
+      github.repository == 'anne-skydancer/vulkanstorm' &&
+      github.ref == 'refs/heads/vkstorm-canary' &&
+      github.event_name == 'workflow_dispatch' && inputs.experimental_release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: vulkanstorm-experimental-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: '*-installer'
+          path: installers
+      - name: Publish both platforms and move experimental
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const publish = require('./scripts/ci_publish_latest.cjs');
+            await publish({ github, context, core, directory: 'installers', channel: publish.channels.experimental });
 
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/Second_Life')
