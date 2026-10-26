@@ -58,9 +58,13 @@ def resolve(name):
 
 
 def base_lines(extra=None):
-    refs = [ref for ref in git("for-each-ref", "--format=%(refname)",
-                               "refs/remotes/origin/%s*" % BASE_PREFIX).stdout.split()
-            if ref[len("refs/remotes/origin/"):] not in MIRROR_LINES]
+    # Remote-tracking and local base branches: a local base line can be ahead
+    # of origin (for example after pulling from an upstream remote).
+    refs = []
+    for prefix in ("refs/remotes/origin/", "refs/heads/"):
+        refs += [ref for ref in git("for-each-ref", "--format=%(refname)",
+                                    "%s%s*" % (prefix, BASE_PREFIX)).stdout.split()
+                 if ref[len(prefix):] not in MIRROR_LINES]
     if extra and resolve(extra):
         refs.append(extra)
     return refs
@@ -76,7 +80,7 @@ def first_parent_chains(refs):
 
 
 def short_ref(ref):
-    return ref.replace("refs/remotes/", "")
+    return ref.replace("refs/remotes/", "").replace("refs/heads/", "")
 
 
 def check_range(base, head):
