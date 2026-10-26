@@ -5,7 +5,8 @@ incrementally, in dependency order, on its current OpenGL pipeline. Each rung
 replaces one subsystem behind a C ABI, keeps the C++ implementation only as
 the oracle in tests (never as a runtime fallback), and stays releasable. The shared crates
 live in [vkstorm-core-rust](https://github.com/anne-skydancer/vkstorm-core-rust),
-consumed from `indra/rust/Cargo.toml` as git dependencies pinned by commit.
+with the C ABI over them (`vkstorm-ffi`), which the viewer links as the
+`vkstorm-ffi` autobuild package.
 The design study behind the port is in the vkstorm-aleph repository under
 `docs/upstream-study/`.
 
@@ -15,15 +16,31 @@ textures, inventory, the object store, the renderer, the UI, then Vulkan.
 
 ## Build integration
 
-- `indra/cmake/Rust.cmake` fetches [corrosion](https://github.com/corrosion-rs/corrosion)
-  v0.6.1 at configure time and imports the `vkstorm_ffi` static library target (crate `vkstorm-ffi`) from
-  `indra/rust`. There is no option to select another codec.
-- The cargo release profile uses fat LTO and one codegen unit, matching the
-  viewer's Release link. With `USE_AVX2_OPTIMIZATION` the crate is built for
-  `x86-64-v3` (AVX2), the Release CPU baseline.
-- `indra/rust/.cargo/config.toml` makes cargo fetch git dependencies with the
-  git CLI. vkstorm-core-rust is public, so CI needs only the Rust toolchain
-  (`dtolnay/rust-toolchain@stable` in `build.yaml`) and no credentials.
+- The C ABI is the crate `vkstorm-ffi` in vkstorm-core-rust (`crates/vkstorm-ffi`,
+  header `include/vkstorm_ffi.h`), one Cargo feature per rung. vkstorm-core-rust's
+  CI builds it as a static library with its pinned toolchain
+  (`rust-toolchain.toml`), with fat LTO and one codegen unit for the
+  `x86-64-v3` (AVX2) Release baseline, and publishes it as the `vkstorm-ffi`
+  autobuild package per rung set (tag `ffi-v*`). The viewer needs no Rust
+  toolchain.
+- This line pins the `full` archives (every rung) in `autobuild.xml`.
+  `indra/cmake/Rust.cmake` defines the `vkstorm_ffi` target from the package:
+  the library, the header, the system libraries it leaves to the final link
+  (`vkstorm_ffi.native-libs.txt`, as rustc reported them) and libcurl.
+- A rung's change to the ABI therefore lands in vkstorm-core-rust first, is
+  tagged, and this line moves its `autobuild.xml` entry to the new archives.
+- Development only: `-DVKS_CORE_RUST_DIR=<vkstorm-core-rust checkout>` builds
+  the library from that checkout with cargo through
+  [corrosion](https://github.com/corrosion-rs/corrosion) (v0.6.1, fetched at
+  configure time), so the port can iterate without publishing a package; it
+  needs a local Rust toolchain. CI always uses the package. OpenSim builds and
+  builds without AVX2 need this switch until such packages exist; the package
+  path refuses them rather than link a mismatched library.
+- Until October 2026 the crate lived here as `indra/rust/vkstorm-ffi` and was
+  built by corrosion on every viewer build; the rung sections below name the
+  files by those former paths (`indra/rust/vkstorm-ffi/src/*.rs` is now
+  `crates/vkstorm-ffi/src/*.rs` in vkstorm-core-rust, the JPEG 2000 and LLSD
+  parts of `lib.rs` in `j2c.rs` and `llsd.rs`).
 - Required Release configuration for this track: Inno Setup as the installer,
   AVX2, OpenJPEG, no OpenSim, LTO, WebRTC voice. Vivox is not part of the
   Release, since Second Life voice is WebRTC; it stays available in OpenSim
