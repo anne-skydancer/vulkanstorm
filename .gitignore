@@ -136,4 +136,3 @@ indra/newview/app_settings/keywords_lua_default.xml
 indra/newview/app_settings/keywords_lsl_default.xml
 
 # Rust build output (vkstorm-rust track)
-indra/rust/target/
