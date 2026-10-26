@@ -148,6 +148,17 @@ def upstream_mirror_integration(r):
     expect("hook: merging an upstream mirror line is allowed", code, 0, out)
 
 
+def local_base_ahead_of_origin(r):
+    # Local vkstorm-rust has moved past origin/vkstorm-rust (pulled from
+    # elsewhere); merging the local tip into a feature branch is still a base merge.
+    r.branch("codex/a", "vkstorm-rust")
+    r.commit("codex/a")
+    r.commit("vkstorm-rust", "local line ahead of origin")
+    r.git("checkout", "-q", "codex/a")
+    code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "merge vkstorm-rust"})
+    expect("hook: a local base line ahead of origin is refused", code, 1, out)
+
+
 def update_branch_style(r):
     # GitHub's "Update branch": the base tip merged into the PR branch.
     r.branch("codex/a", "vkstorm-rust")
@@ -203,11 +214,99 @@ def hook_pull_fetch_head(r):
     expect("hook: FETCH_HEAD entries marked not-for-merge are ignored", code, 0, out)
 
 
+SCRIPTS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def installer_repo(tmp):
+    """A repository carrying this checkout's scripts/, as the installer expects."""
+    import shutil
+    r = Repo(tmp)
+    # Always a hooks directory inside the temporary repository: unsetting the
+    # value would expose a global core.hooksPath to the installer.
+    r.git("config", "core.hooksPath", os.path.join(tmp, ".git", "hooks").replace(os.sep, "/"))
+    shutil.copytree(SCRIPTS, os.path.join(tmp, "scripts"),
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    os.makedirs(os.path.join(tmp, "sub", "dir"))
+    return r
+
+
+def install(r, cwd=None):
+    proc = subprocess.run(["sh", os.path.join(r.root, "scripts", "install-git-hooks.sh")],
+                          cwd=cwd or r.root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          universal_newlines=True)
+    return proc.returncode, proc.stdout
+
+
+def installer_scenarios():
+    with tempfile.TemporaryDirectory() as tmp:
+        r = installer_repo(tmp)
+        r.git("config", "core.hooksPath", ".githooks")
+        code, out = install(r, cwd=os.path.join(tmp, "sub", "dir"))
+        ok = code == 0 and os.path.isfile(os.path.join(tmp, ".githooks", "pre-merge-commit")) \
+            and not os.path.exists(os.path.join(tmp, "sub", "dir", ".githooks"))
+        expect("installer: relative core.hooksPath from a subdirectory", 0 if ok else 1, 0, out)
+    with tempfile.TemporaryDirectory() as tmp:
+        r = installer_repo(tmp)
+        hooks = os.path.join(tmp, ".git", "hooks")
+        os.makedirs(hooks, exist_ok=True)
+        for name in ("pre-merge-commit", "pre-commit"):
+            with open(os.path.join(hooks, name), "w") as fh:
+                fh.write("#!/bin/sh\n# someone else's %s\nexit 0\n" % name)
+        code, out = install(r)
+        kept = all(os.path.isfile(os.path.join(hooks, n + ".local")) for n in ("pre-merge-commit", "pre-commit"))
+        expect("installer: existing foreign hooks are kept as .local", 0 if code == 0 and kept else 1, 0, out)
+        code, out = install(r)  # reinstall: ours is replaced, the .local copies stay
+        local = os.path.join(hooks, "pre-merge-commit.local")
+        still_foreign = os.path.isfile(local) and "someone else's" in open(local).read()
+        expect("installer: reinstall replaces only its own hooks", 0 if code == 0 and still_foreign else 1, 0, out)
+    with tempfile.TemporaryDirectory() as tmp:
+        r = installer_repo(tmp)
+        r.git("config", "core.hooksPath", "scripts/git-hooks")
+        code, out = install(r)
+        expect("installer: core.hooksPath = scripts/git-hooks uses the tracked hooks", code, 0, out)
+    with tempfile.TemporaryDirectory() as tmp:
+        # A saved merge hook that delegates to pre-commit, as Git's sample does,
+        # must not loop when a conflicted merge is concluded (MERGE_HEAD exists).
+        r = installer_repo(tmp)
+        r.commit("trunk", "root")
+        hooks = os.path.join(tmp, ".git", "hooks")
+        os.makedirs(hooks, exist_ok=True)
+        with open(os.path.join(hooks, "pre-merge-commit"), "w") as fh:
+            # Like Git's sample it execs pre-commit; a depth counter turns a loop
+            # into a failure instead of an endless chain of shells.
+            fh.write('#!/bin/sh\n'
+                     'depth=$(( ${VKS_TEST_HOOK_DEPTH:-0} + 1 ))\n'
+                     'if [ "$depth" -gt 5 ]; then echo "hook recursion" >&2; exit 3; fi\n'
+                     'VKS_TEST_HOOK_DEPTH=$depth exec "$(dirname "$0")/pre-commit" "$@"\n')
+        code, out = install(r)
+        with open(os.path.join(tmp, ".git", "MERGE_HEAD"), "w") as fh:
+            fh.write(r.git("rev-parse", "HEAD") + "\n")
+        proc = subprocess.run(["sh", os.path.join(hooks, "pre-commit")], cwd=tmp,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+        code, out = proc.returncode, out + proc.stdout
+        expect("hooks: a saved merge hook delegating to pre-commit does not loop", code, 0, out)
+    with tempfile.TemporaryDirectory() as tmp:
+        # Another tool replaced our hook after a first install: the saved hook stays.
+        r = installer_repo(tmp)
+        hooks = os.path.join(tmp, ".git", "hooks")
+        os.makedirs(hooks, exist_ok=True)
+        with open(os.path.join(hooks, "pre-merge-commit"), "w") as fh:
+            fh.write("#!/bin/sh\n# hook A\nexit 0\n")
+        install(r)
+        with open(os.path.join(hooks, "pre-merge-commit"), "w") as fh:
+            fh.write("#!/bin/sh\n# hook B\nexit 0\n")
+        code, out = install(r)
+        saved = open(os.path.join(hooks, "pre-merge-commit.local")).read()
+        ok = code != 0 and "hook A" in saved
+        expect("installer: an earlier saved hook is never overwritten", 0 if ok else 1, 0, out)
+
+
 def main():
     for fn in (base_merged_into_feature, stacked_feature_then_landed, stacked_feature_landed_first,
-               other_line_merged, upstream_mirror_integration, update_branch_style, clean_feature, hook_refuses_and_override,
+               other_line_merged, upstream_mirror_integration, local_base_ahead_of_origin, update_branch_style, clean_feature, hook_refuses_and_override,
                hook_pull_fetch_head):
         scenario(fn)
+    installer_scenarios()
     if FAILURES:
         print("\n".join(FAILURES))
         return 1
