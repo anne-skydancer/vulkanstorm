@@ -4,8 +4,23 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 
-module.exports = async function publishLatest({ github, context, core, directory }) {
+// A channel is a tag with its release. latest follows vkstorm-release; experimental
+// is a manually dispatched Release build of vkstorm-canary, always a pre-release
+// that never takes GitHub's Latest badge.
+const channels = {
+    latest: {
+        tag: 'latest', name: 'Vulkanstorm — latest Windows and Linux Release',
+        summary: 'Latest successful Windows and Linux CI Release', prerelease: false, makeLatest: true,
+    },
+    experimental: {
+        tag: 'experimental', name: 'Vulkanstorm — experimental (vkstorm-canary) Windows and Linux Release',
+        summary: 'Experimental Windows and Linux Release build of vkstorm-canary', prerelease: true, makeLatest: false,
+    },
+};
+
+module.exports = async function publishLatest({ github, context, core, directory, channel = channels.latest }) {
     const repo = context.repo;
+    const { tag } = channel;
     const runId = String(context.runId);
     const files = [];
     // The upload paths in build.yaml preserve Release/ in the Windows artifact.
@@ -21,35 +36,35 @@ module.exports = async function publishLatest({ github, context, core, directory
 
     let release;
     try {
-        ({ data: release } = await github.rest.repos.getReleaseByTag({ ...repo, tag: 'latest' }));
+        ({ data: release } = await github.rest.repos.getReleaseByTag({ ...repo, tag }));
     } catch (error) {
         if (error.status !== 404) throw error;
     }
-    const previousRun = release?.body?.match(/<!-- vulkanstorm-latest-run:(\d+) -->/);
+    const previousRun = release?.body?.match(new RegExp(`<!-- vulkanstorm-${tag}-run:(\\d+) -->`));
     if (previousRun && BigInt(previousRun[1]) > BigInt(runId)) {
-        core.info('A newer CI run has already published latest; leaving it unchanged.');
+        core.info(`A newer CI run has already published ${tag}; leaving it unchanged.`);
         return;
     }
     let tagExists = true;
     try {
-        await github.rest.git.getRef({ ...repo, ref: 'tags/latest' });
+        await github.rest.git.getRef({ ...repo, ref: `tags/${tag}` });
     } catch (error) {
         if (error.status !== 404) throw error;
         tagExists = false;
     }
     if (tagExists) {
         const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
-            ...repo, basehead: `latest...${context.sha}`,
+            ...repo, basehead: `${tag}...${context.sha}`,
         });
         if (comparison.status === 'behind') {
-            core.info('This source is older than latest; leaving it unchanged.');
+            core.info(`This source is older than ${tag}; leaving it unchanged.`);
             return;
         }
     }
     if (!release) {
         ({ data: release } = await github.rest.repos.createRelease({
-            ...repo, tag_name: 'latest', target_commitish: context.sha,
-            name: 'Vulkanstorm — latest Windows and Linux Release', draft: true,
+            ...repo, tag_name: tag, target_commitish: context.sha,
+            name: channel.name, draft: true, prerelease: channel.prerelease,
         }));
     }
     const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
@@ -85,23 +100,24 @@ module.exports = async function publishLatest({ github, context, core, directory
         await github.rest.repos.updateReleaseAsset({ ...repo, asset_id: asset.id, name: asset.name });
     }
     if (tagExists) {
-        await github.rest.git.updateRef({ ...repo, ref: 'tags/latest', sha: context.sha, force: true });
+        await github.rest.git.updateRef({ ...repo, ref: `tags/${tag}`, sha: context.sha, force: true });
     } else {
-        await github.rest.git.createRef({ ...repo, ref: 'refs/tags/latest', sha: context.sha });
+        await github.rest.git.createRef({ ...repo, ref: `refs/tags/${tag}`, sha: context.sha });
     }
     const summary = [
-        '<!-- vulkanstorm-latest-start -->',
-        `<!-- vulkanstorm-latest-run:${runId} -->`,
-        `Latest successful Windows and Linux CI Release: ${context.sha}.`,
+        `<!-- vulkanstorm-${tag}-start -->`,
+        `<!-- vulkanstorm-${tag}-run:${runId} -->`,
+        `${channel.summary}: ${context.sha}.`,
         `Build: https://github.com/${repo.owner}/${repo.repo}/actions/runs/${runId}`,
         ...files.map(file => `- ${file.name}`),
-        '<!-- vulkanstorm-latest-end -->',
+        `<!-- vulkanstorm-${tag}-end -->`,
     ].join('\n');
-    const notes = (release.body || '').replace(/<!-- vulkanstorm-latest-start -->[\s\S]*?<!-- vulkanstorm-latest-end -->\s*/g, '');
+    const marker = new RegExp(`<!-- vulkanstorm-${tag}-start -->[\\s\\S]*?<!-- vulkanstorm-${tag}-end -->\\s*`, 'g');
+    const notes = (release.body || '').replace(marker, '');
     await github.rest.repos.updateRelease({
-        ...repo, release_id: release.id, name: 'Vulkanstorm — latest Windows and Linux Release',
+        ...repo, release_id: release.id, name: channel.name,
         body: `${summary}\n\n${notes}`.trim(), draft: false,
-        prerelease: release.prerelease ?? false, make_latest: 'true',
+        prerelease: channel.prerelease || (release.prerelease ?? false), make_latest: channel.makeLatest ? 'true' : 'false',
     });
     // Retire superseded binaries only after the new pair is published; preserve
     // unrelated manually attached release assets.
@@ -113,5 +129,6 @@ module.exports = async function publishLatest({ github, context, core, directory
             await github.rest.repos.deleteReleaseAsset({ ...repo, asset_id: asset.id });
         }
     }
-    core.info(`Published Windows and Linux Release binaries; latest now points to ${context.sha}.`);
+    core.info(`Published Windows and Linux Release binaries; ${tag} now points to ${context.sha}.`);
 };
+module.exports.channels = channels;

@@ -135,3 +135,32 @@ test('rerunning the same run replaces its summary without losing maintainer note
     assert.ok(body.endsWith('Notes.'));
     assert.ok(!body.includes('old summary'));
 });
+
+test('the experimental channel moves its own tag as a pre-release that never takes Latest', async t => {
+    const { args, calls } = await fixture(t);
+    await publish({ ...args, channel: publish.channels.experimental });
+    const tagUpdate = calls.find(call => call.name === 'updateRef').args;
+    assert.equal(tagUpdate.ref, 'tags/experimental');
+    assert.equal(tagUpdate.sha, 'new-sha');
+    const release = calls.find(call => call.name === 'updateRelease').args;
+    assert.equal(release.prerelease, true);
+    assert.equal(release.make_latest, 'false');
+    assert.match(release.name, /experimental/);
+    assert.match(release.body, /vulkanstorm-experimental-run:200/);
+    assert.ok(!/vulkanstorm-latest-/.test(release.body));
+});
+
+test('bootstraps a missing experimental release as a draft pre-release', async t => {
+    const { args, calls } = await fixture(t, { noRelease: true, noTag: true });
+    await publish({ ...args, channel: publish.channels.experimental });
+    assert.equal(calls[0].name, 'createRelease');
+    assert.equal(calls[0].args.tag_name, 'experimental');
+    assert.equal(calls[0].args.prerelease, true);
+    assert.ok(calls.some(call => call.name === 'createRef' && call.args.ref === 'refs/tags/experimental'));
+});
+
+test('a newer run on one channel does not block the other', async t => {
+    const { args, calls } = await fixture(t, { body: '<!-- vulkanstorm-latest-run:999 -->' });
+    await publish({ ...args, channel: publish.channels.experimental });
+    assert.ok(calls.some(call => call.name === 'updateRef' && call.args.ref === 'tags/experimental'));
+});
