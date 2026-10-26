@@ -41,12 +41,18 @@ if (VKS_CORE_RUST_DIR)
   )
   target_include_directories(vkstorm_ffi INTERFACE ${VKS_CORE_RUST_DIR}/crates/vkstorm-ffi/include)
 
-  # Match the viewer's CPU baseline: the Release configuration targets AVX2.
+  # Match the viewer's CPU baseline in every crate of the build. vkstorm-core-rust's
+  # .cargo/config.toml sets build.rustflags to x86-64-v3, and per-target rustc
+  # flags reach only the top crate, so the baseline goes through RUSTFLAGS,
+  # which replaces build.rustflags for the whole build, including without AVX.
   if (USE_AVX2_OPTIMIZATION)
-    corrosion_add_target_rustflags(vkstorm_ffi "-Ctarget-cpu=x86-64-v3")
+    set(_vks_rustflags "-Ctarget-cpu=x86-64-v3")
   elseif (USE_AVX_OPTIMIZATION)
-    corrosion_add_target_rustflags(vkstorm_ffi "-Ctarget-cpu=x86-64-v2" "-Ctarget-feature=+avx")
+    set(_vks_rustflags "-Ctarget-cpu=x86-64-v2 -Ctarget-feature=+avx")
+  else ()
+    set(_vks_rustflags "-Ctarget-cpu=x86-64")
   endif ()
+  corrosion_set_env_vars(vkstorm_ffi "RUSTFLAGS=${_vks_rustflags}")
 else ()
   # The package is built for one configuration; say so instead of linking a
   # library that does not match.
