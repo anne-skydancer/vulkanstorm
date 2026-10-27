@@ -304,7 +304,8 @@ class LLWebRTCPeerConnectionInterface
 // exports.
 
 // Share the viewer's audio device mutex (FIRE-36022) with this library, so
-// voice and the audio engine serialize on the same object. Call before init().
+// voice and the audio engine serialize on the same object. Call before init();
+// it has no effect while the library is initialized.
 LLSYMEXPORT void setAudioDeviceMutex(std::timed_mutex* mutex);
 
 // This library must be initialized before use.

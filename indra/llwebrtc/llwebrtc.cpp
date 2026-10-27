@@ -2352,6 +2352,12 @@ void freePeerConnection(LLWebRTCPeerConnectionInterface* peer_connection)
 
 void setAudioDeviceMutex(std::timed_mutex* mutex)
 {
+    // The worker threads read the pointer while the library is initialized;
+    // it can only change before init() or after terminate().
+    if (gWebRTCImpl)
+    {
+        return;
+    }
     sAudioDeviceMutex = mutex ? mutex : &sFallbackAudioDeviceMutex;
 }
 
