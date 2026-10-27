@@ -13,6 +13,41 @@ def function(source,signature):
         depth+=(source[end]=='{')-(source[end]=='}');end+=1
     return source[start:end]
 
+def startup_type_admission():
+    """The actual vs_startup_ui_admission type predicate as admitted(t). Every
+    referenced type and helper is stubbed; helpers reject, so only exact typeids admit."""
+    source=(ROOT/'indra/newview/vsstartupui.cpp').read_text(encoding='utf-8')
+    start=source.index('const bool admitted =')
+    predicate=source[start:source.index(';',start)+1]
+    names=set(re.findall(r'typeid\((\w+(?:::\w+)*)\)',predicate))
+    helpers=re.findall(r'(\w+)::(\w+)\(t\)',predicate)
+    # Argument-less predicates such as LLPathingLib::isFunctional().
+    nullary=[(owner,method) for owner,method in re.findall(r'(\w+)::(\w+)\(\)',predicate)
+             if (owner,method)!=('LLRadioGroup','itemType')]
+    # An owner that is also the namespace of a typeid type is a namespace
+    # (LLNotificationsUI::isInspectToastType), so its functions are free.
+    namespaces={name.split('::')[0] for name in names if '::' in name}
+    definitions=['namespace '+namespace+' {'+''.join(
+        'bool '+method+'(const std::type_info&){return false;}'
+        for method in sorted({method for owner,method in helpers if owner==namespace}))+'}'
+        for namespace in sorted(namespaces)]
+    helpers=[(owner,method) for owner,method in helpers if owner not in namespaces]
+    for name in sorted(names | {owner for owner,_ in helpers+nullary} | {'LLRadioGroup'}):
+        methods=''.join('static bool '+method+'(const std::type_info&){return false;}'
+                        for owner,method in helpers if owner==name)
+        methods+=''.join('static bool '+method+'(){return false;}'
+                         for method in sorted({method for owner,method in nullary if owner==name}))
+        if name=='LLRadioGroup':
+            methods+='static const std::type_info& itemType(){return typeid(Rejected);}'
+        if '::' in name:
+            namespace,child=name.split('::')
+            definitions.append('namespace '+namespace+' { struct '+child+' {}; }')
+        else:
+            definitions.append('struct '+name+' {'+methods+'};')
+    return ('#include <typeinfo>\n#include <cassert>\nstruct Rejected {};\n'+
+        '\n'.join(definitions)+'\nbool admitted(const std::type_info& t){'+predicate+
+        'return admitted;}\n')
+
 class NativeStatisticsTests(unittest.TestCase):
     def test_window_close_does_not_bypass_graceful_logout(self):
         source=(ROOT/'indra/newview/llviewerwindow.cpp').read_text()
@@ -79,6 +114,9 @@ struct LLStartUp {static inline int state=0,gestures=0;static void setStartupSta
 struct Settings {float getF32(const char*){return 2.f;}bool getBOOL(const char*){return false;}}gSavedSettings;
 struct Timer {void reset(){}}gRenderStartTime,gForegroundTime;
 int audioCalls=0;void init_audio(){++audioCalls;}
+struct LLFloaterBeacons {static inline int settings=0;static void initializeSettings(){++settings;}};
+struct LLPathfindingManager {SINGLETON(LLPathfindingManager) int systems=0;void initSystem(){++systems;}};
+struct LLMenuOptionPathfindingRebakeNavmesh {SINGLETON(LLMenuOptionPathfindingRebakeNavmesh) int initialized=0;void initialize(){++initialized;}};
 struct LLTrans {static std::string getString(const char* s){return s;}};
 struct LLNotificationsUtil {static inline int clothing=0;static void add(const char*){++clothing;}};
 void notify_native_startup(const char* name){LLNotificationsUtil::add(name);}
@@ -109,6 +147,8 @@ int main(){
  gInventory.usable=true;owner.advanceStartup();assert(viewer.completed==0);
  LLInventoryModel::ready=true;owner.advanceStartup();assert(gInventory.notices==1 && viewer.completed==0);
  owner.advanceStartup();assert(audioCalls==1 && LLStartUp::gestures==1 && viewer.completed==0);
+ assert(LLFloaterBeacons::settings==1 && LLPathfindingManager::instance().systems==1 &&
+        LLMenuOptionPathfindingRebakeNavmesh::instance().initialized==1);
  owner.advanceStartup();assert(viewer.message=="LoginPrecaching" && viewer.percent==60);
  clockValue=2;owner.advanceStartup();assert(LLStartUp::state==STATE_WEARABLES_WAIT && viewer.completed==0);
  owner.advanceStartup();assert(viewer.message=="LoginDownloadingClothing" && viewer.completed==0);
@@ -140,25 +180,7 @@ int main(){
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
 
     def test_statistics_container_admission_and_native_draw(self):
-        source=(ROOT/'indra/newview/vsstartupui.cpp').read_text(encoding='utf-8')
-        start=source.index('const bool admitted =')
-        predicate=source[start:source.index(';',start)+1]
-        names=set(re.findall(r'typeid\((\w+(?:::\w+)*)\)',predicate))
-        helpers=re.findall(r'(\w+)::(\w+)\(t\)',predicate)
-        definitions=[]
-        for name in sorted(names | {owner for owner,_ in helpers} | {'LLRadioGroup'}):
-            methods=''.join('static bool '+method+'(const std::type_info&){return false;}'
-                            for owner,method in helpers if owner==name)
-            if name=='LLRadioGroup':
-                methods+='static const std::type_info& itemType(){return typeid(Rejected);}'
-            if '::' in name:
-                namespace,child=name.split('::')
-                definitions.append('namespace '+namespace+' { struct '+child+' {}; }')
-            else:
-                definitions.append('struct '+name+' {'+methods+'};')
-        self.compile('#include <typeinfo>\n#include <cassert>\nstruct Rejected {};\n'+
-            '\n'.join(definitions)+'\nbool admitted(const std::type_info& t){'+predicate+
-            'return admitted;}\nint main(){assert(admitted(typeid(LLContainerView)));'
+        self.compile(startup_type_admission()+'int main(){assert(admitted(typeid(LLContainerView)));'
             'assert(admitted(typeid(LLStatView)));assert(admitted(typeid(LLStatBar)));'
             'struct Unreviewed:LLContainerView{};assert(!admitted(typeid(Unreviewed)));}')
         draw=function((ROOT/'indra/llui/llcontainerview.cpp').read_text(), 'void LLContainerView::draw()')
