@@ -32,239 +32,476 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install source-test dependencies
+        id: deps
         run: python -m pip install --disable-pip-version-check PyYAML==6.0.2
-      - run: python doc/vulkan/check_diligent_insertions.py --accept
-      - run: python doc/vulkan/check_milestone1_boundaries.py
-      - run: python -m unittest discover -s doc/vulkan -p 'test_*.py'
-      - run: python scripts/tests/test_progress_panels.py
-      - run: python scripts/tests/test_text_layout_reset.py
-      - run: python scripts/tests/test_software_vulkan_runner.py
-      - run: python scripts/tests/test_vulkan_evidence_package.py
-      - run: python scripts/tests/test_vulkan_session_replay.py
-      - run: python scripts/tests/test_chat_keyboard_routing.py
-      - run: python scripts/tests/test_native_parcel_permissions.py
-      - run: python scripts/tests/test_native_image_completion.py
-      - run: python scripts/tests/test_native_parcel_playback.py
-      - run: python scripts/tests/test_native_app_url_routing.py
-      - run: python scripts/tests/test_inventory_settings_controller.py
-      - run: python scripts/tests/test_profile_native_location.py
-      - run: python scripts/tests/test_emoji_connected_controller.py
-      - run: python scripts/tests/test_native_marketplace_account.py
-      - run: python scripts/tests/test_native_bridge_retirement.py
-      - run: python scripts/tests/test_native_simulator_features.py
-      - run: python scripts/tests/test_native_account_service_pump.py
-      - run: python scripts/tests/test_world_scene_contracts.py
-      - run: python scripts/tests/test_world_scene_replacement.py
-      - run: python scripts/tests/test_world_motion_contracts.py
-      - run: python scripts/tests/test_world_surface_picking.py
-      - run: python scripts/tests/test_native_pick_coordinates.py
-      - run: python scripts/tests/test_terrain_geometry.py
-      - run: python scripts/tests/test_terrain_publication.py
-      - run: python scripts/tests/test_terrain_materials.py
-      - run: python scripts/generate_vulkan_terrain_shader.py --check
-      - run: python scripts/tests/test_world_gltf_ownership.py
-      - run: python scripts/tests/test_world_gltf_publication.py
-      - run: python scripts/tests/test_world_gltf_topology.py
-      - run: python scripts/tests/test_world_gltf_materials.py
-      - run: python scripts/tests/test_world_wind.py
-      - run: python scripts/tests/test_control_constraints.py
-      - run: python scripts/tests/test_avatar_cpu_compositor.py
-      - run: python scripts/tests/test_avatar_cloth.py
-      - run: python scripts/tests/test_avatar_lod.py
-      - run: python scripts/tests/test_volume_lod.py
-      - run: python scripts/tests/test_vegetation_lod.py
-      - run: python scripts/tests/test_avatar_visibility.py
-      - run: python scripts/tests/test_avatar_sex_motion.py
-      - run: python scripts/tests/test_specialized_motion_loading.py
-      - run: python scripts/tests/test_native_outfit_recovery.py
-      - run: python scripts/tests/test_native_appearance_admission.py
-      - run: python scripts/tests/test_native_appearance_queue.py
-      - run: python scripts/tests/test_avatar_lock_policy.py
-      - run: python scripts/tests/test_vulkan_r2_fixture.py
-      - run: python scripts/tests/test_ao_inventory_completion.py
-      - run: python scripts/tests/test_native_avatar_reset.py
-      - run: python scripts/tests/test_avatar_publication.py
-      - run: python scripts/tests/test_avatar_bake_signature.py
-      - run: python scripts/tests/test_avatar_image_pool.py
-      - run: python scripts/tests/test_native_bake_callback.py
-      - run: python scripts/tests/test_native_camera_transport.py
-      - run: python scripts/tests/test_native_camera_retirement.py
-      - run: python scripts/tests/test_native_world_selection.py
-      - run: python scripts/tests/test_plugin_shutdown_lifetime.py
-      - run: python scripts/tests/test_media_plugin_crash_evidence.py
-      - run: python scripts/tests/test_native_selection_admission.py
-      - run: python scripts/tests/test_native_keyboard_tool_dispatch.py
-      - run: python scripts/tests/test_native_region_frontend.py
-      - run: python scripts/tests/test_native_region_aurora.py
-      - run: python scripts/tests/test_native_region_replay.py
-      - run: python scripts/tests/test_native_region_replay_admission.py
-      - run: python scripts/tests/test_native_landstat_http.py
-      - run: python scripts/tests/test_native_global_mouse.py
-      - run: python scripts/tests/test_native_linked_family.py
-      - run: python scripts/tests/test_native_topobjects_lifetime.py
-      - run: python scripts/tests/test_native_rlv_edit.py
-      - run: python scripts/tests/test_native_avatar_context.py
-      - run: python scripts/tests/test_native_avatar_moderation_policy.py
-      - run: python scripts/tests/test_native_avatar_moderation_wire.py
-      - run: python scripts/tests/test_native_avatar_moderation_ban.py
-      - run: python scripts/tests/test_native_navigation_reference.py
-      - run: python scripts/tests/test_native_navigation_lifecycle.py
-      - run: python scripts/tests/test_native_region_height.py
-      - run: python scripts/tests/test_native_region_lifetimes.py
-      - run: python scripts/tests/test_native_region_console.py
-      - run: python scripts/tests/test_native_console_async_http.py
-      - run: python scripts/tests/test_native_console_archive.py
-      - run: python scripts/tests/test_native_region_avatar_pickers.py
-      - run: python scripts/tests/test_native_estate_experience_wire.py
-      - run: python scripts/tests/test_native_region_xui.py
-      - run: python scripts/tests/test_native_telehub.py
-      - run: python scripts/tests/test_native_debug_beacons.py
-      - run: python scripts/tests/test_native_tracker_geometry.py
-      - run: python scripts/tests/test_native_keyboard_dispatch.py
-      - run: python scripts/tests/test_native_accordion_lifecycle.py
-      - run: python scripts/tests/test_native_script_recovery.py
-      - run: python scripts/tests/test_native_personal_lighting.py
-      - run: python scripts/tests/test_native_quickprefs.py
-      - run: python scripts/tests/test_native_selection_nodes.py
-      - run: python scripts/tests/test_native_selection_flow.py
-      - run: python scripts/tests/test_native_attention_policy.py
-      - run: python scripts/tests/test_native_tool_lifecycle.py
-      - run: python scripts/tests/test_native_pick_admission.py
-      - run: python scripts/tests/test_native_overlay.py
-      - run: python scripts/tests/test_native_hud.py
-      - run: python scripts/tests/test_native_selection_script_icon.py
-      - run: python scripts/tests/test_native_attachment_resources.py
-      - run: python scripts/tests/test_native_land_resources.py
-      - run: python scripts/tests/test_native_maps.py
-      - run: python scripts/tests/test_native_minimap.py
-      - run: python scripts/tests/test_native_map_inspector.py
-      - run: python scripts/tests/test_native_default_pie_dispatch.py
-      - run: python scripts/tests/test_native_selection_continuation.py
-      - run: python scripts/tests/test_native_tooltips.py
-      - run: python scripts/tests/test_native_tool_focus.py
-      - run: python scripts/tests/test_native_graphics_settings.py
-      - run: python scripts/tests/test_native_context_flow.py
-      - run: python scripts/tests/test_native_pie_slice_admission.py
-      - run: python scripts/tests/test_native_received_chat_policy.py
-      - run: python scripts/tests/test_native_owner_chat.py
-      - run: python scripts/tests/test_native_media_policy.py
-      - run: python scripts/tests/test_native_media_events.py
-      - run: python scripts/tests/test_native_hud_runner.py
-      - run: python scripts/tests/test_native_utility_lifecycle.py
-      - run: python scripts/tests/test_native_currency_lifecycle.py
-      - run: python scripts/tests/test_native_currency_ui_contract.py
-      - run: python scripts/tests/test_native_pipette.py
-      - run: python scripts/tests/test_native_spatial_roots.py
-      - run: python scripts/tests/test_native_map_images.py
-      - run: python scripts/tests/test_native_map_actions.py
-      - run: python scripts/tests/test_native_map_models.py
-      - run: python scripts/tests/test_native_spatial_services.py
-      - run: python scripts/tests/test_native_capability_catalogue.py
-      - run: python scripts/tests/test_native_region_metadata.py
-      - run: python scripts/tests/test_native_region_limits.py
-      - run: python scripts/tests/test_native_region_context.py
-      - run: python scripts/tests/test_native_region_info.py
-      - run: python scripts/tests/test_native_avatar_standing.py
-      - run: python scripts/tests/test_native_camera_mode.py
-      - run: python scripts/tests/test_shared_teleport_admission.py
-      - run: python scripts/tests/test_native_parcel_cpu.py
-      - run: python scripts/tests/test_native_parcel_parser.py
-      - run: python scripts/tests/test_native_parcel_request_echo.py
-      - run: python scripts/tests/test_native_land_widgets.py
-      - run: python scripts/tests/test_native_land_lifecycle.py
-      - run: python scripts/tests/test_native_land_retirement.py
-      - run: python scripts/tests/test_native_parcel_geometry.py
-      - run: python scripts/tests/test_native_parcel_pixels.py
-      - run: python scripts/tests/test_native_land_factories.py
-      - run: python scripts/tests/test_native_environment_http.py
-      - run: python scripts/tests/test_native_parcel_replies.py
-      - run: python scripts/tests/test_native_covenant_lifecycle.py
-      - run: python scripts/tests/test_native_environment_cpu.py
-      - run: python scripts/tests/test_native_environment_lifecycle.py
-      - run: python scripts/tests/test_native_environment_editors.py
-      - run: python scripts/tests/test_native_url_entry_lifecycle.py
-      - run: python scripts/tests/test_native_environment_xui.py
-      - run: python scripts/tests/test_native_my_environments.py
-      - run: python scripts/tests/test_native_environment_rendering.py
-      - run: python scripts/tests/test_native_water_construction.py
-      - run: python scripts/tests/test_native_sky_construction.py
-      - run: python scripts/tests/test_native_environment_bindings.py
-      - run: python scripts/tests/test_native_environment_widgets.py
-      - run: python scripts/tests/test_native_ui_primitives.py
-      - run: python scripts/tests/test_vulkan_environment_evidence.py
-      - run: python scripts/tests/test_native_region_environment_flags.py
-      - run: python scripts/tests/test_native_source_fixture.py
-      - run: python scripts/tests/test_native_parcel_boundaries.py
-      - run: python scripts/tests/test_native_parcel_transactions.py
-      - run: python scripts/tests/test_native_open_region_settings.py
-      - run: python scripts/tests/test_native_confirmation_lifecycle.py
-      - run: python scripts/tests/test_native_estate_model.py
-      - run: python scripts/tests/test_native_land_deferred_callbacks.py
-      - run: python scripts/tests/test_shared_object_properties.py
-      - run: python scripts/tests/test_connected_utility_xui.py
-      - run: python scripts/tests/test_native_object_selection.py
-      - run: python scripts/tests/test_shared_click_action.py
-      - run: python scripts/tests/test_shared_object_touch.py
-      - run: python scripts/tests/test_object_context.py
-      - run: python scripts/tests/test_native_camera_publication.py
-      - run: python scripts/tests/test_shared_camera_distance.py
-      - run: python scripts/tests/test_native_task_inventory.py
-      - run: python scripts/tests/test_native_bridge_lifecycle.py
-      - run: python scripts/tests/test_native_world_assets.py
-      - run: python scripts/tests/test_native_http_body_limit.py
-      - run: python scripts/tests/test_native_texture_cache.py
-      - run: python scripts/tests/test_native_cache_operations.py
-      - run: python scripts/tests/test_native_cache_demand.py
-      - run: python scripts/tests/test_native_texture_memory.py
-      - run: python scripts/tests/test_vulkan_cache_driver.py
-      - run: python scripts/tests/test_native_material_basis.py
-      - run: python scripts/tests/test_native_platform_headers.py
-      - run: python scripts/tests/test_native_texture_upload.py
-      - run: python scripts/tests/test_native_image_batch.py
-      - run: python scripts/tests/test_native_image_usage.py
-      - run: python scripts/tests/test_native_gltf_image_lifecycle.py
-      - run: python scripts/tests/test_native_gltf_decode.py
-      - run: python scripts/tests/test_vulkan_gltf_image_evidence.py
-      - run: python scripts/tests/test_native_local_images.py
-      - run: python scripts/tests/test_native_image_eviction.py
-      - run: python scripts/tests/test_native_inactive_images.py
-      - run: python scripts/tests/test_native_remote_materials.py
-      - run: python scripts/tests/test_vulkan_remote_material_evidence.py
-      - run: python scripts/tests/test_vulkan_legacy_material_evidence.py
-      - run: python scripts/tests/test_native_material_capabilities.py
-      - run: python scripts/tests/test_vulkan_texture_cache_instances.py
-      - run: python scripts/tests/test_vulkan_local_image_evidence.py
-      - run: python scripts/tests/test_vulkan_texture_cache_evidence.py
-      - run: python scripts/tests/test_vulkan_texture_cache_case_steps.py
-      - run: python scripts/vulkan_parity_inventory.py
-      - run: python scripts/tests/test_vulkan_parity_baseline.py
-      - run: python scripts/tests/test_terrain_packet.py
-      - run: python scripts/tests/test_experience_account_lifetime.py
-      - run: python scripts/tests/test_event_notifier_account.py
-      - run: python scripts/tests/test_vulkan_viewer_diagnostic.py
-      - run: python scripts/tests/test_windows_clipboard.py
-      - run: python scripts/tests/test_native_pointer_leave.py
-      - run: python scripts/tests/test_viewer_hover_lifecycle.py
-      - run: python scripts/tests/test_vulkan_viewer_process.py
-      - run: python scripts/tests/test_im_conference_lifetime.py
-      - run: python scripts/tests/test_chat_history_handoff.py
-      - run: python scripts/tests/test_ui_publication_retry.py
-      - run: python scripts/tests/test_ci_allocation_bounds.py
-      - run: python scripts/tests/test_vulkan_menu_callbacks.py
-      - run: python scripts/tests/test_vulkan_preferences.py
-      - run: python scripts/tests/test_vulkan_friend_status.py
-      - run: python scripts/tests/test_vulkan_ui_oracle.py
-      - run: python scripts/tests/test_vulkan_media_pixels.py
-      - run: python scripts/tests/test_native_media_publication.py
-      - run: python scripts/tests/test_native_media_ownership.py
-      - run: python scripts/tests/test_native_shared_settings.py
-      - run: python scripts/tests/test_vulkan_media_evidence.py
-      - run: python scripts/tests/test_native_media_interest.py
-      - run: python scripts/tests/test_native_object_media.py
-      - run: python scripts/tests/test_vulkan_font_registry.py
-      - run: python scripts/tests/test_vulkan_ci_staging.py
-      - run: python scripts/tests/test_vulkan_dependency_overlay.py
-      - run: python scripts/tests/test_software_vulkan_dependencies.py
+      # Every check below runs even when an earlier one failed, so one failure
+      # cannot hide the rest; any failed step still fails the job.
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python doc/vulkan/check_diligent_insertions.py --accept
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python doc/vulkan/check_milestone1_boundaries.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python -m unittest discover -s doc/vulkan -p 'test_*.py'
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_progress_panels.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_text_layout_reset.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_software_vulkan_runner.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_evidence_package.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_session_replay.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_chat_keyboard_routing.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_parcel_permissions.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_image_completion.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_parcel_playback.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_app_url_routing.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_inventory_settings_controller.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_profile_native_location.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_emoji_connected_controller.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_marketplace_account.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_bridge_retirement.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_simulator_features.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_account_service_pump.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_world_scene_contracts.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_world_scene_replacement.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_world_motion_contracts.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_world_surface_picking.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_pick_coordinates.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_terrain_geometry.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_terrain_publication.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_terrain_materials.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/generate_vulkan_terrain_shader.py --check
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_world_gltf_ownership.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_world_gltf_publication.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_world_gltf_topology.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_world_gltf_materials.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_world_wind.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_control_constraints.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_avatar_cpu_compositor.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_avatar_cloth.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_avatar_lod.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_volume_lod.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vegetation_lod.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_avatar_visibility.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_avatar_sex_motion.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_specialized_motion_loading.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_outfit_recovery.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_appearance_admission.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_appearance_queue.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_avatar_lock_policy.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_r2_fixture.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_ao_inventory_completion.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_avatar_reset.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_avatar_publication.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_avatar_bake_signature.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_avatar_image_pool.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_bake_callback.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_camera_transport.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_camera_retirement.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_world_selection.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_plugin_shutdown_lifetime.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_media_plugin_crash_evidence.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_selection_admission.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_keyboard_tool_dispatch.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_frontend.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_aurora.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_replay.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_replay_admission.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_landstat_http.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_global_mouse.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_linked_family.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_topobjects_lifetime.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_rlv_edit.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_avatar_context.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_avatar_moderation_policy.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_avatar_moderation_wire.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_avatar_moderation_ban.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_navigation_reference.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_navigation_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_height.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_lifetimes.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_console.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_console_async_http.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_console_archive.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_avatar_pickers.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_estate_experience_wire.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_xui.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_telehub.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_debug_beacons.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_tracker_geometry.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_keyboard_dispatch.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_accordion_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_script_recovery.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_personal_lighting.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_quickprefs.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_selection_nodes.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_selection_flow.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_attention_policy.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_tool_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_pick_admission.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_overlay.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_hud.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_selection_script_icon.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_attachment_resources.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_land_resources.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_maps.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_minimap.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_map_inspector.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_default_pie_dispatch.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_selection_continuation.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_tooltips.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_tool_focus.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_graphics_settings.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_context_flow.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_pie_slice_admission.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_received_chat_policy.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_owner_chat.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_media_policy.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_media_events.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_hud_runner.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_utility_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_currency_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_currency_ui_contract.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_pipette.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_spatial_roots.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_map_images.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_map_actions.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_map_models.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_spatial_services.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_capability_catalogue.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_metadata.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_limits.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_context.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_info.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_avatar_standing.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_camera_mode.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_shared_teleport_admission.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_parcel_cpu.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_parcel_parser.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_parcel_request_echo.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_land_widgets.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_land_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_land_retirement.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_parcel_geometry.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_parcel_pixels.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_land_factories.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_environment_http.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_parcel_replies.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_covenant_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_environment_cpu.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_environment_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_environment_editors.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_url_entry_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_environment_xui.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_my_environments.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_environment_rendering.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_water_construction.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_sky_construction.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_environment_bindings.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_environment_widgets.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_ui_primitives.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_environment_evidence.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_region_environment_flags.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_source_fixture.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_parcel_boundaries.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_parcel_transactions.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_open_region_settings.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_confirmation_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_estate_model.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_land_deferred_callbacks.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_shared_object_properties.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_connected_utility_xui.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_object_selection.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_shared_click_action.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_shared_object_touch.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_object_context.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_camera_publication.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_shared_camera_distance.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_task_inventory.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_bridge_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_world_assets.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_http_body_limit.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_texture_cache.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_cache_operations.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_cache_demand.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_texture_memory.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_cache_driver.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_material_basis.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_platform_headers.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_texture_upload.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_image_batch.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_image_usage.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_gltf_image_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_gltf_decode.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_gltf_image_evidence.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_local_images.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_image_eviction.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_inactive_images.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_remote_materials.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_remote_material_evidence.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_legacy_material_evidence.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_material_capabilities.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_texture_cache_instances.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_local_image_evidence.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_texture_cache_evidence.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_texture_cache_case_steps.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/vulkan_parity_inventory.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_parity_baseline.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_terrain_packet.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_experience_account_lifetime.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_event_notifier_account.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_viewer_diagnostic.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_windows_clipboard.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_pointer_leave.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_viewer_hover_lifecycle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_viewer_process.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_im_conference_lifetime.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_chat_history_handoff.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_ui_publication_retry.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_ci_allocation_bounds.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_contacts_layout.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_menu_callbacks.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_preferences.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_friend_status.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_ui_oracle.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_media_pixels.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_media_publication.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_media_ownership.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_shared_settings.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_media_evidence.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_media_interest.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_native_object_media.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_font_registry.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_ci_staging.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_vulkan_dependency_overlay.py
+      - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python scripts/tests/test_software_vulkan_dependencies.py
 
   graphics:
     needs: source-evidence
@@ -430,7 +667,7 @@ jobs:
             -DVIEWER_CHANNEL:STRING=Vulkanstorm-Vulkan-Development -DROOT_PROJECT_NAME:STRING=Firestorm \
             -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
             -DUSE_DILIGENTCORE:BOOL=ON -DVS_VULKAN_DIAGNOSTICS:BOOL=ON -DUSE_MESAZINK:BOOL=OFF -DPACKAGE:BOOL=OFF \
-            -DUSE_INNOSETUP:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF -DUSE_TRACY:BOOL=OFF \
+            -DUSE_VELOPACK:BOOL=OFF -DUSE_TRACY:BOOL=OFF \
             -DUSE_KDU:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
             -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
             -DUSE_AVX2_OPTIMIZATION:BOOL=ON -DUSE_AVX_OPTIMIZATION:BOOL=OFF -DUSE_LTO:BOOL=ON \
