@@ -20,6 +20,8 @@ using uuid_vec_t=std::vector<LLUUID>;
 struct LLHost{int id=1;bool operator==(const LLHost&)const=default;bool operator<(const LLHost& other)const{return id<other.id;}};
 namespace boost::signals2{
 struct connection{};template<class>class signal;
+struct scoped_connection{scoped_connection()=default;scoped_connection(connection){}};
+template<class... A>class signal<void(A...)>{public:using slot_type=std::function<void(A...)>;std::vector<slot_type> callbacks;connection connect(slot_type f){callbacks.push_back(std::move(f));return {};}void operator()(A... a){const auto copy=callbacks;for(const auto& f:copy)f(a...);}};
 template<>class signal<void()>{std::vector<std::function<void()>> callbacks;public:connection connect(std::function<void()> f){callbacks.push_back(std::move(f));return {};}void operator()(){const auto copy=callbacks;for(const auto& f:copy)f();}};
 }
 // CPU model declarations used by the actual controller's retained state.
@@ -30,6 +32,8 @@ struct LLCategory{void unpackMultiMessage(LLMessageSystem*,const char*,S32){}voi
 struct LLSaleInfo:LLCategory{};
 struct LLAggregatePermissions{void unpackMessage(LLMessageSystem*,const char*,const char*,S32){}};
 struct LLPermissions{void init(LLUUID,LLUUID,LLUUID,LLUUID){}void initMasks(U32,U32,U32,U32,U32){}};
+using F32=float;using PermissionBit=U32;struct LLVector3{F32 mV[3]{};};struct LLQuaternion{F32 mQ[4]{0,0,0,1};};struct LLColor4{F32 mV[4]{};};struct LLCamera{};
+template<class T>struct LLPointer{T* p=nullptr;};struct LLGLTFMaterial{};
 PROPERTIES_HEADER
 PREHASH
 class LLMessageSystem{
@@ -62,10 +66,15 @@ struct VSWorldScene{
  std::optional<U32>faceCount(const ObjectHandle& token)const{return current(token)?std::optional<U32>(4):std::nullopt;}
  std::shared_ptr<const VSResourceBudget::Reservation> reserveSpatialBytes(std::size_t bytes){return refuse?nullptr:budget.reserve(bytes);}
  std::function<bool()> guard(ObjectHandle token){return [this,token]{return current(token);};}
+ std::function<void(const ObjectHandle&,S32)> materialObserver;boost::signals2::connection observeMaterialUpdates(std::function<void(const ObjectHandle&,S32)> f){materialObserver=std::move(f);return {};}
 } world;
 struct Context{VSWorldScene& world(){return ::world;}} context;
 struct ViewerWindow{bool native=true;bool isNativeVulkan(){return native;}Context* nativeContext(){return &context;}} window,*gViewerWindow=&window;
+struct Settings{bool getBOOL(const char*){return false;}}gSavedSettings;
+struct LLEditMenuHandler{static inline void* gEditMenuHandler=nullptr;};struct LLSelectMgr{static bool instanceExists(){return false;}static LLSelectMgr* getInstance(){static LLSelectMgr m;return &m;}};
+struct VSTaskInventory{struct State{bool pending=false,dirty=false;S16 serial=0;};S16 serial=0;int dirties=0;State state(const VSWorldScene::ObjectHandle&)const{return {false,false,serial};}void dirty(const VSWorldScene::ObjectHandle&){++dirties;}};
 struct VSNativeSession:std::enable_shared_from_this<VSNativeSession>{
+ VSTaskInventory inventory;VSTaskInventory* taskInventory(){return &inventory;}
  enum class Phase{Connected,Disconnected};Phase state=Phase::Connected;U64 generation=1;struct Account{LLUUID agent=uuid(1),session=uuid(2);U64 generation=1;};
  Phase phase(){return state;}Account account(){return {uuid(1),uuid(2),generation};}
  bool current(Account value){return state==Phase::Connected && generation==value.generation;}
@@ -76,6 +85,9 @@ struct LLFrameTimer{static inline double now=0;static double getTotalSeconds(){r
 SELECTION_HEADER
 PROPERTIES_SOURCE
 SELECTION_SOURCE
+// Saved-material rollback/display is qualified by its own material fixtures.
+bool VSObjectSelection::captureSavedMaterials(const VSWorldScene::ObjectHandle&,const std::shared_ptr<const VSObjectProperties>&){return false;}
+bool VSObjectSelection::hideGLTFMaterial(){return false;}bool VSObjectSelection::showGLTFMaterial(){return false;}
 int main(){
  auto owner=std::make_shared<VSNativeSession>();VSObjectSelection selection(owner);
  VSWorldScene::ObjectHandle first;first.id=uuid(1);first.local=1;world.objects[first.id]=first;
@@ -102,7 +114,7 @@ int main(){
  retireInGuard=true;assert(!selection.highlight({first},true));assert(selection.highlights().empty());
  message.name="ObjectProperties";message.replyID=first.id;message.sender={3};selection.receive(message);assert(!selection.properties(first));
  message.sender={1};world.refuse=true;selection.receive(message);assert(!selection.properties(first));world.refuse=false;
- selection.receive(message);auto publication=selection.properties(first);assert(publication && publication->properties->complete && publication->properties->name=="Name");
+ selection.receive(message);auto publication=selection.properties(first);assert(publication && publication->properties->complete && publication->properties->name=="Name");assert(owner->inventory.dirties==1);
  const auto old=publication->properties;world.refuse=true;selection.receive(message);assert(!selection.properties(first) && old->name=="Name");
  assert(!selection.select({first,first}));assert(guard());
  auto third=first;third.id=uuid(3);third.local=3;world.objects[third.id]=third;assert(!selection.select({third}));assert(guard());world.refuse=false;

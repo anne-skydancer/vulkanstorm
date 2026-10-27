@@ -36,6 +36,7 @@ class NativePickAdmission(unittest.TestCase):
     def test_actual_scene_admission_before_nearest_hit_and_owner_retirement(self):
         renderer=method(viewer('vsworldrenderer.cpp'),'bool VSWorldRenderer::intersect(').replace('VSWorldRenderer::intersect(','VSWorldRenderer::exact(',1)
         text=fixture('pick_admission_owner_fixture.cpp').replace('RENDERER',renderer).replace('POLICY',policy())
+        text=text.replace('PACKET_OBJECT\n',method(viewer('vsworldscene.cpp'),'std::optional<VSWorldScene::ObjectHandle> VSWorldScene::packetObject(')+'\n')
         self.run_cpp(text.replace('PICK\n',actual_pick()+'\n'))
     def test_frozen_avatar_collision_volumes_and_lazy_first_hit(self):
         text=fixture('avatar_collision_fixture.cpp').replace('SPHERE',fixture('avatar_sphere_reference.cpp'))
