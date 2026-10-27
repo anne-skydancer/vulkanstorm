@@ -100,8 +100,9 @@ endif (FS_PF_USER_AGENT)
 # <FS:Ansariel> [AVX Optimization]
 option(USE_AVX_OPTIMIZATION "AVX optimization support" OFF)
 # <Vulkanstorm> Linux builds default to AVX2 (x86-64-v3), the baseline of the
-# vkstorm-ffi package; other platforms keep their default.
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+# vkstorm-ffi package, unless AVX was selected; other platforms keep their
+# default. Enabling both explicitly is still an error (below).
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT USE_AVX_OPTIMIZATION)
   option(USE_AVX2_OPTIMIZATION "AVX2 optimization support" ON)
 else ()
   option(USE_AVX2_OPTIMIZATION "AVX2 optimization support" OFF)
