@@ -28,6 +28,7 @@
 #include "vsregioncontext.h"
 #include "vsavatarservices.h"
 #include "vsnativeim.h"
+#include "inlinemutexs.h"
 
 #include "llsdutil.h"
 
@@ -285,6 +286,7 @@ void LLWebRTCVoiceClient::init(LLPumpIO* pump)
 void LLWebRTCVoiceClient::initWebRTC()
 {
     if (!mPeerOwner) mPeerOwner = std::make_shared<char>(0);
+    llwebrtc::setAudioDeviceMutex(&gAudioDeviceMutex); // FIRE-36022: one mutex for audio and voice
     llwebrtc::init(this);
 
     mWebRTCDeviceInterface = llwebrtc::getDeviceInterface();
