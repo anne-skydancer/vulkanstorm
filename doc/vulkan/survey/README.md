@@ -70,26 +70,33 @@ intended design; this survey describes the code.
 - Then run the graphics jobs and fix what they report: the native viewer has
   not been compiled in CI since before 116a410fc8, so more breakage is likely.
 
-### 2. Restore the OpenGL reference (the line's contract is broken)
-The line's premise is that the OpenGL code stays intact, as the reference
-against which the results-based Vulkan code is qualified. The code no longer
-meets it:
-- About 65% of the changed lines in existing C++ files also compile into
-  OpenGL-only builds: ~23k added lines and all 15.9k deleted lines (04).
-- 343 shared files had logic moved into shared `vs*` helpers, so the OpenGL
-  path now runs Vulkan-line code (for example the region capability list in
-  `vscapabilities.cpp`, the source of the FlickrConnect leak) (02, 04).
-- Known consequences: the FlickrConnect and friends-only regressions and three
-  OpenGL-only compile/link breaks, all from 116a410fc8 (04); unguarded
-  behaviour changes in Win32 DPI handling and clipboard retry, Vivox early
-  exits, mesh upload completion, and a Preferences "Vulkan (in development)"
-  choice that stops startup in OpenGL-only builds (04).
+### 2. Keep the OpenGL viewer's results identical (the line's contract)
+The line's premise: the OpenGL viewer is the reference against which the
+results-based Vulkan code is qualified, so its *results* must not change. The
+OpenGL code may contain logic that is OpenGL-free; that logic is meant to be
+recycled by both renderers, with only the rendering transcribed to Vulkan
+through the DiligentCore RHI. Moving such logic into shared helpers is
+therefore intended, provided the OpenGL viewer behaves exactly as before.
 
-Restoring it means: with `USE_DILIGENTCORE=OFF`, the OpenGL viewer should build
-and behave as `vkstorm-release` does. Native code belongs behind
-`VS_NATIVE_VULKAN` or in native-only files, and shared logic should not move
-out of the OpenGL sources. A check that diffs the OpenGL-only compilation
-against `vkstorm-release` would keep it that way.
+Where the code stands (04):
+- About 65% of the changed lines in existing C++ files compile into
+  OpenGL-only builds (~23k added, 15.9k deleted), and 343 shared files moved
+  logic into shared `vs*` helpers. This measures how much shared code the
+  OpenGL viewer now runs, not how much breaks the contract: the question for
+  each extraction is whether it is shown to be behaviour-identical.
+- About 79 tests already prove extractions against frozen copies of the
+  original logic (05); that is the mechanism the contract needs.
+- Extractions or changes that did alter OpenGL behaviour, all from
+  116a410fc8: the FlickrConnect capability (fixed), friends-only avatar hiding
+  (fixed), three OpenGL-only compile/link breaks (fixed Oct 24-25), and,
+  still open, unguarded behaviour changes in Win32 DPI handling and clipboard
+  retry, Vivox early exits, mesh upload completion, and a Preferences "Vulkan
+  (in development)" choice that stops startup in OpenGL-only builds.
+
+To restore and keep it: revert or guard every OpenGL behaviour change; for each
+extraction into shared code, add (or confirm) an equivalence test against a
+frozen copy of the original OpenGL logic; and treat any OpenGL behaviour change
+without such a test as a defect.
 
 ### 3. Functional bugs in the native path
 - `ParcelAccessListReply`, `ParcelDwellReply`, `ParcelObjectOwnersReply` and
