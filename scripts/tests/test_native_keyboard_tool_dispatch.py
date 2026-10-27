@@ -9,6 +9,7 @@ class KeyboardToolTest(unittest.TestCase):
   b=window.index('    // Try for a new-format gesture',a)
   dispatch=window[a:b]
   drag=method((ROOT/'indra/newview/lltooldraganddrop.cpp').read_text(encoding='utf-8'),'bool LLToolDragAndDrop::handleKey(')
+  current=method((ROOT/'indra/newview/lltoolmgr.cpp').read_text(encoding='utf-8'),'LLTool* LLToolMgr::nativeCurrentTool()')
   fixture=r"""#include <cassert>
 using KEY=int;using MASK=int;constexpr KEY KEY_ESCAPE=27;
 struct MouseHandler{virtual ~MouseHandler()=default;};
@@ -16,7 +17,10 @@ struct LLTool:MouseHandler{virtual bool handleKey(KEY,MASK){return false;}};
 struct LLToolDragAndDrop:LLTool{bool dragging=true;unsigned ended=0;void endDrag(){dragging=false;++ended;}bool handleKey(KEY,MASK)override;};
 DRAG
 struct Focus{MouseHandler*owner=nullptr;MouseHandler*getMouseCapture(){return owner;}}gFocusMgr;
-struct LLToolMgr{unsigned reads=0;LLTool*tool=nullptr;static LLToolMgr*getInstance(){static LLToolMgr x;return &x;}LLTool*getCurrentTool(){++reads;return tool;}};
+struct LLToolMgr{unsigned reads=0;LLTool*tool=nullptr;bool mNativeToolsReady=false;inline static bool exists=true;
+ static LLToolMgr*getInstance(){static LLToolMgr x;return &x;}static bool instanceExists(){return exists;}static LLToolMgr&instance(){return *getInstance();}
+ LLTool*getCurrentTool(){++reads;return tool;}LLTool*nativeCurrentTool();};
+CURRENT
 struct Sink{template<class T>Sink&operator<<(T){return *this;}};
 #define LL_DEBUGS() Sink()
 constexpr int LL_ENDL=0;
@@ -27,8 +31,12 @@ int main(){LLToolDragAndDrop drag;MouseHandler control;auto*manager=LLToolMgr::g
  gFocusMgr.owner=&control;assert(!dispatch(true,KEY_ESCAPE,0)&&manager->reads==0&&drag.ended==1);
  gFocusMgr.owner=nullptr;assert(!dispatch(true,KEY_ESCAPE,0)&&manager->reads==0);
  drag.dragging=true;assert(dispatch(false,KEY_ESCAPE,0)&&drag.ended==2&&manager->reads==1);
+ // Without a captured tool, native keys reach the published current tool only once native tools are ready.
+ manager->mNativeToolsReady=true;LLToolMgr::exists=false;assert(!dispatch(true,KEY_ESCAPE,0)&&manager->reads==1&&drag.ended==2);LLToolMgr::exists=true;
+ drag.dragging=true;assert(dispatch(true,KEY_ESCAPE,0)&&drag.ended==3&&manager->reads==2);
+ gFocusMgr.owner=&drag;drag.dragging=true;assert(dispatch(true,KEY_ESCAPE,0)&&drag.ended==4&&manager->reads==2);
 }
-""".replace('DRAG',drag).replace('DISPATCH',dispatch)
+""".replace('CURRENT',current).replace('DRAG',drag).replace('DISPATCH',dispatch)
   compiler=shutil.which('clang++')or shutil.which('g++');self.assertIsNotNone(compiler)
   with tempfile.TemporaryDirectory()as tmp:
    cpp=Path(tmp)/'keyboard.cpp';exe=Path(tmp)/'keyboard.exe';cpp.write_text(fixture,encoding='utf-8')

@@ -14,8 +14,10 @@ struct LLMenuGL {inline static Menu* sMenuContainer=&menu;};
 struct LLUI {int clears=0;static LLUI* getInstance(){static LLUI value;return &value;}void clearPopups(){++clears;}};
 struct Focus {int clears=0;void setKeyboardFocus(std::nullptr_t){++clears;}}gFocusMgr;
 struct AOEngine {int changes=0;bool mouselook=false;static AOEngine* getInstance(){static AOEngine value;return &value;}void inMouselook(bool value){mouselook=value;++changes;}};
-struct Agent {U32 flags=0;int unpauses=0,uiTransitions=0;bool sitting=false;void unpauseAnimation(){++unpauses;}void setControlFlags(U32 value){flags|=value;}void clearControlFlags(U32 value){flags&=~value;}void endAnimationUpdateUI(){++uiTransitions;}bool isSitting(){return sitting;}}gAgent;
-struct Morph {bool visible=false;bool getVisible(){return visible;}}morph,*gMorphView=&morph;
+enum EAnimRequest {ANIM_REQUEST_START,ANIM_REQUEST_STOP};constexpr int ANIM_AGENT_CUSTOMIZE=7;
+struct Avatar {int stopped=0;void stopMotion(int id){if(id==ANIM_AGENT_CUSTOMIZE)++stopped;}}avatar;Avatar* vs_avatar_character(){return &avatar;}
+struct Agent {U32 flags=0;int unpauses=0,uiTransitions=0,customizeStops=0;bool sitting=false,customAnim=true;void sendAnimationRequest(int id,EAnimRequest request){if(id==ANIM_AGENT_CUSTOMIZE&&request==ANIM_REQUEST_STOP)++customizeStops;}void setCustomAnim(bool value){customAnim=value;}void unpauseAnimation(){++unpauses;}void setControlFlags(U32 value){flags|=value;}void clearControlFlags(U32 value){flags&=~value;}void endAnimationUpdateUI(){++uiTransitions;}bool isSitting(){return sitting;}}gAgent;
+struct Morph {bool visible=false;bool getVisible(){return visible;}void setVisible(bool value){visible=value;}}morph,*gMorphView=&morph;
 struct LLAgentCamera {
  ECameraMode mCameraMode=CAMERA_MODE_THIRD_PERSON,mLastCameraMode=CAMERA_MODE_THIRD_PERSON;bool mCameraAnimating=false;
  bool completeNativeCameraMode(bool,bool=false);
@@ -50,5 +52,8 @@ int main(){
  assert(camera.completeNativeCameraMode(false) && camera.mCameraMode==CAMERA_MODE_CUSTOMIZE_AVATAR);
  morph.visible=true;assert(input.getMode()==MODE_EDIT_AVATAR);morph.visible=false;
  gAgent.sitting=true;assert(input.getMode()==MODE_SITTING);
+ assert(avatar.stopped==0 && gAgent.customizeStops==0 && gAgent.customAnim);morph.visible=true;
  assert(camera.completeNativeCameraMode(true));assert(input.getMode()==MODE_FIRST_PERSON);
+ // Leaving appearance editing retires the customize animation and morph view.
+ assert(avatar.stopped==1 && gAgent.customizeStops==1 && !gAgent.customAnim && !morph.visible);
 }

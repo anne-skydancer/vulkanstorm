@@ -20,7 +20,7 @@ struct LLViewerCamera{
  inline static LLViewerCamera* value=nullptr;LLVector3 eye,at,left,up;float view=.73f,nearClip=0,farClip=0,aspect=0;int height=0;
  static bool instanceExists(){return value;}static void createInstance(){value=new LLViewerCamera;}static auto getInstance(){return value;}
  void setOrigin(LLVector3 v){eye=v;}void setAxes(LLVector3 a,LLVector3 l,LLVector3 u){at=a;left=l;up=u;}
- void setViewNoBroadcast(float v){view=v;}void setNear(float v){nearClip=v;}void setFar(float v){farClip=v;}void setAspect(float v){aspect=v;}void setViewHeightInPixels(int v){height=v;}
+ void setViewNoBroadcast(float v){view=v;}void setNear(float v){nearClip=v;}void setFar(float v){farClip=v;}void setAspect(float v){aspect=v;}void setViewHeightInPixels(int v){height=v;}int frustums=0;void updateNativeFrustum(){assert(height>0 && farClip>0);++frustums;}
 };
 struct VSNativeSession{enum class Phase{Login,Connected};bool mShutdown=false,mChangingRegion=false;Phase mPhase=Phase::Connected;U64 mHandle=2;
  struct State{LLVector3 focus{20,25,35},center{10,20,30},at{1,0,0},left{0,1,0},up{0,0,1};Rotation bodyRotation;}state;
@@ -31,7 +31,7 @@ int main(){
  VSNativeSession owner;assert(owner.publishCamera());auto camera=LLViewerCamera::value;assert(camera);
  assert(camera->eye.x==10 && camera->at.x==1 && camera->left.y==1 && camera->up.z==1 && gAgent.resets==1);
  assert(gAgentCamera.mFocusGlobal.x==532 && gAgentCamera.mFocusGlobal.y==1049 && gAgentCamera.mFocusGlobal.z==35);
- assert(camera->view==.73f && camera->nearClip==.1f && camera->farClip==128 && camera->height==768);
+ assert(camera->view==.73f && camera->nearClip==.1f && camera->farClip==128 && camera->height==768 && camera->frustums==1);
  farDistance=2048;assert(owner.publishCamera());assert(camera->farClip==2048);
  window.rect={800,400};owner.state.center.x=11;assert(owner.publishCamera());assert(camera->aspect==2 && camera->eye.x==11);
  owner.mChangingRegion=true;owner.state.center.x=12;assert(!owner.publishCamera() && camera->eye.x==11);owner.mChangingRegion=false;
