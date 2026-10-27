@@ -66,6 +66,8 @@ struct DeviceMutex
     }
     void unlock() {}
 } gAudioDeviceMutex;
+// llwebrtc locks through this pointer (the viewer injects its mutex).
+DeviceMutex* sAudioDeviceMutex = &gAudioDeviceMutex;
 bool gWebRTCUpdateDevices = false;
 
 struct LLWebRTCImpl
