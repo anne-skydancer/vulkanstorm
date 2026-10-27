@@ -54,6 +54,8 @@
 // engine's. The local one is only a fallback when none is passed.
 static std::timed_mutex sFallbackAudioDeviceMutex;
 static std::timed_mutex* sAudioDeviceMutex = &sFallbackAudioDeviceMutex;
+// Delay before retrying device work that found the audio device mutex busy.
+static const webrtc::TimeDelta AUDIO_DEVICE_RETRY_DELAY = webrtc::TimeDelta::Millis(100);
 // Need to use to access the 3 second timeout for the lock.
 using namespace std::chrono_literals;
 // </FS:minerjr> [FIRE-36022]
@@ -490,10 +492,13 @@ void LLWebRTCImpl::workerDeployDevices()
     {
     // Attempt to lock the access to the audio device, wait up to 1 second for other threads to unlock.
     std::unique_lock lock(*sAudioDeviceMutex, 1s);
-    // If the lock could not be accessed, return as we don't have hardware access and will need to try again another pass.
+    // If the lock could not be accessed, try again shortly: this deployment is
+    // still counted in mDevicesDeploying, so deployDevices() will not queue
+    // another one, and returning here would leave device changes stuck.
     // Prevents threads from interacting with the hardware at the same time as other audio/voice threads.
     if (!lock.owns_lock())
     {
+        mWorkerThread->PostDelayedTask([this] { workerDeployDevices(); }, AUDIO_DEVICE_RETRY_DELAY);
         return;
     }
     // </FS:minerjr> [FIRE-36022]
@@ -862,6 +867,10 @@ void LLWebRTCImpl::setMute(bool mute, int delay_ms)
     }
 }
 
+// Sequence counter: a newer mute/unmute request supersedes a pending one,
+// including one that is waiting to retry after a busy audio device mutex.
+static std::atomic<uint32_t> sMuteSequence(0);
+
 void LLWebRTCImpl::intSetMute(bool mute, int delay_ms)
 {
     if (mPeerCustomProcessor)
@@ -869,132 +878,71 @@ void LLWebRTCImpl::intSetMute(bool mute, int delay_ms)
         mPeerCustomProcessor->setGain(mMute ? 0.0f : mGain);
     }
 
-    // Sequence counter to prevent race conditions from rapid requests to mute/unmute
-    static std::atomic<uint32_t> mute_sequence(0);
-    uint32_t current_sequence = ++mute_sequence;
+    uint32_t current_sequence = ++sMuteSequence;
 
     if (mMute)
     {
-        mWorkerThread->PostDelayedTask(
-            [this, current_sequence]
-            {
-                if (mDeviceModule && (current_sequence == mute_sequence.load()))
-                {
-                    // <FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
-                    try // Try catch needed for uniquie lock as will throw an exception if a second lock is attempted or the mutex is
-                        // invalid
-                    {
-                    // Attempt to lock the access to the audio device, wait up to 1 second for other threads to unlock.
-                    std::unique_lock lock(*sAudioDeviceMutex, 1s);
-                    // If the lock could not be accessed, return as we don't have hardware access and will need to try again another pass.
-                    // Prevents threads from interacting with the hardware at the same time as other audio/voice threads.
-                    if (!lock.owns_lock())
-                    {
-                        return;
-                    }
-                    // Flag the device is being interacted with for the Co-routine in case something goes wrong.
-                    gWebRTCUpdateDevices = true;
-                    // </FS:minerjr> [FIRE-36022]
-                    mDeviceModule->ForceStopRecording();
-                    // <FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
-                    // Finally signal to the co-routine everyting is OK.
-                    gWebRTCUpdateDevices = false;
-                    }
-                    // There are two exceptions that unique_lock can trigger, operation_not_permitted or resource_deadlock_would_occur
-                    catch (const std::system_error& e)
-                    {
-                        if (e.code() == std::errc::resource_deadlock_would_occur)
-                        {
-                            // Another thead may have alreayd called this method
-                            mLogSink->OnLogMessage(std::string("Excepton: WebRTC: ") + e.what());
-                        }
-                        else if (e.code() == std::errc::operation_not_permitted)
-                        {
-                            // This should not be reached
-                            mLogSink->OnLogMessage(std::string("Excepton: WebRTC: ") + e.what());
-                        }
-                        else
-                        {
-                            // Log any other message
-                            mLogSink->OnLogMessage(std::string("Excepton: WebRTC: ") + e.what());
-                        }
-                        // Device no longer being interacted with
-                        gWebRTCUpdateDevices = false;
-                        return;
-                    }
-                    catch (const std::exception& e)
-                    {
-                        mLogSink->OnLogMessage(std::string("Excepton: WebRTC: ") + e.what());
-                        // Device no longer being interacted with
-                        gWebRTCUpdateDevices = false;
-                        return;
-                    }
-                    // </FS:minerjr> [FIRE-36022]
-                }
-            },
-            webrtc::TimeDelta::Millis(delay_ms));
+        mWorkerThread->PostDelayedTask([this, current_sequence] { workerApplyMute(true, current_sequence); },
+                                       webrtc::TimeDelta::Millis(delay_ms));
     }
     else
     {
-        mWorkerThread->PostTask(
-            [this, current_sequence]
-            {
-                if (mDeviceModule && (current_sequence == mute_sequence.load()))
-                {
-                    // <FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
-                    try // Try catch needed for uniquie lock as will throw an exception if a second lock is attempted or the mutex is
-                        // invalid
-                    {
-                    // Attempt to lock the access to the audio device, wait up to 1 second for other threads to unlock.
-                    std::unique_lock lock(*sAudioDeviceMutex, 1s);
-                    // If the lock could not be accessed, return as we don't have hardware access and will need to try again another pass.
-                    // Prevents threads from interacting with the hardware at the same time as other audio/voice threads.
-                    if (!lock.owns_lock())
-                    {
-                        return;
-                    }
-                    // Flag the device is being interacted with for the Co-routine in case something goes wrong.
-                    gWebRTCUpdateDevices = true;
-                    // </FS:minerjr> [FIRE-36022]
-                    mDeviceModule->InitRecording();
-                    mDeviceModule->ForceStartRecording();
-                    // <FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
-                    // Finally signal to the co-routine everyting is OK.
-                    gWebRTCUpdateDevices = false;
-                    }
-                    // There are two exceptions that unique_lock can trigger, operation_not_permitted or resource_deadlock_would_occur
-                    catch (const std::system_error& e)
-                    {
-                        if (e.code() == std::errc::resource_deadlock_would_occur)
-                        {
-                            // Another thead may have alreayd called this method
-                            mLogSink->OnLogMessage(std::string("Excepton: WebRTC: ") + e.what());
-                        }
-                        else if (e.code() == std::errc::operation_not_permitted)
-                        {
-                            // This should not be reached
-                            mLogSink->OnLogMessage(std::string("Excepton: WebRTC: ") + e.what());
-                        }
-                        else
-                        {
-                            // Log any other message
-                            mLogSink->OnLogMessage(std::string("Excepton: WebRTC: ") + e.what());
-                        }
-                        // Device no longer being interacted with
-                        gWebRTCUpdateDevices = false;
-                        return;
-                    }
-                    catch (const std::exception& e)
-                    {
-                        mLogSink->OnLogMessage(std::string("Excepton: WebRTC: ") + e.what());
-                        // Device no longer being interacted with
-                        gWebRTCUpdateDevices = false;
-                        return;
-                    }
-                    // </FS:minerjr> [FIRE-36022]
-                }
-            });
+        mWorkerThread->PostTask([this, current_sequence] { workerApplyMute(false, current_sequence); });
     }
+}
+
+// must be run in the worker thread.
+void LLWebRTCImpl::workerApplyMute(bool mute, uint32_t sequence)
+{
+    if (!mDeviceModule || (sequence != sMuteSequence.load()))
+    {
+        return;
+    }
+    // <FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
+    try // Try catch needed for uniquie lock as will throw an exception if a second lock is attempted or the mutex is invalid
+    {
+        // Attempt to lock the access to the audio device, wait up to 1 second for other threads to unlock.
+        std::unique_lock lock(*sAudioDeviceMutex, 1s);
+        if (!lock.owns_lock())
+        {
+            // The audio engine holds the device (the mutex is shared with it).
+            // Try again shortly rather than drop the request: setMute() has
+            // already recorded the new state and will not ask again. A newer
+            // request changes the sequence and ends the retries.
+            mWorkerThread->PostDelayedTask([this, mute, sequence] { workerApplyMute(mute, sequence); },
+                                           AUDIO_DEVICE_RETRY_DELAY);
+            return;
+        }
+        // Flag the device is being interacted with for the Co-routine in case something goes wrong.
+        gWebRTCUpdateDevices = true;
+        // </FS:minerjr> [FIRE-36022]
+        if (mute)
+        {
+            mDeviceModule->ForceStopRecording();
+        }
+        else
+        {
+            mDeviceModule->InitRecording();
+            mDeviceModule->ForceStartRecording();
+        }
+        // <FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
+        // Finally signal to the co-routine everyting is OK.
+        gWebRTCUpdateDevices = false;
+    }
+    // There are two exceptions that unique_lock can trigger, operation_not_permitted or resource_deadlock_would_occur
+    catch (const std::system_error& e)
+    {
+        mLogSink->OnLogMessage(std::string("Excepton: WebRTC: ") + e.what());
+        // Device no longer being interacted with
+        gWebRTCUpdateDevices = false;
+    }
+    catch (const std::exception& e)
+    {
+        mLogSink->OnLogMessage(std::string("Excepton: WebRTC: ") + e.what());
+        // Device no longer being interacted with
+        gWebRTCUpdateDevices = false;
+    }
+    // </FS:minerjr> [FIRE-36022]
 }
 
 //
@@ -1813,6 +1761,12 @@ void freePeerConnection(LLWebRTCPeerConnectionInterface* peer_connection)
 
 void setAudioDeviceMutex(std::timed_mutex* mutex)
 {
+    // The worker threads read the pointer while the library is initialized;
+    // it can only change before init() or after terminate().
+    if (gWebRTCImpl)
+    {
+        return;
+    }
     sAudioDeviceMutex = mutex ? mutex : &sFallbackAudioDeviceMutex;
 }
 
