@@ -12,25 +12,44 @@ class TerrainPublication(unittest.TestCase):
         body=method((ROOT/'indra/newview/vsworldscene.cpp').read_text(), 'void surfaces(')
         fixture=r'''
 #include "vsmaterial.h"
+#include "vsresourcebudget.h"
 #include <algorithm>
 #include <array>
 #include <cassert>
 #include <cmath>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 using U32=unsigned;using U64=unsigned long long;using S32=int;using F32=float;
+template<class T> T llclamp(T v,T lo,T hi){return std::clamp(v,lo,hi);}
 struct Origin{double mdV[3]{};};Origin from_region_handle(U64){return {};}
 struct RegionLimits{bool water=true;bool getAllowRenderWater(){return water;}}limits;RegionLimits& vs_region_limits(){return limits;}
-struct Settings{float getF32(const char*){return 16;}bool getBOOL(const char*){return false;}}gSavedSettings;
+struct Settings{unsigned skyDetail=16;float getF32(const char*){return 16;}bool getBOOL(const char*){return false;}
+ unsigned getU32(const char*){return skyDetail;}}gSavedSettings;
 struct LLUUID {int id=0;bool notNull()const{return id!=0;}bool isNull()const{return id==0;}std::string asString()const{return std::to_string(id);}};
 LLUUID vs_native_image_id(LLUUID id){return id;}
-void vs_request_world_image(LLUUID,unsigned){}
+std::vector<int> requestedImages;
+void vs_request_world_image(LLUUID id,unsigned){requestedImages.push_back(id.id);}
 struct VSUIRenderer{using Image=std::shared_ptr<int>;};
-struct LLVector3 {float x,y,z;LLVector3(float a,float b,float c):x(a),y(b),z(c){}
- LLVector3 operator-(const LLVector3& v)const{return {x-v.x,y-v.y,z-v.z};}
- float lengthSquared()const{return x*x+y*y+z*z;}float length()const{return std::sqrt(lengthSquared());}};
+struct LLVector3 {float mV[3]{};LLVector3()=default;LLVector3(float a,float b,float c):mV{a,b,c}{}
+ LLVector3 operator-(const LLVector3& v)const{return {mV[0]-v.mV[0],mV[1]-v.mV[1],mV[2]-v.mV[2]};}
+ float lengthSquared()const{return mV[0]*mV[0]+mV[1]*mV[1]+mV[2]*mV[2];}float length()const{return std::sqrt(lengthSquared());}};
+struct LLVector2 {float mV[2]{};};
+// Reference dome topology is covered elsewhere; this adapter supplies one strip per stack.
+template<class Vertices,class TexCoords,class Indices>
+void vs_sky_strips(U32 begin,U32 end,Vertices& vertices,TexCoords& coordinates,Indices& indices,F32 radius,const U32& slices,const U32&){
+ for(U32 i=begin;i<=end;++i)for(U32 j=0;j<slices;++j){*vertices++=LLVector3(radius,F32(i),F32(j));*coordinates++=LLVector2{};}
+ *indices++=0;for(U32 i=1;i<=end-begin;++i){*indices++=i*slices;for(U32 j=0;j<slices;++j){*indices++=(i-1)*slices+j;*indices++=i*slices+j;}*indices++=i*slices;}
+}
+struct Sky {float radius=15000;LLUUID rainbow{11},halo{12};
+ float getDomeRadius()const{return radius;}LLUUID getRainbowTextureId()const{return rainbow;}LLUUID getHaloTextureId()const{return halo;}};
+struct LLEnvironment {static inline bool exists=false;std::shared_ptr<Sky> sky=std::make_shared<Sky>();
+ static bool instanceExists(){return exists;}static LLEnvironment& instance(){static LLEnvironment value;return value;}
+ std::shared_ptr<Sky> getCurrentSky()const{return sky;}};
+struct LLPipeline {enum {RENDER_TYPE_SKY,RENDER_TYPE_WL_SKY,RENDER_TYPE_TERRAIN,RENDER_TYPE_WATER};
+ std::set<int> hidden;bool hasRenderType(int type)const{return !hidden.count(type);}} gPipeline;
 struct VSWorldRenderer {
  using Mesh=std::shared_ptr<int>;
  struct Vertex{float x,y,z,nx,ny,nz,u,v;};
@@ -39,7 +58,12 @@ struct VSWorldRenderer {
  std::shared_ptr<const int> terrainMaterial;
  U64 terrainKey=0,objectGeneration=0;std::array<float,4> color{1,1,1,1};float distanceSquared=0;};
  Mesh upload(const std::vector<Vertex>&,const std::vector<unsigned>&){return std::make_shared<int>(80);}
+ unsigned domes=0;bool refuse=false;
+ bool publishMesh(Mesh& current,const std::vector<Vertex>& vertices,const std::vector<unsigned>& indices){
+  assert(!vertices.empty()&&!indices.empty()&&indices.size()%3==0);if(refuse)return false;
+  current=std::make_shared<int>(int(++domes));return true;}
 };
+struct Budgets {VSResourceBudget terrainBytes{64*1024*1024};};
 struct Resources {
  std::map<std::string,std::shared_ptr<int>> images;std::shared_ptr<int> fallback=std::make_shared<int>(99);
  std::shared_ptr<int> image(const std::string& k){return images[k];}
@@ -47,6 +71,7 @@ struct Resources {
 };
 struct Scene {
  VSWorldRenderer renderer;Resources resources;VSWorldRenderer::Mesh sky,water;
+ std::shared_ptr<Budgets> budgets=std::make_shared<Budgets>();unsigned skyDetail=0;float skyRadius=0;
  struct Ground {VSWorldRenderer::Mesh mesh;unsigned size=16;};std::map<U64,Ground> ground;
  std::array<float,4> terrainStarts{},terrainRanges{1,1,1,1};std::array<LLUUID,4> terrainTextures{{{1},{2},{3},{4}}};
  std::shared_ptr<int> terrainRamp(){return std::make_shared<int>(88);}
@@ -67,6 +92,18 @@ int main(){Scene s;auto mesh=std::make_shared<int>(1);s.ground[0]={mesh,16};
  s.waterKnown=true;packets.clear();s.surfaces(packets,{8,8,16});assert(packets.size()==3);
  limits.water=false;packets.clear();s.surfaces(packets,{8,8,16});assert(packets.size()==2);
  s.waterKnown=false;
+ gPipeline.hidden.insert(LLPipeline::RENDER_TYPE_TERRAIN);packets.clear();s.surfaces(packets,{8,8,16});
+ assert(packets.size()==1&&packets[0].background);gPipeline.hidden.clear();
+ // The current environment sky replaces the startup quad with an admitted dome.
+ LLEnvironment::exists=true;auto quad=s.sky;packets.clear();s.surfaces(packets,{8,8,16});
+ assert(packets.size()==2&&packets[0].background&&packets[0].mesh!=quad&&s.renderer.domes==1);
+ assert(s.skyDetail==16&&s.skyRadius==15000&&s.budgets->terrainBytes.used()==0);
+ s.resources.images["remote:11"]=std::make_shared<int>(211);packets.clear();s.surfaces(packets,{8,8,16});
+ assert(s.renderer.domes==1&&*packets[0].image==211&&!packets[0].channels[0]);
+ gSavedSettings.skyDetail=32;s.renderer.refuse=true;auto dome=s.sky;packets.clear();s.surfaces(packets,{8,8,16});
+ assert(s.sky==dome&&s.skyDetail==16&&packets[0].mesh==dome);s.renderer.refuse=false;
+ LLEnvironment::exists=false;packets.clear();s.surfaces(packets,{8,8,16});
+ assert(s.skyDetail==0&&packets[0].mesh&&packets[0].mesh!=dome);
  s.ground[0].mesh.reset();packets.clear();s.surfaces(packets,{8,8,16});assert(packets.size()==1); // Never invent missing heights/geometry.
 }
 '''.replace('BODY',body)

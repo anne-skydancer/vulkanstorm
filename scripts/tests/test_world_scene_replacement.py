@@ -37,6 +37,9 @@ using F32=float;using S32=int;
 struct LLUUID {std::string value;std::string asString()const{return value;}};
 LLUUID vs_native_image_id(const LLUUID& id){return id;}
 struct Image {unsigned width,height;};
+struct Raw {int width,height;int getWidth()const{return width;}int getHeight()const{return height;}};
+struct ResolvedTexture {std::shared_ptr<Image> image;std::shared_ptr<Raw> raw;};
+struct CostTexture {ResolvedTexture value;};
 struct VSUIRenderer {
  static inline unsigned extentReads=0;
  static std::array<unsigned,2> imageExtent(const std::shared_ptr<Image>& image){
@@ -52,18 +55,27 @@ struct Resources {
 };
 struct Scene {Resources resources;
 ''' + body + r'''
+ // Production callers resolve remote assets to the current published image.
+ F32 assetCost(const LLUUID& id)const{
+  return textureCost(CostTexture{{resources.image("remote:"+vs_native_image_id(id).asString()),{}}});
+ }
 };
 int main(){
  Scene scene;LLUUID id{"pending"};
- assert(scene.textureCost(id)==256);assert(VSUIRenderer::extentReads==0);
+ assert(scene.assetCost(id)==256);assert(VSUIRenderer::extentReads==0);
  scene.resources.images["remote:pending"]=nullptr;
- assert(scene.textureCost(id)==256);assert(VSUIRenderer::extentReads==0);
+ assert(scene.assetCost(id)==256);assert(VSUIRenderer::extentReads==0);
  scene.resources.images["remote:pending"]=std::make_shared<Image>(Image{512,256});
- assert(scene.textureCost(id)==352);assert(VSUIRenderer::extentReads==1);
+ assert(scene.assetCost(id)==352);assert(VSUIRenderer::extentReads==1);
  scene.resources.images["remote:pending"]=std::make_shared<Image>(Image{1024,1024});
- assert(scene.textureCost(id)==512);assert(VSUIRenderer::extentReads==2);
+ assert(scene.assetCost(id)==512);assert(VSUIRenderer::extentReads==2);
  scene.resources.images.clear();
- assert(scene.textureCost(id)==256);assert(VSUIRenderer::extentReads==2);
+ assert(scene.assetCost(id)==256);assert(VSUIRenderer::extentReads==2);
+ // An unpublished local composite borrows its CPU extent without a GPU query.
+ auto raw=std::make_shared<Raw>(Raw{512,256});
+ assert(scene.textureCost(CostTexture{{nullptr,raw}})==352);assert(VSUIRenderer::extentReads==2);
+ assert(scene.textureCost(CostTexture{{std::make_shared<Image>(Image{1024,1024}),raw}})==512);
+ assert(VSUIRenderer::extentReads==3);
 }
 ''')
 
@@ -103,16 +115,18 @@ int main(){
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <functional>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <optional>
 #include <vector>
-using U8=uint8_t;using U32=uint32_t;using U64=uint64_t;using S32=int;using U16=uint16_t;
+using U8=uint8_t;using U32=uint32_t;using U64=uint64_t;using S32=int;using U16=uint16_t;using F32=float;
 constexpr int LL_PCODE_LEGACY_AVATAR=9;
 struct LLUUID {
  int value=0;
- bool isNull()const{return value==0;}
+ bool isNull()const{return value==0;}bool notNull()const{return value!=0;}
  bool operator==(const LLUUID&)const=default;
  bool operator<(const LLUUID& other)const{return value<other.value;}
 };
@@ -130,11 +144,26 @@ struct LLFrameTimer {static double getTotalSeconds(){return 100;}};
 namespace VSWorldContracts {enum class OwnerKind {Avatar,ControlAvatar,Attachment,Object};}
 struct LLExtendedMeshParams {static constexpr U32 ANIMATED_MESH_ENABLED_FLAG=1;};
 struct Mesh {int generation;};
-struct Material {std::shared_ptr<int> value;
+struct Material {std::shared_ptr<int> value,asset;
+ void setGLTFMaterial(const std::shared_ptr<int>& v){asset=v;}
  void setGLTFMaterialOverride(const std::shared_ptr<int>& v){value=v;}
  std::shared_ptr<int> getGLTFMaterialOverride()const{return value;}};
-struct RenderMaterials {std::map<U8,int> values;int getMaterial(U8 face)const{
- auto found=values.find(face);return found==values.end()?0:found->second;}};
+struct GLTFMaterialList {std::shared_ptr<int> getMaterial(const LLUUID& id)const{return std::make_shared<int>(id.value);}} gGLTFMaterialList;
+struct RenderMaterials {std::map<U8,LLUUID> values;LLUUID getMaterial(U8 face)const{
+ auto found=values.find(face);return found==values.end()?LLUUID{}:found->second;}};
+struct LLAssetType {enum EType {AT_OBJECT,AT_PERSON};};
+struct ObjectList {std::set<int> derendered;bool isDerendered(const LLUUID& id)const{return derendered.count(id.value)!=0;}} gObjectList;
+struct FSAssetBlacklist {std::map<int,LLAssetType::EType> blocked;
+ static FSAssetBlacklist& instance(){static FSAssetBlacklist list;return list;}
+ bool isBlacklisted(const LLUUID& id,LLAssetType::EType type)const{auto found=blocked.find(id.value);return found!=blocked.end()&&found->second==type;}};
+struct VSObjectEditParameters {int physics=0;struct Costs {int value=0;bool stale=false;} costs;};
+struct Icon {bool dead=false;void markDead(){dead=true;}};
+using LLHost=int;
+struct ObjectHandle {
+ LLHost host;LLUUID id;U32 local=0;U64 region=0,generation=0;
+ VSWorldContracts::OwnerKind kind=VSWorldContracts::OwnerKind::Object;LLUUID account;U64 accountGeneration=0;
+ ObjectHandle(LLHost h,LLUUID i,U32 l,U64 r,U64 g):host(h),id(i),local(l),region(r),generation(g){}
+};
 struct TextureAnimation {int token=0;bool equals(const TextureAnimation& other)const{return token==other.token;}};
 struct Object {
  LLUUID id;U32 parent=0;int pcode=4,attachment=0;
@@ -152,9 +181,22 @@ struct Object {
  std::shared_ptr<int> gltf,pendingGLTF,controlAvatar;
  std::shared_ptr<const VSResourceBudget::Reservation> controlAnimationResidency;
  std::optional<Flexible> flexible;std::shared_ptr<FlexState> flex;
+ std::shared_ptr<Icon> icon;std::shared_ptr<VSObjectEditParameters> edit;
+ std::optional<int> particles;U64 particleRevision=0;std::shared_ptr<int> legacyPreview;
+ std::shared_ptr<const int> avatarTiming,attachmentTiming,nameRigging;
+ std::optional<U32> avatarTimingAttempt,attachmentTimingAttempt;std::optional<F32> attachmentGpuMilliseconds;
+ S32 nameRiggingLOD=-1;U64 nameRiggingGeneration=0;std::shared_ptr<const std::function<bool()>> nameTagGuard;
 };
-struct Budgets {VSResourceBudget objects{32},primitiveBytes{1024};};
+struct Budgets {VSResourceBudget objects{32},primitiveBytes{1024};
+ LLUUID account{77};U64 accountGeneration=5,particleRevision=1;std::vector<ObjectHandle> sounds;
+ std::function<void(const ObjectHandle&)> objectSounds=[this](const ObjectHandle& token){sounds.push_back(token);};};
+struct SelectionIndex {std::set<U32> ids;bool valid()const{return true;}void erase(U32 id){ids.erase(id);}};
+struct ObjectIndex {std::map<U32,LLUUID> ids;
+ void erase(U32 id,const Object& object){assert(ids.at(id)==object.id);ids.erase(id);}
+ void replace(U32 id,const Object*,const Object& object){ids[id]=object.id;}};
 struct Scene {
+ LLHost host=3;U64 incarnation=4;std::unique_ptr<SelectionIndex> selectionIndex;
+ ObjectIndex objectIndex;std::set<U32> particleObjects;
  std::map<U32,Object> objects;std::map<LLUUID,int> avatars;std::map<U32,int> pending;
  struct AnimationState {std::map<LLUUID,S32> animations;double deadline=0;std::shared_ptr<const VSResourceBudget::Reservation> residency;};
  std::map<LLUUID,AnimationState> pendingAnimations;
@@ -177,7 +219,7 @@ int main(){
  auto& original=scene.objects.at(50);original.faces[0].mesh=first;original.faces[1].mesh=second;
  original.faces[0].published=true;original.faces[0].publishedMaterial=34;original.faces[0].poseGeneration=9;
  original.faces[0].publishedImage=std::make_shared<int>(112);const auto image=original.faces[0].publishedImage;
- original.faces[0].material.value=std::make_shared<int>(113);
+ original.faces[0].material.value=std::make_shared<int>(113);original.renderMaterials.values[0]=LLUUID{3};
  original.faces[0].surface=std::make_shared<int>(114);original.faces[0].publishedChannels[0]=std::make_shared<int>(115);
  auto materialOverride=original.faces[0].material.value,materialSurface=original.faces[0].surface,normal=original.faces[0].publishedChannels[0];
  original.media[0]=std::make_shared<int>(116);auto media=original.media[0];
@@ -187,12 +229,16 @@ int main(){
  original.flexible=Flexible{};original.flex=std::make_shared<FlexState>();auto simulation=original.flex;
  const auto generation=original.generation,revision=original.revision;
  auto lease=original.slot;
- auto compatible=update();compatible.animation=std::make_shared<TextureAnimation>(TextureAnimation{6});compatible.flexible=Flexible{};assert(scene.replace(50,std::move(compatible)));
+ auto compatible=update();compatible.renderMaterials.values[0]=LLUUID{3};compatible.animation=std::make_shared<TextureAnimation>(TextureAnimation{6});compatible.flexible=Flexible{};assert(scene.replace(50,std::move(compatible)));
  const auto& preserved=scene.objects.at(50);
  assert(preserved.faces[0].mesh==first&&preserved.faces[1].mesh==second);
  assert(preserved.faces[0].published&&preserved.faces[0].publishedMaterial==34&&
         preserved.faces[0].publishedImage==image&&preserved.faces[0].poseGeneration==9);
  assert(preserved.faces[0].material.value==materialOverride&&preserved.faces[0].surface==materialSurface&&preserved.faces[0].publishedChannels[0]==normal);
+ assert(preserved.faces[0].material.asset&&*preserved.faces[0].material.asset==3);
+ assert(scene.objectIndex.ids.at(50).value==7&&scene.budgets->sounds.size()==2);
+ assert(scene.budgets->sounds.back().host==3&&scene.budgets->sounds.back().region==4&&scene.budgets->sounds.back().local==50);
+ assert(scene.budgets->sounds.back().generation==generation&&scene.budgets->sounds.back().account.value==77);
  assert(preserved.media.at(0)==media&&preserved.animation==animation&&preserved.textureAnimMode==3);
  assert(preserved.generation==generation&&preserved.revision>revision&&preserved.dirty);
  assert(preserved.slot==lease&&preserved.taskKnown&&preserved.taskSerial==17);
@@ -222,11 +268,15 @@ int main(){
   assert(!fresh.objects.at(50).faces[0].mesh);
  }
  // A changed asset ID retains its incoming override, not the previous asset's.
- Scene materials;auto prior=update();prior.renderMaterials.values[0]=4;
+ Scene materials;auto prior=update();prior.renderMaterials.values[0]=LLUUID{4};
  prior.faces[0].material.value=std::make_shared<int>(11);assert(materials.replace(50,std::move(prior)));
- auto changed=update();changed.renderMaterials.values[0]=5;auto incoming=std::make_shared<int>(22);
+ auto changed=update();changed.renderMaterials.values[0]=LLUUID{5};auto incoming=std::make_shared<int>(22);
  changed.faces[0].material.value=incoming;assert(materials.replace(50,std::move(changed)));
  assert(materials.objects.at(50).faces[0].material.value==incoming);
+ // Without a material asset no previous override survives replacement.
+ Scene unmaterialled;auto plain=update();plain.faces[0].material.value=std::make_shared<int>(33);
+ assert(unmaterialled.replace(50,std::move(plain))&&unmaterialled.replace(50,update()));
+ assert(!unmaterialled.objects.at(50).faces[0].material.value&&!unmaterialled.objects.at(50).faces[0].material.asset);
  Scene queued;queued.pendingMaterialOverrides[50]=99;assert(queued.replace(50,update()));
  assert(queued.pendingMaterialOverrides.empty()&&queued.overrides==1&&*queued.objects.at(50).faces[0].material.value==99);
  // The ordinary animesh kill switch retires the complete linked family,
@@ -238,11 +288,21 @@ int main(){
  auto held=animated.objects.at(50).slot;animated.eraseAnimated();
  assert(!animated.objects.count(50)&&!animated.objects.count(51)&&animated.objects.count(52));
  assert(animated.budgets->objects.used()==2);held.reset();assert(animated.budgets->objects.used()==1);
+ assert(animated.objectIndex.ids.size()==1&&animated.objectIndex.ids.count(52));
  // UUID reassignment expires the old host/local binding and its linked children.
  Scene moved;assert(moved.replace(50,update()));moved.objects.at(50).faces[0].mesh=first;
+ moved.selectionIndex=std::make_unique<SelectionIndex>();moved.selectionIndex->ids={50};
+ moved.objects.at(50).icon=std::make_shared<Icon>();auto icon=moved.objects.at(50).icon;
  auto child=update(9);child.parent=50;assert(moved.replace(51,std::move(child)));
  assert(moved.replace(52,update()));assert(!moved.objects.count(50));
  assert(moved.objects.at(51).parentRetired&&!moved.objects.at(52).faces[0].mesh);
+ assert(moved.selectionIndex->ids.empty()&&icon->dead&&moved.objectIndex.ids.count(52)&&!moved.objectIndex.ids.count(50));
+ // Derendered or blacklisted owners are refused and retire their previous binding.
+ Scene refused;assert(refused.replace(50,update()));gObjectList.derendered.insert(7);
+ assert(!refused.replace(50,update())&&!refused.objects.count(50));gObjectList.derendered.clear();
+ FSAssetBlacklist::instance().blocked[7]=LLAssetType::AT_OBJECT;
+ assert(!refused.replace(50,update())&&!refused.objects.count(50));
+ FSAssetBlacklist::instance().blocked.clear();assert(refused.replace(50,update()));
 }
 '''.replace('BODIES', bodies))
 

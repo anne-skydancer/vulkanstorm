@@ -76,7 +76,7 @@ int main(){
         context = (ROOT/'indra/newview/vsvulkancontext.cpp').read_text()
         begin = method(resources, 'void VSUIResources::begin(')
         lines = context.splitlines()
-        index = next(i for i, line in enumerate(lines) if 'if (observer && resources->evidence()' in line)
+        index = next(i for i, line in enumerate(lines) if 'observer && resources->evidence()' in line)
         observe = '\n'.join(lines[index:index+2])
         self.compile(r'''
 #include <array>
@@ -84,12 +84,13 @@ int main(){
 #include <cmath>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 void check(bool b,const char* m){if(!b)throw std::runtime_error(m);}
 struct VSUIResources {
  struct Impl{bool active=false;unsigned deferred_draw_batches=3;float logical_height=0,logical_width=0,dpi=0;
- std::vector<int> packets;std::array<float,4> clip;};
+ std::vector<int> packets;std::array<float,4> clip;std::optional<float> worldDepth{.5f};};
  std::unique_ptr<Impl> mImpl=std::make_unique<Impl>();
  struct Value{unsigned count;int asInteger()const{return count;}};
  struct Evidence{unsigned count;Value operator[](const char*)const{return {count};}};
@@ -100,14 +101,15 @@ BEGIN
 int main(){
  VSUIResources ui;auto* resources=&ui;
  int device=0,context=0,target=0,captures=0;struct{int mX=10,mY=10;}size;float dpi=1;
- std::vector<int> packets;
+ std::vector<int> packets;std::optional<int> snapshot;
  std::function<void(int,int,int,int,int,float,std::vector<int>&)> observer;
  auto observe=[&]{OBSERVE};
  observe();assert(captures==0);
  observer=[&](int,int,int,int,int,float,std::vector<int>&){++captures;};
  observe();assert(captures==0);
- ui.begin(10,10,1);assert(ui.mImpl->deferred_draw_batches==0);
- observe();assert(captures==1);
+ ui.begin(10,10,1);assert(ui.mImpl->deferred_draw_batches==0&&!ui.mImpl->worldDepth);
+ snapshot=1;observe();assert(captures==0); // Snapshot renders are not frame captures.
+ snapshot.reset();observe();assert(captures==1);
 }
 '''.replace('BEGIN', begin).replace('OBSERVE', observe))
 
@@ -155,7 +157,7 @@ struct VSUIRenderer {
  struct Texture{std::vector<U8> pixels;unsigned w,h;};
  using Image=std::shared_ptr<const Texture>;using FontAtlas=std::shared_ptr<Texture>;
  struct Vertex{float x,y,u,v,r,g,b,a;};
- struct Packet{int blend;Image image;std::array<float,4> clip;std::optional<std::array<Vertex,6>> triangles;};
+ struct Packet{int blend;Image image;std::array<float,4> clip;std::optional<float> worldDepth;std::optional<std::array<Vertex,6>> triangles;};
  unsigned allocations=0,updates=0;bool refuse=false;
  struct Statistics{unsigned residentImageBytes;};
  Statistics statistics()const{return {allocations*32};}
@@ -177,7 +179,7 @@ struct VSUIResources {
   PAGE
   PIXELS
   std::map<LLImageRaw*,FontPage> font_pages;std::map<std::string,Entry> assets;
-  std::vector<VSUIRenderer::Packet> packets;std::array<float,4> clip{0,0,10,10};
+  std::vector<VSUIRenderer::Packet> packets;std::array<float,4> clip{0,0,10,10};std::optional<float> worldDepth;
   bool active=true;float dpi=2,logical_height=10;VSUIRenderer renderer;
  };
  std::unique_ptr<Impl> mImpl=std::make_unique<Impl>();
@@ -194,12 +196,14 @@ int main(){
   ui.mImpl->renderer.refuse=true;bool failed=false;
   try{draw(1);}catch(const std::runtime_error&){failed=true;}
   assert(failed&&ui.mImpl->packets.empty());
-  ui.mImpl->renderer.refuse=false;draw(1);
+  ui.mImpl->renderer.refuse=false;ui.mImpl->worldDepth=.5f;draw(1);ui.mImpl->worldDepth.reset();
+  assert(ui.mImpl->packets.front().worldDepth==.5f);
   auto* renderer=&ui.mImpl->renderer;const auto atlasBytes=renderer->statistics().residentImageBytes;
   auto original=ui.mImpl->packets.front().image;
   for(int generation=2;generation<=100;++generation){raw.bytes[0]=generation;draw(generation);}
   assert(ui.mImpl->renderer.allocations==1&&ui.mImpl->renderer.updates==0);
   auto packets=ui.finish();assert(packets.size()==100&&ui.mImpl->renderer.updates==1);
+  assert(packets[0].worldDepth==.5f&&!packets[1].worldDepth);
   auto font_packets=packets;
   CHECKS
   assert(original==packets.back().image&&original->pixels[8]==100);
