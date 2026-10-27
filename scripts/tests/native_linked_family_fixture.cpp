@@ -20,6 +20,7 @@ struct VSWorldScene{
  struct Impl{struct Object{int id=0;U32 parent=0;unsigned pcode=9;U64 generation=1,parentGeneration=0;bool parentRetired=false;Motion motion;LLVector3 velocity,acceleration,angularVelocity;};std::map<U32,Object>objects;VSObjectIndex<int>objectIndex;int host=1;bool retired=false;U64 incarnation=1;int account=9;U64 accountGeneration=1;};std::shared_ptr<Impl>mImpl=std::make_shared<Impl>();std::map<int,std::shared_ptr<VSWorldScene>>mNeighbours;
  std::optional<ObjectHandle>object(int host,U32 local)const{if(host!=mImpl->host){auto it=mNeighbours.find(host);return it==mNeighbours.end()?std::nullopt:it->second->object(host,local);}auto it=mImpl->objects.find(local);if(it==mImpl->objects.end())return {};return ObjectHandle{host,it->second.id,local,mImpl->incarnation,it->second.generation,mImpl->account,mImpl->accountGeneration};}
  bool current(const ObjectHandle&t)const{auto o=object(t.host,t.local);return o&&o->id==t.id&&o->generation==t.generation&&o->region==t.region&&o->account==t.account&&o->accountGeneration==t.accountGeneration;}
+ bool setLegacyMaterialPreview(const ObjectHandle&,bool){return true;}
  bool freezeObject(const ObjectHandle&,bool);bool setSelectionState(const ObjectHandle&,bool);bool initializeSelectionMotion(const ObjectHandle&);bool initializeDeselectionMotion(const ObjectHandle&);
  std::optional<std::vector<ObjectHandle>>linkedFamily(const ObjectHandle&,bool=true,bool=true,FamilyTraversal=FamilyTraversal::NonJoint)const;
 };
