@@ -49,7 +49,7 @@ WANTS_TRACY=$FALSE
 # <VulkanStorm> Mesa Zink (GL-over-Vulkan) runtime bundling, opt-in via --zink.
 WANTS_MESAZINK=$FALSE
 # </VulkanStorm>
-WANTS_LTO=$FALSE
+WANTS_LTO=$TRUE # on for every build type; --no-lto disables it
 WANTS_BUILD=$FALSE
 WANTS_CRASHREPORTING=$FALSE
 WANTS_CACHE=$FALSE
@@ -94,7 +94,8 @@ showUsage()
     echo "  --avx2                   : Build with Advanced Vector Extensions 2"
     echo "  --tracy                  : Build with Tracy Profiler support"
     echo "  --zink                   : Bundle the Mesa Zink OpenGL-over-Vulkan runtime (Windows 64-bit only)"
-    echo "  --lto                    : Build with Link Time Optimization"
+    echo "  --lto                    : Build with Link Time Optimization (default)"
+    echo "  --no-lto                 : Build without Link Time Optimization"
     echo "  --crashreporting         : Build with crash reporting enabled (Windows only)"
     echo "  --testbuild <days>       : Create time-limited test build (build date + <days>)"
     echo "  --platform <platform>    : Build for specified platform (darwin | windows | linux)"
@@ -111,7 +112,7 @@ getArgs()
 # $* = the options passed in from main
 {
     if [ $# -gt 0 ]; then
-            while getoptex "clean build config version package velopack no-package fmodstudio openal soloud ninja vscode compiler-cache jobs: platform: kdu opensim no-opensim singlegrid: havok avx avx2 tracy zink lto crashreporting testbuild: help chan: btype:" "$@" ; do
+            while getoptex "clean build config version package velopack no-package fmodstudio openal soloud ninja vscode compiler-cache jobs: platform: kdu opensim no-opensim singlegrid: havok avx avx2 tracy zink lto no-lto crashreporting testbuild: help chan: btype:" "$@" ; do
 
           #ensure options are valid
           if [  -z "$OPTOPT"  ] ; then
@@ -151,6 +152,7 @@ getArgs()
           tracy)          WANTS_TRACY=$TRUE;;
           zink)           WANTS_MESAZINK=$TRUE;;
           lto)            WANTS_LTO=$TRUE;;
+          no-lto)         WANTS_LTO=$FALSE;;
           crashreporting) WANTS_CRASHREPORTING=$TRUE;;
           testbuild)      WANTS_TESTBUILD=$TRUE
                           TESTBUILD_PERIOD="$OPTARG"
