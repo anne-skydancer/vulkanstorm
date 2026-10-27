@@ -141,6 +141,7 @@ int main(){
 #include <functional>
 #include <map>
 #include <memory>
+#include <utility>
 struct Host {int id=0;bool isOk()const{return id!=0;}
  bool operator!=(const Host& h)const{return id!=h.id;}bool operator<(const Host& h)const{return id<h.id;}};
 using LLHost=Host;
