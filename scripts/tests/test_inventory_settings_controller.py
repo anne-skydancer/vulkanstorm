@@ -56,6 +56,7 @@ struct LLFloater {std::map<std::string,std::unique_ptr<LLUICtrl>> children;bool 
  template<class T>T* getChild(std::string name){auto* p=findChild<T>(name);if(!p)throw std::runtime_error("missing required control: "+name);return p;}
  void closeFloater(bool){closed=true;}Host* getHost(){return nullptr;}LLSD getKey(){return {};}};
 int retired=0;
+struct OmnifilterEngine {std::vector<std::string> mLog;static bool instanceExists(){return true;}static OmnifilterEngine& instance(){static OmnifilterEngine e;return e;}};
 struct LLFloaterInventorySettings:LLFloater {~LLFloaterInventorySettings(){++retired;}
  bool postBuild();void updateColorSwatch();void applyUIColor(LLUICtrl*,const LLSD&);void getUIColor(LLUICtrl*,const LLSD&);};
 METHODS
@@ -74,7 +75,8 @@ int main(){
  assert(!swatch->enabled);first->getUIColor(swatch,colorName);assert(swatch->original.value==.25f);
  auto* checkbox=first->getChild<LLUICtrl>("favorites_color");checkbox->value=LLSD(1.f);checkbox->callback();assert(swatch->enabled);
  swatch->value=LLSD(.75f);first->applyUIColor(swatch,colorName);assert(table.getColor(colorName.asString()).value==.75f);
- gSavedSettings.color=true;retireAccount();assert(retired==1&&LLFloaterReg::getFloaterList("inventory_settings").empty());
+ gSavedSettings.color=true;OmnifilterEngine::instance().mLog.push_back("old account");retireAccount();assert(retired==1&&LLFloaterReg::getFloaterList("inventory_settings").empty());
+ assert(OmnifilterEngine::instance().mLog.empty());
  assert(gSavedSettings.color&&table.getColor(colorName.asString()).value==.75f);
  auto* second=open(true);assert(second->getChild<LLColorSwatchCtrl>("favorites_swatch")->enabled);
  second->getUIColor(second->getChild<LLColorSwatchCtrl>("favorites_swatch"),colorName);

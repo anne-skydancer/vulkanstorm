@@ -15255,6 +15255,36 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "SETTING.gSavedSettings.DebugBeaconLineWidth",
+      "category": "SETTING",
+      "title": "DebugBeaconLineWidth",
+      "reference_sources": [
+        "indra/newview/llfloaterbeacons.cpp:getControl(\"DebugBeaconLineWidth\")->getSignal"
+      ],
+      "native_owner": "native settings observer and ordinary UI/service effect",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify this direct observer and its actual owner effect, not just persisted settings.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "SETTING.gSavedSettings.DebugHideEmptySystemFolders",
       "category": "SETTING",
       "title": "DebugHideEmptySystemFolders",
@@ -16242,13 +16272,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleUsernameFormatOptionChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsavatarnametagpolicy.h"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -18974,13 +19006,15 @@
         "R4"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Qualify this direct observer and its actual owner effect, not just persisted settings.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsavatarnametagpolicy.h"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
         "indra/newview/vsnativesession.cpp",
@@ -20215,6 +20249,36 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "SETTING.gSavedSettings.RenderAttachedParticles",
+      "category": "SETTING",
+      "title": "RenderAttachedParticles",
+      "reference_sources": [
+        "indra/newview/vsparticleeffects.cpp:getControl(\"RenderAttachedParticles\")->getSignal"
+      ],
+      "native_owner": "native settings observer and ordinary UI/service effect",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-reference-present/effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify this direct observer and its actual owner effect, not just persisted settings.",
+      "native_source_references": [
+        "indra/newview/vsparticleeffects.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "SETTING.gSavedSettings.RenderAvatarCloth",
       "category": "SETTING",
       "title": "RenderAvatarCloth",
@@ -20818,7 +20882,8 @@
       "evidence": [],
       "remaining_gap": "Review reference callback handleReleaseGLBufferChanged; saving a value is not applying its effect.",
       "native_source_references": [
-        "indra/newview/vsgraphicssettings.h"
+        "indra/newview/vsgraphicssettings.h",
+        "indra/newview/vsvulkancontext.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
@@ -22571,126 +22636,6 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
-      "id": "SETTING.gSavedSettings.VivoxVadAuto",
-      "category": "SETTING",
-      "title": "VivoxVadAuto",
-      "reference_sources": [
-        "indra/newview/llvoicevivox.cpp:getControl(\"VivoxVadAuto\")->getSignal"
-      ],
-      "native_owner": "native settings observer and ordinary UI/service effect",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "native-controller-pending",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Qualify this direct observer and its actual owner effect, not just persisted settings.",
-      "native_source_references": [],
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "SETTING.gSavedSettings.VivoxVadHangover",
-      "category": "SETTING",
-      "title": "VivoxVadHangover",
-      "reference_sources": [
-        "indra/newview/llvoicevivox.cpp:getControl(\"VivoxVadHangover\")->getSignal"
-      ],
-      "native_owner": "native settings observer and ordinary UI/service effect",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "native-controller-pending",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Qualify this direct observer and its actual owner effect, not just persisted settings.",
-      "native_source_references": [],
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "SETTING.gSavedSettings.VivoxVadNoiseFloor",
-      "category": "SETTING",
-      "title": "VivoxVadNoiseFloor",
-      "reference_sources": [
-        "indra/newview/llvoicevivox.cpp:getControl(\"VivoxVadNoiseFloor\")->getSignal"
-      ],
-      "native_owner": "native settings observer and ordinary UI/service effect",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "native-controller-pending",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Qualify this direct observer and its actual owner effect, not just persisted settings.",
-      "native_source_references": [],
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "SETTING.gSavedSettings.VivoxVadSensitivity",
-      "category": "SETTING",
-      "title": "VivoxVadSensitivity",
-      "reference_sources": [
-        "indra/newview/llvoicevivox.cpp:getControl(\"VivoxVadSensitivity\")->getSignal"
-      ],
-      "native_owner": "native settings observer and ordinary UI/service effect",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "native-controller-pending",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Qualify this direct observer and its actual owner effect, not just persisted settings.",
-      "native_source_references": [],
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
       "id": "SETTING.gSavedSettings.VoiceAutomaticGainControl",
       "category": "SETTING",
       "title": "VoiceAutomaticGainControl",
@@ -23039,6 +22984,33 @@
       "title": "control_name",
       "reference_sources": [
         "indra/newview/llpresetsmanager.cpp:getControl(control_name)->getSignal"
+      ],
+      "native_owner": "native dynamic settings observer/controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve every runtime control identity and qualify all ordinary observer effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING_FAMILY.indra/newview/llvoicevivox.cpp:name",
+      "category": "SETTING_FAMILY",
+      "title": "name",
+      "reference_sources": [
+        "indra/newview/llvoicevivox.cpp:getControl(name)->getSignal"
       ],
       "native_owner": "native dynamic settings observer/controller",
       "phase": "R3",
@@ -24821,7 +24793,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpaneloutfitedit.cpp"
+        "indra/newview/llpaneloutfitedit.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -24853,7 +24826,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpaneloutfitedit.cpp"
+        "indra/newview/llpaneloutfitedit.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -24885,7 +24859,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpaneloutfitedit.cpp"
+        "indra/newview/llpaneloutfitedit.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -25506,7 +25481,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -25956,7 +25932,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -26183,7 +26160,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -29085,7 +29063,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -29471,7 +29450,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -29666,7 +29646,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -30223,6 +30204,7 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
+        "indra/newview/fsareasearch.cpp",
         "indra/newview/fsareasearchmenu.cpp"
       ],
       "native_integration_hosts": [
@@ -30287,6 +30269,7 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
+        "indra/newview/fsareasearch.cpp",
         "indra/newview/fsareasearchmenu.cpp"
       ],
       "native_integration_hosts": [
@@ -30351,6 +30334,7 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
+        "indra/newview/fsareasearch.cpp",
         "indra/newview/fsareasearchmenu.cpp"
       ],
       "native_integration_hosts": [
@@ -30388,8 +30372,10 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/llcofwearables.cpp",
+        "indra/newview/llsidepanelappearance.cpp",
         "indra/newview/llviewermenu.cpp",
-        "indra/newview/llwearableitemslist.cpp"
+        "indra/newview/llwearableitemslist.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -30487,7 +30473,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llcofwearables.cpp"
+        "indra/newview/llcofwearables.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -30586,7 +30573,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llwearableitemslist.cpp"
+        "indra/newview/llwearableitemslist.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -30618,7 +30606,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llcofwearables.cpp"
+        "indra/newview/llcofwearables.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -30716,6 +30705,7 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/llcofwearables.cpp",
+        "indra/newview/llsidepanelappearance.cpp",
         "indra/newview/llwearableitemslist.cpp"
       ],
       "native_integration_hosts": [
@@ -30871,7 +30861,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -30903,7 +30894,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -31020,6 +31012,7 @@
         "indra/newview/fsparticipantlist.cpp",
         "indra/newview/fsradarmenu.cpp",
         "indra/newview/llfloaterbump.cpp",
+        "indra/newview/llpanelpeople.cpp",
         "indra/newview/llpanelpeoplemenus.cpp",
         "indra/newview/llviewermenu.cpp"
       ],
@@ -31486,6 +31479,7 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/llfloaterbump.cpp",
+        "indra/newview/llpanelpeople.cpp",
         "indra/newview/llviewermenu.cpp"
       ],
       "native_integration_hosts": [
@@ -31738,7 +31732,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -33126,7 +33121,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterbeacons.cpp"
+        "indra/newview/llfloaterbeacons.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -33158,7 +33154,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fsfloaterassetblacklist.cpp"
+        "indra/newview/fsfloaterassetblacklist.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -33335,7 +33332,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llcofwearables.cpp"
+        "indra/newview/llcofwearables.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -33367,7 +33365,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llcofwearables.cpp"
+        "indra/newview/llcofwearables.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -33399,7 +33398,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llcofwearables.cpp"
+        "indra/newview/llcofwearables.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -33431,7 +33431,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llcofwearables.cpp"
+        "indra/newview/llcofwearables.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -34318,7 +34319,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterbulkpermission.cpp"
+        "indra/newview/llfloaterbulkpermission.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -34350,7 +34352,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterbulkpermission.cpp"
+        "indra/newview/llfloaterbulkpermission.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -34382,7 +34385,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterbulkpermission.cpp"
+        "indra/newview/llfloaterbulkpermission.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -34414,7 +34418,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterbulkpermission.cpp"
+        "indra/newview/llfloaterbulkpermission.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -34446,7 +34451,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterbulkpermission.cpp"
+        "indra/newview/llfloaterbulkpermission.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -34478,7 +34484,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterbulkpermission.cpp"
+        "indra/newview/llfloaterbulkpermission.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -34511,7 +34518,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterbump.cpp"
+        "indra/newview/llfloaterbump.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -34545,7 +34553,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterbump.cpp"
+        "indra/newview/llfloaterbump.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -35611,7 +35620,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaternotificationsconsole.cpp"
+        "indra/newview/llfloaternotificationsconsole.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -35874,7 +35884,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llcofwearables.cpp"
+        "indra/newview/llcofwearables.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -35906,7 +35917,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llcofwearables.cpp"
+        "indra/newview/llcofwearables.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -35938,7 +35950,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llcofwearables.cpp"
+        "indra/newview/llcofwearables.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -35970,7 +35983,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llcofwearables.cpp"
+        "indra/newview/llcofwearables.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -36004,7 +36018,9 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/llcofwearables.cpp",
-        "indra/newview/llwearableitemslist.cpp"
+        "indra/newview/llsidepanelappearance.cpp",
+        "indra/newview/llwearableitemslist.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -36118,7 +36134,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpaneleditwearable.cpp"
+        "indra/newview/llpaneleditwearable.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -36956,6 +36973,7 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
+        "indra/newview/llsidepanelappearance.cpp",
         "indra/newview/llviewermenu.cpp"
       ],
       "native_integration_hosts": [
@@ -37460,6 +37478,7 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
+        "indra/newview/llsidepanelappearance.cpp",
         "indra/newview/llviewermenu.cpp"
       ],
       "native_integration_hosts": [
@@ -37598,6 +37617,7 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
+        "indra/newview/llsidepanelappearance.cpp",
         "indra/newview/llviewermenu.cpp"
       ],
       "native_integration_hosts": [
@@ -37634,7 +37654,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -38018,6 +38039,7 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
+        "indra/newview/llsidepanelappearance.cpp",
         "indra/newview/llviewermenu.cpp"
       ],
       "native_integration_hosts": [
@@ -38054,6 +38076,7 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
+        "indra/newview/llsidepanelappearance.cpp",
         "indra/newview/llviewermenu.cpp"
       ],
       "native_integration_hosts": [
@@ -38088,7 +38111,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -38122,7 +38146,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -38283,7 +38308,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -38531,7 +38557,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -38564,7 +38591,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -39006,6 +39034,77 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI.FS.EnableMentionOption",
+      "category": "UI",
+      "title": "FS.EnableMentionOption",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_url_agent.xml:menu_item_call.on_visible",
+        "indra/newview/skins/default/xui/en/menu_url_agent.xml:menu_item_separator.on_visible"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/llui/llscrolllistctrl.cpp",
+        "indra/llui/lltextbase.cpp",
+        "indra/newview/vsstartupui.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI.FS.EnableModeratorOption",
+      "category": "UI",
+      "title": "FS.EnableModeratorOption",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_url_agent.xml:context_menu.on_visible",
+        "indra/newview/skins/default/xui/en/menu_url_agent.xml:menu_item_separator.on_visible",
+        "indra/newview/skins/default/xui/en/menu_url_agent.xml:on_enable",
+        "indra/newview/skins/default/xui/en/menu_url_agent.xml:on_visible"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/llui/llscrolllistctrl.cpp",
+        "indra/llui/lltextbase.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI.FS.EnableOfferTeleport",
       "category": "UI",
       "title": "FS.EnableOfferTeleport",
@@ -39339,6 +39438,38 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI.FS.MuteGroupVoice",
+      "category": "UI",
+      "title": "FS.MuteGroupVoice",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_url_agent.xml:on_click"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/llui/lltextbase.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI.FS.OfferTeleport",
       "category": "UI",
       "title": "FS.OfferTeleport",
@@ -39461,6 +39592,38 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/llui/llscrolllistctrl.cpp",
+        "indra/llui/lltextbase.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI.FS.UnmuteGroupVoice",
+      "category": "UI",
+      "title": "FS.UnmuteGroupVoice",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_url_agent.xml:on_click"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
         "indra/llui/lltextbase.cpp"
       ],
       "native_integration_hosts": [
@@ -39594,7 +39757,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fsfloaterdiscord.cpp"
+        "indra/newview/fsfloaterdiscord.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -39626,7 +39790,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fsfloaterdiscord.cpp"
+        "indra/newview/fsfloaterdiscord.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -39658,7 +39823,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fsfloaterdiscord.cpp"
+        "indra/newview/fsfloaterdiscord.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -39690,7 +39856,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fsfloaterdiscord.cpp"
+        "indra/newview/fsfloaterdiscord.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -39722,7 +39889,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fsfloaterwearablefavorites.cpp"
+        "indra/newview/fsfloaterwearablefavorites.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -39754,7 +39922,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fsfloaterwearablefavorites.cpp"
+        "indra/newview/fsfloaterwearablefavorites.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -40155,7 +40324,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenufile.cpp"
+        "indra/newview/llviewermenufile.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -40286,7 +40456,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenufile.cpp"
+        "indra/newview/llviewermenufile.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -40319,7 +40490,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenufile.cpp"
+        "indra/newview/llviewermenufile.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -40453,7 +40625,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenufile.cpp"
+        "indra/newview/llviewermenufile.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -40521,7 +40694,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenufile.cpp"
+        "indra/newview/llviewermenufile.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -40976,7 +41150,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41008,7 +41183,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41040,7 +41216,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41072,7 +41249,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41104,7 +41282,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41136,7 +41315,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41170,7 +41350,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitslist.cpp",
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41202,7 +41383,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41234,7 +41416,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41266,7 +41449,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41300,7 +41484,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitslist.cpp",
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41332,7 +41517,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41364,7 +41550,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41396,7 +41583,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41428,7 +41616,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41718,7 +41907,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatergodtools.cpp"
+        "indra/newview/llfloatergodtools.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41814,7 +42004,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatergodtools.cpp"
+        "indra/newview/llfloatergodtools.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -41919,6 +42110,7 @@
         "indra/llmessage/message_prehash.cpp",
         "indra/newview/llviewermenu.cpp",
         "indra/newview/vsr2replay.cpp",
+        "indra/newview/vsstartupui.cpp",
         "indra/newview/vsworldavatar.cpp"
       ],
       "native_integration_hosts": [
@@ -42352,7 +42544,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterinspect.cpp"
+        "indra/newview/llfloaterinspect.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -42384,7 +42577,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterinspect.cpp"
+        "indra/newview/llfloaterinspect.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -42416,7 +42610,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterinspect.cpp"
+        "indra/newview/llfloaterinspect.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -42448,7 +42643,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterinspect.cpp"
+        "indra/newview/llfloaterinspect.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -42480,7 +42676,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloaterinspect.cpp"
+        "indra/newview/llfloaterinspect.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -43106,7 +43303,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llinspectavatar.cpp"
+        "indra/newview/llinspectavatar.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -43792,7 +43990,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotinventory.cpp"
+        "indra/newview/llpanelsnapshotinventory.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -44562,7 +44761,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -44661,7 +44861,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotinventory.cpp"
+        "indra/newview/llpanelsnapshotinventory.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -45330,7 +45531,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotlocal.cpp"
+        "indra/newview/llpanelsnapshotlocal.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -45430,7 +45632,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelmediasettingssecurity.cpp"
+        "indra/newview/llpanelmediasettingssecurity.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -45464,7 +45667,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelmediasettingssecurity.cpp"
+        "indra/newview/llpanelmediasettingssecurity.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -46545,7 +46749,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatermemleak.cpp"
+        "indra/newview/llfloatermemleak.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -46577,7 +46782,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatermemleak.cpp"
+        "indra/newview/llfloatermemleak.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -46609,7 +46815,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatermemleak.cpp"
+        "indra/newview/llfloatermemleak.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -46641,7 +46848,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatermemleak.cpp"
+        "indra/newview/llfloatermemleak.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -46673,7 +46881,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatermemleak.cpp"
+        "indra/newview/llfloatermemleak.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -46705,7 +46914,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatermemleak.cpp"
+        "indra/newview/llfloatermemleak.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -49917,6 +50127,7 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
+        "indra/newview/llsidepanelappearance.cpp",
         "indra/newview/llviewermenu.cpp"
       ],
       "native_integration_hosts": [
@@ -50535,7 +50746,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -50776,7 +50988,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -50878,7 +51091,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -51058,7 +51272,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -51259,7 +51474,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -51431,7 +51647,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52079,7 +52296,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloateropenobject.cpp"
+        "indra/newview/llfloateropenobject.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52111,7 +52329,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloateropenobject.cpp"
+        "indra/newview/llfloateropenobject.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52143,7 +52362,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/lloutfitgallery.cpp"
+        "indra/newview/lloutfitgallery.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52177,7 +52397,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52211,7 +52432,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52245,7 +52467,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52279,7 +52502,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52313,7 +52537,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52347,7 +52572,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52381,7 +52607,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52479,7 +52706,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52513,7 +52741,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52547,7 +52776,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -52581,7 +52811,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -53114,7 +53345,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -53147,7 +53379,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -55268,7 +55501,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotprofile.cpp"
+        "indra/newview/llpanelsnapshotprofile.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -55300,7 +55534,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotprofile.cpp"
+        "indra/newview/llpanelsnapshotprofile.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -55332,7 +55567,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotpostcard.cpp"
+        "indra/newview/llpanelsnapshotpostcard.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -55364,7 +55600,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotpostcard.cpp"
+        "indra/newview/llpanelsnapshotpostcard.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -56660,7 +56897,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/llfloaterpreference.cpp",
-        "indra/newview/llfloaterpreferencesgraphicsadvanced.cpp"
+        "indra/newview/llfloaterpreferencesgraphicsadvanced.cpp",
+        "indra/newview/quickprefs.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -57920,7 +58158,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -57986,7 +58225,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fspanelradar.cpp"
+        "indra/newview/fspanelradar.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -58018,7 +58258,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fspanelradar.cpp"
+        "indra/newview/fspanelradar.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -58050,7 +58291,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fspanelradar.cpp"
+        "indra/newview/fspanelradar.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -58082,7 +58324,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fspanelradar.cpp"
+        "indra/newview/fspanelradar.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -58114,7 +58357,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fspanelradar.cpp"
+        "indra/newview/fspanelradar.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -58146,7 +58390,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fspanelradar.cpp"
+        "indra/newview/fspanelradar.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -58178,7 +58423,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fspanelradar.cpp"
+        "indra/newview/fspanelradar.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -58210,7 +58456,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fspanelradar.cpp"
+        "indra/newview/fspanelradar.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -58662,7 +58909,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -59285,7 +59533,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -59317,7 +59566,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -59355,7 +59605,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -59488,7 +59739,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -59525,7 +59777,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -59562,7 +59815,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -59626,7 +59880,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -59903,7 +60158,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/llfloaterbump.cpp",
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -59935,7 +60191,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60107,7 +60364,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotoptions.cpp"
+        "indra/newview/llpanelsnapshotoptions.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60139,7 +60397,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotoptions.cpp"
+        "indra/newview/llpanelsnapshotoptions.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60171,7 +60430,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotoptions.cpp"
+        "indra/newview/llpanelsnapshotoptions.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60203,7 +60463,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotoptions.cpp"
+        "indra/newview/llpanelsnapshotoptions.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60235,7 +60496,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotoptions.cpp"
+        "indra/newview/llpanelsnapshotoptions.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60267,7 +60529,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelsnapshotoptions.cpp"
+        "indra/newview/llpanelsnapshotoptions.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60301,7 +60564,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/fsfloaterprimfeed.cpp",
-        "indra/newview/llfloaterflickr.cpp"
+        "indra/newview/llfloaterflickr.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60335,7 +60599,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/fsfloaterprimfeed.cpp",
-        "indra/newview/llfloaterflickr.cpp"
+        "indra/newview/llfloaterflickr.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60369,7 +60634,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/fsfloaterprimfeed.cpp",
-        "indra/newview/llfloaterflickr.cpp"
+        "indra/newview/llfloaterflickr.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60403,7 +60669,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/fsfloaterprimfeed.cpp",
-        "indra/newview/llfloaterflickr.cpp"
+        "indra/newview/llfloaterflickr.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60437,7 +60704,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/fsfloaterprimfeed.cpp",
-        "indra/newview/llfloaterflickr.cpp"
+        "indra/newview/llfloaterflickr.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60471,7 +60739,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/fsfloaterprimfeed.cpp",
-        "indra/newview/llfloaterflickr.cpp"
+        "indra/newview/llfloaterflickr.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60633,7 +60902,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -60667,7 +60937,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/lloutfitgallery.cpp",
-        "indra/newview/lloutfitslist.cpp"
+        "indra/newview/lloutfitslist.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -61261,7 +61532,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpaneleditwearable.cpp"
+        "indra/newview/llpaneleditwearable.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -61411,7 +61683,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -61779,7 +62052,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -61942,7 +62216,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -61974,7 +62249,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -62675,7 +62951,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -64653,7 +64930,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -65140,7 +65418,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -65399,7 +65678,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -65431,7 +65711,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelvoiceeffect.cpp"
+        "indra/newview/llpanelvoiceeffect.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -65463,7 +65744,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatervoiceeffect.cpp"
+        "indra/newview/llfloatervoiceeffect.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -65495,7 +65777,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatervoiceeffect.cpp"
+        "indra/newview/llfloatervoiceeffect.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -65935,7 +66218,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llwearableitemslist.cpp"
+        "indra/newview/llwearableitemslist.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66063,7 +66347,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llwearableitemslist.cpp"
+        "indra/newview/llwearableitemslist.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66095,7 +66380,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llwearableitemslist.cpp"
+        "indra/newview/llwearableitemslist.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66127,7 +66413,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66159,7 +66446,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66191,7 +66479,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66223,7 +66512,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66255,7 +66545,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66287,7 +66578,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66319,7 +66611,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66351,7 +66644,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelwearing.cpp"
+        "indra/newview/llpanelwearing.cpp",
+        "indra/newview/llsidepanelappearance.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66747,7 +67041,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66814,7 +67109,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66847,7 +67143,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66943,7 +67240,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -66975,7 +67273,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -67369,7 +67668,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -67597,7 +67897,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",

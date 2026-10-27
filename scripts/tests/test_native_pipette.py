@@ -31,6 +31,8 @@ class NativePipetteTest(unittest.TestCase):
             "COPY_TE": ("vsworldscene.cpp", "bool VSWorldScene::copyTextureEntry("),
             "CAPTURE_LOST": ("lltoolpipette.cpp", "void LLToolPipette::onMouseCaptureLost()"),
             "ACTIVE": ("lltoolpipette.cpp", "bool LLToolPipette::nativeActive()"),
+            "NATIVE_CONSUMER": ("lltoolpipette.cpp", "bool LLToolPipette::nativeConsumer("),
+            "ACTIVATE": ("lltoolpipette.cpp", "void LLToolPipette::setNativeActive("),
             "SAMPLE": ("lltoolpipette.cpp", "bool LLToolPipette::nativeSample("),
             "ENTRY": ("lltoolpipette.cpp", "void LLToolPipette::setTextureEntry("),
             "RESULT": ("lltoolpipette.cpp", "void LLToolPipette::setResult("),
@@ -49,6 +51,7 @@ class NativePipetteTest(unittest.TestCase):
 #include <optional>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 #define VS_NATIVE_VULKAN 1
 using S32=int;using U32=unsigned;using MASK=unsigned;
@@ -77,19 +80,43 @@ struct VSWorldScene {
     bool current(const FaceHandle& token)const CURRENT_FACE
     std::optional<FaceHandle> face(const ObjectHandle& token,U32 index)const FACE
     bool copyTextureEntry(const FaceHandle& token,LLTextureEntry& result)const COPY_TE
+    struct ObjectAdmission {int pcode=0;};
+    std::optional<ObjectAdmission> objectAdmission(const ObjectHandle& token)const {
+        if(!current(token))return {};
+        if(token.host!=mImpl->host)return mNeighbours.at(token.host)->objectAdmission(token);
+        return ObjectAdmission{mImpl->objects.at(token.local).pcode};
+    }
 };
 struct LLCoordGL {int x,y;LLCoordGL(int a,int b):x(a),y(b){}};
-struct LLPickInfo {LLUUID mObjectID;int mObjectFace=-1;LLPickInfo(LLCoordGL,MASK,bool,bool,bool,bool,bool,bool,void*){}};
+struct LLPickInfo {LLUUID mObjectID;int mObjectFace=-1;std::function<bool()> mNativeObjectCurrent;LLPickInfo(LLCoordGL,MASK,bool,bool,bool,bool,bool,bool,void*){}};
 struct Context {VSWorldScene scene;VSWorldScene& world(){return scene;}};
-struct Window {Context context;bool pickValid=true;int pickedFace=0;Context* nativeContext(){return &context;}bool nativePick(LLPickInfo& p){p.mObjectID={5};p.mObjectFace=pickedFace;return pickValid;}} window;
+struct Window {Context context;bool pickValid=true,pickCurrent=true;int pickedFace=0;bool isNativeVulkan()const{return true;}Context* nativeContext(){return &context;}
+    bool nativePick(LLPickInfo& p){p.mObjectID={5};p.mObjectFace=pickedFace;p.mNativeObjectCurrent=[this]{return pickCurrent;};return pickValid;}} window;
 Window* gViewerWindow=&window;
-struct LLTool {void onMouseCaptureLost(){}};
+struct LLView;
+template<class T>struct LLHandle {T* ptr=nullptr;std::weak_ptr<bool> alive;LLHandle()=default;LLHandle(T* p,std::shared_ptr<bool> a):ptr(p),alive(a){}
+    bool isDead()const{auto p=alive.lock();return !p||!*p;}T* get()const{return isDead()?nullptr:ptr;}};
+struct LLView {std::shared_ptr<bool> alive=std::make_shared<bool>(true);bool visible=true;virtual ~LLView(){*alive=false;}
+    bool isInVisibleChain()const{return visible;}LLHandle<LLView> getHandle(){return {this,alive};}};
+struct LLTool {bool captured=false;virtual ~LLTool()=default;void onMouseCaptureLost(){}bool hasMouseCapture()const{return captured;}void setMouseCapture(bool value){captured=value;}};
+struct LLToolMgr {LLTool base;LLTool* selected=&base;bool ready=true;static LLToolMgr& instance(){static LLToolMgr value;return value;}
+    LLTool* nativeCurrentTool(){return ready?selected:nullptr;}bool nativeToolsReady()const{return ready;}
+    void setTransientTool(LLTool* t){selected=t;}void clearTransientTool(){selected=&base;}};
+struct Selection {int clears=0,highlights=0;bool admit=true;std::function<bool()> request;
+    void clearHighlights(){++clears;request={};}bool beginHighlightRequest(std::function<bool()> r){if(!admit)return false;request=std::move(r);return true;}
+    bool highlight(const std::vector<VSWorldScene::ObjectHandle>& objects,bool){if(!request||!request()||objects.size()!=1)return false;++highlights;return true;}};
+struct VSNativeSession : std::enable_shared_from_this<VSNativeSession> {
+    static inline std::shared_ptr<VSNativeSession> live;static std::shared_ptr<VSNativeSession> active(){return live;}
+    bool alive=true;Selection selection;bool regionReady()const{return alive;}Selection* objectSelection(){return &selection;}Selection* existingObjectSelection(){return &selection;}
+    std::function<bool()> accountGuard(){return [weak=weak_from_this()]{auto p=weak.lock();return p&&p->alive;};}};
 struct LLToolPipette : LLTool {
-    bool mNativeActive=true,mSuccess=true;std::function<bool()> mNativeAccount=[] {return true;};std::string mTooltipMsg;LLTextureEntry mTextureEntry;
+    bool mSuccess=true,mNativeHighlightOwned=false;LLHandle<LLView> mNativeConsumer;std::function<bool()> mNativeAccount,mNativeOperation;std::string mTooltipMsg;LLTextureEntry mTextureEntry;
     std::function<void(const LLTextureEntry&)> mSignal=[](const LLTextureEntry&){};
-    static LLToolPipette* getInstance();
+    static LLToolPipette* getInstance();static LLToolPipette& instance(){return *getInstance();}
     void onMouseCaptureLost() CAPTURE_LOST
     bool nativeActive()const ACTIVE
+    bool nativeConsumer(const LLView* view)const NATIVE_CONSUMER
+    void setNativeActive(bool active,LLView* consumer=nullptr,std::function<bool()> operation={}) ACTIVATE
     bool nativeSample(S32 x,S32 y,MASK mask) SAMPLE
     void setTextureEntry(const LLTextureEntry* entry) ENTRY
     void setResult(bool success,const std::string& msg) RESULT
@@ -117,7 +144,7 @@ std::ostringstream log_sink;
 #define LL_ENDL ""
 struct LLTextureCtrl {enum {TEXTURE_CHANGE};};
 constexpr int PICK_TEXTURE=0,PICK_MATERIAL=1;
-struct LLFloaterTexturePicker {
+struct LLFloaterTexturePicker : LLView {
     int mInventoryPickType=PICK_TEXTURE;bool mNoCopyTextureSelected=false,mCanApply=true,mCanPreview=true;LLUUID selected;int commits=0;
     LLViewerInventoryItem* findInvItem(const LLUUID& asset_id,bool copyable_only,bool ignore_library=false)const FIND_INVENTORY
     const LLUUID& findItemID(const LLUUID& asset_id,bool copyable_only,bool ignore_library=false)const FIND_ITEM
@@ -126,7 +153,7 @@ struct LLFloaterTexturePicker {
     void onTextureSelect(const LLTextureEntry& te) TEXTURE_SELECT
 };
 constexpr int VRED=0,VGREEN=1,VBLUE=2;
-struct LLFloaterColorPicker {Color selected;void selectCurRgb(float r,float g,float b){selected.mV[0]=r;selected.mV[1]=g;selected.mV[2]=b;}void onColorSelect(const LLTextureEntry& te) COLOR_SELECT;};
+struct LLFloaterColorPicker : LLView {Color selected;void selectCurRgb(float r,float g,float b){selected.mV[0]=r;selected.mV[1]=g;selected.mV[2]=b;}void onColorSelect(const LLTextureEntry& te) COLOR_SELECT;};
 int main(){
     auto& scene=window.context.scene;auto& object=scene.mImpl->objects[1];
     VSWorldScene::Face f;f.material.id={20};f.publishedMaterial.id={10};f.publishedMaterial.color.mV[0]=.25f;f.published=true;object.faces.push_back(f);
@@ -136,19 +163,29 @@ int main(){
     ++object.token.accountGeneration;assert(!scene.copyTextureEntry(*face,copied));face=scene.face(object.token,0);assert(face);
     object.admittedFaces=object.faces;object.faces[0].publishedMaterial.id={40};assert(scene.copyTextureEntry(*face,copied)&&copied.id.value==10);
     scene.mImpl->retired=true;assert(!scene.copyTextureEntry(*face,copied));scene.mImpl->retired=false;
+    auto session=std::make_shared<VSNativeSession>();VSNativeSession::live=session;auto& selection=session->selection;
     LLFloaterTexturePicker picker;tool.mSignal=[&](const LLTextureEntry& te){picker.onTextureSelect(te);};
-    assert(tool.nativeSample(1,1,0));assert(!tool.mSuccess&&picker.selected.isNull()&&picker.commits==0);
+    assert(!tool.nativeActive()&&!tool.nativeSample(1,1,0));
+    tool.setNativeActive(true,&picker);assert(tool.nativeActive()&&tool.nativeConsumer(&picker)&&LLToolMgr::instance().selected==&tool);
+    assert(tool.nativeSample(1,1,0));assert(tool.mNativeHighlightOwned&&selection.highlights==1);assert(!tool.mSuccess&&picker.selected.isNull()&&picker.commits==0);
     LLViewerInventoryItem noCopy{{50},{10},{false}};gInventory.entries={&noCopy};
     assert(tool.nativeSample(1,1,0));assert(!tool.mSuccess&&picker.selected.isNull()&&picker.commits==0);
     LLViewerInventoryItem allowed{{51},{10},{true}};gInventory.entries.push_back(&allowed);
     assert(tool.nativeSample(1,1,0));assert(tool.mSuccess&&picker.selected.value==10&&picker.commits==1);
-    bool accountCurrent=false;tool.mNativeAccount=[&]{return accountCurrent;};assert(!tool.nativeSample(1,1,0)&&picker.commits==1);
-    accountCurrent=true;window.pickedFace=5;assert(!tool.nativeSample(1,1,0)&&picker.commits==1);window.pickedFace=0;
+    session->alive=false;assert(!tool.nativeSample(1,1,0)&&picker.commits==1);
+    session->alive=true;window.pickedFace=5;assert(!tool.nativeSample(1,1,0)&&picker.commits==1);window.pickedFace=0;
     window.pickValid=false;assert(!tool.nativeSample(1,1,0)&&picker.commits==1);window.pickValid=true;
-    LLFloaterColorPicker color;tool.mSignal=[&](const LLTextureEntry& te){color.onColorSelect(te);};assert(tool.nativeSample(1,1,0));assert(color.selected.mV[0]==.25f);
+    window.pickCurrent=false;assert(!tool.nativeSample(1,1,0)&&picker.commits==1&&!tool.mNativeHighlightOwned);window.pickCurrent=true;
+    selection.admit=false;assert(!tool.nativeSample(1,1,0)&&picker.commits==1);selection.admit=true;
+    object.pcode=LL_PCODE_VOLUME+1;assert(!tool.nativeSample(1,1,0)&&picker.commits==1);object.pcode=LL_PCODE_VOLUME;
+    LLFloaterColorPicker color;tool.mSignal=[&](const LLTextureEntry& te){color.onColorSelect(te);picker.onTextureSelect(te);};
+    tool.setNativeActive(true,&color);assert(tool.nativeConsumer(&color)&&!tool.nativeConsumer(&picker));
+    assert(tool.nativeSample(1,1,0));assert(color.selected.mV[0]==.25f&&picker.commits==1); // Only the initiating picker consumes the sample.
     scene.mImpl->retired=true;assert(!tool.nativeSample(1,1,0));
-    scene.mImpl->retired=false;assert(tool.nativeActive());tool.onMouseCaptureLost();
+    scene.mImpl->retired=false;assert(tool.nativeSample(1,1,0)&&tool.mNativeHighlightOwned);
+    const auto clears=selection.clears;assert(tool.nativeActive());tool.onMouseCaptureLost();
     assert(!tool.nativeActive()&&!tool.nativeSample(1,1,0));
+    assert(!tool.mNativeHighlightOwned&&selection.clears==clears+1&&LLToolMgr::instance().selected==&LLToolMgr::instance().base);
 }
 '''
         for marker, (filename, signature) in methods.items():

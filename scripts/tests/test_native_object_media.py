@@ -13,6 +13,7 @@ class ObjectMediaIdentity(unittest.TestCase):
 #include <algorithm>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -41,6 +42,8 @@ struct State {
 struct Session{struct Account{int agent=1;};Account account(){return {};}};
 int main(){
  auto state=std::make_shared<State>();auto session=std::make_shared<Session>();const std::string mediaVersion="v1";
+ // Default publish() arguments: a fetched refresh of every face that updates its player.
+ const std::optional<bool> updateFromSelf;const bool updatePlayer=true;const std::optional<unsigned> editedFace;const bool retired=false;auto valid=[]{return true;};
  auto apply=[&](const Data& data){BODY return true;};
  apply(Data{{Row{"first"}}});auto first=state->media[0];const auto* address=state->entries[0]->getMediaData();
  assert(first->previous.empty() && first->fromSelf);

@@ -18,7 +18,8 @@ public:
  bool hasMouseCapture(){return capture;}void setMouseCapture(bool value){capture=value;if(!value&&onRelease)onRelease();}
 };
 #define TOOL(name) class name:public LLTool{public:static name*getInstance(){static name value;return &value;}};
-TOOL(LLToolPie) TOOL(LLToolCamera) TOOL(LLToolGrab) TOOL(LLToolCompGun)
+class LLToolPie:public LLTool{public:unsigned resets=0;static LLToolPie*getInstance(){static LLToolPie value;return &value;}static bool instanceExists(){return true;}void resetSelection(){++resets;}};
+TOOL(LLToolCamera) TOOL(LLToolGrab) TOOL(LLToolCompGun)
 class LLToolCompInspect:public LLTool{public:bool active=false;bool isToolCameraActive(){return active;}static LLToolCompInspect*getInstance(){static LLToolCompInspect value;return &value;}};
 struct LLFloaterInspect{bool getVisible(){return false;}};struct LLFloaterReg{template<class T>static T*getTypedInstance(const char*){return nullptr;}};
 class LLToolset
@@ -47,5 +48,6 @@ int main()
  auto*pie=LLToolPie::getInstance();pie->onDeselect=[&]{owner.retireNativeTools();};overrideTool=cameraTool;const auto selectedBefore=cameraTool->selects;assert(owner.nativeCurrentTool()==nullptr);assert(!owner.nativeToolsReady()&&cameraTool->selects==selectedBefore);pie->onDeselect={};
  overrideTool=nullptr;owner.initNativeTools();assert(basic.tools.size()==4&&owner.nativeCurrentTool()==pie);
  pie->capture=true;pie->onRelease=[&]{owner.initNativeTools();};const auto deselects=pie->deselects;owner.retireNativeTools();assert(owner.nativeToolsReady()&&owner.nativeCurrentTool()==pie&&pie->deselects==deselects);pie->onRelease={};
- owner.retireNativeTools();assert(!owner.nativeCurrentTool()&&owner.getCurrentTool()==gToolNull);
+ const auto resets=pie->resets;owner.retireNativeTools();assert(!owner.nativeCurrentTool()&&owner.getCurrentTool()==gToolNull&&pie->resets==resets+1);
+ owner.retireNativeTools();assert(pie->resets==resets+1);
 }

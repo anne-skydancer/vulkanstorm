@@ -40,7 +40,7 @@ struct Renderer{bool accept=true;int next=0;bool publishMesh(int&mesh,const std:
 struct Budgets{VSResourceBudget primitiveBytes;Budgets(size_t n):primitiveBytes(n){}};std::shared_ptr<Budgets>budgets;
 Impl(size_t n):budgets(std::make_shared<Budgets>(n)){}
 };
-struct Object{LLVector3 scale{2,3,4};bool flexible=false,dirty=true;LLPointer<LLVolume>volume;std::shared_ptr<const VSWorldAssets::Geometry>asset;std::shared_ptr<const VSResourceBudget::Reservation>primitiveResidency;std::vector<Impl::Face>faces,admittedFaces;};
+struct Object{LLVector3 scale{2,3,4};bool flexible=false,dirty=true;LLPointer<LLVolume>volume;std::shared_ptr<const VSWorldAssets::Geometry>asset;std::shared_ptr<const VSResourceBudget::Reservation>primitiveResidency;std::vector<Impl::Face>faces,admittedFaces;int prunes=0;void pruneMetricsRigging(){++prunes;}};
 void update(Impl*mImpl,Object&o,Geometry&geometry){
 bool uploadDeferred=false;std::vector<Impl::Face>candidates=o.faces;const size_t count=1;LLVector3 position{7,8,9};LLQuaternion rotation=0;bool riggedOwner=bool(geometry.mWeights);const U64 poseGeneration=17;
 for(auto&face:candidates){const int f=0;std::vector<VSWorldRenderer::Vertex>vertices(3);std::vector<unsigned>indices{0,1,2};unsigned attributes=7;
@@ -50,7 +50,7 @@ PUBLISH
 ATOMIC
 }
 int main(){Impl impl(100000);Object object;object.faces.resize(1);object.volume=std::make_shared<LLVolume>();object.primitiveResidency=impl.budgets->primitiveBytes.reserve(512);auto&g=object.volume->geometry;g.center.set(0,0,0);for(int n=0;n<3;n++){g.coords[n]={float(n),float(n+2)};g.positions[n].set(float(n),float(n+1),0);g.normals[n].set(0,0,1);g.tangents[n].set(1,0,0,-1);}
-update(&impl,object,g);assert(object.admittedFaces.size()==1);auto old=object.admittedFaces[0].pickSurface;assert(old&&old->volume->geometry.coords[1].mV[0]==1&&old->volume->geometry.tangents[1][3]==-1);auto bytes=impl.budgets->primitiveBytes.used();assert(bytes==512+sizeof(Impl::PickSurface));int oldmesh=object.admittedFaces[0].mesh;
+update(&impl,object,g);assert(object.admittedFaces.size()==1&&object.prunes==1);auto old=object.admittedFaces[0].pickSurface;assert(old&&old->volume->geometry.coords[1].mV[0]==1&&old->volume->geometry.tangents[1][3]==-1);auto bytes=impl.budgets->primitiveBytes.used();assert(bytes==512+sizeof(Impl::PickSurface));int oldmesh=object.admittedFaces[0].mesh;
 {Object rigged;rigged.faces.resize(1);rigged.volume=std::make_shared<LLVolume>();auto&geometry=rigged.volume->geometry;geometry.mWeights=&rigged;geometry.center.set(0,0,0);update(&impl,rigged,geometry);assert(rigged.admittedFaces[0].pickSurface->volumeGlobal&&rigged.admittedFaces[0].pickSurface->normalGlobal);}assert(impl.budgets->primitiveBytes.used()==bytes);
 // Replacement always owns a NEW immutable volume, including sculpt/flexible generations.
 object.volume=std::make_shared<LLVolume>();object.primitiveResidency=impl.budgets->primitiveBytes.reserve(512);auto&next=object.volume->geometry;next.coords[1]={100,200};next.center.set(0,0,0);impl.renderer.accept=false;update(&impl,object,next);assert(object.admittedFaces[0].mesh==oldmesh&&object.admittedFaces[0].pickSurface==old);assert(old->volume->geometry.coords[1].mV[0]==1);assert(impl.budgets->primitiveBytes.used()==bytes+512);

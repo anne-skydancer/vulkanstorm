@@ -9,7 +9,7 @@ class NativeOverlay(unittest.TestCase):
  def test_actual_renderer_overlay_hud_transition(self):
   source=method(viewer('vsworldrenderer.cpp'),'void VSWorldRenderer::draw(')
   text=(FIXTURES/'composition_fixture.cpp').read_text()
-  start=source.index('    bool                        drawingHud = false;');end=source.index('    for (const auto& p:submitted.packets)',start)
+  start=source.index('    bool                        drawingHud = false;');end=source.index('    for (const auto& original:submitted.packets)',start)
   text=text.replace('SEAM',source[start:end]).replace('EMPTY',method(source,'if (packets.empty())'))
   text=text.replace('FIRST',method(source,'if (!drawingHud)')).replace('FINISH','composeBeforeHud();')
   self.run_cpp(text)

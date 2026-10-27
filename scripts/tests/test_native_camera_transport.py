@@ -43,6 +43,12 @@ struct LLVector3{
  static const LLVector3 zero,x_axis,y_axis,z_axis;
 };const LLVector3 LLVector3::zero{},LLVector3::x_axis{1,0,0},LLVector3::y_axis{0,1,0},LLVector3::z_axis{0,0,1};
 struct LLQuaternion{float angle=0;LLVector3 axis;LLQuaternion()=default;LLQuaternion(float a,LLVector3 v):angle(a),axis(v){}LLQuaternion operator*(LLQuaternion v)const{return {angle+v.angle,axis};}};
+struct LLVector3d{double mdV[3]{};LLVector3d()=default;explicit LLVector3d(LLVector3 v):mdV{v.mV[0],v.mV[1],v.mV[2]}{}
+ LLVector3d operator-(LLVector3d v)const{LLVector3d r;for(int i=0;i<3;++i)r.mdV[i]=mdV[i]-v.mdV[i];return r;}
+ operator LLVector3()const{return {float(mdV[0]),float(mdV[1]),float(mdV[2])};}};
+LLVector3d from_region_handle(U64){return {};}
+struct LLCoordFrame{LLVector3 at,left,up;void lookAt(LLVector3,LLVector3,LLVector3){}LLVector3 getAtAxis()const{return at;}LLVector3 getLeftAxis()const{return left;}
+ LLVector3 getUpAxis()const{return up;}LLQuaternion getQuaternion()const{return {};}};
 struct LLUUID{int id=1;static const LLUUID null;};const LLUUID LLUUID::null{0};
 struct LLHost{int id=1;bool isOk()const{return id!=0;}bool operator!=(LLHost other)const{return id!=other.id;}};
 struct LLSD{const LLSD& operator[](const char*)const{return *this;}std::string asString()const{return {};}int asInteger()const{return 0;}};
@@ -50,7 +56,9 @@ struct LLAgent{LLVector3 position;U32 flags=0;bool flying=false;
  void setPositionAgent(LLVector3 p){position=p;}void setFlying(bool value){flying=value;}bool getFlying()const{return flying;}
  U32 getControlFlags(){return flags;}void resetControlFlags();}gAgent;
 struct AgentCamera{LLVector3 offset{0,0,-.2f},focus{1,0,.2f};float scale=.75f;
- LLVector3 getCameraOffsetInitial(){return offset;}LLVector3 getFocusOffsetInitial(){return focus;}float getCameraOffsetScale(){return scale;}}gAgentCamera;
+ LLVector3 getCameraOffsetInitial(){return offset;}LLVector3 getFocusOffsetInitial(){return focus;}float getCameraOffsetScale(){return scale;}
+ bool focusOnAvatar=true;S32 scrolled=0;bool getFocusOnAvatar()const{return focusOnAvatar;}void handleScrollWheel(S32 clicks){scrolled+=clicks;}
+ bool nativeCameraPose(LLVector3d&,LLVector3d&,LLVector3&)const{return false;}}gAgentCamera;
 struct ViewerInput{void resetNativeKeys(){}}gViewerInput;
 struct Settings{float getF32(const char*){return 128;}}gSavedSettings;
 constexpr int STATE_MISC=10;
@@ -93,7 +101,8 @@ class NativeCameraTransportTests(unittest.TestCase):
         fixture = STUBS + constants + header + r'''
 struct VSNativeSession{
  enum class Phase{Login,Connected,Disconnected};Phase mPhase=Phase::Connected;bool mChangingRegion=false,mFrozen=false,mInterestListArriving=true;
- LLHost mHost;LLUUID mAgent,mSession;U32 mCircuit=99,mMouseControls=0;U64 mGeneration=3,mRegionEpoch=7,mSent=0;
+ LLHost mHost;LLUUID mAgent,mSession;U32 mCircuit=99,mMouseControls=0;U64 mGeneration=3,mRegionEpoch=7,mSent=0,mHandle=0;
+ bool regionReady()const{return mPhase==Phase::Connected&&!mChangingRegion;}
  VSNativeCamera mCamera;LLVector3 mPosition{100,100,20};double mAgentUpdateTime=1;
  std::optional<U32> mLastAgentControls;U32 agentControlFlags()const;
  VSNativeCamera::State cameraState()const;
@@ -139,6 +148,8 @@ int main(){
  assert(close(dot(orbital.at,orbital.left),0)&&close(dot(orbital.at,orbital.up),0)&&close(dot(orbital.left,orbital.up),0));
  owner.cameraZoom(-10000);assert(owner.cameraState().firstPerson&&owner.mCamera.controls()&AGENT_CONTROL_MOUSELOOK);
  owner.cameraZoom(10000);assert(!owner.cameraState().firstPerson);
+ // A detached shared focus routes the wheel to the reference camera, not the native zoom.
+ gAgentCamera.focusOnAvatar=false;owner.cameraZoom(-10000);assert(gAgentCamera.scrolled==-10000&&!owner.cameraState().firstPerson);gAgentCamera.focusOnAvatar=true;
  auto before=owner.cameraState();owner.cameraOrbit(std::numeric_limits<float>::infinity(),0);assert(close(owner.cameraState().at.mV[0],before.at.mV[0]));
  owner.mCamera.step(std::numeric_limits<float>::quiet_NaN());assert(owner.cameraState().center.isFinite());
  assert(!owner.updateAgentPosition({1,2,3},LLHost{2},3,7));assert(!owner.updateAgentPosition({1,2,3},LLHost{1},2,7));

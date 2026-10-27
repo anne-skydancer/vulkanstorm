@@ -44,7 +44,8 @@ class NativePlatformHeaders(unittest.TestCase):
                     path.write_text(source)
                     result = subprocess.run([
                         compiler, '-std=c++17', '-Wall', '-Wextra', '-Werror',
-                        '-fsyntax-only', '-I', str(ROOT / 'indra/newview'), str(path),
+                        '-fsyntax-only', '-I', str(ROOT / 'indra/newview'),
+                        '-I', str(ROOT / 'indra/llrender'), str(path),
                     ], capture_output=True, text=True)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 

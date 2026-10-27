@@ -13,6 +13,7 @@ using U32=uint32_t;using U64=uint64_t;using U8=uint8_t;using S32=int;using F64=d
 struct VSResourceBudget{struct Reservation{};};
 struct LLFrameTimer{static double getTotalSeconds(){return 10;}};
 struct Vector{void clearVec(){}};struct LLBBox{};
+struct LLEditMenuHandler{static inline LLEditMenuHandler*gEditMenuHandler=nullptr;};struct LLSelectMgr:LLEditMenuHandler{static bool instanceExists(){return true;}static LLSelectMgr*getInstance(){static LLSelectMgr instance;return &instance;}};
 struct Settings{bool linked=false;bool getBOOL(const char*)const{return linked;}void setBOOL(const char*,bool b){linked=b;}}gSavedSettings;
 struct VSWorldScene
 {
@@ -49,7 +50,7 @@ public:
  struct Impl
  {
   struct Node{VSWorldScene::ObjectHandle object;std::shared_ptr<const VSResourceBudget::Reservation>residency;std::optional<Publication>publication;bool pending=true;F64 retryAt=0;NodeMetadata metadata;};
-  std::weak_ptr<VSNativeSession>session;std::vector<Node>nodes,hover;std::optional<VSWorldScene::ObjectHandle>primary,hoverRoot,hoverPrimary;U64 revision=1,hoverRevision=1,highlightRevision=1;bool retired=false,forceSelection=false,allowSelectAvatar=false,geometryKnown=false,showSelection=false;std::vector<int>pauses,families,highlights;std::function<bool()>highlightCurrent;Vector selectionCenter;LLBBox bounds;std::shared_ptr<const void>selectionLease=std::make_shared<const U8>(0);
+  std::weak_ptr<VSNativeSession>session;std::vector<Node>nodes,hover;std::optional<VSWorldScene::ObjectHandle>primary,hoverRoot,hoverPrimary;U64 revision=1,hoverRevision=1,highlightRevision=1;bool retired=false,forceSelection=false,allowSelectAvatar=false,geometryKnown=false,showSelection=false;std::vector<int>pauses,families,highlights;std::function<bool()>highlightCurrent;Vector selectionCenter;LLBBox bounds;std::shared_ptr<const void>selectionLease=std::make_shared<const U8>(0);std::map<int,int>avatarOverrides;std::vector<int>gridObjects;std::vector<Node>rectangleHits,rectangleNodes;U64 rectangleRevision=1;
   std::vector<std::pair<std::string,std::vector<VSWorldScene::ObjectHandle>>>sent;std::function<void()>duringSend,changed=[]{ };
   CURRENT
   void sendSelection(const char*n,const std::vector<VSWorldScene::ObjectHandle>&objects){sent.emplace_back(n,objects);if(duringSend){auto cb=std::exchange(duringSend,{});cb();}}
@@ -58,7 +59,7 @@ public:
  std::optional<NodeMetadata>node(const VSWorldScene::ObjectHandle&)const;bool contains(const VSWorldScene::ObjectHandle&,S32=-1)const;
  bool selectOnly(const VSWorldScene::ObjectHandle&,S32=-1,S32=-1,S32=-1);bool selectFamily(const VSWorldScene::ObjectHandle&,bool=false,bool=false);bool deselectOnly(const VSWorldScene::ObjectHandle&,bool=true);bool deselectFamily(const VSWorldScene::ObjectHandle&,bool=true,bool=false);bool deselectAll();void promoteSelectionToRoot();void demoteSelectionToIndividuals();void reset();bool setForceSelection(bool);bool setAllowSelectAvatar(bool);bool allowSelectAvatar()const;std::shared_ptr<const void>retainSelection()const;
  bool canSelect(const VSWorldScene::ObjectHandle&o,bool force=false,bool=false)const{return mImpl->current(o)&&(force||permitted);}
- void refreshSelectionGeometry(){}void updateAttention(){}
+ void refreshSelectionGeometry(){}void updateAttention(){}void bindEditMenuHandler(){}
  std::vector<VSWorldScene::ObjectHandle>selected()const{std::vector<VSWorldScene::ObjectHandle>out;for(auto&n:mImpl->nodes)if(mImpl->current(n.object))out.push_back(n.object);return out;}
 };
 METHODS
@@ -73,7 +74,7 @@ int main()
  world.family.clear();world.budget=0;auto before=selection->selected();assert(!selection->selectOnly(d));assert(selection->selected().size()==before.size()&&!world.chosen[4]);world.budget=100;
  assert(selection->selectOnly(d,1));selection->mImpl->duringSend=[&]{selection->mImpl->nodes.clear();++selection->mImpl->revision;};assert(!selection->deselectOnly(d));assert(selection->selected().empty());
  assert(selection->selectOnly(d));auto lease=selection->retainSelection();assert(lease);std::weak_ptr<VSObjectSelection>weak=selection;
- selection->mImpl->duringSend=[&]{selection->reset();session->selection.reset();};assert(!selection->deselectOnly(d));assert(!selection->retainSelection()&&selection->selected().empty()&&!selection->selectOnly(a));assert(lease);
+ LLEditMenuHandler::gEditMenuHandler=LLSelectMgr::getInstance();selection->mImpl->duringSend=[&]{selection->reset();session->selection.reset();};assert(!selection->deselectOnly(d));assert(!LLEditMenuHandler::gEditMenuHandler);assert(!selection->retainSelection()&&selection->selected().empty()&&!selection->selectOnly(a));assert(lease);
  // A genuine in-flight controller reference keeps only memory alive through
  // account reset. Its authority and opaque selection-use lease are retired.
  auto retained=selection;selection.reset();assert(!weak.expired());retained.reset();assert(weak.expired());

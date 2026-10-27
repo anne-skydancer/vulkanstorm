@@ -4,6 +4,7 @@ No window or hardware is used. GPU rasterization remains covered by the staged
 connected replay; these checks isolate geometry, inherited colour and topology.
 """
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -80,7 +81,11 @@ int main(){
         source = (ROOT/'indra/llrender/llrender2dutils.cpp').read_text(encoding='utf-8')
         names = ['gl_arc_2d', 'gl_circle_2d', 'gl_corners_2d', 'gl_washer_2d',
                  'gl_washer_segment_2d', 'gl_rect_2d_simple']
-        adapter = source[source.index('class NativePrimitive'):source.index('\n};', source.index('class NativePrimitive'))+3]
+        # NativePrimitive now lives beside the shared templates in vsuiprimitive.h;
+        # its line expansion is the production LLRender2D::nativeLine definition.
+        header = (ROOT/'indra/llrender/vsuiprimitive.h').read_text(encoding='utf-8')
+        header = re.sub(r'^#include "[^"]+"[ \t]*$', '', header, flags=re.M)
+        adapter = header + '\n' + method(source, 'void LLRender2D::nativeLine(')
         wrappers = '\n'.join(method(source, 'void '+name+'(') for name in names)
         fixture = (HERE/'ui_primitives_fixture.cpp').read_text(encoding='utf-8')
         fixture = fixture.replace('PRODUCTION_ADAPTER', adapter).replace('PRODUCTION_WRAPPERS', wrappers)

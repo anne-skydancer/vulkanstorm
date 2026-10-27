@@ -56,9 +56,11 @@ int main(){
 #include <array>
 #include <cassert>
 #include <memory>
+#include <optional>
+#include <utility>
 #include <vector>
 struct Face {
- std::shared_ptr<int> mesh,publishedImage;
+ std::shared_ptr<int> mesh,publishedImage,pickSurface;std::optional<int> pickTextureMatrix;
  std::shared_ptr<int> pbrAsset;
  std::array<std::shared_ptr<int>,4> publishedChannels;
  int material=17;
@@ -68,21 +70,25 @@ struct Object {
  std::vector<Face> faces,admittedFaces;
  std::shared_ptr<GLTF> gltf=std::make_shared<GLTF>(),pendingGLTF=std::make_shared<GLTF>();
  std::shared_ptr<int> cpuGeometry=std::make_shared<int>(23);
+ std::vector<std::pair<std::shared_ptr<int>,std::shared_ptr<int>>> metricsRigging;
  bool dirty=false;
  RELEASE
 };
 int main(){
  Object object;Face face;
  face.mesh=std::make_shared<int>(1);face.publishedImage=std::make_shared<int>(2);
- face.pbrAsset=std::make_shared<int>(4);
+ face.pbrAsset=std::make_shared<int>(4);face.pickSurface=std::make_shared<int>(5);face.pickTextureMatrix=6;
+ object.metricsRigging.push_back({std::make_shared<int>(7),std::make_shared<int>(8)});
  for(auto& channel:face.publishedChannels)channel=std::make_shared<int>(3);
  object.faces.push_back(face);object.admittedFaces.push_back(face);
  const auto cpu=object.cpuGeometry;
  auto queued=face.publishedImage;std::weak_ptr<int> mesh=face.mesh,base=queued,normal=face.publishedChannels[0],material=face.pbrAsset;
+ std::weak_ptr<int> pick=face.pickSurface,rigging=object.metricsRigging[0].second;
  face={};object.releaseRenderingResources();
  assert(object.dirty && object.admittedFaces.empty());
  assert(mesh.expired() && normal.expired() && material.expired() && !base.expired());
  assert(!object.faces[0].mesh && !object.faces[0].publishedImage);
+ assert(pick.expired() && !object.faces[0].pickTextureMatrix && object.metricsRigging.empty() && rigging.expired());
  for(const auto& channel:object.faces[0].publishedChannels)assert(!channel);
  assert(object.faces[0].material==17 && object.cpuGeometry==cpu && *cpu==23);
  assert(object.gltf->calls==1 && object.pendingGLTF->calls==1);
@@ -112,7 +118,7 @@ struct LLTimer {static double getTotalSeconds(){return 100.;}};
 struct Image {int refs=1;int getNumRefs()const{return refs;}};
 using LLUIImagePtr=std::shared_ptr<Image>;
 struct Remote {
- bool local=false,fetching=false,preparing=false,prepared=false,uiDemand=true,hasUploadPolicy=true,exactWorld=false;
+ bool local=false,builtin=false,fetching=false,preparing=false,prepared=false,uiDemand=true,hasUploadPolicy=true,exactWorld=false;
  int discard=0,generation=7,readyGeneration=7,failedGeneration=7,attempts=2;
  double lastUsed=90,retryAt=0;int touched=0;
  LLUIImagePtr facade=std::make_shared<Image>(),pixels=std::make_shared<Image>();
@@ -166,6 +172,7 @@ int main(){
  entry.preparing=true;assert(!impl.evict({99}));entry.preparing=false;
  entry.prepared=true;assert(!impl.evict({99}));entry.prepared=false;
  entry.local=true;assert(!impl.evict({99}));entry.local=false;
+ entry.builtin=true;assert(!impl.evict({99}));entry.builtin=false;
  assert(!impl.evict({1}));
  assert(!impl.evict({99},true)); // Metadata cannot detach a held facade.
  entry.facade->refs=1;
