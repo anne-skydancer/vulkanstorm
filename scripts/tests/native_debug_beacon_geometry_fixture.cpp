@@ -1,9 +1,10 @@
 // Original LLDebugBeacon geometry gold; LGPL-2.1, like the viewer.
 #include <cassert>
+#include <cmath>
 #include <array>
 #include <vector>
 using S32=int;using F32=float;constexpr int VX=0,VY=1,VZ=2;
-struct LLVector3{float mV[3];};
+struct LLVector3{float mV[3]={};LLVector3()=default;LLVector3(float x,float y,float z):mV{x,y,z}{}LLVector3(const float(&v)[3]):mV{v[0],v[1],v[2]}{}bool isFinite()const{return std::isfinite(mV[0])&&std::isfinite(mV[1])&&std::isfinite(mV[2]);}LLVector3 scaledVec(const LLVector3&v)const{return{mV[0]*v.mV[0],mV[1]*v.mV[1],mV[2]*v.mV[2]};}LLVector3 operator+(const LLVector3&v)const{return{mV[0]+v.mV[0],mV[1]+v.mV[1],mV[2]+v.mV[2]};}LLVector3 operator-(const LLVector3&v)const{return{mV[0]-v.mV[0],mV[1]-v.mV[1],mV[2]-v.mV[2]};}};
 struct Sink{std::vector<std::array<float,3>>v;void vertex3fv(const float*p){vertex3f(p[0],p[1],p[2]);}void vertex3f(float x,float y,float z){v.push_back({x,y,z});}}gGL;
 void draw_cross_lines(const LLVector3& center, F32 dx, F32 dy, F32 dz)
 {
