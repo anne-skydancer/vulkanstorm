@@ -435,8 +435,11 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
     F32 renderTime() const { return visuallyMuted() ? 0.f : gpuMilliseconds.value_or(0.f); }
     Visibility overallAppearance() const
     {
-        // LLVOAvatar::getOverallAppearance: friends-only is not an invisible mute.
+        // LLVOAvatar::getOverallAppearance.
         if (self) return Visibility::Normal;
+        // LLVOAvatar::isVisible: friends-only hides all but UI, control and buddy avatars.
+        static LLCachedControl<bool> friendsOnly(gSavedSettings, "RenderAvatarFriendsOnly", false);
+        if (friendsOnly() && !preview && !control && !buddy()) return Visibility::Invisible;
         if (inMuteList()) return Visibility::Invisible;
         if (visualMute() == LLVOAvatar::AV_ALWAYS_RENDER) return Visibility::Normal;
         if (visualMute() == LLVOAvatar::AV_DO_NOT_RENDER || complex() || tooSlowWithoutShadows)
