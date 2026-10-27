@@ -453,6 +453,7 @@ class LLWebRTCImpl : public LLWebRTCDeviceInterface, public webrtc::AudioDeviceO
     void setMute(bool mute, int delay_ms = 20) override;
 
     void intSetMute(bool mute, int delay_ms = 20);
+    void workerApplyMute(bool mute, uint32_t sequence);
 
     //
     // AudioDeviceObserver
