@@ -1,5 +1,5 @@
 {
-  "source_commit": "360d5b79244f578c3adb106d7dd79f8264c3f8e7",
+  "source_commit": "8fda71152e6739eaa55702a7ce5885afac8b8136",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -43860,7 +43860,7 @@
       "path": "indra/cmake/00-Common.cmake",
       "start": 20,
       "end": 26,
-      "sha256": "df8810363630c513243d69b887a5039a44304b55d8dcf4fa9a18298c17562e47",
+      "sha256": "236ded0450acf307a69b0fad12cf0358f2f5dafe866a4ab20352830b7ec7ad89",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
