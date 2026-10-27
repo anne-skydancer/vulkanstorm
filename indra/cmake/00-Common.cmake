@@ -57,7 +57,9 @@ if(NON_RELEASE_CRASH_REPORTING)
   add_compile_definitions( LL_SEND_CRASH_REPORTS=1)
 endif()
 
-set(USE_LTO OFF CACHE BOOL "Enable Link Time Optimization")
+# <Vulkanstorm> LTO is on by default for every build type (Release and
+# RelWithDebInfo), as in CI; -DUSE_LTO:BOOL=OFF disables it.
+set(USE_LTO ON CACHE BOOL "Enable Link Time Optimization")
 if(USE_LTO)
   # <FS:PP> (revised by Beq to allow flto=auto on Linux/GCC to re-enable parallel builds with LTO enabled.)
   if(NOT MSVC)
