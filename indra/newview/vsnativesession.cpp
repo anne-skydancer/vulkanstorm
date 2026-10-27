@@ -196,7 +196,7 @@ const std::set<std::string>    worldMessages = {
     "LayerData",         "AvatarAppearance",       "AvatarAnimation",    "ObjectAnimation",           "ViewerEffect",
     "ReplyTaskInventory", "GenericStreamingMessage"
 };
-const std::set<std::string> session = { "SoundTrigger", "PreloadSound", "AttachedSound", "AttachedSoundGainChange", "MeanCollisionAlertMessage", "SimStats",
+const std::set<std::string> session = { "SoundTrigger", "PreloadSound", "AttachedSound", "AttachedSoundGainChange", "MeanCollisionAlert", "SimStats",
                                         "AvatarSitResponse", "RegionInfo", "EstateOwnerMessage", "TelehubInfo", "LandStatReply",
                                         "ParcelProperties",
                                         "ParcelMediaUpdate",
@@ -430,7 +430,7 @@ void VSNativeSession::install(LLMessageSystem& msg)
     msg.setHandlerFunc("AttachedSound", process_attached_sound);
     msg.setHandlerFunc("AttachedSoundGainChange", process_attached_sound_gain_change);
     msg.setHandlerFunc("SimStats", process_sim_stats);
-    msg.setHandlerFunc("MeanCollisionAlertMessage", process_mean_collision_alert_message);
+    msg.setHandlerFunc("MeanCollisionAlert", process_mean_collision_alert_message);
     msg.setHandlerFunc("ScriptQuestion", process_script_question);
     msg.setHandlerFunc("ScriptDialog", process_script_dialog);
     msg.setHandlerFunc("ScriptRunningReply", LLLiveLSLEditor::processScriptRunningReply);

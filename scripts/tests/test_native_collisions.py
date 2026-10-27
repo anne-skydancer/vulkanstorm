@@ -32,5 +32,5 @@ int main(){gMeanCollisionList.push_back(new Entry);gMeanCollisionList.push_back(
   cpp=source('indra/newview/llviewermessage.cpp');self.assertIn('if (current()) mean_name_callback(id, name)',cpp)
   menu=source('indra/newview/llfloaterbump.cpp')
   for method in ('void FSBumpListMenu::onContextMenuItemClick(', 'bool FSBumpListMenu::onContextMenuItemEnable('):self.assertIn('mAccountCurrent && !mAccountCurrent()',body(menu,method));self.assertIn('mUUIDs.empty()',body(menu,method))
-  session=source('indra/newview/vsnativesession.cpp');self.assertIn('msg.setHandlerFunc("MeanCollisionAlertMessage", process_mean_collision_alert_message)',session)
+  session=source('indra/newview/vsnativesession.cpp');self.assertIn('msg.setHandlerFunc("MeanCollisionAlert", process_mean_collision_alert_message)',session)
 if __name__=='__main__':unittest.main()

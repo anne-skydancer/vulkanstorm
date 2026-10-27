@@ -269,16 +269,35 @@ class SessionEvidenceTests(unittest.TestCase):
         expression = re.search(r'const bool admitted\s*=\s*([\s\S]*?);', source)[1]
         types = set(re.findall(r'typeid\(([\w:]+)\)', expression))
         calls = re.findall(r'(\w+)::(\w+)\(t\)', expression)
+        # Argument-less predicates such as LLPathingLib::isFunctional().
+        nullary = re.findall(r'(\w+)::(\w+)\(\)', expression)
         declarations = {name: set() for name in types}
+        nullary_declarations = {}
+        for owner, method in nullary:
+            if (owner, method) == ('LLRadioGroup', 'itemType'):
+                continue  # returns a type, stubbed below
+            nullary_declarations.setdefault(owner, set()).add(method)
+            declarations.setdefault(owner, set())
+        # An owner that is also the namespace of a typeid type is a namespace
+        # (LLNotificationsUI::isInspectToastType), so its functions are free.
+        namespaces = {name.rpartition('::')[0] for name in types if '::' in name}
+        free_functions = {}
         for owner, method in calls:
-            declarations.setdefault(owner, set()).add(method)
+            if owner in namespaces:
+                free_functions.setdefault(owner, set()).add(method)
+            else:
+                declarations.setdefault(owner, set()).add(method)
         fixture = '#include <typeinfo>\n#include <cassert>\n'
+        for namespace, methods in free_functions.items():
+            fixture += 'namespace ' + namespace + '{' + ''.join(
+                'bool ' + method + '(const std::type_info&){return false;}' for method in sorted(methods)) + '}\n'
         for owner, methods in declarations.items():
             namespace, _, name = owner.rpartition('::')
             if namespace:
                 fixture += 'namespace ' + namespace + '{'
             fixture += 'struct ' + name + '{' + ''.join(
-                'static bool ' + method + '(const std::type_info&){return false;}' for method in methods)
+                'static bool ' + method + '(const std::type_info&){return false;}' for method in methods) + ''.join(
+                'static bool ' + method + '(){return false;}' for method in sorted(nullary_declarations.get(owner, ())))
             if owner == 'LLRadioGroup':
                 fixture += 'static const std::type_info& itemType(){return typeid(int);}'
             fixture += '};' + ('}' if namespace else '') + '\n'

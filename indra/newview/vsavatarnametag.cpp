@@ -13,7 +13,7 @@
 #include "llviewerwindow.h"
 #include "llviewernetwork.h"
 #include "llavatarnamecache.h"
-#include "llcacheName.h"
+#include "llcachename.h"
 #include "llcallingcard.h"
 #include "llmutelist.h"
 #include "lltrans.h"
