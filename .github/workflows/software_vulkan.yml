@@ -33,7 +33,11 @@ jobs:
           python-version: '3.11'
       - name: Install source-test dependencies
         id: deps
-        run: python -m pip install --disable-pip-version-check PyYAML==6.0.2
+        # libboost-dev: fixtures that compile production code using boost::signals2.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libboost-dev
+          python -m pip install --disable-pip-version-check PyYAML==6.0.2
       # Every check below runs even when an earlier one failed, so one failure
       # cannot hide the rest; any failed step still fails the job.
       - if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
