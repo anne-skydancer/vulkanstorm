@@ -25,6 +25,7 @@
  */
 #include <algorithm>
 #include "llvoicewebrtc.h"
+#include "inlinemutexs.h"
 
 #include "llsdutil.h"
 
@@ -287,6 +288,7 @@ void LLWebRTCVoiceClient::init(LLPumpIO* pump)
 
 void LLWebRTCVoiceClient::initWebRTC()
 {
+    llwebrtc::setAudioDeviceMutex(&gAudioDeviceMutex); // FIRE-36022: one mutex for audio and voice
     llwebrtc::init(this);
 
     mWebRTCDeviceInterface = llwebrtc::getDeviceInterface();

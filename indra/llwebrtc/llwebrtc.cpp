@@ -52,7 +52,12 @@
 // Audio device mutex to be shared between audio engine and Voice systems to 
 // syncronize on when audio hardware accessed for disconnected/connecting hardware
 // Uses Timed Mutex so as to not lockup the threads forever.
-inline std::timed_mutex gAudioDeviceMutex;
+// The viewer passes its own mutex (llcommon's gAudioDeviceMutex) through
+// llwebrtc::setAudioDeviceMutex() before init(): this library is a separate
+// DLL, so a mutex defined here would be a different object from the audio
+// engine's. The local one is only a fallback when none is passed.
+static std::timed_mutex sFallbackAudioDeviceMutex;
+static std::timed_mutex* sAudioDeviceMutex = &sFallbackAudioDeviceMutex;
 // Need to use to access the 3 second timeout for the lock.
 using namespace std::chrono_literals;
 // </FS:minerjr> [FIRE-36022]
@@ -832,7 +837,7 @@ void LLWebRTCImpl::workerDeployDevices(bool reset_module)
         try // Try catch needed for uniquie lock as will throw an exception if a second lock is attempted or the mutex is invalid
         {
             // Attempt to lock the access to the audio device, wait up to 1 second for other threads to unlock.
-            std::unique_lock lock(gAudioDeviceMutex, 1s);
+            std::unique_lock lock(*sAudioDeviceMutex, 1s);
             // If the lock could not be accessed, return as we don't have hardware access and will need to try again another pass.
             // Prevents threads from interacting with the hardware at the same time as other audio/voice threads.
             if (!lock.owns_lock())
@@ -1046,7 +1051,7 @@ void LLWebRTCImpl::updateDevices()
     try // Try catch needed for uniquie lock as will throw an exception if a second lock is attempted or the mutex is invalid
     {
     // Attempt to lock the access to the audio device, wait up to 1 second for other threads to unlock.
-    std::unique_lock lock(gAudioDeviceMutex, 1s);
+    std::unique_lock lock(*sAudioDeviceMutex, 1s);
     // If the lock could not be accessed, return as we don't have hardware access and will need to try again another pass.
     // Prevents threads from interacting with the hardware at the same time as other audio/voice threads.
     if (!lock.owns_lock())
@@ -2344,6 +2349,11 @@ void freePeerConnection(LLWebRTCPeerConnectionInterface* peer_connection)
     gWebRTCImpl->freePeerConnection(peer_connection);
 }
 
+
+void setAudioDeviceMutex(std::timed_mutex* mutex)
+{
+    sAudioDeviceMutex = mutex ? mutex : &sFallbackAudioDeviceMutex;
+}
 
 void init(LLWebRTCLogCallback* logCallback)
 {
