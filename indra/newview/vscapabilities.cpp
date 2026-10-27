@@ -101,7 +101,6 @@ void vs_build_capability_names(LLSD& capabilityNames)
     capabilityNames.append("RetrieveNavMeshSrc");
     capabilityNames.append("SearchStatRequest");
     capabilityNames.append("SearchStatTracking");
-    capabilityNames.append("FlickrConnect");
     capabilityNames.append("SendPostcard");
     capabilityNames.append("SendUserReport");
     capabilityNames.append("SendUserReportWithScreenshot");
@@ -149,7 +148,9 @@ LLSD vs_native_capability_names()
     std::set<std::string> seen;
     for (auto capability=capabilities.beginArray();capability!=capabilities.endArray();++capability)
         seen.insert(capability->asString());
-    for (const char* name : { "EventQueueGet", "SimConsole", "SimulatorFeatures", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "GetMesh", "GetMesh2", "UpdateAvatarAppearance", "UploadBakedTexture", "RenderMaterials", "ModifyRegion", "VETPBR", "ObjectMedia", "ObjectMediaNavigate", "ModifyMaterialParams", "AvatarPickerSearch", "GroupAPIv1", "GroupMemberData", "AgentProfile", "UploadAgentProfileImage", "NewFileAgentInventory", "InventoryThumbnailUpload", "SetDisplayName", "RemoteParcelRequest", "AcceptFriendship", "DeclineFriendship", "AcceptGroupInvite", "DeclineGroupInvite", "FetchInventory2", "FetchLib2", "FetchInventoryDescendents2", "FetchLibDescendents2", "InventoryAPIv3", "LibraryAPIv3", "CreateInventoryCategory", "ViewerAsset", "CopyInventoryFromNotecard", "UpdateAgentLanguage", "UpdateAgentInformation", "UpdateNotecardAgentInventory", "UpdateNotecardTaskInventory", "UpdateScriptAgent", "RequestTaskInventory", "UserInfo", "AgentPreferences", "SearchStatRequest", "Tracking", "GetExperiences", "GetExperienceInfo", "GroupExperiences", "GetMetadata", "DirectDelivery", "GetAdminExperiences", "GetCreatorExperiences", "AgentExperiences", "UpdateExperience", "ExperiencePreferences", "IsExperienceAdmin", "FindExperienceByName" })
+    for (const char* name : { "EventQueueGet", "SimConsole", "SimulatorFeatures", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "GetMesh", "GetMesh2", "UpdateAvatarAppearance", "UploadBakedTexture", "RenderMaterials", "ModifyRegion", "VETPBR", "ObjectMedia", "ObjectMediaNavigate", "ModifyMaterialParams", "AvatarPickerSearch", "GroupAPIv1", "GroupMemberData", "AgentProfile", "UploadAgentProfileImage", "NewFileAgentInventory", "InventoryThumbnailUpload", "SetDisplayName", "RemoteParcelRequest", "AcceptFriendship", "DeclineFriendship", "AcceptGroupInvite", "DeclineGroupInvite", "FetchInventory2", "FetchLib2", "FetchInventoryDescendents2", "FetchLibDescendents2", "InventoryAPIv3", "LibraryAPIv3", "CreateInventoryCategory", "ViewerAsset", "CopyInventoryFromNotecard", "UpdateAgentLanguage", "UpdateAgentInformation", "UpdateNotecardAgentInventory", "UpdateNotecardTaskInventory", "UpdateScriptAgent", "RequestTaskInventory", "UserInfo", "AgentPreferences", "SearchStatRequest", "Tracking", "GetExperiences", "GetExperienceInfo", "GroupExperiences", "GetMetadata", "DirectDelivery", "GetAdminExperiences", "GetCreatorExperiences", "AgentExperiences", "UpdateExperience", "ExperiencePreferences", "IsExperienceAdmin", "FindExperienceByName",
+        // Upstream's shared list does not request it (SL-11964); LLFlickrConnect reads it.
+        "FlickrConnect" })
         if (seen.insert(name).second) capabilities.append(name);
     return capabilities;
 }
