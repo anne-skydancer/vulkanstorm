@@ -1,4 +1,6 @@
 // Actual Telehub model parser and exact reference message transport. LGPL-2.1.
+// Native session paths are compiled only in USE_DILIGENTCORE builds.
+#define VS_NATIVE_VULKAN 1
 #include <algorithm>
 #include <array>
 #include <cassert>

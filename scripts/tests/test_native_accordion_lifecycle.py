@@ -21,9 +21,15 @@ class NativeAccordionLifecycle(unittest.TestCase):
             'void LLAccordionCtrl::updateClass()'))
         fixture = r'''
 #include <cassert>
+#include <cstdint>
 #include <set>
 #include <vector>
+using U32=std::uint32_t;
 std::vector<int> events;
+struct LLFrameTimer {static inline U32 sFrameCount=0;static U32 getFrameCount(){return sFrameCount;}};
+struct LLView;
+template<class T> struct LLHandle {bool dead=true;bool isDead()const{return dead;}};
+struct LLView {LLHandle<LLView> getHandle(){return {false};}};
 struct LLAccordionCtrl {
     static inline std::set<LLAccordionCtrl*> sPendingArrange;
     bool mArrangePending=false;
@@ -41,25 +47,35 @@ Keyboard* gKeyboard=nullptr;
 struct LLViewerWindow {
     bool mNativeVulkan=true;
     int legacyCalls=0;
+    bool mNativeMouseFrameKnown=false;
+    U32 mNativeMouseFrame=0;
+    LLView root;LLView* mRootView=&root;
+    int mLastMousePoint=0,mCurrentMousePoint=0,picks=0;
+    void updateMouseDelta(){++mCurrentMousePoint;}
+    void performPick(){assert(mLastMousePoint==mCurrentMousePoint);++picks;}
     void updateUI();
     void updateKeyboardFocus(){events.push_back(3);}
     void nativeHoverUpdate(int mask){assert(mask==(gKeyboard?7:MASK_NONE));events.push_back(4);}
 };
+LLViewerWindow* gViewerWindow=nullptr;
 METHODS
 PUMP
 int main(){
     LLAccordionCtrl first,second;
     first.scheduleArrange();first.scheduleArrange();second.scheduleArrange();
     assert(LLAccordionCtrl::sPendingArrange.size()==2);
-    LLViewerWindow window;window.updateUI();
+    LLViewerWindow window;gViewerWindow=&window;window.updateUI();
     assert(first.arranged==1 && second.arranged==1 && !window.legacyCalls);
     assert((events==std::vector<int>{1,1,2,3,4}));
     events.clear();Keyboard keyboard;gKeyboard=&keyboard;
-    first.scheduleArrange();window.updateUI();
+    ++LLFrameTimer::sFrameCount;first.scheduleArrange();window.updateUI();
     assert(first.arranged==2 && second.arranged==1);
     assert((events==std::vector<int>{1,2,3,4}));
     events.clear();window.updateUI();
-    assert((events==std::vector<int>{2,3,4}));
+    // Hover and pick run once per frame; layout and focus run on every pump.
+    assert((events==std::vector<int>{2,3}) && window.picks==2);
+    events.clear();++LLFrameTimer::sFrameCount;window.updateUI();
+    assert((events==std::vector<int>{2,3,4}) && window.picks==3);
     window.mNativeVulkan=false;window.updateUI();assert(window.legacyCalls==1);
 }
 '''.replace('METHODS', methods).replace('PUMP', pump)
