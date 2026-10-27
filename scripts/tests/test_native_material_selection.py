@@ -32,11 +32,14 @@ template<class T>T llmin(T a,T b){return std::min(a,b);}
 struct Row{int id,count,faces;unsigned mask;};
 std::vector<Row>rows;
 struct Object{Row row;int getNumTEs(){return row.count;}int getNumFaces(){return row.faces;}};
-struct VSMaterialObject{std::shared_ptr<Object>ptr;static VSMaterialObject find(int id){for(auto&r:rows)if(r.id==id)return{std::make_shared<Object>(Object{r})};return{};}explicit operator bool()const{return bool(ptr);}Object*operator->(){return ptr.get();}};
 struct Token{int id;};
+struct VSMaterialObject{std::shared_ptr<Object>ptr;static VSMaterialObject find(int id){for(auto&r:rows)if(r.id==id)return{std::make_shared<Object>(Object{r})};return{};}static VSMaterialObject find(Token t){return find(t.id);}explicit operator bool()const{return bool(ptr);}Object*operator->(){return ptr.get();}};
 struct Selection{bool active=true;std::vector<Token>selected(){std::vector<Token>v;for(auto&r:rows)v.push_back({r.id});return v;}bool node(Token){return active;}bool contains(Token t,int face=-1){if(!active)return false;for(auto&r:rows)if(r.id==t.id)return face>=0&&face<32&&((r.mask>>face)&1);return false;}};
 struct LegacyUnused{template<class F>bool applyToTEs(F*,bool){return false;}};
-struct Native{bool mNative=true;std::shared_ptr<Selection>mSelection=std::make_shared<Selection>();std::shared_ptr<LegacyUnused>mLegacy;template<class F>bool applyToTEs(F*func,bool firstonly=false)NATIVE_BODY};
+struct Native{bool mNative=true;std::shared_ptr<Selection>mSelection=std::make_shared<Selection>();std::shared_ptr<LegacyUnused>mLegacy;
+ // VSObjectSelection::selectionGuard: false once the selection it snapshotted is retired/replaced.
+ std::function<bool()>guard()const{auto selection=mSelection;return[selection]{return selection->active;};}
+ template<class F>bool applyToTEs(F*func,bool firstonly=false)NATIVE_BODY};
 struct Node{Object*obj;bool isTESelected(int side){return(obj->row.mask>>std::min(side,31))&1;}Object*getObject(){return obj;}};
 using LLSelectNode=Node;using LLViewerObject=Object;
 struct Functor{std::vector<int>calls;int accept=0;std::function<void()>after=[]{};bool apply(Object*object,int side){calls.push_back(object->row.id*100+side);after();return(side+object->row.id)%3==accept;}bool apply(VSMaterialObject object,int side){return apply(object.ptr.get(),side);}};

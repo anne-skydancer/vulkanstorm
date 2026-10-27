@@ -66,7 +66,7 @@ int main() {
             cpp = directory / 'texture_upload.cpp'
             cpp.write_text(source)
             result = subprocess.run([compiler, '-std=c++17', '-Wall', '-Wextra', '-Werror',
-                '-I', str(ROOT / 'indra/newview'), str(cpp), '-o', str(directory / 'upload.exe')],
+                '-I', str(ROOT / 'indra/newview'), '-I', str(ROOT / 'indra/llrender'), str(cpp), '-o', str(directory / 'upload.exe')],
                 capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             result = subprocess.run([str(directory / 'upload.exe')], capture_output=True, text=True)

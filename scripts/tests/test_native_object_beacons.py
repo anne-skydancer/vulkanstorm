@@ -38,7 +38,12 @@ HELPER
 int main(){for(float x:{-12.f,0.f,33.f})for(float y:{0.f,3.f,14.f}){LLVector3 p{x,y,-8},size{2,5,7};gGL.v.clear();reference(p,size);Sink native;vs_debug_box_outline(native,p,size);assert(native.v==gGL.v&&native.v.size()==24);}LLVector3 nan{NAN,0,0},size{2,4,7};gGL.v.clear();reference(nan,size);Sink native;vs_debug_box_outline(native,nan,size);assert(native.v==gGL.v&&native.v.empty());}
 '''.replace('ORIGINAL',original).replace('HELPER',helper))
  def test_actual_sources_and_constant_shader_do_not_reuse_surface_or_vertex_colors(self):
-  scene=source('indra/newview/vsworldscene.cpp');actual=body(scene,'void VSWorldScene::appendObjectBeacons(');self.assertIn('source->second.generation==packet.objectGeneration',actual);self.assertIn('source->second.revision==packet.faceGeneration',actual);self.assertIn('packet.constantColor=true',actual);self.assertIn('packet.color={119.f/255.f,0,0,.5f}',actual);self.assertIn('packet.surface.reset()',actual);self.assertIn('if (!rigged)',actual)
+  scene=source('indra/newview/vsworldscene.cpp');actual=body(scene,'void VSWorldScene::appendObjectBeacons(');
+  # Rows are keyed by the submitted object generation and admitted only through packetObject,
+  # which requires the packet's actual object generation and face revision to be current.
+  self.assertIn('std::make_pair(identity,packet.objectGeneration)',actual);self.assertIn('const auto token=packetObject(packet);',actual);self.assertIn('if (!token || !current(*token)) continue;',actual)
+  admitted=body(scene,'VSWorldScene::packetObject(const VSWorldRenderer::Packet& packet)const');self.assertIn('token->generation!=packet.objectGeneration',admitted);self.assertIn('!current(FaceHandle{*token,packet.faceIndex,packet.faceGeneration})',admitted)
+  self.assertIn('packet.constantColor=true',actual);self.assertIn('packet.color={119.f/255.f,0,0,.5f}',actual);self.assertIn('packet.surface.reset()',actual);self.assertIn('if (!rigged)',actual)
   shader=source('indra/newview/vsworldrenderer.cpp');self.assertIn('if (p.constantColor) constants.surfaceFlags[0]=-2;',shader);self.assertLess(shader.index('if (surfaceFlags.x<-1.5)'),shader.index('vec4 c=sampleColor*tint*faceColor;'))
   presentation=source('indra/newview/vsbeaconpresentation.cpp');self.assertIn('gAudiop->sourcePositions()',presentation);self.assertIn('region->getHeight()',presentation);self.assertIn('boxMeshes.erase(it)',presentation);self.assertIn('source.hud?LLVector3(center.data())',presentation)
 if __name__=='__main__':unittest.main()

@@ -27,7 +27,7 @@ from test_native_maps import NativeMapsTests
 from unittest.mock import patch
 from render_backend_selector_fixture import SelectorTests
 from test_vulkan_ui_oracle import OracleTest
-from native_statistics_fixture import NativeStatisticsTests
+from native_statistics_fixture import NativeStatisticsTests, startup_type_admission
 from native_driver_version_fixture import DriverVersionTests
 from test_windows_dpi_client_extent import DpiClientExtentTest
 
@@ -189,10 +189,12 @@ int main(){
             run=subprocess.run([str(exe)],capture_output=True,text=True)
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
 
-    def test_native_scene_voice_leaf_is_omitted_before_factory(self):
+    def test_native_scene_voice_leaf_is_retained_by_factory_gate(self):
+        # 116a410fc8 replaced the skin-child omission with exact native
+        # type/controller gates (Radar, NearbyVoiceMonitor): no child is omitted.
         root=Path(__file__).resolve().parents[2]
         source=(root/'indra/newview/vsstartupui.cpp').read_text()
-        start=source.index('[](std::string_view filename, std::string_view child)')
+        start=source.index('[](std::string_view, std::string_view)')
         opening=source.index('{',start);end=opening+1;depth=1
         while depth:
             depth+=(source[end]=='{')-(source[end]=='}');end+=1
@@ -211,8 +213,8 @@ int main(){
    [](std::string_view){return false;},{},{},{},{},gate);
   for(auto file:{"panel_toolbar_view.xml","skins/vintage/xui/en/panel_toolbar_view.xml",
                  "skins\\vintage\\xui\\en\\panel_toolbar_view.xml"})
-   assert(!VSUIAdmission::child(file,"nearby_voice_output_monitor"));
-  assert(!VSUIAdmission::child("skins/default/xui/en/panel_people.xml","nearby_panel"));
+   assert(VSUIAdmission::child(file,"nearby_voice_output_monitor"));
+  assert(VSUIAdmission::child("skins/default/xui/en/panel_people.xml","nearby_panel"));
   for(auto name:{"default_chat_bar","utility_talk_button","voice_chat_controls_panel","toolbar_left"})
    assert(VSUIAdmission::child("panel_toolbar_view.xml",name));
   assert(VSUIAdmission::child("different_panel_toolbar_view.xml","nearby_voice_output_monitor"));
@@ -227,6 +229,15 @@ int main(){
             path=Path(directory)/'native_voice_leaf.cpp';path.write_text(fixture)
             exe=Path(directory)/'native_voice_leaf.exe'
             built=subprocess.run([compiler,'-std=c++17','-I',str(root/'indra/llui'),str(path),'-o',str(exe)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+            run=subprocess.run([str(exe)],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+            # The retained spatial voice leaf is admitted by its exact native type gate instead.
+            path=Path(directory)/'native_voice_types.cpp';exe=Path(directory)/'native_voice_types.exe'
+            path.write_text(startup_type_admission()+'int main(){assert(admitted(typeid(NearbyVoiceMonitor)));'
+                'assert(admitted(typeid(LLOutputMonitorCtrl)));struct Unreviewed:NearbyVoiceMonitor{};'
+                'assert(!admitted(typeid(Unreviewed)));}')
+            built=subprocess.run([compiler,'-std=c++17',str(path),'-o',str(exe)],capture_output=True,text=True)
             self.assertEqual(built.returncode,0,built.stdout+built.stderr)
             run=subprocess.run([str(exe)],capture_output=True,text=True)
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
@@ -343,7 +354,7 @@ int main(){
             run=subprocess.run([str(exe)],capture_output=True,text=True)
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
 
-    def test_people_scene_omission_is_exact_and_precedes_widget_construction(self):
+    def test_people_scene_children_are_retained_before_widget_construction(self):
         root = Path(__file__).resolve().parents[2]
         factory = (root / 'indra/llui/lluictrlfactory.cpp').read_text(encoding='utf-8')
         start = factory.index('void LLUICtrlFactory::createChildren(')
@@ -351,14 +362,15 @@ int main(){
         children = factory[start:end]
         self.assertLess(children.index('VSUIAdmission::child('), children.index('instance().createFromXML('))
         source = (root / 'indra/newview/vsstartupui.cpp').read_text(encoding='utf-8')
-        start = source.index('[](std::string_view filename, std::string_view child)')
+        # 116a410fc8: exact native Radar type gates replace the nearby_panel omission.
+        start = source.index('[](std::string_view, std::string_view)')
         end = source.index('});', start)
         policy = source[start:end+1]
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler)
         fixture = '#include <cassert>\n#include <string_view>\nint main(){auto policy = ' + policy + r""";
- assert(!policy("skins/ansastorm_modern/xui/en/panel_people.xml","nearby_panel"));
- assert(!policy("panel_people.xml","nearby_panel"));
+ assert(policy("skins/ansastorm_modern/xui/en/panel_people.xml","nearby_panel"));
+ assert(policy("panel_people.xml","nearby_panel"));
  assert(policy("panel_people.xml","friends_panel"));
  assert(policy("panel_people.xml","groups_panel"));
  assert(policy("panel_people.xml","contact_sets_panel"));
@@ -371,6 +383,17 @@ int main(){
             path = Path(temp) / 'people_scene_gate.cpp'
             path.write_text(fixture, encoding='utf-8')
             exe = Path(temp) / 'people_scene_gate.exe'
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            # The retained Radar panel is admitted by its exact native type gates instead.
+            path = Path(temp) / 'people_radar_types.cpp'
+            path.write_text(startup_type_admission() + 'int main(){assert(admitted(typeid(LLPanelPeople)));'
+                'assert(admitted(typeid(FSPanelRadar)));assert(admitted(typeid(FSRadarListCtrl)));'
+                'assert(admitted(typeid(FSFloaterRadar)));struct Unreviewed:FSPanelRadar{};'
+                'assert(!admitted(typeid(Unreviewed)));}', encoding='utf-8')
+            exe = Path(temp) / 'people_radar_types.exe'
             built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(exe)], capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
             run = subprocess.run([str(exe)], capture_output=True, text=True)
@@ -446,22 +469,31 @@ int main(){LLMenuItemCallGL::Params p;
         fixture = r"""
 #include <cassert>
 #include <cmath>
+#include <functional>
 using S32=int;using MASK=int;using F32=float;
 enum {VX,VY,UI_CURSOR_ARROW=10,UI_CURSOR_IBEAM=11};
 constexpr MASK MASK_SHIFT=4;
 struct LLVector3{float mV[3];LLVector3(float x,float y,float z):mV{x,y,z}{}};
 int ll_round(float v){return int(std::lround(v));}
-struct LLCoordGL{int mX,mY;};
+struct LLCoordGL{int mX,mY;bool operator!=(const LLCoordGL& o) const{return mX!=o.mX||mY!=o.mY;}};
+struct LLUI{int idleResets=0;static LLUI*getInstance(){static LLUI ui;return &ui;}void resetMouseIdleTimer(){++idleResets;}};
+struct Handle{bool dead=false;bool isDead() const{return dead;}};
 struct Window{bool hidden=true;int cursor=UI_CURSOR_IBEAM;int calls=0;
  void showCursorFromMouseMove(){hidden=false;++calls;}
  void setCursor(int c){cursor=c;++calls;}};
 struct View{Window* window;bool editor=false;int x=-1,y=-1,mask=-1;
  void screenPointToLocal(int sx,int sy,int* x,int* y){*x=sx-3;*y=sy-4;}
  bool pointInView(int x,int y){return x>=0&&y>=0;}
- bool handleHover(int sx,int sy,int m){x=sx;y=sy;mask=m;if(editor)window->setCursor(UI_CURSOR_IBEAM);return true;}};
+ bool handleHover(int sx,int sy,int m){x=sx;y=sy;mask=m;if(editor)window->setCursor(UI_CURSOR_IBEAM);return true;}
+ Handle getHandle(){return {};}};
+struct LLTool:View{};
+struct LLToolPie:LLTool{static bool instanceExists(){return false;}static LLToolPie*getInstance(){static LLToolPie tool{};return &tool;}
+ static LLToolPie&instance(){return *getInstance();}bool hasNativeMediaCapture(){return false;}};
+struct LLToolMgr{static bool instanceExists(){return false;}static LLToolMgr&instance(){static LLToolMgr mgr;return mgr;}LLTool*nativeCurrentTool(){return nullptr;}};
 struct Focus{View* capture=nullptr;View* top=nullptr;View* getMouseCapture(){return capture;} View* getTopCtrl(){return top;}}gFocusMgr;
 struct LLToolPipette{static bool instanceExists(){return false;}static LLToolPipette&instance(){static LLToolPipette tool;return tool;}bool nativeActive(){return false;}bool hasMouseCapture(){return false;}bool handleHover(int,int,int){return false;}bool handleToolTip(int,int,int){return false;}};
 struct VSNativeSession{float yaw=0,pitch=0;int orbits=0,pans=0;LLVector3 pan{0,0,0};
+ enum class Phase{Disconnected,Connected};Phase phase(){return Phase::Disconnected;}std::function<bool()> accountGuard(){return {};}
  static VSNativeSession*active(){static VSNativeSession s;return &s;}
  void cameraOrbit(float y,float p){yaw=y;pitch=p;++orbits;}
  void cameraPan(const LLVector3& value){pan=value;++pans;}};
@@ -470,31 +502,39 @@ struct LLViewerWindow{Window* mWindow;View* mRootView;
  LLCoordGL mCurrentMousePoint{0,0};bool mMouseInWindow=false,mNativeCameraDrag=false;
  int reconciles=0;bool hoverEnabled=false;int hoverX=-1,hoverY=-1;
  void updateMouseHoverViews(int x,int y,MASK,bool enabled){++reconciles;hoverEnabled=enabled;hoverX=x;hoverY=y;}
+ void updateToolTip(bool,View*,View*,MASK){}
  void nativeHover(LLCoordGL,MASK);void nativeHoverUpdate(MASK);};
+LLViewerWindow* gViewerWindow=nullptr;
+bool nativeMediaHover(LLViewerWindow&,const LLCoordGL&,MASK){return false;}
 """ + source[start:end] + r"""
+// Native input records the pointer; the real UI frame (updateUI) pumps
+// nativeHoverUpdate once afterwards, like reference input then updateUI.
+void frame(LLViewerWindow& viewer,LLCoordGL pos,MASK mask){viewer.nativeHover(pos,mask);viewer.nativeHoverUpdate(mask);}
 int main(){Window window;View root{&window},editor{&window,true};
- LLViewerWindow viewer{&window,&root};viewer.nativeHover({20,30},7);
+ LLViewerWindow viewer{&window,&root};gViewerWindow=&viewer;viewer.nativeHover({20,30},7);
+ assert(!window.hidden&&window.cursor==UI_CURSOR_ARROW&&viewer.reconciles==0&&root.x==-1);
+ viewer.nativeHoverUpdate(7);
  assert(!window.hidden&&window.cursor==UI_CURSOR_ARROW);
  assert(root.x==10&&root.y==15&&root.mask==7&&viewer.mMouseInWindow);
  assert(viewer.reconciles==1&&viewer.hoverEnabled&&viewer.hoverX==10&&viewer.hoverY==15);
- gFocusMgr.capture=&editor;viewer.nativeHover({24,34},1);
+ gFocusMgr.capture=&editor;frame(viewer,{24,34},1);
  assert(editor.x==9&&editor.y==13&&window.cursor==UI_CURSOR_IBEAM);
- gFocusMgr.capture=nullptr;viewer.nativeHover({20,30},0);
+ gFocusMgr.capture=nullptr;frame(viewer,{20,30},0);
  assert(window.cursor==UI_CURSOR_ARROW);
- viewer.mNativeCameraDrag=true;viewer.nativeHover({24,34},0);
+ viewer.mNativeCameraDrag=true;frame(viewer,{24,34},0);
  assert(VSNativeSession::active()->orbits==1);
  assert(std::abs(VSNativeSession::active()->yaw+.01f)<.0001f&&std::abs(VSNativeSession::active()->pitch-.01f)<.0001f);
- viewer.nativeHover({28,30},MASK_SHIFT);
+ frame(viewer,{28,30},MASK_SHIFT);
  assert(VSNativeSession::active()->pans==1&&VSNativeSession::active()->orbits==1);
  assert(std::abs(VSNativeSession::active()->pan.mV[1]-.02f)<.0001f);
  assert(std::abs(VSNativeSession::active()->pan.mV[2]-.02f)<.0001f);
  viewer.mNativeCameraDrag=false;
- gFocusMgr.top=&editor;viewer.nativeHover({24,34},2);
+ gFocusMgr.top=&editor;frame(viewer,{24,34},2);
  assert(editor.x==9&&editor.y==13&&editor.mask==2&&window.cursor==UI_CURSOR_IBEAM);
  gFocusMgr.top=nullptr;viewer.mMouseInWindow=false;
  int rootX=root.x;viewer.nativeHoverUpdate(0);
  assert(!viewer.hoverEnabled&&root.x==rootX); // departed window only reconciles Leave
- viewer.mRootView=nullptr;int calls=window.calls;viewer.nativeHover({1,1},0);
+ viewer.mRootView=nullptr;int calls=window.calls;frame(viewer,{1,1},0);
  assert(window.calls==calls);
 }
 """
