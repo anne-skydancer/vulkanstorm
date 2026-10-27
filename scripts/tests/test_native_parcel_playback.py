@@ -100,23 +100,148 @@ class NativeParcelPlaybackTests(unittest.TestCase):
         self.assertLess(change.index('clearParcelPlayback();'), change.index('++mRegionEpoch;'))
 
     def test_actual_nearby_panel_stays_with_current_cpu_parcel(self):
-        panel = (ROOT / 'indra/newview/llpanelnearbymedia.cpp').read_text()
-        for declaration in ('void LLPanelNearByMedia::refreshList()', 'void LLPanelNearByMedia::updateControls()',
-                            'void LLPanelNearByMedia::onClickSelectedMediaPlay()', 'void LLPanelNearByMedia::onClickSelectedMediaPause()',
-                            'void LLPanelNearByMedia::onClickSelectedMediaMute()', 'void LLPanelNearByMedia::onCommitSelectedMediaVolume()',
-                            'bool LLPanelNearByMedia::setDisabled(', 'std::string LLPanelNearByMedia::getSelectedUrl()'):
-            native = method(panel, declaration).split('#if VS_NATIVE_VULKAN', 1)[1].split('#endif', 1)[0]
-            self.assertIn('VSNativeSession::active()', native)
-            self.assertIn('return', native)
-            for forbidden in ('LLViewerParcelMgr', 'LLViewerMediaFocus', 'getPriorityList', 'getProximity', 'getSomeObject'):
-                self.assertNotIn(forbidden, native)
-        refresh = method(panel, 'void LLPanelNearByMedia::refreshList()').split('#endif', 1)[0]
-        self.assertIn('PARCEL_MEDIA_LIST_ITEM_UUID', refresh)
-        self.assertIn('owner->mediaURL()', refresh)
-        self.assertIn('owner->parcelName()', refresh)
-        pause = method((ROOT / 'indra/newview/llviewermedia.cpp').read_text(), 'void LLViewerMedia::setAllMediaPaused(')
-        self.assertIn('owner->setMediaPaused(val)', pause)
-        self.assertNotIn('owner->setMediaEnabled(!val)', pause)
+        # a9e852d2e8 removed the panel and pause-all native shortcuts and moved
+        # native routing into LLViewerParcelMedia, so the shared panel and
+        # LLViewerMedia::setAllMediaPaused now follow upstream Firestorm:
+        # pause-all unloads parcel media through LLViewerParcelMedia::stop(),
+        # resume calls LLViewerParcelMedia::play(agent parcel), and play is a
+        # no-op without an agent parcel. Natively stop/play map to the current
+        # CPU parcel owner's setMediaEnabled(false/true), whose account, session
+        # and region guards are qualified by
+        # test_actual_controller_and_authenticated_metadata.
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler, 'A C++ compiler is required for nearby-media routing qualification')
+
+        def native(body):
+            self.assertIn('#if VS_NATIVE_VULKAN', body)
+            branch = body.split('#if VS_NATIVE_VULKAN', 1)[1].split('#endif', 1)[0]
+            self.assertIn('VSNativeSession::active()', branch)
+            self.assertIn('return', branch)
+            for forbidden in ('LLViewerParcelMgr', 'LLViewerMediaFocus', 'getPriorityList', 'getProximity', 'getSomeObject', 'mMediaImpl'):
+                self.assertNotIn(forbidden, branch)
+            return branch
+
+        parcel_media = (ROOT / 'indra/newview/llviewerparcelmedia.cpp').read_text(encoding='utf-8')
+        routes = {}
+        for name, declaration in (('PLAY', 'void LLViewerParcelMedia::play(LLParcel* parcel)'), ('STOP', 'void LLViewerParcelMedia::stop()'),
+                                  ('PAUSE', 'void LLViewerParcelMedia::pause()'), ('START', 'void LLViewerParcelMedia::start()'),
+                                  ('FILTER', 'void LLViewerParcelMedia::filterMediaUrl(LLParcel* parcel)')):
+            routes[name] = native(method(parcel_media, declaration))
+        self.assertIn('owner->mediaURL()', native(method(parcel_media, 'std::string LLViewerParcelMedia::getURL()')))
+        self.assertIn('owner->parcelMedia()', native(method(parcel_media, 'viewer_media_t LLViewerParcelMedia::getParcelMedia()')))
+        viewer_media = (ROOT / 'indra/newview/llviewermedia.cpp').read_text(encoding='utf-8')
+        media = '\n'.join(method(viewer_media, declaration) for declaration in (
+            'void LLViewerMedia::setAllMediaPaused(', 'bool LLViewerMedia::isParcelMediaPlaying()', 'bool LLViewerMedia::hasParcelMedia()',
+            'bool LLViewerMedia::hasParcelAudio()', 'std::string LLViewerMedia::getParcelAudioURL()', 'bool LLViewerMedia::isParcelAudioPlaying()'))
+        self.assertIn('owner->mediaURL()', native(method(viewer_media, 'bool LLViewerMedia::hasParcelMedia()')))
+        self.assertIn('owner->mediaEnabled()', native(method(viewer_media, 'bool LLViewerMedia::isParcelMediaPlaying()')))
+        panel = (ROOT / 'indra/newview/llpanelnearbymedia.cpp').read_text(encoding='utf-8')
+        refresh = method(panel, 'void LLPanelNearByMedia::refreshParcelItems()')
+        for needle in ('PARCEL_MEDIA_LIST_ITEM_UUID', 'media_inst->hasParcelMedia()', 'LLViewerParcelMedia::getInstance()->getParcelMedia()'):
+            self.assertIn(needle, refresh)
+        self.assertIn('refreshParcelItems();', method(panel, 'void LLPanelNearByMedia::refreshList()'))
+        controls = '\n'.join(method(panel, declaration) for declaration in (
+            'void LLPanelNearByMedia::onClickEnableParcelMedia()', 'void LLPanelNearByMedia::onClickDisableParcelMedia()',
+            'bool LLPanelNearByMedia::setDisabled(', 'void LLPanelNearByMedia::onClickParcelMediaPlay()',
+            'void LLPanelNearByMedia::onClickParcelMediaPause()'))
+        fixture = NEARBY_STUBS
+        for name, branch in routes.items():
+            fixture = fixture.replace(name + '_NATIVE', branch)
+        fixture += media + '\n' + controls + NEARBY_CHECKS
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / 'nearby_media_routing.cpp'
+            executable = Path(directory) / 'nearby_media_routing.exe'
+            cpp.write_text(fixture, encoding='utf-8')
+            built = subprocess.run([compiler, '-std=c++17', str(cpp), '-o', str(executable)], capture_output=True, text=True, timeout=60)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            ran = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+
+
+NEARBY_STUBS = r"""
+#define VS_NATIVE_VULKAN 1
+#include <cassert>
+#include <list>
+#include <map>
+#include <memory>
+#include <string>
+using S32=int;using U32=unsigned;
+struct LLUUID {int v=0;bool operator==(const LLUUID& o)const{return v==o.v;}bool operator!=(const LLUUID& o)const{return v!=o.v;}};
+const LLUUID PARCEL_MEDIA_LIST_ITEM_UUID{77};
+struct Settings {std::map<std::string,bool> values;bool getBOOL(const char* k){return values[k];}void setBOOL(const char* k,bool v){values[k]=v;}}gSavedSettings;
+template<class T>struct LLCachedControl {Settings& settings;std::string key;T fallback;
+ LLCachedControl(Settings& s,const char* k,T d):settings(s),key(k),fallback(d){}
+ operator T()const{auto i=settings.values.find(key);return i==settings.values.end()?fallback:i->second;}};
+struct LLParcel {std::string music;S32 getLocalID()const{return 5;}std::string getMusicURL()const{return music;}};
+struct LLViewerParcelMgr {LLParcel* agent=nullptr;static LLViewerParcelMgr* getInstance(){static LLViewerParcelMgr m;return &m;}LLParcel* getAgentParcel(){return agent;}};
+struct LLViewerRegion {LLUUID getRegionID(){return {3};}};
+struct Agent {LLViewerRegion* region=nullptr;LLViewerRegion* getRegion(){return region;}}gAgent;
+struct LLViewerParcelAskPlay {int resets=0;static LLViewerParcelAskPlay* getInstance(){static LLViewerParcelAskPlay a;return &a;}void resetSetting(LLUUID,S32){++resets;}};
+struct LLAudioEngine {enum {AUDIO_STOPPED,AUDIO_PLAYING,AUDIO_PAUSED};int isInternetStreamPlaying(){return AUDIO_STOPPED;}void pauseInternetStream(bool){}};
+LLAudioEngine* gAudiop=nullptr;
+struct LLViewerAudio {int starts=0,stops=0;static LLViewerAudio* getInstance(){static LLViewerAudio a;return &a;}
+ void startInternetStreamWithAutoFade(const std::string&){++starts;}void stopInternetStreamWithAutoFade(){++stops;}};
+struct LLViewerMediaImpl {bool ui=false,timeBased=true,playing=true,paused=false,disabled=false;void* mMediaSource=this;
+ bool getUsedInUI()const{return ui;}bool isMediaTimeBased()const{return timeBased;}bool isMediaPlaying()const{return playing;}bool isMediaPaused()const{return paused;}
+ bool hasMedia()const{return true;}void setDisabled(bool v,bool=false){disabled=v;}void play(){playing=true;paused=false;}void pause(){playing=false;paused=true;}};
+using viewer_media_t=LLViewerMediaImpl*;
+struct VSNativeSession {
+ std::string url;bool enabled=false;int enables=0,disables=0,pauses=0,resumes=0;
+ static inline std::shared_ptr<VSNativeSession> current;static std::shared_ptr<VSNativeSession> active(){return current;}
+ std::string mediaURL()const{return url;}std::string musicURL()const{return {};}bool mediaEnabled()const{return enabled;}
+ bool setMediaEnabled(bool v){if(v)++enables;else++disables;enabled=v;return true;}void setMediaPaused(bool v){if(v)++pauses;else++resumes;}
+};
+// Legacy GL parcel-media paths are only counted; each native branch is the actual production text.
+struct LLViewerParcelMedia {int plays=0,stops=0,pauses=0,starts=0,filters=0;std::string url;
+ static LLViewerParcelMedia* getInstance(){static LLViewerParcelMedia m;return &m;}
+ viewer_media_t getParcelMedia(){return nullptr;}std::string getURL(){return url;}
+ void play(LLParcel* parcel);void stop();void pause();void start();void filterMediaUrl(LLParcel* parcel);};
+void LLViewerParcelMedia::play(LLParcel* parcel){PLAY_NATIVE ++plays;}
+void LLViewerParcelMedia::stop(){STOP_NATIVE ++stops;}
+void LLViewerParcelMedia::pause(){PAUSE_NATIVE ++pauses;}
+void LLViewerParcelMedia::start(){START_NATIVE ++starts;}
+void LLViewerParcelMedia::filterMediaUrl(LLParcel* parcel){FILTER_NATIVE ++filters;}
+struct LLViewerMedia {using impl_list=std::list<LLViewerMediaImpl*>;static inline impl_list sViewerMediaImplList;LLViewerMediaImpl* textured=nullptr;
+ static LLViewerMedia* getInstance(){static LLViewerMedia m;return &m;}LLViewerMediaImpl* getMediaImplFromTextureID(const LLUUID& id){return id.v==9?textured:nullptr;}
+ void setAllMediaPaused(bool val);std::string getParcelAudioURL();bool hasParcelMedia();bool hasParcelAudio();bool isParcelMediaPlaying();bool isParcelAudioPlaying();};
+struct LLPanelNearByMedia {void onClickEnableParcelMedia();void onClickDisableParcelMedia();bool setDisabled(const LLUUID&,bool);
+ void onClickParcelMediaPlay();void onClickParcelMediaPause();};
+"""
+
+NEARBY_CHECKS = r"""
+int main(){
+ auto owner=std::make_shared<VSNativeSession>();VSNativeSession::current=owner;owner->url="http://127.0.0.1/video";
+ auto* legacy=LLViewerParcelMedia::getInstance();auto* media=LLViewerMedia::getInstance();auto* parcels=LLViewerParcelMgr::getInstance();
+ LLParcel parcel;LLViewerRegion region;gAgent.region=&region;parcels->agent=&parcel;gSavedSettings.values["AudioStreamingMusic"]=false;
+ LLViewerMediaImpl world,ui;ui.ui=true;LLViewerMedia::sViewerMediaImplList={&world,&ui};
+ // Pause-all pauses in-world media and unloads parcel media through LLViewerParcelMedia::stop().
+ owner->enabled=true;media->setAllMediaPaused(true);
+ assert(!gSavedSettings.values["MediaTentativeAutoPlay"]&&world.paused&&!ui.paused);
+ assert(owner->disables==1&&!owner->enabled&&owner->pauses==0&&legacy->stops==0);
+ assert(LLViewerParcelAskPlay::getInstance()->resets==1);
+ // Resume replays the current agent parcel through LLViewerParcelMedia::play(agent parcel).
+ media->setAllMediaPaused(false);assert(gSavedSettings.values["MediaTentativeAutoPlay"]&&world.playing&&!world.disabled);
+ assert(owner->enables==1&&owner->enabled&&legacy->plays==0);
+ media->setAllMediaPaused(false);assert(owner->enables==1); // already playing
+ owner->enabled=false;parcels->agent=nullptr;media->setAllMediaPaused(false);assert(owner->enables==1&&!owner->enabled); // no agent parcel: no-op
+ parcels->agent=&parcel;owner->url.clear();media->setAllMediaPaused(false);assert(owner->enables==1); // no parcel media
+ owner->url="http://127.0.0.1/video";
+ // Panel controls drive the same current CPU parcel owner.
+ LLPanelNearByMedia panel;
+ assert(panel.setDisabled(PARCEL_MEDIA_LIST_ITEM_UUID,false)&&owner->enables==2&&owner->enabled);
+ assert(panel.setDisabled(PARCEL_MEDIA_LIST_ITEM_UUID,false)&&owner->enables==2); // already playing
+ assert(panel.setDisabled(PARCEL_MEDIA_LIST_ITEM_UUID,true)&&owner->disables==2&&!owner->enabled);
+ gSavedSettings.values["MediaEnableFilter"]=true;assert(panel.setDisabled(PARCEL_MEDIA_LIST_ITEM_UUID,false)&&owner->enables==3&&legacy->filters==0);
+ owner->enabled=false;parcels->agent=nullptr;panel.onClickEnableParcelMedia();panel.onClickParcelMediaPlay();assert(owner->enables==3);
+ gSavedSettings.values["MediaEnableFilter"]=false;parcels->agent=&parcel;panel.onClickParcelMediaPlay();assert(owner->enables==4);
+ panel.onClickParcelMediaPause();assert(owner->pauses==1&&legacy->pauses==0);panel.onClickDisableParcelMedia();assert(owner->disables==3);
+ LLViewerMediaImpl textured;media->textured=&textured;assert(panel.setDisabled(LLUUID{9},true)&&textured.disabled);assert(!panel.setDisabled(LLUUID{8},true));
+ assert(legacy->plays==0&&legacy->stops==0&&legacy->pauses==0&&legacy->filters==0);
+ // Without a native account the same controls stay on the GL parcel-media owner.
+ VSNativeSession::current.reset();panel.onClickDisableParcelMedia();panel.onClickParcelMediaPlay();panel.onClickParcelMediaPause();
+ assert(legacy->stops==1&&legacy->plays==1&&legacy->pauses==1&&owner->disables==3&&owner->enables==4&&owner->pauses==1);
+}
+"""
 
 
 STUBS = r"""
@@ -160,9 +285,12 @@ struct Plugin {bool running=false,timeBased=true,loop=false;int status=1,starts=
  bool isPluginRunning(){return running;}bool pluginSupportsMediaTime(){return timeBased;}int getStatus(){return status;}
  void setLoop(bool v){loop=v;}void start(){++starts;}void pause(){++pauses;}void seek(float v){++seeks;lastSeek=v;}
 };
-struct LLMediaCtrl {Plugin* plugin=nullptr;bool decoupled=false;int width=0,height=0;
- Plugin* getMediaPlugin(){return plugin;}void setDecoupleTextureSize(bool v){decoupled=v;}void setTextureSize(int w,int h){width=w;height=h;}
+struct LLMediaCtrl {Plugin* plugin=nullptr;bool decoupled=false;int width=0,height=0,texture=41;
+ Plugin* getMediaPlugin(){return plugin;}int getTextureID()const{return texture;}void setDecoupleTextureSize(bool v){decoupled=v;}void setTextureSize(int w,int h){width=w;height=h;}
 };
+struct LLViewerMediaImpl {bool parcel=false;void setIsParcelMedia(bool v){parcel=v;}};
+struct LLViewerMedia {LLViewerMediaImpl impl;static LLViewerMedia& instance(){static LLViewerMedia m;return m;}static LLViewerMedia* getInstance(){return &instance();}
+ LLViewerMediaImpl* getMediaImplFromTextureID(int id){return id==41?&impl:nullptr;}};
 struct Window {int closes=0;LLMediaCtrl browser;void closeFloater(){++closes;}template<class T>T* findChild(const char*,bool){return &browser;}};
 constexpr int PARCEL_MEDIA_COMMAND_STOP=0,PARCEL_MEDIA_COMMAND_UNLOAD=1,PARCEL_MEDIA_COMMAND_PAUSE=2,PARCEL_MEDIA_COMMAND_TIME=3,PARCEL_MEDIA_COMMAND_PLAY=4,PARCEL_MEDIA_COMMAND_LOOP=5;
 struct Handle {Window* pointer=nullptr;Window* get()const{return pointer;}bool isDead()const{return !pointer;}void markDead(){pointer=nullptr;}};
@@ -246,7 +374,7 @@ int main(){
  // Metadata is bounded and commands remain pending until the actual plugin is ready.
  owner.mParcelMediaWindow.pointer=&window;owner.mMediaRequested=true;owner.mMediaUserStopped=false;
  Plugin plugin;window.browser.plugin=&plugin;LLSD metadata;metadata["loop"]=1;metadata["autoscale"]=0;metadata["width"]=640;metadata["height"]=360;
- assert(owner.updateParcelMediaMetadata(metadata));owner.applyParcelMediaState();assert(plugin.starts==0&&owner.mMediaStateDirty);
+ assert(owner.updateParcelMediaMetadata(metadata));owner.applyParcelMediaState();assert(plugin.starts==0&&owner.mMediaStateDirty);assert(LLViewerMedia::instance().impl.parcel);
  auto invalid=metadata;invalid["width"]=4097;assert(!owner.updateParcelMediaMetadata(invalid));assert(owner.mMediaWidth==640);
  gSavedSettings.values["PermAllowScriptedMedia"]=1;
  owner.parcelMediaCommand(1u<<PARCEL_MEDIA_COMMAND_TIME,PARCEL_MEDIA_COMMAND_TIME,12.5f);assert(owner.mMediaPendingSeek==12.5f&&plugin.seeks==0);

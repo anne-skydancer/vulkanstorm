@@ -4,7 +4,7 @@
 #include <map>
 #include <memory>
 #include <optional>
-using U8=uint8_t;using U32=uint32_t;using LLUUID=int;using LLHost=int;
+using U8=uint8_t;using U32=uint32_t;using F32=float;using LLUUID=int;using LLHost=int;
 struct LLVector3d {double x=0;};
 constexpr U32 FLAGS_OBJECT_YOU_OWNER=16;constexpr U8 GOD_MAINTENANCE=250;
 constexpr U8 CLICK_ACTION_TOUCH=0,CLICK_ACTION_DISABLED=8,CLICK_ACTION_NONE=9;
@@ -45,6 +45,9 @@ struct VSWorldScene {
  std::map<int,ObjectSnapshot> objects;
  std::optional<ObjectHandle> object(int id)const{auto i=objects.find(id);return i==objects.end()?std::nullopt:std::optional(i->second.object);}
  std::optional<ObjectSnapshot> objectSnapshot(ObjectHandle h)const{auto i=objects.find(h.id);return i==objects.end()||i->second.object.generation!=h.generation?std::nullopt:std::optional(i->second);}
+ bool current(ObjectHandle h)const{return bool(objectSnapshot(h));}
+ // Mirrors VSWorldScene::rootObject: stopAtAvatar yields the edit root, otherwise the full linkset root.
+ std::optional<ObjectHandle> rootObject(ObjectHandle h,bool stopAtAvatar=true)const{auto s=objectSnapshot(h);return s?object(stopAtAvatar?s->rootEditID:s->rootID):std::nullopt;}
  std::function<bool()> guard(ObjectHandle h){return [this,h](){return bool(objectSnapshot(h));};}
 };
 struct VSVulkanContext {VSWorldScene scene;VSWorldScene& world(){return scene;}};
