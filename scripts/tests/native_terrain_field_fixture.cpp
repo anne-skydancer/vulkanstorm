@@ -7,17 +7,23 @@
 #include <cstdint>
 #include <cassert>
 #include <utility>
+#include <array>
+#include <set>
 using U64=std::uint64_t;using U32=std::uint32_t;using S32=int;
 struct LLHost{int value=0;bool operator!=(LLHost other)const{return value!=other.value;}bool operator<(LLHost other)const{return value<other.value;}};
 struct ResetOwner {int calls=0;void reset(){++calls;}};
 struct Account {bool empty=false;void setNull(){empty=true;}};
-struct SceneBudget {Account account;U64 accountGeneration=4;};
+struct SceneBudget {Account account;U64 accountGeneration=4,particleRevision=1;};
+struct LLHUDIcon {bool dead=false;void markDead(){dead=true;}static void cleanupDeadIcons(){}};
+struct LLHUDObject {static void cleanupUnreferenced(){}};
+struct SceneObject {LLHUDIcon* icon=nullptr;};
 struct Resources {unsigned erased=0;void erase(const char*){++erased;}};
 struct VSWorldScene {
  struct TerrainField {U64 revision=0,incarnation=0;U32 width=0,height=0;std::function<bool()>current;std::function<std::optional<float>(float,float)>sample;std::function<std::optional<float>(float,float)>referenceHeight;};
  struct Impl {LLHost host{1};bool retired=false;unsigned patchSize=16,width=256,regionHeight=512;U64 incarnation=7,terrainRevision=1;
  std::shared_ptr<ResetOwner> assets=std::make_shared<ResetOwner>();
- std::map<int,int> avatars,pendingMaterialOverrides,objects,pending,pendingAnimations,visiblePackets;
+ std::map<int,int> avatars,pendingMaterialOverrides,pending,pendingAnimations,visiblePackets;
+ std::map<int,SceneObject> objects;std::set<int> particleObjects;std::map<int,int> objectIndex;
  unsigned accepted=3,rejected=2,unsupported=1,nextRequest=5;
  bool waterKnown=true;
  std::shared_ptr<int> water,materialAssets,terrainAssets;

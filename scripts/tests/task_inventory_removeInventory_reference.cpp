@@ -12,6 +12,12 @@ void LLViewerObject::removeInventory(const LLUUID& item_id)
     LLFloaterReg::hideInstance("properties", item_id);
     // </FS:Ansariel>
 
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item_id << " not removed" << LL_ENDL;
+        return;
+    }
+
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_RemoveTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);

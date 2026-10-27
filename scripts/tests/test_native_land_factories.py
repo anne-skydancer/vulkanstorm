@@ -14,7 +14,8 @@ class LandFactories(unittest.TestCase):
   xml=ET.parse(ROOT/'indra/newview/skins/default/xui/en/floater_about_land.xml')
   tabs=xml.getroot().find("tab_container[@name='landtab']")
   self.assertEqual({e.attrib['name'] for e in tabs.findall('panel')},{n for n,_ in entries})
-  predicate=admission[admission.index('[](std::string_view name) { return\n            name == "land_general_panel"'):]
+  # The land panels share one panel-admission predicate with other reviewed panels.
+  predicate=admission[admission.rindex('[](std::string_view name) { return',0,admission.index('name == "land_general_panel"')):]
   predicate=predicate[:predicate.index('; },')+3]
   decl=[];calls=[];checks=[];types=[];bodies=[]
   for name,callback in entries:

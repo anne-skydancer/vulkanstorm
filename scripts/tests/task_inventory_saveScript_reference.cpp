@@ -19,6 +19,12 @@ void LLViewerObject::saveScript(
                                   item->getCreationDate());
     task_item->setTransactionID(item->getTransactionID());
 
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, script " << item->getUUID() << " not saved" << LL_ENDL;
+        return;
+    }
+
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_RezScript);
     msg->nextBlockFast(_PREHASH_AgentData);

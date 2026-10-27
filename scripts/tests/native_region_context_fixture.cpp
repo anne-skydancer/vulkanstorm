@@ -8,31 +8,43 @@
 #include <vector>
 #include <cmath>
 #include <cassert>
+#include <array>
+#include <list>
 #define VS_NATIVE_VULKAN 1
 using F32=float;using F64=double;using U64=unsigned long long;using U32=unsigned;using U8=unsigned char;using S32=int;using LLHost=int;
 constexpr float PARCEL_GRID_STEP_METERS=4;constexpr U8 PARCEL_WEST_LINE=64,PARCEL_SOUTH_LINE=128;
 constexpr int VX=0,VY=1,VZ=2;constexpr U64 REGION_FLAGS_ALLOW_DAMAGE=1,REGION_FLAGS_BLOCK_FLY=2,REGION_FLAGS_ALLOW_VOICE=4,REGION_FLAGS_RESTRICT_PUSHOBJECT=8,REGION_FLAGS_ALLOW_ENVIRONMENT_OVERRIDE=16;
+struct LLSD{bool boolean=false;std::string string;std::shared_ptr<std::map<std::string,LLSD>> map;static LLSD emptyMap(){LLSD r;r.map=std::make_shared<std::map<std::string,LLSD>>();return r;}bool has(const std::string& k)const{return map && map->count(k);}LLSD operator[](const std::string& k)const{if(map){auto i=map->find(k);if(i!=map->end())return i->second;}return {};}bool asBoolean()const{return boolean;}std::string asString()const{return string;}};
+struct LLStringUtil{static void getTokens(const std::string& s,std::vector<std::string>& out,const char* sep){std::size_t a=0;while(a<=s.size()){auto b=s.find(sep,a);if(b==std::string::npos)b=s.size();if(b>a)out.push_back(s.substr(a,b-a));a=b+1;}}};
+class LLBBox{};
+template<class Cell>bool vs_parcel_bounds_cross(const std::vector<LLBBox>&,F32,F32,Cell){return false;}
+struct VSRegionLimits{F32 getRegionMaxHeight()const{return 4096;}};VSRegionLimits& vs_region_limits(){static VSRegionLimits l;return l;}
+void doOnIdleRepeating(std::function<bool()>){}
+namespace LLAvatarAppearanceDefines{enum{BAKED_LEFT_ARM=8,BAKED_NUM_INDICES=11};}
 struct LLUUID{int value=0;bool operator==(const LLUUID& o)const{return value==o.value;}bool operator!=(const LLUUID& o)const{return !(*this==o);}bool operator<(const LLUUID& o)const{return value<o.value;}};
 struct LLVector3d;
 struct LLVector3{float mV[3]{};LLVector3()=default;explicit LLVector3(const LLVector3d&);};
 struct LLVector3d{double mdV[3]{};LLVector3d()=default;LLVector3d(double x,double y,double z):mdV{x,y,z}{}explicit LLVector3d(const LLVector3& v):mdV{v.mV[0],v.mV[1],v.mV[2]}{}LLVector3d operator+(const LLVector3d& v)const{return {mdV[0]+v.mdV[0],mdV[1]+v.mdV[1],mdV[2]+v.mdV[2]};}LLVector3d operator-(const LLVector3d& v)const{return {mdV[0]-v.mdV[0],mdV[1]-v.mdV[1],mdV[2]-v.mdV[2]};}};
 LLVector3::LLVector3(const LLVector3d& v):mV{float(v.mdV[0]),float(v.mdV[1]),float(v.mdV[2])}{}
+template<class Regions>LLVector3d vs_clip_regions(const LLVector3d&,const LLVector3d& end,const Regions&){return end;}
 LLVector3d from_region_handle(U64 h){return {double(h>>32),double(h&0xffffffff),0};}
 struct LegacyOverlay{std::vector<U8> bytes=std::vector<U8>(64*64);const U8* getOwnership()const{return bytes.data();}};
 struct LLViewerRegion{bool dynamicPathfindingEnabled()const{return false;}void setOwner(LLUUID value){owner=value;}LegacyOverlay overlay;LegacyOverlay* getParcelOverlay(){return &overlay;}const LegacyOverlay* getParcelOverlay()const{return &overlay;}LLHost host=1;LLUUID id{10},owner{11};U64 handle=U64(1000)<<32|2000,flags=0,protocols=0;std::string name="real-region",product="Mainland";F32 width=256,water=20,billable=1;U32 capacity=15000;bool estate=false;LLVector3d origin=from_region_handle(handle);
- LLHost getHost()const{return host;}LLUUID getRegionID()const{return id;}U64 getHandle()const{return handle;}LLUUID getOwner()const{return owner;}std::string getName()const{return name;}LLVector3d getOriginGlobal()const{return origin;}F32 getWidth()const{return width;}U64 getRegionFlags()const{return flags;}U64 getRegionProtocols()const{return protocols;}U8 getSimAccess()const{return 13;}F32 getWaterHeight()const{return water;}F32 getBillableFactor()const{return billable;}U32 getMaxTasks()const{return capacity;}bool isEstateManager()const{return estate;}std::string getLocalizedSimProductName()const{return product;}std::string getCapability(const std::string& n)const{return "https://legacy.invalid/"+n;}static std::string accessToString(U8 access){return std::to_string(access);}};
-struct LLWorld{int touches=0;std::map<LLHost,LLViewerRegion*> regions;static LLWorld& instance(){static LLWorld w;++w.touches;return w;}LLViewerRegion* getRegion(LLHost host){auto i=regions.find(host);return i==regions.end()?nullptr:i->second;}LLViewerRegion* getRegionFromID(LLUUID id){for(auto& [host,r]:regions)if(r->id==id)return r;return nullptr;}LLViewerRegion* getRegionFromPosGlobal(const LLVector3d& p){for(auto& [host,r]:regions){auto l=p-r->origin;if(l.mdV[0]>=0&&l.mdV[1]>=0&&l.mdV[0]<r->width&&l.mdV[1]<r->width)return r;}return nullptr;}};
-struct Window{bool native=true;bool isNativeVulkan()const{return native;}}window;Window* gViewerWindow=&window;
+ LLHost getHost()const{return host;}LLUUID getRegionID()const{return id;}U64 getHandle()const{return handle;}LLUUID getOwner()const{return owner;}std::string getName()const{return name;}LLVector3d getOriginGlobal()const{return origin;}F32 getWidth()const{return width;}U64 getRegionFlags()const{return flags;}U64 getRegionProtocols()const{return protocols;}U8 getSimAccess()const{return 13;}F32 getWaterHeight()const{return water;}F32 getBillableFactor()const{return billable;}U32 getMaxTasks()const{return capacity;}bool isEstateManager()const{return estate;}std::string getLocalizedSimProductName()const{return product;}std::string getCapability(const std::string& n)const{return "https://legacy.invalid/"+n;}S32 getCentralBakeVersion()const{return 0;}S32 getRegionMaxBakes()const{return 11;}void setRegionFlag(U64 f,bool on){flags=on?flags|f:flags&~f;}bool capabilitiesReceived()const{return true;}bool simulatorFeaturesReceived()const{return true;}void getSimulatorFeatures(LLSD& f)const{f=LLSD::emptyMap();}template<class F>void setCapabilitiesReceivedCallback(F){}struct Land{F32 resolveHeightGlobal(const LLVector3d&)const{return 0;}}land;const Land& getLand()const{return land;}static std::string accessToString(U8 access){return std::to_string(access);}};
+struct LLWorld{int touches=0;std::map<LLHost,LLViewerRegion*> regions;std::list<LLViewerRegion*> getRegionList()const{std::list<LLViewerRegion*> r;for(auto& [host,region]:regions)r.push_back(region);return r;}static LLWorld& instance(){static LLWorld w;++w.touches;return w;}LLViewerRegion* getRegion(LLHost host){auto i=regions.find(host);return i==regions.end()?nullptr:i->second;}LLViewerRegion* getRegionFromID(LLUUID id){for(auto& [host,r]:regions)if(r->id==id)return r;return nullptr;}LLViewerRegion* getRegionFromPosGlobal(const LLVector3d& p){for(auto& [host,r]:regions){auto l=p-r->origin;if(l.mdV[0]>=0&&l.mdV[1]>=0&&l.mdV[0]<r->width&&l.mdV[1]<r->width)return r;}return nullptr;}};
+struct TerrainField{std::function<bool()> current;std::function<std::optional<float>(float,float)> referenceHeight;};struct NativeWorld{std::optional<TerrainField> terrainField(const LLHost&)const{return {};}};struct NativeContext{NativeWorld scene;NativeWorld& world(){return scene;}};
+struct Window{bool native=true;bool isNativeVulkan()const{return native;}NativeContext* nativeContext(){return nullptr;}}window;Window* gViewerWindow=&window;
 struct LLAppViewer{static inline bool native=false;static auto*instance(){static LLAppViewer app;return &app;}bool isNativeVulkanLogin()const{return native;}};
 struct Agent{LLUUID id{1},session{2};bool god=false;LLViewerRegion* region=nullptr;LLUUID getID()const{return id;}LLUUID getSessionID()const{return session;}bool isGodlike()const{return god;}LLViewerRegion* getRegion()const{return region;}}gAgent;
 bool gDisconnected=false;
-struct LLTrans{static bool findString(std::string& value,const std::string& key){if(key=="Mainland"){value="localized-Mainland";return true;}return false;}};
+struct LLTrans{static std::string getString(const std::string& key){return "localized-"+key;}static bool findString(std::string& value,const std::string& key){if(key=="Mainland"){value="localized-Mainland";return true;}return false;}};
 struct VSNativeSession {
  enum class Phase{Connecting,Connected,Logout};Phase mPhase=Phase::Connected;bool mShutdown=false,mChangingRegion=false;U64 mGeneration=7;LLHost mHost=1;
  struct AccountHandle{LLUUID agent{1},session{2};U64 generation=7;};AccountHandle account()const{return {{1},{2},mGeneration};}
  METADATA
  SNAPSHOT
  struct Features{bool enabled=false;const Features&operator[](const char*)const{return *this;}bool asBoolean()const{return enabled;}}features;const Features&simulatorFeatures()const{return features;}
+ std::optional<LLSD> simulatorFeatures(const LLHost&)const{return {};}bool capabilitiesReceived(const LLHost&)const{return false;}bool setRegionVoiceEnabled(const LLHost&,U64,bool){return false;}
  bool publishRegionOwner(const LLHost&,U64,const LLUUID&);U64 circuitGeneration(const LLHost&host)const{auto found=mCircuits.find(host);return found==mCircuits.end()?0:found->second.incarnation;}
  struct Circuit{bool acknowledged=true,handshake=true;U64 handle=(U64(1000)<<32)|2000,incarnation=9,flags=0;U32 width=512,height=256;LLUUID id{10},owner{11};std::string name="native-real";U8 access=13;F32 waterHeight=20;bool waterKnown=true,estateManager=false,estateManagerKnown=false;U32 objectCapacity=0;bool objectCapacityKnown=false;RegionMetadata metadata;VSCoarseSnapshot<LLUUID> coarse;VSParcelOverlay::Snapshot parcelOverlay;};std::map<LLHost,Circuit> mCircuits;
  static inline std::shared_ptr<VSNativeSession> selected;

@@ -16,6 +16,11 @@ void LLViewerObject::updateInventory(
                                   item->getFlags(),
                                   item->getCreationDate());
     task_item->setTransactionID(item->getTransactionID());
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item->getUUID() << " not updated" << LL_ENDL;
+        return;
+    }
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_UpdateTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);
