@@ -39,6 +39,7 @@ class NativeSimulatorFeaturesTest(unittest.TestCase):
 #include <cassert>
 #include <chrono>
 #include <functional>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <utility>
@@ -74,6 +75,12 @@ struct RlvHandler {
  void cleanup();~RlvHandler();static void cleanupClass();
 } gRlvHandler;
 RLV_DEFINITIONS
+int tool_retirements=0,mesh_shutdowns=0;
+struct LLToolMgr {static bool instanceExists(){return true;}
+ static LLToolMgr& instance(){static LLToolMgr mgr;return mgr;}
+ void retireNativeTools(){assert(account_alive&&fibers_alive&&gRlvHandler.m_fEnabled);++tool_retirements;}};
+struct MeshRepo {void shutdown(){assert(!account_alive&&sTextureFetch_alive());++mesh_shutdowns;}
+ static bool sTextureFetch_alive();} gMeshRepo;
 struct Session {void shutdown(){assert(!gRlvHandler.m_fEnabled&&handler_deletes==1);
  account_alive=false;}};
 struct Message {void setMessageAdmission(std::function<void()>){}};
@@ -91,18 +98,20 @@ struct Worker {
  ~Worker(){assert(stopped);assert(!fetch||(cacheThreadStopped&&waited));}
 };
 Worker* sImageDecodeThread=new Worker;Worker* sTextureCache=new Worker;Worker* sTextureFetch=new Worker(true);
+bool MeshRepo::sTextureFetch_alive(){return sTextureFetch&&!sTextureFetch->stopped;}
 struct LLTimer {unsigned elapsed=0;double getElapsedTimeF64(){return elapsed++;}};
 struct LLViewerStatsRecorder {
  static bool instanceExists(){return true;}
  static void deleteSingleton(){assert(!sTextureFetch&&!sImageDecodeThread&&!sTextureCache);}
 };
 struct Mainloop {template<class Duration>void runFor(Duration){assert(!sTextureFetch&&!sImageDecodeThread&&!sTextureCache);}} gMainloopWork;
-struct LLAppViewer {std::shared_ptr<Session> mNativeSession=std::make_shared<Session>();
+struct LLAppViewer {std::shared_ptr<Session> mNativeSession=std::make_shared<Session>();bool mNativeMeshInitialized=true;
  bool cleanupNativeVulkanLogin();};
 NATIVE_PREFIX
 int main(){
  LLAppViewer app;assert(app.cleanupNativeVulkanLogin());
  assert(drained_workers==6&&fetch_waits==1);
+ assert(tool_retirements==1&&mesh_shutdowns==1&&!app.mNativeMeshInitialized);
  assert(!gRlvHandler.m_fEnabled&&listener_removals==1&&observer_removals==1&&status_queries==1);
  fibers_alive=false;
  gRlvHandler.cleanup();assert(status_queries==1&&handler_deletes==1);
@@ -129,6 +138,7 @@ int main(){
         prefix = connected.split('LLStartUp::initExperiences();', 1)[0] + '}'
         fixture = r'''
 #include <cassert>
+#include <functional>
 #include <map>
 #include <memory>
 struct Host {int id=0;bool isOk()const{return id!=0;}
@@ -159,6 +169,9 @@ struct LLInventoryModelBackgroundFetch {
 struct LLViewerParcelMgr {int finishes=0;static LLViewerParcelMgr& instance(){static LLViewerParcelMgr value;return value;}void onTeleportFinished(bool local,int){assert(!local);++finishes;}};
 struct VSNativeAppearance {explicit VSNativeAppearance(int){} void fallback(int){}};
 struct LLEnvironment {int changes=0;static LLEnvironment& instance(){static LLEnvironment value;return value;}void onRegionChange(){++changes;}};
+struct LLVoiceClient {int shown=0;static bool instanceExists(){return true;}
+ static LLVoiceClient& instance(){static LLVoiceClient value;return value;}void setHidden(bool hidden){assert(!hidden);++shown;}};
+struct LLMaterialMgr {static LLMaterialMgr& instance(){static LLMaterialMgr value;return value;}};
 struct VSNativeSession {
  enum class Phase {Connecting,Connected,Logout};Phase mPhase=Phase::Connecting;
  enum class Startup {Precache,Complete};Startup mStartup=Startup::Precache;
@@ -170,6 +183,9 @@ struct VSNativeSession {
  std::unique_ptr<VSNativeAppearance> mAppearance;int mWearablesMetadata=0;
  int shared_from_this(){return 0;}
  void publishProgress(){}
+ int particleStarts=0,interestUpdates=0,regionNotifications=0;
+ void particles(){++particleStarts;}void updateInterestListMode(){++interestUpdates;}
+ std::function<void()> mCurrentRegionChanged=[this]{++regionNotifications;};
  void requestParcel(){}void connected();
 };
 CONNECTED
@@ -187,6 +203,8 @@ int main(){
  assert(FSLSLBridge::instance().starts==2 && gAgentCamera.inits==0);
  assert(LLEnvironment::instance().changes==2);
  assert(s.environmentStarts==3 && LLViewerParcelMgr::instance().finishes==1);
+ assert(LLVoiceClient::instance().shown==1 && s.particleStarts==1);
+ assert(s.interestUpdates==2 && s.regionNotifications==2);
  VSNativeSession fresh;fresh.mHandshake=fresh.mMovement=fresh.mSeedReady=fresh.mCircuitAck=true;
  fresh.connected();assert(fetch.starts==2 && LLViewerCamera::instanceExists());
  auto* camera=LLViewerCamera::getInstance();assert(camera->heights==1 && camera->aspects==1 && camera->views==1);
@@ -378,9 +396,11 @@ int main(){
         fixture = r'''
 #include <cassert>
 #include <functional>
+#include <map>
 #include <string>
 #include <utility>
 using U64 = unsigned long long;
+using LLHost = int;
 struct LLSD {
  bool map=true; std::string advertised;
  static LLSD emptyMap(){return {};}
@@ -396,6 +416,9 @@ struct VSNativeSession {
  Phase mPhase=Phase::Connecting; bool mShutdown=false,mSimulatorFeaturesReceived=false;
  U64 mGeneration=7,mRegionEpoch=3; LLSD mSimulatorFeatures;
  std::function<void()> mCancelSimulatorFeatures;
+ struct RegionCircuit {LLSD simulatorFeatures;bool featuresReceived=false;};
+ LLHost mHost=1; std::map<LLHost,RegionCircuit> mCircuits{{1,{}}};
+ int featureNotifications=0; std::function<void()> mSimulatorFeaturesChanged=[this]{++featureNotifications;};
  void clearSimulatorFeatures(); bool applySimulatorFeatures(const LLSD&,U64,U64);
 };
 DEFINITIONS
@@ -403,6 +426,8 @@ int main(){
  VSNativeSession session;LLSD first{true,"first-region-advertised-data"};
  assert(session.applySimulatorFeatures(first,7,3));
  assert(session.mSimulatorFeaturesReceived&&session.mSimulatorFeatures.advertised==first.advertised);
+ assert(session.mCircuits[1].featuresReceived&&session.mCircuits[1].simulatorFeatures.advertised==first.advertised);
+ assert(session.featureNotifications==1);
  int calls=LFSimFeatureHandler::instance().calls;
  assert(!session.applySimulatorFeatures({true,"stale-account"},6,3));
  assert(!session.applySimulatorFeatures({true,"stale-region"},7,2));
@@ -410,7 +435,7 @@ int main(){
  for(auto phase:{VSNativeSession::Phase::Login,VSNativeSession::Phase::Logout,VSNativeSession::Phase::Disconnected}){
   session.mPhase=phase;assert(!session.applySimulatorFeatures(first,7,3));
  }
- assert(LFSimFeatureHandler::instance().calls==calls);
+ assert(LFSimFeatureHandler::instance().calls==calls&&session.featureNotifications==1);
  session.mPhase=VSNativeSession::Phase::Connected;session.mShutdown=true;
  assert(!session.applySimulatorFeatures(first,7,3));session.mShutdown=false;
  bool cancelled=false;session.mCancelSimulatorFeatures=[&]{cancelled=true;};

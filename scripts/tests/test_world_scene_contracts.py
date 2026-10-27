@@ -10,6 +10,11 @@ def camera_far_constants():
     import re
     header=(ROOT/'indra/llmath/llcamera.h').read_text(encoding='utf-8')
     return '\n'.join(re.search(r'constexpr F32 '+name+r'\s*=\s*[^;]+;',header).group().replace(' F32 ',' float ') for name in ('MIN_FAR_PLANE','MAX_FAR_PLANE'))+'\n'
+def network_data_ids():
+    import re
+    header=(ROOT/'indra/llprimitive/llprimitive.h').read_text(encoding='utf-8')
+    body=re.search(r'class LLNetworkData\s*\{.*?(enum\s*\{.*?\};)',header,re.S).group(1)
+    return 'struct LLNetworkData {'+body+'};\n'
 
 class WorldSceneContracts(unittest.TestCase):
     def compile(self, text):
@@ -70,7 +75,7 @@ int main() {
 #include <vector>
 #include <cmath>
 using U8=uint8_t;using U16=uint16_t;using U32=uint32_t;using F32=float;
-'''+definitions+'''
+'''+network_data_ids()+definitions+'''
 int main() {
  const U8 f[]={0,0,32,65};assert(littleFloat(f)==10.f);
  const U8 id[]={0x78,0x56,0x34,0x12};assert(littleU32(id)==0x12345678);
@@ -78,6 +83,7 @@ int main() {
  assert(baseVolume({1,0x20,0,1,0,0,0,77}));
  assert(!baseVolume({1,0x30,0,1,0,0,0,77}));
  assert(!baseVolume({1,0x10,0,1,0,0,0,77}));
+ assert(!baseVolume({1,0x60,0,1,0,0,0,77}));
  assert(!baseVolume({1,0x20,0,255,255,255,255}));
  assert(!baseVolume({1,0x20,0,2,0,0,0,77}));
  assert(!baseVolume({0,77}));
@@ -118,7 +124,7 @@ int main() {
 #include <optional>
 #include <vector>
 using U8=uint8_t;using U16=uint16_t;using U32=uint32_t;
-constexpr unsigned UUID_BYTES=16;constexpr U8 LL_SCULPT_TYPE_MASK=7,LL_SCULPT_TYPE_MESH=5;
+'''+network_data_ids()+'''constexpr unsigned UUID_BYTES=16;constexpr U8 LL_SCULPT_TYPE_MASK=7,LL_SCULPT_TYPE_MESH=5;
 struct LLUUID {U8 mData[16]{};bool isNull()const {for(auto c:mData)if(c)return false;return true;}};
 constexpr int LL_PCODE_PATH_FLEXIBLE=128;
 struct LLFlexibleObjectData {};
@@ -133,6 +139,7 @@ int main(){
  assert(decode({}));
  std::vector<U8> mesh={1,0x30,0,17,0,0,0};mesh.resize(24);mesh[7]=42;mesh[23]=5;
  assert(decode(mesh));assert(p.id.mData[0]==42&&p.type==5);
+ auto meshParams=mesh;meshParams[1]=0x60;meshParams[7]=43;assert(decode(meshParams)&&p.id.mData[0]==43&&p.type==5);
  auto invalid=mesh;invalid.pop_back();assert(!decode(invalid));
  invalid=mesh;invalid[7]=0;assert(!decode(invalid));
  // R2 accepts sculpt maps as well as mesh identities, preserving flags.
