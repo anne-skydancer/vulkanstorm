@@ -208,6 +208,18 @@ if (LINUX)
     add_compile_options(-march=pentium4)
   endif (ADDRESS_SIZE EQUAL 32)
 
+  # <Vulkanstorm> AVX/AVX2 code generation, as /arch:AVX and /arch:AVX2 do on
+  # Windows. USE_AVX2_OPTIMIZATION alone only adds a define; without these
+  # flags the C++ was built for the x86-64 baseline (SSE2) while the
+  # vkstorm-ffi package is x86-64-v3.
+  if (ADDRESS_SIZE EQUAL 64)
+    if (USE_AVX_OPTIMIZATION)
+      add_compile_options(-mavx)
+    elseif (USE_AVX2_OPTIMIZATION)
+      add_compile_options(-march=x86-64-v3)
+    endif ()
+  endif ()
+
   # this stops us requiring a really recent glibc at runtime
   add_compile_options(-fno-stack-protector)
   # linking can be very memory-hungry, especially the final viewer link
