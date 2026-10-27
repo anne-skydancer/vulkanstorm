@@ -1,5 +1,5 @@
 {
-  "source_commit": "d60e949144910068adf1de600e9f450deab22438",
+  "source_commit": "faa8f96bf1cfee47a6e407d1ec4e5eb2d55b2d38",
   "tracked_source_paths_scanned": 28062,
   "candidate_files": 1973,
   "candidate_sites": 30129,
@@ -10,11 +10,11 @@
     "mapped-gate": 496,
     "mapped": 1656,
     "interface-only": 4518,
-    "mapped-boundary": 22769,
+    "mapped-boundary": 22801,
     "cpu-only": 13,
     "conditional": 4,
     "mapped-module": 225,
-    "test-only": 448
+    "test-only": 416
   },
   "source_coverage_accepted": true,
   "runtime_parity_qualified": false

@@ -1,5 +1,5 @@
 {
-  "source_commit": "d60e949144910068adf1de600e9f450deab22438",
+  "source_commit": "faa8f96bf1cfee47a6e407d1ec4e5eb2d55b2d38",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -35607,7 +35607,7 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 88,
       "end": 91,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -35616,34 +35616,34 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 142,
       "end": 142,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 145,
-      "end": 145,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 146,
+      "end": 146,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 151,
-      "end": 151,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 152,
+      "end": 152,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 182,
-      "end": 185,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 183,
+      "end": 186,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -35805,7 +35805,7 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 40,
       "end": 40,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -41574,7 +41574,7 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 7,
       "end": 7,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -41583,7 +41583,7 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 13,
       "end": 20,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -41592,25 +41592,25 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 143,
       "end": 143,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 170,
-      "end": 170,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 171,
+      "end": 171,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 183,
-      "end": 184,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 184,
+      "end": 185,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -52005,7 +52005,7 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 113,
       "end": 113,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -53164,27 +53164,27 @@
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 151,
-      "end": 151,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 152,
+      "end": 152,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 177,
-      "end": 177,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 178,
+      "end": 178,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 198,
-      "end": 201,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 199,
+      "end": 202,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
@@ -61588,54 +61588,54 @@
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 151,
-      "end": 160,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 152,
+      "end": 161,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 249,
-      "end": 249,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 250,
+      "end": 250,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 266,
-      "end": 266,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 267,
+      "end": 267,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 271,
-      "end": 271,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 272,
+      "end": 272,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 273,
-      "end": 273,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 274,
+      "end": 274,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 465,
-      "end": 468,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 466,
+      "end": 469,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
@@ -63433,36 +63433,36 @@
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 161,
-      "end": 161,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 162,
+      "end": 162,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 178,
-      "end": 178,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 179,
+      "end": 179,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 203,
-      "end": 203,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 204,
+      "end": 204,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 211,
-      "end": 211,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 212,
+      "end": 212,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
@@ -68626,18 +68626,18 @@
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 171,
-      "end": 171,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 172,
+      "end": 172,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual shared/native parcel, transaction, environment, estate, confirmation, avatar standing and camera-mode logic against deterministic permission, wire, lifecycle and retirement fixtures; check all shipped Buy/Sell XUI overlays. Preserve production readiness checks and strict actual-viewer evidence. Complete connected-UI acceptance remains open."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 204,
-      "end": 204,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 205,
+      "end": 205,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual shared/native parcel, transaction, environment, estate, confirmation, avatar standing and camera-mode logic against deterministic permission, wire, lifecycle and retirement fixtures; check all shipped Buy/Sell XUI overlays. Preserve production readiness checks and strict actual-viewer evidence. Complete connected-UI acceptance remains open."
@@ -69105,43 +69105,43 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 45,
       "end": 45,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual shared/native parcel, transaction, environment, estate, confirmation, avatar standing and camera-mode logic against deterministic permission, wire, lifecycle and retirement fixtures; check all shipped Buy/Sell XUI overlays. Preserve production readiness checks and strict actual-viewer evidence. Complete connected-UI acceptance remains open."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 169,
-      "end": 169,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 170,
+      "end": 170,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual shared/native parcel, transaction, environment, estate, confirmation, avatar standing and camera-mode logic against deterministic permission, wire, lifecycle and retirement fixtures; check all shipped Buy/Sell XUI overlays. Preserve production readiness checks and strict actual-viewer evidence. Complete connected-UI acceptance remains open."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 179,
-      "end": 180,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 180,
+      "end": 181,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual shared/native parcel, transaction, environment, estate, confirmation, avatar standing and camera-mode logic against deterministic permission, wire, lifecycle and retirement fixtures; check all shipped Buy/Sell XUI overlays. Preserve production readiness checks and strict actual-viewer evidence. Complete connected-UI acceptance remains open."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 199,
-      "end": 199,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 200,
+      "end": 200,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual shared/native parcel, transaction, environment, estate, confirmation, avatar standing and camera-mode logic against deterministic permission, wire, lifecycle and retirement fixtures; check all shipped Buy/Sell XUI overlays. Preserve production readiness checks and strict actual-viewer evidence. Complete connected-UI acceptance remains open."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 205,
-      "end": 205,
-      "sha256": "f0156418e54423d7db14f3f66a44b26e7b8d15a2efa69428c5eea6b6bda9fa34",
+      "start": 206,
+      "end": 206,
+      "sha256": "f9e5d9bd9c1ac4b19306c5b9ebec91c3c320ad8d98d6b7ef644109c7006de937",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual shared/native parcel, transaction, environment, estate, confirmation, avatar standing and camera-mode logic against deterministic permission, wire, lifecycle and retirement fixtures; check all shipped Buy/Sell XUI overlays. Preserve production readiness checks and strict actual-viewer evidence. Complete connected-UI acceptance remains open."
@@ -78489,15 +78489,6 @@
       "reason": "Connect real Region/Estate, Telehub and TopObjects models, terrain readiness, account/current-circuit/selection callback ownership and every shipped translated hierarchy. Transpose original CPU tracker/debug-beacon geometry, fog, labels, startup debug-mask policy and native depth/submission ownership, including exact terrain shader interfaces. No manufactured GL scene objects or unconditional family admission. Actual world mouse selection, all controller actions, beam/label pixels and complete UI/keyboard qualification remain open."
     },
     {
-      "path": "scripts/tests/native_debug_beacon_geometry_fixture.cpp",
-      "start": 1,
-      "end": 65,
-      "sha256": "c8f28885713b31fcb6b921de029a6b7b46c12567c8ca818db6f7b1e9245e022a",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Compile actual shared navigation against frozen original algorithms and getter costs, callback reentry/cancellation/account retirement, native height queries, shared sky/water construction and real alternate layouts, Region/Estate lifecycle and every shipped overlay, original beacon/tracker vertex/color streams and native publication refusal. Retain strict runtime missing-widget, image, device, timing and artifact acceptance. These source/CPU checks do not certify complete connected UI or keyboard parity."
-    },
-    {
       "path": "scripts/tests/native_estate_picker_fixture.cpp",
       "start": 1,
       "end": 32,
@@ -78967,36 +78958,36 @@
     },
     {
       "path": "scripts/tests/native_debug_beacon_geometry_fixture.cpp",
-      "start": 5,
-      "end": 5,
-      "sha256": "c8f28885713b31fcb6b921de029a6b7b46c12567c8ca818db6f7b1e9245e022a",
+      "start": 6,
+      "end": 6,
+      "sha256": "c7400e0f079111324699dd6d99701e8102e38adca6951036c466a93820bc0f3e",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile actual camera cleanup and native account/application retirement ordering, proving effect cached-control destruction precedes registry deletion and global destructor reentry is safe. Exercise real console HTTP/scalar-event view/account/circuit callbacks, exhaustive Region avatar-picker registration retirement, valid/malformed EstateExperience counts and packed UUID lengths, original sun/moon geometry and actual beacon labels/cache/refusal/color/depth ownership. Strict runtime, pixel and artifact admission remains unchanged; complete UI parity remains open."
     },
     {
       "path": "scripts/tests/native_debug_beacon_geometry_fixture.cpp",
-      "start": 7,
-      "end": 7,
-      "sha256": "c8f28885713b31fcb6b921de029a6b7b46c12567c8ca818db6f7b1e9245e022a",
+      "start": 8,
+      "end": 8,
+      "sha256": "c7400e0f079111324699dd6d99701e8102e38adca6951036c466a93820bc0f3e",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile actual camera cleanup and native account/application retirement ordering, proving effect cached-control destruction precedes registry deletion and global destructor reentry is safe. Exercise real console HTTP/scalar-event view/account/circuit callbacks, exhaustive Region avatar-picker registration retirement, valid/malformed EstateExperience counts and packed UUID lengths, original sun/moon geometry and actual beacon labels/cache/refusal/color/depth ownership. Strict runtime, pixel and artifact admission remains unchanged; complete UI parity remains open."
     },
     {
       "path": "scripts/tests/native_debug_beacon_geometry_fixture.cpp",
-      "start": 47,
-      "end": 58,
-      "sha256": "c8f28885713b31fcb6b921de029a6b7b46c12567c8ca818db6f7b1e9245e022a",
+      "start": 48,
+      "end": 59,
+      "sha256": "c7400e0f079111324699dd6d99701e8102e38adca6951036c466a93820bc0f3e",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile actual camera cleanup and native account/application retirement ordering, proving effect cached-control destruction precedes registry deletion and global destructor reentry is safe. Exercise real console HTTP/scalar-event view/account/circuit callbacks, exhaustive Region avatar-picker registration retirement, valid/malformed EstateExperience counts and packed UUID lengths, original sun/moon geometry and actual beacon labels/cache/refusal/color/depth ownership. Strict runtime, pixel and artifact admission remains unchanged; complete UI parity remains open."
     },
     {
       "path": "scripts/tests/native_debug_beacon_geometry_fixture.cpp",
-      "start": 60,
-      "end": 62,
-      "sha256": "c8f28885713b31fcb6b921de029a6b7b46c12567c8ca818db6f7b1e9245e022a",
+      "start": 61,
+      "end": 63,
+      "sha256": "c7400e0f079111324699dd6d99701e8102e38adca6951036c466a93820bc0f3e",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile actual camera cleanup and native account/application retirement ordering, proving effect cached-control destruction precedes registry deletion and global destructor reentry is safe. Exercise real console HTTP/scalar-event view/account/circuit callbacks, exhaustive Region avatar-picker registration retirement, valid/malformed EstateExperience counts and packed UUID lengths, original sun/moon geometry and actual beacon labels/cache/refusal/color/depth ownership. Strict runtime, pixel and artifact admission remains unchanged; complete UI parity remains open."
@@ -85863,7 +85854,7 @@
       "path": "scripts/tests/fixtures/native_pick/native_pick_fixture.cpp",
       "start": 10,
       "end": 12,
-      "sha256": "eded0c69cda1ade4776ddc2912eaf133ac7a144ba61ee72632fbbb286d54063a",
+      "sha256": "2845c518b3f350f77746e99b0aebc6bd1f5952bb88bf5f81c6bc1fa01b2b571f",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
@@ -85872,7 +85863,7 @@
       "path": "scripts/tests/fixtures/native_pick/native_pick_fixture.cpp",
       "start": 14,
       "end": 14,
-      "sha256": "eded0c69cda1ade4776ddc2912eaf133ac7a144ba61ee72632fbbb286d54063a",
+      "sha256": "2845c518b3f350f77746e99b0aebc6bd1f5952bb88bf5f81c6bc1fa01b2b571f",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
@@ -85881,7 +85872,7 @@
       "path": "scripts/tests/fixtures/native_pick/native_pick_fixture.cpp",
       "start": 19,
       "end": 19,
-      "sha256": "eded0c69cda1ade4776ddc2912eaf133ac7a144ba61ee72632fbbb286d54063a",
+      "sha256": "2845c518b3f350f77746e99b0aebc6bd1f5952bb88bf5f81c6bc1fa01b2b571f",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
@@ -85890,7 +85881,7 @@
       "path": "scripts/tests/fixtures/native_pick/native_pick_fixture.cpp",
       "start": 28,
       "end": 28,
-      "sha256": "eded0c69cda1ade4776ddc2912eaf133ac7a144ba61ee72632fbbb286d54063a",
+      "sha256": "2845c518b3f350f77746e99b0aebc6bd1f5952bb88bf5f81c6bc1fa01b2b571f",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
@@ -85899,7 +85890,7 @@
       "path": "scripts/tests/fixtures/native_pick/native_pick_fixture.cpp",
       "start": 35,
       "end": 35,
-      "sha256": "eded0c69cda1ade4776ddc2912eaf133ac7a144ba61ee72632fbbb286d54063a",
+      "sha256": "2845c518b3f350f77746e99b0aebc6bd1f5952bb88bf5f81c6bc1fa01b2b571f",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
@@ -85908,7 +85899,7 @@
       "path": "scripts/tests/fixtures/native_pick/native_pick_fixture.cpp",
       "start": 49,
       "end": 49,
-      "sha256": "eded0c69cda1ade4776ddc2912eaf133ac7a144ba61ee72632fbbb286d54063a",
+      "sha256": "2845c518b3f350f77746e99b0aebc6bd1f5952bb88bf5f81c6bc1fa01b2b571f",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
@@ -85917,7 +85908,7 @@
       "path": "scripts/tests/fixtures/native_pick/native_pick_fixture.cpp",
       "start": 51,
       "end": 51,
-      "sha256": "eded0c69cda1ade4776ddc2912eaf133ac7a144ba61ee72632fbbb286d54063a",
+      "sha256": "2845c518b3f350f77746e99b0aebc6bd1f5952bb88bf5f81c6bc1fa01b2b571f",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
@@ -85926,7 +85917,7 @@
       "path": "scripts/tests/fixtures/native_pick/native_pick_fixture.cpp",
       "start": 56,
       "end": 56,
-      "sha256": "eded0c69cda1ade4776ddc2912eaf133ac7a144ba61ee72632fbbb286d54063a",
+      "sha256": "2845c518b3f350f77746e99b0aebc6bd1f5952bb88bf5f81c6bc1fa01b2b571f",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
