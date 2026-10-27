@@ -25,7 +25,7 @@ class EnvironmentRendering(unittest.TestCase):
   self.execute(fixture)
  def test_real_sky_publication_never_crosses_geometry_domains_on_refusal(self):
   source=(ROOT/'indra/newview/vsworldscene.cpp').read_text()
-  a=source.index('        const auto activeSky=',source.index('    void surfaces('));b=source.index('        if (sky)',a)
+  a=source.index('        const auto activeSky=',source.index('    void surfaces('));b=source.index('        if (sky && gPipeline.hasRenderType(',a)
   fixture=(HERE/'native_sky_publication_fixture.cpp').read_text().replace('BUILD',source[a:b])
   kernel=(ROOT/'indra/newview/vsskygeometry.h').read_text()
   kernel='\n'.join(line for line in kernel.splitlines()if not line.startswith('#include')and not line.startswith('#pragma'))

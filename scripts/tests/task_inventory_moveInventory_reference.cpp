@@ -3,6 +3,11 @@ void LLViewerObject::moveInventory(const LLUUID& folder_id,
                                    const LLUUID& item_id)
 {
     LL_DEBUGS() << "LLViewerObject::moveInventory " << item_id << LL_ENDL;
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item_id << " not moved" << LL_ENDL;
+        return;
+    }
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_MoveTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);

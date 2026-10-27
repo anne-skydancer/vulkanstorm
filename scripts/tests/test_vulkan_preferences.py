@@ -95,28 +95,52 @@ int main(){Graphics native;native.probe();
         source = (ROOT / 'indra/newview/llfloaterpreference.cpp').read_text()
         refresh = source[source.index('void LLFloaterPreference::refreshEnabledState()'):]
         refresh = refresh[:refresh.index('#endif') + len('#endif')] + '\n}\n'
+        graphics = (ROOT / 'indra/newview/vsgraphicssettings.h').read_text()
         self.compile_and_run(r'''
 #include <cassert>
+#include <functional>
 #include <map>
+#include <set>
 #include <string>
+#include <type_traits>
+#include <vector>
 #define VS_NATIVE_VULKAN 1
-struct Control {bool enabled=true;int saved=7;void setEnabled(bool v){enabled=v;}};
-struct LLButton:Control{};
-struct VSNativeSession{static bool active(){return true;}};
+''' + graphics.replace('#pragma once', '') + r'''
+using F32=float;using F64=double;constexpr F32 MIN_VRAM_BUDGET=768.f;
+struct LLSD {F64 real=0;LLSD operator[](const char*)const{return {};}F64 asReal()const{return real;}};
+struct VSVulkanContext {VSGraphicsCapabilities graphicsCapabilities()const{return {};}LLSD rendererInfo()const{return {};}};
+// No world renderer owner: no native context and therefore no ready capabilities.
+struct Window {bool isNativeVulkan()const{return true;}VSVulkanContext* nativeContext()const{return nullptr;}}window;Window* gViewerWindow=&window;
+struct Mask {std::set<std::string> features{"RenderDeferredSSAO"};const std::set<std::string>& getFeatures()const{return features;}};
+struct LLFeatureManager {Mask all;static LLFeatureManager& instance(){static LLFeatureManager m;return m;}Mask* findMask(const char*){return &all;}};
+enum {RLV_BHVR_SENDIM};struct RlvActions {static bool isRlvEnabled(){return false;}static bool hasBehaviour(int){return false;}};
+struct Settings {unsigned getU32(const char*){return 2048;}}gSavedSettings;
+struct LLView {
+ bool enabled=true;int saved=7;LLView* parent=nullptr;std::vector<LLView*> children;
+ virtual ~LLView()=default;void setEnabled(bool v){enabled=v;}LLView* getParent(){return parent;}virtual std::vector<LLView*>* getChildList(){return &children;}
+};
+struct Setting {std::string name;const std::string& getName()const{return name;}};
+struct LLUICtrl:LLView {Setting setting;Setting* getControlVariable(){return setting.name.empty()?nullptr:&setting;}
+ void setMinValue(F32){}void setMaxValue(F32){}void setValue(F32,bool){++saved;}};
+struct LLButton:LLUICtrl{};struct LLCheckBoxCtrl:LLUICtrl{};struct LLSliderCtrl:LLUICtrl{};struct LLComboBox:LLUICtrl{};
 enum {STATE_STARTED=1};struct LLStartUp{static int getStartupState(){return 0;}};
 struct LLLoginInstance{static LLLoginInstance* getInstance(){static LLLoginInstance i;return &i;}bool authSuccess(){return false;}};
-struct LLFloaterPreference {
- std::map<std::string,LLButton> controls;
- Control* getChildView(const char* n){return &controls[n];}
- template<class T>T* getChild(const char* n){return &controls[n];}
+struct LLFloaterPreference:LLView {
+ std::map<std::string,LLButton> controls;std::map<std::string,LLSliderCtrl> sliders;
+ std::vector<LLView*>* getChildList() override{children.clear();for(auto& [name,control]:controls)children.push_back(&control);return &children;}
+ LLView* getChildView(const char* n){return &controls[n];}
+ template<class T>T* getChild(const char* n){if constexpr(std::is_same_v<T,LLSliderCtrl>)return &sliders[n];else return &controls[n];}
  void refreshEnabledState();
 };
 ''' + refresh + r'''
 int main(){LLFloaterPreference prefs;
  for(const char* n:{"DrawDistance","fsaa","fsaa quality","TransparentWater","camera_fov","QualityPerformanceSelection","RenderPostProcess","render_backend"})prefs.controls[n];
+ // A control bound to a legacy feature the native renderer lacks is disabled, not rewritten.
+ prefs.controls["UseSSAO"].setting.name="RenderDeferredSSAO";
  for(int i=0;i<100;++i)prefs.refreshEnabledState();
  for(const char* n:{"DrawDistance","fsaa","fsaa quality","TransparentWater","camera_fov","QualityPerformanceSelection","RenderPostProcess","render_backend"}){
  assert(prefs.controls[n].enabled);assert(prefs.controls[n].saved==7);}
+ assert(!prefs.controls["UseSSAO"].enabled&&prefs.controls["UseSSAO"].saved==7);
  assert(!prefs.controls["Defaults"].enabled&&!prefs.controls["Wireframe"].enabled);
 }
 ''')

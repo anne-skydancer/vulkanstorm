@@ -20,6 +20,7 @@ struct LLRender2D
  static bool isNativeUI(){return native;}
  static const LLColor4& nativeColor(){return color;}
  static void nativeTriangle(const Triangle& t){triangles.push_back(t);}
+ static void nativeLine(const Vertex&,const Vertex&);
 };
 struct LLTexUnit{enum{TT_TEXTURE};void unbind(int){assert(!LLRender2D::native);}};
 struct LLRender
@@ -40,8 +41,23 @@ struct LLRender
  void end(){}
 }gGL;
 float native_line_width=1.f;
-#include "vsuiprimitive.h"
+// Declarations named by the header's textured segmented_fragment template,
+// which these untextured primitives never instantiate.
+#define LL_PROFILE_ZONE_SCOPED_CATEGORY_UI
+enum{VX,VY};enum{ROUNDED_RECT_LEFT=1,ROUNDED_RECT_TOP=2,ROUNDED_RECT_RIGHT=4,ROUNDED_RECT_BOTTOM=8};
+template<class T>T llmin(T a,T b,T c){return std::min({a,b,c});}
+template<class T>T llmax(T a,T b){return std::max(a,b);}
+template<class T>T llabs(T a){return a<0?-a:a;}
+template<class T>T llclamp(T a,T low,T high){return std::clamp(a,low,high);}
+struct LLRect{S32 mLeft=0,mTop=0,mRight=0,mBottom=0;};
+struct LLVector2{F32 mV[2]{};static const LLVector2 zero;LLVector2()=default;LLVector2(F32 x,F32 y):mV{x,y}{}LLVector2& operator*=(F32 s){mV[0]*=s;mV[1]*=s;return *this;}};
+const LLVector2 LLVector2::zero{};
+LLVector2 operator+(LLVector2 a,LLVector2 b){return {a.mV[0]+b.mV[0],a.mV[1]+b.mV[1]};}
+LLVector2 operator-(LLVector2 a,LLVector2 b){return {a.mV[0]-b.mV[0],a.mV[1]-b.mV[1]};}
+LLVector2 operator*(F32 s,LLVector2 v){return {s*v.mV[0],s*v.mV[1]};}
+// Production vsuiprimitive.h (its viewer includes removed) and LLRender2D::nativeLine.
 PRODUCTION_ADAPTER
+using VSUIPrimitive::NativePrimitive;
 PRODUCTION_WRAPPERS
 #include "ui_primitives_reference.cpp"
 
