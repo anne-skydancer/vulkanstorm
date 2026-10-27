@@ -207,6 +207,14 @@ if (LINUX)
     elseif (USE_AVX2_OPTIMIZATION)
       add_compile_options(-march=x86-64-v3)
     endif ()
+    # x86-64-v3 includes FMA, and GCC fuses a*b+c into one rounding by
+    # default (-ffp-contract=fast). That changes floating-point results
+    # bit for bit, unlike MSVC /arch:AVX2 under /fp:precise and unlike the
+    # Rust crates, and breaks the recorded parity corpora (llvolume).
+    # Keep separate rounding of multiply and add, as without AVX2.
+    if (USE_AVX_OPTIMIZATION OR USE_AVX2_OPTIMIZATION)
+      add_compile_options(-ffp-contract=off)
+    endif ()
   endif ()
 
   # this stops us requiring a really recent glibc at runtime
