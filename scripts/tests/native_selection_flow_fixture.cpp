@@ -68,7 +68,7 @@ int main()
  {
   Peer gold;auto bit=[&]{return (random()&1)!=0;};
   gold.rlv=bit();gold.edit=bit();gold.build=bit();gold.far=bit();gold.attach=bit();gold.owned=bit();gold.visible=bit();gold.allow=bit();gold.selectedValue=bit();gold.allFaces=bit();gold.faceExists=bit();gold.faceSelected=bit();gold.media=bit();gold.avatarFocus=bit();gold.selfAttachmentValue=bit();gold.selfValue=bit();gold.faces=random()%3;gold.objectDistance=random()%4;gold.surfaceDistance=random()%4;
-  Pick pick{bit(),bit(),random()%8};bool ignore=bit(),temporary=bit(),root=bit();if(root)pick.object=true;
+  Pick pick{bit(),bit(),static_cast<MASK>(random()%8)};bool ignore=bit(),temporary=bit(),root=bit();if(root)pick.object=true;
   auto native=gold;
   auto expected=reference(gold,pick,ignore,temporary,root);
   auto actual=vs_handle_object_selection(native,pick,ignore,temporary,root);
