@@ -27,7 +27,7 @@ worktree at `51d1f729a6`. CI facts come from `gh run list` / `gh run view` /
 | Workflow | `.github/workflows/software_vulkan.yml` | 1,021 lines; 2 jobs; 233 `run:` checks in `source-evidence`; 3-entry matrix with 44 steps per graphics job |
 | Standalone Diligent test | `tests/software_vulkan/` | `CMakeLists.txt` 48, `diligent_render_test.cpp` 1,126, `viewer_geometry_test.cpp` 235, `geometry_dependencies.cpp` 21 lines |
 | Runners/harnesses | `scripts/run_software_vulkan_tests.py` (255), `scripts/vulkan_viewer_process.py` (307), `scripts/run_vulkan_viewer_diagnostic.py` (362), `scripts/run_vulkan_session_replay.py` (1,821), `scripts/run_vulkan_texture_cache_tests.py` (439), `scripts/run_vulkan_texture_cache_instances.py` (156), `scripts/run_vulkan_parity_baseline.py` (346), `scripts/check_vulkan_parity_r0.py` (130), `scripts/package_vulkan_evidence.py` (513), `scripts/run_vulkan_geometry_tests.py` (64) | 4,393 lines |
-| In-viewer replay drivers | `indra/newview/vs*replay*.cpp` (R1, R2, R3 cache/glTF/media/pressure/terrain, HUD icon, tooltip, environment, IM, terrain, native) | `vsr2replay.cpp` 1,923 lines + `vsr2readback.cpp` 184; built only when `VS_VULKAN_DIAGNOSTICS=ON` (`indra/newview/CMakeLists.txt:38`, `:2390-2399`) |
+| In-viewer replay drivers | `indra/newview/vs*replay*.cpp` (R1, R2, R3 cache/glTF/media/pressure/terrain, HUD icon, tooltip, environment, IM, terrain, Vulkan) | `vsr2replay.cpp` 1,923 lines + `vsr2readback.cpp` 184; built only when `VS_VULKAN_DIAGNOSTICS=ON` (`indra/newview/CMakeLists.txt:38`, `:2390-2399`) |
 | Insertion catalog | `doc/vulkan/diligent-insertion-*.{md,json,csv}`, `diligent-platform-review.json`, `check_diligent_insertions.py` (361), `carry_reviewed_ranges.py` (114) | records JSON 90,165 lines; sites CSV 30,130 lines; platform review 80,076 lines |
 | Milestone-1 boundaries | `doc/vulkan/milestone1-boundaries.json` (5,505 lines), `check_milestone1_boundaries.py` (158), `milestone1-source-acceptance.md` (269) | 124 hashed sources, 12 gates, 5 registries |
 | Parity ledger | `doc/vulkan/parity/acceptance-ledger.json` (97,893 lines), `scripts/vulkan_parity_inventory.py` (318), `doc/vulkan/parity/evidence/` (6 files, ~4.4 MB) | 3,131 entries |
@@ -98,16 +98,16 @@ Graphics steps in order, with what each one shows when it passes:
 | 10 | Build and install pinned Autobuild GHI packages (`:586-594`) | `scripts/build_vulkan_dependencies.py` | The pinned DiligentCore/Vulkan GHI packages build from source |
 | 11 | Build pinned test ICD and validation layers (`:595-601`) | `scripts/build_software_vulkan.py --driver <driver>` | SwiftShader or Mesa Lavapipe, plus validation layers, build from pinned sources |
 | 12 | **Build standalone staged Diligent tests** (`:602-615`) | CMake on `tests/software_vulkan`, build, `ctest` (only `device_selection`) | Three production renderer TUs (`vsworldrenderer.cpp`, `vsuipixeloracle.cpp`, `vsuirenderer.cpp`) compile against the GHI alone; the device-selection policy test passes |
-| 13 | Native Vulkan tests on software device (`:616-626`) | `run_software_vulkan_tests.py` modes `offscreen world present invalid invalid-sync bad-pixels bad-orientation` (Xvfb on Linux) | Device creation, pixel oracles, world/UI renderer contracts, native swapchain lifecycle, and that the validation and pixel oracles catch injected faults |
+| 13 | Vulkan tests on software device (`:616-626`) | `run_software_vulkan_tests.py` modes `offscreen world present invalid invalid-sync bad-pixels bad-orientation` (Xvfb on Linux) | Device creation, pixel oracles, world/UI renderer contracts, Vulkan swapchain lifecycle, and that the validation and pixel oracles catch injected faults |
 | 14 | Software tests without a display (`:627-638`) | Same runner with `--headless` (no `present`) | The same, minus presentation; `presentation_qualified: false` is recorded |
 | 15 | Retain qualified dependencies (`:639-649`) | `actions/cache/save` | Nothing |
 | 16-17 | Install GHI into viewer; configure and stage viewer (`:650-684`) | Autobuild `ReleaseFS_open`, RelWithDebInfo, `USE_DILIGENTCORE=ON`, `VS_VULKAN_DIAGNOSTICS=ON`, `LL_TESTS=OFF`, LTO and AVX2 on; provenance begin/finish; `check_vulkan_ci_staging.py` | The full viewer with diagnostics compiles and stages on that OS. The executable hash is bound to the committed source |
-| 18 | Qualify shared CPU camera projection (`:685-689`) | `scripts/tests/test_native_camera_projection.py` against the build dir | CPU camera projection matches the native projection (compile-level, using the build) |
+| 18 | Qualify shared CPU camera projection (`:685-689`) | `scripts/tests/test_native_camera_projection.py` against the build dir | CPU camera projection matches the Vulkan projection (compile-level, using the build) |
 | 19 | Qualify viewer CPU geometry producers (`:690-692`) | `run_vulkan_geometry_tests.py` runs `viewer_geometry_test`, built from `tests/software_vulkan/viewer_geometry_test.cpp` by `indra/newview/CMakeLists.txt:3366-3373` | Vegetation, flexible-path and terrain CPU producers give the expected results without a device |
 | 20 | Provision headless audio (`:693-715`) | PulseAudio null sink (Linux) | WebRTC can start; environment only |
 | 21 | Build separate pinned software OpenGL reference (`:716-720`) | `build_software_opengl.py` builds Mesa llvmpipe (Lavapipe matrix entry only) | The independent GL reference exists |
 | 22 | Record independent production viewer baselines (`:721-734`) | `run_vulkan_parity_baseline.py` startup and `--scene world`, then `check_vulkan_parity_r0.py` (Lavapipe only) | R0: repeatable GL-vs-Vulkan captures of the login screen and a two-primitive static scene; known tint regions are present. This is not a parity comparison |
-| 23 | Native Vulkan presentation through the staged viewer (`:735-749`) | `run_vulkan_viewer_diagnostic.py`: `positive`, 8 injected failures, 6 UI cases, 4 startup cases, plus per-skin cases | The real viewer executable creates a window, device and swapchain, survives resize/zero-extent/minimize/restore, tears down cleanly, renders its UI and startup screens, and reports the expected failure for each injected fault |
+| 23 | Vulkan presentation through the staged viewer (`:735-749`) | `run_vulkan_viewer_diagnostic.py`: `positive`, 8 injected failures, 6 UI cases, 4 startup cases, plus per-skin cases | The real viewer executable creates a window, device and swapchain, survives resize/zero-extent/minimize/restore, tears down cleanly, renders its UI and startup screens, and reports the expected failure for each injected fault |
 | 24 | Connected UI and chat (`:750-763`) | `run_vulkan_session_replay.py --all-skins` against the loopback `SimulatorHTTP` | The viewer runs login → connected UI → chat → logout against a local fake grid in every skin |
 | 25 | Production R1 ownership and lifecycle replay (`:764-782`) | session replay `--headless --r1-contracts` | R1 owner/generation/retirement contracts hold across login, region crossing, teleport, relogin and shutdown in the fake session |
 | 26 | Production asynchronous simulator console replay (`:783-801`) | `--console-async` | The async console HTTP path crosses the real controller |
@@ -194,7 +194,7 @@ TUs. Contents:
 - `preflight()` (`:102-200`): raw Vulkan enumeration. The `invalid` and
   `invalid-sync` modes deliberately trigger `VUID-VkBufferCreateInfo-size-00912`
   and `SYNC-HAZARD-WRITE-AFTER-WRITE`, to show that the validation layers are active.
-- `presentation()` (`:297-356`): a native Win32 HWND or SDL2/X11 window with a
+- `presentation()` (`:297-356`): a Vulkan Win32 HWND or SDL2/X11 window with a
   swapchain at 128×128. It resizes to 160×96, takes 3 zero-extent skips and 2
   minimized skips, restores, and requires exactly 9 presents (`:351`).
 - `draw()`/`compare()` (`:423-476`): renders two 2×2 images and compares each
@@ -237,7 +237,7 @@ GHI tests cannot close the viewer integration gap".
   a set of `ui_*_verified` booleans. `assess_startup()` (`:36-59`) checks 17
   presents, 24 readbacks and about a dozen `*_verified` flags. Negative cases
   (`FAILURES`, `:22-23`; `UI_CASES`, `:25`) must fail with exact messages,
-  including the `gl-trap` and `ui-gl-trap` cases ("GL presentation in native
+  including the `gl-trap` and `ui-gl-trap` cases ("GL presentation in Vulkan
   Vulkan window").
 - Inference: most `*_verified` flags are booleans that the viewer's diagnostic code
   (`vsvkdiag.cpp`, which exists only under `VS_VULKAN_DIAGNOSTICS`) sets after
@@ -277,7 +277,7 @@ R2 replay has two sides:
   or resident bytes. The fixture data comes from `scripts/vulkan_r2_fixture.py`
   and `vulkan_r2_geometry_fixture.py`.
 
-What R2 shows when it passes: the native avatar, appearance and geometry owners
+What R2 shows when it passes: the Vulkan avatar, appearance and geometry owners
 execute a scripted lifecycle against synthetic assets and leave no residue. Bake
 composites are read back from the GPU. What it does not show: that avatars,
 attachments or glTF look the same as in the OpenGL viewer. There is no
@@ -530,7 +530,7 @@ no implementation in CI.
 5. When the graphics job last ran (16-18 Oct), the following held on SwiftShader and Lavapipe:
    the production `VSWorldRenderer`/`VSUIRenderer` gave exact pixels on synthetic
    8×8 scenes under Vulkan validation; the staged viewer created, resized, minimized
-   and destroyed a native swapchain; it ran a loopback login, UI, chat and logout in
+   and destroyed a Vulkan swapchain; it ran a loopback login, UI, chat and logout in
    every skin; and R1/R2 lifecycle scripts completed without leaked owners.
 6. The validation and pixel oracles can fail: injected VUID, sync hazard,
    bad-pixel, orientation and GL-trap cases are required to fail.

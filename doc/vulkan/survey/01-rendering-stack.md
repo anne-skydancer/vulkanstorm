@@ -1,22 +1,22 @@
-# 01 — Native rendering stack
+# 01 — Vulkan rendering stack
 
 Surveyed revision: `vkstorm-vulkan` at `51d1f729a6` (worktree branch
 `codex/vulkan-survey`), compared with `origin/vkstorm-release` (`6e12272e9a`).
 Nothing was built or run for this chapter. Every status below comes from reading
 the source and the CI facts supplied with the survey brief.
 
-**Summary.** The native renderer exists and is wired in. With
+**Summary.** The Vulkan renderer exists and is wired in. With
 `-DUSE_DILIGENTCORE=ON`, the viewer compiles a second frame loop
 (`LLAppViewer::frameNativeVulkanLogin`). That loop creates a DiligentCore Vulkan
 device and swapchain on the viewer's own window, draws the shared LLUI widget tree
-through a native 2D packet renderer, draws a forward-shaded world (objects,
+through a Vulkan 2D packet renderer, draws a forward-shaded world (objects,
 avatars, terrain, sky, flat water, HUD) into the same backbuffer, and presents.
 **Headline status: the device, swapchain, UI, frame flow and resource accounting
 are Implemented or close to it. The world renderer is Partial. It is a
 single-pass forward renderer with simple sun-plus-ambient lighting, no shadows,
 no local lights, no reflections or probes, no real water, no post-processing and
 no anti-aliasing. Its emissive "glow" target is drawn into but never
-composited.** No shipped or CI Release build enables the native renderer: the
+composited.** No shipped or CI Release build enables the Vulkan renderer: the
 option defaults OFF and only the `software_vulkan.yml` qualification workflow
 turns it on. With the option OFF, `RenderBackend=Vulkan` stops startup instead of
 falling back to OpenGL. The standalone software-Vulkan test build is currently
@@ -29,8 +29,8 @@ broken because two renderer sources include viewer headers (see
 |---|---|---|
 | Commits ahead of release | 659 | `git rev-list --count origin/vkstorm-release..HEAD` |
 | Total diff vs release | 2268 files, +558,942 / −24,699 | `git diff --shortstat origin/vkstorm-release...HEAD` (includes `doc/vulkan` evidence catalogs) |
-| Native `indra/newview/vs*` files | 280 (100 `.cpp`, 180 `.h`), 63,353 lines | `ls indra/newview/vs*.cpp indra/newview/vs*.h \| wc -l`; `wc -l indra/newview/vs*` |
-| Native `indra/llrender/vs*.h` | 6 files, 893 lines (shared reference geometry, incl. `vsuiprimitive.h` 543 lines) | `wc -l indra/llrender/vs*` |
+| Vulkan `indra/newview/vs*` files | 280 (100 `.cpp`, 180 `.h`), 63,353 lines | `ls indra/newview/vs*.cpp indra/newview/vs*.h \| wc -l`; `wc -l indra/newview/vs*` |
+| Vulkan `indra/llrender/vs*.h` | 6 files, 893 lines (shared reference geometry, incl. `vsuiprimitive.h` 543 lines) | `wc -l indra/llrender/vs*` |
 | `VS_NATIVE_VULKAN` guard lines | 1,506 in 260 files; 1,300 of them in 234 non-`vs*` shared files, all in `indra/newview` | `git grep -h VS_NATIVE_VULKAN -- indra \| wc -l`; `git grep -c ... \| grep -v '/vs[a-z0-9]*\.\(cpp\|h\):'` |
 | `VS_VULKAN_DIAGNOSTICS` guard lines | 76 | `git grep -h VS_VULKAN_DIAGNOSTICS -- indra \| wc -l` |
 | `llrender` + `llwindow` delta | 36 files, +1,910 / −816 | `git diff --stat origin/vkstorm-release...HEAD -- indra/llrender indra/llwindow` |
@@ -38,7 +38,7 @@ broken because two renderer sources include viewer headers (see
 This chapter covers the **rendering-stack subset**: 47 files totalling 10,573
 lines. They are the device/swapchain owner, the world and UI renderers, UI
 resources, fonts, the image provider, snapshot/preview/scene-monitor, budgets,
-upload preparation, shader embedding, the native window glue, and the diagnostics
+upload preparation, shader embedding, the Vulkan window glue, and the diagnostics
 harness. Command:
 
 ```
@@ -64,15 +64,15 @@ only as packet sources.
 
 | Option | Default | Effect | Evidence |
 |---|---|---|---|
-| `USE_DILIGENTCORE` | OFF | Verifies the locked packages and creates the imported targets `ll::diligentcore` and `ll::vulkan`. In `newview`, it adds the native sources, links Diligent, Vulkan and FreeType, and defines `VS_NATIVE_VULKAN=1`. On Linux it also links `X11-xcb`. | `indra/cmake/DiligentCore.cmake:4`, `:14-31`, `:33-65`; `indra/newview/CMakeLists.txt:2359-2389`, `:2763-2771` |
+| `USE_DILIGENTCORE` | OFF | Verifies the locked packages and creates the imported targets `ll::diligentcore` and `ll::vulkan`. In `newview`, it adds the Vulkan sources, links Diligent, Vulkan and FreeType, and defines `VS_NATIVE_VULKAN=1`. On Linux it also links `X11-xcb`. | `indra/cmake/DiligentCore.cmake:4`, `:14-31`, `:33-65`; `indra/newview/CMakeLists.txt:2359-2389`, `:2763-2771` |
 | `VS_VULKAN_DIAGNOSTICS` | OFF | Requires `USE_DILIGENTCORE` and a `RelWithDebInfo` build. Adds `vsvkdiag.cpp`, the R1/R2/R3 replay drivers, the parity baseline, the UI fixture and the pixel oracle, and defines `VS_VULKAN_DIAGNOSTICS=1`. | `indra/newview/CMakeLists.txt:38-44`, `:2390-2406`, `:2759-2761` |
-| `USE_MESAZINK` | OFF | Separate Mesa Zink GL-over-Vulkan runtime for the **OpenGL** pipeline (`RenderBackend=Zink`). It has no relation to the native renderer. | `indra/cmake/MesaZink.cmake:1-30` |
+| `USE_MESAZINK` | OFF | Separate Mesa Zink GL-over-Vulkan runtime for the **OpenGL** pipeline (`RenderBackend=Zink`). It has no relation to the Vulkan renderer. | `indra/cmake/MesaZink.cmake:1-30` |
 
 - `DiligentCore.cmake:1` describes itself as "dependency preparation. This does
-  not enable a native renderer". That is no longer accurate: in `newview` the
+  not enable a Vulkan renderer". That is no longer accurate: in `newview` the
   same option now defines `VS_NATIVE_VULKAN` (`indra/newview/CMakeLists.txt:2766-2767`).
 - `vsrenderbackend.h` is compiled in every build (`CMakeLists.txt:2357`). All
-  other native rendering sources compile only with `USE_DILIGENTCORE`.
+  other Vulkan rendering sources compile only with `USE_DILIGENTCORE`.
 - Runtime staging copies `GraphicsEngineVk_64r.dll` and `vulkan-1.dll` (Windows)
   or `libGraphicsEngineVk.so` and `libvulkan.so*` (Linux) from a private
   `vulkan-ghi` directory. That keeps them apart from CEF's own Vulkan loader
@@ -82,7 +82,7 @@ only as packet sources.
   `.github/workflows/software_vulkan.yml:673`, which also sets
   `VS_VULKAN_DIAGNOSTICS=ON` and `PACKAGE=OFF`. A grep of `build_viewer.yml` and
   `autobuild.xml` finds no `USE_DILIGENTCORE`. **Inference:** every
-  installer/CI Release artifact on this line is built without the native
+  installer/CI Release artifact on this line is built without the Vulkan
   renderer.
 
 ### Third-party packages (`3p/`)
@@ -115,11 +115,11 @@ only as packet sources.
 
 ### Vulkan loader, SDK and Mesa/Zink
 
-| Item | Relationship to the native renderer |
+| Item | Relationship to the Vulkan renderer |
 |---|---|
 | Vulkan loader | A private build of Khronos Vulkan-Loader, staged under `vulkan-ghi`. The device uses normal ICD discovery: "ICD selection belongs to the process/test environment" (`vsvulkancontext.h:19-21`). |
 | LunarG SDK / validation layers | Not shipped. `RenderDebugGLSession` turns on `VK_LAYER_KHRONOS_validation` only if the user has installed it (`vsvulkancontext.cpp:229-236`, `vsviewerwindow.cpp:157-158`). CI builds its own pinned validation layers (`software_vulkan.yml:595`). |
-| Mesa Zink | A GL provider for the OpenGL pipeline, selected with `RenderBackend=Zink` (`llappviewerwin32.cpp:1103-1125`, `MesaZink.cmake:3-7`). `doc/vulkan/README.md:35-37` says the same: "not a native Vulkan viewer backend or a Vulkan fallback". |
+| Mesa Zink | A GL provider for the OpenGL pipeline, selected with `RenderBackend=Zink` (`llappviewerwin32.cpp:1103-1125`, `MesaZink.cmake:3-7`). `doc/vulkan/README.md:35-37` says the same: "not a Vulkan viewer backend or a Vulkan fallback". |
 | Mesa Lavapipe / SwiftShader | Software ICDs used only by CI (`software_vulkan.yml:512-527`). |
 
 ## Components
@@ -137,7 +137,7 @@ always means reachable only in a `USE_DILIGENTCORE=ON` build.
 | Build integration and packaging | Implemented (local packages only) | `DiligentCore.cmake`, `newview/CMakeLists.txt:2359-2771` |
 | Backend selection at startup | Implemented, no fallback by design | `vsrenderbackend.h:7-18`, `llappviewer.cpp:1040-1046`, `:1070-1076`, `:4174-4197` |
 | Preferences renderer selector | Implemented | `llfloaterpreference.cpp:4126-4205`, `panel_preferences_graphics1.xml:967-988` |
-| Native window creation | Partial (windowed only; Linux X11 only) | `llwindow.cpp:445-463`, `llwindowsdl2.cpp:500`, `vsvulkancontext.cpp:283-293` |
+| Vulkan window creation | Partial (windowed only; Linux X11 only) | `llwindow.cpp:445-463`, `llwindowsdl2.cpp:500`, `vsvulkancontext.cpp:283-293` |
 | Adapter/device selection | Partial (automatic only, no user override) | `vsvulkancontext.cpp:217-247` |
 | Renderer info (About/crash) | Implemented | `vsvulkancontext.cpp:249-277` |
 | Swapchain, resize, minimize, vsync, present | Implemented | `vsvulkancontext.cpp:295-304`, `:505-533`, `:700-711` |
@@ -184,34 +184,34 @@ always means reachable only in a `USE_DILIGENTCORE=ON` build.
   (`skins/default/xui/en/strings.xml:9`). The release baseline differs: it logs a
   warning and falls back to OpenGL for `Vulkan`
   (`git show origin/vkstorm-release:indra/newview/llappviewer.cpp`, line 3736-3740).
-- **Native branch.** In a `VS_NATIVE_VULKAN` build with
+- **Vulkan branch.** In a `VS_NATIVE_VULKAN` build with
   `RenderBackend == "Vulkan"`, `init()` sets `mNativeVulkanLogin` and returns
   `initNativeVulkanLogin()` (`llappviewer.cpp:1070-1076`). It skips the whole
   ordinary GL initialization that follows. `initWindow()` refuses to create a GL
-  window when Vulkan is requested in a build without native Vulkan
+  window when Vulkan is requested in a build without Vulkan
   (`:4174-4180`).
 - **Preferences.** `onRenderBackendCommit` refuses an unavailable backend with
   the `VulkanRendererUnavailable` notification. If the choice is accepted, it
   asks for a restart and writes `RenderBackend` only on "Shutdown now"
   (`llfloaterpreference.cpp:4138-4205`).
 - **Fallback.** None, deliberately: if device, adapter or swapchain creation
-  fails, the native path throws (see below) and never tries GL. This matches the
+  fails, the Vulkan path throws (see below) and never tries GL. This matches the
   mandate in `doc/vulkan/qualification-roadmap.md:23-30`.
 - **Inference (risk):** a user whose persisted `RenderBackend` is `Vulkan` and
-  who then runs a build without native Vulkan cannot reach Preferences to change
+  who then runs a build without Vulkan cannot reach Preferences to change
   it. They have to edit `settings.xml` or pass a command-line override.
 
-### Native window — Partial
+### Vulkan window — Partial
 
-- `LLViewerWindow` gains a native constructor branch (`llviewerwindow.cpp:2248-2253`)
+- `LLViewerWindow` gains a Vulkan constructor branch (`llviewerwindow.cpp:2248-2253`)
   that calls `initNativeWindow` (`vsviewerwindow.cpp:137-190`). That function
   requests `LLWindowManager::createWindow(..., GraphicsAPI::Vulkan, headless)`
   (`vsviewerwindow.cpp:141-144`).
 - `LLWindowManager::createWindow` builds an `LLWindowWin32` or `LLWindowSDL`
   without a GL context (`indra/llwindow/llwindow.cpp:445-463`). It **refuses
-  fullscreen**: "Native Vulkan fullscreen admission is not implemented" (`:447-451`).
+  fullscreen**: "Vulkan fullscreen admission is not implemented" (`:447-451`).
 - Linux requires SDL2 on X11 (`llwindowsdl2.cpp:500`,
-  `vsvulkancontext.cpp:286-288`). **Wayland is not supported natively**, even
+  `vsvulkancontext.cpp:286-288`). **Wayland is not supported under Vulkan**, even
   though the Diligent patch allows Wayland surfaces.
 - In both window classes, GL entry points throw `std::logic_error` when there is
   no GL context, e.g. `llwindowwin32.cpp:1242`, `:1958`, `:2015-2028`, `:3971`;
@@ -382,7 +382,7 @@ CPU and re-uploads vertices.
   at LOD 0 (`vsuirenderer.cpp:104-191`). The shaders are four tiny GLSL
   programs: `vs`, `depth_vs`, `fs` and `mask_fs` (`:112-142`).
 - **Integration with shared LLUI.** The shared `LLRender2D` immediate-mode
-  helpers get native sinks: `setNativeUI` and `setNativeTriangles`, active while
+  helpers get Vulkan sinks: `setNativeUI` and `setNativeTriangles`, active while
   a `VSUIDrawBridge` is in scope (`indra/llrender/llrender2dutils.cpp:57-97`,
   `vsuidrawbridge.cpp:9-21`).
   - `gl_rect_2d` and similar helpers branch on `LLRender2D::isNativeUI()`
@@ -446,7 +446,7 @@ CPU and re-uploads vertices.
 - **Snapshots.** `VSVulkanContext::snapshot` renders into a dedicated RGBA8
   target, can omit UI or HUD, and reads back colour or depth. Depth is converted
   to the GL depth convention (`vsvulkancontext.cpp:784-839`). The shared snapshot
-  floaters reach it through `vssnapshot.cpp:87`, `:159`, and the native loop
+  floaters reach it through `vssnapshot.cpp:87`, `:159`, and the Vulkan loop
   calls `LLFloaterSnapshot::update()` once per frame (`llappviewer.cpp:1786-1795`).
 - **Previews.** `createPreviewRenderer` and `renderPreview` give previews their
   own `VSWorldRenderer` on the same device. They render to an immutable image
@@ -484,10 +484,10 @@ CPU and re-uploads vertices.
 | Bump/normal-map generator | `vsuirenderer.cpp:322-373` | Runtime GLSL |
 | Scene-monitor compare | `vsscenemonitor.cpp:104-105` | Runtime GLSL |
 
-- No native shader files exist on disk, there is no offline SPIR-V step, and
+- No Vulkan shader files exist on disk, there is no offline SPIR-V step, and
   there is no shader cache.
 - The roughly 225 legacy GLSL files under `app_settings/shaders` are not used by
-  the native path. The one exception is `pbrterrainUtilF.glsl`, embedded at
+  the Vulkan path. The one exception is `pbrterrainUtilF.glsl`, embedded at
   generation time.
 - **Inference:** shaders compile on first use of each PSO key, during a frame, so
   first-use stalls are likely. Nothing was measured.
@@ -554,7 +554,7 @@ Notes:
 - The world is drawn **only** when `VSNativeSession` is in phase `Connected`
   (`vsvulkancontext.cpp:561`). Before that, login and progress screens are
   UI-only.
-- No GL code, `gPipeline` render path or `display()` runs. The native loop calls
+- No GL code, `gPipeline` render path or `display()` runs. The Vulkan loop calls
   only `gPipeline.initializeRenderDebugFeatures()` and `initializeRenderTypes()`
   for shared CPU policy (`llappviewer.cpp:1592-1593`) and reads its debug-feature
   masks (`vsvulkancontext.cpp:597`, `:619`).
@@ -574,9 +574,9 @@ catalogs). Its main claims compare with the code as follows.
 | Design claim | Source | Code reality | Verdict |
 |---|---|---|---|
 | DiligentCore is the selected GHI; the viewer keeps scene/pass/material semantics and Diligent supplies device, PSOs, descriptors and barriers. | `README.md:4`, `:57`; `architecture.md:21` | Diligent Vulkan backend pinned and linked. Viewer-owned packets, sort and materials. Diligent PSOs, SRBs, transitions and fences. | **Implemented** |
-| Vulkan is a peer backend; no OpenGL fallback; failures reported and the session stopped. | `qualification-roadmap.md:23-30` | `canStartSession`, `MBVulkanRendererUnavailable`, no GL path in the native branch | **Implemented** |
-| Create the device through `CreateDeviceAndContextsVk` and the swapchain from the viewer's native window with `CreateSwapChainVk`; start with one immediate context. | `framework-comparison.md:47` | Exactly this (`vsvulkancontext.cpp:240`, `:303`) | **Implemented** |
-| Proposed initial floor of **Vulkan 1.3**, with `synchronization2`, `dynamicRendering` and `timelineSemaphore` queried. | `architecture.md:110`; `README.md:115` | `EnumerateAdapters({1,1})` gives a **1.1** floor (`vsvulkancontext.cpp:220`). `queryDriverProperties` also says "The normal native device requires Vulkan 1.1" (`:115-117`). None of those features is requested. | **Diverges** (the docs call it a proposal) |
+| Vulkan is a peer backend; no OpenGL fallback; failures reported and the session stopped. | `qualification-roadmap.md:23-30` | `canStartSession`, `MBVulkanRendererUnavailable`, no GL path in the Vulkan branch | **Implemented** |
+| Create the device through `CreateDeviceAndContextsVk` and the swapchain from the viewer's Vulkan window with `CreateSwapChainVk`; start with one immediate context. | `framework-comparison.md:47` | Exactly this (`vsvulkancontext.cpp:240`, `:303`) | **Implemented** |
+| Proposed initial floor of **Vulkan 1.3**, with `synchronization2`, `dynamicRendering` and `timelineSemaphore` queried. | `architecture.md:110`; `README.md:115` | `EnumerateAdapters({1,1})` gives a **1.1** floor (`vsvulkancontext.cpp:220`). `queryDriverProperties` also says "The normal Vulkan device requires Vulkan 1.1" (`:115-117`). None of those features is requested. | **Diverges** (the docs call it a proposal) |
 | Two frames in flight, histories by rendered-view frame serial. | `architecture.md:114` | Frame pacing is left to Diligent; the viewer only fences retirement. No temporal histories exist. | **Not applicable yet / Absent** |
 | GLSL math retained, rewritten as explicit Vulkan modules compiled to SPIR-V with one ABI schema. | `architecture.md:120`; `framework-comparison.md:129` | Inline GLSL 4.5 compiled at runtime by Diligent. ABI checked by reflection at PSO creation. No offline SPIR-V. | **Partial** |
 | PSO key covers variant ABI, formats, topology, raster, depth, blend; persistent PSO cache keyed by device, driver and shader. | `architecture.md:124` | The key exists (`vsworldrenderer.cpp:196-198`). No persistent cache. | **Partial** |
@@ -586,13 +586,13 @@ catalogs). Its main claims compare with the code as follows.
 | First deliverable requires **full supported rendering parity** including lighting, shadows, water, transparency and post-processing. | `README.md:8-10`; `qualification-roadmap.md:56-63` | Forward sun/ambient only; placeholder water; no shadows or post | **Not met**, consistent with the docs' own "world rendering remains open" (`README.md:51`) and "not achieved" (`world-feature-parity.md:18-20`) |
 | Optional FSR1 / DLSS through Diligent SuperResolution. | `README.md:61`; `framework-comparison.md:152-157` | The package is built with `DILIGENT_NO_SUPER_RESOLUTION=ON` (`build_vulkan_dependencies.py:131`) | **Absent** (deliberately excluded) |
 | UI/chat checkpoint passed on all three software platforms in CI run 38012380599. | `README.md:45-49` | Historical claim. At `51d1f729a6` the graphics jobs fail before reaching viewer tests (below). | **Stale at this revision** |
-| "first authenticated native frames at approximately 14 FPS" | `world-feature-parity.md:12-13` | A user observation recorded in the doc. It was not reproduced for this survey and is not a measurement claim of this chapter. | Unverified |
+| "first authenticated Vulkan frames at approximately 14 FPS" | `world-feature-parity.md:12-13` | A user observation recorded in the doc. It was not reproduced for this survey and is not a measurement claim of this chapter. | Unverified |
 
 Stale statements found in the documentation (not in the code):
 
-- `DiligentCore.cmake:1` ("does not enable a native renderer").
+- `DiligentCore.cmake:1` ("does not enable a Vulkan renderer").
 - `3p/README.md:3-6` ("still renders with its existing OpenGL pipeline", "disabled Vulkan entry").
-- `architecture.md:4-6` ("First implement native Vulkan UI and connected chat with
+- `architecture.md:4-6` ("First implement Vulkan UI and connected chat with
   no world rendering"). This was superseded by the scope expansion in
   `qualification-roadmap.md:32-41`.
 - `world-feature-parity.md:38-48`, the first-increment table. It describes a
@@ -620,7 +620,7 @@ Stale statements found in the documentation (not in the code):
    - Because every later step in the job depends on this one, the
      staged-viewer presentation, connected-UI, R1, R2 and R3 replay steps
      (`:735-972`) do not run. **This revision therefore has no current CI
-     evidence for any native rendering behaviour.** The `[skip ci]` tag hid the
+     evidence for any Vulkan rendering behaviour.** The `[skip ci]` tag hid the
      regression when it landed.
    - Fix direction (Inference): inject the anisotropy flag and the perf-stat
      hooks through the renderer's constructor or callbacks, so the GHI-only
@@ -629,7 +629,7 @@ Stale statements found in the documentation (not in the code):
    frame that has glow packets, but never sampled (`vsworldrenderer.cpp:894-907`;
    `glowView()` has no callers). This costs GPU work and an `RGBA16F`
    full-screen allocation with no visible effect.
-3. **Linux Wayland sessions and fullscreen cannot start the native renderer**
+3. **Linux Wayland sessions and fullscreen cannot start the Vulkan renderer**
    (`llwindowsdl2.cpp:500`, `llwindow.cpp:447-451`). These are explicit
    refusals, not crashes.
 4. **No device-loss handling** (see Frame flow). **Inference:** a lost device
@@ -637,7 +637,7 @@ Stale statements found in the documentation (not in the code):
 
 ## Risks and open questions
 
-- **Not shipped and no current evidence.** The native renderer is compiled only
+- **Not shipped and no current evidence.** The Vulkan renderer is compiled only
   in the diagnostic CI configuration, and that configuration currently fails
   before the viewer is built. No artifact exists in which a user could select
   Vulkan and get a frame. Can a non-diagnostic `USE_DILIGENTCORE=ON` build be
@@ -664,11 +664,11 @@ Stale statements found in the documentation (not in the code):
   bloom and the planned FSR/DLSS (which the design places before tonemap) would
   need a new frame structure. The render-graph design is still "outline, not yet
   written" (`render-graph-design-outline.md:6`).
-- **Settings recovery.** A persisted `RenderBackend=Vulkan` on a non-native
+- **Settings recovery.** A persisted `RenderBackend=Vulkan` on an OpenGL
   build blocks startup with no in-viewer way back (Inference, from
   `llappviewer.cpp:1040-1046`).
 - **Shared-code footprint.** The 1,300 `VS_NATIVE_VULKAN` lines in 234 shared
-  `newview` files, plus the unconditional native hooks in `llrender2dutils.cpp`
+  `newview` files, plus the unconditional Vulkan hooks in `llrender2dutils.cpp`
   and the GL-guard throws in `llwindow`, are always compiled into this line.
   Whether they are all safe in OpenGL-only builds is not established here.
 - **Open question.** Which of the reference-ported features (sky equations, PBR

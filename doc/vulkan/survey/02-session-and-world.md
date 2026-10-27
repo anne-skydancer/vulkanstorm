@@ -1,12 +1,12 @@
-# 02 — Native session and world data
+# 02 — Vulkan session and world data
 
-This chapter covers the CPU client model that feeds the native Vulkan renderer
-on `vkstorm-vulkan` at `51d1f729a6`. The model is the native session
+This chapter covers the CPU client model that feeds the Vulkan renderer
+on `vkstorm-vulkan` at `51d1f729a6`. The model is the Vulkan session
 (`VSNativeSession`), the scene store (`VSWorldScene`), and the avatar, terrain,
 environment, region/parcel, material, texture, sound, media and task-inventory
 owners around them.
 
-**Headline status.** The native client is much further along than the
+**Headline status.** The Vulkan client is much further along than the
 in-tree design notes say. It logs in, joins a circuit, receives capabilities,
 keeps neighbour regions, and stores prims, meshes, sculpts, flexis, trees,
 grass, avatars (with appearance, animation and server- or local-bake textures),
@@ -33,7 +33,7 @@ Commands used (run from `indra/newview` unless noted):
 
 | Measurement | Command | Result |
 |---|---|---|
-| Native file count / lines | `ls vs*.cpp vs*.h \| wc -l`; `cat vs*.cpp vs*.h \| wc -l` | 280 files, 63 353 lines |
+| Vulkan file count / lines | `ls vs*.cpp vs*.h \| wc -l`; `cat vs*.cpp vs*.h \| wc -l` | 280 files, 63 353 lines |
 | Guard lines outside `vs*` files | `grep -rn VS_NATIVE_VULKAN --include=*.cpp --include=*.h indra \| grep -v '/vs[a-z0-9]*\.\(cpp\|h\):' \| wc -l` (from repo root) | 1299 lines in 233 files |
 | `vs*` files on release | `git ls-tree --name-only origin/vkstorm-release indra/newview/ \| grep -c indra/newview/vs` | 0 |
 | Chapter-relevant files | `wc -l` over the 32 files listed below | 24 904 lines |
@@ -53,11 +53,11 @@ Files covered here (lines): `vsnativesession.cpp` 2953, `vsnativecircuits.cpp` 4
 `vsspatialindex.cpp` 149, `vsobjectindex.h` 74, `vsvegetation.cpp` 677,
 `vsflexiblepath.cpp` 432.
 
-Build gating: the native code compiles only when `USE_DILIGENTCORE` is set, which
+Build gating: the Vulkan code compiles only when `USE_DILIGENTCORE` is set, which
 defines `VS_NATIVE_VULKAN=1` (`indra/newview/CMakeLists.txt:2766-2767`). The replay
 harnesses (`vsnativereplay.cpp`, `vsr*replay.cpp`, `vsvkdiag.cpp`) compile only under
 `VS_VULKAN_DIAGNOSTICS` (`CMakeLists.txt:38-42`, `2390-2405`), which requires
-`RelWithDebInfo`. At run time the native path is chosen by `RenderBackend == "Vulkan"`
+`RelWithDebInfo`. At run time the Vulkan path is chosen by `RenderBackend == "Vulkan"`
 (`llappviewer.cpp:1071-1074` → `initNativeVulkanLogin`, `llappviewer.cpp:1590`).
 
 ---
@@ -71,7 +71,7 @@ harnesses (`vsnativereplay.cpp`, `vsr*replay.cpp`, `vsvkdiag.cpp`) compile only 
 | Owner | `LLAppViewer::mNativeSession` (shared_ptr), created in `initNativeVulkanLogin` (`llappviewer.cpp:1595`), shut down at `llappviewer.cpp:1845-1847`. A static weak pointer `sOwner` gives `VSNativeSession::active()` (`vsnativesession.cpp:327-349`). |
 | Declared non-ownership | "Deliberately does not own LLWorld, LLViewerRegion or scene resources" (`vsnativesession.h:41`). The scene belongs to `VSVulkanContext` (`vsvulkancontext.cpp:308`) and is reached through `gViewerWindow->nativeContext()->world()`. |
 | Login hand-off | `process_login_success_response` calls `VSNativeSession::acceptLogin` when a session is active (`llstartup.cpp:4810-4812`). |
-| Start | `idle_startup` returns at `STATE_WORLD_INIT` for native and calls `begin()` (`llstartup.cpp:2069-2077`). `LLAppViewer` also calls `begin()` when the state is `STATE_WORLD_INIT` (`llappviewer.cpp:1762`). |
+| Start | `idle_startup` returns at `STATE_WORLD_INIT` for Vulkan and calls `begin()` (`llstartup.cpp:2069-2077`). `LLAppViewer` also calls `begin()` when the state is `STATE_WORLD_INIT` (`llappviewer.cpp:1762`). |
 | Per-frame | `mNativeSession->tick()` (`llappviewer.cpp:1763`), followed by audio, AFK and media-focus pumps (`llappviewer.cpp:1765-1785`). |
 
 ### Phases and startup sub-states
@@ -88,7 +88,7 @@ harnesses (`vsnativereplay.cpp`, `vsr*replay.cpp`, `vsvkdiag.cpp`) compile only 
 | Begin | `begin` `:579-615` | Installs handlers (`install`, `:407-502`). Initialises the asset blacklist. Creates the first `RegionCircuit`. Calls `world().activateRegion` and `world().initializeSelf`. Sends `UseCircuitCode` with a weak-owner delivery callback (`:307-316`), launches `seedCoro`, and sets `STATE_WORLD_WAIT`. |
 | Circuit ACK | `circuitResult` `:616-627` | Sends `CompleteAgentMovement` and `AgentWearablesRequest`. |
 | Seed capabilities | `seedCoro` `:628-668` → `capabilities` `:669-702` | POSTs `vs_native_capability_names()`. Makes up to 3 attempts with a 15 s timeout. Admits only `http(s)` URLs, through `webURL` `:321-324`. Starts `LLEventPoll` and launches `simulatorFeaturesCoro` (`:721-758`, 2 attempts). |
-| Connected | `connected` `:1998-2116` | Runs once handshake, movement, seed and ACK have all arrived. Creates `LLMaterialMgr`, particles, `LLEnvironment`, `LLViewerCamera`, `VSNativeAppearance`, inventory background fetch, experiences, native tools, voice authorisation, chat panel, mute list and money balance. |
+| Connected | `connected` `:1998-2116` | Runs once handshake, movement, seed and ACK have all arrived. Creates `LLMaterialMgr`, particles, `LLEnvironment`, `LLViewerCamera`, `VSNativeAppearance`, inventory background fetch, experiences, Vulkan tools, voice authorisation, chat panel, mute list and money balance. |
 | Startup advance | `advanceStartup` `:2193-2285` | Inventory → Misc (environment settings, audio, gestures, pathfinding) → Precache (`PrecachingDelay`, needs a self avatar) → Wearables (10 s clothing wait, `ClothingLoading` notice on timeout) → `STATE_STARTED`. |
 | Logout | `requestLogout` `:2658-2676` → `logoutFramePresented` `:2677` → `finishLogout` `:2684` | Waits until the logout frame has been presented before tearing down. |
 | Disconnect | `disconnect` `:2693-2702` | Sends `LogoutRequest`, resets, then shows an `ErrorMessage` whose callback calls `reset_login` only if the generation is unchanged. |
@@ -148,9 +148,9 @@ Event-queue (LLSD) messages are handled in `deliver` (`:1719-1986`).
 admitted (`:1356`), and `receive` has a branch for them (`:1433-1441`). However,
 `install` never routes those names to `receiveMessage`. The shared registrations
 for them live in `register_viewer_callbacks` (`llstartup.cpp:3885-3888`, `:3978`,
-`:3985`), which runs at `STATE_SEED_CAP_GRANTED` (`llstartup.cpp:2332`). The native
+`:3985`), which runs at `STATE_SEED_CAP_GRANTED` (`llstartup.cpp:2332`). The Vulkan
 path returns earlier, at `STATE_WORLD_INIT` (`llstartup.cpp:2071-2077`).
-Inference: in a native session these four UDP replies are admitted but have no
+Inference: in a Vulkan session these four UDP replies are admitted but have no
 handler, and the `receive` branch is reachable only by direct callers. The
 branch was added in `4a4b951e67` without a matching routing entry
 (`git show 4a4b951e67 -- indra/newview/vsnativesession.cpp`).
@@ -158,7 +158,7 @@ branch was added in `4a4b951e67` without a matching routing entry
 **Finding (dead branches).** `SimStats`, `AlertMessage` and `AgentAlertMessage`
 are first routed to `receiveMessage` (`:419-421`) and then re-bound to the shared
 `process_sim_stats`, `process_alert_message` and `process_agent_alert_message`
-(`:432`, `:439-440`). The later binding wins, so the native `deliver` branches for
+(`:432`, `:439-440`). The later binding wins, so the Vulkan `deliver` branches for
 the UDP forms are unreachable. Inference: the shared handlers are probably what
 was intended, but the duplicated code is misleading. Likewise `PayPriceReply` is
 handled at `:1377` and then listed again in the condition at `:1399`.
@@ -168,7 +168,7 @@ handled at `:1377` and then listed again in the condition at `:1399`.
 - `vs_build_capability_names` (`vscapabilities.cpp:7-143`) is the catalogue
   transposed from `LLViewerRegionImpl`. The OpenGL viewer now delegates to it as
   well (`llviewerregion.cpp:3460`).
-- `vs_native_capability_names` (`:144-156`) appends 61 names (62 with `FlickrConnect`) that the native
+- `vs_native_capability_names` (`:144-156`) appends 61 names (62 with `FlickrConnect`) that the Vulkan
   session needs whatever the HTTP-inventory policy, plus `FlickrConnect`
   (`:152-153`). The list is de-duplicated with a `std::set`. This is the
   FlickrConnect fix from `bcdfc2af48`, and it is syntactically correct: the
@@ -268,8 +268,8 @@ region handle.
 
 **Hover text is absent.** The compressed path parses the `Text` and `Color`
 fields and discards them (`vsworldscene.cpp:1461`). The full path never reads
-`"Text"`. The only `LLHUDText` user in native code is `vsbeaconpresentation.cpp:100`.
-Floating prim text (`llSetText`) is therefore not represented in the native
+`"Text"`. The only `LLHUDText` user in Vulkan code is `vsbeaconpresentation.cpp:100`.
+Floating prim text (`llSetText`) is therefore not represented in the Vulkan
 model.
 
 **Lights.** Only a boolean `light` is retained (`:1507`, `:3679`, `:2321`). It is
@@ -316,7 +316,7 @@ publishes ground (`:3820`). It then walks `mImpl->objects` several times
 clip (`:3933-3935`). It does no frustum or octree culling on the CPU (none found).
 `linksCurrent` (`:483-494`) walks the parent chain with a fresh `std::set` for
 each object. Prim LOD uses `RenderVolumeLODFactor` with a fixed PI/3 field of
-view: "Native presentation currently uses the reference default PI/3 FOV"
+view: "Vulkan presentation currently uses the reference default PI/3 FOV"
 (`:123`). Inference: zooming the camera does not change prim LOD as it does in
 OpenGL.
 
@@ -327,7 +327,7 @@ terse TEs, hover text, lights, global object cap).
 
 ## Objects and prims
 
-| Feature | Native implementation | Status |
+| Feature | Vulkan implementation | Status |
 |---|---|---|
 | Parametric prims | `new LLVolume(params, 2.f)` (`vsworldscene.cpp:3728`, `:1546`); LOD via `meshDetail` / `vs_volume_lod_detail` (`:109-125`, `vsvolumelod.h`) | Implemented |
 | Sculpties | `volume->sculpt(...)` from the resolved sculpt image raw (`:4506`) | Implemented |
@@ -351,7 +351,7 @@ terse TEs, hover text, lights, global object cap).
   `0-16777215`** (`:222`, `:271`). The decoder then keeps only the requested LOD.
   Inference: for an object that moves through several LODs, the same asset can be
   downloaded up to 4 times.
-- There is **no disk cache**. `gMeshRepo` is initialised natively only for uploads
+- There is **no disk cache**. `gMeshRepo` is initialised under Vulkan only for uploads
   and cost formulas (`llappviewer.cpp:1665`, `:1745`; `vsworldscene.cpp:6159`). It
   is not used to fetch render meshes.
 - Decoding runs on the **main loop** inside the completion
@@ -367,7 +367,7 @@ terse TEs, hover text, lights, global object cap).
 
 ## Avatars
 
-`VSWorldAvatar` (`vsworldavatar.h`, `vsworldavatar.cpp` 2399 lines) is a native
+`VSWorldAvatar` (`vsworldavatar.h`, `vsworldavatar.cpp` 2399 lines) is a Vulkan
 avatar owner. Its `Impl` derives from the shared appearance library,
 `struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance`
 (`vsworldavatar.cpp:159`), and uses `NativeJoint : LLAvatarJoint`,
@@ -389,7 +389,7 @@ avatar owner. Its `Impl` derives from the shared appearance library,
 | Attachments | Parent chain to an avatar (`skeletonOwner` `vsworldscene.cpp:506-523`, `hudObject` `:524-541`); `attachments()` (`:2600`); `attachmentTransform` (`vsworldavatar.cpp:1890`) | Implemented |
 | Attach / detach / wear | `VSNativeAppearance::attach/detach/wear/remove/wearCategory` (`vsnativeappearance.h`) | Implemented |
 | Visibility policy | `complex`, `slow`, `visuallyMuted`, `overallAppearance` (`vsworldavatar.cpp:398-448`) mirror `LLVOAvatar::isTooComplex` / `getOverallAppearance`. Friends-only hiding was restored by `e77e965d88` (`:440-442`). | Implemented |
-| Auto-tune (ART) | `updatePerformance` (`:449-505`) over native owners, using measured GPU timings | Implemented |
+| Auto-tune (ART) | `updatePerformance` (`:449-505`) over Vulkan owners, using measured GPU timings | Implemented |
 | Jellydoll | `Visibility::Jellydoll` (`:83-88`, `:1215-1274`) | Implemented |
 | **Impostors** | No `RenderAvatarMaxNonImpostors` handling (`grep -n MaxNonImpostors vs*` returns nothing). `FSImpostorAvatarExclude` is read only for exclusion rules. | **Absent** |
 | Name tags | `VSAvatarNameTag`, policy in `vsavatarnametagpolicy.h` (904 lines, shared with OpenGL, `llvoavatar.cpp:3275`) | Implemented |
@@ -398,7 +398,7 @@ avatar owner. Its `Impl` derives from the shared appearance library,
 | Reset skeleton | `resetSkeleton` (`:1111`), with a wire broadcast from `VSNativeSession::resetAvatar` (`vsnativesession.cpp:350-378`) | Implemented |
 
 **Divergence:** the reference renderer skins on the GPU with a joint-matrix
-palette. The native path skins on the CPU and uploads a new mesh for every rigged
+palette. The Vulkan path skins on the CPU and uploads a new mesh for every rigged
 face whenever the pose signature changes, which for an animated avatar is about
 every frame (`vsworldscene.cpp:4784-4798`). `vsworldrenderer.h` has no joint or
 palette type (`grep -n "joint\|palette" vsworldrenderer.h` returns nothing).
@@ -468,7 +468,7 @@ across the region and parcel owners below.
 | `VSRegionLimits` (`vsregionlimits.cpp`) | "Shared CPU simulator region limits, transposed from LLWorld"; used by OpenGL `llsurface.cpp` and `llviewerobject.cpp` as well | Implemented |
 | Region info / estate | `applyRegionInfo` (`vsnativecircuits.cpp:293`); `EstateOwnerMessage` → shared `LLFloaterRegionInfo` (`vsnativesession.cpp:1393-1398`) | Implemented |
 | Parcel overlay | `receiveParcelOverlay` (`vsnativecircuits.cpp:88`); exactly 1024-byte chunks (`vsnativesession.cpp:1448-1456`) | Implemented |
-| Parcel properties | Shared `LLViewerParcelMgr::processParcelProperties` running in a native CPU mode (`mNativeCpu`, `llviewerparcelmgr.cpp:150`; native bitmap `:2038-2050`); the agent parcel is published back to the session (`:2120`, `:2182`) | Implemented |
+| Parcel properties | Shared `LLViewerParcelMgr::processParcelProperties` running in a Vulkan CPU mode (`mNativeCpu`, `llviewerparcelmgr.cpp:150`; Vulkan bitmap `:2038-2050`); the agent parcel is published back to the session (`:2120`, `:2182`) | Implemented |
 | Parcel access, dwell, object owners, covenant | Admitted but probably without a handler; see Session finding | **Probably broken (Inference)** |
 | Parcel borders and feedback | `VSParcelPresentation` (`vsparcelpresentation.cpp`), geometry from `llglsandbox.cpp` (`vsparcelgeometry.h`) | Implemented |
 | Parcel permissions | `VSParcelPermissions::from(regionFlags, parcelFlags, seeAvatars)` (`vsnativesession.h:180-181`) | Implemented |
@@ -560,7 +560,7 @@ created on connect and retired in `reset`.
 
 ## Reuse vs replacement of shared code
 
-| Shared viewer owner | Native approach | Evidence |
+| Shared viewer owner | Vulkan approach | Evidence |
 |---|---|---|
 | `LLWorld`, `LLViewerRegion` | **Replaced** by `RegionCircuit`, `VSRegionContext` and `VSRegionLimits`. `LLWorld` limits moved into `vsregionlimits.cpp` and are used by OpenGL too (`llworld.cpp` +42/−418 vs release) | `vsnativesession.h:41`; `git diff --stat origin/vkstorm-release...HEAD -- indra/newview/llworld.cpp` |
 | `LLViewerObjectList`, `LLViewerObject`, `LLVOVolume`, `LLDrawable` | **Replaced** by `VSWorldScene::Impl::Object`. Shared CPU decoders are reused: `LLVolumeMessage`, `LLPrimitive::unpackTEMessage`, `LLVolume`, `LLPartSysData`, `LLDataPackerBinaryBuffer`. `gObjectList.isDerendered` is still consulted (`vsworldscene.cpp:1306`). | `vsworldscene.cpp:3712-3734` |
@@ -570,7 +570,7 @@ created on connect and retired in `reset`.
 | `LLMeshRepository` | **Replaced** for render fetch (`VSWorldAssets`); still used for uploads and cost formulas | `vsworldassets.cpp`, `vsworldscene.cpp:6159` |
 | `LLViewerTextureList`, `LLViewerFetchedTexture` | **Replaced** by `VSUIImageProvider`; `LLTextureFetch` and `LLTextureCache` reused | `vsuiimageprovider.cpp:804` |
 | `LLEnvironment`, settings | **Reused** directly | `vsenvironmentstate.cpp` |
-| `LLViewerParcelMgr` | **Reused**, with a native CPU mode (`mNativeCpu`) | `llviewerparcelmgr.cpp:150`, `:294`, `:2038` |
+| `LLViewerParcelMgr` | **Reused**, with a Vulkan CPU mode (`mNativeCpu`) | `llviewerparcelmgr.cpp:150`, `:294`, `:2038` |
 | `LLViewerPartSim` | **Reused** | `vsparticleeffects.cpp:89` |
 | `LLAudioEngine`, `LLAudioSourceVO` | **Reused**, with `LLAudioSourceVO` extended for object-less state | `vsworldsound.cpp:76` |
 | `LLGLTFMaterialList`, `LL::GLTF::Asset`, `LLMaterial` | **Reused** | `vsworldscene.cpp:1227`; `vsworldgltf.cpp` includes `gltf/asset.h` |
@@ -612,9 +612,9 @@ deltas against release in shared files are `llvoavatar.cpp` +140/−1592,
 
 1. **Parcel reply routing (likely bug).** `ParcelAccessListReply`,
    `ParcelDwellReply`, `ParcelObjectOwnersReply` and `EstateCovenantReply` are
-   admitted, but no handler is registered in native sessions
+   admitted, but no handler is registered in Vulkan sessions
    (`vsnativesession.cpp:1356`, `:1433-1441`; `llstartup.cpp:2071-2077` vs `:2332`).
-   This should be confirmed with a native login. If confirmed, the land access
+   This should be confirmed with a Vulkan login. If confirmed, the land access
    list, dwell, object owners and covenant views stay empty.
 2. **O(N) per-update scans** in `replace`, `eraseObject`, `dirtyChildren`, the
    `ReplyTaskInventory` lookup and terrain grass dirtying (table in *Scene*). They
@@ -630,7 +630,7 @@ deltas against release in shared files are `llvoavatar.cpp` +140/−1592,
    anyway, which duplicates infrastructure.
 6. **Shared-code coupling.** The capability catalogue, avatar motions, LOD
    policies, vegetation and region limits are now shared `vs*` code compiled into
-   the OpenGL viewer. Any native fix to them changes OpenGL behaviour. The
+   the OpenGL viewer. Any Vulkan fix to them changes OpenGL behaviour. The
    FlickrConnect episode (`116a410fc8` → `bcdfc2af48`) is an example that was
    caught by `test_native_capability_catalogue.py`.
 7. **Two `begin()` call sites** (`llstartup.cpp:2074` and `llappviewer.cpp:1762`).

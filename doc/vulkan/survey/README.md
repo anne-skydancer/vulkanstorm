@@ -1,6 +1,6 @@
 # vkstorm-vulkan code survey
 
-A survey of the `vkstorm-vulkan` line: what the native Vulkan viewer is, what
+A survey of the `vkstorm-vulkan` line: what the Vulkan viewer is, what
 exists, what is wired in, what is partial or refused, and what is broken. It
 complements the design study in `doc/vulkan/` (README.md, architecture.md,
 framework-comparison.md, qualification-roadmap.md), which describes the
@@ -19,19 +19,19 @@ intended design; this survey describes the code.
 
 | # | Chapter | Covers |
 |---|---|---|
-| 01 | [Native rendering stack](01-rendering-stack.md) | Build/enablement, Diligent device and swapchain, world and UI renderers, shaders, frame flow, design study vs code |
-| 02 | [Native session and world data](02-session-and-world.md) | VSNativeSession, scene and object store, avatars, terrain, environment, regions/parcels, materials/glTF, textures and meshes |
-| 03 | [Native UI and input](03-ui-and-input.md) | Shared UI under native drawing, admission gates, window and input, tools, picking/selection, camera, chat/IM, maps, preferences |
+| 01 | [Vulkan rendering stack](01-rendering-stack.md) | Build/enablement, Diligent device and swapchain, world and UI renderers, shaders, frame flow, design study vs code |
+| 02 | [Vulkan session and world data](02-session-and-world.md) | VSNativeSession, scene and object store, avatars, terrain, environment, regions/parcels, materials/glTF, textures and meshes |
+| 03 | [Vulkan UI and input](03-ui-and-input.md) | Shared UI under Vulkan drawing, admission gates, window and input, tools, picking/selection, camera, chat/IM, maps, preferences |
 | 04 | [Integration, build and history](04-integration-build-history.md) | Hooks into shared code, effects on the OpenGL viewer, build options and CI, the 659 commits |
 | 05 | [Qualification and evidence](05-qualification-and-evidence.md) | CI jobs and current results, standalone/viewer-process/R2 tests, insertion catalog, parity ledger, test inventory |
 | 06 | [Feature completeness](06-feature-completeness.md) | How Vulkan is selected, feature-by-feature matrix, incompleteness markers, biggest gaps |
 
 ## The line at a glance
 
-- **Size:** 659 commits ahead of `vkstorm-release`. Native code is
+- **Size:** 659 commits ahead of `vkstorm-release`. Vulkan code is
   `indra/newview/vs*` (280 files, ~63k lines); 885 existing C++ files changed;
   ~400k lines of evidence data under `doc/`; 342 test scripts (04, 05).
-- **Enablement:** the native renderer is compiled only with
+- **Enablement:** the Vulkan renderer is compiled only with
   `USE_DILIGENTCORE=ON` (default OFF), which only the software-Vulkan CI job
   sets. In any other build, choosing "Vulkan (in development)" is refused, and
   `RenderBackend=Vulkan` set by hand stops startup with no OpenGL fallback
@@ -50,7 +50,7 @@ intended design; this survey describes the code.
   drawn into a target nothing reads. Building/editing is unreachable; hover
   text is discarded; no macOS path; no fullscreen; Linux X11 only (01, 03, 06).
 - **Qualification:** `source-evidence` passes since #225. The software-Vulkan
-  `graphics` jobs fail at their first build step; the native viewer was last
+  `graphics` jobs fail at their first build step; the Vulkan viewer was last
   compiled in CI on 2026-10-18 and the last fully green qualification run was
   2026-10-16. The parity ledger marks 1 of 3131 entries implemented and none
   runtime-qualified; ~90% of the tests compile extracted production code and
@@ -58,16 +58,16 @@ intended design; this survey describes the code.
 
 ## Fix list, in priority order
 
-### 1. Make the native build compile again (blocks all runtime evidence)
+### 1. Make the Vulkan build compile again (blocks all runtime evidence)
 - `vsworldrenderer.cpp` includes `llperfstats.h` and `vsuirenderer.cpp`
   includes `llimagegl.h` (116a410fc8), breaking the standalone Diligent test,
   whose CMake requires these sources to depend only on the GHI and standard
   library. All three graphics jobs fail there (01, 05).
 - `vsselectionlightpresentation.cpp` and `vsworldpaint.cpp` are not in
   `indra/newview/CMakeLists.txt`, yet `vsvulkancontext.cpp:310` constructs a
-  `VSSelectionLightPresentation`; a native viewer build would fail to link.
+  `VSSelectionLightPresentation`; a Vulkan viewer build would fail to link.
   Checked while assembling this index (03).
-- Then run the graphics jobs and fix what they report: the native viewer has
+- Then run the graphics jobs and fix what they report: the Vulkan viewer has
   not been compiled in CI since before 116a410fc8, so more breakage is likely.
 
 ### 2. Keep the OpenGL viewer's results identical (the line's contract)
@@ -98,13 +98,13 @@ extraction into shared code, add (or confirm) an equivalence test against a
 frozen copy of the original OpenGL logic; and treat any OpenGL behaviour change
 without such a test as a defect.
 
-### 3. Functional bugs in the native path
+### 3. Functional bugs in the Vulkan path
 - `ParcelAccessListReply`, `ParcelDwellReply`, `ParcelObjectOwnersReply` and
-  `EstateCovenantReply` are admitted but appear to have no handler in native
+  `EstateCovenantReply` are admitted but appear to have no handler in Vulkan
   sessions, so land access, dwell and covenant views likely stay empty (02).
-- Native IM drops teleport offers/requests, object IMs, session invites and
+- Vulkan IM drops teleport offers/requests, object IMs, session invites and
   GOTO_URL (03).
-- Native camera drag is dead code (`mNativeCameraDrag` never set) (03).
+- Vulkan camera drag is dead code (`mNativeCameraDrag` never set) (03).
 - Glow target written every frame, never read (01).
 
 ### 4. Scalability

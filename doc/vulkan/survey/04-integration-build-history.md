@@ -1,6 +1,6 @@
 # 04 — Integration with the shared viewer, build and history
 
-The native Vulkan work on `vkstorm-vulkan` is not isolated in its own files. It
+The Vulkan work on `vkstorm-vulkan` is not isolated in its own files. It
 adds 290 new `vs*` C++ files, and it also changes 885 existing C++ files in
 `indra/`. Only 233 of those 885 files contain a `VS_NATIVE_VULKAN` guard. Of
 the 35,274 lines added to the existing files, about 12,200 sit inside a guard.
@@ -112,7 +112,7 @@ New `vs*` files by location (`git ls-files 'indra/*' | grep -E "/vs[^/]*\.(cpp|h
   for this line. An ordinary configure, including CI `build.yaml`, produces an
   OpenGL-only viewer with no Vulkan code paths compiled in.
 
-The native renderer is chosen at runtime through the existing `RenderBackend`
+The Vulkan renderer is chosen at runtime through the existing `RenderBackend`
 setting. That setting was already present at the merge base; the line adds no
 new settings (see below). Relevant code:
 
@@ -166,9 +166,9 @@ Heaviest guarded shared files (`grep -c VS_NATIVE_VULKAN`): `llviewermenu.cpp`
 `llselectmgr.cpp` 27, `fslslbridge.cpp` 25, `llviewerwindow.cpp` 24,
 `lltoolpie.cpp` 24, `llappviewer.cpp` 21, `llviewermessage.cpp` 18.
 
-A typical guard is a small native branch inside an existing function. One
+A typical guard is a small Vulkan branch inside an existing function. One
 example is `llviewermenu.cpp:672-…`, which re-registers `Floater.Show`/`Toggle`
-callbacks so the Vintage skin's People button opens Contacts in a native session.
+callbacks so the Vintage skin's People button opens Contacts in a Vulkan session.
 
 ### Hook mechanisms
 
@@ -204,7 +204,7 @@ OpenGL-only build.
    `vsselectionlightgeometry.h`, `vsreferencegeometry.h`; `llui/vsuiadmission.h`;
    `llappearance/vstexlayercpu.cpp`). Unguarded added lines that include a `vs`
    header or call a `vs_*`/`VS*` symbol number 2,391 in 343 files.
-5. **Native-only source lists.** 55 `.cpp` files are compiled only under
+5. **Vulkan-only source lists.** 55 `.cpp` files are compiled only under
    `if(USE_DILIGENTCORE)` (`indra/newview/CMakeLists.txt:2359-2388`). Another
    19 diagnostic/replay `.cpp` files are compiled only under
    `if(VS_VULKAN_DIAGNOSTICS)` (lines 2390–2406). When unguarded shared code
@@ -253,7 +253,7 @@ added lines, R = deleted lines):
 
 Some of the `llinventory`, `llcommon`, `llmessage` and `llwebrtc` lines are
 upstream fixes carried on this line, such as the inventory fixes in PR #179
-`90c45e70e6` and the FIRE-36022 voice mutex. They are not native work.
+`90c45e70e6` and the FIRE-36022 voice mutex. They are not Vulkan work.
 Diffing HEAD directly against the current release tip removes 29 files that
 became identical to release. Their content is unchanged in this table.
 
@@ -290,7 +290,7 @@ a file can carry several tags):
 |---|---|---|
 | `vs` include / `vs_*()` call / `VS*` type (transposition to shared helpers) | 343 | 2,391 |
 | Account/session lifetime (`vs_native_im_*`, `mAccountCurrent`, `accountRevision`, `weak_ptr`, `mLifetime`, `isDiscarded`) | 219 | 945 |
-| Runtime native dispatch (`isNativeVulkan()`, `isNativeUI()`, `nativeContext()`, `VSNativeSession`) | 112 | 289 |
+| Runtime Vulkan dispatch (`isNativeVulkan()`, `isNativeUI()`, `nativeContext()`, `VSNativeSession`) | 112 | 289 |
 | None of the above | 447 | (the rest) |
 
 The "none" group includes upstream fixes, test files, reindentation, and
@@ -311,7 +311,7 @@ unmarked refactors. Representative cases follow. Each was read in the diff.
   requests now comes from a `vs*` file. **This is the path behind the
   FlickrConnect regression.** `116a410fc8` added `"FlickrConnect"` to this
   shared list, so OpenGL sessions requested a capability upstream had removed
-  (SL-11964). It was fixed in `bcdfc2af48`, which moved it to the native-only
+  (SL-11964). It was fixed in `bcdfc2af48`, which moved it to the Vulkan-only
   list (`vscapabilities.cpp:144-153`).
 - `indra/llrender/llrender2dutils.cpp`: +288/−578. `gl_arc_2d` (`:1008`),
   `gl_circle_2d` (`:1022`), washer, ring and similar functions now call
@@ -340,7 +340,7 @@ unmarked refactors. Representative cases follow. Each was read in the diff.
   clipboard reads and writes in all builds.
 - `indra/llwindow/llwindowwin32.cpp:3091-3111`: the previously commented-out
   `WM_MOUSELEAVE` case is now active and returns 0 without calling
-  `DefWindowProc`. The native-only body is gated by `!mUseGL`. Inference: the
+  `DefWindowProc`. The Vulkan-only body is gated by `!mUseGL`. Inference: the
   GL path does not call `TrackMouseEvent`, so GL windows should rarely receive
   this message. The handler is nonetheless new code on the GL path.
 - `indra/newview/llvoicevivox.cpp`: about 30 new `if (sShuttingDown) return`
@@ -367,7 +367,7 @@ unmarked refactors. Representative cases follow. Each was read in the diff.
   replaced by `AboutRenderer` and `AboutGraphicsDriver`, and the
   `Rendering I/II` tab labels became `Rendering 1/2`.
 
-**C. Additions that are inert unless a native session is active.**
+**C. Additions that are inert unless a Vulkan session is active.**
 Most of the 945 account-lifetime lines wrap callbacks in
 `vs_native_im_account_callback` or capture `vs_native_im_guard()`. In OpenGL
 builds the guard is an always-true lambda (`vsnativeim.h:21`), so the
@@ -381,7 +381,7 @@ still have to compile and link there.
 | Commit | Regression | Root cause | Caught by |
 |---|---|---|---|
 | `bcdfc2af48` (2026-10-27) | OpenGL viewer requested `FlickrConnect` capability | Added to the shared `vs_build_capability_names` in `116a410fc8` | `test_native_capability_catalogue` (source-evidence test) |
-| `e77e965d88` (2026-10-27) | `RenderAvatarFriendsOnly` no longer hid non-friends (native path; message: "since 116a410fc8") | `overallAppearance()` in `vsworldavatar.cpp:436-441` | `test_avatar_visibility` |
+| `e77e965d88` (2026-10-27) | `RenderAvatarFriendsOnly` no longer hid non-friends (Vulkan path; message: "since 116a410fc8") | `overallAppearance()` in `vsworldavatar.cpp:436-441` | `test_avatar_visibility` |
 | `a6cec18a04` (2026-10-24) | Windows OpenGL-only build failed to compile | Unguarded `nativeContext()` uses, type changes in `animationexplorer.cpp`, missing include in `llmodelpreview.cpp` | Build workflow |
 | `e1b2c30f0a` (2026-10-24) | Windows OpenGL-only build failed to link | Unguarded calls into `VSNativeSession`, `VSObjectSelection`, `VSTrackerDraw`, which exist only with `USE_DILIGENTCORE` | Build workflow |
 | `aae45e93da` (2026-10-25) | Linux OpenGL-only build failed (`-Werror=unused-function`) | Helpers used only from guarded code were left unguarded in `llpaneleditwearable.cpp` | Build run 40134807280 |
@@ -401,7 +401,7 @@ Ranked by judgement from size, centrality and what was read:
 2. **2D UI primitives (`llrender2dutils.cpp`, `vsuiprimitive.h`).** Every
    floater draw goes through code that was rewritten as templates. Pixel
    parity between OpenGL and the release build is not tested in CI (the
-   parity baselines compare native output with an OpenGL reference, not two
+   parity baselines compare Vulkan output with an OpenGL reference, not two
    OpenGL builds).
 3. **Geometry builders moved out of `llvoavatar`, `llvotree`,
    `llvosurfacepatch`, `llflexibleobject`, `llvograss` and `llvopartgroup`.**
@@ -445,12 +445,12 @@ early-October branding and defaults changes that release also carries.
 
 | Area | Files | Nature |
 |---|---|---|
-| `default/xui/en` | 24 M + 4 A | New native frontends `floater_vs_group_search.xml`, `panel_vs_connected_controls.xml`, `panel_vs_nearby_chat.xml`, `widgets/vs_chat_input.xml`; renderer selector, About strings, native-session strings in `strings.xml` |
+| `default/xui/en` | 24 M + 4 A | New Vulkan frontends `floater_vs_group_search.xml`, `panel_vs_connected_controls.xml`, `panel_vs_nearby_chat.xml`, `widgets/vs_chat_input.xml`; renderer selector, About strings, Vulkan-session strings in `strings.xml` |
 | `default/xui/<locale>` (es 16, pt 14, tr 13, de 10, ru 9, da 9, fr 8, zh 7, pl 6, az 6, ja 5, it 5) | 108 | Mostly from `e8c0dd5635` (2026-10-18). `floater_about_land.xml` in 7 locales (−478 lines each with `-w`), `floater_edit_ext_day_cycle.xml`, `panel_region_environment.xml`, `panel_settings_sky_*`. Multi-line `<floater.string>` and `<panel.string>` values collapsed to one line with whitespace trimmed, and `&quot;` replaced by `"` (e.g. `es/floater_about_land.xml:3-12`); also `panel_fs_nui_login.xml` per locale |
 | `ansastorm_modern`, `vintage`, `starlight*`, `metaharper` | ≈20 | Early-October colour/default restoration (shared with release); `ansastorm_modern/xui/en/panel_progress.xml` +200 |
 | `default/colors.xml`, `ansastorm_modern/colors.xml` | 2 | Kokua palette (`6bba1f60ca`); ≈1,900 lines each, shared with release |
 
-Inference: the locale rewrite in `e8c0dd5635` serves native XUI loading
+Inference: the locale rewrite in `e8c0dd5635` serves Vulkan XUI loading
 ("Wire shared land and nested environment UI with owned lifetimes"), but it
 reaches both renderers because XUI is shared.
 
@@ -479,7 +479,7 @@ python keys.py   # extracts <key>X</key><map><key>Comment from each revision
 | `settings_per_account.xml` | 134 | 0 | 0 | identical key set |
 | `settings_firestorm.xml` | 24 | 0 | 2 (`FSCloudColorStart/End`, shared with release) | identical key set |
 
-**The native renderer adds no settings.** It reads existing ones
+**The Vulkan renderer adds no settings.** It reads existing ones
 (`RenderBackend`, `RenderAvatarFriendsOnly` and others). Changes to default
 values since the merge base, for example the camera offsets in
 `settings.xml:3014-3028` (`8fba878ae9`, "Honor shared rear-view offsets") and
@@ -499,7 +499,7 @@ Patton), which this line does not carry.
   commits since the merge base have no patch-identical copy on this line.**
   Some are present in adapted form: the AIS/inventory/gunzip set is squashed
   into `90c45e70e6` (#179), FIRE-36022 is in `76bd1b9e13`/`6917945184`, and
-  FIRE-37070 is in `a76e210c29` plus `11349cd2b7` ("Native Vulkan: adapt to the
+  FIRE-37070 is in `a76e210c29` plus `11349cd2b7` ("Vulkan: adapt to the
   upstream fixes"). Others are missing at HEAD. Examples checked: the selected
   Viewer 26.4 SLua port and its IDE bridge (`c2b161aa8f`, `dfd42a720b`,
   `a550105f2c`), the Penny Patton camera default (`3b4df0c589`), the FreeBSD
@@ -515,7 +515,7 @@ Patton), which this line does not carry.
 
 | Option | Default | Where | Effect |
 |---|---|---|---|
-| `USE_DILIGENTCORE` | OFF | `indra/cmake/DiligentCore.cmake:4` | Imports `ll::diligentcore`, `ll::vulkan`; defines `VS_NATIVE_VULKAN=1` on the viewer target; adds 55 native `.cpp` files; stages runtime libraries (`Copy3rdPartyLibs.cmake:342-344`); Linux links `X11-xcb` |
+| `USE_DILIGENTCORE` | OFF | `indra/cmake/DiligentCore.cmake:4` | Imports `ll::diligentcore`, `ll::vulkan`; defines `VS_NATIVE_VULKAN=1` on the viewer target; adds 55 Vulkan `.cpp` files; stages runtime libraries (`Copy3rdPartyLibs.cmake:342-344`); Linux links `X11-xcb` |
 | `VS_VULKAN_DIAGNOSTICS` | OFF | `indra/newview/CMakeLists.txt:38` | Requires `USE_DILIGENTCORE` and `RelWithDebInfo`; adds 19 replay/diagnostic `.cpp` files and `VS_VULKAN_DIAGNOSTICS=1`; enables Autobuild download retries in `Prebuilt.cmake` under GitHub Actions |
 | `--diligentcore=${USE_DILIGENTCORE}` | n/a | `newview/CMakeLists.txt:2549, 2663, 2919, 2951` | Passed to the viewer manifests so packaging includes or omits GHI runtime files |
 
@@ -547,7 +547,7 @@ other lines.
 - `3p/README.md` is stale. Lines 3–6 say "The viewer still renders with its
   existing OpenGL pipeline. The disabled Vulkan entry in Preferences
   identifies the planned backend". Line 51 says "The default remains OFF until
-  the Vulkan renderer can use them". Native rendering code and an enabled
+  the Vulkan renderer can use them". Vulkan rendering code and an enabled
   combo entry now exist.
 - `3p/tests/` holds a standalone package smoke test (`factory.cpp`).
   `tests/software_vulkan/` holds standalone Diligent and viewer-geometry tests
@@ -563,7 +563,7 @@ other lines.
 
 So **OpenGL-only builds of this line are built in CI**, through `build.yaml`
 on every push. They are compiled and staged but not exercised.
-`software_vulkan.yml` builds only the native configuration. macOS is out of
+`software_vulkan.yml` builds only the Vulkan configuration. macOS is out of
 scope: `DiligentCore.cmake:9-11` stops with a fatal error.
 
 ### CI results (from `gh run list` / `gh run view`, read on 2026-10-27)
@@ -575,13 +575,13 @@ scope: `DiligentCore.cmake:9-11` stops with a fatal error.
 
 - The last successful Vulkan qualification on `vkstorm-vulkan` was
   2026-10-16 22:51 at `93da7c824a`, 353 commits before HEAD.
-- The last run in which `graphics` jobs compiled the native viewer was
+- The last run in which `graphics` jobs compiled the Vulkan viewer was
   `39086372280` at `51c41124ca` (2026-10-18 01:24). All three graphics jobs
   failed, but only at later replay steps: Lavapipe at "Production R2 geometry
   and appearance replay", and both SwiftShader jobs at "Production R3
   concurrent texture-cache instances".
 - `116a410fc8` (`[skip ci]`) and everything after it have **not had a
-  native-configuration viewer build in CI**. Every push and PR run from
+  Vulkan-configuration viewer build in CI**. Every push and PR run from
   2026-10-22 to 2026-10-27 failed in `source-evidence`, mostly at
   `check_diligent_insertions.py --accept`, so `graphics` was skipped. The one
   exception is PR #225 head `082f137fa4` (run `40587007906`). There
@@ -604,7 +604,7 @@ scope: `DiligentCore.cmake:9-11` stops with a fatal error.
 | Week (Mon) | Commits | C++ churn | Doc churn | Themes |
 |---|---|---|---|---|
 | 2026-09-28 (Oct 2–4) | 32 | 204 | 39,111 | Branding, defaults, login/skins, Inno Setup installers, version schema, CPU-AVX2 OpenJPEG. Mostly shared with release (30 patch-identical). DiligentCore GHI preparation and renderer selector (`07d3476e7c`, Oct 3); OpenGL audit and Vulkan design docs (#114, #117) |
-| 2026-10-05 | 147 | 21,758 | 154,310 | Standalone Diligent tests and software-Vulkan CI (Oct 5–6); docs for staged integration (Oct 7, several `[skip ci]`); V3/V4 milestones: native window, login lifecycle, connected UI and nearby chat (`f1701ee9e9`, `be089272e4`, `05907fc6e4`, Oct 9); connected skin and account services (`12b2da0ba9`, `9004ad3126`, Oct 10); Win32 pointer and DPI work (Oct 11) |
+| 2026-10-05 | 147 | 21,758 | 154,310 | Standalone Diligent tests and software-Vulkan CI (Oct 5–6); docs for staged integration (Oct 7, several `[skip ci]`); V3/V4 milestones: Vulkan window, login lifecycle, connected UI and nearby chat (`f1701ee9e9`, `be089272e4`, `05907fc6e4`, Oct 9); connected skin and account services (`12b2da0ba9`, `9004ad3126`, Oct 10); Win32 pointer and DPI work (Oct 11) |
 | 2026-10-12 | 403 | 101,378 | 1,098,173 | R0 inventory and parity baselines (`7abe9a5f8b`, `86fd47d9b2`, Oct 12); R1 ownership (`88f6494ef2`, Oct 13); **R2 geometry/appearance** (`e0794c1e92`, 126 files, Oct 14); R3 textures, materials and terrain (Oct 15–17); **216 commits on Oct 17**, 75 on Oct 18; **`116a410fc8`** (Oct 18 17:02) |
 | 2026-10-19 | 23 | 1,512 | 75,517 | No commits Oct 19–23. Oct 24–25: OpenGL-only build repair (PR #189), upstream inventory fixes (#179), one-way-merge enforcement (#198), FIRE-37058/37070/RLVa picks (#204), evidence re-pin (#205) |
 | 2026-10-26 | 27 | 261 | 9,935 | Hook fixes (#210, #216); LTO/AVX2 and FIRE-36022 (#223); two OpenGL-path regressions fixed and six source-evidence test groups added (#225) |
@@ -649,21 +649,21 @@ By total lines (`git log --shortstat`). Most are evidence and pin commits:
 | `86fd47d9b2` | 10-12 | 4 | 69,916 | Inventory direct settings observers, XUI bindings… for R0 |
 | **`116a410fc8`** | 10-18 | **828** | **56,761** | Implement connected UI and R3 service checkpoint `[skip ci]` |
 | `7abe9a5f8b` | 10-12 | 16 | 47,644 | Add R0 acceptance inventory and baseline capture |
-| `e314755ca1` | 10-18 | 6 | 45,871 | Pin integrated native UI controllers… |
+| `e314755ca1` | 10-18 | 6 | 45,871 | Pin integrated Vulkan UI controllers… |
 | `f01105bcb3` | 10-18 | 5 | 40,164 | Pin shared navigation region controller… |
-| `fb600fb0bb` | 10-10 | 7 | 38,323 | Repin native connected UI source review… |
+| `fb600fb0bb` | 10-10 | 7 | 38,323 | Repin Vulkan connected UI source review… |
 
 By C++ churn under `indra/`:
 
 | Commit | Date | Files | C++ ± | Subject |
 |---|---|---|---|---|
 | **`116a410fc8`** | 10-18 | 828 | **43,722** (35 % of all C++ churn on the line) | Implement connected UI and R3 service checkpoint `[skip ci]` |
-| `e0794c1e92` | 10-14 | 126 | 15,683 | Implement R2 native geometry and appearance production paths |
-| `12b2da0ba9` | 10-10 | 192 | 5,779 | Wire native connected viewer UI and account services |
-| `9004ad3126` | 10-10 | 105 | 3,539 | Integrate shared native connected UI and account-safe actions |
+| `e0794c1e92` | 10-14 | 126 | 15,683 | Implement R2 Vulkan geometry and appearance production paths |
+| `12b2da0ba9` | 10-10 | 192 | 5,779 | Wire Vulkan connected viewer UI and account services |
+| `9004ad3126` | 10-10 | 105 | 3,539 | Integrate shared Vulkan connected UI and account-safe actions |
 | `4a4b951e67` | 10-18 | 114 | 2,780 | Transpose shared land controllers… keyboard camera modes |
-| `88f6494ef2` | 10-13 | 47 | 2,120 | Complete R1 native ownership and lifecycle contracts |
-| `a9e852d2e8` | 10-18 | 43 | 2,067 | Wire native object-media controllers… |
+| `88f6494ef2` | 10-13 | 47 | 2,120 | Complete R1 Vulkan ownership and lifecycle contracts |
+| `a9e852d2e8` | 10-18 | 43 | 2,067 | Wire Vulkan object-media controllers… |
 | `908ac903d3` | 10-18 | 94 | 1,963 | Connect shared region controllers… tracker and beacon owners |
 
 ### `[skip ci]` commits
@@ -698,28 +698,28 @@ pause checkpoint") · `116a410fc8` (10-18 17:02, implementation checkpoint).
 
 ## Risks and open questions
 
-1. **Most native-driven shared changes ship in OpenGL builds.** 868 of 885
+1. **Most Vulkan-driven shared changes ship in OpenGL builds.** 868 of 885
    shared files carry unguarded changes, and all 15,911 deleted lines reach
    both builds. The only automated check on the OpenGL configuration of this
    line is compile, link and stage (`build.yaml`, `LL_TESTS=OFF`). No test
    runs the OpenGL viewer from this line or compares it with release. Both
-   regressions found this week were caught by native-side source-evidence
+   regressions found this week were caught by Vulkan-side source-evidence
    tests, not by OpenGL checks.
-2. **The native configuration at HEAD has not been compiled in CI.** The last
-   CI native viewer build was at `51c41124ca`, before the 43,722-line C++
+2. **The Vulkan configuration at HEAD has not been compiled in CI.** The last
+   CI Vulkan viewer build was at `51c41124ca`, before the 43,722-line C++
    checkpoint. Since then the `graphics` job has been skipped or has failed
    before the viewer step. The last local full build recorded in-tree
    (`fda4ef55ab`) is older still. Open question: does `USE_DILIGENTCORE=ON`
    build at `51d1f729a6`?
 3. **The guard boundary is enforced only by a build.** The macro is defined
-   PRIVATE to the viewer target. Library code cannot use it, so native
+   PRIVATE to the viewer target. Library code cannot use it, so Vulkan
    behaviour in `llui`/`llrender`/`llwindow` must be runtime-gated
    (`isNativeUI()`, `mUseGL`). A mistake there is invisible to the
    preprocessor.
 4. **"Shared" helpers make OpenGL depend on new code.** Capability names, tree,
    terrain, flexible, avatar and 2D primitive geometry, camera view, selection
    flow and pie click policy now live in `vs*` files that both renderers
-   compile. The FlickrConnect regression shows the failure mode: a native
+   compile. The FlickrConnect regression shows the failure mode: a Vulkan
    requirement added to a shared table.
 5. **Drift from release.** 57 release commits since the merge base have no
    patch-identical copy here. Several, including the SLua port, the camera
