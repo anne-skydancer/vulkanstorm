@@ -24,7 +24,11 @@ while IFS= read -r -d '' f; do
     [ -n "$g" ] && max_glibc=$(printf '%s\n%s\n' "$max_glibc" "$g" | grep . | newest)
     [ -n "$x" ] && max_glibcxx=$(printf '%s\n%s\n' "$max_glibcxx" "$x" | grep . | newest)
     [ -n "$a" ] && max_cxxabi=$(printf '%s\n%s\n' "$max_cxxabi" "$a" | grep . | newest)
-done < <(find "$root" -type f \( -name '*-bin' -o -name '*.so' -o -name '*.so.*' \) -print0 2>/dev/null)
+# Every executable and shared library (SLPlugin, dullahan_host, chrome-sandbox,
+# the crash logger, ...); the ELF test above drops scripts. CMakeFiles holds
+# only build-time probes.
+done < <(find "$root" -path '*/CMakeFiles' -prune -o -type f \
+              \( -perm -u+x -o -name '*.so' -o -name '*.so.*' \) -print0 2>/dev/null)
 
 {
     echo "### Linux runtime requirements"
