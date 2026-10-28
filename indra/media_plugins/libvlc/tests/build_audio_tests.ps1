@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$PackageInclude,
     [switch]$Bridge,
-    [string]$VisualStudioRoot = 'C:/Program Files/Microsoft Visual Studio/2022/Community'
+    [string]$VisualStudioRoot = 'C:/Program Files/Microsoft Visual Studio/18/Community'
 )
 $ErrorActionPreference = 'Stop'
 $PackageInclude = [IO.Path]::GetFullPath($PackageInclude)
@@ -9,7 +9,7 @@ $plugin = Split-Path $PSScriptRoot -Parent
 $output = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../../../.audio-test-build'))
 $vcvars = Join-Path $VisualStudioRoot 'VC/Auxiliary/Build/vcvars64.bat'
 if (!(Test-Path (Join-Path $PackageInclude 'soloud/miniaudio.h'))) { throw 'Published miniaudio header is required.' }
-if (!(Test-Path $vcvars)) { throw 'VS2022 x64 compiler setup not found.' }
+if (!(Test-Path $vcvars)) { throw 'VS 2026 x64 compiler setup not found.' }
 New-Item -ItemType Directory -Force $output | Out-Null
 & cmake "-DVLC_MINIAUDIO_INPUT=$PackageInclude/soloud/miniaudio.h" "-DVLC_MINIAUDIO_OUTPUT=$output/llvlc_miniaudio.h" -P "$plugin/prepare_miniaudio.cmake"
 if ($LASTEXITCODE -ne 0) { throw 'Owned miniaudio extension could not be prepared.' }

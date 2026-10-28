@@ -306,9 +306,9 @@ Compiling will take quite a bit of time.
 
 ### Building from within Visual Studio
 
-Inside the Firestorm source folder, you will find a folder named build-vc170-\<architecture\>, with \<architecture\> either being 32 or 64, depending on what you chose during the configuration step. Inside the folder is the Visual Studio solution file for Firestorm, called Firestorm.sln.
+Inside the Firestorm source folder, you will find a folder named build-vc180-\<architecture\> (build-vc170-\<architecture\> with Visual Studio 2022), with \<architecture\> either being 32 or 64, depending on what you chose during the configuration step. Inside the folder is the Visual Studio solution file for Firestorm, called Firestorm.slnx (Firestorm.sln with Visual Studio 2022).
 
-- Double-click Firestorm.sln to open the Firestorm solution in Visual Studio.
+- Double-click Firestorm.slnx to open the Firestorm solution in Visual Studio.
 - From the menu, choose Build -> Build Solution
 - Wait until the build is finished
 

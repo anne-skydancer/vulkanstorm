@@ -18,7 +18,7 @@ pkg install -y $VKSTORM_SYSTEM_PACKAGES
 # come from pkg: Linux PyPI wheels must never enter this native build image.
 python3.12 -m venv /opt/vulkanstorm
 /opt/vulkanstorm/bin/python -m pip install --disable-pip-version-check \
-    autobuild==3.9.3 llsd==1.2.4
+    autobuild==3.10.2 llsd==1.2.4
 fetch -o /tmp/vulkanstorm-patch-autobuild.py \
     "http://${PACKER_HTTP_ADDR:?}/resources/vulkanstorm-patch-autobuild.py"
 /opt/vulkanstorm/bin/python /tmp/vulkanstorm-patch-autobuild.py
