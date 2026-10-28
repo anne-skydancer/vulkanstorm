@@ -27,9 +27,10 @@
 
 namespace vks_inv_frozen
 {
-// FROZEN COPY begin: indra/newview/llviewergenericmessage.cpp, process_generic_message, lines 74-94, blob fd894a59976c4bf31169678f87c64bcc53f8bae9
+// FROZEN COPY begin: indra/newview/llviewergenericmessage.cpp, process_generic_message, lines 74-95, blob f3a0f026b8f7233672158cb091b24f4d2c3b1af8
 void process_generic_message(LLMessageSystem* msg, void**)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
     LLUUID agent_id;
     msg->getUUID("AgentData", "AgentID", agent_id);
     if (agent_id != gAgent.getID())
@@ -51,9 +52,10 @@ void process_generic_message(LLMessageSystem* msg, void**)
 }
 // FROZEN COPY end
 
-// FROZEN COPY begin: indra/newview/llviewergenericmessage.cpp, process_large_generic_message, lines 111-131, blob fd894a59976c4bf31169678f87c64bcc53f8bae9
+// FROZEN COPY begin: indra/newview/llviewergenericmessage.cpp, process_large_generic_message, lines 113-134, blob f3a0f026b8f7233672158cb091b24f4d2c3b1af8
 void process_large_generic_message(LLMessageSystem* msg, void**)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
     LLUUID agent_id;
     msg->getUUID("AgentData", "AgentID", agent_id);
     if (agent_id != gAgent.getID())

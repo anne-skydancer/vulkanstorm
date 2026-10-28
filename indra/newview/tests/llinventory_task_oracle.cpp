@@ -771,7 +771,7 @@ void LLViewerObject::fetchInventoryFromCapCoro(const LLUUID task_inv)
 }
 // <<< VKS-R4A-COPY O2
 
-// >>> VKS-R4A-COPY O3 indra/newview/llviewerobject.cpp lines 3407-4045 blob 0ade67da75e4367e1fcae9e53e8e6388ddb612bf
+// >>> VKS-R4A-COPY O3 indra/newview/llviewerobject.cpp lines 3410-4049 blob 26ec5b036f0ad9cf9aa40b5e9da2bd641c80ae8c
 // struct LLFilenameAndTask, processTaskInv, processTaskInvFile, loadTaskInvFile, loadTaskInvLLSD, doInventoryCallback, removeInventory, isAssetInInventory, updateMaterialInventory, updateInventory, updateInventoryLocal, getInventoryObject, getInventoryItem, getInventoryContents, getInventoryRoot, getInventoryItemByAsset (both), updateViewerInventoryAsset
 // conditionals:
 struct LLFilenameAndTask
@@ -806,6 +806,7 @@ S32 LLFilenameAndTask::sCount = 0;
 // static
 void LLViewerObject::processTaskInv(LLMessageSystem* msg, void** user_data)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
     LLUUID task_id;
     msg->getUUIDFast(_PREHASH_InventoryData, _PREHASH_TaskID, task_id);
     LLViewerObject* object = gObjectList.findObject(task_id);

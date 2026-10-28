@@ -2238,8 +2238,8 @@ LLSaleInfo ll_sale_info_from_sd(const LLSD& sd)
 
 // ---- VKS-ORACLE-COPY BEGIN
 // source: indra/llinventory/llinventory.cpp
-// lines: 26-1770
-// blob: 051481e44cb9b89d3e6d93427dcd687748ef9348
+// lines: 26-1734
+// blob: 434ad7c81ee8699b675b86b3bfa2def35737ea69
 // copied: the whole file after its licence block
 // substitutions: #include lines and forward declarations of LLMessageSystem and LLUUID removed
 // conditionals: 
@@ -2894,84 +2894,6 @@ bool LLInventoryItem::unpackMessage(LLMessageSystem* msg, const char* block, S32
 #endif
 }
 
-// <FS:ND> Helper functions
-void splitCacheDescOrName(char *aBuffer, char *&aJunk, char *&aValue);  /// <FS:CR> Various Missing
-int splitCacheLine(char *aBuffer, char *&aKeyword, char *&aValue);      /// Prototypes
-inline bool isWS( char aVal )
-{
-    return aVal == ' ' || aVal == '\t' || aVal == '\r' || aVal == '\n';
-}
-
-inline bool isNewLine( char aVal )
-{
-    return aVal == '\r' || aVal == '\n';
-}
-
-void splitCacheDescOrName( char *aBuffer, char *&aJunk, char *&aValue )
-{
-    aJunk = aBuffer;
-    aValue = 0;
-
-    while( *aBuffer && *aBuffer != '\t' )
-        ++aBuffer;
-
-    if( *aBuffer == '\t' )
-    {
-        *aBuffer = 0;
-        aValue = ++aBuffer;
-
-        while( *aBuffer && *aBuffer != '|' )
-            ++aBuffer;
-
-        *aBuffer = 0;
-    }
-    else
-    {
-        aValue = aJunk;
-        --aBuffer;
-        if( *aBuffer == '|' )
-            *aBuffer = 0;
-    }
-
-}
-
-int splitCacheLine( char *aBuffer, char *&aKeyword, char *&aValue )
-{
-    while( *aBuffer && isWS( *aBuffer ) )
-        ++aBuffer;
-
-    if( !*aBuffer )
-        return 0;
-
-    int nKWLen(0);
-    aKeyword = aBuffer;
-
-    while( *aBuffer && !isWS( *aBuffer ) )
-    {
-        ++nKWLen;
-        ++aBuffer;
-    }
-
-    if( !isWS( *aBuffer ) )
-        return 0;
-
-    *aBuffer = 0;
-    aValue = ++aBuffer;
-
-    // Is this really necessay?
-    while( *aValue && isWS( *aValue ) )
-        ++aValue;
-
-    // Searching for trailing newline now.
-    while( *aBuffer && !isNewLine(*aBuffer)   )
-        ++aBuffer;
-
-    *aBuffer = 0;   // Kill the newline
-
-    return nKWLen;
-}
-// </FS:ND>
-
 // virtual
 bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
 {
@@ -3374,10 +3296,9 @@ bool LLInventoryItem::fromLLSD(const LLSD& sd, bool is_new)
         if (i->first == INV_THUMBNAIL_LABEL)
         {
             const LLSD &thumbnail_map = i->second;
-            const std::string w = INV_ASSET_ID_LABEL;
-            if (thumbnail_map.has(w))
+            if (thumbnail_map.has(INV_ASSET_ID_LABEL))
             {
-                mThumbnailUUID = thumbnail_map[w];
+                mThumbnailUUID = thumbnail_map[INV_ASSET_ID_LABEL];
             }
             /* Example:
                 <key> asset_id </key>
@@ -3390,7 +3311,7 @@ bool LLInventoryItem::fromLLSD(const LLSD& sd, bool is_new)
                 <integer> 1 </key>
             */
           continue;
-      }
+        }
 
         if (i->first == INV_THUMBNAIL_ID_LABEL)
         {
@@ -3401,10 +3322,9 @@ bool LLInventoryItem::fromLLSD(const LLSD& sd, bool is_new)
         if (i->first == INV_FAVORITE_LABEL)
         {
             const LLSD& favorite_map = i->second;
-            const std::string w = INV_TOGGLED_LABEL;
-            if (favorite_map.has(w))
+            if (favorite_map.has(INV_TOGGLED_LABEL))
             {
-                mFavorite = favorite_map[w].asBoolean();
+                mFavorite = favorite_map[INV_TOGGLED_LABEL].asBoolean();
             }
             continue;
         }
@@ -3468,7 +3388,7 @@ bool LLInventoryItem::fromLLSD(const LLSD& sd, bool is_new)
             LLSD const &label = i->second;
             if (label.isString())
             {
-                mType = LLAssetType::lookup(label.asString().c_str());
+                mType = LLAssetType::lookup(label.asStringRef().c_str());
             }
             else if (label.isInteger())
             {
@@ -3483,7 +3403,7 @@ bool LLInventoryItem::fromLLSD(const LLSD& sd, bool is_new)
             LLSD const &label = i->second;
             if (label.isString())
             {
-                mInventoryType = LLInventoryType::lookup(label.asString().c_str());
+                mInventoryType = LLInventoryType::lookup(label.asStringRef().c_str());
             }
             else if (label.isInteger())
             {
@@ -3647,7 +3567,7 @@ void LLInventoryCategory::packMessage(LLMessageSystem* msg) const
 
 bool LLInventoryCategory::fromLLSD(const LLSD& sd)
 {
-    std::string w;
+    std::string_view w;
 
     w = INV_FOLDER_ID_LABEL_WS;
     if (sd.has(w))
