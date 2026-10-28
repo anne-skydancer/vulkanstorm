@@ -1,5 +1,5 @@
 {
-  "source_commit": "e0877bcb134bc6033d60c293efdeb321c05ce732",
+  "source_commit": "b33c8ab5f4ea41f95978f88c7a77267da7519be0",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -1033,7 +1033,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 50,
       "end": 51,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -1042,7 +1042,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 189,
       "end": 189,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -1051,7 +1051,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 247,
       "end": 251,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -1060,7 +1060,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 253,
       "end": 256,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -1069,7 +1069,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 267,
       "end": 267,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -1078,7 +1078,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 268,
       "end": 270,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -1087,7 +1087,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 846,
       "end": 847,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -15982,7 +15982,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 80,
       "end": 89,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate."
@@ -15991,7 +15991,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 263,
       "end": 266,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate."
@@ -19753,7 +19753,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 58,
       "end": 59,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate. Native About uses selected Vulkan physical device identity: Windows LUID is matched exactly to DXGI adapter and installed package version, without creating a D3D device or GL context. Supplied driver release/build metadata and vendor packing are bounded fallbacks, distinct from API version. Core/extension support is verified before driver-property queries. Production compiler fixtures cover adapter mismatch/retirement and missing metadata; live driver output is separate evidence."
@@ -19762,7 +19762,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 62,
       "end": 62,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate. Native About uses selected Vulkan physical device identity: Windows LUID is matched exactly to DXGI adapter and installed package version, without creating a D3D device or GL context. Supplied driver release/build metadata and vendor packing are bounded fallbacks, distinct from API version. Core/extension support is verified before driver-property queries. Production compiler fixtures cover adapter mismatch/retirement and missing metadata; live driver output is separate evidence."
@@ -19771,7 +19771,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 65,
       "end": 68,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate. Native About uses selected Vulkan physical device identity: Windows LUID is matched exactly to DXGI adapter and installed package version, without creating a D3D device or GL context. Supplied driver release/build metadata and vendor packing are bounded fallbacks, distinct from API version. Core/extension support is verified before driver-property queries. Production compiler fixtures cover adapter mismatch/retirement and missing metadata; live driver output is separate evidence."
@@ -19780,7 +19780,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 91,
       "end": 168,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate. Native About uses selected Vulkan physical device identity: Windows LUID is matched exactly to DXGI adapter and installed package version, without creating a D3D device or GL context. Supplied driver release/build metadata and vendor packing are bounded fallbacks, distinct from API version. Core/extension support is verified before driver-property queries. Production compiler fixtures cover adapter mismatch/retirement and missing metadata; live driver output is separate evidence."
@@ -19789,7 +19789,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 257,
       "end": 262,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate. Native About uses selected Vulkan physical device identity: Windows LUID is matched exactly to DXGI adapter and installed package version, without creating a D3D device or GL context. Supplied driver release/build metadata and vendor packing are bounded fallbacks, distinct from API version. Core/extension support is verified before driver-property queries. Production compiler fixtures cover adapter mismatch/retirement and missing metadata; live driver output is separate evidence."
@@ -20194,7 +20194,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 308,
       "end": 309,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -20203,7 +20203,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 561,
       "end": 562,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -20212,7 +20212,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 573,
       "end": 574,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -20221,7 +20221,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 639,
       "end": 639,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -20230,7 +20230,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 716,
       "end": 716,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -20239,7 +20239,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 759,
       "end": 759,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -21481,7 +21481,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 576,
       "end": 576,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Reviewed native camera snapshot and actual viewport projection wiring into production frame/scene submission; complete HDR/deferred/post-processing graph remains absent. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
@@ -22255,7 +22255,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 4,
       "end": 5,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -22264,7 +22264,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 7,
       "end": 7,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -22867,7 +22867,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 6,
       "end": 6,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -22876,7 +22876,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 61,
       "end": 61,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -23020,7 +23020,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 252,
       "end": 252,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -24883,7 +24883,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 60,
       "end": 60,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -24892,7 +24892,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 176,
       "end": 176,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -24901,7 +24901,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 272,
       "end": 280,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -24910,7 +24910,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 305,
       "end": 305,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -24919,7 +24919,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 350,
       "end": 350,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -24928,7 +24928,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 360,
       "end": 368,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -24937,7 +24937,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 748,
       "end": 756,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -26836,7 +26836,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 26,
       "end": 26,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26845,7 +26845,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 31,
       "end": 34,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26854,7 +26854,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 53,
       "end": 61,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26863,7 +26863,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 143,
       "end": 165,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26872,7 +26872,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 196,
       "end": 196,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26881,7 +26881,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 221,
       "end": 224,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26890,7 +26890,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 232,
       "end": 233,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26899,7 +26899,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 236,
       "end": 237,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26908,7 +26908,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 246,
       "end": 247,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26917,7 +26917,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 596,
       "end": 596,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26926,7 +26926,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 602,
       "end": 603,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26935,7 +26935,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 609,
       "end": 609,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26944,7 +26944,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 618,
       "end": 618,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26953,7 +26953,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 623,
       "end": 623,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26962,7 +26962,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 625,
       "end": 626,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26971,7 +26971,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 667,
       "end": 671,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26980,7 +26980,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 805,
       "end": 807,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26989,7 +26989,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 814,
       "end": 815,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26998,7 +26998,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 947,
       "end": 965,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27007,7 +27007,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 1063,
       "end": 1064,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27016,7 +27016,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 1559,
       "end": 1566,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27025,7 +27025,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 1679,
       "end": 1686,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27034,7 +27034,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 1695,
       "end": 1695,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27043,7 +27043,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 1697,
       "end": 1702,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27052,7 +27052,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 2905,
       "end": 2905,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27061,7 +27061,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 3383,
       "end": 3384,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27070,7 +27070,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 3440,
       "end": 3440,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27079,7 +27079,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 3486,
       "end": 3486,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27088,7 +27088,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 3505,
       "end": 3506,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27097,7 +27097,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 3510,
       "end": 3519,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27106,7 +27106,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 3521,
       "end": 3531,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27115,7 +27115,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 3543,
       "end": 3552,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27124,7 +27124,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 3566,
       "end": 3571,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27133,7 +27133,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 3582,
       "end": 3582,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27142,25 +27142,16 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 3827,
       "end": 3828,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 3861,
-      "end": 3863,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
-      "record": "I14",
-      "disposition": "mapped",
-      "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "indra/newview/aoengine.cpp",
-      "start": 3867,
-      "end": 3867,
-      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
+      "start": 3865,
+      "end": 3865,
+      "sha256": "ed6a3d2d43e8a83901cf9aee1d0f5da2aac8cdaeb4bdcd49dae143b9875cfd4c",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29671,7 +29662,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 34,
       "end": 34,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Immutable selected-device mesh generations retain CPU/GPU reservations; invalid inputs refuse without replacing valid geometry; fence/WaitForIdle retirement and exact buffer readback are separate from full render-graph qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29680,7 +29671,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 841,
       "end": 845,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Immutable selected-device mesh generations retain CPU/GPU reservations; invalid inputs refuse without replacing valid geometry; fence/WaitForIdle retirement and exact buffer readback are separate from full render-graph qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -32722,7 +32713,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 685,
       "end": 685,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Native frame owner draws after local font-atlas synchronization; the existing complete-capture guard now applies to solid-fill refusal only. No font defer/freeze policy, rendering budget increase or threshold relaxation is introduced. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -38131,7 +38122,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 225,
       "end": 225,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -41686,16 +41677,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 190,
       "end": 190,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
-      "record": "I13",
-      "disposition": "mapped",
-      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
-    },
-    {
-      "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 369,
-      "end": 396,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -41704,7 +41686,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 502,
       "end": 502,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -42190,7 +42172,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 191,
       "end": 197,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -43765,7 +43747,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 513,
       "end": 518,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Continue shared-policy texture coarsening, immutable image rebinding and upload/submission completion while minimized, retaining UI/exact requests and admitted geometry. Refused replacements keep prior images; imported image arguments remain binary-safe. Pressure runtime and complete R3 acceptance remain open."
@@ -43774,7 +43756,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 520,
       "end": 520,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Continue shared-policy texture coarsening, immutable image rebinding and upload/submission completion while minimized, retaining UI/exact requests and admitted geometry. Refused replacements keep prior images; imported image arguments remain binary-safe. Pressure runtime and complete R3 acceptance remain open."
@@ -44278,7 +44260,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 391,
       "end": 392,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Continue shared-policy texture coarsening, immutable image rebinding and upload/submission completion while minimized, retaining UI/exact requests and admitted geometry. Refused replacements keep prior images; imported image arguments remain binary-safe. Pressure runtime and complete R3 acceptance remain open."
@@ -50992,7 +50974,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 35,
       "end": 35,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Connect shared connected-UI service state to native rendering: publish authenticated live simulator region flags/capacity and consume the shared clamped camera lens in native drawing and picking. Preserve ordinary permission and shared camera observer policy; full UI runtime acceptance remains open."
@@ -51001,7 +50983,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 574,
       "end": 575,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Connect shared connected-UI service state to native rendering: publish authenticated live simulator region flags/capacity and consume the shared clamped camera lens in native drawing and picking. Preserve ordinary permission and shared camera observer policy; full UI runtime acceptance remains open."
@@ -52870,15 +52852,6 @@
       "reason": "Transpose the actual shared CPU region limits, real peer region contexts and authenticated RegionInfo model publication, preserving reference defaults/setters and observer order. Native contexts retain exact account/circuit identities without fabricated GL regions; nonspatial UI snapshots avoid copying coarse/parcel payloads. Full land/estate/map frontends and native visual acceptance remain open."
     },
     {
-      "path": "indra/newview/vscameraview.cpp",
-      "start": 1,
-      "end": 87,
-      "sha256": "08b293e52c8cc56637509a6bc6016ed9657ad1b7e131bdaec66bd1d478f9e817",
-      "record": "I08",
-      "disposition": "mapped",
-      "reason": "Share the exact reference CPU camera draw-distance and simulator interest-list policies across renderer peers, including customization, actual memory pressure, request ramp and region locks. Initialize the existing camera owner at native connection, route its setting callback safely, and consume the published far plane for native picking/drawing without a separate 1024-metre native cap. Complete camera/UI/runtime acceptance remains open."
-    },
-    {
       "path": "indra/newview/vscameraview.h",
       "start": 1,
       "end": 5,
@@ -53116,7 +53089,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 573,
       "end": 573,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Share the exact reference CPU camera draw-distance and simulator interest-list policies across renderer peers, including customization, actual memory pressure, request ramp and region locks. Initialize the existing camera owner at native connection, route its setting callback safely, and consume the published far plane for native picking/drawing without a separate 1024-metre native cap. Complete camera/UI/runtime acceptance remains open."
@@ -61630,7 +61603,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 17,
       "end": 17,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Close all nine actual AboutLand factory routes and require their specialized controllers. Transpose shared parcel selection/access geometry, height interpolation, paint order, alpha, local banner assets and depth policy onto native immutable packets with account/terrain ownership and refusal retry. Portable pixel-width posts retain world meshes as the camera moves. Full UI, access-barrier pixels and environment visual parity remain open."
@@ -61639,7 +61612,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 180,
       "end": 180,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Close all nine actual AboutLand factory routes and require their specialized controllers. Transpose shared parcel selection/access geometry, height interpolation, paint order, alpha, local banner assets and depth policy onto native immutable packets with account/terrain ownership and refusal retry. Portable pixel-width posts retain world meshes as the camera moves. Full UI, access-barrier pixels and environment visual parity remain open."
@@ -61648,7 +61621,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 311,
       "end": 311,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Close all nine actual AboutLand factory routes and require their specialized controllers. Transpose shared parcel selection/access geometry, height interpolation, paint order, alpha, local banner assets and depth policy onto native immutable packets with account/terrain ownership and refusal retry. Portable pixel-width posts retain world meshes as the camera moves. Full UI, access-barrier pixels and environment visual parity remain open."
@@ -61657,7 +61630,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 336,
       "end": 336,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Close all nine actual AboutLand factory routes and require their specialized controllers. Transpose shared parcel selection/access geometry, height interpolation, paint order, alpha, local banner assets and depth policy onto native immutable packets with account/terrain ownership and refusal retry. Portable pixel-width posts retain world meshes as the camera moves. Full UI, access-barrier pixels and environment visual parity remain open."
@@ -61666,7 +61639,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 596,
       "end": 596,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Close all nine actual AboutLand factory routes and require their specialized controllers. Transpose shared parcel selection/access geometry, height interpolation, paint order, alpha, local banner assets and depth policy onto native immutable packets with account/terrain ownership and refusal retry. Portable pixel-width posts retain world meshes as the camera moves. Full UI, access-barrier pixels and environment visual parity remain open."
@@ -63142,7 +63115,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 15,
       "end": 16,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared MyEnvironments/fixed sky-water controllers and retire view/account/inventory/editor callbacks safely. Correct all shipped ambiguous or obsolete XUI containers without losing translations. Transpose original sky dome geometry and shared current-setting CPU uniform logic into an immutable per-frame Vulkan block, retaining submission ownership, bounded reuse, typed override order and explicit sky publication domains under refusal. Full sky/cloud/celestial/HDR/water rendering, deeper environment inventory flows and complete UI/keyboard parity remain open."
@@ -63151,7 +63124,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 580,
       "end": 587,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared MyEnvironments/fixed sky-water controllers and retire view/account/inventory/editor callbacks safely. Correct all shipped ambiguous or obsolete XUI containers without losing translations. Transpose original sky dome geometry and shared current-setting CPU uniform logic into an immutable per-frame Vulkan block, retaining submission ownership, bounded reuse, typed override order and explicit sky publication domains under refusal. Full sky/cloud/celestial/HDR/water rendering, deeper environment inventory flows and complete UI/keyboard parity remain open."
@@ -68110,7 +68083,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 181,
       "end": 182,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Connect real Region/Estate, Telehub and TopObjects models, terrain readiness, account/current-circuit/selection callback ownership and every shipped translated hierarchy. Transpose original CPU tracker/debug-beacon geometry, fog, labels, startup debug-mask policy and native depth/submission ownership, including exact terrain shader interfaces. No manufactured GL scene objects or unconditional family admission. Actual world mouse selection, all controller actions, beam/label pixels and complete UI/keyboard qualification remain open."
@@ -68119,7 +68092,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 312,
       "end": 313,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Connect real Region/Estate, Telehub and TopObjects models, terrain readiness, account/current-circuit/selection callback ownership and every shipped translated hierarchy. Transpose original CPU tracker/debug-beacon geometry, fog, labels, startup debug-mask policy and native depth/submission ownership, including exact terrain shader interfaces. No manufactured GL scene objects or unconditional family admission. Actual world mouse selection, all controller actions, beam/label pixels and complete UI/keyboard qualification remain open."
@@ -68128,7 +68101,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 644,
       "end": 644,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Connect real Region/Estate, Telehub and TopObjects models, terrain readiness, account/current-circuit/selection callback ownership and every shipped translated hierarchy. Transpose original CPU tracker/debug-beacon geometry, fog, labels, startup debug-mask policy and native depth/submission ownership, including exact terrain shader interfaces. No manufactured GL scene objects or unconditional family admission. Actual world mouse selection, all controller actions, beam/label pixels and complete UI/keyboard qualification remain open."
@@ -68137,7 +68110,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 647,
       "end": 649,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Connect real Region/Estate, Telehub and TopObjects models, terrain readiness, account/current-circuit/selection callback ownership and every shipped translated hierarchy. Transpose original CPU tracker/debug-beacon geometry, fog, labels, startup debug-mask policy and native depth/submission ownership, including exact terrain shader interfaces. No manufactured GL scene objects or unconditional family admission. Actual world mouse selection, all controller actions, beam/label pixels and complete UI/keyboard qualification remain open."
@@ -68146,7 +68119,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 668,
       "end": 672,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Connect real Region/Estate, Telehub and TopObjects models, terrain readiness, account/current-circuit/selection callback ownership and every shipped translated hierarchy. Transpose original CPU tracker/debug-beacon geometry, fog, labels, startup debug-mask policy and native depth/submission ownership, including exact terrain shader interfaces. No manufactured GL scene objects or unconditional family admission. Actual world mouse selection, all controller actions, beam/label pixels and complete UI/keyboard qualification remain open."
@@ -75067,7 +75040,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 602,
       "end": 602,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose original selection/node/tool, attention, media permission/navigation/mute/proximity, script recovery and skinned UI controllers onto real native account/object/face owners. Preserve synchronous callback reentry, source identity, paired input, retirement and original OpenGL semantics. This implementation checkpoint is not full connected UI or keyboard runtime qualification."
@@ -79054,7 +79027,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 226,
       "end": 226,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose original selection/node/tool, attention, media permission/navigation/mute/proximity, script recovery and skinned UI controllers onto real native account/object/face owners. Preserve synchronous callback reentry, source identity, paired input, retirement and original OpenGL semantics. This implementation checkpoint is not full connected UI or keyboard runtime qualification."
@@ -79063,7 +79036,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 577,
       "end": 577,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose original selection/node/tool, attention, media permission/navigation/mute/proximity, script recovery and skinned UI controllers onto real native account/object/face owners. Preserve synchronous callback reentry, source identity, paired input, retirement and original OpenGL semantics. This implementation checkpoint is not full connected UI or keyboard runtime qualification."
@@ -79072,7 +79045,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 858,
       "end": 871,
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose original selection/node/tool, attention, media permission/navigation/mute/proximity, script recovery and skinned UI controllers onto real native account/object/face owners. Preserve synchronous callback reentry, source identity, paired input, retirement and original OpenGL semantics. This implementation checkpoint is not full connected UI or keyboard runtime qualification."

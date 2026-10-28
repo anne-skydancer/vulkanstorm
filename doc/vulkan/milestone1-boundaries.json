@@ -1,5 +1,5 @@
 {
-  "source_commit": "e0877bcb134bc6033d60c293efdeb321c05ce732",
+  "source_commit": "b33c8ab5f4ea41f95978f88c7a77267da7519be0",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -701,7 +701,7 @@
       ]
     },
     "indra/newview/vsvulkancontext.cpp": {
-      "sha256": "9824ab96811a3fab2c02f00e32672f2415cebc77e86fa8d643347e61bf9659dd",
+      "sha256": "2499624f6256c073b60c0bff3309d5184932cb4ca4c22d6863e435440b744a47",
       "anchors": [
         "VSVulkanContext::VSVulkanContext",
         "CreateDeviceAndContextsVk",
