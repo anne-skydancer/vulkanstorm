@@ -170,7 +170,7 @@ jobs:
           cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
             -DCMAKE_BUILD_TYPE:STRING="$VIEWER_BUILD_TYPE" -DADDRESS_SIZE:STRING=64 \
             -DPACKAGE:BOOL="$VIEWER_PACKAGE" \
-            -DVIEWER_CHANNEL:STRING=${{ github.ref == 'refs/heads/vkstorm-aleph' && 'Vulkanstorm-Aleph' || 'Vulkanstorm-Release' }} -DROOT_PROJECT_NAME:STRING=Firestorm \
+            -DVIEWER_CHANNEL:STRING=Vulkanstorm-Release -DROOT_PROJECT_NAME:STRING=Firestorm \
             -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
             -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
             -DUSE_KDU:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
