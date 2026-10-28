@@ -1080,6 +1080,7 @@ void OmnifilterMenuPanel::onRuleSetsUpdated()
 }
 
 void Omnifilter::connectLog()
+{
     const LLHandle<LLFloater> weak=getHandle();
     const auto current=vs_native_im_guard();
     mLogConnection=OmnifilterEngine::instance().mLogSignal.connect(
@@ -1088,3 +1089,4 @@ void Omnifilter::connectLog()
             if(!current())return;
             if(auto* owner=dynamic_cast<Omnifilter*>(weak.get()))owner->onLogLine(time,text);
         });
+}

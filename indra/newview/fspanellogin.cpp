@@ -503,10 +503,6 @@ void FSPanelLogin::onUpdateScrollToChild(const LLUICtrl* control)
     LLPanel::onUpdateScrollToChild(control);
 }
 
-
-            stage->setTargetDim(llmin(width, 1008));
-
-
 // static
 void FSPanelLogin::showLoginWidgets()
 {

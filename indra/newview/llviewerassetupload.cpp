@@ -1025,6 +1025,22 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
     {
         result["success"] = LLSD::Boolean((result["state"].asString() == "complete") && status);
     }
+    if (!current()) return;
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        if (const auto task = std::dynamic_pointer_cast<LLBufferedAssetUploadInfo>(uploadInfo); task && task->getTaskId().notNull())
+        {
+            const auto object = source ? *source : VSTaskInventoryObject::find(task->getTaskId());
+            auto* inventory = object->nativeInventory();
+            if (!object || !inventory || !inventory->completeAsset(object->nativeObject(), task->getItemId(),
+                result["new_asset"].asUUID(), current)) return;
+            // Only this validated publication may advance the operation to its
+            // own new item incarnation. An observer's intervening mutation or
+            // account/object retirement still rejects the finish controller.
+            current = object->itemGuard(task->getItemId());
+            if (!current()) return;
+        }
+#endif
 
     S32 uploadPrice = result["upload_price"].asInteger();
 
@@ -1044,20 +1060,6 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
         // </FS:Ansariel>
     }
 
-    if (!current()) return;
-#if VS_NATIVE_VULKAN
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-        if (const auto task = std::dynamic_pointer_cast<LLBufferedAssetUploadInfo>(uploadInfo); task && task->getTaskId().notNull())
-            const auto object = source ? *source : VSTaskInventoryObject::find(task->getTaskId());
-            auto* inventory = object->nativeInventory();
-            if (!object || !inventory || !inventory->completeAsset(object->nativeObject(), task->getItemId(),
-                result["new_asset"].asUUID(), current)) return;
-            // Only this validated publication may advance the operation to its
-            // own new item incarnation. An observer's intervening mutation or
-            // account/object retirement still rejects the finish controller.
-            current = object->itemGuard(task->getItemId());
-            if (!current()) return;
-#endif
     LLUUID serverInventoryItem = uploadInfo->finishUpload(result);
 
     bool succeeded = false;

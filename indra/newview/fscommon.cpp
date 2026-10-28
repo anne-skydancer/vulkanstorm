@@ -29,8 +29,8 @@
 #include "llviewerwindow.h"
 
 #include "fscommon.h"
-#include "fsfloaterim.h"
 #include "vsavatarservices.h"
+#include "fsfloaterim.h"
 #include "fsradar.h"
 #include "llagent.h"
 #include "llagentbenefits.h"

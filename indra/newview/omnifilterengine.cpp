@@ -1245,4 +1245,6 @@ void OmnifilterEngine::sendDelayedResponse(LLNotificationPtr notification, LLSD 
 }
 
 void OmnifilterEngine::ensureInitialized()
+{
     if(mNeedlesXMLPath.empty())init();
+}

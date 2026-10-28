@@ -1,27 +1,33 @@
 """Exercise production allocation bounds at valid, invalid and extreme sizes."""
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import tempfile
 import unittest
-def method(text, signature):
-    match = re.search(r'\s+'.join(re.escape(part) for part in signature.split()), text)
-    if match is None:
-        raise ValueError('Missing production method: ' + signature)
-    start = match.start()
-    brace = text.index('{', start)
-    depth = 1
-    end = brace + 1
-    while depth:
-        depth+=(text[end]=='{')-(text[end]=='}');end+=1
-    return text[start:end]
-
+from test_native_simulator_features import method
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class CIAllocationBoundsTest(unittest.TestCase):
+    def test_opengl_loader_probe_without_vulkan_sdk(self):
+        source = (ROOT/'indra/newview/llviewerstats.cpp').read_text()
+        probe = source[source.index('// "Minimal Vulkan"'):source.index('namespace LLStatViewer')]
+        self.compile(r'''
+#include <cstdint>
+#include <cassert>
+#define VS_NATIVE_VULKAN 0
+PROBE
+int main(){
+ const uint32_t api=VK_MAKE_API_VERSION(2,1,3,4095);
+ assert(VK_API_VERSION_VARIANT(api)==2&&VK_API_VERSION_MAJOR(api)==1);
+ assert(VK_API_VERSION_MINOR(api)==3&&VK_API_VERSION_PATCH(api)==4095);
+ VkResult result=VK_SUCCESS;assert(result==0);VkInstance instance=nullptr;
+ PFN_vkGetInstanceProcAddr get=nullptr;PFN_vkEnumerateInstanceVersion enumerate=nullptr;
+ assert(!instance&&!get&&!enumerate);
+}
+'''.replace('PROBE', probe))
+
     def compile(self, body):
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler)
@@ -108,25 +114,3 @@ int main(){
 
 if __name__ == '__main__':
     unittest.main()
-from test_native_simulator_features import method
-
-
-
-    def test_opengl_loader_probe_without_vulkan_sdk(self):
-        source = (ROOT/'indra/newview/llviewerstats.cpp').read_text()
-        probe = source[source.index('// "Minimal Vulkan"'):source.index('namespace LLStatViewer')]
-#define VS_NATIVE_VULKAN 0
-PROBE
- const uint32_t api=VK_MAKE_API_VERSION(2,1,3,4095);
- assert(VK_API_VERSION_VARIANT(api)==2&&VK_API_VERSION_MAJOR(api)==1);
- assert(VK_API_VERSION_MINOR(api)==3&&VK_API_VERSION_PATCH(api)==4095);
- VkResult result=VK_SUCCESS;assert(result==0);VkInstance instance=nullptr;
- PFN_vkGetInstanceProcAddr get=nullptr;PFN_vkEnumerateInstanceVersion enumerate=nullptr;
- assert(!instance&&!get&&!enumerate);
-'''.replace('PROBE', probe))
-
-
-
-
-
-
