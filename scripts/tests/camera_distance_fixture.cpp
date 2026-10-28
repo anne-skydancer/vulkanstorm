@@ -18,6 +18,8 @@ struct LLViewerTexture {
  inline static F32 sDesiredDiscardBias=0,budgetFactor=1;inline static bool critical=false;
  static bool isSystemMemoryCritical(){return critical;}static F32 getSystemMemoryBudgetFactor(){return budgetFactor;}
 };
+// Firestorm 7.2.5 moved the budget factor to LLMemory; same value here.
+struct LLMemory {static F32 getSystemMemoryBudgetFactor(){return LLViewerTexture::getSystemMemoryBudgetFactor();}};
 struct LLViewerCamera {
  F32 farClip=128;static LLViewerCamera* getInstance(){static LLViewerCamera c;return &c;}
  F32 getFar()const{return farClip;}
