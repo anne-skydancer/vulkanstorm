@@ -29,7 +29,11 @@ class NumericBoundaryTest(unittest.TestCase):
 
     def test_unsigned_reflection_probe_limits(self):
         definitions = (ROOT / 'indra/llcommon/lldefs.h').read_text()
-        begin = definitions.index('// recursion tail')
+        # llmax/llmin and, since Firestorm 7.3, the llless() comparison they
+        # call (declared just above them).
+        begin = definitions.find('// llless(d0, d1)')
+        if begin < 0:
+            begin = definitions.index('// recursion tail')
         templates = definitions[begin:definitions.index('template <typename A, typename MIN', begin)]
         manager = (ROOT / 'indra/newview/llreflectionmapmanager.cpp').read_text()
         floor = re.search(r'mDynamicProbeCount = (llmax\([^;]+);', manager).group(1)
@@ -42,6 +46,7 @@ class NumericBoundaryTest(unittest.TestCase):
 #include <cstdint>
 #include <limits>
 #include <cstddef>
+#include <type_traits>
 using U32=uint32_t;
 ''' + templates + limit + '''
 U32 lower(U32 count) {
