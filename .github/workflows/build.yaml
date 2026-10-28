@@ -103,18 +103,25 @@ jobs:
         run: |
           set -euo pipefail
           eval "$(autobuild source_environment -c ReleaseFS_open)"
-          export LL_BUILD
+          # This tree reads per-configuration flags (LL_BUILD_RELEASE,
+          # LL_BUILD_RELWITHDEBINFO; autobuild derives them from the
+          # variables file's LL_BUILD_<PLATFORM>_<CONFIG>), not LL_BUILD.
           options=()
           if [[ "$RUNNER_OS" == Windows ]]; then
-            # The flags used by the successful local Release build.
-            export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
+            # The flags used by the successful local Release build, which
+            # vkstorm-release applies to every configuration.
+            LL_BUILD_RELEASE='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
+            LL_BUILD_RELWITHDEBINFO="$LL_BUILD_RELEASE"
             options+=(-G 'Visual Studio 17 2022' -A x64)
           fi
-          {
-            echo 'LL_BUILD<<VKSTORM_LL_BUILD'
-            printf '%s\n' "$LL_BUILD"
-            echo 'VKSTORM_LL_BUILD'
-          } >> "$GITHUB_ENV"
+          export LL_BUILD_RELEASE LL_BUILD_RELWITHDEBINFO
+          for var in LL_BUILD_RELEASE LL_BUILD_RELWITHDEBINFO; do
+            {
+              echo "$var<<VKSTORM_LL_BUILD"
+              printf '%s\n' "${!var}"
+              echo 'VKSTORM_LL_BUILD'
+            } >> "$GITHUB_ENV"
+          done
           # vkstorm-release's configuration. Audio: release builds SoLoud,
           # which this tree does not have; upstream's OpenAL stays the engine.
           cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
