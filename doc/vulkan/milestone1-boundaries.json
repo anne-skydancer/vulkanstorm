@@ -1,5 +1,5 @@
 {
-  "source_commit": "b33c8ab5f4ea41f95978f88c7a77267da7519be0",
+  "source_commit": "3f6268ee34da7d7a1acf36e96e6760ace1e7ca2c",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -374,7 +374,7 @@
       ]
     },
     "indra/newview/llappviewerlinux.cpp": {
-      "sha256": "f5270dbbdd1666c5772d4603f4223c535c8a22880de32dc6c1b44593ce4d313f",
+      "sha256": "77927bb096999f948fbfff84925f131a87a48dd787cb7b50893754029a9d56a7",
       "anchors": [
         "LLAppViewerLinux::init",
         "vulkanDiagnosticExitCode"
