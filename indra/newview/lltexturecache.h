@@ -131,6 +131,12 @@ private:
     // Internal
     LLMutex mWorkersMutex;
     LLMutex mListMutex;
+    // Batch guard for LLViewerTextureList::updateImagesLoadingFastCache
+    // (upstream #5356). The fast cache itself is in vkstorm-assets, which
+    // locks it per call; no worker takes this mutex, so the try-lock there
+    // always succeeds and a busy fast cache blocks inside the read, as
+    // before #5356.
+    LLMutex mFastCacheMutex;
 
     typedef std::map<handle_t, LLTextureCacheWorker*> handle_map_t;
     handle_map_t mReaders;
