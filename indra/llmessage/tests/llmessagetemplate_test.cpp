@@ -1075,7 +1075,7 @@ namespace
         {
             std::vector<U8> buf(70000, 0xA5);
             S32 size = (S32)0xA5A5A5A5;
-            ok = dp.unpackBinaryData(buf.data(), size, name);
+            ok = dp.unpackBinaryData(buf.data(), (S32)buf.size(), size, name);
             r.value.assign((U8*)&size, (U8*)&size + 4);
             S32 n = ok ? llclamp(size, 0, (S32)buf.size()) : 0;
             if (ascii && ok)
@@ -1988,7 +1988,19 @@ namespace tut
                 m.eq<S32>(otag + " pack cursor", d.pack_results[k].cursor, actual.pack_results[k].cursor);
                 m.eq<S32>(otag + " unpack ok", d.unpack_results[k].ok, actual.unpack_results[k].ok);
                 m.eq<S32>(otag + " unpack cursor", d.unpack_results[k].cursor, actual.unpack_results[k].cursor);
-                m.bytes(otag + " unpack value", d.unpack_results[k].value, actual.unpack_results[k].value);
+                std::vector<U8> expected_value = d.unpack_results[k].value;
+                // Stated behaviour since upstream #5486 (ce139f26e0): an
+                // unpackBinaryData that fails before it has read a size
+                // reports out_size 0. The corpus was recorded before #5486,
+                // when such a failure left the caller's size untouched (the
+                // 0xA5 sentinel). Stated results (no call was made) and every
+                // other byte are compared as recorded.
+                if (d.ops[k].kind == DP_BINARY && !d.unpack_results[k].ok && !d.unpack_results[k].stated && expected_value.size() >= 4
+                    && expected_value[0] == 0xA5 && expected_value[1] == 0xA5 && expected_value[2] == 0xA5 && expected_value[3] == 0xA5)
+                {
+                    std::fill(expected_value.begin(), expected_value.begin() + 4, (U8)0);
+                }
+                m.bytes(otag + " unpack value", expected_value, actual.unpack_results[k].value);
             }
         }
         m.report("data packers");
