@@ -235,8 +235,9 @@ jobs:
           dir="${{ matrix.directory }}"
           cmake -S indra -B "$dir" -DLL_TESTS:BOOL=ON
           # The post-build replay fails until the libstdc++ trees exist; the
-          # executables are linked before it runs.
-          cmake --build "$dir" --config "$VIEWER_BUILD_TYPE" --parallel 3             --target INTEGRATION_TEST_llinventorymodel_parity INTEGRATION_TEST_llinvfetch_parity || true
+          # executables are linked before it runs, and make's -i keeps it from
+          # deleting them when the replay fails.
+          cmake --build "$dir" --config "$VIEWER_BUILD_TYPE" --parallel 3             --target INTEGRATION_TEST_llinventorymodel_parity INTEGRATION_TEST_llinvfetch_parity -- -i || true
           r2=$(find "$dir" -name INTEGRATION_TEST_llinventorymodel_parity -type f -perm -u+x | head -1)
           r3b=$(find "$dir" -name INTEGRATION_TEST_llinvfetch_parity -type f -perm -u+x | head -1)
           test -n "$r2" && test -n "$r3b" || { echo "test executables not built"; exit 1; }
