@@ -51,7 +51,7 @@ done
 source <(sed '/^if \[\[ "\$UID"/,$d' "$TOOLS/refresh_desktop_app_entry.sh")
 install_desktop_entry "$FIXTURE/install with spaces" "$FIXTURE/menu"
 grep -Fx "Exec=\"$FIXTURE/install with spaces/firestorm\"" "$FIXTURE/menu/vulkanstorm-viewer.desktop"
-grep -Fx 'StartupWMClass=com.secondlife.indra.viewer' "$FIXTURE/menu/vulkanstorm-viewer.desktop"
+grep -Fx 'StartupWMClass=org.vulkanstorm.viewer' "$FIXTURE/menu/vulkanstorm-viewer.desktop"
 grep -Fx "Path=$FIXTURE/install with spaces" "$FIXTURE/menu/vulkanstorm-viewer.desktop"
 printf 'not a directory' > "$FIXTURE/blocked"
 if install_desktop_entry "$FIXTURE/install" "$FIXTURE/blocked/menu" > /dev/null 2>&1; then exit 1; fi

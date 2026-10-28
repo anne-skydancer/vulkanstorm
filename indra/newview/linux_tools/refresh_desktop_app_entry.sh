@@ -36,7 +36,7 @@ install_desktop_entry() {
         # (SDL_PROP_APP_METADATA_IDENTIFIER_STRING in llappviewerlinux.cpp).
         printf '%s\n' 'Terminal=false' 'Type=Application' \
             'Categories=Internet;Network;' 'StartupNotify=true' \
-            'StartupWMClass=com.secondlife.indra.viewer'
+            'StartupWMClass=org.vulkanstorm.viewer'
     } > "${desktop_entries_dir}/vulkanstorm-viewer.desktop" || return 1
 }
 
