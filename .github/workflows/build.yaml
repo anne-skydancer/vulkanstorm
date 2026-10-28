@@ -121,7 +121,7 @@ jobs:
           echo "revision=$build_revision" >> "$GITHUB_ENV"
           echo "AUTOBUILD_BUILD_ID=$build_revision" >> "$GITHUB_ENV"
           echo "Source $(git rev-parse HEAD): build $build_revision" >> "$GITHUB_STEP_SUMMARY"
-          # ${{ github.workspace }} names the host path, which is not where a
+          # The github.workspace expression names the host path, not where a
           # container sees the workspace; $GITHUB_WORKSPACE is right in both.
           echo "AUTOBUILD_VARIABLES_FILE=$GITHUB_WORKSPACE/.build-variables/variables" >> "$GITHUB_ENV"
           echo "AUTOBUILD_INSTALLABLE_CACHE=$GITHUB_WORKSPACE/.autobuild-installables" >> "$GITHUB_ENV"
