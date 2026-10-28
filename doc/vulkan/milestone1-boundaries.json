@@ -1,5 +1,5 @@
 {
-  "source_commit": "faa8f96bf1cfee47a6e407d1ec4e5eb2d55b2d38",
+  "source_commit": "9e135add7cadcf205f4d537a9a33cdf6d7cdbeb2",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "0033ecce5607d5de820dbc104559fcedac0a9439ce89f984578ca2cfe8d26377",
+      "sha256": "f15649e9a31495e094bab6ca1b9a0f3a70d1b485d868fc9356e32ec1b5ce5c6c",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -33,7 +33,7 @@
       ]
     },
     "indra/newview/llviewerwindow.cpp": {
-      "sha256": "a7f8a03aa1a5f07e9b178d78520175cdab4af8cea2fecd06fba7cf4a521b4f51",
+      "sha256": "5fbf69edc7e1ae3ba9dc9d8415b0f8985b04a23d2de0891c94a4c8653acc8dae",
       "anchors": [
         "LLViewerWindow::LLViewerWindow",
         "LLViewerWindow::initBase",
@@ -54,7 +54,7 @@
       ]
     },
     "indra/llwindow/llwindowwin32.cpp": {
-      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
+      "sha256": "a30a01a8ddc83dc170c4767a01c140ff3b77fc5135f31be9a3fa6bc273025731",
       "anchors": [
         "LLWindowWin32::LLWindowWin32",
         "opengl32.dll",
@@ -70,7 +70,7 @@
       ]
     },
     "indra/newview/llstartup.cpp": {
-      "sha256": "4a4d64cd50d2844a1fefd3bed55bb3cdd244b7cdb256e2e029ebfd84e5be9d3c",
+      "sha256": "dfa1b039ab251c6e6d7dafcac697493989c0f5adbefb2823395cbc7383b97cb4",
       "anchors": [
         "idle_startup()",
         "do_startup_frame()",
@@ -89,7 +89,7 @@
       ]
     },
     "indra/newview/llworld.cpp": {
-      "sha256": "add5df3713c8e4d8af2682c6dcdafd4ad1c1f51970392813aa9b87666e142206",
+      "sha256": "b4aed0cb0ad6382b85e3a1cacf29cabb159b1e657ad48f27838e96ee6c2de34a",
       "anchors": [
         "LLWorld::addRegion",
         "process_region_handshake",
@@ -97,7 +97,7 @@
       ]
     },
     "indra/newview/llviewerregion.cpp": {
-      "sha256": "a8729694564ebe19575f49a29b2a84e07994e518e7524fa7cc7b050fc8ecd762",
+      "sha256": "7bc1b6e0dc5dc2c5a5e1e73f56dcd9afa7ec641996435b8229c1de6e9de6c82e",
       "anchors": [
         "LLViewerRegion::LLViewerRegion",
         "LLViewerRegion::initPartitions",
@@ -107,7 +107,7 @@
       ]
     },
     "indra/newview/llagent.cpp": {
-      "sha256": "c1af44edaa1943eb536dcfbf3eb9e33a7dee5fbe432cb4cbf9b9b2e13a16a89d",
+      "sha256": "c0ca22b50f913abf59cbf73d6d7bc2d4cc134e39774d4f2ea95e61191170e9b6",
       "anchors": [
         "LLAgent::setRegion",
         "LLAgent::startTyping",
@@ -115,7 +115,7 @@
       ]
     },
     "indra/newview/llviewermessage.cpp": {
-      "sha256": "1b6798d6cc361feff9338c300728d3cf5dc4190b3012ac09f9df74bf19c823bb",
+      "sha256": "d727aafcad5ae3c738ed809f04e2fc845a56fc8c6541b98de90af5c53d66686f",
       "anchors": [
         "process_chat_from_simulator",
         "process_agent_movement_complete",
@@ -125,14 +125,14 @@
       ]
     },
     "indra/newview/lleventpoll.cpp": {
-      "sha256": "268f70e832f0c302a5d6993f0f0d8aa72fca33ba32d55d5cd38036686503d9cc",
+      "sha256": "951a381579a1f7bb3ee587702db7033799931ae204d94aaaae250e9e801e0043",
       "anchors": [
         "mNativeGeneration",
         "handleMessage("
       ]
     },
     "indra/newview/fsnearbychathub.cpp": {
-      "sha256": "c95a4301c5b467be9a77e409e3d20005457e0280b46fb7ee1b97beaf2670e1ad",
+      "sha256": "fc37f58dde484f72f176f75646457e980257699713b6c789129e31d034ad2984",
       "anchors": [
         "really_send_chat_from_viewer",
         "FSNearbyChat::sendChatFromViewer",
@@ -140,13 +140,13 @@
       ]
     },
     "indra/newview/fsnearbychatcontrol.cpp": {
-      "sha256": "24f6d30104e7c7860f7853b146a28324a9245b65e58379938dc1f6cef6bf4c26",
+      "sha256": "9b220ead0aef055aa3c12531c8eaa59ed1fe50e1995e349790bdff7c1142666a",
       "anchors": [
         "FSNearbyChatControl"
       ]
     },
     "indra/newview/fsfloaternearbychat.cpp": {
-      "sha256": "487f73abe3770dd60ced17c3843078c1c3ea7400685fe7ef6f1a305ebfce585f",
+      "sha256": "eaf4dbe63783745b1c4115f8280b4feff82c0ba5be304e7f621de2a609dea1b8",
       "anchors": [
         "FSFloaterNearbyChat::postBuild",
         "FSFloaterNearbyChat::addMessage"
@@ -160,7 +160,7 @@
       ]
     },
     "indra/newview/llpanellogin.cpp": {
-      "sha256": "68183ca9c5e6694bf2b69bf4da7aee30759c74c7778c5123283b47f9d2ecf1c5",
+      "sha256": "1e076e0a4c541ff4ea9ca1100aebd9a2db88c2153919a825317538a06ac2884a",
       "anchors": [
         "LLPanelLogin::loadLoginPage",
         "navigateTo"
@@ -175,7 +175,7 @@
       ]
     },
     "indra/newview/llviewerfloaterreg.cpp": {
-      "sha256": "c454479e0cbb249956741bfc1d3c4fcdb95e8e1d19ab6e33b1289f8cd9d3f264",
+      "sha256": "1f81f7a567763a71a89cf8dd0cc793046c7436a00eff856d0693fdbaf7972d8a",
       "anchors": [
         "LLFloaterReg::add",
         "fs_nearby_chat",
@@ -183,20 +183,20 @@
       ]
     },
     "indra/llui/llfloaterreg.cpp": {
-      "sha256": "e0df9dc0b2b1b738821af031ee9f5dd5303e579fff4beec47e1303fee541dc7a",
+      "sha256": "43edb48cb2b8ca7a1b9da1e281049f3a2163ea9f57f6d4439d32c926d992d2e3",
       "anchors": [
         "LLFloaterReg::getInstance",
         "LLFloaterReg::showInitialVisibleInstances"
       ]
     },
     "indra/llui/lluictrlfactory.h": {
-      "sha256": "3a93ea73f073fa7ca9d7601a05c5660eaa4344715a17d45ff00a27c6f2b28497",
+      "sha256": "b951a6674834470bf05723a35f4717d03fed7bca9c982ccb74a0e46e329aa996",
       "anchors": [
         "create"
       ]
     },
     "indra/newview/llviewercontrol.cpp": {
-      "sha256": "1c121dac62f9d34925fd4119cacf12b29a57e094e6bdd04a24ab91443dd56b70",
+      "sha256": "024bcc9513c067ef9e2c0876ec11b48ee7cf83a591ee3e86f89bd34971275596",
       "anchors": [
         "settings_setup_listeners()",
         "setting_setup_signal_listener",
@@ -206,7 +206,7 @@
       ]
     },
     "indra/newview/llviewerdisplay.cpp": {
-      "sha256": "a6f7b675705181eeb862ef2151e0a0c0ce5b5a62877c123ac606515f62c6e448",
+      "sha256": "777a930a95aaac0269c927efec09cc588280b11cc8fe919fb755e322ca01c714",
       "anchors": [
         "display_startup",
         "display",
@@ -226,25 +226,25 @@
       ]
     },
     "indra/newview/llviewertexture.cpp": {
-      "sha256": "712f8f2859a1fafa96c46b71ce9244fcd59d3b5af06cb3358ae888bf468676b8",
+      "sha256": "9ebd4dfd5eac715b74ed7d409c2fab1ef7bafbbf3eb18c40ca1220c20aec7bbe",
       "anchors": [
         "LLViewerTexture"
       ]
     },
     "indra/llrender/llfontgl.cpp": {
-      "sha256": "e9d0974606f12743f3c25d2a29019f498d44fcda3536b3fe3c1228e589c89363",
+      "sha256": "29acac141b89cdd70e0c2a6b5b2276eeb380f607aa94df95d2c75759f2f6b712",
       "anchors": [
         "LLFontGL"
       ]
     },
     "indra/newview/llviewermedia.cpp": {
-      "sha256": "809e1a5e362024de48caeaae1ef3aa3e6566b498285195c6e343bebc4c2f0145",
+      "sha256": "ef353773f7d25f2b1d19707de242c447776bed9f0a05f31cc3fc77cd9ea13ecc",
       "anchors": [
         "LLViewerMedia"
       ]
     },
     "indra/llmessage/llcachename.cpp": {
-      "sha256": "7514479055c25057c49a4e18559372c2852c0837b16476ae1b2ffe9e0f076557",
+      "sha256": "0457ad8e9ef85231a8574a0756e308bbb87af0f14182e2466880745efc60cb83",
       "anchors": [
         "LLCacheName::LLCacheName",
         "setHandlerFuncFast"
@@ -294,7 +294,7 @@
       ]
     },
     "indra/newview/llnavigationbar.h": {
-      "sha256": "585c250e4a0cb1428bc1cb75269bb50834ee91b7fde682749c9f386c35f37c2a",
+      "sha256": "12e53a8ac01adfac8f9013b061f725397476f7ec3749d68333db98402291d3f0",
       "anchors": [
         "LLDestroyClass<LLNavigationBar>"
       ]
@@ -332,7 +332,7 @@
       ]
     },
     "indra/newview/llviewerinventory.h": {
-      "sha256": "5143c0262a8cdd3f49ca538ca9805d8ebce9856e552f5c341049721105554b76",
+      "sha256": "a8d8cc37babeb3eeb5166fdda30fee9a2b6123fff027d8ad7faca67b2dd68d3e",
       "anchors": [
         "LLDestroyClass<LLInventoryCallbackManager>",
         "LLDestroyClass<LLInventoryCallbackManager>"
@@ -359,14 +359,14 @@
       ]
     },
     "indra/newview/llappviewer.h": {
-      "sha256": "108f923d56a331afb92736ed9fc36f52bdbe29a073824dfff509001d50be6deb",
+      "sha256": "c18ffe7c48c9ef2f517a4952c2fea6b02772688e839af08c00e9aa1c4f0654b2",
       "anchors": [
         "isVulkanDiagnostic",
         "vulkanDiagnosticExitCode"
       ]
     },
     "indra/newview/llappviewerwin32.cpp": {
-      "sha256": "54468e74b5650b7a8cb3a4bf7873cca318d1fd33085076bdbecaed2331f65cde",
+      "sha256": "1ec444bf583ad6f524a10d53cf49feb5694c82045bcd61a07f5e9bf7d931ce41",
       "anchors": [
         "LLAppViewerWin32::init",
         "LLAppViewerWin32::cleanup",
@@ -388,7 +388,7 @@
       ]
     },
     "indra/llwindow/llwindowwin32.h": {
-      "sha256": "48b9e4f1839cda7d57f8079ae3ea8a9f7c0bb8c04d58cfb1d3fe4cdd07440d27",
+      "sha256": "f28e64e28fcc9aab5ed4702f469d99a42bad5aede8cec0bbfafc0551d365db14",
       "anchors": [
         "mUseGL"
       ]
@@ -502,14 +502,14 @@
       ]
     },
     "indra/llrender/llfontfreetype.cpp": {
-      "sha256": "2452dba64a3ce93dd9611919de19ef8471fbc546c90d46b20458038afff2d4aa",
+      "sha256": "33ebf474727982c621f4e0cc17fefc63c2c9385316dbaf591720a4f8bd6227a9",
       "anchors": [
         "LLFontFreetype::addGlyphFromFont",
         "hasGPUBacking"
       ]
     },
     "indra/llrender/llfontgl.h": {
-      "sha256": "a0ecd112c2aca2aaf3ad52c5179e96f90d49dc461e6474abc42c3bba964e778c",
+      "sha256": "cd0f447955f3e78691032051a1e79d2ad72b40d5e81c33942853fb372390bb4d",
       "anchors": [
         "native_draw_t",
         "setNativeDraw"
@@ -535,20 +535,20 @@
       ]
     },
     "indra/llui/llfloaterreg.h": {
-      "sha256": "55a7a6a8520d4c9044cbd16485fbdd4e0a59b9ed15c69cf5590943ab32037f49",
+      "sha256": "25189f1dbe855f54b3da5dc9a99e06801202a855e4446104897b78fca2b12db4",
       "anchors": [
         "VSUIAdmission::widget"
       ]
     },
     "indra/llui/llpanel.cpp": {
-      "sha256": "338cf01d7acdeadc42c9866ce7ea57533fdb8d8853ba86bf9626bff63faadc76",
+      "sha256": "0d58de0ae31c62f43976a74519051301ce9cd51de446660176f29c592e2c27f2",
       "anchors": [
         "LLPanel::fromXML",
         "VSUIAdmission::panelFactory"
       ]
     },
     "indra/llui/llpanel.h": {
-      "sha256": "3c6a0b35851c5b4ff10cfcaa2cad382cbf283a636d73d725b4fc31146adbe922",
+      "sha256": "8900b88e504579420b25a4470319e70cd76cf5e0d14ff8cf4b54dfba2cf82893",
       "anchors": [
         "VSUIAdmission::widget",
         "VSUIAdmission::panelFactory"
@@ -584,7 +584,7 @@
       ]
     },
     "indra/llui/llbutton.cpp": {
-      "sha256": "4a2e43ae18a8e61b35d111b5160e31a9383af09a523c92615df27f49a899d480",
+      "sha256": "1df6aeaf4db2b744337f8d3f97ffbf56c1bed7d146b9edd7d0368c6796ecf048",
       "anchors": [
         "LLButton::draw",
         "LLRender2D::setSceneBlendType"
@@ -598,21 +598,21 @@
       ]
     },
     "indra/llui/llscrollcontainer.cpp": {
-      "sha256": "7a49312539b532f8be7ace2002ddbf182835233f349fe8482a1ba9ffbccd069c",
+      "sha256": "b41f033ed6bd90aa8868a72efe02376769c60ae4a0f97d8fa874390df09baf2e",
       "anchors": [
         "LLScrollContainer::draw",
         "isNativeUI"
       ]
     },
     "indra/llui/lltextbase.cpp": {
-      "sha256": "79312a0bb1f5c2b4450adf1d18cde4ae2270c735667129d7df6fb6acc9bf8a79",
+      "sha256": "8a1c589791b335eba3345c7b0ee3ac80e334b32c4e0dfa3382845aeea5dac6d3",
       "anchors": [
         "LLTextBase::draw",
         "isNativeUI"
       ]
     },
     "indra/llui/llviewborder.cpp": {
-      "sha256": "4d3f9fd5219d8564e2936c1b8c8bcc1035b26648aeddb580d4a03872469989af",
+      "sha256": "74cdbfd42b5f896bbab3d604db039487e114bd5db09048f2569c04b8405d1b72",
       "anchors": [
         "LLViewBorder::drawOnePixelLines",
         "LLViewBorder::drawTwoPixelLines"
@@ -672,7 +672,7 @@
       ]
     },
     "indra/llrender/llrender.cpp": {
-      "sha256": "445a2415fdbe91d933083b4a2e61eadb0edf59409d453ce3b5d794334eca6d05",
+      "sha256": "dae13e73831607da90294c3dc719428a8ddd299a9a589e43e5faf122184eb430",
       "anchors": [
         "void LLRender::begin",
         "GL geometry in native UI owner"
@@ -694,7 +694,7 @@
       ]
     },
     "indra/llrender/llfontvertexbuffer.cpp": {
-      "sha256": "467a634236e9da7ffb12790c02d8700ccf625bea961a18b2febc524bf76509ad",
+      "sha256": "1518233e1334352a16fa6ef1373f3e7a1ad81967343a8cabd5f8412084ec438e",
       "anchors": [
         "LLFontVertexBuffer::render",
         "LLFontGL::hasNativeDraw()"
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "82eafa4a2ea1f711830bf620478c6cd57d1af4f365fedcb061e82f1c48cff5c7",
+      "sha256": "ac3664e6d9ff1931bfd13c84823a51799e41e2d307234951d112eaced2b95972",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -742,7 +742,7 @@
       ]
     },
     "indra/llrender/llfontregistry.cpp": {
-      "sha256": "36a3ddcd0b932220651d05b66af2e9b43bea5e0e6e87fc21f22af5f64cc0cea1",
+      "sha256": "46b3af2e2cec4c9af71394d1205b8ba08406a986ef8a0e02670f813c8cce5808",
       "anchors": [
         "LLFontGL::hasNativeDraw"
       ]
@@ -777,7 +777,7 @@
       ]
     },
     "indra/newview/llfloaterwebcontent.cpp": {
-      "sha256": "cc738ca06bec45ef28defbff925fc57fb0ca41dca7dff0e34d38a9cf90d56dd4",
+      "sha256": "99f9d9c1bd559435ed28d4461e4c18d646cc3d5bbaede073185ba744246667a5",
       "anchors": [
         "LLFloaterWebContent::create",
         "VSUIAdmission::floater"
@@ -820,7 +820,7 @@
       ]
     },
     "indra/newview/llmutelist.cpp": {
-      "sha256": "44dc58e20a75731f3339306b53996636ca9c42c1d7f2a80b905c2e20095e9f96",
+      "sha256": "c2abb3ba01007db20c9bb2b763e04aea0f39bf54ec93844c89860dda948d2c9a",
       "anchors": [
         "NativeMuteDelivery",
         "nativeMuteDelivery("
@@ -889,7 +889,7 @@
       ]
     },
     "indra/newview/llimview.cpp": {
-      "sha256": "eb87759e35204bfc6a68bc60dd180722b553aaf3d0bbd4dc4ba31dceadeac013",
+      "sha256": "568544f88b5315ab64c8aa287cfcf2aedb838926375e2808b0c5173a4a298f8e",
       "anchors": [
         "vs_native_im_guard",
         "onInviteNameLookup",
@@ -897,7 +897,7 @@
       ]
     },
     "indra/newview/llgroupmgr.cpp": {
-      "sha256": "d19d25b1a5c17bc56dd7cf93394ce2ae95ab68a670d3ab00170f8fec26cd544e",
+      "sha256": "d7ab848a894cf895527ccf11c97a495a90af3e3ee037b6aa979896fa215c11ef",
       "anchors": [
         "vs_native_im_guard",
         "sendGroupMemberEjects",
@@ -905,21 +905,21 @@
       ]
     },
     "indra/newview/fsfloaterim.cpp": {
-      "sha256": "df800bd3b7a7b190f0299d395a2b96bfa982f1eaf5f5cf25deefd6807a1a7799",
+      "sha256": "4220093346eee52eb1e243aca5d6404bbed53d65637fdd8f66b0a9b15e9683a0",
       "anchors": [
         "FSFloaterIM::postBuild",
         "FSFloaterIM::sendMsg"
       ]
     },
     "indra/newview/fsfloaterimcontainer.cpp": {
-      "sha256": "836b2b5d1a001fa4f796db8723b47af1ffa2995a2a15c3b40d42d1f2967d059a",
+      "sha256": "2ccbc8ab0cf9d2c186c22e0e0b66b57399f4a90e380901cd6f4c208b57237183",
       "anchors": [
         "FSFloaterIMContainer::addFloater",
         "FSFloaterNearbyChat::getInstance"
       ]
     },
     "indra/newview/llfloaterpreference.cpp": {
-      "sha256": "fa23069ff527c7ab43138ff38c7049a76389cb9d92e870f92c66253da6ca7289",
+      "sha256": "d7078993c28e432bc6b53309190e70c7ba1d597d7672433239caff033ec69ac7",
       "anchors": [
         "LLFloaterPreference::refreshEnabledState",
         "vs_native_im_guard"
@@ -1464,826 +1464,826 @@
   "registries": {
     "messages": [
       {
-        "line": 2430,
+        "line": 2438,
         "call": "setHandlerFuncFast(_PREHASH_SoundTrigger, null_message_callback, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 2431,
+        "line": 2439,
         "call": "setHandlerFuncFast(_PREHASH_AttachedSound, null_message_callback, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 2563,
+        "line": 2571,
         "call": "setHandlerFuncFast( _PREHASH_AgentMovementComplete, process_agent_movement_complete)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3061,
+        "line": 3069,
         "call": "setHandlerFuncFast(_PREHASH_SoundTrigger, process_sound_trigger)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3062,
+        "line": 3070,
         "call": "setHandlerFuncFast(_PREHASH_PreloadSound, process_preload_sound)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3063,
+        "line": 3071,
         "call": "setHandlerFuncFast(_PREHASH_AttachedSound, process_attached_sound)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3064,
+        "line": 3072,
         "call": "setHandlerFuncFast(_PREHASH_AttachedSoundGainChange, process_attached_sound_gain_change)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3804,
+        "line": 3820,
         "call": "setHandlerFuncFast(_PREHASH_LayerData, process_layer_data )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3806,
+        "line": 3822,
         "call": "setHandlerFuncFast(_PREHASH_ImageData, LLViewerTextureList::receiveImageHeader )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3807,
+        "line": 3823,
         "call": "setHandlerFuncFast(_PREHASH_ImagePacket, LLViewerTextureList::receiveImagePacket )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3809,
+        "line": 3825,
         "call": "setHandlerFuncFast(_PREHASH_ObjectUpdate, process_object_update )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3810,
+        "line": 3826,
         "call": "setHandlerFunc(\"ObjectUpdateCompressed\", process_compressed_object_update )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3811,
+        "line": 3827,
         "call": "setHandlerFunc(\"ObjectUpdateCached\", process_cached_object_update )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3812,
+        "line": 3828,
         "call": "setHandlerFuncFast(_PREHASH_ImprovedTerseObjectUpdate, process_terse_object_update_improved )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3813,
+        "line": 3829,
         "call": "setHandlerFunc(\"SimStats\", process_sim_stats)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3814,
+        "line": 3830,
         "call": "setHandlerFuncFast(_PREHASH_HealthMessage, process_health_message )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3815,
+        "line": 3831,
         "call": "setHandlerFuncFast(_PREHASH_EconomyData, process_economy_data)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3816,
+        "line": 3832,
         "call": "setHandlerFunc(\"RegionInfo\", LLViewerRegion::processRegionInfo)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3818,
+        "line": 3834,
         "call": "setHandlerFuncFast(_PREHASH_ChatFromSimulator, process_chat_from_simulator)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3819,
+        "line": 3835,
         "call": "setHandlerFuncFast(_PREHASH_KillObject, process_kill_object, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3820,
+        "line": 3836,
         "call": "setHandlerFuncFast(_PREHASH_SimulatorViewerTimeMessage, process_time_synch, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3821,
+        "line": 3837,
         "call": "setHandlerFuncFast(_PREHASH_EnableSimulator, process_enable_simulator)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3822,
+        "line": 3838,
         "call": "setHandlerFuncFast(_PREHASH_DisableSimulator, process_disable_simulator)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3823,
+        "line": 3839,
         "call": "setHandlerFuncFast(_PREHASH_KickUser, process_kick_user, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3825,
+        "line": 3841,
         "call": "setHandlerFunc(\"CrossedRegion\", process_crossed_region)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3826,
+        "line": 3842,
         "call": "setHandlerFuncFast(_PREHASH_TeleportFinish, process_teleport_finish)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3828,
+        "line": 3844,
         "call": "setHandlerFuncFast(_PREHASH_AlertMessage, process_alert_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3829,
+        "line": 3845,
         "call": "setHandlerFunc(\"AgentAlertMessage\", process_agent_alert_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3830,
+        "line": 3846,
         "call": "setHandlerFuncFast(_PREHASH_MeanCollisionAlert, process_mean_collision_alert_message, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3831,
+        "line": 3847,
         "call": "setHandlerFunc(\"ViewerFrozenMessage\", process_frozen_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3833,
+        "line": 3849,
         "call": "setHandlerFuncFast(_PREHASH_NameValuePair, process_name_value)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3834,
+        "line": 3850,
         "call": "setHandlerFuncFast(_PREHASH_RemoveNameValuePair, process_remove_name_value)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3835,
+        "line": 3851,
         "call": "setHandlerFuncFast(_PREHASH_AvatarAnimation, process_avatar_animation)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3836,
+        "line": 3852,
         "call": "setHandlerFuncFast(_PREHASH_ObjectAnimation, process_object_animation)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3837,
+        "line": 3853,
         "call": "setHandlerFuncFast(_PREHASH_AvatarAppearance, process_avatar_appearance)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3839,
+        "line": 3855,
         "call": "setHandlerFunc(\"AgentCachedTextureResponse\", LLAgent::processAgentCachedTextureResponse)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3840,
+        "line": 3856,
         "call": "setHandlerFunc(\"RebakeAvatarTextures\", LLVOAvatarSelf::processRebakeAvatarTextures)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3842,
+        "line": 3858,
         "call": "setHandlerFuncFast(_PREHASH_CameraConstraint, process_camera_constraint)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3843,
+        "line": 3859,
         "call": "setHandlerFuncFast(_PREHASH_AvatarSitResponse, process_avatar_sit_response)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3844,
+        "line": 3860,
         "call": "setHandlerFunc(\"SetFollowCamProperties\", process_set_follow_cam_properties)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3845,
+        "line": 3861,
         "call": "setHandlerFunc(\"ClearFollowCamProperties\", process_clear_follow_cam_properties)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3847,
+        "line": 3863,
         "call": "setHandlerFuncFast(_PREHASH_ImprovedInstantMessage, process_improved_im)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3848,
+        "line": 3864,
         "call": "setHandlerFuncFast(_PREHASH_ScriptQuestion, process_script_question)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3851,
+        "line": 3867,
         "call": "setHandlerFuncFast(_PREHASH_ObjectProperties, process_object_properties, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3855,
+        "line": 3871,
         "call": "setHandlerFuncFast(_PREHASH_ObjectPropertiesFamily, process_object_properties_family, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3857,
+        "line": 3873,
         "call": "setHandlerFunc(\"ForceObjectSelect\", LLSelectMgr::processForceObjectSelect)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3859,
+        "line": 3875,
         "call": "setHandlerFuncFast(_PREHASH_MoneyBalanceReply, process_money_balance_reply, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3860,
+        "line": 3876,
         "call": "setHandlerFuncFast(_PREHASH_CoarseLocationUpdate, LLWorld::processCoarseUpdate, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3861,
+        "line": 3877,
         "call": "setHandlerFuncFast(_PREHASH_ReplyTaskInventory, LLViewerObject::processTaskInv, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3862,
+        "line": 3878,
         "call": "setHandlerFuncFast(_PREHASH_DerezContainer, process_derez_container, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3863,
+        "line": 3879,
         "call": "setHandlerFuncFast(_PREHASH_ScriptRunningReply, &LLLiveLSLEditor::processScriptRunningReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3866,
+        "line": 3882,
         "call": "setHandlerFuncFast(_PREHASH_DeRezAck, process_derez_ack)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3868,
+        "line": 3884,
         "call": "setHandlerFunc(\"LogoutReply\", process_logout_reply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3874,
+        "line": 3890,
         "call": "setHandlerFuncFast(_PREHASH_AgentDataUpdate, &LLAgent::processAgentDataUpdate)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3876,
+        "line": 3892,
         "call": "setHandlerFuncFast(_PREHASH_AgentGroupDataUpdate, &LLAgent::processAgentGroupDataUpdate)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3878,
+        "line": 3894,
         "call": "setHandlerFunc(\"AgentDropGroup\", &LLAgent::processAgentDropGroup)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3881,
+        "line": 3897,
         "call": "setHandlerFuncFast(_PREHASH_ParcelOverlay, LLViewerParcelMgr::processParcelOverlay)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3883,
+        "line": 3899,
         "call": "setHandlerFuncFast(_PREHASH_ParcelProperties, LLViewerParcelMgr::processParcelProperties)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3885,
+        "line": 3901,
         "call": "setHandlerFunc(\"ParcelAccessListReply\", LLViewerParcelMgr::processParcelAccessListReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3887,
+        "line": 3903,
         "call": "setHandlerFunc(\"ParcelDwellReply\", LLViewerParcelMgr::processParcelDwellReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3890,
+        "line": 3906,
         "call": "setHandlerFunc(\"AvatarPropertiesReply\", &LLAvatarPropertiesProcessor::processAvatarLegacyPropertiesReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3892,
+        "line": 3908,
         "call": "setHandlerFunc(\"AvatarInterestsReply\", &LLAvatarPropertiesProcessor::processAvatarInterestsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3894,
+        "line": 3910,
         "call": "setHandlerFunc(\"AvatarGroupsReply\", &LLAvatarPropertiesProcessor::processAvatarGroupsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3896,
+        "line": 3912,
         "call": "setHandlerFunc(\"AvatarNotesReply\", &LLAvatarPropertiesProcessor::processAvatarNotesReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3898,
+        "line": 3914,
         "call": "setHandlerFunc(\"AvatarPicksReply\", &LLAvatarPropertiesProcessor::processAvatarPicksReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3900,
+        "line": 3916,
         "call": "setHandlerFunc(\"AvatarClassifiedReply\", &LLAvatarPropertiesProcessor::processAvatarClassifiedsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3903,
+        "line": 3919,
         "call": "setHandlerFuncFast(_PREHASH_CreateGroupReply, LLGroupMgr::processCreateGroupReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3905,
+        "line": 3921,
         "call": "setHandlerFuncFast(_PREHASH_JoinGroupReply, LLGroupMgr::processJoinGroupReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3907,
+        "line": 3923,
         "call": "setHandlerFuncFast(_PREHASH_EjectGroupMemberReply, LLGroupMgr::processEjectGroupMemberReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3909,
+        "line": 3925,
         "call": "setHandlerFuncFast(_PREHASH_LeaveGroupReply, LLGroupMgr::processLeaveGroupReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3911,
+        "line": 3927,
         "call": "setHandlerFuncFast(_PREHASH_GroupProfileReply, LLGroupMgr::processGroupPropertiesReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3919,
+        "line": 3935,
         "call": "setHandlerFuncFast(_PREHASH_AgentWearablesUpdate, LLAgentWearables::processAgentInitialWearablesUpdate )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3921,
+        "line": 3937,
         "call": "setHandlerFunc(\"ScriptControlChange\", LLAgent::processScriptControlChange )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3924,
+        "line": 3940,
         "call": "setHandlerFuncFast(_PREHASH_ViewerEffect, LLHUDManager::processViewerEffect)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3926,
+        "line": 3942,
         "call": "setHandlerFuncFast(_PREHASH_GrantGodlikePowers, process_grant_godlike_powers)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3928,
+        "line": 3944,
         "call": "setHandlerFuncFast(_PREHASH_GroupAccountSummaryReply, LLPanelGroupLandMoney::processGroupAccountSummaryReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3930,
+        "line": 3946,
         "call": "setHandlerFuncFast(_PREHASH_GroupAccountDetailsReply, LLPanelGroupLandMoney::processGroupAccountDetailsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3932,
+        "line": 3948,
         "call": "setHandlerFuncFast(_PREHASH_GroupAccountTransactionsReply, LLPanelGroupLandMoney::processGroupAccountTransactionsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3935,
+        "line": 3951,
         "call": "setHandlerFuncFast(_PREHASH_UserInfoReply, process_user_info_reply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3938,
+        "line": 3954,
         "call": "setHandlerFunc(\"RegionHandshake\", process_region_handshake, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3940,
+        "line": 3956,
         "call": "setHandlerFunc(\"TeleportStart\", process_teleport_start )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3941,
+        "line": 3957,
         "call": "setHandlerFunc(\"TeleportProgress\", process_teleport_progress)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3942,
+        "line": 3958,
         "call": "setHandlerFunc(\"TeleportFailed\", process_teleport_failed, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3943,
+        "line": 3959,
         "call": "setHandlerFunc(\"TeleportLocal\", process_teleport_local, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3945,
+        "line": 3961,
         "call": "setHandlerFunc(\"ImageNotInDatabase\", LLViewerTextureList::processImageNotInDatabase, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3947,
+        "line": 3963,
         "call": "setHandlerFuncFast(_PREHASH_GroupMembersReply, LLGroupMgr::processGroupMembersReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3949,
+        "line": 3965,
         "call": "setHandlerFunc(\"GroupRoleDataReply\", LLGroupMgr::processGroupRoleDataReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3951,
+        "line": 3967,
         "call": "setHandlerFunc(\"GroupRoleMembersReply\", LLGroupMgr::processGroupRoleMembersReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3953,
+        "line": 3969,
         "call": "setHandlerFunc(\"GroupTitlesReply\", LLGroupMgr::processGroupTitlesReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3956,
+        "line": 3972,
         "call": "setHandlerFunc(\"PlacesReply\", process_places_reply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3957,
+        "line": 3973,
         "call": "setHandlerFunc(\"GroupNoticesListReply\", LLPanelGroupNotices::processGroupNoticesListReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3959,
+        "line": 3975,
         "call": "setHandlerFunc(\"AvatarPickerReply\", LLFloaterAvatarPicker::processAvatarPickerReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3961,
+        "line": 3977,
         "call": "setHandlerFunc(\"DirPlacesReply\", LLPanelDirBrowser::processDirPlacesReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3962,
+        "line": 3978,
         "call": "setHandlerFunc(\"DirPeopleReply\", LLPanelDirBrowser::processDirPeopleReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3963,
+        "line": 3979,
         "call": "setHandlerFunc(\"DirEventsReply\", LLPanelDirBrowser::processDirEventsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3964,
+        "line": 3980,
         "call": "setHandlerFunc(\"DirGroupsReply\", LLPanelDirBrowser::processDirGroupsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3965,
+        "line": 3981,
         "call": "setHandlerFunc(\"DirClassifiedReply\", LLPanelDirBrowser::processDirClassifiedReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3966,
+        "line": 3982,
         "call": "setHandlerFunc(\"DirLandReply\", LLPanelDirBrowser::processDirLandReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3968,
+        "line": 3984,
         "call": "setHandlerFunc(\"MapBlockReply\", LLWorldMapMessage::processMapBlockReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3969,
+        "line": 3985,
         "call": "setHandlerFunc(\"MapItemReply\", LLWorldMapMessage::processMapItemReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3970,
+        "line": 3986,
         "call": "setHandlerFunc(\"EventInfoReply\", LLEventNotifier::processEventInfoReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3972,
+        "line": 3988,
         "call": "setHandlerFunc(\"PickInfoReply\", &LLAvatarPropertiesProcessor::processPickInfoReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3973,
+        "line": 3989,
         "call": "setHandlerFunc(\"ClassifiedInfoReply\", LLAvatarPropertiesProcessor::processClassifiedInfoReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3974,
+        "line": 3990,
         "call": "setHandlerFunc(\"ParcelInfoReply\", LLRemoteParcelInfoProcessor::processParcelInfoReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3975,
+        "line": 3991,
         "call": "setHandlerFunc(\"ScriptDialog\", process_script_dialog)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3976,
+        "line": 3992,
         "call": "setHandlerFunc(\"LoadURL\", process_load_url)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3977,
+        "line": 3993,
         "call": "setHandlerFunc(\"ScriptTeleportRequest\", process_script_teleport_request)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3978,
+        "line": 3994,
         "call": "setHandlerFunc(\"EstateCovenantReply\", process_covenant_reply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3981,
+        "line": 3997,
         "call": "setHandlerFunc(\"OfferCallingCard\", process_offer_callingcard)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3982,
+        "line": 3998,
         "call": "setHandlerFunc(\"AcceptCallingCard\", process_accept_callingcard)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3983,
+        "line": 3999,
         "call": "setHandlerFunc(\"DeclineCallingCard\", process_decline_callingcard)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3985,
+        "line": 4001,
         "call": "setHandlerFunc(\"ParcelObjectOwnersReply\", LLPanelLandObjects::processParcelObjectOwnersReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3987,
+        "line": 4003,
         "call": "setHandlerFunc(\"InitiateDownload\", process_initiate_download)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3988,
+        "line": 4004,
         "call": "setHandlerFunc(\"LandStatReply\", LLFloaterTopObjects::handle_land_reply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3989,
+        "line": 4005,
         "call": "setHandlerFunc(\"GenericMessage\", process_generic_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3990,
+        "line": 4006,
         "call": "setHandlerFunc(\"GenericStreamingMessage\", process_generic_streaming_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3991,
+        "line": 4007,
         "call": "setHandlerFunc(\"LargeGenericMessage\", process_large_generic_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3993,
+        "line": 4009,
         "call": "setHandlerFuncFast(_PREHASH_FeatureDisabled, process_feature_disabled_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
@@ -2292,1232 +2292,1232 @@
     ],
     "settings": [
       {
-        "line": 1415,
+        "line": 1416,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FirstPersonAvatarVisible\", handleRenderAvatarMouselookChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1416,
+        "line": 1417,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderFarClip\", handleRenderFarClipChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1417,
+        "line": 1418,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTerrainScale\", handleTerrainScaleChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1418,
+        "line": 1419,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTerrainPBRScale\", handlePBRTerrainScaleChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1419,
+        "line": 1420,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTerrainPBRDetail\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1420,
+        "line": 1421,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTerrainPBRPlanarSampleCount\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1421,
+        "line": 1422,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTerrainPBRTriplanarBlendFactor\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1422,
+        "line": 1423,
         "call": "setting_setup_signal_listener(gSavedSettings, \"OctreeStaticObjectSizeFactor\", handleRepartition)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1423,
+        "line": 1424,
         "call": "setting_setup_signal_listener(gSavedSettings, \"OctreeDistanceFactor\", handleRepartition)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1424,
+        "line": 1425,
         "call": "setting_setup_signal_listener(gSavedSettings, \"OctreeMaxNodeCapacity\", handleRepartition)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1425,
+        "line": 1426,
         "call": "setting_setup_signal_listener(gSavedSettings, \"OctreeAlphaDistanceFactor\", handleRepartition)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1426,
+        "line": 1427,
         "call": "setting_setup_signal_listener(gSavedSettings, \"OctreeAttachmentSizeFactor\", handleRepartition)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1427,
+        "line": 1428,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderMaxTextureIndex\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1428,
+        "line": 1429,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderUIBuffer\", handleWindowResized)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1429,
+        "line": 1430,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderDepthOfField\", handleReleaseGLBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1430,
+        "line": 1431,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderFSAAType\", handleReleaseGLBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1431,
+        "line": 1432,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderSpecularResX\", handleLUTBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1432,
+        "line": 1433,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderSpecularResY\", handleLUTBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1433,
+        "line": 1434,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderSpecularExponent\", handleLUTBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1434,
+        "line": 1435,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAnisotropic\", handleAnisotropicChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1435,
+        "line": 1436,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderShadowResolutionScale\", handleShadowsResized)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1436,
+        "line": 1437,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGlow\", handleReleaseGLBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1437,
+        "line": 1438,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGlow\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1438,
+        "line": 1439,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGlowResolutionPow\", handleReleaseGLBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1439,
+        "line": 1440,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGlowHDR\", handleReleaseGLBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1440,
+        "line": 1441,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderEnableEmissiveBuffer\", handleEnableEmissiveChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1441,
+        "line": 1442,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderDisableVintageMode\", handleDisableVintageMode)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1442,
+        "line": 1443,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderHDREnabled\", handleEnableHDR)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1443,
+        "line": 1444,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGlowNoise\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1444,
+        "line": 1445,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGammaFull\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1445,
+        "line": 1446,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSOverrideVRAMDetection\", handleOverrideVRAMDetectionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1446,
+        "line": 1447,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderVolumeLODFactor\", handleVolumeLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1447,
+        "line": 1448,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAvatarComplexityMode\", handleUserImpostorByDistEnabledChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1448,
+        "line": 1449,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAvatarLODFactor\", handleAvatarLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1449,
+        "line": 1450,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAvatarPhysicsLODFactor\", handleAvatarPhysicsLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1450,
+        "line": 1451,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTerrainLODFactor\", handleTerrainLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1451,
+        "line": 1452,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTreeLODFactor\", handleTreeLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1452,
+        "line": 1453,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderFlexTimeFactor\", handleFlexLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1453,
+        "line": 1454,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGamma\", handleGammaChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1454,
+        "line": 1455,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderFogRatio\", handleFogRatioChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1455,
+        "line": 1456,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderMaxPartCount\", handleMaxPartCountChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1456,
+        "line": 1457,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderDynamicLOD\", handleRenderDynamicLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1457,
+        "line": 1458,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderVSyncEnable\", handleVSyncChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1458,
+        "line": 1459,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderDeferredNoise\", handleReleaseGLBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1459,
+        "line": 1460,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderDebugPipeline\", handleRenderDebugPipelineChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1460,
+        "line": 1461,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderResolutionDivisor\", handleRenderResolutionDivisorChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1462,
+        "line": 1463,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderResolutionMultiplier\", handleRenderResolutionDivisorChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1464,
+        "line": 1465,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderReflectionProbeLevel\", handleReflectionProbeDetailChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1465,
+        "line": 1466,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderReflectionProbeDetail\", handleReflectionProbeDetailChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1466,
+        "line": 1467,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderReflectionProbeCount\", handleReflectionProbeCountChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1467,
+        "line": 1468,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderReflectionsEnabled\", handleReflectionProbeDetailChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1469,
+        "line": 1470,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAppleUseMultGL\", handleAppleUseMultGLChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1471,
+        "line": 1472,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderScreenSpaceReflections\", handleReflectionProbeDetailChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1472,
+        "line": 1473,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderMirrors\", handleReflectionProbeDetailChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1473,
+        "line": 1474,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderHeroProbeResolution\", handleHeroProbeResolutionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1474,
+        "line": 1475,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderShadowDetail\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1475,
+        "line": 1476,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderDeferredSSAO\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1476,
+        "line": 1477,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderPerformanceTest\", handleRenderPerfTestChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1477,
+        "line": 1478,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAvatarCloth\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1478,
+        "line": 1479,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ChatConsoleFontSize\", handleChatFontSizeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1479,
+        "line": 1480,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ChatPersistTime\", handleChatPersistTimeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1480,
+        "line": 1481,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ConsoleMaxLines\", handleConsoleMaxLinesChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1481,
+        "line": 1482,
         "call": "setting_setup_signal_listener(gSavedSettings, \"UploadBakedTexOld\", handleUploadBakedTexOldChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1482,
+        "line": 1483,
         "call": "setting_setup_signal_listener(gSavedSettings, \"UseOcclusion\", handleUseOcclusionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1483,
+        "line": 1484,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelMaster\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1484,
+        "line": 1485,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelSFX\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1485,
+        "line": 1486,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelUI\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1486,
+        "line": 1487,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelAmbient\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1487,
+        "line": 1488,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelMusic\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1488,
+        "line": 1489,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelMedia\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1489,
+        "line": 1490,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelVoice\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1490,
+        "line": 1491,
         "call": "setting_setup_signal_listener(gSavedSettings, \"MuteAudio\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1491,
+        "line": 1492,
         "call": "setting_setup_signal_listener(gSavedSettings, \"MuteMusic\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1492,
+        "line": 1493,
         "call": "setting_setup_signal_listener(gSavedSettings, \"MuteMedia\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1493,
+        "line": 1494,
         "call": "setting_setup_signal_listener(gSavedSettings, \"MuteVoice\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1494,
+        "line": 1495,
         "call": "setting_setup_signal_listener(gSavedSettings, \"MuteAmbient\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1495,
+        "line": 1496,
         "call": "setting_setup_signal_listener(gSavedSettings, \"MuteUI\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1496,
+        "line": 1497,
         "call": "setting_setup_signal_listener(gSavedSettings, \"WLSkyDetail\", handleWLSkyDetailChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1497,
+        "line": 1498,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1498,
+        "line": 1499,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1499,
+        "line": 1500,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1500,
+        "line": 1501,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1501,
+        "line": 1502,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1502,
+        "line": 1503,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1503,
+        "line": 1504,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis6\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1504,
+        "line": 1505,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1505,
+        "line": 1506,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1506,
+        "line": 1507,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1507,
+        "line": 1508,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1508,
+        "line": 1509,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1509,
+        "line": 1510,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1510,
+        "line": 1511,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale6\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1511,
+        "line": 1512,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1512,
+        "line": 1513,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1513,
+        "line": 1514,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1514,
+        "line": 1515,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1515,
+        "line": 1516,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1516,
+        "line": 1517,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1517,
+        "line": 1518,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone6\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1518,
+        "line": 1519,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisScale0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1519,
+        "line": 1520,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisScale1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1520,
+        "line": 1521,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisScale2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1521,
+        "line": 1522,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisScale3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1522,
+        "line": 1523,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisScale4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1523,
+        "line": 1524,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisScale5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1524,
+        "line": 1525,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisDeadZone0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1525,
+        "line": 1526,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisDeadZone1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1526,
+        "line": 1527,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisDeadZone2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1527,
+        "line": 1528,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisDeadZone3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1528,
+        "line": 1529,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisDeadZone4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1529,
+        "line": 1530,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisDeadZone5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1530,
+        "line": 1531,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisScale0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1531,
+        "line": 1532,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisScale1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1532,
+        "line": 1533,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisScale2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1533,
+        "line": 1534,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisScale3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1534,
+        "line": 1535,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisScale4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1535,
+        "line": 1536,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisScale5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1536,
+        "line": 1537,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisDeadZone0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1537,
+        "line": 1538,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisDeadZone1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1538,
+        "line": 1539,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisDeadZone2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1539,
+        "line": 1540,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisDeadZone3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1540,
+        "line": 1541,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisDeadZone4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1541,
+        "line": 1542,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisDeadZone5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1542,
+        "line": 1543,
         "call": "setting_setup_signal_listener(gSavedSettings, \"DebugViews\", handleDebugViewsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1543,
+        "line": 1544,
         "call": "setting_setup_signal_listener(gSavedSettings, \"UserLogFile\", handleLogFileChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1544,
+        "line": 1545,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderHideGroupTitle\", handleHideGroupTitleChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1545,
+        "line": 1546,
         "call": "setting_setup_signal_listener(gSavedSettings, \"HighResSnapshot\", handleHighResSnapshotChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1546,
+        "line": 1547,
         "call": "setting_setup_signal_listener(gSavedSettings, \"EnableVoiceChat\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1547,
+        "line": 1548,
         "call": "setting_setup_signal_listener(gSavedSettings, \"PTTCurrentlyEnabled\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1548,
+        "line": 1549,
         "call": "setting_setup_signal_listener(gSavedSettings, \"PushToTalkButton\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1549,
+        "line": 1550,
         "call": "setting_setup_signal_listener(gSavedSettings, \"PushToTalkToggle\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1550,
+        "line": 1551,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VoiceEarLocation\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1551,
+        "line": 1552,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VoiceEchoCancellation\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1552,
+        "line": 1553,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VoiceAutomaticGainControl\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1553,
+        "line": 1554,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VoiceNoiseSuppressionLevel\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1554,
+        "line": 1555,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VoiceInputAudioDevice\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1555,
+        "line": 1556,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VoiceOutputAudioDevice\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1556,
+        "line": 1557,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelMic\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1557,
+        "line": 1558,
         "call": "setting_setup_signal_listener(gSavedSettings, \"LipSyncEnabled\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1558,
+        "line": 1559,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VelocityInterpolate\", handleVelocityInterpolate)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1559,
+        "line": 1560,
         "call": "setting_setup_signal_listener(gSavedSettings, \"QAMode\", show_debug_menus)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1560,
+        "line": 1561,
         "call": "setting_setup_signal_listener(gSavedSettings, \"UseDebugMenus\", show_debug_menus)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1561,
+        "line": 1562,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AgentPause\", toggle_agent_pause)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1568,
+        "line": 1569,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ShowMenuBarLocation\", toggle_show_menubar_location_panel)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1569,
+        "line": 1570,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ShowObjectRenderingCost\", toggle_show_object_render_cost)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1570,
+        "line": 1571,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ForceShowGrid\", handleForceShowGrid)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1572,
+        "line": 1573,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ShowStartLocation\", handleForceShowGrid)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1573,
+        "line": 1574,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTransparentWater\", handleRenderTransparentWaterChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1574,
+        "line": 1575,
         "call": "setting_setup_signal_listener(gSavedSettings, \"SpellCheck\", handleSpellCheckChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1575,
+        "line": 1576,
         "call": "setting_setup_signal_listener(gSavedSettings, \"SpellCheckDictionary\", handleSpellCheckChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1576,
+        "line": 1577,
         "call": "setting_setup_signal_listener(gSavedSettings, \"LoginLocation\", handleLoginLocationChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1577,
+        "line": 1578,
         "call": "setting_setup_signal_listener(gSavedSettings, \"DebugAvatarJoints\", handleDebugAvatarJointsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1578,
+        "line": 1579,
         "call": "setting_setup_signal_listener(gSavedSettings, \"DebugQualityPerformance\", handleDebugQualityPerformanceChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1580,
+        "line": 1581,
         "call": "setting_setup_signal_listener(gSavedSettings, \"TargetFPS\", handleTargetFPSChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1581,
+        "line": 1582,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutoTuneFPS\", handleAutoTuneFPSChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1582,
+        "line": 1583,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutoTuneLock\", handleAutoTuneLockChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1583,
+        "line": 1584,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAvatarMaxART\", handleRenderAvatarMaxARTChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1584,
+        "line": 1585,
         "call": "setting_setup_signal_listener(gSavedSettings, \"PerfStatsCaptureEnabled\", handlePerformanceStatsEnabledChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1585,
+        "line": 1586,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutoTuneRenderFarClipTarget\", handleUserTargetDrawDistanceChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1586,
+        "line": 1587,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutoTuneRenderFarClipMin\", handleUserMinDrawDistanceChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1587,
+        "line": 1588,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutoTuneImpostorFarAwayDistance\", handleUserImpostorDistanceChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1588,
+        "line": 1589,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutoTuneImpostorByDistEnabled\", handleUserImpostorByDistEnabledChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1589,
+        "line": 1590,
         "call": "setting_setup_signal_listener(gSavedSettings, \"TuningFPSStrategy\", handleFPSTuningStrategyChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1591,
+        "line": 1592,
         "call": "setting_setup_signal_listener(gSavedSettings, \"LocalTerrainPaintEnabled\", handleLocalTerrainChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1602,
+        "line": 1603,
         "call": "setting_setup_signal_listener(gSavedSettings, asset_setting_name, handleLocalTerrainChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1606,
+        "line": 1607,
         "call": "setting_setup_signal_listener(gSavedSettings, transform_setting_name, handleLocalTerrainChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1610,
+        "line": 1611,
         "call": "setting_setup_signal_listener(gSavedSettings, \"TerrainPaintBitDepth\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1612,
+        "line": 1613,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"AvatarHoverOffsetZ\", handleAvatarHoverOffsetChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1615,
+        "line": 1616,
         "call": "setting_setup_signal_listener(gSavedSettings, static_cast<std::string>(RlvSettingNames::Main), RlvSettings::onChangedSettingMain)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1618,
+        "line": 1619,
         "call": "setting_setup_signal_listener(gSavedSettings, \"_NACL_AntiSpamGlobalQueue\", handleNaclAntiSpamGlobalQueueChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1619,
+        "line": 1620,
         "call": "setting_setup_signal_listener(gSavedSettings, \"_NACL_AntiSpamTime\", handleNaclAntiSpamTimeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1620,
+        "line": 1621,
         "call": "setting_setup_signal_listener(gSavedSettings, \"_NACL_AntiSpamAmount\", handleNaclAntiSpamAmountChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1622,
+        "line": 1623,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutohideChatBar\", handleAutohideChatbarChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1625,
+        "line": 1626,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSUseStandaloneTeleportHistoryFloater\", handleUseStandaloneTeleportHistoryFloaterChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1628,
+        "line": 1629,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSPoseStandLock\", handleSetPoseStandLock)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1632,
+        "line": 1633,
         "call": "setting_setup_signal_listener(gSavedSettings, \"UseLSLBridge\", [](const LLSD& value) { if (value.asBoolean()) FSLSLBridge::instance().initBridge(); else if (FSLSLBridge::instanceExists()) FSLSLBridge::instance().resetNativeAccount(); })",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
@@ -3525,231 +3525,231 @@
         "reason": "Native-only bridge enable listener enters the shared lifecycle through real native attachment/task/script owners; disabling retires operation/account callbacks without constructing legacy scene resources. Peer GL setting registration is unchanged."
       },
       {
-        "line": 1638,
+        "line": 1639,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"UseLSLFlightAssist\", handleFlightAssistOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1639,
+        "line": 1640,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"UseMoveLock\", handleMovelockOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1640,
+        "line": 1641,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"RelockMoveLockAfterMovement\", handleMovelockAfterMoveOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1641,
+        "line": 1642,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSBuildToolDecimalPrecision\", handleDecimalPrecisionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1644,
+        "line": 1645,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"BridgeIntegrationOC\", handleExternalIntegrationsOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1645,
+        "line": 1646,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"BridgeIntegrationLM\", handleExternalIntegrationsOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1647,
+        "line": 1648,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSNameTagShowLegacyUsernames\", handleUsernameFormatOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1648,
+        "line": 1649,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSTrimLegacyNames\", handleLegacyTrimOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1651,
-        "call": "setting_setup_signal_listener(gSavedSettings, \"PlainTextChatHistory\", FSFloaterIM::processChatHistoryStyleUpdate)",
+        "line": 1652,
+        "call": "setting_setup_signal_listener(gSavedSettings, \"PlainTextChatHistory\", FSFloaterIM::handleChatHistoryStyleChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
-      },
-      {
-        "line": 1652,
-        "call": "setting_setup_signal_listener(gSavedSettings, \"PlainTextChatHistory\", FSFloaterNearbyChat::processChatHistoryStyleUpdate)",
-        "gate": "G-SETTINGS",
-        "caller_route": "R10",
-        "disposition": "retain-split"
       },
       {
         "line": 1653,
-        "call": "setting_setup_signal_listener(gSavedSettings, \"ChatFontSize\", FSFloaterIM::processChatHistoryStyleUpdate)",
-        "gate": "G-SETTINGS",
-        "caller_route": "R10",
-        "disposition": "defer"
-      },
-      {
-        "line": 1654,
-        "call": "setting_setup_signal_listener(gSavedSettings, \"ChatFontSize\", FSFloaterNearbyChat::processChatHistoryStyleUpdate)",
+        "call": "setting_setup_signal_listener(gSavedSettings, \"PlainTextChatHistory\", FSFloaterNearbyChat::handleChatHistoryStyleChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
+        "line": 1654,
+        "call": "setting_setup_signal_listener(gSavedSettings, \"ChatFontSize\", FSFloaterIM::handleChatHistoryStyleChanged)",
+        "gate": "G-SETTINGS",
+        "caller_route": "R10",
+        "disposition": "defer"
+      },
+      {
         "line": 1655,
+        "call": "setting_setup_signal_listener(gSavedSettings, \"ChatFontSize\", FSFloaterNearbyChat::handleChatHistoryStyleChanged)",
+        "gate": "G-SETTINGS",
+        "caller_route": "R10",
+        "disposition": "retain-split"
+      },
+      {
+        "line": 1656,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ChatFontSize\", LLViewerChat::signalChatFontChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1658,
+        "line": 1659,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"GlobalOnlineStatusToggle\", handleGlobalOnlineStatusChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1661,
+        "line": 1662,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSHudTextFadeDistance\", LLHUDText::onFadeSettingsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1662,
+        "line": 1663,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSHudTextFadeRange\", LLHUDText::onFadeSettingsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1665,
+        "line": 1666,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ThrottleBandwidthKBPS\", handleBandwidthChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1666,
+        "line": 1667,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSContactListShowSearch\", handleContactListShowSearchChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1669,
+        "line": 1670,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSEnableLogThrottle\", handleLogThrottleChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1672,
+        "line": 1673,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSStaticEyesUUID\", handleStaticEyesChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1673,
+        "line": 1674,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"FSStaticEyes\", handleStaticEyesChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1677,
+        "line": 1678,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"FSRenderFriendsOnly\", handleRenderFriendsOnlyChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1680,
+        "line": 1681,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ShowNavbarFavoritesPanel\", handleNavbarSettingsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1681,
+        "line": 1682,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ShowNavbarNavigationPanel\", handleNavbarSettingsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1685,
+        "line": 1686,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSStatisticsNoFocus\", handleFSStatisticsNoFocusChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1689,
+        "line": 1690,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSOutputDeviceUUID\", handleOutputDeviceChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1692,
+        "line": 1693,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSUseSmallCameraFloater\", handleSmallCameraFloaterChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1695,
+        "line": 1696,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSStatusBarTimeFormat\", handleStatusbarTimeformatChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1698,
+        "line": 1699,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSPlayDefaultBentoAnimation\", handlePlayBentoIdleAnimationChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1701,
+        "line": 1702,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSDiskCacheSize\", handleDiskCacheSizeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1703,
+        "line": 1704,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSDiskCacheHighWaterPercent\", handleDiskCacheHighWaterPctChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1704,
+        "line": 1705,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSDiskCacheLowWaterPercent\", handleDiskCacheLowWaterPctChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1709,
+        "line": 1710,
         "call": "setting_setup_signal_listener(gSavedSettings, \"SDL2IMEEnabled\", handleSDL2IMEEnabledChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
@@ -3758,987 +3758,1001 @@
     ],
     "floaters": [
       {
-        "line": 402,
+        "line": 400,
         "call": "LLFloaterReg::add(\"360capture\", \"floater_360capture.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloater360Capture>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 403,
+        "line": 401,
         "call": "LLFloaterReg::add(\"block_timers\", \"floater_fast_timers.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFastTimerView>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 404,
+        "line": 402,
         "call": "LLFloaterReg::add(\"about_land\", \"floater_about_land.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterLand>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 405,
+        "line": 403,
         "call": "LLFloaterReg::add(\"add_payment_method\", \"floater_add_payment_method.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterAddPaymentMethod>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 406,
+        "line": 404,
         "call": "LLFloaterReg::add(\"appearance\", \"floater_my_appearance.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSidePanelContainer>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 407,
+        "line": 405,
         "call": "LLFloaterReg::add(\"associate_listing\", \"floater_associate_listing.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterAssociateListing>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 408,
+        "line": 406,
         "call": "LLFloaterReg::add(\"auction\", \"floater_auction.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterAuction>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 409,
+        "line": 407,
         "call": "LLFloaterReg::add(\"avatar_picker\", \"floater_avatar_picker.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterAvatarPicker>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 410,
+        "line": 408,
         "call": "LLFloaterReg::add(\"avatar_welcome_pack\", \"floater_avatar_welcome_pack.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterAvatarWelcomePack>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 413,
+        "line": 411,
         "call": "LLFloaterReg::add(\"avatar_textures\", \"floater_avatar_textures.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterAvatarTextures>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 415,
+        "line": 413,
         "call": "LLFloaterReg::add(\"ban_duration\", \"floater_ban_duration.xml\", &LLFloaterReg::build<LLFloaterBanDuration>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 416,
+        "line": 414,
         "call": "LLFloaterReg::add(\"beacons\", \"floater_beacons.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterBeacons>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 417,
+        "line": 415,
         "call": "LLFloaterReg::add(\"bulk_perms\", \"floater_bulk_perms.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterBulkPermission>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 418,
+        "line": 416,
         "call": "LLFloaterReg::add(\"buy_currency\", \"floater_buy_currency.xml\", &LLFloaterBuyCurrency::buildFloater)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 419,
+        "line": 417,
         "call": "LLFloaterReg::add(\"buy_currency_html\", \"floater_buy_currency_html.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterBuyCurrencyHTML>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 420,
+        "line": 418,
         "call": "LLFloaterReg::add(\"buy_land\", \"floater_buy_land.xml\", &LLFloaterBuyLand::buildFloater)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 421,
+        "line": 419,
         "call": "LLFloaterReg::add(\"buy_object\", \"floater_buy_object.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterBuy>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 422,
+        "line": 420,
         "call": "LLFloaterReg::add(\"buy_object_contents\", \"floater_buy_contents.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterBuyContents>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 423,
+        "line": 421,
         "call": "LLFloaterReg::add(\"build\", \"floater_tools.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterTools>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 424,
+        "line": 422,
         "call": "LLFloaterReg::add(\"build_options\", \"floater_build_options.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterBuildOptions>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 425,
+        "line": 423,
         "call": "LLFloaterReg::add(\"bulk_upload\", \"floater_bulk_upload.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterBulkUpload>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 426,
+        "line": 424,
         "call": "LLFloaterReg::add(\"bumps\", \"floater_bumps.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterBump>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 428,
+        "line": 426,
         "call": "LLFloaterReg::add(\"camera\", \"floater_camera.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterCamera>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 430,
+        "line": 428,
         "call": "LLFloaterReg::add(\"fs_camera_small\", \"floater_fs_camera_small.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterCamera>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 431,
+        "line": 429,
         "call": "LLFloaterReg::add(\"camera_presets\", \"floater_camera_presets.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterCameraPresets>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 432,
+        "line": 430,
         "call": "LLFloaterReg::add(\"chat_voice\", \"floater_voice_chat_volume.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterChatVoiceVolume>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 433,
+        "line": 431,
         "call": "LLFloaterReg::add(\"change_item_thumbnail\", \"floater_change_item_thumbnail.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterChangeItemThumbnail>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 436,
+        "line": 434,
         "call": "LLFloaterReg::add(\"fs_nearby_chat\", \"floater_fs_nearby_chat.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterNearbyChat>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "retain-split"
       },
       {
-        "line": 438,
+        "line": 436,
         "call": "LLFloaterReg::add(\"chat_mention_picker\", \"floater_chat_mention_picker.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterChatMentionPicker>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 439,
+        "line": 437,
         "call": "LLFloaterReg::add(\"classified\", \"floater_classified.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterClassified>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 440,
+        "line": 438,
         "call": "LLFloaterReg::add(\"compile_queue\", \"floater_script_queue.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterCompileQueue>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 441,
+        "line": 439,
         "call": "LLFloaterReg::add(\"conversation\", \"floater_conversation_log.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterConversationLog>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 442,
+        "line": 440,
         "call": "LLFloaterReg::add(\"add_landmark\", \"floater_create_landmark.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterCreateLandmark>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 444,
+        "line": 442,
         "call": "LLFloaterReg::add(\"delete_pref_preset\", \"floater_delete_pref_preset.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterDeletePrefPreset>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 445,
+        "line": 443,
         "call": "LLFloaterReg::add(\"destinations\", \"floater_destinations.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterDestinations>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 447,
+        "line": 445,
         "call": "LLFloaterReg::add(\"emoji_picker\", \"floater_emoji_picker.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterEmojiPicker>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 448,
+        "line": 446,
         "call": "LLFloaterReg::add(\"emoji_complete\", \"floater_emoji_complete.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterEmojiComplete>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
+        "line": 448,
+        "call": "LLFloaterReg::add(\"env_fixed_environmentent_water\", \"floater_fixedenvironment.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterFixedEnvironmentSky>)",
+        "gate": "G-UI",
+        "caller_route": "R09",
+        "disposition": "defer"
+      },
+      {
         "line": 449,
-        "call": "LLFloaterReg::add(\"env_post_process\", \"floater_post_process.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPostProcess>)",
+        "call": "LLFloaterReg::add(\"env_fixed_environmentent_sky\", \"floater_fixedenvironment.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterFixedEnvironmentSky>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 453,
-        "call": "LLFloaterReg::add(\"env_fixed_environmentent_water\", \"floater_fs_fixedenvironment.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterFixedEnvironmentWater>)",
         "gate": "G-UI",
         "caller_route": "R09",
-        "disposition": "defer"
+        "disposition": "defer",
+        "line": 451,
+        "call": "LLFloaterReg::add(\"fs_env_fixed_environmentent_water\", \"floater_fs_fixedenvironment.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterFixedEnvironmentWater>)"
       },
       {
-        "line": 456,
-        "call": "LLFloaterReg::add(\"env_fixed_environmentent_sky\", \"floater_fs_fixedenvironment.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterFixedEnvironmentSky>)",
         "gate": "G-UI",
         "caller_route": "R09",
-        "disposition": "defer"
+        "disposition": "defer",
+        "line": 452,
+        "call": "LLFloaterReg::add(\"fs_env_fixed_environmentent_sky\", \"floater_fs_fixedenvironment.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterFixedEnvironmentSky>)"
       },
       {
-        "line": 458,
+        "line": 455,
         "call": "LLFloaterReg::add(\"env_adjust_snapshot\", \"floater_adjust_environment.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterEnvironmentAdjust>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 460,
+        "line": 457,
         "call": "LLFloaterReg::add(\"env_edit_extdaycycle\", \"floater_edit_ext_day_cycle.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterEditExtDayCycle>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 461,
+        "line": 458,
         "call": "LLFloaterReg::add(\"my_environments\", \"floater_my_environments.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterMyEnvironment>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 463,
+        "line": 460,
         "call": "LLFloaterReg::add(\"event\", \"floater_event.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterEvent>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 464,
+        "line": 461,
         "call": "LLFloaterReg::add(\"experiences\", \"floater_experiences.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterExperiences>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 465,
+        "line": 462,
         "call": "LLFloaterReg::add(\"experience_profile\", \"floater_experienceprofile.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterExperienceProfile>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 466,
+        "line": 463,
         "call": "LLFloaterReg::add(\"experience_search\", \"floater_experience_search.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterExperiencePicker>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 468,
+        "line": 465,
         "call": "LLFloaterReg::add(\"font_test\", \"floater_font_test.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterFontTest>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 471,
+        "line": 468,
         "call": "LLFloaterReg::add(\"gestures\", \"floater_gesture.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterGesture>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 472,
+        "line": 469,
         "call": "LLFloaterReg::add(\"gltf_asset_editor\", \"floater_gltf_asset_editor.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterGLTFAssetEditor>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 473,
+        "line": 470,
         "call": "LLFloaterReg::add(\"god_tools\", \"floater_god_tools.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterGodTools>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 474,
+        "line": 471,
         "call": "LLFloaterReg::add(\"grid_status\", \"floater_grid_status.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterGridStatus>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 475,
+        "line": 472,
         "call": "LLFloaterReg::add(\"group_picker\", \"floater_choose_group.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterGroupPicker>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 477,
+        "line": 474,
         "call": "LLFloaterReg::add(\"help_browser\", \"floater_help_browser.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterHelpBrowser>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 478,
+        "line": 475,
         "call": "LLFloaterReg::add(\"edit_hover_height\", \"floater_edit_hover_height.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterHoverHeight>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 479,
+        "line": 476,
         "call": "LLFloaterReg::add(\"hud\", \"floater_hud.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterHUD>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 484,
+        "line": 481,
         "call": "LLFloaterReg::add(\"fs_impanel\", \"floater_fs_im_session.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterIM>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 485,
+        "line": 482,
         "call": "LLFloaterReg::add(\"fs_im_container\", \"floater_fs_im_container.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterIMContainer>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 487,
+        "line": 484,
         "call": "LLFloaterReg::add(\"im_well_window\", \"floater_sys_well.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLIMWellWindow>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 488,
+        "line": 485,
         "call": "LLFloaterReg::add(\"incoming_call\", \"floater_incoming_call.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLIncomingCallDialog>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 489,
+        "line": 486,
         "call": "LLFloaterReg::add(\"inventory\", \"floater_my_inventory.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSidePanelContainer>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 490,
+        "line": 487,
         "call": "LLFloaterReg::add(\"inspect\", \"floater_inspect.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterInspect>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 491,
+        "line": 488,
         "call": "LLFloaterReg::add(\"inventory_thumbnails_helper\", \"floater_inventory_thumbnails_helper.xml\", (LLFloaterBuildFunc) &LLFloaterReg::build<LLFloaterInventoryThumbnailsHelper>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 492,
+        "line": 489,
         "call": "LLFloaterReg::add(\"item_properties\", \"floater_item_properties.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterItemProperties>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 493,
+        "line": 490,
         "call": "LLFloaterReg::add(\"task_properties\", \"floater_task_properties.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterItemProperties>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 494,
+        "line": 491,
         "call": "LLFloaterReg::add(\"inventory_settings\", \"floater_inventory_settings.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterInventorySettings>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 503,
+        "line": 500,
         "call": "LLFloaterReg::add(\"lagmeter\", \"floater_lagmeter.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterLagMeter>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 504,
+        "line": 501,
         "call": "LLFloaterReg::add(\"land_holdings\", \"floater_land_holdings.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterLandHoldings>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 505,
+        "line": 502,
         "call": "LLFloaterReg::add(\"linkreplace\", \"floater_linkreplace.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterLinkReplace>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 506,
+        "line": 503,
         "call": "LLFloaterReg::add(\"load_pref_preset\", \"floater_load_pref_preset.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterLoadPrefPreset>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 508,
+        "line": 505,
         "call": "LLFloaterReg::add(\"mem_leaking\", \"floater_mem_leaking.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterMemLeak>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 510,
+        "line": 507,
         "call": "LLFloaterReg::add(\"media_settings\", \"floater_media_settings.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterMediaSettings>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 511,
+        "line": 508,
         "call": "LLFloaterReg::add(\"marketplace\", \"floater_marketplace.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterMarketplace>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 512,
+        "line": 509,
         "call": "LLFloaterReg::add(\"marketplace_listings\", \"floater_marketplace_listings.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterMarketplaceListings>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 513,
+        "line": 510,
         "call": "LLFloaterReg::add(\"marketplace_validation\", \"floater_marketplace_validation.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterMarketplaceValidation>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 514,
+        "line": 511,
         "call": "LLFloaterReg::add(\"message_critical\", \"floater_critical.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterTOS>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "retain-split"
       },
       {
-        "line": 515,
+        "line": 512,
         "call": "LLFloaterReg::add(\"message_tos\", \"floater_tos.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterTOS>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "retain-split"
       },
       {
-        "line": 516,
+        "line": 513,
         "call": "LLFloaterReg::add(\"moveview\", \"floater_moveview.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterMove>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 517,
+        "line": 514,
         "call": "LLFloaterReg::add(\"mute_object_by_name\", \"floater_mute_object.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterGetBlockedObjectName>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 518,
+        "line": 515,
         "call": "LLFloaterReg::add(\"mini_map\", \"floater_map.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterMap>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 519,
+        "line": 516,
         "call": "LLFloaterReg::add(\"new_feature_notification\", \"floater_new_feature_notification.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterNewFeatureNotification>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 521,
+        "line": 518,
         "call": "LLFloaterReg::add(\"notifications_console\", \"floater_notifications_console.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterNotificationConsole>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 527,
+        "line": 524,
         "call": "LLFloaterReg::add(\"notification_well_window\", \"floater_notifications_tabbed.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterNotificationsTabbed>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 531,
+        "line": 528,
         "call": "LLFloaterReg::add(\"notification_well_window\", \"floater_sys_well.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLNotificationWellWindow>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 535,
+        "line": 532,
         "call": "LLFloaterReg::add(\"object_weights\", \"floater_object_weights.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterObjectWeights>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 536,
+        "line": 533,
         "call": "LLFloaterReg::add(\"openobject\", \"floater_openobject.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterOpenObject>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 537,
+        "line": 534,
         "call": "LLFloaterReg::add(\"outgoing_call\", \"floater_outgoing_call.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLOutgoingCallDialog>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 540,
+        "line": 537,
         "call": "LLFloaterReg::add(\"pathfinding_characters\", \"floater_pathfinding_characters.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPathfindingCharacters>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 541,
+        "line": 538,
         "call": "LLFloaterReg::add(\"pathfinding_linksets\", \"floater_pathfinding_linksets.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPathfindingLinksets>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 542,
+        "line": 539,
         "call": "LLFloaterReg::add(\"pathfinding_console\", \"floater_pathfinding_console.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPathfindingConsole>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 543,
+        "line": 540,
         "call": "LLFloaterReg::add(\"people\", \"floater_people.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSidePanelContainer>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 545,
+        "line": 542,
         "call": "LLFloaterReg::add(\"perms_default\", \"floater_perms_default.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPermsDefault>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 546,
+        "line": 543,
         "call": "LLFloaterReg::add(\"places\", \"floater_places.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSidePanelContainer>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 547,
+        "line": 544,
         "call": "LLFloaterReg::add(\"preferences\", \"floater_preferences.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPreference>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 549,
+        "line": 546,
         "call": "LLFloaterReg::add(\"prefs_view_advanced\", \"floater_preferences_view_advanced.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPreferenceViewAdvanced>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 550,
+        "line": 547,
         "call": "LLFloaterReg::add(\"prefs_proxy\", \"floater_preferences_proxy.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPreferenceProxy>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 551,
+        "line": 548,
         "call": "LLFloaterReg::add(\"prefs_spellchecker_import\", \"floater_spellcheck_import.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSpellCheckerImport>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 552,
+        "line": 549,
         "call": "LLFloaterReg::add(\"prefs_translation\", \"floater_translation_settings.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterTranslationSettings>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 553,
+        "line": 550,
         "call": "LLFloaterReg::add(\"prefs_spellchecker\", \"floater_spellcheck.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSpellCheckerSettings>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 554,
+        "line": 551,
         "call": "LLFloaterReg::add(\"prefs_autoreplace\", \"floater_autoreplace.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterAutoReplaceSettings>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 555,
+        "line": 552,
         "call": "LLFloaterReg::add(\"pref_joystick\", \"floater_joystick.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterJoystick>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 556,
+        "line": 553,
         "call": "LLFloaterReg::add(\"preview_anim\", \"floater_preview_animation.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLPreviewAnim> )",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 557,
+        "line": 554,
         "call": "LLFloaterReg::add(\"preview_conversation\", \"floater_conversation_preview.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterConversationPreview>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 558,
+        "line": 555,
         "call": "LLFloaterReg::add(\"preview_gesture\", \"floater_preview_gesture.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLPreviewGesture> )",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 559,
+        "line": 556,
         "call": "LLFloaterReg::add(\"preview_notecard\", \"floater_preview_notecard.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLPreviewNotecard> )",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 560,
+        "line": 557,
         "call": "LLFloaterReg::add(\"preview_script\", \"floater_script_preview.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLPreviewLSL>, \"preview_script\" )",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 561,
+        "line": 558,
         "call": "LLFloaterReg::add(\"preview_scriptedit\", \"floater_live_lsleditor.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLLiveLSLEditor>, \"preview_script\" )",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 562,
+        "line": 559,
         "call": "LLFloaterReg::add(\"preview_sound\", \"floater_preview_sound.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLPreviewSound> )",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 563,
+        "line": 560,
         "call": "LLFloaterReg::add(\"preview_texture\", \"floater_preview_texture.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLPreviewTexture> )",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 564,
+        "line": 561,
         "call": "LLFloaterReg::add(\"preview_trash\", \"floater_preview_trash.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterPreviewTrash>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 565,
+        "line": 562,
         "call": "LLFloaterReg::add(\"properties\", \"floater_inventory_item_properties.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterProperties>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 566,
+        "line": 563,
         "call": "LLFloaterReg::add(\"publish_classified\", \"floater_publish_classified.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLPublishClassifiedFloater>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 567,
+        "line": 564,
         "call": "LLFloaterReg::add(\"save_pref_preset\", \"floater_save_pref_preset.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSavePrefPreset>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 568,
+        "line": 565,
         "call": "LLFloaterReg::add(\"save_camera_preset\", \"floater_save_camera_preset.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSaveCameraPreset>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 569,
+        "line": 566,
         "call": "LLFloaterReg::add(\"script_colors\", \"floater_script_ed_prefs.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterScriptEdPrefs>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 571,
+        "line": 568,
         "call": "LLFloaterReg::add(\"material_editor\", \"floater_material_editor.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLMaterialEditor>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 572,
+        "line": 569,
         "call": "LLFloaterReg::add(\"live_material_editor\", \"floater_live_material_editor.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLMaterialEditor>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 574,
+        "line": 571,
         "call": "LLFloaterReg::add(\"telehubs\", \"floater_telehub.xml\",&LLFloaterReg::build<LLFloaterTelehub>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 575,
+        "line": 572,
         "call": "LLFloaterReg::add(\"test_inspectors\", \"floater_test_inspectors.xml\", &LLFloaterReg::build<LLFloaterTestInspectors>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 577,
+        "line": 574,
         "call": "LLFloaterReg::add(\"test_textbox\", \"floater_test_textbox.xml\", &LLFloaterReg::build<LLFloater>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 578,
+        "line": 575,
         "call": "LLFloaterReg::add(\"test_text_editor\", \"floater_test_text_editor.xml\", &LLFloaterReg::build<LLFloater>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 579,
+        "line": 576,
         "call": "LLFloaterReg::add(\"test_widgets\", \"floater_test_widgets.xml\", &LLFloaterReg::build<LLFloater>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 580,
+        "line": 577,
         "call": "LLFloaterReg::add(\"top_objects\", \"floater_top_objects.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterTopObjects>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 581,
+        "line": 578,
         "call": "LLFloaterReg::add(\"toybox\", \"floater_toybox.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterToybox>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 583,
+        "line": 580,
         "call": "LLFloaterReg::add(\"reporter\", \"floater_report_abuse.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterReporter>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 584,
+        "line": 581,
         "call": "LLFloaterReg::add(\"reset_queue\", \"floater_script_queue.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterResetQueue>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 585,
+        "line": 582,
         "call": "LLFloaterReg::add(\"region_debug_console\", \"floater_region_debug_console.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterRegionDebugConsole>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 586,
+        "line": 583,
         "call": "LLFloaterReg::add(\"region_info\", \"floater_region_info.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterRegionInfo>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 587,
+        "line": 584,
         "call": "LLFloaterReg::add(\"region_restarting\", \"floater_region_restarting.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterRegionRestarting>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 589,
+        "line": 586,
         "call": "LLFloaterReg::add(\"rlv_behaviours\", \"floater_rlv_behaviours.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<RlvFloaterBehaviours>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 590,
+        "line": 587,
         "call": "LLFloaterReg::add(\"rlv_console\", \"floater_rlv_console.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<RlvFloaterConsole>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 591,
+        "line": 588,
         "call": "LLFloaterReg::add(\"rlv_locks\", \"floater_rlv_locks.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<RlvFloaterLocks>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 592,
+        "line": 589,
         "call": "LLFloaterReg::add(\"rlv_strings\", \"floater_rlv_strings.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<RlvFloaterStrings>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 595,
+        "gate": "G-UI",
+        "caller_route": "R09",
+        "disposition": "defer",
+        "line": 592,
+        "call": "LLFloaterReg::add(\"scripting_settings\", \"floater_scripting_settings.xml\", &LLFloaterReg::build<LLFloaterScripting>)"
+      },
+      {
+        "line": 593,
         "call": "LLFloaterReg::add(\"script_debug\", \"floater_script_debug.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterScriptDebug>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 596,
+        "line": 594,
         "call": "LLFloaterReg::add(\"script_debug_output\", \"floater_script_debug_panel.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterScriptDebugOutput>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 597,
+        "line": 595,
         "call": "LLFloaterReg::add(\"script_floater\", \"floater_script.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLScriptFloater>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 598,
+        "line": 596,
         "call": "LLFloaterReg::add(\"script_limits\", \"floater_script_limits.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterScriptLimits>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 599,
+        "line": 597,
         "call": "LLFloaterReg::add(\"my_scripts\", \"floater_my_scripts.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterMyScripts>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 600,
+        "line": 598,
         "call": "LLFloaterReg::add(\"sell_land\", \"floater_sell_land.xml\", &LLFloaterSellLand::buildFloater)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 601,
+        "line": 599,
         "call": "LLFloaterReg::add(\"settings_color\", \"floater_settings_color.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSettingsColor>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 602,
+        "line": 600,
         "call": "LLFloaterReg::add(\"settings_debug\", \"floater_settings_debug.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSettingsDebug>)",
         "gate": "G-UI",
         "caller_route": "R09",
@@ -4746,524 +4760,510 @@
       },
       {
         "line": 603,
-        "call": "LLFloaterReg::add(\"sound_devices\", \"floater_sound_devices.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSoundDevices>)",
-        "gate": "G-UI",
-        "caller_route": "R09",
-        "disposition": "defer"
-      },
-      {
-        "line": 606,
         "call": "LLFloaterReg::add(\"stats\", \"floater_stats.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterStatistics>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 608,
+        "line": 605,
         "call": "LLFloaterReg::add(\"start_queue\", \"floater_script_queue.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterRunQueue>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 609,
+        "line": 606,
         "call": "LLFloaterReg::add(\"scene_load_stats\", \"floater_scene_load_stats.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSceneLoadStats>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 610,
+        "line": 607,
         "call": "LLFloaterReg::add(\"stop_queue\", \"floater_script_queue.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterNotRunQueue>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 611,
+        "line": 608,
         "call": "LLFloaterReg::add(\"snapshot\", \"floater_snapshot.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSnapshot>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 612,
+        "line": 609,
         "call": "LLFloaterReg::add(\"simple_snapshot\", \"floater_simple_snapshot.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSimpleSnapshot>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 613,
+        "line": 610,
         "call": "LLFloaterReg::add(\"snapshot_guide_settings\", \"floater_snapshot_guide_settings.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloater>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 616,
+        "line": 613,
         "call": "LLFloaterReg::add(\"legacy_search\", \"floater_directory.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterDirectory>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 617,
+        "line": 614,
         "call": "LLFloaterReg::add(\"profile\", \"floater_profile.xml\",(LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterProfile>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 618,
+        "line": 615,
         "call": "LLFloaterReg::add(\"guidebook\", \"floater_how_to.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterHowTo>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 619,
+        "line": 616,
         "call": "LLFloaterReg::add(\"slapp_test\", \"floater_test_slapp.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSLappTest>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 621,
-        "call": "LLFloaterReg::add(\"big_preview\", \"floater_big_preview.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterBigPreview>)",
-        "gate": "G-UI",
-        "caller_route": "R09",
-        "disposition": "defer"
-      },
-      {
-        "line": 624,
+        "line": 619,
         "call": "LLFloaterReg::add(\"upload_anim_bvh\", \"floater_animation_bvh_preview.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterBvhPreview>, \"upload\")",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 625,
+        "line": 620,
         "call": "LLFloaterReg::add(\"upload_anim_anim\", \"floater_animation_anim_preview.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterAnimPreview>, \"upload\")",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 626,
+        "line": 621,
         "call": "LLFloaterReg::add(\"upload_image\", \"floater_image_preview.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterImagePreview>, \"upload\")",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 627,
+        "line": 622,
         "call": "LLFloaterReg::add(\"upload_model\", \"floater_model_preview.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterModelPreview>, \"upload\")",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 628,
+        "line": 623,
         "call": "LLFloaterReg::add(\"upload_script\", \"floater_script_preview.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterScriptPreview>, \"upload\")",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 629,
+        "line": 624,
         "call": "LLFloaterReg::add(\"upload_sound\", \"floater_sound_preview.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSoundPreview>, \"upload\")",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 631,
-        "call": "LLFloaterReg::add(\"voice_effect\", \"floater_voice_effect.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterVoiceEffect>)",
-        "gate": "G-UI",
-        "caller_route": "R09",
-        "disposition": "defer"
-      },
-      {
-        "line": 633,
+        "line": 626,
         "call": "LLFloaterReg::add(\"web_content\", \"floater_web_content.xml\", (LLFloaterBuildFunc)&LLFloaterWebContent::create)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 634,
+        "line": 627,
         "call": "LLFloaterReg::add(\"whitelist_entry\", \"floater_whitelist_entry.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterWhiteListEntry>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 635,
+        "line": 628,
         "call": "LLFloaterReg::add(\"window_size\", \"floater_window_size.xml\", &LLFloaterReg::build<LLFloaterWindowSize>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 636,
+        "line": 629,
         "call": "LLFloaterReg::add(\"world_map\", \"floater_world_map.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterWorldMap>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 640,
+        "line": 633,
         "call": "LLFloaterReg::add(\"animation_explorer\", \"floater_animation_explorer.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<AnimationExplorer>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 641,
+        "line": 634,
         "call": "LLFloaterReg::add(\"animation_overrider\", \"floater_ao.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FloaterAO>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 642,
+        "line": 635,
         "call": "LLFloaterReg::add(\"area_search\", \"floater_fs_area_search.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSAreaSearch>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 643,
+        "line": 636,
         "call": "LLFloaterReg::add(\"export_collada\", \"floater_export_collada.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<ColladaExportFloater>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 644,
+        "line": 637,
         "call": "LLFloaterReg::add(\"delete_queue\", \"floater_script_queue.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterDeleteQueue>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 645,
+        "line": 638,
         "call": "LLFloaterReg::add(\"flickr\", \"floater_flickr.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterFlickr>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 646,
+        "line": 639,
         "call": "LLFloaterReg::add(\"primfeed\", \"floater_primfeed.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterPrimfeed>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 647,
+        "line": 640,
         "call": "LLFloaterReg::add(\"fs_asset_blacklist\", \"floater_fs_asset_blacklist.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterAssetBlacklist>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 648,
+        "line": 641,
         "call": "LLFloaterReg::add(\"fs_avatar_render_settings\", \"floater_fs_avatar_render_settings.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterAvatarRenderSettings>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 649,
+        "line": 642,
+        "call": "LLFloaterReg::add(\"fs_big_preview\", \"floater_fs_big_preview.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterBigPreview>)",
+        "gate": "G-UI",
+        "caller_route": "R09",
+        "disposition": "defer"
+      },
+      {
+        "line": 643,
         "call": "LLFloaterReg::add(\"fs_blocklist\", \"floater_fs_blocklist.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterBlocklist>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 650,
+        "line": 644,
         "call": "LLFloaterReg::add(\"fs_add_contact\", \"floater_fs_contact_add.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterAddToContactSet>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 651,
+        "line": 645,
         "call": "LLFloaterReg::add(\"fs_contact_set_config\", \"floater_fs_contact_set_configuration.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterContactSetConfiguration>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 652,
+        "line": 646,
         "call": "LLFloaterReg::add(\"fs_discord\", \"floater_fs_discord.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterDiscord>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 653,
+        "line": 647,
         "call": "LLFloaterReg::add(\"fs_group\", \"floater_fs_group.xml\",&LLFloaterReg::build<FSFloaterGroup>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 654,
+        "line": 648,
         "call": "LLFloaterReg::add(\"fs_group_titles\", \"floater_fs_group_titles.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterGroupTitles>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 655,
+        "line": 649,
         "call": "LLFloaterReg::add(\"fs_export\", \"floater_fs_export.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterObjectExport>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 656,
+        "line": 650,
         "call": "LLFloaterReg::add(\"fs_import\", \"floater_fs_import.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterImport>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 657,
+        "line": 651,
         "call": "LLFloaterReg::add(\"fs_posestand\", \"floater_fs_posestand.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterPoseStand>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 658,
+        "line": 652,
         "call": "LLFloaterReg::add(\"fs_partial_inventory\", \"floater_fs_partial_inventory.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterPartialInventory>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 659,
+        "line": 653,
         "call": "LLFloaterReg::add(\"fs_placedetails\", \"floater_fs_placedetails.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterPlaceDetails>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 660,
+        "line": 654,
         "call": "LLFloaterReg::add(\"fs_poser\", \"floater_fs_poser.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterPoser>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 661,
+        "line": 655,
         "call": "LLFloaterReg::add(\"fs_protectedfolders\", \"floater_fs_protectedfolders.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterProtectedFolders>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 662,
+        "line": 656,
         "call": "LLFloaterReg::add(\"fs_radar\", \"floater_fs_radar.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterRadar>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 663,
+        "line": 657,
         "call": "LLFloaterReg::add(\"fs_splash_screen_settings\", \"floater_fs_splash_screen_settings.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterSplashScreenSettings>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 664,
+        "line": 658,
         "call": "LLFloaterReg::add(\"fs_streamtitle\", \"floater_fs_streamtitle.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterStreamTitle>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 665,
+        "line": 659,
         "call": "LLFloaterReg::add(\"fs_streamtitlehistory\", \"floater_fs_streamtitlehistory.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterStreamTitleHistory>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 666,
+        "line": 660,
         "call": "LLFloaterReg::add(\"fs_teleporthistory\", \"floater_fs_teleporthistory.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterTeleportHistory>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 667,
+        "line": 661,
         "call": "LLFloaterReg::add(\"fs_voice_controls\", \"floater_fs_voice_controls.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterVoiceControls>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 668,
+        "line": 662,
         "call": "LLFloaterReg::add(\"fs_volume_controls\", \"floater_fs_volume_controls.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterVolumeControls>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 669,
+        "line": 663,
         "call": "LLFloaterReg::add(\"fs_wearable_favorites\", \"floater_fs_wearable_favorites.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterWearableFavorites>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 670,
+        "line": 664,
         "call": "LLFloaterReg::add(\"imcontacts\", \"floater_fs_contacts.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterContacts>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 671,
+        "line": 665,
         "call": "LLFloaterReg::add(\"lgg_beamcolormap\", \"floater_beamcolor.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<lggBeamColorMapFloater>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 672,
+        "line": 666,
         "call": "LLFloaterReg::add(\"lgg_beamshape\", \"floater_beamshape.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<lggBeamMapFloater>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 673,
+        "line": 667,
         "call": "LLFloaterReg::add(\"media_lists\", \"floater_media_lists.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FloaterMediaLists>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 674,
+        "line": 668,
         "call": "LLFloaterReg::add(\"money_tracker\", \"floater_fs_money_tracker.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSMoneyTracker>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 675,
+        "line": 669,
         "call": "LLFloaterReg::add(\"omnifilter\", \"floater_omnifilter.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<Omnifilter>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 676,
+        "line": 670,
         "call": "LLFloaterReg::add(\"particle_editor\",\"floater_particle_editor.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<ParticleEditor>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 677,
+        "line": 671,
         "call": "LLFloaterReg::add(\"performance\", \"floater_fs_performance.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterPerformance>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 680,
+        "line": 674,
         "call": "LLFloaterReg::add(\"phototools\", \"floater_phototools.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FloaterQuickPrefs>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 681,
+        "line": 675,
         "call": "LLFloaterReg::add(\"phototools_camera\", \"floater_phototools_camera.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterCamera>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 682,
+        "line": 676,
         "call": "LLFloaterReg::add(\"quickprefs\", \"floater_quickprefs.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FloaterQuickPrefs>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 683,
+        "line": 677,
         "call": "LLFloaterReg::add(\"region_tracker\", \"floater_region_tracker.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<ALFloaterRegionTracker>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 684,
+        "line": 678,
         "call": "LLFloaterReg::add(\"search_replace\", \"floater_search_replace.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSearchReplace>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 685,
+        "line": 679,
         "call": "LLFloaterReg::add(\"secondary_inventory\", \"floater_my_inventory.xml\", (LLFloaterBuildFunc)&LLSidepanelInventory::createSecondaryInventoryWindow)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 686,
+        "line": 680,
         "call": "LLFloaterReg::add(\"script_recover\", \"floater_script_recover.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterScriptRecover>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 687,
+        "line": 681,
         "call": "LLFloaterReg::add(\"sound_explorer\", \"floater_NACL_explore_sounds.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<NACLFloaterExploreSounds>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 688,
+        "line": 682,
         "call": "LLFloaterReg::add(\"vram_usage\", \"floater_fs_vram_usage.xml\", static_cast<LLFloaterBuildFunc>(&LLFloaterReg::build<FSFloaterVRAMUsage>))",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 689,
+        "line": 683,
         "call": "LLFloaterReg::add(\"local_mesh_floater\", \"floater_vj_local_mesh.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterLocalMesh>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 690,
+        "line": 684,
         "call": "LLFloaterReg::add(\"fs_whitelist_floater\", \"floater_whitelist.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterWhiteListHelper>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 692,
+        "line": 686,
         "call": "LLFloaterReg::add(\"avatar_align\", \"floater_avatar_align.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterAvatarAlign>)",
         "gate": "G-UI",
         "caller_route": "R09",
         "disposition": "defer"
       },
       {
-        "line": 693,
+        "line": 687,
         "call": "LLFloaterReg::add(\"avatar_align_mini\", \"floater_avatar_align_mini.xml\", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterAvatarAlignMini>)",
         "gate": "G-UI",
         "caller_route": "R09",
@@ -5272,28 +5272,28 @@
     ],
     "names": [
       {
-        "line": 273,
+        "line": 272,
         "call": "setHandlerFuncFast( _PREHASH_UUIDNameRequest, handleUUIDNameRequest, (void**)this)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 275,
+        "line": 274,
         "call": "setHandlerFuncFast( _PREHASH_UUIDNameReply, handleUUIDNameReply, (void**)this)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 277,
+        "line": 276,
         "call": "setHandlerFuncFast( _PREHASH_UUIDGroupNameRequest, handleUUIDGroupNameRequest, (void**)this)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 279,
+        "line": 278,
         "call": "setHandlerFuncFast( _PREHASH_UUIDGroupNameReply, handleUUIDGroupNameReply, (void**)this)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
@@ -5425,7 +5425,7 @@
     },
     {
       "path": "indra/newview/llviewerinventory.h",
-      "line": 340,
+      "line": 344,
       "registration": "LLDestroyClass<LLInventoryCallbackManager>",
       "gate": "G-LIFETIME",
       "caller_route": "R12",
@@ -5433,7 +5433,7 @@
     },
     {
       "path": "indra/newview/llviewerinventory.h",
-      "line": 342,
+      "line": 346,
       "registration": "LLDestroyClass<LLInventoryCallbackManager>",
       "gate": "G-LIFETIME",
       "caller_route": "R12",

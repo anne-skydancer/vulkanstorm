@@ -116,7 +116,6 @@ indra/newview/llfeaturemanager.cpp,,inventory candidate; see ledger/gaps; symbol
 indra/newview/llfetchedgltfmaterial.cpp,,inventory candidate; see ledger/gaps; symbol presence does not prove execution
 indra/newview/llfetchedgltfmaterial.h,,inventory candidate; see ledger/gaps; symbol presence does not prove execution
 indra/newview/llfloaterauction.cpp,,inventory candidate; see ledger/gaps; symbol presence does not prove execution
-indra/newview/llfloaterbigpreview.cpp,,inventory candidate; see ledger/gaps; symbol presence does not prove execution
 indra/newview/llfloaterbvhpreview.cpp,,inventory candidate; see ledger/gaps; symbol presence does not prove execution
 indra/newview/llfloaterchangeitemthumbnail.cpp,,inventory candidate; see ledger/gaps; symbol presence does not prove execution
 indra/newview/llfloatercolorpicker.cpp,,inventory candidate; see ledger/gaps; symbol presence does not prove execution
