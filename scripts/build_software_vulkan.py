@@ -97,7 +97,7 @@ def main():
     if windows and args.driver == 'lavapipe':
         parser.error('Lavapipe job is Linux only')
     work.mkdir(parents=True, exist_ok=True)
-    generator = ['-G', 'Visual Studio 17 2022', '-A', 'x64', '-Thost=x64'] if windows else ['-G', 'Ninja']
+    generator = ['-G', 'Visual Studio 18 2026', '-A', 'x64', '-Thost=x64'] if windows else ['-G', 'Ninja']
 
     def build(name, options, target=None, install=False):
         source = work / 'source' / name
@@ -124,7 +124,7 @@ def main():
     deps = work / 'validation-dependencies'
     run(sys.executable, work / 'source/validation/scripts/update_deps.py', '--dir', deps,
         '--known_good_dir', pinned, '--config', 'relwithdebinfo', '--optional=tests',
-        '--generator', 'Visual Studio 17 2022' if windows else 'Ninja',
+        '--generator', 'Visual Studio 18 2026' if windows else 'Ninja',
         '--cmake_var', 'CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL', '--skip-existing-install')
     build('validation', ['-DUPDATE_DEPS=OFF', '-C', str(deps / 'helper.cmake'),
                          '-DBUILD_TESTS=OFF', '-DBUILD_WERROR=OFF',

@@ -109,7 +109,7 @@ def main():
     for package in LOCK.values():
         for name, pin in package['sources'].items():
             checkout(sources / name, pin, package.get('patches', []) if name == 'diligentcore' else [])
-    common = ['-G', 'Visual Studio 17 2022', '-A', 'x64'] if windows else ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=RelWithDebInfo']
+    common = ['-G', 'Visual Studio 18 2026', '-A', 'x64'] if windows else ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=RelWithDebInfo']
     def build(source, name, options, target=None):
         directory = work / 'build' / name
         run('cmake', '-S', source, '-B', directory, *common, *options)

@@ -6,7 +6,7 @@ sys.path.insert(0,str(HERE));from native_source_fixture import method
 class ImmediateGeometry(unittest.TestCase):
  def compile(self,source):
   compiler=shutil.which('clang++')or shutil.which('g++');self.assertIsNotNone(compiler)
-  packages=next((p for p in [ROOT/'build-vc170-64/packages/include',ROOT/'build-linux-x86_64/packages/include']if(p/'glm/glm.hpp').is_file()),None)
+  packages=next((p for p in [ROOT/'build-vc180-64/packages/include',ROOT/'build-linux-x86_64/packages/include']if(p/'glm/glm.hpp').is_file()),None)
   self.assertIsNotNone(packages,'Autobuild GLM dependency is required')
   with tempfile.TemporaryDirectory()as temp:
    out=Path(temp);cpp=out/'source.cpp';exe=out/'source.exe';cpp.write_text(source)

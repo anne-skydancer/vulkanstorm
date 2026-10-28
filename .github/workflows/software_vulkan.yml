@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   source-evidence:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -517,19 +517,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-2022
+          - os: windows-2025
             driver: swiftshader
-            viewer_directory: build-vc170-64
-          - os: ubuntu-24.04
+            viewer_directory: build-vc180-64
+          - os: ubuntu-26.04
             driver: swiftshader
             viewer_directory: build-linux-x86_64
-          - os: ubuntu-24.04
+          - os: ubuntu-26.04
             driver: lavapipe
             viewer_directory: build-linux-x86_64
     runs-on: ${{ matrix.os }}
     env:
       AUTOBUILD_ADDRSIZE: 64
-      AUTOBUILD_VSVER: '170'
+      AUTOBUILD_VSVER: '180'
       AUTOBUILD_VARIABLES_FILE: ${{ github.workspace }}/.build-variables/variables
       AUTOBUILD_INSTALLABLE_CACHE: ${{ github.workspace }}/.autobuild-installables
       LL_SKIP_REQUIRE_SYSROOT: 1
@@ -551,17 +551,17 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get -o Acquire::Retries=3 update
-          sudo apt-get -o Acquire::Retries=3 install -y gcc-14 g++-14 build-essential pkg-config \
+          sudo apt-get -o Acquire::Retries=3 install -y gcc-15 g++-15 build-essential pkg-config \
             libgl1-mesa-dev libglu1-mesa-dev libpulse-dev pulseaudio pulseaudio-utils libssl-dev \
-            libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype6-dev \
+            libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype-dev \
             libsdl2-dev libx11-dev libx11-xcb-dev libxcb1-dev libxshmfence-dev xvfb xauth \
             libxcb-dri3-dev libxcb-present-dev libxcb-randr0-dev libxcb-sync-dev \
             libxcb-xfixes0-dev libxcb-shm0-dev \
             libxcb-glx0-dev libxcb-shape0-dev libxdamage-dev libxxf86vm-dev \
             llvm-18-dev libclang-cpp18-dev libdrm-dev libelf-dev libexpat1-dev \
             libzstd-dev zlib1g-dev flex bison glslang-tools
-          echo 'CC=gcc-14' >> "$GITHUB_ENV"
-          echo 'CXX=g++-14' >> "$GITHUB_ENV"
+          echo 'CC=gcc-15' >> "$GITHUB_ENV"
+          echo 'CXX=g++-15' >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: FirestormViewer/fs-build-variables
@@ -605,7 +605,7 @@ jobs:
           set -euo pipefail
           options=()
           if [[ "$RUNNER_OS" == Windows ]]; then
-            options+=(-G 'Visual Studio 17 2022' -A x64)
+            options+=(-G 'Visual Studio 18 2026' -A x64)
           else
             options+=(-G Ninja)
           fi
@@ -662,7 +662,7 @@ jobs:
           options=()
           if [[ "$RUNNER_OS" == Windows ]]; then
             export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
-            options+=(-G 'Visual Studio 17 2022' -A x64)
+            options+=(-G 'Visual Studio 18 2026' -A x64)
           fi
           # CMake's existing use_prebuilt_binary() installs only enabled viewer
           # dependencies through Autobuild, excluding disabled local SDK URLs.
@@ -998,7 +998,7 @@ jobs:
           echo 'Runner image: ${{ runner.os }} ${{ runner.arch }}' >> .ci/evidence/toolchain.txt
           echo "ImageOS=$ImageOS ImageVersion=$ImageVersion" >> .ci/evidence/toolchain.txt
           if [[ "$RUNNER_OS" == Linux ]]; then
-            gcc-14 --version >> .ci/evidence/toolchain.txt
+            gcc-15 --version >> .ci/evidence/toolchain.txt
             dpkg-query -W >> .ci/evidence/toolchain.txt
           fi
       - name: Package qualification evidence

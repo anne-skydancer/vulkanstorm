@@ -13,7 +13,7 @@ def method(source,signature):
 class CameraProjection(unittest.TestCase):
  def test_actual_shared_projection_against_native_projection(self):
   compiler=shutil.which('clang++') or shutil.which('g++');self.assertIsNotNone(compiler)
-  paths=[ROOT/os.environ['VS_TEST_BUILD_DIRECTORY']/'packages/include'] if os.environ.get('VS_TEST_BUILD_DIRECTORY') else [ROOT/'build-vc170-64/packages/include',ROOT/'build-linux-x86_64/packages/include']
+  paths=[ROOT/os.environ['VS_TEST_BUILD_DIRECTORY']/'packages/include'] if os.environ.get('VS_TEST_BUILD_DIRECTORY') else [ROOT/'build-vc180-64/packages/include',ROOT/'build-linux-x86_64/packages/include']
   glm=next((path for path in paths if (path/'glm/glm.hpp').exists()),None);self.assertIsNotNone(glm,'Autobuild-installed viewer GLM headers required')
   read=lambda name:(ROOT/'indra'/name).read_text(encoding='utf-8-sig')
   camera=read('newview/llviewercamera.cpp');proposed=camera;math=read('llmath/m4math.cpp')
