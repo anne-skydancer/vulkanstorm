@@ -3,6 +3,8 @@
 # versions that the built Linux viewer and its shared libraries require.
 # usage: ci_report_glibc.sh <build-directory>/newview
 # Writes a table to stdout and, in GitHub Actions, to the step summary.
+# With VKSTORM_MAX_GLIBC and/or VKSTORM_MAX_GLIBCXX set (e.g. 2.39, 3.4.33),
+# exits 1 if any file needs a newer version, listing the files that do.
 set -euo pipefail
 
 root=${1:?usage: ci_report_glibc.sh <build-dir>/newview}
@@ -32,4 +34,20 @@ done < <(find "$root" -type f \( -name '*-bin' -o -name '*.so' -o -name '*.so.*'
     echo
     cat "$out"
 } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+# Column 2 is GLIBC, column 3 GLIBCXX; rows look like "| `file` | 2.39 | 3.4.33 | 1.3.15 |".
+too_new() { # <column> <limit> <label>
+    local col=$1 limit=$2 label=$3 bad
+    bad=$(awk -F' [|] ' -v c="$col" 'NR > 2 { v = $c; gsub(/[ |]/, "", v); if (v != "-") print v "\t" $1 }' "$out" |
+          while IFS=$'\t' read -r v f; do
+              [ "$(printf '%s\n%s\n' "$v" "$limit" | sort -V | tail -n 1)" = "$limit" ] || echo "$f ($label $v)"
+          done)
+    [ -z "$bad" ] && return 1
+    echo "Needs a newer $label than $limit:" >&2
+    sed 's/^| *//' <<<"$bad" >&2
+}
+status=0
+if [ -n "${VKSTORM_MAX_GLIBC:-}" ] && too_new 2 "$VKSTORM_MAX_GLIBC" GLIBC; then status=1; fi
+if [ -n "${VKSTORM_MAX_GLIBCXX:-}" ] && too_new 3 "$VKSTORM_MAX_GLIBCXX" GLIBCXX; then status=1; fi
 rm -f "$out"
+exit "$status"
