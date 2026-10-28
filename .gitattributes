@@ -8,7 +8,9 @@
 *.ico binary
 *.j2c binary
 *.j2k binary
+*.jp2 binary
 *.jpg binary
+*.pdn binary
 *.png binary
 *.tga binary
 *.tif binary
