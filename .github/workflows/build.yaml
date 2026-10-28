@@ -208,20 +208,34 @@ jobs:
           cmake -S indra -B ${{ matrix.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
           cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel 3
 
-      # vkstorm-aleph: the LTO link of firestorm-bin on upstream master's tree
-      # exhausted the hosted runner's 16 GB (two cancelled Linux jobs, run
-      # 40666481166). Swap on /mnt lets it finish; the build flags are unchanged.
-      - name: Add swap for the LTO link
+      # Ubuntu 26.04: the GCC LTO link of vulkanstorm-bin writes its temporary
+      # objects to $TMPDIR (default /tmp), which overran on the Release build
+      # ("lto-wrapper: fatal error: write: Disk quota exceeded", run
+      # 40710871603). Give it disk-backed temporary space and swap for the
+      # link's memory peak; the build flags are unchanged.
+      - name: Prepare Linux temporary space and swap for the LTO link
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
+          findmnt -T /tmp || true
+          df -h / /tmp /mnt 2>/dev/null || df -h
           free -h
-          sudo fallocate -l 24G /mnt/vkstorm.swap
-          sudo chmod 600 /mnt/vkstorm.swap
-          sudo mkswap /mnt/vkstorm.swap
-          sudo swapon /mnt/vkstorm.swap
+          base="$RUNNER_TEMP"
+          if [ -d /mnt ] && [ "$(df --output=avail -k /mnt | tail -1)" -gt 41943040 ]; then base=/mnt; fi
+          sudo mkdir -p "$base/vkstorm-tmp"
+          sudo chown "$(id -u):$(id -g)" "$base/vkstorm-tmp"
+          echo "TMPDIR=$base/vkstorm-tmp" >> "$GITHUB_ENV"
+          if [ "$(df --output=avail -k "$base" | tail -1)" -gt 41943040 ]; then
+            sudo fallocate -l 24G "$base/vkstorm.swap"
+            sudo chmod 600 "$base/vkstorm.swap"
+            sudo mkswap "$base/vkstorm.swap"
+            sudo swapon "$base/vkstorm.swap"
+          else
+            echo "Less than 40 GiB free on $base: no swap file added"
+          fi
           free -h
+          echo "TMPDIR for the build: $base/vkstorm-tmp"
 
       - name: Build viewer and stage runtime
         run: cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
