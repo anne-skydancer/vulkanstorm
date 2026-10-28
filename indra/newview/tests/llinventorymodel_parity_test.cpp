@@ -182,6 +182,39 @@ namespace
 
     std::string join(const std::string& a, const std::string& b) { return a + "/" + b; }
 
+    // The C++ standard library this test runs on, as the fixture trees name it.
+    const char* stdlib_name()
+    {
+#if LL_WINDOWS
+        return "msvc";
+#else
+        return "libstdcxx";
+#endif
+    }
+    const char* other_stdlib_name()
+    {
+#if LL_WINDOWS
+        return "libstdcxx";
+#else
+        return "msvc";
+#endif
+    }
+
+    // Where a fixture lives. Since upstream 28fee038e0 the model's maps are
+    // std::unordered_map, so the order the model walks them in (the cache
+    // file's records, the child vectors, the journals) is the standard
+    // library's: those records are kept per library, in <area>/<library>/.
+    // Shared by both: the C2 inputs (written in id order) and the QA-mode
+    // records that already name their library.
+    std::string platform_rel(const std::string& rel)
+    {
+        if (rel.rfind("cache/c2/", 0) == 0) return rel;
+        if (rel.rfind("cache/c4_validation_qa.", 0) == 0) return rel;
+        size_t slash = rel.find('/');
+        if (slash == std::string::npos) return rel;
+        return rel.substr(0, slash) + "/" + stdlib_name() + rel.substr(slash);
+    }
+
     // VKS_INVMODEL_TRACE=1: progress on stderr (for locating a crash).
     void trace(const std::string& what)
     {
@@ -202,8 +235,9 @@ namespace
     }
 
     // Writes (dump) or compares (replay) a text corpus.
-    void corpus(const std::string& rel, const std::string& title, const std::string& seed, const Cases& actual)
+    void corpus(const std::string& logical_rel, const std::string& title, const std::string& seed, const Cases& actual)
     {
+        const std::string rel = platform_rel(logical_rel);
         env().touched.insert(rel);
         if (env().dump())
         {
@@ -220,8 +254,9 @@ namespace
     }
 
     // Writes (dump) or compares (replay) a binary fixture.
-    void binary(const std::string& rel, const std::string& bytes)
+    void binary(const std::string& logical_rel, const std::string& bytes)
     {
+        const std::string rel = platform_rel(logical_rel);
         env().touched.insert(rel);
         if (env().dump())
         {
@@ -649,6 +684,23 @@ namespace
         LLPointer<LLSDParser> parser = new LLSDBinaryParser();
         parser->parse(in, sd, LLSDSerialize::SIZE_UNLIMITED);
         return sd;
+    }
+
+    // A cache body's "categories" and "items" arrays in id order (stable).
+    void sort_cache_body(LLSD& body)
+    {
+        auto sort_array = [&body](const char* array_key, const char* id_key)
+        {
+            if (!body.has(array_key) || !body[array_key].isArray()) return;
+            std::vector<LLSD> v;
+            for (LLSD::array_const_iterator it = body[array_key].beginArray(); it != body[array_key].endArray(); ++it) v.push_back(*it);
+            std::stable_sort(v.begin(), v.end(), [id_key](const LLSD& a, const LLSD& b) { return a[id_key].asUUID() < b[id_key].asUUID(); });
+            LLSD out = LLSD::emptyArray();
+            for (const LLSD& e : v) out.append(e);
+            body[array_key] = out;
+        };
+        sort_array("categories", "cat_id");
+        sort_array("items", "item_id");
     }
 }
 

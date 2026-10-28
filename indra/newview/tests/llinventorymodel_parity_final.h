@@ -37,22 +37,21 @@ namespace tut
         // The fixture tree.
         std::set<std::string> allowed = env().touched;
         for (const char* a : { "cache/README.md", "cache/.gitattributes", "msgs/README.md", "msgs/.gitattributes" }) allowed.insert(a);
-#if LL_WINDOWS
-        allowed.insert("cache/c4_validation_qa.libstdcxx.txt");
-        allowed.insert("cache/c5_write_safety.linux.txt");
-#else
-        allowed.insert("cache/c4_validation_qa.msvc.txt");
-#endif
+        // The other standard library's records: its QA-mode file and its
+        // <area>/<library>/ tree (see platform_rel()).
+        allowed.insert(std::string("cache/c4_validation_qa.") + other_stdlib_name() + ".txt");
         std::string root = env().dump() ? env().out : env().fixtures;
         std::string unexpected;
         for (const char* area : { "cache", "msgs" })
         {
             std::string dir = join(root, area);
             if (!fs::is_directory(dir)) continue;
+            const std::string other_tree = std::string(area) + "/" + other_stdlib_name() + "/";
             for (const auto& e : fs::recursive_directory_iterator(dir))
             {
                 if (!e.is_regular_file()) continue;
                 std::string rel = std::string(area) + "/" + fs::relative(e.path(), dir).generic_string();
+                if (rel.rfind(other_tree, 0) == 0) continue;
                 if (!allowed.count(rel)) unexpected += "\n  " + rel;
             }
         }

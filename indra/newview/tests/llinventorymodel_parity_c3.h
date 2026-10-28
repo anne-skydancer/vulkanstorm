@@ -543,6 +543,9 @@ namespace
             items.clear();
             for (const auto& kv : model::categories()) cats.push_back(kv.first);
             for (const auto& kv : model::items()) items.push_back(kv.first);
+            // The draws index these lists: key order, not the hash table's.
+            std::sort(cats.begin(), cats.end());
+            std::sort(items.begin(), items.end());
         };
         U64 next_id = 0x10000;
         for (U32 n = 0; n < steps; ++n)

@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <sstream>
 
 namespace vks_inv
@@ -195,7 +196,14 @@ namespace vks_inv
         out.push_back(head.str());
         if (with_objects)
         {
-            for (const auto& kv : model::categories())
+            // In key order: the model's maps are std::unordered_map since
+            // upstream 28fee038e0, and the dump must not depend on the
+            // platform's hash table layout.
+            std::map<LLUUID, LLViewerInventoryCategory*> cats;
+            for (const auto& kv : model::categories()) cats[kv.first] = kv.second;
+            std::map<LLUUID, LLViewerInventoryItem*> items;
+            for (const auto& kv : model::items()) items[kv.first] = kv.second;
+            for (const auto& kv : cats)
             {
                 std::string line = dump_category(kv.second);
                 if (kv.first != kv.second->getUUID())
@@ -204,7 +212,7 @@ namespace vks_inv
                 }
                 out.push_back(line);
             }
-            for (const auto& kv : model::items())
+            for (const auto& kv : items)
             {
                 std::string line = dump_item(kv.second);
                 if (kv.first != kv.second->getUUID())

@@ -100,6 +100,12 @@ namespace
         std::string scratch = join(env().work, "c2base_scratch");
         b.agent.body = parse_cache_body(gunzip_bytes(join(dir, gz_name(AGENT)), scratch));
         b.library.body = parse_cache_body(gunzip_bytes(join(dir, gz_name(LIB_OWNER)), scratch));
+        // The C2 inputs are shared by every platform: the records in id
+        // order, not in the order cache() wrote them (the model's maps are
+        // std::unordered_map since upstream 28fee038e0, so that order is the
+        // platform's).
+        sort_cache_body(b.agent.body);
+        sort_cache_body(b.library.body);
         return b;
     }
 

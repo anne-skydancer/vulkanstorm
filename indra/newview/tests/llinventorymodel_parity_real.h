@@ -220,7 +220,7 @@ namespace tut
         // above). Only the decompressed content is compared: a different
         // zlib build may compress differently.
         {
-            const std::string rel = "cache/c1/realistic_100k.inv.llsd.gz";
+            const std::string rel = platform_rel("cache/c1/realistic_100k.inv.llsd.gz");
             env().touched.insert(rel);
             if (env().dump())
             {
