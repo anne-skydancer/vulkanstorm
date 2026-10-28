@@ -35,19 +35,21 @@ WANTS_VELOPACK=$FALSE
 WANTS_VERSION=$FALSE
 WANTS_KDU=$FALSE
 WANTS_FMODSTUDIO=$FALSE
-WANTS_OPENSIM=$TRUE
+# <Vulkanstorm> Default to Second Life (no OpenSim) builds. Use --opensim to opt in.
+WANTS_OPENSIM=$FALSE
+# </Vulkanstorm>
 WANTS_SINGLEGRID=$FALSE
 WANTS_HAVOK=$FALSE
 WANTS_AVX=$FALSE
-WANTS_AVX2=$FALSE
+WANTS_AVX2="" # empty: ON for Linux, OFF elsewhere (set after --platform)
 WANTS_TESTBUILD=$FALSE
 WANTS_TRACY=$FALSE
-WANTS_LTO=$FALSE
+WANTS_LTO=$TRUE # on for every build type; --no-lto disables it
 WANTS_BUILD=$FALSE
 WANTS_CRASHREPORTING=$FALSE
 WANTS_CACHE=$FALSE
 TARGET_PLATFORM="darwin" # darwin, windows, linux
-BTYPE="Release"
+BTYPE="RelWithDebInfo"
 CHANNEL="" # will be overwritten later with platform-specific values unless manually specified.
 LL_ARGS_PASSTHRU=""
 JOBS="0"
@@ -71,7 +73,7 @@ showUsage()
     echo "  --build                  : Build Firestorm"
     echo "  --version                : Update version number"
     echo "  --chan  [Release|Beta|Private]   : Private is the default, sets channel"
-    echo "  --btype [Release|RelWithDebInfo] : Release is default, whether to use symbols"
+    echo "  --btype [Release|RelWithDebInfo] : RelWithDebInfo is default, whether to use symbols"
     echo "  --kdu                    : Build with KDU"
     echo "  --package                : Build installer"
     echo "  --velopack               : Build with velopack (Overrides --package)"
@@ -82,9 +84,11 @@ showUsage()
     echo "  --singlegrid <login_uri> : Build for single grid usage (Requires --opensim)"
     echo "  --havok                  : Build with Havok support (Disables OpenSim support)"
     echo "  --avx                    : Build with Advanced Vector Extensions"
-    echo "  --avx2                   : Build with Advanced Vector Extensions 2"
+    echo "  --avx2                   : Build with Advanced Vector Extensions 2 (default on Linux)"
+    echo "  --no-avx2                : Build without Advanced Vector Extensions 2"
     echo "  --tracy                  : Build with Tracy Profiler support"
-    echo "  --lto                    : Build with Link Time Optimization"
+    echo "  --lto                    : Build with Link Time Optimization (default)"
+    echo "  --no-lto                 : Build without Link Time Optimization"
     echo "  --crashreporting         : Build with crash reporting enabled (Windows only)"
     echo "  --testbuild <days>       : Create time-limited test build (build date + <days>)"
     echo "  --platform <platform>    : Build for specified platform (darwin | windows | linux)"
@@ -101,7 +105,7 @@ getArgs()
 # $* = the options passed in from main
 {
     if [ $# -gt 0 ]; then
-      while getoptex "clean build config version package velopack no-package fmodstudio ninja vscode compiler-cache jobs: platform: kdu opensim no-opensim singlegrid: havok avx avx2 tracy lto crashreporting testbuild: help chan: btype:" "$@" ; do
+      while getoptex "clean build config version package velopack no-package fmodstudio ninja vscode compiler-cache jobs: platform: kdu opensim no-opensim singlegrid: havok avx avx2 no-avx2 tracy lto no-lto crashreporting testbuild: help chan: btype:" "$@" ; do
 
           #ensure options are valid
           if [  -z "$OPTOPT"  ] ; then
@@ -130,8 +134,10 @@ getArgs()
                           ;;
           avx)            WANTS_AVX=$TRUE;;
           avx2)           WANTS_AVX2=$TRUE;;
+          no-avx2)        WANTS_AVX2=$FALSE;;
           tracy)          WANTS_TRACY=$TRUE;;
           lto)            WANTS_LTO=$TRUE;;
+          no-lto)         WANTS_LTO=$FALSE;;
           crashreporting) WANTS_CRASHREPORTING=$TRUE;;
           testbuild)      WANTS_TESTBUILD=$TRUE
                           TESTBUILD_PERIOD="$OPTARG"
@@ -307,6 +313,15 @@ function getopt()
 
 
 getArgs $*
+# AVX2 is the Linux default (x86-64-v3, the vkstorm-ffi package baseline)
+# unless --avx, --avx2 or --no-avx2 was given.
+if [ -z "$WANTS_AVX2" ] ; then
+    if [ "$TARGET_PLATFORM" == "linux" ] && [ $WANTS_AVX -ne $TRUE ] ; then
+        WANTS_AVX2=$TRUE
+    else
+        WANTS_AVX2=$FALSE
+    fi
+fi
 if [ ! -d `dirname "$LOG"` ] ; then
         mkdir -p `dirname "$LOG"`
 fi
@@ -432,12 +447,13 @@ fi
 if [ \( $WANTS_VERSION -eq $TRUE \) -o \( $WANTS_CONFIG -eq $TRUE \) ] ; then
     echo "Versioning..."
     pushd ..
-    if [ -d .git ]
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1
     then
         buildVer=`git rev-list --count HEAD`
     else
         buildVer=`hg summary | head -1 | cut -d " "  -f 2 | cut -d : -f 1 | grep "[0-9]*"`
     fi
+    unset REVISION
     export revision=${buildVer}
 
     majorVer=`cat indra/newview/VIEWER_VERSION_FS.txt | cut -d "." -f 1`
@@ -573,6 +589,8 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         if [ $AUTOBUILD_ADDRSIZE == 32 ]
         then
             CMAKE_ARCH="-A Win32"
+        else
+            CMAKE_ARCH="-A x64"
         fi
         UNATTENDED="-DUNATTENDED=ON"
     fi
@@ -642,7 +660,7 @@ if [ $WANTS_BUILD -eq $TRUE ] ; then
           exit 1
         fi
         msbuild.exe "$SOLUTION" -p:Configuration=${BTYPE} -flp:LogFile="logs\\FirestormBuild_win-${AUTOBUILD_ADDRSIZE}.log" \
-            -flp1:"errorsonly;LogFile=logs\\FirestormBuild_win-${AUTOBUILD_ADDRSIZE}.err" -p:Platform=${AUTOBUILD_WIN_VSPLATFORM} -t:Build -p:useenv=true \
+            -flp1:"errorsonly;LogFile=logs\\FirestormBuild_win-${AUTOBUILD_ADDRSIZE}.err" -p:Platform=${AUTOBUILD_WIN_VSPLATFORM} -t:Build -p:useenv=false\
             -verbosity:normal -toolsversion:Current -p:"VCBuildAdditionalOptions= /incremental"
         build_status=$?
     fi
