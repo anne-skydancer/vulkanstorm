@@ -58,6 +58,8 @@
 // engine's. The local one is only a fallback when none is passed.
 static std::timed_mutex sFallbackAudioDeviceMutex;
 static std::timed_mutex* sAudioDeviceMutex = &sFallbackAudioDeviceMutex;
+// Delay before retrying device work that found the audio device mutex busy.
+static const webrtc::TimeDelta AUDIO_DEVICE_RETRY_DELAY = webrtc::TimeDelta::Millis(100);
 // Need to use to access the 3 second timeout for the lock.
 using namespace std::chrono_literals;
 // </FS:minerjr> [FIRE-36022]
@@ -823,9 +825,10 @@ void LLWebRTCImpl::workerDeployDevices(bool reset_module)
 {
     // Keep every hardware exit inside the attempt so completion always retires
     // its counted request. Failed attempts do not alter connection track state.
-    // A deferred attempt (macOS ADM mid-transition) keeps its request counted
-    // and retries itself; the retry retires it.
-    enum class Attempt { Applied, Failed, Deferred };
+    // A deferred attempt (macOS ADM mid-transition) and a busy attempt (the
+    // shared audio device mutex stayed locked for the whole wait) keep their
+    // request counted and retry themselves; the retry retires it.
+    enum class Attempt { Applied, Failed, Deferred, Busy };
     const Attempt attempt = [this, reset_module]()
     {
         // <FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
@@ -837,7 +840,7 @@ void LLWebRTCImpl::workerDeployDevices(bool reset_module)
             // Prevents threads from interacting with the hardware at the same time as other audio/voice threads.
             if (!lock.owns_lock())
             {
-                return Attempt::Failed;
+                return Attempt::Busy;
             }
             // </FS:minerjr> [FIRE-36022]
             if (!mDeviceModule)
@@ -955,6 +958,21 @@ void LLWebRTCImpl::workerDeployDevices(bool reset_module)
         return;
     }
 #endif
+    if (attempt == Attempt::Busy)
+    {
+        // <FS:minerjr> [FIRE-36022] The audio engine held the shared device mutex for the whole
+        // wait: retry after AUDIO_DEVICE_RETRY_DELAY instead of dropping this device change. The
+        // request stays counted until the retry completes; terminate() ends the retries.
+        mWorkerThread->PostDelayedTask([this, reset_module, alive = mDeployRetriesAlive]
+        {
+            if (!alive->load())
+            {
+                return; // terminate() has handed the threads and device module to its shutdown thread.
+            }
+            workerDeployDevices(reset_module || mDevicesDeployingNeedsReset.exchange(false, std::memory_order_relaxed));
+        }, AUDIO_DEVICE_RETRY_DELAY);
+        return;
+    }
     const bool applied = attempt == Attempt::Applied;
     if (!applied && reset_module)
     {
