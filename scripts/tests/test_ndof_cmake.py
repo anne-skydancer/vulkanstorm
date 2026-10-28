@@ -20,6 +20,11 @@ function(use_prebuilt_binary package)
   endif()
 endfunction()
 ''')
+            # Linux NDOF links SDL3 for its joystick backend (Firestorm 7.3).
+            (source / 'modules/SDL3.cmake').write_text('''
+include_guard()
+add_library(ll::SDL3 INTERFACE IMPORTED)
+''')
             archive = source / 'package with spaces/lib/release/libndofdev.a'
             archive.parent.mkdir(parents=True)
             if present:
@@ -40,7 +45,7 @@ set(CMAKE_MODULE_PATH "{source.as_posix()}/modules")
 set(ARCH_PREBUILT_DIRS_RELEASE "{directories}")
 include("{ROOT.as_posix()}/indra/cmake/NDOF.cmake")
 get_target_property(linked ll::ndof INTERFACE_LINK_LIBRARIES)
-if(NOT linked STREQUAL "{archive.as_posix()}")
+if(NOT linked STREQUAL "{archive.as_posix()};ll::SDL3")
   message(FATAL_ERROR "NDOF target links unexpected payload: ${{linked}}")
 endif()
 get_target_property(definitions ll::ndof INTERFACE_COMPILE_DEFINITIONS)
