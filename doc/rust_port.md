@@ -49,9 +49,10 @@ larger rungs.
   `crates/vkstorm-ffi/src/*.rs` in vkstorm-core-rust, the JPEG 2000 and LLSD
   parts of `lib.rs` in `j2c.rs` and `llsd.rs`).
 - Required Release configuration for this track: Inno Setup as the installer,
-  AVX2, OpenJPEG, no OpenSim, LTO, WebRTC voice. Vivox stays in every build,
-  Release included, by the owner's decision: `llvoicevivox` is compiled and
-  SLVoice is staged as on `vkstorm-release`. This line keeps
+  AVX2, OpenJPEG, no OpenSim, LTO, WebRTC voice. Release builds have WebRTC
+  voice only: Vivox is compiled only in OpenSim builds, as upstream Firestorm
+  does since 7.2.5 (`<FS:TJ> Keep Vivox only for OpenSim viewers` in
+  `llvoiceclient.cpp`, and the CMake `if (OPENSIM)`). This line keeps
   `vkstorm-release`'s build defaults except where a rung has replaced a part
   (for example `USE_VKS_AUDIO` instead of SoLoud, and the `vkstorm-ffi`
   package). CI's Release configure in `build.yaml` already matches.
