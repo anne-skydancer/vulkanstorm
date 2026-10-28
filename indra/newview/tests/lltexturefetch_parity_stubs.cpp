@@ -70,7 +70,7 @@ template struct Steal<RegionHttpUrlTag, &LLViewerRegion::mHttpUrl>;
 // ---- settings and application ---------------------------------------------
 
 LLControlGroup gSavedSettings("Global");
-bool gDisconnected = false;
+// gDisconnected is defined in llcommon (llapp.cpp) since upstream #5241 (147e864246).
 EStartupState LLStartUp::gStartupState = STATE_FIRST;
 
 LLAppViewer* LLAppViewer::sInstance = NULL;

@@ -1019,7 +1019,7 @@ using vks_ais::record;
 //============================================================================
 LLUUID gAgentID;
 LLUUID gAgentSessionID;
-bool gDisconnected = false;
+// gDisconnected is defined in llcommon (llapp.cpp) since upstream #5241 (147e864246).
 LLControlGroup gSavedSettings("Global");
 LLPointer<LLVOAvatarSelf> gAgentAvatarp = NULL;
 
@@ -1060,7 +1060,7 @@ void LLAgent::sendReliableMessage()
     gMessageSystem->clearMessage();
 }
 
-bool LLViewerRegion::isCapabilityAvailable(const std::string& name) const
+bool LLViewerRegion::isCapabilityAvailable(std::string_view name) const
 {
     return false;
 }

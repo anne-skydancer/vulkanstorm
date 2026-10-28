@@ -94,10 +94,10 @@ namespace
         friend typename Tag::type steal(Tag) { return M; }
     };
 
-    typedef std::map<LLUUID, LLPointer<LLViewerInventoryCategory> > cat_map_t;
-    typedef std::map<LLUUID, LLPointer<LLViewerInventoryItem> > item_map_t;
-    typedef std::map<LLUUID, LLInventoryModel::cat_array_t*> parent_cat_map_t;
-    typedef std::map<LLUUID, LLInventoryModel::item_array_t*> parent_item_map_t;
+    typedef std::unordered_map<LLUUID, LLPointer<LLViewerInventoryCategory> > cat_map_t;
+    typedef std::unordered_map<LLUUID, LLPointer<LLViewerInventoryItem> > item_map_t;
+    typedef std::unordered_map<LLUUID, LLInventoryModel::cat_array_t*> parent_cat_map_t;
+    typedef std::unordered_map<LLUUID, LLInventoryModel::item_array_t*> parent_item_map_t;
     typedef std::map<LLUUID, std::set<LLUUID> > broken_links_t;
     typedef std::multimap<LLUUID, LLUUID> backlink_mmap_t;
     typedef std::map<LLUUID, bool> lock_map_t;
@@ -264,7 +264,7 @@ namespace vks_inv
 
 LLControlGroup gSavedSettings("Global");
 LLControlGroup gSavedPerAccountSettings("PerAccount");
-bool gDisconnected = false;
+// gDisconnected is defined in llcommon (llapp.cpp) since upstream #5241 (147e864246).
 LLUUID gAgentID;
 LLUUID gAgentSessionID;
 LLDispatcher gGenericDispatcher;
@@ -417,10 +417,10 @@ namespace vks_inv
             g_fetch_done.disconnect_all_slots();
             apply_config();
         }
-        std::map<LLUUID, LLPointer<LLViewerInventoryCategory> >& categories() { return gInventory.*steal(ModelCatMap()); }
-        std::map<LLUUID, LLPointer<LLViewerInventoryItem> >& items() { return gInventory.*steal(ModelItemMap()); }
-        std::map<LLUUID, std::vector<LLPointer<LLViewerInventoryCategory> >*>& cat_tree() { return gInventory.*steal(ModelCatTree()); }
-        std::map<LLUUID, std::vector<LLPointer<LLViewerInventoryItem> >*>& item_tree() { return gInventory.*steal(ModelItemTree()); }
+        std::unordered_map<LLUUID, LLPointer<LLViewerInventoryCategory> >& categories() { return gInventory.*steal(ModelCatMap()); }
+        std::unordered_map<LLUUID, LLPointer<LLViewerInventoryItem> >& items() { return gInventory.*steal(ModelItemMap()); }
+        std::unordered_map<LLUUID, std::vector<LLPointer<LLViewerInventoryCategory> >*>& cat_tree() { return gInventory.*steal(ModelCatTree()); }
+        std::unordered_map<LLUUID, std::vector<LLPointer<LLViewerInventoryItem> >*>& item_tree() { return gInventory.*steal(ModelItemTree()); }
         std::multimap<LLUUID, LLUUID>& backlinks() { return gInventory.*steal(ModelBacklinks()); }
         std::map<LLUUID, std::set<LLUUID> >& possibly_broken_links() { return gInventory.*steal(ModelBroken()); }
         std::set<LLUUID>& links_rebuild_list() { return gInventory.*steal(ModelRebuild()); }
@@ -491,9 +491,9 @@ namespace
     class RegionShim : public LLCapabilityProvider
     {
     public:
-        std::string getCapability(const std::string& name) const override
+        std::string getCapability(std::string_view name) const override
         {
-            std::map<std::string, std::string>::const_iterator it = g_config.capabilities.find(name);
+            std::map<std::string, std::string>::const_iterator it = g_config.capabilities.find(std::string(name));
             return it == g_config.capabilities.end() ? std::string() : it->second;
         }
         const LLHost& getHost() const override { static LLHost host; return host; }
@@ -516,9 +516,9 @@ namespace
     }
 }
 
-bool LLViewerRegion::isCapabilityAvailable(const std::string& name) const
+bool LLViewerRegion::isCapabilityAvailable(std::string_view name) const
 {
-    std::map<std::string, std::string>::const_iterator it = g_config.capabilities.find(name);
+    std::map<std::string, std::string>::const_iterator it = g_config.capabilities.find(std::string(name));
     return it != g_config.capabilities.end() && !it->second.empty();
 }
 bool LLViewerRegion::capabilitiesReceived() const { return g_config.capabilities_received; }

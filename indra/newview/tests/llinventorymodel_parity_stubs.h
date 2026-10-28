@@ -116,6 +116,7 @@
 
 #include <functional>
 #include <map>
+#include <unordered_map>
 #include <set>
 #include <string>
 #include <utility>
@@ -217,10 +218,10 @@ namespace vks_inv
     namespace model
     {
         void reset();   // destroys and reconstructs gInventory in place
-        std::map<LLUUID, LLPointer<LLViewerInventoryCategory> >& categories();
-        std::map<LLUUID, LLPointer<LLViewerInventoryItem> >& items();
-        std::map<LLUUID, std::vector<LLPointer<LLViewerInventoryCategory> >*>& cat_tree();
-        std::map<LLUUID, std::vector<LLPointer<LLViewerInventoryItem> >*>& item_tree();
+        std::unordered_map<LLUUID, LLPointer<LLViewerInventoryCategory> >& categories();
+        std::unordered_map<LLUUID, LLPointer<LLViewerInventoryItem> >& items();
+        std::unordered_map<LLUUID, std::vector<LLPointer<LLViewerInventoryCategory> >*>& cat_tree();
+        std::unordered_map<LLUUID, std::vector<LLPointer<LLViewerInventoryItem> >*>& item_tree();
         std::multimap<LLUUID, LLUUID>& backlinks();
         std::map<LLUUID, std::set<LLUUID> >& possibly_broken_links();
         std::set<LLUUID>& links_rebuild_list();
