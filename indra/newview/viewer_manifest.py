@@ -325,8 +325,13 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         #<FS:TS> Somehow, we started leaving the - separating the variant from the app name
         # on the beginning of the channel qualifier. This screws up later processing that
         # depends on the channel type. If it's there, we chop it off.
-        if channel_qualifier[0] == '-':
+        # <Vulkanstorm> The unsuffixed vendor channel is the base release.
+        # if channel_qualifier[0] == '-':
+        if channel_qualifier.startswith('-'):
             channel_qualifier = channel_qualifier[1:]
+        if not channel_qualifier:
+            return 'release'
+        # </Vulkanstorm>
         if channel_qualifier.startswith('release'):
             channel_type='release'
         elif channel_qualifier.startswith('beta'):
