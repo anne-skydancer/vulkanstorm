@@ -13,7 +13,7 @@ on:
   workflow_call:
   pull_request:
   push:
-    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "codex/**"]
+    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-vulkan-rhi", "vkstorm-vulkan-direct", "vkstorm-rust", "vkstorm-aleph", "codex/**"]
     tags: ["Second_Life*"]
 
 permissions:
