@@ -33,7 +33,7 @@ install_desktop_entry() {
         printf 'Icon=%s\n' "$(desktop_string "${installation_prefix}/firestorm_icon.png")"
         printf '%s\n' 'Terminal=false' 'Type=Application' \
             'Categories=Internet;Network;' 'StartupNotify=true' \
-            'StartupWMClass=do-not-directly-run-vulkanstorm-bin'
+            'StartupWMClass=org.vulkanstorm.viewer'
     } > "${desktop_entries_dir}/vulkanstorm-viewer.desktop" || return 1
 }
 
