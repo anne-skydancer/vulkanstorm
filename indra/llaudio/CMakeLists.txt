@@ -81,3 +81,7 @@ if( TARGET ll::soloud )
     add_executable(llsoloud_adapter_test EXCLUDE_FROM_ALL tests/llsoloud_adapter_test.cpp)
     target_link_libraries(llsoloud_adapter_test PRIVATE llaudio)
 endif()
+
+if (USE_PRECOMPILED_HEADERS)
+    target_precompile_headers(llaudio REUSE_FROM llprecompiled)
+endif ()

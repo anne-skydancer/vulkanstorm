@@ -48,9 +48,9 @@ public:
     void    draw() override;
     bool    postBuild() override;
 
-    void startOfLine() override;
-    bool handleKeyHere(KEY key, MASK mask) override;
-    void loadKeywords(const std::string& filename, const std::vector<std::string>& funcs, const std::vector<std::string>& tooltips, const LLColor3& color);
+    // <FS> Improved Home-key behavior
+    // LLTextBase override
+    virtual void    startOfLine();
 
     void    initKeywords(bool luau_language = false);
     void    loadKeywords();
@@ -63,11 +63,20 @@ public:
     U32     getKeywordsGeneration() const { return mKeywordsGeneration; }
     void    applySyntaxSegments(const LLWString& text, const LLKeywords::segment_ops_t& ops);
 
-    static std::string getScriptFontSize();
-    LLFontGL* getScriptFont();
-    void onFontSizeChange();
+    // <FS:Ansariel> FIRE-20818: User-selectable font and size for script editor
+    //static std::string getScriptFontSize();
+    //LLFontGL* getScriptFont();
+    //void onFontSizeChange();
+    // <FS:Ansariel>
 
-  protected:
+    // <FS:Ansariel> Re-add legacy format support
+    void    loadKeywords(const std::string& filename,
+                         const std::vector<std::string>& funcs,
+                         const std::vector<std::string>& tooltips,
+                         const LLColor3& func_color);
+    // </FS:Ansariel>
+
+protected:
     friend class LLUICtrlFactory;
     friend class LLScriptEditorSyntaxWorker;
     LLScriptEditor(const Params& p);
@@ -92,6 +101,9 @@ private:
                              LLKeywords* keywords);
     void    processPendingSyntaxApply();
     void    resetPendingSyntaxApply();
+
+    // <FS:Ansariel> Show keyword help on F1
+    /*virtual*/ bool handleKeyHere(KEY key, MASK mask);
 
     LLKeywords  mKeywordsLua;
     LLKeywords  mKeywordsLSL;

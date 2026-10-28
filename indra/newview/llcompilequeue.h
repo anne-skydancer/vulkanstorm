@@ -78,7 +78,6 @@ public:
 
     /*virtual*/ bool postBuild();
 
-    void setMono(bool mono) { mCompileTarget = mono ? "mono" : "lsl2"; }
     void setCompileTarget(std::string target) { mCompileTarget = target; }
 
     // addObject() accepts an object id.

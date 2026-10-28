@@ -33,6 +33,7 @@
 #include "lluuid.h"
 #include "llviewerobject.h"
 #include "llvoinventorylistener.h"
+#include "llscripteditorws.h"
 #include "v3math.h"
 #include <boost/signals2/connection.hpp>
 
@@ -55,10 +56,10 @@ public:
 
     void            onNewScriptFlyoutCommit(LLUICtrl* ctrl);
     void            onNewNotecardCommit();
-    static void     onClickNewNotecard(void* userdata);
-    void            onFinishCreateItem();
-
+    static void     onClickPermissions(void*);
     void            onClickPublish();
+    static void     onClickResetScripts(void*); // <FS> Script reset in edit floater
+    static void     onClickRefresh(void*);
 
     void            createTaskInventoryItemHelper(LLViewerObject* object,
                         LLAssetType::EType asset_type,
@@ -66,11 +67,6 @@ public:
                         U8 sub_type,
                         const std::string& name,
                         const LLSD& params);
-
-
-    static void     onClickPermissions(void*);
-    static void     onClickResetScripts(void*); // <FS> Script reset in edit floater
-    static void     onClickRefresh(void*);
 
     // Key suffix for "tentative" fields
     static const char* TENTATIVE_SUFFIX;
@@ -86,19 +82,19 @@ public:
 protected:
     void getState(LLViewerObject *object);
     void onFilterEdit();
-    void onSimulatorFeaturesReceived(const LLUUID&);
-    LLUUID mLastScriptObjectID;
-    bool mLastLuaRegion{false};
-    bool mNewScriptIsLua{false};
-    boost::signals2::connection mSimulatorFeaturesConnection;
-    LLButton* mPublishButton{nullptr};
+    void onSimulatorFeaturesReceived(const LLUUID& region_id);
 
     bool mDirtyFilter { false };
+    LLUUID mLastScriptObjectID;
+    bool mLastLuaRegion { false };
+    bool mNewScriptIsLua { false };
+    boost::signals2::connection mSimulatorFeaturesConnection;
 
 public:
     class LLFilterEditor* mFilterEditor;
     LLSaveFolderState mSavedFolderState;
     LLPanelObjectInventory* mPanelInventoryObject;
+    LLButton* mPublishButton { nullptr };
 };
 
 #endif // LL_LLPANELCONTENTS_H
