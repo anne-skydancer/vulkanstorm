@@ -2194,11 +2194,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>9c89879f81ee0434e1f59c47d74a25958ae08e9e</string>
+              <string>8ea80dacdf0cbaef8aa202986cf9f37fb23cec0b7bed8e5a1c51cce3ded6e649</string>
               <key>hash_algorithm</key>
-              <string>sha1</string>
+              <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-openjpeg/releases/download/v2.5.4-r1/openjpeg-2.5.4.18754730947-linux64-18754730947.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-openjpeg/releases/download/v2.5.4-cpu-avx2.1/openjpeg-2.5.4.37071874243-linux64-37071874243.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -2208,11 +2208,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>b78887212f18ae59dc7961e0e1af781e568bd92c</string>
+              <string>c810217c22f2352bdce7c4eb7477d53fe53825f6947cfd2819b2ea4a1cdb3d20</string>
               <key>hash_algorithm</key>
-              <string>sha1</string>
+              <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-openjpeg/releases/download/v2.5.4-r1/openjpeg-2.5.4.18754730947-windows64-18754730947.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-openjpeg/releases/download/v2.5.4-cpu-avx2.1/openjpeg-2.5.4.37071874243-windows64-37071874243.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -2225,7 +2225,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <key>copyright</key>
         <string>Copyright (c) 2002-2007, Communications and Remote Sensing Laboratory, Universite catholique de Louvain (UCL), Belgium; Copyright (c) 2002-2007, Professor Benoit Macq; Copyright (c) 2001-2003, David Janssens; Copyright (c) 2002-2003, Yannick Verschueren; Copyright (c) 2003-2007, Francois-Olivier Devaux and Antonin Descampe; Copyright (c) 2005, Herve Drolon, FreeImage Team; Copyright (c) 2006-2007, Parvatha Elangovan; Copyright (c) 2008, Jerome Fimes, Communications &amp; Systemes &lt;jerome.fimes@c-s.fr&gt;; Copyright (c) 2010-2011, Kaori Hagihara; Copyright (c) 2011-2012, Centre National d'Etudes Spatiales (CNES), France; Copyright (c) 2012, CS Systemes d'Information, France;</string>
         <key>version</key>
-        <string>2.5.4.18754730947</string>
+        <string>2.5.4.37071874243</string>
         <key>name</key>
         <string>openjpeg</string>
         <key>description</key>
