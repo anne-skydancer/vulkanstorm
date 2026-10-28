@@ -12,7 +12,14 @@ The design study behind the port is in the vkstorm-aleph repository under
 
 Rung order: the JPEG 2000 codec, LLSD and the message codec, mesh assets and
 the prim mesher, the HTTP layer, the asset pipeline, audio (rung six),
-textures, inventory, the object store, the renderer, the UI, then Vulkan.
+inventory (rung seven, in progress), the object store, the remaining texture
+work, the renderer, the UI, then Vulkan. Inventory moved ahead of textures
+because rung five already ported the texture cache and fetch; what is left of
+textures is the VRAM budget and discard policy, per-texture priority and pixel
+operations (`doc/survey/README.md`, "Recommended order after inventory").
+Small self-contained pieces of the application core (SLURL, chat-log parsing,
+RLVa command syntax, version and date parsing) can be scheduled alongside the
+larger rungs.
 
 ## Build integration
 
@@ -42,9 +49,12 @@ textures, inventory, the object store, the renderer, the UI, then Vulkan.
   `crates/vkstorm-ffi/src/*.rs` in vkstorm-core-rust, the JPEG 2000 and LLSD
   parts of `lib.rs` in `j2c.rs` and `llsd.rs`).
 - Required Release configuration for this track: Inno Setup as the installer,
-  AVX2, OpenJPEG, no OpenSim, LTO, WebRTC voice. Vivox is not part of the
-  Release, since Second Life voice is WebRTC; it stays available in OpenSim
-  builds as today. CI's Release configure in `build.yaml` already matches.
+  AVX2, OpenJPEG, no OpenSim, LTO, WebRTC voice. Vivox stays in every build,
+  Release included, by the owner's decision: `llvoicevivox` is compiled and
+  SLVoice is staged as on `vkstorm-release`. This line keeps
+  `vkstorm-release`'s build defaults except where a rung has replaced a part
+  (for example `USE_VKS_AUDIO` instead of SoLoud, and the `vkstorm-ffi`
+  package). CI's Release configure in `build.yaml` already matches.
 
 ## Rung one: JPEG 2000 codec
 
@@ -1876,6 +1886,36 @@ BL = FL and BR = FR sample for sample at 5.1, LFE silent.
   WSLg; unplugging, default-device moves and audible checks on speakers were
   not exercised by the automation.
 
+## Rung seven: inventory (in progress)
+
+The inventory rung follows the pattern of the earlier rungs: the record
+classes (`LLInventoryItem`, `LLInventoryCategory`, `LLPermissions`,
+`LLSaleInfo` and their viewer subclasses) and the `LLInventoryModel`
+containers stay C++, because viewer code writes their fields directly and 145
+files use `gInventory`. Rust makes the decisions behind them; flat records
+and operation lists cross the C ABI. The plan, the eight open decisions and
+the oracle inventory are in `doc/survey/03-content-model.md` §4-§6.
+
+Sub-rungs and their oracles:
+
+| Sub-rung | Scope | Oracle test | Fixtures |
+|---|---|---|---|
+| R1 | Data model: types and flags, name and description normalisers, permissions, aggregate permissions, sale info, items, categories, CRCs, LLSD and legacy text forms, message blocks | `INTEGRATION_TEST_llinventory_parity` | `indra/llinventory/tests/fixtures` (C1-C10) |
+| R2 | Inventory cache file codec (load, save, validation) and the agent-inventory UDP message handlers | `INTEGRATION_TEST_llinventorymodel_parity` | `indra/newview/tests/fixtures/inventory/cache`, `msgs` |
+| R3a | AIS response parsing and model updates | `INTEGRATION_TEST_llaisupdate_parity` | `inventory/ais/update` |
+| R3b | Background fetch scheduling | `INTEGRATION_TEST_llinvfetch_parity` | `inventory/ais/fetch` |
+| R4a | Object (task) inventory | `INTEGRATION_TEST_llinventory_task_oracle` | `inventory/task` |
+| R4b | Inventory offers and giving | `INTEGRATION_TEST_llinventory_offer_oracle` | `inventory/offer`, `give` |
+
+Each sub-rung has a `check_r*_copies.py` script that keeps the frozen oracle
+copies identical to the production sources they were taken from.
+
+State (October 2026): the oracle phase is complete for all six sub-rungs. R1
+is implemented in the `vkstorm-inventory` crate of vkstorm-core-rust and
+replays every R1 corpus byte for byte, with and without `opensim`; it is not
+yet behind `vkstorm-ffi` and the viewer does not call it. R2-R4b are not
+implemented.
+
 ## Local build
 
 Follow the project's RelWithDebInfo procedure (see `scripts/validate_audio.sh`
@@ -1884,17 +1924,22 @@ for the canonical variables), then:
 ```sh
 autobuild configure -A 64 -c ReleaseFS_open -- --no-opensim --zink --avx2 --no-package \
   -DUSE_DISCORD:BOOL=OFF -DOPENSIM:BOOL=FALSE -DLL_TESTS:BOOL=FALSE
-cmake --build build-vc170-64 --config RelWithDebInfo --target vulkanstorm-bin -- -m:4 -nologo
-cmake -S indra -B build-vc170-64 -DLL_TESTS:BOOL=ON
-cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llimagej2coj -- -m:4 -nologo
-cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llsdserialize_parity llsdserialize_tool -- -m:4 -nologo
-cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llvolume -- -m:4 -nologo
-cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llimagej2coj INTEGRATION_TEST_llimagecodecs -- -m:4 -nologo
-cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llmessagetemplate -- -m:4 -nologo
-cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llcorehttp_parity INTEGRATION_TEST_llcorehttp -- -m:4 -nologo
-cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llmeshunpack_parity INTEGRATION_TEST_lltexturecache_parity INTEGRATION_TEST_lltexturefetch_parity -- -m:4 -nologo
-cmake --build build-vc170-64 --config RelWithDebInfo --target INTEGRATION_TEST_llaudio_parity INTEGRATION_TEST_llaudio_music -- -m:4 -nologo
+cmake --build build-vc180-64 --config RelWithDebInfo --target vulkanstorm-bin -- -m:4 -nologo
+cmake -S indra -B build-vc180-64 -DLL_TESTS:BOOL=ON
+cmake --build build-vc180-64 --config RelWithDebInfo --target INTEGRATION_TEST_llimagej2coj -- -m:4 -nologo
+cmake --build build-vc180-64 --config RelWithDebInfo --target INTEGRATION_TEST_llsdserialize_parity llsdserialize_tool -- -m:4 -nologo
+cmake --build build-vc180-64 --config RelWithDebInfo --target INTEGRATION_TEST_llvolume -- -m:4 -nologo
+cmake --build build-vc180-64 --config RelWithDebInfo --target INTEGRATION_TEST_llimagej2coj INTEGRATION_TEST_llimagecodecs -- -m:4 -nologo
+cmake --build build-vc180-64 --config RelWithDebInfo --target INTEGRATION_TEST_llmessagetemplate -- -m:4 -nologo
+cmake --build build-vc180-64 --config RelWithDebInfo --target INTEGRATION_TEST_llcorehttp_parity INTEGRATION_TEST_llcorehttp -- -m:4 -nologo
+cmake --build build-vc180-64 --config RelWithDebInfo --target INTEGRATION_TEST_llmeshunpack_parity INTEGRATION_TEST_lltexturecache_parity INTEGRATION_TEST_lltexturefetch_parity -- -m:4 -nologo
+cmake --build build-vc180-64 --config RelWithDebInfo --target INTEGRATION_TEST_llaudio_parity INTEGRATION_TEST_llaudio_music -- -m:4 -nologo
+cmake --build build-vc180-64 --config RelWithDebInfo --target INTEGRATION_TEST_llinventory_parity INTEGRATION_TEST_llinventorymodel_parity INTEGRATION_TEST_llinvfetch_parity INTEGRATION_TEST_llaisupdate_parity INTEGRATION_TEST_llinventory_task_oracle INTEGRATION_TEST_llinventory_offer_oracle -- -m:4 -nologo
 ```
+
+The build directory is `build-vc180-64` (Visual Studio 2026) for both
+RelWithDebInfo and Release. Integration tests are built for RelWithDebInfo
+only; a Release build keeps `LL_TESTS` off.
 
 Under Git Bash pass MSBuild switches with a hyphen (`-m:4`), not a slash.
 The llvolume test also records the corpus (`VKS_VOLUME_DUMP=<file>`) and
