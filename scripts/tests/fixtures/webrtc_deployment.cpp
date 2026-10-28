@@ -23,6 +23,7 @@ struct TaskQueue
     void step() { auto task = std::move(tasks.front()); tasks.pop_front(); task(); }
 };
 namespace webrtc { struct TimeDelta { static int Millis(int value) { return value; } }; }
+static const int AUDIO_DEVICE_RETRY_DELAY = webrtc::TimeDelta::Millis(100);
 struct Device
 {
     int initialized = 0, terminated = 0, stops = 0;
@@ -154,11 +155,35 @@ int main()
     vanished.drain();
     assert(vanished.recordings == 1);
 
-    for (int failure = 0; failure < 3; ++failure)
+    // A busy shared device mutex retries the same request after a delay and
+    // applies it, instead of dropping the device change until the next one.
+    LLWebRTCImpl busy;
+    busy.mPeerConnections.emplace_back(std::make_unique<Connection>());
+    gAudioDeviceMutex.timeouts = 3;
+    busy.deployDevices(true);
+    busy.drain();
+    assert(busy.worker.delayed == 3);
+    assert(busy.module.terminated == 1 && busy.recordings == 1 && busy.playouts == 1);
+    assert(!busy.mDevicesDeployingNeedsReset);
+    assert(busy.mPeerConnections[0]->mute_resets == 1);
+    assert(busy.mPeerConnections[0]->receiver_updates == 1);
+
+    // Shutdown while a busy retry is pending: the retry runs after terminate()
+    // and must not deploy or post completion (the threads have moved away).
+    LLWebRTCImpl closing;
+    gAudioDeviceMutex.timeouts = 1;
+    closing.deployDevices(false);
+    closing.worker.step();
+    assert(closing.worker.delayed == 1 && closing.worker.tasks.size() == 1);
+    closing.mDeployRetriesAlive->store(false); // what terminate() does first
+    closing.mSignalingThread = nullptr;        // moved to the shutdown thread
+    closing.worker.step();
+    assert(closing.worker.tasks.empty() && closing.recordings == 0);
+
+    for (int failure = 1; failure < 3; ++failure)
     {
         LLWebRTCImpl recover;
         recover.mPeerConnections.emplace_back(std::make_unique<Connection>());
-        if (failure == 0) gAudioDeviceMutex.timeouts = 1;
         if (failure == 1) gAudioDeviceMutex.throw_next = true;
         if (failure == 2) recover.fail_recording = true;
         recover.deployDevices(true);
@@ -179,8 +204,9 @@ int main()
     gAudioDeviceMutex.timeouts = 1;
     queued.deployDevices(true);
     queued.deployDevices(false);
-    queued.drain(); // The queued request retries the reset after lock failure.
-    assert(queued.module.terminated == 1 && queued.recordings == 1);
+    queued.drain(); // The busy reset retries itself, then the queued request runs.
+    assert(queued.worker.delayed == 1);
+    assert(queued.module.terminated == 1 && queued.recordings == 2);
     assert(!queued.mDevicesDeployingNeedsReset);
 
 #if WEBRTC_MAC
