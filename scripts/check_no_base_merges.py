@@ -26,6 +26,13 @@ reachable from the upstream ref (UPSTREAM_REF, default upstream/master;
 VKS_UPSTREAM_REF overrides it), are protected like any base line. Without
 the upstream ref the whole chain is protected and a note says to fetch it.
 
+Upstream's own merges are not checked either. Every base line branched from
+upstream, so old upstream commits sit on its first-parent chain; an upstream
+merge whose second parent is one of them (upstream merging its master into a
+feature branch) arrives with an upstream integration but is upstream's
+history, not a base merge. Merges the upstream ref can reach are skipped.
+Without the upstream ref they are checked (fail closed).
+
 usage:
   check_no_base_merges.py <base-ref> [<head-ref>]
       CI: every merge commit in <base-ref>..<head-ref> (head defaults to HEAD)
@@ -111,7 +118,16 @@ def short_ref(ref):
 def check_range(base, head):
     owner = first_parent_chains(base_lines(base))
     found = []
-    for merge in git("rev-list", "--merges", "%s..%s" % (base, head)).stdout.split():
+    # Upstream's own merges (reachable from the upstream ref) are upstream
+    # history brought in by an upstream integration, not base merges.
+    merges = ["rev-list", "--merges", "%s..%s" % (base, head)]
+    upstream = resolve(UPSTREAM_REF)
+    if upstream:
+        merges += ["--not", upstream]
+    else:
+        print("note: %s not found; upstream's own merges are checked too. Fetch "
+              "upstream (git fetch upstream master) to exempt them." % UPSTREAM_REF)
+    for merge in git(*merges).stdout.split():
         parents = git("log", "-1", "--format=%P", merge).stdout.split()
         for parent in parents[1:]:
             if parent in owner:

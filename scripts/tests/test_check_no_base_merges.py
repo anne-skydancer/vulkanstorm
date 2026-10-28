@@ -181,6 +181,37 @@ def upstream_line_own_commits(r):
     expect("CI: without upstream/master the line's whole chain is protected", code, 1, out)
 
 
+def upstream_internal_merges(r):
+    # A base line branched from upstream at b, so b is on its first-parent
+    # chain. Upstream later merges its master (b) into a feature branch and
+    # lands the feature. Integrating that upstream tip brings in upstream's
+    # merge whose second parent is b: upstream's history, not a base merge.
+    b = r.commit("trunk", "upstream: branch point")
+    r.branch("upfeat", "trunk~1")
+    r.commit("upfeat", "upstream: feature work")
+    r.git("branch", "vkstorm-canary", b)
+    r.commit("vkstorm-canary", "canary work")
+    r.publish("vkstorm-canary")
+    r.merge("upfeat", "trunk", "upstream: merge master into the feature")
+    up = r.merge("trunk", "upfeat", "upstream: merge the feature")
+    r.git("update-ref", "refs/remotes/upstream/master", up)
+    r.branch("codex/canary-upstream", "vkstorm-canary")
+    r.merge("codex/canary-upstream", up, "Merge upstream master into canary")
+    code, out = r.check("origin/vkstorm-canary", "codex/canary-upstream")
+    expect("CI: upstream's own merges in an upstream integration are allowed", code, 0, out)
+    # A base line merged into a feature is still caught next to them.
+    r.branch("codex/c", "codex/canary-upstream")
+    r.commit("vkstorm-canary", "more canary work")
+    r.publish("vkstorm-canary")
+    r.merge("codex/c", "vkstorm-canary", "Merge vkstorm-canary into codex/c")
+    code, out = r.check("origin/vkstorm-canary", "codex/c")
+    expect("CI: a base merge beside upstream's merges is still rejected", code, 1, out)
+    # Without the upstream ref, upstream's merges are checked (fail closed).
+    r.git("update-ref", "-d", "refs/remotes/upstream/master")
+    code, out = r.check("origin/vkstorm-canary", "codex/canary-upstream")
+    expect("CI: without upstream/master upstream's merges are checked", code, 1, out)
+
+
 def local_base_ahead_of_origin(r):
     # Local vkstorm-rust has moved past origin/vkstorm-rust (pulled from
     # elsewhere); merging the local tip into a feature branch is still a base merge.
@@ -341,7 +372,7 @@ def installer_scenarios():
 
 def main():
     for fn in (base_merged_into_feature, stacked_feature_then_landed, stacked_feature_landed_first,
-               other_line_merged, upstream_mirror_integration, upstream_line_own_commits, local_base_ahead_of_origin, update_branch_style, clean_feature, hook_refuses_and_override,
+               other_line_merged, upstream_mirror_integration, upstream_line_own_commits, upstream_internal_merges, local_base_ahead_of_origin, update_branch_style, clean_feature, hook_refuses_and_override,
                hook_pull_fetch_head):
         scenario(fn)
     installer_scenarios()

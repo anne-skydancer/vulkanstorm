@@ -33,8 +33,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # upstream/master tells vkstorm-aleph's upstream commits (exempt) from
-      # its own (protected).
+      # upstream/master tells upstream's commits and merges (exempt) from the
+      # base lines' own history (protected).
       - name: Fetch upstream master
         run: git fetch --no-tags https://github.com/FirestormViewer/phoenix-firestorm.git +refs/heads/master:refs/remotes/upstream/master
       - name: Checker regression tests
