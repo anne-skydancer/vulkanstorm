@@ -141,8 +141,29 @@ jobs:
             -DLL_TESTS:BOOL=OFF -DRELEASE_CRASH_REPORTING:BOOL=OFF \
             -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
 
+      # The LTO link of this tree's firestorm-bin exhausts the hosted runner's
+      # 16 GB: twice the job was cancelled about 2.5 minutes into that link.
+      # Swap on the larger /mnt disk lets it finish; the build flags stay
+      # vkstorm-release's.
+      - name: Add swap for the LTO link
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          free -h
+          df -h / /mnt
+          sudo fallocate -l 24G /mnt/vkstorm.swap
+          sudo chmod 600 /mnt/vkstorm.swap
+          sudo mkswap /mnt/vkstorm.swap
+          sudo swapon /mnt/vkstorm.swap
+          free -h
+
       - name: Build viewer and stage runtime
         run: cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
+
+      - name: Memory after the build
+        if: always() && runner.os == 'Linux'
+        run: free -h
 
       - name: Keep qualification builds free of installers
         if: env.VIEWER_PACKAGE != 'ON'
