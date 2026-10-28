@@ -1,5 +1,5 @@
 {
-  "source_commit": "f604c4b3a07eb9c6e2170030eacd4b5684c4e0dc",
+  "source_commit": "2b1c070eafa8f089e44ad2457c2a8ca34d4a2ef4",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -23533,7 +23533,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 764,
       "end": 782,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -23542,7 +23542,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 1021,
       "end": 1021,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -26089,7 +26089,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 512,
       "end": 515,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -26143,7 +26143,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 769,
       "end": 778,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -26152,7 +26152,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 782,
       "end": 782,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -26161,7 +26161,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 1004,
       "end": 1014,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -26170,7 +26170,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 1021,
       "end": 1021,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -26539,7 +26539,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 514,
       "end": 514,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -26548,7 +26548,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 690,
       "end": 692,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -26557,7 +26557,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 802,
       "end": 818,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -26836,7 +26836,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 26,
       "end": 26,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26845,7 +26845,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 31,
       "end": 34,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26854,7 +26854,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 53,
       "end": 61,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26863,7 +26863,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 143,
       "end": 165,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26872,7 +26872,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 196,
       "end": 196,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26881,7 +26881,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 221,
       "end": 224,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26890,7 +26890,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 232,
       "end": 233,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26899,7 +26899,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 236,
       "end": 237,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26908,7 +26908,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 246,
       "end": 247,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26917,7 +26917,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 596,
       "end": 596,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26926,7 +26926,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 602,
       "end": 603,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26935,7 +26935,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 609,
       "end": 609,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26944,7 +26944,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 618,
       "end": 618,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26953,7 +26953,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 623,
       "end": 623,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26962,7 +26962,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 625,
       "end": 626,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26971,7 +26971,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 667,
       "end": 671,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26980,7 +26980,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 805,
       "end": 807,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26989,7 +26989,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 814,
       "end": 815,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -26998,7 +26998,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 947,
       "end": 965,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27007,7 +27007,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 1063,
       "end": 1064,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27016,7 +27016,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 1559,
       "end": 1566,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27025,7 +27025,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 1679,
       "end": 1686,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27034,7 +27034,7 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 1695,
       "end": 1695,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -27043,133 +27043,124 @@
       "path": "indra/newview/aoengine.cpp",
       "start": 1697,
       "end": 1702,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 2904,
-      "end": 2904,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 2905,
+      "end": 2905,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 2915,
-      "end": 2918,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 3383,
+      "end": 3384,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 3386,
-      "end": 3387,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 3440,
+      "end": 3440,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 3443,
-      "end": 3443,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 3486,
+      "end": 3486,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 3489,
-      "end": 3489,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 3505,
+      "end": 3506,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 3508,
-      "end": 3509,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 3510,
+      "end": 3519,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 3513,
-      "end": 3522,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 3521,
+      "end": 3531,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 3524,
-      "end": 3534,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 3543,
+      "end": 3552,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 3546,
-      "end": 3555,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 3566,
+      "end": 3571,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 3569,
-      "end": 3574,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 3582,
+      "end": 3582,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 3585,
-      "end": 3585,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 3827,
+      "end": 3828,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 3830,
-      "end": 3831,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 3861,
+      "end": 3863,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/aoengine.cpp",
-      "start": 3864,
-      "end": 3866,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
-      "record": "I14",
-      "disposition": "mapped",
-      "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "indra/newview/aoengine.cpp",
-      "start": 3870,
-      "end": 3870,
-      "sha256": "4017e446e709ce0def7e7cd3c1b5d6e0c3aa33b85029684074fc4b10ccc12cd6",
+      "start": 3867,
+      "end": 3867,
+      "sha256": "d1910d658883e10a2ee1731ce7d9404c375f1fc709b1ca7714b51f4871ea592e",
       "record": "I14",
       "disposition": "mapped",
       "reason": "Shared CPU skeleton/morph/mesh/motion, masks/compositor and bounded composite images; native COF/wearable/rez/detach/bake/gesture/AO/script-control routes use scoped real owners. Reference LOD, typed motion initialization/remapping, visibility, fitted overrides and retirement reviewed. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -33289,7 +33280,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -33298,7 +33289,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 549,
       "end": 549,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -33307,7 +33298,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 585,
       "end": 585,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -33316,7 +33307,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 656,
       "end": 656,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -33325,7 +33316,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 665,
       "end": 665,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -33334,7 +33325,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 669,
       "end": 669,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -33343,7 +33334,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 690,
       "end": 690,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -33802,7 +33793,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 674,
       "end": 674,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -34234,7 +34225,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -34243,7 +34234,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 656,
       "end": 656,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -34252,7 +34243,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 660,
       "end": 660,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -34261,7 +34252,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 665,
       "end": 665,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -34270,7 +34261,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 669,
       "end": 669,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -34279,7 +34270,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 690,
       "end": 690,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37222,7 +37213,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 819,
       "end": 971,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -39697,7 +39688,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 972,
       "end": 987,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -41719,15 +41710,6 @@
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
-      "path": "scripts/tests/test_native_texture_memory.py",
-      "start": 1,
-      "end": 100,
-      "sha256": "029063c10d71c110ca8044fc9297d8b57f56a31957a68646745fe63d8707c02e",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
-    },
-    {
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 33,
       "end": 33,
@@ -42280,7 +42262,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 818,
       "end": 818,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -46393,7 +46375,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 825,
       "end": 825,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -46402,7 +46384,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 828,
       "end": 830,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -46411,7 +46393,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 832,
       "end": 832,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -46420,7 +46402,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 972,
       "end": 984,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -46429,7 +46411,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 475,
       "end": 476,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -46438,7 +46420,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 495,
       "end": 495,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -46447,7 +46429,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 498,
       "end": 499,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48391,7 +48373,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 494,
       "end": 494,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48400,7 +48382,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 775,
       "end": 780,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48409,7 +48391,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 793,
       "end": 793,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48418,7 +48400,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 795,
       "end": 797,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48427,7 +48409,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 811,
       "end": 812,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48436,7 +48418,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 814,
       "end": 817,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48922,7 +48904,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 647,
       "end": 647,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48931,7 +48913,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 685,
       "end": 686,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48940,7 +48922,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 691,
       "end": 692,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48949,7 +48931,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 696,
       "end": 698,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48958,7 +48940,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 719,
       "end": 720,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48967,7 +48949,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 750,
       "end": 756,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -50668,7 +50650,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 685,
       "end": 689,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -62080,7 +62062,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 819,
       "end": 819,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute the same nine R3 cache cases in individually bounded workflow steps, revalidating source, binary, runtime, prior driver/pixels/retirement and cache state before resuming. Reject incomplete matrices and changed inputs; preserve viewer, driver and job limits and full final artifact acceptance. CI-only correction, with existing local UI changes still held from push."
@@ -62089,7 +62071,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 834,
       "end": 970,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute the same nine R3 cache cases in individually bounded workflow steps, revalidating source, binary, runtime, prior driver/pixels/retirement and cache state before resuming. Reject incomplete matrices and changed inputs; preserve viewer, driver and job limits and full final artifact acceptance. CI-only correction, with existing local UI changes still held from push."
@@ -68395,15 +68377,6 @@
       "reason": "Compile actual shared navigation against frozen original algorithms and getter costs, callback reentry/cancellation/account retirement, native height queries, shared sky/water construction and real alternate layouts, Region/Estate lifecycle and every shipped overlay, original beacon/tracker vertex/color streams and native publication refusal. Retain strict runtime missing-widget, image, device, timing and artifact acceptance. These source/CPU checks do not certify complete connected UI or keyboard parity."
     },
     {
-      "path": "scripts/tests/native_sky_construction_fixture.cpp",
-      "start": 1,
-      "end": 40,
-      "sha256": "0067cb9a07ac216c88c1d093676a09986bd84140e5943b9487dda59cc7bc7275",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Compile actual shared navigation against frozen original algorithms and getter costs, callback reentry/cancellation/account retirement, native height queries, shared sky/water construction and real alternate layouts, Region/Estate lifecycle and every shipped overlay, original beacon/tracker vertex/color streams and native publication refusal. Retain strict runtime missing-widget, image, device, timing and artifact acceptance. These source/CPU checks do not certify complete connected UI or keyboard parity."
-    },
-    {
       "path": "scripts/tests/native_tracker_geometry_fixture.cpp",
       "start": 1,
       "end": 234,
@@ -70720,7 +70693,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 770,
       "end": 770,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare original focus, planar/TE/surface coordinate kernels and getter order with real native input-consumer, immutable source-volume/mesh publication, bounds and stale-owner fixtures. Exercise genuine synchronous/asynchronous simulator-console request, EventQueue scalar response, view/account/circuit retirement and all shipped console input schemas; require complete exact-source/executable/readback/library/API/request/output witnesses after evidence ZIP creation. Preserve missing-device/artifact/crash failure rules. Full connected UI, selection/context/media/keyboard runtime parity remains open."
@@ -70729,7 +70702,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 775,
       "end": 777,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare original focus, planar/TE/surface coordinate kernels and getter order with real native input-consumer, immutable source-volume/mesh publication, bounds and stale-owner fixtures. Exercise genuine synchronous/asynchronous simulator-console request, EventQueue scalar response, view/account/circuit retirement and all shipped console input schemas; require complete exact-source/executable/readback/library/API/request/output witnesses after evidence ZIP creation. Preserve missing-device/artifact/crash failure rules. Full connected UI, selection/context/media/keyboard runtime parity remains open."
@@ -70738,7 +70711,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 779,
       "end": 779,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare original focus, planar/TE/surface coordinate kernels and getter order with real native input-consumer, immutable source-volume/mesh publication, bounds and stale-owner fixtures. Exercise genuine synchronous/asynchronous simulator-console request, EventQueue scalar response, view/account/circuit retirement and all shipped console input schemas; require complete exact-source/executable/readback/library/API/request/output witnesses after evidence ZIP creation. Preserve missing-device/artifact/crash failure rules. Full connected UI, selection/context/media/keyboard runtime parity remains open."
@@ -70747,7 +70720,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 783,
       "end": 801,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare original focus, planar/TE/surface coordinate kernels and getter order with real native input-consumer, immutable source-volume/mesh publication, bounds and stale-owner fixtures. Exercise genuine synchronous/asynchronous simulator-console request, EventQueue scalar response, view/account/circuit retirement and all shipped console input schemas; require complete exact-source/executable/readback/library/API/request/output witnesses after evidence ZIP creation. Preserve missing-device/artifact/crash failure rules. Full connected UI, selection/context/media/keyboard runtime parity remains open."
@@ -70756,7 +70729,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 808,
       "end": 808,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare original focus, planar/TE/surface coordinate kernels and getter order with real native input-consumer, immutable source-volume/mesh publication, bounds and stale-owner fixtures. Exercise genuine synchronous/asynchronous simulator-console request, EventQueue scalar response, view/account/circuit retirement and all shipped console input schemas; require complete exact-source/executable/readback/library/API/request/output witnesses after evidence ZIP creation. Preserve missing-device/artifact/crash failure rules. Full connected UI, selection/context/media/keyboard runtime parity remains open."
@@ -70765,7 +70738,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 811,
       "end": 813,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare original focus, planar/TE/surface coordinate kernels and getter order with real native input-consumer, immutable source-volume/mesh publication, bounds and stale-owner fixtures. Exercise genuine synchronous/asynchronous simulator-console request, EventQueue scalar response, view/account/circuit retirement and all shipped console input schemas; require complete exact-source/executable/readback/library/API/request/output witnesses after evidence ZIP creation. Preserve missing-device/artifact/crash failure rules. Full connected UI, selection/context/media/keyboard runtime parity remains open."
@@ -70774,7 +70747,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 815,
       "end": 815,
-      "sha256": "ad6e3bae206944ee598e47b1c9c147b7add35a2ec0b2697f532fb4f71ee2edee",
+      "sha256": "1f4ae53d7de2ea0e2bac4b0ce066bbd2ae9d73ad6636363760ce3e733de579db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare original focus, planar/TE/surface coordinate kernels and getter order with real native input-consumer, immutable source-volume/mesh publication, bounds and stale-owner fixtures. Exercise genuine synchronous/asynchronous simulator-console request, EventQueue scalar response, view/account/circuit retirement and all shipped console input schemas; require complete exact-source/executable/readback/library/API/request/output witnesses after evidence ZIP creation. Preserve missing-device/artifact/crash failure rules. Full connected UI, selection/context/media/keyboard runtime parity remains open."
@@ -75892,15 +75865,6 @@
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
     },
     {
-      "path": "scripts/tests/script_recovery_fixture.hpp",
-      "start": 1,
-      "end": 53,
-      "sha256": "37b483124afbe37c849d62acd0acc3dfb15a467e2c0c6b8560680ecf74d0edbc",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
-    },
-    {
       "path": "scripts/tests/test_native_attachment_resources.py",
       "start": 1,
       "end": 21,
@@ -76085,15 +76049,6 @@
       "start": 1,
       "end": 94,
       "sha256": "cfacdc994985f100329353e3b5179f086f5a546238ec6b6202db95201d889f78",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
-    },
-    {
-      "path": "scripts/tests/test_native_script_recovery.py",
-      "start": 1,
-      "end": 92,
-      "sha256": "8a41780452f445c1f7eea698d5f125697320ca72c00e251de117211fc658923e",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
@@ -78136,7 +78091,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 24,
       "end": 26,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
@@ -79312,15 +79267,6 @@
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
     },
     {
-      "path": "scripts/tests/native_tooltip_dispatch_fixture.cpp",
-      "start": 1,
-      "end": 40,
-      "sha256": "e316cbb126fe612d0dd6ffead2c2aa2a500a6bfda65be655914152a15c822952",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
-    },
-    {
       "path": "scripts/tests/native_tooltip_lifecycle_fixture.cpp",
       "start": 1,
       "end": 7,
@@ -79405,7 +79351,7 @@
       "path": "scripts/tests/test_vulkan_viewer_diagnostic.py",
       "start": 9,
       "end": 9,
-      "sha256": "7acba96276233bba8966d0befba518e27260925c088d8915426b7faaf3441938",
+      "sha256": "3144417999dc9ff95fd2d5147e39f49c284a882dfafb3b896303a60e9ba76ee7",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and exercise actual peer selection, attention, pick admission, overlay, source-owned HUD icons, script recovery, attachment resources and shared media policy; preserve frozen original GL branch traces and strict artifact, account, generation, crash and pixel gates. Native full UI and keyboard acceptance remains open; these witnesses do not qualify every route."
