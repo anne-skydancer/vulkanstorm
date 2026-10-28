@@ -265,6 +265,9 @@ jobs:
         if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && inputs.record_inventory_fixtures
         shell: bash
         run: |
+          # GitHub runs bash with -e; the recorders exit non-zero in dump mode by
+          # design, so -e must be off here. Every result is checked below.
+          set +e
           set -uo pipefail
           dir="${{ matrix.directory }}"
           cmake -S indra -B "$dir" -DLL_TESTS:BOOL=ON
@@ -281,6 +284,7 @@ jobs:
           rm -rf "$out"; mkdir -p "$out"
           for n in 1 2; do
             mkdir -p "$out/r2_$n" "$out/r3b_$n"
+            for f in README.md .gitattributes; do cp indra/newview/tests/fixtures/inventory/ais/fetch/$f "$out/r3b_$n/" 2>/dev/null; done
             LD_LIBRARY_PATH="$libs" VKS_INVMODEL_COMMIT="$commit" VKS_INVMODEL_DUMP="$out/r2_$n" "$r2" > "$out/r2_$n.log" 2>&1
             LD_LIBRARY_PATH="$libs" VKS_INVFETCH_COMMIT="$commit" VKS_INVFETCH_DUMP="$out/r3b_$n"               python3 -I indra/newview/tests/vksinventory_mock_server.py -- "$r3b" > "$out/r3b_$n.log" 2>&1
             test -f "$out/r2_$n/DUMP_COMPLETE" || { echo "R2 dump $n incomplete"; tail -40 "$out/r2_$n.log"; exit 1; }
