@@ -7,6 +7,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'indra/newview'))
 from viewer_manifest import Windows_x86_64_Manifest
 
 class InnoPayloadTest(unittest.TestCase):
+    def test_release_channel_without_qualifier(self):
+        manifest = object.__new__(Windows_x86_64_Manifest)
+        for channel, expected in [('Vulkanstorm', 'release'),
+                                  ('Vulkanstorm-Release', 'release'),
+                                  ('Vulkanstorm Beta', 'beta'),
+                                  ('Vulkanstorm-Private', 'private')]:
+            with self.subTest(channel=channel):
+                manifest.args = {'channel': channel}
+                self.assertEqual(manifest.channel_type(), expected)
+
     def test_only_manifest_files_ship_with_correct_nested_destinations(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
