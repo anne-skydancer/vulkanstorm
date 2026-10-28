@@ -238,7 +238,4 @@ extern LLMenuItemCallGL* gBuyPassPieMenu;
 // </FS:Zi>
 */
 
-class LLViewerObject;
-bool save_object_back_to_contents(LLViewerObject* object, const LLUUID& source_task_id);
-
 #endif

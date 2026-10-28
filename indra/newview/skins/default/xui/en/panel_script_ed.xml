@@ -199,7 +199,7 @@
              name="Edit_btn"
              left_pad="3"
              width="18" />
-
+            
             <button
              follows="left|top"
              height="18"
@@ -224,7 +224,7 @@
              name="save_disk_btn"
              left_pad="3"
              width="18" />
-
+            
             <button
              follows="left|top"
              height="18"
@@ -261,7 +261,7 @@
              name="paste_btn"
              left_pad="3"
              width="18" />
-
+            
             <button
              follows="left|top"
              height="18"
@@ -286,7 +286,7 @@
              name="redo_btn"
              left_pad="3"
              width="18" />
-
+            
             <button
              follows="left|top"
              height="18"
@@ -311,7 +311,7 @@
              name="prefs_btn"
              left_pad="14"
              width="18" />
-
+            
             <loading_indicator
              top="2"
              right="-10"
@@ -339,7 +339,7 @@
     length="1"
     follows="left|top|right|bottom"
     font="Scripting"
-     height="353"
+     height="376"
     ignore_tab="false"
     layout="topleft"
      max_length="262144"
@@ -366,17 +366,7 @@
     layout="topleft"
     name="lsl errors"
      width="487" />
-
-
-  <combo_box name="compile_target" follows="left|bottom" height="23"
-      layout="topleft" left="0" top_pad="0" width="180" value="mono"
-      tool_tip="Script language and runtime">
-      <combo_box.item label="LSL on Mono" name="compile_target_mono" value="mono" />
-      <combo_box.item label="LSL Legacy (LSO)" name="compile_target_lsl2" value="lsl2" />
-      <combo_box.item label="LSL on Luau" name="compile_target_lsl_luau" value="lsl-luau" />
-      <combo_box.item label="Lua" name="compile_target_luau" value="luau" />
-    </combo_box>
-  <combo_box left="0" top_pad="0"
+  <combo_box
     follows="left|bottom"
     height="23"
     label="Insert..."
@@ -392,7 +382,6 @@
      name="line_col"
      value="Line 0, Column 0"
      width="128" />
-
   <button
     enabled="false"
     follows="right|bottom"

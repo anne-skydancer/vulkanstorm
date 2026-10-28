@@ -595,7 +595,6 @@ protected:
 class LLLSLTextBridge : public LLItemBridge
 {
 public:
-    LLUIImagePtr getIcon() const override;
     LLLSLTextBridge(LLInventoryPanel* inventory,
                     LLFolderView* root,
                     const LLUUID& uuid ) :

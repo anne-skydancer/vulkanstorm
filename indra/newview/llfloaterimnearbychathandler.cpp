@@ -24,7 +24,6 @@
  * $/LicenseInfo$
  */
 
-#include "llscripteditorws.h"
 #include "llviewerprecompiledheaders.h"
 
 #include "llagent.h"

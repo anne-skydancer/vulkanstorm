@@ -549,8 +549,6 @@ void LLViewerInventoryItem::fetchFromServer(void) const
 bool LLViewerInventoryItem::unpackMessage(const LLSD& item)
 {
     bool rv = LLInventoryItem::fromLLSD(item);
-    mIsRunning = item["running"].asBoolean();
-    mIsFaulted = item["faulted"].asBoolean();
 
     LLLocalizedInventoryItemsDictionary::getInstance()->localizeInventoryObjectName(mName);
 
@@ -2122,7 +2120,6 @@ void create_new_item(const std::string& name,
 
     LLPointer<LLBoostFuncInventoryCallback> cb = NULL;
 
-    U8 subtype = NO_INV_SUBTYPE;
     switch (inv_type)
     {
         case LLInventoryType::IT_LSL:

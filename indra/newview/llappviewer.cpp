@@ -27,7 +27,6 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llappviewer.h"
-#include "llwebsocketmgr.h"
 
 // Viewer includes
 #include "llversioninfo.h"
@@ -6192,7 +6191,6 @@ void LLAppViewer::idle()
     LLNotificationsUI::LLToast::updateClass();
     LLSmoothInterpolation::updateInterpolants();
     LLMortician::updateClass();
-    if (LLWebsocketMgr::instanceExists()) LLWebsocketMgr::instance().update();
     LLFilePickerThread::clearDead();  //calls LLFilePickerThread::notify()
     LLDirPickerThread::clearDead();
 

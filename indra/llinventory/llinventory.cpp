@@ -284,7 +284,6 @@ bool LLInventoryObject::importLegacyStream(std::istream& input_stream)
                 // LLSDSerialize::fromNotation(metadata, input_stream, -1);
             }
 
-            setRuntime(metadata["script"]["runtime"].asString());
             if (metadata.has("thumbnail"))
             {
                 const LLSD& thumbnail = metadata["thumbnail"];
@@ -814,7 +813,6 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
                 // LLSDSerialize::fromNotation(metadata, input_stream, -1);
             }
 
-            setRuntime(metadata["script"]["runtime"].asString());
             if (metadata.has("thumbnail"))
             {
                 const LLSD& thumbnail = metadata["thumbnail"];

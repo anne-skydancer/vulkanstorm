@@ -264,7 +264,6 @@ namespace LL
          * post work, unless the queue is full
          */
         bool tryPost(const Work&) override;
-        static bool postToMainLoop(const Work& work);
 
         /**
          * @brief Post work to the well-known main-loop queue without blocking
