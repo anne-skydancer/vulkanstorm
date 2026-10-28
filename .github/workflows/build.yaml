@@ -66,9 +66,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-2022
-            directory: build-vc170-64
-          - os: ubuntu-24.04
+          - os: windows-2025
+            directory: build-vc180-64
+          - os: ubuntu-26.04
             directory: build-linux-x86_64
     runs-on: ${{ matrix.os }}
     env:
@@ -78,7 +78,7 @@ jobs:
       VIEWER_PACKAGE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)) && 'ON' || 'OFF' }}
       AUTOBUILD_ADDRSIZE: 64
       AUTOBUILD_CONFIGURATION: ReleaseFS_open
-      AUTOBUILD_VSVER: "170"
+      AUTOBUILD_VSVER: "180"
       AUTOBUILD_VARIABLES_FILE: ${{ github.workspace }}/.build-variables/variables
       AUTOBUILD_INSTALLABLE_CACHE: ${{ github.workspace }}/.autobuild-installables
       LL_SKIP_REQUIRE_SYSROOT: 1
@@ -113,11 +113,11 @@ jobs:
         run: |
           sudo apt-get -o Acquire::Retries=3 update
           sudo apt-get -o Acquire::Retries=3 install -y \
-            gcc-14 g++-14 build-essential pkg-config \
+            gcc-15 g++-15 build-essential pkg-config \
             libgl1-mesa-dev libglu1-mesa-dev libpulse-dev libssl-dev \
-            libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype6-dev
-          echo "CC=gcc-14" >> "$GITHUB_ENV"
-          echo "CXX=g++-14" >> "$GITHUB_ENV"
+            libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype-dev
+          echo "CC=gcc-15" >> "$GITHUB_ENV"
+          echo "CXX=g++-15" >> "$GITHUB_ENV"
 
       - name: Checkout locally qualified build variables
         uses: actions/checkout@v7
@@ -128,7 +128,7 @@ jobs:
           persist-credentials: false
 
       - name: Install build dependencies
-        run: python -m pip install autobuild==3.9.3 llsd
+        run: python -m pip install autobuild==3.10.2 llsd
 
       - name: Check installer version and payload
         run: |
@@ -163,7 +163,7 @@ jobs:
           if [[ "$RUNNER_OS" == Windows ]]; then
             # The flags used by the successful local Release build.
             export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
-            options+=(-G 'Visual Studio 17 2022' -A x64 -DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=ON)
+            options+=(-G 'Visual Studio 18 2026' -A x64 -DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=ON)
           else
             options+=(-DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=OFF)
           fi
@@ -196,7 +196,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get install -y mesa-utils mesa-vulkan-drivers xvfb xauth
-          g++-14 -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llwindow \
+          g++-15 -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llwindow \
             indra/llwindow/tests/linux_zink_loader_test.cpp -lGL -lX11 -ldl \
             -o "$RUNNER_TEMP/linux-zink-loader-test"
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' -print -quit)"
@@ -215,6 +215,11 @@ jobs:
 
       - name: Build viewer and stage runtime
         run: cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
+
+      - name: Report Linux glibc and libstdc++ requirements
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/ci_report_glibc.sh "${{ matrix.directory }}/newview"
 
       - name: Keep qualification builds free of installers
         if: env.VIEWER_PACKAGE != 'ON'
