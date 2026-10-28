@@ -13,10 +13,21 @@ feature that later lands on the base through its PR is only a second parent
 of that PR's merge commit, never on the chain, so an earlier merge of that
 feature into another feature (stacked branches) stays allowed.
 
-Upstream mirrors (MIRROR_LINES) are protected lines that carry only upstream's
-own commits (vkstorm-aleph mirrors Firestorm master). Their history is
-upstream's, so bringing it in is an upstream integration, which canary takes
-through integration merges (AGENTS.md); it is not checked as a base merge.
+Upstream-tracking lines (MIRROR_LINES; vkstorm-aleph tracks Firestorm master)
+carry upstream's commits plus their own (vkstorm-release's build defaults and
+CI). Upstream's commits on their chain are upstream history: bringing them in
+is an upstream integration, which canary takes through integration merges
+(AGENTS.md), so they are not checked. The line's own commits, those not
+reachable from the upstream ref (UPSTREAM_REF, default upstream/master;
+VKS_UPSTREAM_REF overrides it), are protected like any base line. Without
+the upstream ref the whole chain is protected and a note says to fetch it.
+
+Upstream's own merges are not checked either. Every base line branched from
+upstream, so old upstream commits sit on its first-parent chain; an upstream
+merge whose second parent is one of them (upstream merging its master into a
+feature branch) arrives with an upstream integration but is upstream's
+history, not a base merge. Merges the upstream ref can reach are skipped.
+Without the upstream ref they are checked (fail closed).
 
 usage:
   check_no_base_merges.py <base-ref> [<head-ref>]
@@ -34,9 +45,10 @@ import subprocess
 import sys
 
 BASE_PREFIX = "vkstorm-"
-# Lines that only mirror upstream (no commits of their own). Merging upstream
-# brings in their history by design, so they are left out of the check.
+# Lines that track upstream. Upstream's commits on their chain are exempt
+# (merging upstream brings them in by design); their own commits are not.
 MIRROR_LINES = ("vkstorm-aleph",)
+UPSTREAM_REF = os.environ.get("VKS_UPSTREAM_REF", "refs/remotes/upstream/master")
 
 
 def git(*args, check=True):
@@ -62,19 +74,35 @@ def base_lines(extra=None):
     # of origin (for example after pulling from an upstream remote).
     refs = []
     for prefix in ("refs/remotes/origin/", "refs/heads/"):
-        refs += [ref for ref in git("for-each-ref", "--format=%(refname)",
-                                    "%s%s*" % (prefix, BASE_PREFIX)).stdout.split()
-                 if ref[len(prefix):] not in MIRROR_LINES]
+        refs += git("for-each-ref", "--format=%(refname)",
+                    "%s%s*" % (prefix, BASE_PREFIX)).stdout.split()
     if extra and resolve(extra):
         refs.append(extra)
     return refs
 
 
+def is_mirror(ref):
+    return ref.rsplit("/", 1)[-1] in MIRROR_LINES
+
+
 def first_parent_chains(refs):
-    """commit -> the base line whose first-parent chain contains it."""
+    """commit -> the base line whose first-parent chain contains it.
+
+    For an upstream-tracking line only its own commits count: those on its
+    first-parent chain that the upstream ref cannot reach.
+    """
     owner = {}
+    upstream = resolve(UPSTREAM_REF)
     for ref in refs:
-        for commit in git("rev-list", "--first-parent", ref).stdout.split():
+        args = ["rev-list", "--first-parent", ref]
+        if is_mirror(ref):
+            if upstream:
+                args += ["--not", upstream]
+            else:
+                print("note: %s not found; all of %s is protected. Fetch upstream "
+                      "(git fetch upstream master) to exempt upstream's commits." % (
+                          UPSTREAM_REF, short_ref(ref)))
+        for commit in git(*args).stdout.split():
             owner.setdefault(commit, ref)
     return owner
 
@@ -86,7 +114,16 @@ def short_ref(ref):
 def check_range(base, head):
     owner = first_parent_chains(base_lines(base))
     found = []
-    for merge in git("rev-list", "--merges", "%s..%s" % (base, head)).stdout.split():
+    # Upstream's own merges (reachable from the upstream ref) are upstream
+    # history brought in by an upstream integration, not base merges.
+    merges = ["rev-list", "--merges", "%s..%s" % (base, head)]
+    upstream = resolve(UPSTREAM_REF)
+    if upstream:
+        merges += ["--not", upstream]
+    else:
+        print("note: %s not found; upstream's own merges are checked too. Fetch "
+              "upstream (git fetch upstream master) to exempt them." % UPSTREAM_REF)
+    for merge in git(*merges).stdout.split():
         parents = git("log", "-1", "--format=%P", merge).stdout.split()
         for parent in parents[1:]:
             if parent in owner:
