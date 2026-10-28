@@ -79,10 +79,11 @@ jobs:
       AUTOBUILD_ADDRSIZE: 64
       AUTOBUILD_CONFIGURATION: ReleaseFS_open
       AUTOBUILD_VSVER: "180"
-      AUTOBUILD_VARIABLES_FILE: ${{ github.workspace }}/.build-variables/variables
-      AUTOBUILD_INSTALLABLE_CACHE: ${{ github.workspace }}/.autobuild-installables
       LL_SKIP_REQUIRE_SYSROOT: 1
     steps:
+      # The hosted tool cache's Python is built for the 26.04 host and its ssl
+      # module does not load in the container, so Linux uses the container's
+      # own Python 3 in a virtual environment.
       - name: Prepare the Linux build container
         if: runner.os == 'Linux'
         shell: bash
@@ -93,10 +94,12 @@ jobs:
           apt-get -o Acquire::Retries=3 update
           apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
             sudo git ca-certificates curl wget file xz-utils bzip2 zstd unzip \
-            make binutils lsb-release
+            make binutils lsb-release python3 python3-venv
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 -m venv /opt/vkstorm-python
+          echo /opt/vkstorm-python/bin >> "$GITHUB_PATH"
           . /etc/os-release
-          echo "Linux build container: $PRETTY_NAME, $(ldd --version | head -n 1)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Linux build container: $PRETTY_NAME, $(ldd --version | head -n 1), $(python3 --version)" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/checkout@v7
         with:
@@ -118,8 +121,13 @@ jobs:
           echo "revision=$build_revision" >> "$GITHUB_ENV"
           echo "AUTOBUILD_BUILD_ID=$build_revision" >> "$GITHUB_ENV"
           echo "Source $(git rev-parse HEAD): build $build_revision" >> "$GITHUB_STEP_SUMMARY"
+          # ${{ github.workspace }} names the host path, which is not where a
+          # container sees the workspace; $GITHUB_WORKSPACE is right in both.
+          echo "AUTOBUILD_VARIABLES_FILE=$GITHUB_WORKSPACE/.build-variables/variables" >> "$GITHUB_ENV"
+          echo "AUTOBUILD_INSTALLABLE_CACHE=$GITHUB_WORKSPACE/.autobuild-installables" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v7
+        if: runner.os == 'Windows'
         with:
           python-version: "3.11"
       - name: Install Linux build dependencies
