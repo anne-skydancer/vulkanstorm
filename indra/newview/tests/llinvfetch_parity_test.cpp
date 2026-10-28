@@ -12,9 +12,11 @@
  * counts, the request log byte for byte after normalisation, the
  * side-effect journal with the scheduler's states, the public fetch state,
  * the final model) and its response bodies with
- * tests/fixtures/inventory/ais/fetch. The fixture tree must hold exactly the
- * files a run produces (plus README.md and .gitattributes); index.txt and
- * manifest.txt must agree with it.
+ * tests/fixtures/inventory/ais/fetch/<library> (msvc or libstdcxx: the
+ * model's maps are std::unordered_map since upstream 28fee038e0, so request
+ * and queue order are the standard library's). The fixture tree must hold
+ * exactly the files a run produces; index.txt and manifest.txt must agree
+ * with it.
  *
  * Environment:
  *   VKS_INVFETCH_DUMP=<dir>      write the fixtures to <dir>; the test then
@@ -73,6 +75,16 @@ namespace
     {
         const char* v = getenv(name);
         return v ? std::string(v) : std::string();
+    }
+
+    // The C++ standard library this test runs on, as the fixture tree names it.
+    const char* stdlib_name()
+    {
+#if LL_WINDOWS
+        return "msvc";
+#else
+        return "libstdcxx";
+#endif
     }
 
     std::string platform()
@@ -223,8 +235,13 @@ namespace tut
     void invfetch_object::test<2>()
     {
         set_test_name("fetch wire scenarios");
+        // The committed tree is per C++ standard library: since upstream
+        // 28fee038e0 the model's maps are std::unordered_map, and the order
+        // the scheduler and the request builders walk them in (the fetch
+        // queue, the children= lists of a request) is the library's.
+        // VKS_INVFETCH_FIXTURES names one library's tree directly.
         std::string fixtures = getenv_str("VKS_INVFETCH_FIXTURES");
-        if (fixtures.empty()) fixtures = VKS_INVFETCH_FIXTURE_DIR;
+        if (fixtures.empty()) fixtures = std::string(VKS_INVFETCH_FIXTURE_DIR) + "/" + stdlib_name();
         const std::string out = getenv_str("VKS_INVFETCH_DUMP");
         std::string commit = getenv_str("VKS_INVFETCH_COMMIT");
         if (commit.empty()) commit = "unknown";
@@ -364,9 +381,10 @@ namespace tut
             }
             want.insert("index.txt");
             want.insert("manifest.txt");
-            want.insert("README.md");
-            want.insert(".gitattributes");
             std::set<std::string> have = tree(fixtures);
+            // The README and .gitattributes live beside the library trees.
+            have.erase("README.md");
+            have.erase(".gitattributes");
             for (const std::string& f : want)
             {
                 if (!have.count(f)) { report << "fixture tree: missing " << f << "\n"; ++differing; }
