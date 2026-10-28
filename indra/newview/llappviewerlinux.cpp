@@ -38,7 +38,9 @@
 #include "llmd5.h"
 #include "llfindlocale.h"
 
+#include <cstdlib>
 #include <exception>
+#include <vector>
 
 #include <gio/gio.h>
 #include <resolv.h>
@@ -125,9 +127,32 @@ void LLAppViewerLinux::selectGLBackend()
                            << "; using system OpenGL." << LL_ENDL;
 }
 
+// <Vulkanstorm> The Linux window class (X11 WM_CLASS) and Wayland app ID, which
+// desktop entries match through StartupWMClass. SDL2 reads them from these
+// variables when its video subsystem starts, inside initWindow(). A value the
+// user set is kept.
+static const char* const LINUX_APP_ID = "org.vulkanstorm.viewer";
+// </Vulkanstorm>
+
 bool LLAppViewerLinux::initWindow()
 {
+    // <Vulkanstorm> Name the window for the desktop, without leaking the
+    // variables into helper processes started later.
+    std::vector<const char*> app_id_set;
+    for (const char* name : { "SDL_VIDEO_X11_WMCLASS", "SDL_VIDEO_WAYLAND_WMCLASS" })
+    {
+        if (!std::getenv(name))
+        {
+            setenv(name, LINUX_APP_ID, 1);
+            app_id_set.push_back(name);
+        }
+    }
     const bool result = LLAppViewer::initWindow();
+    for (const char* name : app_id_set)
+    {
+        unsetenv(name);
+    }
+    // </Vulkanstorm>
     // GLVND retains the provider for the viewer's X display. Do not leak our
     // selection into subsequently launched browser/media helper processes.
     mZinkEnvironment.restore();
