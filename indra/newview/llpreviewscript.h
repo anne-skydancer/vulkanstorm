@@ -54,6 +54,7 @@ class LLScriptEdContainer;
 class LLFloaterGotoLine;
 class LLFloaterExperienceProfile;
 class LLScriptMovedObserver;
+class LLScriptEditorWSServer;
 // [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0)
 class LLEventTimer;
 // [/SL:KB]
@@ -61,7 +62,6 @@ class LLEventTimer;
 class FSLSLPreprocessor;
 class FSLSLPreProcViewer;
 // NaCl End
-class LLScriptEditorWSServer;
 
 bool is_lua_script(const std::string& code);
 
@@ -97,6 +97,8 @@ class LLScriptEdCore : public LLPanel
 
 public:
     typedef boost::function<void(void*)> script_ed_callback_t;
+    // <FS:Ansariel> FIRE-7514: Script in external editor needs to be saved twice
+    //typedef boost::function<void(void*, bool)> save_callback_t;
     typedef boost::function<void(void*, bool, bool)> save_callback_t;
 
 protected:
@@ -105,12 +107,9 @@ protected:
         LLScriptEdContainer* container,
         const std::string& sample,
         const LLHandle<LLFloater>& floater_handle,
-        void (*load_callback)(void* userdata),
-        // <FS:Ansariel> FIRE-7514: Script in external editor needs to be saved twice
-        //void (*save_callback)(void* userdata, bool close_after_save),
-        void (*save_callback)(void* userdata, bool close_after_save, bool sync),
-        // </FS:Ansariel>
-        void (*search_replace_callback)(void* userdata),
+        script_ed_callback_t load_callback,
+        save_callback_t save_callback,
+        script_ed_callback_t search_replace_callback,
         void* userdata,
         bool live,
         S32 bottom_pad = 0);    // pad below bottom row of buttons
@@ -178,8 +177,8 @@ public:
     LLUUID          getAssetID() const { return mAssetID; }
 
     // <FS:Ansariel> FIRE-20818: User-selectable font and size for script editor
-    //bool isFontSizeChecked(const LLSD &userdata);
-    //void onChangeFontSize(const LLSD &size_name);
+    //bool            isFontSizeChecked(const LLSD &userdata);
+    //void            onChangeFontSize(const LLSD &size_name);
     // </FS:Ansarie>
 
     bool            handleKeyHere(KEY key, MASK mask) override;
@@ -187,6 +186,8 @@ public:
 
     void            enableSave(bool b) { mEnableSave = b; }
     bool            hasChanged() const;
+
+    void            updateTabs(bool is_lua);      // <FS:Zi> Disable LSL preprocessor when compile target is luau
 
   private:
     // NaCl - LSL Preprocessor
@@ -233,12 +234,9 @@ private:
     std::string     mSampleText;
     std::string     mScriptName;
     LLScriptEditor* mEditor;
-    void            (*mLoadCallback)(void* userdata);
-    // <FS:Ansariel> FIRE-7514: Script in external editor needs to be saved twice
-    //void          (*mSaveCallback)(void* userdata, bool close_after_save);
-    void            (*mSaveCallback)(void* userdata, bool close_after_save, bool sync);
-    // </FS:Ansariel>
-    void            (*mSearchReplaceCallback) (void* userdata);
+    script_ed_callback_t mLoadCallback;
+    save_callback_t      mSaveCallback;
+    script_ed_callback_t mSearchReplaceCallback;
     void*           mUserdata;
     LLComboBox      *mFunctions;
     bool            mForceClose;
@@ -290,14 +288,14 @@ class LLScriptEdContainer : public LLPreview
 
 public:
     LLScriptEdContainer(const LLSD& key);
+    ~LLScriptEdContainer() override;
 // [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0) | Added: Catznip-3.2.0
-    /*virtual*/ ~LLScriptEdContainer();
-
-    /*virtual*/ void refreshFromItem();
+    void refreshFromItem() override;
 // [/SL:KB]
 
     // <FS:Ansariel> FIRE-16740: Color syntax highlighting changes don't immediately appear in script window
     void updateStyle();
+
     bool handleKeyHere(KEY key, MASK mask) override;
 
     void startWebsocketServer();
@@ -321,14 +319,15 @@ protected:
     bool            isOpenInExternalEditor() const { return mLiveFile != nullptr; }
 
     LLScriptEdCore*     mScriptEd;
-// [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0) | Added: Catznip-3.2.0
-    std::string         mBackupFilename;
-    LLEventTimer*       mBackupTimer;
-// [/SL:KB]
     LLLiveLSLFile*      mLiveFile = nullptr;
     LLLiveLSLFile*      mLiveLogFile = nullptr;
 
     std::weak_ptr<LLScriptEditorWSServer> mWebSocketServer;
+
+// [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0) | Added: Catznip-3.2.0
+    std::string         mBackupFilename;
+    LLEventTimer*       mBackupTimer;
+// [/SL:KB]
 };
 
 // Used to view and edit an LSL script from your inventory.
@@ -475,3 +474,4 @@ private:
     LLHandle<LLFloater> mExperienceProfile;
     std::string         mObjectName;
 };
+

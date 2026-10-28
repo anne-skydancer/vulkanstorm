@@ -1002,6 +1002,24 @@ void LLViewerObject::addChild(LLViewerObject *childp)
         {
             mSeatCount++;
         }
+        else
+        {
+            if (auto ws_server = LLScriptEditorWSServer::getServer())
+            {
+                // If the child was itself a published root, unpublish it — it is now a child prim
+                if (ws_server->isObjectPublished(childp->getID()))
+                {
+                    ws_server->unpublishObject(childp->getID(), "linked");
+                }
+
+                // If our root is a published object, notify of the structural change
+                LLUUID root_id = getRootEdit()->getID();
+                if (ws_server->isObjectPublished(root_id))
+                {
+                    ws_server->onLinksetChildAdded(root_id, childp);
+                }
+            }
+        }
     }
 
     mExtrap.changedlink(*this); // <FS:JN> if linking update, check for sitters
@@ -2993,6 +3011,89 @@ void LLViewerObject::saveScript(const LLViewerInventoryItem* item,
     doUpdateInventory(task_item, TASK_INVENTORY_ITEM_KEY, is_new);
 }
 
+void LLViewerObject::createInventoryItem(
+    LLAssetType::EType asset_type,
+    LLInventoryType::EType inventory_type,
+    U8 sub_type,
+    const std::string& name,
+    const std::string& description,
+    const LLPermissions& permissions,
+    const LLSD& params,
+    std::function<void(bool, const LLSD&)> callback)
+{
+    if (!mRegionp)
+    {
+        if (callback) callback(false, LLSD().with("message", "No region"));
+        return;
+    }
+
+    std::string cap_url = mRegionp->getCapability("CreateTaskInventoryItem");
+    if (cap_url.empty())
+    {
+        if (callback) callback(false, LLSD().with("message", "Capability not available"));
+        return;
+    }
+
+    LLSD body;
+    body["object_id"]      = mID;
+    body["inventory_type"] = (S32)inventory_type;
+    body["asset_type"]     = (S32)asset_type;
+    body["sub_type"]       = (S32)sub_type;
+    body["name"]           = name;
+    body["description"]    = description;
+
+    LLSD perm_llsd;
+    perm_llsd["base"]       = (S32)permissions.getMaskBase();
+    perm_llsd["owner"]      = (S32)permissions.getMaskOwner();
+    perm_llsd["everyone"]   = (S32)permissions.getMaskEveryone();
+    perm_llsd["group"]      = (S32)permissions.getMaskGroup();
+    perm_llsd["next_owner"] = (S32)permissions.getMaskNextOwner();
+    body["permissions"]     = perm_llsd;
+
+    if (params.isDefined())
+    {
+        body["params"] = params;
+    }
+
+    LLCoros::instance().launch("LLViewerObject::createInventoryItemCoro",
+        boost::bind(&LLViewerObject::createInventoryItemCoro, cap_url, body, callback));
+}
+
+// static
+void LLViewerObject::createInventoryItemCoro(
+    const std::string cap_url, const LLSD body,
+    std::function<void(bool, const LLSD&)> callback)
+{
+    LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
+    LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter =
+        std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("CreateTaskInventoryItem", httpPolicy);
+    LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
+
+    LLSD result = httpAdapter->postAndSuspend(httpRequest, cap_url, body);
+
+    LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
+    LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
+
+    bool success = static_cast<bool>(status) && result["success"].asBoolean();
+
+    if (success)
+    {
+        LLUUID object_id = body["object_id"].asUUID();
+        LLViewerObject* obj = gObjectList.findObject(object_id);
+        if (obj)
+        {
+            ++obj->mExpectedInventorySerialNum;
+            obj->dirtyInventory();
+            obj->requestInventory();
+        }
+    }
+
+    if (callback)
+    {
+        callback(success, result);
+    }
+}
+
 void LLViewerObject::moveInventory(const LLUUID& folder_id,
                                    const LLUUID& item_id)
 {
@@ -4323,6 +4424,11 @@ U32 LLViewerObject::getTriangleCount(S32* vcount) const
     return 0;
 }
 
+U32 LLViewerObject::getLODTriangleCount(S32 lod)
+{
+    return 0;
+}
+
 U32 LLViewerObject::getHighLODTriangleCount()
 {
     return 0;
@@ -4342,6 +4448,27 @@ U32 LLViewerObject::recursiveGetTriangleCount(S32* vcount) const
         }
     }
     return total_tris;
+}
+
+void LLViewerObject::recursiveGetLODTriangleCount(S32& high_lod, S32& medium_lod, S32& low_lod, S32& lowest_lod)
+{
+    high_lod = (S32)getLODTriangleCount(LLModel::LOD_HIGH);
+    medium_lod = (S32)getLODTriangleCount(LLModel::LOD_MEDIUM);
+    low_lod = (S32)getLODTriangleCount(LLModel::LOD_LOW);
+    lowest_lod = (S32)getLODTriangleCount(LLModel::LOD_IMPOSTOR);
+    LLViewerObject::const_child_list_t& child_list = getChildren();
+    for (LLViewerObject::const_child_list_t::const_iterator iter = child_list.begin();
+        iter != child_list.end(); ++iter)
+    {
+        LLViewerObject* childp = *iter;
+        if (childp)
+        {
+            high_lod += (S32)childp->getLODTriangleCount(LLModel::LOD_HIGH);
+            medium_lod += (S32)childp->getLODTriangleCount(LLModel::LOD_MEDIUM);
+            low_lod += (S32)childp->getLODTriangleCount(LLModel::LOD_LOW);
+            lowest_lod += (S32)childp->getLODTriangleCount(LLModel::LOD_IMPOSTOR);
+        }
+    }
 }
 
 // This is using the stored surface area for each volume (which
@@ -7993,7 +8120,7 @@ void LLViewerObject::setRenderMaterialID(S32 te_in, const LLUUID& id, bool updat
                     if (!obj) { return; }
                     obj->initRenderMaterial(te);
                 });
-                }
+            }
 
             // <FS> [FIRE-35138] Update the saved GLTF material since we got an update
             if (material_changed)

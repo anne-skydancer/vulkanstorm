@@ -27,7 +27,6 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llscripteditor.h"
-#include "llpreviewscript.h"
 
 #include "llsyntaxid.h"
 #include "lllocalcliprect.h"
@@ -35,6 +34,7 @@
 #include "llworkerthread.h"
 #include <algorithm>
 #include <utility>
+#include "llpreviewscript.h"
 
 static LLWorkerThread& getSyntaxWorkerThread()
 {
@@ -206,6 +206,8 @@ private:
     bool mDropResults;
 };
 
+// <FS:Ansariel> FIRE-23047: Increase width of line number column
+//const S32 UI_TEXTEDITOR_LINE_NUMBER_MARGIN = 32;
 const S32   UI_TEXTEDITOR_LINE_NUMBER_MARGIN = 40;
 
 static LLDefaultChildRegistry::Register<LLScriptEditor> r("script_editor");
@@ -254,7 +256,13 @@ LLScriptEditor::~LLScriptEditor()
 
 bool LLScriptEditor::postBuild()
 {
+    // <FS:Ansariel> FIRE-20818: User-selectable font and size for script editor
+    //gSavedSettings.getControl("LSLFontSizeName")->getCommitSignal()->connect(boost::bind(&LLScriptEditor::onFontSizeChange, this));
     bool result = LLTextEditor::postBuild();
+    // <FS:Ansariel> FIRE-20818: User-selectable font and size for script editor
+    //setFont(getScriptFont());
+    setFont(getFont());
+    // </FS:Ansariel>
     return result;
 }
 
@@ -295,12 +303,15 @@ void LLScriptEditor::drawLineNumbers()
 
     if (mShowLineNumbers)
     {
-        S32 left = 0;
+        //S32 left = 0; // <FS:Ansariel> FIRE-6955: Line numbers not using correct transparency
         S32 top = getRect().getHeight();
         S32 bottom = 0;
 
-        gl_rect_2d(left, top, UI_TEXTEDITOR_LINE_NUMBER_MARGIN, bottom, mReadOnlyBgColor.get() ); // line number area always read-only
-        gl_rect_2d(UI_TEXTEDITOR_LINE_NUMBER_MARGIN, top, UI_TEXTEDITOR_LINE_NUMBER_MARGIN-1, bottom, LLColor4::grey3); // separator
+        // <FS:Ansariel> FIRE-6955: Line numbers not using correct transparency
+        //gl_rect_2d(left, top, UI_TEXTEDITOR_LINE_NUMBER_MARGIN, bottom, mReadOnlyBgColor.get() ); // line number area always read-only
+        //gl_rect_2d(UI_TEXTEDITOR_LINE_NUMBER_MARGIN, top, UI_TEXTEDITOR_LINE_NUMBER_MARGIN-1, bottom, LLColor4::grey3); // separator
+        gl_rect_2d(UI_TEXTEDITOR_LINE_NUMBER_MARGIN, top, UI_TEXTEDITOR_LINE_NUMBER_MARGIN-1, bottom, LLColor4::grey3 % getCurrentTransparency()); // separator
+        // </FS:Ansariel>
 
         S32 last_line_num = -1;
 
@@ -341,8 +352,6 @@ void LLScriptEditor::drawLineNumbers()
 
 void LLScriptEditor::initKeywords(bool luau_language)
 {
-    if (mSyntaxWorker) mSyntaxWorker->waitForIdle(true);
-    resetPendingSyntaxApply();
     mKeywordsLua.initialize(LLSyntaxDefCache::getInstance()->getLuaKeywords(), true);
     mKeywordsLSL.initialize(LLSyntaxDefCache::getInstance()->getLSLKeywords(), false);
 
@@ -372,6 +381,35 @@ void LLScriptEditor::loadKeywords()
     applySyntaxSegments(text, ops);
     queueSyntaxParse();
 }
+
+// <FS:Ansariel> Re-add legacy format support
+void LLScriptEditor::loadKeywords(const std::string& filename,
+                                const std::vector<std::string>& funcs,
+                                const std::vector<std::string>& tooltips,
+                                const LLColor3& color)
+{
+    LL_PROFILE_ZONE_SCOPED;
+    if (mKeywordsLSL.loadFromLegacyFile(filename))
+    {
+        auto count = llmin(funcs.size(), tooltips.size());
+        for (size_t i = 0; i < count; i++)
+        {
+            std::string name = utf8str_trim(funcs[i]);
+            mKeywordsLSL.addToken(LLKeywordToken::TT_WORD, name, LLUIColor(color), tooltips[i] );
+        }
+        segment_vec_t segment_list;
+        LLStyleConstSP style = new LLStyle(LLStyle::Params().font(getFont()).color(mDefaultColor.get()));
+        mKeywordsLSL.findSegments(&segment_list, getWText(), *this, style);
+
+        mSegments.clear();
+        segment_set_t::iterator insert_it = mSegments.begin();
+        for (segment_vec_t::iterator list_it = segment_list.begin(); list_it != segment_list.end(); ++list_it)
+        {
+            insert_it = mSegments.insert(insert_it, *list_it);
+        }
+    }
+}
+// </FS:Ansariel>
 
 void LLScriptEditor::updateSegments()
 {
@@ -462,7 +500,10 @@ void LLScriptEditor::queueSyntaxApply(LLWString text,
     mPendingApplySegmentIndex = 0;
     mPendingApplySegments.clear();
     mPendingApplySegmentSet.clear();
+    // <FS:Ansariel> FIRE-20818: User-selectable font and size for script editor
+    //mPendingApplyStyle = new LLStyle(LLStyle::Params().font(getScriptFont()).color(mDefaultColor.get()));
     mPendingApplyStyle = new LLStyle(LLStyle::Params().font(getFont()).color(mDefaultColor.get()));
+    // </FS:Ansariel>
     mSyntaxApplyState = SyntaxApplyState::Building;
 }
 
@@ -491,7 +532,10 @@ void LLScriptEditor::processPendingSyntaxApply()
     {
         if (mPendingApplyStyle.isNull())
         {
+            // <FS:Ansariel> FIRE-20818: User-selectable font and size for script editor
+            //mPendingApplyStyle = new LLStyle(LLStyle::Params().font(getScriptFont()).color(mDefaultColor.get()));
             mPendingApplyStyle = new LLStyle(LLStyle::Params().font(getFont()).color(mDefaultColor.get()));
+            // </FS:Ansariel>
         }
         bool done = getKeywords().applySegmentOpsRange(&mPendingApplySegments,
                                                       mPendingApplyText,
@@ -545,6 +589,8 @@ void LLScriptEditor::resetPendingSyntaxApply()
 
 void LLScriptEditor::applySyntaxSegments(const LLWString& text, const LLKeywords::segment_ops_t& ops)
 {
+    // <FS:Ansariel> FIRE-20818: User-selectable font and size for script editor
+    //LLStyleConstSP style = new LLStyle(LLStyle::Params().font(getScriptFont()).color(mDefaultColor.get()));
     LLStyleConstSP style = new LLStyle(LLStyle::Params().font(getFont()).color(mDefaultColor.get()));
 
     segment_vec_t segment_list;
@@ -610,27 +656,31 @@ void LLScriptEditor::drawSelectionBackground()
     }
 }
 
-std::string LLScriptEditor::getScriptFontSize()
-{
-    static LLCachedControl<std::string> size_name(gSavedSettings, "LSLFontSizeName", "Monospace");
-    return size_name;
-}
+// <FS:Ansariel> FIRE-20818: User-selectable font and size for script editor
+//std::string LLScriptEditor::getScriptFontSize()
+//{
+//    static LLCachedControl<std::string> size_name(gSavedSettings, "LSLFontSizeName", "Monospace");
+//    return size_name;
+//}
+//
+//LLFontGL* LLScriptEditor::getScriptFont()
+//{
+//    std::string font_size_name = mUseDefaultFontSize ? "Monospace" : getScriptFontSize();
+//    return LLFontGL::getFont(LLFontDescriptor("Monospace", font_size_name, 0));
+//}
+//
+//void LLScriptEditor::onFontSizeChange()
+//{
+//    if (!mUseDefaultFontSize)
+//    {
+//        setFont(getScriptFont());
+//        needsReflow();
+//    }
+//}
+// </FS:Ansariel>
 
-LLFontGL* LLScriptEditor::getScriptFont()
-{
-    std::string font_size_name = mUseDefaultFontSize ? "Monospace" : getScriptFontSize();
-    return LLFontGL::getFont(LLFontDescriptor("Monospace", font_size_name, 0));
-}
-
-void LLScriptEditor::onFontSizeChange()
-{
-    if (!mUseDefaultFontSize)
-    {
-            needsReflow();
-    }
-}
-
-
+// <FS> Improved Home-key behavior
+//virtual
 void LLScriptEditor::startOfLine()
 {
     const LLWString& text = getWText();
@@ -663,8 +713,9 @@ void LLScriptEditor::startOfLine()
         setCursorPos(line_start_pos);
     }
 }
+// </FS>
 
-
+// <FS:Ansariel> Show keyword help on F1
 bool LLScriptEditor::handleKeyHere(KEY key, MASK mask)
 {
     if (key == KEY_F1 && mask == MASK_NONE)
@@ -678,31 +729,4 @@ bool LLScriptEditor::handleKeyHere(KEY key, MASK mask)
 
     return LLTextEditor::handleKeyHere(key, mask);
 }
-
-
-void LLScriptEditor::loadKeywords(const std::string& filename,
-                                const std::vector<std::string>& funcs,
-                                const std::vector<std::string>& tooltips,
-                                const LLColor3& color)
-{
-    LL_PROFILE_ZONE_SCOPED;
-    if (getKeywords().loadFromLegacyFile(filename))
-    {
-        auto count = llmin(funcs.size(), tooltips.size());
-        for (size_t i = 0; i < count; i++)
-        {
-            std::string name = utf8str_trim(funcs[i]);
-            getKeywords().addToken(LLKeywordToken::TT_WORD, name, LLUIColor(color), tooltips[i] );
-        }
-        segment_vec_t segment_list;
-        LLStyleConstSP style = new LLStyle(LLStyle::Params().font(getFont()).color(mDefaultColor.get()));
-        getKeywords().findSegments(&segment_list, getWText(), *this, style);
-
-        mSegments.clear();
-        segment_set_t::iterator insert_it = mSegments.begin();
-        for (segment_vec_t::iterator list_it = segment_list.begin(); list_it != segment_list.end(); ++list_it)
-        {
-            insert_it = mSegments.insert(insert_it, *list_it);
-        }
-    }
-}
+// </FS:Ansariel>

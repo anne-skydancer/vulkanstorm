@@ -81,6 +81,9 @@
 //#include "lltoggleablemenu.h" // <FS:Ansariel> FIRE-20818: User-selectable font and size for script editor
 //#include "llmenubutton.h" // <FS:Ansariel> FIRE-20818: User-selectable font and size for script editor
 #include "llinventoryfunctions.h"
+#include "llwebsocketmgr.h"
+#include "llscripteditorws.h"
+#include <regex>
 #include "llloadingindicator.h" // <FS:Kadah> Compile indicator
 #include "lliconctrl.h" // <FS:Kadah> Compile indicator
 // [RLVa:KB] - Checked: 2011-05-22 (RLVa-1.3.1a)
@@ -96,9 +99,6 @@
 #ifdef OPENSIM
 #include "llviewernetwork.h"    // for Grid manager
 #endif // OPENSIM
-#include "llwebsocketmgr.h"
-#include "llscripteditorws.h"
-#include <regex>
 
 const std::string HELP_LSL_PORTAL_TOPIC = "LSL_Portal";
 const std::string HELP_LUA_PORTAL_URL = "https://wiki.secondlife.com/wiki/Lua_Alpha";
@@ -147,29 +147,6 @@ static bool have_script_upload_cap(LLUUID& object_id)
     return object && (! object->getRegion()->getCapability("UpdateScriptTask").empty());
 }
 
-// [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0) | Added: Catznip-3.2.0
-#include "lleventtimer.h"
-
-/// ---------------------------------------------------------------------------
-/// Timer helper class
-/// ---------------------------------------------------------------------------
-class LLCallbackTimer : public LLEventTimer
-{
-public:
-    typedef std::function<bool()> bool_func_t;
-public:
-    LLCallbackTimer(F32 nPeriod, bool_func_t cb) : LLEventTimer(nPeriod), m_Callback(cb) {}
-    /*virtual*/ bool tick() { return m_Callback(); }
-protected:
-    bool_func_t m_Callback;
-};
-
-inline LLEventTimer* setupCallbackTimer(F32 nPeriod, LLCallbackTimer::bool_func_t cb)
-{
-    return new LLCallbackTimer(nPeriod, cb);
-}
-// [/SL:KB]
-
 static bool have_lua_enabled(const LLUUID& object_id)
 {
     LLViewerRegion* region = nullptr;
@@ -197,21 +174,37 @@ static bool have_lua_enabled(const LLUUID& object_id)
 // since we don't have another way to determine the language yet
 bool is_lua_script(const std::string& code)
 {
-    // Firestorm stores unprocessed LSL source in inventory. An include may
-    // supply its default state, so the absence of that state does not make
-    // a preprocessor script Lua.
-    static const std::regex preprocessor_pattern(
-        R"((^|\n)[ \t]*#[ \t]*(include|define|undef|if|ifdef|ifndef|elif|else|endif|pragma|error)\b)");
-    if (std::regex_search(code, preprocessor_pattern)) return false;
-
     // Check for LSL's signature "default" state pattern
-    static const std::regex lsl_pattern("\\s*default\\s*\\{");
+    std::regex lsl_pattern("\\s*default\\s*\\{");
     if (std::regex_search(code, lsl_pattern))
         return false;
 
     // "default" state not found, assuming it's Lua
     return true;
 }
+
+// [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0) | Added: Catznip-3.2.0
+#include "lleventtimer.h"
+
+/// ---------------------------------------------------------------------------
+/// Timer helper class
+/// ---------------------------------------------------------------------------
+class LLCallbackTimer : public LLEventTimer
+{
+public:
+    typedef std::function<bool()> bool_func_t;
+public:
+    LLCallbackTimer(F32 nPeriod, bool_func_t cb) : LLEventTimer(nPeriod), m_Callback(cb) {}
+    /*virtual*/ bool tick() { return m_Callback(); }
+protected:
+    bool_func_t m_Callback;
+};
+
+inline LLEventTimer* setupCallbackTimer(F32 nPeriod, LLCallbackTimer::bool_func_t cb)
+{
+    return new LLCallbackTimer(nPeriod, cb);
+}
+// [/SL:KB]
 
 /// ---------------------------------------------------------------------------
 /// LLLiveLSLFile
@@ -471,12 +464,9 @@ LLScriptEdCore::LLScriptEdCore(
     LLScriptEdContainer* container,
     const std::string& sample,
     const LLHandle<LLFloater>& floater_handle,
-    void (*load_callback)(void*),
-    // <FS:Ansariel> FIRE-7514: Script in external editor needs to be saved twice
-    //void (*save_callback)(void*, bool),
-    void (*save_callback)(void*, bool, bool),
-    // </FS:Ansariel>
-    void (*search_replace_callback) (void* userdata),
+    script_ed_callback_t load_callback,
+    save_callback_t save_callback,
+    script_ed_callback_t search_replace_callback,
     void* userdata,
     bool live,
     S32 bottom_pad)
@@ -513,7 +503,7 @@ LLScriptEdCore::LLScriptEdCore(
     setBorderVisible(false);
 
     // NaCl - Script Preprocessor
-    if ((gSavedSettings.getBOOL("_NACL_LSLPreprocessor")))
+    if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor"))
     {
         setXMLFilename("panel_script_ed_preproc.xml");
         mLSLProc = new FSLSLPreprocessor(this);
@@ -569,6 +559,19 @@ LLScriptEdCore::~LLScriptEdCore()
     }
     // </FS:Ansariel>
 }
+
+// <FS:Zi> Disable LSL preprocessor when compile target is luau
+void LLScriptEdCore::updateTabs(bool is_lua)
+{
+    if (!mPreprocTab)
+    {
+        return;
+    }
+
+    mPreprocTab->selectTabByName("Script");
+    mPreprocTab->setTabVisibility(mPreprocTab->getPanelByName("Preprocessed"), !is_lua);
+}
+// </FS:Zi>
 
 void LLLiveLSLEditor::experienceChanged()
 {
@@ -640,7 +643,7 @@ bool LLScriptEdCore::postBuild()
 
     // NaCl - LSL Preprocessor
     mCurrentEditor = mEditor;
-    if ((!mEditor->getIsLuauLanguage() && gSavedSettings.getBOOL("_NACL_LSLPreprocessor")))
+    if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor"))
     {
         mPostEditor = getChild<FSLSLPreProcViewer>("Post Editor");
         mPostEditor->setFollowsAll();
@@ -671,7 +674,7 @@ bool LLScriptEdCore::postBuild()
     initMenu();
     initButtonBar();    // <FS:CR> Advanced Script Editor
 
-    mSyntaxIDConnection = LLSyntaxDefCache::getInstance()->addSyntaxIDCallback([this]() { processKeywords(); });
+    mSyntaxIDConnection = LLSyntaxDefCache::getInstance()->addSyntaxIDCallback(boost::bind(&LLScriptEdCore::processKeywords, this));
 
     // Intialise keyword highlighting for the current simulator's version of LSL
     LLSyntaxDefCache::getInstance();
@@ -688,8 +691,14 @@ bool LLScriptEdCore::postBuild()
 
     bool lua_scripts_enabled = have_lua_enabled(LLUUID::null);
     mCompileTarget = getChild<LLComboBox>("compile_target");
-    mCompileTarget->setEnabledByValue("luau", lua_scripts_enabled);
-    mCompileTarget->setEnabledByValue("lsl-luau", lua_scripts_enabled);
+    if (LLScrollListItem* luau_item = mCompileTarget->findItemByValue("luau"))
+    {
+        luau_item->setEnabled(lua_scripts_enabled);
+    }
+    if (LLScrollListItem* lsl_luau_item = mCompileTarget->findItemByValue("lsl-luau"))
+    {
+        lsl_luau_item->setEnabled(lua_scripts_enabled);
+    }
 
     return true;
 }
@@ -706,18 +715,10 @@ void LLScriptEdCore::processKeywords(bool luau_language)
     mFunctions->clearRows();
     mEditor->clearSegments();
     mEditor->initKeywords(luau_language);
-    if (mPreprocTab)
-    {
-        if (luau_language) mPreprocTab->selectFirstTab();
-        mPreprocTab->setTabVisibility(getChild<LLPanel>("Preprocessed"), !luau_language);
-    }
-    std::vector<std::string> funcs;
-    std::vector<std::string> tooltips;
-    LLColor3 color(LLUIColorTable::instance().getColor("SyntaxLslFunction"));
-    if (!luau_language)
-    {
 
     // <FS:Ansariel> Re-add legacy format support
+    std::vector<std::string> funcs;
+    std::vector<std::string> tooltips;
     for (std::vector<LLScriptLibraryFunction>::const_iterator i = gScriptLibrary.mFunctions.begin();
     i != gScriptLibrary.mFunctions.end(); ++i)
     {
@@ -749,7 +750,8 @@ void LLScriptEdCore::processKeywords(bool luau_language)
         }
     }
 
-    if ((!mEditor->getIsLuauLanguage() && gSavedSettings.getBOOL("_NACL_LSLPreprocessor")))
+    LLColor3 color(LLUIColorTable::instance().getColor("SyntaxLslFunction"));
+    if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor"))
     {
         mEditor->loadKeywords(gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "scriptlibrary_preproc.xml"), funcs, tooltips, color);
     }
@@ -783,7 +785,6 @@ void LLScriptEdCore::processKeywords(bool luau_language)
 #endif // OPENSIM
     // </FS:Ansariel>
 
-    }
     mEditor->loadKeywords();
 
     string_vec_t primary_keywords;
@@ -816,10 +817,10 @@ void LLScriptEdCore::processKeywords(bool luau_language)
     }
 
     // NaCl - LSL Preprocessor
-    if ((!mEditor->getIsLuauLanguage() && gSavedSettings.getBOOL("_NACL_LSLPreprocessor")) && mPostEditor)
+    if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor") && mPostEditor)
     {
         mPostEditor->clearSegments();
-        mPostEditor->initKeywords();
+        mPostEditor->initKeywords(luau_language);
 
         mPostEditor->loadKeywords(gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "scriptlibrary_preproc.xml"), funcs, tooltips, color);
 #ifdef OPENSIM
@@ -1104,7 +1105,7 @@ void LLScriptEdCore::setScriptText(const std::string& text, bool is_valid)
     {
         // NaCl - LSL Preprocessor
         std::string ntext = text;
-        if ((!mEditor->getIsLuauLanguage() && gSavedSettings.getBOOL("_NACL_LSLPreprocessor")) && mLSLProc)
+        if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor") && mLSLProc && !mEditor->getIsLuauLanguage())
         {
             if (mPostEditor)
             {
@@ -1122,7 +1123,7 @@ void LLScriptEdCore::setScriptText(const std::string& text, bool is_valid)
 // NaCl - LSL Preprocessor
 std::string LLScriptEdCore::getScriptText()
 {
-    if ((!mEditor->getIsLuauLanguage() && gSavedSettings.getBOOL("_NACL_LSLPreprocessor")) && mPostEditor)
+    if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor") && mPostEditor && !mEditor->getIsLuauLanguage())
     {
         //return mPostEditor->getText();
         return mPostScript;
@@ -1151,7 +1152,7 @@ bool LLScriptEdCore::loadScriptText(const std::string& filename)
         return false;
     }
 
-    LLFILE* file = LLFile::fopen(filename, "rb");       /*Flawfinder: ignore*/
+    LLFILE* file = LLFile::fopen(filename, LLFILE_MODE("rb"));       /*Flawfinder: ignore*/
     if (!file)
     {
         LL_WARNS() << "Error opening " << filename << LL_ENDL;
@@ -1189,7 +1190,7 @@ bool LLScriptEdCore::loadScriptText(const std::string& filename)
 
 bool LLScriptEdCore::writeToFile(const std::string& filename, bool unprocessed)
 {
-    LLFILE* fp = LLFile::fopen(filename, "wb");
+    LLFILE* fp = LLFile::fopen(filename, LLFILE_MODE("wb"));
     if (!fp)
     {
         LL_WARNS() << "Unable to write to " << filename << LL_ENDL;
@@ -1226,11 +1227,10 @@ void LLScriptEdCore::sync()
     if (mContainer->mLiveFile)
     {
         std::string tmp_file = mContainer->mLiveFile->filename();
-        llstat s;
-        if (LLFile::stat(tmp_file, &s) == 0) // file exists
+        if (LLFile::isfile(tmp_file)) // file exists
         {
             mContainer->mLiveFile->ignoreNextUpdate();
-            writeToFile(tmp_file, (!mEditor->getIsLuauLanguage() && gSavedSettings.getBOOL("_NACL_LSLPreprocessor")));
+            writeToFile(tmp_file, gSavedSettings.getBOOL("_NACL_LSLPreprocessor") && !mEditor->getIsLuauLanguage());
         }
     }
 }
@@ -1457,7 +1457,6 @@ bool LLScriptEdCore::canClose()
 void LLScriptEdCore::setEnableEditing(bool enable)
 {
     mEditor->setEnabled(enable);
-    if (mCompileTarget) mCompileTarget->setEnabled(enable);
     getChildView("Edit_btn")->setEnabled(enable);
     getChildView("edit_btn_2")->setEnabled(enable); // <FS:Zi> support extra edit button
 }
@@ -1641,7 +1640,7 @@ void LLScriptEdCore::doSave(bool close_after_save, bool sync /*= true*/)
 
     updateIndicators(true, false); //<FS:Kadah> Compile Indicators
 
-    if ((!mEditor->getIsLuauLanguage() && gSavedSettings.getBOOL("_NACL_LSLPreprocessor")) && mLSLProc)
+    if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor") && mLSLProc && !mEditor->getIsLuauLanguage())
     {
         LL_INFOS() << "passing to preproc" << LL_ENDL;
         mLSLProc->preprocess_script(close_after_save, sync);
@@ -1677,6 +1676,7 @@ void LLScriptEdCore::openInExternalEditor()
     //    // If already open in an external editor, just return
     //    return;
     //}
+
 
     // Generate a suitable filename
     std::string script_name = mScriptName;
@@ -1716,31 +1716,6 @@ void LLScriptEdCore::openInExternalEditor()
     }
     else
     {
-        // Legacy external editor path: write temp file, watch it, open in external editor.
-        if (!writeToFile(filename, !mEditor->getIsLuauLanguage() && (!mEditor->getIsLuauLanguage() && gSavedSettings.getBOOL("_NACL_LSLPreprocessor"))))
-        {
-            // In case some characters from script name are forbidden
-            // and not accounted for, name is too long or some other issue,
-            // try file that doesn't include script name
-            script_name.clear();
-            filename = mContainer->getTmpFileName(script_name);
-            writeToFile(filename, !mEditor->getIsLuauLanguage() && (!mEditor->getIsLuauLanguage() && gSavedSettings.getBOOL("_NACL_LSLPreprocessor")));
-        }
-
-        if (mContainer->mLiveFile && mContainer->mLiveFile->filename() != filename)
-        { // The name may have changed if we changed the type of script being edited.
-            delete mContainer->mLiveFile;
-            mContainer->mLiveFile = NULL;
-        }
-        // Start watching file changes.
-        if (!mContainer->mLiveFile)
-        {
-            mContainer->mLiveFile = new LLLiveLSLFile(filename, boost::bind(&LLScriptEdContainer::onExternalChange, mContainer, _1));
-            mContainer->mLiveFile->addToEventTimer();
-        }
-
-        mContainer->startWebsocketServer();
-
         LLExternalEditor ed;
         LLExternalEditor::EErrorCode status;
         std::string msg;
@@ -1760,6 +1735,31 @@ void LLScriptEdCore::openInExternalEditor()
             LLNotificationsUtil::add("GenericAlert", LLSD().with("MESSAGE", msg));
             return;
         }
+
+        // Legacy external editor path: write temp file, watch it, open in external editor.
+        if (!writeToFile(filename, gSavedSettings.getBOOL("_NACL_LSLPreprocessor") && !mEditor->getIsLuauLanguage()))
+        {
+            // In case some characters from script name are forbidden
+            // and not accounted for, name is too long or some other issue,
+            // try file that doesn't include script name
+            script_name.clear();
+            filename = mContainer->getTmpFileName(script_name);
+            writeToFile(filename, gSavedSettings.getBOOL("_NACL_LSLPreprocessor") && !mEditor->getIsLuauLanguage());
+        }
+
+        if (mContainer->mLiveFile && mContainer->mLiveFile->filename() != filename)
+        { // The name may have changed if we changed the type of script being edited.
+            delete mContainer->mLiveFile;
+            mContainer->mLiveFile = NULL;
+        }
+        // Start watching file changes.
+        if (!mContainer->mLiveFile)
+        {
+            mContainer->mLiveFile = new LLLiveLSLFile(filename, boost::bind(&LLScriptEdContainer::onExternalChange, mContainer, _1));
+            mContainer->mLiveFile->addToEventTimer();
+        }
+
+        mContainer->startWebsocketServer();
 
         status = ed.run(filename);
         if (status != LLExternalEditor::EC_SUCCESS)
@@ -1796,9 +1796,9 @@ void LLScriptEdCore::onErrorList(LLUICtrl*, void* user_data)
         sscanf(line.c_str(), "%d %d", &row, &column);
         //LL_INFOS() << "LLScriptEdCore::onErrorList() - " << row << ", "
         //<< column << LL_ENDL;
-        row = self->mEditor->getIsLuauLanguage() ? row - 1 : row;
+        row = (self->mEditor->getIsLuauLanguage() ? row - 1 : row);
         // NaCl - LSL Preprocessor
-        if ((!self->mEditor->getIsLuauLanguage() && gSavedSettings.getBOOL("_NACL_LSLPreprocessor")) && self->mPostEditor && self->mPreprocTab)
+        if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor") && self->mPostEditor && self->mPreprocTab && !self->mEditor->getIsLuauLanguage())
         {
             self->mPreprocTab->selectTabByName("Preprocessed");
             self->getChild<LLPanel>("Preprocessed")->setFocus(true);
@@ -2184,26 +2184,37 @@ void LLLiveLSLEditor::receiveExperienceIds(LLSD result, LLHandle<LLLiveLSLEditor
 
 LLScriptEdContainer::LLScriptEdContainer(const LLSD& key) :
     LLPreview(key)
-,   mScriptEd(NULL)
+,   mScriptEd(nullptr)
+,   mLiveFile(nullptr)
+,   mLiveLogFile(nullptr)
 // [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0) | Added: Catznip-3.2.0
-,   mBackupTimer(NULL)
+,   mBackupTimer(nullptr)
 // [/SL:KB]
 {
 }
 
-// [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0) | Added: Catznip-3.2.0
 LLScriptEdContainer::~LLScriptEdContainer()
 {
+    delete mLiveFile;
+    mLiveFile = nullptr;
+
+    delete mLiveLogFile;
+    mLiveLogFile = nullptr;
+
+    if (!mWebSocketServer.expired())
+    {
+        unsubscribeScript();
+    }
+
+    // [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0) | Added: Catznip-3.2.0
     // Clean up the backup file (unless we've gotten disconnected)
-    if ( (!mBackupFilename.empty()) && (gAgent.getRegion()) )
+    if (!mBackupFilename.empty() && gAgent.getRegion())
         LLFile::remove(mBackupFilename);
     delete mBackupTimer;
-    delete mLiveFile;
-    delete mLiveLogFile;
-    unsubscribeScript();
+    // [/SL:KB]
 }
 
-
+// [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0) | Added: Catznip-3.2.0
 void LLScriptEdContainer::refreshFromItem()
 {
     LLPreview::refreshFromItem();
@@ -2221,17 +2232,11 @@ void LLScriptEdContainer::refreshFromItem()
 
 bool LLScriptEdContainer::onBackupTimer()
 {
-    if ( (mScriptEd) && (mScriptEd->hasChanged()) )
+    if (mScriptEd && mScriptEd->hasChanged())
     {
-        const std::string backup_filename = getBackupFileName();
-        if (mScriptEd->writeToFile(backup_filename, true))
-        {
-            if (!mBackupFilename.empty() && mBackupFilename != backup_filename)
-            {
-                LLFile::remove(mBackupFilename);
-            }
-            mBackupFilename = backup_filename;
-        }
+        if (mBackupFilename.empty())
+            mBackupFilename = getBackupFileName();
+        mScriptEd->writeToFile(mBackupFilename, true);
 
         LL_INFOS() << "Backing up script to " << mBackupFilename << LL_ENDL;
     }
@@ -2260,7 +2265,7 @@ std::string LLScriptEdContainer::getBackupFileName() const
     crcUUID.update((U8*)(&mItemUUID.mData), UUID_BYTES);
     strFile += llformat("%X", crcUUID.getCRC());
 
-    strFile += mScriptEd && mScriptEd->mEditor->getIsLuauLanguage() ? ".luabackup" : ".lslbackup";
+    strFile += ".lslbackup";
 
     return strFile;
 }
@@ -2377,17 +2382,6 @@ bool LLScriptEdContainer::handleKeyHere(KEY key, MASK mask)
     return true;
 }
 
-// <FS:Ansariel> FIRE-16740: Color syntax highlighting changes don't immediately appear in script window
-void LLScriptEdContainer::updateStyle()
-{
-    if (mScriptEd && mScriptEd->mEditor)
-    {
-        mScriptEd->mEditor->initKeywords(mScriptEd->mEditor->getIsLuauLanguage());
-        mScriptEd->mEditor->loadKeywords();
-    }
-}
-// </FS:Ansariel>
-
 void LLScriptEdContainer::startWebsocketServer()
 {
     auto server = LLScriptEditorWSServer::ensureServerRunning();
@@ -2421,6 +2415,17 @@ void LLScriptEdContainer::sendCompileResults(LLSD& params)
         server->sendCompileResults(script_id_hash_str, params);
     }
 }
+
+// <FS:Ansariel> FIRE-16740: Color syntax highlighting changes don't immediately appear in script window
+void LLScriptEdContainer::updateStyle()
+{
+    if (mScriptEd && mScriptEd->mEditor)
+    {
+        mScriptEd->mEditor->initKeywords(mScriptEd->mEditor->getIsLuauLanguage());
+        mScriptEd->mEditor->loadKeywords();
+    }
+}
+// </FS:Ansariel>
 
 /// ---------------------------------------------------------------------------
 /// LLPreviewLSL
@@ -2552,6 +2557,7 @@ void LLPreviewLSL::callbackLSLCompileSucceeded()
         mBackupFilename.clear();
     }
 // [/SL:KB]
+
 
     if (isOpenInExternalEditor())
     {
@@ -2767,6 +2773,7 @@ void LLPreviewLSL::saveIfNeeded(bool sync /*= true*/)
     mPendingUploads = 0;
     // <FS> FIRE-10172: Fix LSL editor error display
     //mScriptEd->mErrorList->deleteAllItems();
+    mScriptEd->enableSave(false);
     mScriptEd->mEditor->makePristine();
 
 
@@ -2782,10 +2789,8 @@ void LLPreviewLSL::saveIfNeeded(bool sync /*= true*/)
 
     // NaCL - LSL Preprocessor
     mScriptEd->enableSave(false); // Clear the enable save flag (FIRE-10173)
-    std::string compile_target = mScriptEd->mCompileTarget->getValue().asString();
-    bool domono = compile_target == "mono";
-    if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor") &&
-        (compile_target == "mono" || compile_target == "lsl2"))
+    bool domono = gSavedSettings.getBOOL("FSSaveInventoryScriptsAsMono");
+    if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor") && !mScriptEd->mEditor->getIsLuauLanguage())
     {
         bool mono_directive = FSLSLPreprocessor::mono_directive(mScriptEd->getScriptText(), domono);
 
@@ -2801,8 +2806,6 @@ void LLPreviewLSL::saveIfNeeded(bool sync /*= true*/)
                 message = LLTrans::getString("fs_preprocessor_lsl2_directive_override");
             }
             domono = mono_directive;
-            compile_target = domono ? "mono" : "lsl2";
-            mScriptEd->mCompileTarget->setValue(compile_target);
             mScriptEd->mErrorList->addCommentText(message);
         }
     }
@@ -2814,9 +2817,12 @@ void LLPreviewLSL::saveIfNeeded(bool sync /*= true*/)
         mPendingUploads++;
         if (!url.empty())
         {
+            std::string compile_target(mScriptEd->mCompileTarget->getValue());
             //<FS:KC> Script Preprocessor
             // std::string buffer(mScriptEd->mEditor->getText());
             std::string buffer(mScriptEd->getScriptText());
+            if (compile_target == "lsl2" || compile_target == "mono")
+                compile_target = domono ? "mono" : "lsl2";
             //</FS:KC> Script Preprocessor
 
             LLUUID old_asset_id = inv_item->getAssetUUID().isNull() ? mScriptEd->getAssetID() : inv_item->getAssetUUID();
@@ -2826,7 +2832,7 @@ void LLPreviewLSL::saveIfNeeded(bool sync /*= true*/)
                     LLFileSystem::removeFile(old_asset_id, LLAssetType::AT_LSL_TEXT);
                     LLPreviewLSL::finishedLSLUpload(itemId, response);
                 },
-                LLPreviewLSL::failedLSLUpload));
+            LLPreviewLSL::failedLSLUpload));
 
             LLViewerAssetUpload::EnqueueInventoryUpload(url, uploadInfo);
         }
@@ -2839,6 +2845,7 @@ void LLPreviewLSL::onCompileTargetChanged()
     bool is_lua = (mScriptEd->mCompileTarget->getValue().asString() == "luau");
     mScriptEd->mEditor->setLuauLanguage(is_lua);
     mScriptEd->processKeywords(is_lua);
+    mScriptEd->updateTabs(is_lua);      // <FS:Zi> Disable LSL preprocessor when compile target is luau
 }
 
 // static
@@ -2861,7 +2868,7 @@ void LLPreviewLSL::onLoadComplete(const LLUUID& asset_uuid, LLAssetType::EType t
 
             // put a EOS at the end
             buffer[file_length] = 0;
-
+            preview->mScriptEd->setScriptText(LLStringExplicit(&buffer[0]), true);
             preview->mScriptEd->mEditor->makePristine();
 
             std::string script_name = DEFAULT_SCRIPT_NAME;
@@ -2906,7 +2913,7 @@ void LLPreviewLSL::onLoadComplete(const LLUUID& asset_uuid, LLAssetType::EType t
                     // No language info from inventory metadata; fall back to content analysis.
                     is_lua = is_lua_script(std::string(&buffer[0], file_length));
                 }
-                compile_target = is_lua ? "luau" : (gSavedSettings.getBOOL("FSSaveInventoryScriptsAsMono") ? "mono" : "lsl2");
+                compile_target = is_lua ? "luau" : "mono";
             }
 
             preview->mScriptEd->setScriptName(script_name);
@@ -2914,15 +2921,15 @@ void LLPreviewLSL::onLoadComplete(const LLUUID& asset_uuid, LLAssetType::EType t
             preview->mScriptEd->setAssetID(asset_uuid);
             preview->mAssetStatus = PREVIEW_ASSET_LOADED;
 
+            preview->mScriptEd->mCompileTarget->setValue(compile_target);
+            preview->mScriptEd->mEditor->setLuauLanguage(is_lua);
+            preview->mScriptEd->processKeywords(is_lua);
+            preview->mScriptEd->updateTabs(is_lua);      // <FS:Zi> Disable LSL preprocessor when compile target is luau
+
 // [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0) | Added: Catznip-3.2.0
             // Start the timer which will perform regular backup saves
             preview->mBackupTimer = setupCallbackTimer(60.0f, boost::bind(&LLPreviewLSL::onBackupTimer, preview));
 // [/SL:KB]
-
-            preview->mScriptEd->mCompileTarget->setValue(compile_target);
-            preview->mScriptEd->mEditor->setLuauLanguage(is_lua);
-            preview->mScriptEd->setScriptText(LLStringExplicit(&buffer[0]), true);
-            preview->mScriptEd->processKeywords(is_lua);
         }
         else
         {
@@ -3035,6 +3042,7 @@ void LLLiveLSLEditor::callbackLSLCompileSucceeded(const LLUUID& task_id,
         mBackupFilename.clear();
     }
 // [/SL:KB]
+
 
     if (isOpenInExternalEditor())
     {
@@ -3256,7 +3264,7 @@ void LLLiveLSLEditor::loadScriptText(const LLUUID &uuid, LLAssetType::EType type
 
     buffer[file_length] = '\0';
 
-
+    mScriptEd->setScriptText(LLStringExplicit(&buffer[0]), true);
     mScriptEd->makeEditorPristine();
 
     std::string script_name = DEFAULT_SCRIPT_NAME;
@@ -3289,8 +3297,8 @@ void LLLiveLSLEditor::loadScriptText(const LLUUID &uuid, LLAssetType::EType type
     }
     mScriptEd->mCompileTarget->setValue(compile_target);
     mScriptEd->mEditor->setLuauLanguage(is_lua);
-    mScriptEd->setScriptText(LLStringExplicit(&buffer[0]), true);
     mScriptEd->processKeywords(is_lua);
+    mScriptEd->updateTabs(is_lua);      // <FS:Zi> Disable LSL preprocessor when compile target is luau
 }
 
 
@@ -3619,10 +3627,17 @@ void LLLiveLSLEditor::processScriptRunningReply(LLMessageSystem* msg, void**)
 
         instance->mScriptEd->mCompileTarget->setValue(compile_target);
         instance->mScriptEd->processKeywords(luau && luau_language); // Use Luau syntax highlighting for Luau scripts
+        instance->mScriptEd->updateTabs(luau && luau_language);      // <FS:Zi> Disable LSL preprocessor when compile target is luau
 
         bool lua_scripts_enabled = have_lua_enabled(object_id);
-        instance->mScriptEd->mCompileTarget->setEnabledByValue("luau", lua_scripts_enabled);
-        instance->mScriptEd->mCompileTarget->setEnabledByValue("lsl-luau", lua_scripts_enabled);
+        if (LLScrollListItem* luau_item = instance->mScriptEd->mCompileTarget->findItemByValue("luau"))
+        {
+            luau_item->setEnabled(lua_scripts_enabled);
+        }
+        if (LLScrollListItem* lsl_luau_item = instance->mScriptEd->mCompileTarget->findItemByValue("lsl-luau"))
+        {
+            lsl_luau_item->setEnabled(lua_scripts_enabled);
+        }
 
         instance->mScriptEd->mCompileTarget->setEnabled(instance->getIsModifiable() && have_script_upload_cap(object_id));
     }
@@ -3635,6 +3650,7 @@ void LLLiveLSLEditor::onCompileTargetChanged()
     bool is_lua = mScriptEd->mCompileTarget->getValue().asString() == "luau";
     mScriptEd->mEditor->setLuauLanguage(is_lua);
     mScriptEd->processKeywords(is_lua);
+    mScriptEd->updateTabs(is_lua);      // <FS:Zi> Disable LSL preprocessor when compile target is luau
 }
 
 void LLLiveLSLEditor::setAssociatedExperience( LLHandle<LLLiveLSLEditor> editor, const LLSD& experience )

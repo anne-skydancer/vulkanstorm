@@ -50,3 +50,4 @@ private:
 
     boost::signals2::connection mTightIntegrationConnection;
 };
+

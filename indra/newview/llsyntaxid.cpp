@@ -215,7 +215,7 @@ void LLSyntaxDefCache::fetchKeywordsFileCoro(std::string url, LLUUID syntax_id)
     {
         std::string path = buildCacheDirectoryName(syntax_id);
 
-        if (!gDirUtilp->fileExists(path))
+        if (!LLFile::exists(path))
         {
             LL_DEBUGS("SyntaxLSL") << "Cache directory '" << path << "' does not exist. Attempting to create." << LL_ENDL;
             if (LLFile::mkdir(path))
@@ -295,7 +295,7 @@ void LLSyntaxDefCache::fetchKeywordsDefsCoro(std::string url, LLUUID syntax_id)
     {
         std::string path = buildCacheDirectoryName(syntax_id);
 
-        if (!gDirUtilp->fileExists(path))
+        if (!LLFile::exists(path))
         {
             LL_DEBUGS("SyntaxLSL") << "Cache directory '" << path << "' does not exist. Attempting to create." << LL_ENDL;
             if (LLFile::mkdir(path))
@@ -364,7 +364,7 @@ void LLSyntaxDefCache::buildCachePaths(const LLUUID &syntax_id)
     }
 
     std::string cache_dir = buildCacheDirectoryName(syntax_id);
-    if (!gDirUtilp->fileExists(cache_dir))
+    if (!LLFile::exists(cache_dir))
     {
         LL_DEBUGS("SyntaxLSL") << "Cache directory '" << cache_dir << "' does not exist." << LL_ENDL;
         return;

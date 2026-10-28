@@ -159,7 +159,7 @@ const std::string& LLInventoryIcon::getIconName(LLAssetType::EType asset_type,
             break;
         case LLAssetType::AT_SCRIPT:
         case LLAssetType::AT_LSL_BYTECODE:
-            idx = LLInventoryType::ICONNAME_SCRIPT;
+            idx = assignScriptIcon(misc_flag);
             break;
         case LLAssetType::AT_CLOTHING:
         case LLAssetType::AT_BODYPART:
@@ -219,4 +219,14 @@ LLInventoryType::EIconName LLInventoryIcon::assignSettingsIcon(U32 misc_flag)
 {
     LLSettingsType::type_e settings_type = LLSettingsType::fromInventoryFlags(misc_flag);
     return LLSettingsType::getIconName(settings_type);
+}
+
+LLInventoryType::EIconName LLInventoryIcon::assignScriptIcon(U32 misc_flag)
+{
+    U8 subtype = misc_flag & LLInventoryItemFlags::II_FLAGS_SUBTYPE_MASK;
+    if (subtype == SST_LUA)
+    {
+        return LLInventoryType::ICONNAME_SCRIPT_LUAU;
+    }
+    return LLInventoryType::ICONNAME_SCRIPT;
 }

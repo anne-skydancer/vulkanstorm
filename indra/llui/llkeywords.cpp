@@ -201,19 +201,6 @@ LLUIColor LLKeywords::getColorGroup(std::string_view key_in) const
         color_group = "SyntaxLslGodMode";
     }
     // <FS:Ansariel> Split constant types up
-    //else if (key_in == "constants"
-    //       || key_in == "constants-integer"
-    //       || key_in == "constants-float"
-    //       || key_in == "constants-string"
-    //       || key_in == "constants-key"
-    //       || key_in == "constants-rotation"
-    //       || key_in == "constants-vector")
-    else if (key_in == "constants")
-    // </FS:Ansariel>
-    {
-        color_group = "SyntaxLslConstant";
-    }
-    // <FS:Ansariel> Split constant types up
     else if (key_in == "constants-integer")
     {
         color_group = "SyntaxLslIntegerConstant";
@@ -233,7 +220,16 @@ LLUIColor LLKeywords::getColorGroup(std::string_view key_in) const
         color_group = "SyntaxLslCompoundConstant";
     }
     // </FS:Ansariel>
-    else if (key_in.compare(0, 10, "constants-") == 0)
+    else if (key_in == "constants"
+             || key_in.compare(0, 10, "constants-") == 0)
+
+
+
+
+
+
+
+
     {
         color_group = "SyntaxLslConstant";
     }
@@ -391,7 +387,10 @@ void LLKeywords::processTokensGroup(const LLSD& tokens, std::string_view group)
                         break;
                     case LLKeywordToken::TT_FUNCTION:
                         tooltip = getAttribute("return") + " " + outer_itr->first + "(" + getArguments(arguments) + ");";
-                        if (std::stod(getAttribute("energy")) >= 0)
+                        // <FS:TJ> Fix crash in OpenSim when editing scripts
+                        //if (std::stod(getAttribute("energy")) >= 0)
+                        if (getAttribute("energy").empty() || std::stod(getAttribute("energy")) >= 0)
+                        // </FS:TJ>
                         {
                             tooltip.append("\nEnergy: ");
                             tooltip.append(getAttribute("energy").empty() ? "0.0" : getAttribute("energy"));
@@ -782,6 +781,8 @@ void LLKeywords::collectSegmentOps(segment_ops_t& ops, const LLWString& wtext, b
 
             // check against words
             llwchar prev = cur > base ? *(cur-1) : 0;
+            // NaCl - LSL Preprocessor
+            //if (!iswalnum(prev) && prev != '_' && prev != '.')
             if (!iswalnum(prev) && prev != '_' && prev != '.' && prev != '#')
             {
                 const llwchar* word_start = cur;
@@ -789,7 +790,9 @@ void LLKeywords::collectSegmentOps(segment_ops_t& ops, const LLWString& wtext, b
                 const llwchar* last_dot = nullptr;
 
                 // Find the full extent of the word, potentially including namespace dots
-                while (iswalnum(*cur) || (*cur == '_' || (!mLuauLanguage && *cur == '#')) || (mLuauLanguage && *cur == '.' && iswalnum(*(cur+1))))
+                // NaCl - LSL Preprocessor
+                //while (iswalnum(*cur) || *cur == '_' || (mLuauLanguage && *cur == '.' && iswalnum(*(cur+1))))
+                while(*cur && (iswalnum(*cur) || *cur == '_' || *cur == '#' || (mLuauLanguage && *cur == '.' && iswalnum(*(cur+1)))))
                 {
                     if (mLuauLanguage && *cur == '.')
                     {
@@ -881,7 +884,12 @@ bool LLKeywords::applySegmentOpsRange(std::vector<LLTextSegmentPtr> *seg_list,
         seg_list->reserve(wtext.size() / AVERAGE_SEGMENT_LENGTH);
 
         S32 text_len = static_cast<S32>(wtext.size()) + 1;
-        seg_list->push_back( new LLNormalTextSegment( style, 0, text_len, editor ) );
+        // <FS:Ansariel> Script editor ignoring font selection
+        //seg_list->push_back( new LLNormalTextSegment( style, 0, text_len, editor ) );
+        LLStyleSP actual_style = getDefaultStyle(editor);
+        actual_style->setColor(style->getColor());
+        seg_list->push_back( new LLNormalTextSegment( actual_style, 0, text_len, editor ) );
+        // </FS:Ansariel>
     }
 
     S32 text_len = static_cast<S32>(wtext.size()) + 1;
@@ -896,7 +904,10 @@ bool LLKeywords::applySegmentOpsRange(std::vector<LLTextSegmentPtr> *seg_list,
         const auto& op = ops[op_index];
         if (op.type == SegmentOp::OP_LINE_BREAK)
         {
-            LLTextSegmentPtr text_segment = new LLLineBreakTextSegment(style, op.start);
+            // <FS:Ansariel> Script editor ignoring font selection
+            //LLTextSegmentPtr text_segment = new LLLineBreakTextSegment(style, op.start);
+            LLTextSegmentPtr text_segment = new LLLineBreakTextSegment(getDefaultStyle(editor), op.start);
+            // </FS:Ansariel>
             text_segment->setToken( 0 );
             insertSegment( *seg_list, text_segment, text_len, style, editor);
         }

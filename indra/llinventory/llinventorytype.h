@@ -152,7 +152,12 @@ private:
     ~LLInventoryType( void );
 };
 
-enum ScriptSubtype_t { SST_LSL = 0, SST_LUA = 1 };
+// Subtypes for scripts, (inventory type IT_LSL).
+enum ScriptSubtype_t
+{
+    SST_LSL = 0,
+    SST_LUA = 1
+};
 
 // helper function that returns true if inventory type and asset type
 // are potentially compatible. For example, an attachment must be an

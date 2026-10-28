@@ -30,10 +30,13 @@ install_desktop_entry() {
         printf '%s\n' '[Desktop Entry]' 'Name=Vulkanstorm Viewer' \
             'Comment=Client for accessing 3D virtual worlds'
         printf 'Exec=%s\n' "$(desktop_string "\"$executable\"")"
+        printf 'Path=%s\n' "$(desktop_string "$installation_prefix")"
         printf 'Icon=%s\n' "$(desktop_string "${installation_prefix}/firestorm_icon.png")"
+        # The viewer's SDL3 window reports this application identifier
+        # (SDL_PROP_APP_METADATA_IDENTIFIER_STRING in llappviewerlinux.cpp).
         printf '%s\n' 'Terminal=false' 'Type=Application' \
             'Categories=Internet;Network;' 'StartupNotify=true' \
-            'StartupWMClass=do-not-directly-run-vulkanstorm-bin'
+            'StartupWMClass=com.secondlife.indra.viewer'
     } > "${desktop_entries_dir}/vulkanstorm-viewer.desktop" || return 1
 }
 

@@ -35,7 +35,6 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llcompilequeue.h"
-#include "llfilesystem.h"
 
 #include "llagent.h"
 #include "llchat.h"
@@ -64,6 +63,7 @@
 
 // <FS:KC> [LSL PreProc]
 #include "fslslpreproc.h"
+#include "llfilesystem.h"
 #include "llsdutil.h"
 // </FS:KC>
 
@@ -393,7 +393,7 @@ void LLFloaterCompileQueue::handleScriptRetrieval(const LLUUID& assetId,
         delete ((HandleScriptUserData *)userData)->getData();
     }
     // <FS:KC> [LSL PreProc]
-    else if (((HandleScriptUserData *)userData)->getData())
+    else if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor"))
     {
         LLScriptQueueData* data = ((HandleScriptUserData *)userData)->getData();
         LLFloaterCompileQueue* queue = LLFloaterReg::findTypedInstance<LLFloaterCompileQueue>("compile_queue", data->mQueueID);
@@ -562,8 +562,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
         // <FS:Ansariel> [LSL PreProc]
         //HandleScriptUserData    userData(pump.getName());
         HandleScriptUserData userData;
-        if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor") &&
-            item->getInventorySubType() != SST_LUA && requested_target != "luau")
+        if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor"))
         {
             // Need to dump some stuff into an LLScriptQueueData struct for the LSL PreProc.
             LLScriptQueueData* datap = new LLScriptQueueData(hfloater.get()->getKey().asUUID(), object->getID(), experienceId, item, compile_target);
@@ -1085,9 +1084,9 @@ void LLFloaterScriptQueue::objectScriptProcessingQueueCoro(std::string action, L
 class LLScriptAssetUploadWithId: public LLScriptAssetUpload
 {
 public:
-    LLScriptAssetUploadWithId(  LLUUID taskId, LLUUID itemId, std::string targetType,
+    LLScriptAssetUploadWithId(  LLUUID taskId, LLUUID itemId, std::string compileTarget,
         bool isRunning, std::string scriptName, LLUUID queueId, LLUUID exerienceId, std::string buffer, taskUploadFinish_f finish, uploadFailed_f failed)
-        :  LLScriptAssetUpload( taskId, itemId, targetType,  isRunning, exerienceId, buffer, finish, failed),
+        :  LLScriptAssetUpload( taskId, itemId, compileTarget, isRunning, exerienceId, buffer, finish, failed),
         mScriptName(scriptName),
         mQueueId(queueId)
     {
@@ -1173,7 +1172,7 @@ void LLFloaterCompileQueue::scriptPreprocComplete(LLScriptQueueData* data, LLAss
                 LLBufferedAssetUploadInfo::taskUploadFinish_f proc = boost::bind(&LLFloaterCompileQueue::finishLSLUpload, _1, _2, _3, _4,
                     scriptName, data->mQueueID);
 
-                LLResourceUploadInfo::ptr_t uploadInfo( new LLScriptAssetUploadWithId(
+                LLResourceUploadInfo::ptr_t uploadInfo(new LLScriptAssetUploadWithId(
                     data->mTaskId,
                     data->mItem->getUUID(),
                     data->mCompileTarget,

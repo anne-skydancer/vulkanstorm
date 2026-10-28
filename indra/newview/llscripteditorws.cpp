@@ -29,9 +29,6 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llscripteditorws.h"
-#include "rlvhandler.h"
-#include "rlvlocks.h"
-#include "llvoavatarself.h"
 
 #include "llagent.h"
 #include "llagentcamera.h"
@@ -83,25 +80,6 @@
 #else
 #include "llscripteditorposixfile.h"
 #endif
-
-namespace
-{
-// IDE writes obey the same object restrictions as the native script editor.
-void ensureScriptObjectEditable(LLViewerObject* object)
-{
-    if (!object || !rlv_handler_t::isEnabled()) return;
-    LLViewerObject* root = object->getRootEdit();
-    if (gRlvAttachmentLocks.isLockedAttachment(root))
-    {
-        throw LLJSONRPCConnection::ForbiddenError("Attachment editing is restricted");
-    }
-    if ((gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT) || gRlvHandler.hasBehaviour(RLV_BHVR_SITTP)) &&
-        isAgentAvatarValid() && gAgentAvatarp->isSitting() && gAgentAvatarp->getRoot() == root)
-    {
-        throw LLJSONRPCConnection::ForbiddenError("Object editing is restricted while seated");
-    }
-}
-}
 
 namespace
 {
@@ -494,7 +472,10 @@ void LLScriptEditorWSServer::onStopped()
 
     LL_INFOS("ScriptEditorWS") << "Script editor WebSocket server stopped, all state cleaned up" << LL_ENDL;
 
-    LLNotificationsUtil::add("ExternalEditorServerStopped");
+    if (!LLApp::isExiting())
+    {
+        LLNotificationsUtil::add("ExternalEditorServerStopped");
+    }
 }
 
 void LLScriptEditorWSServer::onConnectionOpened(const LLWebsocketMgr::WSConnection::ptr_t& connection)
@@ -811,7 +792,6 @@ LLSD LLScriptEditorWSServer::handleObjectScriptSetRunning(U32 connection_id, con
         throw LLJSONRPCConnection::InvalidParams("prim_id and item_id are required");
 
     LLViewerObject* prim = gObjectList.findObject(prim_id);
-    ensureScriptObjectEditable(prim);
     if (!prim)
         throw LLJSONRPCConnection::InvalidParams("Prim not found");
 
@@ -855,7 +835,6 @@ LLSD LLScriptEditorWSServer::handleObjectScriptReset(U32 connection_id, const LL
         throw LLJSONRPCConnection::InvalidParams("prim_id and item_id are required");
 
     LLViewerObject* prim = gObjectList.findObject(prim_id);
-    ensureScriptObjectEditable(prim);
     if (!prim)
         throw LLJSONRPCConnection::InvalidParams("Prim not found");
 
@@ -898,7 +877,6 @@ LLSD LLScriptEditorWSServer::handleObjectScriptResetAll(U32 connection_id, const
     }
 
     LLViewerObject* prim = gObjectList.findObject(prim_id);
-    ensureScriptObjectEditable(prim);
     if (!prim)
     {
         throw LLJSONRPCConnection::InvalidParams("Object not found");
@@ -971,7 +949,6 @@ LLSD LLScriptEditorWSServer::handleObjectScriptRecompileAll(
     }
 
     LLViewerObject* object = gObjectList.findObject(object_id);
-    ensureScriptObjectEditable(object);
     if (!object)
     {
         throw LLJSONRPCConnection::InvalidParams("Object not found");
@@ -1048,7 +1025,6 @@ LLSD LLScriptEditorWSServer::handleObjectModify(U32 connection_id, const LLSD& p
 
     // Step 2: Find and Validate Object
     LLViewerObject* prim = gObjectList.findObject(prim_id);
-    ensureScriptObjectEditable(prim);
     if (!prim)
         throw LLJSONRPCConnection::InvalidParams("Prim not found");
 
@@ -1203,7 +1179,6 @@ LLSD LLScriptEditorWSServer::handleSaveBackToObjectContents(U32 connection_id, c
     }
 
     LLViewerObject* root = gObjectList.findObject(object_id);
-    ensureScriptObjectEditable(root);
     if (!root)
     {
         throw LLJSONRPCConnection::InvalidParams(
@@ -1604,7 +1579,6 @@ LLScriptEditorWSServer::ValidatedItem LLScriptEditorWSServer::validatePublishedI
 
     if (permMask & PERM_MODIFY)
     {
-        ensureScriptObjectEditable(prim);
         // Writes into task inventory require modify permission on both the
         // item AND the containing prim. A no-mod object can be published
         // (read-only), but its contents cannot be changed.
@@ -2008,7 +1982,6 @@ LLSD LLScriptEditorWSServer::handleObjectItemCreate(const std::string& method, c
     }
 
     LLViewerObject* prim = gObjectList.findObject(prim_id);
-    ensureScriptObjectEditable(prim);
     if (!prim)
     {
         throw LLJSONRPCConnection::InvalidParams("Prim not found");
@@ -3030,7 +3003,7 @@ LLScriptEditorWSConnection::Challenge LLScriptEditorWSConnection::writeChallenge
     // anything, or through a link, already by that name, and readable by
     // the user alone: the name goes to whoever connects, and the temp
     // folder can be everyone's.
-    const std::string file = std::string(LLFile::tmpdir()) + "sl_script_challenge_" + LLUUID::generateNewID().asString() + ".tmp";
+    const std::string file = LLFile::tmpdir() + "sl_script_challenge_" + LLUUID::generateNewID().asString() + ".tmp";
     const std::string text = challenge.mSecret.asString();
     if (!writeUserOnlyFile(file, text))
     {
@@ -3122,3 +3095,4 @@ bool LLScriptEditorWSConnection::writeUserOnlyFile(const std::string& file, cons
     return LLScriptEditorPOSIX::writeUserOnlyFile(file, text);
 #endif
 }
+

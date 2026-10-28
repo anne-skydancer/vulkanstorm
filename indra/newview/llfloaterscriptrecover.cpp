@@ -155,11 +155,9 @@ void LLScriptRecoverQueue::recoverIfNeeded()
     const std::string strTempPath = LLFile::tmpdir();
     LLSD sdData, &sdFiles = sdData["files"];
 
-    LLDirIterator itFiles(strTempPath, "*.l??backup"); std::string strFilename;
+    LLDirIterator itFiles(strTempPath, "*.lslbackup"); std::string strFilename;
     while (itFiles.next(strFilename))
     {
-        const std::string extension = gDirUtilp->getExtension(strFilename);
-        if (extension != "lslbackup" && extension != "luabackup") continue;
         // Build a friendly name for the file
         std::string strName = gDirUtilp->getBaseFileName(strFilename, true);
 
@@ -245,8 +243,7 @@ bool LLScriptRecoverQueue::recoverNext()
 
     create_inventory_item(gAgent.getID(), gAgent.getSessionID(), idFNF, LLTransactionID::tnull,
                           strScriptName, strItemDescr, LLAssetType::AT_LSL_TEXT, LLInventoryType::IT_LSL,
-                          gDirUtilp->getExtension(itFile->first) == "luabackup" ? SST_LUA : SST_LSL,
-                          PERM_MOVE | PERM_TRANSFER, new LLCreateRecoverScriptCallback(this));
+                          NO_INV_SUBTYPE, PERM_MOVE | PERM_TRANSFER, new LLCreateRecoverScriptCallback(this));
     return true;
 }
 
@@ -280,7 +277,7 @@ void LLScriptRecoverQueue::onCreateScript(const LLUUID& idItem)
         if (0 == LLFile::stat(strFilePath, &stat) && stat.st_size > 0)
         {
             buffer.resize(stat.st_size);
-            LLFILE *pFile = LLFile::fopen(strFileName, "rb");
+            LLFILE *pFile = LLFile::fopen(strFileName, LLFILE_MODE("rb"));
 
             if (pFile)
             {
@@ -304,8 +301,7 @@ void LLScriptRecoverQueue::onCreateScript(const LLUUID& idItem)
         }
 
         LLBufferedAssetUploadInfo::taskUploadFinish_f proc = boost::bind(&LLScriptRecoverQueue::onSavedScript, this, _1, _2, _3, _4);
-        const std::string target = gDirUtilp->getExtension(strFilePath) == "luabackup" ? "luau" : "mono";
-        LLResourceUploadInfo::ptr_t uploadInfo(new LLScriptAssetUpload(idItem, target, buffer, proc, nullptr));
+        LLResourceUploadInfo::ptr_t uploadInfo(new LLScriptAssetUpload(idItem, "mono", buffer, proc, nullptr)); /// TODO LUA-SCRIPT: See if we can make this stuff work for LUA scripts too...
         LLViewerAssetUpload::EnqueueInventoryUpload(strCapsUrl, uploadInfo);
     }
     else
