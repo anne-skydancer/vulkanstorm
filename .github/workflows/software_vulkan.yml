@@ -2,9 +2,9 @@ name: Vulkan qualification
 
 on:
   push:
-    branches: [vkstorm-vulkan, vkstorm_1.1.0, codex/vulkan-world-parity]
+    branches: [vkstorm-vulkan, vkstorm-vulkan-rhi, 'codex/vulkan-rhi-*', vkstorm_1.1.0, codex/vulkan-world-parity]
   pull_request:
-    branches: [vkstorm-vulkan, vkstorm-devel, vkstorm_1.1.0]
+    branches: [vkstorm-vulkan, vkstorm-vulkan-rhi, vkstorm-devel, vkstorm_1.1.0]
   workflow_dispatch:
     inputs:
       clean_dependencies:
