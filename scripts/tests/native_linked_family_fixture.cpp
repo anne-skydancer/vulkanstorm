@@ -26,7 +26,10 @@ struct VSWorldScene{
 };
 METHOD
 EXTRA_FUNCTIONS
-struct Reference{using child_list_t=std::vector<Reference*>;unsigned local=0;bool avatar=false,mbCanSelect=true;unsigned mSeatCount=0;child_list_t mChildList;Reference*parent=nullptr;struct Extrap{void changedlink(Reference&) {}}mExtrap;bool isAvatar()const{return avatar;}bool setParent(Reference*p){parent=p;return true;}void afterReparent(){}void addChild(Reference*);void addThisAndAllChildren(std::vector<Reference*>&);void addThisAndNonJointChildren(std::vector<Reference*>&);};
+// Firestorm 7.2.5: addChild() notifies the script-editor websocket server about
+// relinked published objects. No editor is connected here, so getServer() is null.
+struct LLScriptEditorWSServer{static LLScriptEditorWSServer* getServer(){return nullptr;}bool isObjectPublished(unsigned)const{return false;}void unpublishObject(unsigned,const char*){}template<class T>void onLinksetChildAdded(unsigned,T*){}};
+struct Reference{using child_list_t=std::vector<Reference*>;unsigned local=0;bool avatar=false,mbCanSelect=true;unsigned mSeatCount=0;child_list_t mChildList;Reference*parent=nullptr;struct Extrap{void changedlink(Reference&) {}}mExtrap;bool isAvatar()const{return avatar;}bool setParent(Reference*p){parent=p;return true;}void afterReparent(){}bool isAttachment()const{return false;}unsigned getID()const{return local;}Reference* getRootEdit(){Reference* r=this;while(r->parent&&!r->parent->isAvatar())r=r->parent;return r;}void addChild(Reference*);void addThisAndAllChildren(std::vector<Reference*>&);void addThisAndNonJointChildren(std::vector<Reference*>&);};
 GOLD
 int main(){
  // Parent local-ID reuse retires its old child edges; actual re-admission

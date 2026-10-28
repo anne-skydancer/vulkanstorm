@@ -38,7 +38,9 @@ void gl_draw_x(LLRect,LLColor4){}
 struct LLUI {static void pushMatrix(){++depth;}static void popMatrix(){--depth;}};
 struct Image {float alpha=0;void draw(LLRect,LLColor4 c){++images;alpha=c.alpha;}void draw(int,int,int,int,LLColor4){++images;}};
 struct Pointer {Image* p=nullptr;bool notNull(){return p;}Image* operator->(){return p;}};
-struct Border {void setKeyboardFocusHighlight(bool){}};
+struct Border {void setKeyboardFocusHighlight(bool){}void setVisible(bool){}};
+// Firestorm 7.2.5: an unset swatch draws a gray border from the color table.
+struct LLUIColorTable {static LLUIColorTable& instance(){static LLUIColorTable t;return t;}struct C{LLColor4 get(){return {};}};C getColor(const char*){return {};}};
 struct Caption {void setEnabled(bool){}};
 struct Color {LLColor4 get(){return {};}};
 struct LLUICtrl {void draw(){++children;}};

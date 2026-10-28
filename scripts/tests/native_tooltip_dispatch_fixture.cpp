@@ -22,7 +22,7 @@ LLTool nativeTool("native"),legacyTool("legacy");
 struct LLToolMgr{static LLToolMgr&instance(){static LLToolMgr m;return m;}static LLToolMgr*getInstance(){return &instance();}static bool instanceExists(){return true;}LLTool*nativeCurrentTool(){calls.push_back("native-query");return &nativeTool;}LLTool*getCurrentTool(){calls.push_back("legacy-query");return &legacyTool;}};
 struct LLToolTipMgr{static LLToolTipMgr&instance(){static LLToolTipMgr m;return m;}void show(const LLToolTip::Params&){calls.push_back("show");}};
 struct Window{bool hidden=false;bool isCursorHidden(){return hidden;}};
-struct LLViewerWindow{bool mNativeVulkan=true;struct{int mX=17,mY=23;}mCurrentMousePoint;Window window;Window*mWindow=&window;LLView*mRootView;void updateToolTip(bool,LLUICtrl*,LLMouseHandler*,MASK);};
+struct LLViewerWindow{bool mNativeVulkan=true;bool mMouseInWindow=true;struct{int mX=17,mY=23;}mCurrentMousePoint;Window window;Window*mWindow=&window;LLView*mRootView;void updateToolTip(bool,LLUICtrl*,LLMouseHandler*,MASK);};
 METHOD
 int main(){
  LLView root("root");LLUICtrl top("top");LLMouseHandler captor("captor");LLViewerWindow v;v.mRootView=&root;

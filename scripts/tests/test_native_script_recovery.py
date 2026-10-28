@@ -16,7 +16,7 @@ class ScriptRecoveryTest(unittest.TestCase):
   self.assertLess(create.index('!current()'),create.index('gInventory.getItem'))
   self.assertIn('LLFile::fopen(path, "rb")',create)
   self.assertIn('read != buffer.size()',create)
-  self.assertIn('LLScriptAssetUpload(idItem, buffer, complete, failure)',create)
+  self.assertIn('LLScriptAssetUpload(idItem, target, buffer, complete, failure)',create)
   cancel=function(s,'void LLFloaterScriptRecover::onBtnCancel()')
   self.assertIn('getValue()["path"].asString()',cancel)
   self.assertLess(cancel.index('!mAccountCurrent()'),cancel.index('LLFile::remove'))

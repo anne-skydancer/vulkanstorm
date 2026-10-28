@@ -65,18 +65,4 @@ propriedade.
 	<text name="changeable_clause" width="366">
 		O terreno nesta região não pode ser unido/dividido.
 	</text>
-	<string name="can_resell">
-		O terreno comprado nesta região pode ser revendido.
-	</string>
-	<string name="can_not_resell">
-		O terreno comprado nesta região não pode ser revendido.
-	</string>
-	<string name="can_change">
-		O terreno comprado nesta região pode ser unido e
-dividido.
-	</string>
-	<string name="can_not_change">
-		O terreno comprado nesta região não pode ser unido
-nem dividido.
-	</string>
 </panel>

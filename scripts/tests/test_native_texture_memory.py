@@ -38,6 +38,11 @@ constexpr F32 MIN_VRAM_BUDGET=768,MEMORY_CHECK_WAIT_TIME=1;
 bool isSystemMemoryLow(){return input.systemLow;}
 F32 getSystemMemoryBudgetFactor(){return F32(input.systemFactor);}
 double getFreeSystemMemory(){return input.freeSystemMiB;}
+// Firestorm 7.2.5: the budget factor moved to LLMemory, and recovery became
+// isSystemMemoryRecovered(); off Windows that is the former free-memory test
+// (RenderMinFreeMainMemoryThreshold plus a 100 MiB margin).
+struct LLMemory {static F32 getSystemMemoryBudgetFactor(){return ::getSystemMemoryBudgetFactor();}};
+bool isSystemMemoryRecovered(){gSavedSettings.try_emplace("RenderMinFreeMainMemoryThreshold",512);return getFreeSystemMemory()>gSavedSettings.at("RenderMinFreeMainMemoryThreshold")+100;}
 struct List:std::vector<int>{void updateImageDecodePriority(int&,bool){}}gTextureList;
 std::ostringstream logOutput;
 #define LL_WARNS(...) logOutput

@@ -21,7 +21,8 @@ virtual void setEnabled(bool b){enabled=b;}bool getCanChangeSettings(){return ed
 template<class T>T*getChild(const std::string&n){auto i=controls.find(n);if(i==controls.end()){++missing;throw std::runtime_error("dummy "+n);}return&i->second;}template<class T>T*findChild(const std::string&n){auto i=controls.find(n);return i==controls.end()?nullptr:&i->second;}Control*getChildView(const std::string&n){return getChild<Control>(n);}Control*findChildView(const std::string&n){return findChild<Control>(n);}
 };
 CLASSES
-struct Parser{};struct LLSimpleXUIParser:Parser{const char*mCurAttributeValueBegin=nullptr;static bool readBoolValue(Parser&,void*);};
+struct Parser{};struct LLSimpleXUIParser:Parser{std::string mCurAttributeValueBegin; // std::string since Firestorm 7.2.5
+static bool readBoolValue(Parser&,void*);};
 METHODS
 int main(){
  LLSimpleXUIParser parser;bool b=false;parser.mCurAttributeValueBegin="true";assert(parser.readBoolValue(parser,&b)&&b);parser.mCurAttributeValueBegin="1";assert(!parser.readBoolValue(parser,&b));

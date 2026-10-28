@@ -34,6 +34,8 @@ struct LLInventoryPanel{static LLInventoryPanel* getActiveInventoryPanel(bool){r
 struct LLViewerAssetType{static void generateDescriptionFor(LLAssetType::EType,std::string&){}};
 struct Agent{LLUUID getID(){return gAgentID;}LLUUID getSessionID(){return gAgentSessionID;}std::string cap="upload";std::string getRegionCapability(const char*){return cap;}}gAgent;
 struct LLTransactionID{static int tnull;};int LLTransactionID::tnull=0;const int NO_INV_SUBTYPE=0,PERM_MOVE=1,PERM_TRANSFER=2;
+// Firestorm 7.2.5: recovered scripts keep their language (Lua/LSL) and compile target.
+const int SST_LSL=0,SST_LUA=1;struct LLDir{std::string getExtension(const std::string& p)const{auto d=p.rfind('.');return d==std::string::npos?std::string():p.substr(d+1);}};LLDir gDirUtilInstance;LLDir* gDirUtilp=&gDirUtilInstance;
 using LLFILE=FILE;struct llstat{std::int64_t st_size=0;};std::map<std::string,std::string> files;bool shortRead=false;std::vector<std::string> removed;
 struct LLFile{static bool isfile(const LLSD& path){return files.count(path.asString());}static int stat(const std::string& path,llstat* s){if(!files.count(path))return -1;s->st_size=files[path].size();return 0;}
  static FILE* fopen(const std::string& path,const char*){auto i=files.find(path);if(i==files.end())return nullptr;FILE* f=tmpfile();auto size=i->second.size();if(shortRead&&size)--size;fwrite(i->second.data(),1,size,f);rewind(f);return f;}static void close(FILE* f){fclose(f);}static void remove(const std::string& path){removed.push_back(path);files.erase(path);}};
@@ -41,7 +43,7 @@ namespace LLCore{struct HttpStatus{bool good=false;operator bool()const{return g
 namespace LLCoreHttpUtil{struct HttpCoroutineAdapter{inline static std::string HTTP_RESULTS="http_result";static LLCore::HttpStatus getStatusFromLLSD(const LLSD& s){return {s.number==200};}};}
 struct LLBufferedAssetUploadInfo{using invnUploadFinish_f=std::function<void(LLUUID,LLUUID,LLUUID,LLSD)>;using uploadFailed_f=std::function<bool(LLUUID,LLUUID,LLSD,std::string)>;};
 struct LLResourceUploadInfo{using ptr_t=std::shared_ptr<LLResourceUploadInfo>;virtual ~LLResourceUploadInfo()=default;};
-struct LLScriptAssetUpload:LLResourceUploadInfo{LLUUID item;std::string buffer;LLBufferedAssetUploadInfo::invnUploadFinish_f done;LLBufferedAssetUploadInfo::uploadFailed_f failure;LLScriptAssetUpload(LLUUID i,std::string b,LLBufferedAssetUploadInfo::invnUploadFinish_f d,LLBufferedAssetUploadInfo::uploadFailed_f f):item(i),buffer(std::move(b)),done(d),failure(f){}};
+struct LLScriptAssetUpload:LLResourceUploadInfo{LLUUID item;std::string buffer;LLBufferedAssetUploadInfo::invnUploadFinish_f done;LLBufferedAssetUploadInfo::uploadFailed_f failure;std::string target;LLScriptAssetUpload(LLUUID i,std::string tg,std::string b,LLBufferedAssetUploadInfo::invnUploadFinish_f d,LLBufferedAssetUploadInfo::uploadFailed_f f):item(i),buffer(std::move(b)),done(d),failure(f),target(std::move(tg)){}};
 std::vector<std::shared_ptr<LLScriptAssetUpload>> uploads;
 struct LLViewerAssetUpload{static void EnqueueInventoryUpload(const std::string&,LLResourceUploadInfo::ptr_t upload){uploads.push_back(std::static_pointer_cast<LLScriptAssetUpload>(upload));}};
 std::vector<std::unique_ptr<LLInventoryCallback>> creates;

@@ -6716,35 +6716,6 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
-      "id": "FLOATER.big_preview",
-      "category": "FLOATER",
-      "title": "big_preview",
-      "reference_sources": [
-        "indra/newview/llviewerfloaterreg.cpp:LLFloaterReg::add"
-      ],
-      "native_owner": "shared floater controller and native resource/service adapter",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "registered/native-construction-unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Construct through the ordinary UI and exercise every production effect; registration is not wiring.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
       "id": "FLOATER.block_timers",
       "category": "FLOATER",
       "title": "block_timers",
@@ -7615,35 +7586,6 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
-      "id": "FLOATER.env_post_process",
-      "category": "FLOATER",
-      "title": "env_post_process",
-      "reference_sources": [
-        "indra/newview/llviewerfloaterreg.cpp:LLFloaterReg::add"
-      ],
-      "native_owner": "shared floater controller and native resource/service adapter",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "registered/native-construction-unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Construct through the ordinary UI and exercise every production effect; registration is not wiring.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
       "id": "FLOATER.event",
       "category": "FLOATER",
       "title": "event",
@@ -7992,6 +7934,35 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "FLOATER.fs_big_preview",
+      "category": "FLOATER",
+      "title": "fs_big_preview",
+      "reference_sources": [
+        "indra/newview/llviewerfloaterreg.cpp:LLFloaterReg::add"
+      ],
+      "native_owner": "shared floater controller and native resource/service adapter",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "registered/native-construction-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Construct through the ordinary UI and exercise every production effect; registration is not wiring.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "FLOATER.fs_blocklist",
       "category": "FLOATER",
       "title": "fs_blocklist",
@@ -8082,6 +8053,64 @@
       "id": "FLOATER.fs_discord",
       "category": "FLOATER",
       "title": "fs_discord",
+      "reference_sources": [
+        "indra/newview/llviewerfloaterreg.cpp:LLFloaterReg::add"
+      ],
+      "native_owner": "shared floater controller and native resource/service adapter",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "registered/native-construction-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Construct through the ordinary UI and exercise every production effect; registration is not wiring.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "FLOATER.fs_env_fixed_environmentent_sky",
+      "category": "FLOATER",
+      "title": "fs_env_fixed_environmentent_sky",
+      "reference_sources": [
+        "indra/newview/llviewerfloaterreg.cpp:LLFloaterReg::add"
+      ],
+      "native_owner": "shared floater controller and native resource/service adapter",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "registered/native-construction-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Construct through the ordinary UI and exercise every production effect; registration is not wiring.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "FLOATER.fs_env_fixed_environmentent_water",
+      "category": "FLOATER",
+      "title": "fs_env_fixed_environmentent_water",
       "reference_sources": [
         "indra/newview/llviewerfloaterreg.cpp:LLFloaterReg::add"
       ],
@@ -11910,6 +11939,35 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "FLOATER.scripting_settings",
+      "category": "FLOATER",
+      "title": "scripting_settings",
+      "reference_sources": [
+        "indra/newview/llviewerfloaterreg.cpp:LLFloaterReg::add"
+      ],
+      "native_owner": "shared floater controller and native resource/service adapter",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "registered/native-construction-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Construct through the ordinary UI and exercise every production effect; registration is not wiring.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "FLOATER.search",
       "category": "FLOATER",
       "title": "search",
@@ -12204,35 +12262,6 @@
       "id": "FLOATER.snapshot_guide_settings",
       "category": "FLOATER",
       "title": "snapshot_guide_settings",
-      "reference_sources": [
-        "indra/newview/llviewerfloaterreg.cpp:LLFloaterReg::add"
-      ],
-      "native_owner": "shared floater controller and native resource/service adapter",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "registered/native-construction-unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Construct through the ordinary UI and exercise every production effect; registration is not wiring.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "FLOATER.sound_devices",
-      "category": "FLOATER",
-      "title": "sound_devices",
       "reference_sources": [
         "indra/newview/llviewerfloaterreg.cpp:LLFloaterReg::add"
       ],
@@ -12813,35 +12842,6 @@
       "id": "FLOATER.upload_sound",
       "category": "FLOATER",
       "title": "upload_sound",
-      "reference_sources": [
-        "indra/newview/llviewerfloaterreg.cpp:LLFloaterReg::add"
-      ],
-      "native_owner": "shared floater controller and native resource/service adapter",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "registered/native-construction-unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Construct through the ordinary UI and exercise every production effect; registration is not wiring.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "FLOATER.voice_effect",
-      "category": "FLOATER",
-      "title": "voice_effect",
       "reference_sources": [
         "indra/newview/llviewerfloaterreg.cpp:LLFloaterReg::add"
       ],
@@ -15081,8 +15081,8 @@
       "category": "SETTING",
       "title": "ChatFontSize",
       "reference_sources": [
-        "indra/newview/llviewercontrol.cpp:FSFloaterIM::processChatHistoryStyleUpdate",
-        "indra/newview/llviewercontrol.cpp:FSFloaterNearbyChat::processChatHistoryStyleUpdate",
+        "indra/newview/llviewercontrol.cpp:FSFloaterIM::handleChatHistoryStyleChanged",
+        "indra/newview/llviewercontrol.cpp:FSFloaterNearbyChat::handleChatHistoryStyleChanged",
         "indra/newview/llviewercontrol.cpp:LLViewerChat::signalChatFontChanged"
       ],
       "native_owner": "native settings/controller effect",
@@ -15097,7 +15097,7 @@
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
-      "remaining_gap": "Review reference callback FSFloaterIM::processChatHistoryStyleUpdate; saving a value is not applying its effect.",
+      "remaining_gap": "Review reference callback FSFloaterIM::handleChatHistoryStyleChanged; saving a value is not applying its effect.",
       "native_source_references": [
         "indra/newview/vsr3replay.cpp"
       ],
@@ -15461,6 +15461,36 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "SETTING.gSavedSettings.ExternalEditorTightIntegration",
+      "category": "SETTING",
+      "title": "ExternalEditorTightIntegration",
+      "reference_sources": [
+        "indra/newview/llfloaterscripting.cpp:getControl(\"ExternalEditorTightIntegration\")->getSignal"
+      ],
+      "native_owner": "native settings observer and ordinary UI/service effect",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify this direct observer and its actual owner effect, not just persisted settings.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "SETTING.gSavedSettings.FSAlwaysFly",
       "category": "SETTING",
       "title": "FSAlwaysFly",
@@ -15703,6 +15733,127 @@
       "reference_sources": [
         "indra/newview/fsfloatercontacts.cpp:getControl(\"FSContactSetsColorizeFriends\")->getSignal",
         "indra/newview/llavatarlist.cpp:getControl(\"FSContactSetsColorizeFriends\")->getSignal"
+      ],
+      "native_owner": "native settings observer and ordinary UI/service effect",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify this direct observer and its actual owner effect, not just persisted settings.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.FSContactSetsListColorizeOffline",
+      "category": "SETTING",
+      "title": "FSContactSetsListColorizeOffline",
+      "reference_sources": [
+        "indra/newview/llavatarlist.cpp:getControl(\"FSContactSetsListColorizeOffline\")->getSignal"
+      ],
+      "native_owner": "native settings observer and ordinary UI/service effect",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify this direct observer and its actual owner effect, not just persisted settings.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.FSContactSetsListOfflineColor",
+      "category": "SETTING",
+      "title": "FSContactSetsListOfflineColor",
+      "reference_sources": [
+        "indra/newview/llavatarlist.cpp:getControl(\"FSContactSetsListOfflineColor\")->getSignal"
+      ],
+      "native_owner": "native settings observer and ordinary UI/service effect",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify this direct observer and its actual owner effect, not just persisted settings.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.FSContactSetsListShowIcons",
+      "category": "SETTING",
+      "title": "FSContactSetsListShowIcons",
+      "reference_sources": [
+        "indra/newview/fspanelcontactsets.cpp:getControl(\"FSContactSetsListShowIcons\")->getSignal",
+        "indra/newview/llpanelpeople.cpp:getControl(\"FSContactSetsListShowIcons\")->getSignal"
+      ],
+      "native_owner": "native settings observer and ordinary UI/service effect",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify this direct observer and its actual owner effect, not just persisted settings.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.FSContactSetsProfilePlacement",
+      "category": "SETTING",
+      "title": "FSContactSetsProfilePlacement",
+      "reference_sources": [
+        "indra/newview/llgrouplist.cpp:getControl(\"FSContactSetsProfilePlacement\")->getSignal"
       ],
       "native_owner": "native settings observer and ordinary UI/service effect",
       "phase": "R9",
@@ -19831,8 +19982,8 @@
       "category": "SETTING",
       "title": "PlainTextChatHistory",
       "reference_sources": [
-        "indra/newview/llviewercontrol.cpp:FSFloaterIM::processChatHistoryStyleUpdate",
-        "indra/newview/llviewercontrol.cpp:FSFloaterNearbyChat::processChatHistoryStyleUpdate"
+        "indra/newview/llviewercontrol.cpp:FSFloaterIM::handleChatHistoryStyleChanged",
+        "indra/newview/llviewercontrol.cpp:FSFloaterNearbyChat::handleChatHistoryStyleChanged"
       ],
       "native_owner": "native settings/controller effect",
       "phase": "R3",
@@ -19846,7 +19997,7 @@
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
-      "remaining_gap": "Review reference callback FSFloaterIM::processChatHistoryStyleUpdate; saving a value is not applying its effect.",
+      "remaining_gap": "Review reference callback FSFloaterIM::handleChatHistoryStyleChanged; saving a value is not applying its effect.",
       "native_source_references": [
         "indra/newview/vsstartupui.cpp"
       ],
@@ -27687,6 +27838,38 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI.Advanced.ForceErrorImageAllocationFailure",
+      "category": "UI",
+      "title": "Advanced.ForceErrorImageAllocationFailure",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_viewer.xml:menu_item_call.on_click"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/newview/llviewermenu.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI.Advanced.ForceErrorInfiniteLoop",
       "category": "UI",
       "title": "Advanced.ForceErrorInfiniteLoop",
@@ -28788,7 +28971,8 @@
       "title": "Advanced.ShowURL",
       "reference_sources": [
         "indra/newview/skins/default/xui/de/menu_viewer.xml:menu_item_call.on_click",
-        "indra/newview/skins/default/xui/en/menu_viewer.xml:menu_item_call.on_click"
+        "indra/newview/skins/default/xui/en/menu_viewer.xml:menu_item_call.on_click",
+        "indra/newview/skins/default/xui/pt/menu_viewer.xml:menu_item_call.on_click"
       ],
       "native_owner": "ordinary shared UI callback with native production owner",
       "phase": "R9",
@@ -38122,6 +38306,38 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI.EditableSelectedLua",
+      "category": "UI",
+      "title": "EditableSelectedLua",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_viewer.xml:menu_item_call.on_enable"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/newview/llviewermenu.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI.EditableSelectedMono",
       "category": "UI",
       "title": "EditableSelectedMono",
@@ -39867,6 +40083,134 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI.FSInventoryCustomTab.Clone",
+      "category": "UI",
+      "title": "FSInventoryCustomTab.Clone",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_inventory_custom_tab.xml:on_click"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/newview/fsinventorycustomtabs.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI.FSInventoryCustomTab.Close",
+      "category": "UI",
+      "title": "FSInventoryCustomTab.Close",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_inventory_custom_tab.xml:on_click"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/newview/fsinventorycustomtabs.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI.FSInventoryCustomTab.Hide",
+      "category": "UI",
+      "title": "FSInventoryCustomTab.Hide",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_inventory_custom_tab.xml:on_click"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/newview/fsinventorycustomtabs.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI.FSInventoryCustomTab.Rename",
+      "category": "UI",
+      "title": "FSInventoryCustomTab.Rename",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_inventory_custom_tab.xml:on_click"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/newview/fsinventorycustomtabs.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI.FavWearables.Action",
       "category": "UI",
       "title": "FavWearables.Action",
@@ -40927,6 +41271,9 @@
         "indra/newview/skins/default/xui/en/floater_quickprefs.xml:button.commit_callback",
         "indra/newview/skins/default/xui/en/menu_viewer.xml:menu_item_call.on_click",
         "indra/newview/skins/default/xui/en/menu_viewer.xml:menu_item_check.on_click",
+        "indra/newview/skins/default/xui/en/panel_status_bar.xml:button.commit_callback",
+        "indra/newview/skins/starlight/xui/en/panel_status_bar.xml:button.commit_callback",
+        "indra/newview/skins/starlightcui/xui/en/panel_status_bar.xml:button.commit_callback",
         "indra/newview/skins/vintage/xui/en/panel_toolbar_view.xml:button.commit_callback"
       ],
       "native_owner": "ordinary shared UI callback with native production owner",
@@ -44553,6 +44900,7 @@
         "indra/newview/skins/default/xui/en/menu_inventory_gear_default.xml:on_check",
         "indra/newview/skins/default/xui/en/menu_inventory_search_visibility.xml:on_check",
         "indra/newview/skins/default/xui/en/menu_inventory_view_default.xml:on_check",
+        "indra/newview/skins/vintage/xui/en/panel_main_inventory.xml:menu_item_check.on_check",
         "indra/newview/skins/vintage/xui/en/panel_main_inventory.xml:on_check"
       ],
       "native_owner": "ordinary shared UI callback with native production owner",
@@ -44596,6 +44944,7 @@
         "indra/newview/skins/default/xui/en/panel_main_inventory.xml:button.commit_callback",
         "indra/newview/skins/starlight/xui/en/panel_main_inventory.xml:button.commit_callback",
         "indra/newview/skins/starlightcui/xui/en/panel_main_inventory.xml:button.commit_callback",
+        "indra/newview/skins/vintage/xui/en/panel_main_inventory.xml:menu_item_check.on_click",
         "indra/newview/skins/vintage/xui/en/panel_main_inventory.xml:on_click"
       ],
       "native_owner": "ordinary shared UI callback with native production owner",
@@ -44670,9 +45019,8 @@
         "indra/newview/skins/ansastorm_modern/xui/en/panel_main_inventory.xml:on_visible",
         "indra/newview/skins/default/xui/en/menu_inventory_gear_default.xml:menu_item_separator.on_visible",
         "indra/newview/skins/default/xui/en/menu_inventory_gear_default.xml:on_visible",
-        "indra/newview/skins/default/xui/en/menu_inventory_view_default.xml:menu_item_separator.on_visible",
         "indra/newview/skins/default/xui/en/menu_inventory_view_default.xml:on_visible",
-        "indra/newview/skins/vintage/xui/en/panel_main_inventory.xml:menu_item_separator.on_visible",
+        "indra/newview/skins/vintage/xui/en/panel_main_inventory.xml:menu_item_check.on_visible",
         "indra/newview/skins/vintage/xui/en/panel_main_inventory.xml:on_visible"
       ],
       "native_owner": "ordinary shared UI callback with native production owner",
@@ -47334,7 +47682,7 @@
       "category": "UI",
       "title": "Minimap.CanFaceTowards",
       "reference_sources": [
-        "indra/newview/skins/default/xui/en/menu_mini_map.xml:menu_item_call.on_enable"
+        "indra/newview/skins/default/xui/en/menu_mini_map.xml:menu_item_call.on_visible"
       ],
       "native_owner": "ordinary shared UI callback with native production owner",
       "phase": "R9",
@@ -50720,6 +51068,39 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI.Object.EnableFavorites",
+      "category": "UI",
+      "title": "Object.EnableFavorites",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_attachment_self.xml:menu_item_call.on_visible",
+        "indra/newview/skins/default/xui/en/menu_pie_attachment_self.xml:pie_slice.on_enable"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/newview/llviewermenu.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI.Object.EnableInspect",
       "category": "UI",
       "title": "Object.EnableInspect",
@@ -51391,6 +51772,39 @@
         "indra/newview/skins/default/xui/en/menu_object.xml:menu_item_call.on_click",
         "indra/newview/skins/default/xui/en/menu_pie_object.xml:pie_slice.on_click",
         "indra/newview/skins/default/xui/en/menu_viewer.xml:menu_item_call.on_click"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/newview/llviewermenu.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI.Object.SetFavorite",
+      "category": "UI",
+      "title": "Object.SetFavorite",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_attachment_self.xml:menu_item_call.on_click",
+        "indra/newview/skins/default/xui/en/menu_pie_attachment_self.xml:pie_slice.on_click"
       ],
       "native_owner": "ordinary shared UI callback with native production owner",
       "phase": "R9",
@@ -53252,6 +53666,38 @@
       "title": "ParticipantList.ToggleMuteText",
       "reference_sources": [
         "indra/newview/skins/default/xui/en/menu_participant_list.xml:on_click"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/newview/fsparticipantlist.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI.ParticipantList.VisibleItem",
+      "category": "UI",
+      "title": "ParticipantList.VisibleItem",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/menu_participant_list.xml:on_visible"
       ],
       "native_owner": "ordinary shared UI callback with native production owner",
       "phase": "R9",
@@ -57561,6 +58007,7 @@
       "title": "Pref.applyUIColor",
       "reference_sources": [
         "indra/newview/skins/default/xui/en/panel_preferences_colors.xml:color_swatch.commit_callback",
+        "indra/newview/skins/default/xui/en/panel_preferences_firestorm.xml:color_swatch.commit_callback",
         "indra/newview/skins/starlightcui/xui/en/panel_preferences_custom_colors.xml:color_swatch.commit_callback"
       ],
       "native_owner": "ordinary shared UI callback with native production owner",
@@ -57594,6 +58041,7 @@
       "title": "Pref.getUIColor",
       "reference_sources": [
         "indra/newview/skins/default/xui/en/panel_preferences_colors.xml:color_swatch.init_callback",
+        "indra/newview/skins/default/xui/en/panel_preferences_firestorm.xml:color_swatch.init_callback",
         "indra/newview/skins/starlightcui/xui/en/panel_preferences_custom_colors.xml:color_swatch.init_callback"
       ],
       "native_owner": "ordinary shared UI callback with native production owner",
@@ -59078,6 +59526,70 @@
       "shared_source_references": [
         "indra/newview/llfloaterinventorysettings.cpp",
         "indra/newview/llfloaterscriptedprefs.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI.ScriptingSettings.BROWSE",
+      "category": "UI",
+      "title": "ScriptingSettings.BROWSE",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_scripting_settings.xml:button.commit_callback"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/newview/llfloaterscripting.cpp"
+      ],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI.ScriptingSettings.CLOSE",
+      "category": "UI",
+      "title": "ScriptingSettings.CLOSE",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_scripting_settings.xml:button.commit_callback"
+      ],
+      "native_owner": "ordinary shared UI callback with native production owner",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "shared-source-present/native-effect-unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
+      "shared_source_references": [
+        "indra/newview/llfloaterscripting.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -65679,105 +66191,6 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/llviewermenu.cpp",
-        "indra/newview/vsstartupui.cpp"
-      ],
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI.Voice.CommitVoiceEffect",
-      "category": "UI",
-      "title": "Voice.CommitVoiceEffect",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/panel_voice_effect.xml:combo_box.commit_callback"
-      ],
-      "native_owner": "ordinary shared UI callback with native production owner",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "shared-source-present/native-effect-unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
-      "shared_source_references": [
-        "indra/newview/llpanelvoiceeffect.cpp",
-        "indra/newview/vsstartupui.cpp"
-      ],
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI.VoiceEffect.Record",
-      "category": "UI",
-      "title": "VoiceEffect.Record",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_voice_effect.xml:button.commit_callback"
-      ],
-      "native_owner": "ordinary shared UI callback with native production owner",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "shared-source-present/native-effect-unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
-      "shared_source_references": [
-        "indra/newview/llfloatervoiceeffect.cpp",
-        "indra/newview/vsstartupui.cpp"
-      ],
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI.VoiceEffect.Stop",
-      "category": "UI",
-      "title": "VoiceEffect.Stop",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_voice_effect.xml:button.commit_callback"
-      ],
-      "native_owner": "ordinary shared UI callback with native production owner",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "shared-source-present/native-effect-unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
-      "shared_source_references": [
-        "indra/newview/llfloatervoiceeffect.cpp",
         "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
@@ -72428,7 +72841,6 @@
       "category": "UI_SETTING",
       "title": "EnableVoiceChat",
       "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_sound_devices.xml:check_box.control_name",
         "indra/newview/skins/default/xui/en/panel_preferences_sound.xml:check_box.control_name",
         "indra/newview/skins/default/xui/en/panel_volume_pulldown.xml:check_box.control_name",
         "indra/newview/skins/metaharper/xui/en/panel_volume_pulldown.xml:check_box.control_name"
@@ -72576,6 +72988,7 @@
       "category": "UI_SETTING",
       "title": "ExternalEditor",
       "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_scripting_settings.xml:line_editor.control_name",
         "indra/newview/skins/default/xui/en/panel_preferences_firestorm.xml:line_editor.control_name"
       ],
       "native_owner": "shared LLUICtrl settings binding and native effect controller",
@@ -72606,6 +73019,122 @@
       "title": "ExternalEditorConvertTabsToSpaces",
       "reference_sources": [
         "indra/newview/skins/default/xui/en/floater_script_ed_prefs.xml:check_box.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI_SETTING.ExternalEditorTightIntegration",
+      "category": "UI_SETTING",
+      "title": "ExternalEditorTightIntegration",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_scripting_settings.xml:check_box.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI_SETTING.ExternalWebsocketForwardDebug",
+      "category": "UI_SETTING",
+      "title": "ExternalWebsocketForwardDebug",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_scripting_settings.xml:check_box.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI_SETTING.ExternalWebsocketSyncEnable",
+      "category": "UI_SETTING",
+      "title": "ExternalWebsocketSyncEnable",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_scripting_settings.xml:check_box.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI_SETTING.ExternalWebsocketSyncPort",
+      "category": "UI_SETTING",
+      "title": "ExternalWebsocketSyncPort",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_scripting_settings.xml:line_editor.control_name"
       ],
       "native_owner": "shared LLUICtrl settings binding and native effect controller",
       "phase": "R9",
@@ -73707,6 +74236,64 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI_SETTING.FSBuildPrefs_EditHandleScaling",
+      "category": "UI_SETTING",
+      "title": "FSBuildPrefs_EditHandleScaling",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/panel_preferences_firestorm.xml:spinner.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI_SETTING.FSBuildPrefs_EditTextShadowing",
+      "category": "UI_SETTING",
+      "title": "FSBuildPrefs_EditTextShadowing",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/panel_preferences_firestorm.xml:check_box.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI_SETTING.FSBuildPrefs_EmbedItem",
       "category": "UI_SETTING",
       "title": "FSBuildPrefs_EmbedItem",
@@ -74519,6 +75106,64 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI_SETTING.FSCmdLineAnnounceChannel",
+      "category": "UI_SETTING",
+      "title": "FSCmdLineAnnounceChannel",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/panel_preferences_chat.xml:spinner.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI_SETTING.FSCmdLineAnnounceToChannel",
+      "category": "UI_SETTING",
+      "title": "FSCmdLineAnnounceToChannel",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/panel_preferences_chat.xml:check_box.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI_SETTING.FSCmdLineBandWidth",
       "category": "UI_SETTING",
       "title": "FSCmdLineBandWidth",
@@ -74896,6 +75541,35 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI_SETTING.FSCmdLinePasteCam",
+      "category": "UI_SETTING",
+      "title": "FSCmdLinePasteCam",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/panel_preferences_chat.xml:line_editor.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI_SETTING.FSCmdLinePlatformSize",
       "category": "UI_SETTING",
       "title": "FSCmdLinePlatformSize",
@@ -75044,6 +75718,35 @@
       "id": "UI_SETTING.FSCmdLineTeleportHome",
       "category": "UI_SETTING",
       "title": "FSCmdLineTeleportHome",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/panel_preferences_chat.xml:line_editor.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI_SETTING.FSCmdLineTrackPos",
+      "category": "UI_SETTING",
+      "title": "FSCmdLineTrackPos",
       "reference_sources": [
         "indra/newview/skins/default/xui/en/panel_preferences_chat.xml:line_editor.control_name"
       ],
@@ -75476,6 +76179,64 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI_SETTING.FSContactSetsListColorizeOffline",
+      "category": "UI_SETTING",
+      "title": "FSContactSetsListColorizeOffline",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_fs_contact_set_configuration.xml:check_box.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI_SETTING.FSContactSetsListShowIcons",
+      "category": "UI_SETTING",
+      "title": "FSContactSetsListShowIcons",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_fs_contact_set_configuration.xml:check_box.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI_SETTING.FSContactSetsNotificationNearbyChat",
       "category": "UI_SETTING",
       "title": "FSContactSetsNotificationNearbyChat",
@@ -75510,6 +76271,35 @@
       "title": "FSContactSetsNotificationToast",
       "reference_sources": [
         "indra/newview/skins/default/xui/en/floater_fs_contact_set_configuration.xml:check_box.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI_SETTING.FSContactSetsProfilePlacement",
+      "category": "UI_SETTING",
+      "title": "FSContactSetsProfilePlacement",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_fs_contact_set_configuration.xml:combo_box.control_name"
       ],
       "native_owner": "shared LLUICtrl settings binding and native effect controller",
       "phase": "R9",
@@ -75740,6 +76530,35 @@
       "id": "UI_SETTING.FSDisableLabeledChatLinks",
       "category": "UI_SETTING",
       "title": "FSDisableLabeledChatLinks",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/panel_preferences_firestorm.xml:check_box.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI_SETTING.FSDisableLabeledChatLinksNearbyChat",
+      "category": "UI_SETTING",
+      "title": "FSDisableLabeledChatLinksNearbyChat",
       "reference_sources": [
         "indra/newview/skins/default/xui/en/panel_preferences_firestorm.xml:check_box.control_name"
       ],
@@ -76785,6 +77604,35 @@
       "id": "UI_SETTING.FSFontChatLineSpacingPixels",
       "category": "UI_SETTING",
       "title": "FSFontChatLineSpacingPixels",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/panel_preferences_UI.xml:spinner.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI_SETTING.FSFontLineSpacingAdjustment",
+      "category": "UI_SETTING",
+      "title": "FSFontLineSpacingAdjustment",
       "reference_sources": [
         "indra/newview/skins/default/xui/en/panel_preferences_UI.xml:spinner.control_name"
       ],
@@ -83244,6 +84092,35 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI_SETTING.FSStreamtitleHistoryLength",
+      "category": "UI_SETTING",
+      "title": "FSStreamtitleHistoryLength",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_fs_streamtitlehistory.xml:spinner.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI_SETTING.FSSupportGroupChatPrefix3",
       "category": "UI_SETTING",
       "title": "FSSupportGroupChatPrefix3",
@@ -85687,6 +86564,36 @@
       "title": "GroupSnoozeTime",
       "reference_sources": [
         "indra/newview/skins/default/xui/en/panel_preferences_chat.xml:spinner.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "UI_SETTING.GroupTitlesTagMode",
+      "category": "UI_SETTING",
+      "title": "GroupTitlesTagMode",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/panel_preferences_general.xml:combo_box.control_name",
+        "indra/newview/skins/default/xui/pt/panel_preferences_general.xml:combo_box.control_name"
       ],
       "native_owner": "shared LLUICtrl settings binding and native effect controller",
       "phase": "R9",
@@ -88283,35 +89190,6 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
-      "id": "UI_SETTING.NameTagShowGroupTitles",
-      "category": "UI_SETTING",
-      "title": "NameTagShowGroupTitles",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/panel_preferences_general.xml:check_box.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
       "id": "UI_SETTING.NameTagShowUsernames",
       "category": "UI_SETTING",
       "title": "NameTagShowUsernames",
@@ -88905,11 +89783,44 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI_SETTING.OmnifilterControls",
+      "category": "UI_SETTING",
+      "title": "OmnifilterControls",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_omnifilter.xml:check_box.control_name",
+        "indra/newview/skins/default/xui/en/panel_preferences_UI.xml:check_box.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI_SETTING.OmnifilterEnabled",
       "category": "UI_SETTING",
       "title": "OmnifilterEnabled",
       "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_omnifilter.xml:check_box.control_name"
+        "indra/newview/skins/default/xui/en/floater_omnifilter.xml:check_box.control_name",
+        "indra/newview/skins/default/xui/en/panel_status_bar.xml:check_box.control_name",
+        "indra/newview/skins/starlight/xui/en/panel_status_bar.xml:check_box.control_name",
+        "indra/newview/skins/starlightcui/xui/en/panel_status_bar.xml:check_box.control_name"
       ],
       "native_owner": "shared LLUICtrl settings binding and native effect controller",
       "phase": "R9",
@@ -90401,7 +91312,6 @@
         "indra/newview/skins/default/xui/en/panel_fs_login.xml:check_box.control_name",
         "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml:check_box.control_name",
         "indra/newview/skins/default/xui/en/panel_login.xml:check_box.control_name",
-        "indra/newview/skins/default/xui/en/panel_login_first.xml:check_box.control_name",
         "indra/newview/skins/starlight/xui/en/panel_fs_login.xml:check_box.control_name",
         "indra/newview/skins/starlight/xui/en/panel_fs_nui_login.xml:check_box.control_name",
         "indra/newview/skins/starlightcui/xui/en/panel_fs_login.xml:check_box.control_name",
@@ -94471,6 +95381,7 @@
       "category": "UI_SETTING",
       "title": "ShowScriptErrors",
       "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_scripting_settings.xml:check_box.control_name",
         "indra/newview/skins/default/xui/en/panel_preferences_alerts.xml:check_box.control_name"
       ],
       "native_owner": "shared LLUICtrl settings binding and native effect controller",
@@ -94500,6 +95411,7 @@
       "category": "UI_SETTING",
       "title": "ShowScriptErrorsLocation",
       "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_scripting_settings.xml:radio_group.control_name",
         "indra/newview/skins/default/xui/en/panel_preferences_alerts.xml:radio_group.control_name"
       ],
       "native_owner": "shared LLUICtrl settings binding and native effect controller",
@@ -97072,6 +97984,35 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "UI_SETTING.delay",
+      "category": "UI_SETTING",
+      "title": "delay",
+      "reference_sources": [
+        "indra/newview/skins/default/xui/en/floater_omnifilter.xml:spinner.control_name"
+      ],
+      "native_owner": "shared LLUICtrl settings binding and native effect controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "unqualified",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "UI_SETTING.floater_vis_nearby_chat",
       "category": "UI_SETTING",
       "title": "floater_vis_nearby_chat",
@@ -97402,470 +98343,6 @@
         "indra/newview/skins/default/xui/en/floater_beacons.xml:check_box.control_name",
         "indra/newview/skins/default/xui/en/panel_fs_settings_sky_sunmoon.xml:check_box.control_name",
         "indra/newview/skins/default/xui/en/panel_settings_sky_sunmoon.xml:check_box.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiBloomExtract",
-      "category": "UI_SETTING",
-      "title": "wmiBloomExtract",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiBloomSize",
-      "category": "UI_SETTING",
-      "title": "wmiBloomSize",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiBloomStrength",
-      "category": "UI_SETTING",
-      "title": "wmiBloomStrength",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiBloomToggle",
-      "category": "UI_SETTING",
-      "title": "wmiBloomToggle",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:check_box.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiColorFilterBaseB",
-      "category": "UI_SETTING",
-      "title": "wmiColorFilterBaseB",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiColorFilterBaseG",
-      "category": "UI_SETTING",
-      "title": "wmiColorFilterBaseG",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiColorFilterBaseI",
-      "category": "UI_SETTING",
-      "title": "wmiColorFilterBaseI",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiColorFilterBaseR",
-      "category": "UI_SETTING",
-      "title": "wmiColorFilterBaseR",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiColorFilterBrightness",
-      "category": "UI_SETTING",
-      "title": "wmiColorFilterBrightness",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiColorFilterContrast",
-      "category": "UI_SETTING",
-      "title": "wmiColorFilterContrast",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiColorFilterSaturation",
-      "category": "UI_SETTING",
-      "title": "wmiColorFilterSaturation",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiColorFilterToggle",
-      "category": "UI_SETTING",
-      "title": "wmiColorFilterToggle",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:check_box.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiNightVisionBrightMult",
-      "category": "UI_SETTING",
-      "title": "wmiNightVisionBrightMult",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiNightVisionNoiseSize",
-      "category": "UI_SETTING",
-      "title": "wmiNightVisionNoiseSize",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiNightVisionNoiseStrength",
-      "category": "UI_SETTING",
-      "title": "wmiNightVisionNoiseStrength",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:slider.control_name"
-      ],
-      "native_owner": "shared LLUICtrl settings binding and native effect controller",
-      "phase": "R9",
-      "dependencies": [
-        "R0",
-        "R1",
-        "R2",
-        "R4"
-      ],
-      "variants": [],
-      "implementation": "unqualified",
-      "source_qualified": false,
-      "software_runtime_qualified": false,
-      "authenticated_runtime_qualified": false,
-      "evidence": [],
-      "remaining_gap": "Resolve the declared control group; qualify native two-way binding and actual setting effects.",
-      "native_integration_hosts": [
-        "indra/newview/vsstartupui.cpp",
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/llviewerwindow.cpp"
-      ],
-      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
-    },
-    {
-      "id": "UI_SETTING.wmiNightVisionToggle",
-      "category": "UI_SETTING",
-      "title": "wmiNightVisionToggle",
-      "reference_sources": [
-        "indra/newview/skins/default/xui/en/floater_post_process.xml:check_box.control_name"
       ],
       "native_owner": "shared LLUICtrl settings binding and native effect controller",
       "phase": "R9",

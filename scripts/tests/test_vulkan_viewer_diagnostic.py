@@ -1074,7 +1074,7 @@ int main() {
 #include <string>
 #include <climits>
 #include <cassert>
-using S32=int;using F32=float;using U8=unsigned char;using LLWString=std::wstring;
+using S32=int;using F32=float;using U8=unsigned char;using LLWString=std::wstring;using llwchar=LLWString::value_type;
 constexpr int S32_MAX=INT_MAX;
 struct LLCoordGL { int value=0;bool operator!=(const LLCoordGL& o) const { return value!=o.value; } };
 struct LLColor4 { int value=0;bool operator!=(const LLColor4& o) const { return value!=o.value; } };

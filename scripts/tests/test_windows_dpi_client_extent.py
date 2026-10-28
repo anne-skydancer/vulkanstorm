@@ -22,7 +22,8 @@ struct RECT {int left,top,right,bottom;};using LPRECT=RECT*;
 RECT actual{};bool queried=false;bool readable=true;int notified=0,w=0,h=0;float scale=0;
 std::vector<std::function<void()>> pending;
 struct Callbacks {void handleDPIChanged(void*,float s,int x,int y){++notified;scale=s;w=x;h=y;}} cb;
-struct Window {Callbacks* mCallbacks=&cb;} instance;
+struct WindowThread {void pingWindowTimeout(const char*){}} windowThread; // Firestorm 7.2.5: WM_DPICHANGED pings the window watchdog
+struct Window {Callbacks* mCallbacks=&cb;WindowThread* mWindowThread=&windowThread;} instance;
 void SetWindowPos(int,int,int,int,int width,int height,int){assert(!queried);actual={0,0,width-16,height-39};}
 bool GetClientRect(int,RECT* out){queried=true;*out=actual;return readable;}
 #define LL_PROFILE_ZONE_NAMED_CATEGORY_WIN32(x)
