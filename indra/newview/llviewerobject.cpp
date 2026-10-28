@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llviewerobject.h"
+#include "llscripteditorws.h"
 
 #include "llaudioengine.h"
 #include "indra_constants.h"
@@ -438,6 +439,13 @@ void LLViewerObject::markDead()
         LL_PROFILE_ZONE_SCOPED;
         //LL_INFOS() << "Marking self " << mLocalID << " as dead." << LL_ENDL;
 
+        // If this is a published root prim, notify the WS extension before teardown.
+        auto ws_server = LLScriptEditorWSServer::getServer();
+        if (ws_server && ws_server->isObjectPublished(mID))
+        {
+            ws_server->unpublishObject(mID, "deleted");
+        }
+
         // Root object of this hierarchy unlinks itself.
         if (getParent())
         {
@@ -784,6 +792,18 @@ void LLViewerObject::setNameValueList(const std::string& name_value_list)
         }
         start = end+1;
     }
+
+    if (auto ws_server = LLScriptEditorWSServer::getServer())
+    {
+        LLNameValue* nv_name = getNVPair("Name");
+        LLNameValue* nv_desc = getNVPair("Desc");
+        if (nv_name || nv_desc)
+        {
+            std::string obj_name = nv_name ? nv_name->getString() : "";
+            std::string obj_desc = nv_desc ? nv_desc->getString() : "";
+            ws_server->onObjectPropertyChanged(mID, obj_name, obj_desc);
+        }
+    }
 }
 
 bool LLViewerObject::isAnySelected() const
@@ -985,6 +1005,24 @@ void LLViewerObject::addChild(LLViewerObject *childp)
     }
 
     mExtrap.changedlink(*this); // <FS:JN> if linking update, check for sitters
+    if (childp && !childp->isAvatar() && !childp->isAttachment())
+    {
+            if (auto ws_server = LLScriptEditorWSServer::getServer())
+            {
+                // If the child was itself a published root, unpublish it — it is now a child prim
+                if (ws_server->isObjectPublished(childp->getID()))
+                {
+                    ws_server->unpublishObject(childp->getID(), "linked");
+                }
+
+                // If our root is a published object, notify of the structural change
+                LLUUID root_id = getRootEdit()->getID();
+                if (ws_server->isObjectPublished(root_id))
+                {
+                    ws_server->onLinksetChildAdded(root_id, childp);
+                }
+            }
+    }
 }
 
 void LLViewerObject::onReparent(LLViewerObject *old_parent, LLViewerObject *new_parent)
@@ -1028,6 +1066,18 @@ void LLViewerObject::removeChild(LLViewerObject *childp)
         LLSelectMgr::getInstance()->deselectObjectAndFamily(childp);
         bool add_to_end = true;
         LLSelectMgr::getInstance()->selectObjectAndFamily(childp, add_to_end);
+    }
+
+    // Notify WS server of linkset structure change
+    if (!isDead() && !childp->isDead() && !childp->isAvatar())
+    {
+        if (auto ws_server = LLScriptEditorWSServer::getServer())
+        {
+            if (ws_server->isObjectPublished(getID()))
+            {
+                ws_server->onLinksetChildRemoved(getID(), childp->getID());
+            }
+        }
     }
 }
 
@@ -2885,10 +2935,15 @@ void LLViewerObject::doUpdateInventory(
 // save a script, which involves removing the old one, and rezzing
 // in the new one. This method should be called with the asset id
 // of the new and old script AFTER the bytecode has been saved.
-void LLViewerObject::saveScript(
-    const LLViewerInventoryItem* item,
-    bool active,
-    bool is_new)
+// When creating a new script, the asset should be null.  The server
+// will create the new script based on the script_language (LSL or Lua)
+// If a template_id is provided, the new script will be a copy of that item.
+//
+// *IMPORTANT* If template_id is provided, it must be the ITEM ID of a
+// copy/mod-able script in the user's inventory. The simulator will verify
+// permissions.
+void LLViewerObject::saveScript(const LLViewerInventoryItem* item,
+    bool active, bool is_new, const LLUUID& template_id)
 {
     /*
      * XXXPAM Investigate not making this copy.  Seems unecessary, but I'm unsure about the
@@ -2905,6 +2960,12 @@ void LLViewerObject::saveScript(
                                   item->getCreationDate());
     task_item->setTransactionID(item->getTransactionID());
 
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, script " << item->getUUID() << " not saved" << LL_ENDL;
+        return;
+    }
+
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_RezScript);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -2917,6 +2978,15 @@ void LLViewerObject::saveScript(
     msg->addBOOLFast(_PREHASH_Enabled, enabled);
     msg->nextBlockFast(_PREHASH_InventoryBlock);
     task_item->packMessage(msg);
+
+    // This is a completely new script (no asset id) and we've provided a template.
+    // Note that the script subtype on the template will override any subtype on the item.
+    if (task_item->getAssetUUID().isNull() && template_id.notNull())
+    {
+        msg->nextBlock("NewScriptInfo");
+        msg->addUUID("TemplateID", template_id);
+    }
+
     msg->sendReliable(mRegionp->getHost());
 
     // do the internal logic
@@ -2927,6 +2997,11 @@ void LLViewerObject::moveInventory(const LLUUID& folder_id,
                                    const LLUUID& item_id)
 {
     LL_DEBUGS() << "LLViewerObject::moveInventory " << item_id << LL_ENDL;
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item_id << " not moved" << LL_ENDL;
+        return;
+    }
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_MoveTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -3019,7 +3094,22 @@ void LLViewerObject::requestInventory()
     {
         // inventory is either up to date or doesn't has a listener
         // if it is dirty, leave it this way in case we gain a listener
-        doInventoryCallback();
+        if (isInventoryPending())
+        {
+            // A request or transfer is outstanding: give the listeners the
+            // contents we have, but keep the request state and xfer id that
+            // doInventoryCallback() releases, so the pending reply is still
+            // handled as such and later requests are not duplicated.
+            const EInventoryRequestState request_state = mInvRequestState;
+            const U64 request_xfer_id = mInvRequestXFerId;
+            doInventoryCallback();
+            mInvRequestState = request_state;
+            mInvRequestXFerId = request_xfer_id;
+        }
+        else
+        {
+            doInventoryCallback();
+        }
     }
     else
     {
@@ -3045,6 +3135,12 @@ void LLViewerObject::fetchInventoryFromServer()
         {
             LLCoros::instance().launch("LLViewerObject::fetchInventoryFromCapCoro()",
                                        boost::bind(&LLViewerObject::fetchInventoryFromCapCoro, mID));
+        }
+        else if (!mRegionp)
+        {
+            // Nothing to send to: fail the request as an HTTP error does in fetchInventoryFromCapCoro.
+            LL_WARNS() << "Object " << mID << " has no region, task inventory not requested" << LL_ENDL;
+            mInvRequestState = INVENTORY_REQUEST_STOPPED;
         }
         else
         {
@@ -3430,6 +3526,19 @@ void LLViewerObject::processTaskInv(LLMessageSystem* msg, void** user_data)
             delete ft;
             return;
         }
+        if (!object->mRegionp)
+        {
+            LL_WARNS() << "Object " << task_id << " has no region, task inventory file not requested" << LL_ENDL;
+            // Release a pending request, as fetchInventoryFromServer() does without a
+            // region, so a later fetch is not refused as a duplicate. An active
+            // transfer (INVENTORY_XFER) completes on its own.
+            if (object->mInvRequestState == INVENTORY_REQUEST_PENDING)
+            {
+                object->mInvRequestState = INVENTORY_REQUEST_STOPPED;
+            }
+            delete ft;
+            return;
+        }
         U64 new_id = gXferManager->requestFile(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, ft->mFilename),
             ft->mFilename, LL_PATH_CACHE,
             object->mRegionp->getHost(),
@@ -3627,6 +3736,9 @@ void LLViewerObject::loadTaskInvLLSD(const LLSD& inv_result)
     else
     {
         LL_WARNS() << "unable to load task inventory: " << inv_result << LL_ENDL;
+        // Fail the request as an HTTP error does in fetchInventoryFromCapCoro, so that
+        // later requests are not dropped as duplicates of this one.
+        mInvRequestState = INVENTORY_REQUEST_STOPPED;
         return;
     }
     doInventoryCallback();
@@ -3671,6 +3783,12 @@ void LLViewerObject::removeInventory(const LLUUID& item_id)
     // close any associated floater properties
     LLFloaterReg::hideInstance("properties", item_id);
     // </FS:Ansariel>
+
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item_id << " not removed" << LL_ENDL;
+        return;
+    }
 
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_RemoveTaskInventory);
@@ -3729,6 +3847,14 @@ void LLViewerObject::updateMaterialInventory(LLViewerInventoryItem* item, U8 key
         return;
     }
 
+    if (!mRegionp)
+    {
+        // updateInventory() sends nothing without a region; don't leave the
+        // asset pending, or isAssetInInventory() refuses it from then on.
+        LL_WARNS() << "Object " << mID << " has no region, item " << item->getUUID() << " not updated" << LL_ENDL;
+        return;
+    }
+
     mPendingInventoryItemsIDs.push_back(item->getAssetUUID());
     updateInventory(item, key, is_new);
 }
@@ -3750,6 +3876,11 @@ void LLViewerObject::updateInventory(
                                   item->getFlags(),
                                   item->getCreationDate());
     task_item->setTransactionID(item->getTransactionID());
+    if (!mRegionp)
+    {
+        LL_WARNS() << "Object " << mID << " has no region, item " << item->getUUID() << " not updated" << LL_ENDL;
+        return;
+    }
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_UpdateTaskInventory);
     msg->nextBlockFast(_PREHASH_AgentData);
@@ -8198,3 +8329,87 @@ public:
 LLHTTPRegistration<ObjectPhysicsProperties>
     gHTTPRegistrationObjectPhysicsProperties("/message/ObjectPhysicsProperties");
 
+
+
+void LLViewerObject::createInventoryItem(
+    LLAssetType::EType asset_type,
+    LLInventoryType::EType inventory_type,
+    U8 sub_type,
+    const std::string& name,
+    const std::string& description,
+    const LLPermissions& permissions,
+    const LLSD& params,
+    std::function<void(bool, const LLSD&)> callback)
+{
+    if (!mRegionp)
+    {
+        if (callback) callback(false, LLSD().with("message", "No region"));
+        return;
+    }
+
+    std::string cap_url = mRegionp->getCapability("CreateTaskInventoryItem");
+    if (cap_url.empty())
+    {
+        if (callback) callback(false, LLSD().with("message", "Capability not available"));
+        return;
+    }
+
+    LLSD body;
+    body["object_id"]      = mID;
+    body["inventory_type"] = (S32)inventory_type;
+    body["asset_type"]     = (S32)asset_type;
+    body["sub_type"]       = (S32)sub_type;
+    body["name"]           = name;
+    body["description"]    = description;
+
+    LLSD perm_llsd;
+    perm_llsd["base"]       = (S32)permissions.getMaskBase();
+    perm_llsd["owner"]      = (S32)permissions.getMaskOwner();
+    perm_llsd["everyone"]   = (S32)permissions.getMaskEveryone();
+    perm_llsd["group"]      = (S32)permissions.getMaskGroup();
+    perm_llsd["next_owner"] = (S32)permissions.getMaskNextOwner();
+    body["permissions"]     = perm_llsd;
+
+    if (params.isDefined())
+    {
+        body["params"] = params;
+    }
+
+    LLCoros::instance().launch("LLViewerObject::createInventoryItemCoro",
+        boost::bind(&LLViewerObject::createInventoryItemCoro, cap_url, body, callback));
+}
+
+
+void LLViewerObject::createInventoryItemCoro(
+    const std::string cap_url, const LLSD body,
+    std::function<void(bool, const LLSD&)> callback)
+{
+    LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
+    LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter =
+        std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("CreateTaskInventoryItem", httpPolicy);
+    LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
+
+    LLSD result = httpAdapter->postAndSuspend(httpRequest, cap_url, body);
+
+    LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
+    LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
+
+    bool success = static_cast<bool>(status) && result["success"].asBoolean();
+
+    if (success)
+    {
+        LLUUID object_id = body["object_id"].asUUID();
+        LLViewerObject* obj = gObjectList.findObject(object_id);
+        if (obj)
+        {
+            ++obj->mExpectedInventorySerialNum;
+            obj->dirtyInventory();
+            obj->requestInventory();
+        }
+    }
+
+    if (callback)
+    {
+        callback(success, result);
+    }
+}

@@ -109,6 +109,7 @@ void LLInventoryObject::copyObject(const LLInventoryObject* other)
     mName = other->mName;
     mThumbnailUUID = other->mThumbnailUUID;
     mFavorite = other->mFavorite;
+    mRuntime = other->mRuntime;
 }
 
 const LLUUID& LLInventoryObject::getUUID() const
@@ -129,6 +130,16 @@ const LLUUID& LLInventoryObject::getThumbnailUUID() const
 bool LLInventoryObject::getIsFavorite() const
 {
     return mFavorite;
+}
+
+const std::string& LLInventoryObject::getRuntime() const
+{
+    return mRuntime;
+}
+
+void LLInventoryObject::setRuntime(std::string_view runtime)
+{
+    mRuntime = runtime;
 }
 
 const std::string& LLInventoryObject::getName() const
@@ -193,6 +204,7 @@ void LLInventoryObject::setFavorite(bool favorite)
 void LLInventoryObject::setType(LLAssetType::EType type)
 {
     mType = type;
+    if (type != LLAssetType::AT_LSL_TEXT) mRuntime.clear();
 }
 
 
@@ -210,7 +222,15 @@ bool LLInventoryObject::importLegacyStream(std::istream& input_stream)
     while(input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf(buffer, " %254s %254s", keyword, valuestr);  /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf(buffer, " %254s %254s", keyword, valuestr);  /* Flawfinder: ignore */
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if(0 == strcmp("{",keyword))
         {
             continue;
@@ -218,6 +238,12 @@ bool LLInventoryObject::importLegacyStream(std::istream& input_stream)
         if(0 == strcmp("}", keyword))
         {
             break;
+        }
+        else if (fields < 2 && 0 != strcmp("metadata", keyword))
+        {
+            // a keyword without a value counts as absent
+            // (metadata keeps its own handling)
+            continue;
         }
         else if(0 == strcmp("obj_id", keyword))
         {
@@ -246,6 +272,7 @@ bool LLInventoryObject::importLegacyStream(std::istream& input_stream)
                 // LLSDSerialize::fromNotation(metadata, input_stream, -1);
             }
 
+            setRuntime(metadata["script"]["runtime"].asString());
             if (metadata.has("thumbnail"))
             {
                 const LLSD& thumbnail = metadata["thumbnail"];
@@ -421,6 +448,7 @@ void LLInventoryItem::copyItem(const LLInventoryItem* other)
     mInventoryType = other->mInventoryType;
     mFlags = other->mFlags;
     mCreationDate = other->mCreationDate;
+    mRuntime = other->mRuntime;
 }
 
 // If this is a linked item, then the UUID of the base object is
@@ -675,10 +703,18 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
     while(success && input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %254s %254s",
             keyword, valuestr);
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if(0 == strcmp("{",keyword))
         {
             continue;
@@ -686,6 +722,12 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
         if(0 == strcmp("}", keyword))
         {
             break;
+        }
+        else if (fields < 2 && 0 != strcmp("permissions", keyword) && 0 != strcmp("sale_info", keyword) && 0 != strcmp("metadata", keyword))
+        {
+            // a keyword without a value counts as absent
+            // (block headers and metadata keep their own handling)
+            continue;
         }
         else if(0 == strcmp("item_id", keyword))
         {
@@ -751,6 +793,7 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
                 // LLSDSerialize::fromNotation(metadata, input_stream, -1);
             }
 
+            setRuntime(metadata["script"]["runtime"].asString());
             if (metadata.has("thumbnail"))
             {
                 const LLSD& thumbnail = metadata["thumbnail"];
@@ -838,9 +881,11 @@ bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
         }
         else if(0 == strcmp("creation_date", keyword))
         {
-            S32 date;
-            sscanf(valuestr, "%d", &date);
-            mCreationDate = date;
+            S32 date = 0;
+            if (1 == sscanf(valuestr, "%d", &date))
+            {
+                mCreationDate = date;
+            }
         }
         else
         {
@@ -874,12 +919,19 @@ bool LLInventoryItem::exportLegacyStream(std::ostream& output_stream, bool inclu
     output_stream << "\t\tparent_id\t" << uuid_str << "\n";
     mPermissions.exportLegacyStream(output_stream);
 
-    if (mThumbnailUUID.notNull())
+    if (mThumbnailUUID.notNull() || !mRuntime.empty())
     {
         // Max length is 255 chars, will have to export differently if it gets more data
         // Ex: use newline and toNotation (uses {}) for unlimited size
         LLSD metadata;
-        metadata["thumbnail"] = LLSD().with("asset_id", mThumbnailUUID);
+        if (mThumbnailUUID.notNull())
+        {
+            metadata["thumbnail"] = LLSD().with("asset_id", mThumbnailUUID);
+        }
+        if (!mRuntime.empty())
+        {
+            metadata["script"] = LLSD().with("runtime", mRuntime);
+        }
 
         output_stream << "\t\tmetadata\t";
         LLSDSerialize::toXML(metadata, output_stream);
@@ -949,6 +1001,11 @@ void LLInventoryItem::asLLSD( LLSD& sd ) const
         sd[INV_FAVORITE_LABEL] = LLSD().with(INV_TOGGLED_LABEL, mFavorite);
     }
 
+    if (!mRuntime.empty())
+    {
+        sd["script"] = LLSD().with("runtime", mRuntime);
+    }
+
     U32 mask = mPermissions.getMaskBase();
     if(((mask & PERM_ITEM_UNRESTRICTED) == PERM_ITEM_UNRESTRICTED)
         || (mAssetUUID.isNull()))
@@ -1002,6 +1059,12 @@ bool LLInventoryItem::fromLLSD(const LLSD& sd, bool is_new)
         mPermissions.init(LLUUID::null, LLUUID::null, LLUUID::null, LLUUID::null);
     }
     // </FS:TJ>
+
+    if (is_new || sd.has("script") || (sd.has("metadata") && sd["metadata"].has("script")))
+    {
+        mRuntime = sd.has("script") ? sd["script"]["runtime"].asString()
+                                   : sd["metadata"]["script"]["runtime"].asString();
+    }
 
     // iterate as map to avoid making unnecessary temp copies of everything
     LLSD::map_const_iterator i, end;
@@ -1387,10 +1450,18 @@ bool LLInventoryCategory::importLegacyStream(std::istream& input_stream)
     while(input_stream.good())
     {
         input_stream.getline(buffer, MAX_STRING);
-        sscanf( /* Flawfinder: ignore */
+        // Each line is parsed on its own; a line that does not parse is absent.
+        keyword[0] = '\0';
+        valuestr[0] = '\0';
+        S32 fields = sscanf( /* Flawfinder: ignore */
             buffer,
             " %254s %254s",
             keyword, valuestr);
+        if (fields < 1)
+        {
+            // a blank line counts as absent
+            continue;
+        }
         if(0 == strcmp("{",keyword))
         {
             continue;
@@ -1398,6 +1469,12 @@ bool LLInventoryCategory::importLegacyStream(std::istream& input_stream)
         if(0 == strcmp("}", keyword))
         {
             break;
+        }
+        else if (fields < 2 && 0 != strcmp("metadata", keyword))
+        {
+            // a keyword without a value counts as absent
+            // (metadata keeps its own handling)
+            continue;
         }
         else if(0 == strcmp("cat_id", keyword))
         {
@@ -1442,6 +1519,7 @@ bool LLInventoryCategory::importLegacyStream(std::istream& input_stream)
                 // LLSDSerialize::fromNotation(metadata, input_stream, -1);
             }
 
+            setRuntime(metadata["script"]["runtime"].asString());
             if (metadata.has("thumbnail"))
             {
                 const LLSD& thumbnail = metadata["thumbnail"];

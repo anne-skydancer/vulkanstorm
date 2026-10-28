@@ -46,14 +46,14 @@ namespace tut
             std::ostringstream stream;
             stream << LL_VIEWER_VERSION_MAJOR << "."
                    << LL_VIEWER_VERSION_MINOR << "."
-                   << LL_VIEWER_VERSION_PATCH << "."
+                   << LL_VIEWER_VERSION_PATCH << LL_VIEWER_VERSION_SUFFIX << "."
                    << LL_VIEWER_VERSION_BUILD;
             mVersion = stream.str();
             stream.str("");
 
             stream << LL_VIEWER_VERSION_MAJOR << "."
                    << LL_VIEWER_VERSION_MINOR << "."
-                   << LL_VIEWER_VERSION_PATCH;
+                   << LL_VIEWER_VERSION_PATCH << LL_VIEWER_VERSION_SUFFIX;
             mShortVersion = stream.str();
             stream.str("");
 

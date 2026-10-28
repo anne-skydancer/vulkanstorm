@@ -99,7 +99,14 @@ endif (FS_PF_USER_AGENT)
 
 # <FS:Ansariel> [AVX Optimization]
 option(USE_AVX_OPTIMIZATION "AVX optimization support" OFF)
-option(USE_AVX2_OPTIMIZATION "AVX2 optimization support" OFF)
+# <Vulkanstorm> Linux builds default to AVX2 (x86-64-v3), the baseline of the
+# vkstorm-ffi package, unless AVX was selected; other platforms keep their
+# default. Enabling both explicitly is still an error (below).
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT USE_AVX_OPTIMIZATION)
+  option(USE_AVX2_OPTIMIZATION "AVX2 optimization support" ON)
+else ()
+  option(USE_AVX2_OPTIMIZATION "AVX2 optimization support" OFF)
+endif ()
 if (USE_AVX_OPTIMIZATION)
   if (USE_AVX2_OPTIMIZATION)
     message(FATAL_ERROR "You cannot use AVX and AVX2 at the same time!")
@@ -211,10 +218,10 @@ else (USE_BUGSPLAT)
 endif (USE_BUGSPLAT)
 
 add_subdirectory(${VIEWER_PREFIX}newview)
-add_dependencies(viewer firestorm-bin)
+add_dependencies(viewer vulkanstorm-bin)
 
 set_target_properties(
-    firestorm-bin PROPERTIES
+    vulkanstorm-bin PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "..\\..\\indra\\newview")
 
 add_subdirectory(${VIEWER_PREFIX}doxygen EXCLUDE_FROM_ALL)

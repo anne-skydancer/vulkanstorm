@@ -29,14 +29,25 @@
 #include "llpluginclassmedia.h"
 #include "llpluginclassmediaowner.h"
 #include "llviewermedia.h"
+#include "llviewercontrol.h"
 
 #include "llviewermedia_streamingaudio.h"
 
 #include "llmimetypes.h"
 #include "lldir.h"
+#include <cmath>
+
+// <FS> Icecast status sidechannel
+#include "llaudioengine.h"
+#include "llcorehttputil.h"
+#include "llcoros.h"
+// </FS>
 
 LLStreamingAudio_MediaPlugins::LLStreamingAudio_MediaPlugins() :
     mMediaPlugin(NULL),
+    mStatusValid(false),
+    mStatusPollDone(false),
+    mStatusProbeFails(0),
     mGain(1.0)
 {
     // nothing interesting to do?
@@ -65,6 +76,7 @@ void LLStreamingAudio_MediaPlugins::start(const std::string& url)
         LL_INFOS() << "Starting internet stream: " << url << LL_ENDL;
 
         mURL = url; // keep original url here for comparison purposes
+        resetMetadata(); // <FS/>
         std::string snt_url = url;
         LLStringUtil::trim(snt_url);
         size_t pos = snt_url.find(' ');
@@ -74,7 +86,18 @@ void LLStreamingAudio_MediaPlugins::start(const std::string& url)
             // People label their streams this way, ignore the 'label'.
             snt_url = snt_url.substr(0, pos);
         }
-        mMediaPlugin->loadURI(snt_url);
+    #if LL_WINDOWS
+        mMediaPlugin->setMusicSpeakerFill(gSavedSettings.getS32("FSMusicSpatialSound"));
+    #endif
+        if (mPendingFade)
+        {
+            mMediaPlugin->loadURI(snt_url, mFadeTarget, mFadeDuration);
+            mPendingFade = false;
+        }
+        else
+        {
+            mMediaPlugin->loadURI(snt_url);
+        }
         mMediaPlugin->start();
         LL_INFOS() << "Playing stream..." << LL_ENDL;
     }
@@ -82,26 +105,28 @@ void LLStreamingAudio_MediaPlugins::start(const std::string& url)
     {
         LL_INFOS() << "setting stream to NULL"<< LL_ENDL;
         mURL.clear();
-        mMediaPlugin->stop();
-        delete mMediaPlugin;
-        mMediaPlugin = nullptr;
+        stop();
     }
 }
 
 void LLStreamingAudio_MediaPlugins::stop()
 {
+    mPendingFade = false;
     LL_INFOS() << "Stopping internet stream." << LL_ENDL;
     if(mMediaPlugin)
     {
         mMediaPlugin->stop();
-        delete mMediaPlugin;
-        mMediaPlugin = nullptr;
+        if (!mMediaPlugin->audioControlsAvailable() || mMediaPlugin->isPluginExited())
+        {
+            delete mMediaPlugin;
+            mMediaPlugin = nullptr;
+        }
     }
 
     mURL.clear();
 
     // <FS:Ansariel> Stream meta data display
-    updateMetadata();
+    resetMetadata();
 }
 
 void LLStreamingAudio_MediaPlugins::pause(int pause)
@@ -135,6 +160,13 @@ int LLStreamingAudio_MediaPlugins::isPlaying()
     if (!mMediaPlugin)
         return 0; // stopped
 
+    if (mMediaPlugin->audioControlsAvailable())
+    {
+        if (mMediaPlugin->isAudioPaused())
+            return 2;
+        return mMediaPlugin->isAudioPlaying() ? 1 : 0;
+    }
+
     LLPluginClassMediaOwner::EMediaStatus status =
         mMediaPlugin->getStatus();
 
@@ -158,7 +190,56 @@ void LLStreamingAudio_MediaPlugins::setGain(F32 vol)
         return;
 
     vol = llclamp(vol, 0.f, 1.f);
-    mMediaPlugin->setVolume(vol);
+    if (mMediaPlugin->audioControlsAvailable())
+        mMediaPlugin->setAudioGain(vol, mHardMuted);
+    else
+        mMediaPlugin->setVolume(vol);
+}
+
+bool LLStreamingAudio_MediaPlugins::hasAudioFade() const
+{
+    return !mMediaPlugin || mMediaPlugin->audioControlsAvailable();
+}
+
+bool LLStreamingAudio_MediaPlugins::beginAudioFade(F32 target, F32 duration)
+{
+    if (!hasAudioFade() || !std::isfinite(target) || !std::isfinite(duration) ||
+        target < 0.f || target > 1.f || duration < 0.f || duration > 60.f)
+        return false;
+    mFadeTarget = target;
+    mFadeDuration = duration;
+    if (!mMediaPlugin || mURL.empty())
+    {
+        mPendingFade = true;
+        return true;
+    }
+    return mMediaPlugin->transitionAudio(target, duration);
+}
+
+bool LLStreamingAudio_MediaPlugins::isAudioFadeComplete() const
+{
+    return getAudioFadeResult() == AudioFadeResult::Complete;
+}
+
+LLStreamingAudioInterface::AudioFadeResult LLStreamingAudio_MediaPlugins::getAudioFadeResult() const
+{
+    if (!mMediaPlugin) return mPendingFade ? AudioFadeResult::Pending : AudioFadeResult::Cancelled;
+    if (mMediaPlugin->isPluginExited()) return AudioFadeResult::Cancelled;
+    switch (mMediaPlugin->audioTransitionResult())
+    {
+    case LLPluginClassMedia::AudioTransitionResult::Complete: return AudioFadeResult::Complete;
+    case LLPluginClassMedia::AudioTransitionResult::Failed: return AudioFadeResult::Failed;
+    case LLPluginClassMedia::AudioTransitionResult::Cancelled: return mPendingFade ? AudioFadeResult::Pending : AudioFadeResult::Cancelled;
+    case LLPluginClassMedia::AudioTransitionResult::Pending: return AudioFadeResult::Pending;
+    }
+    return AudioFadeResult::Failed;
+}
+
+void LLStreamingAudio_MediaPlugins::setAudioHardMute(bool muted)
+{
+    mHardMuted = muted;
+    if (mMediaPlugin && mMediaPlugin->audioControlsAvailable())
+        mMediaPlugin->setAudioGain(llclamp(mGain, 0.f, 1.f), muted);
 }
 
 F32 LLStreamingAudio_MediaPlugins::getGain()
@@ -180,6 +261,8 @@ LLPluginClassMedia* LLStreamingAudio_MediaPlugins::initializeMedia(const std::st
 
     if (media_source)
     {
+        media_source->setAudioRole("music");
+        media_source->setAudioGain(llclamp(mGain, 0.f, 1.f), mHardMuted);
         media_source->setLoop(false); // audio streams are not expected to loop
     }
 
@@ -189,20 +272,267 @@ LLPluginClassMedia* LLStreamingAudio_MediaPlugins::initializeMedia(const std::st
 // <FS:ND> stream metadata from plugin
 void LLStreamingAudio_MediaPlugins::updateMetadata() noexcept
 {
-    if (!mMediaPlugin)
+    if (mMediaPlugin &&
+        (mPluginTitle != mMediaPlugin->getTitle() || mPluginArtist != mMediaPlugin->getArtist()))
+    {
+        mPluginArtist = mMediaPlugin->getArtist();
+        mPluginTitle = mMediaPlugin->getTitle();
+
+        // The status sidechannel wins once it has delivered track data for
+        // this stream; in-band data only reaches the user until then
+        if (!mStatusValid)
+        {
+            emitMetadata(mPluginArtist, mPluginTitle);
+        }
+    }
+
+    pollStreamStatus();
+}
+// </FS:ND>
+
+// <FS> Icecast status sidechannel
+void LLStreamingAudio_MediaPlugins::resetMetadata()
+{
+    // Tell listeners the previous stream's information no longer applies;
+    // otherwise it stays displayed until the next stream sends its own
+    const bool had_metadata = !mMetadata.isUndefined() && mMetadata.size() > 0;
+    mArtist.clear();
+    mTitle.clear();
+    mPluginArtist.clear();
+    mPluginTitle.clear();
+    mStatusUrl.clear();
+    mMetadata.clear();
+    mStatusValid = false;
+    mStatusPollDone = false;
+    mStatusProbeFails = 0;
+    mStatusPollTimer.reset();
+
+    if (had_metadata)
+    {
+        mMetadataUpdateSignal(mMetadata);
+    }
+}
+
+void LLStreamingAudio_MediaPlugins::emitMetadata(const std::string& artist, const std::string& title)
+{
+    if (artist == mArtist && title == mTitle)
     {
         return;
     }
 
-    if (mTitle != mMediaPlugin->getTitle() || mArtist != mMediaPlugin->getArtist())
-    {
-        mArtist = mMediaPlugin->getArtist();
-        mTitle = mMediaPlugin->getTitle();
-        mMetadata.clear();
-        mMetadata["ARTIST"] = mArtist;
-        mMetadata["TITLE"] = mTitle;
+    mArtist = artist;
+    mTitle = title;
+    mMetadata.clear();
+    mMetadata["ARTIST"] = mArtist;
+    mMetadata["TITLE"] = mTitle;
 
-        mMetadataUpdateSignal(mMetadata);
-    }
+    LL_INFOS("StreamMetadata") << "Stream metadata changed: artist='" << mArtist
+                               << "' title='" << mTitle << "'" << LL_ENDL;
+
+    mMetadataUpdateSignal(mMetadata);
 }
-// </FS:ND>
+
+// Many stream servers (Icecast, AzuraCast, ...) publish per-mount metadata
+// at /status-json.xsl regardless of codec. This is the only reliable track
+// source for chained-Ogg streams, whose in-band Vorbis comments libVLC does
+// not surface.
+void LLStreamingAudio_MediaPlugins::pollStreamStatus()
+{
+    const F32 FIRST_POLL_DELAY = 5.f;
+    const F32 POLL_INTERVAL = 20.f;
+    const S32 MAX_PROBE_FAILS = 3;
+
+    if (mURL.empty() || !mMediaPlugin || isPlaying() != 1)
+    {
+        return;
+    }
+
+    if (mStatusProbeFails >= MAX_PROBE_FAILS)
+    {
+        return; // this server has no reachable status endpoint; stop asking
+    }
+
+    F32 threshold = POLL_INTERVAL;
+    if (!mStatusPollDone)
+    {
+        threshold = FIRST_POLL_DELAY;
+    }
+    if (mStatusPollTimer.getElapsedTimeF32() < threshold)
+    {
+        return;
+    }
+    mStatusPollDone = true;
+    mStatusPollTimer.reset();
+
+    size_t scheme_end = mURL.find("://");
+    if (scheme_end == std::string::npos)
+    {
+        return;
+    }
+    size_t path_start = mURL.find('/', scheme_end + 3);
+    std::string base;
+    std::string mount;
+    if (path_start == std::string::npos)
+    {
+        base = mURL;
+    }
+    else
+    {
+        base = mURL.substr(0, path_start);
+        mount = mURL.substr(path_start);
+    }
+
+    LLSD candidates = LLSD::emptyArray();
+    if (!mStatusUrl.empty())
+    {
+        // A previous poll found the endpoint; keep using it
+        candidates.append(mStatusUrl);
+    }
+    else
+    {
+        // The status document sits at the Icecast root, which reverse
+        // proxies (AzuraCast et al.) mount at a subpath rather than the
+        // server root. Walk the mount path upward, most specific first:
+        // /listen/station/radio.ogg -> /listen/station/status-json.xsl,
+        // /listen/status-json.xsl, /status-json.xsl
+        std::string path = mount;
+        while (true)
+        {
+            size_t last_slash = path.rfind('/');
+            if (last_slash == std::string::npos)
+            {
+                break;
+            }
+            path = path.substr(0, last_slash);
+            candidates.append(base + path + "/status-json.xsl");
+            if (path.empty())
+            {
+                break;
+            }
+        }
+        if (candidates.size() == 0)
+        {
+            candidates.append(base + "/status-json.xsl");
+        }
+    }
+
+    LLCoros::instance().launch("StreamStatusPoll",
+        boost::bind(&LLStreamingAudio_MediaPlugins::streamStatusCoro,
+                    this, candidates, mount, mURL));
+}
+
+// static
+void LLStreamingAudio_MediaPlugins::streamStatusCoro(LLStreamingAudio_MediaPlugins* self,
+    LLSD candidates, std::string mount_path, std::string stream_url)
+{
+    LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
+    LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter(
+        new LLCoreHttpUtil::HttpCoroutineAdapter("StreamStatusPoll", httpPolicy));
+    LLCore::HttpRequest::ptr_t httpRequest(new LLCore::HttpRequest);
+
+    LLSD result;
+    std::string status_url;
+    bool got_status = false;
+    for (LLSD::array_const_iterator cand = candidates.beginArray(); cand != candidates.endArray(); ++cand)
+    {
+        status_url = cand->asString();
+        result = httpAdapter->getJsonAndSuspend(httpRequest, status_url);
+
+        LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
+        if (httpResults[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_SUCCESS].asBoolean() &&
+            result.has("icestats"))
+        {
+            got_status = true;
+            break;
+        }
+    }
+
+    // The streaming impl outlives the coroutine in normal operation, but
+    // guard against shutdown and stream changes while the requests ran
+    if (!gAudiop || gAudiop->getStreamingAudioImpl() != (LLStreamingAudioInterface*)self ||
+        self->getURL() != stream_url)
+    {
+        return;
+    }
+
+    if (!got_status)
+    {
+        self->onStreamStatusFailed();
+        return;
+    }
+
+    // icestats.source is a map for a single mount, an array for several
+    LLSD sources = result["icestats"]["source"];
+    LLSD source;
+    if (sources.isArray())
+    {
+        for (LLSD::array_const_iterator it = sources.beginArray(); it != sources.endArray(); ++it)
+        {
+            std::string listenurl = (*it)["listenurl"].asString();
+            size_t mount_pos = listenurl.rfind(mount_path);
+            if (!mount_path.empty() && mount_pos != std::string::npos &&
+                mount_pos + mount_path.size() == listenurl.size())
+            {
+                source = *it;
+                break;
+            }
+        }
+        if (source.isUndefined() && sources.size() == 1)
+        {
+            source = sources[0];
+        }
+    }
+    else if (sources.isMap())
+    {
+        source = sources;
+    }
+
+    if (source.isUndefined())
+    {
+        return;
+    }
+
+    std::string artist = source["artist"].asString();
+    std::string title = source["title"].asString();
+
+    // Some servers publish a combined "Artist - Title" string
+    if (artist.empty())
+    {
+        size_t sep = title.find(" - ");
+        if (sep != std::string::npos)
+        {
+            artist = title.substr(0, sep);
+            title = title.substr(sep + 3);
+        }
+    }
+
+    self->onStreamStatus(artist, title, status_url);
+}
+
+void LLStreamingAudio_MediaPlugins::onStreamStatus(const std::string& artist, const std::string& title, const std::string& status_url)
+{
+    if (mStatusUrl != status_url)
+    {
+        LL_INFOS("StreamMetadata") << "Using stream status endpoint " << status_url << LL_ENDL;
+        mStatusUrl = status_url;
+    }
+    mStatusProbeFails = 0;
+
+    if (artist.empty() && title.empty())
+    {
+        return;
+    }
+
+    mStatusValid = true;
+    emitMetadata(artist, title);
+}
+
+void LLStreamingAudio_MediaPlugins::onStreamStatusFailed()
+{
+    // A previously working endpoint failing may be transient; forget it and
+    // re-probe. Repeated full-probe failures disable the sidechannel for
+    // this stream.
+    mStatusUrl.clear();
+    ++mStatusProbeFails;
+}
+// </FS>

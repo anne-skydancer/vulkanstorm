@@ -51,7 +51,7 @@
 LLVersionInfo::LLVersionInfo():
     short_version(STRINGIZE(LL_VIEWER_VERSION_MAJOR << "."
                             << LL_VIEWER_VERSION_MINOR << "."
-                            << LL_VIEWER_VERSION_PATCH)),
+                            << LL_VIEWER_VERSION_PATCH << LL_VIEWER_VERSION_SUFFIX)),
     // LL_VIEWER_CHANNEL is a macro defined on the compiler command line. The
     // macro expands to the string name of the channel, but without quotes. We
     // need to turn it into a quoted string. LL_TO_STRING() does that.

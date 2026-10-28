@@ -1,0 +1,7 @@
+# GL command inventory reference
+
+`gl-api-symbols.txt` contains all 3301 command names declared in the official [Khronos GL registry](https://github.com/KhronosGroup/OpenGL-Registry/blob/1cdd228e34966dd6b95bd203e9f84faba0f371a1/xml/gl.xml), revision `1cdd228e34966dd6b95bd203e9f84faba0f371a1`, accessed 3 October 2026. Registry XML SHA-256: `b9ca2cfa5c676e901c20d34af3407f1687cde0f1336a5ff7a8974d04c7494ad3`.
+
+This local allowlist makes generation offline and reproducible. It identifies GL command names, not supported device capabilities or executed calls. Candidate source files contain a lexically matched registry command call, `gGL` member access, or an exact LLGL wrapper class declared in llgl.h, llglstates.h, llglslshader.h or llgltexture.h. Literals and comments are masked; declarations and inactive branches may still match. No preprocessing or C++ name resolution is performed. GLSL declarations are collected at global brace/parenthesis scope, including qualified interface blocks; conditional branches remain unevaluated and this is not a complete compiled ABI reflection.
+
+Command registry copyright 2013-2026 The Khronos Group Inc.; SPDX-License-Identifier: Apache-2.0. The derived name list is distributed with [the upstream license](gl-api-symbols.LICENSE.txt). Names were extracted with ElementTree from `./commands/command/proto/name`, deduplicated, sorted and written one per line; other registry content is not copied.

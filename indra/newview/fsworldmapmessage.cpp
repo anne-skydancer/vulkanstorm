@@ -101,10 +101,13 @@ namespace hypergrid
                 msg->getU16Fast(_PREHASH_Size, _PREHASH_SizeX, x_size, block);
                 msg->getU16Fast(_PREHASH_Size, _PREHASH_SizeY, y_size, block);
             }
-            if (x_size == 0 || (x_size % 16) != 0 || (y_size % 16) != 0)
+            if (x_size == 0 || (x_size % 16) != 0)
             {
-                x_size = 256;
-                y_size = 256;
+                x_size = REGION_WIDTH_UNITS;
+            }
+            if (y_size == 0 || (y_size % 16) != 0)
+            {
+                y_size = REGION_WIDTH_UNITS;
             }
             // </FS:CR> Aurora Sim
         }

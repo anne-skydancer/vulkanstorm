@@ -1,8 +1,8 @@
-<img align="left" width="100" height="100" src="doc/firestorm_256.png" alt="Logo of Firestorm viewer"/>
+<img align="left" width="100" height="100" src="doc/vulkanstorm_256.png" alt="Vulkanstorm viewer icon"/>
 
-**[Firestorm](https://www.firestormviewer.org) is a free client for 3D virtual worlds such as Second Life and various OpenSim worlds where users can create, connect and chat with others from around the world.**
+**[Vulkanstorm](https://github.com/anne-skydancer/vulkanstorm) is a free client for 3D virtual worlds such as Second Life and OpenSim, where users can create, connect and chat with others from around the world.**
 
-This repository contains the official source code for the Firestorm viewer.
+This repository contains Vulkanstorm, a viewer derived from Firestorm and the Second Life viewer.
 
 ## Open Source
 

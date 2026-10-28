@@ -137,6 +137,10 @@ LLGLSLShader            gPostScreenSpaceReflectionProgram;
 LLGLSLShader            gPostVignetteProgram;   // <FS:CR> Import Vignette from Exodus
 LLGLSLShader            gPostSnapshotFrameProgram;   // <FS:Beq/> Add Snapshot frame guide
 
+// <FS> Vulkanstorm: alpha OIT (PPLL) resolve shader
+LLGLSLShader            gAlphaOITResolveProgram;
+// </FS>
+
 // Deferred rendering shaders
 LLGLSLShader            gDeferredImpostorProgram;
 LLGLSLShader            gDeferredDiffuseProgram;
@@ -3037,6 +3041,27 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
         success = gDeferredBufferVisualProgram.createShader();
     }
+
+    // <FS> Vulkanstorm: alpha OIT (per-pixel linked list) resolve. Built only on GL 4.4+ (SSBO +
+    // image load/store). The alpha shaders' capture path (ALPHA_OIT) and the OIT pipeline are
+    // gated on the same capability, so on older HW this program is absent and compositeAlphaOIT()
+    // is a no-op -- the legacy sorted-alpha path runs instead.
+#if LL_WINDOWS || LL_LINUX
+    if (success && gGLManager.mGLVersion >= 4.4f)
+    {
+        gAlphaOITResolveProgram.mName = "Alpha OIT Resolve";
+        gAlphaOITResolveProgram.mFeatures.isDeferred = true;
+        gAlphaOITResolveProgram.mShaderFiles.clear();
+        gAlphaOITResolveProgram.clearPermutations();
+        gAlphaOITResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gAlphaOITResolveProgram.mShaderFiles.push_back(make_pair("deferred/alphaOITResolveF.glsl", GL_FRAGMENT_SHADER));
+        gAlphaOITResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        success = gAlphaOITResolveProgram.createShader();
+        llassert(success);
+    }
+#endif
+    // </FS>
+
     // [RLVa:KB] - @setsphere
     if(success)
     {

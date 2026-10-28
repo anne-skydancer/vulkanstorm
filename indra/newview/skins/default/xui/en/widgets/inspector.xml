@@ -5,6 +5,6 @@
            background_visible="true"
            bg_opaque_image="Inspector_Hover"
            background_opaque="true"
-           bg_alpha_image="none"
+           bg_alpha_image=""
            mouse_opaque="true" 
            text_color="InspectorTipTextColor"/>

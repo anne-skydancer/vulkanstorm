@@ -569,7 +569,7 @@
 		function="WMap.Landmark"/>
     </combo_box>
     <icon
-     color="MaptrackDisabledColor"
+     color="MapTrackDisabledColor"
      follows="top|right"
      height="16"
      image_name="map_track_16.tga"

@@ -13,6 +13,9 @@
      name="Starting">
         Starting [START] of [COUNT] items.
     </floater.string>
+    <floater.string name="SkippingIncompatibleScript">
+        Skipping [SCRIPT_NAME]: incompatible with [TARGET].
+    </floater.string>
     <floater.string
      name="Done">
         Done.

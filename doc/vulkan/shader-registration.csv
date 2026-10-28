@@ -1,0 +1,691 @@
+path,line,registration_or_variant
+indra/newview/llviewershadermgr.cpp,260,riggedShader.mFeatures.hasObjectSkinning = true;
+indra/newview/llviewershadermgr.cpp,263,"riggedShader.addPermutation(""HAS_SKIN"", ""1"");"
+indra/newview/llviewershadermgr.cpp,278,"shader->addPermutation(""HAS_EMISSIVE"", ""1"");"
+indra/newview/llviewershadermgr.cpp,295,"variant.addPermutation(""MAX_NODES_PER_GLTF_OBJECT"", std::to_string(max_nodes));"
+indra/newview/llviewershadermgr.cpp,301,"variant.addPermutation(""MAX_MATERIALS_PER_GLTF_OBJECT"", std::to_string(max_materials));"
+indra/newview/llviewershadermgr.cpp,304,"variant.addPermutation(""MAX_UBO_VEC4S"", std::to_string(max_vec4s));"
+indra/newview/llviewershadermgr.cpp,308,"variant.addPermutation(""HAS_SKIN"", ""1"");"
+indra/newview/llviewershadermgr.cpp,313,"variant.addPermutation(""UNLIT"", ""1"");"
+indra/newview/llviewershadermgr.cpp,318,"variant.addPermutation(""MULTI_UV"", ""1"");"
+indra/newview/llviewershadermgr.cpp,323,"variant.addPermutation(""ALPHA_BLEND"", ""1"");"
+indra/newview/llviewershadermgr.cpp,325,variant.mFeatures.calculatesLighting = false;
+indra/newview/llviewershadermgr.cpp,326,variant.mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,327,variant.mFeatures.isAlphaLighting = true;
+indra/newview/llviewershadermgr.cpp,328,variant.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,329,variant.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,330,variant.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,331,variant.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,332,variant.mFeatures.hasShadows = use_sun_shadow;
+indra/newview/llviewershadermgr.cpp,333,variant.mFeatures.isDeferred = true; // include deferredUtils
+indra/newview/llviewershadermgr.cpp,334,variant.mFeatures.hasReflectionProbes = true;
+indra/newview/llviewershadermgr.cpp,338,"variant.addPermutation(""HAS_SUN_SHADOW"", ""1"");"
+indra/newview/llviewershadermgr.cpp,346,variant.mFeatures.calculatesLighting = true;
+indra/newview/llviewershadermgr.cpp,347,variant.mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,359,shader.mFeatures.mGLTF = true;
+indra/newview/llviewershadermgr.cpp,945,gWaterProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,946,gWaterProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,947,gWaterProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,948,gWaterProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,949,gWaterProgram.mFeatures.hasReflectionProbes = true;
+indra/newview/llviewershadermgr.cpp,950,gWaterProgram.mFeatures.hasTonemap = true;
+indra/newview/llviewershadermgr.cpp,951,gWaterProgram.mFeatures.hasShadows = use_sun_shadow;
+indra/newview/llviewershadermgr.cpp,953,"gWaterProgram.mShaderFiles.push_back(make_pair(""environment/waterV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,954,"gWaterProgram.mShaderFiles.push_back(make_pair(""environment/waterF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,958,"gWaterProgram.addPermutation(""TRANSPARENT_WATER"", ""1"");"
+indra/newview/llviewershadermgr.cpp,963,"gWaterProgram.addPermutation(""HAS_SUN_SHADOW"", ""1"");"
+indra/newview/llviewershadermgr.cpp,976,gUnderWaterProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,977,gUnderWaterProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,979,"gUnderWaterProgram.mShaderFiles.push_back(make_pair(""environment/waterV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,980,"gUnderWaterProgram.mShaderFiles.push_back(make_pair(""environment/underWaterF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,986,"gUnderWaterProgram.addPermutation(""TRANSPARENT_WATER"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1036,"gGlowProgram.mShaderFiles.push_back(make_pair(""effects/glowV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1037,"gGlowProgram.mShaderFiles.push_back(make_pair(""effects/glowF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1053,"gGlowExtractProgram.mShaderFiles.push_back(make_pair(""effects/glowExtractV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1054,"gGlowExtractProgram.mShaderFiles.push_back(make_pair(""effects/glowExtractF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1059,"gGlowExtractProgram.addPermutation(""HAS_NOISE"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1074,"gPostVignetteProgram.mShaderFiles.push_back(make_pair(""post/exoPostBaseV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1075,"gPostVignetteProgram.mShaderFiles.push_back(make_pair(""post/exoVignetteF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1085,"gPostSnapshotFrameProgram.mShaderFiles.push_back(make_pair(""post/exoPostBaseV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1086,"gPostSnapshotFrameProgram.mShaderFiles.push_back(make_pair(""post/snapshotFrameF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1225,"gDeferredHighlightProgram.mShaderFiles.push_back(make_pair(""interface/highlightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1226,"gDeferredHighlightProgram.mShaderFiles.push_back(make_pair(""deferred/highlightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1235,gDeferredDiffuseProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1237,"gDeferredDiffuseProgram.mShaderFiles.push_back(make_pair(""deferred/diffuseV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1238,"gDeferredDiffuseProgram.mShaderFiles.push_back(make_pair(""deferred/diffuseIndexedF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1239,gDeferredDiffuseProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,1250,"gDeferredDiffuseAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/diffuseV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1251,"gDeferredDiffuseAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/diffuseAlphaMaskIndexedF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1252,gDeferredDiffuseAlphaMaskProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,1263,"gDeferredNonIndexedDiffuseAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/diffuseV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1264,"gDeferredNonIndexedDiffuseAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/diffuseAlphaMaskF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1275,"gDeferredNonIndexedDiffuseAlphaMaskNoColorProgram.mShaderFiles.push_back(make_pair(""deferred/diffuseNoColorV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1276,"gDeferredNonIndexedDiffuseAlphaMaskNoColorProgram.mShaderFiles.push_back(make_pair(""deferred/diffuseAlphaMaskNoColorF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1287,"gDeferredBumpProgram.mShaderFiles.push_back(make_pair(""deferred/bumpV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1288,"gDeferredBumpProgram.mShaderFiles.push_back(make_pair(""deferred/bumpF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1296,gDeferredMaterialProgram[1].mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,1297,gDeferredMaterialProgram[5].mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,1298,gDeferredMaterialProgram[9].mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,1299,gDeferredMaterialProgram[13].mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,1300,gDeferredMaterialProgram[1+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,1301,gDeferredMaterialProgram[5+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,1302,gDeferredMaterialProgram[9+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,1303,gDeferredMaterialProgram[13+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,1324,"gDeferredMaterialProgram[i].mShaderFiles.push_back(make_pair(""deferred/materialV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1325,"gDeferredMaterialProgram[i].mShaderFiles.push_back(make_pair(""deferred/materialF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1335,"gDeferredMaterialProgram[i].addPermutation(""HAS_NORMAL_MAP"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1340,"gDeferredMaterialProgram[i].addPermutation(""HAS_SPECULAR_MAP"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1343,"gDeferredMaterialProgram[i].addPermutation(""DIFFUSE_ALPHA_MODE"", llformat(""%d"", alpha_mode));"
+indra/newview/llviewershadermgr.cpp,1347,gDeferredMaterialProgram[i].mFeatures.hasAlphaMask = true;
+indra/newview/llviewershadermgr.cpp,1348,"gDeferredMaterialProgram[i].addPermutation(""HAS_ALPHA_MASK"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1353,"gDeferredMaterialProgram[i].addPermutation(""HAS_SUN_SHADOW"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1358,gDeferredMaterialProgram[i].mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1359,gDeferredMaterialProgram[i].mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1360,gDeferredMaterialProgram[i].mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1361,gDeferredMaterialProgram[i].mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,1362,gDeferredMaterialProgram[i].mFeatures.hasShadows = use_sun_shadow;
+indra/newview/llviewershadermgr.cpp,1363,gDeferredMaterialProgram[i].mFeatures.hasReflectionProbes = true;
+indra/newview/llviewershadermgr.cpp,1367,"gDeferredMaterialProgram[i].addPermutation(""HAS_SKIN"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1368,gDeferredMaterialProgram[i].mFeatures.hasObjectSkinning = true;
+indra/newview/llviewershadermgr.cpp,1380,gDeferredMaterialProgram[1].mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,1381,gDeferredMaterialProgram[5].mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,1382,gDeferredMaterialProgram[9].mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,1383,gDeferredMaterialProgram[13].mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,1384,gDeferredMaterialProgram[1+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,1385,gDeferredMaterialProgram[5+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,1386,gDeferredMaterialProgram[9+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,1387,gDeferredMaterialProgram[13+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,1392,gDeferredPBROpaqueProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1395,"gDeferredPBROpaqueProgram.mShaderFiles.push_back(make_pair(""deferred/pbropaqueV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1396,"gDeferredPBROpaqueProgram.mShaderFiles.push_back(make_pair(""deferred/pbropaqueF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1415,gGLTFPBRMetallicRoughnessProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1418,"gGLTFPBRMetallicRoughnessProgram.mShaderFiles.push_back(make_pair(""gltf/pbrmetallicroughnessV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1419,"gGLTFPBRMetallicRoughnessProgram.mShaderFiles.push_back(make_pair(""gltf/pbrmetallicroughnessF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1441,gPBRGlowProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1443,"gPBRGlowProgram.mShaderFiles.push_back(make_pair(""deferred/pbrglowV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1444,"gPBRGlowProgram.mShaderFiles.push_back(make_pair(""deferred/pbrglowF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1460,gHUDPBROpaqueProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1462,"gHUDPBROpaqueProgram.mShaderFiles.push_back(make_pair(""deferred/pbropaqueV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1463,"gHUDPBROpaqueProgram.mShaderFiles.push_back(make_pair(""deferred/pbropaqueF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1466,"gHUDPBROpaqueProgram.addPermutation(""IS_HUD"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1480,shader->mFeatures.calculatesLighting = false;
+indra/newview/llviewershadermgr.cpp,1481,shader->mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,1482,shader->mFeatures.isAlphaLighting = true;
+indra/newview/llviewershadermgr.cpp,1483,shader->mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1484,shader->mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1485,shader->mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1486,shader->mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,1487,shader->mFeatures.hasShadows = use_sun_shadow;
+indra/newview/llviewershadermgr.cpp,1488,shader->mFeatures.isDeferred = true; // include deferredUtils
+indra/newview/llviewershadermgr.cpp,1489,shader->mFeatures.hasReflectionProbes = mShaderLevel[SHADER_DEFERRED];
+indra/newview/llviewershadermgr.cpp,1492,"shader->mShaderFiles.push_back(make_pair(""deferred/pbralphaV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1493,"shader->mShaderFiles.push_back(make_pair(""deferred/pbralphaF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1498,"shader->addPermutation(""DIFFUSE_ALPHA_MODE"", llformat(""%d"", alpha_mode));"
+indra/newview/llviewershadermgr.cpp,1499,"shader->addPermutation(""HAS_NORMAL_MAP"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1500,"shader->addPermutation(""HAS_SPECULAR_MAP"", ""1""); // PBR: Packed: Occlusion, Metal, Roughness"
+indra/newview/llviewershadermgr.cpp,1501,"shader->addPermutation(""HAS_EMISSIVE_MAP"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1502,"shader->addPermutation(""USE_VERTEX_COLOR"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1508,"shader->addPermutation(""HAS_SUN_SHADOW"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1521,shader->mFeatures.calculatesLighting = true;
+indra/newview/llviewershadermgr.cpp,1522,shader->mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,1524,shader->mRiggedVariant->mFeatures.calculatesLighting = true;
+indra/newview/llviewershadermgr.cpp,1525,shader->mRiggedVariant->mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,1533,shader->mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1536,"shader->mShaderFiles.push_back(make_pair(""deferred/pbralphaV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1537,"shader->mShaderFiles.push_back(make_pair(""deferred/pbralphaF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1541,"shader->addPermutation(""IS_HUD"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1562,shader->mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1563,shader->mFeatures.isAlphaLighting = true;
+indra/newview/llviewershadermgr.cpp,1564,shader->mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1565,shader->mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1566,shader->mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,1567,shader->mFeatures.hasTransport = true;
+indra/newview/llviewershadermgr.cpp,1568,shader->mFeatures.isPBRTerrain = true;
+indra/newview/llviewershadermgr.cpp,1571,"shader->mShaderFiles.push_back(make_pair(""deferred/pbrterrainV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1572,"shader->mShaderFiles.push_back(make_pair(""deferred/pbrterrainF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1574,"shader->addPermutation(""TERRAIN_PBR_DETAIL"", llformat(""%d"", detail));"
+indra/newview/llviewershadermgr.cpp,1575,"shader->addPermutation(""TERRAIN_PAINT_TYPE"", llformat(""%d"", paint_type));"
+indra/newview/llviewershadermgr.cpp,1576,"shader->addPermutation(""TERRAIN_PLANAR_TEXTURE_SAMPLE_COUNT"", llformat(""%d"", mapping));"
+indra/newview/llviewershadermgr.cpp,1589,"gDeferredTreeProgram.mShaderFiles.push_back(make_pair(""deferred/treeV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1590,"gDeferredTreeProgram.mShaderFiles.push_back(make_pair(""deferred/treeF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1602,"gDeferredTreeShadowProgram.mShaderFiles.push_back(make_pair(""deferred/treeShadowV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1603,"gDeferredTreeShadowProgram.mShaderFiles.push_back(make_pair(""deferred/treeShadowF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1614,gDeferredSkinnedTreeShadowProgram.mFeatures.hasObjectSkinning = true;
+indra/newview/llviewershadermgr.cpp,1615,"gDeferredSkinnedTreeShadowProgram.mShaderFiles.push_back(make_pair(""deferred/treeShadowSkinnedV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1616,"gDeferredSkinnedTreeShadowProgram.mShaderFiles.push_back(make_pair(""deferred/treeShadowF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1625,gDeferredImpostorProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1627,"gDeferredImpostorProgram.mShaderFiles.push_back(make_pair(""deferred/impostorV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1628,"gDeferredImpostorProgram.mShaderFiles.push_back(make_pair(""deferred/impostorF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1640,gDeferredLightProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,1641,gDeferredLightProgram.mFeatures.hasFullGBuffer = true;
+indra/newview/llviewershadermgr.cpp,1642,gDeferredLightProgram.mFeatures.hasShadows = true;
+indra/newview/llviewershadermgr.cpp,1643,gDeferredLightProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1646,"gDeferredLightProgram.mShaderFiles.push_back(make_pair(""deferred/pointLightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1647,"gDeferredLightProgram.mShaderFiles.push_back(make_pair(""deferred/pointLightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1663,gDeferredMultiLightProgram[i].mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,1664,gDeferredMultiLightProgram[i].mFeatures.hasFullGBuffer = true;
+indra/newview/llviewershadermgr.cpp,1665,gDeferredMultiLightProgram[i].mFeatures.hasShadows = true;
+indra/newview/llviewershadermgr.cpp,1666,gDeferredMultiLightProgram[i].mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1670,"gDeferredMultiLightProgram[i].mShaderFiles.push_back(make_pair(""deferred/multiPointLightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1671,"gDeferredMultiLightProgram[i].mShaderFiles.push_back(make_pair(""deferred/multiPointLightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1673,"gDeferredMultiLightProgram[i].addPermutation(""LIGHT_COUNT"", llformat(""%d"", i+1));"
+indra/newview/llviewershadermgr.cpp,1686,gDeferredSpotLightProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1687,gDeferredSpotLightProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,1688,gDeferredSpotLightProgram.mFeatures.hasFullGBuffer = true;
+indra/newview/llviewershadermgr.cpp,1689,gDeferredSpotLightProgram.mFeatures.hasShadows = true;
+indra/newview/llviewershadermgr.cpp,1692,"gDeferredSpotLightProgram.mShaderFiles.push_back(make_pair(""deferred/pointLightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1693,"gDeferredSpotLightProgram.mShaderFiles.push_back(make_pair(""deferred/spotLightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1705,gDeferredMultiSpotLightProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1706,gDeferredMultiSpotLightProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,1707,gDeferredMultiSpotLightProgram.mFeatures.hasFullGBuffer = true;
+indra/newview/llviewershadermgr.cpp,1708,gDeferredMultiSpotLightProgram.mFeatures.hasShadows = true;
+indra/newview/llviewershadermgr.cpp,1711,"gDeferredMultiSpotLightProgram.addPermutation(""MULTI_SPOTLIGHT"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1713,"gDeferredMultiSpotLightProgram.mShaderFiles.push_back(make_pair(""deferred/multiPointLightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1714,"gDeferredMultiSpotLightProgram.mShaderFiles.push_back(make_pair(""deferred/spotLightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1737,gDeferredSunProgram.mFeatures.isDeferred    = true;
+indra/newview/llviewershadermgr.cpp,1738,gDeferredSunProgram.mFeatures.hasShadows    = true;
+indra/newview/llviewershadermgr.cpp,1739,gDeferredSunProgram.mFeatures.hasAmbientOcclusion = use_ao;
+indra/newview/llviewershadermgr.cpp,1742,"gDeferredSunProgram.mShaderFiles.push_back(make_pair(""deferred/sunLightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1743,"gDeferredSunProgram.mShaderFiles.push_back(make_pair(fragment, GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1755,gDeferredSunProbeProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,1756,gDeferredSunProbeProgram.mFeatures.hasShadows = true;
+indra/newview/llviewershadermgr.cpp,1759,"gDeferredSunProbeProgram.mShaderFiles.push_back(make_pair(""deferred/sunLightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1760,"gDeferredSunProbeProgram.mShaderFiles.push_back(make_pair(""deferred/sunLightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1772,gDeferredBlurLightProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,1775,"gDeferredBlurLightProgram.mShaderFiles.push_back(make_pair(""deferred/blurLightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1776,"gDeferredBlurLightProgram.mShaderFiles.push_back(make_pair(""deferred/blurLightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1808,shader->mFeatures.hasObjectSkinning = true;
+indra/newview/llviewershadermgr.cpp,1811,shader->mFeatures.calculatesLighting = false;
+indra/newview/llviewershadermgr.cpp,1812,shader->mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,1813,shader->mFeatures.isAlphaLighting = true;
+indra/newview/llviewershadermgr.cpp,1814,shader->mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1815,shader->mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1816,shader->mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1817,shader->mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,1818,shader->mFeatures.hasShadows = use_sun_shadow;
+indra/newview/llviewershadermgr.cpp,1819,shader->mFeatures.hasReflectionProbes = true;
+indra/newview/llviewershadermgr.cpp,1820,shader->mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,1823,"shader->mShaderFiles.push_back(make_pair(""deferred/alphaV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1824,"shader->mShaderFiles.push_back(make_pair(""deferred/alphaF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1827,"shader->addPermutation(""USE_VERTEX_COLOR"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1828,"shader->addPermutation(""HAS_ALPHA_MASK"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1829,"shader->addPermutation(""USE_INDEXED_TEX"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1832,"shader->addPermutation(""HAS_SUN_SHADOW"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1839,"shader->addPermutation(""HAS_SKIN"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1844,"shader->addPermutation(""IS_HUD"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1853,shader->mFeatures.calculatesLighting = true;
+indra/newview/llviewershadermgr.cpp,1854,shader->mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,1873,shader->mFeatures.calculatesLighting = false;
+indra/newview/llviewershadermgr.cpp,1874,shader->mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,1876,shader->mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1877,shader->mFeatures.isAlphaLighting = true;
+indra/newview/llviewershadermgr.cpp,1878,shader->mFeatures.hasShadows = use_sun_shadow;
+indra/newview/llviewershadermgr.cpp,1879,shader->mFeatures.hasReflectionProbes = true;
+indra/newview/llviewershadermgr.cpp,1880,shader->mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,1883,"shader->mShaderFiles.push_back(make_pair(""deferred/alphaV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1884,"shader->mShaderFiles.push_back(make_pair(""deferred/alphaF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1887,"shader->addPermutation(""USE_INDEXED_TEX"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1888,"shader->addPermutation(""FOR_IMPOSTOR"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1889,"shader->addPermutation(""HAS_ALPHA_MASK"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1890,"shader->addPermutation(""USE_VERTEX_COLOR"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1893,shader->mFeatures.hasObjectSkinning = true;
+indra/newview/llviewershadermgr.cpp,1894,"shader->addPermutation(""HAS_SKIN"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1899,"shader->addPermutation(""HAS_SUN_SHADOW"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1914,shader->mFeatures.calculatesLighting = true;
+indra/newview/llviewershadermgr.cpp,1915,shader->mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,1922,gDeferredAvatarEyesProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1923,gDeferredAvatarEyesProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,1924,gDeferredAvatarEyesProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1925,gDeferredAvatarEyesProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1926,gDeferredAvatarEyesProgram.mFeatures.hasShadows = true;
+indra/newview/llviewershadermgr.cpp,1929,"gDeferredAvatarEyesProgram.mShaderFiles.push_back(make_pair(""deferred/avatarEyesV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1930,"gDeferredAvatarEyesProgram.mShaderFiles.push_back(make_pair(""deferred/diffuseF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1942,gDeferredFullbrightProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1943,gDeferredFullbrightProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,1944,gDeferredFullbrightProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1945,gDeferredFullbrightProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1946,gDeferredFullbrightProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,1948,"gDeferredFullbrightProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1949,"gDeferredFullbrightProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1962,gHUDFullbrightProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1963,gHUDFullbrightProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,1964,gHUDFullbrightProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1965,gHUDFullbrightProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1966,gHUDFullbrightProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,1968,"gHUDFullbrightProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1969,"gHUDFullbrightProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1972,"gHUDFullbrightProgram.addPermutation(""IS_HUD"", ""1"");"
+indra/newview/llviewershadermgr.cpp,1983,gDeferredFullbrightAlphaMaskProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1984,gDeferredFullbrightAlphaMaskProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,1985,gDeferredFullbrightAlphaMaskProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,1986,gDeferredFullbrightAlphaMaskProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,1987,gDeferredFullbrightAlphaMaskProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,1989,"gDeferredFullbrightAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,1990,"gDeferredFullbrightAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,1992,"gDeferredFullbrightAlphaMaskProgram.addPermutation(""HAS_ALPHA_MASK"",""1"");"
+indra/newview/llviewershadermgr.cpp,2005,gHUDFullbrightAlphaMaskProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2006,gHUDFullbrightAlphaMaskProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2007,gHUDFullbrightAlphaMaskProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2008,gHUDFullbrightAlphaMaskProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2009,gHUDFullbrightAlphaMaskProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,2011,"gHUDFullbrightAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2012,"gHUDFullbrightAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2014,"gHUDFullbrightAlphaMaskProgram.addPermutation(""HAS_ALPHA_MASK"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2015,"gHUDFullbrightAlphaMaskProgram.addPermutation(""IS_HUD"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2027,gDeferredFullbrightAlphaMaskAlphaProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2028,gDeferredFullbrightAlphaMaskAlphaProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2029,gDeferredFullbrightAlphaMaskAlphaProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2030,gDeferredFullbrightAlphaMaskAlphaProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2031,gDeferredFullbrightAlphaMaskAlphaProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2032,gDeferredFullbrightAlphaMaskAlphaProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,2034,"gDeferredFullbrightAlphaMaskAlphaProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2035,"gDeferredFullbrightAlphaMaskAlphaProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2037,"gDeferredFullbrightAlphaMaskAlphaProgram.addPermutation(""HAS_ALPHA_MASK"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2038,"gDeferredFullbrightAlphaMaskAlphaProgram.addPermutation(""IS_ALPHA"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2051,gHUDFullbrightAlphaMaskAlphaProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2052,gHUDFullbrightAlphaMaskAlphaProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2053,gHUDFullbrightAlphaMaskAlphaProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2054,gHUDFullbrightAlphaMaskAlphaProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2055,gHUDFullbrightAlphaMaskAlphaProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2056,gHUDFullbrightAlphaMaskAlphaProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,2058,"gHUDFullbrightAlphaMaskAlphaProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2059,"gHUDFullbrightAlphaMaskAlphaProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2061,"gHUDFullbrightAlphaMaskAlphaProgram.addPermutation(""HAS_ALPHA_MASK"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2062,"gHUDFullbrightAlphaMaskAlphaProgram.addPermutation(""IS_ALPHA"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2063,"gHUDFullbrightAlphaMaskAlphaProgram.addPermutation(""IS_HUD"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2075,gDeferredFullbrightShinyProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2076,gDeferredFullbrightShinyProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2077,gDeferredFullbrightShinyProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2078,gDeferredFullbrightShinyProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2079,gDeferredFullbrightShinyProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,2081,"gDeferredFullbrightShinyProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightShinyV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2082,"gDeferredFullbrightShinyProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightShinyF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2084,gDeferredFullbrightShinyProgram.mFeatures.hasReflectionProbes = true;
+indra/newview/llviewershadermgr.cpp,2096,gHUDFullbrightShinyProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2097,gHUDFullbrightShinyProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2098,gHUDFullbrightShinyProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2099,gHUDFullbrightShinyProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2100,gHUDFullbrightShinyProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,2102,"gHUDFullbrightShinyProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightShinyV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2103,"gHUDFullbrightShinyProgram.mShaderFiles.push_back(make_pair(""deferred/fullbrightShinyF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2105,gHUDFullbrightShinyProgram.mFeatures.hasReflectionProbes = true;
+indra/newview/llviewershadermgr.cpp,2107,"gHUDFullbrightShinyProgram.addPermutation(""IS_HUD"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2118,gDeferredEmissiveProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2119,gDeferredEmissiveProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2120,gDeferredEmissiveProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2121,gDeferredEmissiveProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,2123,"gDeferredEmissiveProgram.mShaderFiles.push_back(make_pair(""deferred/emissiveV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2124,"gDeferredEmissiveProgram.mShaderFiles.push_back(make_pair(""deferred/emissiveF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2138,gDeferredSoftenProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2139,gDeferredSoftenProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2140,gDeferredSoftenProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2141,gDeferredSoftenProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2142,gDeferredSoftenProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2143,gDeferredSoftenProgram.mFeatures.hasFullGBuffer = true;
+indra/newview/llviewershadermgr.cpp,2144,gDeferredSoftenProgram.mFeatures.hasShadows = use_sun_shadow;
+indra/newview/llviewershadermgr.cpp,2145,gDeferredSoftenProgram.mFeatures.hasReflectionProbes = mShaderLevel[SHADER_DEFERRED] > 2;
+indra/newview/llviewershadermgr.cpp,2149,"gDeferredSoftenProgram.mShaderFiles.push_back(make_pair(""deferred/softenLightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2150,"gDeferredSoftenProgram.mShaderFiles.push_back(make_pair(""deferred/softenLightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2156,"gDeferredSoftenProgram.addPermutation(""HAS_SUN_SHADOW"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2162,"gDeferredSoftenProgram.addPermutation(""HAS_SSAO"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2173,gHazeProgram.mFeatures.hasSrgb                = true;
+indra/newview/llviewershadermgr.cpp,2174,gHazeProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2175,gHazeProgram.mFeatures.hasAtmospherics        = true;
+indra/newview/llviewershadermgr.cpp,2176,gHazeProgram.mFeatures.hasGamma               = true;
+indra/newview/llviewershadermgr.cpp,2177,gHazeProgram.mFeatures.isDeferred             = true;
+indra/newview/llviewershadermgr.cpp,2178,gHazeProgram.mFeatures.hasShadows             = use_sun_shadow;
+indra/newview/llviewershadermgr.cpp,2179,gHazeProgram.mFeatures.hasReflectionProbes    = mShaderLevel[SHADER_DEFERRED] > 2;
+indra/newview/llviewershadermgr.cpp,2182,"gHazeProgram.mShaderFiles.push_back(make_pair(""deferred/softenLightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2183,"gHazeProgram.mShaderFiles.push_back(make_pair(""deferred/hazeF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2199,gHazeWaterProgram.mFeatures.hasSrgb                = true;
+indra/newview/llviewershadermgr.cpp,2200,gHazeWaterProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2201,gHazeWaterProgram.mFeatures.hasAtmospherics        = true;
+indra/newview/llviewershadermgr.cpp,2202,gHazeWaterProgram.mFeatures.hasGamma               = true;
+indra/newview/llviewershadermgr.cpp,2203,gHazeWaterProgram.mFeatures.isDeferred             = true;
+indra/newview/llviewershadermgr.cpp,2204,gHazeWaterProgram.mFeatures.hasShadows             = use_sun_shadow;
+indra/newview/llviewershadermgr.cpp,2205,gHazeWaterProgram.mFeatures.hasReflectionProbes    = mShaderLevel[SHADER_DEFERRED] > 2;
+indra/newview/llviewershadermgr.cpp,2208,"gHazeWaterProgram.mShaderFiles.push_back(make_pair(""deferred/waterHazeV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2209,"gHazeWaterProgram.mShaderFiles.push_back(make_pair(""deferred/waterHazeF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2224,"gDeferredShadowProgram.mShaderFiles.push_back(make_pair(""deferred/shadowV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2225,"gDeferredShadowProgram.mShaderFiles.push_back(make_pair(""deferred/shadowF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2235,gDeferredSkinnedShadowProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2236,gDeferredSkinnedShadowProgram.mFeatures.hasShadows = true;
+indra/newview/llviewershadermgr.cpp,2237,gDeferredSkinnedShadowProgram.mFeatures.hasObjectSkinning = true;
+indra/newview/llviewershadermgr.cpp,2239,"gDeferredSkinnedShadowProgram.mShaderFiles.push_back(make_pair(""deferred/shadowSkinnedV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2240,"gDeferredSkinnedShadowProgram.mShaderFiles.push_back(make_pair(""deferred/shadowF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2253,gDeferredShadowCubeProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2254,gDeferredShadowCubeProgram.mFeatures.hasShadows = true;
+indra/newview/llviewershadermgr.cpp,2256,"gDeferredShadowCubeProgram.mShaderFiles.push_back(make_pair(""deferred/shadowCubeV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2257,"gDeferredShadowCubeProgram.mShaderFiles.push_back(make_pair(""deferred/shadowF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2267,gDeferredShadowFullbrightAlphaMaskProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,2270,"gDeferredShadowFullbrightAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/shadowAlphaMaskV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2271,"gDeferredShadowFullbrightAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/shadowAlphaMaskF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2274,"gDeferredShadowFullbrightAlphaMaskProgram.addPermutation(""DEPTH_CLAMP"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2275,"gDeferredShadowFullbrightAlphaMaskProgram.addPermutation(""IS_FULLBRIGHT"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2288,gDeferredShadowAlphaMaskProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+indra/newview/llviewershadermgr.cpp,2291,"gDeferredShadowAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/shadowAlphaMaskV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2292,"gDeferredShadowAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/shadowAlphaMaskF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2304,"gDeferredShadowGLTFAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/pbrShadowAlphaMaskV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2305,"gDeferredShadowGLTFAlphaMaskProgram.mShaderFiles.push_back(make_pair(""deferred/pbrShadowAlphaMaskF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2320,"gDeferredShadowGLTFAlphaBlendProgram.mShaderFiles.push_back(make_pair(""deferred/pbrShadowAlphaMaskV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2321,"gDeferredShadowGLTFAlphaBlendProgram.mShaderFiles.push_back(make_pair(""deferred/pbrShadowAlphaBlendF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2335,gDeferredAvatarShadowProgram.mFeatures.hasSkinning = true;
+indra/newview/llviewershadermgr.cpp,2338,"gDeferredAvatarShadowProgram.mShaderFiles.push_back(make_pair(""deferred/avatarShadowV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2339,"gDeferredAvatarShadowProgram.mShaderFiles.push_back(make_pair(""deferred/avatarShadowF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2348,gDeferredAvatarAlphaShadowProgram.mFeatures.hasSkinning = true;
+indra/newview/llviewershadermgr.cpp,2350,"gDeferredAvatarAlphaShadowProgram.mShaderFiles.push_back(make_pair(""deferred/avatarAlphaShadowV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2351,"gDeferredAvatarAlphaShadowProgram.mShaderFiles.push_back(make_pair(""deferred/avatarAlphaShadowF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2359,gDeferredAvatarAlphaMaskShadowProgram.mFeatures.hasSkinning  = true;
+indra/newview/llviewershadermgr.cpp,2361,"gDeferredAvatarAlphaMaskShadowProgram.mShaderFiles.push_back(make_pair(""deferred/avatarAlphaShadowV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2362,"gDeferredAvatarAlphaMaskShadowProgram.mShaderFiles.push_back(make_pair(""deferred/avatarAlphaMaskShadowF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2371,gDeferredTerrainProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2372,gDeferredTerrainProgram.mFeatures.isAlphaLighting = true;
+indra/newview/llviewershadermgr.cpp,2373,gDeferredTerrainProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2374,gDeferredTerrainProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2375,gDeferredTerrainProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2378,"gDeferredTerrainProgram.mShaderFiles.push_back(make_pair(""deferred/terrainV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2379,"gDeferredTerrainProgram.mShaderFiles.push_back(make_pair(""deferred/terrainF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2391,gDeferredAvatarProgram.mFeatures.hasSkinning = true;
+indra/newview/llviewershadermgr.cpp,2393,"gDeferredAvatarProgram.mShaderFiles.push_back(make_pair(""deferred/avatarV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2394,"gDeferredAvatarProgram.mShaderFiles.push_back(make_pair(""deferred/avatarF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2399,"gDeferredAvatarProgram.addPermutation(""AVATAR_CLOTH"", LLPipeline::RenderAvatarCloth ? ""1"" : ""0"");"
+indra/newview/llviewershadermgr.cpp,2408,gDeferredAvatarAlphaProgram.mFeatures.hasSkinning = true;
+indra/newview/llviewershadermgr.cpp,2409,gDeferredAvatarAlphaProgram.mFeatures.calculatesLighting = false;
+indra/newview/llviewershadermgr.cpp,2410,gDeferredAvatarAlphaProgram.mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,2411,gDeferredAvatarAlphaProgram.mFeatures.isAlphaLighting = true;
+indra/newview/llviewershadermgr.cpp,2412,gDeferredAvatarAlphaProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2413,gDeferredAvatarAlphaProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2414,gDeferredAvatarAlphaProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2415,gDeferredAvatarAlphaProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2416,gDeferredAvatarAlphaProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2417,gDeferredAvatarAlphaProgram.mFeatures.hasShadows = true;
+indra/newview/llviewershadermgr.cpp,2418,gDeferredAvatarAlphaProgram.mFeatures.hasReflectionProbes = true;
+indra/newview/llviewershadermgr.cpp,2421,"gDeferredAvatarAlphaProgram.mShaderFiles.push_back(make_pair(""deferred/alphaV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2422,"gDeferredAvatarAlphaProgram.mShaderFiles.push_back(make_pair(""deferred/alphaF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2425,"gDeferredAvatarAlphaProgram.addPermutation(""USE_DIFFUSE_TEX"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2426,"gDeferredAvatarAlphaProgram.addPermutation(""IS_AVATAR_SKIN"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2429,"gDeferredAvatarAlphaProgram.addPermutation(""HAS_SUN_SHADOW"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2439,gDeferredAvatarAlphaProgram.mFeatures.calculatesLighting = true;
+indra/newview/llviewershadermgr.cpp,2440,gDeferredAvatarAlphaProgram.mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,2446,gExposureProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2447,gExposureProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2450,"gExposureProgram.addPermutation(""USE_LAST_EXPOSURE"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2451,"gExposureProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2452,"gExposureProgram.mShaderFiles.push_back(make_pair(""deferred/exposureF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2461,gExposureProgramNoFade.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2462,gExposureProgramNoFade.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2465,"gExposureProgramNoFade.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2466,"gExposureProgramNoFade.mShaderFiles.push_back(make_pair(""deferred/exposureF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2477,"gLuminanceProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2478,"gLuminanceProgram.mShaderFiles.push_back(make_pair(""deferred/luminanceF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2487,gDeferredPostGammaCorrectProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2488,gDeferredPostGammaCorrectProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2491,"gDeferredPostGammaCorrectProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2492,"gDeferredPostGammaCorrectProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredGammaCorrect.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2501,gLegacyPostGammaCorrectProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2502,gLegacyPostGammaCorrectProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2505,"gLegacyPostGammaCorrectProgram.addPermutation(""LEGACY_GAMMA"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2506,"gLegacyPostGammaCorrectProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2507,"gLegacyPostGammaCorrectProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredGammaCorrect.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2516,gDeferredPostTonemapProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2517,gDeferredPostTonemapProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2518,gDeferredPostTonemapProgram.mFeatures.hasTonemap = true;
+indra/newview/llviewershadermgr.cpp,2521,"gDeferredPostTonemapProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2522,"gDeferredPostTonemapProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredTonemap.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2531,gNoPostTonemapProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2532,gNoPostTonemapProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2533,gNoPostTonemapProgram.mFeatures.hasTonemap = true;
+indra/newview/llviewershadermgr.cpp,2536,"gNoPostTonemapProgram.addPermutation(""NO_POST"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2537,"gNoPostTonemapProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2538,"gNoPostTonemapProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredTonemap.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2547,gDeferredPostTonemapGammaCorrectProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2548,gDeferredPostTonemapGammaCorrectProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2549,gDeferredPostTonemapGammaCorrectProgram.mFeatures.hasTonemap = true;
+indra/newview/llviewershadermgr.cpp,2552,"gDeferredPostTonemapGammaCorrectProgram.addPermutation(""GAMMA_CORRECT"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2553,"gDeferredPostTonemapGammaCorrectProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2554,"gDeferredPostTonemapGammaCorrectProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredTonemap.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2563,gNoPostTonemapGammaCorrectProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2564,gNoPostTonemapGammaCorrectProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2565,gNoPostTonemapGammaCorrectProgram.mFeatures.hasTonemap = true;
+indra/newview/llviewershadermgr.cpp,2568,"gNoPostTonemapGammaCorrectProgram.addPermutation(""GAMMA_CORRECT"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2569,"gNoPostTonemapGammaCorrectProgram.addPermutation(""NO_POST"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2570,"gNoPostTonemapGammaCorrectProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2571,"gNoPostTonemapGammaCorrectProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredTonemap.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2580,gDeferredPostTonemapLegacyGammaCorrectProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2581,gDeferredPostTonemapProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2582,gDeferredPostTonemapLegacyGammaCorrectProgram.mFeatures.hasTonemap = true;
+indra/newview/llviewershadermgr.cpp,2585,"gDeferredPostTonemapLegacyGammaCorrectProgram.addPermutation(""GAMMA_CORRECT"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2586,"gDeferredPostTonemapLegacyGammaCorrectProgram.addPermutation(""LEGACY_GAMMA"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2587,"gDeferredPostTonemapLegacyGammaCorrectProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2588,"gDeferredPostTonemapLegacyGammaCorrectProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredTonemap.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2597,gNoPostTonemapLegacyGammaCorrectProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2598,gNoPostTonemapLegacyGammaCorrectProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2599,gNoPostTonemapLegacyGammaCorrectProgram.mFeatures.hasTonemap = true;
+indra/newview/llviewershadermgr.cpp,2602,"gNoPostTonemapLegacyGammaCorrectProgram.addPermutation(""NO_POST"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2603,"gNoPostTonemapLegacyGammaCorrectProgram.addPermutation(""GAMMA_CORRECT"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2604,"gNoPostTonemapLegacyGammaCorrectProgram.addPermutation(""LEGACY_GAMMA"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2605,"gNoPostTonemapLegacyGammaCorrectProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2606,"gNoPostTonemapLegacyGammaCorrectProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredTonemap.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2625,gFXAAProgram[i].mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2627,"gFXAAProgram[i].mShaderFiles.push_back(make_pair(""deferred/postDeferredV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2628,"gFXAAProgram[i].mShaderFiles.push_back(make_pair(""deferred/fxaaF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2631,"gFXAAProgram[i].addPermutation(""FXAA_QUALITY__PRESET"", quality_pair.first);"
+indra/newview/llviewershadermgr.cpp,2634,"gFXAAProgram[i].addPermutation(""FXAA_GLSL_400"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2638,"gFXAAProgram[i].addPermutation(""FXAA_GLSL_130"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2689,gSMAAEdgeDetectProgram[i].mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2692,gSMAAEdgeDetectProgram[i].addPermutations(defines);
+indra/newview/llviewershadermgr.cpp,2695,"gSMAAEdgeDetectProgram[i].mShaderFiles.push_back(make_pair(""deferred/SMAAEdgeDetectF.glsl"", GL_FRAGMENT_SHADER_ARB));"
+indra/newview/llviewershadermgr.cpp,2696,"gSMAAEdgeDetectProgram[i].mShaderFiles.push_back(make_pair(""deferred/SMAAEdgeDetectV.glsl"", GL_VERTEX_SHADER_ARB));"
+indra/newview/llviewershadermgr.cpp,2697,"gSMAAEdgeDetectProgram[i].mShaderFiles.push_back(make_pair(""deferred/SMAA.glsl"", GL_FRAGMENT_SHADER_ARB));"
+indra/newview/llviewershadermgr.cpp,2698,"gSMAAEdgeDetectProgram[i].mShaderFiles.push_back(make_pair(""deferred/SMAA.glsl"", GL_VERTEX_SHADER_ARB));"
+indra/newview/llviewershadermgr.cpp,2715,gSMAABlendWeightsProgram[i].mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2718,gSMAABlendWeightsProgram[i].addPermutations(defines);
+indra/newview/llviewershadermgr.cpp,2721,"gSMAABlendWeightsProgram[i].mShaderFiles.push_back(make_pair(""deferred/SMAABlendWeightsF.glsl"", GL_FRAGMENT_SHADER_ARB));"
+indra/newview/llviewershadermgr.cpp,2722,"gSMAABlendWeightsProgram[i].mShaderFiles.push_back(make_pair(""deferred/SMAABlendWeightsV.glsl"", GL_VERTEX_SHADER_ARB));"
+indra/newview/llviewershadermgr.cpp,2723,"gSMAABlendWeightsProgram[i].mShaderFiles.push_back(make_pair(""deferred/SMAA.glsl"", GL_FRAGMENT_SHADER_ARB));"
+indra/newview/llviewershadermgr.cpp,2724,"gSMAABlendWeightsProgram[i].mShaderFiles.push_back(make_pair(""deferred/SMAA.glsl"", GL_VERTEX_SHADER_ARB));"
+indra/newview/llviewershadermgr.cpp,2741,gSMAANeighborhoodBlendProgram[i].mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2744,gSMAANeighborhoodBlendProgram[i].addPermutations(defines);
+indra/newview/llviewershadermgr.cpp,2747,"gSMAANeighborhoodBlendProgram[i].mShaderFiles.push_back(make_pair(""deferred/SMAANeighborhoodBlendF.glsl"", GL_FRAGMENT_SHADER_ARB));"
+indra/newview/llviewershadermgr.cpp,2748,"gSMAANeighborhoodBlendProgram[i].mShaderFiles.push_back(make_pair(""deferred/SMAANeighborhoodBlendV.glsl"", GL_VERTEX_SHADER_ARB));"
+indra/newview/llviewershadermgr.cpp,2749,"gSMAANeighborhoodBlendProgram[i].mShaderFiles.push_back(make_pair(""deferred/SMAA.glsl"", GL_FRAGMENT_SHADER_ARB));"
+indra/newview/llviewershadermgr.cpp,2750,"gSMAANeighborhoodBlendProgram[i].mShaderFiles.push_back(make_pair(""deferred/SMAA.glsl"", GL_VERTEX_SHADER_ARB));"
+indra/newview/llviewershadermgr.cpp,2780,gCASProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2782,"gCASProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2783,"gCASProgram.mShaderFiles.push_back(make_pair(""deferred/CASF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2798,gCASLegacyGammaProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2800,"gCASLegacyGammaProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2801,"gCASLegacyGammaProgram.mShaderFiles.push_back(make_pair(""deferred/CASF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2804,"gCASLegacyGammaProgram.addPermutation(""GAMMA_CORRECT"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2805,"gCASLegacyGammaProgram.addPermutation(""LEGACY_GAMMA"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2819,gDeferredPostProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2821,"gDeferredPostProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2822,"gDeferredPostProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2832,gDeferredCoFProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2833,"gDeferredCoFProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2834,"gDeferredCoFProgram.mShaderFiles.push_back(make_pair(""deferred/cofF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2843,gDeferredDoFCombineProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2845,"gDeferredDoFCombineProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2846,"gDeferredDoFCombineProgram.mShaderFiles.push_back(make_pair(""deferred/dofCombineF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2855,gDeferredPostNoDoFProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2857,"gDeferredPostNoDoFProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2858,"gDeferredPostNoDoFProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoDoFF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2867,gDeferredPostNoDoFNoiseProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,2869,"gDeferredPostNoDoFNoiseProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2870,"gDeferredPostNoDoFNoiseProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoDoFF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2873,"gDeferredPostNoDoFNoiseProgram.addPermutation(""HAS_NOISE"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2884,gEnvironmentMapProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2885,gEnvironmentMapProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2886,gEnvironmentMapProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2887,gEnvironmentMapProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2890,"gEnvironmentMapProgram.addPermutation(""HAS_HDRI"", ""1"");"
+indra/newview/llviewershadermgr.cpp,2892,"gEnvironmentMapProgram.mShaderFiles.push_back(make_pair(""deferred/skyV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2893,"gEnvironmentMapProgram.mShaderFiles.push_back(make_pair(""deferred/skyF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2905,gDeferredWLSkyProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2906,gDeferredWLSkyProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2907,gDeferredWLSkyProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2908,gDeferredWLSkyProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2910,"gDeferredWLSkyProgram.mShaderFiles.push_back(make_pair(""deferred/skyV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2911,"gDeferredWLSkyProgram.mShaderFiles.push_back(make_pair(""deferred/skyF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2925,gDeferredWLCloudProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2926,gDeferredWLCloudProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2927,gDeferredWLCloudProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2928,gDeferredWLCloudProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2930,"gDeferredWLCloudProgram.mShaderFiles.push_back(make_pair(""deferred/cloudsV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2931,"gDeferredWLCloudProgram.mShaderFiles.push_back(make_pair(""deferred/cloudsF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2945,gDeferredWLSunProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2946,gDeferredWLSunProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2947,gDeferredWLSunProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2948,gDeferredWLSunProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2949,gDeferredWLSunProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2951,"gDeferredWLSunProgram.mShaderFiles.push_back(make_pair(""deferred/sunDiscV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2952,"gDeferredWLSunProgram.mShaderFiles.push_back(make_pair(""deferred/sunDiscF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2965,gDeferredWLMoonProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2966,gDeferredWLMoonProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2967,gDeferredWLMoonProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,2968,gDeferredWLMoonProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,2969,gDeferredWLMoonProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,2972,"gDeferredWLMoonProgram.mShaderFiles.push_back(make_pair(""deferred/moonV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2973,"gDeferredWLMoonProgram.mShaderFiles.push_back(make_pair(""deferred/moonF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,2988,"gDeferredStarProgram.mShaderFiles.push_back(make_pair(""deferred/starsV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,2989,"gDeferredStarProgram.mShaderFiles.push_back(make_pair(""deferred/starsF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3004,"gNormalMapGenProgram.mShaderFiles.push_back(make_pair(""deferred/normgenV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3005,"gNormalMapGenProgram.mShaderFiles.push_back(make_pair(""deferred/normgenF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3015,"gDeferredGenBrdfLutProgram.mShaderFiles.push_back(make_pair(""deferred/genbrdflutV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3016,"gDeferredGenBrdfLutProgram.mShaderFiles.push_back(make_pair(""deferred/genbrdflutF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3024,"gPostScreenSpaceReflectionProgram.mShaderFiles.push_back(make_pair(""deferred/screenSpaceReflPostV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3025,"gPostScreenSpaceReflectionProgram.mShaderFiles.push_back(make_pair(""deferred/screenSpaceReflPostF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3026,gPostScreenSpaceReflectionProgram.mFeatures.hasScreenSpaceReflections = true;
+indra/newview/llviewershadermgr.cpp,3027,gPostScreenSpaceReflectionProgram.mFeatures.isDeferred                = true;
+indra/newview/llviewershadermgr.cpp,3035,"gDeferredBufferVisualProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3036,"gDeferredBufferVisualProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredVisualizeBuffers.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3052,gAlphaOITResolveProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,3055,"gAlphaOITResolveProgram.mShaderFiles.push_back(make_pair(""deferred/postDeferredNoTCV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3056,"gAlphaOITResolveProgram.mShaderFiles.push_back(make_pair(""deferred/alphaOITResolveF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3068,gRlvSphereProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,3070,"gRlvSphereProgram.mShaderFiles.push_back(make_pair(""deferred/rlvV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3071,"gRlvSphereProgram.mShaderFiles.push_back(make_pair(""deferred/rlvF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3088,"gObjectBumpProgram.mShaderFiles.push_back(make_pair(""objects/bumpV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3089,"gObjectBumpProgram.mShaderFiles.push_back(make_pair(""objects/bumpF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3109,gObjectAlphaMaskNoColorProgram.mFeatures.calculatesLighting = true;
+indra/newview/llviewershadermgr.cpp,3110,gObjectAlphaMaskNoColorProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,3111,gObjectAlphaMaskNoColorProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,3112,gObjectAlphaMaskNoColorProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,3113,gObjectAlphaMaskNoColorProgram.mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,3114,gObjectAlphaMaskNoColorProgram.mFeatures.hasAlphaMask = true;
+indra/newview/llviewershadermgr.cpp,3116,"gObjectAlphaMaskNoColorProgram.mShaderFiles.push_back(make_pair(""objects/simpleNoColorV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3117,"gObjectAlphaMaskNoColorProgram.mShaderFiles.push_back(make_pair(""objects/simpleF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3125,gImpostorProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,3127,"gImpostorProgram.mShaderFiles.push_back(make_pair(""objects/impostorV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3128,"gImpostorProgram.mShaderFiles.push_back(make_pair(""objects/impostorF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3137,"gObjectPreviewProgram.mShaderFiles.push_back(make_pair(""objects/previewV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3138,"gObjectPreviewProgram.mShaderFiles.push_back(make_pair(""objects/previewF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3142,gObjectPreviewProgram.mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,3143,gSkinnedObjectPreviewProgram.mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,3149,gPhysicsPreviewProgram.mFeatures.calculatesLighting = false;
+indra/newview/llviewershadermgr.cpp,3150,gPhysicsPreviewProgram.mFeatures.calculatesAtmospherics = false;
+indra/newview/llviewershadermgr.cpp,3151,gPhysicsPreviewProgram.mFeatures.hasGamma = false;
+indra/newview/llviewershadermgr.cpp,3152,gPhysicsPreviewProgram.mFeatures.hasAtmospherics = false;
+indra/newview/llviewershadermgr.cpp,3153,gPhysicsPreviewProgram.mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,3155,"gPhysicsPreviewProgram.mShaderFiles.push_back(make_pair(""objects/previewPhysicsV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3156,"gPhysicsPreviewProgram.mShaderFiles.push_back(make_pair(""objects/previewPhysicsF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3159,gPhysicsPreviewProgram.mFeatures.hasLighting = false;
+indra/newview/llviewershadermgr.cpp,3187,gAvatarProgram.mFeatures.hasSkinning = true;
+indra/newview/llviewershadermgr.cpp,3188,gAvatarProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,3189,gAvatarProgram.mFeatures.calculatesLighting = true;
+indra/newview/llviewershadermgr.cpp,3190,gAvatarProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,3191,gAvatarProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,3192,gAvatarProgram.mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,3193,gAvatarProgram.mFeatures.hasAlphaMask = true;
+indra/newview/llviewershadermgr.cpp,3195,"gAvatarProgram.mShaderFiles.push_back(make_pair(""avatar/avatarV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3196,"gAvatarProgram.mShaderFiles.push_back(make_pair(""avatar/avatarF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3210,gAvatarEyeballProgram.mFeatures.calculatesLighting = true;
+indra/newview/llviewershadermgr.cpp,3211,gAvatarEyeballProgram.mFeatures.isSpecular = true;
+indra/newview/llviewershadermgr.cpp,3212,gAvatarEyeballProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,3213,gAvatarEyeballProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,3214,gAvatarEyeballProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,3215,gAvatarEyeballProgram.mFeatures.hasLighting = true;
+indra/newview/llviewershadermgr.cpp,3216,gAvatarEyeballProgram.mFeatures.hasAlphaMask = true;
+indra/newview/llviewershadermgr.cpp,3218,"gAvatarEyeballProgram.mShaderFiles.push_back(make_pair(""avatar/eyeballV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3219,"gAvatarEyeballProgram.mShaderFiles.push_back(make_pair(""avatar/eyeballF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3243,"gHighlightProgram.mShaderFiles.push_back(make_pair(""interface/highlightV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3244,"gHighlightProgram.mShaderFiles.push_back(make_pair(""interface/highlightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3254,"gHighlightNormalProgram.mShaderFiles.push_back(make_pair(""interface/highlightNormV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3255,"gHighlightNormalProgram.mShaderFiles.push_back(make_pair(""interface/highlightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3264,"gHighlightSpecularProgram.mShaderFiles.push_back(make_pair(""interface/highlightSpecV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3265,"gHighlightSpecularProgram.mShaderFiles.push_back(make_pair(""interface/highlightF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3274,"gUIProgram.mShaderFiles.push_back(make_pair(""interface/uiV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3275,"gUIProgram.mShaderFiles.push_back(make_pair(""interface/uiF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3284,"gPathfindingProgram.mShaderFiles.push_back(make_pair(""interface/pathfindingV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3285,"gPathfindingProgram.mShaderFiles.push_back(make_pair(""interface/pathfindingF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3294,"gPathfindingNoNormalsProgram.mShaderFiles.push_back(make_pair(""interface/pathfindingNoNormalV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3295,"gPathfindingNoNormalsProgram.mShaderFiles.push_back(make_pair(""interface/pathfindingF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3304,"gGlowCombineProgram.mShaderFiles.push_back(make_pair(""interface/glowcombineV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3305,"gGlowCombineProgram.mShaderFiles.push_back(make_pair(""interface/glowcombineF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3321,"gGlowCombineFXAAProgram.mShaderFiles.push_back(make_pair(""interface/glowcombineFXAAV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3322,"gGlowCombineFXAAProgram.mShaderFiles.push_back(make_pair(""interface/glowcombineFXAAF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3339,"gTwoTextureCompareProgram.mShaderFiles.push_back(make_pair(""interface/twotexturecompareV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3340,"gTwoTextureCompareProgram.mShaderFiles.push_back(make_pair(""interface/twotexturecompareF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3356,"gOneTextureFilterProgram.mShaderFiles.push_back(make_pair(""interface/onetexturefilterV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3357,"gOneTextureFilterProgram.mShaderFiles.push_back(make_pair(""interface/onetexturefilterF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3372,"gSolidColorProgram.mShaderFiles.push_back(make_pair(""interface/solidcolorV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3373,"gSolidColorProgram.mShaderFiles.push_back(make_pair(""interface/solidcolorF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3388,"gOcclusionProgram.mShaderFiles.push_back(make_pair(""interface/occlusionV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3389,"gOcclusionProgram.mShaderFiles.push_back(make_pair(""interface/occlusionF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3398,gSkinnedOcclusionProgram.mFeatures.hasObjectSkinning = true;
+indra/newview/llviewershadermgr.cpp,3400,"gSkinnedOcclusionProgram.mShaderFiles.push_back(make_pair(""interface/occlusionSkinnedV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3401,"gSkinnedOcclusionProgram.mShaderFiles.push_back(make_pair(""interface/occlusionF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3410,"gOcclusionCubeProgram.mShaderFiles.push_back(make_pair(""interface/occlusionCubeV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3411,"gOcclusionCubeProgram.mShaderFiles.push_back(make_pair(""interface/occlusionF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3420,"gDebugProgram.mShaderFiles.push_back(make_pair(""interface/debugV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3421,"gDebugProgram.mShaderFiles.push_back(make_pair(""interface/debugF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3436,"shader.mShaderFiles.push_back(make_pair(""interface/normaldebugV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3442,"shader.mShaderFiles.push_back(make_pair(""interface/normaldebugG.glsl"", GL_GEOMETRY_SHADER));"
+indra/newview/llviewershadermgr.cpp,3443,"shader.mShaderFiles.push_back(make_pair(""interface/normaldebugF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3448,"shader.addPermutation(""HAS_ATTRIBUTE_TANGENT"", ""1"");"
+indra/newview/llviewershadermgr.cpp,3459,"gClipProgram.mShaderFiles.push_back(make_pair(""interface/clipV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3460,"gClipProgram.mShaderFiles.push_back(make_pair(""interface/clipF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3469,"gBenchmarkProgram.mShaderFiles.push_back(make_pair(""interface/benchmarkV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3470,"gBenchmarkProgram.mShaderFiles.push_back(make_pair(""interface/benchmarkF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3478,gReflectionProbeDisplayProgram.mFeatures.hasReflectionProbes = true;
+indra/newview/llviewershadermgr.cpp,3479,gReflectionProbeDisplayProgram.mFeatures.hasSrgb = true;
+indra/newview/llviewershadermgr.cpp,3480,gReflectionProbeDisplayProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,3481,gReflectionProbeDisplayProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,3482,gReflectionProbeDisplayProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,3483,gReflectionProbeDisplayProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,3485,"gReflectionProbeDisplayProgram.mShaderFiles.push_back(make_pair(""interface/reflectionprobeV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3486,"gReflectionProbeDisplayProgram.mShaderFiles.push_back(make_pair(""interface/reflectionprobeF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3495,"gCopyProgram.mShaderFiles.push_back(make_pair(""interface/copyV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3496,"gCopyProgram.mShaderFiles.push_back(make_pair(""interface/copyF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3505,"gCopyDepthProgram.mShaderFiles.push_back(make_pair(""interface/copyV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3506,"gCopyDepthProgram.mShaderFiles.push_back(make_pair(""interface/copyF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3508,"gCopyDepthProgram.addPermutation(""COPY_DEPTH"", ""1"");"
+indra/newview/llviewershadermgr.cpp,3517,"gDrawColorProgram.mShaderFiles.push_back(make_pair(""objects/simpleNoAtmosV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3518,"gDrawColorProgram.mShaderFiles.push_back(make_pair(""objects/simpleColorF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3533,shader->mFeatures.isPBRTerrain = true;
+indra/newview/llviewershadermgr.cpp,3536,"shader->mShaderFiles.push_back(make_pair(""interface/pbrTerrainBakeV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3537,"shader->mShaderFiles.push_back(make_pair(""interface/pbrTerrainBakeF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3540,"shader->addPermutation(""TERRAIN_PAINT_PRECISION"", llformat(""%d"", value_range));"
+indra/newview/llviewershadermgr.cpp,3557,"gAlphaMaskProgram.mShaderFiles.push_back(make_pair(""interface/alphamaskV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3558,"gAlphaMaskProgram.mShaderFiles.push_back(make_pair(""interface/alphamaskF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3566,gReflectionMipProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,3567,gReflectionMipProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,3568,gReflectionMipProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,3569,gReflectionMipProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,3571,"gReflectionMipProgram.mShaderFiles.push_back(make_pair(""interface/splattexturerectV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3572,"gReflectionMipProgram.mShaderFiles.push_back(make_pair(""interface/reflectionmipF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3580,gGaussianProgram.mFeatures.isDeferred = true;
+indra/newview/llviewershadermgr.cpp,3581,gGaussianProgram.mFeatures.hasGamma = true;
+indra/newview/llviewershadermgr.cpp,3582,gGaussianProgram.mFeatures.hasAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,3583,gGaussianProgram.mFeatures.calculatesAtmospherics = true;
+indra/newview/llviewershadermgr.cpp,3585,"gGaussianProgram.mShaderFiles.push_back(make_pair(""interface/splattexturerectV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3586,"gGaussianProgram.mShaderFiles.push_back(make_pair(""interface/gaussianF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3595,"gRadianceGenProgram.mShaderFiles.push_back(make_pair(""interface/radianceGenV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3596,"gRadianceGenProgram.mShaderFiles.push_back(make_pair(""interface/radianceGenF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3598,"gRadianceGenProgram.addPermutation(""PROBE_FILTER_SAMPLES"", ""32"");"
+indra/newview/llviewershadermgr.cpp,3606,"gHeroRadianceGenProgram.mShaderFiles.push_back(make_pair(""interface/radianceGenV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3607,"gHeroRadianceGenProgram.mShaderFiles.push_back(make_pair(""interface/radianceGenF.glsl"", GL_FRAGMENT_SHADER));"
+indra/newview/llviewershadermgr.cpp,3609,"gHeroRadianceGenProgram.addPermutation(""HERO_PROBES"", ""1"");"
+indra/newview/llviewershadermgr.cpp,3610,"gHeroRadianceGenProgram.addPermutation(""PROBE_FILTER_SAMPLES"", ""4"");"
+indra/newview/llviewershadermgr.cpp,3618,"gIrradianceGenProgram.mShaderFiles.push_back(make_pair(""interface/irradianceGenV.glsl"", GL_VERTEX_SHADER));"
+indra/newview/llviewershadermgr.cpp,3619,"gIrradianceGenProgram.mShaderFiles.push_back(make_pair(""interface/irradianceGenF.glsl"", GL_FRAGMENT_SHADER));"

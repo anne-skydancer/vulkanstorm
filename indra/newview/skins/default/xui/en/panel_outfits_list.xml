@@ -13,7 +13,7 @@
     <accordion
      background_visible="false"
      bg_alpha_color="SL-Background_66"
-     bg_opaque_color="SL_Background_66"
+     bg_opaque_color="SL-Background_66"
      follows="all"
      height="400"
      layout="topleft"

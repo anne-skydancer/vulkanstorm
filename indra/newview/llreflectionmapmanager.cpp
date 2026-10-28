@@ -239,7 +239,7 @@ void LLReflectionMapManager::update()
             }
             else if (LLPipeline::sReflectionProbeLevel == (S32)LLReflectionMap::ProbeLevel::MANUAL_AND_TERRAIN)// <FS:Beq/> No longer required use the pipeline cached version instead
             {
-                mDynamicProbeCount = llmax((U32)mProbes.size(), 128);
+                mDynamicProbeCount = llmax((U32)mProbes.size(), 128U);
             }
             else
             {
@@ -262,7 +262,7 @@ void LLReflectionMapManager::update()
             mDynamicProbeCount = mRenderReflectionProbeCount;
         }
 
-        mDynamicProbeCount = llmin(mDynamicProbeCount, LL_MAX_REFLECTION_PROBE_COUNT);
+        mDynamicProbeCount = llmin(mDynamicProbeCount, static_cast<U32>(LL_MAX_REFLECTION_PROBE_COUNT));
 
         if (mDynamicProbeCount != probe_count_temp)
             mResetFade = 1.f;
