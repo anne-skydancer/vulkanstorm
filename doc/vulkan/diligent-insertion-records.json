@@ -1,5 +1,5 @@
 {
-  "source_commit": "2b1c070eafa8f089e44ad2457c2a8ca34d4a2ef4",
+  "source_commit": "e0877bcb134bc6033d60c293efdeb321c05ce732",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -58053,7 +58053,7 @@
       "path": "indra/newview/llworldmapmessage.cpp",
       "start": 30,
       "end": 30,
-      "sha256": "fc01ce0263188adaabdc441646c0ac6ef4274054256860655f4c2ff8cebff004",
+      "sha256": "42de5be4d263f9dcdcc00478b8c47f1b1f3e9efbd7faf06470985fd1f5b4b85e",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native authenticated per-circuit spatial snapshots and coarse decoding preserve reference precise/coarse merge, unknown altitude and varregion semantics. Forward complete accepted map replies into shared CPU models, guard optional UI/callback reentrancy and retire account/grid caches without constructing legacy regions or GL textures. Map/minimap native drawing and complete actions remain open; model tests do not qualify UI."
@@ -58062,7 +58062,7 @@
       "path": "indra/newview/llworldmapmessage.cpp",
       "start": 59,
       "end": 63,
-      "sha256": "fc01ce0263188adaabdc441646c0ac6ef4274054256860655f4c2ff8cebff004",
+      "sha256": "42de5be4d263f9dcdcc00478b8c47f1b1f3e9efbd7faf06470985fd1f5b4b85e",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native authenticated per-circuit spatial snapshots and coarse decoding preserve reference precise/coarse merge, unknown altitude and varregion semantics. Forward complete accepted map replies into shared CPU models, guard optional UI/callback reentrancy and retire account/grid caches without constructing legacy regions or GL textures. Map/minimap native drawing and complete actions remain open; model tests do not qualify UI."
@@ -58071,7 +58071,7 @@
       "path": "indra/newview/llworldmapmessage.cpp",
       "start": 177,
       "end": 178,
-      "sha256": "fc01ce0263188adaabdc441646c0ac6ef4274054256860655f4c2ff8cebff004",
+      "sha256": "42de5be4d263f9dcdcc00478b8c47f1b1f3e9efbd7faf06470985fd1f5b4b85e",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native authenticated per-circuit spatial snapshots and coarse decoding preserve reference precise/coarse merge, unknown altitude and varregion semantics. Forward complete accepted map replies into shared CPU models, guard optional UI/callback reentrancy and retire account/grid caches without constructing legacy regions or GL textures. Map/minimap native drawing and complete actions remain open; model tests do not qualify UI."
@@ -58080,7 +58080,7 @@
       "path": "indra/newview/llworldmapmessage.cpp",
       "start": 210,
       "end": 210,
-      "sha256": "fc01ce0263188adaabdc441646c0ac6ef4274054256860655f4c2ff8cebff004",
+      "sha256": "42de5be4d263f9dcdcc00478b8c47f1b1f3e9efbd7faf06470985fd1f5b4b85e",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native authenticated per-circuit spatial snapshots and coarse decoding preserve reference precise/coarse merge, unknown altitude and varregion semantics. Forward complete accepted map replies into shared CPU models, guard optional UI/callback reentrancy and retire account/grid caches without constructing legacy regions or GL textures. Map/minimap native drawing and complete actions remain open; model tests do not qualify UI."
@@ -58089,7 +58089,7 @@
       "path": "indra/newview/llworldmapmessage.cpp",
       "start": 273,
       "end": 273,
-      "sha256": "fc01ce0263188adaabdc441646c0ac6ef4274054256860655f4c2ff8cebff004",
+      "sha256": "42de5be4d263f9dcdcc00478b8c47f1b1f3e9efbd7faf06470985fd1f5b4b85e",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native authenticated per-circuit spatial snapshots and coarse decoding preserve reference precise/coarse merge, unknown altitude and varregion semantics. Forward complete accepted map replies into shared CPU models, guard optional UI/callback reentrancy and retire account/grid caches without constructing legacy regions or GL textures. Map/minimap native drawing and complete actions remain open; model tests do not qualify UI."
@@ -58098,7 +58098,7 @@
       "path": "indra/newview/llworldmapmessage.cpp",
       "start": 303,
       "end": 306,
-      "sha256": "fc01ce0263188adaabdc441646c0ac6ef4274054256860655f4c2ff8cebff004",
+      "sha256": "42de5be4d263f9dcdcc00478b8c47f1b1f3e9efbd7faf06470985fd1f5b4b85e",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native authenticated per-circuit spatial snapshots and coarse decoding preserve reference precise/coarse merge, unknown altitude and varregion semantics. Forward complete accepted map replies into shared CPU models, guard optional UI/callback reentrancy and retire account/grid caches without constructing legacy regions or GL textures. Map/minimap native drawing and complete actions remain open; model tests do not qualify UI."
@@ -58107,7 +58107,7 @@
       "path": "indra/newview/llworldmapmessage.cpp",
       "start": 311,
       "end": 311,
-      "sha256": "fc01ce0263188adaabdc441646c0ac6ef4274054256860655f4c2ff8cebff004",
+      "sha256": "42de5be4d263f9dcdcc00478b8c47f1b1f3e9efbd7faf06470985fd1f5b4b85e",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native authenticated per-circuit spatial snapshots and coarse decoding preserve reference precise/coarse merge, unknown altitude and varregion semantics. Forward complete accepted map replies into shared CPU models, guard optional UI/callback reentrancy and retire account/grid caches without constructing legacy regions or GL textures. Map/minimap native drawing and complete actions remain open; model tests do not qualify UI."
@@ -58116,7 +58116,7 @@
       "path": "indra/newview/llworldmapmessage.cpp",
       "start": 318,
       "end": 319,
-      "sha256": "fc01ce0263188adaabdc441646c0ac6ef4274054256860655f4c2ff8cebff004",
+      "sha256": "42de5be4d263f9dcdcc00478b8c47f1b1f3e9efbd7faf06470985fd1f5b4b85e",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native authenticated per-circuit spatial snapshots and coarse decoding preserve reference precise/coarse merge, unknown altitude and varregion semantics. Forward complete accepted map replies into shared CPU models, guard optional UI/callback reentrancy and retire account/grid caches without constructing legacy regions or GL textures. Map/minimap native drawing and complete actions remain open; model tests do not qualify UI."
@@ -58125,7 +58125,7 @@
       "path": "indra/newview/llworldmapmessage.cpp",
       "start": 328,
       "end": 328,
-      "sha256": "fc01ce0263188adaabdc441646c0ac6ef4274054256860655f4c2ff8cebff004",
+      "sha256": "42de5be4d263f9dcdcc00478b8c47f1b1f3e9efbd7faf06470985fd1f5b4b85e",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native authenticated per-circuit spatial snapshots and coarse decoding preserve reference precise/coarse merge, unknown altitude and varregion semantics. Forward complete accepted map replies into shared CPU models, guard optional UI/callback reentrancy and retire account/grid caches without constructing legacy regions or GL textures. Map/minimap native drawing and complete actions remain open; model tests do not qualify UI."
