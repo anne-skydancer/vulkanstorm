@@ -41,6 +41,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <mutex>
 // <FS:minerjr> [FIRE-36022] - Removing my USB headset crashes entire viewer
 // Needed for inline variable for the crash check
 #include <atomic>
@@ -301,6 +302,11 @@ class LLWebRTCPeerConnectionInterface
 
 // The following define the dynamic linked library
 // exports.
+
+// Share the viewer's audio device mutex (FIRE-36022) with this library, so
+// voice and the audio engine serialize on the same object. Call before init();
+// it has no effect while the library is initialized.
+LLSYMEXPORT void setAudioDeviceMutex(std::timed_mutex* mutex);
 
 // This library must be initialized before use.
 LLSYMEXPORT void init(LLWebRTCLogCallback* logSink);

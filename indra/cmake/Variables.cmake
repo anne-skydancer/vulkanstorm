@@ -35,23 +35,35 @@ endif ()
 # Switches set here and in 00-Common.cmake must agree with
 # https://bitbucket.org/lindenlab/viewer-build-variables/src/tip/variables
 # Reading $LL_BUILD is an attempt to directly use those switches.
-if ("$ENV{LL_BUILD_RELEASE}" STREQUAL "" AND "${LL_BUILD_RELEASE_ENV}" STREQUAL "" )
-  message(FATAL_ERROR "Environment variable LL_BUILD_RELEASE must be set")
-elseif("$ENV{LL_BUILD_RELEASE}" STREQUAL "")
-  set( ENV{LL_BUILD_RELEASE} "${LL_BUILD_RELEASE_ENV}" )
-  message( "Setting ENV{LL_BUILD_RELEASE} to cached variable ${LL_BUILD_RELEASE_ENV}" )
-else()
-  set( LL_BUILD_RELEASE_ENV "$ENV{LL_BUILD_RELEASE}" CACHE STRING "Save environment RELEASE" FORCE )
+# <Vulkanstorm> Our builds pass the combined LL_BUILD (fs-build-variables, or
+# the qualified flags the CI sets), which 00-Common.cmake applies to every
+# configuration. When it is set, the per-configuration LL_BUILD_RELEASE and
+# LL_BUILD_RELWITHDEBINFO that newer build-variables/autobuild provide are
+# optional; without LL_BUILD they are required, as upstream requires them.
+if ("$ENV{LL_BUILD}" STREQUAL "" AND NOT "${LL_BUILD_ENV}" STREQUAL "")
+  set( ENV{LL_BUILD} "${LL_BUILD_ENV}" )
+  message( "Setting ENV{LL_BUILD} to cached variable ${LL_BUILD_ENV}" )
+elseif(NOT "$ENV{LL_BUILD}" STREQUAL "")
+  set( LL_BUILD_ENV "$ENV{LL_BUILD}" CACHE STRING "Save environment" FORCE )
+endif ()
+set(_ll_build_combined FALSE)
+if (NOT "$ENV{LL_BUILD}" STREQUAL "")
+  set(_ll_build_combined TRUE)
 endif ()
 
-if ("$ENV{LL_BUILD_RELWITHDEBINFO}" STREQUAL "" AND "${LL_BUILD_RELWITHDEBINFO_ENV}" STREQUAL "" )
-  message(FATAL_ERROR "Environment variable LL_BUILD_RELWITHDEBINFO must be set")
-elseif("$ENV{LL_BUILD_RELWITHDEBINFO}" STREQUAL "")
-  set( ENV{LL_BUILD_RELWITHDEBINFO} "${LL_BUILD_RELWITHDEBINFO_ENV}" )
-  message( "Setting ENV{LL_BUILD_RELWITHDEBINFO} to cached variable ${LL_BUILD_RELWITHDEBINFO_ENV}" )
-else()
-  set( LL_BUILD_RELWITHDEBINFO_ENV "$ENV{LL_BUILD_RELWITHDEBINFO}" CACHE STRING "Save environment RELWITHDEBINFO" FORCE )
-endif ()
+foreach(_ll_build_config RELEASE RELWITHDEBINFO)
+  set(_ll_build_var "LL_BUILD_${_ll_build_config}")
+  if ("$ENV{${_ll_build_var}}" STREQUAL "" AND "${${_ll_build_var}_ENV}" STREQUAL "" )
+    if (NOT _ll_build_combined)
+      message(FATAL_ERROR "Environment variable ${_ll_build_var} (or LL_BUILD) must be set")
+    endif ()
+  elseif("$ENV{${_ll_build_var}}" STREQUAL "")
+    set( ENV{${_ll_build_var}} "${${_ll_build_var}_ENV}" )
+    message( "Setting ENV{${_ll_build_var}} to cached variable ${${_ll_build_var}_ENV}" )
+  else()
+    set( ${_ll_build_var}_ENV "$ENV{${_ll_build_var}}" CACHE STRING "Save environment ${_ll_build_config}" FORCE )
+  endif ()
+endforeach()
 
 # Relative and absolute paths to subtrees.
 if(NOT DEFINED COMMON_CMAKE_DIR)

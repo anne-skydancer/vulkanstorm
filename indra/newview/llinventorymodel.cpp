@@ -491,6 +491,9 @@ bool LLInventoryModel::isObjectDescendentOf(const LLUUID& obj_id,
     if (obj_id == cat_id) return true;
 
     const LLInventoryObject* obj = getObject(obj_id);
+    // An acyclic parent chain reaches each category at most once, so more
+    // steps than there are categories means the chain loops.
+    size_t steps = 0;
     while(obj)
     {
         const LLUUID& parent_id = obj->getParentUUID();
@@ -505,6 +508,11 @@ bool LLInventoryModel::isObjectDescendentOf(const LLUUID& obj_id,
         // Since we're scanning up the parents, we only need to check
         // in the category list.
         obj = getCategory(parent_id);
+        if (obj && ++steps > mCategoryMap.size())
+        {
+            LL_WARNS(LOG_INV) << "Detected a loop on an object " << parent_id << " when checking whether " << obj_id << " descends from " << cat_id << LL_ENDL;
+            return false;
+        }
     }
     return false;
 }
@@ -1650,6 +1658,11 @@ U32 LLInventoryModel::updateItem(const LLViewerInventoryItem* item, U32 mask)
         // Simply add this item
         new_item = new LLViewerInventoryItem(item);
         addItem(new_item);
+        if (!is_in_map(mItemMap, new_item->getUUID()))
+        {
+            // addItem() refused it (bad type): don't list or account for it.
+            return mask;
+        }
 
         if(item->getParentUUID().isNull())
         {
@@ -1863,7 +1876,9 @@ void LLInventoryModel::moveObject(const LLUUID& object_id, const LLUUID& cat_id)
         return;
     }
 
-    if((object_id == cat_id) || !is_in_map(mCategoryMap, cat_id))
+    if((object_id == cat_id) || !is_in_map(mCategoryMap, cat_id)
+        // A folder can't move into one of its own descendants.
+        || (is_in_map(mCategoryMap, object_id) && isObjectDescendentOf(cat_id, object_id)))
     {
         LL_WARNS(LOG_INV) << "Could not move inventory object " << object_id << " to "
                           << cat_id << LL_ENDL;
@@ -3001,7 +3016,9 @@ bool LLInventoryModel::loadSkeleton(
 {
     LL_PROFILE_ZONE_SCOPED;
     // <FS:Zi> Purge inventory cache files marked by DELETE_INV_GZ marker files
-    std::string delete_cache_marker = gDirUtilp->getExpandedFilename(LL_PATH_CACHE, owner_id.asString() + "_DELETE_INV_GZ");
+    // The marker is the agent's. The library loads first, so check it on
+    // whichever call comes first, before any cache is read.
+    std::string delete_cache_marker = gDirUtilp->getExpandedFilename(LL_PATH_CACHE, gAgent.getID().asString() + "_DELETE_INV_GZ");
     LL_DEBUGS("LLInventoryModel") << "Checking for clear inventory cache marker: " << delete_cache_marker << LL_ENDL;
 
     // if this marker exists, go ahead and delete the respective .inv and/or .inv.gz files
@@ -3009,7 +3026,7 @@ bool LLInventoryModel::loadSkeleton(
     {
         LL_INFOS("LLInventoryModel") << "Clear inventory cache marker found: " << delete_cache_marker << LL_ENDL;
 
-        std::string inventory_filename = getInvCacheAddres(owner_id);
+        std::string inventory_filename = getInvCacheAddres(gAgent.getID());
         if (LLFile::isfile(inventory_filename))
         {
             LL_INFOS("LLInventoryModel") << "Purging inventory cache file: " << inventory_filename << LL_ENDL;
@@ -3118,6 +3135,7 @@ bool LLInventoryModel::loadSkeleton(
             inventory_filename = gDirUtilp->getTempFilename();
             remove_inventory_file = true;
         }
+        bool is_cache_obsolete = false;
         if(fp)
         {
             fclose(fp);
@@ -3132,10 +3150,14 @@ bool LLInventoryModel::loadSkeleton(
             else
             {
                 LL_INFOS(LOG_INV) << "Unable to gunzip " << gzip_filename << LL_ENDL;
+                // A corrupt or truncated cache: don't fall back to a plain
+                // file left under the same name, now or at the next login.
+                // Both it and the .gz are removed below.
+                is_cache_obsolete = true;
+                remove_inventory_file = true;
             }
         }
-        bool is_cache_obsolete = false;
-        if (loadFromFile(inventory_filename, categories, items, categories_to_update, is_cache_obsolete))
+        if (!is_cache_obsolete && loadFromFile(inventory_filename, categories, items, categories_to_update, is_cache_obsolete))
         {
             LL_PROFILE_ZONE_NAMED("loadFromFile");
             // We were able to find a cache of files. So, use what we
@@ -3573,9 +3595,13 @@ void LLInventoryModel::buildParentChildMap()
             // *HACK - fix root inventory folder
             // some accounts has pbroken inventory root folders
 
+            // The root id from login wins: look for a replacement only when
+            // it does not name a root inventory folder.
+            const LLViewerInventoryCategory* login_root = getCategory(mRootFolderID);
+            const bool fix_root = !login_root || login_root->getPreferredType() != LLFolderType::FT_ROOT_INVENTORY;
             std::string name = "My Inventory";
             for (parent_cat_map_t::const_iterator it = mParentChildCategoryTree.begin(),
-                     it_end = mParentChildCategoryTree.end(); it != it_end; ++it)
+                     it_end = mParentChildCategoryTree.end(); fix_root && it != it_end; ++it)
             {
                 cat_array_t* cat_array = it->second;
                 for (cat_array_t::const_iterator cat_it = cat_array->begin(),
@@ -4043,19 +4069,29 @@ void LLInventoryModel::processUpdateCreateInventoryItem(LLMessageSystem* msg, vo
     // do accounting and highlight new items if they arrive
     if (gInventory.messageUpdateCore(msg, true, LLInventoryObserver::UPDATE_CREATE))
     {
-        U32 callback_id;
-        LLUUID item_id;
-        msg->getUUIDFast(_PREHASH_InventoryData, _PREHASH_ItemID, item_id);
-        msg->getU32Fast(_PREHASH_InventoryData, _PREHASH_CallbackID, callback_id);
+        // Each InventoryData block carries its own item and callback.
+        std::list<InventoryCallbackInfo> cblist;
+        S32 count = msg->getNumberOfBlocksFast(_PREHASH_InventoryData);
+        for (S32 i = 0; i < count; ++i)
+        {
+            U32 callback_id;
+            LLUUID item_id;
+            msg->getUUIDFast(_PREHASH_InventoryData, _PREHASH_ItemID, item_id, i);
+            msg->getU32Fast(_PREHASH_InventoryData, _PREHASH_CallbackID, callback_id, i);
+            cblist.push_back(InventoryCallbackInfo(callback_id, item_id));
+        }
 
-        gInventoryCallbacks.fire(callback_id, item_id);
+        for (const InventoryCallbackInfo& cbinfo : cblist)
+        {
+            gInventoryCallbacks.fire(cbinfo.mCallback, cbinfo.mInvID);
 
-        // Message system at the moment doesn't support Thumbnails and potential
-        // newer features so just rerequest whole item
-        //
-        // todo: instead of unpacking message fully,
-        // grab only an item_id, then fetch
-        LLInventoryModelBackgroundFetch::instance().scheduleItemFetch(item_id, true);
+            // Message system at the moment doesn't support Thumbnails and potential
+            // newer features so just rerequest whole item
+            //
+            // todo: instead of unpacking message fully,
+            // grab only an item_id, then fetch
+            LLInventoryModelBackgroundFetch::instance().scheduleItemFetch(cbinfo.mInvID, true);
+        }
     }
 
 }
@@ -4389,7 +4425,7 @@ void LLInventoryModel::processBulkUpdateInventory(LLMessageSystem* msg, void**)
         LL_DEBUGS("Inventory") << "unpacked item '" << titem->getName() << "' in "
                                << titem->getParentUUID() << LL_ENDL;
         U32 callback_id;
-        msg->getU32Fast(_PREHASH_ItemData, _PREHASH_CallbackID, callback_id);
+        msg->getU32Fast(_PREHASH_ItemData, _PREHASH_CallbackID, callback_id, i);
         if(titem->getUUID().notNull() ) // && callback_id.notNull() )
         {
             items.push_back(titem);
@@ -5661,17 +5697,17 @@ void LLInventoryModel::processInventoryDescendents(LLMessageSystem* msg,void**)
 
     S32 i;
     S32 count = msg->getNumberOfBlocksFast(_PREHASH_FolderData);
-    LLPointer<LLViewerInventoryCategory> tcategory = new LLViewerInventoryCategory(owner_id);
     for(i = 0; i < count; ++i)
     {
+        LLPointer<LLViewerInventoryCategory> tcategory = new LLViewerInventoryCategory(owner_id);
         tcategory->unpackMessage(msg, _PREHASH_FolderData, i);
         gInventory.updateCategory(tcategory);
     }
 
     count = msg->getNumberOfBlocksFast(_PREHASH_ItemData);
-    LLPointer<LLViewerInventoryItem> titem = new LLViewerInventoryItem;
     for(i = 0; i < count; ++i)
     {
+        LLPointer<LLViewerInventoryItem> titem = new LLViewerInventoryItem;
         titem->unpackMessage(msg, _PREHASH_ItemData, i);
         // If the item has already been added (e.g. from link prefetch), then it doesn't need to be re-added.
         if (gInventory.getItem(titem->getUUID()))

@@ -32,6 +32,7 @@
 // boost::random_device, which nothing here links.
 #define _WEBSOCKETPP_CPP11_RANDOM_DEVICE_
 
+#include <boost/type_traits/is_same.hpp>
 #include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/client.hpp>
 

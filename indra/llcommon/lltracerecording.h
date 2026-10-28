@@ -409,6 +409,13 @@ namespace LLTrace
             LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
             num_periods = llmin(num_periods, getNumRecordedPeriods());
 
+            // No recorded periods: report 0, not the F64 maximum, which overflows
+            // callers that convert the result to F32.
+            if (num_periods == 0)
+            {
+                return (typename RelatedTypes<typename T::value_t>::fractional_t)0;
+            }
+
             typename RelatedTypes<typename T::value_t>::fractional_t min_val(std::numeric_limits<F64>::max());
             for (size_t i = 1; i <= num_periods; i++)
             {
@@ -437,7 +444,7 @@ namespace LLTrace
             num_periods = llmin(num_periods, getNumRecordedPeriods());
 
             bool has_value = false;
-            typename T::value_t max_val(std::numeric_limits<typename T::value_t>::min());
+            typename T::value_t max_val(std::numeric_limits<typename T::value_t>::lowest());
             for (size_t i = 1; i <= num_periods; i++)
             {
                 Recording& recording = getPrevRecording(i);
@@ -482,7 +489,12 @@ namespace LLTrace
             LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
             num_periods = llmin(num_periods, getNumRecordedPeriods());
 
-            F64 max_val = std::numeric_limits<F64>::min();
+            if (num_periods == 0)
+            {
+                return (typename RelatedTypes<typename T::value_t>::fractional_t)0;
+            }
+
+            F64 max_val = std::numeric_limits<F64>::lowest();
             for (size_t i = 1; i <= num_periods; i++)
             {
                 Recording& recording = getPrevRecording(i);

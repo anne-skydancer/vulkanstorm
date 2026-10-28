@@ -416,7 +416,7 @@ void LLViewerStats::updateFrameStats(const F64Seconds time_diff)
             mEventMinutes++;
             // Calculate average events per minute
             U64 frame_time_events_per_minute = (U64)mFrameJitterEvents / mEventMinutes;
-            sample(LLStatViewer::FRAMETIME_JITTER_EVENTS_PER_MINUTE, frame_time_events_per_minute);
+            sample(LLStatViewer::FRAMETIME_JITTER_EVENTS_PER_MINUTE, static_cast<U32>(frame_time_events_per_minute));
             sample(LLStatViewer::FRAMETIME_JITTER_EVENTS_LAST_MINUTE, mFrameJitterEventsLastMinute);
             mFrameJitterEventsLastMinute   = 0;
             mTimeSinceLastEventSample    = F64Seconds(0);
@@ -626,12 +626,12 @@ void update_statistics()
                 pct_scene_render_time = llclamp(pct_scene_render_time, 0., 100.);
                 if (tot_sleep_time_raw == 0)
                 {
-                    sample(LLStatViewer::SCENERY_FRAME_PCT, (U32)llround(pct_scene_render_time));
-                    sample(LLStatViewer::AVATAR_FRAME_PCT, (U32)llround(pct_avatar_time));
-                    sample(LLStatViewer::HUDS_FRAME_PCT, (U32)llround(pct_huds_time));
-                    sample(LLStatViewer::UI_FRAME_PCT, (U32)llround(pct_ui_time));
-                    sample(LLStatViewer::SWAP_FRAME_PCT, (U32)llround(pct_swap_time));
-                    sample(LLStatViewer::IDLE_FRAME_PCT, (U32)llround(pct_idle_time));
+                    sample(LLStatViewer::SCENERY_FRAME_PCT, F32Percent(static_cast<F32>(llround(pct_scene_render_time))));
+                    sample(LLStatViewer::AVATAR_FRAME_PCT, F32Percent(static_cast<F32>(llround(pct_avatar_time))));
+                    sample(LLStatViewer::HUDS_FRAME_PCT, F32Percent(static_cast<F32>(llround(pct_huds_time))));
+                    sample(LLStatViewer::UI_FRAME_PCT, F32Percent(static_cast<F32>(llround(pct_ui_time))));
+                    sample(LLStatViewer::SWAP_FRAME_PCT, F32Percent(static_cast<F32>(llround(pct_swap_time))));
+                    sample(LLStatViewer::IDLE_FRAME_PCT, F32Percent(static_cast<F32>(llround(pct_idle_time))));
                 }
             }
             else

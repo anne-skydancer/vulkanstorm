@@ -848,6 +848,10 @@ bool LLFloaterPreference::postBuild()
     // </FS:Ansariel>
 
     // <FS:Ansariel> Disable options only available on Windows and not on other platforms
+#if !LL_WINDOWS
+    childSetVisible("FSMusicSpatialSound", false);
+    childSetVisible("spatial_sound_label", false);
+#endif
 #ifndef LL_WINDOWS
     childSetEnabled("FSDisableWMIProbing", false);
 #endif
@@ -4043,8 +4047,75 @@ bool LLPanelPreferenceGraphics::postBuild()
 #endif // LL_DARWIN
 // </FS:CR>
 
+    // <VulkanStorm> Renderer backend selector
+    LLComboBox* backend_combo = getChild<LLComboBox>("render_backend");
+    if (backend_combo)
+    {
+        refreshRenderBackendSelector();
+        backend_combo->setCommitCallback(boost::bind(&LLPanelPreferenceGraphics::onRenderBackendCommit, this));
+    }
+    // </VulkanStorm>
+
     return LLPanelPreference::postBuild();
 }
+
+// <VulkanStorm>
+void LLPanelPreferenceGraphics::refreshRenderBackendSelector()
+{
+    LLComboBox* backend_combo = getChild<LLComboBox>("render_backend");
+    if (backend_combo)
+    {
+        std::string active_backend = gSavedSettings.getString("RenderBackend");
+        if (active_backend != "Zink")
+        {
+            active_backend = "OpenGL";
+        }
+        backend_combo->setValue(LLSD(active_backend));
+        backend_combo->resetDirty();
+    }
+}
+
+void LLPanelPreferenceGraphics::onRenderBackendCommit()
+{
+    std::string selected_backend = gSavedSettings.getString("RenderBackendPending");
+    std::string active_backend = gSavedSettings.getString("RenderBackend");
+    if (active_backend != "Zink")
+    {
+        active_backend = "OpenGL";
+    }
+    if (selected_backend == active_backend)
+    {
+        return;
+    }
+
+    LLSD args;
+    args["BACKEND"] = selected_backend;
+    LLNotificationsUtil::add("ChangeRenderBackend",
+                                args,
+                                LLSD(),
+                                boost::bind(&LLPanelPreferenceGraphics::callbackRenderBackendRestart, this, _1, _2));
+}
+
+void LLPanelPreferenceGraphics::callbackRenderBackendRestart(const LLSD& notification, const LLSD& response)
+{
+    S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
+    if (0 == option) // Shutdown now
+    {
+        std::string selected_backend = gSavedSettings.getString("RenderBackendPending");
+        if (selected_backend != "Zink")
+        {
+            selected_backend = "OpenGL";
+        }
+        gSavedSettings.setString("RenderBackend", selected_backend);
+        LL_INFOS() << "User requested quit to switch render backend to " << selected_backend << LL_ENDL;
+        LLAppViewer::instance()->requestQuit();
+    }
+    else // Later: revert the selector to the active backend
+    {
+        refreshRenderBackendSelector();
+    }
+}
+// </VulkanStorm>
 void LLPanelPreferenceGraphics::draw()
 {
     LLPanelPreference::draw();
@@ -4185,6 +4256,8 @@ void LLPanelPreferenceGraphics::cancel(const std::vector<std::string> settings_t
     // <FS:Ansariel> Improved graphics preferences
     resetDirtyChilds();
     LLPanelPreference::cancel(settings_to_skip);
+    // <VulkanStorm> Always revert the renderer selector to the active backend on cancel
+    refreshRenderBackendSelector();
 }
 void LLPanelPreferenceGraphics::saveSettings()
 {

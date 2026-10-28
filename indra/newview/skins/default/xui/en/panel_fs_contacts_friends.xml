@@ -13,7 +13,7 @@
 	 follows="all"
 	 clip="false"
 	 bottom="-2"
-	 right="-84"
+	 right="-88"
 	 left="4"
 	 layout="topleft"
 	 orientation="vertical"
@@ -118,7 +118,7 @@
 	 layout="topleft"
 	 height="22"
 	 label="IM/Call"
-	 left_delta="270"
+	 right="-5"
 	 name="im_btn"
 	 tool_tip="Open Instant Message session"
 	 width="80" />

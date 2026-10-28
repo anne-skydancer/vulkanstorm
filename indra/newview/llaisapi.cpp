@@ -1077,14 +1077,15 @@ AISUpdate::AISUpdate(const LLSD& update, AISAPI::COMMAND_TYPE type, const LLSD& 
         && type != AISAPI::UPDATEITEM
         && type != AISAPI::FETCHCOF
         && type != AISAPI::FETCHCATEGORYLINKS;
-    mTaskTimer.setTimerExpirySec(AIS_TASK_EXPIRY_SECONDS);
+    // start() resets the timer, which clears its expiry: set the expiry after it.
     mTaskTimer.start();
+    mTaskTimer.setTimerExpirySec(AIS_TASK_EXPIRY_SECONDS);
 
     U32 current_frame = LLFrameTimer::getFrameCount();
     if (sBatchFrameCount != current_frame)
     {
-        sBatchTimer.setTimerExpirySec(AIS_BATCH_EXPIRY_SECONDS);
         sBatchTimer.start();
+        sBatchTimer.setTimerExpirySec(AIS_BATCH_EXPIRY_SECONDS);
         sBatchFrameCount = current_frame;
     }
     parseUpdate(update);
@@ -1112,7 +1113,9 @@ void AISUpdate::checkTimeout()
         // Priority task, don't wait.
         return;
     }
-    if (mTaskTimer.hasExpired() || sBatchTimer.hasExpired())
+    // Loop: every waiting update resumes on the same frame event, so the
+    // frame's shared batch budget may already be spent when this one runs.
+    while (mTaskTimer.hasExpired() || sBatchTimer.hasExpired())
     {
         // If we are taking too long, don't starve other tasks,
         // yield to mainloop.

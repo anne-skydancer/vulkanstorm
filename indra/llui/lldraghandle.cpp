@@ -51,18 +51,18 @@ S32 LLDragHandle::sSnapMargin = 5;
 
 LLDragHandle::LLDragHandle(const LLDragHandle::Params& p)
 :   LLView(p),
-    mDragLastScreenX( 0 ),
-    mDragLastScreenY( 0 ),
-    mLastMouseScreenX( 0 ),
-    mLastMouseScreenY( 0 ),
-    mTitleBox( NULL ),
-    mMaxTitleWidth( 0 ),
-    mForeground( true ),
+    mTitleBox(NULL),
+    mFont(p.font),
+    mLabelVPad(p.label_vpad()),
+    mDragLastScreenX(0),
+    mDragLastScreenY(0),
+    mLastMouseScreenX(0),
+    mLastMouseScreenY(0),
     mDragHighlightColor(p.drag_highlight_color()),
     mDragShadowColor(p.drag_shadow_color()),
-    mFont(p.font),
-    mFontShadow(p.font_shadow),     // <FS:Zi> Allow skins to override drag handle font shadow
-    mLabelVPad(p.label_vpad())
+    mMaxTitleWidth(0),
+    mForeground(true),
+    mFontShadow(p.font_shadow)
 
 {
     static LLUICachedControl<S32> snap_margin ("SnapMargin", 0);
@@ -246,7 +246,7 @@ void LLDragHandleTop::reshapeTitleBox()
     {
         return;
     }
-    const LLFontGL* font = LLFontGL::getFontSansSerif();
+    const LLFontGL* font = mFont;
     S32 title_width = getRect().getWidth();
     title_width -= LEFT_PAD + 2 * BORDER_PAD + getButtonsRect().getWidth();
     S32 title_height = font->getLineHeight();

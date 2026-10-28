@@ -577,7 +577,7 @@
 			</panel>
 		</panel>
 		<panel label="Содержимое" name="Contents">
-			<button label="Создать скрипт" label_selected="Создать скрипт" name="button new script"/>
+			<flyout_button label="Создать скрипт" label_selected="Создать скрипт" name="button new script" />
 			<button label="Разрешения" name="button permissions"/>
 			<button label="Обновить" name="button refresh" width="100"/>
 			<button label="Сброс скриптов" name="btn_reset_scripts" width="100"/>

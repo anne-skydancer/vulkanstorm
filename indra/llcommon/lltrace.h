@@ -139,7 +139,8 @@ void record(EventStatHandle<T>& measurement, VALUE_T value)
 {
 #if LL_TRACE_ENABLED
     T converted_value(value);
-    measurement.getCurrentAccumulator().record(storage_value(converted_value));
+    measurement.getCurrentAccumulator().record(
+        static_cast<typename EventStatHandle<T>::storage_t>(storage_value(converted_value)));
 #endif
 }
 
@@ -164,7 +165,8 @@ void sample(SampleStatHandle<T>& measurement, VALUE_T value)
 {
 #if LL_TRACE_ENABLED
     T converted_value(value);
-    measurement.getCurrentAccumulator().sample(storage_value(converted_value));
+    measurement.getCurrentAccumulator().sample(
+        static_cast<typename SampleStatHandle<T>::storage_t>(storage_value(converted_value)));
 #endif
 }
 
@@ -180,7 +182,7 @@ public:
     CountStatHandle(const char* name, const char* description = NULL)
     :   stat_t(name, description)
     , mTotalSamplesCount(0)
-    , mTotalSamples(0.0)
+    , mTotalSamples()
     {}
 
     /*virtual*/ const char* getUnitLabel() const { return LLGetUnitLabel<T>::getUnitLabel(); }
@@ -206,8 +208,9 @@ void add(CountStatHandle<T>& count, VALUE_T value)
 {
 #if LL_TRACE_ENABLED
     T converted_value(value);
-    count.getCurrentAccumulator().add(storage_value(converted_value));
-    count.add( value ); // <FS:ND/> Add a stats global count. Which will accumulate all samples over the applicaton lifetime.
+    count.getCurrentAccumulator().add(
+        static_cast<typename CountStatHandle<T>::storage_t>(storage_value(converted_value)));
+    count.add( converted_value ); // <FS:ND/> Add a stats global count. Which will accumulate all samples over the applicaton lifetime.
 #endif
 }
 

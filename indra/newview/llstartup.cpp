@@ -109,6 +109,9 @@
 
 #include "llviewermedia_streamingaudio.h"
 #include "llaudioengine.h"
+#ifdef LL_SOLOUD
+#include "llaudioengine_soloud.h"
+#endif
 
 #ifdef LL_FMODSTUDIO
 # include "llaudioengine_fmodstudio.h"
@@ -874,7 +877,7 @@ bool idle_startup()
         {
             LLNotificationsUtil::add("DisplaySetToRecommendedFeatureChange");
         }
-        else if ( ! lastGPU.empty() && (lastGPU != thisGPU))
+        else if (!lastGPU.empty() && LLFeatureManager::getInstance()->graphicsIdentityChanged())
         {
             LLSD subs;
             subs["LAST_GPU"] = lastGPU;
@@ -896,6 +899,7 @@ bool idle_startup()
 
         gSavedSettings.setS32("LastFeatureVersion", LLFeatureManager::getInstance()->getVersion());
         gSavedSettings.setString("LastGPUString", thisGPU);
+        gSavedSettings.setString("LastGraphicsRendererFamily", "OpenGL");
 
         std::string xml_file = LLUI::locateSkin("xui_version.xml");
         LLXMLNodePtr root;
@@ -1095,7 +1099,21 @@ bool idle_startup()
             }
 
             std::string url = gSavedSettings.getString("GridListDownloadURL");
-            FSCoreHttpUtil::callbackHttpGet(url, last_modified, boost::bind(downloadGridlistComplete, _1), boost::bind(downloadGridlistError, _1, url));
+            // Upgrade saved copies of the stock URL without disabling grid discovery.
+            if (url == "http://phoenixviewer.com/app/fsdata/grids.xml")
+            {
+                url = "https://phoenixviewer.com/app/fsdata/grids.xml";
+            }
+            LLCore::HttpOptions::ptr_t options;
+            // Authenticate the stock feed; retain existing options for custom feeds.
+            if (url == "https://phoenixviewer.com/app/fsdata/grids.xml")
+            {
+                options = std::make_shared<LLCore::HttpOptions>();
+                options->setSSLVerifyPeer(true);
+                options->setSSLVerifyHost(true);
+                options->setFollowRedirects(false);
+            }
+            FSCoreHttpUtil::callbackHttpGet(url, last_modified, boost::bind(downloadGridlistComplete, _1), boost::bind(downloadGridlistError, _1, url), options);
         }
 #else
         sGridListRequestReady = true;
@@ -1167,7 +1185,9 @@ bool idle_startup()
             delete gAudiop;
             gAudiop = NULL;
 
-#ifdef LL_FMODSTUDIO
+#ifdef LL_SOLOUD
+            gAudiop = new LLAudioEngine_SoLoud();
+#elif defined(LL_FMODSTUDIO)
 #if !LL_WINDOWS
             if (NULL == getenv("LL_BAD_FMODSTUDIO_DRIVER"))
 #endif // !LL_WINDOWS

@@ -33,6 +33,9 @@
 #include "llsdjson.h"
 #include "lltimer.h"
 
+// WebSocket++'s Boost traits fallback requires this declaration explicitly;
+// newer Boost aligned-storage headers no longer include it transitively.
+#include <boost/type_traits/is_same.hpp>
 #include <websocketpp/config/boost_config.hpp>
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/client.hpp>

@@ -479,6 +479,10 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
     else if (requested_target == "auto")
     {
         compile_target = item->getRuntime();
+        if (compile_target == "luau" && item->getInventorySubType() != SST_LUA)
+        {
+            compile_target = "lsl-luau";
+        }
         if (compile_target.empty())
         {
             floater->addStringMessage(
@@ -561,7 +565,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
         if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor"))
         {
             // Need to dump some stuff into an LLScriptQueueData struct for the LSL PreProc.
-            LLScriptQueueData* datap = new LLScriptQueueData(hfloater.get()->getKey().asUUID(), object->getID(), experienceId, item);
+            LLScriptQueueData* datap = new LLScriptQueueData(hfloater.get()->getKey().asUUID(), object->getID(), experienceId, item, compile_target);
             userData = HandleScriptUserData(pump.getName(), datap);
         }
         else
@@ -1171,7 +1175,7 @@ void LLFloaterCompileQueue::scriptPreprocComplete(LLScriptQueueData* data, LLAss
                 LLResourceUploadInfo::ptr_t uploadInfo(new LLScriptAssetUploadWithId(
                     data->mTaskId,
                     data->mItem->getUUID(),
-                    queue->mCompileTarget,
+                    data->mCompileTarget,
                     is_running,
                     scriptName,
                     data->mQueueID,

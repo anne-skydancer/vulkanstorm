@@ -128,6 +128,7 @@ private:
     LLScriptEdContainer*                    getEditor() const;
     std::shared_ptr<LLScriptEditorWSServer> getServer() const;
 
+    std::atomic<bool> mClosed{ false };
     U32 mConnectionID{ 0 }; ///< Unique identifier for this connection
 
     // Client handshake response data
@@ -223,6 +224,7 @@ public:
     static bool                          launchVSCode(const LLUUID& object_id = LLUUID::null,
                                                       const LLUUID& script_id = LLUUID::null);
 
+    bool update() override;
     void onStarted() override;
     void onStopped() override;
     void onConnectionOpened(const LLWebsocketMgr::WSConnection::ptr_t& connection) override;
@@ -333,6 +335,10 @@ protected:
                 return LLSD();
             }
             auto server = std::static_pointer_cast<LLScriptEditorWSServer>(base);
+            if (!server->isRunning() || !isEnabled())
+            {
+                return LLSD();
+            }
             return fn(*server, method, id, params);
         };
     }
@@ -358,6 +364,7 @@ private:
     SubscriptionError updateScriptSubscription(const std::string &script_id, U32 connection_id);
     void                unsubscribeConnection(U32 connection_id);
 
+    // Main-loop owned, including connection lifecycle publication from I/O.
     subscriptions_t mSubscriptions;
     std::unordered_map<U32, S32> mConnectionSubscriptionCounts;
     std::map<U32, LLScriptEditorWSConnection::wptr_t> mActiveConnections;

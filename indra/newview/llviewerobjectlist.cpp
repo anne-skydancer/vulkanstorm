@@ -1216,7 +1216,7 @@ void LLViewerObjectList::update(LLAgent &agent)
     }
     */
 
-    sample(LLStatViewer::NUM_OBJECTS, mObjects.size());
+    sample(LLStatViewer::NUM_OBJECTS, static_cast<F64>(mObjects.size()));
     sample(LLStatViewer::NUM_ACTIVE_OBJECTS, idle_count);
 }
 

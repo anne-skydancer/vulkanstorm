@@ -1765,6 +1765,10 @@
      name="BuildTools"
      tear_off="true"
      visible="true">
+    <menu_item_call label="Scripting Settings..." name="Scripting Settings">
+      <menu_item_call.on_click function="Floater.Show" parameter="scripting_settings" />
+    </menu_item_call>
+
        <menu_item_check
          label="Build"
          name="Show Build Tools"

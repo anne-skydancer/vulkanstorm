@@ -27,7 +27,6 @@
 	<text name="obj_name">Objeto de origem: [SOURCE_OBJECT]</text>
 	<button label="Redefinir" label_selected="Redefinir" name="Reset"/>
 	<check_box initial_value="true" label="Em execução" name="running"/>
-	<check_box initial_value="true" label="Mono" name="mono"/>
 	<check_box label="Usar experience:" name="enable_xp"/>
 	<button label="&gt;" name="view_profile"/>
 </floater>

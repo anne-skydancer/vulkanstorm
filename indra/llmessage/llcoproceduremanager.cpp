@@ -32,6 +32,8 @@
 #include "llcoproceduremanager.h"
 
 #include <chrono>
+#include <limits>
+#include <stdexcept>
 
 #include <boost/fiber/buffered_channel.hpp>
 
@@ -120,6 +122,18 @@ private:
     // because the consuming coroutine might outlive this LLCoprocedurePool
     // instance.
     typedef std::shared_ptr<CoprocQueue_t> CoprocQueuePtr;
+    static size_t                          checkedQueueSize(size_t capacity, size_t workers)
+    {
+        // buffered_channel requires a power of two and reserves one slot.
+        // count() exposes S32: bound capacity so pending + active fits that API,
+        // and an extreme capacity cannot overflow Boost's slot-array allocation.
+        if (!workers || capacity <= workers || capacity < 2 || (capacity & (capacity - 1)))
+            throw std::invalid_argument("Invalid coprocedure queue capacity or worker count");
+        if (capacity > size_t(std::numeric_limits<S32>::max()) ||
+            capacity > size_t(std::numeric_limits<std::ptrdiff_t>::max()) / sizeof(CoprocQueue_t::value_type) - 1)
+            throw std::length_error("Coprocedure queue capacity exceeds count or allocation range");
+        return capacity;
+    }
 
     std::string     mPoolName;
     size_t          mPoolSize, mQueueSize, mActiveCoprocsCount, mPending;
@@ -316,10 +330,10 @@ void LLCoprocedureManager::close(const std::string &pool)
 }
 
 //=========================================================================
-LLCoprocedurePool::LLCoprocedurePool(const std::string &poolName, size_t size, size_t queue_size):
+LLCoprocedurePool::LLCoprocedurePool(const std::string& poolName, size_t size, size_t queue_size) :
     mPoolName(poolName),
     mPoolSize(size),
-    mQueueSize(queue_size),
+    mQueueSize(checkedQueueSize(queue_size, size)),
     mActiveCoprocsCount(0),
     mPending(0),
     mHTTPPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID),

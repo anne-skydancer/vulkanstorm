@@ -43,7 +43,7 @@ if (WINDOWS)
                                        crypt32
                                        libcmt)
     # as the webrtc libraries are release, build this binary as release as well.
-    target_compile_options(llwebrtc PRIVATE "/MT" "/Zc:wchar_t")
+    target_compile_options(llwebrtc PRIVATE "/Zc:wchar_t")
     if (USE_BUGSPLAT)
         set_target_properties(llwebrtc PROPERTIES PDB_OUTPUT_DIRECTORY "${SYMBOLS_STAGING_DIR}")
     endif (USE_BUGSPLAT)
@@ -69,12 +69,14 @@ target_include_directories( llwebrtc INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 if (WINDOWS)
     set_property(TARGET llwebrtc PROPERTY
-        MSVC_RUNTIME_LIBRARY "MultiThreadedDebug")
+        MSVC_RUNTIME_LIBRARY "MultiThreaded")
 else()
     target_compile_options(llwebrtc PRIVATE -Wno-deprecated-declarations) # webrtc::CreateAudioDeviceWithDataObserver is deprecated
 endif (WINDOWS)
 
 ADD_CUSTOM_COMMAND(TARGET llwebrtc POST_BUILD
+                   BYPRODUCTS "${SHARED_LIB_STAGING_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}llwebrtc${CMAKE_SHARED_LIBRARY_SUFFIX}"
+                   COMMAND ${CMAKE_COMMAND} -E make_directory ${SHARED_LIB_STAGING_DIR}
                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
                        $<TARGET_FILE:llwebrtc>
                                ${SHARED_LIB_STAGING_DIR})

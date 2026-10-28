@@ -49,6 +49,8 @@ public:
     ~FSPanelLogin();
 
     virtual void setFocus( bool b );
+    void reshape(S32 width, S32 height, bool called_from_parent = true) override;
+    void onUpdateScrollToChild(const LLUICtrl* control) override;
 
     static void show(const LLRect &rect,
         void (*callback)(S32 option, void* user_data),

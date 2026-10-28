@@ -15,12 +15,12 @@
 	 max_length_bytes="35"
 	 name="group_filter_input"
 	 top="3"
-	 right="-86" />
+	 right="-90" />
 	<view_border
 	 top_pad="3"
 	 bottom="25"
 	 left="6"
-	 width="262"
+	 width="258"
 	 height="245"
 	 layout="topleft"
 	 follows="all"
@@ -35,7 +35,7 @@
 	 name="group_list"
 	 color="ScrollBgWriteableColor"
 	 top_delta="0"
-	 width="260" />
+	 width="256" />
 	<text
 	 type="string"
 	 length="1"
@@ -52,7 +52,7 @@
 	 height="20"
 	 label="IM/Call"
 	 layout="topleft"
-	 right="-1"
+	 right="-5"
 	 name="chat_btn"
 	 tool_tip="Open Instant Message session"
 	 width="80" />

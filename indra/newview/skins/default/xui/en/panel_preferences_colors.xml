@@ -1790,7 +1790,7 @@
      </color_swatch>
      <color_swatch
        can_apply_immediately="true"
-       color="DialogColorFg"
+       color="ScriptDialogFg"
        follows="left|top"
        height="24"
        label_height="0"

@@ -31,6 +31,7 @@
 
 #include "lldictionary.h"
 #include "llinventorydefines.h"
+#include "llinventorytype.h"
 #include "llui.h"
 #include "lluiimage.h"
 #include "llwearabletype.h"
@@ -152,8 +153,11 @@ const std::string& LLInventoryIcon::getIconName(LLAssetType::EType asset_type,
             idx = LLInventoryType::ICONNAME_LANDMARK;
             // </FS:Ansariel>
             break;
-        case LLAssetType::AT_SCRIPT:
         case LLAssetType::AT_LSL_TEXT:
+            idx = (misc_flag & LLInventoryItemFlags::II_FLAGS_SUBTYPE_MASK) == SST_LUA
+                ? LLInventoryType::ICONNAME_SCRIPT_LUAU : LLInventoryType::ICONNAME_SCRIPT;
+            break;
+        case LLAssetType::AT_SCRIPT:
         case LLAssetType::AT_LSL_BYTECODE:
             idx = assignScriptIcon(misc_flag);
             break;

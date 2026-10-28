@@ -1,18 +1,20 @@
 name: Build
 
-# vkstorm-aleph: vkstorm-release's build workflow (same matrix, configuration
-# and defaults) on the upstream Firestorm tree. Steps that need code only
-# vkstorm-release has are left out: the publication and feature checks of
-# check-publication, the Inno Setup installer, the Mesa Zink checks, the
-# statistics compile check, the SoLoud audio engine and the release-only
-# focused tests. This line never publishes, so latest and release are absent.
-
 on:
   workflow_dispatch:
+    inputs:
+      experimental_release:
+        description: >-
+          vkstorm-canary only: build a Release package (Release configuration, AVX2,
+          LTO, Inno Setup, no development hooks) and publish it as the experimental
+          pre-release, moving the experimental tag. Never touches latest.
+        type: boolean
+        default: false
   workflow_call:
   pull_request:
   push:
-    branches: ["vkstorm-aleph", "codex/**"]
+    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-aleph", "codex/**"]
+    tags: ["Second_Life*"]
 
 permissions:
   contents: read
@@ -23,7 +25,35 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/codex/') }}
 
 jobs:
+  check-publication:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - run: node --test scripts/tests/ci_publish_latest.test.cjs
+      - run: python3 scripts/tests/test_windows_symbol_archive.py
+      - run: python3 scripts/tests/test_version_schema.py
+      - run: python3 scripts/tests/test_contacts_layout.py
+      - run: python3 scripts/tests/test_ci_numeric_boundaries.py
+      - run: python3 scripts/tests/test_ndof_cmake.py
+      - run: python3 scripts/tests/test_slua_ui_resources.py
+      - run: python3 scripts/tests/test_canary_upstream_review.py
+      - run: python3 scripts/tests/test_slua_review.py
+      - name: Check update version parsing
+        run: |
+          g++ -std=c++20 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/viewer_version_parser_test.cpp -o "$RUNNER_TEMP/version-parser-test"
+          "$RUNNER_TEMP/version-parser-test"
+      - name: Check POSIX handshake file creation
+        run: |
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I indra/newview indra/newview/tests/llscripteditorposixfile_test.cpp -o "$RUNNER_TEMP/challenge-file-test"
+          "$RUNNER_TEMP/challenge-file-test"
+      - name: Keep development hooks out of release
+        if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)
+        run: python3 scripts/tests/check_release_hooks.py
+
   build:
+    needs: check-publication
     strategy:
       fail-fast: false
       matrix:
@@ -34,8 +64,10 @@ jobs:
             directory: build-linux-x86_64
     runs-on: ${{ matrix.os }}
     env:
-      VIEWER_BUILD_TYPE: RelWithDebInfo
-      VIEWER_PACKAGE: "OFF"
+      # Release packages: vkstorm-release pushes, Second_Life tags, and the manually
+      # dispatched experimental build of vkstorm-canary.
+      VIEWER_BUILD_TYPE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)) && 'Release' || 'RelWithDebInfo' }}
+      VIEWER_PACKAGE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)) && 'ON' || 'OFF' }}
       AUTOBUILD_ADDRSIZE: 64
       AUTOBUILD_CONFIGURATION: ReleaseFS_open
       AUTOBUILD_VSVER: "170"
@@ -76,9 +108,9 @@ jobs:
             gcc-14 g++-14 build-essential pkg-config \
             libgl1-mesa-dev libglu1-mesa-dev libpulse-dev libssl-dev \
             libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype6-dev \
-            libvlc-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
-          # libvlc and GStreamer: this tree's Linux media plugins use the
-          # system libraries through pkg-config (REQUIRED).
+            libunwind-dev libxcursor-dev libxfixes-dev libxft-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libpipewire-0.3-dev libdbus-1-dev libvlc-dev libosmesa6-dev
           echo "CC=gcc-14" >> "$GITHUB_ENV"
           echo "CXX=g++-14" >> "$GITHUB_ENV"
 
@@ -93,6 +125,21 @@ jobs:
       - name: Install build dependencies
         run: python -m pip install autobuild==3.9.3 llsd
 
+      - name: Check installer version and payload
+        run: |
+          python scripts/tests/test_inno_payload.py
+          python scripts/tests/test_velopack_version.py
+
+      - name: Check Linux installation scripts
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/test_linux_install_scripts.sh
+
+      - name: Install Inno Setup
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: choco install innosetup --yes --no-progress
+
       - uses: actions/cache@v6
         with:
           path: .autobuild-installables
@@ -106,52 +153,70 @@ jobs:
         run: |
           set -euo pipefail
           eval "$(autobuild source_environment -c ReleaseFS_open)"
-          # This tree reads per-configuration flags (LL_BUILD_RELEASE,
-          # LL_BUILD_RELWITHDEBINFO; autobuild derives them from the
-          # variables file's LL_BUILD_<PLATFORM>_<CONFIG>), not LL_BUILD.
+          export LL_BUILD
           options=()
           if [[ "$RUNNER_OS" == Windows ]]; then
-            # The flags used by the successful local Release build, which
-            # vkstorm-release applies to every configuration.
-            LL_BUILD_RELEASE='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
-            LL_BUILD_RELWITHDEBINFO="$LL_BUILD_RELEASE"
-            options+=(-G 'Visual Studio 17 2022' -A x64)
+            # The flags used by the successful local Release build.
+            export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
+            options+=(-G 'Visual Studio 17 2022' -A x64 -DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=ON)
+          else
+            options+=(-DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=OFF)
           fi
-          export LL_BUILD_RELEASE LL_BUILD_RELWITHDEBINFO
-          for var in LL_BUILD_RELEASE LL_BUILD_RELWITHDEBINFO; do
-            {
-              echo "$var<<VKSTORM_LL_BUILD"
-              printf '%s\n' "${!var}"
-              echo 'VKSTORM_LL_BUILD'
-            } >> "$GITHUB_ENV"
-          done
-          # vkstorm-release's configuration. Audio: release builds SoLoud,
-          # which this tree does not have; upstream's OpenAL stays the engine.
+          {
+            echo 'LL_BUILD<<VKSTORM_LL_BUILD'
+            printf '%s\n' "$LL_BUILD"
+            echo 'VKSTORM_LL_BUILD'
+          } >> "$GITHUB_ENV"
           cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
             -DCMAKE_BUILD_TYPE:STRING="$VIEWER_BUILD_TYPE" -DADDRESS_SIZE:STRING=64 \
             -DPACKAGE:BOOL="$VIEWER_PACKAGE" \
-            -DVIEWER_CHANNEL:STRING=Vulkanstorm-Aleph -DROOT_PROJECT_NAME:STRING=Firestorm \
+            -DVIEWER_CHANNEL:STRING=${{ github.ref == 'refs/heads/vkstorm-aleph' && 'Vulkanstorm-Aleph' || 'Vulkanstorm-Release' }} -DROOT_PROJECT_NAME:STRING=Firestorm \
             -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
             -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
-            -DUSE_KDU:BOOL=OFF \
-            -DUSE_OPENAL:BOOL=ON -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF \
+            -DUSE_KDU:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
+            -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF \
             -DUSE_AVX2_OPTIMIZATION:BOOL=ON -DUSE_AVX_OPTIMIZATION:BOOL=OFF -DUSE_LTO:BOOL=ON \
             -DUSE_PRECOMPILED_HEADERS:BOOL=ON -DUSE_DISCORD:BOOL=OFF -DUSE_BUGSPLAT:BOOL=OFF \
             -DUSE_TRACY:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF \
             -DLL_TESTS:BOOL=OFF -DRELEASE_CRASH_REPORTING:BOOL=OFF \
             -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
+          if [[ "$VIEWER_BUILD_TYPE" == Release ]]; then
+            python scripts/ci_release_config.py "$BUILD_DIRECTORY/CMakeCache.txt" "$RUNNER_OS"
+          fi
+          python scripts/ci_viewer_version.py "$BUILD_DIRECTORY/newview/viewer_version.txt"
 
-      # The LTO link of this tree's firestorm-bin exhausts the hosted runner's
-      # 16 GB: twice the job was cancelled about 2.5 minutes into that link.
-      # Swap on the larger /mnt disk lets it finish; the build flags stay
-      # vkstorm-release's.
+      - name: Check Linux Mesa provider selection
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y mesa-utils mesa-vulkan-drivers xvfb xauth
+          g++-14 -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llwindow \
+            indra/llwindow/tests/linux_zink_loader_test.cpp -lGL -lX11 -ldl \
+            -o "$RUNNER_TEMP/linux-zink-loader-test"
+          export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' -print -quit)"
+          test -n "$VK_DRIVER_FILES"
+          export LIBGL_ALWAYS_SOFTWARE=true LIBGL_KOPPER_DRI2=true
+          # No LD_LIBRARY_PATH or LD_PRELOAD entry for Mesa: exercise the viewer loader.
+          xvfb-run -a glxinfo -B > "${{ matrix.directory }}/native-glxinfo.txt"
+          xvfb-run -a "$RUNNER_TEMP/linux-zink-loader-test" \
+            "$GITHUB_WORKSPACE/${{ matrix.directory }}/packages/lib/release/mesa" \
+            | tee "${{ matrix.directory }}/zink-loader-test.txt"
+
+      - name: Compile statistics type coverage before viewer
+        run: |
+          cmake -S indra -B ${{ matrix.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
+          cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel 3
+
+      # vkstorm-aleph: the LTO link of firestorm-bin on upstream master's tree
+      # exhausted the hosted runner's 16 GB (two cancelled Linux jobs, run
+      # 40666481166). Swap on /mnt lets it finish; the build flags are unchanged.
       - name: Add swap for the LTO link
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
           free -h
-          df -h / /mnt
           sudo fallocate -l 24G /mnt/vkstorm.swap
           sudo chmod 600 /mnt/vkstorm.swap
           sudo mkswap /mnt/vkstorm.swap
@@ -160,10 +225,6 @@ jobs:
 
       - name: Build viewer and stage runtime
         run: cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
-
-      - name: Memory after the build
-        if: always() && runner.os == 'Linux'
-        run: free -h
 
       - name: Keep qualification builds free of installers
         if: env.VIEWER_PACKAGE != 'ON'
@@ -176,15 +237,38 @@ jobs:
             exit 1
           fi
 
-      - name: Run statistics regression tests
+      - name: Run statistics, script metadata and transport regression tests
         shell: bash
         run: |
           set -euo pipefail
           cmake -S indra -B "${{ matrix.directory }}" -DLL_TESTS:BOOL=ON
           cmake --build "${{ matrix.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
-            --target INTEGRATION_TEST_lltrace
+            --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver
+
+      - name: Check packaged Linux Mesa runtime
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "${{ matrix.directory }}/newview/packaged/licenses/mesazink.txt"
+          export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' -print -quit)"
+          export LIBGL_ALWAYS_SOFTWARE=true LIBGL_KOPPER_DRI2=true
+          xvfb-run -a "$RUNNER_TEMP/linux-zink-loader-test" \
+            "$GITHUB_WORKSPACE/${{ matrix.directory }}/newview/packaged/lib/mesa" \
+            | tee "${{ matrix.directory }}/zink-packaged-test.txt"
+
+      - name: Upload installer
+        if: env.VIEWER_PACKAGE == 'ON'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ runner.os }}-installer
+          if-no-files-found: error
+          path: |
+            ${{ matrix.directory }}/newview/Release/*_Setup.exe
+            ${{ matrix.directory }}/newview/*.tar.xz
 
       - name: Upload qualification viewer
+        if: env.VIEWER_PACKAGE != 'ON'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ runner.os }}-qualification-viewer
@@ -203,4 +287,87 @@ jobs:
             ${{ matrix.directory }}/CMakeFiles/CMakeConfigureLog.yaml
             ${{ matrix.directory }}/packages/autobuild-package.xml
             ${{ matrix.directory }}/packages/installed-packages.xml
+            ${{ matrix.directory }}/*glxinfo.txt
+            ${{ matrix.directory }}/zink-*-test.txt
             ${{ matrix.directory }}/newview/viewer_version.txt
+
+  latest:
+    # PR builds validate changes but must never publish release binaries.
+    if: >-
+      github.repository == 'anne-skydancer/vulkanstorm' &&
+      github.ref == 'refs/heads/vkstorm-release' &&
+      contains(fromJSON('["push", "workflow_dispatch", "schedule"]'), github.event_name)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: vulkanstorm-latest-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: '*-installer'
+          path: installers
+      - name: Publish both platforms and advance latest
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const publish = require('./scripts/ci_publish_latest.cjs');
+            await publish({ github, context, core, directory: 'installers' });
+
+  experimental:
+    # The manually dispatched Release build of vkstorm-canary: publishes the
+    # experimental pre-release and moves the experimental tag, after both
+    # platforms succeed. It never publishes to latest (canary builds must not
+    # advance latest).
+    if: >-
+      github.repository == 'anne-skydancer/vulkanstorm' &&
+      github.ref == 'refs/heads/vkstorm-canary' &&
+      github.event_name == 'workflow_dispatch' && inputs.experimental_release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: vulkanstorm-experimental-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: '*-installer'
+          path: installers
+      - name: Publish both platforms and move experimental
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const publish = require('./scripts/ci_publish_latest.cjs');
+            await publish({ github, context, core, directory: 'installers', channel: publish.channels.experimental });
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/Second_Life')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: '*-installer'
+          path: installers
+      - uses: secondlife-3p/action-gh-release@v1
+        with:
+          prerelease: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            installers/Windows-installer/*.exe
+            installers/Linux-installer/*.tar.xz

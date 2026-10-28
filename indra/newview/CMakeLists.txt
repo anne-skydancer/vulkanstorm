@@ -36,9 +36,11 @@ include(LLKDU)
 include(LLPhysicsExtensions)
 include(LLPrimitive)
 include(LLWindow)
+include(MesaZink)
 include(NDOF)
 include(NVAPI)
 include(OPENAL)
+include(SOLOUD)
 include(OpenGL)
 include(OpenSSL)
 include(OpenXR)
@@ -49,6 +51,7 @@ include(ThreeJS)
 include(Tracy)
 include(UI)
 include(Velopack)
+include(InnoSetup)
 include(ViewerMiscLibs)
 #include(ViewerManager) # <FS:Ansariel> Remove VMP
 include(VisualLeakDetector)
@@ -951,7 +954,7 @@ else (OPENSIM)
         )
 endif (OPENSIM)
 
-set(VIEWER_BINARY_NAME "firestorm-bin" CACHE STRING
+set(VIEWER_BINARY_NAME "vulkanstorm-bin" CACHE STRING
     "The name of the viewer executable to create.")
 
 set(viewer_HEADER_FILES
@@ -1568,6 +1571,7 @@ set(viewer_HEADER_FILES
     llscreenchannel.h
     llscripteditor.h
     llscripteditorws.h
+    llscripteditorposixfile.h
     llscriptfloater.h
     llscriptruntimeperms.h
     llscrollingpanelparam.h
@@ -1666,6 +1670,7 @@ set(viewer_HEADER_FILES
     llurllineeditorctrl.h
     llurlwhitelist.h
     llversioninfo.h
+    llversionparser.h
     llvvmquery.h
     llviewchildren.h
     llviewerassetstats.h
@@ -1974,22 +1979,8 @@ if (LINUX)
     endif()
     # </FS:ND>
 
-    # Replace the icons with the appropriate ones for the channel
-    # ('test' is the default)
-    set(ICON_PATH "private")
-    string(TOLOWER ${VIEWER_CHANNEL} channel_lower)
-    if(channel_lower MATCHES "release")
-        set(ICON_PATH "release")
-    elseif(channel_lower MATCHES "beta")
-        set(ICON_PATH "beta")
-    elseif(channel_lower MATCHES "project")
-        set(ICON_PATH "project")
-    endif()
-
-    if (OPENSIM)
-        set(ICON_PATH "${ICON_PATH}-os")
-    endif (OPENSIM)
-
+    # All channels and grid variants share Vulkanstorm branding.
+    set(ICON_PATH "vulkanstorm")
     message(STATUS "Copying icons for ${ICON_PATH}")
     execute_process(
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -2020,28 +2011,8 @@ if (WINDOWS)
 # [FS]
          )
 
-    # Replace the icons with the appropriate ones for the channel
-    # ('test' is the default)
-    set(ICON_PATH "private")
-    #set(VIEWER_MACOSX_PHASE "d") # <FS:Ansariel> Moved to OSX section
-    string(TOLOWER ${VIEWER_CHANNEL} channel_lower)
-    if(channel_lower MATCHES "release")
-        set(ICON_PATH "release")
-        #set(VIEWER_MACOSX_PHASE "f") # <FS:Ansariel> Moved to OSX section
-    elseif(channel_lower MATCHES "beta")
-        set(ICON_PATH "beta")
-        #set(VIEWER_MACOSX_PHASE "b") # <FS:Ansariel> Moved to OSX section
-    elseif(channel_lower MATCHES "project")
-        set(ICON_PATH "project")
-        #set(VIEWER_MACOSX_PHASE "a") # <FS:Ansariel> Moved to OSX section
-    endif()
-
-    # <FS:Ansariel> FIRE-24335: Use different icon for OpenSim version
-    if (OPENSIM)
-        set(ICON_PATH "${ICON_PATH}-os")
-    endif (OPENSIM)
-    # <FS:Ansariel>
-
+    # All channels and grid variants share Vulkanstorm branding.
+    set(ICON_PATH "vulkanstorm")
     message(STATUS "Copying icons for ${ICON_PATH}")
     execute_process(
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -2356,6 +2327,8 @@ set(PACKAGE ON CACHE BOOL
 
 if(USE_PRECOMPILED_HEADERS)
   target_precompile_headers( ${VIEWER_BINARY_NAME} PRIVATE llviewerprecompiledheaders.h )
+  include(CompilerCacheHeaders)
+  vs_target_textual_pch(${VIEWER_BINARY_NAME} "${CMAKE_CURRENT_SOURCE_DIR}/llviewerprecompiledheaders.h")
 endif(USE_PRECOMPILED_HEADERS)
 
 if (OPENSIM)
@@ -2368,7 +2341,7 @@ if (WINDOWS)
     set_target_properties(${VIEWER_BINARY_NAME}
         PROPERTIES
         # *TODO -reenable this once we get server usage sorted out
-        LINK_FLAGS "/debug /NODEFAULTLIB:LIBCMT /SUBSYSTEM:WINDOWS /LARGEADDRESSAWARE /NOEXP /NOIMPLIB"
+        LINK_FLAGS "/debug /NODEFAULTLIB:LIBCMT /SUBSYSTEM:WINDOWS /LARGEADDRESSAWARE /NOEXP /NOIMPLIB /DELAYLOAD:opengl32.dll /DELAYLOAD:glu32.dll delayimp.lib" # <VulkanStorm> delay-load GL so selectGLBackend() can redirect opengl32 to Mesa Zink before first import
         LINK_FLAGS_DEBUG "/NODEFAULTLIB:\"LIBCMT;LIBCMTD;MSVCRT\" /INCREMENTAL:NO /LARGEADDRESSAWARE /NOEXP /NOIMPLIB"
         LINK_FLAGS_RELEASE "/FORCE:MULTIPLE /MAP\"secondlife-bin.MAP\" /OPT:REF /LARGEADDRESSAWARE /NOEXP /NOIMPLIB"
         )
@@ -2401,6 +2374,8 @@ if (WINDOWS)
       ${CMAKE_CURRENT_SOURCE_DIR}/licenses-win32.txt
       ${CMAKE_CURRENT_SOURCE_DIR}/featuretable.txt
       ${viewer_APPSETTINGS_FILES}
+      ${viewer_SHADER_FILES}
+      ${viewer_XUI_FILES}
       ${ARCH_PREBUILT_DIRS_RELEASE}/growl.dll
       ${SHARED_LIB_STAGING_DIR}/glod.dll # <FS:Beq> Restore GLOD build dependencies
       SLPlugin
@@ -2453,6 +2428,22 @@ if (WINDOWS)
           )
     endif ()
 
+    if (TARGET ll::soloud)
+      list(APPEND COPY_INPUT_DEPENDENCIES
+           ${AUTOBUILD_INSTALL_DIR}/LICENSES/soloud.txt
+           ${AUTOBUILD_INSTALL_DIR}/LICENSES/soloud-miniaudio.txt
+          )
+    endif ()
+
+    # <VulkanStorm> Mesa Zink runtime staged by Copy3rdPartyLibs.cmake
+    if (USE_MESAZINK)
+      list(APPEND COPY_INPUT_DEPENDENCIES
+           ${SHARED_LIB_STAGING_DIR}/opengl32.dll
+           ${SHARED_LIB_STAGING_DIR}/libgallium_wgl.dll
+          )
+    endif ()
+    # </VulkanStorm>
+
     add_custom_command(
       OUTPUT  ${CMAKE_CFG_INTDIR}/copy_touched.bat
       COMMAND ${PYTHON_EXECUTABLE}
@@ -2465,6 +2456,8 @@ if (WINDOWS)
         "--discord=${USE_DISCORD}"
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
+        "--soloud=${USE_SOLOUD}"
+        "--mesazink=${USE_MESAZINK}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"
         --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2507,6 +2500,7 @@ if (WINDOWS)
             "--discord=${USE_DISCORD}"
             "--fmodstudio=${USE_FMODSTUDIO}"
             "--openal=${USE_OPENAL}"
+            "--soloud=${USE_SOLOUD}"
             "--tracy=${USE_TRACY}"
             "--avx2=${USE_AVX2_OPTIMIZATION}"
             --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2575,7 +2569,10 @@ if (WINDOWS)
               "--discord=${USE_DISCORD}"
               "--fmodstudio=${USE_FMODSTUDIO}"
               "--openal=${USE_OPENAL}"
+              "--soloud=${USE_SOLOUD}"
+              "--mesazink=${USE_MESAZINK}"
               "--tracy=${USE_TRACY}"
+              "--inno=${USE_INNOSETUP}"
               "--velopack=${USE_VELOPACK}"
               "--avx2=${USE_AVX2_OPTIMIZATION}"
               --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2792,6 +2789,21 @@ if (LINUX)
     linux-crash-logger
     )
 
+  if (USE_MESAZINK)
+    foreach(runtime ${MESAZINK_RUNTIME_FILES})
+      list(APPEND COPY_INPUT_DEPENDENCIES "${MESAZINK_RUNTIME_DIR}/${runtime}")
+    endforeach()
+    add_custom_target(stage_linux_mesazink
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/mesa"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${MESAZINK_RUNTIME_DIR}/libGLX_vulkanstorm.so.0"
+        "${MESAZINK_RUNTIME_DIR}/libgallium_vulkanstorm.so"
+        "${CMAKE_CURRENT_BINARY_DIR}/mesa"
+      DEPENDS ${MESAZINK_RUNTIME_DIR}/libGLX_vulkanstorm.so.0
+              ${MESAZINK_RUNTIME_DIR}/libgallium_vulkanstorm.so)
+    add_dependencies(${VIEWER_BINARY_NAME} stage_linux_mesazink)
+  endif()
+
   add_custom_command(
       OUTPUT ${product}.tar.xz
       COMMAND ${PYTHON_EXECUTABLE}
@@ -2803,6 +2815,8 @@ if (LINUX)
         "--discord=${USE_DISCORD}"
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
+        "--soloud=${USE_SOLOUD}"
+        "--mesazink=${USE_MESAZINK}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"
         --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2832,6 +2846,8 @@ if (LINUX)
       "--discord=${USE_DISCORD}"
       "--fmodstudio=${USE_FMODSTUDIO}"
       "--openal=${USE_OPENAL}"
+      "--soloud=${USE_SOLOUD}"
+        "--mesazink=${USE_MESAZINK}"
       "--tracy=${USE_TRACY}"
       "--avx2=${USE_AVX2_OPTIMIZATION}"
       --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2883,8 +2899,8 @@ if (DARWIN)
   set(MACOSX_BUNDLE_GUI_IDENTIFIER "org.firestormviewer.firestorm")
   set(MACOSX_BUNDLE_LONG_VERSION_STRING "${VIEWER_CHANNEL} ${VIEWER_SHORT_VERSION}.${VIEWER_VERSION_REVISION}")
   set(MACOSX_BUNDLE_BUNDLE_NAME "Firestorm")
-  set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${VIEWER_SHORT_VERSION}.${VIEWER_VERSION_REVISION}")
-  set(MACOSX_BUNDLE_BUNDLE_VERSION "${VIEWER_SHORT_VERSION}${VIEWER_MACOSX_PHASE}${VIEWER_REVISION}")
+  set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${VIEWER_VERSION_MAJOR}.${VIEWER_VERSION_MINOR}.${VIEWER_VERSION_PATCH}")
+  set(MACOSX_BUNDLE_BUNDLE_VERSION "${VIEWER_VERSION_MAJOR}.${VIEWER_VERSION_MINOR}.${VIEWER_VERSION_PATCH}")
   set(MACOSX_BUNDLE_COPYRIGHT "Copyright 2010-2026 The Phoenix Firestorm Project, Inc.")
   set(MACOSX_BUNDLE_NSMAIN_NIB_FILE "Firestorm.nib")
   set(MACOSX_BUNDLE_NSPRINCIPAL_CLASS "LLApplication")
@@ -2927,6 +2943,7 @@ if (DARWIN)
       "--discord=${USE_DISCORD}"
       "--fmodstudio=${USE_FMODSTUDIO}"
       "--openal=${USE_OPENAL}"
+      "--soloud=${USE_SOLOUD}"
       "--tracy=${USE_TRACY}"
       "--avx2=${USE_AVX2_OPTIMIZATION}"      
       --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2964,6 +2981,7 @@ if (DARWIN)
           "--discord=${USE_DISCORD}"
           "--fmodstudio=${USE_FMODSTUDIO}"
           "--openal=${USE_OPENAL}"
+          "--soloud=${USE_SOLOUD}"
           "--tracy=${USE_TRACY}"
           "--avx2=${USE_AVX2_OPTIMIZATION}"          
           --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -3210,5 +3228,10 @@ if (LL_TESTS)
   LL_ADD_INTEGRATION_TEST(lltextureinfo "${lltextureinfo_test_sources}" "${test_libs}")
   #LL_ADD_INTEGRATION_TEST(lltextureinfodetails "" "${test_libs}") test cases currently empty
 endif (LL_TESTS)
+
+option(LL_VLC_AUDIO_PROTOCOL_TESTS "Build device-free media_audio protocol tests" OFF)
+if (LL_VLC_AUDIO_PROTOCOL_TESTS)
+  LL_ADD_INTEGRATION_TEST(llviewermedia_audio "" "llplugin;llxml;llcommon;llfilesystem")
+endif ()
 
 check_message_template(${VIEWER_BINARY_NAME})

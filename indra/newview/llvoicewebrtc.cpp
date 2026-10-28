@@ -25,6 +25,7 @@
  */
 #include <algorithm>
 #include "llvoicewebrtc.h"
+#include "inlinemutexs.h"
 
 #include "llsdutil.h"
 
@@ -287,6 +288,7 @@ void LLWebRTCVoiceClient::init(LLPumpIO* pump)
 
 void LLWebRTCVoiceClient::initWebRTC()
 {
+    llwebrtc::setAudioDeviceMutex(&gAudioDeviceMutex); // FIRE-36022: one mutex for audio and voice
     llwebrtc::init(this);
 
     mWebRTCDeviceInterface = llwebrtc::getDeviceInterface();
@@ -3769,15 +3771,15 @@ void LLVoiceWebRTCConnection::OnStatsDelivered(const llwebrtc::LLWebRTCStatsMap&
 
 void LLVoiceWebRTCConnection::resetConnectionStats()
 {
-    sample(LLStatViewer::WEBRTC_JITTER_BUFFER, 0);
-    sample(LLStatViewer::WEBRTC_JITTER_IN, 0);
-    sample(LLStatViewer::WEBRTC_JITTER_OUT, 0);
-    sample(LLStatViewer::WEBRTC_LATENCY, 0);
-    sample(LLStatViewer::WEBRTC_PACKETS_IN_LOST, 0);
-    sample(LLStatViewer::WEBRTC_PACKETS_IN_RECEIVED, 0);
-    sample(LLStatViewer::WEBRTC_PACKETS_OUT_SENT, 0);
-    sample(LLStatViewer::WEBRTC_PACKETS_OUT_LOST, 0);
-    sample(LLStatViewer::WEBRTC_UPLOAD_BANDWIDTH, 0);
+    sample(LLStatViewer::WEBRTC_JITTER_BUFFER, 0.f);
+    sample(LLStatViewer::WEBRTC_JITTER_IN, 0.f);
+    sample(LLStatViewer::WEBRTC_JITTER_OUT, 0.f);
+    sample(LLStatViewer::WEBRTC_LATENCY, 0.f);
+    sample(LLStatViewer::WEBRTC_PACKETS_IN_LOST, 0U);
+    sample(LLStatViewer::WEBRTC_PACKETS_IN_RECEIVED, 0U);
+    sample(LLStatViewer::WEBRTC_PACKETS_OUT_SENT, 0U);
+    sample(LLStatViewer::WEBRTC_PACKETS_OUT_LOST, 0U);
+    sample(LLStatViewer::WEBRTC_UPLOAD_BANDWIDTH, 0.f);
 }
 
 /////////////////////////////

@@ -396,6 +396,8 @@ void LLViewerInventoryItem::copyViewerItem(const LLViewerInventoryItem* other)
     LLInventoryItem::copyItem(other);
     mIsComplete = other->mIsComplete;
     mTransactionID = other->mTransactionID;
+    mIsRunning = other->mIsRunning;
+    mIsFaulted = other->mIsFaulted;
 }
 
 // virtual

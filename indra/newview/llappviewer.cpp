@@ -1229,6 +1229,7 @@ bool LLAppViewer::init()
     // Initialize the window
     //
     gGLActive = true;
+    selectGLBackend(); // <VulkanStorm> resolve the GL provider before any GL import is touched
     initWindow();
     LL_INFOS("InitInfo") << "Window is initialized." << LL_ENDL ;
     // <FS:Beq> allow detected hardware to be overridden.
@@ -2704,7 +2705,7 @@ void errorCallback(LLError::ELevel level, const std::string &error_string)
 
         if (error_display_string.find("MissingString(") != std::string::npos)
         {
-            error_display_string = "We are sorry, but Firestorm has crashed and needs to be closed. If you see this issue happening repeatedly, please contact our support team and submit the following message:\n\n[ERROR_DETAILS]";
+            error_display_string = "We are sorry, but Vulkanstorm has crashed and needs to be closed. If you see this issue happening repeatedly, please contact our support team and submit the following message:\n\n[ERROR_DETAILS]";
             LLStringUtil::format(error_display_string, map);
         }
         if (caption.find("MissingString(") != std::string::npos)
@@ -3925,6 +3926,36 @@ bool LLAppViewer::initWindow()
 
     // always start windowed
     bool ignorePixelDepth = gSavedSettings.getBOOL("IgnorePixelDepth");
+
+    // <VulkanStorm> The render backend (OpenGL/Vulkan) is selected in
+    // Preferences > Graphics > Hardware Settings and is fixed for the
+    // lifetime of the process; switching it requires a viewer restart.
+    // Until the Vulkan pipeline is available, any Vulkan selection falls
+    // back to OpenGL for this session.
+    std::string render_backend = gSavedSettings.getString("RenderBackend");
+    if (render_backend == "Vulkan")
+    {
+        LL_WARNS("AppInit") << "RenderBackend=Vulkan requested, but the Vulkan render pipeline is not yet available in this build; falling back to OpenGL for this session." << LL_ENDL;
+        render_backend = "OpenGL";
+    }
+    else if (render_backend == "Zink")
+    {
+        // <VulkanStorm> Mesa Zink = the OpenGL pipeline running over Vulkan
+        // via the bundled Mesa runtime. It boots the normal GL window/context
+        // path; selectGLBackend() already validated the prerequisites (bundled
+        // runtime present, Vulkan device available) and preloaded the Mesa
+        // opengl32, logging a warning and preloading native OpenGL instead if
+        // they are not met. The session therefore stays on the GL path either
+        // way; only the GL provider differs.
+        // </VulkanStorm>
+    }
+    else if (render_backend != "OpenGL")
+    {
+        LL_WARNS("AppInit") << "Unknown RenderBackend value '" << render_backend << "'; using OpenGL." << LL_ENDL;
+        render_backend = "OpenGL";
+    }
+    LL_INFOS("AppInit") << "Render backend: " << render_backend << LL_ENDL;
+    // </VulkanStorm>
 
     LLViewerWindow::Params window_params;
     window_params

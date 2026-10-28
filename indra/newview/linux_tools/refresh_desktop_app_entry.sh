@@ -1,43 +1,47 @@
 #!/bin/bash
 
-SCRIPTSRC=`readlink -f "$0" || echo "$0"`
-RUN_PATH=`dirname "${SCRIPTSRC}" || echo .`
+SCRIPTSRC=$(readlink -f "$0") || exit 1
+RUN_PATH=$(dirname "$SCRIPTSRC")
+install_prefix=$(readlink -f "${RUN_PATH}/..") || exit 1
 
-install_prefix="$(realpath -- "${RUN_PATH}/..")"
-
-function install_desktop_entry()
-{
-    local installation_prefix="$1"
-    local desktop_entries_dir="$2"
-
-    local desktop_entry="\
-[Desktop Entry]\n\
-Name=Firestorm Viewer\n\
-GenericName=Firestorm Viewer\n\
-Comment=Client for accessing 3D virtual worlds\n\
-Path=${installation_prefix}\n\
-Exec=${installation_prefix}/secondlife\n\
-Icon=${installation_prefix}/firestorm_icon.png\n\
-Terminal=false\n\
-Type=Application\n\
-Categories=Game;Simulation;\n\
-StartupNotify=true\n\
-StartupWMClass="com.secondlife.indra.viewer"\n\
-X-Desktop-File-Install-Version=3.0"
-
-    echo " - Installing menu entries in ${desktop_entries_dir}"
-    WORK_DIR=`mktemp -d`
-    echo -e $desktop_entry > "${WORK_DIR}/firestorm-viewer.desktop" || "Failed to install application menu!"
-    desktop-file-install --dir="${desktop_entries_dir}" ${WORK_DIR}/firestorm-viewer.desktop
-    rm -r $WORK_DIR
-
-    update-desktop-database "${desktop_entries_dir}"
+# Desktop-entry string escaping is applied after Exec argument quoting.
+desktop_string() {
+    local value="$1"
+    value=${value//\\/\\\\}
+    value=${value//$'\n'/\\n}
+    value=${value//$'\r'/\\r}
+    value=${value//$'\t'/\\t}
+    printf '%s' "$value"
 }
 
-if [ "$UID" == "0" ]; then
-    # system-wide
+install_desktop_entry() {
+    local installation_prefix="$1"
+    local desktop_entries_dir="$2"
+    local executable="${installation_prefix}/firestorm"
+    executable=${executable//\\/\\\\}
+    executable=${executable//\"/\\\"}
+    executable=${executable//\$/\\\$}
+    executable=${executable//\`/\\\`}
+    executable=${executable//%/%%}
+
+    echo " - Installing menu entries in ${desktop_entries_dir}"
+    mkdir -p -- "$desktop_entries_dir" || return 1
+    {
+        printf '%s\n' '[Desktop Entry]' 'Name=Vulkanstorm Viewer' \
+            'Comment=Client for accessing 3D virtual worlds'
+        printf 'Exec=%s\n' "$(desktop_string "\"$executable\"")"
+        printf 'Path=%s\n' "$(desktop_string "$installation_prefix")"
+        printf 'Icon=%s\n' "$(desktop_string "${installation_prefix}/firestorm_icon.png")"
+        # The viewer's SDL3 window reports this application identifier
+        # (SDL_PROP_APP_METADATA_IDENTIFIER_STRING in llappviewerlinux.cpp).
+        printf '%s\n' 'Terminal=false' 'Type=Application' \
+            'Categories=Internet;Network;' 'StartupNotify=true' \
+            'StartupWMClass=com.secondlife.indra.viewer'
+    } > "${desktop_entries_dir}/vulkanstorm-viewer.desktop" || return 1
+}
+
+if [[ "$UID" == 0 ]]; then
     install_desktop_entry "$install_prefix" /usr/local/share/applications
 else
-    # user-specific
-    install_desktop_entry "$install_prefix" "$HOME/.local/share/applications"
+    install_desktop_entry "$install_prefix" "${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 fi

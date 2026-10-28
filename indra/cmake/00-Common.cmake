@@ -22,6 +22,13 @@ include(Variables)
 include(Linking)
 
 # We go to some trouble to set LL_BUILD to the set of relevant compiler flags.
+set(_ll_build_flags "$ENV{LL_BUILD}")
+if(WINDOWS)
+  # CMP0091 (enabled by our minimum CMake version) owns CRT selection through
+  # MSVC_RUNTIME_LIBRARY. A global /MD would conflict with static-CRT targets.
+  string(REGEX REPLACE "(^|[ \t])/M[DT]d?([ \t]|$)" " " _ll_build_flags "${_ll_build_flags}")
+endif()
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_ll_build_flags}")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} $ENV{LL_BUILD_RELEASE}")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} $ENV{LL_BUILD_RELWITHDEBINFO}")
 
@@ -219,6 +226,18 @@ if (LINUX)
     add_compile_definitions($<$<CONFIG:Release>:_FORTIFY_SOURCE=2>)
   endif()
 
+  add_compile_options(
+          $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:-fstack-protector>
+          -fexceptions
+          -fno-math-errno
+          -fno-strict-aliasing
+          -fsigned-char
+          -g
+          -msse2
+          -pthread
+          -fvisibility=hidden
+  )
+
   # <Vulkanstorm> AVX/AVX2 code generation, as /arch:AVX and /arch:AVX2 do on
   # Windows. USE_AVX2_OPTIMIZATION alone only adds a define; without these
   # flags the C++ was built for the x86-64 baseline (SSE2) while the
@@ -238,18 +257,6 @@ if (LINUX)
       add_compile_options(-ffp-contract=off)
     endif ()
   endif ()
-
-  add_compile_options(
-          $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:-fstack-protector>
-          -fexceptions
-          -fno-math-errno
-          -fno-strict-aliasing
-          -fsigned-char
-          -g
-          -msse2
-          -pthread
-          -fvisibility=hidden
-  )
 
   add_link_options(
           "LINKER:-z,relro"

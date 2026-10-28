@@ -400,6 +400,7 @@ public:
                                 parse_urls,
                                 force_urls_external,
                                 parse_highlights,
+                                parse_markdown,
                                 clip,
                                 clip_partial,
                                 trusted_content,
@@ -458,6 +459,7 @@ public:
     virtual void    onFocusLost() override;
 
     void        setParseHTML(bool parse_html) { mParseHTML = parse_html; }
+    void        setParseMarkdown(bool parse_markdown) { mParseMarkdown = parse_markdown; }
 
     // LLSpellCheckMenuHandler overrides
     /*virtual*/ bool        getSpellCheck() const override;
@@ -833,6 +835,7 @@ protected:
     bool                        mParseHTML;         // make URLs interactive
     bool                        mForceUrlsExternal; // URLs from this textbox will be opened in external browser
     bool                        mParseHighlights;   // highlight user-defined keywords
+    bool                        mParseMarkdown;     // _italic_ / **bold** emphasis in read-only text
     bool                        mWordWrap;
     bool                        mUseEllipses;
     bool                        mUseEmoji;

@@ -72,6 +72,12 @@ namespace tut
     static SampleStatHandle<F32Milligrams> sCaffeineLevelStat("caffeinelevel", "Coffee buzz quotient");
     static EventStatHandle<S32Ounces> sOuncesPerCup("cupsize", "Large, huge, or ginormous");
 
+    static CountStatHandle<S32Bytes> sTypedBytes("typed_bytes");
+    static CountStatHandle<U32Milliseconds> sTypedDuration("typed_duration");
+    static SampleStatHandle<U64> sWideSample("wide_sample");
+    static SampleStatHandle<F32Seconds> sConvertedSample("converted_sample");
+    static EventStatHandle<S64> sSignedEvent("signed_event");
+
     static F32 sCaffeineLevel(0.f);
     const F32Milligrams sCaffeinePerOz(18.f);
 
@@ -141,6 +147,40 @@ namespace tut
             at_work.getMax(sCaffeineLevelStat) == sCaffeinePerOz * ((S32Ounces)S32TallCup(1) + (S32Ounces)S32GrandeCup(3)).value()
                 && all_day.getMax(sCaffeineLevelStat) == sCaffeinePerOz * ((S32Ounces)S32TallCup(1) + (S32Ounces)S32GrandeCup(3) + (S32Ounces)S32VentiCup(1)).value()
                 && after_3pm.getMax(sCaffeineLevelStat) == sCaffeinePerOz * ((S32Ounces)S32TallCup(1) + (S32Ounces)S32GrandeCup(3) + (S32Ounces)S32VentiCup(1)).value());
+    }
+
+    template<> template<>
+    void trace_object_t::test<2>()
+    {
+        ensure("integer-unit totals start at typed zero",
+               sTypedBytes.getTotalSamples() == S32Bytes(0) &&
+               sTypedDuration.getTotalSamples() == U32Milliseconds(0));
+        ensure("new counters have no lifetime samples",
+               sTypedBytes.getTotalSampleCount() == 0 && sTypedDuration.getTotalSampleCount() == 0);
+
+        Recording recording;
+        recording.start();
+        add(sTypedBytes, S32Kilobytes(1));
+        add(sTypedBytes, S32Bytes(-24));
+        add(sTypedDuration, U32Seconds(2));
+        add(sTypedDuration, U32Milliseconds(5));
+        sample(sWideSample, (U64(1) << 40) + 1);
+        sample(sConvertedSample, F64Milliseconds(125));
+        record(sSignedEvent, S64(-17));
+        recording.stop();
+
+        ensure("lifetime byte totals retain unit conversion and signed values",
+               sTypedBytes.getTotalSamples() == S32Bytes(1000) && sTypedBytes.getTotalSampleCount() == 2);
+        ensure("lifetime duration totals retain unit conversion",
+               sTypedDuration.getTotalSamples() == U32Milliseconds(2005) && sTypedDuration.getTotalSampleCount() == 2);
+        ensure("recorded counters agree with lifetime unit totals",
+               recording.getSum(sTypedBytes) == S32Bytes(1000) &&
+               recording.getSum(sTypedDuration) == U32Milliseconds(2005));
+        ensure("wide integer sampling retains exactly representable values",
+               recording.getLastValue(sWideSample) == (U64(1) << 40) + 1);
+        ensure("sampling retains cross-unit fractional conversion",
+               recording.getLastValue(sConvertedSample) == F32Seconds(0.125f));
+        ensure("event recording retains signed integer values", recording.getSum(sSignedEvent) == -17);
     }
 
 }

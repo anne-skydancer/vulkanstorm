@@ -649,7 +649,7 @@ F64 PeriodicRecording::getPeriodMax( const StatType<EventAccumulator>& stat, siz
     num_periods = llmin(num_periods, getNumRecordedPeriods());
 
     bool has_value = false;
-    F64 max_val = std::numeric_limits<F64>::min();
+    F64 max_val = std::numeric_limits<F64>::lowest();
     for (size_t i = 1; i <= num_periods; i++)
     {
         Recording& recording = getPrevRecording(i);
@@ -742,7 +742,7 @@ F64 PeriodicRecording::getPeriodMax(const StatType<SampleAccumulator>& stat, siz
     num_periods = llmin(num_periods, getNumRecordedPeriods());
 
     bool has_value = false;
-    F64 max_val = std::numeric_limits<F64>::min();
+    F64 max_val = std::numeric_limits<F64>::lowest();
     for (size_t i = 1; i <= num_periods; i++)
     {
         Recording& recording = getPrevRecording(i);

@@ -15,13 +15,14 @@
 	<panel.string name="non_friends">
 		Não-amigos
 	</panel.string>
-	<combo_box name="combo_sets" width="199"/>
+	<combo_box name="combo_sets" width="192"/>
 	<button name="config_btn" tool_tip="Configurar conjunto de contatos selecionado"/>
 	<button name="add_set_btn" tool_tip="Adicionar novo conjunto de contatos"/>
 	<button name="remove_set_btn" tool_tip="Remover conjunto de contatos selecionado"/>
-	<filter_editor label="Filtrar pessoas" name="contact_sets_filter_input"/>
-	<avatar_list name="contact_list" right="-90"/>
-	<button label="Adicionar..." name="add_btn" tool_tip="Adicionar um avatar ao conjunto de contatos atual" width="85" left_delta="265"/>
+	<view_border name="info_border" right="-97"/>
+	<filter_editor right="-97" label="Filtrar pessoas" name="contact_sets_filter_input"/>
+	<avatar_list name="contact_list" width="250"/>
+	<button label="Adicionar..." name="add_btn" tool_tip="Adicionar um avatar ao conjunto de contatos atual" width="85" right="-6"/>
 	<button label="Mover..." name="move_btn" tool_tip="Mover este avatar para outro conjunto de contatos" width="85"/>
 	<button label="Remover..." name="remove_btn" tool_tip="Remover avatar do conjunto de contatos atual" width="85"/>
 	<button label="Perfil..." name="profile_btn" tool_tip="Abrir perfil do avatar" width="85"/>

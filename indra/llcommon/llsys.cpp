@@ -1351,6 +1351,7 @@ bool gunzip_file(const std::string& srcfile, const std::string& dstfile)
     U8 buffer[UNCOMPRESS_BUFFER_SIZE];
     LLFILE *dst = NULL;
     S32 bytes = 0;
+    int gzerrnum = Z_OK;
     tmpfile = dstfile + ".t";
 #ifdef LL_WINDOWS
     std::wstring utf16filename = ll_convert<std::wstring>(srcfile);
@@ -1364,6 +1365,17 @@ bool gunzip_file(const std::string& srcfile, const std::string& dstfile)
     do
     {
         bytes = gzread(src, buffer, UNCOMPRESS_BUFFER_SIZE);
+        // gzread() returns -1 on corrupt data and records Z_BUF_ERROR
+        // when the compressed stream is truncated.
+        gzerror(src, &gzerrnum);
+        if (bytes < 0 || gzerrnum != Z_OK)
+        {
+            LL_WARNS() << "gzread failed: " << gzerror(src, NULL) << LL_ENDL;
+            fclose(dst);
+            dst = NULL;
+            LLFile::remove(tmpfile);
+            goto err;
+        }
         size_t nwrit = fwrite(buffer, sizeof(U8), bytes, dst);
         if (nwrit < (size_t) bytes)
         {
@@ -1390,6 +1402,7 @@ bool gzip_file(const std::string& srcfile, const std::string& dstfile)
     gzFile dst = NULL;
     LLFILE *src = NULL;
     S32 bytes = 0;
+    int gzerrnum = Z_OK;
     tmpfile = dstfile + ".t";
 
 #ifdef LL_WINDOWS
@@ -1418,8 +1431,16 @@ bool gzip_file(const std::string& srcfile, const std::string& dstfile)
         goto err;
     }
 
-    gzclose(dst);
+    // gzclose() writes the rest of the compressed stream, so it can fail
+    // (for example when the disk is full) and leave an incomplete file.
+    gzerrnum = gzclose(dst);
     dst = NULL;
+    if (gzerrnum != Z_OK)
+    {
+        LL_WARNS() << "gzclose failed on " << tmpfile << ": " << gzerrnum << LL_ENDL;
+        LLFile::remove(tmpfile);
+        goto err;
+    }
     if (LLFile::rename(tmpfile, dstfile) == -1) goto err;       /* Flawfinder: ignore */
     retval = true;
  err:

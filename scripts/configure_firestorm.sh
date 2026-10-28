@@ -35,15 +35,20 @@ WANTS_VELOPACK=$FALSE
 WANTS_VERSION=$FALSE
 WANTS_KDU=$FALSE
 WANTS_FMODSTUDIO=$FALSE
-# <Vulkanstorm> Default to Second Life (no OpenSim) builds. Use --opensim to opt in.
+WANTS_OPENAL=$FALSE
+WANTS_SOLOUD=$TRUE
+# <VulkanStorm> Default to Second Life (no OpenSim) builds. Use --opensim to opt in.
 WANTS_OPENSIM=$FALSE
-# </Vulkanstorm>
+# </VulkanStorm>
 WANTS_SINGLEGRID=$FALSE
 WANTS_HAVOK=$FALSE
 WANTS_AVX=$FALSE
 WANTS_AVX2="" # empty: ON for Linux, OFF elsewhere (set after --platform)
 WANTS_TESTBUILD=$FALSE
 WANTS_TRACY=$FALSE
+# <VulkanStorm> Mesa Zink (GL-over-Vulkan) runtime bundling, opt-in via --zink.
+WANTS_MESAZINK=$FALSE
+# </VulkanStorm>
 WANTS_LTO=$TRUE # on for every build type; --no-lto disables it
 WANTS_BUILD=$FALSE
 WANTS_CRASHREPORTING=$FALSE
@@ -79,6 +84,8 @@ showUsage()
     echo "  --velopack               : Build with velopack (Overrides --package)"
     echo "  --no-package             : Build without installer (Overrides --package)"
     echo "  --fmodstudio             : Build with FMOD Studio"
+    echo "  --openal                 : Build with OpenAL"
+    echo "  --soloud                 : Build with SoLoud (default)"
     echo "  --opensim                : Build with OpenSim support (Disables Havok features)"
     echo "  --no-opensim             : Build without OpenSim support (Overrides --opensim)"
     echo "  --singlegrid <login_uri> : Build for single grid usage (Requires --opensim)"
@@ -87,6 +94,7 @@ showUsage()
     echo "  --avx2                   : Build with Advanced Vector Extensions 2 (default on Linux)"
     echo "  --no-avx2                : Build without Advanced Vector Extensions 2"
     echo "  --tracy                  : Build with Tracy Profiler support"
+    echo "  --zink                   : Bundle the Mesa Zink OpenGL-over-Vulkan runtime (Windows 64-bit only)"
     echo "  --lto                    : Build with Link Time Optimization (default)"
     echo "  --no-lto                 : Build without Link Time Optimization"
     echo "  --crashreporting         : Build with crash reporting enabled (Windows only)"
@@ -105,7 +113,7 @@ getArgs()
 # $* = the options passed in from main
 {
     if [ $# -gt 0 ]; then
-      while getoptex "clean build config version package velopack no-package fmodstudio ninja vscode compiler-cache jobs: platform: kdu opensim no-opensim singlegrid: havok avx avx2 no-avx2 tracy lto no-lto crashreporting testbuild: help chan: btype:" "$@" ; do
+            while getoptex "clean build config version package velopack no-package fmodstudio openal soloud ninja vscode compiler-cache jobs: platform: kdu opensim no-opensim singlegrid: havok avx avx2 no-avx2 tracy zink lto no-lto crashreporting testbuild: help chan: btype:" "$@" ; do
 
           #ensure options are valid
           if [  -z "$OPTOPT"  ] ; then
@@ -123,7 +131,15 @@ getArgs()
                           fi
                           ;;
           kdu)            WANTS_KDU=$TRUE;;
-          fmodstudio)     WANTS_FMODSTUDIO=$TRUE;;
+          fmodstudio)     WANTS_FMODSTUDIO=$TRUE
+                          WANTS_OPENAL=$FALSE
+                          WANTS_SOLOUD=$FALSE;;
+          openal)         WANTS_OPENAL=$TRUE
+                          WANTS_FMODSTUDIO=$FALSE
+                          WANTS_SOLOUD=$FALSE;;
+          soloud)         WANTS_SOLOUD=$TRUE
+                          WANTS_FMODSTUDIO=$FALSE
+                          WANTS_OPENAL=$FALSE;;
           opensim)        WANTS_OPENSIM=$TRUE;;
           no-opensim)     WANTS_OPENSIM=$FALSE;;
           singlegrid)     WANTS_SINGLEGRID=$TRUE
@@ -136,6 +152,7 @@ getArgs()
           avx2)           WANTS_AVX2=$TRUE;;
           no-avx2)        WANTS_AVX2=$FALSE;;
           tracy)          WANTS_TRACY=$TRUE;;
+          zink)           WANTS_MESAZINK=$TRUE;;
           lto)            WANTS_LTO=$TRUE;;
           no-lto)         WANTS_LTO=$FALSE;;
           crashreporting) WANTS_CRASHREPORTING=$TRUE;;
@@ -330,6 +347,8 @@ echo -e "configure_firestorm.sh" > "$LOG"
 echo -e "       PLATFORM: $TARGET_PLATFORM"                                    | tee -a "$LOG"
 echo -e "            KDU: `b2a $WANTS_KDU`"                                    | tee -a "$LOG"
 echo -e "     FMODSTUDIO: `b2a $WANTS_FMODSTUDIO`"                             | tee -a "$LOG"
+echo -e "         OPENAL: `b2a $WANTS_OPENAL`"                                 | tee -a "$LOG"
+echo -e "         SOLOUD: `b2a $WANTS_SOLOUD`"                                 | tee -a "$LOG"
 echo -e "        OPENSIM: `b2a $WANTS_OPENSIM`"                                | tee -a "$LOG"
 if [ $WANTS_SINGLEGRID -eq $TRUE ] ; then
     echo -e "     SINGLEGRID: `b2a $WANTS_SINGLEGRID` ($SINGLEGRID_URI)"       | tee -a "$LOG"
@@ -340,6 +359,7 @@ echo -e "          HAVOK: `b2a $WANTS_HAVOK`"                                  |
 echo -e "            AVX: `b2a $WANTS_AVX`"                                    | tee -a "$LOG"
 echo -e "           AVX2: `b2a $WANTS_AVX2`"                                   | tee -a "$LOG"
 echo -e "          TRACY: `b2a $WANTS_TRACY`"                                  | tee -a "$LOG"
+echo -e "          ZINK: `b2a $WANTS_MESAZINK`"                                 | tee -a "$LOG"
 echo -e "            LTO: `b2a $WANTS_LTO`"                                    | tee -a "$LOG"
 echo -e " CRASHREPORTING: `b2a $WANTS_CRASHREPORTING`"                         | tee -a "$LOG"
 if [ $WANTS_TESTBUILD -eq $TRUE ] ; then
@@ -409,7 +429,7 @@ if [ -z $CHANNEL ] ; then
 else
     CHANNEL=`echo $CHANNEL | sed -e "s/[^a-zA-Z0-9\-]*//g"` # strip out difficult characters from channel
 fi
-CHANNEL="Firestorm-$CHANNEL"
+CHANNEL="Vulkanstorm-$CHANNEL"
 
 if [ \( $WANTS_CLEAN -eq $TRUE \) -a \( $WANTS_BUILD -eq $FALSE \) ] ; then
     echo "Cleaning $TARGET_PLATFORM...."
@@ -475,9 +495,19 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         KDU="-DUSE_KDU:BOOL=OFF"
     fi
     if [ $WANTS_FMODSTUDIO -eq $TRUE ] ; then
-        FMODSTUDIO="-DUSE_FMODSTUDIO:BOOL=ON"
+        FMODSTUDIO="-DFMODSTUDIO:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=ON"
     else
-        FMODSTUDIO="-DUSE_FMODSTUDIO:BOOL=OFF"
+        FMODSTUDIO="-DFMODSTUDIO:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF"
+    fi
+    if [ $WANTS_OPENAL -eq $TRUE ] ; then
+        OPENAL="-DOPENAL:BOOL=OFF -DUSE_OPENAL:BOOL=ON"
+    else
+        OPENAL="-DOPENAL:BOOL=OFF -DUSE_OPENAL:BOOL=OFF"
+    fi
+    if [ $WANTS_SOLOUD -eq $TRUE ] ; then
+        SOLOUD="-DUSE_SOLOUD:BOOL=ON"
+    else
+        SOLOUD="-DUSE_SOLOUD:BOOL=OFF"
     fi
     if [ $WANTS_OPENSIM -eq $TRUE ] ; then
         OPENSIM="-DOPENSIM:BOOL=ON"
@@ -509,6 +539,13 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
     else
         TRACY_PROFILER="-DUSE_TRACY:BOOL=OFF"
     fi
+    # <VulkanStorm> Mesa Zink GL-over-Vulkan runtime (windows64 only)
+    if [ $WANTS_MESAZINK -eq $TRUE ] ; then
+        MESAZINK="-DUSE_MESAZINK:BOOL=ON"
+    else
+        MESAZINK="-DUSE_MESAZINK:BOOL=OFF"
+    fi
+    # </VulkanStorm>
     if [ $WANTS_LTO -eq $TRUE ] ; then
         LTO="-DUSE_LTO:BOOL=ON"
     else
@@ -521,6 +558,7 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
     fi
     if [ $WANTS_PACKAGE -eq $TRUE ] ; then
         PACKAGE="-DPACKAGE:BOOL=ON"
+        INNO="-DUSE_INNOSETUP:BOOL=ON"
         # Also delete easy-to-copy resource files, insuring that we properly refresh resoures from the source tree
         if [ -d skins ] ; then
             echo "Removing select previously packaged resources, they will refresh at build time"
@@ -532,11 +570,13 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         fi
         if [ $WANTS_VELOPACK -eq $TRUE ] ; then
             VELOPACK="-DUSE_VELOPACK:BOOL=ON"
+            INNO="-DUSE_INNOSETUP:BOOL=OFF"
         else
             VELOPACK="-DUSE_VELOPACK:BOOL=OFF"
         fi
     else
         PACKAGE="-DPACKAGE:BOOL=OFF"
+        INNO="-DUSE_INNOSETUP:BOOL=OFF"
         VELOPACK="-DUSE_VELOPACK:BOOL=OFF"
     fi
     if [ $WANTS_CRASHREPORTING -eq $TRUE ] ; then
@@ -615,7 +655,7 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         fi
     fi
 
-    cmake -G "$TARGET" $CMAKE_ARCH ../indra $CHANNEL ${GITHASH} $FMODSTUDIO $KDU $OPENSIM $SINGLEGRID $HAVOK $AVX_OPTIMIZATION $AVX2_OPTIMIZATION $TRACY_PROFILER $LTO $TESTBUILD $PACKAGE $VELOPACK \
+    cmake -G "$TARGET" $CMAKE_ARCH ../indra $CHANNEL ${GITHASH} $FMODSTUDIO $OPENAL $SOLOUD $KDU $OPENSIM $SINGLEGRID $HAVOK $AVX_OPTIMIZATION $AVX2_OPTIMIZATION $TRACY_PROFILER $MESAZINK $LTO $TESTBUILD $PACKAGE $INNO $VELOPACK \
           $UNATTENDED -DLL_TESTS:BOOL=OFF -DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE -DCMAKE_BUILD_TYPE:STRING=$BTYPE $CACHE_OPT \
           $CRASH_REPORTING -DVIEWER_SYMBOL_FILE:STRING="${VIEWER_SYMBOL_FILE:-}" $LL_ARGS_PASSTHRU ${VSCODE_FLAGS:-} | tee "$LOG"
     configure_status=${PIPESTATUS[0]}
@@ -660,7 +700,7 @@ if [ $WANTS_BUILD -eq $TRUE ] ; then
           exit 1
         fi
         msbuild.exe "$SOLUTION" -p:Configuration=${BTYPE} -flp:LogFile="logs\\FirestormBuild_win-${AUTOBUILD_ADDRSIZE}.log" \
-            -flp1:"errorsonly;LogFile=logs\\FirestormBuild_win-${AUTOBUILD_ADDRSIZE}.err" -p:Platform=${AUTOBUILD_WIN_VSPLATFORM} -t:Build -p:useenv=false\
+            -flp1:"errorsonly;LogFile=logs\\FirestormBuild_win-${AUTOBUILD_ADDRSIZE}.err" -p:Platform=${AUTOBUILD_WIN_VSPLATFORM} -t:Build -p:useenv=false \
             -verbosity:normal -toolsversion:Current -p:"VCBuildAdditionalOptions= /incremental"
         build_status=$?
     fi

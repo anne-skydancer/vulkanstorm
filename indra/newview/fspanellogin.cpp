@@ -49,6 +49,7 @@
 #include "llfloaterpreference.h"
 #include "llfocusmgr.h"
 #include "lllineeditor.h"
+#include "llscrollcontainer.h"
 #include "llnotificationsutil.h"
 #include "llsecapi.h"
 #include "llstartup.h"
@@ -469,6 +470,39 @@ void FSPanelLogin::giveFocus()
     }
 }
 
+void FSPanelLogin::reshape(S32 width, S32 height, bool called_from_parent)
+{
+    LLPanel::reshape(width, height, called_from_parent);
+
+    // Kokua's flexible outer spacers center the sidebar, gutter and welcome page.
+    // Let the stacks own their rectangles, including height and child bounds.
+    // Settle both levels before a focused control can scroll the login form.
+    if (findChild<LLPanel>("login_content"))
+    {
+        if (LLLayoutPanel* stage = findChild<LLLayoutPanel>("center_stage"))
+        {
+            stage->reshape(llmin(width, 1008), stage->getRect().getHeight());
+            getChild<LLLayoutStack>("main_stack")->updateLayout();
+            getChild<LLLayoutStack>("ui_stack")->updateLayout();
+        }
+    }
+}
+
+void FSPanelLogin::onUpdateScrollToChild(const LLUICtrl* control)
+{
+    LLScrollContainer* scroll = findChild<LLScrollContainer>("login_scroll");
+    LLPanel* content = findChild<LLPanel>("login_content");
+    if (scroll && content && control && control->hasAncestor(content))
+    {
+        LLRect rect;
+        if (control->localRectToOtherView(control->getLocalRect(), &rect, content))
+        {
+            scroll->scrollToShowRect(rect);
+        }
+    }
+    LLPanel::onUpdateScrollToChild(control);
+}
+
 // static
 void FSPanelLogin::showLoginWidgets()
 {
@@ -885,6 +919,17 @@ void FSPanelLogin::loadLoginPage()
 
     // allow users (testers really) to specify a different login content URL
     std::string force_login_url = gSavedSettings.getString("ForceLoginURL");
+    // Ship our welcome page with the viewer. Keep grid-provided splash pages
+    // and explicit tester overrides, but replace the inherited Firestorm page.
+    if (force_login_url.empty() &&
+        (login_page.asString().empty() ||
+         login_page.asString() == "http://phoenixviewer.com/app/loginV3/" ||
+         login_page.asString() == "https://phoenixviewer.com/app/loginV3/"))
+    {
+        sInstance->getChild<LLMediaCtrl>("login_html")->navigateToLocalPage(
+            "vulkanstorm", "welcome.html");
+        return;
+    }
     if ( force_login_url.length() > 0 )
     {
         LLNotificationsUtil::add("WarnForceLoginURL", LLSD(), LLSD(), [](const LLSD&notif, const LLSD&resp)

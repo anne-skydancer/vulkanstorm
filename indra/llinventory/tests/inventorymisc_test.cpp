@@ -30,6 +30,7 @@
 #include "llsd.h"
 #include "llsdserialize.h"
 
+#include "../llcategory.h"
 #include "../llinventory.h"
 #include "../test/lltut.h"
 
@@ -106,6 +107,19 @@ LLPointer<LLInventoryItem> create_random_inventory_item()
     set_random_inventory_metadata(item);
     return item;
 }
+
+// Fill the stack below the caller with a pattern, so that a reader which
+// reads an uninitialised local sees the pattern rather than a lucky zero.
+// Called through a volatile pointer so that it is never inlined.
+void fill_stack(U8 pattern)
+{
+    volatile U8 area[64 * 1024];
+    for (size_t i = 0; i < sizeof(area); ++i)
+    {
+        area[i] = pattern;
+    }
+}
+void (*volatile poison_stack)(U8) = fill_stack;
 
 LLPointer<LLInventoryCategory> create_random_inventory_cat()
 {
@@ -548,5 +562,300 @@ namespace tut
         ensure_equals("5.name::getName() failed", src1->getName(), src2->getName());
         ensure_equals("13.thumbnails::getThumbnailUUID() failed", src1->getThumbnailUUID(), src2->getThumbnailUUID());
         ensure_equals("14.favorites::getIsFavorite() failed", false, src2->getIsFavorite()); // currently not supposed to carry over
+    }
+
+//******class LLSaleInfo*******//
+
+    template<> template<>
+    void inventory_object::test<15>()
+    {
+        set_test_name("legacy export of a sale type outside 0..3 writes 'not'");
+        // An unknown sale type (bad server data) used to stream lookup()'s
+        // NULL: an access violation on Windows, a bad stream elsewhere.
+        for (S32 type : { (S32)LLSaleInfo::FS_COUNT, 7 })
+        {
+            LLSaleInfo sale(static_cast<LLSaleInfo::EForSale>(type), 10);
+            std::ostringstream out;
+            ensure("sale info export returns true", sale.exportLegacyStream(out));
+            ensure("sale info export leaves the stream good", out.good());
+            ensure_equals("sale info export",
+                          out.str(),
+                          std::string("\tsale_info\t0\n\t{\n\t\tsale_type\tnot\n\t\tsale_price\t10\n\t}\n"));
+
+            LLPointer<LLInventoryItem> src = create_random_inventory_item();
+            src->setSaleInfo(sale);
+            std::ostringstream item_out;
+            src->exportLegacyStream(item_out, true);
+            ensure("item export leaves the stream good", item_out.good());
+            std::istringstream item_in(item_out.str());
+            LLPointer<LLInventoryItem> dst = new LLInventoryItem();
+            dst->importLegacyStream(item_in);
+            ensure_equals("item reimport: sale type", dst->getSaleInfo().getSaleType(), LLSaleInfo::FS_NOT);
+            ensure_equals("item reimport: sale price", dst->getSaleInfo().getSalePrice(), 10);
+            ensure_equals("item reimport: name", dst->getName(), src->getName());
+        }
+    }
+
+//******class LLCategory*******//
+
+    template<> template<>
+    void inventory_object::test<16>()
+    {
+        set_test_name("LLCategory with an unknown top byte stays inside its tables");
+        // The defined top-level categories are unchanged.
+        ensure_equals("none: count", LLCategory::none.getSubCategoryCount(), 5);
+        ensure_equals("none: name", std::string(LLCategory::none.lookupName()), std::string("(none)"));
+        ensure_equals("object: count", LLCategory(0x01000000).getSubCategoryCount(), 1);
+        ensure_equals("object: name", std::string(LLCategory(0x01000000).lookupName()), std::string("Object"));
+        ensure_equals("landmark: count", LLCategory(0x05000000).getSubCategoryCount(), 0);
+        ensure_equals("6: count", LLCategory(0x06000000).getSubCategoryCount(), 0);
+        ensure_equals("6: name", std::string(LLCategory(0x06000000).lookupName()), std::string("Component"));
+        ensure("7 with a subcategory: name", LLCategory(0x07010000).lookupName() == NULL);
+
+        // A top byte above 6 used to index past CATEGORY_INDEX (and, above 7,
+        // past CATEGORY_NAME).
+        for (U32 top = 7; top <= 255; ++top)
+        {
+            std::string id = "top byte " + std::to_string(top);
+            for (U32 rest : { 0x000000u, 0x010000u, 0x010101u })
+            {
+                LLCategory cat((top << 24) | rest);
+                ensure_equals(id + ": count", cat.getSubCategoryCount(), 0);
+                ensure(id + ": name", cat.lookupName() == NULL);
+            }
+        }
+    }
+
+//******legacy readers*******//
+
+    template<> template<>
+    void inventory_object::test<17>()
+    {
+        set_test_name("legacy readers give defined values for malformed lines");
+        // Each value below used to come from an uninitialised local. A line
+        // that does not parse is now absent, so the field keeps its value,
+        // except a permission mask, which reads as no permissions.
+        {
+            std::istringstream in("\t{\n\t\tcreation_date\tabc\n\t}\n");
+            LLPointer<LLInventoryItem> item = new LLInventoryItem();
+            poison_stack(0xa5);
+            item->importLegacyStream(in);
+            ensure_equals("item: unparsable creation_date", (S64)item->getCreationDate(), (S64)0);
+        }
+        {
+            std::istringstream in("\t{\n\t\tbase_mask\tzz\n\t}\n");
+            LLPermissions perm;
+            poison_stack(0xa5);
+            perm.importLegacyStream(in);
+            ensure_equals("permissions: unparsable first mask", perm.getMaskBase(), (U32)PERM_NONE);
+            ensure_equals("permissions: owner mask follows the base", perm.getMaskOwner(), (U32)PERM_NONE);
+        }
+        {
+            std::istringstream in("\t{\n\t\tgroup_owned\tx\n\t}\n");
+            LLPermissions perm;
+            poison_stack(0xa5);
+            perm.importLegacyStream(in);
+            ensure("permissions: unparsable group_owned", !perm.isGroupOwned());
+        }
+        {
+            // The old garbage rarely formed a valid UUID, so this case
+            // states the defined value rather than catching the old code.
+            std::istringstream in("\t{\n\t\tcreator_id\n\t}\n");
+            LLPermissions perm;
+            poison_stack(0xa5);
+            perm.importLegacyStream(in);
+            ensure("permissions: value-less creator_id", perm.getCreator().isNull());
+        }
+    }
+
+    // The legacy text of an item, as exportLegacyStream() writes it.
+    std::string legacy_text(const LLInventoryItem* item)
+    {
+        std::ostringstream out;
+        item->exportLegacyStream(out, true);
+        return out.str();
+    }
+
+    // Insert text after the first occurrence of what (which must exist).
+    std::string insert_after(std::string text, const std::string& what, const std::string& extra)
+    {
+        size_t pos = text.find(what);
+        ensure("fixture text contains " + what, pos != std::string::npos);
+        text.insert(pos + what.size(), extra);
+        return text;
+    }
+
+    // Import text into a new item and check it against src and the rest of
+    // the stream: the item must end at its own closing brace.
+    void ensure_reads_as(const std::string& desc, const std::string& text, const LLInventoryItem* src)
+    {
+        std::istringstream in(text + "NEXT\tline\n");
+        LLPointer<LLInventoryItem> dst = new LLInventoryItem();
+        dst->importLegacyStream(in);
+        ensure_equals(desc + ": item id", dst->getUUID(), src->getUUID());
+        ensure_equals(desc + ": permissions", dst->getPermissions(), src->getPermissions());
+        ensure_equals(desc + ": asset id", dst->getAssetUUID(), src->getAssetUUID());
+        ensure_equals(desc + ": type", dst->getType(), src->getType());
+        ensure_equals(desc + ": flags", dst->getFlags(), src->getFlags());
+        ensure_equals(desc + ": sale type", dst->getSaleInfo().getSaleType(), src->getSaleInfo().getSaleType());
+        ensure_equals(desc + ": sale price", dst->getSaleInfo().getSalePrice(), src->getSaleInfo().getSalePrice());
+        ensure_equals(desc + ": name", dst->getName(), src->getName());
+        ensure_equals(desc + ": description", dst->getDescription(), src->getDescription());
+        ensure_equals(desc + ": creation date", dst->getCreationDate(), src->getCreationDate());
+        std::string rest;
+        std::getline(in, rest);
+        ensure_equals(desc + ": the item ends at its closing brace", rest, std::string("NEXT\tline"));
+    }
+
+    template<> template<>
+    void inventory_object::test<18>()
+    {
+        set_test_name("a blank line after the permissions block keeps the item's closing brace");
+        // The blank line used to re-run the permissions keyword: the block was
+        // read again from the defaults up to the item's own '}'.
+        LLPointer<LLInventoryItem> src = create_random_inventory_item();
+        std::string text = legacy_text(src);
+        text = insert_after(text, "\tpermissions 0\n", "");
+        text.insert(text.find("\t}\n", text.find("\tpermissions 0\n")) + 3, "\n");
+        ensure_reads_as("blank line after permissions", text, src);
+        ensure_reads_as("whitespace line after permissions",
+                        insert_after(legacy_text(src), "\t\tgroup_id\t" + src->getPermissions().getGroup().asString() + "\n\t}\n", " \t\r\n"),
+                        src);
+    }
+
+    template<> template<>
+    void inventory_object::test<19>()
+    {
+        set_test_name("a keyword-only line leaves its field unchanged");
+        // The keyword used to run again with the previous line's value.
+        LLPointer<LLInventoryItem> src = create_random_inventory_item();
+        std::string text = legacy_text(src);
+        text = insert_after(text, "\t\tdesc\t" + src->getDescription() + "|\n",
+                            "\t\ttype\n\t\tname\n\t\tdesc\t\n\t\tflags\n\t\tcreation_date\n");
+        ensure_reads_as("keyword-only lines after the values", text, src);
+
+        LLPointer<LLInventoryCategory> cat = create_random_inventory_cat();
+        std::ostringstream out;
+        cat->exportLegacyStream(out, true);
+        std::string cat_text = insert_after(out.str(), "\t\tname\t" + cat->getName() + "|\n", "\t\ttype\n\t\tpref_type\n");
+        std::istringstream in(cat_text);
+        LLPointer<LLInventoryCategory> dst = new LLInventoryCategory();
+        dst->importLegacyStream(in);
+        ensure_equals("category: type", dst->getType(), cat->getType());
+        ensure_equals("category: preferred type", dst->getPreferredType(), cat->getPreferredType());
+        ensure_equals("category: name", dst->getName(), cat->getName());
+    }
+
+    template<> template<>
+    void inventory_object::test<20>()
+    {
+        set_test_name("blank lines in and after the sale block");
+        // A blank line after the block used to re-enter the sale reader, which
+        // then read up to the item's own '}'.
+        LLPointer<LLInventoryItem> src = create_random_inventory_item();
+        std::string text = legacy_text(src);
+        text = insert_after(text, "\t\tsale_type\t", "");
+        text.insert(text.find('\n', text.find("\t\tsale_type\t")) + 1, "\n");
+        text.insert(text.find("\t}\n", text.find("\tsale_info\t0\n")) + 3, "\n");
+        ensure_reads_as("blank lines in and after the sale block", text, src);
+
+        std::istringstream in("\t{\n\n\t\tsale_type\tcopy\n\n\t\tsale_price\t10\n\n\t}\n");
+        LLSaleInfo sale;
+        bool has_perm_mask = true;
+        U32 perm_mask = 0;
+        sale.importLegacyStream(in, has_perm_mask, perm_mask);
+        ensure_equals("sale block: type", sale.getSaleType(), LLSaleInfo::FS_COPY);
+        ensure_equals("sale block: price", sale.getSalePrice(), 10);
+        ensure("sale block: no perm_mask", !has_perm_mask);
+    }
+
+    template<> template<>
+    void inventory_object::test<21>()
+    {
+        set_test_name("a well-formed item with an empty name and description reads as before");
+        // The writer emits "\t\tname\t|" for an empty name; it must still read
+        // as an empty name, and the rest of the item as written.
+        LLPointer<LLInventoryItem> src = create_random_inventory_item();
+        std::string text = legacy_text(src);
+        const std::string name_line = "\t\tname\t" + src->getName() + "|\n";
+        const std::string desc_line = "\t\tdesc\t" + src->getDescription() + "|\n";
+        text.replace(text.find(name_line), name_line.size(), "\t\tname\t|\n");
+        text.replace(text.find(desc_line), desc_line.size(), "\t\tdesc\t|\n");
+        std::istringstream in(text + "NEXT\tline\n");
+        LLPointer<LLInventoryItem> dst = create_random_inventory_item();
+        dst->importLegacyStream(in);
+        ensure_equals("empty name", dst->getName(), std::string());
+        ensure_equals("empty description", dst->getDescription(), std::string());
+        ensure_equals("item id", dst->getUUID(), src->getUUID());
+        ensure_equals("permissions", dst->getPermissions(), src->getPermissions());
+        ensure_equals("creation date", dst->getCreationDate(), src->getCreationDate());
+        std::string rest;
+        std::getline(in, rest);
+        ensure_equals("the item ends at its closing brace", rest, std::string("NEXT\tline"));
+    }
+
+    template<> template<>
+    void inventory_object::test<22>()
+    {
+        set_test_name("a garbage group_owned line after the masks does not make the item group owned");
+        // The unparsable value used to reuse the last parsed mask, so any
+        // non-zero mask before it turned group ownership on.
+        std::istringstream in("\t{\n\t\tbase_mask\t00082000\n\t\towner_mask\t00082000\n\t\tgroup_owned\tjunk\n\t}\n");
+        LLPermissions perm;
+        perm.importLegacyStream(in);
+        ensure("permissions: not group owned", !perm.isGroupOwned());
+
+        LLPointer<LLInventoryItem> src = create_random_inventory_item();
+        std::string text = insert_after(legacy_text(src),
+                                        "\t\tgroup_id\t" + src->getPermissions().getGroup().asString() + "\n",
+                                        "\t\tgroup_owned\tjunk\n");
+        ensure_reads_as("item with a garbage group_owned line", text, src);
+        ensure("item: not group owned", !src->getPermissions().isGroupOwned());
+    }
+
+    template<> template<>
+    void inventory_object::test<23>()
+    {
+        set_test_name("a permission mask line that does not parse reads as no permissions");
+        // Absent would leave init()'s PERM_ALL, wider than the data allows.
+        struct MaskCase
+        {
+            const char* keyword;
+            U32 (LLPermissions::*get)() const;
+        };
+        const MaskCase cases[] = {
+            { "creator_mask", &LLPermissions::getMaskBase },
+            { "base_mask", &LLPermissions::getMaskBase },
+            { "owner_mask", &LLPermissions::getMaskOwner },
+            { "group_mask", &LLPermissions::getMaskGroup },
+            { "everyone_mask", &LLPermissions::getMaskEveryone },
+            { "next_owner_mask", &LLPermissions::getMaskNextOwner },
+        };
+        for (const MaskCase& c : cases)
+        {
+            for (const char* value : { "\tzz", "\t-", "" })
+            {
+                const std::string line = std::string(c.keyword) + value;
+                std::istringstream in("\t{\n\t\t" + line + "\n\t}\n");
+                LLPermissions perm;
+                perm.importLegacyStream(in);
+                // creator_mask's fixFairUse() would add PERM_MOVE: it must not run.
+                ensure_equals("'" + line + "' reads as no permissions", (perm.*c.get)(), (U32)PERM_NONE);
+            }
+        }
+
+        // In an item, the mask's own field is 0 and the item reads on as written.
+        LLPointer<LLInventoryItem> src = create_random_inventory_item();
+        std::string text = legacy_text(src);
+        const std::string line = "\t\teveryone_mask\t";
+        size_t pos = text.find(line);
+        ensure("item text has an everyone mask", pos != std::string::npos);
+        text.replace(pos + line.size(), text.find('\n', pos) - pos - line.size(), "zz");
+        std::istringstream in(text);
+        LLPointer<LLInventoryItem> dst = new LLInventoryItem();
+        dst->importLegacyStream(in);
+        ensure_equals("item: everyone mask", dst->getPermissions().getMaskEveryone(), (U32)PERM_NONE);
+        ensure_equals("item: base mask", dst->getPermissions().getMaskBase(), src->getPermissions().getMaskBase());
+        ensure_equals("item: name", dst->getName(), src->getName());
     }
 }
