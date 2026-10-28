@@ -10,6 +10,14 @@ on:
           pre-release, moving the experimental tag. Never touches latest.
         type: boolean
         default: false
+      record_inventory_fixtures:
+        description: >-
+          Linux only: record the libstdc++ trees of the R2 and R3b inventory
+          oracles (llinventorymodel_parity, llinvfetch_parity) twice, require
+          identical dumps, and upload them as the linux-inventory-fixtures
+          artifact. The replay tests then fail until the files are committed.
+        type: boolean
+        default: false
   workflow_call:
   pull_request:
   push:
@@ -218,6 +226,51 @@ jobs:
             echo 'Qualification builds must stage the viewer without producing an installer.' >&2
             exit 1
           fi
+
+      - name: Record the libstdc++ inventory fixtures (R2, R3b)
+        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && inputs.record_inventory_fixtures
+        shell: bash
+        run: |
+          set -uo pipefail
+          dir="${{ matrix.directory }}"
+          cmake -S indra -B "$dir" -DLL_TESTS:BOOL=ON
+          # The post-build replay fails until the libstdc++ trees exist; the
+          # executables are linked before it runs.
+          cmake --build "$dir" --config "$VIEWER_BUILD_TYPE" --parallel 3             --target INTEGRATION_TEST_llinventorymodel_parity INTEGRATION_TEST_llinvfetch_parity || true
+          r2=$(find "$dir" -name INTEGRATION_TEST_llinventorymodel_parity -type f -perm -u+x | head -1)
+          r3b=$(find "$dir" -name INTEGRATION_TEST_llinvfetch_parity -type f -perm -u+x | head -1)
+          test -n "$r2" && test -n "$r3b" || { echo "test executables not built"; exit 1; }
+          libs="$(dirname "$r2"):$GITHUB_WORKSPACE/$dir/packages/lib/release:$GITHUB_WORKSPACE/$dir/sharedlibs/lib"
+          out="$RUNNER_TEMP/inventory-fixtures"
+          commit=$(git rev-parse --short=10 HEAD)
+          rm -rf "$out"; mkdir -p "$out"
+          for n in 1 2; do
+            mkdir -p "$out/r2_$n" "$out/r3b_$n"
+            LD_LIBRARY_PATH="$libs" VKS_INVMODEL_COMMIT="$commit" VKS_INVMODEL_DUMP="$out/r2_$n" "$r2" > "$out/r2_$n.log" 2>&1
+            LD_LIBRARY_PATH="$libs" VKS_INVFETCH_COMMIT="$commit" VKS_INVFETCH_DUMP="$out/r3b_$n"               python3 -I indra/newview/tests/vksinventory_mock_server.py -- "$r3b" > "$out/r3b_$n.log" 2>&1
+            test -f "$out/r2_$n/DUMP_COMPLETE" || { echo "R2 dump $n incomplete"; tail -40 "$out/r2_$n.log"; exit 1; }
+            grep -q "(0 scenarios with failures)" "$out/r3b_$n.log" || { echo "R3b dump $n failed"; tail -40 "$out/r3b_$n.log"; exit 1; }
+          done
+          diff -r "$out/r2_1" "$out/r2_2" || { echo "the two R2 dumps differ"; exit 1; }
+          # R3b: the concurrent scenarios' "# measured" header lines vary from run
+          # to run and are not compared, and manifest.txt's digests cover them.
+          diff <(cd "$out/r3b_1" && find . -type f | sort) <(cd "$out/r3b_2" && find . -type f | sort) || { echo "the R3b file sets differ"; exit 1; }
+          while read -r f; do
+            [ "$f" = ./manifest.txt ] && continue
+            diff -q <(grep -av '^#' "$out/r3b_1/$f") <(grep -av '^#' "$out/r3b_2/$f") > /dev/null || { echo "the R3b dumps differ in $f"; exit 1; }
+          done < <(cd "$out/r3b_1" && find . -type f | sort)
+          echo "recorded at $commit: both dumps identical"
+
+      - name: Upload the libstdc++ inventory fixtures
+        if: always() && runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && inputs.record_inventory_fixtures
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-inventory-fixtures
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/inventory-fixtures/r2_1/
+            ${{ runner.temp }}/inventory-fixtures/r3b_1/
+            ${{ runner.temp }}/inventory-fixtures/*.log
 
       - name: Run statistics, script metadata and transport regression tests
         shell: bash
