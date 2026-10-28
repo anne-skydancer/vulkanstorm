@@ -1,5 +1,5 @@
 {
-  "source_commit": "9e135add7cadcf205f4d537a9a33cdf6d7cdbeb2",
+  "source_commit": "f604c4b3a07eb9c6e2170030eacd4b5684c4e0dc",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -17562,7 +17562,7 @@
       "path": "indra/newview/llviewerassetupload.cpp",
       "start": 46,
       "end": 47,
-      "sha256": "64eb3decba5bba2f9599bb8da0b836bc014bf764c530db744194b3df1cd8ffdd",
+      "sha256": "b8e12f53d33ce81d8a71d1303819ba064231752798726754c28a3274400d2a65",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Authenticated inventory skeleton/root/library, CPU fetch pumps, observer-preserving reset, AIS queue/response generation guards and existing fetch-item capability bridge preserve account ownership and legacy region checks. Asset storage/upload/notecard services cancel/reset weak account identity while admitting CPU asset protocols. Successful native inventory upload selects the existing CPU inventory tree instead of scene-sidepanel gallery, using actual returned model metadata and inherited generation guards."
@@ -17571,7 +17571,7 @@
       "path": "indra/newview/llviewerassetupload.cpp",
       "start": 932,
       "end": 932,
-      "sha256": "64eb3decba5bba2f9599bb8da0b836bc014bf764c530db744194b3df1cd8ffdd",
+      "sha256": "b8e12f53d33ce81d8a71d1303819ba064231752798726754c28a3274400d2a65",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Authenticated inventory skeleton/root/library, CPU fetch pumps, observer-preserving reset, AIS queue/response generation guards and existing fetch-item capability bridge preserve account ownership and legacy region checks. Asset storage/upload/notecard services cancel/reset weak account identity while admitting CPU asset protocols. Successful native inventory upload selects the existing CPU inventory tree instead of scene-sidepanel gallery, using actual returned model metadata and inherited generation guards."
@@ -17580,7 +17580,7 @@
       "path": "indra/newview/llviewerassetupload.cpp",
       "start": 947,
       "end": 947,
-      "sha256": "64eb3decba5bba2f9599bb8da0b836bc014bf764c530db744194b3df1cd8ffdd",
+      "sha256": "b8e12f53d33ce81d8a71d1303819ba064231752798726754c28a3274400d2a65",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Authenticated inventory skeleton/root/library, CPU fetch pumps, observer-preserving reset, AIS queue/response generation guards and existing fetch-item capability bridge preserve account ownership and legacy region checks. Asset storage/upload/notecard services cancel/reset weak account identity while admitting CPU asset protocols. Successful native inventory upload selects the existing CPU inventory tree instead of scene-sidepanel gallery, using actual returned model metadata and inherited generation guards."
@@ -17589,16 +17589,16 @@
       "path": "indra/newview/llviewerassetupload.cpp",
       "start": 995,
       "end": 995,
-      "sha256": "64eb3decba5bba2f9599bb8da0b836bc014bf764c530db744194b3df1cd8ffdd",
+      "sha256": "b8e12f53d33ce81d8a71d1303819ba064231752798726754c28a3274400d2a65",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Authenticated inventory skeleton/root/library, CPU fetch pumps, observer-preserving reset, AIS queue/response generation guards and existing fetch-item capability bridge preserve account ownership and legacy region checks. Asset storage/upload/notecard services cancel/reset weak account identity while admitting CPU asset protocols. Successful native inventory upload selects the existing CPU inventory tree instead of scene-sidepanel gallery, using actual returned model metadata and inherited generation guards."
     },
     {
       "path": "indra/newview/llviewerassetupload.cpp",
-      "start": 1084,
-      "end": 1090,
-      "sha256": "64eb3decba5bba2f9599bb8da0b836bc014bf764c530db744194b3df1cd8ffdd",
+      "start": 1086,
+      "end": 1092,
+      "sha256": "b8e12f53d33ce81d8a71d1303819ba064231752798726754c28a3274400d2a65",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Authenticated inventory skeleton/root/library, CPU fetch pumps, observer-preserving reset, AIS queue/response generation guards and existing fetch-item capability bridge preserve account ownership and legacy region checks. Asset storage/upload/notecard services cancel/reset weak account identity while admitting CPU asset protocols. Successful native inventory upload selects the existing CPU inventory tree instead of scene-sidepanel gallery, using actual returned model metadata and inherited generation guards."
@@ -21252,7 +21252,7 @@
       "path": "indra/newview/fscommon.cpp",
       "start": 29,
       "end": 29,
-      "sha256": "035b3130c8eddf023d0c0f7a06e3d869d8453e10f1fc240d7a667a114467deb0",
+      "sha256": "3fdf029ea75405c266d09b40dab16db734f5c7fd6edbfde1f7c80374795a1ea6",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared action enable helper rejects only scene zoom/radar tracking/radar-based teleport-to in native mode before any lazy FSRadar construction; required for direct manual resident chat-header context queries that bypass menu registrar admission. All CPU profile/IM/friendship/transcript/group/clipboard/mute predicates remain unchanged; legacy scene checks remain intact. Audited chat-header resident/object callback registration and direct queries; scene object location already has native account metadata branch, no world lookup."
@@ -21261,7 +21261,7 @@
       "path": "indra/newview/fscommon.cpp",
       "start": 373,
       "end": 382,
-      "sha256": "035b3130c8eddf023d0c0f7a06e3d869d8453e10f1fc240d7a667a114467deb0",
+      "sha256": "3fdf029ea75405c266d09b40dab16db734f5c7fd6edbfde1f7c80374795a1ea6",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared action enable helper rejects only scene zoom/radar tracking/radar-based teleport-to in native mode before any lazy FSRadar construction; required for direct manual resident chat-header context queries that bypass menu registrar admission. All CPU profile/IM/friendship/transcript/group/clipboard/mute predicates remain unchanged; legacy scene checks remain intact. Audited chat-header resident/object callback registration and direct queries; scene object location already has native account metadata branch, no world lookup."
@@ -42663,7 +42663,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 13,
       "end": 13,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -42672,7 +42672,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 14,
       "end": 14,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -42681,61 +42681,61 @@
       "path": ".github/workflows/build.yaml",
       "start": 39,
       "end": 39,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 125,
-      "end": 125,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 123,
+      "end": 123,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 148,
-      "end": 148,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 146,
+      "end": 146,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 160,
-      "end": 160,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 158,
+      "end": 158,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 164,
-      "end": 164,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 162,
+      "end": 162,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 213,
-      "end": 221,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 211,
+      "end": 219,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 270,
-      "end": 270,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 268,
+      "end": 268,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -43237,18 +43237,18 @@
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 160,
-      "end": 160,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 158,
+      "end": 158,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 162,
-      "end": 162,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 160,
+      "end": 160,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -43500,7 +43500,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 37,
       "end": 37,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -43545,7 +43545,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 13,
       "end": 13,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -43554,7 +43554,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 14,
       "end": 14,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -43563,7 +43563,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 16,
       "end": 16,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -43572,7 +43572,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 21,
       "end": 25,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -43581,34 +43581,34 @@
       "path": ".github/workflows/build.yaml",
       "start": 39,
       "end": 39,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 71,
-      "end": 72,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 123,
+      "end": 123,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 125,
-      "end": 125,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 146,
+      "end": 146,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 148,
-      "end": 148,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 158,
+      "end": 158,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -43617,7 +43617,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 160,
       "end": 160,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -43625,71 +43625,62 @@
     {
       "path": ".github/workflows/build.yaml",
       "start": 162,
-      "end": 162,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "end": 169,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 164,
-      "end": 171,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 172,
+      "end": 172,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 174,
-      "end": 174,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 180,
+      "end": 182,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 182,
-      "end": 184,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 208,
+      "end": 209,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 210,
-      "end": 211,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 243,
+      "end": 243,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 245,
-      "end": 245,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 252,
+      "end": 261,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 254,
-      "end": 263,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
-    },
-    {
-      "path": ".github/workflows/build.yaml",
-      "start": 270,
-      "end": 270,
-      "sha256": "ede4fdad454c69bc98c1177adcf54416d5dfffc69392727147101dfb9b1b0b89",
+      "start": 268,
+      "end": 268,
+      "sha256": "1061d36b058908851f48c2f3730fb987b497135e578322c71e6c489e461dc848",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -55938,7 +55929,7 @@
       "path": "indra/newview/fscommon.cpp",
       "start": 376,
       "end": 376,
-      "sha256": "035b3130c8eddf023d0c0f7a06e3d869d8453e10f1fc240d7a667a114467deb0",
+      "sha256": "3fdf029ea75405c266d09b40dab16db734f5c7fd6edbfde1f7c80374795a1ea6",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected UI closure: shared teleport offers/requests and profile teleports, current native sound trigger, actual native avatar/scene transforms for Nearby chooser and reference camera zoom, native inventory attachment/wear transactions, flight/sit/animation commands and editable saved debug settings. Preserve ordinary reference permissions, account/circuit ownership and peer GL paths. Full UI acceptance remains open; do not push before exact R3 qualification evidence is verified."
@@ -85636,18 +85627,9 @@
     },
     {
       "path": "indra/newview/fscommon.cpp",
-      "start": 33,
-      "end": 33,
-      "sha256": "035b3130c8eddf023d0c0f7a06e3d869d8453e10f1fc240d7a667a114467deb0",
-      "record": "I08",
-      "disposition": "mapped",
-      "reason": "Transpose original selection/node/tool, attention, media permission/navigation/mute/proximity, script recovery and skinned UI controllers onto real native account/object/face owners. Preserve synchronous callback reentry, source identity, paired input, retirement and original OpenGL semantics. This implementation checkpoint is not full connected UI or keyboard runtime qualification."
-    },
-    {
-      "path": "indra/newview/fscommon.cpp",
       "start": 377,
       "end": 381,
-      "sha256": "035b3130c8eddf023d0c0f7a06e3d869d8453e10f1fc240d7a667a114467deb0",
+      "sha256": "3fdf029ea75405c266d09b40dab16db734f5c7fd6edbfde1f7c80374795a1ea6",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose original selection/node/tool, attention, media permission/navigation/mute/proximity, script recovery and skinned UI controllers onto real native account/object/face owners. Preserve synchronous callback reentry, source identity, paired input, retirement and original OpenGL semantics. This implementation checkpoint is not full connected UI or keyboard runtime qualification."
