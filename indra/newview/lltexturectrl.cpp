@@ -26,6 +26,11 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeim.h"
+#include "vsuiimageprovider.h"
+#endif
 
 #include "lltexturectrl.h"
 
@@ -341,6 +346,14 @@ void LLFloaterTexturePicker::setCanApplyImmediately(bool b)
 
 void LLFloaterTexturePicker::stopUsingPipette()
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if(LLToolPipette::getInstance()->ownsNativeConsumer(this))LLToolPipette::getInstance()->setNativeActive(false);
+        return;
+    }
+#endif
+
     if (LLToolMgr::getInstance()->getCurrentTool() == LLToolPipette::getInstance())
     {
         LLToolMgr::getInstance()->clearTransientTool();
@@ -349,6 +362,23 @@ void LLFloaterTexturePicker::stopUsingPipette()
 
 bool LLFloaterTexturePicker::updateImageStats()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto image = mImageAssetID.notNull() ? LLUI::getUIImageByID(mImageAssetID) : nullptr;
+        const bool ready = mImageAssetID.isNull() || vs_ui_image_ready(mImageAssetID);
+        const S32 width = image && ready ? image->getWidth() : 0;
+        const S32 height = image && ready ? image->getHeight() : 0;
+        const bool valid = ready && (mImageAssetID.isNull() ||
+            ((!mLimitsSet || width == height) && width >= mMinDim && width <= mMaxDim && height >= mMinDim && height <= mMaxDim));
+        mResolutionLabel->setTextArg("[DIMENSIONS]", ready ? llformat("%d x %d", width, height) : std::string("[? x ?]"));
+        mResolutionWarning->setTextArg("[TEXDIM]", llformat("%dx%d", width, height));
+        mResolutionLabel->setVisible(valid || !ready);
+        mResolutionWarning->setVisible(ready && !valid);
+        return valid;
+    }
+#endif
+
     bool result = true;
     if (mGLTFMaterial.notNull())
     {
@@ -737,6 +767,28 @@ bool LLFloaterTexturePicker::postBuild()
 // virtual
 void LLFloaterTexturePicker::draw()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        mSelectBtn->setEnabled(mActive && mCanApply && updateImageStats() && !getTentative());
+        mPipetteBtn->setEnabled(mActive);
+        mPipetteBtn->setValue(LLToolPipette::getInstance()->nativeConsumer(this));
+        if (mTentativeLabel) mTentativeLabel->setVisible(getTentative() && !mViewModel->isDirty());
+        mDefaultBtn->setEnabled(mImageAssetID != mDefaultImageAssetID || getTentative());
+        mBlankBtn->setEnabled((mImageAssetID != mBlankImageAssetID && mBlankImageAssetID.notNull()) || getTentative());
+        mNoneBtn->setEnabled(mAllowNoTexture && (mImageAssetID.notNull() || getTentative()));
+        mTransparentBtn->setEnabled((mImageAssetID != mTransparentImageAssetID && mTransparentImageAssetID.notNull()) || getTentative());
+        LLFloater::draw();
+        if (isMinimized() || !mOwner) return;
+        LLRect interior = mPreviewWidget->getRect(); gl_rect_2d(interior, LLColor4::black, false); interior.stretch(-1);
+        const F32 alpha = getTransparencyType() == TT_ACTIVE ? 1.f : getCurrentTransparency();
+        auto image = mImageAssetID.notNull() ? LLUI::getUIImageByID(mImageAssetID) : mFallbackImage;
+        if (image) image->draw(interior, UI_VERTEX_COLOR % alpha);
+        else { gl_rect_2d(interior, LLColor4::grey % alpha, true); gl_draw_x(interior, LLColor4::black); }
+        return;
+    }
+#endif
+
     static LLCachedControl<F32> max_opacity(gSavedSettings, "PickerContextOpacity", 0.4f);
     drawConeToOwner(mContextConeOpacity, max_opacity, mOwner);
 
@@ -1163,6 +1215,15 @@ void LLFloaterTexturePicker::onBtnSelect(void* userdata)
 
 void LLFloaterTexturePicker::onBtnPipette()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        auto* tool = LLToolPipette::getInstance();
+        const auto* owner=dynamic_cast<const LLTextureCtrl*>(mOwner);
+        tool->setNativeActive(!tool->nativeConsumer(this),this,owner?owner->pickerGuard():std::function<bool()>{});
+        return;
+    }
+#endif
     bool pipette_active = mPipetteBtn->getValue().asBoolean();
     pipette_active = !pipette_active;
     if (pipette_active)
@@ -1788,6 +1849,7 @@ void LLFloaterTexturePicker::onPickerCallback(const std::vector<std::string>& fi
 
 void LLFloaterTexturePicker::onPipetteSelect(LLPointer<LLViewerObject>& object, S32 te_index)
 {
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() && !LLToolPipette::instance().nativeConsumer(this))return;
     if (mInventoryPickType == PICK_MATERIAL)
     {
         // Note: does not copy overrides!
@@ -2125,6 +2187,8 @@ void LLTextureCtrl::setLabel(const std::string& label)
 
 void LLTextureCtrl::showPicker(bool take_focus)
 {
+    mPickerCurrent=mOperationGuardFactory?mOperationGuardFactory():std::function<bool()>{};
+    if(mPickerCurrent && !mPickerCurrent())return;
     // show hourglass cursor when loading inventory window
     // because inventory construction is slooow
     getWindow()->setCursor(UI_CURSOR_WAIT);
@@ -2155,7 +2219,8 @@ void LLTextureCtrl::showPicker(bool take_focus)
         LLFloaterTexturePicker* texture_floaterp = dynamic_cast<LLFloaterTexturePicker*>(floaterp);
         if (texture_floaterp && mOnTextureSelectedCallback)
         {
-            texture_floaterp->setTextureSelectedCallback(mOnTextureSelectedCallback);
+            texture_floaterp->setTextureSelectedCallback([this](LLInventoryItem* item)
+            {if((!mPickerCurrent || mPickerCurrent()) && mOnTextureSelectedCallback)mOnTextureSelectedCallback(item);});
         }
         if (texture_floaterp && mOnCloseCallback)
         {
@@ -2164,7 +2229,8 @@ void LLTextureCtrl::showPicker(bool take_focus)
         if (texture_floaterp)
         {
             texture_floaterp->setOnFloaterCommitCallback(boost::bind(&LLTextureCtrl::onFloaterCommit, this, _1, _2, _3, _4, _5));
-            texture_floaterp->setSetImageAssetIDCallback(boost::bind(&LLTextureCtrl::setImageAssetID, this, _1));
+            texture_floaterp->setSetImageAssetIDCallback([this](const LLUUID& id)
+            {if(!mPickerCurrent || mPickerCurrent())setImageAssetID(id);});
 
             texture_floaterp->setLocalTextureEnabled(mAllowLocalTexture);
             texture_floaterp->setBakeTextureEnabled(mBakeTextureEnabled && mInventoryPickType != PICK_MATERIAL);
@@ -2280,7 +2346,7 @@ void LLTextureCtrl::onFloaterClose()
 
     if (floaterp)
     {
-        if (mOnCloseCallback)
+        if (mOnCloseCallback && (!mPickerCurrent || mPickerCurrent()))
         {
             mOnCloseCallback(this,LLSD());
         }
@@ -2292,6 +2358,7 @@ void LLTextureCtrl::onFloaterClose()
 
 void LLTextureCtrl::onFloaterCommit(ETexturePickOp op, LLPickerSource source, const LLUUID& asset_id, const LLUUID& inv_id, const LLUUID& tracking_id)
 {
+    if(mPickerCurrent && !mPickerCurrent())return;
     LLFloaterTexturePicker* floaterp = (LLFloaterTexturePicker*)mFloaterHandle.get();
 
     if( floaterp && getEnabled())
@@ -2363,7 +2430,8 @@ void LLTextureCtrl::setOnTextureSelectedCallback(texture_selected_callback cb)
     LLFloaterTexturePicker* floaterp = dynamic_cast<LLFloaterTexturePicker*>(mFloaterHandle.get());
     if (floaterp)
     {
-        floaterp->setTextureSelectedCallback(cb);
+        floaterp->setTextureSelectedCallback([this](LLInventoryItem* item)
+        {if((!mPickerCurrent || mPickerCurrent()) && mOnTextureSelectedCallback)mOnTextureSelectedCallback(item);});
     }
 }
 
@@ -2380,6 +2448,20 @@ void LLTextureCtrl::setAllowLocalTexture(bool b)
 void LLTextureCtrl::setImageAssetName(const std::string& name)
 {
     LLPointer<LLUIImage> imagep = LLUI::getUIImage(name);
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        if (LLUUID::validate(name)) setImageAssetID(LLUUID(name));
+        else
+        {
+            // A named skin image has no inventory asset identity. Preserve its
+            // visual facade as the control's empty-selection fallback.
+            mFallbackImage = imagep;
+            setImageAssetID(LLUUID::null);
+        }
+        return;
+    }
+#endif
     if(imagep)
     {
         LLViewerFetchedTexture* pTexture = dynamic_cast<LLViewerFetchedTexture*>(imagep->getImage().get());
@@ -2494,6 +2576,23 @@ bool LLTextureCtrl::handleDragAndDrop(S32 x, S32 y, MASK mask,
 void LLTextureCtrl::draw()
 {
     mBorder->setKeyboardFocusHighlight(hasFocus());
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        LLRect border(0, getRect().getHeight(), getRect().getWidth(), mCaptionHeight);
+        gl_rect_2d(border, mBorderColor.get(), false);
+        LLRect interior = border; interior.stretch(-1);
+        const F32 alpha = getTransparencyType() == TT_ACTIVE ? 1.f : getCurrentTransparency();
+        auto image = mValid && mImageAssetID.notNull() ? LLUI::getUIImageByID(mImageAssetID) : mFallbackImage;
+        if (image) image->draw(interior, UI_VERTEX_COLOR % alpha);
+        else { gl_rect_2d(interior, LLColor4::grey % alpha, true); gl_draw_x(interior, LLColor4::black); }
+        if (mIsMasked) { gl_rect_2d(interior, LLColor4(.5f, .5f, .5f, .44f), true); gl_draw_x(interior, LLColor4::black); }
+        mTentativeLabel->setVisible(getTentative());
+        mCaption->setEnabled(getEnabled() && isInEnabledChain());
+        LLUICtrl::draw();
+        return;
+    }
+#endif
 
     LLPointer<LLViewerTexture> preview = NULL;
 

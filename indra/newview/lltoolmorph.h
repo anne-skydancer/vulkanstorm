@@ -28,6 +28,9 @@
 #define LL_LLTOOLMORPH_H
 
 #include "lltool.h"
+#include <memory>
+#include <string>
+#include <functional>
 #include "m4math.h"
 #include "v2math.h"
 #include "lldynamictexture.h"
@@ -42,6 +45,8 @@ class LLViewerJointMesh;
 class LLPolyMesh;
 class LLViewerObject;
 class LLJoint;
+class VSScenePreview;
+class LLViewerWearable;
 
 //-----------------------------------------------------------------------------
 // LLVisualParamHint
@@ -96,6 +101,12 @@ protected:
 
     LLUIImagePtr mBackgroundp;
     boost::signals2::scoped_connection mBackgroundLoadedConnection;
+    std::shared_ptr<VSScenePreview> mNativePreview;
+    std::shared_ptr<LLViewerWearable> mNativeWearableOwner;
+    std::function<bool()> mNativeCurrent;
+    std::string mNativeJointName;
+    bool renderNative();
+
 
     typedef std::set< LLVisualParamHint* > instance_list_t;
     static instance_list_t sInstances;

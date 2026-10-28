@@ -37,6 +37,8 @@
 #include "llcorehttputil.h"
 #include <memory>
 
+std::string build_order_string(LLWearableType::EType type, U32 index);
+
 class LLWearableHoldingPattern;
 class LLInventoryCallback;
 class LLOutfitUnLockTimer;
@@ -50,6 +52,8 @@ class LLAppearanceMgr: public LLSingleton<LLAppearanceMgr>
     friend class LLOutfitUnLockTimer;
 
 public:
+    // Shared outfit filtering for both renderer-specific appearance owners.
+    void filterWearableItems(LLInventoryModel::item_array_t& items, S32 max_per_type, S32 max_total, bool skip_bodyparts = false);
     typedef std::vector<LLInventoryModel::item_array_t> wearables_by_type_t;
 
     void updateAppearanceFromCOF(bool enforce_item_restrictions = true,
@@ -259,8 +263,9 @@ public:
     typedef boost::signals2::signal<void (const LLUUID& item_id)> attachments_changed_signal_t;
     // </FS:Ansariel>
     boost::signals2::connection setAttachmentsChangedCallback(attachments_changed_callback_t cb);
+    void                        notifyAttachmentChange(const LLUUID& item);
 
-// [SL:KB] - Patch: Appearance-Misc
+    // [SL:KB] - Patch: Appearance-Misc
     void syncCofVersionAndRefresh();
 // [/SL:KB]
 
@@ -276,9 +281,6 @@ private:
     std::string     mAppearanceServiceURL;
 
 private:
-
-    void filterWearableItems(LLInventoryModel::item_array_t& items, S32 max_per_type, S32 max_total, bool skip_bodyparts = false);
-
     void getDescendentsOfAssetType(const LLUUID& category,
                                           LLInventoryModel::item_array_t& items,
                                           LLAssetType::EType type);

@@ -730,7 +730,6 @@ void init_native_connected_menus()
 void init_menus()
 {
     LL_PROFILE_ZONE_SCOPED;
-
     // Initialize actions
     initialize_menus();
 

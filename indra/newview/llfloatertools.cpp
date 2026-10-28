@@ -28,6 +28,12 @@
 #include "vsregioncontext.h"
 
 #include "llfloatertools.h"
+#include "vseditcontroller.h"
+#if VS_NATIVE_VULKAN
+#include "vsobjectselection.h"
+#include "vsnativesession.h"
+#include "vsnativeim.h"
+#endif
 
 #include "llfontgl.h"
 #include "llcoord.h"
@@ -96,6 +102,51 @@
 #include "llvotree.h"
 
 #include "fspanelface.h"    // <FS:Zi> switchable edit texture/materials panel
+
+namespace
+{
+template<class Action>
+void with_build_tool_selection(Action&& action)
+{
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner = VSNativeSession::active();
+        auto* selection = owner ? owner->existingObjectSelection() : nullptr;
+        if (selection) action(selection);
+        return;
+    }
+#endif
+    action(LLSelectMgr::getInstance());
+}
+bool build_selection_empty()
+{
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner = VSNativeSession::active();
+        auto* selection = owner ? owner->existingObjectSelection() : nullptr;
+        return !selection || selection->objectCount() == 0;
+    }
+#endif
+    return LLSelectMgr::instance().getSelection()->isEmpty();
+}
+ESelectType build_selection_type()
+{
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner = VSNativeSession::active();
+        auto* selection = owner ? owner->existingObjectSelection() : nullptr;
+        const auto type = selection ? selection->selectionType().type : std::nullopt;
+        if (type == VSObjectSelection::SelectionType::HUD) return SELECT_TYPE_HUD;
+        if (type == VSObjectSelection::SelectionType::Attachment) return SELECT_TYPE_ATTACHMENT;
+        return SELECT_TYPE_WORLD;
+    }
+#endif
+    return LLSelectMgr::instance().getSelection()->getSelectType();
+}
+}
 
 // Globals
 LLFloaterTools *gFloaterTools = NULL;
@@ -561,12 +612,13 @@ void LLFloaterTools::setStatusText(const std::string& text)
     }
 }
 
-void LLFloaterTools::refresh()
+template<class Selection>
+void LLFloaterTools::refreshController(Selection* selectionManager)
 {
     const S32 INFO_WIDTH = getRect().getWidth();
     const S32 INFO_HEIGHT = 384;
     LLRect object_info_rect(0, 0, INFO_WIDTH, -INFO_HEIGHT);
-    bool all_volume = LLSelectMgr::getInstance()->selectionAllPCode( LL_PCODE_VOLUME );
+    bool all_volume = selectionManager->selectionAllPCode( LL_PCODE_VOLUME );
 
     S32 idx_features = mTab->getPanelIndexByTitle(PANEL_NAMES[PANEL_FEATURES]);
     S32 idx_face = mTab->getPanelIndexByTitle(PANEL_NAMES[PANEL_FACE]);
@@ -591,20 +643,20 @@ void LLFloaterTools::refresh()
     std::string desc_string;
     std::string num_string;
     bool enable_link_count = true;
-    S32 prim_count = LLSelectMgr::getInstance()->getSelection()->getObjectCount();
+    S32 prim_count = selectionManager->getSelection()->getObjectCount();
     if (prim_count == 1 && LLToolMgr::getInstance()->getCurrentTool() == LLToolFace::getInstance())
     {
         desc_string = getString("selected_faces");
 
-        LLViewerObject* objectp = LLSelectMgr::getInstance()->getSelection()->getFirstRootObject();
-        LLSelectNode* nodep = LLSelectMgr::getInstance()->getSelection()->getFirstRootNode();
+        auto* objectp = selectionManager->getSelection()->getFirstRootObject();
+        auto* nodep = selectionManager->getSelection()->getFirstRootNode();
         if(!objectp || !nodep)
         {
-            objectp = LLSelectMgr::getInstance()->getSelection()->getFirstObject();
-            nodep = LLSelectMgr::getInstance()->getSelection()->getFirstNode();
+            objectp = selectionManager->getSelection()->getFirstObject();
+            nodep = selectionManager->getSelection()->getFirstNode();
         }
 
-        if (objectp && objectp->getNumTEs() == LLSelectMgr::getInstance()->getSelection()->getTECount())
+        if (objectp && objectp->getNumTEs() == selectionManager->getSelection()->getTECount())
             num_string = "ALL_SIDES";
         else if (objectp && nodep)
         {
@@ -624,10 +676,10 @@ void LLFloaterTools::refresh()
     else if (prim_count == 1 && gSavedSettings.getBOOL("EditLinkedParts"))
     {
         desc_string = getString("link_number");
-        LLViewerObject* objectp = LLSelectMgr::getInstance()->getSelection()->getFirstObject();
+        auto* objectp = selectionManager->getSelection()->getFirstObject();
         if (objectp && objectp->getRootEdit())
         {
-            LLViewerObject::child_list_t children = objectp->getRootEdit()->getChildren();
+            const auto& children = objectp->getRootEdit()->getChildren();
             if (children.empty())
                 num_string = "0"; //a childless prim is always link zero, and unhappy
             else if (objectp->getRootEdit()->isSelected())
@@ -635,7 +687,7 @@ void LLFloaterTools::refresh()
             else
             {
                 S32 index = 1;
-                for (LLViewerObject::child_list_t::iterator iter = children.begin(); iter != children.end(); ++iter)
+                for (auto iter = children.begin(); iter != children.end(); ++iter)
                 {
                     index++;
                     if ((*iter)->isSelected())
@@ -658,24 +710,24 @@ void LLFloaterTools::refresh()
     if (!gMeshRepo.meshRezEnabled())
     {
         std::string obj_count_string;
-        LLResMgr::getInstance()->getIntegerString(obj_count_string, LLSelectMgr::getInstance()->getSelection()->getRootObjectCount());
+        LLResMgr::getInstance()->getIntegerString(obj_count_string, selectionManager->getSelection()->getRootObjectCount());
         mTextSelectionCount->setTextArg("[OBJ_COUNT]", obj_count_string);
         std::string prim_count_string;
-        LLResMgr::getInstance()->getIntegerString(prim_count_string, LLSelectMgr::getInstance()->getSelection()->getObjectCount());
+        LLResMgr::getInstance()->getIntegerString(prim_count_string, selectionManager->getSelection()->getObjectCount());
         mTextSelectionCount->setTextArg("[PRIM_COUNT]", prim_count_string);
 
         // calculate selection rendering cost
         if (sShowObjectCost)
         {
             std::string prim_cost_string;
-            S32 render_cost = LLSelectMgr::getInstance()->getSelection()->getSelectedObjectRenderCost();
+            S32 render_cost = selectionManager->getSelection()->getSelectedObjectRenderCost();
             LLResMgr::getInstance()->getIntegerString(prim_cost_string, render_cost);
             // <FS:Ansariel> Was removed from floater_tools.xml as part of SH-1917 SH-1935
             //getChild<LLUICtrl>("RenderingCost")->setTextArg("[COUNT]", prim_cost_string);
         }
 
         // disable the object and prim counts if nothing selected
-        bool have_selection = ! LLSelectMgr::getInstance()->getSelection()->isEmpty();
+        bool have_selection = ! selectionManager->getSelection()->isEmpty();
         mTextLinkNumObjCount->setEnabled(have_selection);
         //getChildView("obj_count")->setEnabled(have_selection);
         // <FS:Ansariel> Was removed from floater_tools.xml as part of SH-1719
@@ -686,17 +738,28 @@ void LLFloaterTools::refresh()
     else
 #endif
     {
-        LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
+        auto selection = selectionManager->getSelection();
         F32 link_cost = selection->getSelectedLinksetCost();
-        S32 prim_count = LLSelectMgr::getInstance()->getSelection()->getObjectCount(); // <FS:Ansariel> FIRE-36994: Always display prim count too
+        S32 prim_count = selectionManager->getSelection()->getObjectCount(); // <FS:Ansariel> FIRE-36994: Always display prim count too
         S32 link_count = selection->getRootObjectCount();
         //S32 object_count = selection->getObjectCount(); // <FS:Ansariel> We got this already
 
-        LLCrossParcelFunctor func;
-        if (!LLSelectMgr::getInstance()->getSelection()->applyToRootObjects(&func, true))
+        const bool crossesParcel = [&]
+        {
+#if VS_NATIVE_VULKAN
+            if constexpr (std::is_same_v<Selection,VSEditSelection>)
+                return selection->objectsCrossParcel();
+            else
+#endif
+            {
+                LLCrossParcelFunctor func;
+                return selection->applyToRootObjects(&func, true);
+            }
+        }();
+        if (!crossesParcel)
         {
             // Unless multiple parcels selected, higlight parcel object is at.
-            LLViewerObject* selected_object = mObjectSelection->getFirstObject();
+            auto* selected_object = selection->getFirstObject();
             if (selected_object)
             {
                 // <FS:Ansariel> FIRE-20387: Editing HUD attachment shows [CAPACITY_STRING] in tools floater
@@ -780,7 +843,7 @@ void LLFloaterTools::refresh()
     }
 
     // <FS> disable the object and prim counts if nothing selected
-    bool have_selection = ! LLSelectMgr::getInstance()->getSelection()->isEmpty();
+    bool have_selection = ! selectionManager->getSelection()->isEmpty();
     mTextLinkNumObjCount->setEnabled(have_selection && enable_link_count);
     // </FS>
 
@@ -817,9 +880,14 @@ void LLFloaterTools::refresh()
     // </FS:CR>
 }
 
+void LLFloaterTools::refresh()
+{
+    vs_with_edit_selection([&](auto* selection) { refreshController(selection); });
+}
+
 void LLFloaterTools::draw()
 {
-    bool has_selection = !LLSelectMgr::getInstance()->getSelection()->isEmpty();
+    bool has_selection = !build_selection_empty();
     if(!has_selection && (mHasSelection != has_selection))
     {
         mDirty = true;
@@ -956,7 +1024,7 @@ void LLFloaterTools::updatePopup(LLCoordGL center, MASK mask)
     mBtnPrevPart->setVisible(edit_visible);
     mBtnNextPart->setVisible(edit_visible);
 
-    bool select_btn_enabled = (!LLSelectMgr::getInstance()->getSelection()->isEmpty()
+    bool select_btn_enabled = (!build_selection_empty()
                                 && (linked_parts || LLToolFace::getInstance() == LLToolMgr::getInstance()->getCurrentTool()));
     mBtnPrevPart->setEnabled(select_btn_enabled);
     mBtnNextPart->setEnabled(select_btn_enabled);
@@ -995,7 +1063,7 @@ void LLFloaterTools::updatePopup(LLCoordGL center, MASK mask)
         S32 index = mComboGridMode->getCurrentIndex();
         mComboGridMode->removeall();
 
-        switch (mObjectSelection->getSelectType())
+        switch (build_selection_type())
         {
             case SELECT_TYPE_HUD:
                 mComboGridMode->add(getString("grid_screen_text"));
@@ -1133,7 +1201,7 @@ void LLFloaterTools::updatePopup(LLCoordGL center, MASK mask)
     mPanelLandInfo->setVisible(land_visible && sFSToolboxExpanded);
     // </FS>
 
-    bool have_selection = !LLSelectMgr::getInstance()->getSelection()->isEmpty();
+    bool have_selection = !build_selection_empty();
 
     // <FS>
     getChildView("more info label")->setVisible(!land_visible && have_selection);
@@ -1160,7 +1228,27 @@ bool LLFloaterTools::canClose()
 void LLFloaterTools::onOpen(const LLSD& key)
 {
     mParcelSelection = LLViewerParcelMgr::getInstance()->getFloatingParcelSelection();
-    mObjectSelection = LLSelectMgr::getInstance()->getEditSelection();
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner = VSNativeSession::active();
+        auto* selection = owner ? owner->existingObjectSelection() : nullptr;
+        mNativeSelectionLease = selection ? selection->retainSelection() : nullptr;
+        if (selection)
+        {
+            const auto weak = getHandle();
+            const auto current = vs_native_im_guard();
+            mNativeSelectionChanged = selection->changed([weak, current]
+            {
+                if (!current()) return;
+                if (auto* view = dynamic_cast<LLFloaterTools*>(weak.get())) view->dirty();
+            });
+        }
+        mObjectSelection = nullptr;
+    }
+    else
+#endif
+        mObjectSelection = LLSelectMgr::getInstance()->getEditSelection();
 
     // <FS:KC> Set the check box value from the saved setting
     // this function runs on selection change
@@ -1195,6 +1283,7 @@ void LLFloaterTools::onOpen(const LLSD& key)
 // virtual
 void LLFloaterTools::onClose(bool app_quitting)
 {
+    mNativeSelectionChanged.disconnect();
     mTab->setVisible(false);
 
     LLViewerJoystick::getInstance()->moveAvatar(false);
@@ -1211,7 +1300,7 @@ void LLFloaterTools::onClose(bool app_quitting)
     gAgentCamera.resetView(gSavedSettings.getBOOL("EditCameraMovement"));
 
     // exit component selection mode
-    LLSelectMgr::getInstance()->promoteSelectionToRoot();
+    with_build_tool_selection([](auto* selection) { selection->promoteSelectionToRoot(); });
     gSavedSettings.setBOOL("EditLinkedParts", false);
 
     // <FS:KC>
@@ -1226,6 +1315,7 @@ void LLFloaterTools::onClose(bool app_quitting)
 
     mParcelSelection = NULL;
     mObjectSelection = NULL;
+    mNativeSelectionLease.reset();
 
     // <FS:Ansariel> Enable context/pie menu in mouselook
     // Switch back to basic toolset
@@ -1411,11 +1501,11 @@ void commit_select_component(void *data)
 
     if (select_individuals)
     {
-        LLSelectMgr::getInstance()->demoteSelectionToIndividuals();
+        with_build_tool_selection([](auto* selection) { selection->demoteSelectionToIndividuals(); });
     }
     else
     {
-        LLSelectMgr::getInstance()->promoteSelectionToRoot();
+        with_build_tool_selection([](auto* selection) { selection->promoteSelectionToRoot(); });
     }
 }
 
@@ -1540,41 +1630,28 @@ void LLFloaterTools::updateLandImpacts()
     }
 }
 
-struct LLFloaterToolsCopyKeysFunctor : public LLSelectedObjectFunctor
-{
-    LLFloaterToolsCopyKeysFunctor(std::string& strOut, std::string& strSep) : mOutput(strOut), mSep(strSep) {}
-    virtual bool apply(LLViewerObject* object)
-    {
-        if (!mOutput.empty())
-            mOutput.append(mSep);
-
-        mOutput.append(object->getID().asString());
-
-        return true;
-    }
-private:
-    std::string& mOutput;
-    std::string& mSep;
-};
-
 void LLFloaterTools::onClickBtnCopyKeys()
 {
-    std::string separator = gSavedSettings.getString("FSCopyObjKeySeparator");
-    std::string stringKeys;
-    MASK mask = gKeyboard->currentMask(false);
-    LLFloaterToolsCopyKeysFunctor copy_keys(stringKeys, separator);
-    bool copied = false;
-    if (mask == MASK_SHIFT)
-        copied = LLSelectMgr::getInstance()->getSelection()->applyToObjects(&copy_keys);
-    else if (mCheckSelectIndividual && mCheckSelectIndividual->get())
-        copied = LLSelectMgr::getInstance()->getSelection()->applyToObjects(&copy_keys);
-    else
-        copied = LLSelectMgr::getInstance()->getSelection()->applyToRootObjects(&copy_keys);
-
-    if (copied)
+    const std::string separator = gSavedSettings.getString("FSCopyObjKeySeparator");
+    std::string keys;
+    const bool individuals = gKeyboard->currentMask(false) == MASK_SHIFT ||
+        (mCheckSelectIndividual && mCheckSelectIndividual->get());
+    vs_with_edit_selection([&](auto* manager)
     {
-        LLView::getWindow()->copyTextToClipboard(utf8str_to_wstring(stringKeys));
-    }
+        auto selection = manager->getSelection();
+        const auto append = [&](auto iter, auto end)
+        {
+            for (; iter != end; ++iter)
+                if (const auto* object = (*iter)->getObject())
+                {
+                    if (!keys.empty()) keys.append(separator);
+                    keys.append(object->getID().asString());
+                }
+        };
+        if (individuals) append(selection->begin(),selection->end());
+        else append(selection->root_begin(),selection->root_end());
+    });
+    if (!keys.empty()) LLView::getWindow()->copyTextToClipboard(utf8str_to_wstring(keys));
 }
 
 void LLFloaterTools::onClickExpand()

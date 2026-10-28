@@ -23,11 +23,15 @@
  */
 
 #include "llviewerprecompiledheaders.h"
-
+#include "vsavatarservices.h"
 
 #include "roles_constants.h"
 
 #include "aoengine.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "aoset.h"
 
 #include "llagent.h"
@@ -46,6 +50,15 @@
 
 static const LLUUID ENCRYPTION_MAGIC_ID("4b552ff5-fd63-408c-8288-cd09429852ba");
 constexpr F32 INVENTORY_POLLING_INTERVAL = 5.0f;
+namespace
+{
+struct AOAssetRequest
+{
+    LLUUID                item, asset;
+    U64                   generation = 0;
+    std::function<bool()> current;
+};
+} // namespace
 
 AOEngine::AOEngine() :
     LLSingleton<AOEngine>(),
@@ -127,6 +140,29 @@ void AOEngine::onLoginComplete()
 {
     AOEngine::instance().init();
 }
+void AOEngine::resetAccount()
+{
+    mAccountCallbacks = std::make_shared<char>();
+    ++mImportGeneration;
+    mTimerCollection.enableInventoryTimer(false);
+    mTimerCollection.enableSettingsTimer(false);
+    mTimerCollection.enableReloadTimer(false);
+    mTimerCollection.enableImportTimer(false);
+    mSitCancelTimer.stop();
+    clear(false);
+    if (mImportSet)
+    {
+        delete mImportSet;
+        mImportSet = nullptr;
+    }
+    mDefaultSet = nullptr;
+    mAOFolder.setNull();
+    mTransitionId.setNull();
+    mIgnoreMotionStopOnce.setNull();
+    mLastMotion = mLastOverriddenMotion = ANIM_AGENT_STAND;
+    mEnabled = mEnabledStands = mInMouselook = mUnderWater = false;
+    mImportRetryCount                                      = 0;
+}
 
 void AOEngine::onToggleAOControl()
 {
@@ -157,6 +193,7 @@ void AOEngine::clear(bool fromTimer)
     stopActiveTracks();
     stopAlwaysAnimations();
 
+    ++mSetGeneration;
     std::move(mSets.begin(), mSets.end(), std::back_inserter(mOldSets));
     mSets.clear();
 
@@ -181,10 +218,10 @@ void AOEngine::stopAllStandVariants()
     gAgent.sendAnimationRequest(ANIM_AGENT_STAND_2, ANIM_REQUEST_STOP);
     gAgent.sendAnimationRequest(ANIM_AGENT_STAND_3, ANIM_REQUEST_STOP);
     gAgent.sendAnimationRequest(ANIM_AGENT_STAND_4, ANIM_REQUEST_STOP);
-    gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_STAND_1);
-    gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_STAND_2);
-    gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_STAND_3);
-    gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_STAND_4);
+    vs_avatar_stop_motion(ANIM_AGENT_STAND_1);
+    vs_avatar_stop_motion(ANIM_AGENT_STAND_2);
+    vs_avatar_stop_motion(ANIM_AGENT_STAND_3);
+    vs_avatar_stop_motion(ANIM_AGENT_STAND_4);
 }
 
 void AOEngine::stopAllSitVariants()
@@ -192,12 +229,12 @@ void AOEngine::stopAllSitVariants()
     LL_DEBUGS("AOEngine") << "stopping all SIT variants." << LL_ENDL;
     gAgent.sendAnimationRequest(ANIM_AGENT_SIT_FEMALE, ANIM_REQUEST_STOP);
     gAgent.sendAnimationRequest(ANIM_AGENT_SIT_GENERIC, ANIM_REQUEST_STOP);
-    gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_SIT_FEMALE);
-    gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_SIT_GENERIC);
+    vs_avatar_stop_motion(ANIM_AGENT_SIT_FEMALE);
+    vs_avatar_stop_motion(ANIM_AGENT_SIT_GENERIC);
 
     // scripted seats that use ground_sit as animation need special treatment
-    const LLViewerObject* agentRoot = dynamic_cast<LLViewerObject*>(gAgentAvatarp->getRoot());
-    if (agentRoot && agentRoot->getID() != gAgentID)
+    const LLUUID agentRoot = vs_avatar_root_id();
+    if (agentRoot.notNull() && agentRoot != gAgentID)
     {
         LL_DEBUGS("AOEngine") << "Not stopping ground sit animations while sitting on a prim." << LL_ENDL;
         return;
@@ -206,8 +243,8 @@ void AOEngine::stopAllSitVariants()
     gAgent.sendAnimationRequest(ANIM_AGENT_SIT_GROUND, ANIM_REQUEST_STOP);
     gAgent.sendAnimationRequest(ANIM_AGENT_SIT_GROUND_CONSTRAINED, ANIM_REQUEST_STOP);
 
-    gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_SIT_GROUND);
-    gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_SIT_GROUND_CONSTRAINED);
+    vs_avatar_stop_motion(ANIM_AGENT_SIT_GROUND);
+    vs_avatar_stop_motion(ANIM_AGENT_SIT_GROUND_CONSTRAINED);
 }
 
 void AOEngine::stopCurrentAnimations(AOSet::AOState* state, bool skipFirst)
@@ -220,7 +257,7 @@ void AOEngine::stopCurrentAnimations(AOSet::AOState* state, bool skipFirst)
             gAgent.sendAnimationRequest(animation, ANIM_REQUEST_STOP);
             if (isAgentAvatarValid())
             {
-                gAgentAvatarp->LLCharacter::stopMotion(animation);
+                vs_avatar_stop_motion(animation);
             }
         }
     }
@@ -252,7 +289,7 @@ bool AOEngine::swapStateAnimations(AOSet::AOState* state, const uuid_vec_t& anim
             gAgent.sendAnimationRequest(oldAnimation, ANIM_REQUEST_STOP);
             if (isAgentAvatarValid())
             {
-                gAgentAvatarp->LLCharacter::stopMotion(oldAnimation);
+                vs_avatar_stop_motion(oldAnimation);
             }
         }
     }
@@ -312,7 +349,7 @@ void AOEngine::stopActiveTracks()
             gAgent.sendAnimationRequest(track.mCurrentAnimationID, ANIM_REQUEST_STOP);
             if (isAgentAvatarValid())
             {
-                gAgentAvatarp->LLCharacter::stopMotion(track.mCurrentAnimationID);
+                vs_avatar_stop_motion(track.mCurrentAnimationID);
             }
             track.mCurrentAnimationID.setNull();
         }
@@ -385,7 +422,7 @@ void AOEngine::stopAlwaysAnimations()
             gAgent.sendAnimationRequest(track.mCurrentAnimationID, ANIM_REQUEST_STOP);
             if (isAgentAvatarValid())
             {
-                gAgentAvatarp->LLCharacter::stopMotion(track.mCurrentAnimationID);
+                vs_avatar_stop_motion(track.mCurrentAnimationID);
             }
             track.mCurrentAnimationID.setNull();
         }
@@ -530,7 +567,7 @@ void AOEngine::trackTimeout(S32 stateNum, S32 trackIndex)
         gAgent.sendAnimationRequest(oldAnimation, ANIM_REQUEST_STOP);
         if (isAgentAvatarValid())
         {
-            gAgentAvatarp->LLCharacter::stopMotion(oldAnimation);
+            vs_avatar_stop_motion(oldAnimation);
         }
     }
 
@@ -556,20 +593,20 @@ void AOEngine::setLastOverriddenMotion(const LLUUID& motion)
 bool AOEngine::foreignAnimations() const
 {
     // checking foreign animations only makes sense when smart sit is enabled
-    if (!mCurrentSet->getSmart())
+    if (!mCurrentSet || !mCurrentSet->getSmart())
     {
         return false;
     }
 
     // get the seat the avatar is sitting on
-    const LLViewerObject* agentRoot = dynamic_cast<LLViewerObject*>(gAgentAvatarp->getRoot());
-    if (!agentRoot)
+    const LLUUID agentRoot = vs_avatar_root_id();
+    if (agentRoot.isNull())
     {
         // this should not happen, ever
         return false;
     }
 
-    const LLUUID& seat = agentRoot->getID();
+    const LLUUID& seat = agentRoot;
     if (seat == gAgentID)
     {
         LL_DEBUGS("AOEngine") << "Not checking for foreign animation when not sitting." << LL_ENDL;
@@ -578,28 +615,15 @@ bool AOEngine::foreignAnimations() const
 
     LL_DEBUGS("AOEngine") << "Checking for foreign animation on seat " << seat << LL_ENDL;
 
-    for (const auto& [source_id, animation_id] : gAgentAvatarp->mAnimationSources)
+    for (const auto& [source_id, animation_id] : vs_avatar_animation_sources())
     {
         // skip animations run by the avatar itself
         if (source_id != gAgentID)
         {
-            // find the source object where the animation came from
-            LLViewerObject* source = gObjectList.findObject(source_id);
-
-            // proceed if it's not an attachment
-            if (source && !source->isAttachment())
+            if (vs_avatar_animation_from_seat(source_id, seat))
             {
-                LL_DEBUGS("AOEngine") << "Source " << source_id << " is running animation " << animation_id << LL_ENDL;
-
-                // get the source's root prim
-                LLViewerObject* sourceRoot = dynamic_cast<LLViewerObject*>(source->getRoot());
-
-                // if the root prim is the same as the animation source, report back as true
-                if (sourceRoot && sourceRoot->getID() == seat)
-                {
-                    LL_DEBUGS("AOEngine") << "foreign animation " << animation_id << " found on seat." << LL_ENDL;
-                    return true;
-                }
+                LL_DEBUGS("AOEngine") << "foreign animation " << animation_id << " found on seat." << LL_ENDL;
+                return true;
             }
         }
     }
@@ -640,6 +664,11 @@ AOSet::AOState* AOEngine::mapSwimming(const LLUUID& motion) const
 // switch between swimming and flying on transition in and out of Linden region water
 void AOEngine::checkBelowWater(bool check_underwater)
 {
+    if (!mCurrentSet)
+    {
+        mUnderWater = check_underwater;
+        return;
+    }
     // there was no transition, do nothing
     if (mUnderWater == check_underwater)
     {
@@ -773,17 +802,17 @@ void AOEngine::enable(bool enable)
                 gAgent.sendAnimationRequest(ANIM_AGENT_WALK_NEW, ANIM_REQUEST_STOP);
                 gAgent.sendAnimationRequest(ANIM_AGENT_FEMALE_WALK, ANIM_REQUEST_STOP);
                 gAgent.sendAnimationRequest(ANIM_AGENT_FEMALE_WALK_NEW, ANIM_REQUEST_STOP);
-                gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_WALK_NEW);
-                gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_FEMALE_WALK);
-                gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_FEMALE_WALK_NEW);
+                vs_avatar_stop_motion(ANIM_AGENT_WALK_NEW);
+                vs_avatar_stop_motion(ANIM_AGENT_FEMALE_WALK);
+                vs_avatar_stop_motion(ANIM_AGENT_FEMALE_WALK_NEW);
             }
             else if (mLastMotion == ANIM_AGENT_RUN)
             {
                 LL_DEBUGS("AOEngine") << "Last motion was a RUN, stopping all variants." << LL_ENDL;
                 gAgent.sendAnimationRequest(ANIM_AGENT_RUN_NEW, ANIM_REQUEST_STOP);
                 gAgent.sendAnimationRequest(ANIM_AGENT_FEMALE_RUN_NEW, ANIM_REQUEST_STOP);
-                gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_RUN_NEW);
-                gAgentAvatarp->LLCharacter::stopMotion(ANIM_AGENT_FEMALE_RUN_NEW);
+                vs_avatar_stop_motion(ANIM_AGENT_RUN_NEW);
+                vs_avatar_stop_motion(ANIM_AGENT_FEMALE_RUN_NEW);
             }
             else if (mLastMotion == ANIM_AGENT_SIT)
             {
@@ -915,24 +944,25 @@ LLUUID AOEngine::override(const LLUUID& motion, bool start)
     if (!state)
     {
         LL_DEBUGS("AOEngine") << "No current AO state for motion " << gAnimLibrary.animationName(motion) << LL_ENDL;
-//      This part of the code was added to capture an edge case where animations got stuck
-//      However, it seems it isn't needed anymore and breaks other, more important cases.
-//      So we disable this code for now, unless bad things happen and the stuck animations
-//      come back again. -Zi
-//      if (!gAnimLibrary.animStateToString(motion) && !start)
-//      {
-//          state = mCurrentSet->getStateByRemapID(mLastOverriddenMotion);
-//          if (state && state->mCurrentAnimationID == motion)
-//          {
-//              LL_DEBUGS("AOEngine") << "Stop requested for current overridden animation UUID " << motion << " - Skipping." << LL_ENDL;
-//          }
-//          else
-//          {
-//              LL_DEBUGS("AOEngine") << "Stop requested for unknown UUID " << motion << " - Stopping it just in case." << LL_ENDL;
-//              gAgent.sendAnimationRequest(motion, ANIM_REQUEST_STOP);
-//              gAgentAvatarp->LLCharacter::stopMotion(motion);
-//          }
-//      }
+        //      This part of the code was added to capture an edge case where animations got stuck
+        //      However, it seems it isn't needed anymore and breaks other, more important cases.
+        //      So we disable this code for now, unless bad things happen and the stuck animations
+        //      come back again. -Zi
+        //      if (!gAnimLibrary.animStateToString(motion) && !start)
+        //      {
+        //          state = mCurrentSet->getStateByRemapID(mLastOverriddenMotion);
+        //          if (state && state->mCurrentAnimationID == motion)
+        //          {
+        //              LL_DEBUGS("AOEngine") << "Stop requested for current overridden animation UUID " << motion << " - Skipping." <<
+        //              LL_ENDL;
+        //          }
+        //          else
+        //          {
+        //              LL_DEBUGS("AOEngine") << "Stop requested for unknown UUID " << motion << " - Stopping it just in case." << LL_ENDL;
+        //              gAgent.sendAnimationRequest(motion, ANIM_REQUEST_STOP);
+        //              vs_avatar_stop_motion(motion);
+        //          }
+        //      }
         return LLUUID::null;
     }
 
@@ -1030,8 +1060,8 @@ LLUUID AOEngine::override(const LLUUID& motion, bool start)
         // scripted seats that use ground_sit as animation need special treatment
         if (motion == ANIM_AGENT_SIT_GROUND || motion == ANIM_AGENT_SIT_GROUND_CONSTRAINED)
         {
-            const LLViewerObject* agentRoot = dynamic_cast<LLViewerObject*>(gAgentAvatarp->getRoot());
-            if (agentRoot && agentRoot->getID() != gAgentID)
+            const LLUUID agentRoot = vs_avatar_root_id();
+            if (agentRoot.notNull() && agentRoot != gAgentID)
             {
                 LL_DEBUGS("AOEngine") << "Ground sit animation playing but sitting on a prim - disabling overrider." << LL_ENDL;
                 return LLUUID::null;
@@ -1335,7 +1365,7 @@ void AOEngine::cycle(eCycleMode cycleMode, bool resetTimer)
         {
             LL_DEBUGS("AOEngine") << "Cycling state " << state->mName << " - stopping animation " << oldAnimation << LL_ENDL;
             gAgent.sendAnimationRequest(oldAnimation, ANIM_REQUEST_STOP);
-            gAgentAvatarp->LLCharacter::stopMotion(oldAnimation);
+            vs_avatar_stop_motion(oldAnimation);
         }
     }
 
@@ -1444,7 +1474,7 @@ void AOEngine::playAnimation(S32 stepIndex, S32 memberIndex)
         {
             LL_DEBUGS("AOEngine") << "Cycling state " << state->mName << " - stopping animation " << oldAnimation << LL_ENDL;
             gAgent.sendAnimationRequest(oldAnimation, ANIM_REQUEST_STOP);
-            gAgentAvatarp->LLCharacter::stopMotion(oldAnimation);
+            vs_avatar_stop_motion(oldAnimation);
         }
     }
 
@@ -1526,12 +1556,14 @@ void AOEngine::addSet(const std::string& name, inventory_func_type callback, boo
     bool wasProtected = gSavedPerAccountSettings.getBOOL("LockAOFolders");
     gSavedPerAccountSettings.setBOOL("LockAOFolders", false);
     LL_DEBUGS("AOEngine") << "adding set folder " << name << LL_ENDL;
-    gInventory.createNewCategory(mAOFolder, LLFolderType::FT_NONE, name, [callback, wasProtected](const LLUUID &new_cat_id)
-    {
-        gSavedPerAccountSettings.setBOOL("LockAOFolders", wasProtected);
-
-        callback(new_cat_id);
-    });
+    gInventory.createNewCategory(mAOFolder, LLFolderType::FT_NONE, name,
+                                 [callback, guard = std::weak_ptr<char>(mAccountCallbacks)](const LLUUID& new_cat_id)
+                                 {
+                                     if (!guard.expired())
+                                         callback(new_cat_id);
+                                 });
+    // Do not leave a per-account setting changed while a network callback is pending.
+    gSavedPerAccountSettings.setBOOL("LockAOFolders", wasProtected);
 
     if (reload)
     {
@@ -1586,6 +1618,8 @@ bool AOEngine::cloneSet(AOSet* sourceSet, std::string_view newName)
 
 bool AOEngine::createAnimationLink(const LLUUID& categoryID, const LLInventoryItem* item)
 {
+    if (!item)
+        return false;
     LL_DEBUGS("AOEngine") << "Asset ID " << item->getAssetUUID() << " inventory id " << item->getUUID() << " category id " << categoryID << LL_ENDL;
 
     if (categoryID.isNull())
@@ -1642,25 +1676,30 @@ void AOEngine::addAnimation(const AOSet* set, AOSet::AOState* state, const LLInv
     // if this is the first queued animation for this state, create the folder asyncronously
     if (state->mAddQueue.size() == 1)
     {
-        gInventory.createNewCategory(set->getInventoryUUID(), LLFolderType::FT_NONE, state->mName, [this, state, reload, wasProtected](const LLUUID &new_cat_id)
-        {
-            state->mInventoryUUID = new_cat_id;
-            gSavedPerAccountSettings.setBOOL("LockAOFolders", false);
+        gInventory.createNewCategory(set->getInventoryUUID(), LLFolderType::FT_NONE, state->mName,
+                                     [this, state, reload, wasProtected, guard = std::weak_ptr<char>(mAccountCallbacks),
+                                      generation = mSetGeneration](const LLUUID& new_cat_id)
+                                     {
+                                         if (guard.expired() || generation != mSetGeneration)
+                                             return;
+                                         state->mInventoryUUID = new_cat_id;
+                                         gSavedPerAccountSettings.setBOOL("LockAOFolders", false);
 
-            // add all queued animations to this state's folder and then clear the queue
-            for (const auto item : state->mAddQueue)
-            {
-                createAnimationLink(state->mInventoryUUID, item);
-            }
-            state->mAddQueue.clear();
+                                         // add all queued animations to this state's folder and then clear the queue
+                                         for (const auto item : state->mAddQueue)
+                                         {
+                                             createAnimationLink(state->mInventoryUUID, item);
+                                         }
+                                         state->mAddQueue.clear();
 
-            gSavedPerAccountSettings.setBOOL("LockAOFolders", wasProtected);
+                                         gSavedPerAccountSettings.setBOOL("LockAOFolders", wasProtected);
 
-            if (reload)
-            {
-                mTimerCollection.enableReloadTimer(true);
-            }
-        });
+                                         if (reload)
+                                         {
+                                             mTimerCollection.enableReloadTimer(true);
+                                         }
+                                     });
+        gSavedPerAccountSettings.setBOOL("LockAOFolders", wasProtected);
     }
 }
 
@@ -2203,7 +2242,7 @@ void AOEngine::playTrackAnimation(AOSet::AOState* state, S32 trackIndex, S32 mem
         gAgent.sendAnimationRequest(track.mCurrentAnimationID, ANIM_REQUEST_STOP);
         if (isAgentAvatarValid())
         {
-            gAgentAvatarp->LLCharacter::stopMotion(track.mCurrentAnimationID);
+            vs_avatar_stop_motion(track.mCurrentAnimationID);
         }
     }
 
@@ -3344,8 +3383,8 @@ void AOEngine::setSmart(AOSet* set, bool smart)
     {
         // make sure to restart the sit cancel timer to fix sit overrides when the object we are
         // sitting on is playing its own animation
-        const LLViewerObject* agentRoot = dynamic_cast<LLViewerObject*>(gAgentAvatarp->getRoot());
-        if (agentRoot && agentRoot->getID() != gAgentID)
+        const LLUUID agentRoot = vs_avatar_root_id();
+        if (agentRoot.notNull() && agentRoot != gAgentID)
         {
             mSitCancelTimer.oneShot();
         }
@@ -3401,7 +3440,7 @@ void AOEngine::setCycleTime(AOSet::AOState* state, F32 time)
 void AOEngine::tick()
 {
     // <FS:ND> make sure agent is alive and kicking before doing anything
-    if (!isAgentAvatarValid())
+    if (!vs_avatar_character())
     {
         return;
     }
@@ -3447,7 +3486,7 @@ void AOEngine::tick()
 
 bool AOEngine::importNotecard(const LLInventoryItem* item)
 {
-    if (item)
+    if (item && gAssetStorage)
     {
         LL_INFOS("AOEngine") << "importing AO notecard: " << item->getName() << LL_ENDL;
         if (getSetByName(item->getName()))
@@ -3466,25 +3505,33 @@ bool AOEngine::importNotecard(const LLInventoryItem* item)
         {
             // create the new set with the folder UUID where the notecard is in, so we can reference it
             // in the notecard reader, this will later be cleared to make room for the real #AO subfolder
+            if (mImportSet)
+                return false;
             mImportSet = new AOSet(item->getParentUUID());
             mImportSet->setName(item->getName());
 
-            LLUUID* newUUID = new LLUUID(item->getAssetUUID());
-            const LLHost sourceSim;
+            auto request        = std::make_unique<AOAssetRequest>();
+            request->item       = item->getUUID();
+            request->asset      = item->getAssetUUID();
+            request->generation = ++mImportGeneration;
+            request->current    = vs_native_im_guard();
+            LLHost sourceSim;
+#if VS_NATIVE_VULKAN
+            if (const auto session = VSNativeSession::active())
+                sourceSim = session->host();
+#endif
 
-            gAssetStorage->getInvItemAsset(
-                sourceSim,
-                gAgentID,
-                gAgentSessionID,
-                item->getPermissions().getOwner(),
-                LLUUID::null,
-                item->getUUID(),
-                item->getAssetUUID(),
-                item->getType(),
-                &onNotecardLoadComplete,
-                (void*) newUUID,
-                true
-            );
+            gAssetStorage->getInvItemAsset(sourceSim,
+                                           gAgentID,
+                                           gAgentSessionID,
+                                           item->getPermissions().getOwner(),
+                                           LLUUID::null,
+                                           item->getUUID(),
+                                           item->getAssetUUID(),
+                                           item->getType(),
+                                           &onNotecardLoadComplete,
+                                           request.release(),
+                                           true);
 
             return true;
         }
@@ -3496,6 +3543,16 @@ bool AOEngine::importNotecard(const LLInventoryItem* item)
 void AOEngine::onNotecardLoadComplete(const LLUUID& assetUUID, LLAssetType::EType type,
                                             void* userdata, S32 status, LLExtStat extStatus)
 {
+    const auto request = std::unique_ptr<AOAssetRequest>(static_cast<AOAssetRequest*>(userdata));
+    if (!request || !request->current() || !AOEngine::instanceExists() || request->generation != AOEngine::instance().mImportGeneration ||
+        !AOEngine::instance().mImportSet || assetUUID != request->asset)
+        return;
+    const auto* item = gInventory.getItem(request->item);
+    if (!item || item->getAssetUUID() != request->asset || type != LLAssetType::AT_NOTECARD)
+    {
+        AOEngine::instance().parseNotecard(nullptr);
+        return;
+    }
     if (status != LL_ERR_NOERR)
     {
         // AOImportDownloadFailed
@@ -3509,6 +3566,12 @@ void AOEngine::onNotecardLoadComplete(const LLUUID& assetUUID, LLAssetType::ETyp
     LLFileSystem file(assetUUID, type, LLFileSystem::READ);
 
     S32 notecardSize = file.getSize();
+    if (notecardSize <= 0 || notecardSize > 1024 * 1024)
+    {
+        LLNotificationsUtil::add("AOImportDownloadFailed", LLSD());
+        AOEngine::instance().parseNotecard(nullptr);
+        return;
+    }
     char* buffer = new char[notecardSize + 1];
     buffer[notecardSize] = 0;
 
@@ -3519,6 +3582,7 @@ void AOEngine::onNotecardLoadComplete(const LLUUID& assetUUID, LLAssetType::ETyp
     else
     {
         delete[] buffer;
+        AOEngine::instance().parseNotecard(nullptr);
     }
 }
 
@@ -3763,13 +3827,21 @@ void AOEngine::processImportState(AOSet::AOState* state)
 
 void AOEngine::processImport(bool from_timer)
 {
+    if (!mImportSet)
+        return;
     if (mImportSet->getInventoryUUID().isNull())
     {
         // create new inventory folder for this AO set, the next timer tick should pick it up
-        addSet(getSetFolderName(mImportSet), [this](const LLUUID& new_cat_id)
-        {
-            mImportSet->setInventoryUUID(new_cat_id);
-        }, false);
+        addSet(
+            getSetFolderName(mImportSet),
+            [this, generation = mImportGeneration, guard = std::weak_ptr<char>(mAccountCallbacks)](const LLUUID& new_cat_id)
+            {
+                if (guard.expired() || generation != mImportGeneration || !mImportSet)
+                    return;
+                if (mImportSet->getInventoryUUID().isNull())
+                    mImportSet->setInventoryUUID(new_cat_id);
+            },
+            false);
 
         mImportRetryCount++;
 
@@ -3789,6 +3861,9 @@ void AOEngine::processImport(bool from_timer)
             LLSD args;
             args["NAME"] = mImportSet->getName();
             mTimerCollection.enableImportTimer(false);
+            LLSD args;
+            args["NAME"] = mImportSet->getName();
+            ++mImportGeneration;
             delete mImportSet;
             mImportSet = nullptr;
             mUpdatedSignal();
@@ -3809,8 +3884,12 @@ void AOEngine::processImport(bool from_timer)
 
             if (state->mInventoryUUID.isNull())
             {
-                gInventory.createNewCategory(mImportSet->getInventoryUUID(), LLFolderType::FT_NONE, getStateFolderName(state), [this, state](const LLUUID& new_cat_id)
+                gInventory.createNewCategory(
+                    mImportSet->getInventoryUUID(), LLFolderType::FT_NONE, getStateFolderName(state),
+                    [this, state, generation = mImportGeneration, guard = std::weak_ptr<char>(mAccountCallbacks)](const LLUUID& new_cat_id)
                 {
+                    if (guard.expired() || generation != mImportGeneration || !mImportSet)
+                        return;
                     LL_DEBUGS("AOEngine") << "new_cat_id: " << new_cat_id << LL_ENDL;
                     state->mInventoryUUID = new_cat_id;
                     processImportState(state);

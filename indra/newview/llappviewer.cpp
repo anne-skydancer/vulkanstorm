@@ -25,9 +25,28 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "lldrawable.h"
+#if VS_VULKAN_DIAGNOSTICS
+#include "vsparitybaseline.h"
+#include "vsparityscene.h"
+#endif
+#include "lldonotdisturbnotificationstorage.h"
+#include "llpersistentnotificationstorage.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsavatarservices.h"
+#include "vsvulkancontext.h"
+#endif
 
 #include "llappviewer.h"
 #include "llwebsocketmgr.h"
+#include "vsrenderbackend.h"
+#include "vstranslations.h"
+#include "vsuiaudio.h"
+#if VS_VULKAN_DIAGNOSTICS
+#include "vsvulkandiagnostic.h"
+#include "vsnativereplay.h"
+#endif
 
 // Viewer includes
 #include "llversioninfo.h"
@@ -79,6 +98,7 @@
 #include "llviewerparcelmedia.h"
 #include "llviewershadermgr.h"
 #include "llviewermediafocus.h"
+#include "lltoolpie.h"
 #include "llviewermessage.h"
 #include "llviewerobjectlist.h"
 #include "llworldmap.h"
@@ -240,6 +260,8 @@
 #include "llcommandlineparser.h"
 #include "llfloatermemleak.h"
 #include "llfloaterreg.h"
+#include "llemojidictionary.h"
+#include "llfolderviewitem.h"
 #include "llfloatersimplesnapshot.h"
 #include "llfloatersnapshot.h"
 #include "llfloaterflickr.h"
@@ -551,7 +573,7 @@ void idle_afk_check()
 }
 
 // A callback set in LLAppViewer::init()
-static void ui_audio_callback(const LLUUID& uuid)
+void ui_audio_callback(const LLUUID& uuid)
 {
     if (gAudiop)
     {
@@ -561,7 +583,7 @@ static void ui_audio_callback(const LLUUID& uuid)
 }
 
 // A callback set in LLAppViewer::init()
-static void deferred_ui_audio_callback(const LLUUID& uuid)
+void deferred_ui_audio_callback(const LLUUID& uuid)
 {
     if (gAudiop)
     {
@@ -811,7 +833,10 @@ LLAppViewer::LLAppViewer()
 
     gLoggedInTime.stop();
 
-    processMarkerFiles();
+#if VS_VULKAN_DIAGNOSTICS
+    if (!std::getenv("VS_VULKAN_DIAGNOSTIC"))
+#endif
+        processMarkerFiles();
     //
     // OK to write stuff to logs now, we've now crash reported if necessary
     //
@@ -845,7 +870,7 @@ LLAppViewer::~LLAppViewer()
     destroyMainloopTimeout();
 
     // If we got to this destructor somehow, the app didn't hang.
-    removeMarkerFiles();
+    if (!isVulkanDiagnostic()) removeMarkerFiles();
 }
 
 class LLUITranslationBridge : public LLTranslationBridge
@@ -858,10 +883,38 @@ public:
 };
 
 
+bool LLAppViewer::isVulkanDiagnostic() const
+{
+#if VS_VULKAN_DIAGNOSTICS
+    return mVulkanDiagnostic != nullptr;
+#else
+    return false;
+#endif
+}
+
+int LLAppViewer::vulkanDiagnosticExitCode() const
+{
+#if VS_VULKAN_DIAGNOSTICS
+    return mVulkanDiagnostic ? mVulkanDiagnostic->exitCode() : 0;
+#else
+    return 0;
+#endif
+}
+
 bool LLAppViewer::init()
 {
     LL_PROFILE_ZONE_SCOPED;
 
+#if VS_VULKAN_DIAGNOSTICS
+    if (const char* evidence = std::getenv("VS_VULKAN_DIAGNOSTIC"))
+    {
+        // Closed diagnostic admission before GL, UI, scene or worker bootstrap.
+        gGLActive = false;
+        mVulkanDiagnostic = std::make_unique<VSVulkanDiagnostic>(evidence);
+        mVulkanDiagnostic->initialize();
+        return true; // Initialization failures still traverse owned cleanup.
+    }
+#endif
     setupErrorHandling(mSecondInstance);
 
     nd::octree::debug::setOctreeLogFilename( gDirUtilp->getExpandedFilename(LL_PATH_LOGS, "octree.log" ) ); // <FS:ND/> Filename to log octree options to.
@@ -987,6 +1040,13 @@ bool LLAppViewer::init()
     }
 
     LL_INFOS("InitInfo") << "Configuration initialized." << LL_ENDL ;
+    if (!VSRenderBackend::canStartSession(gSavedSettings.getString("RenderBackend")))
+    {
+        const std::string message = LLTrans::getString("MBVulkanRendererUnavailable");
+        LL_WARNS("AppInit") << message << LL_ENDL;
+        OSMessageBox(message.c_str(), LLStringUtil::null, OSMB_OK);
+        return false;
+    }
     //set the max heap size.
     initMaxHeapSize() ;
     LLCoros::instance().setStackSize(gSavedSettings.getS32("CoroutineStackSize"));
@@ -1010,6 +1070,13 @@ bool LLAppViewer::init()
     LL_INFOS("InitInfo") << "LLCore::Http initialized." << LL_ENDL ;
 
     LLMachineID::init();
+#if VS_NATIVE_VULKAN
+    if (gSavedSettings.getString("RenderBackend") == "Vulkan")
+    {
+        mNativeVulkanLogin = true;
+        return initNativeVulkanLogin();
+    }
+#endif
 
     if (gSavedSettings.getBOOL("QAModeMetrics"))
     {
@@ -1203,7 +1270,7 @@ bool LLAppViewer::init()
     //
     gGLActive = true;
     selectGLBackend(); // <VulkanStorm> resolve the GL provider before any GL import is touched
-    initWindow();
+    if (!initWindow()) return false;
     LL_INFOS("InitInfo") << "Window is initialized." << LL_ENDL ;
     // <FS:Beq> allow detected hardware to be overridden.
     gGLManager.mVRAMDetected = gGLManager.mVRAM;
@@ -1526,15 +1593,375 @@ void LLAppViewer::initMaxHeapSize()
 // externally visible timers
 LLTrace::BlockTimerStatHandle FTM_FRAME("Frame");
 
+// Native login uses the same configuration, controllers and authentication state
+// machine as OpenGL. Only rendering and the not-yet-created world owners differ.
+bool LLAppViewer::initNativeVulkanLogin()
+{
+    gPipeline.initializeRenderDebugFeatures(); // Shared CPU policy; no GL pipeline initialization.
+    gPipeline.initializeRenderTypes();
+#if VS_NATIVE_VULKAN
+    mNativeSession = VSNativeSession::create();
+#endif
+    gGLActive = false;
+    FSAssetBlacklist::getInstance();
+    LLImage::initClass(gSavedSettings.getBOOL("TextureNewByteRange"), gSavedSettings.getS32("TextureReverseByteRange"));
+    LLLFSThread::initClass(true);
+    initGeneralThread();
+    // Use the same startup cache controls, versions, relocation and purge
+    // policy as the OpenGL peer. Native consumers differ only at publication.
+#if VS_NATIVE_VULKAN
+    if (VSVulkanContext::headlessReplay()) gHeadlessClient = true;
+#endif
+    LLSD pools=gSavedSettings.getLLSD("ThreadPoolSizes");
+    pools["ImageDecode"]=llclamp(S32(gSavedSettings.getU32("FSImageDecodeThreads")),1,32);
+    gSavedSettings.setLLSD("ThreadPoolSizes",pools);
+    sImageDecodeThread=new LLImageDecodeThread(true);
+    sTextureCache=new LLTextureCache(true);
+    sPurgeDiskCacheThread=new LLPurgeDiskCacheThread();
+    if(!initCache()) return false;
+    LLViewerStatsRecorder::createInstance();
+    // Reuse the reference CPU fetch/cache/discard state machine without GL.
+    sTextureFetch=new LLTextureFetch(sTextureCache,true,false,true);
+    LLFilePickerThread::initClass();
+    LLDirPickerThread::initClass();
+    LLViewerEventRecorder::createInstance();
+    settings_to_globals();
+#if VS_NATIVE_VULKAN
+    if (VSVulkanContext::headlessReplay()) gHeadlessClient = true;
+#endif
+    mSerialNumber = generateSerialNumber();
+    initSLURLHandler();
+    if (!initWindow()) return false;
+    // Construct the same CPU performance settings owner after the native
+    // window exists; avatar query policy must not use uninitialized tunables.
+    (void)LLPerfStats::StatsRecorder::getInstance();
+    LLUI::getInstance()->mHelpImpl = LLViewerHelp::getInstance();
+    LLUrlFloaterDispatchHandler::registerInDispatcher();
+    LLFolderViewItem::initClass();
+    LLKeyboard::setStringTranslatorFunc(LLTrans::getKeyboardString);
+    // The peer startup loads user bindings with shipped defaults as its fallback.
+    // Native input dispatch consumes that same table, including global and mouse bindings.
+    loadKeyBindings();
+    LLUrlAction::setOpenURLCallback(boost::bind(&LLWeb::loadURL, _1, LLStringUtil::null, LLStringUtil::null));
+    LLUrlAction::setOpenURLInternalCallback(boost::bind(&LLWeb::loadURLInternal, _1, LLStringUtil::null, LLStringUtil::null, false));
+    LLUrlAction::setOpenURLExternalCallback(boost::bind(&LLWeb::loadURLExternal, _1, true, LLStringUtil::null));
+    LLUrlAction::setExecuteSLURLCallback(&LLURLDispatcher::dispatchFromTextEditor);
+    LLTranslationBridge::ptr_t trans = std::make_shared<LLUITranslationBridge>();
+    LLWearableType::initParamSingleton(trans);
+    LLSettingsType::initParamSingleton(trans);
+#if LL_LINUX
+    LLMIMETypes::parseMIMETypes("mime_types_linux.xml");
+#else
+    LLMIMETypes::parseMIMETypes("mime_types.xml");
+#endif
+    try { initializeSecHandler(); }
+    catch (LLProtectedDataException& ex)
+    {
+        LL_WARNS() << "Error initializing SecHandlers: " << ex.what() << LL_ENDL;
+        LLNotificationsUtil::add("CorruptedProtectedDataStore");
+    }
+    LLCoprocedureManager::getInstance()->setPropertyMethods(
+        std::bind(&LLControlGroup::getU32, std::ref(gSavedSettings), std::placeholders::_1),
+        std::bind(&LLControlGroup::declareU32, std::ref(gSavedSettings), std::placeholders::_1, std::placeholders::_2,
+                  std::placeholders::_3, LLControlVariable::PERSIST_ALWAYS));
+    gServicePump = new LLPumpIO(gAPRPoolp);
+    // These shared media request clients own queues and HTTP only. Native
+    // object adapters supply simulator identities without creating GL objects.
+    LLVOVolume::initClass();
+    LLPostProcess::initClass(); // Same CPU-only legacy effect model as ordinary startup.
+    gMeshRepo.init();
+    mNativeMeshInitialized=true;
+    LLVoiceChannel::initClass();
+    LLVoiceClient::initParamSingleton(gServicePump);
+    LLAgentLanguage::init();
+    LLFloater::initClass();
+    LLViewerFloaterReg::registerFloaters();
+    LLGroupMgr::parseRoleActions("role_actions.xml");
+    LLAgent::parseTeleportMessages("teleport_strings.xml");
+    LLEmojiDictionary::initClass();
+    gIMMgr = LLIMMgr::getInstance();
+    // Register the reviewed shared CPU/UI callbacks after their native owners
+    // exist. The wrappers omit legacy GL/scene callbacks for this backend.
+    settings_setup_listeners();
+    gSavedSettings.setString("LastRunVersion", LLVersionInfo::instance().getChannelAndVersion());
+    mNumSessions = gSavedSettings.getS32("NumSessions") + 1;
+    gSavedSettings.setS32("NumSessions", mNumSessions);
+    LL_INFOS("AppInit") << "Native Vulkan normal login initialized" << LL_ENDL;
+    return true;
+}
+
+#if VS_NATIVE_VULKAN
+static void pump_native_account_services(bool connected)
+{
+    if (!connected) return;
+    // These production update entry points do not create scene resources.
+    // The importer checks instanceExists itself; notifications drain only
+    // an existing queue of account inventory actions.
+    LLMarketplaceInventoryImporter::update();
+    LLMarketplaceInventoryNotifications::update();
+    // Use the shared character adapter: native self is not gAgentAvatarp.
+    if (LLGestureMgr::instanceExists() && vs_avatar_character())
+        LLGestureMgr::instance().update();
+}
+#endif
+
+bool LLAppViewer::frameNativeVulkanLogin()
+{
+    struct EndPerformanceFrame {~EndPerformanceFrame(){LLPerfStats::StatsRecorder::endFrame();}} endPerformanceFrame;
+    LLPerfStats::RecordSceneTime frameTime(LLPerfStats::StatType_t::RENDER_FRAME);
+    std::optional<LLPerfStats::RecordSceneTime> idleTime;idleTime.emplace(LLPerfStats::StatType_t::RENDER_IDLE);
+    LLTimer frameTimer;
+    LLPerfStats::updateClass();
+    if(LLPerfStats::tunables.userAutoTuneEnabled && LLPerfStats::tunables.tuningFlag!=LLPerfStats::Tunables::Nothing)LLPerfStats::tunables.applyUpdates();
+
+#if VS_NATIVE_VULKAN
+    update_native_statistics();
+#endif
+    ++gFrameCount;
+    gFrameTime = totalTime();
+    gFrameTimeSeconds = LLFrameTimer::getElapsedSeconds();
+    LLFrameTimer::updateFrameTime();
+    LLFrameTimer::updateFrameCount();
+    LLEventTimer::updateClass();
+    LLSmoothInterpolation::updateInterpolants();
+    LLNotificationsUI::LLToast::updateClass();
+    LLMortician::updateClass(); // Retire closed UI owners before input/focus processing.
+    LLFilePickerThread::clearDead();
+    LLDirPickerThread::clearDead();
+    gViewerWindow->getWindow()->processMiscNativeEvents();
+    gViewerWindow->getWindow()->gatherInput();
+    if (gKeyboard) gKeyboard->scanKeyboard();
+#if VS_NATIVE_VULKAN
+    if(mNativeSession && mNativeSession->regionReady() && gFocusMgr.getAppHasFocus() && !gFocusMgr.focusLocked())gViewerInput.scanMouse();
+#endif
+#if VS_NATIVE_VULKAN
+    if (mNativeSession && mNativeSession->regionReady() && gFocusMgr.getAppHasFocus() && !gFocusMgr.focusLocked() &&
+        gSavedPerAccountSettings.getBOOL("FSCrouchToggle") && gSavedPerAccountSettings.getBOOL("FSCrouchToggleStatus"))
+        gAgent.moveUp(-1);
+#endif
+    if(gSimulateMemLeak)
+        if(auto* probe=LLFloaterReg::findTypedInstance<LLFloaterMemLeak>("mem_leaking"))probe->idle();
+    LLEventPumps::instance().obtain("mainloop").post(LLSD());
+    llcoro::suspend();
+    LLCoros::instance().rethrow();
+    gMainloopWork.runFor(std::chrono::milliseconds(2));
+    LLLFSThread::updateClass(0);
+    if(sImageDecodeThread)sImageDecodeThread->update(0);
+    if(sTextureCache)sTextureCache->update(0);
+    if(sTextureFetch)sTextureFetch->update(0);
+    if (gServicePump) { gServicePump->pump(); gServicePump->callback(); }
+    if(mNativeMeshInitialized){gMeshRepo.update();gMeshRepo.notifyUploadServices();}
+    // Shared text UI views and CPU controllers advance through their idle queue.
+    // Only services initialized for this native account register callbacks here.
+    gIdleCallbacks.callFunctions();
+    gInventory.handleResponses(true);
+    gInventory.handleResponses(false);
+    gInventory.idleNotifyObservers();
+    LLAvatarTracker::instance().idleNotifyObservers();
+    if (!LLApp::isExiting())
+    {
+        // The native owner advances CPU session/network work without entering idle's scene producers.
+        bool replay = false;
+#if VS_VULKAN_DIAGNOSTICS
+        replay = vs_native_replay_tick();
+#endif
+        if (LLStartUp::getStartupState() < STATE_WORLD_INIT && (!replay || LLStartUp::getStartupState() != STATE_LOGIN_WAIT)) idle_startup();
+#if VS_NATIVE_VULKAN
+        else if (LLStartUp::getStartupState() == STATE_WORLD_INIT && mNativeSession) mNativeSession->begin();
+        if (mNativeSession) mNativeSession->tick();
+        // The reference idle loop checks actual idle/away policy once after networking.
+        if(!gDisconnected)idle_afk_check();
+        // Match idle(): locomotion/turn edges belong to this frame, even when
+        // throttling, freezing or packet loss prevents a successful update.
+        // Persistent away/fly/mouselook bits are retained by the shared method.
+        gAgent.resetControlFlags();
+        pump_native_account_services(mNativeSession && mNativeSession->phase() == VSNativeSession::Phase::Connected);
+        if (gAudiop && mNativeSession && mNativeSession->phase() == VSNativeSession::Phase::Connected)
+        {
+            audio_update_volume(false);
+            audio_update_listener();
+            audio_update_wind(false);
+            gAudiop->idle();
+        }
+#endif
+#if VS_NATIVE_VULKAN
+        if(mNativeSession && mNativeSession->phase()==VSNativeSession::Phase::Connected)
+        {
+            if(LLToolPie::instanceExists())LLToolPie::instance().updateNativeMediaCapture();
+            LLViewerMediaFocus::instance().update();
+        }
+#endif
+#if VS_NATIVE_VULKAN
+        if (LLStartUp::getStartupState() == STATE_STARTED)
+        {
+            // The shared controllers may take an offscreen snapshot here.
+            // Run them once, before UI packet collection/presentation begins.
+            LLFloaterSnapshot::update();
+            LLFloaterSimpleSnapshot::update();
+            LLFloaterFlickr::update();
+            FSFloaterPrimfeed::update();
+        }
+#endif
+#if VS_NATIVE_VULKAN
+        // Match the shared simulation's visibility-frame clock once per normal
+        // world frame. Offscreen snapshots and diagnostic subcaptures do not
+        // pass through this application presentation boundary.
+        if (LLStartUp::getStartupState()==STATE_STARTED &&
+            (VSVulkanContext::headlessReplay() ||
+             (!gViewerWindow->getWindow()->getMinimized() && gViewerWindow->getWindow()->getVisible())))
+            LLDrawable::incrementVisible();
+#endif
+        idleTime.reset();
+        gViewerWindow->drawNativeUI();
+    }
+    idleTime.reset();
+    if(!LLApp::isExiting() && (!gViewerWindow->getWindow()->getVisible() || !gFocusMgr.getAppHasFocus()))
+    {
+        static LLCachedControl<S32> background(gSavedSettings,"BackgroundYieldTime",40);
+        const S32 milliseconds=llclamp(S32(background),gViewerWindow->getWindow()->getMinimized()?1:0,1000);
+        if(milliseconds>0){LLPerfStats::RecordSceneTime sleep(LLPerfStats::StatType_t::RENDER_SLEEP);ms_sleep(milliseconds);}
+    }
+    static LLCachedControl<U32> maxFPS(gSavedSettings,"FramePerSecondLimit");
+    static LLCachedControl<bool> limitFPS(gSavedSettings,"FSLimitFramerate");
+    if(limitFPS && LLStartUp::getStartupState()==STATE_STARTED && !gTeleportDisplay && !logoutRequestSent() && maxFPS>F_APPROXIMATELY_ZERO)
+    {
+        LLPerfStats::RecordSceneTime limit(LLPerfStats::StatType_t::RENDER_FPSLIMIT);
+        const F32 minimum=1.f/F32(maxFPS);
+        const S32 milliseconds=llclamp(S32((minimum-frameTimer.getElapsedTimeF64())*1000.f),0,1000);
+        if(milliseconds>0)ms_sleep(milliseconds);
+    }
+    const F32 quit_after = gSavedSettings.getF32("QuitAfterSeconds");
+    if (quit_after > 0.f && gRenderStartTime.getElapsedTimeF32() > quit_after) requestQuit();
+    return LLApp::isExiting();
+}
+
+bool LLAppViewer::cleanupNativeVulkanLogin()
+{
+    #if VS_VULKAN_DIAGNOSTICS
+    extern void vs_r1_replay_cleanup();vs_r1_replay_cleanup();
+    extern void vs_r2_replay_cleanup();
+    vs_r2_replay_cleanup();
+    extern void vs_r3_replay_cleanup();vs_r3_replay_cleanup();
+#endif
+    // Retire RLVa while account services and the application fiber runtime are
+    // alive. Its global destructor must not query LLApp during static teardown.
+    // Real tool callbacks may validate RLVa selection while releasing capture.
+    // Retire them before the policy owner, with the account services alive.
+    if(LLToolMgr::instanceExists())LLToolMgr::instance().retireNativeTools();
+    SUBSYSTEM_CLEANUP(RlvHandler);
+#if VS_NATIVE_VULKAN
+    if (mNativeSession) mNativeSession->shutdown();
+    if (gMessageSystem) gMessageSystem->setMessageAdmission({});
+    mNativeSession.reset();
+#endif
+    if(mNativeMeshInitialized){gMeshRepo.shutdown();mNativeMeshInitialized=false;}
+    if(sTextureFetch)
+    {
+        sTextureFetch->deleteAllRequests();
+        LLTimer drain;
+        while(drain.getElapsedTimeF64()<5.0)
+        {
+            auto pending=sTextureFetch->update(1);
+            if(sTextureCache) pending+=sTextureCache->update(1);
+            if(sImageDecodeThread) pending+=sImageDecodeThread->update(1);
+            if(!pending) break;
+        }
+        sTextureFetch->shutdown();
+    }
+    if(sImageDecodeThread) sImageDecodeThread->shutdown();
+    if(sTextureCache) sTextureCache->shutdown();
+    if(sTextureFetch)
+    {
+        sTextureFetch->shutDownTextureCacheThread();
+        sTextureFetch->waitOnPending();delete sTextureFetch;sTextureFetch=nullptr;
+    }
+    delete sImageDecodeThread;sImageDecodeThread=nullptr;
+    delete sTextureCache;sTextureCache=nullptr;
+    if(LLViewerStatsRecorder::instanceExists()) LLViewerStatsRecorder::deleteSingleton();
+    gMainloopWork.runFor(std::chrono::milliseconds(100));
+    LLStartUp::cleanupNameCache();
+    if (LLLoginInstance::instanceExists()) LLLoginInstance::getInstance()->disconnect();
+    if (LLVoiceClient::instanceExists()) LLVoiceClient::getInstance()->terminate();
+    if (LLPersistentNotificationStorage::instanceExists())
+    {
+        LLPersistentNotificationStorage::deleteSingleton();
+    }
+    if (LLDoNotDisturbNotificationStorage::instanceExists())
+    {
+        LLDoNotDisturbNotificationStorage::deleteSingleton();
+    }
+    if (gViewerWindow)
+    {
+        gViewerWindow->shutdownViews();
+        LLFolderViewItem::cleanupClass();
+        gViewerWindow->shutdownGL();
+        delete gViewerWindow;
+        gViewerWindow = nullptr;
+    }
+    gInventory.cleanupInventory();
+    SUBSYSTEM_CLEANUP(LLFilePickerThread);
+    SUBSYSTEM_CLEANUP(LLDirPickerThread);
+    delete gKeyboard;gKeyboard=nullptr;
+    if (gAudiop) { gAudiop->shutdown(); delete gAudiop; gAudiop = nullptr; }
+    // No request queue may outlive the native objects, plugins or HTTP pump.
+    LLVOVolume::cleanupClass();
+    LLViewerMedia::deleteSingleton();
+    LLPluginProcessParent::shutdown();
+    LLVoiceClient::deleteSingleton();
+    delete gAssetStorage;
+    gAssetStorage = nullptr;
+    cleanup_xfer_manager();
+    end_messaging_system();
+    clearSecHandler();
+    if (mSaveSettingsOnExit)
+    {
+        const std::string account = gSavedSettings.getString("PerAccountSettingsFile");
+        if (mSavePerAccountSettings && !account.empty()
+#if VS_VULKAN_DIAGNOSTICS
+            && !std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY")
+#endif
+            ) gSavedPerAccountSettings.saveToFile(account, true);
+        gSavedSettings.saveToFile(gSavedSettings.getString("ClientSettingsFile"), true);
+        gWarningSettings.saveToFile(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, getSettingsFilename("User", "Warnings")), true);
+    }
+    delete gServicePump;
+    gServicePump = nullptr;
+    if (mGeneralThreadPool)
+    {
+        mGeneralThreadPool->close();
+        delete mGeneralThreadPool;
+        mGeneralThreadPool = nullptr;
+    }
+    delete sPurgeDiskCacheThread;sPurgeDiskCacheThread=nullptr;
+    mAppCoreHttp.cleanup();
+    LLLFSThread::cleanupClass();
+    LLImage::cleanupClass();
+    GrowlManager::destroyManager();
+    removeMarkerFiles();
+    LLViewerEventRecorder::deleteSingleton();
+    LLCore::LLHttp::cleanup();
+    // Match reference disconnectViewer before destroying cached-control owners.
+    gAgentCamera.cleanup();
+    LLSingletonBase::deleteAll();
+    LL_INFOS("AppInit") << "Native Vulkan normal login shut down" << LL_ENDL;
+    LLPostProcess::cleanupClass();
+    return true;
+}
+
 bool LLAppViewer::frame()
 {
+#if VS_VULKAN_DIAGNOSTICS
+    vs_parity_baseline_frame_begin();
+    if (mVulkanDiagnostic) return mVulkanDiagnostic->frame();
+    if (vs_parity_scene_frame()) return LLApp::isExiting();
+#endif
     bool ret = false;
 
     if (gSimulateMemLeak)
     {
         try
         {
-            ret = doFrame();
+            ret = mNativeVulkanLogin ? frameNativeVulkanLogin() : doFrame();
         }
         catch (const LLContinueError&)
         {
@@ -1556,7 +1983,7 @@ bool LLAppViewer::frame()
         try
         {
             const auto start = std::chrono::steady_clock::now();
-            ret = doFrame();
+            ret = mNativeVulkanLogin ? frameNativeVulkanLogin() : doFrame();
             const auto end = std::chrono::steady_clock::now();
             const U64 doframe_time_us = (U64)std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
             LLTrace::sample(LLStatViewer::DOFRAME_TIME_US, doframe_time_us);
@@ -2008,6 +2435,14 @@ void LLAppViewer::flushLFSIO()
 
 bool LLAppViewer::cleanup()
 {
+    if (mNativeVulkanLogin) return cleanupNativeVulkanLogin();
+#if VS_VULKAN_DIAGNOSTICS
+    if (mVulkanDiagnostic)
+    {
+        mVulkanDiagnostic->cleanup();
+        return mVulkanDiagnostic->exitCode() == 0;
+    }
+#endif
 #if LL_VELOPACK
     // Apply any pending Velopack update before shutdown
     if (velopack_is_update_pending())
@@ -3617,6 +4052,12 @@ void LLAppViewer::initStrings()
 {
     LL_PROFILE_ZONE_SCOPED;
 
+    vs_init_strings();
+}
+
+void vs_init_strings()
+{
+    init_default_trans_args();
     std::string strings_file = "strings.xml";
     std::string strings_path_full = gDirUtilp->findSkinnedFilenameBaseLang(LLDir::XUI, strings_file);
     if (strings_path_full.empty() || !LLFile::isfile(strings_path_full))
@@ -3725,13 +4166,14 @@ bool LLAppViewer::initWindow()
     // <VulkanStorm> The render backend (OpenGL/Vulkan) is selected in
     // Preferences > Graphics > Hardware Settings and is fixed for the
     // lifetime of the process; switching it requires a viewer restart.
-    // Until the Vulkan pipeline is available, any Vulkan selection falls
-    // back to OpenGL for this session.
+    // Native Vulkan is a peer backend; unavailable sessions must not enter GL.
     std::string render_backend = gSavedSettings.getString("RenderBackend");
     if (render_backend == "Vulkan")
     {
-        LL_WARNS("AppInit") << "RenderBackend=Vulkan requested, but the Vulkan render pipeline is not yet available in this build; falling back to OpenGL for this session." << LL_ENDL;
-        render_backend = "OpenGL";
+#if !VS_NATIVE_VULKAN
+        LL_WARNS("AppInit") << "Native Vulkan is not built; refusing GL window initialization." << LL_ENDL;
+        return false;
+#endif
     }
     else if (render_backend == "Zink")
     {
@@ -3774,7 +4216,15 @@ bool LLAppViewer::initWindow()
         .ignore_pixel_depth(ignorePixelDepth)
         .first_run(mIsFirstRun);
 
-    gViewerWindow = new LLViewerWindow(window_params);
+    gViewerWindow = new LLViewerWindow(window_params, render_backend == "Vulkan");
+    if (gViewerWindow->isNativeVulkan())
+    {
+        gViewerWindow->initBase();
+        if (gSavedSettings.getBOOL("WindowMaximized")) gViewerWindow->getWindow()->maximize();
+        gViewerWindow->setCursor(UI_CURSOR_WAIT);
+        LL_INFOS("AppInit") << "Native Vulkan viewer window and startup UI initialized." << LL_ENDL;
+        return true;
+    }
 
     LL_INFOS("AppInit") << "gViewerwindow created." << LL_ENDL;
 
@@ -4104,53 +4554,72 @@ LLSD LLAppViewer::getViewerInfo() const
     info["CONCURRENCY"] = LLSD::Integer(std::thread::hardware_concurrency());    // <FS:Beq> Add hardware concurrency to info
     // Moved hack adjustment to Windows memory size into llsys.cpp
     info["OS_VERSION"] = LLOSInfo::instance().getOSString();
-    info["GRAPHICS_CARD_VENDOR"] = ll_safe_string((const char*)(glGetString(GL_VENDOR)));
-    info["GRAPHICS_CARD"] = ll_safe_string((const char*)(glGetString(GL_RENDERER)));
-    info["GRAPHICS_CARD_MEMORY"] = LLSD::Integer(gGLManager.mVRAM);
-    info["GRAPHICS_CARD_MEMORY_DETECTED"] = gGLManager.mVRAMDetected; // <FS:Beq/> allow detected hardware to be overridden.
-
-#if LL_WINDOWS
-    std::string drvinfo;
-
-    if (gGLManager.mIsIntel)
+    // Use the running window, not a renderer preference changed for next restart.
+    // Keep the latched native session flag when reporting after window teardown.
+    const bool native_vulkan = gViewerWindow ? gViewerWindow->isNativeVulkan() : mNativeVulkanLogin;
+    info["RENDERING_API"] = native_vulkan ? "Vulkan" : "OpenGL";
+    for (const char* key : {"RENDERING_API_VERSION", "GRAPHICS_CARD_VENDOR", "GRAPHICS_CARD",
+                           "GRAPHICS_CARD_MEMORY", "GRAPHICS_CARD_MEMORY_DETECTED", "OPENGL_VERSION"})
+        info[key] = LLSD();
+#if VS_NATIVE_VULKAN
+    if (native_vulkan && gViewerWindow && gViewerWindow->nativeContext())
     {
-        drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_INTEL);
-    }
-    else if (gGLManager.mIsNVIDIA)
-    {
-        drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_NVIDIA);
-    }
-    else if (gGLManager.mIsAMD)
-    {
-        drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_AMD);
-    }
-
-    if (drvinfo.empty())
-    {
-        // Generic/substitute windows driver? Unknown vendor?
-        LL_WARNS("DriverVersion") << "Vendor based driver search failed, searching for any driver" << LL_ENDL;
-        drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_ANY);
-    }
-
-    if (!drvinfo.empty())
-    {
-        info["GRAPHICS_DRIVER_VERSION"] = drvinfo;
-    }
-    else
-    {
-        LL_WARNS("DriverVersion")<< "Cannot get driver version from getDriverVersionWMI" << LL_ENDL;
-        LLSD driver_info = gDXHardware.getDisplayInfo();
-        if (driver_info.has("DriverVersion"))
-        {
-            info["GRAPHICS_DRIVER_VERSION"] = driver_info["DriverVersion"];
-        }
+        const LLSD renderer = gViewerWindow->nativeContext()->rendererInfo();
+        for (auto entry = renderer.beginMap(); entry != renderer.endMap(); ++entry)
+            info[entry->first] = entry->second;
     }
 #endif
+    if (!native_vulkan && gGLManager.mInited)
+    {
+        info["GRAPHICS_CARD_VENDOR"] = ll_safe_string((const char*)(glGetString(GL_VENDOR)));
+        info["GRAPHICS_CARD"] = ll_safe_string((const char*)(glGetString(GL_RENDERER)));
+        info["GRAPHICS_CARD_MEMORY"] = LLSD::Integer(gGLManager.mVRAM);
+        info["GRAPHICS_CARD_MEMORY_DETECTED"] = gGLManager.mVRAMDetected; // <FS:Beq/> allow detected hardware to be overridden.
+        info["OPENGL_VERSION"] = ll_safe_string((const char*)(glGetString(GL_VERSION)));
+        info["RENDERING_API_VERSION"] = info["OPENGL_VERSION"];
+
+#if LL_WINDOWS
+        std::string drvinfo;
+
+        if (gGLManager.mIsIntel)
+        {
+            drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_INTEL);
+        }
+        else if (gGLManager.mIsNVIDIA)
+        {
+            drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_NVIDIA);
+        }
+        else if (gGLManager.mIsAMD)
+        {
+            drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_AMD);
+        }
+
+        if (drvinfo.empty())
+        {
+            // Generic/substitute windows driver? Unknown vendor?
+            LL_WARNS("DriverVersion") << "Vendor based driver search failed, searching for any driver" << LL_ENDL;
+            drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_ANY);
+        }
+
+        if (!drvinfo.empty())
+        {
+            info["GRAPHICS_DRIVER_VERSION"] = drvinfo;
+        }
+        else
+        {
+            LL_WARNS("DriverVersion")<< "Cannot get driver version from getDriverVersionWMI" << LL_ENDL;
+            LLSD driver_info = gDXHardware.getDisplayInfo();
+            if (driver_info.has("DriverVersion"))
+            {
+                info["GRAPHICS_DRIVER_VERSION"] = driver_info["DriverVersion"];
+            }
+        }
+#endif
+    }
 
 // [RLVa:KB] - Checked: 2010-04-18 (RLVa-1.2.0)
     info["RLV_VERSION"] = (rlv_handler_t::isEnabled()) ? RlvStrings::getVersionAbout() : LLTrans::getString("RLVaStatusDisabled");
 // [/RLVa:KB]
-    info["OPENGL_VERSION"] = ll_safe_string((const char*)(glGetString(GL_VERSION)));
     info["LIBCURL_VERSION"] = LLCore::LLHttp::getCURLVersion();
     // Settings
     // <FS:Beq> gViewerWindow can be null on shutdown. Crashes if bugsplatt uses the info
@@ -4278,8 +4747,9 @@ LLSD LLAppViewer::getViewerInfo() const
     // populate field for new local disk cache with some details
     // <FS:Beq> only populate if the cache is available
     // info["DISK_CACHE_INFO"] = LLDiskCache::getInstance()->getCacheInfo();
-    if (auto cache = LLDiskCache::getInstance(); cache)
+    if (LLDiskCache::instanceExists())
     {
+        auto* cache = LLDiskCache::getInstance();
         LL_PROFILE_ZONE_NAMED("gvi-getCacheInfo"); // <FS:Beq/> improve instrumentation
         info["DISK_CACHE_INFO"] = cache->getCacheInfo();
     }
@@ -4336,7 +4806,6 @@ LLSD LLAppViewer::getViewerInfo() const
         info["VRAM_BUDGET_ENGLISH"] = "Unlimited";
     }
     // </FS:Ansariel>
-
     return info;
 }
 
@@ -4395,9 +4864,9 @@ std::string LLAppViewer::getViewerInfoString(bool default_string) const
     support << "\n";
     if (info.has("GRAPHICS_DRIVER_VERSION"))
     {
-        support << "\n" << LLTrans::getString("AboutDriver", args, default_string);
+        support << "\n" << LLTrans::getString(info["RENDERING_API"].asString() == "Vulkan" ? "AboutGraphicsDriver" : "AboutDriver", args, default_string);
     }
-    support << "\n" << LLTrans::getString("AboutOGL", args, default_string);
+    support << "\n" << LLTrans::getString("AboutRenderer", args, default_string);
     //support << "\n\n" << LLTrans::getString("AboutSettings", args, default_string); // <FS> Custom sysinfo
 #if LL_DARWIN
     support << "\n" << LLTrans::getString("AboutOSXHiDPI", args, default_string);
@@ -5045,6 +5514,15 @@ void LLAppViewer::fastQuit(S32 error_code)
 
 void LLAppViewer::requestQuit()
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active())
+    {
+        // Shared progress views use this flag to display logout immediately.
+        mQuitRequested = true;
+        session->requestLogout(true);
+        return;
+    }
+#endif
     LL_INFOS() << "requestQuit" << LL_ENDL;
 
     LLViewerRegion* region = gAgent.getRegion();
@@ -5600,6 +6078,9 @@ void LLAppViewer::purgeCache()
     LL_INFOS("AppCache") << "Purging Cache and Texture Cache..." << LL_ENDL;
     LLAppViewer::getTextureCache()->purgeCache(LL_PATH_CACHE);
     LLVOCache::getInstance()->removeCache(LL_PATH_CACHE);
+#if VS_NATIVE_VULKAN
+    if (!VSNativeSession::active())
+#endif
     LLViewerShaderMgr::instance()->clearShaderCache();
     purgeCefStaleCaches();
     gDirUtilp->deleteFilesInDir(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, ""), "*");
@@ -5673,6 +6154,9 @@ bool finish_forced_disconnect(const LLSD& notification, const LLSD& response)
 
 void LLAppViewer::forceDisconnect(const std::string& mesg)
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) { session->disconnect(mesg); return; }
+#endif
     if (gDoDisconnect)
     {
         // Already popped up one of these dialogs, don't
@@ -6790,6 +7274,9 @@ void LLAppViewer::idleNetwork()
 
 void LLAppViewer::disconnectViewer()
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) { session->reset(); return; }
+#endif
     if (gDisconnected)
     {
         return;
@@ -7110,6 +7597,13 @@ F32 LLAppViewer::getMainloopTimeoutSec() const
 
 void LLAppViewer::handleLoginComplete()
 {
+    if (mNativeVulkanLogin)
+    {
+        mSavePerAccountSettings = true;
+        LLScriptRecoverQueue::recoverIfNeeded();
+        return;
+    }
+
     gLoggedInTime.start();
     initMainloopTimeout("Mainloop Init");
     LLWindow* viewer_window = gViewerWindow->getWindow();

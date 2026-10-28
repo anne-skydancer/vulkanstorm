@@ -31,6 +31,7 @@
 #include "fsfloaterbigpreview.h"
 #include "fsfloaterprimfeed.h"
 #include "fsprimfeedauth.h"
+#include "vsnativeim.h"
 #include "fsprimfeedconnect.h"
 #include "llagentui.h"
 #include "llcheckboxctrl.h"
@@ -81,6 +82,7 @@ FSPrimfeedPhotoPanel::FSPrimfeedPhotoPanel()
 
 FSPrimfeedPhotoPanel::~FSPrimfeedPhotoPanel()
 {
+    FSPrimfeedAuth::sPrimfeedAuthPump->stopListening("FSPrimfeedPhotoPanel");
     if (mPreviewHandle.get())
     {
         mPreviewHandle.get()->die();
@@ -201,7 +203,7 @@ void FSPrimfeedPhotoPanel::draw()
     mBtnPreview->setToggleState(preview_active);
 
     // Display the preview if one is available
-    if (previewp && previewp->getThumbnailImage())
+    if (previewp && previewp->hasThumbnailImage())
     {
         const LLRect& thumbnail_rect = mThumbnailPlaceholder->getRect();
         const S32     thumbnail_w    = previewp->getThumbnailWidth();
@@ -213,11 +215,10 @@ void FSPrimfeedPhotoPanel::draw()
         S32       offset_x       = thumbnail_rect.mLeft + local_offset_x;
         S32       offset_y       = thumbnail_rect.mBottom + local_offset_y;
 
-        gGL.matrixMode(LLRender::MM_MODELVIEW);
         // Apply floater transparency to the texture unless the floater is focused.
         F32      alpha = getTransparencyType() == TT_ACTIVE ? 1.0f : getCurrentTransparency();
         LLColor4 color = LLColor4::white;
-        gl_draw_scaled_image(offset_x, offset_y, thumbnail_w, thumbnail_h, previewp->getThumbnailImage(), color % alpha);
+        previewp->drawThumbnail(offset_x,offset_y,thumbnail_w,thumbnail_h,color % alpha);
     }
 
     // Update the visibility of the working (computing preview) label
@@ -370,6 +371,7 @@ void FSPrimfeedPhotoPanel::sendPhoto()
     }
 
     FSPrimfeedConnect::instance().uploadPhoto(params, previewp->getFormattedImage().get(),
+                                              vs_native_im_lifetime_callback([weak = getHandle()] { return weak.get() != nullptr; },
                                               [this](bool success, const std::string& url)
                                               {
                                                   if (success)
@@ -390,7 +392,7 @@ void FSPrimfeedPhotoPanel::sendPhoto()
                                                       mWorkingLabel->setValue("Error posting to Primfeed");
                                                       mPostButton->setEnabled(true);
                                                   }
-                                              });
+                                              }));
     updateControls();
 }
 
@@ -817,7 +819,7 @@ FSFloaterPrimfeed::FSFloaterPrimfeed(const LLSD& key) :
 
 void FSFloaterPrimfeed::onClose(bool app_quitting)
 {
-    if (auto big_preview_floater = LLFloaterReg::getTypedInstance<FSFloaterBigPreview>("fs_big_preview"))
+    if (auto big_preview_floater = LLFloaterReg::findTypedInstance<FSFloaterBigPreview>("fs_big_preview"))
     {
         big_preview_floater->closeOnFloaterOwnerClosing(this);
     }
@@ -826,7 +828,7 @@ void FSFloaterPrimfeed::onClose(bool app_quitting)
 
 void FSFloaterPrimfeed::onCancel()
 {
-    if (auto big_preview_floater = LLFloaterReg::getTypedInstance<FSFloaterBigPreview>("fs_big_preview"))
+    if (auto big_preview_floater = LLFloaterReg::findTypedInstance<FSFloaterBigPreview>("fs_big_preview"))
     {
         big_preview_floater->closeOnFloaterOwnerClosing(this);
     }

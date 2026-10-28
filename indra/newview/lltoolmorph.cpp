@@ -25,6 +25,19 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#include "vsworldavatar.h"
+#include "vsscenepreview.h"
+#include "vsvulkancontext.h"
+#include "vsworldscene.h"
+#include "vsuiresources.h"
+#include "vsuiimageprovider.h"
+#include "llavatarappearance.h"
+#endif
 
 // File includes
 #include "lltoolmorph.h"
@@ -91,6 +104,16 @@ LLVisualParamHint::LLVisualParamHint(
     mLastParamWeight(0.f),
     mCamTargetJoint(jointp)
 {
+    mNativeCurrent = vs_native_im_guard();
+    mNativeJointName = jointp ? jointp->getName() : "mHead";
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active(); owner && owner->appearance())
+    {
+        mNativeWearableOwner = owner->appearance()->retainWearable(dynamic_cast<LLViewerWearable*>(wearable));
+        if (gViewerWindow && gViewerWindow->nativeContext())
+            mNativePreview = std::make_shared<VSScenePreview>(*gViewerWindow->nativeContext());
+    }
+#endif
     LLVisualParamHint::sInstances.insert( this );
     mBackgroundp = LLUI::getUIImage("avatar_thumb_bkgrnd.png");
     if (mBackgroundp)
@@ -160,6 +183,12 @@ bool LLVisualParamHint::needsRender()
 {
     // needsRender gets called once per frame from
     // LLViewerDynamicTexture::updateAllInstances()
+#if VS_NATIVE_VULKAN
+    if (mNativePreview)
+        return mNativeCurrent() && mNativeWearableOwner && mNativeWearableOwner->currentNativeOwner() &&
+            mNeedsUpdate && mDelayFrames-- <= 0 && mAllowsUpdates;
+#endif
+
     return mNeedsUpdate && mDelayFrames-- <= 0 && !gAgentAvatarp->getIsAppearanceAnimating() && mAllowsUpdates;
 }
 
@@ -331,6 +360,18 @@ bool LLVisualParamHint::render()
 //-----------------------------------------------------------------------------
 void LLVisualParamHint::draw(F32 alpha)
 {
+#if VS_NATIVE_VULKAN
+    if (mNativePreview)
+    {
+        if (!mNativeCurrent() || !mNativeWearableOwner || !mNativeWearableOwner->currentNativeOwner()) return;
+        if (needsRender()) renderNative();
+        if (mIsVisible && mNativePreview->image())
+            gViewerWindow->nativeContext()->resources().imageLocalRectangle(mNativePreview->image(),
+                LLRectf(0.f, F32(mFullHeight), F32(mFullWidth), 0.f), LLColor4(1.f, 1.f, 1.f, alpha));
+        return;
+    }
+#endif
+
     if (!mIsVisible) return;
 
     gGL.getTexUnit(0)->bind(this);
@@ -377,6 +418,10 @@ S8 LLVisualParamReset::getType() const
 //-----------------------------------------------------------------------------
 bool LLVisualParamReset::render()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return false;
+#endif
+
     if (sDirty)
     {
         gAgentAvatarp->updateComposites();
@@ -386,4 +431,108 @@ bool LLVisualParamReset::render()
     }
 
     return false;
+}
+
+bool LLVisualParamHint::renderNative()
+{
+#if VS_NATIVE_VULKAN
+    if (!mNativePreview || !mNativePreview->current() || !mNativeCurrent() ||
+        !mNativeWearableOwner || !mNativeWearableOwner->currentNativeOwner()) return false;
+    auto* context = gViewerWindow->nativeContext();
+    auto avatar = context->world().selfAvatar();
+    if (!avatar) return false;
+    auto& appearance = avatar->appearanceOwner();
+    auto* joint = appearance.getJoint(mNativeJointName);
+    if (!joint) return false;
+    auto* param = mNativeWearableOwner->getVisualParam(mVisualParam->getID());
+    if (!param) return false;
+    const F32 previous = param->getWeight();
+    const F32 previous_avatar = appearance.getVisualParamWeight(param->getID());
+    const F32 blink_left = appearance.getVisualParamWeight("Blink_Left");
+    const F32 blink_right = appearance.getVisualParamWeight("Blink_Right");
+    const bool was_volatile = mNativeWearableOwner->getVolatile();
+    // Restore the same actual character/wearable even when mesh or target
+    // allocation throws/refuses. No preview changes reach the next bake/send.
+    struct Restore
+    {
+        VSWorldAvatar* avatar;
+        VSVulkanContext* context;
+        U64 generation;
+        std::function<bool()> current;
+        std::shared_ptr<LLViewerWearable> wearable;
+        S32 param;
+        F32 weight, avatarWeight, left, right;
+        bool volatileValue;
+        ~Restore()
+        {
+            if (!current() || !gViewerWindow || gViewerWindow->nativeContext() != context ||
+                context->world().selfAvatar() != avatar || avatar->ownerGeneration() != generation) return;
+            auto& owner = avatar->appearanceOwner();
+            wearable->setVisualParamWeight(param, weight, false);
+            wearable->setVolatile(volatileValue);
+            owner.setVisualParamWeight(param, avatarWeight, false);
+            owner.setVisualParamWeight("Blink_Left", left, false);
+            owner.setVisualParamWeight("Blink_Right", right, false);
+            owner.LLCharacter::updateVisualParams();
+            avatar->invalidateLocalAppearance();
+        }
+    } restore{avatar, context, avatar->ownerGeneration(), mNativeCurrent, mNativeWearableOwner, param->getID(), previous, previous_avatar, blink_left, blink_right, was_volatile};
+    mNativeWearableOwner->setVolatile(true);
+    mNativeWearableOwner->setVisualParamWeight(param->getID(), mVisualParamWeight, false);
+    appearance.setVisualParamWeight(param->getID(), mVisualParamWeight, false);
+    appearance.setVisualParamWeight("Blink_Left", 0.f, false);
+    appearance.setVisualParamWeight("Blink_Right", 0.f, false);
+    appearance.LLCharacter::updateVisualParams();
+    avatar->invalidateLocalAppearance();
+    LLQuaternion rotation;
+    if (auto* root = appearance.getRootJoint()) rotation = root->getWorldRotation();
+    const auto target_joint = joint->getWorldPosition();
+    const LLVector3 focus = target_joint + LLVector3(0, 0, mVisualParam->getCameraElevation()) * rotation;
+    F32 angle = mVisualParam->getCameraAngle() * DEG_TO_RAD;
+    if (!gSavedSettings.getBOOL("AppearanceCameraMovement")) angle += F_PI;
+    const LLVector3 offset(mVisualParam->getCameraDistance() * cosf(angle),
+        mVisualParam->getCameraDistance() * sinf(angle), mVisualParam->getCameraElevation());
+    const LLVector3 eye = target_joint + offset * rotation;
+    auto* camera = LLViewerCamera::getInstance();
+    const F32 far_clip = camera->getFar(), fov = camera->getView();
+    std::vector<VSWorldRenderer::Packet> packets;
+    // Draw the exact selected-skin backdrop on a camera-facing plane first,
+    // retaining the original UI shader's fullbright sampled image semantics.
+    const auto background = vs_ui_named_image_snapshot(mBackgroundp->getName());
+    if (!background) return false;
+    LLVector3 forward = focus - eye; forward.normalize();
+    LLVector3 right = forward % LLVector3::z_axis; right.normalize();
+    const LLVector3 up = right % forward;
+    const F32 distance = far_clip * .5f;
+    const F32 half_height = tanf(fov * .5f) * distance;
+    const F32 half_width = half_height * F32(mFullWidth) / F32(mFullHeight);
+    const LLVector3 center = eye + forward * distance;
+    std::vector<VSWorldRenderer::Vertex> vertices;
+    for (const auto corner : {LLVector2(-1,-1), LLVector2(1,-1), LLVector2(1,1), LLVector2(-1,1)})
+    {
+        const auto position = center + right * (corner.mV[0] * half_width) + up * (corner.mV[1] * half_height);
+        vertices.push_back({position.mV[0], position.mV[1], position.mV[2], 0,0,1,
+            (corner.mV[0]+1.f)*.5f, (1.f-corner.mV[1])*.5f});
+    }
+    VSWorldRenderer::Packet backdrop;
+    backdrop.mesh = mNativePreview->renderer().upload(vertices, {0,1,2,0,2,3});
+    if (!backdrop.mesh) return false;
+    backdrop.image = background;
+    backdrop.fullbright = true;
+    backdrop.depthTest = false;
+    backdrop.cull = false;
+    packets.push_back(std::move(backdrop));
+    avatar->append(packets, eye, far_clip, mFullHeight, 1.f, mFullWidth, 1, true);
+    context->world().appendAppearanceAttachments(packets, mNativePreview->renderer());
+    const bool rendered = mNativePreview->render(mFullWidth, mFullHeight, eye, focus, LLVector3::z_axis,
+        fov, camera->getNear(), far_clip, packets, {0,0,0,1});
+    if (rendered)
+    {
+        mNeedsUpdate = false;
+        mIsVisible = true;
+    }
+    return rendered;
+#else
+    return false;
+#endif
 }

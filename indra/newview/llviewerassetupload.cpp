@@ -42,6 +42,9 @@
 #include "llinventorypanel.h"
 #include "llsdutil.h"
 #include "llviewerassetupload.h"
+#include "vstaskinventoryobject.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
 #include "llappviewer.h"
 #include "llviewerstats.h"
 #include "llfilesystem.h"
@@ -880,13 +883,26 @@ LLSD LLScriptAssetUpload::generatePostBody()
 
 //=========================================================================
 /*static*/
-LLUUID LLViewerAssetUpload::EnqueueInventoryUpload(const std::string &url, const LLResourceUploadInfo::ptr_t &uploadInfo)
+LLUUID LLViewerAssetUpload::EnqueueInventoryUpload(const std::string &url, const LLResourceUploadInfo::ptr_t &uploadInfo, std::shared_ptr<const VSTaskInventoryObject> source)
 {
+    auto current = vs_native_im_guard();
+    if (source)
+    {
+        const auto task = std::dynamic_pointer_cast<LLBufferedAssetUploadInfo>(uploadInfo);
+        if (!task || !*source || source->getID() != task->getTaskId() || !source->objectGuard()()) return LLUUID::null;
+        current = source->itemGuard(task->getItemId());
+        if (!current()) return LLUUID::null;
+    }
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        if (const auto task = std::dynamic_pointer_cast<LLBufferedAssetUploadInfo>(uploadInfo); task && task->getTaskId().notNull())
+            if (!source) current = VSTaskInventoryObject::find(task->getTaskId())->itemGuard(task->getItemId());
+#endif
     std::string procName("LLViewerAssetUpload::AssetInventoryUploadCoproc(");
 
     LLUUID queueId = LLCoprocedureManager::instance().enqueueCoprocedure("Upload",
         procName + LLAssetType::lookup(uploadInfo->getAssetType()) + ")",
-        boost::bind(&LLViewerAssetUpload::AssetInventoryUploadCoproc, _1, _2, url, uploadInfo));
+        boost::bind(&LLViewerAssetUpload::AssetInventoryUploadCoproc, _1, _2, url, uploadInfo, current, source));
 
     return queueId;
 }
@@ -894,8 +910,26 @@ LLUUID LLViewerAssetUpload::EnqueueInventoryUpload(const std::string &url, const
 //=========================================================================
 /*static*/
 void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter,
-    const LLUUID &id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo)
+    const LLUUID &id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo, std::function<bool()> current, std::shared_ptr<const VSTaskInventoryObject> source)
 {
+    const auto account = vs_native_im_guard();
+    struct TaskRetirement
+    {
+        LLResourceUploadInfo::ptr_t upload;
+        std::function<bool()> account;
+        std::function<bool()>& current;
+        ~TaskRetirement()
+        {
+            const auto task = std::dynamic_pointer_cast<LLBufferedAssetUploadInfo>(upload);
+            if (task && task->getTaskId().notNull() && account() && !current())
+            {
+                LLSD result;
+                std::string reason = LLTrans::getString("UploadFailed");
+                upload->failedUpload(result, reason);
+            }
+        }
+    } retirement{uploadInfo, account, current};
+    if (!current()) return;
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
     LLCore::HttpOptions::ptr_t httpOptions = std::make_shared<LLCore::HttpOptions>();
     httpOptions->setTimeout(LL_ASSET_UPLOAD_TIMEOUT_SEC);
@@ -910,6 +944,7 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
     }
 
     llcoro::suspend();
+    if (!current()) return;
 
     if (uploadInfo->showUploadDialog())
     {
@@ -935,6 +970,7 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
     {
         // Stage 1: Request uploader URL
         result = httpAdapter->postAndSuspend(httpRequest, url, body, httpOptions);
+        if (!current()) return;
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -956,6 +992,7 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
 
         // Stage 2: Upload to the uploader URL
         result = httpAdapter->postFileAndSuspend(httpRequest, uploader, uploadInfo->getAssetId(), uploadInfo->getAssetType(), httpOptions);
+        if (!current()) return;
         httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -1007,6 +1044,20 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
         // </FS:Ansariel>
     }
 
+    if (!current()) return;
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        if (const auto task = std::dynamic_pointer_cast<LLBufferedAssetUploadInfo>(uploadInfo); task && task->getTaskId().notNull())
+            const auto object = source ? *source : VSTaskInventoryObject::find(task->getTaskId());
+            auto* inventory = object->nativeInventory();
+            if (!object || !inventory || !inventory->completeAsset(object->nativeObject(), task->getItemId(),
+                result["new_asset"].asUUID(), current)) return;
+            // Only this validated publication may advance the operation to its
+            // own new item incarnation. An observer's intervening mutation or
+            // account/object retirement still rejects the finish controller.
+            current = object->itemGuard(task->getItemId());
+            if (!current()) return;
+#endif
     LLUUID serverInventoryItem = uploadInfo->finishUpload(result);
 
     bool succeeded = false;
@@ -1030,8 +1081,13 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
                 // panel on the primary inventory floater. We don't have to deal with selecting
                 // the correct floater because only the primary inventory floater can show
                 // object properties.
-                LLSidepanelInventory* sidepanel_inventory = LLFloaterSidePanelContainer::getPanel<LLSidepanelInventory>("inventory");
-                sidepanel_inventory->showInventoryPanel();
+                if (gViewerWindow && gViewerWindow->isNativeVulkan())
+                    panel = LLInventoryPanel::getActiveInventoryPanel(true, true);
+                else
+                {
+                    LLSidepanelInventory* sidepanel_inventory = LLFloaterSidePanelContainer::getPanel<LLSidepanelInventory>("inventory");
+                    sidepanel_inventory->showInventoryPanel();
+                }
             }
             // </FS:Ansariel>
 

@@ -29,6 +29,8 @@
 
 #include "fsfloaterwearablefavorites.h"
 #include "fscommon.h"
+#include "vsnativeim.h"
+#include "llfloaterreg.h"
 #include "llappearancemgr.h"
 #include "llbutton.h"
 #include "llcombobox.h"
@@ -91,13 +93,14 @@ LLUUID FSFloaterWearableFavorites::sFolderID = LLUUID();
 
 FSFloaterWearableFavorites::FSFloaterWearableFavorites(const LLSD& key)
     : LLFloater(key),
-    mItemsList(nullptr),
+    mAccountCurrent(vs_native_im_guard()),
     mNewFolderBtn(nullptr),
     mRenameFolderBtn(nullptr),
     mDeleteFolderBtn(nullptr),
     mFolderCombo(nullptr),
     mSelectedFolderID(),
     mInitialized(false),
+    mItemsList(nullptr),
     mDADCallbackConnection()
 {
     mCategoriesObserver = new LLInventoryCategoriesObserver();
@@ -168,11 +171,16 @@ bool FSFloaterWearableFavorites::postBuild()
 //virtual
 void FSFloaterWearableFavorites::onOpen(const LLSD& /*info*/)
 {
+    if (!mAccountCurrent()) return;
     if (!mInitialized)
     {
         if (sFolderID.isNull())
         {
-            initCategory(boost::bind(&FSFloaterWearableFavorites::initialize, this));
+            initCategory([owner = getHandle(), current = mAccountCurrent](const LLUUID&)
+            {
+                if (current())
+                    if (auto* view = dynamic_cast<FSFloaterWearableFavorites*>(owner.get())) view->initialize();
+            });
         }
         else
         {
@@ -183,6 +191,7 @@ void FSFloaterWearableFavorites::onOpen(const LLSD& /*info*/)
 
 void FSFloaterWearableFavorites::initialize()
 {
+    if (!mAccountCurrent() || mInitialized) return;
     LLViewerInventoryCategory* category = gInventory.getCategory(sFolderID);
     if (!category)
     {
@@ -209,7 +218,7 @@ void FSFloaterWearableFavorites::initialize()
 
     mItemsList->setSortOrder((LLWearableItemsList::ESortOrder)gSavedSettings.getU32("FSWearableFavoritesSortOrder"));
     refreshFolderCombo();
-    mItemsList->setDADCallback(boost::bind(&FSFloaterWearableFavorites::onItemDAD, this, _1));
+    mDADCallbackConnection = mItemsList->setDADCallback(boost::bind(&FSFloaterWearableFavorites::onItemDAD, this, _1));
 
     mInitialized = true;
 }
@@ -269,7 +278,8 @@ std::optional<LLUUID> FSFloaterWearableFavorites::getWearableFavoritesFolderID()
 // static
 void FSFloaterWearableFavorites::initCategory(inventory_func_type callback)
 {
-    if (!gInventory.isInventoryUsable())
+    const auto current = vs_native_im_guard();
+    if (!current() || !gInventory.isInventoryUsable())
     {
         LL_WARNS() << "Cannot initialize Favorite Wearables inventory folder - inventory is not usable!" << LL_ENDL;
         return;
@@ -285,10 +295,12 @@ void FSFloaterWearableFavorites::initCategory(inventory_func_type callback)
         LLUUID fs_root_cat_id = gInventory.findCategoryByName(ROOT_FIRESTORM_FOLDER);
         if (fs_root_cat_id.isNull())
         {
-            gInventory.createNewCategory(gInventory.getRootFolderID(), LLFolderType::FT_NONE, ROOT_FIRESTORM_FOLDER, [callback](const LLUUID& new_cat_id)
+            gInventory.createNewCategory(gInventory.getRootFolderID(), LLFolderType::FT_NONE, ROOT_FIRESTORM_FOLDER, [callback, current](const LLUUID& new_cat_id)
             {
-                gInventory.createNewCategory(new_cat_id, LLFolderType::FT_NONE, FS_WEARABLE_FAVORITES_FOLDER, [callback](const LLUUID& new_cat_id)
+                if (!current()) return;
+                gInventory.createNewCategory(new_cat_id, LLFolderType::FT_NONE, FS_WEARABLE_FAVORITES_FOLDER, [callback, current](const LLUUID& new_cat_id)
                 {
+                    if (!current()) return;
                     FSFloaterWearableFavorites::sFolderID = new_cat_id;
                     callback(new_cat_id);
                 });
@@ -296,8 +308,9 @@ void FSFloaterWearableFavorites::initCategory(inventory_func_type callback)
         }
         else
         {
-            gInventory.createNewCategory(fs_root_cat_id, LLFolderType::FT_NONE, FS_WEARABLE_FAVORITES_FOLDER, [callback](const LLUUID& new_cat_id)
+            gInventory.createNewCategory(fs_root_cat_id, LLFolderType::FT_NONE, FS_WEARABLE_FAVORITES_FOLDER, [callback, current](const LLUUID& new_cat_id)
             {
+                if (!current()) return;
                 FSFloaterWearableFavorites::sFolderID = new_cat_id;
                 callback(new_cat_id);
             });
@@ -321,6 +334,7 @@ LLUUID FSFloaterWearableFavorites::getFavoritesFolder()
 
 void FSFloaterWearableFavorites::updateList(const LLUUID& folder_id)
 {
+    if (!mAccountCurrent()) return;
     if (folder_id.isNull())
     {
         return;
@@ -446,6 +460,7 @@ void FSFloaterWearableFavorites::refreshFolderCombo()
 
 void FSFloaterWearableFavorites::onItemDAD(const LLUUID& item_id)
 {
+    if (!mAccountCurrent()) return;
     const LLUUID target_folder = mSelectedFolderID.notNull() ? mSelectedFolderID : sFolderID;
     LLHandle<LLFloater> floater_handle = getHandle();
 
@@ -464,6 +479,7 @@ void FSFloaterWearableFavorites::onItemDAD(const LLUUID& item_id)
 
 void FSFloaterWearableFavorites::handleRemove()
 {
+    if (!mAccountCurrent()) return;
     uuid_vec_t selected_item_ids;
     mItemsList->getSelectedUUIDs(selected_item_ids);
 
@@ -753,11 +769,13 @@ bool FSFloaterWearableFavorites::onOptionsMenuItemChecked(const LLSD& userdata)
 
 void FSFloaterWearableFavorites::onDoubleClick()
 {
+    if (!mAccountCurrent()) return;
     if (LLUUID selected_item_id = mItemsList->getSelectedUUID(); selected_item_id.notNull())
     {
         uuid_vec_t ids;
         ids.push_back(selected_item_id);
         LLViewerInventoryItem* item = gInventory.getItem(selected_item_id);
+        if (!item) return;
 
         if (get_is_item_worn(selected_item_id))
         {
@@ -783,4 +801,11 @@ void FSFloaterWearableFavorites::onDoubleClick()
             }
         }
     }
+}
+
+void FSFloaterWearableFavorites::retireNativeAccount()
+{
+    LLFloaterReg::destroyInstance("fs_wearable_favorites");
+    sFolderID.setNull();
+    if (LLWearableItemsList::ContextMenu::instanceExists()) LLWearableItemsList::ContextMenu::deleteSingleton();
 }

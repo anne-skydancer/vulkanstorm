@@ -2606,6 +2606,13 @@ void LLTextBase::setText(const LLStringExplicit &utf8str, const LLStyle::Params&
     // Can insert a lot of different segments, don't want to spam events.
     mTrackValueChange = false;
 
+    // A URL popup captures identifiers from the previous contents. Replacing
+    // the text also retires that selection, including an account reset.
+    if (auto* menu = static_cast<LLContextMenu*>(mPopupMenuHandle.get()))
+    {
+        menu->die();
+        mPopupMenuHandle.markDead();
+    }
     // clear out the existing text and segments
     getViewModel()->setDisplay(LLWStringUtil::null);
 

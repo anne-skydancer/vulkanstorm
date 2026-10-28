@@ -425,6 +425,8 @@ private:
     bool canClose() override;
     void closeIfNeeded();
     void draw() override;
+    bool isTaskDraft() const override { return mIsNew; }
+    std::function<bool()> mRunningInfoCurrent;
 
     void loadAsset() override;
     void saveIfNeeded(bool sync = true) override;

@@ -26,6 +26,12 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "lldir.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativeim.h"
+#include "vsnativesession.h"
+#include "vsuiimageprovider.h"
+#endif
 
 #include "llviewertexture.h"
 
@@ -157,6 +163,9 @@ void LLLoadedCallbackEntry::removeTexture(LLViewerFetchedTexture* tex)
 //static
 void LLLoadedCallbackEntry::cleanUpCallbackList(LLLoadedCallbackEntry::source_callback_list_t* callback_list)
 {
+#if VS_NATIVE_VULKAN
+    if (LLViewerTextureManager::cancelCPULocalCallbackList(callback_list)) return;
+#endif
     //clear texture callbacks.
     if(callback_list && !callback_list->empty())
     {
@@ -211,6 +220,9 @@ void  LLViewerTextureManager::findTextures(const LLUUID& id, std::vector<LLViewe
 LLViewerFetchedTexture* LLViewerTextureManager::findFetchedTexture(const LLUUID& id, S32 tex_type)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
+#if VS_NATIVE_VULKAN
+    if (auto* local = findCPULocalTexture(id)) return local;
+#endif
     return gTextureList.findImage(id, (ETexListType)tex_type);
 }
 
@@ -293,6 +305,12 @@ LLPointer<LLViewerTexture> LLViewerTextureManager::getLocalTexture(const U32 wid
 LLViewerFetchedTexture* LLViewerTextureManager::getFetchedTexture(const LLImageRaw* raw, FTType type, bool usemipmaps)
 {
     LLImageDataSharedLock lock(raw);
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        return getCPUFetchedTexture(raw, type, usemipmaps);
+    }
+#endif
     LLViewerFetchedTexture* ret = new LLViewerFetchedTexture(raw, type, usemipmaps);
     gTextureList.addImage(ret, TEX_LIST_STANDARD);
     return ret;
@@ -321,6 +339,20 @@ LLViewerFetchedTexture* LLViewerTextureManager::getFetchedTextureFromFile(
                                                    LLGLenum primary_format,
                                                    const LLUUID& force_id)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const std::string full_path = gDirUtilp->findSkinnedFilename("textures", filename);
+        if (full_path.empty())
+        {
+            LL_WARNS() << "Failed to find local image file: " << filename << LL_ENDL;
+            return nullptr; // explicit unavailable image, never create a GL texture
+        }
+        auto* image = getCPUFileTexture("file://" + full_path, f_type, usemipmaps, force_id);
+        if (image) image->setBoostLevel(boost_priority);
+        return image;
+    }
+#endif
     return gTextureList.getImageFromFile(filename, f_type, usemipmaps, boost_priority, texture_type, internal_format, primary_format, force_id);
 }
 
@@ -335,6 +367,14 @@ LLViewerFetchedTexture* LLViewerTextureManager::getFetchedTextureFromUrl(const s
                                      const LLUUID& force_id
                                      )
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && url.compare(0, 7, "file://") == 0)
+    {
+        auto* image = getCPUFileTexture(url, f_type, usemipmaps, force_id);
+        if (image) image->setBoostLevel(boost_priority);
+        return image;
+    }
+#endif
     return gTextureList.getImageFromUrl(url, f_type, usemipmaps, boost_priority, texture_type, internal_format, primary_format, force_id);
 }
 
@@ -1232,6 +1272,17 @@ LLViewerFetchedTexture::LLViewerFetchedTexture(const LLUUID& id, FTType f_type, 
     generateGLTexture();
 }
 
+#if VS_NATIVE_VULKAN
+LLViewerFetchedTexture::LLViewerFetchedTexture(const LLUUID& id, FTType type, bool mipmaps, NativeLocalImage)
+    : LLViewerTexture(id, mipmaps), mNativeLocalImageCurrent(vs_native_im_guard())
+{
+    init(true);
+    mFTType = type;
+    setCPUImageExtent(0, 0, 0);
+    setTextureListType(TEX_LIST_STANDARD);
+}
+#endif
+
 LLViewerFetchedTexture::LLViewerFetchedTexture(const LLImageRaw* raw, FTType f_type, bool usemipmaps)
     : LLViewerTexture(raw, usemipmaps)
 {
@@ -1312,6 +1363,9 @@ void LLViewerFetchedTexture::init(bool firstinit)
 
 LLViewerFetchedTexture::~LLViewerFetchedTexture()
 {
+#if VS_NATIVE_VULKAN
+    if (!mNativeLocalRetired && mNativeLocalImageCurrent && mNativeLocalImageCurrent()) vs_retire_local_image(getID());
+#endif
     assert_main_thread();
     //*NOTE getTextureFetch can return NULL when Viewer is shutting down.
     // This is due to LLWearableList is singleton and is destroyed after
@@ -2148,6 +2202,14 @@ bool LLViewerFetchedTexture::processFetchResults(S32& desired_discard, S32 curre
 
 bool LLViewerFetchedTexture::updateFetch()
 {
+#if VS_NATIVE_VULKAN
+    if (mNativeLocalImageCurrent)
+    {
+        if (!mNativeLocalRetired && !mNativeLocalPending && !mFullyLoaded && !mIsMissingAsset && mUrl.compare(0, 7, "file://") == 0)
+            startCPUFileDecode(mUrl); // explicit original missing-asset retry
+        return mNativeLocalPending;
+    }
+#endif
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
     static LLCachedControl<bool> textures_decode_disabled(gSavedSettings, "TextureDecodeDisabled", false);
 
@@ -2384,6 +2446,36 @@ bool LLViewerFetchedTexture::updateFetch()
 
 void LLViewerFetchedTexture::clearFetchedResults()
 {
+#if VS_NATIVE_VULKAN
+    if (mNativeLocalImageCurrent)
+    {
+        if (mNativeLocalPending) return; // match original active-fetch guard
+        LLPointer<LLViewerFetchedTexture> keep_alive = this;
+        const U64 revision = ++mNativeLocalDecodeRevision;
+        mNativeLocalPending = false;
+        mIsMissingAsset = false;
+        mFullyLoaded = false;
+        mIsFetched = false;
+        mSavedRawImage = nullptr;
+        mSavedRawDiscardLevel = -1;
+        invalidateCPUImage();
+        // Preserve cleanup's terminal failure contract without destroying GL
+        // state. Reentrant callers may attach the next request's callbacks.
+        auto callbacks = std::move(mLoadedCallbackList);
+        mLoadedCallbackList.clear();
+        for (auto* callback : callbacks)
+        {
+            std::unique_ptr<LLLoadedCallbackEntry> entry(callback);
+            entry->removeTexture(this);
+            entry->mCallback(false, this, nullptr, nullptr, 0, true, entry->mUserData);
+        }
+        if (!mNativeLocalRetired && mNativeLocalImageCurrent() &&
+            revision == mNativeLocalDecodeRevision && mUrl.compare(0, 7, "file://") == 0)
+            startCPUFileDecode(mUrl);
+        return;
+    }
+#endif
+
     // <FS:Ansariel> For texture refresh
     mIsMissingAsset = false;
 
@@ -2463,7 +2555,10 @@ void LLViewerFetchedTexture::setLoadedCallback( loaded_callback_func loaded_call
     if (mLoadedCallbackList.empty())
     {
         // Put in list to call this->doLoadedCallbacks() periodically
-        gTextureList.mCallbackList.insert(this);
+#if VS_NATIVE_VULKAN
+        if (!mNativeLocalImageCurrent)
+#endif
+            gTextureList.mCallbackList.insert(this);
         mLoadedCallbackDesiredDiscardLevel = (S8)discard_level;
     }
     else
@@ -2506,6 +2601,9 @@ void LLViewerFetchedTexture::setLoadedCallback( loaded_callback_func loaded_call
     }
     mLastCallBackActiveTime = sCurrentTime ;
         mLastReferencedSavedRawImageTime = sCurrentTime;
+#if VS_NATIVE_VULKAN
+    if (mNativeLocalImageCurrent) postCPULocalCallbacks();
+#endif
 }
 
 void LLViewerFetchedTexture::clearCallbackEntryList()
@@ -2539,6 +2637,23 @@ void LLViewerFetchedTexture::clearCallbackEntryList()
 
 void LLViewerFetchedTexture::deleteCallbackEntry(const LLLoadedCallbackEntry::source_callback_list_t* callback_list)
 {
+#if VS_NATIVE_VULKAN
+    if (mNativeLocalImageCurrent)
+    {
+        LLPointer<LLViewerFetchedTexture> self = this;
+        for (;;)
+        {
+            auto found = std::find_if(mLoadedCallbackList.begin(), mLoadedCallbackList.end(),
+                [callback_list](const auto* entry) { return entry->mSourceCallbackList == callback_list; });
+            if (found == mLoadedCallbackList.end()) return;
+            std::unique_ptr<LLLoadedCallbackEntry> entry(*found);
+            mLoadedCallbackList.erase(found);
+            // Caller cancellation clears its list before invoking any callback.
+            entry->mSourceCallbackList = nullptr;
+            entry->mCallback(false, this, nullptr, nullptr, 0, true, entry->mUserData);
+        }
+    }
+#endif
     if(mLoadedCallbackList.empty() || !callback_list)
     {
         return;
@@ -2599,6 +2714,9 @@ void LLViewerFetchedTexture::unpauseLoadedCallbacks(const LLLoadedCallbackEntry:
     if(!callback_list)
 {
         mPauseLoadedCallBacks = false;
+#if VS_NATIVE_VULKAN
+        if (mNativeLocalImageCurrent) postCPULocalCallbacks();
+#endif
         return;
     }
 
@@ -2623,6 +2741,9 @@ void LLViewerFetchedTexture::unpauseLoadedCallbacks(const LLLoadedCallbackEntry:
     {
         mSaveRawImage = true;
     }
+#if VS_NATIVE_VULKAN
+    if (mNativeLocalImageCurrent) postCPULocalCallbacks();
+#endif
 }
 
 void LLViewerFetchedTexture::pauseLoadedCallbacks(const LLLoadedCallbackEntry::source_callback_list_t* callback_list)
@@ -2658,6 +2779,30 @@ void LLViewerFetchedTexture::pauseLoadedCallbacks(const LLLoadedCallbackEntry::s
 
 bool LLViewerFetchedTexture::doLoadedCallbacks()
 {
+#if VS_NATIVE_VULKAN
+    if (mNativeLocalImageCurrent)
+    {
+        if (mNativeLocalPending || mPauseLoadedCallBacks) return false;
+        LLPointer<LLViewerFetchedTexture> self = this;
+        const auto initial = mLoadedCallbackList.size();
+        bool called = false;
+        for (std::size_t count = 0; count < initial && !mLoadedCallbackList.empty(); ++count)
+        {
+            std::unique_ptr<LLLoadedCallbackEntry> entry(mLoadedCallbackList.front());
+            mLoadedCallbackList.pop_front();
+            if (entry->mPaused && !mNativeLocalRetired && mNativeLocalImageCurrent())
+            { mLoadedCallbackList.push_back(entry.release()); continue; }
+            const bool success = !mNativeLocalRetired && mNativeLocalImageCurrent() && !mIsMissingAsset && mSavedRawImage.notNull();
+            const auto raw = mSavedRawImage;
+            entry->removeTexture(this);
+            entry->mCallback(success, this, success && entry->mNeedsImageRaw ? raw.get() : nullptr,
+                nullptr, 0, true, entry->mUserData);
+            called = true;
+        }
+        if (mLoadedCallbackList.empty()) mLoadedCallbackDesiredDiscardLevel = S8_MAX;
+        return called;
+    }
+#endif
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
     static const F32 MAX_INACTIVE_TIME = 900.f ; //seconds
     static const F32 MAX_IDLE_WAIT_TIME = 5.f ; //seconds
@@ -4290,3 +4435,184 @@ void LLTexturePipelineTester::LLTextureTestSession::reset()
 //----------------------------------------------------------------------------------------------
 //end of LLTexturePipelineTester
 //----------------------------------------------------------------------------------------------
+
+
+// Actual CPU local-image cache and callback owners for native file import.
+#if VS_NATIVE_VULKAN
+namespace
+{
+std::map<LLUUID, LLPointer<LLViewerFetchedTexture>> sCPULocalImages;
+std::function<bool()> sCPULocalAccount;
+bool sCPULocalResetting = false;
+void pruneCPULocalImages()
+{
+    for (auto entry = sCPULocalImages.begin(); entry != sCPULocalImages.end();)
+        if (entry->second->getNumRefs() == 1 && !entry->second->mNativeLocalPending &&
+            !entry->second->hasCPULocalCallbacks()) entry = sCPULocalImages.erase(entry);
+        else ++entry;
+}
+}
+LLViewerFetchedTexture* LLViewerTextureManager::findCPULocalTexture(const LLUUID& id)
+{
+    if (!sCPULocalAccount || !sCPULocalAccount()) return nullptr;
+    const auto found = sCPULocalImages.find(id);
+    return found != sCPULocalImages.end() ? found->second.get() : nullptr;
+}
+void LLViewerTextureManager::resetCPULocalImages()
+{
+    if (sCPULocalResetting) return;
+    sCPULocalResetting = true;
+    struct ResetFlag { ~ResetFlag() { sCPULocalResetting = false; } } resetFlag;
+    const auto images = sCPULocalImages;
+    sCPULocalAccount = {};
+    for (const auto& [id, image] : images)
+    {
+        if (image.get()->mNativeLocalImageCurrent && image.get()->mNativeLocalImageCurrent()) vs_retire_local_image(id);
+        image.get()->mNativeLocalRetired = true;
+        image.get()->mNativeLocalPending = false;
+    }
+    // Retain the real cancellation lookup until every old callback owner has
+    // retired: failure callbacks can destroy another model's callback list.
+    for (const auto& [id, image] : images) image.get()->retireCPULocalImage();
+    sCPULocalImages.clear();
+    sCPULocalResetting = false;
+}
+bool LLViewerTextureManager::cancelCPULocalCallbackList(LLLoadedCallbackEntry::source_callback_list_t* list)
+{
+    if (!list || list->empty()) return false;
+    bool native = false;
+    for (const auto& key : *list) if (sCPULocalImages.count(key.textureId)) { native = true; break; }
+    if (!native) return false;
+    const auto keys = *list;
+    list->clear(); // no iterator into caller storage survives its callback
+    for (const auto& key : keys)
+    {
+        const auto found = sCPULocalImages.find(key.textureId);
+        LLPointer<LLViewerFetchedTexture> image = found != sCPULocalImages.end() ? found->second.get() :
+            gTextureList.findImage(key);
+        if (image) image.get()->deleteCallbackEntry(list);
+    }
+    return true;
+}
+LLViewerFetchedTexture* LLViewerTextureManager::getCPUFetchedTexture(const LLImageRaw* raw,
+    FTType type, bool mipmaps, const LLUUID& force_id)
+{
+    if (!raw || !VSNativeSession::active() || sCPULocalResetting) return nullptr;
+    if (sCPULocalAccount && !sCPULocalAccount()) resetCPULocalImages();
+    pruneCPULocalImages();
+    if (!sCPULocalAccount) sCPULocalAccount = vs_native_im_guard();
+    const LLUUID id = force_id.isNull() ? LLUUID::generateNewID() : force_id;
+    if (auto* existing = findCPULocalTexture(id))
+    {
+        existing->completeCPULocalImage(const_cast<LLImageRaw*>(raw));
+        return existing;
+    }
+    LLPointer<LLViewerFetchedTexture> image = new LLViewerFetchedTexture(id, type, mipmaps,
+        LLViewerFetchedTexture::NativeLocalImage{});
+    sCPULocalImages.emplace(id, image);
+    image.get()->completeCPULocalImage(const_cast<LLImageRaw*>(raw));
+    return image.get();
+}
+LLViewerFetchedTexture* LLViewerTextureManager::getCPUFileTexture(const std::string& url,
+    FTType type, bool mipmaps, const LLUUID& force_id)
+{
+    if (url.compare(0, 7, "file://") != 0 || !VSNativeSession::active() || sCPULocalResetting) return nullptr;
+    if (sCPULocalAccount && !sCPULocalAccount()) resetCPULocalImages();
+    LL::WorkQueue::ptr_t main = LL::WorkQueue::getInstance("mainloop"), general = LL::WorkQueue::getInstance("General");
+    if (!main || !general) return nullptr;
+    LLUUID id = force_id;
+    if (id.isNull()) id.generate(url); // identical to the real getImageFromUrl identity
+    if (auto* existing = findCPULocalTexture(id)) return existing;
+    pruneCPULocalImages();
+    if (!sCPULocalAccount) sCPULocalAccount = vs_native_im_guard();
+    LLPointer<LLViewerFetchedTexture> image = new LLViewerFetchedTexture(id, type, mipmaps,
+        LLViewerFetchedTexture::NativeLocalImage{});
+    sCPULocalImages.emplace(id, image);
+    image.get()->startCPUFileDecode(url);
+    return image.get();
+}
+void LLViewerFetchedTexture::startCPUFileDecode(const std::string& url)
+{
+    if (mNativeLocalRetired || !mNativeLocalImageCurrent || !mNativeLocalImageCurrent()) return;
+    mUrl = url;
+    const U64 revision = ++mNativeLocalDecodeRevision;
+    invalidateCPUImage();
+    mNativeLocalPending = true;
+    LL::WorkQueue::ptr_t main = LL::WorkQueue::getInstance("mainloop"), general = LL::WorkQueue::getInstance("General");
+    if (!main || !general) { completeCPULocalImage(nullptr); return; }
+    LLPointer<LLViewerFetchedTexture> image = this;
+    const auto current = mNativeLocalImageCurrent;
+    const auto id = getID();
+    const bool posted = main->postTo(general, [filename = url.substr(7)]
+    {
+        // Match TextureFetch's literal file:// suffix. Callers such as the
+        // model loader have already unescaped it; never unescape it twice.
+        LLPointer<LLImageFormatted> formatted = LLImageFormatted::createFromExtension(filename);
+        LLPointer<LLImageRaw> raw = new LLImageRaw;
+        try
+        {
+            if (!formatted || !formatted->load(filename) || !formatted->decode(raw, 0)) raw = nullptr;
+        }
+        catch (const std::exception&) { raw = nullptr; }
+        return raw;
+    }, [image, current, id, revision](LLPointer<LLImageRaw> raw)
+    {
+        if (!current() || image.get()->mNativeLocalRetired ||
+            revision != image.get()->mNativeLocalDecodeRevision ||
+            LLViewerTextureManager::findCPULocalTexture(id) != image.get()) return;
+        image.get()->completeCPULocalImage(raw.get());
+    });
+    if (!posted) image.get()->completeCPULocalImage(nullptr);
+}
+
+void LLViewerFetchedTexture::completeCPULocalImage(LLImageRaw* raw)
+{
+    if (mNativeLocalRetired || !mNativeLocalImageCurrent || !mNativeLocalImageCurrent()) return;
+    ++mNativeLocalDecodeRevision;
+    mNativeLocalPending = false;
+    mIsMissingAsset = !raw || !vs_publish_local_image(getID(), *raw);
+    if (!mIsMissingAsset)
+    {
+        setCPUImageExtent(raw->getWidth(), raw->getHeight(), raw->getComponents());
+        mOrigWidth = raw->getWidth(); mOrigHeight = raw->getHeight();
+        mSavedRawImage = new LLImageRaw(raw->getData(), raw->getWidth(), raw->getHeight(), raw->getComponents());
+        mSavedRawDiscardLevel = 0;
+    }
+    mFullyLoaded = !mIsMissingAsset; mIsFetched = !mIsMissingAsset;
+    postCPULocalCallbacks();
+}
+void LLViewerFetchedTexture::postCPULocalCallbacks()
+{
+    if (mNativeLocalCallbacksQueued || mNativeLocalPending || mLoadedCallbackList.empty()) return;
+    LL::WorkQueue::ptr_t main = LL::WorkQueue::getInstance("mainloop");
+    if (!main) { retireCPULocalImage(); return; }
+    LLPointer<LLViewerFetchedTexture> self = this;
+    mNativeLocalCallbacksQueued = true;
+    if (!main->post([self]
+    {
+        self.get()->mNativeLocalCallbacksQueued = false;
+        self.get()->doLoadedCallbacks();
+    }))
+    {
+        mNativeLocalCallbacksQueued = false;
+        retireCPULocalImage();
+    }
+}
+void LLViewerFetchedTexture::retireCPULocalImage()
+{
+    if (!mNativeLocalRetired && mNativeLocalImageCurrent && mNativeLocalImageCurrent()) vs_retire_local_image(getID());
+    mNativeLocalRetired = true;
+    ++mNativeLocalDecodeRevision;
+    invalidateCPUImage();
+    mNativeLocalPending = false;
+    // Terminal false delivery frees the original caller's userdata. The real
+    // model/preview callback owns its account+view guard; no fabricated success.
+    while (!mLoadedCallbackList.empty())
+    {
+        std::unique_ptr<LLLoadedCallbackEntry> entry(mLoadedCallbackList.front());
+        mLoadedCallbackList.pop_front(); entry->removeTexture(this);
+        entry->mCallback(false, this, nullptr, nullptr, 0, true, entry->mUserData);
+    }
+}
+#endif
+

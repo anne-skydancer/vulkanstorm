@@ -29,6 +29,7 @@
 
 #include "llfloatersnapshot.h" // <FS:Beq/> Fix share to flickr preview again
 #include "llfloaterflickr.h"
+#include "vsnativeim.h"
 
 #include "exoflickr.h"
 #include "exoflickrauth.h"
@@ -87,6 +88,7 @@ mPostButton(NULL)
 
 LLFlickrPhotoPanel::~LLFlickrPhotoPanel()
 {
+    LLEventPumps::instance().obtain("FlickrConnectState").stopListening("LLFlickrPhotoPanel");
     if(mPreviewHandle.get())
     {
         mPreviewHandle.get()->die();
@@ -207,7 +209,7 @@ void LLFlickrPhotoPanel::draw()
     mBtnPreview->setToggleState(preview_active);
 
     // Display the preview if one is available
-    if (previewp && previewp->getThumbnailImage())
+    if (previewp && previewp->hasThumbnailImage())
     {
         const LLRect& thumbnail_rect = mThumbnailPlaceholder->getRect();
         const S32 thumbnail_w = previewp->getThumbnailWidth();
@@ -219,13 +221,10 @@ void LLFlickrPhotoPanel::draw()
         S32 offset_x = thumbnail_rect.mLeft + local_offset_x;
         S32 offset_y = thumbnail_rect.mBottom + local_offset_y;
 
-        gGL.matrixMode(LLRender::MM_MODELVIEW);
         // Apply floater transparency to the texture unless the floater is focused.
         F32 alpha = getTransparencyType() == TT_ACTIVE ? 1.0f : getCurrentTransparency();
         LLColor4 color = LLColor4::white;
-        gl_draw_scaled_image(offset_x, offset_y,
-            thumbnail_w, thumbnail_h,
-            previewp->getThumbnailImage(), color % alpha);
+        previewp->drawThumbnail(offset_x,offset_y,thumbnail_w,thumbnail_h,color % alpha);
     }
 
     // Update the visibility of the working (computing preview) label
@@ -447,7 +446,7 @@ void LLFlickrPhotoPanel::sendPhoto()
     params["safety_level"] = content_rating;
     params["tags"] = tags;
     params["description"] = description;
-    exoFlickr::uploadPhoto(params, previewp->getFormattedImage().get(), boost::bind(&LLFlickrPhotoPanel::uploadCallback, this, _1, _2));
+    exoFlickr::uploadPhoto(params, previewp->getFormattedImage().get(), vs_native_im_lifetime_callback([weak = getHandle()] { return weak.get() != nullptr; }, [this](bool ok, const LLSD& result) { uploadCallback(ok, result); }));
 // </FS:Ansariel>
 
     updateControls();
@@ -607,7 +606,7 @@ void LLFlickrPhotoPanel::onOpen(const LLSD& key)
 {
     // Reauthorise if necessary.
     LLFlickrConnect::instance().setConnectionState(LLFlickrConnect::FLICKR_CONNECTION_IN_PROGRESS);
-    new exoFlickrAuth(boost::bind(&LLFlickrPhotoPanel::flickrAuthResponse, this, _1, _2));
+    exoFlickrAuth::create(vs_native_im_lifetime_callback([weak = getHandle()] { return weak.get() != nullptr; }, [this](bool ok, const LLSD& result) { flickrAuthResponse(ok, result); }));
 }
 
 void LLFlickrPhotoPanel::uploadCallback(bool success, const LLSD& response)
@@ -712,6 +711,12 @@ bool LLFlickrAccountPanel::postBuild()
     mDisconnectButton = getChild<LLUICtrl>("disconnect_btn");
 
     return LLPanel::postBuild();
+}
+
+LLFlickrAccountPanel::~LLFlickrAccountPanel()
+{
+    LLEventPumps::instance().obtain("FlickrConnectState").stopListening("LLFlickrAccountPanel");
+    LLEventPumps::instance().obtain("FlickrConnectInfo").stopListening("LLFlickrAccountPanel");
 }
 
 void LLFlickrAccountPanel::draw()
@@ -854,7 +859,7 @@ LLFloaterFlickr::LLFloaterFlickr(const LLSD& key) : LLFloater(key),
 
 void LLFloaterFlickr::onClose(bool app_quitting)
 {
-    FSFloaterBigPreview* big_preview_floater = dynamic_cast<FSFloaterBigPreview*>(LLFloaterReg::getInstance("fs_big_preview"));
+    FSFloaterBigPreview* big_preview_floater = dynamic_cast<FSFloaterBigPreview*>(LLFloaterReg::findInstance("fs_big_preview"));
     if (big_preview_floater)
     {
         big_preview_floater->closeOnFloaterOwnerClosing(this);
@@ -864,7 +869,7 @@ void LLFloaterFlickr::onClose(bool app_quitting)
 
 void LLFloaterFlickr::onCancel()
 {
-    FSFloaterBigPreview* big_preview_floater = dynamic_cast<FSFloaterBigPreview*>(LLFloaterReg::getInstance("fs_big_preview"));
+    FSFloaterBigPreview* big_preview_floater = dynamic_cast<FSFloaterBigPreview*>(LLFloaterReg::findInstance("fs_big_preview"));
     if (big_preview_floater)
     {
         big_preview_floater->closeOnFloaterOwnerClosing(this);

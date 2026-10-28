@@ -32,11 +32,15 @@
 #include "llinventorypanel.h" // for LLFolderViewModelInventory
 
 #include "llinventory.h"
+#include <memory>
+#include <functional>
+#include <boost/signals2/connection.hpp>
 
 class LLScrollContainer;
 class LLFolderView;
 class LLFolderViewFolder;
 class LLViewerObject;
+class VSTaskInventoryObject;
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Class LLPanelObjectInventory
@@ -67,6 +71,7 @@ public:
     void doToSelected(const LLSD& userdata);
 
     void refresh();
+    VSTaskInventoryObject taskObject() const;
     const LLUUID& getTaskUUID() { return mTaskUUID;}
     void clearInventoryTask();
     void removeSelectedItem();
@@ -99,6 +104,8 @@ protected:
                                  LLInventoryObject::object_list_t* inventory,
                                  S32 serial_num,
                                  void* user_data);
+    void inventoryChangedForTask(const LLUUID&, const LLInventoryObject::object_list_t*);
+    bool refreshNativeInventory();
     void updateInventory();
     void createFolderViews(LLInventoryObject* inventory_root, LLInventoryObject::object_list_t& contents);
     void createViewsForCategory(LLInventoryObject::object_list_t* inventory,
@@ -115,6 +122,9 @@ protected:
     bool            isSelectionRemovable();
 
 private:
+    std::function<bool()> mAccountCurrent;
+    std::shared_ptr<VSTaskInventoryObject> mNativeObject;
+    boost::signals2::scoped_connection mNativeInventoryChanged;
     std::unordered_map<LLUUID, LLFolderViewItem*> mItemMap;
 
     LLScrollContainer* mScroller;

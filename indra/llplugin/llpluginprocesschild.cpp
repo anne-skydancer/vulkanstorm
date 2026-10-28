@@ -52,7 +52,10 @@ LLPluginProcessChild::~LLPluginProcessChild()
 {
     if (mInstance != NULL)
     {
-        sendMessageToPlugin(LLPluginMessage("base", "cleanup"));
+        // Successful cleanup/goodbye has already retired plugin-owned state.
+        // Only incomplete/error paths still need to request cleanup here.
+        if (!mPluginShutdownComplete)
+            sendMessageToPlugin(LLPluginMessage("base", "cleanup"));
 
         // IMPORTANT: under some (unknown) circumstances the apr_dso_unload() triggered when mInstance is deleted
         // appears to fail and lock up which means that a given instance of the slplugin process never exits.
@@ -240,6 +243,7 @@ void LLPluginProcessChild::idle(void)
             break;
 
         case STATE_UNLOADED:
+            mPluginShutdownComplete = true;
             killSockets();
             // Deleting mInstance here causes apr_dso_unload() to trigger a fault on SLPlugin when it unloads libcef
             // Instead, let the process exit on its own and allow the OS reclaim the memory to prevent the error

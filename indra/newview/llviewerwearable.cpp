@@ -38,6 +38,13 @@
 #include "llvoavatarself.h"
 #include "llavatarappearancedefines.h"
 #include "llviewerwearable.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
+#include "llrender2dutils.h"
 #include "llviewercontrol.h"
 #include "llviewerregion.h"
 #include "llmd5.h" // <FS:Ansariel> [Legacy Bake]
@@ -83,6 +90,9 @@ LLViewerWearable::LLViewerWearable(const LLTransactionID& transaction_id) :
     LLWearable(),
     mVolatile(false)
 {
+    mNativeOwned = LLRender2D::isNativeUI();
+    mNativeCurrent = vs_native_im_guard();
+    mNativeAvatarGeneration = mNativeOwned ? vs_avatar_generation() : 0;
     mTransactionID = transaction_id;
     mAssetID = mTransactionID.makeAssetID(gAgent.getSecureSessionID());
 }
@@ -91,6 +101,9 @@ LLViewerWearable::LLViewerWearable(const LLAssetID& asset_id) :
     LLWearable(),
     mVolatile(false)
 {
+    mNativeOwned = LLRender2D::isNativeUI();
+    mNativeCurrent = vs_native_im_guard();
+    mNativeAvatarGeneration = mNativeOwned ? vs_avatar_generation() : 0;
     mAssetID = asset_id;
     mTransactionID.setNull();
 }
@@ -104,6 +117,7 @@ LLViewerWearable::~LLViewerWearable()
 LLWearable::EImportResult LLViewerWearable::importStream( std::istream& input_stream, LLAvatarAppearance* avatarp )
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    if (mNativeOwned) return avatarOwner() == avatarp && avatarp ? LLWearable::importStream(input_stream, avatarp) : LLWearable::FAILURE;
     // suppress texlayerset updates while wearables are being imported. Layersets will be updated
     // when the wearables are "worn", not loaded. Note state will be restored when this object is destroyed.
     LLOverrideBakedTextureUpdate stop_bakes(false);
@@ -149,7 +163,8 @@ LLWearable::EImportResult LLViewerWearable::importStream( std::istream& input_st
 // since this wearable was created.
 bool LLViewerWearable::isOldVersion() const
 {
-    if (!isAgentAvatarValid()) return false;
+    auto* avatar = avatarOwner();
+    if (!avatar) return false;
 
     if( LLWearable::sCurrentDefinitionVersion < mDefinitionVersion )
     {
@@ -163,9 +178,9 @@ bool LLViewerWearable::isOldVersion() const
     }
 
     S32 param_count = 0;
-    for( LLViewerVisualParam* param = (LLViewerVisualParam*) gAgentAvatarp->getFirstVisualParam();
+    for( LLViewerVisualParam* param = (LLViewerVisualParam*) avatar->getFirstVisualParam();
         param;
-        param = (LLViewerVisualParam*) gAgentAvatarp->getNextVisualParam() )
+        param = (LLViewerVisualParam*) avatar->getNextVisualParam() )
     {
         if( (param->getWearableType() == mType) && (param->isTweakable() ) )
         {
@@ -211,11 +226,12 @@ bool LLViewerWearable::isOldVersion() const
 // only if those values are the same as the defaults.
 bool LLViewerWearable::isDirty() const
 {
-    if (!isAgentAvatarValid()) return false;
+    auto* avatar = avatarOwner();
+    if (!avatar) return false;
 
-    for( LLViewerVisualParam* param = (LLViewerVisualParam*) gAgentAvatarp->getFirstVisualParam();
+    for( LLViewerVisualParam* param = (LLViewerVisualParam*) avatar->getFirstVisualParam();
         param;
-        param = (LLViewerVisualParam*) gAgentAvatarp->getNextVisualParam() )
+        param = (LLViewerVisualParam*) avatar->getNextVisualParam() )
     {
         if( (param->getWearableType() == mType)
             && (param->isTweakable() )
@@ -268,9 +284,10 @@ bool LLViewerWearable::isDirty() const
 
 void LLViewerWearable::setParamsToDefaults()
 {
-    if (!isAgentAvatarValid()) return;
+    auto* avatar = avatarOwner();
+    if (!avatar) return;
 
-    for( LLVisualParam* param = gAgentAvatarp->getFirstVisualParam(); param; param = gAgentAvatarp->getNextVisualParam() )
+    for( LLVisualParam* param = avatar->getFirstVisualParam(); param; param = avatar->getNextVisualParam() )
     {
         if( (((LLViewerVisualParam*)param)->getWearableType() == mType ) && (param->isTweakable() ) )
         {
@@ -283,16 +300,18 @@ void LLViewerWearable::setParamsToDefaults()
 
 void LLViewerWearable::setTexturesToDefaults()
 {
+    auto* avatar = avatarOwner();
+    if (!avatar) return;
     for( S32 te = 0; te < TEX_NUM_INDICES; te++ )
     {
         if (LLAvatarAppearance::getDictionary()->getTEWearableType((ETextureIndex) te) == mType)
         {
             LLUUID id = getDefaultTextureImageID((ETextureIndex) te);
-            LLViewerFetchedTexture * image = LLViewerTextureManager::getFetchedTexture( id );
+            LLViewerFetchedTexture * image = mNativeOwned ? nullptr : LLViewerTextureManager::getFetchedTexture( id );
             if( mTEMap.find(te) == mTEMap.end() )
             {
                 mTEMap[te] = new LLLocalTextureObject(image, id);
-                createLayers(te, gAgentAvatarp);
+                createLayers(te, avatar);
             }
             else
             {
@@ -326,6 +345,13 @@ LLUUID LLViewerWearable::getDefaultTextureImageID(ETextureIndex index) const
 //virtual
 void LLViewerWearable::writeToAvatar(LLAvatarAppearance *avatarp)
 {
+    if (mNativeOwned)
+    {
+        if (avatarOwner() == avatarp && avatarp)
+            LLWearable::writeToAvatar(avatarp);
+        return;
+    }
+
     LLVOAvatarSelf* viewer_avatar = dynamic_cast<LLVOAvatarSelf*>(avatarp);
 
     if (!avatarp || !viewer_avatar) return;
@@ -412,7 +438,8 @@ void LLViewerWearable::removeFromAvatar( LLWearableType::EType type, bool upload
 // Definition version is current: removes obsolete enties and creates default values for new ones.
 void LLViewerWearable::copyDataFrom(const LLViewerWearable* src)
 {
-    if (!isAgentAvatarValid()) return;
+    auto* avatar = avatarOwner();
+    if (!avatar) return;
 
     mDefinitionVersion = LLWearable::sCurrentDefinitionVersion;
 
@@ -421,13 +448,13 @@ void LLViewerWearable::copyDataFrom(const LLViewerWearable* src)
     mPermissions = src->mPermissions;
     mSaleInfo = src->mSaleInfo;
 
-    setType(src->mType, gAgentAvatarp);
+    setType(src->mType, avatar);
 
     mSavedVisualParamMap.clear();
     // Deep copy of mVisualParamMap (copies only those params that are current, filling in defaults where needed)
-    for (LLViewerVisualParam* param = (LLViewerVisualParam*) gAgentAvatarp->getFirstVisualParam();
+    for (LLViewerVisualParam* param = (LLViewerVisualParam*) avatar->getFirstVisualParam();
         param;
-        param = (LLViewerVisualParam*) gAgentAvatarp->getNextVisualParam() )
+        param = (LLViewerVisualParam*) avatar->getNextVisualParam() )
     {
         if( (param->getWearableType() == mType) )
         {
@@ -458,11 +485,11 @@ void LLViewerWearable::copyDataFrom(const LLViewerWearable* src)
             else
             {
                 image_id = getDefaultTextureImageID((ETextureIndex) te);
-                image = LLViewerTextureManager::getFetchedTexture( image_id );
+                image = mNativeOwned ? nullptr : LLViewerTextureManager::getFetchedTexture( image_id );
                 mTEMap[te] = new LLLocalTextureObject(image, image_id);
                 mSavedTEMap[te] = new LLLocalTextureObject(image, image_id);
             }
-            createLayers(te, gAgentAvatarp);
+            createLayers(te, avatar);
         }
     }
 
@@ -478,6 +505,7 @@ void LLViewerWearable::setItemID(const LLUUID& item_id)
 
 void LLViewerWearable::revertValues()
 {
+    if (!currentNativeOwner()) return;
     LLWearable::revertValues();
 
     LLSidepanelAppearance *panel = dynamic_cast<LLSidepanelAppearance*>(LLFloaterSidePanelContainer::findPanel("appearance"));
@@ -489,11 +517,13 @@ void LLViewerWearable::revertValues()
 
 void LLViewerWearable::revertValuesWithoutUpdate()
 {
+    if (!currentNativeOwner()) return;
     LLWearable::revertValues();
 }
 
 void LLViewerWearable::saveValues()
 {
+    if (!currentNativeOwner()) return;
     LLWearable::saveValues();
 
     LLSidepanelAppearance *panel = dynamic_cast<LLSidepanelAppearance*>(LLFloaterSidePanelContainer::findPanel("appearance"));
@@ -506,11 +536,20 @@ void LLViewerWearable::saveValues()
 // virtual
 void LLViewerWearable::setUpdated() const
 {
+#if VS_NATIVE_VULKAN
+    if (mNativeOwned)
+    {
+        if (!mNativeCurrent || !mNativeCurrent()) return;
+        if (const auto owner = VSNativeSession::active(); owner && owner->appearance()) owner->appearance()->editedWearable(getItemID());
+    }
+#endif
+
     gInventory.addChangedMask(LLInventoryObserver::LABEL, getItemID());
 }
 
 void LLViewerWearable::refreshName()
 {
+    if (!currentNativeOwner()) return;
     LLUUID item_id = getItemID();
     LLInventoryItem* item = gInventory.getItem(item_id);
     if( item )
@@ -531,10 +570,13 @@ void LLViewerWearable::addToBakedTextureHash(LLMD5& hash) const
 struct LLWearableSaveData
 {
     LLWearableType::EType mType;
+    std::function<bool()> current;
+    std::string filename;
 };
 
 void LLViewerWearable::saveNewAsset() const
 {
+    if (mNativeOwned && !avatarOwner()) return;
 //  LL_INFOS() << "LLViewerWearable::saveNewAsset() type: " << getTypeName() << LL_ENDL;
     //LL_INFOS() << *this << LL_ENDL;
 
@@ -578,6 +620,8 @@ void LLViewerWearable::saveNewAsset() const
          */
          LLWearableSaveData* data = new LLWearableSaveData;
          data->mType = mType;
+         data->current = mNativeCurrent;
+         data->filename = filename;
          gAssetStorage->storeAssetData(filename, mTransactionID, getAssetType(),
                                      &LLViewerWearable::onSaveNewAssetComplete,
                                      (void*)data);
@@ -589,6 +633,12 @@ void LLViewerWearable::onSaveNewAssetComplete(const LLUUID& new_asset_id, void* 
 {
     LLWearableSaveData* data = (LLWearableSaveData*)userdata;
     const std::string& type_name = LLWearableType::getInstance()->getTypeName(data->mType);
+    if(data->current && !data->current())
+    {
+        LLFile::remove(data->filename);
+        delete data;
+        return;
+    }
     if(0 == status)
     {
         // Success
@@ -604,7 +654,7 @@ void LLViewerWearable::onSaveNewAssetComplete(const LLUUID& new_asset_id, void* 
     }
 
     // Delete temp file
-    const std::string src_filename = asset_id_to_filename(new_asset_id, LL_PATH_CACHE);
+    const std::string src_filename = data->filename;
     LLFile::remove(src_filename);
 
     // delete the context data
@@ -649,4 +699,11 @@ std::string asset_id_to_filename(const LLUUID &asset_id, const ELLPath dir_spec)
     asset_id.toString(asset_id_string);
     std::string filename = gDirUtilp->getExpandedFilename(dir_spec,asset_id_string) + ".wbl";
     return filename;
+}
+
+LLAvatarAppearance* LLViewerWearable::avatarOwner() const
+{
+    if (mNativeOwned)
+        return mNativeCurrent && mNativeCurrent() && mNativeAvatarGeneration && mNativeAvatarGeneration == vs_avatar_generation() ? vs_avatar_appearance() : nullptr;
+    return isAgentAvatarValid() ? gAgentAvatarp.get() : nullptr;
 }

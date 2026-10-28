@@ -48,6 +48,7 @@
 #include "lltrace.h"
 #include "llsnapshotmodel.h"
 #include "llpointer.h"
+#include <functional>
 
 #include <boost/signals2.hpp>
 
@@ -66,6 +67,10 @@ class LLImageFormatted;
 class LLHUDIcon;
 class LLWindow;
 class LLRootView;
+class VSVulkanContext;
+class VSUIContext;
+class VSUIAdmission;
+class VSPlainChat;
 class LLWindowListener;
 class LLViewerWindowListener;
 class LLStatsListener;
@@ -120,6 +125,10 @@ public:
     LLVector3d      mPosGlobal;
     LLVector3       mObjectOffset;
     LLUUID          mObjectID;
+#if VS_NATIVE_VULKAN
+    std::function<bool()> mNativeObjectCurrent;
+    std::function<bool()> mNativeRequestCurrent;
+#endif
     LLUUID          mParticleOwnerID;
     LLUUID          mParticleSourceID;
     S32             mObjectFace;
@@ -179,7 +188,16 @@ public:
         Params();
     };
 
-    LLViewerWindow(const Params& p);
+    LLViewerWindow(const Params& p, bool native_vulkan = false);
+    bool isNativeVulkan() const { return mNativeVulkan; }
+    void drawNativeUI();
+    void refreshNativeFonts();
+    void setNativeConnected(bool connected);
+#if VS_NATIVE_VULKAN
+    VSVulkanContext* nativeContext() const { return mVulkanContext.get(); }
+    VSPlainChat* nativeChat() const { return mNativeChat; }
+    bool             nativePick(LLPickInfo&,bool exactObject=false);
+#endif
     virtual ~LLViewerWindow();
 
     void            shutdownViews();
@@ -199,6 +217,7 @@ public:
     //void            resetStatusBarContainer(); // undo changes done by resetStatusBarContainer on initWorldUI()
 
     bool handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK mask, EMouseClickType clicktype, bool down, bool &is_toolmgr_action);
+    bool dispatchAnyMouseClick(LLWindow*,LLCoordGL,MASK,EMouseClickType,bool,bool&,const std::function<bool()>& current);
 
     //
     // LLWindowCallback interface implementation
@@ -434,7 +453,8 @@ public:
                                 bool pick_transparent = false,
                                 bool pick_rigged = false,
                                 bool pick_unselectable = false,
-                                bool pick_reflection_probes = false);
+                                bool pick_reflection_probes = false,
+                                std::function<bool()> operation_current = {});
     LLPickInfo      pickImmediate(S32 x, S32 y, bool pick_transparent, bool pick_rigged = false, bool pick_particle = false, bool pick_unselectable = true, bool pick_reflection_probe = false);
     LLHUDIcon* cursorIntersectIcon(S32 mouse_x, S32 mouse_y, F32 depth,
                                            LLVector4a* intersection);
@@ -506,6 +526,27 @@ private:
     LLRect          getChatConsoleRect(); // Get optimal cosole rect.
 
 private:
+    void initNativeWindow(const Params& p);
+    void initNativeBase();
+    void reshapeNative(S32 width, S32 height, F32 system_scale = 0.f);
+    bool nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type, bool down,bool* toolAction=nullptr);
+    void nativeHover(LLCoordGL pos, MASK mask);
+    void nativeHoverUpdate(MASK mask);
+    void updateToolTip(bool handled, LLUICtrl* top_ctrl, LLMouseHandler* mouse_captor, MASK mask);
+    void updateMouseHoverViews(S32 x, S32 y, MASK mask, bool enabled);
+    void nativeScroll(S32 clicks, bool horizontal = false);
+    bool mNativeVulkan = false;
+    bool mNativeMouseFrameKnown=false;
+    U32 mNativeMouseFrame=0;
+    bool mNativeCameraDrag = false;
+#if VS_NATIVE_VULKAN
+    std::unique_ptr<VSVulkanContext> mVulkanContext;
+    std::unique_ptr<VSUIAdmission> mNativeAdmission;
+    std::unique_ptr<VSUIContext> mNativeUI;
+    VSPlainChat* mNativeChat = nullptr; // Owned by the native root, like required startup panels.
+    F32 mNativeSystemScale = 1.f;
+    bool mNativeConnectedUI = false;
+#endif
     LLWindow*       mWindow;                        // graphical window object
     bool            mActive;
     bool            mUIVisible;
@@ -519,7 +560,7 @@ private:
     LLRect          mWindowRectScaled;          // whole window, scaled by UI size
     LLRect          mWorldViewRectRaw;          // area of screen for 3D world
     LLRect          mWorldViewRectScaled;       // area of screen for 3D world scaled by UI size
-    LLRootView*     mRootView;                  // a view of size mWindowRectRaw, containing all child views
+    LLRootView*     mRootView = nullptr;                  // a view of size mWindowRectRaw, containing all child views
     MainPanel*      mMainView;                  // a view of size mWindowRectRaw, directly containing the base elements of the ui tree
     LLView*         mFloaterSnapRegion = nullptr;
     LLView*         mNavBarContainer = nullptr;
@@ -568,9 +609,9 @@ private:
     LLHandle<LLView> mToolBarHolder;        // container for toolbars
     LLHandle<LLView> mHintHolder;           // container for hints
     LLHandle<LLView> mLoginPanelHolder;     // container for login panel
-    LLPopupView*    mPopupView;         // container for transient popups
+    LLPopupView*    mPopupView = nullptr;         // container for transient popups
 
-    class LLDebugText* mDebugText; // Internal class for debug text
+    class LLDebugText* mDebugText = nullptr; // Internal class for debug text
 
     bool            mResDirty;
     bool            mStatesDirty;

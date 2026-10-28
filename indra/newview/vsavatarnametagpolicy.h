@@ -476,11 +476,15 @@ struct VSAvatarNameTagPolicy
                 LLFontGL::getFontSansSerifSmall());
         }
 
-//      if (LLVOAvatar::sRenderGroupTitles
+        // RENDER_GROUP_TITLE_SELF / _ALWAYS of the enum in llvoavatar.cpp.
+        constexpr S32 render_group_title_self = 1, render_group_title_always = 2;
+        bool render_title = (LLVOAvatar::sRenderGroupTitles == render_group_title_always) ||
+                            (avatar.isSelf() && (LLVOAvatar::sRenderGroupTitles == render_group_title_self));
+
+//      if (render_title && title && title->getString() && title->getString()[0] != '\0')
 // [RLVa:KB] - Checked: RLVa-1.2.2
-        if (LLVOAvatar::sRenderGroupTitles && fRlvShowAvName
+        if (render_title && fRlvShowAvName && title && title->getString() && title->getString()[0] != '\0')
 // [/RLVa:KB]
-            && title && title->getString() && title->getString()[0] != '\0')
         {
             std::string title_str = title->getString();
             LLStringFn::replace_ascii_controlchars(title_str,LL_UNKNOWN_CHAR);

@@ -25,6 +25,10 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "llpanelprofile.h"
 
 // Common
@@ -110,6 +114,11 @@ static const std::string PROFILE_IMAGE_UPLOAD_CAP = "UploadAgentProfileImage";
 
 LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::string path_to_image, LLHandle<LLPanel> *handle)
 {
+#if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    if (!native_guard()) return LLUUID::null;
+#endif
+
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("post_profile_image_coro", httpPolicy);
@@ -128,6 +137,9 @@ LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::stri
     {
         // Stage 1: Request uploader URL
         LLSD result = httpAdapter->postAndSuspend(httpRequest, cap_url, first_data, httpOpts, httpHeaders);
+#if VS_NATIVE_VULKAN
+        if (!native_guard()) return LLUUID::null;
+#endif
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -174,6 +186,9 @@ LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::stri
         uploaderhttpOpts->setFollowRedirects(true);
 
         result = httpAdapter->postFileAndSuspend(uploaderhttpRequest, uploader_cap, path_to_image, uploaderhttpOpts, uploaderhttpHeaders);
+#if VS_NATIVE_VULKAN
+        if (!native_guard()) return LLUUID::null;
+#endif
 
         httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -616,6 +631,11 @@ void LLFloaterProfilePermissions::onOpen(const LLSD& key)
     mAvatarNameCacheConnection = LLAvatarNameCache::get(mAvatarID, boost::bind(&LLFloaterProfilePermissions::onAvatarNameCache, this, _1, _2));
 }
 
+bool LLPanelProfileSecondLife::isPermissionsFloaterType(const std::type_info& type)
+{
+    return type == typeid(LLFloaterProfilePermissions);
+}
+
 void LLFloaterProfilePermissions::draw()
 {
     // drawFrustum
@@ -685,7 +705,7 @@ void LLFloaterProfilePermissions::confirmModifyRights(bool grant)
     LLSD args;
     args["NAME"] = LLSLURL("agent", mAvatarID, "completename").getSLURLString();
     LLNotificationsUtil::add(grant ? "GrantModifyRights" : "RevokeModifyRights", args, LLSD(),
-        boost::bind(&LLFloaterProfilePermissions::rightsConfirmationCallback, this, _1, _2));
+        vs_native_im_ui_callback(this, boost::bind(&LLFloaterProfilePermissions::rightsConfirmationCallback, this, _1, _2)));
 }
 
 void LLFloaterProfilePermissions::onCommitSeeOnlineRights()
@@ -1384,6 +1404,24 @@ void LLPanelProfileSecondLife::setProfileImageUploaded(const LLUUID &image_asset
     mSecondLifePic->setValue(image_asset_id);
     mImageId = image_asset_id;
 
+    #if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        auto image = LLUI::getUIImageByID(image_asset_id);
+        if (image)
+        {
+            const auto handle = getHandle(); const auto guard = vs_native_im_guard();
+            mNativeImageConnection = image->addLoadedCallback([handle, guard]()
+            {
+                if (auto* panel = dynamic_cast<LLPanelProfileSecondLife*>(handle.get()); guard() && panel)
+                    panel->onImageLoaded(true, nullptr);
+            });
+            onImageLoaded(true, nullptr);
+        }
+    }
+    else
+    #endif
+    {
     LLViewerFetchedTexture* imagep = LLViewerTextureManager::getFetchedTexture(image_asset_id);
     if (imagep->getFullHeight())
     {
@@ -1398,6 +1436,7 @@ void LLPanelProfileSecondLife::setProfileImageUploaded(const LLUUID &image_asset
             new LLHandle<LLPanel>(getHandle()),
             NULL,
             false);
+    }
     }
 
     LLFloater *floater = mFloaterProfileTextureHandle.get();
@@ -1471,6 +1510,24 @@ void LLPanelProfileSecondLife::fillCommonData(const LLAvatarData* avatar_data)
     }
 
     // Will be loaded as a LLViewerFetchedTexture::BOOST_UI due to mSecondLifePic
+    #if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        auto image = LLUI::getUIImageByID(avatar_data->image_id);
+        if (image)
+        {
+            const auto handle = getHandle(); const auto guard = vs_native_im_guard();
+            mNativeImageConnection = image->addLoadedCallback([handle, guard]()
+            {
+                if (auto* panel = dynamic_cast<LLPanelProfileSecondLife*>(handle.get()); guard() && panel)
+                    panel->onImageLoaded(true, nullptr);
+            });
+            onImageLoaded(true, nullptr);
+        }
+    }
+    else
+    #endif
+    {
     LLViewerFetchedTexture* imagep = LLViewerTextureManager::getFetchedTexture(avatar_data->image_id);
     if (imagep->getFullHeight())
     {
@@ -1485,6 +1542,7 @@ void LLPanelProfileSecondLife::fillCommonData(const LLAvatarData* avatar_data)
                                   new LLHandle<LLPanel>(getHandle()),
                                   NULL,
                                   false);
+    }
     }
 
     if (getSelfProfile())
@@ -1776,7 +1834,17 @@ void LLPanelProfileSecondLife::onImageLoaded(bool success, LLViewerFetchedTextur
     // <FS:Ansariel> Fix LL UI/UX design accident
     //LLRect imageRect = mSecondLifePicLayout->getRect();
     LLRect imageRect = mSecondLifePic->getRect();
-    if (!success || imagep->getFullWidth() == imagep->getFullHeight())
+    S32 width = 0, height = 0;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto image = LLUI::getUIImageByID(mImageId);
+        if (image) { width = image->getWidth(); height = image->getHeight(); }
+    }
+    else
+#endif
+    if (imagep) { width = imagep->getFullWidth(); height = imagep->getFullHeight(); }
+    if (!success || width == height)
     {
         // <FS:Ansariel> Fix LL UI/UX design accident
         //mSecondLifePicLayout->reshape(imageRect.getWidth(), imageRect.getWidth());
@@ -2588,12 +2656,13 @@ void LLPanelProfileSecondLife::onShowTexturePicker()
 
             mFloaterTexturePickerHandle = texture_floaterp->getHandle();
 
-            texture_floaterp->setOnFloaterCommitCallback([this](LLTextureCtrl::ETexturePickOp op, LLPickerSource source, const LLUUID& asset_id, const LLUUID&, const LLUUID&)
+            const auto weak = getHandle();
+            const auto current = vs_native_im_guard();
+            texture_floaterp->setOnFloaterCommitCallback([weak, current](LLTextureCtrl::ETexturePickOp op, LLPickerSource source, const LLUUID& asset_id, const LLUUID&, const LLUUID&)
             {
-                if (op == LLTextureCtrl::TEXTURE_SELECT)
-                {
-                    onCommitProfileImage(asset_id);
-                }
+                if (!current()) return;
+                auto* panel = dynamic_cast<LLPanelProfileSecondLife*>(weak.get());
+                if (panel && op == LLTextureCtrl::TEXTURE_SELECT) panel->onCommitProfileImage(asset_id);
             });
             texture_floaterp->setLocalTextureEnabled(false);
             texture_floaterp->setBakeTextureEnabled(false);
@@ -2650,6 +2719,24 @@ void LLPanelProfileSecondLife::onCommitProfileImage(const LLUUID& id)
         }
 
         // <FS:Ansariel> Fix LL UI/UX design accident
+        #if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            auto image = LLUI::getUIImageByID(mImageId);
+            if (image)
+            {
+                const auto handle = getHandle(); const auto guard = vs_native_im_guard();
+                mNativeImageConnection = image->addLoadedCallback([handle, guard]()
+                {
+                    if (auto* panel = dynamic_cast<LLPanelProfileSecondLife*>(handle.get()); guard() && panel)
+                        panel->onImageLoaded(true, nullptr);
+                });
+                onImageLoaded(true, nullptr);
+            }
+        }
+        else
+        #endif
+        {
         LLViewerFetchedTexture* imagep = LLViewerTextureManager::getFetchedTexture(mImageId);
         if (imagep->getFullHeight())
         {
@@ -2664,6 +2751,7 @@ void LLPanelProfileSecondLife::onCommitProfileImage(const LLUUID& id)
                 new LLHandle<LLPanel>(getHandle()),
                 NULL,
                 false);
+        }
         }
         // </FS:Ansariel>
 
@@ -2999,12 +3087,13 @@ void LLPanelProfileFirstLife::onChangePhoto()
 
             mFloaterTexturePickerHandle = texture_floaterp->getHandle();
 
-            texture_floaterp->setOnFloaterCommitCallback([this](LLTextureCtrl::ETexturePickOp op, LLPickerSource source, const LLUUID& asset_id, const LLUUID&, const LLUUID&)
+            const auto weak = getHandle();
+            const auto current = vs_native_im_guard();
+            texture_floaterp->setOnFloaterCommitCallback([weak, current](LLTextureCtrl::ETexturePickOp op, LLPickerSource source, const LLUUID& asset_id, const LLUUID&, const LLUUID&)
             {
-                if (op == LLTextureCtrl::TEXTURE_SELECT)
-                {
-                    onCommitPhoto(asset_id);
-                }
+                if (!current()) return;
+                auto* panel = dynamic_cast<LLPanelProfileFirstLife*>(weak.get());
+                if (panel && op == LLTextureCtrl::TEXTURE_SELECT) panel->onCommitPhoto(asset_id);
             });
             texture_floaterp->setLocalTextureEnabled(false);
             texture_floaterp->setBakeTextureEnabled(false);
@@ -3048,7 +3137,10 @@ void LLPanelProfileFirstLife::onCommitPhoto(const LLUUID& id)
 
     if (!gAgent.getRegionCapability(PROFILE_PROPERTIES_CAP).empty())
     {
-        if (!saveAgentUserInfoCoro("fl_image_id", id))
+        if (!saveAgentUserInfoCoro("fl_image_id", id, [](bool success)
+            {
+                if (success) LLAvatarPropertiesProcessor::instance().sendAvatarPropertiesRequest(gAgentID);
+            }))
             return;
 
         mImageId = id;
@@ -3387,7 +3479,7 @@ void LLPanelProfileNotes::onSaveNotesChanges()
 #endif
 // </FS:Beq>
 
-    FSRadar::getInstance()->updateNotes(getAvatarId(), mCurrentNotes);     // <FS:Zi> Update notes in radar when edited
+    if (FSRadar::instanceExists()) FSRadar::instance().updateNotes(getAvatarId(), mCurrentNotes);     // <FS:Zi> Update notes in radar when edited
 
     mSaveChanges->setEnabled(false);
     mDiscardChanges->setEnabled(false);
@@ -3396,6 +3488,7 @@ void LLPanelProfileNotes::onSaveNotesChanges()
 
 void LLPanelProfileNotes::onDiscardNotesChanges()
 {
+    mHasUnsavedChanges = false;
     setNotesText(mCurrentNotes);
 }
 

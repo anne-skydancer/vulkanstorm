@@ -34,9 +34,12 @@
 
 #include "lltool.h"
 #include "lltextureentry.h"
+#include "llhandle.h"
 #include <boost/signals2.hpp>
+#include <functional>
 
 class LLViewerObject;
+class LLView;
 class LLPickInfo;
 
 class LLToolPipette
@@ -50,14 +53,25 @@ public:
     virtual bool    handleMouseUp(S32 x, S32 y, MASK mask) override;
     virtual bool    handleHover(S32 x, S32 y, MASK mask) override;
     virtual bool    handleToolTip(S32 x, S32 y, MASK mask) override;
+    void onMouseCaptureLost() override;
 
     typedef boost::signals2::signal<void (LLPointer<LLViewerObject> obj, S32 te_index)> signal_t;
     boost::signals2::connection setToolSelectCallback(const signal_t::slot_type& cb) { return mSignal.connect(cb); }
     void setResult(bool success, const std::string& msg);
 
+    void setNativeActive(bool,LLView* consumer=nullptr,std::function<bool()> operation={});
+    bool nativeConsumer(const LLView*) const;
+    bool ownsNativeConsumer(const LLView* view) const {return mNativeConsumer.get()==view;}
+    void handleDeselect() override;
+    bool nativeActive() const;
     static void pickCallback(const LLPickInfo& pick_info);
 
 protected:
+    bool nativeSample(S32 x, S32 y, MASK mask);
+    LLHandle<LLView> mNativeConsumer;
+    std::function<bool()> mNativeOperation;
+    bool mNativeHighlightOwned=false;
+    std::function<bool()> mNativeAccount;
     signal_t        mSignal;
     bool            mSuccess;
     std::string     mTooltipMsg;

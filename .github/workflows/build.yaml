@@ -68,6 +68,8 @@ jobs:
       # dispatched experimental build of vkstorm-canary.
       VIEWER_BUILD_TYPE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)) && 'Release' || 'RelWithDebInfo' }}
       VIEWER_PACKAGE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)) && 'ON' || 'OFF' }}
+      VIEWER_BUILD_TYPE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life')) && 'Release' || 'RelWithDebInfo' }}
+      VIEWER_PACKAGE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life')) && 'ON' || 'OFF' }}
       AUTOBUILD_ADDRSIZE: 64
       AUTOBUILD_CONFIGURATION: ReleaseFS_open
       AUTOBUILD_VSVER: "170"

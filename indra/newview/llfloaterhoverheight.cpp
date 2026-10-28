@@ -29,7 +29,14 @@
 
 #include "llfloaterhoverheight.h"
 #include "llkeyboard.h"
+#include "vsnativeim.h"
+#include "vsappearanceui.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
 #include "llsliderctrl.h"
+#include "llfocusmgr.h"
 #include "llviewercontrol.h"
 #include "llsdserialize.h"
 #include "llagent.h"
@@ -42,6 +49,7 @@
 
 LLFloaterHoverHeight::LLFloaterHoverHeight(const LLSD& key) : LLFloater(key)
 {
+    mAccountCurrent = vs_native_im_guard();
 }
 
 void LLFloaterHoverHeight::syncFromPreferenceSetting(void *user_data, bool update_offset)
@@ -71,7 +79,7 @@ bool LLFloaterHoverHeight::postBuild()
     sldrCtrl->setMaxValue(MAX_HOVER_Z);
     sldrCtrl->setSliderMouseUpCallback(boost::bind(&LLFloaterHoverHeight::onFinalCommit,this));
     sldrCtrl->setSliderEditorCommitCallback(boost::bind(&LLFloaterHoverHeight::onFinalCommit,this));
-    childSetCommitCallback("HoverHeightSlider", &LLFloaterHoverHeight::onSliderMoved, NULL);
+    childSetCommitCallback("HoverHeightSlider", &LLFloaterHoverHeight::onSliderMoved, this);
     // <FS:Zi> FIRE-33859 - Add +/- and reset buttons to hover height slider
     childSetCommitCallback("PlusButton", boost::bind(&LLFloaterHoverHeight::onPlusButtonClicked, this), nullptr);
     childSetCommitCallback("MinusButton", boost::bind(&LLFloaterHoverHeight::onMinusButtonClicked, this), nullptr);
@@ -83,7 +91,8 @@ bool LLFloaterHoverHeight::postBuild()
     // Update slider on future pref changes.
     if (gSavedPerAccountSettings.getControl("AvatarHoverOffsetZ"))
     {
-        gSavedPerAccountSettings.getControl("AvatarHoverOffsetZ")->getCommitSignal()->connect(boost::bind(&syncFromPreferenceSetting, this, false));
+        mPreferenceChanged = gSavedPerAccountSettings.getControl("AvatarHoverOffsetZ")->getCommitSignal()->connect(
+            vs_appearance_ui_callback(this, [this](auto&&...) { syncFromPreferenceSetting(this, false); }));
     }
     else
     {
@@ -104,6 +113,8 @@ bool LLFloaterHoverHeight::postBuild()
 
 void LLFloaterHoverHeight::onClose(bool app_quitting)
 {
+    mNativeFeaturesChanged.disconnect();
+    mNativeRegionChanged.disconnect();
     if (mRegionChangedSlot.connected())
     {
         mRegionChangedSlot.disconnect();
@@ -113,6 +124,21 @@ void LLFloaterHoverHeight::onClose(bool app_quitting)
 // static
 void LLFloaterHoverHeight::onSliderMoved(LLUICtrl* ctrl, void* userData)
 {
+    auto* view = static_cast<LLFloaterHoverHeight*>(userData);
+    if (view && !view->mAccountCurrent()) return;
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (!view || !owner->appearance() || !owner->appearance()->hoverEnabled()) return;
+        auto* slider = static_cast<LLSliderCtrl*>(ctrl);
+        const F32 value = slider->getValueF32();
+        if (owner->simulatorFeatures()["AvatarHoverHeightEnabled"].asBoolean() && slider->isMouseHeldDown())
+            owner->appearance()->setHoverHeight(value, false);
+        else
+            gSavedPerAccountSettings.setF32("AvatarHoverOffsetZ", value);
+        return;
+    }
+#endif
     if (isAgentAvatarValid())
     {
         LLSliderCtrl* sldrCtrl = static_cast<LLSliderCtrl*>(ctrl);
@@ -144,11 +170,16 @@ void LLFloaterHoverHeight::onSliderMoved(LLUICtrl* ctrl, void* userData)
 // value entered as text.
 void LLFloaterHoverHeight::onFinalCommit()
 {
+    if (!mAccountCurrent()) return;
     LLSliderCtrl* sldrCtrl = getChild<LLSliderCtrl>("HoverHeightSlider");
     F32 value = sldrCtrl->getValueF32();
     // <FS:Ansariel> Legacy baking avatar z-offset
     LLVector3 offset(0.0, 0.0, llclamp(value,MIN_HOVER_Z,MAX_HOVER_Z));
     gSavedPerAccountSettings.setF32("AvatarHoverOffsetZ",value);
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active(); owner && owner->appearance())
+        owner->appearance()->setHoverHeight(value, true);
+#endif
 }
 
 // <FS:Zi> FIRE-33859 - Add +/- and reset buttons to hover height slider
@@ -190,13 +221,16 @@ void LLFloaterHoverHeight::onButtonClicked(F32 value)
         sldrCtrl->setValue(sldrCtrl->getValueF32() + value);
     }
 
-    onSliderMoved(sldrCtrl, nullptr);
+    onSliderMoved(sldrCtrl, this);
     onFinalCommit();
 }
 // </FS:Zi>
 
 void LLFloaterHoverHeight::onRegionChanged()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { updateEditEnabled(); return; }
+#endif
     LLViewerRegion *region = gAgent.getRegion();
     if (region && region->simulatorFeaturesReceived())
     {
@@ -219,9 +253,19 @@ void LLFloaterHoverHeight::onSimulatorFeaturesReceived(const LLUUID &region_id)
 
 void LLFloaterHoverHeight::updateEditEnabled()
 {
-    bool enabled = gAgent.getRegion() && gAgent.getRegion()->avatarHoverHeightEnabled();
+    bool enabled = false;
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+        enabled = mAccountCurrent() && owner->appearance() && owner->appearance()->hoverEnabled();
+    else
+#endif
+    enabled = gAgent.getRegion() && gAgent.getRegion()->avatarHoverHeightEnabled();
     // <FS:Ansariel> Legacy baking avatar z-offset
-    if (!enabled && isAgentAvatarValid() && !gAgentAvatarp->isUsingServerBakes())
+    if (!enabled &&
+#if VS_NATIVE_VULKAN
+        !VSNativeSession::active() &&
+#endif
+        isAgentAvatarValid() && !gAgentAvatarp->isUsingServerBakes())
     {
         enabled = true;
     }
@@ -240,4 +284,32 @@ void LLFloaterHoverHeight::updateEditEnabled()
     {
         syncFromPreferenceSetting(this);
     }
+}
+
+
+
+void LLFloaterHoverHeight::onOpen(const LLSD&)
+{
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        const auto update = vs_appearance_ui_callback(this, [this] { updateEditEnabled(); });
+        mNativeFeaturesChanged = owner->observeSimulatorFeatures(update);
+        mNativeRegionChanged = owner->observeCurrentRegion(update);
+    }
+#endif
+    onRegionChanged();
+}
+void LLFloaterHoverHeight::draw()
+{
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        // The real self appearance may become available after the floater.
+        // Preserve an in-progress slider preview while refreshing admission.
+        auto* slider = getChild<LLSliderCtrl>("HoverHeightSlider");
+        if (!slider->isMouseHeldDown() && !gFocusMgr.childHasKeyboardFocus(slider)) updateEditEnabled();
+    }
+#endif
+    LLFloater::draw();
 }

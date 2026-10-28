@@ -152,6 +152,7 @@ protected:
     bool mByteCounterDirty = false;
     // </FS>
 
+    bool mTaskSaveFailed = false;
     LLUUID mAssetID;
 
     LLUUID mObjectID;

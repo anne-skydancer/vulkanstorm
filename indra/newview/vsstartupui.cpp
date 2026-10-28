@@ -363,7 +363,6 @@
 #include "llfloateravatarwelcomepack.h"
 #include "llfloatermemleak.h"
 #include "llfloateruipreview.h"
-#include "llfloaterpostprocess.h"
 #include "lggbeammapfloater.h"
 #include "lggbeamcolormapfloater.h"
 #include "llfloaterinventorythumbnailshelper.h"
@@ -402,7 +401,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             const bool admitted =
                 // These existing controllers use shared UI, local settings,
                 // account inventory or the already-owned browser/audio service.
-                t==typeid(LLFloaterPostProcess) || LLFloaterUIPreviewUtil::isNativeType(t) || t==typeid(LLFloaterSceneLoadStats) || t==typeid(LLFloaterSLappTest) ||
+                LLFloaterUIPreviewUtil::isNativeType(t) || t==typeid(LLFloaterSceneLoadStats) || t==typeid(LLFloaterSLappTest) ||
                 t==typeid(LLFloaterAvatarWelcomePack) || t==typeid(LLFloaterMemLeak) ||
                 t==typeid(lggBeamMapFloater) || t==typeid(lggBeamColorMapFloater) || t==typeid(LLFloaterScriptPreview) ||
                 t==typeid(LLFloaterGodTools) || t==typeid(LLPanelGridTools) || t==typeid(LLPanelRegionTools) ||

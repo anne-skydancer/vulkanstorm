@@ -25,11 +25,13 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsbakedtexturepolicy.h"
 #include "vsregionlimits.h"
 #include "vsobjectinteraction.h"
 
 #include "llviewerobject.h"
 #include "llscripteditorws.h"
+#include "vstaskinventorycontroller.h"
 
 #include "llaudioengine.h"
 #include "indra_constants.h"
@@ -57,6 +59,7 @@
 #include "object_flags.h"
 
 #include "llaudiosourcevo.h"
+#include "vsobjectsoundcontroller.h"
 #include "llagent.h"
 #include "llagentcamera.h"
 #include "llagentwearables.h"
@@ -2847,91 +2850,29 @@ void LLViewerObject::deleteInventoryItem(const LLUUID& item_id)
     }
 }
 
-void LLViewerObject::doUpdateInventory(
-    LLPointer<LLViewerInventoryItem>& item,
-    U8 key,
-    bool is_new)
+struct LLViewerObject::TaskInventoryPeer
 {
-    LLViewerInventoryItem* old_item = NULL;
-    if(TASK_INVENTORY_ITEM_KEY == key)
-    {
-        // <FS:ND> Do not use C-Style cast for polymorphic upcasting
-//      old_item = (LLViewerInventoryItem*)getInventoryObject(item->getUUID());
-        old_item = dynamic_cast<LLViewerInventoryItem*>(getInventoryObject(item->getUUID()));
-        // </FS:ND>
-    }
-    else if(TASK_INVENTORY_ASSET_KEY == key)
-    {
-        old_item = getInventoryItemByAsset(item->getAssetUUID());
-    }
-    LLUUID item_id;
-    LLUUID new_owner;
-    LLUUID new_group;
-    bool group_owned = false;
-    if(old_item)
-    {
-        item_id = old_item->getUUID();
-        new_owner = old_item->getPermissions().getOwner();
-        new_group = old_item->getPermissions().getGroup();
-        group_owned = old_item->getPermissions().isGroupOwned();
-        old_item = NULL;
-    }
-    else
-    {
-        item_id = item->getUUID();
-    }
-    if(!is_new && mInventory)
-    {
-        // Attempt to update the local inventory. If we can get the
-        // object perm, we have perfect visibility, so we want the
-        // serial number to match. Otherwise, take our best guess and
-        // make sure that the serial number does not match.
-        deleteInventoryItem(item_id);
-        LLPermissions perm(item->getPermissions());
-        LLPermissions* obj_perm = LLSelectMgr::getInstance()->findObjectPermissions(this);
-        bool is_atomic = (S32)LLAssetType::AT_OBJECT != item->getType();
-        if(obj_perm)
-        {
-            perm.setOwnerAndGroup(LLUUID::null, obj_perm->getOwner(), obj_perm->getGroup(), is_atomic);
-        }
-        else
-        {
-            if(group_owned)
-            {
-                perm.setOwnerAndGroup(LLUUID::null, new_owner, new_group, is_atomic);
-            }
-            else if(!new_owner.isNull())
-            {
-                // The object used to be in inventory, so we can
-                // assume the owner and group will match what they are
-                // there.
-                perm.setOwnerAndGroup(LLUUID::null, new_owner, new_group, is_atomic);
-            }
-            // *FIX: can make an even better guess by using the mPermGroup flags
-            else if(permYouOwner())
-            {
-                // best guess.
-                perm.setOwnerAndGroup(LLUUID::null, gAgent.getID(), item->getPermissions().getGroup(), is_atomic);
-                --mExpectedInventorySerialNum;
-            }
-            else
-            {
-                // dummy it up.
-                perm.setOwnerAndGroup(LLUUID::null, LLUUID::null, LLUUID::null, is_atomic);
-                --mExpectedInventorySerialNum;
-            }
-        }
-        LLViewerInventoryItem* oldItem = item;
-        LLViewerInventoryItem* new_item = new LLViewerInventoryItem(oldItem);
-        new_item->setPermissions(perm);
-        mInventory->push_front(new_item);
-        doInventoryCallback();
-        ++mExpectedInventorySerialNum;
-    }
-    else if (is_new)
-    {
-        ++mExpectedInventorySerialNum;
-    }
+    LLViewerObject& object;
+    const LLUUID& id() const { return object.mID; }
+    U32 localID() const { return object.mLocalID; }
+    const LLHost& host() const { return object.mRegionp->getHost(); }
+    bool hasRegion() const { return object.mRegionp != nullptr; }
+    LLInventoryObject::object_list_t* inventory() const { return object.mInventory; }
+    S16& expectedSerial() { return object.mExpectedInventorySerialNum; }
+    LLInventoryObject* getInventoryObject(const LLUUID& id) { return object.getInventoryObject(id); }
+    LLViewerInventoryItem* getInventoryItemByAsset(const LLUUID& id) { return object.getInventoryItemByAsset(id); }
+    void deleteInventoryItem(const LLUUID& id) { object.deleteInventoryItem(id); }
+    void doInventoryCallback() { object.doInventoryCallback(); }
+    bool permYouOwner() const { return object.permYouOwner(); }
+    LLPermissions* objectPermissions() { return LLSelectMgr::getInstance()->findObjectPermissions(&object); }
+    void doUpdateInventory(LLPointer<LLViewerInventoryItem>& item, U8 key, bool is_new)
+    { object.doUpdateInventory(item, key, is_new); }
+};
+
+void LLViewerObject::doUpdateInventory(LLPointer<LLViewerInventoryItem>& item, U8 key, bool is_new)
+{
+    TaskInventoryPeer peer{*this};
+    vs_do_update_task_inventory(peer, item, key, is_new);
 }
 
 // save a script, which involves removing the old one, and rezzing
@@ -2995,8 +2936,7 @@ void LLViewerObject::saveScript(const LLViewerInventoryItem* item,
     doUpdateInventory(task_item, TASK_INVENTORY_ITEM_KEY, is_new);
 }
 
-void LLViewerObject::moveInventory(const LLUUID& folder_id,
-                                   const LLUUID& item_id)
+void LLViewerObject::moveInventory(const LLUUID& folder_id, const LLUUID& item_id)
 {
     LL_DEBUGS() << "LLViewerObject::moveInventory " << item_id << LL_ENDL;
     if (!mRegionp)
@@ -3901,17 +3841,8 @@ void LLViewerObject::updateInventory(
 
 void LLViewerObject::updateInventoryLocal(LLInventoryItem* item, U8 key)
 {
-    LLPointer<LLViewerInventoryItem> task_item =
-        new LLViewerInventoryItem(item->getUUID(), mID, item->getPermissions(),
-                                  item->getAssetUUID(), item->getType(),
-                                  item->getInventoryType(),
-                                  item->getName(), item->getDescription(),
-                                  item->getSaleInfo(), item->getFlags(),
-                                  item->getCreationDate());
-
-    // do the internal logic
-    const bool is_new = false;
-    doUpdateInventory(task_item, key, is_new);
+    TaskInventoryPeer peer{*this};
+    vs_update_task_inventory_local(peer, item, key);
 }
 
 LLInventoryObject* LLViewerObject::getInventoryObject(const LLUUID& item_id)
@@ -4038,16 +3969,10 @@ LLViewerInventoryItem* LLViewerObject::getInventoryItemByAsset(const LLUUID& ass
     return rv;
 }
 
-void LLViewerObject::updateViewerInventoryAsset(
-                    const LLViewerInventoryItem* item,
-                    const LLUUID& new_asset)
+void LLViewerObject::updateViewerInventoryAsset(const LLViewerInventoryItem* item, const LLUUID& new_asset)
 {
-    LLPointer<LLViewerInventoryItem> task_item =
-        new LLViewerInventoryItem(item);
-    task_item->setAssetUUID(new_asset);
-
-    // do the internal logic
-    doUpdateInventory(task_item, TASK_INVENTORY_ITEM_KEY, false);
+    TaskInventoryPeer peer{*this};
+    vs_update_task_inventory_asset(peer, item, new_asset);
 }
 
 void LLViewerObject::setPixelAreaAndAngle(LLAgent &agent)
@@ -5499,36 +5424,16 @@ void LLViewerObject::sendTEUpdate() const
 
 LLViewerTexture* LLViewerObject::getBakedTextureForMagicId(const LLUUID& id)
 {
-    if (!LLAvatarAppearanceDefines::LLAvatarAppearanceDictionary::isBakedImageId(id))
+    struct Service
     {
-        return NULL;
-    }
-
-    LLViewerObject *root = getRootEdit();
-    if (root && root->isAnimatedObject())
-    {
-        return LLViewerTextureManager::getFetchedTexture(id, FTT_DEFAULT, true, LLGLTexture::BOOST_NONE, LLViewerTexture::LOD_TEXTURE);
-    }
-
-    LLVOAvatar* avatar = getAvatar();
-    if (avatar && !isHUDAttachment())
-    {
-        LLAvatarAppearanceDefines::EBakedTextureIndex texIndex = LLAvatarAppearanceDefines::LLAvatarAppearanceDictionary::assetIdToBakedTextureIndex(id);
-        LLViewerTexture* bakedTexture = avatar->getBakedTexture(texIndex);
-        if (bakedTexture == NULL || bakedTexture->isMissingAsset())
-        {
-            return LLViewerTextureManager::getFetchedTexture(IMG_DEFAULT, FTT_DEFAULT, true, LLGLTexture::BOOST_NONE, LLViewerTexture::LOD_TEXTURE);
-        }
-        else
-        {
-            return bakedTexture;
-        }
-    }
-    else
-    {
-        return LLViewerTextureManager::getFetchedTexture(id, FTT_DEFAULT, true, LLGLTexture::BOOST_NONE, LLViewerTexture::LOD_TEXTURE);
-    }
-
+        using Image=LLViewerTexture*;
+        Image fetch(const LLUUID& asset)const
+        {return LLViewerTextureManager::getFetchedTexture(asset,FTT_DEFAULT,true,LLGLTexture::BOOST_NONE,LLViewerTexture::LOD_TEXTURE);}
+        Image bake(LLVOAvatar* avatar,LLAvatarAppearanceDefines::EBakedTextureIndex index)const
+        {return avatar->getBakedTexture(index);}
+        bool missing(Image image)const{return image->isMissingAsset();}
+    };
+    return vs_baked_texture_for_magic_id(*this,id,Service{});
 }
 
 void LLViewerObject::updateAvatarMeshVisibility(const LLUUID& id, const LLUUID& old_id)
@@ -6737,102 +6642,11 @@ F32 LLViewerObject::getVObjRadius() const
     return mDrawable.notNull() ? mDrawable->getRadius() : 0.f;
 }
 
-void LLViewerObject::setAttachedSound(const LLUUID &audio_uuid, const LLUUID& owner_id, const F32 gain, const U8 flags)
+void LLViewerObject::setAttachedSound(const LLUUID& audio_uuid, const LLUUID& owner_id, F32 gain, U8 flags)
 {
-    if (!gAudiop)
-    {
-        return;
-    }
-
-    if (audio_uuid.isNull())
-    {
-        if (!mAudioSourcep)
-        {
-            return;
-        }
-        if (mAudioSourcep->isLoop() && !mAudioSourcep->hasPendingPreloads())
-        {
-            // We don't clear the sound if it's a loop, it'll go away on its own.
-            // At least, this appears to be how the scripts work.
-            // The attached sound ID is set to NULL to avoid it playing back when the
-            // object rezzes in on non-looping sounds.
-            //LL_INFOS() << "Clearing attached sound " << mAudioSourcep->getCurrentData()->getID() << LL_ENDL;
-            gAudiop->cleanupAudioSource(mAudioSourcep);
-            mAudioSourcep = NULL;
-        }
-        else if (flags & LL_SOUND_FLAG_STOP)
-        {
-            // Just shut off the sound
-            mAudioSourcep->stop();
-        }
-        return;
-    }
-
-    // <FS:Ansariel> Asset blacklist
-    FSAssetBlacklist& blacklist = FSAssetBlacklist::instance();
-    if (blacklist.isBlacklisted(audio_uuid, LLAssetType::AT_SOUND))
-    {
-        return;
-    }
-    else if (isAttachment() && blacklist.isBlacklisted(owner_id, LLAssetType::AT_SOUND, FSAssetBlacklist::eBlacklistFlag::WORN))
-    {
-        // Attachment sound
-        return;
-    }
-    else if (blacklist.isBlacklisted(owner_id, LLAssetType::AT_SOUND, FSAssetBlacklist::eBlacklistFlag::REZZED))
-    {
-        // Rezzed object sound
-        return;
-    }
-    // </FS:Ansariel>
-
-    if (flags & LL_SOUND_FLAG_LOOP
-        && mAudioSourcep && mAudioSourcep->isLoop() && mAudioSourcep->getCurrentData()
-        && mAudioSourcep->getCurrentData()->getID() == audio_uuid)
-    {
-        //LL_INFOS() << "Already playing this sound on a loop, ignoring" << LL_ENDL;
-        return;
-    }
-
-    // don't clean up before previous sound is done. Solves: SL-33486
-    if ( mAudioSourcep && mAudioSourcep->isDone() )
-    {
-        gAudiop->cleanupAudioSource(mAudioSourcep);
-        mAudioSourcep = NULL;
-    }
-
-    if (mAudioSourcep && mAudioSourcep->isMuted() &&
-        mAudioSourcep->getCurrentData() && mAudioSourcep->getCurrentData()->getID() == audio_uuid)
-    {
-        //LL_INFOS() << "Already having this sound as muted sound, ignoring" << LL_ENDL;
-        return;
-    }
-
-    getAudioSource(owner_id);
-
-    if (mAudioSourcep)
-    {
-        bool queue = flags & LL_SOUND_FLAG_QUEUE;
-        mAudioGain = gain;
-        mAudioSourcep->setGain(gain);
-        mAudioSourcep->setLoop(flags & LL_SOUND_FLAG_LOOP);
-        mAudioSourcep->setSyncMaster(flags & LL_SOUND_FLAG_SYNC_MASTER);
-        mAudioSourcep->setSyncSlave(flags & LL_SOUND_FLAG_SYNC_SLAVE);
-        mAudioSourcep->setQueueSounds(queue);
-        if(!queue) // stop any current sound first to avoid "farts of doom" (SL-1541) -MG
-        {
-            mAudioSourcep->stop();
-        }
-
-        // Play this sound if region maturity permits
-        if( gAgent.canAccessMaturityAtGlobal(this->getPositionGlobal()) )
-        {
-            //LL_INFOS() << "Playing attached sound " << audio_uuid << LL_ENDL;
-            // recheck cutoff radius in case this update was an object-update with new value
-            mAudioSourcep->checkCutOffRadius();
-            mAudioSourcep->play(audio_uuid);
-        }
-    }
+    vs_set_attached_sound(mAudioSourcep, mAudioGain, audio_uuid, owner_id, gain, flags,
+        [this] { return isAttachment(); }, [this] { return getPositionGlobal(); },
+        [this](const LLUUID& owner) { getAudioSource(owner); });
 }
 
 LLAudioSource *LLViewerObject::getAudioSource(const LLUUID& owner_id)

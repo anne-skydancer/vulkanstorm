@@ -27,6 +27,15 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llviewerparcelmgr.h"
+#include "llselectmgr.h"
+#include "vsnativeim.h"
+#include "llappviewer.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "vsworldscene.h"
+#include "vsobjectselection.h"
+#endif
 
 // Library includes
 #include "llaudioengine.h"
@@ -138,6 +147,7 @@ LLViewerParcelMgr::LLViewerParcelMgr()
     mMediaParcelId(0),
     mMediaRegionId(0)
 {
+    mNativeCpu=gViewerWindow ? gViewerWindow->isNativeVulkan() : (LLAppViewer::instance() && LLAppViewer::instance()->isNativeVulkanLogin());
     mCurrentParcel = new LLParcel();
     mCurrentParcelSelection = new LLParcelSelection(mCurrentParcel);
     mFloatingParcelSelection = new LLParcelSelection(mCurrentParcel);
@@ -147,10 +157,19 @@ LLViewerParcelMgr::LLViewerParcelMgr()
     mCollisionParcel = new LLParcel();
 
 // <FS:CR> Aurora Sim
+    if(mNativeCpu)
+    {
+        mParcelsPerEdge=mNativeParcelRows=64;
+        mHighlightSegments=mCollisionSegments=mCollisionBitmap=mAgentParcelOverlay=nullptr;
+        sPackedOverlay=nullptr;mBlockedImage=mPassImage=nullptr;
+    }
+    else
+    {
     // Max region size on Aurora-Sim, 8192, just creating larger buffers, it will still work on Second Life and Opensim
     F32 region_size = 8192.f;
 
     mParcelsPerEdge = S32(  region_size / PARCEL_GRID_STEP_METERS );
+    mNativeParcelRows=mParcelsPerEdge;
     //mParcelsPerEdge = S32(    REGION_WIDTH_METERS / PARCEL_GRID_STEP_METERS );
 // </FS:CR> Aurora Sim
     mHighlightSegments = new U8[(mParcelsPerEdge+1)*(mParcelsPerEdge+1)];
@@ -167,8 +186,12 @@ LLViewerParcelMgr::LLViewerParcelMgr()
     // JC: Resolved a merge conflict here, eliminated
     // mBlockedImage->setAddressMode(LLTexUnit::TAM_WRAP);
     // because it is done in llviewertexturelist.cpp
+    if(!mNativeCpu)
+    {
     mBlockedImage = LLViewerTextureManager::getFetchedTextureFromFile("world/NoEntryLines.png", FTT_LOCAL_FILE, true, LLGLTexture::BOOST_UI);
     mPassImage = LLViewerTextureManager::getFetchedTextureFromFile("world/NoEntryPassLines.png", FTT_LOCAL_FILE, true, LLGLTexture::BOOST_UI);
+    }
+    else {mBlockedImage=nullptr;mPassImage=nullptr;}
 
     S32 overlay_size = mParcelsPerEdge * mParcelsPerEdge / PARCEL_OVERLAY_CHUNKS;
     sPackedOverlay = new U8[overlay_size];
@@ -182,8 +205,10 @@ LLViewerParcelMgr::LLViewerParcelMgr()
 
 // <FS:CR> Aurora Sim
     mParcelsPerEdge = S32(  REGION_WIDTH_METERS / PARCEL_GRID_STEP_METERS );
+    mNativeParcelRows=mParcelsPerEdge;
 // </FS:CR> Aurora Sim
 
+    }
     mTeleportInProgress = true; // the initial parcel update is treated like teleport
 }
 
@@ -214,7 +239,7 @@ LLViewerParcelMgr::~LLViewerParcelMgr()
     delete mHoverParcel;
     mHoverParcel = NULL;
 
-    delete[] mHighlightSegments;
+    if(!mNativeCpu)delete[] mHighlightSegments;
     mHighlightSegments = NULL;
 
 // [SL:KB] - Patch: World-MinimapOverlay | Checked: 2012-06-20 (Catznip-3.3)
@@ -222,7 +247,7 @@ LLViewerParcelMgr::~LLViewerParcelMgr()
     mCollisionBitmap = NULL;
 // [/SL:KB]
 
-    delete[] mCollisionSegments;
+    if(!mNativeCpu)delete[] mCollisionSegments;
     mCollisionSegments = NULL;
 
     delete[] sPackedOverlay;
@@ -263,6 +288,56 @@ LLViewerRegion* LLViewerParcelMgr::getSelectionRegion()
 }
 
 
+bool LLViewerParcelMgr::configureNativeSegments(S32 columns,S32 rows,bool collision)
+{
+#if VS_NATIVE_VULKAN
+    if(!mNativeCpu || columns<=0 || rows<=0 || !gViewerWindow || !gViewerWindow->nativeContext())return false;
+    const auto count=(size_t(columns)+1)*(size_t(rows)+1);
+    auto& storage=collision ? mNativeCollisionStorage : mNativeHighlightStorage;
+    auto& residency=collision ? mNativeCollisionResidency : mNativeHighlightResidency;
+    if(storage.size()!=count)
+    {
+        auto charge=gViewerWindow->nativeContext()->world().reserveSpatialBytes(count);
+        if(!charge)return false;
+        std::vector<U8> next(count,0);storage=std::move(next);residency=std::move(charge);
+    }
+    if(collision)mCollisionSegments=storage.data();else mHighlightSegments=storage.data();
+    return true;
+#else
+    return false;
+#endif
+}
+std::function<bool()> LLViewerParcelMgr::selectionGuard() const
+{
+    const auto account=vs_native_im_guard();const auto target=getSelectionRegionContext();
+    const auto selection=mCurrentParcelSelection;const auto identity=this;
+    const S32 local=mCurrentParcel ? mCurrentParcel->getLocalID() : -1;
+    return [account,target,selection,identity,local]()
+    {
+        if(!account() || !target || !target->current() || !LLViewerParcelMgr::instanceExists())return false;
+        const auto& current=LLViewerParcelMgr::instance();
+        return &current==identity && current.mSelected && current.mRequestResult!=PARCEL_RESULT_NO_DATA &&
+            current.mCurrentParcelSelection==selection && current.mCurrentParcel &&
+            current.mCurrentParcel->getRegionID()==target->getRegionID() && current.mCurrentParcel->getLocalID()==local;
+    };
+}
+std::optional<VSRegionContext> LLViewerParcelMgr::getSelectionRegionContext() const
+{
+    return mSelected ? vs_region_context(mWestSouth) : std::nullopt;
+}
+void LLViewerParcelMgr::resetNativeAccount()
+{
+    mNativeRequests.retire();mNativeAgentBitmap.reset();mNativeSelectionBitmap.reset();mNativeCollisionBitmap.reset();
+    mNativeAgentRegion.reset();mNativeCollisionRegion.reset();
+    mAgentParcelSequenceID=-1;mSelected=false;mRequestResult=PARCEL_RESULT_NO_DATA;mHoverRequestResult=PARCEL_RESULT_NO_DATA;
+    *mCurrentParcel=LLParcel();*mAgentParcel=LLParcel();*mHoverParcel=LLParcel();*mCollisionParcel=LLParcel();
+    mNativeSelectionRequestRegion.reset();mNativeHoverRequestRegion.reset();mNativeAccessRequestRegion.reset();
+    mNativeSelectionRequestHandle=nullptr;mNativeAccessRequestHandle=nullptr;mNativeDwellRequestHandle=nullptr;mNativeDwellRequestRegion.reset();mNativeDwellLocal=-1;
+    std::vector<U8>().swap(mNativeHighlightStorage);std::vector<U8>().swap(mNativeCollisionStorage);mNativeHighlightResidency.reset();mNativeCollisionResidency.reset();
+    mHighlightSegments=mCollisionSegments=nullptr;mCollisionRegionHandle=0;mRenderCollision=false;
+    mTeleportInProgress=true;mTeleportWithinRegion=false;mTeleportInProgressPosition.clearVec();
+    mCurrentParcelSelection->setParcel(nullptr);mFloatingParcelSelection->setParcel(nullptr);
+}
 void LLViewerParcelMgr::getDisplayInfo(S32* area_out, S32* claim_out,
                                        S32* rent_out,
                                        bool* for_sale_out,
@@ -327,8 +402,9 @@ S32 LLViewerParcelMgr::getSelectedArea() const
 
 void LLViewerParcelMgr::resetSegments(U8* segments)
 {
+    if(mNativeCpu && !segments)return;
     S32 i;
-    S32 count = (mParcelsPerEdge+1)*(mParcelsPerEdge+1);
+    S32 count = (mParcelsPerEdge+1)*((mNativeCpu?mNativeParcelRows:mParcelsPerEdge)+1);
     for (i = 0; i < count; i++)
     {
         segments[i] = 0x0;
@@ -388,8 +464,16 @@ void LLViewerParcelMgr::writeHighlightSegments(F32 west, F32 south, F32 east,
 }
 
 
-void LLViewerParcelMgr::writeSegmentsFromBitmap(U8* bitmap, U8* segments)
+void LLViewerParcelMgr::writeSegmentsFromBitmap(const U8* bitmap, U8* segments)
 {
+    if(mNativeCpu)
+    {
+        const size_t bytes=size_t(mParcelsPerEdge)*mNativeParcelRows/8;
+        const size_t segmentsSize=(size_t(mParcelsPerEdge)+1)*(size_t(mNativeParcelRows)+1);
+        vs_write_parcel_segments(bitmap,bytes,mParcelsPerEdge,mNativeParcelRows,segments,segmentsSize,SOUTH_MASK,WEST_MASK);
+        return;
+    }
+
     S32 x;
     S32 y;
     const S32 IN_STRIDE = mParcelsPerEdge;
@@ -426,6 +510,8 @@ void LLViewerParcelMgr::writeSegmentsFromBitmap(U8* bitmap, U8* segments)
 
 void LLViewerParcelMgr::writeAgentParcelFromBitmap(U8* bitmap)
 {
+    if(mNativeCpu)return; // Packed immutable publication is authoritative for native membership.
+
     S32 x;
     S32 y;
     const S32 IN_STRIDE = mParcelsPerEdge;
@@ -489,22 +575,41 @@ void LLViewerParcelMgr::selectCollisionParcel()
     //mWestSouth = gAgent.getRegion()->getOriginGlobal();
     //mEastNorth = mWestSouth;
     //mEastNorth += LLVector3d(PARCEL_GRID_STEP_METERS, PARCEL_GRID_STEP_METERS, 0.0);
-    mWestSouth = getSelectionRegion()->getOriginGlobal();
-    mEastNorth = mWestSouth;
-    mEastNorth += LLVector3d((getSelectionRegion()->getWidth() / REGION_WIDTH_METERS) * PARCEL_GRID_STEP_METERS,
-                             (getSelectionRegion()->getWidth() / REGION_WIDTH_METERS) * PARCEL_GRID_STEP_METERS, 0.0);
+    const auto region=mNativeCpu ? mNativeCollisionRegion : getSelectionRegionContext();
+    if(!region || !region->current())return;
+    if(mNativeCpu)
+    {
+        mWestSouth=region->getPosGlobalFromRegion(mCollisionParcel->getAABBMin());
+        mEastNorth=region->getPosGlobalFromRegion(mCollisionParcel->getAABBMax());
+        mParcelsPerEdge=S32(region->getWidth()/PARCEL_GRID_STEP_METERS);mNativeParcelRows=S32(region->getHeight()/PARCEL_GRID_STEP_METERS);
+    }
+    else
+    {
+        mWestSouth=region->getOriginGlobal();mEastNorth=mWestSouth;
+        mEastNorth+=LLVector3d((region->getWidth()/REGION_WIDTH_METERS)*PARCEL_GRID_STEP_METERS,
+            (region->getHeight()/REGION_WIDTH_METERS)*PARCEL_GRID_STEP_METERS,0.0);
+    }
 // </FS:CR> Aurora Sim
 
     // BUG: must be in the sim you are in
+    S32 requestedSequence=SELECTED_PARCEL_SEQ_ID;
+    if(mNativeCpu)
+    {
+        const auto echoed=mNativeRequests.issue(VSParcelRequests::Channel::Selection,SELECTED_PARCEL_SEQ_ID,
+            [target=*region]{return target.current();});
+        if(!echoed)return;
+        requestedSequence=*echoed;mNativeSelectionRequestRegion=region;
+        mNativeRequests.retire(VSParcelRequests::Channel::Access);mNativeAccessRequestRegion.reset();
+    }
     LLMessageSystem *msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_ParcelPropertiesRequestByID);
-    msg->nextBlockFast(_PREHASH_AgentID);
+    msg->nextBlockFast(_PREHASH_AgentData);
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID() );
     msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID() );
     msg->nextBlockFast(_PREHASH_ParcelData);
-    msg->addS32Fast(_PREHASH_SequenceID, SELECTED_PARCEL_SEQ_ID );
+    msg->addS32Fast(_PREHASH_SequenceID, requestedSequence );
     msg->addS32Fast(_PREHASH_LocalID, mCollisionParcel->getLocalID() );
-    gAgent.sendReliableMessage();
+    msg->sendReliable(region->getHost());
 
     mRequestResult = PARCEL_RESULT_NO_DATA;
 
@@ -520,6 +625,7 @@ void LLViewerParcelMgr::selectCollisionParcel()
     mFloatingParcelSelection->setParcel(mCurrentParcel);
     mCurrentParcelSelection->setParcel(NULL);
     mCurrentParcelSelection = new LLParcelSelection(mCurrentParcel);
+    if(mNativeCpu)mNativeSelectionRequestHandle=mCurrentParcelSelection;
 
     mSelected = true;
     mCurrentParcelSelection->mWholeParcelSelected = true;
@@ -559,8 +665,8 @@ LLParcelSelectionHandle LLViewerParcelMgr::selectLand(const LLVector3d &corner1,
     east_north_region_check.mdV[VX] -= 0.5;
     east_north_region_check.mdV[VY] -= 0.5;
 
-    LLViewerRegion *region = LLWorld::getInstance()->getRegionFromPosGlobal(mWestSouth);
-    LLViewerRegion *region_other = LLWorld::getInstance()->getRegionFromPosGlobal( east_north_region_check );
+    auto region = vs_region_context(mWestSouth);
+    auto region_other = vs_region_context( east_north_region_check );
 
     if(!region)
     {
@@ -582,13 +688,22 @@ LLParcelSelectionHandle LLViewerParcelMgr::selectLand(const LLVector3d &corner1,
     LLVector3 ent_region = region->getPosRegionFromGlobal( mEastNorth );
 
     // Send request message
+    S32 requestedSequence=SELECTED_PARCEL_SEQ_ID;
+    if(mNativeCpu)
+    {
+        const auto echoed=mNativeRequests.issue(VSParcelRequests::Channel::Selection,SELECTED_PARCEL_SEQ_ID,
+            [target=*region]{return target.current();});
+        if(!echoed)return nullptr;
+        requestedSequence=*echoed;mNativeSelectionRequestRegion=region;
+        mNativeRequests.retire(VSParcelRequests::Channel::Access);mNativeAccessRequestRegion.reset();
+    }
     LLMessageSystem *msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_ParcelPropertiesRequest);
     msg->nextBlockFast(_PREHASH_AgentData);
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID() );
     msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID() );
     msg->nextBlockFast(_PREHASH_ParcelData);
-    msg->addS32Fast(_PREHASH_SequenceID, SELECTED_PARCEL_SEQ_ID );
+    msg->addS32Fast(_PREHASH_SequenceID, requestedSequence );
     msg->addF32Fast(_PREHASH_West,  wsb_region.mV[VX] );
     msg->addF32Fast(_PREHASH_South, wsb_region.mV[VY] );
     msg->addF32Fast(_PREHASH_East,  ent_region.mV[VX] );
@@ -601,6 +716,7 @@ LLParcelSelectionHandle LLViewerParcelMgr::selectLand(const LLVector3d &corner1,
     mFloatingParcelSelection->setParcel(mCurrentParcel);
     mCurrentParcelSelection->setParcel(NULL);
     mCurrentParcelSelection = new LLParcelSelection(mCurrentParcel);
+    if(mNativeCpu)mNativeSelectionRequestHandle=mCurrentParcelSelection;
 
     mSelected = true;
     mCurrentParcelSelection->mWholeParcelSelected = snap_selection;
@@ -619,6 +735,12 @@ void LLViewerParcelMgr::deselectUnused()
 
 void LLViewerParcelMgr::deselectLand()
 {
+    if(mNativeCpu)
+    {
+        mNativeRequests.retire(VSParcelRequests::Channel::Selection);mNativeRequests.retire(VSParcelRequests::Channel::Access);
+        mNativeSelectionRequestRegion.reset();mNativeAccessRequestRegion.reset();mNativeSelectionBitmap.reset();
+    }
+
     if (mSelected)
     {
         mSelected = false;
@@ -755,7 +877,8 @@ bool LLViewerParcelMgr::allowAgentBuild(const LLParcel* parcel) const
 
 bool LLViewerParcelMgr::allowAgentVoice() const
 {
-    return allowAgentVoice(gAgent.getRegion(), mAgentParcel);
+    const auto region=vs_current_region_context();
+    return allowAgentVoice(region?&*region:nullptr,mAgentParcel);
 }
 
 bool LLViewerParcelMgr::isVoiceRestricted() const
@@ -768,26 +891,49 @@ bool LLViewerParcelMgr::allowVoiceModeration() const
     return isVoiceRestricted() && isParcelOwnedByAgent(mAgentParcel, GP_SESSION_MODERATOR);
 }
 
-bool LLViewerParcelMgr::allowAgentVoice(const LLViewerRegion* region, const LLParcel* parcel) const
+namespace
+{
+template<class Region> bool vs_allow_parcel_voice(const Region* region,const LLParcel* parcel)
 {
     return region && region->isVoiceEnabled()
         && parcel   && parcel->getParcelFlagAllowVoice();
 }
+}
+bool LLViewerParcelMgr::allowAgentVoice(const LLViewerRegion* region, const LLParcel* parcel) const
+{return vs_allow_parcel_voice(region,parcel);}
+bool LLViewerParcelMgr::allowAgentVoice(const VSRegionContext* region,const LLParcel* parcel) const
+{return vs_allow_parcel_voice(region,parcel);}
 
-bool LLViewerParcelMgr::allowAgentFly(const LLViewerRegion* region, const LLParcel* parcel) const
+namespace
+{
+template<class Region> bool vs_allow_parcel_fly(const Region* region,const LLParcel* parcel)
 {
     return region && !region->getBlockFly()
         && parcel && parcel->getAllowFly();
 }
+}
+bool LLViewerParcelMgr::allowAgentFly(const LLViewerRegion* region, const LLParcel* parcel) const
+{return vs_allow_parcel_fly(region,parcel);}
+bool LLViewerParcelMgr::allowAgentFly(const VSRegionContext* region,const LLParcel* parcel) const
+{return vs_allow_parcel_fly(region,parcel);}
 
 // Can the agent be pushed around by LLPushObject?
-bool LLViewerParcelMgr::allowAgentPush(const LLViewerRegion* region, const LLParcel* parcel) const
+namespace
+{
+template<class Region> bool vs_allow_parcel_push(const Region* region,const LLParcel* parcel)
 {
     return region && !region->getRestrictPushObject()
         && parcel && !parcel->getRestrictPushObject();
 }
+}
+bool LLViewerParcelMgr::allowAgentPush(const LLViewerRegion* region, const LLParcel* parcel) const
+{return vs_allow_parcel_push(region,parcel);}
+bool LLViewerParcelMgr::allowAgentPush(const VSRegionContext* region,const LLParcel* parcel) const
+{return vs_allow_parcel_push(region,parcel);}
 
-bool LLViewerParcelMgr::allowAgentScripts(const LLViewerRegion* region, const LLParcel* parcel) const
+namespace
+{
+template<class Region> bool vs_allow_parcel_scripts(const Region* region,const LLParcel* parcel)
 {
     // *NOTE: This code does not take into account group-owned parcels
     // and the flag to allow group-owned scripted objects to run.
@@ -799,15 +945,34 @@ bool LLViewerParcelMgr::allowAgentScripts(const LLViewerRegion* region, const LL
         && parcel
         && parcel->getAllowOtherScripts();
 }
+}
+bool LLViewerParcelMgr::allowAgentScripts(const LLViewerRegion* region, const LLParcel* parcel) const
+{return vs_allow_parcel_scripts(region,parcel);}
+bool LLViewerParcelMgr::allowAgentScripts(const VSRegionContext* region,const LLParcel* parcel) const
+{return vs_allow_parcel_scripts(region,parcel);}
 
-bool LLViewerParcelMgr::allowAgentDamage(const LLViewerRegion* region, const LLParcel* parcel) const
+namespace
+{
+template<class Region> bool vs_allow_parcel_damage(const Region* region,const LLParcel* parcel)
 {
     return (region && region->getAllowDamage())
         || (parcel && parcel->getAllowDamage());
 }
+}
+bool LLViewerParcelMgr::allowAgentDamage(const LLViewerRegion* region, const LLParcel* parcel) const
+{return vs_allow_parcel_damage(region,parcel);}
+bool LLViewerParcelMgr::allowAgentDamage(const VSRegionContext* region,const LLParcel* parcel) const
+{return vs_allow_parcel_damage(region,parcel);}
 
 bool LLViewerParcelMgr::isOwnedAt(const LLVector3d& pos_global) const
 {
+    if(mNativeCpu)
+    {
+        const auto region=vs_region_context(pos_global);
+        const auto flags=region ? region->parcelFlagsAt(pos_global) : std::nullopt;
+        return flags && (*flags & PARCEL_COLOR_MASK)!=PARCEL_PUBLIC;
+    }
+
     LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal( pos_global );
     if (!region) return false;
 
@@ -821,6 +986,13 @@ bool LLViewerParcelMgr::isOwnedAt(const LLVector3d& pos_global) const
 
 bool LLViewerParcelMgr::isOwnedSelfAt(const LLVector3d& pos_global) const
 {
+    if(mNativeCpu)
+    {
+        const auto region=vs_region_context(pos_global);
+        const auto flags=region ? region->parcelFlagsAt(pos_global) : std::nullopt;
+        return flags && (*flags & PARCEL_COLOR_MASK)==PARCEL_SELF;
+    }
+
     LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal( pos_global );
     if (!region) return false;
 
@@ -834,6 +1006,13 @@ bool LLViewerParcelMgr::isOwnedSelfAt(const LLVector3d& pos_global) const
 
 bool LLViewerParcelMgr::isOwnedOtherAt(const LLVector3d& pos_global) const
 {
+    if(mNativeCpu)
+    {
+        const auto region=vs_region_context(pos_global);
+        const auto flags=region ? region->parcelFlagsAt(pos_global) : std::nullopt;
+        return flags && ((*flags & PARCEL_COLOR_MASK)==PARCEL_OWNED || (*flags & PARCEL_COLOR_MASK)==PARCEL_FOR_SALE);
+    }
+
     LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal( pos_global );
     if (!region) return false;
 
@@ -847,6 +1026,13 @@ bool LLViewerParcelMgr::isOwnedOtherAt(const LLVector3d& pos_global) const
 
 bool LLViewerParcelMgr::isSoundLocal(const LLVector3d& pos_global) const
 {
+    if(mNativeCpu)
+    {
+        const auto region=vs_region_context(pos_global);
+        const auto flags=region ? region->parcelFlagsAt(pos_global) : std::nullopt;
+        return flags && (*flags & PARCEL_SOUND_LOCAL)!=0;
+    }
+
     LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal( pos_global );
     if (!region) return false;
 
@@ -890,6 +1076,16 @@ bool LLViewerParcelMgr::canHearSound(const LLVector3d &pos_global) const
 
 bool LLViewerParcelMgr::inAgentParcel(const LLVector3d &pos_global) const
 {
+    if(mNativeCpu)
+    {
+        const auto agentRegion=vs_current_region_context();
+        if(!mNativeAgentBitmap || !mNativeAgentRegion || !mNativeAgentRegion->current() || !agentRegion ||
+           *agentRegion!=*mNativeAgentRegion || !agentRegion->pointInRegionGlobal(pos_global))return false;
+        const auto local=agentRegion->getPosRegionFromGlobal(pos_global);
+        const auto cell=mNativeAgentBitmap->cell(U32(local.mV[VX]/PARCEL_GRID_STEP_METERS),U32(local.mV[VY]/PARCEL_GRID_STEP_METERS));
+        return cell && *cell;
+    }
+
     LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal(pos_global);
     LLViewerRegion* agent_region = gAgent.getRegion();
     if (!region || !agent_region)
@@ -960,7 +1156,7 @@ void LLViewerParcelMgr::render()
 }
 
 
-void LLViewerParcelMgr::renderParcelCollision()
+bool LLViewerParcelMgr::collisionVisible()
 {
     static LLCachedControl<S32> ban_lines_mode(gSavedSettings , "ShowBanLines" , PARCEL_BAN_LINES_ON_COLLISION);
 
@@ -973,7 +1169,12 @@ void LLViewerParcelMgr::renderParcelCollision()
         mRenderCollision = false;
     }
 
-    if (mRenderCollision && ban_lines_mode != PARCEL_BAN_LINES_HIDE)
+    return mRenderCollision && ban_lines_mode!=PARCEL_BAN_LINES_HIDE;
+}
+
+void LLViewerParcelMgr::renderParcelCollision()
+{
+    if (collisionVisible())
     {
         LLViewerRegion* regionp = gAgent.getRegion();
         if (regionp)
@@ -992,7 +1193,7 @@ void LLViewerParcelMgr::sendParcelAccessListRequest(U32 flags)
         return;
     }
 
-    LLViewerRegion *region = LLWorld::getInstance()->getRegionFromPosGlobal( mWestSouth );
+    auto region = vs_region_context( mWestSouth );
     if (!region) return;
 
     // <FS:Ansariel> FIRE-17280: Requesting Experience access allow & block list breaks OpenSim
@@ -1002,6 +1203,15 @@ void LLViewerParcelMgr::sendParcelAccessListRequest(U32 flags)
     }
     // </FS:Ansariel>
 
+    S32 requestedSequence=0;
+    if(mNativeCpu)
+    {
+        if(mRequestResult!=PARCEL_RESULT_SUCCESS || mCurrentParcel->getRegionID()!=region->getRegionID())return;
+        const auto echoed=mNativeRequests.issue(VSParcelRequests::Channel::Access,0,
+            [target=*region]{return target.current();},mCurrentParcel->getLocalID(),flags);
+        if(!echoed)return;
+        requestedSequence=*echoed;mNativeAccessRequestRegion=region;mNativeAccessRequestHandle=mCurrentParcelSelection;
+    }
     LLMessageSystem *msg = gMessageSystem;
 
 
@@ -1028,7 +1238,7 @@ void LLViewerParcelMgr::sendParcelAccessListRequest(U32 flags)
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
     msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
     msg->nextBlockFast(_PREHASH_Data);
-    msg->addS32Fast(_PREHASH_SequenceID, 0);
+    msg->addS32Fast(_PREHASH_SequenceID, requestedSequence);
     msg->addU32Fast(_PREHASH_Flags, flags);
     msg->addS32("LocalID", mCurrentParcel->getLocalID() );
     msg->sendReliable( region->getHost() );
@@ -1042,9 +1252,15 @@ void LLViewerParcelMgr::sendParcelDwellRequest()
         return;
     }
 
-    LLViewerRegion *region = LLWorld::getInstance()->getRegionFromPosGlobal( mWestSouth );
+    auto region = vs_region_context( mWestSouth );
     if (!region) return;
 
+    if(mNativeCpu)
+    {
+        if(mRequestResult==PARCEL_RESULT_NO_DATA || mCurrentParcel->getRegionID()!=region->getRegionID())return;
+        mNativeDwellRequestRegion=region;mNativeDwellLocal=mCurrentParcel->getLocalID();
+        mNativeDwellRequestHandle=mCurrentParcelSelection;
+    }
     LLMessageSystem *msg = gMessageSystem;
 
     // Only the headers differ
@@ -1074,7 +1290,7 @@ void LLViewerParcelMgr::sendParcelGodForceOwner(const LLUUID& owner_id)
     east_north_region_check.mdV[VX] -= 0.5;
     east_north_region_check.mdV[VY] -= 0.5;
 
-    LLViewerRegion *region = LLWorld::getInstance()->getRegionFromPosGlobal( mWestSouth );
+    auto region = vs_region_context( mWestSouth );
     if (!region)
     {
         // TODO: Add a force owner version of this alert.
@@ -1083,7 +1299,7 @@ void LLViewerParcelMgr::sendParcelGodForceOwner(const LLUUID& owner_id)
     }
 
     // BUG: Make work for cross-region selections
-    LLViewerRegion *region2 = LLWorld::getInstance()->getRegionFromPosGlobal( east_north_region_check );
+    auto region2 = vs_region_context( east_north_region_check );
     if (region != region2)
     {
         LLNotificationsUtil::add("CannotSetLandOwnerMultipleRegions");
@@ -1097,7 +1313,9 @@ void LLViewerParcelMgr::sendParcelGodForceOwner(const LLUUID& owner_id)
     payload["parcel_local_id"] = mCurrentParcel->getLocalID();
     payload["region_host"] = region->getHost().getIPandPort();
     LLNotification::Params params("ForceOwnerAuctionWarning");
-    params.payload(payload).functor.function(callback_god_force_owner);
+    const auto current=selectionGuard();
+    params.payload(payload).functor.function([current](const LLSD& notification,const LLSD& response)
+    {if(!current() || !gAgent.isGodlike())return false;return callback_god_force_owner(notification,response);});
 
     if(mCurrentParcel->getAuctionID())
     {
@@ -1134,7 +1352,7 @@ void LLViewerParcelMgr::sendParcelGodForceToContent()
         LLNotificationsUtil::add("CannotContentifyNothingSelected");
         return;
     }
-    LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal( mWestSouth );
+    auto region = vs_region_context( mWestSouth );
     if (!region)
     {
         LLNotificationsUtil::add("CannotContentifyNoRegion");
@@ -1159,7 +1377,7 @@ void LLViewerParcelMgr::sendParcelRelease()
         return;
     }
 
-    LLViewerRegion *region = LLWorld::getInstance()->getRegionFromPosGlobal( mWestSouth );
+    auto region = vs_region_context( mWestSouth );
     if (!region)
     {
         LLNotificationsUtil::add("CannotReleaseLandNoRegion");
@@ -1193,6 +1411,7 @@ public:
     bool    mIsGroupOwned;
     bool    mRemoveContribution;
     bool    mIsClaim;
+    std::function<bool()> mCurrent;
     LLHost  mHost;
 
     // for parcel buys
@@ -1221,7 +1440,7 @@ LLViewerParcelMgr::ParcelBuyInfo* LLViewerParcelMgr::setupParcelBuy(
         return NULL;
     }
 
-    LLViewerRegion *region = LLWorld::getInstance()->getRegionFromPosGlobal( mWestSouth );
+    auto region = vs_region_context( mWestSouth );
     if (!region)
     {
         LLNotificationsUtil::add("CannotBuyLandNoRegion");
@@ -1238,7 +1457,7 @@ LLViewerParcelMgr::ParcelBuyInfo* LLViewerParcelMgr::setupParcelBuy(
         east_north_region_check.mdV[VX] -= 0.5;
         east_north_region_check.mdV[VY] -= 0.5;
 
-        LLViewerRegion *region2 = LLWorld::getInstance()->getRegionFromPosGlobal( east_north_region_check );
+        auto region2 = vs_region_context( east_north_region_check );
 
         if (region != region2)
         {
@@ -1250,6 +1469,7 @@ LLViewerParcelMgr::ParcelBuyInfo* LLViewerParcelMgr::setupParcelBuy(
 
     ParcelBuyInfo* info = new ParcelBuyInfo;
 
+    info->mCurrent=selectionGuard();
     info->mAgent = agent_id;
     info->mSession = session_id;
     info->mGroup = group_id;
@@ -1281,6 +1501,12 @@ LLViewerParcelMgr::ParcelBuyInfo* LLViewerParcelMgr::setupParcelBuy(
 
 void LLViewerParcelMgr::sendParcelBuy(ParcelBuyInfo* info)
 {
+    if(!info || !info->mCurrent || !info->mCurrent() || info->mAgent!=gAgent.getID() || info->mSession!=gAgent.getSessionID())return;
+    if(!mCurrentParcel || (!info->mIsClaim && (mCurrentParcel->getLocalID()!=info->mParcelID ||
+        mCurrentParcel->getSalePrice()!=info->mPrice || mCurrentParcel->getArea()!=info->mArea)))return;
+    if(info->mIsGroupOwned && info->mGroup!=gAgent.getGroupID())return;
+    if(!canAgentBuyParcel(mCurrentParcel,info->mIsGroupOwned))return;
+
     // send the message
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessage(info->mIsClaim ? "ParcelClaim" : "ParcelBuy");
@@ -1332,7 +1558,7 @@ void LLViewerParcelMgr::sendParcelDeed(const LLUUID& group_id)
         LLNotificationsUtil::add("CannotDeedLandNoGroup");
         return;
     }
-    LLViewerRegion *region = LLWorld::getInstance()->getRegionFromPosGlobal( mWestSouth );
+    auto region = vs_region_context( mWestSouth );
     if (!region)
     {
         LLNotificationsUtil::add("CannotDeedLandNoRegion");
@@ -1407,7 +1633,7 @@ void LLViewerParcelMgr::sendParcelPropertiesUpdate(LLParcel* parcel)
     if(!parcel)
         return;
 
-    LLViewerRegion *region = LLWorld::getInstance()->getRegionFromID(parcel->getRegionID());
+    auto region = vs_region_context(parcel->getRegionID());
     if (!region)
         return;
 
@@ -1455,13 +1681,14 @@ void LLViewerParcelMgr::setHoverParcel(const LLVector3d& pos)
     const U32 west_parcel_step = (U32) floor( pos.mdV[VX] / PARCEL_GRID_STEP_METERS );
     const U32 south_parcel_step = (U32) floor( pos.mdV[VY] / PARCEL_GRID_STEP_METERS );
 
-    if ((west_parcel_step == last_west) && (south_parcel_step == last_south))
+    if ((west_parcel_step == last_west) && (south_parcel_step == last_south) &&
+        (!mNativeCpu || (mNativeHoverRequestRegion && mNativeHoverRequestRegion->current())))
     {
         // We are staying in same segment
         return;
     }
 
-    LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal( pos );
+    auto region = vs_region_context( pos );
     if (!region)
     {
         return;
@@ -1470,7 +1697,7 @@ void LLViewerParcelMgr::setHoverParcel(const LLVector3d& pos)
     LLUUID region_id = region->getRegionID();
     LLVector3 pos_in_region = region->getPosRegionFromGlobal(pos);
 
-    bool request_properties = false;
+    bool request_properties = mNativeCpu && (!mNativeHoverRequestRegion || !mNativeHoverRequestRegion->current());
     if (region_id != last_region)
     {
         request_properties = true;
@@ -1486,21 +1713,22 @@ void LLViewerParcelMgr::setHoverParcel(const LLVector3d& pos)
         S32 west_parcel_local = (S32)(pos_in_region.mV[VX] / PARCEL_GRID_STEP_METERS);
         S32 south_parcel_local = (S32)(pos_in_region.mV[VY] / PARCEL_GRID_STEP_METERS);
 
-        LLViewerParcelOverlay* overlay = region->getParcelOverlay();
-        if (!overlay)
+        if (!region->parcelFlagsAt(pos))
         {
              request_properties = true;
         }
         while (!request_properties && west_parcel_step < last_west)
         {
             S32 segment_shift = last_west - west_parcel_step;
-            request_properties = overlay->parcelLineFlags(south_parcel_local, west_parcel_local + segment_shift) & PARCEL_WEST_LINE;
+            const auto line=region->parcelLineFlags(south_parcel_local, west_parcel_local + segment_shift);
+            request_properties = !line || ((*line & PARCEL_WEST_LINE)!=0);
             last_west--;
         }
         while (!request_properties && south_parcel_step < last_south)
         {
             S32 segment_shift = last_south - south_parcel_step;
-            request_properties = overlay->parcelLineFlags(south_parcel_local + segment_shift, west_parcel_local) & PARCEL_SOUTH_LINE;
+            const auto line=region->parcelLineFlags(south_parcel_local + segment_shift, west_parcel_local);
+            request_properties = !line || ((*line & PARCEL_SOUTH_LINE)!=0);
             last_south--;
         }
         // Note: could have just swapped values, reused first two 'while' and set last_south, last_west separately,
@@ -1508,13 +1736,15 @@ void LLViewerParcelMgr::setHoverParcel(const LLVector3d& pos)
         while (!request_properties && west_parcel_step > last_west)
         {
             S32 segment_shift = west_parcel_step - last_west;
-            request_properties = overlay->parcelLineFlags(south_parcel_local, west_parcel_local - segment_shift + 1) & PARCEL_WEST_LINE;
+            const auto line=region->parcelLineFlags(south_parcel_local, west_parcel_local - segment_shift + 1);
+            request_properties = !line || ((*line & PARCEL_WEST_LINE)!=0);
             last_west++;
         }
         while (!request_properties && south_parcel_step > last_south)
         {
             S32 segment_shift = south_parcel_step - last_south;
-            request_properties = overlay->parcelLineFlags(south_parcel_local - segment_shift + 1, west_parcel_local) & PARCEL_SOUTH_LINE;
+            const auto line=region->parcelLineFlags(south_parcel_local - segment_shift + 1, west_parcel_local);
+            request_properties = !line || ((*line & PARCEL_SOUTH_LINE)!=0);
             last_south++;
         }
 
@@ -1540,13 +1770,21 @@ void LLViewerParcelMgr::setHoverParcel(const LLVector3d& pos)
         F32 north = south + PARCEL_GRID_STEP_METERS;
 
         // Send request message
+        S32 requestedSequence=HOVERED_PARCEL_SEQ_ID;
+        if(mNativeCpu)
+        {
+            const auto echoed=mNativeRequests.issue(VSParcelRequests::Channel::Hover,HOVERED_PARCEL_SEQ_ID,
+                [target=*region]{return target.current();});
+            if(!echoed)return;
+            requestedSequence=*echoed;mNativeHoverRequestRegion=region;
+        }
         LLMessageSystem *msg = gMessageSystem;
         msg->newMessageFast(_PREHASH_ParcelPropertiesRequest);
         msg->nextBlockFast(_PREHASH_AgentData);
         msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
         msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
         msg->nextBlockFast(_PREHASH_ParcelData);
-        msg->addS32Fast(_PREHASH_SequenceID, HOVERED_PARCEL_SEQ_ID);
+        msg->addS32Fast(_PREHASH_SequenceID, requestedSequence);
         msg->addF32Fast(_PREHASH_West, west);
         msg->addF32Fast(_PREHASH_South, south);
         msg->addF32Fast(_PREHASH_East, east);
@@ -1650,6 +1888,21 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
 
     LLViewerParcelMgr& parcel_mgr = LLViewerParcelMgr::instance();
 // <FS:CR> Aurora Sim
+    const auto nativeLifetime=vs_native_im_guard();
+    std::optional<VSRegionContext> nativeRegion;
+    S32 nativeColumns=0,nativeRows=0;
+    if(parcel_mgr.mNativeCpu)
+    {
+        nativeRegion=vs_region_context(msg->getSender());
+        if(!nativeRegion || !nativeRegion->current())return;
+        const auto columns=S32(nativeRegion->getWidth()/PARCEL_GRID_STEP_METERS);
+        const auto rows=S32(nativeRegion->getHeight()/PARCEL_GRID_STEP_METERS);
+        // Same actual native region-size domain as the authenticated circuit owner.
+        if(columns<4 || rows<4 || columns>16384 || rows>16384 || (U64(columns)*rows)%8)return;
+        nativeColumns=columns;nativeRows=rows;
+    }
+    else
+    {
     LLViewerRegion* msg_region = LLWorld::getInstance()->getRegion( msg->getSender() );
     if (msg_region)
     {
@@ -1663,10 +1916,32 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
         }
         parcel_mgr.mParcelsPerEdge = S32( gAgent.getRegion()->getWidth() / PARCEL_GRID_STEP_METERS );
     }
+    }
 // </FS:CR> Aurora Sim
 
     msg->getS32Fast(_PREHASH_ParcelData, _PREHASH_RequestResult, request_result);
     msg->getS32Fast(_PREHASH_ParcelData, _PREHASH_SequenceID, sequence_id);
+    if(parcel_mgr.mNativeCpu)
+    {
+        if(sequence_id<0 && sequence_id!=COLLISION_NOT_IN_GROUP_PARCEL_SEQ_ID &&
+           sequence_id!=COLLISION_NOT_ON_LIST_PARCEL_SEQ_ID && sequence_id!=COLLISION_BANNED_PARCEL_SEQ_ID)
+        {
+            const auto pending=parcel_mgr.mNativeRequests.properties(sequence_id);
+            if(!pending)return;
+            const auto& target=pending->logical==SELECTED_PARCEL_SEQ_ID ?
+                parcel_mgr.mNativeSelectionRequestRegion : parcel_mgr.mNativeHoverRequestRegion;
+            if(!target || *target!=*nativeRegion ||
+               (pending->logical==SELECTED_PARCEL_SEQ_ID && (!parcel_mgr.mSelected ||
+                parcel_mgr.mNativeSelectionRequestHandle!=parcel_mgr.mCurrentParcelSelection)))return;
+            sequence_id=pending->logical;
+        }
+        else if(sequence_id>=0)
+        {
+            const auto current=vs_current_region_context();
+            if(!current || *current!=*nativeRegion)return;
+        }
+    }
+
 
     if (request_result == PARCEL_RESULT_NO_DATA)
     {
@@ -1680,19 +1955,19 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
     if (sequence_id == SELECTED_PARCEL_SEQ_ID)
     {
         // ...selected parcels report this sequence id
-        parcel_mgr.mRequestResult = PARCEL_RESULT_SUCCESS;
+        if(!parcel_mgr.mNativeCpu)parcel_mgr.mRequestResult = PARCEL_RESULT_SUCCESS;
         parcel = parcel_mgr.mCurrentParcel;
     }
     else if (sequence_id == HOVERED_PARCEL_SEQ_ID)
     {
-        parcel_mgr.mHoverRequestResult = PARCEL_RESULT_SUCCESS;
+        if(!parcel_mgr.mNativeCpu)parcel_mgr.mHoverRequestResult = PARCEL_RESULT_SUCCESS;
         parcel = parcel_mgr.mHoverParcel;
     }
     else if (sequence_id == COLLISION_NOT_IN_GROUP_PARCEL_SEQ_ID ||
         sequence_id == COLLISION_NOT_ON_LIST_PARCEL_SEQ_ID ||
         sequence_id == COLLISION_BANNED_PARCEL_SEQ_ID)
     {
-        parcel_mgr.mHoverRequestResult = PARCEL_RESULT_SUCCESS;
+        if(!parcel_mgr.mNativeCpu)parcel_mgr.mHoverRequestResult = PARCEL_RESULT_SUCCESS;
         parcel = parcel_mgr.mCollisionParcel;
     }
     else if (sequence_id == 0 || sequence_id > parcel_mgr.mAgentParcelSequenceID)
@@ -1700,7 +1975,7 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
         // new agent parcel
         // *TODO: Does it really make sense to set the agent parcel to this
         // parcel if the client doesn't know what kind of parcel data this is?
-        parcel_mgr.mAgentParcelSequenceID = sequence_id;
+        if(!parcel_mgr.mNativeCpu)parcel_mgr.mAgentParcelSequenceID = sequence_id;
         parcel = parcel_mgr.mAgentParcel;
     }
     else
@@ -1766,11 +2041,44 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
 
     LL_DEBUGS("ParcelMgr") << "Processing parcel " << local_id << " update, target(sequence): " << sequence_id << LL_ENDL;
 
+    VSParcelBitmap::Snapshot nativeBitmap;
+    if(parcel_mgr.mNativeCpu)
+    {
+        for(int axis=0;axis<3;++axis)
+            if(!std::isfinite(aabb_min.mV[axis]) || !std::isfinite(aabb_max.mV[axis]) || aabb_min.mV[axis]>aabb_max.mV[axis])return;
+        if(aabb_min.mV[VX]<0 || aabb_min.mV[VY]<0 || aabb_max.mV[VX]>nativeRegion->getWidth() ||
+           aabb_max.mV[VY]>nativeRegion->getHeight())return;
+        const bool collision=sequence_id==COLLISION_NOT_IN_GROUP_PARCEL_SEQ_ID ||
+            sequence_id==COLLISION_NOT_ON_LIST_PARCEL_SEQ_ID || sequence_id==COLLISION_BANNED_PARCEL_SEQ_ID;
+        const bool needsBitmap=parcel==parcel_mgr.mAgentParcel || collision ||
+            (sequence_id==SELECTED_PARCEL_SEQ_ID && snap_selection && local_id!=0);
+        if(needsBitmap)
+        {
+            const size_t expected=size_t(nativeColumns)*nativeRows/8;
+            if(msg->getSizeFast(_PREHASH_ParcelData,_PREHASH_Bitmap)!=S32(expected))return;
+            std::vector<U8> bytes(expected);
+            msg->getBinaryDataFast(_PREHASH_ParcelData,_PREHASH_Bitmap,bytes.data(),S32(bytes.size()));
+#if VS_NATIVE_VULKAN
+            if(!gViewerWindow || !gViewerWindow->nativeContext())return;
+            auto& world=gViewerWindow->nativeContext()->world();
+            nativeBitmap=VSParcelBitmap::fromWire(nativeColumns,nativeRows,
+                bytes.data(),bytes.size(),[&world](size_t size){return world.reserveSpatialBytes(size);});
+#endif
+            if(!nativeBitmap || !nativeLifetime() || !nativeRegion->current())return;
+        }
+        if((collision || sequence_id==SELECTED_PARCEL_SEQ_ID) &&
+           !parcel_mgr.configureNativeSegments(nativeColumns,nativeRows,collision))return;
+        parcel_mgr.mParcelsPerEdge=nativeColumns;parcel_mgr.mNativeParcelRows=nativeRows;
+        if(sequence_id==SELECTED_PARCEL_SEQ_ID)parcel_mgr.mRequestResult=PARCEL_RESULT_SUCCESS;
+        else if(sequence_id==HOVERED_PARCEL_SEQ_ID || collision)parcel_mgr.mHoverRequestResult=PARCEL_RESULT_SUCCESS;
+        else if(parcel==parcel_mgr.mAgentParcel)parcel_mgr.mAgentParcelSequenceID=sequence_id;
+    }
+
     // Actually extract the data.
     if (parcel)
     {
         // store region_id in the parcel so we can find it again later
-        LLViewerRegion* parcel_region = LLWorld::getInstance()->getRegion(msg->getSender());
+        auto parcel_region=vs_region_context(msg->getSender());
         if (parcel_region)
         {
             parcel->setRegionID(parcel_region->getRegionID());
@@ -1779,7 +2087,7 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
         if (local_id == parcel_mgr.mAgentParcel->getLocalID())
         {
             // Parcels in different regions can have same ids.
-            LLViewerRegion* agent_region = gAgent.getRegion();
+            auto agent_region=vs_current_region_context();
             if (parcel_region && agent_region && parcel_region->getRegionID() == agent_region->getRegionID())
             {
                 // we got an updated version of agent parcel
@@ -1821,18 +2129,39 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
         parcel->setObscureMOAP((bool)extended_flags);
 
         parcel->unpackMessage(msg);
+        if(parcel_mgr.mNativeCpu)
+        {
+            if(parcel==parcel_mgr.mAgentParcel)
+            {
+                parcel_mgr.mNativeAgentBitmap=nativeBitmap;parcel_mgr.mNativeAgentRegion=nativeRegion;
+#if VS_NATIVE_VULKAN
+                if(auto owner=VSNativeSession::active())owner->publishAgentParcel(*parcel);
+#endif
+                if(!nativeLifetime())return;
+            }
+            else if(sequence_id==SELECTED_PARCEL_SEQ_ID)parcel_mgr.mNativeSelectionBitmap=nativeBitmap;
+            else if(sequence_id==COLLISION_NOT_IN_GROUP_PARCEL_SEQ_ID || sequence_id==COLLISION_NOT_ON_LIST_PARCEL_SEQ_ID || sequence_id==COLLISION_BANNED_PARCEL_SEQ_ID)
+            {parcel_mgr.mNativeCollisionBitmap=nativeBitmap;parcel_mgr.mNativeCollisionRegion=nativeRegion;}
+        }
+
 
         if (parcel == parcel_mgr.mAgentParcel)
         {
             // new agent parcel
-            S32 bitmap_size =   parcel_mgr.mParcelsPerEdge
-                                * parcel_mgr.mParcelsPerEdge
-                                / 8;
-            U8* bitmap = new U8[ bitmap_size ];
-            msg->getBinaryDataFast(_PREHASH_ParcelData, _PREHASH_Bitmap, bitmap, bitmap_size);
+            // Native membership already owns its validated immutable packed
+            // bitmap above. Preserve the reference expanded-map update for GL.
+            if(!parcel_mgr.mNativeCpu)
+            {
+                S32 bitmap_size =   parcel_mgr.mParcelsPerEdge
+                                    * (parcel_mgr.mNativeCpu?parcel_mgr.mNativeParcelRows:parcel_mgr.mParcelsPerEdge)
+                                    / 8;
+                U8* bitmap = new U8[ bitmap_size ];
+                msg->getBinaryDataFast(_PREHASH_ParcelData, _PREHASH_Bitmap, bitmap, bitmap_size);
 
-            parcel_mgr.writeAgentParcelFromBitmap(bitmap);
-            delete[] bitmap;
+                parcel_mgr.writeAgentParcelFromBitmap(bitmap);
+                delete[] bitmap;
+
+            }
 
             // Let interesting parties know about agent parcel change.
             LLViewerParcelMgr* instance = LLViewerParcelMgr::getInstance();
@@ -1843,10 +2172,12 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
                 {
                     //initial update
                     instance->mTeleportFinishedSignal(gAgent.getPositionGlobal(), false);
+                if(!nativeLifetime())return;
                 }
                 else
                 {
                     instance->mTeleportFinishedSignal(instance->mTeleportInProgressPosition, false);
+                if(!nativeLifetime())return;
                 }
                 instance->postTeleportFinished(instance->mTeleportWithinRegion);
                 instance->mTeleportWithinRegion = false;
@@ -1856,6 +2187,7 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
 
             // Notify anything that wants to know when the agent changes parcels
             gAgent.changeParcels();
+            if(!nativeLifetime())return;
             instance->mTeleportInProgress = false;
         }
         else if (agent_parcel_update)
@@ -1863,6 +2195,11 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
             parcel->setParcelEnvironmentVersion(parcel_environment_version);
             // updated agent parcel
             parcel_mgr.mAgentParcel->unpackMessage(msg);
+#if VS_NATIVE_VULKAN
+            if(parcel_mgr.mNativeCpu)
+                if(auto owner=VSNativeSession::active())owner->publishAgentParcel(*parcel_mgr.mAgentParcel);
+#endif
+            if(!nativeLifetime())return;
             if ((LLEnvironment::instance().isExtendedEnvironmentEnabled() && environment_changed))
             {
                 LL_DEBUGS("ENVIRONMENT") << "Parcel environment version is " << parcel->getParcelEnvironmentVersion() << LL_ENDL;
@@ -1883,7 +2220,7 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
                             (request_result == PARCEL_RESULT_MULTIPLE);
 
         // Select the whole parcel
-        LLViewerRegion* region = LLWorld::getInstance()->getRegion( msg->getSender() );
+        auto region=vs_region_context( msg->getSender() );
         if (region)
         {
             if (!snap_selection)
@@ -1922,7 +2259,7 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
 
                 // Owned land, highlight the boundaries
                 S32 bitmap_size =   parcel_mgr.mParcelsPerEdge
-                                    * parcel_mgr.mParcelsPerEdge
+                                    * (parcel_mgr.mNativeCpu?parcel_mgr.mNativeParcelRows:parcel_mgr.mParcelsPerEdge)
                                     / 8;
                 S32 size = msg->getSizeFast(_PREHASH_ParcelData, _PREHASH_Bitmap);
                 if (size != bitmap_size)
@@ -1958,6 +2295,7 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
 
             parcel_mgr.mSelected = true;
             parcel_mgr.notifyObservers();
+        if(!nativeLifetime())return;
         }
     }
     else if (sequence_id == COLLISION_NOT_IN_GROUP_PARCEL_SEQ_ID ||
@@ -1992,29 +2330,34 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
 //      U8* bitmap = new U8[ bitmap_size ];
 //      msg->getBinaryDataFast(_PREHASH_ParcelData, _PREHASH_Bitmap, bitmap, bitmap_size);
 // [SL:KB] - Patch: World-MinimapOverlay | Checked: 2012-06-20 (Catznip-3.3)
-        msg->getBinaryDataFast(_PREHASH_ParcelData, _PREHASH_Bitmap, parcel_mgr.mCollisionBitmap, static_cast<S32>(parcel_mgr.getCollisionBitmapSize()));
+        if(!parcel_mgr.mNativeCpu)msg->getBinaryDataFast(_PREHASH_ParcelData, _PREHASH_Bitmap, parcel_mgr.mCollisionBitmap, static_cast<S32>(parcel_mgr.getCollisionBitmapSize()));
 // [/SL:KB]
 
         parcel_mgr.resetSegments(parcel_mgr.mCollisionSegments);
 //      parcel_mgr.writeSegmentsFromBitmap( bitmap, parcel_mgr.mCollisionSegments );
 // [SL:KB] - Patch: World-MinimapOverlay | Checked: 2012-06-20 (Catznip-3.3)
-        parcel_mgr.writeSegmentsFromBitmap(parcel_mgr.mCollisionBitmap, parcel_mgr.mCollisionSegments);
+        parcel_mgr.writeSegmentsFromBitmap(parcel_mgr.getCollisionBitmap(), parcel_mgr.mCollisionSegments);
 // [/SL:KB]
 
 //      delete[] bitmap;
 //      bitmap = NULL;
 
 // [SL:KB] - Patch: World-MinimapOverlay | Checked: 2012-06-20 (Catznip-3.3)
-        LLViewerRegion* pRegion = LLWorld::getInstance()->getRegion(msg->getSender());
+        auto pRegion=vs_region_context(msg->getSender());
         parcel_mgr.mCollisionRegionHandle = (pRegion) ? pRegion->getHandle() : 0;
 
-        if (parcel_mgr.mCollisionUpdateSignal)
-            (*parcel_mgr.mCollisionUpdateSignal)(pRegion);
+        if(parcel_mgr.mNativeCpu)
+        {
+            if(pRegion)parcel_mgr.mSpatialCollisionSignal(*pRegion);
+            if(!nativeLifetime())return;
+        }
+        else if (parcel_mgr.mCollisionUpdateSignal)
+            (*parcel_mgr.mCollisionUpdateSignal)(LLWorld::instance().getRegion(msg->getSender()));
 // [/SL:KB]
     }
     else if (sequence_id == HOVERED_PARCEL_SEQ_ID)
     {
-        LLViewerRegion *region = LLWorld::getInstance()->getRegion( msg->getSender() );
+        auto region=vs_region_context( msg->getSender() );
         if (region)
         {
             parcel_mgr.mHoverWestSouth = region->getPosGlobalFromRegion( aabb_min );
@@ -2028,6 +2371,7 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
     }
     else
     {
+        if(parcel_mgr.mNativeCpu)return;
         if (gNonInteractive)
         {
             return;
@@ -2058,7 +2402,7 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
                         if (music_url.substr(0, 7) == "http://"
                             || music_url.substr(0, 8) == "https://")
                         {
-                            LLViewerRegion *region = LLWorld::getInstance()->getRegion(msg->getSender());
+                            auto region=vs_region_context(msg->getSender());
                             if (region)
                             {
                                 optionallyStartMusic(music_url, parcel->mLocalID, region->getRegionID(), !agent_parcel_update);
@@ -2190,6 +2534,15 @@ void LLViewerParcelMgr::processParcelAccessListReply(LLMessageSystem *msg, void 
     msg->getU32Fast( _PREHASH_Data, _PREHASH_Flags, message_flags);
     msg->getS32Fast( _PREHASH_Data, _PREHASH_LocalID, parcel_id);
 
+    auto& owner=LLViewerParcelMgr::instance();
+    if(owner.mNativeCpu)
+    {
+        const auto target=owner.mNativeAccessRequestRegion;
+        if(!owner.mSelected || owner.mNativeAccessRequestHandle!=owner.mCurrentParcelSelection || agent_id!=gAgent.getID() || !target || target->getHost()!=msg->getSender() || !target->current() ||
+            !owner.mNativeRequests.match(VSParcelRequests::Channel::Access,sequence_id,parcel_id,
+                (message_flags&AL_ACCESS)?AL_ACCESS:(message_flags&AL_BAN)?AL_BAN:
+                (message_flags&AL_ALLOW_EXPERIENCE)?AL_ALLOW_EXPERIENCE:(message_flags&AL_BLOCK_EXPERIENCE)?AL_BLOCK_EXPERIENCE:0))return;
+    }
     LLParcel* parcel = LLViewerParcelMgr::getInstance()->mCurrentParcel;
     if (!parcel) return;
 
@@ -2240,6 +2593,14 @@ void LLViewerParcelMgr::processParcelDwellReply(LLMessageSystem* msg, void**)
     F32 dwell;
     msg->getF32("Data", "Dwell", dwell);
 
+    auto& owner=LLViewerParcelMgr::instance();
+    if(owner.mNativeCpu)
+    {
+        const auto target=owner.mNativeDwellRequestRegion;
+        if(agent_id!=gAgent.getID() || !target || target->getHost()!=msg->getSender() || !target->current() ||
+            !owner.mSelected || owner.mNativeDwellRequestHandle!=owner.mCurrentParcelSelection ||
+            owner.mNativeDwellLocal!=local_id || owner.mCurrentParcel->getRegionID()!=target->getRegionID() || !std::isfinite(dwell))return;
+    }
     if (local_id == LLViewerParcelMgr::getInstance()->mCurrentParcel->getLocalID())
     {
         LLViewerParcelMgr::getInstance()->mSelectedDwell = dwell;
@@ -2255,7 +2616,7 @@ void LLViewerParcelMgr::sendParcelAccessListUpdate(U32 which)
         return;
     }
 
-    LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal( mWestSouth );
+    auto region = vs_region_context( mWestSouth );
     if (!region) return;
 
     LLParcel* parcel = mCurrentParcel;
@@ -2263,26 +2624,27 @@ void LLViewerParcelMgr::sendParcelAccessListUpdate(U32 which)
 
     if (which & AL_ACCESS)
     {
-        sendParcelAccessListUpdate(AL_ACCESS, parcel->mAccessList, region, parcel->getLocalID());
+        sendParcelAccessListUpdate(AL_ACCESS, parcel->mAccessList, &*region, parcel->getLocalID());
     }
 
     if (which & AL_BAN)
     {
-        sendParcelAccessListUpdate(AL_BAN, parcel->mBanList, region, parcel->getLocalID());
+        sendParcelAccessListUpdate(AL_BAN, parcel->mBanList, &*region, parcel->getLocalID());
     }
 
     if(which & AL_ALLOW_EXPERIENCE)
     {
-        sendParcelAccessListUpdate(AL_ALLOW_EXPERIENCE, parcel->getExperienceKeysByType(EXPERIENCE_KEY_TYPE_ALLOWED), region, parcel->getLocalID());
+        sendParcelAccessListUpdate(AL_ALLOW_EXPERIENCE, parcel->getExperienceKeysByType(EXPERIENCE_KEY_TYPE_ALLOWED), &*region, parcel->getLocalID());
     }
     if(which & AL_BLOCK_EXPERIENCE)
     {
-        sendParcelAccessListUpdate(AL_BLOCK_EXPERIENCE, parcel->getExperienceKeysByType(EXPERIENCE_KEY_TYPE_BLOCKED), region, parcel->getLocalID());
+        sendParcelAccessListUpdate(AL_BLOCK_EXPERIENCE, parcel->getExperienceKeysByType(EXPERIENCE_KEY_TYPE_BLOCKED), &*region, parcel->getLocalID());
     }
 }
 
-void LLViewerParcelMgr::sendParcelAccessListUpdate(U32 flags, const LLAccessEntry::map& entries, LLViewerRegion* region, S32 parcel_local_id)
+void LLViewerParcelMgr::sendParcelAccessListUpdate(U32 flags, const LLAccessEntry::map& entries, const VSRegionContext* region, S32 parcel_local_id)
 {
+    if(!region || !region->current())return;
     S32 count = static_cast<S32>(entries.size());
     S32 num_sections = (S32) ceil(count/PARCEL_MAX_ENTRIES_PER_PACKET);
     S32 sequence_id = 1;
@@ -2339,6 +2701,7 @@ void LLViewerParcelMgr::sendParcelAccessListUpdate(U32 flags, const LLAccessEntr
         }
 
         start_message = true;
+        if(!region->current())return;
         msg->sendReliable( region->getHost() );
     }
 }
@@ -2346,6 +2709,8 @@ void LLViewerParcelMgr::sendParcelAccessListUpdate(U32 flags, const LLAccessEntr
 
 void LLViewerParcelMgr::deedLandToGroup()
 {
+    const auto current=selectionGuard();
+
     std::string group_name;
     gCacheName->getGroupName(mCurrentParcel->getGroupID(), group_name);
     LLSD args;
@@ -2354,11 +2719,13 @@ void LLViewerParcelMgr::deedLandToGroup()
     if(mCurrentParcel->getContributeWithDeed())
     {
         args["NAME"] = LLSLURL("agent", mCurrentParcel->getOwnerID(), "completename").getSLURLString();
-        LLNotificationsUtil::add("DeedLandToGroupWithContribution",args, LLSD(), deedAlertCB);
+        LLNotificationsUtil::add("DeedLandToGroupWithContribution",args, LLSD(), [current](const LLSD& notification,const LLSD& response)
+        {if(!current())return false;return deedAlertCB(notification,response);});
     }
     else
     {
-        LLNotificationsUtil::add("DeedLandToGroup",args, LLSD(), deedAlertCB);
+        LLNotificationsUtil::add("DeedLandToGroup",args, LLSD(), [current](const LLSD& notification,const LLSD& response)
+        {if(!current())return false;return deedAlertCB(notification,response);});
     }
 }
 
@@ -2382,6 +2749,8 @@ bool LLViewerParcelMgr::deedAlertCB(const LLSD& notification, const LLSD& respon
 
 void LLViewerParcelMgr::startReleaseLand()
 {
+    const auto current=selectionGuard();
+
     if (!mSelected)
     {
         LLNotificationsUtil::add("CannotReleaseLandNothingSelected");
@@ -2408,7 +2777,7 @@ void LLViewerParcelMgr::startReleaseLand()
     }
 
     LLVector3d parcel_center = (mWestSouth + mEastNorth) / 2.0;
-    LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal(parcel_center);
+    auto region = vs_region_context(parcel_center);
     if (!region)
     {
         LLNotificationsUtil::add("CannotReleaseLandRegionNotFound");
@@ -2434,7 +2803,8 @@ void LLViewerParcelMgr::startReleaseLand()
     // Compute claim price
     LLSD args;
     args["AREA"] = llformat("%d",mCurrentParcel->getArea());
-    LLNotificationsUtil::add("ReleaseLandWarning", args, LLSD(), releaseAlertCB);
+    LLNotificationsUtil::add("ReleaseLandWarning", args, LLSD(), [current](const LLSD& notification,const LLSD& response)
+        {if(!current())return false;return releaseAlertCB(notification,response);});
 }
 
 bool LLViewerParcelMgr::canAgentBuyParcel(LLParcel* parcel, bool forGroup) const
@@ -2460,8 +2830,7 @@ bool LLViewerParcelMgr::canAgentBuyParcel(LLParcel* parcel, bool forGroup) const
         return true;    // change this if want to make it gods only
     }
 
-    LLVector3 parcel_coord = parcel->getCenterpoint();
-    LLViewerRegion* regionp = LLWorld::getInstance()->getRegionFromPosAgent(parcel_coord);
+    const auto regionp=vs_region_context(parcel->getRegionID());
     if (regionp)
     {
         U8 sim_access = regionp->getSimAccess();
@@ -2501,16 +2870,20 @@ bool LLViewerParcelMgr::canAgentBuyParcel(LLParcel* parcel, bool forGroup) const
 
 void LLViewerParcelMgr::startBuyLand(bool is_for_group)
 {
-    LLFloaterBuyLand::buyLand(getSelectionRegion(), mCurrentParcelSelection, is_for_group);
+    const auto region=getSelectionRegionContext();
+    if(region)LLFloaterBuyLand::buyLand(*region,mCurrentParcelSelection,is_for_group);
 }
 
 void LLViewerParcelMgr::startSellLand()
 {
-    LLFloaterSellLand::sellLand(getSelectionRegion(), mCurrentParcelSelection);
+    const auto region=getSelectionRegionContext();
+    if(region)LLFloaterSellLand::sellLand(*region,mCurrentParcelSelection);
 }
 
 void LLViewerParcelMgr::startDivideLand()
 {
+    const auto current=selectionGuard();
+
     if (!mSelected)
     {
         LLNotificationsUtil::add("CannotDivideLandNothingSelected");
@@ -2527,7 +2900,8 @@ void LLViewerParcelMgr::startDivideLand()
     payload["west_south_border"] = ll_sd_from_vector3d(mWestSouth);
     payload["east_north_border"] = ll_sd_from_vector3d(mEastNorth);
 
-    LLNotificationsUtil::add("LandDivideWarning", LLSD(), payload, callbackDivideLand);
+    LLNotificationsUtil::add("LandDivideWarning", LLSD(), payload, [current](const LLSD& notification,const LLSD& response)
+        {if(!current())return false;return callbackDivideLand(notification,response);});
 }
 
 // static
@@ -2538,7 +2912,7 @@ bool LLViewerParcelMgr::callbackDivideLand(const LLSD& notification, const LLSD&
     LLVector3d east_north_d = ll_vector3d_from_sd(notification["payload"]["east_north_border"]);
     LLVector3d parcel_center = (west_south_d + east_north_d) / 2.0;
 
-    LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal(parcel_center);
+    auto region = vs_region_context(parcel_center);
     if (!region)
     {
         LLNotificationsUtil::add("CannotDivideLandNoRegion");
@@ -2568,6 +2942,8 @@ bool LLViewerParcelMgr::callbackDivideLand(const LLSD& notification, const LLSD&
 
 void LLViewerParcelMgr::startJoinLand()
 {
+    const auto current=selectionGuard();
+
     if (!mSelected)
     {
         LLNotificationsUtil::add("CannotJoinLandNothingSelected");
@@ -2590,7 +2966,8 @@ void LLViewerParcelMgr::startJoinLand()
     payload["west_south_border"] = ll_sd_from_vector3d(mWestSouth);
     payload["east_north_border"] = ll_sd_from_vector3d(mEastNorth);
 
-    LLNotificationsUtil::add("JoinLandWarning", LLSD(), payload, callbackJoinLand);
+    LLNotificationsUtil::add("JoinLandWarning", LLSD(), payload, [current](const LLSD& notification,const LLSD& response)
+        {if(!current())return false;return callbackJoinLand(notification,response);});
 }
 
 // static
@@ -2601,7 +2978,7 @@ bool LLViewerParcelMgr::callbackJoinLand(const LLSD& notification, const LLSD& r
     LLVector3d east_north_d = ll_vector3d_from_sd(notification["payload"]["east_north_border"]);
     LLVector3d parcel_center = (west_south_d + east_north_d) / 2.0;
 
-    LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal(parcel_center);
+    auto region = vs_region_context(parcel_center);
     if (!region)
     {
         LLNotificationsUtil::add("CannotJoinLandNoRegion");
@@ -2650,7 +3027,7 @@ void LLViewerParcelMgr::startDeedLandToGroup()
     }
 
     LLVector3d parcel_center = (mWestSouth + mEastNorth) / 2.0;
-    LLViewerRegion* region = LLWorld::getInstance()->getRegionFromPosGlobal(parcel_center);
+    auto region = vs_region_context(parcel_center);
     if (!region)
     {
         LLNotificationsUtil::add("CannotDeedLandNoRegion");
@@ -2676,7 +3053,7 @@ void LLViewerParcelMgr::startDeedLandToGroup()
 void LLViewerParcelMgr::reclaimParcel()
 {
     LLParcel* parcel = LLViewerParcelMgr::getInstance()->getParcelSelection()->getParcel();
-    LLViewerRegion* regionp = LLViewerParcelMgr::getInstance()->getSelectionRegion();
+    auto regionp = LLViewerParcelMgr::instance().getSelectionRegionContext();
     if(parcel && parcel->getOwnerID().notNull()
        && (parcel->getOwnerID() != gAgent.getID())
        && regionp && (regionp->getOwner() == gAgent.getID()))
@@ -2709,7 +3086,7 @@ void LLViewerParcelMgr::buyPass()
     LLParcel* parcel = getParcelSelection()->getParcel();
     if (!parcel) return;
 
-    LLViewerRegion* region = getSelectionRegion();
+    auto region = LLViewerParcelMgr::instance().getSelectionRegionContext();
     if (!region) return;
 
     LLMessageSystem* msg = gMessageSystem;
@@ -2896,3 +3273,56 @@ boost::signals2::connection LLViewerParcelMgr::setCollisionUpdateCallback(const 
     return mCollisionUpdateSignal->connect(cb);
 }
 // [/SL:KB]
+
+void LLViewerParcelMgr::clearObjectHighlights()
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if(const auto owner=VSNativeSession::active())
+            if(auto* selection=owner->objectSelection())selection->clearHighlights();
+        return;
+    }
+#endif
+    LLSelectMgr::instance().unhighlightAll();
+}
+
+std::optional<LLViewerParcelMgr::NativeParcelBoundary> LLViewerParcelMgr::nativeSelectionBoundary() const
+{
+    if(!mNativeCpu || !mSelected || !mRenderSelection || gDisconnected ||
+       !gSavedSettings.getBOOL("RenderParcelSelection") || mRequestResult==PARCEL_RESULT_NO_DATA)return {};
+    const auto region=getSelectionRegionContext();
+    if(!region || !region->current())return {};
+    NativeParcelBoundary result;
+    result.region=*region;result.bitmap=mNativeSelectionBitmap;
+    result.westSouth=mWestSouth;result.eastNorth=mEastNorth;
+    const auto owner=selectionGuard();const auto identity=this;
+    const auto bitmap=result.bitmap;const auto west=result.westSouth,east=result.eastNorth;
+    result.current=[owner,identity,bitmap,west,east]
+    {
+        if(!owner())return false;
+        return identity->mRenderSelection && gSavedSettings.getBOOL("RenderParcelSelection") &&
+            identity->mNativeSelectionBitmap==bitmap && identity->mWestSouth==west && identity->mEastNorth==east;
+    };
+    return result;
+}
+std::optional<LLViewerParcelMgr::NativeParcelBoundary> LLViewerParcelMgr::nativeCollisionBoundary()
+{
+    if(!mNativeCpu || gDisconnected || !collisionVisible() || !mNativeCollisionBitmap ||
+       !mNativeCollisionRegion || !mNativeCollisionRegion->current())return {};
+    NativeParcelBoundary result;
+    result.region=*mNativeCollisionRegion;result.bitmap=mNativeCollisionBitmap;
+    result.westSouth=result.region.getPosGlobalFromRegion(mCollisionParcel->getAABBMin());
+    result.eastNorth=result.region.getPosGlobalFromRegion(mCollisionParcel->getAABBMax());
+    result.collision=true;result.usePass=mCollisionParcel->getParcelFlag(PF_USE_PASS_LIST);result.banState=mCollisionBanned;
+    const auto account=vs_native_im_guard();const auto identity=this;const auto region=result.region;
+    const auto bitmap=result.bitmap;const auto usePass=result.usePass;const auto ban=result.banState;
+    result.current=[account,identity,region,bitmap,usePass,ban]
+    {
+        if(!account() || !region.current() || !LLViewerParcelMgr::instanceExists() ||
+           &LLViewerParcelMgr::instance()!=identity || gDisconnected)return false;
+        return identity->collisionVisible() && identity->mNativeCollisionBitmap==bitmap &&
+            identity->mCollisionBanned==ban && identity->mCollisionParcel->getParcelFlag(PF_USE_PASS_LIST)==usePass;
+    };
+    return result;
+}

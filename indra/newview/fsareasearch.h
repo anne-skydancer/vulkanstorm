@@ -35,6 +35,8 @@
 #include "llsaleinfo.h"
 #include "llscrolllistcolumn.h"
 #include "llviewerobject.h"
+#include "vsareaobject.h"
+#include "vsobjectproperties.h"
 #include "rlvdefines.h"
 #include <boost/regex.hpp>
 
@@ -58,6 +60,8 @@ class FSScrollListCtrl;
 struct FSObjectProperties
 {
     LLUUID id;
+    VSAreaObject source;
+    std::optional<VSObjectProperties> protocol;
     bool listed{ false };
     std::string name;
     std::string description;
@@ -107,6 +111,7 @@ public:
     FSAreaSearch(const LLSD &);
     virtual ~FSAreaSearch();
 
+    static bool isNativeCallback(std::string_view,const LLSD&);
     bool postBuild() override;
     void draw() override;
     void onOpen(const LLSD& key) override;
@@ -123,7 +128,7 @@ public:
     void clearSearchText();
     void onButtonClickedSearch();
     void onCommitCheckboxRegex();
-    bool isSearchableObject(LLViewerObject* objectp, LLViewerRegion* our_region) const;
+    bool isSearchableObject(VSAreaObject objectp, VSAreaRegion our_region) const;
     void setFindOwnerText(const std::string& value);
 
     std::map<LLUUID, FSObjectProperties> mObjectDetails;
@@ -171,6 +176,8 @@ public:
     void onCopySlappLink();
 
     bool isActive() const { return mActive; }
+    VSAreaObject source(const LLUUID&) const;
+    std::function<bool()> accountGuard() const { return mCurrent; }
 
 private:
     struct SlappBoolEntry
@@ -189,8 +196,8 @@ private:
     static const SlappBoolEntry sBoolFilters[];
     static const SlappTextEntry sTextFields[];
 
-    void requestObjectProperties(const std::vector<U32>& request_list, bool select, LLViewerRegion* regionp);
-    void matchObject(FSObjectProperties& details, LLViewerObject* objectp);
+    void requestObjectProperties(const std::vector<U32>& request_list, bool select, VSAreaRegion regionp);
+    void matchObject(FSObjectProperties& details, VSAreaObject objectp);
     void getNameFromUUID(const LLUUID& id, std::string& name, bool group, bool& name_requested);
 
     void updateCounterText();
@@ -201,6 +208,9 @@ private:
     boost::signals2::connection mRlvBehaviorCallbackConnection{};
     void updateRlvRestrictions(ERlvBehaviour behavior);
 
+    LLUUID mAccount,mSession;
+    std::function<bool()> mCurrent;
+    boost::signals2::scoped_connection mCostConnection;
     S32 mRequested{ 0 };
     bool mRefresh{ false };
     S32 mSearchableObjects{ 0 };
@@ -232,7 +242,7 @@ private:
     using name_cache_connection_map_t = std::map<LLUUID, boost::signals2::connection>;
     name_cache_connection_map_t mNameCacheConnections;
 
-    LLViewerRegion* mLastRegion{ nullptr };
+    VSAreaRegion mLastRegion{ nullptr };
 
     class FSParcelChangeObserver;
     friend class FSParcelChangeObserver;
@@ -309,7 +319,7 @@ public:
     void setCounterText(LLStringUtil::format_map_t args);
     void updateScrollList();
     void updateName(const LLUUID& id, const std::string& name);
-    static void touchObject(LLViewerObject* objectp);
+    static void touchObject(VSAreaObject objectp);
 
     FSScrollListCtrl* getResultList() { return mResultList; }
     void updateResultListColumns();
@@ -320,8 +330,8 @@ public:
 private:
     void onDoubleClick();
     void onClickRefresh();
-    void buyObject(FSObjectProperties& details, LLViewerObject* objectp);
-    void sitOnObject(FSObjectProperties& details, LLViewerObject* objectp);
+    void buyObject(FSObjectProperties& details, VSAreaObject objectp);
+    void sitOnObject(FSObjectProperties& details, VSAreaObject objectp);
     void onCommitCheckboxBeacons();
 	
 	void onCopyToClipboard();

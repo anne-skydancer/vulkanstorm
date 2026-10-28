@@ -32,6 +32,7 @@
 #endif
 
 #include "llviewerdisplay.h"
+#include "vscameraview.h"
 
 #include "fsyspath.h"
 #include "hexdump.h"

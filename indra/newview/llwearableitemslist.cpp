@@ -25,7 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llrender2dutils.h"
 #include "vsavatarservices.h"
+#include "vsnativeim.h"
 
 #include "llwearableitemslist.h"
 
@@ -1055,6 +1057,14 @@ void LLWearableItemsList::updateItemComplexity(const std::map<LLUUID, U32>& item
 
 void LLWearableItemsList::updateComplexity()
 {
+    if (LLRender2D::isNativeUI())
+    {
+        std::vector<LLPanel*> rows;
+        getItems(rows);
+        for (auto* row : rows)
+            if (auto* item = dynamic_cast<FSPanelCOFWearableOutfitListItem*>(row)) item->updateItemWeight(0);
+    }
+
     for (std::map<LLUUID, U32>::const_iterator it = mItemComplexityMap.begin(); it != mItemComplexityMap.end(); ++it)
     {
         LLUUID id = mLinkedItemsMap[it->first];
@@ -1112,8 +1122,16 @@ void LLWearableItemsList::ContextMenu::show(LLView* spawning_view, LLWearableTyp
         mUUIDs.clear();
     }
 
+    const auto current = vs_native_im_guard();
+    auto guarded = [current](auto callback)
+    {
+        return [current, callback](LLUICtrl* control, const LLSD& data)
+        {
+            if (current()) callback(control, data);
+        };
+    };
     LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
-    registrar.add("Wearable.CreateNew", boost::bind(createNewWearableByType, w_type));
+    registrar.add("Wearable.CreateNew", guarded(boost::bind(createNewWearableByType, w_type)));
     menup = createFromFile("menu_wearable_list_item.xml");
     if (!menup)
     {
@@ -1260,38 +1278,40 @@ static void populate_assign_to_folder_menu(LLContextMenu* menu)
 // virtual
 LLContextMenu* LLWearableItemsList::ContextMenu::createMenu()
 {
+    const auto current = vs_native_im_guard();
+    auto guarded = [current](auto callback)
+    {
+        return [current, callback](LLUICtrl* control, const LLSD& data)
+        {
+            if (current()) callback(control, data);
+        };
+    };
     LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registrar;
     const uuid_vec_t& ids = mUUIDs;     // selected items IDs
     LLUUID selected_id = ids.front();   // ID of the first selected item
 
     // Register handlers common for all wearable types.
-    registrar.add("Wearable.Wear", boost::bind(wear_multiple, ids, true));
-    registrar.add("Wearable.Add", boost::bind(wear_multiple, ids, false));
-    registrar.add("Wearable.Edit", boost::bind(handle_item_edit, selected_id));
-    registrar.add("Wearable.CreateNew", boost::bind(createNewWearable, selected_id));
-    registrar.add("Wearable.ShowOriginal", boost::bind(show_item_original, selected_id));
+    registrar.add("Wearable.Wear", guarded(boost::bind(wear_multiple, ids, true)));
+    registrar.add("Wearable.Add", guarded(boost::bind(wear_multiple, ids, false)));
+    registrar.add("Wearable.Edit", guarded(boost::bind(handle_item_edit, selected_id)));
+    registrar.add("Wearable.CreateNew", guarded(boost::bind(createNewWearable, selected_id)));
+    registrar.add("Wearable.ShowOriginal", guarded(boost::bind(show_item_original, selected_id)));
     // <AS:Chanayane> Delete from outfit context menu entry
-    registrar.add("Wearable.DeleteFromOutfit", boost::bind(delete_from_outfit, ids));
+    registrar.add("Wearable.DeleteFromOutfit", guarded(boost::bind(delete_from_outfit, ids)));
     // </AS:Chanayane>
-    registrar.add("Wearable.TakeOffDetach",
-                  //boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), ids, no_op)); // <FS:Ansariel> [SL:KB] - Patch: Appearance-Misc
-                  boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), ids));
+    registrar.add("Wearable.TakeOffDetach", guarded(boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), ids)));
     // Register handlers for clothing.
-    registrar.add("Clothing.TakeOff",
-                  //boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), ids, no_op)); // <FS:Ansariel> [SL:KB] - Patch: Appearance-Misc
-                  boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), ids));
+    registrar.add("Clothing.TakeOff", guarded(boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), ids)));
 
     // Register handlers for body parts.
 
     // Register handlers for attachments.
-    registrar.add("Attachment.Detach",
-                  //boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), ids, no_op)); // <FS:Ansariel> [SL:KB] - Patch: Appearance-Misc
-                  boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), ids));
-    registrar.add("Attachment.Favorite", boost::bind(toggle_favorites, ids));
-    registrar.add("Attachment.AssignFolder", boost::bind(assign_to_favorite_folder, ids, _2)); // </FS:Amy> Favorite Wearables folder assignment
-    registrar.add("Attachment.Touch", boost::bind(handle_attachment_touch, selected_id));
-    registrar.add("Attachment.Profile", boost::bind(show_item_profile, selected_id));
-    registrar.add("Object.Attach", boost::bind(LLViewerAttachMenu::attachObjects, ids, _2));
+    registrar.add("Attachment.Detach", guarded(boost::bind(&LLAppearanceMgr::removeItemsFromAvatar, LLAppearanceMgr::getInstance(), ids)));
+    registrar.add("Attachment.Favorite", guarded(boost::bind(toggle_favorites, ids)));
+    registrar.add("Attachment.AssignFolder", guarded(boost::bind(assign_to_favorite_folder, ids, _2))); // </FS:Amy> Favorite Wearables folder assignment
+    registrar.add("Attachment.Touch", guarded(boost::bind(handle_attachment_touch, selected_id)));
+    registrar.add("Attachment.Profile", guarded(boost::bind(show_item_profile, selected_id)));
+    registrar.add("Object.Attach", guarded(boost::bind(LLViewerAttachMenu::attachObjects, ids, _2)));
 
     // Create the menu.
     LLContextMenu* menu = createFromFile("menu_wearable_list_item.xml");

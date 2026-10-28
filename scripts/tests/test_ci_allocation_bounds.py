@@ -108,3 +108,25 @@ int main(){
 
 if __name__ == '__main__':
     unittest.main()
+from test_native_simulator_features import method
+
+
+
+    def test_opengl_loader_probe_without_vulkan_sdk(self):
+        source = (ROOT/'indra/newview/llviewerstats.cpp').read_text()
+        probe = source[source.index('// "Minimal Vulkan"'):source.index('namespace LLStatViewer')]
+#define VS_NATIVE_VULKAN 0
+PROBE
+ const uint32_t api=VK_MAKE_API_VERSION(2,1,3,4095);
+ assert(VK_API_VERSION_VARIANT(api)==2&&VK_API_VERSION_MAJOR(api)==1);
+ assert(VK_API_VERSION_MINOR(api)==3&&VK_API_VERSION_PATCH(api)==4095);
+ VkResult result=VK_SUCCESS;assert(result==0);VkInstance instance=nullptr;
+ PFN_vkGetInstanceProcAddr get=nullptr;PFN_vkEnumerateInstanceVersion enumerate=nullptr;
+ assert(!instance&&!get&&!enumerate);
+'''.replace('PROBE', probe))
+
+
+
+
+
+

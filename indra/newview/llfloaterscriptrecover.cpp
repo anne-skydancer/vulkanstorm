@@ -33,7 +33,21 @@
 #include "llfloaterscriptrecover.h"
 
 #include "llviewerassetupload.h"
+#include "vsnativeim.h"
+#include <exception>
+#include <set>
 
+namespace
+{
+std::set<std::shared_ptr<LLScriptRecoverQueue>> sRecoverQueues;
+std::function<bool()> recoveryAccount()
+{
+    const auto current = vs_native_im_guard();
+    const LLUUID agent = gAgentID, session = gAgentSessionID;
+    return [current, agent, session]()
+    { return current() && agent.notNull() && agent == gAgentID && session == gAgentSessionID; };
+}
+}
 const std::string NEW_LSL_NAME = "New Script";
 
 std::string fixNewScriptDefaultName(const std::string& scriptName)
@@ -57,6 +71,7 @@ LLFloaterScriptRecover::LLFloaterScriptRecover(const LLSD& sdKey)
 
 void LLFloaterScriptRecover::onOpen(const LLSD& sdKey)
 {
+    mAccountCurrent = recoveryAccount();
     LLScrollListCtrl* pListCtrl = findChild<LLScrollListCtrl>("script_list");
 
     LLSD sdBhvrRow; LLSD& sdBhvrColumns = sdBhvrRow["columns"];
@@ -87,13 +102,14 @@ bool LLFloaterScriptRecover::postBuild()
 
 void LLFloaterScriptRecover::onBtnCancel()
 {
+    if (!mAccountCurrent || !mAccountCurrent()) return;
     LLScrollListCtrl* pListCtrl = findChild<LLScrollListCtrl>("script_list");
 
     // Delete all listed files
     std::vector<LLScrollListItem*> items = pListCtrl->getAllData();
     for (std::vector<LLScrollListItem*>::const_iterator itItem = items.begin(); itItem != items.end(); ++itItem)
     {
-        LLFile::remove((*itItem)->getValue().asString());
+        LLFile::remove((*itItem)->getValue()["path"].asString());
     }
 
     closeFloater();
@@ -101,6 +117,7 @@ void LLFloaterScriptRecover::onBtnCancel()
 
 void LLFloaterScriptRecover::onBtnRecover()
 {
+    if (!mAccountCurrent || !mAccountCurrent()) return;
     LLScrollListCtrl* pListCtrl = findChild<LLScrollListCtrl>("script_list");
 
     // Recover all selected, delete any unselected
@@ -119,7 +136,7 @@ void LLFloaterScriptRecover::onBtnRecover()
     }
 
     if (!sdFiles.emptyArray())
-        new LLScriptRecoverQueue(sdFiles);
+        LLScriptRecoverQueue::start(sdFiles);
 
     closeFloater();
 }
@@ -131,18 +148,15 @@ void LLFloaterScriptRecover::onBtnRecover()
 class LLCreateRecoverScriptCallback : public LLInventoryCallback
 {
 public:
-    LLCreateRecoverScriptCallback(LLScriptRecoverQueue* pRecoverQueue)
-        : LLInventoryCallback(), mRecoverQueue(pRecoverQueue)
+    LLCreateRecoverScriptCallback(std::weak_ptr<LLScriptRecoverQueue> queue, std::string path)
+        : mRecoverQueue(std::move(queue)), mPath(std::move(path)) {}
+    void fire(const LLUUID& item) override
     {
+        if (auto queue = mRecoverQueue.lock()) queue->onCreateScript(item, mPath);
     }
-
-    void fire(const LLUUID& idItem)
-    {
-        mRecoverQueue->onCreateScript(idItem);
-    }
-
-protected:
-    LLScriptRecoverQueue* mRecoverQueue;
+private:
+    std::weak_ptr<LLScriptRecoverQueue> mRecoverQueue;
+    std::string mPath;
 };
 
 // ============================================================================
@@ -152,6 +166,7 @@ protected:
 // static
 void LLScriptRecoverQueue::recoverIfNeeded()
 {
+    resetAccount();
     const std::string strTempPath = LLFile::tmpdir();
     LLSD sdData, &sdFiles = sdData["files"];
 
@@ -197,18 +212,48 @@ void LLScriptRecoverQueue::recoverIfNeeded()
 }
 
 LLScriptRecoverQueue::LLScriptRecoverQueue(const LLSD& sdFiles)
+    : mAccountCurrent(recoveryAccount())
 {
     for (LLSD::array_const_iterator itFile = sdFiles.beginArray(), endFile = sdFiles.endArray(); itFile != endFile;  ++itFile)
     {
         const LLSD& sdFile = *itFile;
         if (LLFile::isfile(sdFile["path"]))
-            m_FileQueue.insert(std::pair<std::string, LLSD>(sdFile["path"], sdFile));
+            m_FileQueue.insert(std::pair<std::string, LLSD>(sdFile["path"].asString(), sdFile));
     }
+}
+void LLScriptRecoverQueue::start(const LLSD& files)
+{
+    auto queue = std::shared_ptr<LLScriptRecoverQueue>(new LLScriptRecoverQueue(files));
+    sRecoverQueues.insert(queue);
+    queue->recoverNext();
+}
+void LLScriptRecoverQueue::resetAccount()
+{
+    // Async callbacks retain weak queue references. Backups remain on disk.
+    for (const auto& queue : sRecoverQueues) queue->mRetired = true;
+    sRecoverQueues.clear();
+}
+bool LLScriptRecoverQueue::current() const
+{
+    return !mRetired && mAccountCurrent();
+}
+void LLScriptRecoverQueue::finish()
+{
+    mRetired = true;
+    sRecoverQueues.erase(shared_from_this());
+}
+void LLScriptRecoverQueue::failed(const std::string& path)
+{
+    if (!current()) { finish(); return; }
+    if (path != mPendingPath) return;
+    // Keep failed source files recoverable on the next login.
+    m_FileQueue.erase(path); mPendingPath.clear();
     recoverNext();
 }
-
 bool LLScriptRecoverQueue::recoverNext()
 {
+    const auto keepAlive = shared_from_this();
+    if (!current()) { finish(); return false; }
     /**
      * Steps:
      *  (1) create a script inventory item under Lost and Found
@@ -232,7 +277,7 @@ bool LLScriptRecoverQueue::recoverNext()
             pInvPanel->setSelection(idFNF, true);
         }
 
-        delete this;
+        finish();
         return false;
     }
 
@@ -243,79 +288,58 @@ bool LLScriptRecoverQueue::recoverNext()
     //           script with the default name for new scripts
     std::string strScriptName = fixNewScriptDefaultName(itFile->second["name"].asString());
 
+    mPendingPath = itFile->first;
     create_inventory_item(gAgent.getID(), gAgent.getSessionID(), idFNF, LLTransactionID::tnull,
                           strScriptName, strItemDescr, LLAssetType::AT_LSL_TEXT, LLInventoryType::IT_LSL,
                           gDirUtilp->getExtension(itFile->first) == "luabackup" ? SST_LUA : SST_LSL,
-                          PERM_MOVE | PERM_TRANSFER, new LLCreateRecoverScriptCallback(this));
+                          PERM_MOVE | PERM_TRANSFER, new LLCreateRecoverScriptCallback(weak_from_this(), mPendingPath));
     return true;
 }
 
-void LLScriptRecoverQueue::onCreateScript(const LLUUID& idItem)
+void LLScriptRecoverQueue::onCreateScript(const LLUUID& idItem, const std::string& path)
 {
-    const LLViewerInventoryItem* pItem = gInventory.getItem(idItem);
-    if (!pItem)
-    {
-        // TODO: error handling
-        return;
-    }
-
-    std::string strFileName;
-    std::string strFilePath;
-    for (filename_queue_t::iterator itFile = m_FileQueue.begin(); itFile != m_FileQueue.end(); ++itFile)
-    {
-        if (fixNewScriptDefaultName(itFile->second["name"].asString()) != pItem->getName())
-            continue;
-        strFileName = itFile->second["path"].asString();
-        itFile->second["item"] = idItem;
-        strFilePath = itFile->first;
-        break;
-    }
-
-    std::string strCapsUrl = gAgent.getRegionCapability("UpdateScriptAgent");
-
-    if (!strCapsUrl.empty())
-    {
-        std::string buffer;
-        llstat stat;
-        if (0 == LLFile::stat(strFilePath, &stat) && stat.st_size > 0)
+    const auto keepAlive = shared_from_this();
+    if (!current()) { finish(); return; }
+    auto found = m_FileQueue.find(path);
+    if (path != mPendingPath || found == m_FileQueue.end()) return;
+    auto item = gInventory.getItem(idItem);
+    if (!item || item->getType() != LLAssetType::AT_LSL_TEXT) { failed(path); return; }
+    found->second["item"] = idItem;
+    const std::string cap = gAgent.getRegionCapability("UpdateScriptAgent");
+    llstat info;
+    if (cap.empty() || LLFile::stat(path, &info) != 0 || info.st_size < 0)
+    { failed(path); return; }
+    std::string buffer;
+    try { buffer.resize(static_cast<size_t>(info.st_size)); }
+    catch (const std::exception&) { failed(path); return; }
+    LLFILE* file = LLFile::fopen(path, "rb");
+    if (!file) { failed(path); return; }
+    const size_t read = fread(buffer.data(), 1, buffer.size(), file);
+    LLFile::close(file);
+    if (read != buffer.size()) { failed(path); return; }
+    const std::weak_ptr<LLScriptRecoverQueue> weak = shared_from_this();
+    LLBufferedAssetUploadInfo::invnUploadFinish_f complete =
+        [weak, path](LLUUID item, LLUUID asset, LLUUID replacement, LLSD result)
         {
-            buffer.resize(stat.st_size);
-            LLFILE *pFile = LLFile::fopen(strFileName, "rb");
-
-            if (pFile)
-            {
-                size_t act_read = fread(&buffer[0], 1, stat.st_size, pFile);
-                if (act_read != stat.st_size)
-                {
-                    LL_WARNS() << "Incomplete read of " << strFilePath << ": File size = " << stat.st_size << " - bytes read: " << act_read << LL_ENDL;
-                    buffer = "";
-                }
-                LLFile::close(pFile);
-            }
-            else
-            {
-                buffer = "";
-                LL_WARNS() << "Cannot open " << strFilePath << LL_ENDL;
-            }
-        }
-        else
+            if (auto queue = weak.lock(); queue && queue->current() && queue->mPendingPath == path)
+                queue->onSavedScript(item, asset, replacement, result);
+        };
+    LLBufferedAssetUploadInfo::uploadFailed_f failure =
+        [weak, path](LLUUID, LLUUID, LLSD, std::string)
         {
-            LL_WARNS() << "No access to " << strFilePath << LL_ENDL;
-        }
-
-        LLBufferedAssetUploadInfo::taskUploadFinish_f proc = boost::bind(&LLScriptRecoverQueue::onSavedScript, this, _1, _2, _3, _4);
-        const std::string target = gDirUtilp->getExtension(strFilePath) == "luabackup" ? "luau" : "mono";
-        LLResourceUploadInfo::ptr_t uploadInfo(new LLScriptAssetUpload(idItem, target, buffer, proc, nullptr));
-        LLViewerAssetUpload::EnqueueInventoryUpload(strCapsUrl, uploadInfo);
-    }
-    else
-    {
-        LL_WARNS() << "Cannot recover script - no UpdateScriptAgent cap!" << LL_ENDL;
-    }
+            if (auto queue = weak.lock()) queue->failed(path);
+            return false; // Preserve the normal upload error notification.
+        };
+    const std::string target = gDirUtilp->getExtension(path) == "luabackup" ? "luau" : "mono";
+    LLResourceUploadInfo::ptr_t upload(new LLScriptAssetUpload(idItem, target, buffer, complete, failure));
+    if (!current()) { finish(); return; }
+    LLViewerAssetUpload::EnqueueInventoryUpload(cap, upload);
 }
 
 void LLScriptRecoverQueue::onSavedScript(LLUUID itemId, LLUUID newAssetId, LLUUID newItemId, LLSD response)
 {
+    const auto keepAlive = shared_from_this();
+    if (!current()) { finish(); return; }
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD( response[ LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS ] );
 
     filename_queue_t::iterator itFile = m_FileQueue.begin();
@@ -328,7 +352,8 @@ void LLScriptRecoverQueue::onSavedScript(LLUUID itemId, LLUUID newAssetId, LLUUI
         return;
     }
 
-    if( HTTP_OK == status.getType() )
+    if (itFile->first != mPendingPath) return;
+    if (status && response["state"].asString() == "complete")
     {
         LL_INFOS() << "Recovered script uploaded successfully" << LL_ENDL;
 
@@ -342,13 +367,18 @@ void LLScriptRecoverQueue::onSavedScript(LLUUID itemId, LLUUID newAssetId, LLUUI
                 LLPointer<LLViewerInventoryItem> pNewItem = new LLViewerInventoryItem(pItem);
                 pNewItem->rename(strScriptName);
                 pNewItem->updateServer(false);
+                if (!current()) { finish(); return; }
                 gInventory.updateItem(pNewItem);
+                if (!current()) { finish(); return; }
                 gInventory.notifyObservers();
+                if (!current()) { finish(); return; }
             }
 
+            if (!current()) { finish(); return; }
             LLFile::remove(itFile->first);
             m_FileQueue.erase(itFile);
         }
+        else m_FileQueue.erase(itFile);
     }
     else
     {
@@ -357,8 +387,11 @@ void LLScriptRecoverQueue::onSavedScript(LLUUID itemId, LLUUID newAssetId, LLUUI
         LLViewerInventoryItem* pItem = gInventory.getItem( itemId );
         if (pItem)
             gInventory.changeItemParent(pItem, gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH), false);
+        if (!current()) { finish(); return; }
         m_FileQueue.erase(itFile);
     }
+    if (!current()) { finish(); return; }
+    mPendingPath.clear();
     recoverNext();
 }
 

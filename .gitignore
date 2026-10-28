@@ -134,3 +134,7 @@ checks.json
 # Default language definitions are supplied by the pinned Autobuild package.
 indra/newview/app_settings/keywords_lua_default.xml
 indra/newview/app_settings/keywords_lsl_default.xml
+
+# Isolated software-Vulkan CI build/cache/evidence products.
+.ci/
+!3p/3p-diligentcore/*.patch

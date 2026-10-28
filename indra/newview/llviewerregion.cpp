@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llviewerregion.h"
+#include "vscapabilities.h"
 
 // linden libraries
 #include "indra_constants.h"

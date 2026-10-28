@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llworldmapmessage.h"
+#include "vsnativeim.h"
 #include "message.h"
 
 #include "llworldmap.h"
@@ -55,6 +56,11 @@ LLWorldMapMessage::LLWorldMapMessage() :
 
 LLWorldMapMessage::~LLWorldMapMessage()
 {
+}
+
+void LLWorldMapMessage::resetNativeAccount()
+{
+    mSLURLRegionName.clear();mSLURLRegionHandle=0;mSLURL.clear();mSLURLCallback=nullptr;mSLURLTeleport=false;
 }
 
 void LLWorldMapMessage::sendItemRequest(U32 type, U64 handle)
@@ -168,6 +174,8 @@ void LLWorldMapMessage::sendMapBlockRequest(U16 min_x, U16 min_y, U16 max_x, U16
 void LLWorldMapMessage::processMapBlockReply(LLMessageSystem* msg, void**)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
+    const auto current=vs_native_im_guard();
+    if(!current())return;
     if (gNonInteractive)
     {
         return;
@@ -199,6 +207,7 @@ void LLWorldMapMessage::processMapBlockReply(LLMessageSystem* msg, void**)
 
     for (S32 block=0; block<num_blocks; ++block)
     {
+        if(!current())return;
         U16 x_regions;
         U16 y_regions;
 // <FS:CR> Aurora Sim
@@ -225,7 +234,7 @@ void LLWorldMapMessage::processMapBlockReply(LLMessageSystem* msg, void**)
             msg->getU16Fast(_PREHASH_Size, _PREHASH_SizeX, x_size, block);
             msg->getU16Fast(_PREHASH_Size, _PREHASH_SizeY, y_size, block);
         }
-        if (x_size == 0 || (x_size % 16) != 0)
+        if (x_size == 0 || y_size == 0 || (x_size % 16) != 0)
         {
             x_size = REGION_WIDTH_UNITS;
         }
@@ -261,7 +270,7 @@ void LLWorldMapMessage::processMapBlockReply(LLMessageSystem* msg, void**)
                     gAgent.teleportViaLocation(pos_global);
                 }
                 // Update the "real" tracker information
-                gFloaterWorldMap->trackLocation(pos_global);
+                if(gFloaterWorldMap)gFloaterWorldMap->trackLocation(pos_global);
             }
         }
         else
@@ -291,18 +300,23 @@ void LLWorldMapMessage::processMapBlockReply(LLMessageSystem* msg, void**)
                 LLWorldMapMessage::getInstance()->mSLURLRegionName.clear();
                 LLWorldMapMessage::getInstance()->mSLURLRegionHandle = 0;
 
-                callback(handle, LLWorldMapMessage::getInstance()->mSLURL, image_id, LLWorldMapMessage::getInstance()->mSLURLTeleport);
+                const std::string url=LLWorldMapMessage::instance().mSLURL;
+                const bool teleport=LLWorldMapMessage::instance().mSLURLTeleport;
+                LLWorldMapMessage::instance().mSLURL.clear();
+                callback(handle,url,image_id,teleport);
             }
         }
     }
     // Tell the UI to update itself
-    gFloaterWorldMap->updateSims(found_null_sim);
+    if(current() && gFloaterWorldMap)gFloaterWorldMap->updateSims(found_null_sim);
 }
 
 // public static
 void LLWorldMapMessage::processMapItemReply(LLMessageSystem* msg, void**)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
+    const auto current=vs_native_im_guard();
+    if(!current())return;
     //LL_INFOS("WorldMap") << LL_ENDL;
     U32 type;
     msg->getU32Fast(_PREHASH_RequestData, _PREHASH_ItemType, type);
@@ -311,6 +325,7 @@ void LLWorldMapMessage::processMapItemReply(LLMessageSystem* msg, void**)
 
     for (S32 block=0; block<num_blocks; ++block)
     {
+        if(!current())return;
         U32 X, Y;
         std::string name;
         S32 extra, extra2;

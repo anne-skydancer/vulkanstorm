@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 #if VS_NATIVE_VULKAN
 #include "vsuidrawbridge.h"
+#include "vsmediaimage.h"
+#include "vsuiresources.h"
 #include "vsnativesession.h"
 #include "vsobjectselection.h"
 #include "vsvulkancontext.h"
@@ -1804,6 +1806,10 @@ void LLViewerMediaImpl::createMediaSource()
 void LLViewerMediaImpl::destroyMediaSource()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_MEDIA;
+#if VS_NATIVE_VULKAN
+    if (auto* resources = VSUIDrawBridge::resources())
+        resources->erase("media:" + mTextureId.asString());
+#endif
     mNeedsNewTexture = true;
 
     // Tell the viewer media texture it's no longer active
@@ -3108,9 +3114,13 @@ void LLViewerMediaImpl::update()
 
 
 #if VS_NATIVE_VULKAN
-    // UI controls copy immutable plugin pixels on the main thread before the
-    // next idle can replace the shared buffer. No GL texture/upload worker.
-    if (VSUIDrawBridge::resources()) return;
+    // All consumers share the same immutable generation. Dirty state is reset
+    // only after publication, so budget refusal retries without losing pixels.
+    if (auto* resources = VSUIDrawBridge::resources())
+    {
+        vs_update_media_image(*resources, "media:" + mTextureId.asString(), *mMediaSource);
+        return;
+    }
 #endif
 
     LLViewerMediaTexture* media_tex;

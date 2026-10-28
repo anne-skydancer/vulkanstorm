@@ -29,6 +29,7 @@
 
 #include "llpreviewnotecard.h"
 #include "llnotecard.h" // <FS> Byte counter
+#include "vstaskinventoryobject.h"
 
 #include "llinventory.h"
 
@@ -271,14 +272,14 @@ void LLPreviewNotecard::setEnabled(bool enabled)
     }
     if (mSaveBtn)
     {
-        mSaveBtn->setEnabled(enabled && mEditor && (!mEditor->isPristine()));
+        mSaveBtn->setEnabled(enabled && mEditor && (!mEditor->isPristine() || mTaskSaveFailed));
     }
 }
 
 
 void LLPreviewNotecard::draw()
 {
-    bool changed = !mEditor->isPristine();
+    bool changed = !mEditor->isPristine() || mTaskSaveFailed;
 
     mSaveBtn->setEnabled(changed && getEnabled());
     // <FS> Byte counter
@@ -320,7 +321,7 @@ bool LLPreviewNotecard::handleKeyHere(KEY key, MASK mask)
 // virtual
 bool LLPreviewNotecard::canClose()
 {
-    if(mForceClose || !mEditor || mEditor->isPristine())
+    if(mForceClose || !mEditor || (mEditor->isPristine() && !mTaskSaveFailed))
     {
         return true;
     }
@@ -394,8 +395,18 @@ void LLPreviewNotecard::updateTitleButtons()
     }
 }
 
+namespace
+{
+struct NotecardLoad
+{
+    LLHandle<LLFloater> view;
+    LLUUID item, asset;
+    std::function<bool()> current;
+};
+}
 void LLPreviewNotecard::loadAsset()
 {
+    if (!ensureTaskInventory()) return;
     // request the asset.
     const LLInventoryItem* item = getItem();
     bool fail = false;
@@ -421,13 +432,12 @@ void LLPreviewNotecard::loadAsset()
             else
             {
                 LLHost source_sim = LLHost();
-                LLSD* user_data = nullptr;
                 if (mObjectUUID.notNull())
                 {
-                    LLViewerObject *objectp = gObjectList.findObject(mObjectUUID);
-                    if (objectp && objectp->getRegion())
+                    auto objectp = VSTaskInventoryObject::find(mObjectUUID);
+                    if (objectp)
                     {
-                        source_sim = objectp->getRegion()->getHost();
+                        source_sim = objectp->getHost();
                     }
                     else
                     {
@@ -440,18 +450,8 @@ void LLPreviewNotecard::loadAsset()
                         mAssetStatus = PREVIEW_ASSET_LOADED;
                         return;
                     }
-                    user_data = new LLSD();
-                    user_data->with("taskid", mObjectUUID).with("itemid", mItemUUID);
                 }
-                else
-                {
-                    user_data =  new LLSD(mItemUUID);
-                }
-
-                LLSD context;
-                context["vs_notecard_key"] = *user_data;
-                vs_native_im_stamp_notification(context);
-                *user_data = context;
+                auto* user_data = new NotecardLoad{getHandle(), mItemUUID, mAssetID, inventoryItemGuard()};
                 gAssetStorage->getInvItemAsset(source_sim,
                                                 gAgent.getID(),
                                                 gAgent.getSessionID(),
@@ -528,15 +528,11 @@ void LLPreviewNotecard::onLoadComplete(const LLUUID& asset_uuid,
                                        void* user_data, S32 status, LLExtStat ext_status)
 {
     LL_INFOS() << "LLPreviewNotecard::onLoadComplete()" << LL_ENDL;
-    LLSD* floater_key = (LLSD*)user_data;
-    LLSD key = *floater_key;
-    if (key.has("vs_notecard_key"))
-    {
-        if (!vs_native_im_notification_current(key)) { delete floater_key; return; }
-        key = key["vs_notecard_key"];
-    }
-    LLPreviewNotecard* preview = LLFloaterReg::findTypedInstance<LLPreviewNotecard>("preview_notecard", key);
-    if( preview )
+    std::unique_ptr<NotecardLoad> load(static_cast<NotecardLoad*>(user_data));
+    if (!load || !load->current()) return;
+    auto* preview = dynamic_cast<LLPreviewNotecard*>(load->view.get());
+    const auto* item = preview ? preview->getItem() : nullptr;
+    if (preview && item && item->getUUID() == load->item && item->getAssetUUID() == load->asset && asset_uuid == load->asset)
     {
         if(0 == status)
         {
@@ -603,7 +599,6 @@ void LLPreviewNotecard::onLoadComplete(const LLUUID& asset_uuid,
             preview->mAssetStatus = PREVIEW_ASSET_ERROR;
         }
     }
-    delete floater_key;
 }
 
 struct LLSaveNotecardInfo
@@ -611,6 +606,7 @@ struct LLSaveNotecardInfo
     LLPreviewNotecard* mSelf;
     LLHandle<LLFloater> mHandle;
     std::function<bool()> mCurrent = vs_native_im_guard();
+    std::function<bool()> mAccountCurrent = vs_native_im_guard();
     LLUUID mItemUUID;
     LLUUID mObjectUUID;
     LLTransactionID mTransactionID;
@@ -619,6 +615,7 @@ struct LLSaveNotecardInfo
                        const LLTransactionID& transaction_id, LLInventoryItem* copyitem) :
         mSelf(self), mHandle(self->getHandle()), mItemUUID(item_id), mObjectUUID(object_id), mTransactionID(transaction_id), mCopyItem(copyitem)
     {
+        mCurrent = self->inventoryItemGuard();
     }
 };
 
@@ -674,7 +671,8 @@ void LLPreviewNotecard::finishTaskUpload(LLUUID itemId, LLUUID newAssetId, LLUUI
 
 bool LLPreviewNotecard::saveIfNeeded(LLInventoryItem* copyitem, bool sync)
 {
-    if(!mEditor->isPristine())
+    if (!inventoryItemGuard()()) return false;
+    if(!mEditor->isPristine() || mTaskSaveFailed)
     {
         std::string buffer;
         if (!mEditor->exportBuffer(buffer))
@@ -687,14 +685,16 @@ bool LLPreviewNotecard::saveIfNeeded(LLInventoryItem* copyitem, bool sync)
         mScrollPos = mEditor->getScrollContainer()->getScrollbar(LLScrollContainer::VERTICAL)->getDocPos();
 
         mEditor->makePristine();
+        mTaskSaveFailed = false;
         const LLInventoryItem* item = getItem();
         // save it out to database
         if (item)
         {
-            const auto current = vs_native_im_guard();
+            const auto account = mPreviewCurrent; const auto weak = getHandle();
+            const auto current = [account, weak] { return account() && weak.get(); };
             if (!current()) return false;
             std::string agent_url = gAgent.getRegionCapability("UpdateNotecardAgentInventory");
-            std::string task_url = gAgent.getRegionCapability("UpdateNotecardTaskInventory");
+            std::string task_url = VSTaskInventoryObject::find(mObjectUUID)->getCapability("UpdateNotecardTaskInventory");
 
             if ((mObjectUUID.isNull() && !agent_url.empty()) || (!mObjectUUID.isNull() && !task_url.empty()))
             {
@@ -719,7 +719,16 @@ bool LLPreviewNotecard::saveIfNeeded(LLInventoryItem* copyitem, bool sync)
                             if (!current()) return;
                             LLPreviewNotecard::finishTaskUpload(itemId, newAssetId, object_uuid);
                         },
-                        nullptr);
+                        [weak, account](LLUUID, LLUUID, LLSD, std::string)
+                        {
+                            auto* view = dynamic_cast<LLPreviewNotecard*>(weak.get());
+                            if (!view || !account()) return false;
+                            view->mTaskSaveFailed = true;
+                            view->mCloseAfterSave = false;
+                            view->mAssetStatus = PREVIEW_ASSET_ERROR;
+                            view->setEnabled(true);
+                            return true;
+                        });
                     url = task_url;
                 }
 
@@ -806,6 +815,12 @@ void LLPreviewNotecard::onSaveComplete(const LLUUID& asset_uuid, void* user_data
     LLSaveNotecardInfo* info = (LLSaveNotecardInfo*)user_data;
     if (info && !info->mCurrent())
     {
+        if (info->mAccountCurrent())
+            if (auto* view = dynamic_cast<LLPreviewNotecard*>(info->mHandle.get()))
+            {
+                view->mTaskSaveFailed = true; view->mCloseAfterSave = false;
+                view->mAssetStatus = PREVIEW_ASSET_ERROR; view->setEnabled(true);
+            }
         LLFile::remove(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, asset_uuid.asString()) + ".tmp");
         delete info;
         return;
@@ -833,7 +848,7 @@ void LLPreviewNotecard::onSaveComplete(const LLUUID& asset_uuid, void* user_data
         }
         else
         {
-            LLViewerObject* object = gObjectList.findObject(info->mObjectUUID);
+            auto object = VSTaskInventoryObject::find(info->mObjectUUID);
             LLViewerInventoryItem* item = NULL;
             if(object)
             {
@@ -851,6 +866,14 @@ void LLPreviewNotecard::onSaveComplete(const LLUUID& asset_uuid, void* user_data
                 LLNotificationsUtil::add("SaveNotecardFailObjectNotFound");
             }
         }
+        // Publication may invoke an account-retiring observer synchronously.
+        if (!info->mAccountCurrent() || !info->mHandle.get()) { delete info; return; }
+        if (info->mObjectUUID.notNull())
+        {
+            const auto object = VSTaskInventoryObject::find(info->mObjectUUID);
+            const auto* current = dynamic_cast<const LLViewerInventoryItem*>(object->getInventoryObject(info->mItemUUID));
+            if (!current || current->getAssetUUID() != asset_uuid) { delete info; return; }
+        }
         // Perform item copy to inventory
         if (info->mCopyItem.notNull())
         {
@@ -860,7 +883,7 @@ void LLPreviewNotecard::onSaveComplete(const LLUUID& asset_uuid, void* user_data
 
         // Find our window and close it if requested.
 
-        LLPreviewNotecard* previewp = LLFloaterReg::findTypedInstance<LLPreviewNotecard>("preview_notecard", info->mItemUUID);
+        auto* previewp = dynamic_cast<LLPreviewNotecard*>(info->mHandle.get());
         if (previewp && previewp->mCloseAfterSave)
         {
             previewp->closeFloater();
@@ -909,6 +932,7 @@ bool LLPreviewNotecard::handleSaveChangesDialog(const LLSD& notification, const 
 
 bool LLPreviewNotecard::handleConfirmDeleteDialog(const LLSD& notification, const LLSD& response)
 {
+    if (!inventoryItemGuard()()) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     if (option != 0)
     {
@@ -929,7 +953,7 @@ bool LLPreviewNotecard::handleConfirmDeleteDialog(const LLSD& notification, cons
     else
     {
         // delete item from inventory of in-world object
-        LLViewerObject* object = gObjectList.findObject(mObjectUUID);
+        auto object = VSTaskInventoryObject::find(mObjectUUID);
         if(object)
         {
             LLViewerInventoryItem* item = dynamic_cast<LLViewerInventoryItem*>(object->getInventoryObject(mItemUUID));

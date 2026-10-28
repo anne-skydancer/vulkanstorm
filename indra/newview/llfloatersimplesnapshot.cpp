@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloatersimplesnapshot.h"
+#include "vsnativeim.h"
+#include "llfile.h"
 
 #include "llfloaterreg.h"
 #include "llimagefiltersmanager.h"
@@ -50,8 +52,14 @@ const S32 LLFloaterSimpleSnapshot::THUMBNAIL_SNAPSHOT_DIM_MIN = 64;
 
 static const std::string THUMBNAIL_UPLOAD_CAP = "InventoryThumbnailUpload";
 
-void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, LLSD first_data, LLFloaterSimpleSnapshot::completion_t callback)
+void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, LLSD first_data, LLFloaterSimpleSnapshot::completion_t callback, std::function<bool()> current)
 {
+    struct OwnedThumbnailFile
+    {
+        std::string path;
+        ~OwnedThumbnailFile() { LLFile::remove(path); }
+    } file{path_to_image};
+    if (!current()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("post_thumbnail_image_coro", httpPolicy);
@@ -70,6 +78,7 @@ void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, L
     {
         // Stage 1: Request uploader URL
         LLSD result = httpAdapter->postAndSuspend(httpRequest, cap_url, first_data, httpOpts, httpHeaders);
+        if (!current()) return;
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -134,6 +143,7 @@ void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, L
         uploaderhttpOpts->setFollowRedirects(true);
 
         result = httpAdapter->postFileAndSuspend(uploaderhttpRequest, uploader_cap, path_to_image, uploaderhttpOpts, uploaderhttpHeaders);
+        if (!current()) return;
 
         httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -535,11 +545,12 @@ void LLFloaterSimpleSnapshot::uploadImageUploadFile(const std::string &temp_file
         args["CAPABILITY"] = THUMBNAIL_UPLOAD_CAP;
         LLNotificationsUtil::add("RegionCapabilityRequestError", args);
         LL_WARNS("Thumbnail") << "Failed to upload profile image for item " << inventory_id << " " << task_id << ", no cap found" << LL_ENDL;
+        LLFile::remove(temp_file);
         return;
     }
 
     LLCoros::instance().launch("postAgentUserImageCoro",
-        boost::bind(post_thumbnail_image_coro, cap_url, temp_file, data, callback));
+        boost::bind(post_thumbnail_image_coro, cap_url, temp_file, data, callback, vs_native_im_guard()));
 }
 
 void LLFloaterSimpleSnapshot::update()

@@ -1,21 +1,5 @@
 # Pipeline choice and architecture
 
-Current mandate: Vulkan is a peer backend and OpenGL fallback is not achievable.
-DiligentCore is the selected GHI candidate. First implement native Vulkan UI and
-connected chat with no world rendering, following the
-[first-deliverable scope](qualification-roadmap.md#first-deliverable-for-vkstorm-vulkan).
-The comparisons below are historical; their backend fallback and selection
-proposals do not override this mandate. Vulkan startup/recovery failures must
-be reported explicitly without switching to OpenGL.
-
-Current mandate: DiligentCore is the user-selected GHI, with pinned dependency
-preparation on `vkstorm-vulkan`. Library-selection comparisons below describe the
-historical audit, not a requirement to choose again. These responsibility-level
-designs do not establish a complete insertion catalog. The
-[current insertion audit](diligent-insertion-catalog.md) must cover every necessary
-point and keep unresolved in-scope paths as acceptance blockers. Runtime parity
-and platform/GPU qualification remain separate from source coverage.
-
 ## Recommendation and its confidence
 
 For Windows/Linux, the [in-depth paired design](framework-comparison.md) and [73-record API matrix](framework-contract-matrix.csv) support **qualifying DiligentCore first**, with bgfx remaining a credible alternative. Both were examined through immutable public interfaces and implementation routes; this ranking is conditional, not predetermined or runtime-qualified. Keep viewer ownership of scene snapshots, multi-view pass semantics and material/shader contracts; delegate device creation, allocation, descriptors, PSOs, command recording/submission, barriers and resource lifetime infrastructure to the mature library where it satisfies those contracts. This is a candidate recommendation, not adoption or verified suitability.
@@ -43,7 +27,7 @@ These judgments are source-based engineering estimates. No implementation timing
 | SDL3 GPU / WebGPU-style abstraction | Useful explicit render/copy/compute APIs for general rendering. Full backend change plus API-specific shader pipeline required. | Existing SDL 2 Linux/native Win32 window code cannot assume direct adoption of SDL3 GPU presentation. The API restriction/interop costs need a concrete component proof. | Secondary shortlist, not presumed incapable. Investigate when portability/tooling goals outweigh Vulkan-specific controls; prove fragment storage atomics and current advanced shader features rather than silently substitute algorithms. |
 | Full engine/framework (e.g. DiligentFX) | Could reuse modern PBR/SSR/SSAO/DoF implementations; their algorithms are not established equivalent to the viewer's legacy, water, alpha/glow or RLVa contracts. | Broader content/scene/shader integration and visual requalification; may suit an explicitly redesigned visual product. | Not best **parity-first** option. Remains open if a deliberate visual redesign is accepted and separate compatibility/rebaseline work is funded. |
 | Incremental mixed GL/Vulkan in the same frame | Avoids initially porting every UI/world component, but cross-API resource exchange requires external memory/semaphores, compatible devices/formats and authoritative states. | Hard synchronization, lifetime and platform extension surface; CPU copies are possible but add latency/bandwidth. A GL final frame is not native renderer completion. | Diagnostic transition only if a narrow interop spike demonstrates a bounded need. Prefer backend selection per run until complete native frame coverage. |
-| Keep GL / Mesa Zink | Exactly current rendering algorithms; Zink is OpenGL over Vulkan driver translation, not viewer-native Vulkan. | Lowest immediate migration risk, mature operational baseline; unknown CPU/GPU bottlenecks remain. | GL backend created for AMD GPUs affected by rendering regressions caused by bugs in the AMD OpenGL ICD. May supply reference behavior in a separate run; it is not a Vulkan fallback. |
+| Keep GL / Mesa Zink | Exactly current rendering algorithms; Zink is OpenGL over Vulkan driver translation, not viewer-native Vulkan. | Lowest immediate migration risk, mature operational baseline; unknown CPU/GPU bottlenecks remain. | Preserve as control/fallback. If full backend experiments fail benefit/maintenance gates, retaining this is a valid result. |
 
 DiligentCore supports automatic **and** explicit state control; its resource-state article identifies shared-resource issues across contexts, so this design keeps one authoritative framegraph state owner. [Diligent resource-state management](https://diligentgraphics.com/2018/12/09/resource-state-management/), explanatory primary project guidance (2018), accessed 3 October 2026. Diligent's engine/core is distinct from its optional FX/PBR components. [Current project API/platform description](https://github.com/DiligentGraphics/DiligentEngine#features).
 
@@ -103,7 +87,7 @@ Proposed interfaces, not source already present:
 - `GraphicsDevice`: create/upload/copy/readback/record/submit plus capability/limits/error results. Qualified library objects live behind this semantic boundary. Delegate device, resource, descriptor, PSO, command and completion infrastructure to the library. Raw handles are exceptional bounded escapes with explicit graph/state reconciliation; pervasive escapes make the library infeasible rather than authorize a handcrafted replacement.
 - `CompletionTicket`: per-queue serial plus target generation and callback/cancellation owner. Captures/query results/bakes fulfill original consumers only when bytes valid; destroyed windows or expired requests do not publish stale data.
 
-GHI cannot hide ownership so thoroughly that unsupported combinations become silent fallbacks. Capability reports are generated before selecting algorithms; backend identity/settings reflect actual backend, and failed native Vulkan initialization reports its cause and stops the Vulkan session. It does not select GL or GL/Zink.
+GHI cannot hide ownership so thoroughly that unsupported combinations become silent fallbacks. Capability reports are generated before selecting algorithms; backend identity/settings reflect actual backend, and failed native initialization selects GL only through an explicit restart/fallback path, not mid-frame sharing of GPU names.
 
 ## Device, queues and execution
 
@@ -157,3 +141,74 @@ Keep separate run-selectable GL/Zink and new native backends during migration. F
 Qualify DiligentCore first and compare bgfx against the same representative cases. Disqualifying technical gates are unexpressible shader/descriptor ABI, fragment atomics/PPLL ordering, exact blend/depth/attachment behavior, auxiliary/UI/media/bake/capture completion, or resource/WSI recovery requiring extensive custom backend machinery. Governance and selected utility provenance must also be resolved. Promote bgfx if its public API satisfies these contracts with lower sustainable integration/maintenance burden. Defer optional NVIDIA NVRHI unless equivalent common-path coverage and tangible benefit justify its duplicate costs. If no existing abstraction qualifies, keep GL/Zink and mark architecture implementation blocked by feasibility. Bespoke is not the fallback absent an explicit capacity change.
 
 The required probe suite is in [qualification-roadmap.md](qualification-roadmap.md). Until it closes the identified source/runtime gaps, call this a source-informed recommendation with full listed-component design coverage, not a qualified native renderer or exhaustive verified behavioral audit.
+
+Current mandate: Vulkan is a peer backend and OpenGL fallback is not achievable.
+DiligentCore is the selected GHI candidate. First implement native Vulkan UI and
+connected chat with no world rendering, following the
+[first-deliverable scope](qualification-roadmap.md#first-deliverable-for-vkstorm-vulkan).
+The comparisons below are historical; their backend fallback and selection
+proposals do not override this mandate. Vulkan startup/recovery failures must
+be reported explicitly without switching to OpenGL.
+
+Current mandate: DiligentCore is the user-selected GHI, with pinned dependency
+preparation on `vkstorm-vulkan`. Library-selection comparisons below describe the
+historical audit, not a requirement to choose again. These responsibility-level
+designs do not establish a complete insertion catalog. The
+[current insertion audit](diligent-insertion-catalog.md) must cover every necessary
+point and keep unresolved in-scope paths as acceptance blockers. Runtime parity
+and platform/GPU qualification remain separate from source coverage.
+
+
+
+
+
+
+
+
+
+
+| Keep GL / Mesa Zink | Exactly current rendering algorithms; Zink is OpenGL over Vulkan driver translation, not viewer-native Vulkan. | Lowest immediate migration risk, mature operational baseline; unknown CPU/GPU bottlenecks remain. | GL backend created for AMD GPUs affected by rendering regressions caused by bugs in the AMD OpenGL ICD. May supply reference behavior in a separate run; it is not a Vulkan fallback. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+GHI cannot hide ownership so thoroughly that unsupported combinations become silent fallbacks. Capability reports are generated before selecting algorithms; backend identity/settings reflect actual backend, and failed native Vulkan initialization reports its cause and stops the Vulkan session. It does not select GL or GL/Zink.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

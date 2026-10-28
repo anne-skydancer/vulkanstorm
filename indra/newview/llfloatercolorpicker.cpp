@@ -27,6 +27,10 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloatercolorpicker.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsuiimageprovider.h"
+#endif
 
 // Viewer project includes
 #include "lltoolmgr.h"
@@ -151,9 +155,21 @@ void LLFloaterColorPicker::createUI ()
             * ( bits + x + y * linesize + 2 ) = ( U8 )( bVal * 255.0f );
         }
     }
-    mRGBImage = LLViewerTextureManager::getLocalTexture( (LLImageRaw*)raw, false );
-    gGL.getTexUnit(0)->bind(mRGBImage);
-    mRGBImage->setAddressMode(LLTexUnit::TAM_CLAMP);
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        LLUUID key;
+        key.generate();
+        mNativeImageKey = "color-picker/" + key.asString();
+        mNativeRGBImage = vs_publish_ui_image(mNativeImageKey, *raw);
+    }
+    else
+#endif
+    {
+        mRGBImage = LLViewerTextureManager::getLocalTexture( (LLImageRaw*)raw, false );
+        gGL.getTexUnit(0)->bind(mRGBImage);
+        mRGBImage->setAddressMode(LLTexUnit::TAM_CLAMP);
+    }
 
     // create palette
     for ( S32 each = 0; each < numPaletteColumns * numPaletteRows; ++each )
@@ -285,6 +301,15 @@ void LLFloaterColorPicker::destroyUI ()
 {
     // shut down pipette tool if active
     stopUsingPipette();
+
+#if VS_NATIVE_VULKAN
+    if (!mNativeImageKey.empty())
+    {
+        vs_erase_ui_image(mNativeImageKey);
+        mNativeImageKey.clear();
+        mNativeRGBImage = nullptr;
+    }
+#endif
 
     // delete palette we created
     std::vector < LLColor4* >::iterator iter = mPalette.begin ();
@@ -443,6 +468,14 @@ void LLFloaterColorPicker::onClickSelect ( void* data )
 
 void LLFloaterColorPicker::onClickPipette( )
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        auto* tool = LLToolPipette::getInstance();
+        tool->setNativeActive(!tool->nativeConsumer(this),this,mSwatch?mSwatch->pickerGuard():std::function<bool()>{});
+        return;
+    }
+#endif
     bool pipette_active = mPipetteBtn->getToggleState();
     pipette_active = !pipette_active;
     if (pipette_active)
@@ -485,6 +518,7 @@ void LLFloaterColorPicker::onImmediateCheck( LLUICtrl* ctrl, void* data)
 // From pipette
 void LLFloaterColorPicker::onColorSelect( const LLColor4 &color )
 {
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() && !LLToolPipette::instance().nativeConsumer(this))return;
     selectCurRgb(color.mV[VRED], color.mV[VGREEN], color.mV[VBLUE]);
 }
 
@@ -512,7 +546,15 @@ void LLFloaterColorPicker::draw()
     static LLCachedControl<F32> max_opacity(gSavedSettings, "PickerContextOpacity", 0.4f);
     drawConeToOwner(mContextConeOpacity, max_opacity, mSwatch, mContextConeFadeTime, mContextConeInAlpha, mContextConeOutAlpha);
 
-    mPipetteBtn->setToggleState(LLToolMgr::getInstance()->getCurrentTool() == LLToolPipette::getInstance());
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        mPipetteBtn->setEnabled(mActive);
+        mPipetteBtn->setToggleState(LLToolPipette::getInstance()->nativeConsumer(this));
+    }
+    else
+#endif
+        mPipetteBtn->setToggleState(LLToolMgr::getInstance()->getCurrentTool() == LLToolPipette::getInstance());
     mApplyImmediateCheck->setEnabled(mActive && mCanApplyImmediately);
     mSelectBtn->setEnabled(mActive);
 
@@ -522,7 +564,13 @@ void LLFloaterColorPicker::draw()
     const F32 alpha = getSwatchTransparency();
 
     // draw image for RGB area (not really RGB but you'll see what I mean...
-    gl_draw_image ( mRGBViewerImageLeft, mRGBViewerImageTop - mRGBViewerImageHeight, mRGBImage, LLColor4::white % alpha);
+#if VS_NATIVE_VULKAN
+    if (mNativeRGBImage)
+        mNativeRGBImage->draw(mRGBViewerImageLeft, mRGBViewerImageTop - mRGBViewerImageHeight,
+            mRGBViewerImageWidth, mRGBViewerImageHeight, LLColor4::white % alpha);
+    else
+#endif
+        gl_draw_image ( mRGBViewerImageLeft, mRGBViewerImageTop - mRGBViewerImageHeight, mRGBImage, LLColor4::white % alpha);
 
     // update 'cursor' into RGB Section
     S32 xPos = ( S32 ) ( ( F32 )mRGBViewerImageWidth * getCurH () ) - 8;
@@ -1169,6 +1217,13 @@ void LLFloaterColorPicker::setActive(bool active)
 
 void LLFloaterColorPicker::stopUsingPipette()
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if(LLToolPipette::getInstance()->ownsNativeConsumer(this))LLToolPipette::getInstance()->setNativeActive(false);
+        return;
+    }
+#endif
     if (LLToolMgr::getInstance()->getCurrentTool() == LLToolPipette::getInstance())
     {
         LLToolMgr::getInstance()->clearTransientTool();

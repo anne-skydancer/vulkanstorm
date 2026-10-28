@@ -27,6 +27,14 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "lltoolselect.h"
+#include "vsselectionflow.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsobjectselection.h"
+#include "vsobjectcontext.h"
+#include "vsworldavatar.h"
+#include "vsvulkancontext.h"
+#endif
 
 #include "llagent.h"
 #include "llagentcamera.h"
@@ -75,242 +83,114 @@ bool LLToolSelect::handleMouseDown(S32 x, S32 y, MASK mask)
     // Pass mousedown to agent
     LLTool::handleMouseDown(x, y, mask);
 
+    #if VS_NATIVE_VULKAN
+    if(gViewerWindow->isNativeVulkan())return mPick.mObjectID.notNull() &&
+        (!mPick.mNativeObjectCurrent || mPick.mNativeObjectCurrent());
+    #endif
     return mPick.getObject().notNull();
 }
 
 // static
+namespace
+{
+// This peer supplies the original owners lazily. The branch kernel is shared
+// with native scene handles; no legacy object is manufactured by native code.
+struct ReferenceSelectionPeer
+{
+    bool current()const{return true;}
+    LLViewerObject* object(const LLPickInfo& pick)const{return pick.getObject();}
+    LLViewerObject* rootEdit(LLViewerObject* object)const{return object?object->getRootEdit():nullptr;}
+    bool rlvEnabled()const{return RlvActions::isRlvEnabled();}
+    bool canEdit(LLViewerObject* object)const{return RlvActions::canEdit(object);}
+    bool inBuildMode()const{return LLToolMgr::instance().inBuildMode();}
+    void leaveBuildMode()const{LLToolMgr::instance().leaveBuildMode();}
+    bool fartouch()const{return RlvActions::hasBehaviour(RLV_BHVR_FARTOUCH);}
+    bool attachment(LLViewerObject* object)const{return object->isAttachment();}
+    bool youOwner(LLViewerObject* object)const{return object->permYouOwner();}
+    F32 distanceToObjectSquared(LLViewerObject* object)const{return dist_vec_squared(gAgent.getPositionAgent(),object->getPositionAgent());} // FIRE-37061: agent space
+    F32 fartouchDistanceSquared()const
+    {
+        static RlvCachedBehaviourModifier<float> distance(RLV_MODIFIER_FARTOUCHDIST);
+        return distance*distance;
+    }
+    F32 distanceToSurfaceSquared(const LLPickInfo& pick)const{return dist_vec_squared(gAgent.getPositionAgent(),pick.mIntersection);}
+    bool buildVisible()const{return LLFloaterReg::instanceVisible("build");}
+    MASK mask(const LLPickInfo& pick)const{return pick.mKeyMask;}
+    LLObjectSelectionHandle selection()const{return LLSelectMgr::getInstance()->getSelection();}
+    bool setting(const char* name)const{return gSavedSettings.getBOOL(name);}
+    void setting(const char* name,bool value)const{gSavedSettings.setBOOL(name,value);}
+    bool allowSelectAvatar()const{return LLSelectMgr::getInstance()->mAllowSelectAvatar;}
+    void forceSelection(bool value)const{LLSelectMgr::getInstance()->setForceSelection(value);}
+    bool scriptIcon(const LLPickInfo& pick)const{return pick.mHUDIcon && pick.mHUDIcon->getSourceObject();}
+    void showScriptDebug(const LLPickInfo& pick)const{LLFloaterScriptDebug::show(pick.mHUDIcon->getSourceObject()->getID());}
+    bool selected(LLViewerObject* object)const{return object->isSelected();}
+    S32 faceCount(LLViewerObject* object)const{return object->getNumTEs();}
+    bool containsAllFaces(LLViewerObject* object)const{return selection()->contains(object,SELECT_ALL_TES);}
+    std::optional<bool> faceSelection(LLViewerObject* object,const LLPickInfo& pick)const
+    {
+        const auto* face=object->getTE(pick.mObjectFace);
+        return face?std::optional<bool>(face->isSelected()):std::nullopt;
+    }
+    bool hasMediaFocus()const{return !LLViewerMediaFocus::getInstance()->getFocusedObjectID().isNull();}
+    void clearMediaFocus()const{LLViewerMediaFocus::getInstance()->clearFocus();}
+    void deselectOnly(LLViewerObject* object)const{LLSelectMgr::getInstance()->deselectObjectOnly(object);}
+    void deselectFamily(LLViewerObject* object)const{LLSelectMgr::getInstance()->deselectObjectAndFamily(object,true,true);}
+    void deselectAll()const{LLSelectMgr::getInstance()->deselectAll();}
+    void selectOnly(LLViewerObject* object,S32 face,S32 node,S32 primitive)const{LLSelectMgr::getInstance()->selectObjectOnly(object,face,node,primitive);}
+    void selectFamily(LLViewerObject* object)const{LLSelectMgr::getInstance()->selectObjectAndFamily(object);}
+    std::pair<F32,F32> hudZoom()const
+    {
+        std::pair<F32,F32> result;
+        LLSelectMgr::getInstance()->getAgentHUDZoom(result.first,result.second);
+        return result;
+    }
+    void hudZoom(const std::pair<F32,F32>& zoom)const{LLSelectMgr::getInstance()->setAgentHUDZoom(zoom.first,zoom.second);}
+    S32 gltfNode(const LLPickInfo& pick)const{return pick.mGLTFNodeIndex;}
+    S32 gltfPrimitive(const LLPickInfo& pick)const{return pick.mGLTFPrimitiveIndex;}
+    bool focusOnAvatar()const{return gAgentCamera.getFocusOnAvatar();}
+    bool selfAttachment(LLViewerObject* object)const{return LLVOAvatar::findAvatarFromAttachment(object)==gAgentAvatarp;}
+    bool self(LLViewerObject* object)const{return object==gAgentAvatarp;}
+    void turnToSelection(LLViewerObject* object)const
+    {
+        LLVector3d selection_center=LLSelectMgr::getInstance()->getSelectionCenterGlobal();
+        selection_center=selection_center-gAgent.getPositionGlobal();
+        LLVector3 selection_dir;
+        selection_dir.setVec(selection_center);
+        selection_dir.mV[VZ]=0.f;
+        selection_dir.normVec();
+        if(!object->isAvatar() && gAgent.getAtAxis()*selection_dir<.6f)
+        {
+            LLQuaternion target_rot;
+            target_rot.shortestArc(LLVector3::x_axis,selection_dir);
+            gAgent.startAutoPilotGlobal(gAgent.getPositionGlobal(),"",&target_rot,NULL,NULL,MAX_FAR_CLIP,
+                gAgentAvatarp->isSitting()?SELECTION_SITTING_ROTATION_TRESHOLD:SELECTION_ROTATION_TRESHOLD);
+        }
+    }
+    void transientRootAndChildren(LLViewerObject* object)const
+    {
+        auto* root=object->getRootEdit();
+        auto selection=LLSelectMgr::getInstance()->getSelection();
+        if(auto* node=selection->findNode(root))node->setTransient(true);
+        for(const auto& child:root->getChildren())if(auto* node=selection->findNode(child))node->setTransient(true);
+    }
+};
+}
+
+
 LLObjectSelectionHandle LLToolSelect::handleObjectSelection(const LLPickInfo& pick, bool ignore_group, bool temp_select, bool select_root)
 {
-    LLViewerObject* object = pick.getObject();
-    if (select_root)
-    {
-        object = object->getRootEdit();
-    }
-
-// [RLVa:KB] - Checked: RLVa-2.1.0
-    if ( (object) && (RlvActions::isRlvEnabled()) )
-    {
-        if (!RlvActions::canEdit(object))
-        {
-            if (!temp_select)
-                return LLSelectMgr::getInstance()->getSelection();
-            else if (LLToolMgr::instance().inBuildMode())
-                LLToolMgr::instance().leaveBuildMode();
-        }
-
-        if ( (RlvActions::hasBehaviour(RLV_BHVR_FARTOUCH)) && ( (!object->isAttachment()) || (!object->permYouOwner())) )
-        {
-            static RlvCachedBehaviourModifier<float> s_nFartouchDist(RLV_MODIFIER_FARTOUCHDIST);
-            float nFartouchDistSq = s_nFartouchDist * s_nFartouchDist;
-
-            // User is allowed to edit/select this object if it's within their current fartouch distance
-            // <FS:Trish> FIRE-37061 Compare in agent space, otherwise an object across a region border incorrectly becomes untouchable
-            if (dist_vec_squared(gAgent.getPositionAgent(), object->getPositionAgent()) > nFartouchDistSq)
-            // </FS:Trish>
-            {
-                // The object is out of range but we'll still allow them a temporary select (e.g. context menu) if the surface point is within range
-                if (dist_vec_squared(gAgent.getPositionAgent(), pick.mIntersection) > 1.5f * 1.5f)
-                {
-                    // Even the surface point is out of range so deny them the hit
-                    if ( (LLFloaterReg::instanceVisible("build")) && (pick.mKeyMask != MASK_SHIFT) && (pick.mKeyMask != MASK_CONTROL) )
-                        LLSelectMgr::getInstance()->deselectAll();
-                    return LLSelectMgr::getInstance()->getSelection();
-                }
-                else if (LLToolMgr::instance().inBuildMode())
-                {
-                    // Allow the selection but keep it temporary by pulling them out of build mode when they click too far
-                    LLToolMgr::instance().leaveBuildMode();
-                }
-            }
-        }
-    }
-// [/RLVa:KB]
-
-    bool select_owned = gSavedSettings.getBOOL("SelectOwnedOnly");
-    bool select_movable = gSavedSettings.getBOOL("SelectMovableOnly");
-    // <FS:Ansariel> FIRE-14593: Option to select only copyable objects
-    bool select_copyable = gSavedSettings.getBOOL("FSSelectCopyableOnly");
-    // <FS:Ansariel> FIRE-17696: Option to select only locked objects
-    bool select_locked = gSavedSettings.getBOOL("FSSelectLockedOnly");
-
-    // *NOTE: These settings must be cleaned up at bottom of function.
-    if (temp_select || LLSelectMgr::getInstance()->mAllowSelectAvatar)
-    {
-        gSavedSettings.setBOOL("SelectOwnedOnly", false);
-        gSavedSettings.setBOOL("SelectMovableOnly", false);
-        // <FS:Ansariel> FIRE-14593: Option to select only copyable objects
-        gSavedSettings.setBOOL("FSSelectCopyableOnly", false);
-        // <FS:Ansariel> FIRE-17696: Option to select only locked objects
-        gSavedSettings.setBOOL("FSSelectLockedOnly", false);
-        LLSelectMgr::getInstance()->setForceSelection(true);
-    }
-
-    bool extend_select = (pick.mKeyMask == MASK_SHIFT) || (pick.mKeyMask == MASK_CONTROL);
-
-    // If no object, check for icon, then just deselect
-    if (!object)
-    {
-        LLHUDIcon* last_hit_hud_icon = pick.mHUDIcon;
-
-        if (last_hit_hud_icon && last_hit_hud_icon->getSourceObject())
-        {
-            LLFloaterScriptDebug::show(last_hit_hud_icon->getSourceObject()->getID());
-        }
-        else if (!extend_select)
-        {
-            LLSelectMgr::getInstance()->deselectAll();
-        }
-    }
-    else
-    {
-        bool already_selected = object->isSelected();
-
-        if (already_selected &&
-            object->getNumTEs() > 0 &&
-            !LLSelectMgr::getInstance()->getSelection()->contains(object,SELECT_ALL_TES))
-        {
-            const LLTextureEntry* tep = object->getTE(pick.mObjectFace);
-            if (tep && !tep->isSelected() && !LLViewerMediaFocus::getInstance()->getFocusedObjectID().isNull())
-            {
-                // we were interacting with media and clicked on non selected face, drop media focus
-                LLViewerMediaFocus::getInstance()->clearFocus();
-                // selection was removed and zoom preserved by clearFocus(), continue with regular selection
-                already_selected = false;
-                extend_select = true;
-            }
-        }
-
-        if ( extend_select )
-        {
-            if ( already_selected )
-            {
-                if ( ignore_group )
-                {
-                    LLSelectMgr::getInstance()->deselectObjectOnly(object);
-                }
-                else
-                {
-                    LLSelectMgr::getInstance()->deselectObjectAndFamily(object, true, true);
-                }
-            }
-            else
-            {
-                if ( ignore_group )
-                {
-                    LLSelectMgr::getInstance()->selectObjectOnly(object, SELECT_ALL_TES);
-                }
-                else
-                {
-                    LLSelectMgr::getInstance()->selectObjectAndFamily(object);
-                }
-            }
-        }
-        else
-        {
-            // Save the current zoom values because deselect resets them.
-            F32 target_zoom;
-            F32 current_zoom;
-            LLSelectMgr::getInstance()->getAgentHUDZoom(target_zoom, current_zoom);
-
-            // JC - Change behavior to make it easier to select children
-            // of linked sets. 9/3/2002
-            if( !already_selected || ignore_group)
-            {
-                // ...lose current selection in favor of just this object
-                LLSelectMgr::getInstance()->deselectAll();
-            }
-
-            if ( ignore_group )
-            {
-                LLSelectMgr::getInstance()->selectObjectOnly(object, SELECT_ALL_TES, pick.mGLTFNodeIndex, pick.mGLTFPrimitiveIndex);
-            }
-            else
-            {
-                LLSelectMgr::getInstance()->selectObjectAndFamily(object);
-            }
-
-            // restore the zoom to the previously stored values.
-            LLSelectMgr::getInstance()->setAgentHUDZoom(target_zoom, current_zoom);
-        }
-
-        if (!gAgentCamera.getFocusOnAvatar() &&                                     // if camera not glued to avatar
-            LLVOAvatar::findAvatarFromAttachment(object) != gAgentAvatarp &&    // and it's not one of your attachments
-            // <FS:Ansariel> FIRE-8039: Prevent avatar from turning to selected object
-            //object != gAgentAvatarp)                                  // and it's not you
-            object != gAgentAvatarp &&                                  // and it's not you
-            gSavedSettings.getBOOL("FSTurnAvatarToSelectedObject"))
-            // </FS:Ansariel>
-        {
-            // have avatar turn to face the selected object(s)
-            LLVector3d selection_center = LLSelectMgr::getInstance()->getSelectionCenterGlobal();
-            selection_center = selection_center - gAgent.getPositionGlobal();
-            LLVector3 selection_dir;
-            selection_dir.setVec(selection_center);
-            selection_dir.mV[VZ] = 0.f;
-            selection_dir.normVec();
-            if (!object->isAvatar() && gAgent.getAtAxis() * selection_dir < 0.6f)
-            {
-                LLQuaternion target_rot;
-                target_rot.shortestArc(LLVector3::x_axis, selection_dir);
-                gAgent.startAutoPilotGlobal(gAgent.getPositionGlobal(),
-                                            "",
-                                            &target_rot,
-                                            NULL,
-                                            NULL,
-                                            MAX_FAR_CLIP /*stop_distance, don't care since we are looking, not moving*/,
-                                            gAgentAvatarp->isSitting() ? SELECTION_SITTING_ROTATION_TRESHOLD : SELECTION_ROTATION_TRESHOLD);
-            }
-        }
-
-        if (temp_select)
-        {
-            if (!already_selected)
-            {
-                LLViewerObject* root_object = (LLViewerObject*)object->getRootEdit();
-                LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
-
-                // this is just a temporary selection
-                LLSelectNode* select_node = selection->findNode(root_object);
-                if (select_node)
-                {
-                    select_node->setTransient(true);
-                }
-
-                LLViewerObject::const_child_list_t& child_list = root_object->getChildren();
-                for (LLViewerObject::child_list_t::const_iterator iter = child_list.begin();
-                     iter != child_list.end(); iter++)
-                {
-                    LLViewerObject* child = *iter;
-                    select_node = selection->findNode(child);
-                    if (select_node)
-                    {
-                        select_node->setTransient(true);
-                    }
-                }
-
-            }
-        } //if(temp_select)
-    } //if(!object)
-
-    // Cleanup temp select settings above.
-    if (temp_select ||LLSelectMgr::getInstance()->mAllowSelectAvatar)
-    {
-        gSavedSettings.setBOOL("SelectOwnedOnly", select_owned);
-        gSavedSettings.setBOOL("SelectMovableOnly", select_movable);
-        // <FS:Ansariel> FIRE-14593: Option to select only copyable objects
-        gSavedSettings.setBOOL("FSSelectCopyableOnly", select_copyable);
-        // <FS:Ansariel> FIRE-17696: Option to select only locked objects
-        gSavedSettings.setBOOL("FSSelectLockedOnly", select_locked);
-        LLSelectMgr::getInstance()->setForceSelection(false);
-    }
-
-    return LLSelectMgr::getInstance()->getSelection();
+    ReferenceSelectionPeer peer;
+    return vs_handle_object_selection(peer,pick,ignore_group,temp_select,select_root);
 }
 
 bool LLToolSelect::handleMouseUp(S32 x, S32 y, MASK mask)
 {
     mIgnoreGroup = gSavedSettings.getBOOL("EditLinkedParts");
 
+    #if VS_NATIVE_VULKAN
+    if(gViewerWindow->isNativeVulkan())handleNativeObjectSelection(mPick,mIgnoreGroup,false);
+    else
+    #endif
     handleObjectSelection(mPick, mIgnoreGroup, false);
 
     return LLTool::handleMouseUp(x, y, mask);
@@ -346,3 +226,133 @@ void LLToolSelect::onMouseCaptureLost()
 
 
 
+
+#if VS_NATIVE_VULKAN
+namespace
+{
+struct NativeSelectionPeer
+{
+    using Object=std::optional<VSWorldScene::ObjectHandle>;
+    std::shared_ptr<VSNativeSession> session;
+    std::shared_ptr<VSObjectSelection> lifetime;
+    VSWorldScene& world;
+    VSObjectSelection& owner;
+    std::function<bool()> account;
+    bool current()const{return account && account() && session->phase()==VSNativeSession::Phase::Connected &&
+        session->existingObjectSelection()==lifetime.get() && bool(owner.retainSelection());}
+    Object object(const LLPickInfo& pick)const{return current()?world.object(pick.mObjectID):Object();}
+    Object rootEdit(const Object& object)const{return object?world.rootObject(*object,true):Object();}
+    bool rlvEnabled()const{return RlvActions::isRlvEnabled();}
+    bool canEdit(const Object& object)const
+    {
+        const auto context=object?VSObjectContext::resolve(object->id):std::nullopt;
+        return context && context->current() && RlvActions::canEdit(*context);
+    }
+    bool inBuildMode()const{return LLToolMgr::instance().inBuildMode();}
+    void leaveBuildMode()const{LLToolMgr::instance().leaveBuildMode();}
+    bool fartouch()const{return RlvActions::hasBehaviour(RLV_BHVR_FARTOUCH);}
+    bool attachment(const Object& object)const{const auto row=world.objectAdmission(*object);return row && row->attachment;}
+    bool youOwner(const Object& object)const{const auto row=world.objectAdmission(*object);return row && VSObjectContext::ownedByAgent(row->rootUpdateFlags);}
+    F32 distanceToObjectSquared(const Object& object)const
+    {
+        const auto context=VSObjectContext::resolve(object->id);
+        return context && context->current()?F32(dist_vec_squared(gAgent.getPositionGlobal(),context->position)):F32_MAX;
+    }
+    F32 fartouchDistanceSquared()const
+    {
+        static RlvCachedBehaviourModifier<float> distance(RLV_MODIFIER_FARTOUCHDIST);
+        return distance*distance;
+    }
+    F32 distanceToSurfaceSquared(const LLPickInfo& pick)const{return dist_vec_squared(gAgent.getPositionAgent(),pick.mIntersection);}
+    bool buildVisible()const{return LLFloaterReg::instanceVisible("build");}
+    MASK mask(const LLPickInfo& pick)const{return pick.mKeyMask;}
+    std::shared_ptr<const void> selection()const{return current()?owner.retainSelection():std::shared_ptr<const void>();}
+    bool setting(const char* name)const{return gSavedSettings.getBOOL(name);}
+    void setting(const char* name,bool value)const{gSavedSettings.setBOOL(name,value);}
+    bool allowSelectAvatar()const{return owner.allowSelectAvatar();}
+    void forceSelection(bool value)const{owner.setForceSelection(value);}
+    bool scriptIcon(const LLPickInfo& pick)const
+    {
+        if(!current() || !pick.mHUDIcon)return false;
+        const auto id=pick.mHUDIcon->getSourceID();
+        return current() && id.notNull();
+    }
+    void showScriptDebug(const LLPickInfo& pick)const
+    {
+        if(!current() || !pick.mHUDIcon)return;
+        const auto id=pick.mHUDIcon->getSourceID();
+        if(current() && id.notNull())LLFloaterScriptDebug::show(id);
+    }
+    bool selected(const Object& object)const{return owner.node(*object).has_value();}
+    S32 faceCount(const Object& object)const{return S32(world.faceCount(*object).value_or(0));}
+    bool containsAllFaces(const Object& object)const{return owner.contains(*object);}
+    std::optional<bool> faceSelection(const Object& object,const LLPickInfo& pick)const
+    {
+        const auto count=world.faceCount(*object);
+        if(!count || pick.mObjectFace<0 || U32(pick.mObjectFace)>=*count)return {};
+        return owner.contains(*object,pick.mObjectFace);
+    }
+    bool hasMediaFocus()const{return !LLViewerMediaFocus::getInstance()->getFocusedObjectID().isNull();}
+    void clearMediaFocus()const{LLViewerMediaFocus::getInstance()->clearFocus();}
+    void deselectOnly(const Object& object)const{owner.deselectOnly(*object);}
+    void deselectFamily(const Object& object)const{owner.deselectFamily(*object,true,true);}
+    void deselectAll()const{owner.deselectAll();}
+    void selectOnly(const Object& object,S32 face,S32 node,S32 primitive)const{owner.selectOnly(*object,face,node,primitive);}
+    void selectFamily(const Object& object)const{owner.selectFamily(*object);}
+    std::pair<F32,F32> hudZoom()const{return {gAgentCamera.mHUDTargetZoom,gAgentCamera.mHUDCurZoom};}
+    void hudZoom(const std::pair<F32,F32>& value)const{gAgentCamera.mHUDTargetZoom=value.first;gAgentCamera.mHUDCurZoom=value.second;}
+    S32 gltfNode(const LLPickInfo& pick)const{return pick.mGLTFNodeIndex;}
+    S32 gltfPrimitive(const LLPickInfo& pick)const{return pick.mGLTFPrimitiveIndex;}
+    bool focusOnAvatar()const{return gAgentCamera.getFocusOnAvatar();}
+    bool selfAttachment(const Object& object)const{const auto root=world.rootObject(*object,false);return root && root->id==gAgent.getID();}
+    bool self(const Object& object)const{return object->id==gAgent.getID();}
+    void turnToSelection(const Object& object)const
+    {
+        if(!owner.boundingBox())return;
+        const auto row=world.objectAdmission(*object);
+        if(!row || row->pcode==LL_PCODE_LEGACY_AVATAR)return;
+        LLVector3 selection_dir(owner.centerGlobal()-gAgent.getPositionGlobal());
+        selection_dir.mV[VZ]=0.f;
+        selection_dir.normVec();
+        if(gAgent.getAtAxis()*selection_dir<.6f)
+        {
+            LLQuaternion target_rot;target_rot.shortestArc(LLVector3::x_axis,selection_dir);
+            const auto selfAvatar=world.avatarForObject(gAgent.getID());
+            if(!selfAvatar)return;
+            gAgent.startAutoPilotGlobal(gAgent.getPositionGlobal(),"",&target_rot,NULL,NULL,MAX_FAR_CLIP,
+                selfAvatar->sitting()?SELECTION_SITTING_ROTATION_TRESHOLD:SELECTION_ROTATION_TRESHOLD);
+        }
+    }
+    void transientRootAndChildren(const Object& object)const
+    {
+        const auto root=world.rootObject(*object,true);
+        if(!root)return;
+        owner.setTransient(*root,true);
+        if(!current())return;
+        const auto children=world.directChildren(*root);
+        if(children)for(const auto& child:*children)
+        {
+            if(!current())break;
+            owner.setTransient(child,true);
+        }
+    }
+};
+}
+std::shared_ptr<const void> LLToolSelect::handleNativeObjectSelection(const LLPickInfo& pick,bool ignore_group,bool temp_select,bool select_root)
+{
+    if((pick.mNativeRequestCurrent && !pick.mNativeRequestCurrent()) ||
+       (pick.mNativeObjectCurrent && !pick.mNativeObjectCurrent()))return {};
+    const auto session=VSNativeSession::active();
+    if(!session || !gViewerWindow || !gViewerWindow->isNativeVulkan() || !gViewerWindow->nativeContext())return {};
+    auto* owner=session->objectSelection();
+    if(!owner)return {};
+    const auto lifetime=session->retainObjectSelection();
+    if(!lifetime)return {};
+    const auto account=session->accountGuard();
+    const auto current=[account,request=pick.mNativeRequestCurrent,source=pick.mNativeObjectCurrent]
+    {return account() && (!request || request()) && (!source || source());};
+    NativeSelectionPeer peer{session,lifetime,gViewerWindow->nativeContext()->world(),*owner,current};
+    return vs_handle_object_selection(peer,pick,ignore_group,temp_select,select_root);
+}
+
+#endif

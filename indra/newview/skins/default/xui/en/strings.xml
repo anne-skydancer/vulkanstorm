@@ -3393,4 +3393,10 @@ Your current position: [AVATAR_POS]
  <string name="ExternalEditorFailedToStart">Failed to start the WebSocket server. Ensure the ExternalWebsocketSyncEnable setting is on.</string>
 
  <string name="VSCodeLaunchFailed">Failed to launch VS Code. Ensure the 'code' command is available on your PATH.</string>
+  <string name="NativeSessionLogout">Log out</string>
+    <string name="NativeSessionInvalidLogin">The simulator login response is incomplete.</string>
+    <string name="NativeSessionConnectionTimeout">The simulator connection timed out.</string>
+    <string name="NativeSessionInvalidCapabilities">The simulator returned invalid capabilities.</string>
+    <string name="NativeSessionRegionUnavailable">The simulator connection ended or requested a region change. Region changes are not available in this native UI/chat stage.</string>
+    <string name="NativeSessionCommandUnavailable">This viewer command is not available in the native UI/chat stage.</string>
 </strings>

@@ -30,6 +30,7 @@
 #include "llrect.h"
 #include "llsd.h"
 #include "llstl.h"
+#include "vsuiadmission.h"
 
 #include <functional>
 #include <list>
@@ -103,6 +104,7 @@ public:
     template <class T>
     static LLFloater* build(const LLSD& key)
     {
+        if (!VSUIAdmission::widget(typeid(T))) return nullptr;
         T* floater = new T(key);
         return floater;
     }

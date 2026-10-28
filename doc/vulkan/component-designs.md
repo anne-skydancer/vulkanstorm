@@ -1,13 +1,5 @@
 # Compatible component designs and traceability
 
-Current mandate: DiligentCore is the user-selected GHI, with pinned dependency
-preparation on `vkstorm-vulkan`. Library-selection comparisons below describe the
-historical audit, not a requirement to choose again. These responsibility-level
-designs do not establish a complete insertion catalog. The
-[current insertion audit](diligent-insertion-catalog.md) must cover every necessary
-point and keep unresolved in-scope paths as acceptance blockers. Runtime parity
-and platform/GPU qualification remain separate from source coverage.
-
 These are proposed designs for the GL contracts in [source-audit.md](source-audit.md). They use the interfaces in [architecture.md](architecture.md), implemented through a qualified mature GHI. DiligentCore leads qualification and bgfx is the comparator; bespoke backend machinery is infeasible under current capacity. Delegate backend infrastructure rather than recreate it behind these semantic interfaces. The exact paired API mapping and unresolved constraints for every listed record are in [framework-contract-matrix.csv](framework-contract-matrix.csv), with complete adapter designs in [framework-comparison.md](framework-comparison.md). No backend is integrated. CPU-only work remains CPU work. All formats/usages are queried before enabling a feature; no measured performance or runtime parity is claimed.
 
 The default functional renderer remains independently controlled. Vendor-origin supporting utilities are eligible when actual capabilities, licensing/build compatibility and measured outcomes qualify, with equivalent independent functional fallback. This includes potential NVIDIA/AMD helpers and standard Vulkan allocation utilities. Optional NVIDIA-only NVRHI remains a separate adapter exception requiring all component contracts equally and a complete independent AMD/Intel path; NVIDIA also retains the common GHI path. Existing shader helpers are evaluated for quality/parity and dependency scope, not rejected for origin. No helper or backend is automatically selected or implemented.
@@ -86,3 +78,31 @@ Each active/conditional D01–D17 record maps its source-audit GL contract to on
 R01–R09/P01–P03/B01 map one-for-one to Vulkan/GHI responsibility records in [resources-platform.md](resources-platform.md). S01–S10/U01–U06/A01–A06 map one-for-one to designs in [scene-ui-auxiliary.md](scene-ui-auxiliary.md). H01–H11 map shader-family source/contracts to explicit ABI/SPIR-V design records in [shader-contracts.md](shader-contracts.md). They use the same snapshot/view/generation/graph/ticket interfaces here. No UI/preview/media/asset subsystem is counted as covered merely because main draw-pool routing is mapped.
 
 Unresolved **architecture decisions** are U-D1 mature GHI qualification and selected dependency provenance, external GHI ownership/control and any optional NVIDIA-only NVRHI equivalence/isolation/benefit decision, immutable revision and adoption after governance gate plus spike; U-D2 depth 24/sampled/copy format fallback; U-D3 precise sampler/texture Vulkan descriptor ABI and existing bit-packed attributes; U-D4 reference-observable history/probe initialization/partial-generation resets; U-D5 synchronous legacy bake/readback cancellation and media producer lifetime protocol; U-D6 PSO/descriptor batching and optional queue/compute/skin/occlusion optimizations based on measurements. Each has a candidate design plus an explicit acceptance test in [qualification-roadmap.md](qualification-roadmap.md); none licenses guessing reference behavior. The component catalog is complete for the **73 listed records**, not a claim all source arithmetic or runtime branches have been verified.
+
+Current mandate: DiligentCore is the user-selected GHI, with pinned dependency
+preparation on `vkstorm-vulkan`. Library-selection comparisons below describe the
+historical audit, not a requirement to choose again. These responsibility-level
+designs do not establish a complete insertion catalog. The
+[current insertion audit](diligent-insertion-catalog.md) must cover every necessary
+point and keep unresolved in-scope paths as acceptance blockers. Runtime parity
+and platform/GPU qualification remain separate from source coverage.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

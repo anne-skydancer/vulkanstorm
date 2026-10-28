@@ -23,6 +23,7 @@
  */
 
 #include "omnifilter.h"
+#include "vsnativeim.h"
 
 #include "llbutton.h"
 #include "llcheckboxctrl.h"
@@ -872,7 +873,7 @@ bool Omnifilter::postBuild()
         onLogLine(log_time, log_message);
     }
 
-    instance.mLogSignal.connect(boost::bind(&Omnifilter::onLogLine, this, _1, _2));
+    connectLog();
 
     if (mNeedleListCtrl->getItemCount())
     {
@@ -1077,3 +1078,13 @@ void OmnifilterMenuPanel::onRuleSetsUpdated()
     // Reload the rule sets for the Combo-box as the rules were changed from the Omnifilter Rules Editor.
     reloadRules();
 }
+
+void Omnifilter::connectLog()
+    const LLHandle<LLFloater> weak=getHandle();
+    const auto current=vs_native_im_guard();
+    mLogConnection=OmnifilterEngine::instance().mLogSignal.connect(
+        [weak,current](time_t time,const std::string& text)
+        {
+            if(!current())return;
+            if(auto* owner=dynamic_cast<Omnifilter*>(weak.get()))owner->onLogLine(time,text);
+        });
