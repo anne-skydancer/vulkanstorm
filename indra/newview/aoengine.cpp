@@ -3858,8 +3858,6 @@ void AOEngine::processImport(bool from_timer)
             LLSD args;
             args["NAME"] = mImportSet->getName();
             mTimerCollection.enableImportTimer(false);
-            LLSD args;
-            args["NAME"] = mImportSet->getName();
             ++mImportGeneration;
             delete mImportSet;
             mImportSet = nullptr;

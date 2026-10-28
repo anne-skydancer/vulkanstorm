@@ -26,7 +26,6 @@
 
 #include "llvoiceclient.h"
 // <FS:TJ> Keep Vivox only for OpenSim viewers
-#ifdef OPENSIM
 #include "llvoicechannel.h"
 #include "llfloaterreg.h"
 #include "llfloater.h"
@@ -37,6 +36,7 @@
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #endif
+#ifdef OPENSIM
 #include "llvoicevivox.h"
 #endif
 // </FS:TJ>
@@ -1466,7 +1466,9 @@ void LLVoiceClient::retireNativeAccount()
     }
     LLVoiceChannel::retireNativeAccount();
     if (LLWebRTCVoiceClient::instanceExists()) LLWebRTCVoiceClient::instance().retireNativeAccount();
+#ifdef OPENSIM
     if (LLVivoxVoiceClient::instanceExists()) LLVivoxVoiceClient::instance().retireNativeAccount();
+#endif
     mSpatialVoiceModule = nullptr;
     mNonSpatialVoiceModule = nullptr;
     mSpatialCredentials = LLSD();

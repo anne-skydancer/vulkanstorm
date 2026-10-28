@@ -464,13 +464,13 @@ void LLPanelContents::createTaskInventoryItemHelper(
 // [RLVa:KB] - Checked: 2010-03-31 (RLVa-1.2.0c) | Modified: RLVa-1.0.5a
         if (rlv_handler_t::isEnabled()) // Fallback code [see LLPanelContents::getState()]
         {
-            if (object->attachmentLocked())
+            if (gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit()))
             {
                 return;                 // Disallow creating new scripts in a locked attachment
             }
             else if ( (gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) || (gRlvHandler.hasBehaviour(RLV_BHVR_SITTP)) )
             {
-                if ( object->agentSittingOnRoot() )
+                if ( (isAgentAvatarValid()) && (gAgentAvatarp->isSitting()) && (gAgentAvatarp->getRoot() == object->getRootEdit()) )
                     return;             // .. or in a linkset the avie is sitting on under @unsit=n/@sittp=n
             }
         }

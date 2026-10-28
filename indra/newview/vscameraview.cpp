@@ -7,6 +7,7 @@
 #include "llviewercontrol.h"
 #include "llviewercamera.h"
 #include "llviewertexture.h"
+#include "llmemory.h"
 #include "llframetimer.h"
 F32 vs_camera_far_clip(bool cubeSnapshot)
 {
@@ -52,7 +53,7 @@ F32 vs_agent_draw_distance(bool prioritizeNearby)
     if (LLViewerTexture::isSystemMemoryCritical())
     {
         // If we are low on memory, reduce requested draw distance
-        memory_limited_draw_distance = llmax(gAgentCamera.mDrawDistance / LLViewerTexture::getSystemMemoryBudgetFactor(), gAgentCamera.mDrawDistance / 2.f);
+        memory_limited_draw_distance = llmax(gAgentCamera.mDrawDistance / LLMemory::getSystemMemoryBudgetFactor(), gAgentCamera.mDrawDistance / 2.f);
     }
 
     if (prioritizeNearby)

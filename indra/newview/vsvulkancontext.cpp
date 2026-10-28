@@ -385,7 +385,7 @@ struct VSVulkanContext::Impl
         lastTextureMemoryUpdate=input.now;
         input.geometryBytes=worldRenderer->statistics().residentMeshBytes;
         input.systemLow=LLViewerTexture::isSystemMemoryLow();
-        input.systemFactor=LLViewerTexture::getSystemMemoryBudgetFactor();
+        input.systemFactor=LLMemory::getSystemMemoryBudgetFactor();
         input.freeSystemMiB=LLMemory::getAvailableMemKB().valueInUnits<LLUnits::Megabytes>();
         // A headless diagnostic emulates an active view, not a minimized viewer.
         input.background=window.getMinimized() ||
