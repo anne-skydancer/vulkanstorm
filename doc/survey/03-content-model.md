@@ -652,7 +652,9 @@ byte and every read field by field with the stream position and state.
 Determinism: patterned UUIDs `U(tag)`, xorshift64* with stated seeds and
 draw orders, `RT(win=…;linux=…;crate=…)` for the one C-runtime-dependent
 value class (LLSD String→Integer of `"0x10"`: 16 on MSVC, 0 on libstdc++,
-16 for the crate).
+16 for the crate). (Superseded by the owner decision of 2026-10-28: the crate
+gives the per-platform value too, and `crate=` is no longer read; see
+`indra/llinventory/tests/fixtures/README.md`, *Port rules* 1.)
 
 **R2** (`fixtures/inventory/cache/README.md`, `msgs/README.md`):
 
@@ -807,6 +809,10 @@ fixes)"):
    the per-platform `"0x10"` values (16 MSVC, 0 libstdc++); the crate's own
    mapping over `vkstorm_llsd::Value` gives 16 and a crate test reads the
    `crate=` value.
+   *Note (owner decision of 2026-10-28):* superseded. The crate's mapping
+   now gives the same per-platform values (MSVC runtime in an MSVC build,
+   libstdc++ otherwise), and the crate test reads `win=` or `linux=` for its
+   platform; `crate=` is no longer read.
 2. **Unknown sale type** in the legacy export writes `not`, stream good
    (bug 1).
 3. **Malformed legacy lines** follow bug 29 (absent, field keeps its
@@ -922,6 +928,10 @@ the fixture column is where its parity comes from.
 | `legacy::category` | `LLInventoryCategory::importLegacyStream`/`exportLegacyStream` | `llinventory.cpp:1520-1668` | C5, C6 `C` |
 | `legacy::perms` | `LLPermissions::importLegacyStream`/`exportLegacyStream` (16,384-byte lines, mask exception) | `llpermissions.cpp:572-775` | C3 legacy, C6 `P` |
 | `legacy::sale` | `LLSaleInfo::importLegacyStream`/`exportLegacyStream` (`not` for unknown types) | `llsaleinfo.cpp:81-94, 139-205` | C4 legacy, C6 `S` |
+
+Note (owner decision of 2026-10-28): `llsd::coerce` gives the per-platform
+`RT(...)` value (`win=` with the MSVC runtime, `linux=` with libstdc++), not
+the `crate=16` value named in the table; `crate=` is no longer read.
 
 Not in the module list but covered by R1: `LLNotecard::importStream`/
 `exportStream` (C6 `N`, 22 notecards; `llnotecard.cpp`), `LLLandmark`
