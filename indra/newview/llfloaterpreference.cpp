@@ -4019,13 +4019,14 @@ bool LLPanelPreferenceGraphics::postBuild()
 #endif // LL_DARWIN
 // </FS:CR>
 
-    // <VulkanStorm> Renderer backend selector
-    LLComboBox* backend_combo = getChild<LLComboBox>("render_backend");
-    if (backend_combo)
-    {
-        refreshRenderBackendSelector();
-        backend_combo->setCommitCallback(boost::bind(&LLPanelPreferenceGraphics::onRenderBackendCommit, this));
-    }
+    // <VulkanStorm> Renderer backend selector, commented out with its
+    // Preferences entry while Mesa/Zink is withdrawn (archive/zink/2026-10-29).
+    // LLComboBox* backend_combo = getChild<LLComboBox>("render_backend");
+    // if (backend_combo)
+    // {
+    //     refreshRenderBackendSelector();
+    //     backend_combo->setCommitCallback(boost::bind(&LLPanelPreferenceGraphics::onRenderBackendCommit, this));
+    // }
     // </VulkanStorm>
 
     return LLPanelPreference::postBuild();
