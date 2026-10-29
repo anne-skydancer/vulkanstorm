@@ -60,9 +60,17 @@ jobs:
         include:
           - os: windows-2025
             directory: build-vc180-64
+            container: ''
+          # The Linux viewer is built inside Ubuntu 24.04 (glibc 2.39, GCC 14):
+          # a binary needs at least the glibc and libstdc++ it was built
+          # against, so building on the 26.04 host would raise the floor to
+          # glibc 2.43. 2.39 is the lowest that works: the prebuilt Mesa/Zink
+          # package already needs glibc 2.38.
           - os: ubuntu-26.04
             directory: build-linux-x86_64
+            container: ubuntu:24.04
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     env:
       # Release packages: vkstorm-release pushes, Second_Life tags, and the manually
       # dispatched experimental build of vkstorm-canary.
@@ -71,10 +79,28 @@ jobs:
       AUTOBUILD_ADDRSIZE: 64
       AUTOBUILD_CONFIGURATION: ReleaseFS_open
       AUTOBUILD_VSVER: "180"
-      AUTOBUILD_VARIABLES_FILE: ${{ github.workspace }}/.build-variables/variables
-      AUTOBUILD_INSTALLABLE_CACHE: ${{ github.workspace }}/.autobuild-installables
       LL_SKIP_REQUIRE_SYSROOT: 1
     steps:
+      # The hosted tool cache's Python is built for the 26.04 host and its ssl
+      # module does not load in the container, so Linux uses the container's
+      # own Python 3 in a virtual environment.
+      - name: Prepare the Linux build container
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          echo "DEBIAN_FRONTEND=noninteractive" >> "$GITHUB_ENV"
+          apt-get -o Acquire::Retries=3 update
+          apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+            sudo git ca-certificates curl wget file xz-utils bzip2 zstd unzip \
+            make binutils lsb-release procps python3 python3-venv
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 -m venv /opt/vkstorm-python
+          echo /opt/vkstorm-python/bin >> "$GITHUB_PATH"
+          . /etc/os-release
+          echo "Linux build container: $PRETTY_NAME, $(ldd --version | head -n 1), $(python3 --version)" >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -95,8 +121,13 @@ jobs:
           echo "revision=$build_revision" >> "$GITHUB_ENV"
           echo "AUTOBUILD_BUILD_ID=$build_revision" >> "$GITHUB_ENV"
           echo "Source $(git rev-parse HEAD): build $build_revision" >> "$GITHUB_STEP_SUMMARY"
+          # The github.workspace expression names the host path, not where a
+          # container sees the workspace; $GITHUB_WORKSPACE is right in both.
+          echo "AUTOBUILD_VARIABLES_FILE=$GITHUB_WORKSPACE/.build-variables/variables" >> "$GITHUB_ENV"
+          echo "AUTOBUILD_INSTALLABLE_CACHE=$GITHUB_WORKSPACE/.autobuild-installables" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v7
+        if: runner.os == 'Windows'
         with:
           python-version: "3.11"
       - name: Install Linux build dependencies
@@ -105,11 +136,11 @@ jobs:
         run: |
           sudo apt-get -o Acquire::Retries=3 update
           sudo apt-get -o Acquire::Retries=3 install -y \
-            gcc-15 g++-15 build-essential pkg-config \
+            gcc-14 g++-14 build-essential pkg-config \
             libgl1-mesa-dev libglu1-mesa-dev libpulse-dev libssl-dev \
             libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype-dev
-          echo "CC=gcc-15" >> "$GITHUB_ENV"
-          echo "CXX=g++-15" >> "$GITHUB_ENV"
+          echo "CC=gcc-14" >> "$GITHUB_ENV"
+          echo "CXX=g++-14" >> "$GITHUB_ENV"
 
       - name: Checkout locally qualified build variables
         uses: actions/checkout@v7
@@ -121,6 +152,13 @@ jobs:
 
       - name: Install build dependencies
         run: python -m pip install autobuild==3.10.2 llsd
+
+      # The container's own CMake is 3.28; use the version of the hosted runners.
+      - name: Install CMake in the Linux container
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install cmake==4.4.4
+          cmake --version
 
       - name: Check installer version and payload
         run: |
@@ -188,7 +226,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get install -y mesa-utils mesa-vulkan-drivers xvfb xauth
-          g++-15 -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llwindow \
+          "$CXX" -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llwindow \
             indra/llwindow/tests/linux_zink_loader_test.cpp -lGL -lX11 -ldl \
             -o "$RUNNER_TEMP/linux-zink-loader-test"
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' -print -quit)"
@@ -205,11 +243,12 @@ jobs:
           cmake -S indra -B ${{ matrix.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
           cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel 3
 
-      # Ubuntu 26.04: the GCC LTO link of vulkanstorm-bin writes its temporary
-      # objects to $TMPDIR (default /tmp), which overran on the Release build
+      # The GCC LTO link of vulkanstorm-bin writes its temporary objects to
+      # $TMPDIR. On the 26.04 host /tmp is an 8 GiB tmpfs, which overran
       # ("lto-wrapper: fatal error: write: Disk quota exceeded", run
-      # 40710871603). Give it disk-backed temporary space and swap for the
-      # link's memory peak; the build flags are unchanged.
+      # 40710871603), so the build uses disk-backed temporary space. A swap
+      # file can only be added outside a container; the host's own 3 GiB
+      # swap is what the Ubuntu 24.04 runners linked with.
       - name: Prepare Linux temporary space and swap for the LTO link
         if: runner.os == 'Linux'
         shell: bash
@@ -223,7 +262,9 @@ jobs:
           sudo mkdir -p "$base/vkstorm-tmp"
           sudo chown "$(id -u):$(id -g)" "$base/vkstorm-tmp"
           echo "TMPDIR=$base/vkstorm-tmp" >> "$GITHUB_ENV"
-          if [ "$(df --output=avail -k "$base" | tail -1)" -gt 41943040 ]; then
+          if [ -f /.dockerenv ]; then
+            echo "Building in a container: no swap file added"
+          elif [ "$(df --output=avail -k "$base" | tail -1)" -gt 41943040 ]; then
             sudo fallocate -l 24G "$base/vkstorm.swap"
             sudo chmod 600 "$base/vkstorm.swap"
             sudo mkswap "$base/vkstorm.swap"
@@ -237,9 +278,14 @@ jobs:
       - name: Build viewer and stage runtime
         run: cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
 
-      - name: Report Linux glibc and libstdc++ requirements
+      # Fail if anything built or packaged needs more than Ubuntu 24.04 has:
+      # glibc 2.39, and GLIBCXX_3.4.33 from GCC 14's libstdc++.
+      - name: Check Linux glibc and libstdc++ requirements
         if: runner.os == 'Linux'
         shell: bash
+        env:
+          VKSTORM_MAX_GLIBC: "2.39"
+          VKSTORM_MAX_GLIBCXX: "3.4.33"
         run: bash scripts/ci_report_glibc.sh "${{ matrix.directory }}/newview"
 
       - name: Keep qualification builds free of installers
