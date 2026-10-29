@@ -6,8 +6,16 @@ complements the design study in `doc/vulkan/` (README.md, architecture.md,
 framework-comparison.md, qualification-roadmap.md), which describes the
 intended design; this survey describes the code.
 
-- **Baseline:** `vkstorm-vulkan` at `51d1f729a6` (the #225 merge,
-  2026-10-27), compared with `vkstorm-release`.
+> **Line names.** The survey was written on 2026-10-27, before the lines
+> were rebuilt on Firestorm 7.2.5. The `vkstorm-vulkan` it describes is now
+> `vkstorm-vulkan-archive`; its DiligentCore work was forward-ported to
+> `vkstorm-vulkan-rhi`, where this survey lives. Today's `vkstorm-vulkan` is
+> the shared base of `-rhi` and `-direct`. Commit IDs and the counts below
+> refer to the 2026-10-27 line and the release of that date.
+
+- **Baseline:** `vkstorm-vulkan` (now `vkstorm-vulkan-archive`) at
+  `51d1f729a6` (the #225 merge, 2026-10-27), compared with the
+  `vkstorm-release` of that date (now `vkstorm-release-archive`).
 - **Method:** source reading plus CI history from GitHub. Nothing was built or
   run for this survey. "Implemented" means the code exists and is wired in, not
   that it was observed working. Statements not read from source are labelled

@@ -87,6 +87,7 @@ remain blockers. Native rendering and runtime parity remain unqualified.
 
 | Artifact | Contents |
 |---|---|
+| [Code survey](survey/README.md) | What the Vulkan code on this line is, what is wired in, partial or broken, its CI evidence and feature completeness (source reading, 2026-10-27; nothing built or run for it). |
 | [Source audit](source-audit.md) | Frame/resource graphs, main and auxiliary pass routing, draw families, PPLL and GL state/lifetime contracts. |
 | [Resources and platforms](resources-platform.md) | GL wrappers, uploads/publication, buffers, shaders/targets, media, capabilities, WSI/teardown and build/staging. |
 | [Scene, UI and auxiliary views](scene-ui-auxiliary.md) | Assets/scene/culling, materials/avatars, UI/fonts/media, previews/bakes, picking and capture producers/consumers. |
