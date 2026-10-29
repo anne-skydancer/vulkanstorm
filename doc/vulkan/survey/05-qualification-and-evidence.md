@@ -525,8 +525,9 @@ no implementation in CI.
    unchanged (`check_milestone1_boundaries.py`).
 3. A complete discovery list of 3,131 UI, settings, floater, command and draw
    obligations exists and matches source (`vulkan_parity_inventory.py`).
-4. About 309 extracted production function bodies compile with the host compiler
-   under stubs and behave like reference copies of the original logic.
+4. The source-evidence job runs 199 C++ compile-and-run test files.
+   Across the full inventory of 309 such files, 79 also compare against frozen
+   copies of the original logic; not all 309 are wired into CI.
 5. When the graphics job last ran (16-18 Oct), the following held on SwiftShader and Lavapipe:
    the production `VSWorldRenderer`/`VSUIRenderer` gave exact pixels on synthetic
    8×8 scenes under Vulkan validation; the staged viewer created, resized, minimized
