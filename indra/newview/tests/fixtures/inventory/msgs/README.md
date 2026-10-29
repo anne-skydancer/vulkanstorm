@@ -35,6 +35,13 @@ and the QA-mode records, which already name their library. The harness's own
 walks (the model dump's folder and item lists, C3's random draws) are in key
 order and do not depend on the library.
 
+The libstdc++ trees (and `../cache/c4_validation_qa.libstdcxx.txt`) were recorded
+with GCC 15 on Ubuntu 26.04 at 9564f23272 (Build run 40739185954). A GCC 14
+recording in the `ubuntu:24.04` build container at 5a10dd7b0b (run
+40854647665) gave identical data: only the header lines (commit, platform)
+differ. The shipped Linux viewer builds with GCC 14. The crate's libstdc++
+trees (vkstorm-core-rust) are the same bytes.
+
 ## Files
 
 `set8_handlers.txt` (survey 4 section 7, set 8), made by
