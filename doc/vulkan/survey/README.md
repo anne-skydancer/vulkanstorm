@@ -98,8 +98,7 @@ Where the code stands (04):
   116a410fc8: the FlickrConnect capability (fixed), friends-only avatar hiding
   (fixed), three OpenGL-only compile/link breaks (fixed Oct 24-25), and,
   still open, unguarded behaviour changes in Win32 DPI handling and clipboard
-  retry, Vivox early exits, mesh upload completion, and a Preferences "Vulkan
-  (in development)" choice that stops startup in OpenGL-only builds.
+  retry, Vivox early exits and mesh upload completion.
 
 To restore and keep it: revert or guard every OpenGL behaviour change; for each
 extraction into shared code, add (or confirm) an equivalence test against a
