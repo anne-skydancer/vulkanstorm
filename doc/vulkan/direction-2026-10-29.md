@@ -44,8 +44,10 @@ which never qualified. The branches were renamed, so their history is kept:
 
 ## How the new renderer is approached
 
-- **No wholesale modernization.** Vulkanstorm does not set out on a rewrite
-  of the whole viewer of the kind Aurora Viewer is.
+- **No wholesale modernization.** That means no unproven or experimental
+  rendering techniques. Proven techniques are in, such as those Aurora
+  Viewer uses: GPU-driven rendering with GPU-resident material tables,
+  multi-draw indirect and Hi-Z occlusion culling, and clustered lights.
 - **Learn from Aurora Viewer's renderer.** Study how it works, especially
   for performance and image quality, and apply that to Vulkanstorm's own
   renderer, following Aurora's path.
