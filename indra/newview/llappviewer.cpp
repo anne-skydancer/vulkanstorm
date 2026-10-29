@@ -1204,8 +1204,11 @@ bool LLAppViewer::init()
     gGLActive = true;
     // <VulkanStorm> Mesa/Zink is withdrawn and its Preferences selector is
     // commented out (archive/zink/2026-10-29), so a saved Zink selection would
-    // leave no way back. Reset it to OpenGL before the provider is chosen.
-    if (gSavedSettings.getString("RenderBackend") == "Zink")
+    // leave no way back. Reset it to OpenGL before the provider is chosen,
+    // in any letter case, because the Windows loader compares it lowercased.
+    std::string saved_backend = gSavedSettings.getString("RenderBackend");
+    LLStringUtil::toLower(saved_backend);
+    if (saved_backend == "zink")
     {
         LL_WARNS("RenderInit") << "Mesa/Zink is no longer available; switching the saved renderer to OpenGL." << LL_ENDL;
         gSavedSettings.setString("RenderBackend", "OpenGL");
