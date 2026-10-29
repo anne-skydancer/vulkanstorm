@@ -325,7 +325,9 @@ jobs:
           r3b=$(find "$dir" -name INTEGRATION_TEST_llinvfetch_parity -type f -perm -u+x | head -1)
           test -n "$r2" && test -n "$r3b" || { echo "test executables not built"; exit 1; }
           libs="$(dirname "$r2"):$GITHUB_WORKSPACE/$dir/packages/lib/release:$GITHUB_WORKSPACE/$dir/sharedlibs/lib"
-          out="$RUNNER_TEMP/inventory-fixtures"
+          # Under the workspace: the upload step reads it inside the container,
+          # where the host temp path does not exist.
+          out="$GITHUB_WORKSPACE/.inventory-fixtures"
           commit=$(git rev-parse --short=10 HEAD)
           rm -rf "$out"; mkdir -p "$out"
           for n in 1 2; do
@@ -353,9 +355,9 @@ jobs:
           name: linux-inventory-fixtures
           if-no-files-found: error
           path: |
-            ${{ runner.temp }}/inventory-fixtures/r2_1/
-            ${{ runner.temp }}/inventory-fixtures/r3b_1/
-            ${{ runner.temp }}/inventory-fixtures/*.log
+            .inventory-fixtures/r2_1/
+            .inventory-fixtures/r3b_1/
+            .inventory-fixtures/*.log
 
       - name: Run statistics, script metadata and transport regression tests
         shell: bash
