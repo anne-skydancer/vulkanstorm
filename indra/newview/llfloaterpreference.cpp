@@ -4257,8 +4257,10 @@ void LLPanelPreferenceGraphics::cancel(const std::vector<std::string> settings_t
     // <FS:Ansariel> Improved graphics preferences
     resetDirtyChilds();
     LLPanelPreference::cancel(settings_to_skip);
-    // <VulkanStorm> Always revert the renderer selector to the active backend on cancel
-    refreshRenderBackendSelector();
+    // <VulkanStorm> Always revert the renderer selector to the active backend on cancel.
+    // Commented out with the selector while Mesa/Zink is withdrawn: the combo is
+    // no longer in the panel, so the lookup would make a dummy widget.
+    // refreshRenderBackendSelector();
 }
 void LLPanelPreferenceGraphics::saveSettings()
 {
