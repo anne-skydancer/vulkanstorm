@@ -354,6 +354,8 @@ jobs:
         with:
           name: linux-inventory-fixtures
           if-no-files-found: error
+          # .inventory-fixtures starts with a dot: upload-artifact skips such paths by default.
+          include-hidden-files: true
           path: |
             .inventory-fixtures/r2_1/
             .inventory-fixtures/r3b_1/
