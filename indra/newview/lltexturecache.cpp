@@ -747,6 +747,28 @@ LLPointer<LLImageRaw> LLTextureCache::readFromFastCache(const LLUUID& id, S32& d
     {
         return NULL; //not in the cache, corrupted or under thread race condition
     }
+    return makeFastCacheImage(head, record, discardlevel);
+}
+
+// <VulkanStorm> readFromFastCache without waiting for the fast cache
+// (upstream #5356): vkstorm-assets locks the fast cache per call, so the
+// skip moves from a batch try-lock to the read itself.
+LLPointer<LLImageRaw> LLTextureCache::tryReadFromFastCache(const LLUUID& id, S32& discardlevel, bool& busy)
+{
+    S32 head[4] = { 0, 0, 0, 0 };
+    U8 record[TEXTURE_FAST_CACHE_DATA_SIZE];
+    S32 result = vks_texcache_try_read_fast(mCache, id.mData, &head[0], &head[1], &head[2], &head[3], record);
+    busy = (result < 0);
+    if (result <= 0)
+    {
+        return NULL; //busy, not in the cache or corrupted
+    }
+    return makeFastCacheImage(head, record, discardlevel);
+}
+// </VulkanStorm>
+
+LLPointer<LLImageRaw> LLTextureCache::makeFastCacheImage(const S32* head, const U8* record, S32& discardlevel)
+{
     discardlevel = head[3];
     S32 image_size = head[0] * head[1] * head[2];
     U8* data = (U8*)ll_aligned_malloc_16(image_size);

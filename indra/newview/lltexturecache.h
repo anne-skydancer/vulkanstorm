@@ -99,6 +99,9 @@ public:
     handle_t writeToCache(const LLUUID& id, const U8* data, S32 datasize, S32 imagesize, LLPointer<LLImageRaw> rawimage, S32 discardlevel,
                           WriteResponder* responder);
     LLPointer<LLImageRaw> readFromFastCache(const LLUUID& id, S32& discardlevel);
+    // <VulkanStorm> Sets busy and returns NULL when another thread is
+    // writing the fast cache (upstream #5356).
+    LLPointer<LLImageRaw> tryReadFromFastCache(const LLUUID& id, S32& discardlevel, bool& busy);
     bool writeComplete(handle_t handle, bool abort = false);
     void prioritizeWrite(handle_t handle);
 
@@ -119,24 +122,18 @@ public:
     U32 getMaxEntries();
     bool isInCache(const LLUUID& id) ;
     bool isInLocal(const LLUUID& id) ; //not thread safe at the moment
-    LLMutex* getFastCacheMutex() { return &mFastCacheMutex; }
 protected:
     // Accessed by LLTextureCacheWorker
     std::string getLocalFileName(const LLUUID& id);
     std::string getTextureFileName(const LLUUID& id);
     void addCompleted(Responder* responder, bool success);
     VksTexCache* getCache() { return mCache; }
+    LLPointer<LLImageRaw> makeFastCacheImage(const S32* head, const U8* record, S32& discardlevel);
 
 private:
     // Internal
     LLMutex mWorkersMutex;
     LLMutex mListMutex;
-    // Batch guard for LLViewerTextureList::updateImagesLoadingFastCache
-    // (upstream #5356). The fast cache itself is in vkstorm-assets, which
-    // locks it per call; no worker takes this mutex, so the try-lock there
-    // always succeeds and a busy fast cache blocks inside the read, as
-    // before #5356.
-    LLMutex mFastCacheMutex;
 
     typedef std::map<handle_t, LLTextureCacheWorker*> handle_map_t;
     handle_map_t mReaders;

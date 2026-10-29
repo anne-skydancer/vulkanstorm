@@ -1357,19 +1357,35 @@ void LLViewerFetchedTexture::cleanup()
 }
 
 //access the fast cache
-void LLViewerFetchedTexture::loadFromFastCache()
+// <VulkanStorm> without_waiting: return false, with nothing changed, when
+// another thread is writing the fast cache (upstream #5356).
+bool LLViewerFetchedTexture::loadFromFastCache(bool without_waiting)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
     if(!mInFastCacheList)
     {
-        return; //no need to access the fast cache.
+        return true; //no need to access the fast cache.
+    }
+
+    LLTimer fastCacheTimer;
+    if (without_waiting)
+    {
+        bool busy = false;
+        LLPointer<LLImageRaw> raw = LLAppViewer::getTextureCache()->tryReadFromFastCache(getID(), mRawDiscardLevel, busy);
+        if (busy)
+        {
+            return false;
+        }
+        mRawImage = raw;
+    }
+    else
+    {
+        mRawImage = LLAppViewer::getTextureCache()->readFromFastCache(getID(), mRawDiscardLevel);
     }
     mInFastCacheList = false;
 
     add(LLTextureFetch::sCacheAttempt, 1.0);
-
-    LLTimer fastCacheTimer;
-    mRawImage = LLAppViewer::getTextureCache()->readFromFastCache(getID(), mRawDiscardLevel);
+    // </VulkanStorm>
     if(mRawImage.notNull())
     {
         F32 cachReadTime = fastCacheTimer.getElapsedTimeF32();
@@ -1424,6 +1440,7 @@ void LLViewerFetchedTexture::loadFromFastCache()
     {
         record(LLTextureFetch::sCacheHitRate, LLUnits::Ratio::fromValue(0));
     }
+    return true;
 }
 
 void LLViewerFetchedTexture::setForSculpt()
