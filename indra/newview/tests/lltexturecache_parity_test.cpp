@@ -36,6 +36,7 @@
 #include "vkstorm_ffi.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <thread>
 #include <cstdio>
@@ -802,4 +803,113 @@ namespace tut
             { return vks_asset_url("u", 1, type.data(), type.size(), id.mData, buf, n); });
         ensure_equals("short asset URL", small, "u/?texture_id=" + id.asString());
     }
+
+    // <VulkanStorm> tryReadFromFastCache (upstream #5356): the same hits and
+    // misses as readFromFastCache, never busy without contention, and a busy
+    // answer that is not a miss: no image, discardlevel untouched, and the
+    // same texture reads once the contention ends. The C ABI cannot hold the
+    // fast cache on demand, so contention comes from a second thread reading
+    // it; vkstorm-assets' try_read_fast_is_busy_while_the_fast_cache_is_held
+    // covers the busy answer deterministically.
+    template<> template<>
+    void parity_object::test<4>()
+    {
+        set_test_name("fast cache read without waiting");
+        std::string root = scratch_dir() + "_tryfast";
+        remove_tree(root);
+        LLFile::mkdir(root);
+        ensure("scratch cache dir", gDirUtilp->setCacheDir(root));
+        Rng rng(5356);
+        {
+            LLTextureCache cache(true);
+            cache.setReadOnly(false);
+            cache.initCache(LL_PATH_CACHE, 50 * 1024 * 1024, false);
+            std::vector<Texture> textures;
+            for (int i = 0; i < 40; ++i)
+            {
+                Texture t;
+                t.id = rng.uuid();
+                t.data = make_data(rng, 4000);
+                t.image_size = 4000;
+                t.discard = 2;
+                t.raw_w = 64; t.raw_h = 64; t.raw_c = 3;
+                textures.push_back(t);
+                ensure("write", write_texture(cache, rng, t));
+            }
+
+            // Hits and misses match the waiting read.
+            std::vector<LLUUID> hit_ids;
+            for (const Texture& t : textures)
+            {
+                S32 want_discard = -7;
+                LLPointer<LLImageRaw> want = cache.readFromFastCache(t.id, want_discard);
+                S32 discard = -7;
+                bool busy = true;
+                LLPointer<LLImageRaw> got = cache.tryReadFromFastCache(t.id, discard, busy);
+                ensure("not busy without contention", !busy);
+                ensure_equals("same presence", got.notNull(), want.notNull());
+                ensure_equals("same discard", discard, want_discard);
+                if (want.notNull())
+                {
+                    hit_ids.push_back(t.id);
+                    ensure_equals("same width", got->getWidth(), want->getWidth());
+                    ensure_equals("same height", got->getHeight(), want->getHeight());
+                    ensure_equals("same components", (S32)got->getComponents(), (S32)want->getComponents());
+                    ensure_equals("same size", got->getDataSize(), want->getDataSize());
+                    ensure("same data", std::equal(got->getData(), got->getData() + got->getDataSize(), want->getData()));
+                }
+            }
+            ensure("the fast cache has two entries", hit_ids.size() >= 2);
+            {
+                S32 discard = -7;
+                bool busy = true;
+                LLPointer<LLImageRaw> got = cache.tryReadFromFastCache(rng.uuid(), discard, busy);
+                ensure("miss: no image", got.isNull());
+                ensure("miss: not busy", !busy);
+                ensure_equals("miss: discard untouched", discard, -7);
+            }
+
+            // Contention: a second thread keeps reading the fast cache.
+            const LLUUID id = hit_ids[0];
+            const LLUUID other = hit_ids[1];
+            std::atomic<bool> stop(false);
+            std::thread reader([&]()
+            {
+                while (!stop.load())
+                {
+                    S32 d = 0;
+                    cache.readFromFastCache(other, d);
+                }
+            });
+            S32 busy_count = 0;
+            auto until = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+            while (busy_count < 20 && std::chrono::steady_clock::now() < until)
+            {
+                S32 discard = -7;
+                bool busy = false;
+                LLPointer<LLImageRaw> got = cache.tryReadFromFastCache(id, discard, busy);
+                if (busy)
+                {
+                    ++busy_count;
+                    ensure("busy: no image", got.isNull());
+                    ensure_equals("busy: discard untouched", discard, -7);
+                }
+                else
+                {
+                    ensure("not busy: the hit", got.notNull());
+                }
+            }
+            stop = true;
+            reader.join();
+            std::cout << "fast cache contention: " << busy_count << " busy answers observed" << std::endl;
+
+            S32 discard = -7;
+            bool busy = true;
+            LLPointer<LLImageRaw> got = cache.tryReadFromFastCache(id, discard, busy);
+            ensure("after contention: not busy", !busy);
+            ensure("after contention: the hit", got.notNull());
+        }
+        remove_tree(root);
+    }
+    // </VulkanStorm>
 }
