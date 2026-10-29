@@ -158,8 +158,12 @@ jobs:
           path: .build-variables
           persist-credentials: false
 
+      # autobuild 3.10.2 (the latest release) has no VS 2026 entries and warns
+      # "Unable to determine a suggested AUTOBUILD_WIN_VSTOOLSET for vsver 180".
+      # Upstream main is 3.10.2 plus those entries (secondlife/autobuild #61);
+      # install that commit until a release carries it.
       - name: Install build dependencies
-        run: python -m pip install autobuild==3.10.2 llsd
+        run: python -m pip install "autobuild @ git+https://github.com/secondlife/autobuild@d8c6236eac000eb301748ec6a1df3d0894309b4b" llsd
 
       # The container's own CMake is 3.28; use the version of the hosted runners.
       - name: Install CMake in the Linux container
