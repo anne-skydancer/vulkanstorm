@@ -10,10 +10,18 @@ on:
           pre-release, moving the experimental tag. Never touches latest.
         type: boolean
         default: false
+      record_inventory_fixtures:
+        description: >-
+          Linux only: record the libstdc++ trees of the R2 and R3b inventory
+          oracles (llinventorymodel_parity, llinvfetch_parity) twice, require
+          identical dumps, and upload them as the linux-inventory-fixtures
+          artifact. The replay tests then fail until the files are committed.
+        type: boolean
+        default: false
   workflow_call:
   pull_request:
   push:
-    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "codex/**"]
+    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-vulkan-rhi", "vkstorm-vulkan-direct", "vkstorm-rust", "vkstorm-aleph", "codex/**"]
     tags: ["Second_Life*"]
 
 permissions:
@@ -58,11 +66,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-2022
-            directory: build-vc170-64
-          - os: ubuntu-24.04
+          - os: windows-2025
+            directory: build-vc180-64
+            container: ''
+          # The Linux viewer is built inside Ubuntu 24.04 (glibc 2.39, GCC 14):
+          # a binary needs at least the glibc and libstdc++ it was built
+          # against, so building on the 26.04 host would raise the floor to
+          # glibc 2.43. 2.39 is the lowest that works: the prebuilt Mesa/Zink
+          # package already needs glibc 2.38.
+          - os: ubuntu-26.04
             directory: build-linux-x86_64
+            container: ubuntu:24.04
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     env:
       # Release packages: vkstorm-release pushes, Second_Life tags, and the manually
       # dispatched experimental build of vkstorm-canary.
@@ -70,11 +86,29 @@ jobs:
       VIEWER_PACKAGE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)) && 'ON' || 'OFF' }}
       AUTOBUILD_ADDRSIZE: 64
       AUTOBUILD_CONFIGURATION: ReleaseFS_open
-      AUTOBUILD_VSVER: "170"
-      AUTOBUILD_VARIABLES_FILE: ${{ github.workspace }}/.build-variables/variables
-      AUTOBUILD_INSTALLABLE_CACHE: ${{ github.workspace }}/.autobuild-installables
+      AUTOBUILD_VSVER: "180"
       LL_SKIP_REQUIRE_SYSROOT: 1
     steps:
+      # The hosted tool cache's Python is built for the 26.04 host and its ssl
+      # module does not load in the container, so Linux uses the container's
+      # own Python 3 in a virtual environment.
+      - name: Prepare the Linux build container
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          echo "DEBIAN_FRONTEND=noninteractive" >> "$GITHUB_ENV"
+          apt-get -o Acquire::Retries=3 update
+          apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+            sudo git ca-certificates curl wget file xz-utils bzip2 zstd unzip \
+            make binutils lsb-release procps python3 python3-venv
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 -m venv /opt/vkstorm-python
+          echo /opt/vkstorm-python/bin >> "$GITHUB_PATH"
+          . /etc/os-release
+          echo "Linux build container: $PRETTY_NAME, $(ldd --version | head -n 1), $(python3 --version)" >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -95,8 +129,13 @@ jobs:
           echo "revision=$build_revision" >> "$GITHUB_ENV"
           echo "AUTOBUILD_BUILD_ID=$build_revision" >> "$GITHUB_ENV"
           echo "Source $(git rev-parse HEAD): build $build_revision" >> "$GITHUB_STEP_SUMMARY"
+          # The github.workspace expression names the host path, not where a
+          # container sees the workspace; $GITHUB_WORKSPACE is right in both.
+          echo "AUTOBUILD_VARIABLES_FILE=$GITHUB_WORKSPACE/.build-variables/variables" >> "$GITHUB_ENV"
+          echo "AUTOBUILD_INSTALLABLE_CACHE=$GITHUB_WORKSPACE/.autobuild-installables" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v7
+        if: runner.os == 'Windows'
         with:
           python-version: "3.11"
       - name: Install Linux build dependencies
@@ -107,7 +146,7 @@ jobs:
           sudo apt-get -o Acquire::Retries=3 install -y \
             gcc-14 g++-14 build-essential pkg-config \
             libgl1-mesa-dev libglu1-mesa-dev libpulse-dev libssl-dev \
-            libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype6-dev
+            libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype-dev
           echo "CC=gcc-14" >> "$GITHUB_ENV"
           echo "CXX=g++-14" >> "$GITHUB_ENV"
 
@@ -120,7 +159,14 @@ jobs:
           persist-credentials: false
 
       - name: Install build dependencies
-        run: python -m pip install autobuild==3.9.3 llsd
+        run: python -m pip install autobuild==3.10.2 llsd
+
+      # The container's own CMake is 3.28; use the version of the hosted runners.
+      - name: Install CMake in the Linux container
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install cmake==4.4.4
+          cmake --version
 
       - name: Check installer version and payload
         run: |
@@ -155,7 +201,7 @@ jobs:
           if [[ "$RUNNER_OS" == Windows ]]; then
             # The flags used by the successful local Release build.
             export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
-            options+=(-G 'Visual Studio 17 2022' -A x64 -DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=ON)
+            options+=(-G 'Visual Studio 18 2026' -A x64 -DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=ON)
           else
             options+=(-DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=OFF)
           fi
@@ -170,7 +216,7 @@ jobs:
             -DVIEWER_CHANNEL:STRING=Vulkanstorm-Release -DROOT_PROJECT_NAME:STRING=Firestorm \
             -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
             -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
-            -DUSE_KDU:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
+            -DUSE_KDU:BOOL=OFF -DUSE_VKS_AUDIO:BOOL=ON \
             -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF \
             -DUSE_AVX2_OPTIMIZATION:BOOL=ON -DUSE_AVX_OPTIMIZATION:BOOL=OFF -DUSE_LTO:BOOL=ON \
             -DUSE_PRECOMPILED_HEADERS:BOOL=ON -DUSE_DISCORD:BOOL=OFF -DUSE_BUGSPLAT:BOOL=OFF \
@@ -188,7 +234,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get install -y mesa-utils mesa-vulkan-drivers xvfb xauth
-          g++-14 -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llwindow \
+          "$CXX" -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llwindow \
             indra/llwindow/tests/linux_zink_loader_test.cpp -lGL -lX11 -ldl \
             -o "$RUNNER_TEMP/linux-zink-loader-test"
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' -print -quit)"
@@ -205,8 +251,50 @@ jobs:
           cmake -S indra -B ${{ matrix.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
           cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel 3
 
+      # The GCC LTO link of vulkanstorm-bin writes its temporary objects to
+      # $TMPDIR. On the 26.04 host /tmp is an 8 GiB tmpfs, which overran
+      # ("lto-wrapper: fatal error: write: Disk quota exceeded", run
+      # 40710871603), so the build uses disk-backed temporary space. A swap
+      # file can only be added outside a container; the host's own 3 GiB
+      # swap is what the Ubuntu 24.04 runners linked with.
+      - name: Prepare Linux temporary space and swap for the LTO link
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          findmnt -T /tmp || true
+          df -h / /tmp /mnt 2>/dev/null || df -h
+          free -h
+          base="$RUNNER_TEMP"
+          if [ -d /mnt ] && [ "$(df --output=avail -k /mnt | tail -1)" -gt 41943040 ]; then base=/mnt; fi
+          sudo mkdir -p "$base/vkstorm-tmp"
+          sudo chown "$(id -u):$(id -g)" "$base/vkstorm-tmp"
+          echo "TMPDIR=$base/vkstorm-tmp" >> "$GITHUB_ENV"
+          if [ -f /.dockerenv ]; then
+            echo "Building in a container: no swap file added"
+          elif [ "$(df --output=avail -k "$base" | tail -1)" -gt 41943040 ]; then
+            sudo fallocate -l 24G "$base/vkstorm.swap"
+            sudo chmod 600 "$base/vkstorm.swap"
+            sudo mkswap "$base/vkstorm.swap"
+            sudo swapon "$base/vkstorm.swap"
+          else
+            echo "Less than 40 GiB free on $base: no swap file added"
+          fi
+          free -h
+          echo "TMPDIR for the build: $base/vkstorm-tmp"
+
       - name: Build viewer and stage runtime
         run: cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
+
+      # Fail if anything built or packaged needs more than Ubuntu 24.04 has:
+      # glibc 2.39, and GLIBCXX_3.4.33 from GCC 14's libstdc++.
+      - name: Check Linux glibc and libstdc++ requirements
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          VKSTORM_MAX_GLIBC: "2.39"
+          VKSTORM_MAX_GLIBCXX: "3.4.33"
+        run: bash scripts/ci_report_glibc.sh "${{ matrix.directory }}/newview"
 
       - name: Keep qualification builds free of installers
         if: env.VIEWER_PACKAGE != 'ON'
@@ -219,13 +307,75 @@ jobs:
             exit 1
           fi
 
+      - name: Record the libstdc++ inventory fixtures (R2, R3b)
+        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && inputs.record_inventory_fixtures
+        shell: bash
+        run: |
+          # GitHub runs bash with -e; the recorders exit non-zero in dump mode by
+          # design, so -e must be off here. Every result is checked below.
+          set +e
+          set -uo pipefail
+          dir="${{ matrix.directory }}"
+          cmake -S indra -B "$dir" -DLL_TESTS:BOOL=ON
+          # The post-build replay fails until the libstdc++ trees exist; the
+          # executables are linked before it runs, and make's -i keeps it from
+          # deleting them when the replay fails.
+          cmake --build "$dir" --config "$VIEWER_BUILD_TYPE" --parallel 3             --target INTEGRATION_TEST_llinventorymodel_parity INTEGRATION_TEST_llinvfetch_parity -- -i || true
+          r2=$(find "$dir" -name INTEGRATION_TEST_llinventorymodel_parity -type f -perm -u+x | head -1)
+          r3b=$(find "$dir" -name INTEGRATION_TEST_llinvfetch_parity -type f -perm -u+x | head -1)
+          test -n "$r2" && test -n "$r3b" || { echo "test executables not built"; exit 1; }
+          libs="$(dirname "$r2"):$GITHUB_WORKSPACE/$dir/packages/lib/release:$GITHUB_WORKSPACE/$dir/sharedlibs/lib"
+          # Under the workspace: the upload step reads it inside the container,
+          # where the host temp path does not exist.
+          out="$GITHUB_WORKSPACE/.inventory-fixtures"
+          commit=$(git rev-parse --short=10 HEAD)
+          rm -rf "$out"; mkdir -p "$out"
+          for n in 1 2; do
+            mkdir -p "$out/r2_$n" "$out/r3b_$n"
+            for f in README.md .gitattributes; do cp indra/newview/tests/fixtures/inventory/ais/fetch/$f "$out/r3b_$n/" 2>/dev/null; done
+            LD_LIBRARY_PATH="$libs" VKS_INVMODEL_COMMIT="$commit" VKS_INVMODEL_DUMP="$out/r2_$n" "$r2" > "$out/r2_$n.log" 2>&1
+            LD_LIBRARY_PATH="$libs" VKS_INVFETCH_COMMIT="$commit" VKS_INVFETCH_DUMP="$out/r3b_$n"               python3 -I indra/newview/tests/vksinventory_mock_server.py -- "$r3b" > "$out/r3b_$n.log" 2>&1
+            test -f "$out/r2_$n/DUMP_COMPLETE" || { echo "R2 dump $n incomplete"; tail -40 "$out/r2_$n.log"; exit 1; }
+            grep -q "(0 scenarios with failures)" "$out/r3b_$n.log" || { echo "R3b dump $n failed"; tail -40 "$out/r3b_$n.log"; exit 1; }
+          done
+          diff -r "$out/r2_1" "$out/r2_2" || { echo "the two R2 dumps differ"; exit 1; }
+          # R3b: the concurrent scenarios' "# measured" header lines vary from run
+          # to run and are not compared, and manifest.txt's digests cover them.
+          diff <(cd "$out/r3b_1" && find . -type f | sort) <(cd "$out/r3b_2" && find . -type f | sort) || { echo "the R3b file sets differ"; exit 1; }
+          while read -r f; do
+            [ "$f" = ./manifest.txt ] && continue
+            diff -q <(grep -av '^#' "$out/r3b_1/$f") <(grep -av '^#' "$out/r3b_2/$f") > /dev/null || { echo "the R3b dumps differ in $f"; exit 1; }
+          done < <(cd "$out/r3b_1" && find . -type f | sort)
+          echo "recorded at $commit: both dumps identical"
+
+      - name: Upload the libstdc++ inventory fixtures
+        if: always() && runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && inputs.record_inventory_fixtures
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-inventory-fixtures
+          if-no-files-found: error
+          # .inventory-fixtures starts with a dot: upload-artifact skips such paths by default.
+          include-hidden-files: true
+          path: |
+            .inventory-fixtures/r2_1/
+            .inventory-fixtures/r3b_1/
+            .inventory-fixtures/*.log
+
       - name: Run statistics, script metadata and transport regression tests
         shell: bash
         run: |
           set -euo pipefail
           cmake -S indra -B "${{ matrix.directory }}" -DLL_TESTS:BOOL=ON
           cmake --build "${{ matrix.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
-            --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver
+            --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
+            INTEGRATION_TEST_llimagej2coj INTEGRATION_TEST_llsdserialize_parity INTEGRATION_TEST_llvolume INTEGRATION_TEST_llimagecodecs INTEGRATION_TEST_llmessagetemplate \
+            INTEGRATION_TEST_llcorehttp_parity \
+            INTEGRATION_TEST_llmeshunpack_parity INTEGRATION_TEST_lltexturecache_parity INTEGRATION_TEST_lltexturefetch_parity \
+            INTEGRATION_TEST_llhttpretrypolicy \
+            INTEGRATION_TEST_llaudio_parity INTEGRATION_TEST_llaudio_music \
+            INTEGRATION_TEST_llinventory_parity INTEGRATION_TEST_llinvfetch_parity \
+            INTEGRATION_TEST_llinventorymodel_parity INTEGRATION_TEST_llaisupdate_parity \
+            INTEGRATION_TEST_llinventory_task_oracle INTEGRATION_TEST_llinventory_offer_oracle
 
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'

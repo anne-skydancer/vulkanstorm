@@ -36,6 +36,9 @@ class LLVector3;
 class LLVector4;
 class LLUUID;
 
+// The binary and text forms are the Rust crate vkstorm-messages
+// (vkstorm-rust rung three); these classes keep their interface and their
+// buffer state and hand it to the crate per call.
 class LLDataPacker
 {
 public:
@@ -108,6 +111,10 @@ public:
             void        setPassFlags(U32 flags) { mPassFlags = flags; }
 protected:
     LLDataPacker();
+    // The integer of a fixed-point value. `assigned` says whether a number
+    // was read: the text forms report a present but empty value as success
+    // without one, and unpackFixed then leaves the caller's value as it was.
+    virtual bool        unpackFixedBits(U32 &fixed, S32 total_bits, bool &assigned, const char *name);
 protected:
     U32 mPassFlags;
     bool mWriteEnabled; // disable this to do things like determine filesize without actually copying data
@@ -203,6 +210,8 @@ public:
     /*virtual*/ void dumpBufferToLog();
 protected:
     inline bool verifyLength(const S32 data_size, const char *name);
+    inline bool packBytes(const void* value, S32 size, const char* name);
+    inline bool unpackBytes(void* value, S32 size, const char* name);
 
     U8 *mBufferp;
     U8 *mCurBufferp;
@@ -218,6 +227,37 @@ inline bool LLDataPackerBinaryBuffer::verifyLength(const S32 data_size, const ch
         return false;
     }
 
+    return true;
+}
+
+// The fixed-size values stay an inline bounds check and copy: measured, a
+// call into the crate per 4-byte field costs more than the copy itself
+// (see doc/rust_port.md). Strings, sized binary data and the fixed-point
+// conversion go through the crate.
+inline bool LLDataPackerBinaryBuffer::packBytes(const void* value, S32 size, const char* name)
+{
+    if (!verifyLength(size, name))
+    {
+        return false;
+    }
+    if (mWriteEnabled)
+    {
+        memcpy(mCurBufferp, value, size);
+    }
+    mCurBufferp += size;
+    return true;
+}
+
+// Reads are bounds-checked whether or not writes are enabled (the C++ read
+// past a measuring packer's buffer).
+inline bool LLDataPackerBinaryBuffer::unpackBytes(void* value, S32 size, const char* name)
+{
+    if (!verifyLength(size, name) || !mBufferp || mCurBufferp < mBufferp || (mCurBufferp - mBufferp) > mBufferSize - size)
+    {
+        return false;
+    }
+    memcpy(value, mCurBufferp, size);
+    mCurBufferp += size;
     return true;
 }
 
@@ -305,12 +345,15 @@ public:
     void        dump();
 
 protected:
-    void writeIndentedName(const char *name);
     bool getValueStr(const char *name, char *out_value, const S32 value_len);
+    bool packValue(int32_t kind, const char* name, const int64_t* ints, size_t nints, const float* floats, size_t nfloats, const U8* data, size_t ndata, const char* what);
+    // `assigned`: a number was read; a present but empty value leaves
+    // `out` untouched and still succeeds
+    bool unpackInt(int32_t kind, int64_t& out, bool& assigned, const char* name);
+    /*virtual*/ bool unpackFixedBits(U32 &fixed, S32 total_bits, bool &assigned, const char *name);
+    bool unpackFloats(float* out, size_t count, const char* name);
 
 protected:
-    inline bool verifyLength(const S32 data_size, const char *name);
-
     char *mBufferp;
     char *mCurBufferp;
     S32 mBufferSize;
@@ -331,18 +374,6 @@ inline void LLDataPackerAsciiBuffer::assignBuffer(char* bufferp, S32 size)
     mCurBufferp = bufferp;
     mBufferSize = size;
     mWriteEnabled = true;
-}
-
-inline bool LLDataPackerAsciiBuffer::verifyLength(const S32 data_size, const char *name)
-{
-    if (mWriteEnabled && (mCurBufferp - mBufferp) > mBufferSize - data_size)
-    {
-        LL_WARNS() << "Buffer overflow in AsciiBuffer length verify, field name " << name << "!" << LL_ENDL;
-        LL_WARNS() << "Current pos: " << (int)(mCurBufferp - mBufferp) << " Buffer size: " << mBufferSize << " Data size: " << data_size << LL_ENDL;
-        return false;
-    }
-
-    return true;
 }
 
 class LLDataPackerAsciiFile : public LLDataPacker
@@ -423,6 +454,12 @@ public:
 protected:
     void writeIndentedName(const char *name);
     bool getValueStr(const char *name, char *out_value, const S32 value_len);
+    void writeValue(int32_t kind, const char* name, const int64_t* ints, size_t nints, const float* floats, size_t nfloats, const U8* data, size_t ndata);
+    // `assigned`: a number was read; a present but empty value leaves
+    // `out` untouched and still succeeds
+    bool unpackInt(int32_t kind, int64_t& out, bool& assigned, const char* name);
+    /*virtual*/ bool unpackFixedBits(U32 &fixed, S32 total_bits, bool &assigned, const char *name);
+    bool unpackFloats(float* out, size_t count, const char* name);
 
     /*virtual*/ bool        hasNext() const         { return true; }
 

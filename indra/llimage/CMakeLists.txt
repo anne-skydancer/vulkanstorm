@@ -6,6 +6,7 @@ include(00-Common)
 include(LLCommon)
 include(LLImage)
 include(JPEG)
+include(Rust)
 include(LLKDU)
 include(ZLIBNG)
 include(LLAddBuildTest)
@@ -23,7 +24,6 @@ set(llimage_SOURCE_FILES
     llimagepng.cpp
     llimagetga.cpp
     llimageworker.cpp
-    llpngwrapper.cpp
     )
 
 set(llimage_HEADER_FILES
@@ -40,7 +40,6 @@ set(llimage_HEADER_FILES
     llimagetga.h
     llimageworker.h
     llmapimagetype.h
-    llpngwrapper.h
     )
 
 list(APPEND llimage_SOURCE_FILES ${llimage_HEADER_FILES})
@@ -55,12 +54,14 @@ else (USE_KDU)
     target_link_libraries(llimage llimagej2coj)
 endif (USE_KDU)
 
+# PNG, TGA, BMP and DXT are Rust (vkstorm-image through vkstorm_ffi); JPEG
+# stays on libjpeg-turbo (see doc/rust_port.md).
 target_link_libraries(llimage
         llfilesystem
         llmath
         llcommon
-        ll::libpng
         ll::libjpeg
+        vkstorm_ffi
     )
 
 # Add tests
@@ -69,6 +70,14 @@ if (LL_TESTS)
     llimageworker.cpp
     )
   LL_ADD_PROJECT_UNIT_TESTS(llimage "${llimage_TEST_SOURCE_FILES}")
+  # The Rust raster codecs through LLImagePNG, LLImageTGA, LLImageBMP and
+  # LLImageDXT over the default skin's textures.
+  LL_ADD_INTEGRATION_TEST(llimagecodecs "" "llimage;llfilesystem;llmath;llcommon")
+  set_property(TARGET INTEGRATION_TEST_llimagecodecs APPEND PROPERTY
+      COMPILE_DEFINITIONS
+      "VKS_IMAGE_TEST_SKIN_DIR=\"${CMAKE_SOURCE_DIR}/newview/skins/default\""
+      "VKS_IMAGE_TEST_MANIFEST=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/llimagecodecs_manifest.txt\""
+      "VKS_IMAGE_TEST_CHARACTER_DIR=\"${CMAKE_SOURCE_DIR}/newview/character\"")
 endif (LL_TESTS)
 
 

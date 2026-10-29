@@ -34,13 +34,11 @@
 #include "httpheaders.h"
 #include "httpoptions.h"
 
+struct VksHttpReplyQueue;
+
 namespace LLCore
 {
 
-class HttpRequestQueue;
-class HttpReplyQueue;
-class HttpService;
-class HttpOperation;
 class BufferArray;
 
 /// HttpRequest supplies the entry into the HTTP transport
@@ -627,14 +625,24 @@ public:
 protected:
 
 private:
-    typedef std::shared_ptr<HttpReplyQueue> HttpReplyQueuePtr_t;
+    // The service behind this class is Rust (vkstorm-http, rung four of
+    // the vkstorm-rust track); these are the C++ side of the boundary.
+    HttpHandle submit(policy_t policy_id,
+                      int method,
+                      const std::string & url,
+                      BufferArray * body,
+                      size_t offset,
+                      size_t len,
+                      const HttpOptions::ptr_t & options,
+                      const HttpHeaders::ptr_t & headers,
+                      const HttpHandler::ptr_t & handler);
+    void deliver(void * reply);
 
     /// @name InstanceData
     ///
     /// @{
-    HttpStatus          mLastReqStatus;
-    HttpReplyQueuePtr_t mReplyQueue;
-    HttpRequestQueue *  mRequestQueue;
+    HttpStatus              mLastReqStatus;
+    ::VksHttpReplyQueue *   mReplyQueue;
 
     /// @}
 

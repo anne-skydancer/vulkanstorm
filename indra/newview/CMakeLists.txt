@@ -38,11 +38,10 @@ include(MesaZink)
 include(NDOF)
 include(NVAPI)
 include(OPENAL)
-include(SOLOUD)
+include(VKSAudio)
 include(OpenGL)
 include(OpenSSL)
 include(OpenXR)
-include(PNG)
 include(TemplateCheck)
 include(TinyEXR)
 include(ThreeJS)
@@ -2349,13 +2348,6 @@ if (WINDOWS)
       #media_plugin_example # <FS:Ansariel> Don't package example plugin
       )
 
-    # <FS:Ansariel> Only copy OpenJPEG dll if needed
-    if (NOT USE_KDU)
-        list(APPEND COPY_INPUT_DEPENDENCIES
-            ${SHARED_LIB_STAGING_DIR}/openjp2.dll
-            )
-    endif (NOT USE_KDU)
-    # </FS:Ansariel>
 
     # <FS:TJ> Keep Vivox only for OpenSim viewers
     if (OPENSIM)
@@ -2393,10 +2385,12 @@ if (WINDOWS)
           )
     endif ()
 
-    if (TARGET ll::soloud)
+    if (TARGET ll::vksaudio)
       list(APPEND COPY_INPUT_DEPENDENCIES
-           ${AUTOBUILD_INSTALL_DIR}/LICENSES/soloud.txt
-           ${AUTOBUILD_INSTALL_DIR}/LICENSES/soloud-miniaudio.txt
+           ${SHARED_LIB_STAGING_DIR}/avcodec-63.dll
+           ${SHARED_LIB_STAGING_DIR}/avutil-61.dll
+           ${SHARED_LIB_STAGING_DIR}/swresample-7.dll
+           ${AUTOBUILD_INSTALL_DIR}/LICENSES/ffmpeg.txt
           )
     endif ()
 
@@ -2421,7 +2415,7 @@ if (WINDOWS)
         "--discord=${USE_DISCORD}"
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
-        "--soloud=${USE_SOLOUD}"
+        "--vksaudio=${USE_VKS_AUDIO}"
         "--mesazink=${USE_MESAZINK}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"
@@ -2465,7 +2459,7 @@ if (WINDOWS)
             "--discord=${USE_DISCORD}"
             "--fmodstudio=${USE_FMODSTUDIO}"
             "--openal=${USE_OPENAL}"
-            "--soloud=${USE_SOLOUD}"
+            "--vksaudio=${USE_VKS_AUDIO}"
             "--tracy=${USE_TRACY}"
             "--avx2=${USE_AVX2_OPTIMIZATION}"
             --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2534,7 +2528,7 @@ if (WINDOWS)
               "--discord=${USE_DISCORD}"
               "--fmodstudio=${USE_FMODSTUDIO}"
               "--openal=${USE_OPENAL}"
-              "--soloud=${USE_SOLOUD}"
+              "--vksaudio=${USE_VKS_AUDIO}"
               "--mesazink=${USE_MESAZINK}"
               "--tracy=${USE_TRACY}"
               "--inno=${USE_INNOSETUP}"
@@ -2775,7 +2769,7 @@ if (LINUX)
         "--discord=${USE_DISCORD}"
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
-        "--soloud=${USE_SOLOUD}"
+        "--vksaudio=${USE_VKS_AUDIO}"
         "--mesazink=${USE_MESAZINK}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"        
@@ -2806,7 +2800,7 @@ if (LINUX)
       "--discord=${USE_DISCORD}"
       "--fmodstudio=${USE_FMODSTUDIO}"
       "--openal=${USE_OPENAL}"
-      "--soloud=${USE_SOLOUD}"
+      "--vksaudio=${USE_VKS_AUDIO}"
         "--mesazink=${USE_MESAZINK}"
       "--tracy=${USE_TRACY}"
       "--avx2=${USE_AVX2_OPTIMIZATION}"      
@@ -2903,7 +2897,7 @@ if (DARWIN)
       "--discord=${USE_DISCORD}"
       "--fmodstudio=${USE_FMODSTUDIO}"
       "--openal=${USE_OPENAL}"
-      "--soloud=${USE_SOLOUD}"
+      "--vksaudio=${USE_VKS_AUDIO}"
       "--tracy=${USE_TRACY}"
       "--avx2=${USE_AVX2_OPTIMIZATION}"      
       --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2941,7 +2935,7 @@ if (DARWIN)
           "--discord=${USE_DISCORD}"
           "--fmodstudio=${USE_FMODSTUDIO}"
           "--openal=${USE_OPENAL}"
-          "--soloud=${USE_SOLOUD}"
+          "--vksaudio=${USE_VKS_AUDIO}"
           "--tracy=${USE_TRACY}"
           "--avx2=${USE_AVX2_OPTIMIZATION}"          
           --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -3205,7 +3199,84 @@ if (LL_TESTS)
     "${test_libs}"
     )
 
-# LL_ADD_INTEGRATION_TEST(llhttpretrypolicy "llhttpretrypolicy.cpp" "${test_libs}")
+  # Byte-level parity of the texture cache files against the record made
+  # from the C++ implementation before its port to Rust (vkstorm-rust).
+  LL_ADD_INTEGRATION_TEST(lltexturecache_parity
+    lltexturecache.cpp
+    "llcommon;llfilesystem;llmath;llxml;llmessage;llcorehttp;llimage;llimagej2coj;llrender"
+    )
+  set_property(TARGET INTEGRATION_TEST_lltexturecache_parity APPEND PROPERTY
+      COMPILE_DEFINITIONS "VKS_TEXCACHE_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
+  # The viewer precompiled header reaches into libraries the test does not
+  # link (their unit tests are not part of this build): headers only.
+  target_include_directories(INTEGRATION_TEST_lltexturecache_parity PRIVATE
+      $<TARGET_PROPERTY:llui,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llcharacter,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llinventory,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llappearance,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llplugin,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llwindow,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:lllogin,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llaudio,INTERFACE_INCLUDE_DIRECTORIES>
+      )
+
+  # The texture fetcher's decisions (range requests, discard levels, retries,
+  # cache reads and writes) against the record made before the port, on the
+  # local mock server in tests/vksassets_mock_server.py.
+  # The prebuilt library directory is on the test's library path: the
+  # executable needs the SDL the window layer links.
+  LL_ADD_INTEGRATION_TEST(lltexturefetch_parity
+    "lltexturefetch.cpp;lltexturecache.cpp;llhttpretrypolicy.cpp;llviewerassetstats.cpp;llagentdata.cpp;tests/lltexturefetch_parity_stubs.cpp"
+    "llcommon;llfilesystem;llmath;llxml;llmessage;llcorehttp;llimage;llimagej2coj;llrender"
+    "-l${ARCH_PREBUILT_DIRS_RELEASE}"
+    "-Dhttp_proxy"
+    ${PYTHON_EXECUTABLE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/vksassets_mock_server.py"
+    )
+  set_property(TARGET INTEGRATION_TEST_lltexturefetch_parity APPEND PROPERTY
+      COMPILE_DEFINITIONS "VKS_TEXFETCH_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
+  target_include_directories(INTEGRATION_TEST_lltexturefetch_parity PRIVATE
+      $<TARGET_PROPERTY:llui,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llprimitive,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llphysicsextensionsos,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llmeshoptimizer,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llcharacter,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llinventory,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llappearance,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llplugin,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llwindow,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:lllogin,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llaudio,INTERFACE_INCLUDE_DIRECTORIES>
+      )
+
+  # The retry policy (its backoff in vkstorm-assets) and the Retry-After
+  # header parsing, seconds and RFC 1123 dates.
+  LL_ADD_INTEGRATION_TEST(llhttpretrypolicy
+    llhttpretrypolicy.cpp
+    "llcommon;llmessage;llcorehttp"
+    )
+  target_include_directories(INTEGRATION_TEST_llhttpretrypolicy PRIVATE
+      $<TARGET_PROPERTY:llui,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llcharacter,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llinventory,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llappearance,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llplugin,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llwindow,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:lllogin,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llaudio,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llrender,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llimage,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llmath,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llxml,INTERFACE_INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:llfilesystem,INTERFACE_INCLUDE_DIRECTORIES>
+      )
+
+  # The inventory oracle and parity tests (vkstorm-rust rung seven). Each
+  # recorder registers its own tests in its own fragment, so none of them
+  # edits this file.
+  include(${CMAKE_CURRENT_SOURCE_DIR}/tests/inventory/r2.cmake)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/tests/inventory/r3.cmake)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/tests/inventory/r4.cmake)
 
   #ADD_VIEWER_BUILD_TEST(llmemoryview viewer)
   #ADD_VIEWER_BUILD_TEST(llagentaccess viewer)
@@ -3214,10 +3285,5 @@ if (LL_TESTS)
 
 
 endif (LL_TESTS)
-
-option(LL_VLC_AUDIO_PROTOCOL_TESTS "Build device-free media_audio protocol tests" OFF)
-if (LL_VLC_AUDIO_PROTOCOL_TESTS)
-  LL_ADD_INTEGRATION_TEST(llviewermedia_audio "" "llplugin;llxml;llcommon;llfilesystem")
-endif ()
 
 check_message_template(${VIEWER_BINARY_NAME})

@@ -58,6 +58,9 @@ class LLStreamingAudioInterface
         return isAudioFadeComplete() ? AudioFadeResult::Complete : AudioFadeResult::Pending;
     }
     virtual void setAudioHardMute(bool muted) {}
+    // FSMusicSpatialSound (0, 21, 41, 51, 71): the speaker fill of stereo
+    // music, applied immediately by engines that mix the music themselves
+    virtual void setMusicSpatialLayout(S32 layout) {}
 
     // These three are Firestorm additions and thus optional.
     using metadata_update_callback_t = boost::signals2::signal<void(const LLSD& metadata)>;

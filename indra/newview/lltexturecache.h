@@ -37,52 +37,23 @@
 class LLImageFormatted;
 class LLTextureCacheWorker;
 class LLImageRaw;
+struct VksTexCache;
 
+// The texture cache's index, entries file, header-data file, body files and
+// fast cache are vkstorm-assets (vkstorm-rust rung five), byte-compatible
+// with the files the C++ wrote. This class keeps the worker thread, the
+// responders and the viewer-facing API; see doc/rust_port.md.
 class LLTextureCache : public LLWorkerThread
 {
     friend class LLTextureCacheWorker;
     friend class LLTextureCacheRemoteWorker;
     friend class LLTextureCacheLocalFileWorker;
 
-private:
-
-#if LL_WINDOWS
-#pragma pack(push,1)
-#endif
-
-    // Entries
-    static const U32 sHeaderEncoderStringSize = 32;
-    struct EntriesInfo
-    {
-        EntriesInfo() : mVersion(0.f), mAdressSize(0), mEntries(0) { memset(mEncoderVersion, 0, sHeaderEncoderStringSize); }
-        F32 mVersion;
-        U32 mAdressSize;
-        char mEncoderVersion[sHeaderEncoderStringSize];
-        U32 mEntries;
-    };
-    struct Entry
-    {
-            Entry() :
-                mBodySize(0),
-            mImageSize(0),
-            mTime(0)
-        {
-        }
-        Entry(const LLUUID& id, S32 imagesize, S32 bodysize, U32 time) :
-            mID(id), mImageSize(imagesize), mBodySize(bodysize), mTime(time) {}
-        void init(const LLUUID& id, U32 time) { mID = id, mImageSize = 0; mBodySize = 0; mTime = time; }
-        Entry& operator=(const Entry& entry) {mID = entry.mID, mImageSize = entry.mImageSize; mBodySize = entry.mBodySize; mTime = entry.mTime; return *this;}
-        LLUUID mID; // 16 bytes
-        S32 mImageSize; // total size of image if known
-        S32 mBodySize; // size of body file in body cache
-        U32 mTime; // seconds since 1/1/1970
-    };
-
-#if LL_WINDOWS
-#pragma pack(pop)
-#endif
-
 public:
+    // The clock the entries are stamped with (seconds since 1/1/1970);
+    // NULL for time(NULL). Tests set it for reproducible files.
+    static U32 (*sClock)();
+    static U32 now() { return sClock ? sClock() : (U32)time(NULL); }
 
     class Responder : public LLResponder
     {
@@ -142,10 +113,10 @@ public:
     // debug
     S32 getNumReads() { return static_cast<S32>(mReaders.size()); }
     S32 getNumWrites() { return static_cast<S32>(mWriters.size()); }
-    S64Bytes getUsage() { return S64Bytes(mTexturesSizeTotal); }
-    S64Bytes getMaxUsage() { return S64Bytes(sCacheMaxTexturesSize); }
-    U32 getEntries() { return mHeaderEntriesInfo.mEntries; }
-    U32 getMaxEntries() { return sCacheMaxEntries; };
+    S64Bytes getUsage();
+    S64Bytes getMaxUsage();
+    U32 getEntries();
+    U32 getMaxEntries();
     bool isInCache(const LLUUID& id) ;
     bool isInLocal(const LLUUID& id) ; //not thread safe at the moment
     LLMutex* getFastCacheMutex() { return &mFastCacheMutex; }
@@ -154,56 +125,18 @@ protected:
     std::string getLocalFileName(const LLUUID& id);
     std::string getTextureFileName(const LLUUID& id);
     void addCompleted(Responder* responder, bool success);
-
-protected:
-    //void setFileAPRPool(apr_pool_t* pool) { mFileAPRPool = pool ; }
-
-private:
-    void setDirNames(ELLPath location);
-    void readHeaderCache();
-    void clearCorruptedCache();
-    void purgeAllTextures(bool purge_directories);
-    void purgeTexturesLazy(F32 time_limit_sec);
-    void purgeTextures(bool validate);
-    LLAPRFile* openHeaderEntriesFile(bool readonly, S32 offset);
-    void closeHeaderEntriesFile();
-    void readEntriesHeader();
-    void setEntriesHeader();
-    void writeEntriesHeader();
-    S32 openAndReadEntry(const LLUUID& id, Entry& entry, bool create);
-    bool updateEntry(S32& idx, Entry& entry, S32 new_image_size, S32 new_body_size);
-    void updateEntryTimeStamp(S32 idx, Entry& entry) ;
-    U32 openAndReadEntries(std::vector<Entry>& entries);
-    void writeEntriesAndClose(const std::vector<Entry>& entries);
-    void readEntryFromHeaderImmediately(S32& idx, Entry& entry) ;
-    void writeEntryToHeaderImmediately(S32& idx, Entry& entry, bool write_header = false) ;
-    void removeEntry(S32 idx, Entry& entry, std::string& filename);
-    void removeCachedTexture(const LLUUID& id) ;
-    S32 getHeaderCacheEntry(const LLUUID& id, Entry& entry);
-    S32 setHeaderCacheEntry(const LLUUID& id, Entry& entry, S32 imagesize, S32 datasize);
-    void writeUpdatedEntries() ;
-    void updatedHeaderEntriesFile() ;
-    void lockHeaders() { mHeaderMutex.lock(); }
-    void unlockHeaders() { mHeaderMutex.unlock(); }
-
-    void openFastCache(bool first_time = false);
-    void closeFastCache(bool forced = false);
-    bool writeToFastCache(LLUUID image_id, S32 cache_id, LLPointer<LLImageRaw> raw, S32 discardlevel);
+    VksTexCache* getCache() { return mCache; }
 
 private:
     // Internal
     LLMutex mWorkersMutex;
-    LLMutex mHeaderMutex;
-    LLMutex mHeaderIDMapMutex; // To avoid deadlocks, never lock mFastCacheMutex after mHeaderIDMapMutex.
     LLMutex mListMutex;
+    // Batch guard for LLViewerTextureList::updateImagesLoadingFastCache
+    // (upstream #5356). The fast cache itself is in vkstorm-assets, which
+    // locks it per call; no worker takes this mutex, so the try-lock there
+    // always succeeds and a busy fast cache blocks inside the read, as
+    // before #5356.
     LLMutex mFastCacheMutex;
-    LLAPRFile* mHeaderAPRFile;
-    LLVolatileAPRPool* mFastCachePoolp;
-
-    // mLocalAPRFilePoolp is not thread safe and is meant only for workers
-    // howhever mHeaderEntriesFileName is accessed not from workers' threads
-    // so it needs own pool (not thread safe by itself, relies onto header's mutex)
-    LLVolatileAPRPool*   mHeaderAPRFilePoolp;
 
     typedef std::map<handle_t, LLTextureCacheWorker*> handle_map_t;
     handle_map_t mReaders;
@@ -215,42 +148,7 @@ private:
     typedef std::vector<std::pair<LLPointer<Responder>, bool> > responder_list_t;
     responder_list_t mCompletedList;
 
-    bool mReadOnly;
-
-    std::string mCacheParentDirName;
-
-    // HEADERS (Include first mip)
-    std::string mHeaderEntriesFileName;
-    std::string mHeaderDataFileName;
-    std::string mFastCacheFileName;
-    EntriesInfo mHeaderEntriesInfo;
-    std::set<S32> mFreeList; // deleted entries
-    std::set<LLUUID> mLRU;
-    typedef std::map<LLUUID, S32> id_map_t;
-    id_map_t mHeaderIDMap;
-
-    LLAPRFile*   mFastCachep;
-    LLFrameTimer mFastCacheTimer;
-    U8*          mFastCachePadBuffer;
-
-    // BODIES (TEXTURES minus headers)
-    std::string mTexturesDirName;
-    typedef std::map<LLUUID,S32> size_map_t;
-    size_map_t mTexturesSizeMap;
-    S64 mTexturesSizeTotal;
-    LLAtomicBool mDoPurge;
-
-    typedef std::map<S32, Entry> idx_entry_map_t;
-    idx_entry_map_t mUpdatedEntryMap;
-    typedef std::vector<std::pair<S32, Entry> > idx_entry_vector_t;
-    idx_entry_vector_t mPurgeEntryList;
-
-    // Statics
-    static F32 sHeaderCacheVersion;
-    static U32 sHeaderCacheAddressSize;
-    static std::string sHeaderCacheEncoderVersion;
-    static U32 sCacheMaxEntries;
-    static S64 sCacheMaxTexturesSize;
+    VksTexCache* mCache;
 };
 
 extern const S32 TEXTURE_CACHE_ENTRY_SIZE;

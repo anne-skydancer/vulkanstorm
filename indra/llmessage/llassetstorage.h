@@ -190,7 +190,9 @@ protected:
 
 
 // Map of known bad assets
-typedef std::map<LLUUID,U64,lluuid_less> toxic_asset_map_t;
+// The toxic asset map, the request bookkeeping policies and the error
+// strings are vkstorm-assets (vkstorm-rust rung five, asset).
+struct VksToxicMap;
 
 
 
@@ -223,7 +225,7 @@ protected:
     request_list_t mPendingLocalUploads;
 
     // Map of toxic assets - these caused problems when recently rezzed, so avoid them
-    toxic_asset_map_t   mToxicAssetMap;     // Objects in this list are known to cause problems and are not loaded
+    VksToxicMap*        mToxicAssetMap;     // Objects in this list are known to cause problems and are not loaded
 
 public:
     LLAssetStorage(LLMessageSystem *msg, LLXferManager *xfer, const LLHost &upstream_host);

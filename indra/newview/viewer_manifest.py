@@ -325,8 +325,13 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         #<FS:TS> Somehow, we started leaving the - separating the variant from the app name
         # on the beginning of the channel qualifier. This screws up later processing that
         # depends on the channel type. If it's there, we chop it off.
-        if channel_qualifier[0] == '-':
+        # <Vulkanstorm> The unsuffixed vendor channel is the base release.
+        # if channel_qualifier[0] == '-':
+        if channel_qualifier.startswith('-'):
             channel_qualifier = channel_qualifier[1:]
+        if not channel_qualifier:
+            return 'release'
+        # </Vulkanstorm>
         if channel_qualifier.startswith('release'):
             channel_type='release'
         elif channel_qualifier.startswith('beta'):
@@ -737,6 +742,13 @@ class Windows_x86_64_Manifest(ViewerManifest):
                 self.path("OpenAL32.dll")
                 self.path("alut.dll")
 
+            # The Vulkanstorm audio engine loads the decoder-only LGPL
+            # FFmpeg at run time for HE-AAC and Opus parcel music
+            if self.args.get('vksaudio', 'OFF').lower() == 'on':
+                self.path("avcodec-63.dll")
+                self.path("avutil-61.dll")
+                self.path("swresample-7.dll")
+
             # <VulkanStorm> Mesa Zink runtime (opt-in): stage into mesa\ so the
             # bundled opengl32.dll never shadows the native ICD by accident.
             if self.args.get('mesazink', 'OFF').lower() == 'on':
@@ -746,7 +758,6 @@ class Windows_x86_64_Manifest(ViewerManifest):
             # </VulkanStorm>
 
             # For textures
-            self.path_optional("openjp2.dll")
 
             # These need to be installed as a SxS assembly, currently a 'private' assembly.
             # See http://msdn.microsoft.com/en-us/library/ms235291(VS.80).aspx
@@ -795,10 +806,10 @@ class Windows_x86_64_Manifest(ViewerManifest):
             # </FS:ND>
 
         self.path(src="licenses-win32.txt", dst="licenses.txt")
-        if self.args.get('soloud', 'OFF').lower() == 'on':
+        if self.args.get('vksaudio', 'OFF').lower() == 'on':
+            # Decoder-only LGPL FFmpeg (parcel music: HE-AAC, Opus)
             with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
-                self.path('soloud.txt')
-                self.path('soloud-miniaudio.txt')
+                self.path('ffmpeg.txt')
         self.path("featuretable.txt")
         self.path("cube.dae")
 
@@ -915,19 +926,6 @@ class Windows_x86_64_Manifest(ViewerManifest):
                 self.path("libvlc.dll")
                 self.path("libvlccore.dll")
                 self.path("plugins/")
-
-            with self.prefix(dst="plugins/audio_filter"):
-                self.path2basename("../media_plugins/libvlc/" + self.args['configuration'],
-                                   "libspeakerfill_plugin.dll")
-            with self.prefix(dst="plugins/audio_output"):
-                self.path2basename("../media_plugins/libvlc/" + self.args['configuration'],
-                                   "libspeakerfill_output_plugin.dll")
-            with self.prefix(dst="speakerfill-source"):
-                self.path(src="../media_plugins/libvlc/speakerfill-source/", dst="upstream")
-                self.path(src="../media_plugins/libvlc/prepare_speakerfill.cmake", dst="prepare_speakerfill.cmake")
-                self.path(src="../media_plugins/libvlc/vlc_speakerfill.cpp", dst="vlc_speakerfill.cpp")
-                self.path(src="../../doc/vlc_audio_plugin.md", dst="README.md")
-                self.path(src="../../doc/LGPL-license.txt", dst="COPYING.LIB")
 
         if not self.is_packaging_viewer():
             self.package_file = "copied_deps"
@@ -2425,6 +2423,15 @@ class LinuxManifest(ViewerManifest):
         with self.prefix(src=pkgdir, dst="bin"):
             self.path("ca-bundle.crt")
 
+        if self.args.get('vksaudio', 'OFF').lower() == 'on':
+            # The audio engine loads the decoder-only LGPL FFmpeg at run time
+            with self.prefix(src=os.path.join(pkgdir, 'lib', 'release'), dst="lib"):
+                self.path("libavcodec.so*")
+                self.path("libavutil.so*")
+                self.path("libswresample.so*")
+            with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
+                self.path('ffmpeg.txt')
+
         with self.prefix(src=os.path.join(pkgdir, 'lib', 'release'), dst="lib"):
             # self.path("libfreetype.so*")
             self.path("libapr-1.so*")
@@ -2451,7 +2458,6 @@ class LinuxManifest(ViewerManifest):
             self.path_optional("libdirectfb*.so*")
             self.path_optional("libfusion*.so*")
             self.path_optional("libdirect*.so*")
-            self.path_optional("libopenjpeg.so*")
             self.path("libalut.so*")
             #self.path("libpng15.so.15") #use provided libpng to workaround incompatible system versions on some distros
             #self.path("libpng15.so.15.13.0") #use provided libpng to workaround incompatible system versions on some distros
@@ -2736,7 +2742,7 @@ if __name__ == "__main__":
         dict(name='fmodstudio', description="""Indication if fmod studio libraries are needed""", default='OFF'),
         dict(name='mesazink', description="""Indication the Mesa Zink GL-over-Vulkan runtime is bundled""", default='OFF'),
         dict(name='openal', description="""Indication openal libraries are needed""", default='OFF'),
-        dict(name='soloud', description="""Include SoLoud package licenses""", default='OFF'),
+        dict(name='vksaudio', description="""Include the Vulkanstorm audio engine's FFmpeg libraries and license""", default='OFF'),
         dict(name='tracy', description="""Indication tracy profiler is enabled""", default='OFF'),
         dict(name='inno', description="Use Inno Setup for Windows installers", default='ON'),
         dict(name='velopack', description="""Use Velopack installer instead of NSIS""", default='OFF'),

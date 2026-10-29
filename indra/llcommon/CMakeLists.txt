@@ -12,6 +12,7 @@ include(Copy3rdPartyLibs)
 include(ZLIBNG)
 include(Tracy)
 include(SSE2NEON)
+include(Rust)
 
 set(llcommon_SOURCE_FILES
     apply.cpp
@@ -82,7 +83,6 @@ set(llcommon_SOURCE_FILES
     llsdjson.cpp
     llsdparam.cpp
     llsdserialize.cpp
-    llsdserialize_xml.cpp
     llsdutil.cpp
     llsingleton.cpp
     llstacktrace.cpp
@@ -310,12 +310,16 @@ endif(NOT WORD_SIZE EQUAL 32)
 target_link_libraries(
         llcommon
         ll::apr
+        # llcommon no longer uses expat (the XML LLSD parser is Rust), but
+        # ll::expat carries the prebuilt include directory that llcommon and
+        # every library linking it rely on; keep it until that moves.
         ll::expat
         ll::zlib-ng
         ll::boost
         ll::oslibraries
         ll::tracy
         ll::sse2neon
+        vkstorm_ffi
     )
 
 target_include_directories(llcommon INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -365,6 +369,19 @@ if (LL_TESTS)
   LL_ADD_INTEGRATION_TEST(llprocinfo "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llrand "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llsdserialize "" "${test_libs}")
+  # Parity of the Rust LLSD serialization (vkstorm-rust rung two) with the
+  # former C++ implementation, which lives on in tests/llsdserialize_oracle.cpp.
+  LL_ADD_INTEGRATION_TEST(llsdserialize_parity "tests/llsdserialize_oracle.cpp;tests/llsdserialize_corpus.cpp" "${test_libs};ll::expat")
+  set_property(TARGET INTEGRATION_TEST_llsdserialize_parity APPEND PROPERTY
+      COMPILE_DEFINITIONS "VKS_LLSD_APP_SETTINGS_DIR=\"${CMAKE_SOURCE_DIR}/newview/app_settings\"")
+  # Benchmark and fixture generator for the same comparison; built, not run.
+  add_executable(llsdserialize_tool tests/llsdserialize_tool.cpp tests/llsdserialize_oracle.cpp tests/llsdserialize_corpus.cpp)
+  target_link_libraries(llsdserialize_tool llcommon ll::expat)
+  target_compile_definitions(llsdserialize_tool PRIVATE "VKS_LLSD_APP_SETTINGS_DIR=\"${CMAKE_SOURCE_DIR}/newview/app_settings\"")
+  set_target_properties(llsdserialize_tool PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${EXE_STAGING_DIR}")
+  if (WINDOWS)
+    set_target_properties(llsdserialize_tool PROPERTIES LINK_FLAGS "/debug /NODEFAULTLIB:LIBCMT /SUBSYSTEM:CONSOLE")
+  endif ()
   LL_ADD_INTEGRATION_TEST(llsingleton "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llstreamqueue "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llstring "" "${test_libs}")

@@ -1,0 +1,11 @@
+# Music fixtures are stored as is.
+*.mp2 binary
+*.mp3 binary
+*.ogg binary
+*.oga binary
+*.ogv binary
+*.opus binary
+*.aac binary
+*.flac binary
+*.m4a binary
+*.mp4 binary

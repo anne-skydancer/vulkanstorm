@@ -2,7 +2,7 @@
  * @file lldatapacker.cpp
  * @brief Data packer implementation.
  *
- * $LicenseInfo:firstyear=2006&license=viewerlgpl$
+ * $LicenseInfo:firstyear=2001&license=viewerlgpl$
  * Second Life Viewer Source Code
  * Copyright (C) 2010, Linden Research, Inc.
  *
@@ -24,6 +24,13 @@
  * $/LicenseInfo$
  */
 
+// The binary and text forms are written and read by the Rust crate
+// vkstorm-messages (vkstorm-rust rung three, see doc/rust_port.md). These
+// classes keep their interface and their buffer state (pointer, cursor,
+// size, the write and name flags) and hand it to the crate per call; the
+// file form keeps its file and stream I/O and uses the crate for the text
+// of each value. The warnings the C++ gave are given here.
+
 #include "linden_common.h"
 
 #include "lldatapacker.h"
@@ -37,13 +44,29 @@
 #include "v3math.h"
 #include "v4math.h"
 #include "lluuid.h"
+#include "vkstorm_ffi.h"
 
 // *NOTE: there are functions below which use sscanf and rely on this
 // particular value of DP_BUFSIZE. Search for '511' (DP_BUFSIZE - 1)
 // to find them if you change this number.
 const S32 DP_BUFSIZE = 512;
 
-static char DUMMY_BUFFER[128]; /*Flawfinder: ignore*/
+namespace
+{
+    // The text of a value line (with its newline, without the name) for
+    // the file form.
+    std::string value_text(int32_t kind, const int64_t* ints, size_t nints, const float* floats, size_t nfloats, const U8* data, size_t ndata)
+    {
+        std::string out;
+        size_t n = vks_dp_ascii_format(kind, ints, nints, floats, nfloats, data, ndata, NULL, 0);
+        out.resize(n);
+        if (n)
+        {
+            vks_dp_ascii_format(kind, ints, nints, floats, nfloats, data, ndata, (uint8_t*)&out[0], n);
+        }
+        return out;
+    }
+}
 
 LLDataPacker::LLDataPacker() : mPassFlags(0), mWriteEnabled(false)
 {
@@ -65,46 +88,20 @@ bool LLDataPacker::packFixed(const F32 value, const char *name,
                              const bool is_signed, const U32 int_bits, const U32 frac_bits)
 {
     bool success = true;
-    S32 unsigned_bits = int_bits + frac_bits;
-    S32 total_bits = unsigned_bits;
-
-    if (is_signed)
-    {
-        total_bits++;
-    }
-
-    S32 min_val;
-    U32 max_val;
-    if (is_signed)
-    {
-        min_val = 1 << int_bits;
-        min_val *= -1;
-    }
-    else
-    {
-        min_val = 0;
-    }
-    max_val = 1 << int_bits;
-
-    // Clamp to be within range
-    F32 fixed_val = llclamp(value, (F32)min_val, (F32)max_val);
-    if (is_signed)
-    {
-        fixed_val += max_val;
-    }
-    fixed_val *= 1 << frac_bits;
+    int32_t total_bits = 0;
+    uint32_t fixed = vks_dp_fixed_pack(value, is_signed, int_bits, frac_bits, &total_bits);
 
     if (total_bits <= 8)
     {
-        packU8((U8)fixed_val, name);
+        packU8((U8)fixed, name);
     }
     else if (total_bits <= 16)
     {
-        packU16((U16)fixed_val, name);
+        packU16((U16)fixed, name);
     }
     else if (total_bits <= 31)
     {
-        packU32((U32)fixed_val, name);
+        packU32((U32)fixed, name);
     }
     else
     {
@@ -116,53 +113,49 @@ bool LLDataPacker::packFixed(const F32 value, const char *name,
 bool LLDataPacker::unpackFixed(F32 &value, const char *name,
                                const bool is_signed, const U32 int_bits, const U32 frac_bits)
 {
-    bool success = true;
-    //LL_INFOS() << "unpackFixed:" << name << " int:" << int_bits << " frac:" << frac_bits << LL_ENDL;
-    S32 unsigned_bits = int_bits + frac_bits;
-    S32 total_bits = unsigned_bits;
-
-    if (is_signed)
+    S32 total_bits = vks_dp_fixed_total_bits(is_signed, int_bits, frac_bits);
+    if (total_bits > 31)
     {
-        total_bits++;
+        LL_ERRS() << "Bad bit count: " << total_bits << LL_ENDL;
+        return false;
     }
 
-    U32 max_val;
-    max_val = 1 << int_bits;
+    U32 fixed = 0;
+    bool assigned = false;
+    bool success = unpackFixedBits(fixed, total_bits, assigned, name);
 
-    F32 fixed_val;
+    // a value that could not be read, or a text value without a number,
+    // leaves the caller's as it was
+    if (success && assigned)
+    {
+        value = vks_dp_fixed_unpack(fixed, is_signed, int_bits, frac_bits);
+    }
+    return success;
+}
+
+// The binary form: a read succeeds only when the bytes are there.
+bool LLDataPacker::unpackFixedBits(U32 &fixed, S32 total_bits, bool &assigned, const char *name)
+{
+    bool success = false;
     if (total_bits <= 8)
     {
-        U8 fixed_8;
+        U8 fixed_8 = 0;
         success = unpackU8(fixed_8, name);
-        fixed_val = (F32)fixed_8;
+        fixed = fixed_8;
     }
     else if (total_bits <= 16)
     {
-        U16 fixed_16;
+        U16 fixed_16 = 0;
         success = unpackU16(fixed_16, name);
-        fixed_val = (F32)fixed_16;
-    }
-    else if (total_bits <= 31)
-    {
-        U32 fixed_32;
-        success = unpackU32(fixed_32, name);
-        fixed_val = (F32)fixed_32;
+        fixed = fixed_16;
     }
     else
     {
-        fixed_val = 0;
-        LL_ERRS() << "Bad bit count: " << total_bits << LL_ENDL;
+        U32 fixed_32 = 0;
+        success = unpackU32(fixed_32, name);
+        fixed = fixed_32;
     }
-
-    //LL_INFOS() << "Fixed_val:" << fixed_val << LL_ENDL;
-
-    fixed_val /= (F32)(1 << frac_bits);
-    if (is_signed)
-    {
-        fixed_val -= max_val;
-    }
-    value = fixed_val;
-    //LL_INFOS() << "Value: " << value << LL_ENDL;
+    assigned = success;
     return success;
 }
 
@@ -235,197 +228,139 @@ bool LLDataPacker::unpackUUIDs(LLUUID *values, S32 count, const char *name)
 // LLDataPackerBinaryBuffer implementation
 //---------------------------------------------------------------------------
 
+// The buffer state for one call to the crate, written back afterwards.
+#define VKS_BINARY_STATE VksDpBuffer s = { mBufferp, mBufferSize, (S32)(mCurBufferp - mBufferp), mWriteEnabled, 0 }
+#define VKS_BINARY_DONE mCurBufferp = mBufferp + s.cur
+
 bool LLDataPackerBinaryBuffer::packString(const std::string& value, const char *name)
 {
-    S32 length = static_cast<S32>(value.length()) + 1;
-
-    if (!verifyLength(length, name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, value.c_str(), MVT_VARIABLE, length);
-    }
-    mCurBufferp += length;
-    return true;
+    VKS_BINARY_STATE;
+    bool ok = vks_dp_bin_pack_string(&s, (const uint8_t*)value.data(), value.size()) != 0;
+    if (!ok) verifyLength((S32)value.length() + 1, name);
+    VKS_BINARY_DONE;
+    return ok;
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackString(std::string& value, const char *name)
 {
-    S32 length = (S32)strlen((char *)mCurBufferp) + 1; /*Flawfinder: ignore*/
-
-    if (!verifyLength(length, name))
+    VKS_BINARY_STATE;
+    const uint8_t* p = NULL;
+    size_t n = 0;
+    bool ok = vks_dp_bin_unpack_string(&s, &p, &n) != 0;
+    if (ok)
     {
-        return false;
+        value.assign((const char*)p, n);
     }
-
-    value = std::string((char*)mCurBufferp); // We already assume NULL termination calling strlen()
-
-    mCurBufferp += length;
-    return true;
+    else
+    {
+        LL_WARNS() << "Buffer overflow in BinaryBuffer length verify, field name " << name << "!" << LL_ENDL;
+    }
+    VKS_BINARY_DONE;
+    return ok;
 }
 
 bool LLDataPackerBinaryBuffer::packBinaryData(const U8 *value, S32 size, const char *name)
 {
-    if (!verifyLength(size + 4, name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, &size, MVT_S32, 4);
-    }
-    mCurBufferp += 4;
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, value, MVT_VARIABLE, size);
-    }
-    mCurBufferp += size;
-    return true;
+    VKS_BINARY_STATE;
+    bool ok = vks_dp_bin_pack_binary(&s, value, size) != 0;
+    if (!ok) verifyLength(size + 4, name);
+    VKS_BINARY_DONE;
+    return ok;
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackBinaryData(U8 *value, S32 value_size, S32 &out_size, const char *name)
 {
-    if (!verifyLength(4, name))
+    // The size checks and the bounded copy follow upstream #5486
+    // (ce139f26e0): value_size bounds what is written to value.
+    if (!mBufferp || mCurBufferp < mBufferp || mCurBufferp + 4 > mBufferp + mBufferSize)
     {
         LL_WARNS() << "LLDataPackerBinaryBuffer::unpackBinaryData would unpack invalid data, aborting!" << LL_ENDL;
         out_size = 0;
         return false;
     }
-
     if (value_size < 0)
     {
         LL_WARNS() << "LLDataPackerBinaryBuffer::unpackBinaryData passed negative buffer size, aborting!" << LL_ENDL;
         out_size = 0;
         return false;
     }
-
-    htolememcpy(&out_size, mCurBufferp, MVT_S32, 4);
-
+    // the size field is read into the caller's size even when the data
+    // behind it cannot be, as it always was
+    memcpy(&out_size, mCurBufferp, 4);
     if (out_size < 0)
     {
         LL_WARNS() << "LLDataPackerBinaryBuffer::unpackBinaryData unpacked invalid size, aborting!" << LL_ENDL;
         out_size = 0;
         return false;
     }
-
-    mCurBufferp += 4;
-
-    if (!verifyLength(out_size, name))
+    VKS_BINARY_STATE;
+    const uint8_t* p = NULL;
+    size_t n = 0;
+    bool ok = vks_dp_bin_unpack_binary(&s, &p, &n) != 0;
+    if (ok)
+    {
+        out_size = (S32)n;
+        S32 copy_size = llmin(out_size, value_size);
+        if (copy_size > 0) memcpy(value, p, copy_size);
+        if (value_size < out_size)
+        {
+            LL_WARNS() << "LLDataPackerBinaryBuffer::unpackBinaryData buffer too small for data, truncating!" << LL_ENDL;
+        }
+    }
+    else
     {
         LL_WARNS() << "LLDataPackerBinaryBuffer::unpackBinaryData would unpack invalid data, aborting!" << LL_ENDL;
-        return false;
     }
-    S32 copy_size = llmin(out_size, value_size);
-    htolememcpy(value, mCurBufferp, MVT_VARIABLE, copy_size);
-    mCurBufferp += out_size;
-
-    if (value_size < out_size)
-    {
-        LL_WARNS() << "LLDataPackerBinaryBuffer::unpackBinaryData buffer too small for data, truncating!" << LL_ENDL;
-    }
-
-    return true;
+    VKS_BINARY_DONE;
+    return ok;
 }
 
 
 bool LLDataPackerBinaryBuffer::packBinaryDataFixed(const U8 *value, S32 size, const char *name)
 {
-    if (!verifyLength(size, name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, value, MVT_VARIABLE, size);
-    }
-    mCurBufferp += size;
-    return true;
+    return packBytes(value, size, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackBinaryDataFixed(U8 *value, S32 size, const char *name)
 {
-    if (!verifyLength(size, name))
-    {
-        return false;
-    }
-    htolememcpy(value, mCurBufferp, MVT_VARIABLE, size);
-    mCurBufferp += size;
-    return true;
+    return unpackBytes(value, size, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::packU8(const U8 value, const char *name)
 {
-    if (!verifyLength(sizeof(U8), name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        *mCurBufferp = value;
-    }
-    mCurBufferp++;
-    return true;
+    return packBytes(&value, 1, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackU8(U8 &value, const char *name)
 {
-    if (!verifyLength(sizeof(U8), name))
-    {
-        return false;
-    }
-
-    value = *mCurBufferp;
-    mCurBufferp++;
-    return true;
+    return unpackBytes(&value, 1, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::packU16(const U16 value, const char *name)
 {
-    if (!verifyLength(sizeof(U16), name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, &value, MVT_U16, 2);
-    }
-    mCurBufferp += 2;
-    return true;
+    return packBytes(&value, 2, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackU16(U16 &value, const char *name)
 {
-    if (!verifyLength(sizeof(U16), name))
-    {
-        return false;
-    }
-
-    htolememcpy(&value, mCurBufferp, MVT_U16, 2);
-    mCurBufferp += 2;
-    return true;
+    return unpackBytes(&value, 2, name);
 }
 
 bool LLDataPackerBinaryBuffer::packS16(const S16 value, const char *name)
 {
+    // advances even when refused, as it always did
     bool success = verifyLength(sizeof(S16), name);
 
     if (mWriteEnabled && success)
     {
-        htolememcpy(mCurBufferp, &value, MVT_S16, 2);
+        memcpy(mCurBufferp, &value, 2);
     }
     mCurBufferp += 2;
     return success;
@@ -433,11 +368,11 @@ bool LLDataPackerBinaryBuffer::packS16(const S16 value, const char *name)
 
 bool LLDataPackerBinaryBuffer::unpackS16(S16 &value, const char *name)
 {
-    bool success = verifyLength(sizeof(S16), name);
+    bool success = verifyLength(sizeof(S16), name) && mBufferp && mCurBufferp >= mBufferp && (mCurBufferp - mBufferp) <= mBufferSize - 2;
 
     if (success)
     {
-        htolememcpy(&value, mCurBufferp, MVT_S16, 2);
+        memcpy(&value, mCurBufferp, 2);
     }
     mCurBufferp += 2;
     return success;
@@ -445,263 +380,108 @@ bool LLDataPackerBinaryBuffer::unpackS16(S16 &value, const char *name)
 
 bool LLDataPackerBinaryBuffer::packU32(const U32 value, const char *name)
 {
-    if (!verifyLength(sizeof(U32), name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, &value, MVT_U32, 4);
-    }
-    mCurBufferp += 4;
-    return true;
+    return packBytes(&value, 4, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackU32(U32 &value, const char *name)
 {
-    if (!verifyLength(sizeof(U32), name))
-    {
-        return false;
-    }
-
-    htolememcpy(&value, mCurBufferp, MVT_U32, 4);
-    mCurBufferp += 4;
-    return true;
+    return unpackBytes(&value, 4, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::packS32(const S32 value, const char *name)
 {
-    if (!verifyLength(sizeof(S32), name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, &value, MVT_S32, 4);
-    }
-    mCurBufferp += 4;
-    return true;
+    return packBytes(&value, 4, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackS32(S32 &value, const char *name)
 {
-    if(!verifyLength(sizeof(S32), name))
-    {
-        return false;
-    }
-
-    htolememcpy(&value, mCurBufferp, MVT_S32, 4);
-    mCurBufferp += 4;
-    return true;
+    return unpackBytes(&value, 4, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::packF32(const F32 value, const char *name)
 {
-    if (!verifyLength(sizeof(F32), name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, &value, MVT_F32, 4);
-    }
-    mCurBufferp += 4;
-    return true;
+    return packBytes(&value, 4, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackF32(F32 &value, const char *name)
 {
-    if (!verifyLength(sizeof(F32), name))
-    {
-        return false;
-    }
-
-    htolememcpy(&value, mCurBufferp, MVT_F32, 4);
-    mCurBufferp += 4;
-    return true;
+    return unpackBytes(&value, 4, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::packColor4(const LLColor4 &value, const char *name)
 {
-    if (!verifyLength(16, name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, value.mV, MVT_LLVector4, 16);
-    }
-    mCurBufferp += 16;
-    return true;
+    return packBytes(value.mV, 16, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackColor4(LLColor4 &value, const char *name)
 {
-    if (!verifyLength(16, name))
-    {
-        return false;
-    }
-
-    htolememcpy(value.mV, mCurBufferp, MVT_LLVector4, 16);
-    mCurBufferp += 16;
-    return true;
+    return unpackBytes(value.mV, 16, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::packColor4U(const LLColor4U &value, const char *name)
 {
-    if (!verifyLength(4, name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, value.mV, MVT_VARIABLE, 4);
-    }
-    mCurBufferp += 4;
-    return true;
+    return packBytes(value.mV, 4, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackColor4U(LLColor4U &value, const char *name)
 {
-    if (!verifyLength(4, name))
-    {
-        return false;
-    }
-
-    htolememcpy(value.mV, mCurBufferp, MVT_VARIABLE, 4);
-    mCurBufferp += 4;
-    return true;
+    return unpackBytes(value.mV, 4, name);
 }
 
 
 
 bool LLDataPackerBinaryBuffer::packVector2(const LLVector2 &value, const char *name)
 {
-    if (!verifyLength(8, name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, &value.mV[0], MVT_F32, 4);
-        htolememcpy(mCurBufferp+4, &value.mV[1], MVT_F32, 4);
-    }
-    mCurBufferp += 8;
-    return true;
+    return packBytes(value.mV, 8, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackVector2(LLVector2 &value, const char *name)
 {
-    if (!verifyLength(8, name))
-    {
-        return false;
-    }
-
-    htolememcpy(&value.mV[0], mCurBufferp, MVT_F32, 4);
-    htolememcpy(&value.mV[1], mCurBufferp+4, MVT_F32, 4);
-    mCurBufferp += 8;
-    return true;
+    return unpackBytes(value.mV, 8, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::packVector3(const LLVector3 &value, const char *name)
 {
-    if (!verifyLength(12, name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, value.mV, MVT_LLVector3, 12);
-    }
-    mCurBufferp += 12;
-    return true;
+    return packBytes(value.mV, 12, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackVector3(LLVector3 &value, const char *name)
 {
-    if (!verifyLength(12, name))
-    {
-        return false;
-    }
-
-    htolememcpy(value.mV, mCurBufferp, MVT_LLVector3, 12);
-    mCurBufferp += 12;
-    return true;
+    return unpackBytes(value.mV, 12, name);
 }
 
 bool LLDataPackerBinaryBuffer::packVector4(const LLVector4 &value, const char *name)
 {
-    if (!verifyLength(16, name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, value.mV, MVT_LLVector4, 16);
-    }
-    mCurBufferp += 16;
-    return true;
+    return packBytes(value.mV, 16, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackVector4(LLVector4 &value, const char *name)
 {
-    if (!verifyLength(16, name))
-    {
-        return false;
-    }
-
-    htolememcpy(value.mV, mCurBufferp, MVT_LLVector4, 16);
-    mCurBufferp += 16;
-    return true;
+    return unpackBytes(value.mV, 16, name);
 }
 
 bool LLDataPackerBinaryBuffer::packUUID(const LLUUID &value, const char *name)
 {
-    if (!verifyLength(16, name))
-    {
-        return false;
-    }
-
-    if (mWriteEnabled)
-    {
-        htolememcpy(mCurBufferp, value.mData, MVT_LLUUID, 16);
-    }
-    mCurBufferp += 16;
-    return true;
+    return packBytes(value.mData, 16, name);
 }
 
 
 bool LLDataPackerBinaryBuffer::unpackUUID(LLUUID &value, const char *name)
 {
-    if (!verifyLength(16, name))
-    {
-        return false;
-    }
-
-    htolememcpy(value.mData, mCurBufferp, MVT_LLUUID, 16);
-    mCurBufferp += 16;
-    return true;
+    return unpackBytes(value.mData, 16, name);
 }
 
 const LLDataPackerBinaryBuffer& LLDataPackerBinaryBuffer::operator=(const LLDataPackerBinaryBuffer &a)
@@ -743,34 +523,44 @@ void LLDataPackerBinaryBuffer::dumpBufferToLog()
 //---------------------------------------------------------------------------
 // LLDataPackerAsciiBuffer implementation
 //---------------------------------------------------------------------------
+
+#define VKS_ASCII_STATE VksDpBuffer s = { (uint8_t*)mBufferp, mBufferSize, (S32)(mCurBufferp - mBufferp), mWriteEnabled, mIncludeNames }
+#define VKS_ASCII_DONE mCurBufferp = mBufferp + s.cur
+
+bool LLDataPackerAsciiBuffer::packValue(int32_t kind, const char* name, const int64_t* ints, size_t nints, const float* floats, size_t nfloats, const U8* data, size_t ndata, const char* what)
+{
+    VKS_ASCII_STATE;
+    int32_t truncated = 0;
+    bool ok = vks_dp_ascii_pack(&s, kind, (const uint8_t*)name, strlen(name), ints, nints, floats, nfloats, data, ndata, &truncated) != 0;
+    VKS_ASCII_DONE;
+    if (truncated)
+    {
+        LL_WARNS() << "LLDataPackerAsciiBuffer::" << what << ": truncated: " << LL_ENDL;
+    }
+    return ok;
+}
+
+// getValueStr: the next value line into out_value (at most value_len - 1
+// bytes), after the name when names are included
+bool LLDataPackerAsciiBuffer::getValueStr(const char *name, char *out_value, S32 value_len)
+{
+    VKS_ASCII_STATE;
+    size_t n = 0;
+    bool ok = vks_dp_ascii_next_value(&s, (const uint8_t*)name, strlen(name), (uint8_t*)out_value, value_len - 1, &n) != 0;
+    VKS_ASCII_DONE;
+    if (!ok)
+    {
+        LL_WARNS() << "Data packer expecting keyword of type " << name << ", got another keyword instead!" << LL_ENDL;
+        out_value[0] = 0;
+        return false;
+    }
+    out_value[n] = 0;
+    return true;
+}
+
 bool LLDataPackerAsciiBuffer::packString(const std::string& value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-        numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%s\n", value.c_str());       /* Flawfinder: ignore */
-    }
-    else
-    {
-        numCopied = static_cast<S32>(value.length()) + 1; /*Flawfinder: ignore*/
-    }
-
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-    {
-        // *NOTE: I believe we need to mark a failure bit at this point.
-        numCopied = getBufferSize()-getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packString: string truncated: " << value << LL_ENDL;
-    }
-    mCurBufferp += numCopied;
-    return success;
+    return packValue(VKS_DP_STRING, name, NULL, 0, NULL, 0, (const U8*)value.data(), value.size(), "packString");
 }
 
 bool LLDataPackerAsciiBuffer::unpackString(std::string& value, const char *name)
@@ -787,723 +577,298 @@ bool LLDataPackerAsciiBuffer::unpackString(std::string& value, const char *name)
 
 bool LLDataPackerAsciiBuffer::packBinaryData(const U8 *value, S32 size, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-        numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%010d ", size);  /* Flawfinder: ignore */
-
-        // snprintf returns number of bytes that would have been
-        // written had the output not being truncated. In that case,
-        // it will retuen >= passed in size value.  so a check needs
-        // to be added to detect truncation, and if there is any, only
-        // account for the actual number of bytes written..and not
-        // what could have been written.
-        if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-        {
-            numCopied = getBufferSize()-getCurrentSize();
-            LL_WARNS() << "LLDataPackerAsciiBuffer::packBinaryData: number truncated: " << size << LL_ENDL;
-        }
-        mCurBufferp += numCopied;
-
-
-        S32 i;
-        bool bBufferFull = false;
-        for (i = 0; i < size && !bBufferFull; i++)
-        {
-            numCopied = snprintf(mCurBufferp, getBufferSize()-getCurrentSize(), "%02x ", value[i]); /* Flawfinder: ignore */
-            if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-            {
-                numCopied = getBufferSize()-getCurrentSize();
-                LL_WARNS() << "LLDataPackerAsciiBuffer::packBinaryData: data truncated: " << LL_ENDL;
-                bBufferFull = true;
-            }
-            mCurBufferp += numCopied;
-        }
-
-        if (!bBufferFull)
-        {
-            numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(), "\n");   /* Flawfinder: ignore */
-            if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-                {
-                numCopied = getBufferSize()-getCurrentSize();
-                LL_WARNS() << "LLDataPackerAsciiBuffer::packBinaryData: newline truncated: " << LL_ENDL;
-                }
-                mCurBufferp += numCopied;
-        }
-    }
-    else
-    {
-        // why +10 ?? XXXCHECK
-        numCopied = 10 + 1; // size plus newline
-        numCopied += size;
-        if (numCopied > getBufferSize()-getCurrentSize())
-        {
-            numCopied = getBufferSize()-getCurrentSize();
-        }
-        mCurBufferp += numCopied;
-    }
-
-    return success;
+    return packValue(VKS_DP_BINARY, name, NULL, 0, NULL, 0, value, size > 0 ? (size_t)size : 0, "packBinaryData");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackBinaryData(U8 *value, S32 value_size, S32 &out_size, const char *name)
 {
-    bool success = true;
     char valuestr[DP_BUFSIZE];      /* Flawfinder: ignore */
     if (!getValueStr(name, valuestr, DP_BUFSIZE))
     {
         out_size = 0;
         return false;
     }
-
+    // The size checks and the bounded copy follow upstream #5486
+    // (ce139f26e0): value_size bounds what is written to value.
     if (value_size < 0)
     {
         LL_WARNS() << "LLDataPackerBinaryBuffer::unpackBinaryData passed negative buffer size, aborting!" << LL_ENDL;
         out_size = 0;
         return false;
     }
-
-    char *cur_pos = &valuestr[0];
-    sscanf(valuestr,"%010d", &out_size);
-    cur_pos += 11;
-
-    S32 max_bytes = llmin(out_size, value_size);
-    if (max_bytes != out_size)
+    // the line holds at most (DP_BUFSIZE - 12) / 3 bytes of data; only
+    // what is there is written
+    U8 data[DP_BUFSIZE];
+    int32_t parsed_size = 0;
+    size_t ndata = 0;
+    if (vks_dp_ascii_parse(VKS_DP_BINARY, (const uint8_t*)valuestr, strlen(valuestr), 0, NULL, NULL, data, sizeof(data), &parsed_size, &ndata) > 0)
+    {
+        out_size = parsed_size;
+    }
+    if (llmin(out_size, value_size) != out_size)
     {
         LL_WARNS() << "LLDataPackerAsciiBuffer::unpackBinaryData: buffer too small for data, truncating!" << LL_ENDL;
     }
-    S32 i;
-    for (i = 0; i < max_bytes; i++)
-    {
-        S32 val;
-        sscanf(cur_pos,"%02x", &val);
-        value[i] = val;
-        cur_pos += 3;
-    }
-    return success;
+    S32 copy_size = llmin((S32)ndata, value_size);
+    if (copy_size > 0) memcpy(value, data, copy_size);
+    return true;
 }
 
 
 bool LLDataPackerAsciiBuffer::packBinaryDataFixed(const U8 *value, S32 size, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-
-    if (mWriteEnabled)
-    {
-        S32 i;
-        int numCopied = 0;
-        bool bBufferFull = false;
-        for (i = 0; i < size && !bBufferFull; i++)
-        {
-            numCopied = snprintf(mCurBufferp, getBufferSize()-getCurrentSize(), "%02x ", value[i]); /* Flawfinder: ignore */
-            if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-            {
-                numCopied = getBufferSize()-getCurrentSize();
-                LL_WARNS() << "LLDataPackerAsciiBuffer::packBinaryDataFixed: data truncated: " << LL_ENDL;
-                bBufferFull = true;
-            }
-            mCurBufferp += numCopied;
-
-        }
-        if (!bBufferFull)
-        {
-            numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(), "\n");   /* Flawfinder: ignore */
-            if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-            {
-                numCopied = getBufferSize()-getCurrentSize();
-                LL_WARNS() << "LLDataPackerAsciiBuffer::packBinaryDataFixed: newline truncated: " << LL_ENDL;
-            }
-
-            mCurBufferp += numCopied;
-        }
-    }
-    else
-    {
-        int numCopied = 2 * size + 1; //hex bytes plus newline
-        if (numCopied > getBufferSize()-getCurrentSize())
-        {
-            numCopied = getBufferSize()-getCurrentSize();
-        }
-        mCurBufferp += numCopied;
-    }
-    return success;
+    return packValue(VKS_DP_BINARY_FIXED, name, NULL, 0, NULL, 0, value, size > 0 ? (size_t)size : 0, "packBinaryDataFixed");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackBinaryDataFixed(U8 *value, S32 size, const char *name)
 {
-    bool success = true;
     char valuestr[DP_BUFSIZE];      /* Flawfinder: ignore */
     if (!getValueStr(name, valuestr, DP_BUFSIZE))
     {
         return false;
     }
-
-    char *cur_pos = &valuestr[0];
-
-    S32 i;
-    for (i = 0; i < size; i++)
-    {
-        S32 val;
-        sscanf(cur_pos,"%02x", &val);
-        value[i] = val;
-        cur_pos += 3;
-    }
-    return success;
+    U8 data[DP_BUFSIZE];
+    size_t ndata = 0;
+    vks_dp_ascii_parse(VKS_DP_BINARY_FIXED, (const uint8_t*)valuestr, strlen(valuestr), size > 0 ? (size_t)size : 0, NULL, NULL, data, sizeof(data), NULL, &ndata);
+    if (ndata) memcpy(value, data, llmin((size_t)llmax(size, 0), ndata));
+    return true;
 }
 
+bool LLDataPackerAsciiBuffer::unpackInt(int32_t kind, int64_t& out, bool& assigned, const char* name)
+{
+    assigned = false;
+    char valuestr[DP_BUFSIZE];      /* Flawfinder: ignore */
+    if (!getValueStr(name, valuestr, DP_BUFSIZE))
+    {
+        return false;
+    }
+    int64_t v = 0;
+    if (vks_dp_ascii_parse(kind, (const uint8_t*)valuestr, strlen(valuestr), 1, &v, NULL, NULL, 0, NULL, NULL) > 0)
+    {
+        out = v;
+        assigned = true;
+    }
+    // otherwise nothing to read: the value is left as it was
+    return true;
+}
 
+// The text forms: the number as the C++ scanned it (%d up to 16 bits, %u
+// for 32), or nothing.
+bool LLDataPackerAsciiBuffer::unpackFixedBits(U32 &fixed, S32 total_bits, bool &assigned, const char *name)
+{
+    int64_t v = 0;
+    if (!unpackInt(total_bits <= 16 ? VKS_DP_INT : VKS_DP_UINT, v, assigned, name)) return false;
+    if (assigned)
+    {
+        fixed = total_bits <= 8 ? (U32)(U8)v : (total_bits <= 16 ? (U32)(U16)v : (U32)v);
+    }
+    return true;
+}
+
+bool LLDataPackerAsciiBuffer::unpackFloats(float* out, size_t count, const char* name)
+{
+    char valuestr[DP_BUFSIZE];      /* Flawfinder: ignore */
+    if (!getValueStr(name, valuestr, DP_BUFSIZE))
+    {
+        return false;
+    }
+    float v[4] = { 0.f, 0.f, 0.f, 0.f };
+    int32_t n = vks_dp_ascii_parse(VKS_DP_FLOATS, (const uint8_t*)valuestr, strlen(valuestr), count, NULL, v, NULL, 0, NULL, NULL);
+    for (int32_t i = 0; i < n && i < (int32_t)count; ++i)
+    {
+        out[i] = v[i];
+    }
+    return true;
+}
 
 bool LLDataPackerAsciiBuffer::packU8(const U8 value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-            numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%d\n", value);   /* Flawfinder: ignore */
-    }
-    else
-    {
-        // just do the write to a temp buffer to get the length
-        numCopied = snprintf(DUMMY_BUFFER, sizeof(DUMMY_BUFFER), "%d\n", value);    /* Flawfinder: ignore */
-    }
-
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-    {
-        numCopied = getBufferSize()-getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packU8: val truncated: " << LL_ENDL;
-    }
-
-    mCurBufferp += numCopied;
-
-    return success;
+    int64_t v = value;
+    return packValue(VKS_DP_INT, name, &v, 1, NULL, 0, NULL, 0, "packU8");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackU8(U8 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE];      /* Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    S32 in_val;
-    sscanf(valuestr,"%d", &in_val);
-    value = in_val;
-    return success;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (U8)v;
+    return true;
 }
 
 bool LLDataPackerAsciiBuffer::packU16(const U16 value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-            numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%d\n", value);   /* Flawfinder: ignore */
-    }
-    else
-    {
-        numCopied = snprintf(DUMMY_BUFFER, sizeof(DUMMY_BUFFER), "%d\n", value);    /* Flawfinder: ignore */
-    }
-
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-    {
-        numCopied = getBufferSize()-getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packU16: val truncated: " << LL_ENDL;
-    }
-
-    mCurBufferp += numCopied;
-
-    return success;
+    int64_t v = value;
+    return packValue(VKS_DP_INT, name, &v, 1, NULL, 0, NULL, 0, "packU16");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackU16(U16 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE];      /* Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    S32 in_val;
-    sscanf(valuestr,"%d", &in_val);
-    value = in_val;
-    return success;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (U16)v;
+    return true;
 }
 
 bool LLDataPackerAsciiBuffer::packS16(const S16 value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-        numCopied = snprintf(mCurBufferp, getBufferSize() - getCurrentSize(), "%d\n", value); /* Flawfinder: ignore */
-    }
-    else
-    {
-        numCopied = snprintf(DUMMY_BUFFER, sizeof(DUMMY_BUFFER), "%d\n", value); /* Flawfinder: ignore */
-    }
-
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if(numCopied < 0 || numCopied > getBufferSize() - getCurrentSize())
-    {
-        numCopied = getBufferSize() - getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packS16: val truncated: " << LL_ENDL;
-    }
-
-    mCurBufferp += numCopied;
-
-    return success;
+    int64_t v = value;
+    return packValue(VKS_DP_INT, name, &v, 1, NULL, 0, NULL, 0, "packS16");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackS16(S16 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE]; /* Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    S32 in_val;
-    sscanf(valuestr, "%d", &in_val);
-    value = in_val;
-    return success;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (S16)v;
+    return true;
 }
 
 bool LLDataPackerAsciiBuffer::packU32(const U32 value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-            numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%u\n", value);   /* Flawfinder: ignore */
-    }
-    else
-    {
-        numCopied = snprintf(DUMMY_BUFFER, sizeof(DUMMY_BUFFER), "%u\n", value);    /* Flawfinder: ignore */
-    }
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-    {
-        numCopied = getBufferSize()-getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packU32: val truncated: " << LL_ENDL;
-    }
-
-    mCurBufferp += numCopied;
-    return success;
+    int64_t v = value;
+    return packValue(VKS_DP_UINT, name, &v, 1, NULL, 0, NULL, 0, "packU32");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackU32(U32 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE];      /* Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%u", &value);
-    return success;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_UINT, v, assigned, name)) return false;
+    if (assigned) value = (U32)v;
+    return true;
 }
 
 
 bool LLDataPackerAsciiBuffer::packS32(const S32 value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-            numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%d\n", value);   /* Flawfinder: ignore */
-    }
-    else
-    {
-        numCopied = snprintf(DUMMY_BUFFER, sizeof(DUMMY_BUFFER), "%d\n", value);        /* Flawfinder: ignore */
-    }
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-    {
-        numCopied = getBufferSize()-getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packS32: val truncated: " << LL_ENDL;
-    }
-
-    mCurBufferp += numCopied;
-    return success;
+    int64_t v = value;
+    return packValue(VKS_DP_INT, name, &v, 1, NULL, 0, NULL, 0, "packS32");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackS32(S32 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE];      /* Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%d", &value);
-    return success;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (S32)v;
+    return true;
 }
 
 
 bool LLDataPackerAsciiBuffer::packF32(const F32 value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-            numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%f\n", value);       /* Flawfinder: ignore */
-    }
-    else
-    {
-        numCopied = snprintf(DUMMY_BUFFER, sizeof(DUMMY_BUFFER), "%f\n", value);        /* Flawfinder: ignore */
-    }
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-    {
-        numCopied = getBufferSize()-getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packF32: val truncated: " << LL_ENDL;
-    }
-
-    mCurBufferp += numCopied;
-    return success;
+    return packValue(VKS_DP_FLOATS, name, NULL, 0, &value, 1, NULL, 0, "packF32");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackF32(F32 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE];      /* Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%f", &value);
-    return success;
+    return unpackFloats(&value, 1, name);
 }
 
 
 bool LLDataPackerAsciiBuffer::packColor4(const LLColor4 &value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-            numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%f %f %f %f\n", value.mV[0], value.mV[1], value.mV[2], value.mV[3]); /* Flawfinder: ignore */
-    }
-    else
-    {
-        numCopied = snprintf(DUMMY_BUFFER,sizeof(DUMMY_BUFFER),"%f %f %f %f\n", value.mV[0], value.mV[1], value.mV[2], value.mV[3]);    /* Flawfinder: ignore */
-    }
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-    {
-        numCopied = getBufferSize()-getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packColor4: truncated: " << LL_ENDL;
-    }
-
-    mCurBufferp += numCopied;
-    return success;
+    return packValue(VKS_DP_FLOATS, name, NULL, 0, value.mV, 4, NULL, 0, "packColor4");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackColor4(LLColor4 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE];  /* Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%f %f %f %f", &value.mV[0], &value.mV[1], &value.mV[2], &value.mV[3]);
-    return success;
+    return unpackFloats(value.mV, 4, name);
 }
 
 bool LLDataPackerAsciiBuffer::packColor4U(const LLColor4U &value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-        numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%d %d %d %d\n", value.mV[0], value.mV[1], value.mV[2], value.mV[3]); /* Flawfinder: ignore */
-    }
-    else
-    {
-        numCopied = snprintf(DUMMY_BUFFER,sizeof(DUMMY_BUFFER),"%d %d %d %d\n", value.mV[0], value.mV[1], value.mV[2], value.mV[3]);    /* Flawfinder: ignore */
-    }
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-    {
-        numCopied = getBufferSize()-getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packColor4U: truncated: " << LL_ENDL;
-    }
-
-    mCurBufferp += numCopied;
-    return success;
+    return packValue(VKS_DP_BYTES, name, NULL, 0, NULL, 0, value.mV, 4, "packColor4U");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackColor4U(LLColor4U &value, const char *name)
 {
-    bool success = true;
     char valuestr[DP_BUFSIZE];   /* Flawfinder: ignore */
     if (!getValueStr(name, valuestr, DP_BUFSIZE))
     {
         return false;
     }
-
-    S32 r, g, b, a;
-
-    sscanf(valuestr,"%d %d %d %d", &r, &g, &b, &a);
-    value.mV[0] = r;
-    value.mV[1] = g;
-    value.mV[2] = b;
-    value.mV[3] = a;
-    return success;
+    int64_t v[4] = { 0, 0, 0, 0 };
+    int32_t n = vks_dp_ascii_parse(VKS_DP_BYTES, (const uint8_t*)valuestr, strlen(valuestr), 4, v, NULL, NULL, 0, NULL, NULL);
+    for (int32_t i = 0; i < n && i < 4; ++i)
+    {
+        value.mV[i] = (U8)v[i];
+    }
+    return true;
 }
 
 
 bool LLDataPackerAsciiBuffer::packVector2(const LLVector2 &value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-            numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%f %f\n", value.mV[0], value.mV[1]); /* Flawfinder: ignore */
-    }
-    else
-    {
-        numCopied = snprintf(DUMMY_BUFFER,sizeof(DUMMY_BUFFER),"%f %f\n", value.mV[0], value.mV[1]);        /* Flawfinder: ignore */
-    }
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-    {
-        numCopied = getBufferSize()-getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packVector2: truncated: " << LL_ENDL;
-    }
-
-    mCurBufferp += numCopied;
-    return success;
+    return packValue(VKS_DP_FLOATS, name, NULL, 0, value.mV, 2, NULL, 0, "packVector2");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackVector2(LLVector2 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE];   /* Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%f %f", &value.mV[0], &value.mV[1]);
-    return success;
+    return unpackFloats(value.mV, 2, name);
 }
 
 
 bool LLDataPackerAsciiBuffer::packVector3(const LLVector3 &value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-            numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%f %f %f\n", value.mV[0], value.mV[1], value.mV[2]); /* Flawfinder: ignore */
-    }
-    else
-    {
-        numCopied = snprintf(DUMMY_BUFFER,sizeof(DUMMY_BUFFER),"%f %f %f\n", value.mV[0], value.mV[1], value.mV[2]);    /* Flawfinder: ignore */
-    }
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-    {
-        numCopied = getBufferSize()-getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packVector3: truncated: " << LL_ENDL;
-    }
-
-    mCurBufferp += numCopied;
-    return success;
+    return packValue(VKS_DP_FLOATS, name, NULL, 0, value.mV, 3, NULL, 0, "packVector3");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackVector3(LLVector3 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE];  /* Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%f %f %f", &value.mV[0], &value.mV[1], &value.mV[2]);
-    return success;
+    return unpackFloats(value.mV, 3, name);
 }
 
 bool LLDataPackerAsciiBuffer::packVector4(const LLVector4 &value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-            numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%f %f %f %f\n", value.mV[0], value.mV[1], value.mV[2], value.mV[3]); /* Flawfinder: ignore */
-    }
-    else
-    {
-        numCopied = snprintf(DUMMY_BUFFER,sizeof(DUMMY_BUFFER),"%f %f %f %f\n", value.mV[0], value.mV[1], value.mV[2], value.mV[3]);    /* Flawfinder: ignore */
-    }
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-    {
-        numCopied = getBufferSize()-getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packVector4: truncated: " << LL_ENDL;
-    }
-
-    mCurBufferp += numCopied;
-    return success;
+    return packValue(VKS_DP_FLOATS, name, NULL, 0, value.mV, 4, NULL, 0, "packVector4");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackVector4(LLVector4 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE];  /* Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%f %f %f %f", &value.mV[0], &value.mV[1], &value.mV[2], &value.mV[3]);
-    return success;
+    return unpackFloats(value.mV, 4, name);
 }
 
 
 bool LLDataPackerAsciiBuffer::packUUID(const LLUUID &value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-
-    int numCopied = 0;
-    if (mWriteEnabled)
-    {
-        std::string tmp_str;
-        value.toString(tmp_str);
-        numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%s\n", tmp_str.c_str()); /* Flawfinder: ignore */
-    }
-    else
-    {
-        numCopied = 64 + 1; // UUID + newline
-    }
-    // snprintf returns number of bytes that would have been written
-    // had the output not being truncated. In that case, it will
-    // return either -1 or value >= passed in size value . So a check needs to be added
-    // to detect truncation, and if there is any, only account for the
-    // actual number of bytes written..and not what could have been
-    // written.
-    if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-    {
-        numCopied = getBufferSize()-getCurrentSize();
-        LL_WARNS() << "LLDataPackerAsciiBuffer::packUUID: truncated: " << LL_ENDL;
-        success = false;
-    }
-    mCurBufferp += numCopied;
-    return success;
+    std::string tmp_str;
+    value.toString(tmp_str);
+    return packValue(VKS_DP_UUID, name, NULL, 0, NULL, 0, (const U8*)tmp_str.data(), tmp_str.size(), "packUUID");
 }
 
 
 bool LLDataPackerAsciiBuffer::unpackUUID(LLUUID &value, const char *name)
 {
-    bool success = true;
     char valuestr[DP_BUFSIZE];  /* Flawfinder: ignore */
     if (!getValueStr(name, valuestr, DP_BUFSIZE))
     {
         return false;
     }
 
-    char tmp_str[64];   /* Flawfinder: ignore */
-    sscanf(valuestr, "%63s", tmp_str);  /* Flawfinder: ignore */
-    value.set(tmp_str);
-
-    return success;
+    U8 tmp_str[64];   /* Flawfinder: ignore */
+    size_t n = 0;
+    if (vks_dp_ascii_parse(VKS_DP_UUID, (const uint8_t*)valuestr, strlen(valuestr), 0, NULL, NULL, tmp_str, 63, NULL, &n) > 0)
+    {
+        value.set(std::string((const char*)tmp_str, n));
+    }
+    return true;
 }
 
 void LLDataPackerAsciiBuffer::dump()
@@ -1511,107 +876,33 @@ void LLDataPackerAsciiBuffer::dump()
     LL_INFOS() << "Buffer: " << mBufferp << LL_ENDL;
 }
 
-void LLDataPackerAsciiBuffer::writeIndentedName(const char *name)
-{
-    if (mIncludeNames)
-    {
-        int numCopied = 0;
-        if (mWriteEnabled)
-        {
-            numCopied = snprintf(mCurBufferp,getBufferSize()-getCurrentSize(),"%s\t", name);    /* Flawfinder: ignore */
-        }
-        else
-        {
-            numCopied = (S32)strlen(name) + 1;  /* Flawfinder: ignore */ //name + tab
-        }
-
-        // snprintf returns number of bytes that would have been written
-        // had the output not being truncated. In that case, it will
-        // return either -1 or value >= passed in size value . So a check needs to be added
-        // to detect truncation, and if there is any, only account for the
-        // actual number of bytes written..and not what could have been
-        // written.
-        if (numCopied < 0 || numCopied > getBufferSize()-getCurrentSize())
-        {
-            numCopied = getBufferSize()-getCurrentSize();
-            LL_WARNS() << "LLDataPackerAsciiBuffer::writeIndentedName: truncated: " << LL_ENDL;
-        }
-
-        mCurBufferp += numCopied;
-    }
-}
-
-bool LLDataPackerAsciiBuffer::getValueStr(const char *name, char *out_value, S32 value_len)
-{
-    bool success = true;
-    char buffer[DP_BUFSIZE];    /* Flawfinder: ignore */
-    char keyword[DP_BUFSIZE];   /* Flawfinder: ignore */
-    char value[DP_BUFSIZE]; /* Flawfinder: ignore */
-
-    buffer[0] = '\0';
-    keyword[0] = '\0';
-    value[0] = '\0';
-
-    if (mIncludeNames)
-    {
-        // Read both the name and the value, and validate the name.
-        sscanf(mCurBufferp, "%511[^\n]", buffer);
-        // Skip the \n
-        mCurBufferp += (S32)strlen(buffer) + 1; /* Flawfinder: ignore */
-
-        sscanf(buffer, "%511s %511[^\n]", keyword, value);  /* Flawfinder: ignore */
-
-        if (strcmp(keyword, name))
-        {
-            LL_WARNS() << "Data packer expecting keyword of type " << name << ", got " << keyword << " instead!" << LL_ENDL;
-            return false;
-        }
-    }
-    else
-    {
-        // Just the value exists
-        sscanf(mCurBufferp, "%511[^\n]", value);
-        // Skip the \n
-        mCurBufferp += (S32)strlen(value) + 1;  /* Flawfinder: ignore */
-    }
-
-    S32 in_value_len = (S32)strlen(value)+1;    /* Flawfinder: ignore */
-    S32 min_len = llmin(in_value_len, value_len);
-    memcpy(out_value, value, min_len);  /* Flawfinder: ignore */
-    out_value[min_len-1] = 0;
-
-    return success;
-}
-
-// helper function used by LLDataPackerAsciiFile
-// to convert F32 into a string. This is to avoid
-// << operator writing F32 value into a stream
-// since it does not seem to preserve the float value
-std::string convertF32ToString(F32 val)
-{
-    std::string str;
-    char  buf[20];
-    snprintf(buf, 20, "%f", val);
-    str = buf;
-    return str;
-}
-
 //---------------------------------------------------------------------------
 // LLDataPackerAsciiFile implementation
 //---------------------------------------------------------------------------
-bool LLDataPackerAsciiFile::packString(const std::string& value, const char *name)
+void LLDataPackerAsciiFile::writeValue(int32_t kind, const char* name, const int64_t* ints, size_t nints, const float* floats, size_t nfloats, const U8* data, size_t ndata)
 {
-    bool success = true;
     writeIndentedName(name);
+    // the stream form wrote each float through a 20-byte buffer
+    // (convertF32ToString), cutting long values to 19 characters
+    if (kind == VKS_DP_FLOATS && !mFP)
+    {
+        kind = VKS_DP_FLOATS_SHORT;
+    }
+    std::string text = value_text(kind, ints, nints, floats, nfloats, data, ndata);
     if (mFP)
     {
-        fprintf(mFP,"%s\n", value.c_str());
+        fwrite(text.data(), 1, text.size(), mFP);
     }
     else if (mOutputStream)
     {
-        *mOutputStream << value << "\n";
+        *mOutputStream << text;
     }
-    return success;
+}
+
+bool LLDataPackerAsciiFile::packString(const std::string& value, const char *name)
+{
+    writeValue(VKS_DP_STRING, name, NULL, 0, NULL, 0, (const U8*)value.data(), value.size());
+    return true;
 }
 
 bool LLDataPackerAsciiFile::unpackString(std::string& value, const char *name)
@@ -1629,513 +920,318 @@ bool LLDataPackerAsciiFile::unpackString(std::string& value, const char *name)
 
 bool LLDataPackerAsciiFile::packBinaryData(const U8 *value, S32 size, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-
-    if (mFP)
-    {
-        fprintf(mFP, "%010d ", size);
-
-        S32 i;
-        for (i = 0; i < size; i++)
-        {
-            fprintf(mFP, "%02x ", value[i]);
-        }
-        fprintf(mFP, "\n");
-    }
-    else if (mOutputStream)
-    {
-        char buffer[32];    /* Flawfinder: ignore */
-        snprintf(buffer,sizeof(buffer), "%010d ", size);    /* Flawfinder: ignore */
-        *mOutputStream << buffer;
-
-        S32 i;
-        for (i = 0; i < size; i++)
-        {
-            snprintf(buffer, sizeof(buffer), "%02x ", value[i]);    /* Flawfinder: ignore */
-            *mOutputStream << buffer;
-        }
-        *mOutputStream << "\n";
-    }
-    return success;
+    writeValue(VKS_DP_BINARY, name, NULL, 0, NULL, 0, value, size > 0 ? (size_t)size : 0);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackBinaryData(U8 *value, S32 value_size, S32 &out_size, const char *name)
 {
-    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore*/
+    char valuestr[DP_BUFSIZE];      /* Flawfinder: ignore */
     if (!getValueStr(name, valuestr, DP_BUFSIZE))
     {
         out_size = 0;
         return false;
     }
-
+    // The size checks and the bounded copy follow upstream #5486
+    // (ce139f26e0): value_size bounds what is written to value.
     if (value_size < 0)
     {
         LL_WARNS() << "LLDataPackerBinaryBuffer::unpackBinaryData passed negative buffer size, aborting!" << LL_ENDL;
         out_size = 0;
         return false;
     }
-
-    char *cur_pos = &valuestr[0];
-    sscanf(valuestr,"%010d", &out_size);
-    cur_pos += 11;
-
-    S32 max_bytes = llmin(out_size, value_size);
-    if (max_bytes != out_size)
+    // the line holds at most (DP_BUFSIZE - 12) / 3 bytes of data; only
+    // what is there is written
+    U8 data[DP_BUFSIZE];
+    int32_t parsed_size = 0;
+    size_t ndata = 0;
+    if (vks_dp_ascii_parse(VKS_DP_BINARY, (const uint8_t*)valuestr, strlen(valuestr), 0, NULL, NULL, data, sizeof(data), &parsed_size, &ndata) > 0)
+    {
+        out_size = parsed_size;
+    }
+    if (llmin(out_size, value_size) != out_size)
     {
         LL_WARNS() << "LLDataPackerAsciiBuffer::unpackBinaryData: buffer too small for data, truncating!" << LL_ENDL;
     }
-    S32 i;
-    for (i = 0; i < max_bytes; i++)
-    {
-        S32 val;
-        sscanf(cur_pos,"%02x", &val);
-        value[i] = val;
-        cur_pos += 3;
-    }
+    S32 copy_size = llmin((S32)ndata, value_size);
+    if (copy_size > 0) memcpy(value, data, copy_size);
     return true;
 }
 
 
 bool LLDataPackerAsciiFile::packBinaryDataFixed(const U8 *value, S32 size, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-
-    if (mFP)
-    {
-        S32 i;
-        for (i = 0; i < size; i++)
-        {
-            fprintf(mFP, "%02x ", value[i]);
-        }
-        fprintf(mFP, "\n");
-    }
-    else if (mOutputStream)
-    {
-        char buffer[32]; /*Flawfinder: ignore*/
-        S32 i;
-        for (i = 0; i < size; i++)
-        {
-            snprintf(buffer, sizeof(buffer), "%02x ", value[i]);    /* Flawfinder: ignore */
-            *mOutputStream << buffer;
-        }
-        *mOutputStream << "\n";
-    }
-    return success;
+    writeValue(VKS_DP_BINARY_FIXED, name, NULL, 0, NULL, 0, value, size > 0 ? (size_t)size : 0);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackBinaryDataFixed(U8 *value, S32 size, const char *name)
 {
-    bool success = true;
     char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore*/
     if (!getValueStr(name, valuestr, DP_BUFSIZE))
     {
         return false;
     }
-
-    char *cur_pos = &valuestr[0];
-
-    S32 i;
-    for (i = 0; i < size; i++)
-    {
-        S32 val;
-        sscanf(cur_pos,"%02x", &val);
-        value[i] = val;
-        cur_pos += 3;
-    }
-    return success;
+    U8 data[DP_BUFSIZE];
+    size_t ndata = 0;
+    vks_dp_ascii_parse(VKS_DP_BINARY_FIXED, (const uint8_t*)valuestr, strlen(valuestr), size > 0 ? (size_t)size : 0, NULL, NULL, data, sizeof(data), NULL, &ndata);
+    if (ndata) memcpy(value, data, llmin((size_t)llmax(size, 0), ndata));
+    return true;
 }
 
+bool LLDataPackerAsciiFile::unpackInt(int32_t kind, int64_t& out, bool& assigned, const char* name)
+{
+    assigned = false;
+    char valuestr[DP_BUFSIZE];      /*Flawfinder: ignore */
+    if (!getValueStr(name, valuestr, DP_BUFSIZE))
+    {
+        return false;
+    }
+    int64_t v = 0;
+    if (vks_dp_ascii_parse(kind, (const uint8_t*)valuestr, strlen(valuestr), 1, &v, NULL, NULL, 0, NULL, NULL) > 0)
+    {
+        out = v;
+        assigned = true;
+    }
+    // otherwise nothing to read: the value is left as it was
+    return true;
+}
 
+// The text forms: the number as the C++ scanned it (%d up to 16 bits, %u
+// for 32), or nothing.
+bool LLDataPackerAsciiFile::unpackFixedBits(U32 &fixed, S32 total_bits, bool &assigned, const char *name)
+{
+    int64_t v = 0;
+    if (!unpackInt(total_bits <= 16 ? VKS_DP_INT : VKS_DP_UINT, v, assigned, name)) return false;
+    if (assigned)
+    {
+        fixed = total_bits <= 8 ? (U32)(U8)v : (total_bits <= 16 ? (U32)(U16)v : (U32)v);
+    }
+    return true;
+}
+
+bool LLDataPackerAsciiFile::unpackFloats(float* out, size_t count, const char* name)
+{
+    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
+    if (!getValueStr(name, valuestr, DP_BUFSIZE))
+    {
+        return false;
+    }
+    float v[4] = { 0.f, 0.f, 0.f, 0.f };
+    int32_t n = vks_dp_ascii_parse(VKS_DP_FLOATS, (const uint8_t*)valuestr, strlen(valuestr), count, NULL, v, NULL, 0, NULL, NULL);
+    for (int32_t i = 0; i < n && i < (int32_t)count; ++i)
+    {
+        out[i] = v[i];
+    }
+    return true;
+}
 
 bool LLDataPackerAsciiFile::packU8(const U8 value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    if (mFP)
-    {
-        fprintf(mFP,"%d\n", value);
-    }
-    else if (mOutputStream)
-    {
-        // We have to cast this to an integer because streams serialize
-        // bytes as bytes - not as text.
-        *mOutputStream << (S32)value << "\n";
-    }
-    return success;
+    int64_t v = value;
+    writeValue(VKS_DP_INT, name, &v, 1, NULL, 0, NULL, 0);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackU8(U8 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    S32 in_val;
-    sscanf(valuestr,"%d", &in_val);
-    value = in_val;
-    return success;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (U8)v;
+    return true;
 }
 
 bool LLDataPackerAsciiFile::packU16(const U16 value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    if (mFP)
-    {
-        fprintf(mFP,"%d\n", value);
-    }
-    else if (mOutputStream)
-    {
-        *mOutputStream <<"" << value << "\n";
-    }
-    return success;
+    int64_t v = value;
+    writeValue(VKS_DP_INT, name, &v, 1, NULL, 0, NULL, 0);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackU16(U16 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    S32 in_val;
-    sscanf(valuestr,"%d", &in_val);
-    value = in_val;
-    return success;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (U16)v;
+    return true;
 }
 
 bool LLDataPackerAsciiFile::packS16(const S16 value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    if (mFP)
-    {
-        fprintf(mFP, "%d\n", value);
-    }
-    else if (mOutputStream)
-    {
-        *mOutputStream << "" << value << "\n";
-    }
-    return success;
+    int64_t v = value;
+    writeValue(VKS_DP_INT, name, &v, 1, NULL, 0, NULL, 0);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackS16(S16 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    S32 in_val;
-    sscanf(valuestr, "%d", &in_val);
-    value = in_val;
-    return success;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (S16)v;
+    return true;
 }
 
 bool LLDataPackerAsciiFile::packU32(const U32 value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    if (mFP)
-    {
-        fprintf(mFP,"%u\n", value);
-    }
-    else if (mOutputStream)
-    {
-        *mOutputStream <<"" << value << "\n";
-    }
-    return success;
+    int64_t v = value;
+    writeValue(VKS_DP_UINT, name, &v, 1, NULL, 0, NULL, 0);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackU32(U32 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%u", &value);
-    return success;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_UINT, v, assigned, name)) return false;
+    if (assigned) value = (U32)v;
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::packS32(const S32 value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    if (mFP)
-    {
-        fprintf(mFP,"%d\n", value);
-    }
-    else if (mOutputStream)
-    {
-        *mOutputStream <<"" << value << "\n";
-    }
-    return success;
+    int64_t v = value;
+    writeValue(VKS_DP_INT, name, &v, 1, NULL, 0, NULL, 0);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackS32(S32 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%d", &value);
-    return success;
+    int64_t v = 0;
+    bool assigned = false;
+    if (!unpackInt(VKS_DP_INT, v, assigned, name)) return false;
+    if (assigned) value = (S32)v;
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::packF32(const F32 value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    if (mFP)
-    {
-        fprintf(mFP,"%f\n", value);
-    }
-    else if (mOutputStream)
-    {
-        *mOutputStream <<"" << convertF32ToString(value) << "\n";
-    }
-    return success;
+    writeValue(VKS_DP_FLOATS, name, NULL, 0, &value, 1, NULL, 0);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackF32(F32 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%f", &value);
-    return success;
+    return unpackFloats(&value, 1, name);
 }
 
 
 bool LLDataPackerAsciiFile::packColor4(const LLColor4 &value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    if (mFP)
-    {
-        fprintf(mFP,"%f %f %f %f\n", value.mV[0], value.mV[1], value.mV[2], value.mV[3]);
-    }
-    else if (mOutputStream)
-    {
-        *mOutputStream << convertF32ToString(value.mV[0]) << " " << convertF32ToString(value.mV[1]) << " " << convertF32ToString(value.mV[2]) << " " << convertF32ToString(value.mV[3]) << "\n";
-    }
-    return success;
+    writeValue(VKS_DP_FLOATS, name, NULL, 0, value.mV, 4, NULL, 0);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackColor4(LLColor4 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%f %f %f %f", &value.mV[0], &value.mV[1], &value.mV[2], &value.mV[3]);
-    return success;
+    return unpackFloats(value.mV, 4, name);
 }
 
 bool LLDataPackerAsciiFile::packColor4U(const LLColor4U &value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    if (mFP)
-    {
-        fprintf(mFP,"%d %d %d %d\n", value.mV[0], value.mV[1], value.mV[2], value.mV[3]);
-    }
-    else if (mOutputStream)
-    {
-        *mOutputStream << (S32)(value.mV[0]) << " " << (S32)(value.mV[1]) << " " << (S32)(value.mV[2]) << " " << (S32)(value.mV[3]) << "\n";
-    }
-    return success;
+    writeValue(VKS_DP_BYTES, name, NULL, 0, NULL, 0, value.mV, 4);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackColor4U(LLColor4U &value, const char *name)
 {
-    bool success = true;
     char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
     if (!getValueStr(name, valuestr, DP_BUFSIZE))
     {
         return false;
     }
-
-    S32 r, g, b, a;
-
-    sscanf(valuestr,"%d %d %d %d", &r, &g, &b, &a);
-    value.mV[0] = r;
-    value.mV[1] = g;
-    value.mV[2] = b;
-    value.mV[3] = a;
-    return success;
+    int64_t v[4] = { 0, 0, 0, 0 };
+    int32_t n = vks_dp_ascii_parse(VKS_DP_BYTES, (const uint8_t*)valuestr, strlen(valuestr), 4, v, NULL, NULL, 0, NULL, NULL);
+    for (int32_t i = 0; i < n && i < 4; ++i)
+    {
+        value.mV[i] = (U8)v[i];
+    }
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::packVector2(const LLVector2 &value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    if (mFP)
-    {
-        fprintf(mFP,"%f %f\n", value.mV[0], value.mV[1]);
-    }
-    else if (mOutputStream)
-    {
-        *mOutputStream << convertF32ToString(value.mV[0]) << " " << convertF32ToString(value.mV[1]) << "\n";
-    }
-    return success;
+    writeValue(VKS_DP_FLOATS, name, NULL, 0, value.mV, 2, NULL, 0);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackVector2(LLVector2 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%f %f", &value.mV[0], &value.mV[1]);
-    return success;
+    return unpackFloats(value.mV, 2, name);
 }
 
 
 bool LLDataPackerAsciiFile::packVector3(const LLVector3 &value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    if (mFP)
-    {
-        fprintf(mFP,"%f %f %f\n", value.mV[0], value.mV[1], value.mV[2]);
-    }
-    else if (mOutputStream)
-    {
-        *mOutputStream << convertF32ToString(value.mV[0]) << " " << convertF32ToString(value.mV[1]) << " " << convertF32ToString(value.mV[2]) << "\n";
-    }
-    return success;
+    writeValue(VKS_DP_FLOATS, name, NULL, 0, value.mV, 3, NULL, 0);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackVector3(LLVector3 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%f %f %f", &value.mV[0], &value.mV[1], &value.mV[2]);
-    return success;
+    return unpackFloats(value.mV, 3, name);
 }
 
 bool LLDataPackerAsciiFile::packVector4(const LLVector4 &value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
-    if (mFP)
-    {
-        fprintf(mFP,"%f %f %f %f\n", value.mV[0], value.mV[1], value.mV[2], value.mV[3]);
-    }
-    else if (mOutputStream)
-    {
-        *mOutputStream << convertF32ToString(value.mV[0]) << " " << convertF32ToString(value.mV[1]) << " " << convertF32ToString(value.mV[2]) << " " << convertF32ToString(value.mV[3]) << "\n";
-    }
-    return success;
+    writeValue(VKS_DP_FLOATS, name, NULL, 0, value.mV, 4, NULL, 0);
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackVector4(LLVector4 &value, const char *name)
 {
-    bool success = true;
-    char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
-    if (!getValueStr(name, valuestr, DP_BUFSIZE))
-    {
-        return false;
-    }
-
-    sscanf(valuestr,"%f %f %f %f", &value.mV[0], &value.mV[1], &value.mV[2], &value.mV[3]);
-    return success;
+    return unpackFloats(value.mV, 4, name);
 }
 
 
 bool LLDataPackerAsciiFile::packUUID(const LLUUID &value, const char *name)
 {
-    bool success = true;
-    writeIndentedName(name);
     std::string tmp_str;
     value.toString(tmp_str);
-    if (mFP)
-    {
-        fprintf(mFP,"%s\n", tmp_str.c_str());
-    }
-    else if (mOutputStream)
-    {
-        *mOutputStream <<"" << tmp_str << "\n";
-    }
-    return success;
+    writeValue(VKS_DP_UUID, name, NULL, 0, NULL, 0, (const U8*)tmp_str.data(), tmp_str.size());
+    return true;
 }
 
 
 bool LLDataPackerAsciiFile::unpackUUID(LLUUID &value, const char *name)
 {
-    bool success = true;
     char valuestr[DP_BUFSIZE]; /*Flawfinder: ignore */
     if (!getValueStr(name, valuestr, DP_BUFSIZE))
     {
         return false;
     }
 
-    char tmp_str[64]; /*Flawfinder: ignore */
-    sscanf(valuestr,"%63s",tmp_str);    /* Flawfinder: ignore */
-    value.set(tmp_str);
-
-    return success;
+    U8 tmp_str[64]; /*Flawfinder: ignore */
+    size_t n = 0;
+    if (vks_dp_ascii_parse(VKS_DP_UUID, (const uint8_t*)valuestr, strlen(valuestr), 0, NULL, NULL, tmp_str, 63, NULL, &n) > 0)
+    {
+        value.set(std::string((const char*)tmp_str, n));
+    }
+    return true;
 }
 
 
 void LLDataPackerAsciiFile::writeIndentedName(const char *name)
 {
-    std::string indent_buf;
-    indent_buf.reserve(mIndent+1);
-
-    S32 i;
-    for(i = 0; i < mIndent; i++)
-    {
-        indent_buf[i] = '\t';
-    }
-    indent_buf[i] = 0;
+    std::string indent_buf(mIndent > 0 ? (size_t)mIndent : 0, '\t');
     if (mFP)
     {
         fprintf(mFP,"%s%s\t",indent_buf.c_str(), name);
@@ -2150,12 +1246,7 @@ bool LLDataPackerAsciiFile::getValueStr(const char *name, char *out_value, S32 v
 {
     bool success = false;
     char buffer[DP_BUFSIZE]; /*Flawfinder: ignore*/
-    char keyword[DP_BUFSIZE]; /*Flawfinder: ignore*/
-    char value[DP_BUFSIZE]; /*Flawfinder: ignore*/
-
     buffer[0] = '\0';
-    keyword[0] = '\0';
-    value[0] = '\0';
 
     if (mFP)
     {
@@ -2171,24 +1262,25 @@ bool LLDataPackerAsciiFile::getValueStr(const char *name, char *out_value, S32 v
             buffer[0] = '\0';
         }
 
-        sscanf(buffer, "%511s %511[^\n]", keyword, value);  /* Flawfinder: ignore */
+        const uint8_t* key = NULL; size_t key_len = 0;
+        const uint8_t* value = NULL; size_t value_n = 0;
+        vks_dp_ascii_split((const uint8_t*)buffer, strlen(buffer), &key, &key_len, &value, &value_n);
 
-        if (!keyword[0])
+        if (!key_len)
         {
             LL_WARNS() << "Data packer could not get the keyword!" << LL_ENDL;
             fsetpos(mFP, &last_pos);
             return false;
         }
-        if (strcmp(keyword, name))
+        if (key_len != strlen(name) || memcmp(key, name, key_len) != 0)
         {
-            LL_WARNS() << "Data packer expecting keyword of type " << name << ", got " << keyword << " instead!" << LL_ENDL;
+            LL_WARNS() << "Data packer expecting keyword of type " << name << ", got " << std::string((const char*)key, key_len) << " instead!" << LL_ENDL;
             fsetpos(mFP, &last_pos);
             return false;
         }
 
-        S32 in_value_len = (S32)strlen(value)+1; /*Flawfinder: ignore*/
-        S32 min_len = llmin(in_value_len, value_len);
-        memcpy(out_value, value, min_len); /*Flawfinder: ignore*/
+        S32 min_len = llmin((S32)value_n + 1, value_len);
+        if (min_len > 1) memcpy(out_value, value, min_len - 1); /*Flawfinder: ignore*/
         out_value[min_len-1] = 0;
         success = true;
     }
@@ -2196,21 +1288,22 @@ bool LLDataPackerAsciiFile::getValueStr(const char *name, char *out_value, S32 v
     {
         mInputStream->getline(buffer, DP_BUFSIZE);
 
-        sscanf(buffer, "%511s %511[^\n]", keyword, value);  /* Flawfinder: ignore */
-        if (!keyword[0])
+        const uint8_t* key = NULL; size_t key_len = 0;
+        const uint8_t* value = NULL; size_t value_n = 0;
+        vks_dp_ascii_split((const uint8_t*)buffer, strlen(buffer), &key, &key_len, &value, &value_n);
+        if (!key_len)
         {
             LL_WARNS() << "Data packer could not get the keyword!" << LL_ENDL;
             return false;
         }
-        if (strcmp(keyword, name))
+        if (key_len != strlen(name) || memcmp(key, name, key_len) != 0)
         {
-            LL_WARNS() << "Data packer expecting keyword of type " << name << ", got " << keyword << " instead!" << LL_ENDL;
+            LL_WARNS() << "Data packer expecting keyword of type " << name << ", got " << std::string((const char*)key, key_len) << " instead!" << LL_ENDL;
             return false;
         }
 
-        S32 in_value_len = (S32)strlen(value)+1; /*Flawfinder: ignore*/
-        S32 min_len = llmin(in_value_len, value_len);
-        memcpy(out_value, value, min_len); /*Flawfinder: ignore*/
+        S32 min_len = llmin((S32)value_n + 1, value_len);
+        if (min_len > 1) memcpy(out_value, value, min_len - 1); /*Flawfinder: ignore*/
         out_value[min_len-1] = 0;
         success = true;
     }

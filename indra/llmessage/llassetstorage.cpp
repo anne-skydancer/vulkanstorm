@@ -51,6 +51,8 @@
 #include "llmetrics.h"
 #include "lltrace.h"
 
+#include "vkstorm_ffi.h"
+
 LLAssetStorage *gAssetStorage = NULL;
 LLMetrics *LLAssetStorage::metric_recipient = NULL;
 
@@ -59,42 +61,44 @@ static LLTrace::CountStatHandle<> sFailedDownloadCount("faileddownloads", "Numbe
 
 const LLUUID CATEGORIZE_LOST_AND_FOUND_ID(std::string("00000000-0000-0000-0000-000000000010"));
 
-const U64 TOXIC_ASSET_LIFETIME = (120 * 1000000);       // microseconds
-
 namespace
 {
-    bool operator == (const LLAssetStorage::LLGetAssetCallback &lhs, const LLAssetStorage::LLGetAssetCallback &rhs)
+    // A pending request as the crate's list policies see it. The callback
+    // identity is always 0: the C++ compared two LLGetAssetCallback
+    // std::functions through target<LLGetAssetCallback>(), which never
+    // matches a stored function pointer or lambda, so two callbacks always
+    // compared equal and a duplicate was decided on the asset and the user
+    // data alone. The port keeps that decision.
+    VksAssetRequestKey key_of(const LLAssetRequest* req)
     {
-        auto fnPtrLhs = lhs.target<LLAssetStorage::LLGetAssetCallback>();
-        auto fnPtrRhs = rhs.target<LLAssetStorage::LLGetAssetCallback>();
-        if (fnPtrLhs && fnPtrRhs)
-            return (*fnPtrLhs == *fnPtrRhs);
-        else if (!fnPtrLhs && !fnPtrRhs)
-            return true;
-        return false;
+        VksAssetRequestKey key;
+        memcpy(key.id, req->getUUID().mData, 16);
+        key.asset_type = (int32_t)req->getType();
+        key.callback = 0;
+        key.user_data = (uint64_t)(uintptr_t)req->mUserData;
+        key.time = req->mTime.value();
+        return key;
     }
 
-// Rider: This is the general case of the operator declared above. The code compares the callback
-// passed into the LLAssetStorage functions to determine if there are duplicated requests for an
-// asset.  Unfortunately std::function does not provide a direct way to compare two variables so
-// we define the operator here.
-// XCode is not very happy with the variadic temples in use below so we will just define the specific
-// case of comparing two LLGetAssetCallback objects since that is all we really use.
-//
-//     template<typename T, typename... U>
-//     bool operator == (const std::function<T(U...)> &a, const std::function <T(U...)> &b)
-//     {
-//         typedef T(fnType)(U...);
-//
-//         auto fnPtrA = a.target<T(*)(U...)>();
-//         auto fnPtrB = b.target<T(*)(U...)>();
-//         if (fnPtrA && fnPtrB)
-//             return (*fnPtrA == *fnPtrB);
-//         else if (!fnPtrA && !fnPtrB)
-//             return true;
-//         return false;
-//     }
+    // A pending list as the crate's policies see it: the keys in list order
+    // and an iterator per entry, so the selected entries are erased in
+    // constant time (list iterators stay valid while others are erased).
+    struct ListSnapshot
+    {
+        std::vector<std::list<LLAssetRequest*>::iterator> iters;
+        std::vector<VksAssetRequestKey> keys;
 
+        explicit ListSnapshot(std::list<LLAssetRequest*>& list)
+        {
+            iters.reserve(list.size());
+            keys.reserve(list.size());
+            for (std::list<LLAssetRequest*>::iterator it = list.begin(); it != list.end(); ++it)
+            {
+                iters.push_back(it);
+                keys.push_back(key_of(*it));
+            }
+        }
+    };
 }
 
 ///----------------------------------------------------------------------------
@@ -348,6 +352,8 @@ void LLAssetStorage::_init(LLMessageSystem *msg,
     mMessageSys = msg;
     mXferManager = xfer;
 
+    mToxicAssetMap = vks_toxic_new();
+
     setUpstream(upstream_host);
     msg->setHandlerFuncFast(_PREHASH_AssetUploadComplete, processUploadComplete, (void **)this);
 }
@@ -358,15 +364,15 @@ LLAssetStorage::~LLAssetStorage()
 
     _cleanupRequests(true, LL_ERR_CIRCUIT_GONE);
 
+    vks_toxic_free(mToxicAssetMap);
+    mToxicAssetMap = NULL;
+
     if (gMessageSystem)
     {
         // Warning!  This won't work if there's more than one asset storage.
         // unregister our callbacks with the message system
         gMessageSystem->setHandlerFuncFast(_PREHASH_AssetUploadComplete, NULL, NULL);
     }
-
-    // Clear the toxic asset map
-    mToxicAssetMap.clear();
 }
 
 void LLAssetStorage::setUpstream(const LLHost &upstream_host)
@@ -385,40 +391,39 @@ void LLAssetStorage::_cleanupRequests(bool all, S32 error)
 {
     F64Seconds mt_secs = LLMessageSystem::getMessageTimeSeconds();
 
-    request_list_t timed_out;
+    // The selection (everything when all, else the downloads older than
+    // the timeout) and the callback order (the latest first, each list's
+    // selection ahead of the previous list's) are the crate's.
+    std::vector<LLAssetRequest*> timed_out;
     S32 rt;
     for (rt = 0; rt < RT_COUNT; rt++)
     {
         request_list_t* requests = getRequestList((ERequestType)rt);
-        for (request_list_t::iterator iter = requests->begin();
-             iter != requests->end(); )
+        ListSnapshot snap(*requests);
+        std::vector<size_t> order(snap.keys.size());
+        size_t count = vks_asset_timed_out_order(snap.keys.data(), snap.keys.size(), RT_DOWNLOAD == rt ? 1 : 0, all ? 1 : 0,
+                                                 mt_secs.value(), F64Seconds(LL_ASSET_STORAGE_TIMEOUT).value(), order.data(), order.size());
+        std::vector<LLAssetRequest*> selected;
+        selected.reserve(count);
+        for (size_t i = 0; i < count; ++i)
         {
-            request_list_t::iterator curiter = iter++;
-            LLAssetRequest* tmp = *curiter;
-            // if all is true, we want to clean up everything
-            // otherwise just check for timed out requests
-            // EXCEPT for upload timeouts
-            if (all
-                || ((RT_DOWNLOAD == rt)
-                    && LL_ASSET_STORAGE_TIMEOUT < (mt_secs - tmp->mTime)))
-            {
-                LL_WARNS("AssetStorage") << "Asset " << getRequestName((ERequestType)rt) << " request "
-                                         << (all ? "aborted" : "timed out") << " for "
-                                         << tmp->getUUID() << "."
-                                         << LLAssetType::lookup(tmp->getType()) << LL_ENDL;
-
-                timed_out.push_front(tmp);
-                iter = requests->erase(curiter);
-            }
+            request_list_t::iterator it = snap.iters[order[i]];
+            LLAssetRequest* tmp = *it;
+            LL_WARNS("AssetStorage") << "Asset " << getRequestName((ERequestType)rt) << " request "
+                                     << (all ? "aborted" : "timed out") << " for "
+                                     << tmp->getUUID() << "."
+                                     << LLAssetType::lookup(tmp->getType()) << LL_ENDL;
+            selected.push_back(tmp);
+            requests->erase(it);
         }
+        timed_out.insert(timed_out.begin(), selected.begin(), selected.end());
     }
 
     LLAssetInfo     info;
-    for (request_list_t::iterator iter = timed_out.begin();
+    for (std::vector<LLAssetRequest*>::iterator iter = timed_out.begin();
          iter != timed_out.end();  )
     {
-        request_list_t::iterator curiter = iter++;
-        LLAssetRequest* tmp = *curiter;
+        LLAssetRequest* tmp = *iter++;
         if (tmp->mUpCallback)
         {
             tmp->mUpCallback(tmp->getUUID(), tmp->mUserData, error, LLExtStat::NONE);
@@ -554,24 +559,19 @@ void LLAssetStorage::getAssetData(const LLUUID uuid,
         bool duplicate = false;
         LL_PROFILE_ZONE_NAMED("gad - check pending downloads");
         // check to see if there's a pending download of this uuid already
-        for (request_list_t::iterator iter = mPendingDownloads.begin();
-             iter != mPendingDownloads.end(); ++iter )
         {
-            LLAssetRequest  *tmp = *iter;
-            if ((type == tmp->getType()) && (uuid == tmp->getUUID()))
+            ListSnapshot snap(mPendingDownloads);
+            const int32_t verdict = vks_asset_duplicate_verdict(snap.keys.data(), snap.keys.size(), uuid.mData, (int32_t)type, 0, (uint64_t)(uintptr_t)user_data);
+            if (verdict == 0)
             {
-                if (callback == tmp->mDownCallback && user_data == tmp->mUserData)
-                {
-                    // this is a duplicate from the same subsystem - throw it away
-                    LL_DEBUGS("AssetStorage") << "Discarding duplicate request for asset " << uuid
-                                             << "." << LLAssetType::lookup(type) << LL_ENDL;
-                    return;
-                }
-
-                // this is a duplicate request
-                // queue the request, but don't actually ask for it again
-                duplicate = true;
+                // this is a duplicate from the same subsystem - throw it away
+                LL_DEBUGS("AssetStorage") << "Discarding duplicate request for asset " << uuid
+                                         << "." << LLAssetType::lookup(type) << LL_ENDL;
+                return;
             }
+            // this is a duplicate request
+            // queue the request, but don't actually ask for it again
+            duplicate = (verdict == 1);
         }
         if (duplicate)
         {
@@ -592,27 +592,26 @@ void LLAssetStorage::removeAndCallbackPendingDownloads(const LLUUID& file_id, LL
     // find and callback ALL pending requests for this UUID
     // SJB: We process the callbacks in reverse order, I do not know if this is important,
     //      but I didn't want to mess with it.
-    request_list_t requests;
-    for (request_list_t::iterator iter = gAssetStorage->mPendingDownloads.begin();
-         iter != gAssetStorage->mPendingDownloads.end();  )
+    ListSnapshot snap(gAssetStorage->mPendingDownloads);
+    std::vector<size_t> order(snap.keys.size());
+    size_t count = vks_asset_completion_order(snap.keys.data(), snap.keys.size(), file_id.mData, (int32_t)file_type, order.data(), order.size());
+    std::vector<LLAssetRequest*> requests;
+    requests.reserve(count);
+    for (size_t i = 0; i < count; ++i)
     {
-        request_list_t::iterator curiter = iter++;
-        LLAssetRequest* tmp = *curiter;
-        if ((tmp->getUUID() == file_id) && (tmp->getType()== file_type))
+        request_list_t::iterator it = snap.iters[order[i]];
+        LLAssetRequest* tmp = *it;
+        if (bytes_fetched > 0)
         {
-            if (bytes_fetched > 0)
-            {
-                tmp->mBytesFetched = bytes_fetched;
-            }
-            requests.push_front(tmp);
-            iter = gAssetStorage->mPendingDownloads.erase(curiter);
+            tmp->mBytesFetched = bytes_fetched;
         }
+        requests.push_back(tmp);
+        gAssetStorage->mPendingDownloads.erase(it);
     }
-    for (request_list_t::iterator iter = requests.begin();
+    for (std::vector<LLAssetRequest*>::iterator iter = requests.begin();
          iter != requests.end();  )
     {
-        request_list_t::iterator curiter = iter++;
-        LLAssetRequest* tmp = *curiter;
+        LLAssetRequest* tmp = *iter++;
         if (tmp->mDownCallback)
         {
             if (result_code!= LL_ERR_NOERR)
@@ -1303,44 +1302,7 @@ bool LLAssetStorage::deletePendingRequestImpl(LLAssetStorage::request_list_t* re
 // static
 const char* LLAssetStorage::getErrorString(S32 status)
 {
-    switch( status )
-    {
-        case LL_ERR_NOERR:
-            return "No error";
-
-        case LL_ERR_ASSET_REQUEST_FAILED:
-            return "Asset request: failed";
-
-        case LL_ERR_ASSET_REQUEST_NONEXISTENT_FILE:
-            return "Asset request: non-existent file";
-
-        case LL_ERR_ASSET_REQUEST_NOT_IN_DATABASE:
-            return "Asset request: asset not found in database";
-
-        case LL_ERR_NO_CAP:
-            return "Asset request: region or asset capability not available";
-
-        case LL_ERR_EOF:
-            return "End of file";
-
-        case LL_ERR_CANNOT_OPEN_FILE:
-            return "Cannot open file";
-
-        case LL_ERR_FILE_NOT_FOUND:
-            return "File not found";
-
-        case LL_ERR_TCP_TIMEOUT:
-            return "File transfer timeout";
-
-        case LL_ERR_CIRCUIT_GONE:
-            return "Circuit gone";
-
-        case LL_ERR_PRICE_MISMATCH:
-            return "Viewer and server do not agree on price";
-
-        default:
-            return "Unknown status";
-    }
+    return vks_asset_error_string(status);
 }
 
 void LLAssetStorage::getAssetData(const LLUUID uuid,
@@ -1494,18 +1456,11 @@ void LLAssetStorage::reportMetric( const LLUUID& asset_id, const LLAssetType::ET
 // Check if an asset is in the toxic map.  If it is, the entry is updated
 bool LLAssetStorage::isAssetToxic( const LLUUID& uuid )
 {
-    bool is_toxic = false;
-
-    if ( !uuid.isNull() )
+    if ( uuid.isNull() )
     {
-        toxic_asset_map_t::iterator iter = mToxicAssetMap.find( uuid );
-        if ( iter != mToxicAssetMap.end() )
-        {   // Found toxic asset
-            (*iter).second = LLFrameTimer::getTotalTime() + TOXIC_ASSET_LIFETIME;
-            is_toxic = true;
-        }
+        return false;
     }
-    return is_toxic;
+    return vks_toxic_is_toxic(mToxicAssetMap, uuid.mData, LLFrameTimer::getTotalTime()) != 0;
 }
 
 
@@ -1515,20 +1470,7 @@ bool LLAssetStorage::isAssetToxic( const LLUUID& uuid )
 void LLAssetStorage::flushOldToxicAssets( bool force_it )
 {
     // Scan and look for old entries
-    U64 now = LLFrameTimer::getTotalTime();
-    toxic_asset_map_t::iterator iter = mToxicAssetMap.begin();
-    while ( iter != mToxicAssetMap.end() )
-    {
-        if ( force_it
-             || (*iter).second < now )
-        {   // Too old - remove it
-            mToxicAssetMap.erase( iter++ );
-        }
-        else
-        {
-            iter++;
-        }
-    }
+    vks_toxic_flush_old(mToxicAssetMap, LLFrameTimer::getTotalTime(), force_it ? 1 : 0);
 }
 
 
@@ -1538,7 +1480,7 @@ void LLAssetStorage::markAssetToxic( const LLUUID& uuid )
     if ( !uuid.isNull() )
     {
         // Set the value to the current time.  Creates a new entry if needed
-        mToxicAssetMap[ uuid ] = LLFrameTimer::getTotalTime() + TOXIC_ASSET_LIFETIME;
+        vks_toxic_mark(mToxicAssetMap, uuid.mData, LLFrameTimer::getTotalTime());
     }
 }
 

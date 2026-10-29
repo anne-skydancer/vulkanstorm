@@ -1,6 +1,6 @@
 /*
  * @file llimagepng.cpp
- * @brief LLImageFormatted glue to encode / decode PNG files.
+ * @brief LLImageFormatted glue to encode / decode PNG files, in Rust.
  *
  * $LicenseInfo:firstyear=2007&license=viewerlgpl$
  * Second Life Viewer Source Code
@@ -27,11 +27,25 @@
 #include "linden_common.h"
 #include "stdtypes.h"
 #include "llerror.h"
-#include "llexception.h"
 
 #include "llimage.h"
-#include "llpngwrapper.h"
 #include "llimagepng.h"
+#include "vkstorm_ffi.h"
+
+// The PNG codec on the vkstorm-rust track: vkstorm-image reproduces what the
+// viewer's libpng produced (palettes and low-depth grey expanded, grey
+// converted to RGB, tRNS to alpha, 16-bit samples stripped, gamma to a 2.2
+// screen when the file gamma makes it significant) and writes what libpng
+// wrote (8-bit, libpng's filter choice, deflate at libpng's settings).
+
+namespace
+{
+    std::string pngError()
+    {
+        const std::string err(vks_image_last_error());
+        return err == "Invalid or corrupt PNG file" ? "LLImagePNG data does not have a valid PNG header!" : err;
+    }
+}
 
 // ---------------------------------------------------------------------------
 // LLImagePNG
@@ -52,47 +66,23 @@ bool LLImagePNG::updateData()
 {
     resetLastError();
 
-    try
+    LLImageDataLock lock(this);
+
+    // Check to make sure that this instance has been initialized with data
+    if (!getData() || (0 == getDataSize()))
     {
-        LLImageDataLock lock(this);
-
-        // Check to make sure that this instance has been initialized with data
-        if (!getData() || (0 == getDataSize()))
-        {
-            setLastError("Uninitialized instance of LLImagePNG");
-            return false;
-        }
-
-        // Decode the PNG data and extract sizing information
-        LLPngWrapper pngWrapper;
-        if (!pngWrapper.isValidPng(getData()))
-        {
-            setLastError("LLImagePNG data does not have a valid PNG header!");
-            return false;
-        }
-
-        LLPngWrapper::ImageInfo infop;
-        if (!pngWrapper.readPng(getData(), getDataSize(), NULL, &infop))
-        {
-            setLastError(pngWrapper.getErrorMessage());
-            return false;
-        }
-
-        setSize(infop.mWidth, infop.mHeight, infop.mComponents);
-    }
-    catch (const LLContinueError& msg)
-    {
-        setLastError(msg.what());
-        LOG_UNHANDLED_EXCEPTION("");
-        return false;
-    }
-    catch (...)
-    {
-        setLastError("LLImagePNG");
-        LOG_UNHANDLED_EXCEPTION("");
+        setLastError("Uninitialized instance of LLImagePNG");
         return false;
     }
 
+    VksImageHeader info{};
+    if (!vks_png_header(getData(), (size_t)getDataSize(), &info))
+    {
+        setLastError(pngError());
+        return false;
+    }
+
+    setSize((S32)info.width, (S32)info.height, (S32)info.components);
     return true;
 }
 
@@ -115,19 +105,24 @@ bool LLImagePNG::decode(LLImageRaw* raw_image, F32 decode_time)
         return false;
     }
 
-    // Decode the PNG data into the raw image
-    LLPngWrapper pngWrapper;
-    if (!pngWrapper.isValidPng(getData()))
+    VksRaster* decoded = vks_png_decode(getData(), (size_t)getDataSize());
+    if (!decoded)
     {
-        setLastError("LLImagePNG data does not have a valid PNG header!");
+        setLastError(pngError());
         return false;
     }
 
-    if (! pngWrapper.readPng(getData(), getDataSize(), raw_image))
+    const U32 width = vks_raster_width(decoded);
+    const U32 height = vks_raster_height(decoded);
+    const U32 components = vks_raster_components(decoded);
+    if (!raw_image->resize((U16)width, (U16)height, (S8)components) || raw_image->isBufferInvalid())
     {
-        setLastError(pngWrapper.getErrorMessage());
+        vks_raster_free(decoded);
+        setLastError("Failed to resize image");
         return false;
     }
+    memcpy(raw_image->getData(), vks_raster_data(decoded), vks_raster_len(decoded));
+    vks_raster_free(decoded);
 
     return true;
 }
@@ -146,33 +141,21 @@ bool LLImagePNG::encode(const LLImageRaw* raw_image, F32 encode_time)
     // Image logical size
     setSize(raw_image->getWidth(), raw_image->getHeight(), raw_image->getComponents());
 
-    // Temporary buffer to hold the encoded image. Note: the final image
-    // size should be much smaller due to compression.
-    U32 bufferSize = getWidth() * getHeight() * getComponents() + 8192;
-    U8* tmpWriteBuffer = new(std::nothrow) U8[ bufferSize ];
-    if (!tmpWriteBuffer)
+    VksBytes* encoded = vks_png_encode(raw_image->getData(), (size_t)raw_image->getDataSize(),
+                                       raw_image->getWidth(), raw_image->getHeight(), (U32)raw_image->getComponents());
+    if (!encoded)
     {
-        setLastError("LLImagePNG::out of memory");
+        setLastError(vks_image_last_error());
         return false;
     }
 
-    // Delegate actual encoding work to wrapper
-    LLPngWrapper pngWrapper;
-    if (!pngWrapper.writePng(raw_image, tmpWriteBuffer, bufferSize))
-    {
-        setLastError(pngWrapper.getErrorMessage());
-        delete[] tmpWriteBuffer;
-        return false;
-    }
-
-    // Resize internal buffer and copy from temp
-    U32 encodedSize = pngWrapper.getFinalSize();
-    if(allocateData(encodedSize))
-        memcpy(getData(), tmpWriteBuffer, encodedSize);
+    const size_t encodedSize = vks_bytes_len(encoded);
+    if (allocateData((S32)encodedSize))
+        memcpy(getData(), vks_bytes_data(encoded), encodedSize);
     else
         LL_WARNS() << "allocateData() failed." << LL_ENDL;
 
-    delete[] tmpWriteBuffer;
+    vks_bytes_free(encoded);
 
-    return (getData()!=NULL);
+    return (getData() != NULL);
 }

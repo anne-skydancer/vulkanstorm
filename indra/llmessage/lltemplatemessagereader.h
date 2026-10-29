@@ -33,7 +33,12 @@
 
 class LLMessageTemplate;
 class LLMsgData;
+struct VksMsgReader;
 
+// The template message reader. The unpacking and the per-message data are
+// the Rust crate vkstorm-messages (vkstorm-rust rung three); this class
+// keeps the interface, the template lookup, the trust and ban checks, the
+// dispatch to the handler and the viewer's error reporting.
 class LLTemplateMessageReader : public LLMessageReader
 {
 public:
@@ -118,9 +123,9 @@ private:
 
     bool decodeData(const U8* buffer, const LLHost& sender );
 
+    VksMsgReader* mReader;
     S32 mReceiveSize;
     LLMessageTemplate* mCurrentRMessageTemplate;
-    LLMsgData* mCurrentRMessageData;
     message_template_number_map_t& mMessageNumbers;
 };
 

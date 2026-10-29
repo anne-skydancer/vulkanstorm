@@ -94,6 +94,8 @@
 
 #include "llviewernetwork.h"
 
+#include "vkstorm_ffi.h"
+
 // Purpose
 //
 //   The purpose of this module is to provide access between the viewer
@@ -936,12 +938,103 @@ void log_upload_error(
     gMeshRepo.uploadError(args);
 }
 
+// The header parsing, the fetch planning (capability URLs, policy
+// classes, the byte ranges of the parts and their cache state), the cache
+// preamble and the response range check are vkstorm-assets (vkstorm-rust
+// rung five, mesh::header and mesh::plan); LLMeshHeader stays the C++
+// record the repository keeps per mesh.
+namespace
+{
+    VksMeshHeader to_vks(const LLMeshHeader& h)
+    {
+        VksMeshHeader v;
+        v.version = h.mVersion;
+        v.skin_offset = h.mSkinOffset;
+        v.skin_size = h.mSkinSize;
+        v.skin_in_cache = h.mSkinInCache ? 1 : 0;
+        v.physics_convex_offset = h.mPhysicsConvexOffset;
+        v.physics_convex_size = h.mPhysicsConvexSize;
+        v.physics_convex_in_cache = h.mPhysicsConvexInCache ? 1 : 0;
+        v.physics_mesh_offset = h.mPhysicsMeshOffset;
+        v.physics_mesh_size = h.mPhysicsMeshSize;
+        v.physics_mesh_in_cache = h.mPhysicsMeshInCache ? 1 : 0;
+        // The four render LODs; LLMeshHeader's fifth slot (LLModel::NUM_LODS
+        // counts the physics mesh) is never set.
+        for (S32 i = 0; i < LLVolumeLODGroup::NUM_LODS; ++i)
+        {
+            v.lod_offset[i] = h.mLodOffset[i];
+            v.lod_size[i] = h.mLodSize[i];
+            v.lod_in_cache[i] = h.mLodInCache[i] ? 1 : 0;
+        }
+        v.header_size = h.mHeaderSize;
+        v.not_found = h.m404 ? 1 : 0;
+        memcpy(v.creator_id, h.mCreatorId.mData, 16);
+        return v;
+    }
+
+    LLMeshHeader from_vks(const VksMeshHeader& v)
+    {
+        LLMeshHeader h;
+        h.mVersion = v.version;
+        h.mSkinOffset = v.skin_offset;
+        h.mSkinSize = v.skin_size;
+        h.mSkinInCache = v.skin_in_cache != 0;
+        h.mPhysicsConvexOffset = v.physics_convex_offset;
+        h.mPhysicsConvexSize = v.physics_convex_size;
+        h.mPhysicsConvexInCache = v.physics_convex_in_cache != 0;
+        h.mPhysicsMeshOffset = v.physics_mesh_offset;
+        h.mPhysicsMeshSize = v.physics_mesh_size;
+        h.mPhysicsMeshInCache = v.physics_mesh_in_cache != 0;
+        for (S32 i = 0; i < LLVolumeLODGroup::NUM_LODS; ++i)
+        {
+            h.mLodOffset[i] = v.lod_offset[i];
+            h.mLodSize[i] = v.lod_size[i];
+            h.mLodInCache[i] = v.lod_in_cache[i] != 0;
+        }
+        h.mHeaderSize = v.header_size;
+        h.m404 = v.not_found != 0;
+        memcpy(h.mCreatorId.mData, v.creator_id, 16);
+        return h;
+    }
+
+    // The parts vks_mesh_part_request plans.
+    enum EMeshPart
+    {
+        PART_LOD0 = 0,
+        PART_SKIN = 4,
+        PART_DECOMPOSITION = 5,
+        PART_PHYSICS_SHAPE = 6
+    };
+
+    // fetchMesh*'s range of a part: offset in the asset, size, whether the
+    // cache is believed to hold it and its offset in the cache file. False
+    // when the header has no such part (the request is unavailable).
+    bool plan_part(const LLMeshHeader& header, S32 part, S32& offset, S32& size, bool& in_cache, S32& disk_offset)
+    {
+        VksMeshHeader v = to_vks(header);
+        int32_t ic = 0;
+        if (!vks_mesh_part_request(&v, part, &offset, &size, &ic, &disk_offset))
+        {
+            return false;
+        }
+        in_cache = ic != 0;
+        return true;
+    }
+
+    // The cached-data sanity check: a reserved block never written is all
+    // zeros in its first kilobyte.
+    bool looks_unwritten(const U8* buffer, S32 size)
+    {
+        return vks_mesh_looks_unwritten(buffer, (size_t)llmax(size, 0)) != 0;
+    }
+}
+
 void write_preamble(LLFileSystem &file, S32 header_bytes, S32 flags)
 {
     LLMeshRepository::sCacheBytesWritten += CACHE_PREAMBLE_SIZE;
-    file.write((U8*)&CACHE_PREAMBLE_VERSION, sizeof(U32));
-    file.write((U8*)&header_bytes, sizeof(U32));
-    file.write((U8*)&flags, sizeof(U32));
+    U8 preamble[CACHE_PREAMBLE_SIZE];
+    vks_mesh_preamble_encode(header_bytes, (U32)flags, preamble);
+    file.write(preamble, CACHE_PREAMBLE_SIZE);
 }
 
 LLMeshRepoThread::LLMeshRepoThread()
@@ -1471,31 +1564,20 @@ void LLMeshRepoThread::constructUrl(LLUUID mesh_id, std::string * url, int * leg
     {
         {
             LLMutexLock lock(mMutex);
-            // <FS:Ansariel> [UDP Assets]
-            //res_url = mGetMeshCapability;
-            if (!mGetMeshCapability.empty() && mLegacyGetMeshVersion == 0)
-            {
-                res_url = mGetMeshCapability;
-            }
-            else if (!mLegacyGetMesh2Capability.empty() && mLegacyGetMeshVersion > 1)
-            {
-                res_url = mLegacyGetMesh2Capability;
-                res_version = 2;
-            }
-            else
-            {
-                res_url = mLegacyGetMeshCapability;
-                res_version = 1;
-            }
+            // <FS:Ansariel> [UDP Assets] ViewerAsset, then GetMesh2, then GetMesh
+            int32_t version = 0;
+            res_url = vks_ffi_string([&](char* buf, size_t cap)
+                {
+                    return vks_mesh_construct_url(mGetMeshCapability.data(), mGetMeshCapability.size(),
+                                                  mLegacyGetMeshCapability.data(), mLegacyGetMeshCapability.size(),
+                                                  mLegacyGetMesh2Capability.data(), mLegacyGetMesh2Capability.size(),
+                                                  mLegacyGetMeshVersion, mesh_id.mData, buf, cap, &version);
+                });
+            res_version = version;
             // </FS:Ansariel> [UDP Assets]
         }
 
-        if (!res_url.empty())
-        {
-            res_url += "/?mesh_id=";
-            res_url += mesh_id.asString().c_str();
-        }
-        else
+        if (res_url.empty())
         {
             // <FS:Ansariel> [UDP Assets]
             //LL_WARNS_ONCE(LOG_MESH) << "Current region does not have ViewerAsset capability!  Cannot load meshes. Region id: "
@@ -1536,11 +1618,13 @@ LLCore::HttpHandle LLMeshRepoThread::getByteRange(const std::string & url, int l
 
     LLCore::HttpHandle handle(LLCORE_HTTP_HANDLE_INVALID);
 
-    if (len < LARGE_MESH_FETCH_THRESHOLD)
+    // 0: the mesh policy (ViewerAsset or GetMesh2), 1: the legacy GetMesh
+    // policy, 2: the large mesh policy.
+    const int32_t policy = vks_mesh_policy_for((uint32_t)len, legacy_cap_version);
+    if (policy != 2)
     {
         // <FS:Ansariel> [UDP Assets]
-        //handle = mHttpRequest->requestGetByteRange( mHttpPolicyClass,
-        handle = mHttpRequest->requestGetByteRange( ((legacy_cap_version == 0 || legacy_cap_version == 2) ? mHttpPolicyClass : mHttpLegacyPolicyClass),
+        handle = mHttpRequest->requestGetByteRange( (policy == 0 ? mHttpPolicyClass : mHttpLegacyPolicyClass),
         // </FS:Ansariel> [UDP Assets]
                                                     url,
                                                     (disable_range_req ? size_t(0) : offset),
@@ -1600,17 +1684,17 @@ bool LLMeshRepoThread::fetchMeshSkinInfo(const LLUUID& mesh_id)
 
     if (header_size > 0)
     {
-        S32 version = header.mVersion;
-        S32 offset = header_size + header.mSkinOffset;
-        S32 size = header.mSkinSize;
-        bool in_cache = header.mSkinInCache;
+        S32 offset = -1;
+        S32 size = -1;
+        bool in_cache = false;
+        S32 disk_ofset = -1;
+        const bool planned = plan_part(header, PART_SKIN, offset, size, in_cache, disk_ofset);
 
         mHeaderMutex->unlock();
 
-        if (version <= MAX_MESH_VERSION && offset >= 0 && size > 0)
+        if (planned)
         {
             //check cache for mesh skin info
-            S32 disk_ofset = offset + CACHE_PREAMBLE_SIZE;
             LLFileSystem file(mesh_id, LLAssetType::AT_MESH);
             if (in_cache && file.getSize() >= disk_ofset + size)
             {
@@ -1636,11 +1720,7 @@ bool LLMeshRepoThread::fetchMeshSkinInfo(const LLUUID& mesh_id)
                 file.read(buffer, size);
 
                 //make sure buffer isn't all 0's by checking the first 1KB (reserved block but not written)
-                bool zero = true;
-                for (S32 i = 0; i < llmin(size, 1024) && zero; ++i)
-                {
-                    zero = buffer[i] == 0;
-                }
+                const bool zero = looks_unwritten(buffer, size);
 
                 if (!zero)
                 {
@@ -1786,17 +1866,17 @@ bool LLMeshRepoThread::fetchMeshDecomposition(const LLUUID& mesh_id)
 
     if (header_size > 0)
     {
-        S32 version = header.mVersion;
-        S32 offset = header_size + header.mPhysicsConvexOffset;
-        S32 size = header.mPhysicsConvexSize;
-        bool in_cache = header.mPhysicsConvexInCache;
+        S32 offset = -1;
+        S32 size = -1;
+        bool in_cache = false;
+        S32 disk_ofset = -1;
+        const bool planned = plan_part(header, PART_DECOMPOSITION, offset, size, in_cache, disk_ofset);
 
         mHeaderMutex->unlock();
 
-        if (version <= MAX_MESH_VERSION && offset >= 0 && size > 0)
+        if (planned)
         {
             // check cache for mesh decomposition
-            S32 disk_ofset = offset + CACHE_PREAMBLE_SIZE;
             LLFileSystem file(mesh_id, LLAssetType::AT_MESH);
             if (in_cache && file.getSize() >= disk_ofset + size)
             {
@@ -1812,11 +1892,7 @@ bool LLMeshRepoThread::fetchMeshDecomposition(const LLUUID& mesh_id)
                 file.read(buffer, size);
 
                 //make sure buffer isn't all 0's by checking the first 1KB (reserved block but not written)
-                bool zero = true;
-                for (S32 i = 0; i < llmin(size, 1024) && zero; ++i)
-                {
-                    zero = buffer[i] == 0;
-                }
+                const bool zero = looks_unwritten(buffer, size);
 
                 if (!zero)
                 { //attempt to parse
@@ -1891,18 +1967,18 @@ bool LLMeshRepoThread::fetchMeshPhysicsShape(const LLUUID& mesh_id)
 
     if (header_size > 0)
     {
-        S32 version = header.mVersion;
-        S32 offset = header_size + header.mPhysicsMeshOffset;
-        S32 size = header.mPhysicsMeshSize;
-        bool in_cache = header.mPhysicsMeshInCache;
+        S32 offset = -1;
+        S32 size = -1;
+        bool in_cache = false;
+        S32 disk_ofset = -1;
+        const bool planned = plan_part(header, PART_PHYSICS_SHAPE, offset, size, in_cache, disk_ofset);
 
         mHeaderMutex->unlock();
 
         // todo: check header.mHasPhysicsMesh
-        if (version <= MAX_MESH_VERSION && offset >= 0 && size > 0)
+        if (planned)
         {
             //check cache for mesh physics shape info
-            S32 disk_ofset = offset + CACHE_PREAMBLE_SIZE;
             LLFileSystem file(mesh_id, LLAssetType::AT_MESH);
             if (in_cache && file.getSize() >= disk_ofset +size)
             {
@@ -1918,11 +1994,7 @@ bool LLMeshRepoThread::fetchMeshPhysicsShape(const LLUUID& mesh_id)
                 file.read(buffer, size);
 
                 //make sure buffer isn't all 0's by checking the first 1KB (reserved block but not written)
-                bool zero = true;
-                for (S32 i = 0; i < llmin(size, 1024) && zero; ++i)
-                {
-                    zero = buffer[i] == 0;
-                }
+                const bool zero = looks_unwritten(buffer, size);
 
                 if (!zero)
                 { //attempt to parse
@@ -2037,18 +2109,15 @@ bool LLMeshRepoThread::fetchMeshHeader(const LLVolumeParams& mesh_params)
             file.read(buffer, bytes);
 
             U32 version = 0;
-            memcpy(&version, buffer, sizeof(U32));
-            if (version == CACHE_PREAMBLE_VERSION)
+            S32 header_size = 0;
+            U32 flags = 0;
+            if (vks_mesh_preamble_decode(buffer, (size_t)bytes, &version, &header_size, &flags) && version == CACHE_PREAMBLE_VERSION)
             {
-                S32 header_size = 0;
-                memcpy(&header_size, buffer + sizeof(U32), sizeof(S32));
                 if (header_size + CACHE_PREAMBLE_SIZE > DISK_MINIMAL_READ)
                 {
                     bytes = llmin(size , DISK_MINIMAL_READ * 2);
                     file.read(buffer + DISK_MINIMAL_READ, bytes - DISK_MINIMAL_READ);
                 }
-                U32 flags = 0;
-                memcpy(&flags, buffer + 2 * sizeof(U32), sizeof(U32));
                 if (headerReceived(mesh_params, buffer + CACHE_PREAMBLE_SIZE, bytes - CACHE_PREAMBLE_SIZE, flags) == MESH_OK)
                 {
                     LL_DEBUGS(LOG_MESH) << "Mesh/Cache: Mesh header for ID " << mesh_params.getSculptID() << " - was retrieved from the cache." << LL_ENDL;
@@ -2126,15 +2195,15 @@ bool LLMeshRepoThread::fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod)
     U32 header_size = header.mHeaderSize;
     if (header_size > 0)
     {
-        S32 version = header.mVersion;
-        S32 offset = header_size + header.mLodOffset[lod];
-        S32 size = header.mLodSize[lod];
-        bool in_cache = header.mLodInCache[lod];
+        S32 offset = -1;
+        S32 size = -1;
+        bool in_cache = false;
+        S32 disk_ofset = -1;
+        const bool planned = plan_part(header, PART_LOD0 + lod, offset, size, in_cache, disk_ofset);
         mHeaderMutex->unlock();
 
-        if (version <= MAX_MESH_VERSION && offset >= 0 && size > 0)
+        if (planned)
         {
-            S32 disk_ofset = offset + CACHE_PREAMBLE_SIZE;
             //check cache for mesh asset
             LLFileSystem file(mesh_id, LLAssetType::AT_MESH);
             if (in_cache && (file.getSize() >= disk_ofset + size))
@@ -2162,11 +2231,7 @@ bool LLMeshRepoThread::fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod)
                 file.read(buffer, size);
 
                 //make sure buffer isn't all 0's by checking the first 1KB (reserved block but not written)
-                bool zero = true;
-                for (S32 i = 0; i < llmin(size, 1024) && zero; ++i)
-                {
-                    zero = buffer[i] == 0;
-                }
+                const bool zero = looks_unwritten(buffer, size);
 
                 if (!zero)
                 {
@@ -2305,88 +2370,46 @@ EMeshProcessingResult LLMeshRepoThread::headerReceived(const LLVolumeParams& mes
 {
     LL_PROFILE_ZONE_SCOPED;
     const LLUUID mesh_id = mesh_params.getSculptID();
-    LLSD header_data;
 
-    LLMeshHeader header;
+    // The header's parsing and cache bookkeeping: the deprecated header
+    // stripped, the binary LLSD read, the version and LOD checks, the
+    // in-cache flags from the preamble or from what the buffer holds, and
+    // which skin and LODs the same bytes contain.
+    VksMeshHeaderReceipt receipt;
+    memset(&receipt, 0, sizeof(receipt));
+    const int32_t result = vks_mesh_header_received(data, (size_t)llmax(data_size, 0), flags, &receipt);
+    if (result == MESH_PARSE_FAILURE)
+    {
+        LL_WARNS(LOG_MESH) << "Mesh header parse error.  Not a valid mesh asset!  ID:  " << mesh_id
+                           << LL_ENDL;
+        return MESH_PARSE_FAILURE;
+    }
+    if (result != MESH_OK)
+    {
+        LL_WARNS(LOG_MESH) << "Mesh header is invalid for ID: " << mesh_id << LL_ENDL;
+        return (EMeshProcessingResult)result;
+    }
 
-    llssize header_size = 0;
+    LLMeshHeader header = from_vks(receipt.header);
+    llssize header_size = (llssize)receipt.combined_header_size;
+    data_size = receipt.data_size;
     S32 skin_offset = -1;
     S32 skin_size = -1;
-    S32 lod_offset[LLModel::NUM_LODS] = { -1 };
-    S32 lod_size[LLModel::NUM_LODS] = { -1 };
-    if (data_size > 0)
-    {
-        llssize dsize = data_size;
-        char* result_ptr = strip_deprecated_header((char*)data, dsize, &header_size);
-
-        data_size = (S32)dsize;
-
-        boost::iostreams::stream<boost::iostreams::array_source> stream(result_ptr, data_size);
-
-        if (!LLSDSerialize::fromBinary(header_data, stream, data_size))
-        {
-            LL_WARNS(LOG_MESH) << "Mesh header parse error.  Not a valid mesh asset!  ID:  " << mesh_id
-                               << LL_ENDL;
-            return MESH_PARSE_FAILURE;
-        }
-
-        if (!header_data.isMap())
-        {
-            LL_WARNS(LOG_MESH) << "Mesh header is invalid for ID: " << mesh_id << LL_ENDL;
-            return MESH_INVALID;
-        }
-
-        header.fromLLSD(header_data);
-
-        if (header.mVersion > MAX_MESH_VERSION)
-        {
-            LL_INFOS(LOG_MESH) << "Wrong version in header for " << mesh_id << LL_ENDL;
-            header.m404 = true;
-        }
-        // make sure there is at least one lod, function returns -1 and marks as 404 otherwise
-        else if (LLMeshRepository::getActualMeshLOD(header, 0) >= 0)
-        {
-            header.mHeaderSize = (S32)stream.tellg();
-            header_size += header.mHeaderSize;
-            skin_offset = header.mSkinOffset;
-            skin_size = header.mSkinSize;
-
-            memcpy(lod_offset, header.mLodOffset, sizeof(lod_offset));
-            memcpy(lod_size, header.mLodSize, sizeof(lod_size));
-
-            if (flags != 0)
-            {
-                header.setFromFlags(flags);
-            }
-            else
-            {
-                if (header.mSkinSize > 0 && header_size + header.mSkinOffset + header.mSkinSize < data_size)
-                {
-                    header.mSkinInCache = true;
-                }
-                if (header.mPhysicsConvexSize > 0 && header_size + header.mPhysicsConvexOffset + header.mPhysicsConvexSize < data_size)
-                {
-                    header.mPhysicsConvexInCache = true;
-                }
-                if (header.mPhysicsMeshSize > 0 && header_size + header.mPhysicsMeshOffset + header.mPhysicsMeshSize < data_size)
-                {
-                    header.mPhysicsMeshInCache = true;
-                }
-                for (S32 i = 0; i < LLModel::NUM_LODS; ++i)
-                {
-                    if (lod_size[i] > 0 && header_size + lod_offset[i] + lod_size[i] < data_size)
-                    {
-                        header.mLodInCache[i] = true;
-                    }
-                }
-            }
-        }
-    }
-    else
+    S32 lod_size[LLModel::NUM_LODS] = { -1, 0, 0, 0 };
+    if (data_size <= 0)
     {
         LL_INFOS(LOG_MESH) << "Non-positive data size.  Marking header as non-existent, will not retry.  ID:  " << mesh_id
                            << LL_ENDL;
-        header.m404 = 1;
+    }
+    else if (header.mVersion > MAX_MESH_VERSION)
+    {
+        LL_INFOS(LOG_MESH) << "Wrong version in header for " << mesh_id << LL_ENDL;
+    }
+    else if (header.mHeaderSize > 0)
+    {
+        skin_offset = header.mSkinOffset;
+        skin_size = header.mSkinSize;
+        memcpy(lod_size, header.mLodSize, sizeof(lod_size));
     }
 
     {
@@ -2409,11 +2432,10 @@ EMeshProcessingResult LLMeshRepoThread::headerReceived(const LLVolumeParams& mes
                 }
             }
 
-            S32 offset = (S32)header_size + skin_offset;
             bool request_skin = true;
-            if (offset + skin_size < data_size)
+            if (receipt.skin_in_data)
             {
-                request_skin = !skinInfoReceived(mesh_id, data + offset, skin_size);
+                request_skin = !skinInfoReceived(mesh_id, data + receipt.skin_offset, (S32)receipt.skin_size);
             }
             if (request_skin)
             {
@@ -2457,11 +2479,10 @@ EMeshProcessingResult LLMeshRepoThread::headerReceived(const LLVolumeParams& mes
                 {
                     // try to load from data we just received
                     bool request_lod = true;
-                    S32 offset = (S32)header_size + lod_offset[i];
-                    if (offset + lod_size[i] <= data_size)
+                    if (receipt.lod_in_data[i])
                     {
                         // initial request is 4096 bytes, it's big enough to fit this lod
-                        request_lod = lodReceived(mesh_params, i, data + offset, lod_size[i]) != MESH_OK;
+                        request_lod = lodReceived(mesh_params, i, data + receipt.lod_offset[i], (S32)receipt.lod_size[i]) != MESH_OK;
                     }
                     if (request_lod)
                     {
@@ -2542,31 +2563,16 @@ EMeshProcessingResult LLMeshRepoThread::lodReceived(const LLVolumeParams& mesh_p
 bool LLMeshRepoThread::skinInfoReceived(const LLUUID& mesh_id, U8* data, S32 data_size)
 {
     LL_PROFILE_ZONE_SCOPED;
-    LLSD skin;
 
-    if (data_size > 0)
     {
-        try
+        LLPointer<LLMeshSkinInfo> info = new LLMeshSkinInfo();
+        info->mMeshID = mesh_id;
+        // Inflated, parsed and bound through vkstorm-assets; an allocation
+        // failure is caught at the boundary and reported as a parse error.
+        if (!info->fromZippedData(data, data_size))
         {
-            U32 uzip_result = LLUZipHelper::unzip_llsd(skin, data, data_size);
-            if (uzip_result != LLUZipHelper::ZR_OK)
-            {
-                LL_WARNS(LOG_MESH) << "Mesh skin info parse error.  Not a valid mesh asset!  ID:  " << mesh_id
-                    << " uzip result" << uzip_result
-                    << LL_ENDL;
-                return false;
-            }
-        }
-        catch (std::bad_alloc&)
-        {
-            LL_WARNS(LOG_MESH) << "Out of memory for mesh ID " << mesh_id << " of size: " << data_size << LL_ENDL;
             return false;
         }
-    }
-
-    {
-        LLPointer<LLMeshSkinInfo> info = nullptr;
-        info = new LLMeshSkinInfo(mesh_id, skin);
 
         if (isAgentAvatarValid() && gAgentAvatarp->mInitFlags != 0)
         { // joint numbers are consistent inside LLVOAvatar and animations, but inconsistent inside meshes,
@@ -2595,31 +2601,16 @@ bool LLMeshRepoThread::skinInfoReceived(const LLUUID& mesh_id, U8* data, S32 dat
 bool LLMeshRepoThread::decompositionReceived(const LLUUID& mesh_id, U8* data, S32 data_size)
 {
     LL_PROFILE_ZONE_SCOPED;
-    LLSD decomp;
 
-    if (data_size > 0)
     {
-        try
+        LLModel::Decomposition* d = new LLModel::Decomposition();
+        d->mMeshID = mesh_id;
+        // Inflated and parsed through vkstorm-assets.
+        if (!d->fromZippedData(data, data_size))
         {
-            U32 uzip_result = LLUZipHelper::unzip_llsd(decomp, data, data_size);
-            if (uzip_result != LLUZipHelper::ZR_OK)
-            {
-                LL_WARNS(LOG_MESH) << "Mesh decomposition parse error.  Not a valid mesh asset!  ID:  " << mesh_id
-                    << " uzip result: " << uzip_result
-                    << LL_ENDL;
-                return false;
-            }
-        }
-        catch (const std::bad_alloc&)
-        {
-            LL_WARNS(LOG_MESH) << "Out of memory for mesh ID " << mesh_id << " of size: " << data_size << LL_ENDL;
+            delete d;
             return false;
         }
-    }
-
-    {
-        LLModel::Decomposition* d = new LLModel::Decomposition(decomp);
-        d->mMeshID = mesh_id;
         {
             LLMutexLock lock(mLoadedMutex);
             mDecompositionQ.push_back(d);
@@ -3609,47 +3600,12 @@ S32 LLMeshRepoThread::getActualMeshLOD(const LLVolumeParams& mesh_params, S32 lo
 //static
 S32 LLMeshRepository::getActualMeshLOD(LLMeshHeader& header, S32 lod)
 {
-    lod = llclamp(lod, 0, 3);
-
-    if (header.m404)
-    {
-        return -1;
-    }
-
-    S32 version = header.mVersion;
-
-    if (version > MAX_MESH_VERSION)
-    {
-        return -1;
-    }
-
-    if (header.mLodSize[lod] > 0)
-    {
-        return lod;
-    }
-
-    //search down to find the next available lower lod
-    for (S32 i = lod-1; i >= 0; --i)
-    {
-        if (header.mLodSize[i] > 0)
-        {
-            return i;
-        }
-    }
-
-    //search up to find then ext available higher lod
-    for (S32 i = lod+1; i < LLVolumeLODGroup::NUM_LODS; ++i)
-    {
-        if (header.mLodSize[i] > 0)
-        {
-            return i;
-        }
-    }
-
-    //header exists and no good lod found, treat as 404
-    header.m404 = true;
-
-    return -1;
+    // The nearest available LOD (down, then up); the header is marked 404
+    // when it has none.
+    VksMeshHeader v = to_vks(header);
+    const S32 actual = vks_mesh_header_actual_lod(&v, lod);
+    header.m404 = v.not_found != 0;
+    return actual;
 }
 
 // Handle failed or successful requests for mesh assets.
@@ -3730,9 +3686,8 @@ void LLMeshHandlerBase::onCompleted(LLCore::HttpHandle handle, LLCore::HttpRespo
             // Validate that what we think we received is consistent with
             // what we've asked for.  I.e. first byte we wanted lies somewhere
             // in the response.
-            if (offset > mOffset
-                || (offset + data_size) <= mOffset
-                || (mOffset - offset) >= data_size)
+            size_t wanted_offset = 0;
+            if (!vks_mesh_response_body_offset(mOffset, offset, data_size, &wanted_offset))
             {
                 // No overlap with requested range.  Fail request with
                 // suitable error.  Shouldn't happen unless server/cache/ISP
@@ -3751,7 +3706,7 @@ void LLMeshHandlerBase::onCompleted(LLCore::HttpHandle handle, LLCore::HttpRespo
             // that support BufferArray directly.  Introduce a two-phase
             // handler, optional first that takes a body, fallback second
             // that requires a temporary allocation and data copy.
-            body_offset = mOffset - offset;
+            body_offset = (S32)wanted_offset;
             data = new(std::nothrow) U8[data_size - body_offset];
             if (data)
             {
@@ -3857,25 +3812,12 @@ void LLMeshHeaderHandler::processData(LLCore::BufferArray * /* body */, S32 /* b
             && !header.m404
             && (header.mVersion <= MAX_MESH_VERSION))
         {
-            std::stringstream str;
+            // The bytes to reserve in the file: the farthest LOD, skin or
+            // decomposition end, the header and the preamble.
+            VksMeshHeader v = to_vks(header);
+            S32 bytes = vks_mesh_header_cache_file_size(&v);
 
-            S32 lod_bytes = 0;
-
-            for (U32 i = 0; i < LLModel::LOD_PHYSICS; ++i)
-            {
-                // figure out how many bytes we'll need to reserve in the file
-                lod_bytes = llmax(lod_bytes, header.mLodOffset[i]+header.mLodSize[i]);
-            }
-
-            // just in case skin info or decomposition is at the end of the file (which it shouldn't be)
-            lod_bytes = llmax(lod_bytes, header.mSkinOffset+header.mSkinSize);
-            lod_bytes = llmax(lod_bytes, header.mPhysicsConvexOffset + header.mPhysicsConvexSize);
-
-            // Do not unlock mutex untill we are done with LLSD.
-            // LLSD is smart and can work like smart pointer, is not thread safe.
             gMeshRepo.mThread->mHeaderMutex->unlock();
-
-            S32 bytes = lod_bytes + header_bytes + CACHE_PREAMBLE_SIZE;
 
 
             // It's possible for the remote asset to have more data than is needed for the local cache

@@ -1,5 +1,15 @@
 # Vulkan pipeline audit and design
 
+> **Superseded in part (2026-10-29).** Read
+> [direction-2026-10-29.md](direction-2026-10-29.md) first. Since that date:
+> - Mesa/Zink is withdrawn.
+> - The DiligentCore line is archived.
+> - The new renderer comes after the Rust port, follows lessons from Aurora
+>   Viewer, and has no graphics API chosen yet (wgpu is favoured).
+> - OpenGL or Vulkan is chosen when the viewer is built.
+>
+> This study is kept as a record of the earlier analysis.
+
 Audited source baseline: **`1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`**. Target: **Windows and Linux**. User mandate: compare all suitable architectures, including native Vulkan and general graphics abstractions. This report changes no viewer code and includes no runtime measurements, GPU captures, native implementation or build qualification.
 
 This baseline belongs to `vkstorm-devel`. Publishing the same findings on `vkstorm-release` and `vkstorm-canary` makes the reference design available there; it does not certify those branches' renderer source parity with the audited baseline.

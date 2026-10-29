@@ -34,7 +34,10 @@
 #include "llfasttimer.h"
 #include "lldiskcache.h"
 
-#include "boost/filesystem.hpp"
+#include "vkstorm_ffi.h"
+
+// The file operations are vkstorm-assets (vkstorm-rust rung five,
+// diskcache::file); this class keeps the position bookkeeping.
 
 constexpr S32 LLFileSystem::READ        = 0x00000001;
 constexpr S32 LLFileSystem::WRITE       = 0x00000002;
@@ -53,7 +56,9 @@ LLFileSystem::LLFileSystem(const LLUUID& file_id, const LLAssetType::EType file_
 
     // This block of code was originally called in the read() method but after comments here:
     // https://bitbucket.org/lindenlab/viewer/commits/e28c1b46e9944f0215a13cab8ee7dded88d7fc90#comment-10537114
-    // we decided to follow Henri's suggestion and move the code to update the last access time here.
+    // we moved it to the constructor to avoid the file open/close/update time overhead.
+    // We also moved the deletion of the LLFile from the read() method since we may read the file
+    // several times and only want to update the access time once.
     if (mode == LLFileSystem::READ)
     {
         // build the filename (TODO: we do this in a few places - perhaps we should factor into a single function)
@@ -76,13 +81,7 @@ bool LLFileSystem::getExists(const LLUUID& file_id, const LLAssetType::EType fil
 {
     LL_PROFILE_ZONE_SCOPED;
     const std::string filename = LLDiskCache::metaDataToFilepath(file_id, file_type);
-
-    boost::system::error_code ec;
-    if (boost::filesystem::exists(filename, ec) && boost::filesystem::is_regular_file(filename, ec))
-    {
-        return boost::filesystem::file_size(filename, ec) > 0;
-    }
-    return false;
+    return vks_asset_file_exists(filename.data(), filename.size()) != 0;
 }
 
 // static
@@ -90,9 +89,7 @@ bool LLFileSystem::removeFile(const LLUUID& file_id, const LLAssetType::EType fi
 {
     LL_PROFILE_ZONE_COLOR(tracy::Color::Gold); // <FS:Beq> measure cache performance
     const std::string filename = LLDiskCache::metaDataToFilepath(file_id, file_type);
-
-    LLFile::remove(filename.c_str(), suppress_error);
-
+    vks_asset_file_remove(filename.data(), filename.size());
     return true;
 }
 
@@ -104,13 +101,12 @@ bool LLFileSystem::renameFile(const LLUUID& old_file_id, const LLAssetType::ETyp
     const std::string old_filename = LLDiskCache::metaDataToFilepath(old_file_id, old_file_type);
     const std::string new_filename = LLDiskCache::metaDataToFilepath(new_file_id, new_file_type);
 
-    if (LLFile::rename(old_filename, new_filename) != 0)
+    // The rename replaces an existing file, as LLFile::rename did; renaming
+    // a file onto itself (the same id under another asset type names the
+    // same cache file) leaves it as it is.
+    if (!vks_asset_file_rename(old_filename.data(), old_filename.size(), new_filename.data(), new_filename.size()))
     {
-        // We would like to return false here indicating the operation
-        // failed but the original code does not and doing so seems to
-        // break a lot of things so we go with the flow...
-        //return false;
-        LL_WARNS() << "Failed to rename " << old_file_id << " to " << new_file_id << " reason: " << strerror(errno) << LL_ENDL;
+        LL_WARNS() << "Failed to rename " << old_file_id << " to " << new_file_id << LL_ENDL;
     }
 
     return true;
@@ -121,13 +117,7 @@ S32 LLFileSystem::getFileSize(const LLUUID& file_id, const LLAssetType::EType fi
 {
     LL_PROFILE_ZONE_COLOR(tracy::Color::Gold); // <FS:Beq> measure cache performance
     const std::string filename = LLDiskCache::metaDataToFilepath(file_id, file_type);
-
-    boost::system::error_code ec;
-    if (boost::filesystem::exists(filename, ec) && boost::filesystem::is_regular_file(filename, ec))
-    {
-        return static_cast<S32>(boost::filesystem::file_size(filename, ec));
-    }
-    return 0;
+    return vks_asset_file_size(filename.data(), filename.size());
 }
 
 bool LLFileSystem::read(U8* buffer, S32 bytes)
@@ -136,50 +126,16 @@ bool LLFileSystem::read(U8* buffer, S32 bytes)
     bool success = false;
 
     const std::string filename = LLDiskCache::metaDataToFilepath(mFileID, mFileType);
-
-    // <FS:Ansariel> IO-streams replacement
-    //llifstream file(filename, std::ios::binary);
-    //if (file.is_open())
-    //{
-    //    file.seekg(mPosition, std::ios::beg);
-
-    //    file.read((char*)buffer, bytes);
-
-    //    if (file)
-    //    {
-    //        mBytesRead = bytes;
-    //    }
-    //    else
-    //    {
-    //        mBytesRead = (S32)file.gcount();
-    //    }
-
-    //    file.close();
-
-    //    mPosition += mBytesRead;
-    //    if (mBytesRead)
-    //    {
-    //        success = true;
-    //    }
-    //}
-    LLFILE* file = LLFile::fopen(filename, "rb");
-    if (file)
+    const S32 bytes_read = vks_asset_file_read(filename.data(), filename.size(), mPosition, buffer, (size_t)llmax(bytes, 0));
+    if (bytes_read >= 0)
     {
-        if (fseek(file, mPosition, SEEK_SET) == 0)
+        mBytesRead = bytes_read;
+        mPosition += mBytesRead;
+        if (mBytesRead)
         {
-            mBytesRead = static_cast<S32>(fread(buffer, 1, bytes, file));
-            fclose(file);
-
-            mPosition += mBytesRead;
-            // It probably would be correct to check for mBytesRead == bytes,
-            // but that will break avatar rezzing...
-            if (mBytesRead)
-            {
-                success = true;
-            }
+            success = true;
         }
     }
-    // </FS:Ansariel>
 
     return success;
 }
@@ -200,107 +156,13 @@ bool LLFileSystem::write(const U8* buffer, S32 bytes)
 {
     LL_PROFILE_ZONE_COLOR(tracy::Color::Gold); // <FS:Beq> measure cache performance
     const std::string filename = LLDiskCache::metaDataToFilepath(mFileID, mFileType);
-
-    bool success = false;
-
-    // <FS:Ansariel> IO-streams replacement
-    //if (mMode == APPEND)
-    //{
-    //    llofstream ofs(filename, std::ios::app | std::ios::binary);
-    //    if (ofs)
-    //    {
-    //        ofs.write((const char*)buffer, bytes);
-
-    //        mPosition = (S32)ofs.tellp();
-
-    //        success = true;
-    //    }
-    //}
-    //else if (mMode == READ_WRITE)
-    //{
-    //    // Don't truncate if file already exists
-    //    llofstream ofs(filename, std::ios::in | std::ios::binary);
-    //    if (ofs)
-    //    {
-    //        ofs.seekp(mPosition, std::ios::beg);
-    //        ofs.write((const char*)buffer, bytes);
-    //        mPosition += bytes;
-    //        success = true;
-    //    }
-    //    else
-    //    {
-    //        // File doesn't exist - open in write mode
-    //        ofs.open(filename, std::ios::binary);
-    //        if (ofs.is_open())
-    //        {
-    //            ofs.write((const char*)buffer, bytes);
-    //            mPosition += bytes;
-    //            success = true;
-    //        }
-    //    }
-    //}
-    //else
-    //{
-    //    llofstream ofs(filename, std::ios::binary);
-    //    if (ofs)
-    //    {
-    //        ofs.write((const char*)buffer, bytes);
-
-    //        mPosition += bytes;
-
-    //        success = true;
-    //    }
-    //}
-    if (mMode == APPEND)
+    const S32 new_position = vks_asset_file_write(filename.data(), filename.size(), mMode, mPosition, buffer, (size_t)llmax(bytes, 0));
+    if (new_position < 0)
     {
-        LLFILE* ofs = LLFile::fopen(filename, "a+b");
-        if (ofs)
-        {
-            S32 bytes_written = static_cast<S32>(fwrite(buffer, 1, bytes, ofs));
-            mPosition = ftell(ofs);
-            fclose(ofs);
-            success = (bytes_written == bytes);
-        }
+        return false;
     }
-    else if (mMode == READ_WRITE)
-    {
-        LLFILE* ofs = LLFile::fopen(filename, "r+b");
-        if (ofs)
-        {
-            if (fseek(ofs, mPosition, SEEK_SET) == 0)
-            {
-                S32 bytes_written = static_cast<S32>(fwrite(buffer, 1, bytes, ofs));
-                mPosition = ftell(ofs);
-                fclose(ofs);
-                success = (bytes_written == bytes);
-            }
-        }
-        else
-        {
-            ofs = LLFile::fopen(filename, "wb");
-            if (ofs)
-            {
-                S32 bytes_written = static_cast<S32>(fwrite(buffer, 1, bytes, ofs));
-                mPosition = ftell(ofs);
-                fclose(ofs);
-                success = (bytes_written == bytes);
-            }
-        }
-    }
-    else
-    {
-        LLFILE* ofs = LLFile::fopen(filename, "wb");
-        if (ofs)
-        {
-            S32 bytes_written = static_cast<S32>(fwrite(buffer, 1, bytes, ofs));
-            mPosition = ftell(ofs);
-            fclose(ofs);
-            success = (bytes_written == bytes);
-        }
-    }
-    // </FS:Ansariel>
-
-    return success;
+    mPosition = new_position;
+    return true;
 }
 
 bool LLFileSystem::seek(S32 offset, S32 origin)
@@ -312,26 +174,20 @@ bool LLFileSystem::seek(S32 offset, S32 origin)
     }
 
     S32 new_pos = origin + offset;
-
     S32 size = getSize();
 
     if (new_pos > size)
     {
         LL_WARNS() << "Attempt to seek past end of file" << LL_ENDL;
-
-        mPosition = size;
-        return false;
     }
     else if (new_pos < 0)
     {
         LL_WARNS() << "Attempt to seek past beginning of file" << LL_ENDL;
-
-        mPosition = 0;
-        return false;
     }
-
-    mPosition = new_pos;
-    return true;
+    S32 clamped = 0;
+    const bool within = vks_asset_file_seek(mPosition, offset, origin, size, &clamped) != 0;
+    mPosition = clamped;
+    return within;
 }
 
 S32 LLFileSystem::tell() const
@@ -368,6 +224,7 @@ bool LLFileSystem::remove() const
 {
     LL_PROFILE_ZONE_COLOR(tracy::Color::Gold); // <FS:Beq> measure cache performance
     LLFileSystem::removeFile(mFileID, mFileType);
+
     return true;
 }
 
@@ -382,52 +239,5 @@ void LLFileSystem::updateFileAccessTime(const std::string& file_path)
      *
      * Let's start with 1 hour in time_t units and see how that unfolds
      */
-    constexpr std::time_t time_threshold = 1 * 60 * 60;
-
-    // current time
-    const std::time_t cur_time = std::time(nullptr);
-
-    boost::system::error_code ec;
-#if LL_WINDOWS
-    // file last write time
-    const std::time_t last_write_time = boost::filesystem::last_write_time(ll_convert<std::wstring>(file_path), ec);
-    if (ec.failed())
-    {
-        LL_WARNS() << "Failed to read last write time for cache file " << file_path << ": " << ec.message() << LL_ENDL;
-        return;
-    }
-
-    // delta between cur time and last time the file was written
-    const std::time_t delta_time = cur_time - last_write_time;
-
-    // we only write the new value if the time in time_threshold has elapsed
-    // before the last one
-    if (delta_time > time_threshold)
-    {
-        boost::filesystem::last_write_time(ll_convert<std::wstring>(file_path), cur_time, ec);
-    }
-#else
-    // file last write time
-    const std::time_t last_write_time = boost::filesystem::last_write_time(file_path, ec);
-    if (ec.failed())
-    {
-        LL_WARNS() << "Failed to read last write time for cache file " << file_path << ": " << ec.message() << LL_ENDL;
-        return;
-    }
-
-    // delta between cur time and last time the file was written
-    const std::time_t delta_time = cur_time - last_write_time;
-
-    // we only write the new value if the time in time_threshold has elapsed
-    // before the last one
-    if (delta_time > time_threshold)
-    {
-        boost::filesystem::last_write_time(file_path, cur_time, ec);
-    }
-#endif
-
-    if (ec.failed())
-    {
-        LL_WARNS() << "Failed to update last write time for cache file " << file_path << ": " << ec.message() << LL_ENDL;
-    }
+    vks_asset_file_touch(file_path.data(), file_path.size());
 }

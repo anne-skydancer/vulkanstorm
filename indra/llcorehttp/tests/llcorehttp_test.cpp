@@ -40,10 +40,8 @@
 #include "test_bufferstream.hpp"
 #include "test_httpstatus.hpp"
 #include "test_refcounted.hpp"
-#include "test_httpoperation.hpp"
 #include "test_httprequest.hpp"
 #include "test_httpheaders.hpp"
-#include "test_httprequestqueue.hpp"
 #include "_httpservice.h"
 
 #include "llproxy.h"

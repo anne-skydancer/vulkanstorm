@@ -29,6 +29,8 @@
 #include "llstl.h"
 #include "llapr.h"
 
+#include "vkstorm_ffi.h"
+
 //============================================================================
 
 /*static*/ LLLFSThread* LLLFSThread::sLocal = NULL;
@@ -179,54 +181,19 @@ void LLLFSThread::Request::deleteRequest()
 bool LLLFSThread::Request::processRequest()
 {
     LL_PROFILE_ZONE_SCOPED;
+    // The file I/O is vkstorm-assets (vkstorm-rust rung five,
+    // diskcache::file::lfs_read / lfs_write).
     bool complete = false;
     if (mOperation ==  FILE_READ)
     {
         llassert(mOffset >= 0);
-        LLAPRFile infile ; // auto-closes
-        infile.open(mFileName, LL_APR_RB, mThread->getLocalAPRFilePool());
-        if (!infile.getFileHandle())
-        {
-            LL_WARNS() << "LLLFS: Unable to read file: " << mFileName << LL_ENDL;
-            mBytesRead = 0; // fail
-            return true;
-        }
-        S32 off;
-        if (mOffset < 0)
-            off = infile.seek(APR_END, 0);
-        else
-            off = infile.seek(APR_SET, mOffset);
-        llassert_always(off >= 0);
-        mBytesRead = infile.read(mBuffer, mBytes );
+        mBytesRead = vks_lfs_read(mFileName.data(), mFileName.size(), mOffset, mBuffer, (size_t)llmax(mBytes, 0));
         complete = true;
-//      LL_INFOS() << "LLLFSThread::READ:" << mFileName << " Bytes: " << mBytesRead << LL_ENDL;
     }
     else if (mOperation ==  FILE_WRITE)
     {
-        apr_int32_t flags = APR_CREATE|APR_WRITE|APR_BINARY;
-        if (mOffset < 0)
-            flags |= APR_APPEND;
-        LLAPRFile outfile ; // auto-closes
-        outfile.open(mFileName, flags, mThread->getLocalAPRFilePool());
-        if (!outfile.getFileHandle())
-        {
-            LL_WARNS() << "LLLFS: Unable to write file: " << mFileName << LL_ENDL;
-            mBytesRead = 0; // fail
-            return true;
-        }
-        if (mOffset >= 0)
-        {
-            S32 seek = outfile.seek(APR_SET, mOffset);
-            if (seek < 0)
-            {
-                LL_WARNS() << "LLLFS: Unable to write file (seek failed): " << mFileName << LL_ENDL;
-                mBytesRead = 0; // fail
-                return true;
-            }
-        }
-        mBytesRead = outfile.write(mBuffer, mBytes );
+        mBytesRead = vks_lfs_write(mFileName.data(), mFileName.size(), mOffset, mBuffer, (size_t)llmax(mBytes, 0));
         complete = true;
-//      LL_INFOS() << "LLLFSThread::WRITE:" << mFileName << " Bytes: " << mBytesRead << "/" << mBytes << " Offset:" << mOffset << LL_ENDL;
     }
     else
     {

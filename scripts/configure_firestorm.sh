@@ -36,7 +36,7 @@ WANTS_VERSION=$FALSE
 WANTS_KDU=$FALSE
 WANTS_FMODSTUDIO=$FALSE
 WANTS_OPENAL=$FALSE
-WANTS_SOLOUD=$TRUE
+WANTS_VKSAUDIO=$TRUE
 # <VulkanStorm> Default to Second Life (no OpenSim) builds. Use --opensim to opt in.
 WANTS_OPENSIM=$FALSE
 # </VulkanStorm>
@@ -85,7 +85,7 @@ showUsage()
     echo "  --no-package             : Build without installer (Overrides --package)"
     echo "  --fmodstudio             : Build with FMOD Studio"
     echo "  --openal                 : Build with OpenAL"
-    echo "  --soloud                 : Build with SoLoud (default)"
+    echo "  --vksaudio               : Build with the Vulkanstorm (Rust) audio engine (default)"
     echo "  --opensim                : Build with OpenSim support (Disables Havok features)"
     echo "  --no-opensim             : Build without OpenSim support (Overrides --opensim)"
     echo "  --singlegrid <login_uri> : Build for single grid usage (Requires --opensim)"
@@ -113,7 +113,7 @@ getArgs()
 # $* = the options passed in from main
 {
     if [ $# -gt 0 ]; then
-            while getoptex "clean build config version package velopack no-package fmodstudio openal soloud ninja vscode compiler-cache jobs: platform: kdu opensim no-opensim singlegrid: havok avx avx2 no-avx2 tracy zink lto no-lto crashreporting testbuild: help chan: btype:" "$@" ; do
+            while getoptex "clean build config version package velopack no-package fmodstudio openal vksaudio ninja vscode compiler-cache jobs: platform: kdu opensim no-opensim singlegrid: havok avx avx2 no-avx2 tracy zink lto no-lto crashreporting testbuild: help chan: btype:" "$@" ; do
 
           #ensure options are valid
           if [  -z "$OPTOPT"  ] ; then
@@ -133,11 +133,11 @@ getArgs()
           kdu)            WANTS_KDU=$TRUE;;
           fmodstudio)     WANTS_FMODSTUDIO=$TRUE
                           WANTS_OPENAL=$FALSE
-                          WANTS_SOLOUD=$FALSE;;
+                          WANTS_VKSAUDIO=$FALSE;;
           openal)         WANTS_OPENAL=$TRUE
                           WANTS_FMODSTUDIO=$FALSE
-                          WANTS_SOLOUD=$FALSE;;
-          soloud)         WANTS_SOLOUD=$TRUE
+                          WANTS_VKSAUDIO=$FALSE;;
+          vksaudio)       WANTS_VKSAUDIO=$TRUE
                           WANTS_FMODSTUDIO=$FALSE
                           WANTS_OPENAL=$FALSE;;
           opensim)        WANTS_OPENSIM=$TRUE;;
@@ -348,7 +348,7 @@ echo -e "       PLATFORM: $TARGET_PLATFORM"                                    |
 echo -e "            KDU: `b2a $WANTS_KDU`"                                    | tee -a "$LOG"
 echo -e "     FMODSTUDIO: `b2a $WANTS_FMODSTUDIO`"                             | tee -a "$LOG"
 echo -e "         OPENAL: `b2a $WANTS_OPENAL`"                                 | tee -a "$LOG"
-echo -e "         SOLOUD: `b2a $WANTS_SOLOUD`"                                 | tee -a "$LOG"
+echo -e "       VKSAUDIO: `b2a $WANTS_VKSAUDIO`"                                 | tee -a "$LOG"
 echo -e "        OPENSIM: `b2a $WANTS_OPENSIM`"                                | tee -a "$LOG"
 if [ $WANTS_SINGLEGRID -eq $TRUE ] ; then
     echo -e "     SINGLEGRID: `b2a $WANTS_SINGLEGRID` ($SINGLEGRID_URI)"       | tee -a "$LOG"
@@ -504,10 +504,10 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
     else
         OPENAL="-DOPENAL:BOOL=OFF -DUSE_OPENAL:BOOL=OFF"
     fi
-    if [ $WANTS_SOLOUD -eq $TRUE ] ; then
-        SOLOUD="-DUSE_SOLOUD:BOOL=ON"
+    if [ $WANTS_VKSAUDIO -eq $TRUE ] ; then
+        VKSAUDIO="-DUSE_VKS_AUDIO:BOOL=ON"
     else
-        SOLOUD="-DUSE_SOLOUD:BOOL=OFF"
+        VKSAUDIO="-DUSE_VKS_AUDIO:BOOL=OFF"
     fi
     if [ $WANTS_OPENSIM -eq $TRUE ] ; then
         OPENSIM="-DOPENSIM:BOOL=ON"
@@ -655,7 +655,7 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         fi
     fi
 
-    cmake -G "$TARGET" $CMAKE_ARCH ../indra $CHANNEL ${GITHASH} $FMODSTUDIO $OPENAL $SOLOUD $KDU $OPENSIM $SINGLEGRID $HAVOK $AVX_OPTIMIZATION $AVX2_OPTIMIZATION $TRACY_PROFILER $MESAZINK $LTO $TESTBUILD $PACKAGE $INNO $VELOPACK \
+    cmake -G "$TARGET" $CMAKE_ARCH ../indra $CHANNEL ${GITHASH} $FMODSTUDIO $OPENAL $VKSAUDIO $KDU $OPENSIM $SINGLEGRID $HAVOK $AVX_OPTIMIZATION $AVX2_OPTIMIZATION $TRACY_PROFILER $MESAZINK $LTO $TESTBUILD $PACKAGE $INNO $VELOPACK \
           $UNATTENDED -DLL_TESTS:BOOL=OFF -DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE -DCMAKE_BUILD_TYPE:STRING=$BTYPE $CACHE_OPT \
           $CRASH_REPORTING -DVIEWER_SYMBOL_FILE:STRING="${VIEWER_SYMBOL_FILE:-}" $LL_ARGS_PASSTHRU ${VSCODE_FLAGS:-} | tee "$LOG"
     configure_status=${PIPESTATUS[0]}

@@ -33,6 +33,22 @@
 
 #include "nd/ndexceptions.h" // <FS:ND/> For ndxran
 
+struct VksMsgTemplate;
+
+// The template compiled for the Rust message builder and reader
+// (vkstorm-rust): built from the LLMessageTemplate on first use, dropped
+// when a block is added. A copy of a template compiles afresh.
+class LLMessageTemplateCompiled
+{
+public:
+    LLMessageTemplateCompiled() : mHandle(NULL) {}
+    LLMessageTemplateCompiled(const LLMessageTemplateCompiled&) : mHandle(NULL) {}
+    LLMessageTemplateCompiled& operator=(const LLMessageTemplateCompiled&) { reset(); return *this; }
+    ~LLMessageTemplateCompiled() { reset(); }
+    void reset();
+    VksMsgTemplate* mHandle;
+};
+
 class LLMsgVarData
 {
 public:
@@ -319,7 +335,13 @@ public:
         {
             mTotalSize = -1;
         }
+        mCompiled.reset();
     }
+
+    // The Rust side's view of this template (vkstorm-rust), compiled on
+    // first use from the blocks and variables added so far, with their
+    // canonical name pointers as keys.
+    const VksMsgTemplate* compiled() const;
 
     LLMessageBlock *getBlock(char *name)
     {
@@ -434,6 +456,7 @@ private:
     // message handler function (this is set by each application)
     void                                    (*mHandlerFunc)(LLMessageSystem *msgsystem, void **user_data);
     void                                    **mUserData;
+    mutable LLMessageTemplateCompiled       mCompiled;
 };
 
 #endif // LL_LLMESSAGETEMPLATE_H

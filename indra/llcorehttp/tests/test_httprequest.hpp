@@ -33,7 +33,6 @@
 #include "httpresponse.h"
 #include "httpoptions.h"
 #include "_httpservice.h"
-#include "_httprequestqueue.h"
 
 #include <curl/curl.h>
 #include <boost/regex.hpp>
@@ -246,7 +245,8 @@ void HttpRequestTestObjectType::test<2>()
         req = NULL;
 
         // Request queue should have two references:  global singleton & service object
-        ensure("Two references to request queue", 2 == HttpRequestQueue::instanceOf()->getRefCount());
+        // The request queue is the service's own now (vkstorm-http); its
+        // reference count is no longer visible from here.
 
         // Okay, tear it down
         HttpRequest::destroyService();

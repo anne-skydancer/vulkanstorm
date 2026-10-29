@@ -32,6 +32,7 @@
 #include <stdint.h>
 #endif
 #include <cmath>
+#include <cstddef>
 #include <unordered_map>
 
 #include "llerror.h"
@@ -52,6 +53,51 @@
 #include "llmeshoptimizer.h"
 #include "lltimer.h"
 #include "llvolumeoctree.h"
+#include "vkstorm_ffi.h"
+
+// The parametric mesher (profile and path generation, the mesh sweep, the
+// face builders and tangents) is the Rust crate vkstorm-volume, reached
+// through vkstorm_ffi. The classes here keep the data; the parameter records
+// and the path point layout are shared with the crate.
+static_assert(sizeof(LLPath::PathPt) == sizeof(VksPathPt), "LLPath::PathPt layout is shared with vkstorm-volume");
+static_assert(sizeof(LLVector4a) == 4 * sizeof(float), "LLVector4a layout is shared with vkstorm-volume");
+// The face result's vectors are read with aligned loads: they sit at 16-byte
+// offsets and the local record is aligned where it is declared.
+static_assert(offsetof(VksFaceResult, extents_min) == 0 && offsetof(VksFaceResult, extents_max) == 16 && offsetof(VksFaceResult, center) == 32,
+              "VksFaceResult vectors must be at 16-byte offsets for load4a");
+
+namespace
+{
+    VksProfileParams vks_profile_params(const LLProfileParams& params)
+    {
+        VksProfileParams p;
+        p.curve = params.getCurveType();
+        p.begin = params.getBegin();
+        p.end = params.getEnd();
+        p.hollow = params.getHollow();
+        return p;
+    }
+
+    VksPathParams vks_path_params(const LLPathParams& params)
+    {
+        VksPathParams p;
+        p.curve = params.getCurveType();
+        p.begin = params.getBegin();
+        p.end = params.getEnd();
+        p.scale_x = params.getScaleX();
+        p.scale_y = params.getScaleY();
+        p.shear_x = params.getShearX();
+        p.shear_y = params.getShearY();
+        p.twist_begin = params.getTwistBegin();
+        p.twist_end = params.getTwistEnd();
+        p.radius_offset = params.getRadiusOffset();
+        p.taper_x = params.getTaperX();
+        p.taper_y = params.getTaperY();
+        p.revolutions = params.getRevolutions();
+        p.skew = params.getSkew();
+        return p;
+    }
+}
 
 #include "mikktspace/mikktspace.hh"
 
@@ -377,374 +423,12 @@ bool LLTriangleRayIntersectTwoSided(const LLVector4a& vert0, const LLVector4a& v
 
 //----------------------------------------------------
 
-LLProfile::Face* LLProfile::addCap(S16 faceID)
-{
-    Face *face   = vector_append(mFaces, 1);
-
-    face->mIndex = 0;
-    face->mCount = mTotal;
-    face->mScaleU= 1.0f;
-    face->mCap   = true;
-    face->mFaceID = faceID;
-    return face;
-}
-
-LLProfile::Face* LLProfile::addFace(S32 i, S32 count, F32 scaleU, S16 faceID, bool flat)
-{
-    Face *face   = vector_append(mFaces, 1);
-
-    face->mIndex = i;
-    face->mCount = count;
-    face->mScaleU= scaleU;
-
-    face->mFlat = flat;
-    face->mCap   = false;
-    face->mFaceID = faceID;
-    return face;
-}
-
-//static
-S32 LLProfile::getNumNGonPoints(const LLProfileParams& params, S32 sides, F32 offset, F32 bevel, F32 ang_scale, S32 split)
-{ // this is basically LLProfile::genNGon stripped down to only the operations that influence the number of points
-    S32 np = 0;
-
-    // Generate an n-sided "circular" path.
-    // 0 is (1,0), and we go counter-clockwise along a circular path from there.
-    F32 t, t_step, t_first, t_fraction;
-
-    F32 begin  = params.getBegin();
-    F32 end    = params.getEnd();
-
-    t_step = 1.0f / sides;
-
-    t_first = floor(begin * sides) / (F32)sides;
-
-    // pt1 is the first point on the fractional face.
-    // Starting t and ang values for the first face
-    t = t_first;
-
-    // Increment to the next point.
-    // pt2 is the end point on the fractional face
-    t += t_step;
-
-    t_fraction = (begin - t_first)*sides;
-
-    // Only use if it's not almost exactly on an edge.
-    if (t_fraction < 0.9999f)
-    {
-        np++;
-    }
-
-    // There's lots of potential here for floating point error to generate unneeded extra points - DJS 04/05/02
-    while (t < end)
-    {
-        // Iterate through all the integer steps of t.
-        np++;
-
-        t += t_step;
-    }
-
-    t_fraction = (end - (t - t_step))*sides;
-
-    // Find the fraction that we need to add to the end point.
-    t_fraction = (end - (t - t_step))*sides;
-    if (t_fraction > 0.0001f)
-    {
-        np++;
-    }
-
-    // If we're sliced, the profile is open.
-    if ((end - begin)*ang_scale < 0.99f)
-    {
-        if (params.getHollow() <= 0)
-        {
-            // put center point if not hollow.
-            np++;
-        }
-    }
-
-    return np;
-}
-
-// What is the bevel parameter used for? - DJS 04/05/02
-// Bevel parameter is currently unused but presumedly would support
-// filleted and chamfered corners
-void LLProfile::genNGon(const LLProfileParams& params, S32 sides, F32 offset, F32 bevel, F32 ang_scale, S32 split)
-{
-    // Generate an n-sided "circular" path.
-    // 0 is (1,0), and we go counter-clockwise along a circular path from there.
-    constexpr F32 tableScale[] = { 1, 1, 1, 0.5f, 0.707107f, 0.53f, 0.525f, 0.5f };
-    F32 scale = 0.5f;
-    F32 t, t_step, t_first, t_fraction, ang, ang_step;
-    LLVector4a pt1,pt2;
-
-    F32 begin  = params.getBegin();
-    F32 end    = params.getEnd();
-
-    t_step = 1.0f / sides;
-    ang_step = 2.0f*F_PI*t_step*ang_scale;
-
-    // Scale to have size "match" scale.  Compensates to get object to generally fill bounding box.
-
-    S32 total_sides = ll_round(sides / ang_scale);  // Total number of sides all around
-
-    if (total_sides < 8)
-    {
-        scale = tableScale[total_sides];
-    }
-
-    t_first = floor(begin * sides) / (F32)sides;
-
-    // pt1 is the first point on the fractional face.
-    // Starting t and ang values for the first face
-    t = t_first;
-    ang = 2.0f*F_PI*(t*ang_scale + offset);
-    pt1.set(cos(ang)*scale,sin(ang)*scale, t);
-
-    // Increment to the next point.
-    // pt2 is the end point on the fractional face
-    t += t_step;
-    ang += ang_step;
-    pt2.set(cos(ang)*scale,sin(ang)*scale,t);
-
-    t_fraction = (begin - t_first)*sides;
-
-    // Only use if it's not almost exactly on an edge.
-    if (t_fraction < 0.9999f)
-    {
-        LLVector4a new_pt;
-        new_pt.setLerp(pt1, pt2, t_fraction);
-        mProfile.push_back(new_pt);
-    }
-
-    // There's lots of potential here for floating point error to generate unneeded extra points - DJS 04/05/02
-    while (t < end)
-    {
-        // Iterate through all the integer steps of t.
-        pt1.set(cos(ang)*scale,sin(ang)*scale,t);
-
-        if (mProfile.size() > 0) {
-            LLVector4a p = mProfile[mProfile.size()-1];
-            for (S32 i = 0; i < split && mProfile.size() > 0; i++) {
-                //mProfile.push_back(p+(pt1-p) * 1.0f/(float)(split+1) * (float)(i+1));
-                LLVector4a new_pt;
-                new_pt.setSub(pt1, p);
-                new_pt.mul(1.0f/(float)(split+1) * (float)(i+1));
-                new_pt.add(p);
-                mProfile.push_back(new_pt);
-            }
-        }
-        mProfile.push_back(pt1);
-
-        t += t_step;
-        ang += ang_step;
-    }
-
-    t_fraction = (end - (t - t_step))*sides;
-
-    // pt1 is the first point on the fractional face
-    // pt2 is the end point on the fractional face
-    pt2.set(cos(ang)*scale,sin(ang)*scale,t);
-
-    // Find the fraction that we need to add to the end point.
-    t_fraction = (end - (t - t_step))*sides;
-    if (t_fraction > 0.0001f)
-    {
-        LLVector4a new_pt;
-        new_pt.setLerp(pt1, pt2, t_fraction);
-
-        if (mProfile.size() > 0) {
-            LLVector4a p = mProfile[mProfile.size()-1];
-            for (S32 i = 0; i < split && mProfile.size() > 0; i++) {
-                //mProfile.push_back(p+(new_pt-p) * 1.0f/(float)(split+1) * (float)(i+1));
-
-                LLVector4a pt1;
-                pt1.setSub(new_pt, p);
-                pt1.mul(1.0f/(float)(split+1) * (float)(i+1));
-                pt1.add(p);
-                mProfile.push_back(pt1);
-            }
-        }
-        mProfile.push_back(new_pt);
-    }
-
-    // If we're sliced, the profile is open.
-    if ((end - begin)*ang_scale < 0.99f)
-    {
-        if ((end - begin)*ang_scale > 0.5f)
-        {
-            mConcave = true;
-        }
-        else
-        {
-            mConcave = false;
-        }
-        mOpen = true;
-        if (params.getHollow() <= 0)
-        {
-            // put center point if not hollow.
-            mProfile.push_back(LLVector4a(0,0,0));
-        }
-    }
-    else
-    {
-        // The profile isn't open.
-        mOpen = false;
-        mConcave = false;
-    }
-
-    mTotal = mProfile.size();
-}
-
-// Hollow is percent of the original bounding box, not of this particular
-// profile's geometry.  Thus, a swept triangle needs lower hollow values than
-// a swept square.
-LLProfile::Face* LLProfile::addHole(const LLProfileParams& params, bool flat, F32 sides, F32 offset, F32 box_hollow, F32 ang_scale, S32 split)
-{
-    // Note that addHole will NOT work for non-"circular" profiles, if we ever decide to use them.
-
-    // Total add has number of vertices on outside.
-    mTotalOut = mTotal;
-
-    // Why is the "bevel" parameter -1? DJS 04/05/02
-    genNGon(params, llfloor(sides),offset,-1, ang_scale, split);
-
-    Face *face = addFace(mTotalOut, mTotal-mTotalOut,0,LL_FACE_INNER_SIDE, flat);
-
-    static thread_local LLAlignedArray<LLVector4a,64> pt;
-    pt.resize(mTotal) ;
-
-    for (S32 i=mTotalOut;i<mTotal;i++)
-    {
-        pt[i] = mProfile[i];
-        pt[i].mul(box_hollow);
-    }
-
-    S32 j=mTotal-1;
-    for (S32 i=mTotalOut;i<mTotal;i++)
-    {
-        mProfile[i] = pt[j--];
-    }
-
-    for (S32 i=0;i<(S32)mFaces.size();i++)
-    {
-        if (mFaces[i].mCap)
-        {
-            mFaces[i].mCount *= 2;
-        }
-    }
-
-    return face;
-}
-
 //static
 S32 LLProfile::getNumPoints(const LLProfileParams& params, bool path_open,F32 detail, S32 split,
                          bool is_sculpted, S32 sculpt_size)
-{ // this is basically LLProfile::generate stripped down to only operations that influence the number of points
-    if (detail < MIN_LOD)
-    {
-        detail = MIN_LOD;
-    }
-
-    // Generate the face data
-    F32 hollow = params.getHollow();
-
-    S32 np = 0;
-
-    switch (params.getCurveType() & LL_PCODE_PROFILE_MASK)
-    {
-    case LL_PCODE_PROFILE_SQUARE:
-        {
-            np = getNumNGonPoints(params, 4,-0.375, 0, 1, split);
-
-            if (hollow)
-            {
-                np *= 2;
-            }
-        }
-        break;
-    case  LL_PCODE_PROFILE_ISOTRI:
-    case  LL_PCODE_PROFILE_RIGHTTRI:
-    case  LL_PCODE_PROFILE_EQUALTRI:
-        {
-            np = getNumNGonPoints(params, 3,0, 0, 1, split);
-
-            if (hollow)
-            {
-                np *= 2;
-            }
-        }
-        break;
-    case LL_PCODE_PROFILE_CIRCLE:
-        {
-            // If this has a square hollow, we should adjust the
-            // number of faces a bit so that the geometry lines up.
-            U8 hole_type=0;
-            F32 circle_detail = MIN_DETAIL_FACES * detail;
-            if (hollow)
-            {
-                hole_type = params.getCurveType() & LL_PCODE_HOLE_MASK;
-                if (hole_type == LL_PCODE_HOLE_SQUARE)
-                {
-                    // Snap to the next multiple of four sides,
-                    // so that corners line up.
-                    circle_detail = llceil(circle_detail / 4.0f) * 4.0f;
-                }
-            }
-
-            S32 sides = (S32)circle_detail;
-
-            if (is_sculpted)
-                sides = sculpt_size;
-
-            np = getNumNGonPoints(params, sides);
-
-            if (hollow)
-            {
-                np *= 2;
-            }
-        }
-        break;
-    case LL_PCODE_PROFILE_CIRCLE_HALF:
-        {
-            // If this has a square hollow, we should adjust the
-            // number of faces a bit so that the geometry lines up.
-            U8 hole_type=0;
-            // Number of faces is cut in half because it's only a half-circle.
-            F32 circle_detail = MIN_DETAIL_FACES * detail * 0.5f;
-            if (hollow)
-            {
-                hole_type = params.getCurveType() & LL_PCODE_HOLE_MASK;
-                if (hole_type == LL_PCODE_HOLE_SQUARE)
-                {
-                    // Snap to the next multiple of four sides (div 2),
-                    // so that corners line up.
-                    circle_detail = llceil(circle_detail / 2.0f) * 2.0f;
-                }
-            }
-            np = getNumNGonPoints(params, llfloor(circle_detail), 0.5f, 0.f, 0.5f);
-
-            if (hollow)
-            {
-                np *= 2;
-            }
-
-            // Special case for openness of sphere
-            if ((params.getEnd() - params.getBegin()) < 1.f)
-            {
-            }
-            else if (!hollow)
-            {
-                np++;
-            }
-        }
-        break;
-    default:
-       break;
-    };
-
-
-    return np;
+{ // the point count the generation below produces, for LOD triangle estimates
+    VksProfileParams p = vks_profile_params(params);
+    return vks_volume_profile_num_points(&p, path_open, detail, split, is_sculpted, sculpt_size);
 }
 
 
@@ -768,258 +452,44 @@ bool LLProfile::generate(const LLProfileParams& params, bool path_open,F32 detai
     mProfile.resize(0);
     mFaces.resize(0);
 
-    // Generate the face data
-    S32 i;
-    F32 begin = params.getBegin();
-    F32 end = params.getEnd();
-    F32 hollow = params.getHollow();
-
-    // Quick validation to eliminate some server crashes.
-    if (begin > end - 0.01f)
+    VksProfileParams p = vks_profile_params(params);
+    VksProfileOut out;
+    S32 rc = vks_volume_profile_generate(&p, path_open, detail, split, is_sculpted, sculpt_size, &out);
+    if (rc != 1)
     {
-        LL_WARNS() << "LLProfile::generate() assertion failed (begin >= end)" << LL_ENDL;
-        return false;
-    }
-
-    S32 face_num = 0;
-
-    switch (params.getCurveType() & LL_PCODE_PROFILE_MASK)
-    {
-    case LL_PCODE_PROFILE_SQUARE:
+        if (rc == 0)
         {
-            genNGon(params, 4,-0.375, 0, 1, split);
-            if (path_open)
-            {
-                addCap (LL_FACE_PATH_BEGIN);
-            }
-
-            for (i = llfloor(begin * 4.f); i < llfloor(end * 4.f + .999f); i++)
-            {
-                addFace((face_num++) * (split +1), split+2, 1, LL_FACE_OUTER_SIDE_0 << i, true);
-            }
-
-            LLVector4a scale(1,1,4,1);
-
-            for (i = 0; i <(S32) mProfile.size(); i++)
-            {
-                // Scale by 4 to generate proper tex coords.
-                mProfile[i].mul(scale);
-                llassert(mProfile[i].isFinite3());
-            }
-
-            if (hollow)
-            {
-                switch (params.getCurveType() & LL_PCODE_HOLE_MASK)
-                {
-                case LL_PCODE_HOLE_TRIANGLE:
-                    // This offset is not correct, but we can't change it now... DK 11/17/04
-                    addHole(params, true, 3, -0.375f, hollow, 1.f, split);
-                    break;
-                case LL_PCODE_HOLE_CIRCLE:
-                    // TODO: Compute actual detail levels for cubes
-                    addHole(params, false, MIN_DETAIL_FACES * detail, -0.375f, hollow, 1.f);
-                    break;
-                case LL_PCODE_HOLE_SAME:
-                case LL_PCODE_HOLE_SQUARE:
-                default:
-                    addHole(params, true, 4, -0.375f, hollow, 1.f, split);
-                    break;
-                }
-            }
-
-            if (path_open) {
-                mFaces[0].mCount = mTotal;
-            }
-        }
-        break;
-    case  LL_PCODE_PROFILE_ISOTRI:
-    case  LL_PCODE_PROFILE_RIGHTTRI:
-    case  LL_PCODE_PROFILE_EQUALTRI:
-        {
-            genNGon(params, 3,0, 0, 1, split);
-            LLVector4a scale(1,1,3,1);
-            for (i = 0; i <(S32) mProfile.size(); i++)
-            {
-                // Scale by 3 to generate proper tex coords.
-                mProfile[i].mul(scale);
-                llassert(mProfile[i].isFinite3());
-            }
-
-            if (path_open)
-            {
-                addCap(LL_FACE_PATH_BEGIN);
-            }
-
-            for (i = llfloor(begin * 3.f); i < llfloor(end * 3.f + .999f); i++)
-            {
-                addFace((face_num++) * (split +1), split+2, 1, LL_FACE_OUTER_SIDE_0 << i, true);
-            }
-            if (hollow)
-            {
-                // Swept triangles need smaller hollowness values,
-                // because the triangle doesn't fill the bounding box.
-                F32 triangle_hollow = hollow / 2.f;
-
-                switch (params.getCurveType() & LL_PCODE_HOLE_MASK)
-                {
-                case LL_PCODE_HOLE_CIRCLE:
-                    // TODO: Actually generate level of detail for triangles
-                    addHole(params, false, MIN_DETAIL_FACES * detail, 0, triangle_hollow, 1.f);
-                    break;
-                case LL_PCODE_HOLE_SQUARE:
-                    addHole(params, true, 4, 0, triangle_hollow, 1.f, split);
-                    break;
-                case LL_PCODE_HOLE_SAME:
-                case LL_PCODE_HOLE_TRIANGLE:
-                default:
-                    addHole(params, true, 3, 0, triangle_hollow, 1.f, split);
-                    break;
-                }
-            }
-        }
-        break;
-    case LL_PCODE_PROFILE_CIRCLE:
-        {
-            // If this has a square hollow, we should adjust the
-            // number of faces a bit so that the geometry lines up.
-            U8 hole_type=0;
-            F32 circle_detail = MIN_DETAIL_FACES * detail;
-            if (hollow)
-            {
-                hole_type = params.getCurveType() & LL_PCODE_HOLE_MASK;
-                if (hole_type == LL_PCODE_HOLE_SQUARE)
-                {
-                    // Snap to the next multiple of four sides,
-                    // so that corners line up.
-                    circle_detail = llceil(circle_detail / 4.0f) * 4.0f;
-                }
-            }
-
-            S32 sides = (S32)circle_detail;
-
-            if (is_sculpted)
-                sides = sculpt_size;
-
-            genNGon(params, sides);
-
-            if (path_open)
-            {
-                addCap (LL_FACE_PATH_BEGIN);
-            }
-
-            if (mOpen && !hollow)
-            {
-                addFace(0,mTotal-1,0,LL_FACE_OUTER_SIDE_0, false);
-            }
-            else
-            {
-                addFace(0,mTotal,0,LL_FACE_OUTER_SIDE_0, false);
-            }
-
-            if (hollow)
-            {
-                switch (hole_type)
-                {
-                case LL_PCODE_HOLE_SQUARE:
-                    addHole(params, true, 4, 0, hollow, 1.f, split);
-                    break;
-                case LL_PCODE_HOLE_TRIANGLE:
-                    addHole(params, true, 3, 0, hollow, 1.f, split);
-                    break;
-                case LL_PCODE_HOLE_CIRCLE:
-                case LL_PCODE_HOLE_SAME:
-                default:
-                    addHole(params, false, circle_detail, 0, hollow, 1.f);
-                    break;
-                }
-            }
-        }
-        break;
-    case LL_PCODE_PROFILE_CIRCLE_HALF:
-        {
-            // If this has a square hollow, we should adjust the
-            // number of faces a bit so that the geometry lines up.
-            U8 hole_type=0;
-            // Number of faces is cut in half because it's only a half-circle.
-            F32 circle_detail = MIN_DETAIL_FACES * detail * 0.5f;
-            if (hollow)
-            {
-                hole_type = params.getCurveType() & LL_PCODE_HOLE_MASK;
-                if (hole_type == LL_PCODE_HOLE_SQUARE)
-                {
-                    // Snap to the next multiple of four sides (div 2),
-                    // so that corners line up.
-                    circle_detail = llceil(circle_detail / 2.0f) * 2.0f;
-                }
-            }
-            genNGon(params, llfloor(circle_detail), 0.5f, 0.f, 0.5f);
-            if (path_open)
-            {
-                addCap(LL_FACE_PATH_BEGIN);
-            }
-            if (mOpen && !params.getHollow())
-            {
-                addFace(0,mTotal-1,0,LL_FACE_OUTER_SIDE_0, false);
-            }
-            else
-            {
-                addFace(0,mTotal,0,LL_FACE_OUTER_SIDE_0, false);
-            }
-
-            if (hollow)
-            {
-                switch (hole_type)
-                {
-                case LL_PCODE_HOLE_SQUARE:
-                    addHole(params, true, 2, 0.5f, hollow, 0.5f, split);
-                    break;
-                case LL_PCODE_HOLE_TRIANGLE:
-                    addHole(params, true, 3,  0.5f, hollow, 0.5f, split);
-                    break;
-                case LL_PCODE_HOLE_CIRCLE:
-                case LL_PCODE_HOLE_SAME:
-                default:
-                    addHole(params, false, circle_detail,  0.5f, hollow, 0.5f);
-                    break;
-                }
-            }
-
-            // Special case for openness of sphere
-            if ((params.getEnd() - params.getBegin()) < 1.f)
-            {
-                mOpen = true;
-            }
-            else if (!hollow)
-            {
-                mOpen = false;
-                mProfile.push_back(mProfile[0]);
-                mTotal++;
-            }
-        }
-        break;
-    default:
-        LL_ERRS() << "Unknown profile: getCurveType()=" << params.getCurveType() << LL_ENDL;
-        break;
-    };
-
-    if (path_open)
-    {
-        addCap(LL_FACE_PATH_END); // bottom
-    }
-
-    if ( mOpen) // interior edge caps
-    {
-        addFace(mTotal-1, 2,0.5,LL_FACE_PROFILE_BEGIN, true);
-
-        if (hollow)
-        {
-            addFace(mTotalOut-1, 2,0.5,LL_FACE_PROFILE_END, true);
+            // Quick validation to eliminate some server crashes.
+            LL_WARNS() << "LLProfile::generate() assertion failed (begin >= end)" << LL_ENDL;
         }
         else
         {
-            addFace(mTotal-2, 2,0.5,LL_FACE_PROFILE_END, true);
+            LL_WARNS() << "LLProfile::generate() failed in the mesher" << LL_ENDL;
         }
+        return false;
     }
+
+    mProfile.resize(out.point_count);
+    if (out.point_count)
+    {
+        LLVector4a::memcpyNonAliased16((F32*) mProfile.mArray, out.points, out.point_count * sizeof(LLVector4a));
+    }
+    mFaces.resize(out.face_count);
+    for (U32 i = 0; i < out.face_count; ++i)
+    {
+        const VksProfileFace& s = out.faces[i];
+        Face& f = mFaces[i];
+        f.mIndex = s.index;
+        f.mCount = s.count;
+        f.mScaleU = s.scale_u;
+        f.mCap = s.cap != 0;
+        f.mFlat = s.flat != 0;
+        f.mFaceID = s.face_id;
+    }
+    mTotal = out.total;
+    mTotalOut = out.total_out;
+    mOpen = out.open != 0;
+    mConcave = out.concave != 0;
 
     return true;
 }
@@ -1205,192 +675,6 @@ LLPath::~LLPath()
 {
 }
 
-S32 LLPath::getNumNGonPoints(const LLPathParams& params, S32 sides, F32 startOff, F32 end_scale, F32 twist_scale)
-{ //this is basically LLPath::genNGon stripped down to only operations that influence the number of points added
-    S32 ret = 0;
-
-    F32 step= 1.0f / sides;
-    F32 t   = params.getBegin();
-    ret = 1;
-
-    t+=step;
-
-    // Snap to a quantized parameter, so that cut does not
-    // affect most sample points.
-    t = ((S32)(t * sides)) / (F32)sides;
-
-    // Run through the non-cut dependent points.
-    while (t < params.getEnd())
-    {
-        ret++;
-        t+=step;
-    }
-
-    ret++;
-
-    return ret;
-}
-
-void LLPath::genNGon(const LLPathParams& params, S32 sides, F32 startOff, F32 end_scale, F32 twist_scale)
-{
-    LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME;
-
-    // Generates a circular path, starting at (1, 0, 0), counterclockwise along the xz plane.
-    constexpr F32 tableScale[] = { 1, 1, 1, 0.5f, 0.707107f, 0.53f, 0.525f, 0.5f };
-
-    F32 revolutions = params.getRevolutions();
-    F32 skew        = params.getSkew();
-    F32 skew_mag    = fabs(skew);
-    F32 hole_x      = params.getScaleX() * (1.0f - skew_mag);
-    F32 hole_y      = params.getScaleY();
-
-    // Calculate taper begin/end for x,y (Negative means taper the beginning)
-    F32 taper_x_begin   = 1.0f;
-    F32 taper_x_end     = 1.0f - params.getTaperX();
-    F32 taper_y_begin   = 1.0f;
-    F32 taper_y_end     = 1.0f - params.getTaperY();
-
-    if ( taper_x_end > 1.0f )
-    {
-        // Flip tapering.
-        taper_x_begin   = 2.0f - taper_x_end;
-        taper_x_end     = 1.0f;
-    }
-    if ( taper_y_end > 1.0f )
-    {
-        // Flip tapering.
-        taper_y_begin   = 2.0f - taper_y_end;
-        taper_y_end     = 1.0f;
-    }
-
-    // For spheres, the radius is usually zero.
-    F32 radius_start = 0.5f;
-    if (sides < 8)
-    {
-        radius_start = tableScale[sides];
-    }
-
-    // Scale the radius to take the hole size into account.
-    radius_start *= 1.0f - hole_y;
-
-    // Now check the radius offset to calculate the start,end radius.  (Negative means
-    // decrease the start radius instead).
-    F32 radius_end    = radius_start;
-    F32 radius_offset = params.getRadiusOffset();
-    if (radius_offset < 0.f)
-    {
-        radius_start *= 1.f + radius_offset;
-    }
-    else
-    {
-        radius_end   *= 1.f - radius_offset;
-    }
-
-    // Is the path NOT a closed loop?
-    mOpen = ( (params.getEnd()*end_scale - params.getBegin() < 1.0f) ||
-              (skew_mag > 0.001f) ||
-              (fabs(taper_x_end - taper_x_begin) > 0.001f) ||
-              (fabs(taper_y_end - taper_y_begin) > 0.001f) ||
-              (fabs(radius_end - radius_start) > 0.001f) );
-
-    F32 ang, c, s;
-    LLQuaternion twist, qang;
-    PathPt *pt;
-    LLVector3 path_axis (1.f, 0.f, 0.f);
-    //LLVector3 twist_axis(0.f, 0.f, 1.f);
-    F32 twist_begin = params.getTwistBegin() * twist_scale;
-    F32 twist_end   = params.getTwist() * twist_scale;
-
-    // We run through this once before the main loop, to make sure
-    // the path begins at the correct cut.
-    F32 step= 1.0f / sides;
-    F32 t   = params.getBegin();
-    pt      = mPath.append(1);
-    ang     = 2.0f*F_PI*revolutions * t;
-    s       = sin(ang)*lerp(radius_start, radius_end, t);
-    c       = cos(ang)*lerp(radius_start, radius_end, t);
-
-
-    pt->mPos.set(0 + lerp(0.f, params.getShear().mV[VX], s)
-                      + lerp(-skew ,skew, t) * 0.5f,
-                    c + lerp(0.f, params.getShear().mV[VY], s),
-                    s);
-
-    pt->mScale.set(hole_x * lerp(taper_x_begin, taper_x_end, t),
-        hole_y * lerp(taper_y_begin, taper_y_end, t),
-        0,1);
-    pt->mTexT  = t;
-
-    // Twist rotates the path along the x,y plane (I think) - DJS 04/05/02
-    twist.setQuat  (lerp(twist_begin,twist_end,t) * 2.f * F_PI - F_PI,0,0,1);
-    // Rotate the point around the circle's center.
-    qang.setQuat   (ang,path_axis);
-
-    LLMatrix3 rot(twist * qang);
-
-    pt->mRot.loadu(rot);
-
-    t+=step;
-
-    // Snap to a quantized parameter, so that cut does not
-    // affect most sample points.
-    t = ((S32)(t * sides)) / (F32)sides;
-
-    // Run through the non-cut dependent points.
-    while (t < params.getEnd())
-    {
-        pt      = mPath.append(1);
-
-        ang = 2.0f*F_PI*revolutions * t;
-        c   = cos(ang)*lerp(radius_start, radius_end, t);
-        s   = sin(ang)*lerp(radius_start, radius_end, t);
-
-        pt->mPos.set(0 + lerp(0.f, params.getShear().mV[VX], s)
-                          + lerp(-skew ,skew, t) * 0.5f,
-                        c + lerp(0.f, params.getShear().mV[VY], s),
-                        s);
-
-        pt->mScale.set(hole_x * lerp(taper_x_begin, taper_x_end, t),
-                    hole_y * lerp(taper_y_begin, taper_y_end, t),
-                    0,1);
-        pt->mTexT  = t;
-
-        // Twist rotates the path along the x,y plane (I think) - DJS 04/05/02
-        twist.setQuat  (lerp(twist_begin,twist_end,t) * 2.f * F_PI - F_PI,0,0,1);
-        // Rotate the point around the circle's center.
-        qang.setQuat   (ang,path_axis);
-        LLMatrix3 tmp(twist*qang);
-        pt->mRot.loadu(tmp);
-
-        t+=step;
-    }
-
-    // Make one final pass for the end cut.
-    t = params.getEnd();
-    pt      = mPath.append(1);
-    ang = 2.0f*F_PI*revolutions * t;
-    c   = cos(ang)*lerp(radius_start, radius_end, t);
-    s   = sin(ang)*lerp(radius_start, radius_end, t);
-
-    pt->mPos.set(0 + lerp(0.f, params.getShear().mV[VX], s)
-                      + lerp(-skew ,skew, t) * 0.5f,
-                    c + lerp(0.f, params.getShear().mV[VY], s),
-                    s);
-    pt->mScale.set(hole_x * lerp(taper_x_begin, taper_x_end, t),
-                   hole_y * lerp(taper_y_begin, taper_y_end, t),
-                   0,1);
-    pt->mTexT  = t;
-
-    // Twist rotates the path along the x,y plane (I think) - DJS 04/05/02
-    twist.setQuat  (lerp(twist_begin,twist_end,t) * 2.f * F_PI - F_PI,0,0,1);
-    // Rotate the point around the circle's center.
-    qang.setQuat   (ang,path_axis);
-    LLMatrix3 tmp(twist*qang);
-    pt->mRot.loadu(tmp);
-
-    mTotal = mPath.size();
-}
-
 const LLVector2 LLPathParams::getBeginScale() const
 {
     LLVector2 begin_scale(1.f, 1.f);
@@ -1420,51 +704,9 @@ const LLVector2 LLPathParams::getEndScale() const
 }
 
 S32 LLPath::getNumPoints(const LLPathParams& params, F32 detail)
-{ // this is basically LLPath::generate stripped down to only the operations that influence the number of points
-    if (detail < MIN_LOD)
-    {
-        detail = MIN_LOD;
-    }
-
-    S32 np = 2; // hardcode for line
-
-    // Is this 0xf0 mask really necessary?  DK 03/02/05
-
-    switch (params.getCurveType() & 0xf0)
-    {
-    default:
-    case LL_PCODE_PATH_LINE:
-        {
-            // Take the begin/end twist into account for detail.
-            np    = llfloor(fabs(params.getTwistBegin() - params.getTwist()) * 3.5f * (detail-0.5f)) + 2;
-        }
-        break;
-
-    case LL_PCODE_PATH_CIRCLE:
-        {
-            // Increase the detail as the revolutions and twist increase.
-            F32 twist_mag = fabs(params.getTwistBegin() - params.getTwist());
-
-            S32 sides = (S32)llfloor(llfloor((MIN_DETAIL_FACES * detail + twist_mag * 3.5f * (detail-0.5f))) * params.getRevolutions());
-
-            np = sides;
-        }
-        break;
-
-    case LL_PCODE_PATH_CIRCLE2:
-        {
-            //genNGon(params, llfloor(MIN_DETAIL_FACES * detail), 4.f, 0.f);
-            np = getNumNGonPoints(params, llfloor(MIN_DETAIL_FACES * detail));
-        }
-        break;
-
-    case LL_PCODE_PATH_TEST:
-
-        np     = 5;
-        break;
-    };
-
-    return np;
+{ // the point count estimate for LOD triangle counts (for circles: the side count)
+    VksPathParams p = vks_path_params(params);
+    return vks_volume_path_num_points(&p, detail);
 }
 
 bool LLPath::generate(const LLPathParams& params, F32 detail, S32 split,
@@ -1484,118 +726,28 @@ bool LLPath::generate(const LLPathParams& params, F32 detail, S32 split,
     }
 
     mDirty = false;
-    S32 np = 2; // hardcode for line
 
     mPath.resize(0);
     mOpen = true;
 
-    // Is this 0xf0 mask really necessary?  DK 03/02/05
-    switch (params.getCurveType() & 0xf0)
+    VksPathParams p = vks_path_params(params);
+    VksPathOut out;
+    if (vks_volume_path_generate(&p, detail, split, is_sculpted, sculpt_size, &out) != 1)
     {
-    default:
-    case LL_PCODE_PATH_LINE:
-        {
-            // Take the begin/end twist into account for detail.
-            np    = llfloor(fabs(params.getTwistBegin() - params.getTwist()) * 3.5f * (detail-0.5f)) + 2;
-            if (np < split+2)
-            {
-                np = split+2;
-            }
+        LL_WARNS() << "LLPath::generate() failed in the mesher" << LL_ENDL;
+        return false;
+    }
 
-            mStep = 1.0f / (np-1);
-
-            mPath.resize(np);
-
-            LLVector2 start_scale = params.getBeginScale();
-            LLVector2 end_scale = params.getEndScale();
-
-            for (S32 i=0;i<np;i++)
-            {
-                F32 t = lerp(params.getBegin(),params.getEnd(),(F32)i * mStep);
-                mPath[i].mPos.set(lerp(0.f, params.getShear().mV[VX], t),
-                                     lerp(0.f ,params.getShear().mV[VY], t),
-                                     t - 0.5f);
-                LLQuaternion quat;
-                quat.setQuat(lerp(F_PI * params.getTwistBegin(),F_PI * params.getTwist(),t),0,0,1);
-                LLMatrix3 tmp(quat);
-                mPath[i].mRot.loadu(tmp);
-                mPath[i].mScale.set(lerp(start_scale.mV[0],end_scale.mV[0],t),
-                                    lerp(start_scale.mV[1],end_scale.mV[1],t),
-                                    0,1);
-                mPath[i].mTexT        = t;
-            }
-        }
-        break;
-
-    case LL_PCODE_PATH_CIRCLE:
-        {
-            // Increase the detail as the revolutions and twist increase.
-            F32 twist_mag = fabs(params.getTwistBegin() - params.getTwist());
-
-            S32 sides = (S32)llfloor(llfloor((MIN_DETAIL_FACES * detail + twist_mag * 3.5f * (detail-0.5f))) * params.getRevolutions());
-
-            if (is_sculpted)
-                sides = llmax(sculpt_size, 1);
-
-            if (0 < sides)
-                genNGon(params, sides);
-        }
-        break;
-
-    case LL_PCODE_PATH_CIRCLE2:
-        {
-            if (params.getEnd() - params.getBegin() >= 0.99f &&
-                params.getScaleX() >= .99f)
-            {
-                mOpen = false;
-            }
-
-            //genNGon(params, llfloor(MIN_DETAIL_FACES * detail), 4.f, 0.f);
-            genNGon(params, llfloor(MIN_DETAIL_FACES * detail));
-
-            F32 toggle = 0.5f;
-            for (S32 i=0;i<(S32)mPath.size();i++)
-            {
-                mPath[i].mPos.getF32ptr()[0] = toggle;
-                if (toggle == 0.5f)
-                    toggle = -0.5f;
-                else
-                    toggle = 0.5f;
-            }
-        }
-
-        break;
-
-    case LL_PCODE_PATH_TEST:
-
-        np     = 5;
-        mStep = 1.0f / (np-1);
-
-        mPath.resize(np);
-
-        for (S32 i=0;i<np;i++)
-        {
-            F32 t = (F32)i * mStep;
-            mPath[i].mPos.set(0,
-                                lerp(0.f,  -sin(F_PI*params.getTwist() * t) * 0.5f, t),
-                                lerp(-0.5f, cos(F_PI*params.getTwist() * t) * 0.5f, t));
-            mPath[i].mScale.set(lerp(1.f, params.getScale().mV[VX], t),
-                                lerp(1.f, params.getScale().mV[VY], t), 0.f, 1.f);
-            mPath[i].mTexT  = t;
-            LLQuaternion quat;
-            quat.setQuat(F_PI * params.getTwist() * t,1,0,0);
-            LLMatrix3 tmp(quat);
-            mPath[i].mRot.loadu(tmp);
-        }
-
-        break;
-    };
-
-    if (params.getTwist() != params.getTwistBegin()) mOpen = true;
-
-    //if ((int(fabsf(params.getTwist() - params.getTwistBegin())*100))%100 != 0) {
-    //  mOpen = true;
-    //}
+    mPath.resize(out.count);
+    if (out.count)
+    {
+        // PathPt has a constructor, so GCC refuses a plain memcpy into it; the
+        // layouts are shared (static_assert above) and the copy is intended.
+        memcpy(static_cast<void*>(mPath.mArray), out.points, out.count * sizeof(PathPt));
+    }
+    mOpen = out.open != 0;
+    mStep = out.step;
+    mTotal = out.count;
 
     return true;
 }
@@ -2104,49 +1256,12 @@ bool LLVolume::generate()
         mMesh.resize(sizeT * sizeS);
         sNumMeshPoints += mMesh.size();
 
-        //generate vertex positions
-
-        // Run along the path.
-        LLVector4a* dst = mMesh.mArray;
-
-        for (S32 s = 0; s < sizeS; ++s)
+        //generate vertex positions: the mesher writes straight into mMesh
+        if (sizeS && sizeT)
         {
-            F32* scale = mPathp->mPath[s].mScale.getF32ptr();
-
-            F32 sc [] =
-            { scale[0], 0, 0, 0,
-                0, scale[1], 0, 0,
-                0, 0, scale[2], 0,
-                    0, 0, 0, 1 };
-
-            LLMatrix4 rot((F32*) mPathp->mPath[s].mRot.mMatrix);
-            LLMatrix4 scale_mat(sc);
-
-            scale_mat *= rot;
-
-            LLMatrix4a rot_mat;
-            rot_mat.loadu(scale_mat);
-
-            LLVector4a* profile = mProfilep->mProfile.mArray;
-            LLVector4a* end_profile = profile+sizeT;
-            LLVector4a offset = mPathp->mPath[s].mPos;
-
-            // hack to work around MAINT-5660 for debug until we can suss out
-            // what is wrong with the path generated that inserts NaNs...
-            if (!offset.isFinite3())
-            {
-                offset.clear();
-            }
-
-            LLVector4a tmp;
-
-            // Run along the profile.
-            while (profile < end_profile)
-            {
-                rot_mat.rotate(*profile++, tmp);
-                dst->setAdd(tmp,offset);
-                ++dst;
-            }
+            vks_volume_sweep((const VksPathPt*) mPathp->mPath.mArray, sizeS,
+                             (const F32*) mProfilep->mProfile.mArray, sizeT,
+                             (F32*) mMesh.mArray);
         }
 
         for (std::vector<LLProfile::Face>::iterator iter = mProfilep->mFaces.begin();
@@ -2324,21 +1439,118 @@ bool LLVolume::unpackVolumeFaces(std::istream& is, S32 size)
     return unpackVolumeFacesInternal(mdl);
 }
 
-bool LLVolume::unpackVolumeFaces(U8* in_data, S32 size)
+bool LLVolume::unpackVolumeFaces(U8* in_data, S32 size, bool optimize)
 {
-    //input data is now pointing at a zlib compressed block of LLSD
-    //decompress block
-    LLSD mdl;
-    U32 uzip_result = LLUZipHelper::unzip_llsd(mdl, in_data, size);
-    if (uzip_result != LLUZipHelper::ZR_OK)
+    // The zlib-compressed LLSD block of one LOD is unpacked by vkstorm-assets
+    // (vkstorm-rust rung five): inflate, LLSD parse, the dequantisation of
+    // positions, normals, texture coordinates and joint weights, the sculpt
+    // flags and the extents, bit for bit as unpackVolumeFacesInternal left
+    // them. The faces are copied into LLVolumeFace buffers here; the cache
+    // optimisation stays C++.
+    int32_t err = 0;
+    VksMeshFaces* faces = vks_mesh_unpack(in_data, (size_t)llmax(size, 0), (uint8_t)mParams.getSculptType(), &err);
+    if (!faces)
     {
-        LL_DEBUGS("MeshStreaming") << "Failed to unzip LLSD blob for LoD with code " << uzip_result << " , will probably fetch from sim again." << LL_ENDL;
+        if (err == 1)
+        {
+            LL_DEBUGS("MeshStreaming") << "Failed to unzip LLSD blob for LoD, will probably fetch from sim again." << LL_ENDL;
+        }
+        else if (err == 2)
+        {
+            LL_WARNS() << "found no faces!" << LL_ENDL;
+        }
+        else
+        {
+            LL_WARNS() << "Failed to unpack mesh LOD (code " << err << ")" << LL_ENDL;
+        }
         return false;
     }
-    return unpackVolumeFacesInternal(mdl);
+
+    const size_t face_count = vks_mesh_faces_count(faces);
+    mVolumeFaces.resize(face_count);
+
+    for (size_t i = 0; i < face_count; ++i)
+    {
+        LLVolumeFace& face = mVolumeFaces[i];
+        VksMeshFace f;
+        if (!vks_mesh_face(faces, i, &f))
+        {
+            vks_mesh_faces_free(faces);
+            mVolumeFaces.clear();
+            return false;
+        }
+
+        face.resizeIndices(f.num_indices);
+        if (f.num_indices > 2 && !face.mIndices)
+        {
+            LL_WARNS() << "Failed to allocate " << f.num_indices << " indices for face index: " << i << " Total: " << face_count << LL_ENDL;
+            continue;
+        }
+        face.resizeVertices(f.num_vertices);
+        if (f.num_vertices > 0 && !face.mPositions)
+        {
+            LL_WARNS() << "Failed to allocate " << f.num_vertices << " vertices for face index: " << i << " Total: " << face_count << LL_ENDL;
+            face.resizeIndices(0);
+            continue;
+        }
+        if (f.incomplete)
+        {
+            // The C++ left such a face after allocating its buffers (an
+            // empty index list); so does the port.
+            LL_WARNS() << "Empty face present! Face index: " << i << " Total: " << face_count << LL_ENDL;
+            continue;
+        }
+
+        if (f.num_indices > 0)
+        {
+            memcpy(face.mIndices, f.indices, sizeof(U16) * f.num_indices);
+        }
+        if (f.num_vertices > 0)
+        {
+            memcpy(face.mPositions->getF32ptr(), f.positions, sizeof(LLVector4a) * f.num_vertices);
+            memcpy(face.mNormals->getF32ptr(), f.normals, sizeof(LLVector4a) * f.num_vertices);
+            // The texture coordinates come in pairs (the SSE code wrote them
+            // four floats at a time); the buffer is allocated for the even
+            // count.
+            memcpy(face.mTexCoords->mV, f.texcoords, sizeof(F32) * 2 * f.texcoord_count);
+        }
+        if (f.has_weights)
+        {
+            face.allocateWeights(f.num_vertices);
+            if (!face.mWeights && f.num_vertices)
+            {
+                LL_WARNS() << "Failed to allocate " << f.num_vertices << " weights for face index: " << i << " Total: " << face_count << LL_ENDL;
+                face.resizeIndices(0);
+                face.resizeVertices(0);
+                continue;
+            }
+            if (f.num_vertices > 0)
+            {
+                memcpy(face.mWeights->getF32ptr(), f.weights, sizeof(LLVector4a) * f.num_vertices);
+            }
+        }
+        face.mNormalizedScale.set(f.normalized_scale[0], f.normalized_scale[1], f.normalized_scale[2]);
+        face.mExtents[0].set(f.extents[0], f.extents[1], f.extents[2], f.extents[3]);
+        face.mExtents[1].set(f.extents[4], f.extents[5], f.extents[6], f.extents[7]);
+        face.mTexCoordExtents[0].set(f.tc_extents[0], f.tc_extents[1]);
+        face.mTexCoordExtents[1].set(f.tc_extents[2], f.tc_extents[3]);
+    }
+    vks_mesh_faces_free(faces);
+
+    if (optimize && !cacheOptimize(true))
+    {
+        // Out of memory?
+        LL_WARNS() << "Failed to optimize!" << LL_ENDL;
+        mVolumeFaces.clear();
+        return false;
+    }
+
+    mSculptLevel = 0;  // success!
+
+    return true;
 }
 
-bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl)
+bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl, bool optimize)
 {
     {
         auto face_count = mdl.size();
@@ -2717,7 +1929,7 @@ bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl)
         }
     }
 
-    if (!cacheOptimize(true))
+    if (optimize && !cacheOptimize(true))
     {
         // Out of memory?
         LL_WARNS() << "Failed to optimize!" << LL_ENDL;
@@ -5151,23 +4363,116 @@ bool LLVolumeFace::create(LLVolume* volume, bool partial_build)
     destroyOctree();
 
     LL_CHECK_MEMORY
-    bool ret = false ;
-    if (mTypeMask & CAP_MASK)
-    {
-        ret = createCap(volume, partial_build);
-        LL_CHECK_MEMORY
-    }
-    else if ((mTypeMask & END_MASK) || (mTypeMask & SIDE_MASK))
-    {
-        ret = createSide(volume, partial_build);
-        LL_CHECK_MEMORY
-    }
-    else
+    if (!(mTypeMask & (CAP_MASK | END_MASK | SIDE_MASK)))
     {
         LL_ERRS() << "Unknown/uninitialized face type!" << LL_ENDL;
+        return false;
     }
 
-    return ret ;
+    const LLVolumeParams& vp = volume->getParams();
+    const LLProfile& profile = volume->getProfile();
+    const LLPath& path = volume->getPath();
+
+    VksFaceParams p;
+    p.mesh = (const F32*) volume->getMesh().mArray;
+    p.mesh_count = volume->getMesh().size();
+    p.profile = (const F32*) profile.mProfile.mArray;
+    p.profile_count = profile.mProfile.size();
+    p.profile_total = profile.getTotal();
+    p.profile_open = profile.isOpen();
+    p.path = (const VksPathPt*) path.mPath.mArray;
+    p.path_count = path.mPath.size();
+    p.path_open = path.isOpen();
+    p.id = mID;
+    p.type_mask = mTypeMask;
+    p.begin_s = mBeginS;
+    p.num_s = mNumS;
+    p.begin_t = mBeginT;
+    p.num_t = mNumT;
+    p.profile_curve = vp.getProfileParams().getCurveType();
+    p.path_curve = vp.getPathParams().getCurveType();
+    p.sculpt_type = vp.getSculptType();
+    p.path_begin = vp.getPathParams().getBegin();
+    p.path_end = vp.getPathParams().getEnd();
+
+    S32 num_vertices = 0;
+    S32 num_indices = 0;
+    bool fresh_vertices = false;
+    bool fresh_indices = false;
+    switch (vks_volume_face_sizes(&p, &num_vertices, &num_indices))
+    {
+    case VKS_FACE_SIDE:
+        partial_build = (num_vertices > mNumVertices || num_indices > mNumIndices) ? false : partial_build;
+        if (!partial_build)
+        {
+            resizeVertices(num_vertices);
+            resizeIndices(num_indices);
+            fresh_vertices = fresh_indices = true;
+        }
+        break;
+    case VKS_FACE_CAP:
+        resizeVertices(num_vertices);
+        resizeIndices(num_indices);
+        fresh_vertices = fresh_indices = true;
+        partial_build = false;
+        break;
+    case VKS_FACE_UNCUT_CUBE_CAP:
+        resizeVertices(num_vertices);
+        fresh_vertices = true;
+        if (!partial_build)
+        {
+            resizeIndices(num_indices);
+            fresh_indices = true;
+        }
+        break;
+    default:
+        LL_WARNS() << "LLVolumeFace::create: the mesher rejected the face" << LL_ENDL;
+        return false;
+    }
+
+    // The mesher forms slices over these buffers before it writes them, so
+    // freshly allocated storage is zeroed first (positions, normals and the
+    // padded texture coordinates are one block); a partial rebuild keeps the
+    // data it has.
+    if (fresh_vertices && mPositions)
+    {
+        const size_t tc_size = ((mNumVertices * sizeof(LLVector2)) + 0xF) & ~0xF;
+        memset(mPositions, 0, sizeof(LLVector4a) * 2 * mNumVertices + tc_size);
+    }
+    if (fresh_indices && mIndices)
+    {
+        memset(mIndices, 0, ((mNumIndices * sizeof(U16)) + 0xF) & ~0xF);
+    }
+
+    LL_CHECK_MEMORY
+
+    VksFaceBuffers b;
+    b.positions = (F32*) mPositions;
+    b.normals = (F32*) mNormals;
+    b.texcoords = (F32*) mTexCoords;
+    b.indices = mIndices;
+    b.num_vertices = mNumVertices;
+    b.num_indices = mNumIndices;
+    b.write_indices = !partial_build;
+
+    alignas(16) VksFaceResult r;
+    if (vks_volume_face_build(&p, &b, &r) != 1)
+    {
+        LL_WARNS() << "LLVolumeFace::create: the mesher could not build the face" << LL_ENDL;
+        return false;
+    }
+
+    mExtents[0].load4a(r.extents_min);
+    mExtents[1].load4a(r.extents_max);
+    mCenter->load4a(r.center);
+    if (r.tc_extents_set)
+    {
+        mTexCoordExtents[0].set(r.tc_min[0], r.tc_min[1]);
+        mTexCoordExtents[1].set(r.tc_max[0], r.tc_max[1]);
+    }
+
+    LL_CHECK_MEMORY
+    return true;
 }
 
 void LLVolumeFace::getVertexData(U16 index, LLVolumeFace::VertexData& cv)
@@ -5995,607 +5300,6 @@ void LLVolumeFace::swapData(LLVolumeFace& rhs)
     llswap(rhs.mNumIndices, mNumIndices);
 }
 
-void    LerpPlanarVertex(LLVolumeFace::VertexData& v0,
-                   LLVolumeFace::VertexData& v1,
-                   LLVolumeFace::VertexData& v2,
-                   LLVolumeFace::VertexData& vout,
-                   F32  coef01,
-                   F32  coef02)
-{
-
-    LLVector4a lhs;
-    lhs.setSub(v1.getPosition(), v0.getPosition());
-    lhs.mul(coef01);
-    LLVector4a rhs;
-    rhs.setSub(v2.getPosition(), v0.getPosition());
-    rhs.mul(coef02);
-
-    rhs.add(lhs);
-    rhs.add(v0.getPosition());
-
-    vout.setPosition(rhs);
-
-    vout.mTexCoord = v0.mTexCoord + ((v1.mTexCoord-v0.mTexCoord)*coef01)+((v2.mTexCoord-v0.mTexCoord)*coef02);
-    vout.setNormal(v0.getNormal());
-}
-
-bool LLVolumeFace::createUnCutCubeCap(LLVolume* volume, bool partial_build)
-{
-    LL_CHECK_MEMORY
-
-    const LLAlignedArray<LLVector4a,64>& mesh = volume->getMesh();
-    const LLAlignedArray<LLVector4a,64>& profile = volume->getProfile().mProfile;
-    S32 max_s = volume->getProfile().getTotal();
-    S32 max_t = volume->getPath().mPath.size();
-
-    // S32 i;
-    S32 grid_size = (profile.size()-1)/4;
-    // VFExtents change
-    LLVector4a& min = mExtents[0];
-    LLVector4a& max = mExtents[1];
-
-    S32 offset = 0;
-    if (mTypeMask & TOP_MASK)
-    {
-        offset = (max_t-1) * max_s;
-    }
-    else
-    {
-        offset = mBeginS;
-    }
-
-    {
-        VertexData  corners[4];
-        VertexData baseVert;
-        for(S32 t = 0; t < 4; t++)
-        {
-            corners[t].getPosition().load4a(mesh[offset + (grid_size*t)].getF32ptr());
-            corners[t].mTexCoord.mV[0] = profile[grid_size*t][0]+0.5f;
-            corners[t].mTexCoord.mV[1] = 0.5f - profile[grid_size*t][1];
-        }
-
-        {
-            LLVector4a lhs;
-            lhs.setSub(corners[1].getPosition(), corners[0].getPosition());
-            LLVector4a rhs;
-            rhs.setSub(corners[2].getPosition(), corners[1].getPosition());
-            baseVert.getNormal().setCross3(lhs, rhs);
-            baseVert.getNormal().normalize3fast();
-        }
-
-        if(!(mTypeMask & TOP_MASK))
-        {
-            baseVert.getNormal().mul(-1.0f);
-        }
-        else
-        {
-            //Swap the UVs on the U(X) axis for top face
-            LLVector2 swap;
-            swap = corners[0].mTexCoord;
-            corners[0].mTexCoord=corners[3].mTexCoord;
-            corners[3].mTexCoord=swap;
-            swap = corners[1].mTexCoord;
-            corners[1].mTexCoord=corners[2].mTexCoord;
-            corners[2].mTexCoord=swap;
-        }
-
-        S32 size = (grid_size+1)*(grid_size+1);
-        resizeVertices(size);
-
-        LLVector4a* pos = (LLVector4a*) mPositions;
-        LLVector4a* norm = (LLVector4a*) mNormals;
-        LLVector2* tc = (LLVector2*) mTexCoords;
-
-        for(int gx = 0;gx<grid_size+1;gx++)
-        {
-            for(int gy = 0;gy<grid_size+1;gy++)
-            {
-                VertexData newVert;
-                LerpPlanarVertex(
-                    corners[0],
-                    corners[1],
-                    corners[3],
-                    newVert,
-                    (F32)gx/(F32)grid_size,
-                    (F32)gy/(F32)grid_size);
-
-                *pos++ = newVert.getPosition();
-                *norm++ = baseVert.getNormal();
-                *tc++ = newVert.mTexCoord;
-
-                if (gx == 0 && gy == 0)
-                {
-                    min = newVert.getPosition();
-                    max = min;
-                }
-                else
-                {
-                    min.setMin(min, newVert.getPosition());
-                    max.setMax(max, newVert.getPosition());
-                }
-            }
-        }
-
-        mCenter->setAdd(min, max);
-        mCenter->mul(0.5f);
-    }
-
-    if (!partial_build)
-    {
-        LL_PROFILE_ZONE_NAMED_CATEGORY_VOLUME("llvfcuccm - generate indices");
-
-        resizeIndices(grid_size*grid_size*6);
-
-        U16* out = mIndices;
-
-        S32 idxs[] = {0,1,(grid_size+1)+1,(grid_size+1)+1,(grid_size+1),0};
-
-        for(S32 gx = 0;gx<grid_size;gx++)
-        {
-            for(S32 gy = 0;gy<grid_size;gy++)
-            {
-                if (mTypeMask & TOP_MASK)
-                {
-                    for(S32 i=5;i>=0;i--)
-                    {
-                        *out++ = ((gy*(grid_size+1))+gx+idxs[i]);
-                    }
-
-                }
-                else
-                {
-                    for(S32 i=0;i<6;i++)
-                    {
-                        *out++ = ((gy*(grid_size+1))+gx+idxs[i]);
-                    }
-                }
-            }
-        }
-    }
-
-    LL_CHECK_MEMORY
-    return true;
-}
-
-
-bool LLVolumeFace::createCap(LLVolume* volume, bool partial_build)
-{
-    if (!(mTypeMask & HOLLOW_MASK) &&
-        !(mTypeMask & OPEN_MASK) &&
-        ((volume->getParams().getPathParams().getBegin()==0.0f)&&
-        (volume->getParams().getPathParams().getEnd()==1.0f))&&
-        (volume->getParams().getProfileParams().getCurveType()==LL_PCODE_PROFILE_SQUARE &&
-         volume->getParams().getPathParams().getCurveType()==LL_PCODE_PATH_LINE)
-        ){
-        return createUnCutCubeCap(volume, partial_build);
-    }
-
-    S32 num_vertices = 0, num_indices = 0;
-
-    const LLAlignedArray<LLVector4a,64>& mesh = volume->getMesh();
-    const LLAlignedArray<LLVector4a,64>& profile = volume->getProfile().mProfile;
-
-    // All types of caps have the same number of vertices and indices
-    num_vertices = profile.size();
-    num_indices = (profile.size() - 2)*3;
-
-    if (!(mTypeMask & HOLLOW_MASK) && !(mTypeMask & OPEN_MASK))
-    {
-        resizeVertices(num_vertices+1);
-
-        //if (!partial_build)
-        {
-            resizeIndices(num_indices+3);
-        }
-    }
-    else
-    {
-        resizeVertices(num_vertices);
-        //if (!partial_build)
-        {
-            resizeIndices(num_indices);
-        }
-    }
-
-    LL_CHECK_MEMORY;
-
-    S32 max_s = volume->getProfile().getTotal();
-    S32 max_t = volume->getPath().mPath.size();
-
-    mCenter->clear();
-
-    S32 offset = 0;
-    if (mTypeMask & TOP_MASK)
-    {
-        offset = (max_t-1) * max_s;
-    }
-    else
-    {
-        offset = mBeginS;
-    }
-
-    // Figure out the normal, assume all caps are flat faces.
-    // Cross product to get normals.
-
-    LLVector2 cuv;
-    LLVector2 min_uv, max_uv;
-    // VFExtents change
-    LLVector4a& min = mExtents[0];
-    LLVector4a& max = mExtents[1];
-
-    LLVector2* tc = (LLVector2*) mTexCoords;
-    LLVector4a* pos = (LLVector4a*) mPositions;
-    LLVector4a* norm = (LLVector4a*) mNormals;
-
-    // Copy the vertices into the array
-
-    const LLVector4a* src = mesh.mArray+offset;
-    const LLVector4a* end = src+num_vertices;
-
-    min = *src;
-    max = min;
-
-
-    const LLVector4a* p = profile.mArray;
-
-    if (mTypeMask & TOP_MASK)
-    {
-        min_uv.set((*p)[0]+0.5f,
-                    (*p)[1]+0.5f);
-
-        max_uv = min_uv;
-
-        while(src < end)
-        {
-            tc->mV[0] = (*p)[0]+0.5f;
-            tc->mV[1] = (*p)[1]+0.5f;
-
-            llassert(src->isFinite3()); // MAINT-5660; don't know why this happens, does not affect Release builds
-            update_min_max(min,max,*src);
-            update_min_max(min_uv, max_uv, *tc);
-
-            *pos = *src;
-
-            llassert(pos->isFinite3());
-
-            ++p;
-            ++tc;
-            ++src;
-            ++pos;
-        }
-        }
-        else
-        {
-
-        min_uv.set((*p)[0]+0.5f,
-                   0.5f - (*p)[1]);
-        max_uv = min_uv;
-
-        while(src < end)
-        {
-            // Mirror for underside.
-            tc->mV[0] = (*p)[0]+0.5f;
-            tc->mV[1] = 0.5f - (*p)[1];
-
-            llassert(src->isFinite3());
-            update_min_max(min,max,*src);
-            update_min_max(min_uv, max_uv, *tc);
-
-            *pos = *src;
-
-            llassert(pos->isFinite3());
-
-            ++p;
-            ++tc;
-            ++src;
-            ++pos;
-        }
-    }
-
-    LL_CHECK_MEMORY
-
-    mCenter->setAdd(min, max);
-    mCenter->mul(0.5f);
-
-    cuv = (min_uv + max_uv)*0.5f;
-
-
-    VertexData vd;
-    vd.setPosition(*mCenter);
-    vd.mTexCoord = cuv;
-
-    if (!(mTypeMask & HOLLOW_MASK) && !(mTypeMask & OPEN_MASK))
-    {
-        *pos++ = *mCenter;
-        *tc++ = cuv;
-        num_vertices++;
-    }
-
-    LL_CHECK_MEMORY
-
-    //if (partial_build)
-    //{
-    //  return true;
-    //}
-
-    if (mTypeMask & HOLLOW_MASK)
-    {
-        if (mTypeMask & TOP_MASK)
-        {
-            // HOLLOW TOP
-            // Does it matter if it's open or closed? - djs
-
-            S32 pt1 = 0, pt2 = num_vertices - 1;
-            S32 i = 0;
-            while (pt2 - pt1 > 1)
-            {
-                // Use the profile points instead of the mesh, since you want
-                // the un-transformed profile distances.
-                const LLVector4a& p1 = profile[pt1];
-                const LLVector4a& p2 = profile[pt2];
-                const LLVector4a& pa = profile[pt1+1];
-                const LLVector4a& pb = profile[pt2-1];
-
-                const F32* p1V = p1.getF32ptr();
-                const F32* p2V = p2.getF32ptr();
-                const F32* paV = pa.getF32ptr();
-                const F32* pbV = pb.getF32ptr();
-
-                //p1.mV[VZ] = 0.f;
-                //p2.mV[VZ] = 0.f;
-                //pa.mV[VZ] = 0.f;
-                //pb.mV[VZ] = 0.f;
-
-                // Use area of triangle to determine backfacing
-                F32 area_1a2, area_1ba, area_21b, area_2ab;
-                area_1a2 =  (p1V[0]*paV[1] - paV[0]*p1V[1]) +
-                            (paV[0]*p2V[1] - p2V[0]*paV[1]) +
-                            (p2V[0]*p1V[1] - p1V[0]*p2V[1]);
-
-                area_1ba =  (p1V[0]*pbV[1] - pbV[0]*p1V[1]) +
-                            (pbV[0]*paV[1] - paV[0]*pbV[1]) +
-                            (paV[0]*p1V[1] - p1V[0]*paV[1]);
-
-                area_21b =  (p2V[0]*p1V[1] - p1V[0]*p2V[1]) +
-                            (p1V[0]*pbV[1] - pbV[0]*p1V[1]) +
-                            (pbV[0]*p2V[1] - p2V[0]*pbV[1]);
-
-                area_2ab =  (p2V[0]*paV[1] - paV[0]*p2V[1]) +
-                            (paV[0]*pbV[1] - pbV[0]*paV[1]) +
-                            (pbV[0]*p2V[1] - p2V[0]*pbV[1]);
-
-                bool use_tri1a2 = true;
-                bool tri_1a2 = true;
-                bool tri_21b = true;
-
-                if (area_1a2 < 0)
-                {
-                    tri_1a2 = false;
-                }
-                if (area_2ab < 0)
-                {
-                    // Can't use, because it contains point b
-                    tri_1a2 = false;
-                }
-                if (area_21b < 0)
-                {
-                    tri_21b = false;
-                }
-                if (area_1ba < 0)
-                {
-                    // Can't use, because it contains point b
-                    tri_21b = false;
-                }
-
-                if (!tri_1a2)
-                {
-                    use_tri1a2 = false;
-                }
-                else if (!tri_21b)
-                {
-                    use_tri1a2 = true;
-                }
-                else
-                {
-                    LLVector4a d1;
-                    d1.setSub(p1, pa);
-
-                    LLVector4a d2;
-                    d2.setSub(p2, pb);
-
-                    if (d1.dot3(d1) < d2.dot3(d2))
-                    {
-                        use_tri1a2 = true;
-                    }
-                    else
-                    {
-                        use_tri1a2 = false;
-                    }
-                }
-
-                if (use_tri1a2)
-                {
-                    mIndices[i++] = pt1;
-                    mIndices[i++] = pt1 + 1;
-                    mIndices[i++] = pt2;
-                    pt1++;
-                }
-                else
-                {
-                    mIndices[i++] = pt1;
-                    mIndices[i++] = pt2 - 1;
-                    mIndices[i++] = pt2;
-                    pt2--;
-                }
-            }
-        }
-        else
-        {
-            // HOLLOW BOTTOM
-            // Does it matter if it's open or closed? - djs
-
-            llassert(mTypeMask & BOTTOM_MASK);
-            S32 pt1 = 0, pt2 = num_vertices - 1;
-
-            S32 i = 0;
-            while (pt2 - pt1 > 1)
-            {
-                // Use the profile points instead of the mesh, since you want
-                // the un-transformed profile distances.
-                const LLVector4a& p1 = profile[pt1];
-                const LLVector4a& p2 = profile[pt2];
-                const LLVector4a& pa = profile[pt1+1];
-                const LLVector4a& pb = profile[pt2-1];
-
-                const F32* p1V = p1.getF32ptr();
-                const F32* p2V = p2.getF32ptr();
-                const F32* paV = pa.getF32ptr();
-                const F32* pbV = pb.getF32ptr();
-
-                // Use area of triangle to determine backfacing
-                F32 area_1a2, area_1ba, area_21b, area_2ab;
-                area_1a2 =  (p1V[0]*paV[1] - paV[0]*p1V[1]) +
-                            (paV[0]*p2V[1] - p2V[0]*paV[1]) +
-                            (p2V[0]*p1V[1] - p1V[0]*p2V[1]);
-
-                area_1ba =  (p1V[0]*pbV[1] - pbV[0]*p1V[1]) +
-                            (pbV[0]*paV[1] - paV[0]*pbV[1]) +
-                            (paV[0]*p1V[1] - p1V[0]*paV[1]);
-
-                area_21b =  (p2V[0]*p1V[1] - p1V[0]*p2V[1]) +
-                            (p1V[0]*pbV[1] - pbV[0]*p1V[1]) +
-                            (pbV[0]*p2V[1] - p2V[0]*pbV[1]);
-
-                area_2ab =  (p2V[0]*paV[1] - paV[0]*p2V[1]) +
-                            (paV[0]*pbV[1] - pbV[0]*paV[1]) +
-                            (pbV[0]*p2V[1] - p2V[0]*pbV[1]);
-
-                bool use_tri1a2 = true;
-                bool tri_1a2 = true;
-                bool tri_21b = true;
-
-                if (area_1a2 < 0)
-                {
-                    tri_1a2 = false;
-                }
-                if (area_2ab < 0)
-                {
-                    // Can't use, because it contains point b
-                    tri_1a2 = false;
-                }
-                if (area_21b < 0)
-                {
-                    tri_21b = false;
-                }
-                if (area_1ba < 0)
-                {
-                    // Can't use, because it contains point b
-                    tri_21b = false;
-                }
-
-                if (!tri_1a2)
-                {
-                    use_tri1a2 = false;
-                }
-                else if (!tri_21b)
-                {
-                    use_tri1a2 = true;
-                }
-                else
-                {
-                    LLVector4a d1;
-                    d1.setSub(p1,pa);
-                    LLVector4a d2;
-                    d2.setSub(p2,pb);
-
-                    if (d1.dot3(d1) < d2.dot3(d2))
-                    {
-                        use_tri1a2 = true;
-                    }
-                    else
-                    {
-                        use_tri1a2 = false;
-                    }
-                }
-
-                // Flipped backfacing from top
-                if (use_tri1a2)
-                {
-                    mIndices[i++] = pt1;
-                    mIndices[i++] = pt2;
-                    mIndices[i++] = pt1 + 1;
-                    pt1++;
-                }
-                else
-                {
-                    mIndices[i++] = pt1;
-                    mIndices[i++] = pt2;
-                    mIndices[i++] = pt2 - 1;
-                    pt2--;
-                }
-            }
-        }
-    }
-    else
-    {
-        // Not hollow, generate the triangle fan.
-        U16 v1 = 2;
-        U16 v2 = 1;
-
-        if (mTypeMask & TOP_MASK)
-        {
-            v1 = 1;
-            v2 = 2;
-        }
-
-        for (S32 i = 0; i < (num_vertices - 2); i++)
-        {
-            mIndices[3*i] = num_vertices - 1;
-            mIndices[3*i+v1] = i;
-            mIndices[3*i+v2] = i + 1;
-        }
-
-
-    }
-
-    LLVector4a d0,d1;
-    LL_CHECK_MEMORY
-
-
-    d0.setSub(mPositions[mIndices[1]], mPositions[mIndices[0]]);
-    d1.setSub(mPositions[mIndices[2]], mPositions[mIndices[0]]);
-
-    LLVector4a normal;
-    normal.setCross3(d0,d1);
-
-    if (normal.dot3(normal).getF32() > F_APPROXIMATELY_ZERO)
-    {
-        normal.normalize3fast();
-    }
-    else
-    { //degenerate, make up a value
-        if(normal.getF32ptr()[2] >= 0)
-            normal.set(0.f,0.f,1.f);
-        else
-            normal.set(0.f,0.f,-1.f);
-    }
-
-    llassert(llfinite(normal.getF32ptr()[0]));
-    llassert(llfinite(normal.getF32ptr()[1]));
-    llassert(llfinite(normal.getF32ptr()[2]));
-
-    llassert(!llisnan(normal.getF32ptr()[0]));
-    llassert(!llisnan(normal.getF32ptr()[1]));
-    llassert(!llisnan(normal.getF32ptr()[2]));
-
-    for (S32 i = 0; i < num_vertices; i++)
-    {
-        norm[i].load4a(normal.getF32ptr());
-    }
-
-    return true;
-}
-
 void LLVolumeFace::createTangents()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME;
@@ -6603,26 +5307,17 @@ void LLVolumeFace::createTangents()
     if (!mTangents)
     {
         allocateTangents(mNumVertices);
-
-        //generate tangents
-        LLVector4a* ptr = (LLVector4a*)mTangents;
-
-        LLVector4a* end = mTangents + mNumVertices;
-        while (ptr < end)
+        if (mTangents)
         {
-            (*ptr++).clear();
+            // the mesher forms a slice over the new buffer before writing it
+            memset(mTangents, 0, sizeof(LLVector4a) * mNumVertices);
         }
 
-        LLCalculateTangentArray(mNumVertices, mPositions, mNormals, mTexCoords, mNumIndices / 3, mIndices, mTangents);
-
-        //normalize normals
-        for (S32 i = 0; i < mNumVertices; i++)
-        {
-            //bump map/planar projection code requires normals to be normalized
-            mNormals[i].normalize3fast();
-        }
+        // generate tangents, then normalize the normals: bump map/planar
+        // projection code requires normals to be normalized
+        vks_volume_tangents(mNumVertices, (const F32*) mPositions, (F32*) mNormals, (const F32*) mTexCoords,
+                            mNumIndices, mIndices, (F32*) mTangents, 1);
     }
-
 }
 
 void LLVolumeFace::resizeVertices(S32 num_verts)
@@ -6812,572 +5507,18 @@ void LLVolumeFace::fillFromLegacyData(std::vector<LLVolumeFace::VertexData>& v, 
     }
 }
 
-bool LLVolumeFace::createSide(LLVolume* volume, bool partial_build)
-{
-    LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME;
-
-    LL_CHECK_MEMORY
-    bool flat = mTypeMask & FLAT_MASK;
-
-    U8 sculpt_type = volume->getParams().getSculptType();
-    U8 sculpt_stitching = sculpt_type & LL_SCULPT_TYPE_MASK;
-    bool sculpt_invert = sculpt_type & LL_SCULPT_FLAG_INVERT;
-    bool sculpt_mirror = sculpt_type & LL_SCULPT_FLAG_MIRROR;
-    bool sculpt_reverse_horizontal = (sculpt_invert ? !sculpt_mirror : sculpt_mirror);  // XOR
-
-    S32 num_vertices, num_indices;
-
-    const LLAlignedArray<LLVector4a,64>& mesh = volume->getMesh();
-    const LLAlignedArray<LLVector4a,64>& profile = volume->getProfile().mProfile;
-    const LLAlignedArray<LLPath::PathPt,64>& path_data = volume->getPath().mPath;
-
-    S32 max_s = volume->getProfile().getTotal();
-
-    S32 s, t, i;
-    F32 ss, tt;
-
-    num_vertices = mNumS*mNumT;
-    num_indices = (mNumS-1)*(mNumT-1)*6;
-
-    partial_build = (num_vertices > mNumVertices || num_indices > mNumIndices) ? false : partial_build;
-
-    if (!partial_build)
-    {
-        resizeVertices(num_vertices);
-        resizeIndices(num_indices);
-    }
-
-    LL_CHECK_MEMORY
-
-    LLVector4a* pos = (LLVector4a*) mPositions;
-    LLVector2* tc = (LLVector2*) mTexCoords;
-    F32 begin_stex = floorf(profile[mBeginS][2]);
-    S32 num_s = ((mTypeMask & INNER_MASK) && (mTypeMask & FLAT_MASK) && mNumS > 2) ? mNumS/2 : mNumS;
-
-    S32 cur_vertex = 0;
-    S32 end_t = mBeginT+mNumT;
-    bool test = (mTypeMask & INNER_MASK) && (mTypeMask & FLAT_MASK) && mNumS > 2;
-
-    // Copy the vertices into the array
-    { LL_PROFILE_ZONE_NAMED_CATEGORY_VOLUME("llvfcs - copy verts");
-    for (t = mBeginT; t < end_t; t++)
-    {
-        tt = path_data[t].mTexT;
-        for (s = 0; s < num_s; s++)
-        {
-            if (mTypeMask & END_MASK)
-            {
-                if (s)
-                {
-                    ss = 1.f;
-                }
-                else
-                {
-                    ss = 0.f;
-                }
-            }
-            else
-            {
-                // Get s value for tex-coord.
-                S32 index = mBeginS + s;
-                if (index >= (S32)profile.size())
-                {
-                    // edge?
-                    ss = flat ? 1.f - begin_stex : 1.f;
-                }
-                else if (!flat)
-                {
-                    ss = profile[index][2];
-                }
-                else
-                {
-                    ss = profile[index][2] - begin_stex;
-                }
-            }
-
-            if (sculpt_reverse_horizontal)
-            {
-                ss = 1.f - ss;
-            }
-
-            // Check to see if this triangle wraps around the array.
-            if (mBeginS + s >= max_s)
-            {
-                // We're wrapping
-                i = mBeginS + s + max_s*(t-1);
-            }
-            else
-            {
-                i = mBeginS + s + max_s*t;
-            }
-
-            mesh[i].store4a((F32*)(pos+cur_vertex));
-            tc[cur_vertex].set(ss,tt);
-
-            cur_vertex++;
-
-            if (test && s > 0)
-            {
-                mesh[i].store4a((F32*)(pos+cur_vertex));
-                tc[cur_vertex].set(ss,tt);
-                cur_vertex++;
-            }
-        }
-
-        if ((mTypeMask & INNER_MASK) && (mTypeMask & FLAT_MASK) && mNumS > 2)
-        {
-            if (mTypeMask & OPEN_MASK)
-            {
-                s = num_s-1;
-            }
-            else
-            {
-                s = 0;
-            }
-
-            i = mBeginS + s + max_s*t;
-            ss = profile[mBeginS + s][2] - begin_stex;
-
-            mesh[i].store4a((F32*)(pos+cur_vertex));
-            tc[cur_vertex].set(ss,tt);
-
-            cur_vertex++;
-        }
-    }
-    }
-    LL_CHECK_MEMORY
-
-    mCenter->clear();
-
-    LLVector4a* cur_pos = pos;
-    LLVector4a* end_pos = pos + mNumVertices;
-
-    //get bounding box for this side
-    LLVector4a face_min;
-    LLVector4a face_max;
-
-    face_min = face_max = *cur_pos++;
-
-    while (cur_pos < end_pos)
-    {
-        update_min_max(face_min, face_max, *cur_pos++);
-    }
-    // VFExtents change
-    mExtents[0] = face_min;
-    mExtents[1] = face_max;
-
-    U32 tc_count = mNumVertices;
-    if (tc_count%2 == 1)
-    { //odd number of texture coordinates, duplicate last entry to padded end of array
-        tc_count++;
-        mTexCoords[mNumVertices] = mTexCoords[mNumVertices-1];
-    }
-
-    LLVector4a* cur_tc = (LLVector4a*) mTexCoords;
-    LLVector4a* end_tc = (LLVector4a*) (mTexCoords+tc_count);
-
-    LLVector4a tc_min;
-    LLVector4a tc_max;
-
-    tc_min = tc_max = *cur_tc++;
-
-    while (cur_tc < end_tc)
-    {
-        update_min_max(tc_min, tc_max, *cur_tc++);
-    }
-
-    F32* minp = tc_min.getF32ptr();
-    F32* maxp = tc_max.getF32ptr();
-
-    mTexCoordExtents[0].mV[0] = llmin(minp[0], minp[2]);
-    mTexCoordExtents[0].mV[1] = llmin(minp[1], minp[3]);
-    mTexCoordExtents[1].mV[0] = llmax(maxp[0], maxp[2]);
-    mTexCoordExtents[1].mV[1] = llmax(maxp[1], maxp[3]);
-
-    mCenter->setAdd(face_min, face_max);
-    mCenter->mul(0.5f);
-
-    S32 cur_index = 0;
-
-    if (!partial_build)
-    {
-        LL_PROFILE_ZONE_NAMED_CATEGORY_VOLUME("llvfcs - generate indices");
-
-        // Now we generate the indices.
-        for (t = 0; t < (mNumT-1); t++)
-        {
-            for (s = 0; s < (mNumS-1); s++)
-            {
-                mIndices[cur_index++] = s   + mNumS*t;          //bottom left
-                mIndices[cur_index++] = s+1 + mNumS*(t+1);      //top right
-                mIndices[cur_index++] = s   + mNumS*(t+1);      //top left
-                mIndices[cur_index++] = s   + mNumS*t;          //bottom left
-                mIndices[cur_index++] = s+1 + mNumS*t;          //bottom right
-                mIndices[cur_index++] = s+1 + mNumS*(t+1);      //top right
-            }
-        }
-    }
-
-    LL_CHECK_MEMORY
-
-    //clear normals
-    F32* dst = (F32*) mNormals;
-    F32* end = (F32*) (mNormals+mNumVertices);
-    LLVector4a zero = LLVector4a::getZero();
-
-    while (dst < end)
-    {
-        zero.store4a(dst);
-        dst += 4;
-    }
-
-    LL_CHECK_MEMORY
-
-    //generate normals
-    U32 count = mNumIndices/3;
-
-    LLVector4a* norm = mNormals;
-
-    static thread_local LLAlignedArray<LLVector4a, 64> triangle_normals;
-    try
-    {
-        triangle_normals.resize(count);
-    }
-    catch (std::bad_alloc&)
-    {
-        LL_WARNS("LLVOLUME") << "Resize of triangle_normals to " << count << " failed" << LL_ENDL;
-        return false;
-    }
-    LLVector4a* output = triangle_normals.mArray;
-    LLVector4a* end_output = output+count;
-
-    U16* idx = mIndices;
-
-    while (output < end_output)
-    {
-        LLVector4a b,v1,v2;
-        b.load4a((F32*) (pos+idx[0]));
-        v1.load4a((F32*) (pos+idx[1]));
-        v2.load4a((F32*) (pos+idx[2]));
-
-        //calculate triangle normal
-        LLVector4a a;
-
-        a.setSub(b, v1);
-        b.sub(v2);
-
-
-        LLQuad& vector1 = *((LLQuad*) &v1);
-        LLQuad& vector2 = *((LLQuad*) &v2);
-
-        LLQuad& amQ = *((LLQuad*) &a);
-        LLQuad& bmQ = *((LLQuad*) &b);
-
-        //v1.setCross3(t,v0);
-        //setCross3(const LLVector4a& a, const LLVector4a& b)
-        // Vectors are stored in memory in w, z, y, x order from high to low
-        // Set vector1 = { a[W], a[X], a[Z], a[Y] }
-        vector1 = _mm_shuffle_ps( amQ, amQ, _MM_SHUFFLE( 3, 0, 2, 1 ));
-        // Set vector2 = { b[W], b[Y], b[X], b[Z] }
-        vector2 = _mm_shuffle_ps( bmQ, bmQ, _MM_SHUFFLE( 3, 1, 0, 2 ));
-        // mQ = { a[W]*b[W], a[X]*b[Y], a[Z]*b[X], a[Y]*b[Z] }
-        vector2 = _mm_mul_ps( vector1, vector2 );
-        // vector3 = { a[W], a[Y], a[X], a[Z] }
-        amQ = _mm_shuffle_ps( amQ, amQ, _MM_SHUFFLE( 3, 1, 0, 2 ));
-        // vector4 = { b[W], b[X], b[Z], b[Y] }
-        bmQ = _mm_shuffle_ps( bmQ, bmQ, _MM_SHUFFLE( 3, 0, 2, 1 ));
-        // mQ = { 0, a[X]*b[Y] - a[Y]*b[X], a[Z]*b[X] - a[X]*b[Z], a[Y]*b[Z] - a[Z]*b[Y] }
-        vector1 = _mm_sub_ps( vector2, _mm_mul_ps( amQ, bmQ ));
-
-        llassert(v1.isFinite3());
-
-        v1.store4a((F32*) output);
-
-
-        output++;
-        idx += 3;
-    }
-
-    idx = mIndices;
-
-    LLVector4a* src = triangle_normals.mArray;
-
-    for (U32 i = 0; i < count; i++) //for each triangle
-    {
-        LLVector4a c;
-        c.load4a((F32*) (src++));
-
-        LLVector4a* n0p = norm+idx[0];
-        LLVector4a* n1p = norm+idx[1];
-        LLVector4a* n2p = norm+idx[2];
-
-        idx += 3;
-
-        LLVector4a n0,n1,n2;
-        n0.load4a((F32*) n0p);
-        n1.load4a((F32*) n1p);
-        n2.load4a((F32*) n2p);
-
-        n0.add(c);
-        n1.add(c);
-        n2.add(c);
-
-        llassert(c.isFinite3());
-
-        //even out quad contributions
-        switch (i%2+1)
-        {
-            case 0: n0.add(c); break;
-            case 1: n1.add(c); break;
-            case 2: n2.add(c); break;
-        };
-
-        n0.store4a((F32*) n0p);
-        n1.store4a((F32*) n1p);
-        n2.store4a((F32*) n2p);
-    }
-
-    LL_CHECK_MEMORY
-
-    // adjust normals based on wrapping and stitching
-
-    LLVector4a top;
-    top.setSub(pos[0], pos[mNumS*(mNumT-2)]);
-    bool s_bottom_converges = (top.dot3(top) < 0.000001f);
-
-    top.setSub(pos[mNumS-1], pos[mNumS*(mNumT-2)+mNumS-1]);
-    bool s_top_converges = (top.dot3(top) < 0.000001f);
-
-    if (sculpt_stitching == LL_SCULPT_TYPE_NONE)  // logic for non-sculpt volumes
-    {
-        if (!volume->getPath().isOpen())
-        { //wrap normals on T
-            for (S32 i = 0; i < mNumS; i++)
-            {
-                LLVector4a n;
-                n.setAdd(norm[i], norm[mNumS*(mNumT-1)+i]);
-                norm[i] = n;
-                norm[mNumS*(mNumT-1)+i] = n;
-            }
-        }
-
-        if (!volume->getProfile().isOpen() && !s_bottom_converges)
-        { //wrap normals on S
-            for (S32 i = 0; i < mNumT; i++)
-            {
-                LLVector4a n;
-                n.setAdd(norm[mNumS*i], norm[mNumS*i+mNumS-1]);
-                norm[mNumS * i] = n;
-                norm[mNumS * i+mNumS-1] = n;
-            }
-        }
-
-        if (volume->getPathType() == LL_PCODE_PATH_CIRCLE &&
-            ((volume->getProfileType() & LL_PCODE_PROFILE_MASK) == LL_PCODE_PROFILE_CIRCLE_HALF))
-        {
-            if (s_bottom_converges)
-            { //all lower S have same normal
-                for (S32 i = 0; i < mNumT; i++)
-                {
-                    norm[mNumS*i].set(1,0,0);
-                }
-            }
-
-            if (s_top_converges)
-            { //all upper S have same normal
-                for (S32 i = 0; i < mNumT; i++)
-                {
-                    norm[mNumS*i+mNumS-1].set(-1,0,0);
-                }
-            }
-        }
-    }
-    else  // logic for sculpt volumes
-    {
-        bool average_poles = false;
-        bool wrap_s = false;
-        bool wrap_t = false;
-
-        if (sculpt_stitching == LL_SCULPT_TYPE_SPHERE)
-            average_poles = true;
-
-        if ((sculpt_stitching == LL_SCULPT_TYPE_SPHERE) ||
-            (sculpt_stitching == LL_SCULPT_TYPE_TORUS) ||
-            (sculpt_stitching == LL_SCULPT_TYPE_CYLINDER))
-            wrap_s = true;
-
-        if (sculpt_stitching == LL_SCULPT_TYPE_TORUS)
-            wrap_t = true;
-
-
-        if (average_poles)
-        {
-            // average normals for north pole
-
-            LLVector4a average;
-            average.clear();
-
-            for (S32 i = 0; i < mNumS; i++)
-            {
-                average.add(norm[i]);
-            }
-
-            // set average
-            for (S32 i = 0; i < mNumS; i++)
-            {
-                norm[i] = average;
-            }
-
-            // average normals for south pole
-
-            average.clear();
-
-            for (S32 i = 0; i < mNumS; i++)
-            {
-                average.add(norm[i + mNumS * (mNumT - 1)]);
-            }
-
-            // set average
-            for (S32 i = 0; i < mNumS; i++)
-            {
-                norm[i + mNumS * (mNumT - 1)] = average;
-            }
-
-        }
-
-
-        if (wrap_s)
-        {
-            for (S32 i = 0; i < mNumT; i++)
-            {
-                LLVector4a n;
-                n.setAdd(norm[mNumS*i], norm[mNumS*i+mNumS-1]);
-                norm[mNumS * i] = n;
-                norm[mNumS * i+mNumS-1] = n;
-            }
-        }
-
-        if (wrap_t)
-        {
-            for (S32 i = 0; i < mNumS; i++)
-            {
-                LLVector4a n;
-                n.setAdd(norm[i], norm[mNumS*(mNumT-1)+i]);
-                norm[i] = n;
-                norm[mNumS*(mNumT-1)+i] = n;
-            }
-        }
-
-    }
-
-    LL_CHECK_MEMORY
-
-    return true;
-}
-
 //adapted from Lengyel, Eric. "Computing Tangent Space Basis Vectors for an Arbitrary Mesh". Terathon Software 3D Graphics Library, 2001. http://www.terathon.com/code/tangent.html
 void LLCalculateTangentArray(U32 vertexCount, const LLVector4a *vertex, const LLVector4a *normal,
         const LLVector2 *texcoord, U32 triangleCount, const U16* index_array, LLVector4a *tangent)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME;
 
-    //LLVector4a *tan1 = new LLVector4a[vertexCount * 2];
-    LLVector4a* tan1 = (LLVector4a*) ll_aligned_malloc_16(vertexCount*2*sizeof(LLVector4a));
-    // new(tan1) LLVector4a;
-
-    LLVector4a* tan2 = tan1 + vertexCount;
-
-    U32 count = vertexCount * 2;
-    for (U32 i = 0; i < count; i++)
+    // The mesher forms a slice over the output before writing all of it.
+    if (tangent && vertexCount)
     {
-        tan1[i].clear();
+        memset(tangent, 0, sizeof(LLVector4a) * vertexCount);
     }
-
-    for (U32 a = 0; a < triangleCount; a++)
-    {
-        U32 i1 = *index_array++;
-        U32 i2 = *index_array++;
-        U32 i3 = *index_array++;
-
-        const LLVector4a& v1 = vertex[i1];
-        const LLVector4a& v2 = vertex[i2];
-        const LLVector4a& v3 = vertex[i3];
-
-        const LLVector2& w1 = texcoord[i1];
-        const LLVector2& w2 = texcoord[i2];
-        const LLVector2& w3 = texcoord[i3];
-
-        const F32* v1ptr = v1.getF32ptr();
-        const F32* v2ptr = v2.getF32ptr();
-        const F32* v3ptr = v3.getF32ptr();
-
-        float x1 = v2ptr[0] - v1ptr[0];
-        float x2 = v3ptr[0] - v1ptr[0];
-        float y1 = v2ptr[1] - v1ptr[1];
-        float y2 = v3ptr[1] - v1ptr[1];
-        float z1 = v2ptr[2] - v1ptr[2];
-        float z2 = v3ptr[2] - v1ptr[2];
-
-        float s1 = w2.mV[0] - w1.mV[0];
-        float s2 = w3.mV[0] - w1.mV[0];
-        float t1 = w2.mV[1] - w1.mV[1];
-        float t2 = w3.mV[1] - w1.mV[1];
-
-        F32 rd = s1*t2-s2*t1;
-
-        float r = ((rd*rd) > FLT_EPSILON) ? (1.0f / rd)
-                                                     : ((rd > 0.0f) ? 1024.f : -1024.f); //some made up large ratio for division by zero
-
-        llassert(llfinite(r));
-        llassert(!llisnan(r));
-
-        LLVector4a sdir((t2 * x1 - t1 * x2) * r, (t2 * y1 - t1 * y2) * r,
-                (t2 * z1 - t1 * z2) * r);
-        LLVector4a tdir((s1 * x2 - s2 * x1) * r, (s1 * y2 - s2 * y1) * r,
-                (s1 * z2 - s2 * z1) * r);
-
-        tan1[i1].add(sdir);
-        tan1[i2].add(sdir);
-        tan1[i3].add(sdir);
-
-        tan2[i1].add(tdir);
-        tan2[i2].add(tdir);
-        tan2[i3].add(tdir);
-    }
-
-    for (U32 a = 0; a < vertexCount; a++)
-    {
-        LLVector4a n = normal[a];
-
-        const LLVector4a& t = tan1[a];
-
-        LLVector4a ncrosst;
-        ncrosst.setCross3(n,t);
-
-        // Gram-Schmidt orthogonalize
-        n.mul(n.dot3(t).getF32());
-
-        LLVector4a tsubn;
-        tsubn.setSub(t,n);
-
-        if (tsubn.dot3(tsubn).getF32() > F_APPROXIMATELY_ZERO)
-        {
-            tsubn.normalize3fast();
-
-            // Calculate handedness
-            F32 handedness = ncrosst.dot3(tan2[a]).getF32() < 0.f ? -1.f : 1.f;
-
-            tsubn.getF32ptr()[3] = handedness;
-
-            tangent[a] = tsubn;
-        }
-        else
-        { //degenerate, make up a value
-            tangent[a].set(0,0,1,1);
-        }
-    }
-
-    ll_aligned_free_16(tan1);
+    // The normals are only read (normalize_normals = 0).
+    vks_volume_tangents((S32) vertexCount, (const F32*) vertex, (F32*) const_cast<LLVector4a*>(normal), (const F32*) texcoord,
+                        (S32) (triangleCount * 3), index_array, (F32*) tangent, 0);
 }
-
-

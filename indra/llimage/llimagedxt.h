@@ -29,7 +29,8 @@
 #include "llimage.h"
 #include "llpointer.h"
 
-// This class decodes and encodes LL DXT files (which may unclude uncompressed RGB or RGBA mipped data)
+// This class decodes and encodes LL DXT files (which may unclude uncompressed RGB or RGBA mipped data).
+// The codec is the vkstorm-image port of the viewer's container code (vkstorm-rust track).
 
 class LLImageDXT : public LLImageFormatted
 {
@@ -92,9 +93,6 @@ public:
 protected:
     /*virtual*/ ~LLImageDXT();
 
-private:
-    bool encodeDXT(const LLImageRaw* raw_image, F32 decode_time, bool explicit_mips);
-
 public:
     LLImageDXT();
 
@@ -128,10 +126,6 @@ public:
 
     static void calcDiscardWidthHeight(S32 discard_level, EFileFormat format, S32& width, S32& height);
     static S32 calcNumMips(S32 width, S32 height);
-
-private:
-    static void extractMip(const U8 *indata, U8* mipdata, int width, int height,
-                           int mip_width, int mip_height, EFileFormat format);
 
 private:
     EFileFormat mFileFormat;

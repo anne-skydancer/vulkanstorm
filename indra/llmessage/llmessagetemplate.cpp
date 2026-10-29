@@ -29,6 +29,54 @@
 #include "llmessagetemplate.h"
 
 #include "message.h"
+#include "vkstorm_ffi.h"
+
+void LLMessageTemplateCompiled::reset()
+{
+    if (mHandle)
+    {
+        vks_msg_template_free(mHandle);
+        mHandle = NULL;
+    }
+}
+
+const VksMsgTemplate* LLMessageTemplate::compiled() const
+{
+    if (!mCompiled.mHandle)
+    {
+        VksMsgTemplate* t = vks_msg_template_new((const uint8_t*)mName, strlen(mName), (uint64_t)(uintptr_t)mName,
+                                                 mMessageNumber, mFrequency, mTrust, mEncoding, mDeprecation);
+        if (!t)
+        {
+            LL_ERRS() << "Cannot compile message template " << mName << LL_ENDL;
+            return NULL;
+        }
+        for (message_block_map_t::const_iterator bit = mMemberBlocks.begin(); bit != mMemberBlocks.end(); ++bit)
+        {
+            const LLMessageBlock* block = *bit;
+            int32_t b = vks_msg_template_add_block(t, (const uint8_t*)block->mName, strlen(block->mName),
+                                                   (uint64_t)(uintptr_t)block->mName, block->mType, block->mNumber);
+            if (b < 0)
+            {
+                LL_ERRS() << "Cannot compile block " << block->mName << " of message " << mName << ": " << vks_msg_last_error() << LL_ENDL;
+                return NULL;
+            }
+            for (LLMessageBlock::message_variable_map_t::const_iterator vit = block->mMemberVariables.begin();
+                 vit != block->mMemberVariables.end(); ++vit)
+            {
+                const LLMessageVariable* var = *vit;
+                if (vks_msg_template_add_variable(t, (uint32_t)b, (const uint8_t*)var->getName(), strlen(var->getName()),
+                                                  (uint64_t)(uintptr_t)var->getName(), var->getType(), var->getSize()) < 0)
+                {
+                    LL_ERRS() << "Cannot compile variable " << var->getName() << " of message " << mName << ": " << vks_msg_last_error() << LL_ENDL;
+                    return NULL;
+                }
+            }
+        }
+        mCompiled.mHandle = t;
+    }
+    return mCompiled.mHandle;
+}
 
 void LLMsgVarData::addData(const void *data, S32 size, EMsgVariableType type, S32 data_size)
 {

@@ -1275,7 +1275,19 @@ void AISUpdate::parseItem(const LLSD& item_map)
         else
         {
             mItemsCreated[item_id] = new_item;
-            mCatDescendentDeltas[new_item->getParentUUID()]++;
+            // LLInventoryModel::addItem() refuses an item of no asset type, so
+            // the model will not hold it: don't count it as a new descendant
+            // (the entry is still created, with a 0 delta, as for an update).
+            // getActualType(): the stored type, without the link-following
+            // lookup of getType() (a link's own type is never AT_NONE).
+            if (new_item->getActualType() > LLAssetType::AT_NONE)
+            {
+                mCatDescendentDeltas[new_item->getParentUUID()]++;
+            }
+            else
+            {
+                mCatDescendentDeltas[new_item->getParentUUID()];
+            }
             new_item->setComplete(true);
         }
     }

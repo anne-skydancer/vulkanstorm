@@ -1,5 +1,9 @@
 * text eol=lf
 
+# Recorded mesher and message corpora (vkstorm-rust)
+*.vksv binary
+*.vksm binary
+
 # Images
 *.bmp binary
 *.BMP binary
@@ -35,3 +39,7 @@ FILES_ARE_UNICODE_UTF-16LE.txt text eol=crlf
 
 # Windows Installer Script files (normalization disabled)
 *.nsi -text
+
+# Recorded parity corpora (vkstorm-rust): stored as is
+*.vksa binary
+indra/newview/tests/fixtures/*.bin binary

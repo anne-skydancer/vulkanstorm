@@ -59,10 +59,15 @@ public:
 
 // Very general policy with geometric back-off after failures,
 // up to a maximum delay, and maximum number of retries.
+// The backoff policy is vkstorm-assets (vkstorm-rust rung five,
+// fetch::retry); this class keeps the header parsing and the interface.
+struct VksRetryPolicy;
+
 class LLAdaptiveRetryPolicy: public LLHTTPRetryPolicy
 {
 public:
     LLAdaptiveRetryPolicy(F32 min_delay, F32 max_delay, F32 backoff_factor, U32 max_retries, bool retry_on_4xx = false);
+    ~LLAdaptiveRetryPolicy();
 
     // virtual
     void onSuccess();
@@ -79,22 +84,15 @@ public:
     static bool getSecondsUntilRetryAfter(const std::string& retry_after, F32& seconds_to_wait);
 
 protected:
-    void init();
     bool getRetryAfter(const LLSD& headers, F32& retry_header_time);
     bool getRetryAfter(const LLCore::HttpHeaders::ptr_t &headers, F32& retry_header_time);
     void onFailureCommon(S32 status, bool has_retry_header_time, F32 retry_header_time);
 
 private:
+    LLAdaptiveRetryPolicy(const LLAdaptiveRetryPolicy&) = delete;
+    LLAdaptiveRetryPolicy& operator=(const LLAdaptiveRetryPolicy&) = delete;
 
-    const F32 mMinDelay; // delay never less than this value
-    const F32 mMaxDelay; // delay never exceeds this value
-    const F32 mBackoffFactor; // delay increases by this factor after each retry, up to mMaxDelay.
-    const U32 mMaxRetries; // maximum number of times shouldRetry will return true.
-    F32 mDelay; // current default delay.
-    U32 mRetryCount; // number of times shouldRetry has been called.
-    LLTimer mRetryTimer; // time until next retry.
-    bool mShouldRetry; // Becomes false after too many retries, or the wrong sort of status received, etc.
-    bool mRetryOn4xx; // Normally only retry on 5xx server errors.
+    VksRetryPolicy* mPolicy;
 };
 
 #endif

@@ -27,135 +27,74 @@
 
 #include "llimagedxt.h"
 #include "llmemory.h"
+#include "vkstorm_ffi.h"
+
+// The DXT container on the vkstorm-rust track: vkstorm-image is the port of
+// the viewer's header parsing, mip layout, decode of the uncompressed formats,
+// encode with the generated mip chain, and DXT to DXR conversion. Where the
+// C++ aborted (LL_ERRS) on malformed input the port reports an error.
 
 //static
 void LLImageDXT::checkMinWidthHeight(EFileFormat format, S32& width, S32& height)
 {
-    S32 mindim = (format >= FORMAT_DXT1 && format <= FORMAT_DXR5) ? 4 : 1;
-    width = llmax(width, mindim);
-    height = llmax(height, mindim);
+    vks_dxt_check_min_width_height((S32)format, &width, &height);
 }
 
 //static
 S32 LLImageDXT::formatBits(EFileFormat format)
 {
-    switch (format)
+    S32 bits = vks_dxt_format_bits((S32)format);
+    if (!bits)
     {
-      case FORMAT_DXT1:     return 4;
-      case FORMAT_DXR1:     return 4;
-      case FORMAT_I8:       return 8;
-      case FORMAT_A8:       return 8;
-      case FORMAT_DXT3:     return 8;
-      case FORMAT_DXR3:     return 8;
-      case FORMAT_DXR5:     return 8;
-      case FORMAT_DXT5:     return 8;
-      case FORMAT_RGB8:     return 24;
-      case FORMAT_RGBA8:    return 32;
-      default:
         LL_ERRS() << "LLImageDXT::Unknown format: " << format << LL_ENDL;
-        return 0;
     }
+    return bits;
 };
 
 //static
 S32 LLImageDXT::formatBytes(EFileFormat format, S32 width, S32 height)
 {
-    checkMinWidthHeight(format, width, height);
-    S32 bytes = ((width*height*formatBits(format)+7)>>3);
-    S32 aligned = (bytes+3)&~3;
-    return aligned;
+    S32 bytes = vks_dxt_format_bytes((S32)format, width, height);
+    if (!bytes)
+    {
+        LL_ERRS() << "LLImageDXT::Unknown format: " << format << LL_ENDL;
+    }
+    return bytes;
 }
 
 //static
 S32 LLImageDXT::formatComponents(EFileFormat format)
 {
-    switch (format)
+    S32 components = vks_dxt_format_components((S32)format);
+    if (!components)
     {
-      case FORMAT_DXT1:     return 3;
-      case FORMAT_DXR1:     return 3;
-      case FORMAT_I8:       return 1;
-      case FORMAT_A8:       return 1;
-      case FORMAT_DXT3:     return 4;
-      case FORMAT_DXR3:     return 4;
-      case FORMAT_DXT5:     return 4;
-      case FORMAT_DXR5:     return 4;
-      case FORMAT_RGB8:     return 3;
-      case FORMAT_RGBA8:    return 4;
-      default:
         LL_ERRS() << "LLImageDXT::Unknown format: " << format << LL_ENDL;
-        return 0;
     }
+    return components;
 };
 
 // static
 LLImageDXT::EFileFormat LLImageDXT::getFormat(S32 fourcc)
 {
-    switch(fourcc)
-    {
-        case 0x20203849: return FORMAT_I8;
-        case 0x20203841: return FORMAT_A8;
-        case 0x20424752: return FORMAT_RGB8;
-        case 0x41424752: return FORMAT_RGBA8;
-        case 0x31525844: return FORMAT_DXR1;
-        case 0x32525844: return FORMAT_DXR2;
-        case 0x33525844: return FORMAT_DXR3;
-        case 0x34525844: return FORMAT_DXR4;
-        case 0x35525844: return FORMAT_DXR5;
-        case 0x31545844: return FORMAT_DXT1;
-        case 0x32545844: return FORMAT_DXT2;
-        case 0x33545844: return FORMAT_DXT3;
-        case 0x34545844: return FORMAT_DXT4;
-        case 0x35545844: return FORMAT_DXT5;
-        default: return FORMAT_UNKNOWN;
-    }
+    return EFileFormat(vks_dxt_format_from_fourcc(fourcc));
 }
 
 //static
 S32 LLImageDXT::getFourCC(EFileFormat format)
 {
-    switch(format)
-    {
-        case FORMAT_I8: return 0x20203849;
-        case FORMAT_A8: return 0x20203841;
-        case FORMAT_RGB8: return 0x20424752;
-        case FORMAT_RGBA8: return 0x41424752;
-        case FORMAT_DXR1: return 0x31525844;
-        case FORMAT_DXR2: return 0x32525844;
-        case FORMAT_DXR3: return 0x33525844;
-        case FORMAT_DXR4: return 0x34525844;
-        case FORMAT_DXR5: return 0x35525844;
-        case FORMAT_DXT1: return 0x31545844;
-        case FORMAT_DXT2: return 0x32545844;
-        case FORMAT_DXT3: return 0x33545844;
-        case FORMAT_DXT4: return 0x34545844;
-        case FORMAT_DXT5: return 0x35545844;
-        default: return 0x00000000;
-    }
+    return vks_dxt_fourcc((S32)format);
 }
 
 //static
 void LLImageDXT::calcDiscardWidthHeight(S32 discard_level, EFileFormat format, S32& width, S32& height)
 {
-    while (discard_level > 0 && width > 1 && height > 1)
-    {
-        discard_level--;
-        width >>= 1;
-        height >>= 1;
-    }
-    checkMinWidthHeight(format, width, height);
+    vks_dxt_calc_discard_width_height(discard_level, (S32)format, &width, &height);
 }
 
 //static
 S32 LLImageDXT::calcNumMips(S32 width, S32 height)
 {
-    S32 nmips = 0;
-    while (width > 0 && height > 0)
-    {
-        width >>= 1;
-        height >>= 1;
-        nmips++;
-    }
-    return nmips;
+    return vks_dxt_calc_num_mips(width, height);
 }
 
 //============================================================================
@@ -169,6 +108,21 @@ LLImageDXT::LLImageDXT()
 
 LLImageDXT::~LLImageDXT()
 {
+}
+
+namespace
+{
+    VksDxtHeader headerOf(LLImageDXT& image, LLImageDXT::EFileFormat format, S32 header_size)
+    {
+        VksDxtHeader header{};
+        header.width = image.getWidth();
+        header.height = image.getHeight();
+        header.components = (U32)image.getComponents();
+        header.format = (S32)format;
+        header.header_size = header_size;
+        header.discard_level = image.getDiscardLevel();
+        return header;
+    }
 }
 
 // virtual
@@ -187,36 +141,19 @@ bool LLImageDXT::updateData()
         return false;
     }
 
-    S32 width, height, miplevelmax;
-    dxtfile_header_t* header = (dxtfile_header_t*)data;
-    if (header->fourcc != 0x20534444)
+    VksDxtHeader header{};
+    if (!vks_dxt_header(data, (size_t)data_size, &header))
     {
-        dxtfile_header_old_t* oldheader = (dxtfile_header_old_t*)header;
-        mHeaderSize = sizeof(dxtfile_header_old_t);
-        mFileFormat = EFileFormat(oldheader->format);
-        miplevelmax = llmin(oldheader->maxlevel,MAX_IMAGE_MIP);
-        width = oldheader->maxwidth;
-        height = oldheader->maxheight;
-    }
-    else
-    {
-        mHeaderSize = sizeof(dxtfile_header_t);
-        mFileFormat = getFormat(header->pixel_fmt.fourcc);
-        miplevelmax = llmin(header->num_mips-1,MAX_IMAGE_MIP);
-        width = header->maxwidth;
-        height = header->maxheight;
+        const std::string err(vks_image_last_error());
+        setLastError(err);
+        LL_WARNS() << "LLImageDXT: " << err << LL_ENDL;
+        return false;
     }
 
-    if (data_size < mHeaderSize)
-    {
-        LL_ERRS() << "LLImageDXT: not enough data" << LL_ENDL;
-    }
-    S32 ncomponents = formatComponents(mFileFormat);
-    setSize(width, height, ncomponents);
-
-    S32 discard = calcDiscardLevelBytes(data_size);
-    discard = llmin(discard, miplevelmax);
-    setDiscardLevel(discard);
+    mHeaderSize = header.header_size;
+    mFileFormat = EFileFormat(header.format);
+    setSize((S32)header.width, (S32)header.height, (S32)header.components);
+    setDiscardLevel((S8)header.discard_level);
 
     return true;
 }
@@ -224,24 +161,10 @@ bool LLImageDXT::updateData()
 // discard: 0 = largest (last) mip
 S32 LLImageDXT::getMipOffset(S32 discard)
 {
-    if (mFileFormat >= FORMAT_DXT1 && mFileFormat <= FORMAT_DXT5)
+    S32 offset = vks_dxt_mip_offset((S32)mFileFormat, mHeaderSize, getWidth(), getHeight(), discard);
+    if (offset < 0)
     {
         LL_ERRS() << "getMipOffset called with old (unsupported) format" << LL_ENDL;
-    }
-    S32 width = getWidth(), height = getHeight();
-    S32 num_mips = calcNumMips(width, height);
-    discard = llclamp(discard, 0, num_mips-1);
-    S32 last_mip = num_mips-1-discard;
-    llassert(mHeaderSize > 0);
-    S32 offset = mHeaderSize;
-    for (S32 mipidx = num_mips-1; mipidx >= 0; mipidx--)
-    {
-        if (mipidx < last_mip)
-        {
-            offset += formatBytes(mFileFormat, width, height);
-        }
-        width >>= 1;
-        height >>= 1;
     }
     return offset;
 }
@@ -261,8 +184,6 @@ void LLImageDXT::setFormat()
 // virtual
 bool LLImageDXT::decode(LLImageRaw* raw_image, F32 time)
 {
-    // *TODO: Test! This has been tweaked since its intial inception,
-    //  but we don't use it any more!
     llassert_always(raw_image);
 
     if (mFileFormat >= FORMAT_DXT1 && mFileFormat <= FORMAT_DXR5)
@@ -274,32 +195,31 @@ bool LLImageDXT::decode(LLImageRaw* raw_image, F32 time)
     LLImageDataSharedLock lockIn(this);
     LLImageDataLock lockOut(raw_image);
 
-    S32 width = getWidth(), height = getHeight();
-    S32 ncomponents = getComponents();
-    U8* data = NULL;
-    if (mDiscardLevel >= 0)
-    {
-        data = getData() + getMipOffset(mDiscardLevel);
-        calcDiscardWidthHeight(mDiscardLevel, mFileFormat, width, height);
-    }
-    else
-    {
-        data = getData() + getMipOffset(0);
-    }
-    S32 image_size = formatBytes(mFileFormat, width, height);
-
-    if ((!getData()) || (data + image_size > getData() + getDataSize()))
+    if (!getData())
     {
         setLastError("LLImageDXT trying to decode an image with not enough data!");
         return false;
     }
 
-    if (!raw_image->resize(width, height, ncomponents))
+    const VksDxtHeader header = headerOf(*this, mFileFormat, mHeaderSize);
+    VksRaster* decoded = vks_dxt_decode(getData(), (size_t)getDataSize(), &header);
+    if (!decoded)
     {
+        setLastError(vks_image_last_error());
+        return false;
+    }
+
+    const U32 width = vks_raster_width(decoded);
+    const U32 height = vks_raster_height(decoded);
+    const U32 components = vks_raster_components(decoded);
+    if (!raw_image->resize((U16)width, (U16)height, (S8)components) || raw_image->isBufferInvalid())
+    {
+        vks_raster_free(decoded);
         setLastError("llImageDXT failed to resize image!");
         return false;
     }
-    memcpy(raw_image->getData(), data, image_size); /* Flawfinder: ignore */
+    memcpy(raw_image->getData(), vks_raster_data(decoded), vks_raster_len(decoded)); /* Flawfinder: ignore */
+    vks_raster_free(decoded);
 
     return true;
 }
@@ -317,15 +237,20 @@ bool LLImageDXT::getMipData(LLPointer<LLImageRaw>& raw, S32 discard)
 
     LLImageDataSharedLock lock(this);
 
-    U8* data = getData() + getMipOffset(discard);
-    S32 width = 0;
-    S32 height = 0;
-    calcDiscardWidthHeight(discard, mFileFormat, width, height);
-    raw = new LLImageRaw(data, width, height, getComponents());
+    const VksDxtHeader header = headerOf(*this, mFileFormat, mHeaderSize);
+    VksRaster* mip = vks_dxt_mip_data(getData(), (size_t)getDataSize(), &header, discard);
+    if (!mip)
+    {
+        setLastError(vks_image_last_error());
+        return false;
+    }
+    raw = new LLImageRaw(vks_raster_data(mip), (U16)vks_raster_width(mip), (U16)vks_raster_height(mip), (S8)vks_raster_components(mip));
+    vks_raster_free(mip);
     return true;
 }
 
-bool LLImageDXT::encodeDXT(const LLImageRaw* raw_image, F32 time, bool explicit_mips)
+// virtual
+bool LLImageDXT::encode(const LLImageRaw* raw_image, F32 time)
 {
     llassert_always(raw_image);
 
@@ -358,76 +283,31 @@ bool LLImageDXT::encodeDXT(const LLImageRaw* raw_image, F32 time, bool explicit_
     S32 width = raw_image->getWidth();
     S32 height = raw_image->getHeight();
 
-    if (explicit_mips)
-    {
-        height = (height/3)*2;
-    }
-
     setSize(width, height, ncomponents);
     mHeaderSize = sizeof(dxtfile_header_t);
     mFileFormat = format;
 
-    S32 nmips = calcNumMips(width, height);
-    S32 w = width;
-    S32 h = height;
-
-    S32 totbytes = mHeaderSize;
-    for (S32 mip=0; mip<nmips; mip++)
+    VksBytes* encoded = vks_dxt_encode(raw_image->getData(), (size_t)raw_image->getDataSize(), width, height, (U32)ncomponents);
+    if (!encoded)
     {
-        totbytes += formatBytes(format,w,h);
-        w >>= 1;
-        h >>= 1;
+        setLastError(vks_image_last_error());
+        return false;
     }
 
-    allocateData(totbytes);
-
-    U8* data = getData();
-    dxtfile_header_t* header = (dxtfile_header_t*)data;
-    llassert(mHeaderSize > 0);
-    memset(header, 0, mHeaderSize);
-    header->fourcc = 0x20534444;
-    header->pixel_fmt.fourcc = getFourCC(format);
-    header->num_mips = nmips;
-    header->maxwidth = width;
-    header->maxheight = height;
-
-    U8* prev_mipdata = 0;
-    w = width, h = height;
-    for (S32 mip=0; mip<nmips; mip++)
+    const size_t totbytes = vks_bytes_len(encoded);
+    U8* data = allocateData((S32)totbytes);
+    if (data)
     {
-        U8* mipdata = data + getMipOffset(mip);
-        S32 bytes = formatBytes(format, w, h);
-        if (mip==0)
-        {
-            memcpy(mipdata, raw_image->getData(), bytes);   /* Flawfinder: ignore */
-        }
-        else if (explicit_mips)
-        {
-            extractMip(raw_image->getData(), mipdata, width, height, w, h, format);
-        }
-        else
-        {
-            generateMip(prev_mipdata, mipdata, w, h, ncomponents);
-        }
-        w >>= 1;
-        h >>= 1;
-        checkMinWidthHeight(format, w, h);
-        prev_mipdata = mipdata;
+        memcpy(data, vks_bytes_data(encoded), totbytes); /* Flawfinder: ignore */
     }
+    vks_bytes_free(encoded);
 
-    return true;
-}
-
-// virtual
-bool LLImageDXT::encode(const LLImageRaw* raw_image, F32 time)
-{
-    return encodeDXT(raw_image, time, false);
+    return data != NULL;
 }
 
 // virtual
 bool LLImageDXT::convertToDXR()
 {
-    EFileFormat newformat = FORMAT_UNKNOWN;
     switch (mFileFormat)
     {
       case FORMAT_DXR1:
@@ -436,44 +316,38 @@ bool LLImageDXT::convertToDXR()
       case FORMAT_DXR4:
       case FORMAT_DXR5:
         return false; // nothing to do
-      case FORMAT_DXT1: newformat = FORMAT_DXR1; break;
-      case FORMAT_DXT2: newformat = FORMAT_DXR2; break;
-      case FORMAT_DXT3: newformat = FORMAT_DXR3; break;
-      case FORMAT_DXT4: newformat = FORMAT_DXR4; break;
-      case FORMAT_DXT5: newformat = FORMAT_DXR5; break;
+      case FORMAT_DXT1:
+      case FORMAT_DXT2:
+      case FORMAT_DXT3:
+      case FORMAT_DXT4:
+      case FORMAT_DXT5:
+        break;
       default:
         LL_WARNS() << "convertToDXR: can not convert format: " << llformat("0x%08x",getFourCC(mFileFormat)) << LL_ENDL;
         return false;
     }
-    mFileFormat = newformat;
 
     LLImageDataLock lock(this);
 
-    S32 width = getWidth(), height = getHeight();
-    S32 nmips = calcNumMips(width,height);
-    S32 total_bytes = getDataSize();
-    U8* olddata = getData();
+    const VksDxtHeader header = headerOf(*this, mFileFormat, mHeaderSize);
+    VksBytes* converted = vks_dxt_convert_to_dxr(getData(), (size_t)getDataSize(), &header);
+    if (!converted)
+    {
+        LL_WARNS() << "convertToDXR failed: " << vks_image_last_error() << LL_ENDL;
+        return false;
+    }
+
+    const S32 total_bytes = (S32)vks_bytes_len(converted);
     U8* newdata = (U8*)ll_aligned_malloc_16(total_bytes);
     if (!newdata)
     {
+        vks_bytes_free(converted);
         LLError::LLUserWarningMsg::showOutOfMemory();
         LL_WARNS() << "Out of memory in LLImageDXT::convertToDXR()" << LL_ENDL;
         return false;
     }
-    llassert(total_bytes > 0);
-    memset(newdata, 0, total_bytes);
-    memcpy(newdata, olddata, mHeaderSize);  /* Flawfinder: ignore */
-    for (S32 mip=0; mip<nmips; mip++)
-    {
-        S32 bytes = formatBytes(mFileFormat, width, height);
-        S32 newoffset = getMipOffset(mip);
-        S32 oldoffset = mHeaderSize + (total_bytes - newoffset - bytes);
-        memcpy(newdata + newoffset, olddata + oldoffset, bytes);    /* Flawfinder: ignore */
-        width >>= 1;
-        height >>= 1;
-    }
-    dxtfile_header_t* header = (dxtfile_header_t*)newdata;
-    header->pixel_fmt.fourcc = getFourCC(newformat);
+    memcpy(newdata, vks_bytes_data(converted), total_bytes); /* Flawfinder: ignore */
+    vks_bytes_free(converted);
     setData(newdata, total_bytes);
     updateData();
     return true;
@@ -493,38 +367,14 @@ S32 LLImageDXT::calcDataSize(S32 discard_level)
         LL_ERRS() << "calcDataSize called with unloaded LLImageDXT" << LL_ENDL;
         return 0;
     }
-    if (discard_level < 0)
+    const VksDxtHeader header = headerOf(*this, mFileFormat, mHeaderSize);
+    S32 bytes = vks_dxt_data_size(&header, discard_level);
+    if (bytes < 0)
     {
-        discard_level = mDiscardLevel;
+        LL_ERRS() << "calcDataSize failed: " << vks_image_last_error() << LL_ENDL;
+        return 0;
     }
-    S32 bytes = getMipOffset(discard_level); // size of header + previous mips
-    S32 w = getWidth() >> discard_level;
-    S32 h = getHeight() >> discard_level;
-    bytes += formatBytes(mFileFormat,w,h);
     return bytes;
-}
-
-//============================================================================
-
-//static
-void LLImageDXT::extractMip(const U8 *indata, U8* mipdata, int width, int height,
-                            int mip_width, int mip_height, EFileFormat format)
-{
-    int initial_offset = formatBytes(format, width, height);
-    int line_width = formatBytes(format, width, 1);
-    int mip_line_width = formatBytes(format, mip_width, 1);
-    int line_offset = 0;
-
-    for (int ww=width>>1; ww>mip_width; ww>>=1)
-    {
-        line_offset += formatBytes(format, ww, 1);
-    }
-
-    for (int h=0;h<mip_height;++h)
-    {
-        int start_offset = initial_offset + line_width * h + line_offset;
-        memcpy(mipdata + mip_line_width*h, indata + start_offset, mip_line_width);  /* Flawfinder: ignore */
-    }
 }
 
 //============================================================================

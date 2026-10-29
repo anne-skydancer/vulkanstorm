@@ -846,11 +846,13 @@ bool LLFloaterPreference::postBuild()
 #endif
     // </FS:Ansariel>
 
-    // <FS:Ansariel> Disable options only available on Windows and not on other platforms
-#if !LL_WINDOWS
+#if !LL_VKS_AUDIO
+    // The speaker fill of parcel music is the Vulkanstorm audio engine's
+    // (Windows and Linux); other engines have no such setting
     childSetVisible("FSMusicSpatialSound", false);
     childSetVisible("spatial_sound_label", false);
 #endif
+    // <FS:Ansariel> Disable options only available on Windows and not on other platforms
 #ifndef LL_WINDOWS
     childSetEnabled("FSDisableWMIProbing", false);
 #endif
@@ -4019,13 +4021,14 @@ bool LLPanelPreferenceGraphics::postBuild()
 #endif // LL_DARWIN
 // </FS:CR>
 
-    // <VulkanStorm> Renderer backend selector
-    LLComboBox* backend_combo = getChild<LLComboBox>("render_backend");
-    if (backend_combo)
-    {
-        refreshRenderBackendSelector();
-        backend_combo->setCommitCallback(boost::bind(&LLPanelPreferenceGraphics::onRenderBackendCommit, this));
-    }
+    // <VulkanStorm> Renderer backend selector, commented out with its
+    // Preferences entry while Mesa/Zink is withdrawn (archive/zink/2026-10-29).
+    // LLComboBox* backend_combo = getChild<LLComboBox>("render_backend");
+    // if (backend_combo)
+    // {
+    //     refreshRenderBackendSelector();
+    //     backend_combo->setCommitCallback(boost::bind(&LLPanelPreferenceGraphics::onRenderBackendCommit, this));
+    // }
     // </VulkanStorm>
 
     return LLPanelPreference::postBuild();
@@ -4228,8 +4231,10 @@ void LLPanelPreferenceGraphics::cancel(const std::vector<std::string> settings_t
     // <FS:Ansariel> Improved graphics preferences
     resetDirtyChilds();
     LLPanelPreference::cancel(settings_to_skip);
-    // <VulkanStorm> Always revert the renderer selector to the active backend on cancel
-    refreshRenderBackendSelector();
+    // <VulkanStorm> Always revert the renderer selector to the active backend on cancel.
+    // Commented out with the selector while Mesa/Zink is withdrawn: the combo is
+    // no longer in the panel, so the lookup would make a dummy widget.
+    // refreshRenderBackendSelector();
 }
 void LLPanelPreferenceGraphics::saveSettings()
 {

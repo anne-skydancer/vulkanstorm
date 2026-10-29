@@ -1,6 +1,9 @@
 # -*- cmake -*-
 include(Prebuilt)
 include(Linking)
+# The prebuilt freetype decodes colour bitmap fonts with libpng; nothing else
+# in the viewer uses libpng (the PNG codec is Rust, see doc/rust_port.md).
+include(PNG)
 
 include_guard()
 add_library( ll::freetype INTERFACE IMPORTED )
@@ -15,4 +18,4 @@ find_library(FREETYPE_LIBRARY
     libfreetype.a
     PATHS "${ARCH_PREBUILT_DIRS_RELEASE}" REQUIRED NO_DEFAULT_PATH)
 
-target_link_libraries(ll::freetype INTERFACE ${FREETYPE_LIBRARY})
+target_link_libraries(ll::freetype INTERFACE ${FREETYPE_LIBRARY} ll::libpng)

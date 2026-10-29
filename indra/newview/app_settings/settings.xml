@@ -23306,7 +23306,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSMusicSpatialSound</key>
     <map>
       <key>Comment</key>
-      <string>VLC music layout on Windows: 0=Stereo, 21=2.1, 41=4.1, 51=5.1, 71=7.1. Applies on the next stream start. Unsupported layouts bypass speaker fill. Synthesized LFE is silent; use sound-card bass management.</string>
+      <string>Speaker fill of stereo parcel music: 0=Stereo, 21=2.1, 41=4.1, 51=5.1, 71=7.1. Applies immediately. Layouts the output device does not have, and headphones, bypass speaker fill. Synthesized LFE is silent; use sound-card bass management.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>

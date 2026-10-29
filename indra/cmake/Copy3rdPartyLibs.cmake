@@ -11,6 +11,7 @@ if (USE_DISCORD)
 endif ()
 include(OPENAL)
 include(FMODSTUDIO)
+include(VKSAudio)
 include(MesaZink) # <VulkanStorm>
 
 # When we copy our dependent libraries, we almost always want to copy them to
@@ -61,15 +62,9 @@ if(WINDOWS)
 
     set(release_src_dir "${ARCH_PREBUILT_DIRS_RELEASE}")
     set(release_files
-        #openjp2.dll # <FS:Ansariel> Only copy OpenJPEG dll if needed
         glod.dll # <FS:Beq> restore GLOD
         )
 
-    # <FS:Ansariel> Only copy OpenJPEG dll if needed
-    if (NOT USE_KDU)
-        set(release_files ${release_files} openjp2.dll)
-    endif (NOT USE_KDU)
-    # </FS:Ansariel>
 
     # Filenames are different for 32/64 bit BugSplat file and we don't
     # have any control over them so need to branch.
@@ -94,6 +89,16 @@ if(WINDOWS)
         # fmodL is included for logging, only one should be picked by manifest
         #set(release_files ${release_files} fmodL.dll)
         set(release_files ${release_files} fmod.dll)
+    endif ()
+
+    if (TARGET ll::vksaudio)
+        # Decoder-only LGPL FFmpeg for parcel music (HE-AAC, Opus), loaded by
+        # the engine at run time; the package ships the DLLs in bin/release
+        to_staging_dirs(
+            "${AUTOBUILD_INSTALL_DIR}/bin/release"
+            third_party_targets
+            avcodec-63.dll avutil-61.dll swresample-7.dll
+            )
     endif ()
 
     if (TARGET ll::openal)
@@ -296,6 +301,15 @@ elseif(LINUX)
     if (TARGET ll::fmodstudio)
       set(debug_files ${debug_files} "libfmodL.so")
       set(release_files ${release_files} "libfmod.so")
+    endif ()
+
+    if (TARGET ll::vksaudio)
+      # Decoder-only LGPL FFmpeg for parcel music (HE-AAC, Opus), loaded by
+      # the engine at run time
+      list(APPEND release_files
+        libavcodec.so.63 libavcodec.so.63.1.102
+        libavutil.so.61 libavutil.so.61.1.102
+        libswresample.so.7 libswresample.so.7.1.102)
     endif ()
 
 else(WINDOWS)

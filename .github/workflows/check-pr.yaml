@@ -33,13 +33,17 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # upstream/master tells upstream's commits and merges (exempt) from the
+      # base lines' own history (protected).
+      - name: Fetch upstream master
+        run: git fetch --no-tags https://github.com/FirestormViewer/phoenix-firestorm.git +refs/heads/master:refs/remotes/upstream/master
       - name: Checker regression tests
         run: python3 scripts/tests/test_check_no_base_merges.py
       - name: No merges of a base line into the PR branch
         run: python3 scripts/check_no_base_merges.py "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}"
 
   chat-ui-regression:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

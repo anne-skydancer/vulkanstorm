@@ -4,6 +4,7 @@ project(llfilesystem)
 
 include(00-Common)
 include(LLCommon)
+include(Rust)
 
 set(llfilesystem_SOURCE_FILES
     lldir.cpp
@@ -53,7 +54,8 @@ add_library (llfilesystem ${llfilesystem_SOURCE_FILES})
 
 target_link_libraries(llfilesystem
         llcommon
-    )
+    
+        vkstorm_ffi)
 target_include_directories( llfilesystem  INTERFACE   ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Add tests

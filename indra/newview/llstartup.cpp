@@ -43,8 +43,8 @@
 
 #include "llviewermedia_streamingaudio.h"
 #include "llaudioengine.h"
-#ifdef LL_SOLOUD
-#include "llaudioengine_soloud.h"
+#ifdef LL_VKS_AUDIO
+#include "llaudioengine_vks.h"
 #endif
 
 #ifdef LL_FMODSTUDIO
@@ -1120,8 +1120,8 @@ bool idle_startup()
             delete gAudiop;
             gAudiop = NULL;
 
-#ifdef LL_SOLOUD
-            gAudiop = new LLAudioEngine_SoLoud();
+#ifdef LL_VKS_AUDIO
+            gAudiop = new LLAudioEngine_VKS();
 #elif defined(LL_FMODSTUDIO)
 #if !LL_WINDOWS
             if (NULL == getenv("LL_BAD_FMODSTUDIO_DRIVER"))
@@ -2939,8 +2939,13 @@ bool idle_startup()
             const F32 FAST_RATE_BPS = 600.f * 1024.f;
             const F32 FASTER_RATE_BPS = 750.f * 1024.f;
             F32 max_bandwidth = gViewerThrottle.getMaxBandwidth();
+            // Only ever raise the throttle. The login transfer rate was
+            // always zero while the HTTP layer reported no transfer stats,
+            // so this block was dead; with real figures, comparing the
+            // measured rate against the current throttle would lower a
+            // 3000 kbps default to 750 kbps on any fast link.
             if (rate_bps > FASTER_RATE_BPS
-                && rate_bps > max_bandwidth)
+                && FASTER_RATE_BPS > max_bandwidth)
             {
                 LL_DEBUGS("AppInit") << "Fast network connection, increasing max bandwidth to "
                     << FASTER_RATE_BPS/1024.f
@@ -2948,7 +2953,7 @@ bool idle_startup()
                 gViewerThrottle.setMaxBandwidth(FASTER_RATE_BPS / 1024.f);
             }
             else if (rate_bps > FAST_RATE_BPS
-                && rate_bps > max_bandwidth)
+                && FAST_RATE_BPS > max_bandwidth)
             {
                 LL_DEBUGS("AppInit") << "Fast network connection, increasing max bandwidth to "
                     << FAST_RATE_BPS/1024.f

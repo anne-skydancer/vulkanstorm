@@ -24,349 +24,153 @@
  * $/LicenseInfo$
  */
 
+// The template language is parsed by the Rust crate vkstorm-messages
+// (vkstorm-rust rung three, see doc/rust_port.md); these classes keep their
+// interface and turn the parsed descriptions into the viewer's own
+// LLMessageTemplate, LLMessageBlock and LLMessageVariable objects. Where
+// the parser aborted on bad input (LL_ERRS) it still does, with the same
+// message.
+
 #include "linden_common.h"
 #include "llmessagetemplateparser.h"
-#include <boost/tokenizer.hpp>
 
+#include "vkstorm_ffi.h"
 
-// What follows is a bunch of C functions to do validation.
-
-// Lets support a small subset of regular expressions here
-// Syntax is a string made up of:
-//  a   - checks against alphanumeric               ([A-Za-z0-9])
-//  c   - checks against character                  ([A-Za-z])
-//  f   - checks against first variable character   ([A-Za-z_])
-//  v   - checks against variable                   ([A-Za-z0-9_])
-//  s   - checks against sign of integer            ([-0-9])
-//  d   - checks against integer digit              ([0-9])
-//  *   - repeat last check
-
-// checks 'a'
-bool    b_return_alphanumeric_ok(char c)
+namespace
 {
-    if (  (  (c < 'A')
-           ||(c > 'Z'))
-        &&(  (c < 'a')
-           ||(c > 'z'))
-        &&(  (c < '0')
-           ||(c > '9')))
+    std::string token_string(const uint8_t* p, size_t n)
     {
-        return false;
-    }
-    return true;
-}
-
-// checks 'c'
-bool    b_return_character_ok(char c)
-{
-    if (  (  (c < 'A')
-           ||(c > 'Z'))
-        &&(  (c < 'a')
-           ||(c > 'z')))
-    {
-        return false;
-    }
-    return true;
-}
-
-// checks 'f'
-bool    b_return_first_variable_ok(char c)
-{
-    if (  (  (c < 'A')
-           ||(c > 'Z'))
-        &&(  (c < 'a')
-           ||(c > 'z'))
-        &&(c != '_'))
-    {
-        return false;
-    }
-    return true;
-}
-
-// checks 'v'
-bool    b_return_variable_ok(char c)
-{
-    if (  (  (c < 'A')
-           ||(c > 'Z'))
-        &&(  (c < 'a')
-           ||(c > 'z'))
-        &&(  (c < '0')
-           ||(c > '9'))
-        &&(c != '_'))
-    {
-        return false;
-    }
-    return true;
-}
-
-// checks 's'
-bool    b_return_signed_integer_ok(char c)
-{
-    if (  (  (c < '0')
-           ||(c > '9'))
-        &&(c != '-'))
-    {
-        return false;
-    }
-    return true;
-}
-
-// checks 'd'
-bool    b_return_integer_ok(char c)
-{
-    if (  (c < '0')
-        ||(c > '9'))
-    {
-        return false;
-    }
-    return true;
-}
-
-bool    (*gParseCheckCharacters[])(char c) =
-{
-    b_return_alphanumeric_ok,
-    b_return_character_ok,
-    b_return_first_variable_ok,
-    b_return_variable_ok,
-    b_return_signed_integer_ok,
-    b_return_integer_ok
-};
-
-S32 get_checker_number(char checker)
-{
-    switch(checker)
-    {
-    case 'a':
-        return 0;
-    case 'c':
-        return 1;
-    case 'f':
-        return 2;
-    case 'v':
-        return 3;
-    case 's':
-        return 4;
-    case 'd':
-        return 5;
-    case '*':
-        return 9999;
-    default:
-        return -1;
-    }
-}
-
-// check token based on passed simplified regular expression
-bool    b_check_token(const char *token, const char *regexp)
-{
-    S32 tptr, rptr = 0;
-    S32 current_checker, next_checker = 0;
-
-    current_checker = get_checker_number(regexp[rptr++]);
-
-    if (current_checker == -1)
-    {
-        LL_ERRS() << "Invalid regular expression value!" << LL_ENDL;
-        return false;
+        return std::string((const char*)p, n);
     }
 
-    if (current_checker == 9999)
+    LLMessageVariable* variable_from(const VksMsgDesc* desc, uint32_t block, uint32_t var)
     {
-        LL_ERRS() << "Regular expression can't start with *!" << LL_ENDL;
-        return false;
-    }
-
-    for (tptr = 0; token[tptr]; tptr++)
-    {
-        if (current_checker == -1)
+        VksMsgVarInfo info;
+        if (!vks_msg_desc_variable(desc, block, var, &info))
         {
-            LL_ERRS() << "Input exceeds regular expression!\nDid you forget a *?" << LL_ENDL;
-            return false;
+            return NULL;
         }
+        std::string name = token_string(info.name, info.name_len);
+        return new LLMessageVariable(name.c_str(), (EMsgVariableType)info.type, info.size);
+    }
 
-        if (!gParseCheckCharacters[current_checker](token[tptr]))
+    LLMessageBlock* block_from(const VksMsgDesc* desc, uint32_t block)
+    {
+        VksMsgBlockInfo info;
+        if (!vks_msg_desc_block(desc, block, &info))
         {
-            return false;
+            return NULL;
         }
-        if (next_checker != 9999)
+        std::string name = token_string(info.name, info.name_len);
+        LLMessageBlock* blockp = new LLMessageBlock(name.c_str(), (EMsgBlockType)info.type, info.number);
+        for (uint32_t v = 0; v < info.var_count; ++v)
         {
-            next_checker = get_checker_number(regexp[rptr++]);
-            if (next_checker != 9999)
+            LLMessageVariable* varp = variable_from(desc, block, v);
+            if (varp)
             {
-                current_checker = next_checker;
+                blockp->addVariable(varp->getName(), varp->getType(), varp->getSize());
+                delete varp;
             }
         }
+        return blockp;
     }
-    return true;
-}
 
-// C variable can be made up of upper or lower case letters, underscores, or numbers, but can't start with a number
-bool    b_variable_ok(const char *token)
-{
-    if (!b_check_token(token, "fv*"))
+    LLMessageTemplate* message_from(const VksMsgDesc* desc)
     {
-        LL_WARNS() << "Token '" << token << "' isn't a variable!" << LL_ENDL;
-        return false;
-    }
-    return true;
-}
-
-// An integer is made up of the digits 0-9 and may be preceded by a '-'
-bool    b_integer_ok(const char *token)
-{
-    if (!b_check_token(token, "sd*"))
-    {
-        LL_WARNS() << "Token isn't an integer!" << LL_ENDL;
-        return false;
-    }
-    return true;
-}
-
-// An integer is made up of the digits 0-9
-bool    b_positive_integer_ok(const char *token)
-{
-    if (!b_check_token(token, "d*"))
-    {
-        LL_WARNS() << "Token isn't an integer!" << LL_ENDL;
-        return false;
-    }
-    return true;
-}
-
-
-// Done with C functions, here's the tokenizer.
-
-typedef boost::tokenizer< boost::char_separator<char> > tokenizer;
-
-LLTemplateTokenizer::LLTemplateTokenizer(const std::string & contents) : mStarted(false), mTokens()
-{
-    boost::char_separator<char> newline("\r\n", "", boost::keep_empty_tokens);
-    boost::char_separator<char> spaces(" \t");
-    U32 line_counter = 1;
-
-    tokenizer line_tokens(contents, newline);
-    for(tokenizer::iterator line_iter = line_tokens.begin();
-        line_iter != line_tokens.end();
-        ++line_iter, ++line_counter)
-    {
-        tokenizer word_tokens(*line_iter, spaces);
-        for(tokenizer::iterator word_iter = word_tokens.begin();
-            word_iter != word_tokens.end();
-            ++word_iter)
+        VksMsgInfo info;
+        if (!vks_msg_desc_message(desc, &info))
         {
-            if((*word_iter)[0] == '/')
+            return NULL;
+        }
+        std::string name = token_string(info.name, info.name_len);
+        LLMessageTemplate* templatep = new LLMessageTemplate(name.c_str(), info.number, (EMsgFrequency)info.frequency);
+        templatep->setTrust((EMsgTrust)info.trust);
+        templatep->setEncoding((EMsgEncoding)info.encoding);
+        templatep->setDeprecation((EMsgDeprecation)info.deprecation);
+        for (uint32_t b = 0; b < info.block_count; ++b)
+        {
+            LLMessageBlock* blockp = block_from(desc, b);
+            if (blockp)
             {
-                break;   // skip to end of line on comments
+                templatep->addBlock(blockp);
             }
-            positioned_token pt;// = new positioned_token();
-            pt.str = std::string(*word_iter);
-            pt.line = line_counter;
-            mTokens.push_back(pt);
         }
-    }
-    mCurrent = mTokens.begin();
-}
-void LLTemplateTokenizer::inc()
-{
-    if(atEOF())
-    {
-        error("trying to increment token of EOF");
-    }
-    else if(mStarted)
-    {
-        ++mCurrent;
-    }
-    else
-    {
-        mStarted = true;
-        mCurrent = mTokens.begin();
-    }
-}
-void LLTemplateTokenizer::dec()
-{
-    if(mCurrent == mTokens.begin())
-    {
-        if(mStarted)
-        {
-            mStarted = false;
-        }
-        else
-        {
-            error("trying to decrement past beginning of file");
-        }
-    }
-    else
-    {
-        mCurrent--;
+        return templatep;
     }
 }
 
-std::string LLTemplateTokenizer::get() const
+LLTemplateTokenizer::LLTemplateTokenizer(const std::string & contents)
+    : mTokenizer(vks_msg_tokenizer_new((const uint8_t*)contents.data(), contents.size()))
 {
-    if(atEOF())
+    if (!mTokenizer)
     {
-        error("trying to get EOF");
+        LL_ERRS() << "Cannot tokenize the message template" << LL_ENDL;
     }
-    return mCurrent->str;
+}
+
+LLTemplateTokenizer::LLTemplateTokenizer(const LLTemplateTokenizer& other)
+    : mTokenizer(vks_msg_tokenizer_clone(other.mTokenizer))
+{
+}
+
+LLTemplateTokenizer& LLTemplateTokenizer::operator=(const LLTemplateTokenizer& other)
+{
+    if (this != &other)
+    {
+        vks_msg_tokenizer_free(mTokenizer);
+        mTokenizer = vks_msg_tokenizer_clone(other.mTokenizer);
+    }
+    return *this;
+}
+
+LLTemplateTokenizer::~LLTemplateTokenizer()
+{
+    vks_msg_tokenizer_free(mTokenizer);
+    mTokenizer = NULL;
 }
 
 U32 LLTemplateTokenizer::line() const
 {
-    if(atEOF())
-    {
-        return 0;
-    }
-    return mCurrent->line;
+    return vks_msg_tokenizer_line(mTokenizer);
 }
 
 bool LLTemplateTokenizer::atEOF() const
 {
-    return mCurrent == mTokens.end();
+    return vks_msg_tokenizer_at_eof(mTokenizer) != 0;
 }
 
 std::string LLTemplateTokenizer::next()
 {
-    inc();
-    return get();
+    const uint8_t* p = NULL;
+    size_t n = 0;
+    if (!vks_msg_tokenizer_next(mTokenizer, &p, &n))
+    {
+        LL_ERRS() << vks_msg_last_error() << LL_ENDL;
+        return std::string();
+    }
+    return token_string(p, n);
 }
 
 bool LLTemplateTokenizer::want(const std::string & token)
 {
-    if(atEOF()) return false;
-    inc();
-    if(atEOF()) return false;
-    if(get() != token)
+    int32_t r = vks_msg_tokenizer_want(mTokenizer, (const uint8_t*)token.data(), token.size());
+    if (r < 0)
     {
-        dec(); // back up a step
+        LL_ERRS() << vks_msg_last_error() << LL_ENDL;
         return false;
     }
-    return true;
+    return r == 1;
 }
 
 bool LLTemplateTokenizer::wantEOF()
 {
-    // see if the next token is EOF
-    if(atEOF()) return true;
-    inc();
-    if(!atEOF())
+    int32_t r = vks_msg_tokenizer_want_eof(mTokenizer);
+    if (r < 0)
     {
-        dec(); // back up a step
+        LL_ERRS() << vks_msg_last_error() << LL_ENDL;
         return false;
     }
-    return true;
-}
-
-void LLTemplateTokenizer::error(std::string message) const
-{
-    if(atEOF())
-    {
-        LL_ERRS() << "Unexpected end of file: " << message << LL_ENDL;
-    }
-    else
-    {
-        LL_ERRS() << "Problem parsing message template at line "
-               << line() << ", with token '" << get() << "' : "
-               << message << LL_ENDL;
-    }
+    return r == 1;
 }
 
 
@@ -377,19 +181,11 @@ LLTemplateParser::LLTemplateParser(LLTemplateTokenizer & tokens):
     mMessages()
 {
     // the version number should be the first thing in the file
-    if (tokens.want("version"))
+    if (!vks_msg_parse_version(tokens.handle(), &mVersion))
     {
-        // version number
-        std::string vers_string = tokens.next();
-        mVersion = (F32)atof(vers_string.c_str());
-
-        LL_INFOS() << "### Message template version " << mVersion << "  ###" << LL_ENDL;
+        LL_ERRS() << vks_msg_last_error() << LL_ENDL;
     }
-    else
-    {
-        LL_ERRS() << "Version must be first in the message template, found "
-               << tokens.next() << LL_ENDL;
-    }
+    LL_INFOS() << "### Message template version " << mVersion << "  ###" << LL_ENDL;
 
     while(LLMessageTemplate * templatep = parseMessage(tokens))
     {
@@ -429,333 +225,56 @@ LLTemplateParser::message_iterator LLTemplateParser::getMessagesEnd() const
 // static
 LLMessageTemplate * LLTemplateParser::parseMessage(LLTemplateTokenizer & tokens)
 {
-    LLMessageTemplate   *templatep = NULL;
-    if(!tokens.want("{"))
+    int32_t status = 0;
+    VksMsgDesc* desc = vks_msg_parse_message(tokens.handle(), &status);
+    if (status < 0)
+    {
+        LL_ERRS() << vks_msg_last_error() << LL_ENDL;
+        return NULL;
+    }
+    if (!desc)
     {
         return NULL;
     }
-
-    // name first
-    std::string template_name = tokens.next();
-
-    // is name a legit C variable name
-    if (!b_variable_ok(template_name.c_str()))
-    {
-        LL_ERRS() << "Not legit variable name: " << template_name << " at " << tokens.line() << LL_ENDL;
-    }
-
-    // ok, now get Frequency ("High", "Medium", or "Low")
-    EMsgFrequency frequency = MFT_LOW;
-    std::string freq_string = tokens.next();
-    if (freq_string == "High")
-    {
-        frequency = MFT_HIGH;
-    }
-    else if (freq_string == "Medium")
-    {
-        frequency = MFT_MEDIUM;
-    }
-    else if (freq_string == "Low" || freq_string == "Fixed")
-    {
-        frequency = MFT_LOW;
-    }
-    else
-    {
-        LL_ERRS() << "Expected frequency, got " << freq_string << " at " << tokens.line() << LL_ENDL;
-    }
-
-    // TODO more explicit checking here pls
-    U32 message_number = strtoul(tokens.next().c_str(),NULL,0);
-
-    switch (frequency) {
-    case MFT_HIGH:
-        break;
-    case MFT_MEDIUM:
-        message_number = (255 << 8) | message_number;
-        break;
-    case MFT_LOW:
-        message_number = (255 << 24) | (255 << 16) | message_number;
-        break;
-    default:
-        LL_ERRS() << "Unknown frequency enum: " << frequency << LL_ENDL;
-    }
-
-    templatep = new LLMessageTemplate(
-        template_name.c_str(),
-        message_number,
-        frequency);
-
-    // Now get trust ("Trusted", "NotTrusted")
-    std::string trust = tokens.next();
-    if (trust == "Trusted")
-    {
-        templatep->setTrust(MT_TRUST);
-    }
-    else if (trust == "NotTrusted")
-    {
-        templatep->setTrust(MT_NOTRUST);
-    }
-    else
-    {
-        LL_ERRS() << "Bad trust " << trust << " at " << tokens.line() << LL_ENDL;
-    }
-
-    // get encoding
-    std::string encoding = tokens.next();
-    if(encoding == "Unencoded")
-    {
-        templatep->setEncoding(ME_UNENCODED);
-    }
-    else if(encoding == "Zerocoded")
-    {
-        templatep->setEncoding(ME_ZEROCODED);
-    }
-    else
-    {
-        LL_ERRS() << "Bad encoding " << encoding << " at " << tokens.line() << LL_ENDL;
-    }
-
-    // get deprecation
-    if(tokens.want("Deprecated"))
-    {
-        templatep->setDeprecation(MD_DEPRECATED);
-    }
-    else if (tokens.want("UDPDeprecated"))
-    {
-        templatep->setDeprecation(MD_UDPDEPRECATED);
-    }
-    else if (tokens.want("UDPBlackListed"))
-    {
-        templatep->setDeprecation(MD_UDPBLACKLISTED);
-    }
-    else if (tokens.want("NotDeprecated"))
-    {
-        // this is the default value, but it can't hurt to set it twice
-        templatep->setDeprecation(MD_NOTDEPRECATED);
-    }
-    else {
-        // It's probably a brace, let's just start block processing
-    }
-
-    while(LLMessageBlock * blockp = parseBlock(tokens))
-    {
-        templatep->addBlock(blockp);
-    }
-
-    if(!tokens.want("}"))
-    {
-        LL_ERRS() << "Expecting closing } for message " << template_name
-               << " at " << tokens.line() << LL_ENDL;
-    }
+    LLMessageTemplate* templatep = message_from(desc);
+    vks_msg_desc_free(desc);
     return templatep;
 }
 
 // static
 LLMessageBlock * LLTemplateParser::parseBlock(LLTemplateTokenizer & tokens)
 {
-    LLMessageBlock * blockp = NULL;
-
-    if(!tokens.want("{"))
+    int32_t status = 0;
+    VksMsgDesc* desc = vks_msg_parse_block(tokens.handle(), &status);
+    if (status < 0)
+    {
+        LL_ERRS() << vks_msg_last_error() << LL_ENDL;
+        return NULL;
+    }
+    if (!desc)
     {
         return NULL;
     }
-
-    // name first
-    std::string block_name = tokens.next();
-
-    // is name a legit C variable name
-    if (!b_variable_ok(block_name.c_str()))
-    {
-        LL_ERRS() << "not a legal block name: " << block_name
-               << " at " << tokens.line() << LL_ENDL;
-    }
-
-    // now, block type ("Single", "Multiple", or "Variable")
-    std::string block_type = tokens.next();
-    // which one is it?
-    if (block_type == "Single")
-    {
-        // ok, we can create a block
-        blockp = new LLMessageBlock(block_name.c_str(), MBT_SINGLE);
-    }
-    else if (block_type == "Multiple")
-    {
-        // need to get the number of repeats
-        std::string repeats = tokens.next();
-
-        // is it a legal integer
-        if (!b_positive_integer_ok(repeats.c_str()))
-        {
-            LL_ERRS() << "not a legal integer for block multiple count: "
-                   << repeats << " at " << tokens.line() << LL_ENDL;
-        }
-
-        // ok, we can create a block
-        blockp = new LLMessageBlock(block_name.c_str(),
-                                    MBT_MULTIPLE,
-                                    atoi(repeats.c_str()));
-    }
-    else if (block_type == "Variable")
-    {
-        // ok, we can create a block
-        blockp = new LLMessageBlock(block_name.c_str(), MBT_VARIABLE);
-    }
-    else
-    {
-        LL_ERRS() << "bad block type: " << block_type
-               << " at " << tokens.line() << LL_ENDL;
-    }
-
-
-    while(LLMessageVariable * varp = parseVariable(tokens))
-    {
-        blockp->addVariable(varp->getName(),
-                            varp->getType(),
-                            varp->getSize());
-        delete varp;
-    }
-
-    if(!tokens.want("}"))
-    {
-        LL_ERRS() << "Expecting closing } for block " << block_name
-               << " at " << tokens.line() << LL_ENDL;
-    }
+    LLMessageBlock* blockp = block_from(desc, 0);
+    vks_msg_desc_free(desc);
     return blockp;
-
 }
 
 // static
 LLMessageVariable * LLTemplateParser::parseVariable(LLTemplateTokenizer & tokens)
 {
-    LLMessageVariable * varp = NULL;
-    if(!tokens.want("{"))
+    int32_t status = 0;
+    VksMsgDesc* desc = vks_msg_parse_variable(tokens.handle(), &status);
+    if (status < 0)
+    {
+        LL_ERRS() << vks_msg_last_error() << LL_ENDL;
+        return NULL;
+    }
+    if (!desc)
     {
         return NULL;
     }
-
-    std::string var_name = tokens.next();
-
-    if (!b_variable_ok(var_name.c_str()))
-    {
-        LL_ERRS() << "Not a legit variable name: " << var_name
-               << " at " << tokens.line() << LL_ENDL;
-    }
-
-    std::string var_type = tokens.next();
-
-    if (var_type == "U8")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_U8, 1);
-    }
-    else if (var_type == "U16")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_U16, 2);
-    }
-    else if (var_type == "U32")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_U32, 4);
-    }
-    else if (var_type == "U64")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_U64, 8);
-    }
-    else if (var_type == "S8")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_S8, 1);
-    }
-    else if (var_type == "S16")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_S16, 2);
-    }
-    else if (var_type == "S32")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_S32, 4);
-    }
-    else if (var_type == "S64")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_S64, 8);
-    }
-    else if (var_type == "F32")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_F32, 4);
-    }
-    else if (var_type == "F64")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_F64, 8);
-    }
-    else if (var_type == "LLVector3")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_LLVector3, 12);
-    }
-    else if (var_type == "LLVector3d")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_LLVector3d, 24);
-    }
-    else if (var_type == "LLVector4")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_LLVector4, 16);
-    }
-    else if (var_type == "LLQuaternion")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_LLQuaternion, 12);
-    }
-    else if (var_type == "LLUUID")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_LLUUID, 16);
-    }
-    else if (var_type == "BOOL")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_BOOL, 1);
-    }
-    else if (var_type == "IPADDR")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_IP_ADDR, 4);
-    }
-    else if (var_type == "IPPORT")
-    {
-        varp = new LLMessageVariable(var_name.c_str(), MVT_IP_PORT, 2);
-    }
-    else if (var_type == "Fixed" || var_type == "Variable")
-    {
-        std::string variable_size = tokens.next();
-
-        if (!b_positive_integer_ok(variable_size.c_str()))
-        {
-            LL_ERRS() << "not a legal integer variable size: " << variable_size
-                   << " at " << tokens.line() << LL_ENDL;
-        }
-
-        EMsgVariableType type_enum;
-        if(var_type == "Variable")
-        {
-            type_enum = MVT_VARIABLE;
-        }
-        else if(var_type == "Fixed")
-        {
-            type_enum = MVT_FIXED;
-        }
-        else
-        {
-            type_enum = MVT_FIXED; // removes a warning
-            LL_ERRS() << "bad variable type: " << var_type
-                   << " at " << tokens.line() << LL_ENDL;
-        }
-
-        varp = new LLMessageVariable(
-            var_name.c_str(),
-            type_enum,
-            atoi(variable_size.c_str()));
-    }
-    else
-    {
-        LL_ERRS() << "bad variable type:" << var_type
-               << " at " << tokens.line() << LL_ENDL;
-    }
-
-    if(!tokens.want("}"))
-    {
-        LL_ERRS() << "Expecting closing } for variable " << var_name
-               << " at " << tokens.line() << LL_ENDL;
-    }
+    LLMessageVariable* varp = variable_from(desc, 0, 0);
+    vks_msg_desc_free(desc);
     return varp;
 }

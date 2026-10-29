@@ -36,7 +36,11 @@ class LLMsgData;
 class LLMessageTemplate;
 class LLMsgBlkData;
 class LLMessageTemplate;
+struct VksMsgBuilder;
 
+// The template message builder. The message data and its packing are the
+// Rust crate vkstorm-messages (vkstorm-rust rung three); this class keeps
+// the interface, the template lookup and the viewer's error reporting.
 class LLTemplateMessageBuilder : public LLMessageBuilder
 {
 public:
@@ -93,22 +97,18 @@ public:
     virtual void copyFromMessageData(const LLMsgData& data);
     virtual void copyFromLLSD(const LLSD&);
 
-    LLMsgData* getCurrentMessage() const { return mCurrentSMessageData; }
+    /** The message built so far as LLMsgData, assembled on request; valid
+     *  until the next call or the next change to the message. */
+    LLMsgData* getCurrentMessage() const;
 private:
     void addData(const char* varname, const void* data,
                      EMsgVariableType type, S32 size);
 
-    void addData(const char* varname, const void* data,
-                        EMsgVariableType type);
-
-    LLMsgData* mCurrentSMessageData;
+    VksMsgBuilder* mBuilder;
+    mutable LLMsgData* mCurrentSMessageData;
     const LLMessageTemplate* mCurrentSMessageTemplate;
-    LLMsgBlkData* mCurrentSDataBlock;
     char* mCurrentSMessageName;
     char* mCurrentSBlockName;
-    bool mbSBuilt;
-    bool mbSClear;
-    S32  mCurrentSendTotal;
     const message_template_name_map_t& mMessageTemplates;
 };
 

@@ -26,18 +26,6 @@ set(llcorehttp_SOURCE_FILES
     httpstats.cpp
     llwebsocketmgr.cpp
     lljsonrpcws.cpp
-    _httplibcurl.cpp
-    _httpopcancel.cpp
-    _httpoperation.cpp
-    _httpoprequest.cpp
-    _httpopsetget.cpp
-    _httpopsetpriority.cpp
-    _httppolicy.cpp
-    _httppolicyclass.cpp
-    _httppolicyglobal.cpp
-    _httpreplyqueue.cpp
-    _httprequestqueue.cpp
-    _httpservice.cpp
     _refcounted.cpp
     )
 
@@ -57,18 +45,6 @@ set(llcorehttp_HEADER_FILES
     llwebsocketmgr.h
     lljsonrpcws.h
     _httpinternal.h
-    _httplibcurl.h
-    _httpopcancel.h
-    _httpoperation.h
-    _httpoprequest.h
-    _httpopsetget.h
-    _httpopsetpriority.h
-    _httppolicy.h
-    _httppolicyclass.h
-    _httppolicyglobal.h
-    _httpreadyqueue.h
-    _httpreplyqueue.h
-    _httprequestqueue.h
     _httpservice.h
     _mutex.h
     _refcounted.h
@@ -84,6 +60,8 @@ endif (DARWIN OR LINUX)
 list(APPEND llcorehttp_SOURCE_FILES ${llcorehttp_HEADER_FILES})
 
 add_library (llcorehttp ${llcorehttp_SOURCE_FILES})
+# The HTTP service (request and reply queues, policy, retries, the libcurl
+# transport) is Rust (vkstorm-http through vkstorm_ffi); see doc/rust_port.md.
 target_link_libraries(
         llcorehttp
         llmath
@@ -92,6 +70,7 @@ target_link_libraries(
         ll::openssl
         ll::nghttp2
         ll::websocketpp
+        vkstorm_ffi
   )
 target_include_directories( llcorehttp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 # llmessage depends on llcorehttp, yet llcorehttp also depends on llmessage (at least for includes).
@@ -109,9 +88,7 @@ if (LL_TESTS AND LLCOREHTTP_TESTS)
   set(llcorehttp_TEST_HEADER_FILES
       tests/test_httpstatus.hpp
       tests/test_refcounted.hpp
-      tests/test_httpoperation.hpp
       tests/test_httprequest.hpp
-      tests/test_httprequestqueue.hpp
       tests/test_httpheaders.hpp
       tests/test_bufferarray.hpp
       tests/test_bufferstream.hpp
@@ -132,16 +109,31 @@ if (LL_TESTS AND LLCOREHTTP_TESTS)
   # If http_proxy is in the current environment (e.g. to fetch s3-proxy
   # autobuild packages), suppress it for this integration test: it screws up
   # the tests.
-  #LL_ADD_INTEGRATION_TEST(llcorehttp
-  #                        "${llcorehttp_TEST_SOURCE_FILES}"
-  #                        "${test_libs}"
-  #                        "-Dhttp_proxy"
-  #                        ${PYTHON_EXECUTABLE}
-  #                        "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_llcorehttp_peer.py"
-  #                        )
- 
+  LL_ADD_INTEGRATION_TEST(llcorehttp
+                          "${llcorehttp_TEST_SOURCE_FILES}"
+                          "${test_libs}"
+                          "-Dhttp_proxy"
+                          ${PYTHON_EXECUTABLE}
+                          "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_llcorehttp_peer.py"
+                          )
+
   LL_ADD_INTEGRATION_TEST(jsonrpcws "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(wsserver "" "${test_libs}")
+
+  # Behavioural parity of the HTTP layer against the scenarios recorded from
+  # the C++ implementation before its port to Rust (vkstorm-rust), driven
+  # against the local mock server in tests/vkshttp_mock_server.py. If
+  # http_proxy is in the environment, suppress it: it breaks the loopback
+  # exchange.
+  LL_ADD_INTEGRATION_TEST(llcorehttp_parity
+                          ""
+                          "${test_libs}"
+                          "-Dhttp_proxy"
+                          ${PYTHON_EXECUTABLE}
+                          "${CMAKE_CURRENT_SOURCE_DIR}/tests/vkshttp_mock_server.py"
+                          )
+  set_property(TARGET INTEGRATION_TEST_llcorehttp_parity APPEND PROPERTY
+      COMPILE_DEFINITIONS "VKS_HTTP_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
 
   #
   # Example Programs

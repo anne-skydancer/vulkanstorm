@@ -50,6 +50,7 @@ class LLHost;
 class LLViewerAssetStats;
 class LLTextureCache;
 class LLTextureFetchTester;
+struct VksTexFetcher;
 
 // Interface class
 
@@ -392,8 +393,11 @@ private:
     LLCore::HttpRequest::policy_t       mHttpPolicyClass;               // T*
     LLCore::HttpHeaders::ptr_t          mHttpMetricsHeaders;            // Ttf
     LLCore::HttpRequest::policy_t       mHttpMetricsPolicyClass;        // T*
-    S32                                 mHttpHighWater;                 // Ttf
-    S32                                 mHttpLowWater;                  // Ttf
+
+    // The HTTP resource semaphore, its water marks, the resource waiters
+    // and the cumulative statistics live in the Rust fetcher
+    // (vkstorm-assets, vkstorm-rust rung five); guarded by its own lock.
+    VksTexFetcher *                     mMachine;                       // T*
 
     // We use a resource semaphore to keep HTTP requests in
     // WAIT_HTTP_RESOURCE2 if there aren't sufficient slots in the
@@ -406,16 +410,10 @@ private:
     // Originally implemented as a traditional semaphore (heading towards
     // zero), it now is an outstanding request count that is allowed to
     // exceed the high water level (but not go below zero).
-    LLAtomicS32                         mHttpSemaphore;                 // Ttf
 
-    typedef std::set<LLUUID> wait_http_res_queue_t;
-    wait_http_res_queue_t               mHttpWaitResource;              // Mfnq
 
     // Cumulative stats on the states/requests issued by
     // textures running through here.
-    U32 mTotalCacheReadCount;                                           // Mfq
-    U32 mTotalCacheWriteCount;                                          // Mfq
-    U32 mTotalResourceWaitCount;                                        // Mfq
 
 public:
     // A probabilistically-correct indicator that the current
@@ -445,6 +443,7 @@ public:
     void setLoadSource(e_tex_source source) {mFetchSource = source;}
     void resetLoadSource() {mFetchSource = mOriginFetchSource;}
     bool canLoadFromCache() { return mFetchSource != FROM_HTTP_ONLY;}
+    VksTexFetcher* getMachine() { return mMachine; }
 };
 
 //debug use

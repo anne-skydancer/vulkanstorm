@@ -183,6 +183,8 @@ list(APPEND llmessage_SOURCE_FILES ${llmessage_HEADER_FILES})
 
 add_library (llmessage ${llmessage_SOURCE_FILES})
 
+# The message template system and the data packers are Rust
+# (vkstorm-messages through vkstorm_ffi); see doc/rust_port.md.
 target_link_libraries(
         llmessage
         llcommon
@@ -190,6 +192,7 @@ target_link_libraries(
         llmath
         llcorehttp
         llxml #<FS:Ansariel> For accessing settings
+        vkstorm_ffi
 )
 target_include_directories( llmessage  INTERFACE   ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -218,5 +221,11 @@ if (LL_TESTS)
   LL_ADD_INTEGRATION_TEST(llhost "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llpartdata "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llxfer_file "" "${test_libs}")
+  # The message template system against the corpus recorded from the C++
+  # implementation before its port to Rust (vkstorm-rust).
+  LL_ADD_INTEGRATION_TEST(llmessagetemplate "" "${test_libs}")
+  set_property(TARGET INTEGRATION_TEST_llmessagetemplate APPEND PROPERTY
+      COMPILE_DEFINITIONS "VKS_MSG_TEMPLATE_FILE=\"${CMAKE_SOURCE_DIR}/../scripts/messages/message_template.msg\""
+      "VKS_MSG_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
 endif (LL_TESTS)
 
