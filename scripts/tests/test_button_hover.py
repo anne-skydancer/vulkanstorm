@@ -9,11 +9,18 @@ class ButtonHoverTest(unittest.TestCase):
     def test_capture_release_popup_retirement_and_pointer_departure(self):
         root = Path(__file__).resolve().parents[2]
         source = (root/'indra/newview/llviewerwindow.cpp').read_text(encoding='utf-8')
-        begin = source.index('void LLViewerWindow::updateUI()')
-        source = source[begin:]
-        setup = source[source.index('    LLView* captor_view ='):source.index('    static LLCachedControl<bool> dump_menu_holder')]
-        block = source[source.index('    // only update mouse hover set when UI is visible'):source.index('    // only handle hover events when UI is enabled')]
-        method = """void LLViewerWindow::updateMouseHoverViews(S32 x,S32 y,MASK mask,bool enabled) {
+        own = 'void LLViewerWindow::updateMouseHoverViews(S32 x, S32 y, MASK mask, bool enabled)\n'
+        if own in source:
+            # The Vulkan lines move the hover update out of updateUI() into
+            # its own method, which the fixture then compiles as it is.
+            begin = source.index(own)
+            method = source[begin:source.index('\n}\n', begin) + 3]
+        else:
+            begin = source.index('void LLViewerWindow::updateUI()')
+            source = source[begin:]
+            setup = source[source.index('    LLView* captor_view ='):source.index('    static LLCachedControl<bool> dump_menu_holder')]
+            block = source[source.index('    // only update mouse hover set when UI is visible'):source.index('    // only handle hover events when UI is enabled')]
+            method = """void LLViewerWindow::updateMouseHoverViews(S32 x,S32 y,MASK mask,bool enabled) {
  gPipeline.enabled=enabled;
  LLUICtrl* top_ctrl=gFocusMgr.getTopCtrl();
  LLMouseHandler* mouse_captor=gFocusMgr.getMouseCapture();
