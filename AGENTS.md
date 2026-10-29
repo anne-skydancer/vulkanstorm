@@ -3,6 +3,7 @@
 - Prefer correct, performant, maintainable code. Report measured results and qualification limits accurately.
 - `vkstorm-release` is the release/default branch. Incorporate new features only through PRs after qualification and testing on their feature branches.
 - Develop new features only on feature branches created from `vkstorm-devel`. Use the `codex/` prefix by default.
+- Product lines start from the tip of `vkstorm-release`, to build on what is proven rather than on the newest development: `vkstorm-rust`, and the new `vkstorm-vulkan` once the Rust port is complete (`doc/vulkan/direction-2026-10-29.md`). Feature work for such a line branches from that line and returns to it through PRs; `vkstorm-devel` is not its base.
 - Only hotfixes, critical fixes, or security patches may be directly committed to `vkstorm-release` or `vkstorm-devel`.
 - Never merge either release or development into the other. Integrate selected changes through a dedicated feature/integration branch and PR. Before every merge verify the destination branch and source.
 - Merges flow one way: a feature or PR branch is merged into its base line through its PR. Never merge a base line (`vkstorm-*`) into a feature or PR branch, including GitHub's "Update branch", and never instruct an agent to. To bring base changes into a feature branch, cherry-pick them, or land the branch and follow up. `scripts/check_no_base_merges.py` enforces this in CI (Check PR) and, after `scripts/install-git-hooks.sh`, locally.
