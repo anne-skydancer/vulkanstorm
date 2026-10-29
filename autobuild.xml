@@ -2948,11 +2948,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>3ee2c9d7972172c12cc132f7000cce4428bb58c7</string>
+              <string>d5303e461cf2981e59ec9cb07309571c816739ab</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/vkstorm-core-rust/releases/download/ffi-v0.1.0/vkstorm_ffi-0.1.0.1b183c77e7.full-linux64-40285224044.tar.zst</string>
+              <string>https://github.com/anne-skydancer/vkstorm-core-rust/releases/download/ffi-v0.2.0/vkstorm_ffi-0.2.0.ae75898649.full-linux64-40910276100.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -2962,11 +2962,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>d6e1269ea9934645c3f8ce016e35bed31e8b4473</string>
+              <string>12bf0a4bdee634d95f07cdc4728ed569c3c5e188</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/vkstorm-core-rust/releases/download/ffi-v0.1.0/vkstorm_ffi-0.1.0.1b183c77e7.full-windows64-40285224044.tar.zst</string>
+              <string>https://github.com/anne-skydancer/vkstorm-core-rust/releases/download/ffi-v0.2.0/vkstorm_ffi-0.2.0.ae75898649.full-windows64-40910276100.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -2979,13 +2979,13 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <key>copyright</key>
         <string>Copyright (C) 2026, Vulkanstorm Viewer Project</string>
         <key>version</key>
-        <string>0.1.0.1b183c77e7.full</string>
+        <string>0.2.0.ae75898649.full</string>
         <key>name</key>
         <string>vkstorm-ffi</string>
         <key>canonical_repo</key>
         <string>https://github.com/anne-skydancer/vkstorm-core-rust</string>
         <key>description</key>
-        <string>The Rust port's C ABI (vkstorm-ffi) over the vkstorm-core-rust crates, as a static library: every rung (full). Built by vkstorm-core-rust's CI (tag ffi-v0.1.0).</string>
+        <string>The Rust port's C ABI (vkstorm-ffi) over the vkstorm-core-rust crates, as a static library: every rung (full). Built by vkstorm-core-rust's CI (tag ffi-v0.2.0).</string>
       </map>
       <key>vlc-bin</key>
       <map>
