@@ -39,6 +39,16 @@
 #include "llviewerchat.h"
 #include "llviewercontrol.h"
 
+// <FS> Markdown chat (Preferences > Chat > Visuals). Without it, console
+// lines are plain, as before markdown chat: no emphasis, and no bold or
+// italic for shouts, whispers and emotes.
+static bool use_chat_markdown()
+{
+    static LLCachedControl<bool> chat_markdown(gSavedSettings, "FSChatMarkdown", true);
+    return chat_markdown;
+}
+// </FS>
+
 // static
 bool FSConsoleUtils::ProcessChatMessage(const LLChat& chat_msg, const LLSD &args)
 {
@@ -95,11 +105,18 @@ bool FSConsoleUtils::ProcessChatMessage(const LLChat& chat_msg, const LLSD &args
         F32 alpha = 1.f;
         LLUIColor chatcolor;
         LLViewerChat::getChatColor(chat_msg, chatcolor, alpha);
-        const bool emote = irc_me || chat_msg.mChatStyle == CHAT_STYLE_IRC;
-        const auto style = chat_msg.mChatType == CHAT_TYPE_SHOUT ? LLFontGL::BOLD :
-            (emote || chat_msg.mChatType == CHAT_TYPE_WHISPER ? LLFontGL::ITALIC : LLFontGL::NORMAL);
-        gConsole->addConsoleLine(console_chat, chatcolor % alpha, LLUUID::null, style,
-            static_cast<S32>(utf8str_to_wstring(sender_name + delimiter).size()), emote);
+        if (use_chat_markdown())
+        {
+            const bool emote = irc_me || chat_msg.mChatStyle == CHAT_STYLE_IRC;
+            const auto style = chat_msg.mChatType == CHAT_TYPE_SHOUT ? LLFontGL::BOLD :
+                (emote || chat_msg.mChatType == CHAT_TYPE_WHISPER ? LLFontGL::ITALIC : LLFontGL::NORMAL);
+            gConsole->addConsoleLine(console_chat, chatcolor % alpha, LLUUID::null, style,
+                static_cast<S32>(utf8str_to_wstring(sender_name + delimiter).size()), emote);
+        }
+        else
+        {
+            gConsole->addConsoleLine(console_chat, chatcolor % alpha);
+        }
     }
     else
     {
@@ -122,8 +139,15 @@ bool FSConsoleUtils::ProcessChatMessage(const LLChat& chat_msg, const LLSD &args
         F32 alpha = 1.f;
         LLUIColor chatcolor;
         LLViewerChat::getChatColor(chat_msg, chatcolor, alpha);
-        gConsole->addConsoleLine(console_chat, chatcolor % alpha, LLUUID::null, LLFontGL::NORMAL,
-            chat_msg.mFromName.empty() ? 0 : static_cast<S32>(utf8str_to_wstring(chat_msg.mFromName + " ").size()));
+        if (use_chat_markdown())
+        {
+            gConsole->addConsoleLine(console_chat, chatcolor % alpha, LLUUID::null, LLFontGL::NORMAL,
+                chat_msg.mFromName.empty() ? 0 : static_cast<S32>(utf8str_to_wstring(chat_msg.mFromName + " ").size()));
+        }
+        else
+        {
+            gConsole->addConsoleLine(console_chat, chatcolor % alpha);
+        }
     }
 
     return true;
@@ -168,11 +192,18 @@ void FSConsoleUtils::onProcessChatAvatarNameLookup(const LLUUID& agent_id, const
     F32 alpha = 1.f;
     LLUIColor chatcolor;
     LLViewerChat::getChatColor(chat_msg, chatcolor, alpha);
-    const bool emote = irc_me || chat_msg.mChatStyle == CHAT_STYLE_IRC;
-    const auto style = chat_msg.mChatType == CHAT_TYPE_SHOUT ? LLFontGL::BOLD :
-        (emote || chat_msg.mChatType == CHAT_TYPE_WHISPER ? LLFontGL::ITALIC : LLFontGL::NORMAL);
-    gConsole->addConsoleLine(console_chat, chatcolor % alpha, LLUUID::null, style,
-        static_cast<S32>(utf8str_to_wstring(sender_name + delimiter).size()), emote);
+    if (use_chat_markdown())
+    {
+        const bool emote = irc_me || chat_msg.mChatStyle == CHAT_STYLE_IRC;
+        const auto style = chat_msg.mChatType == CHAT_TYPE_SHOUT ? LLFontGL::BOLD :
+            (emote || chat_msg.mChatType == CHAT_TYPE_WHISPER ? LLFontGL::ITALIC : LLFontGL::NORMAL);
+        gConsole->addConsoleLine(console_chat, chatcolor % alpha, LLUUID::null, style,
+            static_cast<S32>(utf8str_to_wstring(sender_name + delimiter).size()), emote);
+    }
+    else
+    {
+        gConsole->addConsoleLine(console_chat, chatcolor % alpha);
+    }
 }
 
 //static
@@ -257,7 +288,14 @@ void FSConsoleUtils::onProccessInstantMessageNameLookup(const LLUUID& agent_id, 
     LLViewerChat::getChatColor(chat, textcolor, alpha, LLSD().with("is_local", false).with("for_console", true));
 
     const std::string prefix = "IM: " + sender_name + delimiter;
-    gConsole->addConsoleLine(prefix + message, textcolor % alpha, session_id,
-        emote ? LLFontGL::ITALIC : LLFontGL::NORMAL,
-        static_cast<S32>(utf8str_to_wstring(prefix).size()), emote);
+    if (use_chat_markdown())
+    {
+        gConsole->addConsoleLine(prefix + message, textcolor % alpha, session_id,
+            emote ? LLFontGL::ITALIC : LLFontGL::NORMAL,
+            static_cast<S32>(utf8str_to_wstring(prefix).size()), emote);
+    }
+    else
+    {
+        gConsole->addConsoleLine(prefix + message, textcolor % alpha, session_id);
+    }
 }

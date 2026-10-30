@@ -116,7 +116,17 @@
              height="16"
              width="400" />
 			<check_box
+			 control_name="FSChatMarkdown"
+			 name="FSChatMarkdown"
+			 label="Markdown chat (_italic_, **bold**)"
+			 tool_tip="Show _italic_ and **bold** in chat. In emotes, which are then always italic, _ switches italic off and on."
+			 layout="topleft"
+			 top_pad="1"
+			 height="16"
+			 width="400" />
+			<check_box
 			 control_name="EmotesUseItalic"
+			 disabled_control="FSChatMarkdown"
 			 name="EmotesUseItalic"
 			 label="Emotes use italic font"
 			 layout="topleft"
