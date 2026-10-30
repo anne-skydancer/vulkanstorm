@@ -369,6 +369,8 @@ public:
         ALPHA_ST_HISTORY,                   //  "alpha_st_history"
         ALPHA_ST_RESOLVED,                  //  "alpha_st_resolved"
         // </Vulkanstorm>
+        NIGHT_SKY_CELLS,                    //  "night_sky_cells"
+        NIGHT_SKY_STARS,                    //  "night_sky_stars"
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
     // clang-format on
