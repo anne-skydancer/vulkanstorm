@@ -361,6 +361,8 @@ public:
         // </FS:Beq>
 
         ALPHA_OIT_OPAQUE_DEPTH,                   // "alpha_peel_depth"
+        NIGHT_SKY_CELLS,                    //  "night_sky_cells"
+        NIGHT_SKY_STARS,                    //  "night_sky_stars"
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
     // clang-format on
