@@ -253,13 +253,14 @@ jobs:
             exit 1
           fi
 
-      - name: Run statistics, script metadata and transport regression tests
+      - name: Run statistics, script metadata, transport and primitive regression tests
         shell: bash
         run: |
           set -euo pipefail
           cmake -S indra -B "${{ matrix.directory }}" -DLL_TESTS:BOOL=ON
           cmake --build "${{ matrix.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
-            --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver
+            --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
+            llprimitive_tests
 
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'
