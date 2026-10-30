@@ -1902,6 +1902,16 @@ If you do not understand the distinction then leave this control alone."
        layout="topleft"
        left="25"
        top_pad="2"
+       width="5"
+       name="PPLLWarningOpen">
+        (
+      </text>
+      <text
+       follows="left|top"
+       height="16"
+       layout="topleft"
+       left_pad="0"
+       top_delta="0"
        width="60"
        font="SansSerifBold"
        name="PPLLWarningLabel">
@@ -1915,7 +1925,7 @@ If you do not understand the distinction then leave this control alone."
        top_delta="0"
        width="300"
        name="PPLLWarning">
-        May break PPLL
+        May break PPLL)
       </text>
       <spinner
        control_name="RenderAlphaOITMemoryMB"
