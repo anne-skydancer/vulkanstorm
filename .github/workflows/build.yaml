@@ -256,7 +256,11 @@ jobs:
             exit 1
           fi
 
+      # Release builds (vkstorm-release pushes, Second_Life tags, the
+      # experimental canary build) never build or run tests: LL_TESTS stays
+      # off for Release. PR and qualification builds (RelWithDebInfo) run them.
       - name: Run statistics, script metadata, transport, primitive and night sky regression tests
+        if: env.VIEWER_BUILD_TYPE != 'Release'
         shell: bash
         run: |
           set -euo pipefail
