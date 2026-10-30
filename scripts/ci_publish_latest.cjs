@@ -114,8 +114,17 @@ module.exports = async function publishLatest({ github, context, core, directory
     ].join('\n');
     const marker = new RegExp(`<!-- vulkanstorm-${tag}-start -->[\\s\\S]*?<!-- vulkanstorm-${tag}-end -->\\s*`, 'g');
     const notes = (release.body || '').replace(marker, '');
+    // GitHub dates a release when it is first published and never again, and
+    // keeps the commit it was created on. Return a published release to draft
+    // first, so that publishing it again dates it with this build; the tag and
+    // assets stay in place throughout.
+    if (!release.draft) {
+        await github.rest.repos.updateRelease({
+            ...repo, release_id: release.id, draft: true, target_commitish: context.sha,
+        });
+    }
     await github.rest.repos.updateRelease({
-        ...repo, release_id: release.id, name: channel.name,
+        ...repo, release_id: release.id, name: channel.name, target_commitish: context.sha,
         body: `${summary}\n\n${notes}`.trim(), draft: false,
         prerelease: channel.prerelease || (release.prerelease ?? false), make_latest: channel.makeLatest ? 'true' : 'false',
     });
