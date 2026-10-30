@@ -306,7 +306,7 @@ jobs:
           cmake -S indra -B "${{ matrix.directory }}" -DLL_TESTS:BOOL=ON
           cmake --build "${{ matrix.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
             --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
-            PROJECT_llprimitive_TEST_llgltfmaterial PROJECT_llprimitive_TEST_llprimitive
+            llprimitive_tests
 
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'
