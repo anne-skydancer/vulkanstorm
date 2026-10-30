@@ -126,7 +126,6 @@
 			 width="400" />
 			<check_box
 			 control_name="EmotesUseItalic"
-			 disabled_control="FSChatMarkdown"
 			 name="EmotesUseItalic"
 			 label="Emotes use italic font"
 			 layout="topleft"
