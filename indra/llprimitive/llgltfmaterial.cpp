@@ -106,10 +106,16 @@ bool LLGLTFMaterial::TextureTransform::operator==(const TextureTransform& other)
     return mOffset == other.mOffset && mScale == other.mScale && mRotation == other.mRotation;
 }
 
+// <Vulkanstorm> Zero the hashed block first, as the default constructor does:
+// operator= copies the members one by one and leaves the padding bytes as
+// they were, and getHash() hashes them too, so a copy built in uninitialised
+// memory would otherwise hash differently from its original.
 LLGLTFMaterial::LLGLTFMaterial(const LLGLTFMaterial& rhs)
+:   LLGLTFMaterial()
 {
     *this = rhs;
 }
+// </Vulkanstorm>
 
 LLGLTFMaterial& LLGLTFMaterial::operator=(const LLGLTFMaterial& rhs)
 {
