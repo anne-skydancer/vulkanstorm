@@ -22,7 +22,9 @@
  * $/LicenseInfo$
  */
 
-#include "llviewerprecompiledheaders.h"
+// Not the viewer's precompiled header: the integration test builds this
+// file with llcommon and llmath only.
+#include "linden_common.h"
 
 #include "llnightsky.h"
 
