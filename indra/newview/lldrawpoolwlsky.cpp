@@ -44,6 +44,12 @@
 #include "llvowlsky.h"
 #include "llsettingsvo.h"
 #include "llviewercontrol.h"
+// <Vulkanstorm> the real night sky
+#include "lldir.h"
+#include "llfile.h"
+#include "llimagegl.h"
+#include "llnightsky.h"
+// </Vulkanstorm>
 
 extern bool gCubeSnapshot;
 
@@ -56,6 +62,136 @@ static LLGLSLShader* sun_shader   = NULL;
 static LLGLSLShader* moon_shader  = NULL;
 
 static float sStarTime;
+
+// <Vulkanstorm> The real night sky (llnightsky.cpp), drawn by
+// deferred/skyF.glsl from two float textures made on first use and freed
+// with the GL context (LLDrawPoolWLSky::cleanupGL):
+// - the cells: the first star of each cube map cell, then the end, one
+//   per texel (R32F, exact below 2^24);
+// - the stars, binned: two texels each, direction + intensity, then
+//   colour + size (RGBA32F).
+namespace
+{
+    constexpr S32 NIGHT_SKY_CELLS_WIDTH = 64;    // skyF.glsl NIGHT_SKY_CELLS_WIDTH
+    constexpr S32 NIGHT_SKY_STARS_WIDTH = 1024;  // skyF.glsl NIGHT_SKY_STARS_WIDTH
+
+    U32 sNightSkyTextures[2] = { 0, 0 }; // cells, stars
+    bool sNightSkyLoadTried = false;     // once per GL context, success or not
+
+    bool use_real_night_sky()
+    {
+        static LLCachedControl<U32> night_sky(gSavedSettings, "RenderNightSky", 1);
+        return night_sky == 1;
+    }
+
+    void upload_night_sky_texture(U32 texture, GLint internal_format, GLenum format, S32 width, S32 height, const std::vector<F32>& data)
+    {
+        LLTexUnit* unit = gGL.getTexUnit(0);
+        unit->bindManual(LLTexUnit::TT_TEXTURE, texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+        glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, GL_FLOAT, data.data());
+        unit->unbind(LLTexUnit::TT_TEXTURE);
+    }
+
+    // The star tables, made at the first night sky drawn, before a shader
+    // is bound (the upload uses texture unit 0). False when the catalogue
+    // is missing or damaged: then the night sky has no stars.
+    bool load_night_sky()
+    {
+        if (sNightSkyLoadTried)
+        {
+            return sNightSkyTextures[0] != 0;
+        }
+        sNightSkyLoadTried = true;
+
+        const std::string path = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "stars", "stars.bin");
+        llifstream file(path.c_str(), std::ios::in | std::ios::binary);
+        const std::vector<U8> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        std::vector<LLNightSky::CatalogueStar> catalogue;
+        std::string error;
+        if (!file.is_open() || !LLNightSky::parse(bytes.data(), bytes.size(), catalogue, error))
+        {
+            LL_WARNS("NightSky") << path << ": " << (file.is_open() ? error : std::string("cannot open"))
+                                 << "; the night sky has no stars" << LL_ENDL;
+            return false;
+        }
+
+        std::vector<U32> offsets;
+        std::vector<LLNightSky::GpuStar> binned;
+        LLNightSky::bin(LLNightSky::gpuStars(catalogue), offsets, binned);
+
+        const S32 cells_height = ((S32)offsets.size() + NIGHT_SKY_CELLS_WIDTH - 1) / NIGHT_SKY_CELLS_WIDTH;
+        std::vector<F32> cells((size_t)NIGHT_SKY_CELLS_WIDTH * cells_height, (F32)binned.size());
+        for (size_t i = 0; i < offsets.size(); ++i)
+        {
+            cells[i] = (F32)offsets[i];
+        }
+
+        const S32 stars_height = llmax(1, ((S32)binned.size() * 2 + NIGHT_SKY_STARS_WIDTH - 1) / NIGHT_SKY_STARS_WIDTH);
+        std::vector<F32> stars((size_t)NIGHT_SKY_STARS_WIDTH * stars_height * 4, 0.f);
+        for (size_t i = 0; i < binned.size(); ++i)
+        {
+            std::copy(binned[i].pos, binned[i].pos + 4, stars.begin() + i * 8);
+            std::copy(binned[i].color, binned[i].color + 4, stars.begin() + i * 8 + 4);
+        }
+
+        LLImageGL::generateTextures(2, sNightSkyTextures);
+        upload_night_sky_texture(sNightSkyTextures[0], GL_R32F, GL_RED, NIGHT_SKY_CELLS_WIDTH, cells_height, cells);
+        upload_night_sky_texture(sNightSkyTextures[1], GL_RGBA32F, GL_RGBA, NIGHT_SKY_STARS_WIDTH, stars_height, stars);
+        LL_INFOS("NightSky") << catalogue.size() << " stars, " << binned.size() << " in "
+                             << LLNightSky::CELLS << " cells" << LL_ENDL;
+        return true;
+    }
+
+    // The night sky's uniforms and textures for this frame. Off in
+    // reflection probe snapshots, as Firestorm's stars are.
+    void set_night_sky(LLGLSLShader* shader, const LLSettingsSky::ptr_t& psky)
+    {
+        static LLStaticHashedString sNightSkyAxes("night_sky_axes");
+        static LLStaticHashedString sNightSkyParams("night_sky_params");
+
+        F32 gain = 0.f;
+        if (use_real_night_sky() && !gCubeSnapshot && load_night_sky())
+        {
+            // LLDrawPoolWLSky::renderStarsDeferred passes star_brightness /
+            // 500, which starsF.glsl turns into smoothstep(0, 0.9, ...) * 32:
+            // full brightness from about 100, dimmer only below. The same
+            // curve, without the 32 times overdrive.
+            const F32 x = llclamp(psky->getStarBrightness() / 500.f / 0.9f, 0.f, 1.f);
+            gain = llmin(x * x * (3.f - 2.f * x) * 8.f, 1.f);
+        }
+        if (gain > 0.f)
+        {
+            LLVector3 axes[3];
+            LLNightSky::axes(psky->getSunDirection(), LLNightSky::unixDaysNow(), axes);
+            F32 axes_data[9];
+            for (S32 i = 0; i < 3; ++i)
+            {
+                std::copy(axes[i].mV, axes[i].mV + 3, axes_data + i * 3);
+            }
+            shader->uniform3fv(sNightSkyAxes, 3, axes_data);
+
+            S32 channel = shader->enableTexture(LLShaderMgr::NIGHT_SKY_CELLS);
+            if (channel > -1)
+            {
+                gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, sNightSkyTextures[0]);
+            }
+            channel = shader->enableTexture(LLShaderMgr::NIGHT_SKY_STARS);
+            if (channel > -1)
+            {
+                gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, sNightSkyTextures[1]);
+            }
+        }
+        // the stars' scintillation clock, wrapped to keep its precision
+        const F32 time = (F32)fmod(LLFrameTimer::getElapsedSeconds(), 3600.0);
+        shader->uniform4f(sNightSkyParams, gain, 1.f, time, 0.f);
+    }
+}
+// </Vulkanstorm>
 
 LLDrawPoolWLSky::LLDrawPoolWLSky(void) :
     LLDrawPool(POOL_WL_SKY)
@@ -175,6 +311,13 @@ void LLDrawPoolWLSky::renderSkyHazeDeferred(const LLVector3& camPosLocal, F32 ca
         }
         else
         {
+            // <Vulkanstorm> make the night sky's tables before the shader
+            // binds its textures: the upload uses texture unit 0
+            if (use_real_night_sky())
+            {
+                load_night_sky();
+            }
+            // </Vulkanstorm>
             sky_shader->bind();
         }
 
@@ -209,6 +352,13 @@ void LLDrawPoolWLSky::renderSkyHazeDeferred(const LLVector3& camPosLocal, F32 ca
 
         sky_shader->uniform1i(LLShaderMgr::SUN_UP_FACTOR, psky->getIsSunUp() ? 1 : 0);
 
+        // <Vulkanstorm> the real night sky; the HDRI sky has none
+        if (sky_shader == &gDeferredWLSkyProgram)
+        {
+            set_night_sky(sky_shader, psky);
+        }
+        // </Vulkanstorm>
+
         /// Render the skydome
         renderDome(origin, camHeightLocal, sky_shader);
 
@@ -222,6 +372,14 @@ void LLDrawPoolWLSky::renderStarsDeferred(const LLVector3& camPosLocal) const
     {
         return;
     }
+
+    // <Vulkanstorm> the real night sky draws its stars in the sky dome
+    // (renderSkyHazeDeferred); these are Firestorm's random ones
+    if (use_real_night_sky())
+    {
+        return;
+    }
+    // </Vulkanstorm>
 
     LLGLSPipelineBlendSkyBox gls_sky(true, false);
 
@@ -513,6 +671,14 @@ void LLDrawPoolWLSky::resetDrawOrders()
 //static
 void LLDrawPoolWLSky::cleanupGL()
 {
+    // <Vulkanstorm> the night sky's star tables, made again on next use
+    if (sNightSkyTextures[0] != 0)
+    {
+        LLImageGL::deleteTextures(2, sNightSkyTextures);
+        sNightSkyTextures[0] = sNightSkyTextures[1] = 0;
+    }
+    sNightSkyLoadTried = false;
+    // </Vulkanstorm>
 }
 
 //static
