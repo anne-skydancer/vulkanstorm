@@ -1848,7 +1848,28 @@ If you do not understand the distinction then leave this control alone."
        width="480"
        font="SansSerifBold"
        name="PPLLHeading">
-        PPLL parameters (WARNING: May cause PPLL to malfunction)
+        PPLL parameters
+      </text>
+      <text
+       follows="left|top"
+       height="16"
+       layout="topleft"
+       left="25"
+       top_pad="2"
+       width="60"
+       font="SansSerifBold"
+       name="PPLLWarningLabel">
+        Warning:
+      </text>
+      <text
+       follows="left|top"
+       height="16"
+       layout="topleft"
+       left_pad="2"
+       top_delta="0"
+       width="300"
+       name="PPLLWarning">
+        May break PPLL
       </text>
       <spinner
        control_name="RenderAlphaOITMemoryMB"
