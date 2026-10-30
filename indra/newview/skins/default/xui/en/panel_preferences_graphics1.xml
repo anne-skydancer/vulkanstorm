@@ -1844,7 +1844,7 @@ If you do not understand the distinction then leave this control alone."
        width="480"
        font="SansSerifBold"
        name="AlphaSortHeading">
-        Alpha sorting method
+        Alpha rendering method
       </text>
       <text
        follows="left|top"
@@ -1855,7 +1855,7 @@ If you do not understand the distinction then leave this control alone."
        width="485"
        word_wrap="true"
        name="AlphaSortDescription">
-        Applies only to the main post-water world view. Unsupported methods safely use legacy sorting without changing your saved choice. Particles, mirrors and hero probes, cube snapshots, HUDs, impostors, and pre-water alpha retain legacy sorting.
+        Applies only to the main post-water world view. Unsupported methods safely use sorted alpha without changing your saved choice. Particles, mirrors and hero probes, cube snapshots, HUDs, impostors, and pre-water alpha always use sorted alpha.
       </text>
       <radio_group
        control_name="RenderAlphaSortMethod"
@@ -1868,7 +1868,7 @@ If you do not understand the distinction then leave this control alone."
        name="AlphaSortMethod">
         <radio_item
          height="20"
-         label="Upstream sorted alpha"
+         label="Sorted alpha"
          layout="topleft"
          left="8"
          top="5"
@@ -1876,7 +1876,7 @@ If you do not understand the distinction then leave this control alone."
          name="Legacy"/>
         <radio_item
          height="20"
-         label="PPLL (Windows/Linux, OpenGL 4.4+)"
+         label="PPLL"
          layout="topleft"
          left_delta="0"
          top_pad="2"
@@ -1884,72 +1884,6 @@ If you do not understand the distinction then leave this control alone."
          name="PPLL"/>
         <radio_group.commit_callback function="Pref.RenderOptionUpdate"/>
       </radio_group>
-
-      <text
-       follows="left|top"
-       height="18"
-       layout="topleft"
-       left="15"
-       top_pad="14"
-       width="480"
-       font="SansSerifBold"
-       name="PPLLHeading">
-        PPLL parameters
-      </text>
-      <spinner
-       control_name="RenderAlphaOITMemoryMB"
-       decimal_digits="0"
-       follows="left|top"
-       height="20"
-       increment="16"
-       label="Node memory budget (MiB):"
-       label_width="220"
-       layout="topleft"
-       left="25"
-       min_val="32"
-       max_val="2048"
-       top_pad="5"
-       width="330"
-       name="PPLLMemory"/>
-      <spinner
-       control_name="RenderAlphaOITNodesPerPixel"
-       decimal_digits="0"
-       follows="left|top"
-       height="20"
-       increment="1"
-       label="Average nodes per pixel:"
-       label_width="220"
-       layout="topleft"
-       left="25"
-       min_val="1"
-       max_val="32"
-       top_pad="4"
-       width="330"
-       name="PPLLNodes"/>
-      <spinner
-       control_name="RenderAlphaOITMaxPixelLayers"
-       decimal_digits="0"
-       follows="left|top"
-       height="20"
-       increment="1"
-       label="Maximum layers at one pixel:"
-       label_width="220"
-       layout="topleft"
-       left="25"
-       min_val="4"
-       max_val="32"
-       top_pad="4"
-       width="330"
-       name="PPLLMaxLayers"/>
-      <check_box
-       control_name="RenderAlphaOITStats"
-       height="18"
-       label="Log PPLL allocation statistics (debug; may synchronize GPU)"
-       layout="topleft"
-       left="25"
-       top_pad="5"
-       width="440"
-       name="PPLLStats"/>
 
     </panel>
 
