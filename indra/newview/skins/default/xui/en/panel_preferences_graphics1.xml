@@ -1905,6 +1905,44 @@ If you do not understand the distinction then leave this control alone."
        width="440"
        name="PPLLStats"/>
 
+      <text
+       follows="left|top"
+       height="18"
+       layout="topleft"
+       left="15"
+       top_pad="14"
+       width="480"
+       font="SansSerifBold"
+       name="NightSkyHeading">
+        Night sky
+      </text>
+      <radio_group
+       control_name="RenderNightSky"
+       follows="left|top"
+       height="46"
+       layout="topleft"
+       left="15"
+       top_pad="4"
+       width="485"
+       name="NightSky">
+        <radio_item
+         height="20"
+         label="Real stars and Milky Way, as seen from Rome"
+         layout="topleft"
+         left="8"
+         top="3"
+         value="1"
+         name="Real"/>
+        <radio_item
+         height="20"
+         label="Firestorm's random stars"
+         layout="topleft"
+         left_delta="0"
+         top_pad="2"
+         value="0"
+         name="Classic"/>
+      </radio_group>
+
     </panel>
 
 <!--Depth of Field-->
