@@ -1958,20 +1958,20 @@ If you do not understand the distinction then leave this control alone."
        name="NightSky">
         <radio_item
          height="20"
-         label="Real stars and Milky Way, as seen from Rome"
+         label="Default"
          layout="topleft"
          left="8"
          top="3"
-         value="1"
-         name="Real"/>
+         value="0"
+         name="Default"/>
         <radio_item
          height="20"
-         label="Firestorm's random stars"
+         label="Real"
          layout="topleft"
          left_delta="0"
          top_pad="2"
-         value="0"
-         name="Classic"/>
+         value="1"
+         name="Real"/>
       </radio_group>
 
     </panel>
