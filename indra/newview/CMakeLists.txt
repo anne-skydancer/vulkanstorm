@@ -556,6 +556,7 @@ set(viewer_SOURCE_FILES
     llfloaterimnearbychatlistener.cpp
     llnearbyvoicemoderation.cpp
     llnetmap.cpp
+    llnightsky.cpp
     llnotificationalerthandler.cpp
     llnotificationgrouphandler.cpp
     llnotificationhandlerutil.cpp
@@ -1429,6 +1430,7 @@ set(viewer_HEADER_FILES
     llnavigationbar.h
     llnearbyvoicemoderation.h
     llnetmap.h
+    llnightsky.h
     llnotificationhandler.h
     llnotificationlistitem.h
     llnotificationlistview.h
@@ -2187,6 +2189,7 @@ set(viewer_APPSETTINGS_FILES
     app_settings/settings_crash_behavior.xml
     app_settings/settings_files.xml
     app_settings/settings_per_account.xml
+    app_settings/stars/stars.bin
     app_settings/std_bump.ini
     #app_settings/toolbars.xml  FS:AO moved to skins
     app_settings/trees.xml
@@ -3161,6 +3164,12 @@ if (LL_TESTS)
 
   LL_ADD_INTEGRATION_TEST(llsecapi
      llsecapi.cpp
+    "${test_libs}"
+    )
+
+  # <Vulkanstorm> the real night sky's catalogue and frame
+  LL_ADD_INTEGRATION_TEST(llnightsky
+     llnightsky.cpp
     "${test_libs}"
     )
   if (NOT OPENSIM)#<FS:AW optional opensim support>
