@@ -1595,6 +1595,11 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("alpha_oit_opaque_depth");
     // </FS>
 
+    // <Vulkanstorm> the real night sky's star tables (deferred/skyF.glsl)
+    mReservedUniforms.push_back("night_sky_cells");
+    mReservedUniforms.push_back("night_sky_stars");
+    // </Vulkanstorm>
+
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);
 
     std::set<std::string> dupe_check;
