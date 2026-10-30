@@ -26,6 +26,7 @@
 #include "linden_common.h"
 #include "lltut.h"
 
+#include <new>
 #include <set>
 
 #include "../llgltfmaterial.h"
@@ -438,4 +439,26 @@ namespace tut
         ENSURE_HASH_CHANGED(hash_mat, source_mat, mOverrideDoubleSided);
         ENSURE_HASH_CHANGED(hash_mat, source_mat, mOverrideAlphaMode);
     }
+
+    // <Vulkanstorm> A copy hashes as its original, whatever the memory it is
+    // built in held before: getHash() hashes the padding bytes as well, so the
+    // copy constructor must zero them as the default constructor does. The
+    // copy is built in memory filled with a pattern, so that the test does not
+    // depend on what the stack happens to hold in a given build.
+    template<> template<>
+    void llgltfmaterial_object_t::test<13>()
+    {
+        LLGLTFMaterial source_mat = create_test_material();
+        source_mat.mAlphaMode = LLGLTFMaterial::ALPHA_MODE_MASK;
+        source_mat.mDoubleSided = true;
+
+        alignas(LLGLTFMaterial) unsigned char storage[sizeof(LLGLTFMaterial)];
+        memset(storage, 0xa5, sizeof(storage));
+        LLGLTFMaterial* copy = new (storage) LLGLTFMaterial(source_mat);
+        const LLUUID copy_hash = copy->getHash();
+        copy->~LLGLTFMaterial();
+
+        ensure_equals("LLGLTFMaterial: Hash: a copy hashes as its original", copy_hash, source_mat.getHash());
+    }
+    // </Vulkanstorm>
 }
