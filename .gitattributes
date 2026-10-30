@@ -21,6 +21,7 @@
 
 # Viewer resources
 *.db2 binary
+*.bin binary
 *.llm binary
 *.nib binary
 *.rtf binary

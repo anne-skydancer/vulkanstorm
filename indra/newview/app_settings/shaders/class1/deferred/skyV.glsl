@@ -34,6 +34,10 @@ in vec3 position;
 // Output parameters
 out vec3 vary_HazeColor;
 out float vary_LightNormPosDot;
+// <Vulkanstorm> view direction for the real night sky (skyF.glsl): the
+// dome's frame, y up (LLDrawPoolWLSky::renderDome)
+out vec3 vary_sky_dir;
+// </Vulkanstorm>
 
 #ifdef HAS_HDRI
 out vec4 vary_position;
@@ -76,6 +80,7 @@ void main()
 
     // Get relative position
     vec3 rel_pos = position.xyz - camPosLocal.xyz + vec3(0, 50, 0);
+    vary_sky_dir = position.xyz - camPosLocal.xyz; // <Vulkanstorm/>
 
 #ifdef HAS_HDRI
     vary_rel_pos = rel_pos;

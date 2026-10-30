@@ -1297,6 +1297,9 @@ void LLChatHistory::appendMessage(const LLChat& chat, const LLSD &args, const LL
 {
     mEditor->setParseMarkdown(false);
     LL_RECORD_BLOCK_TIME(FTM_APPEND_MESSAGE);
+    // <FS> Markdown chat (Preferences > Chat > Visuals)
+    static LLCachedControl<bool> chat_markdown(gSavedSettings, "FSChatMarkdown", true);
+    // </FS>
     bool use_plain_text_chat_history = args["use_plain_text_chat_history"].asBoolean();
     bool square_brackets = false; // square brackets necessary for a system messages
 
@@ -1368,12 +1371,16 @@ void LLChatHistory::appendMessage(const LLChat& chat, const LLSD &args, const LL
     if (irc_me || chat.mChatStyle == CHAT_STYLE_IRC)
     {
         delimiter = LLStringUtil::null;
-        // <FS> Emotes are italic unconditionally (the underscore-toggle
-        // convention depends on the italic base), and use '_' to toggle
-        // italic off (spoken part) and back on; the toggle does not
-        // survive the line.
-        body_message_params.font.style = "ITALIC";
-        body_message_params.markdown_emote = true;
+        // <FS> With markdown chat, emotes are italic unconditionally (the
+        // underscore-toggle convention depends on the italic base), and
+        // use '_' to toggle italic off (spoken part) and back on; the
+        // toggle does not survive the line. Without it, italic follows
+        // EmotesUseItalic.
+        if (chat_markdown || gSavedSettings.getBOOL("EmotesUseItalic"))
+        {
+            body_message_params.font.style = "ITALIC";
+        }
+        body_message_params.markdown_emote = chat_markdown;
         // </FS>
     }
 
@@ -1631,7 +1638,7 @@ void LLChatHistory::appendMessage(const LLChat& chat, const LLSD &args, const LL
             message += "]";
         }
 
-        mEditor->setParseMarkdown(true);
+        mEditor->setParseMarkdown(chat_markdown);
         mEditor->appendText(message, prependNewLineState, body_message_params);
         mEditor->setParseMarkdown(false);
         prependNewLineState = false;

@@ -365,7 +365,7 @@ jobs:
             .inventory-fixtures/r3b_1/
             .inventory-fixtures/*.log
 
-      - name: Run statistics, script metadata and transport regression tests
+      - name: Run statistics, script metadata, transport, primitive and night sky regression tests
         shell: bash
         run: |
           set -euo pipefail
@@ -379,7 +379,8 @@ jobs:
             INTEGRATION_TEST_llaudio_parity INTEGRATION_TEST_llaudio_music \
             INTEGRATION_TEST_llinventory_parity INTEGRATION_TEST_llinvfetch_parity \
             INTEGRATION_TEST_llinventorymodel_parity INTEGRATION_TEST_llaisupdate_parity \
-            INTEGRATION_TEST_llinventory_task_oracle INTEGRATION_TEST_llinventory_offer_oracle
+            INTEGRATION_TEST_llinventory_task_oracle INTEGRATION_TEST_llinventory_offer_oracle \
+            llprimitive_tests INTEGRATION_TEST_llnightsky
 
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'

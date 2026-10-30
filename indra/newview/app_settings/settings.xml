@@ -11347,6 +11347,17 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Backup</key>
       <integer>0</integer>
     </map>
+  <key>RenderNightSky</key>
+  <map>
+    <key>Comment</key>
+    <string>Night sky: 0 Firestorm's random stars, 1 the real stars and the Milky Way as seen from Rome.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>U32</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
   <key>RenderNormalMapScale</key>
   <map>
     <key>Comment</key>
@@ -11875,13 +11886,13 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderAlphaSortMethod</key>
   <map>
     <key>Comment</key>
-    <string>Main-view post-water alpha method: 0 upstream sorted, 1 PPLL. Unsupported methods fall back to legacy.</string>
+    <string>Main-view post-water alpha method: 0 sorted alpha, 1 PPLL (default; Windows/Linux, OpenGL 4.4+). Unsupported methods fall back to sorted alpha.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
     <string>U32</string>
     <key>Value</key>
-    <integer>0</integer>
+    <integer>1</integer>
   </map>
 
   <key>RenderAlphaOITNodesPerPixel</key>
@@ -24546,6 +24557,17 @@ Change of this parameter will affect the layout of buttons in notification toast
       <string>Boolean</string>
       <key>Value</key>
       <integer>0</integer>
+    </map>
+    <key>FSChatMarkdown</key>
+    <map>
+      <key>Comment</key>
+      <string>Markdown chat: _italic_ and **bold** emphasis in chat, with '_' toggling italic in emotes (which are then always italic). Off: chat shows as typed, and emotes are italic if EmotesUseItalic is set.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
     </map>
     <key>FSVolumeControlsPanelOpen</key>
     <map>

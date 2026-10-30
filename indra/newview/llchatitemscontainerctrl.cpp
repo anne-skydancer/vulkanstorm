@@ -187,12 +187,21 @@ void LLFloaterIMNearbyChatToastPanel::addMessage(LLSD& notification)
         style_params.font.size(font_style_size);
 
         int chat_type = notification["chat_type"].asInteger();
+        // <FS> Markdown chat (Preferences > Chat > Visuals)
+        static LLCachedControl<bool> chat_markdown(gSavedSettings, "FSChatMarkdown", true);
 
         if(notification["chat_style"].asInteger()== CHAT_STYLE_IRC)
         {
-            style_params.font.style = "ITALIC";
-            style_params.markdown_emote = true;
+            // With markdown chat, emotes are italic unconditionally (the
+            // underscore toggle depends on the italic base); without it,
+            // italics for emotes follow EmotesUseItalic -Zi
+            if (chat_markdown || gSavedSettings.getBOOL("EmotesUseItalic"))
+            {
+                style_params.font.style = "ITALIC";
+            }
+            style_params.markdown_emote = chat_markdown;
         }
+        // </FS>
         else if( chat_type == CHAT_TYPE_SHOUT)
         {
             style_params.font.style = "BOLD";
@@ -201,7 +210,7 @@ void LLFloaterIMNearbyChatToastPanel::addMessage(LLSD& notification)
         {
             style_params.font.style = "ITALIC";
         }
-        mMsgText->setParseMarkdown(true);
+        mMsgText->setParseMarkdown(chat_markdown);
         mMsgText->appendText(messageText, true, style_params);
         mMsgText->setParseMarkdown(false);
     }
@@ -322,12 +331,19 @@ void LLFloaterIMNearbyChatToastPanel::init(LLSD& notification)
         style_params.font.size(font_style_size);
 
         int chat_type = notification["chat_type"].asInteger();
+        // <FS> Markdown chat (Preferences > Chat > Visuals)
+        static LLCachedControl<bool> chat_markdown(gSavedSettings, "FSChatMarkdown", true);
 
         if(notification["chat_style"].asInteger()== CHAT_STYLE_IRC)
         {
-            style_params.font.style = "ITALIC";
-            style_params.markdown_emote = true;
+            // as in addMessage()
+            if (chat_markdown || gSavedSettings.getBOOL("EmotesUseItalic"))
+            {
+                style_params.font.style = "ITALIC";
+            }
+            style_params.markdown_emote = chat_markdown;
         }
+        // </FS>
         else if( chat_type == CHAT_TYPE_SHOUT)
         {
             style_params.font.style = "BOLD";
@@ -336,7 +352,7 @@ void LLFloaterIMNearbyChatToastPanel::init(LLSD& notification)
         {
             style_params.font.style = "ITALIC";
         }
-        mMsgText->setParseMarkdown(true);
+        mMsgText->setParseMarkdown(chat_markdown);
         mMsgText->appendText(messageText, false, style_params);
         mMsgText->setParseMarkdown(false);
     }
