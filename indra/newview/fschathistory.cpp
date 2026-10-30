@@ -1512,6 +1512,10 @@ static LLTrace::BlockTimerStatHandle FTM_APPEND_MESSAGE("Append Chat Message");
 void FSChatHistory::appendMessage(const LLChat& chat, const LLSD &args, const LLStyle::Params& input_append_params)
 {
     LL_RECORD_BLOCK_TIME(FTM_APPEND_MESSAGE);
+    // <FS> Markdown chat (Preferences > Chat > Visuals), per message
+    static LLCachedControl<bool> chat_markdown(gSavedSettings, "FSChatMarkdown", true);
+    mParseMarkdown = chat_markdown;
+    // </FS>
     // Ansa: FIRE-12754: Hack around a weird issue where the doc size magically increases by 1px
     //       during draw if the doc exceeds the visible space and the scrollbar is getting visible.
     mScrollToBottom = (mScroller->isAtBottom() || mScroller->getScrollbar(LLScrollContainer::VERTICAL)->getDocPosMax() <= 1);
@@ -1590,13 +1594,23 @@ void FSChatHistory::appendMessage(const LLChat& chat, const LLSD &args, const LL
     {
         delimiter = LLStringUtil::null;
 
-        // <FS> Emotes are italic unconditionally (the underscore-toggle
-        // convention depends on the italic base), and use '_' to toggle
-        // italic off (spoken part) and back on; the toggle does not
-        // survive the line.
-        body_message_params.font.style = "ITALIC";
-        name_params.font.style = "ITALIC" + name_font_style_postfix;
-        body_message_params.markdown_emote = true;
+        // <FS> With markdown chat, emotes are italic unconditionally (the
+        // underscore-toggle convention depends on the italic base), and
+        // use '_' to toggle italic off (spoken part) and back on; the
+        // toggle does not survive the line. Without it, italic follows
+        // EmotesUseItalic, as before markdown chat.
+        if (chat_markdown)
+        {
+            body_message_params.font.style = "ITALIC";
+            name_params.font.style = "ITALIC" + name_font_style_postfix;
+            body_message_params.markdown_emote = true;
+        }
+        else if (gSavedSettings.getBOOL("EmotesUseItalic"))
+        {
+            // italics for emotes -Zi
+            body_message_params.font.style = "ITALIC";
+            name_params.font.style = "ITALIC" + name_font_style_postfix;
+        }
         // </FS>
     }
 
