@@ -23,11 +23,15 @@ async function fixture(t, options = {}) {
         return { data: { id: calls.length } };
     };
     const repos = Object.fromEntries([
-        'createRelease', 'deleteReleaseAsset', 'updateReleaseAsset', 'updateRelease',
+        'deleteReleaseAsset', 'updateReleaseAsset', 'updateRelease',
     ].map(name => [name, record(name)]));
+    repos.createRelease = async args => {
+        calls.push({ name: 'createRelease', args });
+        return { data: { id: calls.length, draft: true } };
+    };
     repos.getReleaseByTag = async () => {
         if (options.noRelease) throw Object.assign(new Error('Not found'), { status: 404 });
-        return { data: { id: 10, body: options.body || 'Maintainer notes.', prerelease: false } };
+        return { data: { id: 10, body: options.body || 'Maintainer notes.', prerelease: false, draft: false } };
     };
     repos.compareCommitsWithBasehead = async () => {
         if (options.comparisonError) throw Object.assign(new Error('Comparison failed'), { status: 404 });
@@ -78,12 +82,27 @@ test('publishes both binaries and verified checksums before moving latest', asyn
     assert.deepEqual(calls[tagIndex].args, {
         owner: 'anne-skydancer', repo: 'vulkanstorm', ref: 'tags/latest', sha: 'new-sha', force: true,
     });
-    const release = calls.find(call => call.name === 'updateRelease').args;
+    const release = calls.findLast(call => call.name === 'updateRelease').args;
     assert.match(release.body, /vulkanstorm-latest-run:200/);
     assert.match(release.body, /Maintainer notes/);
     assert.equal(release.prerelease, false);
     assert.ok(!calls.some(call => call.name === 'deleteReleaseAsset' && call.args.asset_id === 103));
     assert.ok(calls.findIndex(call => call.name === 'deleteReleaseAsset' && call.args.asset_id === 100) > tagIndex);
+});
+
+test('republishes an already published release, so its date and commit follow the build', async t => {
+    const { args, calls } = await fixture(t);
+    await publish(args);
+    const updates = calls.filter(call => call.name === 'updateRelease').map(call => call.args);
+    assert.equal(updates.length, 2);
+    assert.equal(updates[0].draft, true);
+    assert.equal(updates[0].target_commitish, 'new-sha');
+    assert.equal(updates[1].draft, false);
+    assert.equal(updates[1].target_commitish, 'new-sha');
+    assert.equal(updates[1].make_latest, 'true');
+    // only once the binaries are live and the tag has moved
+    const tagIndex = calls.findIndex(call => call.name === 'updateRef');
+    assert.ok(calls.findIndex(call => call.name === 'updateRelease') > tagIndex);
 });
 
 test('missing platform artifacts prevent all publication writes', async t => {
@@ -116,7 +135,7 @@ test('bootstraps a missing latest release and tag', async t => {
     assert.equal(calls[0].name, 'createRelease');
     assert.equal(calls[0].args.draft, true);
     assert.ok(calls.some(call => call.name === 'createRef' && call.args.ref === 'refs/tags/latest'));
-    assert.equal(calls.find(call => call.name === 'updateRelease').args.draft, false);
+    assert.equal(calls.findLast(call => call.name === 'updateRelease').args.draft, false);
 });
 
 test('a comparison API failure does not get treated as a missing tag', async t => {
@@ -130,7 +149,7 @@ test('rerunning the same run replaces its summary without losing maintainer note
         body: '<!-- vulkanstorm-latest-start -->\n<!-- vulkanstorm-latest-run:200 -->\nold summary\n<!-- vulkanstorm-latest-end -->\n\nNotes.',
     });
     await publish(args);
-    const body = calls.find(call => call.name === 'updateRelease').args.body;
+    const body = calls.findLast(call => call.name === 'updateRelease').args.body;
     assert.equal(body.match(/vulkanstorm-latest-start/g).length, 1);
     assert.ok(body.endsWith('Notes.'));
     assert.ok(!body.includes('old summary'));
@@ -142,7 +161,7 @@ test('the experimental channel moves its own tag as a pre-release that never tak
     const tagUpdate = calls.find(call => call.name === 'updateRef').args;
     assert.equal(tagUpdate.ref, 'tags/experimental');
     assert.equal(tagUpdate.sha, 'new-sha');
-    const release = calls.find(call => call.name === 'updateRelease').args;
+    const release = calls.findLast(call => call.name === 'updateRelease').args;
     assert.equal(release.prerelease, true);
     assert.equal(release.make_latest, 'false');
     assert.match(release.name, /experimental/);
