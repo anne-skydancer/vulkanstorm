@@ -3167,10 +3167,11 @@ if (LL_TESTS)
     "${test_libs}"
     )
 
-  # <Vulkanstorm> the real night sky's catalogue and frame
+  # <Vulkanstorm> the real night sky's catalogue and frame: llcommon and
+  # llmath only, so that CI doesn't build other libraries' unit tests
   LL_ADD_INTEGRATION_TEST(llnightsky
      llnightsky.cpp
-    "${test_libs}"
+    "llmath;llcommon"
     )
   if (NOT OPENSIM)#<FS:AW optional opensim support>
     set(llslurl_test_sources
