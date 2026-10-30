@@ -256,13 +256,22 @@ jobs:
             exit 1
           fi
 
-      - name: Run statistics, script metadata and transport regression tests
+      - name: Run statistics, script metadata, transport, primitive and night sky regression tests
         shell: bash
         run: |
           set -euo pipefail
           cmake -S indra -B "${{ matrix.directory }}" -DLL_TESTS:BOOL=ON
           cmake --build "${{ matrix.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
-            --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver
+            --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
+            PROJECT_llprimitive_TEST_llgltfmaterial PROJECT_llprimitive_TEST_llmediaentry PROJECT_llprimitive_TEST_llprimitive \
+            INTEGRATION_TEST_llnightsky
+          # Canary's test helpers register the tests with CTest (upstream
+          # b66d6679b2) instead of running them after their build: run them
+          # here, and fail unless all eight are found.
+          tests='^(INTEGRATION_TEST_RUNNER_(lltrace|llinventory_runtime|jsonrpcws|wsserver|llnightsky)|PROJECT_llprimitive_TEST_(llgltfmaterial|llmediaentry|llprimitive))$'
+          found=$(ctest --test-dir "${{ matrix.directory }}" -C "$VIEWER_BUILD_TYPE" -N -R "$tests" | sed -n 's/^Total Tests: //p')
+          test "$found" = 8 || { echo "expected 8 tests, CTest found ${found:-none}"; exit 1; }
+          ctest --test-dir "${{ matrix.directory }}" -C "$VIEWER_BUILD_TYPE" -R "$tests" --output-on-failure
 
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'

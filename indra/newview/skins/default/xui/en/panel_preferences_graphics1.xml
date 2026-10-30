@@ -1844,7 +1844,7 @@ If you do not understand the distinction then leave this control alone."
        width="480"
        font="SansSerifBold"
        name="AlphaSortHeading">
-        Alpha sorting method
+        Alpha rendering method
       </text>
       <text
        follows="left|top"
@@ -1855,7 +1855,7 @@ If you do not understand the distinction then leave this control alone."
        width="485"
        word_wrap="true"
        name="AlphaSortDescription">
-        Applies only to the main post-water world view. Unsupported methods safely use legacy sorting without changing your saved choice. Particles, mirrors and hero probes, cube snapshots, HUDs, impostors, and pre-water alpha retain legacy sorting.
+        Alpha rendering applies only to the main post-water world view. Particles, mirrors, hero probes, cube snapshots, HUDs, impostors, and pre-water alpha rendering is always performed on the sorted alpha path.
       </text>
       <radio_group
        control_name="RenderAlphaSortMethod"
@@ -1868,7 +1868,7 @@ If you do not understand the distinction then leave this control alone."
        name="AlphaSortMethod">
         <radio_item
          height="20"
-         label="Upstream sorted alpha"
+         label="Sorted alpha"
          layout="topleft"
          left="8"
          top="5"
@@ -1876,7 +1876,7 @@ If you do not understand the distinction then leave this control alone."
          name="Legacy"/>
         <radio_item
          height="20"
-         label="PPLL (Windows/Linux, OpenGL 4.4+)"
+         label="PPLL"
          layout="topleft"
          left_delta="0"
          top_pad="2"
@@ -1895,6 +1895,37 @@ If you do not understand the distinction then leave this control alone."
        font="SansSerifBold"
        name="PPLLHeading">
         PPLL parameters
+      </text>
+      <text
+       follows="left|top"
+       height="16"
+       layout="topleft"
+       left="25"
+       top_pad="2"
+       width="5"
+       name="PPLLWarningOpen">
+        (
+      </text>
+      <text
+       follows="left|top"
+       height="16"
+       layout="topleft"
+       left_pad="0"
+       top_delta="0"
+       width="60"
+       font="SansSerifBold"
+       name="PPLLWarningLabel">
+        Warning:
+      </text>
+      <text
+       follows="left|top"
+       height="16"
+       layout="topleft"
+       left_pad="2"
+       top_delta="0"
+       width="300"
+       name="PPLLWarning">
+        May break PPLL)
       </text>
       <spinner
        control_name="RenderAlphaOITMemoryMB"
@@ -1950,6 +1981,44 @@ If you do not understand the distinction then leave this control alone."
        top_pad="5"
        width="440"
        name="PPLLStats"/>
+
+      <text
+       follows="left|top"
+       height="18"
+       layout="topleft"
+       left="15"
+       top_pad="14"
+       width="480"
+       font="SansSerifBold"
+       name="NightSkyHeading">
+        Night sky
+      </text>
+      <radio_group
+       control_name="RenderNightSky"
+       follows="left|top"
+       height="46"
+       layout="topleft"
+       left="15"
+       top_pad="4"
+       width="485"
+       name="NightSky">
+        <radio_item
+         height="20"
+         label="Default"
+         layout="topleft"
+         left="8"
+         top="3"
+         value="0"
+         name="Default"/>
+        <radio_item
+         height="20"
+         label="Real"
+         layout="topleft"
+         left_delta="0"
+         top_pad="2"
+         value="1"
+         name="Real"/>
+      </radio_group>
 
     </panel>
 
