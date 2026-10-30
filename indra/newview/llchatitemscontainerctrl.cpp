@@ -336,7 +336,11 @@ void LLFloaterIMNearbyChatToastPanel::init(LLSD& notification)
 
         if(notification["chat_style"].asInteger()== CHAT_STYLE_IRC)
         {
-            style_params.font.style = "ITALIC";
+            // as in addMessage()
+            if (chat_markdown || gSavedSettings.getBOOL("EmotesUseItalic"))
+            {
+                style_params.font.style = "ITALIC";
+            }
             style_params.markdown_emote = chat_markdown;
         }
         // </FS>

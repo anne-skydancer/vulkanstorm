@@ -1371,10 +1371,15 @@ void LLChatHistory::appendMessage(const LLChat& chat, const LLSD &args, const LL
     if (irc_me || chat.mChatStyle == CHAT_STYLE_IRC)
     {
         delimiter = LLStringUtil::null;
-        // <FS> Emotes are italic, and with markdown chat use '_' to toggle
-        // italic off (spoken part) and back on; the toggle does not
-        // survive the line.
-        body_message_params.font.style = "ITALIC";
+        // <FS> With markdown chat, emotes are italic unconditionally (the
+        // underscore-toggle convention depends on the italic base), and
+        // use '_' to toggle italic off (spoken part) and back on; the
+        // toggle does not survive the line. Without it, italic follows
+        // EmotesUseItalic.
+        if (chat_markdown || gSavedSettings.getBOOL("EmotesUseItalic"))
+        {
+            body_message_params.font.style = "ITALIC";
+        }
         body_message_params.markdown_emote = chat_markdown;
         // </FS>
     }
