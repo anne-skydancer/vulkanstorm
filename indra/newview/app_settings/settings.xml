@@ -11424,6 +11424,17 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Backup</key>
       <integer>0</integer>
     </map>
+  <key>RenderNightSky</key>
+  <map>
+    <key>Comment</key>
+    <string>Night sky: 0 Firestorm's random stars, 1 the real stars and the Milky Way as seen from Rome.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>U32</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
   <key>RenderNormalMapScale</key>
   <map>
     <key>Comment</key>
