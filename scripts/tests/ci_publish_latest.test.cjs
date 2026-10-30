@@ -129,6 +129,20 @@ test('a channel publishes only its own package and checksum before moving its ta
     }
 });
 
+test('republishes an already published release, so its date and commit follow the build', async t => {
+    const { args, calls } = await fixture(t);
+    await publish(args);
+    const updates = calls.filter(call => call.name === 'updateRelease').map(call => call.args);
+    assert.equal(updates.length, 2);
+    assert.equal(updates[0].draft, true);
+    assert.equal(updates[0].target_commitish, 'new-sha');
+    assert.equal(updates[1].draft, false);
+    assert.equal(updates[1].target_commitish, 'new-sha');
+    assert.equal(updates[1].make_latest, 'true');
+    const tagIndex = calls.findIndex(call => call.name === 'updateRef');
+    assert.ok(calls.findIndex(call => call.name === 'updateRelease') > tagIndex);
+});
+
 test('a re-run resumes the draft release a failed republish left behind', async t => {
     const { args, calls } = await fixture(t, { noRelease: true, draftRelease: true });
     await publish(args);
