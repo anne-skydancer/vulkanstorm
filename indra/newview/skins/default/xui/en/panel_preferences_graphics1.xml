@@ -1894,7 +1894,7 @@ If you do not understand the distinction then leave this control alone."
        width="480"
        font="SansSerifBold"
        name="PPLLHeading">
-        PPLL parameters
+        PPLL parameters (WARNING: May cause PPLL to malfunction)
       </text>
       <spinner
        control_name="RenderAlphaOITMemoryMB"
