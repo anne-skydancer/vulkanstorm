@@ -114,7 +114,10 @@ LLDiskCache::LLDiskCache(const std::string& cache_dir,
 // the asset is re-requested).
 void LLDiskCache::purge()
 {
-    vks_diskcache_purge(mCache);
+    // <VulkanStorm> Stop as soon as the viewer is shutting down (upstream
+    // d527adf68c): checked in the scan, the delete loop and the debug list.
+    vks_diskcache_purge_while(mCache, []() -> int32_t { return LLApp::isRunning() ? 1 : 0; });
+    // </VulkanStorm>
 }
 
 const std::string LLDiskCache::metaDataToFilepath(const LLUUID& id, LLAssetType::EType at)

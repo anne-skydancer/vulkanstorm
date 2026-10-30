@@ -416,7 +416,7 @@ public:
     void        setCanUseHTTP(bool can_use_http) {mCanUseHTTP = can_use_http;}
 
     void        forceToDeleteRequest();
-    void        loadFromFastCache();
+    bool        loadFromFastCache(bool without_waiting = false); // <VulkanStorm> false: fast cache busy, try again
     void        setInFastCacheList(bool in_list) { mInFastCacheList = in_list; }
     bool        isInFastCacheList() { return mInFastCacheList; }
 

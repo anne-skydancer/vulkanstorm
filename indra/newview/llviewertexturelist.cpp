@@ -1228,33 +1228,29 @@ F32 LLViewerTextureList::updateImagesLoadingFastCache(F32 max_time)
 
     LLTimer timer;
     image_list_t::iterator enditer = mFastCacheList.begin();
+    // <VulkanStorm> vkstorm-assets locks the fast cache per read, so the
+    // skip of upstream #5356 moves from a batch try-lock to each read: when
+    // the cache is busy, end this update cycle and keep that texture and the
+    // rest queued. Generally fast cache operations are brief and rare in
+    // comparison to writing the main texture body, but if the disk is busy,
+    // a wait can last seconds, which is not practical on the main thread.
+    for (image_list_t::iterator iter = mFastCacheList.begin();
+        iter != mFastCacheList.end();)
     {
-        // Prelock fast cache mutex to avoid waiting multiple times.
-        LLMutexTrylock fast_cache_lock(LLAppViewer::getTextureCache()->getFastCacheMutex());
-        if (!fast_cache_lock.isLocked())
+        image_list_t::iterator curiter = iter++;
+        LLViewerFetchedTexture* imagep = *curiter;
+        if (!imagep->loadFromFastCache(true))
         {
-            // Cache is busy, skip this update cycle to avoid blocking the main thread.
-            //
-            // Generally fast cache operations are brief and rare in comparison to writing
-            // main texture body, but if disk is busy, it can get stuck for multiple
-            // seconds, waiting for that long is not practical.
-            // But some variant of a timed try lock for 0.1ms or less might be optimal.
-            return 0.0f;
+            break;
         }
-        for (image_list_t::iterator iter = mFastCacheList.begin();
-            iter != mFastCacheList.end();)
-        {
-            image_list_t::iterator curiter = iter++;
-            enditer = iter;
-            LLViewerFetchedTexture* imagep = *curiter;
-            imagep->loadFromFastCache();
-            // <FS:Ansariel> Fast cache stats
-            sNumFastCacheReads++;
-            // </FS:Ansariel>
-            if (timer.getElapsedTimeF32() > max_time)
-                break;
-        }
+        enditer = iter;
+        // <FS:Ansariel> Fast cache stats
+        sNumFastCacheReads++;
+        // </FS:Ansariel>
+        if (timer.getElapsedTimeF32() > max_time)
+            break;
     }
+    // </VulkanStorm>
     mFastCacheList.erase(mFastCacheList.begin(), enditer);
     return timer.getElapsedTimeF32();
 }
