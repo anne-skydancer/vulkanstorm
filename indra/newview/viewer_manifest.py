@@ -146,7 +146,8 @@ class ViewerManifest(LLManifest,FSViewerManifest):
             self.path("*/themes/*/textures/textures.xml")
             self.path("*/html/*/*/*.html")
         with self.prefix(src_dst="app_settings"):
-            for directory in ("camera", "windlight", "filters", "beams", "beamsColors", "poses", "fs_static_assets"):
+            # <Vulkanstorm> stars: the real night sky's catalogue (llnightsky.cpp)
+            for directory in ("camera", "windlight", "filters", "beams", "beamsColors", "poses", "fs_static_assets", "stars"):
                 self.path(directory)
 
         with self.prefix(src_dst="character"):
