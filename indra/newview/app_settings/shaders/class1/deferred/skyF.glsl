@@ -236,7 +236,8 @@ vec3 night_sky_milky_way(vec3 q)
     float clouds = smoothstep(0.3, 0.75, coarse) * (0.45 + 0.75 * fine);
     float light = band * (0.15 + 1.2 * clouds) + bulge * (0.6 + 0.6 * fine);
     // the Great Rift: l from -10 to 90 degrees, centred a little north of the plane
-    float rift_l = smoothstep(-0.35, -0.1, l) * smoothstep(1.75, 1.3, l);
+    // (1 - smoothstep: GLSL leaves smoothstep undefined for reversed edges)
+    float rift_l = smoothstep(-0.35, -0.1, l) * (1.0 - smoothstep(1.3, 1.75, l));
     float rift_b = (b - 0.025 - 0.02 * sin(l * 3.0)) / 0.035;
     float rift_shape = exp(-rift_b * rift_b) * rift_l;
     if (rift_shape > 0.01)
