@@ -39,6 +39,7 @@
 const S32 DEFAULT_PRICE = 10;
 
 class LLMessageSystem;
+struct VksInvSale;
 
 class LLSaleInfo
 {
@@ -67,6 +68,11 @@ public:
 protected:
     EForSale mSaleType;
     S32 mSalePrice;
+
+    // This object as the Rust record (the same layout, asserted in
+    // llsaleinfo.cpp).
+    const VksInvSale* vks() const { return reinterpret_cast<const VksInvSale*>(this); }
+    VksInvSale* vks() { return reinterpret_cast<VksInvSale*>(this); }
 
 public:
     // default constructor is fine usually
