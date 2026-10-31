@@ -416,6 +416,35 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
 
+      # The keep-or-port numbers of inventory sub-rung R2 (doc/rust_port.md):
+      # the cache codec before the port (frozen C++) against the Rust-backed
+      # live functions in one binary, and the model rows (loadSkeleton,
+      # validate) over a 50k random-id world, best of three. Like the step
+      # above it never fails a build and writes to the job summary.
+      - name: Bench the inventory cache and login load (llinventorymodel_parity)
+        if: env.VIEWER_BUILD_TYPE != 'Release'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          dir="${{ matrix.directory }}"
+          exe=$(find "$dir/sharedlibs" -type f \( -name INTEGRATION_TEST_llinventorymodel_parity -o -name INTEGRATION_TEST_llinventorymodel_parity.exe \) | head -1)
+          test -n "$exe" || { echo "INTEGRATION_TEST_llinventorymodel_parity not built"; exit 1; }
+          export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/$dir/packages/lib/release:$GITHUB_WORKSPACE/$dir/sharedlibs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          export PATH="$GITHUB_WORKSPACE/$dir/packages/lib/release:$PATH"
+          out="$RUNNER_TEMP/llinventorymodel_bench.txt"
+          VKS_INVMODEL_BENCH=3 VKS_INVMODEL_BENCH_SKIP_REALISTIC=1 "$exe" > "$out" 2>&1
+          status=$?
+          grep -E '^(bench|  [a-zA-Z])' "$out"
+          {
+            echo "### llinventorymodel_parity bench (${{ runner.os }}, exit $status)"
+            echo '```'
+            grep -E '^(bench|  [a-zA-Z])' "$out"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'
         shell: bash

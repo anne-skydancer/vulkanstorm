@@ -356,6 +356,49 @@ namespace tut
         if (runs <= 0) runs = 3;
 
         struct Timing { std::string name; double best = 1e30; };
+        // <Vulkanstorm> R2: the cache codec in one binary, the C++ before
+        // the port (llinventorymodel_parity_frozen.cpp) against the live,
+        // Rust-backed functions, over the uncompressed file `plain`: load
+        // into fresh arrays, save the loaded records. Best of `runs`.
+        auto bench_codec = [&](const std::string& label, const std::string& plain)
+        {
+            std::string scratch = join(env().work, "codec_scratch");
+            write_file(scratch + ".in", plain);
+            double load_cpp = 1e30, load_rust = 1e30, save_cpp = 1e30, save_rust = 1e30;
+            size_t ncats = 0, nitems = 0;
+            bool same_cpp = false, same_rust = false;
+            for (S32 r = 0; r < runs; ++r)
+            {
+                for (int side = 0; side < 2; ++side)
+                {
+                    LLInventoryModel::cat_array_t cats;
+                    LLInventoryModel::item_array_t items;
+                    std::set<LLUUID> to_update;
+                    bool obsolete = false;
+                    auto t0 = std::chrono::steady_clock::now();
+                    if (side == 0) vks_inv_frozen_cache::load_from_file(scratch + ".in", cats, items, to_update, obsolete);
+                    else model::load_from_file(scratch + ".in", cats, items, to_update, obsolete);
+                    double t = seconds_since(t0);
+                    (side == 0 ? load_cpp : load_rust) = std::min(side == 0 ? load_cpp : load_rust, t);
+                    ncats = cats.size();
+                    nitems = items.size();
+                    t0 = std::chrono::steady_clock::now();
+                    if (side == 0) vks_inv_frozen_cache::save_to_file(scratch + ".out", cats, items);
+                    else model::save_to_file(scratch + ".out", cats, items);
+                    t = seconds_since(t0);
+                    (side == 0 ? save_cpp : save_rust) = std::min(side == 0 ? save_cpp : save_rust, t);
+                    (side == 0 ? same_cpp : same_rust) = read_file(scratch + ".out") == plain;
+                    LLFile::remove(scratch + ".out");
+                }
+            }
+            LLFile::remove(scratch + ".in");
+            printf("\nbench codec %s (%s, minimum of %d runs): %u bytes, %u folders, %u items; re-encode identical C++=%d Rust=%d\n",
+                   label.c_str(), env().platform.c_str(), runs, (U32)plain.size(), (U32)ncats, (U32)nitems, same_cpp ? 1 : 0, same_rust ? 1 : 0);
+            printf("  %-48s %10.3f ms -> %10.3f ms\n", "loadFromFile C++ (frozen) -> Rust (live)", load_cpp * 1000.0, load_rust * 1000.0);
+            printf("  %-48s %10.3f ms -> %10.3f ms\n", "saveToFile C++ (frozen) -> Rust (live)", save_cpp * 1000.0, save_rust * 1000.0);
+            fflush(stdout);
+        };
+        // </Vulkanstorm>
         auto bench_world = [&](const std::string& label, const World& w, bool deep_validate)
         {
             std::vector<Timing> t = { { "populate (login without cache + updateItem)" }, { "cache() agent (collect, saveToFile, gzip)" },
@@ -410,11 +453,36 @@ namespace tut
             printf("\nbench %s (%s, RelWithDebInfo, minimum of %d runs): %s\n", label.c_str(), env().platform.c_str(), runs, summary_line("loaded", loaded).c_str());
             for (const Timing& x : t) printf("  %-48s %10.3f ms\n", x.name.c_str(), x.best * 1000.0);
             fflush(stdout);
+            // <Vulkanstorm> R2: the codec over this world's agent cache.
+            bench_codec(label, gunzip_bytes(LLInventoryModel::getInvCacheAddres(AGENT) + ".gz", join(env().work, "codec_gunzip")));
+            // </Vulkanstorm>
         };
 
         if (atoi(getenv_str("VKS_INVMODEL_BENCH").c_str()) > 0)
         {
-            bench_world("realistic 100k items / 8k folders", realistic_world(REALISTIC_SEED, 8000, 100000, 20000, 10000), true);
+            // <Vulkanstorm> R2 codec rows: the Linden Library cache and the
+            // realistic 100k-item cache (both committed fixtures).
+            {
+                const LLUUID owner("ba2a564a-f0f1-4b82-9c61-b7520bfcd09f");
+                bench_codec("Linden Library", gunzip_bytes(join(env().library_dir, owner.asString() + ".inv.llsd.gz"),
+                                                           join(env().work, "codec_gunzip")));
+                bench_codec("realistic 100k items / 8k folders",
+                            gunzip_bytes(join(env().fixtures, platform_rel("cache/c1/realistic_100k.inv.llsd.gz")), join(env().work, "codec_gunzip")));
+            }
+            // </Vulkanstorm>
+            // <Vulkanstorm> Random ids, as real inventories have. The
+            // realistic world's ids (pid()) differ only in bytes 10-15,
+            // which std::hash<LLUUID> folds into the high bits of the hash
+            // alone: the model's unordered_maps put them in one bucket, so
+            // every model lookup over that world is a list walk.
+            // VKS_INVMODEL_BENCH_SKIP_REALISTIC=1 (CI) times that world only
+            // through the codec rows above.
+            bench_world("random 50k items / 5k folders", random_world(0x5eed50000ULL, 5000, 50000), true);
+            if (getenv_str("VKS_INVMODEL_BENCH_SKIP_REALISTIC").empty())
+            {
+                bench_world("realistic 100k items / 8k folders", realistic_world(REALISTIC_SEED, 8000, 100000, 20000, 10000), true);
+            }
+            // </Vulkanstorm>
             if (!getenv_str("VKS_INVMODEL_BENCH_STRESS").empty())
             {
                 bench_world("stress 1M items / 80k folders", realistic_world(STRESS_SEED, 80000, 1000000, 200000, 100000), true);

@@ -30,7 +30,13 @@
  *                              vkstorm-core-rust copies them)
  *   VKS_INVMODEL_COMMIT=<hash> recorded in the fixture headers when dumping
  *   VKS_INVMODEL_BENCH=<runs>  times the cache and validation paths
- *                              (100k realistic, 1M stress) and prints a table
+ *                              (100k realistic, 1M stress) and prints a table;
+ *                              <Vulkanstorm> R2: also a 50k random-id world,
+ *                              and loadFromFile/saveToFile against their C++
+ *                              before the port (llinventorymodel_parity_frozen.cpp)
+ *                              on the Library, realistic and random caches.
+ *                              VKS_INVMODEL_BENCH_SKIP_REALISTIC=1 skips the
+ *                              100k realistic world's model rows </Vulkanstorm>
  *   VKS_INVMODEL_USER_CACHE=<path to an .inv.llsd.gz>  local only: the
  *                              decode/re-encode identity check and timings of
  *                              a real cache; prints counts and timings only
@@ -54,6 +60,7 @@
 #include "../llinventoryfunctions.h"
 
 #include "llinventorymodel_parity_harness.h"
+#include "llinventorymodel_parity_frozen.h" // <Vulkanstorm/> R2 bench baseline
 
 #include "llassetstorage.h"
 #include "lldir.h"
