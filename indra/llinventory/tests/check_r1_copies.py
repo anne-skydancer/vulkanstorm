@@ -379,12 +379,12 @@ def main():
     failures = 0
     count = 0
     covered = {}  # source -> set of normalised line indices inside matched regions
-    frozen = {}  # source -> normalised lines of its frozen copy
+    frozen = {}  # source -> [(conditionals at copy time, normalised lines)] of its frozen copies
     for name in ORACLE_FILES:
         for meta, body in regions(os.path.join(oracle_dir, name)):
             src = meta["source"]
             if src in (s for s, _, _ in KEPT_CPP):
-                frozen[src] = normalise("\n".join(body))
+                frozen.setdefault(src, []).append((meta.get("conditionals", ""), normalise("\n".join(body))))
             if only and not any(src.startswith(p) for p in only):
                 continue
             count += 1
@@ -445,13 +445,28 @@ def main():
             print("DIFF %s: not found exactly once in the live source" % label)
             continue
         got = normalise("\n".join(text))
-        in_live = len(find_runs(live_lines, got))
-        in_copy = len(find_runs(frozen.get(src, []), got))
-        if in_live == 1 and in_copy == 1:
-            print("OK   %s (%d lines)" % (label, len(got)))
+        live_runs = find_runs(live_lines, got)
+        # The conditionals that enclosed the run in the original source: the frozen region's own
+        # (recorded at copy time) plus any opened inside the region before the run.
+        copy_contexts = []
+        for region_cond, region_lines in frozen.get(src, []):
+            for run in find_runs(region_lines, got):
+                inner = conditional_context(region_lines, run)
+                copy_contexts.append(" | ".join(c for c in (region_cond, inner) if c))
+        if len(live_runs) == 1 and len(copy_contexts) == 1:
+            live_context = conditional_context(live_lines, live_runs[0])
+            if live_context == copy_contexts[0]:
+                print("OK   %s (%d lines)" % (label, len(got)))
+                continue
+            # As for the regions: a conditional that now wraps the run (for example
+            # "#if 1 <new> #else <original> #endif") may leave the matched text a dead branch.
+            failures += 1
+            print("DIFF %s: the run is now inside the preprocessor conditionals [%s]; at copy time [%s]" % (
+                label, live_context, copy_contexts[0]))
             continue
         failures += 1
-        print("DIFF %s: %d matches in the live source, %d in the frozen copy (one each expected)" % (label, in_live, in_copy))
+        print("DIFF %s: %d matches in the live source, %d in the frozen copy (one each expected)" % (
+            label, len(live_runs), len(copy_contexts)))
     print("%d regions and %d kept C++ runs checked, %d differ" % (count, kept_count, failures))
     return 1 if failures else 0
 
