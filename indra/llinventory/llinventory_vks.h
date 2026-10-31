@@ -1,8 +1,8 @@
 /**
  * @file llinventory_vks.h
  * @brief What the inventory data model shares to call vkstorm-inventory
- *        (Rust) through vkstorm_ffi.h: records, strings, LLSD and the legacy
- *        text streams. Private to llinventory.
+ *        (Rust) through vkstorm_ffi.h: records, strings and the legacy text
+ *        streams. Private to llinventory.
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -29,7 +29,6 @@
 
 #include "llpermissions.h"
 #include "llsaleinfo.h"
-#include "llsdflat.h"
 #include "lluuid.h"
 #include "vkstorm_ffi.h"
 
@@ -76,12 +75,9 @@ struct LLInvRecordsFree
 };
 typedef std::unique_ptr<VksInvRecords, LLInvRecordsFree> LLInvRecordsPtr;
 
-// Logs a vks_inv_* call that failed (null, false or no change): a malformed
-// LLSD buffer or a caught panic, with vks_inv_last_error().
+// Logs a vks_inv_* call that failed (null, false or no change): a caught
+// panic, with vks_inv_last_error().
 void ll_inv_vks_warn(const char* call);
-
-// The LLSD a vks_inv_* call returned; undefined, logged, for a failure.
-LLSD ll_inv_sd(VksLlsdDoc* doc, const char* call);
 
 // Writes the text of an export's result block; false, logged, for a failure.
 bool ll_inv_write_text(std::ostream& output, VksInvRecords* r, const char* call);

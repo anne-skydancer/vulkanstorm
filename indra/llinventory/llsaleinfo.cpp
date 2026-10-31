@@ -37,7 +37,9 @@
 
 // The rules are Rust since vkstorm-rust rung seven (sub-rung R1):
 // vkstorm-inventory through vkstorm_ffi.h, over this object in place. The
-// sale type names and the message field I/O stay here.
+// sale type names, the message field I/O and the LLSD forms (asLLSD,
+// fromLLSD, packMessage/unpackMessage LLSD, ll_*_sale_info*: LLInventoryItem's
+// LLSD forms call them, and those stay C++ until R2/R3a) stay here.
 
 // use this to avoid temporary object creation
 const LLSaleInfo LLSaleInfo::DEFAULT;
@@ -54,7 +56,7 @@ const char* FOR_SALE_NAMES[] =
     "cntn"
 };
 
-// The writers fall back to "not" for a type without a name, with this
+// The legacy writer falls back to "not" for a type without a name, with this
 // warning once.
 static void warn_unknown_sale_type(LLSaleInfo::EForSale type)
 {
@@ -105,30 +107,43 @@ bool LLSaleInfo::exportLegacyStream(std::ostream& output_stream) const
 
 LLSD LLSaleInfo::asLLSD() const
 {
-    warn_unknown_sale_type(mSaleType);
-    return ll_inv_sd(vks_inv_sale_fill_llsd(vks(), nullptr), "vks_inv_sale_fill_llsd");
+    LLSD sd;
+    asLLSD(sd);
+    return sd;
 }
 
 void LLSaleInfo::asLLSD(LLSD& sd) const
 {
-    warn_unknown_sale_type(mSaleType);
-    LLSDFlat into(sd);
-    VksLlsdDoc* filled = vks_inv_sale_fill_llsd(vks(), into.get());
-    if (!filled)
+    const char* type = lookup(mSaleType);
+    if (!type)
     {
-        ll_inv_vks_warn("vks_inv_sale_fill_llsd");
-        return;
+        LL_WARNS_ONCE() << "Unknown sale type: " << mSaleType << LL_ENDL;
+        type = lookup(LLSaleInfo::FS_NOT);
     }
-    sd = ll_sd_from_vks_doc(filled);
+    sd["sale_type"] = std::string(type);
+    sd["sale_price"] = mSalePrice;
 }
 
 bool LLSaleInfo::fromLLSD(const LLSD& sd, bool& has_perm_mask, U32& perm_mask)
 {
-    LLSDFlat flat(sd);
-    if (!vks_inv_sale_from_llsd(vks(), flat.get(), &has_perm_mask, &perm_mask))
+    const char *w;
+
+    if (sd["sale_type"].isString())
     {
-        ll_inv_vks_warn("vks_inv_sale_from_llsd");
-        return false;
+        mSaleType = lookup(sd["sale_type"].asString().c_str());
+    }
+    else if(sd["sale_type"].isInteger())
+    {
+        S8 type = (U8)sd["sale_type"].asInteger();
+        mSaleType = static_cast<LLSaleInfo::EForSale>(type);
+    }
+
+    mSalePrice = llclamp(sd["sale_price"].asInteger(), 0, S32_MAX);
+    w = "perm_mask";
+    if (sd.has(w))
+    {
+        has_perm_mask = true;
+        perm_mask = ll_U32_from_sd(sd[w]);
     }
     return true;
 }
@@ -161,7 +176,13 @@ void LLSaleInfo::setSalePrice(S32 price)
 
 LLSD LLSaleInfo::packMessage() const
 {
-    return ll_inv_sd(vks_inv_sale_pack_message_llsd(vks()), "vks_inv_sale_pack_message_llsd");
+    LLSD result;
+
+    U8 sale_type = static_cast<U8>(mSaleType);
+    result["sale-type"]     = (U8)sale_type;
+    result["sale-price"]    = (S32)mSalePrice;
+    //result[_PREHASH_NextOwnerMask] = mNextOwnerPermMask;
+    return result;
 }
 
 void LLSaleInfo::packMessage(LLMessageSystem* msg) const
@@ -174,11 +195,12 @@ void LLSaleInfo::packMessage(LLMessageSystem* msg) const
 
 void LLSaleInfo::unpackMessage(LLSD sales)
 {
-    LLSDFlat flat(sales);
-    if (!vks_inv_sale_unpack_message_llsd(vks(), flat.get()))
-    {
-        ll_inv_vks_warn("vks_inv_sale_unpack_message_llsd");
-    }
+    U8 sale_type = (U8)sales["sale-type"].asInteger();
+    mSaleType = static_cast<EForSale>(sale_type);
+
+    mSalePrice = (S32)sales["sale-price"].asInteger();
+    mSalePrice = llclamp(mSalePrice, 0, S32_MAX);
+    //msg->getU32Fast(block, _PREHASH_NextOwnerMask, mNextOwnerPermMask);
 }
 
 void LLSaleInfo::unpackMessage(LLMessageSystem* msg, const char* block)
@@ -257,19 +279,23 @@ bool LLSaleInfo::operator!=(const LLSaleInfo &rhs) const
 ///----------------------------------------------------------------------------
 /// exported functions
 ///----------------------------------------------------------------------------
+static const std::string ST_TYPE_LABEL("sale_type");
+static const std::string ST_PRICE_LABEL("sale_price");
 
 LLSD ll_create_sd_from_sale_info(const LLSaleInfo& sale)
 {
-    return ll_inv_sd(vks_inv_sale_fill_llsd(vks_sale(sale), nullptr), "vks_inv_sale_fill_llsd");
+    LLSD rv;
+    const char* type = LLSaleInfo::lookup(sale.getSaleType());
+    if(!type) type = LLSaleInfo::lookup(LLSaleInfo::FS_NOT);
+    rv[ST_TYPE_LABEL] = type;
+    rv[ST_PRICE_LABEL] = sale.getSalePrice();
+    return rv;
 }
 
 LLSaleInfo ll_sale_info_from_sd(const LLSD& sd)
 {
     LLSaleInfo rv;
-    LLSDFlat flat(sd);
-    if (!vks_inv_sale_from_sd(vks_sale(rv), flat.get()))
-    {
-        ll_inv_vks_warn("vks_inv_sale_from_sd");
-    }
+    rv.setSaleType(LLSaleInfo::lookup(sd[ST_TYPE_LABEL].asString().c_str()));
+    rv.setSalePrice(llclamp((S32)sd[ST_PRICE_LABEL], 0, S32_MAX));
     return rv;
 }

@@ -38,7 +38,9 @@
 // The rules are Rust since vkstorm-rust rung seven (sub-rung R1):
 // vkstorm-inventory through vkstorm_ffi.h. LLPermissions and
 // LLAggregatePermissions are its records in place; the message field I/O,
-// the copy and the debug output stay here.
+// the copy, the debug output and the LLSD forms (packMessage/unpackMessage
+// LLSD, importLLSD, ll_*_sd_*_permissions: LLInventoryItem's LLSD forms
+// call them, and those stay C++ until R2/R3a) stay here.
 
 ///----------------------------------------------------------------------------
 /// Class LLPermissions
@@ -135,6 +137,16 @@ void LLPermissions::fix()
     vks_inv_perms_fix(vks());
 }
 
+void LLPermissions::fixFairUse()
+{
+    vks_inv_perms_fix_fair_use(vks());
+}
+
+void LLPermissions::fixOwnership()
+{
+    vks_inv_perms_fix_ownership(vks());
+}
+
 // Allow accumulation of permissions. Results in the tightest
 // permissions possible. In the case of clashing UUIDs, it sets the ID
 // to LLUUID::null.
@@ -216,7 +228,18 @@ bool LLPermissions::setNextOwnerBits(const LLUUID& agent, const LLUUID& group, b
 //
 LLSD LLPermissions::packMessage() const
 {
-    return ll_inv_sd(vks_inv_perms_pack_message_llsd(vks()), "vks_inv_perms_pack_message_llsd");
+    LLSD result;
+    result["creator-id"]    = mCreator;
+    result["owner-id"]      = mOwner;
+    result["group-id"]      = mGroup;
+
+    result["base-mask"]     =   (S32)mMaskBase;
+    result["owner-mask"]    =   (S32)mMaskOwner;
+    result["group-mask"]    =   (S32)mMaskGroup;
+    result["everyone-mask"] =   (S32)mMaskEveryone;
+    result["next-owner-mask"]=  (S32)mMaskNextOwner;
+    result["group-owned"]   = (bool)mIsGroupOwned;
+    return result;
 }
 
 //
@@ -238,11 +261,16 @@ void LLPermissions::packMessage(LLMessageSystem* msg) const
 
 void LLPermissions::unpackMessage(LLSD perms)
 {
-    LLSDFlat flat(perms);
-    if (!vks_inv_perms_unpack_message_llsd(vks(), flat.get()))
-    {
-        ll_inv_vks_warn("vks_inv_perms_unpack_message_llsd");
-    }
+    mCreator    =   perms["creator-id"];
+    mOwner  =   perms["owner-id"];
+    mGroup  =   perms["group-id"];
+
+    mMaskBase   =   (U32)perms["base-mask"].asInteger();
+    mMaskOwner  =   (U32)perms["owner-mask"].asInteger();
+    mMaskGroup  =   (U32)perms["group-mask"].asInteger();
+    mMaskEveryone   =   (U32)perms["everyone-mask"].asInteger();
+    mMaskNextOwner  =   (U32)perms["next-owner-mask"].asInteger();
+    mIsGroupOwned   =   perms["group-owned"].asBoolean();
 }
 
 void LLPermissions::unpackMessage(LLMessageSystem* msg, const char* block, S32 block_num)
@@ -283,13 +311,78 @@ bool LLPermissions::exportLegacyStream(std::ostream& output_stream) const
     return ll_inv_write_text(output_stream, text.get(), "vks_inv_perms_export_legacy");
 }
 
+static const std::string PERM_CREATOR_ID_LABEL("creator_id");
+static const std::string PERM_OWNER_ID_LABEL("owner_id");
+static const std::string PERM_LAST_OWNER_ID_LABEL("last_owner_id");
+static const std::string PERM_GROUP_ID_LABEL("group_id");
+static const std::string PERM_IS_OWNER_GROUP_LABEL("is_owner_group");
+static const std::string PERM_BASE_MASK_LABEL("base_mask");
+static const std::string PERM_OWNER_MASK_LABEL("owner_mask");
+static const std::string PERM_GROUP_MASK_LABEL("group_mask");
+static const std::string PERM_EVERYONE_MASK_LABEL("everyone_mask");
+static const std::string PERM_NEXT_OWNER_MASK_LABEL("next_owner_mask");
+
 void LLPermissions::importLLSD(const LLSD& sd_perm)
 {
-    LLSDFlat flat(sd_perm);
-    if (!vks_inv_perms_import_llsd(vks(), flat.get()))
+    LLSD::map_const_iterator i, end;
+    end = sd_perm.endMap();
+    for (i = sd_perm.beginMap(); i != end; ++i)
     {
-        ll_inv_vks_warn("vks_inv_perms_import_llsd");
+        const std::string& label = i->first;
+        if (label == PERM_CREATOR_ID_LABEL)
+        {
+            mCreator = i->second.asUUID();
+            continue;
+        }
+        if (label == PERM_OWNER_ID_LABEL)
+        {
+            mOwner = i->second.asUUID();
+            continue;
+        }
+        if (label == PERM_LAST_OWNER_ID_LABEL)
+        {
+            mLastOwner = i->second.asUUID();
+            continue;
+        }
+        if (label == PERM_GROUP_ID_LABEL)
+        {
+            mGroup = i->second.asUUID();
+            continue;
+        }
+        if (label == PERM_BASE_MASK_LABEL)
+        {
+            PermissionMask mask = i->second.asInteger();
+            mMaskBase = mask;
+            continue;
+        }
+        if (label == PERM_OWNER_MASK_LABEL)
+        {
+            PermissionMask mask = i->second.asInteger();
+            mMaskOwner = mask;
+            continue;
+        }
+        if (label == PERM_EVERYONE_MASK_LABEL)
+        {
+            PermissionMask mask = i->second.asInteger();
+            mMaskEveryone = mask;
+            continue;
+        }
+        if (label == PERM_GROUP_MASK_LABEL)
+        {
+            PermissionMask mask = i->second.asInteger();
+            mMaskGroup = mask;
+            continue;
+        }
+        if (label == PERM_NEXT_OWNER_MASK_LABEL)
+        {
+            PermissionMask mask = i->second.asInteger();
+            mMaskNextOwner = mask;
+            continue;
+        }
     }
+
+    fixOwnership();
+    fix();
 }
 
 bool LLPermissions::operator==(const LLPermissions &rhs) const
@@ -414,18 +507,22 @@ std::string mask_to_string(U32 mask, bool isOpenSim /*=false*/) // <FS:Beq/> rem
 
 LLSD ll_create_sd_from_permissions(const LLPermissions& perm)
 {
-    return ll_inv_sd(vks_inv_perms_fill_llsd(vks_perms(perm), nullptr), "vks_inv_perms_fill_llsd");
+    LLSD rv;
+    ll_fill_sd_from_permissions(rv, perm);
+    return rv;
 }
 void ll_fill_sd_from_permissions(LLSD& rv, const LLPermissions& perm)
 {
-    LLSDFlat into(rv);
-    VksLlsdDoc* filled = vks_inv_perms_fill_llsd(vks_perms(perm), into.get());
-    if (!filled)
-    {
-        ll_inv_vks_warn("vks_inv_perms_fill_llsd");
-        return;
-    }
-    rv = ll_sd_from_vks_doc(filled);
+    rv[PERM_CREATOR_ID_LABEL] = perm.getCreator();
+    rv[PERM_OWNER_ID_LABEL] = perm.getOwner();
+    rv[PERM_LAST_OWNER_ID_LABEL] = perm.getLastOwner();
+    rv[PERM_GROUP_ID_LABEL] = perm.getGroup();
+    rv[PERM_IS_OWNER_GROUP_LABEL] = perm.isGroupOwned();
+    rv[PERM_BASE_MASK_LABEL] = (LLSD::Integer)perm.getMaskBase();
+    rv[PERM_OWNER_MASK_LABEL] = (LLSD::Integer)perm.getMaskOwner();
+    rv[PERM_GROUP_MASK_LABEL] = (LLSD::Integer)perm.getMaskGroup();
+    rv[PERM_EVERYONE_MASK_LABEL] = (LLSD::Integer)perm.getMaskEveryone();
+    rv[PERM_NEXT_OWNER_MASK_LABEL] = (LLSD::Integer)perm.getMaskNextOwner();
 }
 
 LLPermissions ll_permissions_from_sd(const LLSD& sd_perm)

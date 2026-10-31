@@ -1,8 +1,8 @@
 /**
  * @file llinventory_vks.cpp
  * @brief What the inventory data model shares to call vkstorm-inventory
- *        (Rust): failure logs, LLSD results, export text and the legacy
- *        stream window.
+ *        (Rust): failure logs, export text and the legacy stream
+ *        window.
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -33,16 +33,6 @@ void ll_inv_vks_warn(const char* call)
 {
     const char* error = vks_inv_last_error();
     LL_WARNS("Inventory") << call << " failed: " << (error ? error : "") << LL_ENDL;
-}
-
-LLSD ll_inv_sd(VksLlsdDoc* doc, const char* call)
-{
-    if (!doc)
-    {
-        ll_inv_vks_warn(call);
-        return LLSD();
-    }
-    return ll_sd_from_vks_doc(doc);
 }
 
 bool ll_inv_write_text(std::ostream& output, VksInvRecords* r, const char* call)

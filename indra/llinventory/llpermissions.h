@@ -122,6 +122,14 @@ private:
 
     static bool sIsInOpenSim; // <FS:TJ/> [FIRE-36028] Fix OpenSim object permissions
 
+    // Correct for fair use - you can never take away the right to
+    // move stuff you own, and you can never take away the right to
+    // transfer something you cannot otherwise copy.
+    void fixFairUse();
+
+    // Fix internal consistency for group/agent ownership
+    void fixOwnership();
+
     // This object as the Rust record (the same layout, asserted in
     // llpermissions.cpp).
     const VksInvPerms* vks() const { return reinterpret_cast<const VksInvPerms*>(this); }
