@@ -452,6 +452,33 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
 
+      # Inventory rung R3a: an AIS reply of 26.7 MB (the R3a corpus's s10a)
+      # through the adapter and the parse, the C++ of before R3a (a frozen
+      # copy) against the Rust of now, in the same binary. Never fails a build.
+      - name: Bench the AIS reply path (llaisupdate_parity)
+        if: env.VIEWER_BUILD_TYPE != 'Release'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          dir="${{ matrix.directory }}"
+          exe=$(find "$dir/sharedlibs" -type f \( -name INTEGRATION_TEST_llaisupdate_parity -o -name INTEGRATION_TEST_llaisupdate_parity.exe \) | head -1)
+          test -n "$exe" || { echo "INTEGRATION_TEST_llaisupdate_parity not built"; exit 1; }
+          export LD_LIBRARY_PATH="$(dirname "$exe"):$GITHUB_WORKSPACE/$dir/packages/lib/release:$GITHUB_WORKSPACE/$dir/sharedlibs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          export PATH="$(dirname "$exe"):$PATH"
+          out="$RUNNER_TEMP/llaisupdate_bench.txt"
+          VKS_AISUPDATE_BENCH=3 "$exe" > "$out" 2>&1
+          status=$?
+          grep -A5 '\[aisupdate\] bench' "$out"
+          {
+            echo "### AIS reply bench, llaisupdate_parity (${{ runner.os }}, exit $status)"
+            echo '```'
+            grep -A5 '\[aisupdate\] bench' "$out"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'
         shell: bash
