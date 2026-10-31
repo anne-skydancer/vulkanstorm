@@ -218,7 +218,13 @@ jobs:
           if ! command -v rustup > /dev/null; then
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
             echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
           fi
+          # Corrosion runs rustc from the build tree, outside the checkout, so
+          # the toolchain rust-toolchain.toml names is installed as the default.
+          channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' "$GITHUB_WORKSPACE/.core-rust/rust-toolchain.toml")
+          rustup toolchain install "$channel" --profile minimal
+          rustup default "$channel"
           echo "VKS_CORE_RUST_DIR=$GITHUB_WORKSPACE/.core-rust" >> "$GITHUB_ENV"
           echo "vkstorm-ffi from vkstorm-core-rust $(git -C "$GITHUB_WORKSPACE/.core-rust" rev-parse --short=10 HEAD)"
 
