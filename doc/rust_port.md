@@ -1892,10 +1892,19 @@ BL = FL and BR = FR sample for sample at 5.1, LFE silent.
 The inventory rung follows the pattern of the earlier rungs: the record
 classes (`LLInventoryItem`, `LLInventoryCategory`, `LLPermissions`,
 `LLSaleInfo` and their viewer subclasses) and the `LLInventoryModel`
-containers stay C++, because viewer code writes their fields directly and 145
-files use `gInventory`. Rust makes the decisions behind them; flat records
+containers stay C++, because viewer code writes their fields directly:
+184 files use `gInventory` (about 2,500 lines) and 173 work with
+`LLViewerInventoryItem`. Rust makes the decisions behind them; flat records
 and operation lists cross the C ABI. The plan, the eight open decisions and
 the oracle inventory are in `doc/survey/03-content-model.md` §4-§6.
+
+The model's storage (items, folders, observers) moves to Rust with the UI
+rung, when the inventory panels, folder views and filter, its heaviest
+readers, move to Rust and can read it directly. Moving it before then would
+need a C++ proxy layer over Rust records in every one of those files, which
+the UI rung would throw away. A move of the containers alone after R4b is
+considered only if measurements show the C++ storage to be a bottleneck
+(owner's decision, 2026-10-31).
 
 Sub-rungs and their oracles:
 
@@ -1914,8 +1923,10 @@ copies identical to the production sources they were taken from.
 State (October 2026): the oracle phase is complete for all six sub-rungs. R1
 is implemented in the `vkstorm-inventory` crate of vkstorm-core-rust and
 replays every R1 corpus byte for byte, with and without `opensim`; it is not
-yet behind `vkstorm-ffi` and the viewer does not call it. R2-R4b are not
-implemented.
+yet behind `vkstorm-ffi` and the viewer does not call it. R2-R4b are
+implemented in the same crate (vkstorm-core-rust #8, with the map order taken
+from the C++ caller in #9) and replay their oracle recordings per C++
+standard library; none is behind `vkstorm-ffi` yet.
 
 ## Local build
 
