@@ -110,6 +110,15 @@ namespace vks_ais
     // run, op index); must stay empty.
     std::vector<std::string> tid_failures();
 
+    // Bench (VKS_AISUPDATE_BENCH; prints, never fails): an AIS reply body of
+    // a folder fetch at depth 50 through the adapter and the parse, the C++
+    // of before inventory rung R3a (the LLSD handler's XML parse into an
+    // LLSD tree, then the frozen AISUpdate parse of llaisupdate_bench_cpp.inc)
+    // against the Rust of now (the AIS handler's parse into a Rust value,
+    // then AISUpdate's Rust parse and its viewer objects), each step best of
+    // `rounds`, on an empty model (a first fetch: every object new).
+    std::string bench(const std::string& body, int rounds);
+
     // Command type names (the enum's names) and back; -1 if unknown.
     const char* command_name(int type);
     int command_from_name(const std::string& name);

@@ -222,6 +222,7 @@ set(viewer_SOURCE_FILES
     groupchatlistener.cpp
     llaccountingcostmanager.cpp
     llaisapi.cpp
+    llaisreply.cpp
     llagent.cpp
     llagentaccess.cpp
     llagentbenefits.cpp
@@ -1097,6 +1098,7 @@ set(viewer_HEADER_FILES
     llaccountingcost.h
     llaccountingcostmanager.h
     llaisapi.h
+    llaisreply.h
     llagent.h
     llagentaccess.h
     llagentbenefits.h

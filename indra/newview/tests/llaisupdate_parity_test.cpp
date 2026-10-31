@@ -993,4 +993,29 @@ namespace tut
         const std::string cmd = std::string("\"") + VKS_AISUPDATE_PYTHON + "\" \"" + VKS_AISUPDATE_COPY_CHECK + "\"";
         ensure("check_r3a_copies.py failed (see its output above): " + cmd, run_command(cmd));
     }
+
+    template<> template<>
+    void aisupdate_object::test<4>()
+    {
+        // The bench (VKS_AISUPDATE_BENCH=<rounds>): prints, never fails.
+        set_test_name("bench: the large reply, C++ before R3a against Rust");
+        const char* rounds = getenv("VKS_AISUPDATE_BENCH");
+        if (!rounds || !*rounds)
+        {
+            return;
+        }
+        const std::string gz = fixtures_dir() + "/cases/s10a_large_recursive.0.xml.gz";
+        const std::string work(VKS_AISUPDATE_WORK_DIR);
+        LLFile::mkdir(work);
+        const std::string xml = work + "/bench." + std::to_string(vks_getpid()) + ".xml";
+        std::string body;
+        ensure("cannot gunzip " + gz, gunzip_file(gz, xml) && read_file(xml, body));
+        LLFile::remove(xml);
+        std::cout << vks_ais::bench(body, std::max(1, atoi(rounds))) << std::flush;
+        // A typical small reply (a folder fetch at depth 0: 3 items, a link,
+        // a subfolder), many rounds: the per-reply cost of the crossing.
+        std::string small;
+        ensure("cannot read s01a", read_file(fixtures_dir() + "/cases/s01a_children_depth0_full.0.xml", small));
+        std::cout << vks_ais::bench(small, 2000) << std::flush;
+    }
 }

@@ -27,6 +27,8 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llaisapi.h"
+#include "llaisreply.h" // <Vulkanstorm/>
+#include "llinventory_vks.h" // <Vulkanstorm/>
 
 #include "llagent.h"
 #include "llappviewer.h"
@@ -59,14 +61,6 @@ const S32 MAX_SIMULTANEOUS_COROUTINES = 2048;
 // Specify own depth to be able to anticipate it and mark folders as incomplete
 const S32 MAX_FOLDER_DEPTH_REQUEST = 50;
 
-// <Vulkanstorm> The depth limit of an AIS reply (LLSDParser's max_depth): a
-// value nested this many containers deep makes the body unparsable, as
-// malformed XML does (an empty result; status 499 on a success with the
-// application/llsd+xml content type). A depth-50 fetch nests about 160
-// levels; the limit keeps a hostile reply from building, walking and
-// freeing an LLSD tree too deep for the stack (approved fix, 2026-10-29).
-const S32 AIS_MAX_REPLY_DEPTH = 256;
-// </Vulkanstorm>
 
 //-------------------------------------------------------------------------
 /*static*/
@@ -846,18 +840,219 @@ void AISAPI::onIdle(void *userdata)
     }
 }
 
+// <Vulkanstorm> Inventory rung R3a: AIS replies are Rust values (llaisreply.h),
+// and the decisions of the coroutine and of AISUpdate's parse are
+// vkstorm-inventory's (vks_inv_ais_*). They reach the inventory model through
+// this host table, one C++ call per call, in the C++ order. A host function
+// must not throw into Rust: it keeps the first exception (LLCoros::Stopping
+// at a checkpoint, say), answers "not found" / stop from then on, and the
+// caller rethrows it once the Rust call returned.
+struct AISUpdateHost
+{
+    explicit AISUpdateHost(AISUpdate* update) : mUpdate(update)
+    {
+        mTable.ctx = this;
+        mTable.get_category = &getCategory;
+        mTable.get_item = &getItem;
+        mTable.get_version = &getVersion;
+        mTable.set_version = &setVersion;
+        mTable.fetch = &fetch;
+        mTable.fetch_descendents_of = &fetchDescendentsOf;
+        mTable.on_object_deleted_from_server = &onObjectDeletedFromServer;
+        mTable.notify = &notify;
+        mTable.checkpoint = &checkpoint;
+    }
+
+    const VksInvAisHost* table() const { return &mTable; }
+
+    void rethrow()
+    {
+        if (mError)
+        {
+            std::exception_ptr error = mError;
+            mError = nullptr;
+            std::rethrow_exception(error);
+        }
+    }
+
+    template <typename R, typename F>
+    static R guarded(void* ctx, R fail, F&& f)
+    {
+        AISUpdateHost* host = static_cast<AISUpdateHost*>(ctx);
+        if (host->mError)
+        {
+            return fail;
+        }
+        try
+        {
+            return f(host);
+        }
+        catch (...)
+        {
+            host->mError = std::current_exception();
+            return fail;
+        }
+    }
+
+    static LLViewerInventoryCategory* category(uint64_t handle)
+    {
+        return reinterpret_cast<LLViewerInventoryCategory*>(static_cast<uintptr_t>(handle));
+    }
+
+    static bool getCategory(void* ctx, const uint8_t* id, VksInvAisCategory* out, uint64_t* handle)
+    {
+        return guarded(ctx, false, [&](AISUpdateHost*)
+        {
+            LLViewerInventoryCategory* cat = gInventory.getCategory(vks_uuid(id));
+            if (!cat)
+            {
+                return false;
+            }
+            // The fields as the copy constructor takes them (the version
+            // comes from getVersion(), which the parse calls itself).
+            cat->toVks(out->category);
+            vks_set_uuid(out->category.owner, cat->getOwnerID());
+            out->descendents = cat->getDescendentCount();
+            out->has_requested = true;
+            const LLFrameTimer& timer = cat->getFetchRequestTimer();
+            static_assert(sizeof(LLFrameTimer) == sizeof(VksInvAisFetchTimer) &&
+                              std::is_trivially_copyable<LLFrameTimer>::value,
+                          "LLFrameTimer is {F64 start, F64 expiry, bool started}");
+            memcpy(&out->requested, &timer, sizeof(timer));
+            *handle = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(cat));
+            return true;
+        });
+    }
+
+    static bool getItem(void* ctx, const uint8_t* id, VksInvAisItem* out)
+    {
+        return guarded(ctx, false, [&](AISUpdateHost*)
+        {
+            LLViewerInventoryItem* item = gInventory.getItem(vks_uuid(id));
+            if (!item)
+            {
+                return false;
+            }
+            // The fields as copyViewerItem takes them.
+            item->toVks(out->item);
+            out->complete = item->isFinished();
+            vks_set_uuid(out->transaction_id, item->getTransactionID());
+            out->running = item->getIsRunning();
+            out->faulted = item->getIsFaulted();
+            return true;
+        });
+    }
+
+    static int32_t getVersion(void* ctx, uint64_t handle)
+    {
+        return guarded(ctx, (int32_t)LLViewerInventoryCategory::VERSION_UNKNOWN,
+                       [&](AISUpdateHost*) { return (int32_t)category(handle)->getVersion(); });
+    }
+
+    static void setVersion(void* ctx, uint64_t handle, int32_t version)
+    {
+        guarded(ctx, 0, [&](AISUpdateHost*)
+        {
+            category(handle)->setVersion(version);
+            return 0;
+        });
+    }
+
+    static bool fetch(void* ctx, uint64_t handle, int32_t expiry_seconds)
+    {
+        return guarded(ctx, false, [&](AISUpdateHost*)
+        {
+            LLViewerInventoryCategory* cat = category(handle);
+            LL_WARNS("Inventory") << "Got stale folder, refetching '" << cat->getName() << "' " << cat->getUUID() << LL_ENDL;
+            return cat->fetch(expiry_seconds);
+        });
+    }
+
+    static bool fetchDescendentsOf(void* ctx, const uint8_t* folder_id)
+    {
+        return guarded(ctx, false, [&](AISUpdateHost*)
+        {
+            LL_WARNS("Inventory") << "Purge failed: the object no longer exists at the server; refetching "
+                                  << vks_uuid(folder_id) << LL_ENDL;
+            return gInventory.fetchDescendentsOf(vks_uuid(folder_id));
+        });
+    }
+
+    static void onObjectDeletedFromServer(void* ctx, const uint8_t* id, bool fix_broken_links,
+                                          bool update_parent_version, bool do_notify_observers)
+    {
+        guarded(ctx, 0, [&](AISUpdateHost*)
+        {
+            gInventory.onObjectDeletedFromServer(vks_uuid(id), fix_broken_links, update_parent_version,
+                                                 do_notify_observers);
+            return 0;
+        });
+    }
+
+    static void notify(void* ctx, const char* name)
+    {
+        guarded(ctx, 0, [&](AISUpdateHost*)
+        {
+            LL_WARNS("Inventory") << "Fetch failed, content is over limit (" << name << ")" << LL_ENDL;
+            LLNotificationsUtil::add(name);
+            return 0;
+        });
+    }
+
+    static bool checkpoint(void* ctx)
+    {
+        return guarded(ctx, false, [&](AISUpdateHost* host)
+        {
+            if (host->mUpdate)
+            {
+                host->mUpdate->checkTimeout();
+            }
+            return true;
+        });
+    }
+
+    AISUpdate* mUpdate;
+    std::exception_ptr mError;
+    VksInvAisHost mTable{};
+};
+
+namespace
+{
+    // The coroutine's arguments as the decisions read them: of the request
+    // body only its "depth", with the C++ coercion.
+    VksInvAisCall ais_call(AISAPI::COMMAND_TYPE type, const LLUUID& target_id, const LLSD& body)
+    {
+        VksInvAisCall call{};
+        call.command = (int32_t)type;
+        vks_set_uuid(call.target_id, target_id);
+        vks_set_uuid(call.agent_id, gAgent.getID());
+        call.in_open_sim = LLPermissions::getIsInOpenSim();
+        call.has_depth = body.has("depth");
+        call.depth = call.has_depth ? body["depth"].asInteger() : 0;
+        return call;
+    }
+
+    struct AISUpdateFree
+    {
+        void operator()(VksInvAisUpdate* u) const { vks_inv_ais_update_free(u); }
+    };
+}
+// </Vulkanstorm>
+
 /*static*/
-void AISAPI::onUpdateReceived(const LLSD& update, COMMAND_TYPE type, const LLSD& request_body)
+void AISAPI::onUpdateReceived(const AISReply& update, COMMAND_TYPE type, const LLSD& request_body,
+                              uuid_vec_t& callback_ids) // <Vulkanstorm/> a Rust reply; the callback ids out
 {
     LLTimer timer;
     if ( (type == UPDATECATEGORY || type == UPDATEITEM)
         && gSavedSettings.getBOOL("DebugAvatarAppearanceMessage"))
     {
-        dump_sequential_xml(gAgentAvatarp->getDebugName() + "_ais_update", update);
+        dump_sequential_xml(gAgentAvatarp->getDebugName() + "_ais_update", update.asLLSD()); // <Vulkanstorm/> asLLSD
     }
 
     AISUpdate ais_update(update, type, request_body);
     ais_update.doUpdate(); // execute the updates in the appropriate order.
+    callback_ids = ais_update.getCallbackIds(); // <Vulkanstorm/>
     LL_DEBUGS("Inventory", "AIS3") << "Elapsed processing: " << timer.getElapsedTimeF32() << LL_ENDL;
 }
 
@@ -883,181 +1078,59 @@ void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ht
 
     LL_DEBUGS("Inventory") << "Request url: " << url << LL_ENDL;
 
-    LLSD result;
-    LLSD httpResults;
-    LLCore::HttpStatus status;
-
-    httpAdapter->setLLSDMaxDepth(AIS_MAX_REPLY_DEPTH); // <Vulkanstorm/> the AIS depth cap
-    result = invoke(httpAdapter , httpRequest , url , body , httpOptions , httpHeaders);
-    httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
-    status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
-
-    if (!status || !result.isMap())
+    // <Vulkanstorm> Inventory rung R3a. The adapter's handler is the AIS
+    // variant (llaisreply.h): it hands the raw response to Rust, which builds
+    // the result the LLSD handler would have posted, with the depth cap (an
+    // approved fix), and no C++ LLSD tree. The decisions are Rust's: the
+    // status and the error branch here (the 410 refetch and delete, the 403
+    // notification with its first-call flag), AISUpdate's parse, the
+    // completion callback ids. A C++ tree of the result is built only for
+    // the logs that print it.
+    std::shared_ptr<AISReplySlot> slot = std::make_shared<AISReplySlot>();
+    httpAdapter->setLLSDHandlerFactory(AISReplySlot::factory(slot));
+    LLSD posted = invoke(httpAdapter , httpRequest , url , body , httpOptions , httpHeaders);
+    httpAdapter->setLLSDHandlerFactory(nullptr);
+    AISReply result = slot->handler ? slot->handler->takeReply() : AISReply();
+    if (!result)
     {
-        if (!result.isMap())
-        {
-            status = LLCore::HttpStatus(HTTP_INTERNAL_ERROR, "Malformed response contents");
-        }
-        else if (status.getType() == 410) //GONE
-        {
-            // Item does not exist or was already deleted from server.
-            // parent folder is out of sync
-            if (type == REMOVECATEGORY)
-            {
-                LLViewerInventoryCategory *cat = gInventory.getCategory(targetId);
-                if (cat)
-                {
-                    LL_WARNS("Inventory") << "Purge failed for '" << cat->getName()
-                        << "' local version:" << cat->getVersion()
-                        << " since folder no longer exists at server. Descendent count: server == " << cat->getDescendentCount()
-                        << ", viewer == " << cat->getViewerDescendentCount()
-                        << LL_ENDL;
-                    gInventory.fetchDescendentsOf(cat->getParentUUID());
-                    // Note: don't delete folder here - contained items will be deparented (or deleted)
-                    // and since we are clearly out of sync we can't be sure we won't get rid of something we need.
-                    // For example folder could have been moved or renamed with items intact, let it fetch first.
-                }
-            }
-            else if (type == REMOVEITEM)
-            {
-                LLViewerInventoryItem *item = gInventory.getItem(targetId);
-                if (item)
-                {
-                    LL_WARNS("Inventory") << "Purge failed for '" << item->getName()
-                        << "' since item no longer exists at server." << LL_ENDL;
-                    gInventory.fetchDescendentsOf(item->getParentUUID());
-                    // since item not on the server and exists at viewer, so it needs an update at the least,
-                    // so delete it, in worst case item will be refetched with new params.
-                    gInventory.onObjectDeletedFromServer(targetId);
-                }
-            }
-        }
-        else if (status == LLCore::HttpStatus(HTTP_FORBIDDEN) /*403*/)
-        {
-            if (type == FETCHCATEGORYCHILDREN)
-            {
-                if (body.has("depth") && body["depth"].asInteger() == 0)
-                {
-                    // Can't fetch a single folder with depth 0, folder is too big.
-                    static bool first_call = true;
-                    if (first_call)
-                    {
-                        first_call = false;
-                        LLNotificationsUtil::add("InventoryLimitReachedAISAlert");
-                    }
-                    else
-                    {
-                        LLNotificationsUtil::add("InventoryLimitReachedAIS");
-                    }
-                    LL_WARNS("Inventory") << "Fetch failed, content is over limit, url: " << url << LL_ENDL;
-                }
-                else
-                {
-                    // Result was too big, but situation is recoverable by requesting with lower depth
-                    LL_DEBUGS("Inventory") << "Fetch failed, content is over limit, url: " << url << LL_ENDL;
-                }
-            }
-        }
-        LL_WARNS("Inventory") << "Inventory error: " << status.toString() << LL_ENDL;
-        LL_WARNS("Inventory") << ll_pretty_print_sd(result) << LL_ENDL;
+        // The adapter answered without its handler (an immediate error), or
+        // the handler could not build the reply: what the adapter returned.
+        result = AISReply::fromLLSD(posted);
     }
 
-    LL_DEBUGS("Inventory", "AIS3") << "Result: " << result << LL_ENDL;
-    onUpdateReceived(result, type, body);
+    static VksInvAisAlert alert = { true }; // the first 403 at depth 0 gets the alert
+    const VksInvAisCall call = ais_call(type, targetId, body);
+    AISUpdateHost host(nullptr);
+    const VksInvAisStatus status = vks_inv_ais_error_branch(result.get(), &call, &alert, host.table());
+    host.rethrow();
+    if (status.status != 0)
+    {
+        LL_WARNS("Inventory") << "Inventory error: " << result.status().toString() << " url: " << url << LL_ENDL;
+        LL_WARNS("Inventory") << ll_pretty_print_sd(result.asLLSD()) << LL_ENDL;
+    }
+
+    LL_DEBUGS("Inventory", "AIS3") << "Result: " << result.asLLSD() << LL_ENDL;
+    uuid_vec_t callback_ids;
+    onUpdateReceived(result, type, body, callback_ids);
 
     if (callback != nullptr)
     {
-        bool needs_callback = true;
-        LLUUID id(LLUUID::null);
-
-        switch (type)
+        // The callback contract (Rust): every created or updated id for the
+        // writes that report them, else the target's id or null; at least
+        // one call regardless of failure.
+        for (const LLUUID& id : callback_ids)
         {
-        case COPYLIBRARYCATEGORY:
-        case FETCHCATEGORYCATEGORIES:
-        case FETCHCATEGORYCHILDREN:
-        case FETCHCATEGORYSUBSET:
-        case FETCHCATEGORYLINKS:
-        case FETCHCOF:
-            if (result.has("category_id"))
-            {
-                id = result["category_id"];
-            }
-            break;
-        case FETCHITEM:
-            if (result.has("item_id"))
-            {
-                // Error message might contain an item_id!!!
-                id = result["item_id"];
-            }
-            if (result.has("linked_id"))
-            {
-                id = result["linked_id"];
-            }
-            break;
-        case COPYINVENTORY: // <FS:Ansariel> Bring this back from Kitty's patch
-        case CREATEINVENTORY:
-            // CREATEINVENTORY can have multiple callbacks
-            if (result.has("_created_categories"))
-            {
-                LLSD& cats = result["_created_categories"];
-                LLSD::array_const_iterator cat_iter;
-                for (cat_iter = cats.beginArray(); cat_iter != cats.endArray(); ++cat_iter)
-                {
-                    LLUUID cat_id = *cat_iter;
-                    callback(cat_id);
-                    needs_callback = false;
-                }
-            }
-            if (result.has("_created_items"))
-            {
-                LLSD& items = result["_created_items"];
-                LLSD::array_const_iterator item_iter;
-                for (item_iter = items.beginArray(); item_iter != items.endArray(); ++item_iter)
-                {
-                    LLUUID item_id = *item_iter;
-                    callback(item_id);
-                    needs_callback = false;
-                }
-            }
-            break;
-        // <FS:Zi> FIRE-34169 - Fix #RLV ~Subfolder creation
-        case UPDATECATEGORY:
-            if (result.has("_updated_categories"))
-            {
-                LLSD& items = result["_updated_categories"];
-                LLSD::array_const_iterator item_iter;
-                for (item_iter = items.beginArray(); item_iter != items.endArray(); ++item_iter)
-                {
-                    LLUUID item_id = *item_iter;
-                    callback(item_id);
-                    needs_callback = false;
-                }
-            }
-            else if (result.has("category_id"))
-            {
-                id = result["category_id"];
-            }
-            break;
-        // </FS:Zi>
-        default:
-            break;
-        }
-
-        if (needs_callback)
-        {
-            // Call callback at least once regardless of failure.
-            // UPDATEITEM doesn't expect an id
             callback(id);
         }
     }
-
+    // </Vulkanstorm>
 }
 
 //-------------------------------------------------------------------------
 U32 AISUpdate::sBatchFrameCount = 0;
 LLTimer AISUpdate::sBatchTimer;
 
-AISUpdate::AISUpdate(const LLSD& update, AISAPI::COMMAND_TYPE type, const LLSD& request_body)
+AISUpdate::AISUpdate(const AISReply& update, AISAPI::COMMAND_TYPE type, const LLSD& request_body) // <Vulkanstorm/> AISReply
 : mType(type)
 {
     mFetch = (type == AISAPI::FETCHITEM)
@@ -1085,13 +1158,12 @@ AISUpdate::AISUpdate(const LLSD& update, AISAPI::COMMAND_TYPE type, const LLSD& 
         sBatchTimer.setTimerExpirySec(AIS_BATCH_EXPIRY_SECONDS);
         sBatchFrameCount = current_frame;
     }
-    parseUpdate(update);
+    parseUpdate(update, request_body); // <Vulkanstorm/> request_body
 }
 
 void AISUpdate::clearParseResults()
 {
     mCatDescendentDeltas.clear();
-    mCatDescendentsKnown.clear();
     mCatVersionsUpdated.clear();
     mItemsCreated.clear();
     mItemsLost.clear();
@@ -1099,8 +1171,7 @@ void AISUpdate::clearParseResults()
     mCategoriesCreated.clear();
     mCategoriesUpdated.clear();
     mObjectsDeletedIds.clear();
-    mItemIds.clear();
-    mCategoryIds.clear();
+    mCallbackIds.clear(); // <Vulkanstorm/> was mItemIds, mCategoryIds (the parse's)
 }
 
 void AISUpdate::checkTimeout()
@@ -1129,538 +1200,83 @@ void AISUpdate::checkTimeout()
     }
 }
 
-void AISUpdate::parseUpdate(const LLSD& update)
+// <Vulkanstorm> Inventory rung R3a: the parse is vkstorm-inventory's
+// (vks_inv_ais_parse): it reads the reply, queries the model through the
+// host in the C++ order (checkTimeout() at the start of each embedded part,
+// as parseEmbedded() did) and returns the parse's objects and member maps.
+// Each record becomes one viewer object here (a lost item is the same object
+// as its created entry, as before), with the name localized as
+// unpackMessage() did; doUpdate() applies them as before.
+void AISUpdate::parseUpdate(const AISReply& update, const LLSD& request_body)
 {
     clearParseResults();
-    parseMeta(update);
-    parseContent(update);
-}
 
-void AISUpdate::parseMeta(const LLSD& update)
-{
-    // parse _categories_removed -> mObjectsDeletedIds
-    uuid_list_t cat_ids;
-    parseUUIDArray(update,"_categories_removed",cat_ids);
-    for (uuid_list_t::const_iterator it = cat_ids.begin();
-         it != cat_ids.end(); ++it)
+    const VksInvAisCall call = ais_call(mType, LLUUID::null, request_body);
+    AISUpdateHost host(this);
+    std::unique_ptr<VksInvAisUpdate, AISUpdateFree> parsed(vks_inv_ais_parse(update.get(), &call, host.table()));
+    // LLCoros::Stopping at a checkpoint, or another exception of the model:
+    // the update ends there, as it did inside the C++ parse.
+    host.rethrow();
+    if (!parsed)
     {
-        LLViewerInventoryCategory *cat = gInventory.getCategory(*it);
-        if(cat)
-        {
-            mCatDescendentDeltas[cat->getParentUUID()]--;
-            mObjectsDeletedIds.insert(*it);
-        }
-        else
-        {
-            LL_WARNS("Inventory") << "removed category not found " << *it << LL_ENDL;
-        }
-    }
-
-    // parse _categories_items_removed -> mObjectsDeletedIds
-    uuid_list_t item_ids;
-    parseUUIDArray(update,"_category_items_removed",item_ids);
-    parseUUIDArray(update,"_removed_items",item_ids);
-    for (uuid_list_t::const_iterator it = item_ids.begin();
-         it != item_ids.end(); ++it)
-    {
-        LLViewerInventoryItem *item = gInventory.getItem(*it);
-        if(item)
-        {
-            mCatDescendentDeltas[item->getParentUUID()]--;
-            mObjectsDeletedIds.insert(*it);
-        }
-        else
-        {
-            LL_WARNS("Inventory") << "removed item not found " << *it << LL_ENDL;
-        }
-    }
-
-    // parse _broken_links_removed -> mObjectsDeletedIds
-    uuid_list_t broken_link_ids;
-    parseUUIDArray(update,"_broken_links_removed",broken_link_ids);
-    for (uuid_list_t::const_iterator it = broken_link_ids.begin();
-         it != broken_link_ids.end(); ++it)
-    {
-        LLViewerInventoryItem *item = gInventory.getItem(*it);
-        if(item)
-        {
-            mCatDescendentDeltas[item->getParentUUID()]--;
-            mObjectsDeletedIds.insert(*it);
-        }
-        else
-        {
-            LL_WARNS("Inventory") << "broken link not found " << *it << LL_ENDL;
-        }
-    }
-
-    // parse _created_items
-    parseUUIDArray(update,"_created_items",mItemIds);
-
-    // parse _created_categories
-    parseUUIDArray(update,"_created_categories",mCategoryIds);
-
-    // Parse updated category versions.
-    const std::string& ucv = "_updated_category_versions";
-    if (update.has(ucv))
-    {
-        for(LLSD::map_const_iterator it = update[ucv].beginMap(),
-                end = update[ucv].endMap();
-            it != end; ++it)
-        {
-            const LLUUID id((*it).first);
-            S32 version = (*it).second.asInteger();
-            mCatVersionsUpdated[id] = version;
-        }
-    }
-}
-
-void AISUpdate::parseContent(const LLSD& update)
-{
-    // Errors from a fetch request might contain id without
-    // full item or folder.
-    // Todo: Depending on error we might want to do something,
-    // like removing a 404 item or refetching parent folder
-    if (update.has("linked_id") && update.has("parent_id"))
-    {
-        parseLink(update, mFetchDepth);
-    }
-    else if (update.has("item_id") && update.has("parent_id"))
-    {
-        parseItem(update);
-    }
-
-    if (mType == AISAPI::FETCHCATEGORYSUBSET)
-    {
-        // initial category is incomplete, don't process it,
-        // go for content instead
-        if (update.has("_embedded"))
-        {
-            parseEmbedded(update["_embedded"], mFetchDepth - 1);
-        }
-    }
-    else if (update.has("category_id") && update.has("parent_id"))
-    {
-        parseCategory(update, mFetchDepth);
-    }
-    else
-    {
-        if (update.has("_embedded"))
-        {
-            parseEmbedded(update["_embedded"], mFetchDepth);
-        }
-    }
-}
-
-void AISUpdate::parseItem(const LLSD& item_map)
-{
-    LLUUID item_id = item_map["item_id"].asUUID();
-    LLPointer<LLViewerInventoryItem> new_item(new LLViewerInventoryItem);
-    LLViewerInventoryItem *curr_item = gInventory.getItem(item_id);
-    if (curr_item)
-    {
-        // Default to current values where not provided.
-        new_item->copyViewerItem(curr_item);
-    }
-    bool rv = new_item->unpackMessage(item_map);
-    if (rv)
-    {
-        if (mFetch)
-        {
-            mItemsCreated[item_id] = new_item;
-            new_item->setComplete(true);
-
-            if (new_item->getParentUUID().isNull())
-            {
-                mItemsLost[item_id] = new_item;
-            }
-        }
-        else if (curr_item)
-        {
-            mItemsUpdated[item_id] = new_item;
-            // This statement is here to cause a new entry with 0
-            // delta to be created if it does not already exist;
-            // otherwise has no effect.
-            mCatDescendentDeltas[new_item->getParentUUID()];
-        }
-        else
-        {
-            mItemsCreated[item_id] = new_item;
-            // LLInventoryModel::addItem() refuses an item of no asset type, so
-            // the model will not hold it: don't count it as a new descendant
-            // (the entry is still created, with a 0 delta, as for an update).
-            // getActualType(): the stored type, without the link-following
-            // lookup of getType() (a link's own type is never AT_NONE).
-            if (new_item->getActualType() > LLAssetType::AT_NONE)
-            {
-                mCatDescendentDeltas[new_item->getParentUUID()]++;
-            }
-            else
-            {
-                mCatDescendentDeltas[new_item->getParentUUID()];
-            }
-            new_item->setComplete(true);
-        }
-    }
-    else
-    {
-        // *TODO: Wow, harsh.  Should we just complain and get out?
-        LL_ERRS() << "unpack failed" << LL_ENDL;
-    }
-}
-
-void AISUpdate::parseLink(const LLSD& link_map, S32 depth)
-{
-    LLUUID item_id = link_map["item_id"].asUUID();
-    LLPointer<LLViewerInventoryItem> new_link(new LLViewerInventoryItem);
-    LLViewerInventoryItem *curr_link = gInventory.getItem(item_id);
-    if (curr_link)
-    {
-        // Default to current values where not provided.
-        new_link->copyViewerItem(curr_link);
-    }
-    bool rv = new_link->unpackMessage(link_map);
-    if (rv)
-    {
-        const LLUUID& parent_id = new_link->getParentUUID();
-        if (mFetch)
-        {
-            LLPermissions default_perms;
-            default_perms.init(gAgent.getID(), gAgent.getID(), LLUUID::null, LLUUID::null);
-            default_perms.initMasks(PERM_NONE, PERM_NONE, PERM_NONE, PERM_NONE, PERM_NONE);
-            new_link->setPermissions(default_perms);
-            LLSaleInfo default_sale_info;
-            new_link->setSaleInfo(default_sale_info);
-            //LL_DEBUGS("Inventory") << "creating link from llsd: " << ll_pretty_print_sd(link_map) << LL_ENDL;
-            mItemsCreated[item_id] = new_link;
-            new_link->setComplete(true);
-
-            if (new_link->getParentUUID().isNull())
-            {
-                mItemsLost[item_id] = new_link;
-            }
-        }
-        else if (curr_link)
-        {
-            mItemsUpdated[item_id] = new_link;
-            // This statement is here to cause a new entry with 0
-            // delta to be created if it does not already exist;
-            // otherwise has no effect.
-            mCatDescendentDeltas[parent_id];
-        }
-        else
-        {
-            LLPermissions default_perms;
-            default_perms.init(gAgent.getID(),gAgent.getID(),LLUUID::null,LLUUID::null);
-            default_perms.initMasks(PERM_NONE,PERM_NONE,PERM_NONE,PERM_NONE,PERM_NONE);
-            new_link->setPermissions(default_perms);
-            LLSaleInfo default_sale_info;
-            new_link->setSaleInfo(default_sale_info);
-            //LL_DEBUGS("Inventory") << "creating link from llsd: " << ll_pretty_print_sd(link_map) << LL_ENDL;
-            mItemsCreated[item_id] = new_link;
-            mCatDescendentDeltas[parent_id]++;
-            new_link->setComplete(true);
-        }
-
-        if (link_map.has("_embedded"))
-        {
-            parseEmbedded(link_map["_embedded"], depth);
-        }
-    }
-    else
-    {
-        // *TODO: Wow, harsh.  Should we just complain and get out?
-        LL_ERRS() << "unpack failed" << LL_ENDL;
-    }
-}
-
-
-void AISUpdate::parseCategory(const LLSD& category_map, S32 depth)
-{
-    LLUUID category_id = category_map["category_id"].asUUID();
-    S32 version = LLViewerInventoryCategory::VERSION_UNKNOWN;
-
-    if (category_map.has("version"))
-    {
-        version = category_map["version"].asInteger();
-    }
-
-    LLViewerInventoryCategory *curr_cat = gInventory.getCategory(category_id);
-
-    if (curr_cat
-        && curr_cat->getVersion() > LLViewerInventoryCategory::VERSION_UNKNOWN
-        && curr_cat->getDescendentCount() != LLViewerInventoryCategory::DESCENDENT_COUNT_UNKNOWN
-        && version > LLViewerInventoryCategory::VERSION_UNKNOWN
-        && version < curr_cat->getVersion())
-    {
-        LL_WARNS() << "Got stale folder, known: " << curr_cat->getVersion()
-            << ", received: " << version << LL_ENDL;
-        // <FS:Beq> FIRE-33337 workaround for rename issue until proper fix is in place and tested
-        // Also servers a general handler for version de-sync bugs in the future.
-        if( version < curr_cat->getVersion() )
-        {
-            // AIS version is considered canonical, so we need to refetch
-            curr_cat->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
-            curr_cat->fetch();
-        }
-        // </FS:Beq>
+        LL_WARNS("Inventory") << "AIS update not parsed: " << vks_inv_last_error() << LL_ENDL;
+        mCallbackIds.push_back(LLUUID::null);
         return;
     }
+    const VksInvAisUpdateView* v = vks_inv_ais_update_view(parsed.get());
 
-    LLPointer<LLViewerInventoryCategory> new_cat;
-    if (curr_cat)
+    std::vector<LLPointer<LLViewerInventoryItem> > items(v->item_count);
+    for (size_t i = 0; i < v->item_count; ++i)
     {
-        // Default to current values where not provided.
-        new_cat = new LLViewerInventoryCategory(curr_cat);
+        const VksInvAisItem& r = v->items[i];
+        LLPointer<LLViewerInventoryItem> item = new LLViewerInventoryItem();
+        item->fromVks(r.item);
+        item->setComplete(r.complete);
+        LLTransactionID transaction_id;
+        memcpy(transaction_id.mData, r.transaction_id, UUID_BYTES);
+        item->setTransactionID(transaction_id);
+        item->setScriptState(r.running, r.faulted);
+        item->localizeName();
+        items[i] = item;
     }
-    else
+    std::vector<LLPointer<LLViewerInventoryCategory> > categories(v->category_count);
+    for (size_t i = 0; i < v->category_count; ++i)
     {
-        if (category_map.has("agent_id"))
+        const VksInvAisCategory& r = v->categories[i];
+        LLPointer<LLViewerInventoryCategory> cat = new LLViewerInventoryCategory(vks_uuid(r.category.owner));
+        cat->fromVks(r.category);
+        cat->setVersion(r.category.version);
+        cat->setDescendentCount(r.descendents);
+        if (r.has_requested)
         {
-            new_cat = new LLViewerInventoryCategory(category_map["agent_id"].asUUID());
+            LLFrameTimer timer;
+            memcpy(&timer, &r.requested, sizeof(timer));
+            cat->setFetchRequestTimer(timer);
         }
-        else
-        {
-            LL_DEBUGS() << "No owner provided, folder might be assigned wrong owner" << LL_ENDL;
-            new_cat = new LLViewerInventoryCategory(LLUUID::null);
-        }
-    }
-    bool rv = new_cat->unpackMessage(category_map);
-    // *NOTE: unpackMessage does not unpack version or descendent count.
-    if (rv)
-    {
-        // Check descendent count first, as it may be needed
-        // to populate newly created categories
-        if (category_map.has("_embedded"))
-        {
-            parseDescendentCount(category_id, new_cat->getPreferredType(), category_map["_embedded"]);
-        }
-
-        if (mFetch)
-        {
-            uuid_int_map_t::const_iterator lookup_it = mCatDescendentsKnown.find(category_id);
-            if (mCatDescendentsKnown.end() != lookup_it)
-            {
-                S32 descendent_count = static_cast<S32>(lookup_it->second);
-                LL_DEBUGS("Inventory") << "Setting descendents count to " << descendent_count
-                    << " for category " << category_id << LL_ENDL;
-                new_cat->setDescendentCount(descendent_count);
-
-                // set version only if we are sure this update has full data and embeded items
-                // since viewer uses version to decide if folder and content still need fetching
-                if (version > LLViewerInventoryCategory::VERSION_UNKNOWN
-                    && depth >= 0)
-                {
-                    if (curr_cat && curr_cat->getVersion() > version)
-                    {
-                        LL_WARNS("Inventory") << "Version was " << curr_cat->getVersion()
-                            << ", but fetch returned version " << version
-                            << " for category " << category_id << LL_ENDL;
-                    }
-                    else
-                    {
-                        LL_DEBUGS("Inventory") << "Setting version to " << version
-                            << " for category " << category_id << LL_ENDL;
-                    }
-
-                    new_cat->setVersion(version);
-                }
-            }
-            else if (curr_cat
-                     && curr_cat->getVersion() > LLViewerInventoryCategory::VERSION_UNKNOWN
-                     && version > curr_cat->getVersion())
-            {
-                LL_DEBUGS("Inventory") << "Category " << category_id
-                    << " is stale. Known version: " << curr_cat->getVersion()
-                    << " server version: " << version << LL_ENDL;
-            }
-            mCategoriesCreated[category_id] = new_cat;
-        }
-        else if (curr_cat)
-        {
-            mCategoriesUpdated[category_id] = new_cat;
-            // This statement is here to cause a new entry with 0
-            // delta to be created if it does not already exist;
-            // otherwise has no effect.
-            mCatDescendentDeltas[new_cat->getParentUUID()];
-            // Capture update for the category itself as well.
-            mCatDescendentDeltas[category_id];
-        }
-        else
-        {
-            // Set version/descendents for newly created categories.
-            uuid_int_map_t::const_iterator lookup_it = mCatDescendentsKnown.find(category_id);
-            if (mCatDescendentsKnown.end() != lookup_it)
-            {
-                S32 descendent_count = static_cast<S32>(lookup_it->second);
-                LL_DEBUGS("Inventory") << "Setting descendents count to " << descendent_count
-                    << " for new category " << category_id << LL_ENDL;
-                new_cat->setDescendentCount(descendent_count);
-
-                // Don't set version unles correct children count is present
-                if (category_map.has("version"))
-                {
-                    S32 version = category_map["version"].asInteger();
-                    LL_DEBUGS("Inventory") << "Setting version to " << version
-                        << " for new category " << category_id << LL_ENDL;
-                    new_cat->setVersion(version);
-                }
-            }
-            mCategoriesCreated[category_id] = new_cat;
-            mCatDescendentDeltas[new_cat->getParentUUID()]++;
-        }
-    }
-    else
-    {
-        // *TODO: Wow, harsh.  Should we just complain and get out?
-        LL_ERRS() << "unpack failed" << LL_ENDL;
+        cat->localizeParsedName();
+        categories[i] = cat;
     }
 
-    // Check for more embedded content.
-    if (category_map.has("_embedded"))
+    auto each = [](const VksInvAisList& list, auto&& f)
     {
-        parseEmbedded(category_map["_embedded"], depth - 1);
-    }
+        for (size_t i = 0; i < list.count; ++i)
+        {
+            f(vks_uuid(list.entries[i].id), list.entries[i].value);
+        }
+    };
+    // The maps hold the deltas and versions as size_t, read back with
+    // static_cast<S32> (a signed delta wraps and reads back the same).
+    each(v->descendent_deltas, [this](const LLUUID& id, S32 delta) { mCatDescendentDeltas[id] = (size_t)delta; });
+    each(v->versions_updated, [this](const LLUUID& id, S32 version) { mCatVersionsUpdated[id] = (size_t)version; });
+    each(v->items_created, [&](const LLUUID& id, S32 i) { mItemsCreated[id] = items[i]; });
+    each(v->items_lost, [&](const LLUUID& id, S32 i) { mItemsLost[id] = items[i]; });
+    each(v->items_updated, [&](const LLUUID& id, S32 i) { mItemsUpdated[id] = items[i]; });
+    each(v->categories_created, [&](const LLUUID& id, S32 i) { mCategoriesCreated[id] = categories[i]; });
+    each(v->categories_updated, [&](const LLUUID& id, S32 i) { mCategoriesUpdated[id] = categories[i]; });
+    each(v->objects_deleted, [this](const LLUUID& id, S32) { mObjectsDeletedIds.insert(id); });
+    each(v->callbacks, [this](const LLUUID& id, S32) { mCallbackIds.push_back(id); });
 }
-
-void AISUpdate::parseDescendentCount(const LLUUID& category_id, LLFolderType::EType type, const LLSD& embedded)
-{
-    // We can only determine true descendent count if this contains all descendent types.
-    if (embedded.has("categories") &&
-        embedded.has("links") &&
-        embedded.has("items"))
-    {
-        mCatDescendentsKnown[category_id] = embedded["categories"].size();
-        mCatDescendentsKnown[category_id] += embedded["links"].size();
-        mCatDescendentsKnown[category_id] += embedded["items"].size();
-    }
-    else if (mFetch && embedded.has("links") && (type == LLFolderType::FT_CURRENT_OUTFIT || type == LLFolderType::FT_OUTFIT))
-    {
-        // COF and outfits contain links only
-        mCatDescendentsKnown[category_id] = embedded["links"].size();
-    }
-}
-
-void AISUpdate::parseEmbedded(const LLSD& embedded, S32 depth)
-{
-    checkTimeout();
-
-    if (embedded.has("links")) // _embedded in a category
-    {
-        parseEmbeddedLinks(embedded["links"], depth);
-    }
-    if (embedded.has("items")) // _embedded in a category
-    {
-        parseEmbeddedItems(embedded["items"]);
-    }
-    if (embedded.has("item")) // _embedded in a link
-    {
-        parseEmbeddedItem(embedded["item"]);
-    }
-    if (embedded.has("categories")) // _embedded in a category
-    {
-        parseEmbeddedCategories(embedded["categories"], depth);
-    }
-    if (embedded.has("category")) // _embedded in a link
-    {
-        parseEmbeddedCategory(embedded["category"], depth);
-    }
-}
-
-void AISUpdate::parseUUIDArray(const LLSD& content, const std::string& name, uuid_list_t& ids)
-{
-    if (content.has(name))
-    {
-        for(LLSD::array_const_iterator it = content[name].beginArray(),
-                end = content[name].endArray();
-                it != end; ++it)
-        {
-            ids.insert((*it).asUUID());
-        }
-    }
-}
-
-void AISUpdate::parseEmbeddedLinks(const LLSD& links, S32 depth)
-{
-    for(LLSD::map_const_iterator linkit = links.beginMap(),
-            linkend = links.endMap();
-        linkit != linkend; ++linkit)
-    {
-        const LLUUID link_id((*linkit).first);
-        const LLSD& link_map = (*linkit).second;
-        if (!mFetch && mItemIds.end() == mItemIds.find(link_id))
-        {
-            LL_DEBUGS("Inventory") << "Ignoring link not in items list " << link_id << LL_ENDL;
-        }
-        else
-        {
-            parseLink(link_map, depth);
-        }
-    }
-}
-
-void AISUpdate::parseEmbeddedItem(const LLSD& item)
-{
-    // a single item (_embedded in a link)
-    if (item.has("item_id"))
-    {
-        if (mFetch || mItemIds.end() != mItemIds.find(item["item_id"].asUUID()))
-        {
-            parseItem(item);
-        }
-    }
-}
-
-void AISUpdate::parseEmbeddedItems(const LLSD& items)
-{
-    // a map of items (_embedded in a category)
-    for(LLSD::map_const_iterator itemit = items.beginMap(),
-            itemend = items.endMap();
-        itemit != itemend; ++itemit)
-    {
-        const LLUUID item_id((*itemit).first);
-        const LLSD& item_map = (*itemit).second;
-        if (!mFetch && mItemIds.end() == mItemIds.find(item_id))
-        {
-            LL_DEBUGS("Inventory") << "Ignoring item not in items list " << item_id << LL_ENDL;
-        }
-        else
-        {
-            parseItem(item_map);
-        }
-    }
-}
-
-void AISUpdate::parseEmbeddedCategory(const LLSD& category, S32 depth)
-{
-    // a single category (_embedded in a link)
-    if (category.has("category_id"))
-    {
-        if (mFetch || mCategoryIds.end() != mCategoryIds.find(category["category_id"].asUUID()))
-        {
-            parseCategory(category, depth);
-        }
-    }
-}
-
-void AISUpdate::parseEmbeddedCategories(const LLSD& categories, S32 depth)
-{
-    // a map of categories (_embedded in a category)
-    for(LLSD::map_const_iterator categoryit = categories.beginMap(),
-            categoryend = categories.endMap();
-        categoryit != categoryend; ++categoryit)
-    {
-        const LLUUID category_id((*categoryit).first);
-        const LLSD& category_map = (*categoryit).second;
-        if (!mFetch && mCategoryIds.end() == mCategoryIds.find(category_id))
-        {
-            LL_DEBUGS("Inventory") << "Ignoring category not in categories list " << category_id << LL_ENDL;
-        }
-        else
-        {
-            parseCategory(category_map, depth);
-        }
-    }
-}
+// </Vulkanstorm>
 
 void AISUpdate::doUpdate()
 {

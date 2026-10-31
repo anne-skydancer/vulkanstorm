@@ -39,6 +39,8 @@
 #include "llsdserialize.h"
 #include "workqueue.h"
 
+#include "../llaisreply.h"
+
 #include "../test/lltut.h"
 
 #include <cstdlib>
@@ -54,8 +56,6 @@
 
 namespace
 {
-    // The depth cap AIS sets on its adapter (llaisapi.cpp AIS_MAX_REPLY_DEPTH).
-    const S32 AIS_MAX_REPLY_DEPTH = 256;
     // HttpCoroHandler::onCompleted's MAX_BODY_SIZE_THRESHOLD.
     const size_t WORKER_THRESHOLD = 65536;
     // Strings and binaries longer than this are recorded as length and hash.
@@ -262,7 +262,13 @@ namespace
         LL::WorkQueue general{ "General" };
     };
 
-    LLSD run_case(Queues& q, const std::string& id, const Status& st, const Body& body, const ContentType& ct)
+    // Which handler: the C++ LLSD handler with AIS's depth cap (the oracle
+    // that recorded the fixtures), or AIS's own variant (llaisreply.h: the
+    // raw response to Rust), which must reproduce it.
+    enum class Handler { CPP, AIS };
+
+    LLSD run_case(Queues& q, Handler which, const std::string& id, const Status& st, const Body& body,
+                  const ContentType& ct)
     {
         LLEventStream pump("vks_aisadapter_" + id, true);
         bool posted = false;
@@ -274,7 +280,17 @@ namespace
             return false;
         });
 
-        LLCoreHttpUtil::HttpCoroHandler::ptr_t handler = LLCoreHttpUtil::createLLSDHandler(pump, AIS_MAX_REPLY_DEPTH);
+        std::shared_ptr<AISReplyHandler> ais;
+        LLCoreHttpUtil::HttpCoroHandler::ptr_t handler;
+        if (which == Handler::AIS)
+        {
+            ais = std::make_shared<AISReplyHandler>(pump);
+            handler = ais;
+        }
+        else
+        {
+            handler = LLCoreHttpUtil::createLLSDHandler(pump, AIS_MAX_REPLY_DEPTH);
+        }
 
         LLCore::HttpResponse* response = new LLCore::HttpResponse();
         response->setStatus(st.status);
@@ -322,12 +338,22 @@ namespace
         rec["path"] = path;
         if (posted)
         {
-            rec["result"] = shorten(result);
+            if (ais)
+            {
+                // The coroutine's reading: the handler's reply, or what was
+                // posted when it has none.
+                AISReply reply = ais->takeReply();
+                rec["result"] = shorten(reply ? reply.asLLSD() : result);
+            }
+            else
+            {
+                rec["result"] = shorten(result);
+            }
         }
         return rec;
     }
 
-    LLSD run_matrix()
+    LLSD run_matrix(Handler which)
     {
         Queues q;
         LLSD cases = LLSD::emptyArray();
@@ -347,7 +373,7 @@ namespace
                     {
                         std::cerr << "case " << id << std::endl;
                     }
-                    cases.append(run_case(q, id, st, body, ct));
+                    cases.append(run_case(q, which, id, st, body, ct));
                 }
             }
         }
@@ -360,6 +386,58 @@ namespace
         std::ostringstream o;
         o << in.rdbuf();
         return o.str();
+    }
+
+    LLSD read_fixtures()
+    {
+        const std::string dir(VKS_AISADAPTER_FIXTURE_DIR);
+        const std::string bytes = read_file(dir + "/expected.llsd");
+        tut::ensure("fixture tests/fixtures/inventory/ais/adapter/expected.llsd is missing", !bytes.empty());
+        LLSD expected;
+        std::istringstream in(bytes);
+        tut::ensure("expected.llsd does not parse", LLSDSerialize::fromBinary(expected, in, bytes.size()) > 0);
+        return expected;
+    }
+
+    // Compares a run with the fixtures, case by case. main_for_worker: a
+    // case the fixtures parse on the worker queue may have parsed on the
+    // calling thread (the AIS handler of sub-rung R3a, before the worker
+    // scheduling of option B); everything else must be equal.
+    void compare_with_fixtures(const LLSD& cases, const std::string& what, bool main_for_worker)
+    {
+        const LLSD expected = read_fixtures();
+        std::ostringstream report;
+        size_t differ = 0;
+        size_t moved = 0;
+        const size_t n = std::max<size_t>(expected.size(), cases.size());
+        for (size_t i = 0; i < n; ++i)
+        {
+            const LLSD& want = expected[(S32)i];
+            LLSD got = cases[(S32)i];
+            if (main_for_worker && want["path"].asString() == "worker" && got["path"].asString() == "main")
+            {
+                got["path"] = "worker";
+                ++moved;
+            }
+            if (to_binary(want) != to_binary(got))
+            {
+                if (++differ <= 20)
+                {
+                    report << "\ncase " << i << " (" << (got.has("id") ? got["id"].asString() : want["id"].asString())
+                           << "): expected " << to_notation(want) << "\n  actual " << to_notation(got);
+                }
+            }
+        }
+        if (differ)
+        {
+            tut::fail(what + ": " + std::to_string(differ) + " of " + std::to_string(n) + " cases differ:" + report.str());
+        }
+        std::cout << "  llaisadapter_parity, " << what << ": " << cases.size() << " cases, 0 differences";
+        if (moved)
+        {
+            std::cout << " (" << moved << " worker-queue cases parsed on the calling thread)";
+        }
+        std::cout << std::endl;
     }
 }
 
@@ -379,7 +457,7 @@ namespace tut
         // The handler's parse failures log a warning each; keep the run quiet.
         LLError::setDefaultLevel(LLError::LEVEL_ERROR);
 
-        const LLSD cases = run_matrix();
+        const LLSD cases = run_matrix(Handler::CPP);
 
         const char* dump = getenv("VKS_AISADAPTER_DUMP");
         if (dump && *dump)
@@ -406,33 +484,14 @@ namespace tut
             fail("dump mode: wrote " + std::to_string(cases.size()) + " cases to " + dir + " (dump mode never passes)");
         }
 
-        const std::string dir(VKS_AISADAPTER_FIXTURE_DIR);
-        const std::string bytes = read_file(dir + "/expected.llsd");
-        ensure("fixture tests/fixtures/inventory/ais/adapter/expected.llsd is missing", !bytes.empty());
-        LLSD expected;
-        std::istringstream in(bytes);
-        ensure("expected.llsd does not parse", LLSDSerialize::fromBinary(expected, in, bytes.size()) > 0);
+        compare_with_fixtures(cases, "the C++ LLSD handler", false);
+    }
 
-        std::ostringstream report;
-        size_t differ = 0;
-        const size_t n = std::max<size_t>(expected.size(), cases.size());
-        for (size_t i = 0; i < n; ++i)
-        {
-            const LLSD& want = expected[(S32)i];
-            const LLSD& got = cases[(S32)i];
-            if (to_binary(want) != to_binary(got))
-            {
-                if (++differ <= 20)
-                {
-                    report << "\ncase " << i << " (" << (got.has("id") ? got["id"].asString() : want["id"].asString())
-                           << "): expected " << to_notation(want) << "\n  actual " << to_notation(got);
-                }
-            }
-        }
-        if (differ)
-        {
-            fail(std::to_string(differ) + " of " + std::to_string(n) + " cases differ:" + report.str());
-        }
-        std::cout << "  llaisadapter_parity: " << cases.size() << " cases, 0 differences" << std::endl;
+    template<> template<>
+    void aisadapter_object::test<2>()
+    {
+        set_test_name("AIS handler (Rust): the same matrix");
+        LLError::setDefaultLevel(LLError::LEVEL_ERROR);
+        compare_with_fixtures(run_matrix(Handler::AIS), "the AIS handler (Rust)", true);
     }
 }

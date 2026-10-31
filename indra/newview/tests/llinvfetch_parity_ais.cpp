@@ -54,6 +54,8 @@
 #include "llcoros.h"
 #include "lleventcoro.h"
 #include "llexception.h"
+#include "../llaisreply.h"
+#include "llinventory_vks.h"
 
 namespace vks_fetch
 {

@@ -150,6 +150,11 @@ public:
     LLTransactionID getTransactionID() const { return mTransactionID; }
     bool getIsRunning() const { return mIsRunning; }
     bool getIsFaulted() const { return mIsFaulted; }
+    // <Vulkanstorm> For the AIS parse's records (inventory rung R3a): the
+    // script state unpackMessage(const LLSD&) set, and its name localization.
+    void setScriptState(bool running, bool faulted) { mIsRunning = running; mIsFaulted = faulted; }
+    void localizeName();
+    // </Vulkanstorm>
 
     bool getIsBrokenLink() const; // true if the baseitem this points to doesn't exist in memory.
     LLViewerInventoryItem *getLinkedItem() const;
@@ -233,6 +238,13 @@ public:
     enum { DESCENDENT_COUNT_UNKNOWN = -1 };
     S32 getDescendentCount() const { return mDescendentCount; }
     void setDescendentCount(S32 descendents) { mDescendentCount = descendents; }
+    // <Vulkanstorm> The fetch request timer, which the AIS parse's copy of a
+    // folder carries (inventory rung R3a), as copyViewerCategory copies it.
+    const LLFrameTimer& getFetchRequestTimer() const { return mDescendentsRequested; }
+    void setFetchRequestTimer(const LLFrameTimer& timer) { mDescendentsRequested = timer; }
+    // unpackMessage(const LLSD&)'s localization, for the same records.
+    void localizeParsedName() { localizeName(); }
+    // </Vulkanstorm>
     // How many descendents do we currently have information for in the InventoryModel?
     S32 getViewerDescendentCount() const;
 

@@ -35,6 +35,8 @@
 #include "llcorehttputil.h"
 #include "llcoproceduremanager.h"
 
+class AISReply; // <Vulkanstorm/> llaisreply.h
+
 class AISAPI
 {
 public:
@@ -94,7 +96,10 @@ private:
 
     static void EnqueueAISCommand(const std::string &procName, LLCoprocedureManager::CoProcedure_t proc);
     static void onIdle(void *userdata); // launches postponed AIS commands
-    static void onUpdateReceived(const LLSD& update, COMMAND_TYPE type, const LLSD& request_body);
+    // <Vulkanstorm> R3a: the reply is a Rust value; the callback ids come out.
+    static void onUpdateReceived(const AISReply& update, COMMAND_TYPE type, const LLSD& request_body,
+                                 uuid_vec_t& callback_ids);
+    // </Vulkanstorm>
 
     static std::string getInvCap();
     static std::string getLibCap();
@@ -110,23 +115,17 @@ private:
 class AISUpdate
 {
 public:
-    AISUpdate(const LLSD& update, AISAPI::COMMAND_TYPE type, const LLSD& request_body);
-    void parseUpdate(const LLSD& update);
-    void parseMeta(const LLSD& update);
-    void parseContent(const LLSD& update);
-    void parseUUIDArray(const LLSD& content, const std::string& name, uuid_list_t& ids);
-    void parseLink(const LLSD& link_map, S32 depth);
-    void parseItem(const LLSD& link_map);
-    void parseCategory(const LLSD& link_map, S32 depth);
-    void parseDescendentCount(const LLUUID& category_id, LLFolderType::EType type, const LLSD& embedded);
-    void parseEmbedded(const LLSD& embedded, S32 depth);
-    void parseEmbeddedLinks(const LLSD& links, S32 depth);
-    void parseEmbeddedItems(const LLSD& items);
-    void parseEmbeddedCategories(const LLSD& categories, S32 depth);
-    void parseEmbeddedItem(const LLSD& item);
-    void parseEmbeddedCategory(const LLSD& category, S32 depth);
+    // <Vulkanstorm> Inventory rung R3a: the reply is a Rust value and the
+    // parse is vkstorm-inventory's (vks_inv_ais_parse); the parse* members
+    // are gone. doUpdate() applies its results as before.
+    AISUpdate(const AISReply& update, AISAPI::COMMAND_TYPE type, const LLSD& request_body);
     void doUpdate();
+    // The completion callback ids of the reply, in order.
+    const uuid_vec_t& getCallbackIds() const { return mCallbackIds; }
 private:
+    friend struct AISUpdateHost;
+    void parseUpdate(const AISReply& update, const LLSD& request_body);
+    // </Vulkanstorm>
     void clearParseResults();
     void checkTimeout();
 
@@ -140,7 +139,6 @@ private:
 
     typedef std::map<LLUUID,size_t> uuid_int_map_t;
     uuid_int_map_t mCatDescendentDeltas;
-    uuid_int_map_t mCatDescendentsKnown;
     uuid_int_map_t mCatVersionsUpdated;
 
     typedef std::map<LLUUID,LLPointer<LLViewerInventoryItem> > deferred_item_map_t;
@@ -151,11 +149,8 @@ private:
     deferred_category_map_t mCategoriesCreated;
     deferred_category_map_t mCategoriesUpdated;
 
-    // These keep track of uuid's mentioned in meta values.
-    // Useful for filtering out which content we are interested in.
     uuid_list_t mObjectsDeletedIds;
-    uuid_list_t mItemIds;
-    uuid_list_t mCategoryIds;
+    uuid_vec_t mCallbackIds; // <Vulkanstorm/> was mItemIds, mCategoryIds (the parse's own)
     bool mFetch;
     S32 mFetchDepth;
     LLTimer mTaskTimer;

@@ -35,3 +35,6 @@
 1	llviewerinventory.h	const LLUUID& getOwnerID() const { return mOwnerID; }
 1	llviewerinventory.h	void setComplete(bool complete) { mIsComplete = complete; }
 1	llviewerinventory.h	void setDescendentCount(S32 descendents) { mDescendentCount = descendents; }
+1	llviewerinventory.h	const LLFrameTimer& getFetchRequestTimer() const { return mDescendentsRequested; }
+1	llviewerinventory.h	void setFetchRequestTimer(const LLFrameTimer& timer) { mDescendentsRequested = timer; }
+1	llviewerinventory.h	void setScriptState(bool running, bool faulted) { mIsRunning = running; mIsFaulted = faulted; }

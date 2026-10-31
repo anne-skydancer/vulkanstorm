@@ -1004,6 +1004,14 @@ void LLViewerInventoryCategory::localizeName()
     LLLocalizedInventoryItemsDictionary::getInstance()->localizeInventoryObjectName(mName);
 }
 
+// <Vulkanstorm> The item's half of unpackMessage(const LLSD&)'s localization,
+// for the AIS parse's records (inventory rung R3a).
+void LLViewerInventoryItem::localizeName()
+{
+    LLLocalizedInventoryItemsDictionary::getInstance()->localizeInventoryObjectName(mName);
+}
+// </Vulkanstorm>
+
 // virtual
 bool LLViewerInventoryCategory::unpackMessage(const LLSD& category)
 {

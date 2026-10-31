@@ -20,7 +20,7 @@
 # real ones. (Source-file compile definitions would not do: they are per
 # directory and would reach the viewer target.)
 LL_ADD_INTEGRATION_TEST(llaisupdate_parity
-  "tests/llaisupdate_parity_stubs.cpp"
+  "tests/llaisupdate_parity_stubs.cpp;llaisreply.cpp"
   "llinventory;llmessage;llcorehttp;llfilesystem;llxml;llmath;llcommon"
   )
 set_property(TARGET INTEGRATION_TEST_llaisupdate_parity APPEND PROPERTY

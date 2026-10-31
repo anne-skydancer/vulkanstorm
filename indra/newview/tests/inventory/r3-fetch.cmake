@@ -30,7 +30,7 @@ else ()
   set(VKS_INVFETCH_SKIP_PRE_D2 1)
 endif ()
 LL_ADD_INTEGRATION_TEST(llinvfetch_parity
-  "tests/llinvfetch_parity_ais.cpp;tests/llinvfetch_parity_bgf.cpp;llinventorymodel.cpp;llviewerinventory.cpp;llinventoryobserver.cpp;llviewerfoldertype.cpp;tests/llinventorymodel_parity_stubs.cpp;tests/llinventorymodel_parity_harness.cpp;tests/llinventorymodel_parity_generic.cpp;tests/llinvfetch_parity_support.cpp;tests/llinvfetch_parity_scenarios.cpp"
+  "tests/llinvfetch_parity_ais.cpp;llaisreply.cpp;tests/llinvfetch_parity_bgf.cpp;llinventorymodel.cpp;llviewerinventory.cpp;llinventoryobserver.cpp;llviewerfoldertype.cpp;tests/llinventorymodel_parity_stubs.cpp;tests/llinventorymodel_parity_harness.cpp;tests/llinventorymodel_parity_generic.cpp;tests/llinvfetch_parity_support.cpp;tests/llinvfetch_parity_scenarios.cpp"
   "llinventory;llmessage;llcorehttp;llfilesystem;llxml;llmath;llwindow;llcommon"
   "-l${ARCH_PREBUILT_DIRS_RELEASE}"
   "-Dhttp_proxy"

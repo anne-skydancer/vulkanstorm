@@ -61,6 +61,8 @@
 #include "lleventcoro.h"
 #include "llframetimer.h"
 #include "lltimer.h"
+#include "../llaisreply.h"
+#include "llinventory_vks.h"
 
 // ---- What llaisapi.cpp calls outside itself, renamed for its text only ----
 //
@@ -132,12 +134,18 @@ namespace vks_r3a_http
                               LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers);
         LLSD copyAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const std::string destination,
                             LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers);
-        // The AIS depth cap belongs to the real adapter's parse, which the
-        // scripted results stand for (INTEGRATION_TEST_llaisadapter_parity
-        // records it); the coroutine sets it before every request.
-        void setLLSDMaxDepth(S32 max_depth) { mLLSDMaxDepth = max_depth; }
-        S32 mLLSDMaxDepth = -1;
-        // A request without the cap is an error of the code under test.
+        // The AIS reply handler (llaisreply.h) belongs to the real adapter,
+        // whose output the scripted results stand for (the adapter corpus,
+        // INTEGRATION_TEST_llaisadapter_parity, records it); the coroutine
+        // installs it before every request. This adapter returns the
+        // scripted LLSD without a handler, as an adapter's immediate error
+        // does, and the coroutine takes it as its reply.
+        void setLLSDHandlerFactory(LLCoreHttpUtil::HttpCoroutineAdapter::llsd_handler_factory_t factory)
+        {
+            mFactory = std::move(factory);
+        }
+        LLCoreHttpUtil::HttpCoroutineAdapter::llsd_handler_factory_t mFactory;
+        // A request without the AIS handler is an error of the code under test.
         void check_depth_cap() const;
     };
     const std::string HttpCoroutineAdapter::HTTP_RESULTS = LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS;
@@ -191,6 +199,7 @@ struct vks_r3a_apply_tag
 #define LLCoprocedureManager vks_r3a_LLCoprocedureManager
 #define gAgent vks_r3a_gAgent
 #include "../llaisapi.cpp"
+#include "llaisupdate_bench_cpp.inc"
 #undef doUpdate
 #undef LLTimer
 #undef suspendUntilNextFrame
@@ -223,6 +232,12 @@ struct vks_r3a_apply_tag
 #include "llaisupdate_parity_stubs.h"
 
 #include <stdexcept>
+#include <chrono>
+#include <iomanip>
+#include <sstream>
+#include "bufferarray.h"
+#include "httpheaders.h"
+#include "httpresponse.h"
 
 static const char * const LOG_INV("Inventory");
 static const char * const LOG_LOCAL("InventoryLocalize");
@@ -477,7 +492,7 @@ namespace vks_ais
             vks_r3a_LLTimer saved_timer = *steal(BatchTimerTag());
             U32 saved_frame = *steal(BatchFrameTag());
             {
-                AISUpdate probe(LLSD::emptyMap(), AISAPI::UPDATEITEM, LLSD());
+                AISUpdate probe(AISReply::fromLLSD(LLSD::emptyMap()), AISAPI::UPDATEITEM, LLSD());
                 s.batch_expiry = probe.*steal(BatchConstTag());
             }
             *steal(BatchTimerTag()) = saved_timer;
@@ -949,8 +964,8 @@ namespace vks_ais
                 {
                     // Another update constructed now (its constructor's
                     // batch-timer logic runs), processed later.
-                    AISUpdate other(LLSD::emptyMap(), (AISAPI::COMMAND_TYPE)command_from_name(a["construct_update"].asString()),
-                                    LLSD());
+                    AISUpdate other(AISReply::fromLLSD(LLSD::emptyMap()),
+                                    (AISAPI::COMMAND_TYPE)command_from_name(a["construct_update"].asString()), LLSD());
                 }
                 else if (a.has("stop"))
                 {
@@ -1327,9 +1342,9 @@ LLSD vks_r3a_http::HttpCoroutineAdapter::patchAndSuspend(LLCore::HttpRequest::pt
 
 void vks_r3a_http::HttpCoroutineAdapter::check_depth_cap() const
 {
-    if (mLLSDMaxDepth != AIS_MAX_REPLY_DEPTH)
+    if (!mFactory)
     {
-        throw std::runtime_error("AIS request through an adapter without the depth cap");
+        throw std::runtime_error("AIS request through an adapter without the AIS reply handler");
     }
 }
 
@@ -2219,6 +2234,13 @@ void LLViewerInventoryCategory::localizeName()
 }
 // ---- VKS-COPY-END
 
+// ---- VKS-COPY-BEGIN llviewerinventory.cpp 1009-1012 blob ac678fa4f695b2a4eca86ebe7b02772ab00844e8 : LLViewerInventoryItem::localizeName
+void LLViewerInventoryItem::localizeName()
+{
+    LLLocalizedInventoryItemsDictionary::getInstance()->localizeInventoryObjectName(mName);
+}
+// ---- VKS-COPY-END
+
 // ---- VKS-COPY-BEGIN llviewerinventory.cpp 1011-1016 blob 41e2a9b23982f076e14a5de056d443438f8980b3 : LLViewerInventoryCategory::unpackMessage(const LLSD&)
 bool LLViewerInventoryCategory::unpackMessage(const LLSD& category)
 {
@@ -2234,3 +2256,83 @@ void LLViewerInventoryCategory::packMessage(LLMessageSystem* msg) const { vks_ai
 void LLViewerInventoryCategory::exportLLSD(LLSD& sd) const { vks_ais::unreached("LLViewerInventoryCategory::exportLLSD"); }
 bool LLViewerInventoryCategory::importLLSD(const std::string& label, const LLSD& value) { vks_ais::unreached("LLViewerInventoryCategory::importLLSD"); }
 void LLViewerInventoryCategory::unpackMessage(LLMessageSystem* msg, const char* block, S32 block_num) { vks_ais::unreached("LLViewerInventoryCategory::unpackMessage(msg)"); }
+
+//============================================================================
+// Bench (VKS_AISUPDATE_BENCH): the C++ of before R3a against the Rust of now
+//============================================================================
+std::string vks_ais::bench(const std::string& body, int rounds)
+{
+    using clock = std::chrono::steady_clock;
+    auto ms = [](clock::duration d) { return std::chrono::duration<double, std::milli>(d).count(); };
+
+    // An empty model, no recording, timers that never expire.
+    State& s = st();
+    s.cats.clear();
+    s.items.clear();
+    const TimerMode saved_mode = s.mode;
+    s.mode = TIMERS_NEVER;
+    Internal guard;
+
+    LLCore::HttpResponse* response = new LLCore::HttpResponse();
+    response->setStatus(LLCore::HttpStatus(200));
+    response->setRequestURL("https://ais.example/cap/category/c0/children?depth=50");
+    LLCore::BufferArray* ba = new LLCore::BufferArray();
+    ba->append(body.data(), body.size());
+    response->setBody(ba);
+    ba->release();
+    LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>();
+    const char* ct = "Content-Type: application/llsd+xml";
+    headers->appendNormal(ct, strlen(ct));
+    response->setHeaders(headers);
+    const LLSD request_body = LLSD().with("depth", 50);
+    const AISAPI::COMMAND_TYPE type = AISAPI::FETCHCATEGORYCHILDREN;
+
+    double cpp_adapter = 1e30, cpp_parse = 1e30, cpp_total = 1e30;
+    double rust_adapter = 1e30, rust_parse = 1e30, rust_total = 1e30;
+    size_t cpp_objects = 0, rust_objects = 0;
+    for (int r = 0; r < rounds; ++r)
+    {
+        {
+            clock::time_point t0 = clock::now();
+            LLSD tree;
+            LLCoreHttpUtil::responseToLLSD(response, false, tree, AIS_MAX_REPLY_DEPTH);
+            clock::time_point t1 = clock::now();
+            {
+                AISUpdateCppParse parsed(tree, type, request_body);
+                cpp_objects = parsed.objectCount();
+            }
+            clock::time_point t2 = clock::now();
+            tree.clear();
+            clock::time_point t3 = clock::now();
+            cpp_adapter = std::min(cpp_adapter, ms(t1 - t0));
+            cpp_parse = std::min(cpp_parse, ms(t2 - t1));
+            cpp_total = std::min(cpp_total, ms(t3 - t0));
+        }
+        {
+            clock::time_point t0 = clock::now();
+            AISReply reply = AISReply::fromResponse(response, AIS_MAX_REPLY_DEPTH);
+            clock::time_point t1 = clock::now();
+            {
+                AISUpdate parsed(reply, type, request_body);
+                (void)parsed;
+            }
+            clock::time_point t2 = clock::now();
+            reply = AISReply();
+            clock::time_point t3 = clock::now();
+            rust_adapter = std::min(rust_adapter, ms(t1 - t0));
+            rust_parse = std::min(rust_parse, ms(t2 - t1));
+            rust_total = std::min(rust_total, ms(t3 - t0));
+        }
+    }
+    response->release();
+    s.mode = saved_mode;
+
+    std::ostringstream o;
+    o << std::fixed << std::setprecision(body.size() > 1000000 ? 1 : 3);
+    o << "[aisupdate] bench: " << body.size() << " bytes, best of " << rounds << ", ms (C++ before R3a -> Rust)\n";
+    o << "  adapter (body -> result)        " << cpp_adapter << " -> " << rust_adapter << "\n";
+    o << "  parse (result -> objects)       " << cpp_parse << " -> " << rust_parse << "\n";
+    o << "  total, result freed included    " << cpp_total << " -> " << rust_total << "\n";
+    o << "  objects parsed (C++)            " << cpp_objects << "\n";
+    return o.str();
+}

@@ -105,6 +105,9 @@ FENCES = [
         'LLTransactionID mTransactionID;',
         'bool mIsRunning = false;',
         'bool mIsFaulted = false;',
+        # Inventory rung R3a: the AIS parse's item records (llaisapi.cpp),
+        # not task inventory.
+        'void setScriptState(bool running, bool faulted) { mIsRunning = running; mIsFaulted = faulted; }',
     ]),
 ]
 
