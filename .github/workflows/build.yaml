@@ -23,7 +23,7 @@ on:
       core_rust_ref:
         description: >-
           With record_inventory_fixtures: a vkstorm-core-rust branch, tag or
-          commit to build vkstorm-ffi from (VKS_CORE_RUST_DIR) for the
+          commit to build vkstorm-ffi from (VKS_CORE_RUST_DIR) for the whole
           recording, instead of the package autobuild.xml pins. For C++
           fixes that need Rust changes not yet published as a package.
         type: string
@@ -203,6 +203,25 @@ jobs:
           key: ${{ runner.os }}-64-ReleaseFS_open-${{ hashFiles('autobuild.xml') }}
           restore-keys: ${{ runner.os }}-64-ReleaseFS_open-
 
+      # A manual recording run (record_inventory_fixtures) may build vkstorm-ffi
+      # from a vkstorm-core-rust ref instead of the pinned package, for C++
+      # changes that need Rust not yet published (core_rust_ref).
+      - name: vkstorm-ffi from vkstorm-core-rust source
+        if: github.event_name == 'workflow_dispatch' && inputs.record_inventory_fixtures && inputs.core_rust_ref != ''
+        shell: bash
+        env:
+          CORE_RUST_REF: ${{ inputs.core_rust_ref }}
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/anne-skydancer/vkstorm-core-rust.git "$GITHUB_WORKSPACE/.core-rust"
+          git -C "$GITHUB_WORKSPACE/.core-rust" checkout --quiet "$CORE_RUST_REF"
+          if ! command -v rustup > /dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          fi
+          echo "VKS_CORE_RUST_DIR=$GITHUB_WORKSPACE/.core-rust" >> "$GITHUB_ENV"
+          echo "vkstorm-ffi from vkstorm-core-rust $(git -C "$GITHUB_WORKSPACE/.core-rust" rev-parse --short=10 HEAD)"
+
       - name: Configure viewer
         shell: bash
         env:
@@ -212,6 +231,9 @@ jobs:
           eval "$(autobuild source_environment -c ReleaseFS_open)"
           export LL_BUILD
           options=()
+          if [[ -n "${VKS_CORE_RUST_DIR:-}" ]]; then
+            options+=("-DVKS_CORE_RUST_DIR:PATH=$VKS_CORE_RUST_DIR")
+          fi
           if [[ "$RUNNER_OS" == Windows ]]; then
             # The flags used by the successful local Release build.
             export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
@@ -324,26 +346,14 @@ jobs:
       - name: Record the libstdc++ inventory fixtures (R2, R3a, R3b)
         if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && inputs.record_inventory_fixtures
         shell: bash
-        env:
-          CORE_RUST_REF: ${{ inputs.core_rust_ref }}
         run: |
           # GitHub runs bash with -e; the recorders exit non-zero in dump mode by
           # design, so -e must be off here. Every result is checked below.
           set +e
           set -uo pipefail
           dir="${{ matrix.directory }}"
-          rust_dir=()
-          if [ -n "$CORE_RUST_REF" ]; then
-            # vkstorm-ffi from source at that ref (public repository), with the
-            # toolchain its rust-toolchain.toml names.
-            git clone --quiet https://github.com/anne-skydancer/vkstorm-core-rust.git "$GITHUB_WORKSPACE/.core-rust" &&
-              git -C "$GITHUB_WORKSPACE/.core-rust" checkout --quiet "$CORE_RUST_REF" || { echo "cannot check out vkstorm-core-rust $CORE_RUST_REF"; exit 1; }
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none || exit 1
-            export PATH="$HOME/.cargo/bin:$PATH"
-            echo "vkstorm-ffi from vkstorm-core-rust $(git -C "$GITHUB_WORKSPACE/.core-rust" rev-parse --short=10 HEAD)"
-            rust_dir=(-DVKS_CORE_RUST_DIR:PATH="$GITHUB_WORKSPACE/.core-rust")
-          fi
-          cmake -S indra -B "$dir" -DLL_TESTS:BOOL=ON "${rust_dir[@]}"
+          # VKS_CORE_RUST_DIR (core_rust_ref) stays in the cache from the configure step.
+          cmake -S indra -B "$dir" -DLL_TESTS:BOOL=ON
           # The post-build replay fails until the libstdc++ trees exist; the
           # executables are linked before it runs, and make's -i keeps it from
           # deleting them when the replay fails.
