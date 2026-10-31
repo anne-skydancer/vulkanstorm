@@ -2,6 +2,8 @@
     the boundary of the Rust data model: legacy text from files. */
 #include "linden_common.h"
 #include "llinventory.h"
+#include "llnotecard.h"
+#include <stdexcept>
 #include "../test/lltut.h"
 #include <cstdio>
 #include <filesystem>
@@ -239,5 +241,98 @@ template<> template<> void legacy_file_test::test<2>()
     const std::string open = text.substr(0, text.rfind('}'));
     check("no last brace, LF, text mode", open, std::ios::in);
     check("no last brace, CRLF, text mode", crlf(open), std::ios::in);
+}
+
+// A stream buffer that hands out `chunk` bytes per refill and can throw from a
+// refill once `throw_at` bytes are delivered; it counts the bulk reads.
+struct small_buffer : public std::streambuf
+{
+    small_buffer(const std::string& text, size_t chunk, size_t throw_at = std::string::npos)
+    :   mText(text), mChunk(chunk), mThrowAt(throw_at)
+    {
+    }
+
+    int_type underflow() override
+    {
+        if (gptr() < egptr())
+        {
+            return traits_type::to_int_type(*gptr());
+        }
+        if (mPos >= mText.size())
+        {
+            return traits_type::eof();
+        }
+        if (mPos >= mThrowAt)
+        {
+            throw std::runtime_error("read error");
+        }
+        const size_t n = std::min(mChunk, mText.size() - mPos);
+        mBuffer.assign(mText, mPos, n);
+        mPos += n;
+        setg(&mBuffer[0], &mBuffer[0], &mBuffer[0] + n);
+        return traits_type::to_int_type(*gptr());
+    }
+
+    std::streamsize xsgetn(char* s, std::streamsize n) override
+    {
+        ++mReads;
+        return std::streambuf::xsgetn(s, n);
+    }
+
+    std::string mText;
+    std::string mBuffer;
+    size_t mChunk;
+    size_t mThrowAt;
+    size_t mPos = 0;
+    size_t mReads = 0;
+};
+
+template<> template<> void legacy_file_test::test<3>()
+{
+    // A record much longer than a refill: the parts the reader takes stay one
+    // refill each, however many refills it takes (its part size is capped, so
+    // it never falls to one-byte reads).
+    LLNotecard source;
+    std::string text;
+    for (S32 i = 0; text.size() < 16 * 1024; ++i)
+    {
+        text += "Line " + std::to_string(i) + " of a long notecard\n";
+    }
+    source.setText(text);
+    std::ostringstream out;
+    ensure("exported", source.exportStream(out));
+    const std::string bytes = out.str();
+
+    small_buffer sb(bytes, 16);
+    std::istream in(&sb);
+    LLNotecard notecard;
+    ensure("imported", notecard.importStream(in));
+    ensure_equals("text", notecard.getText(), text);
+    ensure("one read per refill, not one per byte (" + std::to_string(sb.mReads) + " reads)",
+           sb.mReads <= bytes.size() / 16 + 8);
+}
+
+template<> template<> void legacy_file_test::test<4>()
+{
+    // A read error under the reader is an import failure with badbit set, as
+    // when istream's own reads catch it; the exception does not escape.
+    const std::string text = fileText();
+    const size_t item = text.find("\tinv_item");
+    ensure("an item", item != std::string::npos);
+    const size_t body = text.find('\n', item) + 1;
+    small_buffer sb(text.substr(body), 16, 100);
+    std::istream in(&sb);
+    LLPointer<LLInventoryItem> imported = new LLInventoryItem;
+    bool ok = true;
+    try
+    {
+        ok = imported->importLegacyStream(in);
+    }
+    catch (...)
+    {
+        fail("an exception escaped the legacy reader");
+    }
+    ensure("import failed", !ok);
+    ensure("badbit set", in.bad());
 }
 }
