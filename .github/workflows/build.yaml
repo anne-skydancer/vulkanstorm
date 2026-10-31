@@ -416,6 +416,36 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
 
+      # The R4b numbers (doc/rust_port.md, R4b): the frozen offer and give
+      # copies against the Rust decisions, per operation, over the oracle's
+      # fakes (VKS_R4B_BENCH runs test 7 of the offer oracle; the other tests
+      # run again too). Non-gating like the step above; output to the summary.
+      - name: Bench the inventory offers and giving (llinventory_offer_oracle)
+        if: env.VIEWER_BUILD_TYPE != 'Release'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          dir="${{ matrix.directory }}"
+          exe=$(find "$dir/sharedlibs" -type f \( -name INTEGRATION_TEST_llinventory_offer_oracle -o -name INTEGRATION_TEST_llinventory_offer_oracle.exe \) | head -1)
+          test -n "$exe" || { echo "INTEGRATION_TEST_llinventory_offer_oracle not built"; exit 1; }
+          export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/$dir/packages/lib/release:$GITHUB_WORKSPACE/$dir/sharedlibs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          log="$RUNNER_TEMP/r4b_bench_full.txt"
+          out="$RUNNER_TEMP/r4b_bench.txt"
+          VKS_R4B_BENCH=2000 "$exe" > "$log" 2>&1
+          status=$?
+          sed -n '/^R4b bench/,/^Unit test group_completed/p' "$log" | grep -v '^Unit test group_completed' > "$out"
+          test -s "$out" || tail -40 "$log" > "$out"
+          cat "$out"
+          {
+            echo "### R4b offer and give bench (${{ runner.os }}, exit $status)"
+            echo '```'
+            cat "$out"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'
         shell: bash
