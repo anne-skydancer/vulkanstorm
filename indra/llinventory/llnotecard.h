@@ -57,8 +57,6 @@ public:
     S32 getEmbeddedVersion() { return mEmbeddedVersion; }
 
 private:
-    bool importEmbeddedItemsStream(std::istream& str);
-    bool exportEmbeddedItemsStream(std::ostream& str);
     std::vector<LLPointer<LLInventoryItem> > mItems;
     std::string mText;
     S32 mMaxText;
