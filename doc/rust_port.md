@@ -1922,8 +1922,15 @@ copies identical to the production sources they were taken from.
 
 State (October 2026): the oracle phase is complete for all six sub-rungs. R1
 is implemented in the `vkstorm-inventory` crate of vkstorm-core-rust and
-replays every R1 corpus byte for byte, with and without `opensim`; it is not
-yet behind `vkstorm-ffi` and the viewer does not call it. R2-R4b are
+replays every R1 corpus byte for byte, with and without `opensim`. On
+`codex/inventory-r1` the viewer calls it through `vkstorm-ffi` (`vks_inv_*`,
+vkstorm-core-rust #16): `LLPermissions`, `LLAggregatePermissions`,
+`LLSaleInfo`, the item, category and object rules and `LLNotecard` keep
+their fields and call Rust, and `INTEGRATION_TEST_llinventory_parity`
+compares them with the frozen C++ (0 differences). Legacy text readers take
+the rest of the stream from what its buffer holds and put back what they did
+not consume (`llinventory_vks.h`): `tellg`/`seekg` do not round-trip on a
+Windows text-mode file with LF line ends. R2-R4b are
 implemented in the same crate (vkstorm-core-rust #8, with the map order taken
 from the C++ caller in #9) and replay their oracle recordings per C++
 standard library; none is behind `vkstorm-ffi` yet.
