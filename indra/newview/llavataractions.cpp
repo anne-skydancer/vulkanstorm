@@ -99,6 +99,9 @@
 #include "llviewerparcelmgr.h"
 #include "llviewerwindow.h" // For opening logs externally
 #include "llworld.h"
+// <Vulkanstorm> The give decisions are Rust (rung seven, sub-rung R4b).
+#include "llinventoryoffer_vks.h"
+// </Vulkanstorm>
 
 // Flags for kick message
 const U32 KICK_FLAGS_DEFAULT    = 0x0;
@@ -1021,84 +1024,14 @@ namespace action_give_inventory
 
     static void give_inventory_cb(const LLSD& notification, const LLSD& response, std::set<LLUUID> inventory_selected_uuids)
     {
-        S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
-        // if Cancel pressed
-        if (option == 1)
-        {
-            return;
-        }
-
-        if (inventory_selected_uuids.empty())
-        {
-            return;
-        }
-
-        auto count = LLShareInfo::instance().mAvatarNames.size();
-        bool shared = count && !inventory_selected_uuids.empty();
-
-        // iterate through avatars
-        for(size_t i = 0; i < count; ++i)
-        {
-            const LLUUID& avatar_uuid = LLShareInfo::instance().mAvatarUuids[i];
-
-            // We souldn't open IM session, just calculate session ID for logging purpose. See EXT-6710
-            const LLUUID session_id = gIMMgr->computeSessionID(IM_NOTHING_SPECIAL, avatar_uuid);
-
-            std::set<LLUUID>::const_iterator it = inventory_selected_uuids.begin();
-            const std::set<LLUUID>::const_iterator it_end = inventory_selected_uuids.end();
-
-            const std::string& separator = LLTrans::getString("words_separator");
-            std::string noncopy_item_names;
-            LLSD noncopy_items = LLSD::emptyArray();
-            // iterate through selected inventory objects
-            for (; it != it_end; ++it)
-            {
-                LLViewerInventoryCategory* inv_cat = gInventory.getCategory(*it);
-                if (inv_cat)
-                {
-                    if (!LLGiveInventory::doGiveInventoryCategory(avatar_uuid, inv_cat, session_id, "ItemsShared"))
-                    {
-                        shared = false;
-                    }
-                    break;
-                }
-                LLViewerInventoryItem* inv_item = gInventory.getItem(*it);
-                if (!inv_item->getPermissions().allowCopyBy(gAgentID))
-                {
-                    if (!noncopy_item_names.empty())
-                    {
-                        noncopy_item_names.append(separator);
-                    }
-                    noncopy_item_names.append(inv_item->getName());
-                    noncopy_items.append(*it);
-                }
-                else
-                {
-                    if (!LLGiveInventory::doGiveInventoryItem(avatar_uuid, inv_item, session_id))
-                    {
-                        shared = false;
-                    }
-                }
-            }
-            if (noncopy_items.beginArray() != noncopy_items.endArray())
-            {
-                LLSD substitutions;
-                substitutions["ITEMS"] = noncopy_item_names;
-                LLSD payload;
-                payload["agent_id"] = avatar_uuid;
-                payload["items"] = noncopy_items;
-                payload["success_notification"] = "ItemsShared";
-                LLNotificationsUtil::add("CannotCopyWarning", substitutions, payload,
-                    &LLGiveInventory::handleCopyProtectedItem);
-                shared = false;
-                break;
-            }
-        }
-        if (shared)
-        {
-            LLFloaterReg::hideInstance("avatar_picker");
-            LLNotificationsUtil::add("ItemsShared");
-        }
+        // <Vulkanstorm> Rust (rung seven R4b): every selected item or the
+        // first folder given to each avatar, the no-copy confirmation, the
+        // ItemsShared notice
+        const LLShareInfo& info = LLShareInfo::instance();
+        uuid_vec_t avatars(info.mAvatarUuids.begin(),
+                           info.mAvatarUuids.begin() + llmin(info.mAvatarNames.size(), info.mAvatarUuids.size()));
+        vks_r4b_share(avatars, notification, response, inventory_selected_uuids);
+        // </Vulkanstorm>
     }
 
     /**

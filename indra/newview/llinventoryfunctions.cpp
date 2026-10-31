@@ -105,6 +105,9 @@
 #include "fslslbridge.h"
 #include "llfloatermarketplacelistings.h"
 #include "llfloaterproperties.h"
+// <Vulkanstorm> The give predicates are Rust (rung seven, sub-rung R4b).
+#include "llinventoryoffer_vks.h"
+// </Vulkanstorm>
 
 bool LLInventoryState::sWearNewClothing = false;
 LLUUID LLInventoryState::sWearNewClothingTransactionID;
@@ -3002,22 +3005,9 @@ LLMarketplaceValidator::ValidationRequest::ValidationRequest(
 // static
 bool LLInventoryCollectFunctor::itemTransferCommonlyAllowed(const LLInventoryItem* item)
 {
-    if (!item)
-        return false;
-
-    switch(item->getType())
-    {
-        case LLAssetType::AT_OBJECT:
-        case LLAssetType::AT_BODYPART:
-        case LLAssetType::AT_CLOTHING:
-            if (!get_is_item_worn(item->getUUID()))
-                return true;
-            break;
-        default:
-            return true;
-            break;
-    }
-    return false;
+    // <Vulkanstorm> Rust (rung seven R4b)
+    return vks_r4b_item_predicate(2, item);
+    // </Vulkanstorm>
 }
 
 bool LLIsFolderType::operator()(LLInventoryCategory* cat, LLInventoryItem* item)

@@ -513,6 +513,7 @@ set(viewer_SOURCE_FILES
     llinventorymodel.cpp
     llinventorymodelbackgroundfetch.cpp
     llinventoryobserver.cpp
+    llinventoryoffer_vks.cpp
     llinventorypanel.cpp
     lljoystickbutton.cpp
     llkeyconflict.cpp
@@ -1391,6 +1392,7 @@ set(viewer_HEADER_FILES
     llinventorymodel.h
     llinventorymodelbackgroundfetch.h
     llinventoryobserver.h
+    llinventoryoffer_vks.h
     llinventorypanel.h
     lljoystickbutton.h
     llkeyconflict.h

@@ -79,6 +79,10 @@
 #include "llparcel.h"
 #include "llviewerparcelmgr.h"
 #include "fscommon.h"
+// <Vulkanstorm> The give and drop decisions are Rust (rung seven, sub-rung R4b).
+#include "llinventoryoffer_vks.h"
+#include "vkstorm_ffi.h"
+// </Vulkanstorm>
 
 // syntactic sugar
 #define callMemberFunction(object,ptrToMember)  ((object).*(ptrToMember))
@@ -134,24 +138,13 @@ protected:
 bool LLDroppableItem::operator()(LLInventoryCategory* cat,
                  LLInventoryItem* item)
 {
-    bool allowed = false;
-    if (item)
-    {
-        allowed = itemTransferCommonlyAllowed(item);
-
-        if (allowed
-           && mIsTransfer
-           && !item->getPermissions().allowOperationBy(PERM_TRANSFER,
-                                   gAgent.getID()))
-        {
-            allowed = false;
-        }
-        if (allowed && !item->getPermissions().allowCopyBy(gAgent.getID()))
-        {
-            ++mCountLosing;
-        }
-    }
+    // <Vulkanstorm> Rust (rung seven R4b)
+    S32 lost = 0;
+    bool allowed = vks_r4b_collect_functor(mIsTransfer ? VKS_INV_R4B_F_DROPPABLE_TRANSFER : VKS_INV_R4B_F_DROPPABLE_NO_TRANSFER,
+                                           cat, item, &lost);
+    mCountLosing += lost;
     return allowed;
+    // </Vulkanstorm>
 }
 
 class LLDropCopyableItems : public LLInventoryCollectFunctor
@@ -167,18 +160,9 @@ bool LLDropCopyableItems::operator()(
     LLInventoryCategory* cat,
     LLInventoryItem* item)
 {
-    bool allowed = false;
-    if (item)
-    {
-        allowed = itemTransferCommonlyAllowed(item);
-        if (allowed &&
-           !item->getPermissions().allowCopyBy(gAgent.getID()))
-        {
-            // whoops, can't copy it - don't allow it.
-            allowed = false;
-        }
-    }
-    return allowed;
+    // <Vulkanstorm> Rust (rung seven R4b)
+    return vks_r4b_collect_functor(VKS_INV_R4B_F_DROP_COPYABLE, cat, item, nullptr);
+    // </Vulkanstorm>
 }
 
 // Starts a fetch on folders and items.  This is really not used
@@ -2130,178 +2114,14 @@ void LLToolDragAndDrop::dropInventory(LLViewerObject* hit_obj,
 // inventory items to determine if a drop would be ok.
 EAcceptance LLToolDragAndDrop::willObjectAcceptInventory(LLViewerObject* obj, LLInventoryItem* item, EDragAndDropType type)
 {
-    // check the basics
-    if (!item || !obj)
-        return ACCEPT_NO;
-
-    // HACK: downcast
-    LLViewerInventoryItem* vitem = (LLViewerInventoryItem*)item;
-    if (!vitem->isFinished() && (type != DAD_CATEGORY))
-    {
-        // Note: for DAD_CATEGORY we assume that folder version check passed and folder
-        // is complete, meaning that items inside are up to date.
-        // (isFinished() == false) at the moment shows that item was loaded from cache.
-        // Library or agent inventory only.
-        return ACCEPT_NO;
-    }
-    if (vitem->getIsLinkType())
-        return ACCEPT_NO; // No giving away links
-
-    // deny attempts to drop from an object onto itself. This is to
-    // help make sure that drops that are from an object to an object
-    // don't have to worry about order of evaluation. Think of this
-    // like check for self in assignment.
-    if (obj->getID() == item->getParentUUID())
-    {
-        return ACCEPT_NO;
-    }
-
-    //bool copy = (perm.allowCopyBy(gAgent.getID(),
-    //                            gAgent.getGroupID())
-    //           && (obj->mPermModify || obj->mFlagAllowInventoryAdd));
-    bool worn = false;
-    LLVOAvatarSelf* my_avatar = NULL;
-    switch (item->getType())
-    {
-    case LLAssetType::AT_OBJECT:
-        my_avatar = gAgentAvatarp;
-        if(my_avatar && my_avatar->isWearingAttachment(item->getUUID()))
-        {
-                worn = true;
-        }
-        break;
-    case LLAssetType::AT_BODYPART:
-    case LLAssetType::AT_CLOTHING:
-        if (gAgentWearables.isWearingItem(item->getUUID()))
-        {
-            worn = true;
-        }
-        break;
-    case LLAssetType::AT_CALLINGCARD:
-        // Calling Cards in object are disabled for now
-        // because of incomplete LSL support. See STORM-1117.
-        return ACCEPT_NO;
-    default:
-        break;
-    }
-    const LLPermissions& perm = item->getPermissions();
-    bool modify = (obj->permModify() || obj->flagAllowInventoryAdd());
-    bool transfer = false;
-    if ((obj->permYouOwner() && (perm.getOwner() == gAgent.getID()))
-       || perm.allowOperationBy(PERM_TRANSFER, gAgent.getID()))
-    {
-        transfer = true;
-    }
-    bool volume = (LL_PCODE_VOLUME == obj->getPCode());
-    bool attached = obj->isAttachment();
-    bool unrestricted = (perm.getMaskBase() & PERM_ITEM_UNRESTRICTED) == PERM_ITEM_UNRESTRICTED;
-
-// [RLVa:KB] - Checked: 2010-03-31 (RLVa-1.2.0c) | Modified: RLVa-1.0.0c
-    if (rlv_handler_t::isEnabled())
-    {
-        const LLViewerObject* pObjRoot = obj->getRootEdit();
-        if (gRlvAttachmentLocks.isLockedAttachment(pObjRoot))
-        {
-            return ACCEPT_NO_LOCKED;        // Disallow inventory drops on a locked attachment
-        }
-        else if ( (gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) || (gRlvHandler.hasBehaviour(RLV_BHVR_SITTP)) )
-        {
-            if ( (isAgentAvatarValid()) && (gAgentAvatarp->isSitting()) && (gAgentAvatarp->getRoot() == pObjRoot) )
-                return ACCEPT_NO_LOCKED;    // ... or on a linkset the avie is sitting on under @unsit=n/@sittp=n
-        }
-    }
-// [/RLVa:KB]
-
-    if(attached && !unrestricted)
-    {
-        // Attachments are in world and in inventory simultaneously,
-        // at the moment server doesn't support such a situation.
-        return ACCEPT_NO_LOCKED;
-    }
-    else if(modify && transfer && volume && !worn)
-    {
-        return ACCEPT_YES_MULTI;
-    }
-    else if(!modify)
-    {
-        return ACCEPT_NO_LOCKED;
-    }
-    return ACCEPT_NO;
+    // <Vulkanstorm> Rust (rung seven R4b)
+    return vks_r4b_will_object_accept(obj, item, type);
+    // </Vulkanstorm>
 }
 
 
-static void give_inventory_cb(const LLSD& notification, const LLSD& response)
-{
-    S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
-    // if Cancel pressed
-    if (option == 1)
-    {
-        return;
-    }
-
-    LLSD payload = notification["payload"];
-    const LLUUID& session_id = payload["session_id"];
-    const LLUUID& agent_id = payload["agent_id"];
-    LLViewerInventoryItem * inv_item =  gInventory.getItem(payload["item_id"]);
-    LLViewerInventoryCategory * inv_cat =  gInventory.getCategory(payload["item_id"]);
-    if (NULL == inv_item && NULL == inv_cat)
-    {
-        llassert( false );
-        return;
-    }
-    bool successfully_shared;
-    if (inv_item)
-    {
-        successfully_shared = LLGiveInventory::doGiveInventoryItem(agent_id, inv_item, session_id);
-    }
-    else
-    {
-        successfully_shared = LLGiveInventory::doGiveInventoryCategory(agent_id, inv_cat, session_id);
-    }
-    if (successfully_shared)
-    {
-        if ("avatarpicker" == payload["d&d_dest"].asString())
-        {
-            LLFloaterReg::hideInstance("avatar_picker");
-        }
-        LLNotificationsUtil::add("ItemsShared");
-    }
-}
-
-static void show_object_sharing_confirmation(const std::string name,
-                       LLInventoryObject* inv_item,
-                       const LLSD& dest,
-                       const LLUUID& dest_agent,
-                       const LLUUID& session_id = LLUUID::null)
-{
-    if (!inv_item)
-    {
-        llassert(NULL != inv_item);
-        return;
-    }
-    LLSD substitutions;
-    substitutions["RESIDENTS"] = name;
-    substitutions["ITEMS"] = inv_item->getName();
-    LLSD payload;
-    payload["agent_id"] = dest_agent;
-    payload["item_id"] = inv_item->getUUID();
-    payload["session_id"] = session_id;
-    payload["d&d_dest"] = dest.asString();
-    LLNotificationsUtil::add("ShareItemsConfirmation", substitutions, payload, &give_inventory_cb);
-}
-
-static void get_name_cb(const LLUUID& id,
-                        const LLAvatarName& av_name,
-                        LLInventoryObject* inv_obj,
-                        const LLSD& dest,
-                        const LLUUID& dest_agent)
-{
-    show_object_sharing_confirmation(av_name.getUserName(),
-                                     inv_obj,
-                                     dest,
-                                     id,
-                                     LLUUID::null);
-}
+// <Vulkanstorm> give_inventory_cb, show_object_sharing_confirmation and
+// get_name_cb are Rust since rung seven R4b (llinventoryoffer_vks.h).
 
 // function used as drag-and-drop handler for simple agent give inventory requests
 //static
@@ -2311,88 +2131,9 @@ bool LLToolDragAndDrop::handleGiveDragAndDrop(LLUUID dest_agent, LLUUID session_
                                               EAcceptance* accept,
                                               const LLSD& dest)
 {
-// [RLVa:KB] - @share
-    if ( (RlvActions::isRlvEnabled()) && (!RlvActions::canGiveInventory(dest_agent)) )
-    {
-        *accept = ACCEPT_NO_LOCKED;
-        return true;
-    }
-// [/RLVa:KB]
-
-    // check the type
-    switch(cargo_type)
-    {
-    case DAD_TEXTURE:
-    case DAD_SOUND:
-    case DAD_LANDMARK:
-    case DAD_SCRIPT:
-    case DAD_OBJECT:
-    case DAD_NOTECARD:
-    case DAD_CLOTHING:
-    case DAD_BODYPART:
-    case DAD_ANIMATION:
-    case DAD_GESTURE:
-    case DAD_CALLINGCARD:
-    case DAD_MESH:
-    case DAD_CATEGORY:
-    case DAD_SETTINGS:
-    case DAD_MATERIAL:
-    {
-        LLInventoryObject* inv_obj = (LLInventoryObject*)cargo_data;
-        if(gInventory.getCategory(inv_obj->getUUID()) || (gInventory.getItem(inv_obj->getUUID())
-            && LLGiveInventory::isInventoryGiveAcceptable(dynamic_cast<LLInventoryItem*>(inv_obj))))
-        {
-            // *TODO: get multiple object transfers working
-            *accept = ACCEPT_YES_COPY_SINGLE;
-            if(drop)
-            {
-                LLIMModel::LLIMSession * session = LLIMModel::instance().findIMSession(session_id);
-
-                // If no IM session found get the destination agent's name by id.
-                if (NULL == session)
-                {
-                    LLAvatarName av_name;
-
-                    // If destination agent's name is found in cash proceed to showing the confirmation dialog.
-                    // Otherwise set up a callback to show the dialog when the name arrives.
-                    if (LLAvatarNameCache::get(dest_agent, &av_name))
-                    {
-                        show_object_sharing_confirmation(av_name.getUserName(), inv_obj, dest, dest_agent, LLUUID::null);
-                    }
-                    else
-                    {
-                        LLAvatarNameCache::get(dest_agent, boost::bind(&get_name_cb, _1, _2, inv_obj, dest, dest_agent));
-                    }
-
-                    return true;
-                }
-                std::string dest_name = session->mName;
-                LLAvatarName av_name;
-                if(LLAvatarNameCache::get(dest_agent, &av_name))
-                {
-                    dest_name = av_name.getCompleteName();
-                }
-                // If an IM session with destination agent is found item offer will be logged in this session.
-                show_object_sharing_confirmation(dest_name, inv_obj, dest, dest_agent, session_id);
-            }
-        }
-        else
-        {
-            // It's not in the user's inventory (it's probably
-            // in an object's contents), so disallow dragging
-            // it here.  You can't give something you don't
-            // yet have.
-            *accept = ACCEPT_NO;
-        }
-        break;
-    }
-    default:
-        *accept = ACCEPT_NO;
-        break;
-    }
-
-    return true;
+    return vks_r4b_give_drag_and_drop(dest_agent, session_id, drop, cargo_type, cargo_data, accept, dest);
 }
+// </Vulkanstorm>
 
 
 
@@ -3222,43 +2963,12 @@ EAcceptance LLToolDragAndDrop::dad3dGiveInventoryObject(
     LLViewerObject* obj, S32 face, MASK mask, bool drop)
 {
     LL_DEBUGS() << "LLToolDragAndDrop::dad3dGiveInventoryObject()" << LL_ENDL;
-
-    // item has to be in agent inventory.
-    if(mSource != SOURCE_AGENT) return ACCEPT_NO;
-
-    // find the item now.
+    // <Vulkanstorm> Rust (rung seven R4b)
     LLViewerInventoryItem* item;
     LLViewerInventoryCategory* cat;
     locateInventory(item, cat);
-    if (!item || !item->isFinished()) return ACCEPT_NO;
-    if(!item->getPermissions().allowOperationBy(PERM_TRANSFER, gAgent.getID()))
-    {
-        // cannot give away no-transfer objects
-        return ACCEPT_NO;
-    }
-    LLVOAvatarSelf* avatar = gAgentAvatarp;
-    if(avatar && avatar->isWearingAttachment( item->getUUID() ) )
-    {
-        // You can't give objects that are attached to you
-        return ACCEPT_NO;
-    }
-    if( obj && avatar )
-    {
-// [RLVa:KB] - @share
-        if ( (obj) && (RlvActions::isRlvEnabled()) && (!RlvActions::canGiveInventory(obj->getID())) )
-        {
-            return ACCEPT_NO_LOCKED;
-        }
-// [/RLVa:KB]
-        if(drop)
-        {
-            LLGiveInventory::doGiveInventoryItem(obj->getID(), item );
-        }
-        // *TODO: deal with all the issues surrounding multi-object
-        // inventory transfers.
-        return ACCEPT_YES_SINGLE;
-    }
-    return ACCEPT_NO;
+    return vks_r4b_dad3d_give(0, (S32)mSource, item, cat, obj, drop);
+    // </Vulkanstorm>
 }
 
 
@@ -3266,52 +2976,24 @@ EAcceptance LLToolDragAndDrop::dad3dGiveInventory(
     LLViewerObject* obj, S32 face, MASK mask, bool drop)
 {
     LL_DEBUGS() << "LLToolDragAndDrop::dad3dGiveInventory()" << LL_ENDL;
-    // item has to be in agent inventory.
-    if(mSource != SOURCE_AGENT) return ACCEPT_NO;
+    // <Vulkanstorm> Rust (rung seven R4b)
     LLViewerInventoryItem* item;
     LLViewerInventoryCategory* cat;
     locateInventory(item, cat);
-    if (!item || !item->isFinished()) return ACCEPT_NO;
-    if (!LLGiveInventory::isInventoryGiveAcceptable(item))
-    {
-        return ACCEPT_NO;
-    }
-// [RLVa:KB] - @share
-    if ( (obj) && (RlvActions::isRlvEnabled()) && (!RlvActions::canGiveInventory(obj->getID())) )
-    {
-        return ACCEPT_NO_LOCKED;
-    }
-// [/RLVa:KB]
-    if (drop && obj)
-    {
-        LLGiveInventory::doGiveInventoryItem(obj->getID(), item);
-    }
-    // *TODO: deal with all the issues surrounding multi-object
-    // inventory transfers.
-    return ACCEPT_YES_SINGLE;
+    return vks_r4b_dad3d_give(1, (S32)mSource, item, cat, obj, drop);
+    // </Vulkanstorm>
 }
 
 EAcceptance LLToolDragAndDrop::dad3dGiveInventoryCategory(
     LLViewerObject* obj, S32 face, MASK mask, bool drop)
 {
     LL_DEBUGS() << "LLToolDragAndDrop::dad3dGiveInventoryCategory()" << LL_ENDL;
-// [RLVa:KB] - @share
-    if ( (obj) && (RlvActions::isRlvEnabled()) && (!RlvActions::canGiveInventory(obj->getID())) )
-    {
-        return ACCEPT_NO_LOCKED;
-    }
-// [/RLVa:KB]
-    if(drop && obj)
-    {
-        LLViewerInventoryItem* item;
-        LLViewerInventoryCategory* cat;
-        locateInventory(item, cat);
-        if(!cat) return ACCEPT_NO;
-        LLGiveInventory::doGiveInventoryCategory(obj->getID(), cat);
-    }
-    // *TODO: deal with all the issues surrounding multi-object
-    // inventory transfers.
-    return ACCEPT_YES_SINGLE;
+    // <Vulkanstorm> Rust (rung seven R4b)
+    LLViewerInventoryItem* item;
+    LLViewerInventoryCategory* cat;
+    locateInventory(item, cat);
+    return vks_r4b_dad3d_give(2, (S32)mSource, item, cat, obj, drop);
+    // </Vulkanstorm>
 }
 
 

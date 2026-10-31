@@ -74,29 +74,10 @@ private:
     // this class is not intended to be instantiated.
     LLGiveInventory();
 
-    /**
-     * logs "Inventory item offered" to IM
-     */
-    static void logInventoryOffer(const LLUUID& to_agent,
-                                    const LLUUID &im_session_id = LLUUID::null,
-                                    const std::string& item_name = std::string(),
-                                    bool is_folder = false);
-
-// [RLVa:KB] - @share
-    static bool commitGiveInventoryItem(const LLUUID& to_agent,
-                                    const LLInventoryItem* item,
-                                    const LLUUID &im_session_id = LLUUID::null);
-// [/RLVa:KB]
-//  static void commitGiveInventoryItem(const LLUUID& to_agent,
-//                                  const LLInventoryItem* item,
-//                                  const LLUUID &im_session_id = LLUUID::null);
-
-    // give inventory category functionality
-    static bool handleCopyProtectedCategory(const LLSD& notification, const LLSD& response);
-    static bool commitGiveInventoryCategory(const LLUUID& to_agent,
-                                    const LLInventoryCategory* cat,
-                                    const LLUUID &im_session_id = LLUUID::null);
-
+    // <Vulkanstorm> logInventoryOffer, commitGiveInventoryItem,
+    // handleCopyProtectedCategory and commitGiveInventoryCategory are Rust
+    // since rung seven R4b (llinventoryoffer_vks.h).
+    // </Vulkanstorm>
 };
 
 #endif // LL_LLGIVEINVENTORY_H

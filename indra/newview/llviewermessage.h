@@ -276,20 +276,15 @@ public:
     // <FS:Ansariel> Optional V1-like inventory accept messages
     void send_decline_response(void);
 
-    // TODO - replace all references with handleRespond()
-    bool inventory_offer_callback(const LLSD& notification, const LLSD& response);
-    bool inventory_task_offer_callback(const LLSD& notification, const LLSD& response);
+    // <Vulkanstorm> inventory_offer_callback, inventory_task_offer_callback,
+    // initRespondFunctionMap, getSanitizedDescription and mRespondFunctions:
+    // the offer decisions are Rust since rung seven R4b (handleRespond and
+    // forceResponse call them there).
+    // </Vulkanstorm>
 
 private:
 
-    void initRespondFunctionMap();
-    std::string getSanitizedDescription();
     void sendReceiveResponse(bool accept, const LLUUID &destination_folder_id);
-
-    typedef std::function<bool (const LLSD&, const LLSD&)> respond_function_t;
-    typedef std::map<std::string, respond_function_t> respond_function_map_t;
-
-    respond_function_map_t mRespondFunctions;
 };
 
 // <FS:Ansariel> Moved from source; needed in llimprocessing.cpp

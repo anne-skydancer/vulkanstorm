@@ -103,6 +103,9 @@
 #include "fsfloaterwearablefavorites.h"
 #include "llviewerattachmenu.h"
 #include "llresmgr.h"
+// <Vulkanstorm> The give and drop decisions are Rust (rung seven, sub-rung R4b).
+#include "llinventoryoffer_vks.h"
+// </Vulkanstorm>
 
 void copy_slurl_to_clipboard_callback_inv(const std::string& slurl);
 
@@ -3600,104 +3603,11 @@ bool move_inv_category_world_to_agent(const LLUUID& object_id,
                                       void* user_data,
                                       LLInventoryFilter* filter)
 {
-    // Make sure the object exists. If we allowed dragging from
-    // anonymous objects, it would be possible to bypass
-    // permissions.
-    // content category has same ID as object itself
-    LLViewerObject* object = gObjectList.findObject(object_id);
-    if (!object)
-    {
-        LL_INFOS() << "Object not found for drop." << LL_ENDL;
-        return false;
-    }
-
-    // this folder is coming from an object, as there is only one folder in an object, the root,
-    // we need to collect the entire contents and handle them as a group
-    LLInventoryObject::object_list_t inventory_objects;
-    object->getInventoryContents(inventory_objects);
-
-    if (inventory_objects.empty())
-    {
-        LL_INFOS() << "Object contents not found for drop." << LL_ENDL;
-        return false;
-    }
-
-    bool accept = false;
-    bool is_move = false;
-    bool use_filter = false;
-    if (filter)
-    {
-        U64 filter_types = filter->getFilterTypes();
-        use_filter = filter_types && (filter_types&LLInventoryFilter::FILTERTYPE_DATE || (filter_types&LLInventoryFilter::FILTERTYPE_OBJECT)==0);
-    }
-
-    // coming from a task. Need to figure out if the person can
-    // move/copy this item.
-    for (LLPointer<LLInventoryObject> obj : inventory_objects)
-    {
-        LLInventoryItem* item = dynamic_cast<LLInventoryItem*>(obj.get());
-        if (!item)
-        {
-            LL_WARNS() << "Invalid inventory item for drop" << LL_ENDL;
-            continue;
-        }
-
-        // coming from a task. Need to figure out if the person can
-        // move/copy this item.
-        LLPermissions perm(item->getPermissions());
-        if ((perm.allowCopyBy(gAgent.getID(), gAgent.getGroupID())
-            && perm.allowTransferTo(gAgent.getID())))
-//          || gAgent.isGodlike())
-        {
-            accept = true;
-        }
-        else if (object->permYouOwner())
-        {
-            // If the object cannot be copied, but the object the
-            // inventory is owned by the agent, then the item can be
-            // moved from the task to agent inventory.
-            is_move = true;
-            accept = true;
-        }
-
-        if (accept && use_filter)
-        {
-            accept = filter->check(item);
-        }
-
-        if (!accept)
-        {
-            break;
-        }
-    }
-
-    if (drop && accept)
-    {
-        std::shared_ptr<LLMoveInv> move_inv = std::make_shared<LLMoveInv>();
-        move_inv->mObjectID = object_id;
-        move_inv->mCategoryID = category_id;
-        move_inv->mCallback = callback;
-        move_inv->mUserData = user_data;
-
-        for (LLPointer<LLInventoryObject> obj : inventory_objects)
-        {
-            two_uuids_t two(category_id, obj->getUUID());
-            move_inv->mMoveList.push_back(two);
-        }
-
-        if (is_move)
-        {
-            // Callback called from within here.
-            warn_move_inventory(object, move_inv);
-        }
-        else
-        {
-            LLNotification::Params params("MoveInventoryFromObject");
-            params.functor.function(boost::bind(move_task_inventory_callback, _1, _2, move_inv));
-            LLNotifications::instance().forceResponse(params, 0);
-        }
-    }
-    return accept;
+    // <Vulkanstorm> Rust (rung seven R4b): the copy or move verdict over the
+    // object's contents, then warn_move_inventory or the forced
+    // MoveInventoryFromObject response
+    return vks_r4b_world_to_agent(object_id, category_id, drop, callback, user_data, filter);
+    // </Vulkanstorm>
 }
 
 void LLRightClickInventoryFetchDescendentsObserver::execute(bool clear_observer)

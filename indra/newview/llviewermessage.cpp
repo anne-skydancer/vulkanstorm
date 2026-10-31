@@ -158,6 +158,9 @@
 #include "tea.h" // <FS:AW opensim currency support>
 #include "NACLantispam.h"
 #include "chatbar_as_cmdline.h"
+// <Vulkanstorm> The offer decisions are Rust (rung seven, sub-rung R4b).
+#include "llinventoryoffer_vks.h"
+// </Vulkanstorm>
 
 extern void on_new_message(const LLSD& msg);
 
@@ -182,10 +185,10 @@ bool check_asset_previewable(const LLAssetType::EType asset_type);
 static void process_money_balance_reply_extended(LLMessageSystem* msg);
 bool handle_trusted_experiences_notification(const LLSD&);
 
-//inventory offer throttle globals
-LLFrameTimer gThrottleTimer;
-const U32 OFFER_THROTTLE_MAX_COUNT=5; //number of items per time period
-const F32 OFFER_THROTTLE_TIME=10.f; //time period in seconds
+// <Vulkanstorm> The inventory offer throttle (gThrottleTimer,
+// OFFER_THROTTLE_*) is Rust since rung seven R4b; its state is in
+// llinventoryoffer_vks.cpp.
+// </Vulkanstorm>
 
 // Agent Update Flags (U8)
 const U8 AU_FLAGS_NONE              = 0x00;
@@ -1291,100 +1294,28 @@ protected:
     LLUUID mObjectID;
 };
 
+// <Vulkanstorm> For the executor of the Rust offer decisions
+// (llinventoryoffer_vks.cpp): the observers this file keeps local.
+LLInventoryObserver* vks_r4b_new_discard_agent_offer(const LLUUID& folder, const LLUUID& object)
+{
+    return new LLDiscardAgentOffer(folder, object);
+}
+
+LLInventoryObserver* vks_r4b_new_open_task_group_offer()
+{
+    return new LLOpenTaskGroupOffer;
+}
+// </Vulkanstorm>
+
 
 //Returns true if we are OK, false if we are throttled
 //Set check_only true if you want to know the throttle status
 //without registering a hit
 bool check_offer_throttle(const std::string& from_name, bool check_only)
 {
-    static U32 throttle_count;
-    static bool throttle_logged;
-    LLChat chat;
-    std::string log_message;
-
-    // <FS:Ansariel> This controls if items should be opened in open_inventory_offer()??? No way!
-    //if (!gSavedSettings.getBOOL("ShowNewInventory"))
-    //  return false;
-    // </FS:Ansariel>
-
-    if (check_only)
-    {
-        return gThrottleTimer.hasExpired();
-    }
-
-    if(gThrottleTimer.checkExpirationAndReset(OFFER_THROTTLE_TIME))
-    {
-        LL_DEBUGS("Messaging") << "Throttle Expired" << LL_ENDL;
-        throttle_count=1;
-        throttle_logged=false;
-        return true;
-    }
-    else //has not expired
-    {
-        LL_DEBUGS("Messaging") << "Throttle Not Expired, Count: " << throttle_count << LL_ENDL;
-        // When downloading the initial inventory we get a lot of new items
-        // coming in and can't tell that from spam.
-
-        // Ansariel: Customizable throttle!
-        static LLCachedControl<U32> fsOfferThrottleMaxCount(gSavedSettings, "FSOfferThrottleMaxCount");
-        if (LLStartUp::getStartupState() >= STATE_STARTED
-            //&& throttle_count >= OFFER_THROTTLE_MAX_COUNT)
-            && throttle_count >= fsOfferThrottleMaxCount)
-        {
-            if (!throttle_logged)
-            {
-                // Use the name of the last item giver, who is probably the person
-                // spamming you.
-
-                LLStringUtil::format_map_t arg;
-                std::string log_msg;
-                std::ostringstream time ;
-                time<<OFFER_THROTTLE_TIME;
-
-                arg["APP_NAME"] = LLAppViewer::instance()->getSecondLifeTitle();
-                arg["TIME"] = time.str();
-
-
-                if (!from_name.empty())
-                {
-                    // <FS:PP> gSavedSettings to LLCachedControl
-                    static LLCachedControl<bool> fsNotifyIncomingObjectSpamFrom(gSavedSettings, "FSNotifyIncomingObjectSpamFrom");
-                    if (fsNotifyIncomingObjectSpamFrom)
-                    // </FS:PP>
-                    {
-                        arg["FROM_NAME"] = from_name;
-                        log_msg = LLTrans::getString("ItemsComingInTooFastFrom", arg);
-                    }
-                }
-                else
-                {
-                    // <FS:PP> gSavedSettings to LLCachedControl
-                    static LLCachedControl<bool> fsNotifyIncomingObjectSpam(gSavedSettings, "FSNotifyIncomingObjectSpam");
-                    if (fsNotifyIncomingObjectSpam)
-                    // </FS:PP>
-                    {
-                        log_msg = LLTrans::getString("ItemsComingInTooFast", arg);
-                    }
-                }
-
-                //this is kinda important, so actually put it on screen
-                if (log_msg != "")
-                {
-                    LLSD args;
-                    args["MESSAGE"] = log_msg;
-                    LLNotificationsUtil::add("SystemMessage", args);
-                }
-
-                throttle_logged=true;
-            }
-            return false;
-        }
-        else
-        {
-            throttle_count++;
-            return true;
-        }
-    }
+    // <Vulkanstorm> Rust (rung seven R4b)
+    return vks_r4b_check_offer_throttle(from_name, check_only);
+    // </Vulkanstorm>
 }
 
 // Return "true" if we have a preview method for that asset type, "false" otherwise
@@ -1666,18 +1597,9 @@ LLOfferInfo::LLOfferInfo()
 
 LLOfferInfo::LLOfferInfo(const LLSD& sd)
 {
-    mIM = (EInstantMessage)sd["im_type"].asInteger();
-    mFromID = sd["from_id"].asUUID();
-    mFromGroup = sd["from_group"].asBoolean();
-    mFromObject = sd["from_object"].asBoolean();
-    mTransactionID = sd["transaction_id"].asUUID();
-    mFolderID = sd["folder_id"].asUUID();
-    mObjectID = sd["object_id"].asUUID();
-    mType = LLAssetType::lookup(sd["type"].asString().c_str());
-    mFromName = sd["from_name"].asString();
-    mDesc = sd["description"].asString();
-    mHost = LLHost(sd["sender"].asString());
-    mPersist = sd["persist"].asBoolean();
+    // <Vulkanstorm> Rust (rung seven R4b)
+    vks_r4b_offer_from_llsd(*this, sd);
+    // </Vulkanstorm>
 }
 
 LLOfferInfo::LLOfferInfo(const LLOfferInfo& info)
@@ -1698,21 +1620,9 @@ LLOfferInfo::LLOfferInfo(const LLOfferInfo& info)
 
 LLSD LLOfferInfo::asLLSD()
 {
-    LLSD sd;
-    sd["responder_type"] = mResponderType;
-    sd["im_type"] = mIM;
-    sd["from_id"] = mFromID;
-    sd["from_group"] = mFromGroup;
-    sd["from_object"] = mFromObject;
-    sd["transaction_id"] = mTransactionID;
-    sd["folder_id"] = mFolderID;
-    sd["object_id"] = mObjectID;
-    sd["type"] = LLAssetType::lookup(mType);
-    sd["from_name"] = mFromName;
-    sd["description"] = mDesc;
-    sd["sender"] = mHost.getIPandPort();
-    sd["persist"] = mPersist;
-    return sd;
+    // <Vulkanstorm> Rust (rung seven R4b)
+    return vks_r4b_offer_as_llsd(*this);
+    // </Vulkanstorm>
 }
 
 void LLOfferInfo::fromLLSD(const LLSD& params)
@@ -1722,126 +1632,26 @@ void LLOfferInfo::fromLLSD(const LLSD& params)
 
 void LLOfferInfo::sendReceiveResponse(bool accept, const LLUUID &destination_folder_id)
 {
-    if(IM_INVENTORY_OFFERED == mIM)
-    {
-        // add buddy to recent people list
-//      LLRecentPeople::instance().add(mFromID);
-// [RLVa:KB] - Checked: RLVa-2.0.1
-        // RELEASE-RLVa: [RLVa-2.0.1] Make sure this stays in sync with the condition in inventory_offer_handler()
-        bool fRlvCanShowName = (!RlvActions::isRlvEnabled()) ||
-            (RlvActions::canShowName(RlvActions::SNC_DEFAULT, mFromID)) || (!RlvUtil::isNearbyAgent(mFromID)) || (RlvUIEnabler::hasOpenIM(mFromID)) || (RlvUIEnabler::hasOpenProfile(mFromID));
-        if (fRlvCanShowName)
-            LLRecentPeople::instance().add(mFromID);
-// [/RLVa:KB]
-    }
-
-    if (mTransactionID.isNull())
-    {
-        // Not provided, message won't work
-        LL_WARNS("Messaging") << "Missing transaction id, response for " << mIM << " won't work" << LL_ENDL;
-        return;
-    }
-
-    LLMessageSystem* msg = gMessageSystem;
-    msg->newMessageFast(_PREHASH_ImprovedInstantMessage);
-    msg->nextBlockFast(_PREHASH_AgentData);
-    msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
-    msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
-    msg->nextBlockFast(_PREHASH_MessageBlock);
-    msg->addBOOLFast(_PREHASH_FromGroup, false);
-    msg->addUUIDFast(_PREHASH_ToAgentID, mFromID);
-    msg->addU8Fast(_PREHASH_Offline, IM_ONLINE);
-    msg->addUUIDFast(_PREHASH_ID, mTransactionID);
-    msg->addU32Fast(_PREHASH_Timestamp, NO_TIMESTAMP); // no timestamp necessary
-    std::string name;
-    LLAgentUI::buildFullname(name);
-    msg->addStringFast(_PREHASH_FromAgentName, name);
-    msg->addStringFast(_PREHASH_Message, "");
-    msg->addU32Fast(_PREHASH_ParentEstateID, 0);
-    msg->addUUIDFast(_PREHASH_RegionID, LLUUID::null);
-    msg->addVector3Fast(_PREHASH_Position, gAgent.getPositionAgent());
-
-    // ACCEPT. The math for the dialog works, because the accept
-    // for inventory_offered, task_inventory_offer or
-    // group_notice_inventory is 1 greater than the offer integer value.
-    // Generates IM_INVENTORY_ACCEPTED, IM_TASK_INVENTORY_ACCEPTED,
-    // or IM_GROUP_NOTICE_INVENTORY_ACCEPTED
-    // Decline for inventory_offered, task_inventory_offer or
-    // group_notice_inventory is 2 greater than the offer integer value.
-
-    EInstantMessage im = mIM;
-    if (mIM == IM_GROUP_NOTICE_REQUESTED)
-    {
-        // Request has no responder dialogs
-        im = IM_GROUP_NOTICE;
-    }
-
-    if (accept)
-    {
-        msg->addU8Fast(_PREHASH_Dialog, (U8)(im + 1));
-        msg->addBinaryDataFast(_PREHASH_BinaryBucket, &(destination_folder_id.mData),
-                                sizeof(destination_folder_id.mData));
-
-        LL_DEBUGS("Messaging") << "Processing" << (U8)(im + 1) << " with transaction id " << mTransactionID << LL_ENDL;
-    }
-    else
-    {
-        msg->addU8Fast(_PREHASH_Dialog, (U8)(im + 2));
-        msg->addBinaryDataFast(_PREHASH_BinaryBucket, EMPTY_BINARY_BUCKET, EMPTY_BINARY_BUCKET_SIZE);
-    }
-    // send the message
-    msg->sendReliable(mHost);
-
-    // transaction id is usable only once
-    // Note: a bit of a hack, clicking group notice attachment will not close notice
-    // so we reset no longer usable transaction id to know not to send message again
-    // Once capabilities for responses will be implemented LLOfferInfo will have to
-    // remember that it already responded in another way and ignore IOR_DECLINE
-    mTransactionID.setNull();
+    // <Vulkanstorm> Rust (rung seven R4b)
+    vks_r4b_send_receive_response(this, accept, destination_folder_id);
+    // </Vulkanstorm>
 }
 
 // <FS:Ansariel> Optional V1-like inventory accept messages
 void LLOfferInfo::send_decline_response(void)
 {
-    LLUUID destination_folder_id = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
-
-    LLMessageSystem* msg = gMessageSystem;
-    msg->newMessageFast(_PREHASH_ImprovedInstantMessage);
-    msg->nextBlockFast(_PREHASH_AgentData);
-    msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
-    msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
-    msg->nextBlockFast(_PREHASH_MessageBlock);
-    msg->addBOOLFast(_PREHASH_FromGroup, false);
-    msg->addUUIDFast(_PREHASH_ToAgentID, mFromID);
-    msg->addU8Fast(_PREHASH_Offline, IM_ONLINE);
-    msg->addUUIDFast(_PREHASH_ID, mTransactionID);
-    msg->addU32Fast(_PREHASH_Timestamp, NO_TIMESTAMP); // no timestamp necessary
-    std::string name;
-    LLAgentUI::buildFullname(name);
-    msg->addStringFast(_PREHASH_FromAgentName, name);
-    msg->addStringFast(_PREHASH_Message, "");
-    msg->addU32Fast(_PREHASH_ParentEstateID, 0);
-    msg->addUUIDFast(_PREHASH_RegionID, LLUUID::null);
-    msg->addVector3Fast(_PREHASH_Position, gAgent.getPositionAgent());
-    msg->addU8Fast(_PREHASH_Dialog, (U8)(mIM + 2));
-    msg->addBinaryDataFast(_PREHASH_BinaryBucket, &(destination_folder_id.mData), sizeof(destination_folder_id.mData));
-    msg->sendReliable(mHost);
+    // <Vulkanstorm> Rust (rung seven R4b)
+    vks_r4b_send_decline_response(this);
+    // </Vulkanstorm>
 }
 // </FS:Ansariel> Optional V1-like inventory accept messages
 
 void LLOfferInfo::handleRespond(const LLSD& notification, const LLSD& response)
 {
-    initRespondFunctionMap();
-
-    const std::string name = notification["name"].asString();
-    if(mRespondFunctions.find(name) == mRespondFunctions.end())
-    {
-        LL_WARNS() << "Unexpected notification name : " << name << LL_ENDL;
-        llassert(!"Unexpected notification name");
-        return;
-    }
-
-    mRespondFunctions[name](notification, response);
+    // <Vulkanstorm> Rust (rung seven R4b): the callback the notification's
+    // name selects (inventory_offer_callback, inventory_task_offer_callback)
+    vks_r4b_respond(this, notification, response);
+    // </Vulkanstorm>
 }
 
 void inventory_offer_name_callback(const LLAvatarName& av_name, const std::string& from_name, const std::string& message)
@@ -1851,516 +1661,15 @@ void inventory_offer_name_callback(const LLAvatarName& av_name, const std::strin
     LLNotificationsUtil::add("SystemMessageTip", args);
 }
 
-bool LLOfferInfo::inventory_offer_callback(const LLSD& notification, const LLSD& response)
-{
-    LLChat chat;
-    std::string log_message;
-    S32 button = LLNotificationsUtil::getSelectedOption(notification, response);
-
-    LLInventoryObserver* opener = NULL;
-    LLViewerInventoryCategory* catp = NULL;
-    catp = (LLViewerInventoryCategory*)gInventory.getCategory(mObjectID);
-    LLViewerInventoryItem* itemp = NULL;
-    if(!catp)
-    {
-        itemp = (LLViewerInventoryItem*)gInventory.getItem(mObjectID);
-    }
-
-    LLNotificationPtr notification_ptr = LLNotifications::instance().find(notification["id"].asUUID());
-
-    // For muting, we need to add the mute, then decline the offer.
-    // This must be done here because:
-    // * callback may be called immediately,
-    // * adding the mute sends a message,
-    // * we can't build two messages at once.
-    if (IOR_MUTE == button) // Block
-    {
-        if (notification_ptr != NULL)
-        {
-            if (mFromGroup)
-            {
-                gCacheName->getGroup(mFromID, boost::bind(&inventory_offer_mute_callback, _1, _2, _3));
-            }
-            else
-            {
-                LLAvatarNameCache::get(mFromID, boost::bind(&inventory_offer_mute_avatar_callback, _1, _2));
-            }
-        }
-    }
-
-    std::string from_string; // Used in the pop-up.
-    std::string chatHistory_string;  // Used in chat history.
-
-    // TODO: when task inventory offers can also be handled the new way, migrate the code that sets these strings here:
-    from_string = chatHistory_string = mFromName;
-
-    // accept goes to proper folder, decline gets accepted to trash, muted gets declined
-    bool accept_to_trash = true;
-
-    LLNotificationFormPtr modified_form(notification_ptr ? new LLNotificationForm(*notification_ptr->getForm()) : new LLNotificationForm());
-
-    switch(button)
-    {
-    case IOR_SHOW:
-    case IOR_SHOW_SILENT: // <FS:Ansariel> FIRE-3832: Silent accept/decline of inventory offers
-        // we will want to open this item when it comes back.
-        LL_DEBUGS("Messaging") << "Initializing an opener for tid: " << mTransactionID
-                 << LL_ENDL;
-        switch (mIM)
-        {
-        case IM_INVENTORY_OFFERED:
-            {
-                // This is an offer from an agent. In this case, the back
-                // end has already copied the items into your inventory,
-                // so we can fetch it out of our inventory.
-// [RLVa:KB] - Checked: 2010-04-18 (RLVa-1.2.0)
-                if ( (rlv_handler_t::isEnabled()) && (!RlvSettings::getForbidGiveToRLV()) && (LLAssetType::AT_CATEGORY == mType) && (mDesc.find(RLV_PUTINV_PREFIX) == 0) )
-                {
-                    RlvGiveToRLVAgentOffer* pOfferObserver = new RlvGiveToRLVAgentOffer(mObjectID);
-                    pOfferObserver->startFetch();
-                    if (pOfferObserver->isFinished())
-                        pOfferObserver->done();
-                    else
-                        gInventory.addObserver(pOfferObserver);
-                }
-// [/RLVa:KB]
-
-                // <FS:Ansariel> FIRE-3234: Ask if items should be previewed;
-                // ShowOfferedInventory is always true anyway - instead there is
-                // ShowNewInventory that is actually changable by the user!
-                //if (gSavedSettings.getBOOL("ShowOfferedInventory"))
-                {
-                    // <FS:Ansariel> FIRE-23476: Don't select inventory offer in inventory if AutoAcceptNewInventory && !ShowInInventory && ShowNewInventory
-                    //LLOpenAgentOffer* open_agent_offer = new LLOpenAgentOffer(mObjectID, from_string);
-                    LLOpenAgentOffer* open_agent_offer = new LLOpenAgentOffer(mObjectID, from_string, true);
-                    // </FS:Ansariel>
-                    open_agent_offer->startFetch();
-                    if(catp || (itemp && itemp->isFinished()))
-                    {
-                        open_agent_offer->done();
-                    }
-                    else
-                    {
-                        opener = open_agent_offer;
-                    }
-                }
-
-                // <FS:Ansariel> Optional V1-like inventory accept messages
-                if (gSavedSettings.getBOOL("FSUseLegacyInventoryAcceptMessages") && button == IOR_SHOW)
-                {
-                    send_auto_receive_response();
-                }
-                // </FS:Ansariel> Optional V1-like inventory accept messages
-            }
-            break;
-        case IM_GROUP_NOTICE:
-        case IM_GROUP_NOTICE_REQUESTED:
-            opener = new LLOpenTaskGroupOffer;
-            sendReceiveResponse(true, mFolderID);
-            break;
-        case IM_TASK_INVENTORY_OFFERED:
-            // This is an offer from a task or group.
-            // We don't use a new instance of an opener
-            // We instead use the singular observer gOpenTaskOffer
-            // Since it already exists, we don't need to actually do anything
-            break;
-        default:
-            LL_WARNS("Messaging") << "inventory_offer_callback: unknown offer type" << LL_ENDL;
-            break;
-        }
-
-        if (modified_form != NULL)
-        {
-            modified_form->setElementEnabled("Show", false);
-        }
-        break;
-        // end switch (mIM)
-
-    case IOR_ACCEPT:
-    case IOR_ACCEPT_SILENT: // <FS:Ansariel> FIRE-3832: Silent accept/decline of inventory offers
-        //don't spam them if they are getting flooded
-        if (check_offer_throttle(mFromName, true))
-        {
-            // <FS:Ansariel> This breaks object owner name parsing
-            //log_message = "<nolink>" + chatHistory_string + "</nolink> " + LLTrans::getString("InvOfferGaveYou") + " " + getSanitizedDescription() + LLTrans::getString(".");
-            // <FS:Ansariel> FIRE-29677 / SL-13720 workaround
-            //log_message = chatHistory_string + " " + LLTrans::getString("InvOfferGaveYou") + " " + getSanitizedDescription() + LLTrans::getString(".");
-            // </FS:Ansariel>
-
-            //LLSD args;
-            //args["MESSAGE"] = log_message;
-            //LLNotificationsUtil::add("SystemMessageTip", args);
-            log_message = " " + LLTrans::getString("InvOfferGaveYou") + " " + getSanitizedDescription() + LLTrans::getString(".");
-
-            LLUUID inv_sender_id;
-            size_t separator_idx = mFromName.find('|');
-            if (separator_idx != std::string::npos && LLUUID::parseUUID(mFromName.substr(0, separator_idx), &inv_sender_id) && mFromName.size() > (++separator_idx))
-            {
-                LLAvatarNameCache::instance().get(inv_sender_id, boost::bind(&inventory_offer_name_callback, _2, mFromName.substr(separator_idx), log_message));
-            }
-            else
-            {
-                LLSD args;
-                args["MESSAGE"] = chatHistory_string + log_message;
-                LLNotificationsUtil::add("SystemMessageTip", args);
-            }
-            // </FS:Ansariel>
-        }
-
-        // <FS:Ansariel> FIRE-3832: Silent accept/decline of inventory offers
-        if (mIM == IM_GROUP_NOTICE || mIM == IM_GROUP_NOTICE_REQUESTED)
-        {
-            opener = new LLOpenTaskGroupOffer;
-            sendReceiveResponse(true, mFolderID);
-        }
-        else if (mIM == IM_INVENTORY_OFFERED)
-        {
-// [RLVa:KB] - Checked: 2010-04-18 (RLVa-1.2.0)
-            if ( (rlv_handler_t::isEnabled()) && (!RlvSettings::getForbidGiveToRLV()) && (LLAssetType::AT_CATEGORY == mType) && (mDesc.find(RLV_PUTINV_PREFIX) == 0) )
-            {
-                RlvGiveToRLVAgentOffer* pOfferObserver = new RlvGiveToRLVAgentOffer(mObjectID);
-                pOfferObserver->startFetch();
-                if (pOfferObserver->isFinished())
-                    pOfferObserver->done();
-                else
-                    gInventory.addObserver(pOfferObserver);
-            }
-// [/RLVa:KB]
-
-            if (gSavedSettings.getBOOL("FSUseLegacyInventoryAcceptMessages") && button == IOR_ACCEPT)
-            {
-                send_auto_receive_response();
-            }
-            if (gSavedSettings.getBOOL("ShowInInventory"))
-            {
-                LLInventoryPanel::openInventoryPanelAndSetSelection(true, mObjectID);
-            }
-        }
-        // </FS:Ansariel>
-
-        break;
-
-    case IOR_MUTE:
-        if (modified_form != NULL)
-        {
-            modified_form->setElementEnabled("Mute", false);
-        }
-        accept_to_trash = false; // for notices, but IOR_MUTE normally doesn't happen for notices
-        // MUTE falls through to decline
-    case IOR_DECLINE:
-    case IOR_DECLINE_SILENT: // <FS:Ansariel> FIRE-3832: Silent accept/decline of inventory offers
-        {
-            {
-                LLStringUtil::format_map_t log_message_args;
-                log_message_args["DESC"] = mDesc;
-                log_message_args["NAME"] = mFromName;
-                log_message = LLTrans::getString("InvOfferDecline", log_message_args);
-            }
-            chat.mText = log_message;
-            if( LLMuteList::getInstance()->isMuted(mFromID ) && ! LLMuteList::isLinden(mFromName) )  // muting for SL-42269
-            {
-                chat.mMuted = true;
-                accept_to_trash = false; // will send decline message
-            }
-
-            // *NOTE dzaporozhan
-            // Disabled logging to old chat floater to fix crash in group notices - EXT-4149
-            // LLFloaterChat::addChatHistory(chat);
-
-            if (mObjectID.notNull()) //make sure we can discard
-            {
-                LLDiscardAgentOffer* discard_agent_offer = new LLDiscardAgentOffer(mFolderID, mObjectID);
-                discard_agent_offer->startFetch();
-                if ((catp && gInventory.isCategoryComplete(mObjectID)) || (itemp && itemp->isFinished()))
-                {
-                    discard_agent_offer->done();
-                }
-                else
-                {
-                    opener = discard_agent_offer;
-                }
-            }
-            // <FS:Ansariel> Make group notice attachment move to trash optional
-            //else if (mIM == IM_GROUP_NOTICE)
-            else if (mIM == IM_GROUP_NOTICE && gSavedSettings.getBOOL("FSDismissGroupNoticeAttachmentsToTrash"))
-            // </FS:Ansariel>
-            {
-                // group notice needs to request object to trash so that user will see it later
-                // Note: muted agent offers go to trash, not sure if we should do same for notices
-                LLUUID trash = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
-                sendReceiveResponse(accept_to_trash, trash);
-            }
-
-            // <FS:Ansariel> Optional V1-like inventory accept messages
-            if ((gSavedSettings.getBOOL("FSUseLegacyInventoryAcceptMessages") && button == IOR_DECLINE) && mIM == IM_INVENTORY_OFFERED)
-            {
-                send_decline_response();
-            }
-            // </FS:Ansariel> Optional V1-like inventory accept messages
-            if (modified_form != NULL)
-            {
-                modified_form->setElementEnabled("Show", false);
-                modified_form->setElementEnabled("Discard", false);
-            }
-
-            break;
-        }
-    default:
-        // close button probably
-        // In case of agent offers item has already been fetched and is in your inventory, we simply won't highlight it
-        // OR delete it if the notification gets killed, since we don't want that to be a vector for
-        // losing inventory offers.
-        // <FS:Ansariel> Make group notice attachment move to trash optional
-        //if (mIM == IM_GROUP_NOTICE)
-        if (mIM == IM_GROUP_NOTICE && gSavedSettings.getBOOL("FSDismissGroupNoticeAttachmentsToTrash"))
-        // </FS:Ansariel>
-        {
-            LLUUID trash = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
-            sendReceiveResponse(true, trash);
-        }
-        break;
-    }
-
-    if(opener)
-    {
-        gInventory.addObserver(opener);
-    }
-
-    if(!mPersist)
-    {
-        delete this;
-    }
-
-    return false;
-}
-
-bool LLOfferInfo::inventory_task_offer_callback(const LLSD& notification, const LLSD& response)
-{
-    LLChat chat;
-    std::string log_message;
-    S32 button = LLNotification::getSelectedOption(notification, response);
-
-    // For muting, we need to add the mute, then decline the offer.
-    // This must be done here because:
-    // * callback may be called immediately,
-    // * adding the mute sends a message,
-    // * we can't build two messages at once.
-    if (2 == button)
-    {
-        LLNotificationPtr notification_ptr = LLNotifications::instance().find(notification["id"].asUUID());
-
-        llassert(notification_ptr != NULL);
-        if (notification_ptr != NULL)
-        {
-            if (mFromGroup)
-            {
-                gCacheName->getGroup(mFromID, boost::bind(&inventory_offer_mute_callback, _1, _2, _3));
-            }
-            else
-            {
-                LLAvatarNameCache::get(mFromID, boost::bind(&inventory_offer_mute_avatar_callback, _1, _2));
-            }
-        }
-    }
-
-    std::string from_string; // Used in the pop-up.
-    std::string chatHistory_string;  // Used in chat history.
-
-    if (mFromObject)
-    {
-        std::string quot = LLTrans::getString("'");
-        if (mFromGroup)
-        {
-            std::string group_name;
-            if (gCacheName->getGroupName(mFromID, group_name))
-            {
-                from_string = LLTrans::getString("InvOfferAnObjectNamed") + " " +
-                    quot + mFromName + quot + " " +
-                    LLTrans::getString("InvOfferOwnedByGroup") + " " +
-                    quot + group_name + quot;
-                chatHistory_string = mFromName + " " +
-                    LLTrans::getString("InvOfferOwnedByGroup") + " " +
-                    quot + group_name + quot;
-            }
-            else
-            {
-                from_string = LLTrans::getString("InvOfferAnObjectNamed") + " " +
-                    quot + mFromName + quot + " " +
-                    LLTrans::getString("InvOfferOwnedByUnknownGroup");
-                chatHistory_string = mFromName + " " +
-                    LLTrans::getString("InvOfferOwnedByUnknownGroup");
-            }
-        }
-        else
-        {
-/*
-            LLAvatarName av_name;
-            if (LLAvatarNameCache::get(mFromID, &av_name))
-            {
-                from_string = LLTrans::getString("InvOfferAnObjectNamed") + " " +
-                    quot + mFromName + quot + " " +
-                    LLTrans::getString("InvOfferOwnedBy") + " " + av_name.getUserName();
-                chatHistory_string = mFromName + " " +
-                    LLTrans::getString("InvOfferOwnedBy") + " " + av_name.getUserName();
-            }
-            else
-            {
-                from_string = LLTrans::getString("InvOfferAnObjectNamed") + " " +
-                    quot + mFromName + quot + " " +
-                    LLTrans::getString("InvOfferOwnedByUnknownUser");
-                chatHistory_string = mFromName + " " +
-                    LLTrans::getString("InvOfferOwnedByUnknownUser");
-            }
-*/
-// [SL:KB] - Checked: 2010-11-02 (RLVa-1.2.2a) | Added: RLVa-1.2.2a
-            std::string name_slurl = LLSLURL("agent", mFromID, "about").getSLURLString();
-
-// [RLVa:KB] - Checked: RLVa-2.0.1
-            // RELEASE-RLVa: [RLVa-2.0.1] Make sure this stays in sync with the condition in inventory_offer_handler()
-            bool fRlvCanShowName = (!RlvActions::isRlvEnabled()) ||
-                (RlvActions::canShowName(RlvActions::SNC_DEFAULT, mFromID)) || (!RlvUtil::isNearbyAgent(mFromID)) || (RlvUIEnabler::hasOpenIM(mFromID)) || (RlvUIEnabler::hasOpenProfile(mFromID));
-            if (!fRlvCanShowName)
-                name_slurl = LLSLURL("agent", mFromID, "rlvanonym").getSLURLString();
-// [/RLVa:KB]
-
-            from_string = LLTrans::getString("InvOfferAnObjectNamed") + " "+ LLTrans::getString("'") + mFromName
-                + LLTrans::getString("'")+" " + LLTrans::getString("InvOfferOwnedBy") + name_slurl;
-            chatHistory_string = mFromName + " " + LLTrans::getString("InvOfferOwnedBy") + " " + name_slurl;
-// [/SL:KB]
-        }
-    }
-    else
-    {
-        from_string = chatHistory_string = mFromName;
-    }
-
-    LLUUID destination;
-    bool accept = true;
-
-    // If user accepted, accept to proper folder, if user discarded, accept to trash.
-    switch(button)
-    {
-        case IOR_ACCEPT:
-// [RLVa:KB] - Checked: 2010-09-23 (RLVa-1.2.1)
-            // Only treat the offer as 'Give to #RLV' if:
-            //   - the user has enabled the feature
-            //   - the inventory offer came from a script (and specifies a folder)
-            //   - the name starts with the prefix - mDesc format: '[OBJECTNAME]'  ( http://slurl.com/... )
-            if ( (rlv_handler_t::isEnabled()) && (IM_TASK_INVENTORY_OFFERED == mIM) && (LLAssetType::AT_CATEGORY == mType) && (mDesc.find(RLV_PUTINV_PREFIX) == 1) )
-            {
-                if (!RlvSettings::getForbidGiveToRLV())
-                {
-                    const LLUUID& idRlvRoot = RlvInventory::instance().getSharedRootID();
-                    if (idRlvRoot.notNull())
-                        mFolderID = idRlvRoot;
-
-                    // "accepted_in_rlv" is sent from RlvGiveToRLVTaskOffer *after* we have the folder
-                    RlvGiveToRLVTaskOffer* pOfferObserver = new RlvGiveToRLVTaskOffer(mTransactionID);
-                    gInventory.addObserver(pOfferObserver);
-                }
-                else
-                {
-                    std::string::size_type idxToken = mDesc.find("'  ( http://");
-                    if (std::string::npos != idxToken)
-                    {
-                        RlvBehaviourNotifyHandler::sendNotification("accepted_in_inv inv_offer " + mDesc.substr(1, idxToken - 1));
-                    }
-                }
-            }
-// [/RLVa:KB]
-
-            destination = mFolderID;
-            //don't spam user if flooded
-            if (check_offer_throttle(mFromName, true))
-            {
-                // <FS:Ansariel> This breaks object owner name parsing
-                //log_message = "<nolink>" + chatHistory_string + "</nolink> " + LLTrans::getString("InvOfferGaveYou") + " " + getSanitizedDescription() + LLTrans::getString(".");
-                log_message = chatHistory_string + " " + LLTrans::getString("InvOfferGaveYou") + " " + getSanitizedDescription() + LLTrans::getString(".");
-                // </FS:Ansariel>
-                LLSD args;
-                args["MESSAGE"] = log_message;
-                LLNotificationsUtil::add("SystemMessageTip", args);
-            }
-            break;
-        case IOR_MUTE:
-            // MUTE falls through to decline
-            accept = false;
-        case IOR_DECLINE:
-        default:
-            // close button probably (or any of the fall-throughs from above)
-            destination = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
-// [RLVa:KB] - Checked: 2010-09-23 (RLVa-1.2.1e) | Added: RLVa-1.2.1e
-            if ( (rlv_handler_t::isEnabled()) &&
-                 (IM_TASK_INVENTORY_OFFERED == mIM) && (LLAssetType::AT_CATEGORY == mType) && (mDesc.find(RLV_PUTINV_PREFIX) == 1) )
-            {
-                std::string::size_type idxToken = mDesc.find("'  ( http://");
-                if (std::string::npos != idxToken)
-                    RlvBehaviourNotifyHandler::sendNotification("declined inv_offer " + mDesc.substr(1, idxToken - 1));
-            }
-// [/RLVa:KB]
-            // <FS:Ansariel> Leave this notification in
-            if (gSavedSettings.getBOOL("LogInventoryDecline"))
-            {
-                LLStringUtil::format_map_t log_message_args;
-                log_message_args["DESC"] = mDesc;
-                log_message_args["NAME"] = mFromName;
-                log_message = LLTrans::getString("InvOfferDecline", log_message_args);
+// <Vulkanstorm> LLOfferInfo::inventory_offer_callback,
+// inventory_task_offer_callback, getSanitizedDescription and
+// initRespondFunctionMap are Rust since rung seven R4b (handleRespond).
+// </Vulkanstorm>
 
 
-                LLSD args;
-                args["MESSAGE"] = log_message;
-                LLNotificationsUtil::add("SystemMessageTip", args);
-            }
-            // </FS:Ansariel>
-            if (accept && LLMuteList::getInstance()->isMuted(mFromID, mFromName))
-            {
-                // Note: muted offers are usually declined automatically,
-                // but user can mute object after receiving message
-                accept = false;
-            }
-            break;
-    }
-
-    sendReceiveResponse(accept, destination);
-
-    if(!mPersist)
-    {
-        delete this;
-    }
-    return false;
-}
-
-std::string LLOfferInfo::getSanitizedDescription()
-{
-    // currently we get description from server as: 'Object' ( Location )
-    // object name shouldn't be shown as a hyperlink
-    std::string description = mDesc;
-
-    std::size_t start = mDesc.find_first_of("'");
-    std::size_t end = mDesc.find_last_of("'");
-    // <FS:Ansariel> FIRE-29194: <nolink> tags showing in offline inventory offer log
-    //if ((start != std::string::npos) && (end != std::string::npos))
-    if ((start != std::string::npos) && (end != std::string::npos) && start != end)
-    // </FS:Ansariel>
-    {
-        description.insert(start, "<nolink>");
-        description.insert(end + 8, "</nolink>");
-    }
-    return description;
-}
 
 
-void LLOfferInfo::initRespondFunctionMap()
-{
-    if(mRespondFunctions.empty())
-    {
-        mRespondFunctions["ObjectGiveItem"] = boost::bind(&LLOfferInfo::inventory_task_offer_callback, this, _1, _2);
-        mRespondFunctions["OwnObjectGiveItem"] = boost::bind(&LLOfferInfo::inventory_task_offer_callback, this, _1, _2);
-        mRespondFunctions["UserGiveItem"] = boost::bind(&LLOfferInfo::inventory_offer_callback, this, _1, _2);
-        // <FS:Ansariel> FIRE-3832: Silent accept/decline of inventory offers
-        mRespondFunctions["UserGiveItemLegacy"] = boost::bind(&LLOfferInfo::inventory_offer_callback, this, _1, _2);
-    }
-}
+
 
 bool lure_callback(const LLSD& notification, const LLSD& response)
 {
@@ -8902,33 +8211,10 @@ void invalid_message_callback(LLMessageSystem* msg,
 
 void LLOfferInfo::forceResponse(InventoryOfferResponse response)
 {
-    // <FS:Ansariel> Now this is a hell of piece of... forceResponse() will look for the
-    //               ELEMENT index, and NOT the button index. So if we want to force a
-    //               response of IOR_ACCEPT, we need to pass the correct element
-    //               index of the button.
-    //LLNotification::Params params("UserGiveItem");
-    //params.functor.function(boost::bind(&LLOfferInfo::inventory_offer_callback, this, _1, _2));
-    //LLNotifications::instance().forceResponse(params, response);
-    S32 element_index;
-    switch (response)
-    {
-        case IOR_ACCEPT:
-            element_index = 1;
-            break;
-        case IOR_DECLINE:
-            element_index = 2;
-            break;
-        case IOR_MUTE:
-            element_index = 3;
-            break;
-        default:
-            element_index = -1;
-            break;
-    }
-    LLNotification::Params params("UserGiveItem");
-    params.functor.function(boost::bind(&LLOfferInfo::inventory_offer_callback, this, _1, _2));
-    LLNotifications::instance().forceResponse(params, element_index);
-    // </FS:Ansariel>
+    // <Vulkanstorm> Rust (rung seven R4b): the UserGiveItem form element the
+    // response names, answered through inventory_offer_callback
+    vks_r4b_force_response(this, (S32)response);
+    // </Vulkanstorm>
 }
 
 // <FS:PP> Announce region restart to a defined chat channel
