@@ -109,7 +109,9 @@ if (LL_TESTS)
     # Since R1 is wired, llpermissions, llsaleinfo, llinventory and llnotecard
     # call Rust and no longer match their copies: the check covers the sources
     # that were not replaced (the type tables and the viewer subclasses, whose
-    # identifier fence stays). The frozen copies were checked once against the
+    # identifier fence stays), and on every run the LLSD forms those sources
+    # kept as C++ (KEPT_CPP in the script: each must still match its frozen
+    # copy). The frozen copies were checked once against the
     # commit the wiring started from (check_r1_copies.py --at 283fab629f: all
     # 35 regions; at 60184e5054 the llinventory.cpp region differs, as the
     # copies follow the Firestorm 7.2.5 sources since 2591f7448d).

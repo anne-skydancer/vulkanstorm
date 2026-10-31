@@ -1,14 +1,11 @@
 /** Tests for independent SLua source-language and runtime metadata, and for
-    the boundary of the Rust data model: legacy text from files, LLSD. */
+    the boundary of the Rust data model: legacy text from files. */
 #include "linden_common.h"
 #include "llinventory.h"
-#include "lldate.h"
-#include "lluri.h"
 #include "../test/lltut.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <limits>
 #include <sstream>
 
 namespace tut
@@ -242,134 +239,5 @@ template<> template<> void legacy_file_test::test<2>()
     const std::string open = text.substr(0, text.rfind('}'));
     check("no last brace, LF, text mode", open, std::ios::in);
     check("no last brace, CRLF, text mode", crlf(open), std::ios::in);
-}
-
-// LLSD crosses to Rust flat and comes back as a document (llsdflat.h): the
-// "into" forms return the value they were given with their own keys added,
-// so every other value must come back exactly, bit for bit.
-struct llsd_flat_data
-{
-    static LLSD everyKind()
-    {
-        LLSD sd = LLSD::emptyMap();
-        sd["undefined"] = LLSD();
-        sd["true"] = true;
-        sd["false"] = false;
-        sd["int min"] = (LLSD::Integer)S32_MIN;
-        sd["int max"] = (LLSD::Integer)S32_MAX;
-        sd["int -1"] = -1;
-        sd["real -0"] = -0.0;
-        sd["real inf"] = std::numeric_limits<F64>::infinity();
-        sd["real denormal"] = std::numeric_limits<F64>::denorm_min();
-        U64 nan_bits = 0x7ff4000000000abcULL; // a NaN with a payload
-        F64 nan;
-        memcpy(&nan, &nan_bits, sizeof(nan));
-        sd["real nan"] = nan;
-        sd["string"] = std::string("a\0b\xc3\xa9\xff|", 7);
-        sd["string empty"] = std::string();
-        sd["uuid"] = LLUUID("0123abcd-4567-89ef-0123-456789abcdef");
-        sd["date"] = LLDate(1234567890.125);
-        sd["uri"] = LLURI("http://example.com/a%20b?c=d");
-        sd["binary"] = LLSD::Binary{ 0, 1, 2, 0xff, 0 };
-        sd["binary empty"] = LLSD::Binary();
-        sd["map empty"] = LLSD::emptyMap();
-        sd["array empty"] = LLSD::emptyArray();
-        LLSD nested = LLSD::emptyArray();
-        nested.append(LLSD());
-        nested.append(LLSD().with("k", LLSD::emptyArray().with(0, 3.5)));
-        nested.append(LLSD::emptyMap());
-        sd["array"] = nested;
-        sd[std::string("key\0with nul", 12)] = 7;
-        sd["\xff key"] = "high key byte";
-        return sd;
-    }
-
-    static void same(const std::string& at, const LLSD& a, const LLSD& b)
-    {
-        ensure_equals(at + " type", (int)b.type(), (int)a.type());
-        switch (a.type())
-        {
-        case LLSD::TypeBoolean:
-            ensure_equals(at, b.asBoolean(), a.asBoolean());
-            break;
-        case LLSD::TypeInteger:
-            ensure_equals(at, b.asInteger(), a.asInteger());
-            break;
-        case LLSD::TypeReal:
-        {
-            const F64 x = a.asReal();
-            const F64 y = b.asReal();
-            ensure(at + " bits", memcmp(&x, &y, sizeof(x)) == 0);
-            break;
-        }
-        case LLSD::TypeDate:
-        {
-            const F64 x = a.asDate().secondsSinceEpoch();
-            const F64 y = b.asDate().secondsSinceEpoch();
-            ensure(at + " bits", memcmp(&x, &y, sizeof(x)) == 0);
-            break;
-        }
-        case LLSD::TypeString:
-        case LLSD::TypeURI:
-            ensure_equals(at, b.asString(), a.asString());
-            break;
-        case LLSD::TypeUUID:
-            ensure_equals(at, b.asUUID(), a.asUUID());
-            break;
-        case LLSD::TypeBinary:
-            ensure(at, b.asBinary() == a.asBinary());
-            break;
-        case LLSD::TypeMap:
-        {
-            ensure_equals(at + " size", b.size(), a.size());
-            auto i = a.beginMap();
-            auto j = b.beginMap();
-            for (; i != a.endMap(); ++i, ++j)
-            {
-                ensure_equals(at + " key", j->first, i->first);
-                same(at + "/" + i->first, i->second, j->second);
-            }
-            break;
-        }
-        case LLSD::TypeArray:
-            ensure_equals(at + " size", b.size(), a.size());
-            for (size_t k = 0; k < a.size(); ++k)
-            {
-                same(at + "[" + std::to_string(k) + "]", a[k], b[k]);
-            }
-            break;
-        default:
-            break;
-        }
-    }
-};
-using llsd_flat_group = test_group<llsd_flat_data>;
-using llsd_flat_test = llsd_flat_group::object;
-llsd_flat_group llsd_flat_tests("LLSD across the inventory calls");
-
-template<> template<> void llsd_flat_test::test<1>()
-{
-    const LLSD given = everyKind();
-    LLSD sd = given;
-    LLSaleInfo(LLSaleInfo::FS_COPY, 25).asLLSD(sd);
-    ensure_equals("sale type added", sd["sale_type"].asString(), std::string("copy"));
-    ensure_equals("sale price added", sd["sale_price"].asInteger(), 25);
-    sd.erase("sale_type");
-    sd.erase("sale_price");
-    same("sd", given, sd);
-}
-
-template<> template<> void llsd_flat_test::test<2>()
-{
-    // An undefined value goes as the empty buffer and comes back a map; a
-    // value nested in the given map comes back unchanged.
-    LLSD sd;
-    ll_fill_sd_from_permissions(sd, LLPermissions::DEFAULT);
-    ensure("undefined becomes a map", sd.isMap() && sd.has("base_mask"));
-    const LLSD array = everyKind()["array"];
-    LLSD inner = LLSD::emptyMap();
-    inner["nested"] = array;
-    ll_fill_sd_from_permissions(inner, LLPermissions::DEFAULT);
-    same("nested", array, inner["nested"]);
 }
 }

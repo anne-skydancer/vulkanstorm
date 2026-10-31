@@ -4957,11 +4957,11 @@ template<class I> void bench_impl(const std::vector<ItemF>& population, const LL
     for (auto& it : items) perms.push_back(it->getPermissions());
     U64& sink = g_bench_sink;
     auto report = [&](const char* op, double us, size_t count) {
-        printf("%-8s %-34s %10.1f us  %8.1f ns/item  (%zu)\n", label, op, us, us * 1000.0 / (double)count, count);
+        printf("%-8s %-42s %10.1f us  %8.1f ns/item  (%zu)\n", label, op, us, us * 1000.0 / (double)count, count);
     };
     if (n) // the synthetic population (empty for a private cache)
     {
-    report("fromLLSD (new item each)", time_min(rounds, [&] {
+    report("fromLLSD [C++] (new item each)", time_min(rounds, [&] {
         for (const LLSD& sd : sds)
         {
             LLPointer<Item> it = new Item;
@@ -4969,7 +4969,7 @@ template<class I> void bench_impl(const std::vector<ItemF>& population, const LL
             sink += it->getFlags();
         }
     }), n);
-    report("asLLSD", time_min(rounds, [&] {
+    report("asLLSD [C++]", time_min(rounds, [&] {
         for (auto& it : items)
         {
             LLSD sd = it->asLLSD();
@@ -5146,7 +5146,7 @@ template<class I> void bench_impl(const std::vector<ItemF>& population, const LL
             it->fromLLSD(li[k]);
             litems.push_back(it);
         }
-        report("library fromLLSD", time_min(rounds, [&] {
+        report("library fromLLSD [C++]", time_min(rounds, [&] {
             for (S32 k = 0; k < li.size(); ++k)
             {
                 LLPointer<Item> it = new Item;
@@ -5154,7 +5154,7 @@ template<class I> void bench_impl(const std::vector<ItemF>& population, const LL
                 sink += it->getFlags();
             }
         }), (size_t)li.size());
-        report("library asLLSD", time_min(rounds, [&] {
+        report("library asLLSD [C++]", time_min(rounds, [&] {
             for (auto& it : litems)
             {
                 LLSD sd = it->asLLSD();
@@ -5175,7 +5175,7 @@ template<class I> void bench_impl(const std::vector<ItemF>& population, const LL
             for (auto& it : litems) acc += it->getCRC32();
             sink += acc;
         }), litems.size());
-        report("library categories importLLSDMap", time_min(rounds, [&] {
+        report("library categories importLLSDMap [C++]", time_min(rounds, [&] {
             for (S32 k = 0; k < lc.size(); ++k)
             {
                 LLPointer<typename I::VCat> c = make_vcat<I>(CatF());
@@ -5191,6 +5191,8 @@ int bench(int rounds, U64 count, const std::string& library, const std::string& 
     init_runtime();
     printf("llinventory_tool bench: %s, %d rounds (minimum reported), %llu synthetic items\n", platform_description().c_str(), rounds,
            (unsigned long long)count);
+    printf("live: the viewer's classes (Rust rules); oracle: the frozen C++. Rows marked [C++] are the LLSD forms,\n"
+           "C++ in both (kept C++ until R2/R3a; they still call the Rust rules inside, e.g. fix and initMasks).\n");
     Rng r(SEED_BENCH);
     std::vector<ItemF> population;
     population.reserve(count);
