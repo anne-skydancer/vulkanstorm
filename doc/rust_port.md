@@ -2001,6 +2001,81 @@ the tests and append the output to the job summary (the step never fails a
 build). The rows marked `[C++]` there are the LLSD forms, C++ in both
 columns.
 
+### R4a: object contents (task inventory)
+
+On `codex/inventory-r4a` the task-inventory decisions of `LLViewerObject`
+are vkstorm-inventory's `task` module, called through `vkstorm-ffi`
+(`vks_inv_task_*`, the "Inventory R4a" section of `vkstorm_ffi.h`). The
+object keeps its state (`mInventory` and its entries, the serials, the
+request state, the xfer id, the dirty flag, the pending assets, the
+listeners) and its members; each member forwards to
+`LLTaskInventoryExecutor` (`indra/newview/lltaskinventoryexecutor.inl`).
+A decision takes the object's scalar state, its pending asset ids and one
+small key per entry of `mInventory` (id, type, and for an item its asset
+and a pointer to its `LLPermissions` in place) and returns one block: the
+actions in the C++ order, the entries to push as records and the messages
+as records. The executor carries them out: state, list edits, listener
+notifications, the `add*Fast` fields of the messages, xfers, coroutines and
+the HTTP adapter, cache files, floaters and callbacks.
+
+The executor is one source for the viewer and the oracle:
+`INTEGRATION_TEST_llinventory_task_oracle` includes it inside its
+namespace, on its fakes (`tests/llinventory_task_oracle_rust.cpp`), and
+replays every set against it: sets 1 to 4, the random sweeps and the
+digests, 0 differences on Windows (RelWithDebInfo). A dump, and a replay
+with `VKS_TASK_BOUNDARY=frozen`, still use the frozen copies.
+`check_r4a_copies.py` checks the regions the wiring replaced against the
+commit it started from (`--at 3846816a16`), and every run checks that the
+code that stayed C++ is identical to its frozen copy (`KEPT_CPP`).
+
+Listeners may call into the object while they are notified: the material
+editor and the notecard preview register again and request the contents
+from inside `inventoryChanged`. The decisions were made exact for that:
+`++`/`--mExpectedInventorySerialNum` is a relative action, bug 6's
+`requestInventory` while a request is outstanding saves and restores the
+request state around the notification, and `processTaskInvFile`'s
+pending-list cleanup runs as a second decision over the object as the
+listeners left it (with the `<FS:ND>` guard for no contents).
+
+| Function | Kept as | Why |
+|---|---|---|
+| `requestInventory`, `dirtyInventory`, `deleteInventoryItem` | Rust | the request state machine |
+| `processTaskInv` (ReplyTaskInventory), the xfer completion, the capability coroutine, the delayed refetch | Rust | serials, loop protection, stale replies; the C++ keeps the message getters, xfer manager and HTTP adapter |
+| `loadTaskInvFile` | Rust | the whole file crosses once, read through the loader's text-mode stream (CRLF and Ctrl-Z as before); records come back in one block. Faster than the C++, see below |
+| capability reply entries (`unpackMessage(LLSD)` per entry) | C++ | an LLSD form (R1's decision); the decision takes `inventory_serial` (`asInteger`) and whether `contents` is present |
+| `updateInventory`, `updateInventoryLocal`, `updateViewerInventoryAsset`, `updateMaterialInventory`, `saveScript`, `removeInventory`, `moveInventory` | Rust | the owner guess, the serial bookkeeping and the message contents (CRC included) |
+| `createInventoryItem` and its coroutine | Rust | the POST body and the verdict; `params` and the body cross as binary LLSD |
+| `getInventoryObject`, `getInventoryItem`, `getInventoryContents`, `getInventoryRoot`, both `getInventoryItemByAsset`, `countInventoryContents`, `isAssetInInventory` | C++ | 25 to 3,000 times slower through the ABI (below); the decisions apply the same rules in Rust |
+| listener bookkeeping (`register`/`removeInventoryListener`, `clearInventoryListeners`, `hasInventoryListeners`), `isInventoryPending`, `isInventoryDirty`, `getInventorySerial` | C++ | object bookkeeping, unchanged |
+
+Timings: test 9 of the oracle (`VKS_TASK_BENCH=5`), the frozen copies
+against the Rust side in one binary, Windows, RelWithDebInfo, best of five,
+items of the kind the simulator sends. The frozen loader already reads
+each entry through R1's Rust readers, one crossing per entry; R1's own
+bench gives the C++ item reader before R1 (7,770 ns per item against 5,798
+in Rust).
+
+| Row | Entries | Frozen C++ | Rust |
+|---|---|---|---|
+| `loadTaskInvFile` (whole load, ms) | 100 | 4.19 | 4.11 |
+| | 1,000 | 13.8 | 8.4 |
+| | 10,000 | 85.4 | 55.5 |
+| `updateInventoryLocal` (µs) | 100 | 0.21 | 2.7 |
+| | 1,000 | 0.72 | 17.4 |
+| | 10,000 | 48.9 | 379 |
+| `getInventoryObject` (front entry, µs; now C++) | 100 / 1,000 / 10,000 | 0.003 / 0.005 / 0.04 | 1.0 / 8.6 / 119 |
+| `getInventoryItemByAsset(asset, type)` (µs; now C++) | 100 / 1,000 / 10,000 | 0.004 / 0.006 / 0.015 | 1.0 / 8.3 / 106 |
+| `countInventoryContents` (µs; now C++) | 100 / 1,000 / 10,000 | 0.12 / 1.7 / 34 | 1.0 / 8.3 / 106 |
+
+The loads are as fast or faster (a third less time from 1,000 entries);
+the fixed cost of a small load is the file itself. The list stays linear
+to build: the decisions return the entries in file order and the C++
+pushes each to the front of its `std::list` (#13's property). The local
+mutations pay for building the keys of the whole list on every call: a few
+microseconds for a typical object, 0.4 ms for 10,000 entries, once per
+user action. They are kept as Rust pending the owner's decision; the
+lookups, which the UI calls per item, are C++.
+
 ## Local build
 
 Follow the project's RelWithDebInfo procedure (see `scripts/validate_audio.sh`
