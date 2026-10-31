@@ -276,7 +276,23 @@ struct small_buffer : public std::streambuf
     std::streamsize xsgetn(char* s, std::streamsize n) override
     {
         ++mReads;
-        return std::streambuf::xsgetn(s, n);
+        const std::streamsize got = std::streambuf::xsgetn(s, n);
+        if (mThrowOnPutBack)
+        {
+            // Nothing read stays available to put back: sungetc goes to
+            // pbackfail.
+            setg(gptr(), gptr(), egptr());
+        }
+        return got;
+    }
+
+    int_type pbackfail(int_type c) override
+    {
+        if (mThrowOnPutBack)
+        {
+            throw std::runtime_error("put back error");
+        }
+        return std::streambuf::pbackfail(c);
     }
 
     std::string mText;
@@ -285,6 +301,7 @@ struct small_buffer : public std::streambuf
     size_t mThrowAt;
     size_t mPos = 0;
     size_t mReads = 0;
+    bool mThrowOnPutBack = false;
 };
 
 template<> template<> void legacy_file_test::test<3>()
@@ -321,6 +338,31 @@ template<> template<> void legacy_file_test::test<4>()
     ensure("an item", item != std::string::npos);
     const size_t body = text.find('\n', item) + 1;
     small_buffer sb(text.substr(body), 16, 100);
+    std::istream in(&sb);
+    LLPointer<LLInventoryItem> imported = new LLInventoryItem;
+    bool ok = true;
+    try
+    {
+        ok = imported->importLegacyStream(in);
+    }
+    catch (...)
+    {
+        fail("an exception escaped the legacy reader");
+    }
+    ensure("import failed", !ok);
+    ensure("badbit set", in.bad());
+}
+
+template<> template<> void legacy_file_test::test<5>()
+{
+    // Putting back the bytes the reader read past the item fails: the import
+    // fails too (the stream is not where the reader left it), with badbit.
+    const std::string text = fileText();
+    const size_t item = text.find("\tinv_item");
+    ensure("an item", item != std::string::npos);
+    const size_t body = text.find('\n', item) + 1;
+    small_buffer sb(text.substr(body), 16);
+    sb.mThrowOnPutBack = true;
     std::istream in(&sb);
     LLPointer<LLInventoryItem> imported = new LLInventoryItem;
     bool ok = true;

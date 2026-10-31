@@ -154,7 +154,9 @@ bool ll_inv_read_legacy(std::istream& input, Read&& read)
                 return false;
             }
             window.finish(stream);
-            return true;
+            // Putting back what the reader did not consume can fail too; the
+            // stream then has badbit and is not where the reader left it.
+            return !window.bad();
         }
     }
 }
