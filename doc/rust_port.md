@@ -2072,13 +2072,29 @@ no handler logic exists to wire. Porting their control flow would need a new
 op-list design in the crate first (as R3a's `doUpdate()` split); that is
 an open scope question for the owner, not part of this wiring.
 
-Logging. The C++ `validate()` wrote one log line per problem found (with
-names and ids); the Rust checks return counts per warning key and `mLog`,
-and the viewer logs those (one line per key, then the log text, then the
-summary line). The C++ `loadFromFile` named which of version, header or
-parse made a cache obsolete; the Rust decode reports only that it is.
-`loadSkeleton` logs one "unable to import" warning per call instead of one
-per bad entry.
+Logging keeps the C++ granularity, text and tags (owner, 2026-10-31:
+support greps for them). `validate()` returns every line the C++ logged as
+events (`validate::Event`, `VKS_INV_VEV_*`), in its order, with the record
+indices, ids and numbers each needs; the viewer formats them with the C++
+text, taking names and paths (`getFullPath`) from its objects: one line
+per problem object, the folder-type debug lines, the lock and
+unknown-count summaries. `loadFromFile` says why a cache was rejected
+(header, version or parse, from the bytes it read), and `loadSkeleton`
+logs "Unable to import near <name>" per refused entry
+(`vks_inv_skeleton_rejected`), "folder to update: <name>" per folder with
+an unknown-type item, and the broken-link and invalidation debug lines
+from the plan; `validate()` also logs the `getObjectTopmostAncestor` and
+`isInSuitcase` warnings its walks trigger. Checked over a whole run of
+`INTEGRATION_TEST_llinventorymodel_parity`: the 21,077 lines it logs from
+`llinventorymodel.cpp` (debug included) are the C++ run's, in the same
+order, level, tag and text; only the random temporary file names and the
+function name of lines that now come from another function differ (the
+cache rejection and null-id lines of a login load name `loadSkeleton`,
+which no longer calls `loadFromFile`; the ancestor warnings name
+`validate`). The first pass's broken-link debug lines are logged before
+the `addItem` calls rather than between them; no corpus case
+interleaves them with `addItem`'s own lines. When nothing is wrong no
+event is made.
 
 Bench (`VKS_INVMODEL_BENCH=7`, Windows, RelWithDebInfo, best of 7, ms;
 measured while four other agents built on the same machine, so take ±20%).
@@ -2095,21 +2111,29 @@ read or write, and both re-encodes give the input bytes back:
 
 The model rows need the whole model, so they compare two builds of the test
 (this branch, and the same test over the `llinventorymodel.cpp` before the
-port), over a 50k-item world with random ids, best of 7 over two to four
-alternating runs each:
+port), over a 50k-item world with random ids, best of 7 in each of two
+alternating rounds per build (the lower round shown):
 
-| 50k random world | C++ | Rust |
-|---|---|---|
-| `loadSkeleton` (library and agent, from the gzipped cache) | 434 | 275 |
-| `validate()` | 42.8 | 55.9 |
-| `buildParentChildMap()` (includes `validate()`) | 52.5 | 67.6 |
+| 50k random world | C++ | Rust, first wiring | Rust |
+|---|---|---|---|
+| `loadSkeleton` (library and agent, from the gzipped cache) | 434.7 | 275 | 273.7 |
+| `validate()` | 42.3 | 55.9 | 20.6 |
+| `buildParentChildMap()` (includes `validate()`) | 51.2 | 67.6 | 31.2 |
 
-`validate()` is about 13 ms slower: building the snapshot (two pointer to
-index maps over every record) and the crate's `BTreeMap`s cost more than
-the C++ checks over the live maps. It runs once at login, after the
-skeleton load that gained about 160 ms. Kept Rust pending the owner's
-decision; a snapshot without the pointer maps, or hashed maps in the
-crate, would close most of the gap.
+The first wiring of `validate()` was about 13 ms slower than the C++: the
+snapshot mapped every object pointer to an index through two hash maps,
+the crate kept the maps as `BTreeMap`s and every ancestor walk allocated a
+`BTreeSet`. The owner kept it in Rust and asked for it to be made faster
+(2026-10-31). Now the snapshot needs one `find` and a pointer compare per
+child vector entry (a record per map entry under its object's own id;
+children, `mLastItem` and a second key of the same object refer to it by
+key, `VKS_INV_SNAP_MAPPED`; only an object the maps do not hold under its
+own id gets a record of its own), the crate's maps are hash maps by UUID
+(`model::UuidMap`; the walks keep the caller's map order), and the
+ancestor walk's loop guard is a short list. It went from 55.9 to 20.6 ms,
+half the C++ time. The "first wiring" column is from an earlier session
+(the machine's load from other agents' builds varies between sessions);
+the C++ and final Rust columns were measured in alternation.
 
 The 100k realistic world's model rows are not a measure of either side:
 its ids (`pid()`) differ only in bytes 10-15, which upstream's
