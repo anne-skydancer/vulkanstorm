@@ -3044,6 +3044,19 @@ namespace
         return true;
     }
 
+    // The implementation a set runs against: the viewer's (the Rust
+    // decisions and lltaskinventoryexecutor.inl) for a replay; the frozen
+    // copies for a dump (the fixtures are recorded from the C++ as it was)
+    // and for a replay with VKS_TASK_BOUNDARY=frozen.
+    const char* select_boundary()
+    {
+        const char* which = getenv("VKS_TASK_BOUNDARY");
+        const bool frozen = dump_mode() || (which && std::string(which) == "frozen");
+        vto::set_boundary(frozen ? NULL : &vto::rust_boundary());
+        std::cerr << "boundary: " << bnd().name() << std::endl;
+        return bnd().name();
+    }
+
     // The fixture tree must hold exactly the files the sets produce, plus
     // README.md and .gitattributes.
     std::string tree_report()
@@ -3105,6 +3118,7 @@ namespace tut
         set_test_name("set 1: task inventory files and scrubbed filenames");
         if (skip_set(1)) return;
         env();
+        select_boundary();
         Outputs o;
         build_set1(o);
         std::string report = finish(o, "");
@@ -3117,6 +3131,7 @@ namespace tut
         set_test_name("set 2: capability replies");
         if (skip_set(2)) return;
         env();
+        select_boundary();
         Outputs o;
         build_set2(o);
         std::string report = finish(o, "digests_set2.txt");
@@ -3129,6 +3144,7 @@ namespace tut
         set_test_name("set 3: serial and request-state traces");
         if (skip_set(3)) return;
         env();
+        select_boundary();
         Outputs o;
         auto t0 = std::chrono::steady_clock::now();
         build_set3(o);
@@ -3144,6 +3160,7 @@ namespace tut
         set_test_name("set 4: task-inventory messages");
         if (skip_set(4)) return;
         env();
+        select_boundary();
         Outputs o;
         build_set4(o);
         std::string report = finish(o, "digests_set4.txt");
@@ -3156,6 +3173,7 @@ namespace tut
         set_test_name("set 1: random sweep of mutated task files");
         if (skip_set(1)) return;
         env();
+        select_boundary();
         Outputs o;
         build_set1_random(o);
         std::string report = finish(o, "digests_set1.txt");
@@ -3189,5 +3207,111 @@ namespace tut
         std::string text;
         read_file(out, text);
         ensure("check_r4a_copies.py failed (rc " + std::to_string(rc) + "):\n" + text, rc == 0);
+    }
+
+    template<> template<>
+    void task_oracle_object_t::test<9>()
+    {
+        set_test_name("bench: frozen copies against the Rust decisions (VKS_TASK_BENCH=<rounds>)");
+        const char* rounds_env = getenv("VKS_TASK_BENCH");
+        if (!(rounds_env && *rounds_env))
+        {
+            return;
+        }
+        env();
+        const int rounds = std::max(1, atoi(rounds_env));
+        std::ostringstream report;
+        report << "# task inventory bench, best of " << rounds << " rounds, ns (Windows: RelWithDebInfo)\n";
+        report << "row\tentries\tfrozen C++\tRust\n";
+        vto::TaskInventoryBoundary* sides[2] = { &vto::frozen_boundary(), &vto::rust_boundary() };
+        for (int n : { 100, 1000, 10000 })
+        {
+            std::string file = legacy_object(OBJ, "Contents");
+            for (int i = 0; i < n; ++i)
+            {
+                ItemSpec m = spec_a();
+                m.id = LLUUID(fmt("1a000000-0000-4000-8000-%012x", 0x100 + i).c_str());
+                m.asset = LLUUID(fmt("a5000000-0000-4000-8000-%012x", 0x100 + i).c_str());
+                m.name = fmt("Item %05d", i);
+                m.desc = "a description of the item";
+                file += legacy_item(m);
+            }
+            const LLUUID last_id(fmt("1a000000-0000-4000-8000-%012x", 0x100 + n - 1).c_str());
+            const LLUUID last_asset(fmt("a5000000-0000-4000-8000-%012x", 0x100 + n - 1).c_str());
+            double load[2], by_id[2], by_asset[2], count[2], update[2];
+            const int lookups = std::max(1, 200000 / n);
+            for (int side = 0; side < 2; ++side)
+            {
+                vto::set_boundary(sides[side]);
+                double best_load = 1e300, best_id = 1e300, best_asset = 1e300, best_count = 1e300, best_update = 1e300;
+                for (int r = 0; r < rounds; ++r)
+                {
+                    Scene s(false, 0);
+                    const std::string name = "task_bench.inv";
+                    const std::string path = s.cache_path(name);
+                    s.write_file(path, file);
+                    auto t0 = std::chrono::steady_clock::now();
+                    bnd().loadTaskInvFile(s.obj, name);
+                    auto t1 = std::chrono::steady_clock::now();
+                    best_load = std::min(best_load, (double)std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+
+                    size_t sink = 0;
+                    t0 = std::chrono::steady_clock::now();
+                    for (int k = 0; k < lookups; ++k)
+                    {
+                        sink += (size_t)bnd().getInventoryObject(s.obj, last_id);
+                    }
+                    t1 = std::chrono::steady_clock::now();
+                    best_id = std::min(best_id, (double)std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count() / lookups);
+                    t0 = std::chrono::steady_clock::now();
+                    for (int k = 0; k < lookups; ++k)
+                    {
+                        sink += (size_t)bnd().getInventoryItemByAsset(s.obj, last_asset, LLAssetType::AT_NOTECARD);
+                    }
+                    t1 = std::chrono::steady_clock::now();
+                    best_asset = std::min(best_asset, (double)std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count() / lookups);
+                    t0 = std::chrono::steady_clock::now();
+                    for (int k = 0; k < lookups; ++k)
+                    {
+                        sink += (size_t)bnd().countInventoryContents(s.obj, LLAssetType::AT_NOTECARD);
+                    }
+                    t1 = std::chrono::steady_clock::now();
+                    best_count = std::min(best_count, (double)std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count() / lookups);
+
+                    LLPointer<vto::LLViewerInventoryItem> item = make_item(spec_a());
+                    const int updates = std::max(1, 20000 / n);
+                    t0 = std::chrono::steady_clock::now();
+                    for (int k = 0; k < updates; ++k)
+                    {
+                        bnd().updateInventoryLocal(s.obj, item, TASK_INVENTORY_ITEM_KEY);
+                    }
+                    t1 = std::chrono::steady_clock::now();
+                    best_update = std::min(best_update, (double)std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count() / updates);
+                    if (sink == 1)
+                    {
+                        std::cerr << "";
+                    }
+                }
+                load[side] = best_load;
+                by_id[side] = best_id;
+                by_asset[side] = best_asset;
+                count[side] = best_count;
+                update[side] = best_update;
+            }
+            vto::set_boundary(NULL);
+            report << fmt("loadTaskInvFile (whole load)\t%d\t%.0f\t%.0f\n", n, load[0], load[1]);
+            report << fmt("loadTaskInvFile per entry\t%d\t%.1f\t%.1f\n", n, load[0] / (n + 1), load[1] / (n + 1));
+            report << fmt("getInventoryObject (last entry)\t%d\t%.1f\t%.1f\n", n, by_id[0], by_id[1]);
+            report << fmt("getInventoryItemByAsset(type) (last)\t%d\t%.1f\t%.1f\n", n, by_asset[0], by_asset[1]);
+            report << fmt("countInventoryContents\t%d\t%.1f\t%.1f\n", n, count[0], count[1]);
+            report << fmt("updateInventoryLocal (owner guess)\t%d\t%.1f\t%.1f\n", n, update[0], update[1]);
+        }
+        std::cerr << report.str();
+        const char* out = getenv("VKS_TASK_BENCH_OUT");
+        if (out && *out)
+        {
+            std::ofstream f(out, std::ios::binary | std::ios::trunc);
+            f << report.str();
+        }
     }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks the task-inventory oracle's frozen copies against the live source.
 
-usage: python indra/newview/tests/check_r4a_copies.py [--print-fence] [--record-conditionals]
+usage: python indra/newview/tests/check_r4a_copies.py [--at <commit>] [--print-fence] [--record-conditionals]
 
 Run by INTEGRATION_TEST_llinventory_task_oracle itself (test 8), so a drift
 fails the build's test step.
@@ -48,6 +48,16 @@ lists the fenced lines outside the regions.
 
 The script reports where each region now lives and whether its file's blob
 changed, and exits non-zero on any failure.
+
+Replaced regions. The R4a wiring replaced the task-inventory code of
+llviewerobject.cpp and the private declarations of llviewerobject.h with
+calls to the Rust decisions and lltaskinventoryexecutor.inl (REPLACED below).
+Those regions are frozen: a normal run skips them, and --at <commit> checks
+them against that commit's source (the wiring started from WIRED_AT). The
+listener bookkeeping inside a replaced region stayed C++ (KEPT_CPP): each of
+those functions must occur, normalised, exactly once in the live source and
+exactly once in the frozen copy, on every run. The fence's allowlist for
+llviewerobject.{cpp,h} holds the reviewed lines of the wiring.
 """
 import os
 import re
@@ -79,9 +89,58 @@ INVENTORY_IDS = ["mIsComplete", "mTransactionID", "mIsRunning", "mIsFaulted",
 # as reviewed at 8dbe68aa69 (the live sources unchanged since 472ecf270d),
 # re-reviewed at 6f23ef84f0 (vkstorm-rust; no new fenced lines outside the regions).
 FENCES = [
+    # The R4a wiring (reviewed at codex/inventory-r4a): the members forward to
+    # LLTaskInventoryExecutor (lltaskinventoryexecutor.inl), and the private
+    # declarations the test boundary still reaches.
     ("indra/newview/llviewerobject.cpp", OBJECT_IDS, [
+        'void LLViewerObject::deleteInventoryItem(const LLUUID& item_id)',
+        'LLTaskInventoryExecutor::deleteInventoryItem(this, item_id);',
+        'void LLViewerObject::saveScript(const LLViewerInventoryItem* item,',
+        'LL_DEBUGS() << "LLViewerObject::saveScript() " << item->getUUID() << " " << item->getAssetUUID() << LL_ENDL;',
+        'LLTaskInventoryExecutor::saveScript(this, item, active, is_new, template_id);',
+        'void LLViewerObject::moveInventory(const LLUUID& folder_id,',
+        'LL_DEBUGS() << "LLViewerObject::moveInventory " << item_id << LL_ENDL;',
+        'LLTaskInventoryExecutor::moveInventory(this, folder_id, item_id);',
+        'void LLViewerObject::dirtyInventory()',
+        'LLTaskInventoryExecutor::dirtyInventory(this);',
+        'void LLViewerObject::requestInventory()',
+        'LLTaskInventoryExecutor::requestInventory(this);',
+        'void LLViewerObject::processTaskInv(LLMessageSystem* msg, void** user_data)',
+        'LLTaskInventoryExecutor::processTaskInv(msg);',
+        'bool LLViewerObject::loadTaskInvFile(const std::string& filename)',
+        'return LLTaskInventoryExecutor::loadTaskInvFile(this, filename);',
+        'void LLViewerObject::removeInventory(const LLUUID& item_id)',
+        'LLTaskInventoryExecutor::removeInventory(this, item_id);',
+        'bool LLViewerObject::isAssetInInventory(LLViewerInventoryItem* item, LLAssetType::EType type)',
+        'return LLTaskInventoryExecutor::isAssetInInventory(this, item, type);',
+        'void LLViewerObject::updateMaterialInventory(LLViewerInventoryItem* item, U8 key, bool is_new)',
+        'LLTaskInventoryExecutor::updateMaterialInventory(this, item, key, is_new);',
+        'void LLViewerObject::updateInventory(',
+        'LLTaskInventoryExecutor::updateInventory(this, item, key, is_new);',
+        'void LLViewerObject::updateInventoryLocal(LLInventoryItem* item, U8 key)',
+        'LLTaskInventoryExecutor::updateInventoryLocal(this, item, key);',
+        'LLInventoryObject* LLViewerObject::getInventoryObject(const LLUUID& item_id)',
+        'return LLTaskInventoryExecutor::getInventoryObject(this, item_id);',
+        'LLInventoryItem* LLViewerObject::getInventoryItem(const LLUUID& item_id)',
+        'return LLTaskInventoryExecutor::getInventoryItem(this, item_id);',
+        'void LLViewerObject::getInventoryContents(LLInventoryObject::object_list_t& objects)',
+        'LLTaskInventoryExecutor::getInventoryContents(this, objects);',
+        'LLInventoryObject* LLViewerObject::getInventoryRoot()',
+        'return LLTaskInventoryExecutor::getInventoryRoot(this);',
+        'LLViewerInventoryItem* LLViewerObject::getInventoryItemByAsset(const LLUUID& asset_id)',
+        'return LLTaskInventoryExecutor::getInventoryItemByAsset(this, asset_id);',
+        'LLViewerInventoryItem* LLViewerObject::getInventoryItemByAsset(const LLUUID& asset_id, LLAssetType::EType type)',
+        'return LLTaskInventoryExecutor::getInventoryItemByAsset(this, asset_id, type);',
+        'void LLViewerObject::updateViewerInventoryAsset(',
+        'LLTaskInventoryExecutor::updateViewerInventoryAsset(this, item, new_asset);',
+        'S32 LLViewerObject::countInventoryContents(LLAssetType::EType type)',
+        'return LLTaskInventoryExecutor::countInventoryContents(this, type);',
+        'void LLViewerObject::createInventoryItem(',
+        'LLTaskInventoryExecutor::createInventoryItem(this, asset_type, inventory_type, sub_type, name, description,',
     ]),
     ("indra/newview/llviewerobject.h", OBJECT_IDS, [
+        'void deleteInventoryItem(const LLUUID& item_id);',
+        'bool loadTaskInvFile(const std::string& filename);',
     ]),
     # llviewerinventory: uses of the members and helpers outside the copies
     # (the UDP item update, fetchFromServer, the dictionary's other users,
@@ -106,6 +165,20 @@ FENCES = [
         'bool mIsRunning = false;',
         'bool mIsFaulted = false;',
     ]),
+]
+
+# The regions the R4a wiring replaced, and the commit it started from.
+REPLACED = {"O2", "O3", "O4", "O6", "H4", "H5", "H6"}
+WIRED_AT = "3846816a16"
+
+# Functions of replaced regions that stayed C++ (first line of each, in the
+# frozen copy and in the live source).
+KEPT_CPP = [
+    ("indra/newview/llviewerobject.cpp", "void LLViewerObject::registerInventoryListener("),
+    ("indra/newview/llviewerobject.cpp", "void LLViewerObject::removeInventoryListener("),
+    ("indra/newview/llviewerobject.cpp", "bool LLViewerObject::isInventoryPending()"),
+    ("indra/newview/llviewerobject.cpp", "void LLViewerObject::clearInventoryListeners()"),
+    ("indra/newview/llviewerobject.cpp", "bool LLViewerObject::hasInventoryListeners()"),
 ]
 
 HEAD = re.compile(r"^// >>> VKS-R4A-COPY (\S+) (\S+) lines (\d+)-(\d+) blob ([0-9a-f]{40})$")
@@ -278,6 +351,64 @@ def live(path):
     return live_cache[path]
 
 
+at_cache = {}
+
+
+def at_commit(commit, path):
+    key = (commit, path)
+    if key not in at_cache:
+        text = subprocess.check_output(["git", "-C", REPO, "show", "%s:%s" % (commit, path)])
+        at_cache[key] = normalise(text.decode("utf-8"))
+    return at_cache[key]
+
+
+def function_text(text, first_line):
+    """The function starting at the line that begins with first_line (after
+    indentation), to its closing brace; None when absent or not unique."""
+    lines = text.replace("\r", "").split("\n")
+    starts = [i for i, l in enumerate(lines) if l.strip().startswith(first_line)]
+    if len(starts) != 1:
+        return None
+    depth = 0
+    seen = False
+    for j in range(starts[0], len(lines)):
+        for ch in lines[j]:
+            if ch == "{":
+                depth += 1
+                seen = True
+            elif ch == "}":
+                depth -= 1
+        if seen and depth == 0:
+            return "\n".join(lines[starts[0]:j + 1])
+    return None
+
+
+def check_kept():
+    failures = 0
+    copy_text = open(REGION_FILES[0], encoding="utf-8").read()
+    copy_norm = normalise(copy_text)
+    for src, first in KEPT_CPP:
+        body = function_text(copy_text, first)
+        if body is None:
+            print("FAIL kept C++ %s: not found once in the frozen copy" % first)
+            failures += 1
+            continue
+        want = normalise(body)
+        n_live = len(find_runs(live(src), want))
+        n_copy = len(find_runs(copy_norm, want))
+        ok = n_live == 1 and n_copy == 1
+        failures += 0 if ok else 1
+        print("%s kept C++ %s (%d normalised lines): %d in %s, %d in the frozen copy" % (
+            "OK  " if ok else "FAIL", first, len(want), n_live, src, n_copy))
+        if ok:
+            covered_kept.setdefault(src, set()).update(range(find_runs(live(src), want)[0],
+                                                             find_runs(live(src), want)[0] + len(want)))
+    return failures
+
+
+covered_kept = {}
+
+
 def record_conditionals(regs):
     edits = {}
     for path, head, rid, src, first, last, recorded_blob, cond, body in regs:
@@ -304,16 +435,30 @@ def main():
         record_conditionals(regs)
         return 0
     print_fence = "--print-fence" in args
+    at = None
+    if "--at" in args:
+        k = args.index("--at")
+        if k + 1 >= len(args):
+            raise SystemExit("--at needs a commit")
+        at = args[k + 1]
     failures = 0
     covered = {}
     for path, head, rid, src, first, last, recorded_blob, cond, body in regs:
         want = normalise(body)
-        live_lines = live(src)
-        runs = find_runs(live_lines, want)
         notes = []
-        current_blob = blob(os.path.join(REPO, src))
-        if current_blob != recorded_blob:
-            notes.append("file blob changed %s -> %s" % (recorded_blob[:10], current_blob[:10]))
+        if rid in REPLACED:
+            if at is None:
+                print("SKIP %s %s lines %d-%d: replaced by the R4a wiring (check with --at %s)" % (
+                    rid, src, first, last, WIRED_AT))
+                continue
+            live_lines = at_commit(at, src)
+            notes.append("checked at %s" % at)
+        else:
+            live_lines = live(src)
+            current_blob = blob(os.path.join(REPO, src))
+            if current_blob != recorded_blob:
+                notes.append("file blob changed %s -> %s" % (recorded_blob[:10], current_blob[:10]))
+        runs = find_runs(live_lines, want)
         status = "OK  "
         if cond is None:
             failures += 1
@@ -329,10 +474,14 @@ def main():
                 failures += 1
                 status = "FAIL"
                 notes.insert(0, "now inside the preprocessor conditionals [%s]; at copy time [%s]" % (ctx, cond))
-            else:
+            elif rid not in REPLACED:
                 covered.setdefault(src, set()).update(range(runs[0], runs[0] + len(want)))
         print("%s %s %s lines %d-%d (%d normalised lines)%s" % (
             status, rid, src, first, last, len(want), ("; " + "; ".join(notes)) if notes else ""))
+
+    failures += check_kept()
+    for src, lines in covered_kept.items():
+        covered.setdefault(src, set()).update(lines)
 
     fence_failures = 0
     for src, ids, allowlist in FENCES:
@@ -351,8 +500,10 @@ def main():
                       % (src, ", ".join(sorted(set(word.findall(text)))), text))
         if not print_fence:
             print("fence %s: %d line(s) outside the regions, %d allowlisted" % (src, outside, len(listed)))
-    print("%d regions, %d identical, %d differ; identifier fence: %d line(s) outside the regions and allowlists"
-          % (len(regs), len(regs) - failures, failures, fence_failures))
+    skipped = 0 if at else sum(1 for r in regs if r[2] in REPLACED)
+    print("%d regions, %d replaced and not checked, %d identical, %d differ (kept C++ included); "
+          "identifier fence: %d line(s) outside the regions and allowlists"
+          % (len(regs), skipped, len(regs) - skipped - failures, failures, fence_failures))
     return 1 if failures or fence_failures else 0
 
 

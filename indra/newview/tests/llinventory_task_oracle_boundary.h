@@ -111,6 +111,9 @@ namespace vks_task_oracle
 
     // The frozen copies (llinventory_task_oracle.cpp).
     TaskInventoryBoundary& frozen_boundary();
+    // The viewer's implementation: the Rust decisions and the executor
+    // llviewerobject.cpp compiles (llinventory_task_oracle_rust.cpp).
+    TaskInventoryBoundary& rust_boundary();
     // The implementation the harness uses: frozen_boundary() unless replaced.
     TaskInventoryBoundary& boundary();
     void set_boundary(TaskInventoryBoundary* implementation); // NULL: back to the frozen copies
