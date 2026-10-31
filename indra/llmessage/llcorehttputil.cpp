@@ -756,12 +756,23 @@ HttpCoroutineAdapter::~HttpCoroutineAdapter()
     cancelSuspendedOperation();
 }
 
+// <Vulkanstorm>
+HttpCoroHandler::ptr_t HttpCoroutineAdapter::makeLLSDHandler(LLEventStream &reply)
+{
+    if (mLLSDHandlerFactory)
+    {
+        return mLLSDHandlerFactory(reply);
+    }
+    return std::make_shared<HttpCoroLLSDHandler>(reply, mLLSDMaxDepth);
+}
+// </Vulkanstorm>
+
 LLSD HttpCoroutineAdapter::postAndSuspend(LLCore::HttpRequest::ptr_t request,
     const std::string & url, const LLSD & body,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName, true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
+    HttpCoroHandler::ptr_t httpHandler = makeLLSDHandler(replyPump); // <Vulkanstorm/> was std::make_shared<HttpCoroLLSDHandler>(replyPump)
 
     return postAndSuspend_(request, url, body, options, headers, httpHandler);
 }
@@ -798,7 +809,7 @@ LLSD HttpCoroutineAdapter::postAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName, true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
+    HttpCoroHandler::ptr_t httpHandler = makeLLSDHandler(replyPump); // <Vulkanstorm/> was std::make_shared<HttpCoroLLSDHandler>(replyPump)
 
     return postAndSuspend_(request, url, rawbody, options, headers, httpHandler);
 }
@@ -921,7 +932,7 @@ LLSD HttpCoroutineAdapter::putAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName + "Reply", true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
+    HttpCoroHandler::ptr_t httpHandler = makeLLSDHandler(replyPump); // <Vulkanstorm/> was std::make_shared<HttpCoroLLSDHandler>(replyPump)
 
     return putAndSuspend_(request, url, body, options, headers, httpHandler);
 }
@@ -1006,7 +1017,7 @@ LLSD HttpCoroutineAdapter::getAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName + "Reply", true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
+    HttpCoroHandler::ptr_t httpHandler = makeLLSDHandler(replyPump); // <Vulkanstorm/> was std::make_shared<HttpCoroLLSDHandler>(replyPump)
 
     return getAndSuspend_(request, url, options, headers, httpHandler);
 }
@@ -1062,7 +1073,7 @@ LLSD HttpCoroutineAdapter::deleteAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName + "Reply", true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
+    HttpCoroHandler::ptr_t httpHandler = makeLLSDHandler(replyPump); // <Vulkanstorm/> was std::make_shared<HttpCoroLLSDHandler>(replyPump)
 
     return deleteAndSuspend_(request, url, options, headers, httpHandler);
 }
@@ -1107,7 +1118,7 @@ LLSD HttpCoroutineAdapter::patchAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName + "Reply", true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
+    HttpCoroHandler::ptr_t httpHandler = makeLLSDHandler(replyPump); // <Vulkanstorm/> was std::make_shared<HttpCoroLLSDHandler>(replyPump)
 
     return patchAndSuspend_(request, url, body, options, headers, httpHandler);
 }
@@ -1145,7 +1156,7 @@ LLSD HttpCoroutineAdapter::copyAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName + "Reply", true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
+    HttpCoroHandler::ptr_t httpHandler = makeLLSDHandler(replyPump); // <Vulkanstorm/> was std::make_shared<HttpCoroLLSDHandler>(replyPump)
 
     if (!headers)
         headers = std::make_shared<LLCore::HttpHeaders>();
@@ -1187,7 +1198,7 @@ LLSD HttpCoroutineAdapter::moveAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName + "Reply", true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
+    HttpCoroHandler::ptr_t httpHandler = makeLLSDHandler(replyPump); // <Vulkanstorm/> was std::make_shared<HttpCoroLLSDHandler>(replyPump)
 
     if (!headers)
         headers = std::make_shared<LLCore::HttpHeaders>();

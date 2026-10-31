@@ -28,6 +28,7 @@
 #ifndef LL_LLCOREHTTPUTIL_H
 #define LL_LLCOREHTTPUTIL_H
 
+#include <functional> // <Vulkanstorm/> llsd_handler_factory_t
 #include <string>
 
 #include "httpcommon.h"
@@ -343,6 +344,14 @@ public:
     // is application/llsd+xml, the status becomes 499. AIS sets it.
     void setLLSDMaxDepth(S32 max_depth) { mLLSDMaxDepth = max_depth; }
     S32 getLLSDMaxDepth() const { return mLLSDMaxDepth; }
+
+    // The handler of the LLSD calls (postAndSuspend, getAndSuspend, ...): the
+    // LLSD handler unless a caller sets a factory, which then makes every
+    // handler of this adapter until it is reset (an empty function). AIS
+    // sets one around each request: its handler hands the raw response to
+    // Rust instead of building an LLSD tree (inventory rung R3a).
+    typedef std::function<HttpCoroHandler::ptr_t(LLEventStream &reply)> llsd_handler_factory_t;
+    void setLLSDHandlerFactory(llsd_handler_factory_t factory) { mLLSDHandlerFactory = std::move(factory); }
     // </Vulkanstorm>
 
     /// Execute a Post transaction on the supplied URL and yield execution of
@@ -690,7 +699,11 @@ private:
 
     std::string                     mAdapterName;
     LLCore::HttpRequest::policy_t   mPolicyId;
-    S32                             mLLSDMaxDepth = -1; // <Vulkanstorm/>
+    // <Vulkanstorm>
+    S32                             mLLSDMaxDepth = -1;
+    llsd_handler_factory_t          mLLSDHandlerFactory;
+    HttpCoroHandler::ptr_t makeLLSDHandler(LLEventStream &reply);
+    // </Vulkanstorm>
 
     LLCore::HttpHandle              mYieldingHandle;
     LLCore::HttpRequest::wptr_t     mWeakRequest;
