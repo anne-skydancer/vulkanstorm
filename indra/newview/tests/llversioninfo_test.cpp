@@ -29,6 +29,11 @@
 
 #include "../llversioninfo.h"
 
+// <Vulkanstorm> The version macros come from the configured fsversionvalues.h
+// (as in llversioninfo.cpp), not from the compiler command line.
+#include "fsversionvalues.h"
+// </Vulkanstorm>
+
  #include <iostream>
 
 // LL_VIEWER_CHANNEL is a macro defined on the compiler command line. The
