@@ -883,6 +883,34 @@ static void vks_r4b_act(void* ctx, const VksInvR4bAction* a)
     case VKS_INV_R4B_A_MOVE_TASK_INVENTORY:
         move_task_inventory_callback(vks_r4b_sd(a->sd[0]), vks_r4b_sd(a->sd[1]), vks_r4b_move(call, a->move));
         break;
+    case VKS_INV_R4B_A_LOG:
+    {
+        // the C++ log lines, level and tag as they were ("Messaging" or none)
+        const std::string message = vks_r4b_string(a->text[1]);
+        const bool messaging = vks_r4b_string(a->text[0]) == "Messaging";
+        switch (a->number[0])
+        {
+        case 0:
+            if (messaging)
+                LL_DEBUGS("Messaging") << message << LL_ENDL;
+            else
+                LL_DEBUGS() << message << LL_ENDL;
+            break;
+        case 1:
+            if (messaging)
+                LL_INFOS("Messaging") << message << LL_ENDL;
+            else
+                LL_INFOS() << message << LL_ENDL;
+            break;
+        default:
+            if (messaging)
+                LL_WARNS("Messaging") << message << LL_ENDL;
+            else
+                LL_WARNS() << message << LL_ENDL;
+            break;
+        }
+        break;
+    }
     default:
         break;
     }
