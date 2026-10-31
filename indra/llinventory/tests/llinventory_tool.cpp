@@ -5017,6 +5017,123 @@ template<class I> void bench_impl(const std::vector<ItemF>& population, const LL
                     acc += p.allowOperationBy(op, a, ID_G()) ? 1 : 0;
         sink += acc;
     }), n * 15);
+    const LLUUID bench_agents[3] = {ID_A(), ID_B(), NUL()};
+    report("allowModifyBy(agent) x 3 agents", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (const auto& p : perms)
+            for (const LLUUID& a : bench_agents)
+                acc += p.allowModifyBy(a) ? 1 : 0;
+        sink += acc;
+    }), n * 3);
+    report("allowCopyBy(agent, group) x 3", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (const auto& p : perms)
+            for (const LLUUID& a : bench_agents)
+                acc += p.allowCopyBy(a, ID_G()) ? 1 : 0;
+        sink += acc;
+    }), n * 3);
+    report("allowTransferTo x 3 agents", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (const auto& p : perms)
+            for (const LLUUID& a : bench_agents)
+                acc += p.allowTransferTo(a) ? 1 : 0;
+        sink += acc;
+    }), n * 3);
+    report("getOwnership", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (const auto& p : perms)
+        {
+            LLUUID id;
+            bool group = false;
+            acc += p.getOwnership(id, group) ? id.mData[0] + (group ? 1 : 0) : 0;
+        }
+        sink += acc;
+    }), n);
+    report("getSafeOwner (owned)", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (const auto& p : perms) acc += p.getSafeOwner().mData[0];
+        sink += acc;
+    }), n);
+    report("initMasks(EType)", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (size_t k = 0; k < n; ++k)
+        {
+            typename I::Perm q = perms[k];
+            q.initMasks((typename I::IT::EType)population[k].inv_type);
+            acc += q.getMaskBase();
+        }
+        sink += acc;
+    }), n);
+    report("LLPermissions::accumulate", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (size_t k = 0; k < n; ++k)
+        {
+            typename I::Perm q = perms[k];
+            q.accumulate(perms[(k + 1) % n]);
+            acc += q.getMaskBase() + q.getCreator().mData[0];
+        }
+        sink += acc;
+    }), n);
+    report("setOwnerAndGroup", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (const auto& p : perms)
+        {
+            typename I::Perm q = p;
+            acc += q.setOwnerAndGroup(ID_A(), ID_B(), ID_G(), true) ? 1 : 0;
+            acc += q.getMaskBase();
+        }
+        sink += acc;
+    }), n);
+    report("LLSaleInfo::getCRC32", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (auto& it : items) acc += it->getSaleInfo().getCRC32();
+        sink += acc;
+    }), n);
+    report("correctInventoryName", time_min(rounds, [&] {
+        for (const ItemF& f : population)
+        {
+            std::string s = f.name;
+            I::Object::correctInventoryName(s);
+            sink += s.size();
+        }
+    }), n);
+    std::vector<LLPointer<typename I::Category> > cats;
+    cats.reserve(n);
+    for (const ItemF& f : population)
+    {
+        CatF c;
+        c.id = f.id;
+        c.parent = f.parent;
+        c.thumb = f.thumb;
+        c.pref = (f.id.mData[8] % 4) ? -1 : 8;
+        c.name = f.name;
+        cats.push_back(make_cat<I>(c));
+    }
+    std::vector<std::string> cat_texts;
+    cat_texts.reserve(n);
+    for (auto& c : cats)
+    {
+        std::ostringstream os;
+        c->exportLegacyStream(os, true);
+        cat_texts.push_back(os.str().substr(os.str().find('\n') + 1));
+    }
+    report("category legacy export", time_min(rounds, [&] {
+        for (auto& c : cats)
+        {
+            std::ostringstream os;
+            c->exportLegacyStream(os, true);
+            sink += os.tellp();
+        }
+    }), n);
+    report("category legacy import (new each)", time_min(rounds, [&] {
+        for (const std::string& t : cat_texts)
+        {
+            std::istringstream is(t);
+            LLPointer<typename I::Category> c = new typename I::Category;
+            c->importLegacyStream(is);
+            sink += c->getName().size();
+        }
+    }), n);
     }
     if (library)
     {
