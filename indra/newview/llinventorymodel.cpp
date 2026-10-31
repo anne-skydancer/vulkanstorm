@@ -3115,6 +3115,14 @@ bool LLInventoryModel::loadSkeleton(
         LL_WARNS(LOG_INV) << "vks_inv_skeleton_import failed: " << vks_inv_last_error() << LL_ENDL;
         return false;
     }
+    {
+        size_t rejected_count = 0;
+        const size_t* rejected = vks_inv_skeleton_rejected(skeleton.get(), &rejected_count);
+        for (size_t i = 0; i < rejected_count; ++i)
+        {
+            LL_WARNS(LOG_INV) << "Unable to import near " << options[(LLSD::Integer)rejected[i]]["name"].asString() << LL_ENDL;
+        }
+    }
     bool rv = true;
     if (vks_inv_skeleton_wants_cache(skeleton.get()))
     {
@@ -3170,6 +3178,11 @@ bool LLInventoryModel::loadSkeleton(
             LL_PROFILE_ZONE_NAMED("loadSkeleton - apply");
             const VksInvLoginPlanView* view = vks_inv_login_plan_view(plan.get());
             rv = view->rv;
+            for (size_t i = 0; i < view->folders_to_update_count; ++i)
+            {
+                const VksInvBytes& name = view->folders[view->folders_to_update[i]].category.object.name;
+                LL_WARNS() << "folder to update: " << std::string(reinterpret_cast<const char*>(name.ptr), name.len) << LL_ENDL;
+            }
             for (size_t i = 0; i < view->folder_count; ++i)
             {
                 const VksInvLoginFolder& folder = view->folders[i];
@@ -3180,10 +3193,30 @@ bool LLInventoryModel::loadSkeleton(
                 }
                 addCategory(cat);
             }
+            // The cached links deferred as broken, as the first pass logged
+            // them (the folders are in the model now, as they were then).
+            for (size_t i = 0; i < view->possibly_broken_count; ++i)
+            {
+                const VksInvItem& link = view->possibly_broken[i];
+                const LLViewerInventoryCategory* cat = getCategory(vks_r2_uuid(link.object.parent));
+                LL_DEBUGS(LOG_INV) << "Attempted to add cached link item without baseobj present ( name: "
+                                   << std::string(reinterpret_cast<const char*>(link.object.name.ptr), link.object.name.len)
+                                   << " itemID: " << vks_r2_uuid(link.object.id)
+                                   << " assetID: " << vks_r2_uuid(link.asset)
+                                   << " ).  Ignoring and invalidating " << (cat ? cat->getName() : std::string()) << " . " << LL_ENDL;
+            }
             for (size_t i = 0; i < view->item_count; ++i)
             {
                 LLPointer<LLViewerInventoryItem> item = vks_r2_item_from(view->items[i]);
                 addItem(item);
+            }
+            if (view->possibly_broken_count > 0)
+            {
+                LL_DEBUGS(LOG_INV) << "Attempted to add " << view->bad_link_count
+                                   << " cached link items without baseobj present. "
+                                   << view->good_link_count << " link items were successfully added. "
+                                   << view->recovered_link_count << " links added in recovery. "
+                                   << "The corresponding categories were invalidated." << LL_ENDL;
             }
             for (size_t i = 0; i < view->invalidate_count; ++i)
             {
@@ -3191,8 +3224,19 @@ bool LLInventoryModel::loadSkeleton(
                 if (cat)
                 {
                     cat->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
+                }
+            }
+            for (size_t i = 0; i < view->invalidated_count; ++i)
+            {
+                const LLViewerInventoryCategory* cat = getCategory(vks_r2_uuid(view->invalidated + i * UUID_BYTES));
+                if (cat)
+                {
                     LL_DEBUGS(LOG_INV) << "Invalidating category name: " << cat->getName() << " UUID: " << cat->getUUID() << " due to invalid descendents cache" << LL_ENDL;
                 }
+            }
+            if (view->invalidated_count > 0)
+            {
+                LL_DEBUGS(LOG_INV) << "Invalidated " << view->invalidated_count << " categories due to invalid descendents cache" << LL_ENDL;
             }
             cached_category_count = view->cached_category_count;
             cached_item_count = view->cached_item_count;
@@ -3213,10 +3257,6 @@ bool LLInventoryModel::loadSkeleton(
     else
     {
         rv = vks_inv_skeleton_rv(skeleton.get());
-    }
-    if (!rv)
-    {
-        LL_WARNS(LOG_INV) << "Unable to import part of the inventory skeleton for " << owner_id << LL_ENDL;
     }
     // </Vulkanstorm>
 
@@ -3711,7 +3751,24 @@ bool LLInventoryModel::loadFromFile(const std::string& filename,
     const VksInvCacheView* view = vks_inv_cache_view(cache.get());
     if (view->obsolete)
     {
-        LL_WARNS(LOG_INV) << "Inventory cache is out of date or unreadable: " << filename << LL_ENDL;
+        // Why, in the C++ text: the header, the version or the parse.
+        if (bytes.size() < sizeof(U32))
+        {
+            LL_WARNS(LOG_INV) << "Failed to read cache version. Unable to load inventory from: " << filename << LL_ENDL;
+        }
+        else
+        {
+            U32 value_nbo = 0;
+            memcpy(&value_nbo, bytes.data(), sizeof(U32));
+            if ((S32)ntohl(value_nbo) != sCurrentInvCacheVersion)
+            {
+                LL_WARNS(LOG_INV) << "Inventory cache is out of date" << LL_ENDL;
+            }
+            else
+            {
+                LL_WARNS(LOG_INV) << "Parsing inventory cache failed" << LL_ENDL;
+            }
+        }
         return false;
     }
     is_cache_obsolete = false;
@@ -4935,58 +4992,101 @@ void LLInventoryModel::dumpInventory() const
 LLPointer<LLInventoryValidationInfo> LLInventoryModel::validate() const
 {
     // <Vulkanstorm> The checks run in Rust (vks_inv_validate) over a flat
-    // snapshot of the model: records by index (identity is the pointer),
-    // the maps in the order this standard library iterates them, the child
-    // vectors, the backlinks, the locks and mLastItem, which the checks move
-    // as getItem() does.
+    // snapshot of the model: one record per object the maps hold, in their
+    // iteration order (this standard library's), the child vectors as
+    // references to them, the backlinks, the locks and mLastItem, which the
+    // checks move as getItem() does. Identity is the record: a child or
+    // mLastItem that is the map's object under its id (one find and a
+    // pointer compare) refers to the map's record; any other object gets a
+    // record of its own (one per object). A map entry under a key other
+    // than its object's id (the object twice in a map) refers the same way.
+    // The result lists every line the C++ logged, which is logged here with
+    // the C++ text.
     LL_PROFILE_ZONE_SCOPED;
     std::vector<VksInvSnapCategory> cats;
     std::vector<VksInvSnapItem> items;
+    std::vector<const LLViewerInventoryCategory*> cat_ptrs;
     std::vector<LLViewerInventoryItem*> item_ptrs;
-    std::unordered_map<const LLViewerInventoryCategory*, int64_t> cat_index;
-    std::unordered_map<const LLViewerInventoryItem*, int64_t> item_index;
     cats.reserve(mCategoryMap.size());
-    cat_index.reserve(mCategoryMap.size());
+    cat_ptrs.reserve(mCategoryMap.size());
     items.reserve(mItemMap.size());
     item_ptrs.reserve(mItemMap.size());
-    item_index.reserve(mItemMap.size());
-    auto cat_of = [&](const LLViewerInventoryCategory* cat) -> int64_t
+    auto add_cat = [&](const LLViewerInventoryCategory* cat) -> int64_t
     {
+        VksInvSnapCategory rec;
+        memcpy(rec.id, cat->getUUID().mData, UUID_BYTES);
+        memcpy(rec.parent, cat->getParentUUID().mData, UUID_BYTES);
+        rec.preferred_type = (int32_t)cat->getPreferredType();
+        rec.version = cat->getVersion();
+        rec.descendent_count = cat->getDescendentCount();
+        cats.push_back(rec);
+        cat_ptrs.push_back(cat);
+        return (int64_t)cats.size() - 1;
+    };
+    auto add_item = [&](LLViewerInventoryItem* item) -> int64_t
+    {
+        VksInvSnapItem rec;
+        memcpy(rec.id, item->getUUID().mData, UUID_BYTES);
+        memcpy(rec.parent, item->getParentUUID().mData, UUID_BYTES);
+        memcpy(rec.asset, item->LLInventoryItem::getAssetUUID().mData, UUID_BYTES);
+        rec.asset_type = (int32_t)item->getActualType();
+        items.push_back(rec);
+        item_ptrs.push_back(item);
+        return (int64_t)items.size() - 1;
+    };
+    // Objects that are not the map's object under their own id: one record
+    // each, however often they are named. Empty unless the model is damaged.
+    std::unordered_map<const void*, int64_t> extra_cats;
+    std::unordered_map<const void*, int64_t> extra_items;
+    auto cat_ref = [&](const LLViewerInventoryCategory* cat) -> VksInvSnapRef
+    {
+        VksInvSnapRef ref{};
         if (!cat)
         {
-            return -1;
+            ref.index = VKS_INV_SNAP_NULL;
+            return ref;
         }
-        auto [it, added] = cat_index.emplace(cat, (int64_t)cats.size());
-        if (added)
+        memcpy(ref.key, cat->getUUID().mData, UUID_BYTES);
+        auto it = mCategoryMap.find(cat->getUUID());
+        if (it != mCategoryMap.end() && it->second.get() == cat)
         {
-            VksInvSnapCategory rec;
-            memcpy(rec.id, cat->getUUID().mData, UUID_BYTES);
-            memcpy(rec.parent, cat->getParentUUID().mData, UUID_BYTES);
-            rec.preferred_type = (int32_t)cat->getPreferredType();
-            rec.version = cat->getVersion();
-            rec.descendent_count = cat->getDescendentCount();
-            cats.push_back(rec);
+            ref.index = VKS_INV_SNAP_MAPPED;
         }
-        return it->second;
+        else
+        {
+            auto [extra, added] = extra_cats.emplace(cat, 0);
+            if (added)
+            {
+                extra->second = add_cat(cat);
+            }
+            ref.index = extra->second;
+        }
+        return ref;
     };
-    auto item_of = [&](LLViewerInventoryItem* item) -> int64_t
+    auto item_ref = [&](LLViewerInventoryItem* item) -> VksInvSnapRef
     {
+        VksInvSnapRef ref{};
         if (!item)
         {
-            return -1;
+            ref.index = VKS_INV_SNAP_NULL;
+            return ref;
         }
-        auto [it, added] = item_index.emplace(item, (int64_t)items.size());
-        if (added)
+        memcpy(ref.key, item->getUUID().mData, UUID_BYTES);
+        auto it = mItemMap.find(item->getUUID());
+        if (it != mItemMap.end() && it->second.get() == item)
         {
-            VksInvSnapItem rec;
-            memcpy(rec.id, item->getUUID().mData, UUID_BYTES);
-            memcpy(rec.parent, item->getParentUUID().mData, UUID_BYTES);
-            memcpy(rec.asset, item->LLInventoryItem::getAssetUUID().mData, UUID_BYTES);
-            rec.asset_type = (int32_t)item->getActualType();
-            items.push_back(rec);
-            item_ptrs.push_back(item);
+            ref.index = VKS_INV_SNAP_MAPPED;
         }
-        return it->second;
+        else
+        {
+            auto [extra, added] = extra_items.emplace(item, 0);
+            if (added)
+            {
+                extra->second = add_item(item);
+            }
+            ref.index = extra->second;
+        }
+        return ref;
     };
 
     std::vector<VksInvSnapEntry> cat_entries;
@@ -4995,7 +5095,15 @@ LLPointer<LLInventoryValidationInfo> LLInventoryModel::validate() const
     {
         VksInvSnapEntry e;
         memcpy(e.key, id.mData, UUID_BYTES);
-        e.index = cat_of(cat.get());
+        if (cat && cat->getUUID() == id)
+        {
+            memcpy(e.object.key, id.mData, UUID_BYTES);
+            e.object.index = add_cat(cat.get());
+        }
+        else
+        {
+            e.object = cat_ref(cat.get());
+        }
         cat_entries.push_back(e);
     }
     std::vector<VksInvSnapEntry> item_entries;
@@ -5004,10 +5112,18 @@ LLPointer<LLInventoryValidationInfo> LLInventoryModel::validate() const
     {
         VksInvSnapEntry e;
         memcpy(e.key, id.mData, UUID_BYTES);
-        e.index = item_of(item.get());
+        if (item && item->getUUID() == id)
+        {
+            memcpy(e.object.key, id.mData, UUID_BYTES);
+            e.object.index = add_item(item.get());
+        }
+        else
+        {
+            e.object = item_ref(item.get());
+        }
         item_entries.push_back(e);
     }
-    std::vector<int64_t> children;
+    std::vector<VksInvSnapRef> children;
     children.reserve(mCategoryMap.size() + mItemMap.size());
     std::vector<VksInvSnapTree> cat_tree;
     cat_tree.reserve(mParentChildCategoryTree.size());
@@ -5021,7 +5137,7 @@ LLPointer<LLInventoryValidationInfo> LLInventoryModel::validate() const
         {
             for (const auto& kid : *kids)
             {
-                children.push_back(cat_of(kid.get()));
+                children.push_back(cat_ref(kid.get()));
             }
         }
         cat_tree.push_back(t);
@@ -5038,7 +5154,7 @@ LLPointer<LLInventoryValidationInfo> LLInventoryModel::validate() const
         {
             for (const auto& kid : *kids)
             {
-                children.push_back(item_of(kid.get()));
+                children.push_back(item_ref(kid.get()));
             }
         }
         item_tree.push_back(t);
@@ -5067,11 +5183,11 @@ LLPointer<LLInventoryValidationInfo> LLInventoryModel::validate() const
             item_locks.push_back(id);
         }
     }
-    const int64_t last_item = item_of(mLastItem.get());
 
     VksInvSnapshot snapshot{};
     memcpy(snapshot.root, getRootFolderID().mData, UUID_BYTES);
     memcpy(snapshot.library_root, getLibraryRootFolderID().mData, UUID_BYTES);
+    snapshot.last_item = item_ref(mLastItem.get());
     snapshot.categories = cats.data();
     snapshot.category_count = cats.size();
     snapshot.items = items.data();
@@ -5092,7 +5208,6 @@ LLPointer<LLInventoryValidationInfo> LLInventoryModel::validate() const
     snapshot.category_lock_count = cat_locks.size();
     snapshot.item_locks = reinterpret_cast<const uint8_t*>(item_locks.data());
     snapshot.item_lock_count = item_locks.size();
-    snapshot.last_item = last_item;
 #ifdef OPENSIM
     snapshot.in_open_sim = !LLGridManager::getInstance()->isInSecondLife(); // isInSuitcase()
 #endif
@@ -5116,6 +5231,164 @@ LLPointer<LLInventoryValidationInfo> LLInventoryModel::validate() const
         return validation_info;
     }
     const VksInvValidationView* v = vks_inv_validation_view(result.get());
+
+    // The lines the C++ logged, with its text and tags.
+    for (size_t i = 0; i < v->event_count; ++i)
+    {
+        const VksInvValidationEvent& e = v->events[i];
+        const LLUUID id = vks_r2_uuid(e.id);
+        const LLUUID id2 = vks_r2_uuid(e.id2);
+        const LLViewerInventoryCategory* cat = (e.cat >= 0 && (size_t)e.cat < cat_ptrs.size()) ? cat_ptrs[(size_t)e.cat] : nullptr;
+        const LLViewerInventoryItem* item = (e.item >= 0 && (size_t)e.item < item_ptrs.size()) ? item_ptrs[(size_t)e.item] : nullptr;
+        const LLViewerInventoryItem* other = (e.other >= 0 && (size_t)e.other < item_ptrs.size()) ? item_ptrs[(size_t)e.other] : nullptr;
+        const LLFolderType::EType ft = (LLFolderType::EType)e.a;
+        switch (e.kind)
+        {
+        case VKS_INV_VEV_NO_ROOT_FOLDER:
+            LL_WARNS("Inventory") << "Fatal inventory corruption: no root folder id" << LL_ENDL;
+            break;
+        case VKS_INV_VEV_NO_LIBRARY_ROOT_FOLDER:
+            LL_WARNS("Inventory") << "Fatal inventory corruption: " << "No library root folder id" << LL_ENDL;
+            break;
+        case VKS_INV_VEV_UNEXPECTED_SIZES:
+            LL_INFOS("Inventory") << "unexpected sizes: cat map size " << e.a << " parent/child " << e.b << LL_ENDL;
+            break;
+        case VKS_INV_VEV_NULL_CAT:
+            LL_WARNS("Inventory") << "null cat" << LL_ENDL;
+            break;
+        case VKS_INV_VEV_CAT_ID_MISMATCH:
+            if (cat) { LL_WARNS("Inventory") << "cat id/index mismatch " << id << " " << cat->getUUID() << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_NULL_PARENT:
+            LL_WARNS("Inventory") << "cat " << id << " has no parent, but is not root ("
+                                  << getRootFolderID() << ") or library root ("
+                                  << getLibraryRootFolderID() << ")" << LL_ENDL;
+            break;
+        case VKS_INV_VEV_SUITCASE_SKIPPED:
+            if (cat) { LL_DEBUGS("Inventory") << "cat " << cat->getName() << " skipped because it is a child of Suitcase" << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_DIRECT_DESCENDENTS:
+            LL_WARNS("Inventory") << "invalid direct descendents for " << id << LL_ENDL;
+            break;
+        case VKS_INV_VEV_INVALID_DESCENDENT_COUNT:
+            if (cat) { LL_WARNS("Inventory") << "invalid desc count for " << id << " [" << getFullPath(cat) << "]"
+                                           << " cached " << cat->getDescendentCount()
+                                           << " expected " << e.a << "+" << e.b
+                                           << "=" << e.a + e.b << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_NULL_ITEM_AT_INDEX:
+            LL_WARNS("Inventory") << "null item at index " << e.a << " for cat " << id << LL_ENDL;
+            break;
+        case VKS_INV_VEV_WRONG_PARENT:
+            if (item) { LL_WARNS("Inventory") << "wrong parent for " << item->getUUID() << " found "
+                                            << item->getParentUUID() << " expected " << id
+                                            << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_ITEM_NOT_IN_TOP_MAP:
+            if (item) { LL_WARNS("Inventory") << "item " << item->getUUID() << " found as child of "
+                                            << id << " but not in top level mItemMap" << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_ITEM_MISMATCH:
+            if (item && other) { LL_WARNS("Inventory") << "item mismatch, item_id " << item->getUUID()
+                                                     << " top level entry is different, uuid " << other->getUUID() << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_TOPMOST_NOT_FOUND:
+            if (item) { LL_WARNS("Inventory") << "unable to find topmost ancestor for " << item->getUUID() << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_TOPMOST_NOT_RECOGNIZED:
+            if (item) { LL_WARNS("Inventory") << "unrecognized top level ancestor for " << item->getUUID()
+                                            << " got " << id2
+                                            << " expected " << getRootFolderID()
+                                            << " or " << getLibraryRootFolderID() << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_CAT_ORPHAN_NO_ARRAY:
+            if (cat) { LL_WARNS("Inventory") << "cat " << id << " name [" << cat->getName()
+                                           << "] orphaned - no child cat array for alleged parent " << id2 << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_CAT_ORPHAN_NOT_FOUND:
+            if (cat) { LL_WARNS("Inventory") << "cat " << id << " name [" << cat->getName()
+                                           << "] orphaned - not found in child cat array of alleged parent " << id2 << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_UNDER_SUITCASE:
+            if (cat) { LL_DEBUGS("Inventory") << "Under suitcase cat: " << getFullPath(cat) << " folder_type " << cat->getPreferredType() << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_UNDER_ROOT:
+            if (cat) { LL_DEBUGS("Inventory") << "Under root cat: " << getFullPath(cat) << " folder_type " << cat->getPreferredType() << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_ELSEWHERE:
+            if (cat) { LL_DEBUGS("Inventory") << "Elsewhere cat: " << getFullPath(cat) << " folder_type " << cat->getPreferredType() << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_ITEM_ID_MISMATCH:
+            if (item) { LL_WARNS("Inventory") << "item_id " << id << " does not match " << item->getUUID() << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_ITEM_NULL_PARENT:
+            if (item) { LL_WARNS("Inventory") << "item " << id << " name [" << item->getName() << "] has null parent id!" << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_ITEM_ORPHAN_NO_LIST:
+            if (item) { LL_WARNS("Inventory") << "item " << id << " name [" << item->getName()
+                                            << "] orphaned - alleged parent has no child items list " << id2 << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_ITEM_ORPHAN_NOT_FOUND:
+            if (item) { LL_WARNS("Inventory") << "item " << id << " name [" << item->getName()
+                                            << "] orphaned - not found as child of alleged parent " << id2 << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_MISSING_BACKLINK:
+            if (item) { LL_WARNS("Inventory") << "link " << item->getUUID() << " type " << item->getActualType()
+                                            << " missing backlink info at target_id " << id2
+                                            << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_BROKEN_ITEM_LINK:
+            if (item) { LL_WARNS("Inventory") << "broken item link " << item->getName() << " id " << item->getUUID() << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_BROKEN_FOLDER_LINK:
+            if (item) { LL_WARNS("Inventory") << "broken folder link " << item->getName() << " id " << item->getUUID() << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_LINK_TO_LINK:
+            if (item && other) { LL_WARNS("Inventory") << "link " << item->getName() << " references a link item "
+                                                     << other->getName() << " " << other->getUUID() << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_LINK_HAS_BACKLINKS:
+            if (item) { LL_WARNS("Inventory") << "Link item " << item->getName() << " has backlinks!" << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_INVALID_BACKLINK:
+            if (item) { LL_WARNS("Inventory") << "invalid backlink from target " << item->getName() << " to " << id2 << LL_ENDL; }
+            break;
+        case VKS_INV_VEV_FOLDER_TYPE_COUNT_UNDER_ROOT:
+            LL_DEBUGS("Inventory") << "Folder type " << ft << " count " << e.b << " under root" << LL_ENDL;
+            break;
+        case VKS_INV_VEV_FOLDER_TYPE_COUNT_ELSEWHERE:
+            LL_DEBUGS("Inventory") << "Folder type " << ft << " count " << e.b << " elsewhere" << LL_ENDL;
+            break;
+        case VKS_INV_VEV_SYSTEM_FOLDER_NOT_FOUND:
+            LL_WARNS("Inventory") << "Expected system folder type " << LLFolderType::lookup(ft) << "(" << e.a << ") was not found under root" << LL_ENDL;
+            break;
+        case VKS_INV_VEV_CANNOT_CREATE_SYSTEM_FOLDER:
+            LL_WARNS("Inventory") << "Fatal inventory corruption: " << "Cannot create system folder of type " << LLFolderType::lookup(ft) << "(" << e.a << ")" << LL_ENDL;
+            break;
+        case VKS_INV_VEV_EXCESS_COPIES_FATAL:
+            LL_WARNS("Inventory") << "Fatal inventory corruption: " << "System folder type has excess copies under root, type " << LLFolderType::lookup(ft) << "(" << e.a << ") count " << e.b << LL_ENDL;
+            break;
+        case VKS_INV_VEV_EXCESS_COPIES_NON_FATAL:
+            LL_WARNS("Inventory") << "Non-Fatal inventory corruption: system folder type has excess copies under root, type " << LLFolderType::lookup(ft) << "(" << e.a << ") count " << e.b << LL_ENDL;
+            break;
+        case VKS_INV_VEV_EXTRA_FOLDERS_ELSEWHERE:
+            LL_WARNS("Inventory") << "Found " << e.b << " extra folders of type " << LLFolderType::lookup(ft) << "(" << e.a << ") outside of root" << LL_ENDL;
+            break;
+        case VKS_INV_VEV_LOCKS:
+            LL_INFOS("Inventory") << "Found locks on some categories: sub-cat arrays "
+                                  << e.a << ", item arrays " << e.b << LL_ENDL;
+            break;
+        case VKS_INV_VEV_UNKNOWN_DESCENDENT_COUNTS:
+            LL_DEBUGS() << "Found " << e.a << " cats with unknown descendent count" << LL_ENDL;
+            break;
+        case VKS_INV_VEV_UNKNOWN_VERSIONS:
+            LL_DEBUGS("Inventory") << "Found " << e.a << " cats with unknown version" << LL_ENDL;
+            break;
+        default:
+            break;
+        }
+    }
+
     validation_info->mInitialized = v->initialized;
     validation_info->mWarningCount = v->warning_count;
     for (size_t i = 0; i < v->warnings_count; ++i)
@@ -5144,14 +5417,6 @@ LLPointer<LLInventoryValidationInfo> LLInventoryModel::validate() const
     }
     mLastItem = (v->last_item >= 0 && (size_t)v->last_item < item_ptrs.size()) ? item_ptrs[(size_t)v->last_item] : nullptr;
 
-    for (const auto& [key, count] : validation_info->mWarnings)
-    {
-        LL_WARNS("Inventory") << "Inventory validation warning " << key << ": " << count << LL_ENDL;
-    }
-    if (v->log.len)
-    {
-        LL_WARNS("Inventory") << "Inventory validation log: " << validation_info->mLog.str() << LL_ENDL;
-    }
     const bool valid = (v->fatal_error_count == 0);
     LL_INFOS("Inventory") << "Validate done, fatal errors: " << v->fatal_error_count << ", warnings: " << v->warning_count
                           << ", valid: " << valid << LL_ENDL;
