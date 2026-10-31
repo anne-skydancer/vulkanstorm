@@ -384,7 +384,37 @@ jobs:
             INTEGRATION_TEST_llinventory_parity INTEGRATION_TEST_llinvfetch_parity \
             INTEGRATION_TEST_llinventorymodel_parity INTEGRATION_TEST_llaisupdate_parity \
             INTEGRATION_TEST_llinventory_task_oracle INTEGRATION_TEST_llinventory_offer_oracle \
-            llprimitive_tests INTEGRATION_TEST_llnightsky
+            llprimitive_tests INTEGRATION_TEST_llnightsky llinventory_tool
+
+      # The keep-or-port numbers of the inventory rung (doc/rust_port.md, R1):
+      # the frozen C++ oracle against the viewer's Rust-backed classes in the
+      # same binary, best of three, on each platform. Shared runners are noisy,
+      # so the bench never fails a build; its output goes to the job summary.
+      # Only non-Release builds have the tool (LL_TESTS, previous step).
+      - name: Bench the inventory data model (llinventory_tool)
+        if: env.VIEWER_BUILD_TYPE != 'Release'
+        continue-on-error: true
+        shell: bash
+        run: |
+          # GitHub runs bash with -e; the summary is written whatever the bench returns.
+          set +e
+          set -uo pipefail
+          dir="${{ matrix.directory }}"
+          tool=$(find "$dir/sharedlibs" -type f \( -name llinventory_tool -o -name llinventory_tool.exe \) | head -1)
+          test -n "$tool" || { echo "llinventory_tool not built"; exit 1; }
+          export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/$dir/packages/lib/release:$GITHUB_WORKSPACE/$dir/sharedlibs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          out="$RUNNER_TEMP/llinventory_bench.txt"
+          "$tool" bench 3 \
+            --library indra/llinventory/tests/fixtures/library/ba2a564a-f0f1-4b82-9c61-b7520bfcd09f.inv.llsd.gz > "$out" 2>&1
+          status=$?
+          cat "$out"
+          {
+            echo "### llinventory_tool bench (${{ runner.os }}, exit $status)"
+            echo '```'
+            cat "$out"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
 
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'
