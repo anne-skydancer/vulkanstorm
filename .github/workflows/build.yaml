@@ -13,11 +13,21 @@ on:
       record_inventory_fixtures:
         description: >-
           Linux only: record the libstdc++ trees of the R2 and R3b inventory
-          oracles (llinventorymodel_parity, llinvfetch_parity) twice, require
-          identical dumps, and upload them as the linux-inventory-fixtures
-          artifact. The replay tests then fail until the files are committed.
+          oracles (llinventorymodel_parity, llinvfetch_parity) and the R3a
+          AIS update and adapter corpora (llaisupdate_parity,
+          llaisadapter_parity) twice, require identical dumps, and upload
+          them as the linux-inventory-fixtures artifact. The replay tests
+          then fail until the files are committed.
         type: boolean
         default: false
+      core_rust_ref:
+        description: >-
+          With record_inventory_fixtures: a vkstorm-core-rust branch, tag or
+          commit to build vkstorm-ffi from (VKS_CORE_RUST_DIR) for the
+          recording, instead of the package autobuild.xml pins. For C++
+          fixes that need Rust changes not yet published as a package.
+        type: string
+        default: ''
   workflow_call:
   pull_request:
   push:
@@ -311,23 +321,38 @@ jobs:
             exit 1
           fi
 
-      - name: Record the libstdc++ inventory fixtures (R2, R3b)
+      - name: Record the libstdc++ inventory fixtures (R2, R3a, R3b)
         if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && inputs.record_inventory_fixtures
         shell: bash
+        env:
+          CORE_RUST_REF: ${{ inputs.core_rust_ref }}
         run: |
           # GitHub runs bash with -e; the recorders exit non-zero in dump mode by
           # design, so -e must be off here. Every result is checked below.
           set +e
           set -uo pipefail
           dir="${{ matrix.directory }}"
-          cmake -S indra -B "$dir" -DLL_TESTS:BOOL=ON
+          rust_dir=()
+          if [ -n "$CORE_RUST_REF" ]; then
+            # vkstorm-ffi from source at that ref (public repository), with the
+            # toolchain its rust-toolchain.toml names.
+            git clone --quiet https://github.com/anne-skydancer/vkstorm-core-rust.git "$GITHUB_WORKSPACE/.core-rust" &&
+              git -C "$GITHUB_WORKSPACE/.core-rust" checkout --quiet "$CORE_RUST_REF" || { echo "cannot check out vkstorm-core-rust $CORE_RUST_REF"; exit 1; }
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none || exit 1
+            export PATH="$HOME/.cargo/bin:$PATH"
+            echo "vkstorm-ffi from vkstorm-core-rust $(git -C "$GITHUB_WORKSPACE/.core-rust" rev-parse --short=10 HEAD)"
+            rust_dir=(-DVKS_CORE_RUST_DIR:PATH="$GITHUB_WORKSPACE/.core-rust")
+          fi
+          cmake -S indra -B "$dir" -DLL_TESTS:BOOL=ON "${rust_dir[@]}"
           # The post-build replay fails until the libstdc++ trees exist; the
           # executables are linked before it runs, and make's -i keeps it from
           # deleting them when the replay fails.
-          cmake --build "$dir" --config "$VIEWER_BUILD_TYPE" --parallel 3             --target INTEGRATION_TEST_llinventorymodel_parity INTEGRATION_TEST_llinvfetch_parity -- -i || true
+          cmake --build "$dir" --config "$VIEWER_BUILD_TYPE" --parallel 3             --target INTEGRATION_TEST_llinventorymodel_parity INTEGRATION_TEST_llinvfetch_parity             INTEGRATION_TEST_llaisupdate_parity INTEGRATION_TEST_llaisadapter_parity -- -i || true
           r2=$(find "$dir" -name INTEGRATION_TEST_llinventorymodel_parity -type f -perm -u+x | head -1)
           r3b=$(find "$dir" -name INTEGRATION_TEST_llinvfetch_parity -type f -perm -u+x | head -1)
-          test -n "$r2" && test -n "$r3b" || { echo "test executables not built"; exit 1; }
+          r3a=$(find "$dir" -name INTEGRATION_TEST_llaisupdate_parity -type f -perm -u+x | head -1)
+          r3a_adapter=$(find "$dir" -name INTEGRATION_TEST_llaisadapter_parity -type f -perm -u+x | head -1)
+          test -n "$r2" && test -n "$r3b" && test -n "$r3a" && test -n "$r3a_adapter" || { echo "test executables not built"; exit 1; }
           libs="$(dirname "$r2"):$GITHUB_WORKSPACE/$dir/packages/lib/release:$GITHUB_WORKSPACE/$dir/sharedlibs/lib"
           # Under the workspace: the upload step reads it inside the container,
           # where the host temp path does not exist.
@@ -341,7 +366,16 @@ jobs:
             LD_LIBRARY_PATH="$libs" VKS_INVFETCH_COMMIT="$commit" VKS_INVFETCH_DUMP="$out/r3b_$n"               python3 -I indra/newview/tests/vksinventory_mock_server.py -- "$r3b" > "$out/r3b_$n.log" 2>&1
             test -f "$out/r2_$n/DUMP_COMPLETE" || { echo "R2 dump $n incomplete"; tail -40 "$out/r2_$n.log"; exit 1; }
             grep -q "(0 scenarios with failures)" "$out/r3b_$n.log" || { echo "R3b dump $n failed"; tail -40 "$out/r3b_$n.log"; exit 1; }
+            # R3a: one tree for both standard libraries (identical data, the
+            # headers differ); the Linux dump is compared with it after download.
+            mkdir -p "$out/r3a_$n/expected" "$out/r3a_adapter_$n"
+            LD_LIBRARY_PATH="$libs" VKS_AISUPDATE_VIEWER_COMMIT="$commit" VKS_AISUPDATE_DUMP="$out/r3a_$n/expected"               VKS_AISUPDATE_FIXTURES="$GITHUB_WORKSPACE/indra/newview/tests/fixtures/inventory/ais/update" "$r3a" > "$out/r3a_$n.log" 2>&1
+            grep -q "\[aisupdate\] dumped [0-9]* cases" "$out/r3a_$n.log" || { echo "R3a dump $n failed"; tail -40 "$out/r3a_$n.log"; exit 1; }
+            LD_LIBRARY_PATH="$libs" VKS_AISADAPTER_COMMIT="$commit" VKS_AISADAPTER_DUMP="$out/r3a_adapter_$n" "$r3a_adapter" > "$out/r3a_adapter_$n.log" 2>&1
+            test -s "$out/r3a_adapter_$n/expected.llsd" || { echo "R3a adapter dump $n failed"; tail -40 "$out/r3a_adapter_$n.log"; exit 1; }
           done
+          diff -r "$out/r3a_adapter_1" "$out/r3a_adapter_2" || { echo "the two R3a adapter dumps differ"; exit 1; }
+          diff -r "$out/r3a_1" "$out/r3a_2" || { echo "the two R3a update dumps differ"; exit 1; }
           diff -r "$out/r2_1" "$out/r2_2" || { echo "the two R2 dumps differ"; exit 1; }
           # R3b: the concurrent scenarios' "# measured" header lines vary from run
           # to run and are not compared, and manifest.txt's digests cover them.
@@ -363,6 +397,8 @@ jobs:
           path: |
             .inventory-fixtures/r2_1/
             .inventory-fixtures/r3b_1/
+            .inventory-fixtures/r3a_1/
+            .inventory-fixtures/r3a_adapter_1/
             .inventory-fixtures/*.log
 
       # Release builds (vkstorm-release pushes, Second_Life tags, the
