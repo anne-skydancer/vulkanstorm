@@ -359,7 +359,9 @@ namespace tut
         // <Vulkanstorm> R2: the cache codec in one binary, the C++ before
         // the port (llinventorymodel_parity_frozen.cpp) against the live,
         // Rust-backed functions, over the uncompressed file `plain`: load
-        // into fresh arrays, save the loaded records. Best of `runs`.
+        // into fresh arrays, save the loaded records. Best of `runs`; the
+        // side that goes first alternates from run to run, so neither gets
+        // the warm caches and allocator every time.
         auto bench_codec = [&](const std::string& label, const std::string& plain)
         {
             std::string scratch = join(env().work, "codec_scratch");
@@ -369,8 +371,9 @@ namespace tut
             bool same_cpp = false, same_rust = false;
             for (S32 r = 0; r < runs; ++r)
             {
-                for (int side = 0; side < 2; ++side)
+                for (int turn = 0; turn < 2; ++turn)
                 {
+                    const int side = (turn + r) % 2; // 0: C++ (frozen), 1: Rust (live)
                     LLInventoryModel::cat_array_t cats;
                     LLInventoryModel::item_array_t items;
                     std::set<LLUUID> to_update;
