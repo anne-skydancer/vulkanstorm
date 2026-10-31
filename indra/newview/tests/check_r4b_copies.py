@@ -28,6 +28,8 @@ It checks:
 
 The port (W6/W7, rung seven sub-rung R4b) replaced the live C++ of the
 regions in PORTED with calls into the Rust decisions (llinventoryoffer_vks.*);
+LLOfferInfo's LLSD form (offer_info_basic) is the original C++ again and is
+checked against the live source like the unported regions;
 the copies stay as the oracle the Rust decisions are replayed against. For
 those regions the script checks that the frozen copy itself is unchanged (the
 SHA-256 of its normalised text, so no git history is needed), and with
@@ -75,7 +77,6 @@ PORTED = {
     "transfer_commonly_allowed": "9374242a668c998125251c4fb46345cfd3e834ec123a6586cebc26b26a0b903f",
     "throttle_globals": "1413b9ffc218c14911afd4a017238afa5e3edbc33ee0ddcc851803445e4f036c",
     "check_offer_throttle": "b53a169e5710e25a8318c0068a8abb85448bf73a15145997564f9eabb1bc0069",
-    "offer_info_basic": "8b738ce0b3026d95849e21c335148c8197233257733aa2e746c78043843cd77d",
     "offer_info_responses": "c560ed650597a40df30d54509ce6d5af890e3d5d274b3b86a8ac82004a338acc",
     "offer_info_callbacks": "f57b7e117d1a5a1042009d8bb832965cf43b817af70c978667caa0e3c2a5d0d3",
     "offer_force_response": "ac0607aed2b4fee2d5523dbb382d90b5949c0216ae129b625fcb2b63228655b0",
@@ -102,6 +103,10 @@ KEPT_CPP = [
     ("indra/newview/llviewermessage.cpp", "LLOfferInfo::LLOfferInfo()", "}"),
     ("indra/newview/llviewermessage.cpp", "LLOfferInfo::LLOfferInfo(const LLOfferInfo& info)", "}"),
     ("indra/newview/llviewermessage.cpp", "void LLOfferInfo::fromLLSD(const LLSD& params)", "}"),
+    # LLOfferInfo's LLSD form: C++ until the inventory storage moves to Rust
+    # (owner's decision; offer_info_basic is checked against the live source again)
+    ("indra/newview/llviewermessage.cpp", "LLOfferInfo::LLOfferInfo(const LLSD& sd)", "}"),
+    ("indra/newview/llviewermessage.cpp", "LLSD LLOfferInfo::asLLSD()", "}"),
     ("indra/newview/llviewermessage.cpp",
      "void inventory_offer_name_callback(const LLAvatarName& av_name, const std::string& from_name, const std::string& message)",
      "}"),
@@ -501,11 +506,9 @@ if __name__ == "__main__":
 # 1	indra/newview/llinventoryfunctions.cpp	can_share = LLGiveInventory::isInventoryGiveAcceptable(item);
 # 1	indra/newview/llinventorygallery.cpp	accept = move_inv_category_world_to_agent(cat_id, dest_id, drop);
 # 1	indra/newview/llinventorymodel.cpp	((tfolder->getName().find(RLV_PUTINV_PREFIX) == 0)) )
-# 1	indra/newview/llinventoryoffer_vks.h	LLSD vks_r4b_offer_as_llsd(const LLOfferInfo& offer);
 # 1	indra/newview/llinventoryoffer_vks.h	bool vks_r4b_check_offer_throttle(const std::string& from_name, bool check_only);
 # 1	indra/newview/llinventoryoffer_vks.h	class LLOfferInfo;
 # 1	indra/newview/llinventoryoffer_vks.h	void vks_r4b_force_response(LLOfferInfo* offer, S32 response);
-# 1	indra/newview/llinventoryoffer_vks.h	void vks_r4b_offer_from_llsd(LLOfferInfo& offer, const LLSD& params);
 # 1	indra/newview/llinventoryoffer_vks.h	void vks_r4b_respond(LLOfferInfo* offer, const LLSD& notification, const LLSD& response);
 # 1	indra/newview/llinventoryoffer_vks.h	void vks_r4b_send_auto_receive_response(LLOfferInfo* offer);
 # 1	indra/newview/llinventoryoffer_vks.h	void vks_r4b_send_decline_response(LLOfferInfo* offer);
@@ -545,19 +548,13 @@ if __name__ == "__main__":
 # 1	indra/newview/lltooldraganddrop.h	static EAcceptance willObjectAcceptInventory(LLViewerObject* obj, LLInventoryItem* item, EDragAndDropType type = DAD_NONE);
 # 1	indra/newview/lltooldraganddrop.h	static bool handleGiveDragAndDrop(LLUUID agent, LLUUID session, bool drop,
 # 1	indra/newview/lltooldraganddrop.h	static bool isInventoryDropAcceptable(LLViewerObject* obj, LLInventoryItem* item) { return (ACCEPT_YES_COPY_SINGLE <= willObjectAcceptInventory(obj, item)); }
-# 1	indra/newview/llviewermessage.cpp	LLOfferInfo::LLOfferInfo()
-# 1	indra/newview/llviewermessage.cpp	LLOfferInfo::LLOfferInfo(const LLOfferInfo& info)
-# 1	indra/newview/llviewermessage.cpp	LLOfferInfo::LLOfferInfo(const LLSD& sd)
-# 1	indra/newview/llviewermessage.cpp	LLSD LLOfferInfo::asLLSD()
 # 1	indra/newview/llviewermessage.cpp	bool check_offer_throttle(const std::string& from_name, bool check_only)
 # 1	indra/newview/llviewermessage.cpp	bool check_offer_throttle(const std::string& from_name, bool check_only);
 # 1	indra/newview/llviewermessage.cpp	if (check_offer_throttle(from_name, false))
 # 1	indra/newview/llviewermessage.cpp	return new LLDiscardAgentOffer(folder, object);
 # 1	indra/newview/llviewermessage.cpp	return vks_r4b_check_offer_throttle(from_name, check_only);
-# 1	indra/newview/llviewermessage.cpp	std::string LLOfferInfo::mResponderType = "offer_info";
 # 1	indra/newview/llviewermessage.cpp	vks_r4b_send_decline_response(this);
 # 1	indra/newview/llviewermessage.cpp	void LLOfferInfo::forceResponse(InventoryOfferResponse response)
-# 1	indra/newview/llviewermessage.cpp	void LLOfferInfo::fromLLSD(const LLSD& params)
 # 1	indra/newview/llviewermessage.cpp	void LLOfferInfo::handleRespond(const LLSD& notification, const LLSD& response)
 # 1	indra/newview/llviewermessage.cpp	void LLOfferInfo::sendReceiveResponse(bool accept, const LLUUID &destination_folder_id)
 # 1	indra/newview/llviewermessage.cpp	void LLOfferInfo::send_decline_response(void)

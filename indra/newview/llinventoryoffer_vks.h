@@ -5,7 +5,8 @@
  * llinventoryoffer_vks.inl, compiled in llinventoryoffer_vks.cpp.
  *
  * Received offers (processNewMessage's offer and group notice cases, the
- * ReadOfflineMsgs loop), LLOfferInfo's responses, callbacks and LLSD form,
+ * ReadOfflineMsgs loop), LLOfferInfo's responses and callbacks (its LLSD
+ * form stays C++ until the inventory storage moves to Rust),
  * the offer throttle, LLGiveInventory, the give and drop functors and
  * predicates, willObjectAcceptInventory, move_inv_category_world_to_agent,
  * handleGiveDragAndDrop, the dad3dGiveInventory* handlers and the share
@@ -56,8 +57,6 @@ void vks_r4b_force_response(LLOfferInfo* offer, S32 response);
 void vks_r4b_send_receive_response(LLOfferInfo* offer, bool accept, const LLUUID& folder);
 void vks_r4b_send_auto_receive_response(LLOfferInfo* offer);
 void vks_r4b_send_decline_response(LLOfferInfo* offer);
-LLSD vks_r4b_offer_as_llsd(const LLOfferInfo& offer);
-void vks_r4b_offer_from_llsd(LLOfferInfo& offer, const LLSD& params);
 bool vks_r4b_check_offer_throttle(const std::string& from_name, bool check_only);
 
 // Giving.

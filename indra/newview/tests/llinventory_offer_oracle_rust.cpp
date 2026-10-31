@@ -132,14 +132,12 @@ namespace r4b_boundary
         }
         void send_auto_receive_response(F::LLOfferInfo* offer) override { F::vks_r4b_send_auto_receive_response(offer); }
         void send_decline_response(F::LLOfferInfo* offer) override { F::vks_r4b_send_decline_response(offer); }
-        LLSD offer_as_llsd(F::LLOfferInfo* offer) override { return F::vks_r4b_offer_as_llsd(*offer); }
-        F::LLOfferInfo* offer_from_llsd(const LLSD& sd) override
-        {
-            F::LLOfferInfo* offer = new F::LLOfferInfo();
-            F::vks_r4b_offer_from_llsd(*offer, sd);
-            return offer;
-        }
-        void offer_from_llsd_assign(F::LLOfferInfo* offer, const LLSD& sd) override { F::vks_r4b_offer_from_llsd(*offer, sd); }
+        // LLOfferInfo's LLSD form stays C++ in the viewer (owner's decision,
+        // until the inventory storage moves to Rust): the frozen class's
+        // members are that C++ (check_r4b_copies.py offer_info_basic).
+        LLSD offer_as_llsd(F::LLOfferInfo* offer) override { return offer->asLLSD(); }
+        F::LLOfferInfo* offer_from_llsd(const LLSD& sd) override { return new F::LLOfferInfo(sd); }
+        void offer_from_llsd_assign(F::LLOfferInfo* offer, const LLSD& sd) override { offer->fromLLSD(sd); }
         bool check_offer_throttle(const std::string& from_name, bool check_only) override
         {
             return F::vks_r4b_check_offer_throttle(from_name, check_only);

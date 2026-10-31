@@ -2709,7 +2709,7 @@ namespace r4b_oracle
                 D().send_receive_response(o, true, U(0xde, 1));
                 delete o;
             } });
-        ops.push_back({ "LLOfferInfo asLLSD + LLOfferInfo(LLSD)", world, [=](int)
+        ops.push_back({ "[C++] LLOfferInfo asLLSD + LLOfferInfo(LLSD)", world, [=](int)
             {
                 F::LLOfferInfo* o = make_offer(IM_INVENTORY_OFFERED, TXN);
                 LLSD sd = D().offer_as_llsd(o);

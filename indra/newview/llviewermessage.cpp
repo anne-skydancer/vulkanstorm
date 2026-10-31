@@ -158,7 +158,8 @@
 #include "tea.h" // <FS:AW opensim currency support>
 #include "NACLantispam.h"
 #include "chatbar_as_cmdline.h"
-// <Vulkanstorm> The offer decisions are Rust (rung seven, sub-rung R4b).
+// <Vulkanstorm> The offer decisions are Rust (rung seven, sub-rung R4b);
+// LLOfferInfo's LLSD form stays C++ until the inventory storage moves to Rust.
 #include "llinventoryoffer_vks.h"
 // </Vulkanstorm>
 
@@ -1597,9 +1598,18 @@ LLOfferInfo::LLOfferInfo()
 
 LLOfferInfo::LLOfferInfo(const LLSD& sd)
 {
-    // <Vulkanstorm> Rust (rung seven R4b)
-    vks_r4b_offer_from_llsd(*this, sd);
-    // </Vulkanstorm>
+    mIM = (EInstantMessage)sd["im_type"].asInteger();
+    mFromID = sd["from_id"].asUUID();
+    mFromGroup = sd["from_group"].asBoolean();
+    mFromObject = sd["from_object"].asBoolean();
+    mTransactionID = sd["transaction_id"].asUUID();
+    mFolderID = sd["folder_id"].asUUID();
+    mObjectID = sd["object_id"].asUUID();
+    mType = LLAssetType::lookup(sd["type"].asString().c_str());
+    mFromName = sd["from_name"].asString();
+    mDesc = sd["description"].asString();
+    mHost = LLHost(sd["sender"].asString());
+    mPersist = sd["persist"].asBoolean();
 }
 
 LLOfferInfo::LLOfferInfo(const LLOfferInfo& info)
@@ -1620,9 +1630,21 @@ LLOfferInfo::LLOfferInfo(const LLOfferInfo& info)
 
 LLSD LLOfferInfo::asLLSD()
 {
-    // <Vulkanstorm> Rust (rung seven R4b)
-    return vks_r4b_offer_as_llsd(*this);
-    // </Vulkanstorm>
+    LLSD sd;
+    sd["responder_type"] = mResponderType;
+    sd["im_type"] = mIM;
+    sd["from_id"] = mFromID;
+    sd["from_group"] = mFromGroup;
+    sd["from_object"] = mFromObject;
+    sd["transaction_id"] = mTransactionID;
+    sd["folder_id"] = mFolderID;
+    sd["object_id"] = mObjectID;
+    sd["type"] = LLAssetType::lookup(mType);
+    sd["from_name"] = mFromName;
+    sd["description"] = mDesc;
+    sd["sender"] = mHost.getIPandPort();
+    sd["persist"] = mPersist;
+    return sd;
 }
 
 void LLOfferInfo::fromLLSD(const LLSD& params)

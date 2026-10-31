@@ -971,31 +971,6 @@ void vks_r4b_send_decline_response(LLOfferInfo* offer)
     vks_inv_r4b_send_decline_response(&call.host, &o);
 }
 
-LLSD vks_r4b_offer_as_llsd(const LLOfferInfo& offer)
-{
-    const VksInvOffer o = vks_r4b_offer(offer);
-    VksInvR4bBlock* b = vks_inv_r4b_offer_as_llsd(&o);
-    LLSD sd;
-    if (b)
-    {
-        sd = vks_r4b_sd(vks_inv_r4b_block_view(b)->bytes);
-        vks_inv_r4b_block_free(b);
-    }
-    return sd;
-}
-
-// LLOfferInfo(const LLSD&) and fromLLSD: every field from the map.
-void vks_r4b_offer_from_llsd(LLOfferInfo& offer, const LLSD& params)
-{
-    const std::string sd = vks_r4b_sd_bytes(params);
-    VksInvR4bBlock* b = vks_inv_r4b_offer_from_llsd(reinterpret_cast<const uint8_t*>(sd.data()), sd.size());
-    if (b)
-    {
-        vks_r4b_set_offer(offer, vks_inv_r4b_block_view(b)->offer);
-        vks_inv_r4b_block_free(b);
-    }
-}
-
 bool vks_r4b_check_offer_throttle(const std::string& from_name, bool check_only)
 {
     VksR4bCall call;
