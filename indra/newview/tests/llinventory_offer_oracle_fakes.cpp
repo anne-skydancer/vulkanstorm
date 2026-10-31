@@ -949,8 +949,9 @@ namespace r4b
                      (U32)offline, (S32)dialog, from_id.asString().c_str(), (S32)from_group, session_id.asString().c_str(),
                      aux_id.asString().c_str(), sender.getIPandPort().c_str(), binary_bucket_size) +
                  hex(binary_bucket, binary_bucket_size));
-        process_offer_im(from_id, from_group, dialog, session_id, timestamp, agentName, message, binary_bucket,
-                         binary_bucket_size, sender, aux_id);
+        // through the W6/W7 seam (the frozen implementation runs process_offer_im)
+        r4b_boundary::decisions().receive_im(from_id, from_group, dialog, session_id, timestamp, agentName, message,
+                                             binary_bucket, binary_bucket_size, sender, aux_id);
     }
 
     LLRecentPeople& LLRecentPeople::instance()

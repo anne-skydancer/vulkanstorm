@@ -39,6 +39,7 @@
 #include "lltut.h"
 
 #include "llinventory_offer_oracle.h"
+#include "llinventory_offer_oracle_boundary.h"
 
 #include <chrono>
 #include <cstdio>
@@ -430,6 +431,7 @@ namespace tut
     {
         set_test_name("fixture replay");
         if (!env("VKS_R4B_DUMP").empty()) return;
+        fprintf(stderr, "r4b decisions: %s (VKS_R4B_IMPL)\n", r4b_boundary::decisions().name());
         std::string failures;
         for (const Corpus& c : corpora())
         {
@@ -581,5 +583,15 @@ namespace tut
 #endif
         int rc = system(cmd.c_str());
         ensure("check_r4b_copies.py failed (rc " + std::to_string(rc) + "): the frozen copies no longer match the live source", rc == 0);
+    }
+
+    // VKS_R4B_BENCH=<reps>: the frozen C++ against the Rust decisions, per
+    // operation (not run otherwise)
+    template<> template<> void r4b_object::test<7>()
+    {
+        set_test_name("bench");
+        const std::string reps = env("VKS_R4B_BENCH");
+        if (reps.empty()) return;
+        fprintf(stderr, "%s", run_bench(std::max(1, atoi(reps.c_str()))).c_str());
     }
 }

@@ -410,6 +410,7 @@ namespace r4b
         std::string mUserName;
         std::string getUserName() const { return mUserName; }
         std::string getCompleteName() const { return mUserName; }
+        static bool trimResidentSurname() { return ::LLAvatarName::trimResidentSurname(); }
     };
 
     class LLAvatarNameCache

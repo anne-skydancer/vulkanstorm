@@ -57,17 +57,25 @@ copy (3000 seeded cases); 3 replay of every full fixture, aligned by case id
 changed chunk names its case range), sample (aligned by case id) and outcome
 classes (the first changed class with its first case); 5 the fixture
 directories hold exactly the registered files (missing and unexpected files
-fail); 6 the copy check.
+fail); 6 the copy check; 7 with `VKS_R4B_BENCH=<reps>`, the frozen copies and
+the Rust decisions timed per operation (otherwise nothing).
 
 ## The W6/W7 seam
 
 Every corpus reaches the decision code only through
-`r4b_boundary::Decisions` (`llinventory_offer_oracle_boundary.h`); today its
-one implementation is `FrozenDecisions` (`llinventory_offer_oracle_frozen.cpp`,
-the copies). W6/W7 add an implementation that calls the Rust decisions
-through the FFI and runs the returned action list with the C++ executor
-translation unit, linked into this test against the same fakes; the fixtures
-must replay unchanged.
+`r4b_boundary::Decisions` (`llinventory_offer_oracle_boundary.h`). It has two
+implementations: `FrozenDecisions` (`llinventory_offer_oracle_frozen.cpp`, the
+copies the fixtures were recorded from) and, since W6/W7 (the R4b port),
+`RustDecisions` (`llinventory_offer_oracle_rust.cpp`): the Rust decisions
+(`vkstorm-ffi` `vks_inv_r4b_*`) with the viewer's executor,
+`indra/newview/llinventoryoffer_vks.inl`, compiled into the test inside
+namespace `r4b` against the same fakes. The fixtures replay unchanged with
+either. `VKS_R4B_IMPL=frozen|rust` chooses; without it a replay runs `rust`
+and a dump records from `frozen`. Since the port the copy check compares the
+regions whose live C++ became Rust calls (`PORTED` in `check_r4b_copies.py`)
+by the digest of the frozen copy instead of against the live source, checks
+the C++ the port kept inside them (`KEPT_CPP`), and `--at 3846816a16` compares
+every region with the source the port started from.
 
 Inputs: the method arguments plus the state of the fakes (model, mutes,
 settings, RLVa verdicts, agent and avatar, objects, live notifications).

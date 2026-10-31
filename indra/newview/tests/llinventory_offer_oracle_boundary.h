@@ -12,13 +12,13 @@
  * answered, observers, deletions, mutes, RLVa observers and notices, offer
  * state snapshots) plus the returned values. The fixtures record exactly that.
  *
- * Today the one implementation is FrozenDecisions
- * (llinventory_offer_oracle_frozen.cpp): the verbatim copies of the C++
- * decision code. W6 (offers) and W7 (giving) add an implementation that calls
- * the Rust decisions through the FFI and runs the returned action list with
- * the C++ executor translation unit, linked into this test against the same
- * fakes; the fixtures must replay unchanged with either implementation
- * (VKS_R4B_IMPL selects it once there are two).
+ * Two implementations: FrozenDecisions (llinventory_offer_oracle_frozen.cpp),
+ * the verbatim copies of the C++ decision code the fixtures were recorded
+ * from, and RustDecisions (llinventory_offer_oracle_rust.cpp), the Rust
+ * decisions (vkstorm-ffi vks_inv_r4b_*, W6 offers and W7 giving) with the
+ * viewer's executor (llinventoryoffer_vks.inl) compiled against the same
+ * fakes. The fixtures replay unchanged with either; VKS_R4B_IMPL=frozen|rust
+ * selects one (default: rust for a replay, frozen for a dump).
  *
  * LLOfferInfo (r4b::LLOfferInfo, the frozen class) is the offer state that
  * crosses the seam: it is created by receive_im/offer_from_llsd and handed
@@ -100,8 +100,12 @@ namespace r4b_boundary
         virtual r4b::EAcceptance dad3d_give(int kind, r4b::LLToolDragAndDrop& tool, r4b::LLViewerObject* obj, bool drop) = 0;
     };
 
-    // the implementation the corpora use (FrozenDecisions until W6/W7)
+    // the implementation the corpora use (VKS_R4B_IMPL)
     Decisions& decisions();
+    Decisions& frozen_decisions();
+    Decisions& rust_decisions();
+    // the bench (VKS_R4B_BENCH) switches the implementation; null restores it
+    void bench_select(Decisions* d);
 }
 
 #endif

@@ -3728,6 +3728,18 @@ void share_give_inventory_cb(const LLSD& notification, const LLSD& response, std
     action_give_inventory::give_inventory_cb(notification, response, selected);
 }
 
+// Factories for RustDecisions's executor (llinventory_offer_oracle_rust.cpp):
+// the classes above are local to this file, as in the viewer's sources.
+LLInventoryObserver* harness_new_discard_agent_offer(const LLUUID& folder_id, const LLUUID& object_id)
+{
+    return new LLDiscardAgentOffer(folder_id, object_id);
+}
+
+void harness_post_offer_notification(const LLNotification::Params& p, const LLUUID& from_id, bool is_group)
+{
+    LLPostponedNotification::add<LLPostponedOfferNotification>(p, from_id, is_group);
+}
+
 // The class name of an observer, for the event log.
 std::string observer_kind(const LLInventoryObserver* o)
 {

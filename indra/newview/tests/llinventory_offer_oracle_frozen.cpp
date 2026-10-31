@@ -104,7 +104,9 @@ namespace r4b_boundary
         }
     };
 
-    Decisions& decisions()
+    // decisions() (llinventory_offer_oracle_rust.cpp) picks this one or
+    // RustDecisions.
+    Decisions& frozen_decisions()
     {
         static FrozenDecisions frozen;
         return frozen;

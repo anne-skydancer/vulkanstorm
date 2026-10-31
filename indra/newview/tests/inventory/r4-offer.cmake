@@ -15,7 +15,7 @@
 # tests/check_r4b_copies.py. The decision code is reached only through the
 # W6/W7 seam in tests/llinventory_offer_oracle_boundary.h.
 LL_ADD_INTEGRATION_TEST(llinventory_offer_oracle
-  "tests/llinventory_offer_oracle.cpp;tests/llinventory_offer_oracle_copies.cpp;tests/llinventory_offer_oracle_fakes.cpp;tests/llinventory_offer_oracle_frozen.cpp"
+  "tests/llinventory_offer_oracle.cpp;tests/llinventory_offer_oracle_copies.cpp;tests/llinventory_offer_oracle_fakes.cpp;tests/llinventory_offer_oracle_frozen.cpp;tests/llinventory_offer_oracle_rust.cpp"
   "llinventory;llmessage;llcorehttp;llfilesystem;llmath;llxml;llcommon"
   )
 set_property(TARGET INTEGRATION_TEST_llinventory_offer_oracle APPEND PROPERTY

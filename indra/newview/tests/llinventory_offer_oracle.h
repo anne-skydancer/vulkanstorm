@@ -75,6 +75,10 @@ namespace r4b_oracle
     // pack_instant_message_block), seeded; returns the number of differing
     // cases and fills `first` with the first difference.
     int pack_live_vs_frozen(uint64_t seed, int count, std::string& first);
+
+    // The frozen C++ and the Rust decisions timed per operation over the same
+    // fakes (VKS_R4B_BENCH=<reps>): a printable table.
+    std::string run_bench(int reps);
 }
 
 #endif

@@ -13,6 +13,8 @@
 
 #include "linden_common.h"
 #include "llinventory_offer_oracle.h"
+
+#include <chrono>
 #include "llinventory_offer_oracle_copies.h"
 #include "llinventory_offer_oracle_boundary.h"
 
@@ -2622,6 +2624,161 @@ namespace r4b_oracle
     }
 
     // ============================================================ registry
+    // ================================================================ bench
+    // Per-operation cost of the frozen C++ and the Rust decisions, in the
+    // same process over the same fakes, the event log off (the fakes still
+    // format what they would log, in both columns). Each row: best of three
+    // runs of `reps` operations, ns per operation.
+    struct BenchOp
+    {
+        const char* name;
+        std::function<void()> prepare;          // once per run, untimed
+        std::function<void(int)> op;            // the timed operation
+    };
+
+    static std::vector<BenchOp> bench_ops()
+    {
+        static const LLUUID FOLDER = U(0x2f, 1);
+        auto world = []()
+        {
+            setup();
+            F::ev().on = false;
+            add_item(OFFERED, ROOT, LLAssetType::AT_NOTECARD, make_perms(AGENT, PERM_ALL), "Offered");
+            add_item(U(0x11, 1), ROOT, LLAssetType::AT_NOTECARD, make_perms(AGENT, PERM_ALL), "Gift");
+            add_item(U(0x11, 2), ROOT, LLAssetType::AT_OBJECT, make_perms(AGENT, perm_mask(false, true, true)), "No Copy");
+            add_cat(FOLDER, ROOT, "Kit");
+            for (int i = 0; i < 20; ++i)
+            {
+                add_item(U(0x12, i), FOLDER, i % 2 ? LLAssetType::AT_NOTECARD : LLAssetType::AT_TEXTURE, make_perms(AGENT, PERM_ALL),
+                         F::fmt("Part %d", i));
+            }
+            F::LLViewerObject* obj = new F::LLViewerObject;
+            obj->mID = U(0x0b, 1);
+            obj->mPermModify = true;
+            obj->mFlagAllowInventoryAdd = true;
+            F::gObjectList.objects[obj->mID] = obj;
+        };
+        auto clear_notifications = []()
+        {
+            F::LLNotifications::instance().mLive.clear();
+            F::world().posted.clear();
+            F::world().pending.clear();
+            F::LLAppViewer::instance()->mIdle.clear();
+            F::gInventory.mObservers.clear();
+        };
+        std::vector<U8> agent_bucket(17);
+        agent_bucket[0] = (U8)LLAssetType::AT_NOTECARD;
+        memcpy(&agent_bucket[1], OFFERED.mData, 16);
+        static std::vector<U8> buffer;
+        buffer.assign(MTUBYTES + 64, 0);
+        memcpy(buffer.data(), agent_bucket.data(), agent_bucket.size());
+        static LLHost sender;
+        sender = LLHost(std::string(OFFER_HOST));
+
+        std::vector<BenchOp> ops;
+        ops.push_back({ "offer arrival, agent (UserGiveItem posted)", world, [=](int i)
+            {
+                D().receive_im(OTHER, false, IM_INVENTORY_OFFERED, TXN, 0, "Sender Resident", "Gift", buffer.data(), 17, sender,
+                               LLUUID::null);
+                if ((i & 63) == 63) clear_notifications();
+            } });
+        ops.push_back({ "offer arrival, object (ObjectGiveItem posted)", world, [=](int i)
+            {
+                static U8 task_bucket[MTUBYTES] = { (U8)LLAssetType::AT_NOTECARD };
+                D().receive_im(OTHER, false, IM_TASK_INVENTORY_OFFERED, TXN, 0, "Gadget", "'Gadget'  ( http://slurl.com/secondlife/R/1/2/3 )",
+                               task_bucket, 1, sender, LLUUID::null);
+                if ((i & 63) == 63) clear_notifications();
+            } });
+        ops.push_back({ "forceResponse(IOR_ACCEPT), agent offer", world, [=](int)
+            {
+                F::LLOfferInfo* o = make_offer(IM_INVENTORY_OFFERED, TXN);
+                o->mPersist = true;
+                D().force_response(o, 0);
+                delete o;
+            } });
+        ops.push_back({ "forceResponse(IOR_DECLINE), object offer", world, [=](int)
+            {
+                F::LLOfferInfo* o = make_offer(IM_TASK_INVENTORY_OFFERED, TXN);
+                o->mPersist = true;
+                D().force_response(o, 1);
+                delete o;
+            } });
+        ops.push_back({ "sendReceiveResponse (accept packet)", world, [=](int)
+            {
+                F::LLOfferInfo* o = make_offer(IM_INVENTORY_OFFERED, TXN);
+                D().send_receive_response(o, true, U(0xde, 1));
+                delete o;
+            } });
+        ops.push_back({ "LLOfferInfo asLLSD + LLOfferInfo(LLSD)", world, [=](int)
+            {
+                F::LLOfferInfo* o = make_offer(IM_INVENTORY_OFFERED, TXN);
+                LLSD sd = D().offer_as_llsd(o);
+                F::LLOfferInfo* back = D().offer_from_llsd(sd);
+                delete back;
+                delete o;
+            } });
+        ops.push_back({ "check_offer_throttle(check_only)", world, [=](int)
+            {
+                D().check_offer_throttle("other.sender", true);
+            } });
+        ops.push_back({ "doGiveInventoryItem (copyable)", world, [=](int)
+            {
+                D().give_item(OTHER, F::gInventory.getItem(U(0x11, 1)), LLUUID::null);
+            } });
+        ops.push_back({ "doGiveInventoryCategory (20 items)", world, [=](int)
+            {
+                D().give_category(OTHER, F::gInventory.getCategory(FOLDER), LLUUID::null, "");
+            } });
+        ops.push_back({ "isInventoryGiveAcceptable", world, [=](int)
+            {
+                D().is_give_acceptable(F::gInventory.getItem(U(0x11, 1)));
+            } });
+        ops.push_back({ "itemTransferCommonlyAllowed (object)", world, [=](int)
+            {
+                D().transfer_commonly_allowed(F::gInventory.getItem(U(0x11, 2)));
+            } });
+        ops.push_back({ "LLDroppableItem(true) on one item", world, [=](int)
+            {
+                S32 count = -1;
+                D().collect_functor("droppable_transfer", nullptr, F::gInventory.getItem(U(0x11, 1)), &count);
+            } });
+        ops.push_back({ "willObjectAcceptInventory", world, [=](int)
+            {
+                D().will_object_accept(F::gObjectList.findObject(U(0x0b, 1)), F::gInventory.getItem(U(0x11, 1)), F::DAD_NOTECARD);
+            } });
+        return ops;
+    }
+
+    std::string run_bench(int reps)
+    {
+        std::string out = F::fmt("R4b bench: ns per operation, best of 3 runs of %d (fakes, event log off)\n", reps);
+        out += F::fmt("%-48s %12s %12s %8s\n", "operation", "C++ (frozen)", "Rust", "ratio");
+        r4b_boundary::Decisions* impls[2] = { &r4b_boundary::frozen_decisions(), &r4b_boundary::rust_decisions() };
+        for (const BenchOp& b : bench_ops())
+        {
+            double best[2] = { 1e300, 1e300 };
+            for (int run = 0; run < 3; ++run)
+            {
+                for (int k = 0; k < 2; ++k)
+                {
+                    r4b_boundary::bench_select(impls[k]);
+                    b.prepare();
+                    auto t0 = std::chrono::steady_clock::now();
+                    for (int i = 0; i < reps; ++i)
+                    {
+                        b.op(i);
+                    }
+                    double ns = std::chrono::duration<double, std::nano>(std::chrono::steady_clock::now() - t0).count() / reps;
+                    best[k] = std::min(best[k], ns);
+                }
+            }
+            out += F::fmt("%-48s %12.0f %12.0f %8.2f\n", b.name, best[0], best[1], best[1] / best[0]);
+        }
+        r4b_boundary::bench_select(nullptr);
+        setup();
+        return out;
+    }
+
     const std::vector<Corpus>& corpora()
     {
         static std::vector<Corpus> list = {
