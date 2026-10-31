@@ -199,6 +199,42 @@ namespace
 }
 // </Vulkanstorm>
 
+// <Vulkanstorm> R2: loadFromFile's warning for a cache it rejects, in the
+// C++ text (the header could not be read, the version differs, or the parse
+// failed), and its debug line per item dropped for a null id. Macros, so
+// that the log lines keep the name of the function that logs them.
+#define VKS_R2_LOG_OBSOLETE(bytes, filename) \
+    do \
+    { \
+        if ((bytes).size() < sizeof(U32)) \
+        { \
+            LL_WARNS(LOG_INV) << "Failed to read cache version. Unable to load inventory from: " << (filename) << LL_ENDL; \
+        } \
+        else \
+        { \
+            U32 vks_value_nbo = 0; \
+            memcpy(&vks_value_nbo, (bytes).data(), sizeof(U32)); \
+            if ((S32)ntohl(vks_value_nbo) != sCurrentInvCacheVersion) \
+            { \
+                LL_WARNS(LOG_INV) << "Inventory cache is out of date" << LL_ENDL; \
+            } \
+            else \
+            { \
+                LL_WARNS(LOG_INV) << "Parsing inventory cache failed" << LL_ENDL; \
+            } \
+        } \
+    } while (0)
+#define VKS_R2_LOG_NULL_IDS(names, count) \
+    do \
+    { \
+        for (size_t vks_i = 0; vks_i < (count); ++vks_i) \
+        { \
+            LL_DEBUGS(LOG_INV) << "Ignoring inventory with null item id: " \
+                               << std::string(reinterpret_cast<const char*>((names)[vks_i].ptr), (names)[vks_i].len) << LL_ENDL; \
+        } \
+    } while (0)
+// </Vulkanstorm>
+
 struct InventoryIDPtrLess
 {
     bool operator()(const LLViewerInventoryCategory* i1, const LLViewerInventoryCategory* i2) const
@@ -3160,6 +3196,10 @@ bool LLInventoryModel::loadSkeleton(
             LL_INFOS(LOG_INV) << "loading inventory from: (" << inventory_filename << ")" << LL_ENDL;
             input.file_present = vks_r2_read_file(inventory_filename, bytes);
             input.file = VksInvBytes{ reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size() };
+            if (!input.file_present)
+            {
+                LL_INFOS(LOG_INV) << "unable to load inventory from: " << inventory_filename << LL_ENDL;
+            }
         }
 
         const VksInvModelHost host = vks_r2_host(this);
@@ -3178,6 +3218,11 @@ bool LLInventoryModel::loadSkeleton(
             LL_PROFILE_ZONE_NAMED("loadSkeleton - apply");
             const VksInvLoginPlanView* view = vks_inv_login_plan_view(plan.get());
             rv = view->rv;
+            if (view->cache_obsolete)
+            {
+                VKS_R2_LOG_OBSOLETE(bytes, inventory_filename);
+            }
+            VKS_R2_LOG_NULL_IDS(view->null_id_names, view->null_id_count);
             for (size_t i = 0; i < view->folders_to_update_count; ++i)
             {
                 const VksInvBytes& name = view->folders[view->folders_to_update[i]].category.object.name;
@@ -3751,27 +3796,11 @@ bool LLInventoryModel::loadFromFile(const std::string& filename,
     const VksInvCacheView* view = vks_inv_cache_view(cache.get());
     if (view->obsolete)
     {
-        // Why, in the C++ text: the header, the version or the parse.
-        if (bytes.size() < sizeof(U32))
-        {
-            LL_WARNS(LOG_INV) << "Failed to read cache version. Unable to load inventory from: " << filename << LL_ENDL;
-        }
-        else
-        {
-            U32 value_nbo = 0;
-            memcpy(&value_nbo, bytes.data(), sizeof(U32));
-            if ((S32)ntohl(value_nbo) != sCurrentInvCacheVersion)
-            {
-                LL_WARNS(LOG_INV) << "Inventory cache is out of date" << LL_ENDL;
-            }
-            else
-            {
-                LL_WARNS(LOG_INV) << "Parsing inventory cache failed" << LL_ENDL;
-            }
-        }
+        VKS_R2_LOG_OBSOLETE(bytes, filename);
         return false;
     }
     is_cache_obsolete = false;
+    VKS_R2_LOG_NULL_IDS(view->null_id_names, view->null_id_count);
 
     {
         LL_PROFILE_ZONE_NAMED("inventory load from file - categories");
@@ -5255,6 +5284,21 @@ LLPointer<LLInventoryValidationInfo> LLInventoryModel::validate() const
             break;
         case VKS_INV_VEV_NULL_CAT:
             LL_WARNS("Inventory") << "null cat" << LL_ENDL;
+            break;
+        case VKS_INV_VEV_ANCESTOR_MISSING:
+            LL_WARNS(LOG_INV) << "Unable to trace topmost ancestor, initial object " << id << " does not exist" << LL_ENDL;
+            break;
+        case VKS_INV_VEV_ANCESTOR_LOOP:
+            LL_WARNS(LOG_INV) << "Detected a loop on an object " << id2 << " when searching for ancestor of " << id << LL_ENDL;
+            break;
+        case VKS_INV_VEV_ANCESTOR_PARENT_MISSING:
+            LL_WARNS(LOG_INV) << "unable to trace topmost ancestor of " << id << ", missing item for uuid " << id2 << LL_ENDL;
+            break;
+        case VKS_INV_VEV_SUITCASE_LOOP:
+            LL_WARNS(LOG_INV) << "Detected a loop on a cat " << id2 << " when searching for ancestor of " << id << LL_ENDL;
+            break;
+        case VKS_INV_VEV_SUITCASE_PARENT_MISSING:
+            LL_WARNS(LOG_INV) << "unable to trace parentage of " << id << ", missing item for uuid " << id2 << LL_ENDL;
             break;
         case VKS_INV_VEV_CAT_ID_MISMATCH:
             if (cat) { LL_WARNS("Inventory") << "cat id/index mismatch " << id << " " << cat->getUUID() << LL_ENDL; }
