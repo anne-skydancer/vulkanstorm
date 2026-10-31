@@ -2001,6 +2001,81 @@ the tests and append the output to the job summary (the step never fails a
 build). The rows marked `[C++]` there are the LLSD forms, C++ in both
 columns.
 
+### R4b: inventory offers and giving
+
+Branch `codex/inventory-r4b` with vkstorm-core-rust `codex/ffi-inventory-r4b`
+(`vks_inv_r4b_*`, `crates/vkstorm-ffi/src/inventory_r4b.rs`). Rust decides
+and builds the outgoing records; the viewer keeps its state and does the
+work. A call reads the viewer through one host query callback
+(`VksInvR4bHost.query`, 59 codes: agent, settings, RLVa verdicts, mutes,
+names, notification forms, model records in model order, objects, observers)
+and tells it what to do through one action callback (`act`, 34 kinds:
+messages field by field, `pack_instant_message`, notifications, name
+lookups, observers, model and mute changes, RLVa notices, the offer's state),
+one action at a time in the order the C++ did it. Strings cross as borrowed
+bytes, LLSD as binary LLSD, items as flat records with the R1 permission
+layout. The C++ executor is one source,
+`indra/newview/llinventoryoffer_vks.inl`: the viewer compiles it in
+`llinventoryoffer_vks.cpp`, and `INTEGRATION_TEST_llinventory_offer_oracle`
+compiles it inside namespace `r4b` against the oracle's fakes
+(`RustDecisions`, `llinventory_offer_oracle_rust.cpp`), so the fixtures
+replay through exactly the code the viewer runs. Every corpus shows 0
+differences with `VKS_R4B_IMPL=rust` (the default) and with `frozen`,
+including the 589,824-case policy table (1,804 outcome classes), the 43,008
+response cases, the 6,000 seeded offers and the 102,400-case
+`will_accept_sweep`.
+
+| C++ | Now |
+|---|---|
+| `processNewMessage` cases `IM_INVENTORY_OFFERED`, `IM_TASK_INVENTORY_OFFERED`, `IM_GROUP_NOTICE`, `IM_GROUP_NOTICE_REQUESTED`; `inventory_offer_handler`; the ReadOfflineMsgs message loop | Rust (`vks_r4b_receive_im` reports where the C++ returned, so Firestorm's "don't flash task icon" paths still skip the flash) |
+| `LLOfferInfo(LLSD)`, `asLLSD`, `sendReceiveResponse`, `send_decline_response`, `handleRespond` (`inventory_offer_callback`, `inventory_task_offer_callback`, `getSanitizedDescription`, `initRespondFunctionMap`), `forceResponse` | Rust |
+| `check_offer_throttle`, `gThrottleTimer` | Rust (state in `llinventoryoffer_vks.cpp`) |
+| `LLGiveInventory` (all), `LLGiveable`, `LLUncopyableItems`, `itemTransferCommonlyAllowed`, `LLDroppableItem`, `LLDropCopyableItems`, `willObjectAcceptInventory`, `move_inv_category_world_to_agent`, `handleGiveDragAndDrop` and its confirmation, `dad3dGiveInventory*`, the share dialog's `give_inventory_cb` | Rust |
+| `LLOfferInfo` class, fields, default and copy constructors, `fromLLSD` (`*this = params`) | C++ |
+| `processNewMessage` preamble (antispam, Omnifilter, name clean-up, mute verdict), `process_improved_im`, the offline coroutine's HTTP part | C++ (other dialogs use them) |
+| Executor pieces: `LLPostponedOfferNotification`, `LLDiscardAgentOffer`, `LLOpenTaskGroupOffer`, `LLOpenAgentOffer`, `open_inventory_offer`, the mute and name callbacks, `notification_group_name_cb`, `send_do_not_disturb_message` | C++ (`check_r4b_copies.py` `KEPT_CPP` checks the ones inside ported regions against their frozen copies) |
+| Dependencies with other users: `LLMuteList`, `get_is_item_worn`, `collectDescendentsIf`, `computeSessionID`, `RlvInventory::isGiveToRLVOffer`, notifications, `pack_instant_message` | C++ |
+
+Copy check: the 20 regions whose live C++ became Rust calls are in `PORTED`
+(checked by the digest of the frozen copy, no git history needed);
+`check_r4b_copies.py --at 3846816a16` compares all 54 regions with the
+source the port started from (0 mismatches). The identifier fence allowlist
+holds the reviewed wrapper lines.
+
+The legacy task bucket is read as a C string, past the bucket's size up to
+a NUL (`task_size_0_fill1`). Rust reads the same bytes within the buffer:
+`process_improved_im`'s `U8[MTUBYTES]`, or the offline loop's vector, which
+the executor now pads with zeros to at least `MTUBYTES` (the C++ read past
+the end of that vector, into the heap).
+
+Bench: `VKS_R4B_BENCH=<reps> INTEGRATION_TEST_llinventory_offer_oracle`
+times the frozen copies against the Rust decisions over the same fakes, event
+log off. Windows, RelWithDebInfo, ns per operation, best of 3 x 2000:
+
+| Operation | C++ (frozen) | Rust | Ratio |
+|---|---:|---:|---:|
+| offer arrival, agent (UserGiveItem posted) | 109,907 | 104,956 | 0.95 |
+| offer arrival, object (ObjectGiveItem posted) | 101,252 | 101,718 | 1.00 |
+| `forceResponse(IOR_ACCEPT)`, agent offer | 10,531 | 17,004 | 1.61 |
+| `forceResponse(IOR_DECLINE)`, object offer | 8,364 | 12,318 | 1.47 |
+| `sendReceiveResponse` (accept packet) | 13,889 | 8,124 | 0.58 |
+| `asLLSD` + `LLOfferInfo(LLSD)` | 2,311 | 6,821 | 2.95 |
+| `check_offer_throttle(check_only)` | 8 | 79 | 10.4 |
+| `doGiveInventoryItem` (copyable) | 20,460 | 16,326 | 0.80 |
+| `doGiveInventoryCategory` (20 items) | 34,138 | 29,054 | 0.85 |
+| `isInventoryGiveAcceptable` | 248 | 357 | 1.44 |
+| `itemTransferCommonlyAllowed` (object) | 275 | 428 | 1.56 |
+| `LLDroppableItem(true)`, one item | 282 | 427 | 1.52 |
+| `willObjectAcceptInventory` | 528 | 650 | 1.23 |
+
+An offer costs about 0.1 ms either way (most of it the fakes' notification
+and message work). The slower rows pay for crossing LLSD (the notification
+form and response of a forced response, the offer's LLSD form) and for one
+host query per fact a small predicate reads. Every function is wired to Rust
+here; which of the slower ones (the LLSD form, the predicates called from
+menus, drag hover and folder drops) go back to C++ is the owner's decision,
+as in R1.
+
 ## Local build
 
 Follow the project's RelWithDebInfo procedure (see `scripts/validate_audio.sh`
