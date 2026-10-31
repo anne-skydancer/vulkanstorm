@@ -31,6 +31,7 @@
 #include "httpheaders.h"
 #include "httpresponse.h"
 #include "llsdserialize.h"
+#include "workqueue.h"
 
 #include <sstream>
 #include <string>
@@ -164,8 +165,43 @@ void AISReplyHandler::onCompleted(LLCore::HttpHandle handle, LLCore::HttpRespons
                              << " url '" << response->getRequestURL() << "' because " << status.toString() << LL_ENDL;
     }
 
-    mReply = AISReply::fromResponse(response, AIS_MAX_REPLY_DEPTH);
+    // As the base handler: a success body over MAX_BODY_SIZE_THRESHOLD (64 KB)
+    // is parsed on the General work queue, the reply posted from the main
+    // loop. The Rust reply is plain data, safe to build there and to hand
+    // back; no LLSD crosses the threads.
+    if (status && response->getBodySize() > AIS_WORKER_THRESHOLD)
+    {
+        LL::WorkQueue::ptr_t main_queue = LL::WorkQueue::getInstance("mainloop");
+        LL::WorkQueue::ptr_t general_queue = LL::WorkQueue::getInstance("General");
+        if (main_queue && general_queue)
+        {
+            response->addRef();
+            std::shared_ptr<AISReplyHandler> self = std::static_pointer_cast<AISReplyHandler>(shared_from_this());
+            const bool posted = main_queue->postTo(
+                general_queue,
+                [response]() // on the General queue
+                {
+                    return AISReply::fromResponse(response, AIS_MAX_REPLY_DEPTH).release();
+                },
+                [self, response](VksInvAisReply* reply) // back on the main loop
+                {
+                    self->deliver(response, AISReply(reply));
+                    response->release();
+                });
+            if (posted)
+            {
+                return;
+            }
+            response->release();
+        }
+    }
+    deliver(response, AISReply::fromResponse(response, AIS_MAX_REPLY_DEPTH));
+}
 
+void AISReplyHandler::deliver(LLCore::HttpResponse* response, AISReply reply)
+{
+    const LLCore::HttpStatus status = response->getStatus();
+    mReply = std::move(reply);
     LLSD posted = LLSD::emptyMap();
     if (!mReply)
     {

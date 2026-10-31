@@ -16,7 +16,8 @@ LL_ADD_INTEGRATION_TEST(llaisadapter_parity
   )
 set_property(TARGET INTEGRATION_TEST_llaisadapter_parity APPEND PROPERTY
     COMPILE_DEFINITIONS
-    "VKS_AISADAPTER_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/inventory/ais/adapter\"")
+    "VKS_AISADAPTER_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/inventory/ais/adapter\""
+    "VKS_AISUPDATE_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/inventory/ais/update\"")
 # The test runs as the target's post-build step: rerun it when the fixtures
 # change.
 set_property(SOURCE tests/llaisadapter_parity_test.cpp APPEND PROPERTY OBJECT_DEPENDS

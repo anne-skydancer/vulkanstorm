@@ -37,12 +37,15 @@
 #include "llerrorcontrol.h"
 #include "llevents.h"
 #include "llsdserialize.h"
+#include "llsys.h"
+#include "llfile.h"
 #include "workqueue.h"
 
 #include "../llaisreply.h"
 
 #include "../test/lltut.h"
 
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
@@ -492,6 +495,80 @@ namespace tut
     {
         set_test_name("AIS handler (Rust): the same matrix");
         LLError::setDefaultLevel(LLError::LEVEL_ERROR);
-        compare_with_fixtures(run_matrix(Handler::AIS), "the AIS handler (Rust)", true);
+        compare_with_fixtures(run_matrix(Handler::AIS), "the AIS handler (Rust)", false);
+    }
+
+    template<> template<>
+    void aisadapter_object::test<3>()
+    {
+        // The bench (VKS_AISADAPTER_BENCH=<rounds>): prints, never fails.
+        // Where the 26.7 MB reply of the R3a corpus (s10a) is parsed: the
+        // time onCompleted takes on the calling (main) thread, and the work
+        // left for the General queue, for the C++ LLSD handler and for the
+        // AIS handler.
+        set_test_name("bench: main-thread time of a large reply");
+        const char* rounds_env = getenv("VKS_AISADAPTER_BENCH");
+        if (!rounds_env || !*rounds_env)
+        {
+            return;
+        }
+        LLError::setDefaultLevel(LLError::LEVEL_ERROR);
+        const int rounds = std::max(1, atoi(rounds_env));
+        const std::string gz = std::string(VKS_AISUPDATE_FIXTURE_DIR) + "/cases/s10a_large_recursive.0.xml.gz";
+        const std::string xml = gz + ".bench." + std::to_string(rounds) + ".xml";
+        ensure("cannot gunzip " + gz, gunzip_file(gz, xml));
+        const std::string body = read_file(xml);
+        LLFile::remove(xml);
+
+        using clock = std::chrono::steady_clock;
+        auto ms = [](clock::duration d) { return std::chrono::duration<double, std::milli>(d).count(); };
+        Queues q;
+        std::cout << std::fixed << std::setprecision(1) << "  [aisadapter] bench: " << body.size()
+                  << " bytes, best of " << rounds << ", ms (on the main thread / on the General queue)" << std::endl;
+        for (Handler which : { Handler::CPP, Handler::AIS })
+        {
+            double main_ms = 1e30, worker_ms = 1e30, reply_ms = 1e30;
+            for (int r = 0; r < rounds; ++r)
+            {
+                LLEventStream pump("vks_aisadapter_bench", true);
+                LLTempBoundListener conn = pump.listen("capture", [](const LLSD&) { return false; });
+                std::shared_ptr<AISReplyHandler> ais;
+                LLCoreHttpUtil::HttpCoroHandler::ptr_t handler;
+                if (which == Handler::AIS)
+                {
+                    ais = std::make_shared<AISReplyHandler>(pump);
+                    handler = ais;
+                }
+                else
+                {
+                    handler = LLCoreHttpUtil::createLLSDHandler(pump, AIS_MAX_REPLY_DEPTH);
+                }
+                LLCore::HttpResponse* response = new LLCore::HttpResponse();
+                response->setStatus(LLCore::HttpStatus(200));
+                response->setRequestURL(URL);
+                LLCore::BufferArray* ba = new LLCore::BufferArray();
+                ba->append(body.data(), body.size());
+                response->setBody(ba);
+                ba->release();
+                LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>();
+                const char* ct = "Content-Type: application/llsd+xml";
+                headers->appendNormal(ct, strlen(ct));
+                response->setHeaders(headers);
+
+                clock::time_point t0 = clock::now();
+                handler->onCompleted(LLCORE_HTTP_HANDLE_INVALID, response);
+                clock::time_point t1 = clock::now();
+                q.general.runPending();
+                clock::time_point t2 = clock::now();
+                q.mainloop.runPending();
+                clock::time_point t3 = clock::now();
+                response->release();
+                main_ms = std::min(main_ms, ms(t1 - t0) + ms(t3 - t2));
+                worker_ms = std::min(worker_ms, ms(t2 - t1));
+                reply_ms = std::min(reply_ms, ms(t3 - t2));
+            }
+            std::cout << "    " << (which == Handler::AIS ? "AIS handler (Rust)   " : "C++ LLSD handler     ") << main_ms
+                      << " / " << worker_ms << " (of the main time, the reply post: " << reply_ms << ")" << std::endl;
+        }
     }
 }

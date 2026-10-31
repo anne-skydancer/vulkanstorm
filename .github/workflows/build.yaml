@@ -470,11 +470,14 @@ jobs:
           out="$RUNNER_TEMP/llaisupdate_bench.txt"
           VKS_AISUPDATE_BENCH=3 "$exe" > "$out" 2>&1
           status=$?
-          grep -A5 '\[aisupdate\] bench' "$out"
+          # Option B: where the large reply is parsed (main thread / General queue).
+          adapter="$(dirname "$exe")/INTEGRATION_TEST_llaisadapter_parity$([ "$RUNNER_OS" = Windows ] && echo .exe)"
+          [ -x "$adapter" ] && VKS_AISADAPTER_BENCH=3 "$adapter" 2>&1 | grep -A3 'aisadapter. bench' >> "$out"
+          grep -A5 'bench:' "$out"
           {
             echo "### AIS reply bench, llaisupdate_parity (${{ runner.os }}, exit $status)"
             echo '```'
-            grep -A5 '\[aisupdate\] bench' "$out"
+            grep -A5 'bench:' "$out"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status

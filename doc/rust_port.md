@@ -2032,7 +2032,7 @@ What is Rust and what stayed C++:
 | Part | Where |
 |---|---|
 | The adapter's work on an AIS response (`HttpCoroLLSDHandler`: body parse, `content`, `http_result`, `error_body`, the 499, the depth cap) | Rust (`ais::reply`) |
-| The scheduling of a large body's parse (General work queue over 64 KB) | C++; R3a parses on the calling thread, the option B change restores the worker queue |
+| The scheduling of a large body's parse (General work queue over 64 KB) | C++, as before (the option B change; R3a alone parsed on the calling thread) |
 | The coroutine's status, error branch (410 refetch and delete, 403 notification with its first-call flag) and completion callback ids | Rust (`ais::result`) |
 | `AISUpdate`'s parse (`parseMeta` ... `parseEmbeddedCategories`) | Rust (`ais::update`), querying the model through a host table in the C++ order, with `checkTimeout()` at the parse checkpoints |
 | The viewer objects the parse produces | C++ objects made from the Rust records (one per record) |
@@ -2064,6 +2064,25 @@ other builds running on the machine:
 | | total | 0.126 → 0.080 |
 
 Rust is faster at both sizes; nothing stays C++ for speed.
+
+**Option B, the worker queue.** AIS's handler keeps the adapter's
+scheduling: a success body over 64 KB is parsed on the `General` work
+queue (into a Rust reply, plain data that crosses the queue without an
+`LLSD` tree) and the coroutine's pump fires from the main loop. The adapter
+corpus now matches all 1,728 cases with the worker path included. On 7.2.5
+the C++ adapter already parsed such bodies on the `General` queue, so the
+gain is not unblocking the main thread for the parse but building no C++
+tree, and the reply post that came with it
+(`INTEGRATION_TEST_llaisadapter_parity`, `VKS_AISADAPTER_BENCH=5`, s10a,
+26.7 MB, ms):
+
+| Handler | main thread | General queue |
+|---|---|---|
+| C++ LLSD handler (7.2.5) | 32.9 | 191.5 |
+| AIS handler (Rust, option B) | 0.0 | 121.9 |
+
+`AISUpdate`'s parse stays on the main thread (it queries the model, which is
+main-thread only); it is the parse row of the table above.
 
 ## Local build
 

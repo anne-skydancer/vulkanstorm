@@ -47,6 +47,9 @@
 // hostile reply from building, walking and freeing a tree too deep for the
 // stack (approved fix, 2026-10-29).
 constexpr S32 AIS_MAX_REPLY_DEPTH = 256;
+// HttpCoroHandler::onCompleted's MAX_BODY_SIZE_THRESHOLD: a success body
+// larger than this is parsed on the General work queue.
+constexpr size_t AIS_WORKER_THRESHOLD = 65536;
 
 // The result of one AIS request, Rust-owned (move-only).
 class AISReply
@@ -62,6 +65,13 @@ public:
 
     explicit operator bool() const { return mReply != nullptr; }
     VksInvAisReply* get() const { return mReply; }
+    // Gives up ownership (to cross a work queue as plain data).
+    VksInvAisReply* release()
+    {
+        VksInvAisReply* r = mReply;
+        mReply = nullptr;
+        return r;
+    }
 
     // The status the reply carries, for logging.
     LLCore::HttpStatus status() const;
@@ -82,8 +92,11 @@ private:
 
 // The AIS variant of the adapter's LLSD handler: it keeps the reply in
 // Rust and posts an empty map to the coroutine's pump, which reads the
-// reply from the handler (AISReplySlot). Everything else is the base
-// handler's: the late reply to a canceled request is ignored.
+// reply from the handler (AISReplySlot). The scheduling is the base
+// handler's: a success body over AIS_WORKER_THRESHOLD is parsed on the
+// General work queue (the reply is Rust data, safe to build there) and the
+// pump fires from the main loop; the late reply to a canceled request is
+// ignored.
 class AISReplyHandler : public LLCoreHttpUtil::HttpCoroHandler
 {
 public:
@@ -104,6 +117,8 @@ protected:
     }
 
 private:
+    void deliver(LLCore::HttpResponse* response, AISReply reply);
+
     AISReply mReply;
 };
 
