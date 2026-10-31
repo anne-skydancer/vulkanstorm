@@ -27,50 +27,18 @@
 #include "linden_common.h"
 #include "llinventory.h"
 
-#include "lldbstrings.h"
 #include "llfasttimer.h"
 #include "llinventorydefines.h"
-#include "llxorcipher.h"
 #include "llsd.h"
-#include "llsdserialize.h"
 #include "message.h"
-#include <boost/tokenizer.hpp>
 
-#include "llsdutil.h"
+#include "llinventory_vks.h"
 
-///----------------------------------------------------------------------------
-/// Exported functions
-///----------------------------------------------------------------------------
-// FIXME D567 - what's the point of these, especially if we don't even use them consistently?
-static const std::string INV_ITEM_ID_LABEL("item_id");
-static const std::string INV_FOLDER_ID_LABEL("cat_id");
-static const std::string INV_PARENT_ID_LABEL("parent_id");
-static const std::string INV_THUMBNAIL_LABEL("thumbnail");
-static const std::string INV_FAVORITE_LABEL("favorite");
-static const std::string INV_THUMBNAIL_ID_LABEL("thumbnail_id");
-static const std::string INV_ASSET_TYPE_LABEL("type");
-static const std::string INV_PREFERRED_TYPE_LABEL("preferred_type");
-static const std::string INV_INVENTORY_TYPE_LABEL("inv_type");
-static const std::string INV_NAME_LABEL("name");
-static const std::string INV_DESC_LABEL("desc");
-static const std::string INV_PERMISSIONS_LABEL("permissions");
-static const std::string INV_SHADOW_ID_LABEL("shadow_id");
-static const std::string INV_ASSET_ID_LABEL("asset_id");
-static const std::string INV_LINKED_ID_LABEL("linked_id");
-static const std::string INV_SALE_INFO_LABEL("sale_info");
-static const std::string INV_FLAGS_LABEL("flags");
-static const std::string INV_CREATION_DATE_LABEL("created_at");
-static const std::string INV_TOGGLED_LABEL("toggled");
-
-// key used by agent-inventory-service
-static const std::string INV_ASSET_TYPE_LABEL_WS("type_default");
-static const std::string INV_FOLDER_ID_LABEL_WS("category_id");
-
-///----------------------------------------------------------------------------
-/// Local function declarations, constants, enums, and typedefs
-///----------------------------------------------------------------------------
-
-const LLUUID MAGIC_ID("3c115e51-04f4-523c-9fa6-98aff1034730");
+// The rules are Rust since vkstorm-rust rung seven (sub-rung R1):
+// vkstorm-inventory through vkstorm_ffi.h, over a flat view of the fields
+// (names and descriptions, CRCs, slam bits, legacy text, LLSD, message
+// blocks). The fields, the accessors, the copies and the message field I/O
+// stay here.
 
 ///----------------------------------------------------------------------------
 /// Class LLInventoryObject
@@ -178,11 +146,11 @@ void LLInventoryObject::setUUID(const LLUUID& new_uuid)
 
 void LLInventoryObject::rename(const std::string& n)
 {
-    std::string new_name(n);
-    correctInventoryName(new_name);
-    if( !new_name.empty() && new_name != mName )
+    char name[VKS_INV_NAME_BUF];
+    size_t len = 0;
+    if (vks_inv_rename(vks_ptr(mName), mName.size(), vks_ptr(n), n.size(), name, sizeof(name), &len))
     {
-        mName = new_name;
+        mName.assign(name, len);
     }
 }
 
@@ -207,138 +175,60 @@ void LLInventoryObject::setType(LLAssetType::EType type)
     if (type != LLAssetType::AT_LSL_TEXT) mRuntime.clear();
 }
 
+void LLInventoryObject::toVks(VksInvObject& view) const
+{
+    vks_set_uuid(view.id, mUUID);
+    vks_set_uuid(view.parent, mParentUUID);
+    vks_set_uuid(view.thumbnail, mThumbnailUUID);
+    view.asset_type = (int32_t)mType;
+    view.favorite = mFavorite;
+    view.creation_date = (int64_t)mCreationDate;
+    view.name = vks_bytes(mName);
+    view.runtime = vks_bytes(mRuntime);
+}
+
+void LLInventoryObject::fromVks(const VksInvObject& view)
+{
+    mUUID = vks_uuid(view.id);
+    mParentUUID = vks_uuid(view.parent);
+    mThumbnailUUID = vks_uuid(view.thumbnail);
+    mType = (LLAssetType::EType)view.asset_type;
+    mFavorite = view.favorite;
+    mCreationDate = (time_t)view.creation_date;
+    vks_assign(mName, view.name);
+    vks_assign(mRuntime, view.runtime);
+}
 
 // virtual
 bool LLInventoryObject::importLegacyStream(std::istream& input_stream)
 {
-    // *NOTE: Changing the buffer size will require changing the scanf
-    // calls below.
-    char buffer[MAX_STRING];    /* Flawfinder: ignore */
-    char keyword[MAX_STRING];   /* Flawfinder: ignore */
-    char valuestr[MAX_STRING];  /* Flawfinder: ignore */
-
-    keyword[0] = '\0';
-    valuestr[0] = '\0';
-    while(input_stream.good())
+    VksInvObject view;
+    toVks(view);
+    LLInvRecordsPtr result;
+    if (!ll_inv_read_legacy(input_stream, [&](const uint8_t* data, size_t len, VksInvStream& stream) {
+            result.reset(vks_inv_object_import_legacy(&view, data, len, &stream));
+            if (!result)
+            {
+                return false;
+            }
+            stream = vks_inv_records_view(result.get())->stream;
+            return true;
+        }))
     {
-        input_stream.getline(buffer, MAX_STRING);
-        // Each line is parsed on its own; a line that does not parse is absent.
-        keyword[0] = '\0';
-        valuestr[0] = '\0';
-        S32 fields = sscanf(buffer, " %254s %254s", keyword, valuestr);  /* Flawfinder: ignore */
-        if (fields < 1)
-        {
-            // a blank line counts as absent
-            continue;
-        }
-        if(0 == strcmp("{",keyword))
-        {
-            continue;
-        }
-        if(0 == strcmp("}", keyword))
-        {
-            break;
-        }
-        else if (fields < 2 && 0 != strcmp("metadata", keyword))
-        {
-            // a keyword without a value counts as absent
-            // (metadata keeps its own handling)
-            continue;
-        }
-        else if(0 == strcmp("obj_id", keyword))
-        {
-            mUUID.set(valuestr);
-        }
-        else if(0 == strcmp("parent_id", keyword))
-        {
-            mParentUUID.set(valuestr);
-        }
-        else if(0 == strcmp("type", keyword))
-        {
-            mType = LLAssetType::lookup(valuestr);
-        }
-        else if (0 == strcmp("metadata", keyword))
-        {
-            LLSD metadata;
-            if (strncmp("<llsd>", valuestr, 6) == 0)
-            {
-                std::istringstream stream(valuestr);
-                LLSDSerialize::fromXML(metadata, stream);
-            }
-            else
-            {
-                // next line likely contains metadata, but at the moment is not supported
-                // can do something like:
-                // LLSDSerialize::fromNotation(metadata, input_stream, -1);
-            }
-
-            setRuntime(metadata["script"]["runtime"].asString());
-            if (metadata.has("thumbnail"))
-            {
-                const LLSD& thumbnail = metadata["thumbnail"];
-                if (thumbnail.has("asset_id"))
-                {
-                    setThumbnailUUID(thumbnail["asset_id"].asUUID());
-                }
-                else
-                {
-                    setThumbnailUUID(LLUUID::null);
-                }
-            }
-            else
-            {
-                setThumbnailUUID(LLUUID::null);
-            }
-
-            if (metadata.has("favorite"))
-            {
-                const LLSD& favorite = metadata["favorite"];
-                if (favorite.has("toggled"))
-                {
-                    setFavorite(favorite["toggled"].asBoolean());
-                }
-                else
-                {
-                    setFavorite(false);
-                }
-            }
-            else
-            {
-                setFavorite(false);
-            }
-        }
-        else if(0 == strcmp("name", keyword))
-        {
-            //strcpy(valuestr, buffer + strlen(keyword) + 3);
-            // *NOTE: Not ANSI C, but widely supported.
-            sscanf( /* Flawfinder: ignore */
-                buffer,
-                " %254s %254[^|]",
-                keyword, valuestr);
-            mName.assign(valuestr);
-            correctInventoryName(mName);
-        }
-        else
-        {
-            LL_WARNS() << "unknown keyword '" << keyword
-                    << "' in LLInventoryObject::importLegacyStream() for object " << mUUID << LL_ENDL;
-        }
+        ll_inv_vks_warn("vks_inv_object_import_legacy");
+        return false;
     }
-    return true;
+    const VksInvRecordsView* r = vks_inv_records_view(result.get());
+    fromVks(r->objects[0]);
+    return r->ok;
 }
 
 bool LLInventoryObject::exportLegacyStream(std::ostream& output_stream, bool) const
 {
-    std::string uuid_str;
-    output_stream <<  "\tinv_object\t0\n\t{\n";
-    mUUID.toString(uuid_str);
-    output_stream << "\t\tobj_id\t" << uuid_str << "\n";
-    mParentUUID.toString(uuid_str);
-    output_stream << "\t\tparent_id\t" << uuid_str << "\n";
-    output_stream << "\t\ttype\t" << LLAssetType::lookup(mType) << "\n";
-    output_stream << "\t\tname\t" << mName.c_str() << "|\n";
-    output_stream << "\t}\n";
-    return true;
+    VksInvObject view;
+    toVks(view);
+    LLInvRecordsPtr text(vks_inv_object_export_legacy(&view));
+    return ll_inv_write_text(output_stream, text.get(), "vks_inv_object_export_legacy");
 }
 
 void LLInventoryObject::updateParentOnServer(bool) const
@@ -356,10 +246,9 @@ void LLInventoryObject::updateServer(bool) const
 // static
 void LLInventoryObject::correctInventoryName(std::string& name)
 {
-    LLStringUtil::replaceNonstandardASCII(name, ' ');
-    LLStringUtil::replaceChar(name, '|', ' ');
-    LLStringUtil::trim(name);
-    LLStringUtil::truncate(name, DB_INV_ITEM_NAME_STR_LEN);
+    char corrected[VKS_INV_NAME_BUF];
+    const size_t len = vks_inv_correct_name(vks_ptr(name), name.size(), corrected, sizeof(corrected));
+    name.assign(corrected, std::min(len, sizeof(corrected) - 1));
 }
 
 time_t LLInventoryObject::getCreationDate() const
@@ -484,48 +373,74 @@ void LLInventoryItem::setAssetUUID(const LLUUID& asset_id)
     mAssetUUID = asset_id;
 }
 
+void LLInventoryItem::toVks(VksInvItem& view) const
+{
+    LLInventoryObject::toVks(view.object);
+    view.perms = *vks_perms(mPermissions);
+    vks_set_uuid(view.asset, mAssetUUID);
+    view.sale = *vks_sale(mSaleInfo);
+    view.inv_type = (int32_t)mInventoryType;
+    view.flags = mFlags;
+    view.description = vks_bytes(mDescription);
+}
+
+void LLInventoryItem::fromVks(const VksInvItem& view)
+{
+    LLInventoryObject::fromVks(view.object);
+    *vks_perms(mPermissions) = view.perms;
+    mAssetUUID = vks_uuid(view.asset);
+    *vks_sale(mSaleInfo) = view.sale;
+    mInventoryType = (LLInventoryType::EType)view.inv_type;
+    mFlags = view.flags;
+    vks_assign(mDescription, view.description);
+}
+
+// The item as its virtual accessors give it, for the functions whose C++
+// read the accessors rather than the fields (a viewer link item answers
+// with its target's).
+static void accessor_view(const LLInventoryItem& item, VksInvItem& view)
+{
+    item.toVks(view);
+    vks_set_uuid(view.object.id, item.getUUID());
+    vks_set_uuid(view.object.thumbnail, item.getThumbnailUUID());
+    view.object.asset_type = (int32_t)item.getType();
+    view.object.favorite = item.getIsFavorite();
+    view.object.creation_date = (int64_t)item.getCreationDate();
+    view.object.name = vks_bytes(item.getName());
+    view.object.runtime = vks_bytes(item.getRuntime());
+    view.perms = *vks_perms(item.getPermissions());
+    vks_set_uuid(view.asset, item.getAssetUUID());
+    view.sale = *vks_sale(item.getSaleInfo());
+    view.inv_type = (int32_t)item.getInventoryType();
+    view.flags = item.getFlags();
+    view.description = vks_bytes(item.getDescription());
+}
 
 U32 LLInventoryItem::getCRC32() const
 {
-    // *FIX: Not a real crc - more of a checksum.
-    // *NOTE: We currently do not validate the name or description,
-    // but if they change in transit, it's no big deal.
-    U32 crc = mUUID.getCRC32();
-    //LL_DEBUGS() << "1 crc: " << std::hex << crc << std::dec << LL_ENDL;
-    crc += mParentUUID.getCRC32();
-    //LL_DEBUGS() << "2 crc: " << std::hex << crc << std::dec << LL_ENDL;
-    crc += mPermissions.getCRC32();
-    //LL_DEBUGS() << "3 crc: " << std::hex << crc << std::dec << LL_ENDL;
-    crc += mAssetUUID.getCRC32();
-    //LL_DEBUGS() << "4 crc: " << std::hex << crc << std::dec << LL_ENDL;
-    crc += mType;
-    //LL_DEBUGS() << "5 crc: " << std::hex << crc << std::dec << LL_ENDL;
-    crc += mInventoryType;
-    //LL_DEBUGS() << "6 crc: " << std::hex << crc << std::dec << LL_ENDL;
-    crc += mFlags;
-    //LL_DEBUGS() << "7 crc: " << std::hex << crc << std::dec << LL_ENDL;
-    crc += mSaleInfo.getCRC32();
-    //LL_DEBUGS() << "8 crc: " << std::hex << crc << std::dec << LL_ENDL;
-    crc += (U32)mCreationDate;
-    //LL_DEBUGS() << "9 crc: " << std::hex << crc << std::dec << LL_ENDL;
-    crc += mThumbnailUUID.getCRC32();
-    return crc;
+    VksInvItem view;
+    toVks(view);
+    return vks_inv_item_crc32(&view);
 }
 
 // static
 void LLInventoryItem::correctInventoryDescription(std::string& desc)
 {
-    LLStringUtil::replaceNonstandardASCII(desc, ' ');
-    LLStringUtil::replaceChar(desc, '|', ' ');
+    std::string corrected = vks_ffi_string([&](char* buf, size_t cap) {
+        return vks_inv_correct_description(vks_ptr(desc), desc.size(), buf, cap);
+    });
+    desc.swap(corrected);
 }
 
 void LLInventoryItem::setDescription(const std::string& d)
 {
-    std::string new_desc(d);
-    LLInventoryItem::correctInventoryDescription(new_desc);
-    if( new_desc != mDescription )
+    std::string desc(d.size() + 1, '\0');
+    size_t len = 0;
+    if (vks_inv_set_description(vks_ptr(mDescription), mDescription.size(), vks_ptr(d), d.size(), desc.data(),
+                                desc.size(), &len))
     {
-        mDescription = new_desc;
+        desc.resize(std::min(len, d.size()));
+        mDescription.swap(desc);
     }
 }
 
@@ -556,36 +471,11 @@ void LLInventoryItem::setCreator(const LLUUID& creator)
 
 void LLInventoryItem::accumulatePermissionSlamBits(const LLInventoryItem& old_item)
 {
-    // Remove any pre-existing II_FLAGS_PERM_OVERWRITE_MASK flags
-    // because we now detect when they should be set.
-    setFlags( old_item.getFlags() | (getFlags() & ~(LLInventoryItemFlags::II_FLAGS_PERM_OVERWRITE_MASK)) );
-
-    // Enforce the PERM_OVERWRITE flags for any masks that are different
-    // but only for AT_OBJECT's since that is the only asset type that can
-    // exist in-world (instead of only in-inventory or in-object-contents).
-    if (LLAssetType::AT_OBJECT == getType())
-    {
-        LLPermissions old_permissions = old_item.getPermissions();
-        U32 flags_to_be_set = 0;
-        if(old_permissions.getMaskNextOwner() != getPermissions().getMaskNextOwner())
-        {
-            flags_to_be_set |= LLInventoryItemFlags::II_FLAGS_OBJECT_SLAM_PERM;
-        }
-        if(old_permissions.getMaskEveryone() != getPermissions().getMaskEveryone())
-        {
-            flags_to_be_set |= LLInventoryItemFlags::II_FLAGS_OBJECT_PERM_OVERWRITE_EVERYONE;
-        }
-        if(old_permissions.getMaskGroup() != getPermissions().getMaskGroup())
-        {
-            flags_to_be_set |= LLInventoryItemFlags::II_FLAGS_OBJECT_PERM_OVERWRITE_GROUP;
-        }
-        LLSaleInfo old_sale_info = old_item.getSaleInfo();
-        if(old_sale_info != getSaleInfo())
-        {
-            flags_to_be_set |= LLInventoryItemFlags::II_FLAGS_OBJECT_SLAM_SALE;
-        }
-        setFlags(getFlags() | flags_to_be_set);
-    }
+    VksInvItem item;
+    VksInvItem old;
+    accessor_view(*this, item);
+    accessor_view(old_item, old);
+    setFlags(vks_inv_item_slam_bits(&item, &old));
 }
 
 const LLSaleInfo& LLInventoryItem::getSaleInfo() const
@@ -617,641 +507,163 @@ time_t LLInventoryItem::getCreationDate() const
 // virtual
 void LLInventoryItem::packMessage(LLMessageSystem* msg) const
 {
-    msg->addUUIDFast(_PREHASH_ItemID, mUUID);
-    msg->addUUIDFast(_PREHASH_FolderID, mParentUUID);
-    mPermissions.packMessage(msg);
-    msg->addUUIDFast(_PREHASH_AssetID, mAssetUUID);
-    S8 type = static_cast<S8>(mType);
-    msg->addS8Fast(_PREHASH_Type, type);
-    type = static_cast<S8>(mInventoryType);
-    msg->addS8Fast(_PREHASH_InvType, type);
-    msg->addU32Fast(_PREHASH_Flags, mFlags);
-    mSaleInfo.packMessage(msg);
+    VksInvItem view;
+    toVks(view);
+    VksInvItemBlock block;
+    if (!vks_inv_item_to_block(&view, nullptr, &block))
+    {
+        ll_inv_vks_warn("vks_inv_item_to_block");
+        return;
+    }
+    msg->addUUIDFast(_PREHASH_ItemID, vks_uuid(block.item_id));
+    msg->addUUIDFast(_PREHASH_FolderID, vks_uuid(block.folder_id));
+    msg->addUUIDFast(_PREHASH_CreatorID, vks_uuid(block.creator_id));
+    msg->addUUIDFast(_PREHASH_OwnerID, vks_uuid(block.owner_id));
+    msg->addUUIDFast(_PREHASH_GroupID, vks_uuid(block.group_id));
+    msg->addU32Fast(_PREHASH_BaseMask, block.base_mask);
+    msg->addU32Fast(_PREHASH_OwnerMask, block.owner_mask);
+    msg->addU32Fast(_PREHASH_GroupMask, block.group_mask);
+    msg->addU32Fast(_PREHASH_EveryoneMask, block.everyone_mask);
+    msg->addU32Fast(_PREHASH_NextOwnerMask, block.next_owner_mask);
+    msg->addBOOLFast(_PREHASH_GroupOwned, block.group_owned);
+    msg->addUUIDFast(_PREHASH_AssetID, vks_uuid(block.asset));
+    msg->addS8Fast(_PREHASH_Type, block.asset_type);
+    msg->addS8Fast(_PREHASH_InvType, block.inv_type);
+    msg->addU32Fast(_PREHASH_Flags, block.flags);
+    msg->addU8Fast(_PREHASH_SaleType, block.sale_type);
+    msg->addS32Fast(_PREHASH_SalePrice, block.sale_price);
     msg->addStringFast(_PREHASH_Name, mName);
     msg->addStringFast(_PREHASH_Description, mDescription);
-    msg->addS32Fast(_PREHASH_CreationDate, (S32)mCreationDate);
-    U32 crc = getCRC32();
-    msg->addU32Fast(_PREHASH_CRC, crc);
+    msg->addS32Fast(_PREHASH_CreationDate, block.creation_date);
+    // getCRC32 is virtual: the CRC of the class that packs.
+    msg->addU32Fast(_PREHASH_CRC, getCRC32());
 }
 
 // virtual
 bool LLInventoryItem::unpackMessage(LLMessageSystem* msg, const char* block, S32 block_num)
 {
-    msg->getUUIDFast(block, _PREHASH_ItemID, mUUID, block_num);
-    msg->getUUIDFast(block, _PREHASH_FolderID, mParentUUID, block_num);
-    mPermissions.unpackMessage(msg, block, block_num);
-    msg->getUUIDFast(block, _PREHASH_AssetID, mAssetUUID, block_num);
-
-    S8 type;
-    msg->getS8Fast(block, _PREHASH_Type, type, block_num);
-    mType = static_cast<LLAssetType::EType>(type);
-    msg->getS8(block, "InvType", type, block_num);
-    mInventoryType = static_cast<LLInventoryType::EType>(type);
-    mPermissions.initMasks(mInventoryType);
-
-    msg->getU32Fast(block, _PREHASH_Flags, mFlags, block_num);
-
-    mSaleInfo.unpackMultiMessage(msg, block, block_num);
-
-    msg->getStringFast(block, _PREHASH_Name, mName, block_num);
-    LLStringUtil::replaceNonstandardASCII(mName, ' ');
-
-    msg->getStringFast(block, _PREHASH_Description, mDescription, block_num);
-    LLStringUtil::replaceNonstandardASCII(mDescription, ' ');
-
-    S32 date;
-    msg->getS32(block, "CreationDate", date, block_num);
-    mCreationDate = date;
-
-    U32 local_crc = getCRC32();
-    U32 remote_crc = 0;
-    msg->getU32(block, "CRC", remote_crc, block_num);
-//#define CRC_CHECK
-#ifdef CRC_CHECK
-    if(local_crc == remote_crc)
+    VksInvItem view;
+    toVks(view);
+    // The block starts as the item's own fields, as the reads went into them.
+    VksInvItemBlock b;
+    if (!vks_inv_item_to_block(&view, nullptr, &b))
     {
-        LL_DEBUGS() << "crc matches" << LL_ENDL;
-        return true;
-    }
-    else
-    {
-        LL_WARNS() << "inventory crc mismatch: local=" << std::hex << local_crc
-                << " remote=" << remote_crc << std::dec << LL_ENDL;
+        ll_inv_vks_warn("vks_inv_item_to_block");
         return false;
     }
-#else
-    return (local_crc == remote_crc);
-#endif
+    LLUUID id;
+    auto get_uuid = [&](const char* var, uint8_t* field) {
+        id = vks_uuid(field);
+        msg->getUUIDFast(block, var, id, block_num);
+        vks_set_uuid(field, id);
+    };
+    get_uuid(_PREHASH_ItemID, b.item_id);
+    get_uuid(_PREHASH_FolderID, b.folder_id);
+    get_uuid(_PREHASH_CreatorID, b.creator_id);
+    get_uuid(_PREHASH_OwnerID, b.owner_id);
+    get_uuid(_PREHASH_GroupID, b.group_id);
+    msg->getU32Fast(block, _PREHASH_BaseMask, b.base_mask, block_num);
+    msg->getU32Fast(block, _PREHASH_OwnerMask, b.owner_mask, block_num);
+    msg->getU32Fast(block, _PREHASH_GroupMask, b.group_mask, block_num);
+    msg->getU32Fast(block, _PREHASH_EveryoneMask, b.everyone_mask, block_num);
+    msg->getU32Fast(block, _PREHASH_NextOwnerMask, b.next_owner_mask, block_num);
+    msg->getBOOLFast(block, _PREHASH_GroupOwned, b.group_owned, block_num);
+    get_uuid(_PREHASH_AssetID, b.asset);
+    msg->getS8Fast(block, _PREHASH_Type, b.asset_type, block_num);
+    msg->getS8(block, "InvType", b.inv_type, block_num);
+    msg->getU32Fast(block, _PREHASH_Flags, b.flags, block_num);
+    msg->getU8Fast(block, _PREHASH_SaleType, b.sale_type, block_num);
+    msg->getS32Fast(block, _PREHASH_SalePrice, b.sale_price, block_num);
+    std::string name = mName;
+    std::string desc = mDescription;
+    msg->getStringFast(block, _PREHASH_Name, name, block_num);
+    msg->getStringFast(block, _PREHASH_Description, desc, block_num);
+    b.name = vks_bytes(name);
+    b.description = vks_bytes(desc);
+    msg->getS32(block, "CreationDate", b.creation_date, block_num);
+    b.crc = 0;
+    msg->getU32(block, "CRC", b.crc, block_num);
+
+    LLInvRecordsPtr result(vks_inv_item_apply_block(&view, &b));
+    if (!result)
+    {
+        ll_inv_vks_warn("vks_inv_item_apply_block");
+        return false;
+    }
+    const VksInvRecordsView* r = vks_inv_records_view(result.get());
+    fromVks(r->items[0]);
+    return r->ok;
 }
 
 // virtual
 bool LLInventoryItem::importLegacyStream(std::istream& input_stream)
 {
-    // *NOTE: Changing the buffer size will require changing the scanf
-    // calls below.
-    char buffer[MAX_STRING];    /* Flawfinder: ignore */
-    char keyword[MAX_STRING];   /* Flawfinder: ignore */
-    char valuestr[MAX_STRING];  /* Flawfinder: ignore */
-    char junk[MAX_STRING];  /* Flawfinder: ignore */
-    bool success = true;
-
-    keyword[0] = '\0';
-    valuestr[0] = '\0';
-
-    mInventoryType = LLInventoryType::IT_NONE;
-    mAssetUUID.setNull();
-    while(success && input_stream.good())
+    VksInvItem view;
+    toVks(view);
+    LLInvRecordsPtr result;
+    if (!ll_inv_read_legacy(input_stream, [&](const uint8_t* data, size_t len, VksInvStream& stream) {
+            result.reset(vks_inv_item_import_legacy(&view, data, len, &stream));
+            if (!result)
+            {
+                return false;
+            }
+            stream = vks_inv_records_view(result.get())->stream;
+            return true;
+        }))
     {
-        input_stream.getline(buffer, MAX_STRING);
-        // Each line is parsed on its own; a line that does not parse is absent.
-        keyword[0] = '\0';
-        valuestr[0] = '\0';
-        S32 fields = sscanf( /* Flawfinder: ignore */
-            buffer,
-            " %254s %254s",
-            keyword, valuestr);
-        if (fields < 1)
-        {
-            // a blank line counts as absent
-            continue;
-        }
-        if(0 == strcmp("{",keyword))
-        {
-            continue;
-        }
-        if(0 == strcmp("}", keyword))
-        {
-            break;
-        }
-        else if (fields < 2 && 0 != strcmp("permissions", keyword) && 0 != strcmp("sale_info", keyword) && 0 != strcmp("metadata", keyword))
-        {
-            // a keyword without a value counts as absent
-            // (block headers and metadata keep their own handling)
-            continue;
-        }
-        else if(0 == strcmp("item_id", keyword))
-        {
-            mUUID.set(valuestr);
-        }
-        else if(0 == strcmp("parent_id", keyword))
-        {
-            mParentUUID.set(valuestr);
-        }
-        else if(0 == strcmp("permissions", keyword))
-        {
-            success = mPermissions.importLegacyStream(input_stream);
-        }
-        else if(0 == strcmp("sale_info", keyword))
-        {
-            // Sale info used to contain next owner perm. It is now in
-            // the permissions. Thus, we read that out, and fix legacy
-            // objects. It's possible this op would fail, but it
-            // should pick up the vast majority of the tasks.
-            bool has_perm_mask = false;
-            U32 perm_mask = 0;
-            success = mSaleInfo.importLegacyStream(input_stream, has_perm_mask, perm_mask);
-            if(has_perm_mask)
-            {
-                if(perm_mask == PERM_NONE)
-                {
-                    perm_mask = mPermissions.getMaskOwner();
-                }
-                // fair use fix.
-                if(!(perm_mask & PERM_COPY))
-                {
-                    perm_mask |= PERM_TRANSFER;
-                }
-                mPermissions.setMaskNext(perm_mask);
-            }
-        }
-        else if(0 == strcmp("shadow_id", keyword))
-        {
-            mAssetUUID.set(valuestr);
-            LLXORCipher cipher(MAGIC_ID.mData, UUID_BYTES);
-            cipher.decrypt(mAssetUUID.mData, UUID_BYTES);
-        }
-        else if(0 == strcmp("asset_id", keyword))
-        {
-            mAssetUUID.set(valuestr);
-        }
-        else if(0 == strcmp("type", keyword))
-        {
-            mType = LLAssetType::lookup(valuestr);
-        }
-        else if (0 == strcmp("metadata", keyword))
-        {
-            LLSD metadata;
-            if (strncmp("<llsd>", valuestr, 6) == 0)
-            {
-                std::istringstream stream(valuestr);
-                LLSDSerialize::fromXML(metadata, stream);
-            }
-            else
-            {
-                // next line likely contains metadata, but at the moment is not supported
-                // can do something like:
-                // LLSDSerialize::fromNotation(metadata, input_stream, -1);
-            }
-
-            setRuntime(metadata["script"]["runtime"].asString());
-            if (metadata.has("thumbnail"))
-            {
-                const LLSD& thumbnail = metadata["thumbnail"];
-                if (thumbnail.has("asset_id"))
-                {
-                    setThumbnailUUID(thumbnail["asset_id"].asUUID());
-                }
-                else
-                {
-                    setThumbnailUUID(LLUUID::null);
-                }
-            }
-            else
-            {
-                setThumbnailUUID(LLUUID::null);
-            }
-
-            if (metadata.has("favorite"))
-            {
-                const LLSD& favorite = metadata["favorite"];
-                if (favorite.has("toggled"))
-                {
-                    setFavorite(favorite["toggled"].asBoolean());
-                }
-                else
-                {
-                    setFavorite(false);
-                }
-            }
-            else
-            {
-                setFavorite(false);
-            }
-        }
-        else if(0 == strcmp("inv_type", keyword))
-        {
-            mInventoryType = LLInventoryType::lookup(std::string(valuestr));
-        }
-        else if(0 == strcmp("flags", keyword))
-        {
-            sscanf(valuestr, "%x", &mFlags);
-        }
-        else if(0 == strcmp("name", keyword))
-        {
-            //strcpy(valuestr, buffer + strlen(keyword) + 3);
-            // *NOTE: Not ANSI C, but widely supported.
-            sscanf( /* Flawfinder: ignore */
-                buffer,
-                " %254s%254[\t]%254[^|]",
-                keyword, junk, valuestr);
-
-            // IW: sscanf chokes and puts | in valuestr if there's no name
-            if (valuestr[0] == '|')
-            {
-                valuestr[0] = '\000';
-            }
-
-            mName.assign(valuestr);
-            LLStringUtil::replaceNonstandardASCII(mName, ' ');
-            LLStringUtil::replaceChar(mName, '|', ' ');
-        }
-        else if(0 == strcmp("desc", keyword))
-        {
-            //strcpy(valuestr, buffer + strlen(keyword) + 3);
-            // *NOTE: Not ANSI C, but widely supported.
-            sscanf( /* Flawfinder: ignore */
-                buffer,
-                " %254s%254[\t]%254[^|]",
-                keyword, junk, valuestr);
-
-            if (valuestr[0] == '|')
-            {
-                valuestr[0] = '\000';
-            }
-
-            mDescription.assign(valuestr);
-            LLStringUtil::replaceNonstandardASCII(mDescription, ' ');
-            /* TODO -- ask Ian about this code
-            const char *donkey = mDescription.c_str();
-            if (donkey[0] == '|')
-            {
-                LL_ERRS() << "Donkey" << LL_ENDL;
-            }
-            */
-        }
-        else if(0 == strcmp("creation_date", keyword))
-        {
-            S32 date = 0;
-            if (1 == sscanf(valuestr, "%d", &date))
-            {
-                mCreationDate = date;
-            }
-        }
-        else
-        {
-            LL_WARNS() << "unknown keyword '" << keyword
-                    << "' in inventory import of item " << mUUID << LL_ENDL;
-        }
+        ll_inv_vks_warn("vks_inv_item_import_legacy");
+        return false;
     }
-
-    // Need to convert 1.0 simstate files to a useful inventory type
-    // and potentially deal with bad inventory tyes eg, a landmark
-    // marked as a texture.
-    if((LLInventoryType::IT_NONE == mInventoryType)
-       || !inventory_and_asset_types_match(mInventoryType, mType))
-    {
-        LL_DEBUGS() << "Resetting inventory type for " << mUUID << LL_ENDL;
-        mInventoryType = LLInventoryType::defaultForAssetType(mType);
-    }
-
-    mPermissions.initMasks(mInventoryType);
-
-    return success;
+    const VksInvRecordsView* r = vks_inv_records_view(result.get());
+    fromVks(r->items[0]);
+    return r->ok;
 }
 
 bool LLInventoryItem::exportLegacyStream(std::ostream& output_stream, bool include_asset_key) const
 {
-    std::string uuid_str;
-    output_stream << "\tinv_item\t0\n\t{\n";
-    mUUID.toString(uuid_str);
-    output_stream << "\t\titem_id\t" << uuid_str << "\n";
-    mParentUUID.toString(uuid_str);
-    output_stream << "\t\tparent_id\t" << uuid_str << "\n";
-    mPermissions.exportLegacyStream(output_stream);
-
-    if (mThumbnailUUID.notNull() || !mRuntime.empty())
-    {
-        // Max length is 255 chars, will have to export differently if it gets more data
-        // Ex: use newline and toNotation (uses {}) for unlimited size
-        LLSD metadata;
-        if (mThumbnailUUID.notNull())
-        {
-            metadata["thumbnail"] = LLSD().with("asset_id", mThumbnailUUID);
-        }
-        if (!mRuntime.empty())
-        {
-            metadata["script"] = LLSD().with("runtime", mRuntime);
-        }
-
-        output_stream << "\t\tmetadata\t";
-        LLSDSerialize::toXML(metadata, output_stream);
-        output_stream << "|\n";
-    }
-
-    // Check for permissions to see the asset id, and if so write it
-    // out as an asset id. Otherwise, apply our cheesy encryption.
-    if(include_asset_key)
-    {
-        U32 mask = mPermissions.getMaskBase();
-        if(((mask & PERM_ITEM_UNRESTRICTED) == PERM_ITEM_UNRESTRICTED)
-           || (mAssetUUID.isNull()))
-        {
-            mAssetUUID.toString(uuid_str);
-            output_stream << "\t\tasset_id\t" << uuid_str << "\n";
-        }
-        else
-        {
-            LLUUID shadow_id(mAssetUUID);
-            LLXORCipher cipher(MAGIC_ID.mData, UUID_BYTES);
-            cipher.encrypt(shadow_id.mData, UUID_BYTES);
-            shadow_id.toString(uuid_str);
-            output_stream << "\t\tshadow_id\t" << uuid_str << "\n";
-        }
-    }
-    else
-    {
-        LLUUID::null.toString(uuid_str);
-        output_stream << "\t\tasset_id\t" << uuid_str << "\n";
-    }
-    output_stream << "\t\ttype\t" << LLAssetType::lookup(mType) << "\n";
-    const std::string inv_type_str = LLInventoryType::lookup(mInventoryType);
-    if(!inv_type_str.empty())
-        output_stream << "\t\tinv_type\t" << inv_type_str << "\n";
-    std::string buffer;
-    buffer = llformat( "\t\tflags\t%08x\n", mFlags);
-    output_stream << buffer;
-    mSaleInfo.exportLegacyStream(output_stream);
-    output_stream << "\t\tname\t" << mName.c_str() << "|\n";
-    output_stream << "\t\tdesc\t" << mDescription.c_str() << "|\n";
-    output_stream << "\t\tcreation_date\t" << mCreationDate << "\n";
-    output_stream << "\t}\n";
-    return true;
+    VksInvItem view;
+    toVks(view);
+    LLInvRecordsPtr text(vks_inv_item_export_legacy(&view, include_asset_key));
+    return ll_inv_write_text(output_stream, text.get(), "vks_inv_item_export_legacy");
 }
 
 LLSD LLInventoryItem::asLLSD() const
 {
-    LLSD sd;
-    asLLSD(sd);
-    return sd;
+    VksInvItem view;
+    toVks(view);
+    return ll_inv_sd(vks_inv_item_fill_llsd(&view, nullptr), "vks_inv_item_fill_llsd");
 }
 
 void LLInventoryItem::asLLSD( LLSD& sd ) const
 {
-    sd[INV_ITEM_ID_LABEL] = mUUID;
-    sd[INV_PARENT_ID_LABEL] = mParentUUID;
-    ll_fill_sd_from_permissions(sd[INV_PERMISSIONS_LABEL], mPermissions);
-
-    if (mThumbnailUUID.notNull())
+    VksInvItem view;
+    toVks(view);
+    LLSDFlat into(sd);
+    VksLlsdDoc* filled = vks_inv_item_fill_llsd(&view, into.get());
+    if (!filled)
     {
-        sd[INV_THUMBNAIL_LABEL] = LLSD().with(INV_ASSET_ID_LABEL, mThumbnailUUID);
+        ll_inv_vks_warn("vks_inv_item_fill_llsd");
+        return;
     }
-
-    if (mFavorite)
-    {
-        sd[INV_FAVORITE_LABEL] = LLSD().with(INV_TOGGLED_LABEL, mFavorite);
-    }
-
-    if (!mRuntime.empty())
-    {
-        sd["script"] = LLSD().with("runtime", mRuntime);
-    }
-
-    U32 mask = mPermissions.getMaskBase();
-    if(((mask & PERM_ITEM_UNRESTRICTED) == PERM_ITEM_UNRESTRICTED)
-        || (mAssetUUID.isNull()))
-    {
-        sd[INV_ASSET_ID_LABEL] = mAssetUUID;
-    }
-    else
-    {
-        // *TODO: get rid of this. Phoenix 2008-01-30
-        LLUUID shadow_id(mAssetUUID);
-        LLXORCipher cipher(MAGIC_ID.mData, UUID_BYTES);
-        cipher.encrypt(shadow_id.mData, UUID_BYTES);
-        sd[INV_SHADOW_ID_LABEL] = shadow_id;
-    }
-    sd[INV_ASSET_TYPE_LABEL] = std::string(LLAssetType::lookup(mType));
-    const std::string inv_type_str = LLInventoryType::lookup(mInventoryType);
-    if(!inv_type_str.empty())
-    {
-        sd[INV_INVENTORY_TYPE_LABEL] = inv_type_str;
-    }
-    else
-    {
-        sd[INV_INVENTORY_TYPE_LABEL] = (LLSD::Integer)mInventoryType;
-    }
-    //sd[INV_FLAGS_LABEL] = (S32)mFlags;
-    sd[INV_FLAGS_LABEL] = ll_sd_from_U32(mFlags);
-    mSaleInfo.asLLSD(sd[INV_SALE_INFO_LABEL]);
-    sd[INV_NAME_LABEL] = mName;
-    sd[INV_DESC_LABEL] = mDescription;
-    sd[INV_CREATION_DATE_LABEL] = (LLSD::Integer)mCreationDate;
+    sd = ll_sd_from_vks_doc(filled);
 }
 
 bool LLInventoryItem::fromLLSD(const LLSD& sd, bool is_new)
 {
     LL_PROFILE_ZONE_SCOPED;
-    if (is_new)
+    VksInvItem view;
+    toVks(view);
+    LLSDFlat flat(sd);
+    // In OpenSim the permissions are not reset first (FIRE-36028).
+    LLInvRecordsPtr result(vks_inv_item_from_llsd(&view, flat.get(), is_new, LLPermissions::getIsInOpenSim()));
+    if (!result)
     {
-        // If we're adding LLSD to an existing object, need avoid
-        // clobbering these fields.
-        mInventoryType = LLInventoryType::IT_NONE;
-        mAssetUUID.setNull();
+        ll_inv_vks_warn("vks_inv_item_from_llsd");
+        return false;
     }
-
-    // TODO - figure out if this should be moved into the noclobber fields above
-    mThumbnailUUID.setNull();
-    mFavorite = false;
-    // <FS:TJ> [FIRE-36028] Fix OpenSim object permissions
-    //mPermissions.init(LLUUID::null, LLUUID::null, LLUUID::null, LLUUID::null);
-    if (!LLPermissions::getIsInOpenSim())
-    {
-        mPermissions.init(LLUUID::null, LLUUID::null, LLUUID::null, LLUUID::null);
-    }
-    // </FS:TJ>
-
-    if (is_new || sd.has("script") || (sd.has("metadata") && sd["metadata"].has("script")))
-    {
-        mRuntime = sd.has("script") ? sd["script"]["runtime"].asString()
-                                   : sd["metadata"]["script"]["runtime"].asString();
-    }
-
-    // iterate as map to avoid making unnecessary temp copies of everything
-    LLSD::map_const_iterator i, end;
-    end = sd.endMap();
-    for (i = sd.beginMap(); i != end; ++i)
-    {
-        if (i->first == INV_ITEM_ID_LABEL)
-        {
-            mUUID = i->second;
-            continue;
-        }
-
-        if (i->first == INV_PARENT_ID_LABEL)
-        {
-            mParentUUID = i->second;
-            continue;
-        }
-
-        if (i->first == INV_THUMBNAIL_LABEL)
-        {
-            const LLSD &thumbnail_map = i->second;
-            if (thumbnail_map.has(INV_ASSET_ID_LABEL))
-            {
-                mThumbnailUUID = thumbnail_map[INV_ASSET_ID_LABEL];
-            }
-            /* Example:
-                <key> asset_id </key>
-                <uuid> acc0ec86 - 17f2 - 4b92 - ab41 - 6718b1f755f7 </uuid>
-                <key> perms </key>
-                <integer> 8 </integer>
-                <key>service</key>
-                <integer> 3 </integer>
-                <key>version</key>
-                <integer> 1 </key>
-            */
-          continue;
-        }
-
-        if (i->first == INV_THUMBNAIL_ID_LABEL)
-        {
-            mThumbnailUUID = i->second.asUUID();
-            continue;
-        }
-
-        if (i->first == INV_FAVORITE_LABEL)
-        {
-            const LLSD& favorite_map = i->second;
-            if (favorite_map.has(INV_TOGGLED_LABEL))
-            {
-                mFavorite = favorite_map[INV_TOGGLED_LABEL].asBoolean();
-            }
-            continue;
-        }
-
-        if (i->first == INV_PERMISSIONS_LABEL)
-        {
-            mPermissions.importLLSD(i->second);
-            continue;
-        }
-
-        if (i->first == INV_SALE_INFO_LABEL)
-        {
-            // Sale info used to contain next owner perm. It is now in
-            // the permissions. Thus, we read that out, and fix legacy
-            // objects. It's possible this op would fail, but it
-            // should pick up the vast majority of the tasks.
-            bool has_perm_mask = false;
-            U32  perm_mask     = 0;
-            if (!mSaleInfo.fromLLSD(i->second, has_perm_mask, perm_mask))
-            {
-                return false;
-            }
-            if (has_perm_mask)
-            {
-                if (perm_mask == PERM_NONE)
-                {
-                    perm_mask = mPermissions.getMaskOwner();
-                }
-                // fair use fix.
-                if (!(perm_mask & PERM_COPY))
-                {
-                    perm_mask |= PERM_TRANSFER;
-                }
-                mPermissions.setMaskNext(perm_mask);
-            }
-            continue;
-        }
-
-        if (i->first == INV_SHADOW_ID_LABEL)
-        {
-            mAssetUUID = i->second;
-            LLXORCipher cipher(MAGIC_ID.mData, UUID_BYTES);
-            cipher.decrypt(mAssetUUID.mData, UUID_BYTES);
-            continue;
-        }
-
-        if (i->first == INV_ASSET_ID_LABEL)
-        {
-            mAssetUUID = i->second;
-            continue;
-        }
-
-        if (i->first == INV_LINKED_ID_LABEL)
-        {
-            mAssetUUID = i->second;
-            continue;
-        }
-
-        if (i->first == INV_ASSET_TYPE_LABEL)
-        {
-            LLSD const &label = i->second;
-            if (label.isString())
-            {
-                mType = LLAssetType::lookup(label.asStringRef().c_str());
-            }
-            else if (label.isInteger())
-            {
-                S8 type = (U8) label.asInteger();
-                mType   = static_cast<LLAssetType::EType>(type);
-            }
-            continue;
-        }
-
-        if (i->first == INV_INVENTORY_TYPE_LABEL)
-        {
-            LLSD const &label = i->second;
-            if (label.isString())
-            {
-                mInventoryType = LLInventoryType::lookup(label.asStringRef().c_str());
-            }
-            else if (label.isInteger())
-            {
-                S8 type        = (U8) label.asInteger();
-                mInventoryType = static_cast<LLInventoryType::EType>(type);
-            }
-            continue;
-        }
-
-        if (i->first == INV_FLAGS_LABEL)
-        {
-            LLSD const &label = i->second;
-            if (label.isBinary())
-            {
-                mFlags = ll_U32_from_sd(label);
-            }
-            else if (label.isInteger())
-            {
-                mFlags = label.asInteger();
-            }
-            continue;
-        }
-
-        if (i->first == INV_NAME_LABEL)
-        {
-            mName = i->second.asString();
-            LLStringUtil::replaceNonstandardASCII(mName, ' ');
-            LLStringUtil::replaceChar(mName, '|', ' ');
-            continue;
-        }
-
-        if (i->first == INV_DESC_LABEL)
-        {
-            mDescription = i->second.asString();
-            LLStringUtil::replaceNonstandardASCII(mDescription, ' ');
-            continue;
-        }
-
-        if (i->first == INV_CREATION_DATE_LABEL)
-        {
-            mCreationDate = i->second.asInteger();
-            continue;
-        }
-    }
-
-    // Need to convert 1.0 simstate files to a useful inventory type
-    // and potentially deal with bad inventory tyes eg, a landmark
-    // marked as a texture.
-    if((LLInventoryType::IT_NONE == mInventoryType)
-       || !inventory_and_asset_types_match(mInventoryType, mType))
-    {
-        LL_DEBUGS() << "Resetting inventory type for " << mUUID << LL_ENDL;
-        mInventoryType = LLInventoryType::defaultForAssetType(mType);
-    }
-
-    mPermissions.initMasks(mInventoryType);
-
-    return true;
+    const VksInvRecordsView* r = vks_inv_records_view(result.get());
+    fromVks(r->items[0]);
+    return r->ok;
 }
 
 ///----------------------------------------------------------------------------
@@ -1300,48 +712,32 @@ void LLInventoryCategory::setPreferredType(LLFolderType::EType type)
     mPreferredType = type;
 }
 
+void LLInventoryCategory::toVks(VksInvCategory& view) const
+{
+    LLInventoryObject::toVks(view.object);
+    view.preferred_type = (int32_t)mPreferredType;
+    memset(view.owner, 0, sizeof(view.owner));
+    view.version = -1;
+}
+
+void LLInventoryCategory::fromVks(const VksInvCategory& view)
+{
+    LLInventoryObject::fromVks(view.object);
+    mPreferredType = (LLFolderType::EType)view.preferred_type;
+}
+
 LLSD LLInventoryCategory::asLLSD() const
 {
-    LLSD sd = LLSD();
-    sd[INV_ITEM_ID_LABEL]   = mUUID;
-    sd[INV_PARENT_ID_LABEL] = mParentUUID;
-    S8 type = static_cast<S8>(mPreferredType);
-    sd[INV_ASSET_TYPE_LABEL] = type;
-    sd[INV_NAME_LABEL] = mName;
-
-    if (mThumbnailUUID.notNull())
-    {
-        sd[INV_THUMBNAIL_LABEL] = LLSD().with(INV_ASSET_ID_LABEL, mThumbnailUUID);
-    }
-
-    if (mFavorite)
-    {
-        sd[INV_FAVORITE_LABEL] = LLSD().with(INV_TOGGLED_LABEL, mFavorite);
-    }
-
-    return sd;
+    VksInvCategory view;
+    toVks(view);
+    return ll_inv_sd(vks_inv_category_to_llsd(&view, VKS_INV_CAT_AS_LLSD), "vks_inv_category_to_llsd");
 }
 
 LLSD LLInventoryCategory::asAISCreateCatLLSD() const
 {
-    LLSD sd                 = LLSD();
-    sd[INV_FOLDER_ID_LABEL_WS]  = mUUID;
-    sd[INV_PARENT_ID_LABEL] = mParentUUID;
-    S8 type                 = static_cast<S8>(mPreferredType);
-    sd[INV_ASSET_TYPE_LABEL_WS] = type;
-    sd[INV_NAME_LABEL] = mName;
-
-    if (mThumbnailUUID.notNull())
-    {
-        sd[INV_THUMBNAIL_LABEL] = LLSD().with(INV_ASSET_ID_LABEL, mThumbnailUUID);
-    }
-
-    if (mFavorite)
-    {
-        sd[INV_FAVORITE_LABEL] = LLSD().with(INV_TOGGLED_LABEL, mFavorite);
-    }
-
-    return sd;
+    VksInvCategory view;
+    toVks(view);
+    return ll_inv_sd(vks_inv_category_to_llsd(&view, VKS_INV_CAT_AIS_CREATE), "vks_inv_category_to_llsd");
 }
 
 
@@ -1357,69 +753,18 @@ void LLInventoryCategory::packMessage(LLMessageSystem* msg) const
 
 bool LLInventoryCategory::fromLLSD(const LLSD& sd)
 {
-    std::string_view w;
-
-    w = INV_FOLDER_ID_LABEL_WS;
-    if (sd.has(w))
+    VksInvCategory view;
+    toVks(view);
+    LLSDFlat flat(sd);
+    LLInvRecordsPtr result(vks_inv_category_from_llsd(&view, flat.get()));
+    if (!result)
     {
-        mUUID = sd[w];
+        ll_inv_vks_warn("vks_inv_category_from_llsd");
+        return false;
     }
-    w = INV_PARENT_ID_LABEL;
-    if (sd.has(w))
-    {
-        mParentUUID = sd[w];
-    }
-    mThumbnailUUID.setNull();
-    w = INV_THUMBNAIL_LABEL;
-    if (sd.has(w))
-    {
-        const LLSD &thumbnail_map = sd[w];
-        w = INV_ASSET_ID_LABEL;
-        if (thumbnail_map.has(w))
-        {
-            mThumbnailUUID = thumbnail_map[w];
-        }
-    }
-    else
-    {
-        w = INV_THUMBNAIL_ID_LABEL;
-        if (sd.has(w))
-        {
-            mThumbnailUUID = sd[w];
-        }
-    }
-    mFavorite = false;
-    w = INV_FAVORITE_LABEL;
-    if (sd.has(w))
-    {
-        const LLSD& favorite_map = sd[w];
-        w = INV_TOGGLED_LABEL;
-        if (favorite_map.has(w))
-        {
-            mFavorite = favorite_map[w].asBoolean();
-        }
-    }
-    w = INV_ASSET_TYPE_LABEL;
-    if (sd.has(w))
-    {
-        S8 type = (U8)sd[w].asInteger();
-        mPreferredType = static_cast<LLFolderType::EType>(type);
-    }
-    w = INV_ASSET_TYPE_LABEL_WS;
-    if (sd.has(w))
-    {
-        S8 type = (U8)sd[w].asInteger();
-        mPreferredType = static_cast<LLFolderType::EType>(type);
-    }
-
-    w = INV_NAME_LABEL;
-    if (sd.has(w))
-    {
-        mName = sd[w].asString();
-        LLStringUtil::replaceNonstandardASCII(mName, ' ');
-        LLStringUtil::replaceChar(mName, '|', ' ');
-    }
-    return true;
+    const VksInvRecordsView* r = vks_inv_records_view(result.get());
+    fromVks(r->categories[0]);
+    return r->ok;
 }
 
 // virtual
@@ -1427,184 +772,79 @@ void LLInventoryCategory::unpackMessage(LLMessageSystem* msg,
                                         const char* block,
                                         S32 block_num)
 {
-    msg->getUUIDFast(block, _PREHASH_FolderID, mUUID, block_num);
-    msg->getUUIDFast(block, _PREHASH_ParentID, mParentUUID, block_num);
-    S8 type;
-    msg->getS8Fast(block, _PREHASH_Type, type, block_num);
-    mPreferredType = static_cast<LLFolderType::EType>(type);
-    msg->getStringFast(block, _PREHASH_Name, mName, block_num);
-    LLStringUtil::replaceNonstandardASCII(mName, ' ');
+    VksInvCategory view;
+    toVks(view);
+    // The block starts as the category's own fields, as the reads went into them.
+    VksInvFolderBlock b;
+    LLUUID id = mUUID;
+    msg->getUUIDFast(block, _PREHASH_FolderID, id, block_num);
+    vks_set_uuid(b.folder_id, id);
+    id = mParentUUID;
+    msg->getUUIDFast(block, _PREHASH_ParentID, id, block_num);
+    vks_set_uuid(b.parent_id, id);
+    b.preferred_type = static_cast<S8>(mPreferredType);
+    msg->getS8Fast(block, _PREHASH_Type, b.preferred_type, block_num);
+    std::string name = mName;
+    msg->getStringFast(block, _PREHASH_Name, name, block_num);
+    b.name = vks_bytes(name);
+
+    LLInvRecordsPtr result(vks_inv_category_apply_block(&view, &b));
+    if (!result)
+    {
+        ll_inv_vks_warn("vks_inv_category_apply_block");
+        return;
+    }
+    fromVks(vks_inv_records_view(result.get())->categories[0]);
 }
 
 // virtual
 bool LLInventoryCategory::importLegacyStream(std::istream& input_stream)
 {
-    // *NOTE: Changing the buffer size will require changing the scanf
-    // calls below.
-    char buffer[MAX_STRING];    /* Flawfinder: ignore */
-    char keyword[MAX_STRING];   /* Flawfinder: ignore */
-    char valuestr[MAX_STRING];  /* Flawfinder: ignore */
-
-    keyword[0] = '\0';
-    valuestr[0] = '\0';
-    while(input_stream.good())
+    VksInvCategory view;
+    toVks(view);
+    LLInvRecordsPtr result;
+    if (!ll_inv_read_legacy(input_stream, [&](const uint8_t* data, size_t len, VksInvStream& stream) {
+            result.reset(vks_inv_category_import_legacy(&view, data, len, &stream));
+            if (!result)
+            {
+                return false;
+            }
+            stream = vks_inv_records_view(result.get())->stream;
+            return true;
+        }))
     {
-        input_stream.getline(buffer, MAX_STRING);
-        // Each line is parsed on its own; a line that does not parse is absent.
-        keyword[0] = '\0';
-        valuestr[0] = '\0';
-        S32 fields = sscanf( /* Flawfinder: ignore */
-            buffer,
-            " %254s %254s",
-            keyword, valuestr);
-        if (fields < 1)
-        {
-            // a blank line counts as absent
-            continue;
-        }
-        if(0 == strcmp("{",keyword))
-        {
-            continue;
-        }
-        if(0 == strcmp("}", keyword))
-        {
-            break;
-        }
-        else if (fields < 2 && 0 != strcmp("metadata", keyword))
-        {
-            // a keyword without a value counts as absent
-            // (metadata keeps its own handling)
-            continue;
-        }
-        else if(0 == strcmp("cat_id", keyword))
-        {
-            mUUID.set(valuestr);
-        }
-        else if(0 == strcmp("parent_id", keyword))
-        {
-            mParentUUID.set(valuestr);
-        }
-        else if(0 == strcmp("type", keyword))
-        {
-            mType = LLAssetType::lookup(valuestr);
-        }
-        else if(0 == strcmp("pref_type", keyword))
-        {
-            mPreferredType = LLFolderType::lookup(valuestr);
-        }
-        else if(0 == strcmp("name", keyword))
-        {
-            //strcpy(valuestr, buffer + strlen(keyword) + 3);
-            // *NOTE: Not ANSI C, but widely supported.
-            sscanf( /* Flawfinder: ignore */
-                buffer,
-                " %254s %254[^|]",
-                keyword, valuestr);
-            mName.assign(valuestr);
-            LLStringUtil::replaceNonstandardASCII(mName, ' ');
-            LLStringUtil::replaceChar(mName, '|', ' ');
-        }
-        else if (0 == strcmp("metadata", keyword))
-        {
-            LLSD metadata;
-            if (strncmp("<llsd>", valuestr, 6) == 0)
-            {
-                std::istringstream stream(valuestr);
-                LLSDSerialize::fromXML(metadata, stream);
-            }
-            else
-            {
-                // next line likely contains metadata, but at the moment is not supported
-                // can do something like:
-                // LLSDSerialize::fromNotation(metadata, input_stream, -1);
-            }
-
-            setRuntime(metadata["script"]["runtime"].asString());
-            if (metadata.has("thumbnail"))
-            {
-                const LLSD& thumbnail = metadata["thumbnail"];
-                if (thumbnail.has("asset_id"))
-                {
-                    setThumbnailUUID(thumbnail["asset_id"].asUUID());
-                }
-                else
-                {
-                    setThumbnailUUID(LLUUID::null);
-                }
-            }
-            else
-            {
-                setThumbnailUUID(LLUUID::null);
-            }
-
-            if (metadata.has("favorite"))
-            {
-                const LLSD& favorite = metadata["favorite"];
-                if (favorite.has("toggled"))
-                {
-                    setFavorite(favorite["toggled"].asBoolean());
-                }
-                else
-                {
-                    setFavorite(false);
-                }
-            }
-            else
-            {
-                setFavorite(false);
-            }
-        }
-        else
-        {
-            LL_WARNS() << "unknown keyword '" << keyword
-                    << "' in inventory import category "  << mUUID << LL_ENDL;
-        }
+        ll_inv_vks_warn("vks_inv_category_import_legacy");
+        return false;
     }
-    return true;
+    const VksInvRecordsView* r = vks_inv_records_view(result.get());
+    fromVks(r->categories[0]);
+    return r->ok;
 }
 
 bool LLInventoryCategory::exportLegacyStream(std::ostream& output_stream, bool) const
 {
-    std::string uuid_str;
-    output_stream << "\tinv_category\t0\n\t{\n";
-    mUUID.toString(uuid_str);
-    output_stream << "\t\tcat_id\t" << uuid_str << "\n";
-    mParentUUID.toString(uuid_str);
-    output_stream << "\t\tparent_id\t" << uuid_str << "\n";
-    output_stream << "\t\ttype\t" << LLAssetType::lookup(mType) << "\n";
-    output_stream << "\t\tpref_type\t" << LLFolderType::lookup(mPreferredType) << "\n";
-    output_stream << "\t\tname\t" << mName.c_str() << "|\n";
-    if (mThumbnailUUID.notNull())
-    {
-        // Only up to 255 chars
-        LLSD metadata;
-        metadata["thumbnail"] = LLSD().with("asset_id", mThumbnailUUID);
-        output_stream << "\t\tmetadata\t";
-        LLSDSerialize::toXML(metadata, output_stream);
-        output_stream << "|\n";
-    }
-    output_stream << "\t}\n";
-    return true;
+    VksInvCategory view;
+    toVks(view);
+    LLInvRecordsPtr text(vks_inv_category_export_legacy(&view));
+    return ll_inv_write_text(output_stream, text.get(), "vks_inv_category_export_legacy");
 }
 
 void LLInventoryCategory::exportLLSD(LLSD& cat_data) const
 {
-    cat_data[INV_FOLDER_ID_LABEL] = mUUID;
-    cat_data[INV_PARENT_ID_LABEL] = mParentUUID;
-    cat_data[INV_ASSET_TYPE_LABEL] = std::string(LLAssetType::lookup(mType));
-    cat_data[INV_PREFERRED_TYPE_LABEL] = LLFolderType::lookup(mPreferredType);
-    cat_data[INV_NAME_LABEL] = mName;
-
-    if (mThumbnailUUID.notNull())
+    VksInvCategory view;
+    toVks(view);
+    LLSDFlat into(cat_data);
+    VksLlsdDoc* filled = vks_inv_category_export_llsd(&view, false, into.get());
+    if (!filled)
     {
-        cat_data[INV_THUMBNAIL_LABEL] = LLSD().with(INV_ASSET_ID_LABEL, mThumbnailUUID);
+        ll_inv_vks_warn("vks_inv_category_export_llsd");
+        return;
     }
-    if (mFavorite)
-    {
-        cat_data[INV_FAVORITE_LABEL] = LLSD().with(INV_TOGGLED_LABEL, mFavorite);
-    }
+    cat_data = ll_sd_from_vks_doc(filled);
 }
 
+// importLLSD is virtual (the viewer subclass reads its own keys), so the map
+// goes to it key by key.
 bool LLInventoryCategory::importLLSDMap(const LLSD& cat_data)
 {
     LLSD::map_const_iterator i, end;
@@ -1618,53 +858,18 @@ bool LLInventoryCategory::importLLSDMap(const LLSD& cat_data)
 
 bool LLInventoryCategory::importLLSD(const std::string& label, const LLSD& value)
 {
-    if (label == INV_FOLDER_ID_LABEL)
+    VksInvCategory view;
+    toVks(view);
+    LLSDFlat flat(value);
+    LLInvRecordsPtr result(vks_inv_category_import_llsd(&view, vks_ptr(label), label.size(), flat.get(), false));
+    if (!result)
     {
-        setUUID(value.asUUID());
-        return true;
+        ll_inv_vks_warn("vks_inv_category_import_llsd");
+        return false;
     }
-    else if (label == INV_PARENT_ID_LABEL)
-    {
-        setParent(value.asUUID());
-        return true;
-    }
-    else if (label == INV_ASSET_TYPE_LABEL)
-    {
-        setType(LLAssetType::lookup(value.asString()));
-        return true;
-    }
-    else if (label == INV_PREFERRED_TYPE_LABEL)
-    {
-        setPreferredType(LLFolderType::lookup(value.asString()));
-        return true;
-    }
-    else if (label == INV_THUMBNAIL_LABEL)
-    {
-        LLUUID thumbnail_uuid;
-        if (value.has(INV_ASSET_ID_LABEL))
-        {
-            thumbnail_uuid = value[INV_ASSET_ID_LABEL].asUUID();
-        }
-        setThumbnailUUID(thumbnail_uuid);
-        return true;
-    }
-    if (label == INV_FAVORITE_LABEL)
-    {
-        bool favorite = false;
-        if (value.has(INV_TOGGLED_LABEL))
-        {
-            favorite = value[INV_TOGGLED_LABEL].asBoolean();
-        }
-        setFavorite(favorite);
-    }
-    else if (label == INV_NAME_LABEL)
-    {
-        mName = value.asString();
-        LLStringUtil::replaceNonstandardASCII(mName, ' ');
-        LLStringUtil::replaceChar(mName, '|', ' ');
-        return true;
-    }
-    return false;
+    const VksInvRecordsView* r = vks_inv_records_view(result.get());
+    fromVks(r->categories[0]);
+    return r->ok;
 }
 
 ///----------------------------------------------------------------------------
@@ -1675,25 +880,14 @@ LLSD ll_create_sd_from_inventory_item(LLPointer<LLInventoryItem> item)
 {
     LLSD rv;
     if(item.isNull()) return rv;
-    if (item->getType() == LLAssetType::AT_NONE)
+    VksInvItem view;
+    accessor_view(*item, view);
+    rv = ll_inv_sd(vks_inv_item_create_sd(&view), "vks_inv_item_create_sd");
+    if (rv.isUndefined() && item->getType() == LLAssetType::AT_NONE)
     {
         LL_WARNS() << "ll_create_sd_from_inventory_item() for item with AT_NONE"
             << LL_ENDL;
-        return rv;
     }
-    rv[INV_ITEM_ID_LABEL] =  item->getUUID();
-    rv[INV_PARENT_ID_LABEL] = item->getParentUUID();
-    rv[INV_NAME_LABEL] = item->getName();
-    rv[INV_ASSET_TYPE_LABEL] = LLAssetType::lookup(item->getType());
-    rv[INV_ASSET_ID_LABEL] = item->getAssetUUID();
-    rv[INV_DESC_LABEL] = item->getDescription();
-    rv[INV_SALE_INFO_LABEL] = ll_create_sd_from_sale_info(item->getSaleInfo());
-    rv[INV_PERMISSIONS_LABEL] =
-        ll_create_sd_from_permissions(item->getPermissions());
-    rv[INV_INVENTORY_TYPE_LABEL] =
-        LLInventoryType::lookup(item->getInventoryType());
-    rv[INV_FLAGS_LABEL] = (S32)item->getFlags();
-    rv[INV_CREATION_DATE_LABEL] = (S32)item->getCreationDate();
     return rv;
 }
 
@@ -1701,20 +895,17 @@ LLSD ll_create_sd_from_inventory_category(LLPointer<LLInventoryCategory> cat)
 {
     LLSD rv;
     if(cat.isNull()) return rv;
-    if (cat->getType() == LLAssetType::AT_NONE)
+    // The C++ read the id, name and type through the accessors.
+    VksInvCategory view;
+    cat->toVks(view);
+    vks_set_uuid(view.object.id, cat->getUUID());
+    view.object.name = vks_bytes(cat->getName());
+    view.object.asset_type = (int32_t)cat->getType();
+    rv = ll_inv_sd(vks_inv_category_to_llsd(&view, VKS_INV_CAT_CREATE_SD), "vks_inv_category_to_llsd");
+    if (rv.isUndefined() && cat->getType() == LLAssetType::AT_NONE)
     {
         LL_WARNS() << "ll_create_sd_from_inventory_category() for cat with AT_NONE"
             << LL_ENDL;
-        return rv;
-    }
-    rv[INV_FOLDER_ID_LABEL] = cat->getUUID();
-    rv[INV_PARENT_ID_LABEL] = cat->getParentUUID();
-    rv[INV_NAME_LABEL] = cat->getName();
-    rv[INV_ASSET_TYPE_LABEL] = LLAssetType::lookup(cat->getType());
-    if(LLFolderType::lookupIsProtectedType(cat->getPreferredType()))
-    {
-        rv[INV_PREFERRED_TYPE_LABEL] =
-            LLFolderType::lookup(cat->getPreferredType()).c_str();
     }
     return rv;
 }
@@ -1722,13 +913,13 @@ LLSD ll_create_sd_from_inventory_category(LLPointer<LLInventoryCategory> cat)
 LLPointer<LLInventoryCategory> ll_create_category_from_sd(const LLSD& sd_cat)
 {
     LLPointer<LLInventoryCategory> rv = new LLInventoryCategory;
-    rv->setUUID(sd_cat[INV_FOLDER_ID_LABEL].asUUID());
-    rv->setParent(sd_cat[INV_PARENT_ID_LABEL].asUUID());
-    rv->rename(sd_cat[INV_NAME_LABEL].asString());
-    rv->setType(
-        LLAssetType::lookup(sd_cat[INV_ASSET_TYPE_LABEL].asString()));
-    rv->setPreferredType(
-            LLFolderType::lookup(
-                sd_cat[INV_PREFERRED_TYPE_LABEL].asString()));
+    LLSDFlat flat(sd_cat);
+    LLInvRecordsPtr result(vks_inv_category_from_create_sd(flat.get()));
+    if (!result)
+    {
+        ll_inv_vks_warn("vks_inv_category_from_create_sd");
+        return rv;
+    }
+    rv->fromVks(vks_inv_records_view(result.get())->categories[0]);
     return rv;
 }

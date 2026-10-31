@@ -39,6 +39,9 @@
 #include "lltrace.h"
 
 class LLMessageSystem;
+struct VksInvObject;
+struct VksInvItem;
+struct VksInvCategory;
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Class LLInventoryObject
@@ -109,6 +112,11 @@ public:
 
     virtual void updateParentOnServer(bool) const;
     virtual void updateServer(bool) const;
+
+    // The fields as the vkstorm_ffi.h record (its strings borrow this
+    // object's) and back, for the Rust rules (vkstorm-rust rung seven).
+    void toVks(VksInvObject& view) const;
+    void fromVks(const VksInvObject& view);
 
     //--------------------------------------------------------------------
     // Member Variables
@@ -220,6 +228,10 @@ public:
     void asLLSD( LLSD& sd ) const;
     bool fromLLSD(const LLSD& sd, bool is_new = true);
 
+    // The fields as the vkstorm_ffi.h record and back (see LLInventoryObject).
+    void toVks(VksInvItem& view) const;
+    void fromVks(const VksInvItem& view);
+
     //--------------------------------------------------------------------
     // Member Variables
     //--------------------------------------------------------------------
@@ -283,6 +295,11 @@ public:
     virtual void exportLLSD(LLSD& sd) const;
     bool importLLSDMap(const LLSD& cat_data);
     virtual bool importLLSD(const std::string& label, const LLSD& value);
+
+    // The fields as the vkstorm_ffi.h record and back (see
+    // LLInventoryObject); the record's viewer owner and version are not ours.
+    void toVks(VksInvCategory& view) const;
+    void fromVks(const VksInvCategory& view);
     //--------------------------------------------------------------------
     // Member Variables
     //--------------------------------------------------------------------
