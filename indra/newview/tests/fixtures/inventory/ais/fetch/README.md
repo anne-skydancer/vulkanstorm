@@ -473,6 +473,16 @@ A port of the scheduler must keep two seams these scenarios depend on:
   `LLCoros::checkStop()` after its yield to the next frame; s24 makes it throw
   at the first yield. The port keeps a stop check at the same point.
 
+Sub-rung R3b keeps both. The scheduler is Rust (`vks_inv_fetch_*`); its
+clock is the host function `vks_host_total_seconds` in
+`llinventorymodelbackgroundfetch.cpp`, which calls
+`LLTimer::getTotalSeconds()`, so `llinvfetch_parity_bgf.cpp`'s rename of
+`LLTimer` still scripts it, read at the same three points. The stop check
+stays in the C++ `AISUpdate::checkTimeout()`: when it throws, the AIS
+completion lambda never runs, so the scheduler's ticket stays open and the
+counts it would have released stay raised, as before. The scheduler's state
+(`sch` lines) is read through `vks_inv_fetch_state`.
+
 ## Runtime edges and determinism
 
 * **Process order.** `InventoryLimitReachedAISAlert` is chosen by a

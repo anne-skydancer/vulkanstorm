@@ -3659,6 +3659,45 @@ LLCore::HttpHandle LLInventoryModel::requestPost(bool foreground,
     return handle;
 }
 
+// <Vulkanstorm>
+LLCore::HttpHandle LLInventoryModel::requestPostRaw(bool foreground,
+                                                    const std::string & url,
+                                                    const char * body,
+                                                    size_t body_len,
+                                                    const LLCore::HttpHandler::ptr_t &handler,
+                                                    const char * const message)
+{
+    if (! mHttpRequestFG)
+    {
+        // As requestPost: initialised late and lazily.
+        initHttpRequest();
+    }
+
+    LLCore::HttpRequest * request(foreground ? mHttpRequestFG : mHttpRequestBG);
+    LLCore::HttpHandle handle(LLCORE_HTTP_HANDLE_INVALID);
+
+    // The bytes requestPostWithLLSD would have written with LLSDSerialize::toXML.
+    LLCore::BufferArray * ba = new LLCore::BufferArray();
+    ba->append(body, body_len);
+    handle = request->requestPost(mHttpPolicyClass,
+                                  url,
+                                  ba,
+                                  mHttpOptions,
+                                  mHttpHeaders,
+                                  handler);
+    ba->release();
+    if (LLCORE_HTTP_HANDLE_INVALID == handle)
+    {
+        LLCore::HttpStatus status(request->getStatus());
+        LL_WARNS(LOG_INV) << "HTTP POST request failed for " << message
+                          << ", Status: " << status.toTerseString()
+                          << " Reason: '" << status.toString() << "'"
+                          << LL_ENDL;
+    }
+    return handle;
+}
+// </Vulkanstorm>
+
 void LLInventoryModel::createCommonSystemCategories()
 {
     //amount of System Folder we should wait for

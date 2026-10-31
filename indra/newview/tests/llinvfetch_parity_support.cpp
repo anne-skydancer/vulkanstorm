@@ -26,6 +26,7 @@
 #include "../llviewercontrol.h"
 #include "../llviewerwindow.h"
 #include "../llappviewer.h"
+#include "vkstorm_ffi.h"
 #include "llnotificationsutil.h"
 #include "llcallbacklist.h"
 #include "llcoproceduremanager.h"
@@ -75,18 +76,6 @@ namespace
         friend typename Tag::type steal(Tag) { return M; }
     };
 
-    // Protected names of the background fetch, reachable from a subclass
-    // (never instantiated).
-    struct BGFTypes : public LLInventoryModelBackgroundFetch
-    {
-        // Declared, never defined: the class only names protected members.
-        ~BGFTypes();
-        typedef LLInventoryModelBackgroundFetch::fetch_queue_t queue_t;
-        static bool folder_complete(const LLInventoryModelBackgroundFetch& b)
-        {
-            return (b.*(&BGFTypes::isFolderFetchProcessingComplete))();
-        }
-    };
     // LLApp::setStatus is protected.
     struct AppStatus : public LLApp
     {
@@ -96,36 +85,16 @@ namespace
 #define VKS_STEAL(TagName, Type) \
     struct TagName { typedef Type type; friend type steal(TagName); }
 
-    VKS_STEAL(BgfActive, bool LLInventoryModelBackgroundFetch::*);
-    VKS_STEAL(BgfFolderActive, bool LLInventoryModelBackgroundFetch::*);
-    VKS_STEAL(BgfInvStarted, bool LLInventoryModelBackgroundFetch::*);
-    VKS_STEAL(BgfLibStarted, bool LLInventoryModelBackgroundFetch::*);
-    VKS_STEAL(BgfMktStarted, bool LLInventoryModelBackgroundFetch::*);
-    VKS_STEAL(BgfAllFetched, bool LLInventoryModelBackgroundFetch::*);
-    VKS_STEAL(BgfFetchCount, S32 LLInventoryModelBackgroundFetch::*);
-    VKS_STEAL(BgfFolderCount, S32 LLInventoryModelBackgroundFetch::*);
-    VKS_STEAL(BgfFolderQueue, BGFTypes::queue_t LLInventoryModelBackgroundFetch::*);
-    VKS_STEAL(BgfItemQueue, BGFTypes::queue_t LLInventoryModelBackgroundFetch::*);
-    VKS_STEAL(BgfForced, uuid_set_t LLInventoryModelBackgroundFetch::*);
-    VKS_STEAL(BgfExpected, std::list<LLUUID> LLInventoryModelBackgroundFetch::*);
+    // The background fetch's scheduler is Rust (sub-rung R3b): its state is
+    // read through vks_inv_fetch_state.
+    VKS_STEAL(BgfFetch, VksInvFetch* LLInventoryModelBackgroundFetch::*);
     VKS_STEAL(FTFrameTime, F64*);
     VKS_STEAL(FTTotalTime, U64*);
     VKS_STEAL(FTTotalSeconds, F64*);
     VKS_STEAL(FTStartTotal, U64*);
 #undef VKS_STEAL
 }
-template struct Steal<BgfActive, &LLInventoryModelBackgroundFetch::mBackgroundFetchActive>;
-template struct Steal<BgfFolderActive, &LLInventoryModelBackgroundFetch::mFolderFetchActive>;
-template struct Steal<BgfInvStarted, &LLInventoryModelBackgroundFetch::mRecursiveInventoryFetchStarted>;
-template struct Steal<BgfLibStarted, &LLInventoryModelBackgroundFetch::mRecursiveLibraryFetchStarted>;
-template struct Steal<BgfMktStarted, &LLInventoryModelBackgroundFetch::mRecursiveMarketplaceFetchStarted>;
-template struct Steal<BgfAllFetched, &LLInventoryModelBackgroundFetch::mAllRecursiveFoldersFetched>;
-template struct Steal<BgfFetchCount, &LLInventoryModelBackgroundFetch::mFetchCount>;
-template struct Steal<BgfFolderCount, &LLInventoryModelBackgroundFetch::mFetchFolderCount>;
-template struct Steal<BgfFolderQueue, &LLInventoryModelBackgroundFetch::mFetchFolderQueue>;
-template struct Steal<BgfItemQueue, &LLInventoryModelBackgroundFetch::mFetchItemQueue>;
-template struct Steal<BgfForced, &LLInventoryModelBackgroundFetch::mForceFetchSet>;
-template struct Steal<BgfExpected, &LLInventoryModelBackgroundFetch::mExpectedFolderIds>;
+template struct Steal<BgfFetch, &LLInventoryModelBackgroundFetch::mFetch>;
 template struct Steal<FTFrameTime, &LLFrameTimer::sFrameTime>;
 template struct Steal<FTTotalTime, &LLFrameTimer::sTotalTime>;
 template struct Steal<FTTotalSeconds, &LLFrameTimer::sTotalSeconds>;
@@ -606,19 +575,24 @@ namespace vks_fetch
     SchedState sched_state()
     {
         LLInventoryModelBackgroundFetch& b = LLInventoryModelBackgroundFetch::instance();
+        VksInvFetchState* st = vks_inv_fetch_state(b.*steal(BgfFetch()));
+        llassert_always(st);
+        const VksInvFetchStateView v = vks_inv_fetch_state_view(st);
+        auto id_at = [](const uint8_t* p) { LLUUID id; memcpy(id.mData, p, UUID_BYTES); return id; };
         SchedState s;
-        s.bg_active = b.*steal(BgfActive());
-        s.folder_active = b.*steal(BgfFolderActive());
-        s.inv_started = b.*steal(BgfInvStarted());
-        s.lib_started = b.*steal(BgfLibStarted());
-        s.mkt_started = b.*steal(BgfMktStarted());
-        s.all_fetched = b.*steal(BgfAllFetched());
-        s.fetch_count = b.*steal(BgfFetchCount());
-        s.folder_count = b.*steal(BgfFolderCount());
-        for (const auto& e : b.*steal(BgfFolderQueue())) s.folder_queue.push_back(std::make_pair(e.mUUID, (S32)e.mFetchType));
-        for (const auto& e : b.*steal(BgfItemQueue())) s.item_queue.push_back(std::make_pair(e.mUUID, (S32)e.mFetchType));
-        for (const LLUUID& id : b.*steal(BgfExpected())) s.expected.push_back(id);
-        for (const LLUUID& id : b.*steal(BgfForced())) s.forced.push_back(id);
+        s.bg_active = (v.flags & VKS_INV_FETCH_BG_ACTIVE) != 0;
+        s.folder_active = (v.flags & VKS_INV_FETCH_FOLDER_ACTIVE) != 0;
+        s.inv_started = (v.flags & VKS_INV_FETCH_INV_STARTED) != 0;
+        s.lib_started = (v.flags & VKS_INV_FETCH_LIB_STARTED) != 0;
+        s.mkt_started = (v.flags & VKS_INV_FETCH_MKT_STARTED) != 0;
+        s.all_fetched = (v.flags & VKS_INV_FETCH_EVERYTHING) != 0;
+        s.fetch_count = v.fetch_count;
+        s.folder_count = v.folder_fetch_count;
+        for (size_t i = 0; i < v.folder_queue_len; ++i) s.folder_queue.push_back(std::make_pair(id_at(v.folder_queue[i].id), (S32)v.folder_queue[i].fetch_type));
+        for (size_t i = 0; i < v.item_queue_len; ++i) s.item_queue.push_back(std::make_pair(id_at(v.item_queue[i].id), (S32)v.item_queue[i].fetch_type));
+        for (size_t i = 0; i < v.expected_len; ++i) s.expected.push_back(id_at(v.expected + i * UUID_BYTES));
+        for (size_t i = 0; i < v.forced_len; ++i) s.forced.push_back(id_at(v.forced + i * UUID_BYTES));
+        vks_inv_fetch_state_free(st);
         return s;
     }
 

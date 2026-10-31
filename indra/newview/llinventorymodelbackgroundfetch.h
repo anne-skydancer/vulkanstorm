@@ -35,6 +35,14 @@
 #include "httpheaders.h"
 #include "httphandler.h"
 
+// <Vulkanstorm> The scheduler is Rust (vkstorm-rust rung seven, sub-rung R3b):
+// vkstorm-inventory through vkstorm_ffi.h (vks_inv_fetch_*).
+#include <map>
+struct VksInvFetch;
+struct VksInvFetchOps;
+struct VksInvFetchOp;
+// </Vulkanstorm>
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Class LLInventoryModelBackgroundFetch
 //
@@ -85,6 +93,16 @@ public:
     void addRequestAtFront(const LLUUID& id, bool recursive, bool is_category);
     void addRequestAtBack(const LLUUID& id, bool recursive, bool is_category);
 
+    // <Vulkanstorm> The AIS completions and the legacy handlers report to
+    // the scheduler through these (internal to llinventorymodelbackgroundfetch.cpp).
+    void onAISComplete(U64 ticket, const LLUUID& response_id);
+    bool legacyIsRecursive(U64 handler, const LLUUID& cat_id) const;
+    void legacyDataDone();
+    void legacyHttpFailure(U64 handler, bool forbidden);
+    void legacyReplyFailure(U64 handler);
+    void legacyReleased(U64 handler);
+    // </Vulkanstorm>
+
 protected:
     bool isFolderFetchProcessingComplete() const;
 
@@ -95,25 +113,14 @@ protected:
         FT_FOLDER_AND_CONTENT, // request folder, then content recursively
         FT_RECURSIVE, // request everything recursively
     } EFetchType;
-    struct FetchQueueInfo
-    {
-        FetchQueueInfo(const LLUUID& id, EFetchType recursive, bool is_category = true)
-            : mUUID(id),
-            mIsCategory(is_category),
-            mFetchType(recursive)
-        {}
-
-        LLUUID mUUID;
-        bool mIsCategory;
-        EFetchType mFetchType;
-    };
-    typedef std::deque<FetchQueueInfo> fetch_queue_t;
-
-    void onAISContentCalback(const LLUUID& request_id, const uuid_vec_t& content_ids, const LLUUID& response_id, EFetchType fetch_type);
-    void onAISFolderCalback(const LLUUID& request_id, const LLUUID& response_id, EFetchType fetch_type);
-    void bulkFetchViaAis();
-    void bulkFetchViaAis(const FetchQueueInfo& fetch_info);
-    void bulkFetch();
+    // <Vulkanstorm> The queues (FetchQueueInfo), the AIS completions
+    // (onAISContentCalback, onAISFolderCalback) and the schedulers
+    // (bulkFetchViaAis, bulkFetch) are Rust; the C++ carries out the
+    // operations they return.
+    void runOps(VksInvFetchOps* ops);
+    void runOp(const VksInvFetchOp& op);
+    U64 addCallback(const nullary_func_t& callback);
+    // </Vulkanstorm>
 
     void backgroundFetch();
     static void backgroundFetchCB(void*); // background fetch idle function
@@ -121,30 +128,21 @@ protected:
     bool fetchQueueContainsNoDescendentsOf(const LLUUID& cat_id) const;
 
 private:
-    void markFetchStarted();
-
-    bool mRecursiveInventoryFetchStarted;
-    bool mRecursiveLibraryFetchStarted;
-    bool mRecursiveMarketplaceFetchStarted; // AIS3 specific
-    bool mAllRecursiveFoldersFetched;
+    // <Vulkanstorm> The scheduler's state (queues, counts, flags, forced
+    // set, expected folders, open AIS commands and legacy handlers).
+    VksInvFetch* mFetch;
+    // The callbacks of fetchCOF / fetchFolderAndLinks by token, until the
+    // scheduler asks to run them.
+    std::map<U64, nullary_func_t> mCallbacks;
+    U64 mNextCallback;
+    // </Vulkanstorm>
     typedef boost::signals2::signal<void()> folders_fetched_signal_t;
     folders_fetched_signal_t mFoldersFetchedSignal;
 
-    bool mBackgroundFetchActive;
-    bool mFolderFetchActive;
-    S32 mFetchCount;
-    S32 mLastFetchCount; // for debug
-    S32 mFetchFolderCount;
-
     LLFrameTimer mFetchStartTimer;
     F32 mInitialFetchDuration;
-    bool mInitialFetchDurationCaptured;
     LLFrameTimer mFetchTimer;
     F32 mMinTimeBetweenFetches;
-    fetch_queue_t mFetchFolderQueue;
-    fetch_queue_t mFetchItemQueue;
-    uuid_set_t mForceFetchSet;
-    std::list<LLUUID> mExpectedFolderIds; // for debug, should this track time?
     // <FS:ND> For legacy inventory
     bool mTimelyFetchPending;
     S32 mNumFetchRetries;

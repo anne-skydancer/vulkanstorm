@@ -700,6 +700,16 @@ public:
                                    const LLCore::HttpHandler::ptr_t &handler,
                                    const char * const message);
 
+    // <Vulkanstorm> requestPost with the body already serialised as LLSD XML
+    // (the background fetch's legacy batches, built in Rust: sub-rung R3b).
+    LLCore::HttpHandle requestPostRaw(bool foreground,
+                                      const std::string & url,
+                                      const char * body,
+                                      size_t body_len,
+                                      const LLCore::HttpHandler::ptr_t &handler,
+                                      const char * const message);
+    // </Vulkanstorm>
+
 private:
     // Usual plumbing for LLCore:: HTTP operations.
     LLCore::HttpRequest *               mHttpRequestFG;
