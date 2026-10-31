@@ -1250,7 +1250,7 @@ void AISUpdate::parseUpdate(const AISReply& update, const LLSD& request_body)
         if (r.has_requested)
         {
             LLFrameTimer timer;
-            memcpy(&timer, &r.requested, sizeof(timer));
+            memcpy(static_cast<void*>(&timer), &r.requested, sizeof(timer)); // trivially copyable (asserted above)
             cat->setFetchRequestTimer(timer);
         }
         cat->localizeParsedName();
