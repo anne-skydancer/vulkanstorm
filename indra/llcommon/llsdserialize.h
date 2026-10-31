@@ -192,7 +192,8 @@ protected:
      *
      * @param istr The input stream.
      * @param data[out] The newly parse structured data.
-     * @param max_depth Ignored by the XML parser, as before.
+     * @param max_depth Max depth parser will check before exiting; -1,
+     *        what the XML callers pass, is unlimited.
      * @return Returns the number of LLSD objects parsed into
      * data. Returns PARSE_FAILURE (-1) on parse failure.
      */

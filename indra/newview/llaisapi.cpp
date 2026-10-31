@@ -59,6 +59,15 @@ const S32 MAX_SIMULTANEOUS_COROUTINES = 2048;
 // Specify own depth to be able to anticipate it and mark folders as incomplete
 const S32 MAX_FOLDER_DEPTH_REQUEST = 50;
 
+// <Vulkanstorm> The depth limit of an AIS reply (LLSDParser's max_depth): a
+// value nested this many containers deep makes the body unparsable, as
+// malformed XML does (an empty result; status 499 on a success with the
+// application/llsd+xml content type). A depth-50 fetch nests about 160
+// levels; the limit keeps a hostile reply from building, walking and
+// freeing an LLSD tree too deep for the stack (approved fix, 2026-10-29).
+const S32 AIS_MAX_REPLY_DEPTH = 256;
+// </Vulkanstorm>
+
 //-------------------------------------------------------------------------
 /*static*/
 bool AISAPI::isAvailable()
@@ -878,6 +887,7 @@ void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ht
     LLSD httpResults;
     LLCore::HttpStatus status;
 
+    httpAdapter->setLLSDMaxDepth(AIS_MAX_REPLY_DEPTH); // <Vulkanstorm/> the AIS depth cap
     result = invoke(httpAdapter , httpRequest , url , body , httpOptions , httpHeaders);
     httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
