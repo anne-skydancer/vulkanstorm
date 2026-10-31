@@ -3098,12 +3098,30 @@ void LLViewerObject::removeInventory(const LLUUID& item_id)
 }
 // </Vulkanstorm>
 
-// <Vulkanstorm> R4a: the decision is Rust (vkstorm-inventory); lltaskinventoryexecutor.inl carries it out
 bool LLViewerObject::isAssetInInventory(LLViewerInventoryItem* item, LLAssetType::EType type)
 {
-    return LLTaskInventoryExecutor::isAssetInInventory(this, item, type);
+    bool result = false;
+
+    if (item)
+    {
+        // For now mPendingInventoryItemsIDs only stores textures and materials
+        // but if it gets to store more types, it will need to verify type as well
+        // since null can be a shared default id and it is fine to need a null
+        // script and a null material simultaneously.
+        std::list<LLUUID>::iterator begin = mPendingInventoryItemsIDs.begin();
+        std::list<LLUUID>::iterator end = mPendingInventoryItemsIDs.end();
+
+        bool is_fetching = std::find(begin, end, item->getAssetUUID()) != end;
+
+        // null is the default asset for materials and default for scripts
+        // so need to check type as well
+        bool is_fetched = getInventoryItemByAsset(item->getAssetUUID(), type) != NULL;
+
+        result = is_fetched || is_fetching;
+    }
+
+    return result;
 }
-// </Vulkanstorm>
 
 // <Vulkanstorm> R4a: the decision is Rust (vkstorm-inventory); lltaskinventoryexecutor.inl carries it out
 void LLViewerObject::updateMaterialInventory(LLViewerInventoryItem* item, U8 key, bool is_new)
@@ -3133,47 +3151,129 @@ void LLViewerObject::updateInventoryLocal(LLInventoryItem* item, U8 key)
 }
 // </Vulkanstorm>
 
-// <Vulkanstorm> R4a: the decision is Rust (vkstorm-inventory); lltaskinventoryexecutor.inl carries it out
 LLInventoryObject* LLViewerObject::getInventoryObject(const LLUUID& item_id)
 {
-    return LLTaskInventoryExecutor::getInventoryObject(this, item_id);
+    LLInventoryObject* rv = NULL;
+    if(mInventory)
+    {
+        LLInventoryObject::object_list_t::iterator it = mInventory->begin();
+        LLInventoryObject::object_list_t::iterator end = mInventory->end();
+        for ( ; it != end; ++it)
+        {
+            if((*it)->getUUID() == item_id)
+            {
+                rv = *it;
+                break;
+            }
+        }
+    }
+    return rv;
 }
-// </Vulkanstorm>
 
-// <Vulkanstorm> R4a: the decision is Rust (vkstorm-inventory); lltaskinventoryexecutor.inl carries it out
 LLInventoryItem* LLViewerObject::getInventoryItem(const LLUUID& item_id)
 {
-    return LLTaskInventoryExecutor::getInventoryItem(this, item_id);
+    LLInventoryObject* iobj = getInventoryObject(item_id);
+    if (!iobj || iobj->getType() == LLAssetType::AT_CATEGORY)
+    {
+        return NULL;
+    }
+    LLInventoryItem* item = dynamic_cast<LLInventoryItem*>(iobj);
+    return item;
 }
-// </Vulkanstorm>
 
-// <Vulkanstorm> R4a: the decision is Rust (vkstorm-inventory); lltaskinventoryexecutor.inl carries it out
 void LLViewerObject::getInventoryContents(LLInventoryObject::object_list_t& objects)
 {
-    LLTaskInventoryExecutor::getInventoryContents(this, objects);
+    if(mInventory)
+    {
+        LLInventoryObject::object_list_t::iterator it = mInventory->begin();
+        LLInventoryObject::object_list_t::iterator end = mInventory->end();
+        for( ; it != end; ++it)
+        {
+            if ((*it)->getType() != LLAssetType::AT_CATEGORY)
+            {
+                objects.push_back(*it);
+            }
+        }
+    }
 }
-// </Vulkanstorm>
 
-// <Vulkanstorm> R4a: the decision is Rust (vkstorm-inventory); lltaskinventoryexecutor.inl carries it out
 LLInventoryObject* LLViewerObject::getInventoryRoot()
 {
-    return LLTaskInventoryExecutor::getInventoryRoot(this);
+    if (!mInventory || !mInventory->size())
+    {
+        return NULL;
+    }
+    return mInventory->back();
 }
-// </Vulkanstorm>
 
-// <Vulkanstorm> R4a: the decision is Rust (vkstorm-inventory); lltaskinventoryexecutor.inl carries it out
 LLViewerInventoryItem* LLViewerObject::getInventoryItemByAsset(const LLUUID& asset_id)
 {
-    return LLTaskInventoryExecutor::getInventoryItemByAsset(this, asset_id);
-}
-// </Vulkanstorm>
+    if (mInventoryDirty)
+        LL_WARNS() << "Peforming inventory lookup for object " << mID << " that has dirty inventory!" << LL_ENDL;
 
-// <Vulkanstorm> R4a: the decision is Rust (vkstorm-inventory); lltaskinventoryexecutor.inl carries it out
+    LLViewerInventoryItem* rv = NULL;
+    if(mInventory)
+    {
+        LLViewerInventoryItem* item = NULL;
+
+        LLInventoryObject::object_list_t::iterator it = mInventory->begin();
+        LLInventoryObject::object_list_t::iterator end = mInventory->end();
+        for( ; it != end; ++it)
+        {
+            LLInventoryObject* obj = *it;
+            if(obj->getType() != LLAssetType::AT_CATEGORY
+               && obj->getType() != LLAssetType::AT_NONE ) // <FS:ND> check for AT_NONE too loadTaskInvFile can create such objects for "Contants"
+            {
+                // *FIX: gank-ass down cast!
+                item = (LLViewerInventoryItem*)obj;
+                if(item->getAssetUUID() == asset_id)
+                {
+                    rv = item;
+                    break;
+                }
+            }
+        }
+    }
+    return rv;
+}
+
 LLViewerInventoryItem* LLViewerObject::getInventoryItemByAsset(const LLUUID& asset_id, LLAssetType::EType type)
 {
-    return LLTaskInventoryExecutor::getInventoryItemByAsset(this, asset_id, type);
+    if (mInventoryDirty)
+        LL_WARNS() << "Peforming inventory lookup for object " << mID << " that has dirty inventory!" << LL_ENDL;
+
+    LLViewerInventoryItem* rv = NULL;
+    if (type == LLAssetType::AT_CATEGORY)
+    {
+        // Whatever called this shouldn't be trying to get a folder by asset
+        // categories don't have assets
+        llassert(0);
+        return rv;
+    }
+
+    if (mInventory)
+    {
+        LLViewerInventoryItem* item = NULL;
+
+        LLInventoryObject::object_list_t::iterator it = mInventory->begin();
+        LLInventoryObject::object_list_t::iterator end = mInventory->end();
+        for (; it != end; ++it)
+        {
+            LLInventoryObject* obj = *it;
+            if (obj->getType() == type)
+            {
+                // *FIX: gank-ass down cast!
+                item = (LLViewerInventoryItem*)obj;
+                if (item->getAssetUUID() == asset_id)
+                {
+                    rv = item;
+                    break;
+                }
+            }
+        }
+    }
+    return rv;
 }
-// </Vulkanstorm>
 
 // <Vulkanstorm> R4a: the decision is Rust (vkstorm-inventory); lltaskinventoryexecutor.inl carries it out
 void LLViewerObject::updateViewerInventoryAsset(
@@ -5458,12 +5558,23 @@ U32 LLViewerObject::getNumIndices() const
 }
 
 // Find the number of instances of this object's inventory that are of the given type
-// <Vulkanstorm> R4a: the decision is Rust (vkstorm-inventory); lltaskinventoryexecutor.inl carries it out
 S32 LLViewerObject::countInventoryContents(LLAssetType::EType type)
 {
-    return LLTaskInventoryExecutor::countInventoryContents(this, type);
+    S32 count = 0;
+    if( mInventory )
+    {
+        LLInventoryObject::object_list_t::const_iterator it = mInventory->begin();
+        LLInventoryObject::object_list_t::const_iterator end = mInventory->end();
+        for(  ; it != end ; ++it )
+        {
+            if( (*it)->getType() == type )
+            {
+                ++count;
+            }
+        }
+    }
+    return count;
 }
-// </Vulkanstorm>
 
 void LLViewerObject::setDebugText(const std::string &utf8text, const LLColor4& color)
 {

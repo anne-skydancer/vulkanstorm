@@ -9,9 +9,10 @@
  * do; the harness replays the fixtures recorded from the frozen copies
  * against it.
  *
- * The listener bookkeeping and the state accessors stay C++ in the viewer,
- * unchanged; here they forward to the oracle object's frozen copies of them
- * (check_r4a_copies.py keeps the live ones identical: KEPT_CPP).
+ * The listener bookkeeping, the state accessors and the read-only lookups
+ * stay C++ in the viewer, unchanged; here they forward to the oracle
+ * object's frozen copies of them (check_r4a_copies.py keeps the live ones
+ * identical: KEPT_CPP).
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -111,33 +112,33 @@ namespace vks_task_oracle
             bool isInventoryPending(LLViewerObject* obj) override { return obj->isInventoryPending(); }
             LLInventoryObject* getInventoryObject(LLViewerObject* obj, const LLUUID& item_id) override
             {
-                return X::getInventoryObject(obj, item_id);
+                return obj->getInventoryObject(item_id);
             }
             LLInventoryItem* getInventoryItem(LLViewerObject* obj, const LLUUID& item_id) override
             {
-                return X::getInventoryItem(obj, item_id);
+                return obj->getInventoryItem(item_id);
             }
             bool isAssetInInventory(LLViewerObject* obj, LLViewerInventoryItem* item, LLAssetType::EType type) override
             {
-                return X::isAssetInInventory(obj, item, type);
+                return obj->isAssetInInventory(item, type);
             }
-            LLInventoryObject* getInventoryRoot(LLViewerObject* obj) override { return X::getInventoryRoot(obj); }
+            LLInventoryObject* getInventoryRoot(LLViewerObject* obj) override { return obj->getInventoryRoot(); }
             void getInventoryContents(LLViewerObject* obj, LLInventoryObject::object_list_t& objects) override
             {
-                X::getInventoryContents(obj, objects);
+                obj->getInventoryContents(objects);
             }
             S32 countInventoryContents(LLViewerObject* obj, LLAssetType::EType type) override
             {
-                return X::countInventoryContents(obj, type);
+                return obj->countInventoryContents(type);
             }
             LLViewerInventoryItem* getInventoryItemByAsset(LLViewerObject* obj, const LLUUID& asset_id) override
             {
-                return X::getInventoryItemByAsset(obj, asset_id);
+                return obj->getInventoryItemByAsset(asset_id);
             }
             LLViewerInventoryItem* getInventoryItemByAsset(LLViewerObject* obj, const LLUUID& asset_id,
                                                            LLAssetType::EType type) override
             {
-                return X::getInventoryItemByAsset(obj, asset_id, type);
+                return obj->getInventoryItemByAsset(asset_id, type);
             }
         };
     }

@@ -3213,6 +3213,9 @@ namespace tut
     void task_oracle_object_t::test<9>()
     {
         set_test_name("bench: frozen copies against the Rust decisions (VKS_TASK_BENCH=<rounds>)");
+        // The lookups stayed C++ (a Rust lookup copies the keys per call, 25 to
+        // 3,000 times slower: doc/rust_port.md, R4a); the rows are the loads and
+        // a decision that reads the list (the owner guess of a local update).
         const char* rounds_env = getenv("VKS_TASK_BENCH");
         if (!(rounds_env && *rounds_env))
         {
@@ -3236,14 +3239,11 @@ namespace tut
                 m.desc = "a description of the item";
                 file += legacy_item(m);
             }
-            const LLUUID last_id(fmt("1a000000-0000-4000-8000-%012x", 0x100 + n - 1).c_str());
-            const LLUUID last_asset(fmt("a5000000-0000-4000-8000-%012x", 0x100 + n - 1).c_str());
-            double load[2], by_id[2], by_asset[2], count[2], update[2];
-            const int lookups = std::max(1, 200000 / n);
+            double load[2], update[2];
             for (int side = 0; side < 2; ++side)
             {
                 vto::set_boundary(sides[side]);
-                double best_load = 1e300, best_id = 1e300, best_asset = 1e300, best_count = 1e300, best_update = 1e300;
+                double best_load = 1e300, best_update = 1e300;
                 for (int r = 0; r < rounds; ++r)
                 {
                     Scene s(false, 0);
@@ -3255,29 +3255,6 @@ namespace tut
                     auto t1 = std::chrono::steady_clock::now();
                     best_load = std::min(best_load, (double)std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
 
-                    size_t sink = 0;
-                    t0 = std::chrono::steady_clock::now();
-                    for (int k = 0; k < lookups; ++k)
-                    {
-                        sink += (size_t)bnd().getInventoryObject(s.obj, last_id);
-                    }
-                    t1 = std::chrono::steady_clock::now();
-                    best_id = std::min(best_id, (double)std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count() / lookups);
-                    t0 = std::chrono::steady_clock::now();
-                    for (int k = 0; k < lookups; ++k)
-                    {
-                        sink += (size_t)bnd().getInventoryItemByAsset(s.obj, last_asset, LLAssetType::AT_NOTECARD);
-                    }
-                    t1 = std::chrono::steady_clock::now();
-                    best_asset = std::min(best_asset, (double)std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count() / lookups);
-                    t0 = std::chrono::steady_clock::now();
-                    for (int k = 0; k < lookups; ++k)
-                    {
-                        sink += (size_t)bnd().countInventoryContents(s.obj, LLAssetType::AT_NOTECARD);
-                    }
-                    t1 = std::chrono::steady_clock::now();
-                    best_count = std::min(best_count, (double)std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count() / lookups);
-
                     LLPointer<vto::LLViewerInventoryItem> item = make_item(spec_a());
                     const int updates = std::max(1, 20000 / n);
                     t0 = std::chrono::steady_clock::now();
@@ -3287,23 +3264,13 @@ namespace tut
                     }
                     t1 = std::chrono::steady_clock::now();
                     best_update = std::min(best_update, (double)std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count() / updates);
-                    if (sink == 1)
-                    {
-                        std::cerr << "";
-                    }
                 }
                 load[side] = best_load;
-                by_id[side] = best_id;
-                by_asset[side] = best_asset;
-                count[side] = best_count;
                 update[side] = best_update;
             }
             vto::set_boundary(NULL);
             report << fmt("loadTaskInvFile (whole load)\t%d\t%.0f\t%.0f\n", n, load[0], load[1]);
             report << fmt("loadTaskInvFile per entry\t%d\t%.1f\t%.1f\n", n, load[0] / (n + 1), load[1] / (n + 1));
-            report << fmt("getInventoryObject (last entry)\t%d\t%.1f\t%.1f\n", n, by_id[0], by_id[1]);
-            report << fmt("getInventoryItemByAsset(type) (last)\t%d\t%.1f\t%.1f\n", n, by_asset[0], by_asset[1]);
-            report << fmt("countInventoryContents\t%d\t%.1f\t%.1f\n", n, count[0], count[1]);
             report << fmt("updateInventoryLocal (owner guess)\t%d\t%.1f\t%.1f\n", n, update[0], update[1]);
         }
         std::cerr << report.str();

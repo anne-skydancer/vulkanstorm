@@ -18,9 +18,12 @@
  * LLViewerObject declares LLTaskInventoryExecutor a friend: the executor
  * reads and writes the task-inventory members. What stays C++ in the object:
  * the state itself, the listener bookkeeping (register, remove, clear, has),
- * the accessors, and the I/O the decisions ask for (the message fields, the
- * xfer manager, the coroutines and HTTP adapter, the cache files, the
- * capability reply's LLSD entries).
+ * the accessors, the read-only lookups over the contents (getInventoryObject
+ * and friends: a Rust lookup has to copy the list's keys on every call, 25 to
+ * 3,000 times slower than the C++ loop; the decisions apply the same rules
+ * in Rust to the keys they get), and the I/O the decisions ask for (the
+ * message fields, the xfer manager, the coroutines and HTTP adapter, the
+ * cache files, the capability reply's LLSD entries).
  *
  * Listeners may call into the object while they are notified (the material
  * editor and the notecard preview register again and request the contents);
@@ -951,95 +954,5 @@ struct LLTaskInventoryExecutor
                 reinterpret_cast<const VksInvPerms*>(&permissions), params.isDefined(),
                 reinterpret_cast<const uint8_t*>(params_binary.data()), params_binary.size());
         });
-    }
-
-    //------------------------------------------------------------------
-    // The lookups
-    //------------------------------------------------------------------
-    static LLInventoryObject* find(LLViewerObject* obj, uint32_t kind, const LLUUID& id, S32 type)
-    {
-        if (!obj->mInventory)
-        {
-            return NULL;
-        }
-        Inputs in;
-        readEntries(obj, in);
-        const int64_t i = vks_inv_task_find(in.entries.data(), in.entries.size(), kind, id.mData, type);
-        return i < 0 ? NULL : in.objects[(size_t)i];
-    }
-
-    static LLInventoryObject* getInventoryObject(LLViewerObject* obj, const LLUUID& item_id)
-    {
-        return find(obj, VKS_INV_TASK_FIND_OBJECT, item_id, 0);
-    }
-
-    static LLInventoryItem* getInventoryItem(LLViewerObject* obj, const LLUUID& item_id)
-    {
-        // An entry found is an LLViewerInventoryItem.
-        return static_cast<LLViewerInventoryItem*>(find(obj, VKS_INV_TASK_FIND_ITEM, item_id, 0));
-    }
-
-    static void getInventoryContents(LLViewerObject* obj, LLInventoryObject::object_list_t& objects)
-    {
-        if (!obj->mInventory)
-        {
-            return;
-        }
-        Inputs in;
-        readEntries(obj, in);
-        std::vector<size_t> found(in.entries.size());
-        const size_t n = vks_inv_task_contents(in.entries.data(), in.entries.size(), found.data());
-        for (size_t k = 0; k < n; ++k)
-        {
-            objects.push_back(LLPointer<LLInventoryObject>(in.objects[found[k]]));
-        }
-    }
-
-    static LLInventoryObject* getInventoryRoot(LLViewerObject* obj)
-    {
-        return find(obj, VKS_INV_TASK_FIND_ROOT, LLUUID::null, 0);
-    }
-
-    static LLViewerInventoryItem* getInventoryItemByAsset(LLViewerObject* obj, const LLUUID& asset_id)
-    {
-        if (obj->mInventoryDirty)
-            LL_WARNS() << "Peforming inventory lookup for object " << obj->mID << " that has dirty inventory!" << LL_ENDL;
-        return static_cast<LLViewerInventoryItem*>(find(obj, VKS_INV_TASK_FIND_ITEM_BY_ASSET, asset_id, 0));
-    }
-
-    static LLViewerInventoryItem* getInventoryItemByAsset(LLViewerObject* obj, const LLUUID& asset_id,
-                                                          LLAssetType::EType type)
-    {
-        if (obj->mInventoryDirty)
-            LL_WARNS() << "Peforming inventory lookup for object " << obj->mID << " that has dirty inventory!" << LL_ENDL;
-        // Whatever calls this with AT_CATEGORY shouldn't be trying to get a
-        // folder by asset: categories don't have assets.
-        llassert(type != LLAssetType::AT_CATEGORY);
-        return static_cast<LLViewerInventoryItem*>(
-            find(obj, VKS_INV_TASK_FIND_ITEM_BY_ASSET_AND_TYPE, asset_id, (S32)type));
-    }
-
-    static S32 countInventoryContents(LLViewerObject* obj, LLAssetType::EType type)
-    {
-        if (!obj->mInventory)
-        {
-            return 0;
-        }
-        Inputs in;
-        readEntries(obj, in);
-        return (S32)vks_inv_task_count_of_type(in.entries.data(), in.entries.size(), (int32_t)type);
-    }
-
-    static bool isAssetInInventory(LLViewerObject* obj, LLViewerInventoryItem* item, LLAssetType::EType type)
-    {
-        if (!item)
-        {
-            return false;
-        }
-        Inputs in;
-        readView(obj, in);
-        return vks_inv_task_is_asset_in_inventory(in.entries.data(), in.entries.size(), in.view.has_inventory,
-                                                  in.pending.data(), obj->mPendingInventoryItemsIDs.size(),
-                                                  item->getAssetUUID().mData, (int32_t)type);
     }
 };
