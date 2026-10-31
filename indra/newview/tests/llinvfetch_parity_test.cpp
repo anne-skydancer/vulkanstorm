@@ -235,6 +235,12 @@ namespace tut
     void invfetch_object::test<2>()
     {
         set_test_name("fetch wire scenarios");
+        if (!getenv_str("VKS_INVFETCH_BENCH").empty())
+        {
+            // Bench mode (test 3): the environment is set up once per process.
+            std::cerr << "[r3b] VKS_INVFETCH_BENCH is set: the replay is not run" << std::endl;
+            return;
+        }
         // The committed tree is per C++ standard library: since upstream
         // 28fee038e0 the model's maps are std::unordered_map, and the order
         // the scheduler and the request builders walk them in (the fetch
@@ -447,5 +453,44 @@ namespace tut
         }
         std::cerr << "[r3b] compared " << compared << " scenarios, " << differing << " problems" << std::endl;
         ensure(report.str(), differing == 0);
+    }
+
+    template<> template<>
+    void invfetch_object::test<3>()
+    {
+        set_test_name("scheduler bench");
+        // The frozen C++ scheduler against the Rust-backed one (sub-rung R3b),
+        // in this binary: VKS_INVFETCH_BENCH=<rounds> (best of), optional
+        // VKS_INVFETCH_BENCH_CALLS=<calls per timing> (default 1,000,000) and
+        // VKS_INVFETCH_BENCH_OUT=<csv>. Not run otherwise.
+        const std::string rounds_s = getenv_str("VKS_INVFETCH_BENCH");
+        if (rounds_s.empty())
+        {
+            return;
+        }
+        const int rounds = std::max(1, atoi(rounds_s.c_str()));
+        const std::string calls_s = getenv_str("VKS_INVFETCH_BENCH_CALLS");
+        const long calls = calls_s.empty() ? 1000000L : std::max(10L, atol(calls_s.c_str()));
+        const std::string work = std::string(VKS_INVFETCH_WORK_DIR) + "/bench-" + std::to_string(vks_getpid());
+        fs::remove_all(work);
+        fs::create_directories(work);
+        std::string error;
+        ensure("mock server: " + error, vks_fetch::init(VKS_INVFETCH_TEMPLATE_FILE, work, error));
+        const std::vector<vks_fetch::BenchRow> rows = vks_fetch::run_bench(work, rounds, calls);
+        vks_fetch::shutdown();
+        std::ostringstream csv;
+        csv << "row,cpp,rust,rust_over_cpp\n";
+        std::cerr << "[r3b bench] best of " << rounds << ", " << calls << " calls per timing; frozen C++ -> Rust" << std::endl;
+        for (const vks_fetch::BenchRow& r : rows)
+        {
+            std::cerr << "[r3b bench] " << r.name << ": " << r.cpp << " -> " << r.rust
+                      << " (" << (r.cpp > 0 ? r.rust / r.cpp : 0.0) << "x)" << std::endl;
+            csv << "\"" << r.name << "\"," << r.cpp << "," << r.rust << "," << (r.cpp > 0 ? r.rust / r.cpp : 0.0) << "\n";
+        }
+        const std::string out = getenv_str("VKS_INVFETCH_BENCH_OUT");
+        if (!out.empty())
+        {
+            vks_inv::write_file(out, csv.str());
+        }
     }
 }

@@ -36,15 +36,40 @@ The comparison:
     reason it does not change what the copies do); an allowlisted line may
     occur once outside the regions (a second copy of it fails).
 
+Frozen originals. Sub-rung R3b moved the scheduler of
+llinventorymodelbackgroundfetch.{h,cpp} to Rust; the bench of
+INTEGRATION_TEST_llinvfetch_parity (test 3) compares it with the C++ as it
+was, kept in llinvfetch_bench_frozen.cpp between
+
+    // FROZEN ORIGINAL begin: <source path>, blob <hash>
+    ...
+    // FROZEN ORIGINAL end
+
+(the whole file at the commit R3b started from, 3846816a16, with its
+#include lines removed). The live file no longer holds that code, so each
+region is checked against the SHA-256 of the original's normalised text
+(as above, #include lines removed), recorded in FROZEN_ORIGINALS: no git
+history is needed, so shallow clones check it too.
+
 Exit status 0 when everything matches. A blob differing from the recorded
 one is reported but is not a failure when the copied text still matches.
 """
+import hashlib
 import os
 import re
 import subprocess
 import sys
 
 COPY_FILE = os.path.join("indra", "newview", "tests", "llinvfetch_parity_support.cpp")
+FROZEN_FILE = os.path.join("indra", "newview", "tests", "llinvfetch_bench_frozen.cpp")
+FROZEN_BEGIN = re.compile(r"//\s*FROZEN ORIGINAL begin:\s*(?P<path>[^,]+),\s*blob\s*(?P<blob>[0-9a-f]+)")
+INCLUDE_RE = re.compile(r"^\s*#\s*include\b")
+# The SHA-256 of each original's normalised lines (prepare(), #include lines
+# removed, joined with newlines), at 3846816a16.
+FROZEN_ORIGINALS = {
+    "indra/newview/llinventorymodelbackgroundfetch.h": "2f4116f648a5368b67e1fbeb85e66fc0dc3d5ba573ad5b0b4aae00c77b69464f",
+    "indra/newview/llinventorymodelbackgroundfetch.cpp": "1f185a44a774cdefcb321287d5f096b4bda8e08f659aaa48ba38b4566c3f2ab4",
+}
 BEGIN = re.compile(r"//\s*FROZEN COPY begin:\s*(?P<path>[^,]+),\s*(?P<func>[^,]+),\s*lines\s*(?P<a>\d+)-(?P<b>\d+),\s*blob\s*(?P<blob>[0-9a-f]+)")
 
 # Live lines that mention a fenced identifier outside the copied regions,
@@ -288,8 +313,46 @@ def main():
             print("FAIL  fence %s: lines outside the copied regions and the allowlist:\n        %s" % (path, "\n        ".join(bad)))
         else:
             print("OK    fence %s (%s)" % (path, ", ".join(fence["identifiers"])))
-    print("%d copies checked, %d fences, %d failing" % (len(copies), len(FENCES), failures))
+    # The frozen originals of the bench.
+    frozen = 0
+    with open(os.path.join(root, FROZEN_FILE), encoding="utf-8") as f:
+        ftext = f.read().splitlines()
+    seen = set()
+    i = 0
+    while i < len(ftext):
+        m = FROZEN_BEGIN.search(ftext[i])
+        if m:
+            j = i + 1
+            while j < len(ftext) and "FROZEN ORIGINAL end" not in ftext[j]:
+                j += 1
+            path = m.group("path").strip().replace("\\", "/")
+            frozen += 1
+            seen.add(path)
+            want = FROZEN_ORIGINALS.get(path)
+            got = original_digest("\n".join(ftext[i + 1:j]))
+            if want is None:
+                failures += 1
+                print("FAIL  frozen original %s: not in FROZEN_ORIGINALS" % path)
+            elif got != want:
+                failures += 1
+                print("FAIL  frozen original %s: the copy differs from the original (sha256 %s, recorded %s)" % (path, got, want))
+            else:
+                print("OK    frozen original %s (blob %s)" % (path, m.group("blob")))
+            i = j
+        i += 1
+    for path in FROZEN_ORIGINALS:
+        if path not in seen:
+            failures += 1
+            print("FAIL  frozen original %s: missing from %s" % (path, FROZEN_FILE))
+    print("%d copies checked, %d fences, %d frozen originals, %d failing" % (len(copies), len(FENCES), frozen, failures))
     return 1 if failures or not copies else 0
+
+
+def original_digest(text):
+    """The SHA-256 of a source's normalised lines without its #include lines."""
+    kept = "\n".join(l for l in text.replace("\r\n", "\n").split("\n") if not INCLUDE_RE.match(l))
+    norm, _, _ = prepare(kept)
+    return hashlib.sha256("\n".join(norm).encode("utf-8")).hexdigest()
 
 
 if __name__ == "__main__":

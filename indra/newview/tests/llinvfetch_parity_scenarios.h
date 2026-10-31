@@ -46,6 +46,15 @@ namespace vks_fetch
     // PRE_D2_SL_FALLBACKS skips exactly these, each with the D2 targets that
     // replace it.
     const std::vector<std::pair<std::string, std::string> >& pre_d2_sl_fallbacks();
+
+    // The bench of test 3 (sub-rung R3b): the frozen C++ scheduler against
+    // the Rust-backed one, best of `rounds` timings of `calls` calls each.
+    struct BenchRow
+    {
+        std::string name;
+        double cpp, rust;
+    };
+    std::vector<BenchRow> run_bench(const std::string& work_dir, int rounds, long calls);
 }
 
 #endif

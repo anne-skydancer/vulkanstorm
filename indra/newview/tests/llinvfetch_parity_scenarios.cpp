@@ -18,6 +18,7 @@
 #include "../llviewerprecompiledheaders.h"
 
 #include "llinvfetch_parity_scenarios.h"
+#include "llinvfetch_bench_frozen.h"
 
 #include "../llinventorymodel.h"
 #include "../llinventorymodelbackgroundfetch.h"
@@ -2250,4 +2251,149 @@ void run_scenarios(const std::string& work_dir, const std::set<std::string>& onl
         }
     }
 }
+}
+
+// ---- The bench (test 3, VKS_INVFETCH_BENCH) ---------------------------------------
+// The frozen C++ scheduler (llinvfetch_bench_frozen.cpp) against the Rust-backed
+// one, in the same binary, on s03's large inventory loaded and fully versioned
+// (a warm login: the walk queues every folder and requests none).
+namespace
+{
+    struct LiveIdle { typedef void (LLInventoryModelBackgroundFetch::*type)(); friend type steal(LiveIdle); };
+    template<typename Tag, typename Tag::type M>
+    struct BenchSteal
+    {
+        friend typename Tag::type steal(Tag) { return M; }
+    };
+}
+template struct BenchSteal<LiveIdle, &LLInventoryModelBackgroundFetch::backgroundFetch>;
+
+namespace vks_fetch
+{
+    namespace
+    {
+        typedef std::chrono::steady_clock bench_clock;
+
+        double ns_since(bench_clock::time_point t0, double n)
+        {
+            return std::chrono::duration<double, std::nano>(bench_clock::now() - t0).count() / n;
+        }
+
+        // Best of `rounds` timings of `n` calls of f, in ns per call.
+        template<typename F>
+        double best_ns(int rounds, long n, F f)
+        {
+            double best = 1e300;
+            for (int r = 0; r < rounds; ++r)
+            {
+                bench_clock::time_point t0 = bench_clock::now();
+                for (long i = 0; i < n; ++i) f();
+                best = std::min(best, ns_since(t0, (double)n));
+            }
+            return best;
+        }
+
+        void live_reset()
+        {
+            if (LLInventoryModelBackgroundFetch::instanceExists())
+            {
+                LLInventoryModelBackgroundFetch::deleteSingleton();
+            }
+        }
+        // As the idle callback calls it (backgroundFetchCB: instance(), then backgroundFetch()).
+        void live_idle() { (LLInventoryModelBackgroundFetch::instance().*steal(LiveIdle()))(); }
+        bool live_active() { return sched_state().bg_active; }
+
+        volatile bool g_bench_sink = false;
+    }
+
+    std::vector<BenchRow> run_bench(const std::string& work_dir, int rounds, long calls)
+    {
+        using namespace vks_fetch_bench;
+        std::vector<BenchRow> rows;
+        Builder b(true);
+        large(b);
+        begin(work_dir + "/bench_cache", 20, CAPS_ALL, b.w, "");
+        Run r("bench", &b.w, Run::SEQ, true);
+        login(r, b.w.login_response(), b.w.root);
+        vks_inv::set_startup_state(STATE_STARTED);
+        // Every folder known (a warm login from a full cache).
+        size_t folders = 0;
+        for (const Folder& f : b.w.folders)
+        {
+            if (LLViewerInventoryCategory* k = gInventory.getCategory(f.id))
+            {
+                k->setVersion(f.version >= 0 ? f.version : 1);
+                ++folders;
+            }
+        }
+        const LLUUID some_folder = b.ids.user[0];
+
+        // The login walk of a fully cached inventory, one idle call (the
+        // frame budget's clock is frozen in both): start(), then the idle
+        // callback until the fetch is inactive.
+        auto walk = [&](bool rust) -> double
+        {
+            double best = 1e300;
+            for (int k = 0; k < rounds; ++k)
+            {
+                if (rust) live_reset(); else frozen_reset();
+                bench_clock::time_point t0 = bench_clock::now();
+                if (rust)
+                {
+                    LLInventoryModelBackgroundFetch::instance().start();
+                    do { live_idle(); } while (live_active());
+                }
+                else
+                {
+                    frozen_start(LLUUID::null, true);
+                    do { frozen_idle(); } while (frozen_active());
+                }
+                best = std::min(best, ns_since(t0, 1.0));
+            }
+            return best;
+        };
+        rows.push_back({ "login walk, " + std::to_string(folders) + " cached folders (ms per walk)",
+                         walk(false) / 1e6, walk(true) / 1e6 });
+
+        // After the walk: the idle callback with nothing to do (every frame of
+        // the session) and the public state the UI asks for.
+        rows.push_back({ "backgroundFetch() inactive (ns per frame)",
+                         best_ns(rounds, calls, [] { frozen_idle(); }),
+                         best_ns(rounds, calls, [] { live_idle(); }) });
+        LLInventoryModelBackgroundFetch& live = LLInventoryModelBackgroundFetch::instance();
+        rows.push_back({ "isEverythingFetched() (ns per call)",
+                         best_ns(rounds, calls, [] { g_bench_sink = frozen_everything_fetched(); }),
+                         best_ns(rounds, calls, [&] { g_bench_sink = live.isEverythingFetched(); }) });
+        rows.push_back({ "folderFetchActive() (ns per call)",
+                         best_ns(rounds, calls, [] { g_bench_sink = frozen_folder_fetch_active(); }),
+                         best_ns(rounds, calls, [&] { g_bench_sink = live.folderFetchActive(); }) });
+        rows.push_back({ "isBulkFetchProcessingComplete() (ns per call)",
+                         best_ns(rounds, calls, [] { g_bench_sink = frozen_bulk_complete(); }),
+                         best_ns(rounds, calls, [&] { g_bench_sink = live.isBulkFetchProcessingComplete(); }) });
+        rows.push_back({ "inventoryFetchCompleted(), empty queues (ns per call)",
+                         best_ns(rounds, calls, [] { g_bench_sink = frozen_inventory_completed(); }),
+                         best_ns(rounds, calls, [&] { g_bench_sink = live.inventoryFetchCompleted(); }) });
+        // A folder view opening a folder already at the queue's end
+        // (LLViewerInventoryCategory::fetch's start(id, false), deduplicated)
+        // and a forced-fetch request already at the front.
+        frozen_start(some_folder, false);
+        live.start(some_folder, false);
+        rows.push_back({ "start(folder) already queued (ns per call)",
+                         best_ns(rounds, calls / 10, [&] { frozen_start(some_folder, false); }),
+                         best_ns(rounds, calls / 10, [&] { live.start(some_folder, false); }) });
+        frozen_schedule_folder(some_folder);
+        live.scheduleFolderFetch(some_folder);
+        rows.push_back({ "scheduleFolderFetch(folder) already queued (ns per call)",
+                         best_ns(rounds, calls, [&] { frozen_schedule_folder(some_folder); }),
+                         best_ns(rounds, calls, [&] { live.scheduleFolderFetch(some_folder); }) });
+        // One active idle call with a queue of already fetched folders (the
+        // dispatch loop's per-entry cost): the walk above, per folder.
+        rows.push_back({ "dispatch loop per cached folder (ns per entry)",
+                         rows[0].cpp * 1e6 / (double)folders, rows[0].rust * 1e6 / (double)folders });
+
+        frozen_reset();
+        live_reset();
+        return rows;
+    }
 }

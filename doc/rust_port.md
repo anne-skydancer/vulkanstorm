@@ -2001,6 +2001,81 @@ the tests and append the output to the job summary (the step never fails a
 build). The rows marked `[C++]` there are the LLSD forms, C++ in both
 columns.
 
+### R3b: the background fetch scheduler
+
+`LLInventoryModelBackgroundFetch` keeps its interface and calls
+`vkstorm_inventory::fetch::scheduler` through `vkstorm-ffi`
+(`vks_inv_fetch_*`). Rust holds the scheduler's state (the folder and item
+queues, the counts and flags, the forced set, the expected folders, the open
+AIS commands and the legacy handlers' requests) and makes its decisions:
+what to fetch, in what order, in which batches, within the concurrency limit
+and the frame budget. Each C++ entry point is one call that returns an
+operation list (issue this `AISAPI` fetch, post this legacy body, run this
+callback, raise the completion signal, reset this timer, log this warning);
+the C++ carries it out in order. The model is read through a host table in
+the C++ order: `getDirectDescendentsOf` hands over the model's
+`std::unordered_map` order of the platform, so the per-library recordings
+replay unchanged. A caller's callback (`fetchCOF`, `fetchFolderAndLinks`)
+ends its list; the C++ runs it and then `vks_inv_fetch_resume`, because the
+C++ lambda runs `callback()` before the rest of the completion and the
+callback may call the scheduler again.
+
+| Part | Kept as |
+|---|---|
+| `start`, `scheduleFolderFetch`, `scheduleItemFetch`, `fetchFolderAndLinks`, `fetchCOF`, `findLostItems`, `setAllFoldersFetched`, `addRequestAtFront/Back`, `incrFetch(Folder)Count` | Rust |
+| The idle callback: `bulkFetchViaAis` (AIS dispatch, 1 s / 6 ms budget, pool limit, marketplace follow-up) and `bulkFetch` (legacy batches of 10, 12 outstanding) | Rust |
+| AIS completions (`onAISFolderCalback`, `onAISContentCalback`, `ais_simple_item_callback`, the COF and folder-and-links lambdas) | Rust |
+| Public state (`isEverythingFetched`, `folderFetchActive`, `inventoryFetchCompleted`, ...) | Rust |
+| Legacy requests: the folder and item POST bodies (LLSD XML), `getIsRecursive`, the 403 split, the malformed-reply re-queue, the completion check | Rust |
+| `AISAPI` fetch functions (URL, depth clamp, coroutines) | C++ (R3a's) |
+| `BGFolderHttpHandler::onCompleted` (the reply parse) and `processData`'s model writes, `BGItemHttpHandler` (`FetchItemHttpHandler`) | C++; posted with the new `LLInventoryModel::requestPostRaw` |
+| The `#ifdef OPENSIM` UDP loop of `backgroundFetch()` | C++, on Rust's folder queue (`vks_inv_fetch_folder_*`) |
+| `mFetchStartTimer`, `mInitialFetchDuration`, `mFetchTimer`, the completion signal | C++, driven by operations |
+| `LLViewerInventoryCategory`'s fetch state and timers (`getFetching`, `setFetching`, `fetch()`'s gate) | C++: state of the record class, read through the host table; the crate's `fetch::timer` waits for the storage move |
+
+The oracle `INTEGRATION_TEST_llinvfetch_parity` replays all 47 scenarios
+with 0 differences (Windows, RelWithDebInfo), as before the port. Its frame
+budget seam is unchanged: the host's clock function in
+`llinventorymodelbackgroundfetch.cpp` calls `LLTimer::getTotalSeconds()`, which
+the test renames. The scheduler's private state for the `sch` lines comes
+from `vks_inv_fetch_state`.
+
+Bench: test 3 of the same executable (`VKS_INVFETCH_BENCH=<rounds>`,
+`VKS_INVFETCH_BENCH_CALLS`, `VKS_INVFETCH_BENCH_OUT=<csv>`, run under
+`vksinventory_mock_server.py` as the test is) times the scheduler as it was
+(`tests/llinvfetch_bench_frozen.cpp`, the original source, checked by
+`check_r3b_copies.py`) against the Rust-backed class, in the same binary, on
+s03's 5,000-folder inventory fully cached. Windows, RelWithDebInfo, best of
+3, frozen C++ → Rust:
+
+| Row | C++ → Rust |
+|---|---|
+| Login walk of 5,000 cached folders, one idle call (ms) | 72.1 → 73.4 (80.7 → 77.6 in an earlier run) |
+| The same, per folder entry of the dispatch loop (µs) | 14.4 → 14.7 |
+| `backgroundFetch()` with nothing to do, every frame (ns) | 143.8 → 49.8 (43.9 → 45.8 earlier) |
+| `isEverythingFetched()` (ns) | 1.46 → 1.66 |
+| `folderFetchActive()` (ns) | 1.49 → 1.67 |
+| `isBulkFetchProcessingComplete()` (ns) | 1.48 → 1.68 |
+| `inventoryFetchCompleted()`, empty queues (ns) | 4.1 → 6.5 |
+| `start(folder)`, already queued (µs) | 13.3 → 12.4 |
+| `scheduleFolderFetch(folder)`, already queued (ns) | 8.1 → 17.2 |
+
+The machine ran four other viewer builds at the time, so rows move by tens of
+percent between runs (the idle row is two singleton lookups and a flag in
+both columns). The walk, the per-frame idle callback and `start()` cost the
+same through the ABI; the predicates and `scheduleFolderFetch` pay a few
+nanoseconds for the crossing, on calls made a handful of times per frame at
+most.
+
+The test's environment is stubbed (region, settings, grid), so its fixed
+costs (`start()` around 20 µs in both) are not the viewer's; the
+differences between the columns are what the crossing costs. The idle
+callback runs every frame of the session and has nothing to do almost
+always: one crossing answers that before an environment is built. A call
+that may issue AIS commands reads the region's two AIS capabilities in
+addition to what the C++ read (whether a command would be refused at once,
+which the scheduler needs inside its loop); `start()` does not.
+
 ## Local build
 
 Follow the project's RelWithDebInfo procedure (see `scripts/validate_audio.sh`
