@@ -4957,11 +4957,11 @@ template<class I> void bench_impl(const std::vector<ItemF>& population, const LL
     for (auto& it : items) perms.push_back(it->getPermissions());
     U64& sink = g_bench_sink;
     auto report = [&](const char* op, double us, size_t count) {
-        printf("%-8s %-34s %10.1f us  %8.1f ns/item  (%zu)\n", label, op, us, us * 1000.0 / (double)count, count);
+        printf("%-8s %-42s %10.1f us  %8.1f ns/item  (%zu)\n", label, op, us, us * 1000.0 / (double)count, count);
     };
     if (n) // the synthetic population (empty for a private cache)
     {
-    report("fromLLSD (new item each)", time_min(rounds, [&] {
+    report("fromLLSD [C++] (new item each)", time_min(rounds, [&] {
         for (const LLSD& sd : sds)
         {
             LLPointer<Item> it = new Item;
@@ -4969,7 +4969,7 @@ template<class I> void bench_impl(const std::vector<ItemF>& population, const LL
             sink += it->getFlags();
         }
     }), n);
-    report("asLLSD", time_min(rounds, [&] {
+    report("asLLSD [C++]", time_min(rounds, [&] {
         for (auto& it : items)
         {
             LLSD sd = it->asLLSD();
@@ -5017,6 +5017,123 @@ template<class I> void bench_impl(const std::vector<ItemF>& population, const LL
                     acc += p.allowOperationBy(op, a, ID_G()) ? 1 : 0;
         sink += acc;
     }), n * 15);
+    const LLUUID bench_agents[3] = {ID_A(), ID_B(), NUL()};
+    report("allowModifyBy(agent) x 3 agents", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (const auto& p : perms)
+            for (const LLUUID& a : bench_agents)
+                acc += p.allowModifyBy(a) ? 1 : 0;
+        sink += acc;
+    }), n * 3);
+    report("allowCopyBy(agent, group) x 3", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (const auto& p : perms)
+            for (const LLUUID& a : bench_agents)
+                acc += p.allowCopyBy(a, ID_G()) ? 1 : 0;
+        sink += acc;
+    }), n * 3);
+    report("allowTransferTo x 3 agents", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (const auto& p : perms)
+            for (const LLUUID& a : bench_agents)
+                acc += p.allowTransferTo(a) ? 1 : 0;
+        sink += acc;
+    }), n * 3);
+    report("getOwnership", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (const auto& p : perms)
+        {
+            LLUUID id;
+            bool group = false;
+            acc += p.getOwnership(id, group) ? id.mData[0] + (group ? 1 : 0) : 0;
+        }
+        sink += acc;
+    }), n);
+    report("getSafeOwner (owned)", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (const auto& p : perms) acc += p.getSafeOwner().mData[0];
+        sink += acc;
+    }), n);
+    report("initMasks(EType)", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (size_t k = 0; k < n; ++k)
+        {
+            typename I::Perm q = perms[k];
+            q.initMasks((typename I::IT::EType)population[k].inv_type);
+            acc += q.getMaskBase();
+        }
+        sink += acc;
+    }), n);
+    report("LLPermissions::accumulate", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (size_t k = 0; k < n; ++k)
+        {
+            typename I::Perm q = perms[k];
+            q.accumulate(perms[(k + 1) % n]);
+            acc += q.getMaskBase() + q.getCreator().mData[0];
+        }
+        sink += acc;
+    }), n);
+    report("setOwnerAndGroup", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (const auto& p : perms)
+        {
+            typename I::Perm q = p;
+            acc += q.setOwnerAndGroup(ID_A(), ID_B(), ID_G(), true) ? 1 : 0;
+            acc += q.getMaskBase();
+        }
+        sink += acc;
+    }), n);
+    report("LLSaleInfo::getCRC32", time_min(rounds, [&] {
+        U32 acc = 0;
+        for (auto& it : items) acc += it->getSaleInfo().getCRC32();
+        sink += acc;
+    }), n);
+    report("correctInventoryName", time_min(rounds, [&] {
+        for (const ItemF& f : population)
+        {
+            std::string s = f.name;
+            I::Object::correctInventoryName(s);
+            sink += s.size();
+        }
+    }), n);
+    std::vector<LLPointer<typename I::Category> > cats;
+    cats.reserve(n);
+    for (const ItemF& f : population)
+    {
+        CatF c;
+        c.id = f.id;
+        c.parent = f.parent;
+        c.thumb = f.thumb;
+        c.pref = (f.id.mData[8] % 4) ? -1 : 8;
+        c.name = f.name;
+        cats.push_back(make_cat<I>(c));
+    }
+    std::vector<std::string> cat_texts;
+    cat_texts.reserve(n);
+    for (auto& c : cats)
+    {
+        std::ostringstream os;
+        c->exportLegacyStream(os, true);
+        cat_texts.push_back(os.str().substr(os.str().find('\n') + 1));
+    }
+    report("category legacy export", time_min(rounds, [&] {
+        for (auto& c : cats)
+        {
+            std::ostringstream os;
+            c->exportLegacyStream(os, true);
+            sink += os.tellp();
+        }
+    }), n);
+    report("category legacy import (new each)", time_min(rounds, [&] {
+        for (const std::string& t : cat_texts)
+        {
+            std::istringstream is(t);
+            LLPointer<typename I::Category> c = new typename I::Category;
+            c->importLegacyStream(is);
+            sink += c->getName().size();
+        }
+    }), n);
     }
     if (library)
     {
@@ -5029,7 +5146,7 @@ template<class I> void bench_impl(const std::vector<ItemF>& population, const LL
             it->fromLLSD(li[k]);
             litems.push_back(it);
         }
-        report("library fromLLSD", time_min(rounds, [&] {
+        report("library fromLLSD [C++]", time_min(rounds, [&] {
             for (S32 k = 0; k < li.size(); ++k)
             {
                 LLPointer<Item> it = new Item;
@@ -5037,7 +5154,7 @@ template<class I> void bench_impl(const std::vector<ItemF>& population, const LL
                 sink += it->getFlags();
             }
         }), (size_t)li.size());
-        report("library asLLSD", time_min(rounds, [&] {
+        report("library asLLSD [C++]", time_min(rounds, [&] {
             for (auto& it : litems)
             {
                 LLSD sd = it->asLLSD();
@@ -5058,7 +5175,7 @@ template<class I> void bench_impl(const std::vector<ItemF>& population, const LL
             for (auto& it : litems) acc += it->getCRC32();
             sink += acc;
         }), litems.size());
-        report("library categories importLLSDMap", time_min(rounds, [&] {
+        report("library categories importLLSDMap [C++]", time_min(rounds, [&] {
             for (S32 k = 0; k < lc.size(); ++k)
             {
                 LLPointer<typename I::VCat> c = make_vcat<I>(CatF());
@@ -5074,6 +5191,8 @@ int bench(int rounds, U64 count, const std::string& library, const std::string& 
     init_runtime();
     printf("llinventory_tool bench: %s, %d rounds (minimum reported), %llu synthetic items\n", platform_description().c_str(), rounds,
            (unsigned long long)count);
+    printf("live: the viewer's classes (Rust rules); oracle: the frozen C++. Rows marked [C++] are the LLSD forms,\n"
+           "C++ in both (kept C++ until R2/R3a; they still call the Rust rules inside, e.g. fix and initMasks).\n");
     Rng r(SEED_BENCH);
     std::vector<ItemF> population;
     population.reserve(count);

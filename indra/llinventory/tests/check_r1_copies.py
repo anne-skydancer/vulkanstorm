@@ -49,11 +49,21 @@ the test and re-runs the check). When a port step replaces a copied source on
 purpose, it narrows that run with --only to the sources it did not replace
 (for example --only indra/newview --allow-partial, which keeps the viewer
 subclass copies and their fence checked) and checks the frozen copies once against the commit
-they were made from with --at 040ec69cfe.
+the step starts from with --at <commit> (the README of the fixtures names the
+reference; the R1 wiring used 283fab629f).
 
 A partial run (--only) is refused unless --allow-partial is also given.
 
-usage: python check_r1_copies.py [--at <commit>] [--only <source prefix>... --allow-partial] [--print-fence] [viewer root]
+Live C++ kept inside a replaced source. R1 replaced llpermissions,
+llsaleinfo and llinventory with calls to Rust except for the LLSD forms,
+which stay C++ (the cost of flattening a C++ LLSD tree across the C ABI) until
+R2 and R3a stop building C++ LLSD trees. Those functions are the original C++,
+so each one (KEPT_CPP below: a run of lines from a first line to a last one)
+must occur, normalised, exactly once in the live source and exactly once in
+the frozen copy of that source. They are checked on every run, whatever --only
+selects, unless --no-kept is given.
+
+usage: python check_r1_copies.py [--at <commit>] [--only <source prefix>... --allow-partial] [--no-kept] [--print-fence] [viewer root]
        (default root: the repository of this file)
 exit status: 0 when every checked region matches and every fence holds.
 """
@@ -108,6 +118,56 @@ FENCES = [
         'update_item->packMessage(msg);',
     ]),
 ]
+
+# The C++ that stays live in the sources R1 replaced: (source, first line, last line), each line given by
+# how it starts; a last line of "}" is the first line that is exactly "}" (the end of a function).
+_PERMS = "indra/llinventory/llpermissions.cpp"
+_SALE = "indra/llinventory/llsaleinfo.cpp"
+_INV = "indra/llinventory/llinventory.cpp"
+KEPT_CPP = [
+    (_PERMS, "LLSD LLPermissions::packMessage() const", "}"),
+    (_PERMS, "void LLPermissions::unpackMessage(LLSD perms)", "}"),
+    (_PERMS, "static const std::string PERM_CREATOR_ID_LABEL", "static const std::string PERM_NEXT_OWNER_MASK_LABEL"),
+    (_PERMS, "void LLPermissions::importLLSD(", "}"),
+    (_PERMS, "LLSD ll_create_sd_from_permissions(", "}"),
+    (_PERMS, "void ll_fill_sd_from_permissions(", "}"),
+    (_PERMS, "LLPermissions ll_permissions_from_sd(", "}"),
+    (_SALE, "LLSD LLSaleInfo::asLLSD() const", "}"),
+    (_SALE, "void LLSaleInfo::asLLSD(LLSD& sd) const", "}"),
+    (_SALE, "bool LLSaleInfo::fromLLSD(", "}"),
+    (_SALE, "LLSD LLSaleInfo::packMessage() const", "}"),
+    (_SALE, "void LLSaleInfo::unpackMessage(LLSD sales)", "}"),
+    (_SALE, "static const std::string ST_TYPE_LABEL", "static const std::string ST_PRICE_LABEL"),
+    (_SALE, "LLSD ll_create_sd_from_sale_info(", "}"),
+    (_SALE, "LLSaleInfo ll_sale_info_from_sd(", "}"),
+    (_INV, "static const std::string INV_ITEM_ID_LABEL", "static const std::string INV_FOLDER_ID_LABEL_WS"),
+    (_INV, "const LLUUID MAGIC_ID", "const LLUUID MAGIC_ID"),
+    (_INV, "LLSD LLInventoryItem::asLLSD() const", "}"),
+    (_INV, "void LLInventoryItem::asLLSD( LLSD& sd ) const", "}"),
+    (_INV, "bool LLInventoryItem::fromLLSD(", "}"),
+    (_INV, "LLSD LLInventoryCategory::asLLSD() const", "}"),
+    (_INV, "LLSD LLInventoryCategory::asAISCreateCatLLSD() const", "}"),
+    (_INV, "bool LLInventoryCategory::fromLLSD(", "}"),
+    (_INV, "void LLInventoryCategory::exportLLSD(", "}"),
+    (_INV, "bool LLInventoryCategory::importLLSDMap(", "}"),
+    (_INV, "bool LLInventoryCategory::importLLSD(", "}"),
+    (_INV, "LLSD ll_create_sd_from_inventory_item(", "}"),
+    (_INV, "LLSD ll_create_sd_from_inventory_category(", "}"),
+    (_INV, "LLPointer<LLInventoryCategory> ll_create_category_from_sd(", "}"),
+]
+
+
+def kept_lines(text, first, last):
+    """The lines of `text` from the one line starting with `first` to `last` (see KEPT_CPP);
+    None when `first` does not start exactly one line."""
+    lines = [l.rstrip("\r") for l in text.split("\n")]
+    starts = [i for i, l in enumerate(lines) if l.startswith(first)]
+    if len(starts) != 1:
+        return None
+    end = starts[0]
+    while end < len(lines) and not (lines[end] == "}" if last == "}" else lines[end].startswith(last)):
+        end += 1
+    return lines[starts[0]:end + 1] if end < len(lines) else None
 
 
 def strip_if0(text):
@@ -275,6 +335,7 @@ def main():
     only = []
     print_fence = False
     allow_partial = False
+    kept = True
     while args and args[0].startswith("--"):
         if args[0] == "--at" and len(args) >= 2:
             at = args[1]
@@ -284,6 +345,9 @@ def main():
             args = args[2:]
         elif args[0] == "--allow-partial":
             allow_partial = True
+            args = args[1:]
+        elif args[0] == "--no-kept":
+            kept = False
             args = args[1:]
         elif args[0] == "--print-fence":
             print_fence = True
@@ -315,9 +379,12 @@ def main():
     failures = 0
     count = 0
     covered = {}  # source -> set of normalised line indices inside matched regions
+    frozen = {}  # source -> normalised lines of its frozen copy
     for name in ORACLE_FILES:
         for meta, body in regions(os.path.join(oracle_dir, name)):
             src = meta["source"]
+            if src in (s for s, _, _ in KEPT_CPP):
+                frozen[src] = normalise("\n".join(body))
             if only and not any(src.startswith(p) for p in only):
                 continue
             count += 1
@@ -367,7 +434,25 @@ def main():
                 print("DIFF fence %s: a line touching %s is neither copied nor allowlisted: %s" % (
                     src, ", ".join(sorted(set(word.findall(line)))), line))
         print("OK   fence %s: %d lines outside the copies, all allowlisted" % (src, fenced) if not print_fence else "")
-    print("%d regions checked, %d differ" % (count, failures))
+    kept_count = 0
+    for src, first, last in (KEPT_CPP if kept else []):
+        kept_count += 1
+        data, live_lines = live(src)
+        label = "kept C++ %s: %s" % (src, first)
+        text = kept_lines(data.decode("latin-1"), first, last)
+        if text is None:
+            failures += 1
+            print("DIFF %s: not found exactly once in the live source" % label)
+            continue
+        got = normalise("\n".join(text))
+        in_live = len(find_runs(live_lines, got))
+        in_copy = len(find_runs(frozen.get(src, []), got))
+        if in_live == 1 and in_copy == 1:
+            print("OK   %s (%d lines)" % (label, len(got)))
+            continue
+        failures += 1
+        print("DIFF %s: %d matches in the live source, %d in the frozen copy (one each expected)" % (label, in_live, in_copy))
+    print("%d regions and %d kept C++ runs checked, %d differ" % (count, kept_count, failures))
     return 1 if failures else 0
 
 

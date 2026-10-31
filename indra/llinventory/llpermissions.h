@@ -39,6 +39,23 @@ extern void mask_to_string(U32 mask, char* str, bool isOpenSim=false);
 extern std::string mask_to_string(U32 mask, bool isOpenSim=false);
 template<class T> class LLMetaClassT;
 
+// The permission rules are Rust (vkstorm-inventory, vkstorm-rust rung seven).
+// The inline checks below call them directly, one call each; these are the
+// declarations of vkstorm_ffi.h, which llpermissions.cpp includes as well,
+// so the compiler holds them to it.
+extern "C"
+{
+struct VksInvPerms;
+struct VksInvAggregate;
+bool vks_inv_perms_allow_operation_by(const VksInvPerms* p, uint32_t op, const uint8_t* requester,
+                                      const uint8_t* group);
+bool vks_inv_perms_allow_transfer_to(const VksInvPerms* p, const uint8_t* agent);
+bool vks_inv_perms_allow_export_by(const VksInvPerms* p, const uint8_t* agent);
+#ifdef OPENSIM
+bool vks_inv_perms_allow_open_sim_export_by(const VksInvPerms* p, const uint8_t* agent);
+#endif
+}
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Class LLPermissions
 //
@@ -112,6 +129,11 @@ private:
 
     // Fix internal consistency for group/agent ownership
     void fixOwnership();
+
+    // This object as the Rust record (the same layout, asserted in
+    // llpermissions.cpp).
+    const VksInvPerms* vks() const { return reinterpret_cast<const VksInvPerms*>(this); }
+    VksInvPerms* vks() { return reinterpret_cast<VksInvPerms*>(this); }
 
 public:
     static const LLPermissions DEFAULT;
@@ -267,7 +289,7 @@ public:
     // They also return true if the object isn't owned, or the
     // requesting agent is a system agent.  See llpermissionsflags.h
     // for bits.
-    bool allowOperationBy(PermissionBit op, const LLUUID& agent, const LLUUID& group = LLUUID::null) const;
+    inline bool allowOperationBy(PermissionBit op, const LLUUID& agent, const LLUUID& group = LLUUID::null) const;
 
     inline bool allowModifyBy(const LLUUID &agent_id) const;
     inline bool allowCopyBy(const LLUUID& agent_id) const;
@@ -318,62 +340,59 @@ public:
 
 };
 
-// Inlines
+// Inlines (a null group pointer is the null group)
+bool LLPermissions::allowOperationBy(PermissionBit op, const LLUUID& agent, const LLUUID& group) const
+{
+    return vks_inv_perms_allow_operation_by(vks(), op, agent.mData, group.mData);
+}
+
 bool LLPermissions::allowModifyBy(const LLUUID& agent, const LLUUID& group) const
 {
-    return allowOperationBy(PERM_MODIFY, agent, group);
+    return vks_inv_perms_allow_operation_by(vks(), PERM_MODIFY, agent.mData, group.mData);
 }
 
 bool LLPermissions::allowCopyBy(const LLUUID& agent, const LLUUID& group) const
 {
-    return allowOperationBy(PERM_COPY, agent, group);
+    return vks_inv_perms_allow_operation_by(vks(), PERM_COPY, agent.mData, group.mData);
 }
-
 
 bool LLPermissions::allowMoveBy(const LLUUID& agent, const LLUUID& group) const
 {
-    return allowOperationBy(PERM_MOVE, agent, group);
+    return vks_inv_perms_allow_operation_by(vks(), PERM_MOVE, agent.mData, group.mData);
 }
 
 bool LLPermissions::allowModifyBy(const LLUUID& agent) const
 {
-    return allowOperationBy(PERM_MODIFY, agent, LLUUID::null);
+    return vks_inv_perms_allow_operation_by(vks(), PERM_MODIFY, agent.mData, nullptr);
 }
 
 bool LLPermissions::allowCopyBy(const LLUUID& agent) const
 {
-    return allowOperationBy(PERM_COPY, agent, LLUUID::null);
+    return vks_inv_perms_allow_operation_by(vks(), PERM_COPY, agent.mData, nullptr);
 }
 
 bool LLPermissions::allowMoveBy(const LLUUID& agent) const
 {
-    return allowOperationBy(PERM_MOVE, agent, LLUUID::null);
+    return vks_inv_perms_allow_operation_by(vks(), PERM_MOVE, agent.mData, nullptr);
 }
 
 bool LLPermissions::allowExportBy(const LLUUID& agent) const
 {
-    return agent == mOwner && agent == mCreator;
+    return vks_inv_perms_allow_export_by(vks(), agent.mData);
 }
 
 // <FS:CR> Opensim Export Permissions
 #ifdef OPENSIM
 bool LLPermissions::allowOpenSimExportBy(const LLUUID& agent) const
 {
-    return ((mCreator == agent) ? true : (allowOperationBy(PERM_EXPORT, agent, LLUUID::null)));
+    return vks_inv_perms_allow_open_sim_export_by(vks(), agent.mData);
 }
 #endif
 // </FS:CR>
 
 bool LLPermissions::allowTransferTo(const LLUUID &agent_id) const
 {
-    if (mIsGroupOwned)
-    {
-        return allowOperationBy(PERM_TRANSFER, mGroup, mGroup);
-    }
-    else
-    {
-        return ((mOwner == agent_id) ? true : allowOperationBy(PERM_TRANSFER, mOwner));
-    }
+    return vks_inv_perms_allow_transfer_to(vks(), agent_id.mData);
 }
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -443,9 +462,10 @@ protected:
         PI_END = 3,
         PI_COUNT = 3
     };
-    void aggregateBit(EPermIndex idx, bool allowed);
-    void aggregateIndex(EPermIndex idx, U8 bits);
-    static EPermIndex perm2PermIndex(PermissionBit bit);
+
+    // This object as the Rust record (VksInvAggregate, the same layout).
+    const VksInvAggregate* vks() const { return reinterpret_cast<const VksInvAggregate*>(this); }
+    VksInvAggregate* vks() { return reinterpret_cast<VksInvAggregate*>(this); }
 
     // structure used to store the aggregate so far.
     U8 mBits[PI_COUNT];

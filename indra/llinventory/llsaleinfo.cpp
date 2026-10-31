@@ -33,6 +33,14 @@
 #include "message.h"
 #include "llsdutil.h"
 
+#include "llinventory_vks.h"
+
+// The rules are Rust since vkstorm-rust rung seven (sub-rung R1):
+// vkstorm-inventory through vkstorm_ffi.h, over this object in place. The
+// sale type names, the message field I/O and the LLSD forms (asLLSD,
+// fromLLSD, packMessage/unpackMessage LLSD, ll_*_sale_info*: LLInventoryItem's
+// LLSD forms call them, and those stay C++ until R2/R3a) stay here.
+
 // use this to avoid temporary object creation
 const LLSaleInfo LLSaleInfo::DEFAULT;
 
@@ -48,6 +56,16 @@ const char* FOR_SALE_NAMES[] =
     "cntn"
 };
 
+// The legacy writer falls back to "not" for a type without a name, with this
+// warning once.
+static void warn_unknown_sale_type(LLSaleInfo::EForSale type)
+{
+    if (!LLSaleInfo::lookup(type))
+    {
+        LL_WARNS_ONCE() << "Unknown sale type: " << type << LL_ENDL;
+    }
+}
+
 ///----------------------------------------------------------------------------
 /// Class llsaleinfo
 ///----------------------------------------------------------------------------
@@ -57,6 +75,10 @@ LLSaleInfo::LLSaleInfo() :
     mSaleType(LLSaleInfo::FS_NOT),
     mSalePrice(DEFAULT_PRICE)
 {
+    static_assert(sizeof(LLSaleInfo) == VKS_INV_SALE_SIZE && alignof(LLSaleInfo) == alignof(VksInvSale) &&
+                  sizeof(EForSale) == sizeof(int32_t) && offsetof(LLSaleInfo, mSaleType) == 0 &&
+                  offsetof(LLSaleInfo, mSalePrice) == 4,
+                  "LLSaleInfo is VksInvSale");
 }
 
 LLSaleInfo::LLSaleInfo(EForSale sale_type, S32 sale_price) :
@@ -73,24 +95,14 @@ bool LLSaleInfo::isForSale() const
 
 U32 LLSaleInfo::getCRC32() const
 {
-    U32 rv = (U32)mSalePrice;
-    rv += (mSaleType * 0x07073096);
-    return rv;
+    return vks_inv_sale_crc32(vks());
 }
 
 bool LLSaleInfo::exportLegacyStream(std::ostream& output_stream) const
 {
-    const char* type = lookup(mSaleType);
-    if (!type)
-    {
-        LL_WARNS_ONCE() << "Unknown sale type: " << mSaleType << LL_ENDL;
-        type = lookup(LLSaleInfo::FS_NOT);
-    }
-    output_stream << "\tsale_info\t0\n\t{\n";
-    output_stream << "\t\tsale_type\t" << type << "\n";
-    output_stream << "\t\tsale_price\t" << mSalePrice << "\n";
-    output_stream <<"\t}\n";
-    return true;
+    warn_unknown_sale_type(mSaleType);
+    LLInvRecordsPtr text(vks_inv_sale_export_legacy(vks()));
+    return ll_inv_write_text(output_stream, text.get(), "vks_inv_sale_export_legacy");
 }
 
 LLSD LLSaleInfo::asLLSD() const
@@ -138,76 +150,28 @@ bool LLSaleInfo::fromLLSD(const LLSD& sd, bool& has_perm_mask, U32& perm_mask)
 
 bool LLSaleInfo::importLegacyStream(std::istream& input_stream, bool& has_perm_mask, U32& perm_mask)
 {
-    has_perm_mask = false;
-
-    // *NOTE: Changing the buffer size will require changing the scanf
-    // calls below.
-    char buffer[MAX_STRING];    /* Flawfinder: ignore */
-    char keyword[MAX_STRING];   /* Flawfinder: ignore */
-    char valuestr[MAX_STRING];  /* Flawfinder: ignore */
-    bool success = true;
-
-    keyword[0] = '\0';
-    valuestr[0] = '\0';
-    while(success && input_stream.good())
+    LLSaleInfo read;
+    bool read_has = false;
+    U32 read_mask = 0;
+    if (!ll_inv_read_legacy(input_stream, [&](const uint8_t* data, size_t len, VksInvStream& stream) {
+            read = *this;
+            read_has = has_perm_mask;
+            read_mask = perm_mask;
+            return vks_inv_sale_import_legacy(read.vks(), data, len, &read_has, &read_mask, &stream);
+        }))
     {
-        input_stream.getline(buffer, MAX_STRING);
-        // Each line is parsed on its own; a line that does not parse is absent.
-        keyword[0] = '\0';
-        valuestr[0] = '\0';
-        S32 fields = sscanf( /* Flawfinder: ignore */
-            buffer,
-            " %254s %254s",
-            keyword, valuestr);
-        if(!keyword[0])
-        {
-            continue;
-        }
-        if(0 == strcmp("{",keyword))
-        {
-            continue;
-        }
-        if(0 == strcmp("}", keyword))
-        {
-            break;
-        }
-        else if (fields < 2)
-        {
-            // a keyword without a value counts as absent
-            continue;
-        }
-        else if(0 == strcmp("sale_type", keyword))
-        {
-            mSaleType = lookup(valuestr);
-        }
-        else if(0 == strcmp("sale_price", keyword))
-        {
-            if (1 == sscanf(valuestr, "%d", &mSalePrice))
-            {
-                mSalePrice = llclamp(mSalePrice, 0, S32_MAX);
-            }
-        }
-        else if (!strcmp("perm_mask", keyword))
-        {
-            //LL_INFOS() << "found deprecated keyword perm_mask" << LL_ENDL;
-            if (1 == sscanf(valuestr, "%x", &perm_mask))
-            {
-                has_perm_mask = true;
-            }
-        }
-        else
-        {
-            LL_WARNS() << "unknown keyword '" << keyword
-                    << "' in sale info import" << LL_ENDL;
-        }
+        ll_inv_vks_warn("vks_inv_sale_import_legacy");
+        return false;
     }
-    return success;
+    *this = read;
+    has_perm_mask = read_has;
+    perm_mask = read_mask;
+    return true;
 }
 
 void LLSaleInfo::setSalePrice(S32 price)
 {
-    mSalePrice = price;
-    mSalePrice = llclamp(mSalePrice, 0, S32_MAX);
+    vks_inv_sale_set_price(vks(), price);
 }
 
 LLSD LLSaleInfo::packMessage() const
@@ -241,23 +205,21 @@ void LLSaleInfo::unpackMessage(LLSD sales)
 
 void LLSaleInfo::unpackMessage(LLMessageSystem* msg, const char* block)
 {
-    U8 sale_type;
+    U8 sale_type = static_cast<U8>(mSaleType);
+    S32 sale_price = mSalePrice;
     msg->getU8Fast(block, _PREHASH_SaleType, sale_type);
-    mSaleType = static_cast<EForSale>(sale_type);
-    msg->getS32Fast(block, _PREHASH_SalePrice, mSalePrice);
-    mSalePrice = llclamp(mSalePrice, 0, S32_MAX);
-    //msg->getU32Fast(block, _PREHASH_NextOwnerMask, mNextOwnerPermMask);
+    msg->getS32Fast(block, _PREHASH_SalePrice, sale_price);
+    vks_inv_sale_unpack_wire(vks(), sale_type, sale_price);
 }
 
 void LLSaleInfo::unpackMultiMessage(LLMessageSystem* msg, const char* block,
                                     S32 block_num)
 {
-    U8 sale_type;
+    U8 sale_type = static_cast<U8>(mSaleType);
+    S32 sale_price = mSalePrice;
     msg->getU8Fast(block, _PREHASH_SaleType, sale_type, block_num);
-    mSaleType = static_cast<EForSale>(sale_type);
-    msg->getS32Fast(block, _PREHASH_SalePrice, mSalePrice, block_num);
-    mSalePrice = llclamp(mSalePrice, 0, S32_MAX);
-    //msg->getU32Fast(block, _PREHASH_NextOwnerMask, mNextOwnerPermMask, block_num);
+    msg->getS32Fast(block, _PREHASH_SalePrice, sale_price, block_num);
+    vks_inv_sale_unpack_wire(vks(), sale_type, sale_price);
 }
 
 LLSaleInfo::EForSale LLSaleInfo::lookup(const char* name)
@@ -290,12 +252,7 @@ const char* LLSaleInfo::lookup(EForSale type)
 // tightened.
 void LLSaleInfo::accumulate(const LLSaleInfo& sale_info)
 {
-    if(mSaleType != sale_info.mSaleType)
-    {
-        mSaleType = FS_NOT;
-    }
-    mSalePrice += sale_info.mSalePrice;
-    //mNextOwnerPermMask &= sale_info.mNextOwnerPermMask;
+    vks_inv_sale_accumulate(vks(), sale_info.vks());
 }
 
 bool LLSaleInfo::operator==(const LLSaleInfo &rhs) const

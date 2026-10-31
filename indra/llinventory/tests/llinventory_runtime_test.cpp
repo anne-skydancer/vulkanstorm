@@ -1,7 +1,11 @@
-/** Tests for independent SLua source-language and runtime metadata. */
+/** Tests for independent SLua source-language and runtime metadata, and for
+    the boundary of the Rust data model: legacy text from files. */
 #include "linden_common.h"
 #include "llinventory.h"
 #include "../test/lltut.h"
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <sstream>
 
 namespace tut
@@ -100,5 +104,140 @@ template<> template<> void script_inventory_test::test<7>()
     update.erase("metadata");
     item->fromLLSD(update, true);
     ensure("full replacement clears absent runtime", item->getRuntime().empty());
+}
+
+// The legacy readers take the rest of a stream as one window and leave the
+// stream where the C++ readers left it (llinventory_vks.h). A task inventory
+// file is read in text mode, where the delivered bytes differ from the file's
+// (CRLF) and tellg/seekg do not round-trip on Windows (LF): read every item of
+// a file larger than a stream buffer, as LLViewerObject::loadTaskInvFile does,
+// and compare with the same loop over the delivered bytes in memory.
+struct legacy_file_data
+{
+    static std::string fileText()
+    {
+        std::ostringstream out;
+        LLPointer<LLInventoryObject> contents = new LLInventoryObject(LLUUID::generateNewID(), LLUUID::null,
+                                                                      LLAssetType::AT_CATEGORY, "Contents");
+        contents->exportLegacyStream(out);
+        for (S32 i = 0; i < 300; ++i)
+        {
+            LLPermissions perm;
+            perm.init(LLUUID::generateNewID(), LLUUID::generateNewID(), LLUUID::null, LLUUID::null);
+            perm.initMasks(PERM_ALL, PERM_ALL, i % 3 ? PERM_NONE : PERM_COPY, PERM_NONE, PERM_MOVE | PERM_TRANSFER);
+            const std::string name = "Item " + std::to_string(i) + std::string(i % 57, 'n');
+            const std::string desc = std::string(i % 131, 'd');
+            LLPointer<LLInventoryItem> item = new LLInventoryItem(
+                LLUUID::generateNewID(), LLUUID::generateNewID(), perm, LLUUID::generateNewID(),
+                i % 2 ? LLAssetType::AT_NOTECARD : LLAssetType::AT_LSL_TEXT,
+                i % 2 ? LLInventoryType::IT_NOTECARD : LLInventoryType::IT_LSL, name, desc,
+                LLSaleInfo(LLSaleInfo::FS_NOT, i), 0, 1100000000 + i);
+            item->exportLegacyStream(out, true);
+        }
+        return out.str();
+    }
+
+    // The loop of LLViewerObject::loadTaskInvFile: every object read, as its
+    // legacy text, then the stream state.
+    static std::string readAll(std::istream& in)
+    {
+        std::string out;
+        char buffer[MAX_STRING];
+        char keyword[MAX_STRING];
+        while (in.good())
+        {
+            in.getline(buffer, MAX_STRING);
+            if (sscanf(buffer, " %254s", keyword) == EOF)
+            {
+                break;
+            }
+            std::ostringstream text;
+            if (0 == strcmp("inv_item", keyword))
+            {
+                LLPointer<LLInventoryItem> item = new LLInventoryItem;
+                item->importLegacyStream(in);
+                item->exportLegacyStream(text, true);
+            }
+            else if (0 == strcmp("inv_object", keyword))
+            {
+                LLPointer<LLInventoryObject> object = new LLInventoryObject;
+                object->importLegacyStream(in);
+                object->exportLegacyStream(text);
+            }
+            else
+            {
+                text << "unknown " << keyword << "\n";
+            }
+            out += text.str();
+        }
+        out += "state " + std::to_string((int)in.rdstate()) + "\n";
+        return out;
+    }
+
+    static void check(const std::string& label, const std::string& bytes, std::ios::openmode mode)
+    {
+        const std::filesystem::path path = std::filesystem::temp_directory_path() /
+            ("llinventory_legacy_" + std::to_string((unsigned long long)LLUUID::generateNewID().getCRC32()) + ".txt");
+        {
+            std::ofstream file(path, std::ios::binary);
+            file.write(bytes.data(), (std::streamsize)bytes.size());
+        }
+        std::string delivered;
+        {
+            std::ifstream file(path, mode);
+            std::ostringstream all;
+            all << file.rdbuf();
+            delivered = all.str();
+        }
+        std::string from_file;
+        {
+            std::ifstream file(path, mode);
+            from_file = readAll(file);
+        }
+        std::filesystem::remove(path);
+        std::istringstream memory(delivered);
+        const std::string expected = readAll(memory);
+        ensure(label + ": items read", expected.find("inv_item") != std::string::npos);
+        ensure_equals(label, from_file, expected);
+    }
+
+    static std::string crlf(const std::string& text)
+    {
+        std::string out;
+        for (char c : text)
+        {
+            if (c == '\n')
+            {
+                out += '\r';
+            }
+            out += c;
+        }
+        return out;
+    }
+};
+using legacy_file_group = test_group<legacy_file_data>;
+using legacy_file_test = legacy_file_group::object;
+legacy_file_group legacy_file_tests("Legacy inventory text from files");
+
+template<> template<> void legacy_file_test::test<1>()
+{
+    const std::string text = fileText();
+    ensure("larger than a stream buffer", text.size() > 64 * 1024);
+    check("LF, text mode", text, std::ios::in);
+    check("CRLF, text mode", crlf(text), std::ios::in);
+    check("LF, binary mode", text, std::ios::in | std::ios::binary);
+    check("CRLF, binary mode", crlf(text), std::ios::in | std::ios::binary);
+}
+
+template<> template<> void legacy_file_test::test<2>()
+{
+    // A file that ends inside an item, and one whose last item has no "}".
+    const std::string text = fileText();
+    const std::string cut = text.substr(0, text.size() / 2 + 17);
+    check("cut, LF, text mode", cut, std::ios::in);
+    check("cut, CRLF, text mode", crlf(cut), std::ios::in);
+    const std::string open = text.substr(0, text.rfind('}'));
+    check("no last brace, LF, text mode", open, std::ios::in);
+    check("no last brace, CRLF, text mode", crlf(open), std::ios::in);
 }
 }

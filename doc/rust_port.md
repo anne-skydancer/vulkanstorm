@@ -1892,10 +1892,19 @@ BL = FL and BR = FR sample for sample at 5.1, LFE silent.
 The inventory rung follows the pattern of the earlier rungs: the record
 classes (`LLInventoryItem`, `LLInventoryCategory`, `LLPermissions`,
 `LLSaleInfo` and their viewer subclasses) and the `LLInventoryModel`
-containers stay C++, because viewer code writes their fields directly and 145
-files use `gInventory`. Rust makes the decisions behind them; flat records
+containers stay C++, because viewer code writes their fields directly:
+184 files use `gInventory` (about 2,500 lines) and 173 work with
+`LLViewerInventoryItem`. Rust makes the decisions behind them; flat records
 and operation lists cross the C ABI. The plan, the eight open decisions and
 the oracle inventory are in `doc/survey/03-content-model.md` §4-§6.
+
+The model's storage (items, folders, observers) moves to Rust with the UI
+rung, when the inventory panels, folder views and filter, its heaviest
+readers, move to Rust and can read it directly. Moving it before then would
+need a C++ proxy layer over Rust records in every one of those files, which
+the UI rung would throw away. A move of the containers alone after R4b is
+considered only if measurements show the C++ storage to be a bottleneck
+(owner's decision, 2026-10-31).
 
 Sub-rungs and their oracles:
 
@@ -1913,9 +1922,84 @@ copies identical to the production sources they were taken from.
 
 State (October 2026): the oracle phase is complete for all six sub-rungs. R1
 is implemented in the `vkstorm-inventory` crate of vkstorm-core-rust and
-replays every R1 corpus byte for byte, with and without `opensim`; it is not
-yet behind `vkstorm-ffi` and the viewer does not call it. R2-R4b are not
-implemented.
+replays every R1 corpus byte for byte, with and without `opensim`. On
+`codex/inventory-r1` the viewer calls it through `vkstorm-ffi` (`vks_inv_*`,
+vkstorm-core-rust #16): `LLPermissions`, `LLAggregatePermissions`,
+`LLSaleInfo`, the item, category and object rules and `LLNotecard` keep
+their fields and call Rust, and `INTEGRATION_TEST_llinventory_parity`
+compares them with the frozen C++ (0 differences). Legacy text readers take
+the rest of the stream from what its buffer holds and put back what they did
+not consume (`llinventory_vks.h`): `tellg`/`seekg` do not round-trip on a
+Windows text-mode file with LF line ends. R2-R4b are
+implemented in the same crate (vkstorm-core-rust #8, with the map order taken
+from the C++ caller in #9) and replay their oracle recordings per C++
+standard library; none is behind `vkstorm-ffi` yet.
+
+### R1: what is Rust and what stayed C++
+
+Every R1 function was first wired through `vkstorm-ffi` and timed with
+`llinventory_tool bench` (built with `LL_TESTS`): the frozen C++ copies in
+`llinventory_oracle.cpp` against the viewer's Rust-backed classes, in the
+same binary, over 100,000 synthetic items and the Linden Library cache (C10),
+best of three. The owner decided per function from those numbers
+(2026-10-31). Windows, RelWithDebInfo, ns per item (per check for the
+permission checks), C++ (frozen) → Rust:
+
+| Function | C++ → Rust | Kept as |
+|---|---|---|
+| `LLInventoryItem::fromLLSD` (new item each) | 1551.6 → 4224.1 | C++ |
+| `LLInventoryItem::asLLSD` | 2004.5 → 3597.5 | C++ |
+| item legacy export | 4955 → 992 | Rust |
+| item legacy import (new item each) | 7770 → 5798 | Rust |
+| `LLInventoryItem::getCRC32` | 17.0 → 13.6 | Rust |
+| `LLPermissions::fix` | 2.8 → 3.0 | Rust |
+| `allowOperationBy` (5 ops × 3 agents) | 5.8 → 4.1 | Rust |
+| `allowModifyBy` | 3.4 → 1.8 | Rust |
+| `allowCopyBy` | 6.1 → 4.5 | Rust |
+| `allowTransferTo` | 3.0 → 1.9 | Rust |
+| `getOwnership` | 2.9 → 2.4 | Rust |
+| `getSafeOwner` | 2.2 → 3.6 | Rust (cold call) |
+| `initMasks(EType)` | 2.4 → 2.3 | Rust |
+| `LLPermissions::accumulate` | 9.0 → 8.3 | Rust |
+| `setOwnerAndGroup` | 20.2 → 16.3 | Rust |
+| `LLSaleInfo::getCRC32` | 1.7 → 1.8 | Rust |
+| `correctInventoryName` | 43.9 → 77.5 | Rust (cold call) |
+| category legacy export | 1464 → 532 | Rust |
+| category legacy import (new each) | 2289 → 1595 | Rust |
+| Library `fromLLSD` | 652 → 3141 | C++ |
+| Library `asLLSD` | 1890 → 3520 | C++ |
+| Library legacy export | 4750 → 948 | Rust |
+| Library categories `importLLSDMap` | 275.7 → 2853.5 | C++ |
+
+Rust is as fast or faster everywhere except the LLSD forms, which pay for
+flattening a C++ `LLSD` tree into a node buffer, crossing the C ABI and
+building the result tree back (2 to 10 times the C++). So the LLSD forms are
+the original C++ again: `LLInventoryItem::asLLSD`/`fromLLSD`,
+`ll_create_sd_from_inventory_item`, `LLInventoryCategory::asLLSD`,
+`asAISCreateCatLLSD`, `fromLLSD`, `exportLLSD`, `importLLSDMap`,
+`importLLSD`, `ll_create_sd_from_inventory_category` and
+`ll_create_category_from_sd`. For consistency the LLSD forms of
+`LLPermissions` (`packMessage()`/`unpackMessage(LLSD)`, `importLLSD`,
+`ll_create_sd_from_permissions`, `ll_fill_sd_from_permissions`,
+`ll_permissions_from_sd`) and `LLSaleInfo` (`asLLSD`, `fromLLSD`,
+`packMessage()`/`unpackMessage(LLSD)`, `ll_create_sd_from_sale_info`,
+`ll_sale_info_from_sd`) are C++ again too: the item's LLSD forms call them,
+and a crossing left there would remain in the C++ path. They still call the
+Rust rules inside them (`fix`, `fixOwnership`, `initMasks`, `setSalePrice`,
+`rename`...). `check_r1_copies.py` checks on every run that each of them is
+still identical to its frozen copy (`KEPT_CPP`). They retire, rather than
+move, once R2 (the cache load in Rust) and R3a (AIS bodies parsed in Rust,
+option B) no longer build C++ `LLSD` trees; the crate keeps their logic for
+that. `vkstorm-ffi` exports no LLSD entry point for R1 any more, and the
+viewer's `LLSDFlat`/`ll_sd_from_vks_doc` plumbing is gone; both can return
+with R3a. `getSafeOwner` and `correctInventoryName` are slower in Rust by
+nanoseconds but are cold calls, so they stay Rust.
+
+The Linux numbers come from CI: non-Release builds run
+`llinventory_tool bench 3 --library <C10 cache>` on Windows and Linux after
+the tests and append the output to the job summary (the step never fails a
+build). The rows marked `[C++]` there are the LLSD forms, C++ in both
+columns.
 
 ## Local build
 
