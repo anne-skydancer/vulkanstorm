@@ -33,6 +33,13 @@
 #include "message.h"
 #include "llsd.h"
 
+#include "llinventory_vks.h"
+
+// The rules are Rust since vkstorm-rust rung seven (sub-rung R1):
+// vkstorm-inventory through vkstorm_ffi.h. LLPermissions and
+// LLAggregatePermissions are its records in place; the message field I/O,
+// the copy and the debug output stay here.
+
 ///----------------------------------------------------------------------------
 /// Class LLPermissions
 ///----------------------------------------------------------------------------
@@ -44,6 +51,19 @@ bool LLPermissions::sIsInOpenSim = false; // <FS:TJ/> [FIRE-36028] Fix OpenSim o
 // No creator = created by system
 LLPermissions::LLPermissions()
 {
+    static_assert(sizeof(LLPermissions) == VKS_INV_PERMS_SIZE && alignof(LLPermissions) == alignof(VksInvPerms),
+                  "LLPermissions is VksInvPerms");
+    static_assert(offsetof(LLPermissions, mCreator) == VKS_INV_PERMS_OFFSET_CREATOR &&
+                  offsetof(LLPermissions, mOwner) == VKS_INV_PERMS_OFFSET_OWNER &&
+                  offsetof(LLPermissions, mLastOwner) == VKS_INV_PERMS_OFFSET_LAST_OWNER &&
+                  offsetof(LLPermissions, mGroup) == VKS_INV_PERMS_OFFSET_GROUP &&
+                  offsetof(LLPermissions, mMaskBase) == VKS_INV_PERMS_OFFSET_BASE &&
+                  offsetof(LLPermissions, mMaskOwner) == VKS_INV_PERMS_OFFSET_OWNER_MASK &&
+                  offsetof(LLPermissions, mMaskEveryone) == VKS_INV_PERMS_OFFSET_EVERYONE &&
+                  offsetof(LLPermissions, mMaskGroup) == VKS_INV_PERMS_OFFSET_GROUP_MASK &&
+                  offsetof(LLPermissions, mMaskNextOwner) == VKS_INV_PERMS_OFFSET_NEXT_OWNER &&
+                  offsetof(LLPermissions, mIsGroupOwned) == VKS_INV_PERMS_OFFSET_GROUP_OWNED,
+                  "LLPermissions has the field offsets of VksInvPerms");
     init(LLUUID::null, LLUUID::null, LLUUID::null, LLUUID::null);
 }
 
@@ -51,17 +71,7 @@ LLPermissions::LLPermissions()
 // Default to created by system
 void LLPermissions::init(const LLUUID& creator, const LLUUID& owner, const LLUUID& last_owner, const LLUUID& group)
 {
-    mCreator    = creator;
-    mOwner      = owner;
-    mLastOwner  = last_owner;
-    mGroup      = group;
-
-    mMaskBase       = PERM_ALL;
-    mMaskOwner      = PERM_ALL;
-    mMaskEveryone   = PERM_ALL;
-    mMaskGroup      = PERM_ALL;
-    mMaskNextOwner = PERM_ALL;
-    fixOwnership();
+    vks_inv_perms_init(vks(), creator.mData, owner.mData, last_owner.mData, group.mData);
 }
 
 
@@ -69,13 +79,7 @@ void LLPermissions::initMasks(PermissionMask base, PermissionMask owner,
                               PermissionMask everyone, PermissionMask group,
                               PermissionMask next)
 {
-    mMaskBase       = base;
-    mMaskOwner      = owner;
-    mMaskEveryone   = everyone;
-    mMaskGroup      = group;
-    mMaskNextOwner = next;
-    fixFairUse();
-    fix();
+    vks_inv_perms_init_masks(vks(), base, owner, everyone, group, next);
 }
 
 // ! BACKWARDS COMPATIBILITY ! Override masks for inventory types that
@@ -83,57 +87,31 @@ void LLPermissions::initMasks(PermissionMask base, PermissionMask owner,
 // version landmarks that could have had no copy/mod/transfer bits set.
 void LLPermissions::initMasks(LLInventoryType::EType type)
 {
-    if (LLInventoryType::cannotRestrictPermissions(type))
-    {
-        initMasks(PERM_ALL, PERM_ALL, PERM_ALL, PERM_ALL, PERM_ALL);
-    }
+    vks_inv_perms_init_masks_for_type(vks(), (int32_t)type);
 }
 
 bool LLPermissions::getOwnership(LLUUID& owner_id, bool& is_group_owned) const
 {
-    if(mOwner.notNull())
-    {
-        owner_id = mOwner;
-        is_group_owned = false;
-        return true;
-    }
-    else if(mIsGroupOwned)
-    {
-        owner_id = mGroup;
-        is_group_owned = true;
-        return true;
-    }
-    return false;
+    return vks_inv_perms_get_ownership(vks(), owner_id.mData, &is_group_owned);
 }
 
 LLUUID LLPermissions::getSafeOwner() const
 {
-    if(mOwner.notNull())
+    LLUUID owner;
+    if (vks_inv_perms_safe_owner(vks(), owner.mData))
     {
-        return mOwner;
+        return owner;
     }
-    else if(mIsGroupOwned)
-    {
-        return mGroup;
-    }
-    else
-    {
-        LL_WARNS() << "LLPermissions::getSafeOwner() called with no valid owner!" << LL_ENDL;
-        LLUUID unused_uuid;
-        unused_uuid.generate();
+    LL_WARNS() << "LLPermissions::getSafeOwner() called with no valid owner!" << LL_ENDL;
+    LLUUID unused_uuid;
+    unused_uuid.generate();
 
-        return unused_uuid;
-    }
+    return unused_uuid;
 }
 
 U32 LLPermissions::getCRC32() const
 {
-    U32 rv = mCreator.getCRC32();
-    rv += mOwner.getCRC32();
-    rv += mLastOwner.getCRC32();
-    rv += mGroup.getCRC32();
-    rv += mMaskBase + mMaskOwner + mMaskEveryone + mMaskGroup;
-    return rv;
+    return vks_inv_perms_crc32(vks());
 }
 
 void LLPermissions::set(const LLPermissions& from)
@@ -154,51 +132,7 @@ void LLPermissions::set(const LLPermissions& from)
 // Fix hierarchy of permissions.
 void LLPermissions::fix()
 {
-    mMaskOwner &= mMaskBase;
-    mMaskGroup &= mMaskOwner;
-    // next owner uses base, since you may want to sell locked objects.
-    mMaskNextOwner &= mMaskBase;
-    mMaskEveryone &= mMaskOwner;
-    mMaskEveryone &= ~PERM_MODIFY;
-    if(!(mMaskBase & PERM_TRANSFER) && !mIsGroupOwned)
-    {
-        mMaskGroup &= ~PERM_COPY;
-        mMaskEveryone &= ~PERM_COPY;
-        // Do not set mask next owner to too restrictive because if we
-        // rez an object, it may require an ownership transfer during
-        // rez, which will note the overly restrictive perms, and then
-        // fix them to allow fair use, which may be different than the
-        // original intention.
-    }
-}
-
-// Correct for fair use - you can never take away the right to move
-// stuff you own, and you can never take away the right to transfer
-// something you cannot otherwise copy.
-void LLPermissions::fixFairUse()
-{
-    mMaskBase |= PERM_MOVE;
-    if(!(mMaskBase & PERM_COPY))
-    {
-        mMaskBase |= PERM_TRANSFER;
-    }
-    // (mask next owner == PERM_NONE) iff mask base is no transfer
-    if(mMaskNextOwner != PERM_NONE)
-    {
-        mMaskNextOwner |= PERM_MOVE;
-    }
-}
-
-void LLPermissions::fixOwnership()
-{
-    if(mOwner.isNull() && mGroup.notNull())
-    {
-        mIsGroupOwned = true;
-    }
-    else
-    {
-        mIsGroupOwned = false;
-    }
+    vks_inv_perms_fix(vks());
 }
 
 // Allow accumulation of permissions. Results in the tightest
@@ -206,29 +140,7 @@ void LLPermissions::fixOwnership()
 // to LLUUID::null.
 void LLPermissions::accumulate(const LLPermissions& perm)
 {
-    if(perm.mCreator != mCreator)
-    {
-        mCreator = LLUUID::null;
-    }
-    if(perm.mOwner != mOwner)
-    {
-        mOwner = LLUUID::null;
-    }
-    if(perm.mLastOwner != mLastOwner)
-    {
-        mLastOwner = LLUUID::null;
-    }
-    if(perm.mGroup != mGroup)
-    {
-        mGroup = LLUUID::null;
-    }
-
-    mMaskBase &= perm.mMaskBase;
-    mMaskOwner &= perm.mMaskOwner;
-    mMaskGroup &= perm.mMaskGroup;
-    mMaskEveryone &= perm.mMaskEveryone;
-    mMaskNextOwner &= perm.mMaskNextOwner;
-    fix();
+    vks_inv_perms_accumulate(vks(), perm.vks());
 }
 
 // saves last owner, sets current owner, and sets the group.  note
@@ -240,47 +152,7 @@ bool LLPermissions::setOwnerAndGroup(
     const LLUUID& group,
     bool is_atomic)
 {
-    bool allowed = false;
-
-    if( agent.isNull() || mOwner.isNull()
-       || ((agent == mOwner) && ((owner == mOwner) || (mMaskOwner & PERM_TRANSFER)) ) )
-    {
-        // ...system can alway set owner
-        // ...public objects can be claimed by anyone
-        // ...otherwise, agent must own it and have transfer ability
-        allowed = true;
-    }
-
-    if (allowed)
-    {
-        if(mLastOwner.isNull() || (!mOwner.isNull() && (owner != mLastOwner)))
-        {
-            mLastOwner = mOwner;
-        }
-        if((mOwner != owner)
-           || (mOwner.isNull() && owner.isNull() && (mGroup != group)))
-        {
-            mMaskBase = mMaskNextOwner;
-            mOwner = owner;
-            // this is a selective use of fair use for atomic
-            // permissions.
-            if(is_atomic && !(mMaskBase & PERM_COPY))
-            {
-                mMaskBase |= PERM_TRANSFER;
-            }
-        }
-        mGroup = group;
-        fixOwnership();
-        // if it's not atomic and we fix fair use, it blows away
-        //objects as inventory items which have different permissions
-        //than it's contents. :(
-        // fixFairUse();
-        mMaskBase |= PERM_MOVE;
-        if(mMaskNextOwner != PERM_NONE) mMaskNextOwner |= PERM_MOVE;
-        fix();
-    }
-
-    return allowed;
+    return vks_inv_perms_set_owner_and_group(vks(), agent.mData, owner.mData, group.mData, is_atomic);
 }
 
 //Fix for DEV-33917, last owner isn't used much and has little impact on
@@ -289,8 +161,7 @@ bool LLPermissions::setOwnerAndGroup(
 //group owned.
 void LLPermissions::setLastOwner(const LLUUID& last_owner)
 {
-    if (isGroupOwned())
-        mLastOwner = last_owner;
+    vks_inv_perms_set_last_owner(vks(), last_owner.mData);
 }
 
 
@@ -299,55 +170,17 @@ void LLPermissions::setLastOwner(const LLUUID& last_owner)
 // ownerhsip changes
 void LLPermissions::yesReallySetOwner(const LLUUID& owner, bool group_owned)
 {
-    mOwner = owner;
-    mIsGroupOwned = group_owned;
+    vks_inv_perms_yes_really_set_owner(vks(), owner.mData, group_owned);
 }
 
 bool LLPermissions::deedToGroup(const LLUUID& agent, const LLUUID& group)
 {
-    if(group.notNull() && (agent.isNull() || ((group == mGroup)
-                                              && (mMaskOwner & PERM_TRANSFER)
-                                              && (mMaskGroup & PERM_MOVE))))
-    {
-        if(mOwner.notNull())
-        {
-            mLastOwner = mOwner;
-            mOwner.setNull();
-        }
-        mMaskBase = mMaskNextOwner;
-        mMaskGroup = PERM_NONE;
-        mGroup = group;
-        mIsGroupOwned = true;
-        fixFairUse();
-        fix();
-        return true;
-    }
-    return false;
+    return vks_inv_perms_deed_to_group(vks(), agent.mData, group.mData);
 }
 
 bool LLPermissions::setBaseBits(const LLUUID& agent, bool set, PermissionMask bits)
 {
-    bool ownership = false;
-    if(agent.isNull())
-    {
-        // only the system is always allowed to change base bits
-        ownership = true;
-    }
-
-    if (ownership)
-    {
-        if (set)
-        {
-            mMaskBase |= bits;      // turn on bits
-        }
-        else
-        {
-            mMaskBase &= ~bits;     // turn off bits
-        }
-        fix();
-    }
-
-    return ownership;
+    return vks_inv_perms_set_base_bits(vks(), agent.mData, set, bits);
 }
 
 
@@ -355,60 +188,12 @@ bool LLPermissions::setBaseBits(const LLUUID& agent, bool set, PermissionMask bi
 // the function will succeed, but those bits will not be set.
 bool LLPermissions::setOwnerBits(const LLUUID& agent, bool set, PermissionMask bits)
 {
-    bool ownership = false;
-
-    if(agent.isNull())
-    {
-        // ...system always allowed to change things
-        ownership = true;
-    }
-    else if (agent == mOwner)
-    {
-        // ...owner bits can only be set by owner
-        ownership = true;
-    }
-
-    // If we have correct ownership and
-    if (ownership)
-    {
-        if (set)
-        {
-            mMaskOwner |= bits;         // turn on bits
-        }
-        else
-        {
-            mMaskOwner &= ~bits;        // turn off bits
-        }
-        fix();
-    }
-
-    return (ownership);
+    return vks_inv_perms_set_owner_bits(vks(), agent.mData, set, bits);
 }
 
 bool LLPermissions::setGroupBits(const LLUUID& agent, const LLUUID& group, bool set, PermissionMask bits)
 {
-    bool ownership = false;
-    if((agent.isNull()) || (agent == mOwner)
-       || ((group == mGroup) && (!mGroup.isNull())))
-    {
-        // The group bits can be set by the system, the owner, or a
-        // group member.
-        ownership = true;
-    }
-
-    if (ownership)
-    {
-        if (set)
-        {
-            mMaskGroup |= bits;
-        }
-        else
-        {
-            mMaskGroup &= ~bits;
-        }
-        fix();
-    }
-    return ownership;
+    return vks_inv_perms_set_group_bits(vks(), agent.mData, group.mData, set, bits);
 }
 
 
@@ -416,88 +201,14 @@ bool LLPermissions::setGroupBits(const LLUUID& agent, const LLUUID& group, bool 
 // the function will succeed, but those bits will not be set.
 bool LLPermissions::setEveryoneBits(const LLUUID& agent, const LLUUID& group, bool set, PermissionMask bits)
 {
-    bool ownership = false;
-    if((agent.isNull()) || (agent == mOwner)
-       || ((group == mGroup) && (!mGroup.isNull())))
-    {
-        // The everyone bits can be set by the system, the owner, or a
-        // group member.
-        ownership = true;
-    }
-    if (ownership)
-    {
-        if (set)
-        {
-            mMaskEveryone |= bits;
-        }
-        else
-        {
-            mMaskEveryone &= ~bits;
-        }
-
-        // Fix hierarchy of permissions
-        fix();
-    }
-    return ownership;
+    return vks_inv_perms_set_everyone_bits(vks(), agent.mData, group.mData, set, bits);
 }
 
 // Note: If you attempt to set bits that the creator or owner doesn't allow,
 // the function will succeed, but those bits will not be set.
 bool LLPermissions::setNextOwnerBits(const LLUUID& agent, const LLUUID& group, bool set, PermissionMask bits)
 {
-    bool ownership = false;
-    if((agent.isNull()) || (agent == mOwner)
-       || ((group == mGroup) && (!mGroup.isNull())))
-    {
-        // The next owner bits can be set by the system, the owner, or
-        // a group member.
-        ownership = true;
-    }
-    if (ownership)
-    {
-        if (set)
-        {
-            mMaskNextOwner |= bits;
-        }
-        else
-        {
-            mMaskNextOwner &= ~bits;
-        }
-
-        // Fix-up permissions
-        if(!(mMaskNextOwner & PERM_COPY))
-        {
-            mMaskNextOwner |= PERM_TRANSFER;
-        }
-        fix();
-    }
-    return ownership;
-}
-
-bool LLPermissions::allowOperationBy(PermissionBit op, const LLUUID& requester, const LLUUID& group) const
-{
-    if(requester.isNull())
-    {
-        // ...system making request
-        // ...not owned
-        return true;
-    }
-    else if (mIsGroupOwned && (mGroup == requester))
-    {
-        // group checking ownership permissions
-        return (mMaskOwner & op);
-    }
-    else if (!mIsGroupOwned && (mOwner == requester))
-    {
-        // ...owner making request
-        return (mMaskOwner & op);
-    }
-    else if(mGroup.notNull() && (mGroup == group))
-    {
-        // group member making request
-        return ((mMaskGroup & op) || (mMaskEveryone & op));
-    }
-    return (mMaskEveryone & op);
+    return vks_inv_perms_set_next_owner_bits(vks(), agent.mData, group.mData, set, bits);
 }
 
 //
@@ -505,18 +216,7 @@ bool LLPermissions::allowOperationBy(PermissionBit op, const LLUUID& requester, 
 //
 LLSD LLPermissions::packMessage() const
 {
-    LLSD result;
-    result["creator-id"]    = mCreator;
-    result["owner-id"]      = mOwner;
-    result["group-id"]      = mGroup;
-
-    result["base-mask"]     =   (S32)mMaskBase;
-    result["owner-mask"]    =   (S32)mMaskOwner;
-    result["group-mask"]    =   (S32)mMaskGroup;
-    result["everyone-mask"] =   (S32)mMaskEveryone;
-    result["next-owner-mask"]=  (S32)mMaskNextOwner;
-    result["group-owned"]   = (bool)mIsGroupOwned;
-    return result;
+    return ll_inv_sd(vks_inv_perms_pack_message_llsd(vks()), "vks_inv_perms_pack_message_llsd");
 }
 
 //
@@ -538,16 +238,11 @@ void LLPermissions::packMessage(LLMessageSystem* msg) const
 
 void LLPermissions::unpackMessage(LLSD perms)
 {
-    mCreator    =   perms["creator-id"];
-    mOwner  =   perms["owner-id"];
-    mGroup  =   perms["group-id"];
-
-    mMaskBase   =   (U32)perms["base-mask"].asInteger();
-    mMaskOwner  =   (U32)perms["owner-mask"].asInteger();
-    mMaskGroup  =   (U32)perms["group-mask"].asInteger();
-    mMaskEveryone   =   (U32)perms["everyone-mask"].asInteger();
-    mMaskNextOwner  =   (U32)perms["next-owner-mask"].asInteger();
-    mIsGroupOwned   =   perms["group-owned"].asBoolean();
+    LLSDFlat flat(perms);
+    if (!vks_inv_perms_unpack_message_llsd(vks(), flat.get()))
+    {
+        ll_inv_vks_warn("vks_inv_perms_unpack_message_llsd");
+    }
 }
 
 void LLPermissions::unpackMessage(LLMessageSystem* msg, const char* block, S32 block_num)
@@ -566,316 +261,46 @@ void LLPermissions::unpackMessage(LLMessageSystem* msg, const char* block, S32 b
     mIsGroupOwned = tmp;
 }
 
-
-// The mask keywords of the legacy text: a mask line that does not parse
-// (no value, or a value that is not hexadecimal) reads as PERM_NONE.
-static bool is_legacy_mask_keyword(const char* keyword)
-{
-    return !strcmp("creator_mask", keyword) || !strcmp("base_mask", keyword)
-        || !strcmp("owner_mask", keyword) || !strcmp("group_mask", keyword)
-        || !strcmp("everyone_mask", keyword) || !strcmp("next_owner_mask", keyword);
-}
-
 bool LLPermissions::importLegacyStream(std::istream& input_stream)
 {
-    init(LLUUID::null, LLUUID::null, LLUUID::null, LLUUID::null);
-    const S32 BUFSIZE = 16384;
-
-    // *NOTE: Changing the buffer size will require changing the scanf
-    // calls below.
-    char buffer[BUFSIZE];   /* Flawfinder: ignore */
-    char keyword[256];  /* Flawfinder: ignore */
-    char valuestr[256]; /* Flawfinder: ignore */
-    char uuid_str[256]; /* Flawfinder: ignore */
-    U32 mask = 0;
-
-    keyword[0]  = '\0';
-    valuestr[0] = '\0';
-    uuid_str[0] = '\0';
-
-    while (input_stream.good())
+    LLPermissions read;
+    if (!ll_inv_read_legacy(input_stream, [&](const uint8_t* data, size_t len, VksInvStream& stream) {
+            read = *this;
+            return vks_inv_perms_import_legacy(read.vks(), data, len, &stream);
+        }))
     {
-        input_stream.getline(buffer, BUFSIZE);
-        // Each line is parsed on its own; a line that does not parse is absent.
-        keyword[0] = '\0';
-        valuestr[0] = '\0';
-        S32 fields = sscanf( /* Flawfinder: ignore */
-            buffer,
-            " %255s %255s",
-            keyword, valuestr);
-        if (fields < 1)
-        {
-            // a blank line counts as absent
-            continue;
-        }
-        if (!strcmp("{", keyword))
-        {
-            continue;
-        }
-        if (!strcmp("}",keyword))
-        {
-            break;
-        }
-        else if (fields < 2 && !is_legacy_mask_keyword(keyword))
-        {
-            // a keyword without a value counts as absent
-            continue;
-        }
-        else if (!strcmp("creator_mask", keyword))
-        {
-            // legacy support for "creator" masks
-            if (1 == sscanf(valuestr, "%x", &mask))
-            {
-                mMaskBase = mask;
-                fixFairUse();
-            }
-            else
-            {
-                // a mask that does not parse reads as no permissions, never wider
-                mMaskBase = PERM_NONE;
-            }
-        }
-        else if (!strcmp("base_mask", keyword))
-        {
-            if (1 == sscanf(valuestr, "%x", &mask))
-            {
-                mMaskBase = mask;
-                //fixFairUse();
-            }
-            else
-            {
-                // a mask that does not parse reads as no permissions, never wider
-                mMaskBase = PERM_NONE;
-            }
-        }
-        else if (!strcmp("owner_mask", keyword))
-        {
-            if (1 == sscanf(valuestr, "%x", &mask))
-            {
-                mMaskOwner = mask;
-            }
-            else
-            {
-                // a mask that does not parse reads as no permissions, never wider
-                mMaskOwner = PERM_NONE;
-            }
-        }
-        else if (!strcmp("group_mask", keyword))
-        {
-            if (1 == sscanf(valuestr, "%x", &mask))
-            {
-                mMaskGroup = mask;
-            }
-            else
-            {
-                // a mask that does not parse reads as no permissions, never wider
-                mMaskGroup = PERM_NONE;
-            }
-        }
-        else if (!strcmp("everyone_mask", keyword))
-        {
-            if (1 == sscanf(valuestr, "%x", &mask))
-            {
-                mMaskEveryone = mask;
-            }
-            else
-            {
-                // a mask that does not parse reads as no permissions, never wider
-                mMaskEveryone = PERM_NONE;
-            }
-        }
-        else if (!strcmp("next_owner_mask", keyword))
-        {
-            if (1 == sscanf(valuestr, "%x", &mask))
-            {
-                mMaskNextOwner = mask;
-            }
-            else
-            {
-                // a mask that does not parse reads as no permissions, never wider
-                mMaskNextOwner = PERM_NONE;
-            }
-        }
-        else if (!strcmp("creator_id", keyword))
-        {
-            sscanf(valuestr, "%255s", uuid_str);    /* Flawfinder: ignore */
-            mCreator.set(uuid_str);
-        }
-        else if (!strcmp("owner_id", keyword))
-        {
-            sscanf(valuestr, "%255s", uuid_str);    /* Flawfinder: ignore */
-            mOwner.set(uuid_str);
-        }
-        else if (!strcmp("last_owner_id", keyword))
-        {
-            sscanf(valuestr, "%255s", uuid_str);    /* Flawfinder: ignore */
-            mLastOwner.set(uuid_str);
-        }
-        else if (!strcmp("group_id", keyword))
-        {
-            sscanf(valuestr, "%255s", uuid_str);    /* Flawfinder: ignore */
-            mGroup.set(uuid_str);
-        }
-        else if (!strcmp("group_owned", keyword))
-        {
-            if (1 == sscanf(valuestr, "%d", &mask))
-            {
-                if(mask) mIsGroupOwned = true;
-                else mIsGroupOwned = false;
-            }
-        }
-        else
-        {
-            LL_INFOS() << "unknown keyword " << keyword << " in permissions import" << LL_ENDL;
-        }
+        ll_inv_vks_warn("vks_inv_perms_import_legacy");
+        return false;
     }
-    fix();
+    *this = read;
     return true;
 }
 
 
 bool LLPermissions::exportLegacyStream(std::ostream& output_stream) const
 {
-    std::string uuid_str;
-
-    output_stream <<  "\tpermissions 0\n";
-    output_stream <<  "\t{\n";
-
-    std::string buffer;
-    buffer = llformat( "\t\tbase_mask\t%08x\n",     mMaskBase);
-    output_stream << buffer;
-    buffer = llformat( "\t\towner_mask\t%08x\n",        mMaskOwner);
-    output_stream << buffer;
-    buffer = llformat( "\t\tgroup_mask\t%08x\n",        mMaskGroup);
-    output_stream << buffer;
-    buffer = llformat( "\t\teveryone_mask\t%08x\n", mMaskEveryone);
-    output_stream << buffer;
-    buffer = llformat( "\t\tnext_owner_mask\t%08x\n",   mMaskNextOwner);
-    output_stream << buffer;
-
-    mCreator.toString(uuid_str);
-    output_stream <<  "\t\tcreator_id\t" << uuid_str << "\n";
-
-    mOwner.toString(uuid_str);
-    output_stream <<  "\t\towner_id\t" << uuid_str << "\n";
-
-    mLastOwner.toString(uuid_str);
-    output_stream <<  "\t\tlast_owner_id\t" << uuid_str << "\n";
-
-    mGroup.toString(uuid_str);
-    output_stream <<  "\t\tgroup_id\t" << uuid_str << "\n";
-
-    if(mIsGroupOwned)
-    {
-        output_stream <<  "\t\tgroup_owned\t1\n";
-    }
-    output_stream << "\t}\n";
-    return true;
+    LLInvRecordsPtr text(vks_inv_perms_export_legacy(vks()));
+    return ll_inv_write_text(output_stream, text.get(), "vks_inv_perms_export_legacy");
 }
-
-static const std::string PERM_CREATOR_ID_LABEL("creator_id");
-static const std::string PERM_OWNER_ID_LABEL("owner_id");
-static const std::string PERM_LAST_OWNER_ID_LABEL("last_owner_id");
-static const std::string PERM_GROUP_ID_LABEL("group_id");
-static const std::string PERM_IS_OWNER_GROUP_LABEL("is_owner_group");
-static const std::string PERM_BASE_MASK_LABEL("base_mask");
-static const std::string PERM_OWNER_MASK_LABEL("owner_mask");
-static const std::string PERM_GROUP_MASK_LABEL("group_mask");
-static const std::string PERM_EVERYONE_MASK_LABEL("everyone_mask");
-static const std::string PERM_NEXT_OWNER_MASK_LABEL("next_owner_mask");
 
 void LLPermissions::importLLSD(const LLSD& sd_perm)
 {
-    LLSD::map_const_iterator i, end;
-    end = sd_perm.endMap();
-    for (i = sd_perm.beginMap(); i != end; ++i)
+    LLSDFlat flat(sd_perm);
+    if (!vks_inv_perms_import_llsd(vks(), flat.get()))
     {
-        const std::string& label = i->first;
-        if (label == PERM_CREATOR_ID_LABEL)
-        {
-            mCreator = i->second.asUUID();
-            continue;
-        }
-        if (label == PERM_OWNER_ID_LABEL)
-        {
-            mOwner = i->second.asUUID();
-            continue;
-        }
-        if (label == PERM_LAST_OWNER_ID_LABEL)
-        {
-            mLastOwner = i->second.asUUID();
-            continue;
-        }
-        if (label == PERM_GROUP_ID_LABEL)
-        {
-            mGroup = i->second.asUUID();
-            continue;
-        }
-        if (label == PERM_BASE_MASK_LABEL)
-        {
-            PermissionMask mask = i->second.asInteger();
-            mMaskBase = mask;
-            continue;
-        }
-        if (label == PERM_OWNER_MASK_LABEL)
-        {
-            PermissionMask mask = i->second.asInteger();
-            mMaskOwner = mask;
-            continue;
-        }
-        if (label == PERM_EVERYONE_MASK_LABEL)
-        {
-            PermissionMask mask = i->second.asInteger();
-            mMaskEveryone = mask;
-            continue;
-        }
-        if (label == PERM_GROUP_MASK_LABEL)
-        {
-            PermissionMask mask = i->second.asInteger();
-            mMaskGroup = mask;
-            continue;
-        }
-        if (label == PERM_NEXT_OWNER_MASK_LABEL)
-        {
-            PermissionMask mask = i->second.asInteger();
-            mMaskNextOwner = mask;
-            continue;
-        }
+        ll_inv_vks_warn("vks_inv_perms_import_llsd");
     }
-
-    fixOwnership();
-    fix();
 }
 
 bool LLPermissions::operator==(const LLPermissions &rhs) const
 {
-    return
-        (mCreator == rhs.mCreator) &&
-        (mOwner == rhs.mOwner) &&
-        (mLastOwner == rhs.mLastOwner ) &&
-        (mGroup == rhs.mGroup ) &&
-        (mMaskBase == rhs.mMaskBase ) &&
-        (mMaskOwner == rhs.mMaskOwner ) &&
-        (mMaskGroup == rhs.mMaskGroup ) &&
-        (mMaskEveryone == rhs.mMaskEveryone ) &&
-        (mMaskNextOwner == rhs.mMaskNextOwner ) &&
-        (mIsGroupOwned == rhs.mIsGroupOwned);
+    return vks_inv_perms_equal(vks(), rhs.vks());
 }
 
 
 bool LLPermissions::operator!=(const LLPermissions &rhs) const
 {
-    return
-        (mCreator != rhs.mCreator) ||
-        (mOwner != rhs.mOwner) ||
-        (mLastOwner != rhs.mLastOwner ) ||
-        (mGroup != rhs.mGroup ) ||
-        (mMaskBase != rhs.mMaskBase ) ||
-        (mMaskOwner != rhs.mMaskOwner ) ||
-        (mMaskGroup != rhs.mMaskGroup ) ||
-        (mMaskEveryone != rhs.mMaskEveryone ) ||
-        (mMaskNextOwner != rhs.mMaskNextOwner) ||
-        (mIsGroupOwned != rhs.mIsGroupOwned);
+    return !vks_inv_perms_equal(vks(), rhs.vks());
 }
 
 std::ostream& operator<<(std::ostream &s, const LLPermissions &perm)
@@ -901,6 +326,9 @@ const LLAggregatePermissions LLAggregatePermissions::empty;
 
 LLAggregatePermissions::LLAggregatePermissions()
 {
+    static_assert(sizeof(LLAggregatePermissions) == VKS_INV_AGGREGATE_SIZE &&
+                  offsetof(LLAggregatePermissions, mBits) == 0,
+                  "LLAggregatePermissions is VksInvAggregate");
     for(S32 i = 0; i < PI_COUNT; ++i)
     {
         mBits[i] = AP_EMPTY;
@@ -909,13 +337,7 @@ LLAggregatePermissions::LLAggregatePermissions()
 
 LLAggregatePermissions::EValue LLAggregatePermissions::getValue(PermissionBit bit) const
 {
-    EPermIndex idx = perm2PermIndex(bit);
-    EValue rv = AP_EMPTY;
-    if(idx != PI_END)
-    {
-        rv = (LLAggregatePermissions::EValue)(mBits[idx]);
-    }
-    return rv;
+    return (LLAggregatePermissions::EValue)vks_inv_aggregate_value(vks(), bit);
 }
 
 // returns the bits compressed into a single byte: 00TTMMCC
@@ -923,132 +345,22 @@ LLAggregatePermissions::EValue LLAggregatePermissions::getValue(PermissionBit bi
 // LSB is to the right
 U8 LLAggregatePermissions::getU8() const
 {
-    U8 byte = mBits[PI_TRANSFER];
-    byte <<= 2;
-    byte |= mBits[PI_MODIFY];
-    byte <<= 2;
-    byte |= mBits[PI_COPY];
-    return byte;
+    return vks_inv_aggregate_to_u8(vks());
 }
 
 bool LLAggregatePermissions::isEmpty() const
 {
-    for(S32 i = 0; i < PI_END; ++i)
-    {
-        if(mBits[i] != AP_EMPTY)
-        {
-            return false;
-        }
-    }
-    return true;
+    return vks_inv_aggregate_is_empty(vks());
 }
 
 void LLAggregatePermissions::aggregate(PermissionMask mask)
 {
-    bool is_allowed = mask & PERM_COPY;
-    aggregateBit(PI_COPY, is_allowed);
-    is_allowed = mask & PERM_MODIFY;
-    aggregateBit(PI_MODIFY, is_allowed);
-    is_allowed = mask & PERM_TRANSFER;
-    aggregateBit(PI_TRANSFER, is_allowed);
+    vks_inv_aggregate_mask(vks(), mask);
 }
 
 void LLAggregatePermissions::aggregate(const LLAggregatePermissions& ag)
 {
-    for(S32 idx = PI_COPY; idx != PI_END; ++idx)
-    {
-        aggregateIndex((EPermIndex)idx, ag.mBits[idx]);
-    }
-}
-
-void LLAggregatePermissions::aggregateBit(EPermIndex idx, bool allowed)
-{
-    //if(AP_SOME == mBits[idx]) return; // P4 branch prediction optimization
-    switch(mBits[idx])
-    {
-    case AP_EMPTY:
-        mBits[idx] = allowed ? AP_ALL : AP_NONE;
-        break;
-    case AP_NONE:
-        mBits[idx] = allowed ? AP_SOME: AP_NONE;
-        break;
-    case AP_SOME:
-        // no-op
-        break;
-    case AP_ALL:
-        mBits[idx] = allowed ? AP_ALL : AP_SOME;
-        break;
-    default:
-        LL_WARNS() << "Bad aggregateBit " << (S32)idx << " "
-                << (allowed ? "true" : "false") << LL_ENDL;
-        break;
-    }
-}
-
-void LLAggregatePermissions::aggregateIndex(EPermIndex idx, U8 bits)
-{
-    switch(mBits[idx])
-    {
-    case AP_EMPTY:
-        mBits[idx] = bits;
-        break;
-    case AP_NONE:
-        switch(bits)
-        {
-        case AP_SOME:
-        case AP_ALL:
-            mBits[idx] = AP_SOME;
-            break;
-        case AP_EMPTY:
-        case AP_NONE:
-        default:
-            // no-op
-            break;
-        }
-        break;
-    case AP_SOME:
-        // no-op
-        break;
-    case AP_ALL:
-        switch(bits)
-        {
-        case AP_NONE:
-        case AP_SOME:
-            mBits[idx] = AP_SOME;
-            break;
-        case AP_EMPTY:
-        case AP_ALL:
-        default:
-            // no-op
-            break;
-        }
-        break;
-    default:
-        LL_WARNS() << "Bad aggregate index " << (S32)idx << " "
-                <<  (S32)bits << LL_ENDL;
-        break;
-    }
-}
-
-// static
-LLAggregatePermissions::EPermIndex LLAggregatePermissions::perm2PermIndex(PermissionBit bit)
-{
-    EPermIndex idx = PI_END; // past any good value.
-    switch(bit)
-    {
-    case PERM_COPY:
-        idx = PI_COPY;
-        break;
-    case PERM_MODIFY:
-        idx = PI_MODIFY;
-        break;
-    case PERM_TRANSFER:
-        idx = PI_TRANSFER;
-        break;
-    default:
-        break;
-    }
-    return idx;
+    vks_inv_aggregate_merge(vks(), ag.vks());
 }
 
 
@@ -1059,14 +371,9 @@ void LLAggregatePermissions::packMessage(LLMessageSystem* msg, const char* field
 
 void LLAggregatePermissions::unpackMessage(LLMessageSystem* msg, const char* block, const char* field, S32 block_num)
 {
-    const U8 TWO_BITS = 0x3; // binary 00000011
     U8 bits = 0;
     msg->getU8Fast(block, field, bits, block_num);
-    mBits[PI_COPY] = bits & TWO_BITS;
-    bits >>= 2;
-    mBits[PI_MODIFY] = bits & TWO_BITS;
-    bits >>= 2;
-    mBits[PI_TRANSFER] = bits & TWO_BITS;
+    vks_inv_aggregate_from_u8(vks(), bits);
 }
 
 const std::string AGGREGATE_VALUES[4] =
@@ -1086,67 +393,12 @@ std::ostream& operator<<(std::ostream &s, const LLAggregatePermissions &perm)
     return s;
 }
 
-// This converts a permissions mask into a string for debugging use.
+// This converts a permissions mask into a string for debugging use. The
+// export column (X) is there in an OpenSim build only, for isOpenSim.
 void mask_to_string(U32 mask, char* str, bool isOpenSim /*=false*/) // <FS:Beq/> remove misleading X for export when not in OpenSim
 {
-    if (mask & PERM_MOVE)
-    {
-        *str = 'V';
-    }
-    else
-    {
-        *str = ' ';
-    }
-    str++;
-
-    if (mask & PERM_MODIFY)
-    {
-        *str = 'M';
-    }
-    else
-    {
-        *str = ' ';
-    }
-    str++;
-
-    if (mask & PERM_COPY)
-    {
-        *str = 'C';
-    }
-    else
-    {
-        *str = ' ';
-    }
-    str++;
-
-    if (mask & PERM_TRANSFER)
-    {
-        *str = 'T';
-    }
-    else
-    {
-        *str = ' ';
-    }
-    str++;
-
-// <FS:CR> OpenSim export permission
-#ifdef OPENSIM
-    // The export permission is only available in OpenSim.
-    if (isOpenSim)
-    {
-        if (mask & PERM_EXPORT)
-        {
-            *str = 'X';
-        }
-        else
-        {
-            *str = ' ';
-        }
-        str++;
-    }
-#endif
-// </FS:CR>
-    *str = '\0';
+    // At most five characters and the NUL: no more than the C++ wrote.
+    vks_inv_mask_to_string(mask, isOpenSim, str, 6);
 }
 
 std::string mask_to_string(U32 mask, bool isOpenSim /*=false*/) // <FS:Beq/> remove misleading X for export when not in OpenSim
@@ -1162,22 +414,18 @@ std::string mask_to_string(U32 mask, bool isOpenSim /*=false*/) // <FS:Beq/> rem
 
 LLSD ll_create_sd_from_permissions(const LLPermissions& perm)
 {
-    LLSD rv;
-    ll_fill_sd_from_permissions(rv, perm);
-    return rv;
+    return ll_inv_sd(vks_inv_perms_fill_llsd(vks_perms(perm), nullptr), "vks_inv_perms_fill_llsd");
 }
 void ll_fill_sd_from_permissions(LLSD& rv, const LLPermissions& perm)
 {
-    rv[PERM_CREATOR_ID_LABEL] = perm.getCreator();
-    rv[PERM_OWNER_ID_LABEL] = perm.getOwner();
-    rv[PERM_LAST_OWNER_ID_LABEL] = perm.getLastOwner();
-    rv[PERM_GROUP_ID_LABEL] = perm.getGroup();
-    rv[PERM_IS_OWNER_GROUP_LABEL] = perm.isGroupOwned();
-    rv[PERM_BASE_MASK_LABEL] = (LLSD::Integer)perm.getMaskBase();
-    rv[PERM_OWNER_MASK_LABEL] = (LLSD::Integer)perm.getMaskOwner();
-    rv[PERM_GROUP_MASK_LABEL] = (LLSD::Integer)perm.getMaskGroup();
-    rv[PERM_EVERYONE_MASK_LABEL] = (LLSD::Integer)perm.getMaskEveryone();
-    rv[PERM_NEXT_OWNER_MASK_LABEL] = (LLSD::Integer)perm.getMaskNextOwner();
+    LLSDFlat into(rv);
+    VksLlsdDoc* filled = vks_inv_perms_fill_llsd(vks_perms(perm), into.get());
+    if (!filled)
+    {
+        ll_inv_vks_warn("vks_inv_perms_fill_llsd");
+        return;
+    }
+    rv = ll_sd_from_vks_doc(filled);
 }
 
 LLPermissions ll_permissions_from_sd(const LLSD& sd_perm)

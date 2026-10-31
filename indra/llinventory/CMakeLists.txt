@@ -5,12 +5,14 @@ project(llinventory)
 include(00-Common)
 include(LLCommon)
 include(LLCoreHttp)
+include(Rust)
 
 set(llinventory_SOURCE_FILES
     llcategory.cpp
     lleconomy.cpp #<FS:Ansariel> OpenSim legacy economy
     llfoldertype.cpp
     llinventory.cpp
+    llinventory_vks.cpp
     llinventorydefines.cpp
     llinventorysettings.cpp
     llinventorytype.cpp
@@ -34,6 +36,7 @@ set(llinventory_HEADER_FILES
     lleconomy.h #<FS:Ansariel> OpenSim legacy economy
     llfoldertype.h
     llinventory.h
+    llinventory_vks.h
     llinventorydefines.h
     llinventorysettings.h
     llinventorytype.h
@@ -58,7 +61,9 @@ list(APPEND llinventory_SOURCE_FILES ${llinventory_HEADER_FILES})
 
 add_library (llinventory ${llinventory_SOURCE_FILES})
 
-target_link_libraries( llinventory llcommon llmath llmessage llxml )
+# The data model's rules are Rust since vkstorm-rust rung seven, sub-rung R1
+# (vkstorm-inventory through vkstorm_ffi); see doc/rust_port.md.
+target_link_libraries( llinventory llcommon llmath llmessage llxml vkstorm_ffi )
 target_include_directories( llinventory  INTERFACE   ${CMAKE_CURRENT_SOURCE_DIR})
 
 #add unit tests
