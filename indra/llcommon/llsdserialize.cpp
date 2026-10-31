@@ -865,7 +865,6 @@ void LLSDXMLParser::parsePart(const char *buf, llssize len)
 S32 LLSDXMLParser::doParse(std::istream& input, LLSD& data, S32 max_depth) const
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_LLSD;
-    (void)max_depth; // the XML parser never limited depth
     std::string prefix;
     prefix.swap(mPrefix);
     if (mParseLines)
@@ -873,7 +872,12 @@ S32 LLSDXMLParser::doParse(std::istream& input, LLSD& data, S32 max_depth) const
         // Must get rid of any leading \n, otherwise the stream gets into an error/eof state
         clear_eol(input);
     }
-    S32 count = parseWithRust(VKS_LLSD_XML, input, data, LLSDSerialize::SIZE_UNLIMITED, -1, prefix, mParseLines);
+    // <Vulkanstorm> max_depth: the viewer's XML callers pass -1 (unlimited,
+    // as the C++ XML parser always was); a depth-capped caller (AIS replies)
+    // gets PARSE_FAILURE for a value max_depth containers deep or more, as
+    // from the binary and notation parsers.
+    S32 count = parseWithRust(VKS_LLSD_XML, input, data, LLSDSerialize::SIZE_UNLIMITED, max_depth, prefix, mParseLines);
+    // </Vulkanstorm>
     if (count == LLSDParser::PARSE_FAILURE)
     {
         if (mEmitErrors)

@@ -86,15 +86,21 @@ extern const F32 HTTP_REQUEST_EXPIRY_SECS;
 /// @return             Returns true (and writes to out_llsd) if
 ///                     parse was successful.  False otherwise.
 ///
+// <Vulkanstorm> max_depth: LLSDParser's limit for the XML parse, -1
+// (unlimited) by default; a body nested deeper does not parse.
 bool responseToLLSD(LLCore::HttpResponse * response,
                     bool log,
-                    LLSD & out_llsd);
+                    LLSD & out_llsd,
+                    S32 max_depth = -1);
+// </Vulkanstorm>
 
 /// Create a std::string representation of a response object
 /// suitable for logging.  Mainly intended for logging of
 /// failures and debug information.  This won't be fast,
 /// just adequate.
-std::string responseToString(LLCore::HttpResponse * response);
+// <Vulkanstorm> max_depth: as responseToLLSD's, for the LLSD attempt.
+std::string responseToString(LLCore::HttpResponse * response, S32 max_depth = -1);
+// </Vulkanstorm>
 
 
 /// Issue a standard HttpRequest::requestPost() call but using
@@ -289,6 +295,12 @@ private:
     LLEventStream &mReplyPump;
 };
 
+// <Vulkanstorm> The handler the adapter's LLSD calls (postAndSuspend,
+// getAndSuspend, ...) use, with its depth limit: for the oracle that feeds it
+// canned responses (INTEGRATION_TEST_llaisadapter_parity).
+HttpCoroHandler::ptr_t createLLSDHandler(LLEventStream &reply, S32 max_depth = -1);
+// </Vulkanstorm>
+
 //=========================================================================
 /// An adapter to handle some of the boilerplate code surrounding HTTP and coroutine
 /// interaction.
@@ -323,6 +335,15 @@ public:
 
     HttpCoroutineAdapter(std::string name, LLCore::HttpRequest::policy_t policyId);
     ~HttpCoroutineAdapter();
+
+    // <Vulkanstorm> The depth limit of the LLSD bodies this adapter parses
+    // (LLSDParser's max_depth): -1, unlimited, unless a caller sets it. A
+    // body nested deeper counts as unparsable, as malformed XML does: on a
+    // success status the result is an empty map and, when the content type
+    // is application/llsd+xml, the status becomes 499. AIS sets it.
+    void setLLSDMaxDepth(S32 max_depth) { mLLSDMaxDepth = max_depth; }
+    S32 getLLSDMaxDepth() const { return mLLSDMaxDepth; }
+    // </Vulkanstorm>
 
     /// Execute a Post transaction on the supplied URL and yield execution of
     /// the coroutine until a result is available.
@@ -669,6 +690,7 @@ private:
 
     std::string                     mAdapterName;
     LLCore::HttpRequest::policy_t   mPolicyId;
+    S32                             mLLSDMaxDepth = -1; // <Vulkanstorm/>
 
     LLCore::HttpHandle              mYieldingHandle;
     LLCore::HttpRequest::wptr_t     mWeakRequest;

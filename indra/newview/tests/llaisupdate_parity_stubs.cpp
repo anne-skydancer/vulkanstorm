@@ -132,6 +132,13 @@ namespace vks_r3a_http
                               LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers);
         LLSD copyAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const std::string destination,
                             LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers);
+        // The AIS depth cap belongs to the real adapter's parse, which the
+        // scripted results stand for (INTEGRATION_TEST_llaisadapter_parity
+        // records it); the coroutine sets it before every request.
+        void setLLSDMaxDepth(S32 max_depth) { mLLSDMaxDepth = max_depth; }
+        S32 mLLSDMaxDepth = -1;
+        // A request without the cap is an error of the code under test.
+        void check_depth_cap() const;
     };
     const std::string HttpCoroutineAdapter::HTTP_RESULTS = LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS;
 }
@@ -682,7 +689,10 @@ namespace vks_ais
             {
                 return result;
             };
-            steal(InvokeTag())(vks_r3a_http::HttpCoroutineAdapter::ptr_t(), invoke, url, target_id, body,
+            // An adapter as the AIS pool passes one (the coroutine sets the
+            // depth cap on it); the invoke function above does not use it.
+            vks_r3a_http::HttpCoroutineAdapter::ptr_t adapter = std::make_shared<vks_r3a_http::HttpCoroutineAdapter>();
+            steal(InvokeTag())(adapter, invoke, url, target_id, body,
                                recording_callback(with_callback), (AISAPI::COMMAND_TYPE)type);
         }
 
@@ -1297,36 +1307,50 @@ namespace
 LLSD vks_r3a_http::HttpCoroutineAdapter::postAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const LLSD& body,
                                                        LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
+    check_depth_cap();
     return http_call("POST", url, &body, NULL, options, headers);
 }
 
 LLSD vks_r3a_http::HttpCoroutineAdapter::putAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const LLSD& body,
                                                       LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
+    check_depth_cap();
     return http_call("PUT", url, &body, NULL, options, headers);
 }
 
 LLSD vks_r3a_http::HttpCoroutineAdapter::patchAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const LLSD& body,
                                                         LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
+    check_depth_cap();
     return http_call("PATCH", url, &body, NULL, options, headers);
+}
+
+void vks_r3a_http::HttpCoroutineAdapter::check_depth_cap() const
+{
+    if (mLLSDMaxDepth != AIS_MAX_REPLY_DEPTH)
+    {
+        throw std::runtime_error("AIS request through an adapter without the depth cap");
+    }
 }
 
 LLSD vks_r3a_http::HttpCoroutineAdapter::getAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url,
                                                       LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
+    check_depth_cap();
     return http_call("GET", url, NULL, NULL, options, headers);
 }
 
 LLSD vks_r3a_http::HttpCoroutineAdapter::deleteAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url,
                                                          LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
+    check_depth_cap();
     return http_call("DELETE", url, NULL, NULL, options, headers);
 }
 
 LLSD vks_r3a_http::HttpCoroutineAdapter::copyAndSuspend(LLCore::HttpRequest::ptr_t, const std::string& url, const std::string destination,
                                                        LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
+    check_depth_cap();
     return http_call("COPY", url, NULL, &destination, options, headers);
 }
 
