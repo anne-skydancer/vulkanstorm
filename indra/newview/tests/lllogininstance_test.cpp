@@ -386,7 +386,11 @@ namespace tut
         {
             // Global initialization
             // <FS:Beq> Update login test interfaces, initialize fixture state, and cover OpenSim login flows.
-            LLGridManager::createInstance();
+            // <Vulkanstorm> Our LLGridManager is still an LLSingleton
+            // (upstream later made it an LLSimpleton with createInstance()).
+            // LLGridManager::createInstance();
+            LLGridManager::getInstance();
+            // </Vulkanstorm>
             gGridLoginURIs = {VIEWERLOGIN_URI};
             gOpenSimGrid = true;
             logininstance->setLastExecEvent(0);
