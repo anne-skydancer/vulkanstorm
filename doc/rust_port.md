@@ -2028,8 +2028,10 @@ The picture matches Windows: the text forms and CRCs are 1.1 to 4 times
 faster, the permission checks equal. Four rows are slower by one to nine
 nanoseconds (`getOwnership`, `getSafeOwner`, `LLSaleInfo::getCRC32`,
 `correctInventoryName`): GCC inlines the C++ forms, which the call into the
-Rust library cannot be without cross-language LTO. They stay Rust, as the
-owner decided for the cold `getSafeOwner` and `correctInventoryName`.
+Rust library cannot be without cross-language LTO. `getSafeOwner` and
+`correctInventoryName` stay Rust (owner's decision: cold calls);
+`getOwnership` and `LLSaleInfo::getCRC32`, faster or equal on Windows, are
+Rust pending the owner's decision on these numbers.
 
 ## Local build
 
