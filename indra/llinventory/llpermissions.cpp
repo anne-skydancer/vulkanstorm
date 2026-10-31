@@ -51,7 +51,17 @@ const LLPermissions LLPermissions::DEFAULT;
 bool LLPermissions::sIsInOpenSim = false; // <FS:TJ/> [FIRE-36028] Fix OpenSim object permissions
 
 // No creator = created by system
+// <Vulkanstorm> The scalars start initialised: init() hands this object to
+// Rust as a Permissions reference, which must hold valid values (a bool is 0
+// or 1) even though init() overwrites them.
 LLPermissions::LLPermissions()
+:   mMaskBase(PERM_NONE),
+    mMaskOwner(PERM_NONE),
+    mMaskEveryone(PERM_NONE),
+    mMaskGroup(PERM_NONE),
+    mMaskNextOwner(PERM_NONE),
+    mIsGroupOwned(false)
+// </Vulkanstorm>
 {
     static_assert(sizeof(LLPermissions) == VKS_INV_PERMS_SIZE && alignof(LLPermissions) == alignof(VksInvPerms),
                   "LLPermissions is VksInvPerms");
