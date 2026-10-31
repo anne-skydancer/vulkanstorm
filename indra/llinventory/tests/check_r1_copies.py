@@ -49,7 +49,8 @@ the test and re-runs the check). When a port step replaces a copied source on
 purpose, it narrows that run with --only to the sources it did not replace
 (for example --only indra/newview --allow-partial, which keeps the viewer
 subclass copies and their fence checked) and checks the frozen copies once against the commit
-they were made from with --at 040ec69cfe.
+the step starts from with --at <commit> (the README of the fixtures names the
+reference; the R1 wiring used 283fab629f).
 
 A partial run (--only) is refused unless --allow-partial is also given.
 

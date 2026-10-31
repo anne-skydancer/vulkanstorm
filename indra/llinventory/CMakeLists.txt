@@ -101,9 +101,26 @@ if (LL_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/lltransactionflags.h ${CMAKE_CURRENT_SOURCE_DIR}/lltransactionflags.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/llnotecard.h ${CMAKE_CURRENT_SOURCE_DIR}/llnotecard.cpp
         ${CMAKE_SOURCE_DIR}/newview/llviewerinventory.h ${CMAKE_SOURCE_DIR}/newview/llviewerinventory.cpp)
+    # Since R1 is wired, llpermissions, llsaleinfo, llinventory and llnotecard
+    # call Rust and no longer match their copies: the check covers the sources
+    # that were not replaced (the type tables and the viewer subclasses, whose
+    # identifier fence stays). The frozen copies were checked once against the
+    # commit the wiring started from (check_r1_copies.py --at 283fab629f: all
+    # 35 regions; at 60184e5054 the llinventory.cpp region differs, as the
+    # copies follow the Firestorm 7.2.5 sources since 2591f7448d).
     add_custom_command(TARGET INTEGRATION_TEST_llinventory_parity POST_BUILD
-        COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_r1_copies.py ${CMAKE_SOURCE_DIR}/..
-        COMMENT "Checking the frozen copies of the inventory oracle against their sources")
+        COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_r1_copies.py
+            --only indra/newview
+            --only indra/llcommon/llassettype
+            --only indra/llinventory/llpermissionsflags.h
+            --only indra/llinventory/llinventorytype
+            --only indra/llinventory/llfoldertype
+            --only indra/llinventory/llinventorydefines
+            --only indra/llinventory/llcategory
+            --only indra/llinventory/llinventorysettings
+            --only indra/llinventory/lltransactionflags
+            --allow-partial ${CMAKE_SOURCE_DIR}/..
+        COMMENT "Checking the frozen copies of the inventory oracle against the sources not yet replaced")
     # Fixture writer and C++ baseline benchmark for the same corpora; built, not run.
     add_executable(llinventory_tool tests/llinventory_tool.cpp tests/llinventory_oracle.cpp)
     target_link_libraries(llinventory_tool ${test_libs} llmessage ll::zlib-ng)
