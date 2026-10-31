@@ -708,6 +708,9 @@ public:
 
     friend class LLViewerObjectList;
     friend class LLViewerMediaList;
+    // <Vulkanstorm> R4a: carries out the Rust task-inventory decisions
+    friend struct LLTaskInventoryExecutor;
+    // </Vulkanstorm>
 
 public:
     LLViewerTexture* getBakedTextureForMagicId(const LLUUID& id);
@@ -780,14 +783,9 @@ private:
 
     static void initObjectDataMap();
 
-    // forms task inventory request if none are pending, marks request as pending
-    void fetchInventoryFromServer();
-
-    // forms task inventory request after some time passed, marks request as pending
-    void fetchInventoryDelayed(const F64 &time_seconds);
-    static void fetchInventoryDelayedCoro(const LLUUID task_inv, const F64 time_seconds);
-    static void fetchInventoryFromCapCoro(const LLUUID task_inv);
-    static void createInventoryItemCoro(const std::string cap_url, const LLSD body, std::function<void(bool, const LLSD&)> callback);
+    // <Vulkanstorm> R4a: the fetches, coroutines and the update logic are the
+    // Rust decisions and LLTaskInventoryExecutor (lltaskinventoryexecutor.inl)
+    // </Vulkanstorm>
 
 public:
     //
@@ -929,10 +927,6 @@ protected:
     // savescript.
     void deleteInventoryItem(const LLUUID& item_id);
 
-    // do the update/caching logic. called by saveScript and
-    // updateInventory.
-    void doUpdateInventory(LLPointer<LLViewerInventoryItem>& item, U8 key, bool is_new);
-
     static LLViewerObject *createObject(const LLUUID &id, LLPCode pcode, LLViewerRegion *regionp, S32 flags = 0);
 
     // Hide or show HUD, icon and particles
@@ -943,10 +937,7 @@ protected:
     // inventory functionality
     //
 
-    static void processTaskInvFile(void** user_data, S32 error_code, LLExtStat ext_status);
     bool loadTaskInvFile(const std::string& filename);
-    void loadTaskInvLLSD(const LLSD &inv_result);
-    void doInventoryCallback();
 
     bool isOnMap();
 

@@ -1612,6 +1612,7 @@ set(viewer_HEADER_FILES
     llsyswellitem.h
     llsyswellwindow.h
     lltable.h
+    lltaskinventoryexecutor.inl
     llteleporthistory.h
     llteleporthistorystorage.h
     llterrainpaintmap.h
