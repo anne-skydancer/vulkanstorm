@@ -211,6 +211,7 @@ set(llcommon_HEADER_FILES
     llrun.h
     llsafehandle.h
     llsd.h
+    llsdflat.h
     llsdjson.h
     llsdparam.h
     llsdserialize.h

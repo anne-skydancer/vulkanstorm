@@ -35,6 +35,7 @@
 
 #include "linden_common.h"
 #include "llsdserialize.h"
+#include "llsdflat.h"
 #include "llpointer.h"
 #include "llstreamtools.h" // for cat_streambuf
 
@@ -772,6 +773,120 @@ namespace
         vks_llsd_escape(kind, reinterpret_cast<const uint8_t*>(in.data()), in.size(), &out, &appendToString);
         return out;
     }
+}
+
+/**
+ * LLSD values for the later rungs' calls (llsdflat.h): the node buffer is
+ * the one buildLLSD reads, written from the tree without coercion.
+ */
+LLSDFlat::LLSDFlat(const LLSD& sd)
+{
+    if (sd.isDefined())
+    {
+        add(sd);
+    }
+    mFlat.nodes = mNodes.empty() ? nullptr : mNodes.data();
+    mFlat.node_count = mNodes.size();
+    mFlat.bytes = mBytes.empty() ? nullptr : mBytes.data();
+    mFlat.byte_len = mBytes.size();
+}
+
+void LLSDFlat::addNode(uint8_t kind, uint32_t len, uint64_t payload)
+{
+    VksLlsdNode node{};
+    node.kind = kind;
+    node.len = len;
+    node.payload = payload;
+    mNodes.push_back(node);
+}
+
+void LLSDFlat::addBytes(uint8_t kind, const void* data, size_t len)
+{
+    const uint64_t offset = mBytes.size();
+    const uint8_t* p = static_cast<const uint8_t*>(data);
+    mBytes.insert(mBytes.end(), p, p + len);
+    addNode(kind, (uint32_t)len, offset);
+}
+
+void LLSDFlat::add(const LLSD& sd)
+{
+    switch (sd.type())
+    {
+    case LLSD::TypeBoolean:
+        addNode(VKS_LLSD_NODE_BOOLEAN, 0, sd.asBoolean() ? 1 : 0);
+        break;
+    case LLSD::TypeInteger:
+        addNode(VKS_LLSD_NODE_INTEGER, 0, (uint64_t)(int64_t)sd.asInteger());
+        break;
+    case LLSD::TypeReal:
+    {
+        // The bits as stored, NaN payloads included.
+        const F64 v = sd.asReal();
+        uint64_t bits;
+        memcpy(&bits, &v, sizeof(bits));
+        addNode(VKS_LLSD_NODE_REAL, 0, bits);
+        break;
+    }
+    case LLSD::TypeString:
+    {
+        const std::string& s = sd.asStringRef();
+        addBytes(VKS_LLSD_NODE_STRING, s.data(), s.size());
+        break;
+    }
+    case LLSD::TypeUUID:
+        addBytes(VKS_LLSD_NODE_UUID, sd.asUUID().mData, UUID_BYTES);
+        break;
+    case LLSD::TypeDate:
+    {
+        const F64 v = sd.asDate().secondsSinceEpoch();
+        uint64_t bits;
+        memcpy(&bits, &v, sizeof(bits));
+        addNode(VKS_LLSD_NODE_DATE, 0, bits);
+        break;
+    }
+    case LLSD::TypeURI:
+    {
+        const std::string s = sd.asString();
+        addBytes(VKS_LLSD_NODE_URI, s.data(), s.size());
+        break;
+    }
+    case LLSD::TypeBinary:
+    {
+        const LLSD::Binary& b = sd.asBinary();
+        addBytes(VKS_LLSD_NODE_BINARY, b.data(), b.size());
+        break;
+    }
+    case LLSD::TypeMap:
+        addNode(VKS_LLSD_NODE_MAP, (uint32_t)sd.size(), 0);
+        for (LLSD::map_const_iterator it = sd.beginMap(), end = sd.endMap(); it != end; ++it)
+        {
+            addBytes(VKS_LLSD_NODE_KEY, it->first.data(), it->first.size());
+            add(it->second);
+        }
+        break;
+    case LLSD::TypeArray:
+        addNode(VKS_LLSD_NODE_ARRAY, (uint32_t)sd.size(), 0);
+        for (LLSD::array_const_iterator it = sd.beginArray(), end = sd.endArray(); it != end; ++it)
+        {
+            add(*it);
+        }
+        break;
+    case LLSD::TypeUndefined:
+    default:
+        addNode(VKS_LLSD_NODE_UNDEF, 0, 0);
+        break;
+    }
+}
+
+LLSD ll_sd_from_vks_doc(VksLlsdDoc* doc)
+{
+    LLSD out;
+    if (doc)
+    {
+        buildLLSD(doc, out, true);
+        vks_llsd_doc_free(doc);
+    }
+    return out;
 }
 
 /**
