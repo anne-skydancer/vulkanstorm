@@ -2001,6 +2001,70 @@ the tests and append the output to the job summary (the step never fails a
 build). The rows marked `[C++]` there are the LLSD forms, C++ in both
 columns.
 
+### R3a: AIS replies
+
+R3a moves AIS reply handling to the `ais` module of `vkstorm-inventory`
+(`vkstorm-ffi` `vks_inv_ais_*`, header section "Inventory R3a"). AIS replies
+cross as decided on 2026-10-28 (option B): AIS installs its own handler on
+the coroutine adapter (`llaisreply.{h,cpp}`, through the adapter's new
+`setLLSDHandlerFactory`; other users keep the LLSD handler), which hands the
+raw status, message, URL, headers and body to Rust. Rust builds the result
+the C++ LLSD handler would have posted, as a Rust value; no C++ `LLSD` tree
+is built, except for the log lines that print one (`AISReply::asLLSD`).
+
+Two approved fixes came first, in C++, with their recordings:
+
+- **Finding 9** (2026-10-28): a created item of no asset type, which
+  `addItem()` refuses, is no longer counted as a new descendant of its folder
+  (2fab9075e3, fixtures d779109bd9; the Rust parse does the same). Its
+  completion callback still fires (the id is the server's
+  `_created_items`; changing that is a separate question for the owner).
+- **The AIS depth cap** (2026-10-29): an AIS reply nested 256 containers deep
+  counts as unparsable, the path of malformed XML (an empty result; on a
+  success with the exact content type `application/llsd+xml`, status 499).
+  `vkstorm-llsd`'s XML parser now honours `max_depth` (the viewer's other
+  XML callers pass -1, unlimited); `responseToString` logs an unparsable body
+  with the same limit (a 100,000-level body crashed the 499 path while being
+  logged). A depth-50 fetch nests about 160 levels.
+
+What is Rust and what stayed C++:
+
+| Part | Where |
+|---|---|
+| The adapter's work on an AIS response (`HttpCoroLLSDHandler`: body parse, `content`, `http_result`, `error_body`, the 499, the depth cap) | Rust (`ais::reply`) |
+| The scheduling of a large body's parse (General work queue over 64 KB) | C++; R3a parses on the calling thread, the option B change restores the worker queue |
+| The coroutine's status, error branch (410 refetch and delete, 403 notification with its first-call flag) and completion callback ids | Rust (`ais::result`) |
+| `AISUpdate`'s parse (`parseMeta` ... `parseEmbeddedCategories`) | Rust (`ais::update`), querying the model through a host table in the C++ order, with `checkTimeout()` at the parse checkpoints |
+| The viewer objects the parse produces | C++ objects made from the Rust records (one per record) |
+| `doUpdate()`, `checkTimeout()`, the timers, the coroutine plumbing, the model | C++ |
+| The command functions (`CreateInventory` ... `FetchOrphans`) | C++: they build C++ `LLSD` request bodies and bind adapter methods; the crate's `ais::command` has their logic |
+
+Oracles: `INTEGRATION_TEST_llaisupdate_parity` (the update corpus, 140
+cases: never 0 differ, sched 0 differ, drift guard 0 findings) and the new
+`INTEGRATION_TEST_llaisadapter_parity` (`fixtures/inventory/ais/adapter`:
+canned responses, 16 statuses x 18 bodies x 6 content types, 1,728 cases,
+recorded from the C++ LLSD handler; the AIS handler reproduces all of them,
+with the 150 success bodies over 64 KB parsed on the calling thread until
+the option B change). `INTEGRATION_TEST_llinvfetch_parity` runs the real
+adapter against the mock AIS server, so it covers the whole Rust path too.
+
+Bench (`VKS_AISUPDATE_BENCH=<rounds>`; CI runs it on Windows and Linux): a
+folder fetch at depth 50 through the adapter and the parse, on an empty
+model, the C++ of before R3a (frozen in `llaisupdate_bench_cpp.inc`) against
+the Rust path, same binary. Windows, RelWithDebInfo, best of 5, ms, with
+other builds running on the machine:
+
+| Reply | Step | C++ (before) → Rust |
+|---|---|---|
+| s10a, 26.7 MB, 22,500 objects | adapter (body → result) | 238.1 → 151.3 |
+| | parse (result → viewer objects) | 248.8 → 197.9 |
+| | total, result freed | 548.6 → 377.0 |
+| s01a, 7.5 KB, 7 objects (best of 2,000) | adapter | 0.048 → 0.028 |
+| | parse | 0.075 → 0.049 |
+| | total | 0.126 → 0.080 |
+
+Rust is faster at both sizes; nothing stays C++ for speed.
+
 ## Local build
 
 Follow the project's RelWithDebInfo procedure (see `scripts/validate_audio.sh`
