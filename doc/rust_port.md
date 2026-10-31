@@ -2029,9 +2029,9 @@ faster, the permission checks equal. Four rows are slower by one to nine
 nanoseconds (`getOwnership`, `getSafeOwner`, `LLSaleInfo::getCRC32`,
 `correctInventoryName`): GCC inlines the C++ forms, which the call into the
 Rust library cannot be without cross-language LTO. `getSafeOwner` and
-`correctInventoryName` stay Rust (owner's decision: cold calls);
-`getOwnership` and `LLSaleInfo::getCRC32`, faster or equal on Windows, are
-Rust pending the owner's decision on these numbers.
+`correctInventoryName` stay Rust (owner's decision: cold calls), and so do
+`getOwnership` and `LLSaleInfo::getCRC32`, faster or equal on Windows (owner's
+decision on these numbers: a nanosecond or two is noise).
 
 ## Local build
 
