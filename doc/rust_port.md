@@ -2063,6 +2063,11 @@ other builds running on the machine:
 | | parse | 0.075 → 0.049 |
 | | total | 0.126 → 0.080 |
 
+CI (run 41253303267, best of 3, total with the result freed): Linux GCC
+s10a 431.9 → 329.9 ms (adapter 292.5 → 215.1, parse 116.5 → 92.4), s01a
+0.138 → 0.089 ms; Windows runner s10a 829.3 → 551.7 ms, s01a 0.242 → 0.149
+ms.
+
 Rust is faster at both sizes; nothing stays C++ for speed.
 
 ## Local build
