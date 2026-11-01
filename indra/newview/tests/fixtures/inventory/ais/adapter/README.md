@@ -83,4 +83,5 @@ What it shows (each a case to keep when the handler is replaced):
 Recorded on Windows (MSVC, RelWithDebInfo). Linux (GCC) dumps are made by
 the `record_inventory_fixtures` input of the Build workflow; they must be
 identical in `expected.llsd` and in every `expected.txt` line but the
-header.
+header. The CI dump (run 41253303267, GCC on Ubuntu 24.04) is: one tree
+serves both standard libraries.
