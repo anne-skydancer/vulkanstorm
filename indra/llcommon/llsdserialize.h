@@ -754,9 +754,12 @@ public:
      * @param sd [out] The data found on the stream
      * @param str The incoming stream
      * @param max_bytes the maximum number of bytes to parse
+     * @param max_depth the parser's depth limit (LLSDParser::parse): a value
+     *        nested this many containers deep fails the parse; -1 unlimited
+     *        <Vulkanstorm/>
      * @return Returns true if the stream appears to contain valid data
      */
-    static bool deserialize(LLSD& sd, std::istream& str, llssize max_bytes);
+    static bool deserialize(LLSD& sd, std::istream& str, llssize max_bytes, S32 max_depth = -1);
 
     /*
      * Notation Methods

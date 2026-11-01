@@ -109,7 +109,7 @@ private:
 // *TODO:  Currently converts only from XML content.  A mode
 // to convert using fromBinary() might be useful as well.  Mesh
 // headers could use it.
-bool responseToLLSD(HttpResponse * response, bool log, LLSD & out_llsd)
+bool responseToLLSD(HttpResponse * response, bool log, LLSD & out_llsd, S32 max_depth)
 {
     // Convert response to LLSD
     BufferArray * body(response->getBody());
@@ -122,7 +122,8 @@ bool responseToLLSD(HttpResponse * response, bool log, LLSD & out_llsd)
     LLCore::BufferArrayStream bas(body);
     LLSD body_llsd;
 
-    if (!LLSDSerialize::deserialize(body_llsd, bas, body_size))
+    // <Vulkanstorm> the caller's depth limit (an over-deep body fails the parse)
+    if (!LLSDSerialize::deserialize(body_llsd, bas, body_size, max_depth))
     {
         return false;
     }
@@ -205,7 +206,7 @@ HttpHandle requestPatchWithLLSD(HttpRequest * request,
 }
 
 
-std::string responseToString(LLCore::HttpResponse * response)
+std::string responseToString(LLCore::HttpResponse * response, S32 max_depth)
 {
     static const std::string empty("[Empty]");
 
@@ -222,7 +223,7 @@ std::string responseToString(LLCore::HttpResponse * response)
 
     // Attempt to parse as LLSD regardless of content-type
     LLSD body_llsd;
-    if (responseToLLSD(response, false, body_llsd))
+    if (responseToLLSD(response, false, body_llsd, max_depth)) // <Vulkanstorm/> max_depth
     {
         std::ostringstream tmp;
 
@@ -446,16 +447,20 @@ void HttpCoroHandler::writeStatusCodes(LLCore::HttpStatus status, const std::str
 class HttpCoroLLSDHandler : public HttpCoroHandler
 {
 public:
-    HttpCoroLLSDHandler(LLEventStream &reply);
+    HttpCoroLLSDHandler(LLEventStream &reply, S32 max_depth = -1); // <Vulkanstorm/> max_depth
 
 protected:
     virtual LLSD handleSuccess(LLCore::HttpResponse * response, LLCore::HttpStatus &status) const;
     virtual LLSD parseBody(LLCore::HttpResponse *response, bool &success) const;
+
+private:
+    S32 mMaxDepth; // <Vulkanstorm/> the adapter's LLSD depth limit
 };
 
 //-------------------------------------------------------------------------
-HttpCoroLLSDHandler::HttpCoroLLSDHandler(LLEventStream &reply):
-    HttpCoroHandler(reply)
+HttpCoroLLSDHandler::HttpCoroLLSDHandler(LLEventStream &reply, S32 max_depth):
+    HttpCoroHandler(reply),
+    mMaxDepth(max_depth)
 {
 }
 
@@ -478,7 +483,10 @@ LLSD HttpCoroLLSDHandler::handleSuccess(LLCore::HttpResponse * response, LLCore:
 
         if (contentType && (HTTP_CONTENT_LLSD_XML == *contentType))
         {
-            std::string thebody = LLCoreHttpUtil::responseToString(response);
+            // <Vulkanstorm> The same depth limit: re-parsing an over-deep
+            // body without it to log it would build the tree the limit refuses.
+            std::string thebody = LLCoreHttpUtil::responseToString(response, mMaxDepth);
+            // </Vulkanstorm>
             LL_WARNS("CoreHTTP") << "Failed to deserialize . " << response->getRequestURL() << " [status:" << response->getStatus().toString() << "] "
                 << " body: " << thebody << LL_ENDL;
 
@@ -511,7 +519,7 @@ LLSD HttpCoroLLSDHandler::parseBody(LLCore::HttpResponse *response, bool &succes
 
     LLSD result;
 
-    if (!LLCoreHttpUtil::responseToLLSD(response, true, result))
+    if (!LLCoreHttpUtil::responseToLLSD(response, true, result, mMaxDepth)) // <Vulkanstorm/> mMaxDepth
     {
         success = false;
         return LLSD();
@@ -724,7 +732,7 @@ LLSD HttpCoroutineAdapter::postAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName, true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump);
+    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
 
     return postAndSuspend_(request, url, body, options, headers, httpHandler);
 }
@@ -761,7 +769,7 @@ LLSD HttpCoroutineAdapter::postAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName, true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump);
+    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
 
     return postAndSuspend_(request, url, rawbody, options, headers, httpHandler);
 }
@@ -884,7 +892,7 @@ LLSD HttpCoroutineAdapter::putAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName + "Reply", true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump);
+    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
 
     return putAndSuspend_(request, url, body, options, headers, httpHandler);
 }
@@ -969,7 +977,7 @@ LLSD HttpCoroutineAdapter::getAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName + "Reply", true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump);
+    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
 
     return getAndSuspend_(request, url, options, headers, httpHandler);
 }
@@ -1024,7 +1032,7 @@ LLSD HttpCoroutineAdapter::deleteAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName + "Reply", true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump);
+    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
 
     return deleteAndSuspend_(request, url, options, headers, httpHandler);
 }
@@ -1069,7 +1077,7 @@ LLSD HttpCoroutineAdapter::patchAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName + "Reply", true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump);
+    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
 
     return patchAndSuspend_(request, url, body, options, headers, httpHandler);
 }
@@ -1107,7 +1115,7 @@ LLSD HttpCoroutineAdapter::copyAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName + "Reply", true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump);
+    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
 
     if (!headers)
         headers = std::make_shared<LLCore::HttpHeaders>();
@@ -1149,7 +1157,7 @@ LLSD HttpCoroutineAdapter::moveAndSuspend(LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers)
 {
     LLEventStream  replyPump(mAdapterName + "Reply", true);
-    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump);
+    HttpCoroHandler::ptr_t httpHandler = std::make_shared<HttpCoroLLSDHandler>(replyPump, mLLSDMaxDepth); // <Vulkanstorm/> mLLSDMaxDepth
 
     if (!headers)
         headers = std::make_shared<LLCore::HttpHeaders>();

@@ -909,6 +909,75 @@ namespace tut
             8);
     }
 
+    // <Vulkanstorm> max_depth in the XML parser, counted as the binary and
+    // notation parsers count it: a value nested max_depth containers deep or
+    // more fails the parse; -1 is unlimited. AIS replies are parsed with 256.
+    namespace
+    {
+        // levels arrays (or maps, key "k") around <integer>7</integer>,
+        // and the LLSD it parses to.
+        std::string nested_xml(S32 levels, bool maps, LLSD* expected = nullptr)
+        {
+            std::string open(maps ? "<map><key>k</key>" : "<array>");
+            std::string close(maps ? "</map>" : "</array>");
+            std::string xml("<llsd>");
+            xml.reserve(xml.size() + levels * (open.size() + close.size()) + 40);
+            for (S32 i = 0; i < levels; ++i) xml += open;
+            xml += "<integer>7</integer>";
+            for (S32 i = 0; i < levels; ++i) xml += close;
+            xml += "</llsd>";
+            if (expected)
+            {
+                LLSD value(7);
+                for (S32 i = 0; i < levels; ++i)
+                {
+                    LLSD outer(maps ? LLSD::emptyMap() : LLSD::emptyArray());
+                    if (maps) outer["k"] = value; else outer.append(value);
+                    value = outer;
+                }
+                *expected = value;
+            }
+            return xml;
+        }
+    }
+
+    template<> template<>
+    void TestLLSDXMLParsingObject::test<6>()
+    {
+        set_test_name("XML max_depth");
+        // The top-level value is 0 containers deep.
+        ensureParse("scalar, max_depth 0", "<llsd><integer>7</integer></llsd>", LLSD(),
+                    LLSDParser::PARSE_FAILURE, 0);
+        ensureParse("scalar, max_depth 1", "<llsd><integer>7</integer></llsd>", LLSD(7), 1, 1);
+        ensureParse("empty array, max_depth 1", "<llsd><array /></llsd>", LLSD::emptyArray(), 1, 1);
+        ensureParse("array of a scalar, max_depth 1", "<llsd><array><integer>7</integer></array></llsd>",
+                    LLSD(), LLSDParser::PARSE_FAILURE, 1);
+
+        const S32 limit = 256;
+        for (bool maps : { false, true })
+        {
+            std::string kind(maps ? "maps" : "arrays");
+            LLSD expected;
+            // At the limit minus one: parses.
+            std::string xml = nested_xml(limit - 1, maps, &expected);
+            ensureParse(kind + " nested limit - 1 deep", xml, expected, limit, limit);
+            // At the limit: fails, with nothing returned.
+            ensureParse(kind + " nested limit deep", nested_xml(limit, maps), LLSD(),
+                        LLSDParser::PARSE_FAILURE, limit);
+            // Unlimited (-1, every other caller): still parses a deep body.
+            xml = nested_xml(1000, maps, &expected);
+            ensureParse(kind + " nested 1000 deep, unlimited", xml, expected, 1001, -1);
+        }
+
+        // Far deeper than the limit (the 100,000-level AIS body that crashed
+        // the viewer): refused without building the tree, and the parser
+        // still parses after reset().
+        ensureParse("arrays nested 100000 deep", nested_xml(100000, false), LLSD(),
+                    LLSDParser::PARSE_FAILURE, limit);
+        ensureParse("parse after a refused body", "<llsd><integer>7</integer></llsd>", LLSD(7), 1, limit);
+    }
+    // </Vulkanstorm>
+
 
     /*
     TODO:

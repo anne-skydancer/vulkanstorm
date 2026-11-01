@@ -120,7 +120,7 @@ void LLSDSerialize::serialize(const LLSD& sd, std::ostream& str, ELLSD_Serialize
 }
 
 // static
-bool LLSDSerialize::deserialize(LLSD& sd, std::istream& str, llssize max_bytes)
+bool LLSDSerialize::deserialize(LLSD& sd, std::istream& str, llssize max_bytes, S32 max_depth) // <Vulkanstorm/> max_depth
 {
 	LL_PROFILE_ZONE_SCOPED_CATEGORY_LLSD;
     char hdr_buf[MAX_HDR_LEN + 1] = ""; /* Flawfinder: ignore */
@@ -236,14 +236,14 @@ bool LLSDSerialize::deserialize(LLSD& sd, std::istream& str, llssize max_bytes)
         cat_streambuf prebuff(&already, str.rdbuf());
         std::istream  prepend(&prebuff);
 #if 1
-        return (p->parse(prepend, sd, max_bytes) > 0);
+        return (p->parse(prepend, sd, max_bytes, max_depth) > 0); // <Vulkanstorm/> max_depth
 #else
         // debugging the reconstituted 'prepend' stream
         // allocate a buffer that we hope is big enough for the whole thing
         std::vector<char> wholemsg((max_bytes == size_t(SIZE_UNLIMITED))? 1024 : max_bytes);
         prepend.read(wholemsg.data(), std::min(max_bytes, wholemsg.size()));
         LLMemoryStream replay(reinterpret_cast<const U8*>(wholemsg.data()), prepend.gcount());
-        auto success{ p->parse(replay, sd, prepend.gcount()) > 0 };
+        auto success{ p->parse(replay, sd, prepend.gcount(), max_depth) > 0 }; // <Vulkanstorm/> max_depth
         {
             LL_DEBUGS() << (success? "parsed: $$" : "failed: '")
                         << std::string(wholemsg.data(), llmin(prepend.gcount(), 100)) << "$$"
