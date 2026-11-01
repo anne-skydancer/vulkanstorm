@@ -2091,10 +2091,38 @@ order, level, tag and text; only the random temporary file names and the
 function name of lines that now come from another function differ (the
 cache rejection and null-id lines of a login load name `loadSkeleton`,
 which no longer calls `loadFromFile`; the ancestor warnings name
-`validate`). The first pass's broken-link debug lines are logged before
-the `addItem` calls rather than between them; no corpus case
-interleaves them with `addItem`'s own lines. When nothing is wrong no
-event is made.
+`validate`). When nothing is wrong no event is made.
+
+Log parity follow-up (review of #279): the lines other files log while
+these functions run are kept too. A getter that follows a link to a link
+logs `LLViewerInventoryItem::getLinkedItem`'s "Warning: Accessing link to
+link"; the C++ login load did that in `loadFromFile`'s item filter, in the
+first pass and in the retry of a deferred link (so a cached `A`,
+`B -> A`, `C -> B` logs it twice for `C`), and in the debug lines'
+`getName()`/`getAssetUUID()`. The plan now lists the decode's lines in
+file order and the two item passes as steps in the C++ order
+(`VksInvLoadLine`: `addItem`, a deferred link, a link to a link), and the
+viewer applies them in that order, so each line falls between the
+`addItem` calls where the C++ logged it and `mLastItem` moves as it did;
+for a link to a link it calls `getLinkedItem()` itself (the line keeps its
+function), and the null-id and deferred-link debug lines are formatted
+with the item's own getters, evaluated only when the line is enabled, as
+in the C++. The record also showed that the decode lost
+`LLInventoryItem::fromLLSD`'s untagged debug line "Resetting inventory type
+for <id>" (an `IT_NONE` or mismatched inventory type); it is a decode line
+now too (`VKS_INV_LOAD_RESET_INV_TYPE`). On OpenSim, `validate()` also logs `isInSuitcase`'s "Parent
+folder is ...; Folder type ..." debug line per ancestor
+(`VKS_INV_VEV_SUITCASE_PARENT`). `cache/c2_logs.txt` holds every line the
+two `loadSkeleton` calls log (level, tags, text) for links to links, a
+null-id link and a deferred link after a line of `addItem`, with debug
+lines on and off, recorded from the `llinventorymodel.cpp` before the
+port; test 11 of `INTEGRATION_TEST_llinventorymodel_parity` replays it.
+A null child vector in `mParentChildCategoryTree` or
+`mParentChildItemTree`, which `validate()` would report as "invalid direct
+descendents", is not snapshotted as such: every writer of those maps
+stores a `new` vector (`updateCategory`, `buildParentChildMap`), the
+erasers remove the entry, and other readers (`categoryHasChildren`)
+dereference the value unchecked, so the viewer cannot hold one.
 
 Bench (`VKS_INVMODEL_BENCH=7`, Windows, RelWithDebInfo, best of 7, ms;
 measured while four other agents built on the same machine, so take ±20%).
