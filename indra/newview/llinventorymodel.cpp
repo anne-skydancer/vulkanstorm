@@ -170,6 +170,29 @@ namespace
         return item;
     }
 
+    // Where the C++ followed a link to a link of the model
+    // (VKS_INV_LOAD_LINK_TO_LINK; Rust found it through the host): the
+    // getter's own step, LLViewerInventoryItem::getLinkedItem(), which looks
+    // the target up (getItem, moving mLastItem) and logs "Warning: Accessing
+    // link to link" under its own name.
+    void vks_r2_follow_link(const uint8_t* target)
+    {
+        LLPointer<LLViewerInventoryItem> link = new LLViewerInventoryItem;
+        link->setType(LLAssetType::AT_LINK);
+        link->setAssetUUID(vks_r2_uuid(target));
+        link->getLinkedItem();
+    }
+
+    // An item's name as a debug line of the C++ read it: getName(), which
+    // follows a link (and can log "Warning: Accessing link to link"). Called
+    // only inside the debug line, so only when the line is enabled. (A
+    // function, not part of the macro below: check_r3a_copies.py fences
+    // macros that name getName.)
+    std::string vks_r2_item_name(const VksInvItem& view)
+    {
+        return vks_r2_item_from(view)->getName();
+    }
+
     // The whole file, as loadFromFile opens it (binary); false when it
     // cannot be opened.
     bool vks_r2_read_file(const std::string& filename, std::string& out)
@@ -201,8 +224,12 @@ namespace
 
 // <Vulkanstorm> R2: loadFromFile's warning for a cache it rejects, in the
 // C++ text (the header could not be read, the version differs, or the parse
-// failed), and its debug line per item dropped for a null id. Macros, so
-// that the log lines keep the name of the function that logs them.
+// failed), and what its item loop logged, in file order: fromLLSD's debug
+// line for an item whose inventory type it reset, the debug line per item
+// dropped for a null id (with the item's getName(), which follows a link
+// only when the line is enabled, as the C++ evaluated it) and the item
+// filter's getType() following a link to a link. Macros, so that the log
+// lines keep the name of the function that logs them.
 #define VKS_R2_LOG_OBSOLETE(bytes, filename) \
     do \
     { \
@@ -224,13 +251,25 @@ namespace
             } \
         } \
     } while (0)
-#define VKS_R2_LOG_NULL_IDS(names, count) \
+#define VKS_R2_LOG_DECODE(lines, count, null_items, null_count) \
     do \
     { \
         for (size_t vks_i = 0; vks_i < (count); ++vks_i) \
         { \
-            LL_DEBUGS(LOG_INV) << "Ignoring inventory with null item id: " \
-                               << std::string(reinterpret_cast<const char*>((names)[vks_i].ptr), (names)[vks_i].len) << LL_ENDL; \
+            const VksInvLoadLine& vks_line = (lines)[vks_i]; \
+            if (vks_line.kind == VKS_INV_LOAD_NULL_ID && vks_line.index < (null_count)) \
+            { \
+                LL_DEBUGS(LOG_INV) << "Ignoring inventory with null item id: " \
+                                   << vks_r2_item_name((null_items)[vks_line.index]) << LL_ENDL; \
+            } \
+            else if (vks_line.kind == VKS_INV_LOAD_LINK_TO_LINK) \
+            { \
+                vks_r2_follow_link(vks_line.id); \
+            } \
+            else if (vks_line.kind == VKS_INV_LOAD_RESET_INV_TYPE) \
+            { \
+                LL_DEBUGS() << "Resetting inventory type for " << vks_r2_uuid(vks_line.id) << LL_ENDL; \
+            } \
         } \
     } while (0)
 // </Vulkanstorm>
@@ -3222,7 +3261,7 @@ bool LLInventoryModel::loadSkeleton(
             {
                 VKS_R2_LOG_OBSOLETE(bytes, inventory_filename);
             }
-            VKS_R2_LOG_NULL_IDS(view->null_id_names, view->null_id_count);
+            VKS_R2_LOG_DECODE(view->decode_lines, view->decode_line_count, view->null_id_items, view->null_id_count);
             for (size_t i = 0; i < view->folders_to_update_count; ++i)
             {
                 const VksInvBytes& name = view->folders[view->folders_to_update[i]].category.object.name;
@@ -3238,22 +3277,35 @@ bool LLInventoryModel::loadSkeleton(
                 }
                 addCategory(cat);
             }
-            // The cached links deferred as broken, as the first pass logged
-            // them (the folders are in the model now, as they were then).
-            for (size_t i = 0; i < view->possibly_broken_count; ++i)
+            // The two item passes (the cached items, then the deferred links
+            // again) in the C++ order, so the model is as the C++ had it at
+            // each step: addItem, the debug line of a link deferred as broken
+            // (with the link's getName() and getAssetUUID(), which follow it
+            // only when the line is enabled, as the C++ evaluated them), and
+            // a check that followed a link to a link.
+            for (size_t i = 0; i < view->step_count; ++i)
             {
-                const VksInvItem& link = view->possibly_broken[i];
-                const LLViewerInventoryCategory* cat = getCategory(vks_r2_uuid(link.object.parent));
-                LL_DEBUGS(LOG_INV) << "Attempted to add cached link item without baseobj present ( name: "
-                                   << std::string(reinterpret_cast<const char*>(link.object.name.ptr), link.object.name.len)
-                                   << " itemID: " << vks_r2_uuid(link.object.id)
-                                   << " assetID: " << vks_r2_uuid(link.asset)
-                                   << " ).  Ignoring and invalidating " << (cat ? cat->getName() : std::string()) << " . " << LL_ENDL;
-            }
-            for (size_t i = 0; i < view->item_count; ++i)
-            {
-                LLPointer<LLViewerInventoryItem> item = vks_r2_item_from(view->items[i]);
-                addItem(item);
+                const VksInvLoadLine& step = view->steps[i];
+                if (step.kind == VKS_INV_LOAD_ADD && step.index < view->item_count)
+                {
+                    LLPointer<LLViewerInventoryItem> item = vks_r2_item_from(view->items[step.index]);
+                    addItem(item);
+                }
+                else if (step.kind == VKS_INV_LOAD_DEFERRED && step.index < view->possibly_broken_count)
+                {
+                    const VksInvItem& deferred = view->possibly_broken[step.index];
+                    const LLViewerInventoryCategory* cat = getCategory(vks_r2_uuid(deferred.object.parent));
+                    LLPointer<LLViewerInventoryItem> link;
+                    LL_DEBUGS(LOG_INV) << "Attempted to add cached link item without baseobj present ( name: "
+                                       << (link = vks_r2_item_from(deferred))->getName()
+                                       << " itemID: " << link->getUUID()
+                                       << " assetID: " << link->getAssetUUID()
+                                       << " ).  Ignoring and invalidating " << (cat ? cat->getName() : std::string()) << " . " << LL_ENDL;
+                }
+                else if (step.kind == VKS_INV_LOAD_LINK_TO_LINK)
+                {
+                    vks_r2_follow_link(step.id);
+                }
             }
             if (view->possibly_broken_count > 0)
             {
@@ -3800,7 +3852,7 @@ bool LLInventoryModel::loadFromFile(const std::string& filename,
         return false;
     }
     is_cache_obsolete = false;
-    VKS_R2_LOG_NULL_IDS(view->null_id_names, view->null_id_count);
+    VKS_R2_LOG_DECODE(view->lines, view->line_count, view->null_id_items, view->null_id_count);
 
     {
         LL_PROFILE_ZONE_NAMED("inventory load from file - categories");
@@ -5299,6 +5351,9 @@ LLPointer<LLInventoryValidationInfo> LLInventoryModel::validate() const
             break;
         case VKS_INV_VEV_SUITCASE_PARENT_MISSING:
             LL_WARNS(LOG_INV) << "unable to trace parentage of " << id << ", missing item for uuid " << id2 << LL_ENDL;
+            break;
+        case VKS_INV_VEV_SUITCASE_PARENT:
+            if (cat) { LL_DEBUGS(LOG_INV) << "Parent folder is " << cat->getName() << "; Folder type " << cat->getPreferredType() << LL_ENDL; }
             break;
         case VKS_INV_VEV_CAT_ID_MISMATCH:
             if (cat) { LL_WARNS("Inventory") << "cat id/index mismatch " << id << " " << cat->getUUID() << LL_ENDL; }
