@@ -20,6 +20,8 @@
  *                              batch, outbound message and outward call, and
  *                              the model after each step
  *   cache/c4_validation.txt    C4: validate() over constructed model states
+ *   cache/c2_logs.txt          <Vulkanstorm> R2: the log lines of the login
+ *                              load (llinventorymodel_parity_logs.h) </Vulkanstorm>
  *   cache/library_real.txt     the public Linden Library cache (read from
  *                              indra/llinventory/tests/fixtures/library/)
  *   msgs/set8_handlers.txt     set 8: the inventory UDP message handlers
@@ -217,6 +219,7 @@ namespace
     {
         if (rel.rfind("cache/c2/", 0) == 0) return rel;
         if (rel.rfind("cache/c4_validation_qa.", 0) == 0) return rel;
+        if (rel == "cache/c2_logs.txt") return rel; // <Vulkanstorm/> R2: no unordered walk
         size_t slash = rel.find('/');
         if (slash == std::string::npos) return rel;
         return rel.substr(0, slash) + "/" + stdlib_name() + rel.substr(slash);
@@ -729,4 +732,5 @@ namespace tut
 #include "llinventorymodel_parity_msgs.h"
 #include "llinventorymodel_parity_real.h"
 #include "llinventorymodel_parity_c5.h"
+#include "llinventorymodel_parity_logs.h" // <Vulkanstorm/> R2 log parity
 #include "llinventorymodel_parity_final.h"

@@ -27,7 +27,7 @@ namespace tut
     template<> template<> void invmodel_object::test<20>()
     {
         set_test_name("closing checks: every corpus ran, fixture tree, frozen copies, record mode");
-        const std::set<int> all = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+        const std::set<int> all = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
         bool partial = !getenv_str("VKS_INVMODEL_PARTIAL").empty();
         std::string missing_tests;
         for (int n : all) if (!env().ran.count(n)) missing_tests += " " + std::to_string(n);
