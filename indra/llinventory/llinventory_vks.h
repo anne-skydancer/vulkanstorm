@@ -102,10 +102,8 @@ public:
     size_t size() const { return mData.size(); }
     // The stream's state bits on entry (VKS_INV_STREAM_*).
     uint32_t entryState() const { return mEntryState; }
-    // Reads the next part; false at the end of the stream or on a read error.
+    // Reads the next part; false at the end of the stream.
     bool grow();
-    // A read or put-back threw (as istream's own reads would, it sets badbit).
-    bool bad() const { return mBad; }
     // Leaves the stream after what the reader consumed, in its state.
     void finish(const VksInvStream& stream);
     // A failed call: what can go back goes back, and the stream fails.
@@ -117,14 +115,8 @@ private:
     std::istream& mInput;
     std::string mData;
     size_t mLastPart = 0; // where the last part read starts in mData
-    size_t mPartCap = PART_MIN;
+    size_t mPartCap = 4096;
     uint32_t mEntryState = 0;
-    bool mBad = false;
-    // Parts double from PART_MIN up to PART_MAX: few re-reads of a long
-    // record, and the cap keeps the size in streamsize range however many
-    // short refills a file buffer gives.
-    static constexpr size_t PART_MIN = 4096;
-    static constexpr size_t PART_MAX = 1 << 20;
 };
 
 // Runs a vks_inv_* legacy reader over the rest of `input`. `read(data, len,
@@ -146,17 +138,8 @@ bool ll_inv_read_legacy(std::istream& input, Read&& read)
         }
         if (!(stream.state & VKS_INV_STREAM_EOF) || !window.grow())
         {
-            if (window.bad())
-            {
-                // The stream failed under the reader: an import failure, as
-                // when istream's own reads catch the error.
-                window.fail();
-                return false;
-            }
             window.finish(stream);
-            // Putting back what the reader did not consume can fail too; the
-            // stream then has badbit and is not where the reader left it.
-            return !window.bad();
+            return true;
         }
     }
 }

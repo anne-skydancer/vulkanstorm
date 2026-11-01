@@ -77,38 +77,23 @@ bool LLInvLegacyWindow::grow()
     {
         return false;
     }
-    // The streambuf calls bypass istream's own error handling, which turns an
-    // exception from the buffer into badbit; do the same here, leaving the
-    // window as it was before this part.
-    const size_t size_before = mData.size();
-    const size_t last_part_before = mLastPart;
-    try
+    // sgetc fills an empty buffer; in_avail then counts what the buffer holds
+    // (not what a file has left), so no part is read past a refill.
+    if (sb->sgetc() == std::char_traits<char>::eof())
     {
-        // sgetc fills an empty buffer; in_avail then counts what the buffer
-        // holds (not what a file has left), so no part is read past a refill.
-        if (sb->sgetc() == std::char_traits<char>::eof())
-        {
-            return false;
-        }
-        std::streamsize n = std::min<std::streamsize>(sb->in_avail(), (std::streamsize)mPartCap);
-        if (n <= 0)
-        {
-            n = 1; // an unbuffered stream
-        }
-        mPartCap = std::min(mPartCap * 2, PART_MAX);
-        mLastPart = mData.size();
-        mData.resize(mLastPart + (size_t)n);
-        const std::streamsize got = sb->sgetn(&mData[mLastPart], n);
-        mData.resize(mLastPart + (size_t)std::max<std::streamsize>(got, 0));
-        return got > 0;
-    }
-    catch (...)
-    {
-        mData.resize(size_before);
-        mLastPart = last_part_before;
-        mBad = true;
         return false;
     }
+    std::streamsize n = std::min<std::streamsize>(sb->in_avail(), (std::streamsize)mPartCap);
+    if (n <= 0)
+    {
+        n = 1; // an unbuffered stream
+    }
+    mPartCap *= 2;
+    mLastPart = mData.size();
+    mData.resize(mLastPart + (size_t)n);
+    const std::streamsize got = sb->sgetn(&mData[mLastPart], n);
+    mData.resize(mLastPart + (size_t)std::max<std::streamsize>(got, 0));
+    return got > 0;
 }
 
 void LLInvLegacyWindow::putBack(size_t count)
@@ -119,20 +104,13 @@ void LLInvLegacyWindow::putBack(size_t count)
                               << mData.size() - mLastPart << " in the buffer" << LL_ENDL;
     }
     std::streambuf* sb = mInput.rdbuf();
-    try
+    for (size_t i = 0; i < count; ++i)
     {
-        for (size_t i = 0; i < count; ++i)
+        if (sb->sungetc() == std::char_traits<char>::eof())
         {
-            if (sb->sungetc() == std::char_traits<char>::eof())
-            {
-                LL_WARNS("Inventory") << "cannot put back " << count - i << " bytes of a legacy text stream" << LL_ENDL;
-                break;
-            }
+            LL_WARNS("Inventory") << "cannot put back " << count - i << " bytes of a legacy text stream" << LL_ENDL;
+            break;
         }
-    }
-    catch (...)
-    {
-        mBad = true;
     }
 }
 
@@ -148,7 +126,7 @@ void LLInvLegacyWindow::finish(const VksInvStream& stream)
     {
         state |= std::ios::failbit;
     }
-    if ((stream.state & VKS_INV_STREAM_BAD) || mBad)
+    if (stream.state & VKS_INV_STREAM_BAD)
     {
         state |= std::ios::badbit;
     }
@@ -158,5 +136,5 @@ void LLInvLegacyWindow::finish(const VksInvStream& stream)
 void LLInvLegacyWindow::fail()
 {
     putBack(mData.size() - mLastPart);
-    mInput.setstate(mBad ? std::ios::failbit | std::ios::badbit : std::ios::failbit);
+    mInput.setstate(std::ios::failbit);
 }

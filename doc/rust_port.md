@@ -1999,39 +1999,7 @@ The Linux numbers come from CI: non-Release builds run
 `llinventory_tool bench 3 --library <C10 cache>` on Windows and Linux after
 the tests and append the output to the job summary (the step never fails a
 build). The rows marked `[C++]` there are the LLSD forms, C++ in both
-columns. Linux, GitHub runner (ubuntu-26.04, GCC, RelWithDebInfo), one run,
-ns per item, from #277's CI:
-
-| Function | C++ → Rust |
-|---|---|
-| item legacy export | 2829.1 → 689.5 |
-| item legacy import (new item each) | 3813.9 → 2857.6 |
-| `LLInventoryItem::getCRC32` | 25.7 → 13.8 |
-| `LLPermissions::fix` | 8.3 → 3.5 |
-| `allowOperationBy` (5 ops × 3 agents) | 1.7 → 1.5 |
-| `allowModifyBy` | 2.2 → 2.2 |
-| `allowCopyBy` | 2.2 → 2.1 |
-| `allowTransferTo` | 1.3 → 1.3 |
-| `getOwnership` | 0.9 → 2.0 |
-| `getSafeOwner` | 1.1 → 2.7 |
-| `initMasks(EType)` | 3.5 → 2.9 |
-| `LLPermissions::accumulate` | 15.7 → 9.2 |
-| `setOwnerAndGroup` | 14.4 → 14.1 |
-| `LLSaleInfo::getCRC32` | 7.4 → 8.9 |
-| `correctInventoryName` | 32.3 → 41.4 |
-| category legacy export | 873.6 → 245.2 |
-| category legacy import (new each) | 1085.0 → 979.1 |
-| Library legacy export | 2892.2 → 666.6 |
-| Library `getCRC32` | 24.8 → 13.5 |
-
-The picture matches Windows: the text forms and CRCs are 1.1 to 4 times
-faster, the permission checks equal. Four rows are slower by one to nine
-nanoseconds (`getOwnership`, `getSafeOwner`, `LLSaleInfo::getCRC32`,
-`correctInventoryName`): GCC inlines the C++ forms, which the call into the
-Rust library cannot be without cross-language LTO. `getSafeOwner` and
-`correctInventoryName` stay Rust (owner's decision: cold calls), and so do
-`getOwnership` and `LLSaleInfo::getCRC32`, faster or equal on Windows (owner's
-decision on these numbers: a nanosecond or two is noise).
+columns.
 
 ## Local build
 
