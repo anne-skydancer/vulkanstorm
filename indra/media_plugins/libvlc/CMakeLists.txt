@@ -32,19 +32,18 @@ target_link_libraries(media_plugin_libvlc
 target_compile_definitions(media_plugin_libvlc PRIVATE LL_VLC_PCM_AUDIO=0)
 
 if (WINDOWS AND CMAKE_SIZEOF_VOID_P EQUAL 8)
-  find_program(VLC_MODULE_CC NAMES x86_64-w64-mingw32-gcc gcc REQUIRED)
-  set(SPEAKERFILL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/speakerfill-source")
-  include("${CMAKE_CURRENT_SOURCE_DIR}/prepare_speakerfill.cmake")
-  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/prepare_speakerfill.cmake")
+  # Prebuilt VLC speaker-fill output module (3p-vlc-speakerfill; temporary until the Rust audio engine).
+  use_prebuilt_binary(vlc-speakerfill)
+  set(SPEAKERFILL_PACKAGE_DLL "${AUTOBUILD_INSTALL_DIR}/lib/release/libspeakerfill_output_plugin.dll")
+  set(SPEAKERFILL_SOURCE_DIR "${AUTOBUILD_INSTALL_DIR}/share/vlc-speakerfill/source")
+  if (NOT EXISTS "${SPEAKERFILL_PACKAGE_DLL}")
+    message(FATAL_ERROR "vlc-speakerfill package is missing ${SPEAKERFILL_PACKAGE_DLL}")
+  endif ()
   set(SPEAKERFILL_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/libspeakerfill_output_plugin.dll")
   add_custom_command(OUTPUT "${SPEAKERFILL_OUTPUT}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>"
-    COMMAND "${VLC_MODULE_CC}" -shared -std=gnu11 -O2 -g -DHAVE_ATTRIBUTE_PACKED -D__PLUGIN__ -DMODULE_STRING="speakerfill_output"
-      -I "${AUTOBUILD_INSTALL_DIR}/include/vlc/plugins" -I "${SPEAKERFILL_SOURCE_DIR}"
-      "${SPEAKERFILL_SOURCE_DIR}/speakerfill_output.c" "${VLCCORE_LIBRARY}"
-      -lole32 -luuid -lksuser -lwinmm -lws2_32 -o "${SPEAKERFILL_OUTPUT}"
-    DEPENDS "${SPEAKERFILL_SOURCE_DIR}/speakerfill_output.c" "${CMAKE_CURRENT_SOURCE_DIR}/prepare_speakerfill.cmake"
-      "${SPEAKERFILL_SOURCE_DIR}/speakerfill_codecs.h"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SPEAKERFILL_PACKAGE_DLL}" "${SPEAKERFILL_OUTPUT}"
+    DEPENDS "${SPEAKERFILL_PACKAGE_DLL}"
     VERBATIM)
   add_custom_target(vlc_speakerfill_output DEPENDS "${SPEAKERFILL_OUTPUT}")
   add_library(vlc_speakerfill MODULE vlc_speakerfill.cpp)

@@ -2983,6 +2983,40 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <key>name</key>
         <string>vlc-bin</string>
       </map>
+      <key>vlc-speakerfill</key>
+      <map>
+        <key>platforms</key>
+        <map>
+          <key>windows64</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>1cd5ed4996fbd0dd9e735c4329de15065b07f02a79c9339e47fbe1b280d6ca94</string>
+              <key>hash_algorithm</key>
+              <string>sha256</string>
+              <key>url</key>
+              <string>https://github.com/anne-skydancer/3p-vlc-speakerfill/releases/download/v3.0.21.2/vlc_speakerfill-3.0.21.2-windows64-41516072179.tar.zst</string>
+            </map>
+            <key>name</key>
+            <string>windows64</string>
+          </map>
+        </map>
+        <key>license</key>
+        <string>LGPL-2.1+</string>
+        <key>license_file</key>
+        <string>LICENSES/vlc-speakerfill.txt</string>
+        <key>copyright</key>
+        <string>Copyright (C) 2012 Remi Denis-Courmont and VLC authors (modules/audio_output/wasapi.c)</string>
+        <key>version</key>
+        <string>3.0.21.2</string>
+        <key>name</key>
+        <string>vlc-speakerfill</string>
+        <key>canonical_repo</key>
+        <string>https://github.com/anne-skydancer/3p-vlc-speakerfill</string>
+        <key>description</key>
+        <string>VLC 3.0.21 speaker-fill WASAPI output module, prebuilt with MinGW (temporary until the Rust audio engine)</string>
+      </map>
       <key>vulkan_gltf</key>
       <map>
         <key>platforms</key>

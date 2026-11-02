@@ -19,7 +19,8 @@ Enabled music selects VLC's `mmdevice` output with the explicit
 `speakerfill_output,none` backend and the `speakerfill` audio filter. These are
 separate module DLLs; no packaged VLC binary is overwritten. The output module
 is built from hash-checked VLC 3.0.21 `wasapi.c`, `mmdevice.h`, and `vlc_codecs.h`
-using `prepare_speakerfill.cmake`. Its playback and timing algorithms remain
+using `prepare_speakerfill.cmake`, in the prebuilt `vlc-speakerfill` package
+(`anne-skydancer/3p-vlc-speakerfill`). Its playback and timing algorithms remain
 upstream VLC code, with progress reporting added for native fades below; this
 is not the rejected custom WASAPI loop.
 The existing VLC MMDevice owner continues managing device changes and recovery.
@@ -66,12 +67,16 @@ there is no extra device, queue, timer or presentation clock in the filter.
 
 ### Build and verification
 
-Windows builds additionally require an x64 Windows GNU C compiler for the
-unchanged GNU C VLC module (validated with LLVM-MinGW 22.1.8). Set
-`VLC_MODULE_CC` if it is not on PATH. Sources are fetched once over HTTPS,
-SHA-256 checked, and cached in the build tree. The packaged VLC 3.0.21 plugin
-SDK and core import library supply the matching ABI. Dependency source and
-the transformation are included under `llplugin/speakerfill-source`.
+The unchanged GNU C VLC module cannot be built with MSVC. It is built in CI by the
+`vlc-speakerfill` autobuild package (3p-vlc-speakerfill) with the GitHub Windows
+runner's preinstalled MinGW-w64 GCC (MSVCRT runtime, matching VLC 3); the exact
+compiler version of a given package is recorded in its `build-info.txt`, shipped
+in the source offer. The viewer build needs no GNU C compiler and just installs the
+package. The package's sources are fetched over HTTPS and SHA-256 checked. The packaged VLC
+3.0.21 plugin SDK and core import library supply the matching ABI. Dependency
+source and the transformation are included under `llplugin/speakerfill-source`.
+The package is temporary: it is removed when the Rust audio engine, which does
+speaker fill itself, reaches `vkstorm-release`.
 
 `vlc_speakerfill_test` loads both actual DLL entry points and confirms real
 libVLC module discovery without opening a device. It tests negotiated speaker
@@ -531,7 +536,7 @@ tests, viewer/protocol owners, `LibVLCPlugin.cmake`, SoLoud modules and autobuil
 were not edited by this agent.
 ### Windows PCM definition compatibility
 
-The speaker-fill preparation script retains the hash-verified VLC 3.0.21
+The speaker-fill preparation script (in 3p-vlc-speakerfill) retains the hash-verified VLC 3.0.21
 `vlc_codecs.h` and generates `speakerfill_codecs.h` with an `#ifndef` guard
 around WAVE_FORMAT_PCM. The generated output source includes that adapted
 header. Windows/MinGW's existing definition (1) takes precedence over VLC's
@@ -541,5 +546,5 @@ is an explicit plugin build dependency and is included in the staged source tree
 
 Validation: repeated preparation preserves upstream hashes and produces an
 identical adapted header. The complete output plugin compiles and links with
-LLVM-MinGW with macro-redefinition warnings promoted to errors. Other existing
+MinGW-w64 GCC with macro-redefinition warnings promoted to errors. Other existing
 VLC header warnings remain outside this correction.
