@@ -31,6 +31,13 @@
 
 #include "llfeaturemanager.h"
 #include "llviewershadermgr.h"
+
+// <FS> Vulkanstorm: shader source digest for the shader binary cache version
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+// </FS>
 #include "llviewercontrol.h"
 #include "llversioninfo.h"
 
@@ -527,6 +534,43 @@ S32 LLViewerShaderMgr::getShaderLevel(S32 type)
 //============================================================================
 // Shader Management
 
+// <FS> Vulkanstorm: the shader binary cache is keyed by the viewer version, which every
+// development build of a line shares, so an edited shader was served the previous build's
+// binary under the same program name. Fold a digest of every file under app_settings/shaders
+// (relative path + bytes, in sorted order) into the cache version: any shader change purges
+// the cache once, release builds are unaffected (their version changes anyway).
+static LLUUID shader_source_digest()
+{
+    namespace fs = std::filesystem;
+    HBXXH128 hash_obj;
+    const std::string root_utf8 = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "shaders");
+#if LL_WINDOWS
+    const fs::path root(ll_convert_string_to_wide(root_utf8));
+#else
+    const fs::path root(root_utf8);
+#endif
+    std::error_code ec;
+    std::vector<fs::path> files;
+    for (fs::recursive_directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec))
+    {
+        if (it->is_regular_file(ec))
+        {
+            files.push_back(it->path());
+        }
+    }
+    std::sort(files.begin(), files.end());
+    for (const fs::path& path : files)
+    {
+        std::ifstream in(path, std::ios::binary);
+        const std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        hash_obj.update(fs::relative(path, root, ec).generic_string());
+        hash_obj.update(bytes);
+    }
+    LL_INFOS("ShaderMgr") << "Shader source digest over " << files.size() << " files" << LL_ENDL;
+    return hash_obj.digest();
+}
+// </FS>
+
 void LLViewerShaderMgr::setShaders()
 {
     LL_PROFILE_ZONE_SCOPED;
@@ -555,6 +599,7 @@ void LLViewerShaderMgr::setShaders()
         {
             HBXXH128 hash_obj;
             hash_obj.update(LLVersionInfo::instance().getVersion());
+            hash_obj.update(shader_source_digest().asString()); // <FS/> Vulkanstorm: shader sources too
             current_cache_version = hash_obj.digest();
 
             old_cache_version = LLUUID(gSavedSettings.getString("RenderShaderCacheVersion"));
