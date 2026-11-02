@@ -36,10 +36,11 @@ uniform int oit_mode;       // 0 normal, 1 OIT capture
 // ---- alpha OIT capture: per-pixel slot array (A-buffer in a 2D-array image) ----
 // Each pixel owns oit_slot_count slots (one array layer each); a per-pixel atomic count in
 // layer 0 of oit_meta hands out slot indices. Fragments past the last slot fold into the
-// order-independent tail accumulators in layers 1..5 (fixed-point atomics), which the
-// resolve composites behind the depth-sorted slots. Scales must match alphaOITResolveF.glsl.
+// order-independent tail accumulators in layers 1..5 (fixed-point atomics) and record their
+// nearest depth in layer 6; the resolve composites the tail at that depth among the sorted
+// slots. Scales must match alphaOITResolveF.glsl.
 // Capture-only depth rejection below; normal alpha shader depth behaviour is unchanged.
-layout(binding = 0, r32ui) uniform coherent uimage2DArray oit_meta;      // 0 count, 1..3 sum rgb*a, 4 sum a, 5 sum -log2(1-a)
+layout(binding = 0, r32ui) uniform coherent uimage2DArray oit_meta;      // 0 count, 1..3 sum rgb*a, 4 sum a, 5 sum -log2(1-a), 6 ~bits(nearest z)
 layout(binding = 1, rgba32ui) uniform writeonly uimage2DArray oit_slots; // { RG16F, BA16F, depth bits, 0 }
 uniform int oit_slot_count;  // slots per pixel (layers of oit_slots)
 #define OIT_TAIL_COLOR_SCALE 4096.0
@@ -67,6 +68,9 @@ void oit_append(vec4 c, float z)
     imageAtomicAdd(oit_meta, ivec3(p, 3), uint(w.b * OIT_TAIL_COLOR_SCALE + 0.5));
     imageAtomicAdd(oit_meta, ivec3(p, 4), uint(a * OIT_TAIL_ALPHA_SCALE + 0.5));
     imageAtomicAdd(oit_meta, ivec3(p, 5), uint(-log2(max(1.0 - a, 0.0009765625)) * OIT_TAIL_LOG_SCALE + 0.5));
+    // Nearest tail depth: window z is a non-negative float, so its bits order like the value;
+    // inverted, the maximum over a zero-cleared layer is the minimum depth.
+    imageAtomicMax(oit_meta, ivec3(p, 6), ~floatBitsToUint(z));
 }
 #endif
 

@@ -22,7 +22,7 @@ attachtex=fn('glFramebufferTexture2D',None,U,U,U,U,I)
 geterror=fn('glGetError',U);uniform=fn('glUniform1i',None,I,I);loc=fn('glGetUniformLocation',I,U,C.c_char_p)
 draw=fn('glDrawArrays',None,U,I,I)
 TEX2D=0x0DE1;TEX2DARRAY=0x8C1A;R32UI=0x8236;RGBA32UI=0x8D70;RED_INT=0x8D94;RGBA_INT=0x8D99;UINT=0x1405
-META_LAYERS=6;SLOT_LAYERS=2;W=3
+META_LAYERS=7;SLOT_LAYERS=2;W=3
 vao=U();fn('glGenVertexArrays',None,I,C.POINTER(U))(1,C.byref(vao));fn('glBindVertexArray',None,U)(vao)
 textures=(U*3)();gentex(3,textures)   # live depth, detached depth snapshot, colour
 for name,fmt in zip(textures,(0x81A6,0x81A6,0x8058)):
@@ -38,7 +38,8 @@ fn('glViewport',None,I,I,I,I)(0,0,W,1);fn('glDisable',None,U)(0x0B71)
 vertex='#version 430 core\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-1.,0.,1.);}'
 files=['class1/deferred/fullbrightF.glsl','class2/deferred/alphaF.glsl','class2/deferred/pbralphaF.glsl','class3/deferred/materialF.glsl']
 # Fragment colour (1,0,0,0.5) twice per visible pixel; with one slot the second fragment is
-# the only tail entry: rgb*a, a and -log2(1-a) in the capture shaders' fixed point.
+# the only tail entry: rgb*a, a and -log2(1-a) in the capture shaders' fixed point, and its
+# depth as inverted float bits.
 TAIL_R=2048;TAIL_A=32768;TAIL_LOG=65536
 checks=0
 for rel in files:
@@ -93,7 +94,8 @@ out vec4 color;
                     texel=slot[(layer*W+x)*4:(layer*W+x)*4+4]
                     assert texel[2]==struct.unpack('<I',struct.pack('<f',snapshot[1]))[0],('slot depth',rel,cycle,slots,layer,list(texel))
                     assert texel[0]==0x3C00 and texel[1]==0x38000000,('slot colour',rel,list(texel))   # half(1,0) / half(0,0.5)
-                expected=(0,0,0,0,0) if slots>=2 else (TAIL_R,0,0,TAIL_A,TAIL_LOG)
+                near=(~struct.unpack('<I',struct.pack('<f',snapshot[1]))[0])&0xFFFFFFFF
+                expected=(0,0,0,0,0,0) if slots>=2 else (TAIL_R,0,0,TAIL_A,TAIL_LOG,near)
                 assert tuple(t[x] for t in tail)==expected,('tail',rel,cycle,slots,[t[x] for t in tail])
             bindtex(TEX2D,textures[1]);assert geterror()==0;checks+=1
     fn('glDeleteProgram',None,U)(prog)

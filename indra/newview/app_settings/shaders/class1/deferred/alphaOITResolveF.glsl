@@ -28,14 +28,16 @@
 /*[EXTRA_CODE_HERE]*/
 
 // Alpha OIT resolve: read each pixel's slot array (filled by the capture pass), depth-sort
-// it, and composite it "over" the current screen back-to-front, on top of the pixel's
-// order-independent tail (fragments that arrived after the last slot). Output is
+// it, and composite it "over" the current screen back-to-front, with the pixel's
+// order-independent tail (fragments that arrived after the last slot) inserted at the depth
+// of its nearest fragment: alpha groups are submitted far to near, so the tail is usually
+// the nearest block, but rigged alpha is captured first whatever its depth. Output is
 // premultiplied color + coverage; the composite blend is ONE, ONE_MINUS_SRC_ALPHA with the
 // alpha channel masked off so emissive glow already in screen.a survives.
 
 out vec4 frag_color;
 
-layout(binding = 0, r32ui) uniform readonly uimage2DArray oit_meta;     // 0 count, 1..3 sum rgb*a, 4 sum a, 5 sum -log2(1-a)
+layout(binding = 0, r32ui) uniform readonly uimage2DArray oit_meta;     // 0 count, 1..3 sum rgb*a, 4 sum a, 5 sum -log2(1-a), 6 ~bits(nearest z)
 layout(binding = 2, r32ui) uniform writeonly uimage2DArray oit_meta_clear; // the same image, written only to zero a consumed tail
 layout(binding = 1, rgba32ui) uniform readonly uimage2DArray oit_slots; // { RG16F, BA16F, depth bits, 0 }
 uniform sampler2D depthMap;   // opaque scene depth (DEFERRED_DEPTH) -- occlusion reject vs captured slots
@@ -103,9 +105,12 @@ void main()
     }
 
     // Deep stacks degrade continuously instead of dropping layers: fragments past the last
-    // slot were folded into an order-independent coverage-weighted colour average.
-    vec3  accum = vec3(0.0);
-    float cov   = 0.0;
+    // slot were folded into an order-independent coverage-weighted colour average, placed at
+    // the depth of the nearest of them.
+    bool  has_tail  = false;
+    vec3  tail_rgb  = vec3(0.0);   // premultiplied
+    float tail_cov  = 0.0;
+    float tail_z    = 0.0;
     if (count > uint(slots))
     {
         vec3 tail_wsum = vec3(float(imageLoad(oit_meta, ivec3(coord, 1)).r),
@@ -113,20 +118,37 @@ void main()
                               float(imageLoad(oit_meta, ivec3(coord, 3)).r)) / OIT_TAIL_COLOR_SCALE;
         float tail_asum  = float(imageLoad(oit_meta, ivec3(coord, 4)).r) / OIT_TAIL_ALPHA_SCALE;
         float tail_trans = exp2(-float(imageLoad(oit_meta, ivec3(coord, 5)).r) / OIT_TAIL_LOG_SCALE);
+        tail_z = uintBitsToFloat(~imageLoad(oit_meta, ivec3(coord, 6)).r);
         if (tail_asum > 0.0)
         {
-            float tail_cov = 1.0 - tail_trans;
-            accum = (tail_wsum / tail_asum) * tail_cov;
-            cov = tail_cov;
+            has_tail = true;
+            tail_cov = 1.0 - tail_trans;
+            tail_rgb = (tail_wsum / tail_asum) * tail_cov;
         }
     }
+
+    // Back to front: slots at or behind the tail's nearest depth, the tail, the nearer slots.
+    vec3  accum = vec3(0.0);
+    float cov   = 0.0;
+    bool  tail_pending = has_tail;
     for (int i = 0; i < cnt; i++)
     {
+        if (tail_pending && ndep[i] < tail_z)
+        {
+            accum = tail_rgb + accum * (1.0 - tail_cov);
+            cov   = tail_cov + cov   * (1.0 - tail_cov);
+            tail_pending = false;
+        }
         vec2 rg = unpackHalf2x16(nrg[i]);
         vec2 ba = unpackHalf2x16(nba[i]);
         vec4 c = vec4(rg, ba);
         accum = c.rgb * c.a + accum * (1.0 - c.a);
         cov   = c.a       + cov   * (1.0 - c.a);
+    }
+    if (tail_pending)
+    {
+        accum = tail_rgb + accum * (1.0 - tail_cov);
+        cov   = tail_cov + cov   * (1.0 - tail_cov);
     }
 
     frag_color = vec4(accum, cov);
@@ -135,7 +157,7 @@ void main()
     // the per-frame clear can be limited to the count layer (beginAlphaOITCapture()).
     if (count > uint(slots))
     {
-        for (int l = 1; l < 6; l++)
+        for (int l = 1; l < 7; l++)
         {
             imageStore(oit_meta_clear, ivec3(coord, l), uvec4(0u));
         }
