@@ -36,6 +36,7 @@
 out vec4 frag_color;
 
 layout(binding = 0, r32ui) uniform readonly uimage2DArray oit_meta;     // 0 count, 1..3 sum rgb*a, 4 sum a, 5 sum -log2(1-a)
+layout(binding = 2, r32ui) uniform writeonly uimage2DArray oit_meta_clear; // the same image, written only to zero a consumed tail
 layout(binding = 1, rgba32ui) uniform readonly uimage2DArray oit_slots; // { RG16F, BA16F, depth bits, 0 }
 uniform sampler2D depthMap;   // opaque scene depth (DEFERRED_DEPTH) -- occlusion reject vs captured slots
 uniform int oit_slot_count;   // slots per pixel (layers of oit_slots)
@@ -129,4 +130,14 @@ void main()
     }
 
     frag_color = vec4(accum, cov);
+
+    // Leave the tail clean: only overflowing pixels write it and only this pass reads it, so
+    // the per-frame clear can be limited to the count layer (beginAlphaOITCapture()).
+    if (count > uint(slots))
+    {
+        for (int l = 1; l < 6; l++)
+        {
+            imageStore(oit_meta_clear, ivec3(coord, l), uvec4(0u));
+        }
+    }
 }
