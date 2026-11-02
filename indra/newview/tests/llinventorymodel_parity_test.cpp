@@ -20,6 +20,8 @@
  *                              batch, outbound message and outward call, and
  *                              the model after each step
  *   cache/c4_validation.txt    C4: validate() over constructed model states
+ *   cache/c2_logs.txt          <Vulkanstorm> R2: the log lines of the login
+ *                              load (llinventorymodel_parity_logs.h) </Vulkanstorm>
  *   cache/library_real.txt     the public Linden Library cache (read from
  *                              indra/llinventory/tests/fixtures/library/)
  *   msgs/set8_handlers.txt     set 8: the inventory UDP message handlers
@@ -30,7 +32,13 @@
  *                              vkstorm-core-rust copies them)
  *   VKS_INVMODEL_COMMIT=<hash> recorded in the fixture headers when dumping
  *   VKS_INVMODEL_BENCH=<runs>  times the cache and validation paths
- *                              (100k realistic, 1M stress) and prints a table
+ *                              (100k realistic, 1M stress) and prints a table;
+ *                              <Vulkanstorm> R2: also a 50k random-id world,
+ *                              and loadFromFile/saveToFile against their C++
+ *                              before the port (llinventorymodel_parity_frozen.cpp)
+ *                              on the Library, realistic and random caches.
+ *                              VKS_INVMODEL_BENCH_SKIP_REALISTIC=1 skips the
+ *                              100k realistic world's model rows </Vulkanstorm>
  *   VKS_INVMODEL_USER_CACHE=<path to an .inv.llsd.gz>  local only: the
  *                              decode/re-encode identity check and timings of
  *                              a real cache; prints counts and timings only
@@ -54,6 +62,7 @@
 #include "../llinventoryfunctions.h"
 
 #include "llinventorymodel_parity_harness.h"
+#include "llinventorymodel_parity_frozen.h" // <Vulkanstorm/> R2 bench baseline
 
 #include "llassetstorage.h"
 #include "lldir.h"
@@ -210,6 +219,7 @@ namespace
     {
         if (rel.rfind("cache/c2/", 0) == 0) return rel;
         if (rel.rfind("cache/c4_validation_qa.", 0) == 0) return rel;
+        if (rel == "cache/c2_logs.txt") return rel; // <Vulkanstorm/> R2: no unordered walk
         size_t slash = rel.find('/');
         if (slash == std::string::npos) return rel;
         return rel.substr(0, slash) + "/" + stdlib_name() + rel.substr(slash);
@@ -722,4 +732,5 @@ namespace tut
 #include "llinventorymodel_parity_msgs.h"
 #include "llinventorymodel_parity_real.h"
 #include "llinventorymodel_parity_c5.h"
+#include "llinventorymodel_parity_logs.h" // <Vulkanstorm/> R2 log parity
 #include "llinventorymodel_parity_final.h"

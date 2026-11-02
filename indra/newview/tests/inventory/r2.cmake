@@ -12,9 +12,11 @@
 # (cache bytes, login load and discard cases, mutation sequences with every
 # notification batch and outbound message, validation, and the inventory UDP
 # message handlers) and, with VKS_INVMODEL_DUMP=<dir> in the environment, writes
-# them instead. VKS_INVMODEL_BENCH=<runs> times the cache and validation paths.
+# them instead. VKS_INVMODEL_BENCH=<runs> times the cache and validation paths,
+# and the cache codec against its C++ before the port
+# (tests/llinventorymodel_parity_frozen.cpp).
 LL_ADD_INTEGRATION_TEST(llinventorymodel_parity
-  "llinventorymodel.cpp;llviewerinventory.cpp;llinventoryobserver.cpp;llviewerfoldertype.cpp;tests/llinventorymodel_parity_stubs.cpp;tests/llinventorymodel_parity_harness.cpp;tests/llinventorymodel_parity_generic.cpp"
+  "llinventorymodel.cpp;llviewerinventory.cpp;llinventoryobserver.cpp;llviewerfoldertype.cpp;tests/llinventorymodel_parity_stubs.cpp;tests/llinventorymodel_parity_harness.cpp;tests/llinventorymodel_parity_generic.cpp;tests/llinventorymodel_parity_frozen.cpp"
   "llinventory;llmessage;llcorehttp;llfilesystem;llxml;llmath;llwindow;llcommon"
   "-l${ARCH_PREBUILT_DIRS_RELEASE}"
   )

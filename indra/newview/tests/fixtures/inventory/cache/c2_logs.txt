@@ -1,0 +1,318 @@
+# vkstorm inventory model oracle (recorder R2): C2 log lines of the login load (level, tags, text)
+# generator: INTEGRATION_TEST_llinventorymodel_parity with VKS_INVMODEL_DUMP (indra/newview/tests/llinventorymodel_parity_test.cpp)
+# viewer commit: 3846816a16 (llinventorymodel.cpp before the R2 port)
+# platform: windows-msvc
+# seed: none
+# format: tests/fixtures/inventory/cache/README.md; lines starting with '#' are not compared
+== baseline/debug
+note both caches current
+step load_library rv=1
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ' => '<cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ'
+  log DEBUG #LLInventoryModel#   : Checking for clear inventory cache marker: <cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ
+  log DEBUG #Inventory#   : importing inventory skeleton for 11b00000-0000-4000-8000-000000000001
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', '11b00000-0000-4000-8000-000000000001' => '<cache>/11b00000-0000-4000-8000-000000000001'
+  log INFO #Inventory#   : loading inventory from: (<cache>/11b00000-0000-4000-8000-000000000001.inv.llsd)
+  log DEBUG #InventoryLocalize#   : Searching for localization: Library
+  log DEBUG #InventoryLocalize#   : Searching for localization: Clothing
+  log DEBUG #InventoryLocalize#   : Searching for localization: Objects
+  log DEBUG #InventoryLocalize#   : Searching for localization: Furniture
+  log INFO #Inventory#   : Successfully loaded 4 categories and 3 items from cache after <t> seconds.
+step load_agent rv=1
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ' => '<cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ'
+  log DEBUG #LLInventoryModel#   : Checking for clear inventory cache marker: <cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ
+  log DEBUG #Inventory#   : importing inventory skeleton for a9e00000-0000-4000-8000-000000000001
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001' => '<cache>/a9e00000-0000-4000-8000-000000000001'
+  log INFO #Inventory#   : loading inventory from: (<cache>/a9e00000-0000-4000-8000-000000000001.inv.llsd)
+  log DEBUG #InventoryLocalize#   : Searching for localization: My Inventory
+  log DEBUG #InventoryLocalize#   : Searching for localization: Textures
+  log DEBUG #InventoryLocalize#   : Searching for localization: Sounds
+  log DEBUG #InventoryLocalize#   : Searching for localization: Calling Cards
+  log DEBUG #InventoryLocalize#   : Searching for localization: Landmarks
+  log DEBUG #InventoryLocalize#   : Searching for localization: Clothing
+  log DEBUG #InventoryLocalize#   : Searching for localization: Objects
+  log DEBUG #InventoryLocalize#   : Searching for localization: Notecards
+  log DEBUG #InventoryLocalize#   : Searching for localization: Scripts
+  log DEBUG #InventoryLocalize#   : Searching for localization: Body Parts
+  log DEBUG #InventoryLocalize#   : Searching for localization: Trash
+  log DEBUG #InventoryLocalize#   : Searching for localization: Photo Album
+  log DEBUG #InventoryLocalize#   : Searching for localization: Lost And Found
+  log DEBUG #InventoryLocalize#   : Searching for localization: Animations
+  log DEBUG #InventoryLocalize#   : Searching for localization: Gestures
+  log DEBUG #InventoryLocalize#   : Searching for localization: Favorites
+  log DEBUG #InventoryLocalize#   : Searching for localization: Current Outfit
+  log DEBUG #InventoryLocalize#   : Searching for localization: My Outfits
+  log DEBUG #InventoryLocalize#   : Searching for localization: Received Items
+  log DEBUG #InventoryLocalize#   : Searching for localization: Settings
+  log DEBUG #InventoryLocalize#   : Searching for localization: Materials
+  log DEBUG #InventoryLocalize#   : Searching for localization: Outfit A
+  log DEBUG #InventoryLocalize#   : Searching for localization: Outfit B
+  log DEBUG #InventoryLocalize#   : Searching for localization: Furniture
+  log DEBUG #InventoryLocalize#   : Searching for localization: Chairs
+  log DEBUG #InventoryLocalize#   : Searching for localization: Old stuff
+  log DEBUG #InventoryLocalize#   : Searching for localization: Older stuff
+  log INFO #Inventory#   : Successfully loaded 27 categories and 30 items from cache after <t> seconds.
+== baseline/info
+note both caches current
+step load_library rv=1
+  log INFO #Inventory#   : loading inventory from: (<cache>/11b00000-0000-4000-8000-000000000001.inv.llsd)
+  log INFO #Inventory#   : Successfully loaded 4 categories and 3 items from cache after <t> seconds.
+step load_agent rv=1
+  log INFO #Inventory#   : loading inventory from: (<cache>/a9e00000-0000-4000-8000-000000000001.inv.llsd)
+  log INFO #Inventory#   : Successfully loaded 27 categories and 30 items from cache after <t> seconds.
+== link_to_link_after_target/debug
+note a link to a link, after its target in the file: followed in the first pass and in the retry; still broken
+step load_library rv=1
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ' => '<cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ'
+  log DEBUG #LLInventoryModel#   : Checking for clear inventory cache marker: <cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ
+  log DEBUG #Inventory#   : importing inventory skeleton for 11b00000-0000-4000-8000-000000000001
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', '11b00000-0000-4000-8000-000000000001' => '<cache>/11b00000-0000-4000-8000-000000000001'
+  log INFO #Inventory#   : loading inventory from: (<cache>/11b00000-0000-4000-8000-000000000001.inv.llsd)
+  log DEBUG #InventoryLocalize#   : Searching for localization: Library
+  log DEBUG #InventoryLocalize#   : Searching for localization: Clothing
+  log DEBUG #InventoryLocalize#   : Searching for localization: Objects
+  log DEBUG #InventoryLocalize#   : Searching for localization: Furniture
+  log INFO #Inventory#   : Successfully loaded 4 categories and 3 items from cache after <t> seconds.
+step load_agent rv=1
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ' => '<cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ'
+  log DEBUG #LLInventoryModel#   : Checking for clear inventory cache marker: <cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ
+  log DEBUG #Inventory#   : importing inventory skeleton for a9e00000-0000-4000-8000-000000000001
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001' => '<cache>/a9e00000-0000-4000-8000-000000000001'
+  log INFO #Inventory#   : loading inventory from: (<cache>/a9e00000-0000-4000-8000-000000000001.inv.llsd)
+  log DEBUG #InventoryLocalize#   : Searching for localization: My Inventory
+  log DEBUG #InventoryLocalize#   : Searching for localization: Textures
+  log DEBUG #InventoryLocalize#   : Searching for localization: Sounds
+  log DEBUG #InventoryLocalize#   : Searching for localization: Calling Cards
+  log DEBUG #InventoryLocalize#   : Searching for localization: Landmarks
+  log DEBUG #InventoryLocalize#   : Searching for localization: Clothing
+  log DEBUG #InventoryLocalize#   : Searching for localization: Objects
+  log DEBUG #InventoryLocalize#   : Searching for localization: Notecards
+  log DEBUG #InventoryLocalize#   : Searching for localization: Scripts
+  log DEBUG #InventoryLocalize#   : Searching for localization: Body Parts
+  log DEBUG #InventoryLocalize#   : Searching for localization: Trash
+  log DEBUG #InventoryLocalize#   : Searching for localization: Photo Album
+  log DEBUG #InventoryLocalize#   : Searching for localization: Lost And Found
+  log DEBUG #InventoryLocalize#   : Searching for localization: Animations
+  log DEBUG #InventoryLocalize#   : Searching for localization: Gestures
+  log DEBUG #InventoryLocalize#   : Searching for localization: Favorites
+  log DEBUG #InventoryLocalize#   : Searching for localization: Current Outfit
+  log DEBUG #InventoryLocalize#   : Searching for localization: My Outfits
+  log DEBUG #InventoryLocalize#   : Searching for localization: Received Items
+  log DEBUG #InventoryLocalize#   : Searching for localization: Settings
+  log DEBUG #InventoryLocalize#   : Searching for localization: Materials
+  log DEBUG #InventoryLocalize#   : Searching for localization: Outfit A
+  log DEBUG #InventoryLocalize#   : Searching for localization: Outfit B
+  log DEBUG #InventoryLocalize#   : Searching for localization: Furniture
+  log DEBUG #InventoryLocalize#   : Searching for localization: Chairs
+  log DEBUG #InventoryLocalize#   : Searching for localization: Old stuff
+  log DEBUG #InventoryLocalize#   : Searching for localization: Older stuff
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log DEBUG #Inventory#   : Attempted to add cached link item without baseobj present ( name: Link to a COF link itemID: a0000000-0000-4000-8000-000000000384 assetID: a0000000-0000-4000-8000-000000000021 ).  Ignoring and invalidating Objects . 
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log DEBUG #Inventory#   : Attempted to add 1 cached link items without baseobj present. 10 link items were successfully added. 0 links added in recovery. The corresponding categories were invalidated.
+  log DEBUG #Inventory#   : Invalidating category name: Objects UUID: f0000000-0000-4000-8000-000000000007 due to invalid descendents cache
+  log DEBUG #Inventory#   : Invalidated 1 categories due to invalid descendents cache
+  log INFO #Inventory#   : Successfully loaded 27 categories and 30 items from cache after <t> seconds.
+== link_to_link_after_target/info
+note a link to a link, after its target in the file: followed in the first pass and in the retry; still broken
+step load_library rv=1
+  log INFO #Inventory#   : loading inventory from: (<cache>/11b00000-0000-4000-8000-000000000001.inv.llsd)
+  log INFO #Inventory#   : Successfully loaded 4 categories and 3 items from cache after <t> seconds.
+step load_agent rv=1
+  log INFO #Inventory#   : loading inventory from: (<cache>/a9e00000-0000-4000-8000-000000000001.inv.llsd)
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log INFO #Inventory#   : Successfully loaded 27 categories and 30 items from cache after <t> seconds.
+== link_to_link_before_target/debug
+note a link to a link, before its target in the file: deferred without following; followed in the retry
+step load_library rv=1
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ' => '<cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ'
+  log DEBUG #LLInventoryModel#   : Checking for clear inventory cache marker: <cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ
+  log DEBUG #Inventory#   : importing inventory skeleton for 11b00000-0000-4000-8000-000000000001
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', '11b00000-0000-4000-8000-000000000001' => '<cache>/11b00000-0000-4000-8000-000000000001'
+  log INFO #Inventory#   : loading inventory from: (<cache>/11b00000-0000-4000-8000-000000000001.inv.llsd)
+  log DEBUG #InventoryLocalize#   : Searching for localization: Library
+  log DEBUG #InventoryLocalize#   : Searching for localization: Clothing
+  log DEBUG #InventoryLocalize#   : Searching for localization: Objects
+  log DEBUG #InventoryLocalize#   : Searching for localization: Furniture
+  log INFO #Inventory#   : Successfully loaded 4 categories and 3 items from cache after <t> seconds.
+step load_agent rv=1
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ' => '<cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ'
+  log DEBUG #LLInventoryModel#   : Checking for clear inventory cache marker: <cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ
+  log DEBUG #Inventory#   : importing inventory skeleton for a9e00000-0000-4000-8000-000000000001
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001' => '<cache>/a9e00000-0000-4000-8000-000000000001'
+  log INFO #Inventory#   : loading inventory from: (<cache>/a9e00000-0000-4000-8000-000000000001.inv.llsd)
+  log DEBUG #InventoryLocalize#   : Searching for localization: My Inventory
+  log DEBUG #InventoryLocalize#   : Searching for localization: Textures
+  log DEBUG #InventoryLocalize#   : Searching for localization: Sounds
+  log DEBUG #InventoryLocalize#   : Searching for localization: Calling Cards
+  log DEBUG #InventoryLocalize#   : Searching for localization: Landmarks
+  log DEBUG #InventoryLocalize#   : Searching for localization: Clothing
+  log DEBUG #InventoryLocalize#   : Searching for localization: Objects
+  log DEBUG #InventoryLocalize#   : Searching for localization: Notecards
+  log DEBUG #InventoryLocalize#   : Searching for localization: Scripts
+  log DEBUG #InventoryLocalize#   : Searching for localization: Body Parts
+  log DEBUG #InventoryLocalize#   : Searching for localization: Trash
+  log DEBUG #InventoryLocalize#   : Searching for localization: Photo Album
+  log DEBUG #InventoryLocalize#   : Searching for localization: Lost And Found
+  log DEBUG #InventoryLocalize#   : Searching for localization: Animations
+  log DEBUG #InventoryLocalize#   : Searching for localization: Gestures
+  log DEBUG #InventoryLocalize#   : Searching for localization: Favorites
+  log DEBUG #InventoryLocalize#   : Searching for localization: Current Outfit
+  log DEBUG #InventoryLocalize#   : Searching for localization: My Outfits
+  log DEBUG #InventoryLocalize#   : Searching for localization: Received Items
+  log DEBUG #InventoryLocalize#   : Searching for localization: Settings
+  log DEBUG #InventoryLocalize#   : Searching for localization: Materials
+  log DEBUG #InventoryLocalize#   : Searching for localization: Outfit A
+  log DEBUG #InventoryLocalize#   : Searching for localization: Outfit B
+  log DEBUG #InventoryLocalize#   : Searching for localization: Furniture
+  log DEBUG #InventoryLocalize#   : Searching for localization: Chairs
+  log DEBUG #InventoryLocalize#   : Searching for localization: Old stuff
+  log DEBUG #InventoryLocalize#   : Searching for localization: Older stuff
+  log DEBUG #Inventory#   : Attempted to add cached link item without baseobj present ( name: Link to a COF link, first itemID: a0000000-0000-4000-8000-000000000385 assetID: a0000000-0000-4000-8000-000000000021 ).  Ignoring and invalidating Objects . 
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log DEBUG #Inventory#   : Attempted to add 1 cached link items without baseobj present. 10 link items were successfully added. 0 links added in recovery. The corresponding categories were invalidated.
+  log DEBUG #Inventory#   : Invalidating category name: Objects UUID: f0000000-0000-4000-8000-000000000007 due to invalid descendents cache
+  log DEBUG #Inventory#   : Invalidated 1 categories due to invalid descendents cache
+  log INFO #Inventory#   : Successfully loaded 27 categories and 30 items from cache after <t> seconds.
+== link_to_link_before_target/info
+note a link to a link, before its target in the file: deferred without following; followed in the retry
+step load_library rv=1
+  log INFO #Inventory#   : loading inventory from: (<cache>/11b00000-0000-4000-8000-000000000001.inv.llsd)
+  log INFO #Inventory#   : Successfully loaded 4 categories and 3 items from cache after <t> seconds.
+step load_agent rv=1
+  log INFO #Inventory#   : loading inventory from: (<cache>/a9e00000-0000-4000-8000-000000000001.inv.llsd)
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log INFO #Inventory#   : Successfully loaded 27 categories and 30 items from cache after <t> seconds.
+== link_to_library_link/debug
+note an agent link to a Library link (in the model before the agent's load: followed by the decode's item filter too) and a null-id link to it (its debug line's getName() follows it)
+step load_library rv=1
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ' => '<cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ'
+  log DEBUG #LLInventoryModel#   : Checking for clear inventory cache marker: <cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ
+  log DEBUG #Inventory#   : importing inventory skeleton for 11b00000-0000-4000-8000-000000000001
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', '11b00000-0000-4000-8000-000000000001' => '<cache>/11b00000-0000-4000-8000-000000000001'
+  log INFO #Inventory#   : loading inventory from: (<cache>/11b00000-0000-4000-8000-000000000001.inv.llsd)
+  log DEBUG #InventoryLocalize#   : Searching for localization: Library
+  log DEBUG #InventoryLocalize#   : Searching for localization: Clothing
+  log DEBUG #InventoryLocalize#   : Searching for localization: Objects
+  log DEBUG #InventoryLocalize#   : Searching for localization: Furniture
+  log INFO #Inventory#   : Successfully loaded 4 categories and 4 items from cache after <t> seconds.
+step load_agent rv=1
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ' => '<cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ'
+  log DEBUG #LLInventoryModel#   : Checking for clear inventory cache marker: <cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ
+  log DEBUG #Inventory#   : importing inventory skeleton for a9e00000-0000-4000-8000-000000000001
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001' => '<cache>/a9e00000-0000-4000-8000-000000000001'
+  log INFO #Inventory#   : loading inventory from: (<cache>/a9e00000-0000-4000-8000-000000000001.inv.llsd)
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log DEBUG #Inventory#   : Ignoring inventory with null item id: Null-id link to a Library link
+  log DEBUG #InventoryLocalize#   : Searching for localization: My Inventory
+  log DEBUG #InventoryLocalize#   : Searching for localization: Textures
+  log DEBUG #InventoryLocalize#   : Searching for localization: Sounds
+  log DEBUG #InventoryLocalize#   : Searching for localization: Calling Cards
+  log DEBUG #InventoryLocalize#   : Searching for localization: Landmarks
+  log DEBUG #InventoryLocalize#   : Searching for localization: Clothing
+  log DEBUG #InventoryLocalize#   : Searching for localization: Objects
+  log DEBUG #InventoryLocalize#   : Searching for localization: Notecards
+  log DEBUG #InventoryLocalize#   : Searching for localization: Scripts
+  log DEBUG #InventoryLocalize#   : Searching for localization: Body Parts
+  log DEBUG #InventoryLocalize#   : Searching for localization: Trash
+  log DEBUG #InventoryLocalize#   : Searching for localization: Photo Album
+  log DEBUG #InventoryLocalize#   : Searching for localization: Lost And Found
+  log DEBUG #InventoryLocalize#   : Searching for localization: Animations
+  log DEBUG #InventoryLocalize#   : Searching for localization: Gestures
+  log DEBUG #InventoryLocalize#   : Searching for localization: Favorites
+  log DEBUG #InventoryLocalize#   : Searching for localization: Current Outfit
+  log DEBUG #InventoryLocalize#   : Searching for localization: My Outfits
+  log DEBUG #InventoryLocalize#   : Searching for localization: Received Items
+  log DEBUG #InventoryLocalize#   : Searching for localization: Settings
+  log DEBUG #InventoryLocalize#   : Searching for localization: Materials
+  log DEBUG #InventoryLocalize#   : Searching for localization: Outfit A
+  log DEBUG #InventoryLocalize#   : Searching for localization: Outfit B
+  log DEBUG #InventoryLocalize#   : Searching for localization: Furniture
+  log DEBUG #InventoryLocalize#   : Searching for localization: Chairs
+  log DEBUG #InventoryLocalize#   : Searching for localization: Old stuff
+  log DEBUG #InventoryLocalize#   : Searching for localization: Older stuff
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log DEBUG #Inventory#   : Attempted to add cached link item without baseobj present ( name: Link to a Library link itemID: a0000000-0000-4000-8000-000000000386 assetID: a1000000-0000-4000-8000-000000000009 ).  Ignoring and invalidating Current Outfit . 
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log DEBUG #Inventory#   : Attempted to add 1 cached link items without baseobj present. 10 link items were successfully added. 0 links added in recovery. The corresponding categories were invalidated.
+  log DEBUG #Inventory#   : Invalidating category name: Current Outfit UUID: f0000000-0000-4000-8000-000000000011 due to invalid descendents cache
+  log DEBUG #Inventory#   : Invalidated 1 categories due to invalid descendents cache
+  log INFO #Inventory#   : Successfully loaded 27 categories and 30 items from cache after <t> seconds.
+== link_to_library_link/info
+note an agent link to a Library link (in the model before the agent's load: followed by the decode's item filter too) and a null-id link to it (its debug line's getName() follows it)
+step load_library rv=1
+  log INFO #Inventory#   : loading inventory from: (<cache>/11b00000-0000-4000-8000-000000000001.inv.llsd)
+  log INFO #Inventory#   : Successfully loaded 4 categories and 4 items from cache after <t> seconds.
+step load_agent rv=1
+  log INFO #Inventory#   : loading inventory from: (<cache>/a9e00000-0000-4000-8000-000000000001.inv.llsd)
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log WARNING #Inventory#   : Warning: Accessing link to link
+  log INFO #Inventory#   : Successfully loaded 27 categories and 30 items from cache after <t> seconds.
+== deferred_after_add_line/debug
+note an item addItem logs (unknown asset type 200), then a link deferred as broken: their lines in that order
+step load_library rv=1
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ' => '<cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ'
+  log DEBUG #LLInventoryModel#   : Checking for clear inventory cache marker: <cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ
+  log DEBUG #Inventory#   : importing inventory skeleton for 11b00000-0000-4000-8000-000000000001
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', '11b00000-0000-4000-8000-000000000001' => '<cache>/11b00000-0000-4000-8000-000000000001'
+  log INFO #Inventory#   : loading inventory from: (<cache>/11b00000-0000-4000-8000-000000000001.inv.llsd)
+  log DEBUG #InventoryLocalize#   : Searching for localization: Library
+  log DEBUG #InventoryLocalize#   : Searching for localization: Clothing
+  log DEBUG #InventoryLocalize#   : Searching for localization: Objects
+  log DEBUG #InventoryLocalize#   : Searching for localization: Furniture
+  log INFO #Inventory#   : Successfully loaded 4 categories and 3 items from cache after <t> seconds.
+step load_agent rv=1
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ' => '<cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ'
+  log DEBUG #LLInventoryModel#   : Checking for clear inventory cache marker: <cache>/a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ
+  log DEBUG #Inventory#   : importing inventory skeleton for a9e00000-0000-4000-8000-000000000001
+  log DEBUG #LLDir#   : LL_PATH_CACHE, '', '', 'a9e00000-0000-4000-8000-000000000001' => '<cache>/a9e00000-0000-4000-8000-000000000001'
+  log INFO #Inventory#   : loading inventory from: (<cache>/a9e00000-0000-4000-8000-000000000001.inv.llsd)
+  log DEBUG #   : Resetting inventory type for a0000000-0000-4000-8000-000000000388
+  log DEBUG #InventoryLocalize#   : Searching for localization: My Inventory
+  log DEBUG #InventoryLocalize#   : Searching for localization: Textures
+  log DEBUG #InventoryLocalize#   : Searching for localization: Sounds
+  log DEBUG #InventoryLocalize#   : Searching for localization: Calling Cards
+  log DEBUG #InventoryLocalize#   : Searching for localization: Landmarks
+  log DEBUG #InventoryLocalize#   : Searching for localization: Clothing
+  log DEBUG #InventoryLocalize#   : Searching for localization: Objects
+  log DEBUG #InventoryLocalize#   : Searching for localization: Notecards
+  log DEBUG #InventoryLocalize#   : Searching for localization: Scripts
+  log DEBUG #InventoryLocalize#   : Searching for localization: Body Parts
+  log DEBUG #InventoryLocalize#   : Searching for localization: Trash
+  log DEBUG #InventoryLocalize#   : Searching for localization: Photo Album
+  log DEBUG #InventoryLocalize#   : Searching for localization: Lost And Found
+  log DEBUG #InventoryLocalize#   : Searching for localization: Animations
+  log DEBUG #InventoryLocalize#   : Searching for localization: Gestures
+  log DEBUG #InventoryLocalize#   : Searching for localization: Favorites
+  log DEBUG #InventoryLocalize#   : Searching for localization: Current Outfit
+  log DEBUG #InventoryLocalize#   : Searching for localization: My Outfits
+  log DEBUG #InventoryLocalize#   : Searching for localization: Received Items
+  log DEBUG #InventoryLocalize#   : Searching for localization: Settings
+  log DEBUG #InventoryLocalize#   : Searching for localization: Materials
+  log DEBUG #InventoryLocalize#   : Searching for localization: Outfit A
+  log DEBUG #InventoryLocalize#   : Searching for localization: Outfit B
+  log DEBUG #InventoryLocalize#   : Searching for localization: Furniture
+  log DEBUG #InventoryLocalize#   : Searching for localization: Chairs
+  log DEBUG #InventoryLocalize#   : Searching for localization: Old stuff
+  log DEBUG #InventoryLocalize#   : Searching for localization: Older stuff
+  log WARNING #Inventory#   : Got bad asset type for item [ name: Unknown type 200 type: -56 inv-type: 255 ], ignoring.
+  log DEBUG #Inventory#   : Attempted to add cached link item without baseobj present ( name: Link to nothing itemID: a0000000-0000-4000-8000-000000000387 assetID: a0000000-0000-4000-8000-000000009903 ).  Ignoring and invalidating Objects . 
+  log DEBUG #Inventory#   : Attempted to add 1 cached link items without baseobj present. 10 link items were successfully added. 0 links added in recovery. The corresponding categories were invalidated.
+  log DEBUG #Inventory#   : Invalidating category name: Objects UUID: f0000000-0000-4000-8000-000000000007 due to invalid descendents cache
+  log DEBUG #Inventory#   : Invalidated 1 categories due to invalid descendents cache
+  log INFO #Inventory#   : Successfully loaded 27 categories and 31 items from cache after <t> seconds.
+== deferred_after_add_line/info
+note an item addItem logs (unknown asset type 200), then a link deferred as broken: their lines in that order
+step load_library rv=1
+  log INFO #Inventory#   : loading inventory from: (<cache>/11b00000-0000-4000-8000-000000000001.inv.llsd)
+  log INFO #Inventory#   : Successfully loaded 4 categories and 3 items from cache after <t> seconds.
+step load_agent rv=1
+  log INFO #Inventory#   : loading inventory from: (<cache>/a9e00000-0000-4000-8000-000000000001.inv.llsd)
+  log WARNING #Inventory#   : Got bad asset type for item [ name: Unknown type 200 type: -56 inv-type: 255 ], ignoring.
+  log INFO #Inventory#   : Successfully loaded 27 categories and 31 items from cache after <t> seconds.

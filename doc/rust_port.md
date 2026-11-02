@@ -1933,7 +1933,9 @@ not consume (`llinventory_vks.h`): `tellg`/`seekg` do not round-trip on a
 Windows text-mode file with LF line ends. R2-R4b are
 implemented in the same crate (vkstorm-core-rust #8, with the map order taken
 from the C++ caller in #9) and replay their oracle recordings per C++
-standard library; none is behind `vkstorm-ffi` yet.
+standard library. On `codex/inventory-r2` R2 (the cache file, the login load
+and `validate()`) is behind `vkstorm-ffi` as well (see "R2" below); R3a-R4b
+are not yet.
 
 ### R1: what is Rust and what stayed C++
 
@@ -2032,6 +2034,190 @@ Rust library cannot be without cross-language LTO. `getSafeOwner` and
 `correctInventoryName` stay Rust (owner's decision: cold calls), and so do
 `getOwnership` and `LLSaleInfo::getCRC32`, faster or equal on Windows (owner's
 decision on these numbers: a nanosecond or two is noise).
+
+### R2: the cache file, the login load and validate()
+
+On `codex/inventory-r2` the viewer's `LLInventoryModel` calls
+`vkstorm-inventory` through `vkstorm-ffi` (`inventory_r2.rs`, the header's
+"Inventory R2" section) for:
+
+- `loadFromFile`: C++ reads the uncompressed cache file into memory and hands
+  Rust the bytes whole (`vks_inv_cache_decode`). Rust checks the version
+  header, parses the binary LLSD into its own `Value`, makes the records
+  (`fromLLSD`, `importLLSDMap`, the null-id and `AT_UNKNOWN` filters) and
+  returns them as flat `VksInvItem`/`VksInvCategory` arrays (the R1 views,
+  owner and version included), which fill new `LLViewerInventoryItem`s and
+  `LLViewerInventoryCategory`s directly. No C++ `LLSD` tree is built.
+- `saveToFile`: C++ makes flat views of its records in the order it
+  collected them (the child vectors' `unordered_map` order) and Rust writes
+  the file's bytes (`vks_inv_cache_encode`); C++ writes them to the file.
+- `loadSkeleton`: C++ extracts each skeleton entry with the C++ `LLSD`
+  coercions (port rule 1) and keeps the file-system steps (the clear-cache
+  marker, `gunzip_file`, reading the file, the removals). Rust makes the
+  skeleton's folders (`vks_inv_skeleton_import`), decodes the cache and
+  reconciles the two (`vks_inv_skeleton_load`), and returns the plan C++
+  applies: `addCategory` for each folder with its final version and
+  descendent count, `addItem` for each kept item in order, the model folders
+  to invalidate and the files to remove. The decoded items the load
+  discards never become C++ objects.
+- `validate()`: C++ builds a flat snapshot of what the checks read (records
+  by index, since the C++ compares pointers; `mCategoryMap` and `mItemMap`
+  in the order this standard library iterates them; the child vectors; the
+  backlinks; the set locks; `mLastItem`) and Rust runs the checks
+  (`vks_inv_validate`) and returns `LLInventoryValidationInfo`'s fields and
+  `mLastItem` afterwards. `QAModeFakeSystemFolderIssues` draws from
+  `vks_inv_qa_random_new`'s engine, `QaRandom::native()`: the
+  `std::default_random_engine` of the standard library the build targets
+  (`mt19937` with MSVC, `minstd_rand0` with libstdc++), kept for the
+  process like the C++ function-static engine (open decision 4 of survey
+  03: each platform reproduces its own recording).
+
+The rules read the model through a `VksInvModelHost` callback table (an
+item's stored type through `getItem`, which moves `mLastItem` as the C++
+link-following getters do; a folder's type and version), called only for a
+link's target and an item's parent outside the skeleton.
+`INTEGRATION_TEST_llinventorymodel_parity`, which compiles the real
+`llinventorymodel.cpp`, replays every R2 corpus with 0 differences (11 of
+11 tests: C1 cache files, C2 login load and discard, C3 mutations, C4
+validation and its MSVC QA draws, C5 write safety, set 8 messages, the
+Library and the 100k realistic cache); `check_r2_copies.py` passes inside it.
+
+What stayed C++:
+
+| Part | Why |
+|---|---|
+| The model containers, `addCategory`/`addItem`, observers | storage moves with the UI rung (owner, 2026-10-31) |
+| `gunzip_file`/`gzip_file`, the temporary files, the clear-cache marker, `getInvCacheAddres` | llcommon's file-to-file gzip (zlib-ng) shared with the rest of the viewer, and file-system glue; the crate documents them as C++ (`cache.rs`) |
+| `cache()`'s walk (`LLCanCache` over `collectDescendentsIf`) | a walk of the C++ model; Rust encodes what it is given, in that order |
+| The agent-inventory UDP message handlers (`UpdateCreateInventoryItem`, `BulkUpdateInventory` in both forms, the remove messages, `SaveAssetIntoInventory`, `MoveInventoryItem`, `InventoryDescendents`, `FetchInventoryReply`) | see below |
+
+The UDP handlers keep the message field I/O in C++, and the decisions
+inside a block are already Rust: each item and folder block goes through
+R1's `vks_inv_item_apply_block`/`vks_inv_category_apply_block` (CRC,
+verdict, repairs) via `unpackMessage`. What is left in the handlers is
+glue that interleaves model lookups with model calls block by block
+(`accountForUpdate`, `updateItem`, `updateCategory`, the callbacks,
+`notifyObservers`, the fetch, marketplace and RLVa hooks). The crate has no
+decision module for that control flow: when it was written (#8) its
+`lib.rs` recorded that the handlers stay C++ as glue around the model, and
+no handler logic exists to wire. Porting their control flow would need a new
+op-list design in the crate first (as R3a's `doUpdate()` split); that is
+an open scope question for the owner, not part of this wiring.
+
+Logging keeps the C++ granularity, text and tags (owner, 2026-10-31:
+support greps for them). `validate()` returns every line the C++ logged as
+events (`validate::Event`, `VKS_INV_VEV_*`), in its order, with the record
+indices, ids and numbers each needs; the viewer formats them with the C++
+text, taking names and paths (`getFullPath`) from its objects: one line
+per problem object, the folder-type debug lines, the lock and
+unknown-count summaries. `loadFromFile` says why a cache was rejected
+(header, version or parse, from the bytes it read), and `loadSkeleton`
+logs "Unable to import near <name>" per refused entry
+(`vks_inv_skeleton_rejected`), "folder to update: <name>" per folder with
+an unknown-type item, and the broken-link and invalidation debug lines
+from the plan; `validate()` also logs the `getObjectTopmostAncestor` and
+`isInSuitcase` warnings its walks trigger. Checked over a whole run of
+`INTEGRATION_TEST_llinventorymodel_parity`: the 21,077 lines it logs from
+`llinventorymodel.cpp` (debug included) are the C++ run's, in the same
+order, level, tag and text; only the random temporary file names and the
+function name of lines that now come from another function differ (the
+cache rejection and null-id lines of a login load name `loadSkeleton`,
+which no longer calls `loadFromFile`; the ancestor warnings name
+`validate`). When nothing is wrong no event is made.
+
+Log parity follow-up (review of #279): the lines other files log while
+these functions run are kept too. A getter that follows a link to a link
+logs `LLViewerInventoryItem::getLinkedItem`'s "Warning: Accessing link to
+link"; the C++ login load did that in `loadFromFile`'s item filter, in the
+first pass and in the retry of a deferred link (so a cached `A`,
+`B -> A`, `C -> B` logs it twice for `C`), and in the debug lines'
+`getName()`/`getAssetUUID()`. The plan now lists the decode's lines in
+file order and the two item passes as steps in the C++ order
+(`VksInvLoadLine`: `addItem`, a deferred link, a link to a link), and the
+viewer applies them in that order, so each line falls between the
+`addItem` calls where the C++ logged it and `mLastItem` moves as it did;
+for a link to a link it calls `getLinkedItem()` itself (the line keeps its
+function), and the null-id and deferred-link debug lines are formatted
+with the item's own getters, evaluated only when the line is enabled, as
+in the C++. The record also showed that the decode lost
+`LLInventoryItem::fromLLSD`'s untagged debug line "Resetting inventory type
+for <id>" (an `IT_NONE` or mismatched inventory type); it is a decode line
+now too (`VKS_INV_LOAD_RESET_INV_TYPE`). On OpenSim, `validate()` also logs `isInSuitcase`'s "Parent
+folder is ...; Folder type ..." debug line per ancestor
+(`VKS_INV_VEV_SUITCASE_PARENT`). `cache/c2_logs.txt` holds every line the
+two `loadSkeleton` calls log (level, tags, text) for links to links, a
+null-id link and a deferred link after a line of `addItem`, with debug
+lines on and off, recorded from the `llinventorymodel.cpp` before the
+port; test 11 of `INTEGRATION_TEST_llinventorymodel_parity` replays it.
+A null child vector in `mParentChildCategoryTree` or
+`mParentChildItemTree`, which `validate()` would report as "invalid direct
+descendents", is not snapshotted as such: every writer of those maps
+stores a `new` vector (`updateCategory`, `buildParentChildMap`), the
+erasers remove the entry, and other readers (`categoryHasChildren`)
+dereference the value unchecked, so the viewer cannot hold one.
+
+Bench (`VKS_INVMODEL_BENCH=7`, Windows, RelWithDebInfo, best of 7, ms;
+measured while four other agents built on the same machine, so take ±20%).
+The codec rows run the C++ before the port
+(`tests/llinventorymodel_parity_frozen.cpp`) and the live Rust-backed
+functions in one binary, alternating which goes first; each includes the file
+read or write, and both re-encodes give the input bytes back:
+
+| Cache file | `loadFromFile` C++ → Rust | `saveToFile` C++ → Rust |
+|---|---|---|
+| Linden Library (3.4 MB, 490 folders, 5,585 items) | 35.8 → 19.9 | 21.1 → 17.8 |
+| random 50k world (29.0 MB, 5,027 folders, 50,030 items) | 379.3 → 192.2 | 250.7 → 175.9 |
+| realistic 100k (57.8 MB, 8,027 folders, 100,000 items) | 782.9 → 422.6 | 546.6 → 396.0 |
+
+The model rows need the whole model, so they compare two builds of the test
+(this branch, and the same test over the `llinventorymodel.cpp` before the
+port), over a 50k-item world with random ids, best of 7 in each of two
+alternating rounds per build (the lower round shown):
+
+| 50k random world | C++ | Rust, first wiring | Rust |
+|---|---|---|---|
+| `loadSkeleton` (library and agent, from the gzipped cache) | 434.7 | 275 | 273.7 |
+| `validate()` | 42.3 | 55.9 | 20.6 |
+| `buildParentChildMap()` (includes `validate()`) | 51.2 | 67.6 | 31.2 |
+
+The first wiring of `validate()` was about 13 ms slower than the C++: the
+snapshot mapped every object pointer to an index through two hash maps,
+the crate kept the maps as `BTreeMap`s and every ancestor walk allocated a
+`BTreeSet`. The owner kept it in Rust and asked for it to be made faster
+(2026-10-31). Now the snapshot needs one `find` and a pointer compare per
+child vector entry (a record per map entry under its object's own id;
+children, `mLastItem` and a second key of the same object refer to it by
+key, `VKS_INV_SNAP_MAPPED`; only an object the maps do not hold under its
+own id gets a record of its own), the crate's maps are hash maps by UUID
+(`model::UuidMap`; the walks keep the caller's map order), and the
+ancestor walk's loop guard is a short list. It went from 55.9 to 20.6 ms,
+half the C++ time. The "first wiring" column is from an earlier session
+(the machine's load from other agents' builds varies between sessions);
+the C++ and final Rust columns were measured in alternation.
+
+The 100k realistic world's model rows are not a measure of either side:
+its ids (`pid()`) differ only in bytes 10-15, which upstream's
+`std::hash<LLUUID>` folds into the high bits of the hash only, so the
+model's `unordered_map`s put a kind of id in one bucket and every model
+lookup walks a list (C++: `loadSkeleton` 22.6 s, `validate()` 42.3 s; with
+Rust: 19.8 s and 0.15 s, the rest being the C++ map inserts). Real ids are
+random and do not collide. CI runs the same bench on Windows and Linux for
+the Linux numbers (job summary; the realistic world's model rows are
+skipped there).
+
+Once R2 lands, the cache no longer calls the C++ LLSD forms R1 kept:
+`LLViewerInventoryCategory::exportLLSD`/`importLLSD` and
+`LLInventoryCategory::exportLLSD`/`importLLSDMap`/`importLLSD` have no
+viewer caller left (only tests). `LLInventoryItem::fromLLSD`/`asLLSD` and
+the category `fromLLSD`/`asLLSD` still have callers: the AIS parse
+(`llaisapi.cpp`, `unpackMessage(LLSD)`; R3a, option B), the background
+fetch replies (`llinventorymodelbackgroundfetch.cpp`; R3b), the server
+updates and AIS bodies of `llviewerinventory.cpp` (`updateServer`,
+`update_inventory_item`/`_category`, the AIS create and copy bodies), the
+GenericMessage form of `BulkUpdateInventory` (`LLDispatchBulkUpdateInventory`),
+the offer's LLSD form (R4b) and the export floater
+(`ll_create_sd_from_inventory_item`). They retire as those sub-rungs stop
+building C++ trees; none is retired here.
 
 ## Local build
 
