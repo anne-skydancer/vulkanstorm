@@ -8033,7 +8033,7 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
     // Windows resolves these entry points at runtime. On Linux they are GL
     // prototypes, so testing their addresses is both redundant and a warning.
     sRenderAlphaOITSupported = sRenderAlphaOITSupported &&
-                               glTexStorage3D && glBindImageTexture && glClearTexImage && glCopyImageSubData;
+                               glTexStorage3D && glBindImageTexture && glClearTexImage && glClearTexSubImage && glCopyImageSubData;
 #endif
     if (sRenderAlphaOITSupported)
     {
@@ -8107,6 +8107,9 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
     make_array(mAlphaOITMeta, GL_R32UI, OIT_META_LAYERS);
     make_array(mAlphaOITSlots, GL_RGBA32UI, slots);
     glBindTexture(GL_TEXTURE_2D_ARRAY, previous_texture);
+    const U32 zero = 0;
+    glClearTexImage(mAlphaOITMeta, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+    mAlphaOITTailDirty = false;
 
     // Separate depth storage avoids sampling the active scene depth attachment.
     const bool depth_allocated = mAlphaOITOpaqueDepth.allocate(w, h, 0, true);
@@ -8138,6 +8141,7 @@ void LLPipeline::releaseAlphaOITBuffers()
     if (mAlphaOITMeta)  { glDeleteTextures(1, &mAlphaOITMeta);  mAlphaOITMeta = 0; }
     if (mAlphaOITSlots) { glDeleteTextures(1, &mAlphaOITSlots); mAlphaOITSlots = 0; }
     mAlphaOITWidth = mAlphaOITHeight = mAlphaOITSlotCount = 0;
+    mAlphaOITTailDirty = false;
 }
 
 bool LLPipeline::beginAlphaOITCapture()
@@ -8166,10 +8170,21 @@ bool LLPipeline::beginAlphaOITCapture()
     glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32UI);
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT);
 
-    // Zero every per-pixel count and tail accumulator in one clear. The slot array needs no
-    // clear: the count bounds what the resolve reads.
+    // Zero the per-pixel counts (layer 0). The tail layers are written only by overflowing
+    // pixels and zeroed again by the resolve that reads them, so they are clean unless a
+    // capture ran without its resolve; then clear everything. The slot array needs no clear:
+    // the count bounds what the resolve reads.
     const U32 zero = 0;
-    glClearTexImage(mAlphaOITMeta, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+    if (mAlphaOITTailDirty)
+    {
+        glClearTexImage(mAlphaOITMeta, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+    }
+    else
+    {
+        glClearTexSubImage(mAlphaOITMeta, 0, 0, 0, 0, (GLsizei)mAlphaOITWidth, (GLsizei)mAlphaOITHeight, 1,
+                           GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+    }
+    mAlphaOITTailDirty = true;
 
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
@@ -8262,12 +8277,14 @@ void LLPipeline::compositeAlphaOIT()
     // Use the same detached opaque-depth snapshot as capture for the final guard.
     gAlphaOITResolveProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mAlphaOITOpaqueDepth, true);
 
-    // meta + slots (read) -- same image units the capture wrote to
-    glBindImageTexture(0, mAlphaOITMeta, 0, GL_TRUE, 0, GL_READ_ONLY, GL_R32UI);
+    // meta (read, and the resolve zeroes the tail layers it consumed) + slots (read) -- same
+    // image units the capture wrote to
+    glBindImageTexture(0, mAlphaOITMeta, 0, GL_TRUE, 0, GL_READ_WRITE, GL_R32UI);
     glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32UI);
 
     mScreenTriangleVB->setBuffer();
     mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+    mAlphaOITTailDirty = false;
 
     gAlphaOITResolveProgram.disableTexture(LLShaderMgr::DEFERRED_DEPTH, mRT->deferredScreen.getUsage());
     gAlphaOITResolveProgram.unbind();
