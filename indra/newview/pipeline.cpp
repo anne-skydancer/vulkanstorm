@@ -8038,7 +8038,7 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 
 namespace
 {
-    constexpr U32 OIT_META_LAYERS = 6;    // count + 5 tail accumulators (see alphaOITResolveF.glsl)
+    constexpr U32 OIT_META_LAYERS = 7;    // count + 5 tail accumulators + nearest tail depth (see alphaOITResolveF.glsl)
     constexpr U64 OIT_META_BYTES  = OIT_META_LAYERS * sizeof(U32);
     constexpr U64 OIT_SLOT_BYTES  = 4 * sizeof(U32);  // one RGBA32UI texel per slot
     constexpr U32 OIT_MAX_SLOTS   = 32;   // OIT_MAX_SLOTS in alphaOITResolveF.glsl
@@ -8095,20 +8095,19 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
         return;
     }
 
-    U32 slots = llclamp((U32)slots_setting, 1u, OIT_MAX_SLOTS);
-    const U32 fitting = (U32)llmin<U64>((budget_bytes - meta_bytes) / slot_layer_bytes, OIT_MAX_SLOTS);
-    if (fitting < slots)
-    {
-        LL_INFOS("Pipeline") << "Alpha OIT: memory budget allows " << fitting << " of the requested "
-                             << slots << " slots per pixel at " << w << "x" << h << LL_ENDL;
-        slots = fitting;
-    }
+    const U32 requested = llclamp((U32)slots_setting, 1u, OIT_MAX_SLOTS);
+    const U32 slots = llmin(requested, (U32)llmin<U64>((budget_bytes - meta_bytes) / slot_layer_bytes, OIT_MAX_SLOTS));
 
     if (mAlphaOITMeta && mAlphaOITSlots && mAlphaOITOpaqueDepth.isComplete() &&
         mAlphaOITWidth == w && mAlphaOITHeight == h && mAlphaOITSlotCount == slots)
     {
         gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", true);
         return; // already sized
+    }
+    if (slots < requested)
+    {
+        LL_INFOS("Pipeline") << "Alpha OIT: memory budget allows " << slots << " of the requested "
+                             << requested << " slots per pixel at " << w << "x" << h << LL_ENDL;
     }
     releaseAlphaOITBuffers();
     while (glGetError() != GL_NO_ERROR) {}
@@ -8133,10 +8132,12 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
     const U32 zero = 0;
     glClearTexImage(mAlphaOITMeta, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
     mAlphaOITTailDirty = false;
+    // Read the array allocations' error now: LLRenderTarget::allocate() clears the error state.
+    const GLenum array_error = glGetError();
 
     // Separate depth storage avoids sampling the active scene depth attachment.
     const bool depth_allocated = mAlphaOITOpaqueDepth.allocate(w, h, 0, true);
-    const GLenum allocation_error = glGetError();
+    const GLenum allocation_error = array_error != GL_NO_ERROR ? array_error : glGetError();
     if (!depth_allocated || allocation_error != GL_NO_ERROR)
     {
         LL_WARNS("Pipeline") << "Alpha OIT allocation failed (GL error "
