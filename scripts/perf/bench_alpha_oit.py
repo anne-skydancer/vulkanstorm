@@ -22,7 +22,7 @@ root = Path(__file__).resolve().parents[2]
 W = int(os.environ.get('OIT_BENCH_W', 2560)); H = int(os.environ.get('OIT_BENCH_H', 1440))
 FRAMES = int(os.environ.get('OIT_BENCH_FRAMES', 20)); WARMUP = 5
 OLD_REF = os.environ.get('OIT_BENCH_OLD_REF', 'origin/vkstorm-devel')
-NODES_PER_PX = 8; OLD_MAX_LAYERS = 24; SLOTS = 8; META_LAYERS = 6
+NODES_PER_PX = 8; OLD_MAX_LAYERS = 24; SLOTS = 8; META_LAYERS = 7
 
 genbuf=fn('glGenBuffers',None,I,C.POINTER(U));bindbuf=fn('glBindBuffer',None,U,U)
 storage=fn('glBufferStorage',None,U,S,P,U);data=fn('glBufferData',None,U,S,P,U)
