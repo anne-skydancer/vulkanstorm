@@ -11898,7 +11898,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderAlphaOITNodesPerPixel</key>
   <map>
     <key>Comment</key>
-    <string>Average PPLL node budget per main-view pixel. Actual allocation is also bounded by the memory budget and driver SSBO limit.</string>
+    <string>Alpha OIT slots per main-view pixel: the layers that are depth-sorted exactly. Fragments past the last slot fold into an order-independent tail. Clamped to 1..32 and reduced to fit the memory budget.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -11910,7 +11910,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderAlphaOITMemoryMB</key>
   <map>
     <key>Comment</key>
-    <string>Maximum memory budget in MiB for the PPLL node pool, excluding its per-pixel head image.</string>
+    <string>Maximum memory budget in MiB for the alpha OIT A-buffer (slot array plus the per-pixel count/tail image). The slot count is reduced to fit.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -11919,24 +11919,12 @@ Change of this parameter will affect the layout of buttons in notification toast
     <integer>512</integer>
   </map>
 
-  <key>RenderAlphaOITMaxPixelLayers</key>
-  <map>
-    <key>Comment</key>
-    <string>Hard maximum PPLL fragments captured and traversed at one pixel. Clamped to 4..32 to bound shader execution time.</string>
-    <key>Persist</key>
-    <integer>1</integer>
-    <key>Type</key>
-    <string>U32</string>
-    <key>Value</key>
-    <integer>24</integer>
-  </map>
-
 
 
   <key>RenderAlphaPPLLAvailable</key>
   <map>
     <key>Comment</key>
-    <string>Runtime capability flag used by preferences; PPLL is available only on Windows/Linux with required GL support and valid resources.</string>
+    <string>Runtime capability flag used by preferences; alpha OIT is available only on Windows/Linux with required GL support and valid resources.</string>
     <key>Persist</key>
     <integer>0</integer>
     <key>Type</key>
@@ -11949,7 +11937,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderAlphaOITStats</key>
   <map>
     <key>Comment</key>
-    <string>Debug: read back and log alpha OIT node-pool usage each frame (peak/percent). Adds a GPU sync; leave off except when tuning RenderAlphaOITNodesPerPixel.</string>
+    <string>Debug: every 64th frame, read back the alpha OIT per-pixel layer counts and log coverage, peak depth and how many pixels overflow into the tail. Adds a GPU sync; leave off except when tuning RenderAlphaOITNodesPerPixel. Needs GL 4.5.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
