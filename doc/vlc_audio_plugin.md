@@ -68,9 +68,11 @@ there is no extra device, queue, timer or presentation clock in the filter.
 ### Build and verification
 
 The unchanged GNU C VLC module cannot be built with MSVC. It is built in CI by the
-`vlc-speakerfill` autobuild package (3p-vlc-speakerfill) with a pinned LLVM-MinGW
-22.1.8; the viewer build needs no GNU C compiler and just installs the package. The
-package's sources are fetched over HTTPS and SHA-256 checked. The packaged VLC
+`vlc-speakerfill` autobuild package (3p-vlc-speakerfill) with the GitHub Windows
+runner's preinstalled MinGW-w64 GCC (MSVCRT runtime, matching VLC 3); the exact
+compiler version of a given package is recorded in its `build-info.txt`, shipped
+in the source offer. The viewer build needs no GNU C compiler and just installs the
+package. The package's sources are fetched over HTTPS and SHA-256 checked. The packaged VLC
 3.0.21 plugin SDK and core import library supply the matching ABI. Dependency
 source and the transformation are included under `llplugin/speakerfill-source`.
 The package is temporary: it is removed when the Rust audio engine, which does
@@ -544,5 +546,5 @@ is an explicit plugin build dependency and is included in the staged source tree
 
 Validation: repeated preparation preserves upstream hashes and produces an
 identical adapted header. The complete output plugin compiles and links with
-LLVM-MinGW with macro-redefinition warnings promoted to errors. Other existing
+MinGW-w64 GCC with macro-redefinition warnings promoted to errors. Other existing
 VLC header warnings remain outside this correction.
