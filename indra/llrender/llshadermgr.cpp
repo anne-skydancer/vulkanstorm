@@ -1089,6 +1089,10 @@ void LLShaderMgr::clearShaderCache()
     const std::string mask = "*";
     gDirUtilp->deleteFilesInDir(shader_cache, mask);
     mShaderBinaryCache.clear();
+    // <FS> Vulkanstorm: recreate the directory, or the binaries and metadata compiled right
+    // after a purge cannot be saved and the next start compiles everything again.
+    LLFile::mkdir(shader_cache);
+    // </FS>
 }
 
 void LLShaderMgr::persistShaderCacheMetadata()
