@@ -5,6 +5,9 @@ queries for two implementations on synthetic layer stacks at a given resolution:
   * "ppll"  -- per-pixel linked list: shaders from git ref OIT_BENCH_OLD_REF
                (default origin/vkstorm-devel), node pool 8 nodes/pixel, 24 sorted layers
   * "slots" -- image-array A-buffer: shaders from this working tree, 8 slots/pixel
+  * "direct" -- no A-buffer: plain in-order source-over blending (the legacy cost floor)
+OIT_BENCH_IMPLS selects implementations (default ppll,slots); OIT_BENCH_SCENES a JSON list of
+[pattern, layers] pairs.
 Each scenario draws L full-screen layers at alpha 0.5 with distinct depths, either over
 every pixel ("full") or over 25% of 64x64 blocks ("sparse", a hair/particle clump proxy).
 
@@ -28,6 +31,7 @@ gentex=fn('glGenTextures',None,I,C.POINTER(U));bindtex=fn('glBindTexture',None,U
 texstorage=fn('glTexStorage2D',None,U,I,U,I,I);texstorage3=fn('glTexStorage3D',None,U,I,U,I,I,I)
 texparam=fn('glTexParameteri',None,U,U,I);image=fn('glBindImageTexture',None,U,U,I,C.c_ubyte,I,U,U)
 cleartex=fn('glClearTexImage',None,U,I,U,U,P)
+clearsub=fn('glClearTexSubImage',None,U,I,I,I,I,I,I,I,U,U,P)
 genfbo=fn('glGenFramebuffers',None,I,C.POINTER(U));bindfbo=fn('glBindFramebuffer',None,U,U)
 attachtex=fn('glFramebufferTexture2D',None,U,U,U,U,I)
 geterror=fn('glGetError',U);uniform=fn('glUniform1i',None,I,I);uniform1f=fn('glUniform1f',None,I,C.c_float)
@@ -48,6 +52,7 @@ one=C.c_float(1.0);cleartex(depth,0,0x1902,0x1406,C.byref(one))   # opaque depth
 bindtex(TEX2D,color);texstorage(TEX2D,1,0x881A,W,H)                # RGBA16F screen
 bindtex(TEX2D,head);texstorage(TEX2D,1,R32UI,W,H)
 bindtex(TEX2DARRAY,meta);texstorage3(TEX2DARRAY,1,R32UI,W,H,META_LAYERS)
+zero=U(0);cleartex(meta,0,RED_INT,UINT,C.byref(zero))
 bindtex(TEX2DARRAY,slots);texstorage3(TEX2DARRAY,1,RGBA32UI,W,H,SLOTS)
 bindtex(TEX2D,depth)   # unit 0 sampler2D = opaque depth for both capture and resolve
 fbo=U();genfbo(1,C.byref(fbo));bindfbo(0x8D40,fbo);attachtex(0x8D40,0x8CE0,TEX2D,color,0)
@@ -67,7 +72,18 @@ def resolve_source(impl):
     src=shader_text(impl,'indra/newview/app_settings/shaders/class1/deferred/alphaOITResolveF.glsl')
     src=src[src.index('#extension'):].replace('/*[EXTRA_CODE_HERE]*/','')
     return '#version 430 core\n'+src
+DIRECT_SOURCE='''#version 430 core
+uniform float test_depth;
+uniform int pattern;
+out vec4 color;
+void main()
+{
+    if (pattern == 1 && (((int(gl_FragCoord.x) >> 6) ^ (int(gl_FragCoord.y) >> 6)) & 3) != 0) discard;
+    color = vec4(0.8, 0.5, 0.2, 0.5);
+}
+'''
 def capture_source(impl):
+    if impl=='direct': return DIRECT_SOURCE
     src=shader_text(impl,'indra/newview/app_settings/shaders/class2/deferred/alphaF.glsl')
     marker='bool oit_append(' if impl=='ppll' else 'void oit_append('
     start=src.index(marker);end=src.index('\n}',start)+2;helper=src[start:end]
@@ -102,9 +118,9 @@ void main()
 '''
 vertex='#version 430 core\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-1.,0.,1.);}'
 progs={}
-for impl in ('ppll','slots'):
+for impl in ('ppll','slots','direct'):
     cap=program([(0x8B31,vertex),(0x8B30,capture_source(impl))])
-    res=program([(0x8B31,vertex),(0x8B30,resolve_source(impl))])
+    res=None if impl=='direct' else program([(0x8B31,vertex),(0x8B30,resolve_source(impl))])
     progs[impl]=(cap,res)
 queries=(U*3)();genq(3,queries)
 
@@ -113,7 +129,9 @@ def frame(impl, layers, pattern):
     clearcolor(0,0,0,1);clear(0x4000)
     # --- reset ---
     beginq(TIME_ELAPSED,queries[0])
-    if impl=='ppll':
+    if impl=='direct':
+        pass
+    elif impl=='ppll':
         barrier(0x200|0x100)   # BUFFER_UPDATE | TEXTURE_UPDATE
         bindbuf(ACB,counter);sub(ACB,0,4,C.byref(zero));bindbuf(ACB,0)
         empty=U(0xFFFFFFFF);cleartex(head,0,RED_INT,UINT,C.byref(empty))
@@ -122,15 +140,16 @@ def frame(impl, layers, pattern):
     else:
         image(0,0,0,1,0,0x88BA,R32UI);image(1,0,0,1,0,0x88B9,RGBA32UI)
         barrier(0x20|0x100)
-        cleartex(meta,0,RED_INT,UINT,C.byref(zero))
+        clearsub(meta,0,0,0,0,W,H,1,RED_INT,UINT,C.byref(zero))   # count layer only; the resolve zeroes the tail it read
         barrier(0x20)
         image(0,meta,0,1,0,0x88BA,R32UI);image(1,slots,0,1,0,0x88B9,RGBA32UI)
     endq(TIME_ELAPSED)
     # --- capture: L layers, distinct depths, standard alpha blend for any fall-through ---
     beginq(TIME_ELAPSED,queries[1])
-    use(cap);uniform(loc(cap,b'alpha_oit_opaque_depth'),0);uniform(loc(cap,b'pattern'),pattern)
+    use(cap);uniform(loc(cap,b'pattern'),pattern)
+    if impl!='direct': uniform(loc(cap,b'alpha_oit_opaque_depth'),0)
     if impl=='ppll': uniform(loc(cap,b'oit_node_cap'),node_cap)
-    else: uniform(loc(cap,b'oit_slot_count'),SLOTS)
+    elif impl=='slots': uniform(loc(cap,b'oit_slot_count'),SLOTS)
     blendfunc(0x0302,0x0303);colormask(1,1,1,1)
     for i in range(layers):
         uniform1f(loc(cap,b'test_depth'),0.05+0.9*((i*7919)%layers)/max(layers,1))
@@ -139,13 +158,20 @@ def frame(impl, layers, pattern):
     endq(TIME_ELAPSED)
     # --- resolve: premultiplied over, alpha channel masked ---
     beginq(TIME_ELAPSED,queries[2])
+    if impl=='direct':
+        endq(TIME_ELAPSED);finish()
+        out=[]
+        for q in queries:
+            v=C.c_uint64();qresult(q,QUERY_RESULT,C.byref(v));out.append(v.value/1e6)
+        assert geterror()==0
+        return out
     use(res);uniform(loc(res,b'depthMap'),0)
     if impl=='ppll':
         uniform(loc(res,b'oit_max_pixel_layers'),OLD_MAX_LAYERS)
         image(0,head,0,0,0,0x88B8,R32UI);base(SSBO,0,nodes)
     else:
         uniform(loc(res,b'oit_slot_count'),SLOTS)
-        image(0,meta,0,1,0,0x88B8,R32UI);image(1,slots,0,1,0,0x88B8,RGBA32UI)
+        image(0,meta,0,1,0,0x88B8,R32UI);image(1,slots,0,1,0,0x88B8,RGBA32UI);image(2,meta,0,1,0,0x88B9,R32UI)
     blendfunc(1,0x0303);colormask(1,1,1,0)
     draw(4,0,3)
     endq(TIME_ELAPSED)
@@ -156,14 +182,16 @@ def frame(impl, layers, pattern):
     assert geterror()==0
     return out
 
-scenarios=[('full',1),('full',4),('full',8),('full',16),('full',32),('sparse',8),('sparse',24),('sparse',48)]
+import json
+scenarios=json.loads(os.environ['OIT_BENCH_SCENES']) if 'OIT_BENCH_SCENES' in os.environ else [('full',1),('full',4),('full',8),('full',16),('full',32),('sparse',8),('sparse',24),('sparse',48)]
+impls=os.environ.get('OIT_BENCH_IMPLS','ppll,slots').split(',')
 print(f'{W}x{H}, {FRAMES} frames median after {WARMUP} warmup; ms per frame (reset / capture / resolve / total)')
 print(f'ppll: {NODES_PER_PX} nodes/px pool ({node_cap*16>>20} MiB), {OLD_MAX_LAYERS} sorted layers; slots: {SLOTS} slots/px ({W*H*16*SLOTS>>20} MiB) + meta ({W*H*4*META_LAYERS>>20} MiB)')
 print(f'{"scene":<12}{"impl":<7}{"reset":>8}{"capture":>9}{"resolve":>9}{"total":>8}  note')
 for pattern_name,layers in scenarios:
     pattern=1 if pattern_name=='sparse' else 0
     row={}
-    for impl in ('ppll','slots'):
+    for impl in impls:
         samples=[]
         for f in range(WARMUP+FRAMES):
             t=frame(impl,layers,pattern)
@@ -175,5 +203,6 @@ for pattern_name,layers in scenarios:
         if impl=='ppll' and layers>OLD_MAX_LAYERS: note+=' + weighted tail past 24'
         if impl=='slots' and layers>SLOTS: note=f'{layers-SLOTS} of {layers} layers in the tail'
         print(f'{pattern_name+" L="+str(layers):<12}{impl:<7}{med[0]:>8.3f}{med[1]:>9.3f}{med[2]:>9.3f}{sum(med):>8.3f}  {note}')
-    a,b=sum(row["ppll"]),sum(row["slots"]);print(f'{"":<19}slots/ppll total = {b/a:.2f}x')
+    if 'ppll' in row and 'slots' in row:
+        a,b=sum(row["ppll"]),sum(row["slots"]);print(f'{"":<19}slots/ppll total = {b/a:.2f}x')
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)
