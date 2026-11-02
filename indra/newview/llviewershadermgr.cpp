@@ -137,7 +137,7 @@ LLGLSLShader            gPostScreenSpaceReflectionProgram;
 LLGLSLShader            gPostVignetteProgram;   // <FS:CR> Import Vignette from Exodus
 LLGLSLShader            gPostSnapshotFrameProgram;   // <FS:Beq/> Add Snapshot frame guide
 
-// <FS> Vulkanstorm: alpha OIT (PPLL) resolve shader
+// <FS> Vulkanstorm: alpha OIT (A-buffer) resolve shader
 LLGLSLShader            gAlphaOITResolveProgram;
 // </FS>
 
@@ -3046,8 +3046,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         success = gDeferredBufferVisualProgram.createShader();
     }
 
-    // <FS> Vulkanstorm: alpha OIT (per-pixel linked list) resolve. Built only on GL 4.4+ (SSBO +
-    // image load/store). The alpha shaders' capture path (ALPHA_OIT) and the OIT pipeline are
+    // <FS> Vulkanstorm: alpha OIT (image-array A-buffer) resolve. Built only on GL 4.4+ (image
+    // load/store). The alpha shaders' capture path (ALPHA_OIT) and the OIT pipeline are
     // gated on the same capability, so on older HW this program is absent and compositeAlphaOIT()
     // is a no-op -- the legacy sorted-alpha path runs instead.
 #if LL_WINDOWS || LL_LINUX

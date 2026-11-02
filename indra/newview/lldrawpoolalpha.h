@@ -89,7 +89,7 @@ public:
 
 private:
     LLGLSLShader* target_shader;
-    LLRenderTarget* mAlphaOpaqueDepth = nullptr; // detached opaque depth for PPLL capture
+    LLRenderTarget* mAlphaOpaqueDepth = nullptr; // detached opaque depth for OIT capture
 
     // setup by beginFooPass, [0] is static variant, [1] is rigged variant
     LLGLSLShader* simple_shader = nullptr;
