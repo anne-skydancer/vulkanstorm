@@ -779,6 +779,7 @@ public:
     U32 mAlphaOITWidth = 0;
     U32 mAlphaOITHeight = 0;
     U32 mAlphaOITSlotCount = 0; // layers of mAlphaOITSlots
+    bool mAlphaOITTailDirty = false; // a capture ran without its resolve: clear the tail layers too
 
     // </FS>
 
