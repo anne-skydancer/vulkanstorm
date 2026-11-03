@@ -41,6 +41,20 @@
     #pragma comment(lib, "wbemuuid.lib")
 #endif
 
+// Symbols the viewer defines in newview that llui and llrender reference:
+// llurlentry.cpp calls the RLVa rlvGetAnonym(), and llfontregistry.cpp in
+// llrender reads gSavedSettings.
+#include "llavatarname.h"
+#include "llcontrol.h"
+
+std::string rlvGetAnonym(const LLAvatarName& avName)
+{
+    static std::string strAnonym = "A resident";
+    return strAnonym;
+}
+
+LLControlGroup gSavedSettings("Global");
+
 
 // namespace LLExperienceCache
 // {
