@@ -199,7 +199,7 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
     // already being setup for rendering
     LLGLSLShader::unbind();
 
-    // <FS> Vulkanstorm: PPLL capture and resolve are
+    // <FS> Vulkanstorm: OIT (A-buffer) capture and resolve are
     // limited to the main post-water view. Mirrors/hero probes, cube snapshots, HUDs,
     // impostors and pre-water alpha retain the stock path.
     static LLCachedControl<U32> alpha_method(gSavedSettings, "RenderAlphaSortMethod", 1);
@@ -211,18 +211,18 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
         !LLPipeline::sReflectionRender &&
         !gCubeSnapshot;
 
-    bool ppll_resources = true;
+    bool oit_resources = true;
     if (alpha_method == 1 && oit_view_eligible)
     {
         gPipeline.allocateAlphaOITBuffers(
             gPipeline.mRT->screen.getWidth(), gPipeline.mRT->screen.getHeight());
-        ppll_resources = LLPipeline::sRenderAlphaOITSupported;
+        oit_resources = LLPipeline::sRenderAlphaOITSupported;
     }
-    bool use_ppll = alpha_method == 1
+    bool use_oit = alpha_method == 1
                  && oit_view_eligible
-                 && ppll_resources
+                 && oit_resources
                  && LLPipeline::sRenderAlphaOITSupported;
-    if (use_ppll)
+    if (use_oit)
     {
         drawGLTFScene();
         if (gPipeline.beginAlphaOITCapture())
@@ -234,7 +234,7 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
             gPipeline.endAlphaOITCapture();
             gPipeline.compositeAlphaOIT();
 
-            // PPLL capture cannot write the shared scene depth: doing so would reject
+            // OIT capture cannot write the shared scene depth: doing so would reject
             // transparent fragments before the per-pixel resolve can order them. Restore
             // the legacy rigged depth contribution before residual alpha and emissive
             // replay. The legacy path establishes this depth while drawing rigged alpha;
@@ -391,8 +391,8 @@ void LLDrawPoolAlpha::drawGLTFScene()
 void LLDrawPoolAlpha::setOITMode(S32 mode)
 {
     static const LLStaticHashedString sOITMode("oit_mode");
-    static const LLStaticHashedString sOITNodeCap("oit_node_cap");
-    const S32 node_cap = (S32)llmin<U32>(gPipeline.getAlphaOITNodeCap(), 0x7fffffffu);
+    static const LLStaticHashedString sOITSlotCount("oit_slot_count");
+    const S32 slot_count = (S32)gPipeline.getAlphaOITSlotCount();
     mAlphaOpaqueDepth = mode == 1 ? gPipeline.getAlphaOITOpaqueDepth() : nullptr;
 
     auto apply = [&](LLGLSLShader* shader)
@@ -403,7 +403,7 @@ void LLDrawPoolAlpha::setOITMode(S32 mode)
         }
         shader->bind();
         shader->uniform1i(sOITMode, mode);
-        shader->uniform1i(sOITNodeCap, node_cap);
+        shader->uniform1i(sOITSlotCount, slot_count);
         if (mAlphaOpaqueDepth)
         {
             shader->bindTexture(LLShaderMgr::ALPHA_OIT_OPAQUE_DEPTH, mAlphaOpaqueDepth,
@@ -413,7 +413,7 @@ void LLDrawPoolAlpha::setOITMode(S32 mode)
         {
             shader->mRiggedVariant->bind();
             shader->mRiggedVariant->uniform1i(sOITMode, mode);
-            shader->mRiggedVariant->uniform1i(sOITNodeCap, node_cap);
+            shader->mRiggedVariant->uniform1i(sOITSlotCount, slot_count);
             if (mAlphaOpaqueDepth)
             {
                 shader->mRiggedVariant->bindTexture(LLShaderMgr::ALPHA_OIT_OPAQUE_DEPTH, mAlphaOpaqueDepth,

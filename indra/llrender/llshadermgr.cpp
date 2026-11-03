@@ -653,9 +653,9 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
         extra_code_text[extra_code_count++] = strdup( "#define IS_AMD_CARD 1\n" );
     }
 
-    // <FS> Vulkanstorm: gate the alpha OIT (per-pixel linked list) capture path in the alpha
-    // fragment shaders on GL >= 4.4, where SSBO + image load/store + atomic counters +
-    // glClearTexImage are all core. On older contexts ALPHA_OIT stays undefined and the alpha
+    // <FS> Vulkanstorm: gate the alpha OIT (image-array A-buffer) capture path in the alpha
+    // fragment shaders on GL >= 4.4, where image load/store, image atomics, immutable array
+    // textures and glClearTexImage are all core. On older contexts ALPHA_OIT stays undefined and the alpha
     // shaders compile the legacy sorted-alpha path (the #extension lines above only warn).
 
 #if LL_WINDOWS || LL_LINUX
@@ -1095,6 +1095,10 @@ void LLShaderMgr::clearShaderCache()
     gDirUtilp->deleteFilesInDir(shader_cache, mask);
     LLFile::rmdir(shader_cache);
     mShaderBinaryCache.clear();
+    // <FS> Vulkanstorm: recreate the directory, or the binaries and metadata compiled right
+    // after a purge cannot be saved and the next start compiles everything again.
+    LLFile::mkdir(shader_cache);
+    // </FS>
 }
 
 void LLShaderMgr::persistShaderCacheMetadata()
