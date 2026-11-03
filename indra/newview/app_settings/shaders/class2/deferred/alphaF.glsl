@@ -60,6 +60,9 @@ void oit_append(vec4 c, float z)
     // Match resolve LEQUAL, including equality; reject before touching the A-buffer.
     if (!(z <= texelFetch(alpha_oit_opaque_depth, p, 0).r)) discard;
     float a   = clamp(c.a, 0.0, 1.0);
+    // A fully transparent fragment adds no colour and no coverage; keep it out of the slots
+    // and away from the tail's nearest depth, which would otherwise reorder a visible tail.
+    if (a <= 0.0) return;
     vec3  rgb = max(c.rgb, vec3(0.0));
     uint k = imageAtomicAdd(oit_meta, ivec3(p, 0), 1u);
     if (k < uint(oit_slot_count))
