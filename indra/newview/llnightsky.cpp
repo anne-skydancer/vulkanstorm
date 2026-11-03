@@ -202,10 +202,17 @@ bool LLNightSky::parseMilkyWay(const U8* data, size_t size, std::vector<U32>& te
     const size_t cw = read_u32(data + 20);
     const size_t ch = read_u32(data + 24);
     const size_t length = read_u32(data + 28);
-    if (width != MILKY_WAY_WIDTH || height != MILKY_WAY_HEIGHT || reach != MILKY_WAY_REACH || cw == 0 || ch == 0)
+    if (width != MILKY_WAY_WIDTH || height != MILKY_WAY_HEIGHT || reach != MILKY_WAY_REACH)
     {
         error = "Milky Way map: " + std::to_string(width) + " x " + std::to_string(height) + " within "
             + std::to_string(reach) + " degrees, not the shader's";
+        return false;
+    }
+    // the colour grid is coarser than the map: this bounds the unpacked size
+    // before anything is allocated for a damaged header
+    if (cw == 0 || ch == 0 || cw > MILKY_WAY_WIDTH || ch > MILKY_WAY_HEIGHT)
+    {
+        error = "Milky Way map: colour grid " + std::to_string(cw) + " x " + std::to_string(ch);
         return false;
     }
     if (length > size - 32)
