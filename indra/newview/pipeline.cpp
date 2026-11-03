@@ -8060,13 +8060,13 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
 #endif
     if (sRenderAlphaOITSupported)
     {
-        // The capture shaders declare two image uniforms (GL 4.4 guarantees eight) and the
-        // meta image needs OIT_META_LAYERS array layers.
+        // The capture shaders declare two image uniforms and the resolve three (GL 4.4
+        // guarantees eight), and the meta image needs OIT_META_LAYERS array layers.
         GLint image_uniforms = 0;
         GLint array_layers = 0;
         glGetIntegerv(GL_MAX_FRAGMENT_IMAGE_UNIFORMS, &image_uniforms);
         glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &array_layers);
-        sRenderAlphaOITSupported = image_uniforms >= 2 && array_layers >= (GLint)OIT_MAX_SLOTS;
+        sRenderAlphaOITSupported = image_uniforms >= 3 && array_layers >= (GLint)OIT_MAX_SLOTS;
     }
     if (!sRenderAlphaOITSupported)
     {
@@ -8301,10 +8301,12 @@ void LLPipeline::compositeAlphaOIT()
     // Use the same detached opaque-depth snapshot as capture for the final guard.
     gAlphaOITResolveProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mAlphaOITOpaqueDepth, true);
 
-    // meta (read, and the resolve zeroes the tail layers it consumed) + slots (read) -- same
-    // image units the capture wrote to
-    glBindImageTexture(0, mAlphaOITMeta, 0, GL_TRUE, 0, GL_READ_WRITE, GL_R32UI);
+    // meta (unit 0, read) + slots (unit 1, read) on the image units the capture wrote to, and the
+    // meta image once more on unit 2 as the write-only binding through which the resolve zeroes
+    // the tail layers it consumed (alphaOITResolveF.glsl: oit_meta / oit_slots / oit_meta_clear).
+    glBindImageTexture(0, mAlphaOITMeta, 0, GL_TRUE, 0, GL_READ_ONLY, GL_R32UI);
     glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32UI);
+    glBindImageTexture(2, mAlphaOITMeta, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32UI);
 
     mScreenTriangleVB->setBuffer();
     mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
@@ -8315,6 +8317,7 @@ void LLPipeline::compositeAlphaOIT()
     // Leave no OIT texture bound to an image unit for the rest of the frame (see beginAlphaOITCapture()).
     glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_R32UI);
     glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32UI);
+    glBindImageTexture(2, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32UI);
 
     // Restore the state the rest of the frame expects. compositeAlphaOIT() is appended to
     // POOL_ALPHA_POST_WATER -- the LAST pool -- so renderHighlights() inherits whatever GL state
