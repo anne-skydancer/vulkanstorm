@@ -432,7 +432,7 @@ namespace tut
         set_test_name("the stars too bright for Tycho-2 keep their colour");
         const std::vector<LLNightSky::CatalogueStar> stars = catalogue();
         // from Hipparcos: Arcturus orange, once, and Capella yellow
-        auto near = [&](F32 ra_deg, F32 dec_deg)
+        auto stars_near = [&](F32 ra_deg, F32 dec_deg)
         {
             const LLVector3 d = LLNightSky::equatorial(ra_deg * DEG, dec_deg * DEG);
             std::vector<LLNightSky::CatalogueStar> out;
@@ -445,10 +445,10 @@ namespace tut
             }
             return out;
         };
-        const std::vector<LLNightSky::CatalogueStar> arcturus = near(213.92f, 19.18f);
+        const std::vector<LLNightSky::CatalogueStar> arcturus = stars_near(213.92f, 19.18f);
         ensure_equals("Arcturus listed once", arcturus.size(), (size_t)1);
         ensure("Arcturus orange", arcturus[0].has_bv && arcturus[0].bv > 1.1f);
-        const std::vector<LLNightSky::CatalogueStar> capella = near(79.17f, 46.f);
+        const std::vector<LLNightSky::CatalogueStar> capella = stars_near(79.17f, 46.f);
         ensure("Capella listed", !capella.empty());
         for (const LLNightSky::CatalogueStar& s : capella)
         {
