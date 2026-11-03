@@ -287,8 +287,11 @@ vec3 night_sky_mw(vec3 q, vec3 ax, vec3 ay, float pixel)
     }
     // the field's mean over a pixel: occupied cells per pixel times a
     // point's area (within its fade, about), not below a floor, so that
-    // zooming in shows separate points rather than ever brighter ones
-    float cells = pixel * pixel / (cell * cell * max(cos(b), 0.1));
+    // zooming in shows separate points rather than ever brighter ones. The
+    // pixel's sky area is the Jacobian's determinant: the longer derivative
+    // squared would overstate it where the footprint is stretched or sheared
+    // (towards the edge of a wide view) and dim the points there.
+    float cells = abs(det) / (cell * cell * max(cos(b), 0.1));
     float kept = 0.75 * reach / NIGHT_SKY_MW_GRAIN_SIGMA;
     float area = 6.2831853 * NIGHT_SKY_MW_GRAIN_SIGMA * NIGHT_SKY_MW_GRAIN_SIGMA * (1.0 - exp(-0.5 * kept * kept));
     float mean = max(p * area * cells, NIGHT_SKY_MW_POINT_MEAN_MIN);
