@@ -1,6 +1,6 @@
 /**
  * @file llnightsky.cpp
- * @brief The real night sky: the naked-eye stars and the Milky Way over Rome
+ * @brief The real night sky: the naked-eye stars and the Milky Way, seen from a place on Earth
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -108,11 +108,20 @@ namespace
         return std::atan2(std::cos(epsilon) * std::sin(lambda), std::cos(lambda));
     }
 
-    // Hour angle (radians, 0 at noon, growing westwards) of a direction of
-    // the region's sky seen from latitude lat.
-    F64 sun_hour_angle(const Vec3d& s, F64 lat)
+    // The region day's phase (radians, 0 at noon, growing westwards): the
+    // sun's angle in the east-up plane, the hour angle it has at the equator.
+    //
+    // The region's sun follows the same track at every latitude (east to
+    // west through the zenith by default), which no real sun does away from
+    // the equator: the hour angle seen from the latitude itself (the sun
+    // projected on that sky's equator) degenerates near a pole, or wherever
+    // a leaning track crosses the celestial pole, and the stars would swing
+    // half a turn across a moment. The equatorial reading is continuous
+    // whenever the sun is off the north-south horizon, and uniform for the
+    // default track; the tilt of the sky still follows the real latitude.
+    F64 sun_hour_angle(const Vec3d& s)
     {
-        return std::atan2(-s.x, s.z * std::cos(lat) - s.y * std::sin(lat));
+        return std::atan2(-s.x, s.z);
     }
 
     // Cells a star's point can reach: its own and those within MARGIN.
@@ -256,6 +265,47 @@ bool LLNightSky::parseMilkyWay(const U8* data, size_t size, std::vector<U32>& te
     return true;
 }
 
+namespace
+{
+    // The precession matrix from J2000 to the mean equinox of date (rows),
+    // IAU 1976 (Lieske), as in Meeus, Astronomical Algorithms, ch. 21.
+    void precession(F64 unix_days, Vec3d rows[3])
+    {
+        const F64 T = (unix_days - J2000_UNIX_DAYS) / 36525.0;
+        const F64 arcsec = PI / (180.0 * 3600.0);
+        const F64 zeta = (2306.2181 * T + 0.30188 * T * T + 0.017998 * T * T * T) * arcsec;
+        const F64 z = (2306.2181 * T + 1.09468 * T * T + 0.018203 * T * T * T) * arcsec;
+        const F64 theta = (2004.3109 * T - 0.42665 * T * T - 0.041833 * T * T * T) * arcsec;
+        const F64 cz = std::cos(zeta), sz = std::sin(zeta);
+        const F64 cZ = std::cos(z), sZ = std::sin(z);
+        const F64 ct = std::cos(theta), st = std::sin(theta);
+        rows[0] = { cz * ct * cZ - sz * sZ, -sz * ct * cZ - cz * sZ, -st * cZ };
+        rows[1] = { cz * ct * sZ + sz * cZ, -sz * ct * sZ + cz * cZ, -st * sZ };
+        rows[2] = { cz * st, -sz * st, ct };
+    }
+
+    Vec3d apply_rows(const Vec3d rows[3], const Vec3d& v)
+    {
+        return { rows[0].x * v.x + rows[0].y * v.y + rows[0].z * v.z,
+                 rows[1].x * v.x + rows[1].y * v.y + rows[1].z * v.z,
+                 rows[2].x * v.x + rows[2].y * v.y + rows[2].z * v.z };
+    }
+
+    // v in the basis whose axes' images are basis[0..2]
+    Vec3d in_basis(const Vec3d basis[3], const Vec3d& v)
+    {
+        return add(add(scale(basis[0], v.x), scale(basis[1], v.y)), scale(basis[2], v.z));
+    }
+}
+
+LLVector3 LLNightSky::precessed(const LLVector3& j2000, F64 unix_days)
+{
+    Vec3d rows[3];
+    precession(unix_days, rows);
+    const Vec3d v = apply_rows(rows, { j2000.mV[VX], j2000.mV[VY], j2000.mV[VZ] });
+    return LLVector3((F32)v.x, (F32)v.y, (F32)v.z);
+}
+
 LLVector3 LLNightSky::equatorial(F32 ra, F32 dec)
 {
     return LLVector3(std::cos(dec) * std::cos(ra), std::cos(dec) * std::sin(ra), std::sin(dec));
@@ -390,14 +440,82 @@ F64 LLNightSky::greenwichSidereal(F64 n)
     return gmst < 0.0 ? gmst + 360.0 : gmst;
 }
 
+LLNightSky::SkyPlace LLNightSky::skyPlace(U32 setting)
+{
+    return setting < SKY_PLACES ? (SkyPlace)setting : SkyPlace::Rome;
+}
+
+bool LLNightSky::placeLatitude(SkyPlace place, F64& out)
+{
+    switch (place)
+    {
+    case SkyPlace::Rome:         out = LATITUDE; return true;
+    case SkyPlace::Paris:        out = 48.8566; return true;
+    case SkyPlace::London:       out = 51.507; return true;
+    case SkyPlace::NewYork:      out = 40.713; return true;
+    case SkyPlace::LosAngeles:   out = 34.052; return true;
+    case SkyPlace::Tokyo:        out = 35.676; return true;
+    case SkyPlace::RioDeJaneiro: out = -22.907; return true;
+    case SkyPlace::CapeTown:     out = -33.925; return true;
+    case SkyPlace::Sydney:       out = -33.869; return true;
+    case SkyPlace::Equator:      out = 0.0; return true;
+    case SkyPlace::NorthPole:    out = 90.0; return true;
+    case SkyPlace::Custom:       break;
+    }
+    return false;
+}
+
+bool LLNightSky::placeLongitude(SkyPlace place, F64& out)
+{
+    switch (place)
+    {
+    case SkyPlace::Rome:         out = LONGITUDE; return true;
+    case SkyPlace::Paris:        out = 2.3522; return true;
+    case SkyPlace::London:       out = -0.128; return true;
+    case SkyPlace::NewYork:      out = -74.006; return true;
+    case SkyPlace::LosAngeles:   out = -118.244; return true;
+    case SkyPlace::Tokyo:        out = 139.650; return true;
+    case SkyPlace::RioDeJaneiro: out = -43.173; return true;
+    case SkyPlace::CapeTown:     out = 18.424; return true;
+    case SkyPlace::Sydney:       out = 151.209; return true;
+    case SkyPlace::Equator:      out = 0.0; return true;
+    case SkyPlace::NorthPole:    out = 0.0; return true;
+    case SkyPlace::Custom:       break;
+    }
+    return false;
+}
+
+LLNightSky::Observer LLNightSky::observer(SkyPlace place, F64 latitude, F64 longitude, StarHour hour)
+{
+    Observer at;
+    at.hour = hour;
+    if (!placeLatitude(place, at.latitude))
+    {
+        at.latitude = std::isfinite(latitude) ? std::clamp(latitude, -90.0, 90.0) : LATITUDE;
+    }
+    if (!placeLongitude(place, at.longitude))
+    {
+        at.longitude = std::isfinite(longitude) ? std::clamp(longitude, -180.0, 180.0) : LONGITUDE;
+    }
+    return at;
+}
+
 void LLNightSky::axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3], StarHour hour, F64 longitude)
 {
-    const F64 lat = radians(LATITUDE);
+    Observer at;
+    at.hour = hour;
+    at.longitude = longitude;
+    axes(sun, unix_days, out, at);
+}
+
+void LLNightSky::axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3], const Observer& at)
+{
+    const F64 lat = radians(std::isfinite(at.latitude) ? std::clamp(at.latitude, -90.0, 90.0) : LATITUDE);
     F64 lst;
-    if (hour == StarHour::RealTime)
+    if (at.hour == StarHour::RealTime)
     {
         // local sidereal time: Greenwich's from the clock plus the longitude
-        const F64 east = std::isfinite(longitude) ? longitude : LONGITUDE;
+        const F64 east = std::isfinite(at.longitude) ? at.longitude : LONGITUDE;
         lst = radians(greenwichSidereal(unix_days - J2000_UNIX_DAYS) + east);
     }
     else
@@ -405,11 +523,14 @@ void LLNightSky::axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3], Sta
         // local sidereal time: the Sun's right ascension plus its hour
         // angle in the region's sky
         const Vec3d s = { sun.mV[VX], sun.mV[VY], sun.mV[VZ] };
-        lst = sun_right_ascension(unix_days - J2000_UNIX_DAYS) + sun_hour_angle(s, lat);
+        lst = sun_right_ascension(unix_days - J2000_UNIX_DAYS) + sun_hour_angle(s);
     }
-    // to hour angle coordinates (a turn by -lst about the pole), then
+    // The catalogue's J2000 axes in the equinox of date (lst refers to it),
+    // then to hour angle coordinates (a turn by -lst about the pole), then
     // tilted by the latitude: the tilt's columns are the region directions
     // of the hour angle frame's axes
+    Vec3d precess[3];
+    precession(unix_days, precess);
     const Vec3d tilt[3] = {
         { 0.0, -std::sin(lat), std::cos(lat) },
         { 1.0, 0.0, 0.0 },
@@ -422,9 +543,10 @@ void LLNightSky::axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3], Sta
         { sn, c, 0.0 },
         { 0.0, 0.0, 1.0 },
     };
+    const Vec3d axis[3] = { { 1.0, 0.0, 0.0 }, { 0.0, 1.0, 0.0 }, { 0.0, 0.0, 1.0 } };
     for (S32 i = 0; i < 3; ++i)
     {
-        const Vec3d col = add(add(scale(tilt[0], turn[i].x), scale(tilt[1], turn[i].y)), scale(tilt[2], turn[i].z));
+        const Vec3d col = in_basis(tilt, in_basis(turn, apply_rows(precess, axis[i])));
         out[i].setVec((F32)col.x, (F32)col.y, (F32)col.z);
     }
 }

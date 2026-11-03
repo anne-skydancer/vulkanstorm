@@ -184,6 +184,9 @@ namespace
         static LLStaticHashedString sNightSkyParams("night_sky_params");
 
         static LLCachedControl<U32> night_sky_hour(gSavedSettings, "RenderNightSkyHour", 0);
+        static LLCachedControl<U32> night_sky_place(gSavedSettings, "RenderNightSkyPlace", 0);
+        static LLCachedControl<F32> night_sky_latitude(gSavedSettings, "RenderNightSkyLatitude", (F32)LLNightSky::LATITUDE);
+        static LLCachedControl<F32> night_sky_longitude(gSavedSettings, "RenderNightSkyLongitude", (F32)LLNightSky::LONGITUDE);
 
         F32 gain = 0.f;
         if (use_real_night_sky() && !gCubeSnapshot && load_night_sky())
@@ -199,7 +202,11 @@ namespace
         {
             LLVector3 axes[3];
             const LLNightSky::StarHour hour = night_sky_hour == 1 ? LLNightSky::StarHour::RealTime : LLNightSky::StarHour::RegionSun;
-            LLNightSky::axes(psky->getSunDirection(), LLNightSky::unixDaysNow(), axes, hour, LLNightSky::LONGITUDE);
+            // where the sky is seen from: a preset's place, or the Custom
+            // latitude and longitude
+            const LLNightSky::Observer at = LLNightSky::observer(LLNightSky::skyPlace(night_sky_place),
+                                                                 night_sky_latitude, night_sky_longitude, hour);
+            LLNightSky::axes(psky->getSunDirection(), LLNightSky::unixDaysNow(), axes, at);
             F32 axes_data[9];
             for (S32 i = 0; i < 3; ++i)
             {
