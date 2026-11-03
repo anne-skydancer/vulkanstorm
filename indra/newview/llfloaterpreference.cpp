@@ -100,6 +100,7 @@
 #include "lllineeditor.h"
 #include "llresmgr.h"
 #include "llspinctrl.h"
+#include "llnightsky.h" // <Vulkanstorm> night sky place
 #include "llstartup.h"
 #include "lltextbox.h"
 #include "llui.h"
@@ -4031,8 +4032,72 @@ bool LLPanelPreferenceGraphics::postBuild()
     // }
     // </VulkanStorm>
 
+    // <Vulkanstorm> Night sky place (Rendering 2)
+    mNightSkyLatitude = findChild<LLSpinCtrl>("NightSkyLatitude");
+    mNightSkyLongitude = findChild<LLSpinCtrl>("NightSkyLongitude");
+    if (mNightSkyLatitude && mNightSkyLongitude)
+    {
+        mNightSkyLatitude->setCommitCallback(boost::bind(&LLPanelPreferenceGraphics::onNightSkyCoordinateCommit, this));
+        mNightSkyLongitude->setCommitCallback(boost::bind(&LLPanelPreferenceGraphics::onNightSkyCoordinateCommit, this));
+        // a preset chosen here, by Cancel or in Debug Settings
+        if (LLControlVariable* place = gSavedSettings.getControl("RenderNightSkyPlace"))
+        {
+            mNightSkyPlaceConnection = place->getSignal()->connect(boost::bind(&LLPanelPreferenceGraphics::onNightSkyPlaceChanged, this));
+        }
+        onNightSkyPlaceChanged();
+    }
+    // </Vulkanstorm>
+
     return LLPanelPreference::postBuild();
 }
+
+// <Vulkanstorm> Night sky place
+void LLPanelPreferenceGraphics::onNightSkyPlaceChanged()
+{
+    // a preset shows its own latitude and longitude, which Custom then
+    // starts from; Custom keeps the typed ones
+    const LLNightSky::SkyPlace place = LLNightSky::skyPlace(gSavedSettings.getU32("RenderNightSkyPlace"));
+    F64 latitude = 0.0;
+    F64 longitude = 0.0;
+    if (LLNightSky::placeLatitude(place, latitude) && LLNightSky::placeLongitude(place, longitude))
+    {
+        if (gSavedSettings.getF32("RenderNightSkyLatitude") != (F32)latitude)
+        {
+            gSavedSettings.setF32("RenderNightSkyLatitude", (F32)latitude);
+        }
+        if (gSavedSettings.getF32("RenderNightSkyLongitude") != (F32)longitude)
+        {
+            gSavedSettings.setF32("RenderNightSkyLongitude", (F32)longitude);
+        }
+    }
+    refreshNightSkyPlace();
+}
+
+void LLPanelPreferenceGraphics::onNightSkyCoordinateCommit()
+{
+    // a latitude or longitude set by hand: the place is Custom
+    if (gSavedSettings.getU32("RenderNightSkyPlace") != (U32)LLNightSky::SkyPlace::Custom)
+    {
+        gSavedSettings.setU32("RenderNightSkyPlace", (U32)LLNightSky::SkyPlace::Custom);
+    }
+}
+
+void LLPanelPreferenceGraphics::refreshNightSkyPlace()
+{
+    if (!mNightSkyLatitude || !mNightSkyLongitude)
+    {
+        return;
+    }
+    // the latitude for a Custom place, the longitude for a Custom place
+    // with the real time only (it does not count with the region's sun)
+    static LLCachedControl<U32> night_sky(gSavedSettings, "RenderNightSky", 1);
+    static LLCachedControl<U32> night_sky_hour(gSavedSettings, "RenderNightSkyHour", 0);
+    static LLCachedControl<U32> night_sky_place(gSavedSettings, "RenderNightSkyPlace", 0);
+    const bool custom = night_sky == 1 && LLNightSky::skyPlace(night_sky_place) == LLNightSky::SkyPlace::Custom;
+    mNightSkyLatitude->setEnabled(custom);
+    mNightSkyLongitude->setEnabled(custom && night_sky_hour == 1);
+}
+// </Vulkanstorm>
 
 // <VulkanStorm>
 void LLPanelPreferenceGraphics::refreshRenderBackendSelector()
@@ -4093,6 +4158,7 @@ void LLPanelPreferenceGraphics::callbackRenderBackendRestart(const LLSD& notific
 // </VulkanStorm>
 void LLPanelPreferenceGraphics::draw()
 {
+    refreshNightSkyPlace(); // <Vulkanstorm> follows the night sky and star hour choices
     LLPanelPreference::draw();
 }
 

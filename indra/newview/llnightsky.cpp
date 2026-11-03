@@ -1,6 +1,6 @@
 /**
  * @file llnightsky.cpp
- * @brief The real night sky: the naked-eye stars and the Milky Way over Rome
+ * @brief The real night sky: the naked-eye stars and the Milky Way, seen from a place on Earth
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -390,14 +390,82 @@ F64 LLNightSky::greenwichSidereal(F64 n)
     return gmst < 0.0 ? gmst + 360.0 : gmst;
 }
 
+LLNightSky::SkyPlace LLNightSky::skyPlace(U32 setting)
+{
+    return setting < SKY_PLACES ? (SkyPlace)setting : SkyPlace::Rome;
+}
+
+bool LLNightSky::placeLatitude(SkyPlace place, F64& out)
+{
+    switch (place)
+    {
+    case SkyPlace::Rome:         out = LATITUDE; return true;
+    case SkyPlace::Paris:        out = 48.8566; return true;
+    case SkyPlace::London:       out = 51.507; return true;
+    case SkyPlace::NewYork:      out = 40.713; return true;
+    case SkyPlace::LosAngeles:   out = 34.052; return true;
+    case SkyPlace::Tokyo:        out = 35.676; return true;
+    case SkyPlace::RioDeJaneiro: out = -22.907; return true;
+    case SkyPlace::CapeTown:     out = -33.925; return true;
+    case SkyPlace::Sydney:       out = -33.869; return true;
+    case SkyPlace::Equator:      out = 0.0; return true;
+    case SkyPlace::NorthPole:    out = 90.0; return true;
+    case SkyPlace::Custom:       break;
+    }
+    return false;
+}
+
+bool LLNightSky::placeLongitude(SkyPlace place, F64& out)
+{
+    switch (place)
+    {
+    case SkyPlace::Rome:         out = LONGITUDE; return true;
+    case SkyPlace::Paris:        out = 2.3522; return true;
+    case SkyPlace::London:       out = -0.128; return true;
+    case SkyPlace::NewYork:      out = -74.006; return true;
+    case SkyPlace::LosAngeles:   out = -118.244; return true;
+    case SkyPlace::Tokyo:        out = 139.650; return true;
+    case SkyPlace::RioDeJaneiro: out = -43.173; return true;
+    case SkyPlace::CapeTown:     out = 18.424; return true;
+    case SkyPlace::Sydney:       out = 151.209; return true;
+    case SkyPlace::Equator:      out = 0.0; return true;
+    case SkyPlace::NorthPole:    out = 0.0; return true;
+    case SkyPlace::Custom:       break;
+    }
+    return false;
+}
+
+LLNightSky::Observer LLNightSky::observer(SkyPlace place, F64 latitude, F64 longitude, StarHour hour)
+{
+    Observer at;
+    at.hour = hour;
+    if (!placeLatitude(place, at.latitude))
+    {
+        at.latitude = std::isfinite(latitude) ? std::clamp(latitude, -90.0, 90.0) : LATITUDE;
+    }
+    if (!placeLongitude(place, at.longitude))
+    {
+        at.longitude = std::isfinite(longitude) ? std::clamp(longitude, -180.0, 180.0) : LONGITUDE;
+    }
+    return at;
+}
+
 void LLNightSky::axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3], StarHour hour, F64 longitude)
 {
-    const F64 lat = radians(LATITUDE);
+    Observer at;
+    at.hour = hour;
+    at.longitude = longitude;
+    axes(sun, unix_days, out, at);
+}
+
+void LLNightSky::axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3], const Observer& at)
+{
+    const F64 lat = radians(std::isfinite(at.latitude) ? std::clamp(at.latitude, -90.0, 90.0) : LATITUDE);
     F64 lst;
-    if (hour == StarHour::RealTime)
+    if (at.hour == StarHour::RealTime)
     {
         // local sidereal time: Greenwich's from the clock plus the longitude
-        const F64 east = std::isfinite(longitude) ? longitude : LONGITUDE;
+        const F64 east = std::isfinite(at.longitude) ? at.longitude : LONGITUDE;
         lst = radians(greenwichSidereal(unix_days - J2000_UNIX_DAYS) + east);
     }
     else

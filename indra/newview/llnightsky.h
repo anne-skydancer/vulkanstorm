@@ -1,6 +1,6 @@
 /**
  * @file llnightsky.h
- * @brief The real night sky: the naked-eye stars and the Milky Way over Rome
+ * @brief The real night sky: the naked-eye stars and the Milky Way, seen from a place on Earth
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -45,11 +45,14 @@
 // stars on a grid of galactic longitude and latitude (their glow, colour
 // and count), which the shader samples by hand.
 //
-// The sky turns around the celestial pole as seen from Rome (Vulkanstorm
-// has no other place). The star hour (StarHour) is either the region's sun,
-// so the stars turn once per region day and which stars are up at night
-// follows the season of today's date, or the real time: the stars above
-// Rome at this moment (Greenwich sidereal time from the clock).
+// The sky turns around the celestial pole as seen from a place on Earth
+// (SkyPlace, Preferences "Sky seen from"): Rome by default, a preset city or
+// a Custom latitude and longitude. The latitude sets how high the pole
+// stands. The star hour (StarHour) is either the region's sun, so the stars
+// turn once per region day and which stars are up at night follows the
+// season of today's date (the longitude does not count then), or the real
+// time: the stars above the place at this moment (Greenwich sidereal time
+// from the clock plus the longitude).
 //
 // Frames: the region's is x east, y north, z up. The catalogue's is x
 // towards the March equinox, z towards the north celestial pole.
@@ -63,9 +66,10 @@ namespace LLNightSky
     // Angular radius (radians) of the widest star point the shader draws: a
     // star is also listed in every cell within it. Must match NIGHT_SKY_MARGIN.
     constexpr F32 MARGIN = 0.021f;
-    // Latitude of Rome (degrees north).
+    // Latitude of Rome (degrees north), the default place.
     constexpr F64 LATITUDE = 41.9028;
-    // Longitude of Rome (degrees east): counts with the real time only.
+    // Longitude of Rome (degrees east), the default place: counts with the
+    // real time only.
     constexpr F64 LONGITUDE = 12.4964;
 
     // Texels of the Milky Way map across (galactic longitude, -180 to 180
@@ -80,8 +84,49 @@ namespace LLNightSky
     enum class StarHour
     {
         RegionSun,  // the region's sun: its night shows the stars of a real night
-        RealTime,   // the clock: the stars above Rome now
+        RealTime,   // the clock: the stars above the place now
     };
+
+    // Where the real sky is seen from (Preferences, "Sky seen from",
+    // RenderNightSkyPlace: the numbers are the setting's).
+    enum class SkyPlace
+    {
+        Rome,           // the default
+        Paris,
+        London,
+        NewYork,
+        LosAngeles,
+        Tokyo,
+        RioDeJaneiro,
+        CapeTown,
+        Sydney,
+        Equator,
+        NorthPole,
+        Custom,         // RenderNightSkyLatitude and RenderNightSkyLongitude
+    };
+    constexpr U32 SKY_PLACES = (U32)SkyPlace::Custom + 1;
+
+    // The place of a RenderNightSkyPlace value; Rome when out of range.
+    SkyPlace skyPlace(U32 setting);
+
+    // A preset's latitude (degrees north) or longitude (degrees east).
+    // False, out unchanged, for Custom.
+    bool placeLatitude(SkyPlace place, F64& out);
+    bool placeLongitude(SkyPlace place, F64& out);
+
+    // Where and when the real sky is seen: the place's latitude (degrees
+    // north) and longitude (degrees east), and what sets its hour.
+    struct Observer
+    {
+        F64 latitude = LATITUDE;
+        F64 longitude = LONGITUDE;
+        StarHour hour = StarHour::RegionSun;
+    };
+
+    // The observer of the settings: a preset's own latitude and longitude,
+    // or for Custom the typed ones, clamped to +-90 and +-180 degrees
+    // (non-finite: Rome's).
+    Observer observer(SkyPlace place, F64 latitude, F64 longitude, StarHour hour);
 
     // A star of the table, decoded.
     struct CatalogueStar
@@ -151,8 +196,13 @@ namespace LLNightSky
     // Region directions of the catalogue's x, y and z axes (the columns of
     // the rotation from the catalogue's frame to the region's), for the
     // region's sun direction sun (region frame) and the moment unix_days
-    // (days since 1970-01-01 UTC, with the time of day), the hour set by
-    // hour. longitude (degrees east) counts with the real time only.
+    // (days since 1970-01-01 UTC, with the time of day), seen by at. Its
+    // latitude is clamped to +-90 degrees (non-finite: Rome's); its
+    // longitude counts with the real time only.
+    void axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3], const Observer& at);
+
+    // The same from Rome's latitude, the hour set by hour. longitude
+    // (degrees east) counts with the real time only.
     void axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3],
               StarHour hour = StarHour::RegionSun, F64 longitude = LONGITUDE);
 }
