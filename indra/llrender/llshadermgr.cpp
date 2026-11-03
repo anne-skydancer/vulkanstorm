@@ -1602,6 +1602,7 @@ void LLShaderMgr::initAttribsAndUniforms()
     // <Vulkanstorm> the real night sky's star tables (deferred/skyF.glsl)
     mReservedUniforms.push_back("night_sky_cells");
     mReservedUniforms.push_back("night_sky_stars");
+    mReservedUniforms.push_back("night_sky_milky_way");
     // </Vulkanstorm>
 
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);

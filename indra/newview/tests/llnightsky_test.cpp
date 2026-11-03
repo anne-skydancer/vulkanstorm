@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -36,15 +37,67 @@ namespace
 {
     constexpr F32 DEG = 3.14159265f / 180.f;
 
-    // app_settings/stars/stars.bin, found from this source file
-    std::vector<U8> read_catalogue()
+    // a file of the source tree, found from this source file
+    std::vector<U8> read_source(const std::string& relative)
     {
         std::string here = __FILE__;
         const size_t slash = here.find_last_of("/\\");
-        const std::string path = here.substr(0, slash + 1) + "../app_settings/stars/stars.bin";
+        const std::string path = here.substr(0, slash + 1) + relative;
         std::ifstream file(path, std::ios::binary);
         tut::ensure("open " + path, file.is_open());
         return std::vector<U8>((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    }
+
+    // app_settings/stars/stars.bin
+    std::vector<U8> read_catalogue()
+    {
+        return read_source("../app_settings/stars/stars.bin");
+    }
+
+    // app_settings/stars/milky_way.bin, decoded
+    std::vector<U32> milky_way()
+    {
+        const std::vector<U8> bytes = read_source("../app_settings/stars/milky_way.bin");
+        std::vector<U32> map;
+        std::string error;
+        const bool parsed = LLNightSky::parseMilkyWay(bytes.data(), bytes.size(), map, error);
+        tut::ensure("milky_way.bin parses: " + error, parsed);
+        return map;
+    }
+
+    bool map_parses(const std::vector<U8>& bytes)
+    {
+        std::vector<U32> map;
+        std::string error;
+        return LLNightSky::parseMilkyWay(bytes.data(), bytes.size(), map, error);
+    }
+
+    // The map's texel at a galactic longitude and latitude (degrees).
+    S32 map_x(F32 l) { return (S32)((l + 180.f) / 360.f * (F32)LLNightSky::MILKY_WAY_WIDTH); }
+    S32 map_y(F32 b)
+    {
+        return (S32)((b + LLNightSky::MILKY_WAY_REACH) / (2.f * LLNightSky::MILKY_WAY_REACH) * (F32)LLNightSky::MILKY_WAY_HEIGHT);
+    }
+
+    // The map's glow (0..1, linear) at a galactic longitude and latitude
+    // (degrees), averaged over a few texels.
+    F32 glow(const std::vector<U32>& map, F32 l, F32 b)
+    {
+        const S32 w = (S32)LLNightSky::MILKY_WAY_WIDTH;
+        const S32 h = (S32)LLNightSky::MILKY_WAY_HEIGHT;
+        const S32 x = map_x(l);
+        const S32 y = map_y(b);
+        F32 sum = 0.f;
+        for (S32 dy = -2; dy <= 2; ++dy)
+        {
+            for (S32 dx = -2; dx <= 2; ++dx)
+            {
+                const U32 t = map[std::clamp(y + dy, 0, h - 1) * w + ((x + dx) % w + w) % w];
+                const F32 g = (F32)(t & 255) / 255.f;
+                sum += g * g;
+            }
+        }
+        return sum / 25.f;
     }
 
     std::vector<LLNightSky::CatalogueStar> catalogue()
@@ -76,10 +129,11 @@ namespace
 
     // A star (right ascension in hours, declination in degrees) in the
     // region's frame for this sun and date.
-    LLVector3 region(const LLVector3& sun, F64 unix_days, F32 ra_hours, F32 dec_deg)
+    LLVector3 region(const LLVector3& sun, F64 unix_days, F32 ra_hours, F32 dec_deg,
+                     LLNightSky::StarHour hour = LLNightSky::StarHour::RegionSun, F64 longitude = LLNightSky::LONGITUDE)
     {
         LLVector3 axes[3];
-        LLNightSky::axes(sun, unix_days, axes);
+        LLNightSky::axes(sun, unix_days, axes, hour, longitude);
         const LLVector3 e = LLNightSky::equatorial(ra_hours * 15.f * DEG, dec_deg * DEG);
         return axes[0] * e.mV[VX] + axes[1] * e.mV[VY] + axes[2] * e.mV[VZ];
     }
@@ -254,5 +308,183 @@ namespace tut
         ensure("unit y", std::fabs(axes[1].length() - 1.f) < 1e-5f);
         ensure("orthogonal", std::fabs(axes[0] * axes[1]) < 1e-5f);
         ensure("right-handed", dist_vec(axes[0] % axes[1], axes[2]) < 1e-5f);
+    }
+
+    template<> template<>
+    void nightsky_object::test<11>()
+    {
+        set_test_name("the Milky Way is bright in Sagittarius and dark in the rift");
+        const std::vector<U32> map = milky_way();
+        ensure_equals("2048 x 512 texels", map.size(),
+                      (size_t)LLNightSky::MILKY_WAY_WIDTH * LLNightSky::MILKY_WAY_HEIGHT);
+        // the star clouds of Sagittarius (within 8 degrees of the centre,
+        // south of the plane, between its dust lanes) are the brightest of
+        // the sky: brighter than Crux's band (l 296), far brighter than the
+        // faint band towards the anticentre (Auriga)
+        F32 sagittarius = 0.f;
+        for (S32 l = -8; l <= 8; l += 2)
+        {
+            for (S32 b = -10; b <= 2; b += 2)
+            {
+                sagittarius = std::max(sagittarius, glow(map, (F32)l, (F32)b));
+            }
+        }
+        ensure("brighter than Crux: " + std::to_string(sagittarius), sagittarius > glow(map, -64.f, -1.f));
+        ensure("4 times the anticentre: " + std::to_string(sagittarius), sagittarius > 4.f * glow(map, 178.f, 0.f));
+        // far from the plane: nothing
+        ensure("nothing far from the plane", glow(map, 0.f, -42.f) < 0.02f);
+        // the Great Rift in Aquila (l 30, b 3) is far darker than the band
+        // just south of it (b -4), and the Coalsack (l 301, b -1) than the
+        // band beside it in Crux (l 296)
+        ensure("the Aquila Rift", glow(map, 30.f, 3.f) * 3.f < glow(map, 30.f, -4.f));
+        ensure("the Coalsack", glow(map, -59.f, -1.f) * 2.f < glow(map, -64.f, -1.f));
+        // the faint stars' colour: dust reddens the centre
+        const U32 centre = map[map_y(-6.f) * LLNightSky::MILKY_WAY_WIDTH + map_x(2.f)];
+        const F32 bv = (F32)((centre >> 16) & 255) / 100.f;
+        ensure("colour " + std::to_string(bv), bv >= 0.2f && bv < 1.6f);
+        // the grain follows the stars: more in the band than above it
+        auto grain = [&](F32 l, F32 b) { return (map[map_y(b) * LLNightSky::MILKY_WAY_WIDTH + map_x(l)] >> 8) & 255; };
+        ensure("grain in the band", grain(-75.f, 0.f) > grain(-75.f, 30.f));
+    }
+
+    template<> template<>
+    void nightsky_object::test<12>()
+    {
+        set_test_name("a damaged Milky Way map is refused");
+        const std::vector<U8> map = read_source("../app_settings/stars/milky_way.bin");
+        ensure("the map parses", map_parses(map));
+        ensure("header only", !map_parses(std::vector<U8>(map.begin(), map.begin() + 8)));
+        std::vector<U8> aurora = map;
+        const char other[] = "AURMWAY2";
+        std::copy(other, other + 8, aurora.begin());
+        ensure("Aurora's magic", !map_parses(aurora));
+        std::vector<U8> wrong = map;
+        wrong[8] ^= 1; // another width than the shader's
+        ensure("another width", !map_parses(wrong));
+        std::vector<U8> huge = map;
+        huge[23] |= 0x80; // a colour grid wider than the map: refused before any allocation
+        ensure("a huge colour grid", !map_parses(huge));
+        std::vector<U8> empty_grid = map;
+        empty_grid[20] = empty_grid[21] = empty_grid[22] = empty_grid[23] = 0;
+        ensure("an empty colour grid", !map_parses(empty_grid));
+        ensure("truncated", !map_parses(std::vector<U8>(map.begin(), map.end() - 100)));
+        std::vector<U8> damaged = map;
+        damaged[200] ^= 0xff;
+        ensure("damaged stream", !map_parses(damaged));
+    }
+
+    template<> template<>
+    void nightsky_object::test<13>()
+    {
+        set_test_name("the shader reads the map at its size");
+        const std::vector<U8> bytes = read_source("../app_settings/shaders/class1/deferred/skyF.glsl");
+        const std::string sky(bytes.begin(), bytes.end());
+        auto value = [&](const std::string& name)
+        {
+            const std::string key = "#define " + name + " ";
+            const size_t at = sky.find(key);
+            ensure(name + " defined", at != std::string::npos);
+            return std::strtod(sky.c_str() + at + key.size(), nullptr);
+        };
+        ensure_equals("NIGHT_SKY_MW_WIDTH", value("NIGHT_SKY_MW_WIDTH"), (F64)LLNightSky::MILKY_WAY_WIDTH);
+        ensure_equals("NIGHT_SKY_MW_HEIGHT", value("NIGHT_SKY_MW_HEIGHT"), (F64)LLNightSky::MILKY_WAY_HEIGHT);
+        const F64 reach = value("NIGHT_SKY_MW_REACH");
+        ensure("NIGHT_SKY_MW_REACH " + std::to_string(reach),
+               std::fabs(reach - LLNightSky::MILKY_WAY_REACH * 3.14159265358979 / 180.0) < 1e-6);
+    }
+
+    template<> template<>
+    void nightsky_object::test<14>()
+    {
+        set_test_name("the stars too bright for Tycho-2 keep their colour");
+        const std::vector<LLNightSky::CatalogueStar> stars = catalogue();
+        // from Hipparcos: Arcturus orange, once, and Capella yellow
+        auto near = [&](F32 ra_deg, F32 dec_deg)
+        {
+            const LLVector3 d = LLNightSky::equatorial(ra_deg * DEG, dec_deg * DEG);
+            std::vector<LLNightSky::CatalogueStar> out;
+            for (const LLNightSky::CatalogueStar& s : stars)
+            {
+                if (s.magnitude < 3.f && LLNightSky::equatorial(s.ra, s.dec) * d > 0.9999f)
+                {
+                    out.push_back(s);
+                }
+            }
+            return out;
+        };
+        const std::vector<LLNightSky::CatalogueStar> arcturus = near(213.92f, 19.18f);
+        ensure_equals("Arcturus listed once", arcturus.size(), (size_t)1);
+        ensure("Arcturus orange", arcturus[0].has_bv && arcturus[0].bv > 1.1f);
+        const std::vector<LLNightSky::CatalogueStar> capella = near(79.17f, 46.f);
+        ensure("Capella listed", !capella.empty());
+        for (const LLNightSky::CatalogueStar& s : capella)
+        {
+            ensure("Capella yellow", s.has_bv && s.bv > 0.6f);
+        }
+    }
+
+    template<> template<>
+    void nightsky_object::test<15>()
+    {
+        set_test_name("Greenwich sidereal time starts from its J2000 value");
+        // 18h 41m 50.5s at 2000-01-01 12:00 UT
+        ensure("at J2000", std::fabs(LLNightSky::greenwichSidereal(0.0) - 280.4606) < 1e-3);
+        // a sidereal day later it is back, a solar day later 3m 56s ahead
+        const F64 sidereal_day = 360.0 / 360.98564736629;
+        ensure("a sidereal day later", std::fabs(LLNightSky::greenwichSidereal(sidereal_day) - 280.4606) < 1e-3);
+        const F64 ahead = std::fmod(LLNightSky::greenwichSidereal(1.0) - LLNightSky::greenwichSidereal(0.0) + 360.0, 360.0);
+        ensure("a solar day later: " + std::to_string(ahead), std::fabs(ahead - 0.9856) < 1e-3);
+        // within 0 to 360 before J2000 too
+        const F64 before = LLNightSky::greenwichSidereal(-1000.25);
+        ensure("in range", before >= 0.0 && before < 360.0);
+    }
+
+    template<> template<>
+    void nightsky_object::test<16>()
+    {
+        set_test_name("in real time a place further west sees the sky later");
+        constexpr F64 PARIS = 2.3522;
+        constexpr F64 NEW_YORK = -74.006;
+        const LLNightSky::StarHour real = LLNightSky::StarHour::RealTime;
+        // the same instant: Betelgeuse stands elsewhere
+        const LLVector3 p = region(MIDNIGHT, WINTER, 5.92f, 7.41f, real, PARIS);
+        const LLVector3 n = region(MIDNIGHT, WINTER, 5.92f, 7.41f, real, NEW_YORK);
+        ensure("elsewhere at the same instant", dist_vec(p, n) > 0.5f);
+        // New York, later by the longitude difference in sidereal time
+        const F64 later = (PARIS - NEW_YORK) / 360.98564736629;
+        LLVector3 paris[3];
+        LLVector3 new_york[3];
+        LLNightSky::axes(MIDNIGHT, WINTER, paris, real, PARIS);
+        LLNightSky::axes(MIDNIGHT, WINTER + later, new_york, real, NEW_YORK);
+        for (S32 i = 0; i < 3; ++i)
+        {
+            ensure("axis " + std::to_string(i), dist_vec(paris[i], new_york[i]) < 1e-4f);
+        }
+        // the Pole Star still at the latitude, whatever the hour
+        const F32 polaris = std::asin(region(MIDNIGHT, WINTER + later, 2.53f, 89.26f, real, NEW_YORK).mV[VZ]) / DEG;
+        ensure("Polaris " + std::to_string(polaris), std::fabs(polaris - (F32)LLNightSky::LATITUDE) < 1.f);
+        // the clock turns the sky: a quarter of a sidereal day later,
+        // Betelgeuse has moved
+        const LLVector3 q = region(MIDNIGHT, WINTER + 0.25 * 360.0 / 360.98564736629, 5.92f, 7.41f, real, PARIS);
+        ensure("turns with the clock", dist_vec(p, q) > 0.5f);
+    }
+
+    template<> template<>
+    void nightsky_object::test<17>()
+    {
+        set_test_name("with the region's sun the longitude changes nothing");
+        const LLNightSky::StarHour sun = LLNightSky::StarHour::RegionSun;
+        LLVector3 a[3];
+        LLVector3 b[3];
+        LLNightSky::axes(MIDNIGHT, WINTER, a, sun, 2.35);
+        LLNightSky::axes(MIDNIGHT, WINTER, b, sun, -74.0);
+        // the default is the region's sun
+        LLVector3 c[3];
+        LLNightSky::axes(MIDNIGHT, WINTER, c);
+        for (S32 i = 0; i < 3; ++i)
+        {
+            ensure("axis " + std::to_string(i), a[i] == b[i]);
+            ensure("default axis " + std::to_string(i), a[i] == c[i]);
+        }
     }
 }
