@@ -834,7 +834,10 @@ namespace tut
         data = handler->getProtectedData("test_data_type1", "test_data_not_found");
         ensure("not found", data.isUndefined());
 
-        // cause a 'write' by using 'LLPointer' to delete then instantiate a handler
+        // write the store, then use 'LLPointer' to delete and instantiate a
+        // handler. The destructor does not write the store (FIRE-965), so
+        // persist it explicitly.
+        handler->syncProtectedMap();
         handler = NULL;
         handler = new LLSecAPIBasicHandler("sechandler_settings.tmp", "test_password.dat");
         handler->init();
@@ -864,6 +867,7 @@ namespace tut
         handler->init();
         data = handler->getProtectedData("test_data_type1", "test_data_id");
         ensure("not found", data.isUndefined());
+        handler->syncProtectedMap();
         handler = NULL;
 
         ensure(LLFile::isfile("sechandler_settings.tmp"));
