@@ -3,7 +3,7 @@
 Times the per-frame reset, the capture pass and the resolve pass with GL_TIME_ELAPSED
 queries for two implementations on synthetic layer stacks at a given resolution:
   * "ppll"  -- per-pixel linked list: shaders from git ref OIT_BENCH_OLD_REF
-               (default origin/vkstorm-devel), node pool 8 nodes/pixel, 24 sorted layers
+               (default ed92bed30d, the last devel commit with the PPLL), 8 nodes/pixel, 24 sorted layers
   * "slots" -- image-array A-buffer: shaders from this working tree, 8 slots/pixel
   * "direct" -- no A-buffer: plain in-order source-over blending (the legacy cost floor)
 OIT_BENCH_IMPLS selects implementations (default ppll,slots); OIT_BENCH_SCENES a JSON list of
@@ -21,7 +21,9 @@ exec(compile(bootstrap, 'gl_test_bootstrap', 'exec'))
 root = Path(__file__).resolve().parents[2]
 W = int(os.environ.get('OIT_BENCH_W', 2560)); H = int(os.environ.get('OIT_BENCH_H', 1440))
 FRAMES = int(os.environ.get('OIT_BENCH_FRAMES', 20)); WARMUP = 5
-OLD_REF = os.environ.get('OIT_BENCH_OLD_REF', 'origin/vkstorm-devel')
+# Last devel commit with the linked-list PPLL (before #283); an immutable baseline.
+OLD_REF = os.environ.get('OIT_BENCH_OLD_REF', 'ed92bed30d')
+IMPLS = os.environ.get('OIT_BENCH_IMPLS', 'ppll,slots').split(',')
 NODES_PER_PX = 8; OLD_MAX_LAYERS = 24; SLOTS = 8; META_LAYERS = 7
 
 genbuf=fn('glGenBuffers',None,I,C.POINTER(U));bindbuf=fn('glBindBuffer',None,U,U)
@@ -118,7 +120,7 @@ void main()
 '''
 vertex='#version 430 core\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-1.,0.,1.);}'
 progs={}
-for impl in ('ppll','slots','direct'):
+for impl in IMPLS:   # only the selected implementations; 'ppll' alone needs the git baseline
     cap=program([(0x8B31,vertex),(0x8B30,capture_source(impl))])
     res=None if impl=='direct' else program([(0x8B31,vertex),(0x8B30,resolve_source(impl))])
     progs[impl]=(cap,res)
@@ -138,7 +140,7 @@ def frame(impl, layers, pattern):
         barrier(0x20|0x1000)   # SHADER_IMAGE_ACCESS | ATOMIC_COUNTER
         image(0,head,0,0,0,0x88BA,R32UI);base(SSBO,0,nodes);base(ACB,0,counter)
     else:
-        image(0,0,0,1,0,0x88BA,R32UI);image(1,0,0,1,0,0x88B9,RGBA32UI)
+        image(0,0,0,1,0,0x88BA,R32UI);image(1,0,0,1,0,0x88B9,RGBA32UI);image(2,0,0,1,0,0x88B9,R32UI)   # as the viewer: nothing bound before the clear
         barrier(0x20|0x100)
         clearsub(meta,0,0,0,0,W,H,1,RED_INT,UINT,C.byref(zero))   # count layer only; the resolve zeroes the tail it read
         barrier(0x20)
@@ -184,7 +186,7 @@ def frame(impl, layers, pattern):
 
 import json
 scenarios=json.loads(os.environ['OIT_BENCH_SCENES']) if 'OIT_BENCH_SCENES' in os.environ else [('full',1),('full',4),('full',8),('full',16),('full',32),('sparse',8),('sparse',24),('sparse',48)]
-impls=os.environ.get('OIT_BENCH_IMPLS','ppll,slots').split(',')
+impls=IMPLS
 print(f'{W}x{H}, {FRAMES} frames median after {WARMUP} warmup; ms per frame (reset / capture / resolve / total)')
 print(f'ppll: {NODES_PER_PX} nodes/px pool ({node_cap*16>>20} MiB), {OLD_MAX_LAYERS} sorted layers; slots: {SLOTS} slots/px ({W*H*16*SLOTS>>20} MiB) + meta ({W*H*4*META_LAYERS>>20} MiB)')
 print(f'{"scene":<12}{"impl":<7}{"reset":>8}{"capture":>9}{"resolve":>9}{"total":>8}  note')
