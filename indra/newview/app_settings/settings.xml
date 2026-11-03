@@ -11350,7 +11350,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderNightSky</key>
   <map>
     <key>Comment</key>
-    <string>Night sky: 0 Firestorm's random stars, 1 the real stars and the Milky Way as seen from Rome.</string>
+    <string>Night sky: 0 Firestorm's random stars, 1 the real stars and the Milky Way as seen from the place of RenderNightSkyPlace (Rome by default).</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -11361,13 +11361,46 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderNightSkyHour</key>
   <map>
     <key>Comment</key>
-    <string>Real night sky's hour: 0 the region's sun (its night shows the stars of a real night), 1 the real time (the stars above Rome at this moment).</string>
+    <string>Real night sky's hour: 0 the region's sun (its night shows the stars of a real night), 1 the real time (the stars above the place of RenderNightSkyPlace at this moment).</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
     <string>U32</string>
     <key>Value</key>
     <integer>0</integer>
+  </map>
+  <key>RenderNightSkyPlace</key>
+  <map>
+    <key>Comment</key>
+    <string>Where the real night sky is seen from: 0 Rome, 1 Paris, 2 London, 3 New York, 4 Los Angeles, 5 Tokyo, 6 Rio de Janeiro, 7 Cape Town, 8 Sydney, 9 the equator, 10 the North Pole, 11 Custom (RenderNightSkyLatitude and RenderNightSkyLongitude).</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>U32</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>RenderNightSkyLatitude</key>
+  <map>
+    <key>Comment</key>
+    <string>Latitude (degrees north, -90 to 90) the real night sky is seen from when RenderNightSkyPlace is 11 (Custom); a preset place sets it to its own.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>41.9028</real>
+  </map>
+  <key>RenderNightSkyLongitude</key>
+  <map>
+    <key>Comment</key>
+    <string>Longitude (degrees east, -180 to 180) the real night sky is seen from when RenderNightSkyPlace is 11 (Custom); a preset place sets it to its own. Counts with the real time (RenderNightSkyHour 1) only.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>12.4964</real>
   </map>
   <key>RenderNormalMapScale</key>
   <map>
