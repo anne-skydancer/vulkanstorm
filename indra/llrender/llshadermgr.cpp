@@ -65,6 +65,35 @@ LLShaderMgr * LLShaderMgr::instance()
     return sInstance;
 }
 
+// <FS> Vulkanstorm: programs whose sources declare the alpha OIT node pack/unpack functions.
+// Matched on the file name: the class directory is resolved when the file is loaded.
+#if LL_WINDOWS || LL_LINUX
+static bool usesAlphaOITPack(const LLGLSLShader* shader)
+{
+    static const char* const files[] = { "alphaOITResolveF.glsl", "fullbrightF.glsl", "alphaF.glsl",
+                                         "materialF.glsl", "pbralphaF.glsl" };
+    for (const auto& file : shader->mShaderFiles)
+    {
+        if (file.second != GL_FRAGMENT_SHADER)
+        {
+            continue;
+        }
+        const std::string& path = file.first;
+        const size_t slash = path.find_last_of("/\\");
+        const std::string name = slash == std::string::npos ? path : path.substr(slash + 1);
+        for (const char* oit_file : files)
+        {
+            if (name == oit_file)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+#endif
+// </FS>
+
 bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
 {
     llassert_always(shader != NULL);
@@ -191,9 +220,12 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
     }
 
     // <FS> Vulkanstorm: the alpha OIT capture shaders and the resolve declare the A-buffer
-    // node pack/unpack functions; define them wherever ALPHA_OIT is defined (compileShader).
+    // node pack/unpack functions (alphaOITPackF.glsl). Attach the object only to programs built
+    // from one of those files, under the same gate as ALPHA_OIT (compileShader). Rigged variants
+    // copy mShaderFiles (make_rigged_variant), so they match too.
 #if LL_WINDOWS || LL_LINUX
-    if (gGLManager.mGLVersion >= 4.4f && !shader->attachFragmentObject("deferred/alphaOITPackF.glsl"))
+    if (gGLManager.mGLVersion >= 4.4f && usesAlphaOITPack(shader) &&
+        !shader->attachFragmentObject("deferred/alphaOITPackF.glsl"))
     {
         return false;
     }
