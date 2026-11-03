@@ -69,13 +69,17 @@ static float sStarTime;
 // - the cells: the first star of each cube map cell, then the end, one
 //   per texel (R32F, exact below 2^24);
 // - the stars, binned: two texels each, direction + intensity, then
-//   colour + size (RGBA32F).
+//   colour + size (RGBA32F);
+// - the Milky Way map (app_settings/stars/milky_way.bin), one texel per
+//   cell of galactic longitude and latitude: glow, grain and colour packed
+//   in one integer (R32UI, LLNightSky::parseMilkyWay).
 namespace
 {
     constexpr S32 NIGHT_SKY_CELLS_WIDTH = 64;    // skyF.glsl NIGHT_SKY_CELLS_WIDTH
     constexpr S32 NIGHT_SKY_STARS_WIDTH = 1024;  // skyF.glsl NIGHT_SKY_STARS_WIDTH
 
     U32 sNightSkyTextures[2] = { 0, 0 }; // cells, stars
+    U32 sNightSkyMilkyWay = 0;           // the Milky Way map; 0: none (stars only)
     bool sNightSkyLoadTried = false;     // once per GL context, success or not
 
     bool use_real_night_sky()
@@ -84,7 +88,7 @@ namespace
         return night_sky == 1;
     }
 
-    void upload_night_sky_texture(U32 texture, GLint internal_format, GLenum format, S32 width, S32 height, const std::vector<F32>& data)
+    void upload_night_sky_texture(U32 texture, GLint internal_format, GLenum format, GLenum type, S32 width, S32 height, const void* data)
     {
         LLTexUnit* unit = gGL.getTexUnit(0);
         unit->bindManual(LLTexUnit::TT_TEXTURE, texture);
@@ -93,8 +97,32 @@ namespace
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-        glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, GL_FLOAT, data.data());
+        glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, type, data);
         unit->unbind(LLTexUnit::TT_TEXTURE);
+    }
+
+    // The Milky Way map, or 0 when it is missing or damaged: then the night
+    // sky draws its stars without a Milky Way.
+    U32 load_milky_way()
+    {
+        const std::string path = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "stars", "milky_way.bin");
+        llifstream file(path.c_str(), std::ios::in | std::ios::binary);
+        const std::vector<U8> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        std::vector<U32> texels;
+        std::string error;
+        if (!file.is_open() || !LLNightSky::parseMilkyWay(bytes.data(), bytes.size(), texels, error))
+        {
+            LL_WARNS("NightSky") << path << ": " << (file.is_open() ? error : std::string("cannot open"))
+                                 << "; the night sky has no Milky Way" << LL_ENDL;
+            return 0;
+        }
+        U32 texture = 0;
+        LLImageGL::generateTextures(1, &texture);
+        upload_night_sky_texture(texture, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT,
+                                 LLNightSky::MILKY_WAY_WIDTH, LLNightSky::MILKY_WAY_HEIGHT, texels.data());
+        LL_INFOS("NightSky") << "Milky Way map " << LLNightSky::MILKY_WAY_WIDTH << " x "
+                             << LLNightSky::MILKY_WAY_HEIGHT << LL_ENDL;
+        return texture;
     }
 
     // The star tables, made at the first night sky drawn, before a shader
@@ -140,10 +168,11 @@ namespace
         }
 
         LLImageGL::generateTextures(2, sNightSkyTextures);
-        upload_night_sky_texture(sNightSkyTextures[0], GL_R32F, GL_RED, NIGHT_SKY_CELLS_WIDTH, cells_height, cells);
-        upload_night_sky_texture(sNightSkyTextures[1], GL_RGBA32F, GL_RGBA, NIGHT_SKY_STARS_WIDTH, stars_height, stars);
+        upload_night_sky_texture(sNightSkyTextures[0], GL_R32F, GL_RED, GL_FLOAT, NIGHT_SKY_CELLS_WIDTH, cells_height, cells.data());
+        upload_night_sky_texture(sNightSkyTextures[1], GL_RGBA32F, GL_RGBA, GL_FLOAT, NIGHT_SKY_STARS_WIDTH, stars_height, stars.data());
         LL_INFOS("NightSky") << catalogue.size() << " stars, " << binned.size() << " in "
                              << LLNightSky::CELLS << " cells" << LL_ENDL;
+        sNightSkyMilkyWay = load_milky_way();
         return true;
     }
 
@@ -153,6 +182,8 @@ namespace
     {
         static LLStaticHashedString sNightSkyAxes("night_sky_axes");
         static LLStaticHashedString sNightSkyParams("night_sky_params");
+
+        static LLCachedControl<U32> night_sky_hour(gSavedSettings, "RenderNightSkyHour", 0);
 
         F32 gain = 0.f;
         if (use_real_night_sky() && !gCubeSnapshot && load_night_sky())
@@ -167,7 +198,8 @@ namespace
         if (gain > 0.f)
         {
             LLVector3 axes[3];
-            LLNightSky::axes(psky->getSunDirection(), LLNightSky::unixDaysNow(), axes);
+            const LLNightSky::StarHour hour = night_sky_hour == 1 ? LLNightSky::StarHour::RealTime : LLNightSky::StarHour::RegionSun;
+            LLNightSky::axes(psky->getSunDirection(), LLNightSky::unixDaysNow(), axes, hour, LLNightSky::LONGITUDE);
             F32 axes_data[9];
             for (S32 i = 0; i < 3; ++i)
             {
@@ -185,10 +217,19 @@ namespace
             {
                 gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, sNightSkyTextures[1]);
             }
+            if (sNightSkyMilkyWay != 0)
+            {
+                channel = shader->enableTexture(LLShaderMgr::NIGHT_SKY_MILKY_WAY);
+                if (channel > -1)
+                {
+                    gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, sNightSkyMilkyWay);
+                }
+            }
         }
         // the stars' scintillation clock, wrapped to keep its precision
         const F32 time = (F32)fmod(LLFrameTimer::getElapsedSeconds(), 3600.0);
-        shader->uniform4f(sNightSkyParams, gain, 1.f, time, 0.f);
+        // the Milky Way only with its map
+        shader->uniform4f(sNightSkyParams, gain, sNightSkyMilkyWay != 0 ? 1.f : 0.f, time, 0.f);
     }
 }
 // </Vulkanstorm>
@@ -676,6 +717,11 @@ void LLDrawPoolWLSky::cleanupGL()
     {
         LLImageGL::deleteTextures(2, sNightSkyTextures);
         sNightSkyTextures[0] = sNightSkyTextures[1] = 0;
+    }
+    if (sNightSkyMilkyWay != 0)
+    {
+        LLImageGL::deleteTextures(1, &sNightSkyMilkyWay);
+        sNightSkyMilkyWay = 0;
     }
     sNightSkyLoadTried = false;
     // </Vulkanstorm>
