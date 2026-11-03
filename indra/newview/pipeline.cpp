@@ -8003,7 +8003,8 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 
 // <FS> Vulkanstorm: alpha order-independent transparency (image-array A-buffer) ----
 // The capture pass stores every normal-alpha fragment into a fixed per-pixel slot array held
-// in an RGBA32UI 2D-array image (one layer per slot). A per-pixel atomic count in layer 0 of
+// in an RG32UI 2D-array image (one layer per slot, 8 bytes: R11F_G11F_B10F premultiplied
+// colour, 24-bit depth and 8-bit alpha; alphaOITPackF.glsl). A per-pixel atomic count in layer 0 of
 // an R32UI 2D-array image hands out the slots; its remaining layers accumulate an
 // order-independent tail for fragments that arrive after the last slot. compositeAlphaOIT()
 // depth-sorts each pixel's slots and composites them over the tail onto screen.
@@ -8017,7 +8018,7 @@ namespace
 {
     constexpr U32 OIT_META_LAYERS = 7;    // count + 5 tail accumulators + nearest tail depth (see alphaOITResolveF.glsl)
     constexpr U64 OIT_META_BYTES  = OIT_META_LAYERS * sizeof(U32);
-    constexpr U64 OIT_SLOT_BYTES  = 4 * sizeof(U32);  // one RGBA32UI texel per slot
+    constexpr U64 OIT_SLOT_BYTES  = 2 * sizeof(U32);  // one RG32UI texel per slot
     constexpr U32 OIT_MAX_SLOTS   = 32;   // OIT_MAX_SLOTS in alphaOITResolveF.glsl
 }
 
@@ -8104,7 +8105,7 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
     // Per-pixel count + tail accumulators (cleared each frame) and the slot array (never cleared:
     // the count bounds what the resolve reads).
     make_array(mAlphaOITMeta, GL_R32UI, OIT_META_LAYERS);
-    make_array(mAlphaOITSlots, GL_RGBA32UI, slots);
+    make_array(mAlphaOITSlots, GL_RG32UI, slots);
     glBindTexture(GL_TEXTURE_2D_ARRAY, previous_texture);
     const U32 zero = 0;
     glClearTexImage(mAlphaOITMeta, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
@@ -8168,7 +8169,7 @@ bool LLPipeline::beginAlphaOITCapture()
     // shader atomics while the texture is still bound as an image), then order those writes
     // before the API clear, including when reusing unchanged allocations.
     glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_WRITE, GL_R32UI);
-    glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32UI);
+    glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RG32UI);
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT);
 
     // Zero the per-pixel counts (layer 0). The tail layers are written only by overflowing
@@ -8191,7 +8192,7 @@ bool LLPipeline::beginAlphaOITCapture()
 
     // bind storage: meta (unit 0, rw, layered) and slots (unit 1, write, layered)
     glBindImageTexture(0, mAlphaOITMeta, 0, GL_TRUE, 0, GL_READ_WRITE, GL_R32UI);
-    glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32UI);
+    glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RG32UI);
 
     // Every visible capture fragment is stored (slot or tail) and discards in the shader;
     // there is no pool to exhaust, so no fragment falls through to legacy blending.
@@ -8282,7 +8283,7 @@ void LLPipeline::compositeAlphaOIT()
     // meta image once more on unit 2 as the write-only binding through which the resolve zeroes
     // the tail layers it consumed (alphaOITResolveF.glsl: oit_meta / oit_slots / oit_meta_clear).
     glBindImageTexture(0, mAlphaOITMeta, 0, GL_TRUE, 0, GL_READ_ONLY, GL_R32UI);
-    glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32UI);
+    glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RG32UI);
     glBindImageTexture(2, mAlphaOITMeta, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32UI);
 
     mScreenTriangleVB->setBuffer();
@@ -8293,7 +8294,7 @@ void LLPipeline::compositeAlphaOIT()
     gAlphaOITResolveProgram.unbind();
     // Leave no OIT texture bound to an image unit for the rest of the frame (see beginAlphaOITCapture()).
     glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_R32UI);
-    glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32UI);
+    glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RG32UI);
     glBindImageTexture(2, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32UI);
 
     // Restore the state the rest of the frame expects. compositeAlphaOIT() is appended to

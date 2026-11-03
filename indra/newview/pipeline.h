@@ -775,7 +775,7 @@ public:
     // (uint, 0 = none). Allocated at main-view render resolution; see beginAlphaOITCapture().
     LLRenderTarget mAlphaOITOpaqueDepth; // detached per-frame depth snapshot
     U32 mAlphaOITMeta = 0;      // R32UI 2D array: layer 0 per-pixel count, layers 1..5 tail accumulators, 6 nearest tail depth
-    U32 mAlphaOITSlots = 0;     // RGBA32UI 2D array: one layer per slot = { RG16F, BA16F, depth, 0 }
+    U32 mAlphaOITSlots = 0;     // RG32UI 2D array: one layer per slot = { R11F_G11F_B10F premultiplied rgb, depth24 << 8 | alpha8 }
     U32 mAlphaOITWidth = 0;
     U32 mAlphaOITHeight = 0;
     U32 mAlphaOITSlotCount = 0; // layers of mAlphaOITSlots
