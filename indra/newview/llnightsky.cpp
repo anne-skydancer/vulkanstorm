@@ -108,11 +108,20 @@ namespace
         return std::atan2(std::cos(epsilon) * std::sin(lambda), std::cos(lambda));
     }
 
-    // Hour angle (radians, 0 at noon, growing westwards) of a direction of
-    // the region's sky seen from latitude lat.
-    F64 sun_hour_angle(const Vec3d& s, F64 lat)
+    // The region day's phase (radians, 0 at noon, growing westwards): the
+    // sun's angle in the east-up plane, the hour angle it has at the equator.
+    //
+    // The region's sun follows the same track at every latitude (east to
+    // west through the zenith by default), which no real sun does away from
+    // the equator: the hour angle seen from the latitude itself (the sun
+    // projected on that sky's equator) degenerates near a pole, or wherever
+    // a leaning track crosses the celestial pole, and the stars would swing
+    // half a turn across a moment. The equatorial reading is continuous
+    // whenever the sun is off the north-south horizon, and uniform for the
+    // default track; the tilt of the sky still follows the real latitude.
+    F64 sun_hour_angle(const Vec3d& s)
     {
-        return std::atan2(-s.x, s.z * std::cos(lat) - s.y * std::sin(lat));
+        return std::atan2(-s.x, s.z);
     }
 
     // Cells a star's point can reach: its own and those within MARGIN.
@@ -473,7 +482,7 @@ void LLNightSky::axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3], con
         // local sidereal time: the Sun's right ascension plus its hour
         // angle in the region's sky
         const Vec3d s = { sun.mV[VX], sun.mV[VY], sun.mV[VZ] };
-        lst = sun_right_ascension(unix_days - J2000_UNIX_DAYS) + sun_hour_angle(s, lat);
+        lst = sun_right_ascension(unix_days - J2000_UNIX_DAYS) + sun_hour_angle(s);
     }
     // to hour angle coordinates (a turn by -lst about the pole), then
     // tilted by the latitude: the tilt's columns are the region directions

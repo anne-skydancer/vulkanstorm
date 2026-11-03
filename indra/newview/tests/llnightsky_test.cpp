@@ -704,4 +704,61 @@ namespace tut
         const F32 polaris = std::asin(region_at(new_york, MIDNIGHT, WINTER + later, 2.53f, 89.26f).mV[VZ]) / DEG;
         ensure("Polaris " + std::to_string(polaris), std::fabs(polaris - 45.f) < 1.f);
     }
+
+    template<> template<>
+    void nightsky_object::test<23>()
+    {
+        set_test_name("the sky turns continuously through midnight at every latitude");
+        // The region's sun crosses midnight along its east-west track (and a
+        // track leaning south): the stars must not jump at the poles, where
+        // the sun's hour angle seen from the latitude itself is degenerate.
+        for (F64 latitude : { 90.0, 89.9999, 80.0, 41.9028, 0.0, -33.869, -90.0 })
+        {
+            for (F32 lean : { 0.f, -0.3f })
+            {
+                LLNightSky::Observer at;
+                at.latitude = latitude;
+                at.hour = LLNightSky::StarHour::RegionSun;
+                LLVector3 previous[3];
+                F32 worst_step = 0.f;
+                LLVector3 first[3];
+                for (S32 i = 0; i <= 40; ++i)
+                {
+                    // the sun's east offset from -0.02 to 0.02 around midnight
+                    LLVector3 sun(-0.02f + 0.001f * (F32)i, lean, -1.f);
+                    sun.normVec();
+                    LLVector3 axes[3];
+                    LLNightSky::axes(sun, WINTER, axes, at);
+                    for (S32 k = 0; k < 3; ++k)
+                    {
+                        ensure("finite", axes[k].isFinite() && std::fabs(axes[k].length() - 1.f) < 1e-4f);
+                    }
+                    if (i > 0)
+                    {
+                        for (S32 k = 0; k < 3; ++k)
+                        {
+                            const F32 step = std::acos(llclamp(previous[k] * axes[k], -1.f, 1.f)) / DEG;
+                            worst_step = llmax(worst_step, step);
+                        }
+                    }
+                    else
+                    {
+                        for (S32 k = 0; k < 3; ++k) first[k] = axes[k];
+                    }
+                    for (S32 k = 0; k < 3; ++k) previous[k] = axes[k];
+                }
+                F32 swing = 0.f;
+                for (S32 k = 0; k < 3; ++k)
+                {
+                    swing = llmax(swing, std::acos(llclamp(first[k] * previous[k], -1.f, 1.f)) / DEG);
+                }
+                // a thousandth of the sun's track per step: well under a degree;
+                // the whole 2.3 degrees of sun track turn the sky by about as much
+                ensure("no jump at latitude " + std::to_string(latitude) + ": step " + std::to_string(worst_step),
+                       worst_step < 0.2f);
+                ensure("small swing at latitude " + std::to_string(latitude) + ": " + std::to_string(swing),
+                       swing < 3.f);
+            }
+        }
+    }
 }
