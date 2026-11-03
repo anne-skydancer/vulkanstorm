@@ -2349,6 +2349,7 @@ if (WINDOWS)
       SLPlugin
       media_plugin_cef
       media_plugin_libvlc
+      vlc_cache_gen # <Vulkanstorm/> writes llplugin/plugins/plugins.dat during the copy
       #media_plugin_example # <FS:Ansariel> Don't package example plugin
       )
 
