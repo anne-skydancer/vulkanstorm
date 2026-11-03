@@ -761,4 +761,44 @@ namespace tut
             }
         }
     }
+
+    template<> template<>
+    void nightsky_object::test<24>()
+    {
+        set_test_name("the catalogue is precessed to the equinox of date");
+        const F64 J2000 = 10957.5;
+        const LLVector3 equinox(1.f, 0.f, 0.f);
+        const LLVector3 pole(0.f, 0.f, 1.f);
+        // nothing at the epoch
+        ensure("identity at J2000", (LLNightSky::precessed(equinox, J2000) - equinox).length() < 1e-6f);
+        // 26 years on: the equinox has moved about 50.3 arcseconds a year
+        // along the ecliptic (0.36 degrees), the pole about 20 arcseconds a year
+        const F64 Y2026 = J2000 + 26.0 * 365.25;
+        const F32 equinox_shift = std::acos(llclamp(LLNightSky::precessed(equinox, Y2026) * equinox, -1.f, 1.f)) / DEG;
+        const F32 pole_shift = std::acos(llclamp(LLNightSky::precessed(pole, Y2026) * pole, -1.f, 1.f)) / DEG;
+        ensure("equinox " + std::to_string(equinox_shift), std::fabs(equinox_shift - 0.363f) < 0.02f);
+        ensure("pole " + std::to_string(pole_shift), std::fabs(pole_shift - 0.145f) < 0.01f);
+        // the equinox moves westwards among the stars, so a fixed direction's
+        // right ascension grows with time: the J2000 equinox point has a
+        // positive right ascension in the frame of 2026
+        ensure("right ascension grows", LLNightSky::precessed(equinox, Y2026).mV[VY] > 0.f);
+        // Polaris, still within a degree of the pole and nearer it than in 2000
+        const LLVector3 polaris = LLNightSky::equatorial(2.53f * 15.f * DEG, 89.26f * DEG);
+        const F32 then = std::acos(llclamp(polaris * pole, -1.f, 1.f)) / DEG;
+        const F32 now = std::acos(llclamp(LLNightSky::precessed(polaris, Y2026) * pole, -1.f, 1.f)) / DEG;
+        ensure("Polaris nearer the pole " + std::to_string(now) + " < " + std::to_string(then), now < then && now > 0.5f);
+        // the axes carry it: with the region's sun at midnight the sky turned
+        // for 2026 differs from the sky turned for 2000 at the same hour by the
+        // equinox shift, not more
+        LLNightSky::Observer at;
+        LLVector3 a[3], b[3];
+        LLNightSky::axes(MIDNIGHT, J2000, a, at);
+        LLNightSky::axes(MIDNIGHT, Y2026, b, at);
+        F32 worst = 0.f;
+        for (S32 k = 0; k < 3; ++k)
+        {
+            worst = llmax(worst, std::acos(llclamp(a[k] * b[k], -1.f, 1.f)) / DEG);
+        }
+        ensure("axes within the precession " + std::to_string(worst), worst < 0.5f);
+    }
 }
