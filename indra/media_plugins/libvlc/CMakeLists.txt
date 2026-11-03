@@ -97,6 +97,15 @@ if (WINDOWS)
     PROPERTIES
     LINK_FLAGS "/MANIFEST:NO /NODEFAULTLIB:LIBCMT"
     )
+
+  # <Vulkanstorm> vlc_cache_gen writes libvlc's plugin cache (plugins.dat) into
+  # the staged llplugin/plugins (viewer_manifest.py): without it libvlc opens
+  # every plugin DLL at each start and the parcel music takes half a minute to
+  # start after a fresh install or build.
+  add_executable(vlc_cache_gen vlc_cache_gen.cpp)
+  target_include_directories(vlc_cache_gen SYSTEM PRIVATE "${AUTOBUILD_INSTALL_DIR}/include")
+  target_link_libraries(vlc_cache_gen PRIVATE ll::libvlc)
+  # </Vulkanstorm>
 endif (WINDOWS)
 
 if (DARWIN)
