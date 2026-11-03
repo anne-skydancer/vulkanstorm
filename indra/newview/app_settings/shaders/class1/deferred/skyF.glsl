@@ -83,7 +83,7 @@ vec3 halo22(float d)
 // <Vulkanstorm> The real night sky (llnightsky.cpp, Preferences > Graphics >
 // Rendering 2 > Night sky): the naked-eye stars of app_settings/stars and the
 // Milky Way of the fainter stars (milky_way.bin, Tycho-2), turning about the
-// celestial pole as seen from Rome.
+// celestial pole as seen from the place of "Sky seen from" (Rome by default).
 // Firestorm's random stars (starsF.glsl) are the other choice; this pass
 // is off for them (night_sky_params.x 0). Design by Anne Skydancer, LGPL 2.1.
 //
