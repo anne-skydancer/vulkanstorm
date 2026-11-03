@@ -361,6 +361,12 @@ namespace tut
         std::vector<U8> wrong = map;
         wrong[8] ^= 1; // another width than the shader's
         ensure("another width", !map_parses(wrong));
+        std::vector<U8> huge = map;
+        huge[23] |= 0x80; // a colour grid wider than the map: refused before any allocation
+        ensure("a huge colour grid", !map_parses(huge));
+        std::vector<U8> empty_grid = map;
+        empty_grid[20] = empty_grid[21] = empty_grid[22] = empty_grid[23] = 0;
+        ensure("an empty colour grid", !map_parses(empty_grid));
         ensure("truncated", !map_parses(std::vector<U8>(map.begin(), map.end() - 100)));
         std::vector<U8> damaged = map;
         damaged[200] ^= 0xff;
