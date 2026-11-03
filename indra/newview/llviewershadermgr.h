@@ -215,7 +215,7 @@ extern LLGLSLShader         gPostScreenSpaceReflectionProgram;
 extern LLGLSLShader         gPostVignetteProgram;   // <FS:CR> Import Vignette from Exodus
 extern LLGLSLShader         gPostSnapshotFrameProgram;   // <FS:Beq/> Snapshot Frame overlay
 
-// <FS> Vulkanstorm: alpha OIT (PPLL) resolve shader
+// <FS> Vulkanstorm: alpha OIT (A-buffer) resolve shader
 extern LLGLSLShader         gAlphaOITResolveProgram;
 // </FS>
 

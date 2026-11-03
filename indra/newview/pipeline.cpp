@@ -358,7 +358,7 @@ bool    LLPipeline::sReflectionRender = false;
 bool    LLPipeline::sDistortionRender = false;
 bool    LLPipeline::sImpostorRender = false;
 bool    LLPipeline::sImpostorRenderAlphaDepthPass = false;
-bool    LLPipeline::sRenderAlphaOITSupported = false;   // <FS/> Vulkanstorm: alpha OIT (PPLL) HW gate (GL 4.4+), set in allocateAlphaOITBuffers
+bool    LLPipeline::sRenderAlphaOITSupported = false;   // <FS/> Vulkanstorm: alpha OIT HW gate (GL 4.4+), set in allocateAlphaOITBuffers
 bool    LLPipeline::sShowJellyDollAsImpostor = true;
 bool    LLPipeline::sUnderWaterRender = false;
 bool    LLPipeline::sTextureBindTest = false;
@@ -1004,7 +1004,7 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
 
     mRT->deferredScreen.shareDepthBuffer(mRT->screen);
 
-    // <FS> Vulkanstorm: alpha OIT (PPLL) head image + node pool: main view only, at the render resolution.
+    // <FS> Vulkanstorm: alpha OIT (image-array A-buffer): main view only, at the render resolution.
     if (mRT == &mMainRT)
     {
 #if LL_WINDOWS || LL_LINUX
@@ -8024,19 +8024,29 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
     }
 }
 
-// <FS> Vulkanstorm: alpha order-independent transparency (PPLL) ----
-// The capture pass appends every normal-alpha fragment to a shared node pool, threading a
-// per-pixel singly-linked list whose head lives in an R32UI image. compositeAlphaOIT() walks
-// and depth-sorts each pixel's list and composites it over screen.
+// <FS> Vulkanstorm: alpha order-independent transparency (image-array A-buffer) ----
+// The capture pass stores every normal-alpha fragment into a fixed per-pixel slot array held
+// in an RGBA32UI 2D-array image (one layer per slot). A per-pixel atomic count in layer 0 of
+// an R32UI 2D-array image hands out the slots; its remaining layers accumulate an
+// order-independent tail for fragments that arrive after the last slot. compositeAlphaOIT()
+// depth-sorts each pixel's slots and composites them over the tail onto screen.
 //
-// This is a direct-GL port (no RHI) of the PPLL feature, gated on GL 4.4+ (SSBO + image
-// load/store + atomic counters + glClearTexImage). On older HW sRenderAlphaOITSupported is
-// false, the head image is never allocated, and every entry point here is a no-op --
-// lldrawpoolalpha then runs the legacy sorted-alpha path.
+// Direct-GL (no RHI), gated on GL 4.4+ (image load/store + glTexStorage3D + glClearTexImage +
+// glCopyImageSubData). On older HW sRenderAlphaOITSupported is false, nothing is allocated,
+// and every entry point here is a no-op -- lldrawpoolalpha then runs the legacy sorted-alpha
+// path.
+
+namespace
+{
+    constexpr U32 OIT_META_LAYERS = 7;    // count + 5 tail accumulators + nearest tail depth (see alphaOITResolveF.glsl)
+    constexpr U64 OIT_META_BYTES  = OIT_META_LAYERS * sizeof(U32);
+    constexpr U64 OIT_SLOT_BYTES  = 4 * sizeof(U32);  // one RGBA32UI texel per slot
+    constexpr U32 OIT_MAX_SLOTS   = 32;   // OIT_MAX_SLOTS in alphaOITResolveF.glsl
+}
 
 void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
 {
-    // PPLL is intentionally a Windows/Linux feature. macOS remains on GL 4.1
+    // OIT is intentionally a Windows/Linux feature. macOS remains on GL 4.1
 #if LL_WINDOWS || LL_LINUX
     sRenderAlphaOITSupported = (gGLManager.mGLVersion >= 4.4f);
 #else
@@ -8045,37 +8055,39 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
 #if LL_WINDOWS && !LL_MESA
     // Windows resolves these entry points at runtime. On Linux they are GL
     // prototypes, so testing their addresses is both redundant and a warning.
-    sRenderAlphaOITSupported = sRenderAlphaOITSupported && glBufferStorage && glCopyImageSubData;
+    sRenderAlphaOITSupported = sRenderAlphaOITSupported &&
+                               glTexStorage3D && glBindImageTexture && glClearTexImage && glClearTexSubImage && glCopyImageSubData;
 #endif
+    if (sRenderAlphaOITSupported)
+    {
+        // The capture shaders declare two image uniforms and the resolve three (GL 4.4
+        // guarantees eight), and the meta image needs OIT_META_LAYERS array layers.
+        GLint image_uniforms = 0;
+        GLint array_layers = 0;
+        glGetIntegerv(GL_MAX_FRAGMENT_IMAGE_UNIFORMS, &image_uniforms);
+        glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &array_layers);
+        sRenderAlphaOITSupported = image_uniforms >= 3 && array_layers >= (GLint)OIT_MAX_SLOTS;
+    }
     if (!sRenderAlphaOITSupported)
     {
-        sRenderAlphaOITSupported = false;
         releaseAlphaOITBuffers();
         gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", false);
         return;
     }
 
-    static LLCachedControl<U32> nodes_per_px(gSavedSettings, "RenderAlphaOITNodesPerPixel", 8);
+    static LLCachedControl<U32> slots_setting(gSavedSettings, "RenderAlphaOITNodesPerPixel", 8);
     static LLCachedControl<U32> memory_mb(gSavedSettings, "RenderAlphaOITMemoryMB", 512);
-    static LLCachedControl<U32> max_pixel_layers(gSavedSettings, "RenderAlphaOITMaxPixelLayers", 24);
 
-    // Compact footprint while retaining HDR. Two packed half-float pairs replace the RGBA8
-    // word; depth and next remain one word each.
-    constexpr U64 NODE_BYTES = 4u * sizeof(U32);
     const U64 pixels = (U64)w * (U64)h;
-    const U64 requested = pixels * (U64)llclamp((U32)nodes_per_px, 1u, 32u);
     const U64 budget_bytes = (U64)llclamp((U32)memory_mb, 32u, 2048u) << 20;
+    const U64 meta_bytes = pixels * OIT_META_BYTES;
+    const U64 slot_layer_bytes = pixels * OIT_SLOT_BYTES;
 
-    GLint64 driver_bytes = 0;
-    glGetInteger64v(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &driver_bytes);
-    const U64 usable_bytes = llmin<U64>(budget_bytes, driver_bytes > 0 ? (U64)driver_bytes : 0u);
-    const U64 capacity64 = llmin<U64>(requested, usable_bytes / NODE_BYTES);
-
-    // Below one average node per pixel, PPLL would overflow too readily to be useful.
-    if (capacity64 < pixels || capacity64 > 0x7fffffffu)
+    // Below one slot per pixel the sorted set is empty and the method is pointless.
+    if (budget_bytes < meta_bytes + slot_layer_bytes)
     {
-        LL_WARNS("Pipeline") << "Alpha PPLL disabled: requested storage exceeds the "
-                             << "configured or driver SSBO budget." << LL_ENDL;
+        LL_WARNS("Pipeline") << "Alpha OIT disabled: one slot per pixel at " << w << "x" << h
+                             << " exceeds the configured memory budget." << LL_ENDL;
         releaseAlphaOITBuffers();
         sRenderAlphaOITSupported = false;
         gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", true);
@@ -8083,55 +8095,52 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
         return;
     }
 
-    const U32 node_cap = (U32)capacity64;
-    const U32 pixel_layers = llclamp((U32)max_pixel_layers, 4u, 32u);
+    const U32 requested = llclamp((U32)slots_setting, 1u, OIT_MAX_SLOTS);
+    const U32 slots = llmin(requested, (U32)llmin<U64>((budget_bytes - meta_bytes) / slot_layer_bytes, OIT_MAX_SLOTS));
 
-    if (mAlphaOITHead && mAlphaOITOpaqueDepth.isComplete() &&
-        mAlphaOITWidth == w && mAlphaOITHeight == h &&
-        mAlphaOITNodeCap == node_cap && mAlphaOITMaxPixelLayers == pixel_layers)
+    if (mAlphaOITMeta && mAlphaOITSlots && mAlphaOITOpaqueDepth.isComplete() &&
+        mAlphaOITWidth == w && mAlphaOITHeight == h && mAlphaOITSlotCount == slots)
     {
         gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", true);
         return; // already sized
     }
+    if (slots < requested)
+    {
+        LL_INFOS("Pipeline") << "Alpha OIT: memory budget allows " << slots << " of the requested "
+                             << requested << " slots per pixel at " << w << "x" << h << LL_ENDL;
+    }
     releaseAlphaOITBuffers();
     while (glGetError() != GL_NO_ERROR) {}
 
-    // Per-pixel linked-list head image.
     GLint previous_texture = 0;
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_texture);
-    glGenTextures(1, &mAlphaOITHead);
-    glBindTexture(GL_TEXTURE_2D, mAlphaOITHead);
-    glTexStorage2D(GL_TEXTURE_2D, 1, GL_R32UI, (GLsizei)w, (GLsizei)h);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    glBindTexture(GL_TEXTURE_2D, previous_texture);
-
-    // HDR node pool: packed half-float RG/BA, depth, next.
-    glGenBuffers(1, &mAlphaOITNodes);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, mAlphaOITNodes);
-    // Shader-only storage: do not request dynamic/CPU-coherent placement.
-    glBufferStorage(GL_SHADER_STORAGE_BUFFER, (GLsizeiptr)(capacity64 * NODE_BYTES), nullptr, 0);
-    GLint allocated_bytes = 0;
-    glGetBufferParameteriv(GL_SHADER_STORAGE_BUFFER, GL_BUFFER_SIZE, &allocated_bytes);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-    // atomic counter: single uint next-free-node allocator
-    U32 zero = 0;
-    glGenBuffers(1, &mAlphaOITCounter);
-    glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, mAlphaOITCounter);
-    glBufferData(GL_ATOMIC_COUNTER_BUFFER, sizeof(U32), &zero, GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, 0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY, &previous_texture);
+    auto make_array = [&](U32& name, GLenum format, U32 layers)
+    {
+        glGenTextures(1, &name);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, name);
+        glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, format, (GLsizei)w, (GLsizei)h, (GLsizei)layers);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    };
+    // Per-pixel count + tail accumulators (cleared each frame) and the slot array (never cleared:
+    // the count bounds what the resolve reads).
+    make_array(mAlphaOITMeta, GL_R32UI, OIT_META_LAYERS);
+    make_array(mAlphaOITSlots, GL_RGBA32UI, slots);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, previous_texture);
+    const U32 zero = 0;
+    glClearTexImage(mAlphaOITMeta, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+    mAlphaOITTailDirty = false;
+    // Read the array allocations' error now: LLRenderTarget::allocate() clears the error state.
+    const GLenum array_error = glGetError();
 
     // Separate depth storage avoids sampling the active scene depth attachment.
     const bool depth_allocated = mAlphaOITOpaqueDepth.allocate(w, h, 0, true);
-    const GLenum allocation_error = glGetError();
-    if (!depth_allocated || allocation_error != GL_NO_ERROR ||
-        (U64)llmax(allocated_bytes, 0) < capacity64 * NODE_BYTES)
+    const GLenum allocation_error = array_error != GL_NO_ERROR ? array_error : glGetError();
+    if (!depth_allocated || allocation_error != GL_NO_ERROR)
     {
-        LL_WARNS("Pipeline") << "Alpha PPLL allocation failed (GL error "
+        LL_WARNS("Pipeline") << "Alpha OIT allocation failed (GL error "
                              << allocation_error << "); using legacy alpha." << LL_ENDL;
         releaseAlphaOITBuffers();
         sRenderAlphaOITSupported = false;
@@ -8140,29 +8149,28 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
         return;
     }
 
-    mAlphaOITWidth   = w;
-    mAlphaOITHeight  = h;
-    mAlphaOITNodeCap = node_cap;
-    mAlphaOITMaxPixelLayers = pixel_layers;
+    mAlphaOITWidth     = w;
+    mAlphaOITHeight    = h;
+    mAlphaOITSlotCount = slots;
     gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", true);
 
-    LL_INFOS("Pipeline") << "Alpha OIT: allocated " << w << "x" << h << " head + "
-                         << node_cap << " HDR nodes (" << (capacity64 * NODE_BYTES >> 20)
-                         << " MiB pool, " << pixel_layers << " max layers/pixel)" << LL_ENDL;
+    LL_INFOS("Pipeline") << "Alpha OIT: allocated " << w << "x" << h << " x " << slots
+                         << " slots (" << ((slot_layer_bytes * slots) >> 20) << " MiB) + meta ("
+                         << (meta_bytes >> 20) << " MiB)" << LL_ENDL;
 }
 
 void LLPipeline::releaseAlphaOITBuffers()
 {
     mAlphaOITOpaqueDepth.release();
-    if (mAlphaOITHead)    { glDeleteTextures(1, &mAlphaOITHead);   mAlphaOITHead = 0; }
-    if (mAlphaOITNodes)   { glDeleteBuffers(1, &mAlphaOITNodes);   mAlphaOITNodes = 0; }
-    if (mAlphaOITCounter) { glDeleteBuffers(1, &mAlphaOITCounter); mAlphaOITCounter = 0; }
-    mAlphaOITWidth = mAlphaOITHeight = mAlphaOITNodeCap = mAlphaOITMaxPixelLayers = 0;
+    if (mAlphaOITMeta)  { glDeleteTextures(1, &mAlphaOITMeta);  mAlphaOITMeta = 0; }
+    if (mAlphaOITSlots) { glDeleteTextures(1, &mAlphaOITSlots); mAlphaOITSlots = 0; }
+    mAlphaOITWidth = mAlphaOITHeight = mAlphaOITSlotCount = 0;
+    mAlphaOITTailDirty = false;
 }
 
 bool LLPipeline::beginAlphaOITCapture()
 {
-    if (!mAlphaOITHead || !mAlphaOITNodes || !mAlphaOITCounter ||
+    if (!mAlphaOITMeta || !mAlphaOITSlots ||
         !gAlphaOITResolveProgram.mProgramObject || !mAlphaOITOpaqueDepth.isComplete() ||
         !mRT->deferredScreen.getDepth() ||
         mRT->deferredScreen.getWidth() != mAlphaOITWidth ||
@@ -8178,80 +8186,107 @@ bool LLPipeline::beginAlphaOITCapture()
                        mAlphaOITOpaqueDepth.getDepth(), GL_TEXTURE_2D, 0, 0, 0, 0,
                        mAlphaOITWidth, mAlphaOITHeight, 1);
 
-    // The previous capture wrote these resources through shaders. Order those
-    // writes before the API resets, including when reusing unchanged allocations.
-    glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT);
+    // The previous frame left both textures bound to image units 0/1 and wrote the meta image
+    // through shaders. Unbind them first (NVIDIA 621.01 orders glClearTexImage after later
+    // shader atomics while the texture is still bound as an image), then order those writes
+    // before the API clear, including when reusing unchanged allocations.
+    glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_WRITE, GL_R32UI);
+    glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32UI);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT);
 
-    // reset the free-node allocator and clear every per-pixel head to "empty"
-    U32 zero = 0;
-    glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, mAlphaOITCounter);
-    glBufferSubData(GL_ATOMIC_COUNTER_BUFFER, 0, sizeof(U32), &zero);
-    glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, 0);
+    // Zero the per-pixel counts (layer 0). The tail layers are written only by overflowing
+    // pixels and zeroed again by the resolve that reads them, so they are clean unless a
+    // capture ran without its resolve; then clear everything. The slot array needs no clear:
+    // the count bounds what the resolve reads.
+    const U32 zero = 0;
+    if (mAlphaOITTailDirty)
+    {
+        glClearTexImage(mAlphaOITMeta, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+    }
+    else
+    {
+        glClearTexSubImage(mAlphaOITMeta, 0, 0, 0, 0, (GLsizei)mAlphaOITWidth, (GLsizei)mAlphaOITHeight, 1,
+                           GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+    }
+    mAlphaOITTailDirty = true;
 
-    U32 clear_head = 0xFFFFFFFFu;
-    glClearTexImage(mAlphaOITHead, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, &clear_head);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |
-                    GL_ATOMIC_COUNTER_BARRIER_BIT);
+    // bind storage: meta (unit 0, rw, layered) and slots (unit 1, write, layered)
+    glBindImageTexture(0, mAlphaOITMeta, 0, GL_TRUE, 0, GL_READ_WRITE, GL_R32UI);
+    glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32UI);
 
-    // bind storage: head image (unit 0, rw), node pool (SSBO 0), counter (atomic 0)
-    glBindImageTexture(0, mAlphaOITHead, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32UI);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mAlphaOITNodes);
-    glBindBufferBase(GL_ATOMIC_COUNTER_BUFFER, 0, mAlphaOITCounter);
-
-    // Successful appends discard in the shader.  If the global pool is exhausted,
-    // the fragment deliberately falls through to ordinary source-over blending so
-    // overflow degrades to legacy ordering rather than making cards disappear.
+    // Every visible capture fragment is stored (slot or tail) and discards in the shader;
+    // there is no pool to exhaust, so no fragment falls through to legacy blending.
     gGL.setColorMask(true, true);
     return true;
 }
 
 void LLPipeline::endAlphaOITCapture()
 {
-    if (!mAlphaOITHead)
+    if (!mAlphaOITMeta)
     {
         return;
     }
-    // make all appended nodes + head-image writes visible to the resolve pass
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |
-                    GL_SHADER_STORAGE_BARRIER_BIT |
-                    GL_ATOMIC_COUNTER_BARRIER_BIT);
+    // make all slot + meta image writes visible to the resolve pass
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
     gGL.setColorMask(true, true);
 }
 
 void LLPipeline::compositeAlphaOIT()
 {
-    if (!mAlphaOITHead || !gAlphaOITResolveProgram.mProgramObject)
+    if (!mAlphaOITMeta || !mAlphaOITSlots || !gAlphaOITResolveProgram.mProgramObject)
     {
         return;
     }
     LL_PROFILE_GPU_ZONE("alpha oit resolve");
 
-    // debug: read back node-pool usage to tune RenderAlphaOITNodesPerPixel (gated -- the
-    // readback forces a GPU sync, so it stays off unless explicitly enabled).
+    // debug: read back the per-pixel layer counts to tune RenderAlphaOITNodesPerPixel (gated --
+    // the readback forces a GPU sync, so it stays off unless explicitly enabled, and runs on
+    // every 64th frame only). Needs glGetTextureSubImage (GL 4.5) to fetch layer 0 alone.
     static LLCachedControl<bool> oit_stats(gSavedSettings, "RenderAlphaOITStats", false);
-    if (oit_stats && mAlphaOITCounter)
+    static S32 s_stats_throttle = 0;
+    if (oit_stats && (s_stats_throttle++ & 0x3F) == 0)
     {
-        // API readback consumes the counter written by the just-finished capture.
-        glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
-        U32 used = 0;
-        glBindBuffer(GL_ARRAY_BUFFER, mAlphaOITCounter);
-        glGetBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(U32), &used);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        static U32 s_peak = 0;
-        s_peak = llmax(s_peak, used);
-        static S32 s_throttle = 0;
-        if ((s_throttle++ & 0x3F) == 0)
+        bool can_read = gGLManager.mGLVersion >= 4.5f;
+#if LL_WINDOWS && !LL_MESA
+        can_read = can_read && glGetTextureSubImage;
+#endif
+        if (!can_read)
         {
-            U32 cap = mAlphaOITNodeCap ? mAlphaOITNodeCap : 1u;
-            LL_INFOS("Pipeline") << "Alpha OIT nodes: used=" << used << " peak=" << s_peak
-                                 << " cap=" << mAlphaOITNodeCap
-                                 << " (" << (100u * used / cap) << "% used, "
-                                 << (100u * s_peak / cap) << "% peak)" << LL_ENDL;
+            LL_WARNS_ONCE("Pipeline") << "Alpha OIT stats need GL 4.5 (glGetTextureSubImage)" << LL_ENDL;
+        }
+        else
+        {
+            glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
+            const U64 pixels = (U64)mAlphaOITWidth * mAlphaOITHeight;
+            std::vector<U32> counts(pixels);
+            glGetTextureSubImage(mAlphaOITMeta, 0, 0, 0, 0, mAlphaOITWidth, mAlphaOITHeight, 1,
+                                 GL_RED_INTEGER, GL_UNSIGNED_INT, (GLsizei)(pixels * sizeof(U32)), counts.data());
+            U64 covered = 0, over4 = 0, over8 = 0, over16 = 0, overflow = 0;
+            U32 peak = 0;
+            for (U32 c : counts)
+            {
+                if (c == 0) continue;
+                covered++;
+                if (c > 4) over4++;
+                if (c > 8) over8++;
+                if (c > 16) over16++;
+                if (c > mAlphaOITSlotCount) overflow++;
+                peak = llmax(peak, c);
+            }
+            static U32 s_peak = 0;
+            s_peak = llmax(s_peak, peak);
+            const F64 pct = 100.0 / (F64)llmax<U64>(pixels, 1);
+            LL_INFOS("Pipeline") << "Alpha OIT layers: covered " << (U32)(covered * pct) << "% of pixels, peak "
+                                 << peak << " (session peak " << s_peak << "), >4: " << over4
+                                 << ", >8: " << over8 << ", >16: " << over16
+                                 << ", past " << mAlphaOITSlotCount << " slots (tail): " << overflow
+                                 << " (" << (F32)(overflow * pct) << "%)" << LL_ENDL;
         }
     }
 
-    // Resolve each pixel's list over the currently-bound screen target, sorted back-to-front.
+    // Resolve each pixel's slots over the currently-bound screen target, sorted back-to-front.
     // Premultiplied "over": screen.rgb = accum + screen.rgb*(1-cov). Emissive glow already in
     // screen.a is preserved by masking the alpha channel off.
     LLGLDepthTest depth(GL_FALSE, GL_FALSE);
@@ -8260,21 +8295,29 @@ void LLPipeline::compositeAlphaOIT()
     gGL.blendFunc(LLRender::BF_ONE, LLRender::BF_ONE_MINUS_SOURCE_ALPHA);
 
     gAlphaOITResolveProgram.bind();
-    static const LLStaticHashedString sOITMaxPixelLayers("oit_max_pixel_layers");
-    gAlphaOITResolveProgram.uniform1i(sOITMaxPixelLayers, (S32)mAlphaOITMaxPixelLayers);
+    static const LLStaticHashedString sOITSlotCount("oit_slot_count");
+    gAlphaOITResolveProgram.uniform1i(sOITSlotCount, (S32)mAlphaOITSlotCount);
 
     // Use the same detached opaque-depth snapshot as capture for the final guard.
     gAlphaOITResolveProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mAlphaOITOpaqueDepth, true);
 
-    // head image (read) + node pool (SSBO) -- same binding points the capture wrote to
-    glBindImageTexture(0, mAlphaOITHead, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R32UI);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mAlphaOITNodes);
+    // meta (unit 0, read) + slots (unit 1, read) on the image units the capture wrote to, and the
+    // meta image once more on unit 2 as the write-only binding through which the resolve zeroes
+    // the tail layers it consumed (alphaOITResolveF.glsl: oit_meta / oit_slots / oit_meta_clear).
+    glBindImageTexture(0, mAlphaOITMeta, 0, GL_TRUE, 0, GL_READ_ONLY, GL_R32UI);
+    glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32UI);
+    glBindImageTexture(2, mAlphaOITMeta, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32UI);
 
     mScreenTriangleVB->setBuffer();
     mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+    mAlphaOITTailDirty = false;
 
     gAlphaOITResolveProgram.disableTexture(LLShaderMgr::DEFERRED_DEPTH, mRT->deferredScreen.getUsage());
     gAlphaOITResolveProgram.unbind();
+    // Leave no OIT texture bound to an image unit for the rest of the frame (see beginAlphaOITCapture()).
+    glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_R32UI);
+    glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32UI);
+    glBindImageTexture(2, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32UI);
 
     // Restore the state the rest of the frame expects. compositeAlphaOIT() is appended to
     // POOL_ALPHA_POST_WATER -- the LAST pool -- so renderHighlights() inherits whatever GL state
@@ -8286,18 +8329,6 @@ void LLPipeline::compositeAlphaOIT()
     gGL.setColorMask(true, false);
     gGL.blendFunc(LLRender::BF_SOURCE_ALPHA, LLRender::BF_ONE_MINUS_SOURCE_ALPHA);
 }
-
-
-
-
-
-
-
-
-
-
-
-
 // </FS>
 
 void LLPipeline::generateGlow(LLRenderTarget* src)

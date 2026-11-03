@@ -15,7 +15,7 @@ pre-reset development version.
 The OpenJPEG GPU, Mesa/Zink and SoLoud installable definitions are identical
 to pre-reset master `7bf30e6ef8664bc038603a0341fb2e982ff9dea7`.
 Other dependencies come from the upstream release base. Existing upstream
-sorted-alpha rendering remains the fallback; PPLL is the only added OIT method.
+sorted-alpha rendering remains the fallback; the image-array A-buffer OIT (originally a PPLL) is the only added OIT method.
 Depth peeling and the rigged/world interleaving change are excluded. Native
 Vulkan rendering, compute-mesh experiments, viewer performance experiments,
 and development runtime probes are excluded.

@@ -403,17 +403,17 @@ public:
 
     static bool isWaterClip();
 
-    // <FS> Vulkanstorm: alpha order-independent transparency (per-pixel linked list). The
-    // capture pass appends normal-alpha fragments to a node pool keyed by a per-pixel
-    // head-pointer image; the composite resolves each pixel's list back-to-front over screen.
-    // Direct-GL (no RHI), gated on GL 4.4+ (see LLPipeline::sRenderAlphaOITSupported).
+    // <FS> Vulkanstorm: alpha order-independent transparency (image-array A-buffer). The
+    // capture pass stores normal-alpha fragments into a fixed per-pixel slot array (a 2D-array
+    // image) handed out by a per-pixel atomic count, with an order-independent tail for
+    // fragments past the last slot; the composite resolves each pixel's slots back-to-front
+    // over screen. Direct-GL (no RHI), gated on GL 4.4+ (see LLPipeline::sRenderAlphaOITSupported).
     bool beginAlphaOITCapture();   // reset/bind resources; false falls back to legacy
-    void endAlphaOITCapture();     // barrier so the resolve sees all appended fragments
-    void compositeAlphaOIT();      // sorted resolve of the lists over mRT->screen
-    void allocateAlphaOITBuffers(U32 w, U32 h);  // (re)create head image / node pool / counter
+    void endAlphaOITCapture();     // barrier so the resolve sees all stored fragments
+    void compositeAlphaOIT();      // sorted resolve of the slots over mRT->screen
+    void allocateAlphaOITBuffers(U32 w, U32 h);  // (re)create meta image / slot array
     void releaseAlphaOITBuffers();               // destroy them
-    U32  getAlphaOITNodeCap() const { return mAlphaOITNodeCap; }  // node-pool capacity (append overflow guard)
-    U32  getAlphaOITMaxPixelLayers() const { return mAlphaOITMaxPixelLayers; }
+    U32  getAlphaOITSlotCount() const { return mAlphaOITSlotCount; }  // slots per pixel (shader uniform)
     LLRenderTarget* getAlphaOITOpaqueDepth() { return &mAlphaOITOpaqueDepth; }
 
     // </FS>
@@ -704,7 +704,7 @@ public:
     static bool             sDistortionRender;
     static bool             sImpostorRender;
     static bool             sImpostorRenderAlphaDepthPass;
-    static bool             sRenderAlphaOITSupported;   // <FS/> Vulkanstorm: alpha OIT (PPLL) HW capable (GL 4.4+)
+    static bool             sRenderAlphaOITSupported;   // <FS/> Vulkanstorm: alpha OIT HW capable (GL 4.4+)
     static bool             sShowJellyDollAsImpostor;
     static bool             sUnderWaterRender;
     static bool             sRenderGlow;
@@ -771,16 +771,15 @@ public:
     // for use by SSR
     LLRenderTarget          mSceneMap;
 
-    // <FS> Vulkanstorm: alpha OIT (per-pixel linked list) GPU resources, stored as raw GL names
+    // <FS> Vulkanstorm: alpha OIT (image-array A-buffer) GPU resources, stored as raw GL names
     // (uint, 0 = none). Allocated at main-view render resolution; see beginAlphaOITCapture().
     LLRenderTarget mAlphaOITOpaqueDepth; // detached per-frame depth snapshot
-    U32 mAlphaOITHead = 0;      // R32UI per-pixel head-pointer image (0xFFFFFFFF = empty)
-    U32 mAlphaOITNodes = 0;     // SSBO uint[nodeCap*4] = { RG16F, BA16F, depth, next }
-    U32 mAlphaOITCounter = 0;   // atomic counter buffer: next free node index
+    U32 mAlphaOITMeta = 0;      // R32UI 2D array: layer 0 per-pixel count, layers 1..5 tail accumulators, 6 nearest tail depth
+    U32 mAlphaOITSlots = 0;     // RGBA32UI 2D array: one layer per slot = { RG16F, BA16F, depth, 0 }
     U32 mAlphaOITWidth = 0;
     U32 mAlphaOITHeight = 0;
-    U32 mAlphaOITNodeCap = 0;   // number of nodes the pool holds
-    U32 mAlphaOITMaxPixelLayers = 0;
+    U32 mAlphaOITSlotCount = 0; // layers of mAlphaOITSlots
+    bool mAlphaOITTailDirty = false; // a capture ran without its resolve: clear the tail layers too
 
     // </FS>
 
