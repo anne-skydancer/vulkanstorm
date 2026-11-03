@@ -1,6 +1,8 @@
-"""Check the PCSS stage 1 kernel of shadowUtil.glsl: its Poisson disk, edge clamp and
-receiver-plane gradient, through Python mirrors of the GLSL functions that use the shader's
-own constants. The GPU behaviour itself is measured by scripts/perf/bench_shadow_pcss.py."""
+"""Check the PCSS kernel of shadowUtil.glsl: its Poisson disk, edge clamp and receiver-plane
+gradient (stage 1), and the blocker search, penumbra and projector depth linearisation of the
+contact hardening (stage 2), through Python mirrors of the GLSL functions that use the
+shader's own constants. The GPU behaviour itself is measured by
+scripts/perf/bench_shadow_pcss.py."""
 from pathlib import Path
 import importlib.util
 import math
@@ -96,6 +98,62 @@ def light_matrix(direction, extent, depth, perspective=False):
     return mul(tex, mul(proj, view))
 
 
+# --- stage 2 mirrors ---------------------------------------------------------------------
+def clamp_extent(extent, texel, lo, hi):
+    """pcssClampExtent"""
+    return [min(max(extent[i], texel[i] * lo), texel[i] * hi) for i in range(2)]
+
+
+def res_scale(res, screen):
+    """pcssResScale"""
+    return max(res[0] / screen[0], 1.0)
+
+
+def blocker_depth(depth_at, c, z_bias, grad, extent, rot):
+    """pcssBlockerDepth; depth_at(uv) reads the raw depth map"""
+    total, count = 0.0, 0
+    for px, py in shader_disk():
+        off = ((rot[0] * px - rot[1] * py) * extent[0], (rot[1] * px + rot[0] * py) * extent[1])
+        d = depth_at((c[0] + off[0], c[1] + off[1]))
+        if d < c[2] + z_bias - min(grad[0] * abs(off[0]) + grad[1] * abs(off[1]), define('PCSS_RPDB_MAX')):
+            total += d
+            count += 1
+    return total / count if count else -1.0
+
+
+def sun_extents(s_uv, s_z, z_receiver, z_blocker, light_size, d_max, texel, scale=1.0):
+    """search and PCF half axes (uv) of pcssSunContactShadow; PCF None for the early out"""
+    r_max = define('PCSS_PCF_RADIUS_MAX') * scale
+    search = clamp_extent([s * light_size * d_max for s in s_uv], texel, define('PCSS_SEARCH_RADIUS_MIN'), r_max)
+    if z_blocker < 0.0:
+        return search, None
+    w_world = max(z_receiver - z_blocker, 0.0) / max(s_z, 1.0e-8) * light_size
+    return search, clamp_extent([0.5 * w_world * s for s in s_uv], texel, define('PCSS_PCF_RADIUS_MIN'), r_max)
+
+
+def det3(q):
+    return (q[0][0] * (q[1][1] * q[2][2] - q[1][2] * q[2][1]) - q[0][1] * (q[1][0] * q[2][2] - q[1][2] * q[2][0])
+            + q[0][2] * (q[1][0] * q[2][1] - q[1][1] * q[2][0]))
+
+
+def projector_eye(m):
+    """pcssProjectorEye: the point where rows 0, 1 and 3 of m vanish (x = y = w = 0)"""
+    a = [m[0][:3], m[1][:3], m[3][:3]]
+    b = [-m[0][3], -m[1][3], -m[3][3]]
+    d = det3(a)
+    return [det3([[b[r] if k == i else a[r][k] for k in range(3)] for r in range(3)]) / d for i in range(3)]
+
+
+def spot_blocker_distance(m, stc, z_blocker):
+    """the linearisation in pcssSpotContactShadow: stc undivided, z_blocker a raw depth"""
+    eye = projector_eye(m)
+    z_eye = sum(m[2][k] * eye[k] for k in range(3)) + m[2][3]
+    d_r = stc[3]
+    denom = z_blocker * d_r - stc[2] + z_eye
+    d_b = z_eye * d_r / denom if abs(denom) > 1.0e-7 else d_r
+    return min(max(d_b, 1.0e-3), d_r)
+
+
 class PoissonDiskTest(unittest.TestCase):
     def test_shader_disk_is_the_generator_output(self):
         expected = generator().best_candidate(12)
@@ -184,6 +242,89 @@ class ReceiverPlaneTest(unittest.TestCase):
         m = light_matrix([0.3, 1.0, 0.2], 20.0, 100.0)
         g = depth_gradient(m, [1.0, 0.0, -12.0], [0.3, 1.0, 0.2])
         self.assertLess(max(abs(g[0]), abs(g[1])), 1e-9)
+
+
+class ContactHardeningTest(unittest.TestCase):
+    TEXEL = (1.0 / 1936, 1.0 / 1088)
+    S_UV = (1.0 / 40.0, 1.0 / 22.5)     # an orthographic cascade 40 x 22.5 m across
+    S_Z = 1.0 / 100.0                   # and 100 m deep
+
+    def test_sun_penumbra_is_blocker_height_times_light_size(self):
+        light = 0.05
+        for h in (0.5, 1.0, 2.0):
+            _, pcf = sun_extents(self.S_UV, self.S_Z, 0.6, 0.6 - h * self.S_Z, light, define('PCSS_BLOCKER_DIST0'), self.TEXEL)
+            for i in range(2):   # the PCF disc's diameter is the full penumbra h L
+                want = min(max(0.5 * h * light * self.S_UV[i], self.TEXEL[i] * define('PCSS_PCF_RADIUS_MIN')),
+                           self.TEXEL[i] * define('PCSS_PCF_RADIUS_MAX'))
+                self.assertAlmostEqual(pcf[i], want, places=12)
+        # wider with the height (contact hardening), up to the cap
+        widths = [sun_extents(self.S_UV, self.S_Z, 0.6, 0.6 - h * self.S_Z, light, 4.0, self.TEXEL)[1][0]
+                  for h in (0.1, 0.5, 1.0, 2.0)]
+        self.assertEqual(widths, sorted(widths))
+        self.assertLess(widths[0], widths[-1])
+
+    def test_kernel_limits_and_resolution_scale(self):
+        _, contact = sun_extents(self.S_UV, self.S_Z, 0.6, 0.6 - 1e-6, 0.00925, 4.0, self.TEXEL)
+        self.assertEqual(contact, [t * define('PCSS_PCF_RADIUS_MIN') for t in self.TEXEL])
+        for scale in (1.0, 2.0):
+            search, wide = sun_extents(self.S_UV, self.S_Z, 0.6, 0.0, 10.0, 8.0, self.TEXEL, scale)
+            cap = [t * define('PCSS_PCF_RADIUS_MAX') * scale for t in self.TEXEL]
+            self.assertEqual(wide, cap)
+            self.assertEqual(search, cap)
+        self.assertEqual(res_scale((1936, 1088), (1920, 1080)), 1936 / 1920)
+        self.assertEqual(res_scale((3856, 2176), (1920, 1080)), 3856 / 1920)
+        self.assertEqual(res_scale((1000, 500), (1920, 1080)), 1.0)
+
+    def test_search_radius_follows_blocker_distance_cap(self):
+        light = 0.02                    # 4 m and 8 m reach both between the limits
+        self.assertEqual((define('PCSS_BLOCKER_DIST0'), define('PCSS_BLOCKER_DIST1')), (4.0, 8.0))
+        near, _ = sun_extents(self.S_UV, 1.0, 0.5, -1.0, light, define('PCSS_BLOCKER_DIST0'), self.TEXEL)
+        far, _ = sun_extents(self.S_UV, 1.0, 0.5, -1.0, light, define('PCSS_BLOCKER_DIST1'), self.TEXEL)
+        self.assertAlmostEqual(far[0] / near[0], 2.0)    # both below the cap: twice the reach
+        tiny, _ = sun_extents(self.S_UV, 1.0, 0.5, -1.0, 0.00925, 0.01, self.TEXEL)
+        self.assertEqual(tiny, [t * define('PCSS_SEARCH_RADIUS_MIN') for t in self.TEXEL])
+
+    def test_no_blocker_is_the_early_out(self):
+        rot = (math.cos(0.7), math.sin(0.7))
+        lit = blocker_depth(lambda uv: 0.8, (0.5, 0.5, 0.6), -0.004, (0.0, 0.0), (0.01, 0.01), rot)
+        self.assertEqual(lit, -1.0)
+        self.assertIsNone(sun_extents((0.02, 0.03), 0.01, 0.6, lit, 0.00925, 4.0, self.TEXEL)[1])
+        # the receiver itself, within the bias, is no blocker either
+        ground = blocker_depth(lambda uv: 0.598, (0.5, 0.5, 0.6), -0.004, (0.0, 0.0), (0.01, 0.01), rot)
+        self.assertEqual(ground, -1.0)
+        half = blocker_depth(lambda uv: 0.3 if uv[0] < 0.5 else 0.8, (0.5, 0.5, 0.6), -0.004, (0.0, 0.0), (0.01, 0.01), rot)
+        self.assertEqual(half, 0.3)
+
+    def test_spot_blocker_distance_from_raw_depth(self):
+        m = light_matrix([0.2, 1.0, -0.1], 20.0, 30.0, perspective=True)
+        eye = projector_eye(m)
+        e = mat_vec(m, eye + [1.0])
+        for i in (0, 1, 3):          # the projector's eye maps to x = y = w = 0
+            self.assertAlmostEqual(e[i], 0.0, places=9)
+        rng = random.Random(5)
+        for _ in range(50):
+            pos = [rng.uniform(-3, 3), rng.uniform(-3, 3), rng.uniform(-14, -6)]
+            stc = mat_vec(m, pos + [1.0])
+            s = rng.uniform(0.3, 0.95)   # a blocker on the same ray, nearer the projector
+            qt = mat_vec(m, [eye[i] + s * (pos[i] - eye[i]) for i in range(3)] + [1.0])
+            self.assertAlmostEqual(qt[3], s * stc[3], delta=1e-9)
+            self.assertAlmostEqual(spot_blocker_distance(m, stc, qt[2] / qt[3]), qt[3], delta=1e-6 * stc[3])
+
+    def test_disc_light_profile_constant(self):
+        # bench_shadow_pcss.DISC_10_90: 10-90 % width of a disc light's edge over its full width
+        def covered(t):  # area of a unit diameter disc left of x = t, as a fraction
+            t = min(max(t, -0.5), 0.5)
+            return (0.25 * math.acos(-t / 0.5) + t * math.sqrt(0.25 - t * t)) / (math.pi * 0.25)
+
+        def solve(v):
+            lo, hi = -0.5, 0.5
+            for _ in range(60):
+                mid = 0.5 * (lo + hi)
+                lo, hi = (mid, hi) if covered(mid) < v else (lo, mid)
+            return lo
+        bench = (ROOT / 'scripts/perf/bench_shadow_pcss.py').read_text()
+        constant = float(re.search(r'^DISC_10_90 = ([0-9.]+)', bench, re.M).group(1))
+        self.assertAlmostEqual(solve(0.9) - solve(0.1), constant, places=6)
 
 
 if __name__ == '__main__':
