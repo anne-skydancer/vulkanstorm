@@ -678,6 +678,10 @@ class Windows_x86_64_Manifest(ViewerManifest):
         self.run_command([generator, plugins], env=env)
         if not os.path.isfile(cache):
             raise ManifestError("vlc_cache_gen left no %s" % cache)
+        # The installer scripts (nsi_file_commands, inno_file_commands) list the
+        # files of file_list, which the copies fill; a file written here must be
+        # added by hand or the installer leaves it out.
+        self.file_list.append([cache, cache])
     # </Vulkanstorm>
 
     def construct(self):
