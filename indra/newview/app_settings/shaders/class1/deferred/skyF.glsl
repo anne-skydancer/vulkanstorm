@@ -102,8 +102,9 @@ vec3 halo22(float d)
 }
 
 // <Vulkanstorm> The real night sky (llnightsky.cpp, Preferences > Graphics >
-// Rendering 2 > Night sky): the naked-eye stars of app_settings/stars and a
-// procedural Milky Way, turning about the celestial pole as seen from Rome.
+// Rendering 2 > Night sky): the naked-eye stars of app_settings/stars and the
+// Milky Way of the fainter stars (milky_way.bin, Tycho-2), turning about the
+// celestial pole as seen from Rome.
 // Firestorm's random stars (starsF.glsl) are the other choice; this pass
 // is off for them (night_sky_params.x 0). Design by Anne Skydancer, LGPL 2.1.
 //
@@ -116,9 +117,25 @@ vec3 halo22(float d)
 #define NIGHT_SKY_STARS_WIDTH 1024    // lldrawpoolwlsky.cpp, texels per row
 // a cell holds about 6 stars, up to a few dozen in the Milky Way
 #define NIGHT_SKY_MAX_PER_CELL 96
+// the Milky Way's light at its brightest, and the size of its points
+// (sigma, pixels)
+#define NIGHT_SKY_MW_GLOW 0.12
+#define NIGHT_SKY_MW_GRAIN_SIGMA 0.6
+// the band's light left as a haze, the rest in points; points per lattice
+// cell at the band's brightest; the floor of the points' mean (see
+// night_sky_mw)
+#define NIGHT_SKY_MW_HAZE 0.45
+#define NIGHT_SKY_MW_POINTS 2.0
+#define NIGHT_SKY_MW_POINT_MEAN_MIN 0.6
+// The Milky Way map (llnightsky.h MILKY_WAY_*): galactic longitude -180 to
+// 180 degrees across, latitude -NIGHT_SKY_MW_REACH to +NIGHT_SKY_MW_REACH down.
+#define NIGHT_SKY_MW_WIDTH 2048
+#define NIGHT_SKY_MW_HEIGHT 512
+#define NIGHT_SKY_MW_REACH 0.785398163 // 45 degrees
 
 uniform sampler2D night_sky_cells;  // R32F: the first star of each cell, then the end
 uniform sampler2D night_sky_stars;  // RGBA32F: per star, direction + intensity, colour + size
+uniform usampler2D night_sky_milky_way; // R32UI: glow, grain, colour (llnightsky.h parseMilkyWay)
 uniform vec3 night_sky_axes[3];    // region directions of the catalogue's x, y and z axes
 uniform vec4 night_sky_params;      // x gain (0: off), y Milky Way strength, z time (s)
 uniform float sky_hdr_scale;
@@ -178,100 +195,132 @@ uvec3 night_sky_pcg3(uvec3 v)
     return v;
 }
 
-vec3 night_sky_gradient(vec3 i)
+// One texel of the Milky Way map: glow (square root of the light), grain
+// (stars of V 6.5 to 9.5 per texel, x 16) and B-V colour (x 100), 0..255.
+// Longitude wraps, latitude clamps.
+vec3 night_sky_mw_texel(int x, int y)
 {
-    uvec3 h = night_sky_pcg3(uvec3(ivec3(i) + ivec3(4096)));
-    return normalize(vec3(h & uvec3(0xffffu)) / 32767.5 - 1.0 + vec3(1e-4));
+    int xi = (x + NIGHT_SKY_MW_WIDTH) % NIGHT_SKY_MW_WIDTH;
+    int yi = clamp(y, 0, NIGHT_SKY_MW_HEIGHT - 1);
+    uint t = texelFetch(night_sky_milky_way, ivec2(xi, yi), 0).r;
+    return vec3(float(t & 255u), float((t >> 8u) & 255u), float((t >> 16u) & 255u));
 }
 
-float night_sky_corner(vec3 i, vec3 f, vec3 o)
+// The Milky Way at catalogue direction q (J2000 equatorial), linear, from
+// the map of the real stars too faint for the naked eye (Tycho-2): their
+// glow, with its clouds and dark lanes, and their grain, faint points
+// scattered as densely as the counted stars, fixed in the sky. ax, ay: the
+// pixel's footprint across and down (catalogue frame), pixel its angle
+// (radians).
+vec3 night_sky_mw(vec3 q, vec3 ax, vec3 ay, float pixel)
 {
-    return dot(night_sky_gradient(i + o), f - o);
-}
-
-// Gradient noise in 0..1, quintic fade: no facets along the lattice.
-float night_sky_noise(vec3 p)
-{
-    vec3 i = floor(p);
-    vec3 f = fract(p);
-    vec3 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
-    float x00 = mix(night_sky_corner(i, f, vec3(0.0, 0.0, 0.0)), night_sky_corner(i, f, vec3(1.0, 0.0, 0.0)), u.x);
-    float x10 = mix(night_sky_corner(i, f, vec3(0.0, 1.0, 0.0)), night_sky_corner(i, f, vec3(1.0, 1.0, 0.0)), u.x);
-    float x01 = mix(night_sky_corner(i, f, vec3(0.0, 0.0, 1.0)), night_sky_corner(i, f, vec3(1.0, 0.0, 1.0)), u.x);
-    float x11 = mix(night_sky_corner(i, f, vec3(0.0, 1.0, 1.0)), night_sky_corner(i, f, vec3(1.0, 1.0, 1.0)), u.x);
-    float n = mix(mix(x00, x10, u.y), mix(x01, x11, u.y), u.z);
-    return clamp(0.5 + 0.75 * n, 0.0, 1.0);
-}
-
-// octaves of noise, each turned by a fixed rotation so that the lattices
-// do not line up from one octave to the next
-float night_sky_fbm(vec3 p, int octaves)
-{
-    mat3 turn = mat3(
-        vec3(0.00, 0.80, 0.60),
-        vec3(-0.80, 0.36, -0.48),
-        vec3(-0.60, -0.48, 0.64));
-    float sum = 0.0;
-    float amp = 0.5;
-    float total = 0.0;
-    vec3 q = turn * p;
-    for (int i = 0; i < octaves; i++)
-    {
-        sum += night_sky_noise(q) * amp;
-        total += amp;
-        q = turn * q * 2.03 + vec3(1.7, 9.2, 5.3);
-        amp *= 0.5;
-    }
-    return sum / total;
-}
-
-// The Milky Way at catalogue direction q (J2000 equatorial), linear, laid
-// on the real galactic plane: a band a few degrees wide, brighter and wider
-// towards the centre (Sagittarius, l = 0), faint towards the anticentre
-// (Auriga), with the dark Great Rift from Cygnus to Sagittarius just north
-// of the plane, and mottling.
-vec3 night_sky_milky_way(vec3 q)
-{
-    // J2000 equatorial to galactic (IAU 1958, Hipparcos values)
-    vec3 g = vec3(
-        dot(vec3(-0.0548756, -0.8734371, -0.4838350), q),
-        dot(vec3(0.4941094, -0.4448296, 0.7469822), q),
-        dot(vec3(-0.8676661, -0.1980764, 0.4559838), q));
-    float l = atan(g.y, g.x);
+    // J2000 equatorial to galactic (IAU 1958, Hipparcos values; the same
+    // rows as scripts/generate-star-catalog.py)
+    vec3 m0 = vec3(-0.0548756, -0.8734371, -0.4838350);
+    vec3 m1 = vec3(0.4941094, -0.4448296, 0.7469822);
+    vec3 m2 = vec3(-0.8676661, -0.1980764, 0.4559838);
+    vec3 g = vec3(dot(m0, q), dot(m1, q), dot(m2, q));
     float b = asin(clamp(g.z, -1.0, 1.0));
-    float centre = exp(-l * l / (0.5 * 0.5));
-    float width = 0.075 + 0.1 * centre;
-    float along = 0.3 + 0.7 * (0.5 + 0.5 * cos(l));
-    float band = exp(-(b * b) / (width * width)) * along;
-    float bulge = exp(-(l * l + 2.4 * b * b) / (0.2 * 0.2));
-    // most of the sky is far from the band: no noise there
-    if (band + bulge < 0.004)
+    if (abs(b) >= NIGHT_SKY_MW_REACH)
     {
         return vec3(0.0);
     }
-    float coarse = night_sky_fbm(g * 5.0, 4);
-    float fine = night_sky_fbm(g * 21.0 + vec3(7.1, 3.3, 1.9), 3);
-    // star clouds: the band is patchy, not a smooth stripe
-    float clouds = smoothstep(0.3, 0.75, coarse) * (0.45 + 0.75 * fine);
-    float light = band * (0.15 + 1.2 * clouds) + bulge * (0.6 + 0.6 * fine);
-    // the Great Rift: l from -10 to 90 degrees, centred a little north of the plane
-    // (1 - smoothstep: GLSL leaves smoothstep undefined for reversed edges)
-    float rift_l = smoothstep(-0.35, -0.1, l) * (1.0 - smoothstep(1.3, 1.75, l));
-    float rift_b = (b - 0.025 - 0.02 * sin(l * 3.0)) / 0.035;
-    float rift_shape = exp(-rift_b * rift_b) * rift_l;
-    if (rift_shape > 0.01)
+    float l = atan(g.y, g.x);
+    // texel coordinates, centres on the integers
+    vec2 uv = vec2((l / 6.28318531 + 0.5) * float(NIGHT_SKY_MW_WIDTH),
+                   (b / NIGHT_SKY_MW_REACH * 0.5 + 0.5) * float(NIGHT_SKY_MW_HEIGHT)) - 0.5;
+    ivec2 i = ivec2(floor(uv));
+    vec2 f = uv - floor(uv);
+    vec3 t = mix(mix(night_sky_mw_texel(i.x, i.y), night_sky_mw_texel(i.x + 1, i.y), f.x),
+                 mix(night_sky_mw_texel(i.x, i.y + 1), night_sky_mw_texel(i.x + 1, i.y + 1), f.x), f.y);
+    if (t.x + t.y < 0.5)
     {
-        light *= 1.0 - 0.8 * rift_shape * (0.55 + 0.45 * night_sky_fbm(g * 13.0 + vec3(2.0), 3));
+        return vec3(0.0);
     }
-    vec3 tint = mix(vec3(0.80, 0.86, 1.0), vec3(1.0, 0.86, 0.68), clamp(centre * 0.7 + bulge, 0.0, 1.0));
-    return tint * light * 0.09;
+    float glow = (t.x / 255.0) * (t.x / 255.0);
+    // dust reddens the light towards the centre; the eye sees little colour
+    float warm = clamp((t.z / 100.0 - 0.45) / 0.9, 0.0, 1.0);
+    vec3 tint = mix(vec3(0.82, 0.88, 1.0), vec3(1.0, 0.87, 0.70), warm);
+    vec3 light = tint * glow * NIGHT_SKY_MW_GLOW;
+
+    // The band is made of stars: part of its light stays a haze (the stars
+    // too faint to tell apart), the rest is gathered into faint points on a
+    // lattice fixed in the sky, two cells per texel each way, each holding a
+    // star or none, as many as the map's light and its counted stars say.
+    // The points keep the band's mean light; where a pixel covers more than
+    // a cell (wide views, reflection probes) they would shimmer, and give
+    // way to that mean.
+    float cell = NIGHT_SKY_MW_REACH * 2.0 / float(NIGHT_SKY_MW_HEIGHT * 2);
+    float sparkle = 1.0 - smoothstep(0.8 * cell, 1.6 * cell, pixel);
+    float p = 1.0 - exp(-(glow * NIGHT_SKY_MW_POINTS + t.y / 16.0 / 4.0));
+    if (sparkle <= 0.0 || p < 0.002)
+    {
+        return light;
+    }
+    // the pixel's footprint along longitude (east) and latitude (north),
+    // and back: a point's offset in pixels
+    vec3 east = vec3(-sin(l), cos(l), 0.0);
+    vec3 north = vec3(-sin(b) * cos(l), -sin(b) * sin(l), cos(b));
+    vec3 gx = vec3(dot(m0, ax), dot(m1, ax), dot(m2, ax));
+    vec3 gy = vec3(dot(m0, ay), dot(m1, ay), dot(m2, ay));
+    // columns: the footprint across, then down (as WGSL's mat2x2)
+    mat2 j = mat2(vec2(dot(east, gx), dot(north, gx)), vec2(dot(east, gy), dot(north, gy)));
+    float det = j[0].x * j[1].y - j[1].x * j[0].y;
+    if (abs(det) < 1e-20)
+    {
+        return light;
+    }
+    mat2 inv = mat2(vec2(j[1].y, -j[0].y), vec2(-j[1].x, j[0].x)) * (1.0 / det);
+    vec2 c = uv * 2.0 + 0.5; // cell coordinates
+    // the pixel's cell and its eight neighbours: a point of any other cell
+    // is at least a cell away, where each point has faded to nothing
+    // (reach), so none is cut off as the sky turns
+    ivec2 base = ivec2(floor(c)) - 1;
+    float reach = cell * max(cos(b), 0.1) / max(pixel, 1e-9);
+    vec3 field = vec3(0.0);
+    for (int k = 0; k < 9; k++)
+    {
+        ivec2 ci = base + ivec2(k % 3, k / 3);
+        // ci is at least -2 each way here: the remainder's operands stay
+        // positive, where GLSL defines it
+        uvec3 h = night_sky_pcg3(uvec3(uint((ci.x + NIGHT_SKY_MW_WIDTH * 2) % (NIGHT_SKY_MW_WIDTH * 2)), uint(ci.y + 4), 0x5717u));
+        vec3 r = vec3(h & uvec3(0xffffu)) / 65535.0;
+        if (r.z >= p)
+        {
+            continue;
+        }
+        vec2 d = (vec2(ci) + r.xy - c) * vec2(cell * cos(b), cell);
+        vec2 px = inv * d;
+        float r2 = dot(px, px) / (NIGHT_SKY_MW_GRAIN_SIGMA * NIGHT_SKY_MW_GRAIN_SIGMA);
+        float fade = 1.0 - smoothstep(0.5 * reach, reach, sqrt(dot(px, px)));
+        if (r2 < 9.0 && fade > 0.0)
+        {
+            // brightness: the faint ones the more numerous (star counts
+            // grow about 2.5 times a magnitude over three magnitudes), mean 1
+            float u = mix(0.0316, 1.0, float(h.z >> 16u) / 65535.0);
+            float w = 0.518 * pow(u, -0.6);
+            // a little colour of its own, bluer or redder than the band
+            float hue = float((h.x >> 16u) & 255u) / 255.0 - 0.5;
+            field += w * fade * exp(-0.5 * r2) * (vec3(1.0) + vec3(0.12, 0.0, -0.12) * hue);
+        }
+    }
+    // the field's mean over a pixel: occupied cells per pixel times a
+    // point's area (within its fade, about), not below a floor, so that
+    // zooming in shows separate points rather than ever brighter ones
+    float cells = pixel * pixel / (cell * cell * max(cos(b), 0.1));
+    float kept = 0.75 * reach / NIGHT_SKY_MW_GRAIN_SIGMA;
+    float area = 6.2831853 * NIGHT_SKY_MW_GRAIN_SIGMA * NIGHT_SKY_MW_GRAIN_SIGMA * (1.0 - exp(-0.5 * kept * kept));
+    float mean = max(p * area * cells, NIGHT_SKY_MW_POINT_MEAN_MIN);
+    vec3 points = mix(vec3(1.0), field / mean, sparkle);
+    return light * (NIGHT_SKY_MW_HAZE + (1.0 - NIGHT_SKY_MW_HAZE) * points);
 }
 
 // Stars and Milky Way in region direction d (unit, x east, y north, z up),
-// linear. pixel is the angle one pixel covers there; background the sky's
+// linear. dx, dy are its screen derivatives (the pixel's footprint across
+// and down), pixel the angle one pixel covers there; background the sky's
 // own linear colour, which drowns them when bright (twilight shows the
 // brightest first, daylight none).
-vec3 night_sky(vec3 d, float pixel, vec3 background)
+vec3 night_sky(vec3 d, vec3 dx, vec3 dy, float pixel, vec3 background)
 {
     float gain = night_sky_params.x;
     if (gain <= 0.0 || d.z <= 0.0)
@@ -319,7 +368,10 @@ vec3 night_sky(vec3 d, float pixel, vec3 background)
     }
     if (night_sky_params.y > 0.0)
     {
-        sum += night_sky_milky_way(q) * night_sky_params.y;
+        // the pixel's footprint in the catalogue's frame, as q
+        vec3 ax = vec3(dot(dx, night_sky_axes[0]), dot(dx, night_sky_axes[1]), dot(dx, night_sky_axes[2]));
+        vec3 ay = vec3(dot(dy, night_sky_axes[0]), dot(dy, night_sky_axes[1]), dot(dy, night_sky_axes[2]));
+        sum += night_sky_mw(q, ax, ay, pixel) * night_sky_params.y;
     }
     return sum * gain * extinction * glare;
 }
@@ -355,7 +407,9 @@ void main()
     // here, outside the branches, where the derivatives are defined
     vec3 sky_dir = pos.xyz - camPosLocal.xyz;
     vec3 night_dir = normalize(vec3(sky_dir.z, sky_dir.x, sky_dir.y));
-    float night_pixel = max(max(length(dFdx(night_dir)), length(dFdy(night_dir))), 1e-6);
+    vec3 night_dx = dFdx(night_dir);
+    vec3 night_dy = dFdy(night_dir);
+    float night_pixel = max(max(length(night_dx), length(night_dy)), 1e-6);
     // </Vulkanstorm>
 #ifdef HAS_HDRI
     vec3 frag_coord = vary_position.xyz/vary_position.w;
@@ -454,7 +508,7 @@ void main()
         {
             float hdr = max(sky_hdr_scale, 0.01);
             vec3 sky_linear = srgb_to_linear(color.rgb);
-            vec3 stars = night_sky(night_dir, night_pixel, sky_linear * hdr);
+            vec3 stars = night_sky(night_dir, night_dx, night_dy, night_pixel, sky_linear * hdr);
             if (any(greaterThan(stars, vec3(0.0))))
             {
                 color.rgb = night_sky_encode(sky_linear + stars / hdr);

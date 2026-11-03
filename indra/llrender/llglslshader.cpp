@@ -822,7 +822,7 @@ GLint LLGLSLShader::mapUniformTextureChannel(GLint location, GLenum type, GLint 
     if ((type >= GL_SAMPLER_1D && type <= GL_SAMPLER_2D_RECT_SHADOW) ||
         type == GL_SAMPLER_2D_MULTISAMPLE ||
         type == GL_SAMPLER_CUBE_MAP_ARRAY ||
-        type == GL_UNSIGNED_INT_SAMPLER_2D) // <Vulkanstorm/> stochastic transparency's mask table (alpha_st_masks)
+        type == GL_UNSIGNED_INT_SAMPLER_2D) // <Vulkanstorm/> stochastic transparency's mask table (alpha_st_masks), the night sky's Milky Way map (deferred/skyF.glsl)
     {   //this here is a texture
         GLint ret = mActiveTextureChannels;
         if (size == 1)

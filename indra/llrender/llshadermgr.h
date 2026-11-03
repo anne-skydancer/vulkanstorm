@@ -371,6 +371,7 @@ public:
         // </Vulkanstorm>
         NIGHT_SKY_CELLS,                    //  "night_sky_cells"
         NIGHT_SKY_STARS,                    //  "night_sky_stars"
+        NIGHT_SKY_MILKY_WAY,                //  "night_sky_milky_way"
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
     // clang-format on

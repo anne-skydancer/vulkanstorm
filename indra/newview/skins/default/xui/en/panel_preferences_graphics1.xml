@@ -1922,6 +1922,47 @@ If you do not understand the distinction then leave this control alone."
          value="1"
          name="Real"/>
       </radio_group>
+      <!-- <Vulkanstorm> what sets the real sky's hour (llnightsky.h StarHour) -->
+      <text
+       follows="left|top"
+       height="18"
+       layout="topleft"
+       left="15"
+       top_pad="6"
+       width="480"
+       name="NightSkyHourLabel"
+       tool_tip="What sets the hour of the real night sky. Region's sun: the region's night shows the stars of a real night, turning once per region day. Real time: the stars above Rome at this moment, from the clock (the real sky is always seen from Rome).">
+        Star hour:
+      </text>
+      <radio_group
+       control_name="RenderNightSkyHour"
+       enabled_control="RenderNightSky"
+       follows="left|top"
+       height="46"
+       layout="topleft"
+       left="15"
+       top_pad="2"
+       width="485"
+       name="NightSkyHour"
+       tool_tip="What sets the hour of the real night sky. Region's sun: the region's night shows the stars of a real night, turning once per region day. Real time: the stars above Rome at this moment, from the clock (the real sky is always seen from Rome).">
+        <radio_item
+         height="20"
+         label="Region's sun"
+         layout="topleft"
+         left="8"
+         top="3"
+         value="0"
+         name="RegionSun"/>
+        <radio_item
+         height="20"
+         label="Real time"
+         layout="topleft"
+         left_delta="0"
+         top_pad="2"
+         value="1"
+         name="RealTime"/>
+      </radio_group>
+      <!-- </Vulkanstorm> -->
 
     </panel>
 

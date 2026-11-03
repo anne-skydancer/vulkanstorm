@@ -33,9 +33,17 @@
 #include <cmath>
 #include <cstring>
 
+#ifdef LL_USESYSTEMLIBS
+# include <zlib.h>
+#else
+# include "zlib-ng/zlib.h"
+#endif
+
 namespace
 {
     constexpr char MAGIC[8] = { 'V', 'K', 'S', 'S', 'T', 'A', 'R', '1' };
+    constexpr char MILKY_WAY_MAGIC[8] = { 'V', 'K', 'S', 'M', 'W', 'A', 'Y', '1' };
+    constexpr size_t MILKY_WAY_TEXELS = (size_t)LLNightSky::MILKY_WAY_WIDTH * LLNightSky::MILKY_WAY_HEIGHT;
     constexpr S16 NO_COLOUR = 32767;
     constexpr F64 PI = 3.14159265358979323846;
     constexpr F64 TAU = 2.0 * PI;
@@ -44,6 +52,40 @@ namespace
 
     U16 read_u16(const U8* p) { return (U16)(p[0] | (p[1] << 8)); }
     S16 read_s16(const U8* p) { return (S16)read_u16(p); }
+    U32 read_u32(const U8* p) { return (U32)p[0] | ((U32)p[1] << 8) | ((U32)p[2] << 16) | ((U32)p[3] << 24); }
+
+    // Inflates a zlib stream that must hold exactly expected bytes.
+    bool inflate_exactly(const U8* packed, size_t length, size_t expected, std::vector<U8>& raw, std::string& error)
+    {
+        // one byte more than expected, to tell a longer stream
+        raw.assign(expected + 1, 0);
+        z_stream z;
+        std::memset(&z, 0, sizeof(z));
+        if (inflateInit(&z) != Z_OK)
+        {
+            error = "Milky Way map: inflateInit failed";
+            return false;
+        }
+        z.next_in = const_cast<Bytef*>(packed);
+        z.avail_in = (uInt)length;
+        z.next_out = raw.data();
+        z.avail_out = (uInt)raw.size();
+        const int result = inflate(&z, Z_FINISH);
+        const size_t unpacked = raw.size() - z.avail_out;
+        inflateEnd(&z);
+        if (result != Z_STREAM_END)
+        {
+            error = std::string("Milky Way map: ") + (z.msg ? z.msg : "damaged or truncated zlib stream");
+            return false;
+        }
+        if (unpacked != expected)
+        {
+            error = "Milky Way map: " + std::to_string(unpacked) + " bytes unpacked";
+            return false;
+        }
+        raw.resize(expected);
+        return true;
+    }
 
     F64 radians(F64 degrees) { return degrees * PI / 180.0; }
 
@@ -135,6 +177,74 @@ bool LLNightSky::parse(const U8* data, size_t size, std::vector<CatalogueStar>& 
         s.has_bv = bv != NO_COLOUR;
         s.bv = s.has_bv ? (F32)bv / 1000.f : 0.f;
         stars.push_back(s);
+    }
+    return true;
+}
+
+bool LLNightSky::parseMilkyWay(const U8* data, size_t size, std::vector<U32>& texels, std::string& error)
+{
+    texels.clear();
+    if (!data || size < 32)
+    {
+        error = "Milky Way map: too short";
+        return false;
+    }
+    if (std::memcmp(data, MILKY_WAY_MAGIC, sizeof(MILKY_WAY_MAGIC)) != 0)
+    {
+        error = "Milky Way map: bad magic";
+        return false;
+    }
+    const U32 width = read_u32(data + 8);
+    const U32 height = read_u32(data + 12);
+    const U32 reach_bits = read_u32(data + 16);
+    F32 reach;
+    std::memcpy(&reach, &reach_bits, sizeof(reach));
+    const size_t cw = read_u32(data + 20);
+    const size_t ch = read_u32(data + 24);
+    const size_t length = read_u32(data + 28);
+    if (width != MILKY_WAY_WIDTH || height != MILKY_WAY_HEIGHT || reach != MILKY_WAY_REACH || cw == 0 || ch == 0)
+    {
+        error = "Milky Way map: " + std::to_string(width) + " x " + std::to_string(height) + " within "
+            + std::to_string(reach) + " degrees, not the shader's";
+        return false;
+    }
+    if (length > size - 32)
+    {
+        error = "Milky Way map: truncated";
+        return false;
+    }
+    std::vector<U8> raw;
+    if (!inflate_exactly(data + 32, length, MILKY_WAY_TEXELS * 2 + cw * ch, raw, error))
+    {
+        return false;
+    }
+    const U8* colour = raw.data() + MILKY_WAY_TEXELS * 2;
+    const size_t w = MILKY_WAY_WIDTH;
+    const size_t h = MILKY_WAY_HEIGHT;
+    // the colour grid's value at a texel: bilinear between the centres of
+    // its cells (longitude wraps)
+    auto colour_at = [&](size_t x, size_t y) -> U32
+    {
+        const F32 fx = ((F32)x + 0.5f) * (F32)cw / (F32)w - 0.5f;
+        const F32 fy = std::clamp(((F32)y + 0.5f) * (F32)ch / (F32)h - 0.5f, 0.f, (F32)(ch - 1));
+        const F32 x0 = std::floor(fx);
+        const F32 y0 = std::floor(fy);
+        const F32 tx = fx - x0;
+        const F32 ty = fy - y0;
+        const S64 n = (S64)cw;
+        const size_t xa = (size_t)((((S64)x0 % n) + n) % n);
+        const size_t xb = (xa + 1) % cw;
+        const size_t ya = (size_t)y0;
+        const size_t yb = std::min(ya + 1, ch - 1);
+        auto c = [&](size_t cx, size_t cy) { return (F32)colour[cy * cw + cx]; };
+        const F32 top = c(xa, ya) + (c(xb, ya) - c(xa, ya)) * tx;
+        const F32 bottom = c(xa, yb) + (c(xb, yb) - c(xa, yb)) * tx;
+        return (U32)std::round(top + (bottom - top) * ty);
+    };
+    texels.resize(MILKY_WAY_TEXELS);
+    for (size_t i = 0; i < MILKY_WAY_TEXELS; ++i)
+    {
+        texels[i] = (U32)read_u16(raw.data() + i * 2) | (colour_at(i % w, i / w) << 16);
     }
     return true;
 }
@@ -267,12 +377,29 @@ F64 LLNightSky::unixDaysNow()
     return duration<F64>(system_clock::now().time_since_epoch()).count() / 86400.0;
 }
 
-void LLNightSky::axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3])
+F64 LLNightSky::greenwichSidereal(F64 n)
+{
+    const F64 gmst = std::fmod(280.46061837 + 360.98564736629 * n, 360.0);
+    return gmst < 0.0 ? gmst + 360.0 : gmst;
+}
+
+void LLNightSky::axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3], StarHour hour, F64 longitude)
 {
     const F64 lat = radians(LATITUDE);
-    const Vec3d s = { sun.mV[VX], sun.mV[VY], sun.mV[VZ] };
-    // local sidereal time: the Sun's right ascension plus its hour angle
-    const F64 lst = sun_right_ascension(unix_days - J2000_UNIX_DAYS) + sun_hour_angle(s, lat);
+    F64 lst;
+    if (hour == StarHour::RealTime)
+    {
+        // local sidereal time: Greenwich's from the clock plus the longitude
+        const F64 east = std::isfinite(longitude) ? longitude : LONGITUDE;
+        lst = radians(greenwichSidereal(unix_days - J2000_UNIX_DAYS) + east);
+    }
+    else
+    {
+        // local sidereal time: the Sun's right ascension plus its hour
+        // angle in the region's sky
+        const Vec3d s = { sun.mV[VX], sun.mV[VY], sun.mV[VZ] };
+        lst = sun_right_ascension(unix_days - J2000_UNIX_DAYS) + sun_hour_angle(s, lat);
+    }
     // to hour angle coordinates (a turn by -lst about the pole), then
     // tilted by the latitude: the tilt's columns are the region directions
     // of the hour angle frame's axes
