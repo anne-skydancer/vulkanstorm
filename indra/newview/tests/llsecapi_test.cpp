@@ -69,6 +69,7 @@ LLPointer<LLCredential> LLSecAPIBasicHandler::createCredential(const std::string
 LLPointer<LLCredential> LLSecAPIBasicHandler::loadCredential(const std::string& grid) { return NULL; }
 void LLSecAPIBasicHandler::saveCredential(LLPointer<LLCredential> cred, bool save_authenticator) {}
 void LLSecAPIBasicHandler::deleteCredential(LLPointer<LLCredential> cred) {}
+std::vector<std::string> LLSecAPIBasicHandler::listCredentials() { return {}; }
 bool LLSecAPIBasicHandler::hasCredentialMap(const std::string& storage, const std::string& grid) { return false; }
 bool LLSecAPIBasicHandler::emptyCredentialMap(const std::string& storage, const std::string& grid) { return false; }
 void LLSecAPIBasicHandler::loadCredentialMap(const std::string& storage, const std::string& grid, credential_map_t& credential_map) {}
