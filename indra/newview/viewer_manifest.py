@@ -664,6 +664,22 @@ class Windows_x86_64_Manifest(ViewerManifest):
         else:
             print("Doesn't exist:", src)
 
+    # <Vulkanstorm> libvlc's plugin cache for the staged llplugin/plugins (see construct()).
+    def write_vlc_plugin_cache(self):
+        plugins = self.dst_path_of("plugins")
+        generator = os.path.join(self.args['build'], os.pardir, 'media_plugins', 'libvlc',
+                                 self.args['configuration'], 'vlc_cache_gen.exe')
+        cache = os.path.join(plugins, "plugins.dat")
+        if os.path.exists(cache):
+            os.remove(cache)
+        env = dict(os.environ)
+        # libvlc.dll and libvlccore.dll were just copied beside the plugins directory
+        env['PATH'] = os.pathsep.join([self.get_dst_prefix(), env.get('PATH', '')])
+        self.run_command([generator, plugins], env=env)
+        if not os.path.isfile(cache):
+            raise ManifestError("vlc_cache_gen left no %s" % cache)
+    # </Vulkanstorm>
+
     def construct(self):
         super().construct()
 
@@ -927,6 +943,15 @@ class Windows_x86_64_Manifest(ViewerManifest):
                 self.path("libvlc.dll")
                 self.path("libvlccore.dll")
                 self.path("plugins/")
+
+            # <Vulkanstorm> libvlc's plugin cache, written here where the plugins
+            # finally live: it records each plugin's size and modification time,
+            # which the copies above and the installer keep. Without it libvlc
+            # opens all 370 plugin DLLs at every start, each scanned by Windows
+            # the first time, and the parcel music takes half a minute to start
+            # after a fresh install or build (media_plugins/libvlc/vlc_cache_gen.cpp).
+            self.write_vlc_plugin_cache()
+            # </Vulkanstorm>
 
         if not self.is_packaging_viewer():
             self.package_file = "copied_deps"
