@@ -23,9 +23,7 @@
 * $/LicenseInfo$
 */
 
-#extension GL_ARB_shader_storage_buffer_object : enable
 #extension GL_ARB_shader_image_load_store : enable
-#extension GL_ARB_shader_atomic_counters : enable
 
 /*[EXTRA_CODE_HERE]*/
 
@@ -39,26 +37,44 @@ uniform int oit_mode;
 #endif
 
 #ifdef ALPHA_OIT
-// ---- alpha OIT (per-pixel linked list) capture ----
-    // Capture-only depth rejection below; normal alpha shader depth behaviour is unchanged.
-layout(binding = 0, r32ui) uniform coherent uimage2D oit_head;
-layout(std430, binding = 0) buffer OITNodePool { uint oit_nodes[]; };
-layout(binding = 0, offset = 0) uniform atomic_uint oit_counter;
-uniform int oit_node_cap;   // node pool capacity; overflow falls through to legacy blending
-bool oit_append(vec4 c, float z)
+// ---- alpha OIT capture: per-pixel slot array (A-buffer in a 2D-array image) ----
+// Each pixel owns oit_slot_count slots (one array layer each); a per-pixel atomic count in
+// layer 0 of oit_meta hands out slot indices. Fragments past the last slot fold into the
+// order-independent tail accumulators in layers 1..5 (fixed-point atomics) and record their
+// nearest depth in layer 6; the resolve composites the tail at that depth among the sorted
+// slots. Scales must match alphaOITResolveF.glsl.
+// Capture-only depth rejection below; normal alpha shader depth behaviour is unchanged.
+layout(binding = 0, r32ui) uniform coherent uimage2DArray oit_meta;      // 0 count, 1..3 sum rgb*a, 4 sum a, 5 sum -log2(1-a), 6 ~bits(nearest z)
+layout(binding = 1, rgba32ui) uniform writeonly uimage2DArray oit_slots; // { RG16F, BA16F, depth bits, 0 }
+uniform int oit_slot_count;  // slots per pixel (layers of oit_slots)
+#define OIT_TAIL_COLOR_SCALE 4096.0
+#define OIT_TAIL_ALPHA_SCALE 65536.0
+#define OIT_TAIL_LOG_SCALE   65536.0
+void oit_append(vec4 c, float z)
 {
-    // Match resolve LEQUAL, including equality; reject before allocator/SSBO work.
-    // discard also prevents hidden fragments from taking the overflow blend path.
-    if (!(z <= texelFetch(alpha_oit_opaque_depth, ivec2(gl_FragCoord.xy), 0).r)) discard;
-    uint idx = atomicCounterIncrement(oit_counter);
-    if (idx >= uint(oit_node_cap)) return false;
-    uint prev = imageAtomicExchange(oit_head, ivec2(gl_FragCoord.xy), idx);
-    uint base = idx * 4u;
-    oit_nodes[base + 0u] = packHalf2x16(max(c.rg, vec2(0.0)));
-    oit_nodes[base + 1u] = packHalf2x16(vec2(max(c.b, 0.0), clamp(c.a, 0.0, 1.0)));
-    oit_nodes[base + 2u] = floatBitsToUint(z);
-    oit_nodes[base + 3u] = prev;
-    return true;
+    ivec2 p = ivec2(gl_FragCoord.xy);
+    // Match resolve LEQUAL, including equality; reject before touching the A-buffer.
+    if (!(z <= texelFetch(alpha_oit_opaque_depth, p, 0).r)) discard;
+    float a   = clamp(c.a, 0.0, 1.0);
+    vec3  rgb = max(c.rgb, vec3(0.0));
+    uint k = imageAtomicAdd(oit_meta, ivec3(p, 0), 1u);
+    if (k < uint(oit_slot_count))
+    {
+        imageStore(oit_slots, ivec3(p, int(k)),
+                   uvec4(packHalf2x16(rgb.rg), packHalf2x16(vec2(rgb.b, a)), floatBitsToUint(z), 0u));
+        return;
+    }
+    // Slot overflow: coverage and the coverage-weighted colour average are order independent.
+    // Per-fragment clamps keep the fixed-point sums from wrapping on HDR emissive stacks.
+    vec3 w = min(rgb * a, vec3(1024.0));
+    imageAtomicAdd(oit_meta, ivec3(p, 1), uint(w.r * OIT_TAIL_COLOR_SCALE + 0.5));
+    imageAtomicAdd(oit_meta, ivec3(p, 2), uint(w.g * OIT_TAIL_COLOR_SCALE + 0.5));
+    imageAtomicAdd(oit_meta, ivec3(p, 3), uint(w.b * OIT_TAIL_COLOR_SCALE + 0.5));
+    imageAtomicAdd(oit_meta, ivec3(p, 4), uint(a * OIT_TAIL_ALPHA_SCALE + 0.5));
+    imageAtomicAdd(oit_meta, ivec3(p, 5), uint(-log2(max(1.0 - a, 0.0009765625)) * OIT_TAIL_LOG_SCALE + 0.5));
+    // Nearest tail depth: window z is a non-negative float, so its bits order like the value;
+    // inverted, the maximum over a zero-cleared layer is the minimum depth.
+    imageAtomicMax(oit_meta, ivec3(p, 6), ~floatBitsToUint(z));
 }
 #endif
 
@@ -460,7 +476,7 @@ void main()
         final_scale = 1.1;
 #ifdef ALPHA_OIT
     vec4 oit_out = max(vec4(color * final_scale, al), vec4(0));
-    if (oit_mode == 1 && oit_append(oit_out, gl_FragCoord.z)) { discard; }
+    if (oit_mode == 1) { oit_append(oit_out, gl_FragCoord.z); discard; }
     frag_color = oit_out;
 #else
     vec4 oit_out = max(vec4(color * final_scale, al), vec4(0));
