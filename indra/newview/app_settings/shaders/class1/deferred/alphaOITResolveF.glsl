@@ -23,86 +23,65 @@
  * $/LicenseInfo$
  */
 
-#extension GL_ARB_shader_storage_buffer_object : enable
 #extension GL_ARB_shader_image_load_store : enable
 
 /*[EXTRA_CODE_HERE]*/
 
-// Alpha OIT resolve: walk each pixel's per-pixel linked list (built by the capture pass),
-// depth-sort it, and composite it "over" the current screen back-to-front. Output is
+// Alpha OIT resolve: read each pixel's slot array (filled by the capture pass), depth-sort
+// it, and composite it "over" the current screen back-to-front, with the pixel's
+// order-independent tail (fragments that arrived after the last slot) inserted at the depth
+// of its nearest fragment: alpha groups are submitted far to near, so the tail is usually
+// the nearest block, but rigged alpha is captured first whatever its depth. Output is
 // premultiplied color + coverage; the composite blend is ONE, ONE_MINUS_SRC_ALPHA with the
 // alpha channel masked off so emissive glow already in screen.a survives.
 
 out vec4 frag_color;
 
-layout(binding = 0, r32ui) uniform readonly uimage2D oit_head;   // per-pixel list head (0xFFFFFFFF = empty)
-layout(std430, binding = 0) buffer OITNodePool { uint oit_nodes[]; };
-uniform sampler2D depthMap;   // opaque scene depth (DEFERRED_DEPTH) -- occlusion reject vs captured nodes
-uniform int oit_max_pixel_layers;
+layout(binding = 0, r32ui) uniform readonly uimage2DArray oit_meta;     // 0 count, 1..3 sum rgb*a, 4 sum a, 5 sum -log2(1-a), 6 ~bits(nearest z)
+layout(binding = 2, r32ui) uniform writeonly uimage2DArray oit_meta_clear; // the same image, written only to zero a consumed tail
+layout(binding = 1, rgba32ui) uniform readonly uimage2DArray oit_slots; // { RG16F, BA16F, depth bits, 0 }
+uniform sampler2D depthMap;   // opaque scene depth (DEFERRED_DEPTH) -- occlusion reject vs captured slots
+uniform int oit_slot_count;   // slots per pixel (layers of oit_slots)
 
-// Exact-sort the user-selected number of layers, then collapse the remainder
-// into the archived implementation's order-independent weighted tail.  The
-// traversal cap prevents corrupt data from creating an unbounded shader loop.
-#define OIT_MAX_LAYERS 32
-#define OIT_MAX_TRAVERSAL 256
+// Must match the capture shaders' tail encoding.
+#define OIT_TAIL_COLOR_SCALE 4096.0
+#define OIT_TAIL_ALPHA_SCALE 65536.0
+#define OIT_TAIL_LOG_SCALE   65536.0
+
+// Upper bound of the slot array (RenderAlphaOITNodesPerPixel is clamped to it on the CPU).
+#define OIT_MAX_SLOTS 32
 
 void main()
 {
     ivec2 coord = ivec2(gl_FragCoord.xy);
-    // Detached opaque-depth snapshot shared with capture. Retain the final LEQUAL guard.
-    float opaque_z = texelFetch(depthMap, coord, 0).r;
 
-    uint idx = imageLoad(oit_head, coord).r;
-    if (idx == 0xFFFFFFFFu)
+    uint count = imageLoad(oit_meta, ivec3(coord, 0)).r;
+    if (count == 0u)
     {
         discard;   // no transparent fragments at this pixel
     }
 
-    uint  nrg[OIT_MAX_LAYERS];
-    uint  nba[OIT_MAX_LAYERS];
-    float ndep[OIT_MAX_LAYERS];
+    // Detached opaque-depth snapshot shared with capture. Retain the final LEQUAL guard.
+    float opaque_z = texelFetch(depthMap, coord, 0).r;
+
+    int slots = min(oit_slot_count, OIT_MAX_SLOTS);
+    int n = int(min(count, uint(slots)));
+
+    uint  nrg[OIT_MAX_SLOTS];
+    uint  nba[OIT_MAX_SLOTS];
+    float ndep[OIT_MAX_SLOTS];
     int cnt = 0;
-    int traversed = 0;
-    while (idx != 0xFFFFFFFFu &&
-           cnt < OIT_MAX_LAYERS &&
-           cnt < oit_max_pixel_layers &&
-           traversed < OIT_MAX_TRAVERSAL)
+    for (int i = 0; i < n; i++)
     {
-        uint  base = idx * 4u;
-        float nz   = uintBitsToFloat(oit_nodes[base + 2u]);
-        uint  nxt  = oit_nodes[base + 3u];
-        traversed++;
+        uvec4 s = imageLoad(oit_slots, ivec3(coord, i));
+        float nz = uintBitsToFloat(s.z);
         if (nz <= opaque_z)   // visible (in front of opaque) -> keep; else occluded -> skip
         {
-            nrg[cnt] = oit_nodes[base + 0u];
-            nba[cnt] = oit_nodes[base + 1u];
+            nrg[cnt] = s.x;
+            nba[cnt] = s.y;
             ndep[cnt] = nz;
             cnt++;
         }
-        idx = nxt;
-    }
-
-    // Deep stacks degrade continuously instead of dropping layers. Coverage and
-    // the coverage-weighted colour average are independent of list order.
-    vec3 tail_wsum = vec3(0.0);
-    float tail_asum = 0.0;
-    float tail_trans = 1.0;
-    while (idx != 0xFFFFFFFFu && traversed < OIT_MAX_TRAVERSAL)
-    {
-        uint base = idx * 4u;
-        float nz = uintBitsToFloat(oit_nodes[base + 2u]);
-        uint nxt = oit_nodes[base + 3u];
-        traversed++;
-        if (nz <= opaque_z)
-        {
-            vec2 rg = unpackHalf2x16(oit_nodes[base + 0u]);
-            vec2 ba = unpackHalf2x16(oit_nodes[base + 1u]);
-            vec4 c = vec4(rg, ba);
-            tail_wsum += c.rgb * c.a;
-            tail_asum += c.a;
-            tail_trans *= (1.0 - c.a);
-        }
-        idx = nxt;
     }
 
     // insertion sort DESCENDING by window depth. Standard depth (near=0, far=1): largest z is
@@ -125,22 +104,62 @@ void main()
         ndep[j] = d;
     }
 
+    // Deep stacks degrade continuously instead of dropping layers: fragments past the last
+    // slot were folded into an order-independent coverage-weighted colour average, placed at
+    // the depth of the nearest of them.
+    bool  has_tail  = false;
+    vec3  tail_rgb  = vec3(0.0);   // premultiplied
+    float tail_cov  = 0.0;
+    float tail_z    = 0.0;
+    if (count > uint(slots))
+    {
+        vec3 tail_wsum = vec3(float(imageLoad(oit_meta, ivec3(coord, 1)).r),
+                              float(imageLoad(oit_meta, ivec3(coord, 2)).r),
+                              float(imageLoad(oit_meta, ivec3(coord, 3)).r)) / OIT_TAIL_COLOR_SCALE;
+        float tail_asum  = float(imageLoad(oit_meta, ivec3(coord, 4)).r) / OIT_TAIL_ALPHA_SCALE;
+        float tail_trans = exp2(-float(imageLoad(oit_meta, ivec3(coord, 5)).r) / OIT_TAIL_LOG_SCALE);
+        tail_z = uintBitsToFloat(~imageLoad(oit_meta, ivec3(coord, 6)).r);
+        if (tail_asum > 0.0)
+        {
+            has_tail = true;
+            tail_cov = 1.0 - tail_trans;
+            tail_rgb = (tail_wsum / tail_asum) * tail_cov;
+        }
+    }
+
+    // Back to front: slots at or behind the tail's nearest depth, the tail, the nearer slots.
     vec3  accum = vec3(0.0);
     float cov   = 0.0;
-    if (tail_asum > 0.0)
-    {
-        float tail_cov = 1.0 - tail_trans;
-        accum = (tail_wsum / tail_asum) * tail_cov;
-        cov = tail_cov;
-    }
+    bool  tail_pending = has_tail;
     for (int i = 0; i < cnt; i++)
     {
+        if (tail_pending && ndep[i] < tail_z)
+        {
+            accum = tail_rgb + accum * (1.0 - tail_cov);
+            cov   = tail_cov + cov   * (1.0 - tail_cov);
+            tail_pending = false;
+        }
         vec2 rg = unpackHalf2x16(nrg[i]);
         vec2 ba = unpackHalf2x16(nba[i]);
         vec4 c = vec4(rg, ba);
         accum = c.rgb * c.a + accum * (1.0 - c.a);
         cov   = c.a       + cov   * (1.0 - c.a);
     }
+    if (tail_pending)
+    {
+        accum = tail_rgb + accum * (1.0 - tail_cov);
+        cov   = tail_cov + cov   * (1.0 - tail_cov);
+    }
 
     frag_color = vec4(accum, cov);
+
+    // Leave the tail clean: only overflowing pixels write it and only this pass reads it, so
+    // the per-frame clear can be limited to the count layer (beginAlphaOITCapture()).
+    if (count > uint(slots))
+    {
+        for (int l = 1; l < 7; l++)
+        {
+            imageStore(oit_meta_clear, ivec3(coord, l), uvec4(0u));
+        }
+    }
 }
