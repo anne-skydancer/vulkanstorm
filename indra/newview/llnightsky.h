@@ -162,6 +162,13 @@ namespace LLNightSky
     // Unit vector of an equatorial position.
     LLVector3 equatorial(F32 ra, F32 dec);
 
+    // A J2000 direction in the mean equator and equinox of the date
+    // unix_days (days since 1970-01-01 UTC): precession (IAU 1976, Meeus
+    // ch. 21), about 0.36 degrees since 2000 along the equator. Sidereal
+    // time and the region sun's right ascension refer to the equinox of
+    // date, so the catalogue is brought to it before the sky is turned.
+    LLVector3 precessed(const LLVector3& j2000, F64 unix_days);
+
     // Peak intensity (linear) of a star of this visual magnitude. The real
     // range (Sirius is 1,500 times brighter than a magnitude 6.5 star) is
     // compressed to about 1 to 100, so that the faintest stars just show over
