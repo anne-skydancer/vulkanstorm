@@ -33,6 +33,9 @@
 #include "../lluicolortable.h"
 #include "../llrender/lluiimage.h"
 #include "../llmessage/llexperiencecache.h"
+#include "lldir.h"
+#include "llfile.h"
+#include "llfontgl.h"
 
 #include <boost/regex.hpp>
 
@@ -105,10 +108,51 @@ S32 LLUIImage::getHeight() const
 }
 |*==========================================================================*/
 
+namespace
+{
+    // LLUrlRegistry::findUrl() builds LLUrlMatch objects, whose LLStyle::Params
+    // default to LLFontGL::getFontMonospace(); that dereferences the font
+    // registry, which only LLFontGL::initClass() creates. Initialise it from
+    // an empty fonts.xml, without GL textures, so that every font lookup
+    // returns NULL instead of touching font files.
+    void initEmptyFontRegistry()
+    {
+        static bool initialized = false;
+        if (initialized)
+        {
+            return;
+        }
+        initialized = true;
+
+        const std::string fonts_dir = gDirUtilp->getExpandedFilename(LL_PATH_FONTS, "");
+        const bool created_dir = !LLFile::isdir(fonts_dir);
+        if (created_dir)
+        {
+            LLFile::mkdir(fonts_dir);
+        }
+        const std::string fonts_file = "llurlentry_test_fonts.xml";
+        const std::string fonts_path = gDirUtilp->add(fonts_dir, fonts_file);
+        {
+            llofstream out(fonts_path);
+            out << "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>" "<fonts></fonts>";
+        }
+        LLFontGL::initClass(96.f, 1.f, 1.f, gDirUtilp->getAppRODataDir(), fonts_file, 0.f, false);
+        LLFile::remove(fonts_path);
+        if (created_dir)
+        {
+            LLFile::rmdir(fonts_dir);
+        }
+    }
+}
+
 namespace tut
 {
     struct LLUrlEntryData
     {
+        LLUrlEntryData()
+        {
+            initEmptyFontRegistry();
+        }
     };
 
     typedef test_group<LLUrlEntryData> factory;
