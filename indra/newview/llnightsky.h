@@ -35,15 +35,21 @@
 // Rendering 2 > Night sky). Firestorm's random stars (LLVOWLSky) stay the
 // other choice and are drawn as before.
 //
-// The stars are those of app_settings/stars/stars.bin (HYG database,
-// CC BY-SA 4.0, magnitude 6.5 and brighter) in J2000 equatorial
-// coordinates. They are sorted into the cells of a cube map (FACE_CELLS per
+// The stars are those of app_settings/stars/stars.bin (Tycho-2,
+// BSD-2-Clause, the brightest completed from Hipparcos; magnitude 6.5 and
+// brighter) in J2000 equatorial coordinates. They are sorted into the cells of a cube map (FACE_CELLS per
 // face edge); a star is also listed in the neighbouring cells its point can
 // cover (MARGIN), so a sky pixel only reads the stars of its own cell.
 //
-// The sky turns around the celestial pole as seen from Rome: the hour
-// follows the region's sun, so the stars turn once per region day, and
-// which stars are up at night follows the season of today's date.
+// The Milky Way is app_settings/stars/milky_way.bin: the fainter Tycho-2
+// stars on a grid of galactic longitude and latitude (their glow, colour
+// and count), which the shader samples by hand.
+//
+// The sky turns around the celestial pole as seen from Rome (Vulkanstorm
+// has no other place). The star hour (StarHour) is either the region's sun,
+// so the stars turn once per region day and which stars are up at night
+// follows the season of today's date, or the real time: the stars above
+// Rome at this moment (Greenwich sidereal time from the clock).
 //
 // Frames: the region's is x east, y north, z up. The catalogue's is x
 // towards the March equinox, z towards the north celestial pole.
@@ -59,6 +65,23 @@ namespace LLNightSky
     constexpr F32 MARGIN = 0.021f;
     // Latitude of Rome (degrees north).
     constexpr F64 LATITUDE = 41.9028;
+    // Longitude of Rome (degrees east): counts with the real time only.
+    constexpr F64 LONGITUDE = 12.4964;
+
+    // Texels of the Milky Way map across (galactic longitude, -180 to 180
+    // degrees) and down (latitude, -MILKY_WAY_REACH to +). Must match
+    // NIGHT_SKY_MW_WIDTH, NIGHT_SKY_MW_HEIGHT and NIGHT_SKY_MW_REACH (skyF.glsl).
+    constexpr U32 MILKY_WAY_WIDTH = 2048;
+    constexpr U32 MILKY_WAY_HEIGHT = 512;
+    constexpr F32 MILKY_WAY_REACH = 45.f; // degrees
+
+    // What sets the hour of the real sky (Preferences, "Star hour",
+    // RenderNightSkyHour).
+    enum class StarHour
+    {
+        RegionSun,  // the region's sun: its night shows the stars of a real night
+        RealTime,   // the clock: the stars above Rome now
+    };
 
     // A star of the table, decoded.
     struct CatalogueStar
@@ -82,6 +105,14 @@ namespace LLNightSky
     // Decodes stars.bin (format in scripts/generate-star-catalog.py).
     // Returns false and sets error when the table is damaged.
     bool parse(const U8* data, size_t size, std::vector<CatalogueStar>& stars, std::string& error);
+
+    // Decodes milky_way.bin (format in scripts/generate-star-catalog.py)
+    // into the texels the sky shader reads, MILKY_WAY_WIDTH x
+    // MILKY_WAY_HEIGHT, row by row: bits 0..7 the glow (square root of the
+    // light), 8..15 the grain (stars of V 6.5 to 9.5 per texel, x 16),
+    // 16..23 the B-V colour index x 100, spread from its coarse grid.
+    // Returns false and sets error when the map is damaged.
+    bool parseMilkyWay(const U8* data, size_t size, std::vector<U32>& texels, std::string& error);
 
     // Unit vector of an equatorial position.
     LLVector3 equatorial(F32 ra, F32 dec);
@@ -110,13 +141,20 @@ namespace LLNightSky
     // where each star is repeated in every cell it reaches.
     void bin(const std::vector<GpuStar>& stars, std::vector<U32>& offsets, std::vector<GpuStar>& binned);
 
-    // Days since 1970-01-01 UTC, now.
+    // Days since 1970-01-01 UTC, now, with the time of day.
     F64 unixDaysNow();
+
+    // Greenwich mean sidereal time (degrees, 0 to 360), n days (UT) after
+    // J2000.0 (Astronomical Almanac, about 0.1 s over this century).
+    F64 greenwichSidereal(F64 n);
 
     // Region directions of the catalogue's x, y and z axes (the columns of
     // the rotation from the catalogue's frame to the region's), for the
-    // region's sun direction sun (region frame) and the date unix_days.
-    void axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3]);
+    // region's sun direction sun (region frame) and the moment unix_days
+    // (days since 1970-01-01 UTC, with the time of day), the hour set by
+    // hour. longitude (degrees east) counts with the real time only.
+    void axes(const LLVector3& sun, F64 unix_days, LLVector3 out[3],
+              StarHour hour = StarHour::RegionSun, F64 longitude = LONGITUDE);
 }
 
 #endif // LL_NIGHTSKY_H
