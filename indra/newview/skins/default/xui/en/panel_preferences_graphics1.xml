@@ -1978,10 +1978,11 @@ If you do not understand the distinction then leave this control alone."
        name="NightSkyHeading">
         Night sky
       </text>
+      <!-- <Vulkanstorm> the choices side by side, to leave room for the place -->
       <radio_group
        control_name="RenderNightSky"
        follows="left|top"
-       height="46"
+       height="20"
        layout="topleft"
        left="15"
        top_pad="4"
@@ -1992,55 +1993,165 @@ If you do not understand the distinction then leave this control alone."
          label="Default"
          layout="topleft"
          left="8"
-         top="3"
+         top="0"
+         width="90"
          value="0"
          name="Default"/>
         <radio_item
          height="20"
          label="Real"
          layout="topleft"
-         left_delta="0"
-         top_pad="2"
+         left_pad="10"
+         top_delta="0"
+         width="90"
          value="1"
          name="Real"/>
       </radio_group>
-      <!-- <Vulkanstorm> what sets the real sky's hour (llnightsky.h StarHour) -->
+      <!-- where the real sky is seen from (llnightsky.h SkyPlace); the
+           spinners are enabled and the presets copied into them by
+           LLPanelPreferenceGraphics -->
       <text
        follows="left|top"
        height="18"
        layout="topleft"
-       left="15"
+       left="23"
        top_pad="6"
-       width="480"
+       width="110"
+       name="NightSkyPlaceLabel"
+       tool_tip="Where on Earth the real night sky is seen from: which stars are up, and how high the Pole Star stands. With the region's sun as the star hour only the latitude counts; with the real time the longitude too.">
+        Sky seen from:
+      </text>
+      <combo_box
+       control_name="RenderNightSkyPlace"
+       enabled_control="RenderNightSky"
+       follows="left|top"
+       height="22"
+       layout="topleft"
+       left_pad="5"
+       top_delta="-3"
+       width="160"
+       name="NightSkyPlace"
+       tool_tip="Where on Earth the real night sky is seen from: which stars are up, and how high the Pole Star stands. With the region's sun as the star hour only the latitude counts; with the real time the longitude too.">
+        <combo_box.item
+         label="Rome"
+         name="Rome"
+         value="0"/>
+        <combo_box.item
+         label="Paris"
+         name="Paris"
+         value="1"/>
+        <combo_box.item
+         label="London"
+         name="London"
+         value="2"/>
+        <combo_box.item
+         label="New York"
+         name="NewYork"
+         value="3"/>
+        <combo_box.item
+         label="Los Angeles"
+         name="LosAngeles"
+         value="4"/>
+        <combo_box.item
+         label="Tokyo"
+         name="Tokyo"
+         value="5"/>
+        <combo_box.item
+         label="Rio de Janeiro"
+         name="RioDeJaneiro"
+         value="6"/>
+        <combo_box.item
+         label="Cape Town"
+         name="CapeTown"
+         value="7"/>
+        <combo_box.item
+         label="Sydney"
+         name="Sydney"
+         value="8"/>
+        <combo_box.item
+         label="Equator"
+         name="Equator"
+         value="9"/>
+        <combo_box.item
+         label="North Pole"
+         name="NorthPole"
+         value="10"/>
+        <combo_box.item
+         label="Custom"
+         name="Custom"
+         value="11"/>
+      </combo_box>
+      <spinner
+       control_name="RenderNightSkyLatitude"
+       decimal_digits="4"
+       follows="left|top"
+       height="20"
+       increment="0.1"
+       label="Latitude (° north):"
+       label_width="115"
+       layout="topleft"
+       left="23"
+       min_val="-90"
+       max_val="90"
+       top_pad="4"
+       width="200"
+       name="NightSkyLatitude"
+       tool_tip="Degrees north of the equator, negative in the south. Choose Custom above to set your own; changing it makes the place Custom."/>
+      <spinner
+       control_name="RenderNightSkyLongitude"
+       decimal_digits="4"
+       follows="left|top"
+       height="20"
+       increment="0.1"
+       label="Longitude (° east):"
+       label_width="115"
+       layout="topleft"
+       left_pad="20"
+       min_val="-180"
+       max_val="180"
+       top_delta="0"
+       width="210"
+       name="NightSkyLongitude"
+       tool_tip="Degrees east of Greenwich, negative in the west. It counts only when the star hour is the real time. Choose Custom above and Real time below to set your own; changing it makes the place Custom."/>
+      <!-- what sets the real sky's hour (llnightsky.h StarHour) -->
+      <text
+       follows="left|top"
+       height="18"
+       layout="topleft"
+       left="23"
+       top_pad="6"
+       width="110"
        name="NightSkyHourLabel"
-       tool_tip="What sets the hour of the real night sky. Region's sun: the region's night shows the stars of a real night, turning once per region day. Real time: the stars above Rome at this moment, from the clock (the real sky is always seen from Rome).">
+       tool_tip="What sets the hour of the real night sky. Region's sun: the region's night shows the stars of a real night, turning once per region day, at any longitude. Real time: the stars above the place at this moment, by your clock, so a place further west sees them later.">
         Star hour:
       </text>
       <radio_group
        control_name="RenderNightSkyHour"
        enabled_control="RenderNightSky"
        follows="left|top"
-       height="46"
+       height="20"
        layout="topleft"
-       left="15"
-       top_pad="2"
-       width="485"
+       left_pad="5"
+       top_delta="-2"
+       width="300"
        name="NightSkyHour"
-       tool_tip="What sets the hour of the real night sky. Region's sun: the region's night shows the stars of a real night, turning once per region day. Real time: the stars above Rome at this moment, from the clock (the real sky is always seen from Rome).">
+       tool_tip="What sets the hour of the real night sky. Region's sun: the region's night shows the stars of a real night, turning once per region day, at any longitude. Real time: the stars above the place at this moment, by your clock, so a place further west sees them later.">
         <radio_item
          height="20"
          label="Region's sun"
          layout="topleft"
-         left="8"
-         top="3"
+         left="0"
+         top="0"
+         width="110"
          value="0"
          name="RegionSun"/>
         <radio_item
          height="20"
          label="Real time"
          layout="topleft"
-         left_delta="0"
-         top_pad="2"
+         left_pad="10"
+         top_delta="0"
+         width="110"
          value="1"
          name="RealTime"/>
       </radio_group>

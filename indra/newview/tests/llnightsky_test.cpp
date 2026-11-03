@@ -1,6 +1,6 @@
 /**
  * @file llnightsky_test.cpp
- * @brief The real night sky's catalogue, binning and frame
+ * @brief The real night sky's catalogue, binning, frame and place
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Vulkanstorm Viewer Source Code
@@ -31,7 +31,10 @@
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -136,6 +139,36 @@ namespace
         LLNightSky::axes(sun, unix_days, axes, hour, longitude);
         const LLVector3 e = LLNightSky::equatorial(ra_hours * 15.f * DEG, dec_deg * DEG);
         return axes[0] * e.mV[VX] + axes[1] * e.mV[VY] + axes[2] * e.mV[VZ];
+    }
+
+    // A star in the region's frame for this sun and date, seen by at.
+    LLVector3 region_at(const LLNightSky::Observer& at, const LLVector3& sun, F64 unix_days, F32 ra_hours, F32 dec_deg)
+    {
+        LLVector3 axes[3];
+        LLNightSky::axes(sun, unix_days, axes, at);
+        const LLVector3 e = LLNightSky::equatorial(ra_hours * 15.f * DEG, dec_deg * DEG);
+        return axes[0] * e.mV[VX] + axes[1] * e.mV[VY] + axes[2] * e.mV[VZ];
+    }
+
+    LLNightSky::Observer observer_at(F64 latitude, F64 longitude = LLNightSky::LONGITUDE,
+                                     LLNightSky::StarHour hour = LLNightSky::StarHour::RegionSun)
+    {
+        LLNightSky::Observer at;
+        at.latitude = latitude;
+        at.longitude = longitude;
+        at.hour = hour;
+        return at;
+    }
+
+    // every place, Custom last
+    std::vector<LLNightSky::SkyPlace> all_places()
+    {
+        std::vector<LLNightSky::SkyPlace> places;
+        for (U32 i = 0; i < LLNightSky::SKY_PLACES; ++i)
+        {
+            places.push_back(LLNightSky::skyPlace(i));
+        }
+        return places;
     }
 
     // the sun straight below the horizon: the region's midnight
@@ -486,5 +519,189 @@ namespace tut
             ensure("axis " + std::to_string(i), a[i] == b[i]);
             ensure("default axis " + std::to_string(i), a[i] == c[i]);
         }
+    }
+
+    template<> template<>
+    void nightsky_object::test<18>()
+    {
+        set_test_name("every preset has its own latitude and longitude, Custom none");
+        const std::vector<LLNightSky::SkyPlace> places = all_places();
+        ensure_equals("places", places.size(), (size_t)12);
+        ensure("Rome first", LLNightSky::skyPlace(0) == LLNightSky::SkyPlace::Rome);
+        ensure("Custom last", places.back() == LLNightSky::SkyPlace::Custom);
+        ensure("out of range: Rome", LLNightSky::skyPlace(LLNightSky::SKY_PLACES) == LLNightSky::SkyPlace::Rome);
+        ensure("far out of range: Rome", LLNightSky::skyPlace(0xffffffffU) == LLNightSky::SkyPlace::Rome);
+        std::vector<std::pair<F64, F64>> seen;
+        for (LLNightSky::SkyPlace place : places)
+        {
+            F64 latitude = 1234.0;
+            F64 longitude = 1234.0;
+            const bool has_latitude = LLNightSky::placeLatitude(place, latitude);
+            const bool has_longitude = LLNightSky::placeLongitude(place, longitude);
+            const std::string name = "place " + std::to_string((U32)place);
+            ensure_equals(name + " both or none", has_latitude, has_longitude);
+            if (place == LLNightSky::SkyPlace::Custom)
+            {
+                ensure(name + " none", !has_latitude && latitude == 1234.0 && longitude == 1234.0);
+                continue;
+            }
+            ensure(name + " has its place", has_latitude);
+            ensure(name + " latitude in range", latitude >= -90.0 && latitude <= 90.0);
+            ensure(name + " longitude in range", longitude >= -180.0 && longitude <= 180.0);
+            ensure(name + " its own", std::find(seen.begin(), seen.end(), std::make_pair(latitude, longitude)) == seen.end());
+            seen.emplace_back(latitude, longitude);
+        }
+        F64 v = 0.0;
+        ensure("Rome's latitude", LLNightSky::placeLatitude(LLNightSky::SkyPlace::Rome, v) && v == LLNightSky::LATITUDE);
+        ensure("Rome's longitude", LLNightSky::placeLongitude(LLNightSky::SkyPlace::Rome, v) && v == LLNightSky::LONGITUDE);
+        ensure("New York's longitude", LLNightSky::placeLongitude(LLNightSky::SkyPlace::NewYork, v) && v == -74.006);
+        ensure("Sydney in the south", LLNightSky::placeLatitude(LLNightSky::SkyPlace::Sydney, v) && v < -33.0);
+    }
+
+    template<> template<>
+    void nightsky_object::test<19>()
+    {
+        set_test_name("each place sees its own sky");
+        // seen from any place, the celestial pole stands at its latitude:
+        // the Pole Star above the north in the north, under the horizon in
+        // the south
+        for (LLNightSky::SkyPlace place : all_places())
+        {
+            F64 latitude = 0.0;
+            if (!LLNightSky::placeLatitude(place, latitude))
+            {
+                continue;
+            }
+            const LLVector3 polaris = region_at(observer_at(latitude), MIDNIGHT, WINTER, 2.53f, 89.26f);
+            const F32 altitude = std::asin(llclamp(polaris.mV[VZ], -1.f, 1.f)) / DEG;
+            ensure("place " + std::to_string((U32)place) + " altitude " + std::to_string(altitude),
+                   std::fabs(altitude - (F32)latitude) < 1.f);
+        }
+        // Acrux (RA 12h27m, Dec -63.1 degrees): never above Rome, high over
+        // Sydney at some hour of the night
+        auto highest = [](F64 latitude)
+        {
+            F32 best = -2.f;
+            for (S32 h = 0; h < 24; ++h)
+            {
+                const F32 a = (F32)h / 24.f * 2.f * 3.14159265f;
+                LLVector3 sun(std::cos(a) * 0.3f, std::sin(a) * 0.3f, -0.95f);
+                sun.normVec();
+                best = llmax(best, region_at(observer_at(latitude), sun, WINTER, 12.44f, -63.1f).mV[VZ]);
+            }
+            return best;
+        };
+        F64 sydney = 0.0;
+        LLNightSky::placeLatitude(LLNightSky::SkyPlace::Sydney, sydney);
+        ensure("Acrux never above Rome", highest(LLNightSky::LATITUDE) < 0.f);
+        ensure("Acrux high over Sydney", highest(sydney) > 0.5f);
+    }
+
+    template<> template<>
+    void nightsky_object::test<20>()
+    {
+        set_test_name("the poles give a finite rotation");
+        for (F64 latitude : { 90.0, -90.0, 89.9999, 120.0, -1000.0 })
+        {
+            for (const LLVector3& sun : { MIDNIGHT, LLVector3(0.f, 0.f, 1.f), LLVector3(0.3f, -0.5f, 0.2f) })
+            {
+                for (LLNightSky::StarHour hour : { LLNightSky::StarHour::RegionSun, LLNightSky::StarHour::RealTime })
+                {
+                    LLVector3 axes[3];
+                    LLNightSky::axes(sun, WINTER, axes, observer_at(latitude, 0.0, hour));
+                    for (S32 i = 0; i < 3; ++i)
+                    {
+                        const std::string name = "latitude " + std::to_string(latitude) + " axis " + std::to_string(i);
+                        ensure(name + " finite", axes[i].isFinite());
+                        ensure(name + " unit", std::fabs(axes[i].length() - 1.f) < 1e-4f);
+                    }
+                }
+            }
+        }
+        // at the North Pole the Pole Star is overhead; beyond it, clamped
+        const LLVector3 polaris = region_at(observer_at(90.0), MIDNIGHT, WINTER, 2.53f, 89.26f);
+        ensure("overhead", polaris.mV[VZ] > 0.999f);
+        const LLVector3 beyond = region_at(observer_at(120.0), MIDNIGHT, WINTER, 2.53f, 89.26f);
+        ensure("clamped to the pole", dist_vec(polaris, beyond) < 1e-5f);
+        // a latitude that is no number: Rome's
+        const LLVector3 rome = region_at(observer_at(LLNightSky::LATITUDE), MIDNIGHT, WINTER, 5.92f, 7.41f);
+        const LLVector3 nan = region_at(observer_at(std::nan("")), MIDNIGHT, WINTER, 5.92f, 7.41f);
+        ensure("non-finite latitude: Rome's", dist_vec(rome, nan) < 1e-6f);
+    }
+
+    template<> template<>
+    void nightsky_object::test<21>()
+    {
+        set_test_name("a preset's place, or the Custom one clamped and Rome's when not a number");
+        const LLNightSky::StarHour real = LLNightSky::StarHour::RealTime;
+        // a preset ignores the typed values
+        const LLNightSky::Observer tokyo = LLNightSky::observer(LLNightSky::SkyPlace::Tokyo, 10.0, 20.0, real);
+        ensure("Tokyo latitude", tokyo.latitude == 35.676);
+        ensure("Tokyo longitude", tokyo.longitude == 139.650);
+        ensure("the hour kept", tokyo.hour == real);
+        const LLNightSky::Observer rome = LLNightSky::observer(LLNightSky::skyPlace(0), 10.0, 20.0, LLNightSky::StarHour::RegionSun);
+        ensure("Rome by default", rome.latitude == LLNightSky::LATITUDE && rome.longitude == LLNightSky::LONGITUDE);
+        ensure("region's sun kept", rome.hour == LLNightSky::StarHour::RegionSun);
+        // Custom keeps the typed values within range
+        const LLNightSky::SkyPlace custom = LLNightSky::SkyPlace::Custom;
+        LLNightSky::Observer at = LLNightSky::observer(custom, -45.5, 170.25, real);
+        ensure("custom latitude", at.latitude == -45.5);
+        ensure("custom longitude", at.longitude == 170.25);
+        at = LLNightSky::observer(custom, 95.0, -200.0, real);
+        ensure("latitude clamped", at.latitude == 90.0);
+        ensure("longitude clamped", at.longitude == -180.0);
+        at = LLNightSky::observer(custom, -1e9, 1e9, real);
+        ensure("clamped below and above", at.latitude == -90.0 && at.longitude == 180.0);
+        const F64 inf = std::numeric_limits<F64>::infinity();
+        at = LLNightSky::observer(custom, std::nan(""), inf, real);
+        ensure("non-finite latitude: Rome's", at.latitude == LLNightSky::LATITUDE);
+        ensure("non-finite longitude: Rome's", at.longitude == LLNightSky::LONGITUDE);
+        at = LLNightSky::observer(custom, -inf, std::nan(""), real);
+        ensure("non-finite again: Rome's", at.latitude == LLNightSky::LATITUDE && at.longitude == LLNightSky::LONGITUDE);
+        // the older entry point is Rome's latitude
+        LLVector3 a[3];
+        LLVector3 b[3];
+        LLNightSky::axes(MIDNIGHT, WINTER, a, real, -74.006);
+        LLNightSky::axes(MIDNIGHT, WINTER, b, observer_at(LLNightSky::LATITUDE, -74.006, real));
+        for (S32 i = 0; i < 3; ++i)
+        {
+            ensure("same as Rome's observer, axis " + std::to_string(i), a[i] == b[i]);
+        }
+    }
+
+    template<> template<>
+    void nightsky_object::test<22>()
+    {
+        set_test_name("an observer's longitude counts with the real time only");
+        // with the region's sun the longitude changes nothing
+        LLVector3 a[3];
+        LLVector3 b[3];
+        LLNightSky::axes(MIDNIGHT, WINTER, a, observer_at(45.0, 2.35));
+        LLNightSky::axes(MIDNIGHT, WINTER, b, observer_at(45.0, -74.0));
+        for (S32 i = 0; i < 3; ++i)
+        {
+            ensure("region's sun, axis " + std::to_string(i), a[i] == b[i]);
+        }
+        // in real time New York sees the sky Paris had, later by the
+        // longitude difference in sidereal time
+        F64 paris_east = 0.0;
+        F64 new_york_east = 0.0;
+        LLNightSky::placeLongitude(LLNightSky::SkyPlace::Paris, paris_east);
+        LLNightSky::placeLongitude(LLNightSky::SkyPlace::NewYork, new_york_east);
+        const LLNightSky::StarHour real = LLNightSky::StarHour::RealTime;
+        const LLNightSky::Observer paris = observer_at(45.0, paris_east, real);
+        const LLNightSky::Observer new_york = observer_at(45.0, new_york_east, real);
+        ensure("elsewhere at the same instant",
+               dist_vec(region_at(paris, MIDNIGHT, WINTER, 5.92f, 7.41f), region_at(new_york, MIDNIGHT, WINTER, 5.92f, 7.41f)) > 0.5f);
+        const F64 later = (paris_east - new_york_east) / 360.98564736629;
+        LLNightSky::axes(MIDNIGHT, WINTER, a, paris);
+        LLNightSky::axes(MIDNIGHT, WINTER + later, b, new_york);
+        for (S32 i = 0; i < 3; ++i)
+        {
+            ensure("later, axis " + std::to_string(i), dist_vec(a[i], b[i]) < 1e-4f);
+        }
+        // the Pole Star still at the latitude, whatever the hour
+        const F32 polaris = std::asin(region_at(new_york, MIDNIGHT, WINTER + later, 2.53f, 89.26f).mV[VZ]) / DEG;
+        ensure("Polaris " + std::to_string(polaris), std::fabs(polaris - 45.f) < 1.f);
     }
 }

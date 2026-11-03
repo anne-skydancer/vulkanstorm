@@ -51,6 +51,7 @@ class LLComboBox;
 class LLScrollListCtrl;
 class LLScrollListCell;
 class LLSliderCtrl;
+class LLSpinCtrl; // <Vulkanstorm/>
 class LLSD;
 class LLTextBox;
 class LLComboBox;
@@ -443,6 +444,17 @@ private:
     void callbackRenderBackendRestart(const LLSD& notification, const LLSD& response);
     void refreshRenderBackendSelector();
     // </VulkanStorm>
+
+    // <Vulkanstorm> Night sky place: a preset copies its latitude and
+    // longitude into the spinners, a spinner changed by hand makes the
+    // place Custom, and the spinners are enabled only where they count.
+    void onNightSkyPlaceChanged();
+    void onNightSkyCoordinateCommit();
+    void refreshNightSkyPlace();
+    LLSpinCtrl* mNightSkyLatitude = nullptr;
+    LLSpinCtrl* mNightSkyLongitude = nullptr;
+    boost::signals2::scoped_connection mNightSkyPlaceConnection;
+    // </Vulkanstorm>
 
     LOG_CLASS(LLPanelPreferenceGraphics);
 };
