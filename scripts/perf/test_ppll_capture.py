@@ -44,7 +44,8 @@ resolve=(root/'indra/newview/app_settings/shaders/class1/deferred/alphaOITResolv
 resolve='#version 430 core\n'+resolve[resolve.index('#extension'):].replace('/*[EXTRA_CODE_HERE]*/','')
 resolve_prog=program([(0x8B31,vertex),(0x8B30,resolve)])
 files=['class1/deferred/fullbrightF.glsl','class2/deferred/alphaF.glsl','class2/deferred/pbralphaF.glsl','class3/deferred/materialF.glsl']
-# Fragment colour (1,0,0,0.5) twice per visible pixel; with one slot the second fragment is
+# Fragment colour (1,0,0,0.5) twice per visible pixel, then once with alpha 0 (must be ignored);
+# with one slot the second fragment is
 # the only tail entry: rgb*a, a and -log2(1-a) in the capture shaders' fixed point, and its
 # depth as inverted float bits.
 TAIL_R=2048;TAIL_A=32768;TAIL_LOG=65536
@@ -59,12 +60,13 @@ layout(binding=1,rgba32ui) uniform writeonly uimage2DArray oit_slots;
 uniform int oit_slot_count;
 uniform sampler2D alpha_oit_opaque_depth;
 uniform float test_depth;
+uniform float test_alpha;
 #define OIT_TAIL_COLOR_SCALE 4096.0
 #define OIT_TAIL_ALPHA_SCALE 65536.0
 #define OIT_TAIL_LOG_SCALE   65536.0
 out vec4 color;
 '''
-    prog=program([(0x8B31,vertex),(0x8B30,declarations+helper+'\nvoid main(){oit_append(vec4(1.,0.,0.,0.5),test_depth);color=vec4(0.,1.,0.,1.);}')])
+    prog=program([(0x8B31,vertex),(0x8B30,declarations+helper+'\nvoid main(){oit_append(vec4(1.,0.,0.,test_alpha),test_depth);color=vec4(0.,1.,0.,1.);}')])
     for cycle in range(6):
         depth=(C.c_float*3)(0.25,0.5,0.75) if cycle%2==0 else (C.c_float*3)(0.75,0.5,0.25)
         bindtex(TEX2D,textures[0]);texsub(TEX2D,0,0,0,W,1,0x1902,0x1406,depth)
@@ -86,7 +88,10 @@ out vec4 color;
             use(prog);uniform(loc(prog,b'oit_slot_count'),slots);uniform(loc(prog,b'alpha_oit_opaque_depth'),0)
             # Exactly equal to the stored middle depth, testing LEQUAL precisely.
             fn('glUniform1f',None,I,C.c_float)(loc(prog,b'test_depth'),snapshot[1])
-            draw(4,0,3);draw(4,0,3);barrier(0xFFFFFFFF)
+            alpha=loc(prog,b'test_alpha');fn('glUniform1f',None,I,C.c_float)(alpha,0.5)
+            draw(4,0,3);draw(4,0,3)
+            # A third, fully transparent fragment must take no slot and leave the tail alone.
+            fn('glUniform1f',None,I,C.c_float)(alpha,0.0);draw(4,0,3);barrier(0xFFFFFFFF)
             meta=(U*(META_LAYERS*W))();bindtex(TEX2DARRAY,arrays[0]);gettex(TEX2DARRAY,0,RED_INT,UINT,meta)
             slot=(U*(SLOT_LAYERS*W*4))();bindtex(TEX2DARRAY,arrays[1]);gettex(TEX2DARRAY,0,RGBA_INT,UINT,slot)
             counts=list(meta[0:W]);tail=[list(meta[l*W:(l+1)*W]) for l in range(1,META_LAYERS)]
@@ -124,5 +129,5 @@ out vec4 color;
             bindtex(TEX2D,textures[1]);assert geterror()==0;checks+=1
     fn('glDeleteProgram',None,U)(prog)
 fn('glDeleteProgram',None,U)(resolve_prog)
-print(f'{checks} alpha OIT cases passed: four append shaders, detached depth, equality, occlusion, slot fill, tail overflow, reset, resolve colour and tail reset.')
+print(f'{checks} alpha OIT cases passed: four append shaders, detached depth, equality, occlusion, slot fill, tail overflow, zero alpha ignored, reset, resolve colour and tail reset.')
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)
