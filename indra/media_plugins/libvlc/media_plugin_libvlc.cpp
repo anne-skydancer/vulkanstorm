@@ -58,6 +58,7 @@ typedef SSIZE_T ssize_t;
 #include "llvlcspeakerfillconfig.h"
 // needed for waveOut call - see below for description
 #include <mmsystem.h>
+#include <windows.h> // <Vulkanstorm/> pluginCacheExists()
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -75,6 +76,7 @@ private:
     bool init();
 
     void initVLC();
+    static bool pluginCacheExists(); // <Vulkanstorm/> plugins/plugins.dat beside libvlc
     void playMedia();
     void resetVLC();
     void stopPlayer();
@@ -255,6 +257,37 @@ void MediaPluginLibVLC::display(void* data, void* id)
     context->parent->mFrameReady.store(true, std::memory_order_release);
 }
 
+// <Vulkanstorm> plugins/plugins.dat beside libvlc, where libvlc looks for its
+// plugins: next to this module on Windows, the working directory elsewhere
+// (VLC_PLUGIN_PATH=./plugins on macOS, SLPlugin starts in llplugin).
+bool MediaPluginLibVLC::pluginCacheExists()
+{
+#if LL_WINDOWS
+    HMODULE module = nullptr;
+    wchar_t path[MAX_PATH];
+    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCWSTR>(&MediaPluginLibVLC::pluginCacheExists), &module) &&
+        GetModuleFileNameW(module, path, MAX_PATH) > 0)
+    {
+        std::wstring dir(path);
+        const size_t slash = dir.find_last_of(L"\\/");
+        if (slash != std::wstring::npos)
+        {
+            dir.resize(slash + 1);
+        }
+        return GetFileAttributesW((dir + L"plugins\\plugins.dat").c_str()) != INVALID_FILE_ATTRIBUTES;
+    }
+#endif
+    FILE* file = fopen("plugins/plugins.dat", "rb");
+    if (!file)
+    {
+        return false;
+    }
+    fclose(file);
+    return true;
+}
+// </Vulkanstorm>
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 void MediaPluginLibVLC::initVLC()
@@ -269,13 +302,27 @@ void MediaPluginLibVLC::initVLC()
         // audio engine via the kernel's vchan mixing.
         "--aout=oss",
 #endif
+        // <Vulkanstorm> filled below when the plugin cache is missing
+        nullptr,
+        // </Vulkanstorm>
     };
 
 #if LL_DARWIN
     setenv("VLC_PLUGIN_PATH", "./plugins", 1);
 #endif
 
-    int vlc_argc = sizeof(vlc_argv) / sizeof(*vlc_argv);
+    int vlc_argc = sizeof(vlc_argv) / sizeof(*vlc_argv) - 1;
+    // <Vulkanstorm> The build writes libvlc's plugin cache (plugins.dat) next to the
+    // plugins (vlc_cache_gen.cpp). Without it libvlc opens every plugin DLL at each
+    // start, and Windows scans each one the first time: the parcel music then takes
+    // half a minute to start. When the cache is missing and the directory is
+    // writable (a per-user install, a build tree), ask libvlc to write it on this
+    // start; a plain start only reads one. A stale cache libvlc rewrites by itself.
+    if (!pluginCacheExists())
+    {
+        vlc_argv[vlc_argc++] = "--reset-plugins-cache";
+    }
+    // </Vulkanstorm>
     mLibVLC = libvlc_new(vlc_argc, vlc_argv);
 
     if (!mLibVLC)
