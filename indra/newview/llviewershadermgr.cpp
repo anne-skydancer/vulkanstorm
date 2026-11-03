@@ -954,6 +954,15 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     index_channels.push_back(-1);    shaders.push_back( make_pair( "lighting/lightAlphaMaskNonIndexedF.glsl",                   mShaderLevel[SHADER_LIGHTING] ) );
     index_channels.push_back(ch);    shaders.push_back( make_pair( "lighting/lightF.glsl",                  mShaderLevel[SHADER_LIGHTING] ) );
     index_channels.push_back(ch);    shaders.push_back( make_pair( "lighting/lightAlphaMaskF.glsl",                 mShaderLevel[SHADER_LIGHTING] ) );
+    // <FS> Vulkanstorm: alpha OIT A-buffer node encoding, under the same gate as ALPHA_OIT
+    // (LLShaderMgr::compileShader) and attached with it (LLShaderMgr::attachShaderFeatures).
+#if LL_WINDOWS || LL_LINUX
+    if (gGLManager.mGLVersion >= 4.4f)
+    {
+        index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/alphaOITPackF.glsl",               1) );
+    }
+#endif
+    // </FS>
 
     for (U32 i = 0; i < shaders.size(); i++)
     {

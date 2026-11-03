@@ -43,7 +43,10 @@ uniform int oit_mode;
 // slots. Scales must match alphaOITResolveF.glsl.
 // Capture-only depth rejection below; normal alpha shader depth behaviour is unchanged.
 layout(binding = 0, r32ui) uniform coherent uimage2DArray oit_meta;      // 0 count, 1..3 sum rgb*a, 4 sum a, 5 sum -log2(1-a), 6 ~bits(nearest z)
-layout(binding = 1, rgba32ui) uniform writeonly uimage2DArray oit_slots; // { RG16F, BA16F, depth bits, 0 }
+layout(binding = 1, rg32ui) uniform writeonly uimage2DArray oit_slots;   // { R11F_G11F_B10F premultiplied rgb, depth24 << 8 | alpha8 }
+// Node encoding: alphaOITPackF.glsl, attached to every fragment program when ALPHA_OIT is defined.
+uint oit_pack_rgb(vec3 c);
+uint oit_pack_depth_alpha(float z, float a);
 uniform int oit_slot_count;  // slots per pixel (layers of oit_slots)
 #define OIT_TAIL_COLOR_SCALE 4096.0
 #define OIT_TAIL_ALPHA_SCALE 65536.0
@@ -62,7 +65,7 @@ void oit_append(vec4 c, float z)
     if (k < uint(oit_slot_count))
     {
         imageStore(oit_slots, ivec3(p, int(k)),
-                   uvec4(packHalf2x16(rgb.rg), packHalf2x16(vec2(rgb.b, a)), floatBitsToUint(z), 0u));
+                   uvec4(oit_pack_rgb(rgb * a), oit_pack_depth_alpha(z, a), 0u, 0u));
         return;
     }
     // Slot overflow: coverage and the coverage-weighted colour average are order independent.
