@@ -2191,6 +2191,7 @@ set(viewer_APPSETTINGS_FILES
     app_settings/settings_files.xml
     app_settings/settings_per_account.xml
     app_settings/stars/stars.bin
+    app_settings/stars/milky_way.bin
     app_settings/std_bump.ini
     #app_settings/toolbars.xml  FS:AO moved to skins
     app_settings/trees.xml
