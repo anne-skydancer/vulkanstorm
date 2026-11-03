@@ -190,6 +190,16 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
         return false;
     }
 
+    // <FS> Vulkanstorm: the alpha OIT capture shaders and the resolve declare the A-buffer
+    // node pack/unpack functions; define them wherever ALPHA_OIT is defined (compileShader).
+#if LL_WINDOWS || LL_LINUX
+    if (gGLManager.mGLVersion >= 4.4f && !shader->attachFragmentObject("deferred/alphaOITPackF.glsl"))
+    {
+        return false;
+    }
+#endif
+    // </FS>
+
     if (features->hasSrgb || features->hasAtmospherics || features->calculatesAtmospherics || features->isDeferred)
     {
         if (!shader->attachFragmentObject("environment/srgbF.glsl"))
