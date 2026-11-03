@@ -12031,7 +12031,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderAlphaOITMemoryMB</key>
   <map>
     <key>Comment</key>
-    <string>Maximum memory budget in MiB for the alpha OIT A-buffer (slot array plus the per-pixel count/tail image). The slot count is reduced to fit.</string>
+    <string>Maximum memory budget in MiB for the alpha OIT A-buffer: 8 bytes per pixel per slot plus 28 bytes per pixel for the count/tail image. The slot count is reduced to fit (the default 8 slots need 92 bytes per pixel: about 182 MiB at 1080p, 324 MiB at 1440p; at 4K the default 512 MiB allows 4 slots).</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
