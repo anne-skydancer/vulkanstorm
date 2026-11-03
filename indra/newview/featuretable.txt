@@ -65,6 +65,7 @@ RenderReflectionProbeLevel  1   3
 RenderDeferred				1	1
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	2
+RenderShadowPCSS			1	1
 RenderUseStreamVBO			1	1
 RenderFSAAType			    1	2
 RenderFSAASamples			1	3
@@ -113,6 +114,7 @@ RenderTreeLODFactor			1	0
 RenderVolumeLODFactor		1	1.5
 RenderDeferredSSAO			1	0
 RenderShadowDetail			1	0
+RenderShadowPCSS			1	0
 WLSkyDetail					1	96
 RenderFSAAType  			1	0
 RenderFSAASamples			1	0
@@ -156,6 +158,7 @@ RenderTreeLODFactor			1	0.5
 RenderVolumeLODFactor		1	2.0
 RenderDeferredSSAO			1	0
 RenderShadowDetail			1	0
+RenderShadowPCSS			1	0
 WLSkyDetail					1	96
 RenderFSAAType  			1	0
 RenderFSAASamples			1	0
@@ -197,6 +200,7 @@ RenderTreeLODFactor			1	0.5
 RenderVolumeLODFactor		1	2.0
 RenderDeferredSSAO			1	0
 RenderShadowDetail			1	0
+RenderShadowPCSS			1	0
 WLSkyDetail					1	96
 RenderFSAAType  			1	1
 RenderFSAASamples			1	1
@@ -239,6 +243,7 @@ RenderTreeLODFactor			1	0.5
 RenderVolumeLODFactor		1	2.0
 RenderDeferredSSAO			1	0
 RenderShadowDetail			1	0
+RenderShadowPCSS			1	0
 WLSkyDetail					1	96
 RenderFSAAType  			1	1
 RenderFSAASamples			1	1
@@ -281,6 +286,7 @@ RenderTreeLODFactor			1	0.5
 RenderVolumeLODFactor		1	2.0
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	1
+RenderShadowPCSS			1	0
 WLSkyDetail					1	96
 RenderFSAAType  			1	2
 RenderFSAASamples			1	2
@@ -323,6 +329,7 @@ RenderTreeLODFactor			1	0.5
 RenderVolumeLODFactor		1	2.0
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	2
+RenderShadowPCSS			1	0
 WLSkyDetail					1	96
 RenderFSAAType  			1	2
 RenderFSAASamples			1	2
@@ -366,6 +373,7 @@ WindLightUseAtmosShaders	1	1
 WLSkyDetail					1	128
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	2
+RenderShadowPCSS			1	1
 RenderFSAAType  			1	2
 RenderFSAASamples			1	3
 RenderReflectionsEnabled    1   1
@@ -389,6 +397,7 @@ RenderReflectionProbeCount  1   256
 //
 list Unknown
 RenderShadowDetail			1	0
+RenderShadowPCSS			1	0
 RenderDeferredSSAO			1	0
 RenderMirrors				1	0
 RenderDisableVintageMode           1   0
@@ -412,6 +421,7 @@ RenderTerrainDetail 		1	0
 RenderTransparentWater      1   0
 RenderDeferredSSAO			0	0
 RenderShadowDetail			0	0
+RenderShadowPCSS			0	0
 RenderReflectionProbeDetail	0	-1
 RenderMirrors				0	0
 RenderDisableVintageMode           1   0
