@@ -3,7 +3,7 @@
 Times a full-screen pass that evaluates night_sky() for every pixel with GL_TIME_ELAPSED
 queries, for two versions of the shader:
   * "old" -- the procedural gradient-noise Milky Way, skyF.glsl from git ref
-             NIGHT_SKY_BENCH_OLD_REF (default origin/vkstorm-devel)
+             NIGHT_SKY_BENCH_OLD_REF (default adbb322e05, the last devel commit with the noise)
   * "new" -- the Milky Way map of milky_way.bin (Tycho-2), skyF.glsl from this working tree
 Each version runs with the Milky Way on (night_sky_params.y 1) and off (0), so the Milky Way's
 own cost is the difference; the stars are the real catalogue (app_settings/stars/stars.bin),
@@ -28,7 +28,8 @@ exec(compile(bootstrap, 'gl_test_bootstrap', 'exec'))
 root = Path(__file__).resolve().parents[2]
 W = int(os.environ.get('NIGHT_SKY_BENCH_W', 2560)); H = int(os.environ.get('NIGHT_SKY_BENCH_H', 1440))
 FRAMES = int(os.environ.get('NIGHT_SKY_BENCH_FRAMES', 20)); WARMUP = 5
-OLD_REF = os.environ.get('NIGHT_SKY_BENCH_OLD_REF', 'origin/vkstorm-devel')
+# The last devel commit with the procedural Milky Way (before the map): an immutable baseline.
+OLD_REF = os.environ.get('NIGHT_SKY_BENCH_OLD_REF', 'adbb322e05')
 SKY = 'indra/newview/app_settings/shaders/class1/deferred/skyF.glsl'
 STARS = root / 'indra/newview/app_settings/stars'
 
