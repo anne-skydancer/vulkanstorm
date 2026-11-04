@@ -43,11 +43,17 @@ need to wait for LL or Firestorm; neither has moved (verified, see below).
    value. With OpenSSL 3 and no legacy provider the cipher fetch fails
    (verified with the OpenSSL 3.5.9 CLI, below). Decryption then yields
    garbage, the viewer shows `CorruptedProtectedDataStore`, and the next
-   save replaces the file. The write path would also write
-   `encrypted_length` bytes from an uninitialised variable. Every
-   remembered login, MFA token and saved grid credential would be lost.
+   save replaces the file. On the write path `EVP_EncryptUpdate` sets
+   `*outl = 0` before it fails (`crypto/evp/evp_enc.c`, 3.5.4), so the
+   writer replaces the store with a file holding only the 16-byte salt
+   header. Every remembered login, MFA token and saved grid credential
+   would be lost. Checking return values is not enough on its own: an
+   exception inside `_writeProtectedData()`'s first `try` deletes the
+   temporary file but falls through to the replace step, which removes the
+   original store and then fails the rename (`llsechandler_basic.cpp:1472-1500`).
    Mitigation: RC4 through the legacy provider in a private
-   `OSSL_LIB_CTX`, return values checked, a compatibility test as a gate.
+   `OSSL_LIB_CTX`, return values checked, a write-error path that returns
+   before the replace step, and a compatibility test as a gate.
 2. **libcurl 7.54.1 against OpenSSL 3 is unproven here (medium).** The
    viewer depends on LL's pipelining-capable curl 7.54.1; newer curl (7.62
    and later) dropped HTTP/1.1 pipelining. Its OpenSSL backend guards its
@@ -92,7 +98,8 @@ gives byte-identical output, while OpenSSL 3.5.9 with only the default
 provider refuses (`Error setting cipher RC4 ... unsupported`). No migration
 step is needed if RC4 stays readable. Moving to a stronger format, which
 Alchemy has done (ChaCha20 with an RC4 read fallback; design reference only),
-is a separate decision: a downgraded viewer could not read the new file.
+is a separate decision: a downgraded viewer could not read the new file, and
+the RC4 read fallback keeps the legacy provider (or a separate RC4) in use.
 
 ## 1. Where OpenSSL is used
 
@@ -170,7 +177,7 @@ Headers checked at tag `openssl-3.5.4`.
 | `ENGINE_load_builtin_engines`, `ENGINE_by_id("rdrand")`, `ENGINE_set_default` (`llsecapi.cpp:49-53`) | `OSSL_DEPRECATEDIN_3_0`: a build error under `/WX`/`-Werror`; engines are removed in 4.0 (`CHANGES.md` at `openssl-4.0.0`) | Delete. The 3.x DRBG seeds from the OS and uses RDRAND/RDSEED as an entropy source where present; feeding raw RDRAND output as the RAND method was never better | -15 lines |
 | `ERR_load_crypto_strings`, `OpenSSL_add_all_algorithms` (`llsecapi.cpp:45-46`) | macros deprecated since 1.1.0; init is automatic | Delete, or one `OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, nullptr)` if a config file is ever wanted | -2 |
 | `EVP_rc4()` + `EVP_DecryptInit`/`EVP_EncryptInit`/`*Update` (`llsechandler_basic.cpp:1362-1380`, `:1440-1468`) | RC4 lives in the legacy provider only; unchecked returns | `OSSL_LIB_CTX_new()` + `OSSL_PROVIDER_load(ctx, "legacy")` + `EVP_CIPHER_fetch(ctx, "RC4", nullptr)` + `EVP_CipherInit_ex2`, check every return, throw `LLProtectedDataException` on failure, append `decrypted_length` rather than `gcount()` | about 60 to 80 changed |
-| `X509_get_notAfter`/`X509_get_notBefore` (`llsechandler_basic.cpp:183-184`) | macros under `OPENSSL_NO_DEPRECATED_1_1_0` | `X509_get0_notAfter`/`X509_get0_notBefore` | 2 |
+| `X509_get_notAfter`/`X509_get_notBefore` (`llsechandler_basic.cpp:183-184`) | macros under `OPENSSL_NO_DEPRECATED_1_1_0` | `X509_get0_notAfter`/`X509_get0_notBefore`, which return `const ASN1_TIME*`: also make `cert_date_from_asn1_time` take `const ASN1_TIME*` (`llsechandler_basic.h:44`, `llsechandler_basic.cpp:441`) | 4 |
 | `CRYPTO_num_locks`, `CRYPTO_set_locking_callback`, `CRYPTO_THREADID_*` (`llcrashlogger.cpp:771-818`) | no-op macros since 1.1.0, still defined in 3.5 | Delete the locking code (3.x is thread-safe internally) | about -40 |
 | `HMAC(EVP_sha1(), ...)` (`exoflickr.cpp:272`) | not deprecated (only `HMAC_CTX_*` are) | none needed; `EVP_Q_mac` if wanted | 0 |
 | `RAND_bytes` (`llsechandler_basic.cpp:1431`, `llscripteditorws.cpp:3023`) | unchanged | check the return at `:1431` | 1 |
@@ -249,8 +256,13 @@ viewer links them already), and on Linux `-ldl -pthread` (also present).
 - **FreeBSD** (`scripts/ci/freebsd`): image qualification only; it links the
   system curl, which uses base-system OpenSSL 3. No viewer build there yet.
 - **macOS:** `darwin64` entries exist in `autobuild.xml` but Vulkanstorm CI
-  does not build macOS. Build the package for windows64 and linux64; keep
-  `darwin64` pointing at the LL 1.1.1w package or drop it.
+  does not build macOS. The viewer change (`OSSL_LIB_CTX`, provider
+  loading, `EVP_CIPHER_fetch`) is OpenSSL 3 only and lives in shared code,
+  so leaving `darwin64` on LL's 1.1.1w package would break a macOS build.
+  Either build `darwin64` packages too (the 3p-openssl and 3p-curl scripts
+  already support it), or record that macOS builds are unsupported and
+  drop the `darwin64` entries. A dual 1.1.1/3 code path is not worth its
+  maintenance.
 
 ## 5. Package availability
 
@@ -310,7 +322,9 @@ Each stage has a gate; stop at a failed gate.
 2. **Viewer change** on `codex/openssl3` from `vkstorm-devel`:
    `autobuild.xml`, `OpenSSL.cmake` if needed, `llsecapi.cpp` (drop
    ENGINE/init), `llsechandler_basic.cpp` (RC4 via private legacy context,
-   checked returns, `get0_` accessors), `llcrashlogger.cpp` (drop locking),
+   checked returns, a write-error path that returns before replacing the
+   store, `get0_` accessors with a const `cert_date_from_asn1_time`),
+   `llcrashlogger.cpp` (drop locking),
    remove the dead `wrapper.sh` preload.
    *Gate:* RelWithDebInfo builds with `/WX` and `-Werror` on Windows and
    Linux and the staged viewer runs.
@@ -318,8 +332,10 @@ Each stage has a gate; stop at a failed gate.
    *Gate:* (a) `llsechandler_basic_test` test 3 passes; (b) a new test
    reads a `bin_conf.dat` fixture written by the current 1.1.1 viewer and
    writes it back, and the 1.1.1 viewer reads the result (round trip in
-   both directions, so a downgrade keeps credentials); (c) an injected
-   cipher-fetch failure throws instead of writing garbage; (d) manual: a
+   both directions, so a downgrade keeps credentials); (c) injected
+   failures (cipher fetch on read, cipher init or update on write, file
+   write) leave the existing `bin_conf.dat` byte-identical and raise
+   instead of writing; (d) manual: a
    profile with saved SL and OpenSim logins, including MFA, logs in after
    the upgrade without re-entering passwords.
 4. **TLS against servers.**
@@ -337,8 +353,10 @@ Each stage has a gate; stop at a failed gate.
    no GPL-incompatible OpenSSL. *Gate:* each line's CI, then the owner's
    in-world check after release.
 7. **Later, separate:** decide whether to move the credential store to a
-   modern AEAD format with an RC4 read fallback (which would drop the legacy
-   provider), and whether to move to curl 8.x with HTTP/2 (its own study:
+   modern AEAD format with an RC4 read fallback. The fallback still needs
+   RC4, so the legacy provider stays until RC4 compatibility is retired,
+   unless a small self-contained RC4 replaces it for the read path. Also
+   decide whether to move to curl 8.x with HTTP/2 (its own study:
    pipelining, error-code merge, Rust `vkstorm-http` parity).
 
 ## Effort
@@ -347,7 +365,7 @@ Each stage has a gate; stop at a failed gate.
 |---|---|
 | 1. OpenSSL package | 1 to 2 days |
 | 1. curl rebuild (more if 7.54.1 needs source patches) | 1 to 3 days |
-| 2. Viewer change | 1 day |
+| 2. Viewer change | 1 to 1.5 days |
 | 3. Credential tests and fixtures | 1 day |
 | 4. Server tests and timing | 1 to 2 days |
 | 5. CI | 0.5 day |
