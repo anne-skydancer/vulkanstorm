@@ -36,6 +36,11 @@
 #include "lldir.h"
 #include "llfile.h"
 #include "llfontgl.h"
+#include "llapp.h"
+
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 
 #include <boost/regex.hpp>
 
@@ -110,11 +115,58 @@ S32 LLUIImage::getHeight() const
 
 namespace
 {
+    // Read and replace LLDir's protected read-only data directory, which
+    // LL_PATH_FONTS is derived from. Never instantiated.
+    struct LLDirAppRODataDir : public LLDir
+    {
+        static std::string LLDir::* member() { return &LLDirAppRODataDir::mAppRODataDir; }
+    };
+
+    // Points gDirUtilp's LL_PATH_FONTS at another directory for its lifetime.
+    class ScopedFontsLookup
+    {
+    public:
+        ScopedFontsLookup(const std::string& app_ro_data_dir):
+            mSaved(gDirUtilp->*LLDirAppRODataDir::member())
+        {
+            gDirUtilp->*LLDirAppRODataDir::member() = app_ro_data_dir;
+        }
+        ~ScopedFontsLookup()
+        {
+            gDirUtilp->*LLDirAppRODataDir::member() = mSaved;
+        }
+        ScopedFontsLookup(const ScopedFontsLookup&) = delete;
+        ScopedFontsLookup& operator=(const ScopedFontsLookup&) = delete;
+
+    private:
+        std::string mSaved;
+    };
+
+    // Removes a directory tree on scope exit.
+    struct ScopedRemoveAll
+    {
+        std::filesystem::path mPath;
+        ~ScopedRemoveAll()
+        {
+            std::error_code ec;
+            std::filesystem::remove_all(mPath, ec);
+        }
+    };
+
+    std::string utf8_path(const std::filesystem::path& path)
+    {
+        const auto u8 = path.u8string();
+        return std::string(u8.begin(), u8.end());
+    }
+
     // LLUrlRegistry::findUrl() builds LLUrlMatch objects, whose LLStyle::Params
     // default to LLFontGL::getFontMonospace(); that dereferences the font
     // registry, which only LLFontGL::initClass() creates. Initialise it from
     // an empty fonts.xml, without GL textures, so that every font lookup
-    // returns NULL instead of touching font files.
+    // returns NULL instead of touching font files. The file lives in a
+    // directory unique to this process under the system temporary directory,
+    // and LL_PATH_FONTS points there only while initClass() reads it, so the
+    // fixture writes nothing into the application or user directories.
     void initEmptyFontRegistry()
     {
         static bool initialized = false;
@@ -122,26 +174,44 @@ namespace
         {
             return;
         }
-        initialized = true;
 
-        const std::string fonts_dir = gDirUtilp->getExpandedFilename(LL_PATH_FONTS, "");
-        const bool created_dir = !LLFile::isdir(fonts_dir);
-        if (created_dir)
+        namespace fs = std::filesystem;
+        std::error_code ec;
+        const fs::path temp_root = fs::temp_directory_path(ec);
+        if (ec)
         {
-            LLFile::mkdir(fonts_dir);
+            throw tut::failure("llurlentry fixture: no temporary directory: " + ec.message());
         }
-        const std::string fonts_file = "llurlentry_test_fonts.xml";
-        const std::string fonts_path = gDirUtilp->add(fonts_dir, fonts_file);
+        const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
+        const fs::path app_dir = temp_root / ("llurlentry_test_" + std::to_string(LLApp::getPid()) +
+                                              "_" + std::to_string(ticks));
+        const fs::path fonts_dir = app_dir / "fonts";
+        if (!fs::create_directories(fonts_dir, ec) || ec)
         {
-            llofstream out(fonts_path);
+            throw tut::failure("llurlentry fixture: cannot create " + utf8_path(fonts_dir) +
+                               (ec ? ": " + ec.message() : std::string(": already exists")));
+        }
+        ScopedRemoveAll cleanup{ app_dir };
+
+        const std::string fonts_file = "fonts.xml";
+        {
+            std::ofstream out(fonts_dir / fonts_file, std::ios::binary);
             out << "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>" "<fonts></fonts>";
+            out.close();
+            if (!out)
+            {
+                throw tut::failure("llurlentry fixture: cannot write " + utf8_path(fonts_dir / fonts_file));
+            }
         }
-        LLFontGL::initClass(96.f, 1.f, 1.f, gDirUtilp->getAppRODataDir(), fonts_file, 0.f, false);
-        LLFile::remove(fonts_path);
-        if (created_dir)
+
+        ScopedFontsLookup fonts_lookup(utf8_path(app_dir));
+        const std::string fonts_path = gDirUtilp->getExpandedFilename(LL_PATH_FONTS, "", fonts_file);
+        if (!LLFile::isfile(fonts_path))
         {
-            LLFile::rmdir(fonts_dir);
+            throw tut::failure("llurlentry fixture: LL_PATH_FONTS does not reach " + fonts_path);
         }
+        LLFontGL::initClass(96.f, 1.f, 1.f, utf8_path(app_dir), fonts_file, 0.f, false);
+        initialized = true;
     }
 }
 
