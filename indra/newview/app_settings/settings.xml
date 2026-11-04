@@ -11954,7 +11954,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderAlphaOITMemoryMB</key>
   <map>
     <key>Comment</key>
-    <string>Maximum memory budget in MiB for the alpha OIT A-buffer (slot array plus the per-pixel count/tail image). The slot count is reduced to fit.</string>
+    <string>Maximum memory budget in MiB for the alpha OIT A-buffer: 8 bytes per pixel per slot plus 28 bytes per pixel for the count/tail image. The slot count is reduced to fit (the default 8 slots need 92 bytes per pixel: about 182 MiB at 1080p, 324 MiB at 1440p; at 4K the default 512 MiB allows 4 slots).</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12399,6 +12399,28 @@ Change of this parameter will affect the layout of buttons in notification toast
     <real>1.4</real>
     <key>Backup</key>
     <integer>0</integer>
+  </map>
+  <key>RenderShadowPCSS</key>
+  <map>
+    <key>Comment</key>
+    <string>Soft shadows (PCSS): filter the deferred sun and projector shadows with a rotated Poisson kernel and a receiver-plane bias, denoised by the shadow blur. Needs RenderShadowDetail above 0.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>RenderShadowPCSSLightSize</key>
+  <map>
+    <key>Comment</key>
+    <string>Soft shadows (PCSS): multiplier of the shadowing light's angular size, which is the physical sun (0.53 degrees) times the sky's sun scale; the moon uses the same size.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>1.0</real>
   </map>
   <key>RenderShadowBlurSamples</key>
   <map>
