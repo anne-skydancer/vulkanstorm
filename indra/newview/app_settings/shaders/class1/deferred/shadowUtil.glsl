@@ -301,7 +301,9 @@ float pcssSunContactShadow(sampler2DShadow shadowMap, sampler2D depthMap, mat4 m
     float z_blocker = pcssBlockerDepth(depthMap, c, z_bias, grad, search, rot);
     if (z_blocker < 0.0)
     {
-        return 1.0; // no blocker: lit
+        // no blocker in the search: one comparison tap at the centre still catches a caster
+        // thinner than the search taps' spacing inside the bilinear footprint
+        return texture(shadowMap, vec3(c.xy, c.z + z_bias));
     }
 
     float w_world = max(c.z - z_blocker, 0.0) / max(s_z, 1.0e-8) * shadow_light_size;
@@ -344,7 +346,9 @@ float pcssSpotContactShadow(sampler2DShadow shadowMap, sampler2D depthMap, mat4 
     float z_blocker = pcssBlockerDepth(depthMap, c, z_bias, grad, search, rot);
     if (z_blocker < 0.0)
     {
-        return 1.0; // no blocker: lit
+        // no blocker in the search: one comparison tap at the centre still catches a caster
+        // thinner than the search taps' spacing inside the bilinear footprint
+        return texture(shadowMap, vec3(c.xy, c.z + z_bias));
     }
 
     // along the ray eye + s (pos - eye): w = s d_r and z = z_eye + s (stc.z - z_eye); z / w = z_blocker
