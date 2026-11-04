@@ -628,7 +628,7 @@ if stoch_rmse:
           f'stoch: RMSE decreases with S (sum over {len(noisy)} noisy scenes {sums[0]:.1f} > {sums[1]:.1f} > {sums[2]:.1f}'+(f'; not in {", ".join(bad)}' if bad else '')+')')
     worst=max(r['alpha'] for r in stoch_rmse.values())
     check(worst<=1/255,f'stoch: total alpha matches the exact 1 - prod(1 - a) (max error {worst*255:.3f}/255 <= 1/255)')
-if 'slots' in IMPLS:
+if 'slots' in IMPLS and 'OIT_BENCH_SCENES' not in os.environ:
     check(bool(tail_scenes),f'slots: the tail path is exercised ({", ".join(tail_scenes) or "no scene past 8 slots"})')
 if 'stoch' in IMPLS and 'slots' in IMPLS:
     print('stage 1 gates (info, not checks):')
