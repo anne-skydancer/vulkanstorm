@@ -6,6 +6,7 @@ English item order must match the enum, and translations may only relabel
 items the English file defines.
 """
 from pathlib import Path
+import os
 import re
 import shutil
 import subprocess
@@ -133,7 +134,16 @@ class GlodRetiredTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('git') and (ROOT / '.git').exists(), 'needs a git checkout')
     def test_diff_whitespace(self):
-        result = subprocess.run(['git', '-C', str(ROOT), 'diff', '--check'], capture_output=True, text=True)
+        # CI checks out the PR merge commit and sets GLOD_DIFF_BASE to its first
+        # parent (the base tip), so the PR's own changes are checked; a clean
+        # checkout's working-tree diff would always be empty. Locally, without
+        # the variable, the uncommitted changes are checked.
+        base = os.environ.get('GLOD_DIFF_BASE')
+        command = ['git', '-C', str(ROOT), 'diff', '--check']
+        if base:
+            command += [base, 'HEAD']
+        command += ['--', *ACTIVE_PATHS, 'scripts/tests/test_glod_retired.py']
+        result = subprocess.run(command, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
