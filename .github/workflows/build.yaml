@@ -384,7 +384,7 @@ jobs:
             INTEGRATION_TEST_llinventory_parity INTEGRATION_TEST_llinvfetch_parity \
             INTEGRATION_TEST_llinventorymodel_parity INTEGRATION_TEST_llaisupdate_parity \
             INTEGRATION_TEST_llinventory_task_oracle INTEGRATION_TEST_llinventory_offer_oracle \
-            llprimitive_tests INTEGRATION_TEST_llnightsky llinventory_tool
+            llprimitive_tests INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition llinventory_tool
 
       # The keep-or-port numbers of the inventory rung (doc/rust_port.md, R1):
       # the frozen C++ oracle against the viewer's Rust-backed classes in the
