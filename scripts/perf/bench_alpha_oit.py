@@ -374,7 +374,9 @@ if 'stoch' in IMPLS:
     activetex(0x84C0);bindtex(TEX2D,depth);bindfbo(0x8D40,fbo)
     stoch_progs={k:program([(0x8B31,STOCH_VERTEX),(0x8B30,src)]) for k,src in
                  (('T',STOCH_TOTAL),('D',STOCH_DEPTH),('A',STOCH_ACCUM),('seed',STOCH_SEED),('C',STOCH_COMPOSITE))}
-    stoch_queries=(U*12)();genq(12,stoch_queries)
+    # one query for T, one for C, and a D/A pair per iteration; stoch_plan() may fall back to
+    # one hardware sample, so S = 16 can take up to 16 iterations
+    STOCH_QUERIES=2+2*max(STOCH_RMSE_SAMPLES);stoch_queries=(U*STOCH_QUERIES)();genq(STOCH_QUERIES,stoch_queries)
     for s in STOCH_RMSE_SAMPLES: stoch_plan(s)
     assert geterror()==0
 def stoch_summary():
