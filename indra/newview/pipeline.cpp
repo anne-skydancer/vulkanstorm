@@ -200,6 +200,8 @@ F32 LLPipeline::CameraFocalLength;
 F32 LLPipeline::CameraFieldOfView;
 F32 LLPipeline::RenderShadowNoise;
 F32 LLPipeline::RenderShadowBlurSize;
+bool LLPipeline::RenderShadowPCSS;          // <Vulkanstorm/> PCSS
+F32 LLPipeline::RenderShadowPCSSLightSize;  // <Vulkanstorm/> PCSS
 F32 LLPipeline::RenderSSAOScale;
 U32 LLPipeline::RenderSSAOMaxScale;
 F32 LLPipeline::RenderSSAOFactor;
@@ -625,6 +627,8 @@ void LLPipeline::init()
     connectRefreshCachedSettingsSafe("CameraFieldOfView");
     connectRefreshCachedSettingsSafe("RenderShadowNoise");
     connectRefreshCachedSettingsSafe("RenderShadowBlurSize");
+    connectRefreshCachedSettingsSafe("RenderShadowPCSS");          // <Vulkanstorm/> PCSS
+    connectRefreshCachedSettingsSafe("RenderShadowPCSSLightSize"); // <Vulkanstorm/> PCSS
     connectRefreshCachedSettingsSafe("RenderSSAOScale");
     connectRefreshCachedSettingsSafe("RenderSSAOMaxScale");
     connectRefreshCachedSettingsSafe("RenderSSAOFactor");
@@ -1278,6 +1282,8 @@ void LLPipeline::refreshCachedSettings()
     CameraFieldOfView = gSavedSettings.getF32("CameraFieldOfView");
     RenderShadowNoise = gSavedSettings.getF32("RenderShadowNoise");
     RenderShadowBlurSize = gSavedSettings.getF32("RenderShadowBlurSize");
+    RenderShadowPCSS = gSavedSettings.getBOOL("RenderShadowPCSS");                    // <Vulkanstorm/> PCSS
+    RenderShadowPCSSLightSize = gSavedSettings.getF32("RenderShadowPCSSLightSize");  // <Vulkanstorm/> PCSS
     RenderSSAOScale = gSavedSettings.getF32("RenderSSAOScale");
     RenderSSAOMaxScale = gSavedSettings.getU32("RenderSSAOMaxScale");
     RenderSSAOFactor = gSavedSettings.getF32("RenderSSAOFactor");
@@ -8003,7 +8009,8 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 
 // <FS> Vulkanstorm: alpha order-independent transparency (image-array A-buffer) ----
 // The capture pass stores every normal-alpha fragment into a fixed per-pixel slot array held
-// in an RGBA32UI 2D-array image (one layer per slot). A per-pixel atomic count in layer 0 of
+// in an RG32UI 2D-array image (one layer per slot, 8 bytes: R11F_G11F_B10F premultiplied
+// colour, 24-bit depth and 8-bit alpha; alphaOITPackF.glsl). A per-pixel atomic count in layer 0 of
 // an R32UI 2D-array image hands out the slots; its remaining layers accumulate an
 // order-independent tail for fragments that arrive after the last slot. compositeAlphaOIT()
 // depth-sorts each pixel's slots and composites them over the tail onto screen.
@@ -8017,7 +8024,7 @@ namespace
 {
     constexpr U32 OIT_META_LAYERS = 7;    // count + 5 tail accumulators + nearest tail depth (see alphaOITResolveF.glsl)
     constexpr U64 OIT_META_BYTES  = OIT_META_LAYERS * sizeof(U32);
-    constexpr U64 OIT_SLOT_BYTES  = 4 * sizeof(U32);  // one RGBA32UI texel per slot
+    constexpr U64 OIT_SLOT_BYTES  = 2 * sizeof(U32);  // one RG32UI texel per slot
     constexpr U32 OIT_MAX_SLOTS   = 32;   // OIT_MAX_SLOTS in alphaOITResolveF.glsl
 }
 
@@ -8104,7 +8111,7 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
     // Per-pixel count + tail accumulators (cleared each frame) and the slot array (never cleared:
     // the count bounds what the resolve reads).
     make_array(mAlphaOITMeta, GL_R32UI, OIT_META_LAYERS);
-    make_array(mAlphaOITSlots, GL_RGBA32UI, slots);
+    make_array(mAlphaOITSlots, GL_RG32UI, slots);
     glBindTexture(GL_TEXTURE_2D_ARRAY, previous_texture);
     const U32 zero = 0;
     glClearTexImage(mAlphaOITMeta, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
@@ -8168,7 +8175,7 @@ bool LLPipeline::beginAlphaOITCapture()
     // shader atomics while the texture is still bound as an image), then order those writes
     // before the API clear, including when reusing unchanged allocations.
     glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_WRITE, GL_R32UI);
-    glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32UI);
+    glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RG32UI);
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT);
 
     // Zero the per-pixel counts (layer 0). The tail layers are written only by overflowing
@@ -8191,7 +8198,7 @@ bool LLPipeline::beginAlphaOITCapture()
 
     // bind storage: meta (unit 0, rw, layered) and slots (unit 1, write, layered)
     glBindImageTexture(0, mAlphaOITMeta, 0, GL_TRUE, 0, GL_READ_WRITE, GL_R32UI);
-    glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32UI);
+    glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RG32UI);
 
     // Every visible capture fragment is stored (slot or tail) and discards in the shader;
     // there is no pool to exhaust, so no fragment falls through to legacy blending.
@@ -8282,7 +8289,7 @@ void LLPipeline::compositeAlphaOIT()
     // meta image once more on unit 2 as the write-only binding through which the resolve zeroes
     // the tail layers it consumed (alphaOITResolveF.glsl: oit_meta / oit_slots / oit_meta_clear).
     glBindImageTexture(0, mAlphaOITMeta, 0, GL_TRUE, 0, GL_READ_ONLY, GL_R32UI);
-    glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32UI);
+    glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RG32UI);
     glBindImageTexture(2, mAlphaOITMeta, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32UI);
 
     mScreenTriangleVB->setBuffer();
@@ -8293,7 +8300,7 @@ void LLPipeline::compositeAlphaOIT()
     gAlphaOITResolveProgram.unbind();
     // Leave no OIT texture bound to an image unit for the rest of the frame (see beginAlphaOITCapture()).
     glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_R32UI);
-    glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32UI);
+    glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RG32UI);
     glBindImageTexture(2, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32UI);
 
     // Restore the state the rest of the frame expects. compositeAlphaOIT() is appended to
@@ -9478,6 +9485,38 @@ void LLPipeline::bindShadowMaps(LLGLSLShader& shader)
     }
 }
 
+// <Vulkanstorm> PCSS: bind (or release) shadowDepth0/1/4/5, the same depth maps as shadowMap0/1/4/5
+// on their own units with the depth fetch sampler, so the shader can read raw depth there while
+// the compare sampler stays on shadowMapN. Programs without these uniforms are left untouched.
+void LLPipeline::bindShadowDepthFetch(LLGLSLShader& shader, bool bind)
+{
+    static const S32 maps[4] = { 0, 1, 4, 5 };
+    const U32 sampler = bind ? gGL.getDepthFetchSampler() : 0;
+    for (S32 k = 0; k < 4; ++k)
+    {
+        const S32 uniform = LLShaderMgr::DEFERRED_SHADOW_DEPTH0 + k;
+        if (bind)
+        {
+            LLRenderTarget* target = maps[k] < 4 ? getSunShadowTarget(maps[k]) : getSpotShadowTarget(maps[k] - 4);
+            const S32 channel = target ? shader.enableTexture(uniform) : -1;
+            if (channel > -1)
+            {
+                gGL.getTexUnit(channel)->bind(target, true);
+                gGL.getTexUnit(channel)->bindSampler(sampler);
+            }
+        }
+        else
+        {
+            const S32 channel = shader.disableTexture(uniform);
+            if (channel > -1)
+            {
+                gGL.getTexUnit(channel)->bindSampler(0);
+            }
+        }
+    }
+}
+// </Vulkanstorm>
+
 void LLPipeline::bindDeferredShaderFast(LLGLSLShader& shader)
 {
     if (shader.mCanBindFast)
@@ -9798,18 +9837,46 @@ void LLPipeline::renderDeferredLighting()
                                               (GLfloat)deferred_light_target->getWidth(),
                                               (GLfloat)deferred_light_target->getHeight());
 
+                // <Vulkanstorm> PCSS: the shadowing light's angular size, L = 2 tan(half angle):
+                // the physical sun (0.53 degrees) times the sky's sun scale times
+                // RenderShadowPCSSLightSize; the moon uses the same size
+                if (RenderShadowPCSS && !gCubeSnapshot)
+                {
+                    static const F32 sun_angular_size = 2.f * tanf(0.5f * 0.53f * DEG_TO_RAD);
+                    LLSettingsSky::ptr_t sky = LLEnvironment::instance().getCurrentSky();
+                    const F32 sun_scale = sky ? sky->getSunScale() : 1.f;
+                    sun_shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE, sun_angular_size * sun_scale * RenderShadowPCSSLightSize);
+                }
+                // the blocker search reads cascades 0-1 and both spot maps a second time as
+                // plain depth, through a sampler object (only the PCSS sun program has these units)
+                const bool pcss_depth_fetch = RenderShadowPCSS && !gCubeSnapshot && gGLManager.mGLVersion >= 3.29f;
+                if (pcss_depth_fetch)
+                {
+                    bindShadowDepthFetch(sun_shader, true);
+                }
+                // </Vulkanstorm>
+
                 {
                     LLGLDisable   blend(GL_BLEND);
                     LLGLDepthTest depth(GL_TRUE, GL_FALSE, GL_ALWAYS);
                     mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
                 }
 
+                if (pcss_depth_fetch)
+                {
+                    bindShadowDepthFetch(sun_shader, false); // <Vulkanstorm/> PCSS: release the units and the sampler
+                }
                 unbindDeferredShader(sun_shader);
             }
             deferred_light_target->flush();
         }
 
-        if (RenderDeferredSSAO && !gCubeSnapshot)
+        // <Vulkanstorm> PCSS: the blur is the denoiser of the rotated shadow kernel, so it runs
+        // without SSAO too, and a blur size of 0 skips both passes. Unchanged with PCSS off.
+        const bool pcss_shadows = RenderShadowPCSS && RenderShadowDetail > 0;
+        const bool blur_light_map = pcss_shadows ? RenderShadowBlurSize > 0.f : RenderDeferredSSAO;
+        if (blur_light_map && !gCubeSnapshot)
+        // </Vulkanstorm>
         {
             // soften direct lighting lightmap
             LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("renderDeferredLighting - soften shadow");

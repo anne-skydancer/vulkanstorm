@@ -315,6 +315,7 @@ public:
     // bind shadow maps
     // if setup is true, wil lset texture compare mode function and filtering options
     void bindShadowMaps(LLGLSLShader& shader);
+    void bindShadowDepthFetch(LLGLSLShader& shader, bool bind); // <Vulkanstorm/> PCSS raw depth units
     void bindDeferredShaderFast(LLGLSLShader& shader);
     void bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_target = nullptr, LLRenderTarget* depth_target = nullptr);
     void setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep);
@@ -775,7 +776,7 @@ public:
     // (uint, 0 = none). Allocated at main-view render resolution; see beginAlphaOITCapture().
     LLRenderTarget mAlphaOITOpaqueDepth; // detached per-frame depth snapshot
     U32 mAlphaOITMeta = 0;      // R32UI 2D array: layer 0 per-pixel count, layers 1..5 tail accumulators, 6 nearest tail depth
-    U32 mAlphaOITSlots = 0;     // RGBA32UI 2D array: one layer per slot = { RG16F, BA16F, depth, 0 }
+    U32 mAlphaOITSlots = 0;     // RG32UI 2D array: one layer per slot = { R11F_G11F_B10F premultiplied rgb, depth24 << 8 | alpha8 }
     U32 mAlphaOITWidth = 0;
     U32 mAlphaOITHeight = 0;
     U32 mAlphaOITSlotCount = 0; // layers of mAlphaOITSlots
@@ -1158,6 +1159,8 @@ public:
     static F32 CameraFieldOfView;
     static F32 RenderShadowNoise;
     static F32 RenderShadowBlurSize;
+    static bool RenderShadowPCSS;          // <Vulkanstorm/> PCSS soft shadows
+    static F32 RenderShadowPCSSLightSize;  // <Vulkanstorm/> PCSS light size multiplier
     static F32 RenderSSAOScale;
     static U32 RenderSSAOMaxScale;
     static F32 RenderSSAOFactor;
