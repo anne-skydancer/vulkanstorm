@@ -3,6 +3,7 @@
 """Check the dual-licence texts, what the viewer ships of them, and the headers."""
 from pathlib import Path
 import hashlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -95,10 +96,95 @@ class SourceHeaderTest(unittest.TestCase):
             for line in path.read_bytes()[:3000].decode('utf-8', 'replace').splitlines():
                 if 'SPDX-License-Identifier:' not in line:
                     continue
-                expression = line.split('SPDX-License-Identifier:', 1)[1]
-                if 'GPL' in expression.replace('LGPL', '') and 'LGPL' not in expression:
+                expression = spdx_expression(line.split('SPDX-License-Identifier:', 1)[1])
+                if expression and requires_gpl(expression):
                     offenders.append(name)
         self.assertEqual(offenders, [])
+
+    def test_requires_gpl(self):
+        for expression, expected in [
+                ('LGPL-2.1-or-later OR GPL-3.0-or-later', False),
+                ('LGPL-2.1-only OR GPL-3.0-or-later', False),
+                ('(LGPL-2.1-only OR GPL-3.0-or-later) AND Zlib', False),
+                ('BSD-3-Clause AND (LGPL-2.1-only OR GPL-3.0-or-later)', False),
+                ('MIT OR GPL-3.0-or-later', False),
+                ('Apache-2.0', False),
+                ('GPL-3.0-or-later', True),
+                ('GPL-2.0-only WITH Classpath-exception-2.0', True),
+                ('LGPL-2.1-only AND GPL-3.0-only', True),
+                ('MIT AND (GPL-2.0-or-later OR GPL-3.0-only)', True)]:
+            with self.subTest(expression=expression):
+                self.assertEqual(requires_gpl(expression), expected)
+
+    def test_spdx_expression_ignores_prose(self):
+        self.assertEqual(spdx_expression(' Apache-2.0. The derived name list'), 'Apache-2.0')
+        self.assertEqual(spdx_expression(' LGPL-2.1-only OR GPL-3.0-or-later */'),
+                         'LGPL-2.1-only OR GPL-3.0-or-later')
+        self.assertEqual(spdx_expression("' not in line:"), '')
+
+
+def spdx_expression(text):
+    """The SPDX expression at the start of text, without trailing prose or comment syntax."""
+    tokens = []
+    for token in text.replace('(', ' ( ').replace(')', ' ) ').split():
+        if token in ('AND', 'OR', 'WITH', '(', ')'):
+            tokens.append(token)
+            continue
+        identifier = token.rstrip('.,;')
+        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.+-]*', identifier):
+            break
+        tokens.append(identifier)
+        if identifier != token:
+            break
+    while tokens and tokens[-1] in ('AND', 'OR', 'WITH', '('):
+        tokens.pop()
+    return ' '.join(tokens)
+
+
+def alternatives(expression):
+    """The SPDX expression in disjunctive form: a list of sets of licence ids."""
+    tokens = expression.replace('(', ' ( ').replace(')', ' ) ').split()
+    position = 0
+
+    def parse_or():
+        nonlocal position
+        result = parse_and()
+        while position < len(tokens) and tokens[position] == 'OR':
+            position += 1
+            result = result + parse_and()
+        return result
+
+    def parse_and():
+        nonlocal position
+        result = parse_term()
+        while position < len(tokens) and tokens[position] == 'AND':
+            position += 1
+            right = parse_term()
+            result = [a | b for a in result for b in right]
+        return result
+
+    def parse_term():
+        nonlocal position
+        token = tokens[position]
+        position += 1
+        if token == '(':
+            result = parse_or()
+            assert tokens[position] == ')', expression
+            position += 1
+            return result
+        if position < len(tokens) and tokens[position] == 'WITH':
+            position += 2  # an exception does not change the licence's family
+        return [{token}]
+
+    result = parse_or()
+    assert position == len(tokens), expression
+    return result
+
+
+def requires_gpl(expression):
+    """True when every alternative of the expression includes a GPL (not LGPL) licence."""
+    return all(any(lic.startswith('GPL-') for lic in conjunction)
+               for conjunction in alternatives(expression))
 
 
 if __name__ == '__main__':
