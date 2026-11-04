@@ -27,8 +27,9 @@ measured meets the quality bar where PPLL is exact (8 layers per pixel: PPLL 0.7
 which then fails on thin foliage with a max error of 120). The only variant that reaches GPU
 parity with PPLL slots on 8 layers is the noisiest (S = 4), and only with a 16-bit depth that
 collapses distant layers (19.4 RMSE on the `deep` scene). Every stochastic variant except the
-one-pass basic method needs one more geometry pass over the alpha set than PPLL (about +50 %
-alpha draw calls), and the one-pass method is both slower (3.7x at 8 layers) and noisier
+one-pass basic method needs one more geometry pass over the alpha set than PPLL (+100 % of
+the non-rigged alpha draws with depth of field off, the default; +50 % of the rigged ones,
+and of the non-rigged ones with depth of field on), and the one-pass method is both slower (3.7x at 8 layers) and noisier
 (11.5 / 65) than the others.
 
 **Go-with-conditions only for a hybrid that keeps PPLL** and replaces its tail: PPLL slots
@@ -74,7 +75,7 @@ worse for the common case. The criteria, with the numbers this study holds each 
 | # | Criterion | Bar | Why |
 |---|---|---|---|
 | R1 | GPU time | <= 1.0x PPLL slots summed over the 11-scene set at 1080p and 1440p, and <= 1.25x on each 8-layer scene (full, bright, deep, occl) | a replacement that costs more on the common case is a regression; overflow scenes may trade |
-| R2 | CPU / draw calls | no more geometry passes over the captured alpha set than PPLL (2 per side today, section 5), or <= +15 % frame time in a CPU-bound crowded scene | the alpha pass is per-draw CPU work in `LLDrawPoolAlpha::renderAlpha` |
+| R2 | CPU / draw calls | no more geometry passes over the captured alpha set than PPLL (today 1 non-rigged and 2 rigged with depth of field off, the default; section 5), or <= +15 % frame time in a CPU-bound crowded scene | the alpha pass is per-draw CPU work in `LLDrawPoolAlpha::renderAlpha` |
 | R3 | Image quality, no TAA | up to 8 layers: RMSE <= 1 step and max <= 2 steps (PPLL: 0.73 / 1); past 8 layers: RMSE below PPLL's tail (12.2 at full 32) | the viewer has no temporal accumulation; per-frame noise is the final image |
 | R4 | Memory | <= 92 B/px (PPLL slots) | PPLL's budget (`RenderAlphaOITMemoryMB`) already covers 1440p |
 | R5 | Coverage | every path PPLL captures today, with no new exclusion (section 6) | parity |
@@ -137,15 +138,19 @@ unchanged. New:
 - **Measured memory** of each multisample target (`GL_NVX_gpu_memory_info`, available
   video memory before and after allocate + clear).
 - Checks: total alpha of every stochastic variant against the exact `1 - prod(1 - a)`
-  (all pass, max 0.25/255), and the hybrid bit-identical to PPLL slots on every scene
-  without overflow (all pass on NVIDIA and Zink).
+  (all pass, max 0.25/255), and the hybrid's read-back image equal to PPLL slots' value for
+  value on every scene without overflow in the window, at least one such scene required
+  (pass on NVIDIA and Zink, max difference 0).
 - Unit tests (`scripts/tests/test_oit_bench_scenes.py`, 27 tests, unittest): the new
   scenes, the blue-noise map, the upsample weights, the blurred error, and Python models
   of `stoch1` and `hybrid` (the hybrid is exact within the slots and equals the depth-based
   estimate past them).
 
-Method: one process per variant (each with `slots` as its baseline) so that only one
-variant's multisample targets are resident; 30 frames, median, after 5 warm-up frames;
+Method: one process per variant (each with `slots` as its baseline), so that besides PPLL's
+slot arrays only that variant's multisample targets and the start-up sample-count probe's
+full-resolution D32F targets (S = 4, 8 and 16, kept allocated; 58 and 116 MiB measured, about
+230 MiB for 16, at 1440p)
+are resident, not all sixteen variants' targets; 30 frames, median, after 5 warm-up frames;
 RMSE over a 256x256 window against the exact CPU composite, 8-bit units of linear colour. A
 first run with all 16 variants in one process showed outliers (plain `stoch` full 8 at
 1440p: 5.88 ms against 3.10 ms in isolation, every pass slower including the composite);
@@ -362,12 +367,18 @@ Traversals of the alpha pool per frame, main view, post-water, PPLL on
 | Side | PPLL today | draws per captured draw |
 |---|---|---|
 | rigged | capture; depth-only replay (full lit programs, for glow depth); residual (queues emissives, draws only particles/custom-blend) | 2 |
-| non-rigged | capture; residual (as above); DoF depth (`gDeferredFullbrightAlphaMaskProgram` or the full lit programs) | 2 |
+| non-rigged | capture; residual (as above); DoF depth (`gDeferredFullbrightAlphaMaskProgram` or the full lit programs) only when `RenderDepthOfField` is on (`lldrawpoolalpha.cpp` 281; default off, `settings.xml` 11918) | 1, or 2 with DoF |
 
-Legacy sorted alpha is 1 (rigged) and 2 (non-rigged, forward + DoF). Under stochastic
-transparency the capture becomes D + A (with `mrt`) or T + D + A (without): **3 draws per
-captured draw instead of 2 (+50 %), or 4 (+100 %)**. The hybrid is also 3 (D + capture).
-Only `stoch1` keeps 2.
+Legacy sorted alpha is 1 (rigged) and 1 or 2 (non-rigged, forward, + DoF). Under stochastic
+transparency the capture becomes D + A (with `mrt`) or T + D + A (without):
+
+| Side | PPLL | D + A (`mrt`) or hybrid (D + capture) | T + D + A |
+|---|---|---|---|
+| non-rigged, DoF off (default) | 1 | 2 (**+100 %**) | 3 (+200 %) |
+| non-rigged, DoF on | 2 | 3 (+50 %) | 4 (+100 %) |
+| rigged | 2 | 3 (+50 %) | 4 (+100 %) |
+
+Only `stoch1` keeps PPLL's counts.
 
 Per draw, `renderAlpha` (lines 750-1141) repeats for every pass: the group walk and water
 test, `applyModelMatrix`, shader selection and, on every program change,
@@ -389,8 +400,8 @@ and "a second full alpha pass" (today's loop). The study's Stage 2 gate (+15 % f
 a CPU-bound crowded scene) is the measurement that decides it; it needs a draw counter in
 `renderAlpha` (e.g. in the `RenderAlphaOITStats` log) and the existing `LLGLSLShader`
 profiling (`sProfileEnabled`, per-program binds and GPU time). Two existing traversals
-already redraw the alpha set with full lit programs only to write depth (the rigged replay
-and DoF): giving those an alpha-only program is an independent saving that would pay for
+already redraw (part of) the alpha set with full lit programs only to write depth (the
+rigged replay, and DoF when it is on): giving those an alpha-only program is an independent saving that would pay for
 part of an extra pass, whatever is decided here.
 
 ---

@@ -846,7 +846,9 @@ def frame_stoch(name, background, layers, samples, seed=0, v=None):
         beginq(TIME_ELAPSED,q[1+2*it]);depth_pass(it);endq(TIME_ELAPSED)
         # --- A: shade every layer once, weighted by its visibility in the S depths ---
         beginq(TIME_ELAPSED,q[2+2*it])
-        bindfbo(0x8D40,mrt_fbo if v['mrt'] else accum_fbo)
+        # with mrt the total alpha is written once: later iterations (S above the hardware's
+        # independent samples) accumulate colour only, so the log sum is not counted twice
+        bindfbo(0x8D40,mrt_fbo if v['mrt'] and it==0 else accum_fbo)
         prog=progs_v['A'];use(prog);uniform(uloc(prog,'alpha_oit_opaque_depth'),0)
         uniform(uloc(prog,'stoch_depth'),1);uniform(uloc(prog,'stoch_samples'),hw);uniform1f(uloc(prog,'stoch_eps'),eps)
         if v['half']: uniform(uloc(prog,'stoch_seed_half'),7)
@@ -965,13 +967,15 @@ def set_opaque(name):
         texsub(TEX2D,0,0,0,W,H,0x1902,0x1406,rows)
     assert geterror()==0
     opaque_state[0]=key
-get_texture_sub=fn('glGetTextureSubImage',None,U,I,I,I,I,I,I,I,U,U,I,P)
+get_tex_image=fn('glGetTexImage',None,U,I,U,U,P)
 def read_total_image():
-    """stoch1's R32UI total image over the RMSE window, as total alpha."""
-    finish();n=RMSE_WIN*RMSE_WIN;buf=(U*n)()
-    get_texture_sub(total_img,0,WIN_X,WIN_Y,0,RMSE_WIN,RMSE_WIN,1,RED_INT,UINT,4*n,buf)
+    """stoch1's R32UI total image over the RMSE window, as total alpha. glGetTexImage of the
+    whole level (OpenGL 1.x; glGetTextureSubImage would need 4.5) and the window sliced out."""
+    finish();buf=(U*(W*H))()
+    activetex(0x84C0+7);bindtex(TEX2D,total_img);get_tex_image(TEX2D,0,RED_INT,UINT,buf)
+    bindtex(TEX2D,seed_half_tex);activetex(0x84C0)
     assert geterror()==0
-    return [1.0-2.0**(-buf[i]/65536.0) for i in range(n)]
+    return [1.0-2.0**(-buf[(WIN_Y+y)*W+WIN_X+x]/65536.0) for y in range(RMSE_WIN) for x in range(RMSE_WIN)]
 
 scenarios=json.loads(os.environ['OIT_BENCH_SCENES']) if 'OIT_BENCH_SCENES' in os.environ else [
     ('opaque',1),('full',1),('full',2),('full',4),('full',8),('full',16),('full',32),('full',64),
@@ -1002,6 +1006,7 @@ print(f'{"scene":<13}{"impl":<{LABEL}}{"reset":>8}{"capture":>9}{"resolve":>9}{"
 results={}   # (pattern, layers) -> {impl: (timings, rmse, max, brmse)}
 stoch_rmse={}   # (pattern, layers) -> {S: (rmse, max)}, plus 'alpha': max total-alpha error
 variant_alpha={}   # impl -> worst total-alpha error over the scenes
+exact_images={}   # (pattern, layers, impl) -> image, PPLL slots and hybrid on scenes without overflow
 tail_scenes=[]
 failures=[]
 def check(ok, text):
@@ -1046,6 +1051,8 @@ for pattern_name,layers in scenarios:
                 else: totals=[1.0-math.exp(-t[0]) for t in read_window(total_fbo,fmt=0x1903,channels=1)]
                 err=max(abs(t-e[1]) for t,e in zip(totals,exact))
                 variant_alpha[impl]=max(variant_alpha.get(impl,0.0),err)
+            if tail_px==0 and (impl=='slots' or (v and v['kind']=='hybrid')):
+                exact_images[(pattern_name,layers,impl)]=image_rgb
             if want_png: png_written.append((impl.replace('+','_'),image_rgb))
         row[impl]=(med,rmse,worst,brmse)
         note=''
@@ -1129,11 +1136,12 @@ for impl,worst in variant_alpha.items():
 for impl in IMPLS:
     v=VARIANTS[impl]
     if v and v['kind']=='hybrid' and 'slots' in IMPLS:
-        # Exact where PPLL is exact: on scenes with no pixel past the slots, the hybrid's image
-        # must match PPLL slots to the quantisation floor.
-        exact_keys=[k for k in results if not any(c>SLOTS for _,_,c in scenes.exact_window(k[0],*scenes.scene(*k),WIN_X,WIN_Y,RMSE_WIN,RMSE_WIN))]
-        worst=max((abs(results[k][impl][1]-results[k]['slots'][1]) for k in exact_keys),default=0.0)
-        check(worst<=0.05,f'{impl}: matches PPLL slots where no pixel overflows ({len(exact_keys)} scenes, RMSE difference {worst:.3f} <= 0.05)')
+        # Exact where PPLL is exact: on scenes with no pixel past the slots (in the window), the
+        # hybrid's image must equal PPLL slots' image value for value, on at least one scene.
+        keys=[(p,l) for (p,l,i) in exact_images if i==impl and (p,l,'slots') in exact_images]
+        worst=max((abs(a-b)*255.0 for k in keys for pa,pb in zip(exact_images[k+(impl,)],exact_images[k+('slots',)])
+                   for a,b in zip(pa[:3],pb[:3])),default=0.0)
+        check(bool(keys) and worst==0.0,f'{impl}: identical to PPLL slots where no pixel overflows ({len(keys)} scenes, max difference {worst:.4f} steps)')
 if 'slots' in IMPLS and 'OIT_BENCH_SCENES' not in os.environ:
     check(bool(tail_scenes),f'slots: the tail path is exercised ({", ".join(tail_scenes) or "no scene past 8 slots"})')
 if 'stoch' in IMPLS and 'slots' in IMPLS:
