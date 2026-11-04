@@ -43,22 +43,25 @@ static const char * const TEST_FILENAME("llslurl_test.xml");
 //
 // Stub implementation for LLTrans
 //
-class LLTrans
-{
-public:
-    static std::string getString(std::string_view xml_desc, const LLStringUtil::format_map_t& args, bool def_string = false);
-};
+// rlvhandler.h includes llui's lltrans.h (through rlvcommon.h), so use its
+// declaration rather than a local class. setDefaultArg() is stubbed too:
+// LLGridManager::setGridChoice() calls it, and without it llui's
+// lltrans.obj, which also defines getString(), would join the link.
+#include "lltrans.h"
 
 std::string LLTrans::getString(std::string_view xml_desc, const LLStringUtil::format_map_t& args, bool def_string)
 {
     return std::string();
 }
 
+void LLTrans::setDefaultArg(const std::string& name, const std::string& value) {}
+
 // [RLVa:KB] - Checked: 2010-11-12 (RLVa-1.2.2a) | Added: RLVa-1.2.2a
 // Stub implementation to get the test to compile properly
 #include "../rlvhandler.h"
 
-const std::string& RlvStrings::getString(const std::string& strStringName)
+// rlvdefines.h defines CATZNIP_STRINGVIEW, so RlvStrings takes string_views.
+const std::string& RlvStrings::getString(const std::string_view& strStringName)
 {
     static const std::string strMissing = "(Missing RLVa string)";
     return strMissing;
@@ -69,7 +72,9 @@ bool RlvUtil::isNearbyRegion(const std::string& strRegion)
     return false;
 }
 
-RlvHandler::RlvHandler() : m_pGCTimer(NULL), m_pWLSnapshot(NULL)
+// The viewer's RlvHandler no longer has m_pWLSnapshot; initialise the
+// members its own constructor does.
+RlvHandler::RlvHandler() : m_fCanCancelTp(true), m_posSitSource(), m_pGCTimer(NULL)
 {
     // Array auto-initialization to 0 is non-standard? (Compiler warning in VC-8.0)
     memset(m_Behaviours, 0, sizeof(S16) * RLV_BHVR_COUNT);
@@ -78,6 +83,11 @@ RlvHandler::RlvHandler() : m_pGCTimer(NULL), m_pWLSnapshot(NULL)
 RlvHandler::~RlvHandler()
 {
 }
+
+// RlvHandler's vtable needs its overrides of the group and old-event
+// observers.
+void RlvHandler::changed(const LLUUID& group_id, LLGroupChange gc) {}
+bool RlvHandler::handleEvent(LLPointer<LLOldEvents::LLEvent> event, const LLSD& sdUserdata) { return false; }
 
 RlvHandler gRlvHandler;
 // [/RLVa:KB]
@@ -131,6 +141,11 @@ LLPointer<LLControlVariable> LLControlGroup::getControl(std::string_view name)
 }
 
 LLControlGroup gSavedSettings("test");
+// This viewer's LLGridManager::initialize() does not read grid files (FS:AW,
+// Havok sublicense requirements), so foo.bar.com and my.grid.com below never
+// become known grids. The tests use Aditi, the one system grid besides Agni,
+// where Linden's version used them; the file is still written and passed,
+// as the viewer would see it.
 const char *gSampleGridFile =
     "<?xml version=\"1.0\"?>"
     "<llsd>"
@@ -248,27 +263,27 @@ namespace tut
         ensure_equals(" slurl, region + coords", slurl.getSLURLString(),
                       "https://maps.secondlife.com/secondlife/my%20region/1/2/3");
 
-        LLGridManager::getInstance()->setGridChoice("my.grid.com");
-        slurl = LLSLURL("https://my.grid.com/region/my%20region/1/2/3");
+        // Aditi's SLURLs use its system-grid base, secondlife://Aditi/secondlife/
+        LLGridManager::getInstance()->setGridChoice("util.aditi.lindenlab.com");
+        slurl = LLSLURL("secondlife://Aditi/secondlife/my%20region/1/2/3");
         ensure_equals("grid slurl, region + coords - type", slurl.getType(), LLSLURL::LOCATION);
         ensure_equals("grid slurl, region + coords", slurl.getSLURLString(),
-                      "https://my.grid.com/region/my%20region/1/2/3");
+                      "secondlife://Aditi/secondlife/my%20region/1/2/3");
 
-        slurl = LLSLURL("https://my.grid.com/region/my region");
-        ensure_equals("grid slurl, region + coords - type", slurl.getType(), LLSLURL::LOCATION);
-        ensure_equals("grid slurl, region + coords", slurl.getSLURLString(),
-                      "https://my.grid.com/region/my%20region/128/128/0");
+        slurl = LLSLURL("secondlife://Aditi/secondlife/my region");
+        ensure_equals("grid slurl, region only - type", slurl.getType(), LLSLURL::LOCATION);
+        ensure_equals("grid slurl, region only", slurl.getSLURLString(),
+                      "secondlife://Aditi/secondlife/my%20region/128/128/0");
 
-        LLGridManager::getInstance()->setGridChoice("foo.bar.com");
         slurl = LLSLURL("/myregion/1/2/3");
         ensure_equals("/: slurl, region + coords - type", slurl.getType(), LLSLURL::LOCATION);
         ensure_equals("/ slurl, region + coords", slurl.getSLURLString(),
-                      "https://foo.bar.com/region/myregion/1/2/3");
+                      "secondlife://Aditi/secondlife/myregion/1/2/3");
 
         slurl = LLSLURL("myregion/1/2/3");
         ensure_equals(": slurl, region + coords - type", slurl.getType(), LLSLURL::LOCATION);
         ensure_equals(" slurl, region + coords", slurl.getSLURLString(),
-                      "https://foo.bar.com/region/myregion/1/2/3");
+                      "secondlife://Aditi/secondlife/myregion/1/2/3");
 
         slurl = LLSLURL(LLSLURL::SIM_LOCATION_HOME);
         ensure_equals("home", slurl.getType(), LLSLURL::HOME_LOCATION);
@@ -282,7 +297,8 @@ namespace tut
         ensure_equals("apppath", slurl.getAppPath().size(), 1);
         ensure_equals("apppath2", slurl.getAppPath()[0].asString(), "bar");
         ensure_equals("appquery", slurl.getAppQuery(), "12345");
-        ensure_equals("grid1", slurl.getGrid(), "FooBar");
+        // no grid in an app SLURL: the selected grid's ID
+        ensure_equals("grid1", slurl.getGrid(), "Aditi");
 
         slurl = LLSLURL("secondlife://Aditi/app/foo/bar?12345");
         ensure_equals("app", slurl.getType(), LLSLURL::APP);
@@ -292,7 +308,6 @@ namespace tut
         ensure_equals("appquery", slurl.getAppQuery(), "12345");
         ensure_equals("grid2",  slurl.getGrid(), "Aditi");
 
-        LLGridManager::getInstance()->setGridChoice("foo.bar.com");
         slurl = LLSLURL("secondlife:///secondlife/myregion/1/2/3");
         ensure_equals("/: slurl, region + coords - type", slurl.getType(), LLSLURL::LOCATION);
         ensure_equals("location", slurl.getType(), LLSLURL::LOCATION);
@@ -305,8 +320,9 @@ namespace tut
         ensure_equals("region" , "myregion", slurl.getRegion());
         ensure_equals("grid4", slurl.getGrid(), "Aditi" );
 
-        LLGridManager::getInstance()->setGridChoice("my.grid.com");
-        slurl = LLSLURL("https://my.grid.com/app/foo/bar?12345");
+        // An https app SLURL on maps.secondlife.com, in place of one on a
+        // grid-file grid's own host
+        slurl = LLSLURL("https://maps.secondlife.com/app/foo/bar?12345");
         ensure_equals("app", slurl.getType(), LLSLURL::APP);
         ensure_equals("appcmd", slurl.getAppCmd(), "foo");
         ensure_equals("apppath", slurl.getAppPath().size(), 1);
@@ -325,15 +341,15 @@ namespace tut
 
         LLGridManager::getInstance()->initialize(TEST_FILENAME);
 
-        LLSLURL slurl = LLSLURL("my.grid.com", "my region");
+        LLSLURL slurl = LLSLURL("util.aditi.lindenlab.com", "my region");
         ensure_equals("grid/region - type", slurl.getType(), LLSLURL::LOCATION);
         ensure_equals("grid/region", slurl.getSLURLString(),
-                      "https://my.grid.com/region/my%20region/128/128/0");
+                      "secondlife://Aditi/secondlife/my%20region/128/128/0");
 
-        slurl = LLSLURL("my.grid.com", "my region", LLVector3(1,2,3));
+        slurl = LLSLURL("util.aditi.lindenlab.com", "my region", LLVector3(1,2,3));
         ensure_equals("grid/region/vector - type", slurl.getType(), LLSLURL::LOCATION);
         ensure_equals(" grid/region/vector", slurl.getSLURLString(),
-                      "https://my.grid.com/region/my%20region/1/2/3");
+                      "secondlife://Aditi/secondlife/my%20region/1/2/3");
 
         LLGridManager::getInstance()->setGridChoice("util.agni.lindenlab.com");
         slurl = LLSLURL("my region", LLVector3(1,2,3));
@@ -341,11 +357,12 @@ namespace tut
         ensure_equals(" default grid/region/vector", slurl.getSLURLString(),
                       "https://maps.secondlife.com/secondlife/my%20region/1/2/3");
 
-        LLGridManager::getInstance()->setGridChoice("MyGrid");
+        // selected by grid ID
+        LLGridManager::getInstance()->setGridChoice("Aditi");
         slurl = LLSLURL("my region", LLVector3(1,2,3));
         ensure_equals("default grid/region/vector - type", slurl.getType(), LLSLURL::LOCATION);
         ensure_equals(" default grid/region/vector", slurl.getSLURLString(),
-                      "https://my.grid.com/region/my%20region/1/2/3");
+                      "secondlife://Aditi/secondlife/my%20region/1/2/3");
 
     }
     // Accessors
@@ -358,11 +375,11 @@ namespace tut
 
         LLGridManager::getInstance()->initialize(TEST_FILENAME);
 
-        LLGridManager::getInstance()->setGridChoice("my.grid.com");
-        LLSLURL slurl = LLSLURL("https://my.grid.com/region/my%20region/1/2/3");
+        LLGridManager::getInstance()->setGridChoice("util.aditi.lindenlab.com");
+        LLSLURL slurl = LLSLURL("secondlife://Aditi/secondlife/my%20region/1/2/3");
         ensure_equals("login string", slurl.getLoginString(), "uri:my region&amp;1&amp;2&amp;3");
         ensure_equals("location string", slurl.getLocationString(), "my region/1/2/3");
-        ensure_equals("grid", slurl.getGrid(), "my.grid.com");
+        ensure_equals("grid", slurl.getGrid(), "Aditi");
         ensure_equals("region", slurl.getRegion(), "my region");
         ensure_equals("position", slurl.getPosition(), LLVector3(1, 2, 3));
 
