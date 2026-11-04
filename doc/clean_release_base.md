@@ -64,3 +64,47 @@ source paths. Linux build validation remains delegated to the Release CI
 matrix; `latest` must remain unchanged until both platform builds succeed.
 These checks do not establish improved viewer performance. Interactive grid login, logout,
 audio-device switching and visual skin/OIT qualification remain necessary.
+
+## Alpha OIT A-buffer node
+
+Each slot of the image-array A-buffer holds one fragment in an 8-byte RG32UI
+texel (`alphaOITPackF.glsl`, linked into the four capture shaders and the
+resolve): `x` is the premultiplied colour as R11F_G11F_B10F, `y` is the window
+depth as a 24-bit unorm in the high bits and alpha as an 8-bit unorm in the
+low byte, so the resolve sorts on the `y` words directly. It replaced a
+16-byte RGBA32UI node (half-float RGBA, float depth, an unused zero word). At
+8 slots a pixel needs 92 bytes instead of 156. Under the default 512 MiB
+budget, 1440p now keeps all 8 slots (previously cut to 7), and 4K keeps 4
+(previously 2). The tail accumulators are unchanged.
+
+Precision. The colour keeps the half float's 5-bit exponent, so its range is
+the same (up to 65024 for red and green, 64512 for blue). Larger values clamp
+to that limit rather than becoming infinity. The mantissa is 6 bits for red and
+green and 5 for blue. That gives relative steps of 1.6% and 3.1%, so a stored
+value is off by at most 0.8% and 1.6%. These are roughly one 8-bit sRGB step of
+a bright source texel; for mid and dark tones they are finer than the 8-bit
+texture data. The rounding is relative and every contribution to the composite
+is non-negative, so the composited colour carries the same relative bound. It
+does not grow with the layer count. Alpha is stored as 8 bits, the precision of
+the texture alpha the fragments come from. Depth uses 24 bits, the precision of
+the opaque depth buffer (`GL_DEPTH_COMPONENT24`) it is tested against. The
+capture still tests the full-precision depth, and the quantisation is
+monotonic, so the resolve keeps every fragment the capture kept.
+
+What this loses:
+- The colour mantissa drops from 10 to 6/6/5 bits. Smooth bright gradients
+  seen through alpha can shift by up to one 8-bit step. Blue is coarser than
+  red and green, so a hue can move by up to 1.6%.
+- Below 6.1e-5, colours are denormal, with an absolute step of about 1e-6.
+  That is far below display precision, but exposure that scales very dark
+  premultiplied colours up would show it.
+- Alpha is rounded to 1/255. Alpha that does not come straight from an 8-bit
+  texel (vertex alpha, material alpha factors) is off by up to 1/510 per layer
+  in the transmittance. Over many layers this compounds in the background's
+  visibility. Alpha at or below 1/510 stores as 0: the fragment still adds its
+  premultiplied colour but no coverage.
+- Two fragments closer than 1/16777215 in window depth can share a depth code.
+  They are then ordered by alpha rather than by their float depth. With
+  the near plane at 0.25 m, window depth passes 0.5 at about 0.5 m, where the
+  float depth already has a 2^-24 spacing, so beyond that the order is the same
+  as before to within one step.
