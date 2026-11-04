@@ -6,7 +6,24 @@ ports of it) and `LGPL-2.1-or-later OR GPL-3.0-or-later` (original
 Vulkanstorm code). Offering GPL-3.0 for a *binary* is only honest if
 everything linked into it can be distributed under GPL-3.0 too. This is the
 audit of what the shipped binaries link with, as of 2026-11-04 on
-`vkstorm-devel`.
+`vkstorm-devel`, re-checked for this line below.
+
+## This line: `vkstorm-canary`
+
+The audit below was made on `vkstorm-devel` and re-checked against this
+line's own `autobuild.xml` and CI configure line (2026-11-04). The configure
+options are the same as devel's. Canary follows upstream Firestorm 7.2.5,
+which brings these package differences:
+
+| Component | Licence | Status | Notes |
+|---|---|---|---|
+| SDL3 3.2.24 (replaces SDL2) | Zlib upstream (`autobuild.xml` says "lgpl") | OK | either way |
+| glext 2025.10.27 | Khronos (MIT-style) | OK | |
+| open-libndofdev 0.14 | BSD | OK | |
+| fltk, mesa (old), libuuid, glh_linear, llappearance_utility, vlc-speakerfill | | not on this line | |
+
+The open points are the same: OpenSSL 1.1.1w and GLOD are linked. This line
+has no GPL-only code.
 
 ## Open points (read first)
 
