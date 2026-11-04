@@ -143,7 +143,7 @@ Rust-port status uses these terms:
 | glh_linear | 1.0.1-dev4 | common | BSD | GLH:7 | headers via GLEXT.cmake | kept |
 | glib | 2.48.0 | linux64 | LGPL | GLIB:5 | media_plugins/gstreamer10, newview (Linux) | kept |
 | glm | v1.0.1 | common | MIT | GLM:7 | llprimitive, llwindow | kept |
-| glod | 1.0pre3.532346 | d, l, w | GLOD 1.0 | GLOD:7 | newview | kept |
+| glod | 1.0pre3.532346 | d, l, w | GLOD 1.0 | — (GLOD.cmake removed) | none | **removed**: GLOD retired, MeshOpt generates uploader LODs |
 | gntp-growl | — | d, l, w | bsd | Growl:11 | newview | kept |
 | gstreamer10 | 0.10.6.294903 | linux64 | LGPL | GStreamer10Plugin:12 | media_plugins/gstreamer10 | kept |
 | havok-source | 2012.1-2 | d, l, w | havok | Havok:5 | via LLPhysicsExtensions | kept |
