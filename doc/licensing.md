@@ -6,7 +6,17 @@ ports of it) and `LGPL-2.1-or-later OR GPL-3.0-or-later` (original
 Vulkanstorm code). Offering GPL-3.0 for a *binary* is only honest if
 everything linked into it can be distributed under GPL-3.0 too. This is the
 audit of what the shipped binaries link with, as of 2026-11-04 on
-`vkstorm-devel`.
+`vkstorm-devel`, re-checked for this line below.
+
+## This line: `vkstorm-release`
+
+The audit below was made on `vkstorm-devel` and re-checked against this
+line's own `autobuild.xml` and CI configure line (2026-11-04). The configure
+options are the same as devel's (`USE_SOLOUD=ON`, `USE_MESAZINK=ON`,
+OpenSim, KDU, FMOD, Discord, BugSplat, Tracy and Velopack off). The one
+package difference: the `vlc-speakerfill` package is not in this line's
+`autobuild.xml`. The open points are the same: OpenSSL 1.1.1w and GLOD are
+linked. This line has no GPL-only code.
 
 ## Open points (read first)
 
