@@ -115,7 +115,8 @@ at S = 8 for two alpha 0.5 layers) are printed as info lines, not checks. stoch 
 ref to pin: its shaders are emulations in this script, not viewer shaders.
 
 Environment: OIT_BENCH_W, OIT_BENCH_H (default 2560x1440), OIT_BENCH_FRAMES (default 20),
-OIT_BENCH_OLD_REF. Pass --opengl PATH to select another GL DLL (Mesa).
+OIT_BENCH_OLD_REF, OIT_BENCH_SLOTS (slots per pixel of "slots", "slots16" and "hybrid", default 8 as
+the viewer's RenderAlphaOITNodesPerPixel). Pass --opengl PATH to select another GL DLL (Mesa).
 """
 import json, math, os, statistics, subprocess, sys
 from pathlib import Path
@@ -152,7 +153,8 @@ def variant(impl):
     return v
 VARIANTS = {impl: variant(impl) for impl in IMPLS}
 HAS_HYBRID = any(v and v['kind'] == 'hybrid' for v in VARIANTS.values())
-NODES_PER_PX = 8; OLD_MAX_LAYERS = 24; SLOTS = 8; META_LAYERS = 7
+NODES_PER_PX = 8; OLD_MAX_LAYERS = 24; SLOTS = int(os.environ.get("OIT_BENCH_SLOTS", 8)); META_LAYERS = 7
+assert 1 <= SLOTS <= 32, "OIT_BENCH_SLOTS: 1..32 (the resolve's OIT_MAX_SLOTS)"
 RMSE_WIN = min(int(os.environ.get('OIT_BENCH_RMSE_WIN', 256)), W, H)
 WIN_X = min(512, W - RMSE_WIN); WIN_Y = min(256, H - RMSE_WIN)   # covers both sparse block phases
 
