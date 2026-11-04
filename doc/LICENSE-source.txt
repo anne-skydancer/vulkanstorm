@@ -1,3 +1,15 @@
+Vulkanstorm
+===========
+Vulkanstorm is offered under the GNU Lesser General Public License,
+version 2.1, or, at your choice, the GNU General Public License, version 3
+or any later version. Code from Linden Lab and the Phoenix Firestorm
+Project is under LGPL-2.1-only OR GPL-3.0-or-later (section 3 of LGPL-2.1
+allows the GPL option); original Vulkanstorm code is under
+LGPL-2.1-or-later OR GPL-3.0-or-later. See LICENSE, NOTICE.md,
+LICENSE-LGPL-2.1 and LICENSE-GPL-3.0 at the top of the source tree, and
+doc/licensing.md. The Linden Lab terms below continue to apply to Linden
+Lab's code.
+
 Source code
 ========
 The license for the source code in this distribution should be clearly

@@ -46,6 +46,7 @@ import time
 sys.dont_write_bytecode = True # <FS:Ansariel> Prevents creating __pycache__ directory
 
 from fs_viewer_manifest import FSViewerManifest #<FS:ND/> Manifest extensions for Firestorm
+from licence_texts import LICENCE_TEXTS, write_installer_licence # <Vulkanstorm/> dual licence
 
 viewer_dir = os.path.dirname(__file__)
 # Add indra/lib/python to our path so we don't have to muck with PYTHONPATH.
@@ -434,6 +435,12 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         # <FS:Ansariel> Same as app_name_oneword()
         #return "SecondLifeViewer"
         return ''.join(self.app_name().split())
+
+    # <Vulkanstorm> Ship the licence texts beside the viewer (NOTICE.md).
+    def path_licence_texts(self):
+        for src, dst in LICENCE_TEXTS:
+            self.path(src=src, dst=dst)
+    # </Vulkanstorm>
 
     def app_name_oneword(self):
         return ''.join(self.app_name().split())
@@ -834,6 +841,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
             # </FS:ND>
 
         self.path(src="licenses-win32.txt", dst="licenses.txt")
+        self.path_licence_texts()
         if self.args.get('soloud', 'OFF').lower() == 'on':
             with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
                 self.path('soloud.txt')
@@ -1106,8 +1114,9 @@ class Windows_x86_64_Manifest(ViewerManifest):
     def inno_package_finish(self):
         """Package the viewer using Inno Setup 7 (replaces legacy NSIS).
 
-        Produces a modern installer that shows the LGPL-2.1 license agreement
-        up front and offers a "Launch Vulkanstorm" option on the finish page.
+        Produces a modern installer that shows the licence page up front (the
+        dual LGPL-2.1 / GPL-3.0-or-later terms, see write_installer_licence)
+        and offers a "Launch Vulkanstorm" option on the finish page.
         """
 
         installer_base = self.fs_installer_basename()
@@ -1120,7 +1129,10 @@ class Windows_x86_64_Manifest(ViewerManifest):
         # Read the Inno template and substitute the tokens.
         src_prefix = self.get_src_prefix()
         template_path = os.path.join(src_prefix, 'installers', 'windows', 'installer_template.iss')
-        license_file = os.path.abspath(os.path.join(src_prefix, '..', '..', 'doc', 'LGPL-license.txt'))
+        license_file = self.dst_path_of('installer-licence.txt')
+        write_installer_licence(license_file,
+                                os.path.join(src_prefix, 'LGPL-license.txt'),
+                                os.path.join(src_prefix, '..', '..', 'LICENSE-GPL-3.0'))
         setup_icon = os.path.join(src_prefix, self.icon_path(), 'firestorm_icon.ico')
 
         with open(template_path, 'r') as f:
@@ -1834,7 +1846,7 @@ class Darwin_x86_64_Manifest(ViewerManifest):
                 if self.fs_is_opensim():
                     self.path("VivoxAUP.txt")
                 # </FS:TJ>
-                self.path("LGPL-license.txt")
+                self.path_licence_texts()
                 with self.prefix(src=pkgdir,dst=""):
                     self.path("ca-bundle.crt")
 
@@ -2398,7 +2410,7 @@ class LinuxManifest(ViewerManifest):
         if self.fs_is_opensim():
             self.path("VivoxAUP.txt")
         # </FS:TJ>
-        self.path("LGPL-license.txt")
+        self.path_licence_texts()
         self.path(os.path.join(self.icon_path(), "firestorm_512.png"), "firestorm_icon.png")
         with self.prefix("linux_tools"):
             self.path("FIRESTORM_DESKTOPINSTALL.txt","FIRESTORM_DESKTOPINSTALL.txt")
