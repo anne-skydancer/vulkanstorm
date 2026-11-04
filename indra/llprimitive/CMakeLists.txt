@@ -104,3 +104,9 @@ if (LL_TESTS)
     set_property(TARGET INTEGRATION_TEST_llmeshunpack_parity APPEND PROPERTY
         COMPILE_DEFINITIONS "VKS_MESH_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures\"")
 endif (LL_TESTS)
+
+option(LL_MODEL_DECOMPOSITION_TEST "Build the focused physics decomposition test" OFF)
+if (LL_TESTS OR LL_MODEL_DECOMPOSITION_TEST)
+    include(LLAddBuildTest)
+    LL_ADD_INTEGRATION_TEST(llmodel_decomposition "" "llprimitive;llcommon")
+endif ()

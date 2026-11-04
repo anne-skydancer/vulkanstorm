@@ -1985,7 +1985,12 @@ void LLModel::Decomposition::fromLLSD(LLSD& decomp)
         const LLSD::Binary& hulls = decomp["HullList"].asBinary();
         const LLSD::Binary& position = decomp["Positions"].asBinary();
 
-        U16* p = (U16*) &position[0];
+        // HullList and Positions come from the mesh asset: never trust the
+        // hull counts to fit the position data.
+        const size_t available_coordinates = position.size() / sizeof(U16);
+        size_t used_coordinates = 0;
+        bool truncated = false;
+        const U16* p = reinterpret_cast<const U16*>(position.data());
 
         mHull.resize(hulls.size());
 
@@ -2006,7 +2011,7 @@ void LLModel::Decomposition::fromLLSD(LLSD& decomp)
 
         range = max-min;
 
-        for (U32 i = 0; i < hulls.size(); ++i)
+        for (U32 i = 0; i < hulls.size() && !truncated; ++i)
         {
             U16 count = (hulls[i] == 0) ? 256 : hulls[i];
 
@@ -2017,6 +2022,11 @@ void LLModel::Decomposition::fromLLSD(LLSD& decomp)
 
             for (U32 j = 0; j < count; ++j)
             {
+                if (available_coordinates - used_coordinates < 3)
+                {
+                    truncated = true;
+                    break;
+                }
                 U64 test = (U64) p[0] | ((U64) p[1] << 16) | ((U64) p[2] << 32);
                 //point must be unique
                 //llassert(valid.find(test) == valid.end());
@@ -2027,12 +2037,17 @@ void LLModel::Decomposition::fromLLSD(LLSD& decomp)
                     (F32) p[1]/65535.f*range.mV[1]+min.mV[1],
                     (F32) p[2]/65535.f*range.mV[2]+min.mV[2]));
                 p += 3;
-
-
+                used_coordinates += 3;
             }
 
             //each hull must contain at least 4 unique points
             //llassert(valid.size() > 3);
+        }
+
+        if (truncated)
+        {
+            LL_WARNS("MeshRepo") << "Physics hull counts exceed the Positions data; rejecting decomposition." << LL_ENDL;
+            mHull.clear();
         }
     }
 
@@ -2040,7 +2055,9 @@ void LLModel::Decomposition::fromLLSD(LLSD& decomp)
     {
         const LLSD::Binary& position = decomp["BoundingVerts"].asBinary();
 
-        U16* p = (U16*) &position[0];
+        // data(), not &position[0]: the block may be empty. The vertex count
+        // below is derived from the size, so the reads stay inside it.
+        const U16* p = reinterpret_cast<const U16*>(position.data());
 
         LLVector3 min;
         LLVector3 max;
