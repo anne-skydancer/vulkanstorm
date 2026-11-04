@@ -320,12 +320,15 @@ namespace tut
             };
         }
 
-        void setParser(bool (*parser)(LLSD&, std::istream&, llssize))
+        // LLSDSerialize::deserialize() takes a trailing max_depth on this
+        // line (the AIS depth cap); a function pointer cannot carry its
+        // default, so pass -1, unlimited, the value every other caller gets.
+        void setParser(bool (*parser)(LLSD&, std::istream&, llssize, S32))
         {
             // why does LLSDSerialize::deserialize() reverse the parse() params??
             mParser = [parser](std::istream& istr, LLSD& data, llssize max_bytes)
             {
-                return parser(data, istr, max_bytes);
+                return parser(data, istr, max_bytes, -1);
             };
         }
 
@@ -939,6 +942,32 @@ namespace tut
             }
             return xml;
         }
+
+        // ensure_equals(LLSD) recurses once per level with several
+        // std::string temporaries per frame; at 1000 levels that exhausts
+        // the 1 MB main-thread stack of a Windows test executable. Walk the
+        // nested_xml() chain iteratively instead.
+        void ensure_nested(const std::string& msg, const LLSD& actual, S32 levels, bool maps)
+        {
+            const LLSD* node = &actual;
+            for (S32 i = 0; i < levels; ++i)
+            {
+                std::string where(msg + llformat(" level %d", i));
+                tut::ensure_equals(where + " type", node->type(),
+                                   maps ? LLSD::TypeMap : LLSD::TypeArray);
+                tut::ensure_equals(where + " size", node->size(), 1);
+                if (maps)
+                {
+                    tut::ensure(where + " key", node->has("k"));
+                    node = &(*node)["k"];
+                }
+                else
+                {
+                    node = &(*node)[0];
+                }
+            }
+            tut::ensure_equals(msg + " value", *node, LLSD(7));
+        }
     }
 
     template<> template<>
@@ -965,8 +994,14 @@ namespace tut
             ensureParse(kind + " nested limit deep", nested_xml(limit, maps), LLSD(),
                         LLSDParser::PARSE_FAILURE, limit);
             // Unlimited (-1, every other caller): still parses a deep body.
-            xml = nested_xml(1000, maps, &expected);
-            ensureParse(kind + " nested 1000 deep, unlimited", xml, expected, 1001, -1);
+            // Checked with ensure_nested(), not ensureParse(): see there.
+            xml = nested_xml(1000, maps);
+            std::istringstream input(xml);
+            LLSD parsed;
+            mParser->reset();
+            S32 count = mParser->parse(input, parsed, xml.size(), -1);
+            ensure_nested(kind + " nested 1000 deep, unlimited", parsed, 1000, maps);
+            ensure_equals(kind + " nested 1000 deep, unlimited (count)", count, 1001);
         }
 
         // Far deeper than the limit (the 100,000-level AIS body that crashed
