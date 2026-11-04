@@ -200,6 +200,8 @@ F32 LLPipeline::CameraFocalLength;
 F32 LLPipeline::CameraFieldOfView;
 F32 LLPipeline::RenderShadowNoise;
 F32 LLPipeline::RenderShadowBlurSize;
+bool LLPipeline::RenderShadowPCSS;          // <Vulkanstorm/> PCSS
+F32 LLPipeline::RenderShadowPCSSLightSize;  // <Vulkanstorm/> PCSS
 F32 LLPipeline::RenderSSAOScale;
 U32 LLPipeline::RenderSSAOMaxScale;
 F32 LLPipeline::RenderSSAOFactor;
@@ -625,6 +627,8 @@ void LLPipeline::init()
     connectRefreshCachedSettingsSafe("CameraFieldOfView");
     connectRefreshCachedSettingsSafe("RenderShadowNoise");
     connectRefreshCachedSettingsSafe("RenderShadowBlurSize");
+    connectRefreshCachedSettingsSafe("RenderShadowPCSS");          // <Vulkanstorm/> PCSS
+    connectRefreshCachedSettingsSafe("RenderShadowPCSSLightSize"); // <Vulkanstorm/> PCSS
     connectRefreshCachedSettingsSafe("RenderSSAOScale");
     connectRefreshCachedSettingsSafe("RenderSSAOMaxScale");
     connectRefreshCachedSettingsSafe("RenderSSAOFactor");
@@ -1278,6 +1282,8 @@ void LLPipeline::refreshCachedSettings()
     CameraFieldOfView = gSavedSettings.getF32("CameraFieldOfView");
     RenderShadowNoise = gSavedSettings.getF32("RenderShadowNoise");
     RenderShadowBlurSize = gSavedSettings.getF32("RenderShadowBlurSize");
+    RenderShadowPCSS = gSavedSettings.getBOOL("RenderShadowPCSS");                    // <Vulkanstorm/> PCSS
+    RenderShadowPCSSLightSize = gSavedSettings.getF32("RenderShadowPCSSLightSize");  // <Vulkanstorm/> PCSS
     RenderSSAOScale = gSavedSettings.getF32("RenderSSAOScale");
     RenderSSAOMaxScale = gSavedSettings.getU32("RenderSSAOMaxScale");
     RenderSSAOFactor = gSavedSettings.getF32("RenderSSAOFactor");
@@ -9478,6 +9484,38 @@ void LLPipeline::bindShadowMaps(LLGLSLShader& shader)
     }
 }
 
+// <Vulkanstorm> PCSS: bind (or release) shadowDepth0/1/4/5, the same depth maps as shadowMap0/1/4/5
+// on their own units with the depth fetch sampler, so the shader can read raw depth there while
+// the compare sampler stays on shadowMapN. Programs without these uniforms are left untouched.
+void LLPipeline::bindShadowDepthFetch(LLGLSLShader& shader, bool bind)
+{
+    static const S32 maps[4] = { 0, 1, 4, 5 };
+    const U32 sampler = bind ? gGL.getDepthFetchSampler() : 0;
+    for (S32 k = 0; k < 4; ++k)
+    {
+        const S32 uniform = LLShaderMgr::DEFERRED_SHADOW_DEPTH0 + k;
+        if (bind)
+        {
+            LLRenderTarget* target = maps[k] < 4 ? getSunShadowTarget(maps[k]) : getSpotShadowTarget(maps[k] - 4);
+            const S32 channel = target ? shader.enableTexture(uniform) : -1;
+            if (channel > -1)
+            {
+                gGL.getTexUnit(channel)->bind(target, true);
+                gGL.getTexUnit(channel)->bindSampler(sampler);
+            }
+        }
+        else
+        {
+            const S32 channel = shader.disableTexture(uniform);
+            if (channel > -1)
+            {
+                gGL.getTexUnit(channel)->bindSampler(0);
+            }
+        }
+    }
+}
+// </Vulkanstorm>
+
 void LLPipeline::bindDeferredShaderFast(LLGLSLShader& shader)
 {
     if (shader.mCanBindFast)
@@ -9798,18 +9836,46 @@ void LLPipeline::renderDeferredLighting()
                                               (GLfloat)deferred_light_target->getWidth(),
                                               (GLfloat)deferred_light_target->getHeight());
 
+                // <Vulkanstorm> PCSS: the shadowing light's angular size, L = 2 tan(half angle):
+                // the physical sun (0.53 degrees) times the sky's sun scale times
+                // RenderShadowPCSSLightSize; the moon uses the same size
+                if (RenderShadowPCSS && !gCubeSnapshot)
+                {
+                    static const F32 sun_angular_size = 2.f * tanf(0.5f * 0.53f * DEG_TO_RAD);
+                    LLSettingsSky::ptr_t sky = LLEnvironment::instance().getCurrentSky();
+                    const F32 sun_scale = sky ? sky->getSunScale() : 1.f;
+                    sun_shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE, sun_angular_size * sun_scale * RenderShadowPCSSLightSize);
+                }
+                // the blocker search reads cascades 0-1 and both spot maps a second time as
+                // plain depth, through a sampler object (only the PCSS sun program has these units)
+                const bool pcss_depth_fetch = RenderShadowPCSS && !gCubeSnapshot && gGLManager.mGLVersion >= 3.29f;
+                if (pcss_depth_fetch)
+                {
+                    bindShadowDepthFetch(sun_shader, true);
+                }
+                // </Vulkanstorm>
+
                 {
                     LLGLDisable   blend(GL_BLEND);
                     LLGLDepthTest depth(GL_TRUE, GL_FALSE, GL_ALWAYS);
                     mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
                 }
 
+                if (pcss_depth_fetch)
+                {
+                    bindShadowDepthFetch(sun_shader, false); // <Vulkanstorm/> PCSS: release the units and the sampler
+                }
                 unbindDeferredShader(sun_shader);
             }
             deferred_light_target->flush();
         }
 
-        if (RenderDeferredSSAO && !gCubeSnapshot)
+        // <Vulkanstorm> PCSS: the blur is the denoiser of the rotated shadow kernel, so it runs
+        // without SSAO too, and a blur size of 0 skips both passes. Unchanged with PCSS off.
+        const bool pcss_shadows = RenderShadowPCSS && RenderShadowDetail > 0;
+        const bool blur_light_map = pcss_shadows ? RenderShadowBlurSize > 0.f : RenderDeferredSSAO;
+        if (blur_light_map && !gCubeSnapshot)
+        // </Vulkanstorm>
         {
             // soften direct lighting lightmap
             LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("renderDeferredLighting - soften shadow");

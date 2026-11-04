@@ -30,6 +30,11 @@
 #include "llgl.h"
 #include "llglslshader.h"
 
+// <Vulkanstorm> key of the PCSS build of deferred/shadowUtil.glsl among the compiled fragment
+// objects (the same file with PCSS_SHADOW defined); see LLViewerShaderMgr::loadBasicShaders
+#define PCSS_SHADOW_UTIL_KEY "deferred/shadowUtil.glsl#PCSS_SHADOW"
+// </Vulkanstorm>
+
 class LLShaderMgr
 {
 public:
@@ -181,6 +186,7 @@ public:
         DEFERRED_DEPTH_CUTOFF,              //  "depth_cutoff"
         DEFERRED_NORM_CUTOFF,               //  "norm_cutoff"
         DEFERRED_SHADOW_TARGET_WIDTH,       //  "shadow_target_width"
+        DEFERRED_SHADOW_LIGHT_SIZE,         //  "shadow_light_size" <Vulkanstorm/> PCSS
 
         DEFERRED_SSR_ITR_COUNT,             //  "iterationCount"
         DEFERRED_SSR_RAY_STEP,              //  "rayStep"
@@ -215,6 +221,12 @@ public:
         DEFERRED_SHADOW3,                   //  "shadowMap3"
         DEFERRED_SHADOW4,                   //  "shadowMap4"
         DEFERRED_SHADOW5,                   //  "shadowMap5"
+        // <Vulkanstorm> PCSS: plain depth reads (sampler object) of shadowMap0/1/4/5
+        DEFERRED_SHADOW_DEPTH0,             //  "shadowDepth0"
+        DEFERRED_SHADOW_DEPTH1,             //  "shadowDepth1"
+        DEFERRED_SHADOW_DEPTH4,             //  "shadowDepth4"
+        DEFERRED_SHADOW_DEPTH5,             //  "shadowDepth5"
+        // </Vulkanstorm>
         DEFERRED_POSITION,                  //  "positionMap"
         DEFERRED_DIFFUSE,                   //  "diffuseRect"
         DEFERRED_SPECULAR,                  //  "specularRect"

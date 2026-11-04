@@ -315,6 +315,7 @@ public:
     // bind shadow maps
     // if setup is true, wil lset texture compare mode function and filtering options
     void bindShadowMaps(LLGLSLShader& shader);
+    void bindShadowDepthFetch(LLGLSLShader& shader, bool bind); // <Vulkanstorm/> PCSS raw depth units
     void bindDeferredShaderFast(LLGLSLShader& shader);
     void bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_target = nullptr, LLRenderTarget* depth_target = nullptr);
     void setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep);
@@ -1158,6 +1159,8 @@ public:
     static F32 CameraFieldOfView;
     static F32 RenderShadowNoise;
     static F32 RenderShadowBlurSize;
+    static bool RenderShadowPCSS;          // <Vulkanstorm/> PCSS soft shadows
+    static F32 RenderShadowPCSSLightSize;  // <Vulkanstorm/> PCSS light size multiplier
     static F32 RenderSSAOScale;
     static U32 RenderSSAOMaxScale;
     static F32 RenderSSAOFactor;

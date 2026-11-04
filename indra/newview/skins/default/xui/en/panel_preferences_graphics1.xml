@@ -2111,6 +2111,30 @@ If you do not understand the distinction then leave this control alone."
       </radio_group>
       <!-- </Vulkanstorm> -->
 
+      <!-- <Vulkanstorm> PCSS soft shadows; enabled with shadows only (LLFloaterPreference::refreshEnabledState) -->
+      <text
+       follows="left|top"
+       height="18"
+       layout="topleft"
+       left="15"
+       top_pad="12"
+       width="100"
+       font="SansSerifBold"
+       name="ShadowsHeading">
+        Shadows
+      </text>
+      <check_box
+       control_name="RenderShadowPCSS"
+       height="18"
+       label="Soft shadows (PCSS)"
+       layout="topleft"
+       left_pad="5"
+       top_delta="0"
+       width="300"
+       name="ShadowPCSS"
+       tool_tip="Softens the edges of sun, moon and projector shadows with a wider, rotated filter and smooths the result with the shadow blur. Needs shadows (Sun/Moon or Sun/Moon + Projectors). Costs some GPU time."/>
+      <!-- </Vulkanstorm> -->
+
     </panel>
 
 <!--Depth of Field-->
