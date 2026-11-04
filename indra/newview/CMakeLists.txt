@@ -2946,6 +2946,12 @@ if (DARWIN)
      "${VIEWER_APP_BUNDLE}/Contents/Info.plist"
     )
 
+  # <Vulkanstorm> macOS stages the bundle only in this POST_BUILD step: relink
+  # when a shipped licence text changes so the staged terms cannot go stale
+  # (LINK_DEPENDS: Makefile and Ninja generators).
+  set_property(TARGET ${VIEWER_BINARY_NAME} APPEND PROPERTY LINK_DEPENDS ${VIEWER_MANIFEST_LICENCE_INPUTS})
+  # </Vulkanstorm>
+
   add_custom_command(
     TARGET ${VIEWER_BINARY_NAME} POST_BUILD
     COMMAND ${PYTHON_EXECUTABLE}
