@@ -6,7 +6,33 @@ ports of it) and `LGPL-2.1-or-later OR GPL-3.0-or-later` (original
 Vulkanstorm code). Offering GPL-3.0 for a *binary* is only honest if
 everything linked into it can be distributed under GPL-3.0 too. This is the
 audit of what the shipped binaries link with, as of 2026-11-04 on
-`vkstorm-devel`.
+`vkstorm-devel`, re-checked for this line below.
+
+## This line: `vkstorm-rust`
+
+The audit below was made on `vkstorm-devel` and re-checked against this
+line's own `autobuild.xml` and CI configure line (2026-11-04). The configure
+options match devel's except `USE_VKS_AUDIO=ON` in place of `USE_SOLOUD`.
+Package differences:
+
+| Component | Licence | Status | Notes |
+|---|---|---|---|
+| vkstorm-ffi 0.5.0 (`vkstorm-core-rust`, static library) | `LGPL-2.1-only OR GPL-3.0-or-later` with BSD-2-Clause, BSD-3-Clause and Zlib parts | OK | Its `autobuild.xml` metadata still says `LGPL-2.1-only` until the package is rebuilt from vkstorm-core-rust #25. The crates.io dependencies are audited in the Rust core section below |
+| FFmpeg 9.0.2, decoder-only shared libraries (libavcodec, libavutil, libswresample) | LGPL-2.1-or-later | OK | Built without GPL or non-free parts (`3p-ffmpeg`) |
+| SoLoud, vlc-speakerfill | | not on this line | The vkstorm-ffi audio engine replaces SoLoud |
+
+The open points are the same: OpenSSL 1.1.1w and GLOD are linked. In
+addition, `vkstorm-http` (inside vkstorm-ffi) loads the viewer's libcurl,
+and with it OpenSSL, at run time. This line has no GPL-only code.
+
+Follow-up for this line: the C++ adapters and parity tests that only this
+line has are not marked. They are Linden Lab-derived glue and tests: take
+them under `LGPL-2.1-only OR GPL-3.0-or-later`. They include
+`indra/llaudio/llaudioengine_vks.cpp`, `llstreamingaudio_vks.*`,
+`indra/llinventory/llinventory_vks.*`, the `*_parity_test.cpp`, `*_oracle.*`
+and `*_tool.cpp` tests, `check_r*_copies.py`, `indra/cmake/Rust.cmake` and
+`VKSAudio.cmake`. The SoLoud and libvlc audio files listed under
+follow-up below are not on this line.
 
 ## Open points (read first)
 
