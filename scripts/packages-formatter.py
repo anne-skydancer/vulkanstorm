@@ -126,6 +126,16 @@ if any(pkgs for pkgs in list(dups.values())):
 
 print("%s %s" % (args.channel, args.version))
 print(viewer_copyright)
+# <Vulkanstorm> The viewer's own licence (NOTICE.md in the source tree).
+# One line: the About box wraps it.
+print("Vulkanstorm is free software: you may use, modify and distribute it under "
+      "the GNU Lesser General Public License, version 2.1, or, at your choice, the "
+      "GNU General Public License, version 3 or any later version (LGPL-license.txt "
+      "and GPL-3.0-license.txt beside the viewer). Linden Lab and Firestorm code is "
+      "licensed by them under LGPL-2.1 only; section 3 of that licence allows the "
+      "GPL option. The components below keep their own licences.")
+print()
+# </Vulkanstorm>
 version = list(info['versions'].items())
 version.sort()
 for pkg, pkg_version in version:

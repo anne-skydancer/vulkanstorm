@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 # Installs the repository's git hooks into the directory git uses for hooks
 # (the shared .git/hooks, or core.hooksPath when it is set), so they apply to
 # the main checkout and to every worktree.

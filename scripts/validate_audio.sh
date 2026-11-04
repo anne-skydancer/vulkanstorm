@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 variables_dir="${FS_BUILD_VARIABLES_DIR:-$(cygpath -u "$LOCALAPPDATA")/VulkanStorm/fs-build-variables}"
