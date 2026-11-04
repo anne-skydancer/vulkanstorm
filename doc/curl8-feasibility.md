@@ -39,7 +39,7 @@ Order:
    7.54.1 on OpenSSL 3.5 until 2030 and revisit when LL enables HTTP/2 on
    the CDN.
 
-Effort: **12 to 19 working days** on top of the OpenSSL work
+Effort: **16 to 24 working days** on top of the OpenSSL work
 ([Effort](#effort)).
 
 ### Comparison
@@ -47,7 +47,7 @@ Effort: **12 to 19 working days** on top of the OpenSSL work
 | | curl 7.54.1 on OpenSSL 3.5 | curl 8.23 on OpenSSL 3.5 |
 |---|---|---|
 | Security support | None upstream. 88 published vulnerabilities, 7 High ([vuln-7.54.1](https://curl.se/docs/vuln-7.54.1.html)); LL's 3p-curl builds every protocol (FTP, SMTP, TFTP, ...) and its recent commits are build fixes, not backports (verified) | Current release, fixes ship every ~8 weeks ([releases](https://curl.se/docs/releases.csv)); we can disable all non-HTTP protocols |
-| Effort | 1 to 3 days (rebuild; more if it needs patches), part of the OpenSSL study | 12 to 19 days: package, ~15 viewer call sites, pipelining replacement in C++ and Rust, measurement |
+| Effort | 1 to 3 days (rebuild; more if it needs patches), part of the OpenSSL study | 16 to 24 days: package, ~15 viewer call sites, pipelining replacement in C++ and Rust, measurement |
 | Risk | Unproven build against OpenSSL 3 (medium); no behaviour change | Texture/mesh load regression for distant users (high until measured); small API/behaviour changes (low) |
 | Performance | Unchanged: 8 connections x depth 5 to the CDN | HTTP/1.1 only to the CDN: needs ~2 to 5x more connections to keep the same requests in flight; HTTP/2 helps only on hosts that offer h2 (web services, not the CDN) |
 | Future | Dead end: uses the ENGINE API, so it cannot move to OpenSSL 4 (4.1.0 is out, 2026-10-23); no HTTP/3 | Builds against OpenSSL 4.x (curl CI already tracks 4.1); HTTP/3 possible via ngtcp2 if SL ever offers it; ready the day LL enables HTTP/2 on the CDN |
@@ -95,13 +95,24 @@ Effort: **12 to 19 working days** on top of the OpenSSL work
    `CURLINFO_SIZE_DOWNLOAD`/`SPEED_DOWNLOAD` (`_httpoprequest.cpp:279,281`)
    and `curl_formadd`/`CURLOPT_HTTPPOST` (`linux_crash_logger.cpp:105-138`).
    MSVC is unaffected (the macro is empty there).
-6. **Small behaviour changes (low).** Accept-Encoding is no longer sent on
+6. **Wrong certificate dialog at login (medium, certain without a fix).**
+   The viewer's `sslVerify` returns `CURLE_SSL_CACERT` for an untrusted CA
+   and `CURLE_SSL_PEER_CERTIFICATE` for every other certificate failure
+   (`llappcorehttp.cpp:572,581`). In curl 8 both are 60, so
+   `llxmlrpclistener.cpp` names both `SSL_CACERT`, and `llstartup.cpp:1944-1961`
+   then offers the "trust this CA" dialog (`TrustCertificateError`) for
+   expired certificates or bad signatures too, instead of
+   `GeneralCertificateError`. Fix: carry an application-level failure kind
+   from `sslVerify` through the login transaction instead of the curl code,
+   and test both dialogs. The rust line has the same path
+   (`httprequest.cpp` returns `CURLE_SSL_CACERT`).
+7. **Small behaviour changes (low).** Accept-Encoding is no longer sent on
    GET/PUT (guard at `_httpoprequest.cpp:521-523`); certificate-error
    messages at login lose their specific text
    (`llxmlrpctransaction.cpp:428-436`); HTTP/2 is negotiated by default with
    hosts that offer it (web services, `map.secondlife.com`). Each is
    listed with its fix in [API changes](#3-api-and-behaviour-changes).
-7. **OpenSim (low, inferred).** OpenSim grids serve plain HTTP/1.1 from
+8. **OpenSim (low, inferred).** OpenSim grids serve plain HTTP/1.1 from
    `OSWebServer` (verified for a sample). Pipelining against OpenSim was
    switched off by Firestorm in 2016 and back on in 2020 (verified); the
    connection-concurrency replacement applies unchanged. Some grids'
@@ -262,8 +273,8 @@ C++ is not typechecked by curl's setopt macros (they are C-only,
 | `llcorehttp/_httpoprequest.cpp:521-523`, `httpcommon.cpp:294-297` | `CURLOPT_ENCODING ""` compiled out for curl >= 7.81 (Firestorm guard: AWS sends `Content-Encoding: binary/octet-stream`, which newer curl rejects) | GET/PUT stop sending Accept-Encoding | Decide: keep off (assets are already compressed) or set it per class for LLSD caps; inventory responses may grow |
 | `llcorehttp/_httpoprequest.cpp:627` | `CURLOPT_ENCODING ""` on POST, unguarded | a bad `Content-Encoding` now fails with `CURLE_BAD_CONTENT_ENCODING` (61) (inferred) | Align with the decision above |
 | `newview/llxmlrpctransaction.cpp:428-436` | `#if CURLE_SSL_PEER_CERTIFICATE != CURLE_SSL_CACERT` (enum names in `#if` evaluate to 0, so this case is already compiled out with 7.54.1) and `case CURLE_SSL_CACERT` guarded `< 7.81` | `CURLE_SSL_CACERT` and `CURLE_SSL_PEER_CERTIFICATE` are both macros for `CURLE_PEER_FAILED_VERIFICATION` (60) since 7.62 | Add `case CURLE_PEER_FAILED_VERIFICATION:` to the `ssl_connect_error` message, else certificate failures at login get the generic text |
-| `newview/llappcorehttp.cpp:572,581` | viewer's `sslVerify` returns `CURLE_SSL_CACERT` or `CURLE_SSL_PEER_CERTIFICATE` | both 60 | none to compile; the two cases become indistinguishable to callers |
-| `newview/llxmlrpclistener.cpp:130,140,306-309` | name table and `case CURLE_SSL_CACERT` | key 60 labelled "SSL_CACERT"; branch now taken for curl's own failures with empty certificate data | Tidy (optional) |
+| `newview/llappcorehttp.cpp:572,581` | viewer's `sslVerify` returns `CURLE_SSL_CACERT` or `CURLE_SSL_PEER_CERTIFICATE` | both 60 | **Required:** the two cases become indistinguishable, see risk 6. Carry a viewer-side failure kind (trust vs general) through login |
+| `newview/llxmlrpclistener.cpp:130,140,306-309` | name table and `case CURLE_SSL_CACERT` | key 60 labelled "SSL_CACERT"; branch now taken for curl's own failures with empty certificate data; every certificate failure is named `SSL_CACERT`, which drives the dialog choice in `llstartup.cpp:1944-1961` | Required with the row above |
 | `indra/cmake/CURL.cmake` | links `libcurl` + `ll::openssl ll::nghttp2 ll::zlib-ng` | a static curl 8 on Windows also needs `ws2_32 crypt32 bcrypt iphlpapi secur32 normaliz` (inferred) | Add system libraries |
 | `httpcommon.cpp:238-246` | `CURLE_HTTP_POST_ERROR` in the retry list | now `CURLE_OBSOLETE34`, never returned | optional |
 | `fscommon.cpp:127-129` | `curl_unescape` | still exported | optional `curl_easy_unescape` |
@@ -442,14 +453,19 @@ licence question beyond the OpenSSL one already recorded.
   port (http:80 or https:443), and the connection count the viewer opens
   to the CDN.
 - **G2 build:** Windows `/WX` and Linux `-Werror` RelWithDebInfo builds
-  clean; `llcorehttp` unit tests and the integration tests pass; on the
+  clean; the `llcorehttp` unit and integration tests pass. Those suites are
+  not registered today (`LL_ADD_PROJECT_UNIT_TESTS(llcorehttp ...)` and
+  `LL_ADD_INTEGRATION_TEST(llcorehttp ...)` are commented out in
+  `indra/llcorehttp/CMakeLists.txt:122-140`, verified), so restoring them
+  against both curls is part of this gate. On the
   rust line the parity tests and the `link-curl` suites pass.
 - **G3 performance (blocking):** curl 8 with the new concurrency must match
   7.54.1 pipelined within noise on texture and mesh load time, for each
   of: local latency, +150 ms added latency (Windows `clumsy` or Linux
   `tc netem`), and one OpenSim grid. No rise in 503/429 or timeouts.
 - **G4 functional:** login (SL and OpenSim; HTTPS and HTTP login URIs),
-  certificate errors show the right message, HTTP proxy and SOCKS5 proxy
+  an untrusted-CA certificate shows the trust dialog and an expired or
+  badly signed one shows the general certificate dialog, HTTP proxy and SOCKS5 proxy
   from Preferences (`llproxy.cpp:431-465`), inventory/AIS, uploads, event
   poll survives long idles, Linux crash logger upload (`curl_mime_*`),
   parcel audio streams (vkstorm-audio on the rust line). Media/SLPlugin
@@ -460,16 +476,25 @@ licence question beyond the OpenSSL one already recorded.
 ### Measuring load performance
 
 - `indra/llcorehttp/examples/http_texture_load.cpp` (verified present): a
-  stand-alone loader that takes a URL list and a pipelining depth. Build it
-  against both curls and replay the same texture URL list from a G1 trace
-  (no credentials needed for CDN asset URLs, inferred). This isolates the
-  HTTP layer from rendering.
+  stand-alone loader with a pipelining depth option. It does not take a URL
+  list: it reads 36-character asset UUIDs (`WorkingSet::loadAssetUuids()`,
+  `:573-582`) and builds URLs from a printf-style template (`-u`). Either
+  extract the texture UUIDs and the ViewerAsset URL template from the G1
+  trace, or adapt the loader to replay full URLs and byte ranges (part of
+  stage 1). Build it against both curls; no credentials are needed for CDN
+  asset URLs (inferred). This isolates the HTTP layer from rendering.
 - `--logmetrics TextureFetchTester` (`lltexturefetch.cpp:80,2752`) writes
   the viewer's own texture fetch metrics; the texture and mesh fetch
   statistics in the Statistics floater and fast-timer logs give totals.
-- `scripts/perf/perfbot_run.py` runs non-interactive viewers; with a fixed
-  start location and cleared cache it gives a repeatable "time to all
-  textures loaded" run. `profile_cmp.py` compares the results.
+- The existing `scripts/perf/` tools do not measure this:
+  `perfbot_run.py` always passes `--noninteractive`, which skips texture
+  fetching (`lltexturefetch.cpp:1138-1141`), and `profile_cmp.py` compares
+  frame-profile statistics, not load times (verified). Stage 1 therefore
+  adds a rendering-enabled run (fixed start location, cleared cache) and a
+  collector and comparator for texture and mesh completion: time until
+  the fetch queues are empty and the counts of completed, failed and
+  retried requests, taken from the fetch statistics or
+  `TextureFetchTester` output.
 - Run each configuration at least five times with a cleared cache; report
   median and spread.
 
@@ -478,13 +503,14 @@ licence question beyond the OpenSSL one already recorded.
 | Stage | Days |
 |---|---|
 | 0. curl 8.23 package (with the OpenSSL 3.5 package from the OpenSSL study) | 2 to 3 |
-| 1. G1 baseline trace and measurement harness | 1 to 2 |
-| 2. Compile fixes: deprecations, crash logger mime, `CURL.cmake` system libs, error mapping, Accept-Encoding decision | 1 to 2 |
+| 1. G1 baseline trace; measurement harness (loader replay, rendering-enabled run, completion collector and comparator) | 3 to 4 |
+| 2. Compile fixes: deprecations, crash logger mime, `CURL.cmake` system libs, Accept-Encoding decision; certificate failure kind through login | 2 to 3 |
+| 2b. Restore the llcorehttp unit and integration tests | 1 to 2 |
 | 3. Pipelining replacement in llcorehttp and llappcorehttp, water marks | 2 to 3 |
 | 4. Same in Rust `vkstorm-http`, parity fixture re-baseline | 2 to 3 |
 | 5. G3 measurements and tuning | 3 to 4 |
 | 6. G4 functional checks, per-line integration PRs | 1 to 2 |
-| **Total** | **12 to 19** |
+| **Total** | **16 to 24** |
 
 This comes after the OpenSSL 3.5 change (8 to 12 days in that study). If
 the 7.54.1 rebuild against OpenSSL 3.5 fails, stages 0 to 3 and 5 move
