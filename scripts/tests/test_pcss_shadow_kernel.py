@@ -112,6 +112,10 @@ def res_scale(res, screen):
 def blocker_depth(depth_at, c, z_bias, grad, extent, rot):
     """pcssBlockerDepth; depth_at(uv) reads the raw depth map"""
     total, count = 0.0, 0
+    centre = depth_at((c[0], c[1]))
+    if centre < c[2] + z_bias:
+        total += centre
+        count += 1
     for px, py in shader_disk():
         off = ((rot[0] * px - rot[1] * py) * extent[0], (rot[1] * px + rot[0] * py) * extent[1])
         d = depth_at((c[0] + off[0], c[1] + off[1]))
@@ -294,6 +298,15 @@ class ContactHardeningTest(unittest.TestCase):
         self.assertEqual(ground, -1.0)
         half = blocker_depth(lambda uv: 0.3 if uv[0] < 0.5 else 0.8, (0.5, 0.5, 0.6), -0.004, (0.0, 0.0), (0.01, 0.01), rot)
         self.assertEqual(half, 0.3)
+
+    def test_thin_caster_under_the_receiver_is_found(self):
+        # a 2x2 texel caster centred on the pixel, searched with an 8 texel radius: every
+        # disk tap lands outside it, so only the centre read can find it
+        rot = (math.cos(0.7), math.sin(0.7))
+        texel = 1.0 / 1024.0
+        caster = lambda uv: 0.3 if abs(uv[0] - 0.5) <= texel and abs(uv[1] - 0.5) <= texel else 0.8
+        found = blocker_depth(caster, (0.5, 0.5, 0.6), -0.004, (0.0, 0.0), (8 * texel, 8 * texel), rot)
+        self.assertEqual(found, 0.3)
 
     def test_spot_blocker_distance_from_raw_depth(self):
         m = light_matrix([0.2, 1.0, -0.1], 20.0, 30.0, perspective=True)
