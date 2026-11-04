@@ -11,7 +11,7 @@ shader) into
 then times the sun light pass (class2 deferred/sunLightF.glsl + class1 deferred/shadowUtil.glsl)
 at RenderShadowDetail 2 (SUN_SHADOW and SPOT_SHADOW) and 1 (SUN_SHADOW) with GL_TIME_ELAPSED
 queries for
-  * "base"  -- both shaders from git ref PCSS_BENCH_BASE_REF (default origin/vkstorm-devel)
+  * "base"  -- both shaders from git ref PCSS_BENCH_BASE_REF (default 6ceaf3196c, the pre-PCSS devel tip)
   * "tree"  -- this working tree, PCSS_SHADOW undefined
   * "pcss1" -- this working tree, PCSS_SHADOW: stage 1, the fixed radius rotated PCF (what the
                viewer compiles below GL 3.3, without sampler objects)
@@ -45,7 +45,8 @@ from pathlib import Path
 bootstrap = Path(__file__).with_name('gl_test_context.py').read_text()
 exec(compile(bootstrap, 'gl_test_bootstrap', 'exec'))
 root = Path(__file__).resolve().parents[2]
-BASE_REF = os.environ.get('PCSS_BENCH_BASE_REF', 'origin/vkstorm-devel')
+# pre-PCSS devel tip (the #294 merge): the last shadowUtil.glsl without PCSS_SHADOW
+BASE_REF = os.environ.get('PCSS_BENCH_BASE_REF', '6ceaf3196c')
 FRAMES = int(os.environ.get('PCSS_BENCH_FRAMES', 30)); WARMUP = 5
 RESOLUTIONS = [tuple(int(v) for v in r.split('x')) for r in os.environ.get('PCSS_BENCH_RES', '1920x1080,2560x1440').split(',')]
 SHADERS = 'indra/newview/app_settings/shaders/'
@@ -64,6 +65,7 @@ deltex=fn('glDeleteTextures',None,I,C.POINTER(U))
 texstorage=fn('glTexStorage2D',None,U,I,U,I,I);texparam=fn('glTexParameteri',None,U,U,I)
 active=fn('glActiveTexture',None,U)
 genfbo=fn('glGenFramebuffers',None,I,C.POINTER(U));bindfbo=fn('glBindFramebuffer',None,U,U)
+delfbo=fn('glDeleteFramebuffers',None,I,C.POINTER(U))
 attachtex=fn('glFramebufferTexture2D',None,U,U,U,U,I);fbstatus=fn('glCheckFramebufferStatus',U,U)
 drawbuffers=fn('glDrawBuffers',None,I,C.POINTER(U));drawbuffer=fn('glDrawBuffer',None,U);readbuffer=fn('glReadBuffer',None,U)
 viewport=fn('glViewport',None,I,I,I,I);draw=fn('glDrawArrays',None,U,I,I)
@@ -216,6 +218,7 @@ def make_fbo(colors, depth=None):
     else:
         drawbuffer(0); readbuffer(0)
     assert fbstatus(FB) == 0x8CD5, 'incomplete framebuffer'
+    return f
     return f.value
 def blur_happy(x): return (x + 16) & ~0xF
 
@@ -261,10 +264,11 @@ class Scene:
         return mats
 
     def render_depth(self, sprog, tex, w, h, light):
-        make_fbo([], tex); viewport(0, 0, w, h)
+        f = make_fbo([], tex); viewport(0, 0, w, h)
         enable(0x0B71); depthfunc(0x0207); depthmask(1)        # depth test ALWAYS, write
         use(sprog); set_mat(sprog, 'light_proj_view', [light]); set_mat(sprog, 'inv_light', [inverse(light)])
         draw(4, 0, 3); disable(0x0B71)
+        bindfbo(FB, 0); delfbo(1, C.byref(f))
         bindtex(TEX2D, tex)                                    # compare state as allocateShadowBuffer
         texparam(TEX2D, 0x884C, 0x884E); texparam(TEX2D, 0x884D, 0x0203)
 
@@ -302,6 +306,7 @@ class Scene:
         bindfbo(FB, self.gfbo); readbuffer(COLOR0)
         buf = (F*4)(); readpixels(x, y, 1, 1, 0x1908, 0x1406, C.byref(buf)); return list(buf)
     def release(self):
+        bindfbo(FB, 0); fbos = (U*2)(self.gfbo, self.lfbo); delfbo(2, fbos)
         tex = (U*(4 + len(self.maps)))(self.gpos, self.gnorm, self.light_map, 0, *self.maps); deltex(len(tex), tex)
 
 failures = []
