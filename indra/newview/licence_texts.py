@@ -30,6 +30,10 @@ or later, to your copy instead. Original Vulkanstorm code is offered under
 LGPL-2.1 or later, or GPL-3.0 or later. Third-party components keep their
 own licences: see licenses.txt and the licenses folder after installation.
 
+This build links OpenSSL 1.1.1 and GLOD, whose licences are not compatible
+with GPL-3.0. Until they are replaced, the GPL-3.0 option applies to the
+source code only, and this program is offered to you under LGPL-2.1.
+
 Neither licence limits running the program; they set the terms for
 copying, modifying and distributing it. The source code is available at
 https://github.com/anne-skydancer/vulkanstorm (see NOTICE.md there).
