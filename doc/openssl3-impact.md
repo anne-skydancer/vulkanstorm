@@ -29,7 +29,8 @@ wrong is the credential store (`bin_conf.dat`), which is RC4-encrypted: RC4
 is only in the legacy provider in 3.x. Load the legacy provider into a
 private library context used only for that file, check every EVP return
 value, and gate the change on a test that reads a store written by the
-current 1.1.1 viewer.
+current 1.1.1 viewer. That test now exists and passes against a local
+OpenSSL 3.5.9 build (section 9), including on the owner's real store.
 
 When: after the GLOD removal lands, as a feature branch from `vkstorm-devel`
 (packages first, then the viewer change), then one integration PR per line.
@@ -54,6 +55,15 @@ need to wait for LL or Firestorm; neither has moved (verified, see below).
    Mitigation: RC4 through the legacy provider in a private
    `OSSL_LIB_CTX`, return values checked, a write-error path that returns
    before the replace step, and a compatibility test as a gate.
+   **Tested** ([section 9](#9-credential-store-test-openssl-35-with-the-built-in-legacy-provider)):
+   with OpenSSL 3.5.9 built `no-shared no-module`, the proposed code reads
+   and writes stores byte-compatible with the current 1.1.1w viewer in both
+   directions, including the owner's real store. Without the legacy
+   provider it fails cleanly and leaves the store untouched. Today's
+   unchanged code against OpenSSL 3 cut a 3,222-byte store to its 16-byte
+   salt and read garbage. The risk is real and the mitigation works; it
+   stays high until the viewer change carries the same code and passes
+   the in-viewer gates.
 2. **libcurl 7.54.1 against OpenSSL 3 is unproven here (medium).** The
    viewer depends on LL's pipelining-capable curl 7.54.1; newer curl (7.62
    and later) dropped HTTP/1.1 pipelining. Its OpenSSL backend guards its
@@ -95,8 +105,9 @@ XML encrypted with plain RC4 keyed by the salt. Verified: the store blob in
 `indra/newview/tests/llsechandler_basic_test.cpp` (test 3) decrypts to the
 expected LLSD with a textbook RC4, and the OpenSSL 3.5.9 legacy provider
 gives byte-identical output, while OpenSSL 3.5.9 with only the default
-provider refuses (`Error setting cipher RC4 ... unsupported`). No migration
-step is needed if RC4 stays readable. Moving to a stronger format, which
+provider refuses (`Error setting cipher RC4 ... unsupported`). Section 9
+repeats this with the proposed code on generated stores and on the owner's
+real store. No migration step is needed if RC4 stays readable. Moving to a stronger format, which
 Alchemy has done (ChaCha20 with an RC4 read fallback; design reference only),
 is a separate decision: a downgraded viewer could not read the new file, and
 the RC4 read fallback keeps the legacy provider (or a separate RC4) in use.
@@ -318,26 +329,30 @@ Each stage has a gate; stop at a failed gate.
    windows64 + linux64; `anne-skydancer/3p-curl` 7.54.1 against it.
    *Gate:* both packages build in CI; `openssl list -providers -provider
    legacy` from the package build shows the built-in legacy provider; the
-   curl test suite's TLS tests pass.
-2. **Viewer change** on `codex/openssl3` from `vkstorm-devel`:
+   curl test suite's TLS tests pass. On Windows the OpenSSL build must use
+   the dynamic CRT (`/MD` in `CFLAGS`, as LL's script does): OpenSSL's
+   default `/MT` does not link against the zlib-ng package (found in
+   section 9).
+2. **Credential-store gate, before any viewer change.**
+   `scripts/tests/openssl3_credstore/` (section 9): the harness built
+   against the viewer's 1.1.1 package and against the OpenSSL 3.5 package
+   from stage 1 (not only the local build used for this study). *Gate:*
+   every check in section 9 passes against the package, and the owner's
+   real-store check passes with `CREDSTORE_REAL=1`.
+3. **Viewer change** on `codex/openssl3` from `vkstorm-devel`:
    `autobuild.xml`, `OpenSSL.cmake` if needed, `llsecapi.cpp` (drop
-   ENGINE/init), `llsechandler_basic.cpp` (RC4 via private legacy context,
-   checked returns, a write-error path that returns before replacing the
-   store, `get0_` accessors with a const `cert_date_from_asn1_time`),
-   `llcrashlogger.cpp` (drop locking),
-   remove the dead `wrapper.sh` preload.
+   ENGINE/init), `llsechandler_basic.cpp` (the harness's RC4 code: private
+   legacy context, checked returns, a write-error path that returns before
+   replacing the store), `get0_` accessors with a const
+   `cert_date_from_asn1_time`, `llcrashlogger.cpp` (drop locking), and
+   removal of the dead `wrapper.sh` preload.
    *Gate:* RelWithDebInfo builds with `/WX` and `-Werror` on Windows and
-   Linux and the staged viewer runs.
-3. **Credential-store compatibility.**
-   *Gate:* (a) `llsechandler_basic_test` test 3 passes; (b) a new test
-   reads a `bin_conf.dat` fixture written by the current 1.1.1 viewer and
-   writes it back, and the 1.1.1 viewer reads the result (round trip in
-   both directions, so a downgrade keeps credentials); (c) injected
-   failures (cipher fetch on read, cipher init or update on write, file
-   write) leave the existing `bin_conf.dat` byte-identical and raise
-   instead of writing; (d) manual: a
-   profile with saved SL and OpenSim logins, including MFA, logs in after
-   the upgrade without re-entering passwords.
+   Linux and the staged viewer runs; `llsechandler_basic_test` test 3
+   passes; in-viewer fault injection (cipher fetch on read, cipher init
+   or update on write, file write) leaves `bin_conf.dat` byte-identical
+   and raises instead of writing; manual: a profile with saved SL and
+   OpenSim logins, including MFA, logs in after the upgrade without
+   re-entering passwords, and again after a downgrade to the 1.1.1 build.
 4. **TLS against servers.**
    *Gate:* SL login on agni and aditi, region crossings and teleports
    (simulator capabilities on 12043), inventory and asset fetch, marketplace
@@ -365,12 +380,102 @@ Each stage has a gate; stop at a failed gate.
 |---|---|
 | 1. OpenSSL package | 1 to 2 days |
 | 1. curl rebuild (more if 7.54.1 needs source patches) | 1 to 3 days |
-| 2. Viewer change | 1 to 1.5 days |
-| 3. Credential tests and fixtures | 1 day |
+| 2. Credential-store gate (harness exists; rerun against the package) | 0.5 day |
+| 3. Viewer change | 1 to 1.5 days |
+| 3. In-viewer credential tests | 0.5 day |
 | 4. Server tests and timing | 1 to 2 days |
 | 5. CI | 0.5 day |
 | 6. Four line integrations | 2 days |
 | **Total** | **8 to 12 working days** |
+
+## 9. Credential-store test (OpenSSL 3.5 with the built-in legacy provider)
+
+Owner's request, 2026-11-04: test the credential store against OpenSSL 3.5
+built the way this report proposes to ship it, before any viewer change.
+Everything below was run (verified) on Windows 11, 2026-11-04, with
+TEMP/TMP set to `.fixture-tmp`.
+
+### What was built
+
+- **OpenSSL 3.5.9** (3.5 LTS) from `openssl-3.5.9.tar.gz`, the release
+  linked from <https://openssl-library.org/source/>. SHA-256
+  `603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a`.
+  This matches the `.sha256` file and the GitHub release asset digest. The
+  site prints no digest itself; it links to these files. The detached
+  signature `openssl-3.5.9.tar.gz.asc` verifies ("Good signature from
+  OpenSSL <openssl@openssl.org>", subkey `C46E D3F2 CBEF DA1F DAAD A442
+  64ED 7B1D CCE7 1CB2`) against `pubkeys.asc` from openssl-library.org,
+  imported into a throwaway keyring.
+  Built outside the repository under `C:\Users\annes\source\repos\work\openssl-3.5` with
+  `scripts/tests/openssl3_credstore/build_openssl35.cmd`:
+  `Configure VC-WIN64A zlib no-zlib-dynamic threads no-shared no-module
+  -DUNICODE -D_UNICODE -FS`, zlib from the viewer's zlib-ng package, and
+  `CFLAGS=/nologo /O2 /MD /W3 /wd4090 /DNDEBUG`. That is LL's 3p-openssl
+  configuration plus `no-module`. Result: `-DSTATIC_LEGACY` in the
+  compile lines, an empty `lib/ossl-modules` (no `legacy.dll`), and
+  `openssl list -providers -provider legacy` reports the legacy provider
+  3.5.9 active. Assembly is enabled (NASM). The first attempt, with
+  OpenSSL's default `/MT`, failed to link `openssl.exe` against the
+  `/MD` zlib-ng package (`__imp__aligned_malloc` unresolved), so a package
+  build needs the `/MD` CFLAGS too.
+- **OpenSSL 1.1.1w**: the viewer's current package
+  (`openssl-1.1.1w-r4-windows64`, from a devel-based build tree's
+  `build-vc180-64/packages`).
+- **Tools:** MSVC 19.51.36260 (Visual Studio 18, x64), Strawberry Perl
+  5.42.3 and NASM 3.02, both installed for this test with winget
+  (`StrawberryPerl.StrawberryPerl`, `NASM.NASM`). Git's Cygwin Perl cannot
+  configure VC targets. Python 3.13 runs the tests.
+- **Harness:** `scripts/tests/openssl3_credstore/credstore.cpp`, compiled by
+  `build.cmd` (`/std:c++17 /O2 /MD /W4 /WX`) twice:
+  - `credstore111.exe` against 1.1.1w: today's
+    `_readProtectedData`/`_writeProtectedData`, statement for statement
+    (salt XOR machine id as `LLXORCipher`, `EVP_rc4()`, 256-byte chunks,
+    `gcount()` appends, return values ignored, write to `.tmp` then
+    remove and rename);
+  - `credstore35.exe` against 3.5.9 with `OPENSSL_API_COMPAT=30000
+    OPENSSL_NO_DEPRECATED`: the proposed code (private `OSSL_LIB_CTX`,
+    `OSSL_PROVIDER_load(ctx, "legacy")`, `EVP_CIPHER_fetch(ctx, "RC4")`,
+    key length checked, `EVP_CipherInit_ex2`/`Update`/`Final_ex` checked,
+    output length checked per chunk, the whole file prepared before the
+    temporary file is written, and the store replaced only after that
+    succeeds). `--no-legacy` skips the provider load. `--unchecked` runs
+    today's code unchanged against 3.5.9.
+- **Test:** `python -m unittest scripts/tests/openssl3_credstore/test_credstore.py -v`
+  builds both and runs the checks. It finds the 1.1.1 package in this or a
+  sibling checkout and OpenSSL 3.5 under `work/openssl-3.5/install` (or
+  `CREDSTORE_PACKAGES`/`CREDSTORE_OPENSSL35`). It skips with a message on
+  non-Windows hosts or when either library is missing.
+
+### Results
+
+7 tests passed; the real-store test is opt-in and was run separately.
+
+| Check | Result |
+|---|---|
+| Versions | `OpenSSL 1.1.1w  11 Sep 2023`; `OpenSSL 3.5.9 29 Sep 2026` |
+| Fixture from `llsechandler_basic_test.cpp` test 3 (machine id 77,21,46,31,89,2) | both builds decrypt it to identical bytes containing `test_data_type`, `test_data_1`, `test_data_2`, `test element1` |
+| Same salt, same input: 1.1.1 and 3.5 write byte-identical files | pass for 0 bytes, an empty map, 255, 256, 257, 512 and 1000 bytes, and a 3,206-byte six-login credential LLSD (chunk size is 256) |
+| Cross-read, fixed salt | every store above, written by either build, reads back identically with both builds |
+| Cross-read, random salt (`RAND_bytes`) | 1.1.1 to 3.5 and 3.5 to 1.1.1: pass |
+| Negative: write with the legacy provider not loaded | exit 1, "RC4 unavailable or failed: nothing written, store untouched"; the existing store is byte-identical, no `.tmp` is left behind, and no file is created at a fresh path |
+| Negative: read with the legacy provider not loaded | exit 1, "store not decrypted"; no plaintext written; store unchanged |
+| Control: today's code, unchanged, against 3.5.9 (no legacy in the default context) | write exits 0 but leaves a **16-byte** file (salt only) in place of the 3,222-byte store; read exits 0 with wrong plaintext. This confirms risk 1 |
+| Owner's real store (`%APPDATA%\Vulkanstorm_x64\user_settings\bin_conf.dat`, opt-in `CREDSTORE_REAL=1`) | decrypts with the unique machine id under both builds; identical plaintext digest; 19 `<key>` elements; the original's SHA-256 is the same before and after |
+
+Real-store handling: the store was copied into a temporary folder under
+`.fixture-tmp` and the copy deleted afterwards. The machine id was derived in
+memory from WMI (`Win32_ComputerSystemProduct.UUID`, folded into 6 bytes as
+`llmachineid.cpp` does; `Win32_OperatingSystem.SerialNumber` as the legacy
+fallback, which was not needed) and passed on stdin. The harness's `digest`
+mode prints only a SHA-256, a length, a key count and an LLSD yes/no. The
+test compared those and printed only the flags and the key count. No
+plaintext, key, salt, machine id or digest of the real store was printed,
+logged or committed.
+
+Not covered here: Linux (the same code and package flags are expected to
+behave the same; inferred), the viewer's own `LLSDXMLParser` (the harness
+compares bytes, which is stricter), and libcurl, which this test does not
+link.
 
 ## What was inspected
 
