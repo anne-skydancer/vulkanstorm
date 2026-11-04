@@ -78,7 +78,7 @@ under `LGPL-2.1-or-later OR GPL-3.0-or-later`. See
 There is none in this tree, and there must be none: code available only
 under the GPL (for example the Aurora Viewer, GPL-3.0-or-later only) would
 remove the LGPL option for the whole viewer. Aurora is a design reference
-only; its code is never copied. The night sky (`indra/newview/llnightsky.*`
+only; its code is never copied. The night sky (not on `vkstorm-aleph`) (`indra/newview/llnightsky.*`
 and its data tools) is the owner's own work, relicensed by her from her
 Aurora fork, and is original Vulkanstorm code under the dual licence.
 
