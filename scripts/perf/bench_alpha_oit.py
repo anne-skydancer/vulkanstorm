@@ -1,24 +1,37 @@
 """Offline GPU benchmark of the alpha OIT capture + resolve shaders, no viewer launch.
 
 Times the per-frame reset, the capture pass and the resolve pass with GL_TIME_ELAPSED
-queries for two implementations on synthetic layer stacks at a given resolution:
-  * "ppll"  -- per-pixel linked list: shaders from git ref OIT_BENCH_OLD_REF
-               (default ed92bed30d, the last devel commit with the PPLL), 8 nodes/pixel, 24 sorted layers
-  * "slots" -- image-array A-buffer: shaders from this working tree, 8 slots/pixel, 8-byte
-               RG32UI nodes (alphaOITPackF.glsl linked as its own fragment shader object)
-  * "slots16" -- the same A-buffer with the 16-byte RGBA32UI node: shaders from git ref
+queries for these implementations on synthetic layer stacks at a given resolution:
+  * "ppll"  -- the original per-pixel linked list: shaders from git ref OIT_BENCH_OLD_REF
+               (default ed92bed30d, the last devel commit with the linked list), 8 nodes/pixel,
+               24 sorted layers
+  * "slots" -- PPLL as the viewer has it since PR #283, a fixed-slot image array: shaders from
+               this working tree, 8 slots/pixel, 8-byte RG32UI nodes (alphaOITPackF.glsl linked
+               as its own fragment shader object), order-independent tail past the last slot
+  * "slots16" -- the same with the 16-byte RGBA32UI node: shaders from git ref
                OIT_BENCH_SLOTS16_REF (default 6ceaf3196c, the last devel commit with that node)
-  * "direct" -- no A-buffer: plain in-order source-over blending (the legacy cost floor)
+  * "direct" -- no OIT: plain in-order source-over blending (the legacy cost floor; draw order
+               is not depth order, so its image is not a reference and has no RMSE)
 OIT_BENCH_IMPLS selects implementations (default ppll,slots); OIT_BENCH_SCENES a JSON list of
 [pattern, layers] pairs.
-Each scenario draws L full-screen layers at alpha 0.5 with distinct depths, either over
-every pixel ("full") or over 25% of 64x64 blocks ("sparse", a hair/particle clump proxy).
+Each scenario draws L full-screen layers with distinct, unsorted depths; the patterns
+(oit_bench_scenes.py) are "full" (every pixel, alpha 0.5), "sparse" (25% of 64x64 blocks, a
+hair/particle clump proxy), "bright" (bright alpha 0.22-0.37 layers over black), "foliage"
+(thin 40%-coverage stripes, alpha 0.95 core / 0.15 edge, past 8 slots from 32 layers) and
+"opaque" (alpha 1). All implementations shade the same scene_color() fragment function.
+
+Correctness: after timing, one more frame per implementation is read back over a window of
+OIT_BENCH_RMSE_WIN (default 256) square pixels and compared with the exact back-to-front
+composite of the same fragments on the CPU: RMSE and max absolute error in 8-bit units of the
+linear colour, over the alpha-covered pixels. Checks print ok/FAIL; any FAIL exits 1.
 
 Environment: OIT_BENCH_W, OIT_BENCH_H (default 2560x1440), OIT_BENCH_FRAMES (default 20),
 OIT_BENCH_OLD_REF. Pass --opengl PATH to select another GL DLL (Mesa).
 """
-import os, statistics, subprocess, sys
+import json, os, statistics, subprocess, sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import oit_bench_scenes as scenes
 bootstrap = Path(__file__).with_name('gl_test_context.py').read_text()
 exec(compile(bootstrap, 'gl_test_bootstrap', 'exec'))
 root = Path(__file__).resolve().parents[2]
@@ -30,6 +43,8 @@ OLD_REF = os.environ.get('OIT_BENCH_OLD_REF', 'ed92bed30d')
 SLOTS16_REF = os.environ.get('OIT_BENCH_SLOTS16_REF', '6ceaf3196c')
 IMPLS = os.environ.get('OIT_BENCH_IMPLS', 'ppll,slots').split(',')
 NODES_PER_PX = 8; OLD_MAX_LAYERS = 24; SLOTS = 8; META_LAYERS = 7
+RMSE_WIN = min(int(os.environ.get('OIT_BENCH_RMSE_WIN', 256)), W, H)
+WIN_X = min(512, W - RMSE_WIN); WIN_Y = min(256, H - RMSE_WIN)   # covers both sparse block phases
 
 genbuf=fn('glGenBuffers',None,I,C.POINTER(U));bindbuf=fn('glBindBuffer',None,U,U)
 storage=fn('glBufferStorage',None,U,S,P,U);data=fn('glBufferData',None,U,S,P,U)
@@ -42,6 +57,8 @@ clearsub=fn('glClearTexSubImage',None,U,I,I,I,I,I,I,I,U,U,P)
 genfbo=fn('glGenFramebuffers',None,I,C.POINTER(U));bindfbo=fn('glBindFramebuffer',None,U,U)
 attachtex=fn('glFramebufferTexture2D',None,U,U,U,U,I)
 geterror=fn('glGetError',U);uniform=fn('glUniform1i',None,I,I);uniform1f=fn('glUniform1f',None,I,C.c_float)
+F=C.c_float;uniform4f=fn('glUniform4f',None,I,F,F,F,F);uniform4i=fn('glUniform4i',None,I,I,I,I,I)
+readpixels=fn('glReadPixels',None,I,I,I,I,U,U,P)
 loc=fn('glGetUniformLocation',I,U,C.c_char_p);draw=fn('glDrawArrays',None,U,I,I)
 genq=fn('glGenQueries',None,I,C.POINTER(U));beginq=fn('glBeginQuery',None,U,U);endq=fn('glEndQuery',None,U)
 qresult=fn('glGetQueryObjectui64v',None,U,U,C.POINTER(C.c_uint64))
@@ -90,12 +107,11 @@ def resolve_source(impl):
     return '#version 430 core\n'+src
 DIRECT_SOURCE='''#version 430 core
 uniform float test_depth;
-uniform int pattern;
+'''+scenes.SCENE_GLSL+'''
 out vec4 color;
 void main()
 {
-    if (pattern == 1 && (((int(gl_FragCoord.x) >> 6) ^ (int(gl_FragCoord.y) >> 6)) & 3) != 0) discard;
-    color = vec4(0.8, 0.5, 0.2, 0.5);
+    color = scene_color();
 }
 '''
 def capture_source(impl):
@@ -125,13 +141,12 @@ uniform int oit_slot_count;
     return f'''#version 430 core
 {decl}uniform sampler2D alpha_oit_opaque_depth;
 uniform float test_depth;
-uniform int pattern;
+{scenes.SCENE_GLSL}
 out vec4 color;
 {helper}
 void main()
 {{
-    if (pattern == 1 && (((int(gl_FragCoord.x) >> 6) ^ (int(gl_FragCoord.y) >> 6)) & 3) != 0) discard;
-    vec4 c = vec4(0.8, 0.5, 0.2, 0.5);
+    vec4 c = scene_color();
     {body}
 }}
 '''
@@ -143,10 +158,33 @@ for impl in IMPLS:   # only the selected implementations; 'ppll' and 'slots16' n
     res=None if impl=='direct' else program([(0x8B31,vertex),(0x8B30,resolve_source(impl))]+extra)
     progs[impl]=(cap,res)
 queries=(U*3)();genq(3,queries)
+locations={}
+def uloc(prog,name):
+    key=(prog,name)
+    if key not in locations: locations[key]=loc(prog,name.encode())
+    return locations[key]
 
-def frame(impl, layers, pattern):
+def draw_layers(prog, name, layers):
+    """One full-screen triangle per layer, in draw order, with the scene uniforms."""
+    uniform(uloc(prog,'pattern'),scenes.PATTERNS[name])
+    for layer in layers:
+        uniform4f(uloc(prog,'layer_color'),*layer.color,layer.alpha)
+        uniform4i(uloc(prog,'stripe'),*layer.stripe)
+        uniform1f(uloc(prog,'stripe_edge_alpha'),layer.edge_alpha)
+        uniform1f(uloc(prog,'test_depth'),layer.depth)
+        draw(4,0,3)
+
+def read_queries(qs):
+    finish()
+    out=[]
+    for q in qs:
+        v=C.c_uint64();qresult(q,QUERY_RESULT,C.byref(v));out.append(v.value/1e6)
+    assert geterror()==0
+    return out
+
+def frame(impl, name, background, layers):
     cap,res=progs[impl]
-    clearcolor(0,0,0,1);clear(0x4000)
+    bindfbo(0x8D40,fbo);colormask(1,1,1,1);clearcolor(*background,1);clear(0x4000)
     # --- reset ---
     beginq(TIME_ELAPSED,queries[0])
     if impl=='direct':
@@ -167,70 +205,100 @@ def frame(impl, layers, pattern):
     endq(TIME_ELAPSED)
     # --- capture: L layers, distinct depths, standard alpha blend for any fall-through ---
     beginq(TIME_ELAPSED,queries[1])
-    use(cap);uniform(loc(cap,b'pattern'),pattern)
-    if impl!='direct': uniform(loc(cap,b'alpha_oit_opaque_depth'),0)
-    if impl=='ppll': uniform(loc(cap,b'oit_node_cap'),node_cap)
-    else: uniform(loc(cap,b'oit_slot_count'),SLOTS)
+    use(cap)
+    if impl!='direct': uniform(uloc(cap,'alpha_oit_opaque_depth'),0)
+    if impl=='ppll': uniform(uloc(cap,'oit_node_cap'),node_cap)
+    elif impl!='direct': uniform(uloc(cap,'oit_slot_count'),SLOTS)
     blendfunc(0x0302,0x0303);colormask(1,1,1,1)
-    for i in range(layers):
-        uniform1f(loc(cap,b'test_depth'),0.05+0.9*((i*7919)%layers)/max(layers,1))
-        draw(4,0,3)
+    draw_layers(cap,name,layers)
     barrier(0x20|0x2000|0x1000)   # IMAGE | SHADER_STORAGE | ATOMIC_COUNTER
     endq(TIME_ELAPSED)
     # --- resolve: premultiplied over, alpha channel masked ---
     beginq(TIME_ELAPSED,queries[2])
     if impl=='direct':
-        endq(TIME_ELAPSED);finish()
-        out=[]
-        for q in queries:
-            v=C.c_uint64();qresult(q,QUERY_RESULT,C.byref(v));out.append(v.value/1e6)
-        assert geterror()==0
-        return out
-    use(res);uniform(loc(res,b'depthMap'),0)
+        endq(TIME_ELAPSED)
+        return read_queries(queries)
+    use(res);uniform(uloc(res,'depthMap'),0)
     if impl=='ppll':
-        uniform(loc(res,b'oit_max_pixel_layers'),OLD_MAX_LAYERS)
+        uniform(uloc(res,'oit_max_pixel_layers'),OLD_MAX_LAYERS)
         image(0,head,0,0,0,0x88B8,R32UI);base(SSBO,0,nodes)
     else:
         slot_tex,slot_fmt,_=SLOT_FORMAT[impl]
-        uniform(loc(res,b'oit_slot_count'),SLOTS)
+        uniform(uloc(res,'oit_slot_count'),SLOTS)
         image(0,meta,0,1,0,0x88B8,R32UI);image(1,slot_tex,0,1,0,0x88B8,slot_fmt);image(2,meta,0,1,0,0x88B9,R32UI)
     blendfunc(1,0x0303);colormask(1,1,1,0)
     draw(4,0,3)
     endq(TIME_ELAPSED)
-    finish()
-    out=[]
-    for q in queries:
-        v=C.c_uint64();qresult(q,QUERY_RESULT,C.byref(v));out.append(v.value/1e6)
-    assert geterror()==0
-    return out
+    return read_queries(queries)
 
-import json
-scenarios=json.loads(os.environ['OIT_BENCH_SCENES']) if 'OIT_BENCH_SCENES' in os.environ else [('full',1),('full',4),('full',8),('full',16),('full',32),('sparse',8),('sparse',24),('sparse',48)]
-impls=IMPLS
+def read_window(target_fbo, fmt=0x1908, channels=4):
+    """The RMSE window of a float colour attachment, row-major, bottom row first."""
+    finish();bindfbo(0x8D40,target_fbo)
+    n=RMSE_WIN*RMSE_WIN;buf=(C.c_float*(n*channels))()
+    readpixels(WIN_X,WIN_Y,RMSE_WIN,RMSE_WIN,fmt,0x1406,buf)
+    assert geterror()==0
+    return [tuple(buf[i*channels:i*channels+channels]) for i in range(n)]
+
+def run_scene(impl, name, background, layers):
+    samples=[]
+    for f in range(WARMUP+FRAMES):
+        t=frame(impl,name,background,layers)
+        if f>=WARMUP: samples.append(t)
+    return [statistics.median(s[i] for s in samples) for i in range(len(samples[0]))]
+
+scenarios=json.loads(os.environ['OIT_BENCH_SCENES']) if 'OIT_BENCH_SCENES' in os.environ else [
+    ('opaque',1),('full',1),('full',2),('full',4),('full',8),('full',16),('full',32),('full',64),
+    ('sparse',8),('sparse',24),('sparse',48),('bright',4),('bright',8),('bright',16),
+    ('foliage',16),('foliage',32),('foliage',64)]
+scenarios=[(p,int(l)) for p,l in scenarios]
 print(f'{W}x{H}, {FRAMES} frames median after {WARMUP} warmup; ms per frame (reset / capture / resolve / total)')
+print(f'RMSE window {RMSE_WIN}x{RMSE_WIN} at ({WIN_X},{WIN_Y}): 8-bit units of linear colour over the alpha-covered pixels')
 for impl in IMPLS:
     if impl=='ppll': print(f'ppll ({OLD_REF}): {NODES_PER_PX} nodes/px pool ({node_cap*16>>20} MiB), {OLD_MAX_LAYERS} sorted layers')
     if impl in SLOT_FORMAT:
         b=SLOT_FORMAT[impl][2];ref=SLOTS16_REF if impl=='slots16' else 'tree'
         print(f'{impl} ({ref}): {SLOTS} slots/px x {b} B + meta {4*META_LAYERS} B = {b*SLOTS+4*META_LAYERS} B/px ({W*H*b*SLOTS>>20} MiB + {W*H*4*META_LAYERS>>20} MiB)')
-print(f'{"scene":<12}{"impl":<8}{"reset":>8}{"capture":>9}{"resolve":>9}{"total":>8}  note')
+print(f'{"scene":<13}{"impl":<8}{"reset":>8}{"capture":>9}{"resolve":>9}{"total":>8}{"rmse":>7}{"max":>7}  note')
+results={}   # (pattern, layers) -> {impl: (timings, rmse, max)}
+tail_scenes=[]
+failures=[]
+def check(ok, text):
+    print(('ok    ' if ok else 'FAIL  ')+text)
+    if not ok: failures.append(text)
 for pattern_name,layers in scenarios:
-    pattern=1 if pattern_name=='sparse' else 0
+    background,scene_layers=scenes.scene(pattern_name,layers)
+    exact=scenes.exact_window(pattern_name,background,scene_layers,WIN_X,WIN_Y,RMSE_WIN,RMSE_WIN)
+    covered=[c for _,_,c in exact if c]
+    tail_px=sum(c>SLOTS for c in covered)/max(len(covered),1)
+    coverage=scenes.COVERAGE.get(pattern_name,1.0)   # screen-wide, for the shared PPLL pool
+    if tail_px>0: tail_scenes.append(f'{pattern_name} L={layers}')
     row={}
-    for impl in impls:
-        samples=[]
-        for f in range(WARMUP+FRAMES):
-            t=frame(impl,layers,pattern)
-            if f>=WARMUP: samples.append(t)
-        med=[statistics.median(s[i] for s in samples) for i in range(3)]
-        row[impl]=med
+    for impl in IMPLS:
+        med=run_scene(impl,pattern_name,background,scene_layers)
+        rmse=worst=None
+        if impl!='direct':
+            frame(impl,pattern_name,background,scene_layers)
+            rmse,worst=scenes.error_stats(read_window(fbo),exact)
+        row[impl]=(med,rmse,worst)
         note=''
-        if impl=='ppll' and pattern==0 and layers>NODES_PER_PX: note=f'pool overflow: {layers-NODES_PER_PX} of {layers} layers fall through to in-place blend'
+        if impl=='ppll' and layers*coverage>NODES_PER_PX: note=f'pool overflow: {layers*coverage-NODES_PER_PX:.0f} of {layers*coverage:.0f} fragments/px fall through to in-place blend'
         if impl=='ppll' and layers>OLD_MAX_LAYERS: note+=' + weighted tail past 24'
-        if impl in SLOT_FORMAT and layers>SLOTS: note=f'{layers-SLOTS} of {layers} layers in the tail'
-        print(f'{pattern_name+" L="+str(layers):<12}{impl:<8}{med[0]:>8.3f}{med[1]:>9.3f}{med[2]:>9.3f}{sum(med):>8.3f}  {note}')
+        if impl in SLOT_FORMAT and tail_px>0: note=f'tail on {100*tail_px:.0f}% of covered px'
+        err=f'{rmse:>7.2f}{worst:>7.1f}' if rmse is not None else f'{"-":>7}{"-":>7}'
+        print(f'{pattern_name+" L="+str(layers):<13}{impl:<8}{med[0]:>8.3f}{med[1]:>9.3f}{med[2]:>9.3f}{sum(med):>8.3f}{err}  {note}')
+    results[(pattern_name,layers)]=row
     if 'ppll' in row and 'slots' in row:
-        a,b=sum(row["ppll"]),sum(row["slots"]);print(f'{"":<20}slots/ppll total = {b/a:.2f}x')
+        a,b=sum(row["ppll"][0]),sum(row["slots"][0]);print(f'{"":<21}slots/ppll total = {b/a:.2f}x')
     if 'slots16' in row and 'slots' in row:
-        a,b=sum(row["slots16"]),sum(row["slots"]);print(f'{"":<20}slots/slots16 total = {b/a:.2f}x')
+        a,b=sum(row["slots16"][0]),sum(row["slots"][0]);print(f'{"":<21}slots/slots16 total = {b/a:.2f}x')
+
+print('checks:')
+if ('opaque',1) in results:
+    for impl in IMPLS:
+        if impl=='direct': continue
+        _,rmse,worst=results[('opaque',1)][impl]
+        check(worst<=1.0,f'{impl}: a single opaque layer is reproduced (max error {worst:.2f} <= 1 step)')
+if 'slots' in IMPLS:
+    check(bool(tail_scenes),f'slots: the tail path is exercised ({", ".join(tail_scenes) or "no scene past 8 slots"})')
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)
+sys.exit(1 if failures else 0)

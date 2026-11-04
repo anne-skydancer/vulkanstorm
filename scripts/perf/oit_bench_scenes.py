@@ -34,6 +34,8 @@ STRIPE_DIRS = [(1, 0), (0, 1), (1, 1), (1, -1), (2, 1), (1, 2), (-1, 2), (2, -1)
 FOLIAGE_CORE_ALPHA = 0.95
 FOLIAGE_EDGE_ALPHA = 0.15
 BRIGHT_ALPHAS = (0.3, 0.22, 0.37, 0.27)
+# Screen-wide fraction of pixels a layer covers, where it is not 1.
+COVERAGE = {'sparse': 0.25, 'foliage': STRIPE_WIDTH / STRIPE_PERIOD}
 
 SCENE_GLSL = '''
 uniform int pattern;
