@@ -834,7 +834,10 @@ namespace tut
         data = handler->getProtectedData("test_data_type1", "test_data_not_found");
         ensure("not found", data.isUndefined());
 
-        // cause a 'write' by using 'LLPointer' to delete then instantiate a handler
+        // write the store, then use 'LLPointer' to delete and instantiate a
+        // handler. The destructor does not write the store (FIRE-965), so
+        // persist it explicitly.
+        handler->syncProtectedMap();
         handler = NULL;
         handler = new LLSecAPIBasicHandler("sechandler_settings.tmp", "test_password.dat");
         handler->init();
@@ -864,6 +867,7 @@ namespace tut
         handler->init();
         data = handler->getProtectedData("test_data_type1", "test_data_id");
         ensure("not found", data.isUndefined());
+        handler->syncProtectedMap();
         handler = NULL;
 
         ensure(LLFile::isfile("sechandler_settings.tmp"));
@@ -889,7 +893,7 @@ namespace tut
         // test retrieval of credential components
         ensure_equals("basic credential creation: identifier", my_id, my_cred->getIdentifier());
         ensure_equals("basic credential creation: authenticator", my_authenticator, my_cred->getAuthenticator());
-        ensure_equals("basic credential creation: grid", "my_grid", my_cred->getGrid());
+        ensure_equals("basic credential creation: grid", "my_grid", my_cred->getCredentialName());
 
         // test setting/overwriting of credential components
         my_id["first_name"] = "firstname";
@@ -900,7 +904,7 @@ namespace tut
         my_cred->setCredentialData(my_id, my_authenticator);
         ensure_equals("set credential data: identifier", my_id, my_cred->getIdentifier());
         ensure_equals("set credential data: authenticator", my_authenticator, my_cred->getAuthenticator());
-        ensure_equals("set credential data: grid", "my_grid", my_cred->getGrid());
+        ensure_equals("set credential data: grid", "my_grid", my_cred->getCredentialName());
 
         // test loading of a credential, that hasn't been saved, without
         // any legacy saved credential data
@@ -916,14 +920,14 @@ namespace tut
         my_new_cred = handler->loadCredential("my_grid");
         ensure_equals("load a known credential: identifier", my_id, my_new_cred->getIdentifier());
         ensure_equals("load a known credential: authenticator",my_authenticator, my_new_cred->getAuthenticator());
-        ensure_equals("load a known credential: grid", "my_grid", my_cred->getGrid());
+        ensure_equals("load a known credential: grid", "my_grid", my_cred->getCredentialName());
 
         // test deletion of a credential
         handler->deleteCredential(my_new_cred);
 
         ensure("delete credential: identifier", my_new_cred->getIdentifier().isUndefined());
         ensure("delete credentialt: authenticator", my_new_cred->getIdentifier().isUndefined());
-        ensure_equals("delete credential: grid", "my_grid", my_cred->getGrid());
+        ensure_equals("delete credential: grid", "my_grid", my_cred->getCredentialName());
         // load unknown cred
 
         my_new_cred = handler->loadCredential("my_grid");
