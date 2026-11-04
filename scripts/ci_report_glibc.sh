@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 # Report the newest glibc (GLIBC_) and libstdc++ (GLIBCXX_, CXXABI_) symbol
 # versions that the built Linux viewer and its shared libraries require.
 # usage: ci_report_glibc.sh <build-directory>/newview

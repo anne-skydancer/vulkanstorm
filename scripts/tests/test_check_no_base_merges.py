@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Regression tests for scripts/check_no_base_merges.py.
 
 Each scenario builds a throwaway repository whose base lines are fake
