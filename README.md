@@ -8,6 +8,16 @@ This repository contains Vulkanstorm, a viewer derived from Firestorm and the Se
 
 Firestorm is a third party viewer derived from the official [Second Life](https://github.com/secondlife/viewer) client. The client codebase has been open source since 2007 and is available under the LGPL license.
 
+## Licence
+
+Vulkanstorm is dual-licensed: you may use, modify and distribute it under the [GNU Lesser General Public License, version 2.1](LICENSE-LGPL-2.1) or, at your choice, the [GNU General Public License, version 3 or later](LICENSE-GPL-3.0).
+
+- Code from Linden Lab and Firestorm, and Rust ports of it: `LGPL-2.1-only OR GPL-3.0-or-later`. Linden Lab and Firestorm license it under LGPL-2.1 only; section 3 of LGPL-2.1 lets every licensee apply the GPL, version 3 or later, instead.
+- Original Vulkanstorm code: `LGPL-2.1-or-later OR GPL-3.0-or-later`.
+- Third-party components keep their own licences.
+
+[NOTICE.md](NOTICE.md) explains the groups and how to choose; [doc/licensing.md](doc/licensing.md) audits the libraries the viewer links with. Contributions are accepted under the same dual licence ([CONTRIBUTING.md](CONTRIBUTING.md)).
+
 ## Download
 
 Pre-built versions of the viewer releases for Windows, Mac and Linux can be downloaded from the [official website](https://www.firestormviewer.org/choose-your-platform/).

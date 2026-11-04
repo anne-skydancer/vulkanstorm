@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-only
+// SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+// Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 // Standalone regression tests for the production VVM version parser.
 #include "llversionparser.h"
 #include <cassert>

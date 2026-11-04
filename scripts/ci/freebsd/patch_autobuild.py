@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Add native FreeBSD platform identity to the image's pinned Autobuild 3.9.3.
 
 This does not map FreeBSD to Linux, install viewer dependencies, or modify
