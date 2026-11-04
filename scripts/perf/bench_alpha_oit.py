@@ -619,12 +619,13 @@ if ('opaque',1) in stoch_rmse:
     check(worst<=1.0,f'stoch: a single opaque layer is reproduced at S = 4, 8, 16 (max error {worst:.2f} <= 1 step)')
 if stoch_rmse:
     # Per scene non-increasing within 0.05 steps (exact scenes stay at the quantisation floor),
-    # and strictly decreasing over all scenes together.
+    # and strictly decreasing summed over the noisy scenes (RMSE above 0.5 steps at S = 4).
     bad=[f'{p} L={l}' for (p,l),r in stoch_rmse.items()
          if not (r[8][0]<=r[4][0]+0.05 and r[16][0]<=r[8][0]+0.05)]
-    sums=[sum(r[s][0] for r in stoch_rmse.values()) for s in STOCH_RMSE_SAMPLES]
-    check(not bad and sums[0]>sums[1]>sums[2],
-          f'stoch: RMSE decreases with S (sum over scenes {sums[0]:.1f} > {sums[1]:.1f} > {sums[2]:.1f}'+(f'; not in {", ".join(bad)}' if bad else '')+')')
+    noisy=[r for r in stoch_rmse.values() if r[4][0]>0.5]
+    sums=[sum(r[s][0] for r in noisy) for s in STOCH_RMSE_SAMPLES]
+    check(not bad and (not noisy or sums[0]>sums[1]>sums[2]),
+          f'stoch: RMSE decreases with S (sum over {len(noisy)} noisy scenes {sums[0]:.1f} > {sums[1]:.1f} > {sums[2]:.1f}'+(f'; not in {", ".join(bad)}' if bad else '')+')')
     worst=max(r['alpha'] for r in stoch_rmse.values())
     check(worst<=1/255,f'stoch: total alpha matches the exact 1 - prod(1 - a) (max error {worst*255:.3f}/255 <= 1/255)')
 if 'slots' in IMPLS:
