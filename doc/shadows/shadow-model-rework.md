@@ -1009,3 +1009,12 @@ S7a alone may fix the owner's tests 1 and 2 where the light stays in view; the g
 ### 16.6 References
 
 NVIDIA, GPU Gems, GPU Gems 2 and GPU Gems 3, developer.nvidia.com/gpugems: the chapters in §16.2. No NVIDIA code is used.
+
+### 16.7 Decisions (owner, 2026-11-05)
+
+1. The atlas design (§16.3) is approved.
+2. S7a goes first, **as a hotfix on every line** (release, devel, canary, rust, aleph): the projector-shadow fade by the sun's splits is in all of them.
+3. The tiers: 12 / 24 / 48 projector shadows; atlas 36 / 64 / 96 MB; 2 / 3 / 4 re-renders per frame, subject to the gates.
+4. Avatars cast into projector tiles only within 25 m of the camera.
+5. The 2 s safety refresh stays.
+6. Projector shadows share `RenderShadowDistance`.
