@@ -39,6 +39,13 @@ builds only Skin Studio, not the viewer.
 
 ## Licensing
 
-Code is distributed under [LGPL 2.1](LICENSE). Included skin artwork and other
-upstream assets retain their original terms and trademark restrictions; see
-[the bundled notices](tools/skin-editor/licenses/).
+Dual-licensed: you may use, modify and distribute the tools under the
+[GNU Lesser General Public License, version 2.1](LICENSE-LGPL-2.1) or, at your
+choice, the [GNU General Public License, version 3 or later](LICENSE-GPL-3.0).
+Skin Studio's code is `LGPL-2.1-or-later OR GPL-3.0-or-later`; the skin library
+copied from the viewer (Linden Lab and Firestorm) is
+`LGPL-2.1-only OR GPL-3.0-or-later` (section 3 of LGPL-2.1 allows the GPL
+option). Included skin artwork and other upstream assets retain their original
+terms and trademark restrictions; see [the bundled notices](tools/skin-editor/licenses/).
+[NOTICE.md](NOTICE.md) explains the groups and how to choose; contributions are
+accepted under the same terms ([CONTRIBUTING.md](CONTRIBUTING.md)).
