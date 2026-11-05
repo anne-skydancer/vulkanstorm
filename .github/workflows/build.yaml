@@ -42,6 +42,10 @@ jobs:
       - run: python3 scripts/tests/test_slua_review.py
       - run: python3 scripts/tests/test_licence_files.py
       - run: python3 scripts/tests/test_msaa_bench_model.py
+      - name: Check the projector shadow atlas
+        run: |
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llshadowprojectoratlas_test.cpp -o "$RUNNER_TEMP/shadow-projector-atlas-test"
+          "$RUNNER_TEMP/shadow-projector-atlas-test"
       - name: Check update version parsing
         run: |
           g++ -std=c++20 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/viewer_version_parser_test.cpp -o "$RUNNER_TEMP/version-parser-test"
