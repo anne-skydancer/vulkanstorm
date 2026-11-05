@@ -67,6 +67,13 @@ queries for these implementations on synthetic layer stacks at a given resolutio
       comp   the composite over the screen (alpha correction, the screen dimmed per pixel).
     The passes carry the viewer's polygon offsets. Its error is measured at S = 4, 8 and 16 like
     stoch's.
+OIT_BENCH_SHADE=heavy gives every shaded fragment (direct, the PPLL capture, st's accumulation)
+a cost like the viewer's alpha programs': diffuse, normal and specular fetches from 1024x1024
+mipmapped textures, a 4-tap shadow lookup, eight scattered reflection-probe lookups, seven point lights and fog
+(scene_shade(); it does not
+change the colour). st's alpha-only passes (total alpha, stochastic depth) shade for alpha alone
+unless OIT_BENCH_ST_ALPHAONLY=0, which gives them the same cost: the variant without the
+optimisation. "direct" is sorted alpha (OIT off): the comparison the method is held to.
 OIT_BENCH_IMPLS selects implementations (default ppll,slots,stoch; add st for the viewer's method); OIT_BENCH_SCENES a JSON list
 of [pattern, layers] pairs.
 Each scenario draws L full-screen layers with distinct, unsorted depths; the patterns
@@ -105,6 +112,46 @@ SLOTS16_REF = os.environ.get('OIT_BENCH_SLOTS16_REF', '6ceaf3196c')
 # Last devel commit with the 8-byte slot PPLL (replaced by stochastic transparency); "slots".
 SLOTS_REF = os.environ.get('OIT_BENCH_SLOTS_REF', 'a5290e8c81')
 ST_PASS = int(os.environ.get('OIT_BENCH_ST_PASS', 8))
+SHADE = os.environ.get('OIT_BENCH_SHADE', 'trivial')
+ST_ALPHAONLY = os.environ.get('OIT_BENCH_ST_ALPHAONLY', '1') != '0'
+SHADE_GLSL = scenes.SCENE_GLSL + ('#define BENCH_HEAVY 1\n' if SHADE == 'heavy' else '') + '''
+uniform sampler2D bench_tex;   // unit 7: 1024x1024 RGBA8 noise, mipmapped
+uniform float shade_zero;      // 0 at run time: the cost stays, the colour does not change
+vec4 scene_shade()
+{
+    vec4 c = scene_color();
+#ifdef BENCH_HEAVY
+    vec2 uv = gl_FragCoord.xy / 1024.0;
+    vec4 diffuse = texture(bench_tex, uv * 1.7);
+    vec3 n = normalize(texture(bench_tex, uv * 2.3 + 0.1).xyz * 2.0 - 1.0 + vec3(0.0, 0.0, 1.5));
+    vec4 spec = texture(bench_tex, uv * 3.1 + 0.2);
+    float shadow = 0.0;
+    for (int i = 0; i < 4; ++i)
+        shadow += texture(bench_tex, uv * 0.5 + vec2(i) * 0.013).r;
+    vec3 light = vec3(0.0);
+    vec3 pos = vec3(gl_FragCoord.xy * 0.01, gl_FragCoord.z * 50.0);
+    for (int i = 0; i < 7; ++i)
+    {
+        vec3 lp = vec3(float(i) * 3.0, float(i * i) * 0.5, 4.0);
+        vec3 lv = lp - pos;
+        float d = length(lv);
+        lv /= max(d, 1e-3);
+        float da = max(dot(n, lv), 0.0);
+        vec3 h = normalize(lv + vec3(0.0, 0.0, 1.0));
+        float sp = pow(max(dot(n, h), 0.0), 1.0 + spec.a * 64.0);
+        light += (diffuse.rgb * da + spec.rgb * sp) / (1.0 + d * d * 0.01);
+    }
+    // reflection probes: scattered lookups, as the probe blending of the alpha programs
+    vec3 probe = vec3(0.0);
+    for (int i = 0; i < 8; ++i)
+        probe += textureLod(bench_tex, fract(uv * float(5 + i) + n.xy * 0.37), 2.0).rgb;
+    light += probe * spec.rgb * 0.125;
+    vec3 fog = exp(-vec3(0.1, 0.2, 0.3) * pos.z) * shadow * 0.25;
+    c += shade_zero * vec4(light + fog, diffuse.a + spec.a);
+#endif
+    return c;
+}
+'''
 IMPLS = os.environ.get('OIT_BENCH_IMPLS', 'ppll,slots,stoch').split(',')
 STOCH_SAMPLES = int(os.environ.get('OIT_BENCH_STOCH_SAMPLES', 8)); STOCH_RMSE_SAMPLES = (4, 8, 16)
 assert STOCH_SAMPLES in STOCH_RMSE_SAMPLES, 'OIT_BENCH_STOCH_SAMPLES must be 4, 8 or 16'
@@ -180,11 +227,11 @@ def resolve_source(impl):
     return '#version 430 core\n'+src
 DIRECT_SOURCE='''#version 430 core
 uniform float test_depth;
-'''+scenes.SCENE_GLSL+'''
+'''+SHADE_GLSL+'''
 out vec4 color;
 void main()
 {
-    color = scene_color();
+    color = scene_shade();
 }
 '''
 def capture_source(impl):
@@ -214,12 +261,12 @@ uniform int oit_slot_count;
     return f'''#version 430 core
 {decl}uniform sampler2D alpha_oit_opaque_depth;
 uniform float test_depth;
-{scenes.SCENE_GLSL}
+{SHADE_GLSL}
 out vec4 color;
 {helper}
 void main()
 {{
-    vec4 c = scene_color();
+    vec4 c = scene_shade();
     {body}
 }}
 '''
@@ -231,6 +278,19 @@ for impl in [i for i in IMPLS if i not in ('stoch','st')]:   # only the selected
     res=None if impl=='direct' else program([(0x8B31,vertex),(0x8B30,resolve_source(impl))]+extra)
     progs[impl]=(cap,res)
 queries=(U*3)();genq(3,queries)
+bench_tex=U();gentex(1,C.byref(bench_tex));activetex(0x84C0+7);bindtex(TEX2D,bench_tex)
+import random as _random
+_rng=_random.Random(7);_noise=(C.c_ubyte*(1024*1024*4))(*[_rng.randrange(256) for _ in range(1024*1024*4)])
+fn('glTexImage2D',None,U,I,I,I,I,I,U,U,P)(TEX2D,0,0x8058,1024,1024,0,0x1908,0x1401,_noise)
+fn('glGenerateMipmap',None,U)(TEX2D);texparam(TEX2D,0x2801,0x2703);texparam(TEX2D,0x2800,0x2601)
+activetex(0x84C0);bindtex(TEX2D,depth)
+def bench_shading(prog):
+    use(prog)
+    l=loc(prog,b'bench_tex')
+    if l>=0: uniform(l,7)
+    l=loc(prog,b'shade_zero')
+    if l>=0: uniform1f(l,0.0)
+for cap,_ in progs.values(): bench_shading(cap)
 
 # --- stoch: depth-sampled stochastic transparency (see the module docstring) ---
 TEX2DMS=0x9100;R16F=0x822D;RGBA16F=0x881A;D32F=0x8CAC;DEPTH_TEST=0x0B71
@@ -426,21 +486,21 @@ def st_viewer(name):
     return '#version 430 core\n'+src.replace('/*[EXTRA_CODE_HERE]*/','')
 ST_VERTEX='#version 430 core\nuniform float test_depth;\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-1.,test_depth*2.-1.,1.);}'
 ST_SCREEN='#version 430 core\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-1.,0.,1.);}'
-ST_VARIANT='#version 430 core\n'+scenes.SCENE_GLSL+'''
+ST_VARIANT='#version 430 core\n'+SHADE_GLSL+'''
 out vec4 frag_color;
 int alpha_stochastic_mask(float a);
 void main()
 {
-    vec4 c = scene_color();
+    vec4 c = '''+('scene_color()' if ST_ALPHAONLY else 'scene_shade()')+''';
     frag_color = vec4(0.0, 0.0, 0.0, max(c.a, 0.0));
     gl_SampleMask[0] = alpha_stochastic_mask(c.a);
 }
 '''
-ST_SHADE='#version 430 core\n'+scenes.SCENE_GLSL+'''
+ST_SHADE='#version 430 core\n'+SHADE_GLSL+'''
 out vec4 frag_color;
 void main()
 {
-    frag_color = scene_color();
+    frag_color = scene_shade();
 }
 '''
 st={}
@@ -459,6 +519,7 @@ if 'st' in IMPLS:
     st['expand']=program([(0x8B31,ST_SCREEN),(0x8B30,st_viewer('alphaStochasticExpandF.glsl'))])
     st['composite']=program([(0x8B31,ST_SCREEN),(0x8B30,st_viewer('alphaStochasticCompositeF.glsl'))])
     st_queries=(U*4)();genq(4,st_queries)
+    bench_shading(st['variant']);bench_shading(st['shade'])
     assert geterror()==0
 def st_targets(n):
     """The viewer's targets at n samples (min(ST_PASS, S), as LLPipeline::allocateAlphaStochastic
@@ -665,6 +726,7 @@ scenarios=json.loads(os.environ['OIT_BENCH_SCENES']) if 'OIT_BENCH_SCENES' in os
     ('foliage',16),('foliage',32),('foliage',64)]
 scenarios=[(p,int(l)) for p,l in scenarios]
 print(f'{W}x{H}, {FRAMES} frames median after {WARMUP} warmup; ms per frame (reset / capture / resolve / total)')
+print(f'shading: {SHADE}; st alpha-only passes: {"alpha alone" if ST_ALPHAONLY else "full shading (no alpha-only optimisation)"}')
 print(f'RMSE window {RMSE_WIN}x{RMSE_WIN} at ({WIN_X},{WIN_Y}): 8-bit units of linear colour over the alpha-covered pixels')
 for impl in IMPLS:
     if impl=='ppll': print(f'ppll ({OLD_REF}): {NODES_PER_PX} nodes/px pool ({node_cap*16>>20} MiB), {OLD_MAX_LAYERS} sorted layers')
@@ -758,6 +820,8 @@ for pattern_name,layers in scenarios:
         a,b=sum(row["slots"][0]),sum(row["stoch"][0]);print(f'{"":<21}stoch/slots total = {b/a:.2f}x')
     if 'st' in row and 'slots' in row:
         a,b=sum(row["slots"][0]),sum(row["st"][0]);print(f'{"":<21}st/slots total = {b/a:.2f}x')
+    if 'st' in row and 'direct' in row:
+        a,b=sum(row["direct"][0]),sum(row["st"][0]);print(f'{"":<21}st/direct (sorted alpha) total = {b/a:.2f}x')
 
 if stoch_rmse:
     print(f'RMSE / max error, 8-bit units ({RMSE_WIN}x{RMSE_WIN} window); frags = mean fragments per covered pixel, tail = covered pixels past {SLOTS} slots')
@@ -784,6 +848,10 @@ if st_rmse:
         tot_slots=sum(sum(r['slots'][0]) for r in results.values())
         tot_st=sum(sum(r['st'][0]) for r in results.values())
         print(f'info  GPU total over the scenes: st{STOCH_SAMPLES} {tot_st:.2f} ms, slots {tot_slots:.2f} ms ({tot_st/tot_slots:.2f}x)')
+    if 'direct' in IMPLS:
+        tot_d=sum(sum(r['direct'][0]) for r in results.values())
+        tot_st=sum(sum(r['st'][0]) for r in results.values())
+        print(f'info  GPU total over the scenes: st{STOCH_SAMPLES} {tot_st:.2f} ms, direct (sorted alpha) {tot_d:.2f} ms ({tot_st/tot_d:.2f}x)')
 print('checks:')
 if ('opaque',1) in results:
     for impl in IMPLS:

@@ -70,9 +70,14 @@ composite):
 The alpha-only variants (`LLGLSLShader::mStochasticVariant`, built with `ALPHA_STOCHASTIC` by
 `make_stochastic_variant` in `llviewershadermgr.cpp`) exist for the alpha programs the pool
 binds: simple alpha, fullbright alpha, the blended legacy materials and PBR alpha, static and
-rigged. Each returns as soon as its output alpha is known; the material variant shades fully
-only when glare can raise the alpha (an environment map or a glossy highlight on a translucent
-diffuse alpha). The ordinary programs are unchanged, so sorted alpha draws as before.
+rigged. Each returns as soon as its alpha is known, before any texture other than the base map is
+fetched (Aurora's `st_material_alpha`, commit `9424d986`: the driver did not drop the other
+fetches by itself): base alpha, the alpha-mask cutoff and the vertex alpha, nothing else. The
+simple-alpha variant takes no shadow sample; the material variant leaves out the glare that an
+environment map or a highlight adds to the shaded alpha (the accumulation keeps it, and the alpha
+correction scales the colour to the variants' total alpha). In those two passes a variant, once
+fully bound in a frame, is bound without the light function, shadow maps and reflection probes,
+and the materials' normal and specular maps are not bound. The ordinary programs are unchanged, so sorted alpha draws as before.
 
 The coverage mask of a fragment is seeded by its pixel, its face's identity
 (`LLDrawInfo::mStochasticSeed`: the object's UUID and texture entry hashed, the same on every
@@ -111,8 +116,11 @@ transparency) and "Samples per pixel" (4, 8, 16). Users who had chosen PPLL (1) 
 transparency; `RenderAlphaOITNodesPerPixel`, `RenderAlphaOITMemoryMB`, `RenderAlphaOITStats`
 and `RenderAlphaPPLLAvailable` are gone (a stale value in a settings file is ignored). Neither
 the method nor its samples are in the feature tables or the graphics presets, as PPLL's were
-not. 16 samples follow Aurora's default (its finding: S = 8 shows a faint speckle on dark hair
-cards, S = 16 less); 8 halves the cost of the passes over the faces.
+not. 16 samples follow Aurora's default, which stays 16 there until the owner decides. Aurora's
+findings: S = 8 (one run, one accumulation) costs what OIT off does on its hair fly-through,
+with a faint speckle on dark hair cards and more grain on broad glass; S = 16 runs the
+accumulation twice. The bench below finds the same here (S = 8 0.72-0.76x sorted alpha, S = 16
+1.37-1.43x).
 
 Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and
 `gl_PrimitiveID`, multisample textures), at least 2 samples for the three formats, and every
@@ -127,12 +135,68 @@ alpha-only variant built. Otherwise, or when the targets cannot be allocated, so
   a decal on a sloped plane with and without the offset. NVIDIA 621.01 and Mesa Zink
   (`GALLIUM_DRIVER=zink`, `--opengl <Mesa opengl32.dll>`).
 - `scripts/perf/bench_alpha_oit.py`, implementation `st`: the viewer's shaders and passes on the
-  bench's synthetic full-screen layers against `slots` (PPLL, from git ref `a5290e8c81`). It
-  measures GPU time with a trivial fragment shader: it leaves out shading cost, draw calls and
-  skinning, which the real alpha programs add once per accumulation pass (twice at S = 16) and,
-  for the alpha-only variants, at a fraction of the cost.
+  bench's synthetic layers, against `direct` (sorted alpha) and `slots` (PPLL, from git ref
+  `a5290e8c81`), GPU time only; `OIT_BENCH_SHADE=heavy` adds a proxy of the alpha programs'
+  shading cost.
 
-Bench, RTX 5070 Ti, NVIDIA 621.01, GPU ms per frame (20-frame medians), PPLL = `slots`:
+### Against sorted alpha, with shading (the comparison that matters)
+
+Sorted alpha (method 0, "OIT off") shades every blended fragment once. The stochastic
+accumulation shades only the fragments at or in front of the stochastic depth (the early depth
+test stays on), and the alpha-only passes shade for alpha alone, so the figures depend on what a
+fragment costs. The bench cannot run the viewer's alpha programs (their lighting, probes and
+atmospherics need the whole viewer); `OIT_BENCH_SHADE=heavy` gives `direct` (sorted alpha), the
+PPLL capture and the accumulation a proxy of that cost: diffuse, normal and specular fetches, a
+4-tap shadow, eight scattered probe lookups, seven point lights and fog. It does not cover draw
+calls: each blended draw is issued once by sorted alpha, five times by stochastic transparency
+at S = 16 (total alpha, two depth and two accumulation runs) and three times at S = 8, CPU time
+the bench does not see.
+
+RTX 5070 Ti, NVIDIA 621.01, GPU ms per frame, 20-frame medians, `OIT_BENCH_SHADE=heavy`:
+
+| Scene | Sorted alpha | PPLL | S = 16 | S = 8 |
+|---|---|---|---|---|
+| 1080p full, 8 layers | 2.56 | 2.89 | 5.71 | 3.07 |
+| 1080p full, 32 layers | 10.24 | 11.80 | 10.78 | 5.85 |
+| 1080p sparse, 24 layers | 1.96 | 2.20 | 2.90 | 1.72 |
+| 1080p foliage (hair-like cards), 32 layers | 6.19 | 7.79 | 7.60 | 4.30 |
+| 1080p, sum of 17 scenes | 78.3 | 91.2 | 107.4 (1.37x) | 59.5 (0.72x) |
+| 1440p full, 8 layers | 4.56 | 5.15 | 10.40 | 5.66 |
+| 1440p full, 32 layers | 18.27 | 21.27 | 20.09 | 10.88 |
+| 1440p sparse, 24 layers | 3.63 | 4.04 | 5.07 | 3.00 |
+| 1440p foliage, 32 layers | 11.12 | 13.96 | 15.24 | 8.39 |
+| 1440p, sum of 17 scenes | 140.1 | 163.3 | 200.1 (1.43x) | 109.7 (0.76x) |
+
+Summed, S = 8 costs less than sorted alpha (most where the layers are many; at 8 full-screen
+layers about the same), as Aurora found on its hair fly-through; S = 16 runs the shaded
+accumulation twice and costs about 1.4x. The split per pass, total alpha / depth / accumulation /
+composite, ms:
+
+| Scene | S = 16 | S = 8 |
+|---|---|---|
+| 1080p full, 8 layers | 0.24 / 1.34 / 3.94 / 0.19 | 0.24 / 0.66 / 1.99 / 0.19 |
+| 1080p foliage, 32 layers | 0.72 / 2.45 / 4.24 / 0.19 | 0.72 / 1.29 / 2.12 / 0.17 |
+| 1440p full, 8 layers | 0.44 / 2.67 / 6.95 / 0.34 | 0.42 / 1.31 / 3.58 / 0.35 |
+| 1440p foliage, 32 layers | 1.26 / 5.98 / 7.68 / 0.31 | 1.27 / 3.05 / 3.78 / 0.30 |
+
+The bench has no glowing layers; in the viewer the glow pass runs only for groups with a glowing
+blended face, and the glow composite only when one was drawn.
+
+The alpha-only shading of the total alpha and depth passes, before (`OIT_BENCH_ST_ALPHAONLY=0`:
+the proxy's full cost in those passes) and after, sum of 17 scenes: 1080p S = 16 114.2 to 107.4
+ms, S = 8 64.7 to 59.5; 1440p S = 16 206.0 to 200.1, S = 8 115.1 to 109.7 (3 to 8 %). This is the
+cost of shading those passes in full, not of what a given driver would have left in. The CPU-side
+reductions (no light, shadow, probe or material-map binds in the alpha-only passes) cannot be
+measured offline.
+
+Not done, Aurora's listed next step: one accumulation testing both runs' depths in the shader,
+which would halve the accumulation at S = 16. Here that means every alpha program reading both
+stochastic depths per sample in its fragment shader, giving up the early depth test the
+accumulation relies on; it is left for a later change.
+
+### Against PPLL, trivially shaded
+
+With a trivial fragment shader (`OIT_BENCH_SHADE` unset), PPLL = `slots`:
 
 | Scene | 1080p PPLL | 1080p S=16 | 1080p S=8 | 1440p PPLL | 1440p S=16 | 1440p S=8 |
 |---|---|---|---|---|---|---|
