@@ -130,6 +130,12 @@ class Resolves(unittest.TestCase):
         shown = model.reinhard((tw, tw, tw))[0]
         self.assertAlmostEqual(shown, (40 / 41 + 3 * 0.2 / 1.2) / 4, places=9)
 
+    def test_alpha_is_the_plain_mean(self):
+        # Glow in alpha is linear: a bright glowing sample keeps its 1/4 share.
+        cols = [(40.0, 40.0, 40.0, 1.0)] + [(0.2, 0.2, 0.2, 0.0)] * 3
+        self.assertAlmostEqual(model.tonemap_weighted_resolve(cols)[3], 0.25)
+        self.assertEqual(len(model.tonemap_weighted_resolve([(1.0, 2.0, 3.0)] * 2)), 3)
+
     def test_uniform_samples_unchanged(self):
         c = (3.0, 1.0, 0.5, 0.25)
         self.assertEqual(model.tonemap_weighted_resolve([c] * 8), c)
@@ -144,9 +150,10 @@ class Estimate(unittest.TestCase):
     def test_frame_estimate(self):
         t = {'gfill': 1.0, 'classify': 0.1, 'a_edge': 2.0, 'a_all': 5.0, 'b_edge': 1.5,
              'resolve_tone': 0.2, 'resolve_tone_all': 0.4, 'resolve_depth': 0.05, 'pixel': 1.2}
-        self.assertAlmostEqual(model.frame_estimate(t, 4, 'a_edge'), 3.35)
-        self.assertAlmostEqual(model.frame_estimate(t, 4, 'a_all'), 6.45)
-        self.assertAlmostEqual(model.frame_estimate(t, 4, 'b_edge'), 2.6)
+        self.assertAlmostEqual(model.frame_estimate(t, 4, 'a_edge'), 1.0 + 0.1 + 2.0 + 0.2 + 0.05)
+        self.assertAlmostEqual(model.frame_estimate(t, 4, 'a_all'), 1.0 + 5.0 + 0.4 + 0.05)
+        # b_edge classifies inside its lighting shader: no standalone classify, no colour resolve.
+        self.assertAlmostEqual(model.frame_estimate(t, 4, 'b_edge'), 1.0 + 1.5 + 0.05)
         self.assertAlmostEqual(model.frame_estimate(t, 1, 'pixel'), 2.2)
 
 

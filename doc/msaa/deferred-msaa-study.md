@@ -47,12 +47,12 @@ reads 3 to 10 % higher]:
   The scene colour is RGBA16F. The resolve targets are an RGBA16F colour and a D24 depth.
 - Stochastic transparency adds a transmittance target at the scene's sample count, RG16F,
   4 B per sample: 1440p 2x/4x/8x +28/56/112 MiB.
-- The measured figures are 1080p 1x/2x/4x/8x: 87/182/321/616 MiB; 1440p: 155/324/578/1110 MiB.
+- The measured figures are 1080p 1x/2x/4x/8x: 78/182/321/616 MiB; 1440p: 139/324/578/1110 MiB.
 
 **Scene-pass GPU cost, measured** [verified]:
 
 - Hardware: RTX 5070 Ti, NVIDIA 621.01, OpenGL 4.6, bench `scripts/perf/bench_deferred_msaa.py`,
-  median of 20 frames.
+  median of 20 frames, third run (after the review fixes).
 - What is timed: G-buffer fill + classification + lighting + tonemap-weighted resolve +
   depth resolve. The lighting stand-in is "heavy" (sun + 24 point lights GGX + 2 probe
   lookups; 0.40 ms per pixel-shaded 1440p frame).
@@ -63,41 +63,49 @@ reads 3 to 10 % higher]:
 
 | Resolution | Scene | 1x | 2x | 4x | 8x |
 |---|---|---|---|---|---|
-| 1080p | open | 0.44 | 0.54 (+0.10) | 0.67 (+0.23) | 1.10 (+0.66) |
-| 1080p | dense | 0.48 | 0.67 (+0.19) | 1.07 (+0.59) | 2.55 (+2.07) |
-| 1080p | foliage | 0.54 | 1.21 (+0.67) | 2.10 (+1.56) | 6.04 (+5.50) |
-| 1440p | open | 0.79 | 0.95 (+0.16) | 1.15 (+0.36) | 1.81 (+1.02) |
-| 1440p | dense | 0.82 | 1.21 (+0.39) | 2.05 (+1.23) | 3.70 (+2.88) |
-| 1440p | foliage | 0.88 | 2.12 (+1.24) | 3.29 (+2.41) | 9.51 (+8.63) |
+| 1080p | open | 0.44 | 0.54 (+0.10) | 0.66 (+0.22) | 1.08 (+0.64) |
+| 1080p | dense | 0.48 | 0.67 (+0.19) | 0.94 (+0.46) | 2.11 (+1.63) |
+| 1080p | foliage | 0.54 | 1.10 (+0.56) | 1.83 (+1.29) | 4.40 (+3.86) |
+| 1440p | open | 0.80 | 0.95 (+0.15) | 1.14 (+0.34) | 1.82 (+1.02) |
+| 1440p | dense | 0.82 | 1.13 (+0.31) | 1.73 (+0.91) | 3.73 (+2.91) |
+| 1440p | foliage | 0.88 | 1.79 (+0.91) | 3.28 (+2.40) | 9.61 (+8.73) |
 
 What these numbers say [verified unless marked]:
 
 - **Lighting cost follows the number of shaded samples.** Per-sample shading everywhere
-  costs N times a single shade (1440p heavy: 0.40 → 0.84 / 1.69 / 3.39 ms). With
-  classification, the open and dense scenes come back to 0.43 to 0.80 ms at every sample
+  costs N times a single shade (1440p heavy: 0.40 → 0.85 / 1.69 to 1.72 / 3.44 ms). With
+  classification, the open and dense scenes come back to 0.43 to 0.81 ms at every sample
   count.
-- **The G-buffer fill dominates at 8x on dense geometry.** The fill is 0.39 → 0.66 ms
-  (open) but 0.48 → 6.4 ms (foliage) at 1440p. It also varies most from run to run, from
-  0.93 to 1.24 ms (1440p dense 4x) and from 2.4 to 4.1 ms (1080p foliage 8x) between the two
-  runs. The bench's fill shader is trivial, so the viewer's real G-buffer shaders add their
+- **The G-buffer fill dominates at 8x on dense geometry.** The fill is 0.39 → 0.67 ms
+  (open) but 0.48 → 6.4 ms (foliage) at 1440p. It also varies most from run to run: over
+  three runs 0.92 to 1.24 ms (1440p dense 4x) and 2.4 to 4.1 ms (1080p foliage 8x). The bench's fill shader is trivial, so the viewer's real G-buffer shaders add their
   own cost at 1x. The MSAA increment (raster, depth and ROP work and bandwidth per sample)
   is the part this table measures [inferred: the increment carries over].
 - **The resolve is cheap.** The tonemap-weighted resolve costs the same as
-  `glBlitFramebuffer` at 2x/4x (0.02 to 0.07 ms) and 0.01 to 0.04 ms more at 8x (up to
+  `glBlitFramebuffer` at 2x/4x (0.02 to 0.07 ms) and up to 0.04 ms more at 8x (up to
   0.14 ms at 1440p). The depth resolve costs 0.02 to 0.05 ms.
-- **Classification costs 0.02 to 0.17 / 0.08 to 0.16 / 0.27 to 0.49 ms at 2x / 4x / 8x.** Comparing
-  only depth and normal, without albedo, saves 20 to 35 %.
+- **Classification costs 0.02 to 0.09 / 0.08 to 0.14 / 0.27 to 0.49 ms at 2x / 4x / 8x.**
+  Comparing only depth and normal, without albedo, saves 20 to 35 %, but it misses material boundaries between coplanar faces and is not validated, so the
+  recommendation keeps the full rule (section 4.2).
 - **The viewer's real lighting is heavier than the stand-in.** Soften with probes,
   atmospherics and shadows, plus up to 256 local lights, makes the per-sample-everywhere
   design worse and classification better than shown here [inferred].
 
-**Why not 8x by default:** +0.9 GB at 1440p, and 5 to 9 ms on foliage-heavy views from the
-fill alone. 8x stays an opt-in for high-memory GPU classes.
+- **Design B (lighting resolved inside the lighting shader) is competitive in this sum at
+  8x on simple scenes.** It skips the standalone classification and the colour resolve
+  (1440p open heavy 8x: B-edge 1.84 against A-edge 1.82 ms; light lighting: 1.24 against
+  1.61 ms). It is still not recommended: the forward passes (water, alpha, haze,
+  transparency) stay aliased, and the in-shader average is a box resolve of HDR (section 3,
+  lesson 2).
+
+**Why not 8x by default:** +0.9 GB at 1440p, and 2 to 6 ms on dense and foliage-heavy
+views from the fill alone. 8x stays an opt-in for high-memory GPU classes.
 
 **Zink check** [verified]: Mesa 26.3.0-devel Zink on the same GPU.
 - `GL_MAX_*_SAMPLES` is 8, and every G-buffer format takes 2/4/8 (NVIDIA: up to 32).
 - All 60 correctness checks pass.
-- Timings are within about 10 % of NVIDIA's OpenGL driver. The exception is the blit
+- The scene-pass sums are mostly within 15 % of NVIDIA's OpenGL driver, and up to about
+  25 % higher at 8x (1440p open heavy 8x: 2.26 against 1.82 ms). The exception is the blit
   resolve, which the timer query does not capture under Zink (0.002 ms), so it is not
   comparable.
 
@@ -136,7 +144,7 @@ Sources: [survey] of `pipeline.cpp` (`allocateScreenBufferInternal` ~913-1090,
 | Sorted alpha (legacy forward path), fullbright, glow pools | forward into `screen` | Into the MS scene: **edges antialiased for free** (per-pixel shading, per-sample coverage and depth). |
 | Stochastic transparency (#321) | own MS targets at P ≤ 8 samples, composite per pixel | Total alpha and composite at the scene's N, accumulation at P ≥ N (section 6). |
 | PPLL (devel default today; removed by #321) | per-pixel image arrays | **Not supported with MSAA.** MSAA requires #321 to have landed, or falls back to sorted alpha. |
-| Glow (screen alpha → `generateGlow`) | alpha of `screen` | Resolved with the colour (glow is linear, so averaging is correct). |
+| Glow (screen alpha → `generateGlow`) | alpha of `screen` | Resolved as the plain sample mean beside the weighted colour (glow is linear). |
 | Luminance / exposure (`generateLuminance`, `generateExposure`) | reads `screen` | Reads the resolved colour. Unchanged. |
 | Tonemap / gamma (`postDeferredTonemap`, `postDeferredGammaCorrect`) | `screen` → `mPostPingMap` RGBA8 | Reads the resolved colour. Unchanged. The resolve is weighted so that the tonemap of the average is close to the average of tonemaps (section 4.3). |
 | CAS, glow combine, DoF (`cofF` reads depth), vignette, snapshot frame, RLV effects | single-sample LDR chain | Unchanged on resolved inputs. DoF reads the resolved depth. |
@@ -186,17 +194,19 @@ Firestorm clone `phoenix-firestorm` history; all commits by Dave Parks, LGPL-2.1
 ### Lessons
 
 1. **Shade per sample only where it matters.** The 2011 design is the bench's `b_all`. The
-   bench measures its lighting at the full N-times cost (1440p heavy: 0.83 / 1.67 /
-   3.35 ms at 2x / 4x / 8x against 0.40 ms single-sample) [verified]. Linden named
+   bench measures its lighting at the full N-times cost (1440p heavy: 0.84 / 1.69 /
+   3.39 ms at 2x / 4x / 8x against 0.40 ms single-sample) [verified]. Linden named
    unreliable drivers, not cost, as the reason for dropping it [verified]. The cost alone
    would have made 4x hard on 2011 hardware [inferred].
 2. **Do not resolve lighting inside the lighting shader** (design B). It is simple and
    saves the MS scene colour, but the forward passes (water, alpha, haze) then draw into a
    single-sample target against a resolved depth. Their edges stay aliased, and depth-tested
    forward geometry needs a single-sample depth that disagrees with the samples at
-   silhouettes [inferred]. Design B with an in-shader edge branch (`b_edge`) is also slower
-   than design A with stencil classification in the bench (1440p dense heavy 4x: 1.20 ms
-   against 0.60 ms) [verified]. The branch diverges in a warp.
+   silhouettes [inferred]. Design B with an in-shader edge branch (`b_edge`) also lights more
+   slowly than design A with stencil classification (1440p dense heavy 4x: 1.20 ms,
+   classification included, against 0.60 + 0.14 ms) [verified]. The branch diverges in a
+   warp. In the scene-pass sum B can still come out level at 8x on simple scenes, because
+   it needs no colour resolve (section 1).
 3. **The driver problems of 2011 are gone.** Both NVIDIA 621.01 and Zink create every
    G-buffer format at 2, 4 and 8 samples, including D24S8 with stencil, and all FBOs are
    complete [verified]. The sample-count halving fallback is still worth keeping for
@@ -215,18 +225,18 @@ Firestorm clone `phoenix-firestorm` history; all commits by Dave Parks, LGPL-2.1
 
 | Option | Lighting work | MS scene colour | Forward edges antialiased | Measured (1440p heavy, dense, 4x) |
 |---|---|---|---|---|
-| A-all: sample-rate shading everywhere (`gl_SampleID`) | N × | yes | yes | lighting 1.71 ms, scene 3.03 ms |
-| **A-edge: stencil classification, per pixel on simple and per sample on complex pixels** | 1 × + edges × (N − 1) + classification | yes | yes | lighting 0.60 ms, scene 2.05 ms |
-| B-all: per-pixel loop over samples, average out (Linden 2011) | N × | no | no | lighting 1.67 ms |
-| B-edge: per-pixel loop only on complex pixels (branch) | 1 × + edges, divergent | no | no | lighting 1.20 ms |
+| A-all: sample-rate shading everywhere (`gl_SampleID`) | N × | yes | yes | lighting 1.72 ms, scene 2.72 ms |
+| **A-edge: stencil classification, per pixel on simple and per sample on complex pixels** | 1 × + edges × (N − 1) + classification | yes | yes | lighting 0.60 ms + classification 0.14 ms, scene 1.73 ms |
+| B-all: per-pixel loop over samples, average out (Linden 2011) | N × | no | no | lighting 1.69 ms, scene 2.64 ms |
+| B-edge: per-pixel loop only on complex pixels (branch) | 1 × + edges, divergent | no | no | lighting 1.20 ms (classification included), scene 2.15 ms |
 | C: compute-tiled classification (Lauritzen 2010: per-tile lists of complex pixels, shaded in the same dispatch) | like A-edge, without the stencil and quad overhead | yes (via image store) | yes | not measured |
 
 [verified measurements; C inferred from Lauritzen 2010]
 
 **Two-pass stencil overhead.** The second pass in A-edge runs at sample rate on scattered
 pixels, and its quads are poorly packed. Where complex pixels exceed about 20 % (the
-foliage scene), A-edge is no better than A-all: 1440p foliage heavy 2x lighting 0.79 against
-0.84 ms, light 2x 0.60 against 0.26 ms [verified].
+foliage scene), A-edge is no better than A-all: 1440p foliage heavy 2x lighting 0.80 against
+0.85 ms, light 2x 0.31 against 0.23 ms, before the 0.09 ms classification [verified].
 
 **Adaptive choice.** The classification's `GL_SAMPLES_PASSED` count of the previous frame
 gives the edge fraction for free. Above a measured threshold, the frame can skip the split
@@ -250,8 +260,14 @@ no compute lighting today, so it is not recommended for the OpenGL line now.
 - Missed edges cost little. A-edge against A-all over a 256² window at 1080p is at most
   4.7 steps (8-bit, tonemapped) on single foliage pixels, with RMSE ≤ 0.04, and ≤ 0.06
   steps in the open and dense scenes [verified, checks in the bench].
-- The depth-and-normal-only rule is 20 to 35 % cheaper. It misses albedo-only edges between
-  coplanar faces, which do not alias in lighting, so it is the likely choice [inferred].
+- The depth-and-normal-only rule is 20 to 35 % cheaper, but it treats coplanar faces with
+  different materials (same depth, normal and flag, different albedo) as simple. A-edge then
+  writes sample 0's colour to every sample and the material boundary stays aliased. The
+  bench's image checks use the full rule, so they do not validate the cheaper one.
+  **The recommendation keeps the full rule** (depth, normal, flag, albedo), and stage 1
+  also tests whether ORM or emissive differences need comparing. The cheaper rule is
+  adopted only if an image test of coplanar material boundaries shows the loss acceptable
+  [verified that the checks use the full rule; the quality loss is not measured].
 - Reading the depth attachment while writing the stencil is a feedback loop in the GL spec.
   The viewer already samples the attached depth in its full-screen passes with depth writes
   off. The bench's stencil written that way passes the image checks on NVIDIA and Zink
@@ -270,8 +286,12 @@ no compute lighting today, so it is not recommended for the OpenGL line now.
   sample at 40× brightness: maximum relative error ≤ 8.6·10⁻⁴ at 2/4/8x, on NVIDIA and
   Zink [verified].
 - It costs the same as the blit at 2x/4x [verified].
-- Recommended: always the weighted resolve, with the current exposure multiplied into the
-  weight. This leaves the HDR post chain (luminance, exposure, tonemap) unchanged.
+- The alpha channel carries glow, which is linear, so it is resolved as the plain sample
+  mean. Weighting it by brightness would suppress the glow of bright samples: one
+  (40, 40, 40, α 1) sample among three dark α 0 samples would resolve to α 0.01 instead
+  of 0.25 [verified: unit test].
+- Recommended: always the weighted resolve for colour, with the current exposure
+  multiplied into the weight. This leaves the HDR post chain (luminance, exposure, tonemap) unchanged.
 
 ### 4.4 Depth for the post chain
 
@@ -310,13 +330,13 @@ The headline tables are in section 1. Measured detail [verified], all 1440p heav
 
 | Pass | 1x | 2x | 4x | 8x |
 |---|---|---|---|---|
-| G-buffer fill, open / dense / foliage | 0.39 / 0.42 / 0.48 | 0.41 / 0.61 / 1.06 | 0.47 / 1.24 / 1.68 | 0.66 / 2.27 / 6.40 |
-| Classification (full rule / depth + normal) | - | 0.05-0.17 / 0.03-0.14 | 0.14 / 0.10-0.11 | 0.44-0.49 / 0.31-0.33 |
+| G-buffer fill, open / dense / foliage | 0.39 / 0.42 / 0.48 | 0.42 / 0.54 / 0.84 | 0.47 / 0.92 / 1.64 | 0.67 / 2.27 / 6.45 |
+| Classification (full rule / depth + normal) | - | 0.04-0.09 / 0.03-0.07 | 0.14 / 0.10-0.11 | 0.45-0.49 / 0.31-0.33 |
 | Lighting per pixel (today) | 0.40 | - | - | - |
-| Lighting A-all | - | 0.84 | 1.69-1.71 | 3.39-3.42 |
-| Lighting A-edge, open / dense / foliage | - | 0.43 / 0.48 / 0.79 | 0.46 / 0.60 / 1.38 | 0.51 / 0.80 / 2.48 |
-| Resolve, tonemap-weighted | - | 0.03-0.07 | 0.04-0.10 | 0.11-0.14 |
-| Resolve, blit | - | 0.03-0.06 | 0.04-0.09 | 0.07-0.13 |
+| Lighting A-all | - | 0.85 | 1.69-1.72 | 3.44 |
+| Lighting A-edge, open / dense / foliage | - | 0.43 / 0.48 / 0.80 | 0.46 / 0.60 / 1.41 | 0.52 / 0.81 / 2.52 |
+| Resolve, tonemap-weighted (after A-edge) | - | 0.03 | 0.04-0.07 | 0.11-0.14 |
+| Resolve, blit (after A-edge) | - | 0.03 | 0.04-0.07 | 0.07-0.12 |
 | Depth resolve | - | 0.03 | 0.03 | 0.04-0.05 |
 
 For the light lighting stand-in (sun + 4 lights, 0.10 ms per pixel at 1440p) the lighting
@@ -368,8 +388,11 @@ read for design only]:
    - Glow moves out of Trans green into a P-sample R16F target, or Accum's FBO, because
      Trans and Accum no longer share a sample count when P > N.
 3. **Stochastic depth init.**
-   - When P = N, `glCopyImageSubData` of the scene's MS depth (same sample count) replaces
-     `alphaStochasticExpandF`.
+   - When P = N, `glCopyImageSubData` of the scene's MS depth replaces
+     `alphaStochasticExpandF`, but only if `mAlphaSTDepth` is allocated in the scene's format.
+     The scene depth becomes D24S8 while `mAlphaSTDepth` is D24 today, and the two are not
+     copy-compatible (`GL_INVALID_OPERATION`). Either allocate `mAlphaSTDepth` as D24S8 on
+     this path (same 4 B per sample), or keep the per-sample shader copy.
    - When P > N, `alphaStochasticExpandF` reads `sampler2DMS` and writes, per pass sample,
      the nearest scene sample's depth.
    - The nearest sample comes from the actual positions (`glGetMultisamplefv(GL_SAMPLE_POSITION)`).
@@ -390,7 +413,8 @@ read for design only]:
      `test_alpha_stochastic.py`'s decal and slope cases at N = 2/4/8.
 7. **Changes, by place:**
    - `allocateAlphaStochastic`: N, the split FBOs and the reuse check.
-   - `beginAlphaStochastic` / `spreadAlphaStochasticDepth`: the copy or nearest-sample expand.
+   - `beginAlphaStochastic` / `spreadAlphaStochasticDepth`: the copy (into a D24S8
+     `mAlphaSTDepth`) or the per-sample expand.
    - `alphaStochasticExpandF.glsl`: `sampler2DMS`.
    - `alphaStochasticCompositeF.glsl`: a per-sample variant.
    - `compositeAlphaStochastic`: the Accum blit and sample rate.
@@ -548,7 +572,8 @@ the installed viewer.
 **Stage 1: G-buffer, classification, soften, resolve; post chain on resolved inputs; behind
 the setting. About 8 to 12 days.**
 - The MS G-buffer and scene colour.
-- The classification pass (depth + normal rule).
+- The classification pass with the full rule (depth, normal, flag, albedo). The cheaper
+  depth-and-normal rule only after an image test of coplanar material boundaries.
 - `softenLightF` with a sample index (`getGBuffer` taking a sample index); two draws.
 - The depth resolve after the G-buffer.
 - The tonemap-weighted resolve before `renderFinalize`.

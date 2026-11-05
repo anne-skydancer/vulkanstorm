@@ -175,11 +175,15 @@ def tonemap_weighted_resolve(colors, exposure=1.0):
     Reinhard curve on max(rgb) the weighted average equals tonemap -> average -> inverse
     tonemap exactly when every sample's largest channel is the same channel, and is close
     otherwise. A bright sample at an edge then contributes its coverage share of the
-    displayed brightness instead of dominating the pixel. The alpha channel (glow) is
-    resolved with the same weights."""
+    displayed brightness instead of dominating the pixel. The alpha channel (glow, a
+    linear coverage-like quantity) is the plain sample mean: weighting it by brightness
+    would suppress the glow of bright samples."""
     ws = [1.0 / (1.0 + exposure * luma_max(c)) for c in colors]
     t = sum(ws)
-    return tuple(sum(w * c[i] for w, c in zip(ws, colors)) / t for i in range(len(colors[0])))
+    rgb = tuple(sum(w * c[i] for w, c in zip(ws, colors)) / t for i in range(3))
+    if len(colors[0]) == 3:
+        return rgb
+    return rgb + (sum(c[3] for c in colors) / len(colors),)
 
 
 def reinhard(c, exposure=1.0):
@@ -205,13 +209,16 @@ def median(values):
 
 
 def frame_estimate(timings, samples, variant):
-    """Scene-pass GPU ms of one configuration: G-buffer fill + classification (edge
-    variants) + lighting + resolve (design A; the resolve timed after that variant) + the
-    depth resolve. `timings` maps pass -> ms."""
+    """Scene-pass GPU ms of one configuration: G-buffer fill + lighting, and at samples > 1
+    the depth resolve every variant's post chain needs, the standalone classification of
+    a_edge (b_edge classifies inside its timed lighting shader), and design A's colour
+    resolve timed after that variant (design B's lighting already writes one sample).
+    `timings` maps pass -> ms."""
     total = timings['gfill'] + timings[variant]
-    if variant.endswith('edge') and samples > 1:
-        total += timings['classify']
-    if variant.startswith('a_') and samples > 1:
-        tone = timings['resolve_tone_all'] if variant == 'a_all' else timings['resolve_tone']
-        total += tone + timings['resolve_depth']
+    if samples > 1:
+        total += timings['resolve_depth']
+        if variant == 'a_edge':
+            total += timings['classify'] + timings['resolve_tone']
+        elif variant == 'a_all':
+            total += timings['resolve_tone_all']
     return total

@@ -249,10 +249,10 @@ VARIANT_MAIN = {
 RESOLVE_TONE_FS = '''#version 430
 #define SAMPLES %d
 uniform sampler2DMS src; uniform float exposure; out vec4 frag;
-void main(){ ivec2 p = ivec2(gl_FragCoord.xy); vec4 acc = vec4(0.0); float wsum = 0.0;
+void main(){ ivec2 p = ivec2(gl_FragCoord.xy); vec3 acc = vec3(0.0); float wsum = 0.0, alpha = 0.0;
   for (int s = 0; s < SAMPLES; ++s) { vec4 c = texelFetch(src, p, s);
-    float w = 1.0 / (1.0 + exposure * max(c.r, max(c.g, c.b))); acc += c * w; wsum += w; }
-  frag = acc / wsum; }
+    float w = 1.0 / (1.0 + exposure * max(c.r, max(c.g, c.b))); acc += c.rgb * w; wsum += w; alpha += c.a; }
+  frag = vec4(acc / wsum, alpha / float(SAMPLES)); }   // rgb tonemap-weighted, alpha (glow) the plain mean
 '''
 RESOLVE_DEPTH_FS = '''#version 430
 uniform sampler2DMS dm;
@@ -360,11 +360,12 @@ class Targets:
         self.cfbo, st = fbo([], self.ds, samples=n)
         check(st == FB_COMPLETE, f'classification fbo x{n} complete (0x{st:04X})')
         self.screen1 = tex2d(0x881A, w, h, 1)
-        self.depth1 = tex2d(model.GL_FORMATS['DEPTH_COMPONENT24'], w, h, 1)
         self.rfbo, st = fbo([self.screen1], None)
-        self.dfbo, _ = fbo([], self.depth1, ds_att=DEPTH_ATT)
         self.screen_ms = None
-        if n > 1:
+        self.depth1 = self.dfbo = None
+        if n > 1:   # the resolve targets exist only under MSAA, as msaa_memory() counts them
+            self.depth1 = tex2d(model.GL_FORMATS['DEPTH_COMPONENT24'], w, h, 1)
+            self.dfbo, _ = fbo([], self.depth1, ds_att=DEPTH_ATT)
             self.screen_ms = tex2d(0x881A, w, h, n)
             self.sfbo, st = fbo([self.screen_ms], self.ds, samples=n)
             check(st == FB_COMPLETE, f'MS scene colour fbo x{n} complete (0x{st:04X})')
@@ -379,9 +380,9 @@ class Targets:
         activetex(0x84C0 + 5); bindtex(TEX2D, PROBE); activetex(0x84C0)
 
     def release(self):
-        texs = self.g + [self.ds, self.screen1, self.depth1] + ([self.screen_ms] if self.screen_ms else [])
+        texs = self.g + [self.ds, self.screen1] + ([self.screen_ms, self.depth1] if self.n > 1 else [])
         arr = (U * len(texs))(*texs); deltex(len(texs), arr)
-        fbos = [self.gfbo, self.cfbo, self.rfbo, self.dfbo] + ([self.sfbo] if self.n > 1 else [])
+        fbos = [self.gfbo, self.cfbo, self.rfbo] + ([self.sfbo, self.dfbo] if self.n > 1 else [])
         arr = (U * len(fbos))(*fbos); delfbo(len(fbos), arr)
 
 
