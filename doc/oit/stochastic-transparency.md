@@ -119,8 +119,8 @@ the method nor its samples are in the feature tables or the graphics presets, as
 not. 16 samples follow Aurora's default, which stays 16 there until the owner decides. Aurora's
 findings: S = 8 (one run, one accumulation) costs what OIT off does on its hair fly-through,
 with a faint speckle on dark hair cards and more grain on broad glass; S = 16 runs the
-accumulation twice. The bench below finds the same here (S = 8 0.73-0.81x sorted alpha, S = 16
-1.39-1.47x).
+accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted alpha, S = 16
+1.38-1.46x).
 
 Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and
 `gl_PrimitiveID`, multisample textures), at least 2 samples for the three formats, and every
@@ -154,47 +154,52 @@ sorted alpha, five times by stochastic transparency at S = 16 (total alpha, two 
 accumulation runs) and three times at S = 8, CPU time the bench does not see.
 
 RTX 5070 Ti, NVIDIA 621.01, GPU ms per frame, 20-frame medians, `OIT_BENCH_SHADE=heavy`, the
-bench's 19 scenes (with `deep` and `occl` from the round-2 bench):
+bench's 19 scenes (with `deep` and `occl` from the round-2 bench). Sorted alpha draws each layer
+at its depth against the opaque depth (LEQUAL, no depth writes), as the viewer does:
 
 | Scene | Sorted alpha | PPLL | S = 16 | S = 8 |
 |---|---|---|---|---|
-| 1080p full, 8 layers | 2.64 | 2.97 | 5.80 | 3.11 |
-| 1080p full, 32 layers | 10.57 | 12.13 | 10.83 | 5.87 |
-| 1080p sparse, 24 layers | 2.04 | 2.27 | 2.92 | 1.73 |
-| 1080p foliage (hair-like cards), 32 layers | 6.37 | 7.96 | 7.68 | 4.32 |
-| 1080p occluded, 8 layers | 2.65 | 2.89 | 5.12 | 2.75 |
-| 1080p, sum of 19 scenes | 85.9 | 99.2 | 119.3 (1.39x) | 65.7 (0.73x) |
-| 1440p full, 8 layers | 4.57 | 5.16 | 10.41 | 5.57 ¹ |
-| 1440p full, 32 layers | 18.51 | 21.14 | 21.11 | 10.77 |
-| 1440p sparse, 24 layers | 3.54 | 3.98 | 5.02 | 2.97 |
-| 1440p foliage, 32 layers | 11.01 | 13.83 | 15.04 | 8.33 |
-| 1440p occluded, 8 layers | 4.57 | 5.00 | 9.29 | 4.96 |
-| 1440p, sum of 19 scenes | 149.7 | 173.2 | 220.7 (1.47x) | 120.8 (0.81x) ¹ |
+| 1080p full, 8 layers | 2.60 | 2.88 | 5.68 | 3.07 |
+| 1080p full, 32 layers | 10.36 | 11.78 | 10.76 | 5.87 |
+| 1080p sparse, 24 layers | 2.07 | 2.21 | 2.89 | 1.72 |
+| 1080p foliage (hair-like cards), 32 layers | 6.33 | 7.79 | 7.61 | 4.30 |
+| 1080p occluded, 8 layers | 2.21 | 2.82 | 5.99 | 2.70 |
+| 1080p, sum of 19 scenes | 86.0 | 96.6 | 118.8 (1.38x) | 65.3 (0.75x) |
+| 1440p full, 8 layers | 4.63 | 5.15 | 10.38 | 5.54 |
+| 1440p full, 32 layers | 18.42 | 21.03 | 19.92 | 10.76 |
+| 1440p sparse, 24 layers | 3.68 | 3.96 | 5.03 | 3.17 |
+| 1440p foliage, 32 layers | 11.16 | 13.82 | 15.00 | 8.32 |
+| 1440p occluded, 8 layers | 3.77 | 4.99 | 9.29 | 4.95 |
+| 1440p, sum of 19 scenes | 149.7 | 172.0 | 218.4 (1.46x) | 119.6 (0.80x) |
 
-¹ Measured alone. In the 19-scene run this one scene reads 7.15 ms at 1440p S = 8 (its depth and
-composite passes about twice as long; twice reproduced in that sequence, never alone), which the
-sum includes; without it the sum is about 119.2 (0.80x). The trivially shaded runs show the same
-on the same scene in some configurations.
+In some 19-scene runs one scene of one implementation reads much higher than in every other run
+and alone (st on "full, 8 layers" about +1.5 ms, its depth and composite passes doubled; sorted
+alpha once on "occluded" +8.5 ms): a placement effect of the process, not of the method. For
+each implementation the table takes a run without it (1080p S = 16: st from one run, sorted
+alpha and PPLL from the other); the ratios divide sums from runs without it.
 
 Summed, S = 8 costs less than sorted alpha (most where the layers are many; at 8 full-screen
-layers about the same or a little more), as Aurora found on its hair fly-through; S = 16 runs the
-shaded accumulation twice and costs about 1.4-1.5x. The split per pass, total alpha / depth /
+layers a little more), as Aurora found on its hair fly-through; S = 16 runs the shaded
+accumulation twice and costs about 1.4-1.5x. The split per pass, total alpha / depth /
 accumulation / composite, ms:
 
 | Scene | S = 16 | S = 8 |
 |---|---|---|
-| 1080p full, 8 layers | 0.24 / 1.34 / 4.04 / 0.19 | 0.24 / 0.66 / 2.02 / 0.19 |
-| 1080p foliage, 32 layers | 0.72 / 2.48 / 4.29 / 0.19 | 0.72 / 1.29 / 2.14 / 0.17 |
-| 1440p full, 8 layers | 0.42 / 2.67 / 6.97 / 0.34 | 0.42 / 1.30 / 3.51 / 0.35 ¹ |
-| 1440p foliage, 32 layers | 1.28 / 5.96 / 7.47 / 0.33 | 1.27 / 3.05 / 3.71 / 0.30 |
+| 1080p full, 8 layers | 0.24 / 1.34 / 3.92 / 0.19 | 0.24 / 0.66 / 1.98 / 0.19 |
+| 1080p foliage, 32 layers | 0.72 / 2.46 / 4.24 / 0.19 | 0.71 / 1.29 / 2.12 / 0.18 |
+| 1440p full, 8 layers | 0.42 / 2.67 / 6.95 / 0.35 | 0.42 / 1.30 / 3.47 / 0.35 |
+| 1440p foliage, 32 layers | 1.27 / 5.95 / 7.45 / 0.33 | 1.27 / 3.04 / 3.70 / 0.30 |
 
 The bench has no glowing layers; in the viewer the glow pass runs only for groups with a glowing
 blended face, and the glow composite only when one was drawn.
 
 The alpha-only shading of the total alpha and depth passes, before (`OIT_BENCH_ST_ALPHAONLY=0`:
-the proxy's full cost in those passes) and after, sum of 19 scenes: 1080p S = 16 126.2 to 119.3
-ms, S = 8 71.0 to 65.7; 1440p S = 16 227.9 to 220.7, S = 8 128.7 to 120.8 (3 to 7 %). This is the
-cost of shading those passes in full, not of what a given driver would have left in. The CPU-side
+those passes shade the full proxy, its alpha depending on the whole result so nothing is dropped)
+and after, sum of 19 scenes: 1080p S = 16 339.4 to 118.8 ms, S = 8 216.8 to 65.3; 1440p S = 16
+603.0 to 218.4, S = 8 378.9 to 119.6. The depth pass writes the sample mask, so it has no early
+depth test and full shading there costs every layer at every pixel. This is the cost of shading
+those passes in full, not of what a given driver would have left in; the variants' early return
+before the extra fetches is what makes the "after" figures hold on any driver. The CPU-side
 reductions (no light, shadow, probe or material-map binds in the alpha-only passes) cannot be
 measured offline.
 
@@ -215,8 +220,8 @@ With a trivial fragment shader (`OIT_BENCH_SHADE` unset), PPLL = `slots`, 19 sce
 | foliage, 32 layers | 4.42 | 6.89 | 3.87 | 8.42 | 13.73 | 7.63 |
 | sum of 19 scenes | 23.2 | 92.7 (4.0x) | 50.0 (2.2x) | 44.9 | 178.1 (4.0x) | 96.9 (2.1x) |
 
-¹ Measured alone (in the 19-scene run 4.87 and 5.03, the placement effect above); the sums are the
-19-scene runs'.
+¹ Measured alone (in the 19-scene run 4.87 and 5.03, the placement effect above); the sums are
+those runs'.
 
 Mesa Zink on the same GPU, 1080p, S = 16: 3.4x PPLL summed. In short: on trivially shaded scenes
 stochastic transparency costs more GPU time than PPLL's fixed slots (4.0x at S = 16, 2.1-2.2x at
