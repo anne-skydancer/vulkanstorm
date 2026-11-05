@@ -118,7 +118,8 @@ it does not change the colour). The shaded pass is direct's draw, the PPLL captu
 slots16, ppll), stoch's accumulation A, stoch1's single pass, hybrid's capture and st's
 accumulation; the alpha-only passes (total alpha, stochastic depth) are not shaded, unless
 OIT_BENCH_ST_ALPHAONLY=0 gives st's the same cost (the variant without the alpha-only
-optimisation). "direct" is sorted alpha (OIT off): the comparison the viewer's method is held to.
+optimisation). "direct" is sorted alpha (OIT off): the comparison the viewer's method is held to; it draws each
+layer at its depth against the opaque depth (LEQUAL, no depth writes), as the viewer does.
 OIT_BENCH_IMPLS selects implementations (default ppll,slots,stoch; add st for the viewer's method); OIT_BENCH_SCENES a JSON list
 of [pattern, layers] pairs; OIT_BENCH_PNG_SCENE one or more pattern,layers pairs separated by
 ';'.
@@ -194,7 +195,8 @@ vec4 shade_cost(vec4 c)
         probe += textureLod(bench_tex, fract(uv * float(5 + i) + n.xy * 0.37), 2.0).rgb;
     light += probe * spec.rgb * 0.125;
     vec3 fog = exp(-vec3(0.1, 0.2, 0.3) * pos.z) * shadow * 0.25;
-    c += shade_zero * vec4(light + fog, diffuse.a + spec.a);
+    // the alpha term depends on the whole result, so an alpha-only consumer keeps the whole cost
+    c += shade_zero * vec4(light + fog, diffuse.a + spec.a + dot(light + fog, vec3(1.0)));
 #endif
     return c;
 }
@@ -267,8 +269,14 @@ SLOT_FORMAT={'slots':(slots,RG32UI,8),'slots16':(slots16,RGBA32UI,16)}
 for impl,(name,fmt,_) in SLOT_FORMAT.items():
     if impl in IMPLS or (impl=='slots' and HAS_HYBRID): bindtex(TEX2DARRAY,name);texstorage3(TEX2DARRAY,1,fmt,W,H,SLOTS)
 bindtex(TEX2D,depth)   # unit 0 sampler2D = opaque depth for both capture and resolve
+# direct (sorted alpha) draws into the same colour, tested LEQUAL against the opaque depth
+# without writing it, each layer at its depth, as the viewer's sorted alpha does
+direct_fbo=U();genfbo(1,C.byref(direct_fbo));bindfbo(0x8D40,direct_fbo)
+attachtex(0x8D40,0x8CE0,TEX2D,color,0);attachtex(0x8D40,0x8D00,TEX2D,depth,0)
+assert fn('glCheckFramebufferStatus',U,U)(0x8D40)==0x8CD5
 fbo=U();genfbo(1,C.byref(fbo));bindfbo(0x8D40,fbo);attachtex(0x8D40,0x8CE0,TEX2D,color,0)
 assert fn('glCheckFramebufferStatus',U,U)(0x8D40)==0x8CD5
+DIRECT_VERTEX='#version 430 core\nuniform float test_depth;\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-1.,test_depth*2.-1.,1.);}'
 fn('glViewport',None,I,I,I,I)(0,0,W,H);disable(0x0B71);enable(0x0BE2)
 bufs=(U*2)();genbuf(2,bufs);nodes,counter=bufs[0],bufs[1]
 node_cap=W*H*NODES_PER_PX
@@ -340,7 +348,7 @@ vertex='#version 430 core\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexI
 progs={}
 for impl in [i for i in IMPLS if VARIANTS[i] is None and i!='st']:   # only the selected implementations; 'ppll' and 'slots16' need their git refs
     extra=[(0x8B30,pack_source())] if impl=='slots' else []
-    cap=program([(0x8B31,vertex),(0x8B30,capture_source(impl))]+extra)
+    cap=program([(0x8B31,DIRECT_VERTEX if impl=='direct' else vertex),(0x8B30,capture_source(impl))]+extra)
     res=None if impl=='direct' else program([(0x8B31,vertex),(0x8B30,resolve_source(impl))]+extra)
     progs[impl]=(cap,res)
 queries=(U*3)();genq(3,queries)
@@ -1130,7 +1138,11 @@ def frame(impl, name, background, layers):
     if impl=='ppll': uniform(uloc(cap,'oit_node_cap'),node_cap)
     elif impl!='direct': uniform(uloc(cap,'oit_slot_count'),SLOTS)
     blendfunc(0x0302,0x0303);colormask(1,1,1,1)
+    if impl=='direct':
+        bindfbo(0x8D40,direct_fbo);enable(0x0B71);depthfunc(0x0203);fn('glDepthMask',None,C.c_ubyte)(0)
     draw_layers(cap,name,layers)
+    if impl=='direct':
+        disable(0x0B71);depthfunc(0x0201);fn('glDepthMask',None,C.c_ubyte)(1);bindfbo(0x8D40,fbo)
     barrier(0x20|0x2000|0x1000)   # IMAGE | SHADER_STORAGE | ATOMIC_COUNTER
     endq(TIME_ELAPSED)
     # --- resolve: premultiplied over, alpha channel masked ---
