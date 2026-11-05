@@ -6,6 +6,18 @@ at `a5290e8c81`; Rust core branch `codex/curl8-prototype` from
 vkstorm-core-rust `main` at `08a5cbd`. Follows the two studies,
 `doc/openssl3-impact.md` (PR #314) and `doc/curl8-feasibility.md` (PR #319).
 
+**Follow-up, 2026-11-05 afternoon** (gaps in the first pass closed; see
+[Follow-up](#follow-up-2026-11-05-gaps-closed)): the credential-store hotfix
+`68ec9057a3` landed on every line after this branch was cut and supersedes
+a3, a4 and a7, so it is cherry-picked here (`528cba6c39`) and step (a) is
+now a1, a2, a5, a6 only; the certificate-failure path at login (b4, b5) was
+run against local servers with bad certificates, on this build and on the
+installed release viewer; the smoke test was repeated at b10; the per-line
+check was redone on the current line tips. The worktrees moved: `vkr\` and
+`repos\work\` are now `vulkanstorm\work\` (this worktree
+`work\tls-prototype`, the packages `work\tls-packages`, the Rust worktree
+`vkstorm-core-rust\work\curl8-prototype`).
+
 Every item is marked **verified** (built, run or inspected here) or
 **inferred** (reasoned, not run). Windows x64 only was built and run; Linux
 is CI's and nothing Linux-specific was run locally (no WSL on this machine).
@@ -28,8 +40,12 @@ is CI's and nothing Linux-specific was run locally (no WSL on this machine).
   with curl 7.54.1** (rebuilt), pipelining and all.
 - **Step (a), OpenSSL 3.5 with curl 7.54.1** needs one build fix
   (`llsecapi.cpp`, ENGINE) and one behavioural fix that the compiler does
-  not report (the credential store), plus cleanups. Seven commits, +364 −211
-  lines, more than half of it the credential store and its tests.
+  not report (the credential store), plus cleanups. The credential store is
+  now on every line already: the hotfix `68ec9057a3` (release; devel
+  `d91f465450`, canary `103718b763`, rust `26da4e02e5`, aleph `0a6cff7455`)
+  carries a3, a4 and a7 with the OpenSSL 3 code under
+  `OPENSSL_VERSION_NUMBER >= 0x30000000L`. What step (a) still adds is four
+  commits, a1, a2, a5, a6: about +32 −101 lines, plus the package.
 - **Step (b), curl 8.23.0** needs one link fix on Windows (`iphlpapi`), two
   Linux `-Werror` fixes, the certificate-failure fix at login, and the
   pipelining replacement in llcorehttp and in the Rust `vkstorm-http`.
@@ -41,7 +57,9 @@ is CI's and nothing Linux-specific was run locally (no WSL on this machine).
   texture and mesh load times is not measured here (the study's gate G3).
 - Effort, updated from what was hit: see [Effort](#effort).
 
-**Per line:** vkstorm-release takes all 17 code commits as-is. On canary
+**Per line** (rechecked on the current tips in the follow-up): every line
+now has the credential-store hotfix, so a3, a4 and a7 drop out;
+vkstorm-release takes the other 14 code commits as-is. On canary
 and aleph the net change applies to every file but one: the llcorehttp
 test registration in `CMakeLists.txt` must be placed by hand (commit by
 commit, the test hunks after it follow). On the rust line the step (a)
@@ -115,11 +133,11 @@ TLS tests). The OpenSSL test suite did run.
 Only through autobuild, and only in the worktree:
 
 ```
-cd vkr\tls-prototype
+cd work\tls-prototype                         (was vkr\tls-prototype)
 copy autobuild.xml my_autobuild.xml            (my_autobuild.xml is in .gitignore)
 set AUTOBUILD_CONFIG_FILE=my_autobuild.xml
-autobuild installables edit openssl platform=windows64 hash=96e36bea4f5b126d064e95e0dfdab4a912088150 hash_algorithm=sha1 url=file:///C:/Users/annes/source/repos/work/3p-openssl/openssl-3.5.9.1-windows64-1.tar.zst
-autobuild installables edit curl platform=windows64 hash=f0b81174297e51927a8b5dbb5b191c1ffbdf3b49 hash_algorithm=sha1 url=file:///C:/Users/annes/source/repos/work/3p-curl/curl-7.54.1-1-windows64-1.tar.zst
+autobuild installables edit openssl platform=windows64 hash=96e36bea4f5b126d064e95e0dfdab4a912088150 hash_algorithm=sha1 url=file:///C:/Users/annes/source/repos/vulkanstorm/work/tls-packages/3p-openssl/openssl-3.5.9.1-windows64-1.tar.zst
+autobuild installables edit curl platform=windows64 hash=f0b81174297e51927a8b5dbb5b191c1ffbdf3b49 hash_algorithm=sha1 url=file:///C:/Users/annes/source/repos/vulkanstorm/work/tls-packages/3p-curl/curl-7.54.1-1-windows64-1.tar.zst
 autobuild configure -A 64 -c RelWithDebInfoFS_open -- --no-opensim --lto "-DLL_TESTS:BOOL=TRUE"
 autobuild build -A 64 -c RelWithDebInfoFS_open --no-configure
 ```
@@ -134,6 +152,12 @@ CMake prebuilt check watches `autobuild.xml`), so the switch also needs
 records the `file:///` URLs. The committed `autobuild.xml` keeps LL's
 packages, so CI builds this branch against OpenSSL 1.1.1 and curl 7.54.1
 and fails at the OpenSSL 3 calls (expected; see the PR).
+
+After the move of the worktrees the two `file:///` URLs in `my_autobuild.xml`
+were pointed at `work\tls-packages` (same SHA-1s, rechecked), and the build
+directory had to be configured afresh: its `CMakeCache.txt` named the old
+source directory (kept as `CMakeCache.pre-move.txt`). `autobuild configure`
+then found OpenSSL 3.5.9.1 and curl 8.23.0.1 already installed.
 
 ## Step (a): OpenSSL 3.5 with curl 7.54.1
 
@@ -171,13 +195,13 @@ holds `OpenSSL 3.5.9 29 Sep 2026` and `libcurl/7.54.1`.
 |---|---|---|---|---|---|
 | a1 | `328debadba` | `indra/newview/llsecapi.cpp` | ENGINE/rdrand init deprecated (the build error above) and removed in OpenSSL 4; `ERR_load_crypto_strings`/`OpenSSL_add_all_algorithms` automatic since 1.1.0. The 3.x DRBG seeds from the OS generator, which mixes in RDRAND/RDSEED | +7 −24 | verified (builds; viewer runs) |
 | a2 | `9617af6ef5` | `llsechandler_basic.cpp`, `.h` | `X509_get0_notAfter/notBefore` (const) instead of the deprecated aliases; `cert_date_from_asn1_time(const ASN1_TIME*)`. Not an error at the default API level; it would be with `OPENSSL_NO_DEPRECATED_1_1_0`. Also valid on 1.1.1 | +6 −4 | verified (the certificate tests, which check validity dates, pass) |
-| a3 | `66d5e3a5d4` | `llsechandler_basic.cpp` | Credential store: the credstore harness's tested RC4 code (private `OSSL_LIB_CTX`, `OSSL_PROVIDER_load(ctx, "legacy")`, `EVP_CIPHER_fetch(ctx, "RC4")`, key length, every `EVP_CipherInit_ex2`/`Update`/`Final_ex` return and each chunk's output length checked). Read: whole file, one checked pass, `LLProtectedDataException` on failure. Write: whole file built in memory; `RAND_bytes` checked; the temporary file must be written and closed without error; then `LLFile::rename` (`MoveFileExW(MOVEFILE_REPLACE_EXISTING)` on Windows, `rename()` elsewhere) replaces the store, which is never removed first. Closes both loss routes from the study (failed cipher; exception in the encryption block falling through to the remove-then-rename) and a third one found here: a failed write of the temporary file (disk full, locked file) was not detected and also ended in remove-then-rename | +179 −105 | verified (tests 3, 10, 11; credstore harness) |
-| a4 | `974b20076b` | `indra/newview/tests/llsechandler_basic_test.cpp` | Test 10: a store written by the handler decrypts with a textbook RC4 (no OpenSSL) to the stored LLSD, so the on-disk format is the one 1.1.1 viewers read. Test 11: a directory in the place of `<store>.tmp` makes the write fail; the store must stay byte-identical and readable, and a later write must replace it. Test 3 (existing) reads the 1.1.1-era RC4 fixture | +112 −1 | verified (11/11 pass; test 11 logs "Could not write the protected data store), existing store kept") |
+| a3 | `66d5e3a5d4` | `llsechandler_basic.cpp` | Credential store: the credstore harness's tested RC4 code (private `OSSL_LIB_CTX`, `OSSL_PROVIDER_load(ctx, "legacy")`, `EVP_CIPHER_fetch(ctx, "RC4")`, key length, every `EVP_CipherInit_ex2`/`Update`/`Final_ex` return and each chunk's output length checked). Read: whole file, one checked pass, `LLProtectedDataException` on failure. Write: whole file built in memory; `RAND_bytes` checked; the temporary file must be written and closed without error; then `LLFile::rename` (`MoveFileExW(MOVEFILE_REPLACE_EXISTING)` on Windows, `rename()` elsewhere) replaces the store, which is never removed first. Closes both loss routes from the study (failed cipher; exception in the encryption block falling through to the remove-then-rename) and a third one found here: a failed write of the temporary file (disk full, locked file) was not detected and also ended in remove-then-rename | +179 −105 | verified (tests 3, 10, 11; credstore harness). **Superseded** by the hotfix `68ec9057a3`, on every line; cherry-picked here as `528cba6c39` |
+| a4 | `974b20076b` | `indra/newview/tests/llsechandler_basic_test.cpp` | Test 10: a store written by the handler decrypts with a textbook RC4 (no OpenSSL) to the stored LLSD, so the on-disk format is the one 1.1.1 viewers read. Test 11: a directory in the place of `<store>.tmp` makes the write fail; the store must stay byte-identical and readable, and a later write must replace it. Test 3 (existing) reads the 1.1.1-era RC4 fixture | +112 −1 | verified (11/11 pass; test 11 logs "Could not write the protected data store), existing store kept"). **Superseded** by the hotfix (its tests 10–12) |
 | a5 | `a6d5ea9a57` | `indra/llcrashlogger/llcrashlogger.cpp`, `.h` | `CRYPTO_num_locks`/`CRYPTO_set_locking_callback`/`CRYPTO_THREADID` have been no-op macros since 1.1.0; removed with their mutex list | +3 −66 | verified (compiles; Windows builds the library but only the Linux crash logger links it) |
 | a6 | `819a54439d` | `indra/llcorehttp/CMakeLists.txt`, `tests/test_httprequest.hpp` | `INTEGRATION_TEST_llcorehttp` registered again (Firestorm had it commented out): the gate for an OpenSSL or curl change. Its BUG-2295 test fails under Firestorm's pipelining desync check (the peer answers a 0-49 range with 0-75 and the check turns it into a 503), so it is skipped with that reason until step (b) removes the check | +16 −7 | verified (63 tests: 59 pass, 4 skipped, 0 failed) |
-| a7 | `67123785bc` | `llsechandler_basic.cpp`, `tests/llsechandler_basic_test.cpp` | Review follow-up (#322): the store is read through `istream::read` in chunks, not an `istreambuf_iterator`, which lets libstdc++'s `basic_filebuf::underflow` throw `std::ios_base::failure` (a directory, an I/O error) past the `LLProtectedDataException` handler; a read error now raises `LLProtectedDataException("Config file cannot be read.")`. Test 12: a directory as the store path lets nothing but `LLProtectedDataException` out of `init()` | +41 −4 | verified on Windows (12/12; there a directory does not open as a file); the Linux path inferred |
+| a7 | `67123785bc` | `llsechandler_basic.cpp`, `tests/llsechandler_basic_test.cpp` | Review follow-up (#322): the store is read through `istream::read` in chunks, not an `istreambuf_iterator`, which lets libstdc++'s `basic_filebuf::underflow` throw `std::ios_base::failure` (a directory, an I/O error) past the `LLProtectedDataException` handler; a read error now raises `LLProtectedDataException("Config file cannot be read.")`. Test 12: a directory as the store path lets nothing but `LLProtectedDataException` out of `init()` | +41 −4 | verified on Windows (12/12; there a directory does not open as a file); the Linux path inferred. **Superseded** by the hotfix |
 
-Total step (a): +364 −211 in 8 files (a7 is the review follow-up).
+Total step (a) as first built: +364 −211 in 8 files (a7 is the review follow-up). With the hotfix on every line, what remains is a1, a2, a5, a6.
 
 Not changed: `exoflickr.cpp` (one-shot `HMAC`, not deprecated),
 `llscripteditorws.cpp` (already checks `RAND_bytes`), `OpenSSL.cmake` (no
@@ -268,8 +292,8 @@ The step (a) tree built against the curl 8.23.0 package:
 | b1 | `a1a46dcc86` | `indra/cmake/CURL.cmake` | Static curl 8's Windows libraries (`bcrypt advapi32 crypt32 ws2_32 iphlpapi`, from its `CURLTargets.cmake`): the link error above | +6 | verified (links) |
 | b2 | `e3b6166fd5` | `indra/llcorehttp/_httpoprequest.cpp` | `CURLINFO_SIZE_DOWNLOAD_T`/`SPEED_DOWNLOAD_T` (`curl_off_t`, converted to the `F64` stats); old calls kept under `LIBCURL_VERSION_NUM < 7.55` | +12 | verified on Windows; Linux error and fix checked with clang only |
 | b3 | `ac93b575e0` | `indra/linux_crash_logger/linux_crash_logger.cpp` | The mime API Firestorm had drafted and commented out (`curl_mime_*`, `CURLOPT_MIMEPOST`) for curl 7.56+; the form API stays for older curl. Drops a stray handle that was never cleaned up | +16 −17 | inferred (Linux-only file; checked with clang `-Werror` against the 8.23.0 headers, not built on Linux) |
-| b4 | `c2434700d9` | `llsecapi.h`, `llappcorehttp.cpp`, `llxmlrpclistener.cpp` | `sslVerify` records its verdict in the certificate data (`CERT_VALIDATION_FAILURE`: `untrusted_ca` or `invalid`); the XML-RPC listener names the failure from it (`SSL_CACERT` only for an untrusted CA, else `SSL_PEER_CERTIFICATE`) and attaches the certificate, independent of curl's code. `llstartup.cpp:1944-1961` then offers "trust this CA" only for an unknown CA. curl's own verification failures carry no verdict and keep the generic error | +26 −10 | built; dialog choice inferred (not run: it needs a login against a server with a bad certificate) |
-| b5 | `f4a87d0c1f` | `llxmlrpctransaction.cpp` | `case CURLE_PEER_FAILED_VERIFICATION:` → `ssl_connect_error` for curl 7.81+, where the `CURLE_SSL_CACERT` case is compiled out; otherwise a certificate failure shows "server is down" | +7 | built; inferred |
+| b4 | `c2434700d9` | `llsecapi.h`, `llappcorehttp.cpp`, `llxmlrpclistener.cpp` | `sslVerify` records its verdict in the certificate data (`CERT_VALIDATION_FAILURE`: `untrusted_ca` or `invalid`); the XML-RPC listener names the failure from it (`SSL_CACERT` only for an untrusted CA, else `SSL_PEER_CERTIFICATE`) and attaches the certificate, independent of curl's code. `llstartup.cpp:1944-1961` then offers "trust this CA" only for an unknown CA. curl's own verification failures carry no verdict and keep the generic error | +26 −10 | **verified** to the dialog choice: the certificate probe (follow-up) gets `SSL_CACERT` + `untrusted_ca` for an unknown CA and `SSL_PEER_CERTIFICATE` + `invalid` + the certificate for an expired one; the dialog itself is masked by finding 3 |
+| b5 | `f4a87d0c1f` | `llxmlrpctransaction.cpp` | `case CURLE_PEER_FAILED_VERIFICATION:` → `ssl_connect_error` for curl 7.81+, where the `CURLE_SSL_CACERT` case is compiled out; otherwise a certificate failure shows "server is down" | +7 | **verified** by the certificate probe: every certificate failure, the hostname mismatch included, now gives the `ssl_connect_error` text; release gives the generic text for the expired and wrong-host cases |
 | b6 | `92a4f39218` | `_httppolicyclass.h`, `_httppolicy.cpp/.h`, `_httplibcurl.cpp/.h`, `_httpoprequest.cpp/.h`, `httprequest.h`, `llappcorehttp.cpp`, `tests/test_httprequest.hpp` | Pipelining replacement, below. BUG-2295 test no longer skipped | +90 −235 | verified: builds; llcorehttp suite incl. BUG-2295 passes; viewer and `http_texture_load` run. Load-time effect not measured (G3) |
 | b7 | `1c79e63d1a` | `indra/llcorehttp/tests/test_httprequest.hpp` | With curl 8 the restored suite's "Header generation for HttpRequest GET" and "... PUT" failed: they require `Accept-Encoding`, which llcorehttp sends only with curl before 7.81 (the guard below). For 7.81+ they now require it absent; POST is unchanged | +33 | verified (63 tests: 60 pass, 3 skipped, 0 failed) |
 | b8 | `3500ce3c11` | `_httplibcurl.cpp`, `tests/test_httprequest.hpp` | Review follow-up (#322): b6 had also dropped the desync check's offset test. A 206 whose Content-Range starts elsewhere than asked is refused again, with the retryable `HE_INV_CONTENT_RANGE_HDR` and nothing switched off: `lltexturefetch.cpp:1844` skips realignment when the reply offset is 0 and would append such a reply to its data. A longer reply at the asked offset is still delivered (BUG-2295). New block in the BUG-2295 test: `bytes 0-75` for a request at offset 10 must fail so | +47 −1 | verified (63 tests: 60 pass, 3 skipped; the new block logs the refusal and passes) |
@@ -380,13 +404,13 @@ G3. POST stays as it is (its replies come from simulators and login).
   successes, 238,211 bytes, 0 errors, 0.45 s; `-p 0`: 8 successes, 0.25 s.
   Single runs on 8 small textures: a smoke test, not the G3 comparison.
 - **Not run:** a Linux build (the two Linux fixes were checked with clang
-  only); a login, so neither certificate dialog (b4, b5 need a login against
-  a server with an untrusted or expired certificate: the study's G4); curl's
+  only); a login, so neither certificate dialog is seen on screen (the
+  transport and listener half of G4 is now run: see the follow-up); curl's
   own test suite; any load-time measurement.
 
 ## Rust core: `vkstorm-core-rust`, branch `codex/curl8-prototype`
 
-Worktree `vkr\core-curl8-prototype`, from `main` at `08a5cbd`. Pairs with
+Worktree `vkstorm-core-rust\work\curl8-prototype` (was `vkr\core-curl8-prototype`), from `main` at `08a5cbd`. Pairs with
 step (b) only: step (a) keeps curl 7.54.1 and needs no Rust change (the core
 uses no OpenSSL; `Cargo.lock` has no TLS crate).
 
@@ -498,14 +522,17 @@ What was hit here, against the studies' estimates:
 | OpenSSL 3.5 package | 1–2 d | first try built and passed its 3822 tests (22 min); 0.5 d with the fork | linux64 in CI: 0.5–1 d (not run) |
 | curl 7.54.1 rebuild | 1–3 d (risk of source patches) | no patch; 2 min | linux64 in CI: 0.5 d |
 | curl 8.23 package | 2–3 d | one CMake fix (FindOpenSSL on MSVC); 0.5 d | linux64 in CI, curl's own HTTP/TLS tests: 1 d |
-| Step (a) viewer change and tests | 1.5–2 d | one build error, the credential store, two new tests: done | Linux `-Werror` build (CI), in-viewer fault injection on the read path, a real profile with saved SL/OpenSim logins and MFA through upgrade and downgrade: 1–1.5 d |
+| Step (a) viewer change and tests | 1.5–2 d | one build error, the credential store, two new tests: done; the credential store is now on every line through the hotfix, and its OpenSSL 3 branch was built and tested here against 3.5.9 | Linux `-Werror` build (CI), a real profile with saved SL/OpenSim logins and MFA through upgrade and downgrade: 0.5–1 d |
 | Restore llcorehttp tests | 1–2 d | registered and passing in both steps; 2 tests needed the Accept-Encoding expectation, 1 the desync check: done | rust line adaptation: 0.25 d |
-| Step (b) compile/link fixes, certificate kind | 2–3 d | one link fix, two Linux fixes, certificate kind: done | G4 dialog test with an untrusted and an expired certificate: 0.5–1 d |
+| Step (b) compile/link fixes, certificate kind | 2–3 d | one link fix, two Linux fixes, certificate kind: done | transport half of G4 done (the probe); the dialogs need the finding-3 hotfix first, then one look at each dialog with the probe's servers: 0.5 d |
 | Pipelining replacement, C++ and Rust | 4–6 d | done, tested against the mock servers | parity fixture re-record on the rust line: 0.5–1 d |
 | G1 baseline trace, G3 measurement harness and tuning | 6–8 d | not started (needs in-world sessions) | 6–8 d |
 | Server tests (G4), CI, per-line integrations | 3–4 d | per-line check done (mostly applies as-is) | 3–4 d |
 
-Updated totals: **OpenSSL step about 5–7 working days** left (was 8–12),
+Updated totals (follow-up): **OpenSSL step about 4–6 working days** left
+(the credential store is done on every line), **curl 8 step about 11–15
+days**, plus the finding-3 hotfix (about 0.5 d per line set, a separate
+release patch). First pass: **OpenSSL step about 5–7 working days** left (was 8–12),
 because the packages built first time and 7.54.1 needed no patch; **curl 8
 step about 12–16 days** left (was 16–24), most of it the measurement work
 (G1, G3), which this prototype does not touch.
@@ -529,6 +556,11 @@ step about 12–16 days** left (was 16–24), most of it the measurement work
    `LLInvalidCertificate`, and the user gets `GeneralCertificateErrorShort`.
    b4 makes the dialog choice right; making either dialog work needs the PEM
    in the certificate data (a follow-up, with the G4 test).
+   *Follow-up:* the missing PEM is now **verified** on both the release
+   viewer and this prototype (the certificate probe's replies carry no
+   `pem`), so no line can show `TrustCertificateError` or
+   `GeneralCertificateError` today. A pre-existing bug: a hotfix candidate
+   for release and every line, outside this prototype.
 4. **The asset CDN's HTTPS certificate does not match its name** (verified
    with curl 8.23: "no alternative certificate subject name matches target
    hostname 'asset-cdn.glb.agni.lindenlab.com'"), which is why the viewer's
@@ -554,7 +586,130 @@ step about 12–16 days** left (was 16–24), most of it the measurement work
    (admin-only on Windows). That is today's behaviour too. To make the
    viewer independent of a machine's `openssl.cnf`, build OpenSSL with
    `no-autoload-config` and curl with `CURL_DISABLE_OPENSSL_AUTO_LOAD_CONFIG=ON`;
-   not done in the prototype.
+   not done in the prototype. *Follow-up, verified:* the viewer binary holds
+   `OPENSSLDIR: "C:\Program Files\Common Files\SSL"` (admin-writable only),
+   the same as the package's `openssl version -d`. A build made outside the
+   package script keeps its build-time prefix instead (the standalone
+   `openssl-3.5\install` build names a user directory, which no longer
+   exists after the move), so the package script's `--openssldir` matters.
 10. **Build time**: a full RelWithDebInfo + LTO + tests build here is about
     half an hour of work, but the machine sleeps when idle; one build took
     3 h 44 min of wall clock for that reason.
+
+## Follow-up 2026-11-05: gaps closed
+
+A second pass over the brief against the first one. What was missing or
+only reasoned, and what was done about it:
+
+| Gap | Done here | Status |
+|---|---|---|
+| The certificate failure at login (b4, b5; the study's G4) was built but never run | Run through the real login transport, without logging in, on this build and on the installed release viewer (below) | verified, up to the dialog llstartup picks |
+| The smoke test was not repeated after b8–b10 | Repeated at b10 (and again after the hotfix cherry-pick, below) | verified |
+| The credential-store hotfix `68ec9057a3` landed on every line after this branch: the a3/a4/a7 patch set no longer applied, and the hotfix's OpenSSL 3 branch had not been built against OpenSSL 3 | Cherry-picked (`528cba6c39`), a2 kept on top; rebuilt and tested against OpenSSL 3.5.9 (below) | verified |
+| Per-line notes were taken at 08:13 UTC; the lines moved since | Redone on the current tips (below) | verified |
+| The worktree and packages moved (`vkr\`, `repos\work\` to `vulkanstorm\work\`) | `my_autobuild.xml` URLs and the build directory updated | done |
+| Linux builds | Still not run: no WSL or container runtime on this machine (`wsl --status`: not installed) | open |
+| curl's own test suite (G0), the real-store credstore check (`CREDSTORE_REAL=1`, reads the owner's store), a real profile through upgrade and downgrade, G1/G3 load measurements | Not done: each needs either the owner's data, a login, or a Linux/MSYS test host | open |
+
+### Certificate failures at login: the probe
+
+`scripts/tests/tls_cert_probe/run_probe.ps1` (new, this branch) makes a
+throw-away PKI with OpenSSL 3.5.9, serves five local HTTPS endpoints
+(Python `ssl`, 127.0.0.1 only), and starts the staged viewer with an empty
+scratch profile whose `CA.pem` trusts the test CA. A LEAP plugin
+(`xmlrpc_cert_probe.py`, loaded through a `--sessionsettings` file, because
+`--leap` on the command line needs LLSD notation quoting) posts one XML-RPC
+request with no credentials to each endpoint through the
+`LLXMLRPCTransaction` pump. That is the transport the login uses: the same
+`LLXMLRPCTransaction`, the viewer's `sslVerify` and certificate store, and
+the `LLXMLRPCListener` that fills the reply llstartup reads (`status`,
+`errorcode`, `certificate`). From those three values llstartup's branch is
+fixed (`llstartup.cpp:1916-1961`); the script prints it. The real profile
+is never opened; the SHA-256 of `bin_conf.dat` was the same before and after
+every run.
+
+| Endpoint | Release viewer (OpenSSL 1.1.1w, curl 7.54.1) | This prototype (OpenSSL 3.5.9, curl 8.23.0) |
+|---|---|---|
+| valid (test CA in `CA.pem`) | `Complete` | `Complete` |
+| expired leaf, trusted CA | `SSL_PEER_CERTIFICATE`, no certificate: generic login error, "Despite our best efforts..." | `SSL_PEER_CERTIFICATE`, certificate, `invalid`: certificate error, `ssl_connect_error` text |
+| leaf from an unknown CA | `SSL_CACERT`, certificate (the CA's): certificate error | `SSL_CACERT`, certificate, `untrusted_ca`: certificate error |
+| self-signed leaf | `SSL_CACERT`, certificate | `SSL_CACERT`, certificate, `untrusted_ca` |
+| wrong host name (curl's own check) | `SSL_PEER_CERTIFICATE`, no certificate: generic login error | `SSL_CACERT` (curl's 60, named by the listener's code table), no certificate: generic login error with the `ssl_connect_error` text |
+
+What this shows:
+
+- b4 works on curl 8: the validator's verdict travels with the certificate,
+  and only an unknown CA (or a self-signed leaf) is named `SSL_CACERT`. An
+  expired certificate under a trusted CA is `SSL_PEER_CERTIFICATE` and now
+  carries its certificate, so llstartup takes the certificate branch where
+  release showed the generic text. Without b4 that case would have been
+  curl 8's 60, named `SSL_CACERT` with the certificate attached: the
+  "trust this CA" branch (inferred; not built without b4).
+- b5 works: every TLS certificate failure gives the `ssl_connect_error`
+  text on curl 8.
+- The viewer's own validator classifies the same on OpenSSL 3.5.9 as on
+  1.1.1w (`CertExpired`, the trust exception for an unknown or self-signed
+  root). Step (a) keeps curl 7.54.1, whose codes 51 and 60 differ, so its
+  reply is the release column (inferred: the step (a) build was not probed
+  separately; its validator is this one, its curl is release's).
+- **Finding 3 confirmed on both viewers:** the certificate data in the reply
+  is the `getLLSD()` map (subject, issuer, dates, extensions, now
+  `validation_failure`) with no PEM, so llstartup's
+  `getCertificate(response["certificate"])` gets `""`, throws, and shows
+  `GeneralCertificateErrorShort`. Neither `TrustCertificateError` nor
+  `GeneralCertificateError` can appear on any line today. The probe proves
+  the missing PEM; the throw on `""` is read from the code. This is a
+  pre-existing bug, so by the project's rule it is a hotfix on release and
+  every line, not part of this prototype; b4 is what makes the dialog choice
+  right once the PEM is there.
+- Public test hosts are not a usable gate: `badssl.com`'s
+  `untrusted-root`, `self-signed` and `wrong.host` reset connections
+  intermittently from here (curl 8 and Windows' own curl alike, with `-k`
+  too), which first looked like a curl 8 regression (`SSL_CONNECT_ERROR`).
+  The local servers make the probe deterministic.
+
+Run it with:
+
+```
+pwsh -File scripts\tests\tls_cert_probe\run_probe.ps1 -Exe <staged or installed viewer exe> -OpenSsl <openssl.exe 3.4+> -WorkDir <scratch dir> -Python <python with the llsd package>
+```
+
+Bounded: the servers exit after 200 s, the viewer is closed once the result
+is written (or after 180 s) and killed 30 s later. Two runs on each viewer
+gave the same table.
+
+### Rebuild with the hotfix (`528cba6c39`), OpenSSL 3.5.9 and curl 8.23.0
+
+Fresh configure of the moved build directory, then `autobuild build -A 64
+-c RelWithDebInfoFS_open --no-configure` (RelWithDebInfo, LTO,
+`LL_TESTS=TRUE`): 42 min 33 s, 0 errors, exit 0, staged. The tests the build
+runs: 93 test executables, 1333 tests passed, 9 skipped known failures
+(the six from step (a), llcorehttp's FIXMEs 19–21, plus `LLSphere` 2), 0
+failed. `INTEGRATION_TEST_llsechandler_basic`: 12/12, so the hotfix's
+OpenSSL 3 branch (private `OSSL_LIB_CTX`, legacy provider,
+`EVP_CIPHER_fetch`) builds and passes against 3.5.9, the textbook-RC4
+format check (test 10) and the failed-write and unreadable-store cases
+(11, 12) included. `INTEGRATION_TEST_llcorehttp`: 63 tests, 60 passed, 3
+skipped. The certificate probe on this build gave the same table as
+above; smoke: `GridListRequest: got new list`, `STATE_LOGIN_WAIT` 5 s after
+start, no TLS or curl warning outside the probe's endpoints.
+
+### Smoke test at b10, repeated
+
+Staged viewer, scratch profile: `libcurl/8.23.0 OpenSSL/3.5.9
+zlib/1.3.1.zlib-ng nghttp2/1.64.0`, `GridListRequest: got new list` over
+HTTPS, `STATE_LOGIN_WAIT` reached in 4 s; no `CoreHttp`, TLS or certificate
+warning other than the probe's own endpoints. Not logged in.
+
+### Per-line check on the current tips
+
+Same method as [Per-line notes](#per-line-notes), on release `9f58734096`,
+canary `aee351a302`, rust `fb40f493a4`, aleph `95d5446a58` (fetched
+2026-11-05 ~12:30 UTC), with a3, a4 and a7 left out because each line has
+the hotfix. Release takes a1, a2, a5, a6 and b1–b10 as-is. Canary and
+aleph: a6 must be placed by hand, and b6, b8, b9, b10 then do not apply
+as-is (b6 and b9 for their `test_httprequest.hpp` hunks after a6, b8–b10
+for `_httplibcurl.cpp` hunks that follow b6); b7 now applies as-is there
+(it was marked "adapt" before). Rust: a6 adapted, b2, b6, b8–b10 are the
+Rust core's (their C++ files are gone), the rest applies. a2 applies as-is
+on top of the hotfix on all four lines.
