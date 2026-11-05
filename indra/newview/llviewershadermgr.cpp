@@ -307,13 +307,17 @@ static void make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant)
     variant.mShaderFiles = shader.mShaderFiles;
     variant.mShaderLevel = shader.mShaderLevel;
     variant.mShaderGroup = shader.mShaderGroup;
-    if (variant.createShader())
+    // createShader() can fall back to a lower shader class (the class1 stubs of the PBR and material
+    // programs), which writes no coverage mask: only a program that kept the mask table is a variant
+    if (variant.createShader() && variant.mTexture.size() > LLShaderMgr::ALPHA_ST_MASKS &&
+        variant.mTexture[LLShaderMgr::ALPHA_ST_MASKS] >= 0)
     {
         shader.mStochasticVariant = &variant;
     }
     else
     {
-        LL_WARNS("Shader") << "Stochastic transparency unavailable: " << variant.mName << " failed to build" << LL_ENDL;
+        LL_WARNS("Shader") << "Stochastic transparency unavailable: " << variant.mName
+                           << " failed to build with its coverage mask" << LL_ENDL;
         variant.unload();
     }
 }
