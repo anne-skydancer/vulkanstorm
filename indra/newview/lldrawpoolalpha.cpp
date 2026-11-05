@@ -465,6 +465,9 @@ void LLDrawPoolAlpha::bindStochasticMasks(LLGLSLShader* shader)
     }
 }
 
+// <Vulkanstorm/> the stochastic passes' slope-scaled polygon offset (see renderStochastic)
+static const F32 ALPHA_ST_OFFSET_FACTOR = -1.f / 256.f;
+
 bool LLDrawPoolAlpha::renderStochastic()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
@@ -477,15 +480,17 @@ bool LLDrawPoolAlpha::renderStochastic()
     const U32 iterations = llmax(gPipeline.getAlphaStochasticIterations(), 1u);
     {
         // Multisampled rasterization for the passes' targets (the viewer keeps it off). The
-        // transparent faces are pulled forward by their depth slope: the opaque depth is the
-        // pixel centre's on every sample, the faces' depth the sample's own, so a face lying on
-        // an opaque surface (a decal) would fail on half its samples. One slope unit covers a
-        // sample's offset from the centre. The accumulation takes one depth unit more than the
-        // stochastic depth, and the glow (other vertex shaders) one more again, so that a face
-        // always passes at the samples it won whatever the last bit of its depth.
+        // depth spread gives each sample the opaque surface's depth at that sample, so a face
+        // meets it sample for sample as sorted alpha meets it at the pixel centre. The faces are
+        // pulled forward by a 256th of their depth slope and one depth unit, the rounding of the
+        // spread and of the rasteriser, so that a face lying on an opaque surface (a decal) keeps
+        // every sample; no more, since a whole slope unit let a face up to a pixel's depth step
+        // behind an opaque surface show through it, where sorted alpha hides it. The accumulation takes one depth unit more than the stochastic depth,
+        // and the glow (other vertex shaders) one more again, so that a face always passes at the
+        // samples it won whatever the last bit of its depth.
         LLGLEnable multisample(GL_MULTISAMPLE);
         LLGLEnable offset(GL_POLYGON_OFFSET_FILL);
-        glPolygonOffset(-1.f, -1.f);
+        glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -1.f);
 
         {
             LL_PROFILE_GPU_ZONE("alpha stochastic total alpha");
@@ -504,7 +509,7 @@ bool LLDrawPoolAlpha::renderStochastic()
             }
             {
                 LL_PROFILE_GPU_ZONE("alpha stochastic depth");
-                glPolygonOffset(-1.f, -1.f);
+                glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -1.f);
                 setStochasticUniforms(2, iteration);
                 gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_NONE);
                 forwardRender(true, ALPHA_ST_DEPTH);
@@ -512,7 +517,7 @@ bool LLDrawPoolAlpha::renderStochastic()
             }
             {
                 LL_PROFILE_GPU_ZONE("alpha stochastic accumulation");
-                glPolygonOffset(-1.f, -2.f);
+                glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -2.f);
                 gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_ACCUM);
                 forwardRender(true, ALPHA_ST_ACCUM);
                 forwardRender(false, ALPHA_ST_ACCUM);
@@ -1238,7 +1243,7 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                 {
                     gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_TRANS);
                     gGL.blendFunc(LLRender::BF_ONE, LLRender::BF_ONE, LLRender::BF_ONE, LLRender::BF_ONE);
-                    glPolygonOffset(-1.f, -3.f);
+                    glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -3.f);
                     mStochasticGlow = true;
                 }
                 // </Vulkanstorm>
@@ -1278,7 +1283,7 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                 if (st_glow)
                 {
                     gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_ACCUM); // <Vulkanstorm/>
-                    glPolygonOffset(-1.f, -2.f);
+                    glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -2.f);
                 }
 
                 if (lastShader && rebind)

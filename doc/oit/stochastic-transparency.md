@@ -97,11 +97,23 @@ The coverage mask of a fragment is seeded by its pixel, its face's identity
 launch) and its triangle (`gl_PrimitiveID`), so the noise is fixed in screen space and
 uncorrelated between faces and between the triangles of one face.
 
-Depth: the opaque depth is the pixel centre's on every sample, a face's depth the sample's own.
-A face lying on an opaque surface (a decal) would lose half its samples, so the passes pull the
-faces forward by one depth-slope unit (`glPolygonOffset(-1, -1)`); the accumulation takes one
-depth unit more and the glow (other vertex shaders) one more again, so that a face always passes
-at the samples it won.
+Depth: the spread gives each sample the opaque surface's depth at that sample (the pixel
+centre's depth extended along the surface's screen-space gradient, taken from the neighbour on
+the same side of any depth edge), and a face's depth is the sample's own, so a face meets the
+opaque surface sample for sample, as sorted alpha meets it at the pixel centre. The passes pull
+the faces forward by a 256th of their depth slope and one depth unit (`glPolygonOffset(-1/256,
+-1)`), the rounding of the spread and the rasteriser, so that a face lying on an opaque surface
+(a decal) keeps every sample; the accumulation takes one depth unit more and the glow (other
+vertex shaders) one more again, so that a face always passes at the samples it won.
+
+Until 1.0.1.81943 the spread gave every sample the pixel centre's depth and the passes pulled the
+faces forward by a whole slope unit (`glPolygonOffset(-1, -1)`). That let a blended face up to one
+pixel's depth step behind an opaque surface show through it, where sorted alpha (and Aurora, whose
+passes have no depth bias) hide it, for instance a blended layer just inside a surface it should
+stay under (fixed 2026-11-05; `scripts/perf/test_alpha_stochastic.py` checks faces a third and a
+sixteenth of a pixel behind sloped planes, and that the old passes show them on every pixel). The spread now runs once
+per sample (it reads `gl_SamplePosition`): 0.26 ms instead of 0.03 ms per spread at 2560x1440 with
+8 samples on an RTX 5070 Ti (NVIDIA 621.01), run once at S = 4 or 8 and twice at S = 16.
 
 ## What takes the method, and what does not
 
