@@ -144,10 +144,6 @@ LLGLSLShader            gPostScreenSpaceReflectionProgram;
 LLGLSLShader            gPostVignetteProgram;   // <FS:CR> Import Vignette from Exodus
 LLGLSLShader            gPostSnapshotFrameProgram;   // <FS:Beq/> Add Snapshot frame guide
 
-// <FS> Vulkanstorm: alpha OIT (A-buffer) resolve shader
-LLGLSLShader            gAlphaOITResolveProgram;
-// </FS>
-
 // <Vulkanstorm> stochastic transparency (doc/oit/stochastic-transparency.md): the alpha-only
 // variants of the alpha programs, [0] static and [1] rigged, the depth spread and the composite
 LLGLSLShader            gDeferredAlphaStochasticProgram[2];
@@ -1051,15 +1047,6 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     }
 #endif
     // </Vulkanstorm>
-    // <FS> Vulkanstorm: alpha OIT A-buffer node encoding, under the same gate as ALPHA_OIT
-    // (LLShaderMgr::compileShader) and attached with it (LLShaderMgr::attachShaderFeatures).
-#if LL_WINDOWS || LL_LINUX
-    if (gGLManager.mGLVersion >= 4.4f)
-    {
-        index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/alphaOITPackF.glsl",               1) );
-    }
-#endif
-    // </FS>
 
     for (U32 i = 0; i < shaders.size(); i++)
     {
@@ -3266,26 +3253,6 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
         success = gDeferredBufferVisualProgram.createShader();
     }
-
-    // <FS> Vulkanstorm: alpha OIT (image-array A-buffer) resolve. Built only on GL 4.4+ (image
-    // load/store). The alpha shaders' capture path (ALPHA_OIT) and the OIT pipeline are
-    // gated on the same capability, so on older HW this program is absent and compositeAlphaOIT()
-    // is a no-op -- the legacy sorted-alpha path runs instead.
-#if LL_WINDOWS || LL_LINUX
-    if (success && gGLManager.mGLVersion >= 4.4f)
-    {
-        gAlphaOITResolveProgram.mName = "Alpha OIT Resolve";
-        gAlphaOITResolveProgram.mFeatures.isDeferred = true;
-        gAlphaOITResolveProgram.mShaderFiles.clear();
-        gAlphaOITResolveProgram.clearPermutations();
-        gAlphaOITResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gAlphaOITResolveProgram.mShaderFiles.push_back(make_pair("deferred/alphaOITResolveF.glsl", GL_FRAGMENT_SHADER));
-        gAlphaOITResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-        success = gAlphaOITResolveProgram.createShader();
-        llassert(success);
-    }
-#endif
-    // </FS>
 
     // <Vulkanstorm> stochastic transparency: the opaque depth spread over the passes' samples and
     // the composite. Like the variants, a failure leaves the method unavailable (sorted alpha).
