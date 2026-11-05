@@ -1585,6 +1585,7 @@ set(viewer_HEADER_FILES
     llsetkeybinddialog.h
     llsettingspicker.h
     llsettingsvo.h
+    llshadowprojectorselect.h
     llsidepanelappearance.h
     llsidepanelinventory.h
     llsidepanelinventorysubpanel.h

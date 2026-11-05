@@ -852,6 +852,16 @@ public:
     LLPointer<LLDrawable>   mShadowSpotLight[2];
     F32                     mSpotLightFade[2];
     LLPointer<LLDrawable>   mTargetShadowSpotLight[2];
+    // <Vulkanstorm> projector shadow selection (llshadowprojectorselect.h): seconds since each
+    // slot's projector was last drawn, and the projectors drawn last frame with their scores
+    F32                     mSpotLightMissing[2] = { 0.f, 0.f };
+    struct ShadowSpotCandidate
+    {
+        LLPointer<LLDrawable> drawable;
+        F32 score;
+    };
+    std::vector<ShadowSpotCandidate> mShadowSpotCandidates;
+    // </Vulkanstorm>
 
     LLVector4               mSunClipPlanes;
     LLVector4               mSunOrthoClipPlanes;
