@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later -->
 # Shadow model rework: soft shadows as the base (study and design)
 
-Status: study and design, phase 1. Nothing here changes the shadows for users.
+Status: study and design, phase 1; design approved by the owner on 2026-11-05 (decisions in §14). Nothing here changes the shadows for users.
 The branch `codex/indoor-shadow-study` (from `vkstorm-devel` d36fe19890) carries:
 
 - this document;
@@ -822,19 +822,17 @@ The diagnostics are development hooks. `scripts/tests/check_release_hooks.py` do
 
 ---
 
-## 14. Decisions for the owner
+## 14. Decisions (owner, 2026-11-05: "proceed as per your recommendations")
 
-1. **Replace the perspective-warped cascades** with stable ortho cascades (§9.2). This reverses the 2026-11-03 "keep" decision.
-2. **Shadow distance becomes its own setting** with per-tier defaults (§2.4), instead of following the draw distance and the visible extents.
-3. **The transmittance mapping**: T = (1 − α)(1 + α c), or T = 1 − α(1 − c), or another (§7.2).
-4. **Remove the bias altitude term** (§6.4): a hotfix now, or within S2.
-5. **featuretable turning PCSS on at Ultra** (§6.2): keep it, or drop it now that PCSS will be the only model.
-6. **Cloud cover widening the penumbra** (§8.1): no (the default, EEP intent), or yes as an EEP-driven mapping.
-7. **Tier defaults per GPU class**, and whether Low may drop to 3 cascades.
-8. **Screen-space contact shadows**: Ultra only, or not at all.
-9. **The default camera offsets** (§6.2) differ from stock and change shadow density on the avatar. This is informational: keep them.
-
----
+1. **The warped cascades are replaced** by stable ortho cascades (§9.2). This reverses the 2026-11-03 decision to keep the warp.
+2. **Shadow distance becomes its own setting**, with a default per tier (§2.4).
+3. **Transmittance is T = (1 − α)(1 + α c)** (§7.2).
+4. **The bias altitude term is dropped now, as a hotfix** to release and every line (§6.4), ahead of S2.
+5. **The featuretable entry that turns PCSS on at Ultra stays** (§6.2).
+6. **No cloud-cover penumbra.** The light size comes from sun_scale and moon_scale only (§8.1).
+7. **Low may use 3 cascades.** Per-GPU-class defaults are tuned in S8.
+8. **Screen-space contact shadows at Ultra only** (S9).
+9. **The default camera offsets differ from stock:** noted, no change.
 
 ## 15. Could this be proposed to Aurora Viewer later?
 
