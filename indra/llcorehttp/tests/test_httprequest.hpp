@@ -1566,10 +1566,21 @@ void HttpRequestTestObjectType::test<16>()
             regex_container_t::value_type(
                 boost::regex("X-Reflect-accept", boost::regex::icase),
                 boost::regex("\\*/\\*", boost::regex::icase)));
+#if LIBCURL_VERSION_NUM < 0x075100
         handler.mHeadersRequired.push_back(
             regex_container_t::value_type(
                 boost::regex("X-Reflect-accept-encoding", boost::regex::icase),
                 boost::regex("((gzip|deflate),\\s*)+(gzip|deflate)", boost::regex::icase))); // close enough
+#else
+        // <Vulkanstorm> With curl 7.81 and later Firestorm sets no
+        // CURLOPT_ENCODING except on POST (an unknown Content-Encoding, as
+        // AWS sends, then fails the transfer), so no Accept-Encoding.
+        handler.mHeadersDisallowed.push_back(
+            regex_container_t::value_type(
+                boost::regex("X-Reflect-accept-encoding", boost::regex::icase),
+                boost::regex(".*", boost::regex::icase)));
+        // </Vulkanstorm>
+#endif
         handler.mHeadersRequired.push_back(
             regex_container_t::value_type(
                 boost::regex("X-Reflect-keep-alive", boost::regex::icase),
@@ -1639,10 +1650,21 @@ void HttpRequestTestObjectType::test<16>()
             regex_container_t::value_type(
                 boost::regex("X-Reflect-accept", boost::regex::icase),
                 boost::regex("image/x-j2c", boost::regex::icase)));
+#if LIBCURL_VERSION_NUM < 0x075100
         handler.mHeadersRequired.push_back(
             regex_container_t::value_type(
                 boost::regex("X-Reflect-accept-encoding", boost::regex::icase),
                 boost::regex("((gzip|deflate),\\s*)+(gzip|deflate)", boost::regex::icase))); // close enough
+#else
+        // <Vulkanstorm> With curl 7.81 and later Firestorm sets no
+        // CURLOPT_ENCODING except on POST (an unknown Content-Encoding, as
+        // AWS sends, then fails the transfer), so no Accept-Encoding.
+        handler.mHeadersDisallowed.push_back(
+            regex_container_t::value_type(
+                boost::regex("X-Reflect-accept-encoding", boost::regex::icase),
+                boost::regex(".*", boost::regex::icase)));
+        // </Vulkanstorm>
+#endif
         handler.mHeadersRequired.push_back(
             regex_container_t::value_type(
                 boost::regex("X-Reflect-keep-alive", boost::regex::icase),
@@ -1993,10 +2015,21 @@ void HttpRequestTestObjectType::test<18>()
             regex_container_t::value_type(
                 boost::regex("X-Reflect-accept", boost::regex::icase),
                 boost::regex("\\*/\\*", boost::regex::icase)));
+#if LIBCURL_VERSION_NUM < 0x075100
         handler.mHeadersRequired.push_back(
             regex_container_t::value_type(
                 boost::regex("X-Reflect-accept-encoding", boost::regex::icase),
                 boost::regex("((gzip|deflate),\\s*)+(gzip|deflate)", boost::regex::icase))); // close enough
+#else
+        // <Vulkanstorm> With curl 7.81 and later Firestorm sets no
+        // CURLOPT_ENCODING except on POST (an unknown Content-Encoding, as
+        // AWS sends, then fails the transfer), so no Accept-Encoding.
+        handler.mHeadersDisallowed.push_back(
+            regex_container_t::value_type(
+                boost::regex("X-Reflect-accept-encoding", boost::regex::icase),
+                boost::regex(".*", boost::regex::icase)));
+        // </Vulkanstorm>
+#endif
         handler.mHeadersRequired.push_back(
             regex_container_t::value_type(
                 boost::regex("X-Reflect-keep-alive", boost::regex::icase),
