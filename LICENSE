@@ -24,8 +24,8 @@ The exact terms differ by origin:
   * Third-party components keep their own licences.
 
 Binary packages: the viewer binaries currently built from this tree link
-OpenSSL 1.1.1 and GLOD, whose licences are not compatible with GPL-3.0
-(doc/licensing.md, "Open points"). Until those are replaced, the GPL-3.0
+OpenSSL 1.1.1, whose licence is not compatible with GPL-3.0
+(doc/licensing.md, "Open points"). Until it is replaced, the GPL-3.0
 option applies to the source code only, and the binaries are offered under
 LGPL-2.1.
 
