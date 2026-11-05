@@ -61,9 +61,9 @@ Third-party components stay under their own licences whichever you choose.
 Whether a given binary can be distributed under a given option depends on
 the libraries linked into it: see the compatibility audit in
 [`doc/licensing.md`](doc/licensing.md). **At present the viewer binaries
-link OpenSSL 1.1.1 and GLOD, which are not compatible with GPL-3.0, so the
+link OpenSSL 1.1.1, which is not compatible with GPL-3.0, so the
 GPL-3.0 option applies to the source code only and the binaries are offered
-under LGPL-2.1** until those are replaced (the open points there).
+under LGPL-2.1** until it is replaced (the open point there; GLOD, the other one, has been removed).
 
 ## Contributions
 
