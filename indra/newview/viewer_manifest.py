@@ -762,13 +762,6 @@ class Windows_x86_64_Manifest(ViewerManifest):
             if self.args['discord'] == 'ON':
                 self.path("discord_partner_sdk.dll")
 
-            # Mesh 3rd party libs needed for auto LOD and collada reading
-            try:
-                self.path("glod.dll")
-            except RuntimeError as err:
-                print (err.message)
-                print ("Skipping GLOD library (assumming linked statically)")
-
             # Get fmodstudio dll if needed
             # if self.args['fmodstudio'] == 'ON':
             if self.args['fmodstudio'].lower() == 'on':
@@ -1662,7 +1655,6 @@ class Darwin_x86_64_Manifest(ViewerManifest):
                                 # "libapr-1.0.dylib",
                                 # "libaprutil-1.0.dylib",
                                 # "libexpat.1.dylib",
-                                # "libGLOD.dylib",
                                 # # libnghttp2.dylib is a symlink to
                                 # # libnghttp2.major.dylib, which is a symlink to
                                 # # libnghttp2.version.dylib. Get all of them.
@@ -1910,7 +1902,6 @@ class Darwin_x86_64_Manifest(ViewerManifest):
                 libfile = "libllcommon.dylib"
                 dylibs = []
                 for libfile in (
-                                "libGLOD.dylib",
                                 "libgrowl.dylib",
                                 "libgrowl++.dylib",
                                 ):
@@ -2173,7 +2164,7 @@ class Darwin_x86_64_Manifest(ViewerManifest):
                         plain_sign = glob.glob(resources + "llplugin/*.dylib")
 
                         # <FS:ND> Even though we got some dylibs in Resources signed by LL, we also got some there that are *NOT*
-                        # At least: fmod, growl, GLOD
+                        # At least: fmod, growl
                         # We could selectively sign those, or repackage them and then sign them. For an easy clean sweet we just resign them al
                         plain_sign += glob.glob(resources + "*.dylib")
                         plain_sign += glob.glob(resources + "llplugin/lib/*.dylib")
@@ -2520,7 +2511,6 @@ class LinuxManifest(ViewerManifest):
             #self.path("libcrypto.so*")
             #self.path("libexpat.so*")
             #self.path("libssl.so*")
-            #self.path("libGLOD.so")
             #self.fs_path("libminizip.so")
             #self.path("libuuid.so*")        # <FS:Zi> no longer used
             self.path("libSDL*.so*")
