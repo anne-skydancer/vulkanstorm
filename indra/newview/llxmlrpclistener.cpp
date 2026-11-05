@@ -301,6 +301,29 @@ public:
                                      << " (" << data["error"].asString() << ")"
                                      << LL_ENDL;
 
+#if LIBCURL_VERSION_NUM >= 0x073e00
+        // <Vulkanstorm> Since libcurl 7.62 an untrusted CA and every other
+        // certificate failure are the same code (60). Report them as 7.54.1
+        // did: an untrusted CA as SSL_CACERT with its certificate; anything
+        // else (expired, bad signature, curl's host name check) as
+        // SSL_PEER_CERTIFICATE without one, since 7.54.1's code 51 never
+        // carried it (see the #if below, which is always false).
+        if (curlcode == CURLE_PEER_FAILED_VERIFICATION)
+        {
+            LLSD cert_data = mTransaction->getErrorCertData();
+            if (cert_data.isMap() && cert_data[CERT_VALIDATION_FAILURE].asString() == CERT_FAILURE_UNTRUSTED_CA)
+            {
+                cert_data.erase(CERT_VALIDATION_FAILURE);
+                data["errorcode"] = "SSL_CACERT";
+                data["certificate"] = cert_data;
+            }
+            else
+            {
+                data["errorcode"] = "SSL_PEER_CERTIFICATE";
+            }
+        }
+        // </Vulkanstorm>
+#else
         switch (curlcode)
         {
 #if CURLE_SSL_PEER_CERTIFICATE != CURLE_SSL_CACERT
@@ -313,6 +336,7 @@ public:
             default:
                 break;
         }
+#endif
         // values of 'curlcode':
         // CURLE_COULDNT_RESOLVE_HOST,
         // CURLE_SSL_PEER_CERTIFICATE,
