@@ -572,6 +572,7 @@ LLCore::HttpStatus LLAppCoreHttp::sslVerify(const std::string &url,
         result = LLCore::HttpStatus(LLCore::HttpStatus::EXT_CURL_EASY, CURLE_SSL_CACERT);
         result.setMessage(cert_exception.what());
         LLSD certdata = cert_exception.getCertData();
+        certdata[CERT_VALIDATION_FAILURE] = CERT_FAILURE_UNTRUSTED_CA; // <Vulkanstorm/>
         result.setErrorData(certdata);
         // We should probably have a more generic way of passing information
         // back to the error handlers.
@@ -581,6 +582,7 @@ LLCore::HttpStatus LLAppCoreHttp::sslVerify(const std::string &url,
         result = LLCore::HttpStatus(LLCore::HttpStatus::EXT_CURL_EASY, CURLE_SSL_PEER_CERTIFICATE);
         result.setMessage(cert_exception.what());
         LLSD certdata = cert_exception.getCertData();
+        certdata[CERT_VALIDATION_FAILURE] = CERT_FAILURE_INVALID; // <Vulkanstorm/>
         result.setErrorData(certdata);
     }
     catch (...)
