@@ -339,6 +339,10 @@ public:
     // this pointer should be set to whichever shader represents this shader's rigged variant
     LLGLSLShader* mRiggedVariant = nullptr;
 
+    // <Vulkanstorm> the alpha-only variant of an alpha program for stochastic transparency's
+    // total alpha and stochastic depth passes (ALPHA_STOCHASTIC); null where it has none
+    LLGLSLShader* mStochasticVariant = nullptr;
+
     // variants for use by GLTF renderer
     // bit 0 = alpha mode blend (1) or opaque (0)
     // bit 1 = rigged (1) or static (0)
