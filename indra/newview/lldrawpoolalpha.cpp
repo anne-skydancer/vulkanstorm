@@ -206,8 +206,8 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
     // already being setup for rendering
     LLGLSLShader::unbind();
 
-    // <FS> Vulkanstorm: PPLL capture and resolve are
-    // limited to the main post-water view. Mirrors/hero probes, cube snapshots, HUDs,
+    // <Vulkanstorm> order-independent transparency (stochastic transparency, RenderAlphaSortMethod 1)
+    // is limited to the main post-water view. Mirrors/hero probes, cube snapshots, HUDs,
     // impostors and pre-water alpha retain the stock path.
     static LLCachedControl<U32> alpha_method(gSavedSettings, "RenderAlphaSortMethod", 0);
     const bool oit_view_eligible =
@@ -218,9 +218,8 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
         !LLPipeline::sReflectionRender &&
         !gCubeSnapshot;
 
-    // <Vulkanstorm> stochastic transparency (RenderAlphaSortMethod 2): the same views and the
-    // same draws as PPLL; sorted alpha where it is unavailable
-    bool use_stochastic = alpha_method == 2 && oit_view_eligible;
+    // Sorted alpha where it is unavailable.
+    bool use_stochastic = alpha_method == 1 && oit_view_eligible;
     if (use_stochastic)
     {
         gPipeline.allocateAlphaStochastic(gPipeline.mRT->screen.getWidth(), gPipeline.mRT->screen.getHeight());
@@ -241,52 +240,13 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
             forwardRender();
         }
     }
-    else if (oit_view_eligible)
-    {
-        gPipeline.releaseAlphaStochastic(); // another method: its targets freed
-    }
-    // </Vulkanstorm>
-
-    bool oit_resources = true;
-    if (alpha_method == 1 && oit_view_eligible)
-    {
-        gPipeline.allocateAlphaOITBuffers(
-            gPipeline.mRT->screen.getWidth(), gPipeline.mRT->screen.getHeight());
-        oit_resources = LLPipeline::sRenderAlphaOITSupported;
-    }
-    bool use_oit = alpha_method == 1
-                 && oit_view_eligible
-                 && oit_resources
-                 && LLPipeline::sRenderAlphaOITSupported;
-    if (use_stochastic)
-    {
-        // drawn above
-    }
-    else if (use_oit)
-    {
-        drawGLTFScene();
-        if (gPipeline.beginAlphaOITCapture())
-        {
-            setOITMode(1);
-            forwardRender(true, ALPHA_OIT_CAPTURE);
-            forwardRender(false, ALPHA_OIT_CAPTURE);
-            setOITMode(0);
-            gPipeline.endAlphaOITCapture();
-            gPipeline.compositeAlphaOIT();
-
-            renderOITResidual();
-        }
-        else
-        {
-            if (!LLPipeline::sRenderingHUDs)
-            {
-                forwardRender(true);
-            }
-            forwardRender();
-        }
-    }
     else
     {
+        if (oit_view_eligible)
+        {
+            gPipeline.releaseAlphaStochastic(); // sorted alpha selected: the targets freed
+        }
+
         if (!LLPipeline::sRenderingHUDs)
         {
             // first pass, render rigged objects only and render to depth buffer
@@ -296,7 +256,7 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
         // second pass, regular forward alpha rendering
         forwardRender();
     }
-    // </FS>
+    // </Vulkanstorm>
 
     // final pass, render to depth for depth of field effects
     if (!LLPipeline::sImpostorRender && LLPipeline::RenderDepthOfField && !gCubeSnapshot && !LLPipeline::sRenderingHUDs && getType() == LLDrawPool::POOL_ALPHA_POST_WATER)

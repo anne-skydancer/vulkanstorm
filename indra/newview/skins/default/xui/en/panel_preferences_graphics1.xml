@@ -1855,7 +1855,7 @@ If you do not understand the distinction then leave this control alone."
        width="485"
        word_wrap="true"
        name="AlphaSortDescription">
-        Applies only to the main post-water world view. Unsupported methods safely use legacy sorting without changing your saved choice. Particles, mirrors and hero probes, cube snapshots, HUDs, impostors, and pre-water alpha retain legacy sorting.
+        Stochastic transparency applies only to the main post-water world view. Particles, mirrors, hero probes, cube snapshots, HUDs, impostors, and pre-water alpha are always drawn with sorted alpha.
       </text>
       <radio_group
        control_name="RenderAlphaSortMethod"
@@ -1876,12 +1876,12 @@ If you do not understand the distinction then leave this control alone."
          name="Legacy"/>
         <radio_item
          height="20"
-         label="PPLL (Windows/Linux, OpenGL 4.4+)"
+         label="Stochastic transparency"
          layout="topleft"
          left_delta="0"
          top_pad="2"
          value="1"
-         name="PPLL"/>
+         name="Stochastic"/>
         <radio_group.commit_callback function="Pref.RenderOptionUpdate"/>
       </radio_group>
 
