@@ -41,7 +41,7 @@
 extern LLSD cert_name_from_X509_NAME(X509_NAME* name);
 extern std::string cert_string_name_from_X509_NAME(X509_NAME* name);
 extern std::string cert_string_from_asn1_integer(ASN1_INTEGER* value);
-extern LLDate cert_date_from_asn1_time(ASN1_TIME* asn1_time);
+extern LLDate cert_date_from_asn1_time(const ASN1_TIME* asn1_time);
 extern std::string cert_get_digest(const std::string& digest_type, X509 *cert);
 
 
