@@ -12027,56 +12027,12 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>Value</key>
     <integer>0</integer>
   </map>
-  <key>RenderAlphaOITNodesPerPixel</key>
-  <map>
-    <key>Comment</key>
-    <string>Alpha OIT slots per main-view pixel: the layers that are depth-sorted exactly. Fragments past the last slot fold into an order-independent tail. Clamped to 1..32 and reduced to fit the memory budget.</string>
-    <key>Persist</key>
-    <integer>1</integer>
-    <key>Type</key>
-    <string>U32</string>
-    <key>Value</key>
-    <integer>8</integer>
-  </map>
-
-  <key>RenderAlphaOITMemoryMB</key>
-  <map>
-    <key>Comment</key>
-    <string>Maximum memory budget in MiB for the alpha OIT A-buffer: 8 bytes per pixel per slot plus 28 bytes per pixel for the count/tail image. The slot count is reduced to fit (the default 8 slots need 92 bytes per pixel: about 182 MiB at 1080p, 324 MiB at 1440p; at 4K the default 512 MiB allows 4 slots).</string>
-    <key>Persist</key>
-    <integer>1</integer>
-    <key>Type</key>
-    <string>U32</string>
-    <key>Value</key>
-    <integer>512</integer>
-  </map>
 
 
 
-  <key>RenderAlphaPPLLAvailable</key>
-  <map>
-    <key>Comment</key>
-    <string>Runtime capability flag used by preferences; alpha OIT is available only on Windows/Linux with required GL support and valid resources.</string>
-    <key>Persist</key>
-    <integer>0</integer>
-    <key>Type</key>
-    <string>Boolean</string>
-    <key>Value</key>
-    <integer>0</integer>
-  </map>
 
 
-  <key>RenderAlphaOITStats</key>
-  <map>
-    <key>Comment</key>
-    <string>Debug: every 64th frame, read back the alpha OIT per-pixel layer counts and log coverage, peak depth and how many pixels overflow into the tail. Adds a GPU sync; leave off except when tuning RenderAlphaOITNodesPerPixel. Needs GL 4.5.</string>
-    <key>Persist</key>
-    <integer>1</integer>
-    <key>Type</key>
-    <string>Boolean</string>
-    <key>Value</key>
-    <integer>0</integer>
-  </map>
+
 
   <key>RenderDepthOfFieldInEditMode</key>
   <map>
