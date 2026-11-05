@@ -9702,8 +9702,15 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
     shader.uniformMatrix3fv(LLShaderMgr::DEFERRED_SSAO_EFFECT_MAT, 1, GL_FALSE, ssao_effect_mat);
 
     //F32 shadow_offset_error = 1.f + RenderShadowOffsetError * fabsf(LLViewerCamera::getInstance()->getOrigin().mV[2]);
-    F32 shadow_bias_error = RenderShadowBiasError * fabsf(LLViewerCamera::getInstance()->getOrigin().mV[2])/3000.f;
-    F32 shadow_bias       = RenderShadowBias + shadow_bias_error;
+    // <Vulkanstorm> no altitude term (RenderShadowBiasError x |camera z| / 3000, MAINT-653): the sun
+    // shadow views are anchored at the camera, so their precision does not depend on the altitude
+    // (float32 loss 0.24 mm at 4000 m), while the term widened the bias 4.4x at 3000 m and detached
+    // shadows from their casters by up to 21 cm in skyboxes. The acne it masked on slanted surfaces
+    // is handled at every altitude by the receiver-plane bias of pcfShadow (shadowUtil.glsl).
+    // scripts/perf/test_shadow_bias_altitude.py checks both.
+    //F32 shadow_bias_error = RenderShadowBiasError * fabsf(LLViewerCamera::getInstance()->getOrigin().mV[2])/3000.f;
+    F32 shadow_bias       = RenderShadowBias;
+    // </Vulkanstorm>
 
     shader.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)deferred_target->getWidth(), (GLfloat)deferred_target->getHeight());
     shader.uniform1f(LLShaderMgr::DEFERRED_NEAR_CLIP, LLViewerCamera::getInstance()->getNear()*2.f);
