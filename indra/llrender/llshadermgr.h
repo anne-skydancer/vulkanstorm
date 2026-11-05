@@ -372,7 +372,6 @@ public:
         SNAPSHOT_FRAME_RECT,                // "frame_rect"
         // </FS:Beq>
 
-        ALPHA_OIT_OPAQUE_DEPTH,                   // "alpha_peel_depth"
         NIGHT_SKY_CELLS,                    //  "night_sky_cells"
         NIGHT_SKY_STARS,                    //  "night_sky_stars"
         NIGHT_SKY_MILKY_WAY,                //  "night_sky_milky_way"
