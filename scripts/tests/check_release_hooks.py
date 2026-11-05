@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Reject development harnesses in release runtime sources (run for vkstorm-release changes).
 
 Standalone profiling tools and normal viewer debug facilities remain permitted.

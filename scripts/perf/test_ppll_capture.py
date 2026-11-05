@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Offscreen alpha OIT (image-array A-buffer) regression, no viewer launch; --opengl PATH selects Mesa.
 
 Reuse the standalone Windows GL bootstrap and shader compiler.
