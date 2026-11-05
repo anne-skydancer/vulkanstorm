@@ -18,7 +18,11 @@ param(
     [Parameter(Mandatory)][string]$Exe,
     [Parameter(Mandatory)][string]$OpenSsl,
     [Parameter(Mandatory)][string]$WorkDir,
-    [string]$Python = (Get-Command python -ErrorAction Stop).Source
+    [string]$Python = (Get-Command python -ErrorAction Stop).Source,
+    # extra targets beyond the five local endpoints: a JSON file of [name, url] pairs
+    [string]$Targets = '',
+    # route the viewer's HTTP through a local test proxy: None, Web (HTTP) or Socks
+    [ValidateSet('None', 'Web', 'Socks')][string]$Proxy = 'None'
 )
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
@@ -74,32 +78,48 @@ Remove-Item $out -ErrorAction SilentlyContinue
 # need LLSD notation quoting); the viewer joins the name to app_settings ---
 $fwd = { param($p) $p.Replace([char]92, [char]47) }
 $leap = "$(& $fwd $Python) -I $(& $fwd (Join-Path $here 'xmlrpc_cert_probe.py')) $(& $fwd $out)"
+if ($Targets) { $leap += " $(& $fwd $Targets)" }
+$proxyXml = ''
+function SettingXml($k, $t, $v) { "<key>$k</key><map><key>Comment</key><string>probe</string><key>Persist</key><integer>0</integer><key>Type</key><string>$t</string><key>Value</key>$v</map>" }
+if ($Proxy -eq 'Web') { $proxyXml = (SettingXml 'HttpProxyType' 'String' '<string>Web</string>') + (SettingXml 'BrowserProxyEnabled' 'Boolean' '<integer>1</integer>') + (SettingXml 'BrowserProxyAddress' 'String' '<string>127.0.0.1</string>') + (SettingXml 'BrowserProxyPort' 'S32' '<integer>18471</integer>') }
+if ($Proxy -eq 'Socks') { $proxyXml = (SettingXml 'HttpProxyType' 'String' '<string>Socks</string>') + (SettingXml 'Socks5ProxyEnabled' 'Boolean' '<integer>1</integer>') + (SettingXml 'Socks5ProxyHost' 'String' '<string>127.0.0.1</string>') + (SettingXml 'Socks5ProxyPort' 'U32' '<integer>18472</integer>') + (SettingXml 'Socks5AuthType' 'String' '<string>None</string>') }
 @"
 <?xml version="1.0" ?>
 <llsd><map><key>LeapCommand</key><map>
 <key>Comment</key><string>TLS certificate probe</string><key>Persist</key><integer>0</integer>
 <key>Type</key><string>LLSD</string><key>Value</key><array><string>$leap</string></array>
-</map></map></llsd>
+</map>$proxyXml</map></llsd>
 "@ | Set-Content -Encoding utf8NoBOM $sess
 $sessArg = [System.IO.Path]::GetRelativePath((Join-Path (Split-Path $Exe) 'app_settings'), $sess)
 
 $srv = Start-Process -FilePath $Python -ArgumentList '-I', (Join-Path $here 'tls_servers.py'), $pki, '200' `
     -RedirectStandardError (Join-Path $WorkDir 'servers.log') -RedirectStandardOutput (Join-Path $WorkDir 'servers.out') `
     -PassThru -NoNewWindow
+$prx = $null
+if ($Proxy -ne 'None') {
+    $prx = Start-Process -FilePath $Python -ArgumentList '-I', (Join-Path $here 'test_proxy.py'), '18471', '18472', '200' `
+        -RedirectStandardError (Join-Path $WorkDir 'proxy.log') -RedirectStandardOutput (Join-Path $WorkDir 'proxy.out') -PassThru -NoNewWindow
+}
 Start-Sleep -Seconds 2
 try {
-    $psi = [System.Diagnostics.ProcessStartInfo]::new($Exe, "--sessionsettings `"$sessArg`"")
-    $psi.WorkingDirectory = Split-Path $Exe
-    $psi.UseShellExecute = $false
-    $psi.Environment['APPDATA'] = Join-Path $profileDir 'Roaming'
-    $psi.Environment['LOCALAPPDATA'] = Join-Path $profileDir 'Local'
-    $t0 = Get-Date
-    $viewer = [System.Diagnostics.Process]::Start($psi)
+    # minimised; the scratch profile through the environment the child inherits
+    $saved = @{ APPDATA = $env:APPDATA; LOCALAPPDATA = $env:LOCALAPPDATA }
+    try {
+        $env:APPDATA = Join-Path $profileDir 'Roaming'
+        $env:LOCALAPPDATA = Join-Path $profileDir 'Local'
+        $t0 = Get-Date
+        $viewer = Start-Process -FilePath $Exe -ArgumentList "--sessionsettings `"$sessArg`"" `
+            -WorkingDirectory (Split-Path $Exe) -WindowStyle Minimized -PassThru
+    } finally {
+        $env:APPDATA = $saved.APPDATA; $env:LOCALAPPDATA = $saved.LOCALAPPDATA
+    }
     while (-not (Test-Path $out) -and ((Get-Date) - $t0).TotalSeconds -lt 180 -and -not $viewer.HasExited) { Start-Sleep 2 }
     Start-Sleep 3
     if (-not $viewer.HasExited) { $null = $viewer.CloseMainWindow(); if (-not $viewer.WaitForExit(30000)) { $viewer.Kill($true) } }
 } finally {
     if (-not $srv.HasExited) { Stop-Process -Id $srv.Id -Force }
+    if ($prx -and -not $prx.HasExited) { Stop-Process -Id $prx.Id -Force }
+    if ($viewer -and -not $viewer.HasExited) { $viewer.Kill($true) }
 }
 $after = $stores | ForEach-Object { "$($_.FullName) $((Get-FileHash $_.FullName).Hash)" }
 "real credential stores unchanged: $($null -eq (Compare-Object @($before) @($after))) ($(@($before).Count) checked)"
