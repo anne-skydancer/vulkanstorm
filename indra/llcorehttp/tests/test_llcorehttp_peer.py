@@ -34,6 +34,7 @@ import sys
 import time
 import select
 import getopt
+import zlib
 from io import StringIO
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -183,6 +184,35 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-type", "text/plain")
             self.end_headers()
             if body:
+                self.wfile.write(body)
+        elif "/encoding/" in self.path:
+            # <Vulkanstorm> Content-Encoding handling: llcorehttp undoes gzip
+            # and deflate itself and passes anything else through, as
+            # libcurl 7.54.1 did.
+            text = ("Vulkanstorm content encoding test body. " * 40).encode("utf-8")
+            if "/encoding/gzip/" in self.path:
+                c = zlib.compressobj(9, zlib.DEFLATED, 16 + 15)
+                body, enc = c.compress(text) + c.flush(), "gzip"
+            elif "/encoding/deflate/" in self.path:
+                body, enc = zlib.compress(text), "deflate"
+            elif "/encoding/rawdeflate/" in self.path:
+                c = zlib.compressobj(9, zlib.DEFLATED, -15)
+                body, enc = c.compress(text) + c.flush(), "deflate"
+            elif "/encoding/binary/" in self.path:
+                body, enc = text, "binary/octet-stream"
+            elif "/encoding/badgzip/" in self.path:
+                body, enc = b"this is not gzip data at all", "gzip"
+            else:
+                body, enc = text, None
+            self.send_response(200)
+            if "/reflect/" in self.path:
+                self.reflect_headers()
+            self.send_header("Content-type", "text/plain")
+            if enc:
+                self.send_header("Content-Encoding", enc)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if withdata:
                 self.wfile.write(body)
         elif "/bug2295/" in self.path:
             # Test for https://jira.secondlife.com/browse/BUG-2295

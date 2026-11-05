@@ -3090,6 +3090,122 @@ void HttpRequestTestObjectType::test<23>()
 }
 
 
+// <Vulkanstorm> Content-Encoding as libcurl 7.54.1 handled it: gzip and
+// deflate (zlib or raw) are undone, any other value (the asset CDN's
+// "binary/octet-stream") passes through untouched, and gzip data that does
+// not decode fails with CURLE_BAD_CONTENT_ENCODING.
+namespace
+{
+class EncodingHandler : public LLCore::HttpHandler
+{
+public:
+    virtual void onCompleted(HttpHandle, HttpResponse * response)
+        {
+            mStatus = response->getStatus();
+            mBody.clear();
+            BufferArray * body(response->getBody());
+            if (body && body->size())
+            {
+                mBody.resize(body->size());
+                body->read(0, &mBody[0], mBody.size());
+            }
+            ++mCalls;
+        }
+    HttpStatus mStatus;
+    std::string mBody;
+    int mCalls = 0;
+};
+}
+
+template <> template <>
+void HttpRequestTestObjectType::test<24>()
+{
+    ScopedCurlInit ready;
+
+    set_test_name("HttpRequest GET with gzip, deflate and unknown Content-Encoding");
+
+    std::string text;
+    for (int i(0); i < 40; ++i)
+    {
+        text += "Vulkanstorm content encoding test body. ";
+    }
+
+    EncodingHandler handler;
+    LLCore::HttpHandler::ptr_t handlerp(&handler, NoOpDeletor);
+    HttpRequest * req = NULL;
+
+    try
+    {
+        HttpRequest::createService();
+        HttpRequest::startThread();
+        req = new HttpRequest();
+
+        struct Case { const char * path; bool ok; bool decoded; };
+        const Case cases[] = {
+            { "/encoding/gzip/", true, true },
+            { "/encoding/deflate/", true, true },
+            { "/encoding/rawdeflate/", true, true },
+            { "/encoding/binary/", true, false },
+            { "/encoding/none/", true, false },
+            { "/encoding/badgzip/", false, false },
+        };
+        for (const Case & c : cases)
+        {
+            handler.mCalls = 0;
+            HttpHandle handle = req->requestGet(HttpRequest::DEFAULT_POLICY_ID,
+                                                get_base_url() + c.path,
+                                                HttpOptions::ptr_t(),
+                                                HttpHeaders::ptr_t(),
+                                                handlerp);
+            ensure(std::string("Valid handle for ") + c.path, handle != LLCORE_HTTP_HANDLE_INVALID);
+            int count(0);
+            while (count++ < LOOP_COUNT_LONG && handler.mCalls < 1)
+            {
+                req->update(1000000);
+                usleep(LOOP_SLEEP_INTERVAL);
+            }
+            ensure(std::string("Reply in time for ") + c.path, handler.mCalls == 1);
+            if (c.ok)
+            {
+                ensure(std::string("Success for ") + c.path, bool(handler.mStatus));
+                ensure_equals(std::string("Body for ") + c.path, handler.mBody, text);
+            }
+            else
+            {
+                ensure(std::string("Bad encoding refused for ") + c.path,
+                       handler.mStatus == HttpStatus(HttpStatus::EXT_CURL_EASY, CURLE_BAD_CONTENT_ENCODING));
+            }
+        }
+
+        handler.mCalls = 0;
+        HttpHandle handle = req->requestStopThread(handlerp);
+        ensure("Valid handle for stop", handle != LLCORE_HTTP_HANDLE_INVALID);
+        int count(0);
+        while (count++ < LOOP_COUNT_LONG && handler.mCalls < 1)
+        {
+            req->update(1000000);
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        count = 0;
+        while (count++ < LOOP_COUNT_SHORT && ! HttpService::isStopped())
+        {
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        ensure("Thread stopped", HttpService::isStopped());
+        delete req;
+        req = NULL;
+        HttpRequest::destroyService();
+    }
+    catch (...)
+    {
+        stop_thread(req);
+        delete req;
+        HttpRequest::destroyService();
+        throw;
+    }
+}
+// </Vulkanstorm>
+
 }  // end namespace tut
 
 namespace
