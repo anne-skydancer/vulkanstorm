@@ -49,7 +49,6 @@
 #include <openssl/evp.h>
 #include <openssl/provider.h> // <Vulkanstorm/> RC4 lives in the legacy provider
 #include <algorithm>
-#include <iterator>
 #include <iostream>
 #include <iomanip>
 #include <time.h>
@@ -1443,9 +1442,17 @@ void LLSecAPIBasicHandler::_readProtectedData(unsigned char *unique_id, U32 id_l
         // mechanisms and are considered to be more secure.
         // We've a strong intent to move to OS dependent protected data stores.
 
-        // <Vulkanstorm> read the whole file, then decrypt it in one checked pass
-        std::string file_data((std::istreambuf_iterator<char>(protected_data_stream)),
-                              std::istreambuf_iterator<char>());
+        // <Vulkanstorm> read the whole file, then decrypt it in one checked pass.
+        // Through istream::read, which turns a read error into badbit; an
+        // istreambuf_iterator would let libstdc++'s filebuf throw
+        // std::ios_base::failure (a directory, an I/O error) past the
+        // LLProtectedDataException the caller handles.
+        std::string file_data;
+        char chunk[BUFFER_READ_SIZE];
+        while (protected_data_stream.read(chunk, sizeof(chunk)) || protected_data_stream.gcount() > 0)
+        {
+            file_data.append(chunk, static_cast<size_t>(protected_data_stream.gcount()));
+        }
         if (protected_data_stream.bad())
         {
             LLTHROW(LLProtectedDataException("Config file cannot be read."));

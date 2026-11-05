@@ -1550,4 +1550,34 @@ namespace tut
                       std::string("replaced"));
     }
     // </Vulkanstorm>
+
+    // <Vulkanstorm> A store that cannot be read (here a directory) raises
+    // LLProtectedDataException, which the viewer turns into the
+    // CorruptedProtectedDataStore notice, or nothing where the platform will
+    // not open a directory as a file (Windows); never another exception. On
+    // Linux, libstdc++'s filebuf throws std::ios_base::failure for the read
+    // when the store is read through an istreambuf_iterator.
+    template<> template<>
+    void sechandler_basic_test_object::test<12>()
+    {
+        LLFile::remove("sechandler_settings.tmp");
+        ensure_equals("store path is a directory", LLFile::mkdir("sechandler_settings.tmp"), 0);
+        bool unexpected = false;
+        try
+        {
+            LLPointer<LLSecAPIBasicHandler> handler = new LLSecAPIBasicHandler("sechandler_settings.tmp",
+                                                                               "test_password.dat");
+            handler->init();
+        }
+        catch (const LLProtectedDataException&)
+        {
+        }
+        catch (...)
+        {
+            unexpected = true;
+        }
+        LLFile::rmdir("sechandler_settings.tmp");
+        ensure("only LLProtectedDataException leaves the handler", !unexpected);
+    }
+    // </Vulkanstorm>
 };
