@@ -523,6 +523,12 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     }
 
     check_curl_easy_setopt(mCurlHandle, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+#if LIBCURL_VERSION_NUM >= 0x073e00 // 7.62.0
+    // <Vulkanstorm> libcurl 7.62 and later negotiate HTTP/2 over TLS by
+    // default; 7.54.1 spoke HTTP/1.1 to every server. Keep HTTP/1.1 so that
+    // no server sees a different protocol from this viewer. </Vulkanstorm>
+    check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_1_1);
+#endif
     check_curl_easy_setopt(mCurlHandle, CURLOPT_NOSIGNAL, 1);
     check_curl_easy_setopt(mCurlHandle, CURLOPT_NOPROGRESS, 1);
     check_curl_easy_setopt(mCurlHandle, CURLOPT_URL, mReqURL.c_str());
