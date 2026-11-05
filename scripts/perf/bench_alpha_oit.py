@@ -446,12 +446,7 @@ void main()
 st={}
 if 'st' in IMPLS:
     assert ST_PASS in (2,4,8) and ST_PASS<=MAX_DEPTH_SAMPLES,('OIT_BENCH_ST_PASS',ST_PASS)
-    def st_ms(fmt):
-        t=U();gentex(1,C.byref(t));bindtex(TEX2DMS,t);fn('glTexImage2DMultisample',None,U,I,U,I,I,C.c_ubyte)(TEX2DMS,ST_PASS,fmt,W,H,1);return t.value
-    st['accum'],st['trans'],st['depth']=st_ms(RGBA16F),st_ms(RG16F),st_ms(D24)
-    f=U();genfbo(1,C.byref(f));bindfbo(0x8D40,f)
-    attachtex(0x8D40,0x8CE0,TEX2DMS,st['accum'],0);attachtex(0x8D40,0x8CE1,TEX2DMS,st['trans'],0);attachtex(0x8D40,0x8D00,TEX2DMS,st['depth'],0)
-    assert fn('glCheckFramebufferStatus',U,U)(0x8D40)==0x8CD5;st['fbo']=f.value
+    st['targets']={}
     st['masks']={}
     for s in STOCH_RMSE_SAMPLES:
         t=st_mask_table(s);words=(U*len(t))(*t)
@@ -465,14 +460,27 @@ if 'st' in IMPLS:
     st['composite']=program([(0x8B31,ST_SCREEN),(0x8B30,st_viewer('alphaStochasticCompositeF.glsl'))])
     st_queries=(U*4)();genq(4,st_queries)
     assert geterror()==0
+def st_targets(n):
+    """The viewer's targets at n samples (min(ST_PASS, S), as LLPipeline::allocateAlphaStochastic
+    picks the pass size): one set per sample count, made on first use."""
+    if n not in st['targets']:
+        def st_ms(fmt):
+            t=U();gentex(1,C.byref(t));bindtex(TEX2DMS,t);fn('glTexImage2DMultisample',None,U,I,U,I,I,C.c_ubyte)(TEX2DMS,n,fmt,W,H,1);return t.value
+        accum,trans,ms_depth=st_ms(RGBA16F),st_ms(RG16F),st_ms(D24)
+        f=U();genfbo(1,C.byref(f));bindfbo(0x8D40,f)
+        attachtex(0x8D40,0x8CE0,TEX2DMS,accum,0);attachtex(0x8D40,0x8CE1,TEX2DMS,trans,0);attachtex(0x8D40,0x8D00,TEX2DMS,ms_depth,0)
+        assert fn('glCheckFramebufferStatus',U,U)(0x8D40)==0x8CD5
+        bindfbo(0x8D40,fbo);assert geterror()==0
+        st['targets'][n]={'accum':accum,'trans':trans,'depth':ms_depth,'fbo':f.value}
+    return st['targets'][n]
 def frame_st(name, background, layers, samples):
     """One frame of the viewer's passes; returns [alpha, depth, accum, comp] in ms."""
-    n=min(ST_PASS,samples);iters=samples//n
+    n=min(ST_PASS,samples);iters=samples//n;tg=st_targets(n)
     clearbuf=fn('glClearBufferfv',None,U,I,C.POINTER(C.c_float));setbuf=fn('glDrawBuffer',None,U)
     blendsep=fn('glBlendFuncSeparate',None,U,U,U,U);depthmask=fn('glDepthMask',None,C.c_ubyte);offset=fn('glPolygonOffset',None,C.c_float,C.c_float)
     bindfbo(0x8D40,fbo);colormask(1,1,1,1);clearcolor(*background,1);clear(0x4000)
-    activetex(0x84C0+6);bindtex(TEX2D,st['masks'][samples]);activetex(0x84C0+4);bindtex(TEX2DMS,st['accum'])
-    activetex(0x84C0+5);bindtex(TEX2DMS,st['trans']);activetex(0x84C0);bindtex(TEX2D,depth)
+    activetex(0x84C0+6);bindtex(TEX2D,st['masks'][samples]);activetex(0x84C0+4);bindtex(TEX2DMS,tg['accum'])
+    activetex(0x84C0+5);bindtex(TEX2DMS,tg['trans']);activetex(0x84C0);bindtex(TEX2D,depth)
     var=st['variant'];use(var)
     uniform(uloc(var,'alpha_st_masks'),6);uniform(uloc(var,'st_samples_hw'),n);uniform(uloc(var,'st_samples'),samples)
     def spread():
@@ -490,7 +498,7 @@ def frame_st(name, background, layers, samples):
     q=list(st_queries);t_depth=t_accum=0.
     # alpha: clears, spread, total alpha
     beginq(TIME_ELAPSED,q[0])
-    bindfbo(0x8D40,st['fbo']);enable(0x809D)
+    bindfbo(0x8D40,tg['fbo']);enable(0x809D)
     setbuf(0x8CE1);clearbuf(0x1800,0,(C.c_float*4)(1.,0.,0.,0.));setbuf(0x8CE0);clearbuf(0x1800,0,(C.c_float*4)(0.,0.,0.,0.))
     spread()
     setbuf(0x8CE1);enable(0x0BE2);blendsep(0,0x0303,0,0x0303);depthmask(0);enable(0x8037);offset(-1.,-1.)

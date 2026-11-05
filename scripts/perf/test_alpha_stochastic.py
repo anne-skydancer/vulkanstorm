@@ -51,7 +51,7 @@ ZERO=0;ONE=1;SRC_ALPHA=0x0302;ONE_MINUS_SRC_ALPHA=0x0303;LEQUAL=0x0203;ALWAYS=0x
 W,H=64,32
 vao=U();fn('glGenVertexArrays',None,I,C.POINTER(U))(1,C.byref(vao));fn('glBindVertexArray',None,U)(vao)
 viewport(0,0,W,H);disable(CULL)
-getint(0x9110,C.byref(max_ms:=I()))   # GL_MAX_DEPTH_TEXTURE_SAMPLES
+getint(0x910F,C.byref(max_ms:=I()))   # GL_MAX_DEPTH_TEXTURE_SAMPLES
 assert max_ms.value>=8,('needs 8 depth samples',max_ms.value)
 
 # ---- the mask table: LLPipeline::alphaStochasticMaskTable, ported
