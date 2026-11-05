@@ -2896,6 +2896,36 @@ void HttpRequestTestObjectType::test<22>()
         ensure("One handler invocation for each request - ms4", mHandlerCalls == test4_count);
 
         // ======================================
+        // <Vulkanstorm> So does a 206 without Content-Range to a request at
+        // offset 10: it reads as offset 0. </Vulkanstorm>
+        // ======================================
+        mHandlerCalls = 0;
+        mStatus = HttpStatus(HttpStatus::LLCORE, HE_INV_CONTENT_RANGE_HDR);
+        static const int test5_count(1);
+        for (int i(0); i < test5_count; ++i)
+        {
+            HttpHandle handle = req->requestGetByteRange(HttpRequest::DEFAULT_POLICY_ID,
+                                                         url_base + "/bug2295/no_range/",
+                                                         10,
+                                                         25,
+                                                         options,
+                                                         HttpHeaders::ptr_t(),
+                                                         handlerp);
+            ensure("Valid handle returned for ranged request", handle != LLCORE_HTTP_HANDLE_INVALID);
+        }
+
+        // Run the notification pump.
+        count = 0;
+        limit = LOOP_COUNT_LONG;
+        while (count++ < limit && mHandlerCalls < test5_count)
+        {
+            req->update(1000000);
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        ensure("Request executed in reasonable time - ms5", count < limit);
+        ensure("One handler invocation for each request - ms5", mHandlerCalls == test5_count);
+
+        // ======================================
         // Okay, request a shutdown of the servicing thread
         // ======================================
         mStatus = HttpStatus();
