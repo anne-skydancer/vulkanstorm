@@ -142,6 +142,11 @@ public:
     bool mFullbright = false;
     bool mHasGlow = false;
 
+    // <Vulkanstorm> stochastic transparency: the identity of the batch's first face (its object's
+    // id and its texture entry hashed, the same on every frame and every launch), which seeds the
+    // fragments' coverage masks with the triangle (alphaStochasticF.glsl)
+    U32 mStochasticSeed = 0;
+
     struct CompareTexture
     {
         bool operator()(const LLDrawInfo& lhs, const LLDrawInfo& rhs)
