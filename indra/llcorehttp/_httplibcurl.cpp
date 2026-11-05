@@ -63,8 +63,7 @@ HttpLibcurl::HttpLibcurl(HttpService * service)
       mHandleCache(),
       mPolicyCount(0),
       mMultiHandles(NULL),
-      mActiveHandles(NULL),
-      mDirtyPolicy(NULL)
+      mActiveHandles(NULL)
 {}
 
 
@@ -102,9 +101,6 @@ void HttpLibcurl::shutdown()
 
         delete [] mActiveHandles;
         mActiveHandles = NULL;
-
-        delete [] mDirtyPolicy;
-        mDirtyPolicy = NULL;
     }
 
     mPolicyCount = 0;
@@ -120,7 +116,6 @@ void HttpLibcurl::start(int policy_count)
     mPolicyCount = policy_count;
     mMultiHandles = new CURLM * [mPolicyCount];
     mActiveHandles = new int [mPolicyCount];
-    mDirtyPolicy = new bool [mPolicyCount];
 
     for (unsigned int policy_class(0); policy_class < mPolicyCount; ++policy_class)
     {
@@ -130,7 +125,6 @@ void HttpLibcurl::start(int policy_count)
                               << LL_ENDL;
         }
         mActiveHandles[policy_class] = 0;
-        mDirtyPolicy[policy_class] = false;
         policyUpdated(policy_class);
     }
 }
@@ -157,12 +151,6 @@ HttpService::ELoopSpeed HttpLibcurl::processTransport()
         }
         if (! mActiveHandles[policy_class])
         {
-            // If we've gone quiet and there's a dirty update, apply it,
-            // otherwise we're done.
-            if (mDirtyPolicy[policy_class])
-            {
-                policyUpdated(policy_class);
-            }
             continue;
         }
 
@@ -409,60 +397,9 @@ bool HttpLibcurl::completeRequest(CURLM * multi_handle, CURL * handle, CURLcode 
         }
     }
 
-    // <FS:ND> See if the requested URL matches a X-LL-URL header (if present) and the requested range.
-    // If not, we assume http pipelining havng gone out of sync. If yes, yield a 503 status and switch
-    // pipelining off.
-    bool bFailed = false;
-    if (op->mXLLURL.size())
-    {
-        std::string strURI = op->mReqURL;
-        size_t i = strURI.find("://");
-        if (i != std::string::npos)
-            i = strURI.find("/", i + 3);
-
-        if (i != std::string::npos)
-            strURI = strURI.substr(i);
-
-        if (strURI != op->mXLLURL)
-        {
-            LL_WARNS() << "HTTP pipelining out of sync! Asked for: " << strURI << " got " << op->mXLLURL << LL_ENDL;
-            op->mStatus = HttpStatus(HTTP_SERVICE_UNAVAILABLE);
-            bFailed = true;
-        }
-    }
-    if (!bFailed && (op->mReqOffset || op->mReqLength))
-    {
-        // We should only check the offset and length if we are handling a partial content request.
-        if (op->mStatus == HttpStatus(HTTP_PARTIAL_CONTENT) && (op->mReqOffset != op->mReplyOffset || (op->mReqLength && op->mReqLength < op->mReplyLength)))
-        {
-            std::stringstream strm;
-            strm << "HTTP pipelining possibly out of sync, request wanted: " << op->mReqOffset << "-";
-            if (op->mReqLength)
-                strm << op->mReqLength + op->mReqLength -1;
-            strm << " got: " << op->mReplyOffset << "-" << op->mReplyOffset+op->mReplyLength-1;
-            strm << " url: " << op->mReqURL;
-            LL_WARNS() << strm.str() << LL_ENDL;
-            op->mStatus = HttpStatus(HTTP_SERVICE_UNAVAILABLE);
-            bFailed = true;
-        }
-    }
-    if (bFailed)
-    {
-        HttpPolicy & policy(mService->getPolicy());
-        for (unsigned int i = 0; i < mPolicyCount; ++ i)
-        {
-            HttpPolicyClass & options(policy.getClassOptions(i));
-            long lVal;
-
-            if (options.get(LLCore::HttpRequest::PO_PIPELINING_DEPTH, &lVal) && lVal)
-            {
-                options.set(LLCore::HttpRequest::PO_PIPELINING_DEPTH, 0);
-                mDirtyPolicy[i] = true;
-                policyUpdated(i);
-            }
-        }
-    }
-    // /</FS:ND>
+    // <Vulkanstorm> Firestorm's X-LL-URL / Content-Range check for HTTP/1.1
+    // pipelining going out of sync is gone with the pipelining (curl 8).
+    // </Vulkanstorm>
 
     if (multi_handle && handle)
     {
@@ -516,71 +453,50 @@ void HttpLibcurl::policyUpdated(unsigned int policy_class)
         return;
     }
 
+    // <Vulkanstorm> Options apply at once. The stall that let a class go
+    // idle first protected libcurl 7.37, which corrupted memory when
+    // HTTP/1.1 pipelining was switched off under active requests; libcurl
+    // 7.62 and later have no HTTP/1.1 pipelining to switch.
+    //
+    // A deep-queue class may open as many connections per host as it runs
+    // requests (HttpPolicyClass::activeLimit()), so libcurl runs every
+    // request it is handed and none waits unseen in libcurl's pending
+    // queue with its timeout running. Where a server offers h2, up to
+    // `depth` streams share a connection, the shape pipelining had.
     HttpPolicy & policy(mService->getPolicy());
+    const HttpPolicyClass & options(policy.getClassOptions(policy_class));
+    CURLM * multi_handle(mMultiHandles[policy_class]);
 
-    if (! mActiveHandles[policy_class])
+    if (options.mPipelining > 1)
     {
-        // Clear to set options.  As of libcurl 7.37.0, if a pipelining
-        // multi handle has active requests and you try to set the
-        // multi handle to non-pipelining, the library gets very angry
-        // and goes off the rails corrupting memory.  A clue that you're
-        // about to crash is that you'll get a missing server response
-        // error (curl code 9).  So, if options are to be set, we let
-        // the multi handle run out of requests, then set options, and
-        // re-enable request processing.
-        //
-        // All of this stall mechanism exists for this reason.  If
-        // libcurl becomes more resilient later, it should be possible
-        // to remove all of this.  The connection limit settings are fine,
-        // it's just that pipelined-to-non-pipelined transition that
-        // is fatal at the moment.
-
-        HttpPolicyClass & options(policy.getClassOptions(policy_class));
-        CURLM * multi_handle(mMultiHandles[policy_class]);
-
-        // Enable policy if stalled
-        policy.stallPolicy(policy_class, false);
-        mDirtyPolicy[policy_class] = false;
-
-        if (options.mPipelining > 1)
-        {
-            // We'll try to do pipelining on this multihandle
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_PIPELINING,
-                                     1L);
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_MAX_PIPELINE_LENGTH,
-                                     long(options.mPipelining));
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_MAX_HOST_CONNECTIONS,
-                                     long(options.mPerHostConnectionLimit));
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_MAX_TOTAL_CONNECTIONS,
-                                     long(options.mConnectionLimit));
-        }
-        else
-        {
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_PIPELINING,
-                                     0L);
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_MAX_HOST_CONNECTIONS,
-                                     0L);
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_MAX_TOTAL_CONNECTIONS,
-                                     long(options.mConnectionLimit));
-        }
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_PIPELINING,
+                                CURLPIPE_MULTIPLEX);
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_MAX_HOST_CONNECTIONS,
+                                options.activeLimit());
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_MAX_TOTAL_CONNECTIONS,
+                                options.activeLimit());
+#if LIBCURL_VERSION_NUM >= 0x074300 // 7.67.0
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_MAX_CONCURRENT_STREAMS,
+                                options.mPipelining);
+#endif
     }
-    else if (! mDirtyPolicy[policy_class])
+    else
     {
-        // Mark policy dirty and request a stall in the policy.
-        // When policy goes idle, we'll re-invoke this method
-        // and perform the change.  Don't allow this thread to
-        // sleep while we're waiting for quiescence, we'll just
-        // stop processing.
-        mDirtyPolicy[policy_class] = true;
-        policy.stallPolicy(policy_class, true);
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_PIPELINING,
+                                CURLPIPE_NOTHING);
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_MAX_HOST_CONNECTIONS,
+                                0L);
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_MAX_TOTAL_CONNECTIONS,
+                                long(options.mConnectionLimit));
     }
+    // </Vulkanstorm>
 }
 
 // ---------------------------------------
