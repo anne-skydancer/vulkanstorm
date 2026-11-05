@@ -184,35 +184,19 @@ public:
         /// Global only
         PO_TRACE,
 
-        /// If greater than 1, suitable requests are allowed to
-        /// pipeline on their connections when they ask for it.
-        /// Value gives the maximum number of outstanding requests
-        /// on a connection.
+        /// If greater than 1, the class is a deep queue: it runs
+        /// PO_PER_HOST_CONNECTION_LIMIT x PO_PIPELINING_DEPTH requests
+        /// at once. <Vulkanstorm> libcurl 7.62 and later have no
+        /// HTTP/1.1 pipelining, so each of those requests gets its own
+        /// HTTP/1.1 connection (libcurl may open that many per host),
+        /// or an HTTP/2 stream where the server offers h2, up to
+        /// PO_PIPELINING_DEPTH streams per connection. </Vulkanstorm>
         ///
-        /// There is some interaction between PO_CONNECTION_LIMIT,
-        /// PO_PER_HOST_CONNECTION_LIMIT, and PO_PIPELINING_DEPTH.
-        /// When PIPELINING_DEPTH is 0 or 1 (no pipelining), this
-        /// library manages connection lifecycle and honors the
-        /// PO_CONNECTION_LIMIT setting as the maximum in-flight
-        /// request limit.  Libcurl itself may be caching additional
-        /// connections under its connection cache policy.
-        ///
-        /// When PIPELINING_DEPTH is 2 or more, libcurl performs
-        /// connection management and both PO_CONNECTION_LIMIT and
-        /// PO_PER_HOST_CONNECTION_LIMIT should be set and non-zero.
-        /// In this case (as of libcurl 7.37.0), libcurl will
-        /// open new connections in preference to pipelining, up
-        /// to the above limits at which time pipelining begins.
-        /// And as usual, an additional cache of open but inactive
-        /// connections may still be maintained within libcurl.
-        /// For SL, a good rule-of-thumb is to set
-        /// PO_PER_HOST_CONNECTION_LIMIT to the user-visible
-        /// concurrency value and PO_CONNECTION_LIMIT to twice
-        /// that for baked texture loads and region crossings where
-        /// additional connection load will be tolerated.  If
-        /// either limit is 0, libcurl will prefer pipelining
-        /// over connection creation, which is still interesting,
-        /// but won't be pursued at this time.
+        /// When PIPELINING_DEPTH is 0 or 1, this library manages
+        /// connection lifecycle and honors the PO_CONNECTION_LIMIT
+        /// setting as the maximum in-flight request limit.  Libcurl
+        /// itself may be caching additional connections under its
+        /// connection cache policy.
         ///
         /// Per-class only
         PO_PIPELINING_DEPTH,

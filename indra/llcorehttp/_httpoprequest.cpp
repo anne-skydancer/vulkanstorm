@@ -745,39 +745,20 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     }
     if (cpolicy.mPipelining > 1L)
     {
-        // Pipelining affects both connection and transfer timeout values.
-        // Requests that are added to a pipeling immediately have completed
-        // their connection so the connection delay tends to be less than
-        // the non-pipelined value.  Transfers are the opposite.  Transfer
-        // timeout starts once the connection is established and completion
-        // can be delayed due to the pipelined requests ahead.  So, it's
-        // a handwave but bump the transfer timeout up by the pipelining
-        // depth to give some room.
-        //
-        // BUG-7698, BUG-7688, BUG-7694 (others).  Scylla and Charybdis
-        // situation.  Operating against a CDN having service issues may
-        // lead to requests stalling for an arbitrarily long time with only
-        // the CURLOPT_TIMEOUT value leading to a closed connection.  Sadly
-        // for pipelining, libcurl (7.39.0 and earlier, at minimum) starts
-        // the clock on this value as soon as a request is started down
-        // the wire.  We want a short value to recover and retry from the
-        // CDN.  We need a long value to safely deal with a succession of
-        // piled-up pipelined requests.
-        //
-        // *TODO:  Find a better scheme than timeouts to guarantee liveness.
-        // Progress on the connection is what we really want, not timeouts.
-        // But we don't have access to that and the request progress indicators
-        // (various libcurl callbacks) have the same problem TIMEOUT does.
-        //
-        // xfer_timeout *= cpolicy.mPipelining;
+        // <Vulkanstorm> A deep-queue class runs per-host limit x depth
+        // transfers at once (HttpPolicyClass::activeLimit()). libcurl 7.62
+        // and later have no HTTP/1.1 pipelining, so they share the link side
+        // by side instead of queueing on a few connections, and the last
+        // one still finishes no sooner than the last of a pipeline did: the
+        // transfer timeout stays doubled (BUG-7698, BUG-7688, BUG-7694: a
+        // CDN with service issues can stall a request for as long as
+        // CURLOPT_TIMEOUT allows; short enough to retry, long enough for a
+        // full queue). libcurl's default HTTP version negotiates h2 over TLS
+        // only; where it does, wait for a stream on an open connection
+        // rather than opening another. The VIEWERASSET test switch to
+        // HTTP/2 is gone. </Vulkanstorm>
         xfer_timeout *= 2L;
-
-        // Also try requesting HTTP/2.
-/******************************/
-        // but for test purposes, only if overriding VIEWERASSET
-        if (getenv("VIEWERASSET"))
-/******************************/
-        check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+        check_curl_easy_setopt(mCurlHandle, CURLOPT_PIPEWAIT, 1L);
     }
     // *DEBUG:  Enable following override for timeout handling and "[curl:bugs] #1420" tests
     //if (cpolicy.mPipelining)
@@ -981,8 +962,6 @@ size_t HttpOpRequest::headerCallback(void * data, size_t size, size_t nmemb, voi
     // <FS:ND> To detect pipelining going out of sync, save a x-ll-url header and later compare it with the requested URL.
     // We do not bail here already, but rather postpone it until the request is finised, then yield a 503 status
     // (request will be retried) and turn pipelining off.
-    if( value && std::string( "x-ll-url" ) == name )
-        op->mXLLURL = value;
     // </FS:ND>
 
     // Save header if caller wants them in the response

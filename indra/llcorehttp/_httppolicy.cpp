@@ -59,8 +59,7 @@ public:
     ClassState()
         : mThrottleEnd(0),
           mThrottleLeft(0L),
-          mRequestCount(0L),
-          mStallStaging(false)
+          mRequestCount(0L)
         {}
 
     HttpReadyQueue      mReadyQueue;
@@ -70,7 +69,6 @@ public:
     HttpTime            mThrottleEnd;
     long                mThrottleLeft;
     long                mRequestCount;
-    bool                mStallStaging;
 };
 
 
@@ -224,15 +222,6 @@ HttpService::ELoopSpeed HttpPolicy::processReadyQueue()
         HttpRetryQueue & retryq(state.mRetryQueue);
         HttpReadyQueue & readyq(state.mReadyQueue);
 
-        if (state.mStallStaging)
-        {
-            // Stalling but don't sleep.  Need to complete operations
-            // and get back to servicing queues.  Do this test before
-            // the retryq/readyq test or you'll get stalls until you
-            // click a setting or an asset request comes in.
-            result = HttpService::NORMAL;
-            continue;
-        }
         if (retryq.empty() && readyq.empty())
         {
             continue;
@@ -249,10 +238,7 @@ HttpService::ELoopSpeed HttpPolicy::processReadyQueue()
         }
 
         int active(transport.getActiveCountInClass(policy_class));
-        int active_limit(state.mOptions.mPipelining > 1L
-                         ? (state.mOptions.mPerHostConnectionLimit
-                            * state.mOptions.mPipelining)
-                         : state.mOptions.mConnectionLimit);
+        int active_limit(state.mOptions.activeLimit());
         int needed(active_limit - active);      // Expect negatives here
 
         if (needed > 0)
@@ -437,19 +423,6 @@ int HttpPolicy::getReadyCount(HttpRequest::policy_t policy_class) const
             + mClasses[policy_class]->mRetryQueue.size()));
     }
     return 0;
-}
-
-
-bool HttpPolicy::stallPolicy(HttpRequest::policy_t policy_class, bool stall)
-{
-    bool ret(false);
-
-    if (policy_class < mClasses.size())
-    {
-        ret = mClasses[policy_class]->mStallStaging;
-        mClasses[policy_class]->mStallStaging = stall;
-    }
-    return ret;
 }
 
 
