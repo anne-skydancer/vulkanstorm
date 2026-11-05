@@ -301,18 +301,22 @@ public:
                                      << " (" << data["error"].asString() << ")"
                                      << LL_ENDL;
 
-        switch (curlcode)
+        // <Vulkanstorm> A certificate the viewer's validator rejected:
+        // name the failure by the validator's verdict, not by the curl
+        // code. libcurl 7.62 and later return 60 for both an untrusted CA
+        // and any other certificate error, which made every certificate
+        // failure look like "SSL_CACERT" and offer "trust this CA". (With
+        // 7.54.1 the old `case CURLE_SSL_PEER_CERTIFICATE` sat under an #if
+        // that is always false, so other certificate errors carried no
+        // certificate and got the generic login error.)
+        const LLSD cert_data = mTransaction->getErrorCertData();
+        if (curlcode != CURLE_OK && cert_data.has(CERT_VALIDATION_FAILURE))
         {
-#if CURLE_SSL_PEER_CERTIFICATE != CURLE_SSL_CACERT
-            case CURLE_SSL_PEER_CERTIFICATE:
-#endif
-            case CURLE_SSL_CACERT:
-                data["certificate"] = mTransaction->getErrorCertData();
-                break;
-
-            default:
-                break;
+            data["certificate"] = cert_data;
+            data["errorcode"] = (cert_data[CERT_VALIDATION_FAILURE].asString() == CERT_FAILURE_UNTRUSTED_CA)
+                                ? "SSL_CACERT" : "SSL_PEER_CERTIFICATE";
         }
+        // </Vulkanstorm>
         // values of 'curlcode':
         // CURLE_COULDNT_RESOLVE_HOST,
         // CURLE_SSL_PEER_CERTIFICATE,
