@@ -2896,11 +2896,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>68452f86971e5acf93b74d6b43451ae80bc34923</string>
+              <string>d4c4a226a53997a612f9e798e11a47abd3e731bd</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/vkstorm-core-rust/releases/download/ffi-v0.5.0/vkstorm_ffi-0.5.0.08a5cbda92.full-linux64-41337442488.tar.zst</string>
+              <string>https://github.com/anne-skydancer/vkstorm-core-rust/releases/download/ffi-v0.5.1/vkstorm_ffi-0.5.1.7d56ec242a.full-linux64-41991517480.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -2910,24 +2910,24 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>01cb4e0ab12e0bb98f31290b0c6efa49d0a3d000</string>
+              <string>4bf86cfdc0aa260d1e2d3335592584ca4d337f62</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/vkstorm-core-rust/releases/download/ffi-v0.5.0/vkstorm_ffi-0.5.0.08a5cbda92.full-windows64-41337442488.tar.zst</string>
+              <string>https://github.com/anne-skydancer/vkstorm-core-rust/releases/download/ffi-v0.5.1/vkstorm_ffi-0.5.1.7d56ec242a.full-windows64-41991517480.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
           </map>
         </map>
         <key>license</key>
-        <string>LGPL-2.1-only</string>
+        <string>LGPL-2.1-only OR GPL-3.0-or-later</string>
         <key>license_file</key>
         <string>LICENSES/vkstorm-core-rust.txt</string>
         <key>copyright</key>
         <string>Copyright (C) 2026, Vulkanstorm Viewer Project</string>
         <key>version</key>
-        <string>0.5.0.08a5cbda92.full</string>
+        <string>0.5.1.7d56ec242a.full</string>
         <key>name</key>
         <string>vkstorm-ffi</string>
         <key>canonical_repo</key>
