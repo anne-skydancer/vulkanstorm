@@ -624,9 +624,7 @@ The owner's 2026-11-03 decision kept the warp. This reverses it, so it is a deci
 
 ### 9.4 Projector lights
 
-- Keep 2 shadow projectors. Choose them by a priority that is stable over time: hysteresis, with the score from light power and distance to the avatar, not to the camera.
-- Fade over a fixed 0.5 s, not with camera speed.
-- Same PCSS path.
+**Superseded by §16**, after the S7 selection (2 slots chosen from the scene) failed the owner's in-world test. The original proposal was to keep two projector shadows and pick them by a stable priority with a fixed fade. §16 explains the failure (the projector shadow fades with the sun's cascade splits, and its candidates still come from the camera's light culling) and replaces the design with a camera-independent atlas of cached tiles.
 
 ### 9.5 Integration
 
@@ -797,7 +795,7 @@ The stages are feature PRs from `vkstorm-devel` on `codex/shadow-*` branches, bu
 | S4 | **Denoise**: half-res joint-bilateral on the shadow term, independent of SSAO; light-map blur no longer needed for shadows | 2 days | ≤ 0.08 ms at 1080p; no residual noise in B9 |
 | S5 | **Caching** of far cascades, staggered; dirty flags from moving casters | 3 days | total ≤ today's PCSS-on total at the default tier on scenes 1–4; CPU ≤ today's |
 | S6 | **Transmittance** (§7, option A + depth gate; hashed coverage at Low) | 4–5 days | ≤ 0.12 ms extra at 1080p on scene 1; 0 extra when no transparent casters; §7.4 checks |
-| S7 | **Projector stability** (priority with hysteresis, fixed fade) | 1 day | no fade-out while walking in scene 4 |
+| S7 | **Projector shadows**: S7a the distance-fade fix; S7b the camera-independent atlas of cached tiles (§16) | S7a 0.5 day, S7b 8–10 days | S7a: the projector shadow's fade distance no longer depends on the view. S7b: a static room re-renders no projector tile per frame at steady state; a 30-light club at most N per frame; lighting GPU time and Frame Profile no worse than today |
 | S8 | **Tiers and Preferences** (RenderShadowQuality, presets, featuretable) | 1–2 days | every tier within its §2.3 budget; FPS drop shadows off→on stated per tier |
 | S9 | Optional: **screen-space contact shadows** at Ultra | 2 days | ≤ 0.15 ms at 1080p |
 
@@ -849,3 +847,165 @@ The design is renderer-agnostic. It uses:
 All of it maps onto wgpu: depth texture arrays, comparison samplers, RGBA8 with multiplicative blend, and compute or fragment denoise. The fit and snapping are being written as a renderer-free unit (S1). They can be shared as a description and test vectors, the model in `cascade_fit_model.py`, without sharing code.
 
 Our new files are dual-licensed LGPL-2.1-or-later OR GPL-3.0-or-later, which is compatible with Aurora's GPL-3, so an Aurora implementation could even reuse the unit if the owner wishes. A proposal would be the design document and the offline model, after S1–S3 are qualified here.
+
+## 16. Projector shadows: why the S7 selection failed in-world, and a camera-independent design
+
+Written after the owner's test of the S7 build (#332), 2026-11-05. The owner's results were:
+- Turning with the projector's light in view: the shadow does not stay.
+- Turning away briefly and back: the shadow does not stay.
+- Walking and running: no popping.
+- The build costs frame rate and camera smoothness, and "real light does not behave in this manner".
+
+### 16.1 Diagnosis
+
+**Cause 1, a bug S7 did not touch: the projector shadow fades with the SUN's cascade splits.**
+- `sampleSpotShadow` (shadowUtil.glsl) takes its distance fade from `shadow_clip`, which holds the sun cascade splits (`mSunClipPlanes`).
+- The projector shadow starts to fade out at (c2 + c3) / 2 and is gone at c3, where c2 and c3 are the third and fourth sun splits. The shader measures this on the pixel's view depth.
+- In the devel build the splits follow what the camera sees (§3.1). The model puts the distance at which a projector shadow is gone at:
+
+| Scene | Range of "gone at c3" over 16 views |
+|---|---|
+| Room on the ground | 25 m (looking down) to 256 m (looking out) |
+| Skybox room | 16 to 20 m |
+| Open land | 21 to 256 m |
+
+- Tilting the camera from −30° to −45° moved the fade-out distance from 256 m to 21 m.
+- So a projector that lights a wall 18 m across a big room has a full shadow when you look at the wall and none when you look at the floor.
+- Turning does the same thing: it changes which objects are visible, and so the splits.
+- This is finding 7 of §3, which I had attributed to the slot selection alone. The shader fade was the larger part.
+- S1 makes the splits view-independent (c3 = shadow distance). The fade is then stable but still tied to the sun's shadow distance: at 128 m it starts at 91 m and ends at 128 m.
+
+**Cause 2: candidates still come from the main camera's light culling.**
+- A light is a shadow candidate only while its light box is inside the camera frustum, because only those lights are drawn by the lighting pass.
+- S7 added a 0.5 s grace, but a turn that keeps the light off-screen longer drops the shadow. When it returns, it fades in over 0.4 s: the owner's "does not stay".
+- Real light does not care where you look.
+
+**Why the offline model said 0 %.**
+- It measured only the selection logic.
+- It had neither the shader's distance fade nor the candidate loss.
+- Its metric, "the strongest projector lighting the visible floor", was itself defined by the view.
+- The test was too narrow, and I reported it as if it covered the real behaviour.
+
+**Wiring: correct.**
+- The slot assignments are used by the shadow render, by `setupSpotLight` (via `mShadowSpotLight`), and for the fade, and the order of candidate gathering and use is right.
+- Nothing is dropped between the lighting pass and the next frame's selection.
+
+**Cost.** There are two parts.
+1. **GPU.** Measured with `scripts/perf/bench_projector_shadows.py` on the RTX 5070 Ti.
+   - Rendering one projector map costs 0.006 ms (50 000 triangles), 0.021 ms (250 000) or 0.078 ms (1 million) of depth-only raster.
+   - This is the same at 1920², 2560², 2048², 1024², 512², 256² and 128². The clear and the raster are geometry-bound, not resolution-bound.
+   - So the two maps cost the GPU a fraction of a millisecond, and shrinking them saves memory but not time.
+   - The lighting side is the larger fixed cost. The sun pass evaluates both projector shadows for every pixel, whether or not a projector is there. Detail 2 minus detail 1 in `bench_shadow_pcss.py` gives 0.05 ms (PCF) or 0.11 ms (PCSS) at 1080p, and 0.07 / 0.18 ms at 1440p.
+2. **CPU, not measured offline.**
+   - Each active projector map is a full `renderShadow`: `updateCull` over all region partitions, `stateSort`, and submission of every batch in the cone. This happens every frame, for each of two maps, even when nothing moved.
+   - That is the same kind of work as one sun cascade, on the main thread, and it is the likely source of the lost smoothness.
+   - S7 did not add per-frame work beyond trivial bookkeeping, but it keeps both maps alive for longer: up to 0.5 s of grace per turn, and indefinitely while the light stays in view. Before, the shadows dropped out as the view turned, which saved their cost by accident.
+   - **To confirm in-world** (a few minutes): in a room with a projector in view, compare Develop › Render Tests › Frame Profile with Shadows set to Sun/Moon (detail 1) and Sun/Moon + Projectors (detail 2). The difference in `renderShadow`, `updateCull` and `stateSort` is the projector cost.
+
+### 16.2 What GPU Gems says about this (and where it is superseded)
+
+Read from the free online texts at developer.nvidia.com/gpugems. These are ideas only: no NVIDIA sample code is used or copied, since it carries NVIDIA's licence, not ours.
+
+| Chapter | Idea | Informs | Today |
+|---|---|---|---|
+| GPU Gems 3, ch. 19, *Deferred Shading in Tabula Rasa* (Koonce) | Local-light shadow maps from a pool, assigned by priority, location and requested size, and reused. Static maps are built once. A dynamic light's map is regenerated only when dynamic geometry is inside its volume. Only 1–2 shadow maps are rebuilt per frame, so the cost spreads over frames. The global shadow's light position and direction are quantised for stability. Artists' light priorities scale features such as shadows with quality settings. | The projector design below: pool, caching, update budget, tiers. Also S1's snapping. | Holds fully. This is the template. |
+| GPU Gems 2, ch. 9, *Deferred Shading in S.T.A.L.K.E.R.* (Shishkovtsov) | Shadow creation was the largest single bottleneck in some scenes. Ask whether each light needs shadows at all. Leave a border larger than the filter radius around each spot map. Push the position along the normal for bias ("virtual position"). Static lights keep a conservative caster set. Skip expensive filtering where N·L ≤ 0 or on sky. | Tile borders; projector bias in world units; `S` casters per light; the early-outs of S3. | Holds. Its stencil-mask pre-pass is superseded by branching in the pixel shader. |
+| GPU Gems 1, ch. 15, *Managing Visibility for Per-Pixel Lighting* (O'Rorke) | Per light: visible set V, light set L, illumination set I = V∩L (skip the light if empty), and a shadow set S ⊂ L of every object that can cast into the visible region, including objects outside the view frustum. CPU batch count, not GPU, bounds the number of lights; cull per light, not per frame. | Caster culling per cascade and per projector from the light, not the camera (§3.10, S1); skipping lights with no lit pixels. | Holds: batches still dominate in Second Life. Its portal system is not relevant here. |
+| GPU Gems 3, ch. 10, *Parallel-Split Shadow Maps on Programmable GPUs* (Zhang, Sun, Nyman) | Practical split scheme: a logarithmic and uniform blend, lambda 0.5 by default. Tighten near and far to the content. Fit each split's box and crop the light's frustum to it. The scene-dependent variant merges caster and receiver boxes. | S1's splits and fit. Our power-law exponent is another way of making the same blend; the lambda form is a candidate for S3. | Holds for the splits. The chapter says nothing about swimming or snapping; S1's snapping is our own. Its DirectX 10 geometry-shader and instancing cloning of casters into the splits is not used now. In Vulkan, layered rendering could submit the cascades once and cut CPU cost. |
+| GPU Gems 1, ch. 14, *Perspective Shadow Maps: Care and Feeding* (Kozlov) | Camera-dependent warping makes quality jump when a caster starts or stops counting as a potential caster. A constant depth bias fails; use world-space bias scaled by the texel's world size. | The case for removing our warp and for world-unit bias (§9.2, S1, S2). | Holds. PSMs themselves are superseded by cascades. |
+| GPU Gems 1, ch. 11, *Shadow Map Antialiasing* (Bunnell, Pellacini) | Hardware bilinear PCF over a fixed 4×4 texel region. 16 taps cost less than expected because they hit the cache. A reduced 4-tap variant varies its sample positions by screen position, "like dithering". | The origin of stock `pcfShadow`'s per-row jitter, our dither source #1 (§4.1). Filter design in S3–S4: fixed kernels with enough taps, noise only with a denoiser. | The idea holds. Its 8-bit shadow percentage is obsolete. |
+| GPU Gems 2, ch. 17, *Efficient Soft-Edged Shadows Using Pixel Shader Branching* (Uralsky) | Test a sparse ring of samples first. Refine with the remaining samples only on pixels where the test samples disagree (the penumbra). The reported gain was 2× on a GeForce 6800 GT. Jitter turns banding into noise. | S3's blocker-search early-outs for the sun and projectors. | Holds. Modern GPUs tolerate divergence better, but coherence still matters. |
+| GPU Gems 3, ch. 8, *Summed-Area Variance Shadow Maps* (Lauritzen) | Constant-cost filtering of any width. Light bleeding with several occluders. A summed-area table uses log2(w×h) bits of precision. PCSS's blocker search and similar-triangles penumbra can use it. | Considered and not adopted: our content has many occluders, light bleeding is the worse artefact, and a table per cascade per frame costs memory and precision. | Holds. We keep hardware PCF/PCSS. |
+| GPU Gems 1, ch. 12, *Omnidirectional Shadow Mapping* (Gerasimov) | Cube maps, six face renders per light. Static scenes can precompute shadow maps. Memory arithmetic. | Memory estimates; a point light would be six tiles in the atlas. Second Life has no shadowing point lights, only projectors. | Its depth-packing formats and the 2004 speed conclusions are obsolete. |
+| GPU Gems 1 ch. 9 and GPU Gems 3 ch. 11 (shadow volumes); GPU Gems 1 ch. 13 (occlusion interval maps) | Stencil volumes give exact hard shadows. Occlusion intervals precompute static occluders. | Not used: user-made meshes are not closed manifolds, semi-transparent casters need maps (Tabula Rasa and S.T.A.L.K.E.R. rejected volumes for the same reasons), and the scene is dynamic. | Superseded for our purpose. |
+
+The GPU Gems 2 contributors page returned 404; I used its part and chapter pages.
+
+### 16.3 Design: a camera-independent projector shadow atlas
+
+**Rule.** Every shadow-casting projector whose cone reaches within the shadow distance of the camera position casts its shadow, whatever the view direction. This means `dist(camera, light) − radius < RenderShadowDistance`. Nothing depends on the camera's orientation.
+
+**Atlas.**
+- One large depth texture (D24, the viewer's current format, so compare sampling and the depth-fetch sampler stay as they are).
+- Tiles are power-of-two squares from 128² to the tier's maximum.
+- A shelf or buddy allocator hands them out. A border of at least 8 texels surrounds each tile, wider than the filter kernel (the S.T.A.L.K.E.R. advice).
+- Each projector gets a tile sized from its projected size and distance, at about one shadow texel per screen pixel of its lit area, between 128² and the tier maximum. Small, far lights get 128–256² tiles.
+- Tiles are evicted by priority (screen size × proximity), least-recently-used first, only under pressure or when the light leaves the shadow distance.
+
+**Caching** (Tabula Rasa).
+- A tile keeps a fingerprint of its light (position, rotation, fov, radius, scale) and a record of the caster state it was rendered with.
+- It is rendered once and reused until:
+  - the projector moves or changes;
+  - a **dynamic** caster inside its cone changes. Avatars, attachments, animated or moving objects and rigged meshes are dynamic; everything else is static. Changed bounds come from the existing spatial-partition dirty and move flags, tested against the cone's bounds;
+  - a refresh timer expires. Every tile is re-rendered at least every 2 s as a safety net, so a missed dirty flag cannot leave a shadow stale for good.
+- A light that is turned out of view keeps its tile. When it returns the shadow is already there: no re-render, no fade-in.
+
+**Update budget.**
+- At most N dirty tiles are re-rendered per frame (Medium 2, High 3, Ultra 4), and a measured CPU cap of 1 ms of shadow submission per frame, whichever binds first.
+- Tiles are ranked by (dynamic casters near the camera) × projected size × age. Casters near the camera win.
+- A stale tile is still sampled, so its shadow lags by up to the refresh interval rather than disappearing.
+- A new tile is rendered with priority and fades in over 0.25 s once rendered.
+
+**Lighting.**
+- The projector shadow term is computed in the spot light pass, per light, from the atlas. This removes the 2-slot limit.
+  - Per-light uniforms: the light's shadow matrix (as `proj_mat` is today), a `vec4` tile rect (offset and scale), the tile's fade, and the distance-fade band.
+  - One extra sampler, `shadowAtlas`, replaces `shadowMap4/5` and `shadowDepth4/5`.
+- The sun pass no longer evaluates the two projector shadows (the `SPOT_SHADOW` permutation of `sunLightF.glsl`). The light map's blue and alpha channels stop carrying them, and `spotLightF.glsl` stops reading `lightMap.b/.a` (it reads `proj_shadow_idx` today).
+- The blur no longer touches projector shadows, so PCSS on projectors needs either enough fixed taps or a small spatial filter of its own. Risk: grain without the blur. First answer: 12 Poisson taps and the per-pixel rotation PCSS already uses; measure it in S7b.
+- The shadow term fades with Euclidean distance from the camera across the last 20 % of the shadow distance. It does not use view depth and does not use the sun splits.
+- Tile edges clamp the filter: the kernel shrinks towards the tile's border, as `pcssEdgeScale` already does at a map's edge.
+
+**Bias.** In world units, as in S1: the receiver moves along its normal by 2 tile texels at its depth, which is `d × 2 tan(fov/2) / R` metres for a perspective tile, plus the receiver-plane bias PCSS already has.
+
+**Interactions**
+- *PCSS:* the blocker search reads the atlas through the depth-fetch sampler (one unit instead of two); the search radius is clamped to the tile.
+- *S1:* the sun cascades stay separate. Their cadence (every frame, or alternate frames) and size differ, and mixing them would tie invalidation together. They share the tier, the shadow distance setting and the world-unit bias convention.
+- *Transmittance (§7):* a projector tile can carry the same coloured transmittance target later, per tile. Not in the first version.
+- *Water, probes:* unchanged. Probe renders (`gCubeSnapshot`) keep their cheap path with no projector shadows.
+- *Vulkan:* the allocator, the priority and budget logic, the dirty tracking and the fades are written renderer-free in `llshadowprojectoratlas.h` with unit tests. The GL side is a depth texture, an FBO with viewport and scissor on the tile, and a comparison sampler. In Vulkan the tile is a render area with a clear load operation, and the comparison sampler is core.
+
+### 16.4 Costs per tier
+
+Measured offline on the RTX 5070 Ti (`bench_projector_shadows.py`, `bench_shadow_pcss.py`); tile render is GPU only. The CPU cost per re-render is expressed as C, the cost of one `renderShadow` call as it is today; it is not measured here. The viewer renders 2 maps every frame today, so today's worst case is 2C per frame, always.
+
+| | Low | Medium | High | Ultra |
+|---|---|---|---|---|
+| Projector shadows | none | up to 12 | up to 24 | up to 48 |
+| Atlas | – | 3072², 36 MB | 4096², 64 MB | 6144×4096, 96 MB |
+| Largest tile | – | 1024² | 1024² (2048² for the first two) | 2048² |
+| Re-renders per frame, at most | – | 2 | 3 | 4 |
+| Today (2 separate maps) | 29.5 MB at 1080p, 52 MB at 1440p; always 2C per frame | | | |
+| Tile render (GPU), per tile | – | 0.006–0.078 ms for 0.05–1 Mtri | same | same |
+| Lighting (GPU) | – | per light, ∝ covered pixels; estimated 0.025 ms (PCF) or 0.055 ms (PCSS) per light covering the whole screen at 1080p | same | same |
+| Fixed sun-pass cost removed | – | 0.05 ms (PCF) / 0.11 ms (PCSS) at 1080p; 0.07 / 0.18 ms at 1440p | same | same |
+
+Synthetic full-screen lighting term (a worst case, hostile to the cache), one light covering the whole screen at 1080p: separate 1920² map 0.284 ms; atlas tile 1024² 0.125 ms; tile 512² 0.044 ms; tile 256² 0.018 ms. Smaller tiles are cheaper to sample because their footprint fits the cache.
+
+**Worst cases and how the budget holds**
+
+- **A static room with 10 lamps.**
+  - All 10 tiles render once, 2 per frame, so about 5 frames; each fades in over 0.25 s.
+  - After that: 0 re-renders per frame (against 2C today), apart from the 2 s safety refresh, which spreads to 10 tiles / 2 s = 5 per second.
+  - Memory: 10 tiles of 512–1024², 10–25 MB.
+- **A club with 30 moving spotlights** (every light moves every frame, each with dynamic casters inside).
+  - 30 dirty tiles per frame against a budget of 2 (Medium), so each tile refreshes every 15 frames at 60 fps (0.25 s): beam shadows lag by up to a quarter of a second behind a fast sweep.
+  - CPU cost is capped at 2C, equal to today's worst case, never more.
+  - Mitigations, in order: priority by projected size and nearness puts the lights that matter on top; far lights get 128–256² tiles; lights below a size or nearness threshold keep their light but lose the shadow, with a fade; High and Ultra raise the budget to 3–4.
+- **A crowd.**
+  - Avatars are dynamic casters, so every tile whose cone contains one is dirty every frame. The budget binds as in the club.
+  - Skinned avatars are costlier per re-render than static geometry.
+  - Mitigation: avatars cast into a projector's tile only within 25 m of the camera; farther tiles are rendered from static casters and refresh slowly. This is a quality trade, not a bug.
+- **Many tiles of static geometry with a moving avatar nearby.** Only the tiles around the avatar are dirty; the rest are untouched.
+
+### 16.5 Plan
+
+| Stage | Content | Effort | Gate |
+|---|---|---|---|
+| S7a (interim) | Replace the projector shadow's fade by the sun splits with a Euclidean-distance fade over the last 20 % of `RenderShadowDistance` (shader only). | 0.5 day | The model's shadow-gone distance stops depending on the view; no GL regressions in `bench_shadow_pcss.py`. |
+| S7b | Atlas, allocator and budget unit (renderer-free, tested); GL atlas and tile rendering; caching and dirty tracking; the lighting pass moves to per-light atlas sampling; tiers and Preferences. | 8–10 days | Static room: 0 re-renders per frame at steady state. Club: at most N per frame. GPU lighting no worse than today's sun-pass projector term. Frame Profile in the club and in a static room no worse than today. |
+
+S7a alone may fix the owner's tests 1 and 2 where the light stays in view; the grace window still limits the others until S7b.
+
+### 16.6 References
+
+NVIDIA, GPU Gems, GPU Gems 2 and GPU Gems 3, developer.nvidia.com/gpugems: the chapters in §16.2. No NVIDIA code is used.
