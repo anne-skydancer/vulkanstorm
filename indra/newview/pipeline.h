@@ -404,19 +404,6 @@ public:
 
     static bool isWaterClip();
 
-    // <FS> Vulkanstorm: alpha order-independent transparency (image-array A-buffer). The
-    // capture pass stores normal-alpha fragments into a fixed per-pixel slot array (a 2D-array
-    // image) handed out by a per-pixel atomic count, with an order-independent tail for
-    // fragments past the last slot; the composite resolves each pixel's slots back-to-front
-    // over screen. Direct-GL (no RHI), gated on GL 4.4+ (see LLPipeline::sRenderAlphaOITSupported).
-    bool beginAlphaOITCapture();   // reset/bind resources; false falls back to legacy
-    void endAlphaOITCapture();     // barrier so the resolve sees all stored fragments
-    void compositeAlphaOIT();      // sorted resolve of the slots over mRT->screen
-    void allocateAlphaOITBuffers(U32 w, U32 h);  // (re)create meta image / slot array
-    void releaseAlphaOITBuffers();               // destroy them
-    U32  getAlphaOITSlotCount() const { return mAlphaOITSlotCount; }  // slots per pixel (shader uniform)
-    LLRenderTarget* getAlphaOITOpaqueDepth() { return &mAlphaOITOpaqueDepth; }
-
     // <Vulkanstorm> stochastic transparency (doc/oit/stochastic-transparency.md): multisampled
     // targets at the render resolution, freed while another method is selected.
     enum EAlphaStochasticBuffer
@@ -727,7 +714,6 @@ public:
     static bool             sDistortionRender;
     static bool             sImpostorRender;
     static bool             sImpostorRenderAlphaDepthPass;
-    static bool             sRenderAlphaOITSupported;   // <FS/> Vulkanstorm: alpha OIT HW capable (GL 4.4+)
     static bool             sRenderAlphaStochasticSupported; // <Vulkanstorm/> stochastic transparency available (GL 4.0+, its shaders built)
     static bool             sShowJellyDollAsImpostor;
     static bool             sUnderWaterRender;
@@ -795,15 +781,6 @@ public:
     // for use by SSR
     LLRenderTarget          mSceneMap;
 
-    // <FS> Vulkanstorm: alpha OIT (image-array A-buffer) GPU resources, stored as raw GL names
-    // (uint, 0 = none). Allocated at main-view render resolution; see beginAlphaOITCapture().
-    LLRenderTarget mAlphaOITOpaqueDepth; // detached per-frame depth snapshot
-    U32 mAlphaOITMeta = 0;      // R32UI 2D array: layer 0 per-pixel count, layers 1..5 tail accumulators, 6 nearest tail depth
-    U32 mAlphaOITSlots = 0;     // RG32UI 2D array: one layer per slot = { R11F_G11F_B10F premultiplied rgb, depth24 << 8 | alpha8 }
-    U32 mAlphaOITWidth = 0;
-    U32 mAlphaOITHeight = 0;
-    U32 mAlphaOITSlotCount = 0; // layers of mAlphaOITSlots
-    bool mAlphaOITTailDirty = false; // a capture ran without its resolve: clear the tail layers too
 
     // <Vulkanstorm> stochastic transparency's targets (raw GL names, 0 = none): one framebuffer
     // with the accumulation (COLOR0, RGBA16F), the transparency and glow (COLOR1, RG16F) and the
