@@ -47,6 +47,7 @@ uniform float shadow_bias;
 uniform float shadow_offset;
 uniform float spot_shadow_bias;
 uniform float spot_shadow_offset;
+uniform float spot_shadow_reach; // <Vulkanstorm/> metres: the projector shadows fade out towards this camera distance
 uniform mat4 inv_proj;
 uniform vec2 screen_res;
 uniform int sun_up_factor;
@@ -539,56 +540,48 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
 {
 #if defined(SPOT_SHADOW)
-    float shadow = 0.0f;
     pos += norm * spot_shadow_offset;
 
     vec4 spos = vec4(pos,1.0);
-    if (spos.z > -shadow_clip.w)
+
+    // <Vulkanstorm> The projector shadow fades out with the distance from the camera to the lit
+    // pixel (Euclidean, so it does not depend on which way the camera looks), over the last 20 %
+    // of spot_shadow_reach. It used to fade with the sun's cascade splits (shadow_clip z and w),
+    // which follow what the camera sees: the fade-out distance went from 16 m to 256 m with the
+    // camera's pitch and yaw, and projector shadows came and went with the view.
+    float reach = spot_shadow_reach > 1.0 ? spot_shadow_reach : 128.0;
+    float fade = clamp((reach - length(pos)) / (0.2 * reach), 0.0, 1.0);
+    if (fade <= 0.0)
     {
-        vec4 lpos;
+        return 1.0;
+    }
 
-        vec4 near_split = shadow_clip*-0.75;
-        vec4 far_split = shadow_clip*-1.25;
-        vec4 transition_domain = near_split-far_split;
-        float weight = 0.0;
-
-        {
-            float w = 1.0;
-            w -= max(spos.z-far_split.z, 0.0)/transition_domain.z;
-
-            if (index == 0)
-            {
-                lpos = shadow_matrix[4]*spos;
+    float shadow;
+    vec4 lpos;
+    if (index == 0)
+    {
+        lpos = shadow_matrix[4]*spos;
 #if defined(PCSS_SHADOW) && defined(PCSS_SHADOW_FETCH)
-                shadow += pcssSpotContactShadow(shadowMap4, shadowDepth4, shadow_matrix[4], lpos, spos.xyz, norm, 0.8)*w;
+        shadow = pcssSpotContactShadow(shadowMap4, shadowDepth4, shadow_matrix[4], lpos, spos.xyz, norm, 0.8);
 #elif defined(PCSS_SHADOW)
-                shadow += pcssSpotShadow(shadowMap4, 4, lpos, spos.xyz, norm, 0.8)*w;
+        shadow = pcssSpotShadow(shadowMap4, 4, lpos, spos.xyz, norm, 0.8);
 #else
-                shadow += pcfSpotShadow(shadowMap4, lpos, 0.8, spos.xy)*w;
+        shadow = pcfSpotShadow(shadowMap4, lpos, 0.8, spos.xy);
 #endif
-            }
-            else
-            {
-                lpos = shadow_matrix[5]*spos;
-#if defined(PCSS_SHADOW) && defined(PCSS_SHADOW_FETCH)
-                shadow += pcssSpotContactShadow(shadowMap5, shadowDepth5, shadow_matrix[5], lpos, spos.xyz, norm, 0.8)*w;
-#elif defined(PCSS_SHADOW)
-                shadow += pcssSpotShadow(shadowMap5, 5, lpos, spos.xyz, norm, 0.8)*w;
-#else
-                shadow += pcfSpotShadow(shadowMap5, lpos, 0.8, spos.xy)*w;
-#endif
-            }
-            weight += w;
-            shadow += max((pos.z+shadow_clip.z)/(shadow_clip.z-shadow_clip.w)*2.0-1.0, 0.0);
-        }
-
-        shadow /= weight;
     }
     else
     {
-        shadow = 1.0f;
+        lpos = shadow_matrix[5]*spos;
+#if defined(PCSS_SHADOW) && defined(PCSS_SHADOW_FETCH)
+        shadow = pcssSpotContactShadow(shadowMap5, shadowDepth5, shadow_matrix[5], lpos, spos.xyz, norm, 0.8);
+#elif defined(PCSS_SHADOW)
+        shadow = pcssSpotShadow(shadowMap5, 5, lpos, spos.xyz, norm, 0.8);
+#else
+        shadow = pcfSpotShadow(shadowMap5, lpos, 0.8, spos.xy);
+#endif
     }
-    return shadow;
+    return mix(1.0, shadow, fade);
+    // </Vulkanstorm>
 #else
     return 1.0;
 #endif

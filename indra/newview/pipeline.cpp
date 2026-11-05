@@ -9756,6 +9756,14 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
     shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_BIAS, shadow_bias);
     shader.uniform1f(LLShaderMgr::DEFERRED_SPOT_SHADOW_OFFSET, RenderSpotShadowOffset);
     shader.uniform1f(LLShaderMgr::DEFERRED_SPOT_SHADOW_BIAS, RenderSpotShadowBias);
+    // <Vulkanstorm> the projector shadows fade out over the last 20 % of this camera distance (see
+    // sampleSpotShadow); the same everywhere and for every camera orientation. The draw distance
+    // caps it, as it capped the sun splits the fade used to follow.
+    {
+        static const LLStaticHashedString sSpotShadowReach("spot_shadow_reach");
+        shader.uniform1f(sSpotShadowReach, llmin((F32)RenderFarClip, 128.f));
+    }
+    // </Vulkanstorm>
 
     shader.uniform3fv(LLShaderMgr::DEFERRED_SUN_DIR, 1, mTransformedSunDir.mV);
     shader.uniform3fv(LLShaderMgr::DEFERRED_MOON_DIR, 1, mTransformedMoonDir.mV);
