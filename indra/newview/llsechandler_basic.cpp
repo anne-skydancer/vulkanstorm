@@ -46,6 +46,11 @@
 #include <openssl/asn1.h>
 #include <openssl/rand.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/provider.h> // <Vulkanstorm/> RC4 lives in the legacy provider
+#endif
+#include <algorithm>
 #include <iostream>
 #include <iomanip>
 #include <time.h>
@@ -1323,6 +1328,110 @@ LLSecAPIBasicHandler::~LLSecAPIBasicHandler()
     //_writeProtectedData();
 }
 
+// <Vulkanstorm> bin_conf.dat is a 16-byte salt XORed with the machine id,
+// then the LLSD XML encrypted with RC4 keyed by the salt. Every cipher call is
+// checked: a failure must never produce a store that cannot be read back, nor
+// replace a good one. OpenSSL 1.1.1 has RC4 in its default library; OpenSSL 3
+// has it only in the legacy provider, which is then loaded into a private
+// library context used for this file alone, so TLS and certificate handling
+// never see the legacy algorithms. The on-disk format is the same either way.
+namespace
+{
+class ProtectedDataRC4
+{
+public:
+    ProtectedDataRC4()
+    {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        mLibCtx = OSSL_LIB_CTX_new();
+        if (!mLibCtx)
+        {
+            return;
+        }
+        mLegacy = OSSL_PROVIDER_load(mLibCtx, "legacy");
+        if (!mLegacy)
+        {
+            return;
+        }
+        mFetched = EVP_CIPHER_fetch(mLibCtx, "RC4", nullptr);
+        mCipher = mFetched;
+#else
+        mCipher = EVP_rc4();
+#endif
+    }
+
+    ~ProtectedDataRC4()
+    {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        EVP_CIPHER_free(mFetched);
+        if (mLegacy)
+        {
+            OSSL_PROVIDER_unload(mLegacy);
+        }
+        OSSL_LIB_CTX_free(mLibCtx);
+#endif
+    }
+
+    ProtectedDataRC4(const ProtectedDataRC4&) = delete;
+    ProtectedDataRC4& operator=(const ProtectedDataRC4&) = delete;
+
+    // Runs `in_len` bytes at `in` through RC4 keyed by `key` (STORE_SALT_SIZE
+    // bytes) in BUFFER_READ_SIZE chunks and appends the result to `out`.
+    // Returns false on any failure; `out` is then incomplete and must not be
+    // used.
+    bool run(const U8* key, bool encrypt, const char* in, size_t in_len, std::string& out) const
+    {
+        if (!mCipher || EVP_CIPHER_key_length(mCipher) != STORE_SALT_SIZE)
+        {
+            return false;
+        }
+        EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+        if (!ctx)
+        {
+            return false;
+        }
+        bool ok = EVP_CipherInit_ex(ctx, mCipher, nullptr, key, nullptr, encrypt ? 1 : 0) == 1;
+        U8 outbuf[BUFFER_READ_SIZE];
+        for (size_t pos = 0; ok && pos < in_len; pos += BUFFER_READ_SIZE)
+        {
+            const int inl = static_cast<int>(std::min<size_t>(BUFFER_READ_SIZE, in_len - pos));
+            int outl = 0;
+            ok = EVP_CipherUpdate(ctx, outbuf, &outl, reinterpret_cast<const U8*>(in) + pos, inl) == 1
+                 && outl == inl;
+            if (ok)
+            {
+                out.append(reinterpret_cast<const char*>(outbuf), outl);
+            }
+        }
+        // RC4 is a stream cipher: nothing is buffered, so Final adds nothing.
+        int finl = 0;
+        ok = ok && EVP_CipherFinal_ex(ctx, outbuf, &finl) == 1 && finl == 0;
+        EVP_CIPHER_CTX_free(ctx);
+        return ok;
+    }
+
+private:
+    const EVP_CIPHER* mCipher = nullptr;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    OSSL_LIB_CTX* mLibCtx = nullptr;
+    OSSL_PROVIDER* mLegacy = nullptr;
+    EVP_CIPHER* mFetched = nullptr;
+#endif
+};
+
+void log_openssl_errors(const char* what)
+{
+    LL_WARNS("SECAPI") << what << LL_ENDL;
+    for (unsigned long err = ERR_get_error(); err != 0; err = ERR_get_error())
+    {
+        char text[256];
+        ERR_error_string_n(err, text, sizeof(text));
+        LL_WARNS("SECAPI") << "  OpenSSL: " << text << LL_ENDL;
+    }
+}
+} // namespace
+// </Vulkanstorm>
+
 void LLSecAPIBasicHandler::_readProtectedData(unsigned char *unique_id, U32 id_len)
 {
     // attempt to load the file into our map
@@ -1331,21 +1440,6 @@ void LLSecAPIBasicHandler::_readProtectedData(unsigned char *unique_id, U32 id_l
                                     llifstream::binary);
 
     if (!protected_data_stream.fail()) {
-        U8 salt[STORE_SALT_SIZE];
-        U8 buffer[BUFFER_READ_SIZE];
-        U8 decrypted_buffer[BUFFER_READ_SIZE];
-        int decrypted_length;
-        LLXORCipher cipher(unique_id, id_len);
-
-        // read in the salt and key
-        protected_data_stream.read((char *)salt, STORE_SALT_SIZE);
-        if (protected_data_stream.gcount() < STORE_SALT_SIZE)
-        {
-            LLTHROW(LLProtectedDataException("Config file too short."));
-        }
-
-        cipher.decrypt(salt, STORE_SALT_SIZE);
-
         // totally lame.  As we're not using the OS level protected data, we need to
         // at least obfuscate the data.  We do this by using a salt stored at the head of the file
         // to encrypt the data, therefore obfuscating it from someone using simple existing tools.
@@ -1357,27 +1451,41 @@ void LLSecAPIBasicHandler::_readProtectedData(unsigned char *unique_id, U32 id_l
         // mechanisms and are considered to be more secure.
         // We've a strong intent to move to OS dependent protected data stores.
 
-
-        // read in the rest of the file.
-        EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-        // todo: ctx error handling
-
-        EVP_DecryptInit(ctx, EVP_rc4(), salt, NULL);
-        // allocate memory:
-        std::string decrypted_data;
-
-        while(protected_data_stream.good()) {
-            // read data as a block:
-            protected_data_stream.read((char *)buffer, BUFFER_READ_SIZE);
-
-            EVP_DecryptUpdate(ctx, decrypted_buffer, &decrypted_length,
-                              buffer, (int)protected_data_stream.gcount());
-            decrypted_data.append((const char *)decrypted_buffer, (int)protected_data_stream.gcount());
+        // <Vulkanstorm> Read the whole file, then decrypt it in one checked
+        // pass. istream::read turns a read error into badbit (it never lets
+        // the filebuf's std::ios_base::failure through, as an
+        // istreambuf_iterator would), and every failure raises
+        // LLProtectedDataException, which the caller turns into the
+        // CorruptedProtectedDataStore notice.
+        std::string file_data;
+        char chunk[BUFFER_READ_SIZE];
+        while (protected_data_stream.read(chunk, sizeof(chunk)) || protected_data_stream.gcount() > 0)
+        {
+            file_data.append(chunk, static_cast<size_t>(protected_data_stream.gcount()));
+        }
+        if (protected_data_stream.bad())
+        {
+            LLTHROW(LLProtectedDataException("Config file cannot be read."));
+        }
+        if (file_data.size() < STORE_SALT_SIZE)
+        {
+            LLTHROW(LLProtectedDataException("Config file too short."));
         }
 
-        // RC4 is a stream cipher, so we don't bother to EVP_DecryptFinal, as there is
-        // no block padding.
-        EVP_CIPHER_CTX_free(ctx);
+        // read in the salt and key
+        U8 salt[STORE_SALT_SIZE];
+        memcpy(salt, file_data.data(), STORE_SALT_SIZE);
+        LLXORCipher cipher(unique_id, id_len);
+        cipher.decrypt(salt, STORE_SALT_SIZE);
+
+        std::string decrypted_data;
+        if (!ProtectedDataRC4().run(salt, false, file_data.data() + STORE_SALT_SIZE,
+                                    file_data.size() - STORE_SALT_SIZE, decrypted_data))
+        {
+            log_openssl_errors("RC4 unavailable or failed: protected data store not decrypted");
+            LLTHROW(LLProtectedDataException("Config file cannot be decrypted (RC4 unavailable)."));
+        }
+        // </Vulkanstorm>
         std::istringstream parse_stream(decrypted_data);
         if (parser->parse(parse_stream, mProtectedDataMap,
                           LLSDSerialize::SIZE_UNLIMITED) == LLSDParser::PARSE_FAILURE)
@@ -1413,108 +1521,97 @@ void LLSecAPIBasicHandler::_readProtectedData()
 
 void LLSecAPIBasicHandler::_writeProtectedData()
 {
-    std::ostringstream formatted_data_ostream;
-    U8 salt[STORE_SALT_SIZE];
-    U8 buffer[BUFFER_READ_SIZE];
-    U8 encrypted_buffer[BUFFER_READ_SIZE];
-
-
     if(mProtectedDataMap.isUndefined())
     {
         LLFile::remove(mProtectedDataFilename);
         return;
     }
-    // create a string with the formatted data.
-    LLSDSerialize::toXML(mProtectedDataMap, formatted_data_ostream);
-    std::istringstream formatted_data_istream(formatted_data_ostream.str());
-    // generate the seed
-    RAND_bytes(salt, STORE_SALT_SIZE);
 
-
-    // write to a temp file so we don't clobber the initial file if there is
-    // an error.
-    std::string tmp_filename = mProtectedDataFilename + ".tmp";
-
-    llofstream protected_data_stream(tmp_filename.c_str(),
-                                     std::ios_base::binary);
-    EVP_CIPHER_CTX *ctx = NULL;
+    // <Vulkanstorm> Build the whole new file in memory first, write it to a
+    // temporary file, and only once that is complete and closed without
+    // error put it in place of the store. Every failure before that point
+    // returns with the existing store untouched. The old code could lose
+    // every saved login: an exception in the encryption block deleted the
+    // temporary file but fell through to the step that removed the store
+    // before the rename; a failed or partial write of the temporary file
+    // (disk full, a locked file, a directory in the way) went the same way,
+    // because the stream state was never checked; and unchecked EVP calls
+    // could write a truncated or garbage store.
+    std::string file_data;
     try
     {
+        // create a string with the formatted data.
+        std::ostringstream formatted_data_ostream;
+        LLSDSerialize::toXML(mProtectedDataMap, formatted_data_ostream);
+        const std::string formatted_data = formatted_data_ostream.str();
 
-        ctx = EVP_CIPHER_CTX_new();
-        // todo: ctx error handling
+        // generate the seed
+        U8 salt[STORE_SALT_SIZE];
+        if (RAND_bytes(salt, STORE_SALT_SIZE) != 1)
+        {
+            log_openssl_errors("RAND_bytes failed: protected data store not written, existing store kept");
+            return;
+        }
 
-        EVP_EncryptInit(ctx, EVP_rc4(), salt, NULL);
+        std::string encrypted_data;
+        if (!ProtectedDataRC4().run(salt, true, formatted_data.data(), formatted_data.size(), encrypted_data))
+        {
+            log_openssl_errors("RC4 unavailable or failed: protected data store not written, existing store kept");
+            return;
+        }
+
         unsigned char unique_id[MAC_ADDRESS_BYTES];
         LLMachineID::getUniqueID(unique_id, sizeof(unique_id));
         LLXORCipher cipher(unique_id, sizeof(unique_id));
         cipher.encrypt(salt, STORE_SALT_SIZE);
-        protected_data_stream.write((const char *)salt, STORE_SALT_SIZE);
 
-        while (formatted_data_istream.good())
-        {
-            formatted_data_istream.read((char *)buffer, BUFFER_READ_SIZE);
-            if(formatted_data_istream.gcount() == 0)
-            {
-                break;
-            }
-            int encrypted_length;
-            EVP_EncryptUpdate(ctx, encrypted_buffer, &encrypted_length,
-                          buffer, (int)formatted_data_istream.gcount());
-            protected_data_stream.write((const char *)encrypted_buffer, encrypted_length);
-        }
-
-        // no EVP_EncrypteFinal, as this is a stream cipher
-        EVP_CIPHER_CTX_free(ctx);
-
-        protected_data_stream.close();
+        file_data.reserve(STORE_SALT_SIZE + encrypted_data.size());
+        file_data.assign(reinterpret_cast<const char*>(salt), STORE_SALT_SIZE);
+        file_data.append(encrypted_data);
     }
     catch (...)
     {
         LOG_UNHANDLED_EXCEPTION("LLProtectedDataException(Error writing Protected Data Store)");
-        // it's good practice to clean up any secure information on error
-        // (even though this file isn't really secure.  Perhaps in the future
-        // it may be, however.
-        LLFile::remove(tmp_filename);
-
-        if (ctx)
-        {
-            EVP_CIPHER_CTX_free(ctx);
-        }
-
-        // EXP-1825 crash in LLSecAPIBasicHandler::_writeProtectedData()
-        // Decided throwing an exception here was overkill until we figure out why this happens
-        //LLTHROW(LLProtectedDataException("Error writing Protected Data Store"));
+        // EXP-1825: no rethrow. Nothing has been written; the store is kept.
+        return;
     }
 
+    // write to a temp file so we don't clobber the initial file if there is
+    // an error.
+    std::string tmp_filename = mProtectedDataFilename + ".tmp";
+    bool written = false;
     try
     {
-        // move the temporary file to the specified file location.
-        if(((   (LLFile::isfile(mProtectedDataFilename) != 0)
-             && (LLFile::remove(mProtectedDataFilename) != 0)))
-           || (LLFile::rename(tmp_filename, mProtectedDataFilename)))
-        {
-            LL_WARNS() << "LLProtectedDataException(Could not overwrite protected data store)" << LL_ENDL;
-            LLFile::remove(tmp_filename);
-
-            // EXP-1825 crash in LLSecAPIBasicHandler::_writeProtectedData()
-            // Decided throwing an exception here was overkill until we figure out why this happens
-            //LLTHROW(LLProtectedDataException("Could not overwrite protected data store"));
-        }
+        llofstream protected_data_stream(tmp_filename.c_str(),
+                                         std::ios_base::binary | std::ios_base::trunc);
+        protected_data_stream.write(file_data.data(), file_data.size());
+        protected_data_stream.close();
+        written = !protected_data_stream.fail();
     }
     catch (...)
     {
-        LOG_UNHANDLED_EXCEPTION(STRINGIZE("renaming '" << tmp_filename << "' to '"
-                                          << mProtectedDataFilename << "'"));
+        LOG_UNHANDLED_EXCEPTION(STRINGIZE("writing '" << tmp_filename << "'"));
+    }
+    if (!written)
+    {
+        LL_WARNS("SECAPI") << "LLProtectedDataException(Could not write the protected data store), existing store kept" << LL_ENDL;
         // it's good practice to clean up any secure information on error
         // (even though this file isn't really secure.  Perhaps in the future
         // it may be, however).
-        LLFile::remove(tmp_filename);
-
-        //crash in LLSecAPIBasicHandler::_writeProtectedData()
-        // Decided throwing an exception here was overkill until we figure out why this happens
-        //LLTHROW(LLProtectedDataException("Error writing Protected Data Store"));
+        LLFile::remove(tmp_filename, ENOENT);
+        return;
     }
+
+    // LLFile::rename replaces an existing file in one step (MoveFileExW with
+    // MOVEFILE_REPLACE_EXISTING on Windows, rename() elsewhere), so the store
+    // is never removed before its replacement is in place, and if the rename
+    // fails the old store is still there.
+    if (LLFile::rename(tmp_filename, mProtectedDataFilename) != 0)
+    {
+        LL_WARNS("SECAPI") << "LLProtectedDataException(Could not overwrite protected data store), existing store kept" << LL_ENDL;
+        LLFile::remove(tmp_filename, ENOENT);
+    }
+    // </Vulkanstorm>
 }
 
 // instantiate a certificate from a pem string
