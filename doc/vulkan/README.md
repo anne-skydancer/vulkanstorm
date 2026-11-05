@@ -7,6 +7,9 @@
 > - The new renderer comes after the Rust port, follows lessons from Aurora
 >   Viewer, and has no graphics API chosen yet (wgpu is favoured).
 > - OpenGL or Vulkan is chosen when the viewer is built.
+> - PPLL, the order-independent transparency these documents describe, was
+>   replaced by stochastic transparency on 2026-11-05
+>   ([../oit/stochastic-transparency.md](../oit/stochastic-transparency.md)).
 >
 > This study is kept as a record of the earlier analysis.
 
