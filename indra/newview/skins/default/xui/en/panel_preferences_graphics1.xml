@@ -1809,7 +1809,7 @@ If you do not understand the distinction then leave this control alone."
        width="485"
        word_wrap="true"
        name="AlphaSortDescription">
-        Alpha rendering applies only to the main post-water world view. Particles, mirrors, hero probes, cube snapshots, HUDs, impostors, and pre-water alpha rendering is always performed on the sorted alpha path.
+        Stochastic transparency applies only to the main post-water world view. Particles, mirrors, hero probes, cube snapshots, HUDs, impostors, and pre-water alpha are always drawn with sorted alpha.
       </text>
       <radio_group
        control_name="RenderAlphaSortMethod"
@@ -1830,12 +1830,12 @@ If you do not understand the distinction then leave this control alone."
          name="Legacy"/>
         <radio_item
          height="20"
-         label="PPLL"
+         label="Stochastic transparency"
          layout="topleft"
          left_delta="0"
          top_pad="2"
          value="1"
-         name="PPLL"/>
+         name="Stochastic"/>
         <radio_group.commit_callback function="Pref.RenderOptionUpdate"/>
       </radio_group>
 
@@ -1847,79 +1847,42 @@ If you do not understand the distinction then leave this control alone."
        top_pad="14"
        width="480"
        font="SansSerifBold"
-       name="PPLLHeading">
-        PPLL parameters
+       name="StochasticHeading">
+        Stochastic transparency
       </text>
       <text
        follows="left|top"
        height="16"
        layout="topleft"
        left="25"
-       top_pad="2"
-       width="5"
-       name="PPLLWarningOpen">
-        (
-      </text>
-      <text
-       follows="left|top"
-       height="16"
-       layout="topleft"
-       left_pad="0"
-       top_delta="0"
-       width="60"
-       font="SansSerifBold"
-       name="PPLLWarningLabel">
-        Warning:
-      </text>
-      <text
-       follows="left|top"
-       height="16"
-       layout="topleft"
-       left_pad="2"
-       top_delta="0"
-       width="300"
-       name="PPLLWarning">
-        May break PPLL)
-      </text>
-      <spinner
-       control_name="RenderAlphaOITMemoryMB"
-       decimal_digits="0"
-       follows="left|top"
-       height="20"
-       increment="16"
-       label="PPLL memory budget (MiB):"
-       label_width="220"
-       layout="topleft"
-       left="25"
-       min_val="32"
-       max_val="2048"
-       top_pad="5"
-       width="330"
-       name="PPLLMemory"/>
-      <spinner
-       control_name="RenderAlphaOITNodesPerPixel"
-       decimal_digits="0"
-       follows="left|top"
-       height="20"
-       increment="1"
-       label="Sorted layers (slots) per pixel:"
-       label_width="220"
-       layout="topleft"
-       left="25"
-       min_val="1"
-       max_val="32"
        top_pad="4"
-       width="330"
-       name="PPLLNodes"/>
-      <check_box
-       control_name="RenderAlphaOITStats"
-       height="18"
-       label="Log PPLL layer statistics (debug; synchronizes GPU)"
+       width="190"
+       name="StochasticSamplesLabel">
+        Samples per pixel:
+      </text>
+      <combo_box
+       control_name="RenderAlphaStochasticSamples"
+       follows="left|top"
+       height="23"
        layout="topleft"
-       left="25"
-       top_pad="5"
-       width="440"
-       name="PPLLStats"/>
+       left_pad="5"
+       top_delta="-3"
+       width="120"
+       tool_tip="More samples, less grain in layered transparency (hair, glass behind glass), at the cost of the transparency passes: 16 runs two passes of 8."
+       name="StochasticSamples">
+        <combo_box.item
+         label="4"
+         name="4"
+         value="4"/>
+        <combo_box.item
+         label="8"
+         name="8"
+         value="8"/>
+        <combo_box.item
+         label="16"
+         name="16"
+         value="16"/>
+      </combo_box>
 
       <text
        follows="left|top"
