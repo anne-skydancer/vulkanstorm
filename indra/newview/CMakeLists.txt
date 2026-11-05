@@ -2256,6 +2256,16 @@ set_source_files_properties(${viewer_POSER_PRESET_FILES}
 list(APPEND viewer_SOURCE_FILES ${viewer_POSER_PRESET_FILES})
 # </FS:AR> Poser presets
 
+# <Vulkanstorm> The licence texts viewer_manifest.py ships (licence_texts.py,
+# NOTICE.md): re-run the staging and packaging steps when they change.
+set(VIEWER_MANIFEST_LICENCE_INPUTS
+    ${CMAKE_CURRENT_SOURCE_DIR}/licence_texts.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/LGPL-license.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE-GPL-3.0
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE
+    )
+# </Vulkanstorm>
+
 if (WINDOWS)
   file(GLOB viewer_INSTALLER_FILES installers/windows/*.nsi)
 
@@ -2436,6 +2446,7 @@ if (WINDOWS)
         --viewer_flavor=${ND_VIEWER_FLAVOR}
       DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/viewer_manifest.py
+        ${VIEWER_MANIFEST_LICENCE_INPUTS}
         stage_third_party_libs
         llwebrtc
         ${COPY_INPUT_DEPENDENCIES}
@@ -2479,6 +2490,7 @@ if (WINDOWS)
             --viewer_flavor=${ND_VIEWER_FLAVOR}
             DEPENDS
             ${CMAKE_CURRENT_SOURCE_DIR}/viewer_manifest.py
+            ${VIEWER_MANIFEST_LICENCE_INPUTS}
             stage_third_party_libs
             llwebrtc
             ${CMAKE_CURRENT_BINARY_DIR}/viewer_version.txt
@@ -2552,6 +2564,7 @@ if (WINDOWS)
         DEPENDS
             ${VIEWER_BINARY_NAME}
             ${CMAKE_CURRENT_SOURCE_DIR}/viewer_manifest.py
+            ${VIEWER_MANIFEST_LICENCE_INPUTS}
             ${CMAKE_CURRENT_BINARY_DIR}/viewer_version.txt
             ${COPY_INPUT_DEPENDENCIES}
         )
@@ -2790,6 +2803,7 @@ if (LINUX)
         --viewer_flavor=${ND_VIEWER_FLAVOR}
       DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/viewer_manifest.py
+        ${VIEWER_MANIFEST_LICENCE_INPUTS}
         ${COPY_INPUT_DEPENDENCIES}
       )
 
@@ -2820,6 +2834,7 @@ if (LINUX)
       --viewer_flavor=${ND_VIEWER_FLAVOR}
     DEPENDS
       ${CMAKE_CURRENT_SOURCE_DIR}/viewer_manifest.py
+      ${VIEWER_MANIFEST_LICENCE_INPUTS}
       ${COPY_INPUT_DEPENDENCIES}
     COMMENT "Performing viewer_manifest copy"
     )
@@ -2889,6 +2904,12 @@ if (DARWIN)
      "${CMAKE_CURRENT_SOURCE_DIR}/Info-Firestorm.plist"
      "${VIEWER_APP_BUNDLE}/Contents/Info.plist"
     )
+
+  # <Vulkanstorm> macOS stages the bundle only in this POST_BUILD step: relink
+  # when a shipped licence text changes so the staged terms cannot go stale
+  # (LINK_DEPENDS: Makefile and Ninja generators).
+  set_property(TARGET ${VIEWER_BINARY_NAME} APPEND PROPERTY LINK_DEPENDS ${VIEWER_MANIFEST_LICENCE_INPUTS})
+  # </Vulkanstorm>
 
   add_custom_command(
     TARGET ${VIEWER_BINARY_NAME} POST_BUILD
