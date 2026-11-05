@@ -8177,10 +8177,13 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
     if (status != GL_FRAMEBUFFER_COMPLETE || error != GL_NO_ERROR)
     {
         LL_WARNS("Pipeline") << "Stochastic transparency allocation failed (framebuffer status " << status
-                             << ", GL error " << error << "); sorted alpha is used" << LL_ENDL;
+                             << ", GL error " << error << "); sorted alpha is selected" << LL_ENDL;
         releaseAlphaStochastic();
         sRenderAlphaStochasticSupported = false;
         gSavedSettings.setBOOL("RenderAlphaStochasticAvailable", false);
+        // as PPLL's allocator did: sorted alpha selected, so the allocation is not retried on
+        // every frame (choosing the method again in Preferences retries it once)
+        gSavedSettings.setU32("RenderAlphaSortMethod", 0);
         return;
     }
 
