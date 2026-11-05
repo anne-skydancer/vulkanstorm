@@ -16,7 +16,7 @@ Vulkanstorm is dual-licensed: you may use, modify and distribute it under the [G
 - Original Vulkanstorm code: `LGPL-2.1-or-later OR GPL-3.0-or-later`.
 - Third-party components keep their own licences.
 
-The viewer binaries currently link OpenSSL 1.1.1 and GLOD, which are not compatible with GPL-3.0; until they are replaced, the GPL-3.0 option applies to the source code only and the binaries are offered under LGPL-2.1. [NOTICE.md](NOTICE.md) explains the groups and how to choose; [doc/licensing.md](doc/licensing.md) audits the libraries the viewer links with. Contributions are accepted under the same dual licence ([CONTRIBUTING.md](CONTRIBUTING.md)).
+The viewer binaries currently link OpenSSL 1.1.1, which is not compatible with GPL-3.0; until it is replaced, the GPL-3.0 option applies to the source code only and the binaries are offered under LGPL-2.1. [NOTICE.md](NOTICE.md) explains the groups and how to choose; [doc/licensing.md](doc/licensing.md) audits the libraries the viewer links with. Contributions are accepted under the same dual licence ([CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Download
 
