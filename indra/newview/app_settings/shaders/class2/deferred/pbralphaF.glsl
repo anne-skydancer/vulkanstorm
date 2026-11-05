@@ -23,41 +23,12 @@
  * $/LicenseInfo$
  */
 
-#extension GL_ARB_shader_storage_buffer_object : enable
-#extension GL_ARB_shader_image_load_store : enable
-#extension GL_ARB_shader_atomic_counters : enable
-
 /*[EXTRA_CODE_HERE]*/
 
-#if defined(ALPHA_OIT)
-uniform sampler2D alpha_oit_opaque_depth; // detached opaque depth
-uniform int oit_mode;       // 0 normal, 1 PPLL capture
+#ifdef ALPHA_STOCHASTIC
+// <Vulkanstorm> stochastic transparency's alpha-only variant (alphaStochasticF.glsl)
+int alpha_stochastic_mask(float a);
 #endif
-
-#ifdef ALPHA_OIT
-// ---- alpha OIT (per-pixel linked list) capture ----
-    // Capture-only depth rejection below; normal alpha shader depth behaviour is unchanged.
-layout(binding = 0, r32ui) uniform coherent uimage2D oit_head;
-layout(std430, binding = 0) buffer OITNodePool { uint oit_nodes[]; };
-layout(binding = 0, offset = 0) uniform atomic_uint oit_counter;
-uniform int oit_node_cap;   // node pool capacity; overflow falls through to legacy blending
-bool oit_append(vec4 c, float z)
-{
-    // Match resolve LEQUAL, including equality; reject before allocator/SSBO work.
-    // discard also prevents hidden fragments from taking the overflow blend path.
-    if (!(z <= texelFetch(alpha_oit_opaque_depth, ivec2(gl_FragCoord.xy), 0).r)) discard;
-    uint idx = atomicCounterIncrement(oit_counter);
-    if (idx >= uint(oit_node_cap)) return false;
-    uint prev = imageAtomicExchange(oit_head, ivec2(gl_FragCoord.xy), idx);
-    uint base = idx * 4u;
-    oit_nodes[base + 0u] = packHalf2x16(max(c.rg, vec2(0.0)));
-    oit_nodes[base + 1u] = packHalf2x16(vec2(max(c.b, 0.0), clamp(c.a, 0.0, 1.0)));
-    oit_nodes[base + 2u] = floatBitsToUint(z);
-    oit_nodes[base + 3u] = prev;
-    return true;
-}
-#endif
-
 
 #ifndef IS_HUD
 
@@ -99,7 +70,6 @@ in vec4 vertex_color;
 in vec3 vary_normal;
 in vec3 vary_tangent;
 flat in float vary_sign;
-
 
 #ifdef HAS_ALPHA_MASK
 uniform float minimum_alpha; // PBR alphaMode: MASK, See: mAlphaCutoff, setAlphaCutoff()
@@ -177,6 +147,14 @@ void main()
     }
 #endif
 
+#ifdef ALPHA_STOCHASTIC
+    // <Vulkanstorm> stochastic transparency: the total alpha or the stochastic depth, for the
+    // alpha alone (the same alpha as the shaded output below)
+    frag_color = vec4(0.0, 0.0, 0.0, max(basecolor.a * vertex_color.a, 0.0));
+    gl_SampleMask[0] = alpha_stochastic_mask(basecolor.a * vertex_color.a);
+    return;
+#endif
+
     vec3 col = vertex_color.rgb * basecolor.rgb;
 
     vec3 vNt = texture(bumpMap, normal_texcoord.xy).xyz*2.0-1.0;
@@ -251,14 +229,7 @@ void main()
     float final_scale = 1;
     if (classic_mode > 0)
         final_scale = 1.1;
-#ifdef ALPHA_OIT
-    vec4 oit_out = max(vec4(color.rgb * final_scale,a), vec4(0));
-    if (oit_mode == 1 && oit_append(oit_out, gl_FragCoord.z)) { discard; }
-    frag_color = oit_out;
-#else
-    vec4 oit_out = max(vec4(color.rgb * final_scale,a), vec4(0));
-    frag_color = oit_out;
-#endif
+    frag_color = max(vec4(color.rgb * final_scale,a), vec4(0));
 }
 
 #else
@@ -284,7 +255,6 @@ uniform float minimum_alpha; // PBR alphaMode: MASK, See: mAlphaCutoff, setAlpha
 vec3 srgb_to_linear(vec3 c);
 vec3 linear_to_srgb(vec3 c);
 
-
 void main()
 {
     vec3 color = vec3(0,0,0);
@@ -306,7 +276,6 @@ void main()
     vec3 colorEmissive = emissiveColor;
     // emissiveMap here is a vanilla RGB texture encoded as sRGB, manually convert to linear
     colorEmissive *= srgb_to_linear(texture(emissiveMap, emissive_texcoord.xy).rgb);
-
 
     float a = basecolor.a*vertex_color.a;
     color += colorEmissive;

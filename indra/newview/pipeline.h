@@ -403,18 +403,27 @@ public:
 
     static bool isWaterClip();
 
-    // <FS> Vulkanstorm: alpha order-independent transparency (per-pixel linked list). The
-    // capture pass appends normal-alpha fragments to a node pool keyed by a per-pixel
-    // head-pointer image; the composite resolves each pixel's list back-to-front over screen.
-    // Direct-GL (no RHI), gated on GL 4.4+ (see LLPipeline::sRenderAlphaOITSupported).
-    bool beginAlphaOITCapture();   // reset/bind resources; false falls back to legacy
-    void endAlphaOITCapture();     // barrier so the resolve sees all appended fragments
-    void compositeAlphaOIT();      // sorted resolve of the lists over mRT->screen
-    void allocateAlphaOITBuffers(U32 w, U32 h);  // (re)create head image / node pool / counter
-    void releaseAlphaOITBuffers();               // destroy them
-    U32  getAlphaOITNodeCap() const { return mAlphaOITNodeCap; }  // node-pool capacity (append overflow guard)
-    U32  getAlphaOITMaxPixelLayers() const { return mAlphaOITMaxPixelLayers; }
-    LLRenderTarget* getAlphaOITOpaqueDepth() { return &mAlphaOITOpaqueDepth; }
+    // <Vulkanstorm> stochastic transparency (doc/oit/stochastic-transparency.md): multisampled
+    // targets at the render resolution, freed while another method is selected.
+    enum EAlphaStochasticBuffer
+    {
+        ALPHA_ST_BUFFER_NONE = 0,   // depth only: the depth spread and the stochastic depth
+        ALPHA_ST_BUFFER_ACCUM,      // alpha x colour and alpha, additive
+        ALPHA_ST_BUFFER_TRANS,      // red prod(1 - alpha), green the blended faces' glow
+    };
+    bool beginAlphaStochastic();     // targets sized and bound, cleared, opaque depth spread; false: sorted alpha
+    void spreadAlphaStochasticDepth(); // the opaque depth on every sample again (before an iteration)
+    void setAlphaStochasticBuffer(EAlphaStochasticBuffer buffer);
+    void endAlphaStochastic();       // the scene target bound again
+    void compositeAlphaStochastic(bool glow); // over mRT->screen; glow: the faces' glow into its alpha
+    void allocateAlphaStochastic(U32 w, U32 h);
+    void releaseAlphaStochastic();
+    U32  getAlphaStochasticPassSamples() const { return mAlphaSTPassSamples; }
+    U32  getAlphaStochasticSamples() const { return mAlphaSTSamples; }
+    U32  getAlphaStochasticIterations() const { return mAlphaSTPassSamples ? mAlphaSTSamples / mAlphaSTPassSamples : 0; }
+    U32  getAlphaStochasticMasks() const { return mAlphaSTMasks; }
+    static std::vector<U32> alphaStochasticMaskTable(U32 samples); // [r * 2048 + seed]
+    // </Vulkanstorm>
 
     // </FS>
 
@@ -704,7 +713,7 @@ public:
     static bool             sDistortionRender;
     static bool             sImpostorRender;
     static bool             sImpostorRenderAlphaDepthPass;
-    static bool             sRenderAlphaOITSupported;   // <FS/> Vulkanstorm: alpha OIT (PPLL) HW capable (GL 4.4+)
+    static bool             sRenderAlphaStochasticSupported; // <Vulkanstorm/> stochastic transparency available (GL 4.0+, its shaders built)
     static bool             sShowJellyDollAsImpostor;
     static bool             sUnderWaterRender;
     static bool             sRenderGlow;
@@ -771,16 +780,21 @@ public:
     // for use by SSR
     LLRenderTarget          mSceneMap;
 
-    // <FS> Vulkanstorm: alpha OIT (per-pixel linked list) GPU resources, stored as raw GL names
-    // (uint, 0 = none). Allocated at main-view render resolution; see beginAlphaOITCapture().
-    LLRenderTarget mAlphaOITOpaqueDepth; // detached per-frame depth snapshot
-    U32 mAlphaOITHead = 0;      // R32UI per-pixel head-pointer image (0xFFFFFFFF = empty)
-    U32 mAlphaOITNodes = 0;     // SSBO uint[nodeCap*4] = { RG16F, BA16F, depth, next }
-    U32 mAlphaOITCounter = 0;   // atomic counter buffer: next free node index
-    U32 mAlphaOITWidth = 0;
-    U32 mAlphaOITHeight = 0;
-    U32 mAlphaOITNodeCap = 0;   // number of nodes the pool holds
-    U32 mAlphaOITMaxPixelLayers = 0;
+
+    // <Vulkanstorm> stochastic transparency's targets (raw GL names, 0 = none): one framebuffer
+    // with the accumulation (COLOR0, RGBA16F), the transparency and glow (COLOR1, RG16F) and the
+    // stochastic depth (DEPTH_COMPONENT24), all at mAlphaSTPassSamples; the mask table (R32UI,
+    // 2048 x (S + 1)) for S = mAlphaSTSamples samples in all
+    U32 mAlphaSTFBO = 0;
+    U32 mAlphaSTAccum = 0;
+    U32 mAlphaSTTrans = 0;
+    U32 mAlphaSTDepth = 0;
+    U32 mAlphaSTMasks = 0;
+    U32 mAlphaSTWidth = 0;
+    U32 mAlphaSTHeight = 0;
+    U32 mAlphaSTPassSamples = 0;
+    U32 mAlphaSTSamples = 0;
+    // </Vulkanstorm>
 
     // </FS>
 

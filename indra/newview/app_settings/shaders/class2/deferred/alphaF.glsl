@@ -25,10 +25,6 @@
 
 //class2/deferred/alphaF.glsl
 
-#extension GL_ARB_shader_storage_buffer_object : enable
-#extension GL_ARB_shader_image_load_store : enable
-#extension GL_ARB_shader_atomic_counters : enable
-
 /*[EXTRA_CODE_HERE]*/
 
 #define INDEXED 1
@@ -37,35 +33,10 @@
 
 out vec4 frag_color;
 
-#if defined(ALPHA_OIT)
-uniform sampler2D alpha_oit_opaque_depth; // detached opaque depth
-uniform int oit_mode;       // 0 normal, 1 PPLL capture
+#ifdef ALPHA_STOCHASTIC
+// <Vulkanstorm> stochastic transparency's alpha-only variant (alphaStochasticF.glsl)
+int alpha_stochastic_mask(float a);
 #endif
-
-#ifdef ALPHA_OIT
-// ---- alpha OIT (per-pixel linked list) capture ----
-    // Capture-only depth rejection below; normal alpha shader depth behaviour is unchanged.
-layout(binding = 0, r32ui) uniform coherent uimage2D oit_head;
-layout(std430, binding = 0) buffer OITNodePool { uint oit_nodes[]; };
-layout(binding = 0, offset = 0) uniform atomic_uint oit_counter;
-uniform int oit_node_cap;   // node pool capacity; overflow falls through to legacy blending
-bool oit_append(vec4 c, float z)
-{
-    // Match resolve LEQUAL, including equality; reject before allocator/SSBO work.
-    // discard also prevents hidden fragments from taking the overflow blend path.
-    if (!(z <= texelFetch(alpha_oit_opaque_depth, ivec2(gl_FragCoord.xy), 0).r)) discard;
-    uint idx = atomicCounterIncrement(oit_counter);
-    if (idx >= uint(oit_node_cap)) return false;
-    uint prev = imageAtomicExchange(oit_head, ivec2(gl_FragCoord.xy), idx);
-    uint base = idx * 4u;
-    oit_nodes[base + 0u] = packHalf2x16(max(c.rg, vec2(0.0)));
-    oit_nodes[base + 1u] = packHalf2x16(vec2(max(c.b, 0.0), clamp(c.a, 0.0, 1.0)));
-    oit_nodes[base + 2u] = floatBitsToUint(z);
-    oit_nodes[base + 3u] = prev;
-    return true;
-}
-#endif
-
 
 uniform mat3 env_mat;
 uniform vec3 sun_dir;
@@ -217,7 +188,7 @@ void main()
 
     float shadow = 1.0f;
 
-#ifdef HAS_SUN_SHADOW
+#if defined(HAS_SUN_SHADOW) && !defined(ALPHA_STOCHASTIC) // <Vulkanstorm/> no shadow in the alpha-only variant
     shadow = sampleDirectionalShadow(pos.xyz, norm.xyz, frag);
 #endif
 
@@ -277,6 +248,14 @@ void main()
     diffuse_linear.rgb = srgb_to_linear(diffuse_srgb.rgb);
 #endif // USE_VERTEX_COLOR
 
+#ifdef ALPHA_STOCHASTIC
+    // <Vulkanstorm> stochastic transparency: the total alpha or the stochastic depth, for the
+    // alpha alone (the same alpha as the shaded output below)
+    frag_color = vec4(0.0, 0.0, 0.0, max(final_alpha, 0.0));
+    gl_SampleMask[0] = alpha_stochastic_mask(final_alpha);
+    return;
+#endif
+
     vec3 sunlit;
     vec3 amblit;
     vec3 additive;
@@ -292,7 +271,6 @@ void main()
     vec3 glossenv = vec3(0.0);
     vec3 legacyenv = vec3(0.0);
     sampleReflectionProbesLegacy(irradiance, glossenv, legacyenv, frag, pos.xyz, norm.xyz, 0.0, 0.0, true, amblit_linear);
-
 
     float da = dot(norm.xyz, light_dir.xyz);
           da = clamp(da, -1.0, 1.0);
@@ -348,13 +326,6 @@ void main()
 #endif
 
     color.rgb *= final_scale;
-#ifdef ALPHA_OIT
-    vec4 oit_out = max(color, vec4(0));
-    if (oit_mode == 1 && oit_append(oit_out, gl_FragCoord.z)) { discard; }
-    frag_color = oit_out;
-#else
-    vec4 oit_out = max(color, vec4(0));
-    frag_color = oit_out;
-#endif
+    frag_color = max(color, vec4(0));
 }
 

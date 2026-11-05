@@ -61,7 +61,8 @@ void main()
     lum *= vertex_emissive.a;
 
     // HUDs are rendered after gamma correction, output in sRGB space
-    frag_color.rgb = vec3(0);
+    // <Vulkanstorm> the glow in green as well (emissiveF.glsl)
+    frag_color.rgb = vec3(0, max(lum, 0.0), 0);
     frag_color.a = lum;
 }
 

@@ -23,45 +23,16 @@
 * $/LicenseInfo$
 */
 
-#extension GL_ARB_shader_storage_buffer_object : enable
-#extension GL_ARB_shader_image_load_store : enable
-#extension GL_ARB_shader_atomic_counters : enable
-
 /*[EXTRA_CODE_HERE]*/
 
 //class1/deferred/materialF.glsl
 
 // This shader is used for both writing opaque/masked content to the gbuffer and writing blended content to the framebuffer during the alpha pass.
 
-#if defined(ALPHA_OIT)
-uniform sampler2D alpha_oit_opaque_depth; // detached opaque depth
-uniform int oit_mode;
+#ifdef ALPHA_STOCHASTIC
+// <Vulkanstorm> stochastic transparency's alpha-only variant (alphaStochasticF.glsl)
+int alpha_stochastic_mask(float a);
 #endif
-
-#ifdef ALPHA_OIT
-// ---- alpha OIT (per-pixel linked list) capture ----
-    // Capture-only depth rejection below; normal alpha shader depth behaviour is unchanged.
-layout(binding = 0, r32ui) uniform coherent uimage2D oit_head;
-layout(std430, binding = 0) buffer OITNodePool { uint oit_nodes[]; };
-layout(binding = 0, offset = 0) uniform atomic_uint oit_counter;
-uniform int oit_node_cap;   // node pool capacity; overflow falls through to legacy blending
-bool oit_append(vec4 c, float z)
-{
-    // Match resolve LEQUAL, including equality; reject before allocator/SSBO work.
-    // discard also prevents hidden fragments from taking the overflow blend path.
-    if (!(z <= texelFetch(alpha_oit_opaque_depth, ivec2(gl_FragCoord.xy), 0).r)) discard;
-    uint idx = atomicCounterIncrement(oit_counter);
-    if (idx >= uint(oit_node_cap)) return false;
-    uint prev = imageAtomicExchange(oit_head, ivec2(gl_FragCoord.xy), idx);
-    uint base = idx * 4u;
-    oit_nodes[base + 0u] = packHalf2x16(max(c.rg, vec2(0.0)));
-    oit_nodes[base + 1u] = packHalf2x16(vec2(max(c.b, 0.0), clamp(c.a, 0.0, 1.0)));
-    oit_nodes[base + 2u] = floatBitsToUint(z);
-    oit_nodes[base + 3u] = prev;
-    return true;
-}
-#endif
-
 
 #define DIFFUSE_ALPHA_MODE_NONE     0
 #define DIFFUSE_ALPHA_MODE_BLEND    1
@@ -335,6 +306,23 @@ void main()
     diffcol.rgb *= vertex_color.rgb;
     alphaMask(diffcol.a);
 
+#if defined(ALPHA_STOCHASTIC) && (DIFFUSE_ALPHA_MODE == DIFFUSE_ALPHA_MODE_BLEND)
+    // <Vulkanstorm> stochastic transparency's alpha-only passes. The shaded alpha is
+    // max(diffuse alpha, glare) x vertex alpha, and glare comes only from the environment map
+    // (env_intensity) and the specular highlights (glossiness, specular_color.a). Without either,
+    // or with an opaque diffuse alpha, it is the diffuse alpha x vertex alpha: returned here,
+    // before the specular and normal maps are fetched (the author's Aurora Viewer,
+    // st_material_alpha: the driver does not reliably drop the fetches by itself). A material
+    // that can glare (shiny glass: reflections on a clear diffuse) runs the shading below and
+    // takes its alpha at the end, so its reflections keep their coverage.
+    if ((env_intensity <= 0.0 && specular_color.a <= 0.0) || diffcol.a >= 1.0)
+    {
+        frag_color = vec4(0.0, 0.0, 0.0, max(diffcol.a * vertex_color.a, 0.0));
+        gl_SampleMask[0] = alpha_stochastic_mask(diffcol.a * vertex_color.a);
+        return;
+    }
+#endif
+
     // spec == specular map combined with specular color
     vec4 spec = getSpecular();
     float env = env_intensity * spec.a;
@@ -455,17 +443,16 @@ void main()
     glare *= 1.0-emissive;
     glare = min(glare, 1.0);
     float al = max(diffcol.a, glare) * vertex_color.a;
+#ifdef ALPHA_STOCHASTIC
+    // <Vulkanstorm> stochastic transparency: the glaring material's alpha, as the shaded pass's
+    frag_color = vec4(0.0, 0.0, 0.0, max(al, 0.0));
+    gl_SampleMask[0] = alpha_stochastic_mask(al);
+    return;
+#endif
     float final_scale = 1;
     if (classic_mode > 0)
         final_scale = 1.1;
-#ifdef ALPHA_OIT
-    vec4 oit_out = max(vec4(color * final_scale, al), vec4(0));
-    if (oit_mode == 1 && oit_append(oit_out, gl_FragCoord.z)) { discard; }
-    frag_color = oit_out;
-#else
-    vec4 oit_out = max(vec4(color * final_scale, al), vec4(0));
-    frag_color = oit_out;
-#endif
+    frag_color = max(vec4(color * final_scale, al), vec4(0));
 
 #else // mode is not DIFFUSE_ALPHA_MODE_BLEND, encode to gbuffer
     // deferred path               // See: C++: addDeferredAttachment(), shader: softenLightF.glsl

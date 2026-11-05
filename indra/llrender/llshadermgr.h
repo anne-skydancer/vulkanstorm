@@ -360,7 +360,12 @@ public:
         SNAPSHOT_FRAME_RECT,                // "frame_rect"
         // </FS:Beq>
 
-        ALPHA_OIT_OPAQUE_DEPTH,                   // "alpha_peel_depth"
+        // <Vulkanstorm> stochastic transparency (alphaStochasticF.glsl, alphaStochasticCompositeF.glsl)
+        ALPHA_ST_MASKS,                     //  "alpha_st_masks"
+        ALPHA_ST_ACCUM,                     //  "alpha_st_accum"
+        ALPHA_ST_TRANS,                     //  "alpha_st_trans"
+        ALPHA_ST_SEED,                      //  "st_seed"
+        // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
     // clang-format on
