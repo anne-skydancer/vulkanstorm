@@ -997,13 +997,8 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
 #else
         sRenderAlphaOITSupported = false;
 #endif
-        gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", sRenderAlphaOITSupported);
-        if (gSavedSettings.getU32("RenderAlphaSortMethod") == 1)
-        {
-            allocateAlphaOITBuffers(resX, resY);
-        }
         // <Vulkanstorm> stochastic transparency: sized with the scene, freed otherwise
-        if (gSavedSettings.getU32("RenderAlphaSortMethod") == 2)
+        if (gSavedSettings.getU32("RenderAlphaSortMethod") == 1)
         {
             allocateAlphaStochastic(resX, resY);
         }
