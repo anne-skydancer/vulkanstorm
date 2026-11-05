@@ -307,14 +307,20 @@ void main()
     alphaMask(diffcol.a);
 
 #if defined(ALPHA_STOCHASTIC) && (DIFFUSE_ALPHA_MODE == DIFFUSE_ALPHA_MODE_BLEND)
-    // <Vulkanstorm> stochastic transparency's alpha-only passes: the diffuse alpha and the vertex
-    // alpha alone, before the specular and normal maps are fetched (the author's Aurora Viewer,
-    // st_material_alpha: the driver does not reliably drop the fetches by itself). The glare an
-    // environment map or a highlight adds to the shaded alpha is left out here; the accumulation
-    // keeps it and the alpha correction scales the colour to this total alpha.
-    frag_color = vec4(0.0, 0.0, 0.0, max(diffcol.a * vertex_color.a, 0.0));
-    gl_SampleMask[0] = alpha_stochastic_mask(diffcol.a * vertex_color.a);
-    return;
+    // <Vulkanstorm> stochastic transparency's alpha-only passes. The shaded alpha is
+    // max(diffuse alpha, glare) x vertex alpha, and glare comes only from the environment map
+    // (env_intensity) and the specular highlights (glossiness, specular_color.a). Without either,
+    // or with an opaque diffuse alpha, it is the diffuse alpha x vertex alpha: returned here,
+    // before the specular and normal maps are fetched (the author's Aurora Viewer,
+    // st_material_alpha: the driver does not reliably drop the fetches by itself). A material
+    // that can glare (shiny glass: reflections on a clear diffuse) runs the shading below and
+    // takes its alpha at the end, so its reflections keep their coverage.
+    if ((env_intensity <= 0.0 && specular_color.a <= 0.0) || diffcol.a >= 1.0)
+    {
+        frag_color = vec4(0.0, 0.0, 0.0, max(diffcol.a * vertex_color.a, 0.0));
+        gl_SampleMask[0] = alpha_stochastic_mask(diffcol.a * vertex_color.a);
+        return;
+    }
 #endif
 
     // spec == specular map combined with specular color
@@ -437,6 +443,12 @@ void main()
     glare *= 1.0-emissive;
     glare = min(glare, 1.0);
     float al = max(diffcol.a, glare) * vertex_color.a;
+#ifdef ALPHA_STOCHASTIC
+    // <Vulkanstorm> stochastic transparency: the glaring material's alpha, as the shaded pass's
+    frag_color = vec4(0.0, 0.0, 0.0, max(al, 0.0));
+    gl_SampleMask[0] = alpha_stochastic_mask(al);
+    return;
+#endif
     float final_scale = 1;
     if (classic_mode > 0)
         final_scale = 1.1;

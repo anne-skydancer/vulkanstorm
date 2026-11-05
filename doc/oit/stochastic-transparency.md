@@ -73,9 +73,11 @@ binds: simple alpha, fullbright alpha, the blended legacy materials and PBR alph
 rigged. Each returns as soon as its alpha is known, before any texture other than the base map is
 fetched (Aurora's `st_material_alpha`, commit `9424d986`: the driver did not drop the other
 fetches by itself): base alpha, the alpha-mask cutoff and the vertex alpha, nothing else. The
-simple-alpha variant takes no shadow sample; the material variant leaves out the glare that an
-environment map or a highlight adds to the shaded alpha (the accumulation keeps it, and the alpha
-correction scales the colour to the variants' total alpha). In those two passes a variant, once
+simple-alpha variant takes no shadow sample. The legacy material variant does so whenever its
+uniforms rule out glare (no environment intensity, no glossiness) or its diffuse is opaque; a
+material that can glare (shiny glass, whose reflections raise the shaded alpha above a clear
+diffuse) runs the full shading in those passes and reports the shaded alpha, so its reflections
+keep their coverage. In those two passes a variant, once
 fully bound in a frame, is bound without the light function, shadow maps and reflection probes,
 and the materials' normal and specular maps are not bound. The ordinary programs are unchanged, so sorted alpha draws as before.
 
