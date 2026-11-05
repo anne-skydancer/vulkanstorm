@@ -354,7 +354,9 @@ for (W, H) in RESOLUTIONS:
             exact = v == 'pcss' and want == 1.0     # no blocker in the search: the early out gives exactly 1
             check(r == want if exact else abs(r - want) < 1e-3, f'{v}: light map R at {p} = {r:.4f}, expected {want}{" exactly" if exact else ""}', label)
     same = 0 if bytes(images['base']) == bytes(images['tree']) else sum(1 for i in range(W*H) if images['base'][i] != images['tree'][i])
-    check(same == 0, f'tree (PCSS off) equals base bit for bit ({same} pixels differ)', label)
+    # PCSS off differs from the base only by pcfShadow's receiver-plane bias (the altitude-bias
+    # hotfix): on slanted lit surfaces, where the base had acne between the taps
+    check(same <= W * H // 1000, f'tree (PCSS off) equals base except the receiver-plane bias ({same} pixels differ, at most 0.1 %)', label)
     for v in ('pcss1', 'pcss'):
         differ = sum(1 for i in range(W*H) if images['base'][i] != images[v][i])
         print(f'  info {v} differs from base in {differ} of {W*H} pixels')
