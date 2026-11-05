@@ -51,12 +51,28 @@ uniform mat4 inv_proj;
 uniform vec2 screen_res;
 uniform int sun_up_factor;
 
+// <Vulkanstorm> DEVELOPMENT DIAGNOSTIC, not for release (LLPipeline::bindDeferredShader,
+// ShadowDiag* settings): 1 PCSS kernel not rotated, 2 shadow texel checkerboard per cascade,
+// 4 stock PCF without its screen-row jitter. 0 (never set) = stock behaviour.
+uniform int shadow_diag;
+
+// 8x8 shadow-map texel blocks, darker for each further cascade: shows the texel density,
+// the cascade boundaries and any swimming of the grid while the camera moves
+float shadowDiagTexels(vec4 lpos, int cascade)
+{
+    vec2 uv = lpos.xy / lpos.w * shadow_res / 8.0;
+    float c = mod(floor(uv.x) + floor(uv.y), 2.0);
+    return mix(0.1 + 0.2 * float(cascade), 1.0, c);
+}
+// </Vulkanstorm>
+
 float pcfShadow(sampler2DShadow shadowMap, vec3 norm, vec4 stc, float bias_mul, vec2 pos_screen, vec3 light_dir)
 {
 #if defined(SUN_SHADOW)
     float offset = shadow_bias * bias_mul;
     stc.xyz /= stc.w;
     stc.z += offset * 2.0;
+    if ((shadow_diag & 4) == 0) // <Vulkanstorm/> DEVELOPMENT DIAGNOSTIC: the jitter can be turned off
     stc.x = floor(stc.x*shadow_res.x + fract(pos_screen.y*shadow_res.y))/shadow_res.x; // add some chaotic jitter to X sample pos according to Y to disguise the snapping going on here
     float cs = texture(shadowMap, stc.xyz);
     float shadow = cs * 4.0;
@@ -75,6 +91,7 @@ float pcfSpotShadow(sampler2DShadow shadowMap, vec4 stc, float bias_scale, vec2 
 #if defined(SPOT_SHADOW)
     stc.xyz /= stc.w;
     stc.z += spot_shadow_bias * bias_scale;
+    if ((shadow_diag & 4) == 0) // <Vulkanstorm/> DEVELOPMENT DIAGNOSTIC: the jitter can be turned off
     stc.x = floor(proj_shadow_res.x * stc.x + fract(pos_screen.y*0.666666666)) / proj_shadow_res.x; // snap
 
     float cs = texture(shadowMap, stc.xyz);
@@ -166,6 +183,10 @@ float pcssEdgeScale(vec2 uv, vec2 extent, vec2 texel)
 // the kernel's per pixel rotation (cos, sin)
 vec2 pcssRotation()
 {
+    if ((shadow_diag & 1) != 0) // <Vulkanstorm/> DEVELOPMENT DIAGNOSTIC: fixed kernel
+    {
+        return vec2(1.0, 0.0);
+    }
     float angle = 6.28318531 * pcssNoise(gl_FragCoord.xy);
     return vec2(cos(angle), sin(angle));
 }
@@ -414,6 +435,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 #else
             float contrib = pcfShadow(shadowMap3, norm, lpos, 1.0, pos_screen, light_dir)*w;
 #endif
+            if ((shadow_diag & 2) != 0) contrib = shadowDiagTexels(lpos, 3)*w; // <Vulkanstorm/> DEVELOPMENT DIAGNOSTIC
             //if (contrib > 0)
             {
                 shadow += contrib;
@@ -435,6 +457,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 #else
             float contrib = pcfShadow(shadowMap2, norm, lpos, 1.0, pos_screen, light_dir)*w;
 #endif
+            if ((shadow_diag & 2) != 0) contrib = shadowDiagTexels(lpos, 2)*w; // <Vulkanstorm/> DEVELOPMENT DIAGNOSTIC
             //if (contrib > 0)
             {
                 shadow += contrib;
@@ -457,6 +480,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 #else
             float contrib = pcfShadow(shadowMap1, norm, lpos, 1.0, pos_screen, light_dir)*w;
 #endif
+            if ((shadow_diag & 2) != 0) contrib = shadowDiagTexels(lpos, 1)*w; // <Vulkanstorm/> DEVELOPMENT DIAGNOSTIC
             //if (contrib > 0)
             {
                 shadow += contrib;
@@ -478,6 +502,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 #else
             float contrib = pcfShadow(shadowMap0, norm, lpos, 1.0, pos_screen, light_dir)*w;
 #endif
+            if ((shadow_diag & 2) != 0) contrib = shadowDiagTexels(lpos, 0)*w; // <Vulkanstorm/> DEVELOPMENT DIAGNOSTIC
             //if (contrib > 0)
             {
                 shadow += contrib;

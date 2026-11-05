@@ -9718,6 +9718,22 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
 
     //F32 shadow_offset_error = 1.f + RenderShadowOffsetError * fabsf(LLViewerCamera::getInstance()->getOrigin().mV[2]);
     F32 shadow_bias_error = RenderShadowBiasError * fabsf(LLViewerCamera::getInstance()->getOrigin().mV[2])/3000.f;
+    // <Vulkanstorm> DEVELOPMENT DIAGNOSTIC: without the altitude term of the bias
+    static LLCachedControl<bool> diag_no_altitude_bias(gSavedSettings, "ShadowDiagNoAltitudeBias", false);
+    if (diag_no_altitude_bias)
+    {
+        shadow_bias_error = 0.f;
+    }
+    // shader-side flags (shadowUtil.glsl shadow_diag): 1 PCSS kernel not rotated, 2 shadow texel
+    // checkerboard per cascade, 4 stock PCF without its screen-row jitter
+    {
+        static LLCachedControl<bool> diag_no_rotation(gSavedSettings, "ShadowDiagNoKernelRotation", false);
+        static LLCachedControl<bool> diag_texels(gSavedSettings, "ShadowDiagShowTexels", false);
+        static LLCachedControl<bool> diag_no_jitter(gSavedSettings, "ShadowDiagNoPCFJitter", false);
+        static const LLStaticHashedString sShadowDiag("shadow_diag");
+        shader.uniform1i(sShadowDiag, (diag_no_rotation ? 1 : 0) | (diag_texels ? 2 : 0) | (diag_no_jitter ? 4 : 0));
+    }
+    // </Vulkanstorm>
     F32 shadow_bias       = RenderShadowBias + shadow_bias_error;
 
     shader.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)deferred_target->getWidth(), (GLfloat)deferred_target->getHeight());
@@ -9883,7 +9899,17 @@ void LLPipeline::renderDeferredLighting()
         // <Vulkanstorm> PCSS: the blur is the denoiser of the rotated shadow kernel, so it runs
         // without SSAO too, and a blur size of 0 skips both passes. Unchanged with PCSS off.
         const bool pcss_shadows = RenderShadowPCSS && RenderShadowDetail > 0;
-        const bool blur_light_map = pcss_shadows ? RenderShadowBlurSize > 0.f : RenderDeferredSSAO;
+        bool blur_light_map = pcss_shadows ? RenderShadowBlurSize > 0.f : RenderDeferredSSAO;
+        // DEVELOPMENT DIAGNOSTIC: the blur forced on (stock with SSAO on) or off
+        static LLCachedControl<U32> diag_blur(gSavedSettings, "ShadowDiagLightMapBlur", 0);
+        if (diag_blur == 1 && RenderShadowDetail > 0)
+        {
+            blur_light_map = true;
+        }
+        else if (diag_blur == 2)
+        {
+            blur_light_map = false;
+        }
         if (blur_light_map && !gCubeSnapshot)
         // </Vulkanstorm>
         {
@@ -11251,6 +11277,26 @@ public:
     }
 };
 
+// <Vulkanstorm> DEVELOPMENT DIAGNOSTIC, not for release: sun-shadow study controls
+// (doc/shadows/shadow-model-rework.md, Preferences > Graphics > Rendering 2 > Shadow diagnostics).
+// Every control is a non-persistent ShadowDiag* setting read live; all off = stock behaviour.
+namespace
+{
+    struct ShadowDiagFrozen
+    {
+        bool      valid = false;
+        bool      empty = true;
+        glm::mat4 view{ 1.f };
+        glm::mat4 proj{ 1.f };
+        LLCamera  cam;
+    };
+    ShadowDiagFrozen sShadowDiagFrozen[4];
+    LLVector4        sShadowDiagFrozenClip;
+    bool             sShadowDiagFrozenValid = false;
+    std::string      sShadowDiagCascade[4];
+}
+// </Vulkanstorm>
+
 void LLPipeline::generateSunShadow(LLCamera& camera)
 {
     if (!sRenderDeferred || RenderShadowDetail <= 0)
@@ -11262,6 +11308,20 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     LL_PROFILE_GPU_ZONE("generateSunShadow");
 
     LLDisableOcclusionCulling no_occlusion;
+
+    // <Vulkanstorm> DEVELOPMENT DIAGNOSTIC, not for release (see sShadowDiagFrozen above)
+    static LLCachedControl<bool> diag_no_caster_cull(gSavedSettings, "ShadowDiagNoCasterCull", false);
+    static LLCachedControl<F32>  diag_extend_light(gSavedSettings, "ShadowDiagExtendToLight", 0.f);
+    static LLCachedControl<bool> diag_freeze(gSavedSettings, "ShadowDiagFreezeFit", false);
+    static LLCachedControl<bool> diag_keep_empty(gSavedSettings, "ShadowDiagKeepEmptyCascades", false);
+    static LLCachedControl<F32>  diag_fixed_far(gSavedSettings, "ShadowDiagFixedFar", 0.f);
+    static LLCachedControl<bool> diag_lock_up(gSavedSettings, "ShadowDiagLockUp", false);
+    static LLCachedControl<bool> diag_force_ortho(gSavedSettings, "ShadowDiagForceOrtho", false);
+    static LLCachedControl<bool> diag_snap(gSavedSettings, "ShadowDiagSnapTexels", false);
+    static LLCachedControl<bool> diag_log(gSavedSettings, "ShadowDiagLog", false);
+    const bool diag_main_view = !gCubeSnapshot;
+    const bool diag_frozen = diag_freeze && diag_main_view && sShadowDiagFrozenValid;
+    // </Vulkanstorm>
 
     bool skip_avatar_update = false;
     if (!isAgentAvatarValid() || gAgentCamera.getCameraAnimating() || gAgentCamera.getCameraMode() != CAMERA_MODE_MOUSELOOK || !LLVOAvatar::sVisibleInFirstPerson)
@@ -11384,6 +11444,18 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
         up = camera.getUpAxis();
     }
 
+    // <Vulkanstorm> DEVELOPMENT DIAGNOSTIC: the light view's "up" fixed to the world (north),
+    // so the shadow texel grid does not rotate with the camera
+    if (diag_lock_up && diag_main_view)
+    {
+        up = LLVector3(0.f, 1.f, 0.f);
+        if (fabsf(up * lightDir) > 0.75f)
+        {
+            up = LLVector3(1.f, 0.f, 0.f);
+        }
+    }
+    // </Vulkanstorm>
+
     up.normVec();
     at.normVec();
 
@@ -11443,6 +11515,14 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
         near_clip    = llclamp(-max.mV[2], 0.01f, 4.0f);
         F32 far_clip = llclamp(-min.mV[2]*2.f, 16.0f, 512.0f);
 
+        // <Vulkanstorm> DEVELOPMENT DIAGNOSTIC: split distances independent of what is visible
+        if (diag_fixed_far > 0.f && diag_main_view)
+        {
+            near_clip = llclamp(camera.getNear(), 0.01f, 4.0f);
+            far_clip = llmax((F32)diag_fixed_far, near_clip + 1.f);
+        }
+        // </Vulkanstorm>
+
         //far_clip = llmin(far_clip, 128.f);
         far_clip = llmin(far_clip, camera.getFar());
 
@@ -11465,6 +11545,20 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
 
         mSunClipPlanes.mV[0] *= 1.25f; //bump back first split for transition padding
     }
+
+    // <Vulkanstorm> DEVELOPMENT DIAGNOSTIC: freeze the cascade fit (the splits too)
+    if (diag_main_view)
+    {
+        if (diag_frozen)
+        {
+            mSunClipPlanes = sShadowDiagFrozenClip;
+        }
+        else
+        {
+            sShadowDiagFrozenClip = mSunClipPlanes;
+        }
+    }
+    // </Vulkanstorm>
 
     if (gCubeSnapshot)
     { // stretch clip planes for reflection probe renders to reduce number of shadow passes
@@ -11495,6 +11589,49 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             //restore render matrices
             set_current_modelview(saved_view);
             set_current_projection(saved_proj);
+
+            // <Vulkanstorm> DEVELOPMENT DIAGNOSTIC: a frozen fit renders the last fit's cascades,
+            // culled with the last fit's shadow camera; only the receiver side (the camera) moves
+            if (diag_frozen)
+            {
+                ShadowDiagFrozen& frozen = sShadowDiagFrozen[j];
+                if (!frozen.valid || frozen.empty)
+                {
+                    mRT->shadow[j].bindTarget();
+                    {
+                        LLGLDepthTest depth(GL_TRUE);
+                        mRT->shadow[j].clear();
+                    }
+                    mRT->shadow[j].flush();
+                    mShadowError.mV[j] = 0.f;
+                    mShadowFOV.mV[j] = 0.f;
+                    continue;
+                }
+                const glm::mat4 frozen_trans(0.5f, 0.0f, 0.0f, 0.0f,
+                                             0.0f, 0.5f, 0.0f, 0.0f,
+                                             0.0f, 0.0f, 0.5f, 0.0f,
+                                             0.5f, 0.5f, 0.5f, 1.0f);
+                view[j] = frozen.view;
+                proj[j] = frozen.proj;
+                LLCamera frozen_cam = frozen.cam;
+                set_current_modelview(view[j]);
+                set_current_projection(proj[j]);
+                set_last_modelview(mShadowModelview[j]);
+                set_last_projection(mShadowProjection[j]);
+                mShadowModelview[j] = view[j];
+                mShadowProjection[j] = proj[j];
+                mSunShadowMatrix[j] = frozen_trans * proj[j] * view[j] * inv_view;
+                mRT->shadow[j].bindTarget();
+                mRT->shadow[j].getViewport(gGLViewport);
+                mRT->shadow[j].clear();
+                {
+                    static LLCullResult frozen_result[4];
+                    renderShadow(view[j], proj[j], frozen_cam, frozen_result[j], true);
+                }
+                mRT->shadow[j].flush();
+                continue;
+            }
+            // </Vulkanstorm>
 
             LLVector3 eye = camera.getOrigin();
             llassert(eye.isFinite());
@@ -11535,9 +11672,42 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
 
             std::vector<LLVector3> fp;
 
-            if (!gPipeline.getVisiblePointCloud(shadow_cam, min, max, fp, lightDir)
+            // <Vulkanstorm> DEVELOPMENT DIAGNOSTIC: a split without receivers is fitted to its
+            // own frustum section instead of being cleared
+            bool have_receivers = gPipeline.getVisiblePointCloud(shadow_cam, min, max, fp, lightDir);
+            if (!have_receivers && diag_keep_empty && diag_main_view && j <= RenderShadowSplits)
+            {
+                fp.assign(frust, frust + 8);
+                min = fp[0];
+                max = fp[0];
+                for (const LLVector3& p : fp)
+                {
+                    update_min_max(min, max, p);
+                }
+                have_receivers = true;
+            }
+            // receivers pushed towards the light: the projection's near plane follows them
+            if (have_receivers && diag_extend_light > 0.f && diag_main_view)
+            {
+                const size_t count = fp.size();
+                for (size_t k = 0; k < count; ++k)
+                {
+                    fp.push_back(fp[k] + caster_dir * (F32)diag_extend_light);
+                }
+            }
+            // </Vulkanstorm>
+
+            if (!have_receivers // <Vulkanstorm/> was !gPipeline.getVisiblePointCloud(...)
                 || j > RenderShadowSplits)
             {
+                // <Vulkanstorm> DEVELOPMENT DIAGNOSTIC
+                if (diag_main_view)
+                {
+                    sShadowDiagFrozen[j].valid = true;
+                    sShadowDiagFrozen[j].empty = true;
+                    sShadowDiagCascade[j] = "cleared (no receivers)";
+                }
+                // </Vulkanstorm>
                 //no possible shadow receivers
                 if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
                 {
@@ -11675,10 +11845,28 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                 mShadowError.mV[j] /= wpf.size();
                 mShadowError.mV[j] /= size.mV[0];
 
-                if (mShadowError.mV[j] > RenderShadowErrorCutoff)
+                if (mShadowError.mV[j] > RenderShadowErrorCutoff
+                    || ((diag_force_ortho || diag_snap) && diag_main_view)) // <Vulkanstorm/> DEVELOPMENT DIAGNOSTIC
                 { //just use ortho projection
                     mShadowFOV.mV[j] = -1.f;
                     origin.clearVec();
+                    // <Vulkanstorm> DEVELOPMENT DIAGNOSTIC: extents rounded up to powers of two
+                    // metres and moved in whole texels of a grid fixed in the world (the light
+                    // space position of the agent origin); meaningful with "Lock up" on
+                    if (diag_snap && diag_main_view)
+                    {
+                        const glm::vec3 anchor = mul_mat4_vec3(view[j], glm::vec3(0.f));
+                        const F32 res[2] = { (F32)mRT->shadow[j].getWidth(), (F32)mRT->shadow[j].getHeight() };
+                        for (U32 a = 0; a < 2; ++a)
+                        {
+                            const F32 extent = powf(2.f, ceilf(log2f(llmax((max.mV[a] - min.mV[a]) * 1.05f, 0.25f))));
+                            const F32 texel = extent / llmax(res[a], 1.f);
+                            const F32 lo = anchor[a] + floorf((min.mV[a] - anchor[a]) / texel) * texel;
+                            min.mV[a] = lo;
+                            max.mV[a] = lo + extent;
+                        }
+                    }
+                    // </Vulkanstorm>
                     proj[j] = glm::ortho(min.mV[0], max.mV[0],
                                         min.mV[1], max.mV[1],
                                         -max.mV[2], -min.mV[2]);
@@ -11818,6 +12006,33 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             //shadow_cam.ignoreAgentFrustumPlane(LLCamera::AGENT_PLANE_NEAR);
             shadow_cam.getAgentPlane(LLCamera::AGENT_PLANE_NEAR).set(shadow_near_clip);
 
+            // <Vulkanstorm> DEVELOPMENT DIAGNOSTIC: no caster culling: every plane of the
+            // shadow camera moved 100 km outwards (normals kept, so the plane masks stay valid)
+            if (diag_no_caster_cull && diag_main_view)
+            {
+                for (U32 k = 0; k < LLCamera::AGENT_PLANE_NO_USER_CLIP_NUM; ++k)
+                {
+                    LLPlane& plane = shadow_cam.getAgentPlane(k);
+                    LLVector3 n;
+                    plane.getVector3(n);
+                    plane.setVec(camera.getOrigin() + n * 100000.f, n);
+                }
+            }
+
+            if (diag_main_view)
+            {
+                const bool ortho = mShadowFOV.mV[j] < 0.f || mShadowError.mV[j] < 0.f;
+                const F32 bias = RenderShadowBias + RenderShadowBiasError * fabsf(camera.getOrigin().mV[2]) / 3000.f;
+                const F32 w = max.mV[0] - min.mV[0];
+                const F32 h = max.mV[1] - min.mV[1];
+                const F32 d = max.mV[2] - min.mV[2];
+                const F32 texel = llmax(w / llmax((F32)mRT->shadow[j].getWidth(), 1.f), h / llmax((F32)mRT->shadow[j].getHeight(), 1.f));
+                sShadowDiagCascade[j] = ortho
+                    ? llformat("ortho %.1fx%.1f m, texel %.2f cm, depth %.1f m, bias %.1f cm", w, h, texel * 100.f, d, 2.f * fabsf(bias) * d * 100.f)
+                    : llformat("warped fov %.2f rad, light-space box %.1fx%.1fx%.1f m", mShadowFOV.mV[j], w, h, d);
+            }
+            // </Vulkanstorm>
+
             //translate and scale to from [-1, 1] to [0, 1]
             glm::mat4 trans(0.5f, 0.0f, 0.0f, 0.0f,
                             0.0f, 0.5f, 0.0f, 0.0f,
@@ -11847,12 +12062,42 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
 
             mRT->shadow[j].flush();
 
+            // <Vulkanstorm> DEVELOPMENT DIAGNOSTIC: the fit a freeze would keep
+            if (diag_main_view)
+            {
+                sShadowDiagFrozen[j].valid = true;
+                sShadowDiagFrozen[j].empty = false;
+                sShadowDiagFrozen[j].view = view[j];
+                sShadowDiagFrozen[j].proj = proj[j];
+                sShadowDiagFrozen[j].cam = shadow_cam;
+            }
+            // </Vulkanstorm>
+
             if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
             {
                 mShadowCamera[j+4] = shadow_cam;
             }
         }
     }
+
+    // <Vulkanstorm> DEVELOPMENT DIAGNOSTIC
+    if (diag_main_view && mSunDiffuse != LLColor4::black)
+    {
+        sShadowDiagFrozenValid = true;
+        static LLFrameTimer diag_log_timer;
+        if (diag_log && diag_log_timer.getElapsedTimeF32() >= 1.f)
+        {
+            diag_log_timer.reset();
+            LL_INFOS("ShadowDiag") << "camera " << camera.getOrigin() << " at " << camera.getAtAxis()
+                                   << " splits " << mSunClipPlanes << " light up " << up
+                                   << (diag_frozen ? " FROZEN" : "") << LL_ENDL;
+            for (U32 k = 0; k < 4; ++k)
+            {
+                LL_INFOS("ShadowDiag") << "  cascade " << k << ": " << sShadowDiagCascade[k] << LL_ENDL;
+            }
+        }
+    }
+    // </Vulkanstorm>
 
     //hack to disable projector shadows
     bool gen_shadow = RenderShadowDetail > 1;
