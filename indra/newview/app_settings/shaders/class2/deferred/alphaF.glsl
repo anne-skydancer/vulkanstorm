@@ -188,7 +188,7 @@ void main()
 
     float shadow = 1.0f;
 
-#ifdef HAS_SUN_SHADOW
+#if defined(HAS_SUN_SHADOW) && !defined(ALPHA_STOCHASTIC) // <Vulkanstorm/> no shadow in the alpha-only variant
     shadow = sampleDirectionalShadow(pos.xyz, norm.xyz, frag);
 #endif
 
