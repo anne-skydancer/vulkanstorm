@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Generate the Poisson disks used by the PCSS shadow filter (shadowUtil.glsl).
 
 Mitchell's best-candidate sampling in the unit disc: each new point is the one, out of

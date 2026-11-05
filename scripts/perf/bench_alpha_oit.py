@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Offline GPU benchmark of the alpha OIT capture + resolve shaders, no viewer launch.
 
 Times the per-frame reset, the capture pass and the resolve pass with GL_TIME_ELAPSED

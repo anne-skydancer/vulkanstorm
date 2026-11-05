@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Check the CPU reference of the alpha OIT bench (scripts/perf/oit_bench_scenes.py): the exact
 back-to-front composite, the scene coverage mirror of SCENE_GLSL, the stratified mask table
 of the stochastic transparency emulation, the error statistics and the PNG writer. A Python
