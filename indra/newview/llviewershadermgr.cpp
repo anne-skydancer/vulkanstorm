@@ -285,6 +285,8 @@ static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader
 // <Vulkanstorm> stochastic transparency: the alpha programs' variants need gl_SampleMask and
 // gl_PrimitiveID in the fragment shader (GLSL 4.00) and multisample textures; like PPLL before
 // it, a Windows and Linux feature.
+static const std::string ALPHA_STOCHASTIC_HELPER = "deferred/alphaStochasticF.glsl";
+
 static bool stochastic_transparency_shaders()
 {
 #if LL_WINDOWS || LL_LINUX
@@ -300,9 +302,10 @@ static bool stochastic_transparency_shaders()
 static void make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant)
 {
     shader.mStochasticVariant = nullptr;
-    if (!stochastic_transparency_shaders())
+    if (!stochastic_transparency_shaders() ||
+        !LLShaderMgr::instance()->mFragmentShaderObjects.count(ALPHA_STOCHASTIC_HELPER))
     {
-        return;
+        return;   // the coverage mask helper did not build (loadBasicShaders): sorted alpha
     }
     variant.mName = llformat("Stochastic %s", shader.mName.c_str());
     variant.mFeatures = shader.mFeatures;
@@ -1038,16 +1041,6 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     index_channels.push_back(-1);    shaders.push_back( make_pair( "lighting/lightAlphaMaskNonIndexedF.glsl",                   mShaderLevel[SHADER_LIGHTING] ) );
     index_channels.push_back(ch);    shaders.push_back( make_pair( "lighting/lightF.glsl",                  mShaderLevel[SHADER_LIGHTING] ) );
     index_channels.push_back(ch);    shaders.push_back( make_pair( "lighting/lightAlphaMaskF.glsl",                 mShaderLevel[SHADER_LIGHTING] ) );
-    // <Vulkanstorm> stochastic transparency's coverage masks, attached to the alpha programs'
-    // alpha-only variants (LLShaderMgr::attachShaderFeatures)
-#if LL_WINDOWS || LL_LINUX
-    if (gGLManager.mGLVersion >= 4.0f && gGLManager.mGLSLVersionMajor >= 4)
-    {
-        index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/alphaStochasticF.glsl",            1) );
-    }
-#endif
-    // </Vulkanstorm>
-
     for (U32 i = 0; i < shaders.size(); i++)
     {
         // Note usage of GL_FRAGMENT_SHADER
@@ -1057,6 +1050,22 @@ std::string LLViewerShaderMgr::loadBasicShaders()
             return shaders[i].first;
         }
     }
+
+    // <Vulkanstorm> stochastic transparency's coverage masks, attached to the alpha programs'
+    // alpha-only variants (LLShaderMgr::attachShaderFeatures). Optional: without it the
+    // variants are not built and sorted alpha is used; the viewer starts either way.
+    mFragmentShaderObjects.erase(ALPHA_STOCHASTIC_HELPER);
+    if (stochastic_transparency_shaders())
+    {
+        S32 level = 1;
+        if (loadShaderFile(ALPHA_STOCHASTIC_HELPER, level, GL_FRAGMENT_SHADER, &attribs, -1) == 0)
+        {
+            mFragmentShaderObjects.erase(ALPHA_STOCHASTIC_HELPER);
+            LL_WARNS("Shader") << "Stochastic transparency unavailable: " << ALPHA_STOCHASTIC_HELPER
+                               << " failed to build; sorted alpha is used" << LL_ENDL;
+        }
+    }
+    // </Vulkanstorm>
 
     // <Vulkanstorm> PCSS: a second build of shadowUtil.glsl with PCSS_SHADOW defined, kept under
     // its own key for the deferred sun program alone (LLShaderMgr::attachShaderFeatures); every
