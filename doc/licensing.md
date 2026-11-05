@@ -5,26 +5,31 @@ This document backs [`NOTICE.md`](../NOTICE.md). Vulkanstorm is offered under
 ports of it) and `LGPL-2.1-or-later OR GPL-3.0-or-later` (original
 Vulkanstorm code). Offering GPL-3.0 for a *binary* is only honest if
 everything linked into it can be distributed under GPL-3.0 too. This is the
-audit of what the shipped binaries link with, as of 2026-11-04 on
+audit of what the shipped binaries link with, as of 2026-11-05 on
 `vkstorm-devel`.
 
 ## Open points (read first)
 
-1. **OpenSSL 1.1.1w is linked into the viewer and is not compatible with
-   the GPL.** `autobuild.xml` pins `openssl 1.1.1w-r4`;
-   `indra/cmake/OpenSSL.cmake` links `libssl` and `libcrypto` statically
-   into the viewer (through `llcorehttp`, libcurl and the viewer itself).
-   OpenSSL 1.x is under the OpenSSL License plus the original SSLeay
-   License; both carry advertising clauses, and the SSLeay License says the
-   code "cannot simply be copied and put under another distribution licence
-   [including the GNU Public Licence.]". The FSF lists that combination as
-   GPL-incompatible, and GPL-3.0's System Library exception does not cover
-   a copy the viewer bundles itself. **Until OpenSSL is moved to 3.x
-   (Apache-2.0, which is GPL-3.0-compatible), the viewer binaries cannot be
-   offered under GPL-3.0; the source code can.** The same conflict exists
-   under LGPL-2.1 (its sections 2 and 10 also forbid further restrictions
-   on the combined work); it is inherited from the Second Life viewer and
-   not created by the GPL option, but the GPL option does not resolve it.
+1. **OpenSSL: resolved by the move to OpenSSL 3.5.** Until 2026-11-05 the
+   viewer linked OpenSSL 1.1.1w (`openssl 1.1.1w-r4`), under the OpenSSL
+   License plus the original SSLeay License; both carry advertising
+   clauses, and the SSLeay License says the code "cannot simply be copied
+   and put under another distribution licence [including the GNU Public
+   Licence.]". The FSF lists that combination as GPL-incompatible, and
+   GPL-3.0's System Library exception does not cover a copy the viewer
+   bundles itself, so the binaries could not be offered under GPL-3.0. The
+   viewer now links OpenSSL 3.5.9 (`openssl 3.5.9.1`, built by
+   [anne-skydancer/3p-openssl](https://github.com/anne-skydancer/3p-openssl)),
+   statically into the viewer as before (through `llcorehttp`, libcurl and
+   the viewer itself). OpenSSL 3.x is under the **Apache License 2.0**,
+   which the FSF lists as compatible with GPL-3.0 and incompatible with
+   GPL-2.0 (its patent termination and indemnity terms are further
+   restrictions under GPL-2.0 section 6). The FSF gives no separate ruling
+   for LGPL-2.1; its section 10 forbids further restrictions in the same
+   words as GPL-2.0 section 6, so Apache-2.0 code linked into the viewer has
+   the standing under the LGPL-2.1 option that APR and the Apache-2.0 parts
+   of WebRTC already had. OpenSSL 3 therefore removes the GPL-3.0 blocker
+   and does not change the LGPL-2.1 position.
 2. **GLOD: resolved.** GLOD (GLOD Open-Source License 1.0, whose clause 6
    fixes exclusive venue in the courts of Maryland, an additional term
    GPL-3.0 section 7 does not permit) was the mesh uploader's second LOD
@@ -35,7 +40,7 @@ audit of what the shipped binaries link with, as of 2026-11-04 on
 
 Everything else linked in the shipped configuration is compatible with
 GPL-3.0 (most of it also with LGPL-2.1). Several components are compatible
-with GPL-3.0 but **not** with GPL-2.0 (Apache-2.0: APR, OpenXR, and
+with GPL-3.0 but **not** with GPL-2.0 (Apache-2.0: OpenSSL 3, APR, OpenXR, and
 BoringSSL and others inside WebRTC; the FreeType License): one reason the
 GPL option is version 3 or later.
 
@@ -58,12 +63,12 @@ compatible; **off** not built or shipped in our configuration.
 
 | Component | Licence | Status | Notes |
 |---|---|---|---|
-| OpenSSL 1.1.1w | OpenSSL + SSLeay | **blocker** | Open point 1; fix: OpenSSL 3.x (Apache-2.0) |
+| OpenSSL 3.5.9 | Apache-2.0 | OK | GPL-3 only, not GPL-2; replaced OpenSSL 1.1.1w (open point 1, resolved) |
 | GLOD 1.0pre3 | GLOD Open-Source License 1.0 | removed | Open point 2, resolved: retired on every line (#313, #315-#318) |
 | APR, apr-util | Apache-2.0 | OK | GPL-3 only, not GPL-2 |
 | Boost | BSL-1.0 | OK | |
 | Collada DOM | MIT (package text; `autobuild.xml` says "SCEA") | OK | |
-| libcurl 7.54.1 | curl (MIT-style) | OK | links OpenSSL, see point 1 |
+| libcurl 7.54.1 | curl (MIT-style) | OK | rebuilt against OpenSSL 3.5.9 ([anne-skydancer/3p-curl](https://github.com/anne-skydancer/3p-curl)) |
 | expat | MIT | OK | |
 | FreeType | FreeType License (or GPL-2.0) | OK | FTL is GPL-3-compatible, not GPL-2 |
 | Hunspell | MPL-1.1 / GPL-2.0 / LGPL-2.1 tri-licence | OK | taken under LGPL-2.1 |
@@ -132,7 +137,7 @@ The crates.io dependencies reachable from `vkstorm-ffi` with all features
 BSD, Unlicense, Unicode-3.0, IJG and MPL-2.0 (Symphonia); MPL-2.0 is
 GPL-compatible through its section 3.3 (Secondary Licenses), and none of
 them is GPL-only or proprietary. `vkstorm-http` loads the viewer's libcurl
-at run time, so open point 1 applies to it as part of the viewer.
+at run time, so it links OpenSSL 3.5 as part of the viewer (open point 1, resolved).
 
 ## Source headers
 
