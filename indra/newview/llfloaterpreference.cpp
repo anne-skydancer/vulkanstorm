@@ -2239,6 +2239,7 @@ void LLFloaterPreference::refreshEnabledState()
     getChild<LLCheckBoxCtrl>("ShadowPCSS")->setEnabled(enabled
         && gSavedSettings.getS32("RenderShadowDetail") > 0
         && LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowPCSS"));
+    getChildView("ShadowDistance")->setEnabled(enabled && gSavedSettings.getS32("RenderShadowDetail") > 0); // <Vulkanstorm/> stable cascades
     // </Vulkanstorm>
 
     enabled = false;

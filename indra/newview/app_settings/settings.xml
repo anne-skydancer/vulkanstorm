@@ -11093,7 +11093,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowSplitExponent</key>
   <map>
     <key>Comment</key>
-    <string>Near clip plane split distances for shadow map frusta (x=perspective, y=ortho, z=transition rate).</string>
+    <string>Sun cascade split distribution: only y is used, as the exponent of the splits over [camera near, RenderShadowDistance] (Phototools' shadow clarity). Was: Near clip plane split distances for shadow map frusta (x=perspective, y=ortho, z=transition rate).</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12312,7 +12312,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowErrorCutoff</key>
   <map>
     <key>Comment</key>
-    <string>Cutoff error value to use ortho instead of perspective projection.</string>
+    <string>Unused since the sun cascades are always orthographic (Vulkanstorm stable cascades). Was: Cutoff error value to use ortho instead of perspective projection.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12325,7 +12325,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowFOVCutoff</key>
   <map>
     <key>Comment</key>
-    <string>Cutoff FOV to use ortho instead of perspective projection.</string>
+    <string>Unused since the sun cascades are always orthographic (Vulkanstorm stable cascades). Was: Cutoff FOV to use ortho instead of perspective projection.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12377,6 +12377,17 @@ Change of this parameter will affect the layout of buttons in notification toast
     <string>Boolean</string>
     <key>Value</key>
     <integer>0</integer>
+  </map>
+  <key>RenderShadowDistance</key>
+  <map>
+    <key>Comment</key>
+    <string>Distance (metres) the sun and moon shadow cascades cover; capped by the draw distance. The cascades no longer follow what the camera sees (doc/shadows/shadow-model-rework.md). Default per graphics level in the feature table.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>128.0</real>
   </map>
   <key>RenderShadowPCSSLightSize</key>
   <map>

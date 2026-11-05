@@ -2098,6 +2098,27 @@ If you do not understand the distinction then leave this control alone."
        tool_tip="Softens the edges of sun, moon and projector shadows with a wider, rotated filter and smooths the result with the shadow blur. Needs shadows (Sun/Moon or Sun/Moon + Projectors). Costs some GPU time."/>
       <!-- </Vulkanstorm> -->
 
+      <!-- <Vulkanstorm> sun shadow distance (stable cascades); enabled with shadows only
+           (LLFloaterPreference::refreshEnabledState) -->
+      <slider
+       control_name="RenderShadowDistance"
+       decimal_digits="0"
+       follows="left|top"
+       height="16"
+       increment="8"
+       initial_value="128"
+       label="Shadow distance (m):"
+       label_width="140"
+       layout="topleft"
+       left="20"
+       max_val="512"
+       min_val="32"
+       name="ShadowDistance"
+       top_pad="6"
+       width="380"
+       tool_tip="How far from the camera the sun and moon cast shadows, at most the draw distance. Shadows no longer change with what the camera sees; a shorter distance gives sharper shadows near you."/>
+      <!-- </Vulkanstorm> -->
+
     </panel>
 
 <!--Depth of Field-->
