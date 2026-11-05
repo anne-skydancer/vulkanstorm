@@ -229,6 +229,30 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
     pixels=[tuple(out[i*4:i*4+4]) for i in range(W*H)]
     return (pixels,bits) if read_bits else pixels
 
+# ---- the alpha programs compile, plain and as their ALPHA_STOCHASTIC variant, with the defines the
+# viewer gives them (llviewershadermgr.cpp), the indexed-texture lookup declared as the viewer
+# injects it; compile only (the shared functions are linked from other objects in the viewer)
+alpha_programs={
+    'class2/deferred/alphaF.glsl':['USE_VERTEX_COLOR','HAS_ALPHA_MASK','USE_INDEXED_TEX','HAS_SUN_SHADOW'],
+    'class1/deferred/fullbrightF.glsl':['HAS_ALPHA_MASK','IS_ALPHA','HAS_DIFFUSE_LOOKUP'],
+    'class2/deferred/pbralphaF.glsl':['DIFFUSE_ALPHA_MODE 1','HAS_NORMAL_MAP','HAS_SPECULAR_MAP','HAS_EMISSIVE_MAP','USE_VERTEX_COLOR','HAS_SUN_SHADOW'],
+    'class3/deferred/materialF.glsl':['DIFFUSE_ALPHA_MODE 1','HAS_NORMAL_MAP','HAS_SPECULAR_MAP','HAS_ALPHA_MASK','HAS_SUN_SHADOW'],
+}
+compiled=0
+for rel,defines in alpha_programs.items():
+    text=(root/'indra/newview/app_settings/shaders'/rel).read_text()
+    for as_variant in (False,True):
+        extra=''.join('#define '+(d if ' ' in d else d+' 1')+'\n' for d in defines)
+        if as_variant: extra+='#define ALPHA_STOCHASTIC 1\n'
+        extra+='#define DIFFUSE_ALPHA_MODE_NONE 0\n#define DIFFUSE_ALPHA_MODE_BLEND 1\n#define DIFFUSE_ALPHA_MODE_MASK 2\n#define DIFFUSE_ALPHA_MODE_EMISSIVE 3\n'
+        extra+='vec4 diffuseLookup(vec2 texcoord);\n'
+        source='#version 420\n'+text.replace('#extension GL_ARB_shader_image_load_store : enable','').replace('/*[EXTRA_CODE_HERE]*/',extra)
+        shader=create_shader(0x8B30);src=C.c_char_p(source.encode());source_shader(shader,1,C.byref(src),None);compile_shader(shader)
+        ok=I();shader_iv(shader,0x8B81,C.byref(ok));log=C.create_string_buffer(16384);shader_log(shader,len(log),None,log)
+        assert ok.value,(rel,'stochastic' if as_variant else 'plain',log.value.decode()[:2000])
+        fn('glDeleteShader',None,U)(shader);compiled+=1
+print(f'{compiled} alpha fragment shaders compile, plain and as their stochastic variants')
+
 checks=0
 def L(z,a,rgb=(1.,1.,1.),seed=0,glow=0.,slope=0.): return (z,a,rgb,seed,glow,slope)
 
