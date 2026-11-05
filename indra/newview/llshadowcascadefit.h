@@ -139,6 +139,21 @@ namespace LLShadowCascadeFit
         return applied - wanted;
     }
 
+    // The shadow distance takes only the steps 32, 64, ... 256 m: any other value (an older
+    // setting, a preset, the debug settings) is rounded to the nearest step and clamped.
+    constexpr float SHADOW_DISTANCE_STEP = 32.f;
+    constexpr float SHADOW_DISTANCE_MAX = 256.f;
+    inline float snapShadowDistance(float metres)
+    {
+        if (!(metres > SHADOW_DISTANCE_STEP)) // also NaN
+        {
+            return SHADOW_DISTANCE_STEP;
+        }
+        const float steps = std::floor(metres / SHADOW_DISTANCE_STEP + 0.5f);
+        const float snapped = steps * SHADOW_DISTANCE_STEP;
+        return snapped < SHADOW_DISTANCE_MAX ? snapped : SHADOW_DISTANCE_MAX;
+    }
+
     // Up axis of the light view: world north (+y), or east (+x) when the light runs nearly
     // north-south. The result is orthogonal to the light direction.
     inline Vec3 lightUp(const Vec3& light_dir)

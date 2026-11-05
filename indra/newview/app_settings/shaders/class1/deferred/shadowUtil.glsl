@@ -51,6 +51,11 @@ uniform mat4 inv_proj;
 uniform vec2 screen_res;
 uniform int sun_up_factor;
 uniform int shadow_s1_cascades; // <Vulkanstorm/> TEMPORARY S1 overlay (sampleDirectionalShadow)
+// <Vulkanstorm> stable sun cascades: each cascade's texel size in metres and the normal offset in
+// texels (LLPipeline::bindDeferredShader); 0 when not set (no offset)
+uniform vec4 shadow_texel;
+uniform float shadow_normal_offset;
+// </Vulkanstorm>
 
 float pcfShadow(sampler2DShadow shadowMap, vec3 norm, vec4 stc, float bias_mul, vec2 pos_screen, vec3 light_dir)
 {
@@ -392,6 +397,19 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     vec3 offset = light_dir.xyz * (1.0 - dp_directional_light);
 
     shadow_pos += offset * shadow_offset * 2.0;
+
+    // <Vulkanstorm> normal offset in world units: the receiver moves along its normal by
+    // shadow_normal_offset texels of the (farther) cascade it is sampled from, more the more the
+    // surface turns from the light, so a slanted lit surface does not shadow itself between the
+    // filter's taps (the sphere-fitted cascades cannot squeeze texels along a receiver's slope)
+    {
+        float split_z = pos.z; // view depth, negative
+        float texel = split_z < shadow_clip.z * -0.75 ? shadow_texel.w
+                    : (split_z < shadow_clip.y * -0.75 ? shadow_texel.z
+                    : (split_z < shadow_clip.x * -0.75 ? shadow_texel.y : shadow_texel.x));
+        shadow_pos += norm.xyz * (shadow_normal_offset * texel * (1.0 - dp_directional_light));
+    }
+    // </Vulkanstorm>
 
     vec4 spos = vec4(shadow_pos.xyz, 1.0);
 

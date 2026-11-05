@@ -12411,10 +12411,21 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>Value</key>
     <integer>0</integer>
   </map>
+  <key>RenderShadowNormalOffsetTexels</key>
+  <map>
+    <key>Comment</key>
+    <string>Sun shadow normal offset: receivers move along their normal by this many shadow-map texels of their cascade (in world units, more the more they turn from the light), so slanted lit surfaces do not shadow themselves.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>3.0</real>
+  </map>
   <key>RenderShadowDistance</key>
   <map>
     <key>Comment</key>
-    <string>Distance (metres) the sun and moon shadow cascades cover; capped by the draw distance. The cascades no longer follow what the camera sees (doc/shadows/shadow-model-rework.md). Default per graphics level in the feature table.</string>
+    <string>Distance (metres) the sun and moon shadow cascades cover, in steps of 32 m from 32 to 256 m (other values are rounded to the nearest step); capped by the draw distance. The cascades no longer follow what the camera sees (doc/shadows/shadow-model-rework.md). Default per graphics level in the feature table.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>

@@ -208,6 +208,19 @@ namespace
         }
     }
 
+    void test_distance_steps()
+    {
+        const float cases[][2] = { { 0.f, 32.f }, { -5.f, 32.f }, { 31.f, 32.f }, { 47.9f, 32.f }, { 48.1f, 64.f },
+                                   { 100.f, 96.f }, { 128.f, 128.f }, { 175.f, 160.f }, { 177.f, 192.f },
+                                   { 256.f, 256.f }, { 300.f, 256.f }, { 512.f, 256.f } };
+        for (const auto& c : cases)
+        {
+            const float got = LLShadowCascadeFit::snapShadowDistance(c[0]);
+            check(got == c[1], "shadow distance snaps to the 32 m steps", got, c[1]);
+        }
+        check(LLShadowCascadeFit::snapShadowDistance(std::nanf("")) == 32.f, "NaN distance snaps to 32");
+    }
+
     void test_depth()
     {
         const auto z = LLShadowCascadeFit::depthRange(-3.f, 5.f);
@@ -224,6 +237,7 @@ int main()
     test_up();
     test_depth();
     test_bias();
+    test_distance_steps();
     if (failures)
     {
         std::printf("%d check(s) failed\n", failures);

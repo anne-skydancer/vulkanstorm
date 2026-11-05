@@ -254,6 +254,8 @@ const F32 ALPHA_BLEND_CUTOFF = 0.598f;
 // <Vulkanstorm> the sun shadow bias uniform bindDeferredShader last set: generateSunShadow
 // compensates it in each cascade's matrix (bias in world units, llshadowcascadefit.h)
 static F32 sSunShadowBiasUniform = -0.002f;
+// each sun cascade's texel size in metres (generateSunShadow), for the shader's normal offset
+static LLVector4 sSunShadowTexel(0.f, 0.f, 0.f, 0.f);
 // </Vulkanstorm>
 const F32 DEFERRED_LIGHT_FALLOFF = 0.5f;
 const U32 DEFERRED_VB_MASK = LLVertexBuffer::MAP_VERTEX | LLVertexBuffer::MAP_TEXCOORD0 | LLVertexBuffer::MAP_TEXCOORD1;
@@ -9734,6 +9736,15 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
     shader.uniform1f (LLShaderMgr::DEFERRED_SHADOW_OFFSET, RenderShadowOffset); //*shadow_offset_error);
     shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_BIAS, shadow_bias);
     sSunShadowBiasUniform = shadow_bias; // <Vulkanstorm/> stable cascades: bias in world units
+    // <Vulkanstorm> stable cascades: normal offset in texels of each cascade
+    {
+        static LLCachedControl<F32> normal_offset(gSavedSettings, "RenderShadowNormalOffsetTexels", 3.f);
+        static const LLStaticHashedString sShadowTexel("shadow_texel");
+        static const LLStaticHashedString sShadowNormalOffset("shadow_normal_offset");
+        shader.uniform4fv(sShadowTexel, 1, sSunShadowTexel.mV);
+        shader.uniform1f(sShadowNormalOffset, (F32)normal_offset);
+    }
+    // </Vulkanstorm>
     shader.uniform1f(LLShaderMgr::DEFERRED_SPOT_SHADOW_OFFSET, RenderSpotShadowOffset);
     shader.uniform1f(LLShaderMgr::DEFERRED_SPOT_SHADOW_BIAS, RenderSpotShadowBias);
 
@@ -11448,7 +11459,11 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     static LLCachedControl<F32> shadow_distance(gSavedSettings, "RenderShadowDistance", 128.f);
     static LLCachedControl<F32> bias_texels(gSavedSettings, "RenderShadowBiasTexels", 3.f);
     const F32 near_clip = llclamp(camera.getNear(), 0.01f, 4.0f);
-    const F32 far_clip = llmax(llmin((F32)shadow_distance, camera.getFar()), near_clip + 1.f);
+    const F32 far_clip = llmax(llmin(LLShadowCascadeFit::snapShadowDistance(shadow_distance), camera.getFar()), near_clip + 1.f);
+    if (cache_view && LLShadowCascadeFit::snapShadowDistance(shadow_distance) != (F32)shadow_distance)
+    { // an older value, a preset or a debug setting off the 32 m steps: store the step once
+        gSavedSettings.setF32("RenderShadowDistance", LLShadowCascadeFit::snapShadowDistance(shadow_distance));
+    }
     {
         const std::array<F32, 5> splits = LLShadowCascadeFit::splitDistances(near_clip, far_clip, RenderShadowSplitExponent.mV[VY]);
         for (U32 i = 0; i < 4; ++i)
@@ -11671,6 +11686,10 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             {
                 const F32 texel = (used_box.max_x - used_box.min_x) / llmax((F32)mRT->shadow[j].getWidth(), 1.f);
                 const F32 range = used_depth.z_max - used_depth.z_min;
+                if (!gCubeSnapshot)
+                {
+                    sSunShadowTexel.mV[j] = texel;
+                }
                 glm::mat4 bias(1.f);
                 bias[3][2] = LLShadowCascadeFit::depthBiasOffset(bias_texels, texel, range, sSunShadowBiasUniform);
                 mSunShadowMatrix[j] = bias * mSunShadowMatrix[j];

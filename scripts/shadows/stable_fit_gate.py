@@ -285,7 +285,7 @@ def main():
     failures = []
     print(f"# S1 stable cascades (slice-bound culling, far-cascade cache) vs the old fit; sun 35 deg; old maps 1920x1080, new {RES_SQUARE}x{RES_SQUARE} (same texel count)")
     gate = {}
-    for distance in (64.0, 128.0, 192.0, 256.0):
+    for distance in (32.0, 64.0, 96.0, 128.0, 160.0, 192.0, 224.0, 256.0):   # the slider's steps
         print(f"\n## shadow distance {distance:.0f} m")
         print("scene                    casters new/old (median, max)   cascade-0 texel old (min-max) / new   splits new")
         ratios_all = []
