@@ -27,7 +27,6 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "pipeline.h"
-#include "llshadowprojectorselect.h" // <Vulkanstorm/> projector shadow selection
 
 // library includes
 #include "llimagepng.h"
@@ -2079,13 +2078,6 @@ void LLPipeline::unlinkDrawable(LLDrawable *drawable)
             mTargetShadowSpotLight[i] = NULL;
         }
     }
-
-    // <Vulkanstorm> projector shadow selection: a removed light is no candidate
-    for (auto it = mShadowSpotCandidates.begin(); it != mShadowSpotCandidates.end(); )
-    {
-        it = it->drawable == drawablep ? mShadowSpotCandidates.erase(it) : it + 1;
-    }
-    // </Vulkanstorm>
 }
 
 //static
@@ -10012,7 +10004,6 @@ void LLPipeline::renderDeferredLighting()
                 {
                     mTargetShadowSpotLight[i] = NULL;
                 }
-                mShadowSpotCandidates.clear(); // <Vulkanstorm/> gathered by setupSpotLight below
             }
 
             std::list<LLVector4> light_colors;
@@ -10568,18 +10559,27 @@ void LLPipeline::setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep)
 
     if (!gCubeSnapshot)
     {
-        // <Vulkanstorm> projector shadow selection (llshadowprojectorselect.h): a candidate with the
-        // light's power reaching the camera's surroundings, from the camera's position only (the
-        // slots are chosen once per frame in generateSunShadow, with grace and hysteresis)
-        const LLColor3 col = volume->getLightLinearColor();
-        const F32 lum = 0.2126f * col.mV[0] + 0.7152f * col.mV[1] + 0.0722f * col.mV[2];
-        const F32 radius = volume->getLightRadius();
-        LLVector3 axis(0.f, 0.f, -1.f);
-        axis *= quat;
-        const LLVector3 cone_centre = pos + axis * (radius * 0.5f);
-        const F32 dist2 = (cone_centre - LLViewerCamera::getInstance()->getOrigin()).magVecSquared();
-        mShadowSpotCandidates.push_back({ drawablep, LLShadowProjectorSelect::score(lum, radius, fov, dist2) });
-        // </Vulkanstorm>
+        LLDrawable* potential = drawablep;
+        //determine if this light is higher priority than one of the existing spot shadows
+        F32 m_pri = volume->getSpotLightPriority();
+
+        for (U32 i = 0; i < 2; i++)
+        {
+            F32 pri = 0.f;
+
+            if (mTargetShadowSpotLight[i].notNull())
+            {
+                pri = mTargetShadowSpotLight[i]->getVOVolume()->getSpotLightPriority();
+            }
+
+            if (m_pri > pri)
+            {
+                LLDrawable* temp = mTargetShadowSpotLight[i];
+                mTargetShadowSpotLight[i] = potential;
+                potential = temp;
+                m_pri = pri;
+            }
+        }
     }
 
     // make sure we didn't end up targeting the same spot light with both shadow maps
@@ -11861,47 +11861,43 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     {
         if (!gCubeSnapshot) //skip updating spot shadow maps during cubemap updates
         {
-            // <Vulkanstorm> projector shadow selection (llshadowprojectorselect.h): from last frame's
-            // drawn projectors, scored from the scene and the camera position; a slot keeps its
-            // projector while it is drawn and for a grace time after, yields only to a much stronger
-            // one, and fades in a fixed time (no longer re-ranked by the camera's orientation each
-            // frame, nor faded at the camera's speed)
-            std::vector<LLShadowProjectorSelect::Candidate> candidates;
-            candidates.reserve(mShadowSpotCandidates.size());
-            for (const ShadowSpotCandidate& c : mShadowSpotCandidates)
-            {
-                if (c.drawable.notNull() && !c.drawable->isDead() && c.drawable->getVOVolume())
-                {
-                    candidates.push_back({ c.drawable.get(), c.score });
+            LLTrace::CountStatHandle<>* velocity_stat = LLViewerCamera::getVelocityStat();
+            F32 fade_amt = gFrameIntervalSeconds.value()
+                * (F32)llmax(LLTrace::get_frame_recording().getLastRecording().getSum(*velocity_stat) / LLTrace::get_frame_recording().getLastRecording().getDuration().value(), 1.0);
+
+            // should never happen
+            llassert(mTargetShadowSpotLight[0] != mTargetShadowSpotLight[1] || mTargetShadowSpotLight[0].isNull());
+
+            //update shadow targets
+            for (U32 i = 0; i < 2; i++)
+            { //for each current shadow
+                LLViewerCamera::sCurCameraID = (LLViewerCamera::eCameraID)(LLViewerCamera::CAMERA_SPOT_SHADOW0 + i);
+
+                if (mShadowSpotLight[i].notNull() &&
+                    (mShadowSpotLight[i] == mTargetShadowSpotLight[0] ||
+                        mShadowSpotLight[i] == mTargetShadowSpotLight[1]))
+                { //keep this spotlight
+                    mSpotLightFade[i] = llmin(mSpotLightFade[i] + fade_amt, 1.f);
                 }
-            }
-            LLShadowProjectorSelect::Slot slots[2];
-            for (U32 i = 0; i < 2; i++)
-            {
-                slots[i].id = mShadowSpotLight[i].get();
-                slots[i].fade = mSpotLightFade[i];
-                slots[i].missing = mSpotLightMissing[i];
-            }
-            LLShadowProjectorSelect::update(slots, candidates, gFrameIntervalSeconds.value());
-            for (U32 i = 0; i < 2; i++)
-            {
-                if (slots[i].id != mShadowSpotLight[i].get())
-                {
-                    LLDrawable* chosen = nullptr;
-                    for (const ShadowSpotCandidate& c : mShadowSpotCandidates)
-                    {
-                        if (c.drawable.get() == slots[i].id)
+                else
+                { //fade out this light
+                    mSpotLightFade[i] = llmax(mSpotLightFade[i] - fade_amt, 0.f);
+
+                    if (mSpotLightFade[i] == 0.f || mShadowSpotLight[i].isNull())
+                    { //faded out, grab one of the pending spots (whichever one isn't already taken)
+                        if (mTargetShadowSpotLight[0] != mShadowSpotLight[(i + 1) % 2])
                         {
-                            chosen = c.drawable.get();
+                            mShadowSpotLight[i] = mTargetShadowSpotLight[0];
+                        }
+                        else
+                        {
+                            mShadowSpotLight[i] = mTargetShadowSpotLight[1];
                         }
                     }
-                    mShadowSpotLight[i] = chosen;
                 }
-                mSpotLightFade[i] = slots[i].fade;
-                mSpotLightMissing[i] = slots[i].missing;
             }
-            // </Vulkanstorm>
         }
+
         // this should never happen
         llassert(mShadowSpotLight[0] != mShadowSpotLight[1] || mShadowSpotLight[0].isNull());
 
