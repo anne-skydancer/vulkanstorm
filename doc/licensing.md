@@ -25,16 +25,13 @@ audit of what the shipped binaries link with, as of 2026-11-04 on
    under LGPL-2.1 (its sections 2 and 10 also forbid further restrictions
    on the combined work); it is inherited from the Second Life viewer and
    not created by the GPL option, but the GPL option does not resolve it.
-2. **GLOD is linked into the viewer and its licence is probably not
-   compatible with GPL-3.0.** The GLOD Open-Source License 1.0 (`glod.dll`
-   on Windows, `libGLOD.a` on Linux; used by the mesh uploader's LOD
-   generator) is BSD-like, but its clause 6 fixes exclusive jurisdiction and
-   venue in the courts of Maryland. GPL-3.0 section 7 permits only the
-   additional terms it lists, and a venue clause is not among them; clause
-   4 (an acknowledgment in modified versions) is acceptable under section
-   7(b). Resolution: drop GLOD (the uploader also generates LODs with
-   meshoptimizer) or obtain a relicence; until then treat it like point 1.
-   This needs the owner's review rather than a definite verdict.
+2. **GLOD: resolved.** GLOD (GLOD Open-Source License 1.0, whose clause 6
+   fixes exclusive venue in the courts of Maryland, an additional term
+   GPL-3.0 section 7 does not permit) was the mesh uploader's second LOD
+   generator. It was removed from every viewer line on 2026-11-05 (#313
+   on devel, #315-#318 on release, rust, canary and aleph); meshoptimizer
+   is now the only LOD generator, and `scripts/tests/test_glod_retired.py`
+   keeps it out.
 
 Everything else linked in the shipped configuration is compatible with
 GPL-3.0 (most of it also with LGPL-2.1). Several components are compatible
@@ -62,7 +59,7 @@ compatible; **off** not built or shipped in our configuration.
 | Component | Licence | Status | Notes |
 |---|---|---|---|
 | OpenSSL 1.1.1w | OpenSSL + SSLeay | **blocker** | Open point 1; fix: OpenSSL 3.x (Apache-2.0) |
-| GLOD 1.0pre3 | GLOD Open-Source License 1.0 | **blocker (probable)** | Open point 2 |
+| GLOD 1.0pre3 | GLOD Open-Source License 1.0 | removed | Open point 2, resolved: retired on every line (#313, #315-#318) |
 | APR, apr-util | Apache-2.0 | OK | GPL-3 only, not GPL-2 |
 | Boost | BSL-1.0 | OK | |
 | Collada DOM | MIT (package text; `autobuild.xml` says "SCEA") | OK | |
