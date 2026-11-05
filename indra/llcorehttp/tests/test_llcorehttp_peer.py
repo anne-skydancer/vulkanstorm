@@ -206,6 +206,10 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.send_response(206)
                 self.send_header("Content-Range", "bytes 0-75/2983")
                 self.send_header("Content-Length", "76")
+            elif "/bug2295/no_range/" in self.path:
+                # <Vulkanstorm> a 206 without Content-Range
+                self.send_response(206)
+                body = "0123456789012345678901234"
             elif "/bug2295/inv_cont_range/0/" in self.path:
                 self.send_response(206)
                 self.send_header("Content-Range", "bytes 0-75/2983")
