@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 # vks-base-merge-check: concluding a conflicted merge also runs the check.
 # Installed by scripts/install-git-hooks.sh beside pre-merge-commit.
 hooks=$(cd "$(dirname "$0")" && pwd)
