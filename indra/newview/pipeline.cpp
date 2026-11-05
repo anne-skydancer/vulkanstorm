@@ -349,7 +349,7 @@ bool    LLPipeline::sReflectionRender = false;
 bool    LLPipeline::sDistortionRender = false;
 bool    LLPipeline::sImpostorRender = false;
 bool    LLPipeline::sImpostorRenderAlphaDepthPass = false;
-bool    LLPipeline::sRenderAlphaOITSupported = false;   // <FS/> Vulkanstorm: alpha OIT HW gate (GL 4.4+), set in allocateAlphaOITBuffers
+bool    LLPipeline::sRenderAlphaStochasticSupported = false; // <Vulkanstorm/> stochastic transparency, set in allocateAlphaStochastic
 bool    LLPipeline::sShowJellyDollAsImpostor = true;
 bool    LLPipeline::sUnderWaterRender = false;
 bool    LLPipeline::sTextureBindTest = false;
@@ -988,21 +988,20 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
 
     mRT->deferredScreen.shareDepthBuffer(mRT->screen);
 
-    // <FS> Vulkanstorm: alpha OIT (image-array A-buffer): main view only, at the render resolution.
+    // <Vulkanstorm> stochastic transparency: main view only, at the render resolution; sized
+    // with the scene while it is selected, freed otherwise
     if (mRT == &mMainRT)
     {
-#if LL_WINDOWS || LL_LINUX
-        sRenderAlphaOITSupported = gGLManager.mGLVersion >= 4.4f;
-#else
-        sRenderAlphaOITSupported = false;
-#endif
-        gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", sRenderAlphaOITSupported);
         if (gSavedSettings.getU32("RenderAlphaSortMethod") == 1)
         {
-            allocateAlphaOITBuffers(resX, resY);
+            allocateAlphaStochastic(resX, resY);
+        }
+        else
+        {
+            releaseAlphaStochastic();
         }
     }
-    // </FS>
+    // </Vulkanstorm>
 
     // <FS:Beq> restore setSphere
     // if (hdr || shadow_detail > 0 || ssao || RenderDepthOfField))
@@ -1424,9 +1423,7 @@ void LLPipeline::releaseShadowBuffers()
 
 void LLPipeline::releaseScreenBuffers()
 {
-    // Release the detached PPLL depth snapshot before the scene targets.
-    releaseAlphaOITBuffers();
-    // </FS>
+    releaseAlphaStochastic(); // <Vulkanstorm/> stochastic transparency's targets
 
     mRT->screen.release();
     mRT->deferredScreen.release();
@@ -8007,313 +8004,325 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
     }
 }
 
-// <FS> Vulkanstorm: alpha order-independent transparency (image-array A-buffer) ----
-// The capture pass stores every normal-alpha fragment into a fixed per-pixel slot array held
-// in an RG32UI 2D-array image (one layer per slot, 8 bytes: R11F_G11F_B10F premultiplied
-// colour, 24-bit depth and 8-bit alpha; alphaOITPackF.glsl). A per-pixel atomic count in layer 0 of
-// an R32UI 2D-array image hands out the slots; its remaining layers accumulate an
-// order-independent tail for fragments that arrive after the last slot. compositeAlphaOIT()
-// depth-sorts each pixel's slots and composites them over the tail onto screen.
-//
-// Direct-GL (no RHI), gated on GL 4.4+ (image load/store + glTexStorage3D + glClearTexImage +
-// glCopyImageSubData). On older HW sRenderAlphaOITSupported is false, nothing is allocated,
-// and every entry point here is a no-op -- lldrawpoolalpha then runs the legacy sorted-alpha
-// path.
+// <Vulkanstorm> stochastic transparency -----------------------------------------------------
+// Depth-based stochastic transparency (Enderton, Sintorn, Shirley and Luebke, "Stochastic
+// Transparency", I3D 2010, section 3.4), as the author's Aurora Viewer draws it without MSAA
+// (oit_stochastic.rs): the scene is single-sampled (FXAA and SMAA run after the composite), so
+// the passes over the blended faces run at their own sample count, the most the device takes
+// up to 8, against the opaque depth spread over those samples. LLDrawPoolAlpha drives the
+// passes (renderPostDeferred):
+//   1. total alpha: prod(1 - alpha) per sample into the red of the RG16F target (cleared to 1),
+//      tested against the spread opaque depth;
+//   2. stochastic depth: each fragment covers R = floor(alpha S + xi) of the S samples, a
+//      stratified subset from the mask table, depth only;
+//   3. accumulation: alpha x colour and alpha added where the fragment is at or in front of the
+//      stochastic depth; the glowing faces' glow likewise into the green of the RG16F target;
+//   with more samples than a pass holds, 2 and 3 run again with the next bits of the same mask
+//   (paper footnote 1), the depth spread anew before each run;
+//   4. composite: the scene dimmed by the pixel's transparency, the accumulated colour added
+//      times total alpha over accumulated alpha; the glow then added to the scene alpha.
+// Gated on GL 4.0 (gl_SampleMask, multisample textures) and on every alpha program's alpha-only
+// variant (gAlphaStochasticShadersReady); otherwise sorted alpha runs.
 
 namespace
 {
-    constexpr U32 OIT_META_LAYERS = 7;    // count + 5 tail accumulators + nearest tail depth (see alphaOITResolveF.glsl)
-    constexpr U64 OIT_META_BYTES  = OIT_META_LAYERS * sizeof(U32);
-    constexpr U64 OIT_SLOT_BYTES  = 2 * sizeof(U32);  // one RG32UI texel per slot
-    constexpr U32 OIT_MAX_SLOTS   = 32;   // OIT_MAX_SLOTS in alphaOITResolveF.glsl
+    constexpr U32 ST_SEEDS = 2048;          // ST_SEEDS in alphaStochasticF.glsl
+    // The most samples one pass takes: NVIDIA 621.01 honours only the low 4 bits of a texture-
+    // fetched gl_SampleMask at 16 samples (scripts/perf/bench_alpha_oit.py stoch_probe), and the
+    // paper and Aurora run passes of 8.
+    constexpr U32 ST_MAX_PASS_SAMPLES = 8;
 }
 
-void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
+// The table of masks for `samples` bits: entry [r][seed] is a random r-subset of the bits, from a
+// fixed generator (splitmix64, a partial Fisher-Yates shuffle), the same on every launch: the
+// author's Aurora Viewer, oit_stochastic.rs mask_table.
+std::vector<U32> LLPipeline::alphaStochasticMaskTable(U32 samples)
 {
-    // OIT is intentionally a Windows/Linux feature. macOS remains on GL 4.1
+    const U32 s = llclamp(samples, 1u, 32u);
+    U64 state = 0x9e3779b97f4a7c15ULL ^ (U64)s;
+    auto next = [&state]()
+    {
+        state += 0x9e3779b97f4a7c15ULL;
+        U64 z = state;
+        z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+        z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+        return z ^ (z >> 31);
+    };
+    std::vector<U32> table;
+    table.reserve((size_t)(s + 1) * ST_SEEDS);
+    std::vector<U32> bits(s);
+    for (U32 r = 0; r <= s; ++r)
+    {
+        for (U32 seed = 0; seed < ST_SEEDS; ++seed)
+        {
+            for (U32 i = 0; i < s; ++i)
+            {
+                bits[i] = i;
+            }
+            U32 mask = 0;
+            for (U32 i = 0; i < r; ++i)
+            {
+                const U32 j = i + (U32)(next() % (U64)(s - i));
+                std::swap(bits[i], bits[j]);
+                mask |= 1u << bits[i];
+            }
+            table.push_back(mask);
+        }
+    }
+    return table;
+}
+
+void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
+{
 #if LL_WINDOWS || LL_LINUX
-    sRenderAlphaOITSupported = (gGLManager.mGLVersion >= 4.4f);
+    sRenderAlphaStochasticSupported = gAlphaStochasticShadersReady && gGLManager.mGLVersion >= 4.0f &&
+                                      gAlphaStochasticExpandProgram.mProgramObject &&
+                                      gAlphaStochasticCompositeProgram.mProgramObject;
 #else
-    sRenderAlphaOITSupported = false;
+    sRenderAlphaStochasticSupported = false;
 #endif
 #if LL_WINDOWS && !LL_MESA
-    // Windows resolves these entry points at runtime. On Linux they are GL
-    // prototypes, so testing their addresses is both redundant and a warning.
-    sRenderAlphaOITSupported = sRenderAlphaOITSupported &&
-                               glTexStorage3D && glBindImageTexture && glClearTexImage && glClearTexSubImage && glCopyImageSubData;
+    sRenderAlphaStochasticSupported = sRenderAlphaStochasticSupported && glTexImage2DMultisample && glDrawBuffers;
 #endif
-    if (sRenderAlphaOITSupported)
+
+    // Samples in all (4, 8 or 16) and per pass: the most the device takes for the three
+    // formats up to 8, at least 2; more in all than a pass holds run as iterations.
+    static LLCachedControl<U32> samples_setting(gSavedSettings, "RenderAlphaStochasticSamples", 16);
+    const U32 samples = samples_setting <= 4 ? 4 : (samples_setting <= 8 ? 8 : 16);
+    const U32 device = (U32)llmax(0, llmin(gGLManager.mMaxColorTextureSamples,
+                                            llmin(gGLManager.mMaxDepthTextureSamples, gGLManager.mMaxSamples)));
+    U32 pass = 0;
+    for (U32 n : { 8u, 4u, 2u })
     {
-        // The capture shaders declare two image uniforms and the resolve three (GL 4.4
-        // guarantees eight), and the meta image needs OIT_META_LAYERS array layers.
-        GLint image_uniforms = 0;
-        GLint array_layers = 0;
-        glGetIntegerv(GL_MAX_FRAGMENT_IMAGE_UNIFORMS, &image_uniforms);
-        glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &array_layers);
-        sRenderAlphaOITSupported = image_uniforms >= 3 && array_layers >= (GLint)OIT_MAX_SLOTS;
+        if (n <= samples && n <= ST_MAX_PASS_SAMPLES && n <= device)
+        {
+            pass = n;
+            break;
+        }
     }
-    if (!sRenderAlphaOITSupported)
+    if (pass < 2)
     {
-        releaseAlphaOITBuffers();
-        gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", false);
+        if (sRenderAlphaStochasticSupported)
+        {
+            LL_WARNS_ONCE("Pipeline") << "Stochastic transparency unavailable: the device takes " << device
+                                      << " samples; sorted alpha is used" << LL_ENDL;
+        }
+        sRenderAlphaStochasticSupported = false;
+    }
+    gSavedSettings.setBOOL("RenderAlphaStochasticAvailable", sRenderAlphaStochasticSupported);
+    if (!sRenderAlphaStochasticSupported)
+    {
+        releaseAlphaStochastic();
         return;
     }
 
-    static LLCachedControl<U32> slots_setting(gSavedSettings, "RenderAlphaOITNodesPerPixel", 8);
-    static LLCachedControl<U32> memory_mb(gSavedSettings, "RenderAlphaOITMemoryMB", 512);
-
-    const U64 pixels = (U64)w * (U64)h;
-    const U64 budget_bytes = (U64)llclamp((U32)memory_mb, 32u, 2048u) << 20;
-    const U64 meta_bytes = pixels * OIT_META_BYTES;
-    const U64 slot_layer_bytes = pixels * OIT_SLOT_BYTES;
-
-    // Below one slot per pixel the sorted set is empty and the method is pointless.
-    if (budget_bytes < meta_bytes + slot_layer_bytes)
+    if (mAlphaSTFBO && mAlphaSTWidth == w && mAlphaSTHeight == h && mAlphaSTPassSamples == pass &&
+        mAlphaSTSamples == samples)
     {
-        LL_WARNS("Pipeline") << "Alpha OIT disabled: one slot per pixel at " << w << "x" << h
-                             << " exceeds the configured memory budget." << LL_ENDL;
-        releaseAlphaOITBuffers();
-        sRenderAlphaOITSupported = false;
-        gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", true);
-        gSavedSettings.setU32("RenderAlphaSortMethod", 0);
-        return;
-    }
-
-    const U32 requested = llclamp((U32)slots_setting, 1u, OIT_MAX_SLOTS);
-    const U32 slots = llmin(requested, (U32)llmin<U64>((budget_bytes - meta_bytes) / slot_layer_bytes, OIT_MAX_SLOTS));
-
-    if (mAlphaOITMeta && mAlphaOITSlots && mAlphaOITOpaqueDepth.isComplete() &&
-        mAlphaOITWidth == w && mAlphaOITHeight == h && mAlphaOITSlotCount == slots)
-    {
-        gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", true);
         return; // already sized
     }
-    if (slots < requested)
-    {
-        LL_INFOS("Pipeline") << "Alpha OIT: memory budget allows " << slots << " of the requested "
-                             << requested << " slots per pixel at " << w << "x" << h << LL_ENDL;
-    }
-    releaseAlphaOITBuffers();
+    releaseAlphaStochastic();
     while (glGetError() != GL_NO_ERROR) {}
 
-    GLint previous_texture = 0;
-    glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY, &previous_texture);
-    auto make_array = [&](U32& name, GLenum format, U32 layers)
+    GLint previous_ms = 0;
+    GLint previous_2d = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D_MULTISAMPLE, &previous_ms);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_2d);
+    auto make_ms = [&](U32& name, GLenum format)
     {
         glGenTextures(1, &name);
-        glBindTexture(GL_TEXTURE_2D_ARRAY, name);
-        glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, format, (GLsizei)w, (GLsizei)h, (GLsizei)layers);
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, name);
+        glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, (GLsizei)pass, format, (GLsizei)w, (GLsizei)h, GL_TRUE);
     };
-    // Per-pixel count + tail accumulators (cleared each frame) and the slot array (never cleared:
-    // the count bounds what the resolve reads).
-    make_array(mAlphaOITMeta, GL_R32UI, OIT_META_LAYERS);
-    make_array(mAlphaOITSlots, GL_RG32UI, slots);
-    glBindTexture(GL_TEXTURE_2D_ARRAY, previous_texture);
-    const U32 zero = 0;
-    glClearTexImage(mAlphaOITMeta, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
-    mAlphaOITTailDirty = false;
-    // Read the array allocations' error now: LLRenderTarget::allocate() clears the error state.
-    const GLenum array_error = glGetError();
+    make_ms(mAlphaSTAccum, GL_RGBA16F);
+    make_ms(mAlphaSTTrans, GL_RG16F);
+    make_ms(mAlphaSTDepth, GL_DEPTH_COMPONENT24);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, (GLuint)previous_ms);
 
-    // Separate depth storage avoids sampling the active scene depth attachment.
-    const bool depth_allocated = mAlphaOITOpaqueDepth.allocate(w, h, 0, true);
-    const GLenum allocation_error = array_error != GL_NO_ERROR ? array_error : glGetError();
-    if (!depth_allocated || allocation_error != GL_NO_ERROR)
+    const std::vector<U32> table = alphaStochasticMaskTable(samples);
+    glGenTextures(1, &mAlphaSTMasks);
+    glBindTexture(GL_TEXTURE_2D, mAlphaSTMasks);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, (GLsizei)ST_SEEDS, (GLsizei)(samples + 1), 0, GL_RED_INTEGER,
+                 GL_UNSIGNED_INT, table.data());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    glBindTexture(GL_TEXTURE_2D, (GLuint)previous_2d);
+
+    glGenFramebuffers(1, &mAlphaSTFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, mAlphaSTAccum, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D_MULTISAMPLE, mAlphaSTTrans, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D_MULTISAMPLE, mAlphaSTDepth, 0);
+    const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+    const GLenum error = glGetError();
+    if (status != GL_FRAMEBUFFER_COMPLETE || error != GL_NO_ERROR)
     {
-        LL_WARNS("Pipeline") << "Alpha OIT allocation failed (GL error "
-                             << allocation_error << "); using legacy alpha." << LL_ENDL;
-        releaseAlphaOITBuffers();
-        sRenderAlphaOITSupported = false;
-        gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", true);
+        LL_WARNS("Pipeline") << "Stochastic transparency allocation failed (framebuffer status " << status
+                             << ", GL error " << error << "); sorted alpha is selected" << LL_ENDL;
+        releaseAlphaStochastic();
+        sRenderAlphaStochasticSupported = false;
+        gSavedSettings.setBOOL("RenderAlphaStochasticAvailable", false);
+        // as PPLL's allocator did: sorted alpha selected, so the allocation is not retried on
+        // every frame (choosing the method again in Preferences retries it once)
         gSavedSettings.setU32("RenderAlphaSortMethod", 0);
         return;
     }
 
-    mAlphaOITWidth     = w;
-    mAlphaOITHeight    = h;
-    mAlphaOITSlotCount = slots;
-    gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", true);
-
-    LL_INFOS("Pipeline") << "Alpha OIT: allocated " << w << "x" << h << " x " << slots
-                         << " slots (" << ((slot_layer_bytes * slots) >> 20) << " MiB) + meta ("
-                         << (meta_bytes >> 20) << " MiB)" << LL_ENDL;
+    mAlphaSTWidth = w;
+    mAlphaSTHeight = h;
+    mAlphaSTPassSamples = pass;
+    mAlphaSTSamples = samples;
+    // 8 + 4 + 4 bytes per sample (DEPTH_COMPONENT24 is stored in 32 bits)
+    const U64 bytes = (U64)w * h * pass * 16;
+    LL_INFOS("Pipeline") << "Stochastic transparency: " << w << "x" << h << ", " << samples << " samples in "
+                         << samples / pass << " pass(es) of " << pass << " (" << (bytes >> 20) << " MiB)" << LL_ENDL;
 }
 
-void LLPipeline::releaseAlphaOITBuffers()
+void LLPipeline::releaseAlphaStochastic()
 {
-    mAlphaOITOpaqueDepth.release();
-    if (mAlphaOITMeta)  { glDeleteTextures(1, &mAlphaOITMeta);  mAlphaOITMeta = 0; }
-    if (mAlphaOITSlots) { glDeleteTextures(1, &mAlphaOITSlots); mAlphaOITSlots = 0; }
-    mAlphaOITWidth = mAlphaOITHeight = mAlphaOITSlotCount = 0;
-    mAlphaOITTailDirty = false;
+    if (mAlphaSTFBO)
+    {
+        glDeleteFramebuffers(1, &mAlphaSTFBO);
+        mAlphaSTFBO = 0;
+    }
+    for (U32* name : { &mAlphaSTAccum, &mAlphaSTTrans, &mAlphaSTDepth, &mAlphaSTMasks })
+    {
+        if (*name)
+        {
+            // no unit may keep the deleted name as its current texture (bindManual's cache)
+            for (U32 unit = 0; unit < LL_NUM_TEXTURE_LAYERS; ++unit)
+            {
+                LLTexUnit* tex_unit = gGL.getTexUnit(unit);
+                if (tex_unit && tex_unit->getCurrTexture() == *name)
+                {
+                    tex_unit->unbind(tex_unit->getCurrType());
+                }
+            }
+            glDeleteTextures(1, name);
+            *name = 0;
+        }
+    }
+    mAlphaSTWidth = mAlphaSTHeight = mAlphaSTPassSamples = mAlphaSTSamples = 0;
 }
 
-bool LLPipeline::beginAlphaOITCapture()
+bool LLPipeline::beginAlphaStochastic()
 {
-    if (!mAlphaOITMeta || !mAlphaOITSlots ||
-        !gAlphaOITResolveProgram.mProgramObject || !mAlphaOITOpaqueDepth.isComplete() ||
-        !mRT->deferredScreen.getDepth() ||
-        mRT->deferredScreen.getWidth() != mAlphaOITWidth ||
-        mRT->deferredScreen.getHeight() != mAlphaOITHeight)
+    if (!mAlphaSTFBO || !sRenderAlphaStochasticSupported || !mRT->deferredScreen.getDepth() ||
+        mRT->screen.getWidth() != mAlphaSTWidth || mRT->screen.getHeight() != mAlphaSTHeight ||
+        !gAlphaStochasticExpandProgram.mProgramObject || !gAlphaStochasticCompositeProgram.mProgramObject)
     {
         return false;
     }
-    LL_PROFILE_GPU_ZONE("alpha oit capture begin");
+    LL_PROFILE_GPU_ZONE("alpha stochastic begin");
+    gGL.flush();
+    glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTFBO);
 
-    // LLRenderTarget depth textures are DEPTH_COMPONENT24. Copy the opaque depth
-    // before capture/residual passes; this destination is never the draw attachment.
-    glCopyImageSubData(mRT->deferredScreen.getDepth(), GL_TEXTURE_2D, 0, 0, 0, 0,
-                       mAlphaOITOpaqueDepth.getDepth(), GL_TEXTURE_2D, 0, 0, 0, 0,
-                       mAlphaOITWidth, mAlphaOITHeight, 1);
-
-    // The previous frame left both textures bound to image units 0/1 and wrote the meta image
-    // through shaders. Unbind them first (NVIDIA 621.01 orders glClearTexImage after later
-    // shader atomics while the texture is still bound as an image), then order those writes
-    // before the API clear, including when reusing unchanged allocations.
-    glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_WRITE, GL_R32UI);
-    glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RG32UI);
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT);
-
-    // Zero the per-pixel counts (layer 0). The tail layers are written only by overflowing
-    // pixels and zeroed again by the resolve that reads them, so they are clean unless a
-    // capture ran without its resolve; then clear everything. The slot array needs no clear:
-    // the count bounds what the resolve reads.
-    const U32 zero = 0;
-    if (mAlphaOITTailDirty)
-    {
-        glClearTexImage(mAlphaOITMeta, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
-    }
-    else
-    {
-        glClearTexSubImage(mAlphaOITMeta, 0, 0, 0, 0, (GLsizei)mAlphaOITWidth, (GLsizei)mAlphaOITHeight, 1,
-                           GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
-    }
-    mAlphaOITTailDirty = true;
-
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-    // bind storage: meta (unit 0, rw, layered) and slots (unit 1, write, layered)
-    glBindImageTexture(0, mAlphaOITMeta, 0, GL_TRUE, 0, GL_READ_WRITE, GL_R32UI);
-    glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RG32UI);
-
-    // Every visible capture fragment is stored (slot or tail) and discards in the shader;
-    // there is no pool to exhaust, so no fragment falls through to legacy blending.
+    // The transparency to 1 (no layer yet) and the glow to 0; the accumulation to 0.
+    LLGLDisable scissor(GL_SCISSOR_TEST);
     gGL.setColorMask(true, true);
+    static const GLfloat trans_clear[4] = { 1.f, 0.f, 0.f, 0.f };
+    static const GLfloat accum_clear[4] = { 0.f, 0.f, 0.f, 0.f };
+    glDrawBuffer(GL_COLOR_ATTACHMENT1);
+    glClearBufferfv(GL_COLOR, 0, trans_clear);
+    glDrawBuffer(GL_COLOR_ATTACHMENT0);
+    glClearBufferfv(GL_COLOR, 0, accum_clear);
+    glReadBuffer(GL_NONE);
+
+    spreadAlphaStochasticDepth();
     return true;
 }
 
-void LLPipeline::endAlphaOITCapture()
+void LLPipeline::spreadAlphaStochasticDepth()
 {
-    if (!mAlphaOITMeta)
-    {
-        return;
-    }
-    // make all slot + meta image writes visible to the resolve pass
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-    gGL.setColorMask(true, true);
-}
-
-void LLPipeline::compositeAlphaOIT()
-{
-    if (!mAlphaOITMeta || !mAlphaOITSlots || !gAlphaOITResolveProgram.mProgramObject)
-    {
-        return;
-    }
-    LL_PROFILE_GPU_ZONE("alpha oit resolve");
-
-    // debug: read back the per-pixel layer counts to tune RenderAlphaOITNodesPerPixel (gated --
-    // the readback forces a GPU sync, so it stays off unless explicitly enabled, and runs on
-    // every 64th frame only). Needs glGetTextureSubImage (GL 4.5) to fetch layer 0 alone.
-    static LLCachedControl<bool> oit_stats(gSavedSettings, "RenderAlphaOITStats", false);
-    static S32 s_stats_throttle = 0;
-    if (oit_stats && (s_stats_throttle++ & 0x3F) == 0)
-    {
-        bool can_read = gGLManager.mGLVersion >= 4.5f;
-#if LL_WINDOWS && !LL_MESA
-        can_read = can_read && glGetTextureSubImage;
-#endif
-        if (!can_read)
-        {
-            LL_WARNS_ONCE("Pipeline") << "Alpha OIT stats need GL 4.5 (glGetTextureSubImage)" << LL_ENDL;
-        }
-        else
-        {
-            glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
-            const U64 pixels = (U64)mAlphaOITWidth * mAlphaOITHeight;
-            std::vector<U32> counts(pixels);
-            glGetTextureSubImage(mAlphaOITMeta, 0, 0, 0, 0, mAlphaOITWidth, mAlphaOITHeight, 1,
-                                 GL_RED_INTEGER, GL_UNSIGNED_INT, (GLsizei)(pixels * sizeof(U32)), counts.data());
-            U64 covered = 0, over4 = 0, over8 = 0, over16 = 0, overflow = 0;
-            U32 peak = 0;
-            for (U32 c : counts)
-            {
-                if (c == 0) continue;
-                covered++;
-                if (c > 4) over4++;
-                if (c > 8) over8++;
-                if (c > 16) over16++;
-                if (c > mAlphaOITSlotCount) overflow++;
-                peak = llmax(peak, c);
-            }
-            static U32 s_peak = 0;
-            s_peak = llmax(s_peak, peak);
-            const F64 pct = 100.0 / (F64)llmax<U64>(pixels, 1);
-            LL_INFOS("Pipeline") << "Alpha OIT layers: covered " << (U32)(covered * pct) << "% of pixels, peak "
-                                 << peak << " (session peak " << s_peak << "), >4: " << over4
-                                 << ", >8: " << over8 << ", >16: " << over16
-                                 << ", past " << mAlphaOITSlotCount << " slots (tail): " << overflow
-                                 << " (" << (F32)(overflow * pct) << "%)" << LL_ENDL;
-        }
-    }
-
-    // Resolve each pixel's slots over the currently-bound screen target, sorted back-to-front.
-    // Premultiplied "over": screen.rgb = accum + screen.rgb*(1-cov). Emissive glow already in
-    // screen.a is preserved by masking the alpha channel off.
-    LLGLDepthTest depth(GL_FALSE, GL_FALSE);
-    LLGLEnable blend(GL_BLEND);
-    gGL.setColorMask(true, false);
-    gGL.blendFunc(LLRender::BF_ONE, LLRender::BF_ONE_MINUS_SOURCE_ALPHA);
-
-    gAlphaOITResolveProgram.bind();
-    static const LLStaticHashedString sOITSlotCount("oit_slot_count");
-    gAlphaOITResolveProgram.uniform1i(sOITSlotCount, (S32)mAlphaOITSlotCount);
-
-    // Use the same detached opaque-depth snapshot as capture for the final guard.
-    gAlphaOITResolveProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mAlphaOITOpaqueDepth, true);
-
-    // meta (unit 0, read) + slots (unit 1, read) on the image units the capture wrote to, and the
-    // meta image once more on unit 2 as the write-only binding through which the resolve zeroes
-    // the tail layers it consumed (alphaOITResolveF.glsl: oit_meta / oit_slots / oit_meta_clear).
-    glBindImageTexture(0, mAlphaOITMeta, 0, GL_TRUE, 0, GL_READ_ONLY, GL_R32UI);
-    glBindImageTexture(1, mAlphaOITSlots, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RG32UI);
-    glBindImageTexture(2, mAlphaOITMeta, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32UI);
-
+    LL_PROFILE_GPU_ZONE("alpha stochastic depth spread");
+    setAlphaStochasticBuffer(ALPHA_ST_BUFFER_NONE);
+    LLGLDepthTest depth(GL_TRUE, GL_TRUE, GL_ALWAYS);
+    LLGLDisable cull(GL_CULL_FACE);
+    LLGLDisable blend(GL_BLEND);
+    LLGLEnable multisample(GL_MULTISAMPLE);
+    gAlphaStochasticExpandProgram.bind();
+    gAlphaStochasticExpandProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);
     mScreenTriangleVB->setBuffer();
     mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
-    mAlphaOITTailDirty = false;
+    gAlphaStochasticExpandProgram.unbindTexture(LLShaderMgr::DEFERRED_DEPTH);
+    gAlphaStochasticExpandProgram.unbind();
+}
 
-    gAlphaOITResolveProgram.disableTexture(LLShaderMgr::DEFERRED_DEPTH, mRT->deferredScreen.getUsage());
-    gAlphaOITResolveProgram.unbind();
-    // Leave no OIT texture bound to an image unit for the rest of the frame (see beginAlphaOITCapture()).
-    glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_R32UI);
-    glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RG32UI);
-    glBindImageTexture(2, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_R32UI);
+void LLPipeline::setAlphaStochasticBuffer(EAlphaStochasticBuffer buffer)
+{
+    gGL.flush();
+    switch (buffer)
+    {
+    case ALPHA_ST_BUFFER_ACCUM: glDrawBuffer(GL_COLOR_ATTACHMENT0); break;
+    case ALPHA_ST_BUFFER_TRANS: glDrawBuffer(GL_COLOR_ATTACHMENT1); break;
+    default:                    glDrawBuffer(GL_NONE); break;
+    }
+}
 
-    // Restore the state the rest of the frame expects. compositeAlphaOIT() is appended to
-    // POOL_ALPHA_POST_WATER -- the LAST pool -- so renderHighlights() inherits whatever GL state
-    // we leave, and the selection overlay sets neither colormask nor blendFunc of its own. Two
-    // non-scoped states this pass changed must be put back to what the legacy forwardRender()
-    // path leaves, or the selection highlight breaks:
-    //   * colormask -> (true,false): keep screen.a (the emissive/glow buffer) read-only.
-    //   * blendFunc -> standard source-alpha: the resolve used premultiplied (ONE, 1-SRC_ALPHA).
+void LLPipeline::endAlphaStochastic()
+{
+    gGL.flush();
+    glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+}
+
+void LLPipeline::compositeAlphaStochastic(bool glow)
+{
+    LL_PROFILE_GPU_ZONE("alpha stochastic composite");
+    LLGLDepthTest depth(GL_FALSE, GL_FALSE);
+    LLGLDisable cull(GL_CULL_FACE);
+    LLGLEnable blend(GL_BLEND);
+    gGL.setColorMask(true, true);
+    // the scene dimmed by the transparency and the colour added; its glow (alpha) dimmed alike
+    gGL.blendFunc(LLRender::BF_ONE, LLRender::BF_ONE_MINUS_SOURCE_ALPHA, LLRender::BF_ZERO,
+                  LLRender::BF_ONE_MINUS_SOURCE_ALPHA);
+
+    static const LLStaticHashedString sSamplesHW("st_samples_hw");
+    static const LLStaticHashedString sSamples("st_samples");
+    static const LLStaticHashedString sGlow("st_glow");
+    LLGLSLShader& shader = gAlphaStochasticCompositeProgram;
+    shader.bind();
+    shader.uniform1i(sSamplesHW, (S32)mAlphaSTPassSamples);
+    shader.uniform1i(sSamples, (S32)mAlphaSTSamples);
+    shader.uniform1i(sGlow, 0);
+    const S32 accum = shader.enableTexture(LLShaderMgr::ALPHA_ST_ACCUM, LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+    if (accum > -1)
+    {
+        gGL.getTexUnit(accum)->bindManual(LLTexUnit::TT_MULTISAMPLE_TEXTURE, mAlphaSTAccum);
+    }
+    const S32 trans = shader.enableTexture(LLShaderMgr::ALPHA_ST_TRANS, LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+    if (trans > -1)
+    {
+        gGL.getTexUnit(trans)->bindManual(LLTexUnit::TT_MULTISAMPLE_TEXTURE, mAlphaSTTrans);
+    }
+    mScreenTriangleVB->setBuffer();
+    mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+
+    if (glow)
+    {
+        // the blended faces' glow, corrected like their colour, added to the scene alpha
+        gGL.blendFunc(LLRender::BF_ZERO, LLRender::BF_ONE, LLRender::BF_ONE, LLRender::BF_ONE);
+        shader.uniform1i(sGlow, 1);
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+    }
+
+    if (accum > -1)
+    {
+        gGL.getTexUnit(accum)->unbind(LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+    }
+    if (trans > -1)
+    {
+        gGL.getTexUnit(trans)->unbind(LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+    }
+    shader.unbind();
+
+    // The state the legacy forwardRender() leaves for the rest of the alpha pool (residual
+    // draws, the selection highlight): colour only, standard source-alpha blending.
     gGL.setColorMask(true, false);
     gGL.blendFunc(LLRender::BF_SOURCE_ALPHA, LLRender::BF_ONE_MINUS_SOURCE_ALPHA);
 }
-// </FS>
+// </Vulkanstorm>
 
 void LLPipeline::generateGlow(LLRenderTarget* src)
 {

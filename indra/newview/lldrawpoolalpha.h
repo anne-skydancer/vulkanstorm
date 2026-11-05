@@ -51,12 +51,15 @@ public:
     };
     virtual U32 getVertexDataMask() { return VERTEX_DATA_MASK; }
 
-    // <FS> Vulkanstorm: alpha OIT sub-pass. OIT is restricted to the main-view post-water pool.
+    // <Vulkanstorm> the passes of order-independent transparency (stochastic transparency),
+    // restricted to the main-view post-water pool
     enum EAlphaOITPhase
     {
         ALPHA_OIT_NONE = 0,
-        ALPHA_OIT_CAPTURE,
-        ALPHA_OIT_RESIDUAL,
+        ALPHA_OIT_RESIDUAL, // the stock path after the composite: particles, custom blending
+        ALPHA_ST_ALPHA,     // total alpha (alpha-only variants)
+        ALPHA_ST_DEPTH,     // stochastic depth (alpha-only variants, coverage masks)
+        ALPHA_ST_ACCUM,     // accumulation (the ordinary programs) and the faces' glow
     };
     // </FS>
 
@@ -82,14 +85,26 @@ public:
     // </FS>
     void renderAlphaHighlight();
 
-    void setOITMode(S32 mode);
+    // <Vulkanstorm> stochastic transparency (LLPipeline::beginAlphaStochastic): the passes over the
+    // blended faces and the composite; false when the targets could not be bound (sorted alpha)
+    bool renderStochastic();
+    void setStochasticUniforms(S32 mode, U32 iteration);
+    void bindStochasticMasks(LLGLSLShader* shader);
+    // the rigged depth and the residual draws (particles, custom blending) after the composite
+    void renderOITResidual();
+    // </Vulkanstorm>
 
     static bool sShowDebugAlpha;
     static bool sShowDebugAlphaRigged;
 
 private:
     LLGLSLShader* target_shader;
-    LLRenderTarget* mAlphaOpaqueDepth = nullptr; // detached opaque depth for OIT capture
+    // <Vulkanstorm> stochastic transparency: the mask table bound by the depth pass's programs,
+    // and a glowing blended face accumulated this frame
+    U32  mStochasticMasks = 0;
+    bool mStochasticGlow = false;
+    bool mAlphaOnlyPass = false;   // TexSetup: the alpha-only variants need no material maps
+    // </Vulkanstorm>
 
     // setup by beginFooPass, [0] is static variant, [1] is rigged variant
     LLGLSLShader* simple_shader = nullptr;
