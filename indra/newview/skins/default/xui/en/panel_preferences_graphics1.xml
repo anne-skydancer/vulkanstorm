@@ -2139,6 +2139,16 @@ If you do not understand the distinction then leave this control alone."
        width="450"
        name="ShadowS1ShowCascades"
        tool_tip="TEMPORARY, for checking stage S1 in-world: an 8x8-texel checkerboard of the cascade each pixel uses; the squares should stay put in the world while you move and turn."/>
+      <check_box
+       control_name="RenderShadowS1NoFarCache"
+       height="16"
+       label="S1 (temporary): no far-cascade caching"
+       layout="topleft"
+       left="20"
+       top_pad="2"
+       width="450"
+       name="ShadowS1NoFarCache"
+       tool_tip="TEMPORARY, for checking stage S1 in-world: renders the far sun cascades every frame instead of on alternate frames. Should look identical, at some cost."/>
       <!-- </Vulkanstorm> -->
 
     </panel>

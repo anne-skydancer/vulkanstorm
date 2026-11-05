@@ -9735,7 +9735,10 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
     shader.uniform1f(LLShaderMgr::DEFERRED_NEAR_CLIP, LLViewerCamera::getInstance()->getNear()*2.f);
     shader.uniform1f (LLShaderMgr::DEFERRED_SHADOW_OFFSET, RenderShadowOffset); //*shadow_offset_error);
     shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_BIAS, shadow_bias);
-    sSunShadowBiasUniform = shadow_bias; // <Vulkanstorm/> stable cascades: bias in world units
+    if (!gCubeSnapshot)
+    {
+        sSunShadowBiasUniform = shadow_bias; // <Vulkanstorm/> stable cascades: bias in world units (main view's)
+    }
     // <Vulkanstorm> stable cascades: normal offset in texels of each cascade
     {
         static LLCachedControl<F32> normal_offset(gSavedSettings, "RenderShadowNormalOffsetTexels", 3.f);
@@ -11295,6 +11298,8 @@ namespace
         LLShadowCascadeFit::Rect box{ 0.f, 0.f, 0.f, 0.f };
         LLShadowCascadeFit::DepthRange depth{ 0.f, 0.f };
         LLVector3 light;
+        LLVector3 eye;      // camera origin (agent) when rendered
+        U64       region = 0; // the agent's region when rendered (agent coordinates are per region)
     };
     SunCascadeCache sSunCascadeCache[4];
     U32 sSunShadowFrame = 0;
@@ -11453,8 +11458,10 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     {
         ++sSunShadowFrame;
     }
-    // TEMPORARY S1 toggle (Rendering 2): cull with the stable box only, no slice bound
+    // TEMPORARY S1 toggles (Rendering 2): cull with the stable box only, no slice bound; render
+    // every far cascade every frame (no cache)
     static LLCachedControl<bool> s1_box_only_cull(gSavedSettings, "RenderShadowS1BoxOnlyCulling", false);
+    static LLCachedControl<bool> s1_no_far_cache(gSavedSettings, "RenderShadowS1NoFarCache", false);
 
     static LLCachedControl<F32> shadow_distance(gSavedSettings, "RenderShadowDistance", 128.f);
     static LLCachedControl<F32> bias_texels(gSavedSettings, "RenderShadowBiasTexels", 3.f);
@@ -11579,7 +11586,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             view[j] = look(eye, lightDir, -up);
             const glm::vec3 c = mul_mat4_vec3(view[j], glm::vec3(sphere_centre));
             const glm::vec3 anchor = mul_mat4_vec3(view[j], glm::vec3(0.f));
-            const bool cached_cascade = cache_view && j >= 2;
+            const bool cached_cascade = cache_view && j >= 2 && !s1_no_far_cache;
             const F32 box_radius = cached_cascade ? radius * SUN_CASCADE_GUARD : radius;
             const LLShadowCascadeFit::Rect box = LLShadowCascadeFit::snappedSquare(c.x, c.y, box_radius,
                 (F32)mRT->shadow[j].getWidth(), (F32)mRT->shadow[j].getHeight(), anchor.x, anchor.y);
@@ -11628,8 +11635,20 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             {
                 SunCascadeCache& cache = sSunCascadeCache[j];
                 const bool off_frame = ((sSunShadowFrame + (U32)j) & 1) != 0;
+                // The light may have turned since the map was rendered (an EEP transition, the day
+                // cycle, the sun/moon switch): reuse only while that moves any caster in the
+                // cascade's depth range by less than a quarter texel, an invisible error.
+                const F32 cached_texel = (cache.box.max_x - cache.box.min_x) / llmax((F32)mRT->shadow[j].getWidth(), 1.f);
+                const F32 light_turn = (cache.light % lightDir).length(); // sin of the angle
+                const bool light_still = cache.light * lightDir > 0.f
+                    && light_turn * (cache.depth.z_max - cache.depth.z_min) <= 0.25f * cached_texel;
+                // and only for the same region (agent coordinates are rebased on a crossing or a
+                // teleport) after a camera move within half the guard band
+                const LLViewerRegion* region = gAgent.getRegion();
+                const bool same_place = region && cache.region == region->getHandle()
+                    && (camera.getOrigin() - cache.eye).length() <= 0.5f * (box_radius - radius);
                 if (off_frame && cache.valid && cache.frame + 1 == sSunShadowFrame && cache.clears == sSunShadowClears
-                    && cache.texture == mRT->shadow[j].getDepth() && cache.light * lightDir > 0.999994f)
+                    && cache.texture == mRT->shadow[j].getDepth() && light_still && same_place)
                 {
                     const glm::vec3 cc = mul_mat4_vec3(cache.view, glm::vec3(sphere_centre));
                     reuse_map = cc.x - radius >= cache.box.min_x && cc.x + radius <= cache.box.max_x
@@ -11724,6 +11743,8 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                     cache.box = box;
                     cache.depth = depth;
                     cache.light = lightDir;
+                    cache.eye = camera.getOrigin();
+                    cache.region = gAgent.getRegion() ? gAgent.getRegion()->getHandle() : 0;
                 }
                 // </Vulkanstorm>
             }

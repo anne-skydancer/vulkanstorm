@@ -116,6 +116,7 @@ def new_fit(cam, sun_dir, distance, cache=True):
         lo_x, lo_y, hi_x, hi_y, t = snapped(c[0], c[1], rb, RES_SQUARE, anchor[0], anchor[1])
         out["cascades"].append({
             "empty": False, "mode": "ortho", "texel": t, "radius": r, "box_radius": rb,
+            "sphere_centre": eye + cam.at * dist,
             "mn": np.array([lo_x, lo_y, c[2] - rb]), "mx": np.array([hi_x, hi_y, c[2] + 2 * rb]),
             "view": view, "width": hi_x - lo_x, "height": hi_y - lo_y,
             "slice": slice_corners(cam, d, j),
@@ -257,6 +258,214 @@ def altitude_test(failures):
                     failures.append(f"near cascades' bias too large: {now[:2]}")
 
 
+def ray_hits_box(p, d, lo, hi):
+    """Does the ray p + t d (t > 1 cm) hit the box [lo, hi]? (vectorised over boxes)"""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        inv = 1.0 / d
+        t0 = (lo - p) * inv
+        t1 = (hi - p) * inv
+    tn = np.nanmax(np.minimum(t0, t1), axis=1)
+    tf = np.nanmin(np.maximum(t0, t1), axis=1)
+    return (tn <= tf) & (tf > 0.01)
+
+
+class CascadeCacheSim:
+    """The far-cascade cache of pipeline.cpp, frame by frame: cascades 2-3 render on alternate
+    frames and are reused in between when the reuse test passes. A reused map holds the casters
+    of the frame it was rendered on (that frame's cull set). check_footprint adds the fix: reuse
+    also needs this frame's slice footprint (+ margin) inside the cull box the map was rendered
+    with."""
+
+    def __init__(self, caching=True, check_footprint=False):
+        self.caching, self.check_footprint = caching, check_footprint
+        self.frame = 0
+        self.cache = {}
+
+    def frame_cull_sets(self, cam, objects, sdir, distance):
+        self.frame += 1
+        fit = new_fit(cam, sdir, distance, cache=self.caching)
+        sets = []
+        for j, c in enumerate(fit["cascades"]):
+            lo, hi = cull_volume(c)
+            reuse = False
+            if self.caching and j >= 2 and j in self.cache:
+                cached = self.cache[j]
+                off = ((self.frame + j) & 1) != 0
+                if off and cached["frame"] + 1 == self.frame:
+                    # the C++ test: this frame's sphere inside the cached box (in the cached light view)
+                    centre = cam.origin + cam.at * 0  # placeholder, replaced below
+                    cc = m.xform(cached["view"], c["sphere_centre"][None, :])[0]
+                    r = c["radius"]
+                    reuse = (cc[0] - r >= cached["mn"][0] and cc[0] + r <= cached["mx"][0] and
+                             cc[1] - r >= cached["mn"][1] and cc[1] + r <= cached["mx"][1] and
+                             cc[2] - r >= cached["mn"][2] and cc[2] + r <= cached["mx"][2])
+                    if reuse and self.check_footprint:
+                        lp = m.xform(cached["view"], c["slice"])
+                        margin = 16 * c["texel"] + 0.05
+                        clo, chi = cached["cull_lo"], cached["cull_hi"]
+                        reuse = (lp[:, 0].min() - margin >= clo[0] and lp[:, 0].max() + margin <= chi[0] and
+                                 lp[:, 1].min() - margin >= clo[1] and lp[:, 1].max() + margin <= chi[1] and
+                                 lp[:, 2].min() - margin >= clo[2])
+            if reuse:
+                self.reused = getattr(self, "reused", 0) + 1
+                sets.append(self.cache[j]["set"])
+                self.cache[j]["frame"] = self.frame
+                continue
+            cull = [o for o in objects if in_volume(c["view"], o, lo, hi)]
+            sets.append(cull)
+            if self.caching and j >= 2:
+                self.cache[j] = {"frame": self.frame, "view": c["view"], "mn": c["mn"], "mx": c["mx"],
+                                 "cull_lo": lo, "cull_hi": hi, "set": cull}
+        return fit, sets
+
+
+def temporal_test(failures):
+    """Consecutive frames, nothing in the scene moving: still camera, slow and fast turns, a slow
+    walk. Ground points in view (cascades 2-3: 16 m and more at 128 m) are shadowed when a caster
+    in the cull set of the map they are sampled from blocks the sun; any frame where that differs
+    from the truth (all casters) is a wrong pixel, and a change from the previous frame is a
+    flicker."""
+    sdir = m.sun(35.0, 200.0)
+    to_sun = m.norm(sdir)
+    land = m.outdoor_scene(22.0)
+    # more casters out in the far cascades: a grove of trees between 15 and 120 m
+    rng = np.random.default_rng(7)
+    for k in range(60):
+        a = rng.uniform(0, 2 * np.pi); dist = rng.uniform(15, 120)
+        x, y = 0.0 + dist * np.cos(a), 0.0 + dist * np.sin(a)
+        land.append(m.box((x - 0.4, y - 0.4, 22.0), (x + 0.4, y + 0.4, 26.0), f"grove trunk {k}"))
+        land.append(m.box((x - 2.5, y - 2.5, 25.0), (x + 2.5, y + 2.5, 29.0), f"grove crown {k}"))
+    casters = [o for o in land if not o["name"].startswith("terrain")]
+    lo_all = np.array([o["lo"] for o in casters]); hi_all = np.array([o["hi"] for o in casters])
+    names = [o["name"] for o in casters]
+    # ground sample points: a grid out to 130 m
+    g = np.linspace(-130, 130, 61)
+    pts = np.array([[x, y, 22.0] for x in g for y in g])
+    truth = np.array([ray_hits_box(p, to_sun, lo_all, hi_all).any() for p in pts])
+    print("\n## consecutive frames, nothing moving (open land with a grove; 128 m; cascades 2-3 cached)")
+
+    def sequences():
+        eye = np.array([0.0, 0.0, 23.7])
+        yield "still camera", [m.Camera(eye, 30.0, -12.0) for _ in range(12)]
+        yield "turning 10 deg/s", [m.Camera(eye, 30.0 + 10.0 * f / 60.0, -12.0) for f in range(24)]
+        yield "turning 90 deg/s", [m.Camera(eye, 30.0 + 90.0 * f / 60.0, -12.0) for f in range(24)]
+        yield "walking 1.5 m/s", [m.Camera(eye + np.array([1.5 * f / 60.0, 0.0, 0.0]), 30.0, -12.0) for f in range(24)]
+        yield "flick 6 deg/frame", [m.Camera(eye, 30.0 + 6.0 * f, -12.0) for f in range(16)]
+        yield "flick 12 deg/frame", [m.Camera(eye, 30.0 + 12.0 * f, -12.0) for f in range(12)]
+
+    for label, cams in sequences():
+        for mode, kwargs in (("cache as built", {"caching": True}),
+                             ("cache + footprint test", {"caching": True, "check_footprint": True}),
+                             ("no cache", {"caching": False})):
+            sim = CascadeCacheSim(**kwargs)
+            prev = None; wrong_total = 0; flicker_total = 0; checked = 0
+            for cam in cams:
+                fit, sets = sim.frame_cull_sets(cam, land, sdir, 128.0)
+                planes = m.planes_from_corners(cam.corners())
+                vd = (pts - cam.origin) @ cam.at
+                state = np.zeros(len(pts), dtype=np.int8) - 1   # -1: not in cascades 2-3 / not visible
+                for j in (2, 3):
+                    c = fit["cascades"][j]
+                    near = fit["dd"][j] * 0.75 if j > 0 else 0
+                    far = fit["dd"][j + 1] * 1.25
+                    sel = (vd >= fit["dd"][j]) & (vd < fit["dd"][j + 1])
+                    if not sel.any():
+                        continue
+                    allowed = np.array([n in {o["name"] for o in sets[j]} for n in names])
+                    if not allowed.any():
+                        lo_c = hi_c = None
+                    for i in np.nonzero(sel)[0]:
+                        if not m.aabb_in_planes(pts[i] - 0.01, pts[i] + 0.01, planes):
+                            continue
+                        hit = ray_hits_box(pts[i], to_sun, lo_all[allowed], hi_all[allowed]).any() if allowed.any() else False
+                        state[i] = 1 if hit else 0
+                vis = state >= 0
+                checked += int(vis.sum())
+                wrong_total += int(np.sum(vis & (state != truth.astype(np.int8))))
+                if prev is not None:
+                    both = vis & (prev >= 0)
+                    flicker_total += int(np.sum(both & (state != prev)))
+                prev = state
+            print(f"{label:18s} {mode:24s}: wrong (shadow missing) {wrong_total:5d} of {checked} point-frames; "
+                  f"frame-to-frame flips {flicker_total}")
+            if mode != "cache as built" and (wrong_total or flicker_total):
+                failures.append(f"{label} / {mode}: {wrong_total} wrong, {flicker_total} flips")
+
+
+def env_transition_test(failures):
+    """The owner's repro: a still camera while the environment switches from fixed Midday to the
+    region's sky, the sun turning over N frames (an EEP transition). Far cascades 2-3 render on
+    alternate frames; a reused map was rendered with the previous frame's light. Ground points in
+    cascades 2-3 are shadowed when a caster in the map's cull set blocks the map's light; any frame
+    where that differs from the truth (all casters, this frame's light) is a wrong pixel. Old reuse
+    test: the light within 0.2 degrees of the map's. New: the light's turn moves no caster in the
+    cascade's depth range by more than a quarter texel (sin(angle) x range <= texel / 4)."""
+    land = m.outdoor_scene(22.0)
+    rng = np.random.default_rng(11)
+    for k in range(60):
+        a = rng.uniform(0, 2 * np.pi); dist = rng.uniform(15, 120)
+        x, y = dist * np.cos(a), dist * np.sin(a)
+        land.append(m.box((x - 0.4, y - 0.4, 22.0), (x + 0.4, y + 0.4, 30.0), f"grove trunk {k}"))
+        land.append(m.box((x - 2.5, y - 2.5, 28.0), (x + 2.5, y + 2.5, 34.0), f"grove crown {k}"))
+    casters = [o for o in land if not o["name"].startswith("terrain")]
+    lo_all = np.array([o["lo"] for o in casters]); hi_all = np.array([o["hi"] for o in casters])
+    names = [o["name"] for o in casters]
+    g = np.linspace(-130, 130, 61)
+    pts = np.array([[x, y, 22.0] for x in g for y in g])
+    cam = m.Camera(np.array([0.0, 0.0, 23.7]), 30.0, -12.0)
+    planes = m.planes_from_corners(cam.corners())
+    vd = (pts - cam.origin) @ cam.at
+    in_view = np.array([m.aabb_in_planes(p - 0.01, p + 0.01, planes) for p in pts])
+    midday = np.array(m.sun(70.0, 180.0)); region = np.array(m.sun(35.0, 200.0))
+    print("\n## environment switch, still camera: Midday -> region sky over N frames (far cascades cached)")
+    for n_frames in (10, 60, 240, 2400):
+        for mode in ("old 0.2 deg", "new quarter texel", "no cache"):
+            cache = {}
+            wrong = 0; checked = 0; renders = 0
+            for f in range(n_frames + 4):
+                t = min(f / n_frames, 1.0)
+                sdir = m.norm(midday * (1 - t) + region * t)
+                fit = new_fit(cam, sdir, 128.0, cache=(mode != "no cache"))
+                for j in (2, 3):
+                    c = fit["cascades"][j]
+                    use_light, use_set = sdir, None
+                    cached = cache.get(j)
+                    off = ((f + j) & 1) != 0
+                    reuse = False
+                    if mode != "no cache" and cached and off and cached["frame"] + 1 == f:
+                        cc = m.xform(cached["view"], c["sphere_centre"][None, :])[0]
+                        r = c["radius"]
+                        inside = (cc[0] - r >= cached["mn"][0] and cc[0] + r <= cached["mx"][0] and
+                                  cc[1] - r >= cached["mn"][1] and cc[1] + r <= cached["mx"][1])
+                        if mode == "old 0.2 deg":
+                            light_ok = float(cached["light"] @ sdir) > 0.999994
+                        else:
+                            sin_turn = float(np.linalg.norm(np.cross(cached["light"], sdir)))
+                            light_ok = sin_turn * cached["range"] <= 0.25 * cached["texel"]
+                        reuse = inside and light_ok
+                    if reuse:
+                        use_light, use_set = cached["light"], cached["set"]
+                        cached["frame"] = f
+                    else:
+                        lo, hi = cull_volume(c)
+                        use_set = {o["name"] for o in land if in_volume(c["view"], o, lo, hi)}
+                        renders += 1
+                        if mode != "no cache":
+                            cache[j] = {"frame": f, "view": c["view"], "mn": c["mn"], "mx": c["mx"], "light": sdir,
+                                        "set": use_set, "range": c["mx"][2] - c["mn"][2], "texel": c["texel"]}
+                    allowed = np.array([nm in use_set for nm in names])
+                    sel = in_view & (vd >= fit["dd"][j]) & (vd < fit["dd"][j + 1])
+                    for i in np.nonzero(sel)[0]:
+                        truth = ray_hits_box(pts[i], sdir, lo_all, hi_all).any()
+                        got = ray_hits_box(pts[i], use_light, lo_all[allowed], hi_all[allowed]).any() if allowed.any() else False
+                        checked += 1
+                        wrong += int(truth != got)
+            print(f"N = {n_frames:4d} frames ({n_frames / 60:5.1f} s at 60 fps)  {mode:18s}: wrong point-frames {wrong:5d} of {checked}; "
+                  f"far-cascade renders {renders} of {2 * (n_frames + 4)}")
+            if mode == "new quarter texel" and wrong:
+                failures.append(f"environment switch over {n_frames} frames: {wrong} wrong")
+
+
 def camera_paths(scene_z):
     """Turning in place, tilting, and walking: (label, Camera) pairs."""
     eye = np.array([-3.0, 0.0, scene_z + 1.7])
@@ -333,6 +542,8 @@ def main():
 
     fixed_caster_test(failures)
     altitude_test(failures)
+    temporal_test(failures)
+    env_transition_test(failures)
 
     print(f"\nS1 gate: median caster ratio at the default 128 m = {gate[128.0]:.2f} (limit 1.15)")
     if gate[128.0] > 1.15:

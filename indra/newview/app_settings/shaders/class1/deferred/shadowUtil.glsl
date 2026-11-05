@@ -402,11 +402,15 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     // shadow_normal_offset texels of the (farther) cascade it is sampled from, more the more the
     // surface turns from the light, so a slanted lit surface does not shadow itself between the
     // filter's taps (the sphere-fitted cascades cannot squeeze texels along a receiver's slope)
+    // The texel size follows the view depth continuously, so the offset has no step where a
+    // cascade boundary sweeps over a surface: it ramps up to the next cascade's from 0.5 to 0.75 of
+    // each split, before that cascade starts to blend in at 0.75 (only the nearer one is sampled
+    // there, and a little more offset than it needs is harmless), and keeps the larger one over
+    // the blend band, where the farther cascade needs its own.
     {
-        float split_z = pos.z; // view depth, negative
-        float texel = split_z < shadow_clip.z * -0.75 ? shadow_texel.w
-                    : (split_z < shadow_clip.y * -0.75 ? shadow_texel.z
-                    : (split_z < shadow_clip.x * -0.75 ? shadow_texel.y : shadow_texel.x));
+        float d = -pos.z; // view depth
+        vec4 t = clamp((vec4(d) - shadow_clip * 0.5) / (shadow_clip * 0.25), 0.0, 1.0);
+        float texel = mix(mix(mix(shadow_texel.x, shadow_texel.y, t.x), shadow_texel.z, t.y), shadow_texel.w, t.z);
         shadow_pos += norm.xyz * (shadow_normal_offset * texel * (1.0 - dp_directional_light));
     }
     // </Vulkanstorm>

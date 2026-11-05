@@ -189,6 +189,45 @@ def run(z):
     MODE[0] = 's1'
     return res
 
+
+def util_program(util_text, variant):
+    """sun_program with a given shadowUtil.glsl text (to compare a committed version with this tree)."""
+    sun = (root / SUN_F).read_text()
+    local = VARIANT_DEFINES[variant]
+    return program([(0x8B31, VERTEX), (0x8B30, stage(sun, local)), (0x8B30, stage(util_text, ['SUN_SHADOW'] + local)), (0x8B30, STUBS_F)])
+
+
+def temporal(util_text, variant):
+    """Fixed ground points across a 10 cm wall's shadow edge, 12-24 m from the camera (the
+    cascade 1-2 transition at 128 m): the camera backs away 2 cm per frame, nothing else moves.
+    Returns the largest frame-to-frame change of any point's shadow value."""
+    ALT[0] = 0.0
+    prog_t = util_program(util_text, variant)
+    wall = ((-6.0, 0.0, -20.1), (6.0, 1.5, -20.0))
+    sun = sun_from(25.0, 0.0)
+    # the shadow edge on the ground lies 1.5 / tan(25 deg) = 3.2 m behind the wall (towards -z)
+    pts = [(x, 0.0, -20.1 - 3.2 + dz) for x in (-2.0, 0.0, 2.0) for dz in (-0.3, -0.15, 0.0, 0.15, 0.3)]
+    prev = None; worst = 0.0
+    for f in range(0, 400):
+        eye = [1.0, 2.0, -12.0 + 0.02 * f]
+        sc = make([wall], eye, [0.0, 0.0, -23.0 + 0.02 * f], sun)
+        img = light_map(sc, prog_t, 0.0)
+        vals = []
+        for p in pts:
+            try:
+                x, y = sc.project(up(p))
+                vals.append(img[y, x])
+            except AssertionError:
+                vals.append(None)
+        sc.release()
+        if prev is not None:
+            for a, b in zip(prev, vals):
+                if a is not None and b is not None:
+                    worst = max(worst, abs(float(a) - float(b)))
+        prev = vals
+    return worst
+
+
 def main():
     print('GL:', get_string(0x1F01).decode(), flush=True)
     print(f'S1 splits at 128 m: {", ".join(f"{c:.1f}" for c in CLIP)}; maps {SQUARE}x{SQUARE}; bias {BIAS_TEXELS:g} texels\n')
@@ -205,6 +244,18 @@ def main():
             name = 'PCF ' if v == 'tree' else 'PCSS'
             s1, first, ground = r[('contact', 's1', v)], r[('contact', 'first', v)], g[('contact', 's1', v)]
             ok(abs(s1 - ground) <= 2.0, f'contact {name} at {z:6.0f} m: gap {s1:.1f} cm (ground {ground:.1f} cm); first S1 build {first:.1f} cm')
+    import subprocess
+    committed = subprocess.run(['git', 'show', 'HEAD:indra/newview/app_settings/shaders/class1/deferred/shadowUtil.glsl'],
+                               cwd=root, capture_output=True, text=True).stdout
+    current = (root / UTIL_F).read_text()
+    for v in ('tree', 'pcss'):
+        name = 'PCF ' if v == 'tree' else 'PCSS'
+        step = temporal(committed, v) if 'shadow_texel' in committed else None
+        ramp = temporal(current, v)
+        line = f'temporal {name}: largest frame-to-frame change at fixed ground points, camera backing away 2 cm/frame: this tree {ramp:.3f}'
+        if step is not None:
+            line += f'; HEAD (stepped normal offset) {step:.3f}'
+        ok(ramp < 0.25, line)
     print(f'\n{"all checks passed" if not fails else str(len(fails)) + " check(s) failed"}')
     return 1 if fails else 0
 
