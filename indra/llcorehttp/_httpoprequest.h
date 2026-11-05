@@ -217,6 +217,7 @@ public:
     size_t              mReplyFullLength;
     HttpHeaders::ptr_t  mReplyHeaders;
     std::string         mReplyConType;
+    bool                mDecodeReply;   // <Vulkanstorm/> llcorehttp, not libcurl, undoes gzip/deflate (_httplibcurl.cpp)
     int                 mReplyRetryAfter;
     // Policy data
     int                 mPolicyRetries;
