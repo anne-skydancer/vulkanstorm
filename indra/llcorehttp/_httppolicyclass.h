@@ -59,12 +59,12 @@ public:
     HttpStatus set(HttpRequest::EPolicyOption opt, long value);
     HttpStatus get(HttpRequest::EPolicyOption opt, long * value) const;
 
-    // <Vulkanstorm> The requests the class may have in flight at once, and
-    // so also the connections libcurl may open for it. libcurl 7.62 and
-    // later have no HTTP/1.1 pipelining: a deep-queue class (pipelining
-    // depth above 1) runs per-host limit x depth requests, each on its own
-    // HTTP/1.1 connection, or as HTTP/2 streams where the server offers h2.
-    // Other classes run up to their connection limit. </Vulkanstorm>
+    // <Vulkanstorm> The requests the class may have in flight at once. A
+    // deep-queue class (pipelining depth above 1) runs per-host limit x
+    // depth requests, as with HTTP/1.1 pipelining, over the same number of
+    // connections as before (_httplibcurl.cpp): with HTTP/1.1 the extra
+    // requests wait in libcurl for a free connection; with h2 they are
+    // streams. Other classes run up to their connection limit. </Vulkanstorm>
     long activeLimit() const
     {
         return mPipelining > 1L ? mPerHostConnectionLimit * mPipelining : mConnectionLimit;
