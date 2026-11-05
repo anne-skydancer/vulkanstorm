@@ -50,6 +50,7 @@ uniform float spot_shadow_offset;
 uniform mat4 inv_proj;
 uniform vec2 screen_res;
 uniform int sun_up_factor;
+uniform int shadow_s1_cascades; // <Vulkanstorm/> TEMPORARY S1 overlay (sampleDirectionalShadow)
 
 float pcfShadow(sampler2DShadow shadowMap, vec3 norm, vec4 stc, float bias_mul, vec2 pos_screen, vec3 light_dir)
 {
@@ -486,6 +487,17 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
         }
 
         shadow /= weight;
+
+        // <Vulkanstorm> TEMPORARY S1 qualification overlay: an 8x8-texel checkerboard of the
+        // cascade the pixel uses, darker for each further cascade (removed before #331 is ready)
+        if (shadow_s1_cascades != 0)
+        {
+            int k = spos.z < near_split.z ? 3 : (spos.z < near_split.y ? 2 : (spos.z < near_split.x ? 1 : 0));
+            vec4 q = shadow_matrix[k] * spos;
+            vec2 uv = q.xy / q.w * shadow_res / 8.0;
+            shadow = mix(0.1 + 0.2 * float(k), 1.0, mod(floor(uv.x) + floor(uv.y), 2.0)) * (0.5 + 0.5 * shadow);
+        }
+        // </Vulkanstorm>
     }
     else
     {

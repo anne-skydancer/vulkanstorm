@@ -2118,6 +2118,28 @@ If you do not understand the distinction then leave this control alone."
        width="380"
        tool_tip="How far from the camera the sun and moon cast shadows, at most the draw distance. Shadows no longer change with what the camera sees; a shorter distance gives sharper shadows near you."/>
       <!-- </Vulkanstorm> -->
+      <!-- <Vulkanstorm> TEMPORARY S1 qualification toggle, removed before #331 is marked ready -->
+      <check_box
+       control_name="RenderShadowS1BoxOnlyCulling"
+       height="16"
+       label="S1 (temporary): cull sun shadow casters with the stable box only"
+       layout="topleft"
+       left="20"
+       top_pad="4"
+       width="450"
+       name="ShadowS1BoxOnlyCulling"
+       tool_tip="TEMPORARY, for checking stage S1 in-world: draws every caster in each cascade's box instead of only those over the camera's frustum slice. Should look identical, at some cost."/>
+      <check_box
+       control_name="RenderShadowS1ShowCascades"
+       height="16"
+       label="S1 (temporary): show sun shadow cascades (checkerboard, darker = farther)"
+       layout="topleft"
+       left="20"
+       top_pad="2"
+       width="450"
+       name="ShadowS1ShowCascades"
+       tool_tip="TEMPORARY, for checking stage S1 in-world: an 8x8-texel checkerboard of the cascade each pixel uses; the squares should stay put in the world while you move and turn."/>
+      <!-- </Vulkanstorm> -->
 
     </panel>
 

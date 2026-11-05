@@ -250,6 +250,11 @@ constexpr U32 LLPipeline::MAX_PREVIEW_HEIGHT = 2048;
 const F32 BACKLIGHT_DAY_MAGNITUDE_OBJECT = 0.1f;
 const F32 BACKLIGHT_NIGHT_MAGNITUDE_OBJECT = 0.08f;
 const F32 ALPHA_BLEND_CUTOFF = 0.598f;
+
+// <Vulkanstorm> the sun shadow bias uniform bindDeferredShader last set: generateSunShadow
+// compensates it in each cascade's matrix (bias in world units, llshadowcascadefit.h)
+static F32 sSunShadowBiasUniform = -0.002f;
+// </Vulkanstorm>
 const F32 DEFERRED_LIGHT_FALLOFF = 0.5f;
 const U32 DEFERRED_VB_MASK = LLVertexBuffer::MAP_VERTEX | LLVertexBuffer::MAP_TEXCOORD0 | LLVertexBuffer::MAP_TEXCOORD1;
 
@@ -9728,6 +9733,7 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
     shader.uniform1f(LLShaderMgr::DEFERRED_NEAR_CLIP, LLViewerCamera::getInstance()->getNear()*2.f);
     shader.uniform1f (LLShaderMgr::DEFERRED_SHADOW_OFFSET, RenderShadowOffset); //*shadow_offset_error);
     shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_BIAS, shadow_bias);
+    sSunShadowBiasUniform = shadow_bias; // <Vulkanstorm/> stable cascades: bias in world units
     shader.uniform1f(LLShaderMgr::DEFERRED_SPOT_SHADOW_OFFSET, RenderSpotShadowOffset);
     shader.uniform1f(LLShaderMgr::DEFERRED_SPOT_SHADOW_BIAS, RenderSpotShadowBias);
 
@@ -9853,6 +9859,13 @@ void LLPipeline::renderDeferredLighting()
                 // <Vulkanstorm> PCSS: the shadowing light's angular size, L = 2 tan(half angle):
                 // the physical sun (0.53 degrees) times the sky's sun scale times
                 // RenderShadowPCSSLightSize; the moon uses the same size
+                // <Vulkanstorm> TEMPORARY S1 qualification overlay (Rendering 2), removed before #331 is ready
+                {
+                    static LLCachedControl<bool> s1_show_cascades(gSavedSettings, "RenderShadowS1ShowCascades", false);
+                    static const LLStaticHashedString sS1Cascades("shadow_s1_cascades");
+                    sun_shader.uniform1i(sS1Cascades, s1_show_cascades ? 1 : 0);
+                }
+                // </Vulkanstorm>
                 if (RenderShadowPCSS && !gCubeSnapshot)
                 {
                     static const F32 sun_angular_size = 2.f * tanf(0.5f * 0.53f * DEG_TO_RAD);
@@ -11255,6 +11268,30 @@ public:
     }
 };
 
+// <Vulkanstorm> stable sun cascades: the far cascades (2, 3) of the main view are re-rendered on
+// alternate frames and reused in between while their (guard-banded) box still holds the slice
+// (doc/shadows/shadow-model-rework.md §9.1, a minimal form of stage S5's caching).
+namespace
+{
+    struct SunCascadeCache
+    {
+        bool      valid = false;
+        U32       frame = 0;
+        U32       clears = 0;
+        U32       texture = 0;
+        glm::mat4 view{ 1.f };
+        glm::mat4 proj{ 1.f };
+        LLShadowCascadeFit::Rect box{ 0.f, 0.f, 0.f, 0.f };
+        LLShadowCascadeFit::DepthRange depth{ 0.f, 0.f };
+        LLVector3 light;
+    };
+    SunCascadeCache sSunCascadeCache[4];
+    U32 sSunShadowFrame = 0;
+    U32 sSunShadowClears = 0; // bumped whenever the sun maps are cleared outside generateSunShadow
+    constexpr F32 SUN_CASCADE_GUARD = 1.1f; // box half-size / sphere radius of a cached cascade
+}
+// </Vulkanstorm>
+
 void LLPipeline::generateSunShadow(LLCamera& camera)
 {
     if (!sRenderDeferred || RenderShadowDetail <= 0)
@@ -11400,7 +11437,16 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     up.normVec();
     at.normVec();
 
+    const bool cache_view = !gCubeSnapshot && mRT == &mMainRT;
+    if (cache_view)
+    {
+        ++sSunShadowFrame;
+    }
+    // TEMPORARY S1 toggle (Rendering 2): cull with the stable box only, no slice bound
+    static LLCachedControl<bool> s1_box_only_cull(gSavedSettings, "RenderShadowS1BoxOnlyCulling", false);
+
     static LLCachedControl<F32> shadow_distance(gSavedSettings, "RenderShadowDistance", 128.f);
+    static LLCachedControl<F32> bias_texels(gSavedSettings, "RenderShadowBiasTexels", 3.f);
     const F32 near_clip = llclamp(camera.getNear(), 0.01f, 4.0f);
     const F32 far_clip = llmax(llmin((F32)shadow_distance, camera.getFar()), near_clip + 1.f);
     {
@@ -11518,51 +11564,70 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             view[j] = look(eye, lightDir, -up);
             const glm::vec3 c = mul_mat4_vec3(view[j], glm::vec3(sphere_centre));
             const glm::vec3 anchor = mul_mat4_vec3(view[j], glm::vec3(0.f));
-            const LLShadowCascadeFit::Rect box = LLShadowCascadeFit::snappedSquare(c.x, c.y, radius,
+            const bool cached_cascade = cache_view && j >= 2;
+            const F32 box_radius = cached_cascade ? radius * SUN_CASCADE_GUARD : radius;
+            const LLShadowCascadeFit::Rect box = LLShadowCascadeFit::snappedSquare(c.x, c.y, box_radius,
                 (F32)mRT->shadow[j].getWidth(), (F32)mRT->shadow[j].getHeight(), anchor.x, anchor.y);
-            const LLShadowCascadeFit::DepthRange depth = LLShadowCascadeFit::depthRange(c.z, radius);
+            const LLShadowCascadeFit::DepthRange depth = LLShadowCascadeFit::depthRange(c.z, box_radius);
 
             mShadowError.mV[j] = -1.f; // orthographic (the perspective warp is gone)
             mShadowFOV.mV[j] = -1.f;
             proj[j] = glm::ortho(box.min_x, box.max_x, box.min_y, box.max_y, -depth.z_max, -depth.z_min);
 
-            // Caster culling: the stable box, narrowed to the light-space bounds of this slice's
-            // visible receivers plus 16 texels for the filter kernels. A caster outside cannot
-            // shadow anything on screen; an off-screen roof over a visible floor projects onto
-            // that floor in light space and stays in. Only which casters are drawn depends on the
-            // view, never the map's placement, so the shadows stay put. Without receivers the
-            // map holds no casters (same matrix: nothing to refit when receivers come back).
+            // Caster culling depends only on the camera's frustum slice and the light, never on a
+            // set of visible objects: a caster can shadow a pixel of this cascade only if its
+            // light-space footprint overlaps the slice's (the shader picks the cascade by the
+            // pixel's view depth, inside this slice), so the cull box is the stable box narrowed
+            // to the slice corners' light-space bounds plus 16 texels (filter kernels) and 5 cm
+            // (shadow_offset), from the slice's far side up to the light. Only which casters
+            // are drawn depends on the view, never where the map sits.
             glm::mat4 cull_proj = proj[j];
-            bool render_casters = true;
+            if (!s1_box_only_cull)
             {
-                std::vector<LLVector3> receivers;
-                LLVector3 rmin, rmax;
-                if (gPipeline.getVisiblePointCloud(shadow_cam, rmin, rmax, receivers, lightDir))
+                glm::vec3 lo = mul_mat4_vec3(view[j], glm::vec3(frust[0]));
+                glm::vec3 hi = lo;
+                for (U32 k = 1; k < 8; ++k)
                 {
-                    glm::vec3 lo = mul_mat4_vec3(view[j], glm::vec3(receivers[0]));
-                    glm::vec3 hi = lo;
-                    for (const LLVector3& r : receivers)
-                    {
-                        const glm::vec3 q = mul_mat4_vec3(view[j], glm::vec3(r));
-                        lo = glm::min(lo, q);
-                        hi = glm::max(hi, q);
-                    }
-                    const F32 margin = 16.f * (box.max_x - box.min_x) / llmax((F32)mRT->shadow[j].getWidth(), 1.f);
-                    const F32 cx0 = llmax(box.min_x, lo.x - margin), cx1 = llmin(box.max_x, hi.x + margin);
-                    const F32 cy0 = llmax(box.min_y, lo.y - margin), cy1 = llmin(box.max_y, hi.y + margin);
-                    const F32 cz0 = llmax(depth.z_min, lo.z - margin);
-                    if (cx0 < cx1 && cy0 < cy1 && cz0 < depth.z_max)
-                    {
-                        cull_proj = glm::ortho(cx0, cx1, cy0, cy1, -depth.z_max, -cz0);
-                    }
-                    else
-                    {
-                        render_casters = false;
-                    }
+                    const glm::vec3 q = mul_mat4_vec3(view[j], glm::vec3(frust[k]));
+                    lo = glm::min(lo, q);
+                    hi = glm::max(hi, q);
                 }
-                else
+                const F32 margin = 16.f * (box.max_x - box.min_x) / llmax((F32)mRT->shadow[j].getWidth(), 1.f) + 0.05f;
+                const F32 guard = cached_cascade ? (box_radius - radius) : 0.f; // the cached box's slack
+                const F32 cx0 = llmax(box.min_x, lo.x - margin - guard), cx1 = llmin(box.max_x, hi.x + margin + guard);
+                const F32 cy0 = llmax(box.min_y, lo.y - margin - guard), cy1 = llmin(box.max_y, hi.y + margin + guard);
+                const F32 cz0 = llmax(depth.z_min, lo.z - margin - guard);
+                if (cx0 < cx1 && cy0 < cy1 && cz0 < depth.z_max)
                 {
-                    render_casters = false;
+                    cull_proj = glm::ortho(cx0, cx1, cy0, cy1, -depth.z_max, -cz0);
+                }
+            }
+
+            // Far cascades: reuse last frame's map on the off frame while its box and depth range
+            // still hold this frame's sphere and the light has not turned (moving casters lag by
+            // at most one frame there, 16 m and more from the camera at the default distance).
+            bool reuse_map = false;
+            LLShadowCascadeFit::Rect used_box = box;
+            LLShadowCascadeFit::DepthRange used_depth = depth;
+            if (cached_cascade)
+            {
+                SunCascadeCache& cache = sSunCascadeCache[j];
+                const bool off_frame = ((sSunShadowFrame + (U32)j) & 1) != 0;
+                if (off_frame && cache.valid && cache.frame + 1 == sSunShadowFrame && cache.clears == sSunShadowClears
+                    && cache.texture == mRT->shadow[j].getDepth() && cache.light * lightDir > 0.999994f)
+                {
+                    const glm::vec3 cc = mul_mat4_vec3(cache.view, glm::vec3(sphere_centre));
+                    reuse_map = cc.x - radius >= cache.box.min_x && cc.x + radius <= cache.box.max_x
+                             && cc.y - radius >= cache.box.min_y && cc.y + radius <= cache.box.max_y
+                             && cc.z - radius >= cache.depth.z_min && cc.z + radius <= cache.depth.z_max;
+                }
+                if (reuse_map)
+                {
+                    view[j] = cache.view;
+                    proj[j] = cache.proj;
+                    cull_proj = cache.proj;
+                    used_box = cache.box;
+                    used_depth = cache.depth;
                 }
             }
 
@@ -11600,19 +11665,53 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             mShadowProjection[j] = proj[j];
             mSunShadowMatrix[j] = trans*proj[j]*view[j]*inv_view;
 
+            // <Vulkanstorm> bias in world units: RenderShadowBiasTexels of this cascade's texels,
+            // whatever its depth range and whatever bias uniform the shader adds (a z offset of
+            // the texture-space matrix, the same for every consumer of shadow_matrix)
+            {
+                const F32 texel = (used_box.max_x - used_box.min_x) / llmax((F32)mRT->shadow[j].getWidth(), 1.f);
+                const F32 range = used_depth.z_max - used_depth.z_min;
+                glm::mat4 bias(1.f);
+                bias[3][2] = LLShadowCascadeFit::depthBiasOffset(bias_texels, texel, range, sSunShadowBiasUniform);
+                mSunShadowMatrix[j] = bias * mSunShadowMatrix[j];
+            }
+            // </Vulkanstorm>
+
             stop_glerror();
 
-            mRT->shadow[j].bindTarget();
-            mRT->shadow[j].getViewport(gGLViewport);
-            mRT->shadow[j].clear();
-
-            if (render_casters) // <Vulkanstorm/> no visible receivers: an empty map, same matrix
+            if (!reuse_map) // <Vulkanstorm/> a reused far cascade keeps last frame's map
             {
-                static LLCullResult result[4];
-                renderShadow(view[j], proj[j], shadow_cam, result[j], true);
-            }
+                mRT->shadow[j].bindTarget();
+                mRT->shadow[j].getViewport(gGLViewport);
+                mRT->shadow[j].clear();
 
-            mRT->shadow[j].flush();
+                {
+                    static LLCullResult result[4];
+                    renderShadow(view[j], proj[j], shadow_cam, result[j], true);
+                }
+
+                mRT->shadow[j].flush();
+
+                // <Vulkanstorm>
+                if (cached_cascade)
+                {
+                    SunCascadeCache& cache = sSunCascadeCache[j];
+                    cache.valid = true;
+                    cache.frame = sSunShadowFrame;
+                    cache.clears = sSunShadowClears;
+                    cache.texture = mRT->shadow[j].getDepth();
+                    cache.view = view[j];
+                    cache.proj = proj[j];
+                    cache.box = box;
+                    cache.depth = depth;
+                    cache.light = lightDir;
+                }
+                // </Vulkanstorm>
+            }
+            else
+            {
+                sSunCascadeCache[j].frame = sSunShadowFrame; // still current: next frame renders it
+            }
 
             if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
             {
@@ -12643,6 +12742,7 @@ void LLPipeline::restoreHiddenObject( const LLUUID& id )
 void LLPipeline::skipRenderingShadows()
 {
     LLGLDepthTest depth(GL_TRUE);
+    ++sSunShadowClears; // <Vulkanstorm/> cached sun cascades are gone
 
     for (S32 j = 0; j < 4; j++)
     {

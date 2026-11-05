@@ -128,6 +128,17 @@ namespace LLShadowCascadeFit
         return { cz - r, cz + r + headroom * r };
     }
 
+    // Texture-space depth offset for a cascade's shadow matrix so that the bias the shader applies
+    // (2 |uniform_bias| in the cascade's [0,1] depth, towards the light) becomes bias_texels of the
+    // cascade's texels in world units, whatever the cascade's depth range or the uniform: the bias
+    // no longer grows with the depth range (or with any altitude term in the uniform).
+    inline float depthBiasOffset(float bias_texels, float texel, float depth_range, float uniform_bias)
+    {
+        const float applied = 2.f * std::fabs(uniform_bias);
+        const float wanted = bias_texels * texel / (depth_range > 1.0e-6f ? depth_range : 1.0e-6f);
+        return applied - wanted;
+    }
+
     // Up axis of the light view: world north (+y), or east (+x) when the light runs nearly
     // north-south. The result is orthogonal to the light direction.
     inline Vec3 lightUp(const Vec3& light_dir)

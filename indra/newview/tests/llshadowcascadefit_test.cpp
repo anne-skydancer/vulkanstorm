@@ -193,6 +193,21 @@ namespace
         check(a.x == b.x && a.y == b.y && a.z == b.z, "up depends on the light only");
     }
 
+    void test_bias()
+    {
+        // the effective bias in metres is bias_texels x texel for any range and any uniform
+        for (float range : { 0.5f, 7.f, 45.f, 300.f, 1500.f })
+        {
+            for (float uniform : { -0.002f, -0.0021f, -0.009f, -0.0157f })
+            {
+                const float texel = 0.0123f;
+                const float o = LLShadowCascadeFit::depthBiasOffset(4.f, texel, range, uniform);
+                const float metres = (2.f * std::fabs(uniform) - o) * range;
+                check(std::fabs(metres - 4.f * texel) < 1e-4f, "bias in world units", metres, 4.f * texel);
+            }
+        }
+    }
+
     void test_depth()
     {
         const auto z = LLShadowCascadeFit::depthRange(-3.f, 5.f);
@@ -208,6 +223,7 @@ int main()
     test_snap();
     test_up();
     test_depth();
+    test_bias();
     if (failures)
     {
         std::printf("%d check(s) failed\n", failures);
