@@ -276,13 +276,30 @@ jobs:
             exit 1
           fi
 
-      - name: Run statistics, script metadata, transport and physics decomposition regression tests
+      - name: Run statistics, script metadata, transport, TLS and physics decomposition regression tests
         shell: bash
         run: |
           set -euo pipefail
           cmake -S indra -B "${{ matrix.directory }}" -DLL_TESTS:BOOL=ON
           cmake --build "${{ matrix.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
-            --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver INTEGRATION_TEST_llmodel_decomposition
+            --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver INTEGRATION_TEST_llmodel_decomposition \
+            INTEGRATION_TEST_llcorehttp
+          # The TLS tests: this line's test helpers register tests with CTest,
+          # so run them here, and fail unless all are found. The
+          # credential-store tests stub LLControlGroup and link llui, which
+          # only MSVC's linker resolves; they have never linked on Linux.
+          runners='llcorehttp'
+          want=1
+          if [ "$RUNNER_OS" = Windows ]; then
+            cmake --build "${{ matrix.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
+              --target INTEGRATION_TEST_llsechandler_basic INTEGRATION_TEST_llsecapi
+            runners="$runners|llsechandler_basic|llsecapi"
+            want=3
+          fi
+          tests="^INTEGRATION_TEST_RUNNER_($runners)$"
+          found=$(ctest --test-dir "${{ matrix.directory }}" -C "$VIEWER_BUILD_TYPE" -N -R "$tests" | sed -n 's/^Total Tests: //p')
+          test "$found" = "$want" || { echo "expected $want tests, CTest found ${found:-none}"; exit 1; }
+          ctest --test-dir "${{ matrix.directory }}" -C "$VIEWER_BUILD_TYPE" -R "$tests" --output-on-failure
 
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'
