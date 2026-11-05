@@ -137,14 +137,17 @@ if (LL_TESTS AND LLCOREHTTP_TESTS)
   # If http_proxy is in the current environment (e.g. to fetch s3-proxy
   # autobuild packages), suppress it for this integration test: it screws up
   # the tests.
-  #LL_ADD_INTEGRATION_TEST(llcorehttp
-  #                        "${llcorehttp_TEST_SOURCE_FILES}"
-  #                        "${test_libs}"
-  #                        "-Dhttp_proxy"
-  #                        ${PYTHON_EXECUTABLE}
-  #                        "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_llcorehttp_peer.py"
-  #                        )
-
+  # <Vulkanstorm> registered again (Firestorm had it commented out): it drives
+  # llcorehttp and the libcurl it links against the local Python peer, the
+  # gate for an OpenSSL or curl change. </Vulkanstorm>
+  LL_ADD_INTEGRATION_TEST(llcorehttp
+                          "${llcorehttp_TEST_SOURCE_FILES}"
+                          "${test_libs}"
+                          "-Dhttp_proxy"
+                          ${PYTHON_EXECUTABLE}
+                          "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_llcorehttp_peer.py"
+                          )
+ 
   LL_ADD_INTEGRATION_TEST(wsserver "" "${test_libs}")
 
   LL_ADD_INTEGRATION_TEST(jsonrpcws "" "${test_libs}")
