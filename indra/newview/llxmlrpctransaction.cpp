@@ -434,6 +434,13 @@ void LLXMLRPCTransaction::Impl::setHttpStatus(const LLCore::HttpStatus &status)
 #if LIBCURL_VERSION_NUM < 0x075100
     case CURLE_SSL_CACERT:
 #endif
+#if LIBCURL_VERSION_NUM >= 0x075100
+    // <Vulkanstorm> since 7.62 CURLE_SSL_CACERT and CURLE_SSL_PEER_CERTIFICATE
+    // are both this code (the case above is left out from 7.81 on);
+    // certificate failures keep the SSL message rather than the generic
+    // "server is down" text. </Vulkanstorm>
+    case CURLE_PEER_FAILED_VERIFICATION:
+#endif
     case CURLE_SSL_CONNECT_ERROR:
         message = LLTrans::getString("ssl_connect_error");
         break;
