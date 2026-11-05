@@ -475,11 +475,14 @@ void HttpLibcurl::policyUpdated(unsigned int policy_class)
     // HTTP/1.1 pipelining was switched off under active requests; libcurl
     // 7.62 and later have no HTTP/1.1 pipelining to switch.
     //
-    // A deep-queue class may open as many connections per host as it runs
-    // requests (HttpPolicyClass::activeLimit()), so libcurl runs every
-    // request it is handed and none waits unseen in libcurl's pending
-    // queue with its timeout running. Where a server offers h2, up to
-    // `depth` streams share a connection, the shape pipelining had.
+    // A deep-queue class keeps the connections it had with HTTP/1.1
+    // pipelining: up to its per-host limit to a host and its connection
+    // limit in all. It still runs per-host limit x depth requests
+    // (HttpPolicyClass::activeLimit()); with HTTP/1.1 those beyond the open
+    // connections wait in libcurl's queue for the next free one, as they
+    // waited in a pipeline before (their transfer timeout is doubled for
+    // that, _httpoprequest.cpp). Where a server offers h2, up to `depth`
+    // streams share a connection instead, the shape pipelining had.
     HttpPolicy & policy(mService->getPolicy());
     const HttpPolicyClass & options(policy.getClassOptions(policy_class));
     CURLM * multi_handle(mMultiHandles[policy_class]);
@@ -491,10 +494,10 @@ void HttpLibcurl::policyUpdated(unsigned int policy_class)
                                 CURLPIPE_MULTIPLEX);
         check_curl_multi_setopt(multi_handle,
                                 CURLMOPT_MAX_HOST_CONNECTIONS,
-                                options.activeLimit());
+                                long(options.mPerHostConnectionLimit));
         check_curl_multi_setopt(multi_handle,
                                 CURLMOPT_MAX_TOTAL_CONNECTIONS,
-                                options.activeLimit());
+                                long(options.mConnectionLimit));
 #if LIBCURL_VERSION_NUM >= 0x074300 // 7.67.0
         check_curl_multi_setopt(multi_handle,
                                 CURLMOPT_MAX_CONCURRENT_STREAMS,
