@@ -684,7 +684,8 @@ Fresh configure of the moved build directory, then `autobuild build -A 64
 -c RelWithDebInfoFS_open --no-configure` (RelWithDebInfo, LTO,
 `LL_TESTS=TRUE`): 42 min 33 s, 0 errors, exit 0, staged. The tests the build
 runs: 93 test executables, 1333 tests passed, 9 skipped known failures
-(the six from step (a), llcorehttp's FIXMEs 19–21, plus `LLSphere` 2), 0
+(the six from step (a), mathmisc's being `LLSphere` 2, and llcorehttp's
+FIXMEs 19–21), 0
 failed. `INTEGRATION_TEST_llsechandler_basic`: 12/12, so the hotfix's
 OpenSSL 3 branch (private `OSSL_LIB_CTX`, legacy provider,
 `EVP_CIPHER_fetch`) builds and passes against 3.5.9, the textbook-RC4
