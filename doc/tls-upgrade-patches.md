@@ -33,19 +33,22 @@ is CI's and nothing Linux-specific was run locally (no WSL on this machine).
 - **Step (b), curl 8.23.0** needs one link fix on Windows (`iphlpapi`), two
   Linux `-Werror` fixes, the certificate-failure fix at login, and the
   pipelining replacement in llcorehttp and in the Rust `vkstorm-http`.
-  Eight commits, +237 −263 lines in 15 files (b6 removes more than it adds).
+  Ten commits, +285 −274 lines in 16 files (b6 removes more than it adds;
+  b8–b10 are review follow-ups).
   The viewer builds green on curl 8.23.0, its curl-linked tests pass (the
   restored llcorehttp suite after two expectation fixes), and it reaches
   the login screen with the HTTPS grid list fetched. What curl 8 does to
   texture and mesh load times is not measured here (the study's gate G3).
 - Effort, updated from what was hit: see [Effort](#effort).
 
-**Per line:** vkstorm-release takes all 15 commits as-is. canary and aleph
-take every code commit; only the llcorehttp test registration (and the two
-test hunks that follow it) must be placed by hand. On the rust line the step
-(a) code applies as-is; b2 and b6 are done in Rust instead (the core
-branch), because its C++ llcorehttp internals are gone, and its parity
-fixture must be re-recorded. See [Per-line notes](#per-line-notes).
+**Per line:** vkstorm-release takes all 17 code commits as-is. On canary
+and aleph the net change applies to every file but one: the llcorehttp
+test registration in `CMakeLists.txt` must be placed by hand (commit by
+commit, the test hunks after it follow). On the rust line the step (a)
+code applies as-is (the line registers the llcorehttp test already); its
+C++ llcorehttp internals are gone, so b2 is moot there, b6 and b8–b10
+are done in Rust instead (the core branch), and its parity fixture must
+be re-recorded. See [Per-line notes](#per-line-notes).
 
 ## Packages
 
@@ -270,8 +273,10 @@ The step (a) tree built against the curl 8.23.0 package:
 | b6 | `92a4f39218` | `_httppolicyclass.h`, `_httppolicy.cpp/.h`, `_httplibcurl.cpp/.h`, `_httpoprequest.cpp/.h`, `httprequest.h`, `llappcorehttp.cpp`, `tests/test_httprequest.hpp` | Pipelining replacement, below. BUG-2295 test no longer skipped | +90 −235 | verified: builds; llcorehttp suite incl. BUG-2295 passes; viewer and `http_texture_load` run. Load-time effect not measured (G3) |
 | b7 | `1c79e63d1a` | `indra/llcorehttp/tests/test_httprequest.hpp` | With curl 8 the restored suite's "Header generation for HttpRequest GET" and "... PUT" failed: they require `Accept-Encoding`, which llcorehttp sends only with curl before 7.81 (the guard below). For 7.81+ they now require it absent; POST is unchanged | +33 | verified (63 tests: 60 pass, 3 skipped, 0 failed) |
 | b8 | `3500ce3c11` | `_httplibcurl.cpp`, `tests/test_httprequest.hpp` | Review follow-up (#322): b6 had also dropped the desync check's offset test. A 206 whose Content-Range starts elsewhere than asked is refused again, with the retryable `HE_INV_CONTENT_RANGE_HDR` and nothing switched off: `lltexturefetch.cpp:1844` skips realignment when the reply offset is 0 and would append such a reply to its data. A longer reply at the asked offset is still delivered (BUG-2295). New block in the BUG-2295 test: `bytes 0-75` for a request at offset 10 must fail so | +47 −1 | verified (63 tests: 60 pass, 3 skipped; the new block logs the refusal and passes) |
+| b9 | `523bdfdb40` | `_httplibcurl.cpp`, `tests/test_httprequest.hpp`, `tests/test_llcorehttp_peer.py` | Second review follow-up (the same check in Rust, core #26): b8 skipped a 206 whose Content-Range was missing or not parsed (`mReplyOffset` and `mReplyLength` stay 0), so such a reply to a request at a later offset was delivered unchecked. The length guard goes: such a reply reads as offset 0 and is refused for a request at a later offset, as Firestorm's check did; at offset 0 it passes. The test peer gains `/bug2295/no_range/` (a 206 without Content-Range) and the BUG-2295 test a fifth block: that reply to a request at offset 10 must fail with `HE_INV_CONTENT_RANGE_HDR` | +41 −5 | verified (63 tests: 60 pass, 3 skipped; both refusals logged) |
+| b10 | `42c7ab06f6` | `_httplibcurl.cpp` | Comment only: the texture fetcher (`lltexturefetch.cpp:2474`) and the mesh repository (`llmeshrepository.cpp:3710`) take a 206 without a useful Content-Range as the asked range at any offset (LL's fallback for services that scrub headers); b9 keeps Firestorm's refusal at a later offset, and the comment now says so | +7 −6 | built |
 
-Total step (b): +237 −263 in 15 files (b6 removes more than it adds; b8 is the review follow-up).
+Total step (b): +285 −274 in 16 files (b6 removes more than it adds; b8–b10 are the review follow-ups).
 
 ### The pipelining replacement (b6, and the same in `vkstorm-http`)
 
@@ -302,7 +307,14 @@ Total step (b): +237 −263 in 15 files (b6 removes more than it adds; b8 is the
   and Content-Range desync check, which answered a mismatched reply with a
   503 and switched pipelining off on every class (with it gone, LL's
   BUG-2295 expectation, deliver a longer 206 than asked for, holds again;
-  its offset test comes back on its own in b8);
+  its offset test comes back on its own in b8 and b9: a 206 that starts
+  elsewhere than asked, or that carries no usable Content-Range for a
+  request at a later offset, is retried and then fails as before, which
+  leaves the texture at the data it has. LL's texture and mesh fetchers
+  would take such an unlabelled reply as the asked range, and with
+  pipelining gone it can no longer be a desync, so relaxing that case is
+  an option if a grid's services scrub Content-Range; the prototype keeps
+  Firestorm's behaviour);
   the `VIEWERASSET` environment switch to `CURL_HTTP_VERSION_2_0`. curl 8's
   default negotiates h2 over TLS only; it would have tried h2c upgrades on
   the CDN's `http:` URLs.
@@ -349,6 +361,14 @@ G3. POST stays as it is (its replies come from simulators and login).
   passed, 9 skipped known failures, 0 failed; `llsechandler_basic` 12/12;
   llcorehttp 63/60/3 with the refused 206 logged ("Partial content at
   offset 0 for a request at offset 10").
+- **After the second follow-up** (b9, and b10, a comment): incremental
+  build at b10 8 min 57 s, 0 errors, 0 warnings, staged; 82 test
+  executables relinked and rerun with TEMP in `.fixture-tmp`: 1199 tests,
+  1190 passed, 9 skipped known failures, 0 failed; `llsechandler_basic`
+  12/12; llcorehttp 63/60/3, with both refusals logged (`/bug2295/0/` and
+  `/bug2295/no_range/`, each "Partial content at offset 0 for a request
+  at offset 10", once more on the retry). The smoke test was not repeated
+  after b8–b10, which change only how a 206 at an unexpected offset ends.
 - **Smoke test** (same harness and scratch profile; real store unchanged):
   login screen after 8 s; `libcurl version is: libcurl/8.23.0 OpenSSL/3.5.9
   zlib/1.3.1.zlib-ng nghttp2/1.64.0`; `GridListRequest: got new list` from
@@ -377,6 +397,8 @@ uses no OpenSSL; `Cargo.lock` has no TLS crate).
 | `586b1cf` | README: the `link-curl` library list for the new packages (`bcrypt;iphlpapi`; no `wldap32`, `normaliz`) | verified (the list links) |
 | `bd267c3` | Scenario `options_change_under_active_requests`: a deep-queue class switched to depth 0 with six requests in flight; all of them and eight later ones complete, the later ones within the new limit. Answers the Copilot review's "active-transfer reconfiguration" note (the stall's removal had no test) | verified (3 runs) |
 | `42eb1c8` | The b8 offset check, one to one; mock endpoint `/fixedrange/`; `odd_bodies` checks a refused 206 at the wrong offset and a delivered one at the asked offset | verified |
+| `7748f1c` | The b9 change, one to one (from this PR's Copilot review): the length guard goes, so a 206 without a usable Content-Range is refused for a request at a later offset and delivered at offset 0. Mock endpoints `/norange/` (no Content-Range) and `/oddrange/` (`items 0-9/100`, which the parser leaves alone); `odd_bodies` checks both at offsets 20 and 0 | verified |
+| `2798df6` | The b10 comment, one to one | comment only |
 
 Not changed (the study's optional items): `CURLINFO_*_DOWNLOAD` doubles
 (no deprecation warnings in Rust), `vkstorm-audio`'s private curl bindings
@@ -386,11 +408,13 @@ Not changed (the study's optional items): `CURLINFO_*_DOWNLOAD` doubles
 
 - `cargo test -p vkstorm-http --features link-curl` against the curl 8.23.0
   + OpenSSL 3.5.9 static libraries: 16 unit tests and 17 scenarios pass,
-  three runs in a row (18 scenarios, all passing, after `bd267c3` and
-  `42eb1c8`). One earlier run under full CPU load (a viewer build
-  in parallel) failed `concurrency_limits_and_throttle` once on timing ("sixth
-  throttled request after 870 ms", window 900–1400 ms); throttling is not
-  touched by these commits.
+  three runs in a row. With the follow-ups (`bd267c3`, `42eb1c8`,
+  `7748f1c`) there are 18 scenarios; at `2798df6`, three runs in a row
+  again, 16 + 18 each, with another viewer build running in parallel. One
+  earlier run under full CPU load (a viewer build in parallel) failed
+  `concurrency_limits_and_throttle` once on timing ("sixth throttled
+  request after 870 ms", window 900–1400 ms); throttling is not touched by
+  these commits.
 - The same suite at the first commit against curl 7.54.1 + OpenSSL 3.5.9:
   16 + 17 pass. With `CURLPIPE_MULTIPLEX` and no HTTP/1.1 bit, 7.54.1 does
   not pipeline either, so the new scenario holds there too
@@ -402,7 +426,8 @@ Not changed (the study's optional items): `CURLINFO_*_DOWNLOAD` doubles
 - `cargo test -p vkstorm-http` (no libcurl): 16 pass. `cargo fmt --check`
   clean; `cargo clippy -p vkstorm-http --all-targets --features link-curl`
   clean. `cargo test --workspace --locked --no-fail-fast`
-  (CI's command): 446 passed, 0 failed, 2 ignored in 83 test binaries.
+  (CI's command) at `2798df6`: 446 passed, 0 failed, 2 ignored in 83 test
+  binaries.
 - Not in CI: the `link-curl` suites still do not run in the core's CI
   (`.github/workflows/test.yaml`), as the study found.
 
@@ -413,7 +438,7 @@ connection, overlap 1 under 7.54.1 pipelining), `dynamic_pipelining`, and
 `Accept-Encoding: deflate, gzip` in every GET's raw request head. With curl 8
 those change on both sides, so the fixture must be re-recorded: run the
 rust line's `llcorehttp_parity_test` and its mock server against a C++
-llcorehttp that carries b1–b7 (this prototype tree, for example) with
+llcorehttp that carries b1–b10 (this prototype tree, for example) with
 `VKS_HTTP_RECORD=<file>`, then compare the Rust service against it on the
 rust line. Not done here (it belongs to the rust line's integration PR).
 
@@ -422,10 +447,21 @@ rust line. Not done here (it belongs to the rust line's integration PR).
 Checked by applying the whole series, in order, to each line's tree in a
 temporary index (`git read-tree origin/<line>` then `git apply --cached`
 commit by commit; no checkout): release `8617c997a7`, canary `307df79dd4`,
-rust `e89ee30f6e`, aleph `1678d1a92c`, fetched 2026-11-05 07:20 UTC.
-"Applies" means as-is; nothing needed a 3-way merge. Of 60 checks (15
-code commits, 4 lines), 48 apply as-is; **vkstorm-release takes all 15
+rust `e89ee30f6e`, aleph `1678d1a92c`, fetched 2026-11-05 08:13 UTC.
+"Applies" means as-is; nothing needed a 3-way merge. Of 68 checks (17
+code commits, 4 lines), 50 apply as-is; **vkstorm-release takes all 17
 commits unchanged**.
+
+Per file, the series' net change (`a5290e8c81..` the branch) against each
+line's copy: on release every touched file is identical to the series
+base. On canary and aleph only `indra/llcorehttp/CMakeLists.txt` (a6) must
+be placed by hand; `linux_crash_logger.cpp`, `test_httprequest.hpp` and
+`llsechandler_basic_test.cpp` differ there but take the net change as-is,
+and the llcorehttp internals are identical to the base. Commit by commit,
+a6's BUG-2295 skip does not apply to their `test_httprequest.hpp`, so
+every later commit with a hunk in that file (b6–b9) is marked too, as is
+b10, which edits b9's lines. On rust: `CMakeLists.txt` and the seven
+llcorehttp internals that the line replaced with the Rust service.
 
 | Commit | release | canary | rust | aleph |
 |---|---|---|---|---|
@@ -444,6 +480,8 @@ commits unchanged**.
 | b6 pipelining | applies | adapt: only the BUG-2295 hunk, since a6 was adapted; the code applies | adapt: the C++ internals are gone; the change is the Rust core branch (`8b6c519`, `a77ca42`) plus the `httprequest.h`/`llappcorehttp.cpp` comments; the parity fixture must be re-recorded (above) | as canary |
 | b7 header tests | applies | adapt (follows a6) | applies (the Rust transport sends no `Accept-Encoding` on GET after `a77ca42` either) | as canary |
 | b8 206 offset check | applies | adapt: the test hunk follows a6; the `_httplibcurl.cpp` hunk applies | adapt: done in Rust (`42eb1c8`) | as canary |
+| b9 206 without Content-Range | applies | adapt: the test hunk follows a6; the `_httplibcurl.cpp` and peer hunks apply | adapt: done in Rust (`7748f1c`) | as canary |
+| b10 comment | applies | applies on top of b9 (marked only because b9 was held back whole) | adapt: done in Rust (`2798df6`) | as canary |
 
 Packages: all five lines pin the same `openssl` (1.1.1w-r4) and `curl`
 (7.54.1-r4) entries, so one `autobuild.xml` change per line once the
