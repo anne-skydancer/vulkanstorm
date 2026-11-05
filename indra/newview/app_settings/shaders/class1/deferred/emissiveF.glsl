@@ -34,6 +34,8 @@ void main()
 {
     // NOTE: when this shader is used, only alpha is being written to
     float a = diffuseLookup(vary_texcoord0.xy).a*vertex_color.a;
-    frag_color = max(vec4(0, 0, 0, a), vec4(0));
+    // <Vulkanstorm> the glow in green as well: the RGB is masked or blended with ZERO here, and
+    // stochastic transparency accumulates the glow into the green of an RG16F target
+    frag_color = max(vec4(0, a, 0, a), vec4(0));
 }
 
