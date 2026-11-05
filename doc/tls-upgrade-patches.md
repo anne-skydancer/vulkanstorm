@@ -28,19 +28,19 @@ is CI's and nothing Linux-specific was run locally (no WSL on this machine).
   with curl 7.54.1** (rebuilt), pipelining and all.
 - **Step (a), OpenSSL 3.5 with curl 7.54.1** needs one build fix
   (`llsecapi.cpp`, ENGINE) and one behavioural fix that the compiler does
-  not report (the credential store), plus cleanups. Six commits, +323 −207
-  lines, half of it the credential store and its tests.
+  not report (the credential store), plus cleanups. Seven commits, +364 −211
+  lines, more than half of it the credential store and its tests.
 - **Step (b), curl 8.23.0** needs one link fix on Windows (`iphlpapi`), two
   Linux `-Werror` fixes, the certificate-failure fix at login, and the
   pipelining replacement in llcorehttp and in the Rust `vkstorm-http`.
-  Seven commits, +190 −262 lines in 15 files (b6 removes more than it adds).
+  Eight commits, +237 −263 lines in 15 files (b6 removes more than it adds).
   The viewer builds green on curl 8.23.0, its curl-linked tests pass (the
   restored llcorehttp suite after two expectation fixes), and it reaches
   the login screen with the HTTPS grid list fetched. What curl 8 does to
   texture and mesh load times is not measured here (the study's gate G3).
 - Effort, updated from what was hit: see [Effort](#effort).
 
-**Per line:** vkstorm-release takes all 13 commits as-is. canary and aleph
+**Per line:** vkstorm-release takes all 15 commits as-is. canary and aleph
 take every code commit; only the llcorehttp test registration (and the two
 test hunks that follow it) must be placed by hand. On the rust line the step
 (a) code applies as-is; b2 and b6 are done in Rust instead (the core
@@ -172,8 +172,9 @@ holds `OpenSSL 3.5.9 29 Sep 2026` and `libcurl/7.54.1`.
 | a4 | `974b20076b` | `indra/newview/tests/llsechandler_basic_test.cpp` | Test 10: a store written by the handler decrypts with a textbook RC4 (no OpenSSL) to the stored LLSD, so the on-disk format is the one 1.1.1 viewers read. Test 11: a directory in the place of `<store>.tmp` makes the write fail; the store must stay byte-identical and readable, and a later write must replace it. Test 3 (existing) reads the 1.1.1-era RC4 fixture | +112 −1 | verified (11/11 pass; test 11 logs "Could not write the protected data store), existing store kept") |
 | a5 | `a6d5ea9a57` | `indra/llcrashlogger/llcrashlogger.cpp`, `.h` | `CRYPTO_num_locks`/`CRYPTO_set_locking_callback`/`CRYPTO_THREADID` have been no-op macros since 1.1.0; removed with their mutex list | +3 −66 | verified (compiles; Windows builds the library but only the Linux crash logger links it) |
 | a6 | `819a54439d` | `indra/llcorehttp/CMakeLists.txt`, `tests/test_httprequest.hpp` | `INTEGRATION_TEST_llcorehttp` registered again (Firestorm had it commented out): the gate for an OpenSSL or curl change. Its BUG-2295 test fails under Firestorm's pipelining desync check (the peer answers a 0-49 range with 0-75 and the check turns it into a 503), so it is skipped with that reason until step (b) removes the check | +16 −7 | verified (63 tests: 59 pass, 4 skipped, 0 failed) |
+| a7 | `67123785bc` | `llsechandler_basic.cpp`, `tests/llsechandler_basic_test.cpp` | Review follow-up (#322): the store is read through `istream::read` in chunks, not an `istreambuf_iterator`, which lets libstdc++'s `basic_filebuf::underflow` throw `std::ios_base::failure` (a directory, an I/O error) past the `LLProtectedDataException` handler; a read error now raises `LLProtectedDataException("Config file cannot be read.")`. Test 12: a directory as the store path lets nothing but `LLProtectedDataException` out of `init()` | +41 −4 | verified on Windows (12/12; there a directory does not open as a file); the Linux path inferred |
 
-Total step (a): +323 −207 in 8 files.
+Total step (a): +364 −211 in 8 files (a7 is the review follow-up).
 
 Not changed: `exoflickr.cpp` (one-shot `HMAC`, not deprecated),
 `llscripteditorws.cpp` (already checks `RAND_bytes`), `OpenSSL.cmake` (no
@@ -268,8 +269,9 @@ The step (a) tree built against the curl 8.23.0 package:
 | b5 | `f4a87d0c1f` | `llxmlrpctransaction.cpp` | `case CURLE_PEER_FAILED_VERIFICATION:` → `ssl_connect_error` for curl 7.81+, where the `CURLE_SSL_CACERT` case is compiled out; otherwise a certificate failure shows "server is down" | +7 | built; inferred |
 | b6 | `92a4f39218` | `_httppolicyclass.h`, `_httppolicy.cpp/.h`, `_httplibcurl.cpp/.h`, `_httpoprequest.cpp/.h`, `httprequest.h`, `llappcorehttp.cpp`, `tests/test_httprequest.hpp` | Pipelining replacement, below. BUG-2295 test no longer skipped | +90 −235 | verified: builds; llcorehttp suite incl. BUG-2295 passes; viewer and `http_texture_load` run. Load-time effect not measured (G3) |
 | b7 | `1c79e63d1a` | `indra/llcorehttp/tests/test_httprequest.hpp` | With curl 8 the restored suite's "Header generation for HttpRequest GET" and "... PUT" failed: they require `Accept-Encoding`, which llcorehttp sends only with curl before 7.81 (the guard below). For 7.81+ they now require it absent; POST is unchanged | +33 | verified (63 tests: 60 pass, 3 skipped, 0 failed) |
+| b8 | `3500ce3c11` | `_httplibcurl.cpp`, `tests/test_httprequest.hpp` | Review follow-up (#322): b6 had also dropped the desync check's offset test. A 206 whose Content-Range starts elsewhere than asked is refused again, with the retryable `HE_INV_CONTENT_RANGE_HDR` and nothing switched off: `lltexturefetch.cpp:1844` skips realignment when the reply offset is 0 and would append such a reply to its data. A longer reply at the asked offset is still delivered (BUG-2295). New block in the BUG-2295 test: `bytes 0-75` for a request at offset 10 must fail so | +47 −1 | verified (63 tests: 60 pass, 3 skipped; the new block logs the refusal and passes) |
 
-Total step (b): +190 −262 in 15 files (b6 removes more than it adds).
+Total step (b): +237 −263 in 15 files (b6 removes more than it adds; b8 is the review follow-up).
 
 ### The pipelining replacement (b6, and the same in `vkstorm-http`)
 
@@ -299,7 +301,8 @@ Total step (b): +190 −262 in 15 files (b6 removes more than it adds).
   options (it protected curl 7.37's pipelining switch); Firestorm's X-LL-URL
   and Content-Range desync check, which answered a mismatched reply with a
   503 and switched pipelining off on every class (with it gone, LL's
-  BUG-2295 expectation, deliver a longer 206 than asked for, holds again);
+  BUG-2295 expectation, deliver a longer 206 than asked for, holds again;
+  its offset test comes back on its own in b8);
   the `VIEWERASSET` environment switch to `CURL_HTTP_VERSION_2_0`. curl 8's
   default negotiates h2 over TLS only; it would have tried h2c upgrades on
   the CDN's `http:` URLs.
@@ -341,6 +344,11 @@ G3. POST stays as it is (its replies come from simulators and login).
   by b7). `INTEGRATION_TEST_llcorehttp` after b7: 63 tests, 60 passed
   (BUG-2295 included), 3 skipped known failures (LL's FIXMEs 19–21), 0
   failed. `INTEGRATION_TEST_llsechandler_basic`: 11/11 again.
+- **After the review follow-ups** (a7, b8): incremental build 10 min 31 s,
+  0 errors; 82 test executables relinked and rerun, 1199 tests: 1190
+  passed, 9 skipped known failures, 0 failed; `llsechandler_basic` 12/12;
+  llcorehttp 63/60/3 with the refused 206 logged ("Partial content at
+  offset 0 for a request at offset 10").
 - **Smoke test** (same harness and scratch profile; real store unchanged):
   login screen after 8 s; `libcurl version is: libcurl/8.23.0 OpenSSL/3.5.9
   zlib/1.3.1.zlib-ng nghttp2/1.64.0`; `GridListRequest: got new list` from
@@ -367,6 +375,8 @@ uses no OpenSSL; `Cargo.lock` has no TLS crate).
 | `8b6c519` | `vkstorm-http`: the C++ b6 change, one to one. `ClassOptions::active_limit()` used by the policy and the transport; deep-queue multi handles get `CURLPIPE_MULTIPLEX`, host and total connections = active limit, `MAX_CONCURRENT_STREAMS` = depth; requests set `CURLOPT_PIPEWAIT`; options apply at once (stall and `dirty` gone); the X-LL-URL/Content-Range desync check and `RequestOp::xll_url` gone; the doubled transfer timeout kept; `VIEWERASSET` switch gone. New bindings: `CURLOPT_PIPEWAIT`, `CURLMOPT_MAX_CONCURRENT_STREAMS`, `CURLPIPE_NOTHING`, `CURLPIPE_MULTIPLEX`. New tests: `active_limit` unit test; scenario `deep_queue_runs_per_host_times_depth_on_own_connections` (per-host 2 × depth 3: six requests in flight, never two at once on one connection, at most six connections). `status_strings` accepts curl 8's "Could not connect to server" | verified |
 | `a77ca42` | Request options as the C++ sets them when built against curl 8: no `Accept-Encoding` except on POST (the Firestorm guard above), If-Modified-Since through `CURLOPT_TIMEVALUE_LARGE` (64-bit `curl_off_t`; `CURLOPT_TIMEVALUE` is a 32-bit `long` on Windows). The GET scenario now expects no `Accept-Encoding` | verified |
 | `586b1cf` | README: the `link-curl` library list for the new packages (`bcrypt;iphlpapi`; no `wldap32`, `normaliz`) | verified (the list links) |
+| `bd267c3` | Scenario `options_change_under_active_requests`: a deep-queue class switched to depth 0 with six requests in flight; all of them and eight later ones complete, the later ones within the new limit. Answers the Copilot review's "active-transfer reconfiguration" note (the stall's removal had no test) | verified (3 runs) |
+| `42eb1c8` | The b8 offset check, one to one; mock endpoint `/fixedrange/`; `odd_bodies` checks a refused 206 at the wrong offset and a delivered one at the asked offset | verified |
 
 Not changed (the study's optional items): `CURLINFO_*_DOWNLOAD` doubles
 (no deprecation warnings in Rust), `vkstorm-audio`'s private curl bindings
@@ -376,7 +386,8 @@ Not changed (the study's optional items): `CURLINFO_*_DOWNLOAD` doubles
 
 - `cargo test -p vkstorm-http --features link-curl` against the curl 8.23.0
   + OpenSSL 3.5.9 static libraries: 16 unit tests and 17 scenarios pass,
-  three runs in a row. One earlier run under full CPU load (a viewer build
+  three runs in a row (18 scenarios, all passing, after `bd267c3` and
+  `42eb1c8`). One earlier run under full CPU load (a viewer build
   in parallel) failed `concurrency_limits_and_throttle` once on timing ("sixth
   throttled request after 870 ms", window 900–1400 ms); throttling is not
   touched by these commits.
@@ -412,8 +423,9 @@ Checked by applying the whole series, in order, to each line's tree in a
 temporary index (`git read-tree origin/<line>` then `git apply --cached`
 commit by commit; no checkout): release `8617c997a7`, canary `307df79dd4`,
 rust `e89ee30f6e`, aleph `1678d1a92c`, fetched 2026-11-05 07:20 UTC.
-"Applies" means as-is; nothing needed a 3-way merge. Of 52 checks, 43
-apply as-is; **vkstorm-release takes all 13 commits unchanged**.
+"Applies" means as-is; nothing needed a 3-way merge. Of 60 checks (15
+code commits, 4 lines), 48 apply as-is; **vkstorm-release takes all 15
+commits unchanged**.
 
 | Commit | release | canary | rust | aleph |
 |---|---|---|---|---|
@@ -423,6 +435,7 @@ apply as-is; **vkstorm-release takes all 13 commits unchanged**.
 | a4 credential store tests | applies | applies | applies | applies |
 | a5 crash logger locking | applies | applies | applies | applies |
 | a6 llcorehttp test registered | applies | adapt: the commented block sits after `wsserver`/`jsonrpcws` in another order; same 7 lines | adapt: the rust line already registers `INTEGRATION_TEST_llcorehttp` (and a parity test) against the Rust service; keep only the BUG-2295 skip if its desync check fails it there too (the Rust port has the same check) | as canary |
+| a7 store read through `istream::read` | applies | applies | applies | applies |
 | b1 `CURL.cmake` | applies | applies | applies | applies |
 | b2 `CURLINFO_*_T` | applies | applies | adapt: `_httpoprequest.cpp` is gone (Rust service); the Rust transport reads the doubles, optional to change | applies |
 | b3 crash logger mime | applies | applies | applies | applies |
@@ -430,6 +443,7 @@ apply as-is; **vkstorm-release takes all 13 commits unchanged**.
 | b5 SSL message | applies | applies | applies | applies |
 | b6 pipelining | applies | adapt: only the BUG-2295 hunk, since a6 was adapted; the code applies | adapt: the C++ internals are gone; the change is the Rust core branch (`8b6c519`, `a77ca42`) plus the `httprequest.h`/`llappcorehttp.cpp` comments; the parity fixture must be re-recorded (above) | as canary |
 | b7 header tests | applies | adapt (follows a6) | applies (the Rust transport sends no `Accept-Encoding` on GET after `a77ca42` either) | as canary |
+| b8 206 offset check | applies | adapt: the test hunk follows a6; the `_httplibcurl.cpp` hunk applies | adapt: done in Rust (`42eb1c8`) | as canary |
 
 Packages: all five lines pin the same `openssl` (1.1.1w-r4) and `curl`
 (7.54.1-r4) entries, so one `autobuild.xml` change per line once the
