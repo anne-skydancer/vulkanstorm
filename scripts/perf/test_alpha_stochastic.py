@@ -17,8 +17,10 @@ LLDrawPoolAlpha::renderStochastic on a small target:
     (alpha 0.5), a noisy pair whose mean over the pixels converges, an opaque occluder;
   * the glow: accumulated like the colour, corrected, added to the scene alpha after the
     composite has dimmed it;
-  * a face lying on an opaque surface (a decal on a sloped plane) is covered on every sample with
-    the passes' polygon offset (and the check shows it is not without);
+  * faces on, a third of a pixel's depth in front of and behind a sloped opaque surface: the
+    first two cover every sample, the third leaves the scene untouched, as sorted alpha draws
+    them; the depth spread of 1.0.1.81943 (the centre's depth on every sample, with a
+    slope-scaled offset in the passes) is shown to let the face behind through.;
   * blended legacy materials that can glare (materialF.glsl itself, plain and as its variant, with
     stand-ins for the lighting it links): the composite equals sorted alpha, an alpha 0 layer with
     matte maps leaves the opaque surface untouched, and shiny glass keeps its reflections (#328);
@@ -110,8 +112,8 @@ def viewer(name):
     return '#version 420\n'+text.replace('/*[EXTRA_CODE_HERE]*/','')
 helper=viewer('alphaStochasticF.glsl')
 vertex='''#version 420
-uniform float z; uniform float slope;
-void main(){ vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2)*2.0-1.0; gl_Position=vec4(p,z+slope*p.x,1.0); }'''
+uniform float z; uniform float slope; uniform float slope_y;
+void main(){ vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2)*2.0-1.0; gl_Position=vec4(p,z+slope*p.x+slope_y*p.y,1.0); }'''
 # the alpha programs' ALPHA_STOCHASTIC variant: alpha alone, the sample mask
 variant=program([(0x8B31,vertex),(0x8B30,'''#version 420
 uniform float test_alpha; out vec4 frag_color; int alpha_stochastic_mask(float a);
@@ -127,6 +129,17 @@ void main(){ frag_color=max(vec4(0.0,test_glow,0.0,test_glow),vec4(0.0)); }''')]
 screen_vertex='''#version 420
 void main(){ vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2); gl_Position=vec4(p*2.0-1.0,0.0,1.0); }'''
 expand=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticExpandF.glsl'))])
+# the depth spread as released in 1.0.1.81943 (the pixel centre's depth on every sample), for the
+# regression check below: with it the passes needed a slope-scaled polygon offset
+BEFORE_REF='dd23ea50c4'
+import subprocess
+expand_before=program([(0x8B31,screen_vertex),(0x8B30,'#version 420\n'+subprocess.run(['git','show',
+    BEFORE_REF+':indra/newview/app_settings/shaders/class1/deferred/alphaStochasticExpandF.glsl'],cwd=root,
+    capture_output=True,text=True,check=True).stdout.replace('/*[EXTRA_CODE_HERE]*/',''))])
+# glPolygonOffset of LLDrawPoolAlpha::renderStochastic: factor; units of the total alpha and the
+# stochastic depth, of the accumulation, of the glow
+VIEWER_OFFSET=(-1/256,-1.,-2.,-3.)
+BEFORE_OFFSET=(-1.,-1.,-2.,-3.)
 composite=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCompositeF.glsl'))])
 # per pixel, the samples of the stochastic depth nearer than the opaque depth, as bits
 readmask=program([(0x8B31,screen_vertex),(0x8B30,'''#version 420
@@ -161,51 +174,53 @@ for n in (4,8):
     targets[n]=(fbo((COLOR0,TEXMS,accum),(COLOR1,TEXMS,trans),(DEPTH_ATT,TEXMS,depth)),accum,trans,depth)
 assert geterror()==0
 
-def set_opaque(z,occluder=None,slope=0.):
+def set_opaque(z,occluder=None,slope=0.,slope_y=0.):
     """The scene depth: z everywhere, or the sloped plane, or z with an occluder (x0, depth)."""
     bindfbo(FB,opaque_fbo);drawbuffer(NONE);depthmask(1);enable(DEPTH_TEST);depthfunc(ALWAYS)
     cleardepth(z);clear(0x100)
-    if slope:
-        use(shade);uniform1f(loc(shade,b'z'),z);uniform1f(loc(shade,b'slope'),slope);draw(4,0,3)
+    if slope or slope_y:
+        use(shade);uniform1f(loc(shade,b'z'),z);uniform1f(loc(shade,b'slope'),slope);uniform1f(loc(shade,b'slope_y'),slope_y);draw(4,0,3)
     if occluder:
         x0,zo=occluder;fn('glEnable',None,U)(0x0C11);fn('glScissor',None,I,I,I,I)(x0,0,W-x0,H)
         cleardepth(zo);clear(0x100);disable(0x0C11)
     depthfunc(LEQUAL)
 
-def layer(prog,z,alpha=0.,rgb=(1.,1.,1.),seed=0,glow=0.,slope=0.):
-    use(prog);uniform1f(loc(prog,b'z'),z);uniform1f(loc(prog,b'slope'),slope)
+def layer(prog,z,alpha=0.,rgb=(1.,1.,1.),seed=0,glow=0.,slope=0.,slope_y=0.):
+    if isinstance(slope,tuple): slope,slope_y=slope
+    use(prog);uniform1f(loc(prog,b'z'),z);uniform1f(loc(prog,b'slope'),slope);uniform1f(loc(prog,b'slope_y'),slope_y)
     if prog==variant: uniform1f(loc(prog,b'test_alpha'),alpha);uniform1i(loc(prog,b'st_seed'),seed)
     elif prog==shade: uniform1f(loc(prog,b'test_alpha'),alpha);uniform3f(loc(prog,b'test_rgb'),*rgb)
     else: uniform1f(loc(prog,b'test_glow'),glow)
     draw(4,0,3)
 
-def spread(n):
+def spread(n,prog):
     f=targets[n][0];bindfbo(FB,f);drawbuffer(NONE);disable(BLEND);disable(POLY_OFFSET)
     enable(DEPTH_TEST);depthfunc(ALWAYS);depthmask(1)
-    use(expand);bind_unit(0,TEX2D,opaque_depth);uniform1i(loc(expand,b'depthMap'),0);draw(4,0,3)
+    use(prog);bind_unit(0,TEX2D,opaque_depth);uniform1i(loc(prog,b'depthMap'),0);draw(4,0,3)
     depthfunc(LEQUAL)
 
-def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits=None):
+def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits=None,before=False):
     """LLDrawPoolAlpha::renderStochastic over `layers` [(z, alpha, rgb, seed, glow, slope)], then
     the composite over a scene of `scene_rgba`; returns the scene's pixels (RGBA float)."""
     f,accum,trans,depth=targets[n];iterations=total//n
     bindfbo(FB,f);enable(MULTISAMPLE);disable(0x0C11)
     drawbuffer(COLOR1);clearf(0,(1.,0.,0.,0.));drawbuffer(COLOR0);clearf(0,(0.,0.,0.,0.))
-    spread(n)
+    spread_prog,offsets=(expand_before,BEFORE_OFFSET) if before else (expand,VIEWER_OFFSET)
+    spread(n,spread_prog)
     use(variant);uniform1i(loc(variant,b'st_samples_hw'),n);uniform1i(loc(variant,b'st_samples'),total)
     bind_unit(1,TEX2D,mask_tex[total]);uniform1i(loc(variant,b'alpha_st_masks'),1)
-    def poly(units):
-        if use_offset: enable(POLY_OFFSET);offset(-1.,units)
+    def poly(i):
+        if use_offset: enable(POLY_OFFSET);offset(offsets[0],offsets[i])
         else: disable(POLY_OFFSET)
     # 1. total alpha
     bindfbo(FB,f);drawbuffer(COLOR1);enable(BLEND);blendsep(ZERO,ONE_MINUS_SRC_ALPHA,ZERO,ONE_MINUS_SRC_ALPHA)
-    depthmask(0);poly(-1.);use(variant);uniform1i(loc(variant,b'st_mode'),1)
+    depthmask(0);poly(1);use(variant);uniform1i(loc(variant,b'st_mode'),1)
     for z,a,rgb,seed,glow,slope in layers: layer(variant,z,a,seed=seed,slope=slope)
     bits=[]
     for it in range(iterations):
-        if it: spread(n)
+        if it: spread(n,spread_prog)
         # 2. stochastic depth
-        bindfbo(FB,f);drawbuffer(NONE);depthmask(1);poly(-1.)
+        bindfbo(FB,f);drawbuffer(NONE);depthmask(1);poly(1)
         use(variant);uniform1i(loc(variant,b'st_mode'),2);uniform1i(loc(variant,b'st_iteration'),it)
         for z,a,rgb,seed,glow,slope in layers: layer(variant,z,a,seed=seed,slope=slope)
         if read_bits:
@@ -215,9 +230,9 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
             draw(4,0,3);px=(U*(W*H))();readpixels(0,0,W,H,RED_INT,UINT,px);bits.append(list(px))
             enable(DEPTH_TEST);enable(MULTISAMPLE);bindfbo(FB,f)
         # 3. accumulation, then the glow of the glowing faces
-        drawbuffer(COLOR0);depthmask(0);enable(BLEND);blendsep(SRC_ALPHA,ONE,ONE,ONE);poly(-2.)
+        drawbuffer(COLOR0);depthmask(0);enable(BLEND);blendsep(SRC_ALPHA,ONE,ONE,ONE);poly(2)
         for z,a,rgb,seed,glow,slope in layers: layer(shade,z,a,rgb,slope=slope)
-        drawbuffer(COLOR1);blendsep(ONE,ONE,ONE,ONE);poly(-3.)
+        drawbuffer(COLOR1);blendsep(ONE,ONE,ONE,ONE);poly(3)
         for z,a,rgb,seed,glow,slope in layers:
             if glow>0: layer(glowprog,z,glow=glow,slope=slope)
     disable(POLY_OFFSET);disable(MULTISAMPLE)
@@ -335,17 +350,79 @@ worst=max(abs(p[3]-want) for p in pix)
 assert worst<3e-3,('glow',worst);checks+=1
 print(f'glow: the scene glow dimmed by the total alpha plus the visible glow: {want:.3f} within 3e-3')
 
-# ---- a decal: a face on a sloped opaque plane is covered on every sample with the offset only
-slope=0.02
-set_opaque(0.5,slope=slope)
-pix=stochastic([L(0.5,1.0,seed=8,slope=slope)],8,8)
-worst=max(abs(p[0]-1.0) for p in pix)
-assert worst<2e-3,('decal with offset',worst)
-pix=stochastic([L(0.5,1.0,seed=8,slope=slope)],8,8,use_offset=False)
-lost=sum(1 for p in pix if p[0]<0.999)
-assert lost>0,'without the offset the decal should lose samples (the test would not see it)'
+# ---- faces on, just in front of and just behind a sloped opaque surface, against sorted alpha
+# (which tests the face's depth at the pixel centre against the opaque depth there, LEQUAL): a
+# face on or in front shows on every sample, a face behind leaves the scene exactly as it is. The
+# window depth per pixel of a plane of NDC slopes (kx, ky) is kx / W across x and ky / H across
+# y; the faces sit a third of the steeper axis' step in front of or behind the plane.
+SLOPES=((0.02,0.),(0.,0.02),(0.05,-0.03),(-0.2,0.1),(0.3,0.15))   # the planes stay inside the depth range
+def pixel_step(sl): return max(abs(sl[0])/W,abs(sl[1])/H)
+def ndc_shift(sl,fraction): return 2.0*fraction*pixel_step(sl)
+BLUE=(0.,0.,1.,0.)
+def white_everywhere(pix): return max(max(abs(p[0]-1.0),abs(p[1]-1.0),abs(p[2]-1.0)) for p in pix)
+for sl in SLOPES:
+    set_opaque(0.5,slope=sl[0],slope_y=sl[1])
+    for total,n in ((16,8),(8,8),(4,4)):
+        worst=white_everywhere(stochastic([L(0.5,1.0,seed=8,slope=sl)],total,n,scene_rgba=BLUE))
+        assert worst<2e-3,('decal on the plane',sl,total,worst)
+        worst=white_everywhere(stochastic([L(0.5-ndc_shift(sl,1/3),1.0,seed=8,slope=sl)],total,n,scene_rgba=BLUE))
+        assert worst<2e-3,('face in front of the plane',sl,total,worst)
+        for fraction in (1/3,1/16):
+            behind=stochastic([L(0.5+ndc_shift(sl,fraction),1.0,seed=8,slope=sl)],total,n,scene_rgba=BLUE)
+            shown=sum(1 for p in behind if p!=BLUE)
+            assert shown==0,('face behind the plane shows through it',sl,fraction,total,shown,W*H)
+        checks+=1
+print(f'{len(SLOPES)} sloped opaque planes, S = 16, 8, 4: a face on the plane or a third of a pixel\'s depth in front '
+      'of it covers every pixel; one a third or a sixteenth of a pixel behind it leaves the scene exactly as sorted alpha does')
+
+# a decal on 60 random planes (inside the depth range), every pixel covered at S = 16
+rnd=random.Random(5);tried=0
+while tried<60:
+    sl=(rnd.uniform(-0.35,0.35),rnd.uniform(-0.18,0.18))
+    if abs(sl[0])+abs(sl[1])>0.45: continue
+    tried+=1;set_opaque(0.5,slope=sl[0],slope_y=sl[1])
+    worst=white_everywhere(stochastic([L(0.5,1.0,seed=100+tried,slope=sl)],16,8,scene_rgba=BLUE))
+    assert worst<2e-3,('decal on a random plane',sl,worst)
 checks+=1
-print(f'decal on a sloped plane: covered on every pixel with the offset; without it {lost} of {W*H} pixels lose samples')
+print('a decal on 60 random sloped planes: every pixel covered (S = 16)')
+
+# the same decal beside a depth edge: an opaque occluder nearer the eye over the right half; the
+# pixels next to the edge take the plane's gradient from their own side
+sl=(0.05,-0.03)
+set_opaque(0.5,slope=sl[0],slope_y=sl[1],occluder=(W//2,0.3))
+pix=stochastic([L(0.5,1.0,seed=8,slope=sl)],16,8,scene_rgba=BLUE)
+for y in range(H):
+    for x in range(W):
+        p=pix[y*W+x];want=(1.,1.,1.) if x<W//2 else (0.,0.,1.)
+        assert all(abs(p[c]-want[c])<2e-3 for c in range(3)),('decal beside a depth edge',x,y,p)
+checks+=1
+print('a decal beside a depth edge: covered up to the edge, hidden behind the occluder')
+
+# a half-transparent face in front of the plane with an alpha 1 layer just behind it: the
+# composite is the front face over the scene, as sorted alpha draws it
+sl=(0.05,-0.03)
+set_opaque(0.5,slope=sl[0],slope_y=sl[1])
+pix=stochastic([L(0.5+ndc_shift(sl,1/3),1.0,(1.,1.,1.),seed=8,slope=sl),L(0.4,0.5,(1.,0.,0.),seed=9,slope=sl)],16,8,scene_rgba=BLUE)
+worst=max(max(abs(p[0]-0.5),abs(p[1]),abs(p[2]-0.5)) for p in pix)
+assert worst<2e-3,('front face over a hidden layer',worst);checks+=1
+print('a half-transparent face over an alpha 1 layer hidden behind the plane: exactly the face over the scene')
+
+# the regression: the spread and offsets of 1.0.1.81943 let the face behind the plane through (a
+# mesh body's blended skin through the dress fitted over it); the check must see it
+leaks=[]
+for sl in SLOPES:
+    set_opaque(0.5,slope=sl[0],slope_y=sl[1])
+    behind=stochastic([L(0.5+ndc_shift(sl,1/3),1.0,seed=8,slope=sl)],16,8,scene_rgba=BLUE,before=True)
+    leaks.append(sum(1 for p in behind if p!=BLUE))
+assert all(k>0 for k in leaks),('the 1.0.1.81943 passes should show the face behind the plane',leaks)
+# and without any offset its centre-depth spread loses samples of a face lying on the plane
+set_opaque(0.5,slope=0.02)
+pix=stochastic([L(0.5,1.0,seed=8,slope=(0.02,0.))],8,8,before=True,use_offset=False)
+lost=sum(1 for p in pix if p[0]<0.999)
+assert lost>0,'without the offset the centre-depth spread should lose samples of the decal'
+checks+=1
+print(f'before ({BEFORE_REF}: the centre depth on every sample, offset factor -1): the face behind the plane shows '
+      f'on {", ".join(str(k) for k in leaks)} of {W*H} pixels; without the offset a decal loses samples on {lost} pixels')
 
 # ---- a blended legacy material that can glare (materialF.glsl, class3, DIFFUSE_ALPHA_MODE_BLEND with
 # normal and specular maps), the viewer's own shader, plain and as its alpha-only variant, over an
@@ -435,7 +512,7 @@ def material_layer(z,diffuse,bump,spec,env,gloss,total,n,scene_rgba,fixed):
     """renderStochastic over one blended material face, then the composite"""
     f,accum,trans,depth=targets[n];iterations=total//n
     bindfbo(FB,f);enable(MULTISAMPLE);drawbuffer(COLOR1);clearf(0,(1.,0.,0.,0.));drawbuffer(COLOR0);clearf(0,(0.,0.,0.,0.))
-    spread(n);enable(POLY_OFFSET)
+    spread(n,expand);enable(POLY_OFFSET)
     own=alpha_only_binds_maps(env,gloss,fixed)
     ab,asp=(bump,spec) if own else STALE[spec==own_spec_shiny]
     def variant_pass(mode,it=0):
@@ -445,11 +522,11 @@ def material_layer(z,diffuse,bump,spec,env,gloss,total,n,scene_rgba,fixed):
         uniform1i(loc(mat_variant,b'st_seed'),21);bind_unit(1,TEX2D,mask_tex[total]);uniform1i(loc(mat_variant,b'alpha_st_masks'),1)
         draw(4,0,3)
     bindfbo(FB,f);drawbuffer(COLOR1);enable(BLEND);blendsep(ZERO,ONE_MINUS_SRC_ALPHA,ZERO,ONE_MINUS_SRC_ALPHA)
-    depthmask(0);offset(-1.,-1.);variant_pass(1)
+    depthmask(0);offset(VIEWER_OFFSET[0],VIEWER_OFFSET[1]);variant_pass(1)
     for it in range(iterations):
-        if it: spread(n);enable(POLY_OFFSET)
-        bindfbo(FB,f);drawbuffer(NONE);disable(BLEND);depthmask(1);offset(-1.,-1.);variant_pass(2,it)
-        drawbuffer(COLOR0);depthmask(0);enable(BLEND);blendsep(SRC_ALPHA,ONE,ONE,ONE);offset(-1.,-2.)
+        if it: spread(n,expand);enable(POLY_OFFSET)
+        bindfbo(FB,f);drawbuffer(NONE);disable(BLEND);depthmask(1);offset(VIEWER_OFFSET[0],VIEWER_OFFSET[1]);variant_pass(2,it)
+        drawbuffer(COLOR0);depthmask(0);enable(BLEND);blendsep(SRC_ALPHA,ONE,ONE,ONE);offset(VIEWER_OFFSET[0],VIEWER_OFFSET[2])
         bind_material(mat_plain,diffuse,bump,spec,env,gloss);uniform1f(loc(mat_plain,b'z'),z);draw(4,0,3)
     disable(POLY_OFFSET);disable(MULTISAMPLE)
     bindfbo(FB,scene_fbo);drawbuffer(COLOR0);clearcolor(*scene_rgba);clear(0x4000)
