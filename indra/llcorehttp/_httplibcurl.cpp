@@ -399,13 +399,15 @@ bool HttpLibcurl::completeRequest(CURLM * multi_handle, CURL * handle, CURLcode 
 
     // <Vulkanstorm> Firestorm's X-LL-URL / Content-Range check for HTTP/1.1
     // pipelining going out of sync is gone with the pipelining (curl 8), but
-    // a 206 whose Content-Range starts elsewhere than the request asked is
-    // still refused, with the retryable HE_INV_CONTENT_RANGE_HDR and nothing
-    // switched off: lltexturefetch cannot tell a reply that starts at 0 from
-    // one without a Content-Range and would append it to the data it has. A
+    // its offset test stays: a 206 that does not start where the request
+    // asked is refused, with the retryable HE_INV_CONTENT_RANGE_HDR and
+    // nothing switched off. A 206 without a usable Content-Range reads as
+    // offset 0, so it passes only for a request at offset 0 (where
+    // lltexturefetch assumes it got what it asked for, as for capability
+    // services that scrub headers); lltexturefetch cannot tell such a reply
+    // from one starting at 0 and would append it to the data it has. A
     // longer reply at the asked offset is delivered (BUG-2295).
     if (op->mStatus == HttpStatus(HTTP_PARTIAL_CONTENT)
-        && op->mReplyLength
         && op->mReqOffset != op->mReplyOffset)
     {
         LL_WARNS(LOG_CORE) << "Partial content at offset " << op->mReplyOffset
