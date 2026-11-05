@@ -666,7 +666,8 @@ bool LLDrawPoolAlpha::TexSetup(LLDrawInfo* draw, bool use_material)
     }
     else
     {
-        if (!LLPipeline::sRenderingHUDs && use_material && current_shader)
+        // <Vulkanstorm> the alpha-only variants read only the diffuse map
+        if (!LLPipeline::sRenderingHUDs && use_material && current_shader && !mAlphaOnlyPass)
         {
             if (draw->mNormalMap)
             {
@@ -934,6 +935,7 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
 
                 const bool stochastic_pass = oit_phase == ALPHA_ST_ALPHA || oit_phase == ALPHA_ST_DEPTH ||
                                              oit_phase == ALPHA_ST_ACCUM; // <Vulkanstorm/>
+                const bool alpha_only_pass = oit_phase == ALPHA_ST_ALPHA || oit_phase == ALPHA_ST_DEPTH; // <Vulkanstorm/>
                 if (stochastic_pass && residual_draw)
                 {
                     continue;
@@ -973,6 +975,14 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                     // shader must be bound before LLGLTFMaterial::bind
                     if (current_shader != target_shader)
                     {
+                        // <Vulkanstorm> the alpha-only variants read no light function, shadow
+                        // map or reflection probe: once fully bound this frame, a plain bind
+                        if (alpha_only_pass && target_shader->mCanBindFast)
+                        {
+                            target_shader->bind();
+                        }
+                        else
+                        // </Vulkanstorm>
                         gPipeline.bindDeferredShaderFast(*target_shader);
                         // <Vulkanstorm> texture units are global state; the mask table on
                         // every shader transition
@@ -1043,6 +1053,14 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                     if (current_shader != target_shader)
                     {// If we need shaders, and we're not ALREADY using the proper shader, then bind it
                     // (this way we won't rebind shaders unnecessarily).
+                        // <Vulkanstorm> the alpha-only variants read no light function, shadow
+                        // map or reflection probe: once fully bound this frame, a plain bind
+                        if (alpha_only_pass && target_shader->mCanBindFast)
+                        {
+                            target_shader->bind();
+                        }
+                        else
+                        // </Vulkanstorm>
                         gPipeline.bindDeferredShaderFast(*target_shader);
 
                         // <Vulkanstorm> texture units are global state; the mask table on
@@ -1088,7 +1106,9 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                     continue;
                 }
 
+                mAlphaOnlyPass = alpha_only_pass; // <Vulkanstorm/>
                 bool tex_setup = TexSetup(&params, (mat != nullptr));
+                mAlphaOnlyPass = false;
 
                 {
                     // <Vulkanstorm> stochastic transparency: the pass's own factors, and the face's seed

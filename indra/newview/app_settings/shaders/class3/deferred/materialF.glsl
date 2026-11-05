@@ -306,6 +306,17 @@ void main()
     diffcol.rgb *= vertex_color.rgb;
     alphaMask(diffcol.a);
 
+#if defined(ALPHA_STOCHASTIC) && (DIFFUSE_ALPHA_MODE == DIFFUSE_ALPHA_MODE_BLEND)
+    // <Vulkanstorm> stochastic transparency's alpha-only passes: the diffuse alpha and the vertex
+    // alpha alone, before the specular and normal maps are fetched (the author's Aurora Viewer,
+    // st_material_alpha: the driver does not reliably drop the fetches by itself). The glare an
+    // environment map or a highlight adds to the shaded alpha is left out here; the accumulation
+    // keeps it and the alpha correction scales the colour to this total alpha.
+    frag_color = vec4(0.0, 0.0, 0.0, max(diffcol.a * vertex_color.a, 0.0));
+    gl_SampleMask[0] = alpha_stochastic_mask(diffcol.a * vertex_color.a);
+    return;
+#endif
+
     // spec == specular map combined with specular color
     vec4 spec = getSpecular();
     float env = env_intensity * spec.a;
@@ -315,18 +326,6 @@ void main()
     float emissive = getEmissive(diffcol);
 
 #if (DIFFUSE_ALPHA_MODE == DIFFUSE_ALPHA_MODE_BLEND)
-#ifdef ALPHA_STOCHASTIC
-    // <Vulkanstorm> stochastic transparency: the output alpha is max(diffuse alpha, glare) x
-    // vertex alpha, and glare comes only from the environment map and the specular highlights;
-    // without either (or with an opaque diffuse alpha) it is the diffuse alpha: no shading.
-    // Otherwise the shading below runs and its alpha is taken at the end.
-    if ((env <= 0.0 && glossiness <= 0.0) || diffcol.a >= 1.0)
-    {
-        frag_color = vec4(0.0, 0.0, 0.0, max(diffcol.a * vertex_color.a, 0.0));
-        gl_SampleMask[0] = alpha_stochastic_mask(diffcol.a * vertex_color.a);
-        return;
-    }
-#endif
     //forward rendering, output lit linear color
     diffcol.rgb = srgb_to_linear(diffcol.rgb);
     spec.rgb = srgb_to_linear(spec.rgb);
@@ -438,13 +437,6 @@ void main()
     glare *= 1.0-emissive;
     glare = min(glare, 1.0);
     float al = max(diffcol.a, glare) * vertex_color.a;
-#ifdef ALPHA_STOCHASTIC
-    // <Vulkanstorm> stochastic transparency: the total alpha or the stochastic depth, for the
-    // alpha alone (the same alpha as the shaded output below)
-    frag_color = vec4(0.0, 0.0, 0.0, max(al, 0.0));
-    gl_SampleMask[0] = alpha_stochastic_mask(al);
-    return;
-#endif
     float final_scale = 1;
     if (classic_mode > 0)
         final_scale = 1.1;
