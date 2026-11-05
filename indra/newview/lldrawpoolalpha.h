@@ -103,7 +103,8 @@ private:
     // and a glowing blended face accumulated this frame
     U32  mStochasticMasks = 0;
     bool mStochasticGlow = false;
-    bool mAlphaOnlyPass = false;   // TexSetup: the alpha-only variants need no material maps
+    bool mAlphaOnlyPass = false;   // TexSetup: an alpha-only variant that cannot glare needs no material maps
+    bool mAlphaOnlyLightBound = false; // the current alpha-only variant has its light function, shadow maps and probes
     // </Vulkanstorm>
 
     // setup by beginFooPass, [0] is static variant, [1] is rigged variant

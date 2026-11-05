@@ -58,6 +58,17 @@ bool LLDrawPoolAlpha::sShowDebugAlphaRigged = false;
 
 #define current_shader (LLGLSLShader::sCurBoundShaderPtr)
 
+// <Vulkanstorm> stochastic transparency: whether a blended legacy material's alpha-only variant
+// can glare, the condition materialF.glsl tests (env_intensity and the glossiness in
+// specular_color.a, the uniforms renderAlpha gives it from the draw): its alpha is then
+// max(diffuse alpha, glare) x vertex alpha and it shades in full, with the same inputs as the
+// shaded pass, so that the coverage it gives agrees with the accumulated alpha
+static bool alphaOnlyCanGlare(const LLDrawInfo& draw)
+{
+    return draw.mEnvIntensity > 0.f || draw.mSpecColor.mV[VALPHA] > 0.f;
+}
+// </Vulkanstorm>
+
 LLVector4 LLDrawPoolAlpha::sWaterPlane;
 
 // minimum alpha before discarding a fragment
@@ -666,8 +677,12 @@ bool LLDrawPoolAlpha::TexSetup(LLDrawInfo* draw, bool use_material)
     }
     else
     {
-        // <Vulkanstorm> the alpha-only variants read only the diffuse map
-        if (!LLPipeline::sRenderingHUDs && use_material && current_shader && !mAlphaOnlyPass)
+        // <Vulkanstorm> an alpha-only variant reads only the diffuse map unless the material can
+        // glare (materialF.glsl): then it shades in full for its alpha, and its own normal map
+        // (the glossiness in its alpha) and specular map (the environment intensity in its
+        // alpha) must be bound, or it reads whatever another face left on those units
+        const bool alpha_only_no_glare = mAlphaOnlyPass && !alphaOnlyCanGlare(*draw);
+        if (!LLPipeline::sRenderingHUDs && use_material && current_shader && !alpha_only_no_glare)
         {
             if (draw->mNormalMap)
             {
@@ -980,10 +995,14 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                         if (alpha_only_pass && target_shader->mCanBindFast)
                         {
                             target_shader->bind();
+                            mAlphaOnlyLightBound = false;
                         }
                         else
+                        {
+                            gPipeline.bindDeferredShaderFast(*target_shader);
+                            mAlphaOnlyLightBound = true;
+                        }
                         // </Vulkanstorm>
-                        gPipeline.bindDeferredShaderFast(*target_shader);
                         // <Vulkanstorm> texture units are global state; the mask table on
                         // every shader transition
                         if (oit_phase == ALPHA_ST_DEPTH)
@@ -1058,10 +1077,14 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                         if (alpha_only_pass && target_shader->mCanBindFast)
                         {
                             target_shader->bind();
+                            mAlphaOnlyLightBound = false;
                         }
                         else
+                        {
+                            gPipeline.bindDeferredShaderFast(*target_shader);
+                            mAlphaOnlyLightBound = true;
+                        }
                         // </Vulkanstorm>
-                        gPipeline.bindDeferredShaderFast(*target_shader);
 
                         // <Vulkanstorm> texture units are global state; the mask table on
                         // every shader transition
@@ -1092,6 +1115,20 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                         env_intensity = params.mEnvIntensity;
                         brightness = params.mFullbright ? 1.f : 0.f;
                     }
+
+                    // <Vulkanstorm> an alpha-only variant of a material that can glare shades in
+                    // full for its alpha: it needs the light function, shadow maps and probes
+                    // that its plain bind skipped
+                    if (alpha_only_pass && mat && current_shader && !mAlphaOnlyLightBound && alphaOnlyCanGlare(params))
+                    {
+                        gPipeline.bindDeferredShaderFast(*current_shader);
+                        mAlphaOnlyLightBound = true;
+                        if (oit_phase == ALPHA_ST_DEPTH)
+                        {
+                            bindStochasticMasks(current_shader);
+                        }
+                    }
+                    // </Vulkanstorm>
 
                     if (current_shader)
                     {
