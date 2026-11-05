@@ -79,7 +79,18 @@ material that can glare (shiny glass, whose reflections raise the shaded alpha a
 diffuse) runs the full shading in those passes and reports the shaded alpha, so its reflections
 keep their coverage. In those two passes a variant, once
 fully bound in a frame, is bound without the light function, shadow maps and reflection probes,
-and the materials' normal and specular maps are not bound. The ordinary programs are unchanged, so sorted alpha draws as before.
+and the materials' normal and specular maps are not bound, unless the face's material can glare:
+then the variant shades in full and is given what the shaded pass is given (the light function,
+shadow maps and probes, and the face's own normal map, whose alpha scales the glossiness, and
+specular map, whose alpha scales the environment intensity), so that its alpha is the shaded
+pass's alpha. The ordinary programs are unchanged, so sorted alpha draws as before.
+
+Until 1.0.1.81943 those two maps were never bound in the alpha-only passes, so a glaring material
+read the maps another face had left on those units: a near-invisible blended layer whose own maps
+rule out glare (a mesh body's tattoo or applier layer with a glossy material) got coverage there
+but none in the accumulation, and the composite dimmed the deferred-lit skin under it, a
+shadow-like band with a hard edge at the layer's outline (fixed 2026-11-05;
+`scripts/perf/test_alpha_stochastic.py` runs materialF.glsl itself both ways).
 
 The coverage mask of a fragment is seeded by its pixel, its face's identity
 (`LLDrawInfo::mStochasticSeed`: the object's UUID and texture entry hashed, the same on every

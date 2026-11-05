@@ -18,7 +18,12 @@ LLDrawPoolAlpha::renderStochastic on a small target:
   * the glow: accumulated like the colour, corrected, added to the scene alpha after the
     composite has dimmed it;
   * a face lying on an opaque surface (a decal on a sloped plane) is covered on every sample with
-    the passes' polygon offset (and the check shows it is not without).
+    the passes' polygon offset (and the check shows it is not without);
+  * blended legacy materials that can glare (materialF.glsl itself, plain and as its variant, with
+    stand-ins for the lighting it links): the composite equals sorted alpha, an alpha 0 layer with
+    matte maps leaves the opaque surface untouched, and shiny glass keeps its reflections (#328);
+    with the alpha-only passes reading another face's normal and specular maps (TexSetup before
+    2026-11-05) the alpha 0 layer darkens every pixel and the glass loses its reflections.
 """
 from pathlib import Path
 bootstrap = Path(__file__).with_name('gl_test_context.py').read_text()
@@ -341,6 +346,159 @@ lost=sum(1 for p in pix if p[0]<0.999)
 assert lost>0,'without the offset the decal should lose samples (the test would not see it)'
 checks+=1
 print(f'decal on a sloped plane: covered on every pixel with the offset; without it {lost} of {W*H} pixels lose samples')
+
+# ---- a blended legacy material that can glare (materialF.glsl, class3, DIFFUSE_ALPHA_MODE_BLEND with
+# normal and specular maps), the viewer's own shader, plain and as its alpha-only variant, over an
+# opaque scene, against sorted alpha (the plain program blended SRC_ALPHA, ONE_MINUS_SRC_ALPHA over
+# the scene). The lighting functions it links in the viewer are replaced by small stand-ins (a
+# reflection of 0.8 grey, a white sun, no local lights): the glare term is materialF's own,
+# max(diffuse alpha, legacy environment x env_intensity x specular map alpha) x vertex alpha.
+# LLDrawPoolAlpha::TexSetup decides which maps the alpha-only passes see: the face's own normal and
+# specular maps, or (before 2026-11-05) none, leaving on those units what another face bound.
+MATERIAL_STUBS='''#version 420
+vec4 applySkyAndWaterFog(vec3 pos, vec3 additive, vec3 atten, vec4 color) { return color; }
+vec3 scaleSoftClipFragLinear(vec3 l) { return l; }
+void calcAtmosphericVarsLinear(vec3 p, vec3 n, vec3 l, out vec3 sunlit, out vec3 amblit, out vec3 atten, out vec3 additive)
+{ sunlit = vec3(1.0); amblit = vec3(0.3); atten = vec3(1.0); additive = vec3(0.0); }
+void calcHalfVectors(vec3 lv, vec3 n, vec3 v, out vec3 h, out vec3 l, out float nh, out float nl, out float nv, out float vh, out float lightDist)
+{ l = normalize(lv); h = normalize(l + v); nh = clamp(dot(n, h), 0.0, 1.0); nl = clamp(dot(n, l), 0.0, 1.0);
+  nv = clamp(dot(n, v), 0.0, 1.0); vh = clamp(dot(v, h), 0.0, 1.0); lightDist = length(lv); }
+vec3 srgb_to_linear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
+vec3 linear_to_srgb(vec3 c) { return pow(max(c, vec3(0.0)), vec3(1.0 / 2.2)); }
+void mirrorClip(vec3 pos) {}
+void waterClip(vec3 pos) {}
+float getAmbientClamp() { return 1.0; }
+vec4 encodeNormal(vec3 n, float env, float flag) { return vec4(n, env); }
+float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen) { return 1.0; }
+void sampleReflectionProbesLegacy(inout vec3 ambenv, inout vec3 glossenv, inout vec3 legacyenv, vec2 tc, vec3 pos,
+    vec3 norm, float glossiness, float envIntensity, bool transparent, vec3 amblit)
+{ ambenv = amblit; glossenv = vec3(0.5); legacyenv = vec3(0.8); }
+void applyGlossEnv(inout vec3 color, vec3 glossenv, vec4 spec, vec3 pos, vec3 norm) { color += glossenv * spec.rgb * spec.a * 0.25; }
+void applyLegacyEnv(inout vec3 color, vec3 legacyenv, vec4 spec, vec3 pos, vec3 norm, float env) { color = mix(color, legacyenv, env); }
+'''
+MATERIAL_VERTEX='''#version 420
+uniform float z;
+out vec3 vary_position; out vec4 vertex_color; out vec2 vary_texcoord0; out vec2 vary_texcoord1; out vec2 vary_texcoord2;
+out vec3 vary_normal; out vec3 vary_tangent; flat out float vary_sign;
+void main()
+{
+    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2) * 2.0 - 1.0;
+    gl_Position = vec4(p, z, 1.0);
+    vec2 uv = p * 0.5 + 0.5;
+    vary_position = vec3(p, -2.0); vertex_color = vec4(1.0);
+    vary_texcoord0 = uv; vary_texcoord1 = uv; vary_texcoord2 = uv;
+    vary_normal = vec3(0.0, 0.0, 1.0); vary_tangent = vec3(1.0, 0.0, 0.0); vary_sign = 1.0;
+}'''
+def material_program(as_variant):
+    text=(root/'indra/newview/app_settings/shaders/class3/deferred/materialF.glsl').read_text()
+    extra='#define DIFFUSE_ALPHA_MODE 1\n#define HAS_NORMAL_MAP 1\n#define HAS_SPECULAR_MAP 1\n#define HAS_SUN_SHADOW 1\n'
+    if as_variant: extra+='#define ALPHA_STOCHASTIC 1\n'
+    stages=[(0x8B31,MATERIAL_VERTEX),(0x8B30,'#version 420\n'+text.replace('/*[EXTRA_CODE_HERE]*/',extra)),(0x8B30,MATERIAL_STUBS)]
+    if as_variant: stages.append((0x8B30,helper))
+    return program(stages)
+mat_plain=material_program(False); mat_variant=material_program(True)
+
+def rgba_tex(r,g,b,a,w=W,h=H,ramp=False):
+    """RGBA8 texture of one colour, or with alpha rising 0 -> a across x (ramp)"""
+    data=(C.c_ubyte*(w*h*4))()
+    for y in range(h):
+        for x in range(w):
+            i=(y*w+x)*4; data[i:i+4]=[r,g,b,int(round(a*x/(w-1))) if ramp else a]
+    t=U();gentex(1,C.byref(t));bindtex(TEX2D,t);teximage(TEX2D,0,0x8058,w,h,0,RGBA,0x1401,data)
+    texparam(TEX2D,MIN,NEAREST);texparam(TEX2D,MAG,NEAREST);return t
+TEX_UNITS={'diffuseMap':6,'bumpMap':7,'specularMap':8,'lightFunc':9}
+def bind_material(prog,diffuse,bump,spec,env,gloss):
+    use(prog)
+    for name,unit in TEX_UNITS.items(): uniform1i(loc(prog,name.encode()),unit)
+    bind_unit(6,TEX2D,diffuse);bind_unit(7,TEX2D,bump);bind_unit(8,TEX2D,spec);bind_unit(9,TEX2D,light_func)
+    uniform1f(loc(prog,b'env_intensity'),env)
+    fn('glUniform4f',None,I,C.c_float,C.c_float,C.c_float,C.c_float)(loc(prog,b'specular_color'),1.,1.,1.,gloss)
+    uniform1f(loc(prog,b'emissive_brightness'),0.);uniform1i(loc(prog,b'sun_up_factor'),1)
+    uniform3f(loc(prog,b'sun_dir'),0.,0.6,0.8);uniform3f(loc(prog,b'moon_dir'),0.,0.6,0.8)
+light_func=rgba_tex(255,255,255,255)
+red_clear=rgba_tex(200,40,40,0)            # the layer's diffuse: alpha 0 (a tattoo or applier layer)
+red_fade=rgba_tex(200,40,40,255,ramp=True) # alpha 0 -> 1 across the face
+own_bump_matte=rgba_tex(128,128,255,0)     # its own normal map: no glossiness (alpha 0)
+own_spec_matte=rgba_tex(0,0,0,0)           # its own specular map: no environment (alpha 0)
+own_bump_shiny=rgba_tex(128,128,255,255)   # shiny glass (#328): glossy normal map,
+own_spec_shiny=rgba_tex(255,255,255,255)   # full environment
+# what another face left on those units: a shiny face's maps under a matte layer, a matte face's
+# under shiny glass
+STALE={True:(own_bump_matte,own_spec_matte),False:(own_bump_shiny,own_spec_shiny)}
+
+def alpha_only_binds_maps(env,gloss,fixed):
+    """LLDrawPoolAlpha::TexSetup in the alpha-only passes: the face's own maps when its material
+    can glare (alphaOnlyCanGlare); before the fix, never"""
+    return fixed and (env>0. or gloss>0.)
+
+def material_layer(z,diffuse,bump,spec,env,gloss,total,n,scene_rgba,fixed):
+    """renderStochastic over one blended material face, then the composite"""
+    f,accum,trans,depth=targets[n];iterations=total//n
+    bindfbo(FB,f);enable(MULTISAMPLE);drawbuffer(COLOR1);clearf(0,(1.,0.,0.,0.));drawbuffer(COLOR0);clearf(0,(0.,0.,0.,0.))
+    spread(n);enable(POLY_OFFSET)
+    own=alpha_only_binds_maps(env,gloss,fixed)
+    ab,asp=(bump,spec) if own else STALE[spec==own_spec_shiny]
+    def variant_pass(mode,it=0):
+        bind_material(mat_variant,diffuse,ab,asp,env,gloss);uniform1f(loc(mat_variant,b'z'),z)
+        uniform1i(loc(mat_variant,b'st_mode'),mode);uniform1i(loc(mat_variant,b'st_iteration'),it)
+        uniform1i(loc(mat_variant,b'st_samples_hw'),n);uniform1i(loc(mat_variant,b'st_samples'),total)
+        uniform1i(loc(mat_variant,b'st_seed'),21);bind_unit(1,TEX2D,mask_tex[total]);uniform1i(loc(mat_variant,b'alpha_st_masks'),1)
+        draw(4,0,3)
+    bindfbo(FB,f);drawbuffer(COLOR1);enable(BLEND);blendsep(ZERO,ONE_MINUS_SRC_ALPHA,ZERO,ONE_MINUS_SRC_ALPHA)
+    depthmask(0);offset(-1.,-1.);variant_pass(1)
+    for it in range(iterations):
+        if it: spread(n);enable(POLY_OFFSET)
+        bindfbo(FB,f);drawbuffer(NONE);disable(BLEND);depthmask(1);offset(-1.,-1.);variant_pass(2,it)
+        drawbuffer(COLOR0);depthmask(0);enable(BLEND);blendsep(SRC_ALPHA,ONE,ONE,ONE);offset(-1.,-2.)
+        bind_material(mat_plain,diffuse,bump,spec,env,gloss);uniform1f(loc(mat_plain,b'z'),z);draw(4,0,3)
+    disable(POLY_OFFSET);disable(MULTISAMPLE)
+    bindfbo(FB,scene_fbo);drawbuffer(COLOR0);clearcolor(*scene_rgba);clear(0x4000)
+    disable(DEPTH_TEST);enable(BLEND);blendsep(ONE,ONE_MINUS_SRC_ALPHA,ZERO,ONE_MINUS_SRC_ALPHA)
+    use(composite);bind_unit(4,TEXMS,accum);bind_unit(5,TEXMS,trans)
+    uniform1i(loc(composite,b'alpha_st_accum'),4);uniform1i(loc(composite,b'alpha_st_trans'),5)
+    uniform1i(loc(composite,b'st_samples_hw'),n);uniform1i(loc(composite,b'st_samples'),total);uniform1i(loc(composite,b'st_glow'),0)
+    draw(4,0,3);enable(DEPTH_TEST)
+    out=(C.c_float*(W*H*4))();readbuffer(COLOR0);readpixels(0,0,W,H,RGBA,FLOAT,out)
+    return [tuple(out[i*4:i*4+4]) for i in range(W*H)]
+
+def material_sorted(z,diffuse,bump,spec,env,gloss,scene_rgba):
+    """sorted alpha: the plain program over the scene, SRC_ALPHA, ONE_MINUS_SRC_ALPHA, tested
+    against the opaque depth at the pixel centre"""
+    bindfbo(FB,scene_fbo);drawbuffer(COLOR0);clearcolor(*scene_rgba);clear(0x4000)
+    disable(DEPTH_TEST);enable(BLEND);blendsep(SRC_ALPHA,ONE_MINUS_SRC_ALPHA,ZERO,ONE_MINUS_SRC_ALPHA)
+    bind_material(mat_plain,diffuse,bump,spec,env,gloss);uniform1f(loc(mat_plain,b'z'),z);draw(4,0,3)
+    enable(DEPTH_TEST)
+    out=(C.c_float*(W*H*4))();readbuffer(COLOR0);readpixels(0,0,W,H,RGBA,FLOAT,out)
+    return [tuple(out[i*4:i*4+4]) for i in range(W*H)]
+
+def worst_rgb(a,b): return max(max(abs(p[c]-q[c]) for c in range(3)) for p,q in zip(a,b))
+SKIN=(0.6,0.4,0.3,0.)
+set_opaque(0.8)
+CASES=[('alpha 0 layer, glossy material, matte maps (a body layer)',red_clear,own_bump_matte,own_spec_matte,0.4,0.6),
+       ('alpha 0 layer, environment only, matte maps',red_clear,own_bump_matte,own_spec_matte,0.5,0.0),
+       ('alpha 0 shiny glass, its reflections (#328)',red_clear,own_bump_shiny,own_spec_shiny,0.5,0.6),
+       ('alpha 0 -> 1 fade, glossy material, matte maps',red_fade,own_bump_matte,own_spec_matte,0.4,0.6),
+       ('alpha 0 -> 1 fade, shiny maps',red_fade,own_bump_shiny,own_spec_shiny,0.5,0.6)]
+before=[]
+for name,dif,bump,spec,env,gloss in CASES:
+    ref=material_sorted(0.0,dif,bump,spec,env,gloss,SKIN)
+    for total,n in ((16,8),(8,8),(4,4)):
+        got=material_layer(0.0,dif,bump,spec,env,gloss,total,n,SKIN,fixed=True)
+        worst=worst_rgb(got,ref)
+        # one layer is exact (its accumulation passes on every sample, the total is exact); the
+        # tolerance is the 16-bit float targets'
+        assert worst<4e-3,('glaring material against sorted alpha',name,total,worst)
+    bad=material_layer(0.0,dif,bump,spec,env,gloss,16,8,SKIN,fixed=False)
+    before.append((name,worst_rgb(bad,ref),sum(1 for p,q in zip(bad,ref) if max(abs(p[c]-q[c]) for c in range(3))>4e-3)))
+    checks+=1
+untouched=material_sorted(0.0,red_clear,own_bump_matte,own_spec_matte,0.4,0.6,SKIN)
+assert all(max(abs(p[c]-SKIN[c]) for c in range(3))<1e-3 for p in untouched),('sorted alpha should leave the skin as it is',untouched[0],untouched[W*H//2])
+print(f'{len(CASES)} blended legacy materials that can glare (materialF.glsl), S = 16, 8, 4: the composite equals sorted '
+      'alpha within 4e-3; an alpha 0 layer with matte maps leaves the opaque surface exactly as sorted alpha does')
+for name,worst,count in before:
+    print(f'  before (alpha-only passes reading another face\'s normal and specular maps instead of its own): {name}: {count} of {W*H} pixels differ, worst {worst:.3f}')
+assert before[0][2]==W*H and before[1][2]==W*H,('the old binding should change every pixel under the alpha 0 layer',before)
+assert before[2][2]==W*H,('the old binding should lose the shiny glass reflections',before)
 
 print(f'{checks} stochastic transparency cases passed.')
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)
