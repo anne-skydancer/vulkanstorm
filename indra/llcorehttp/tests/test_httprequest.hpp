@@ -2864,6 +2864,38 @@ void HttpRequestTestObjectType::test<22>()
         ensure("One handler invocation for each request - ms3", mHandlerCalls == test3_count);
 
         // ======================================
+        // <Vulkanstorm> A 206 that starts elsewhere than asked gets
+        // HE_INV_CONTENT_RANGE_HDR: the peer answers bytes 0-75 to a request
+        // at offset 10. (A longer reply at the asked offset, above, is
+        // delivered.) </Vulkanstorm>
+        // ======================================
+        mHandlerCalls = 0;
+        mStatus = HttpStatus(HttpStatus::LLCORE, HE_INV_CONTENT_RANGE_HDR);
+        static const int test4_count(1);
+        for (int i(0); i < test4_count; ++i)
+        {
+            HttpHandle handle = req->requestGetByteRange(HttpRequest::DEFAULT_POLICY_ID,
+                                                         url_base + "/bug2295/0/",
+                                                         10,
+                                                         25,
+                                                         options,
+                                                         HttpHeaders::ptr_t(),
+                                                         handlerp);
+            ensure("Valid handle returned for ranged request", handle != LLCORE_HTTP_HANDLE_INVALID);
+        }
+
+        // Run the notification pump.
+        count = 0;
+        limit = LOOP_COUNT_LONG;
+        while (count++ < limit && mHandlerCalls < test4_count)
+        {
+            req->update(1000000);
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        ensure("Request executed in reasonable time - ms4", count < limit);
+        ensure("One handler invocation for each request - ms4", mHandlerCalls == test4_count);
+
+        // ======================================
         // Okay, request a shutdown of the servicing thread
         // ======================================
         mStatus = HttpStatus();
