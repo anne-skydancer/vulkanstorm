@@ -12367,6 +12367,160 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>Backup</key>
     <integer>0</integer>
   </map>
+  <key>ShadowDiagNoCasterCull</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). Sun shadow cameras cull no casters (every plane moved 100 km out).</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+  <key>ShadowDiagExtendToLight</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). Metres the sun cascades' receiver cloud is extended towards the light (moves each cascade's near plane); 0 = stock.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.0</real>
+    </map>
+  <key>ShadowDiagFreezeFit</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). Keep the last sun cascade fit (splits, matrices, culling cameras) while the camera moves.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+  <key>ShadowDiagKeepEmptyCascades</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). A sun cascade without receivers is fitted to its frustum section instead of being cleared.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+  <key>ShadowDiagFixedFar</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). Sun cascade split range fixed to this many metres (near = camera near) instead of the visible extents; 0 = stock.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.0</real>
+    </map>
+  <key>ShadowDiagLockUp</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). Sun shadow light view 'up' fixed to world north instead of the camera's at-axis.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+  <key>ShadowDiagForceOrtho</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). Sun cascades always orthographic (no perspective warp).</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+  <key>ShadowDiagSnapTexels</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). Sun cascades orthographic, extents rounded to powers of two metres and moved in whole texels of a world-fixed grid (use with ShadowDiagLockUp).</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+  <key>ShadowDiagNoAltitudeBias</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). Drop the RenderShadowBiasError x altitude term from the sun shadow bias.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+  <key>ShadowDiagNoKernelRotation</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). PCSS: the Poisson kernel is not rotated per pixel (no noise).</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+  <key>ShadowDiagShowTexels</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). Replace the sun shadow by a checkerboard of 8x8 shadow-map texels, darker per cascade.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+  <key>ShadowDiagNoPCFJitter</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). Stock PCF (PCSS off): no screen-row jitter of the sample position.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+  <key>ShadowDiagLightMapBlur</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). Light-map blur: 0 stock (with SSAO, or with PCSS), 1 always on, 2 always off.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+  <key>ShadowDiagLog</key>
+    <map>
+      <key>Comment</key>
+      <string>DEVELOPMENT DIAGNOSTIC, not for release (doc/shadows/shadow-model-rework.md). Log the sun cascade fit (splits, mode, extents, texel size, depth range, bias in metres) once a second.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
   <key>RenderShadowPCSS</key>
   <map>
     <key>Comment</key>

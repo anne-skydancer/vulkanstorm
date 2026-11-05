@@ -2098,6 +2098,199 @@ If you do not understand the distinction then leave this control alone."
        tool_tip="Softens the edges of sun, moon and projector shadows with a wider, rotated filter and smooths the result with the shadow blur. Needs shadows (Sun/Moon or Sun/Moon + Projectors). Costs some GPU time."/>
       <!-- </Vulkanstorm> -->
 
+      <!-- <Vulkanstorm> DEVELOPMENT DIAGNOSTIC, not for release: shadow study controls
+           (doc/shadows/shadow-model-rework.md). Non-persistent ShadowDiag* settings, applied live. -->
+      <text
+       follows="left|top"
+       height="16"
+       layout="topleft"
+       left="15"
+       top_pad="6"
+       width="500"
+       font="SansSerifBold"
+       text_color="Orange"
+       name="ShadowDiagHeading">
+        Shadow diagnostics - DEVELOPMENT DIAGNOSTIC, not for release
+      </text>
+      <check_box
+       control_name="ShadowDiagNoCasterCull"
+       height="16"
+       label="No caster culling"
+       layout="topleft"
+       left="25"
+       top_pad="2"
+       width="245"
+       name="ShadowDiagNoCasterCull"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. Sun shadow cameras cull no casters."/>
+      <check_box
+       control_name="ShadowDiagFreezeFit"
+       height="16"
+       label="Freeze cascade fit"
+       layout="topleft"
+       left="275"
+       top_delta="0"
+       width="245"
+       name="ShadowDiagFreezeFit"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. Keeps the last sun cascade fit while you move."/>
+      <check_box
+       control_name="ShadowDiagKeepEmptyCascades"
+       height="16"
+       label="Never clear empty cascades"
+       layout="topleft"
+       left="25"
+       top_pad="2"
+       width="245"
+       name="ShadowDiagKeepEmptyCascades"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. An empty cascade is fitted to its frustum section."/>
+      <check_box
+       control_name="ShadowDiagLockUp"
+       height="16"
+       label="Lock light 'up' to north"
+       layout="topleft"
+       left="275"
+       top_delta="0"
+       width="245"
+       name="ShadowDiagLockUp"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. The shadow texel grid no longer turns with the camera."/>
+      <check_box
+       control_name="ShadowDiagForceOrtho"
+       height="16"
+       label="Orthographic cascades (no warp)"
+       layout="topleft"
+       left="25"
+       top_pad="2"
+       width="245"
+       name="ShadowDiagForceOrtho"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. No perspective-warped cascades."/>
+      <check_box
+       control_name="ShadowDiagSnapTexels"
+       height="16"
+       label="Snap cascades to texels"
+       layout="topleft"
+       left="275"
+       top_delta="0"
+       width="245"
+       name="ShadowDiagSnapTexels"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. Power-of-two extents, whole-texel moves. Use with Lock light 'up'."/>
+      <check_box
+       control_name="ShadowDiagNoAltitudeBias"
+       height="16"
+       label="No altitude bias term"
+       layout="topleft"
+       left="25"
+       top_pad="2"
+       width="245"
+       name="ShadowDiagNoAltitudeBias"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. Drops RenderShadowBiasError x altitude."/>
+      <check_box
+       control_name="ShadowDiagShowTexels"
+       height="16"
+       label="Show shadow texels"
+       layout="topleft"
+       left="275"
+       top_delta="0"
+       width="245"
+       name="ShadowDiagShowTexels"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. Checkerboard of 8x8 shadow texels, darker per cascade."/>
+      <check_box
+       control_name="ShadowDiagNoPCFJitter"
+       height="16"
+       label="Stock PCF: no jitter"
+       layout="topleft"
+       left="25"
+       top_pad="2"
+       width="245"
+       name="ShadowDiagNoPCFJitter"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. PCSS off: no screen-row jitter."/>
+      <check_box
+       control_name="ShadowDiagNoKernelRotation"
+       height="16"
+       label="PCSS: no kernel rotation"
+       layout="topleft"
+       left="275"
+       top_delta="0"
+       width="245"
+       name="ShadowDiagNoKernelRotation"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. PCSS on: the kernel is not rotated per pixel."/>
+      <check_box
+       control_name="ShadowDiagLog"
+       height="16"
+       label="Log cascade fit (1/s)"
+       layout="topleft"
+       left="25"
+       top_pad="2"
+       width="245"
+       name="ShadowDiagLog"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. Logs the fit once a second to the viewer log (ShadowDiag)."/>
+      <check_box
+       control_name="UseObjectCacheOcclusion"
+       height="16"
+       label="Object cache occlusion (stock on)"
+       layout="topleft"
+       left="275"
+       top_delta="0"
+       width="245"
+       name="UseObjectCacheOcclusion"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. Existing setting: cached objects hidden from the camera are not created."/>
+      <text
+       follows="left|top"
+       height="16"
+       layout="topleft"
+       left="25"
+       top_pad="4"
+       width="105"
+       name="ShadowDiagBlurLabel">
+        Light-map blur:
+      </text>
+      <combo_box
+       control_name="ShadowDiagLightMapBlur"
+       height="20"
+       layout="topleft"
+       left_pad="0"
+       top_delta="-2"
+       width="110"
+       name="ShadowDiagLightMapBlur"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. Stock: with SSAO, or with PCSS.">
+        <combo_box.item label="Stock" name="Stock" value="0"/>
+        <combo_box.item label="Always on" name="On" value="1"/>
+        <combo_box.item label="Always off" name="Off" value="2"/>
+      </combo_box>
+      <spinner
+       control_name="ShadowDiagFixedFar"
+       decimal_digits="0"
+       follows="left|top"
+       height="18"
+       increment="8"
+       initial_value="0"
+       label="Fixed split range (m)"
+       label_width="120"
+       layout="topleft"
+       left_pad="15"
+       top_delta="1"
+       max_val="512"
+       min_val="0"
+       width="175"
+       name="ShadowDiagFixedFar"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. 0 = stock: the split range follows the visible extents."/>
+      <spinner
+       control_name="ShadowDiagExtendToLight"
+       decimal_digits="0"
+       follows="left|top"
+       height="18"
+       increment="10"
+       initial_value="0"
+       label="Extend to light (m)"
+       label_width="120"
+       layout="topleft"
+       left="25"
+       top_pad="2"
+       max_val="1000"
+       min_val="0"
+       width="175"
+       name="ShadowDiagExtendToLight"
+       tool_tip="DEVELOPMENT DIAGNOSTIC, not for release. Extends each sun cascade towards the light by this many metres; 0 = stock."/>
+      <!-- </Vulkanstorm> -->
+
     </panel>
 
 <!--Depth of Field-->
