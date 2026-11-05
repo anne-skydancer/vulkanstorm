@@ -37,6 +37,9 @@
 #include "apr_base64.h"
 #include <vector>
 #include <ios>
+#include <fstream>
+#include <iterator>
+#include <sstream>
 #include <llsdserialize.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
@@ -126,6 +129,38 @@ S32 LLMachineID::getLegacyID(unsigned char *unique_id, size_t len)
     return 0;
 }
 S32 LLMachineID::init() { return 1; }
+
+// <Vulkanstorm> A textbook RC4, independent of OpenSSL, to check the store
+// format, and a whole-file reader.
+static std::string textbook_rc4(const U8* key, size_t keylen, const std::string& in)
+{
+    U8 state[256];
+    for (int i = 0; i < 256; ++i)
+    {
+        state[i] = static_cast<U8>(i);
+    }
+    for (int i = 0, j = 0; i < 256; ++i)
+    {
+        j = (j + state[i] + key[i % keylen]) & 0xff;
+        std::swap(state[i], state[j]);
+    }
+    std::string out(in.size(), '\0');
+    for (size_t n = 0, i = 0, j = 0; n < in.size(); ++n)
+    {
+        i = (i + 1) & 0xff;
+        j = (j + state[i]) & 0xff;
+        std::swap(state[i], state[j]);
+        out[n] = static_cast<char>(in[n] ^ state[(state[i] + state[j]) & 0xff]);
+    }
+    return out;
+}
+
+static std::string read_whole_file(const std::string& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+// </Vulkanstorm>
 
 
 LLCertException::LLCertException(const LLSD& cert_data, const std::string& msg)
@@ -647,6 +682,7 @@ namespace tut
             mValidationDate[CERT_VALIDATION_DATE] = LLDate("2017-04-11T00:00:00.00Z");
             LLFile::remove("test_password.dat");
             LLFile::remove("sechandler_settings.tmp");
+            LLFile::rmdir("sechandler_settings.tmp.tmp");
 
             mX509TestCert = NULL;
             mX509RootCert = NULL;
@@ -675,6 +711,7 @@ namespace tut
         {
             LLFile::remove("test_password.dat");
             LLFile::remove("sechandler_settings.tmp");
+            LLFile::rmdir("sechandler_settings.tmp.tmp");
             LLFile::remove("mycertstore.pem");
             X509_free(mX509TestCert);
             X509_free(mX509RootCert);
@@ -1438,5 +1475,79 @@ namespace tut
         test_store->validate(0, test_chain, validation_params);
     }
 
-};
+    // <Vulkanstorm> The store written through OpenSSL 3's legacy provider is
+    // the format the OpenSSL 1.1 viewer wrote and reads: a 16-byte salt XORed
+    // with the machine id, then the LLSD XML encrypted with plain RC4 keyed
+    // by the salt. Checked with a textbook RC4, without OpenSSL.
+    template<> template<>
+    void sechandler_basic_test_object::test<10>()
+    {
+        LLPointer<LLSecAPIBasicHandler> handler = new LLSecAPIBasicHandler("sechandler_settings.tmp",
+                                                                           "test_password.dat");
+        handler->init();
+        LLSD store_data = LLSD::emptyMap();
+        store_data["secret"] = "test_store_rc4";
+        store_data["padding"] = std::string(700, 'x'); // several 256-byte chunks
+        handler->setProtectedData("test_data_type", "test_data_id", store_data);
+        handler->syncProtectedMap();
+        handler = NULL;
 
+        const std::string file = read_whole_file("sechandler_settings.tmp");
+        ensure("store holds more than its salt", file.size() > 16);
+        U8 salt[16];
+        memcpy(salt, file.data(), sizeof(salt));
+        LLXORCipher cipher(gMACAddress, MAC_ADDRESS_BYTES);
+        cipher.decrypt(salt, sizeof(salt));
+        const std::string plain = textbook_rc4(salt, sizeof(salt), file.substr(16));
+
+        LLSD parsed;
+        std::istringstream plain_stream(plain);
+        ensure("decrypts to LLSD", LLSDSerialize::fromXML(parsed, plain_stream) > 0);
+        ensure_equals("secret", parsed["test_data_type"]["test_data_id"]["secret"].asString(),
+                      std::string("test_store_rc4"));
+        ensure_equals("padding", parsed["test_data_type"]["test_data_id"]["padding"].asString().size(),
+                      size_t(700));
+    }
+
+    // <Vulkanstorm> A write that cannot complete leaves the store as it was.
+    // A directory in the place of the temporary file makes the write fail:
+    // the old code then removed the store and renamed the directory over it.
+    template<> template<>
+    void sechandler_basic_test_object::test<11>()
+    {
+        LLPointer<LLSecAPIBasicHandler> handler = new LLSecAPIBasicHandler("sechandler_settings.tmp",
+                                                                           "test_password.dat");
+        handler->init();
+        LLSD store_data = LLSD::emptyMap();
+        store_data["secret"] = "kept";
+        handler->setProtectedData("test_data_type", "test_data_id", store_data);
+        handler->syncProtectedMap();
+        const std::string before = read_whole_file("sechandler_settings.tmp");
+        ensure("store written", before.size() > 16);
+
+        ensure_equals("temporary path blocked", LLFile::mkdir("sechandler_settings.tmp.tmp"), 0);
+        store_data["secret"] = "lost";
+        handler->setProtectedData("test_data_type", "test_data_id", store_data);
+        handler->syncProtectedMap();
+        ensure("store is still a file", LLFile::isfile("sechandler_settings.tmp"));
+        ensure("store unchanged after a failed write", read_whole_file("sechandler_settings.tmp") == before);
+        LLFile::rmdir("sechandler_settings.tmp.tmp");
+
+        // and it still reads back with the old content
+        handler = new LLSecAPIBasicHandler("sechandler_settings.tmp", "test_password.dat");
+        handler->init();
+        ensure_equals("old content", handler->getProtectedData("test_data_type", "test_data_id")["secret"].asString(),
+                      std::string("kept"));
+
+        // a write that can complete replaces it
+        store_data["secret"] = "replaced";
+        handler->setProtectedData("test_data_type", "test_data_id", store_data);
+        handler->syncProtectedMap();
+        ensure("no temporary file left", !LLFile::isfile("sechandler_settings.tmp.tmp"));
+        handler = new LLSecAPIBasicHandler("sechandler_settings.tmp", "test_password.dat");
+        handler->init();
+        ensure_equals("new content", handler->getProtectedData("test_data_type", "test_data_id")["secret"].asString(),
+                      std::string("replaced"));
+    }
+    // </Vulkanstorm>
+};
