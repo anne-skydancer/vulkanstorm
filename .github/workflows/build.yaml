@@ -69,7 +69,19 @@ jobs:
           # package already needs glibc 2.38.
           - os: ubuntu-26.04
             directory: build-linux-x86_64
-            container: ubuntu:24.04
+            # The host's preinstalled toolchains are mounted in so that the
+            # disk step below can remove them (the container cannot reach the host otherwise).
+            container:
+              image: ubuntu:24.04
+              volumes:
+                - /usr/local/lib/android:/host-free/usr_local_lib_android
+                - /usr/share/dotnet:/host-free/usr_share_dotnet
+                - /opt/ghc:/host-free/opt_ghc
+                - /usr/local/.ghcup:/host-free/usr_local_.ghcup
+                - /opt/hostedtoolcache/CodeQL:/host-free/opt_hostedtoolcache_CodeQL
+                - /usr/local/share/powershell:/host-free/usr_local_share_powershell
+                - /usr/share/swift:/host-free/usr_share_swift
+                - /usr/local/julia:/host-free/usr_local_julia
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
     env:
@@ -82,6 +94,25 @@ jobs:
       AUTOBUILD_VSVER: "180"
       LL_SKIP_REQUIRE_SYSROOT: 1
     steps:
+      # The ubuntu-26.04 image leaves about 16 GB free on / by the time the
+      # viewer links, and the GCC LTO link of vulkanstorm-bin can need more
+      # ("lto-wrapper: fatal error: write: No space left on device", for
+      # example run 41989168080). Remove preinstalled toolchains this build never
+      # uses. In the ubuntu:24.04 job container they are mounted under /host-free.
+      - name: Free runner disk space for the LTO link
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "Before: $(df -h --output=avail / | tail -1) free on /"
+          if [ -d /host-free ]; then
+            for d in /host-free/*; do find "$d" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; done
+          else
+            sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/powershell /usr/share/swift /usr/local/julia || true
+            sudo docker image prune --all --force >/dev/null 2>&1 || true
+          fi
+          echo "After: $(df -h --output=avail / | tail -1) free on /"
+
       # The hosted tool cache's Python is built for the 26.04 host and its ssl
       # module does not load in the container, so Linux uses the container's
       # own Python 3 in a virtual environment.
@@ -265,13 +296,13 @@ jobs:
           echo "TMPDIR=$base/vkstorm-tmp" >> "$GITHUB_ENV"
           if [ -f /.dockerenv ]; then
             echo "Building in a container: no swap file added"
-          elif [ "$(df --output=avail -k "$base" | tail -1)" -gt 41943040 ]; then
+          elif [ "$(df --output=avail -k "$base" | tail -1)" -gt 67108864 ]; then
             sudo fallocate -l 24G "$base/vkstorm.swap"
             sudo chmod 600 "$base/vkstorm.swap"
             sudo mkswap "$base/vkstorm.swap"
             sudo swapon "$base/vkstorm.swap"
           else
-            echo "Less than 40 GiB free on $base: no swap file added"
+            echo "Less than 64 GiB free on $base: no swap file added (24 GiB of swap must leave 40 GiB)"
           fi
           free -h
           echo "TMPDIR for the build: $base/vkstorm-tmp"
