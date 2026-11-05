@@ -492,6 +492,13 @@ void LLAppCoreHttp::refreshSettings(bool initial)
             // avatars, etc.) can request additional outbound connections
             // to other servers via 2X total connection limit.
             //
+            // <Vulkanstorm> With curl 8 there is no HTTP/1.1 pipelining:
+            // a pipelined (deep-queue) class runs per-host setting x
+            // PIPELINING_DEPTH requests, each on its own connection or
+            // HTTP/2 stream (HttpPolicyClass::activeLimit()), so the
+            // connection count to the asset CDN rises to that number.
+            // </Vulkanstorm>
+            //
             LLCore::HttpHandle handle;
             handle = mRequest->setPolicyOption(LLCore::HttpRequest::PO_CONNECTION_LIMIT,
                                                mHttpClasses[app_policy].mPolicy,
