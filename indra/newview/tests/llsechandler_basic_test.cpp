@@ -682,7 +682,7 @@ namespace tut
             mValidationDate[CERT_VALIDATION_DATE] = LLDate("2017-04-11T00:00:00.00Z");
             LLFile::remove("test_password.dat");
             LLFile::remove("sechandler_settings.tmp");
-            LLFile::rmdir("sechandler_settings.tmp.tmp");
+            LLFile::remove("sechandler_settings.tmp.tmp", ENOENT);
 
             mX509TestCert = NULL;
             mX509RootCert = NULL;
@@ -711,7 +711,7 @@ namespace tut
         {
             LLFile::remove("test_password.dat");
             LLFile::remove("sechandler_settings.tmp");
-            LLFile::rmdir("sechandler_settings.tmp.tmp");
+            LLFile::remove("sechandler_settings.tmp.tmp", ENOENT);
             LLFile::remove("mycertstore.pem");
             X509_free(mX509TestCert);
             X509_free(mX509RootCert);
@@ -1475,10 +1475,10 @@ namespace tut
         test_store->validate(0, test_chain, validation_params);
     }
 
-    // <Vulkanstorm> The store written through OpenSSL 3's legacy provider is
-    // the format the OpenSSL 1.1 viewer wrote and reads: a 16-byte salt XORed
-    // with the machine id, then the LLSD XML encrypted with plain RC4 keyed
-    // by the salt. Checked with a textbook RC4, without OpenSSL.
+    // <Vulkanstorm> The store the handler writes is the format every viewer
+    // reads: a 16-byte salt XORed with the machine id, then the LLSD XML
+    // encrypted with plain RC4 keyed by the salt. Checked with a textbook
+    // RC4, without OpenSSL.
     template<> template<>
     void sechandler_basic_test_object::test<10>()
     {
@@ -1531,7 +1531,7 @@ namespace tut
         handler->syncProtectedMap();
         ensure("store is still a file", LLFile::isfile("sechandler_settings.tmp"));
         ensure("store unchanged after a failed write", read_whole_file("sechandler_settings.tmp") == before);
-        LLFile::rmdir("sechandler_settings.tmp.tmp");
+        LLFile::remove("sechandler_settings.tmp.tmp", ENOENT);
 
         // and it still reads back with the old content
         handler = new LLSecAPIBasicHandler("sechandler_settings.tmp", "test_password.dat");
@@ -1549,18 +1549,15 @@ namespace tut
         ensure_equals("new content", handler->getProtectedData("test_data_type", "test_data_id")["secret"].asString(),
                       std::string("replaced"));
     }
-    // </Vulkanstorm>
 
     // <Vulkanstorm> A store that cannot be read (here a directory) raises
     // LLProtectedDataException, which the viewer turns into the
     // CorruptedProtectedDataStore notice, or nothing where the platform will
-    // not open a directory as a file (Windows); never another exception. On
-    // Linux, libstdc++'s filebuf throws std::ios_base::failure for the read
-    // when the store is read through an istreambuf_iterator.
+    // not open a directory as a file (Windows); never another exception.
     template<> template<>
     void sechandler_basic_test_object::test<12>()
     {
-        LLFile::remove("sechandler_settings.tmp");
+        LLFile::remove("sechandler_settings.tmp", ENOENT);
         ensure_equals("store path is a directory", LLFile::mkdir("sechandler_settings.tmp"), 0);
         bool unexpected = false;
         try
@@ -1576,7 +1573,7 @@ namespace tut
         {
             unexpected = true;
         }
-        LLFile::rmdir("sechandler_settings.tmp");
+        LLFile::remove("sechandler_settings.tmp", ENOENT);
         ensure("only LLProtectedDataException leaves the handler", !unexpected);
     }
     // </Vulkanstorm>

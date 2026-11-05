@@ -47,7 +47,9 @@
 #include <openssl/rand.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 #include <openssl/provider.h> // <Vulkanstorm/> RC4 lives in the legacy provider
+#endif
 #include <algorithm>
 #include <iostream>
 #include <iomanip>
@@ -1328,14 +1330,13 @@ LLSecAPIBasicHandler::~LLSecAPIBasicHandler()
     //_writeProtectedData();
 }
 
-// <Vulkanstorm> bin_conf.dat is RC4: a 16-byte salt XORed with the machine
-// id, then the LLSD XML encrypted with RC4 keyed by the salt. OpenSSL 3 has
-// RC4 only in its legacy provider. It is loaded into a private library
-// context used for this file alone, so TLS and certificate handling never
-// see the legacy algorithms, and every call is checked: a failure must never
-// produce a store that cannot be read back, nor replace a good one. This is
-// the code tested against OpenSSL 1.1.1w stores by
-// scripts/tests/openssl3_credstore (credstore.cpp, Rc4).
+// <Vulkanstorm> bin_conf.dat is a 16-byte salt XORed with the machine id,
+// then the LLSD XML encrypted with RC4 keyed by the salt. Every cipher call is
+// checked: a failure must never produce a store that cannot be read back, nor
+// replace a good one. OpenSSL 1.1.1 has RC4 in its default library; OpenSSL 3
+// has it only in the legacy provider, which is then loaded into a private
+// library context used for this file alone, so TLS and certificate handling
+// never see the legacy algorithms. The on-disk format is the same either way.
 namespace
 {
 class ProtectedDataRC4
@@ -1343,6 +1344,7 @@ class ProtectedDataRC4
 public:
     ProtectedDataRC4()
     {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
         mLibCtx = OSSL_LIB_CTX_new();
         if (!mLibCtx)
         {
@@ -1353,29 +1355,35 @@ public:
         {
             return;
         }
-        mCipher = EVP_CIPHER_fetch(mLibCtx, "RC4", nullptr);
+        mFetched = EVP_CIPHER_fetch(mLibCtx, "RC4", nullptr);
+        mCipher = mFetched;
+#else
+        mCipher = EVP_rc4();
+#endif
     }
 
     ~ProtectedDataRC4()
     {
-        EVP_CIPHER_free(mCipher);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        EVP_CIPHER_free(mFetched);
         if (mLegacy)
         {
             OSSL_PROVIDER_unload(mLegacy);
         }
         OSSL_LIB_CTX_free(mLibCtx);
+#endif
     }
 
     ProtectedDataRC4(const ProtectedDataRC4&) = delete;
     ProtectedDataRC4& operator=(const ProtectedDataRC4&) = delete;
 
-    // Runs the whole of `in` through RC4 keyed by `key` (STORE_SALT_SIZE
-    // bytes) in BUFFER_READ_SIZE chunks, as the OpenSSL 1.1 code did, and
-    // appends the result to `out`. Returns false on any failure; `out` is
-    // then incomplete and must not be used.
-    bool run(const U8* key, bool encrypt, const std::string& in, std::string& out) const
+    // Runs `in_len` bytes at `in` through RC4 keyed by `key` (STORE_SALT_SIZE
+    // bytes) in BUFFER_READ_SIZE chunks and appends the result to `out`.
+    // Returns false on any failure; `out` is then incomplete and must not be
+    // used.
+    bool run(const U8* key, bool encrypt, const char* in, size_t in_len, std::string& out) const
     {
-        if (!mCipher || EVP_CIPHER_get_key_length(mCipher) != STORE_SALT_SIZE)
+        if (!mCipher || EVP_CIPHER_key_length(mCipher) != STORE_SALT_SIZE)
         {
             return false;
         }
@@ -1384,13 +1392,13 @@ public:
         {
             return false;
         }
-        bool ok = EVP_CipherInit_ex2(ctx, mCipher, key, nullptr, encrypt ? 1 : 0, nullptr) == 1;
+        bool ok = EVP_CipherInit_ex(ctx, mCipher, nullptr, key, nullptr, encrypt ? 1 : 0) == 1;
         U8 outbuf[BUFFER_READ_SIZE];
-        for (size_t pos = 0; ok && pos < in.size(); pos += BUFFER_READ_SIZE)
+        for (size_t pos = 0; ok && pos < in_len; pos += BUFFER_READ_SIZE)
         {
-            const int inl = static_cast<int>(std::min<size_t>(BUFFER_READ_SIZE, in.size() - pos));
+            const int inl = static_cast<int>(std::min<size_t>(BUFFER_READ_SIZE, in_len - pos));
             int outl = 0;
-            ok = EVP_CipherUpdate(ctx, outbuf, &outl, reinterpret_cast<const U8*>(in.data()) + pos, inl) == 1
+            ok = EVP_CipherUpdate(ctx, outbuf, &outl, reinterpret_cast<const U8*>(in) + pos, inl) == 1
                  && outl == inl;
             if (ok)
             {
@@ -1405,9 +1413,12 @@ public:
     }
 
 private:
+    const EVP_CIPHER* mCipher = nullptr;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
     OSSL_LIB_CTX* mLibCtx = nullptr;
     OSSL_PROVIDER* mLegacy = nullptr;
-    EVP_CIPHER* mCipher = nullptr;
+    EVP_CIPHER* mFetched = nullptr;
+#endif
 };
 
 void log_openssl_errors(const char* what)
@@ -1442,11 +1453,12 @@ void LLSecAPIBasicHandler::_readProtectedData(unsigned char *unique_id, U32 id_l
         // mechanisms and are considered to be more secure.
         // We've a strong intent to move to OS dependent protected data stores.
 
-        // <Vulkanstorm> read the whole file, then decrypt it in one checked pass.
-        // Through istream::read, which turns a read error into badbit; an
-        // istreambuf_iterator would let libstdc++'s filebuf throw
-        // std::ios_base::failure (a directory, an I/O error) past the
-        // LLProtectedDataException the caller handles.
+        // <Vulkanstorm> Read the whole file, then decrypt it in one checked
+        // pass. istream::read turns a read error into badbit (it never lets
+        // the filebuf's std::ios_base::failure through, as an
+        // istreambuf_iterator would), and every failure raises
+        // LLProtectedDataException, which the caller turns into the
+        // CorruptedProtectedDataStore notice.
         std::string file_data;
         char chunk[BUFFER_READ_SIZE];
         while (protected_data_stream.read(chunk, sizeof(chunk)) || protected_data_stream.gcount() > 0)
@@ -1469,7 +1481,8 @@ void LLSecAPIBasicHandler::_readProtectedData(unsigned char *unique_id, U32 id_l
         cipher.decrypt(salt, STORE_SALT_SIZE);
 
         std::string decrypted_data;
-        if (!ProtectedDataRC4().run(salt, false, file_data.substr(STORE_SALT_SIZE), decrypted_data))
+        if (!ProtectedDataRC4().run(salt, false, file_data.data() + STORE_SALT_SIZE,
+                                    file_data.size() - STORE_SALT_SIZE, decrypted_data))
         {
             log_openssl_errors("RC4 unavailable or failed: protected data store not decrypted");
             LLTHROW(LLProtectedDataException("Config file cannot be decrypted (RC4 unavailable)."));
@@ -1519,19 +1532,20 @@ void LLSecAPIBasicHandler::_writeProtectedData()
     // <Vulkanstorm> Build the whole new file in memory first, write it to a
     // temporary file, and only once that is complete and closed without
     // error put it in place of the store. Every failure before that point
-    // returns with the existing store untouched. The old code had two ways to
-    // lose every saved login: unchecked EVP calls (with OpenSSL 3 and no RC4,
-    // EVP_EncryptUpdate writes nothing and the store became its 16-byte salt),
-    // and an exception in the encryption block, which deleted the temporary
-    // file but fell through to the step that removes the store before the
-    // rename. A failed write of the temporary file (disk full, locked file)
-    // went the same way, because the stream state was never checked.
+    // returns with the existing store untouched. The old code could lose
+    // every saved login: an exception in the encryption block deleted the
+    // temporary file but fell through to the step that removed the store
+    // before the rename; a failed or partial write of the temporary file
+    // (disk full, a locked file, a directory in the way) went the same way,
+    // because the stream state was never checked; and unchecked EVP calls
+    // could write a truncated or garbage store.
     std::string file_data;
     try
     {
         // create a string with the formatted data.
         std::ostringstream formatted_data_ostream;
         LLSDSerialize::toXML(mProtectedDataMap, formatted_data_ostream);
+        const std::string formatted_data = formatted_data_ostream.str();
 
         // generate the seed
         U8 salt[STORE_SALT_SIZE];
@@ -1542,7 +1556,7 @@ void LLSecAPIBasicHandler::_writeProtectedData()
         }
 
         std::string encrypted_data;
-        if (!ProtectedDataRC4().run(salt, true, formatted_data_ostream.str(), encrypted_data))
+        if (!ProtectedDataRC4().run(salt, true, formatted_data.data(), formatted_data.size(), encrypted_data))
         {
             log_openssl_errors("RC4 unavailable or failed: protected data store not written, existing store kept");
             return;
@@ -1584,11 +1598,13 @@ void LLSecAPIBasicHandler::_writeProtectedData()
     {
         LL_WARNS("SECAPI") << "LLProtectedDataException(Could not write the protected data store), existing store kept" << LL_ENDL;
         // it's good practice to clean up any secure information on error
+        // (even though this file isn't really secure.  Perhaps in the future
+        // it may be, however).
         LLFile::remove(tmp_filename, ENOENT);
         return;
     }
 
-    // LLFile::rename replaces an existing file (MoveFileEx with
+    // LLFile::rename replaces an existing file in one step (MoveFileExW with
     // MOVEFILE_REPLACE_EXISTING on Windows, rename() elsewhere), so the store
     // is never removed before its replacement is in place, and if the rename
     // fails the old store is still there.
