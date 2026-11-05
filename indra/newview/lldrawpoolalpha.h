@@ -57,6 +57,11 @@ public:
         ALPHA_OIT_NONE = 0,
         ALPHA_OIT_CAPTURE,
         ALPHA_OIT_RESIDUAL,
+        // <Vulkanstorm> stochastic transparency's passes over the blended faces
+        ALPHA_ST_ALPHA,     // total alpha (alpha-only variants)
+        ALPHA_ST_DEPTH,     // stochastic depth (alpha-only variants, coverage masks)
+        ALPHA_ST_ACCUM,     // accumulation (the ordinary programs) and the faces' glow
+        // </Vulkanstorm>
     };
     // </FS>
 
@@ -84,12 +89,28 @@ public:
 
     void setOITMode(S32 mode);
 
+    // <Vulkanstorm> stochastic transparency (LLPipeline::beginAlphaStochastic): the passes over the
+    // blended faces and the composite; false when the targets could not be bound (sorted alpha)
+    bool renderStochastic();
+    void setStochasticUniforms(S32 mode, U32 iteration);
+    void bindStochasticMasks(LLGLSLShader* shader);
+    // the rigged depth and the residual draws (particles, custom blending) after the composite
+    void renderOITResidual();
+    // </Vulkanstorm>
+
     static bool sShowDebugAlpha;
     static bool sShowDebugAlphaRigged;
 
 private:
     LLGLSLShader* target_shader;
-    LLRenderTarget* mAlphaOpaqueDepth = nullptr; // detached opaque depth for PPLL capture
+    LLRenderTarget* mAlphaOpaqueDepth = nullptr; // detached opaque depth for OIT capture
+    // <Vulkanstorm> stochastic transparency: the mask table bound by the depth pass's programs, a
+    // glowing blended face accumulated this frame, and the residual pass after the method (whose
+    // composite already holds the blended faces' glow)
+    U32  mStochasticMasks = 0;
+    bool mStochasticGlow = false;
+    bool mResidualAfterStochastic = false;
+    // </Vulkanstorm>
 
     // setup by beginFooPass, [0] is static variant, [1] is rigged variant
     LLGLSLShader* simple_shader = nullptr;

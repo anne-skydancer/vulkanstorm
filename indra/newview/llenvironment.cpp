@@ -1789,7 +1789,17 @@ void LLEnvironment::update(const LLViewerCamera * cam)
         if (shaders_iter->mRiggedVariant)
         {
             shaders_iter->mRiggedVariant->mUniformsDirty = true;
+            // <Vulkanstorm> stochastic transparency's alpha-only variants
+            if (shaders_iter->mRiggedVariant->mStochasticVariant)
+            {
+                shaders_iter->mRiggedVariant->mStochasticVariant->mUniformsDirty = true;
+            }
         }
+        if (shaders_iter->mStochasticVariant)
+        {
+            shaders_iter->mStochasticVariant->mUniformsDirty = true;
+        }
+        // </Vulkanstorm>
 
         for (auto& variant : shaders_iter->mGLTFVariants)
         {

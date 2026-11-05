@@ -358,7 +358,8 @@ bool    LLPipeline::sReflectionRender = false;
 bool    LLPipeline::sDistortionRender = false;
 bool    LLPipeline::sImpostorRender = false;
 bool    LLPipeline::sImpostorRenderAlphaDepthPass = false;
-bool    LLPipeline::sRenderAlphaOITSupported = false;   // <FS/> Vulkanstorm: alpha OIT (PPLL) HW gate (GL 4.4+), set in allocateAlphaOITBuffers
+bool    LLPipeline::sRenderAlphaOITSupported = false;   // <FS/> Vulkanstorm: alpha OIT HW gate (GL 4.4+), set in allocateAlphaOITBuffers
+bool    LLPipeline::sRenderAlphaStochasticSupported = false; // <Vulkanstorm/> stochastic transparency, set in allocateAlphaStochastic
 bool    LLPipeline::sShowJellyDollAsImpostor = true;
 bool    LLPipeline::sUnderWaterRender = false;
 bool    LLPipeline::sTextureBindTest = false;
@@ -1017,6 +1018,16 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
         {
             allocateAlphaOITBuffers(resX, resY);
         }
+        // <Vulkanstorm> stochastic transparency: sized with the scene, freed otherwise
+        if (gSavedSettings.getU32("RenderAlphaSortMethod") == 2)
+        {
+            allocateAlphaStochastic(resX, resY);
+        }
+        else
+        {
+            releaseAlphaStochastic();
+        }
+        // </Vulkanstorm>
     }
     // </FS>
 
@@ -1444,6 +1455,7 @@ void LLPipeline::releaseScreenBuffers()
 {
     // Release the detached PPLL depth snapshot before the scene targets.
     releaseAlphaOITBuffers();
+    releaseAlphaStochastic(); // <Vulkanstorm/> stochastic transparency's targets
     // </FS>
 
     mRT->screen.release();
@@ -8299,6 +8311,323 @@ void LLPipeline::compositeAlphaOIT()
 
 
 // </FS>
+
+// <Vulkanstorm> stochastic transparency -----------------------------------------------------
+// Depth-based stochastic transparency (Enderton, Sintorn, Shirley and Luebke, "Stochastic
+// Transparency", I3D 2010, section 3.4), as the author's Aurora Viewer draws it without MSAA
+// (oit_stochastic.rs): the scene is single-sampled (FXAA and SMAA run after the composite), so
+// the passes over the blended faces run at their own sample count, the most the device takes
+// up to 8, against the opaque depth spread over those samples. LLDrawPoolAlpha drives the
+// passes (renderPostDeferred):
+//   1. total alpha: prod(1 - alpha) per sample into the red of the RG16F target (cleared to 1),
+//      tested against the spread opaque depth;
+//   2. stochastic depth: each fragment covers R = floor(alpha S + xi) of the S samples, a
+//      stratified subset from the mask table, depth only;
+//   3. accumulation: alpha x colour and alpha added where the fragment is at or in front of the
+//      stochastic depth; the glowing faces' glow likewise into the green of the RG16F target;
+//   with more samples than a pass holds, 2 and 3 run again with the next bits of the same mask
+//   (paper footnote 1), the depth spread anew before each run;
+//   4. composite: the scene dimmed by the pixel's transparency, the accumulated colour added
+//      times total alpha over accumulated alpha; the glow then added to the scene alpha.
+// Gated on GL 4.0 (gl_SampleMask, multisample textures) and on every alpha program's alpha-only
+// variant (gAlphaStochasticShadersReady); otherwise sorted alpha runs.
+
+namespace
+{
+    constexpr U32 ST_SEEDS = 2048;          // ST_SEEDS in alphaStochasticF.glsl
+    // The most samples one pass takes: NVIDIA 621.01 honours only the low 4 bits of a texture-
+    // fetched gl_SampleMask at 16 samples (scripts/perf/bench_alpha_oit.py stoch_probe), and the
+    // paper and Aurora run passes of 8.
+    constexpr U32 ST_MAX_PASS_SAMPLES = 8;
+}
+
+// The table of masks for `samples` bits: entry [r][seed] is a random r-subset of the bits, from a
+// fixed generator (splitmix64, a partial Fisher-Yates shuffle), the same on every launch: the
+// author's Aurora Viewer, oit_stochastic.rs mask_table.
+std::vector<U32> LLPipeline::alphaStochasticMaskTable(U32 samples)
+{
+    const U32 s = llclamp(samples, 1u, 32u);
+    U64 state = 0x9e3779b97f4a7c15ULL ^ (U64)s;
+    auto next = [&state]()
+    {
+        state += 0x9e3779b97f4a7c15ULL;
+        U64 z = state;
+        z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+        z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+        return z ^ (z >> 31);
+    };
+    std::vector<U32> table;
+    table.reserve((size_t)(s + 1) * ST_SEEDS);
+    std::vector<U32> bits(s);
+    for (U32 r = 0; r <= s; ++r)
+    {
+        for (U32 seed = 0; seed < ST_SEEDS; ++seed)
+        {
+            for (U32 i = 0; i < s; ++i)
+            {
+                bits[i] = i;
+            }
+            U32 mask = 0;
+            for (U32 i = 0; i < r; ++i)
+            {
+                const U32 j = i + (U32)(next() % (U64)(s - i));
+                std::swap(bits[i], bits[j]);
+                mask |= 1u << bits[i];
+            }
+            table.push_back(mask);
+        }
+    }
+    return table;
+}
+
+void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
+{
+#if LL_WINDOWS || LL_LINUX
+    sRenderAlphaStochasticSupported = gAlphaStochasticShadersReady && gGLManager.mGLVersion >= 4.0f &&
+                                      gAlphaStochasticExpandProgram.mProgramObject &&
+                                      gAlphaStochasticCompositeProgram.mProgramObject;
+#else
+    sRenderAlphaStochasticSupported = false;
+#endif
+#if LL_WINDOWS && !LL_MESA
+    sRenderAlphaStochasticSupported = sRenderAlphaStochasticSupported && glTexImage2DMultisample && glDrawBuffers;
+#endif
+
+    // Samples in all (4, 8 or 16) and per pass: the most the device takes for the three
+    // formats up to 8, at least 2; more in all than a pass holds run as iterations.
+    static LLCachedControl<U32> samples_setting(gSavedSettings, "RenderAlphaStochasticSamples", 16);
+    const U32 samples = samples_setting <= 4 ? 4 : (samples_setting <= 8 ? 8 : 16);
+    const U32 device = (U32)llmax(0, llmin(gGLManager.mMaxColorTextureSamples,
+                                            llmin(gGLManager.mMaxDepthTextureSamples, gGLManager.mMaxSamples)));
+    U32 pass = 0;
+    for (U32 n : { 8u, 4u, 2u })
+    {
+        if (n <= samples && n <= ST_MAX_PASS_SAMPLES && n <= device)
+        {
+            pass = n;
+            break;
+        }
+    }
+    if (pass < 2)
+    {
+        if (sRenderAlphaStochasticSupported)
+        {
+            LL_WARNS_ONCE("Pipeline") << "Stochastic transparency unavailable: the device takes " << device
+                                      << " samples; sorted alpha is used" << LL_ENDL;
+        }
+        sRenderAlphaStochasticSupported = false;
+    }
+    gSavedSettings.setBOOL("RenderAlphaStochasticAvailable", sRenderAlphaStochasticSupported);
+    if (!sRenderAlphaStochasticSupported)
+    {
+        releaseAlphaStochastic();
+        return;
+    }
+
+    if (mAlphaSTFBO && mAlphaSTWidth == w && mAlphaSTHeight == h && mAlphaSTPassSamples == pass &&
+        mAlphaSTSamples == samples)
+    {
+        return; // already sized
+    }
+    releaseAlphaStochastic();
+    while (glGetError() != GL_NO_ERROR) {}
+
+    GLint previous_ms = 0;
+    GLint previous_2d = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D_MULTISAMPLE, &previous_ms);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_2d);
+    auto make_ms = [&](U32& name, GLenum format)
+    {
+        glGenTextures(1, &name);
+        glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, name);
+        glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, (GLsizei)pass, format, (GLsizei)w, (GLsizei)h, GL_TRUE);
+    };
+    make_ms(mAlphaSTAccum, GL_RGBA16F);
+    make_ms(mAlphaSTTrans, GL_RG16F);
+    make_ms(mAlphaSTDepth, GL_DEPTH_COMPONENT24);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, (GLuint)previous_ms);
+
+    const std::vector<U32> table = alphaStochasticMaskTable(samples);
+    glGenTextures(1, &mAlphaSTMasks);
+    glBindTexture(GL_TEXTURE_2D, mAlphaSTMasks);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, (GLsizei)ST_SEEDS, (GLsizei)(samples + 1), 0, GL_RED_INTEGER,
+                 GL_UNSIGNED_INT, table.data());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    glBindTexture(GL_TEXTURE_2D, (GLuint)previous_2d);
+
+    glGenFramebuffers(1, &mAlphaSTFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, mAlphaSTAccum, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D_MULTISAMPLE, mAlphaSTTrans, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D_MULTISAMPLE, mAlphaSTDepth, 0);
+    const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+    const GLenum error = glGetError();
+    if (status != GL_FRAMEBUFFER_COMPLETE || error != GL_NO_ERROR)
+    {
+        LL_WARNS("Pipeline") << "Stochastic transparency allocation failed (framebuffer status " << status
+                             << ", GL error " << error << "); sorted alpha is used" << LL_ENDL;
+        releaseAlphaStochastic();
+        sRenderAlphaStochasticSupported = false;
+        gSavedSettings.setBOOL("RenderAlphaStochasticAvailable", false);
+        return;
+    }
+
+    mAlphaSTWidth = w;
+    mAlphaSTHeight = h;
+    mAlphaSTPassSamples = pass;
+    mAlphaSTSamples = samples;
+    // 8 + 4 + 4 bytes per sample (DEPTH_COMPONENT24 is stored in 32 bits)
+    const U64 bytes = (U64)w * h * pass * 16;
+    LL_INFOS("Pipeline") << "Stochastic transparency: " << w << "x" << h << ", " << samples << " samples in "
+                         << samples / pass << " pass(es) of " << pass << " (" << (bytes >> 20) << " MiB)" << LL_ENDL;
+}
+
+void LLPipeline::releaseAlphaStochastic()
+{
+    if (mAlphaSTFBO)
+    {
+        glDeleteFramebuffers(1, &mAlphaSTFBO);
+        mAlphaSTFBO = 0;
+    }
+    for (U32* name : { &mAlphaSTAccum, &mAlphaSTTrans, &mAlphaSTDepth, &mAlphaSTMasks })
+    {
+        if (*name)
+        {
+            // no unit may keep the deleted name as its current texture (bindManual's cache)
+            for (U32 unit = 0; unit < LL_NUM_TEXTURE_LAYERS; ++unit)
+            {
+                LLTexUnit* tex_unit = gGL.getTexUnit(unit);
+                if (tex_unit && tex_unit->getCurrTexture() == *name)
+                {
+                    tex_unit->unbind(tex_unit->getCurrType());
+                }
+            }
+            glDeleteTextures(1, name);
+            *name = 0;
+        }
+    }
+    mAlphaSTWidth = mAlphaSTHeight = mAlphaSTPassSamples = mAlphaSTSamples = 0;
+}
+
+bool LLPipeline::beginAlphaStochastic()
+{
+    if (!mAlphaSTFBO || !sRenderAlphaStochasticSupported || !mRT->deferredScreen.getDepth() ||
+        mRT->screen.getWidth() != mAlphaSTWidth || mRT->screen.getHeight() != mAlphaSTHeight ||
+        !gAlphaStochasticExpandProgram.mProgramObject || !gAlphaStochasticCompositeProgram.mProgramObject)
+    {
+        return false;
+    }
+    LL_PROFILE_GPU_ZONE("alpha stochastic begin");
+    gGL.flush();
+    glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTFBO);
+
+    // The transparency to 1 (no layer yet) and the glow to 0; the accumulation to 0.
+    LLGLDisable scissor(GL_SCISSOR_TEST);
+    gGL.setColorMask(true, true);
+    static const GLfloat trans_clear[4] = { 1.f, 0.f, 0.f, 0.f };
+    static const GLfloat accum_clear[4] = { 0.f, 0.f, 0.f, 0.f };
+    glDrawBuffer(GL_COLOR_ATTACHMENT1);
+    glClearBufferfv(GL_COLOR, 0, trans_clear);
+    glDrawBuffer(GL_COLOR_ATTACHMENT0);
+    glClearBufferfv(GL_COLOR, 0, accum_clear);
+    glReadBuffer(GL_NONE);
+
+    spreadAlphaStochasticDepth();
+    return true;
+}
+
+void LLPipeline::spreadAlphaStochasticDepth()
+{
+    LL_PROFILE_GPU_ZONE("alpha stochastic depth spread");
+    setAlphaStochasticBuffer(ALPHA_ST_BUFFER_NONE);
+    LLGLDepthTest depth(GL_TRUE, GL_TRUE, GL_ALWAYS);
+    LLGLDisable cull(GL_CULL_FACE);
+    LLGLDisable blend(GL_BLEND);
+    LLGLEnable multisample(GL_MULTISAMPLE);
+    gAlphaStochasticExpandProgram.bind();
+    gAlphaStochasticExpandProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);
+    mScreenTriangleVB->setBuffer();
+    mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+    gAlphaStochasticExpandProgram.unbindTexture(LLShaderMgr::DEFERRED_DEPTH);
+    gAlphaStochasticExpandProgram.unbind();
+}
+
+void LLPipeline::setAlphaStochasticBuffer(EAlphaStochasticBuffer buffer)
+{
+    gGL.flush();
+    switch (buffer)
+    {
+    case ALPHA_ST_BUFFER_ACCUM: glDrawBuffer(GL_COLOR_ATTACHMENT0); break;
+    case ALPHA_ST_BUFFER_TRANS: glDrawBuffer(GL_COLOR_ATTACHMENT1); break;
+    default:                    glDrawBuffer(GL_NONE); break;
+    }
+}
+
+void LLPipeline::endAlphaStochastic()
+{
+    gGL.flush();
+    glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+}
+
+void LLPipeline::compositeAlphaStochastic(bool glow)
+{
+    LL_PROFILE_GPU_ZONE("alpha stochastic composite");
+    LLGLDepthTest depth(GL_FALSE, GL_FALSE);
+    LLGLDisable cull(GL_CULL_FACE);
+    LLGLEnable blend(GL_BLEND);
+    gGL.setColorMask(true, true);
+    // the scene dimmed by the transparency and the colour added; its glow (alpha) dimmed alike
+    gGL.blendFunc(LLRender::BF_ONE, LLRender::BF_ONE_MINUS_SOURCE_ALPHA, LLRender::BF_ZERO,
+                  LLRender::BF_ONE_MINUS_SOURCE_ALPHA);
+
+    static const LLStaticHashedString sSamplesHW("st_samples_hw");
+    static const LLStaticHashedString sSamples("st_samples");
+    static const LLStaticHashedString sGlow("st_glow");
+    LLGLSLShader& shader = gAlphaStochasticCompositeProgram;
+    shader.bind();
+    shader.uniform1i(sSamplesHW, (S32)mAlphaSTPassSamples);
+    shader.uniform1i(sSamples, (S32)mAlphaSTSamples);
+    shader.uniform1i(sGlow, 0);
+    const S32 accum = shader.enableTexture(LLShaderMgr::ALPHA_ST_ACCUM, LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+    if (accum > -1)
+    {
+        gGL.getTexUnit(accum)->bindManual(LLTexUnit::TT_MULTISAMPLE_TEXTURE, mAlphaSTAccum);
+    }
+    const S32 trans = shader.enableTexture(LLShaderMgr::ALPHA_ST_TRANS, LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+    if (trans > -1)
+    {
+        gGL.getTexUnit(trans)->bindManual(LLTexUnit::TT_MULTISAMPLE_TEXTURE, mAlphaSTTrans);
+    }
+    mScreenTriangleVB->setBuffer();
+    mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+
+    if (glow)
+    {
+        // the blended faces' glow, corrected like their colour, added to the scene alpha
+        gGL.blendFunc(LLRender::BF_ZERO, LLRender::BF_ONE, LLRender::BF_ONE, LLRender::BF_ONE);
+        shader.uniform1i(sGlow, 1);
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+    }
+
+    if (accum > -1)
+    {
+        gGL.getTexUnit(accum)->unbind(LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+    }
+    if (trans > -1)
+    {
+        gGL.getTexUnit(trans)->unbind(LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+    }
+    shader.unbind();
+
+    // The state the legacy forwardRender() leaves for the rest of the alpha pool (residual
+    // draws, the selection highlight): colour only, standard source-alpha blending.
+    gGL.setColorMask(true, false);
+    gGL.blendFunc(LLRender::BF_SOURCE_ALPHA, LLRender::BF_ONE_MINUS_SOURCE_ALPHA);
+}
+// </Vulkanstorm>
 
 void LLPipeline::generateGlow(LLRenderTarget* src)
 {

@@ -11950,6 +11950,28 @@ Change of this parameter will affect the layout of buttons in notification toast
     <integer>0</integer>
   </map>
 
+  <key>RenderAlphaStochasticSamples</key>
+  <map>
+    <key>Comment</key>
+    <string>Stochastic transparency: coverage samples per pixel, 4, 8 or 16 (the nearest above). Passes take at most 8 samples, so 16 runs the stochastic depth and accumulation passes twice. More samples, less noise in layered transparency, at the cost of those passes.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>U32</string>
+    <key>Value</key>
+    <integer>16</integer>
+  </map>
+  <key>RenderAlphaStochasticAvailable</key>
+  <map>
+    <key>Comment</key>
+    <string>Runtime capability flag used by preferences: stochastic transparency is available only on Windows/Linux with OpenGL 4.0, its shaders built and its targets allocated.</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
   <key>RenderAlphaOITNodesPerPixel</key>
   <map>
     <key>Comment</key>

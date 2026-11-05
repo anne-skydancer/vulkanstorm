@@ -190,6 +190,15 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
         return false;
     }
 
+    // <Vulkanstorm> stochastic transparency: the alpha programs' alpha-only variants
+    // (llviewershadermgr.cpp make_stochastic_variant) take the coverage mask helpers.
+    if (shader->mDefines.count("ALPHA_STOCHASTIC") &&
+        !shader->attachFragmentObject("deferred/alphaStochasticF.glsl"))
+    {
+        return false;
+    }
+    // </Vulkanstorm>
+
     if (features->hasSrgb || features->hasAtmospherics || features->calculatesAtmospherics || features->isDeferred)
     {
         if (!shader->attachFragmentObject("environment/srgbF.glsl"))
@@ -1643,6 +1652,14 @@ void LLShaderMgr::initAttribsAndUniforms()
     // OpenGL uniform location.
     mReservedUniforms.push_back("alpha_oit_opaque_depth");
     // </FS>
+
+    // <Vulkanstorm> stochastic transparency: the mask table, the accumulation and the
+    // transparency (samplers, bound by reserved index) and the face seed (set per draw)
+    mReservedUniforms.push_back("alpha_st_masks");
+    mReservedUniforms.push_back("alpha_st_accum");
+    mReservedUniforms.push_back("alpha_st_trans");
+    mReservedUniforms.push_back("st_seed");
+    // </Vulkanstorm>
 
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);
 

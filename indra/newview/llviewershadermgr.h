@@ -219,6 +219,13 @@ extern LLGLSLShader         gPostSnapshotFrameProgram;   // <FS:Beq/> Snapshot F
 extern LLGLSLShader         gAlphaOITResolveProgram;
 // </FS>
 
+// <Vulkanstorm> stochastic transparency: the depth spread, the composite, and whether every
+// alpha program has its alpha-only variant (LLGLSLShader::mStochasticVariant)
+extern LLGLSLShader         gAlphaStochasticExpandProgram;
+extern LLGLSLShader         gAlphaStochasticCompositeProgram;
+extern bool                 gAlphaStochasticShadersReady;
+// </Vulkanstorm>
+
 // Deferred rendering shaders
 extern LLGLSLShader         gDeferredImpostorProgram;
 extern LLGLSLShader         gDeferredDiffuseProgram;
