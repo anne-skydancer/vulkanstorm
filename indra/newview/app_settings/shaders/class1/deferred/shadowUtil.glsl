@@ -33,8 +33,9 @@ uniform sampler2DShadow shadowMap3;
 #endif
 
 #if defined(SPOT_SHADOW)
+// <Vulkanstorm> the projector shadow atlas (doc/shadows/shadow-model-rework.md §16): one depth
+// texture holding a tile per projector, sampled per light by the spot light pass
 uniform sampler2DShadow shadowMap4;
-uniform sampler2DShadow shadowMap5;
 #endif
 
 uniform vec3 sun_dir;
@@ -109,28 +110,29 @@ float pcfShadow(sampler2DShadow shadowMap, vec3 norm, vec4 stc, float bias_mul, 
 #endif
 }
 
-float pcfSpotShadow(sampler2DShadow shadowMap, vec4 stc, float bias_scale, vec2 pos_screen)
+// <Vulkanstorm> Projector shadow from the atlas, stock filter: five hardware-PCF taps in a fixed
+// pattern (no screen-position jitter), each lowered by the receiver's depth slope times its
+// offset. c: projected atlas uv and depth; rect: the tile's map in atlas uv; grad: |d depth / d uv|.
+float pcfAtlasShadow(sampler2DShadow shadowMap, vec3 c, vec4 rect, vec2 grad)
 {
 #if defined(SPOT_SHADOW)
-    stc.xyz /= stc.w;
-    stc.z += spot_shadow_bias * bias_scale;
-    stc.x = floor(proj_shadow_res.x * stc.x + fract(pos_screen.y*0.666666666)) / proj_shadow_res.x; // snap
-
-    float cs = texture(shadowMap, stc.xyz);
-    float shadow = cs;
-
-    vec2 off = 1.0/proj_shadow_res;
-    off.y *= 1.5;
-
-    shadow += texture(shadowMap, stc.xyz+vec3(off.x*2.0, off.y, 0.0));
-    shadow += texture(shadowMap, stc.xyz+vec3(off.x, -off.y, 0.0));
-    shadow += texture(shadowMap, stc.xyz+vec3(-off.x, off.y, 0.0));
-    shadow += texture(shadowMap, stc.xyz+vec3(-off.x*2.0, -off.y, 0.0));
-    return shadow*0.2;
+    c.xy = clamp(c.xy, rect.xy, rect.zw);
+    c.z += spot_shadow_bias * 0.8;
+    vec2 texel = 1.0 / proj_shadow_res;
+    vec2 base = 0.5 * texel;
+    float shadow = texture(shadowMap, vec3(c.xy, c.z - min(dot(grad, base), PCF_RPDB_MAX)));
+    const vec2 offs[4] = vec2[4](vec2(2.0, 1.5), vec2(1.0, -1.5), vec2(-1.0, 1.5), vec2(-2.0, -1.5));
+    for (int i = 0; i < 4; ++i)
+    {
+        vec2 o = offs[i] * texel;
+        shadow += texture(shadowMap, vec3(c.xy + o, c.z - min(dot(grad, base + abs(o)), PCF_RPDB_MAX)));
+    }
+    return shadow * 0.2;
 #else
     return 1.0;
 #endif
 }
+// </Vulkanstorm>
 
 #if defined(PCSS_SHADOW)
 // <Vulkanstorm> PCSS stage 1: rotated Poisson PCF with a receiver-plane depth bias.
@@ -202,6 +204,13 @@ float pcssEdgeScale(vec2 uv, vec2 extent, vec2 texel)
     return clamp(min(room.x / extent.x, room.y / extent.y), 0.0, 1.0);
 }
 
+// the same inside a rectangle of the texture (a tile of the projector atlas): rect = (min.xy, max.xy)
+float pcssEdgeScale(vec2 uv, vec2 extent, vec2 texel, vec4 rect)
+{
+    vec2 room = min(uv - rect.xy, rect.zw - uv) - 0.5 * texel;
+    return clamp(min(room.x / extent.x, room.y / extent.y), 0.0, 1.0);
+}
+
 // the kernel's per pixel rotation (cos, sin)
 vec2 pcssRotation()
 {
@@ -240,6 +249,21 @@ float pcssPoissonPCF(sampler2DShadow shadowMap, mat4 m, vec4 stc, vec3 pos, vec3
     return pcssPCF(shadowMap, stc.xyz, grad, extent, pcssRotation());
 }
 
+// Stage 1 for a projector tile: the fixed radius rotated PCF in atlas uv, clamped to the tile.
+float pcssAtlasPCF(sampler2DShadow shadowMap, mat4 m, vec4 stc, vec3 pos, vec3 norm, float z_bias, vec4 rect)
+{
+    stc.xyz /= stc.w;
+    stc.xy = clamp(stc.xy, rect.xy, rect.zw);
+    vec2 grad = abs(pcssDepthGradient(m, pos, norm, stc.xyz));
+    stc.z += z_bias;
+
+    vec2 texel = 1.0 / proj_shadow_res;
+    vec2 extent = PCSS_PCF_RADIUS * texel;
+    extent *= pcssEdgeScale(stc.xy, extent, texel, rect);
+
+    return pcssPCF(shadowMap, stc.xyz, grad, extent, pcssRotation());
+}
+
 #if defined(PCSS_SHADOW_FETCH)
 // Stage 2, contact hardening (sun cascades 0-1 and the spot shadows): a blocker search through a
 // plain depth read of the same map (shadowDepthN, bound with a GL 3.3 sampler object that has
@@ -250,8 +274,7 @@ uniform sampler2D shadowDepth0;
 uniform sampler2D shadowDepth1;
 #endif
 #if defined(SPOT_SHADOW)
-uniform sampler2D shadowDepth4;
-uniform sampler2D shadowDepth5;
+uniform sampler2D shadowDepth4; // the projector atlas, read as plain depth
 #endif
 
 #define PCSS_BLOCKER_DIST0     4.0   // metres: farthest blocker that softens cascade 0
@@ -364,14 +387,15 @@ vec3 pcssProjectorEye(mat4 m)
 // Spot shadow with contact hardening, the textbook perspective form: an emitter of width
 // PCSS_SPOT_LIGHT_SIZE at the projector, blockers at linear distance d_b, receiver at d_r:
 // penumbra (full width, metres on the receiver) = PCSS_SPOT_LIGHT_SIZE * (d_r - d_b) / d_b.
-float pcssSpotContactShadow(sampler2DShadow shadowMap, sampler2D depthMap, mat4 m, vec4 stc, vec3 pos, vec3 norm, float bias_scale)
+float pcssSpotContactShadow(sampler2DShadow shadowMap, sampler2D depthMap, mat4 m, vec4 stc, vec3 pos, vec3 norm, float bias_scale, vec4 rect)
 {
     vec3 c = stc.xyz / stc.w;
+    c.xy = clamp(c.xy, rect.xy, rect.zw);
     float d_r = stc.w;                       // linear distance along the projector's axis
     vec2 grad = abs(pcssDepthGradient(m, pos, norm, c));
     float z_bias = spot_shadow_bias * bias_scale;
     vec2 texel = 1.0 / proj_shadow_res;
-    float r_max = PCSS_PCF_RADIUS_MAX * pcssResScale(proj_shadow_res);
+    float r_max = PCSS_PCF_RADIUS_MAX; // texels of the atlas
     vec2 rot = pcssRotation();
 
     vec3 eye = pcssProjectorEye(m);
@@ -381,7 +405,7 @@ float pcssSpotContactShadow(sampler2DShadow shadowMap, sampler2D depthMap, mat4 
 
     float d_near = max(d_r - PCSS_BLOCKER_DIST_SPOT, 0.25 * d_r);
     vec2 search = pcssClampExtent(s_uv * PCSS_SPOT_LIGHT_SIZE * (d_r - d_near) / d_near, texel, PCSS_SEARCH_RADIUS_MIN, r_max);
-    search *= pcssEdgeScale(c.xy, search, texel);
+    search *= pcssEdgeScale(c.xy, search, texel, rect);
     float z_blocker = pcssBlockerDepth(depthMap, c, z_bias, grad, search, rot);
     if (z_blocker < 0.0)
     {
@@ -397,7 +421,7 @@ float pcssSpotContactShadow(sampler2DShadow shadowMap, sampler2D depthMap, mat4 
     d_b = clamp(d_b, 1.0e-3, d_r);
     float w_world = PCSS_SPOT_LIGHT_SIZE * (d_r - d_b) / d_b;
     vec2 extent = pcssClampExtent(0.5 * w_world * s_uv, texel, PCSS_PCF_RADIUS_MIN, r_max);
-    extent *= pcssEdgeScale(c.xy, extent, texel);
+    extent *= pcssEdgeScale(c.xy, extent, texel, rect);
     return pcssPCF(shadowMap, vec3(c.xy, c.z + z_bias), grad, extent, rot);
 }
 #endif // PCSS_SHADOW_FETCH
@@ -408,11 +432,6 @@ float pcssShadow(sampler2DShadow shadowMap, int index, vec4 stc, vec3 pos, vec3 
     return pcssPoissonPCF(shadowMap, shadow_matrix[index], stc, pos, norm, shadow_bias * 2.0, shadow_res);
 }
 
-// spot shadow index (4-5): the constant bias as pcfSpotShadow applies it
-float pcssSpotShadow(sampler2DShadow shadowMap, int index, vec4 stc, vec3 pos, vec3 norm, float bias_scale)
-{
-    return pcssPoissonPCF(shadowMap, shadow_matrix[index], stc, pos, norm, spot_shadow_bias * bias_scale, proj_shadow_res);
-}
 // </Vulkanstorm>
 #endif
 
@@ -537,53 +556,59 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 #endif
 }
 
-float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
+// <Vulkanstorm> The projector shadow of ONE light, from its tile of the atlas (the spot light pass
+// calls this per light; there is no limit of two). proj_shadow_matrix maps view space to atlas uv
+// (xy), depth (z) and the distance along the light's axis (w); proj_shadow_weight is 0 for a
+// light without a rendered tile and fades in with a new one; the shadow fades out with the
+// Euclidean distance from the camera over the last 20 % of spot_shadow_reach (independent of
+// where the camera looks; it used to follow the sun's cascade splits).
+#if defined(SPOT_SHADOW)
+uniform mat4 proj_shadow_matrix;
+uniform vec4 proj_shadow_rect;      // the map inside the tile, in atlas uv: min.xy, max.xy
+uniform float proj_shadow_k;        // world size of one shadow texel per metre along the axis
+uniform float proj_shadow_weight;
+#endif
+
+float sampleProjectorShadow(vec3 pos, vec3 norm)
 {
 #if defined(SPOT_SHADOW)
-    pos += norm * spot_shadow_offset;
-
-    vec4 spos = vec4(pos,1.0);
-
-    // <Vulkanstorm> The projector shadow fades out with the distance from the camera to the lit
-    // pixel (Euclidean, so it does not depend on which way the camera looks), over the last 20 %
-    // of spot_shadow_reach. It used to fade with the sun's cascade splits (shadow_clip z and w),
-    // which follow what the camera sees: the fade-out distance went from 16 m to 256 m with the
-    // camera's pitch and yaw, and projector shadows came and went with the view.
+    if (proj_shadow_weight <= 0.0)
+    {
+        return 1.0;
+    }
     float reach = spot_shadow_reach > 1.0 ? spot_shadow_reach : 128.0;
-    float fade = clamp((reach - length(pos)) / (0.2 * reach), 0.0, 1.0);
+    float fade = clamp((reach - length(pos)) / (0.2 * reach), 0.0, 1.0) * proj_shadow_weight;
     if (fade <= 0.0)
     {
         return 1.0;
     }
 
+    vec4 lpos = proj_shadow_matrix * vec4(pos, 1.0);
+    if (lpos.w <= 0.0)
+    {
+        return 1.0; // behind the projector
+    }
+    // normal offset in world units: the stock offset plus one and a half texels at this distance
+    pos += norm * (spot_shadow_offset + 1.5 * lpos.w * proj_shadow_k);
+    lpos = proj_shadow_matrix * vec4(pos, 1.0);
+    vec3 c = lpos.xyz / lpos.w;
+    if (c.z > 1.0)
+    {
+        return 1.0; // beyond the projector's far plane
+    }
+
     float shadow;
-    vec4 lpos;
-    if (index == 0)
-    {
-        lpos = shadow_matrix[4]*spos;
 #if defined(PCSS_SHADOW) && defined(PCSS_SHADOW_FETCH)
-        shadow = pcssSpotContactShadow(shadowMap4, shadowDepth4, shadow_matrix[4], lpos, spos.xyz, norm, 0.8);
+    shadow = pcssSpotContactShadow(shadowMap4, shadowDepth4, proj_shadow_matrix, lpos, pos, norm, 0.8, proj_shadow_rect);
 #elif defined(PCSS_SHADOW)
-        shadow = pcssSpotShadow(shadowMap4, 4, lpos, spos.xyz, norm, 0.8);
+    shadow = pcssAtlasPCF(shadowMap4, proj_shadow_matrix, lpos, pos, norm, spot_shadow_bias * 0.8, proj_shadow_rect);
 #else
-        shadow = pcfSpotShadow(shadowMap4, lpos, 0.8, spos.xy);
+    shadow = pcfAtlasShadow(shadowMap4, c, proj_shadow_rect, pcfDepthGradient(proj_shadow_matrix, pos, norm, c));
 #endif
-    }
-    else
-    {
-        lpos = shadow_matrix[5]*spos;
-#if defined(PCSS_SHADOW) && defined(PCSS_SHADOW_FETCH)
-        shadow = pcssSpotContactShadow(shadowMap5, shadowDepth5, shadow_matrix[5], lpos, spos.xyz, norm, 0.8);
-#elif defined(PCSS_SHADOW)
-        shadow = pcssSpotShadow(shadowMap5, 5, lpos, spos.xyz, norm, 0.8);
-#else
-        shadow = pcfSpotShadow(shadowMap5, lpos, 0.8, spos.xy);
-#endif
-    }
     return mix(1.0, shadow, fade);
-    // </Vulkanstorm>
 #else
     return 1.0;
 #endif
 }
+// </Vulkanstorm>
 

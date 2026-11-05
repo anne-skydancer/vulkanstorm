@@ -497,6 +497,8 @@ namespace LLShadowProjectorAtlas
             }
         }
 
+        void setShadowDistance(float metres) { m_cfg.shadow_distance = metres; }
+
         const std::vector<Tile>& tiles() const { return m_tiles; }
         const std::vector<Render>& renders() const { return m_renders; }
         const Config& config() const { return m_cfg; }

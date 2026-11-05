@@ -2098,6 +2098,34 @@ If you do not understand the distinction then leave this control alone."
        tool_tip="Softens the edges of sun, moon and projector shadows with a wider, rotated filter and smooths the result with the shadow blur. Needs shadows (Sun/Moon or Sun/Moon + Projectors). Costs some GPU time."/>
       <!-- </Vulkanstorm> -->
 
+      <!-- <Vulkanstorm> projector shadows: how many lights get a cached shadow tile; enabled with
+           Sun/Moon + Projectors (LLFloaterPreference::refreshEnabledState) -->
+      <text
+       follows="left|top"
+       height="16"
+       layout="topleft"
+       left="20"
+       top_pad="8"
+       width="130"
+       name="ProjectorShadowTierLabel">
+        Projector shadows:
+      </text>
+      <combo_box
+       control_name="RenderProjectorShadowTier"
+       follows="left|top"
+       height="20"
+       layout="topleft"
+       left_pad="5"
+       top_delta="-2"
+       width="260"
+       name="ProjectorShadowTier"
+       tool_tip="How many projectors cast a shadow, whatever way you look: Medium up to 12 lights, High 24, Ultra 48. Shadows are cached and only re-rendered when something moves; higher levels use a larger shadow atlas (Medium 36 MB, High 64 MB, Ultra 96 MB).">
+        <combo_box.item label="Medium (12 lights, 36 MB)" name="Medium" value="1"/>
+        <combo_box.item label="High (24 lights, 64 MB)" name="High" value="2"/>
+        <combo_box.item label="Ultra (48 lights, 96 MB)" name="Ultra" value="3"/>
+      </combo_box>
+      <!-- </Vulkanstorm> -->
+
     </panel>
 
 <!--Depth of Field-->

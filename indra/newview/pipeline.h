@@ -40,8 +40,10 @@
 #include "llrendertarget.h"
 #include "llreflectionmapmanager.h"
 #include "llheroprobemanager.h"
+#include "llshadowprojectoratlas.h" // <Vulkanstorm/> projector shadow atlas
 
 #include <stack>
+#include <unordered_map>
 
 class LLViewerTexture;
 class LLFace;
@@ -345,6 +347,11 @@ public:
     void postDeferredGammaCorrect(LLRenderTarget* screen_target);
 
     void generateSunShadow(LLCamera& camera);
+    // <Vulkanstorm> projector shadows: the atlas of per-light tiles (llshadowprojectoratlas.h)
+    void updateProjectorShadows(LLCamera& camera);
+    void noteProjectorCasterChange(LLDrawable* drawablep);
+    void andShadowPassRenderTypes();
+    // </Vulkanstorm>
     LLRenderTarget* getSunShadowTarget(U32 i);
     LLRenderTarget* getSpotShadowTarget(U32 i);
 
@@ -708,6 +715,7 @@ public:
     static bool             sNoAlpha;
     static bool             sUseFarClip;
     static bool             sShadowRender;
+    static bool             sProjectorShadowNoAvatars; // <Vulkanstorm/> a projector tile is rendered without avatars
     static bool             sDynamicLOD;
     static bool             sPickAvatar;
     static bool             sReflectionRender;
@@ -772,7 +780,7 @@ public:
     // currently used render target pack
     RenderTargetPack* mRT;
 
-    LLRenderTarget          mSpotShadow[2];
+    LLRenderTarget          mProjectorAtlas; // <Vulkanstorm/> projector shadow atlas (depth)
 
     LLRenderTarget          mPbrBrdfLut;
     LLRenderTarget          mWaterExclusionMask;
@@ -849,9 +857,29 @@ public:
     glm::mat4               mShadowProjection[6];
     glm::mat4               mReflectionModelView;
 
-    LLPointer<LLDrawable>   mShadowSpotLight[2];
-    F32                     mSpotLightFade[2];
-    LLPointer<LLDrawable>   mTargetShadowSpotLight[2];
+    // <Vulkanstorm> projector shadow atlas: tile allocation and budget, and what the lighting pass
+    // needs to sample each light's tile
+    LLShadowProjectorAtlas::Atlas mProjectorTiles;
+    struct ProjectorSampling
+    {
+        glm::mat4 light_pv{ 1.f };      // projection x view of the light as the tile was rendered (agent space)
+        F32 k = 0.f;                    // world size of a shadow texel per metre along the axis
+        F32 weight = 0.f;               // 0 without a rendered tile; the tile's fade
+        glm::vec4 rect{ 0.f };          // the map inside the tile, atlas uv: min.xy, max.xy
+        glm::mat4 matrix{ 1.f };        // current view space -> atlas uv, depth, distance along the axis
+    };
+    std::unordered_map<const void*, ProjectorSampling> mProjectorSampling;
+    struct ProjectorCasterChange
+    {
+        LLVector3 center;
+        F32 radius;
+    };
+    std::vector<ProjectorCasterChange> mProjectorCasterChanges;     // casters that moved or were rebuilt this frame
+    bool mProjectorAllDirty = false;
+    U64 mProjectorRegion = 0;           // the agent's region when the tiles were rendered (agent coordinates)
+    U32 mProjectorTier = 0;
+    double mProjectorTime = 0.0;
+    // </Vulkanstorm>
 
     LLVector4               mSunClipPlanes;
     LLVector4               mSunOrthoClipPlanes;

@@ -213,6 +213,7 @@ F32 LLPipeline::RenderShadowBias;
 F32 LLPipeline::RenderSpotShadowOffset;
 F32 LLPipeline::RenderSpotShadowBias;
 LLDrawable* LLPipeline::RenderSpotLight = nullptr;
+bool LLPipeline::sProjectorShadowNoAvatars = false; // <Vulkanstorm/> projector tiles
 F32 LLPipeline::RenderEdgeDepthCutoff;
 F32 LLPipeline::RenderEdgeNormCutoff;
 LLVector3 LLPipeline::RenderShadowGaussian;
@@ -541,11 +542,6 @@ void LLPipeline::init()
 
     // Enable features
     LLViewerShaderMgr::instance()->setShaders();
-
-    for (U32 i = 0; i < 2; ++i)
-    {
-        mSpotLightFade[i] = 1.f;
-    }
 
     if (mCubeVB.isNull())
     {
@@ -1130,20 +1126,35 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
 
     if (!gCubeSnapshot) // hack to not allocate spot shadow maps during ReflectionMapManager init
     {
-        U32 width = (U32)(resX * scale);
-        U32 height = width;
-
         if (shadow_detail > 1)
-        { //allocate two spot shadow maps
-            U32 spot_shadow_map_width = width;
-            U32 spot_shadow_map_height = height;
-            for (U32 i = 0; i < 2; i++)
+        { // <Vulkanstorm> one atlas of projector shadow tiles replaces the two screen-sized spot maps
+            const U32 tier = llclamp(gSavedSettings.getU32("RenderProjectorShadowTier"), 1u, 3u);
+            LLShadowProjectorAtlas::Config cfg;
+            switch (tier)
             {
-                if (!mSpotShadow[i].allocate(spot_shadow_map_width, spot_shadow_map_height, 0, true))
-                {
-                    return false;
-                }
+            case 1:  cfg.atlas_w = 3072; cfg.atlas_h = 3072; cfg.root = 1024; cfg.max_lights = 12; cfg.max_renders_per_frame = 2; break;
+            case 2:  cfg.atlas_w = 4096; cfg.atlas_h = 4096; cfg.root = 1024; cfg.max_lights = 24; cfg.max_renders_per_frame = 3; break;
+            default: cfg.atlas_w = 6144; cfg.atlas_h = 4096; cfg.root = 2048; cfg.max_lights = 48; cfg.max_renders_per_frame = 4; break;
             }
+            // the device's limit: halve the tier's atlas until it fits
+            while ((S32)cfg.atlas_w > gGLManager.mGLMaxTextureSize || (S32)cfg.atlas_h > gGLManager.mGLMaxTextureSize)
+            {
+                cfg.atlas_w /= 2;
+                cfg.atlas_h /= 2;
+                cfg.root = std::max(cfg.root / 2, cfg.min_tile);
+            }
+            const bool changed = tier != mProjectorTier || mProjectorAtlas.getWidth() != (U32)cfg.atlas_w || mProjectorAtlas.getHeight() != (U32)cfg.atlas_h;
+            if (!mProjectorAtlas.allocate(cfg.atlas_w, cfg.atlas_h, 0, true))
+            {
+                return false;
+            }
+            if (changed)
+            {
+                mProjectorTier = tier;
+                mProjectorTiles.configure(cfg);   // the cached tiles are gone with the old texture
+                mProjectorSampling.clear();
+            }
+            // </Vulkanstorm>
         }
         else
         {
@@ -1458,10 +1469,10 @@ void LLPipeline::releaseSpotShadowTargets()
 {
     if (!gCubeSnapshot) // hack to avoid freeing spot shadows during ReflectionMapManager init
     {
-        for (U32 i = 0; i < 2; i++)
-        {
-            mSpotShadow[i].release();
-        }
+        mProjectorAtlas.release(); // <Vulkanstorm/> projector shadow atlas
+        mProjectorTiles.configure(mProjectorTiles.config());
+        mProjectorSampling.clear();
+        mProjectorTier = 0;
     }
 }
 
@@ -2031,6 +2042,7 @@ void LLPipeline::unlinkDrawable(LLDrawable *drawable)
     assertInitialized();
 
     LLPointer<LLDrawable> drawablep = drawable; // make sure this doesn't get deleted before we are done
+    noteProjectorCasterChange(drawablep); // <Vulkanstorm/> a removed caster no longer shadows
 
     // Based on flags, remove the drawable from the queues that it's on.
     if (drawablep->isState(LLDrawable::ON_MOVE_LIST))
@@ -2066,18 +2078,10 @@ void LLPipeline::unlinkDrawable(LLDrawable *drawable)
         }
     }
 
-    for (U32 i = 0; i < 2; ++i)
-    {
-        if (mShadowSpotLight[i] == drawablep)
-        {
-            mShadowSpotLight[i] = NULL;
-        }
-
-        if (mTargetShadowSpotLight[i] == drawablep)
-        {
-            mTargetShadowSpotLight[i] = NULL;
-        }
-    }
+    // <Vulkanstorm> projector shadow atlas: a removed light's tile fades out with its light's absence
+    // (the atlas sees it missing from its next update)
+    mProjectorSampling.erase(drawablep);
+    // </Vulkanstorm>
 }
 
 //static
@@ -3124,6 +3128,8 @@ void LLPipeline::markMoved(LLDrawable *drawablep, bool damped_motion)
         return;
     }
 
+    noteProjectorCasterChange(drawablep); // <Vulkanstorm/> a projector tile whose cone holds it is re-rendered
+
     if (drawablep->getParent())
     {
         //ensure that parent drawables are moved first
@@ -3292,6 +3298,7 @@ void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags f
 {
     if (drawablep && !drawablep->isDead() && assertInitialized())
     {
+        noteProjectorCasterChange(drawablep); // <Vulkanstorm/>
         if (!drawablep->isState(LLDrawable::IN_REBUILD_Q))
         {
             mBuildQ1.push_back(drawablep);
@@ -9745,7 +9752,7 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
     shader.uniform3fv(LLShaderMgr::DEFERRED_SUN_DIR, 1, mTransformedSunDir.mV);
     shader.uniform3fv(LLShaderMgr::DEFERRED_MOON_DIR, 1, mTransformedMoonDir.mV);
     shader.uniform2f(LLShaderMgr::DEFERRED_SHADOW_RES, (GLfloat)mRT->shadow[0].getWidth(), (GLfloat)mRT->shadow[0].getHeight());
-    shader.uniform2f(LLShaderMgr::DEFERRED_PROJ_SHADOW_RES, (GLfloat)mSpotShadow[0].getWidth(), (GLfloat)mSpotShadow[0].getHeight());
+    shader.uniform2f(LLShaderMgr::DEFERRED_PROJ_SHADOW_RES, (GLfloat)mProjectorAtlas.getWidth(), (GLfloat)mProjectorAtlas.getHeight()); // <Vulkanstorm/> the atlas
     shader.uniform1f(LLShaderMgr::DEFERRED_DEPTH_CUTOFF, RenderEdgeDepthCutoff);
     shader.uniform1f(LLShaderMgr::DEFERRED_NORM_CUTOFF, RenderEdgeNormCutoff);
 
@@ -10013,14 +10020,6 @@ void LLPipeline::renderDeferredLighting()
             LLDrawable::drawable_list_t fullscreen_spot_lights;
             LLSettingsSky::ptr_t        psky        = LLEnvironment::instance().getCurrentSky();
 
-            if (!gCubeSnapshot)
-            {
-                for (U32 i = 0; i < 2; i++)
-                {
-                    mTargetShadowSpotLight[i] = NULL;
-                }
-            }
-
             std::list<LLVector4> light_colors;
 
             LLVertexBuffer::unbind();
@@ -10148,6 +10147,13 @@ void LLPipeline::renderDeferredLighting()
                 LL_PROFILE_GPU_ZONE("projectors");
                 LLGLDepthTest depth(GL_TRUE, GL_FALSE);
                 bindDeferredShader(gDeferredSpotLightProgram);
+                // <Vulkanstorm> the projector atlas read as plain depth by the PCSS blocker search
+                const bool pcss_atlas_fetch = RenderShadowPCSS && RenderShadowDetail > 1 && gGLManager.mGLVersion >= 3.29f;
+                if (pcss_atlas_fetch)
+                {
+                    bindShadowDepthFetch(gDeferredSpotLightProgram, true);
+                }
+                // </Vulkanstorm>
 
                 mCubeVB->setBuffer();
 
@@ -10182,6 +10188,10 @@ void LLPipeline::renderDeferredLighting()
                     mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, get_box_fan_indices(camera, center));
                 }
                 gDeferredSpotLightProgram.disableTexture(LLShaderMgr::DEFERRED_PROJECTION);
+                if (pcss_atlas_fetch)
+                {
+                    bindShadowDepthFetch(gDeferredSpotLightProgram, false); // <Vulkanstorm/>
+                }
                 unbindDeferredShader(gDeferredSpotLightProgram);
             }
 
@@ -10225,6 +10235,11 @@ void LLPipeline::renderDeferredLighting()
                 }
 
                 bindDeferredShader(gDeferredMultiSpotLightProgram);
+                const bool pcss_multi_atlas_fetch = RenderShadowPCSS && RenderShadowDetail > 1 && gGLManager.mGLVersion >= 3.29f; // <Vulkanstorm/>
+                if (pcss_multi_atlas_fetch)
+                {
+                    bindShadowDepthFetch(gDeferredMultiSpotLightProgram, true); // <Vulkanstorm/>
+                }
 
                 gDeferredMultiSpotLightProgram.enableTexture(LLShaderMgr::DEFERRED_PROJECTION);
 
@@ -10258,6 +10273,10 @@ void LLPipeline::renderDeferredLighting()
                 }
 
                 gDeferredMultiSpotLightProgram.disableTexture(LLShaderMgr::DEFERRED_PROJECTION);
+                if (pcss_multi_atlas_fetch)
+                {
+                    bindShadowDepthFetch(gDeferredMultiSpotLightProgram, false); // <Vulkanstorm/>
+                }
                 unbindDeferredShader(gDeferredMultiSpotLightProgram);
             }
         }
@@ -10548,57 +10567,27 @@ void LLPipeline::setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep)
     shader.uniform3fv(LLShaderMgr::PROJECTOR_ORIGIN, 1, glm::value_ptr(screen_origin));
     shader.uniform1f(LLShaderMgr::PROJECTOR_RANGE, proj_range);
     shader.uniform1f(LLShaderMgr::PROJECTOR_AMBIANCE, params.mV[2]);
-    S32 s_idx = -1;
-
-    for (U32 i = 0; i < 2; i++)
+    // <Vulkanstorm> this light's shadow tile of the projector atlas (see updateProjectorShadows): its
+    // matrix, the map's rectangle in atlas uv, the size of a texel and the tile's fade
     {
-        if (mShadowSpotLight[i] == drawablep)
+        static const LLStaticHashedString sMatrix("proj_shadow_matrix");
+        static const LLStaticHashedString sRect("proj_shadow_rect");
+        static const LLStaticHashedString sK("proj_shadow_k");
+        static const LLStaticHashedString sWeight("proj_shadow_weight");
+        auto it = mProjectorSampling.find(drawablep);
+        if (!gCubeSnapshot && it != mProjectorSampling.end() && it->second.weight > 0.f)
         {
-            s_idx = i;
+            shader.uniformMatrix4fv(sMatrix, 1, GL_FALSE, glm::value_ptr(it->second.matrix));
+            shader.uniform4fv(sRect, 1, glm::value_ptr(it->second.rect));
+            shader.uniform1f(sK, it->second.k);
+            shader.uniform1f(sWeight, it->second.weight);
+        }
+        else
+        {
+            shader.uniform1f(sWeight, 0.f);
         }
     }
-
-    shader.uniform1i(LLShaderMgr::PROJECTOR_SHADOW_INDEX, s_idx);
-
-    if (s_idx >= 0)
-    {
-        shader.uniform1f(LLShaderMgr::PROJECTOR_SHADOW_FADE, 1.f-mSpotLightFade[s_idx]);
-    }
-    else
-    {
-        shader.uniform1f(LLShaderMgr::PROJECTOR_SHADOW_FADE, 1.f);
-    }
-
-    // make sure we're not already targeting the same spot light with both shadow maps
-    llassert(mTargetShadowSpotLight[0] != mTargetShadowSpotLight[1] || mTargetShadowSpotLight[0].isNull());
-
-    if (!gCubeSnapshot)
-    {
-        LLDrawable* potential = drawablep;
-        //determine if this light is higher priority than one of the existing spot shadows
-        F32 m_pri = volume->getSpotLightPriority();
-
-        for (U32 i = 0; i < 2; i++)
-        {
-            F32 pri = 0.f;
-
-            if (mTargetShadowSpotLight[i].notNull())
-            {
-                pri = mTargetShadowSpotLight[i]->getVOVolume()->getSpotLightPriority();
-            }
-
-            if (m_pri > pri)
-            {
-                LLDrawable* temp = mTargetShadowSpotLight[i];
-                mTargetShadowSpotLight[i] = potential;
-                potential = temp;
-                m_pri = pri;
-            }
-        }
-    }
-
-    // make sure we didn't end up targeting the same spot light with both shadow maps
-    llassert(mTargetShadowSpotLight[0] != mTargetShadowSpotLight[1] || mTargetShadowSpotLight[0].isNull());
+    // </Vulkanstorm>
 
     LLViewerTexture* img = volume->getLightTexture();
 
@@ -10898,7 +10887,7 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
 
 
     LLVertexBuffer::unbind();
-    for (int j = 0; j < 2; ++j) // 0 -- static, 1 -- rigged
+    for (int j = 0; j < (sProjectorShadowNoAvatars ? 1 : 2); ++j) // 0 -- static, 1 -- rigged (<Vulkanstorm/> not in a tile without avatars)
     {
         bool rigged = j == 1;
         gDeferredShadowProgram.bind(rigged);
@@ -10944,7 +10933,7 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
         const S32 sun_up = LLEnvironment::instance().getIsSunUp() ? 1 : 0;
         U32 target_width = LLRenderTarget::sCurResX;
 
-        for (int i = 0; i < 2; ++i)
+        for (int i = 0; i < (sProjectorShadowNoAvatars ? 1 : 2); ++i) // <Vulkanstorm/>
         {
             bool rigged = i == 1;
 
@@ -10994,7 +10983,7 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
             }
         }
 
-        for (int i = 0; i < 2; ++i)
+        for (int i = 0; i < (sProjectorShadowNoAvatars ? 1 : 2); ++i) // <Vulkanstorm/>
         {
             bool rigged = i == 1;
             gDeferredShadowGLTFAlphaMaskProgram.bind(rigged);
@@ -11242,7 +11231,7 @@ LLRenderTarget* LLPipeline::getSunShadowTarget(U32 i)
 LLRenderTarget* LLPipeline::getSpotShadowTarget(U32 i)
 {
     llassert(i < 2);
-    return &mSpotShadow[i];
+    return i == 0 ? &mProjectorAtlas : nullptr; // <Vulkanstorm/> the atlas is the only projector shadow map
 }
 
 static LLTrace::BlockTimerStatHandle FTM_GEN_SUN_SHADOW("Gen Sun Shadow");
@@ -11266,33 +11255,9 @@ public:
     }
 };
 
-void LLPipeline::generateSunShadow(LLCamera& camera)
+// <Vulkanstorm> the render types of every shadow pass (sun cascades and projector tiles)
+void LLPipeline::andShadowPassRenderTypes()
 {
-    if (!sRenderDeferred || RenderShadowDetail <= 0)
-    {
-        return;
-    }
-
-    LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE; //LL_RECORD_BLOCK_TIME(FTM_GEN_SUN_SHADOW);
-    LL_PROFILE_GPU_ZONE("generateSunShadow");
-
-    LLDisableOcclusionCulling no_occlusion;
-
-    bool skip_avatar_update = false;
-    if (!isAgentAvatarValid() || gAgentCamera.getCameraAnimating() || gAgentCamera.getCameraMode() != CAMERA_MODE_MOUSELOOK || !LLVOAvatar::sVisibleInFirstPerson)
-    {
-        skip_avatar_update = true;
-    }
-
-    if (!skip_avatar_update)
-    {
-        gAgentAvatarp->updateAttachmentVisibility(CAMERA_MODE_THIRD_PERSON);
-    }
-
-    glm::mat4 last_modelview = get_last_modelview();
-    glm::mat4 last_projection = get_last_projection();
-
-    pushRenderTypeMask();
     andRenderTypeMask(LLPipeline::RENDER_TYPE_SIMPLE,
                     LLPipeline::RENDER_TYPE_ALPHA,
                     LLPipeline::RENDER_TYPE_ALPHA_PRE_WATER,
@@ -11361,6 +11326,37 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                     LLPipeline::RENDER_TYPE_PASS_GLTF_PBR_ALPHA_MASK,
                     LLPipeline::RENDER_TYPE_PASS_GLTF_PBR_ALPHA_MASK_RIGGED,
                     END_RENDER_TYPES);
+}
+// </Vulkanstorm>
+
+void LLPipeline::generateSunShadow(LLCamera& camera)
+{
+    if (!sRenderDeferred || RenderShadowDetail <= 0)
+    {
+        return;
+    }
+
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE; //LL_RECORD_BLOCK_TIME(FTM_GEN_SUN_SHADOW);
+    LL_PROFILE_GPU_ZONE("generateSunShadow");
+
+    LLDisableOcclusionCulling no_occlusion;
+
+    bool skip_avatar_update = false;
+    if (!isAgentAvatarValid() || gAgentCamera.getCameraAnimating() || gAgentCamera.getCameraMode() != CAMERA_MODE_MOUSELOOK || !LLVOAvatar::sVisibleInFirstPerson)
+    {
+        skip_avatar_update = true;
+    }
+
+    if (!skip_avatar_update)
+    {
+        gAgentAvatarp->updateAttachmentVisibility(CAMERA_MODE_THIRD_PERSON);
+    }
+
+    glm::mat4 last_modelview = get_last_modelview();
+    glm::mat4 last_projection = get_last_projection();
+
+    pushRenderTypeMask();
+    andShadowPassRenderTypes(); // <Vulkanstorm/> (shared with updateProjectorShadows)
 
     gGL.setColorMask(false, false);
 
@@ -11869,160 +11865,8 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
         }
     }
 
-    //hack to disable projector shadows
-    bool gen_shadow = RenderShadowDetail > 1;
-
-    if (gen_shadow)
-    {
-        if (!gCubeSnapshot) //skip updating spot shadow maps during cubemap updates
-        {
-            LLTrace::CountStatHandle<>* velocity_stat = LLViewerCamera::getVelocityStat();
-            F32 fade_amt = gFrameIntervalSeconds.value()
-                * (F32)llmax(LLTrace::get_frame_recording().getLastRecording().getSum(*velocity_stat) / LLTrace::get_frame_recording().getLastRecording().getDuration().value(), 1.0);
-
-            // should never happen
-            llassert(mTargetShadowSpotLight[0] != mTargetShadowSpotLight[1] || mTargetShadowSpotLight[0].isNull());
-
-            //update shadow targets
-            for (U32 i = 0; i < 2; i++)
-            { //for each current shadow
-                LLViewerCamera::sCurCameraID = (LLViewerCamera::eCameraID)(LLViewerCamera::CAMERA_SPOT_SHADOW0 + i);
-
-                if (mShadowSpotLight[i].notNull() &&
-                    (mShadowSpotLight[i] == mTargetShadowSpotLight[0] ||
-                        mShadowSpotLight[i] == mTargetShadowSpotLight[1]))
-                { //keep this spotlight
-                    mSpotLightFade[i] = llmin(mSpotLightFade[i] + fade_amt, 1.f);
-                }
-                else
-                { //fade out this light
-                    mSpotLightFade[i] = llmax(mSpotLightFade[i] - fade_amt, 0.f);
-
-                    if (mSpotLightFade[i] == 0.f || mShadowSpotLight[i].isNull())
-                    { //faded out, grab one of the pending spots (whichever one isn't already taken)
-                        if (mTargetShadowSpotLight[0] != mShadowSpotLight[(i + 1) % 2])
-                        {
-                            mShadowSpotLight[i] = mTargetShadowSpotLight[0];
-                        }
-                        else
-                        {
-                            mShadowSpotLight[i] = mTargetShadowSpotLight[1];
-                        }
-                    }
-                }
-            }
-        }
-
-        // this should never happen
-        llassert(mShadowSpotLight[0] != mShadowSpotLight[1] || mShadowSpotLight[0].isNull());
-
-        for (S32 i = 0; i < 2; i++)
-        {
-            set_current_modelview(saved_view);
-            set_current_projection(saved_proj);
-
-            if (mShadowSpotLight[i].isNull())
-            {
-                continue;
-            }
-
-            LLVOVolume* volume = mShadowSpotLight[i]->getVOVolume();
-
-            if (!volume)
-            {
-                mShadowSpotLight[i] = NULL;
-                continue;
-            }
-
-            LLDrawable* drawable = mShadowSpotLight[i];
-
-            LLVector3 params = volume->getSpotLightParams();
-            F32 fov = params.mV[0];
-
-            //get agent->light space matrix (modelview)
-            LLVector3 center = drawable->getPositionAgent();
-            LLQuaternion quat = volume->getRenderRotation();
-
-            //get near clip plane
-            LLVector3 scale = volume->getScale();
-            LLVector3 at_axis(0, 0, -scale.mV[2] * 0.5f);
-            at_axis *= quat;
-
-            LLVector3 np = center + at_axis;
-            at_axis.normVec();
-
-            //get origin that has given fov for plane np, at_axis, and given scale
-            F32 dist = (scale.mV[1] * 0.5f) / tanf(fov * 0.5f);
-
-            LLVector3 origin = np - at_axis * dist;
-
-            LLMatrix4 mat(quat, LLVector4(origin, 1.f));
-
-            view[i + 4] = glm::make_mat4((F32*)mat.mMatrix);
-
-            view[i + 4] = glm::inverse(view[i + 4]);
-
-            //get perspective matrix
-            F32 near_clip = dist + 0.01f;
-            F32 width = scale.mV[VX];
-            F32 height = scale.mV[VY];
-            F32 far_clip = dist + volume->getLightRadius() * 1.5f;
-
-            F32 fovy = fov; // radians
-            F32 aspect = width / height;
-
-            proj[i + 4] = glm::perspective(fovy, aspect, near_clip, far_clip);
-
-            //translate and scale to from [-1, 1] to [0, 1]
-            glm::mat4 trans(0.5f, 0.0f, 0.0f, 0.0f,
-                            0.0f, 0.5f, 0.0f, 0.0f,
-                            0.0f, 0.0f, 0.5f, 0.0f,
-                            0.5f, 0.5f, 0.5f, 1.0f);
-
-            set_current_modelview(view[i + 4]);
-            set_current_projection(proj[i + 4]);
-
-            mSunShadowMatrix[i + 4] = trans * proj[i + 4] * view[i + 4] * inv_view;
-
-            set_last_modelview(mShadowModelview[i + 4]);
-            set_last_projection(mShadowProjection[i + 4]);
-
-            mShadowModelview[i + 4] = view[i + 4];
-            mShadowProjection[i + 4] = proj[i + 4];
-
-            if (!gCubeSnapshot) //skip updating spot shadow maps during cubemap updates
-            {
-                LLCamera shadow_cam = camera;
-                shadow_cam.setFar(far_clip);
-                shadow_cam.setOrigin(origin);
-
-                LLViewerCamera::updateFrustumPlanes(shadow_cam, false, false, true);
-
-                //
-
-                mSpotShadow[i].bindTarget();
-                mSpotShadow[i].getViewport(gGLViewport);
-                mSpotShadow[i].clear();
-
-                static LLCullResult result[2];
-
-                LLViewerCamera::sCurCameraID = (LLViewerCamera::eCameraID)(LLViewerCamera::CAMERA_SPOT_SHADOW0 + i);
-
-                RenderSpotLight = drawable;
-
-                renderShadow(view[i + 4], proj[i + 4], shadow_cam, result[i], false);
-
-                RenderSpotLight = nullptr;
-
-                mSpotShadow[i].flush();
-            }
-        }
-    }
-    else
-    { //no spotlight shadows
-        mShadowSpotLight[0] = mShadowSpotLight[1] = NULL;
-    }
-
+    // <Vulkanstorm> projector shadows are rendered into the atlas by updateProjectorShadows, whatever
+    // the camera sees (this function returns early when nothing is visible)
 
     if (!CameraOffset)
     {
@@ -12050,6 +11894,330 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
         gAgentAvatarp->updateAttachmentVisibility(gAgentCamera.getCameraMode());
     }
 }
+
+
+// <Vulkanstorm> ---------------------------------------------------------------------------------
+// Projector shadows (doc/shadows/shadow-model-rework.md §16, stage S7b): one tile of the atlas per
+// shadow-casting projector within reach of the camera POSITION, whatever the camera looks at. The
+// atlas (llshadowprojectoratlas.h) decides which tiles to render this frame; a tile that is not
+// dirty keeps its map. The spot light pass samples each light's tile (setupSpotLight).
+
+void LLPipeline::noteProjectorCasterChange(LLDrawable* drawablep)
+{
+    if (!drawablep || RenderShadowDetail <= 1)
+    {
+        return;
+    }
+    if (mProjectorCasterChanges.size() >= 4096)
+    {
+        mProjectorAllDirty = true;
+        return;
+    }
+    mProjectorCasterChanges.push_back({ drawablep->getPositionAgent(), drawablep->getRadius() });
+}
+
+static U64 projector_hash(U64 h, const void* data, size_t bytes)
+{
+    const unsigned char* p = static_cast<const unsigned char*>(data);
+    for (size_t i = 0; i < bytes; ++i)
+    {
+        h = (h ^ p[i]) * 0x100000001b3ULL;
+    }
+    return h;
+}
+
+void LLPipeline::updateProjectorShadows(LLCamera& camera)
+{
+    if (!sRenderDeferred || RenderShadowDetail <= 1 || gCubeSnapshot)
+    {
+        mProjectorSampling.clear();
+        mProjectorCasterChanges.clear();
+        mProjectorAllDirty = false;
+        return;
+    }
+    if (mProjectorAtlas.getWidth() == 0)
+    {
+        mProjectorCasterChanges.clear();
+        mProjectorAllDirty = false;
+        return;
+    }
+
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
+    LL_PROFILE_GPU_ZONE("projector shadows");
+
+    // agent coordinates are rebased on a region crossing or a teleport: the cached maps are void
+    LLViewerRegion* region = gAgent.getRegion();
+    const U64 handle = region ? region->getHandle() : 0;
+    if (handle != mProjectorRegion)
+    {
+        mProjectorTiles.invalidateAll();
+        mProjectorRegion = handle;
+    }
+
+    const F32 dt = llclamp((F32)gFrameIntervalSeconds.value(), 0.f, 0.25f);
+    mProjectorTime += dt;
+
+    // the shadow distance (RenderShadowDistance once the stable cascades land; the same reach as the
+    // projector shadow's fade in bindDeferredShader)
+    LLShadowProjectorAtlas::Config cfg = mProjectorTiles.config();
+    const F32 reach = llmin((F32)RenderFarClip, 128.f);
+    if (cfg.shadow_distance != reach)
+    {
+        cfg.shadow_distance = reach;
+        mProjectorTiles.setShadowDistance(reach);
+    }
+
+    // ---- this frame's projectors and what changed inside their cones
+    static LLCachedControl<S32> local_light_count(gSavedSettings, "RenderLocalLightCount", 256);
+    std::vector<LLShadowProjectorAtlas::LightInput> inputs;
+    std::unordered_map<const void*, LLPointer<LLDrawable>> lights;
+    std::vector<LLVOAvatar*> avatars;
+    for (LLCharacter* c : LLCharacter::sInstances)
+    {
+        LLVOAvatar* av = dynamic_cast<LLVOAvatar*>(c);
+        if (av && !av->isDead() && av->mDrawable.notNull())
+        {
+            avatars.push_back(av);
+        }
+    }
+    S32 count = 0;
+    for (const Light& light : mNearbyLights)
+    {
+        if (++count > local_light_count)
+        {
+            break;
+        }
+        LLDrawable* drawable = light.drawable;
+        LLVOVolume* volume = drawable ? drawable->getVOVolume() : nullptr;
+        if (!volume || !volume->isLightSpotlight() || (volume->isAttachment() && !sRenderAttachedLights))
+        {
+            continue;
+        }
+        const F32 radius = volume->getLightRadius();
+        const LLColor3 col = volume->getLightLinearColor();
+        if (radius * 1.5f <= 0.001f || col.magVecSquared() < 0.001f)
+        {
+            continue;
+        }
+        const LLVector3 params = volume->getSpotLightParams();
+        const LLQuaternion quat = volume->getRenderRotation();
+        LLVector3 axis(0.f, 0.f, -1.f);
+        axis *= quat;
+        axis.normVec();
+        const LLVector3 pos = drawable->getPositionAgent();
+        const LLVector3 scale = volume->getScale();
+
+        LLShadowProjectorAtlas::LightInput in;
+        in.id = drawable;
+        in.pos = { pos.mV[VX], pos.mV[VY], pos.mV[VZ] };
+        in.axis = { axis.mV[VX], axis.mV[VY], axis.mV[VZ] };
+        in.radius = radius;
+        in.fov = params.mV[0];
+        in.lum = 0.2126f * col.mV[0] + 0.7152f * col.mV[1] + 0.0722f * col.mV[2];
+        U64 h = 0xcbf29ce484222325ULL;
+        const F32 floats[] = { pos.mV[VX], pos.mV[VY], pos.mV[VZ], quat.mQ[0], quat.mQ[1], quat.mQ[2], quat.mQ[3],
+                               scale.mV[VX], scale.mV[VY], scale.mV[VZ], params.mV[0], params.mV[1], radius };
+        in.fingerprint = projector_hash(h, floats, sizeof(floats));
+        // casters that moved or were rebuilt inside the cone (static), avatars inside it
+        if (mProjectorAllDirty)
+        {
+            in.static_dirty = true;
+        }
+        else
+        {
+            for (const ProjectorCasterChange& change : mProjectorCasterChanges)
+            {
+                const F32 r = radius + change.radius;
+                if ((change.center - pos).magVecSquared() <= r * r)
+                {
+                    in.static_dirty = true;
+                    break;
+                }
+            }
+        }
+        for (LLVOAvatar* av : avatars)
+        {
+            const F32 r = radius + 2.5f;
+            if ((av->getPositionAgent() - pos).magVecSquared() <= r * r)
+            {
+                in.avatar_dirty = true;
+                break;
+            }
+        }
+        inputs.push_back(in);
+        lights[drawable] = drawable;
+    }
+    mProjectorCasterChanges.clear();
+    mProjectorAllDirty = false;
+
+    LLShadowProjectorAtlas::CameraInput cam;
+    cam.pos = { camera.getOrigin().mV[VX], camera.getOrigin().mV[VY], camera.getOrigin().mV[VZ] };
+    cam.pixels_per_radian = (F32)gViewerWindow->getWindowHeightRaw() / llmax(LLViewerCamera::getInstance()->getView(), 0.1f);
+    mProjectorTiles.update(cam, inputs, dt, mProjectorTime);
+
+    const std::vector<LLShadowProjectorAtlas::Render>& renders = mProjectorTiles.renders();
+    const U32 atlas_w = mProjectorAtlas.getWidth(), atlas_h = mProjectorAtlas.getHeight();
+    glm::mat4 saved_proj = get_current_projection();
+    glm::mat4 saved_view = get_current_modelview();
+    glm::mat4 last_modelview = get_last_modelview();
+    glm::mat4 last_projection = get_last_projection();
+
+    if (!renders.empty())
+    {
+        LLDisableOcclusionCulling no_occlusion;
+
+        bool skip_avatar_update = false;
+        if (!isAgentAvatarValid() || gAgentCamera.getCameraAnimating() || gAgentCamera.getCameraMode() != CAMERA_MODE_MOUSELOOK || !LLVOAvatar::sVisibleInFirstPerson)
+        {
+            skip_avatar_update = true;
+        }
+        if (!skip_avatar_update)
+        {
+            gAgentAvatarp->updateAttachmentVisibility(CAMERA_MODE_THIRD_PERSON);
+        }
+
+        pushRenderTypeMask();
+        andShadowPassRenderTypes();
+        gGL.setColorMask(false, false);
+
+        mProjectorAtlas.bindTarget();
+        {
+            LLGLDepthTest depth(GL_TRUE, GL_TRUE);
+            for (const LLShadowProjectorAtlas::Render& render : renders)
+            {
+                auto found = lights.find(render.id);
+                if (found == lights.end())
+                {
+                    continue;
+                }
+                LLDrawable* drawable = found->second;
+                LLVOVolume* volume = drawable->getVOVolume();
+                if (!volume)
+                {
+                    continue;
+                }
+
+                // the light's view and projection, as the stock projector shadow had them, with the
+                // field of view widened so that the cone fills the map inside the tile's border
+                const LLVector3 params = volume->getSpotLightParams();
+                const F32 fov = params.mV[0];
+                const LLVector3 center = drawable->getPositionAgent();
+                const LLQuaternion quat = volume->getRenderRotation();
+                const LLVector3 scale = volume->getScale();
+                LLVector3 at_axis(0, 0, -scale.mV[2] * 0.5f);
+                at_axis *= quat;
+                const LLVector3 np = center + at_axis;
+                at_axis.normVec();
+                const F32 dist = (scale.mV[1] * 0.5f) / tanf(fov * 0.5f);
+                const LLVector3 origin = np - at_axis * dist;
+
+                LLMatrix4 mat(quat, LLVector4(origin, 1.f));
+                glm::mat4 view = glm::inverse(glm::make_mat4((F32*)mat.mMatrix));
+
+                const F32 near_clip = dist + 0.01f;
+                const F32 far_clip = dist + volume->getLightRadius() * 1.5f;
+                const F32 aspect = scale.mV[VX] / scale.mV[VY];
+                const F32 fovy = LLShadowProjectorAtlas::renderFov(fov, render.size, render.border);
+                glm::mat4 proj = glm::perspective(fovy, aspect, near_clip, far_clip);
+
+                ProjectorSampling& sample = mProjectorSampling[drawable];
+                sample.light_pv = proj * view;
+                sample.k = 2.f * tanf(0.5f * fovy) * llmax(aspect, 1.f) / (F32)render.size;
+
+                set_current_modelview(view);
+                set_current_projection(proj);
+
+                gGLViewport[0] = render.x;
+                gGLViewport[1] = render.y;
+                gGLViewport[2] = render.size;
+                gGLViewport[3] = render.size;
+                glViewport(render.x, render.y, render.size, render.size);
+
+                LLCamera shadow_cam = camera;
+                shadow_cam.setFar(far_clip);
+                shadow_cam.setOrigin(origin);
+                LLViewerCamera::updateFrustumPlanes(shadow_cam, false, false, true);
+
+                LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_SPOT_SHADOW0;
+                RenderSpotLight = drawable;
+                sProjectorShadowNoAvatars = !render.include_avatars;
+                if (!render.include_avatars)
+                {
+                    pushRenderTypeMask();
+                    clearRenderTypeMask(LLPipeline::RENDER_TYPE_AVATAR, LLPipeline::RENDER_TYPE_CONTROL_AV, LLPipeline::END_RENDER_TYPES);
+                }
+
+                {
+                    LLGLEnable scissor(GL_SCISSOR_TEST);
+                    glScissor(render.x, render.y, render.size, render.size);
+                    glClear(GL_DEPTH_BUFFER_BIT);
+
+                    const U32 saved_res = LLRenderTarget::sCurResX;
+                    LLRenderTarget::sCurResX = (U32)render.size; // the alpha shadow's dither follows the tile's width
+                    static LLCullResult result;
+                    renderShadow(view, proj, shadow_cam, result, false);
+                    LLRenderTarget::sCurResX = saved_res;
+                }
+
+                if (!render.include_avatars)
+                {
+                    popRenderTypeMask();
+                }
+                sProjectorShadowNoAvatars = false;
+                RenderSpotLight = nullptr;
+            }
+        }
+        mProjectorAtlas.flush();
+
+        gGL.setColorMask(true, true);
+        popRenderTypeMask();
+        if (!skip_avatar_update)
+        {
+            gAgentAvatarp->updateAttachmentVisibility(gAgentCamera.getCameraMode());
+        }
+    }
+
+    set_current_modelview(saved_view);
+    set_current_projection(saved_proj);
+    set_last_modelview(last_modelview);
+    set_last_projection(last_projection);
+
+    // ---- what the lighting pass samples: each tile's matrix for the current camera, and its fade
+    const glm::mat4 inv_view = glm::inverse(saved_view);
+    const glm::mat4 trans(0.5f, 0.0f, 0.0f, 0.0f,
+                          0.0f, 0.5f, 0.0f, 0.0f,
+                          0.0f, 0.0f, 0.5f, 0.0f,
+                          0.5f, 0.5f, 0.5f, 1.0f);
+    std::unordered_map<const void*, bool> alive;
+    for (const LLShadowProjectorAtlas::Tile& tile : mProjectorTiles.tiles())
+    {
+        alive[tile.id] = true;
+        auto it = mProjectorSampling.find(tile.id);
+        if (it == mProjectorSampling.end())
+        {
+            continue;
+        }
+        ProjectorSampling& sample = it->second;
+        sample.weight = tile.valid ? tile.fade : 0.f;
+        const F32 w = (F32)atlas_w, h = (F32)atlas_h;
+        const F32 size = (F32)tile.block.size;
+        const F32 border = (F32)mProjectorTiles.config().border;
+        // tile uv (0..1 over the whole tile) -> atlas uv: x' = a x + b w (applied to the homogeneous coordinate)
+        glm::mat4 atlas(1.f);
+        atlas[0][0] = size / w;
+        atlas[3][0] = (F32)tile.block.x / w;
+        atlas[1][1] = size / h;
+        atlas[3][1] = (F32)tile.block.y / h;
+        sample.matrix = atlas * trans * sample.light_pv * inv_view;
+        sample.rect = glm::vec4(((F32)tile.block.x + border) / w, ((F32)tile.block.y + border) / h,
+                                ((F32)tile.block.x + size - border) / w, ((F32)tile.block.y + size - border) / h);
+    }
+    for (auto it = mProjectorSampling.begin(); it != mProjectorSampling.end();)
+    {
+        it = alive.count(it->first) ? std::next(it) : mProjectorSampling.erase(it);
+    }
+}
+// </Vulkanstorm>
 
 void LLPipeline::renderGroups(LLRenderPass* pass, U32 type, bool texture)
 {

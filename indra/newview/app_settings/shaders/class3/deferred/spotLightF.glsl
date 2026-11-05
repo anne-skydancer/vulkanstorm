@@ -45,8 +45,6 @@ uniform float far_clip;
 
 uniform vec3 proj_origin; //origin of projection to be used for angular attenuation
 uniform float sun_wash;
-uniform int proj_shadow_idx;
-uniform float shadow_fade;
 uniform int classic_mode;
 
 // Light params
@@ -75,6 +73,7 @@ vec3 srgb_to_linear(vec3 cs);
 vec4 texture2DLodSpecular(vec2 tc, float lod);
 
 vec4 getPosition(vec2 pos_screen);
+float sampleProjectorShadow(vec3 pos, vec3 norm); // <Vulkanstorm/> shadowUtil.glsl
 
 const float M_PI = 3.14159265;
 
@@ -111,19 +110,13 @@ void main()
         discard;
     }
 
-    float shadow = 1.0;
-
-    if (proj_shadow_idx >= 0)
-    {
-        vec4 shd = texture(lightMap, tc);
-        shadow = (proj_shadow_idx==0)?shd.b:shd.a;
-        shadow += shadow_fade;
-        shadow = clamp(shadow, 0.0, 1.0);
-    }
-
     GBufferInfo gb = getGBuffer(tc);
 
     vec3 n = gb.normal;
+
+    // <Vulkanstorm> this light's own shadow, from its tile of the projector atlas
+    float shadow = sampleProjectorShadow(pos, n);
+    // </Vulkanstorm>
 
     float dist_atten = calcLegacyDistanceAttenuation(dist, falloff);
     if (dist_atten <= 0.0)

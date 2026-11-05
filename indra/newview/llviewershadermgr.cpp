@@ -1897,6 +1897,13 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
         add_common_permutations(&gDeferredSpotLightProgram);
 
+        // <Vulkanstorm> the projector shadow of each light is filtered in the spot light pass
+        if (use_pcss_shadows())
+        {
+            gDeferredSpotLightProgram.addPermutation("PCSS_SHADOW", "1");
+        }
+        // </Vulkanstorm>
+
         success = gDeferredSpotLightProgram.createShader();
         llassert(success);
     }
@@ -1917,6 +1924,13 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredMultiSpotLightProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredMultiSpotLightProgram);
+
+        // <Vulkanstorm> the projector shadow of each light is filtered in the spot light pass
+        if (use_pcss_shadows())
+        {
+            gDeferredMultiSpotLightProgram.addPermutation("PCSS_SHADOW", "1");
+        }
+        // </Vulkanstorm>
 
         success = gDeferredMultiSpotLightProgram.createShader();
         llassert(success);

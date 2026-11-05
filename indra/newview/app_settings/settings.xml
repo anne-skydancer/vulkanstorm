@@ -12367,6 +12367,17 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>Backup</key>
     <integer>0</integer>
   </map>
+  <key>RenderProjectorShadowTier</key>
+  <map>
+    <key>Comment</key>
+    <string>Projector shadows: 1 Medium (up to 12 lights with a shadow, a 3072 x 3072 atlas, 2 tile renders per frame), 2 High (24, 4096 x 4096, 3), 3 Ultra (48, 6144 x 4096, 4). Every projector within reach of the camera casts a shadow whatever way the camera looks; shadows are cached and re-rendered only when something changes (doc/shadows/shadow-model-rework.md section 16).</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>U32</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
   <key>RenderShadowPCSS</key>
   <map>
     <key>Comment</key>
