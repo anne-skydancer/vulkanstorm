@@ -493,10 +493,10 @@ void LLAppCoreHttp::refreshSettings(bool initial)
             // to other servers via 2X total connection limit.
             //
             // <Vulkanstorm> With curl 8 there is no HTTP/1.1 pipelining:
-            // a pipelined (deep-queue) class runs per-host setting x
-            // PIPELINING_DEPTH requests, each on its own connection or
-            // HTTP/2 stream (HttpPolicyClass::activeLimit()), so the
-            // connection count to the asset CDN rises to that number.
+            // a pipelined (deep-queue) class still runs per-host setting x
+            // PIPELINING_DEPTH requests over the same connections as before
+            // (the extra requests wait for a free HTTP/1.1 connection, or
+            // are HTTP/2 streams), so the connection counts do not change.
             // </Vulkanstorm>
             //
             LLCore::HttpHandle handle;
