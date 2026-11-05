@@ -23,7 +23,10 @@ TARGETS = [
     ("wronghost", "https://localhost:18444/"),   # trusted CA, SAN not-localhost.invalid
     ("selfsigned", "https://localhost:18445/"),  # self-signed leaf
 ]
-TIMEOUT = 90.0
+if len(sys.argv) > 2:
+    # extra targets: a JSON list of [name, url]
+    TARGETS += [tuple(t) for t in json.load(open(sys.argv[2]))]
+TIMEOUT = 120.0
 stdin = sys.stdin.buffer
 stdout = sys.stdout.buffer
 
