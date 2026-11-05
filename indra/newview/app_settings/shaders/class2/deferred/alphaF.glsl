@@ -35,6 +35,11 @@
 
 out vec4 frag_color;
 
+#ifdef ALPHA_STOCHASTIC
+// <Vulkanstorm> stochastic transparency's alpha-only variant (alphaStochasticF.glsl)
+int alpha_stochastic_mask(float a);
+#endif
+
 #if defined(ALPHA_OIT)
 uniform sampler2D alpha_oit_opaque_depth; // detached opaque depth
 uniform int oit_mode;       // 0 normal, 1 OIT capture
@@ -298,6 +303,14 @@ void main()
     diffuse_srgb.rgb *= vertex_color.rgb;
     diffuse_linear.rgb = srgb_to_linear(diffuse_srgb.rgb);
 #endif // USE_VERTEX_COLOR
+
+#ifdef ALPHA_STOCHASTIC
+    // <Vulkanstorm> stochastic transparency: the total alpha or the stochastic depth, for the
+    // alpha alone (the same alpha as the shaded output below)
+    frag_color = vec4(0.0, 0.0, 0.0, max(final_alpha, 0.0));
+    gl_SampleMask[0] = alpha_stochastic_mask(final_alpha);
+    return;
+#endif
 
     vec3 sunlit;
     vec3 amblit;
