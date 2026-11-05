@@ -144,9 +144,16 @@ LLGLSLShader            gPostScreenSpaceReflectionProgram;
 LLGLSLShader            gPostVignetteProgram;   // <FS:CR> Import Vignette from Exodus
 LLGLSLShader            gPostSnapshotFrameProgram;   // <FS:Beq/> Add Snapshot frame guide
 
-// <FS> Vulkanstorm: alpha OIT (A-buffer) resolve shader
-LLGLSLShader            gAlphaOITResolveProgram;
-// </FS>
+// <Vulkanstorm> stochastic transparency (doc/oit/stochastic-transparency.md): the alpha-only
+// variants of the alpha programs, [0] static and [1] rigged, the depth spread and the composite
+LLGLSLShader            gDeferredAlphaStochasticProgram[2];
+LLGLSLShader            gDeferredFullbrightAlphaMaskAlphaStochasticProgram[2];
+LLGLSLShader            gDeferredPBRAlphaStochasticProgram[2];
+LLGLSLShader            gDeferredMaterialStochasticProgram[LLMaterial::SHADER_COUNT*2];
+LLGLSLShader            gAlphaStochasticExpandProgram;
+LLGLSLShader            gAlphaStochasticCompositeProgram;
+bool                    gAlphaStochasticShadersReady = false;
+// </Vulkanstorm>
 
 // Deferred rendering shaders
 LLGLSLShader            gDeferredImpostorProgram;
@@ -274,6 +281,82 @@ static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader
     shader.mRiggedVariant = &riggedShader;
     return riggedShader.createShader();
 }
+
+// <Vulkanstorm> stochastic transparency: the alpha programs' variants need gl_SampleMask and
+// gl_PrimitiveID in the fragment shader (GLSL 4.00) and multisample textures; like PPLL before
+// it, a Windows and Linux feature.
+static const std::string ALPHA_STOCHASTIC_HELPER = "deferred/alphaStochasticF.glsl";
+
+static bool stochastic_transparency_shaders()
+{
+#if LL_WINDOWS || LL_LINUX
+    return gGLManager.mGLVersion >= 4.0f && gGLManager.mGLSLVersionMajor >= 4;
+#else
+    return false;
+#endif
+}
+
+// The alpha-only variant of an alpha program (ALPHA_STOCHASTIC: the shader returns once its
+// alpha is known). A variant that fails to build leaves the method unavailable, never the
+// viewer without its shaders: sorted alpha runs instead.
+static void make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant)
+{
+    shader.mStochasticVariant = nullptr;
+    if (!stochastic_transparency_shaders() ||
+        !LLShaderMgr::instance()->mFragmentShaderObjects.count(ALPHA_STOCHASTIC_HELPER))
+    {
+        return;   // the coverage mask helper did not build (loadBasicShaders): sorted alpha
+    }
+    variant.mName = llformat("Stochastic %s", shader.mName.c_str());
+    variant.mFeatures = shader.mFeatures;
+    variant.mDefines = shader.mDefines;    // NOTE: Must come before addPermutation
+    variant.addPermutation("ALPHA_STOCHASTIC", "1");
+    variant.mShaderFiles = shader.mShaderFiles;
+    variant.mShaderLevel = shader.mShaderLevel;
+    variant.mShaderGroup = shader.mShaderGroup;
+    // createShader() can fall back to a lower shader class (the class1 stubs of the PBR and material
+    // programs), which writes no coverage mask: only a program that kept the mask table is a variant
+    if (variant.createShader() && variant.mTexture.size() > LLShaderMgr::ALPHA_ST_MASKS &&
+        variant.mTexture[LLShaderMgr::ALPHA_ST_MASKS] >= 0)
+    {
+        shader.mStochasticVariant = &variant;
+    }
+    else
+    {
+        LL_WARNS("Shader") << "Stochastic transparency unavailable: " << variant.mName
+                           << " failed to build with its coverage mask" << LL_ENDL;
+        variant.unload();
+    }
+}
+
+// The alpha programs set calculatesLighting/hasLighting after creation (LLRender::syncMatrices
+// uploads the lights for them); their variants follow.
+static void sync_stochastic_variant(LLGLSLShader& shader)
+{
+    if (shader.mStochasticVariant)
+    {
+        shader.mStochasticVariant->mFeatures.calculatesLighting = shader.mFeatures.calculatesLighting;
+        shader.mStochasticVariant->mFeatures.hasLighting = shader.mFeatures.hasLighting;
+    }
+}
+
+static void unload_stochastic_shaders()
+{
+    gAlphaStochasticShadersReady = false;
+    for (LLGLSLShader* shader : { &gDeferredAlphaStochasticProgram[0], &gDeferredAlphaStochasticProgram[1],
+                                  &gDeferredFullbrightAlphaMaskAlphaStochasticProgram[0],
+                                  &gDeferredFullbrightAlphaMaskAlphaStochasticProgram[1],
+                                  &gDeferredPBRAlphaStochasticProgram[0], &gDeferredPBRAlphaStochasticProgram[1],
+                                  &gAlphaStochasticExpandProgram, &gAlphaStochasticCompositeProgram })
+    {
+        shader->unload();
+    }
+    for (U32 i = 0; i < LLMaterial::SHADER_COUNT*2; ++i)
+    {
+        gDeferredMaterialStochasticProgram[i].unload();
+    }
+}
+// </Vulkanstorm>
 
 // <Vulkanstorm> PCSS soft shadows: the deferred sun program's shadow filter
 static bool use_pcss_shadows()
@@ -813,6 +896,7 @@ void LLViewerShaderMgr::unloadShaders()
     mShaderLevel[SHADER_EFFECT] = 0;
     mShaderLevel[SHADER_WINDLIGHT] = 0;
 
+    gAlphaStochasticShadersReady = false; // <Vulkanstorm/> stochastic transparency
     gPipeline.mShadersLoaded = false;
 }
 
@@ -962,16 +1046,6 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     index_channels.push_back(-1);    shaders.push_back( make_pair( "lighting/lightAlphaMaskNonIndexedF.glsl",                   mShaderLevel[SHADER_LIGHTING] ) );
     index_channels.push_back(ch);    shaders.push_back( make_pair( "lighting/lightF.glsl",                  mShaderLevel[SHADER_LIGHTING] ) );
     index_channels.push_back(ch);    shaders.push_back( make_pair( "lighting/lightAlphaMaskF.glsl",                 mShaderLevel[SHADER_LIGHTING] ) );
-    // <FS> Vulkanstorm: alpha OIT A-buffer node encoding, under the same gate as ALPHA_OIT
-    // (LLShaderMgr::compileShader) and attached with it (LLShaderMgr::attachShaderFeatures).
-#if LL_WINDOWS || LL_LINUX
-    if (gGLManager.mGLVersion >= 4.4f)
-    {
-        index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/alphaOITPackF.glsl",               1) );
-    }
-#endif
-    // </FS>
-
     for (U32 i = 0; i < shaders.size(); i++)
     {
         // Note usage of GL_FRAGMENT_SHADER
@@ -981,6 +1055,22 @@ std::string LLViewerShaderMgr::loadBasicShaders()
             return shaders[i].first;
         }
     }
+
+    // <Vulkanstorm> stochastic transparency's coverage masks, attached to the alpha programs'
+    // alpha-only variants (LLShaderMgr::attachShaderFeatures). Optional: without it the
+    // variants are not built and sorted alpha is used; the viewer starts either way.
+    mFragmentShaderObjects.erase(ALPHA_STOCHASTIC_HELPER);
+    if (stochastic_transparency_shaders())
+    {
+        S32 level = 1;
+        if (loadShaderFile(ALPHA_STOCHASTIC_HELPER, level, GL_FRAGMENT_SHADER, &attribs, -1) == 0)
+        {
+            mFragmentShaderObjects.erase(ALPHA_STOCHASTIC_HELPER);
+            LL_WARNS("Shader") << "Stochastic transparency unavailable: " << ALPHA_STOCHASTIC_HELPER
+                               << " failed to build; sorted alpha is used" << LL_ENDL;
+        }
+    }
+    // </Vulkanstorm>
 
     // <Vulkanstorm> PCSS: a second build of shadowUtil.glsl with PCSS_SHADOW defined, kept under
     // its own key for the deferred sun program alone (LLShaderMgr::attachShaderFeatures); every
@@ -1297,6 +1387,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredSkinnedPBROpaqueProgram.unload();
         gDeferredPBRAlphaProgram.unload();
         gDeferredSkinnedPBRAlphaProgram.unload();
+        unload_stochastic_shaders(); // <Vulkanstorm/>
         for (U32 paint_type = 0; paint_type < TERRAIN_PAINT_TYPE_COUNT; ++paint_type)
         {
             gDeferredPBRTerrainProgram[paint_type].unload();
@@ -1466,6 +1557,13 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
             success = gDeferredMaterialProgram[i].createShader();
             llassert(success);
+
+            // <Vulkanstorm> stochastic transparency: the blended materials' alpha-only variant
+            if (success && alpha_mode == LLMaterial::DIFFUSE_ALPHA_MODE_BLEND)
+            {
+                make_stochastic_variant(gDeferredMaterialProgram[i], gDeferredMaterialStochasticProgram[i]);
+            }
+            // </Vulkanstorm>
         }
     }
 
@@ -1477,6 +1575,12 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     gDeferredMaterialProgram[5+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = true;
     gDeferredMaterialProgram[9+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = true;
     gDeferredMaterialProgram[13+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = true;
+
+    // <Vulkanstorm/> stochastic transparency: the variants keep their programs' lighting flags
+    for (U32 i = 0; i < LLMaterial::SHADER_COUNT*2; ++i)
+    {
+        sync_stochastic_variant(gDeferredMaterialProgram[i]);
+    }
 
     if (success)
     {
@@ -1608,6 +1712,14 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         }
         llassert(success);
 
+        // <Vulkanstorm> stochastic transparency's alpha-only variants
+        if (success)
+        {
+            make_stochastic_variant(*shader, gDeferredPBRAlphaStochasticProgram[0]);
+            make_stochastic_variant(gDeferredSkinnedPBRAlphaProgram, gDeferredPBRAlphaStochasticProgram[1]);
+        }
+        // </Vulkanstorm>
+
         // Alpha Shader Hack
         // See: LLRender::syncMatrices()
         shader->mFeatures.calculatesLighting = true;
@@ -1615,6 +1727,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
         shader->mRiggedVariant->mFeatures.calculatesLighting = true;
         shader->mRiggedVariant->mFeatures.hasLighting = true;
+        sync_stochastic_variant(*shader); // <Vulkanstorm/>
+        sync_stochastic_variant(*shader->mRiggedVariant);
     }
 
     if (success)
@@ -1949,9 +2063,17 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             success = shader->createShader();
             llassert(success);
 
+            // <Vulkanstorm> stochastic transparency's alpha-only variant
+            if (success && !hud)
+            {
+                make_stochastic_variant(*shader, gDeferredAlphaStochasticProgram[rigged ? 1 : 0]);
+            }
+            // </Vulkanstorm>
+
             // Hack
             shader->mFeatures.calculatesLighting = true;
             shader->mFeatures.hasLighting = true;
+            sync_stochastic_variant(*shader); // <Vulkanstorm/>
         }
     }
 
@@ -2143,6 +2265,14 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         success = make_rigged_variant(gDeferredFullbrightAlphaMaskAlphaProgram, gDeferredSkinnedFullbrightAlphaMaskAlphaProgram);
         success = success && gDeferredFullbrightAlphaMaskAlphaProgram.createShader();
         llassert(success);
+
+        // <Vulkanstorm> stochastic transparency's alpha-only variants
+        if (success)
+        {
+            make_stochastic_variant(gDeferredFullbrightAlphaMaskAlphaProgram, gDeferredFullbrightAlphaMaskAlphaStochasticProgram[0]);
+            make_stochastic_variant(gDeferredSkinnedFullbrightAlphaMaskAlphaProgram, gDeferredFullbrightAlphaMaskAlphaStochasticProgram[1]);
+        }
+        // </Vulkanstorm>
     }
 
     if (success)
@@ -3141,25 +3271,50 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         success = gDeferredBufferVisualProgram.createShader();
     }
 
-    // <FS> Vulkanstorm: alpha OIT (image-array A-buffer) resolve. Built only on GL 4.4+ (image
-    // load/store). The alpha shaders' capture path (ALPHA_OIT) and the OIT pipeline are
-    // gated on the same capability, so on older HW this program is absent and compositeAlphaOIT()
-    // is a no-op -- the legacy sorted-alpha path runs instead.
-#if LL_WINDOWS || LL_LINUX
-    if (success && gGLManager.mGLVersion >= 4.4f)
+    // <Vulkanstorm> stochastic transparency: the opaque depth spread over the passes' samples and
+    // the composite. Like the variants, a failure leaves the method unavailable (sorted alpha).
+    if (success && stochastic_transparency_shaders())
     {
-        gAlphaOITResolveProgram.mName = "Alpha OIT Resolve";
-        gAlphaOITResolveProgram.mFeatures.isDeferred = true;
-        gAlphaOITResolveProgram.mShaderFiles.clear();
-        gAlphaOITResolveProgram.clearPermutations();
-        gAlphaOITResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gAlphaOITResolveProgram.mShaderFiles.push_back(make_pair("deferred/alphaOITResolveF.glsl", GL_FRAGMENT_SHADER));
-        gAlphaOITResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-        success = gAlphaOITResolveProgram.createShader();
-        llassert(success);
+        gAlphaStochasticExpandProgram.mName = "Alpha Stochastic Depth Spread";
+        gAlphaStochasticExpandProgram.mShaderFiles.clear();
+        gAlphaStochasticExpandProgram.clearPermutations();
+        gAlphaStochasticExpandProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gAlphaStochasticExpandProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticExpandF.glsl", GL_FRAGMENT_SHADER));
+        gAlphaStochasticExpandProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+
+        gAlphaStochasticCompositeProgram.mName = "Alpha Stochastic Composite";
+        gAlphaStochasticCompositeProgram.mShaderFiles.clear();
+        gAlphaStochasticCompositeProgram.clearPermutations();
+        gAlphaStochasticCompositeProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gAlphaStochasticCompositeProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticCompositeF.glsl", GL_FRAGMENT_SHADER));
+        gAlphaStochasticCompositeProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+
+        bool ready = gAlphaStochasticExpandProgram.createShader() && gAlphaStochasticCompositeProgram.createShader();
+        LLGLSLShader* bases[] = { &gDeferredAlphaProgram, &gDeferredSkinnedAlphaProgram,
+                                  &gDeferredFullbrightAlphaMaskAlphaProgram, &gDeferredSkinnedFullbrightAlphaMaskAlphaProgram,
+                                  &gDeferredPBRAlphaProgram, &gDeferredSkinnedPBRAlphaProgram };
+        for (LLGLSLShader* base : bases)
+        {
+            ready = ready && base->mStochasticVariant;
+        }
+        for (U32 i = 0; i < LLMaterial::SHADER_COUNT*2; ++i)
+        {
+            if ((i & 0x3) == LLMaterial::DIFFUSE_ALPHA_MODE_BLEND)
+            {
+                ready = ready && gDeferredMaterialProgram[i].mStochasticVariant;
+            }
+        }
+        gAlphaStochasticShadersReady = ready;
+        if (!ready)
+        {
+            LL_WARNS("Shader") << "Stochastic transparency unavailable: a shader failed to build; sorted alpha is used" << LL_ENDL;
+        }
     }
-#endif
-    // </FS>
+    else
+    {
+        gAlphaStochasticShadersReady = false;
+    }
+    // </Vulkanstorm>
 
     // [RLVa:KB] - @setsphere
     if(success)

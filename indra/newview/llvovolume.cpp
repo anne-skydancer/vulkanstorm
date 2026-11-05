@@ -5578,6 +5578,36 @@ void LLVolumeGeometryManager::freeFaces()
     }
 }
 
+// <Vulkanstorm> stochastic transparency: the identity of a face, a hash of its object's full id
+// (never the region's local id) and of its texture entry, the same on every launch whatever the
+// order the objects arrived in (from the author's Aurora Viewer, types.rs oit_tie: FNV-1a, then a
+// final mix).
+static U32 stochastic_face_seed(const LLFace* facep)
+{
+    const LLViewerObject* object = facep->getViewerObject();
+    if (!object)
+    {
+        return 0;
+    }
+    U32 h = 0x811c9dc5u;
+    const LLUUID& id = object->getID();
+    for (S32 i = 0; i < UUID_BYTES; ++i)
+    {
+        h = (h ^ (U32)id.mData[i]) * 0x01000193u;
+    }
+    const U32 face = (U32)facep->getTEOffset();
+    for (U32 i = 0; i < 4; ++i)
+    {
+        h = (h ^ ((face >> (8 * i)) & 0xffu)) * 0x01000193u;
+    }
+    h ^= h >> 16;
+    h *= 0x7feb352du;
+    h ^= h >> 15;
+    h *= 0x846ca68bu;
+    return h ^ (h >> 16);
+}
+// </Vulkanstorm>
+
 void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep, U32 type)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME;
@@ -5814,6 +5844,12 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
         draw_info->mShaderMask = shader_mask;
         draw_info->mAvatar = facep->mAvatar;
         draw_info->mSkinInfo = facep->mSkinInfo;
+        // <Vulkanstorm> stochastic transparency's face identity
+        if (type == LLRenderPass::PASS_ALPHA || type == LLRenderPass::PASS_ALPHA_RIGGED)
+        {
+            draw_info->mStochasticSeed = stochastic_face_seed(facep);
+        }
+        // </Vulkanstorm>
 
         if (gltf_mat)
         {
