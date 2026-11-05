@@ -48,8 +48,57 @@ queries for these implementations on synthetic layer stacks at a given resolutio
     times) with a new seed into the same accumulation, the paper's iteration; the ratio in C
     normalises it. The multisample-accumulation variant (the paper's Sec. 3.4) is not
     emulated.
+Round 2 variants (the question: can stochastic transparency replace PPLL). An implementation
+name is a base and '+'-separated options, e.g. "stoch+mrt+d16", "stoch1+bn", "hybrid+s4":
+  bases:
+    stoch   the depth-based method above.
+    stoch1  basic stochastic transparency with alpha correction (Enderton et al. Sec. 3.1/3.2):
+            ONE geometry pass, the same pass count as PPLL. Each fragment writes its colour into
+            the samples of its stratified mask of an S-sample RGBA16F colour target with an
+            S-sample depth (LEQUAL, depth write), and adds -log2(1 - a) (fixed point, 1 - a
+            clamped to 2^-10 as in the PPLL tail) into an R32UI image with an atomic before its
+            mask is applied; the resolve averages the covered samples and scales them to the
+            exact total alpha. Timers: alpha = clears, depth = opaque seed, accum = the
+            geometry pass, comp = resolve.
+    hybrid  PPLL slots as the core and depth-based stochastic transparency only where they
+            overflow: pass D as stoch, then the PPLL slot capture in which a fragment past the
+            last slot adds its visibility-weighted colour (vis a rgb, vis a; vis from the
+            S-sample depth) and its unweighted -log2(1 - a) to the tail; the resolve is the
+            exact PPLL sort where count <= slots and, on overflowing pixels, the depth-based
+            estimator over the slot nodes (visibility from the S-sample depth) plus the tail,
+            scaled to the exact total alpha (slot product x tail transmittance). Exact where
+            PPLL is exact; stochastic only past the slots. Timers: alpha = reset, depth = D,
+            accum = capture, comp = resolve. Its shaders are bench emulations of the tree's
+            oit_append and resolve with the tail changed, linked with the tree's pack object.
+  options:
+    d16, d24  the S-sample depth in DEPTH_COMPONENT16 / DEPTH_COMPONENT24 instead of 32F; the
+              visibility test allows one unit of the format (the stored depth of a
+              fragment's own samples is rounded)
+    mrt       stoch only: the total alpha is a second render target of pass A (blend ONE, ONE;
+              A then shades every fragment, also fully hidden ones), so pass T is gone and the
+              method has two geometry passes, D (depth only) and A
+    half      stoch only: pass D at half resolution in each axis (coverage evaluated at the
+              even pixel of each 2x2), seeded with the farthest opaque depth of the 2x2, which
+              is also stored in an R32F image; pass A weights the four bilinear neighbours'
+              visibilities with oit_bench_scenes.upsample_weights() (neighbours whose seed is
+              nearer than the fragment are dropped)
+    bn        blue-noise thresholds: xi = fract(blue_noise(p mod 32) + a per-layer shift hashed
+              from the depth alone) instead of a per-pixel hash; the mask choice stays hashed.
+              In the viewer the shift would hash a per-draw or object-space id (Wyman and
+              McGuire 2017), not the depth.
+    s4, s8, s16  the sample count of that variant (default OIT_BENCH_STOCH_SAMPLES)
+  Variants other than plain "stoch" are measured at their own sample count only; stoch1 and
+  hybrid need that count without iteration (4 or 8 on NVIDIA 621.01).
+Memory: B/px is format arithmetic; where GL_NVX_gpu_memory_info exists the bench also prints
+the measured drop of available video memory when each multisample target is allocated and
+cleared.
+Error: next to RMSE / max, "brmse" is the RMSE after a 3x3 binomial filter of image and
+reference (oit_bench_scenes.error_stats_blurred), a proxy for the noise seen at a normal
+viewing distance; blue noise should lower it more than the RMSE.
+
 OIT_BENCH_IMPLS selects implementations (default ppll,slots,stoch); OIT_BENCH_SCENES a JSON list
-of [pattern, layers] pairs.
+of [pattern, layers] pairs; OIT_BENCH_PNG_SCENE one or more pattern,layers pairs separated by
+';'.
 Each scenario draws L full-screen layers with distinct, unsorted depths; the patterns
 (oit_bench_scenes.py) are "full" (every pixel, alpha 0.5), "sparse" (25% of 64x64 blocks, a
 hair/particle clump proxy), "bright" (bright alpha 0.22-0.37 layers over black), "foliage"
@@ -68,7 +117,8 @@ at S = 8 for two alpha 0.5 layers) are printed as info lines, not checks. stoch 
 ref to pin: its shaders are emulations in this script, not viewer shaders.
 
 Environment: OIT_BENCH_W, OIT_BENCH_H (default 2560x1440), OIT_BENCH_FRAMES (default 20),
-OIT_BENCH_OLD_REF. Pass --opengl PATH to select another GL DLL (Mesa).
+OIT_BENCH_OLD_REF, OIT_BENCH_SLOTS (slots per pixel of "slots", "slots16" and "hybrid", default 8 as
+the viewer's RenderAlphaOITNodesPerPixel). Pass --opengl PATH to select another GL DLL (Mesa).
 """
 import json, math, os, statistics, subprocess, sys
 from pathlib import Path
@@ -87,8 +137,26 @@ IMPLS = os.environ.get('OIT_BENCH_IMPLS', 'ppll,slots,stoch').split(',')
 STOCH_SAMPLES = int(os.environ.get('OIT_BENCH_STOCH_SAMPLES', 8)); STOCH_RMSE_SAMPLES = (4, 8, 16)
 assert STOCH_SAMPLES in STOCH_RMSE_SAMPLES, 'OIT_BENCH_STOCH_SAMPLES must be 4, 8 or 16'
 PNG_DIR = os.environ.get('OIT_BENCH_PNG_DIR')
-PNG_SCENE = tuple(f(v) for f, v in zip((str, int), os.environ.get('OIT_BENCH_PNG_SCENE', 'bright,4').split(',')))
-NODES_PER_PX = 8; OLD_MAX_LAYERS = 24; SLOTS = 8; META_LAYERS = 7
+PNG_SCENES = [tuple(f(v) for f, v in zip((str, int), item.split(',')))
+              for item in os.environ.get('OIT_BENCH_PNG_SCENE', 'bright,4').split(';') if item]
+VARIANT_OPTIONS = ('d16', 'd24', 'mrt', 'half', 'bn', 's4', 's8', 's16')
+def variant(impl):
+    """The stochastic variant an implementation name describes, or None for the others."""
+    base, *opts = impl.split('+')
+    if base not in ('stoch', 'stoch1', 'hybrid'):
+        assert not opts, f'{impl}: options apply to stoch, stoch1 and hybrid only'
+        return None
+    bad = [o for o in opts if o not in VARIANT_OPTIONS]
+    assert not bad, f'{impl}: unknown options {bad}'
+    v = dict(kind=base, fmt=next((o for o in opts if o in ('d16', 'd24')), 'd32f'),
+             mrt='mrt' in opts, half='half' in opts, bn='bn' in opts,
+             samples=next((int(o[1:]) for o in opts if o in ('s4', 's8', 's16')), STOCH_SAMPLES))
+    assert base == 'stoch' or not (v['mrt'] or v['half']), f'{impl}: mrt and half apply to stoch only'
+    return v
+VARIANTS = {impl: variant(impl) for impl in IMPLS}
+HAS_HYBRID = any(v and v['kind'] == 'hybrid' for v in VARIANTS.values())
+NODES_PER_PX = 8; OLD_MAX_LAYERS = 24; SLOTS = int(os.environ.get("OIT_BENCH_SLOTS", 8)); META_LAYERS = 7
+assert 1 <= SLOTS <= 32, "OIT_BENCH_SLOTS: 1..32 (the resolve's OIT_MAX_SLOTS)"
 RMSE_WIN = min(int(os.environ.get('OIT_BENCH_RMSE_WIN', 256)), W, H)
 WIN_X = min(512, W - RMSE_WIN); WIN_Y = min(256, H - RMSE_WIN)   # covers both sparse block phases
 
@@ -130,7 +198,7 @@ zero=U(0);cleartex(meta,0,RED_INT,UINT,C.byref(zero))
 # Slot arrays only for the selected implementations: node size and format per implementation.
 SLOT_FORMAT={'slots':(slots,RG32UI,8),'slots16':(slots16,RGBA32UI,16)}
 for impl,(name,fmt,_) in SLOT_FORMAT.items():
-    if impl in IMPLS: bindtex(TEX2DARRAY,name);texstorage3(TEX2DARRAY,1,fmt,W,H,SLOTS)
+    if impl in IMPLS or (impl=='slots' and HAS_HYBRID): bindtex(TEX2DARRAY,name);texstorage3(TEX2DARRAY,1,fmt,W,H,SLOTS)
 bindtex(TEX2D,depth)   # unit 0 sampler2D = opaque depth for both capture and resolve
 fbo=U();genfbo(1,C.byref(fbo));bindfbo(0x8D40,fbo);attachtex(0x8D40,0x8CE0,TEX2D,color,0)
 assert fn('glCheckFramebufferStatus',U,U)(0x8D40)==0x8CD5
@@ -202,16 +270,27 @@ void main()
 '''
 vertex='#version 430 core\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-1.,0.,1.);}'
 progs={}
-for impl in [i for i in IMPLS if i!='stoch']:   # only the selected implementations; 'ppll' and 'slots16' need their git refs
+for impl in [i for i in IMPLS if VARIANTS[i] is None]:   # only the selected implementations; 'ppll' and 'slots16' need their git refs
     extra=[(0x8B30,pack_source())] if impl=='slots' else []
     cap=program([(0x8B31,vertex),(0x8B30,capture_source(impl))]+extra)
     res=None if impl=='direct' else program([(0x8B31,vertex),(0x8B30,resolve_source(impl))]+extra)
     progs[impl]=(cap,res)
 queries=(U*3)();genq(3,queries)
 
-# --- stoch: depth-sampled stochastic transparency (see the module docstring) ---
-TEX2DMS=0x9100;R16F=0x822D;RGBA16F=0x881A;D32F=0x8CAC;DEPTH_TEST=0x0B71
+# --- stoch: depth-sampled stochastic transparency and the round 2 variants (module docstring) ---
+TEX2DMS=0x9100;R16F=0x822D;RGBA16F=0x881A;D32F=0x8CAC;D24=0x81A6;D16=0x81A5;R32F=0x822E;DEPTH_TEST=0x0B71
+# format, bytes per sample (D24 assumed padded to 4), visibility tolerance (one unit of the format)
+DEPTH_FORMATS={'d32f':(D32F,4,0.0),'d24':(D24,4,1.0/16777215.0),'d16':(D16,2,1.0/65535.0)}
 max_ds=I();getint(0x910F,C.byref(max_ds));MAX_DEPTH_SAMPLES=max_ds.value   # GL_MAX_DEPTH_TEXTURE_SAMPLES
+ext_count=I();getint(0x821D,C.byref(ext_count))   # GL_NUM_EXTENSIONS
+get_stringi=fn('glGetStringi',C.c_char_p,U,U)
+EXTENSIONS={get_stringi(0x1F03,i).decode() for i in range(ext_count.value)}
+HAS_NVX_MEMINFO='GL_NVX_gpu_memory_info' in EXTENSIONS
+def vidmem_free_kib():
+    # GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, KiB; None without the extension
+    if not HAS_NVX_MEMINFO: return None
+    finish();v=I();getint(0x9049,C.byref(v));return v.value
+measured_mib={}   # target key -> measured MiB (allocation + first clear)
 stoch_status={}   # hardware samples -> 'ok' or why that count is not used
 def stoch_usable(hw):
     if hw not in stoch_status:
@@ -232,24 +311,53 @@ def color_target(fmt):
     target=U();genfbo(1,C.byref(target));bindfbo(0x8D40,target);attachtex(0x8D40,0x8CE0,TEX2D,name,0)
     assert fn('glCheckFramebufferStatus',U,U)(0x8D40)==0x8CD5
     return name.value,target.value
-stoch_ms={}   # hardware samples -> (MS depth texture, its FBO, mask table texture)
-def stoch_resources(hw):
-    if hw in stoch_ms: return stoch_ms[hw]
-    activetex(0x84C0+1)
-    ms=U();gentex(1,C.byref(ms));bindtex(TEX2DMS,ms);texstorage_ms(TEX2DMS,hw,D32F,W,H,1)
-    err=geterror();assert err==0,f'multisample depth allocation failed: S={hw}, GL error {err:#x}'
-    target=U();genfbo(1,C.byref(target));bindfbo(0x8D40,target);attachtex(0x8D40,0x8D00,TEX2DMS,ms,0)
-    drawbuffer(0);readbuffer(0)
-    assert fn('glCheckFramebufferStatus',U,U)(0x8D40)==0x8CD5
-    activetex(0x84C0+2)
-    table=scenes.mask_table(hw);words=(U*(64*(hw+1)))(*[m for row in table for m in row])
-    masks=U();gentex(1,C.byref(masks));bindtex(TEX2D,masks);texstorage(TEX2D,1,R32UI,64,hw+1)
+def plain_texture(fmt, w, h, unit):
+    activetex(0x84C0+unit)
+    name=U();gentex(1,C.byref(name));bindtex(TEX2D,name);texstorage(TEX2D,1,fmt,w,h)
     texparam(TEX2D,0x2801,0x2600);texparam(TEX2D,0x2800,0x2600)
-    texsub(TEX2D,0,0,0,64,hw+1,RED_INT,UINT,words)
+    activetex(0x84C0)
+    return name.value
+stoch_masks={}   # hardware samples -> mask table texture
+def stoch_mask_texture(hw):
+    if hw not in stoch_masks:
+        activetex(0x84C0+2)
+        table=scenes.mask_table(hw);words=(U*(64*(hw+1)))(*[m for row in table for m in row])
+        masks=U();gentex(1,C.byref(masks));bindtex(TEX2D,masks);texstorage(TEX2D,1,R32UI,64,hw+1)
+        texparam(TEX2D,0x2801,0x2600);texparam(TEX2D,0x2800,0x2600)
+        texsub(TEX2D,0,0,0,64,hw+1,RED_INT,UINT,words)
+        activetex(0x84C0)
+        stoch_masks[hw]=masks.value
+    return stoch_masks[hw]
+stoch_targets={}   # (hw, depth format, half, colour) -> (MS depth texture, FBO, MS colour texture or 0)
+def stoch_target(hw, fmt='d32f', half=False, color=False):
+    key=(hw,fmt,half,color)
+    if key in stoch_targets: return stoch_targets[key]
+    w,h=(W//2,H//2) if half else (W,H)
+    before=vidmem_free_kib()
+    activetex(0x84C0+1)
+    ms=U();gentex(1,C.byref(ms));bindtex(TEX2DMS,ms);texstorage_ms(TEX2DMS,hw,DEPTH_FORMATS[fmt][0],w,h,1)
+    err=geterror();assert err==0,f'multisample depth allocation failed: S={hw} {fmt}, GL error {err:#x}'
+    target=U();genfbo(1,C.byref(target));bindfbo(0x8D40,target);attachtex(0x8D40,0x8D00,TEX2DMS,ms,0)
+    col=U(0)
+    if color:
+        gentex(1,C.byref(col));bindtex(TEX2DMS,col);texstorage_ms(TEX2DMS,hw,RGBA16F,w,h,1)
+        err=geterror();assert err==0,f'multisample colour allocation failed: S={hw}, GL error {err:#x}'
+        attachtex(0x8D40,0x8CE0,TEX2DMS,col,0);drawbuffer(0x8CE0)
+    else:
+        drawbuffer(0)
+    readbuffer(0)
+    assert fn('glCheckFramebufferStatus',U,U)(0x8D40)==0x8CD5
+    clearcolor(0,0,0,0);clear(0x100|(0x4000 if color else 0))   # touch it, so the memory is committed
+    after=vidmem_free_kib()
+    if before is not None: measured_mib[key]=(before-after)/1024.0
     activetex(0x84C0);bindfbo(0x8D40,fbo)
     assert geterror()==0
-    stoch_ms[hw]=(ms.value,target.value,masks.value)
-    return stoch_ms[hw]
+    stoch_targets[key]=(ms.value,target.value,col.value)
+    return stoch_targets[key]
+def stoch_resources(hw):
+    # The probe's resources: full-resolution D32F target and the mask table.
+    ms,target,_=stoch_target(hw)
+    return ms,target,stoch_mask_texture(hw)
 def stoch_probe(hw):
     # Sample mask probe: a fragment whose gl_SampleMask[0] is a mask fetched from an R32UI
     # texture, as pass D fetches it, must write exactly the samples of that mask: each
@@ -269,7 +377,7 @@ def stoch_probe(hw):
         texparam(TEX2D,0x2801,0x2600);texparam(TEX2D,0x2800,0x2600);activetex(0x84C0)
         probe_progs=(program([(0x8B31,STOCH_VERTEX),(0x8B30,frag)]),program([(0x91B9,comp)]),out.value,mask_tex.value)
     draw_prog,read_prog,out,mask_tex=probe_progs
-    ms_tex,ms_fbo,_=stoch_ms[hw]
+    ms_tex,ms_fbo,_=stoch_resources(hw)
     activetex(0x84C0+1);bindtex(TEX2DMS,ms_tex);activetex(0x84C0+5);bindtex(TEX2D,mask_tex);activetex(0x84C0)
     result='ok'
     for mask in [1<<k for k in range(hw)]+scenes.mask_table(hw)[hw//2][:8]:
@@ -286,31 +394,21 @@ def stoch_probe(hw):
     bindfbo(0x8D40,fbo);assert geterror()==0
     return result
 STOCH_VERTEX='#version 430 core\nuniform float test_depth;\ninvariant gl_Position;\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.-1.,test_depth*2.-1.,1.);}'
-STOCH_COMMON='''#version 430 core
+STOCH_COMMON_BODY='''
 uniform sampler2D alpha_oit_opaque_depth;   // unit 0: detached opaque depth snapshot
 '''+scenes.SCENE_GLSL+'''
-// The capture's reject: LEQUAL against the opaque depth, nothing for zero alpha.
+// The capture's reject: LEQUAL against the opaque depth, nothing for zero alpha. A
+// half-resolution depth pass leaves the opaque reject to its seeded depth test.
 vec4 stoch_fragment()
 {
     vec4 c = scene_color();
+#ifndef STOCH_HALF
     if (!(gl_FragCoord.z <= texelFetch(alpha_oit_opaque_depth, ivec2(gl_FragCoord.xy), 0).r)) discard;
+#endif
     c.a = clamp(c.a, 0.0, 1.0);
     if (c.a <= 0.0) discard;
     return c;
 }
-'''
-STOCH_TOTAL=STOCH_COMMON+'''
-out vec4 total;
-void main()
-{
-    vec4 c = stoch_fragment();
-    total = vec4(-log(max(1.0 - c.a, 1.0 / 16384.0)), 0.0, 0.0, 0.0);
-}
-'''
-STOCH_DEPTH=STOCH_COMMON+'''
-uniform usampler2D stoch_masks;   // unit 2: row r = 64 masks with exactly r of S bits set
-uniform int stoch_samples;
-uniform uint stoch_seed;
 // pcg3d (Jarzynski and Olano, "Hash Functions for GPU Rendering", JCGT 2020)
 uvec3 stoch_pcg3d(uvec3 v)
 {
@@ -320,40 +418,139 @@ uvec3 stoch_pcg3d(uvec3 v)
     v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
     return v;
 }
-void main()
-{
-    vec4 c = stoch_fragment();
-    uvec3 h = stoch_pcg3d(uvec3(uvec2(gl_FragCoord.xy), floatBitsToUint(gl_FragCoord.z) ^ stoch_seed));
-    float xi = float(h.x >> 8) * (1.0 / 16777216.0);
-    int r = min(int(c.a * float(stoch_samples) + xi), stoch_samples);   // stratified count
-    if (r == 0) discard;
-    gl_SampleMask[0] = int(texelFetch(stoch_masks, ivec2(int(h.y & 63u), r), 0).r);
-}
-'''
-STOCH_ACCUM=STOCH_COMMON+'''
-uniform sampler2DMS stoch_depth;   // unit 1
+// Visibility of depth z among the S samples at q: the fraction not nearer than z, with a
+// tolerance of one unit of the depth format (a fragment's own samples hold its rounded depth).
+layout(binding = 1) uniform sampler2DMS stoch_depth;   // unit 1
 uniform int stoch_samples;
-out vec4 accum;
-void main()
+uniform float stoch_eps;
+float stoch_vis(ivec2 q, float z)
 {
-    vec4 c = stoch_fragment();
-    ivec2 p = ivec2(gl_FragCoord.xy);
-    float z = gl_FragCoord.z;
     int n = 0;
     for (int s = 0; s < stoch_samples; s++)
     {
-        n += int(z <= texelFetch(stoch_depth, p, s).r);
+        n += int(z - stoch_eps <= texelFetch(stoch_depth, q, s).r);
     }
-    if (n == 0) discard;
-    float w = c.a * float(n) / float(stoch_samples);
+    return float(n) / float(stoch_samples);
+}
+'''
+def stoch_source(body, defines=()):
+    head='#version 430 core\n'+''.join(f'#define {d}\n' for d in defines)
+    if 'STOCH_HALF' in defines and body is STOCH_DEPTH:   # only pass D runs at half resolution
+        head+='#define SCENE_PIXEL (ivec2(gl_FragCoord.xy) * 2)\n'
+    return head+STOCH_COMMON_BODY+body
+STOCH_COMMON='#version 430 core\n'+STOCH_COMMON_BODY   # kept for readers of round 1
+STOCH_TOTAL='''
+out vec4 total;
+void main()
+{
+    vec4 c = stoch_fragment();
+    total = vec4(-log(max(1.0 - c.a, 1.0 / 16384.0)), 0.0, 0.0, 0.0);
+}
+'''
+STOCH_DEPTH='''
+uniform usampler2D stoch_masks;   // unit 2: row r = 64 masks with exactly r of S bits set
+uniform uint stoch_seed;
+#ifdef STOCH_BN
+uniform sampler2D stoch_bn;       // unit 6: 32x32 blue-noise thresholds
+#endif
+#ifdef STOCH_BASIC
+layout(binding = 4, r32ui) uniform coherent uimage2D stoch_total_img;   // sum -log2(1 - a) * 65536
+out vec4 sample_color;
+#endif
+void main()
+{
+    vec4 c = stoch_fragment();
+#ifdef STOCH_BASIC
+    // Exact total alpha, before the mask can drop the fragment.
+    imageAtomicAdd(stoch_total_img, ivec2(gl_FragCoord.xy), uint(-log2(max(1.0 - c.a, 1.0 / 1024.0)) * 65536.0 + 0.5));
+#endif
+    uvec3 h = stoch_pcg3d(uvec3(uvec2(gl_FragCoord.xy), floatBitsToUint(gl_FragCoord.z) ^ stoch_seed));
+#ifdef STOCH_BN
+    // Blue-noise threshold, shifted per layer by a hash of the depth alone (constant over a
+    // flat bench layer; the viewer would hash a per-draw or object-space id).
+    uint layer_hash = stoch_pcg3d(uvec3(floatBitsToUint(gl_FragCoord.z) ^ stoch_seed, 0x9E37u, 0x79B9u)).x;
+    float xi = fract(texelFetch(stoch_bn, ivec2(gl_FragCoord.xy) & 31, 0).r + float(layer_hash >> 8) * (1.0 / 16777216.0));
+#else
+    float xi = float(h.x >> 8) * (1.0 / 16777216.0);
+#endif
+    int r = min(int(c.a * float(stoch_samples) + xi), stoch_samples);   // stratified count
+    if (r == 0) discard;
+    gl_SampleMask[0] = int(texelFetch(stoch_masks, ivec2(int(h.y & 63u), r), 0).r);
+#ifdef STOCH_BASIC
+    sample_color = vec4(c.rgb, 1.0);
+#endif
+}
+'''
+STOCH_ACCUM='''
+#ifdef STOCH_MRT
+layout(location = 0) out vec4 accum;
+layout(location = 1) out vec4 total;
+#else
+out vec4 accum;
+#endif
+#ifdef STOCH_HALF
+uniform sampler2D stoch_seed_half;   // unit 7: farthest opaque depth of each 2x2
+#endif
+void main()
+{
+#ifdef STOCH_HALF
+    vec4 c = scene_color();   // full-resolution coverage; the half-resolution pass skipped the opaque reject
+    if (!(gl_FragCoord.z <= texelFetch(alpha_oit_opaque_depth, ivec2(gl_FragCoord.xy), 0).r)) discard;
+    c.a = clamp(c.a, 0.0, 1.0);
+    if (c.a <= 0.0) discard;
+#else
+    vec4 c = stoch_fragment();
+#endif
+    float z = gl_FragCoord.z;
+#ifdef STOCH_HALF
+    // Depth-aware upsample (oit_bench_scenes.upsample_weights): bilinear weights of the four
+    // half-resolution neighbours, a neighbour whose opaque seed is nearer than z dropped.
+    vec2 hp = gl_FragCoord.xy * 0.5 - 0.5;
+    ivec2 b = ivec2(floor(hp));
+    vec2 f = hp - vec2(b);
+    ivec2 hmax = textureSize(stoch_seed_half, 0) - 1;
+    float vis = 0.0;
+    float wsum = 0.0;
+    for (int k = 0; k < 4; k++)
+    {
+        ivec2 o = ivec2(k & 1, k >> 1);
+        ivec2 q = clamp(b + o, ivec2(0), hmax);
+        float w = (o.x == 1 ? f.x : 1.0 - f.x) * (o.y == 1 ? f.y : 1.0 - f.y);
+        if (w > 0.0 && z <= texelFetch(stoch_seed_half, q, 0).r)
+        {
+            vis += w * stoch_vis(q, z);
+            wsum += w;
+        }
+    }
+    vis = wsum > 0.0 ? vis / wsum : 0.0;
+#else
+    float vis = stoch_vis(ivec2(gl_FragCoord.xy), z);
+#endif
+#ifdef STOCH_MRT
+    total = vec4(-log(max(1.0 - c.a, 1.0 / 16384.0)), 0.0, 0.0, 0.0);
+#else
+    if (vis <= 0.0) discard;
+#endif
+    float w = c.a * vis;
     accum = vec4(c.rgb * w, w);
 }
 '''
 STOCH_SEED='''#version 430 core
 uniform sampler2D alpha_oit_opaque_depth;
+#ifdef STOCH_HALF
+layout(binding = 3, r32f) uniform writeonly image2D stoch_seed_img;
+#endif
 void main()
 {
+#ifdef STOCH_HALF
+    ivec2 q = ivec2(gl_FragCoord.xy) * 2;
+    float z = max(max(texelFetch(alpha_oit_opaque_depth, q, 0).r, texelFetch(alpha_oit_opaque_depth, q + ivec2(1, 0), 0).r),
+                  max(texelFetch(alpha_oit_opaque_depth, q + ivec2(0, 1), 0).r, texelFetch(alpha_oit_opaque_depth, q + ivec2(1, 1), 0).r));
+    imageStore(stoch_seed_img, ivec2(gl_FragCoord.xy), vec4(z));
+    gl_FragDepth = z;
+#else
     gl_FragDepth = texelFetch(alpha_oit_opaque_depth, ivec2(gl_FragCoord.xy), 0).r;
+#endif
 }
 '''
 STOCH_COMPOSITE='''#version 430 core
@@ -369,59 +566,301 @@ void main()
     frag_color = vec4(acc.rgb * (alpha_total / acc.a), alpha_total);   // alpha correction
 }
 '''
-if 'stoch' in IMPLS:
+STOCH1_RESOLVE='''#version 430 core
+uniform sampler2DMS stoch_color;   // unit 1: per sample the colour of the nearest covering fragment, a = 1
+uniform int stoch_samples;
+layout(binding = 4, r32ui) uniform readonly uimage2D stoch_total_img;
+out vec4 frag_color;
+void main()
+{
+    ivec2 p = ivec2(gl_FragCoord.xy);
+    uint t = imageLoad(stoch_total_img, p).r;
+    if (t == 0u) discard;
+    vec4 sum = vec4(0.0);
+    for (int s = 0; s < stoch_samples; s++)
+    {
+        sum += texelFetch(stoch_color, p, s);
+    }
+    if (sum.a <= 0.0) discard;   // no fragment won a sample: no colour to scale
+    float alpha_total = 1.0 - exp2(-float(t) / 65536.0);
+    frag_color = vec4(sum.rgb / sum.a * alpha_total, alpha_total);   // alpha correction
+}
+'''
+# hybrid: the tree's slot capture with a visibility-weighted tail, and its resolve with the
+# depth-based estimator on overflowing pixels (module docstring).
+HYBRID_CAPTURE='''
+layout(binding = 0, r32ui) uniform coherent uimage2DArray oit_meta;
+layout(binding = 1, rg32ui) uniform writeonly uimage2DArray oit_slots;
+uint oit_pack_rgb(vec3 c);
+uint oit_pack_depth_alpha(float z, float a);
+uniform int oit_slot_count;
+#define OIT_TAIL_COLOR_SCALE 4096.0
+#define OIT_TAIL_ALPHA_SCALE 65536.0
+#define OIT_TAIL_LOG_SCALE   65536.0
+void main()
+{
+    vec4 c = stoch_fragment();
+    ivec2 p = ivec2(gl_FragCoord.xy);
+    float z = gl_FragCoord.z;
+    float a = c.a;
+    vec3 rgb = max(c.rgb, vec3(0.0));
+    uint k = imageAtomicAdd(oit_meta, ivec3(p, 0), 1u);
+    if (k < uint(oit_slot_count))
+    {
+        imageStore(oit_slots, ivec3(p, int(k)), uvec4(oit_pack_rgb(rgb * a), oit_pack_depth_alpha(z, a), 0u, 0u));
+        discard;
+    }
+    // Past the slots: the colour weighted by the stochastic visibility, the transmittance exact.
+    float vis = stoch_vis(p, z);
+    vec3 w = min(rgb * a * vis, vec3(1024.0));
+    imageAtomicAdd(oit_meta, ivec3(p, 1), uint(w.r * OIT_TAIL_COLOR_SCALE + 0.5));
+    imageAtomicAdd(oit_meta, ivec3(p, 2), uint(w.g * OIT_TAIL_COLOR_SCALE + 0.5));
+    imageAtomicAdd(oit_meta, ivec3(p, 3), uint(w.b * OIT_TAIL_COLOR_SCALE + 0.5));
+    imageAtomicAdd(oit_meta, ivec3(p, 4), uint(a * vis * OIT_TAIL_ALPHA_SCALE + 0.5));
+    imageAtomicAdd(oit_meta, ivec3(p, 5), uint(-log2(max(1.0 - a, 0.0009765625)) * OIT_TAIL_LOG_SCALE + 0.5));
+    discard;
+}
+'''
+HYBRID_RESOLVE='''#version 430 core
+layout(binding = 0, r32ui) uniform readonly uimage2DArray oit_meta;
+layout(binding = 2, r32ui) uniform writeonly uimage2DArray oit_meta_clear;
+layout(binding = 1, rg32ui) uniform readonly uimage2DArray oit_slots;
+uniform sampler2D depthMap;
+uniform int oit_slot_count;
+layout(binding = 1) uniform sampler2DMS stoch_depth;   // unit 1
+uniform int stoch_samples;
+uniform float stoch_eps;
+#define OIT_TAIL_COLOR_SCALE 4096.0
+#define OIT_TAIL_ALPHA_SCALE 65536.0
+#define OIT_TAIL_LOG_SCALE   65536.0
+#define OIT_MAX_SLOTS 32
+vec3 oit_unpack_rgb(uint p);
+uint oit_depth24(float z);
+out vec4 frag_color;
+void main()
+{
+    ivec2 coord = ivec2(gl_FragCoord.xy);
+    uint count = imageLoad(oit_meta, ivec3(coord, 0)).r;
+    if (count == 0u) discard;
+    uint opaque_q = oit_depth24(texelFetch(depthMap, coord, 0).r);
+    int slots = min(oit_slot_count, OIT_MAX_SLOTS);
+    int n = int(min(count, uint(slots)));
+    if (count <= uint(slots))
+    {
+        // Exact: the PPLL sort and back-to-front composite.
+        uint ncol[OIT_MAX_SLOTS];
+        uint nkey[OIT_MAX_SLOTS];
+        int cnt = 0;
+        for (int i = 0; i < n; i++)
+        {
+            uvec2 s = imageLoad(oit_slots, ivec3(coord, i)).xy;
+            if ((s.y >> 8) <= opaque_q) { ncol[cnt] = s.x; nkey[cnt] = s.y; cnt++; }
+        }
+        for (int i = 1; i < cnt; i++)
+        {
+            uint c = ncol[i]; uint k = nkey[i]; int j = i;
+            while (j > 0 && nkey[j - 1] < k) { ncol[j] = ncol[j - 1]; nkey[j] = nkey[j - 1]; j--; }
+            ncol[j] = c; nkey[j] = k;
+        }
+        vec3 accum = vec3(0.0);
+        float cov = 0.0;
+        for (int i = 0; i < cnt; i++)
+        {
+            float a = float(nkey[i] & 0xFFu) / 255.0;
+            accum = oit_unpack_rgb(ncol[i]) + accum * (1.0 - a);
+            cov = a + cov * (1.0 - a);
+        }
+        frag_color = vec4(accum, cov);
+        return;
+    }
+    // Overflow: depth-based stochastic estimator over the slot nodes and the weighted tail.
+    float zs[OIT_MAX_SLOTS];
+    int ns = min(stoch_samples, OIT_MAX_SLOTS);
+    for (int s = 0; s < ns; s++) zs[s] = texelFetch(stoch_depth, coord, s).r;
+    float eps = stoch_eps + 0.5 / 16777215.0;   // the node depth is 24-bit
+    vec3 acc = vec3(0.0);
+    float acc_a = 0.0;
+    float trans = 1.0;
+    for (int i = 0; i < n; i++)
+    {
+        uvec2 s = imageLoad(oit_slots, ivec3(coord, i)).xy;
+        if ((s.y >> 8) > opaque_q) continue;
+        float a = float(s.y & 0xFFu) / 255.0;
+        float zn = float(s.y >> 8) / 16777215.0;
+        int m = 0;
+        for (int k = 0; k < ns; k++) m += int(zn - eps <= zs[k]);
+        float vis = float(m) / float(ns);
+        acc += vis * oit_unpack_rgb(s.x);
+        acc_a += vis * a;
+        trans *= 1.0 - a;
+    }
+    acc += vec3(float(imageLoad(oit_meta, ivec3(coord, 1)).r),
+                float(imageLoad(oit_meta, ivec3(coord, 2)).r),
+                float(imageLoad(oit_meta, ivec3(coord, 3)).r)) / OIT_TAIL_COLOR_SCALE;
+    acc_a += float(imageLoad(oit_meta, ivec3(coord, 4)).r) / OIT_TAIL_ALPHA_SCALE;
+    trans *= exp2(-float(imageLoad(oit_meta, ivec3(coord, 5)).r) / OIT_TAIL_LOG_SCALE);
+    float alpha_total = 1.0 - trans;
+    frag_color = acc_a > 0.0 ? vec4(acc * (alpha_total / acc_a), alpha_total) : vec4(0.0);
+    for (int l = 1; l < 7; l++) imageStore(oit_meta_clear, ivec3(coord, l), uvec4(0u));
+}
+'''
+stoch_prog_cache={}
+def stoch_program(key, stages):
+    if key not in stoch_prog_cache: stoch_prog_cache[key]=program(stages)
+    return stoch_prog_cache[key]
+def variant_programs(v):
+    """The programs of a variant: seed, D, A (stoch), T (stoch, not mrt), C or resolve, capture."""
+    defs=(['STOCH_HALF'] if v['half'] else [])+(['STOCH_MRT'] if v['mrt'] else [])+(['STOCH_BN'] if v['bn'] else [])
+    seed_defs=['STOCH_HALF'] if v['half'] else []
+    seed_src=STOCH_SEED.replace('#version 430 core\n','#version 430 core\n'+''.join(f'#define {d}\n' for d in seed_defs))
+    p={'seed':stoch_program(('seed',v['half']),[(0x8B31,STOCH_VERTEX),(0x8B30,seed_src)])}
+    if v['kind']=='stoch1':
+        d=tuple(['STOCH_BASIC']+(['STOCH_BN'] if v['bn'] else []))
+        p['D']=stoch_program(('D',)+d,[(0x8B31,STOCH_VERTEX),(0x8B30,stoch_source(STOCH_DEPTH,d))])
+        p['R']=stoch_program(('R1',),[(0x8B31,vertex),(0x8B30,STOCH1_RESOLVE)])
+        return p
+    ddefs=tuple(d for d in defs if d in ('STOCH_HALF','STOCH_BN'))
+    p['D']=stoch_program(('D',)+ddefs,[(0x8B31,STOCH_VERTEX),(0x8B30,stoch_source(STOCH_DEPTH,ddefs))])
+    if v['kind']=='hybrid':
+        p['cap']=stoch_program(('hcap',),[(0x8B31,STOCH_VERTEX),(0x8B30,stoch_source(HYBRID_CAPTURE)),(0x8B30,pack_source())])
+        p['R']=stoch_program(('hres',),[(0x8B31,vertex),(0x8B30,HYBRID_RESOLVE),(0x8B30,pack_source())])
+        return p
+    adefs=tuple(d for d in defs if d in ('STOCH_HALF','STOCH_MRT'))
+    p['A']=stoch_program(('A',)+adefs,[(0x8B31,STOCH_VERTEX),(0x8B30,stoch_source(STOCH_ACCUM,adefs))])
+    p['T']=stoch_program(('T',),[(0x8B31,STOCH_VERTEX),(0x8B30,stoch_source(STOCH_TOTAL))])
+    p['C']=stoch_program(('C',),[(0x8B31,STOCH_VERTEX),(0x8B30,STOCH_COMPOSITE)])
+    return p
+if any(VARIANTS.values()):
     total_tex,total_fbo=color_target(R16F)
     accum_tex,accum_fbo=color_target(RGBA16F)
+    # accumulation + total alpha as two render targets, for the mrt option
+    mrt_fbo=U();genfbo(1,C.byref(mrt_fbo));bindfbo(0x8D40,mrt_fbo)
+    attachtex(0x8D40,0x8CE0,TEX2D,accum_tex,0);attachtex(0x8D40,0x8CE1,TEX2D,total_tex,0)
+    fn('glDrawBuffers',None,I,C.POINTER(U))(2,(U*2)(0x8CE0,0x8CE1))
+    assert fn('glCheckFramebufferStatus',U,U)(0x8D40)==0x8CD5
+    mrt_fbo=mrt_fbo.value
     activetex(0x84C0+3);bindtex(TEX2D,total_tex);activetex(0x84C0+4);bindtex(TEX2D,accum_tex)
     activetex(0x84C0);bindtex(TEX2D,depth);bindfbo(0x8D40,fbo)
-    stoch_progs={k:program([(0x8B31,STOCH_VERTEX),(0x8B30,src)]) for k,src in
-                 (('T',STOCH_TOTAL),('D',STOCH_DEPTH),('A',STOCH_ACCUM),('seed',STOCH_SEED),('C',STOCH_COMPOSITE))}
+    bn_values=scenes.blue_noise()
+    bn_tex=plain_texture(R32F,32,32,6)
+    activetex(0x84C0+6);texsub(TEX2D,0,0,0,32,32,0x1903,0x1406,(C.c_float*1024)(*bn_values));activetex(0x84C0)
+    seed_half_tex=plain_texture(R32F,W//2,H//2,7)
+    total_img=plain_texture(R32UI,W,H,0);activetex(0x84C0);bindtex(TEX2D,depth)
     # one query for T, one for C, and a D/A pair per iteration; stoch_plan() may fall back to
     # one hardware sample, so S = 16 can take up to 16 iterations
     STOCH_QUERIES=2+2*max(STOCH_RMSE_SAMPLES);stoch_queries=(U*STOCH_QUERIES)();genq(STOCH_QUERIES,stoch_queries)
     for s in STOCH_RMSE_SAMPLES: stoch_plan(s)
+    for impl,v in VARIANTS.items():
+        if v is None: continue
+        hw,iters=stoch_plan(v['samples'])
+        assert v['kind']=='stoch' or iters==1,f'{impl}: S={v["samples"]} needs {iters} iterations; stoch1 and hybrid run without'
+        stoch_target(hw,v['fmt'],v['half'],v['kind']=='stoch1');stoch_mask_texture(hw);variant_programs(v)
     assert geterror()==0
 def stoch_summary():
     plans=', '.join(f'S={s}: '+('{} hw'.format(stoch_plan(s)[0]) if stoch_plan(s)[1]==1 else '{} hw x {} iterations'.format(*stoch_plan(s))) for s in STOCH_RMSE_SAMPLES)
     return 'multisample depth with independent samples: '+', '.join(f'{k}: {v}' for k,v in sorted(stoch_status.items()))+'; plans '+plans
+def variant_bytes(v):
+    """Bytes per pixel of a variant's own buffers (format arithmetic, PPLL slots included for hybrid)."""
+    hw,_=stoch_plan(v['samples']);db=DEPTH_FORMATS[v['fmt']][1]
+    if v['kind']=='stoch1': return hw*(8+db)+4
+    if v['kind']=='hybrid': return 8*SLOTS+4*META_LAYERS+hw*db
+    return hw*db*(0.25 if v['half'] else 1)+(1 if v['half'] else 0)+2+8
+def variant_measured(v):
+    hw,_=stoch_plan(v['samples'])
+    return measured_mib.get((hw,v['fmt'],v['half'],v['kind']=='stoch1'))
 
-def frame_stoch(name, background, layers, samples, seed=0):
-    # One stoch frame; returns the four pass times [T, D, A, C] in ms.
+def frame_stoch(name, background, layers, samples, seed=0, v=None):
+    """One frame of a stochastic variant (default: plain stoch); returns the four pass times
+    in ms: stoch [T, D, A, C]; stoch1 [clears, seed, geometry pass, resolve]; hybrid [reset,
+    D, capture, resolve]."""
+    v=v or VARIANTS.get('stoch') or variant('stoch')
     hw,iters=stoch_plan(samples)
-    ms_tex,ms_fbo,_=stoch_resources(hw)
-    activetex(0x84C0+1);bindtex(TEX2DMS,ms_tex);activetex(0x84C0+2);bindtex(TEX2D,stoch_ms[hw][2]);activetex(0x84C0)
+    ms_tex,ms_fbo,ms_col=stoch_target(hw,v['fmt'],v['half'],v['kind']=='stoch1')
+    progs_v=variant_programs(v)
+    eps=DEPTH_FORMATS[v['fmt']][2]
+    activetex(0x84C0+1);bindtex(TEX2DMS,ms_col if v['kind']=='stoch1' else ms_tex)
+    activetex(0x84C0+2);bindtex(TEX2D,stoch_mask_texture(hw));activetex(0x84C0)
     bindfbo(0x8D40,fbo);colormask(1,1,1,1);clearcolor(*background,1);clear(0x4000)
     q=list(stoch_queries)
-    # --- T: clear the total-alpha and accumulation targets, sum -ln(1 - a) ---
+    hw_w,hw_h=(W//2,H//2) if v['half'] else (W,H)
+    def seed_pass(color=False):
+        # seed the multisample depth from the opaque depth (colour masked)
+        bindfbo(0x8D40,ms_fbo);fn('glViewport',None,I,I,I,I)(0,0,hw_w,hw_h)
+        if color: colormask(1,1,1,1);clearcolor(0,0,0,0);clear(0x4000)
+        colormask(0,0,0,0);enable(DEPTH_TEST);depthfunc(0x0207)   # ALWAYS
+        if v['half']: image(3,seed_half_tex,0,0,0,0x88B9,R32F)
+        prog=progs_v['seed'];use(prog);uniform(uloc(prog,'alpha_oit_opaque_depth'),0);draw(4,0,3)
+        if v['half']: barrier(0x8|0x20)   # TEXTURE_FETCH | SHADER_IMAGE_ACCESS
+        colormask(1,1,1,1)
+    def mask_pass(it):
+        # the stochastic masks: every layer, LEQUAL, depth write (and, for stoch1, colour)
+        enable(DEPTH_TEST);depthfunc(0x0203)   # LEQUAL
+        prog=progs_v['D'];use(prog);uniform(uloc(prog,'alpha_oit_opaque_depth'),0)
+        uniform(uloc(prog,'stoch_masks'),2);uniform(uloc(prog,'stoch_samples'),hw);uniform1ui(uloc(prog,'stoch_seed'),seed*977+it*7919)
+        if v['bn']: uniform(uloc(prog,'stoch_bn'),6)
+        draw_layers(prog,name,layers)
+        disable(DEPTH_TEST);depthfunc(0x0201);fn('glViewport',None,I,I,I,I)(0,0,W,H)
+    def depth_pass(it):
+        seed_pass();mask_pass(it)
+    if v['kind']=='stoch1':
+        beginq(TIME_ELAPSED,q[0]);cleartex(total_img,0,RED_INT,UINT,C.byref(zero));barrier(0x20);endq(TIME_ELAPSED)
+        beginq(TIME_ELAPSED,q[1]);seed_pass(color=True);endq(TIME_ELAPSED)
+        beginq(TIME_ELAPSED,q[2])
+        image(4,total_img,0,0,0,0x88BA,R32UI);blendfunc(1,0)   # replace: each sample keeps the nearest colour
+        mask_pass(0)
+        endq(TIME_ELAPSED)
+        barrier(0x20|0x8)
+        beginq(TIME_ELAPSED,q[3])
+        bindfbo(0x8D40,fbo);prog=progs_v['R'];use(prog);uniform(uloc(prog,'stoch_color'),1);uniform(uloc(prog,'stoch_samples'),hw)
+        blendfunc(1,0x0303);colormask(1,1,1,0);draw(4,0,3)
+        endq(TIME_ELAPSED)
+        t=read_queries(q[:4])
+        return t
+    if v['kind']=='hybrid':
+        beginq(TIME_ELAPSED,q[0])
+        image(0,0,0,1,0,0x88BA,R32UI);image(1,0,0,1,0,0x88B9,RG32UI);image(2,0,0,1,0,0x88B9,R32UI)
+        barrier(0x20|0x100);clearsub(meta,0,0,0,0,W,H,1,RED_INT,UINT,C.byref(zero));barrier(0x20)
+        image(0,meta,0,1,0,0x88BA,R32UI);image(1,slots,0,1,0,0x88B9,RG32UI)
+        endq(TIME_ELAPSED)
+        beginq(TIME_ELAPSED,q[1]);depth_pass(0);endq(TIME_ELAPSED)
+        beginq(TIME_ELAPSED,q[2])
+        bindfbo(0x8D40,fbo);activetex(0x84C0+1);bindtex(TEX2DMS,ms_tex);activetex(0x84C0)
+        prog=progs_v['cap'];use(prog);uniform(uloc(prog,'alpha_oit_opaque_depth'),0);uniform(uloc(prog,'stoch_depth'),1)
+        uniform(uloc(prog,'stoch_samples'),hw);uniform1f(uloc(prog,'stoch_eps'),eps);uniform(uloc(prog,'oit_slot_count'),SLOTS)
+        colormask(1,1,1,1);draw_layers(prog,name,layers);barrier(0x20)
+        endq(TIME_ELAPSED)
+        beginq(TIME_ELAPSED,q[3])
+        prog=progs_v['R'];use(prog);uniform(uloc(prog,'depthMap'),0);uniform(uloc(prog,'stoch_depth'),1)
+        uniform(uloc(prog,'stoch_samples'),hw);uniform1f(uloc(prog,'stoch_eps'),eps);uniform(uloc(prog,'oit_slot_count'),SLOTS)
+        image(0,meta,0,1,0,0x88B8,R32UI);image(1,slots,0,1,0,0x88B8,RG32UI);image(2,meta,0,1,0,0x88B9,R32UI)
+        blendfunc(1,0x0303);colormask(1,1,1,0);draw(4,0,3)
+        endq(TIME_ELAPSED)
+        return read_queries(q[:4])
+    # --- T: clear the total-alpha and accumulation targets, sum -ln(1 - a) (not with mrt) ---
     beginq(TIME_ELAPSED,q[0])
     clearcolor(0,0,0,0);bindfbo(0x8D40,accum_fbo);clear(0x4000);bindfbo(0x8D40,total_fbo);clear(0x4000)
-    prog=stoch_progs['T'];use(prog);uniform(uloc(prog,'alpha_oit_opaque_depth'),0)
-    blendfunc(1,1);draw_layers(prog,name,layers)
+    if not v['mrt']:
+        prog=progs_v['T'];use(prog);uniform(uloc(prog,'alpha_oit_opaque_depth'),0)
+        blendfunc(1,1);draw_layers(prog,name,layers)
     endq(TIME_ELAPSED)
     used=[q[0]]
     for it in range(iters):
-        # --- D: seed the multisample depth from the opaque depth, then the stochastic masks ---
-        beginq(TIME_ELAPSED,q[1+2*it])
-        bindfbo(0x8D40,ms_fbo);enable(DEPTH_TEST);depthfunc(0x0207)   # ALWAYS
-        prog=stoch_progs['seed'];use(prog);uniform(uloc(prog,'alpha_oit_opaque_depth'),0);draw(4,0,3)
-        depthfunc(0x0203)   # LEQUAL
-        prog=stoch_progs['D'];use(prog);uniform(uloc(prog,'alpha_oit_opaque_depth'),0)
-        uniform(uloc(prog,'stoch_masks'),2);uniform(uloc(prog,'stoch_samples'),hw);uniform1ui(uloc(prog,'stoch_seed'),seed*977+it*7919)
-        draw_layers(prog,name,layers)
-        disable(DEPTH_TEST);depthfunc(0x0201)
-        endq(TIME_ELAPSED)
+        beginq(TIME_ELAPSED,q[1+2*it]);depth_pass(it);endq(TIME_ELAPSED)
         # --- A: shade every layer once, weighted by its visibility in the S depths ---
         beginq(TIME_ELAPSED,q[2+2*it])
-        bindfbo(0x8D40,accum_fbo)
-        prog=stoch_progs['A'];use(prog);uniform(uloc(prog,'alpha_oit_opaque_depth'),0)
-        uniform(uloc(prog,'stoch_depth'),1);uniform(uloc(prog,'stoch_samples'),hw)
+        # with mrt the total alpha is written once: later iterations (S above the hardware's
+        # independent samples) accumulate colour only, so the log sum is not counted twice
+        bindfbo(0x8D40,mrt_fbo if v['mrt'] and it==0 else accum_fbo)
+        prog=progs_v['A'];use(prog);uniform(uloc(prog,'alpha_oit_opaque_depth'),0)
+        uniform(uloc(prog,'stoch_depth'),1);uniform(uloc(prog,'stoch_samples'),hw);uniform1f(uloc(prog,'stoch_eps'),eps)
+        if v['half']: uniform(uloc(prog,'stoch_seed_half'),7)
         blendfunc(1,1);draw_layers(prog,name,layers)
         endq(TIME_ELAPSED)
         used+=[q[1+2*it],q[2+2*it]]
     # --- C: alpha-corrected composite over the screen ---
     beginq(TIME_ELAPSED,q[-1])
     bindfbo(0x8D40,fbo)
-    prog=stoch_progs['C'];use(prog);uniform(uloc(prog,'stoch_total'),3);uniform(uloc(prog,'stoch_accum'),4)
+    prog=progs_v['C'];use(prog);uniform(uloc(prog,'stoch_total'),3);uniform(uloc(prog,'stoch_accum'),4)
     blendfunc(1,0x0303);colormask(1,1,1,0);draw(4,0,3)
     endq(TIME_ELAPSED)
     t=read_queries(used+[q[-1]])
@@ -451,7 +890,8 @@ def read_queries(qs):
     return out
 
 def frame(impl, name, background, layers):
-    if impl=='stoch': return frame_stoch(name,background,layers,STOCH_SAMPLES)
+    v=VARIANTS[impl]
+    if v: return frame_stoch(name,background,layers,v['samples'],v=v)
     cap,res=progs[impl]
     bindfbo(0x8D40,fbo);colormask(1,1,1,1);clearcolor(*background,1);clear(0x4000)
     # --- reset ---
@@ -515,13 +955,38 @@ def run_scene(impl, name, background, layers):
         if f>=WARMUP: samples.append(t)
     return [statistics.median(s[i] for s in samples) for i in range(len(samples[0]))]
 
+opaque_state=[None]   # the scene whose opaque depth is in the snapshot texture
+def set_opaque(name):
+    """Upload the scene's opaque depth (oit_bench_scenes.opaque_depth) when it changes."""
+    key=name if name=='occl' else 'none'
+    if opaque_state[0]==key: return
+    activetex(0x84C0);bindtex(TEX2D,depth)
+    if key=='none':
+        cleartex(depth,0,0x1902,0x1406,C.byref(one))
+    else:
+        row=(C.c_float*W)(*[scenes.opaque_depth(name,x,0) for x in range(W)])   # occl depends on x only
+        rows=bytes(row)*H
+        texsub(TEX2D,0,0,0,W,H,0x1902,0x1406,rows)
+    assert geterror()==0
+    opaque_state[0]=key
+get_tex_image=fn('glGetTexImage',None,U,I,U,U,P)
+def read_total_image():
+    """stoch1's R32UI total image over the RMSE window, as total alpha. glGetTexImage of the
+    whole level (OpenGL 1.x; glGetTextureSubImage would need 4.5) and the window sliced out."""
+    finish();buf=(U*(W*H))()
+    activetex(0x84C0+7);bindtex(TEX2D,total_img);get_tex_image(TEX2D,0,RED_INT,UINT,buf)
+    bindtex(TEX2D,seed_half_tex);activetex(0x84C0)
+    assert geterror()==0
+    return [1.0-2.0**(-buf[(WIN_Y+y)*W+WIN_X+x]/65536.0) for y in range(RMSE_WIN) for x in range(RMSE_WIN)]
+
 scenarios=json.loads(os.environ['OIT_BENCH_SCENES']) if 'OIT_BENCH_SCENES' in os.environ else [
     ('opaque',1),('full',1),('full',2),('full',4),('full',8),('full',16),('full',32),('full',64),
     ('sparse',8),('sparse',24),('sparse',48),('bright',4),('bright',8),('bright',16),
-    ('foliage',16),('foliage',32),('foliage',64)]
+    ('foliage',16),('foliage',32),('foliage',64),('deep',8),('occl',8)]
 scenarios=[(p,int(l)) for p,l in scenarios]
+LABEL=max([8]+[len(i)+1 for i in IMPLS])
 print(f'{W}x{H}, {FRAMES} frames median after {WARMUP} warmup; ms per frame (reset / capture / resolve / total)')
-print(f'RMSE window {RMSE_WIN}x{RMSE_WIN} at ({WIN_X},{WIN_Y}): 8-bit units of linear colour over the alpha-covered pixels')
+print(f'RMSE window {RMSE_WIN}x{RMSE_WIN} at ({WIN_X},{WIN_Y}): 8-bit units of linear colour over the alpha-covered pixels; brmse after a 3x3 binomial filter')
 for impl in IMPLS:
     if impl=='ppll': print(f'ppll ({OLD_REF}): {NODES_PER_PX} nodes/px pool ({node_cap*16>>20} MiB), {OLD_MAX_LAYERS} sorted layers')
     if impl in SLOT_FORMAT:
@@ -532,36 +997,49 @@ for impl in IMPLS:
         print(f'stoch (bench emulation): S={STOCH_SAMPLES} ({hw} hardware samples x {iters} iteration{"s" if iters>1 else ""}): MS depth D32F {4*hw} B + total alpha R16F 2 B + accumulation RGBA16F 8 B = {4*hw+10} B/px ({W*H*(4*hw+10)>>20} MiB)')
         print(f'stoch: GL_MAX_DEPTH_TEXTURE_SAMPLES = {MAX_DEPTH_SAMPLES}; '+stoch_summary())
         print('stoch timers: alpha = clears + total alpha pass, depth = opaque seed + stochastic depth pass, accum = accumulation pass, comp = composite')
-print(f'{"scene":<13}{"impl":<8}{"reset":>8}{"capture":>9}{"resolve":>9}{"alpha":>8}{"depth":>8}{"accum":>8}{"comp":>8}{"total":>8}{"rmse":>7}{"max":>7}  note')
-results={}   # (pattern, layers) -> {impl: (timings, rmse, max)}
+    elif VARIANTS[impl]:
+        v=VARIANTS[impl];hw,iters=stoch_plan(v['samples']);m=variant_measured(v)
+        b=variant_bytes(v)
+        meas=f'; MS target measured {m:.0f} MiB' if m is not None else ''
+        print(f'{impl} (bench emulation): S={v["samples"]} ({hw} hw x {iters}), depth {v["fmt"]}: {b:g} B/px ({W*H*b/1048576:.0f} MiB){meas}')
+if any(VARIANTS.values()):
+    print('variant timers: stoch* alpha/depth/accum/comp = T (clears only with mrt) / seed + D / A / C; stoch1 = clears / seed / geometry pass / resolve; hybrid = reset / D / capture / resolve')
+print(f'{"scene":<13}{"impl":<{LABEL}}{"reset":>8}{"capture":>9}{"resolve":>9}{"alpha":>8}{"depth":>8}{"accum":>8}{"comp":>8}{"total":>8}{"rmse":>7}{"max":>7}{"brmse":>7}  note')
+results={}   # (pattern, layers) -> {impl: (timings, rmse, max, brmse)}
 stoch_rmse={}   # (pattern, layers) -> {S: (rmse, max)}, plus 'alpha': max total-alpha error
-png_written=[]
+variant_alpha={}   # impl -> worst total-alpha error over the scenes
+exact_images={}   # (pattern, layers, impl) -> image, PPLL slots and hybrid on scenes without overflow
 tail_scenes=[]
 failures=[]
 def check(ok, text):
     print(('ok    ' if ok else 'FAIL  ')+text)
     if not ok: failures.append(text)
 for pattern_name,layers in scenarios:
+    set_opaque(pattern_name)
     background,scene_layers=scenes.scene(pattern_name,layers)
     exact=scenes.exact_window(pattern_name,background,scene_layers,WIN_X,WIN_Y,RMSE_WIN,RMSE_WIN)
     covered=[c for _,_,c in exact if c]
     tail_px=sum(c>SLOTS for c in covered)/max(len(covered),1)
     coverage=scenes.COVERAGE.get(pattern_name,1.0)   # screen-wide, for the shared PPLL pool
     if tail_px>0: tail_scenes.append(f'{pattern_name} L={layers}')
+    want_png=PNG_DIR and (pattern_name,layers) in PNG_SCENES
+    png_written=[]
     row={}
     for impl in IMPLS:
         med=run_scene(impl,pattern_name,background,scene_layers)
-        rmse=worst=None
+        rmse=worst=brmse=None
+        v=VARIANTS[impl]
         if impl=='stoch':
             per_s={}
             for s in STOCH_RMSE_SAMPLES:
-                frame_stoch(pattern_name,background,scene_layers,s)
+                frame_stoch(pattern_name,background,scene_layers,s,v=v)
                 image_rgb=read_window(fbo)
                 per_s[s]=scenes.error_stats(image_rgb,exact)
                 if s==STOCH_SAMPLES:
+                    brmse=scenes.error_stats_blurred(image_rgb,exact,RMSE_WIN,RMSE_WIN)
                     totals=read_window(total_fbo,fmt=0x1903,channels=1)   # GL_RED
-                    per_s['alpha']=max(abs((1.0-math.exp(-v[0]))-e[1]) for v,e in zip(totals,exact))
-                if PNG_DIR and (pattern_name,layers)==PNG_SCENE:
+                    per_s['alpha']=max(abs((1.0-math.exp(-t[0]))-e[1]) for t,e in zip(totals,exact))
+                if want_png:
                     png_written.append((f'stoch_s{s}',image_rgb))
             stoch_rmse[(pattern_name,layers)]=per_s
             rmse,worst=per_s[STOCH_SAMPLES]
@@ -569,22 +1047,30 @@ for pattern_name,layers in scenarios:
             frame(impl,pattern_name,background,scene_layers)
             image_rgb=read_window(fbo)
             rmse,worst=scenes.error_stats(image_rgb,exact)
-            if PNG_DIR and (pattern_name,layers)==PNG_SCENE: png_written.append((impl,image_rgb))
-        row[impl]=(med,rmse,worst)
+            brmse=scenes.error_stats_blurred(image_rgb,exact,RMSE_WIN,RMSE_WIN)
+            if v and v['kind'] in ('stoch','stoch1'):
+                if v['kind']=='stoch1': totals=read_total_image()
+                else: totals=[1.0-math.exp(-t[0]) for t in read_window(total_fbo,fmt=0x1903,channels=1)]
+                err=max(abs(t-e[1]) for t,e in zip(totals,exact))
+                variant_alpha[impl]=max(variant_alpha.get(impl,0.0),err)
+            if tail_px==0 and (impl=='slots' or (v and v['kind']=='hybrid')):
+                exact_images[(pattern_name,layers,impl)]=image_rgb
+            if want_png: png_written.append((impl.replace('+','_'),image_rgb))
+        row[impl]=(med,rmse,worst,brmse)
         note=''
         if impl=='ppll' and layers*coverage>NODES_PER_PX: note=f'pool overflow: {layers*coverage-NODES_PER_PX:.0f} of {layers*coverage:.0f} fragments/px fall through to in-place blend'
         if impl=='ppll' and layers>OLD_MAX_LAYERS: note+=' + weighted tail past 24'
-        if impl in SLOT_FORMAT and tail_px>0: note=f'tail on {100*tail_px:.0f}% of covered px'
-        err=f'{rmse:>7.2f}{worst:>7.1f}' if rmse is not None else f'{"-":>7}{"-":>7}'
-        if impl=='stoch':
-            label=f'stoch{STOCH_SAMPLES}'
-            times=f'{"-":>8}{"-":>9}{"-":>9}'+''.join(f'{v:>8.3f}' for v in med)
+        if (impl in SLOT_FORMAT or (v and v['kind']=='hybrid')) and tail_px>0: note=f'tail on {100*tail_px:.0f}% of covered px'
+        err=f'{rmse:>7.2f}{worst:>7.1f}{brmse:>7.2f}' if rmse is not None else f'{"-":>7}{"-":>7}{"-":>7}'
+        if v:
+            label=f'stoch{STOCH_SAMPLES}' if impl=='stoch' else impl
+            times=f'{"-":>8}{"-":>9}{"-":>9}'+''.join(f'{t:>8.3f}' for t in med)
         else:
             label=impl
             times=f'{med[0]:>8.3f}{med[1]:>9.3f}{med[2]:>9.3f}'+f'{"-":>8}'*4
-        print(f'{pattern_name+" L="+str(layers):<13}{label:<8}{times}{sum(med):>8.3f}{err}  {note}')
+        print(f'{pattern_name+" L="+str(layers):<13}{label:<{LABEL}}{times}{sum(med):>8.3f}{err}  {note}')
     results[(pattern_name,layers)]=row
-    if PNG_DIR and (pattern_name,layers)==PNG_SCENE:
+    if want_png:
         os.makedirs(PNG_DIR,exist_ok=True)
         stem=f'{pattern_name}{layers}_{W}x{H}'
         for label,image_rgb in [('exact',[e[0] for e in exact])]+png_written:
@@ -595,8 +1081,10 @@ for pattern_name,layers in scenarios:
         a,b=sum(row["ppll"][0]),sum(row["slots"][0]);print(f'{"":<21}slots/ppll total = {b/a:.2f}x')
     if 'slots16' in row and 'slots' in row:
         a,b=sum(row["slots16"][0]),sum(row["slots"][0]);print(f'{"":<21}slots/slots16 total = {b/a:.2f}x')
-    if 'stoch' in row and 'slots' in row:
-        a,b=sum(row["slots"][0]),sum(row["stoch"][0]);print(f'{"":<21}stoch/slots total = {b/a:.2f}x')
+    if 'slots' in row:
+        for impl in IMPLS:
+            if VARIANTS[impl]:
+                a,b=sum(row["slots"][0]),sum(row[impl][0]);print(f'{"":<21}{impl}/slots total = {b/a:.2f}x')
 
 if stoch_rmse:
     print(f'RMSE / max error, 8-bit units ({RMSE_WIN}x{RMSE_WIN} window); frags = mean fragments per covered pixel, tail = covered pixels past {SLOTS} slots')
@@ -612,11 +1100,24 @@ if stoch_rmse:
         line+=''.join(f'{per_s[s][0]:>7.2f} /{per_s[s][1]:>4.0f}' for s in STOCH_RMSE_SAMPLES)
         line+=f'{per_s["alpha"]*255:>9.2f}/255'
         print(line)
+if 'slots' in IMPLS and len(IMPLS)>1:
+    # One line per implementation and scene: GPU total vs PPLL slots, RMSE / max / brmse, B/px.
+    print('summary: GPU total ms (x PPLL slots) | RMSE / max / brmse in 8-bit steps | B/px')
+    for impl in IMPLS:
+        v=VARIANTS[impl]
+        if impl=='slots': bpx=8*SLOTS+4*META_LAYERS
+        elif v: bpx=variant_bytes(v)
+        else: bpx=None
+        print(f'  {impl}'+(f' ({bpx:g} B/px)' if bpx is not None else ''))
+        for key,row in results.items():
+            med,rmse,worst,brmse=row[impl];t=sum(med);ratio=t/sum(row['slots'][0])
+            err=f'{rmse:6.2f} /{worst:5.1f} /{brmse:6.2f}' if rmse is not None else '-'
+            print(f'    {key[0]+" L="+str(key[1]):<13}{t:7.3f} ms ({ratio:5.2f}x)  {err}')
 print('checks:')
 if ('opaque',1) in results:
     for impl in IMPLS:
         if impl in ('direct','stoch'): continue   # stoch: checked at every S below
-        _,rmse,worst=results[('opaque',1)][impl]
+        _,rmse,worst,_=results[('opaque',1)][impl]
         check(worst<=1.0,f'{impl}: a single opaque layer is reproduced (max error {worst:.2f} <= 1 step)')
 if ('opaque',1) in stoch_rmse:
     worst=max(stoch_rmse[('opaque',1)][s][1] for s in STOCH_RMSE_SAMPLES)
@@ -632,6 +1133,17 @@ if stoch_rmse:
           f'stoch: RMSE decreases with S (sum over {len(noisy)} noisy scenes {sums[0]:.1f} > {sums[1]:.1f} > {sums[2]:.1f}'+(f'; not in {", ".join(bad)}' if bad else '')+')')
     worst=max(r['alpha'] for r in stoch_rmse.values())
     check(worst<=1/255,f'stoch: total alpha matches the exact 1 - prod(1 - a) (max error {worst*255:.3f}/255 <= 1/255)')
+for impl,worst in variant_alpha.items():
+    check(worst<=1/255,f'{impl}: total alpha matches the exact 1 - prod(1 - a) (max error {worst*255:.3f}/255 <= 1/255)')
+for impl in IMPLS:
+    v=VARIANTS[impl]
+    if v and v['kind']=='hybrid' and 'slots' in IMPLS:
+        # Exact where PPLL is exact: on scenes with no pixel past the slots (in the window), the
+        # hybrid's image must equal PPLL slots' image value for value, on at least one scene.
+        keys=[(p,l) for (p,l,i) in exact_images if i==impl and (p,l,'slots') in exact_images]
+        worst=max((abs(a-b)*255.0 for k in keys for pa,pb in zip(exact_images[k+(impl,)],exact_images[k+('slots',)])
+                   for a,b in zip(pa[:3],pb[:3])),default=0.0)
+        check(bool(keys) and worst==0.0,f'{impl}: identical to PPLL slots where no pixel overflows ({len(keys)} scenes, max difference {worst:.4f} steps)')
 if 'slots' in IMPLS and 'OIT_BENCH_SCENES' not in os.environ:
     check(bool(tail_scenes),f'slots: the tail path is exercised ({", ".join(tail_scenes) or "no scene past 8 slots"})')
 if 'stoch' in IMPLS and 'slots' in IMPLS:
@@ -643,6 +1155,7 @@ if 'stoch' in IMPLS and 'slots' in IMPLS:
     if ('full',2) in stoch_rmse:
         r=stoch_rmse[('full',2)][8][0]
         print(f'info  RMSE at S = 8, two alpha 0.5 layers: {r:.2f} steps (gate <= 1: {"met" if r<=1.0 else "not met"})')
+if any(VARIANTS.values()):
     print('info  '+stoch_summary())
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)
 sys.exit(1 if failures else 0)
