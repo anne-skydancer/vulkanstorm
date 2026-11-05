@@ -209,7 +209,7 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
     // <Vulkanstorm> order-independent transparency (stochastic transparency, RenderAlphaSortMethod 1)
     // is limited to the main post-water view. Mirrors/hero probes, cube snapshots, HUDs,
     // impostors and pre-water alpha retain the stock path.
-    static LLCachedControl<U32> alpha_method(gSavedSettings, "RenderAlphaSortMethod", 0);
+    static LLCachedControl<U32> alpha_method(gSavedSettings, "RenderAlphaSortMethod", 1);
     const bool oit_view_eligible =
         getType() == LLDrawPool::POOL_ALPHA_POST_WATER &&
         gPipeline.mRT == &gPipeline.mMainRT &&
