@@ -45,6 +45,7 @@
 #include "_httpinternal.h"
 
 #include "llhttpconstants.h"
+#include "llstring.h" // <Vulkanstorm/>
 #include "llproxy.h"
 
 #include "httpstats.h"
@@ -145,6 +146,7 @@ HttpOpRequest::HttpOpRequest()
       mCurlTemp(NULL),
       mCurlTempLen(0),
       mReplyBody(NULL),
+      mDecodeReply(false),
       mReplyOffset(0),
       mReplyLength(0),
       mReplyFullLength(0),
@@ -505,6 +507,7 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     mReplyFullLength = 0;
     mReplyHeaders.reset();
     mReplyConType.clear();
+    mDecodeReply = false;
 
     // *FIXME:  better error handling later
     HttpStatus status;
@@ -536,7 +539,17 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
 
 // <FS:ND/> Newer versions of curl are stricter with checkinng Cotent-Encoding: header
 // Aws returns Content-Encoding: binary/octet-stream which is no valid scheme defined by HTTP/1.1 (compress,deflate, gzip)
-#if LIBCURL_VERSION_NUM < 0x075100
+#if LIBCURL_VERSION_NUM >= 0x075300 // 7.83.0, curl_easy_header()
+    // <Vulkanstorm> Ask for gzip and deflate as 7.54.1 did, but undo them in
+    // llcorehttp (HttpLibcurl::completeRequest) instead of in libcurl: a
+    // Content-Encoding libcurl does not know, such as the asset CDN's
+    // "binary/octet-stream" on every texture, then passes through as it did
+    // with 7.54.1 rather than failing the transfer (CURLE_BAD_CONTENT_ENCODING).
+    // The header itself is added with the request headers below.
+    check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTP_CONTENT_DECODING, 0L);
+    mDecodeReply = true;
+    // </Vulkanstorm>
+#elif LIBCURL_VERSION_NUM < 0x075100
     check_curl_easy_setopt(mCurlHandle, CURLOPT_ENCODING, "");
 #endif
 
@@ -642,7 +655,9 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     case HOR_POST:
         {
             check_curl_easy_setopt(mCurlHandle, CURLOPT_POST, 1);
+#if LIBCURL_VERSION_NUM < 0x075300
             check_curl_easy_setopt(mCurlHandle, CURLOPT_ENCODING, "");
+#endif
             long data_size(0);
             if (mReqBody)
             {
@@ -780,6 +795,24 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     {
         // Caller's headers last to override
         mCurlHeaders = append_headers_to_slist(mReqHeaders, mCurlHeaders);
+    }
+    if (mDecodeReply)
+    {
+        // <Vulkanstorm> what libcurl 7.54.1's CURLOPT_ENCODING "" sent,
+        // unless the caller gave its own, which libcurl let win
+        bool caller_set(false);
+        if (mReqHeaders)
+        {
+            for (HttpHeaders::const_iterator it(mReqHeaders->begin()); it != mReqHeaders->end(); ++it)
+            {
+                caller_set = caller_set || LLStringUtil::compareInsensitive((*it).first, "Accept-Encoding") == 0;
+            }
+        }
+        if (!caller_set)
+        {
+            mCurlHeaders = curl_slist_append(mCurlHeaders, "Accept-Encoding: deflate, gzip");
+        }
+        // </Vulkanstorm>
     }
     check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTPHEADER, mCurlHeaders);
 

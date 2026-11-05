@@ -33,6 +33,17 @@
 
 #include "llhttpconstants.h"
 
+// <Vulkanstorm> gzip/deflate reply decoding (HttpLibcurl::completeRequest)
+#ifdef LL_USESYSTEMLIBS
+# include <zlib.h>
+#else
+# include "zlib-ng/zlib.h"
+#endif
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+// </Vulkanstorm>
+
 namespace
 {
 
@@ -53,6 +64,84 @@ static const char * const LOG_CORE("CoreHttp");
 
 } // end anonymous namespace
 
+
+// <Vulkanstorm> Undo a gzip or deflate Content-Encoding, as libcurl 7.54.1
+// did with CURLOPT_ENCODING "" (see HttpOpRequest::prepareRequest). Only
+// those two (and x-gzip) are decoded; any other value, the asset CDN's
+// "binary/octet-stream" or "identity" among them, leaves the body as it
+// came, again as 7.54.1 did. deflate is the zlib format, with a fallback to
+// a raw deflate stream as libcurl had. Returns false if the data cannot be
+// decoded (libcurl's CURLE_BAD_CONTENT_ENCODING).
+namespace
+{
+bool inflate_reply(const std::string & in, int window_bits, std::string & out)
+{
+    z_stream z;
+    memset(&z, 0, sizeof(z));
+    if (inflateInit2(&z, window_bits) != Z_OK)
+    {
+        return false;
+    }
+    z.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(in.data()));
+    z.avail_in = static_cast<uInt>(in.size());
+    char buf[16384];
+    int ret(Z_OK);
+    while (ret == Z_OK)
+    {
+        z.next_out = reinterpret_cast<Bytef *>(buf);
+        z.avail_out = sizeof(buf);
+        ret = inflate(&z, Z_NO_FLUSH);
+        if (ret == Z_OK || ret == Z_STREAM_END)
+        {
+            out.append(buf, sizeof(buf) - z.avail_out);
+        }
+        else if (ret == Z_BUF_ERROR && z.avail_in == 0)
+        {
+            break;              // truncated input: what was decoded is kept, as libcurl did
+        }
+    }
+    inflateEnd(&z);
+    return ret == Z_STREAM_END || ret == Z_OK || ret == Z_BUF_ERROR;
+}
+
+// 1: decoded into `body`; 0: not an encoding to undo; -1: bad encoded data.
+int decode_reply(const std::string & encoding, LLCore::BufferArray * & body)
+{
+    std::string enc(encoding);
+    std::transform(enc.begin(), enc.end(), enc.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+    const size_t first(enc.find_first_not_of(" \t"));
+    const size_t last(enc.find_last_not_of(" \t"));
+    enc = first == std::string::npos ? std::string() : enc.substr(first, last - first + 1);
+    const bool gzip(enc == "gzip" || enc == "x-gzip");
+    if (!gzip && enc != "deflate")
+    {
+        return 0;
+    }
+    if (!body || !body->size())
+    {
+        return 1;
+    }
+    std::string in(body->size(), '\0');
+    body->read(0, &in[0], in.size());
+    std::string out;
+    bool ok(gzip ? inflate_reply(in, 15 + 16, out) : inflate_reply(in, 15, out));
+    if (!ok && !gzip)
+    {
+        out.clear();
+        ok = inflate_reply(in, -15, out);
+    }
+    if (!ok)
+    {
+        return -1;
+    }
+    LLCore::BufferArray * decoded(new LLCore::BufferArray());
+    decoded->append(out.data(), out.size());
+    body->release();
+    body = decoded;
+    return 1;
+}
+} // anonymous namespace
+// </Vulkanstorm>
 
 namespace LLCore
 {
@@ -396,6 +485,23 @@ bool HttpLibcurl::completeRequest(CURLM * multi_handle, CURL * handle, CURLcode 
             LL_WARNS(LOG_CORE) << "Attempt to retrieve status from NULL handle!" << LL_ENDL;
         }
     }
+
+#if LIBCURL_VERSION_NUM >= 0x075300
+    // <Vulkanstorm> the reply decoding libcurl 7.54.1 did, see decode_reply()
+    if (op->mDecodeReply && handle)
+    {
+        struct curl_header * encoding(NULL);
+        if (curl_easy_header(handle, "Content-Encoding", 0, CURLH_HEADER, -1, &encoding) == CURLHE_OK
+            && encoding && encoding->value
+            && decode_reply(encoding->value, op->mReplyBody) < 0)
+        {
+            LL_WARNS(LOG_CORE) << "Could not undo Content-Encoding " << encoding->value
+                               << ", url " << op->mReqURL << LL_ENDL;
+            op->mStatus = HttpStatus(HttpStatus::EXT_CURL_EASY, CURLE_BAD_CONTENT_ENCODING);
+        }
+    }
+    // </Vulkanstorm>
+#endif
 
     // <Vulkanstorm> Firestorm's X-LL-URL / Content-Range check for HTTP/1.1
     // pipelining going out of sync is gone with the pipelining (curl 8), but
