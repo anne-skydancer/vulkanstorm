@@ -2744,12 +2744,6 @@ void HttpRequestTestObjectType::test<22>()
 
     set_test_name("BUG-2295");
 
-    // <Vulkanstorm> Firestorm's HTTP/1.1 pipelining desync check
-    // (HttpLibcurl::completeRequest) turns a 206 whose Content-Range is not
-    // the range asked for into a 503, and this test's peer answers 0-49 with
-    // 0-75. The check goes with the pipelining (curl 8). </Vulkanstorm>
-    skip("BUG-2295: the pipelining desync check answers 503 to this range reply");
-
 #if LL_WINDOWS && ADDRESS_SIZE == 64
     // teamcity win64 builds freeze on this test, if you figure out the cause, please fix it
     if (getenv("TEAMCITY_PROJECT_NAME"))
@@ -2875,6 +2869,68 @@ void HttpRequestTestObjectType::test<22>()
         }
         ensure("Request executed in reasonable time - ms3", count < limit);
         ensure("One handler invocation for each request - ms3", mHandlerCalls == test3_count);
+
+        // ======================================
+        // <Vulkanstorm> A 206 that starts elsewhere than asked gets
+        // HE_INV_CONTENT_RANGE_HDR: the peer answers bytes 0-75 to a request
+        // at offset 10. (A longer reply at the asked offset, above, is
+        // delivered.) </Vulkanstorm>
+        // ======================================
+        mHandlerCalls = 0;
+        mStatus = HttpStatus(HttpStatus::LLCORE, HE_INV_CONTENT_RANGE_HDR);
+        static const int test4_count(1);
+        for (int i(0); i < test4_count; ++i)
+        {
+            HttpHandle handle = req->requestGetByteRange(HttpRequest::DEFAULT_POLICY_ID,
+                                                         url_base + "/bug2295/0/",
+                                                         10,
+                                                         25,
+                                                         options,
+                                                         HttpHeaders::ptr_t(),
+                                                         handlerp);
+            ensure("Valid handle returned for ranged request", handle != LLCORE_HTTP_HANDLE_INVALID);
+        }
+
+        // Run the notification pump.
+        count = 0;
+        limit = LOOP_COUNT_LONG;
+        while (count++ < limit && mHandlerCalls < test4_count)
+        {
+            req->update(1000000);
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        ensure("Request executed in reasonable time - ms4", count < limit);
+        ensure("One handler invocation for each request - ms4", mHandlerCalls == test4_count);
+
+        // ======================================
+        // <Vulkanstorm> So does a 206 without Content-Range to a request at
+        // offset 10: it reads as offset 0. </Vulkanstorm>
+        // ======================================
+        mHandlerCalls = 0;
+        mStatus = HttpStatus(HttpStatus::LLCORE, HE_INV_CONTENT_RANGE_HDR);
+        static const int test5_count(1);
+        for (int i(0); i < test5_count; ++i)
+        {
+            HttpHandle handle = req->requestGetByteRange(HttpRequest::DEFAULT_POLICY_ID,
+                                                         url_base + "/bug2295/no_range/",
+                                                         10,
+                                                         25,
+                                                         options,
+                                                         HttpHeaders::ptr_t(),
+                                                         handlerp);
+            ensure("Valid handle returned for ranged request", handle != LLCORE_HTTP_HANDLE_INVALID);
+        }
+
+        // Run the notification pump.
+        count = 0;
+        limit = LOOP_COUNT_LONG;
+        while (count++ < limit && mHandlerCalls < test5_count)
+        {
+            req->update(1000000);
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        ensure("Request executed in reasonable time - ms5", count < limit);
+        ensure("One handler invocation for each request - ms5", mHandlerCalls == test5_count);
 
         // ======================================
         // Okay, request a shutdown of the servicing thread
@@ -3048,6 +3104,150 @@ void HttpRequestTestObjectType::test<23>()
     }
 }
 
+
+// <Vulkanstorm> Content-Encoding as libcurl 7.54.1 handled it: gzip and
+// deflate (zlib or raw) are undone, any other value (the asset CDN's
+// "binary/octet-stream") passes through untouched, and gzip data that does
+// not decode fails with CURLE_BAD_CONTENT_ENCODING.
+namespace
+{
+class EncodingHandler : public LLCore::HttpHandler
+{
+public:
+    virtual void onCompleted(HttpHandle, HttpResponse * response)
+        {
+            mStatus = response->getStatus();
+            mBody.clear();
+            BufferArray * body(response->getBody());
+            if (body && body->size())
+            {
+                mBody.resize(body->size());
+                body->read(0, &mBody[0], mBody.size());
+            }
+            ++mCalls;
+        }
+    HttpStatus mStatus;
+    std::string mBody;
+    int mCalls = 0;
+};
+}
+
+template <> template <>
+void HttpRequestTestObjectType::test<24>()
+{
+    ScopedCurlInit ready;
+
+    set_test_name("HttpRequest GET with gzip (gzip or zlib wrapper, several members, trailing bytes), deflate and unknown Content-Encoding");
+
+    std::string text;
+    for (int i(0); i < 40; ++i)
+    {
+        text += "Vulkanstorm content encoding test body. ";
+    }
+
+    EncodingHandler handler;
+    LLCore::HttpHandler::ptr_t handlerp(&handler, NoOpDeletor);
+    HttpRequest * req = NULL;
+
+    try
+    {
+        HttpRequest::createService();
+        HttpRequest::startThread();
+        req = new HttpRequest();
+
+        struct Case { const char * path; bool ok; bool decoded; };
+        const Case cases[] = {
+            { "/encoding/gzip/", true, true },
+            { "/encoding/gzipzlib/", true, true },
+            { "/encoding/gzipmulti/", true, true },
+            { "/encoding/gziptrail/", true, true },
+            { "/encoding/gzipraw/", true, true },
+            { "/encoding/gziplist/", true, true },
+            { "/encoding/deflate/", true, true },
+            { "/encoding/rawdeflate/", true, true },
+            { "/encoding/binary/", true, false },
+            { "/encoding/none/", true, false },
+            { "/encoding/badgzip/", false, false },
+        };
+        for (const Case & c : cases)
+        {
+            handler.mCalls = 0;
+            HttpHandle handle = req->requestGet(HttpRequest::DEFAULT_POLICY_ID,
+                                                get_base_url() + c.path,
+                                                HttpOptions::ptr_t(),
+                                                HttpHeaders::ptr_t(),
+                                                handlerp);
+            ensure(std::string("Valid handle for ") + c.path, handle != LLCORE_HTTP_HANDLE_INVALID);
+            int count(0);
+            while (count++ < LOOP_COUNT_LONG && handler.mCalls < 1)
+            {
+                req->update(1000000);
+                usleep(LOOP_SLEEP_INTERVAL);
+            }
+            ensure(std::string("Reply in time for ") + c.path, handler.mCalls == 1);
+            if (c.ok)
+            {
+                ensure(std::string("Success for ") + c.path, bool(handler.mStatus));
+                ensure_equals(std::string("Body for ") + c.path, handler.mBody, text);
+            }
+            else
+            {
+                ensure(std::string("Bad encoding refused for ") + c.path,
+                       handler.mStatus == HttpStatus(HttpStatus::EXT_CURL_EASY, CURLE_BAD_CONTENT_ENCODING));
+            }
+        }
+
+        // zlib output still pending when the input runs out must not be lost
+        for (const auto & big : { std::make_pair("/encoding/rawbig/", std::string(16400, 'A')),
+                                  std::make_pair("/encoding/gzipbig/", std::string(70000, 'A')) })
+        {
+            handler.mCalls = 0;
+            HttpHandle bh = req->requestGet(HttpRequest::DEFAULT_POLICY_ID,
+                                            get_base_url() + big.first,
+                                            HttpOptions::ptr_t(),
+                                            HttpHeaders::ptr_t(),
+                                            handlerp);
+            ensure(std::string("Valid handle for ") + big.first, bh != LLCORE_HTTP_HANDLE_INVALID);
+            int count(0);
+            while (count++ < LOOP_COUNT_LONG && handler.mCalls < 1)
+            {
+                req->update(1000000);
+                usleep(LOOP_SLEEP_INTERVAL);
+            }
+            ensure(std::string("Reply in time for ") + big.first, handler.mCalls == 1);
+            ensure(std::string("Success for ") + big.first, bool(handler.mStatus));
+            ensure_equals(std::string("Body size for ") + big.first, handler.mBody.size(), big.second.size());
+            ensure(std::string("Body for ") + big.first, handler.mBody == big.second);
+        }
+
+        handler.mCalls = 0;
+        HttpHandle handle = req->requestStopThread(handlerp);
+        ensure("Valid handle for stop", handle != LLCORE_HTTP_HANDLE_INVALID);
+        int count(0);
+        while (count++ < LOOP_COUNT_LONG && handler.mCalls < 1)
+        {
+            req->update(1000000);
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        count = 0;
+        while (count++ < LOOP_COUNT_SHORT && ! HttpService::isStopped())
+        {
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        ensure("Thread stopped", HttpService::isStopped());
+        delete req;
+        req = NULL;
+        HttpRequest::destroyService();
+    }
+    catch (...)
+    {
+        stop_thread(req);
+        delete req;
+        HttpRequest::destroyService();
+        throw;
+    }
+}
+// </Vulkanstorm>
 
 }  // end namespace tut
 
