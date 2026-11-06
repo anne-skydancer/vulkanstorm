@@ -45,7 +45,7 @@ follow-up below are not on this line.
    Licence.]". The FSF lists that combination as GPL-incompatible, and
    GPL-3.0's System Library exception does not cover a copy the viewer
    bundles itself, so the binaries could not be offered under GPL-3.0. The
-   viewer now links OpenSSL 3.5.9 (`openssl 3.5.9.3`, built by
+   viewer now links OpenSSL 3.5.9 (`openssl 3.5.9.1`, built by
    [anne-skydancer/3p-openssl](https://github.com/anne-skydancer/3p-openssl)),
    statically into the viewer as before (through `llcorehttp`, libcurl and
    the viewer itself). OpenSSL 3.x is under the **Apache License 2.0**,
@@ -95,7 +95,7 @@ compatible; **off** not built or shipped in our configuration.
 | APR, apr-util | Apache-2.0 | OK | GPL-3 only, not GPL-2 |
 | Boost | BSL-1.0 | OK | |
 | Collada DOM | MIT (package text; `autobuild.xml` says "SCEA") | OK | |
-| libcurl 8.23.0 | curl (MIT-style) | OK | built against OpenSSL 3.5.9, HTTP(S) only ([anne-skydancer/3p-curl](https://github.com/anne-skydancer/3p-curl)) |
+| libcurl 7.54.1 | curl (MIT-style) | OK | rebuilt against OpenSSL 3.5.9 ([anne-skydancer/3p-curl](https://github.com/anne-skydancer/3p-curl)) |
 | expat | MIT | OK | |
 | FreeType | FreeType License (or GPL-2.0) | OK | FTL is GPL-3-compatible, not GPL-2 |
 | Hunspell | MPL-1.1 / GPL-2.0 / LGPL-2.1 tri-licence | OK | taken under LGPL-2.1 |
@@ -165,9 +165,6 @@ BSD, Unlicense, Unicode-3.0, IJG and MPL-2.0 (Symphonia); MPL-2.0 is
 GPL-compatible through its section 3.3 (Secondary Licenses), and none of
 them is GPL-only or proprietary. `vkstorm-http` loads the viewer's libcurl
 at run time, so it links OpenSSL 3.5 as part of the viewer (open point 1, resolved).
-Its reply decoding (curl 8, vkstorm-core-rust #28) adds `flate2` (MIT OR
-Apache-2.0, used under MIT) on `zlib-rs` (Zlib) and nothing else; both are
-compatible with LGPL-2.1 and GPL-3.0.
 
 ## Source headers
 

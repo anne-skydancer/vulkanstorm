@@ -74,17 +74,6 @@
 #define BASIC_SECHANDLER "BASIC_SECHANDLER"
 #define CERT_VALIDATION_DATE "validation_date"
 
-// <Vulkanstorm> Set on the certificate data of a failed validation by the
-// SSL verify callback (LLAppCoreHttp::sslVerify): CERT_FAILURE_UNTRUSTED_CA
-// when the chain ends at a CA the store does not trust, CERT_FAILURE_INVALID
-// for every other certificate error. libcurl 7.62 and later return
-// CURLE_PEER_FAILED_VERIFICATION (60) for both, where 7.54.1 returned 60 and
-// 51; the login reads this to report each failure exactly as it did with
-// 7.54.1. </Vulkanstorm>
-#define CERT_VALIDATION_FAILURE "validation_failure"
-#define CERT_FAILURE_UNTRUSTED_CA "untrusted_ca"
-#define CERT_FAILURE_INVALID "invalid"
-
 #define CERT_EXTENDED_KEY_USAGE "extendedKeyUsage"
 #define CERT_EKU_SERVER_AUTH SN_server_auth
 #define CERT_EKU_TLS_SERVER_AUTH LN_server_auth
