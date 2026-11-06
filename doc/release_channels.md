@@ -8,18 +8,22 @@ failed or skipped platform never holds back another.
 
 ## Platforms
 
-`.github/build-platforms.json` defines the CI platforms. `scripts/ci_publish_latest.cjs`
-plans `build.yaml`'s matrix and publication from it. `build.yaml` calls
-`viewer-platform.yaml` once per platform. That workflow builds the platform
-(check `<platform> / build`) and, when the plan gives it a tag, publishes it
-(`<platform> / publish <tag>`). Each publish job waits only for its own
-platform's build.
+Each platform is a workflow of its own: `build-windows.yaml` (Build Windows),
+`build-linux.yaml` (Build Linux) and `build-linux-lts.yaml` (Build Linux LTS).
+Each run has three jobs: `checks` (the repository checks of
+`.github/actions/ci-checks`, and the plan of
+`scripts/ci_publish_latest.cjs` `planPlatform()`), the build itself (check
+`windows`, `linux` or `linux-lts`, the shared steps of
+`.github/actions/viewer-build`), and, when the plan gives the run a tag,
+`publish`. A platform publishes the moment its own build finishes,
+whatever the other platforms' workflows do. `.github/build-platforms.json`
+holds the platform data (runner, container, packages, tags).
 
-The builds run one after another, never side by side: `windows`, then
-`linux-lts`, then `linux`; a release push (no `linux-lts`) builds `windows`,
-then `linux`. The order is sequencing only: a later build runs whether an
-earlier one succeeded, failed or was not selected. A run therefore takes
-about the sum of its builds, not the longest one.
+One run per pull request or line: a new push cancels the previous run of the
+same workflow. vkstorm-release pushes (they publish) and tags never cancel,
+and every dispatch has a group of its own; each publish job also holds its
+tag's lock. Pushes build the vkstorm-* lines and Second_Life tags; a feature
+branch builds through its pull request.
 
 | Platform | Built | Package | Floor |
 |---|---|---|---|
@@ -32,11 +36,12 @@ the Mesa/Zink runtime (`USE_MESAZINK` off): Zink was withdrawn from the
 viewer, a Vulkan build will supersede it, and its code is kept (tag
 `archive/zink/2026-10-29`).
 
-Pull requests build all three platforms as RelWithDebInfo qualification
+Pull requests run all three workflows as RelWithDebInfo qualification
 builds, never published, so that the on-demand `linux-lts` build never rots.
-Pushes build `windows` and `linux`. A FreeBSD build, `freebsd-latest` with
+Pushes run Build Windows and Build Linux; Build Linux LTS runs on pull
+requests and on dispatch only. A FreeBSD build, `freebsd-latest` with
 `experimental-freebsd-latest` and `preview-freebsd-latest`, is planned. It
-will be one more entry in `build-platforms.json`.
+will be one more entry in `build-platforms.json` and one more workflow.
 
 ## Tags
 
@@ -44,16 +49,16 @@ will be one more entry in `build-platforms.json`.
 |---|---|---|
 | `windows-latest` | vkstorm-release, `windows` | every push, automatically; takes GitHub's Latest badge |
 | `linux-latest` | vkstorm-release, `linux` | every push, automatically |
-| `linux-lts` | vkstorm-release, `linux-lts` | on demand: Build, `linux_lts` + `publish` |
+| `linux-lts` | vkstorm-release, `linux-lts` | on demand: Build Linux LTS with `publish` |
 | `stable` | the designated `windows-latest`, `linux-latest` and `linux-lts` releases, promoted together into one release; nothing is rebuilt | on demand: Promote stable |
 | `oldstable` | the previous `stable` | moved by each stable promotion |
 | `archive/stable-installers` | the outgoing `oldstable` packages, with `SHA256SUMS-<version>.txt` and a table row | added to by each stable promotion |
-| `experimental-windows`, `experimental-linux-latest`, `experimental-linux-lts` | vkstorm-canary, one per platform, pre-releases | on demand: Build with `publish`, platforms selected |
-| `preview-windows`, `preview-linux-latest`, `preview-linux-lts` | vkstorm-devel, one per platform, pre-releases | on demand: Build with `publish`, platforms selected |
+| `experimental-windows`, `experimental-linux-latest`, `experimental-linux-lts` | vkstorm-canary, one per platform, pre-releases | on demand: the platform's Build workflow with `publish` |
+| `preview-windows`, `preview-linux-latest`, `preview-linux-lts` | vkstorm-devel, one per platform, pre-releases | on demand: the platform's Build workflow with `publish` |
 
-A dispatch of Build selects its platforms with the `windows`, `linux` and
-`linux_lts` inputs. With `publish` set, it builds Release packages and
-publishes each selected platform to its own tag. Without it, it only builds.
+Dispatch the platform's workflow (Build Windows, Build Linux or Build Linux
+LTS). With `publish` set, it builds a Release package and publishes it to
+that line's tag for the platform. Without it, it only builds.
 No other line publishes. vkstorm-canary and vkstorm-devel never move
 `windows-latest`, `linux-latest`, `linux-lts` or `stable`.
 

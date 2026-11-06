@@ -1,0 +1,346 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+#
+# The viewer build of one platform, shared by build-windows.yaml,
+# build-linux.yaml and build-linux-lts.yaml (doc/release_channels.md). The
+# calling job checks the source out (full history), sets the build's env
+# (VIEWER_BUILD_TYPE, VIEWER_PACKAGE, AUTOBUILD_*) and, for linux-lts, runs
+# in the ubuntu:24.04 container; everything after the checkout is here. It
+# uploads <platform>-installer (Release) or <platform>-qualification-viewer,
+# and <platform>-build-evidence.
+name: Viewer build
+description: Build, check and upload one platform's viewer (doc/release_channels.md).
+inputs:
+  directory:
+    description: "The CMake build directory."
+    required: false
+    default: ""
+  gcc:
+    description: "Linux only: the GCC version to use; empty for the runner's newest."
+    required: false
+    default: ""
+  linux_flavor:
+    description: "Linux only: host (on the runner) or container (linux-lts)."
+    required: false
+    default: ""
+  max_glibc:
+    description: "Linux only: fail if anything needs a newer glibc; empty to report only."
+    required: false
+    default: ""
+  max_glibcxx:
+    description: "Linux only: fail if anything needs a newer GLIBCXX; empty to report only."
+    required: false
+    default: ""
+  package_override:
+    description: "The checked-in package override to apply (linux-lts); empty for none."
+    required: false
+    default: ""
+  package_suffix:
+    description: "Linux only: the package name's suffix (ubuntu-latest, ubuntu24.04)."
+    required: false
+    default: ""
+  platform:
+    description: "The platform (.github/build-platforms.json); names its artifacts."
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    # The hosted Ubuntu images leave about 16 GB free on / by the time the
+    # viewer links, and the GCC LTO link of vulkanstorm-bin can need more
+    # ("lto-wrapper: fatal error: write: No space left on device", for
+    # example run 41989168080). Remove preinstalled toolchains this build never
+    # uses. In the ubuntu:24.04 job container (linux-lts) they are mounted
+    # under /host-free.
+    - name: Free runner disk space for the LTO link
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -uo pipefail
+        echo "Before: $(df -h --output=avail / | tail -1) free on /"
+        if [ -d /host-free ]; then
+          for d in /host-free/*; do find "$d" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; done
+        else
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/powershell /usr/share/swift /usr/local/julia || true
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+        fi
+        echo "After: $(df -h --output=avail / | tail -1) free on /"
+
+    - name: Set source build number
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "$(git rev-parse --is-shallow-repository)" != false ]]; then
+          echo "Build numbering requires complete Git history" >&2
+          exit 1
+        fi
+        build_revision=$(git rev-list --count HEAD)
+        [[ "$build_revision" =~ ^[1-9][0-9]*$ ]]
+        # Match BuildVersion.cmake's local Git fallback on both platforms.
+        # Set revision too: it has precedence over AUTOBUILD_BUILD_ID.
+        echo "revision=$build_revision" >> "$GITHUB_ENV"
+        echo "AUTOBUILD_BUILD_ID=$build_revision" >> "$GITHUB_ENV"
+        echo "Source $(git rev-parse HEAD): build $build_revision" >> "$GITHUB_STEP_SUMMARY"
+        # The github.workspace expression names the host path, not where a
+        # container sees the workspace; $GITHUB_WORKSPACE is right in both.
+        echo "AUTOBUILD_VARIABLES_FILE=$GITHUB_WORKSPACE/.build-variables/variables" >> "$GITHUB_ENV"
+        echo "AUTOBUILD_INSTALLABLE_CACHE=$GITHUB_WORKSPACE/.autobuild-installables" >> "$GITHUB_ENV"
+
+    - uses: actions/setup-python@v7
+      if: inputs.linux_flavor != 'container'
+      with:
+        python-version: "3.11"
+    - name: Install Linux build dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        VKSTORM_GCC: ${{ inputs.gcc }}
+      run: |
+        set -euo pipefail
+        sudo apt-get -o Acquire::Retries=3 update
+        # linux-lts pins GCC 14 (Ubuntu 24.04's libstdc++). The host build
+        # takes the newest GCC its runner's Ubuntu ships: GCC 14 on 24.04,
+        # GCC 15 on 26.04.
+        gcc=$VKSTORM_GCC
+        if [ -z "$gcc" ]; then
+          for v in 15 14; do
+            if apt-get install -s "gcc-$v" "g++-$v" > /dev/null 2>&1; then gcc=$v; break; fi
+          done
+        fi
+        test -n "$gcc"
+        echo "Linux compiler: gcc-$gcc on $(. /etc/os-release && echo "$PRETTY_NAME")" >> "$GITHUB_STEP_SUMMARY"
+        sudo apt-get -o Acquire::Retries=3 install -y \
+          "gcc-$gcc" "g++-$gcc" build-essential pkg-config \
+          libgl1-mesa-dev libglu1-mesa-dev libpulse-dev libssl-dev \
+          libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype-dev
+        echo "CC=gcc-$gcc" >> "$GITHUB_ENV"
+        echo "CXX=g++-$gcc" >> "$GITHUB_ENV"
+
+    - name: Checkout locally qualified build variables
+      uses: actions/checkout@v7
+      with:
+        repository: FirestormViewer/fs-build-variables
+        ref: c17312d38377c003977cf5b6dcc83c6042eba194
+        path: .build-variables
+        persist-credentials: false
+
+    - name: Install build dependencies
+      shell: bash
+      run: python -m pip install autobuild==3.10.2 llsd
+
+    # The container's own CMake is 3.28; use the version of the hosted runners.
+    - name: Install CMake in the Linux container
+      shell: bash
+      if: inputs.linux_flavor == 'container'
+      run: |
+        python -m pip install cmake==4.4.4
+        cmake --version
+
+    # autobuild.xml names the packages built on ubuntu-26.04. The LTS build
+    # swaps in the 24.04-built ones listed, with their hashes, in the
+    # checked-in override; local builds and the normal CI build never read it.
+    # The override must name the same releases as autobuild.xml; checked
+    # here rather than in check-publication, so that a stale override stops
+    # only the build that uses it.
+    - name: Use the Ubuntu 24.04 packages
+      shell: bash
+      if: inputs.package_override != ''
+      run: |
+        python scripts/tests/test_linux_lts_packages.py
+        python scripts/ci_autobuild_override.py "${{ inputs.package_override }}"
+
+    - name: Check installer version and payload
+      shell: bash
+      run: |
+        python scripts/tests/test_inno_payload.py
+        python scripts/tests/test_velopack_version.py
+
+    - name: Check Linux installation scripts
+      if: runner.os == 'Linux'
+      shell: bash
+      run: bash scripts/test_linux_install_scripts.sh
+
+    - name: Install Inno Setup
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: choco install innosetup --yes --no-progress
+
+    - uses: actions/cache@v6
+      with:
+        path: .autobuild-installables
+        key: ${{ runner.os }}-64-ReleaseFS_open-${{ hashFiles('autobuild.xml') }}
+        restore-keys: ${{ runner.os }}-64-ReleaseFS_open-
+
+    - name: Configure viewer
+      shell: bash
+      env:
+        BUILD_DIRECTORY: ${{ inputs.directory }}
+      run: |
+        set -euo pipefail
+        eval "$(autobuild source_environment -c ReleaseFS_open)"
+        export LL_BUILD
+        options=()
+        if [[ "$RUNNER_OS" == Windows ]]; then
+          # The flags used by the successful local Release build.
+          export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
+          options+=(-G 'Visual Studio 18 2026' -A x64 -DUSE_MESAZINK:BOOL=OFF -DUSE_INNOSETUP:BOOL=ON)
+        else
+          options+=(-DUSE_MESAZINK:BOOL=OFF -DUSE_INNOSETUP:BOOL=OFF)
+        fi
+        {
+          echo 'LL_BUILD<<VKSTORM_LL_BUILD'
+          printf '%s\n' "$LL_BUILD"
+          echo 'VKSTORM_LL_BUILD'
+        } >> "$GITHUB_ENV"
+        cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
+          -DCMAKE_BUILD_TYPE:STRING="$VIEWER_BUILD_TYPE" -DADDRESS_SIZE:STRING=64 \
+          -DPACKAGE:BOOL="$VIEWER_PACKAGE" \
+          -DVIEWER_CHANNEL:STRING=Vulkanstorm-Release -DROOT_PROJECT_NAME:STRING=Firestorm \
+          -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
+          -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
+          -DUSE_KDU:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
+          -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF \
+          -DUSE_AVX2_OPTIMIZATION:BOOL=ON -DUSE_AVX_OPTIMIZATION:BOOL=OFF -DUSE_LTO:BOOL=ON \
+          -DUSE_PRECOMPILED_HEADERS:BOOL=ON -DUSE_DISCORD:BOOL=OFF -DUSE_BUGSPLAT:BOOL=OFF \
+          -DUSE_TRACY:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF \
+          -DLL_TESTS:BOOL=OFF -DRELEASE_CRASH_REPORTING:BOOL=OFF \
+          -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
+        if [[ "$VIEWER_BUILD_TYPE" == Release ]]; then
+          python scripts/ci_release_config.py "$BUILD_DIRECTORY/CMakeCache.txt" "$RUNNER_OS"
+        fi
+        python scripts/ci_viewer_version.py "$BUILD_DIRECTORY/newview/viewer_version.txt"
+
+    - name: Compile statistics type coverage before viewer
+      shell: bash
+      run: |
+        cmake -S indra -B ${{ inputs.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
+        cmake --build ${{ inputs.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel 3
+
+    # The GCC LTO link of vulkanstorm-bin writes its temporary objects to
+    # $TMPDIR. On a 26.04 host /tmp is an 8 GiB tmpfs, which overran
+    # ("lto-wrapper: fatal error: write: Disk quota exceeded", run
+    # 40710871603), so the build uses disk-backed temporary space. A swap
+    # file can only be added outside a container; the container build links
+    # with the host's own 3 GiB swap.
+    - name: Prepare Linux temporary space and swap for the LTO link
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -euo pipefail
+        findmnt -T /tmp || true
+        df -h / /tmp /mnt 2>/dev/null || df -h
+        free -h
+        base="$RUNNER_TEMP"
+        if [ -d /mnt ] && [ "$(df --output=avail -k /mnt | tail -1)" -gt 41943040 ]; then base=/mnt; fi
+        sudo mkdir -p "$base/vkstorm-tmp"
+        sudo chown "$(id -u):$(id -g)" "$base/vkstorm-tmp"
+        echo "TMPDIR=$base/vkstorm-tmp" >> "$GITHUB_ENV"
+        if [ -f /.dockerenv ]; then
+          echo "Building in a container: no swap file added"
+        elif [ "$(df --output=avail -k "$base" | tail -1)" -gt 67108864 ]; then
+          sudo fallocate -l 24G "$base/vkstorm.swap"
+          sudo chmod 600 "$base/vkstorm.swap"
+          sudo mkswap "$base/vkstorm.swap"
+          sudo swapon "$base/vkstorm.swap"
+        else
+          echo "Less than 64 GiB free on $base: no swap file added (24 GiB of swap must leave 40 GiB)"
+        fi
+        free -h
+        echo "TMPDIR for the build: $base/vkstorm-tmp"
+
+    - name: Build viewer and stage runtime
+      shell: bash
+      run: cmake --build ${{ inputs.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
+
+    # linux-lts fails if anything built or packaged needs more than Ubuntu
+    # 24.04 has: glibc 2.39, and GLIBCXX_3.4.33 from GCC 14's libstdc++.
+    # The ubuntu-26.04 build (linux-latest; no limits in its matrix entry) only reports.
+    - name: Check Linux glibc and libstdc++ requirements
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        VKSTORM_MAX_GLIBC: ${{ inputs.max_glibc }}
+        VKSTORM_MAX_GLIBCXX: ${{ inputs.max_glibcxx }}
+      run: bash scripts/ci_report_glibc.sh "${{ inputs.directory }}/newview"
+
+    # The Linux packages of the two builds (stable carries both) would
+    # otherwise share one name: -ubuntu-latest, or -ubuntu24.04 for linux-lts.
+    - name: Name the Linux package for its build
+      if: runner.os == 'Linux' && env.VIEWER_PACKAGE == 'ON'
+      shell: bash
+      run: |
+        set -euo pipefail
+        shopt -s nullglob
+        # Lines whose viewer_manifest.py diverts the archive to $RUNNER_TEMP
+        # under GitHub Actions (canary, aleph) leave it there, the others in
+        # newview/; the suffixed package goes to newview/, where the upload
+        # step reads it.
+        packages=("${{ inputs.directory }}"/newview/*.tar.xz "$RUNNER_TEMP"/*.tar.xz)
+        test "${#packages[@]}" = 1 || { echo "Expected one Linux package, found ${#packages[@]}" >&2; exit 1; }
+        name=$(basename "${packages[0]}")
+        renamed="${{ inputs.directory }}/newview/${name%.tar.xz}-${{ inputs.package_suffix }}.tar.xz"
+        mv "${packages[0]}" "$renamed"
+        echo "Linux package: $(basename "$renamed")" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Keep qualification builds free of installers
+      if: env.VIEWER_PACKAGE != 'ON'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if compgen -G '${{ inputs.directory }}/newview/*.tar.xz' || \
+           compgen -G '${{ inputs.directory }}/newview/RelWithDebInfo/*_Setup.exe'; then
+          echo 'Qualification builds must stage the viewer without producing an installer.' >&2
+          exit 1
+        fi
+
+    # Release builds (vkstorm-release pushes, Second_Life tags, the
+    # experimental canary build) never build or run tests: LL_TESTS stays
+    # off for Release. PR and qualification builds (RelWithDebInfo) run them.
+    - name: Run statistics, script metadata, transport, TLS, primitive and night sky regression tests
+      if: env.VIEWER_BUILD_TYPE != 'Release'
+      shell: bash
+      run: |
+        set -euo pipefail
+        cmake -S indra -B "${{ inputs.directory }}" -DLL_TESTS:BOOL=ON
+        cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
+          --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
+          llprimitive_tests INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition \
+          INTEGRATION_TEST_llcorehttp
+        # The credential-store tests stub LLControlGroup and link llui,
+        # which only MSVC's linker resolves; they have never linked on Linux.
+        if [ "$RUNNER_OS" = Windows ]; then
+          cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
+            --target INTEGRATION_TEST_llsechandler_basic INTEGRATION_TEST_llsecapi
+        fi
+
+    - name: Upload installer
+      if: env.VIEWER_PACKAGE == 'ON'
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.platform }}-installer
+        if-no-files-found: error
+        path: |
+          ${{ inputs.directory }}/newview/Release/*_Setup.exe
+          ${{ inputs.directory }}/newview/*.tar.xz
+
+    - name: Upload qualification viewer
+      if: env.VIEWER_PACKAGE != 'ON'
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.platform }}-qualification-viewer
+        if-no-files-found: error
+        path: |
+          ${{ inputs.directory }}/newview/RelWithDebInfo/
+          ${{ inputs.directory }}/newview/packaged/
+
+    - name: Upload build evidence
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.platform }}-build-evidence
+        path: |
+          ${{ inputs.directory }}/CMakeCache.txt
+          ${{ inputs.directory }}/CMakeFiles/CMakeConfigureLog.yaml
+          ${{ inputs.directory }}/packages/autobuild-package.xml
+          ${{ inputs.directory }}/packages/installed-packages.xml
+          ${{ inputs.directory }}/newview/viewer_version.txt

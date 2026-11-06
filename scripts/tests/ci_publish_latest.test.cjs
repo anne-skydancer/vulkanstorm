@@ -8,7 +8,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const publish = require('../ci_publish_latest.cjs');
 
-// The package each platform's build uploads, named as build.yaml names it.
+// The package each platform's build uploads, named as .github/actions/viewer-build names it.
 const packages = {
     windows: 'new_Setup.exe',
     'linux-lts': 'new-ubuntu24.04.tar.xz',
@@ -87,50 +87,6 @@ test('every line gives every platform its own tag', () => {
     const tags = filter => Object.values(publish.channels).filter(filter).map(channel => channel.tag);
     assert.deepEqual(tags(channel => channel.makeLatest), ['windows-latest']);
     assert.deepEqual(tags(channel => !channel.prerelease), ['windows-latest', 'linux-latest', 'linux-lts']);
-});
-
-test('the plan: pushes build windows and linux, and only vkstorm-release pushes publish', () => {
-    const repository = 'anne-skydancer/vulkanstorm';
-    const platformsOf = result => result.matrix.include.map(entry => entry.platform);
-    const push = publish.plan({ eventName: 'push', ref: 'refs/heads/vkstorm-release', repository, inputs: null });
-    assert.deepEqual(platformsOf(push), ['windows', 'linux']);
-    assert.deepEqual(push.publish, [{ platform: 'windows', tag: 'windows-latest' }, { platform: 'linux', tag: 'linux-latest' }]);
-    // Each matrix entry carries its own tag to viewer-platform.yaml, and Release packaging.
-    assert.deepEqual(push.matrix.include.map(entry => entry.tag), ['windows-latest', 'linux-latest']);
-    assert.equal(push.release, true);
-    for (const ref of ['refs/heads/vkstorm-devel', 'refs/heads/vkstorm-canary', 'refs/heads/codex/x', 'refs/tags/Second_Life_1']) {
-        assert.deepEqual(publish.plan({ eventName: 'push', ref, repository, inputs: null }).publish, []);
-    }
-    // Pull requests also build linux-lts, and never publish.
-    const pr = publish.plan({ eventName: 'pull_request', ref: 'refs/pull/1/merge', repository, inputs: null });
-    assert.deepEqual(platformsOf(pr), ['windows', 'linux', 'linux-lts']);
-    assert.deepEqual(pr.publish, []);
-    assert.deepEqual(pr.matrix.include.map(entry => entry.tag), ['', '', '']);
-    assert.equal(pr.release, false);
-    // A fork never publishes.
-    assert.deepEqual(publish.plan({ eventName: 'push', ref: 'refs/heads/vkstorm-release', repository: 'someone/vulkanstorm' }).publish, []);
-    // The linux-lts entry carries the container and the package override.
-    const lts = publish.plan({ eventName: 'workflow_dispatch', ref: 'refs/heads/vkstorm-release', repository,
-        inputs: { windows: false, linux: false, linux_lts: true, publish: true } });
-    assert.deepEqual(lts.publish, [{ platform: 'linux-lts', tag: 'linux-lts' }]);
-    assert.equal(lts.matrix.include[0].container.image, 'ubuntu:24.04');
-    assert.equal(lts.matrix.include[0].package_override, 'scripts/linux_lts_packages.json');
-});
-
-test('the plan: a dispatch builds and publishes only the platforms selected', () => {
-    const repository = 'anne-skydancer/vulkanstorm';
-    const dispatch = (ref, inputs) => publish.plan({ eventName: 'workflow_dispatch', ref, repository, inputs });
-    assert.deepEqual(dispatch('refs/heads/vkstorm-canary', { windows: true, linux: false, linux_lts: true, publish: true }).publish,
-        [{ platform: 'windows', tag: 'experimental-windows' }, { platform: 'linux-lts', tag: 'experimental-linux-lts' }]);
-    assert.deepEqual(dispatch('refs/heads/vkstorm-devel', { windows: false, linux: 'true', linux_lts: 'false', publish: 'true' }).publish,
-        [{ platform: 'linux', tag: 'preview-linux-latest' }]);
-    // Without publish a dispatch only builds; other lines never publish.
-    const unpublished = dispatch('refs/heads/vkstorm-canary', { windows: true, linux: true, linux_lts: false, publish: false });
-    assert.deepEqual(unpublished.matrix.include.map(entry => entry.platform), ['windows', 'linux']);
-    assert.deepEqual(unpublished.publish, []);
-    assert.equal(unpublished.release, false);
-    assert.deepEqual(dispatch('refs/heads/vkstorm-rust', { windows: true, linux: true, linux_lts: true, publish: true }).publish, []);
-    assert.deepEqual(dispatch('refs/heads/vkstorm-release', { windows: false, linux: false, linux_lts: false, publish: true }).matrix.include, []);
 });
 
 test('a channel publishes only its own package and checksum before moving its tag', async t => {
@@ -234,28 +190,28 @@ test('a newer run on one channel does not block another', async t => {
     assert.ok(calls.some(call => call.name === 'updateRef' && call.args.ref === 'tags/linux-latest'));
 });
 
-test('each platform publishes only when its own build job succeeded', async () => {
-    const jobs = [
-        { name: 'windows / build', conclusion: 'success' },
-        { name: 'linux / build', conclusion: 'failure' },
-        { name: 'caller / linux-lts / build', conclusion: 'success' },
-        { name: 'linux-lts / publish', conclusion: 'failure' },
-    ];
-    const requests = [];
-    const github = {
-        rest: { actions: { listJobsForWorkflowRun: 'list' } },
-        paginate: async (route, args) => { requests.push({ route, args }); return jobs; },
-    };
-    const context = { repo: { owner: 'anne-skydancer', repo: 'vulkanstorm' }, runId: 200 };
-    const core = { info() {} };
-    const results = {};
-    for (const platform of ['windows', 'linux', 'linux-lts']) {
-        results[platform] = await publish.buildSucceeded({ github, context, core, platform });
-    }
-    assert.deepEqual(results, { windows: true, linux: false, 'linux-lts': true });
-    assert.equal(requests[0].args.run_id, 200);
-    assert.equal(requests[0].args.filter, 'latest');
-    await assert.rejects(publish.buildSucceeded({ github, context, core, platform: 'freebsd' }), /Unknown platform/);
-    jobs.length = 0;
-    assert.equal(await publish.buildSucceeded({ github, context, core, platform: 'windows' }), false);
+test('planPlatform: each platform workflow plans its own build and tag', () => {
+    const { planPlatform } = publish;
+    const repository = 'anne-skydancer/vulkanstorm';
+    const at = (eventName, ref, platform, inputs) => planPlatform({ eventName, ref, repository, inputs, platform });
+    // vkstorm-release pushes publish windows-latest and linux-latest, never linux-lts.
+    assert.deepEqual([at('push', 'refs/heads/vkstorm-release', 'windows').tag, at('push', 'refs/heads/vkstorm-release', 'linux').tag,
+        at('push', 'refs/heads/vkstorm-release', 'linux-lts').tag], ['windows-latest', 'linux-latest', '']);
+    assert.equal(at('push', 'refs/heads/vkstorm-release', 'linux').release, true);
+    assert.equal(at('workflow_dispatch', 'refs/heads/vkstorm-release', 'linux-lts', { publish: true }).tag, 'linux-lts');
+    // canary and devel publish only on a dispatch with publish.
+    assert.equal(at('push', 'refs/heads/vkstorm-canary', 'windows').tag, '');
+    assert.equal(at('workflow_dispatch', 'refs/heads/vkstorm-canary', 'linux', { publish: 'true' }).tag, 'experimental-linux-latest');
+    assert.equal(at('workflow_dispatch', 'refs/heads/vkstorm-devel', 'linux-lts', { publish: true }).tag, 'preview-linux-lts');
+    assert.equal(at('workflow_dispatch', 'refs/heads/vkstorm-devel', 'windows', { publish: false }).release, false);
+    // Pull requests and other lines never publish; forks never publish.
+    const pr = at('pull_request', 'refs/pull/7/merge', 'linux-lts');
+    assert.deepEqual([pr.tag, pr.release, pr.entry.platform, pr.entry.container.image], ['', false, 'linux-lts', 'ubuntu:24.04']);
+    assert.equal(at('push', 'refs/heads/vkstorm-rust', 'linux').tag, '');
+    assert.equal(planPlatform({ eventName: 'push', ref: 'refs/heads/vkstorm-release', repository: 'someone/fork', platform: 'windows' }).tag, '');
+    // Second_Life tags build Release packages for their own release, no channel tag.
+    const tagged = at('push', 'refs/tags/Second_Life_Release#1', 'windows');
+    assert.deepEqual([tagged.release, tagged.tag], [true, '']);
+    assert.equal(at('push', 'refs/heads/vkstorm-release', 'linux').entry.os, 'ubuntu-26.04');
+    assert.throws(() => at('push', 'refs/heads/vkstorm-release', 'freebsd'));
 });
