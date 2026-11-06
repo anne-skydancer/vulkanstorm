@@ -5,7 +5,9 @@ permissions:
 
 on:
   workflow_run:
-    workflows: ["Build"]
+    # Only Build Windows uploads the Windows-installer artifact this workflow
+    # downloads from the triggering run (the name lookup is case-insensitive).
+    workflows: ["Build Windows"]
     types:
       - completed
   workflow_dispatch:
