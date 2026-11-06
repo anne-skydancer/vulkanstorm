@@ -12,6 +12,7 @@ on:
   pull_request:
     paths:
       - '.github/**'
+      - '.gitignore'
       - 'scripts/ci_*'
       - 'scripts/tests/ci_*'
       - 'scripts/tests/test_ci_files.py'
