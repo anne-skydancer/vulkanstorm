@@ -20,7 +20,13 @@ The viewer binaries link OpenSSL 3.5 (Apache-2.0), which is compatible with GPL-
 
 ## Download
 
-Pre-built versions of the viewer releases for Windows, Mac and Linux can be downloaded from the [official website](https://www.firestormviewer.org/choose-your-platform/).
+Vulkanstorm builds are published on this repository's [releases](https://github.com/anne-skydancer/vulkanstorm/releases), one tag per platform ([doc/release_channels.md](doc/release_channels.md)):
+
+- `stable`: the current stable release, Windows, Linux and Linux LTS; `oldstable` is the previous one.
+- `windows-latest` and `linux-latest`: the latest successful builds of `vkstorm-release`.
+- `linux-lts`: the Linux build for older systems, built in Ubuntu 24.04 (glibc 2.39); it runs on Ubuntu 24.04 and newer.
+
+Firestorm's own builds for Windows, Mac and Linux are on the [Firestorm website](https://www.firestormviewer.org/choose-your-platform/).
 
 ## Build Instructions
 
