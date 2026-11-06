@@ -12,11 +12,11 @@ param(
     [string[]]$Configs = @('-c 8 -p 5', '-c 8 -p 0')
 )
 $ErrorActionPreference = 'Stop'
-$env:TEMP = 'C:\Users\annes\source\repos\.fixture-tmp'; $env:TMP = $env:TEMP
 foreach ($cfg in $Configs) {
     for ($i = 1; $i -le $Runs; $i++) {
         $outF = [System.IO.Path]::GetTempFileName()
-        $args = @('-w') + ($cfg -split ' ') + @('-u', 'http://asset-cdn.glb.agni.lindenlab.com/?texture_id=%s', $Uuids)
+        # Start-Process joins the list into one command line: quote the path
+        $args = @('-w') + ($cfg -split ' ') + @('-u', 'http://asset-cdn.glb.agni.lindenlab.com/?texture_id=%s', ('"{0}"' -f $Uuids))
         $p = Start-Process -FilePath $Tool -ArgumentList $args -RedirectStandardOutput $outF -RedirectStandardError "$outF.err" -PassThru -NoNewWindow
         $max = 0; $t0 = Get-Date
         while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt 120) {
