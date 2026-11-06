@@ -33,6 +33,17 @@
 
 #include "llhttpconstants.h"
 
+// <Vulkanstorm> gzip/deflate reply decoding (HttpLibcurl::completeRequest)
+#ifdef LL_USESYSTEMLIBS
+# include <zlib.h>
+#else
+# include "zlib-ng/zlib.h"
+#endif
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+// </Vulkanstorm>
+
 namespace
 {
 
@@ -54,6 +65,124 @@ static const char * const LOG_CORE("CoreHttp");
 } // end anonymous namespace
 
 
+// <Vulkanstorm> Undo a gzip or deflate Content-Encoding, as libcurl 7.54.1
+// did with CURLOPT_ENCODING "" (see HttpOpRequest::prepareRequest). Only
+// those two (and x-gzip) are decoded; any other value, the asset CDN's
+// "binary/octet-stream" or "identity" among them, leaves the body as it
+// came, again as 7.54.1 did. deflate is the zlib format, with a fallback to
+// a raw deflate stream as libcurl had. Returns false if the data cannot be
+// decoded (libcurl's CURLE_BAD_CONTENT_ENCODING).
+namespace
+{
+// Inflates `in` into a new BufferArray, reading and writing in chunks so
+// that no whole copy of either side is made. Successive gzip members (a
+// valid concatenation) are all decoded. Returns NULL if the data does not
+// decode or the output cannot be stored.
+LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits)
+{
+    z_stream z;
+    memset(&z, 0, sizeof(z));
+    if (inflateInit2(&z, window_bits) != Z_OK)
+    {
+        return NULL;
+    }
+    LLCore::BufferArray * out(new LLCore::BufferArray());
+    char inbuf[16384];
+    char outbuf[16384];
+    size_t pos(0);
+    bool ok(true), ended(false), next_member(false);
+    while (ok)
+    {
+        if (z.avail_in == 0)
+        {
+            const size_t n(in->read(pos, inbuf, sizeof(inbuf)));
+            if (n == 0)
+            {
+                break;          // all input used (a truncated stream keeps what decoded, as libcurl did)
+            }
+            pos += n;
+            z.next_in = reinterpret_cast<Bytef *>(inbuf);
+            z.avail_in = static_cast<uInt>(n);
+        }
+        if (ended)
+        {
+            // more input after a complete stream: the next gzip member
+            if (inflateReset(&z) != Z_OK)
+            {
+                ok = false;
+                break;
+            }
+            ended = false;
+            next_member = true;
+        }
+        z.next_out = reinterpret_cast<Bytef *>(outbuf);
+        z.avail_out = sizeof(outbuf);
+        const int ret(inflate(&z, Z_NO_FLUSH));
+        const size_t produced(sizeof(outbuf) - z.avail_out);
+        if (ret == Z_DATA_ERROR && next_member && produced == 0)
+        {
+            break;              // trailing bytes after a complete stream are not another member: ignored
+        }
+        if (ret != Z_OK && ret != Z_STREAM_END && !(ret == Z_BUF_ERROR && produced == 0 && z.avail_in == 0))
+        {
+            ok = false;
+            break;
+        }
+        if (produced)
+        {
+            next_member = false;
+        }
+        if (produced && out->append(outbuf, produced) != produced)
+        {
+            ok = false;         // BufferArray could not allocate
+            break;
+        }
+        ended = (ret == Z_STREAM_END);
+    }
+    inflateEnd(&z);
+    if (!ok)
+    {
+        out->release();
+        return NULL;
+    }
+    return out;
+}
+
+// 1: decoded into `body`; 0: not an encoding to undo; -1: bad encoded data.
+int decode_reply(const std::string & encoding, LLCore::BufferArray * & body)
+{
+    std::string enc(encoding);
+    std::transform(enc.begin(), enc.end(), enc.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+    const size_t first(enc.find_first_not_of(" \t"));
+    const size_t last(enc.find_last_not_of(" \t"));
+    enc = first == std::string::npos ? std::string() : enc.substr(first, last - first + 1);
+    const bool gzip(enc == "gzip" || enc == "x-gzip");
+    if (!gzip && enc != "deflate")
+    {
+        return 0;
+    }
+    if (!body || !body->size())
+    {
+        return 1;
+    }
+    // gzip as libcurl 7.54.1 decoded it: MAX_WBITS + 32 detects a gzip or
+    // zlib wrapper. deflate: zlib, then a raw stream as libcurl's fallback.
+    LLCore::BufferArray * decoded(inflate_reply(body, gzip ? MAX_WBITS + 32 : MAX_WBITS));
+    if (!decoded && !gzip)
+    {
+        decoded = inflate_reply(body, -MAX_WBITS);
+    }
+    if (!decoded)
+    {
+        return -1;
+    }
+    body->release();
+    body = decoded;
+    return 1;
+}
+} // anonymous namespace
+// </Vulkanstorm>
+
 namespace LLCore
 {
 
@@ -63,8 +192,7 @@ HttpLibcurl::HttpLibcurl(HttpService * service)
       mHandleCache(),
       mPolicyCount(0),
       mMultiHandles(NULL),
-      mActiveHandles(NULL),
-      mDirtyPolicy(NULL)
+      mActiveHandles(NULL)
 {}
 
 
@@ -102,9 +230,6 @@ void HttpLibcurl::shutdown()
 
         delete [] mActiveHandles;
         mActiveHandles = NULL;
-
-        delete [] mDirtyPolicy;
-        mDirtyPolicy = NULL;
     }
 
     mPolicyCount = 0;
@@ -120,7 +245,6 @@ void HttpLibcurl::start(int policy_count)
     mPolicyCount = policy_count;
     mMultiHandles = new CURLM * [mPolicyCount];
     mActiveHandles = new int [mPolicyCount];
-    mDirtyPolicy = new bool [mPolicyCount];
 
     for (unsigned int policy_class(0); policy_class < mPolicyCount; ++policy_class)
     {
@@ -130,7 +254,6 @@ void HttpLibcurl::start(int policy_count)
                               << LL_ENDL;
         }
         mActiveHandles[policy_class] = 0;
-        mDirtyPolicy[policy_class] = false;
         policyUpdated(policy_class);
     }
 }
@@ -157,12 +280,6 @@ HttpService::ELoopSpeed HttpLibcurl::processTransport()
         }
         if (! mActiveHandles[policy_class])
         {
-            // If we've gone quiet and there's a dirty update, apply it,
-            // otherwise we're done.
-            if (mDirtyPolicy[policy_class])
-            {
-                policyUpdated(policy_class);
-            }
             continue;
         }
 
@@ -409,60 +526,43 @@ bool HttpLibcurl::completeRequest(CURLM * multi_handle, CURL * handle, CURLcode 
         }
     }
 
-    // <FS:ND> See if the requested URL matches a X-LL-URL header (if present) and the requested range.
-    // If not, we assume http pipelining havng gone out of sync. If yes, yield a 503 status and switch
-    // pipelining off.
-    bool bFailed = false;
-    if (op->mXLLURL.size())
+#if LIBCURL_VERSION_NUM >= 0x075300
+    // <Vulkanstorm> the reply decoding libcurl 7.54.1 did, see decode_reply()
+    if (op->mDecodeReply && handle)
     {
-        std::string strURI = op->mReqURL;
-        size_t i = strURI.find("://");
-        if (i != std::string::npos)
-            i = strURI.find("/", i + 3);
-
-        if (i != std::string::npos)
-            strURI = strURI.substr(i);
-
-        if (strURI != op->mXLLURL)
+        struct curl_header * encoding(NULL);
+        if (curl_easy_header(handle, "Content-Encoding", 0, CURLH_HEADER, -1, &encoding) == CURLHE_OK
+            && encoding && encoding->value
+            && decode_reply(encoding->value, op->mReplyBody) < 0)
         {
-            LL_WARNS() << "HTTP pipelining out of sync! Asked for: " << strURI << " got " << op->mXLLURL << LL_ENDL;
-            op->mStatus = HttpStatus(HTTP_SERVICE_UNAVAILABLE);
-            bFailed = true;
+            LL_WARNS(LOG_CORE) << "Could not undo Content-Encoding " << encoding->value
+                               << ", url " << op->mReqURL << LL_ENDL;
+            op->mStatus = HttpStatus(HttpStatus::EXT_CURL_EASY, CURLE_BAD_CONTENT_ENCODING);
         }
     }
-    if (!bFailed && (op->mReqOffset || op->mReqLength))
-    {
-        // We should only check the offset and length if we are handling a partial content request.
-        if (op->mStatus == HttpStatus(HTTP_PARTIAL_CONTENT) && (op->mReqOffset != op->mReplyOffset || (op->mReqLength && op->mReqLength < op->mReplyLength)))
-        {
-            std::stringstream strm;
-            strm << "HTTP pipelining possibly out of sync, request wanted: " << op->mReqOffset << "-";
-            if (op->mReqLength)
-                strm << op->mReqLength + op->mReqLength -1;
-            strm << " got: " << op->mReplyOffset << "-" << op->mReplyOffset+op->mReplyLength-1;
-            strm << " url: " << op->mReqURL;
-            LL_WARNS() << strm.str() << LL_ENDL;
-            op->mStatus = HttpStatus(HTTP_SERVICE_UNAVAILABLE);
-            bFailed = true;
-        }
-    }
-    if (bFailed)
-    {
-        HttpPolicy & policy(mService->getPolicy());
-        for (unsigned int i = 0; i < mPolicyCount; ++ i)
-        {
-            HttpPolicyClass & options(policy.getClassOptions(i));
-            long lVal;
+    // </Vulkanstorm>
+#endif
 
-            if (options.get(LLCore::HttpRequest::PO_PIPELINING_DEPTH, &lVal) && lVal)
-            {
-                options.set(LLCore::HttpRequest::PO_PIPELINING_DEPTH, 0);
-                mDirtyPolicy[i] = true;
-                policyUpdated(i);
-            }
-        }
+    // <Vulkanstorm> Firestorm's X-LL-URL / Content-Range check for HTTP/1.1
+    // pipelining going out of sync is gone with the pipelining (curl 8), but
+    // its offset test stays: a 206 that does not start where the request
+    // asked is refused, with the retryable HE_INV_CONTENT_RANGE_HDR and
+    // nothing switched off. lltexturefetch skips its realignment for a reply
+    // at offset 0 and would append a wrong one to the data it has. A 206
+    // without a usable Content-Range reads as offset 0 here, so it is refused
+    // for a request at a later offset, as Firestorm's check did, although
+    // lltexturefetch and the mesh repository would take it as the asked
+    // range (LL's fallback for services that scrub headers). A longer reply
+    // at the asked offset is delivered (BUG-2295).
+    if (op->mStatus == HttpStatus(HTTP_PARTIAL_CONTENT)
+        && op->mReqOffset != op->mReplyOffset)
+    {
+        LL_WARNS(LOG_CORE) << "Partial content at offset " << op->mReplyOffset
+                           << " for a request at offset " << op->mReqOffset
+                           << ", url " << op->mReqURL << LL_ENDL;
+        op->mStatus = HttpStatus(HttpStatus::LLCORE, HE_INV_CONTENT_RANGE_HDR);
     }
-    // /</FS:ND>
+    // </Vulkanstorm>
 
     if (multi_handle && handle)
     {
@@ -516,71 +616,50 @@ void HttpLibcurl::policyUpdated(unsigned int policy_class)
         return;
     }
 
+    // <Vulkanstorm> Options apply at once. The stall that let a class go
+    // idle first protected libcurl 7.37, which corrupted memory when
+    // HTTP/1.1 pipelining was switched off under active requests; libcurl
+    // 7.62 and later have no HTTP/1.1 pipelining to switch.
+    //
+    // A deep-queue class keeps the connections it had with HTTP/1.1
+    // pipelining: up to its per-host limit to a host and its connection
+    // limit in all. It runs one request per connection
+    // (HttpPolicyClass::activeLimit()); the rest wait in llcorehttp's ready
+    // queue, as they waited in a pipeline before.
     HttpPolicy & policy(mService->getPolicy());
+    const HttpPolicyClass & options(policy.getClassOptions(policy_class));
+    CURLM * multi_handle(mMultiHandles[policy_class]);
 
-    if (! mActiveHandles[policy_class])
+    if (options.mPipelining > 1)
     {
-        // Clear to set options.  As of libcurl 7.37.0, if a pipelining
-        // multi handle has active requests and you try to set the
-        // multi handle to non-pipelining, the library gets very angry
-        // and goes off the rails corrupting memory.  A clue that you're
-        // about to crash is that you'll get a missing server response
-        // error (curl code 9).  So, if options are to be set, we let
-        // the multi handle run out of requests, then set options, and
-        // re-enable request processing.
-        //
-        // All of this stall mechanism exists for this reason.  If
-        // libcurl becomes more resilient later, it should be possible
-        // to remove all of this.  The connection limit settings are fine,
-        // it's just that pipelined-to-non-pipelined transition that
-        // is fatal at the moment.
-
-        HttpPolicyClass & options(policy.getClassOptions(policy_class));
-        CURLM * multi_handle(mMultiHandles[policy_class]);
-
-        // Enable policy if stalled
-        policy.stallPolicy(policy_class, false);
-        mDirtyPolicy[policy_class] = false;
-
-        if (options.mPipelining > 1)
-        {
-            // We'll try to do pipelining on this multihandle
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_PIPELINING,
-                                     1L);
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_MAX_PIPELINE_LENGTH,
-                                     long(options.mPipelining));
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_MAX_HOST_CONNECTIONS,
-                                     long(options.mPerHostConnectionLimit));
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_MAX_TOTAL_CONNECTIONS,
-                                     long(options.mConnectionLimit));
-        }
-        else
-        {
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_PIPELINING,
-                                     0L);
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_MAX_HOST_CONNECTIONS,
-                                     0L);
-            check_curl_multi_setopt(multi_handle,
-                                     CURLMOPT_MAX_TOTAL_CONNECTIONS,
-                                     long(options.mConnectionLimit));
-        }
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_PIPELINING,
+                                CURLPIPE_MULTIPLEX);
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_MAX_HOST_CONNECTIONS,
+                                long(options.mPerHostConnectionLimit));
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_MAX_TOTAL_CONNECTIONS,
+                                long(options.mConnectionLimit));
+#if LIBCURL_VERSION_NUM >= 0x074300 // 7.67.0
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_MAX_CONCURRENT_STREAMS,
+                                options.mPipelining);
+#endif
     }
-    else if (! mDirtyPolicy[policy_class])
+    else
     {
-        // Mark policy dirty and request a stall in the policy.
-        // When policy goes idle, we'll re-invoke this method
-        // and perform the change.  Don't allow this thread to
-        // sleep while we're waiting for quiescence, we'll just
-        // stop processing.
-        mDirtyPolicy[policy_class] = true;
-        policy.stallPolicy(policy_class, true);
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_PIPELINING,
+                                CURLPIPE_NOTHING);
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_MAX_HOST_CONNECTIONS,
+                                0L);
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_MAX_TOTAL_CONNECTIONS,
+                                long(options.mConnectionLimit));
     }
+    // </Vulkanstorm>
 }
 
 // ---------------------------------------

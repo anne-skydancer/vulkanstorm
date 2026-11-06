@@ -27,6 +27,10 @@ param(
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 New-Item -ItemType Directory -Force $WorkDir | Out-Null
+# absolute paths: the PKI is made from inside its directory, and the plugin
+# and helpers run with other working directories
+$WorkDir = (Resolve-Path -LiteralPath $WorkDir).ProviderPath
+if ($Targets) { $Targets = (Resolve-Path -LiteralPath $Targets).ProviderPath }
 $pki = Join-Path $WorkDir 'pki'
 $profileDir = Join-Path $WorkDir 'profile'
 $out = Join-Path $WorkDir 'result.json'
