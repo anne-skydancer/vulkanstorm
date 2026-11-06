@@ -400,7 +400,7 @@ jobs:
       # Release builds (vkstorm-release pushes, Second_Life tags, the
       # experimental canary build) never build or run tests: LL_TESTS stays
       # off for Release. PR and qualification builds (RelWithDebInfo) run them.
-      - name: Run statistics, script metadata, transport, primitive and night sky regression tests
+      - name: Run statistics, script metadata, transport, TLS, primitive and night sky regression tests
         if: env.VIEWER_BUILD_TYPE != 'Release'
         shell: bash
         run: |
@@ -416,7 +416,14 @@ jobs:
             INTEGRATION_TEST_llinventory_parity INTEGRATION_TEST_llinvfetch_parity \
             INTEGRATION_TEST_llinventorymodel_parity INTEGRATION_TEST_llaisupdate_parity \
             INTEGRATION_TEST_llinventory_task_oracle INTEGRATION_TEST_llinventory_offer_oracle \
-            llprimitive_tests INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition llinventory_tool
+            llprimitive_tests INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition llinventory_tool \
+            INTEGRATION_TEST_llcorehttp
+          # The credential-store tests stub LLControlGroup and link llui,
+          # which only MSVC's linker resolves; they have never linked on Linux.
+          if [ "$RUNNER_OS" = Windows ]; then
+            cmake --build "${{ matrix.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
+              --target INTEGRATION_TEST_llsechandler_basic INTEGRATION_TEST_llsecapi
+          fi
 
       # The keep-or-port numbers of the inventory rung (doc/rust_port.md, R1):
       # the frozen C++ oracle against the viewer's Rust-backed classes in the
