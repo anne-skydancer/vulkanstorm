@@ -34,11 +34,11 @@ uniform sampler2D emissiveMap;
 
 out vec4 frag_color;
 
-in vec3 vary_position;
-in vec4 vertex_emissive;
+centroid in vec3 vary_position;
+centroid in vec4 vertex_emissive;
 
-in vec2 base_color_texcoord;
-in vec2 emissive_texcoord;
+centroid in vec2 base_color_texcoord;
+centroid in vec2 emissive_texcoord;
 
 uniform float minimum_alpha; // PBR alphaMode: MASK, See: mAlphaCutoff, setAlphaCutoff()
 

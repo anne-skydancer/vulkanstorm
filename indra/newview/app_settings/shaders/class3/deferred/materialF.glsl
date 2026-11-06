@@ -54,7 +54,7 @@ vec3 linear_to_srgb(vec3 cs);
 uniform mat4 modelview_matrix;
 uniform mat3 normal_matrix;
 
-in vec3 vary_position;
+centroid in vec3 vary_position;
 
 void mirrorClip(vec3 pos);
 vec4 encodeNormal(vec3 n, float env, float gbuffer_flag);
@@ -202,7 +202,7 @@ uniform sampler2D bumpMap;
 #ifdef HAS_SPECULAR_MAP
 uniform sampler2D specularMap;
 
-in vec2 vary_texcoord2;
+centroid in vec2 vary_texcoord2;
 #endif
 
 uniform float env_intensity;
@@ -213,16 +213,16 @@ uniform float minimum_alpha;
 #endif
 
 #ifdef HAS_NORMAL_MAP
-in vec3 vary_normal;
-in vec3 vary_tangent;
+centroid in vec3 vary_normal;
+centroid in vec3 vary_tangent;
 flat in float vary_sign;
-in vec2 vary_texcoord1;
+centroid in vec2 vary_texcoord1;
 #else
-in vec3 vary_normal;
+centroid in vec3 vary_normal;
 #endif
 
-in vec4 vertex_color;
-in vec2 vary_texcoord0;
+centroid in vec4 vertex_color;
+centroid in vec2 vary_texcoord0;
 
 // get the transformed normal and apply glossiness component from normal map
 vec3 getNormal(inout float glossiness)

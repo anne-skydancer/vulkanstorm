@@ -156,6 +156,104 @@ reprojected, 2.9 and 2.5; surfaces moving 0.25, 0.5, 1 and 4 pixels a frame, not
 Cost: the resolve pass alone, 0.5 to 0.7 ms at 1920 x 1080 and 1.7 to 2.0 ms at 2560 x 1440 on a machine
 under load (about the composite's own cost); the second run of the passes it replaces is, in the shaded
 bench above, 2.6 to 3.3 ms at 1080p and 4.8 to 6.7 ms at 1440p.
+## Edge pixels: attributes at the centroid (fixed 2026-11-05)
+
+Symptom (release 1.0.1.81947, rigged mesh hair close up in a dim interior): a fine regular lattice
+of thin, slightly redder lines over the hair, one line along every quad of the mesh ("i can see the
+matrix"). Its cause is not the noise. The passes draw into multisampled targets, and a pixel that a
+triangle covers in part is shaded once for that triangle, with every varying interpolated at the
+pixel centre unless it is declared `centroid`. When the centre lies outside the triangle the value is
+extrapolated. Sorted alpha is single-sampled and only shades a pixel whose centre is inside, so
+there the texture coordinates never leave the triangle. Hair cards whose quads have UV islands of
+their own (the UV jumps at every quad edge) therefore showed the texels beyond each island along
+every quad edge, in the stochastic passes only. The alpha programs' fragment inputs (`alphaF`,
+`fullbrightF`, `pbralphaF`, `materialF`, `emissiveF`, `pbrglowF`) are now `centroid in`; for a
+single-sampled target that changes nothing, for the passes' samples the attributes are taken inside
+the triangle. `scripts/perf/test_alpha_stochastic.py` draws three layers of 8-pixel quads with UV
+islands (grey inside, red outside): sorted alpha shows the outside on 0 of 2048 pixels, the
+stochastic passes without `centroid` on 279, 660 and 688 pixels (S = 4, 8, 16), with it on 0 (NVIDIA
+621.01 and Mesa Zink alike, the vertex shaders' outputs staying as they are).
+
+The cause was found by elimination first, with offline experiments on the masks (next section): no
+structure in the noise, at any S, even on regular quad lattices, as long as every fragment has its
+own (face seed, triangle) pair. The lattice in the screenshot has the rectangular cells of the
+quads, no diagonals, and a reddish tone, which is the signature of extrapolated texels.
+
+## Noise: what the paper recommends, what we do, what was measured
+
+Reference: the journal version, Enderton, Sintorn, Shirley and Luebke, "Stochastic Transparency",
+IEEE TVCG 17(8), 2011 (section numbers below are its). The method here is its depth-based,
+anti-aliased form (3.4, 3.5), kept.
+
+| Recommendation | Here |
+|---|---|
+| 3.1 stratified masks: R = floor(alpha S + xi) samples, one S-choose-R subset | done (a table of 2048 random R-subsets per R) |
+| 3.1 dither R across a tile for further stratification | done per pixel with a white xi; a 64 x 64 blue-noise tile for xi measured: no gain (below), not adopted |
+| 3.3 alpha correction, total alpha over accumulated alpha | done (composite); a single layer is exact (test) |
+| 3.4 steps 1-5: opaque depth, total alpha, stochastic depth only, accumulation by the stochastic depth, composite | done; deviations: the opaque depth is spread over the samples (the scene is single-sampled), and the composite dims the scene by the pixel's mean transparency, not per sample (differs only on background edges inside a pixel) |
+| 3.5, footnotes 3 and 4: more than 8 samples by iterating, one stratified mask split across the passes | done (S = 16 is two passes of 8 of one 16-bit mask) |
+| 5 mask table of about 2047 masks | done (2048) |
+| 6 temporal coherence: seed by pixel and primitive id | done (pixel, face identity, triangle); the noise field is fixed in screen space |
+| 6 uneven noise at edges; alpha correction makes one-layer regions noise free | known properties |
+| 6 post processing: cross-bilateral filter on the total alpha | measured, rejected (below) |
+| 6 adaptive sampling, importance sampling for dark backgrounds | not adopted: S is a setting |
+| 6 mask selection: a pair of random S-choose-R masks does reasonably well | done; masks of fragments that differ in (face seed, triangle) are independent |
+
+Measurements (offline, the viewer's own shaders and pass structure on NVIDIA 621.01, 256 x 256,
+hair-like stacks of N = 5, 10, 20 layers of alpha 0.2 to 0.6 in one draw call, so every triangle has
+its own id; a lattice of 8-pixel quads shifted per layer, or random thin strips; the reference is
+sorted alpha at every sample; the colour error is in 1/255 of full scale, "lp" is the rms after a
+Gaussian low-pass of sigma 1.5 pixels, the closer measure of what the eye sees):
+
+| Layout | S | N = 5 rms / lp | N = 10 rms / lp | N = 20 rms / lp |
+|---|---|---|---|---|
+| quads | 4 | 9.3 / 2.3 | 9.6 / 2.9 | 9.3 / 2.5 |
+| quads | 8 | 5.8 / 1.3 | 6.9 / 1.7 | 6.4 / 1.5 |
+| quads | 16 | 3.7 / 0.8 | 4.9 / 1.1 | 4.4 / 0.9 |
+| strips | 4 | 6.5 / 1.7 | 8.5 / 2.0 | 10.9 / 2.7 |
+| strips | 8 | 3.7 / 1.4 | 5.3 / 1.6 | 7.5 / 2.1 |
+| strips | 16 | 2.9 / 1.4 | 4.0 / 1.5 | 5.6 / 1.9 |
+
+- No spectral peak in the noise: the error's power spectrum has a maximum of 7 to 13 times its mean
+  for the quads (white noise of the same size: 12), at every S and N. The strips are lower in
+  frequency (up to 55 times at S = 16, N = 5, where the error is a few grey levels).
+- An independent per-fragment hash of (pixel, face seed, triangle), in place of the shared pixel
+  field rotated per triangle that `alphaStochasticF.glsl` uses, changes nothing: rms and lp within
+  0.5 %. The same with a 64 x 64 blue-noise tile (void and cluster, sigma 1.5) for xi, shifted per
+  triangle: within 1.5 % at every S and N. The error is dominated by the overlap of the masks of
+  different layers, which no per-pixel pattern controls (paper, section 6: "it would seem difficult
+  to improve on that significantly"). Rejected: a texture and a binding for nothing.
+- Masks that coincide (the same face seed and triangle id on two layers at a pixel: two draws with
+  one seed, since `gl_PrimitiveID` restarts at 0 in each draw call) make the layers occlude each
+  other instead of blending: a bias of 27 to 44 grey levels and spectral peaks 100 to 600 times the
+  mean on a quad lattice. Nothing in the viewer's draws should produce it (a batch has one seed and
+  consecutive triangle ids, a face its own seed), and it is not what the screenshot shows.
+- A cross-bilateral filter guided by the total alpha (radius 1 or 2, sigma_alpha 0.02 to 0.1): on a
+  layout whose colour varies only where the total alpha does, it cuts the rms by 60 % but the part
+  of the noise the eye sees (lp) by 5 %; on random strips, where the colour has detail that the
+  total alpha does not carry, it blurs: the rms goes from 5.3 to 4.8 at radius 1 and up to 5.9 to 6.6
+  at radius 2, where the blur of the exact image alone is 5.5. Rejected, as the paper says (6).
+- The bias of alpha correction on deep stacks (3.3, 4.1) is 0.5 to 3.5 grey levels at N = 10 to 20
+  and S = 4 to 16 (the "bias" of the same runs): the price of its noise reduction, as the paper
+  finds.
+- S is the lever: the rms falls with S (quads, N = 10: 9.6, 6.9, 4.9 at S = 4, 8, 16), at the cost
+  of the bench below.
+
+## Aurora Viewer's implementation (the author's, feat/alpha-oit)
+
+Compared point by point (`crates/aurora-render/src/oit_stochastic.rs`, `shaders/object.wgsl`
+`st_mask`, `st_pixel_values`, `st_sub_mask`; all of it by Anne Skydancer): the same `st_hash` (PCG),
+the same seed (face identity, triangle), the same rotation of two per-pixel values (the dither of R
+and the column of the table), the same table (2048 columns, splitmix64 and a partial Fisher-Yates),
+the same S = 16 in passes of at most 8 of one mask, the same alpha correction and composite, and the
+same default (white pixel values, triangle in the seed, no filter). Aurora has the options measured
+above, off by default and not changed by what was found here: `seed=r2|blue` (R2 or a blue-noise
+tile), `noprim`, `filter=<r>[:<sigma>]` (cross-bilateral), `temporal`, `naive`, `nocorr`. So nothing
+in the mask logic separates the two. What may separate them is the shading of the edge pixels: WGSL
+`@location` inputs are interpolated at the pixel centre as GLSL's are without `centroid`; whether a
+Vulkan driver takes them at the centre or inside the triangle is left to the implementation, and
+Aurora's hair may simply not hit it (not tested). Nothing was ported from Aurora in this fix; the
+passes and masks come from it as before.
 
 ## What takes the method, and what does not
 
@@ -199,7 +297,8 @@ alpha-only variant built. Otherwise, or when the targets cannot be allocated, so
 - `scripts/perf/test_alpha_stochastic.py`: offscreen, the viewer's shaders with the viewer's pass
   structure: the mask table, every covered sample against a Python model of the mask (16 in two
   passes of 8, 8, 4), the total alpha, visibility and composite, an opaque occluder, the glow,
-  a decal on a sloped plane with and without the offset. NVIDIA 621.01 and Mesa Zink
+  a decal on a sloped plane with and without the offset, the edge pixels of quads with UV islands
+  (sorted alpha, then the passes without and with `centroid`). NVIDIA 621.01 and Mesa Zink
   (`GALLIUM_DRIVER=zink`, `--opengl <Mesa opengl32.dll>`).
 - `scripts/perf/bench_alpha_oit.py`, implementation `st`: the viewer's shaders and passes on the
   bench's synthetic layers, beside the round-2 study's variants (`stoch+...`, `stoch1`, `hybrid`),

@@ -52,23 +52,23 @@ uniform int classic_mode;
 
 out vec4 frag_color;
 
-in vec3 vary_fragcoord;
+centroid in vec3 vary_fragcoord;
 
 #ifdef HAS_SUN_SHADOW
   uniform vec2 screen_res;
 #endif
 
-in vec3 vary_position;
+centroid in vec3 vary_position;
 
-in vec2 base_color_texcoord;
-in vec2 normal_texcoord;
-in vec2 metallic_roughness_texcoord;
-in vec2 emissive_texcoord;
+centroid in vec2 base_color_texcoord;
+centroid in vec2 normal_texcoord;
+centroid in vec2 metallic_roughness_texcoord;
+centroid in vec2 emissive_texcoord;
 
-in vec4 vertex_color;
+centroid in vec4 vertex_color;
 
-in vec3 vary_normal;
-in vec3 vary_tangent;
+centroid in vec3 vary_normal;
+centroid in vec3 vary_tangent;
 flat in float vary_sign;
 
 #ifdef HAS_ALPHA_MASK
@@ -241,12 +241,12 @@ uniform vec3 emissiveColor;
 
 out vec4 frag_color;
 
-in vec3 vary_position;
+centroid in vec3 vary_position;
 
-in vec2 base_color_texcoord;
-in vec2 emissive_texcoord;
+centroid in vec2 base_color_texcoord;
+centroid in vec2 emissive_texcoord;
 
-in vec4 vertex_color;
+centroid in vec4 vertex_color;
 
 #ifdef HAS_ALPHA_MASK
 uniform float minimum_alpha; // PBR alphaMode: MASK, See: mAlphaCutoff, setAlphaCutoff()
