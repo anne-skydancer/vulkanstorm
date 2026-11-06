@@ -3197,6 +3197,7 @@ void HttpRequestTestObjectType::test<24>()
             }
         }
 
+#if LIBCURL_VERSION_NUM >= 0x075300 // the viewer's decoder (inflate_reply()); libcurl 7.54.1's loses this output
         // zlib output still pending when the input runs out must not be lost
         for (const auto & big : { std::make_pair("/encoding/rawbig/", std::string(16400, 'A')),
                                   std::make_pair("/encoding/gzipbig/", std::string(70000, 'A')) })
@@ -3219,6 +3220,7 @@ void HttpRequestTestObjectType::test<24>()
             ensure_equals(std::string("Body size for ") + big.first, handler.mBody.size(), big.second.size());
             ensure(std::string("Body for ") + big.first, handler.mBody == big.second);
         }
+#endif
 
         handler.mCalls = 0;
         HttpHandle handle = req->requestStopThread(handlerp);
