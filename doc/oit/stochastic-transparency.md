@@ -130,7 +130,7 @@ every quad edge, in the stochastic passes only. The alpha programs' fragment inp
 single-sampled target that changes nothing, for the passes' samples the attributes are taken inside
 the triangle. `scripts/perf/test_alpha_stochastic.py` draws three layers of 8-pixel quads with UV
 islands (grey inside, red outside): sorted alpha shows the outside on 0 of 2048 pixels, the
-stochastic passes without `centroid` on 279, 660 and 688 pixels (S = 4, 8, 16), with it on 0 (NVIDIA
+stochastic passes without `centroid` on 273, 664 and 686 pixels (S = 4, 8, 16), with it on 0 (NVIDIA
 621.01 and Mesa Zink alike, the vertex shaders' outputs staying as they are).
 
 The cause was found by elimination first, with offline experiments on the masks (next section): no
@@ -182,11 +182,14 @@ Gaussian low-pass of sigma 1.5 pixels, the closer measure of what the eye sees):
   triangle: within 1.5 % at every S and N. The error is dominated by the overlap of the masks of
   different layers, which no per-pixel pattern controls (paper, section 6: "it would seem difficult
   to improve on that significantly"). Rejected: a texture and a binding for nothing.
-- Masks that coincide (the same face seed and triangle id on two layers at a pixel: two draws with
-  one seed, since `gl_PrimitiveID` restarts at 0 in each draw call) make the layers occlude each
+- Masks that coincide (the same subset on two layers over their overlap) make the layers occlude each
   other instead of blending: a bias of 27 to 44 grey levels and spectral peaks 100 to 600 times the
-  mean on a quad lattice. Nothing in the viewer's draws should produce it (a batch has one seed and
-  consecutive triangle ids, a face its own seed), and it is not what the screenshot shows.
+  mean on a quad lattice. This does happen: the subset of the mask table was the column of the pixel's
+  value plus the layer's rotation, so two layers whose rotations met on one of the 2048 columns (about one
+  pair in a thousand, many pairs among hundreds of hair cards) shared a subset over their whole overlap,
+  and the layers behind them saw too few covered samples. The subset is now hashed from the seed and the
+  pixel (the Aurora Viewer's fix of 2026-11-06, the author's own); the test puts a pair of colliding seeds
+  over a third layer: the back layer reads 0.219 where the exact 0.125, now 0.120 to 0.124 (S = 4, 8, 16).
 - A cross-bilateral filter guided by the total alpha (radius 1 or 2, sigma_alpha 0.02 to 0.1): on a
   layout whose colour varies only where the total alpha does, it cuts the rms by 60 % but the part
   of the noise the eye sees (lp) by 5 %; on random strips, where the colour has detail that the
