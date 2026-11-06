@@ -113,5 +113,5 @@ feature to `vkstorm-devel` by PR. Prepare separate integration branches for
 Verify each PR's source and destination before merging. Recheck the native UI,
 skin overrides, and dependencies against each destination.
 
-Do not advance `latest` as part of feature qualification. Only a successful CI
-Release build supplying both Windows and Linux binaries may advance it.
+Do not advance any `latest-*` tag as part of feature qualification. Only a
+successful CI Release build of that platform may advance its tag.
