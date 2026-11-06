@@ -187,11 +187,11 @@ public:
         /// If greater than 1, the class is a deep queue: it runs
         /// PO_PER_HOST_CONNECTION_LIMIT x PO_PIPELINING_DEPTH requests
         /// at once. <Vulkanstorm> libcurl 7.62 and later have no
-        /// HTTP/1.1 pipelining; the class keeps its connection limits
-        /// (PO_PER_HOST_CONNECTION_LIMIT per host), the requests beyond
-        /// them wait in libcurl for a free HTTP/1.1 connection, and where
-        /// a server offers h2 they are streams, up to PO_PIPELINING_DEPTH
-        /// per connection. </Vulkanstorm>
+        /// HTTP/1.1 pipelining, and llcorehttp speaks HTTP/1.1 to every
+        /// server: the class keeps its connection limits
+        /// (PO_PER_HOST_CONNECTION_LIMIT per host) and runs one request per
+        /// connection, the rest waiting in llcorehttp's queue.
+        /// </Vulkanstorm>
         ///
         /// When PIPELINING_DEPTH is 0 or 1, this library manages
         /// connection lifecycle and honors the PO_CONNECTION_LIMIT
