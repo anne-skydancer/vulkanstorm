@@ -45,7 +45,8 @@ rebuilds.
 
 Download a successful run's image artifact and check `sha256sum --check
 SHA256SUMS`. For long-term use, attach both files to an explicitly versioned
-image release (separate from the viewer's `latest` tag), then pass the QCOW2
+image release (`freebsd-image-*`: CI infrastructure only, never a viewer build,
+download or release channel; see doc/release_channels.md), then pass the QCOW2
 asset URL as the action's `image_url`. Pin the action commit, version `15.1`,
 architecture `x86-64`, and image release. On self-hosted Linux, the same image
 can be served locally, as the image qualification workflow demonstrates.

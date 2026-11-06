@@ -113,5 +113,6 @@ feature to `vkstorm-devel` by PR. Prepare separate integration branches for
 Verify each PR's source and destination before merging. Recheck the native UI,
 skin overrides, and dependencies against each destination.
 
-Do not advance any `latest-*` tag as part of feature qualification. Only a
-successful CI Release build of that platform may advance its tag.
+Do not advance any release tag as part of feature qualification. Only a
+successful CI Release build of a platform may advance that platform's tag
+(doc/release_channels.md).
