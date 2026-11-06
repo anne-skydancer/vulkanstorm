@@ -77,8 +77,12 @@ Remove-Item $out -ErrorAction SilentlyContinue
 # --- LEAP plugin through a session settings file (the command line would
 # need LLSD notation quoting); the viewer joins the name to app_settings ---
 $fwd = { param($p) $p.Replace([char]92, [char]47) }
-$leap = "$(& $fwd $Python) -I $(& $fwd (Join-Path $here 'xmlrpc_cert_probe.py')) $(& $fwd $out)"
-if ($Targets) { $leap += " $(& $fwd $Targets)" }
+# LLLeap splits the command on whitespace and honours quotes: quote every
+# path; the whole command is then XML-escaped into the settings file
+$qf = { param($p) '"' + (& $fwd $p) + '"' }
+$leap = "$(& $qf $Python) -I $(& $qf (Join-Path $here 'xmlrpc_cert_probe.py')) $(& $qf $out)"
+if ($Targets) { $leap += " $(& $qf $Targets)" }
+$leapXml = [System.Security.SecurityElement]::Escape($leap)
 $proxyXml = ''
 function SettingXml($k, $t, $v) { "<key>$k</key><map><key>Comment</key><string>probe</string><key>Persist</key><integer>0</integer><key>Type</key><string>$t</string><key>Value</key>$v</map>" }
 if ($Proxy -eq 'Web') { $proxyXml = (SettingXml 'HttpProxyType' 'String' '<string>Web</string>') + (SettingXml 'BrowserProxyEnabled' 'Boolean' '<integer>1</integer>') + (SettingXml 'BrowserProxyAddress' 'String' '<string>127.0.0.1</string>') + (SettingXml 'BrowserProxyPort' 'S32' '<integer>18471</integer>') }
@@ -87,17 +91,18 @@ if ($Proxy -eq 'Socks') { $proxyXml = (SettingXml 'HttpProxyType' 'String' '<str
 <?xml version="1.0" ?>
 <llsd><map><key>LeapCommand</key><map>
 <key>Comment</key><string>TLS certificate probe</string><key>Persist</key><integer>0</integer>
-<key>Type</key><string>LLSD</string><key>Value</key><array><string>$leap</string></array>
+<key>Type</key><string>LLSD</string><key>Value</key><array><string>$leapXml</string></array>
 </map>$proxyXml</map></llsd>
 "@ | Set-Content -Encoding utf8NoBOM $sess
 $sessArg = [System.IO.Path]::GetRelativePath((Join-Path (Split-Path $Exe) 'app_settings'), $sess)
 
-$srv = Start-Process -FilePath $Python -ArgumentList '-I', (Join-Path $here 'tls_servers.py'), $pki, '200' `
+# Start-Process joins ArgumentList into one command line: quote the paths
+$srv = Start-Process -FilePath $Python -ArgumentList '-I', ('"{0}"' -f (Join-Path $here 'tls_servers.py')), ('"{0}"' -f $pki), '200' `
     -RedirectStandardError (Join-Path $WorkDir 'servers.log') -RedirectStandardOutput (Join-Path $WorkDir 'servers.out') `
     -PassThru -NoNewWindow
 $prx = $null
 if ($Proxy -ne 'None') {
-    $prx = Start-Process -FilePath $Python -ArgumentList '-I', (Join-Path $here 'test_proxy.py'), '18471', '18472', '200' `
+    $prx = Start-Process -FilePath $Python -ArgumentList '-I', ('"{0}"' -f (Join-Path $here 'test_proxy.py')), '18471', '18472', '200' `
         -RedirectStandardError (Join-Path $WorkDir 'proxy.log') -RedirectStandardOutput (Join-Path $WorkDir 'proxy.out') -PassThru -NoNewWindow
 }
 Start-Sleep -Seconds 2
@@ -124,8 +129,13 @@ try {
 $after = $stores | ForEach-Object { "$($_.FullName) $((Get-FileHash $_.FullName).Hash)" }
 "real credential stores unchanged: $($null -eq (Compare-Object @($before) @($after))) ($(@($before).Count) checked)"
 "viewer log: $(Join-Path $profileDir 'Roaming\Vulkanstorm_x64\logs\Vulkanstorm.log')"
-if (Test-Path $out) {
-    (Get-Content $out | ConvertFrom-Json).PSObject.Properties | ForEach-Object {
-        '{0,-10} {1,-9} {2,-21} cert={3,-5} {4,-12} -> {5}' -f $_.Name, $_.Value.status, $_.Value.errorcode,
-            $_.Value.has_certificate, $_.Value.validation_failure, $_.Value.llstartup }
-} else { 'no result: see the viewer log'; exit 1 }
+if (-not (Test-Path $out)) { 'no result: see the viewer log'; exit 1 }
+$result = Get-Content $out | ConvertFrom-Json
+$result.PSObject.Properties | ForEach-Object {
+    '{0,-10} {1,-9} {2,-21} cert={3,-5} {4,-12} -> {5}' -f $_.Name, $_.Value.status, $_.Value.errorcode,
+        $_.Value.has_certificate, $_.Value.validation_failure, $_.Value.llstartup }
+# the plugin writes what it has when its timeout fires: every target must have answered
+$wanted = @('valid', 'expired', 'untrusted', 'wronghost', 'selfsigned')
+if ($Targets) { $wanted += @((Get-Content $Targets | ConvertFrom-Json) | ForEach-Object { $_[0] }) }
+$missing = @($wanted | Where-Object { -not $result.PSObject.Properties[$_] })
+if ($missing.Count) { "no reply for: $($missing -join ', ')"; exit 1 }
