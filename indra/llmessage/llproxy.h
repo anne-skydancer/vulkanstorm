@@ -254,6 +254,10 @@ public:
     // Apply the current proxy settings to a curl request. Doesn't do anything if mHTTPProxyEnabled is false.
     // Safe to call from any thread.
     static void applyProxySettings(CURL* handle);
+    // <Vulkanstorm> The HTTP-type proxy applyProxySettings() would set, as
+    // "ip:port", or empty if it sets none (no proxy, or a SOCKS 5 one), for
+    // llcorehttp's per-host admission. Safe to call from any thread. </Vulkanstorm>
+    static std::string getHTTPProxyForCurl();
     // Start a connection to the SOCKS 5 proxy. Call from main thread only.
     S32 startSOCKSProxy(LLHost host);
 

@@ -89,6 +89,15 @@ public:
     };
     static std::string methodToString(const EMethod &);
 
+    /// <Vulkanstorm> The key per-host admission counts a request under
+    /// (HttpPolicy::processReadyQueue), the connection libcurl's per-host
+    /// limit applies to: the URL's host name in lower case and its effective
+    /// port, without scheme or userinfo, so that "https://h/" and
+    /// "https://H:443/" are one host. A plain http URL through an HTTP proxy
+    /// (`http_proxy`, as given to CURLOPT_PROXY; empty: none) is the proxy's
+    /// connection instead. </Vulkanstorm>
+    static std::string admissionKey(const std::string & url, const std::string & http_proxy);
+
     virtual void stageFromRequest(HttpService *);
     virtual void stageFromReady(HttpService *);
     virtual void stageFromActive(HttpService *);
@@ -195,7 +204,7 @@ public:
     // Request data
     EMethod             mReqMethod;
     std::string         mReqURL;
-    std::string         mReqHost;       // <Vulkanstorm/> scheme://authority, for per-host admission (_httppolicy.cpp)
+    std::string         mReqHost;       // <Vulkanstorm/> admissionKey(), set by stageFromRequest, for per-host admission (_httppolicy.cpp)
     BufferArray *       mReqBody;
     off_t               mReqOffset;
     size_t              mReqLength;
