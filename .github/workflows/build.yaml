@@ -3,12 +3,26 @@ name: Build
 on:
   workflow_dispatch:
     inputs:
-      experimental_release:
+      windows:
+        description: Build the Windows viewer.
+        type: boolean
+        default: true
+      linux:
+        description: Build the Linux viewer on ubuntu-26.04 (linux-latest).
+        type: boolean
+        default: true
+      linux_lts:
         description: >-
-          vkstorm-canary only: build a Release package (Release configuration, AVX2,
-          LTO, Inno Setup, no development hooks) and publish each platform as its
-          experimental-<platform> pre-release, moving that tag. Never touches any
-          latest-* tag.
+          Build the Linux LTS viewer inside ubuntu:24.04 (GCC 14, the 24.04-built
+          packages of scripts/linux_lts_packages.json, glibc 2.39 at most).
+        type: boolean
+        default: false
+      publish:
+        description: >-
+          Build Release packages and publish each selected platform to its own tag:
+          windows-latest, linux-latest, linux-lts on vkstorm-release;
+          experimental-<platform> on vkstorm-canary; preview-<platform> on
+          vkstorm-devel. Other lines never publish.
         type: boolean
         default: false
   workflow_call:
@@ -32,7 +46,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - run: node --test scripts/tests/ci_publish_latest.test.cjs
+      - run: node --test scripts/tests/ci_publish_latest.test.cjs scripts/tests/ci_promote_stable.test.cjs
       - run: python3 scripts/tests/test_windows_symbol_archive.py
       - run: python3 scripts/tests/test_version_schema.py
       - run: python3 scripts/tests/test_contacts_layout.py
@@ -51,505 +65,72 @@ jobs:
           g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I indra/newview indra/newview/tests/llscripteditorposixfile_test.cpp -o "$RUNNER_TEMP/challenge-file-test"
           "$RUNNER_TEMP/challenge-file-test"
       - name: Keep development hooks out of release
-        if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)
+        if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.publish)
         run: python3 scripts/tests/check_release_hooks.py
 
-  build:
-    needs: check-publication
-    # platform names the build everywhere it produces output: the job, its
-    # artifacts, the Linux package suffix and its latest-<platform> tag.
-    name: build (${{ matrix.platform }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows
-            os: windows-2025
-            directory: build-vc180-64
-            container: ''
-          # Two Linux viewers. linux-LTS is built inside Ubuntu 24.04 (glibc
-          # 2.39, GCC 14): a binary needs at least the glibc and libstdc++ it
-          # was built against, so it runs on Ubuntu 24.04 and newer, and the
-          # check below enforces that. 2.39 is the lowest that works: the
-          # prebuilt Mesa/Zink package already needs glibc 2.38. linux is
-          # built directly on GitHub's ubuntu-latest runner with the newest
-          # GCC it ships; its floor follows that runner and is only reported.
-          - platform: linux-LTS
-            os: ubuntu-latest
-            directory: build-linux-x86_64
-            linux_flavor: container
-            package_suffix: ubuntu24.04
-            gcc: '14'
-            max_glibc: '2.39'
-            max_glibcxx: '3.4.33'
-            # The host's preinstalled toolchains are mounted in so that the
-            # disk step below can remove them (the container cannot reach the host otherwise).
-            container:
-              image: ubuntu:24.04
-              volumes:
-                - /usr/local/lib/android:/host-free/usr_local_lib_android
-                - /usr/share/dotnet:/host-free/usr_share_dotnet
-                - /opt/ghc:/host-free/opt_ghc
-                - /usr/local/.ghcup:/host-free/usr_local_.ghcup
-                - /opt/hostedtoolcache/CodeQL:/host-free/opt_hostedtoolcache_CodeQL
-                - /usr/local/share/powershell:/host-free/usr_local_share_powershell
-                - /usr/share/swift:/host-free/usr_share_swift
-                - /usr/local/julia:/host-free/usr_local_julia
-          - platform: linux
-            os: ubuntu-latest
-            directory: build-linux-x86_64
-            linux_flavor: host
-            package_suffix: ubuntu-latest
-            container: ''
-    runs-on: ${{ matrix.os }}
-    container: ${{ matrix.container }}
-    env:
-      # Release packages: vkstorm-release pushes, Second_Life tags, and the manually
-      # dispatched experimental build of vkstorm-canary.
-      VIEWER_BUILD_TYPE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)) && 'Release' || 'RelWithDebInfo' }}
-      VIEWER_PACKAGE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.experimental_release)) && 'ON' || 'OFF' }}
-      AUTOBUILD_ADDRSIZE: 64
-      AUTOBUILD_CONFIGURATION: ReleaseFS_open
-      AUTOBUILD_VSVER: "180"
-      LL_SKIP_REQUIRE_SYSROOT: 1
+  # The build matrix (.github/build-platforms.json) and what this run
+  # publishes, planned by scripts/ci_publish_latest.cjs: pushes build windows
+  # and linux, pull requests also linux-lts; a dispatch builds the platforms
+  # its inputs select.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      builds: ${{ steps.plan.outputs.builds }}
+      release: ${{ steps.plan.outputs.release }}
+      publish: ${{ steps.plan.outputs.publish }}
     steps:
-      # The hosted Ubuntu images leave about 16 GB free on / by the time the
-      # viewer links, and the GCC LTO link of vulkanstorm-bin can need more
-      # ("lto-wrapper: fatal error: write: No space left on device", for
-      # example run 41989168080). Remove preinstalled toolchains this build never
-      # uses. In the ubuntu:24.04 job container (linux-LTS) they are mounted
-      # under /host-free.
-      - name: Free runner disk space for the LTO link
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -uo pipefail
-          echo "Before: $(df -h --output=avail / | tail -1) free on /"
-          if [ -d /host-free ]; then
-            for d in /host-free/*; do find "$d" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true; done
-          else
-            sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/powershell /usr/share/swift /usr/local/julia || true
-            sudo docker image prune --all --force >/dev/null 2>&1 || true
-          fi
-          echo "After: $(df -h --output=avail / | tail -1) free on /"
-
-      # The hosted tool cache's Python is built for the runner's own Ubuntu
-      # and its ssl module need not load in the container, so the container
-      # build uses the container's own Python 3 in a virtual environment.
-      - name: Prepare the Linux build container
-        if: matrix.linux_flavor == 'container'
-        shell: bash
-        run: |
-          set -euo pipefail
-          export DEBIAN_FRONTEND=noninteractive
-          echo "DEBIAN_FRONTEND=noninteractive" >> "$GITHUB_ENV"
-          apt-get -o Acquire::Retries=3 update
-          apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
-            sudo git ca-certificates curl wget file xz-utils bzip2 zstd unzip \
-            make binutils lsb-release procps python3 python3-venv
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          python3 -m venv /opt/vkstorm-python
-          echo /opt/vkstorm-python/bin >> "$GITHUB_PATH"
-          . /etc/os-release
-          echo "Linux build container: $PRETTY_NAME, $(ldd --version | head -n 1), $(python3 --version)" >> "$GITHUB_STEP_SUMMARY"
-
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
-
-      - name: Set source build number
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$(git rev-parse --is-shallow-repository)" != false ]]; then
-            echo "Build numbering requires complete Git history" >&2
-            exit 1
-          fi
-          build_revision=$(git rev-list --count HEAD)
-          [[ "$build_revision" =~ ^[1-9][0-9]*$ ]]
-          # Match BuildVersion.cmake's local Git fallback on both platforms.
-          # Set revision too: it has precedence over AUTOBUILD_BUILD_ID.
-          echo "revision=$build_revision" >> "$GITHUB_ENV"
-          echo "AUTOBUILD_BUILD_ID=$build_revision" >> "$GITHUB_ENV"
-          echo "Source $(git rev-parse HEAD): build $build_revision" >> "$GITHUB_STEP_SUMMARY"
-          # The github.workspace expression names the host path, not where a
-          # container sees the workspace; $GITHUB_WORKSPACE is right in both.
-          echo "AUTOBUILD_VARIABLES_FILE=$GITHUB_WORKSPACE/.build-variables/variables" >> "$GITHUB_ENV"
-          echo "AUTOBUILD_INSTALLABLE_CACHE=$GITHUB_WORKSPACE/.autobuild-installables" >> "$GITHUB_ENV"
-
-      - uses: actions/setup-python@v7
-        if: matrix.linux_flavor != 'container'
-        with:
-          python-version: "3.11"
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        shell: bash
-        env:
-          VKSTORM_GCC: ${{ matrix.gcc }}
-        run: |
-          set -euo pipefail
-          sudo apt-get -o Acquire::Retries=3 update
-          # linux-LTS pins GCC 14 (Ubuntu 24.04's libstdc++). The host build
-          # takes the newest GCC its runner's Ubuntu ships: GCC 14 on 24.04,
-          # GCC 15 on 26.04.
-          gcc=$VKSTORM_GCC
-          if [ -z "$gcc" ]; then
-            for v in 15 14; do
-              if apt-get install -s "gcc-$v" "g++-$v" > /dev/null 2>&1; then gcc=$v; break; fi
-            done
-          fi
-          test -n "$gcc"
-          echo "Linux compiler: gcc-$gcc on $(. /etc/os-release && echo "$PRETTY_NAME")" >> "$GITHUB_STEP_SUMMARY"
-          sudo apt-get -o Acquire::Retries=3 install -y \
-            "gcc-$gcc" "g++-$gcc" build-essential pkg-config \
-            libgl1-mesa-dev libglu1-mesa-dev libpulse-dev libssl-dev \
-            libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype-dev \
-            libunwind-dev libxcursor-dev libxfixes-dev libxft-dev \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            libpipewire-0.3-dev libdbus-1-dev libvlc-dev libosmesa6-dev
-          echo "CC=gcc-$gcc" >> "$GITHUB_ENV"
-          echo "CXX=g++-$gcc" >> "$GITHUB_ENV"
-
-      - name: Checkout locally qualified build variables
-        uses: actions/checkout@v7
-        with:
-          repository: FirestormViewer/fs-build-variables
-          ref: c17312d38377c003977cf5b6dcc83c6042eba194
-          path: .build-variables
           persist-credentials: false
-
-      - name: Install build dependencies
-        run: python -m pip install autobuild==3.10.2 llsd
-
-      # The container's own CMake is 3.28; use the version of the hosted runners.
-      - name: Install CMake in the Linux container
-        if: matrix.linux_flavor == 'container'
-        run: |
-          python -m pip install cmake==4.4.4
-          cmake --version
-
-      - name: Check installer version and payload
-        run: |
-          python scripts/tests/test_inno_payload.py
-          python scripts/tests/test_velopack_version.py
-
-      - name: Check Linux installation scripts
-        if: runner.os == 'Linux'
-        shell: bash
-        run: bash scripts/test_linux_install_scripts.sh
-
-      - name: Install Inno Setup
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: choco install innosetup --yes --no-progress
-
-      - uses: actions/cache@v6
-        with:
-          path: .autobuild-installables
-          key: ${{ runner.os }}-64-ReleaseFS_open-${{ hashFiles('autobuild.xml') }}
-          restore-keys: ${{ runner.os }}-64-ReleaseFS_open-
-
-      - name: Configure viewer
-        shell: bash
+      - id: plan
+        uses: actions/github-script@v9
         env:
-          BUILD_DIRECTORY: ${{ matrix.directory }}
-        run: |
-          set -euo pipefail
-          eval "$(autobuild source_environment -c ReleaseFS_open)"
-          export LL_BUILD
-          options=()
-          if [[ "$RUNNER_OS" == Windows ]]; then
-            # The flags used by the successful local Release build.
-            export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
-            options+=(-G 'Visual Studio 18 2026' -A x64 -DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=ON)
-          else
-            options+=(-DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=OFF)
-          fi
-          {
-            echo 'LL_BUILD<<VKSTORM_LL_BUILD'
-            printf '%s\n' "$LL_BUILD"
-            echo 'VKSTORM_LL_BUILD'
-          } >> "$GITHUB_ENV"
-          cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
-            -DCMAKE_BUILD_TYPE:STRING="$VIEWER_BUILD_TYPE" -DADDRESS_SIZE:STRING=64 \
-            -DPACKAGE:BOOL="$VIEWER_PACKAGE" \
-            -DVIEWER_CHANNEL:STRING=Vulkanstorm-Release -DROOT_PROJECT_NAME:STRING=Firestorm \
-            -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
-            -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
-            -DUSE_KDU:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
-            -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF \
-            -DUSE_AVX2_OPTIMIZATION:BOOL=ON -DUSE_AVX_OPTIMIZATION:BOOL=OFF -DUSE_LTO:BOOL=ON \
-            -DUSE_PRECOMPILED_HEADERS:BOOL=ON -DUSE_DISCORD:BOOL=OFF -DUSE_BUGSPLAT:BOOL=OFF \
-            -DUSE_TRACY:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF \
-            -DLL_TESTS:BOOL=OFF -DRELEASE_CRASH_REPORTING:BOOL=OFF \
-            -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
-          if [[ "$VIEWER_BUILD_TYPE" == Release ]]; then
-            python scripts/ci_release_config.py "$BUILD_DIRECTORY/CMakeCache.txt" "$RUNNER_OS"
-          fi
-          python scripts/ci_viewer_version.py "$BUILD_DIRECTORY/newview/viewer_version.txt"
-
-      - name: Check Linux Mesa provider selection
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get install -y mesa-utils mesa-vulkan-drivers xvfb xauth
-          "$CXX" -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llwindow \
-            indra/llwindow/tests/linux_zink_loader_test.cpp -lGL -lX11 -ldl \
-            -o "$RUNNER_TEMP/linux-zink-loader-test"
-          export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' -print -quit)"
-          test -n "$VK_DRIVER_FILES"
-          export LIBGL_ALWAYS_SOFTWARE=true LIBGL_KOPPER_DRI2=true
-          # No LD_LIBRARY_PATH or LD_PRELOAD entry for Mesa: exercise the viewer loader.
-          xvfb-run -a glxinfo -B > "${{ matrix.directory }}/native-glxinfo.txt"
-          xvfb-run -a "$RUNNER_TEMP/linux-zink-loader-test" \
-            "$GITHUB_WORKSPACE/${{ matrix.directory }}/packages/lib/release/mesa" \
-            | tee "${{ matrix.directory }}/zink-loader-test.txt"
-
-      - name: Compile statistics type coverage before viewer
-        run: |
-          cmake -S indra -B ${{ matrix.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
-          cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel 3
-
-      # The GCC LTO link of vulkanstorm-bin writes its temporary objects to
-      # $TMPDIR. On a 26.04 host /tmp is an 8 GiB tmpfs, which overran
-      # ("lto-wrapper: fatal error: write: Disk quota exceeded", run
-      # 40710871603), so the build uses disk-backed temporary space. A swap
-      # file can only be added outside a container; the container build links
-      # with the host's own 3 GiB swap.
-      - name: Prepare Linux temporary space and swap for the LTO link
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          findmnt -T /tmp || true
-          df -h / /tmp /mnt 2>/dev/null || df -h
-          free -h
-          base="$RUNNER_TEMP"
-          if [ -d /mnt ] && [ "$(df --output=avail -k /mnt | tail -1)" -gt 41943040 ]; then base=/mnt; fi
-          sudo mkdir -p "$base/vkstorm-tmp"
-          sudo chown "$(id -u):$(id -g)" "$base/vkstorm-tmp"
-          echo "TMPDIR=$base/vkstorm-tmp" >> "$GITHUB_ENV"
-          if [ -f /.dockerenv ]; then
-            echo "Building in a container: no swap file added"
-          elif [ "$(df --output=avail -k "$base" | tail -1)" -gt 67108864 ]; then
-            sudo fallocate -l 24G "$base/vkstorm.swap"
-            sudo chmod 600 "$base/vkstorm.swap"
-            sudo mkswap "$base/vkstorm.swap"
-            sudo swapon "$base/vkstorm.swap"
-          else
-            echo "Less than 64 GiB free on $base: no swap file added (24 GiB of swap must leave 40 GiB)"
-          fi
-          free -h
-          echo "TMPDIR for the build: $base/vkstorm-tmp"
-
-      - name: Build viewer and stage runtime
-        run: cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
-
-      # linux-LTS fails if anything built or packaged needs more than Ubuntu
-      # 24.04 has: glibc 2.39, and GLIBCXX_3.4.33 from GCC 14's libstdc++.
-      # The ubuntu-latest build (no limits in its matrix entry) only reports.
-      - name: Check Linux glibc and libstdc++ requirements
-        if: runner.os == 'Linux'
-        shell: bash
-        env:
-          VKSTORM_MAX_GLIBC: ${{ matrix.max_glibc }}
-          VKSTORM_MAX_GLIBCXX: ${{ matrix.max_glibcxx }}
-        run: bash scripts/ci_report_glibc.sh "${{ matrix.directory }}/newview"
-
-      # The two Linux packages would otherwise share one name: give each its
-      # build's suffix (-ubuntu24.04, -ubuntu-latest).
-      - name: Name the Linux package for its build
-        if: runner.os == 'Linux' && env.VIEWER_PACKAGE == 'ON'
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          packages=("${{ matrix.directory }}"/newview/*.tar.xz)
-          test "${#packages[@]}" = 1 || { echo "Expected one Linux package, found ${#packages[@]}" >&2; exit 1; }
-          renamed="${packages[0]%.tar.xz}-${{ matrix.package_suffix }}.tar.xz"
-          mv "${packages[0]}" "$renamed"
-          echo "Linux package: $(basename "$renamed")" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Keep qualification builds free of installers
-        if: env.VIEWER_PACKAGE != 'ON'
-        shell: bash
-        run: |
-          set -euo pipefail
-          if compgen -G '${{ matrix.directory }}/newview/*.tar.xz' || \
-             compgen -G '${{ matrix.directory }}/newview/RelWithDebInfo/*_Setup.exe'; then
-            echo 'Qualification builds must stage the viewer without producing an installer.' >&2
-            exit 1
-          fi
-
-      - name: Run statistics, script metadata, transport, TLS and physics decomposition regression tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          cmake -S indra -B "${{ matrix.directory }}" -DLL_TESTS:BOOL=ON
-          cmake --build "${{ matrix.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
-            --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver INTEGRATION_TEST_llmodel_decomposition \
-            INTEGRATION_TEST_llcorehttp
-          # The TLS test: this line's test helpers register tests with CTest,
-          # so run it here, and fail unless it is found. The credential-store
-          # tests are not built on this line: llsechandler_basic_test.cpp no
-          # longer compiles against its LLCredential (no getGrid()).
-          runners='llcorehttp'
-          want=1
-          tests="^INTEGRATION_TEST_RUNNER_($runners)$"
-          found=$(ctest --test-dir "${{ matrix.directory }}" -C "$VIEWER_BUILD_TYPE" -N -R "$tests" | sed -n 's/^Total Tests: //p')
-          test "$found" = "$want" || { echo "expected $want tests, CTest found ${found:-none}"; exit 1; }
-          ctest --test-dir "${{ matrix.directory }}" -C "$VIEWER_BUILD_TYPE" -R "$tests" --output-on-failure
-
-      - name: Check packaged Linux Mesa runtime
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f "${{ matrix.directory }}/newview/packaged/licenses/mesazink.txt"
-          export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' -print -quit)"
-          export LIBGL_ALWAYS_SOFTWARE=true LIBGL_KOPPER_DRI2=true
-          xvfb-run -a "$RUNNER_TEMP/linux-zink-loader-test" \
-            "$GITHUB_WORKSPACE/${{ matrix.directory }}/newview/packaged/lib/mesa" \
-            | tee "${{ matrix.directory }}/zink-packaged-test.txt"
-
-      - name: Upload installer
-        if: env.VIEWER_PACKAGE == 'ON'
-        uses: actions/upload-artifact@v7
+          INPUTS: ${{ toJSON(inputs) }}
         with:
-          name: ${{ matrix.platform }}-installer
-          if-no-files-found: error
-          path: |
-            ${{ matrix.directory }}/newview/Release/*_Setup.exe
-            ${{ matrix.directory }}/newview/*.tar.xz
+          script: |
+            const { plan } = require('./scripts/ci_publish_latest.cjs');
+            const result = plan({
+              eventName: context.eventName, ref: context.ref, repository: `${context.repo.owner}/${context.repo.repo}`,
+              inputs: JSON.parse(process.env.INPUTS || 'null'),
+            });
+            core.setOutput('matrix', JSON.stringify(result.matrix));
+            core.setOutput('builds', String(result.matrix.include.length));
+            core.setOutput('release', String(result.release));
+            core.setOutput('publish', JSON.stringify(result.publish));
+            core.info(JSON.stringify(result, null, 2));
 
-      - name: Upload qualification viewer
-        if: env.VIEWER_PACKAGE != 'ON'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.platform }}-qualification-viewer
-          if-no-files-found: error
-          path: |
-            ${{ matrix.directory }}/newview/RelWithDebInfo/
-            ${{ matrix.directory }}/newview/packaged/
-
-      - name: Upload build evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.platform }}-build-evidence
-          path: |
-            ${{ matrix.directory }}/CMakeCache.txt
-            ${{ matrix.directory }}/CMakeFiles/CMakeConfigureLog.yaml
-            ${{ matrix.directory }}/packages/autobuild-package.xml
-            ${{ matrix.directory }}/packages/installed-packages.xml
-            ${{ matrix.directory }}/*glxinfo.txt
-            ${{ matrix.directory }}/zink-*-test.txt
-            ${{ matrix.directory }}/newview/viewer_version.txt
-
-  # Each platform advances its own tag when its own build succeeds:
-  # latest-windows, latest-linux-LTS (the ubuntu:24.04 build) and latest-linux
-  # (the ubuntu-latest build). None waits for another platform's success, and
-  # each release carries only its own platform's package.
-  latest:
-    # PR builds validate changes but must never publish release binaries.
-    if: >-
-      !cancelled() &&
-      github.repository == 'anne-skydancer/vulkanstorm' &&
-      github.ref == 'refs/heads/vkstorm-release' &&
-      contains(fromJSON('["push", "workflow_dispatch", "schedule"]'), github.event_name)
-    needs: build
+  build:
+    needs: [check-publication, plan]
+    if: needs.plan.outputs.builds != '0'
     strategy:
       fail-fast: false
-      matrix:
-        platform: [windows, linux-LTS, linux]
-    runs-on: ubuntu-latest
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    # Checks read "<platform> / build" and "<platform> / publish".
+    name: ${{ matrix.platform }}
+    uses: ./.github/workflows/viewer-platform.yaml
+    # Only its publish job writes; its build job reads.
     permissions:
       contents: write
-      actions: read
-    concurrency:
-      group: vulkanstorm-latest-${{ matrix.platform }}
-      cancel-in-progress: false
-    env:
-      PLATFORM: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - name: Check that this platform's build succeeded
-        id: built
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const { buildSucceeded } = require('./scripts/ci_publish_latest.cjs');
-            core.setOutput('ok', String(await buildSucceeded({ github, context, core, platform: process.env.PLATFORM })));
-      - uses: actions/download-artifact@v8
-        if: steps.built.outputs.ok == 'true'
-        with:
-          name: ${{ matrix.platform }}-installer
-          path: installers/${{ matrix.platform }}-installer
-      - name: Publish and advance latest-${{ matrix.platform }}
-        if: steps.built.outputs.ok == 'true'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const publish = require('./scripts/ci_publish_latest.cjs');
-            await publish({ github, context, core, directory: 'installers', channel: publish.channels.latest[process.env.PLATFORM] });
+    with:
+      entry: ${{ toJSON(matrix) }}
+      release: ${{ needs.plan.outputs.release == 'true' }}
+      tag: ${{ matrix.tag }}
 
-  experimental:
-    # The manually dispatched Release build of vkstorm-canary: each platform
-    # publishes its own experimental-<platform> pre-release and moves its tag
-    # when its own build succeeds. It never publishes to any latest-* tag
-    # (canary builds must not advance latest).
-    if: >-
-      !cancelled() &&
-      github.repository == 'anne-skydancer/vulkanstorm' &&
-      github.ref == 'refs/heads/vkstorm-canary' &&
-      github.event_name == 'workflow_dispatch' && inputs.experimental_release
-    needs: build
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [windows, linux-LTS, linux]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: read
-    concurrency:
-      group: vulkanstorm-experimental-${{ matrix.platform }}
-      cancel-in-progress: false
-    env:
-      PLATFORM: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - name: Check that this platform's build succeeded
-        id: built
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const { buildSucceeded } = require('./scripts/ci_publish_latest.cjs');
-            core.setOutput('ok', String(await buildSucceeded({ github, context, core, platform: process.env.PLATFORM })));
-      - uses: actions/download-artifact@v8
-        if: steps.built.outputs.ok == 'true'
-        with:
-          name: ${{ matrix.platform }}-installer
-          path: installers/${{ matrix.platform }}-installer
-      - name: Publish and move experimental-${{ matrix.platform }}
-        if: steps.built.outputs.ok == 'true'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const publish = require('./scripts/ci_publish_latest.cjs');
-            await publish({ github, context, core, directory: 'installers', channel: publish.channels.experimental[process.env.PLATFORM] });
+  # Publication happens in viewer-platform.yaml, per platform: each platform
+  # advances its own tag once its own build succeeded.
+  #   vkstorm-release: windows-latest and linux-latest on every push; linux-lts
+  #     (and the others) on a dispatch with publish.
+  #   vkstorm-canary: experimental-<platform>, vkstorm-devel: preview-<platform>,
+  #     both only on a dispatch with publish.
+  # Pull requests build windows, linux and linux-lts and never publish.
+  # stable and oldstable are promoted from the vkstorm-release tags by
+  # promote-stable.yaml.
 
   release:
-    # A Second_Life tag's release takes each platform's package whose build
-    # succeeded; a failed platform does not hold back the others.
+    # A Second_Life tag's release takes each package whose build succeeded; a
+    # failed platform does not hold back the other.
     if: ${{ !cancelled() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/Second_Life') }}
     needs: build
     runs-on: ubuntu-latest
@@ -567,7 +148,7 @@ jobs:
         with:
           script: |
             const { buildSucceeded } = require('./scripts/ci_publish_latest.cjs');
-            for (const platform of ['windows', 'linux-LTS', 'linux']) {
+            for (const platform of ['windows', 'linux']) {
               core.setOutput(platform, String(await buildSucceeded({ github, context, core, platform })));
             }
       - uses: actions/download-artifact@v8
@@ -581,13 +162,6 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: installers/windows-installer/Release/*_Setup.exe
-      - uses: secondlife-3p/action-gh-release@v1
-        if: steps.built.outputs.linux-LTS == 'true'
-        with:
-          prerelease: true
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          files: installers/linux-LTS-installer/*-ubuntu24.04.tar.xz
       - uses: secondlife-3p/action-gh-release@v1
         if: steps.built.outputs.linux == 'true'
         with:
