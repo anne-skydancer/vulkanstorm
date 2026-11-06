@@ -83,6 +83,9 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       builds: ${{ steps.plan.outputs.builds }}
+      entry_windows: ${{ steps.plan.outputs.entry_windows }}
+      entry_linux_lts: ${{ steps.plan.outputs.entry_linux_lts }}
+      entry_linux: ${{ steps.plan.outputs.entry_linux }}
       release: ${{ steps.plan.outputs.release }}
       publish: ${{ steps.plan.outputs.publish }}
     steps:
@@ -103,26 +106,59 @@ jobs:
             });
             core.setOutput('matrix', JSON.stringify(result.matrix));
             core.setOutput('builds', String(result.matrix.include.length));
+            // One output per platform job: its matrix entry as JSON, empty when not built.
+            for (const [platform, output] of [['windows', 'entry_windows'], ['linux-lts', 'entry_linux_lts'], ['linux', 'entry_linux']]) {
+              const entry = result.matrix.include.find(entry => entry.platform === platform);
+              core.setOutput(output, entry ? JSON.stringify(entry) : '');
+            }
             core.setOutput('release', String(result.release));
             core.setOutput('publish', JSON.stringify(result.publish));
             core.info(JSON.stringify(result, null, 2));
 
-  build:
+  # The platform builds run one after another, never side by side: windows,
+  # then linux-lts, then linux (owner's rule). The order is sequencing only:
+  # each later build runs whether an earlier one succeeded, failed or was
+  # not selected (!cancelled()), and each platform's publish job (inside its
+  # viewer-platform.yaml call) needs only that platform's build. Checks read
+  # "<platform> / build" and "<platform> / publish <tag>".
+  windows:
+    name: windows
     needs: [check-publication, plan]
-    if: needs.plan.outputs.builds != '0'
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
-    # Checks read "<platform> / build" and "<platform> / publish".
-    name: ${{ matrix.platform }}
+    if: needs.plan.outputs.entry_windows != ''
     uses: ./.github/workflows/viewer-platform.yaml
     # Only its publish job writes; its build job reads.
     permissions:
       contents: write
     with:
-      entry: ${{ toJSON(matrix) }}
+      entry: ${{ needs.plan.outputs.entry_windows }}
       release: ${{ needs.plan.outputs.release == 'true' }}
-      tag: ${{ matrix.tag }}
+      tag: ${{ fromJSON(needs.plan.outputs.entry_windows).tag }}
+
+  linux-lts:
+    name: linux-lts
+    needs: [check-publication, plan, windows]
+    if: ${{ !cancelled() && needs.check-publication.result == 'success' && needs.plan.result == 'success' && needs.plan.outputs.entry_linux_lts != '' }}
+    uses: ./.github/workflows/viewer-platform.yaml
+    # Only its publish job writes; its build job reads.
+    permissions:
+      contents: write
+    with:
+      entry: ${{ needs.plan.outputs.entry_linux_lts }}
+      release: ${{ needs.plan.outputs.release == 'true' }}
+      tag: ${{ fromJSON(needs.plan.outputs.entry_linux_lts).tag }}
+
+  linux:
+    name: linux
+    needs: [check-publication, plan, linux-lts]
+    if: ${{ !cancelled() && needs.check-publication.result == 'success' && needs.plan.result == 'success' && needs.plan.outputs.entry_linux != '' }}
+    uses: ./.github/workflows/viewer-platform.yaml
+    # Only its publish job writes; its build job reads.
+    permissions:
+      contents: write
+    with:
+      entry: ${{ needs.plan.outputs.entry_linux }}
+      release: ${{ needs.plan.outputs.release == 'true' }}
+      tag: ${{ fromJSON(needs.plan.outputs.entry_linux).tag }}
 
   # Publication happens in viewer-platform.yaml, per platform: each platform
   # advances its own tag once its own build succeeded.
@@ -138,7 +174,7 @@ jobs:
     # A Second_Life tag's release takes each package whose build succeeded; a
     # failed platform does not hold back the other.
     if: ${{ !cancelled() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/Second_Life') }}
-    needs: build
+    needs: [windows, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write

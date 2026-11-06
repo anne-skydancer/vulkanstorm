@@ -12,8 +12,14 @@ failed or skipped platform never holds back another.
 plans `build.yaml`'s matrix and publication from it. `build.yaml` calls
 `viewer-platform.yaml` once per platform. That workflow builds the platform
 (check `<platform> / build`) and, when the plan gives it a tag, publishes it
-(`<platform> / publish`). Each publish job waits only for its own platform's
-build.
+(`<platform> / publish <tag>`). Each publish job waits only for its own
+platform's build.
+
+The builds run one after another, never side by side: `windows`, then
+`linux-lts`, then `linux`; a release push (no `linux-lts`) builds `windows`,
+then `linux`. The order is sequencing only: a later build runs whether an
+earlier one succeeded, failed or was not selected. A run therefore takes
+about the sum of its builds, not the longest one.
 
 | Platform | Built | Package | Floor |
 |---|---|---|---|
