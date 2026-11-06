@@ -766,18 +766,14 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     }
     if (cpolicy.mPipelining > 1L)
     {
-        // <Vulkanstorm> A deep-queue class runs per-host limit x depth
-        // transfers at once (HttpPolicyClass::activeLimit()). libcurl 7.62
-        // and later have no HTTP/1.1 pipelining, so they share the link side
-        // by side instead of queueing on a few connections, and the last
-        // one still finishes no sooner than the last of a pipeline did: the
-        // transfer timeout stays doubled (BUG-7698, BUG-7688, BUG-7694: a
-        // CDN with service issues can stall a request for as long as
-        // CURLOPT_TIMEOUT allows; short enough to retry, long enough for a
-        // full queue). libcurl's default HTTP version negotiates h2 over TLS
-        // only; where it does, wait for a stream on an open connection
-        // rather than opening another. The VIEWERASSET test switch to
-        // HTTP/2 is gone. </Vulkanstorm>
+        // <Vulkanstorm> A deep-queue class keeps the doubled transfer
+        // timeout it had under HTTP/1.1 pipelining (BUG-7698, BUG-7688,
+        // BUG-7694: a CDN with service issues can stall a request for as
+        // long as CURLOPT_TIMEOUT allows; short enough to retry, long enough
+        // for a full queue), so no request times out sooner than before.
+        // It runs one request per connection (HttpPolicyClass::activeLimit());
+        // PIPEWAIT only matters if a request ever negotiates h2. The
+        // VIEWERASSET test switch to HTTP/2 is gone. </Vulkanstorm>
         xfer_timeout *= 2L;
         check_curl_easy_setopt(mCurlHandle, CURLOPT_PIPEWAIT, 1L);
     }
