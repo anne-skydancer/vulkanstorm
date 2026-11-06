@@ -592,11 +592,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>a51f78c2aebebd01c1ba649fe351112f69ddfdf4</string>
+              <string>ed7492c4d45f785ad0812b2b0e1744fc96331080</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v7.54.1-vks1/curl-7.54.1-42123686455-linux64-42123686455.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v8.23.0.1/curl-8.23.0.1-linux64-42165727760.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -606,11 +606,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>6091689a1e9c6cbf4e38d6b5fc52b70f30d02278</string>
+              <string>7a675d176484817d8dbf9f9815107d37299bd38f</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v7.54.1-vks1/curl-7.54.1-42123686455-windows64-42123686455.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v8.23.0.1/curl-8.23.0.1-windows64-42165727760.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -621,13 +621,13 @@
         <key>license_file</key>
         <string>LICENSES/curl.txt</string>
         <key>copyright</key>
-        <string>Copyright (c) 1996 - 2014, Daniel Stenberg, (daniel@haxx.se).</string>
+        <string>Copyright (c) 1996 - 2026, Daniel Stenberg, &lt;daniel@haxx.se&gt;, and many contributors</string>
         <key>version</key>
-        <string>7.54.1-42123686455</string>
+        <string>8.23.0.1</string>
         <key>name</key>
         <string>curl</string>
         <key>description</key>
-        <string>Library for transferring data specified with URL syntax</string>
+        <string>libcurl 8.23.0: HTTP and HTTPS client library, static, OpenSSL 3.5, nghttp2, zlib-ng</string>
       </map>
       <key>dictionaries</key>
       <map>
