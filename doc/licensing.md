@@ -29,7 +29,7 @@ open point is resolved here too (GLOD has been removed). This line has no GPL-on
    Licence.]". The FSF lists that combination as GPL-incompatible, and
    GPL-3.0's System Library exception does not cover a copy the viewer
    bundles itself, so the binaries could not be offered under GPL-3.0. The
-   viewer now links OpenSSL 3.5.9 (`openssl 3.5.9.3`, built by
+   viewer now links OpenSSL 3.5.9 (`openssl 3.5.9.1`, built by
    [anne-skydancer/3p-openssl](https://github.com/anne-skydancer/3p-openssl)),
    statically into the viewer as before (through `llcorehttp`, libcurl and
    the viewer itself). OpenSSL 3.x is under the **Apache License 2.0**,
