@@ -48,8 +48,9 @@ uint st_hash(uint v)
 }
 
 // The whole S-bit mask of a fragment of alpha a: the seed is the face's identity and the
-// triangle, which rotate the pixel's two values (the dither of R and the choice of the subset),
-// so the noise is a field fixed in screen space and uncorrelated between fragments.
+// triangle, which rotate the pixel's value for the dither of R; the choice of the subset is hashed
+// from the seed and the pixel, so the noise is a field fixed in screen space and uncorrelated
+// between fragments.
 uint st_mask(float a)
 {
     uint seed = st_hash(uint(st_seed) * 0x9e3779b9u + 0x7f4a7c15u);
@@ -64,6 +65,11 @@ uint st_mask(float a)
     vec2 pv = vec2(float(h >> 8u), float(st_hash(h) >> 8u)) / 16777216.0;
     vec2 rot = vec2(float(seed >> 8u), float(st_hash(seed) >> 8u)) / 16777216.0;
     vec2 v = fract(pv + rot);
+    // the subset is hashed from the layer's seed and the pixel, whatever the pixel values: two
+    // layers whose rotations met on one table index would otherwise share a subset over their
+    // whole overlap, and the layers behind them would see too few covered samples (the Aurora
+    // Viewer's fix of 2026-11-06, the author's own: object.wgsl st_mask)
+    v.y = float(st_hash(seed ^ h ^ 0x5bd1e995u) >> 8u) / 16777216.0;
     uint s = uint(st_samples);
     uint r = min(uint(floor(clamp(a, 0.0, 1.0) * float(s) + v.x)), s);
     uint column = min(uint(v.y * float(ST_SEEDS)), ST_SEEDS - 1u);
