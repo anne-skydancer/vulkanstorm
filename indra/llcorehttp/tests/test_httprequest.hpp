@@ -3137,7 +3137,7 @@ void HttpRequestTestObjectType::test<24>()
 {
     ScopedCurlInit ready;
 
-    set_test_name("HttpRequest GET with gzip, deflate and unknown Content-Encoding");
+    set_test_name("HttpRequest GET with gzip (gzip or zlib wrapper, several members, trailing bytes), deflate and unknown Content-Encoding");
 
     std::string text;
     for (int i(0); i < 40; ++i)
@@ -3158,6 +3158,9 @@ void HttpRequestTestObjectType::test<24>()
         struct Case { const char * path; bool ok; bool decoded; };
         const Case cases[] = {
             { "/encoding/gzip/", true, true },
+            { "/encoding/gzipzlib/", true, true },
+            { "/encoding/gzipmulti/", true, true },
+            { "/encoding/gziptrail/", true, true },
             { "/encoding/deflate/", true, true },
             { "/encoding/rawdeflate/", true, true },
             { "/encoding/binary/", true, false },
