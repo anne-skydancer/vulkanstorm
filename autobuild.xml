@@ -592,11 +592,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>3465bbe70cfba2814b1fd52094c62804f4067490</string>
+              <string>a51f78c2aebebd01c1ba649fe351112f69ddfdf4</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-curl/releases/download/v7.54.1-r4/curl-7.54.1-20982000504-linux64-20982000504.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v7.54.1-vks1/curl-7.54.1-42123686455-linux64-42123686455.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -606,11 +606,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>0e64e20945eeb19259abf8e78400eb492e31eda7</string>
+              <string>6091689a1e9c6cbf4e38d6b5fc52b70f30d02278</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-curl/releases/download/v7.54.1-r4/curl-7.54.1-20982000504-windows64-20982000504.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v7.54.1-vks1/curl-7.54.1-42123686455-windows64-42123686455.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -623,7 +623,7 @@
         <key>copyright</key>
         <string>Copyright (c) 1996 - 2014, Daniel Stenberg, (daniel@haxx.se).</string>
         <key>version</key>
-        <string>7.54.1-20982000504</string>
+        <string>7.54.1-42123686455</string>
         <key>name</key>
         <string>curl</string>
         <key>description</key>
@@ -2370,11 +2370,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>d83a1e910762b792c90550ce2b8f51f9aaec7570</string>
+              <string>183d0d51ccea8a18b1b50fc180fc5961fe747e3f</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-openssl/releases/download/v1.1.1w-r4/openssl-1.1.1w-r4-linux64-20981673556.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-openssl/releases/download/v3.5.9.1/openssl-3.5.9.1-linux64-42117119543.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -2384,28 +2384,28 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>eec78c22e2d1eecf375aa0c6eff08fe67d2316f4</string>
+              <string>4971c6c1faf08cf172fe6ce7cd2854c23a1ef085</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-openssl/releases/download/v1.1.1w-r4/openssl-1.1.1w-r4-windows64-20981673556.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-openssl/releases/download/v3.5.9.1/openssl-3.5.9.1-windows64-42117119543.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
           </map>
         </map>
         <key>license</key>
-        <string>openssl</string>
+        <string>Apache-2.0</string>
         <key>license_file</key>
         <string>LICENSES/openssl.txt</string>
         <key>copyright</key>
-        <string>Copyright (c) 1998-2011 The OpenSSL Project.  All rights reserved; Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)</string>
+        <string>Copyright (c) 1998-2026 The OpenSSL Project Authors; Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson</string>
         <key>version</key>
-        <string>1.1.1w-r4</string>
+        <string>3.5.9.1</string>
         <key>name</key>
         <string>openssl</string>
         <key>description</key>
-        <string>Secure Sockets Layer (SSL v2/v3) and Transport Layer Security (TLS v1) Library</string>
+        <string>OpenSSL 3.5 LTS: Transport Layer Security (TLS) and cryptography library, static, legacy provider built in</string>
       </map>
       <key>openxr</key>
       <map>

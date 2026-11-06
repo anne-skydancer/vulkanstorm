@@ -48,7 +48,6 @@
 #include "llcleanup.h"
 
 #include <curl/curl.h>
-#include <openssl/crypto.h>
 
 // [SL:KB] - Patch: Viewer-CrashLookup | Checked: 2011-03-24 (Catznip-2.6.0a) | Added: Catznip-2.6.0a
 #ifdef LL_WINDOWS
@@ -64,9 +63,6 @@ void trimSLLog(std::string& sllog);
 std::string getFormDataField(const std::string& strFieldName, const std::string& strFieldValue, const std::string& strBoundary);
 std::string getStartupStateFromLog(std::string& sllog);
 // </FS:CR>
-
-int LLCrashLogger::ssl_mutex_count = 0;
-LLCoreInt::HttpMutex ** LLCrashLogger::ssl_mutex_list = NULL;
 
 #define CRASH_UPLOAD_RETRIES 3 /* seconds */
 #define CRASH_UPLOAD_TIMEOUT 180 /* seconds */
@@ -766,57 +762,14 @@ void LLCrashLogger::commonCleanup()
 
 void LLCrashLogger::init_curl()
 {
+    // <Vulkanstorm> OpenSSL 1.1 and later lock internally; the 1.0-era
+    // CRYPTO_set_locking_callback() and CRYPTO_THREADID callbacks this used
+    // to install have been no-op macros since 1.1.0. </Vulkanstorm>
     curl_global_init(CURL_GLOBAL_ALL);
-
-    ssl_mutex_count = CRYPTO_num_locks();
-    if (ssl_mutex_count > 0)
-    {
-        ssl_mutex_list = new LLCoreInt::HttpMutex *[ssl_mutex_count];
-
-        for (int i(0); i < ssl_mutex_count; ++i)
-        {
-            ssl_mutex_list[i] = new LLCoreInt::HttpMutex;
-        }
-
-        CRYPTO_set_locking_callback(ssl_locking_callback);
-        (void)CRYPTO_THREADID_set_callback(ssl_thread_id_callback);
-    }
 }
 
 
 void LLCrashLogger::term_curl()
 {
-    CRYPTO_set_locking_callback(NULL);
-    for (int i(0); i < ssl_mutex_count; ++i)
-    {
-        delete ssl_mutex_list[i];
-    }
-    delete[] ssl_mutex_list;
-}
-
-
-void LLCrashLogger::ssl_thread_id_callback(CRYPTO_THREADID* pthreadid)
-{
-#if LL_WINDOWS
-    CRYPTO_THREADID_set_pointer(pthreadid, GetCurrentThread());
-#else
-    CRYPTO_THREADID_set_pointer(pthreadid, reinterpret_cast<void*>(pthread_self()));
-#endif
-}
-
-
-void LLCrashLogger::ssl_locking_callback(int mode, int type, const char * /* file */, int /* line */)
-{
-    if (type >= 0 && type < ssl_mutex_count)
-    {
-        if (mode & CRYPTO_LOCK)
-        {
-            ssl_mutex_list[type]->lock();
-        }
-        else
-        {
-            ssl_mutex_list[type]->unlock();
-        }
-    }
 }
 
