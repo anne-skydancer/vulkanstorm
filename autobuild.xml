@@ -592,11 +592,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>11379fc47568e2e738e8beaf65c9d2cd77d44ee7</string>
+              <string>a51f78c2aebebd01c1ba649fe351112f69ddfdf4</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v7.54.1-vks2/curl-7.54.1-42287708560-linux64-42287708560.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v7.54.1-vks1/curl-7.54.1-42123686455-linux64-42123686455.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -606,11 +606,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>f91b8e44b32c624e535ada9fa0da2af8cdf05903</string>
+              <string>6091689a1e9c6cbf4e38d6b5fc52b70f30d02278</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v7.54.1-vks2/curl-7.54.1-42287708560-windows64-42287708560.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v7.54.1-vks1/curl-7.54.1-42123686455-windows64-42123686455.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -623,7 +623,7 @@
         <key>copyright</key>
         <string>Copyright (c) 1996 - 2014, Daniel Stenberg, (daniel@haxx.se).</string>
         <key>version</key>
-        <string>7.54.1-42287708560</string>
+        <string>7.54.1-42123686455</string>
         <key>name</key>
         <string>curl</string>
         <key>description</key>
@@ -1687,11 +1687,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>73236d8dd12ab0aa8c3a93c81765fe4ad5da837d32609c05c45f5f3e7a584cad</string>
+              <string>b72941b0cf61be2757e16b3fe30fe2f5eff154579417216a580dfd4fc01ccf34</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-soloud/releases/download/v202002-e82fd32c1f-5/soloud-202002.e82fd32c1f.vulkanstorm5-linux64-42293956310.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-soloud/releases/download/v202002-e82fd32c1f-3/soloud-202002.e82fd32c1f.vulkanstorm3-linux64-35538098924.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -1701,11 +1701,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>bc1578c01cba6ac2585d3984eac890ad5c2d43a5e967acdb020450551dc49735</string>
+              <string>635d4026712129471bf98df4fc2a1d26e96a7737f653ca0ec54994bab81638d8</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-soloud/releases/download/v202002-e82fd32c1f-5/soloud-202002.e82fd32c1f.vulkanstorm5-windows64-42293956310.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-soloud/releases/download/v202002-e82fd32c1f-3/soloud-202002.e82fd32c1f.vulkanstorm3-windows64-35538098924.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -1718,7 +1718,7 @@
         <key>copyright</key>
         <string>Copyright (c) 2013-2020 Jari Komppa</string>
         <key>version</key>
-        <string>202002.e82fd32c1f.vulkanstorm5</string>
+        <string>202002.e82fd32c1f.vulkanstorm3</string>
         <key>name</key>
         <string>soloud</string>
         <key>canonical_repo</key>
@@ -2238,11 +2238,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>62ddf06ff25f40a9378e4c529508fcabdb32ec2832c1892be62e170b19ac1a85</string>
+              <string>8ea80dacdf0cbaef8aa202986cf9f37fb23cec0b7bed8e5a1c51cce3ded6e649</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-openjpeg/releases/download/v2.5.4-cpu-avx2.3/openjpeg-2.5.4.42293961644-linux64-42293961644.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-openjpeg/releases/download/v2.5.4-cpu-avx2.1/openjpeg-2.5.4.37071874243-linux64-37071874243.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -2252,11 +2252,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>d751044dca6259d37adcf8703f4d89f4d860d1757e9d08335397674ac0c97379</string>
+              <string>c810217c22f2352bdce7c4eb7477d53fe53825f6947cfd2819b2ea4a1cdb3d20</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-openjpeg/releases/download/v2.5.4-cpu-avx2.3/openjpeg-2.5.4.42293961644-windows64-42293961644.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-openjpeg/releases/download/v2.5.4-cpu-avx2.1/openjpeg-2.5.4.37071874243-windows64-37071874243.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -2269,7 +2269,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <key>copyright</key>
         <string>Copyright (c) 2002-2007, Communications and Remote Sensing Laboratory, Universite catholique de Louvain (UCL), Belgium; Copyright (c) 2002-2007, Professor Benoit Macq; Copyright (c) 2001-2003, David Janssens; Copyright (c) 2002-2003, Yannick Verschueren; Copyright (c) 2003-2007, Francois-Olivier Devaux and Antonin Descampe; Copyright (c) 2005, Herve Drolon, FreeImage Team; Copyright (c) 2006-2007, Parvatha Elangovan; Copyright (c) 2008, Jerome Fimes, Communications &amp; Systemes &lt;jerome.fimes@c-s.fr&gt;; Copyright (c) 2010-2011, Kaori Hagihara; Copyright (c) 2011-2012, Centre National d'Etudes Spatiales (CNES), France; Copyright (c) 2012, CS Systemes d'Information, France;</string>
         <key>version</key>
-        <string>2.5.4.42293961644</string>
+        <string>2.5.4.37071874243</string>
         <key>name</key>
         <string>openjpeg</string>
         <key>description</key>
@@ -2298,11 +2298,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>3f24145d422fe2eceacb8e40b4e0f037c87b891f</string>
+              <string>183d0d51ccea8a18b1b50fc180fc5961fe747e3f</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-openssl/releases/download/v3.5.9.2/openssl-3.5.9.2-linux64-42282004860.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-openssl/releases/download/v3.5.9.1/openssl-3.5.9.1-linux64-42117119543.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -2312,11 +2312,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>dedee0a08a7eed1b0e56fdcb1b3e20f5a8ec0931</string>
+              <string>4971c6c1faf08cf172fe6ce7cd2854c23a1ef085</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-openssl/releases/download/v3.5.9.2/openssl-3.5.9.2-windows64-42282004860.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-openssl/releases/download/v3.5.9.1/openssl-3.5.9.1-windows64-42117119543.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -2329,7 +2329,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <key>copyright</key>
         <string>Copyright (c) 1998-2026 The OpenSSL Project Authors; Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson</string>
         <key>version</key>
-        <string>3.5.9.2</string>
+        <string>3.5.9.1</string>
         <key>name</key>
         <string>openssl</string>
         <key>description</key>
