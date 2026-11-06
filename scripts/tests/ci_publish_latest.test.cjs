@@ -209,9 +209,9 @@ test('planPlatform: each platform workflow plans its own build and tag', () => {
     assert.deepEqual([pr.tag, pr.release, pr.entry.platform, pr.entry.container.image], ['', false, 'linux-lts', 'ubuntu:24.04']);
     assert.equal(at('push', 'refs/heads/vkstorm-rust', 'linux').tag, '');
     assert.equal(planPlatform({ eventName: 'push', ref: 'refs/heads/vkstorm-release', repository: 'someone/fork', platform: 'windows' }).tag, '');
-    // Second_Life tags build Release packages for their own release, no channel tag.
-    const tagged = at('push', 'refs/tags/Second_Life_Release#1', 'windows');
-    assert.deepEqual([tagged.release, tagged.tag], [true, '']);
+    // A tag never builds a Release package or publishes.
+    const tagged = at('push', 'refs/tags/v1', 'windows');
+    assert.deepEqual([tagged.release, tagged.tag], [false, '']);
     assert.equal(at('push', 'refs/heads/vkstorm-release', 'linux').entry.os, 'ubuntu-26.04');
     assert.throws(() => at('push', 'refs/heads/vkstorm-release', 'freebsd'));
 });

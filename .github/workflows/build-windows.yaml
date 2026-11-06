@@ -5,8 +5,8 @@
 # Publishes windows-latest on every vkstorm-release push; on a dispatch with
 # publish, windows-latest (vkstorm-release), experimental-windows (canary) or
 # preview-windows (devel).
-# Its own workflow, so that it publishes the moment its build finishes,
-# whatever the other platforms do. The build steps are shared in
+# One workflow per platform, so that it publishes the moment its build
+# finishes, whatever the other platforms do. It runs the shared build steps,
 # .github/actions/viewer-build; the platform's data is in
 # .github/build-platforms.json; doc/release_channels.md describes the tags.
 name: Build Windows
@@ -14,10 +14,10 @@ name: Build Windows
 on:
   pull_request:
   # Feature branches build through their pull request only, so one commit
-  # never builds twice; pushes build the vkstorm-* lines and Second_Life tags.
+  # never builds twice; pushes build the vkstorm-* lines. No tag triggers a
+  # build.
   push:
     branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-vulkan-rhi", "vkstorm-vulkan-direct", "vkstorm-rust", "vkstorm-aleph"]
-    tags: ["Second_Life*"]
   workflow_dispatch:
     inputs:
       publish:
@@ -33,12 +33,12 @@ permissions:
 
 # One run per pull request or line: a new push cancels the previous run.
 # Not on vkstorm-release (its pushes publish; a newer push queues behind
-# the running one) or tags, and each dispatch has a group of its own, so a
+# the running one), and each dispatch has a group of its own, so a
 # publication is never cancelled half-way. The publish job also holds its
 # tag's lock.
 concurrency:
   group: build-windows-${{ github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/vkstorm-release' && !startsWith(github.ref, 'refs/tags/')) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/vkstorm-release') }}
 
 jobs:
   # The repository checks, and this run's plan (scripts/ci_publish_latest.cjs
@@ -129,23 +129,3 @@ jobs:
               throw new Error(`${process.env.TAG} is not a channel of ${process.env.PLATFORM}`);
             }
             await publish({ github, context, core, directory: 'installers', channel });
-
-  # A Second_Life tag's release takes this platform's package once its build
-  # succeeded; the other platform's workflow adds its own.
-  release:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/Second_Life')
-    needs: windows
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: windows-installer
-          path: installers/windows-installer
-      - uses: secondlife-3p/action-gh-release@v1
-        with:
-          prerelease: true
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          files: installers/windows-installer/Release/*_Setup.exe

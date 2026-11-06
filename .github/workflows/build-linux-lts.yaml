@@ -6,8 +6,8 @@
 # 2.39 / GLIBCXX_3.4.33 at most. Builds on every pull request; publishes
 # only on a dispatch with publish: linux-lts (vkstorm-release),
 # experimental-linux-lts (canary) or preview-linux-lts (devel).
-# Its own workflow, so that it publishes the moment its build finishes,
-# whatever the other platforms do. The build steps are shared in
+# One workflow per platform, so that it publishes the moment its build
+# finishes, whatever the other platforms do. It runs the shared build steps,
 # .github/actions/viewer-build; the platform's data is in
 # .github/build-platforms.json; doc/release_channels.md describes the tags.
 name: Build Linux LTS
@@ -29,12 +29,12 @@ permissions:
 
 # One run per pull request or line: a new push cancels the previous run.
 # Not on vkstorm-release (its pushes publish; a newer push queues behind
-# the running one) or tags, and each dispatch has a group of its own, so a
+# the running one), and each dispatch has a group of its own, so a
 # publication is never cancelled half-way. The publish job also holds its
 # tag's lock.
 concurrency:
   group: build-linux-lts-${{ github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/vkstorm-release' && !startsWith(github.ref, 'refs/tags/')) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/vkstorm-release') }}
 
 jobs:
   # The repository checks, and this run's plan (scripts/ci_publish_latest.cjs

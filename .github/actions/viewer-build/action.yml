@@ -1,14 +1,15 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 #
-# The viewer build of one platform, shared by build-windows.yaml,
-# build-linux.yaml and build-linux-lts.yaml (doc/release_channels.md). The
+# The shared build steps of the one workflow per platform: build-windows.yaml,
+# build-linux.yaml and build-linux-lts.yaml (doc/release_channels.md). A
+# composite action, so each build's check keeps its plain name. The
 # calling job checks the source out (full history), sets the build's env
 # (VIEWER_BUILD_TYPE, VIEWER_PACKAGE, AUTOBUILD_*) and, for linux-lts, runs
 # in the ubuntu:24.04 container; everything after the checkout is here. It
 # uploads <platform>-installer (Release) or <platform>-qualification-viewer,
 # and <platform>-build-evidence.
-name: Viewer build
+name: Shared build steps
 description: Build, check and upload one platform's viewer (doc/release_channels.md).
 inputs:
   directory:
@@ -293,8 +294,7 @@ runs:
           exit 1
         fi
 
-    # Release builds (vkstorm-release pushes, Second_Life tags, the
-    # experimental canary build) never build or run tests: LL_TESTS stays
+    # Release builds (vkstorm-release pushes, publishing dispatches) never build or run tests: LL_TESTS stays
     # off for Release. PR and qualification builds (RelWithDebInfo) run them.
     - name: Run statistics, script metadata, transport, TLS, primitive and night sky regression tests
       if: env.VIEWER_BUILD_TYPE != 'Release'

@@ -60,7 +60,7 @@ function planPlatform({ eventName, ref, repository, inputs, platform }) {
     return {
         platform,
         entry: { platform, ...platforms[platform].build },
-        release: ref === 'refs/heads/vkstorm-release' || ref.startsWith('refs/tags/Second_Life') || (dispatch && truthy(inputs.publish)),
+        release: ref === 'refs/heads/vkstorm-release' || (dispatch && truthy(inputs.publish)),
         tag: publishes ? channelFor(line.kind, platform).tag : '',
     };
 }

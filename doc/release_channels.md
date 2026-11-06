@@ -8,22 +8,24 @@ failed or skipped platform never holds back another.
 
 ## Platforms
 
-Each platform is a workflow of its own: `build-windows.yaml` (Build Windows),
+One workflow per platform: `build-windows.yaml` (Build Windows),
 `build-linux.yaml` (Build Linux) and `build-linux-lts.yaml` (Build Linux LTS).
 Each run has three jobs: `checks` (the repository checks of
 `.github/actions/ci-checks`, and the plan of
 `scripts/ci_publish_latest.cjs` `planPlatform()`), the build itself (check
-`windows`, `linux` or `linux-lts`, the shared steps of
+`windows`, `linux` or `linux-lts`, running the shared build steps,
 `.github/actions/viewer-build`), and, when the plan gives the run a tag,
 `publish`. A platform publishes the moment its own build finishes,
 whatever the other platforms' workflows do. `.github/build-platforms.json`
-holds the platform data (runner, container, packages, tags).
+holds the platform data (runner, container, packages, tags). The shared build
+steps are a composite action rather than a reusable workflow, so that each
+build's check is named exactly `windows`, `linux` or `linux-lts`.
 
 One run per pull request or line: a new push cancels the previous run of the
-same workflow. vkstorm-release pushes (they publish) and tags never cancel,
+same workflow. vkstorm-release pushes (they publish) never cancel,
 and every dispatch has a group of its own; each publish job also holds its
-tag's lock. Pushes build the vkstorm-* lines and Second_Life tags; a feature
-branch builds through its pull request.
+tag's lock. Pushes build the vkstorm-* lines; a feature branch builds through
+its pull request; no tag triggers a build.
 
 | Platform | Built | Package | Floor |
 |---|---|---|---|
