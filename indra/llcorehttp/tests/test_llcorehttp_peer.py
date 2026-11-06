@@ -190,7 +190,22 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
             # and deflate itself and passes anything else through, as
             # libcurl 7.54.1 did.
             text = ("Vulkanstorm content encoding test body. " * 40).encode("utf-8")
-            if "/encoding/gzip/" in self.path:
+            if "/encoding/gzipzlib/" in self.path:
+                # labelled gzip, zlib-wrapped: libcurl 7.54.1 accepted it
+                body, enc = zlib.compress(text), "gzip"
+            elif "/encoding/gzipmulti/" in self.path:
+                # two gzip members, each half of the text
+                half = len(text) // 2
+                body = b""
+                for part in (text[:half], text[half:]):
+                    c = zlib.compressobj(9, zlib.DEFLATED, 16 + 15)
+                    body += c.compress(part) + c.flush()
+                enc = "gzip"
+            elif "/encoding/gziptrail/" in self.path:
+                # a complete gzip stream followed by padding
+                c = zlib.compressobj(9, zlib.DEFLATED, 16 + 15)
+                body, enc = c.compress(text) + c.flush() + b"\0\0\0\0", "gzip"
+            elif "/encoding/gzip/" in self.path:
                 c = zlib.compressobj(9, zlib.DEFLATED, 16 + 15)
                 body, enc = c.compress(text) + c.flush(), "gzip"
             elif "/encoding/deflate/" in self.path:
