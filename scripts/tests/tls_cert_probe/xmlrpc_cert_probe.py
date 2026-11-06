@@ -9,6 +9,7 @@ status, errorcode, and the certificate data that llstartup uses to pick
 its dialog. Usage (as a LeapCommand): python -I xmlrpc_cert_probe.py <out.json>
 """
 import json
+import queue
 import sys
 import threading
 import time
@@ -53,11 +54,13 @@ def write_msg(pump, data):
     stdout.flush()
 
 
-def llstartup_branch(status, errorcode, cert):
-    """The branch llstartup.cpp (login failure handling) takes for this reply."""
+def llstartup_branch(status, errorcode, has_cert_key, cert):
+    """The branch llstartup.cpp (login failure handling) takes for this reply.
+    llstartup tests that the reply has a "certificate" key, whatever its
+    value, before it tries to decode it."""
     if status == "Complete":
         return "none (TLS and the XML-RPC reply were accepted)"
-    if status != "CURLError" or errorcode not in ("SSL_CACERT", "SSL_PEER_CERTIFICATE") or not cert:
+    if status != "CURLError" or errorcode not in ("SSL_CACERT", "SSL_PEER_CERTIFICATE") or not has_cert_key:
         return "generic login error"
     if not (isinstance(cert, dict) and cert.get("pem")):
         # getCertificate(response["certificate"]) turns the LLSD map into ""
@@ -78,12 +81,26 @@ reply_pump = read_msg()["pump"]
 for i, (name, uri) in enumerate(TARGETS):
     write_msg("LLXMLRPCTransaction", {"uri": uri, "method": "vks_tls_probe", "reply": reply_pump,
                                       "reqid": i, "params": {"probe": name}})
-timer = threading.Timer(TIMEOUT, lambda: (finish(), sys.exit(0)))
-timer.daemon = True
-timer.start()
-start = time.time()
-while len(results) < len(TARGETS) and time.time() - start < TIMEOUT:
-    msg = read_msg()
+# a reader thread feeds a queue, so the main thread stops at the deadline
+# even when a target never replies, and writes the result once
+inbox = queue.Queue()
+
+
+def reader():
+    while True:
+        m = read_msg()
+        inbox.put(m)
+        if m is None:
+            return
+
+
+threading.Thread(target=reader, daemon=True).start()
+deadline = time.time() + TIMEOUT
+while len(results) < len(TARGETS) and time.time() < deadline:
+    try:
+        msg = inbox.get(timeout=max(0.1, deadline - time.time()))
+    except queue.Empty:
+        break
     if msg is None:
         break
     data = msg.get("data", {})
@@ -91,14 +108,15 @@ while len(results) < len(TARGETS) and time.time() - start < TIMEOUT:
         continue
     name, uri = TARGETS[int(data["reqid"])]
     cert = data.get("certificate")
+    has_cert_key = "certificate" in data
     results[name] = {
         "uri": uri,
         "status": data.get("status"),
         "errorcode": data.get("errorcode"),
-        "has_certificate": bool(cert),
+        "has_certificate": has_cert_key,
         "validation_failure": cert.get("validation_failure") if isinstance(cert, dict) else None,
         "cert_subject": cert.get("subject_name") if isinstance(cert, dict) else None,
-        "llstartup": llstartup_branch(data.get("status"), data.get("errorcode"), cert),
+        "llstartup": llstartup_branch(data.get("status"), data.get("errorcode"), has_cert_key, cert),
         "error": data.get("error"),
     }
     log(name, results[name]["status"], results[name]["errorcode"])
