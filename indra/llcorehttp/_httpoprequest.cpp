@@ -202,10 +202,93 @@ HttpOpRequest::~HttpOpRequest()
 }
 
 
+// <Vulkanstorm>
+namespace
+{
+// "host:port" of a URL as libcurl keys its connections: host name in lower
+// case (an IPv6 literal with its brackets), the port given or the scheme's
+// default, userinfo dropped. `scheme` receives the scheme in lower case
+// (`default_scheme` if the URL has none); with no port given,
+// `default_port`, or if that is 0 the scheme's.
+std::string host_port(const std::string & url, const char * default_scheme, long default_port, std::string & scheme)
+{
+    const size_t sep(url.find("://"));
+    scheme = sep == std::string::npos ? std::string(default_scheme) : url.substr(0, sep);
+    std::transform(scheme.begin(), scheme.end(), scheme.begin(),
+                   [](unsigned char c) { return char(tolower(c)); });
+    const size_t start(sep == std::string::npos ? 0 : sep + 3);
+    const size_t end_auth(std::min(url.find_first_of("/?#", start), url.size()));
+    std::string auth(url.substr(start, end_auth - start));
+    const size_t at(auth.rfind('@'));
+    if (at != std::string::npos)
+    {
+        auth.erase(0, at + 1);
+    }
+    size_t host_end(auth.size());
+    if (! auth.empty() && auth[0] == '[')
+    {
+        const size_t close(auth.find(']'));
+        host_end = close == std::string::npos ? auth.size() : close + 1;
+    }
+    else
+    {
+        host_end = std::min(auth.find(':'), auth.size());
+    }
+    std::string host(auth.substr(0, host_end));
+    std::transform(host.begin(), host.end(), host.begin(),
+                   [](unsigned char c) { return char(tolower(c)); });
+    long port(0);
+    if (host_end < auth.size() && auth[host_end] == ':' && host_end + 1 < auth.size())
+    {
+        port = strtol(auth.c_str() + host_end + 1, NULL, 10);
+    }
+    if (port <= 0)
+    {
+        port = default_port > 0 ? default_port : scheme == "https" ? 443L : scheme == "http" ? 80L : 0L;
+    }
+    return host + ":" + std::to_string(port);
+}
+} // anonymous namespace
+
+std::string HttpOpRequest::admissionKey(const std::string & url, const std::string & http_proxy)
+{
+    std::string scheme;
+    const std::string origin(host_port(url, "http", 0L, scheme));
+    if (scheme == "http" && ! http_proxy.empty())
+    {
+        // libcurl sends a plain http request to an HTTP proxy over the
+        // proxy's own connection (no tunnel), so the proxy's limit applies.
+        // A proxy given without a port is on libcurl's default: 1080, an
+        // https:// proxy 443. A SOCKS proxy relays to the origin.
+        std::string proxy_scheme;
+        const size_t sep(http_proxy.find("://"));
+        if (sep != std::string::npos)
+        {
+            proxy_scheme = http_proxy.substr(0, sep);
+            std::transform(proxy_scheme.begin(), proxy_scheme.end(), proxy_scheme.begin(),
+                           [](unsigned char c) { return char(tolower(c)); });
+        }
+        if (proxy_scheme.compare(0, 5, "socks") != 0)
+        {
+            return "proxy " + host_port(http_proxy, "http", proxy_scheme == "https" ? 443L : 1080L, proxy_scheme);
+        }
+    }
+    return origin;
+}
+// </Vulkanstorm>
+
+
 void HttpOpRequest::stageFromRequest(HttpService * service)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
     HttpOpRequest::ptr_t self(std::dynamic_pointer_cast<HttpOpRequest>(shared_from_this()));
+    // <Vulkanstorm> the admission key, with the proxy prepareRequest() will
+    // set: on this (the worker) thread, which owns the global options
+    {
+        const HttpPolicyGlobal & gpolicy(service->getPolicy().getGlobalOptions());
+        mReqHost = admissionKey(mReqURL, gpolicy.mUseLLProxy ? LLProxy::getHTTPProxyForCurl() : gpolicy.mHttpProxy);
+    }
+    // </Vulkanstorm>
     service->getPolicy().addOp(self);           // transfers refcount
 }
 
@@ -446,16 +529,6 @@ void HttpOpRequest::setupCommon(HttpRequest::policy_t policy_id,
     mProcFlags = 0U;
     mReqPolicy = policy_id;
     mReqURL = url;
-    // <Vulkanstorm> the connection key: scheme and authority, lower case
-    {
-        const size_t scheme(url.find("://"));
-        const size_t start(scheme == std::string::npos ? 0 : scheme + 3);
-        const size_t end(url.find_first_of("/?#", start));
-        mReqHost = url.substr(0, end == std::string::npos ? url.size() : end);
-        std::transform(mReqHost.begin(), mReqHost.end(), mReqHost.begin(),
-                       [](unsigned char c) { return char(tolower(c)); });
-    }
-    // </Vulkanstorm>
     if (body)
     {
         body->addRef();
