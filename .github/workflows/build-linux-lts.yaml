@@ -1,0 +1,152 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+#
+# The Linux LTS viewer, built and linked in an ubuntu:24.04 container (GCC 14)
+# with the linux64-lts packages of scripts/linux_lts_packages.json; glibc
+# 2.39 / GLIBCXX_3.4.33 at most. Builds on every pull request; publishes
+# only on a dispatch with publish: linux-lts (vkstorm-release),
+# experimental-linux-lts (canary) or preview-linux-lts (devel).
+# Its own workflow, so that it publishes the moment its build finishes,
+# whatever the other platforms do. The build steps are shared in
+# .github/actions/viewer-build; the platform's data is in
+# .github/build-platforms.json; doc/release_channels.md describes the tags.
+name: Build Linux LTS
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: >-
+          Build a Release package and publish it to this line's linux-lts tag
+          (doc/release_channels.md). Only vkstorm-release, vkstorm-canary and
+          vkstorm-devel publish.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One run per pull request or line: a new push cancels the previous run.
+# Not on vkstorm-release (its pushes publish; a newer push queues behind
+# the running one) or tags, and each dispatch has a group of its own, so a
+# publication is never cancelled half-way. The publish job also holds its
+# tag's lock.
+concurrency:
+  group: build-linux-lts-${{ github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/vkstorm-release' && !startsWith(github.ref, 'refs/tags/')) }}
+
+jobs:
+  # The repository checks, and this run's plan (scripts/ci_publish_latest.cjs
+  # planPlatform): the platform's build entry, Release or not, and its tag.
+  checks:
+    runs-on: ubuntu-latest
+    outputs:
+      entry: ${{ steps.plan.outputs.entry }}
+      release: ${{ steps.plan.outputs.release }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/ci-checks
+        with:
+          publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+      - id: plan
+        uses: actions/github-script@v9
+        env:
+          INPUTS: ${{ toJSON(inputs) }}
+        with:
+          script: |
+            const { planPlatform } = require('./scripts/ci_publish_latest.cjs');
+            const result = planPlatform({
+              eventName: context.eventName, ref: context.ref, repository: `${context.repo.owner}/${context.repo.repo}`,
+              inputs: JSON.parse(process.env.INPUTS || 'null'), platform: 'linux-lts',
+            });
+            core.setOutput('entry', JSON.stringify(result.entry));
+            core.setOutput('release', String(result.release));
+            core.setOutput('tag', result.tag);
+            core.info(JSON.stringify(result, null, 2));
+
+  linux-lts:
+    name: linux-lts
+    needs: checks
+    runs-on: ${{ fromJSON(needs.checks.outputs.entry).os }}
+    container: ${{ fromJSON(needs.checks.outputs.entry).container }}
+    env:
+      VIEWER_BUILD_TYPE: ${{ needs.checks.outputs.release == 'true' && 'Release' || 'RelWithDebInfo' }}
+      VIEWER_PACKAGE: ${{ needs.checks.outputs.release == 'true' && 'ON' || 'OFF' }}
+      AUTOBUILD_ADDRSIZE: 64
+      AUTOBUILD_CONFIGURATION: ReleaseFS_open
+      AUTOBUILD_VSVER: "180"
+      LL_SKIP_REQUIRE_SYSROOT: 1
+    steps:
+      # The hosted tool cache's Python is built for the runner's own Ubuntu
+      # and its ssl module need not load in the container, so the container
+      # build uses the container's own Python 3 in a virtual environment.
+      - name: Prepare the Linux build container
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          echo "DEBIAN_FRONTEND=noninteractive" >> "$GITHUB_ENV"
+          apt-get -o Acquire::Retries=3 update
+          apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+            sudo git ca-certificates curl wget file xz-utils bzip2 zstd unzip \
+            make binutils lsb-release procps python3 python3-venv
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 -m venv /opt/vkstorm-python
+          echo /opt/vkstorm-python/bin >> "$GITHUB_PATH"
+          . /etc/os-release
+          echo "Linux build container: $PRETTY_NAME, $(ldd --version | head -n 1), $(python3 --version)" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: ./.github/actions/viewer-build
+        with:
+          platform: linux-lts
+          directory: ${{ fromJSON(needs.checks.outputs.entry).directory }}
+          gcc: ${{ fromJSON(needs.checks.outputs.entry).gcc }}
+          linux_flavor: ${{ fromJSON(needs.checks.outputs.entry).linux_flavor }}
+          max_glibc: ${{ fromJSON(needs.checks.outputs.entry).max_glibc }}
+          max_glibcxx: ${{ fromJSON(needs.checks.outputs.entry).max_glibcxx }}
+          package_override: ${{ fromJSON(needs.checks.outputs.entry).package_override }}
+          package_suffix: ${{ fromJSON(needs.checks.outputs.entry).package_suffix }}
+
+  # Advances this platform's tag (a tag with its release) once its build
+  # succeeded; its step names the tag.
+  publish:
+    name: publish
+    needs: [checks, linux-lts]
+    if: needs.checks.outputs.tag != '' && needs.checks.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: vulkanstorm-publish-${{ needs.checks.outputs.tag }}
+      cancel-in-progress: false
+    env:
+      PLATFORM: linux-lts
+      TAG: ${{ needs.checks.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux-lts-installer
+          path: installers/linux-lts-installer
+      - name: Publish and move ${{ needs.checks.outputs.tag }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const publish = require('./scripts/ci_publish_latest.cjs');
+            const channel = publish.channels[process.env.TAG];
+            if (!channel || !channel.platforms.includes(process.env.PLATFORM)) {
+              throw new Error(`${process.env.TAG} is not a channel of ${process.env.PLATFORM}`);
+            }
+            await publish({ github, context, core, directory: 'installers', channel });
