@@ -1583,6 +1583,7 @@ set(viewer_HEADER_FILES
     llsechandler_basic.h
     llselectmgr.h
     llsetkeybinddialog.h
+    llshadowcascadefit.h
     llsettingspicker.h
     llsettingsvo.h
     llsidepanelappearance.h

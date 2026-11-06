@@ -2098,6 +2098,59 @@ If you do not understand the distinction then leave this control alone."
        tool_tip="Softens the edges of sun, moon and projector shadows with a wider, rotated filter and smooths the result with the shadow blur. Needs shadows (Sun/Moon or Sun/Moon + Projectors). Costs some GPU time."/>
       <!-- </Vulkanstorm> -->
 
+      <!-- <Vulkanstorm> sun shadow distance (stable cascades); enabled with shadows only
+           (LLFloaterPreference::refreshEnabledState) -->
+      <slider
+       control_name="RenderShadowDistance"
+       decimal_digits="0"
+       follows="left|top"
+       height="16"
+       increment="32"
+       initial_value="128"
+       label="Shadow distance (m):"
+       label_width="140"
+       layout="topleft"
+       left="20"
+       max_val="256"
+       min_val="32"
+       name="ShadowDistance"
+       top_pad="6"
+       width="380"
+       tool_tip="How far from the camera the sun and moon cast shadows, at most the draw distance. Shadows no longer change with what the camera sees; a shorter distance gives sharper shadows near you."/>
+      <!-- </Vulkanstorm> -->
+      <!-- <Vulkanstorm> TEMPORARY S1 qualification toggle, removed before #331 is marked ready -->
+      <check_box
+       control_name="RenderShadowS1BoxOnlyCulling"
+       height="16"
+       label="S1 (temporary): cull sun shadow casters with the stable box only"
+       layout="topleft"
+       left="20"
+       top_pad="4"
+       width="450"
+       name="ShadowS1BoxOnlyCulling"
+       tool_tip="TEMPORARY, for checking stage S1 in-world: draws every caster in each cascade's box instead of only those over the camera's frustum slice. Should look identical, at some cost."/>
+      <check_box
+       control_name="RenderShadowS1ShowCascades"
+       height="16"
+       label="S1 (temporary): show sun shadow cascades (checkerboard, darker = farther)"
+       layout="topleft"
+       left="20"
+       top_pad="2"
+       width="450"
+       name="ShadowS1ShowCascades"
+       tool_tip="TEMPORARY, for checking stage S1 in-world: an 8x8-texel checkerboard of the cascade each pixel uses; the squares should stay put in the world while you move and turn."/>
+      <check_box
+       control_name="RenderShadowS1NoFarCache"
+       height="16"
+       label="S1 (temporary): no far-cascade caching"
+       layout="topleft"
+       left="20"
+       top_pad="2"
+       width="450"
+       name="ShadowS1NoFarCache"
+       tool_tip="TEMPORARY, for checking stage S1 in-world: renders the far sun cascades every frame instead of on alternate frames. Should look identical, at some cost."/>
+      <!-- </Vulkanstorm> -->
+
     </panel>
 
 <!--Depth of Field-->

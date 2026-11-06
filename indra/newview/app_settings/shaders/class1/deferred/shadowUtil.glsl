@@ -51,6 +51,12 @@ uniform float spot_shadow_reach; // <Vulkanstorm/> metres: the projector shadows
 uniform mat4 inv_proj;
 uniform vec2 screen_res;
 uniform int sun_up_factor;
+uniform int shadow_s1_cascades; // <Vulkanstorm/> TEMPORARY S1 overlay (sampleDirectionalShadow)
+// <Vulkanstorm> stable sun cascades: each cascade's texel size in metres and the normal offset in
+// texels (LLPipeline::bindDeferredShader); 0 when not set (no offset)
+uniform vec4 shadow_texel;
+uniform float shadow_normal_offset;
+// </Vulkanstorm>
 
 // <Vulkanstorm> receiver-plane depth bias of the sun PCF: the depth slope of the receiver in
 // shadow texture space (d depth / d uv), from two 5 cm tangent steps of the view space position
@@ -431,6 +437,23 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 
     shadow_pos += offset * shadow_offset * 2.0;
 
+    // <Vulkanstorm> normal offset in world units: the receiver moves along its normal by
+    // shadow_normal_offset texels of the (farther) cascade it is sampled from, more the more the
+    // surface turns from the light, so a slanted lit surface does not shadow itself between the
+    // filter's taps (the sphere-fitted cascades cannot squeeze texels along a receiver's slope)
+    // The texel size follows the view depth continuously, so the offset has no step where a
+    // cascade boundary sweeps over a surface: it ramps up to the next cascade's from 0.5 to 0.75 of
+    // each split, before that cascade starts to blend in at 0.75 (only the nearer one is sampled
+    // there, and a little more offset than it needs is harmless), and keeps the larger one over
+    // the blend band, where the farther cascade needs its own.
+    {
+        float d = -pos.z; // view depth
+        vec4 t = clamp((vec4(d) - shadow_clip * 0.5) / (shadow_clip * 0.25), 0.0, 1.0);
+        float texel = mix(mix(mix(shadow_texel.x, shadow_texel.y, t.x), shadow_texel.z, t.y), shadow_texel.w, t.z);
+        shadow_pos += norm.xyz * (shadow_normal_offset * texel * (1.0 - dp_directional_light));
+    }
+    // </Vulkanstorm>
+
     vec4 spos = vec4(shadow_pos.xyz, 1.0);
 
     if (spos.z > -shadow_clip.w)
@@ -525,6 +548,17 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
         }
 
         shadow /= weight;
+
+        // <Vulkanstorm> TEMPORARY S1 qualification overlay: an 8x8-texel checkerboard of the
+        // cascade the pixel uses, darker for each further cascade (removed before #331 is ready)
+        if (shadow_s1_cascades != 0)
+        {
+            int k = spos.z < near_split.z ? 3 : (spos.z < near_split.y ? 2 : (spos.z < near_split.x ? 1 : 0));
+            vec4 q = shadow_matrix[k] * spos;
+            vec2 uv = q.xy / q.w * shadow_res / 8.0;
+            shadow = mix(0.1 + 0.2 * float(k), 1.0, mod(floor(uv.x) + floor(uv.y), 2.0)) * (0.5 + 0.5 * shadow);
+        }
+        // </Vulkanstorm>
     }
     else
     {

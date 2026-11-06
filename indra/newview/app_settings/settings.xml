@@ -11093,7 +11093,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowSplitExponent</key>
   <map>
     <key>Comment</key>
-    <string>Near clip plane split distances for shadow map frusta (x=perspective, y=ortho, z=transition rate).</string>
+    <string>Sun cascade split distribution: only y is used, as the exponent of the splits over [camera near, RenderShadowDistance] (Phototools' shadow clarity). Was: Near clip plane split distances for shadow map frusta (x=perspective, y=ortho, z=transition rate).</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12312,7 +12312,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowErrorCutoff</key>
   <map>
     <key>Comment</key>
-    <string>Cutoff error value to use ortho instead of perspective projection.</string>
+    <string>Unused since the sun cascades are always orthographic (Vulkanstorm stable cascades). Was: Cutoff error value to use ortho instead of perspective projection.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12325,7 +12325,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowFOVCutoff</key>
   <map>
     <key>Comment</key>
-    <string>Cutoff FOV to use ortho instead of perspective projection.</string>
+    <string>Unused since the sun cascades are always orthographic (Vulkanstorm stable cascades). Was: Cutoff FOV to use ortho instead of perspective projection.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12377,6 +12377,72 @@ Change of this parameter will affect the layout of buttons in notification toast
     <string>Boolean</string>
     <key>Value</key>
     <integer>0</integer>
+  </map>
+  <key>RenderShadowS1BoxOnlyCulling</key>
+  <map>
+    <key>Comment</key>
+    <string>TEMPORARY (stage S1 qualification, removed before it is marked ready): cull the sun cascades' casters with the stable cascade box only, without the frustum-slice bound.</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>RenderShadowBiasTexels</key>
+  <map>
+    <key>Comment</key>
+    <string>Sun shadow depth bias in shadow-map texels of each cascade, in world units: independent of the cascade's depth range and of the altitude (stable cascades).</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>3.0</real>
+  </map>
+  <key>RenderShadowS1NoFarCache</key>
+  <map>
+    <key>Comment</key>
+    <string>TEMPORARY (stage S1 qualification, removed before it is marked ready): render the far sun cascades (2, 3) every frame instead of reusing them on alternate frames.</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>RenderShadowS1ShowCascades</key>
+  <map>
+    <key>Comment</key>
+    <string>TEMPORARY (stage S1 qualification, removed before it is marked ready): show the sun cascade each pixel uses as a texel checkerboard, darker for each further cascade.</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>RenderShadowNormalOffsetTexels</key>
+  <map>
+    <key>Comment</key>
+    <string>Sun shadow normal offset: receivers move along their normal by this many shadow-map texels of their cascade (in world units, more the more they turn from the light), so slanted lit surfaces do not shadow themselves.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>3.0</real>
+  </map>
+  <key>RenderShadowDistance</key>
+  <map>
+    <key>Comment</key>
+    <string>Distance (metres) the sun and moon shadow cascades cover, in steps of 32 m from 32 to 256 m (other values are rounded to the nearest step); capped by the draw distance. The cascades no longer follow what the camera sees (doc/shadows/shadow-model-rework.md). Default per graphics level in the feature table.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>128.0</real>
   </map>
   <key>RenderShadowPCSSLightSize</key>
   <map>
