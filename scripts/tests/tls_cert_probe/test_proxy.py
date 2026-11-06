@@ -43,6 +43,10 @@ def pipe(a, b):
 
 
 class HttpProxy(socketserver.StreamRequestHandler):
+    # unbuffered: headers are read byte by byte, so a request body that came
+    # with them stays in the socket for pipe() to forward
+    rbufsize = 0
+
     def handle(self):
         line = self.rfile.readline().decode("latin-1").strip()
         if not line:
@@ -76,23 +80,34 @@ class HttpProxy(socketserver.StreamRequestHandler):
         up.close()
 
 
+def recv_exact(sock, n):
+    """recv() may return fewer bytes than asked, even on loopback."""
+    data = b""
+    while len(data) < n:
+        chunk = sock.recv(n - len(data))
+        if not chunk:
+            raise ConnectionError("SOCKS client closed the connection")
+        data += chunk
+    return data
+
+
 class Socks5(socketserver.StreamRequestHandler):
     def handle(self):
         c = self.connection
-        ver, n = c.recv(2)
-        methods = c.recv(n)
+        ver, n = recv_exact(c, 2)
+        methods = recv_exact(c, n)
         if 0 not in methods:
             c.sendall(b"\x05\xff")
             return
         c.sendall(b"\x05\x00")
-        ver, cmd, _, atyp = c.recv(4)
+        ver, cmd, _, atyp = recv_exact(c, 4)
         if atyp == 1:
-            host = socket.inet_ntoa(c.recv(4))
+            host = socket.inet_ntoa(recv_exact(c, 4))
         elif atyp == 3:
-            host = c.recv(c.recv(1)[0]).decode()
+            host = recv_exact(c, recv_exact(c, 1)[0]).decode()
         else:
-            host = socket.inet_ntop(socket.AF_INET6, c.recv(16))
-        port = struct.unpack("!H", c.recv(2))[0]
+            host = socket.inet_ntop(socket.AF_INET6, recv_exact(c, 16))
+        port = struct.unpack("!H", recv_exact(c, 2))[0]
         if cmd == 1:
             log("SOCKS-CONNECT", "%s:%d" % (host, port))
             try:
