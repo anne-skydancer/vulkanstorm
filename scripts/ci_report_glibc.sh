@@ -7,6 +7,8 @@
 # Writes a table to stdout and, in GitHub Actions, to the step summary.
 # With VKSTORM_MAX_GLIBC and/or VKSTORM_MAX_GLIBCXX set (e.g. 2.39, 3.4.33),
 # exits 1 if any file needs a newer version, listing the files that do.
+# CI sets both for the linux-LTS build (ubuntu:24.04: 2.39, 3.4.33); the
+# ubuntu-latest host build sets neither and only reports.
 set -euo pipefail
 
 root=${1:?usage: ci_report_glibc.sh <build-dir>/newview}
