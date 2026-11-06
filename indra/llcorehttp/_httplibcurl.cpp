@@ -28,6 +28,7 @@
 
 #include "httpheaders.h"
 #include "bufferarray.h"
+#include "bufferstream.h" // <Vulkanstorm/> sequential reads for the reply decoding
 #include "_httpoprequest.h"
 #include "_httppolicy.h"
 
@@ -65,19 +66,65 @@ static const char * const LOG_CORE("CoreHttp");
 } // end anonymous namespace
 
 
-// <Vulkanstorm> Undo a gzip or deflate Content-Encoding, as libcurl 7.54.1
-// did with CURLOPT_ENCODING "" (see HttpOpRequest::prepareRequest). Only
-// those two (and x-gzip) are decoded; any other value, the asset CDN's
-// "binary/octet-stream" or "identity" among them, leaves the body as it
-// came, again as 7.54.1 did. deflate is the zlib format, with a fallback to
-// a raw deflate stream as libcurl had. Returns false if the data cannot be
-// decoded (libcurl's CURLE_BAD_CONTENT_ENCODING).
+#if LIBCURL_VERSION_NUM >= 0x075300 // 7.83.0, the only users (HttpLibcurl::completeRequest)
+// <Vulkanstorm> Undo a gzip or deflate Content-Encoding as libcurl 7.54.1
+// did with CURLOPT_ENCODING "" (lib/http.c, lib/content_encoding.c), with
+// two of its defects fixed: it lost output still pending in zlib when the
+// last input filled its 16 KiB buffer, and it dropped every gzip member
+// after the first.
+//  - The value is matched as 7.54.1 did: leading white space skipped, then
+//    a case-insensitive prefix, so only the first coding of a list counts
+//    ("gzip, identity" is gzip): "identity", "deflate", "gzip", "x-gzip".
+//    Anything else, the asset CDN's "binary/octet-stream" among it, leaves
+//    the body as it came.
+//  - gzip uses MAX_WBITS + 32 (a gzip or zlib wrapper), deflate MAX_WBITS;
+//    for either, data that does not start a valid stream is retried as a raw
+//    deflate stream, 7.54.1's fallback for servers that send no header.
+//  - Every member of a concatenation is decoded; bytes after a complete
+//    stream that do not start another member are ignored; a truncated
+//    stream keeps what decoded. Data that does not decode is refused
+//    (CURLE_BAD_CONTENT_ENCODING) and the original body kept.
 namespace
 {
-// Inflates `in` into a new BufferArray, reading and writing in chunks so
-// that no whole copy of either side is made. Successive gzip members (a
-// valid concatenation) are all decoded. Returns NULL if the data does not
-// decode or the output cannot be stored.
+enum class ReplyCoding { NONE, GZIP, DEFLATE };
+
+ReplyCoding reply_coding(const char * value)
+{
+    while (*value && isspace(static_cast<unsigned char>(*value)))
+    {
+        ++value;
+    }
+    // case-insensitive prefix test, as libcurl's checkprefix()
+    auto prefix = [value](const char * p)
+    {
+        for (size_t i(0); p[i]; ++i)
+        {
+            if (tolower(static_cast<unsigned char>(value[i])) != p[i])
+            {
+                return false;   // also stops at the end of `value` (NUL never matches)
+            }
+        }
+        return true;
+    };
+    if (prefix("identity"))
+    {
+        return ReplyCoding::NONE;
+    }
+    if (prefix("deflate"))
+    {
+        return ReplyCoding::DEFLATE;
+    }
+    if (prefix("gzip") || prefix("x-gzip"))
+    {
+        return ReplyCoding::GZIP;
+    }
+    return ReplyCoding::NONE;
+}
+
+// Inflates `in` into a new BufferArray, reading it through
+// BufferArrayStreamBuf (sequential, no block search per chunk) in 16 KiB
+// chunks. Returns NULL if the data does not decode or the output cannot be
+// stored.
 LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits)
 {
     z_stream z;
@@ -87,22 +134,28 @@ LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits)
         return NULL;
     }
     LLCore::BufferArray * out(new LLCore::BufferArray());
+    LLCore::BufferArrayStreamBuf src(in);
     char inbuf[16384];
     char outbuf[16384];
-    size_t pos(0);
-    bool ok(true), ended(false), next_member(false);
+    bool ok(true), ended(false), next_member(false), input_done(false), full(false);
     while (ok)
     {
-        if (z.avail_in == 0)
+        if (z.avail_in == 0 && !input_done)
         {
-            const size_t n(in->read(pos, inbuf, sizeof(inbuf)));
-            if (n == 0)
+            const std::streamsize n(src.sgetn(inbuf, sizeof(inbuf)));
+            if (n <= 0)
             {
-                break;          // all input used (a truncated stream keeps what decoded, as libcurl did)
+                input_done = true;
             }
-            pos += n;
-            z.next_in = reinterpret_cast<Bytef *>(inbuf);
-            z.avail_in = static_cast<uInt>(n);
+            else
+            {
+                z.next_in = reinterpret_cast<Bytef *>(inbuf);
+                z.avail_in = static_cast<uInt>(n);
+            }
+        }
+        if (z.avail_in == 0 && input_done && (ended || !full))
+        {
+            break;              // all input used and no output pending (a truncated stream keeps what decoded)
         }
         if (ended)
         {
@@ -119,11 +172,20 @@ LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits)
         z.avail_out = sizeof(outbuf);
         const int ret(inflate(&z, Z_NO_FLUSH));
         const size_t produced(sizeof(outbuf) - z.avail_out);
+        full = (z.avail_out == 0);
         if (ret == Z_DATA_ERROR && next_member && produced == 0)
         {
             break;              // trailing bytes after a complete stream are not another member: ignored
         }
-        if (ret != Z_OK && ret != Z_STREAM_END && !(ret == Z_BUF_ERROR && produced == 0 && z.avail_in == 0))
+        if (ret == Z_BUF_ERROR && produced == 0 && z.avail_in == 0)
+        {
+            if (input_done)
+            {
+                break;          // nothing more to give zlib
+            }
+            continue;
+        }
+        if (ret != Z_OK && ret != Z_STREAM_END)
         {
             ok = false;
             break;
@@ -149,15 +211,10 @@ LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits)
 }
 
 // 1: decoded into `body`; 0: not an encoding to undo; -1: bad encoded data.
-int decode_reply(const std::string & encoding, LLCore::BufferArray * & body)
+int decode_reply(const char * encoding, LLCore::BufferArray * & body)
 {
-    std::string enc(encoding);
-    std::transform(enc.begin(), enc.end(), enc.begin(), [](unsigned char c) { return char(std::tolower(c)); });
-    const size_t first(enc.find_first_not_of(" \t"));
-    const size_t last(enc.find_last_not_of(" \t"));
-    enc = first == std::string::npos ? std::string() : enc.substr(first, last - first + 1);
-    const bool gzip(enc == "gzip" || enc == "x-gzip");
-    if (!gzip && enc != "deflate")
+    const ReplyCoding coding(reply_coding(encoding));
+    if (coding == ReplyCoding::NONE)
     {
         return 0;
     }
@@ -165,10 +222,8 @@ int decode_reply(const std::string & encoding, LLCore::BufferArray * & body)
     {
         return 1;
     }
-    // gzip as libcurl 7.54.1 decoded it: MAX_WBITS + 32 detects a gzip or
-    // zlib wrapper. deflate: zlib, then a raw stream as libcurl's fallback.
-    LLCore::BufferArray * decoded(inflate_reply(body, gzip ? MAX_WBITS + 32 : MAX_WBITS));
-    if (!decoded && !gzip)
+    LLCore::BufferArray * decoded(inflate_reply(body, coding == ReplyCoding::GZIP ? MAX_WBITS + 32 : MAX_WBITS));
+    if (!decoded)
     {
         decoded = inflate_reply(body, -MAX_WBITS);
     }
@@ -182,6 +237,7 @@ int decode_reply(const std::string & encoding, LLCore::BufferArray * & body)
 }
 } // anonymous namespace
 // </Vulkanstorm>
+#endif
 
 namespace LLCore
 {
@@ -230,6 +286,7 @@ void HttpLibcurl::shutdown()
 
         delete [] mActiveHandles;
         mActiveHandles = NULL;
+        mActiveHosts.clear(); // <Vulkanstorm/>
     }
 
     mPolicyCount = 0;
@@ -245,6 +302,7 @@ void HttpLibcurl::start(int policy_count)
     mPolicyCount = policy_count;
     mMultiHandles = new CURLM * [mPolicyCount];
     mActiveHandles = new int [mPolicyCount];
+    mActiveHosts.assign(mPolicyCount, std::map<std::string, int>()); // <Vulkanstorm/>
 
     for (unsigned int policy_class(0); policy_class < mPolicyCount; ++policy_class)
     {
@@ -361,6 +419,7 @@ void HttpLibcurl::addOp(const HttpOpRequest::ptr_t &op)
     op->mCurlActive = true;
     mActiveOps.insert(op);
     ++mActiveHandles[op->mReqPolicy];
+    ++mActiveHosts[op->mReqPolicy][op->mReqHost]; // <Vulkanstorm/>
 
     if (op->mTracing > HTTP_TRACE_OFF)
     {
@@ -395,6 +454,7 @@ bool HttpLibcurl::cancel(HttpHandle handle)
     // Drop references
     mActiveOps.erase(it);
     --mActiveHandles[op->mReqPolicy];
+    releaseHost(op->mReqPolicy, op->mReqHost); // <Vulkanstorm/>
 
     return true;
 }
@@ -473,6 +533,7 @@ bool HttpLibcurl::completeRequest(CURLM * multi_handle, CURL * handle, CURLcode 
     // Deactivate request
     mActiveOps.erase(it);
     --mActiveHandles[op->mReqPolicy];
+    releaseHost(op->mReqPolicy, op->mReqHost); // <Vulkanstorm/>
     op->mCurlActive = false;
 
     // Set final status of request if it hasn't failed by other mechanisms yet
@@ -530,9 +591,15 @@ bool HttpLibcurl::completeRequest(CURLM * multi_handle, CURL * handle, CURLcode 
     // <Vulkanstorm> the reply decoding libcurl 7.54.1 did, see decode_reply()
     if (op->mDecodeReply && handle)
     {
+        // the last Content-Encoding line of the final response, as 7.54.1
+        // read every line and kept the last
         struct curl_header * encoding(NULL);
         if (curl_easy_header(handle, "Content-Encoding", 0, CURLH_HEADER, -1, &encoding) == CURLHE_OK
-            && encoding && encoding->value
+            && encoding && encoding->amount > 1)
+        {
+            curl_easy_header(handle, "Content-Encoding", encoding->amount - 1, CURLH_HEADER, -1, &encoding);
+        }
+        if (encoding && encoding->value
             && decode_reply(encoding->value, op->mReplyBody) < 0)
         {
             LL_WARNS(LOG_CORE) << "Could not undo Content-Encoding " << encoding->value
@@ -601,6 +668,33 @@ int HttpLibcurl::getActiveCount() const
 }
 
 
+// <Vulkanstorm>
+int HttpLibcurl::getActiveCountForHost(unsigned int policy_class, const std::string & host) const
+{
+    if (policy_class >= mActiveHosts.size())
+    {
+        return 0;
+    }
+    const std::map<std::string, int> & hosts(mActiveHosts[policy_class]);
+    const std::map<std::string, int>::const_iterator it(hosts.find(host));
+    return it == hosts.end() ? 0 : it->second;
+}
+
+void HttpLibcurl::releaseHost(unsigned int policy_class, const std::string & host)
+{
+    if (policy_class >= mActiveHosts.size())
+    {
+        return;
+    }
+    std::map<std::string, int> & hosts(mActiveHosts[policy_class]);
+    std::map<std::string, int>::iterator it(hosts.find(host));
+    if (it != hosts.end() && --it->second <= 0)
+    {
+        hosts.erase(it);
+    }
+}
+// </Vulkanstorm>
+
 int HttpLibcurl::getActiveCountInClass(unsigned int policy_class) const
 {
     llassert_always(policy_class < mPolicyCount);
@@ -623,8 +717,9 @@ void HttpLibcurl::policyUpdated(unsigned int policy_class)
     //
     // A deep-queue class keeps the connections it had with HTTP/1.1
     // pipelining: up to its per-host limit to a host and its connection
-    // limit in all. It runs one request per connection
-    // (HttpPolicyClass::activeLimit()); the rest wait in llcorehttp's ready
+    // limit in all. With libcurl 7.62+ it runs one request per connection
+    // (HttpPolicyClass::activeLimit() and hostLimit(), admitted per host by
+    // HttpPolicy::processReadyQueue); the rest wait in llcorehttp's ready
     // queue, as they waited in a pipeline before.
     HttpPolicy & policy(mService->getPolicy());
     const HttpPolicyClass & options(policy.getClassOptions(policy_class));
@@ -632,9 +727,22 @@ void HttpLibcurl::policyUpdated(unsigned int policy_class)
 
     if (options.mPipelining > 1)
     {
+#if LIBCURL_VERSION_NUM < 0x073e00
+        // libcurl before 7.62 (the darwin64 package, 7.54.1): HTTP/1.1
+        // pipelining as before, matching HttpPolicyClass::activeLimit()'s
+        // per-host limit x depth for that version. (The stall that let the
+        // class go idle before switching pipelining off is not restored.)
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_PIPELINING,
+                                1L);
+        check_curl_multi_setopt(multi_handle,
+                                CURLMOPT_MAX_PIPELINE_LENGTH,
+                                long(options.mPipelining));
+#else
         check_curl_multi_setopt(multi_handle,
                                 CURLMOPT_PIPELINING,
                                 CURLPIPE_MULTIPLEX);
+#endif
         check_curl_multi_setopt(multi_handle,
                                 CURLMOPT_MAX_HOST_CONNECTIONS,
                                 long(options.mPerHostConnectionLimit));
