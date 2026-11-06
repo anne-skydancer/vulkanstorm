@@ -20,7 +20,8 @@ LLDrawPoolAlpha::renderStochastic on a small target:
   * faces on, a third of a pixel's depth in front of and behind a sloped opaque surface: the
     first two cover every sample, the third leaves the scene untouched, as sorted alpha draws
     them; the depth spread of 1.0.1.81943 (the centre's depth on every sample, with a
-    slope-scaled offset in the passes) is shown to let the face behind through.;
+    slope-scaled offset in the passes) is shown to let the face behind through.
+;
   * blended legacy materials that can glare (materialF.glsl itself, plain and as its variant, with
     stand-ins for the lighting it links): the composite equals sorted alpha, an alpha 0 layer with
     matte maps leaves the opaque surface untouched, and shiny glass keeps its reflections (#328);
@@ -576,6 +577,81 @@ for name,worst,count in before:
     print(f'  before (alpha-only passes reading another face\'s normal and specular maps instead of its own): {name}: {count} of {W*H} pixels differ, worst {worst:.3f}')
 assert before[0][2]==W*H and before[1][2]==W*H,('the old binding should change every pixel under the alpha 0 layer',before)
 assert before[2][2]==W*H,('the old binding should lose the shiny glass reflections',before)
+
+# ---- edge pixels: attributes at the centroid, not the pixel centre (the lattice on layered hair)
+# The stochastic passes draw into multisampled targets: a pixel that a triangle covers in part is
+# shaded once for that triangle, and without `centroid` its attributes are interpolated at the pixel
+# centre, which may lie outside the triangle (extrapolated). Sorted alpha is single-sampled and
+# shades a pixel only when its centre is inside, so there the texture coordinates never leave the
+# triangle. A mesh whose quads have UV islands of their own (hair cards) shows the texels beyond
+# each island along every quad edge: a regular lattice of thin lines over the hair. The alpha
+# programs' fragment inputs are `centroid in` (alphaF, fullbrightF, pbralphaF, materialF, emissiveF,
+# pbrglowF). Here the stand-in texture is grey inside an island and pure red outside it.
+CELLS_L=8;QUAD_PX=8   # lattice cells of QUAD_PX pixels (NDC: 2.5 x the screen, offset per layer)
+lat_vertex='''#version 420
+uniform float z; uniform int cells; uniform vec2 goff; out vec2 vuv;
+void main(){ int cell=gl_VertexID/6; int k=gl_VertexID%6; int cx=cell%cells; int cy=cell/cells;
+ vec2 c[6]=vec2[6](vec2(0,0),vec2(1,0),vec2(0,1),vec2(1,0),vec2(1,1),vec2(0,1)); vuv=c[k];
+ vec2 p=(vec2(cx,cy)+c[k])/float(cells)*2.5-1.25+goff; gl_Position=vec4(p,z,1.0); }'''
+lat_variant=program([(0x8B31,lat_vertex),(0x8B30,'''#version 420
+uniform float test_alpha; in vec2 vuv; out vec4 frag_color; int alpha_stochastic_mask(float a);
+void main(){ frag_color=vec4(0.0,0.0,0.0,test_alpha); gl_SampleMask[0]=alpha_stochastic_mask(test_alpha); }'''),(0x8B30,helper)])
+def lat_shade_program(qualifier):
+    return program([(0x8B31,lat_vertex),(0x8B30,'''#version 420
+uniform float test_alpha; QUAL in vec2 vuv; out vec4 frag_color;
+void main(){ bool outside=any(lessThan(vuv,vec2(0.0)))||any(greaterThan(vuv,vec2(1.0)));
+ frag_color=vec4(outside?vec3(1.0,0.0,0.0):vec3(0.3),test_alpha); }'''.replace('QUAL',qualifier))])
+lat_smooth=lat_shade_program('')
+lat_centroid=lat_shade_program('centroid')
+lat_calls=[0];lat_layers=[3]
+def lat_layer(prog,z,alpha=0.,rgb=(1.,1.,1.),seed=0,glow=0.,slope=0.,slope_y=0.):
+    i=lat_calls[0]%lat_layers[0];lat_calls[0]+=1
+    use(prog);uniform1f(loc(prog,b'z'),z);uniform1i(loc(prog,b'cells'),CELLS_L)
+    fn('glUniform2f',None,I,C.c_float,C.c_float)(loc(prog,b'goff'),(i*0.37%1.0)*2.5/CELLS_L,(i*0.61%1.0)*2.5/CELLS_L)
+    uniform1f(loc(prog,b'test_alpha'),alpha)
+    if prog is lat_variant: uniform1i(loc(prog,b'st_seed'),seed)
+    draw(4,0,6*CELLS_L*CELLS_L)
+def lattice_reddish(pixels):
+    """pixels whose red exceeds their green: the texels outside a UV island reached the image"""
+    return sum(1 for p in pixels if p[0]-p[1]>1e-3)
+def lattice_stochastic(shade_prog,total,n):
+    global layer,variant,shade
+    saved=(layer,variant,shade);layer,variant,shade=lat_layer,lat_variant,shade_prog
+    lat_calls[0]=0;lat_layers[0]=3
+    try:
+        set_opaque(1.0)
+        return stochastic([L(0.7-0.1*i,0.5,seed=900+i) for i in range(3)],total,n,scene_rgba=(0.,0.,0.,0.))
+    finally:
+        layer,variant,shade=saved
+# sorted alpha for reference: single-sampled, back to front, the pixel centre decides
+bindfbo(FB,scene_fbo);drawbuffer(COLOR0);clearcolor(0.,0.,0.,0.);clear(0x4000)
+disable(DEPTH_TEST);enable(BLEND);blendsep(SRC_ALPHA,ONE_MINUS_SRC_ALPHA,ZERO,ONE_MINUS_SRC_ALPHA)
+lat_calls[0]=0;lat_layers[0]=3
+for _ in range(3): lat_layer(lat_smooth,0.5,0.5)
+enable(DEPTH_TEST)
+out=(C.c_float*(W*H*4))();readbuffer(COLOR0);readpixels(0,0,W,H,RGBA,FLOAT,out)
+sorted_reddish=lattice_reddish([tuple(out[i*4:i*4+4]) for i in range(W*H)])
+assert sorted_reddish==0,('sorted alpha shades only where the centre is inside the triangle',sorted_reddish)
+lattice_report=[]
+for total,n in ((4,4),(8,8),(16,8)):
+    before=lattice_reddish(lattice_stochastic(lat_smooth,total,n))
+    after=lattice_reddish(lattice_stochastic(lat_centroid,total,n))
+    assert before>W*H//50,('without centroid the edge pixels should show the outside texels',total,before)
+    assert after==0,('with centroid no pixel may show a texel outside its island',total,after)
+    lattice_report.append((total,before,after));checks+=1
+print('edge pixels (3 layers of 8-pixel quads with UV islands, a grey island over a red outside): sorted alpha shows '
+      f'{sorted_reddish} of {W*H} pixels with the outside; stochastic transparency without centroid vs with it: '
+      +', '.join(f'S = {t}: {b} -> {a}' for t,b,a in lattice_report))
+# every non-flat fragment input of the alpha programs the stochastic passes draw is centroid
+import re as _re
+for rel in ('class2/deferred/alphaF.glsl','class1/deferred/fullbrightF.glsl','class2/deferred/pbralphaF.glsl',
+            'class3/deferred/materialF.glsl','class1/deferred/emissiveF.glsl','class1/deferred/pbrglowF.glsl'):
+    text=(root/'indra/newview/app_settings/shaders'/rel).read_text()
+    plain=_re.findall(r'^[ \t]*in\s+(?:vec[234]|float|mat[234])\s+\w+',text,_re.M)
+    assert not plain,(rel,'fragment inputs without centroid',plain)
+    assert 'centroid in ' in text,rel
+checks+=1
+print('alpha programs: every interpolated fragment input is `centroid in`')
 
 print(f'{checks} stochastic transparency cases passed.')
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)
