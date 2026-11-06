@@ -32,9 +32,10 @@ permissions:
 
 jobs:
   build:
-    # Named without the matrix values, so the check reads "<platform> / build"
-    # (the caller's job is named after the platform).
-    name: build
+    # The check reads "<platform> / build" (the caller's job is named after
+    # the platform). GitHub appends the matrix values to a matrix job's name
+    # unless the name uses a matrix expression, hence the expression.
+    name: ${{ matrix.platform && 'build' }}
     # platform names the build everywhere it produces output: its artifacts
     # and its package.
     strategy:
