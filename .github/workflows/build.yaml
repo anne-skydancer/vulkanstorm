@@ -197,7 +197,7 @@ jobs:
           gcc=$VKSTORM_GCC
           if [ -z "$gcc" ]; then
             for v in 15 14; do
-              if apt-cache policy "g++-$v" | grep -q 'Candidate: [0-9]'; then gcc=$v; break; fi
+              if apt-get install -s "gcc-$v" "g++-$v" > /dev/null 2>&1; then gcc=$v; break; fi
             done
           fi
           test -n "$gcc"
