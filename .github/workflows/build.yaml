@@ -6,8 +6,9 @@ on:
       experimental_release:
         description: >-
           vkstorm-canary only: build a Release package (Release configuration, AVX2,
-          LTO, Inno Setup, no development hooks) and publish it as the experimental
-          pre-release, moving the experimental tag. Never touches latest.
+          LTO, Inno Setup, no development hooks) and publish each platform as its
+          experimental-<platform> pre-release, moving that tag. Never touches any
+          latest-* tag.
         type: boolean
         default: false
   workflow_call:
@@ -56,15 +57,53 @@ jobs:
 
   build:
     needs: check-publication
+    # platform names the build everywhere it produces output: the job, its
+    # artifacts, the Linux package suffix and its latest-<platform> tag.
+    name: build (${{ matrix.platform }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-2025
+          - platform: windows
+            os: windows-2025
             directory: build-vc180-64
-          - os: ubuntu-26.04
+            container: ''
+          # Two Linux viewers. linux-LTS is built inside Ubuntu 24.04 (glibc
+          # 2.39, GCC 14): a binary needs at least the glibc and libstdc++ it
+          # was built against, so it runs on Ubuntu 24.04 and newer, and the
+          # check below enforces that. 2.39 is the lowest that works: the
+          # prebuilt Mesa/Zink package already needs glibc 2.38. linux is
+          # built directly on GitHub's ubuntu-latest runner with the newest
+          # GCC it ships; its floor follows that runner and is only reported.
+          - platform: linux-LTS
+            os: ubuntu-latest
             directory: build-linux-x86_64
+            linux_flavor: container
+            package_suffix: ubuntu24.04
+            gcc: '14'
+            max_glibc: '2.39'
+            max_glibcxx: '3.4.33'
+            # The host's preinstalled toolchains are mounted in so that the
+            # disk step below can remove them (the container cannot reach the host otherwise).
+            container:
+              image: ubuntu:24.04
+              volumes:
+                - /usr/local/lib/android:/host-free/usr_local_lib_android
+                - /usr/share/dotnet:/host-free/usr_share_dotnet
+                - /opt/ghc:/host-free/opt_ghc
+                - /usr/local/.ghcup:/host-free/usr_local_.ghcup
+                - /opt/hostedtoolcache/CodeQL:/host-free/opt_hostedtoolcache_CodeQL
+                - /usr/local/share/powershell:/host-free/usr_local_share_powershell
+                - /usr/share/swift:/host-free/usr_share_swift
+                - /usr/local/julia:/host-free/usr_local_julia
+          - platform: linux
+            os: ubuntu-latest
+            directory: build-linux-x86_64
+            linux_flavor: host
+            package_suffix: ubuntu-latest
+            container: ''
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     env:
       # Release packages: vkstorm-release pushes, Second_Life tags, and the manually
       # dispatched experimental build of vkstorm-canary.
@@ -73,15 +112,14 @@ jobs:
       AUTOBUILD_ADDRSIZE: 64
       AUTOBUILD_CONFIGURATION: ReleaseFS_open
       AUTOBUILD_VSVER: "180"
-      AUTOBUILD_VARIABLES_FILE: ${{ github.workspace }}/.build-variables/variables
-      AUTOBUILD_INSTALLABLE_CACHE: ${{ github.workspace }}/.autobuild-installables
       LL_SKIP_REQUIRE_SYSROOT: 1
     steps:
-      # The ubuntu-26.04 image leaves about 16 GB free on / by the time the
+      # The hosted Ubuntu images leave about 16 GB free on / by the time the
       # viewer links, and the GCC LTO link of vulkanstorm-bin can need more
       # ("lto-wrapper: fatal error: write: No space left on device", for
       # example run 41989168080). Remove preinstalled toolchains this build never
-      # uses. In the ubuntu:24.04 job container they are mounted under /host-free.
+      # uses. In the ubuntu:24.04 job container (linux-LTS) they are mounted
+      # under /host-free.
       - name: Free runner disk space for the LTO link
         if: runner.os == 'Linux'
         shell: bash
@@ -95,6 +133,26 @@ jobs:
             sudo docker image prune --all --force >/dev/null 2>&1 || true
           fi
           echo "After: $(df -h --output=avail / | tail -1) free on /"
+
+      # The hosted tool cache's Python is built for the runner's own Ubuntu
+      # and its ssl module need not load in the container, so the container
+      # build uses the container's own Python 3 in a virtual environment.
+      - name: Prepare the Linux build container
+        if: matrix.linux_flavor == 'container'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          echo "DEBIAN_FRONTEND=noninteractive" >> "$GITHUB_ENV"
+          apt-get -o Acquire::Retries=3 update
+          apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+            sudo git ca-certificates curl wget file xz-utils bzip2 zstd unzip \
+            make binutils lsb-release procps python3 python3-venv
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 -m venv /opt/vkstorm-python
+          echo /opt/vkstorm-python/bin >> "$GITHUB_PATH"
+          . /etc/os-release
+          echo "Linux build container: $PRETTY_NAME, $(ldd --version | head -n 1), $(python3 --version)" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/checkout@v7
         with:
@@ -116,21 +174,40 @@ jobs:
           echo "revision=$build_revision" >> "$GITHUB_ENV"
           echo "AUTOBUILD_BUILD_ID=$build_revision" >> "$GITHUB_ENV"
           echo "Source $(git rev-parse HEAD): build $build_revision" >> "$GITHUB_STEP_SUMMARY"
+          # The github.workspace expression names the host path, not where a
+          # container sees the workspace; $GITHUB_WORKSPACE is right in both.
+          echo "AUTOBUILD_VARIABLES_FILE=$GITHUB_WORKSPACE/.build-variables/variables" >> "$GITHUB_ENV"
+          echo "AUTOBUILD_INSTALLABLE_CACHE=$GITHUB_WORKSPACE/.autobuild-installables" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v7
+        if: matrix.linux_flavor != 'container'
         with:
           python-version: "3.11"
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         shell: bash
+        env:
+          VKSTORM_GCC: ${{ matrix.gcc }}
         run: |
+          set -euo pipefail
           sudo apt-get -o Acquire::Retries=3 update
+          # linux-LTS pins GCC 14 (Ubuntu 24.04's libstdc++). The host build
+          # takes the newest GCC its runner's Ubuntu ships: GCC 14 on 24.04,
+          # GCC 15 on 26.04.
+          gcc=$VKSTORM_GCC
+          if [ -z "$gcc" ]; then
+            for v in 15 14; do
+              if apt-cache policy "g++-$v" | grep -q 'Candidate: [0-9]'; then gcc=$v; break; fi
+            done
+          fi
+          test -n "$gcc"
+          echo "Linux compiler: gcc-$gcc on $(. /etc/os-release && echo "$PRETTY_NAME")" >> "$GITHUB_STEP_SUMMARY"
           sudo apt-get -o Acquire::Retries=3 install -y \
-            gcc-15 g++-15 build-essential pkg-config \
+            "gcc-$gcc" "g++-$gcc" build-essential pkg-config \
             libgl1-mesa-dev libglu1-mesa-dev libpulse-dev libssl-dev \
             libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype-dev
-          echo "CC=gcc-15" >> "$GITHUB_ENV"
-          echo "CXX=g++-15" >> "$GITHUB_ENV"
+          echo "CC=gcc-$gcc" >> "$GITHUB_ENV"
+          echo "CXX=g++-$gcc" >> "$GITHUB_ENV"
 
       - name: Checkout locally qualified build variables
         uses: actions/checkout@v7
@@ -142,6 +219,13 @@ jobs:
 
       - name: Install build dependencies
         run: python -m pip install autobuild==3.10.2 llsd
+
+      # The container's own CMake is 3.28; use the version of the hosted runners.
+      - name: Install CMake in the Linux container
+        if: matrix.linux_flavor == 'container'
+        run: |
+          python -m pip install cmake==4.4.4
+          cmake --version
 
       - name: Check installer version and payload
         run: |
@@ -209,7 +293,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get install -y mesa-utils mesa-vulkan-drivers xvfb xauth
-          g++-15 -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llwindow \
+          "$CXX" -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llwindow \
             indra/llwindow/tests/linux_zink_loader_test.cpp -lGL -lX11 -ldl \
             -o "$RUNNER_TEMP/linux-zink-loader-test"
           export VK_DRIVER_FILES="$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' -print -quit)"
@@ -226,11 +310,12 @@ jobs:
           cmake -S indra -B ${{ matrix.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
           cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel 3
 
-      # Ubuntu 26.04: the GCC LTO link of vulkanstorm-bin writes its temporary
-      # objects to $TMPDIR (default /tmp), which overran on the Release build
+      # The GCC LTO link of vulkanstorm-bin writes its temporary objects to
+      # $TMPDIR. On a 26.04 host /tmp is an 8 GiB tmpfs, which overran
       # ("lto-wrapper: fatal error: write: Disk quota exceeded", run
-      # 40710871603). Give it disk-backed temporary space and swap for the
-      # link's memory peak; the build flags are unchanged.
+      # 40710871603), so the build uses disk-backed temporary space. A swap
+      # file can only be added outside a container; the container build links
+      # with the host's own 3 GiB swap.
       - name: Prepare Linux temporary space and swap for the LTO link
         if: runner.os == 'Linux'
         shell: bash
@@ -244,7 +329,9 @@ jobs:
           sudo mkdir -p "$base/vkstorm-tmp"
           sudo chown "$(id -u):$(id -g)" "$base/vkstorm-tmp"
           echo "TMPDIR=$base/vkstorm-tmp" >> "$GITHUB_ENV"
-          if [ "$(df --output=avail -k "$base" | tail -1)" -gt 67108864 ]; then
+          if [ -f /.dockerenv ]; then
+            echo "Building in a container: no swap file added"
+          elif [ "$(df --output=avail -k "$base" | tail -1)" -gt 67108864 ]; then
             sudo fallocate -l 24G "$base/vkstorm.swap"
             sudo chmod 600 "$base/vkstorm.swap"
             sudo mkswap "$base/vkstorm.swap"
@@ -258,10 +345,30 @@ jobs:
       - name: Build viewer and stage runtime
         run: cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
 
-      - name: Report Linux glibc and libstdc++ requirements
+      # linux-LTS fails if anything built or packaged needs more than Ubuntu
+      # 24.04 has: glibc 2.39, and GLIBCXX_3.4.33 from GCC 14's libstdc++.
+      # The ubuntu-latest build (no limits in its matrix entry) only reports.
+      - name: Check Linux glibc and libstdc++ requirements
         if: runner.os == 'Linux'
         shell: bash
+        env:
+          VKSTORM_MAX_GLIBC: ${{ matrix.max_glibc }}
+          VKSTORM_MAX_GLIBCXX: ${{ matrix.max_glibcxx }}
         run: bash scripts/ci_report_glibc.sh "${{ matrix.directory }}/newview"
+
+      # The two Linux packages would otherwise share one name: give each its
+      # build's suffix (-ubuntu24.04, -ubuntu-latest).
+      - name: Name the Linux package for its build
+        if: runner.os == 'Linux' && env.VIEWER_PACKAGE == 'ON'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packages=("${{ matrix.directory }}"/newview/*.tar.xz)
+          test "${#packages[@]}" = 1 || { echo "Expected one Linux package, found ${#packages[@]}" >&2; exit 1; }
+          renamed="${packages[0]%.tar.xz}-${{ matrix.package_suffix }}.tar.xz"
+          mv "${packages[0]}" "$renamed"
+          echo "Linux package: $(basename "$renamed")" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep qualification builds free of installers
         if: env.VIEWER_PACKAGE != 'ON'
@@ -310,7 +417,7 @@ jobs:
         if: env.VIEWER_PACKAGE == 'ON'
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ runner.os }}-installer
+          name: ${{ matrix.platform }}-installer
           if-no-files-found: error
           path: |
             ${{ matrix.directory }}/newview/Release/*_Setup.exe
@@ -320,7 +427,7 @@ jobs:
         if: env.VIEWER_PACKAGE != 'ON'
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ runner.os }}-qualification-viewer
+          name: ${{ matrix.platform }}-qualification-viewer
           if-no-files-found: error
           path: |
             ${{ matrix.directory }}/newview/RelWithDebInfo/
@@ -330,7 +437,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ runner.os }}-build-evidence
+          name: ${{ matrix.platform }}-build-evidence
           path: |
             ${{ matrix.directory }}/CMakeCache.txt
             ${{ matrix.directory }}/CMakeFiles/CMakeConfigureLog.yaml
@@ -340,83 +447,150 @@ jobs:
             ${{ matrix.directory }}/zink-*-test.txt
             ${{ matrix.directory }}/newview/viewer_version.txt
 
+  # Each platform advances its own tag when its own build succeeds:
+  # latest-windows, latest-linux-LTS (the ubuntu:24.04 build) and latest-linux
+  # (the ubuntu-latest build). None waits for another platform's success, and
+  # each release carries only its own platform's package.
   latest:
     # PR builds validate changes but must never publish release binaries.
     if: >-
+      !cancelled() &&
       github.repository == 'anne-skydancer/vulkanstorm' &&
       github.ref == 'refs/heads/vkstorm-release' &&
       contains(fromJSON('["push", "workflow_dispatch", "schedule"]'), github.event_name)
     needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows, linux-LTS, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     concurrency:
-      group: vulkanstorm-latest-release
+      group: vulkanstorm-latest-${{ matrix.platform }}
       cancel-in-progress: false
+    env:
+      PLATFORM: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v8
+      - name: Check that this platform's build succeeded
+        id: built
+        uses: actions/github-script@v9
         with:
-          pattern: '*-installer'
-          path: installers
-      - name: Publish both platforms and advance latest
+          script: |
+            const { buildSucceeded } = require('./scripts/ci_publish_latest.cjs');
+            core.setOutput('ok', String(await buildSucceeded({ github, context, core, platform: process.env.PLATFORM })));
+      - uses: actions/download-artifact@v8
+        if: steps.built.outputs.ok == 'true'
+        with:
+          name: ${{ matrix.platform }}-installer
+          path: installers/${{ matrix.platform }}-installer
+      - name: Publish and advance latest-${{ matrix.platform }}
+        if: steps.built.outputs.ok == 'true'
         uses: actions/github-script@v9
         with:
           script: |
             const publish = require('./scripts/ci_publish_latest.cjs');
-            await publish({ github, context, core, directory: 'installers' });
+            await publish({ github, context, core, directory: 'installers', channel: publish.channels.latest[process.env.PLATFORM] });
 
   experimental:
-    # The manually dispatched Release build of vkstorm-canary: publishes the
-    # experimental pre-release and moves the experimental tag, after both
-    # platforms succeed. It never publishes to latest (canary builds must not
-    # advance latest).
+    # The manually dispatched Release build of vkstorm-canary: each platform
+    # publishes its own experimental-<platform> pre-release and moves its tag
+    # when its own build succeeds. It never publishes to any latest-* tag
+    # (canary builds must not advance latest).
     if: >-
+      !cancelled() &&
       github.repository == 'anne-skydancer/vulkanstorm' &&
       github.ref == 'refs/heads/vkstorm-canary' &&
       github.event_name == 'workflow_dispatch' && inputs.experimental_release
     needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows, linux-LTS, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     concurrency:
-      group: vulkanstorm-experimental-release
+      group: vulkanstorm-experimental-${{ matrix.platform }}
       cancel-in-progress: false
+    env:
+      PLATFORM: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v8
+      - name: Check that this platform's build succeeded
+        id: built
+        uses: actions/github-script@v9
         with:
-          pattern: '*-installer'
-          path: installers
-      - name: Publish both platforms and move experimental
+          script: |
+            const { buildSucceeded } = require('./scripts/ci_publish_latest.cjs');
+            core.setOutput('ok', String(await buildSucceeded({ github, context, core, platform: process.env.PLATFORM })));
+      - uses: actions/download-artifact@v8
+        if: steps.built.outputs.ok == 'true'
+        with:
+          name: ${{ matrix.platform }}-installer
+          path: installers/${{ matrix.platform }}-installer
+      - name: Publish and move experimental-${{ matrix.platform }}
+        if: steps.built.outputs.ok == 'true'
         uses: actions/github-script@v9
         with:
           script: |
             const publish = require('./scripts/ci_publish_latest.cjs');
-            await publish({ github, context, core, directory: 'installers', channel: publish.channels.experimental });
+            await publish({ github, context, core, directory: 'installers', channel: publish.channels.experimental[process.env.PLATFORM] });
 
   release:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/Second_Life')
+    # A Second_Life tag's release takes each platform's package whose build
+    # succeeded; a failed platform does not hold back the others.
+    if: ${{ !cancelled() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/Second_Life') }}
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check which platform builds succeeded
+        id: built
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { buildSucceeded } = require('./scripts/ci_publish_latest.cjs');
+            for (const platform of ['windows', 'linux-LTS', 'linux']) {
+              core.setOutput(platform, String(await buildSucceeded({ github, context, core, platform })));
+            }
       - uses: actions/download-artifact@v8
         with:
           pattern: '*-installer'
           path: installers
       - uses: secondlife-3p/action-gh-release@v1
+        if: steps.built.outputs.windows == 'true'
         with:
           prerelease: true
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: |
-            installers/Windows-installer/*.exe
-            installers/Linux-installer/*.tar.xz
+          files: installers/windows-installer/Release/*_Setup.exe
+      - uses: secondlife-3p/action-gh-release@v1
+        if: steps.built.outputs.linux-LTS == 'true'
+        with:
+          prerelease: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: installers/linux-LTS-installer/*-ubuntu24.04.tar.xz
+      - uses: secondlife-3p/action-gh-release@v1
+        if: steps.built.outputs.linux == 'true'
+        with:
+          prerelease: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: installers/linux-installer/*-ubuntu-latest.tar.xz

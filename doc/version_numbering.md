@@ -6,7 +6,7 @@ The viewer version is `1.0.0.<count>` on release, development and their feature 
 
 C++ major/minor/patch values remain numeric. Windows binary and installer resource versions use `1.0.0.0` because each resource component is limited to 16 bits and the source count exceeds 65535; the string ProductVersion and installer UI retain the complete version. macOS short bundle versions keep the numeric three-component core.
 
-Existing artifacts retain the version of their source commit. New numbering requires a new build. Advance `latest` only after both Windows and Linux release platform builds succeed.
+Existing artifacts retain the version of their source commit. New numbering requires a new build. Each `latest-<platform>` tag (`latest-windows`, `latest-linux-LTS`, `latest-linux`) advances only after its own Release platform build succeeds.
 
 Build configuration rejects shallow repositories and CI fetches complete history. VVM update comparisons parse complete stable/canary input and reject malformed versions instead of treating them as rollbacks. Velopack retains a separate numeric canary prerelease count, and both macOS plist templates use the three-component numeric bundle version. Regression checks cover these consumers.
 
