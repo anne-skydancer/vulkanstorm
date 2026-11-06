@@ -185,8 +185,10 @@ LLSD& LLBasicCertificate::_initLLSD()
         mLLSDInfo[CERT_SERIAL_NUMBER] = cert_string_from_asn1_integer(sn);
     }
 
-    mLLSDInfo[CERT_VALID_TO] = cert_date_from_asn1_time(X509_get_notAfter(mCert));
-    mLLSDInfo[CERT_VALID_FROM] = cert_date_from_asn1_time(X509_get_notBefore(mCert));
+    // <Vulkanstorm> X509_get_notAfter/notBefore are deprecated aliases;
+    // the get0 accessors return const ASN1_TIME. </Vulkanstorm>
+    mLLSDInfo[CERT_VALID_TO] = cert_date_from_asn1_time(X509_get0_notAfter(mCert));
+    mLLSDInfo[CERT_VALID_FROM] = cert_date_from_asn1_time(X509_get0_notBefore(mCert));
     // add the known extensions
     mLLSDInfo[CERT_BASIC_CONSTRAINTS] = _basic_constraints_ext(mCert);
     mLLSDInfo[CERT_KEY_USAGE] = _key_usage_ext(mCert);
@@ -443,7 +445,7 @@ std::string cert_string_from_asn1_string(ASN1_STRING* value)
 
 // retrieve a date structure from an ASN1 time, for
 // validity checking.
-LLDate cert_date_from_asn1_time(ASN1_TIME* asn1_time)
+LLDate cert_date_from_asn1_time(const ASN1_TIME* asn1_time)
 {
 
     struct tm timestruct = {0};
