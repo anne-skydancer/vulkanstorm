@@ -1929,6 +1929,18 @@ If you do not understand the distinction then leave this control alone."
          name="16"
          value="16"/>
       </combo_box>
+      <check_box
+       control_name="RenderAlphaStochasticTemporal"
+       follows="left|top"
+       height="16"
+       initial_value="true"
+       label="Accumulate over the frames"
+       layout="topleft"
+       left="25"
+       top_pad="6"
+       width="300"
+       tool_tip="Averages the grain over the frames while the view holds, so 8 samples look as fine as many more. Moving objects can ghost a little."
+       name="StochasticTemporal"/>
 
     </panel>
 

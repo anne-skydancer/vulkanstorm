@@ -11953,13 +11953,24 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderAlphaStochasticSamples</key>
   <map>
     <key>Comment</key>
-    <string>Stochastic transparency: coverage samples per pixel, 4, 8 or 16 (the nearest above). Passes take at most 8 samples, so 16 runs the stochastic depth and accumulation passes twice. More samples, less noise in layered transparency, at the cost of those passes.</string>
+    <string>Stochastic transparency: coverage samples per pixel, 4, 8 or 16 (the nearest above). Passes take at most 8 samples, so 16 runs the stochastic depth and accumulation passes twice. More samples, less noise in layered transparency, at the cost of those passes. 8 with the temporal accumulation is the default.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
     <string>U32</string>
     <key>Value</key>
-    <integer>16</integer>
+    <integer>8</integer>
+  </map>
+  <key>RenderAlphaStochasticTemporal</key>
+  <map>
+    <key>Comment</key>
+    <string>Stochastic transparency: accumulate the noise over the frames. The seeds change every frame and the last frame's colour, moved by the camera's motion and clamped to this frame's neighbourhood, is blended in at one eighth. Static views converge to a fine, steady image from 8 samples; moving objects can ghost a little.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>1</integer>
   </map>
   <key>RenderAlphaStochasticAvailable</key>
   <map>
