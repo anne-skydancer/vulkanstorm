@@ -36,6 +36,8 @@
 #include "lltimer.h"
 #include "httpstats.h"
 
+#include <vector> // <Vulkanstorm/>
+
 namespace
 {
 
@@ -256,13 +258,31 @@ HttpService::ELoopSpeed HttpPolicy::processReadyQueue()
         if (needed > 0)
         {
             // First see if we have any retries...
+            // <Vulkanstorm> a due retry to a host with all its connections
+            // busy is set aside and goes back on the heap afterwards, so
+            // that due retries to other hosts behind it still run
+            std::vector<HttpOpRequest::ptr_t> host_full;
+            struct Requeue
+            {
+                HttpRetryQueue & q;
+                std::vector<HttpOpRequest::ptr_t> & ops;
+                ~Requeue() { for (const HttpOpRequest::ptr_t & op : ops) q.push(op); }
+            } requeue{ retryq, host_full };     // also on the throttle exit below
+            // </Vulkanstorm>
             while (needed > 0 && ! retryq.empty())
             {
                 HttpOpRequest::ptr_t op(retryq.top());
-                if (op->mPolicyRetryAt > now || ! host_free(op)) // <Vulkanstorm/> host full: the retry waits
+                if (op->mPolicyRetryAt > now)
                     break;
 
                 retryq.pop();
+                // <Vulkanstorm>
+                if (! host_free(op))
+                {
+                    host_full.push_back(op);
+                    continue;
+                }
+                // </Vulkanstorm>
 
                 op->stageFromReady(mService);
                 op.reset();
