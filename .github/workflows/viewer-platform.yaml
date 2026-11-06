@@ -497,7 +497,8 @@ jobs:
   # Advances this platform's tag (a tag with its release, doc/release_channels.md)
   # once this platform's build has succeeded.
   publish:
-    name: publish
+    # "<platform> / publish <tag>", e.g. "windows / publish windows-latest".
+    name: publish ${{ inputs.tag }}
     needs: build
     if: inputs.tag != '' && inputs.release
     runs-on: ubuntu-latest

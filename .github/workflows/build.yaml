@@ -36,17 +36,23 @@ on:
         default: false
   workflow_call:
   pull_request:
+  # Feature branches build through their pull request only (no duplicate push
+  # run for the same commit); pushes build the vkstorm-* lines and tags.
   push:
-    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-vulkan-rhi", "vkstorm-vulkan-direct", "vkstorm-rust", "vkstorm-aleph", "codex/**"]
+    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-vulkan-rhi", "vkstorm-vulkan-direct", "vkstorm-rust", "vkstorm-aleph"]
     tags: ["Second_Life*"]
 
 permissions:
   contents: read
 
-# Avoid compiling the same feature commit for both push and PR events.
+# One run per pull request or line: a new push cancels the PR's or the
+# line's previous run. Not on vkstorm-release (its pushes publish; a newer
+# push queues behind the running one) or tags, and every dispatch has a
+# group of its own, so publication is never cancelled half-way. Each
+# publish job also holds its tag's lock (viewer-platform.yaml).
 concurrency:
-  group: viewer-build-${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'codex/') && format('refs/heads/{0}', github.head_ref) || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/codex/') }}
+  group: build-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/vkstorm-release' && !startsWith(github.ref, 'refs/tags/')) }}
 
 jobs:
   check-publication:
