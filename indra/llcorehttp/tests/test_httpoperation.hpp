@@ -27,6 +27,7 @@
 #define TEST_LLCORE_HTTP_OPERATION_H_
 
 #include "_httpoperation.h"
+#include "_httpoprequest.h" // <Vulkanstorm/> admissionKey()
 #include "httphandler.h"
 
 #include <iostream>
@@ -102,6 +103,34 @@ namespace tut
         h1.reset();
     }
 
+    // <Vulkanstorm>
+    template <> template <>
+    void HttpOperationTestObjectType::test<3>()
+    {
+        set_test_name("HttpOpRequest admission key: host and effective port, the HTTP proxy for plain http");
+
+        using LLCore::HttpOpRequest;
+        const std::string none;
+        // one key for every spelling of one host and port
+        ensure_equals("https default port", HttpOpRequest::admissionKey("https://cdn.example/a/b?c", none), std::string("cdn.example:443"));
+        ensure_equals("https explicit port", HttpOpRequest::admissionKey("https://cdn.example:443/x", none), std::string("cdn.example:443"));
+        ensure_equals("case and userinfo", HttpOpRequest::admissionKey("HTTPS://user:pw@CDN.Example:0443", none), std::string("cdn.example:443"));
+        ensure_equals("http default port", HttpOpRequest::admissionKey("http://cdn.example?q", none), std::string("cdn.example:80"));
+        ensure_equals("other port", HttpOpRequest::admissionKey("http://cdn.example:8002/#f", none), std::string("cdn.example:8002"));
+        ensure_equals("IPv6 literal", HttpOpRequest::admissionKey("http://[::1]:8000/x", none), std::string("[::1]:8000"));
+        ensure_equals("IPv6 default port", HttpOpRequest::admissionKey("https://[::1]/x", none), std::string("[::1]:443"));
+        // plain http through an HTTP proxy is the proxy's connection
+        ensure_equals("http via proxy", HttpOpRequest::admissionKey("http://a.example/x", "10.0.0.1:3128"), std::string("proxy 10.0.0.1:3128"));
+        ensure_equals("second origin, same proxy", HttpOpRequest::admissionKey("http://b.example:8080/x", "http://10.0.0.1:3128"),
+                      std::string("proxy 10.0.0.1:3128"));
+        ensure_equals("proxy default port", HttpOpRequest::admissionKey("http://a.example/x", "Proxy.Example"), std::string("proxy proxy.example:1080"));
+        ensure_equals("https proxy default port", HttpOpRequest::admissionKey("http://a.example/x", "https://proxy.example"),
+                      std::string("proxy proxy.example:443"));
+        // https is tunnelled to the origin; a SOCKS proxy relays to it
+        ensure_equals("https via proxy", HttpOpRequest::admissionKey("https://a.example/x", "10.0.0.1:3128"), std::string("a.example:443"));
+        ensure_equals("SOCKS proxy", HttpOpRequest::admissionKey("http://a.example/x", "socks5h://10.0.0.1"), std::string("a.example:80"));
+    }
+    // </Vulkanstorm>
 }
 
 #endif  // TEST_LLCORE_HTTP_OPERATION_H_
