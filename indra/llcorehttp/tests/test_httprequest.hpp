@@ -3146,6 +3146,8 @@ void HttpRequestTestObjectType::test<24>()
             { "/encoding/gzipzlib/", true, true },
             { "/encoding/gzipmulti/", true, true },
             { "/encoding/gziptrail/", true, true },
+            { "/encoding/gzipraw/", true, true },
+            { "/encoding/gziplist/", true, true },
             { "/encoding/deflate/", true, true },
             { "/encoding/rawdeflate/", true, true },
             { "/encoding/binary/", true, false },
@@ -3178,6 +3180,29 @@ void HttpRequestTestObjectType::test<24>()
                 ensure(std::string("Bad encoding refused for ") + c.path,
                        handler.mStatus == HttpStatus(HttpStatus::EXT_CURL_EASY, CURLE_BAD_CONTENT_ENCODING));
             }
+        }
+
+        // zlib output still pending when the input runs out must not be lost
+        for (const auto & big : { std::make_pair("/encoding/rawbig/", std::string(16400, 'A')),
+                                  std::make_pair("/encoding/gzipbig/", std::string(70000, 'A')) })
+        {
+            handler.mCalls = 0;
+            HttpHandle bh = req->requestGet(HttpRequest::DEFAULT_POLICY_ID,
+                                            get_base_url() + big.first,
+                                            HttpOptions::ptr_t(),
+                                            HttpHeaders::ptr_t(),
+                                            handlerp);
+            ensure(std::string("Valid handle for ") + big.first, bh != LLCORE_HTTP_HANDLE_INVALID);
+            int count(0);
+            while (count++ < LOOP_COUNT_LONG && handler.mCalls < 1)
+            {
+                req->update(1000000);
+                usleep(LOOP_SLEEP_INTERVAL);
+            }
+            ensure(std::string("Reply in time for ") + big.first, handler.mCalls == 1);
+            ensure(std::string("Success for ") + big.first, bool(handler.mStatus));
+            ensure_equals(std::string("Body size for ") + big.first, handler.mBody.size(), big.second.size());
+            ensure(std::string("Body for ") + big.first, handler.mBody == big.second);
         }
 
         handler.mCalls = 0;

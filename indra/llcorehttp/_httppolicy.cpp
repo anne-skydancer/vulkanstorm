@@ -240,6 +240,18 @@ HttpService::ELoopSpeed HttpPolicy::processReadyQueue()
         int active(transport.getActiveCountInClass(policy_class));
         int active_limit(state.mOptions.activeLimit());
         int needed(active_limit - active);      // Expect negatives here
+        static_assert(LLCORE_HTTP_READY_QUEUE_IGNORES_PRIORITY,
+                      "per-host admission erases from the ready queue's container, which must be the FIFO deque");
+        // <Vulkanstorm> per-host admission for a deep-queue class with
+        // libcurl 7.62+ (HttpPolicyClass::hostLimit()): a request to a host
+        // with all its connections busy waits here, never in libcurl
+        const int host_limit(int(state.mOptions.hostLimit()));
+        auto host_free = [&](const HttpOpRequest::ptr_t & op)
+        {
+            return host_limit <= 0
+                || transport.getActiveCountForHost(policy_class, op->mReqHost) < host_limit;
+        };
+        // </Vulkanstorm>
 
         if (needed > 0)
         {
@@ -247,7 +259,7 @@ HttpService::ELoopSpeed HttpPolicy::processReadyQueue()
             while (needed > 0 && ! retryq.empty())
             {
                 HttpOpRequest::ptr_t op(retryq.top());
-                if (op->mPolicyRetryAt > now)
+                if (op->mPolicyRetryAt > now || ! host_free(op)) // <Vulkanstorm/> host full: the retry waits
                     break;
 
                 retryq.pop();
@@ -278,8 +290,21 @@ HttpService::ELoopSpeed HttpPolicy::processReadyQueue()
             // Now go on to the new requests...
             while (needed > 0 && ! readyq.empty())
             {
-                HttpOpRequest::ptr_t op(readyq.top());
-                readyq.pop();
+                // <Vulkanstorm> the oldest request whose host has a free
+                // connection; none: the class waits for a completion
+                HttpReadyQueue::container_type & ready(readyq.get_container());
+                HttpReadyQueue::container_type::iterator pick(ready.begin());
+                while (pick != ready.end() && ! host_free(*pick))
+                {
+                    ++pick;
+                }
+                if (pick == ready.end())
+                {
+                    break;
+                }
+                HttpOpRequest::ptr_t op(*pick);
+                ready.erase(pick);
+                // </Vulkanstorm>
 
                 op->stageFromReady(mService);
                 op.reset();
