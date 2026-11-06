@@ -74,34 +74,78 @@ static const char * const LOG_CORE("CoreHttp");
 // decoded (libcurl's CURLE_BAD_CONTENT_ENCODING).
 namespace
 {
-bool inflate_reply(const std::string & in, int window_bits, std::string & out)
+// Inflates `in` into a new BufferArray, reading and writing in chunks so
+// that no whole copy of either side is made. Successive gzip members (a
+// valid concatenation) are all decoded. Returns NULL if the data does not
+// decode or the output cannot be stored.
+LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits)
 {
     z_stream z;
     memset(&z, 0, sizeof(z));
     if (inflateInit2(&z, window_bits) != Z_OK)
     {
-        return false;
+        return NULL;
     }
-    z.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(in.data()));
-    z.avail_in = static_cast<uInt>(in.size());
-    char buf[16384];
-    int ret(Z_OK);
-    while (ret == Z_OK)
+    LLCore::BufferArray * out(new LLCore::BufferArray());
+    char inbuf[16384];
+    char outbuf[16384];
+    size_t pos(0);
+    bool ok(true), ended(false), next_member(false);
+    while (ok)
     {
-        z.next_out = reinterpret_cast<Bytef *>(buf);
-        z.avail_out = sizeof(buf);
-        ret = inflate(&z, Z_NO_FLUSH);
-        if (ret == Z_OK || ret == Z_STREAM_END)
+        if (z.avail_in == 0)
         {
-            out.append(buf, sizeof(buf) - z.avail_out);
+            const size_t n(in->read(pos, inbuf, sizeof(inbuf)));
+            if (n == 0)
+            {
+                break;          // all input used (a truncated stream keeps what decoded, as libcurl did)
+            }
+            pos += n;
+            z.next_in = reinterpret_cast<Bytef *>(inbuf);
+            z.avail_in = static_cast<uInt>(n);
         }
-        else if (ret == Z_BUF_ERROR && z.avail_in == 0)
+        if (ended)
         {
-            break;              // truncated input: what was decoded is kept, as libcurl did
+            // more input after a complete stream: the next gzip member
+            if (inflateReset(&z) != Z_OK)
+            {
+                ok = false;
+                break;
+            }
+            ended = false;
+            next_member = true;
         }
+        z.next_out = reinterpret_cast<Bytef *>(outbuf);
+        z.avail_out = sizeof(outbuf);
+        const int ret(inflate(&z, Z_NO_FLUSH));
+        const size_t produced(sizeof(outbuf) - z.avail_out);
+        if (ret == Z_DATA_ERROR && next_member && produced == 0)
+        {
+            break;              // trailing bytes after a complete stream are not another member: ignored
+        }
+        if (ret != Z_OK && ret != Z_STREAM_END && !(ret == Z_BUF_ERROR && produced == 0 && z.avail_in == 0))
+        {
+            ok = false;
+            break;
+        }
+        if (produced)
+        {
+            next_member = false;
+        }
+        if (produced && out->append(outbuf, produced) != produced)
+        {
+            ok = false;         // BufferArray could not allocate
+            break;
+        }
+        ended = (ret == Z_STREAM_END);
     }
     inflateEnd(&z);
-    return ret == Z_STREAM_END || ret == Z_OK || ret == Z_BUF_ERROR;
+    if (!ok)
+    {
+        out->release();
+        return NULL;
+    }
+    return out;
 }
 
 // 1: decoded into `body`; 0: not an encoding to undo; -1: bad encoded data.
@@ -121,21 +165,17 @@ int decode_reply(const std::string & encoding, LLCore::BufferArray * & body)
     {
         return 1;
     }
-    std::string in(body->size(), '\0');
-    body->read(0, &in[0], in.size());
-    std::string out;
-    bool ok(gzip ? inflate_reply(in, 15 + 16, out) : inflate_reply(in, 15, out));
-    if (!ok && !gzip)
+    // gzip as libcurl 7.54.1 decoded it: MAX_WBITS + 32 detects a gzip or
+    // zlib wrapper. deflate: zlib, then a raw stream as libcurl's fallback.
+    LLCore::BufferArray * decoded(inflate_reply(body, gzip ? MAX_WBITS + 32 : MAX_WBITS));
+    if (!decoded && !gzip)
     {
-        out.clear();
-        ok = inflate_reply(in, -15, out);
+        decoded = inflate_reply(body, -MAX_WBITS);
     }
-    if (!ok)
+    if (!decoded)
     {
         return -1;
     }
-    LLCore::BufferArray * decoded(new LLCore::BufferArray());
-    decoded->append(out.data(), out.size());
     body->release();
     body = decoded;
     return 1;
@@ -583,12 +623,9 @@ void HttpLibcurl::policyUpdated(unsigned int policy_class)
     //
     // A deep-queue class keeps the connections it had with HTTP/1.1
     // pipelining: up to its per-host limit to a host and its connection
-    // limit in all. It still runs per-host limit x depth requests
-    // (HttpPolicyClass::activeLimit()); with HTTP/1.1 those beyond the open
-    // connections wait in libcurl's queue for the next free one, as they
-    // waited in a pipeline before (their transfer timeout is doubled for
-    // that, _httpoprequest.cpp). Where a server offers h2, up to `depth`
-    // streams share a connection instead, the shape pipelining had.
+    // limit in all. It runs one request per connection
+    // (HttpPolicyClass::activeLimit()); the rest wait in llcorehttp's ready
+    // queue, as they waited in a pipeline before.
     HttpPolicy & policy(mService->getPolicy());
     const HttpPolicyClass & options(policy.getClassOptions(policy_class));
     CURLM * multi_handle(mMultiHandles[policy_class]);
