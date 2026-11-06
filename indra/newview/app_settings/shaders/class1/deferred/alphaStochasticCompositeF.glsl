@@ -36,6 +36,8 @@ uniform sampler2DMS alpha_st_trans; // red prod(1 - alpha), green the glow (addi
 uniform int st_samples_hw;          // samples of the targets
 uniform int st_samples;             // samples in all, over the iterations
 uniform int st_glow;
+uniform sampler2D alpha_st_resolved; // the temporal accumulation: the blended colour, averaged
+uniform int st_temporal;             // 1: the colour pass takes alpha_st_resolved instead of the samples
 
 void main()
 {
@@ -48,10 +50,18 @@ void main()
         vec2 tg = texelFetch(alpha_st_trans, px, s).rg;
         trans += tg.r;
         glow += tg.g;
-        accum += texelFetch(alpha_st_accum, px, s);
+        if (st_temporal == 0 || st_glow != 0)
+        {
+            accum += texelFetch(alpha_st_accum, px, s);
+        }
     }
     float total = 1.0 - trans / float(max(st_samples_hw, 1));
     accum /= float(max(st_samples, 1));
+    if (st_temporal != 0 && st_glow == 0)
+    {
+        // the blended colour (alpha included): the correction below is total alpha over its alpha
+        accum = texelFetch(alpha_st_resolved, px, 0);
+    }
     float corr = accum.a > 1e-5 ? total / accum.a : 1.0;
     if (st_glow != 0)
     {
