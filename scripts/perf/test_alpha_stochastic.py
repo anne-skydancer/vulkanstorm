@@ -103,6 +103,7 @@ def model_mask(px,py,seed,prim,a,s,table):
     v=[]
     for p,q in zip(pv,rot):
         t=f32(p+q);v.append(f32(t-math.floor(t)))
+    v[1]=f32((h32(sd^h^0x5bd1e995)>>8)/16777216.0)   # the subset: hashed from the seed and the pixel
     r=min(int(math.floor(f32(f32(min(max(a,0.),1.)*s)+v[0]))),s)
     col=min(int(f32(v[1]*SEEDS)),SEEDS-1)
     return table[r*SEEDS+col]
@@ -652,6 +653,48 @@ for rel in ('class2/deferred/alphaF.glsl','class1/deferred/fullbrightF.glsl','cl
     assert 'centroid in ' in text,rel
 checks+=1
 print('alpha programs: every interpolated fragment input is `centroid in`')
+
+# ---- two layers whose rotations meet on one table entry (the subset of the mask table)
+# The subset of a fragment was the table column of fract(pixel value + the layer's rotation), so
+# two layers whose rotations fell in one of the 2048 columns (about one pair in a thousand, many
+# pairs among hundreds of hair cards) had the same subset at every pixel of their overlap: their
+# masks coincide, the union of the two covers R samples instead of about 2R - R^2/S, and the layers
+# behind them see too few covered samples. The subset is now hashed from the seed and the pixel.
+def rot_y(seed):
+    sd=h32((seed*0x9e3779b9+0x7f4a7c15)&0xffffffff);sd=h32(sd^h32(0x632be5ab))   # triangle 0
+    return f32((h32(sd)>>8)/16777216.0)
+order=sorted(range(1,6000),key=rot_y)
+best=min(zip(order,order[1:]),key=lambda ab:abs(rot_y(ab[0])-rot_y(ab[1])))
+SEED_A,SEED_B=best;SEED_C=7777
+assert abs(rot_y(SEED_A)-rot_y(SEED_B))<2e-6,('colliding pair',best)
+assert 'v.y = float(st_hash(seed ^ h ^ 0x5bd1e995u)' in helper,'the hashed subset is in the shader'
+lines=helper.splitlines();i=next(k for k,ln in enumerate(lines) if ln.strip()=='vec2 v = fract(pv + rot);')
+j=next(k for k,ln in enumerate(lines) if ln.strip()=='uint s = uint(st_samples);')
+helper_old=chr(10).join(lines[:i+1]+lines[j:])   # the shader as it was: the subset from the rotated value
+variant_old=program([(0x8B31,vertex),(0x8B30,"""#version 420
+uniform float test_alpha; out vec4 frag_color; int alpha_stochastic_mask(float a);
+void main(){ frag_color=vec4(0.0,0.0,0.0,max(test_alpha,0.0)); gl_SampleMask[0]=alpha_stochastic_mask(test_alpha); }"""),(0x8B30,helper_old)])
+def coincide(prog,total,n):
+    global variant
+    saved=variant;variant=prog
+    try:
+        set_opaque(1.0)
+        return stochastic([L(0.3,0.5,(1.,0.,0.),seed=SEED_A),L(0.45,0.5,(0.,1.,0.),seed=SEED_B),L(0.6,0.5,(0.,0.,1.),seed=SEED_C)],total,n)
+    finally:
+        variant=saved
+want=(0.5,0.25,0.125)
+subset_report=[]
+for total,n in ((4,4),(8,8),(16,8)):
+    for name,prog in (('hashed',variant),('rotated',variant_old)):
+        pix=coincide(prog,total,n)
+        mean=[sum(p[c] for p in pix)/len(pix) for c in range(3)]
+        err=max(abs(m-w) for m,w in zip(mean,want))
+        if name=='hashed': assert err<0.01,('three layers, the front two colliding',total,mean,want)
+        else: assert err>0.05,('the rotated subset should show the bias',total,mean)
+        subset_report.append((total,name,mean[2],err))
+    checks+=1
+print(f'two layers whose subsets collide (seeds {SEED_A} and {SEED_B}) over a third: the back layer reads '
+      +', '.join(f'S = {t} {nm}: {b:.3f} (exact {want[2]:.3f})' for t,nm,b,e in subset_report))
 
 print(f'{checks} stochastic transparency cases passed.')
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)
