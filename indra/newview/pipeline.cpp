@@ -3207,6 +3207,10 @@ void LLPipeline::shiftObjects(const LLVector3 &offset)
     glClear(GL_DEPTH_BUFFER_BIT);
     gDepthDirty = true;
 
+    // The saved stochastic-transparency view is in the old agent frame; the shift would
+    // otherwise read as camera motion and reproject unrelated history.
+    mAlphaSTHistoryValid = false;
+
     LLVector4a offseta;
     offseta.load3(offset.mV);
 
