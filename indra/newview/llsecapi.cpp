@@ -31,37 +31,20 @@
 #include "llsechandler_basic.h"
 #include "llexception.h"
 #include "stringize.h"
-#include <openssl/evp.h>
-#include <openssl/err.h>
 #include <map>
-
-#include <openssl/engine.h> // <FS:ND> To enable rdrand engine if possible
 
 std::map<std::string, LLPointer<LLSecAPIHandler> > gHandlerMap;
 LLPointer<LLSecAPIHandler> gSecAPIHandler;
 
 void initializeSecHandler()
 {
-    ERR_load_crypto_strings();
-    OpenSSL_add_all_algorithms();
-
-    // <FS:ND If we can, enabled the rdrand engine. It is available as a CPU instruction on newer Intel CPUs
-    ENGINE_load_builtin_engines();
-
-    ENGINE* engRdRand = ENGINE_by_id("rdrand");
-    if( engRdRand )
-        ENGINE_set_default(engRdRand, ENGINE_METHOD_RAND);
-
-    unsigned long lErr ( ERR_get_error() );
-    while( lErr )
-    {
-        char aError[128];
-        ERR_error_string_n( lErr, aError, sizeof( aError ) );
-        LL_WARNS() << aError << LL_ENDL;
-
-        lErr = ERR_get_error();
-    }
-    // </FS:ND>
+    // <Vulkanstorm> OpenSSL 3 initialises itself (algorithms, error strings)
+    // on first use, so the 1.0-era ERR_load_crypto_strings() and
+    // OpenSSL_add_all_algorithms() calls are gone. So is Firestorm's rdrand
+    // ENGINE as the default RAND method: ENGINE is deprecated in 3.0 (a
+    // build error under /WX and -Werror) and removed in 4.0, and the 3.x
+    // DRBG seeds from the OS generator (BCryptGenRandom, getrandom), which
+    // already mixes in the CPU's RDRAND/RDSEED where present. </Vulkanstorm>
 
     gHandlerMap[BASIC_SECHANDLER] = new LLSecAPIBasicHandler();
 

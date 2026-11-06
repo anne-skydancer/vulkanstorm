@@ -60,10 +60,9 @@ two options.
 Third-party components stay under their own licences whichever you choose.
 Whether a given binary can be distributed under a given option depends on
 the libraries linked into it: see the compatibility audit in
-[`doc/licensing.md`](doc/licensing.md). **At present the viewer binaries
-link OpenSSL 1.1.1, which is not compatible with GPL-3.0, so the
-GPL-3.0 option applies to the source code only and the binaries are offered
-under LGPL-2.1** until it is replaced (the open point there; GLOD, the other one, has been removed).
+[`doc/licensing.md`](doc/licensing.md). The viewer binaries link OpenSSL
+3.5 (Apache-2.0, compatible with GPL-3.0); OpenSSL 1.1.1, which was not, and
+GLOD have been replaced or removed, so the open points there are resolved.
 
 ## Contributions
 
