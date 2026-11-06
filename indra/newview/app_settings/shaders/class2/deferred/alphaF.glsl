@@ -47,13 +47,13 @@ uniform int classic_mode;
 uniform sampler2D diffuseMap;
 #endif
 
-in vec3 vary_fragcoord;
-in vec3 vary_position;
-in vec2 vary_texcoord0;
-in vec3 vary_norm;
+centroid in vec3 vary_fragcoord;
+centroid in vec3 vary_position;
+centroid in vec2 vary_texcoord0;
+centroid in vec3 vary_norm;
 
 #ifdef USE_VERTEX_COLOR
-in vec4 vertex_color; //vertex color should be treated as sRGB
+centroid in vec4 vertex_color; //vertex color should be treated as sRGB
 #endif
 
 uniform float minimum_alpha;

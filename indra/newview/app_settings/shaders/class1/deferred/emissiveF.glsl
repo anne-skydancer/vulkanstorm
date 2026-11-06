@@ -27,8 +27,8 @@
 
 out vec4 frag_color;
 
-in vec4 vertex_color;
-in vec2 vary_texcoord0;
+centroid in vec4 vertex_color;
+centroid in vec2 vary_texcoord0;
 
 void main()
 {

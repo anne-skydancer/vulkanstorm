@@ -36,9 +36,9 @@ int alpha_stochastic_mask(float a);
 uniform sampler2D diffuseMap;
 #endif
 
-in vec3 vary_position;
-in vec4 vertex_color;
-in vec2 vary_texcoord0;
+centroid in vec3 vary_position;
+centroid in vec4 vertex_color;
+centroid in vec2 vary_texcoord0;
 
 vec3 srgb_to_linear(vec3 cs);
 vec3 linear_to_srgb(vec3 cl);
