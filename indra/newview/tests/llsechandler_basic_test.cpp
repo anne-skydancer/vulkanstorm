@@ -54,12 +54,6 @@
 #include <openssl/err.h>
 #include "../llmachineid.h"
 
-// <Vulkanstorm> llui's llurlentry.cpp calls RLVa's rlvGetAnonym(), which
-// lives in newview; GCC's linker needs it although no test reaches it.
-class LLAvatarName;
-std::string rlvGetAnonym(const LLAvatarName&) { return std::string(); }
-// </Vulkanstorm>
-
 #define ensure_throws(str, exc_type, cert, func, ...) \
 try \
 { \

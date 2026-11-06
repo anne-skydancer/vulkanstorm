@@ -32,12 +32,6 @@
 #include "../llsechandler_basic.h"
 #include "../../llxml/llcontrol.h"
 
-// <Vulkanstorm> llui's llurlentry.cpp calls RLVa's rlvGetAnonym(), which
-// lives in newview; GCC's linker needs it although no test reaches it.
-class LLAvatarName;
-std::string rlvGetAnonym(const LLAvatarName&) { return std::string(); }
-// </Vulkanstorm>
-
 
 //----------------------------------------------------------------------------
 // Mock objects for the dependencies of the code we're testing
