@@ -27,6 +27,18 @@ and every dispatch has a group of its own; each publish job also holds its
 tag's lock. Pushes build the vkstorm-* lines; a feature branch builds through
 its pull request; no tag triggers a build.
 
+A CI change is validated as a CI change: **CI lint** (`ci-lint.yaml`) runs on
+pull requests that touch `.github/`, the CI scripts, the linux-lts package list
+or `autobuild.xml` (actionlint, the scripts' tests, the package list check,
+`scripts/tests/test_ci_files.py`). The build workflows skip a pull request
+that changes only CI files and documentation; a vkstorm-release push or a
+dispatch always builds.
+
+`linux-lts` builds with the line's `scripts/linux_lts_packages.json`. A line
+gets that list with its first package update that has linux64-lts archives;
+until then the `linux-lts` job stops at its first step ("this line has no
+linux-lts package list yet").
+
 | Platform | Built | Package | Floor |
 |---|---|---|---|
 | `windows` | windows-2025, MSVC; Inno Setup installer | `*_Setup.exe` | – |
