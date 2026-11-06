@@ -36,6 +36,7 @@ uniform int st_samples_hw;         // samples of the pass's targets (at most 8)
 uniform int st_samples;            // samples in all (4, 8 or 16: the table's S)
 uniform int st_iteration;          // the run of the depth and accumulation passes
 uniform int st_seed;               // the face's identity (LLDrawInfo::mStochasticSeed)
+uniform int st_frame;              // the frame, in the seed with the temporal accumulation (0: a fixed field)
 
 #define ST_SEEDS 2048u
 
@@ -53,6 +54,11 @@ uint st_mask(float a)
 {
     uint seed = st_hash(uint(st_seed) * 0x9e3779b9u + 0x7f4a7c15u);
     seed = st_hash(seed ^ st_hash(uint(gl_PrimitiveID) + 0x632be5abu));
+    // with the temporal accumulation the field changes every frame, from stable identities
+    if (st_frame != 0)
+    {
+        seed = st_hash(seed + uint(st_frame) * 0x9e3779b9u);
+    }
     uvec2 px = uvec2(gl_FragCoord.xy);
     uint h = st_hash(px.x | (px.y << 16u));
     vec2 pv = vec2(float(h >> 8u), float(st_hash(h) >> 8u)) / 16777216.0;

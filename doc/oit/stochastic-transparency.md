@@ -115,6 +115,48 @@ sixteenth of a pixel behind sloped planes, and that the old passes show them on 
 per sample (it reads `gl_SamplePosition`): 0.26 ms instead of 0.03 ms per spread at 2560x1440 with
 8 samples on an RTX 5070 Ti (NVIDIA 621.01), run once at S = 4 or 8 and twice at S = 16.
 
+## Temporal accumulation (`RenderAlphaStochasticTemporal`, default on)
+
+8 samples in one run of the passes, with the noise averaged over the frames, instead of 16 samples in
+two runs: the second run of the stochastic depth and accumulation is gone. The design and the weights
+are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reprojected` and `cs_resolve`).
+
+- The masks' seeds change every frame (`st_frame` in the seed hash, only with the accumulation on; the
+  face identities stay stable, so layers keep their roles).
+- `alphaStochasticResolveF.glsl`, one full-screen pass after the accumulation: this frame's accumulated
+  colour (alpha x colour, alpha) averaged over the samples, blended 1/8 with the last frame's blended
+  colour taken where this pixel's nearest transparent surface was (the minimum of the stochastic depth
+  over the samples), moved by the camera alone (this frame's clip space to the last frame's, from the
+  matrices the pipeline keeps itself, `mAlphaSTLastModelView` and `mAlphaSTLastProjection`) and clamped
+  to the 3 x 3 minimum and maximum of this frame, as a TAA's history is. The result is the next frame's
+  history and the composite's accumulated colour; the alpha correction there is this frame's total alpha
+  over its alpha, so an alpha change is never ghosted. The glow keeps the current frame's accumulation.
+- No history on the first frame, after a resize, when the setting or the method is switched, or when the
+  frame before did not run the method (the history stamp is the frame counter).
+- Memory: two full-size RGBA16F colours (the history and the latest), 16 bytes a pixel: 33 MB at 1920 x
+  1080, 59 MB at 2560 x 1440, allocated only while the setting is on. The passes' own targets are as
+  before.
+- Not reprojected: the surfaces' own motion (an avatar's hair in motion, an animated texture): there the
+  history ghosts, limited by the clamp.
+
+Offline (`test_alpha_stochastic.py`, three layers of alpha 0.2, 0.4, 0.5, rmse/255 against exact, NVIDIA
+and Mesa Zink): 8 samples 5.77, 16 samples 3.74, 8 samples accumulated 5.91 at frame 1, 2.22 at frame 8,
+1.60 at frame 16, 1.56 at frame 40; the image changes by 0.95 between frames, against 6.99 for 8 re-seeded
+samples; after a 3 pixel camera move the columns at the edges of the layers read 1.30 with the history
+reprojected and 2.69 without; after an alpha change from 0.2/0.4/0.5 to 0.05/0.1/0.1 the first frame reads
+1.01 (0.81 without the history).
+
+Hair-like random strips (10 layers, alpha 0.2 to 0.6, rmse/255 against sorted alpha at every sample; plain
+8 samples 4.7 to 5.4, plain 16 samples 3.5 to 4.0): a camera pan of 1 or 4 pixels a frame, history
+reprojected, 2.9 and 2.5; surfaces moving 0.25, 0.5, 1 and 4 pixels a frame, not reprojected, 10.9, 13.1,
+14.8 and 15.1: the history ghosts there, three times the plain 8 samples. A variance clip of the history
+(mean plus or minus 0.75 deviations inside the minimum and maximum) gives 11.2 at 2 pixels a frame against
+15.6 for the minimum and maximum, and slows the convergence.
+
+Cost: the resolve pass alone, 0.5 to 0.7 ms at 1920 x 1080 and 1.7 to 2.0 ms at 2560 x 1440 on a machine
+under load (about the composite's own cost); the second run of the passes it replaces is, in the shaded
+bench above, 2.6 to 3.3 ms at 1080p and 4.8 to 6.7 ms at 1440p.
+
 ## What takes the method, and what does not
 
 Exactly the draws PPLL captured, with the same exclusions:
