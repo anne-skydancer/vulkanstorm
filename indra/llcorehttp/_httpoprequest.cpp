@@ -446,6 +446,16 @@ void HttpOpRequest::setupCommon(HttpRequest::policy_t policy_id,
     mProcFlags = 0U;
     mReqPolicy = policy_id;
     mReqURL = url;
+    // <Vulkanstorm> the connection key: scheme and authority, lower case
+    {
+        const size_t scheme(url.find("://"));
+        const size_t start(scheme == std::string::npos ? 0 : scheme + 3);
+        const size_t end(url.find_first_of("/?#", start));
+        mReqHost = url.substr(0, end == std::string::npos ? url.size() : end);
+        std::transform(mReqHost.begin(), mReqHost.end(), mReqHost.begin(),
+                       [](unsigned char c) { return char(tolower(c)); });
+    }
+    // </Vulkanstorm>
     if (body)
     {
         body->addRef();

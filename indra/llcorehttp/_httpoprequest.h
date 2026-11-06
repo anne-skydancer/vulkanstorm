@@ -194,6 +194,7 @@ public:
     // Request data
     EMethod             mReqMethod;
     std::string         mReqURL;
+    std::string         mReqHost;       // <Vulkanstorm/> scheme://authority, for per-host admission (_httppolicy.cpp)
     BufferArray *       mReqBody;
     off_t               mReqOffset;
     size_t              mReqLength;
