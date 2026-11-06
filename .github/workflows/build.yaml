@@ -19,7 +19,7 @@ on:
         default: false
       record_inventory_fixtures:
         description: >-
-          Linux (ubuntu-latest build) only: record the libstdc++ trees of the R2
+          Linux (ubuntu-26.04 build) only: record the libstdc++ trees of the R2
           and R3b inventory oracles (llinventorymodel_parity, llinvfetch_parity)
           twice, require identical dumps, and upload them as the
           linux-inventory-fixtures artifact. The replay tests then fail until the
@@ -32,14 +32,6 @@ on:
           windows-latest, linux-latest, linux-lts on vkstorm-release;
           experimental-<platform> on vkstorm-canary; preview-<platform> on
           vkstorm-devel. Other lines never publish.
-        type: boolean
-        default: false
-      record_inventory_fixtures:
-        description: >-
-          Linux only: record the libstdc++ trees of the R2 and R3b inventory
-          oracles (llinventorymodel_parity, llinvfetch_parity) twice, require
-          identical dumps, and upload them as the linux-inventory-fixtures
-          artifact. The replay tests then fail until the files are committed.
         type: boolean
         default: false
   workflow_call:
