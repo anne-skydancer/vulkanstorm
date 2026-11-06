@@ -19,7 +19,7 @@ This procedure may or may not work on other Linux distributions (or you might ne
 > Building on a system with a glibc version older than 2.34 will likely result in linker errors.
 
 > [!NOTE]
-> Vulkanstorm CI builds two Linux packages. `*-ubuntu24.04.tar.xz` (tag `latest-linux-LTS`) is built inside an Ubuntu 24.04 container with GCC 14, and CI fails it if anything needs more than glibc 2.39 or GLIBCXX_3.4.33: it runs on Ubuntu 24.04 and newer. `*-ubuntu-latest.tar.xz` (tag `latest-linux`) is built directly on GitHub's `ubuntu-latest` runner with the newest GCC that runner's Ubuntu ships; it needs at least that runner's glibc, which CI reports but does not limit. Linux users are pointed at `latest-linux-LTS`; nothing points at `latest-linux` for updates.
+> Vulkanstorm's CI builds the Linux viewer twice (doc/release_channels.md). `linux-latest` (`*-ubuntu-latest.tar.xz`) is built and linked on GitHub's `ubuntu-26.04` runner (the newest GitHub runner, bumped by hand), with the newest GCC its Ubuntu ships and packages built on ubuntu-26.04; it needs at least that runner's glibc, which CI reports. `linux-lts` (`*-ubuntu24.04.tar.xz`) is built and linked inside an Ubuntu 24.04 container with GCC 14 and 24.04-built packages, and CI fails it if anything needs more than glibc 2.39 or GLIBCXX_3.4.33, so it runs on Ubuntu 24.04 and newer.
 
 > [!IMPORTANT]
 > Only 64 bit builds are possible - 32 bit support was dropped quite some time ago.

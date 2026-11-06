@@ -1,0 +1,62 @@
+{
+  "_about": "The viewer's CI platforms, read by scripts/ci_publish_latest.cjs to plan build.yaml's build matrix and its publication (doc/release_channels.md). Each platform is one call of viewer-platform.yaml (checks \"<name> / build\" and \"<name> / publish\"), uploading <name>-installer with one package ending in package.suffix. tags.main is its vkstorm-release tag; vkstorm-canary and vkstorm-devel publish it as experimental-<tags.line> and preview-<tags.line>. automatic platforms build on every push and pull request, pull_requests platforms on every pull request too (so the on-demand linux-lts build never rots); on workflow_dispatch the input named by dispatch_input selects it. A FreeBSD build (freebsd-latest, planned) is one more entry.",
+  "windows": {
+    "title": "Windows",
+    "automatic": true,
+    "dispatch_input": "windows",
+    "package": { "subdirectory": "Release", "suffix": "_Setup.exe" },
+    "tags": { "main": "windows-latest", "line": "windows" },
+    "build": {
+      "os": "windows-2025",
+      "directory": "build-vc180-64",
+      "container": ""
+    }
+  },
+  "linux": {
+    "title": "Linux",
+    "_note": "Built and linked directly on GitHub's ubuntu-26.04 runner (the newest GitHub runner, bumped by hand when a newer one ships) with the newest GCC its Ubuntu ships and the packages of autobuild.xml, built on ubuntu-26.04. The tag and package keep the name linux-latest / -ubuntu-latest across such bumps. A binary needs at least the glibc and libstdc++ it was built against, so its floor is that runner's; CI reports it.",
+    "automatic": true,
+    "dispatch_input": "linux",
+    "package": { "subdirectory": "", "suffix": "-ubuntu-latest.tar.xz" },
+    "tags": { "main": "linux-latest", "line": "linux-latest" },
+    "build": {
+      "os": "ubuntu-26.04",
+      "directory": "build-linux-x86_64",
+      "linux_flavor": "host",
+      "package_suffix": "ubuntu-latest",
+      "container": ""
+    }
+  },
+  "linux-lts": {
+    "title": "Linux LTS (Ubuntu 24.04)",
+    "_note": "Published on demand, built on every pull request. Built and linked inside ubuntu:24.04 (glibc 2.39, GCC 14) with the 24.04-built packages of scripts/linux_lts_packages.json, so it runs on Ubuntu 24.04 and newer; CI fails it on anything newer than glibc 2.39 or GLIBCXX_3.4.33. The host's preinstalled toolchains are mounted under /host-free so that the disk step can remove them.",
+    "automatic": false,
+    "pull_requests": true,
+    "dispatch_input": "linux_lts",
+    "package": { "subdirectory": "", "suffix": "-ubuntu24.04.tar.xz" },
+    "tags": { "main": "linux-lts", "line": "linux-lts" },
+    "build": {
+      "os": "ubuntu-26.04",
+      "directory": "build-linux-x86_64",
+      "linux_flavor": "container",
+      "package_suffix": "ubuntu24.04",
+      "package_override": "scripts/linux_lts_packages.json",
+      "gcc": "14",
+      "max_glibc": "2.39",
+      "max_glibcxx": "3.4.33",
+      "container": {
+        "image": "ubuntu:24.04",
+        "volumes": [
+          "/usr/local/lib/android:/host-free/usr_local_lib_android",
+          "/usr/share/dotnet:/host-free/usr_share_dotnet",
+          "/opt/ghc:/host-free/opt_ghc",
+          "/usr/local/.ghcup:/host-free/usr_local_.ghcup",
+          "/opt/hostedtoolcache/CodeQL:/host-free/opt_hostedtoolcache_CodeQL",
+          "/usr/local/share/powershell:/host-free/usr_local_share_powershell",
+          "/usr/share/swift:/host-free/usr_share_swift",
+          "/usr/local/julia:/host-free/usr_local_julia"
+        ]
+      }
+    }
+  }
+}
