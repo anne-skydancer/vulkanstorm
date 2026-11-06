@@ -592,11 +592,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>a51f78c2aebebd01c1ba649fe351112f69ddfdf4</string>
+              <string>11379fc47568e2e738e8beaf65c9d2cd77d44ee7</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v7.54.1-vks1/curl-7.54.1-42123686455-linux64-42123686455.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v7.54.1-vks2/curl-7.54.1-42287708560-linux64-42287708560.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -606,11 +606,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>6091689a1e9c6cbf4e38d6b5fc52b70f30d02278</string>
+              <string>f91b8e44b32c624e535ada9fa0da2af8cdf05903</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v7.54.1-vks1/curl-7.54.1-42123686455-windows64-42123686455.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-curl/releases/download/v7.54.1-vks2/curl-7.54.1-42287708560-windows64-42287708560.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -623,7 +623,7 @@
         <key>copyright</key>
         <string>Copyright (c) 1996 - 2014, Daniel Stenberg, (daniel@haxx.se).</string>
         <key>version</key>
-        <string>7.54.1-42123686455</string>
+        <string>7.54.1-42287708560</string>
         <key>name</key>
         <string>curl</string>
         <key>description</key>
@@ -2370,11 +2370,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>183d0d51ccea8a18b1b50fc180fc5961fe747e3f</string>
+              <string>3f24145d422fe2eceacb8e40b4e0f037c87b891f</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-openssl/releases/download/v3.5.9.1/openssl-3.5.9.1-linux64-42117119543.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-openssl/releases/download/v3.5.9.2/openssl-3.5.9.2-linux64-42282004860.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -2384,11 +2384,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>4971c6c1faf08cf172fe6ce7cd2854c23a1ef085</string>
+              <string>dedee0a08a7eed1b0e56fdcb1b3e20f5a8ec0931</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-openssl/releases/download/v3.5.9.1/openssl-3.5.9.1-windows64-42117119543.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-openssl/releases/download/v3.5.9.2/openssl-3.5.9.2-windows64-42282004860.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -2401,7 +2401,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <key>copyright</key>
         <string>Copyright (c) 1998-2026 The OpenSSL Project Authors; Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson</string>
         <key>version</key>
-        <string>3.5.9.1</string>
+        <string>3.5.9.2</string>
         <key>name</key>
         <string>openssl</string>
         <key>description</key>
