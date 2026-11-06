@@ -33,9 +33,6 @@
 #include <curl/multi.h>
 
 #include <set>
-#include <map>
-#include <string>
-#include <vector>
 
 #include "httprequest.h"
 #include "_httpservice.h"
@@ -111,10 +108,6 @@ public:
     /// Threading:  called by worker thread.
     int getActiveCount() const;
     int getActiveCountInClass(unsigned int policy_class) const;
-
-    /// <Vulkanstorm> Active requests of the class to one host
-    /// (HttpOpRequest::mReqHost), for per-host admission. </Vulkanstorm>
-    int getActiveCountForHost(unsigned int policy_class, const std::string & host) const;
 
     /// Attempt to cancel a request identified by handle.
     ///
@@ -220,10 +213,8 @@ protected:
     active_set_t        mActiveOps;
     unsigned int        mPolicyCount;
     CURLM **            mMultiHandles;      // One handle per policy class
-    void releaseHost(unsigned int policy_class, const std::string & host); // <Vulkanstorm/>
-
     int *               mActiveHandles;     // Active count per policy class
-    std::vector<std::map<std::string, int> > mActiveHosts; // <Vulkanstorm/> Active count per host, per policy class
+    bool *              mDirtyPolicy;       // Dirty policy update waiting for stall (per pc)
 
 }; // end class HttpLibcurl
 

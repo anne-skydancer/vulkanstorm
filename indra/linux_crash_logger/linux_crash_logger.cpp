@@ -67,17 +67,19 @@ int main(int argc, char **argv)
 
     curl_global_init(CURL_GLOBAL_ALL);
 
-#if LIBCURL_VERSION_NUM >= 0x073800 // 7.56.0
-    // <Vulkanstorm> The mime API: curl_formadd and CURLOPT_HTTPPOST are
-    // deprecated since 7.56 (a -Werror build error with curl 8 headers).
-    // This is the version Firestorm had drafted here for a newer curl.
-    if (CURL* curl = curl_easy_init())
-    {
-        curl_mime* form = curl_mime_init(curl);
+    auto curl = curl_easy_init();
 
-        curl_mimepart* field = curl_mime_addpart(form);
+//Not compatible with LL's crusty old curl - support for the curl_mime functions
+//was introduced in curl 7.57.0, LL is still using 7.54 :(
+
+/*
+    if( curl)
+    {
+        auto form = curl_mime_init(curl);
+
+        auto field = curl_mime_addpart(form);
         curl_mime_name(field, "upload_file_minidump");
-        curl_mime_filedata(field, dmpFile.c_str());
+        curl_mime_filedata(field, dmpFile.c_str() );
 
         field = curl_mime_addpart(form);
         curl_mime_name(field, "product");
@@ -87,19 +89,19 @@ int main(int argc, char **argv)
         curl_mime_name(field, "version");
         curl_mime_data(field, version.c_str(), CURL_ZERO_TERMINATED);
 
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str() );
         curl_easy_setopt(curl, CURLOPT_MIMEPOST, form);
 
-        CURLcode res = curl_easy_perform(curl);
+        auto res = curl_easy_perform(curl);
+
+        if(res != CURLE_OK)
+            std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
 
         curl_easy_cleanup(curl);
-        curl_mime_free(form);
 
-        if (res != CURLE_OK)
-            std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
-    }
-    // </Vulkanstorm>
-#else
+        curl_mime_free(form);
+    }*/
+
 if (auto curl_handle = curl_easy_init()) {
     struct curl_httppost* formpost = NULL;
     struct curl_httppost* lastptr = NULL;
@@ -139,7 +141,6 @@ if (auto curl_handle = curl_easy_init()) {
     if (res != CURLE_OK)
         std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
 }
-#endif
 
     return 0;
 }
