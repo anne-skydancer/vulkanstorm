@@ -11964,7 +11964,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderAlphaStochasticTemporal</key>
   <map>
     <key>Comment</key>
-    <string>Stochastic transparency: accumulate the noise over the frames. The seeds change every frame and the last frame's colour, moved by the camera's motion and clamped to this frame's neighbourhood, is blended in at one eighth. Static views converge to a fine, steady image from 8 samples; moving objects can ghost a little.</string>
+    <string>Debug only, not in Preferences: the accumulation is part of the method. Stochastic transparency: accumulate the noise over the frames. The seeds change every frame and the last frame's colour, moved by the camera's motion and clamped to this frame's neighbourhood, is blended in at one eighth. Static views converge to a fine, steady image from 8 samples; moving objects can ghost a little.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>

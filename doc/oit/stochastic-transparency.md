@@ -117,6 +117,9 @@ per sample (it reads `gl_SamplePosition`): 0.26 ms instead of 0.03 ms per spread
 
 ## Temporal accumulation (`RenderAlphaStochasticTemporal`, default on)
 
+The accumulation is part of the method, not a user choice: it is not in Preferences. The debug setting
+exists for debugging only.
+
 8 samples in one run of the passes, with the noise averaged over the frames, instead of 16 samples in
 two runs: the second run of the stochastic depth and accumulation is gone. The design and the weights
 are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reprojected` and `cs_resolve`).
@@ -276,7 +279,8 @@ Exactly the draws PPLL captured, with the same exclusions:
 | Setting | Values | Default |
 |---|---|---|
 | `RenderAlphaSortMethod` | 0 sorted alpha, 1 stochastic transparency | 1 |
-| `RenderAlphaStochasticSamples` | 4, 8, 16 (values in between take the next) | 16 |
+| `RenderAlphaStochasticSamples` | 4, 8, 16 (values in between take the next) | 8 |
+| `RenderAlphaStochasticTemporal` | debug only: accumulate over the frames | TRUE |
 | `RenderAlphaStochasticAvailable` | runtime flag, not persisted | |
 
 Preferences › Graphics › Rendering 2: "Alpha rendering method" (Sorted alpha / Stochastic
