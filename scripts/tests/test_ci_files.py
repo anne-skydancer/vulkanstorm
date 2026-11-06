@@ -11,6 +11,7 @@ checks the workflows themselves (ci-lint.yaml).
 import json
 import pathlib
 import re
+import subprocess
 import sys
 
 import yaml
@@ -21,6 +22,13 @@ STEP_KEYS = {"name", "id", "if", "run", "shell", "env", "uses", "with", "working
 
 def main():
     errors = []
+    # No ignore pattern may hide a CI file (a build-* pattern once hid build-linux-lts.yaml).
+    ci_files = [p.relative_to(ROOT).as_posix() for p in (ROOT / ".github").rglob("*") if p.is_file()]
+    ci_files += [p.relative_to(ROOT).as_posix() for p in (ROOT / "scripts").glob("ci_*")]
+    result = subprocess.run(["git", "-C", str(ROOT), "check-ignore", "--no-index", "--stdin", "-z"],
+                            input="\0".join(ci_files).encode(), capture_output=True)
+    hidden = [name for name in result.stdout.decode().split("\0") if name]
+    errors += [f"{name}: matched by .gitignore" for name in hidden]
     documents = {}
     for path in sorted((ROOT / ".github").rglob("*.y*ml")):
         try:

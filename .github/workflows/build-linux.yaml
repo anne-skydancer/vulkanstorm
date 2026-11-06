@@ -19,6 +19,7 @@ on:
     # are build inputs and are never ignored.
     paths-ignore:
       - '.github/**'
+      - '.gitignore'
       - 'doc/**'
       - '**/*.md'
       - 'scripts/ci_*'
