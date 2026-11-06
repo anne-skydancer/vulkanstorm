@@ -165,6 +165,9 @@ BSD, Unlicense, Unicode-3.0, IJG and MPL-2.0 (Symphonia); MPL-2.0 is
 GPL-compatible through its section 3.3 (Secondary Licenses), and none of
 them is GPL-only or proprietary. `vkstorm-http` loads the viewer's libcurl
 at run time, so it links OpenSSL 3.5 as part of the viewer (open point 1, resolved).
+Its reply decoding (curl 8, vkstorm-core-rust #28) adds `flate2` (MIT OR
+Apache-2.0, used under MIT) on `zlib-rs` (Zlib) and nothing else; both are
+compatible with LGPL-2.1 and GPL-3.0.
 
 ## Source headers
 
