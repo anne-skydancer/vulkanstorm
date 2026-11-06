@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
-// Plans build.yaml's build matrix and publication, and publishes one channel
-// (a tag with its release) after its platform's build succeeded
-// (viewer-platform.yaml), under that channel's publication concurrency lock. doc/release_channels.md describes
-// the channels.
+// Plans one platform workflow's run (build-<platform>.yaml) and publishes its
+// channel (a tag with its release) after that platform's build succeeded,
+// under the channel's publication concurrency lock. doc/release_channels.md
+// describes the channels.
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
@@ -43,27 +43,25 @@ function channelFor(kind, platform) {
 const channels = Object.fromEntries(Object.values(lines).flatMap(({ kind }) =>
     Object.keys(platforms).map(platform => channelFor(kind, platform))).map(channel => [channel.tag, channel]));
 
-// The build matrix and the channels this run publishes. Pushes build the
-// automatic platforms (windows, linux), pull requests also linux-lts, all as
-// unpublished RelWithDebInfo qualification builds except on vkstorm-release;
-// workflow_dispatch builds the platforms its inputs select. vkstorm-release publishes its pushes (and
-// schedules); a dispatch publishes only with publish set, on the three lines.
-function plan({ eventName, ref, repository, inputs }) {
+// One platform workflow's plan (build-<platform>.yaml, doc/release_channels.md):
+// its build entry, whether it builds a Release package, and the tag it
+// publishes to ('' for none). vkstorm-release publishes its automatic
+// platforms (windows, linux) on every push; a dispatch with publish set
+// publishes the dispatched platform on the three publishing lines.
+function planPlatform({ eventName, ref, repository, inputs, platform }) {
+    if (!platforms[platform]) throw new Error(`Unknown platform ${platform}`);
     inputs = inputs || {};
-    const dispatch = eventName === 'workflow_dispatch';
     const truthy = value => value === true || value === 'true';
-    const selected = Object.keys(platforms).filter(platform => dispatch
-        ? truthy(inputs[platforms[platform].dispatch_input] ?? platforms[platform].automatic)
-        : platforms[platform].automatic || (eventName === 'pull_request' && platforms[platform].pull_requests === true));
+    const dispatch = eventName === 'workflow_dispatch';
     const line = lines[ref];
     const publishes = repository === 'anne-skydancer/vulkanstorm' && line !== undefined
-        && ((line.kind === 'main' && ['push', 'schedule'].includes(eventName)) || (dispatch && truthy(inputs.publish)));
-    const tagOf = platform => publishes ? channelFor(line.kind, platform).tag : '';
+        && ((line.kind === 'main' && platforms[platform].automatic && ['push', 'schedule'].includes(eventName))
+            || (dispatch && truthy(inputs.publish)));
     return {
-        // Release packages: vkstorm-release, Second_Life tags, a dispatch with publish.
-        release: ref === 'refs/heads/vkstorm-release' || ref.startsWith('refs/tags/Second_Life') || (dispatch && truthy(inputs.publish)),
-        matrix: { include: selected.map(platform => ({ platform, ...platforms[platform].build, tag: tagOf(platform) })) },
-        publish: publishes ? selected.map(platform => ({ platform, tag: tagOf(platform) })) : [],
+        platform,
+        entry: { platform, ...platforms[platform].build },
+        release: ref === 'refs/heads/vkstorm-release' || (dispatch && truthy(inputs.publish)),
+        tag: publishes ? channelFor(line.kind, platform).tag : '',
     };
 }
 
@@ -82,20 +80,6 @@ async function packageFile(directory, platform) {
     const stat = await fs.stat(file);
     if (!stat.isFile() || stat.size === 0) throw new Error(`Empty or invalid package: ${file}`);
     return { name: names[0], file };
-}
-
-// Whether this run's build job for the platform ("<platform> / build", from
-// viewer-platform.yaml) succeeded.
-async function buildSucceeded({ github, context, core, platform }) {
-    if (!platforms[platform]) throw new Error(`Unknown platform ${platform}`);
-    const name = `${platform} / build`;
-    const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
-        ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100,
-    });
-    const job = jobs.find(job => job.name === name || job.name.endsWith(` / ${name}`));
-    if (job?.conclusion === 'success') return true;
-    core.info(`${name} ${job ? `concluded ${job.conclusion}` : 'is not in this run'}: nothing published for ${platform}.`);
-    return false;
 }
 
 module.exports = async function publishLatest({ github, context, core, directory, channel }) {
@@ -204,6 +188,5 @@ module.exports = async function publishLatest({ github, context, core, directory
 };
 module.exports.channels = channels;
 module.exports.platforms = platforms;
-module.exports.plan = plan;
-module.exports.buildSucceeded = buildSucceeded;
+module.exports.planPlatform = planPlatform;
 module.exports.packageFile = packageFile;
