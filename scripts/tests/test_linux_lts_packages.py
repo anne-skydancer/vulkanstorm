@@ -9,7 +9,7 @@ reason no CI build installs it: the same version,
 from the same release as autobuild.xml's linux64 archive, so the linux-lts
 builds use the same library versions as linux-latest, only built in Ubuntu
 24.04. Fails when the two diverge, e.g. after a package update that changed
-only autobuild.xml.
+only autobuild.xml. Passes when the line has no list yet.
 """
 import importlib.util
 import json
@@ -26,6 +26,11 @@ def release_dir(url):
 
 
 def main():
+    if not OVERRIDE.exists():
+        # A line gets its list with its first package update that has
+        # linux64-lts archives; until then the linux-lts build stops early.
+        print(f"no linux-lts package list on this line ({OVERRIDE.relative_to(ROOT)}): nothing to check")
+        return
     spec = importlib.util.spec_from_file_location("override", ROOT / "scripts" / "ci_autobuild_override.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

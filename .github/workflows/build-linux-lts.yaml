@@ -14,6 +14,17 @@ name: Build Linux LTS
 
 on:
   pull_request:
+    # A pull request that changes only CI files or documentation builds no
+    # viewer: ci-lint.yaml validates it. The package list and autobuild.xml
+    # are build inputs and are never ignored.
+    paths-ignore:
+      - '.github/**'
+      - 'doc/**'
+      - '**/*.md'
+      - 'scripts/ci_*'
+      - 'scripts/tests/ci_*'
+      - 'scripts/tests/test_ci_files.py'
+      - 'scripts/tests/test_linux_lts_packages.py'
   workflow_dispatch:
     inputs:
       publish:

@@ -51,6 +51,19 @@ inputs:
 runs:
   using: composite
   steps:
+    # linux-lts builds only with the line's linux64-lts package list: without
+    # it autobuild.xml's linux64 packages (built on ubuntu-26.04) would not
+    # link in ubuntu:24.04. Stop before anything else.
+    - name: Check the linux-lts package list
+      if: inputs.package_override != ''
+      shell: bash
+      env:
+        OVERRIDE: ${{ inputs.package_override }}
+      run: |
+        if [ ! -f "$OVERRIDE" ]; then
+          echo "::error file=$OVERRIDE::this line has no linux-lts package list yet ($OVERRIDE); it comes with the line's package update"
+          exit 1
+        fi
     # The hosted Ubuntu images leave about 16 GB free on / by the time the
     # viewer links, and the GCC LTO link of vulkanstorm-bin can need more
     # ("lto-wrapper: fatal error: write: No space left on device", for
