@@ -83,9 +83,25 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Merge the pull request into its base
+        # What GitHub's merge commit would be; built here because that commit is not
+        # always ready when a run starts. Local to this run, never pushed.
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE: ${{ github.base_ref }}
+          # The base commit fixed at the pull request event, so every job (and a re-run)
+          # merges the same commit, even if the base branch moves meanwhile.
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags origin "$BASE_SHA"
+          if ! git -c user.name=ci -c user.email=ci@invalid merge --no-edit --no-ff "$BASE_SHA"; then
+            echo "::error::this pull request conflicts with $BASE; resolve the conflict first"
+            exit 1
+          fi
       - uses: ./.github/actions/ci-checks
         with:
           publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
@@ -119,8 +135,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+      - name: Merge the pull request into its base
+        # What GitHub's merge commit would be; built here because that commit is not
+        # always ready when a run starts. Local to this run, never pushed.
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE: ${{ github.base_ref }}
+          # The base commit fixed at the pull request event, so every job (and a re-run)
+          # merges the same commit, even if the base branch moves meanwhile.
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags origin "$BASE_SHA"
+          if ! git -c user.name=ci -c user.email=ci@invalid merge --no-edit --no-ff "$BASE_SHA"; then
+            echo "::error::this pull request conflicts with $BASE; resolve the conflict first"
+            exit 1
+          fi
       - uses: ./.github/actions/viewer-build
         with:
           platform: linux
