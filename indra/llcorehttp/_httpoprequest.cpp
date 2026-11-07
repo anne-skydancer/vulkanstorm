@@ -591,6 +591,12 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     mReplyHeaders.reset();
     mReplyConType.clear();
     mDecodeReply = false;
+    // <Vulkanstorm> a retry starts with a clean result: without a header callback (no
+    // headers wanted, Retry-After off) nothing else resets the status of the failed attempt,
+    // and the stale 503 would hide the next response.
+    mStatus = HttpStatus();
+    mReplyRetryAfter = 0;
+    // </Vulkanstorm>
 
     // *FIXME:  better error handling later
     HttpStatus status;
