@@ -83,6 +83,9 @@ FSPanelContactSets::~FSPanelContactSets()
     {
         mContactSetChangedConnection.disconnect();
     }
+    // <Vulkanstorm> The toggle-icons connection outlives the panel otherwise
+    mAvatarListToggleIconsConnection.disconnect();
+    // </Vulkanstorm>
 }
 
 bool FSPanelContactSets::postBuild()
