@@ -53,7 +53,8 @@ jobs:
             .github/workflows/build-windows.yaml .github/workflows/build-linux.yaml \
             .github/workflows/build-linux-lts.yaml .github/workflows/ci-lint.yaml \
             .github/workflows/promote-stable.yaml .github/workflows/check-pr.yaml \
-            .github/workflows/freebsd-image.yaml .github/workflows/label.yaml \n            .github/workflows/codeql.yaml
+            .github/workflows/freebsd-image.yaml .github/workflows/label.yaml \
+            .github/workflows/codeql.yaml
       - name: Publish and promote scripts
         run: node --test scripts/tests/ci_publish_latest.test.cjs scripts/tests/ci_promote_stable.test.cjs
       - name: linux-lts package list
