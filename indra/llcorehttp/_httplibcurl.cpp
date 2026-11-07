@@ -79,7 +79,14 @@ static const char * const LOG_CORE("CoreHttp");
 //    the body as it came.
 //  - gzip uses MAX_WBITS + 32 (a gzip or zlib wrapper), deflate MAX_WBITS;
 //    for either, data that does not start a valid stream is retried as a raw
-//    deflate stream, 7.54.1's fallback for servers that send no header.
+//    deflate stream, 7.54.1's fallback for servers that send no header. As
+//    there, only a format error before any output counts: 7.54.1 restarted
+//    on Z_DATA_ERROR only until inflate() had once returned Z_OK. A stream
+//    that fails later (corrupt data, a bad CRC-32 or Adler-32, no memory) is
+//    refused, never raw-decoded, which could turn a corrupt zlib stream
+//    into an unrelated body. 7.54.1 re-armed the restart for every network
+//    read, so a checksum error in a later read could still restart; here it
+//    is armed for the first inflate() call of a reply only.
 //  - Every member of a concatenation is decoded; bytes after a complete
 //    stream that do not start another member are ignored; a truncated
 //    stream keeps what decoded. Data that does not decode is refused
@@ -124,9 +131,11 @@ ReplyCoding reply_coding(const char * value)
 // Inflates `in` into a new BufferArray, reading it through
 // BufferArrayStreamBuf (sequential, no block search per chunk) in 16 KiB
 // chunks. Returns NULL if the data does not decode or the output cannot be
-// stored.
-LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits)
+// stored; `not_a_stream` is then true if the data failed as a format error
+// at its start, before any output (the raw-deflate fallback's case).
+LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits, bool & not_a_stream)
 {
+    not_a_stream = false;
     z_stream z;
     memset(&z, 0, sizeof(z));
     if (inflateInit2(&z, window_bits) != Z_OK)
@@ -137,7 +146,7 @@ LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits)
     LLCore::BufferArrayStreamBuf src(in);
     char inbuf[16384];
     char outbuf[16384];
-    bool ok(true), ended(false), next_member(false), input_done(false), full(false);
+    bool ok(true), ended(false), next_member(false), input_done(false), full(false), first_call(true);
     while (ok)
     {
         if (z.avail_in == 0 && !input_done)
@@ -173,6 +182,11 @@ LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits)
         const int ret(inflate(&z, Z_NO_FLUSH));
         const size_t produced(sizeof(outbuf) - z.avail_out);
         full = (z.avail_out == 0);
+        if (first_call && ret == Z_DATA_ERROR && produced == 0)
+        {
+            not_a_stream = true;    // bad header (or first block) before any output
+        }
+        first_call = false;
         if (ret == Z_DATA_ERROR && next_member && produced == 0)
         {
             break;              // trailing bytes after a complete stream are not another member: ignored
@@ -222,10 +236,12 @@ int decode_reply(const char * encoding, LLCore::BufferArray * & body)
     {
         return 1;
     }
-    LLCore::BufferArray * decoded(inflate_reply(body, coding == ReplyCoding::GZIP ? MAX_WBITS + 32 : MAX_WBITS));
-    if (!decoded)
+    bool not_a_stream(false);
+    LLCore::BufferArray * decoded(inflate_reply(body, coding == ReplyCoding::GZIP ? MAX_WBITS + 32 : MAX_WBITS,
+                                                not_a_stream));
+    if (!decoded && not_a_stream)
     {
-        decoded = inflate_reply(body, -MAX_WBITS);
+        decoded = inflate_reply(body, -MAX_WBITS, not_a_stream);   // 7.54.1's fallback: no zlib or gzip header
     }
     if (!decoded)
     {
