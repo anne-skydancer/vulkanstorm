@@ -184,7 +184,7 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-type", "text/plain")
             self.end_headers()
             if body:
-                self.wfile.write(body)
+                self.wfile.write(body.encode("utf-8"))
         elif "/encoding/" in self.path:
             # <Vulkanstorm> Content-Encoding handling: llcorehttp undoes gzip
             # and deflate itself and passes anything else through, as
