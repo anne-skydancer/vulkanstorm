@@ -1158,7 +1158,7 @@ selects, `VKS_HTTP_TRACE=<level>` traces, `VKS_HTTP_BENCH=<n>` times.
   form.
 
 ### Measurements
-nHistorical: these measurements were taken with libcurl 7.54.1 and OpenSSL 1.1.1w, before the viewer moved to curl 8.23.0.5 and OpenSSL 3.5.9.3; they were not repeated.
+Historical: these measurements were taken with libcurl 7.54.1 and OpenSSL 1.1.1w, before the viewer moved to curl 8.23.0.5 and OpenSSL 3.5.9.3; they were not repeated.
 
 `INTEGRATION_TEST_llcorehttp_parity` with `VKS_HTTP_BENCH=2000`: the C++ at
 the pre-port commit and the port, each built in the same tree and run
