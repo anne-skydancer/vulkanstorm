@@ -10,7 +10,7 @@ name: CodeQL
 on:
   pull_request:
   push:
-    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-aleph"]
+    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-vulkan-rhi", "vkstorm-vulkan-direct", "vkstorm-rust", "vkstorm-aleph"]
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
