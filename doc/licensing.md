@@ -95,7 +95,7 @@ compatible; **off** not built or shipped in our configuration.
 | APR, apr-util | Apache-2.0 | OK | GPL-3 only, not GPL-2 |
 | Boost | BSL-1.0 | OK | |
 | Collada DOM | MIT (package text; `autobuild.xml` says "SCEA") | OK | |
-| libcurl 7.54.1 | curl (MIT-style) | OK | rebuilt against OpenSSL 3.5.9 ([anne-skydancer/3p-curl](https://github.com/anne-skydancer/3p-curl)) |
+| libcurl 8.23.0.5 | curl (MIT-style) | OK | replaced libcurl 7.54.1; built against OpenSSL 3.5.9.3 ([anne-skydancer/3p-curl](https://github.com/anne-skydancer/3p-curl)) |
 | expat | MIT | OK | |
 | FreeType | FreeType License (or GPL-2.0) | OK | FTL is GPL-3-compatible, not GPL-2 |
 | Hunspell | MPL-1.1 / GPL-2.0 / LGPL-2.1 tri-licence | OK | taken under LGPL-2.1 |

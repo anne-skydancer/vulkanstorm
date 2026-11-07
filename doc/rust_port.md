@@ -914,9 +914,9 @@ The viewer's requirements decide it, before any measurement:
 
 | requirement | libcurl through bindings | pure Rust (hyper/reqwest on rustls) |
 |---|---|---|
-| TLS stack identical to today's (OpenSSL 1.1.1w, the staged `ca-bundle.crt` through `CURLOPT_CAINFO`, the viewer's own certificate verification installed on the `SSL_CTX` by `LLAppCoreHttp::sslVerify` against `LLSecAPIHandler`'s store) | the same library, the same calls | a different TLS implementation and certificate path; the `SSL_CTX` callback has no counterpart |
+| TLS stack identical to today's (OpenSSL 1.1.1w at the time of the port; now 3.5.9.3, the staged `ca-bundle.crt` through `CURLOPT_CAINFO`, the viewer's own certificate verification installed on the `SSL_CTX` by `LLAppCoreHttp::sslVerify` against `LLSecAPIHandler`'s store) | the same library, the same calls | a different TLS implementation and certificate path; the `SSL_CTX` callback has no counterpart |
 | proxy settings as the viewer exposes them (`LLProxy::applyProxySettings`: HTTP and SOCKS5 with user/password, applied per handle) | the same function, called on each handle | re-implemented per client |
-| HTTP/1.1 keep-alive and pipelining as today (libcurl 7.54.1 `CURLMOPT_PIPELINING` per policy class, the stall when a class is reconfigured) | identical | no HTTP/1.1 pipelining exists in hyper |
+| HTTP/1.1 keep-alive and pipelining as today (libcurl 7.54.1 `CURLMOPT_PIPELINING` per policy class; curl 8 has none, the stall when a class is reconfigured) | identical | no HTTP/1.1 pipelining exists in hyper |
 | the status and error codes callers switch on (`CURLE_*` through `HttpStatus::EXT_CURL_EASY`, `isRetryable`'s list, `CURLE_SSL_CACERT` from the certificate callback) | identical | an approximate mapping |
 | per-request timeouts, byte ranges, chunked bodies, cookies (the per-handle cookie engine, carried across the handle cache), `If-Modified-Since`, `Accept-Encoding` | identical | reproducible with care, cookies and the handle-cache carry-over not |
 | wire bytes where the viewer controls them | identical (same option setup, same order) | different request heads |
@@ -1111,7 +1111,7 @@ selects, `VKS_HTTP_TRACE=<level>` traces, `VKS_HTTP_BENCH=<n>` times.
   of the viewer's parity set against the crate's own loopback mock server
   (`tests/mock`, the same paths as the Python one, less gzip and the
   reset), run on Windows and Linux against the viewer's prebuilt libcurl
-  7.54.1 with OpenSSL (`VKS_HTTP_CURL_LIB_DIR` at the build's
+  (7.54.1 at the time; now 8.23.0.5) with OpenSSL (`VKS_HTTP_CURL_LIB_DIR` at the build's
   `packages/lib/release`). `cargo bench --bench loopback` is the
   crate-side timing harness.
 - `INTEGRATION_TEST_llcorehttp_parity` (viewer): the 16 scenarios above
@@ -1158,6 +1158,7 @@ selects, `VKS_HTTP_TRACE=<level>` traces, `VKS_HTTP_BENCH=<n>` times.
   form.
 
 ### Measurements
+nHistorical: these measurements were taken with libcurl 7.54.1 and OpenSSL 1.1.1w, before the viewer moved to curl 8.23.0.5 and OpenSSL 3.5.9.3; they were not repeated.
 
 `INTEGRATION_TEST_llcorehttp_parity` with `VKS_HTTP_BENCH=2000`: the C++ at
 the pre-port commit and the port, each built in the same tree and run
