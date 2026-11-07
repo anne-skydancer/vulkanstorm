@@ -447,6 +447,12 @@ void LLXMLRPCTransaction::Impl::setHttpStatus(const LLCore::HttpStatus &status)
         {
             message = LLTrans::getString("ssl_connect_error");
         }
+        else
+        {
+            // An expired certificate or a host name mismatch: 7.54.1's generic
+            // message, so llstartup has fallback text without certificate data.
+            message = LLTrans::getString("ssl_peer_certificate");
+        }
         break;
     // </Vulkanstorm>
 #endif
