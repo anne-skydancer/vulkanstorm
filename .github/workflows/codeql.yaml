@@ -10,7 +10,7 @@ name: CodeQL
 on:
   pull_request:
   push:
-    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-aleph", "vkstorm-rust"]
+    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-vulkan-rhi", "vkstorm-vulkan-direct", "vkstorm-rust", "vkstorm-aleph"]
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
@@ -19,7 +19,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  # The event is part of the group, so a push cannot replace a pending weekly or
+  # on-demand run, which is the only one that scans C/C++.
+  group: codeql-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
