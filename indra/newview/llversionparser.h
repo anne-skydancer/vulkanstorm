@@ -14,6 +14,8 @@ namespace LLViewerVersion
 {
 using Components = std::array<std::uint64_t, 4>;
 
+inline constexpr std::string_view canary_suffix{"-canary", sizeof("-canary") - 1};
+
 inline std::optional<Components> parse(std::string_view text)
 {
     Components components{};
@@ -26,8 +28,9 @@ inline std::optional<Components> parse(std::string_view text)
         if (result.ec != std::errc{})
             return std::nullopt;
         text.remove_prefix(result.ptr - text.data());
-        if (i == 2 && text.substr(0, 7) == "-canary")
-            text.remove_prefix(7);
+        // <Vulkanstorm> the length comes from the literal, not a bare 7
+        if (i == 2 && text.substr(0, canary_suffix.size()) == canary_suffix)
+            text.remove_prefix(canary_suffix.size());
         if (i < 3)
         {
             if (text.empty() || text.front() != '.')
