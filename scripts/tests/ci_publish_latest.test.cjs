@@ -47,6 +47,16 @@ async function fixture(t, options = {}) {
         return { data: { status: options.comparison || 'ahead' } };
     };
     repos.listReleaseAssets = () => {};
+    repos.listReleases = () => {};
+    let publishFailures = options.publishFailures || 0;
+    const baseUpdate = repos.updateRelease;
+    repos.updateRelease = async args => {
+        if (args.draft === false && publishFailures > 0) {
+            publishFailures--;
+            throw new Error('Publish failed');
+        }
+        return baseUpdate(args);
+    };
     repos.uploadReleaseAsset = async args => {
         if (options.failChecksum && args.name.startsWith('SHA256SUMS.txt')) throw new Error('Upload failed');
         return record('uploadReleaseAsset')(args);
@@ -63,12 +73,15 @@ async function fixture(t, options = {}) {
                 createRef: record('createRef'),
             },
         },
-        paginate: async () => [
-            { id: 100, name: 'old_Setup.exe' },
-            { id: 101, name: 'old-ubuntu24.04.tar.xz' },
-            { id: 102, name: 'SHA256SUMS.txt' },
-            { id: 103, name: 'manual-notes.txt' },
-        ],
+        paginate: async fn => fn === repos.listReleases
+            ? (options.draftRelease ? [{ id: 55, tag_name: 'windows-latest', draft: true, prerelease: false,
+                body: options.body || 'Maintainer notes.' }] : [])
+            : [
+                { id: 100, name: 'old_Setup.exe' },
+                { id: 101, name: 'old-ubuntu24.04.tar.xz' },
+                { id: 102, name: 'SHA256SUMS.txt' },
+                { id: 103, name: 'manual-notes.txt' },
+            ],
     };
     return {
         calls,
@@ -114,6 +127,25 @@ test('a channel publishes only its own package and checksum before moving its ta
             assert.ok(calls.findIndex(call => call.name === 'deleteReleaseAsset' && call.args.asset_id === 100) > tagIndex);
         });
     }
+});
+
+test('a re-run resumes the draft release a failed republish left behind', async t => {
+    const { args, calls } = await fixture(t, { noRelease: true, draftRelease: true });
+    await publish(args);
+    assert.ok(!calls.some(call => call.name === 'createRelease'));
+    const updates = calls.filter(call => call.name === 'updateRelease').map(call => call.args);
+    assert.equal(updates.length, 1);
+    assert.equal(updates[0].release_id, 55);
+    assert.equal(updates[0].draft, false);
+    assert.match(updates[0].body, /Maintainer notes/);
+});
+
+test('a failing final republish is retried a bounded number of times', async t => {
+    const retried = await fixture(t, { publishFailures: 2 });
+    await publish({ ...retried.args, retryDelayMs: 0 });
+    assert.equal(retried.calls.filter(call => call.name === 'updateRelease' && call.args.draft === false).length, 1);
+    const failing = await fixture(t, { publishFailures: 3 });
+    await assert.rejects(publish({ ...failing.args, retryDelayMs: 0 }), /Publish failed/);
 });
 
 test('a missing package prevents all publication writes for its channel only', async t => {

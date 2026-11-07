@@ -82,7 +82,11 @@ async function packageFile(directory, platform) {
     return { name: names[0], file };
 }
 
-module.exports = async function publishLatest({ github, context, core, directory, channel }) {
+// <Vulkanstorm> The final republish is retried a few times: it can fail after
+// the release was returned to draft, and a re-run finds that draft again.
+const publishAttempts = 3;
+
+module.exports = async function publishLatest({ github, context, core, directory, channel, retryDelayMs = 2000 }) {
     const repo = context.repo;
     const { tag } = channel;
     const runId = String(context.runId);
@@ -94,6 +98,12 @@ module.exports = async function publishLatest({ github, context, core, directory
         ({ data: release } = await github.rest.repos.getReleaseByTag({ ...repo, tag }));
     } catch (error) {
         if (error.status !== 404) throw error;
+    }
+    if (!release) {
+        // getReleaseByTag never returns a draft: look for one a failed run left behind.
+        const releases = await github.paginate(github.rest.repos.listReleases, { ...repo, per_page: 100 });
+        release = releases.find(candidate => candidate.draft && candidate.tag_name === tag);
+        if (release) core.info(`Resuming the draft release left for ${tag}.`);
     }
     const previousRun = release?.body?.match(new RegExp(`<!-- vulkanstorm-${tag}-run:(\\d+) -->`));
     if (previousRun && BigInt(previousRun[1]) > BigInt(runId)) {
@@ -169,11 +179,22 @@ module.exports = async function publishLatest({ github, context, core, directory
     ].join('\n');
     const marker = new RegExp(`<!-- vulkanstorm-${tag}-start -->[\\s\\S]*?<!-- vulkanstorm-${tag}-end -->\\s*`, 'g');
     const notes = (release.body || '').replace(marker, '');
-    await github.rest.repos.updateRelease({
-        ...repo, release_id: release.id, name: channel.name,
-        body: `${summary}\n\n${notes}`.trim(), draft: false,
-        prerelease: channel.prerelease || (release.prerelease ?? false), make_latest: channel.makeLatest ? 'true' : 'false',
-    });
+    // <Vulkanstorm> The final publish is retried a few times: a draft left by a
+    // failed run is found again by a re-run (see above).
+    for (let attempt = 1; ; attempt++) {
+        try {
+            await github.rest.repos.updateRelease({
+                ...repo, release_id: release.id, name: channel.name,
+                body: `${summary}\n\n${notes}`.trim(), draft: false,
+                prerelease: channel.prerelease || (release.prerelease ?? false), make_latest: channel.makeLatest ? 'true' : 'false',
+            });
+            break;
+        } catch (error) {
+            if (attempt >= publishAttempts) throw error;
+            core.info(`Publishing ${tag} failed (attempt ${attempt}): ${error.message}; retrying.`);
+            await new Promise(resolve => setTimeout(resolve, retryDelayMs * attempt));
+        }
+    }
     // Retire superseded packages only after the new ones are published; preserve
     // unrelated manually attached release assets.
     const current = new Set(staged.map(asset => asset.name));
