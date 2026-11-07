@@ -54,6 +54,7 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     outputs:
+      base_sha: ${{ steps.merge.outputs.base_sha }}
       entry: ${{ steps.plan.outputs.entry }}
       release: ${{ steps.plan.outputs.release }}
       tag: ${{ steps.plan.outputs.tag }}
@@ -65,17 +66,20 @@ jobs:
           persist-credentials: false
       - name: Merge the pull request into its base
         # What GitHub's merge commit would be; built here because that commit is not
-        # always ready when a run starts. Local to this run, never pushed.
+        # always ready when a run starts. Local to this run, never pushed. The base
+        # branch's current tip is resolved once here and handed to the build job, so
+        # both merge the same commit (pull_request.base.sha is not refreshed on a reopen).
+        id: merge
         if: github.event_name == 'pull_request'
         shell: bash
         env:
           BASE: ${{ github.base_ref }}
-          # The base commit fixed at the pull request event, so every job (and a re-run)
-          # merges the same commit, even if the base branch moves meanwhile.
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          git fetch --no-tags origin "$BASE_SHA"
-          if ! git -c user.name=ci -c user.email=ci@invalid merge --no-edit --no-ff "$BASE_SHA"; then
+          git fetch --no-tags origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
+          base_sha=$(git rev-parse "origin/$BASE")
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "Merging $BASE at $base_sha" >> "$GITHUB_STEP_SUMMARY"
+          if ! git -c user.name=ci -c user.email=ci@invalid merge --no-edit --no-ff "$base_sha"; then
             echo "::error::this pull request conflicts with $BASE; resolve the conflict first"
             exit 1
           fi
@@ -134,15 +138,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: Merge the pull request into its base
-        # What GitHub's merge commit would be; built here because that commit is not
-        # always ready when a run starts. Local to this run, never pushed.
+        # The same base commit the checks job merged.
         if: github.event_name == 'pull_request'
         shell: bash
         env:
           BASE: ${{ github.base_ref }}
-          # The base commit fixed at the pull request event, so every job (and a re-run)
-          # merges the same commit, even if the base branch moves meanwhile.
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ needs.checks.outputs.base_sha }}
         run: |
           git fetch --no-tags origin "$BASE_SHA"
           if ! git -c user.name=ci -c user.email=ci@invalid merge --no-edit --no-ff "$BASE_SHA"; then
