@@ -1083,7 +1083,8 @@ class Windows_x86_64_Manifest(ViewerManifest):
         dest_files = [pair[1] for pair in self.file_list if pair[0] and os.path.isfile(pair[1]) and not pair[1].endswith(".pdb")]
         dest_files.sort()
         for pkg_file in dest_files:
-            rel_file = os.path.normpath(pkg_file.replace(self.get_dst_prefix()+os.path.sep,''))
+            # <Vulkanstorm> relpath, not a string replace of the prefix
+            rel_file = os.path.relpath(pkg_file, self.get_dst_prefix())
             destination = os.path.dirname(rel_file).replace('/', '\\')
             destination = "{app}" if not destination else "{app}\\" + destination
             result.append('Source: "%s"; DestDir: "%s"; Flags: ignoreversion' %
@@ -1201,13 +1202,19 @@ class Windows_x86_64_Manifest(ViewerManifest):
 
 
     def package_finish(self):
-        if self.args.get('inno', 'ON') == 'ON':
+        # <Vulkanstorm> CMake always passes --inno and --velopack; an absent
+        # --inno is OFF, and both ON is an error rather than a silent choice.
+        use_inno = self.args.get('inno', 'OFF') == 'ON'
+        use_velopack = self.args.get('velopack', 'OFF') == 'ON'
+        if use_inno and use_velopack:
+            raise ManifestError("--inno=ON and --velopack=ON: choose one installer")
+        if use_inno:
             self.inno_package_finish()
             return
         # Check if we should use Velopack instead of NSIS
         # Note: as of 2026.01's release, we will be building with Velopack's one click install.
         # We maintain the legacy NSIS packaging mainly for TPVs at this point.
-        if self.args.get('velopack', 'OFF') == 'ON':
+        if use_velopack:
             self.velopack_package_finish()
             return
 
@@ -2773,7 +2780,7 @@ if __name__ == "__main__":
         dict(name='openal', description="""Indication openal libraries are needed""", default='OFF'),
         dict(name='soloud', description="""Include SoLoud package licenses""", default='OFF'),
         dict(name='tracy', description="""Indication tracy profiler is enabled""", default='OFF'),
-        dict(name='inno', description="Use Inno Setup for Windows installers", default='ON'),
+        dict(name='inno', description="Use Inno Setup for Windows installers", default='OFF'),
         dict(name='velopack', description="""Use Velopack installer instead of NSIS""", default='OFF'),
         dict(name='avx2', description="""Indication avx2 instruction set is enabled""", default='OFF'),
         ]
