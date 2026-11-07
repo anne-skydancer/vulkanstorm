@@ -668,6 +668,9 @@ LLPanelPeople::~LLPanelPeople()
     mContactSetsFilterCommitConnection.disconnect();
     if (mContactSetChangedConnection.connected())
         mContactSetChangedConnection.disconnect();
+    // <Vulkanstorm> The toggle-icons connection outlives the panel otherwise
+    mContactSetListToggleIconsConnection.disconnect();
+    // </Vulkanstorm>
     LLAvatarTracker::instance().removeObserver(this);
     // [/FS:CR]
 }
