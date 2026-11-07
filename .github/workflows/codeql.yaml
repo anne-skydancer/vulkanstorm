@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+#
+# CodeQL code scanning (replaces GitHub's default setup).
+# - Actions, Python and JavaScript/TypeScript: every pull request and push to a line (minutes).
+# - C/C++: weekly and on demand only, without compiling the viewer (build-mode none), so the
+#   scan no longer takes hours on every pull request.
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-aleph"]
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # The event is part of the group, so a push cannot replace a pending weekly or
+  # on-demand run, which is the only one that scans C/C++.
+  group: codeql-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, python, javascript-typescript, c-cpp]
+    steps:
+      - name: Skip C/C++ outside the weekly and on-demand runs
+        id: gate
+        shell: bash
+        env:
+          LANGUAGE: ${{ matrix.language }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$LANGUAGE" = c-cpp ] && [ "$EVENT" != schedule ] && [ "$EVENT" != workflow_dispatch ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "C/C++ is scanned weekly and on demand only." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.gate.outputs.run == 'true'
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+      - uses: github/codeql-action/analyze@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          category: /language:${{ matrix.language }}
