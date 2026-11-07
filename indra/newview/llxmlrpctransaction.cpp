@@ -447,6 +447,10 @@ void LLXMLRPCTransaction::Impl::setHttpStatus(const LLCore::HttpStatus &status)
         {
             message = LLTrans::getString("ssl_connect_error");
         }
+        else
+        {
+            message = LLTrans::getString("ssl_peer_certificate");
+        }
         break;
     // </Vulkanstorm>
 #endif
