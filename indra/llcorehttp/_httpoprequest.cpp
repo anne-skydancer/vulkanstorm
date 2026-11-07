@@ -45,6 +45,7 @@
 #include "_httpinternal.h"
 
 #include "llhttpconstants.h"
+#include "llstring.h" // <Vulkanstorm/>
 #include "llproxy.h"
 
 #include "httpstats.h"
@@ -145,6 +146,7 @@ HttpOpRequest::HttpOpRequest()
       mCurlTemp(NULL),
       mCurlTempLen(0),
       mReplyBody(NULL),
+      mDecodeReply(false),
       mReplyOffset(0),
       mReplyLength(0),
       mReplyFullLength(0),
@@ -276,9 +278,21 @@ void HttpOpRequest::visitNotifier(HttpRequest * request)
 
         HttpResponse::TransferStats::ptr_t stats = std::make_shared<HttpResponse::TransferStats>();
 
+#if LIBCURL_VERSION_NUM >= 0x073700 // 7.55.0
+        // <Vulkanstorm> the double-valued CURLINFO_SIZE/SPEED_DOWNLOAD are
+        // deprecated (a -Werror build error with curl 8 headers on GCC and
+        // clang); the curl_off_t forms hold the same values. </Vulkanstorm>
+        curl_off_t size_download(0), speed_download(0);
+        curl_easy_getinfo(mCurlHandle, CURLINFO_SIZE_DOWNLOAD_T, &size_download);
+        curl_easy_getinfo(mCurlHandle, CURLINFO_TOTAL_TIME, &stats->mTotalTime);
+        curl_easy_getinfo(mCurlHandle, CURLINFO_SPEED_DOWNLOAD_T, &speed_download);
+        stats->mSizeDownload = static_cast<F64>(size_download);
+        stats->mSpeedDownload = static_cast<F64>(speed_download);
+#else
         curl_easy_getinfo(mCurlHandle, CURLINFO_SIZE_DOWNLOAD, &stats->mSizeDownload);
         curl_easy_getinfo(mCurlHandle, CURLINFO_TOTAL_TIME, &stats->mTotalTime);
         curl_easy_getinfo(mCurlHandle, CURLINFO_SPEED_DOWNLOAD, &stats->mSpeedDownload);
+#endif
 
         response->setTransferStats(stats);
 
@@ -432,6 +446,16 @@ void HttpOpRequest::setupCommon(HttpRequest::policy_t policy_id,
     mProcFlags = 0U;
     mReqPolicy = policy_id;
     mReqURL = url;
+    // <Vulkanstorm> the connection key: scheme and authority, lower case
+    {
+        const size_t scheme(url.find("://"));
+        const size_t start(scheme == std::string::npos ? 0 : scheme + 3);
+        const size_t end(url.find_first_of("/?#", start));
+        mReqHost = url.substr(0, end == std::string::npos ? url.size() : end);
+        std::transform(mReqHost.begin(), mReqHost.end(), mReqHost.begin(),
+                       [](unsigned char c) { return char(tolower(c)); });
+    }
+    // </Vulkanstorm>
     if (body)
     {
         body->addRef();
@@ -493,6 +517,7 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     mReplyFullLength = 0;
     mReplyHeaders.reset();
     mReplyConType.clear();
+    mDecodeReply = false;
 
     // *FIXME:  better error handling later
     HttpStatus status;
@@ -511,6 +536,12 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     }
 
     check_curl_easy_setopt(mCurlHandle, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+#if LIBCURL_VERSION_NUM >= 0x073e00 // 7.62.0
+    // <Vulkanstorm> libcurl 7.62 and later negotiate HTTP/2 over TLS by
+    // default; 7.54.1 spoke HTTP/1.1 to every server. Keep HTTP/1.1 so that
+    // no server sees a different protocol from this viewer. </Vulkanstorm>
+    check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_1_1);
+#endif
     check_curl_easy_setopt(mCurlHandle, CURLOPT_NOSIGNAL, 1);
     check_curl_easy_setopt(mCurlHandle, CURLOPT_NOPROGRESS, 1);
     check_curl_easy_setopt(mCurlHandle, CURLOPT_URL, mReqURL.c_str());
@@ -518,7 +549,17 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
 
 // <FS:ND/> Newer versions of curl are stricter with checkinng Cotent-Encoding: header
 // Aws returns Content-Encoding: binary/octet-stream which is no valid scheme defined by HTTP/1.1 (compress,deflate, gzip)
-#if LIBCURL_VERSION_NUM < 0x075100
+#if LIBCURL_VERSION_NUM >= 0x075300 // 7.83.0, curl_easy_header()
+    // <Vulkanstorm> Ask for gzip and deflate as 7.54.1 did, but undo them in
+    // llcorehttp (HttpLibcurl::completeRequest) instead of in libcurl: a
+    // Content-Encoding libcurl does not know, such as the asset CDN's
+    // "binary/octet-stream" on every texture, then passes through as it did
+    // with 7.54.1 rather than failing the transfer (CURLE_BAD_CONTENT_ENCODING).
+    // The header itself is added with the request headers below.
+    check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTP_CONTENT_DECODING, 0L);
+    mDecodeReply = true;
+    // </Vulkanstorm>
+#elif LIBCURL_VERSION_NUM < 0x075100
     check_curl_easy_setopt(mCurlHandle, CURLOPT_ENCODING, "");
 #endif
 
@@ -624,7 +665,9 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     case HOR_POST:
         {
             check_curl_easy_setopt(mCurlHandle, CURLOPT_POST, 1);
+#if LIBCURL_VERSION_NUM < 0x075300
             check_curl_easy_setopt(mCurlHandle, CURLOPT_ENCODING, "");
+#endif
             long data_size(0);
             if (mReqBody)
             {
@@ -733,39 +776,16 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     }
     if (cpolicy.mPipelining > 1L)
     {
-        // Pipelining affects both connection and transfer timeout values.
-        // Requests that are added to a pipeling immediately have completed
-        // their connection so the connection delay tends to be less than
-        // the non-pipelined value.  Transfers are the opposite.  Transfer
-        // timeout starts once the connection is established and completion
-        // can be delayed due to the pipelined requests ahead.  So, it's
-        // a handwave but bump the transfer timeout up by the pipelining
-        // depth to give some room.
-        //
-        // BUG-7698, BUG-7688, BUG-7694 (others).  Scylla and Charybdis
-        // situation.  Operating against a CDN having service issues may
-        // lead to requests stalling for an arbitrarily long time with only
-        // the CURLOPT_TIMEOUT value leading to a closed connection.  Sadly
-        // for pipelining, libcurl (7.39.0 and earlier, at minimum) starts
-        // the clock on this value as soon as a request is started down
-        // the wire.  We want a short value to recover and retry from the
-        // CDN.  We need a long value to safely deal with a succession of
-        // piled-up pipelined requests.
-        //
-        // *TODO:  Find a better scheme than timeouts to guarantee liveness.
-        // Progress on the connection is what we really want, not timeouts.
-        // But we don't have access to that and the request progress indicators
-        // (various libcurl callbacks) have the same problem TIMEOUT does.
-        //
-        // xfer_timeout *= cpolicy.mPipelining;
+        // <Vulkanstorm> A deep-queue class keeps the doubled transfer
+        // timeout it had under HTTP/1.1 pipelining (BUG-7698, BUG-7688,
+        // BUG-7694: a CDN with service issues can stall a request for as
+        // long as CURLOPT_TIMEOUT allows; short enough to retry, long enough
+        // for a full queue), so no request times out sooner than before.
+        // It runs one request per connection (HttpPolicyClass::activeLimit());
+        // PIPEWAIT only matters if a request ever negotiates h2. The
+        // VIEWERASSET test switch to HTTP/2 is gone. </Vulkanstorm>
         xfer_timeout *= 2L;
-
-        // Also try requesting HTTP/2.
-/******************************/
-        // but for test purposes, only if overriding VIEWERASSET
-        if (getenv("VIEWERASSET"))
-/******************************/
-        check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+        check_curl_easy_setopt(mCurlHandle, CURLOPT_PIPEWAIT, 1L);
     }
     // *DEBUG:  Enable following override for timeout handling and "[curl:bugs] #1420" tests
     //if (cpolicy.mPipelining)
@@ -781,6 +801,24 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     {
         // Caller's headers last to override
         mCurlHeaders = append_headers_to_slist(mReqHeaders, mCurlHeaders);
+    }
+    if (mDecodeReply)
+    {
+        // <Vulkanstorm> what libcurl 7.54.1's CURLOPT_ENCODING "" sent,
+        // unless the caller gave its own, which libcurl let win
+        bool caller_set(false);
+        if (mReqHeaders)
+        {
+            for (HttpHeaders::const_iterator it(mReqHeaders->begin()); it != mReqHeaders->end(); ++it)
+            {
+                caller_set = caller_set || LLStringUtil::compareInsensitive((*it).first, "Accept-Encoding") == 0;
+            }
+        }
+        if (!caller_set)
+        {
+            mCurlHeaders = curl_slist_append(mCurlHeaders, "Accept-Encoding: deflate, gzip");
+        }
+        // </Vulkanstorm>
     }
     check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTPHEADER, mCurlHeaders);
 
@@ -969,8 +1007,6 @@ size_t HttpOpRequest::headerCallback(void * data, size_t size, size_t nmemb, voi
     // <FS:ND> To detect pipelining going out of sync, save a x-ll-url header and later compare it with the requested URL.
     // We do not bail here already, but rather postpone it until the request is finised, then yield a 503 status
     // (request will be retried) and turn pipelining off.
-    if( value && std::string( "x-ll-url" ) == name )
-        op->mXLLURL = value;
     // </FS:ND>
 
     // Save header if caller wants them in the response
