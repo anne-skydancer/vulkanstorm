@@ -84,9 +84,12 @@ jobs:
         shell: bash
         env:
           BASE: ${{ github.base_ref }}
+          # The base commit fixed at the pull request event, so every job (and a re-run)
+          # merges the same commit, even if the base branch moves meanwhile.
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          git fetch --no-tags origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
-          if ! git -c user.name=ci -c user.email=ci@invalid merge --no-edit --no-ff "origin/$BASE"; then
+          git fetch --no-tags origin "$BASE_SHA"
+          if ! git -c user.name=ci -c user.email=ci@invalid merge --no-edit --no-ff "$BASE_SHA"; then
             echo "::error::this pull request conflicts with $BASE; resolve the conflict first"
             exit 1
           fi
@@ -132,9 +135,12 @@ jobs:
         shell: bash
         env:
           BASE: ${{ github.base_ref }}
+          # The base commit fixed at the pull request event, so every job (and a re-run)
+          # merges the same commit, even if the base branch moves meanwhile.
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          git fetch --no-tags origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
-          if ! git -c user.name=ci -c user.email=ci@invalid merge --no-edit --no-ff "origin/$BASE"; then
+          git fetch --no-tags origin "$BASE_SHA"
+          if ! git -c user.name=ci -c user.email=ci@invalid merge --no-edit --no-ff "$BASE_SHA"; then
             echo "::error::this pull request conflicts with $BASE; resolve the conflict first"
             exit 1
           fi
