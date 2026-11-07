@@ -33,7 +33,7 @@
                 <key>raw_head</key>
                     <string>GET /chunked/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>0.2199999999938881956040859</real>
+                    <real>0.149999999997817212715745</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
@@ -63,11 +63,11 @@
                 <key>raw_head</key>
                     <string>GET /gzip/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>31.47899999999935971572995</real>
+                    <real>31.27499999999781721271574</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>31.02699999999458668753505</real>
+                    <real>30.99799999999959254637361</real>
                 <key>target</key>
                     <string>/gzip/</string>
                 <key>version</key>
@@ -93,11 +93,11 @@
                 <key>raw_head</key>
                     <string>GET /badrange/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nRange: bytes=0-2\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>61.65499999999883584678173</real>
+                    <real>61.62999999999738065525889</real>
                 <key>seq</key>
                     <integer>4</integer>
                 <key>t</key>
-                    <real>61.54199999999400461092591</real>
+                    <real>61.54599999999845749698579</real>
                 <key>target</key>
                     <string>/badrange/</string>
                 <key>version</key>
@@ -123,11 +123,11 @@
                 <key>raw_head</key>
                     <string>GET /badrange/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nRange: bytes=0-2\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>1092.734999999993306118995</real>
+                    <real>1090.534999999999854480848</real>
                 <key>seq</key>
                     <integer>5</integer>
                 <key>t</key>
-                    <real>1092.649999999994179233909</real>
+                    <real>1090.431999999997060513124</real>
                 <key>target</key>
                     <string>/badrange/</string>
                 <key>version</key>
@@ -153,11 +153,11 @@
                 <key>raw_head</key>
                     <string>GET /ok/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>1123.735999999997147824615</real>
+                    <real>1122.034999999999854480848</real>
                 <key>seq</key>
                     <integer>6</integer>
                 <key>t</key>
-                    <real>1123.675999999999476131052</real>
+                    <real>1121.930999999996856786311</real>
                 <key>target</key>
                     <string>/ok/</string>
                 <key>version</key>
@@ -176,7 +176,7 @@
                 <key>content_type</key>
                     <string>application/octet-stream</string>
                 <key>done_ms</key>
-                    <real>85.95409999999999683950591</real>
+                    <real>69.65550000000000352429197</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -206,7 +206,7 @@
                 <key>content_type</key>
                     <string>application/octet-stream</string>
                 <key>done_ms</key>
-                    <real>116.4736000000000046838977</real>
+                    <real>100.2275000000000062527761</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -238,7 +238,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>1178.615099999999983992893</real>
+                    <real>1159.966699999999946157914</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -270,7 +270,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>1194.697300000000041109161</real>
+                    <real>1206.466100000000096770236</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -325,7 +325,7 @@
                 <key>raw_head</key>
                     <string>GET /slow/2500/B/0 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>2500.587999999996100086719</real>
+                    <real>2500.245000000002619344741</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
@@ -357,7 +357,7 @@
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
-                    <real>2528.419000000001688022166</real>
+                    <real>2531.04500000000189174898</real>
                 <key>target</key>
                     <string>/slow/1500/R/0</string>
                 <key>version</key>
@@ -378,7 +378,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>86.28959999999999297415343</real>
+                    <real>54.03070000000000305817593</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -410,7 +410,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>86.2916000000000025238478</real>
+                    <real>54.04789999999999849933374</real>
                 <key>method</key>
                     <string />
                 <key>name</key>
@@ -442,7 +442,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>2598.724900000000161526259</real>
+                    <real>2570.461800000000039290171</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -474,7 +474,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>3023.28909999999996216502</real>
+                    <real>3004.174700000000029831426</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -506,7 +506,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>3023.297700000000077125151</real>
+                    <real>3004.204000000000178260962</real>
                 <key>method</key>
                     <string />
                 <key>name</key>
@@ -538,7 +538,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>3038.74299999999993815436</real>
+                    <real>3020.390800000000126601662</real>
                 <key>method</key>
                     <string />
                 <key>name</key>
@@ -597,7 +597,7 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/A/0 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>300.3079999999972642399371</real>
+                    <real>300.2039999999979045242071</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
@@ -627,11 +627,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/A/1 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>316.3199999999997089616954</real>
+                    <real>316.2369999999973515514284</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>15.95599999999831197783351</real>
+                    <real>15.97599999999874853529036</real>
                 <key>target</key>
                     <string>/slow/300/A/1</string>
                 <key>version</key>
@@ -657,11 +657,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/B/0 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>316.4020000000018626451492</real>
+                    <real>316.7929999999978463165462</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>16.01600000000325962901115</real>
+                    <real>16.02899999999863211996853</real>
                 <key>target</key>
                     <string>/slow/300/B/0</string>
                 <key>version</key>
@@ -687,11 +687,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/B/1 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>316.9029999999984283931553</real>
+                    <real>316.8429999999971187207848</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>16.07400000000052386894822</real>
+                    <real>16.09399999999732244759798</real>
                 <key>target</key>
                     <string>/slow/300/B/1</string>
                 <key>version</key>
@@ -717,11 +717,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/B/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>316.3640000000013969838619</real>
+                    <real>316.8159999999988940544426</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>16.13399999999819556251168</real>
+                    <real>16.13699999999880674295127</real>
                 <key>target</key>
                     <string>/slow/300/B/2</string>
                 <key>version</key>
@@ -747,11 +747,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/B/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>316.9599999999991268850863</real>
+                    <real>316.8519999999989522621036</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>16.17599999999947613105178</real>
+                    <real>16.18799999999828287400305</real>
                 <key>target</key>
                     <string>/slow/300/B/3</string>
                 <key>version</key>
@@ -777,11 +777,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/C/0 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>316.953000000001338776201</real>
+                    <real>316.875</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>16.22499999999854480847716</real>
+                    <real>16.24599999999918509274721</real>
                 <key>target</key>
                     <string>/slow/300/C/0</string>
                 <key>version</key>
@@ -807,11 +807,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/C/1 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>316.9449999999997089616954</real>
+                    <real>316.8809999999975843820721</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>16.27100000000064028427005</real>
+                    <real>16.27299999999740975908935</real>
                 <key>target</key>
                     <string>/slow/300/C/1</string>
                 <key>version</key>
@@ -837,11 +837,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/C/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>316.9349999999976716935635</real>
+                    <real>316.7680000000000291038305</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>16.32899999999790452420712</real>
+                    <real>16.31699999999909778125584</real>
                 <key>target</key>
                     <string>/slow/300/C/2</string>
                 <key>version</key>
@@ -865,15 +865,15 @@
                 <key>method</key>
                     <string>GET</string>
                 <key>raw_head</key>
-                    <string>GET /slow/300/C/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
+                    <string>GET /slow/300/C/4 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>316.828000000001338776201</real>
+                    <real>316.8879999999990104697645</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>16.375</real>
+                    <real>16.35399999999935971572995</real>
                 <key>target</key>
-                    <string>/slow/300/C/3</string>
+                    <string>/slow/300/C/4</string>
                 <key>version</key>
                     <string>HTTP/1.1</string>
                 </map>
@@ -895,15 +895,15 @@
                 <key>method</key>
                     <string>GET</string>
                 <key>raw_head</key>
-                    <string>GET /slow/300/C/4 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
+                    <string>GET /slow/300/C/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>316.8680000000022118911147</real>
+                    <real>316.895999999997002305463</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>16.41900000000168802216649</real>
+                    <real>16.39899999999761348590255</real>
                 <key>target</key>
-                    <string>/slow/300/C/4</string>
+                    <string>/slow/300/C/3</string>
                 <key>version</key>
                     <string>HTTP/1.1</string>
                 </map>
@@ -927,11 +927,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/A/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>627.5540000000037252902985</real>
+                    <real>630.0569999999970605131239</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
-                    <real>327.0200000000040745362639</real>
+                    <real>329.4369999999980791471899</real>
                 <key>target</key>
                     <string>/slow/300/A/2</string>
                 <key>version</key>
@@ -957,11 +957,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/A/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>642.6200000000026193447411</real>
+                    <real>646.161999999996623955667</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
-                    <real>341.9879999999975552782416</real>
+                    <real>345.5029999999969732016325</real>
                 <key>target</key>
                     <string>/slow/300/A/3</string>
                 <key>version</key>
@@ -987,11 +987,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/B/4 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>642.5970000000015716068447</real>
+                    <real>646.1019999999989522621036</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
-                    <real>342.0809999999983119778335</real>
+                    <real>345.5499999999992724042386</real>
                 <key>target</key>
                     <string>/slow/300/B/4</string>
                 <key>version</key>
@@ -1017,11 +1017,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/B/5 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>642.6399999999994179233909</real>
+                    <real>646.22899999999935971573</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
-                    <real>342.1630000000004656612873</real>
+                    <real>345.5829999999987194314599</real>
                 <key>target</key>
                     <string>/slow/300/B/5</string>
                 <key>version</key>
@@ -1047,11 +1047,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/B/6 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>642.6469999999972060322762</real>
+                    <real>646.0589999999974679667503</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
-                    <real>342.2170000000041909515858</real>
+                    <real>345.6139999999977590050548</real>
                 <key>target</key>
                     <string>/slow/300/B/6</string>
                 <key>version</key>
@@ -1077,11 +1077,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/B/7 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>642.6529999999984283931553</real>
+                    <real>646.1859999999978754203767</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
-                    <real>342.3830000000016298145056</real>
+                    <real>345.7169999999969149939716</real>
                 <key>target</key>
                     <string>/slow/300/B/7</string>
                 <key>version</key>
@@ -1107,11 +1107,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/A/4 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>957.1500000000014551915228</real>
+                    <real>961.8569999999999708961695</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>656.843999999997322447598</real>
+                    <real>661.6279999999969732016325</real>
                 <key>target</key>
                     <string>/slow/300/A/4</string>
                 <key>version</key>
@@ -1137,11 +1137,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/A/5 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>972.6540000000022700987756</real>
+                    <real>961.9069999999992433004081</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>672.3369999999995343387127</real>
+                    <real>661.6970000000001164153218</real>
                 <key>target</key>
                     <string>/slow/300/A/5</string>
                 <key>version</key>
@@ -1167,11 +1167,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/A/6 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>1287.817999999999301508069</real>
+                    <real>1293.307999999997264239937</real>
                 <key>seq</key>
                     <integer>4</integer>
                 <key>t</key>
-                    <real>987.3389999999999417923391</real>
+                    <real>992.7009999999972933437675</real>
                 <key>target</key>
                     <string>/slow/300/A/6</string>
                 <key>version</key>
@@ -1197,11 +1197,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/A/7 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>1303.342000000004190951586</real>
+                    <real>1293.400999999998020939529</real>
                 <key>seq</key>
                     <integer>4</integer>
                 <key>t</key>
-                    <real>1002.889999999999417923391</real>
+                    <real>992.7519999999967694748193</real>
                 <key>target</key>
                     <string>/slow/300/A/7</string>
                 <key>version</key>
@@ -1227,11 +1227,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/C/5 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>1303.385999999998603016138</real>
+                    <real>1309.840999999996711267158</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
-                    <real>1002.947000000000116415322</real>
+                    <real>1009.491999999998370185494</real>
                 <key>target</key>
                     <string>/slow/300/C/5</string>
                 <key>version</key>
@@ -1257,11 +1257,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/C/6 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>1303.366000000001804437488</real>
+                    <real>1309.876000000000203726813</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
-                    <real>1003.025000000001455191523</real>
+                    <real>1009.539999999997235136107</real>
                 <key>target</key>
                     <string>/slow/300/C/6</string>
                 <key>version</key>
@@ -1287,11 +1287,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/300/C/7 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>1303.394000000000232830644</real>
+                    <real>1309.901999999998224666342</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
-                    <real>1003.072000000000116415322</real>
+                    <real>1009.611999999997351551428</real>
                 <key>target</key>
                     <string>/slow/300/C/7</string>
                 <key>version</key>
@@ -1312,7 +1312,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>401.5774999999999863575795</real>
+                    <real>399.2590000000000145519152</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1344,7 +1344,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>416.6028000000000020008883</real>
+                    <real>415.3666000000000053660187</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1376,7 +1376,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>416.6209999999999809006113</real>
+                    <real>415.3713000000000192812877</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1408,7 +1408,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>416.6238999999999919054972</real>
+                    <real>415.3763999999999896317604</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1440,7 +1440,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>416.6462999999999965439201</real>
+                    <real>415.3953999999999950887286</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1472,7 +1472,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>416.6505999999999971805664</real>
+                    <real>415.4003999999999905412551</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1504,7 +1504,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>416.6515999999999735337042</real>
+                    <real>415.4014999999999986357579</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1536,7 +1536,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>416.6646999999999820829544</real>
+                    <real>415.4195000000000277395884</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1568,7 +1568,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>416.6666999999999916326487</real>
+                    <real>415.4211000000000240106601</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1600,7 +1600,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>416.6739999999999781721272</real>
+                    <real>415.4304999999999949977791</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1632,7 +1632,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>416.6779999999999972715159</real>
+                    <real>415.435099999999977171683</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1664,7 +1664,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>731.4293999999999869032763</real>
+                    <real>731.5023999999999659848982</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1696,7 +1696,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>746.9406999999999925421434</real>
+                    <real>731.5777000000000498403097</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1728,7 +1728,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>746.9551000000000158252078</real>
+                    <real>731.5815000000000054569682</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1760,7 +1760,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>746.9764999999999872670742</real>
+                    <real>731.6123999999999796273187</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1792,7 +1792,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>746.9915999999999485225999</real>
+                    <real>731.7142999999999801730155</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1824,7 +1824,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>746.9942999999999528881744</real>
+                    <real>731.7206999999999652573024</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1856,7 +1856,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>1061.998199999999997089617</real>
+                    <real>1062.916300000000092040864</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1888,7 +1888,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>1077.562799999999924693839</real>
+                    <real>1062.922100000000000363798</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1920,7 +1920,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>1376.678000000000110958354</real>
+                    <real>1376.944199999999909778126</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1952,7 +1952,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>1392.228200000000015279511</real>
+                    <real>1376.962399999999888677849</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -1984,7 +1984,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>1392.230999999999994543032</real>
+                    <real>1407.715999999999894498615</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -2016,7 +2016,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>1392.2406000000000858563</real>
+                    <real>1407.730800000000044747139</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -2048,7 +2048,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>1392.243300000000090221874</real>
+                    <real>1407.748000000000047293724</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -2103,7 +2103,7 @@
                 <key>raw_head</key>
                     <string>GET /status/404 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>0.06500000000050931703299284</real>
+                    <real>0.125</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
@@ -2133,11 +2133,11 @@
                 <key>raw_head</key>
                     <string>GET /status/403 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>31.42200000000048021320254</real>
+                    <real>31.85299999999983810994308</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>31.36200000000008003553376</real>
+                    <real>31.74099999999998544808477</real>
                 <key>target</key>
                     <string>/status/403</string>
                 <key>version</key>
@@ -2163,11 +2163,11 @@
                 <key>raw_head</key>
                     <string>GET /status/400 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>62.55600000000049476511776</real>
+                    <real>63.7469999999998435669113</real>
                 <key>seq</key>
                     <integer>4</integer>
                 <key>t</key>
-                    <real>62.48500000000058207660913</real>
+                    <real>63.64300000000002910383046</real>
                 <key>target</key>
                     <string>/status/400</string>
                 <key>version</key>
@@ -2193,11 +2193,11 @@
                 <key>raw_head</key>
                     <string>GET /status/204 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>93.59100000000034924596548</real>
+                    <real>96.41799999999989267962519</real>
                 <key>seq</key>
                     <integer>5</integer>
                 <key>t</key>
-                    <real>93.53000000000065483618528</real>
+                    <real>96.30600000000004001776688</real>
                 <key>target</key>
                     <string>/status/204</string>
                 <key>version</key>
@@ -2223,11 +2223,11 @@
                 <key>raw_head</key>
                     <string>GET /missing/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>125.5780000000004292814992</real>
+                    <real>127.2189999999998235580279</real>
                 <key>seq</key>
                     <integer>6</integer>
                 <key>t</key>
-                    <real>125.5150000000003274180926</real>
+                    <real>127.1109999999998763087206</real>
                 <key>target</key>
                     <string>/missing/</string>
                 <key>version</key>
@@ -2248,7 +2248,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>85.22729999999999961346475</real>
+                    <real>85.05039999999999622559699</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -2280,7 +2280,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>116.3483999999999980445864</real>
+                    <real>117.1461000000000041154635</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -2312,7 +2312,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>147.3829000000000064574124</real>
+                    <real>149.5314999999999940882844</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -2344,7 +2344,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>179.4080999999999903593562</real>
+                    <real>180.4787000000000034560799</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -2376,7 +2376,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>210.9181000000000096861186</real>
+                    <real>211.0389999999999872670742</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -2431,7 +2431,7 @@
                 <key>raw_head</key>
                     <string>GET /ok/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>0.1220000000002983142621815</real>
+                    <real>0.1599999999999965893948684</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
@@ -2461,11 +2461,11 @@
                 <key>raw_head</key>
                     <string>GET /ok/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>31.62100000000009458744898</real>
+                    <real>30.49499999999999033661879</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>31.55200000000013460521586</real>
+                    <real>30.39899999999998669863999</real>
                 <key>target</key>
                     <string>/ok/</string>
                 <key>version</key>
@@ -2486,7 +2486,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>95.64700000000000557065505</real>
+                    <real>92.75950000000000272848411</real>
                 <key>headers</key>
                     <array>
                         <array>
@@ -2529,7 +2529,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>127.1441999999999978854248</real>
+                    <real>123.9459999999999979536369</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -2561,7 +2561,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>127.1889999999999929514161</real>
+                    <real>123.9795000000000015916157</real>
                 <key>method</key>
                     <string />
                 <key>name</key>
@@ -2616,7 +2616,7 @@
                 <key>raw_head</key>
                     <string>GET /headers/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nKeep-alive: 300\r\nAccept: image/x-j2c\r\nX-Custom-Header: custom value\r\nCache-Control: no-cache\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>0.0769999999974970705807209</real>
+                    <real>0.09000000000014551915228367</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
@@ -2646,11 +2646,11 @@
                 <key>raw_head</key>
                     <string>GET /headers/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nAccept: */*\r\nKeep-alive: 300\r\nUser-Agent: parity-agent\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\nConnection: close\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>30.76799999999639112502337</real>
+                    <real>31.73600000000078580342233</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>30.69199999999545980244875</real>
+                    <real>31.65899999999965075403452</real>
                 <key>target</key>
                     <string>/headers/</string>
                 <key>version</key>
@@ -2676,11 +2676,11 @@
                 <key>raw_head</key>
                     <string>GET /cookie/set HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>61.84799999999813735485077</real>
+                    <real>47.28700000000026193447411</real>
                 <key>seq</key>
                     <integer>4</integer>
                 <key>t</key>
-                    <real>61.78199999999924330040812</real>
+                    <real>47.2109999999993306118995</real>
                 <key>target</key>
                     <string>/cookie/set</string>
                 <key>version</key>
@@ -2706,11 +2706,11 @@
                 <key>raw_head</key>
                     <string>GET /cookie/get HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nCookie: vks=1\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>93.88299999999435385689139</real>
+                    <real>78.67699999999967985786498</real>
                 <key>seq</key>
                     <integer>5</integer>
                 <key>t</key>
-                    <real>93.79099999999743886291981</real>
+                    <real>78.59600000000136788003147</real>
                 <key>target</key>
                     <string>/cookie/get</string>
                 <key>version</key>
@@ -2736,11 +2736,11 @@
                 <key>raw_head</key>
                     <string>GET /headers/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nCookie: vks=1\r\nIf-Modified-Since: Tue, 14 Nov 2023 22:13:20 GMT\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>125.0999999999985448084772</real>
+                    <real>109.5390000000006693881005</real>
                 <key>seq</key>
                     <integer>6</integer>
                 <key>t</key>
-                    <real>125.0349999999962165020406</real>
+                    <real>109.4609999999993306118995</real>
                 <key>target</key>
                     <string>/headers/</string>
                 <key>version</key>
@@ -2761,7 +2761,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>88.69360000000000354702934</real>
+                    <real>72.18659999999999854480848</real>
                 <key>headers</key>
                     <array>
                         <array>
@@ -2836,7 +2836,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>134.6851000000000055933924</real>
+                    <real>87.74989999999999668034434</real>
                 <key>headers</key>
                     <array>
                         <array>
@@ -2907,7 +2907,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>166.6562000000000125510269</real>
+                    <real>103.7592000000000069803718</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -2939,7 +2939,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>197.9105999999999880856194</real>
+                    <real>134.9464999999999861302058</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -2971,7 +2971,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>228.4302999999999883584678</real>
+                    <real>166.2785000000000081854523</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -3026,7 +3026,7 @@
                 <key>raw_head</key>
                     <string>POST /echo/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nKeep-alive: 300\r\nContent-Type: application/llsd+xml\r\nAccept: application/llsd+xml\r\nAccept-Encoding: deflate, gzip\r\nContent-Length: 192\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>0.06500000000005456968210638</real>
+                    <real>0.1100000000000136424205266</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
@@ -3056,11 +3056,11 @@
                 <key>raw_head</key>
                     <string>PUT /echo/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nKeep-alive: 300\r\nContent-Type: application/llsd+xml\r\nAccept: application/llsd+xml\r\nAccept-Encoding: deflate, gzip\r\nContent-Length: 192\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>31.62100000000009458744898</real>
+                    <real>31.60500000000001818989404</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>31.45600000000013096723706</real>
+                    <real>31.45699999999999363353709</real>
                 <key>target</key>
                     <string>/echo/</string>
                 <key>version</key>
@@ -3086,11 +3086,11 @@
                 <key>raw_head</key>
                     <string>PATCH /echo/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nKeep-alive: 300\r\nContent-Type: application/llsd+xml\r\nAccept: application/llsd+xml\r\nAccept-Encoding: deflate, gzip\r\nContent-Length: 192\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>63.06900000000041472958401</real>
+                    <real>63.46899999999999408828444</real>
                 <key>seq</key>
                     <integer>4</integer>
                 <key>t</key>
-                    <real>63.00900000000001455191523</real>
+                    <real>63.36500000000000909494702</real>
                 <key>target</key>
                     <string>/echo/</string>
                 <key>version</key>
@@ -3116,11 +3116,11 @@
                 <key>raw_head</key>
                     <string>POST /echo/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nContent-Length: 0\r\nContent-Type: application/x-www-form-urlencoded\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>94.56800000000021100277081</real>
+                    <real>94.22199999999997999111656</real>
                 <key>seq</key>
                     <integer>5</integer>
                 <key>t</key>
-                    <real>94.5</real>
+                    <real>94.11899999999997135091689</real>
                 <key>target</key>
                     <string>/echo/</string>
                 <key>version</key>
@@ -3146,11 +3146,11 @@
                 <key>raw_head</key>
                     <string>PUT /echo/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>126.573000000000320142135</real>
+                    <real>124.2509999999999763531378</real>
                 <key>seq</key>
                     <integer>6</integer>
                 <key>t</key>
-                    <real>126.5150000000003274180926</real>
+                    <real>124.1519999999999868123268</real>
                 <key>target</key>
                     <string>/echo/</string>
                 <key>version</key>
@@ -3176,11 +3176,11 @@
                 <key>raw_head</key>
                     <string>DELETE /echo/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>158.6640000000002146407496</real>
+                    <real>156.7540000000000190993887</real>
                 <key>seq</key>
                     <integer>7</integer>
                 <key>t</key>
-                    <real>158.605000000000018189894</real>
+                    <real>156.6569999999999822648533</real>
                 <key>target</key>
                     <string>/echo/</string>
                 <key>version</key>
@@ -3206,11 +3206,11 @@
                 <key>raw_head</key>
                     <string>COPY /echo/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nDestination: http://127.0.0.1:{PORT}/echo/copy\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>190.1490000000003419700079</real>
+                    <real>187.3709999999999809006113</real>
                 <key>seq</key>
                     <integer>8</integer>
                 <key>t</key>
-                    <real>190.08900000000039653969</real>
+                    <real>187.2669999999999959072738</real>
                 <key>target</key>
                     <string>/echo/</string>
                 <key>version</key>
@@ -3236,11 +3236,11 @@
                 <key>raw_head</key>
                     <string>MOVE /echo/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nDestination: http://127.0.0.1:{PORT}/echo/copy\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>222.2070000000003346940503</real>
+                    <real>217.9430000000000404725142</real>
                 <key>seq</key>
                     <integer>9</integer>
                 <key>t</key>
-                    <real>222.08900000000039653969</real>
+                    <real>217.8420000000000413820089</real>
                 <key>target</key>
                     <string>/echo/</string>
                 <key>version</key>
@@ -3266,11 +3266,11 @@
                 <key>raw_head</key>
                     <string>HEAD /ok/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>253.1710000000002764863893</real>
+                    <real>249.1700000000000159161573</real>
                 <key>seq</key>
                     <integer>10</integer>
                 <key>t</key>
-                    <real>253.1120000000000800355338</real>
+                    <real>249.0699999999999931787897</real>
                 <key>target</key>
                     <string>/ok/</string>
                 <key>version</key>
@@ -3294,11 +3294,11 @@
                 <key>raw_head</key>
                     <string>POST /echo/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nContent-Length: 300000\r\nContent-Type: application/x-www-form-urlencoded\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>348.3120000000003528839443</real>
+                    <real>346.5830000000000268300937</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>347.3400000000001455191523</real>
+                    <real>345.3760000000000331965566</real>
                 <key>target</key>
                     <string>/echo/</string>
                 <key>version</key>
@@ -3322,11 +3322,11 @@
                 <key>raw_head</key>
                     <string>PUT /echo/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nContent-Length: 300000\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>442.4710000000000036379788</real>
+                    <real>435.9040000000000532054401</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
-                    <real>441.5500000000001818989404</real>
+                    <real>434.8539999999999849933374</real>
                 <key>target</key>
                     <string>/echo/</string>
                 <key>version</key>
@@ -3347,7 +3347,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>93.66509999999999536157702</real>
+                    <real>93.53029999999999688498065</real>
                 <key>method</key>
                     <string>POST</string>
                 <key>name</key>
@@ -3379,7 +3379,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>125.1938999999999992951416</real>
+                    <real>125.5567000000000064119376</real>
                 <key>method</key>
                     <string>PUT</string>
                 <key>name</key>
@@ -3411,7 +3411,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>156.7057000000000073214323</real>
+                    <real>156.3158999999999991814548</real>
                 <key>method</key>
                     <string>PATCH</string>
                 <key>name</key>
@@ -3443,7 +3443,7 @@
                 <key>content_type</key>
                     <string>application/x-www-form-urlencoded</string>
                 <key>done_ms</key>
-                    <real>188.7324999999999874944479</real>
+                    <real>186.3658000000000072304829</real>
                 <key>method</key>
                     <string>POST</string>
                 <key>name</key>
@@ -3475,7 +3475,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>220.7795999999999878582457</real>
+                    <real>218.8414999999999963620212</real>
                 <key>method</key>
                     <string>PUT</string>
                 <key>name</key>
@@ -3507,7 +3507,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>252.2973000000000070031092</real>
+                    <real>249.4532000000000095951691</real>
                 <key>method</key>
                     <string>DELETE</string>
                 <key>name</key>
@@ -3539,7 +3539,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>284.3020000000000209183781</real>
+                    <real>280.0264999999999986357579</real>
                 <key>method</key>
                     <string>COPY</string>
                 <key>name</key>
@@ -3571,7 +3571,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>315.350799999999992451194</real>
+                    <real>311.1213999999999941792339</real>
                 <key>method</key>
                     <string>MOVE</string>
                 <key>name</key>
@@ -3603,7 +3603,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>346.8688999999999964529707</real>
+                    <real>342.2796000000000162799552</real>
                 <key>headers</key>
                     <array>
                         <array>
@@ -3644,7 +3644,7 @@
                 <key>content_type</key>
                     <string>application/x-www-form-urlencoded</string>
                 <key>done_ms</key>
-                    <real>456.6270999999999844476406</real>
+                    <real>450.9470000000000027284841</real>
                 <key>method</key>
                     <string>POST</string>
                 <key>name</key>
@@ -3674,7 +3674,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>550.502899999999954161467</real>
+                    <real>544.0761999999999716237653</real>
                 <key>method</key>
                     <string>PUT</string>
                 <key>name</key>
@@ -3729,7 +3729,7 @@
                 <key>raw_head</key>
                     <string>GET /partial/1000 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>50.38300000000162981450558</real>
+                    <real>50.35000000000218278728426</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
@@ -3759,11 +3759,11 @@
                 <key>raw_head</key>
                     <string>GET /partial/1000 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>1131.663000000000465661287</real>
+                    <real>1142.557000000000698491931</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>1081.114999999997962731868</real>
+                    <real>1092.261000000002240994945</real>
                 <key>target</key>
                     <string>/partial/1000</string>
                 <key>version</key>
@@ -3789,11 +3789,11 @@
                 <key>raw_head</key>
                     <string>GET /reset/1000 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>1225.743999999998777639121</real>
+                    <real>1235.072000000000116415322</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>1175.485000000000582076609</real>
+                    <real>1184.735000000000582076609</real>
                 <key>target</key>
                     <string>/reset/1000</string>
                 <key>version</key>
@@ -3812,7 +3812,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>1217.507599999999911233317</real>
+                    <real>1214.630200000000058935257</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -3842,7 +3842,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>1311.501800000000002910383</real>
+                    <real>1294.153700000000071668182</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -3897,7 +3897,7 @@
                 <key>raw_head</key>
                     <string>GET /slow/100/P/0 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>100.4460000000035506673157</real>
+                    <real>100.3659999999981664586812</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
@@ -3927,11 +3927,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/100/P/1 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>223.588000000003376044333</real>
+                    <real>223.7569999999977881088853</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
-                    <real>123.1480000000010477378964</real>
+                    <real>123.3240000000005238689482</real>
                 <key>target</key>
                     <string>/slow/100/P/1</string>
                 <key>version</key>
@@ -3957,11 +3957,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/100/P/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>349.3260000000009313225746</real>
+                    <real>349.1139999999977590050548</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>248.8770000000004074536264</real>
+                    <real>248.5560000000004947651178</real>
                 <key>target</key>
                     <string>/slow/100/P/2</string>
                 <key>version</key>
@@ -3987,11 +3987,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/100/P/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>475.4150000000008731149137</real>
+                    <real>474.2759999999980209395289</real>
                 <key>seq</key>
                     <integer>4</integer>
                 <key>t</key>
-                    <real>375.0500000000029103830457</real>
+                    <real>374.1019999999989522621036</real>
                 <key>target</key>
                     <string>/slow/100/P/3</string>
                 <key>version</key>
@@ -4017,11 +4017,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/100/P/4 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>600.8369999999995343387127</real>
+                    <real>597.5089999999981955625117</real>
                 <key>seq</key>
                     <integer>5</integer>
                 <key>t</key>
-                    <real>500.281000000002677552402</real>
+                    <real>497.35399999999935971573</real>
                 <key>target</key>
                     <string>/slow/100/P/4</string>
                 <key>version</key>
@@ -4047,11 +4047,11 @@
                 <key>raw_head</key>
                     <string>GET /slow/100/P/5 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>724.5659999999988940544426</real>
+                    <real>724.4189999999980500433594</real>
                 <key>seq</key>
                     <integer>6</integer>
                 <key>t</key>
-                    <real>624.4080000000030850060284</real>
+                    <real>624.2379999999975552782416</real>
                 <key>target</key>
                     <string>/slow/100/P/5</string>
                 <key>version</key>
@@ -4072,7 +4072,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>192.467600000000004456524</real>
+                    <real>192.4953999999999894043867</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -4104,7 +4104,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>318.4227000000000202817318</real>
+                    <real>317.5982999999999947249307</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -4136,7 +4136,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>444.5482000000000084583007</real>
+                    <real>442.9062000000000125510269</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -4168,7 +4168,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>554.5630999999999630745151</real>
+                    <real>566.3328000000000201907824</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -4200,7 +4200,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>693.8354000000000496584107</real>
+                    <real>692.7827999999999519786797</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -4232,7 +4232,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>818.1426000000000158252078</real>
+                    <real>818.9850000000000136424205</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -4391,7 +4391,7 @@
                 <key>raw_head</key>
                     <string>GET /ok/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>0.06300000000192085281014442</real>
+                    <real>0.09699999999793362803757191</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
@@ -4416,7 +4416,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>69.68999999999999772626325</real>
+                    <real>69.11750000000000682121026</real>
                 <key>method</key>
                     <string />
                 <key>name</key>
@@ -4448,7 +4448,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>84.7026999999999929968908</real>
+                    <real>69.15819999999999367901182</real>
                 <key>method</key>
                     <string />
                 <key>name</key>
@@ -4480,7 +4480,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>100.1989999999999980673238</real>
+                    <real>69.16889999999999361079972</real>
                 <key>method</key>
                     <string />
                 <key>name</key>
@@ -4512,7 +4512,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>115.9211999999999989086064</real>
+                    <real>69.18340000000000600266503</real>
                 <key>method</key>
                     <string />
                 <key>name</key>
@@ -4544,7 +4544,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>115.9467000000000069803718</real>
+                    <real>84.69670000000000698037184</real>
                 <key>method</key>
                     <string />
                 <key>name</key>
@@ -4576,7 +4576,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>130.9525999999999896772351</real>
+                    <real>100.7283999999999934971129</real>
                 <key>method</key>
                     <string />
                 <key>name</key>
@@ -4608,7 +4608,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>178.4727000000000032287062</real>
+                    <real>147.6536999999999864030542</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -4663,7 +4663,7 @@
                 <key>raw_head</key>
                     <string>GET /large/1048576 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nRange: bytes=0-1048575\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>51.3440000000000509317033</real>
+                    <real>54.56400000000007821654435</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
@@ -4693,11 +4693,11 @@
                 <key>raw_head</key>
                     <string>GET /large/1048576 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nRange: bytes=262144-786431\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>208.7000000000002728484105</real>
+                    <real>210.5420000000001437001629</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>156.992000000000189174898</real>
+                    <real>156.980000000000018189894</real>
                 <key>target</key>
                     <string>/large/1048576</string>
                 <key>version</key>
@@ -4723,11 +4723,11 @@
                 <key>raw_head</key>
                     <string>GET /large/1048576 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>317.019999999999981810106</real>
+                    <real>318.4130000000000109139364</real>
                 <key>seq</key>
                     <integer>4</integer>
                 <key>t</key>
-                    <real>265.230000000000018189894</real>
+                    <real>265.1910000000000309228199</real>
                 <key>target</key>
                     <string>/large/1048576</string>
                 <key>version</key>
@@ -4746,7 +4746,7 @@
                 <key>content_type</key>
                     <string>application/octet-stream</string>
                 <key>done_ms</key>
-                    <real>214.5137000000000000454747</real>
+                    <real>214.7190999999999974079401</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -4776,7 +4776,7 @@
                 <key>content_type</key>
                     <string>application/octet-stream</string>
                 <key>done_ms</key>
-                    <real>322.6134999999999877218215</real>
+                    <real>308.6664000000000100953912</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -4806,7 +4806,7 @@
                 <key>content_type</key>
                     <string>application/octet-stream</string>
                 <key>done_ms</key>
-                    <real>479.8969999999999913598003</real>
+                    <real>482.3301000000000158252078</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -4861,7 +4861,7 @@
                 <key>raw_head</key>
                     <string>GET /large/1000 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nRange: bytes=100-299\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>0.125</real>
+                    <real>0.1749999999999545252649114</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
@@ -4891,11 +4891,11 @@
                 <key>raw_head</key>
                     <string>GET /large/1000 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nRange: bytes=900-1399\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>30.75900000000001455191523</real>
+                    <real>31.65499999999997271515895</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>30.64699999999993451638147</real>
+                    <real>31.48599999999998999555828</real>
                 <key>target</key>
                     <string>/large/1000</string>
                 <key>version</key>
@@ -4921,11 +4921,11 @@
                 <key>raw_head</key>
                     <string>GET /large/1000 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nRange: bytes=2000-2009\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>61.75799999999981082510203</real>
+                    <real>63.19399999999995998223312</real>
                 <key>seq</key>
                     <integer>4</integer>
                 <key>t</key>
-                    <real>61.65000000000009094947018</real>
+                    <real>63.02599999999995361577021</real>
                 <key>target</key>
                     <string>/large/1000</string>
                 <key>version</key>
@@ -4951,11 +4951,11 @@
                 <key>raw_head</key>
                     <string>GET /large/1000 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nRange: bytes=500-\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>92.84499999999979991116561</real>
+                    <real>95.27700000000004365574569</real>
                 <key>seq</key>
                     <integer>5</integer>
                 <key>t</key>
-                    <real>92.72399999999970532371663</real>
+                    <real>95.10699999999997089616954</real>
                 <key>target</key>
                     <string>/large/1000</string>
                 <key>version</key>
@@ -4981,11 +4981,11 @@
                 <key>raw_head</key>
                     <string>GET /large/1000 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>124.8659999999999854480848</real>
+                    <real>126.9749999999999090505298</real>
                 <key>seq</key>
                     <integer>6</integer>
                 <key>t</key>
-                    <real>124.7599999999997635313775</real>
+                    <real>126.8060000000000400177669</real>
                 <key>target</key>
                     <string>/large/1000</string>
                 <key>version</key>
@@ -5006,7 +5006,7 @@
                 <key>content_type</key>
                     <string>application/octet-stream</string>
                 <key>done_ms</key>
-                    <real>86.95489999999999497504177</real>
+                    <real>103.4269000000000033878678</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -5038,7 +5038,7 @@
                 <key>content_type</key>
                     <string>application/octet-stream</string>
                 <key>done_ms</key>
-                    <real>117.9834000000000031604941</real>
+                    <real>134.9953999999999894043867</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -5070,7 +5070,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>149.040099999999995361577</real>
+                    <real>167.0814000000000021373125</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -5100,7 +5100,7 @@
                 <key>content_type</key>
                     <string>application/octet-stream</string>
                 <key>done_ms</key>
-                    <real>181.0819999999999936335371</real>
+                    <real>198.6548999999999978172127</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -5130,7 +5130,7 @@
                 <key>content_type</key>
                     <string>application/octet-stream</string>
                 <key>done_ms</key>
-                    <real>212.625300000000009958967</real>
+                    <real>214.1957999999999913143256</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -5185,7 +5185,7 @@
                 <key>raw_head</key>
                     <string>GET /redirect/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>0.1390000000028521753847599</real>
+                    <real>0.09500000000116415321826935</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
@@ -5215,11 +5215,11 @@
                 <key>raw_head</key>
                     <string>GET /redirect/1 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nReferer: http://127.0.0.1:{PORT}/redirect/2\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>16.10100000000238651409745</real>
+                    <real>15.43000000000029103830457</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>16.03399999999965075403452</real>
+                    <real>15.34300000000075669959188</real>
                 <key>target</key>
                     <string>/redirect/1</string>
                 <key>version</key>
@@ -5245,11 +5245,11 @@
                 <key>raw_head</key>
                     <string>GET /ok/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nReferer: http://127.0.0.1:{PORT}/redirect/1\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>31.81100000000151339918375</real>
+                    <real>31.25800000000162981450558</real>
                 <key>seq</key>
                     <integer>4</integer>
                 <key>t</key>
-                    <real>31.68899999999848660081625</real>
+                    <real>31.17100000000209547579288</real>
                 <key>target</key>
                     <string>/ok/</string>
                 <key>version</key>
@@ -5275,11 +5275,11 @@
                 <key>raw_head</key>
                     <string>GET /redirect/1 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>63.40499999999883584678173</real>
+                    <real>62.69800000000032014213502</real>
                 <key>seq</key>
                     <integer>5</integer>
                 <key>t</key>
-                    <real>63.2929999999978463165462</real>
+                    <real>62.59900000000197906047106</real>
                 <key>target</key>
                     <string>/redirect/1</string>
                 <key>version</key>
@@ -5305,11 +5305,11 @@
                 <key>raw_head</key>
                     <string>POST /redirect/1 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nContent-Length: 6\r\nContent-Type: application/x-www-form-urlencoded\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>93.89199999999982537701726</real>
+                    <real>93.50300000000061118043959</real>
                 <key>seq</key>
                     <integer>6</integer>
                 <key>t</key>
-                    <real>93.8300000000017462298274</real>
+                    <real>93.4160000000010768417269</real>
                 <key>target</key>
                     <string>/redirect/1</string>
                 <key>version</key>
@@ -5335,11 +5335,11 @@
                 <key>raw_head</key>
                     <string>GET /ok/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nReferer: http://127.0.0.1:{PORT}/redirect/1\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>110.4049999999988358467817</real>
+                    <real>109.4439999999995052348822</real>
                 <key>seq</key>
                     <integer>7</integer>
                 <key>t</key>
-                    <real>110.3459999999977299012244</real>
+                    <real>109.3640000000013969838619</real>
                 <key>target</key>
                     <string>/ok/</string>
                 <key>version</key>
@@ -5360,7 +5360,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>119.6473000000000013187673</real>
+                    <real>87.76789999999999736246536</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -5392,7 +5392,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>150.1600999999999999090505</real>
+                    <real>134.8411999999999864030542</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -5424,7 +5424,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>197.7024000000000114596332</real>
+                    <real>167.1052999999999997271516</real>
                 <key>method</key>
                     <string>POST</string>
                 <key>name</key>
@@ -5479,7 +5479,7 @@
                 <key>raw_head</key>
                     <string>GET /flaky/r1/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>0.06899999999950523488223553</real>
+                    <real>0.1130000000002837623469532</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
@@ -5509,11 +5509,11 @@
                 <key>raw_head</key>
                     <string>GET /flaky/r1/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>1020.433999999999286956154</real>
+                    <real>1019.448000000000320142135</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>1020.333999999998923158273</real>
+                    <real>1019.248999999999796273187</real>
                 <key>target</key>
                     <string>/flaky/r1/2</string>
                 <key>version</key>
@@ -5539,11 +5539,11 @@
                 <key>raw_head</key>
                     <string>GET /flaky/r1/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>3039.309999999999490682967</real>
+                    <real>3049.394000000000232830644</real>
                 <key>seq</key>
                     <integer>4</integer>
                 <key>t</key>
-                    <real>3039.203999999999723513611</real>
+                    <real>3049.282999999999447027221</real>
                 <key>target</key>
                     <string>/flaky/r1/2</string>
                 <key>version</key>
@@ -5569,11 +5569,11 @@
                 <key>raw_head</key>
                     <string>GET /flaky/r2/1/retry/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>3069.823000000000320142135</real>
+                    <real>3080.717000000000552972779</real>
                 <key>seq</key>
                     <integer>5</integer>
                 <key>t</key>
-                    <real>3069.743000000000392901711</real>
+                    <real>3080.625</real>
                 <key>target</key>
                     <string>/flaky/r2/1/retry/2</string>
                 <key>version</key>
@@ -5599,11 +5599,11 @@
                 <key>raw_head</key>
                     <string>GET /flaky/r2/1/retry/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>5095.450999999999112333171</real>
+                    <real>5098.181000000000494765118</real>
                 <key>seq</key>
                     <integer>6</integer>
                 <key>t</key>
-                    <real>5095.351999999998952262104</real>
+                    <real>5098.072000000000116415322</real>
                 <key>target</key>
                     <string>/flaky/r2/1/retry/2</string>
                 <key>version</key>
@@ -5629,11 +5629,11 @@
                 <key>raw_head</key>
                     <string>GET /flaky/r3/1/retry/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>5126.375</real>
+                    <real>5129.325999999999112333171</real>
                 <key>seq</key>
                     <integer>7</integer>
                 <key>t</key>
-                    <real>5126.263999999999214196578</real>
+                    <real>5129.204999999999927240424</real>
                 <key>target</key>
                     <string>/flaky/r3/1/retry/2</string>
                 <key>version</key>
@@ -5659,11 +5659,11 @@
                 <key>raw_head</key>
                     <string>GET /flaky/r3/1/retry/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>6157.775999999999839928932</real>
+                    <real>6156.058999999999286956154</real>
                 <key>seq</key>
                     <integer>8</integer>
                 <key>t</key>
-                    <real>6157.681999999998879502527</real>
+                    <real>6155.944999999999708961695</real>
                 <key>target</key>
                     <string>/flaky/r3/1/retry/2</string>
                 <key>version</key>
@@ -5687,15 +5687,15 @@
                 <key>method</key>
                     <string>GET</string>
                 <key>raw_head</key>
-                    <string>GET /flaky/r3/1/retry/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
+                    <string>GET /flaky/r4/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>8178.699000000000523868948</real>
+                    <real>6336.236999999999170540832</real>
                 <key>seq</key>
                     <integer>9</integer>
                 <key>t</key>
-                    <real>8178.597999999998137354851</real>
+                    <real>6336.117000000000189174898</real>
                 <key>target</key>
-                    <string>/flaky/r3/1/retry/2</string>
+                    <string>/flaky/r4/3</string>
                 <key>version</key>
                     <string>HTTP/1.1</string>
                 </map>
@@ -5717,15 +5717,15 @@
                 <key>method</key>
                     <string>GET</string>
                 <key>raw_head</key>
-                    <string>GET /flaky/r3/1/retry/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
+                    <string>GET /flaky/r4/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>12205.7890000000006693881</real>
+                    <real>6647.611000000000785803422</real>
                 <key>seq</key>
                     <integer>10</integer>
                 <key>t</key>
-                    <real>12205.63699999999880674295</real>
+                    <real>6647.501000000000203726813</real>
                 <key>target</key>
-                    <string>/flaky/r3/1/retry/2</string>
+                    <string>/flaky/r4/3</string>
                 <key>version</key>
                     <string>HTTP/1.1</string>
                 </map>
@@ -5747,15 +5747,15 @@
                 <key>method</key>
                     <string>GET</string>
                 <key>raw_head</key>
-                    <string>GET /flaky/r3/1/retry/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
+                    <string>GET /flaky/r4/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>20224.10499999999956344254</real>
+                    <real>7067.361000000000785803422</real>
                 <key>seq</key>
                     <integer>11</integer>
                 <key>t</key>
-                    <real>20224</real>
+                    <real>7067.256999999999607098289</real>
                 <key>target</key>
-                    <string>/flaky/r3/1/retry/2</string>
+                    <string>/flaky/r4/3</string>
                 <key>version</key>
                     <string>HTTP/1.1</string>
                 </map>
@@ -5777,133 +5777,13 @@
                 <key>method</key>
                     <string>GET</string>
                 <key>raw_head</key>
-                    <string>GET /flaky/r3/1/retry/2 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
+                    <string>GET /flaky/r4/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>36254.36400000000139698386</real>
+                    <real>7585.420000000000072759576</real>
                 <key>seq</key>
                     <integer>12</integer>
                 <key>t</key>
-                    <real>36254.20600000000558793545</real>
-                <key>target</key>
-                    <string>/flaky/r3/1/retry/2</string>
-                <key>version</key>
-                    <string>HTTP/1.1</string>
-                </map>
-                <map>
-                <key>answered</key>
-                    <boolean>1</boolean>
-                <key>body</key>
-                    <binary />
-                <key>body_len</key>
-                    <integer>0</integer>
-                <key>body_md5</key>
-                    <string>d41d8cd98f00b204e9800998ecf8427e</string>
-                <key>chunked_upload</key>
-                    <boolean>0</boolean>
-                <key>conn</key>
-                    <integer>1</integer>
-                <key>group</key>
-                    <string />
-                <key>method</key>
-                    <string>GET</string>
-                <key>raw_head</key>
-                    <string>GET /flaky/r4/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
-                <key>rsp_t</key>
-                    <real>36284.95399999999790452421</real>
-                <key>seq</key>
-                    <integer>13</integer>
-                <key>t</key>
-                    <real>36284.89100000000325962901</real>
-                <key>target</key>
-                    <string>/flaky/r4/3</string>
-                <key>version</key>
-                    <string>HTTP/1.1</string>
-                </map>
-                <map>
-                <key>answered</key>
-                    <boolean>1</boolean>
-                <key>body</key>
-                    <binary />
-                <key>body_len</key>
-                    <integer>0</integer>
-                <key>body_md5</key>
-                    <string>d41d8cd98f00b204e9800998ecf8427e</string>
-                <key>chunked_upload</key>
-                    <boolean>0</boolean>
-                <key>conn</key>
-                    <integer>1</integer>
-                <key>group</key>
-                    <string />
-                <key>method</key>
-                    <string>GET</string>
-                <key>raw_head</key>
-                    <string>GET /flaky/r4/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
-                <key>rsp_t</key>
-                    <real>36502.25100000000384170562</real>
-                <key>seq</key>
-                    <integer>14</integer>
-                <key>t</key>
-                    <real>36502.18200000000069849193</real>
-                <key>target</key>
-                    <string>/flaky/r4/3</string>
-                <key>version</key>
-                    <string>HTTP/1.1</string>
-                </map>
-                <map>
-                <key>answered</key>
-                    <boolean>1</boolean>
-                <key>body</key>
-                    <binary />
-                <key>body_len</key>
-                    <integer>0</integer>
-                <key>body_md5</key>
-                    <string>d41d8cd98f00b204e9800998ecf8427e</string>
-                <key>chunked_upload</key>
-                    <boolean>0</boolean>
-                <key>conn</key>
-                    <integer>1</integer>
-                <key>group</key>
-                    <string />
-                <key>method</key>
-                    <string>GET</string>
-                <key>raw_head</key>
-                    <string>GET /flaky/r4/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
-                <key>rsp_t</key>
-                    <real>36924.13099999999394640326</real>
-                <key>seq</key>
-                    <integer>15</integer>
-                <key>t</key>
-                    <real>36924.01600000000325962901</real>
-                <key>target</key>
-                    <string>/flaky/r4/3</string>
-                <key>version</key>
-                    <string>HTTP/1.1</string>
-                </map>
-                <map>
-                <key>answered</key>
-                    <boolean>1</boolean>
-                <key>body</key>
-                    <binary />
-                <key>body_len</key>
-                    <integer>0</integer>
-                <key>body_md5</key>
-                    <string>d41d8cd98f00b204e9800998ecf8427e</string>
-                <key>chunked_upload</key>
-                    <boolean>0</boolean>
-                <key>conn</key>
-                    <integer>1</integer>
-                <key>group</key>
-                    <string />
-                <key>method</key>
-                    <string>GET</string>
-                <key>raw_head</key>
-                    <string>GET /flaky/r4/3 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
-                <key>rsp_t</key>
-                    <real>37441.0399999999935971573</real>
-                <key>seq</key>
-                    <integer>16</integer>
-                <key>t</key>
-                    <real>37440.94700000000011641532</real>
+                    <real>7585.31099999999969440978</real>
                 <key>target</key>
                     <string>/flaky/r4/3</string>
                 <key>version</key>
@@ -5924,7 +5804,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>3127.534000000000105501385</real>
+                    <real>3120.514000000000123691279</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -5956,7 +5836,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>5184.042300000000068394002</real>
+                    <real>5184.769900000000234285835</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -5984,11 +5864,11 @@
                 <key>body_md5</key>
                     <string>56f039517ad7b7fffd66363a2ee7b49e</string>
                 <key>code</key>
-                    <integer>1</integer>
+                    <integer>0</integer>
                 <key>content_type</key>
-                    <string />
+                    <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>36342.62109999999665888026</real>
+                    <real>6301.122000000000298314262</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -6000,11 +5880,11 @@
                         <integer>0</integer>
                     </array>
                 <key>retries</key>
-                    <integer>5</integer>
+                    <integer>1</integer>
                 <key>retries_503</key>
-                    <integer>5</integer>
+                    <integer>1</integer>
                 <key>type</key>
-                    <integer>503</integer>
+                    <integer>200</integer>
                 <key>url</key>
                     <string>http://127.0.0.1:{PORT}/flaky/r3/1/retry/2</string>
                 </map>
@@ -6020,7 +5900,7 @@
                 <key>content_type</key>
                     <string>application/llsd+xml</string>
                 <key>done_ms</key>
-                    <real>37514.84569999999803258106</real>
+                    <real>7671.211199999999735155143</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -6075,7 +5955,7 @@
                 <key>raw_head</key>
                     <string>GET /status/500 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>0.1189999999996871338225901</real>
+                    <real>0.1010000000001127773430198</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
@@ -6105,11 +5985,11 @@
                 <key>raw_head</key>
                     <string>GET /status/500 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>1030.26099999999951251084</real>
+                    <real>1026.237000000000307409209</real>
                 <key>seq</key>
                     <integer>3</integer>
                 <key>t</key>
-                    <real>1030.176999999999679857865</real>
+                    <real>1026.129999999999881765689</real>
                 <key>target</key>
                     <string>/status/500</string>
                 <key>version</key>
@@ -6135,11 +6015,11 @@
                 <key>raw_head</key>
                     <string>GET /status/500 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>3057.831000000000130967237</real>
+                    <real>3055.155999999999949068297</real>
                 <key>seq</key>
                     <integer>4</integer>
                 <key>t</key>
-                    <real>3057.73199999999997089617</real>
+                    <real>3055.046000000000276486389</real>
                 <key>target</key>
                     <string>/status/500</string>
                 <key>version</key>
@@ -6165,11 +6045,11 @@
                 <key>raw_head</key>
                     <string>GET /status/502 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>3088.867000000000189174898</real>
+                    <real>3087.453999999999723513611</real>
                 <key>seq</key>
                     <integer>5</integer>
                 <key>t</key>
-                    <real>3088.744999999999890860636</real>
+                    <real>3087.350999999999658029992</real>
                 <key>target</key>
                     <string>/status/502</string>
                 <key>version</key>
@@ -6195,11 +6075,11 @@
                 <key>raw_head</key>
                     <string>GET /status/502 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>4107.140000000000327418093</real>
+                    <real>4117.394999999999527062755</real>
                 <key>seq</key>
                     <integer>6</integer>
                 <key>t</key>
-                    <real>4107.039999999999963620212</real>
+                    <real>4117.275999999999839928932</real>
                 <key>target</key>
                     <string>/status/502</string>
                 <key>version</key>
@@ -6225,11 +6105,11 @@
                 <key>raw_head</key>
                     <string>GET /status/499 HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>4138.818000000000211002771</real>
+                    <real>4148.54299999999966530595</real>
                 <key>seq</key>
                     <integer>7</integer>
                 <key>t</key>
-                    <real>4138.690999999999803549144</real>
+                    <real>4148.440999999999803549144</real>
                 <key>target</key>
                     <string>/status/499</string>
                 <key>version</key>
@@ -6250,7 +6130,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>3131.905400000000099680619</real>
+                    <real>3128.888500000000021827873</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -6282,7 +6162,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>4197.2156999999997424311</real>
+                    <real>4175.038899999999557621777</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -6314,7 +6194,7 @@
                 <key>content_type</key>
                     <string>text/plain</string>
                 <key>done_ms</key>
-                    <real>4213.240999999999985448085</real>
+                    <real>4207.250699999999596911948</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -6369,7 +6249,7 @@
                 <key>raw_head</key>
                     <string>GET /timeout/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>2008.431000000004132743925</real>
+                    <real>2014.77100000000064028427</real>
                 <key>seq</key>
                     <integer>2</integer>
                 <key>t</key>
@@ -6399,11 +6279,11 @@
                 <key>raw_head</key>
                     <string>GET /timeout/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>5022.883999999998195562512</real>
+                    <real>5024.22899999999935971573</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>3036.631999999997788108885</real>
+                    <real>3033.966000000000349245965</real>
                 <key>target</key>
                     <string>/timeout/</string>
                 <key>version</key>
@@ -6429,11 +6309,11 @@
                 <key>raw_head</key>
                     <string>GET /timeout/ HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUser-Agent: Vulkanstorm\r\nAccept: */*\r\nKeep-alive: 300\r\nAccept-Encoding: deflate, gzip\r\nConnection: keep-alive\r\n\r\n</string>
                 <key>rsp_t</key>
-                    <real>6053.296999999998661223799</real>
+                    <real>6044.765999999999621650204</real>
                 <key>seq</key>
                     <integer>1</integer>
                 <key>t</key>
-                    <real>5053.425000000002910383046</real>
+                    <real>5057.061000000001513399184</real>
                 <key>target</key>
                     <string>/timeout/</string>
                 <key>version</key>
@@ -6454,7 +6334,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>5080.597399999999652209226</real>
+                    <real>5065.203199999999924330041</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
@@ -6486,7 +6366,7 @@
                 <key>content_type</key>
                     <string />
                 <key>done_ms</key>
-                    <real>6110.587999999999738065526</real>
+                    <real>6102.133100000000013096724</real>
                 <key>method</key>
                     <string>GET</string>
                 <key>name</key>
