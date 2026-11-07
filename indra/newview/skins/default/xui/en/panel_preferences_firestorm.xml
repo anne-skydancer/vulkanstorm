@@ -324,7 +324,7 @@
          height="16"
          name="FSDisableLabeledChatLinks"
          width="520"
-         tool_tip="When enabled, hovering over square-bracket (labeled) links in IMs, group chat, ad-hoc conferences and group notices instantly shows the real destination URL in a large hint. The supplied link text is displayed whether this option is enabled or not. Nearby chat uses the option below. Built-in viewer text is not affected."/>
+         tool_tip="When enabled, hovering over square-bracket (labeled) links in IMs, group chat, ad-hoc conferences and group notices instantly shows the real destination URL in a large hint. The supplied link text is displayed whether this option is enabled or not, except that link text which is itself a URL is replaced by the destination. Nearby chat uses the option below. Built-in viewer text is not affected."/>
         <check_box
          top_pad="4"
          left="10"
@@ -334,7 +334,7 @@
          height="16"
          name="FSDisableLabeledChatLinksNearbyChat"
          width="520"
-         tool_tip="When enabled, hovering over square-bracket (labeled) links in nearby (local) chat and object text instantly shows the real destination URL in a large hint. The supplied link text is displayed whether this option is enabled or not."/>
+         tool_tip="When enabled, hovering over square-bracket (labeled) links in nearby (local) chat and object text instantly shows the real destination URL in a large hint. The supplied link text is displayed whether this option is enabled or not, except that link text which is itself a URL is replaced by the destination."/>
 
         <check_box
          left="10"
