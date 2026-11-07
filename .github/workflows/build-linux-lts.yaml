@@ -60,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/ci-checks
@@ -115,7 +115,7 @@ jobs:
           echo "Linux build container: $PRETTY_NAME, $(ldd --version | head -n 1), $(python3 --version)" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - uses: ./.github/actions/viewer-build
         with:
