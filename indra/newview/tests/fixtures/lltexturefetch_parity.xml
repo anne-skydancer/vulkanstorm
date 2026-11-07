@@ -497,7 +497,7 @@
             <key>from_cache</key>
                 <boolean>0</boolean>
             <key>http</key>
-                <string>Http_503</string>
+                <string>Core_4</string>
             <key>raw_c</key>
                 <integer>0</integer>
             <key>raw_h</key>
