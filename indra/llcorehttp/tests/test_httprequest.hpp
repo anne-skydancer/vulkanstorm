@@ -3093,7 +3093,8 @@ void HttpRequestTestObjectType::test<23>()
 // <Vulkanstorm> Content-Encoding as libcurl 7.54.1 handled it: gzip and
 // deflate (zlib or raw) are undone, any other value (the asset CDN's
 // "binary/octet-stream") passes through untouched, and gzip data that does
-// not decode fails with CURLE_BAD_CONTENT_ENCODING.
+// not decode fails with CURLE_BAD_CONTENT_ENCODING, as does a zlib or gzip
+// stream that fails after its header (no raw-deflate retry then).
 namespace
 {
 class EncodingHandler : public LLCore::HttpHandler
@@ -3155,6 +3156,11 @@ void HttpRequestTestObjectType::test<24>()
             { "/encoding/binary/", true, false },
             { "/encoding/none/", true, false },
             { "/encoding/badgzip/", false, false },
+#if LIBCURL_VERSION_NUM >= 0x075300 // the viewer's decoder: no raw-deflate retry after a failure past the header
+            { "/encoding/deflatebadsum/", false, false },
+            { "/encoding/gzipbadcrc/", false, false },
+            { "/encoding/zlibtwinbad/", false, false },
+#endif
         };
         for (const Case & c : cases)
         {
@@ -3184,9 +3190,12 @@ void HttpRequestTestObjectType::test<24>()
             }
         }
 
-        // zlib output still pending when the input runs out must not be lost
+        // zlib output still pending when the input runs out must not be lost;
+        // a valid zlib stream that also reads as raw deflate decodes as zlib
+        const std::string twin(std::string("\x01\x00\xfe\xffX\x01\x00\x00\xff\xff", 10) + std::string(65524, 'A'));
         for (const auto & big : { std::make_pair("/encoding/rawbig/", std::string(16400, 'A')),
-                                  std::make_pair("/encoding/gzipbig/", std::string(70000, 'A')) })
+                                  std::make_pair("/encoding/gzipbig/", std::string(70000, 'A')),
+                                  std::make_pair("/encoding/zlibtwin/", twin) })
         {
             handler.mCalls = 0;
             HttpHandle bh = req->requestGet(HttpRequest::DEFAULT_POLICY_ID,
