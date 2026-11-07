@@ -218,19 +218,27 @@ function colorRow(name, label = name, note = "", customTab = false) {
         row.append(missing);
         return row;
     }
+    const current = () => (customTab ? project.tab_highlight : project.colors[name]);
+    const hex = v => "#" + v.slice(0, 3).map(c => Math.round(c * 255).toString(16).padStart(2, "0")).join("");
     const setColor = value => {
         if (customTab) project.tab_highlight = value;
         else project.colors[name] = value;
-        renderColors(); changed();
+        // Update only the changed swatch and values, in place: rebuilding the
+        // rows would drop the focus of the input being edited.
+        document.querySelectorAll(".color-row").forEach(other => {
+            if (other.dataset.role === name && other.syncColor) other.syncColor();
+        });
+        changed();
     };
     const picker = document.createElement("input");
     picker.type = "color";
     picker.setAttribute("aria-label", `${name} RGB`);
-    picker.value = "#" + values.slice(0, 3).map(v => Math.round(v * 255).toString(16).padStart(2, "0")).join("");
+    picker.value = hex(values);
     picker.onchange = () => {
-        setColor([1, 3, 5].map(i => parseInt(picker.value.slice(i, i + 2), 16) / 255).concat(values[3]));
+        setColor([1, 3, 5].map(i => parseInt(picker.value.slice(i, i + 2), 16) / 255).concat(current()[3]));
     };
     row.append(picker);
+    const inputs = [];
     values.forEach((value, index) => {
         const input = document.createElement("input");
         input.type = "number"; input.min = "0"; input.max = "1"; input.step = "any";
@@ -238,14 +246,22 @@ function colorRow(name, label = name, note = "", customTab = false) {
         input.setAttribute("aria-label", `${name} ${"RGBA"[index]}`);
         input.onchange = () => {
             if (input.value === "" || !input.checkValidity()) {
-                input.reportValidity(); input.value = values[index]; return;
+                input.reportValidity(); input.value = current()[index]; return;
             }
-            const next = [...values];
+            const next = [...current()];
             next[index] = Number(input.value);
             setColor(next);
         };
+        inputs.push(input);
         row.append(input);
     });
+    row.syncColor = () => {
+        const now = current();
+        if (document.activeElement !== picker) picker.value = hex(now);
+        inputs.forEach((input, index) => {
+            if (document.activeElement !== input) input.value = now[index];
+        });
+    };
     row.append(button("Reset", `Reset ${name}`, () => {
         setColor([...(customTab ? original.tab_highlight || original.colors.EmphasisColor : original.colors[name])]);
     }));

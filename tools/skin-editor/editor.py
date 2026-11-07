@@ -248,6 +248,17 @@ class SkinLibrary:
             ET.SubElement(theme, "string").text = value
         output = BytesIO()
         generated: dict[str, bytes] = {}
+        textures_path = "textures/textures.xml"
+        if base != selected and (base / textures_path).is_file() and (selected / textures_path).is_file():
+            # A theme's textures.xml lists only its own entries: merge them over the base skin's.
+            merged = ET.parse(base / textures_path).getroot()
+            for texture in ET.parse(selected / textures_path).getroot().findall("texture"):
+                existing = next((t for t in merged.findall("texture") if t.get("name") == texture.get("name")), None)
+                if existing is None:
+                    merged.append(texture)
+                else:
+                    merged[list(merged).index(existing)] = texture
+            generated[textures_path] = xml_bytes(merged)
         if project.get("tab_highlight") is not None:
             widget_path = "xui/en/widgets/tab_container.xml"
             widget = ET.parse(files.get(widget_path, self.skins / "default" / widget_path)).getroot()

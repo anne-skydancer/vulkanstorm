@@ -143,10 +143,25 @@ class SkinEditorTests(unittest.TestCase):
         with ZipFile(BytesIO(self.library.export(project))) as archive:
             self.assertFalse(any("/themes/" in name for name in archive.namelist()))
             for path in theme.rglob("*"):
-                if path.is_file() and path.name not in ("colors.xml", "toolbars.xml"):
+                if path.is_file() and path.name not in ("colors.xml", "toolbars.xml", "textures.xml"):
                     target = "skins/my_skin/" + path.relative_to(theme).as_posix()
                     self.assertEqual(archive.read(target), path.read_bytes())
         self.assertEqual((base / "colors.xml").read_bytes(), before)
+
+    def test_theme_textures_xml_is_merged_over_the_base(self):
+        project = self.library.project("firestorm", "dark")
+        base, theme = self.library.selection("firestorm", "dark")
+        path = "textures/textures.xml"
+        base_names = [t.get("name") for t in ET.parse(base / path).getroot().findall("texture")]
+        theme_textures = {t.get("name"): t.get("file_name") for t in ET.parse(theme / path).getroot().findall("texture")}
+        with ZipFile(BytesIO(self.library.export(project))) as archive:
+            merged = ET.fromstring(archive.read("skins/my_skin/" + path))
+        entries = {t.get("name"): t.get("file_name") for t in merged.findall("texture")}
+        self.assertEqual(len(merged.findall("texture")), len(set(base_names) | set(theme_textures)))
+        for name in base_names:
+            self.assertIn(name, entries)
+        for name, file_name in theme_textures.items():
+            self.assertEqual(entries[name], file_name)
 
     def test_source_warnings_are_explicit(self):
         self.assertTrue(any("facebook" in warning for warning in self.project["warnings"]))
