@@ -66,6 +66,40 @@ namespace
         return j2c->decode(out, 0.0f) && !out->isBufferInvalid() && out->getWidth() > 0;
     }
 
+    // Decode a channel range, as the viewer does for avatar bakes (the colour
+    // channels with decode(), the auxiliary 5th channel with decodeChannels()).
+    bool decodeChannelsAt(LLPointer<LLImageJ2C> j2c, S32 first_channel, S32 max_channel_count, LLPointer<LLImageRaw>& out)
+    {
+        if (j2c.isNull())
+        {
+            return false;
+        }
+        out = new LLImageRaw();
+        j2c->initDecode(*out, 0, nullptr);
+        return j2c->decodeChannels(out, 0.0f, first_channel, max_channel_count) && !out->isBufferInvalid() && out->getWidth() > 0;
+    }
+
+    // A synthetic bake: red, green, blue, alpha and the auxiliary channel
+    // each vary differently, so a mix-up of channels shows.
+    LLPointer<LLImageRaw> makeFiveComponentImage(S32 width, S32 height)
+    {
+        LLPointer<LLImageRaw> img = new LLImageRaw(width, height, 5);
+        U8* p = img->getData();
+        for (S32 y = 0; y < height; ++y)
+        {
+            for (S32 x = 0; x < width; ++x)
+            {
+                U8* px = p + 5 * (y * width + x);
+                px[0] = (U8)(x * 255 / (width - 1));
+                px[1] = (U8)(y * 255 / (height - 1));
+                px[2] = (U8)(((x ^ y) * 4) & 0xff);
+                px[3] = (U8)(255 - px[0] / 2);
+                px[4] = (U8)(((x / 8 + y / 8) & 1) ? 200 : 40); // checkerboard mask
+            }
+        }
+        return img;
+    }
+
     F64 psnr(const LLImageRaw& a, const LLImageRaw& b)
     {
         const S32 n = llmin(a.getDataSize(), b.getDataSize());
@@ -200,5 +234,68 @@ namespace tut
         LLPointer<LLImageJ2C> j2c = new LLImageJ2C();
         ensure("junk has no metadata", !j2c->load(junk_path));
         std::remove(junk_path.c_str());
+    }
+
+    // Avatar bakes carry five components (llviewertexlayer.cpp): a lossless
+    // five-component round trip returns every sample, the default decode
+    // takes the first four channels, and decodeChannels(4, 1) takes the
+    // auxiliary one (llimageworker.cpp).
+    template<> template<>
+    void j2coj_object::test<6>()
+    {
+        const S32 w = 64, h = 64;
+        LLPointer<LLImageRaw> src = makeFiveComponentImage(w, h);
+
+        LLPointer<LLImageJ2C> j2c = new LLImageJ2C();
+        j2c->setReversible(true);
+        ensure("five-component lossless encode", j2c->encode(src, "vkstorm test", 0.0f));
+
+        LLPointer<LLImageRaw> primary;
+        ensure("primary decode", decodeAt(j2c, 0, 0, primary));
+        ensure_equals("primary channels", (S32)primary->getComponents(), 4);
+        ensure_equals("primary width", (S32)primary->getWidth(), w);
+        ensure_equals("primary height", (S32)primary->getHeight(), h);
+        const U8* sp = src->getData();
+        const U8* pp = primary->getData();
+        for (S32 i = 0; i < w * h; ++i)
+        {
+            for (S32 c = 0; c < 4; ++c)
+            {
+                ensure_equals("primary sample " + std::to_string(i) + "/" + std::to_string(c), (S32)pp[4 * i + c], (S32)sp[5 * i + c]);
+            }
+        }
+
+        LLPointer<LLImageRaw> aux;
+        ensure("auxiliary channel decode", decodeChannelsAt(j2c, 4, 1, aux));
+        ensure_equals("auxiliary channels", (S32)aux->getComponents(), 1);
+        ensure_equals("auxiliary width", (S32)aux->getWidth(), w);
+        ensure_equals("auxiliary height", (S32)aux->getHeight(), h);
+        const U8* ap = aux->getData();
+        for (S32 i = 0; i < w * h; ++i)
+        {
+            ensure_equals("auxiliary sample " + std::to_string(i), (S32)ap[i], (S32)sp[5 * i + 4]);
+        }
+    }
+
+    // The lossy path of the same bake: colour channels resemble the source
+    // and the auxiliary mask keeps its two levels apart.
+    template<> template<>
+    void j2coj_object::test<7>()
+    {
+        const S32 w = 64, h = 64;
+        LLPointer<LLImageRaw> src = makeFiveComponentImage(w, h);
+        LLPointer<LLImageJ2C> j2c = new LLImageJ2C();
+        ensure("five-component lossy encode", j2c->encode(src, "vkstorm test", 0.0f));
+
+        LLPointer<LLImageRaw> aux;
+        ensure("auxiliary channel decode", decodeChannelsAt(j2c, 4, 1, aux));
+        ensure_equals("auxiliary channels", (S32)aux->getComponents(), 1);
+        const U8* sp = src->getData();
+        const U8* ap = aux->getData();
+        for (S32 i = 0; i < w * h; ++i)
+        {
+            const bool high = sp[5 * i + 4] > 100;
+            ensure("auxiliary mask level " + std::to_string(i), high ? ap[i] > 120 : ap[i] < 120);
+        }
     }
 }
