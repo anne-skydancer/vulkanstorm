@@ -1,4 +1,4 @@
-note a second FT_ROOT_INVENTORY folder named MY INVENTORY: the root-fix hack replaces the root id
+note a second FT_ROOT_INVENTORY folder named MY INVENTORY: the login's root is kept (bug 21); validation reports a non-fatal duplicate root
 second_instance 0
 production_grid 1
 grid_id util.agni.lindenlab.com
