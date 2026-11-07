@@ -492,6 +492,11 @@ void LLAppCoreHttp::refreshSettings(bool initial)
             // avatars, etc.) can request additional outbound connections
             // to other servers via 2X total connection limit.
             //
+            // <Vulkanstorm> With curl 8 there is no HTTP/1.1 pipelining:
+            // a pipelined (deep-queue) class keeps the same connections and
+            // runs one request on each, the rest waiting in llcorehttp's
+            // queue, so the connection counts do not change. </Vulkanstorm>
+            //
             LLCore::HttpHandle handle;
             handle = mRequest->setPolicyOption(LLCore::HttpRequest::PO_CONNECTION_LIMIT,
                                                mHttpClasses[app_policy].mPolicy,
@@ -572,6 +577,7 @@ LLCore::HttpStatus LLAppCoreHttp::sslVerify(const std::string &url,
         result = LLCore::HttpStatus(LLCore::HttpStatus::EXT_CURL_EASY, CURLE_SSL_CACERT);
         result.setMessage(cert_exception.what());
         LLSD certdata = cert_exception.getCertData();
+        certdata[CERT_VALIDATION_FAILURE] = CERT_FAILURE_UNTRUSTED_CA; // <Vulkanstorm/>
         result.setErrorData(certdata);
         // We should probably have a more generic way of passing information
         // back to the error handlers.
@@ -581,6 +587,7 @@ LLCore::HttpStatus LLAppCoreHttp::sslVerify(const std::string &url,
         result = LLCore::HttpStatus(LLCore::HttpStatus::EXT_CURL_EASY, CURLE_SSL_PEER_CERTIFICATE);
         result.setMessage(cert_exception.what());
         LLSD certdata = cert_exception.getCertData();
+        certdata[CERT_VALIDATION_FAILURE] = CERT_FAILURE_INVALID; // <Vulkanstorm/>
         result.setErrorData(certdata);
     }
     catch (...)

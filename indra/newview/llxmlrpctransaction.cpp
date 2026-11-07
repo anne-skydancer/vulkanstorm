@@ -437,6 +437,23 @@ void LLXMLRPCTransaction::Impl::setHttpStatus(const LLCore::HttpStatus &status)
     case CURLE_SSL_CONNECT_ERROR:
         message = LLTrans::getString("ssl_connect_error");
         break;
+#if LIBCURL_VERSION_NUM >= 0x075100
+    // <Vulkanstorm> One code (60) for every certificate failure since
+    // libcurl 7.62: keep 7.54.1's texts, the SSL message for an untrusted CA
+    // (its CURLE_SSL_CACERT) and the generic one for the rest (its
+    // CURLE_SSL_PEER_CERTIFICATE case above is compiled out).
+    case CURLE_PEER_FAILED_VERIFICATION:
+        if (status.getErrorData()[CERT_VALIDATION_FAILURE].asString() == CERT_FAILURE_UNTRUSTED_CA)
+        {
+            message = LLTrans::getString("ssl_connect_error");
+        }
+        else
+        {
+            message = LLTrans::getString("ssl_peer_certificate");
+        }
+        break;
+    // </Vulkanstorm>
+#endif
 
     default:
         break;

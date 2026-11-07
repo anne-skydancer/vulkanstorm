@@ -34,6 +34,7 @@ import sys
 import time
 import select
 import getopt
+import zlib
 from io import StringIO
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -183,6 +184,68 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-type", "text/plain")
             self.end_headers()
             if body:
+                self.wfile.write(body.encode("utf-8"))
+        elif "/encoding/" in self.path:
+            # <Vulkanstorm> Content-Encoding handling: llcorehttp undoes gzip
+            # and deflate itself and passes anything else through, as
+            # libcurl 7.54.1 did.
+            text = ("Vulkanstorm content encoding test body. " * 40).encode("utf-8")
+            if "/encoding/rawbig/" in self.path:
+                # raw deflate whose last input leaves zlib output pending:
+                # 16,400 bytes from a few dozen
+                text = b"A" * 16400
+                c = zlib.compressobj(9, zlib.DEFLATED, -15)
+                body, enc = c.compress(text) + c.flush(), "deflate"
+            elif "/encoding/gzipbig/" in self.path:
+                text = b"A" * 70000
+                c = zlib.compressobj(9, zlib.DEFLATED, 16 + 15)
+                body, enc = c.compress(text) + c.flush(), "gzip"
+            elif "/encoding/gzipraw/" in self.path:
+                # raw deflate labelled gzip: libcurl 7.54.1's raw fallback
+                c = zlib.compressobj(9, zlib.DEFLATED, -15)
+                body, enc = c.compress(text) + c.flush(), "gzip"
+            elif "/encoding/gziplist/" in self.path:
+                # a coding list: libcurl 7.54.1 used the first
+                c = zlib.compressobj(9, zlib.DEFLATED, 16 + 15)
+                body, enc = c.compress(text) + c.flush(), "gzip, identity"
+            elif "/encoding/gzipzlib/" in self.path:
+                # labelled gzip, zlib-wrapped: libcurl 7.54.1 accepted it
+                body, enc = zlib.compress(text), "gzip"
+            elif "/encoding/gzipmulti/" in self.path:
+                # two gzip members, each half of the text
+                half = len(text) // 2
+                body = b""
+                for part in (text[:half], text[half:]):
+                    c = zlib.compressobj(9, zlib.DEFLATED, 16 + 15)
+                    body += c.compress(part) + c.flush()
+                enc = "gzip"
+            elif "/encoding/gziptrail/" in self.path:
+                # a complete gzip stream followed by padding
+                c = zlib.compressobj(9, zlib.DEFLATED, 16 + 15)
+                body, enc = c.compress(text) + c.flush() + b"\0\0\0\0", "gzip"
+            elif "/encoding/gzip/" in self.path:
+                c = zlib.compressobj(9, zlib.DEFLATED, 16 + 15)
+                body, enc = c.compress(text) + c.flush(), "gzip"
+            elif "/encoding/deflate/" in self.path:
+                body, enc = zlib.compress(text), "deflate"
+            elif "/encoding/rawdeflate/" in self.path:
+                c = zlib.compressobj(9, zlib.DEFLATED, -15)
+                body, enc = c.compress(text) + c.flush(), "deflate"
+            elif "/encoding/binary/" in self.path:
+                body, enc = text, "binary/octet-stream"
+            elif "/encoding/badgzip/" in self.path:
+                body, enc = b"this is not gzip data at all", "gzip"
+            else:
+                body, enc = text, None
+            self.send_response(200)
+            if "/reflect/" in self.path:
+                self.reflect_headers()
+            self.send_header("Content-type", "text/plain")
+            if enc:
+                self.send_header("Content-Encoding", enc)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if withdata:
                 self.wfile.write(body)
         elif "/bug2295/" in self.path:
             # Test for https://jira.secondlife.com/browse/BUG-2295
@@ -206,6 +269,10 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.send_response(206)
                 self.send_header("Content-Range", "bytes 0-75/2983")
                 self.send_header("Content-Length", "76")
+            elif "/bug2295/no_range/" in self.path:
+                # <Vulkanstorm> a 206 without Content-Range
+                self.send_response(206)
+                body = "0123456789012345678901234"
             elif "/bug2295/inv_cont_range/0/" in self.path:
                 self.send_response(206)
                 self.send_header("Content-Range", "bytes 0-75/2983")
