@@ -157,7 +157,8 @@ std::string LLVersionInfo::getChannelAndVersionFS() const
         stream << LL_TO_STRING(LL_VIEWER_CHANNEL) << " "
                << LL_VIEWER_VERSION_MAJOR << "."
                << LL_VIEWER_VERSION_MINOR << "."
-               << LL_VIEWER_VERSION_PATCH << " ("
+               << LL_VIEWER_VERSION_PATCH
+               << LL_VIEWER_VERSION_SUFFIX << " ("  // <Vulkanstorm> a canary reports its suffix
                << LL_VIEWER_VERSION_BUILD << ")";
         sVersionChannelFS = stream.str();
     }
