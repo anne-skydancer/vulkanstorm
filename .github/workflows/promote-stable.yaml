@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+#
+# On demand: promote published vkstorm-release packages to stable, without
+# rebuilding. stable then carries the Windows, Linux and Linux LTS packages of
+# the releases named below. The previous stable becomes oldstable, and the
+# previous oldstable's packages go to archive/stable-installers
+# (scripts/ci_promote_stable.cjs, doc/release_channels.md).
+name: Promote stable
+
+on:
+  workflow_dispatch:
+    inputs:
+      windows:
+        description: Release to take the Windows installer from.
+        type: string
+        default: windows-latest
+      linux:
+        description: Release to take the Linux (linux-latest, ubuntu-26.04) package from.
+        type: string
+        default: linux-latest
+      linux_lts:
+        description: Release to take the Linux LTS (Ubuntu 24.04) package from.
+        type: string
+        default: linux-lts
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    if: github.repository == 'anne-skydancer/vulkanstorm' && github.ref == 'refs/heads/vkstorm-release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: vulkanstorm-promote-stable
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/github-script@v9
+        env:
+          WINDOWS: ${{ inputs.windows }}
+          LINUX: ${{ inputs.linux }}
+          LINUX_LTS: ${{ inputs.linux_lts }}
+        with:
+          script: |
+            const promote = require('./scripts/ci_promote_stable.cjs');
+            await promote({ github, context, core, sources: {
+              windows: process.env.WINDOWS, linux: process.env.LINUX, 'linux-lts': process.env.LINUX_LTS,
+            } });

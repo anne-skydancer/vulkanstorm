@@ -73,8 +73,8 @@ GPL option is version 3 or later.
 
 ## What is built and shipped
 
-The CI Release and development builds (`.github/workflows/build.yaml`,
-checked by `scripts/ci_release_config.py`) configure Windows and Linux with
+The CI Release and development builds (`.github/workflows/build-*.yaml` with
+`.github/actions/viewer-build`, checked by `scripts/ci_release_config.py`) configure Windows and Linux with
 `OPENSIM=OFF INSTALL_PROPRIETARY=OFF USE_KDU=OFF USE_FMODSTUDIO=OFF
 USE_OPENAL=OFF USE_DISCORD=OFF USE_BUGSPLAT=OFF USE_TRACY=OFF
 USE_VELOPACK=OFF USE_SOLOUD=ON USE_MESAZINK=ON`, and Inno Setup on Windows.

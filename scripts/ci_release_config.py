@@ -18,8 +18,10 @@ enabled = {"PACKAGE", "USE_VKS_AUDIO", "USE_AVX2_OPTIMIZATION", "USE_LTO",
 disabled = {"OPENSIM", "USE_KDU", "INSTALL_PROPRIETARY", "USE_OPENAL",
             "USE_FMODSTUDIO", "USE_DISCORD", "USE_BUGSPLAT", "USE_TRACY",
             "USE_AVX_OPTIMIZATION", "USE_VELOPACK", "LL_TESTS",
-            "RELEASE_CRASH_REPORTING", "NON_RELEASE_CRASH_REPORTING"}
-enabled.add("USE_MESAZINK")
+            "RELEASE_CRASH_REPORTING", "NON_RELEASE_CRASH_REPORTING",
+            # The bundled Mesa/Zink runtime is not shipped (Zink is withdrawn;
+            # a Vulkan build supersedes it). The code stays.
+            "USE_MESAZINK"}
 if development:
     enabled -= {"PACKAGE"}
     disabled |= {"PACKAGE"}
