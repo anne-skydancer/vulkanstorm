@@ -8,12 +8,19 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const publish = require('../ci_publish_latest.cjs');
 
+// The package each platform's build uploads, named as .github/actions/viewer-build names it.
+const packages = {
+    windows: 'new_Setup.exe',
+    'linux-lts': 'new-ubuntu24.04.tar.xz',
+    linux: 'new-ubuntu-latest.tar.xz',
+};
+
 async function fixture(t, options = {}) {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'vulkanstorm-publish-'));
     t.after(() => fs.rm(directory, { recursive: true, force: true }));
-    for (const [platform, filename] of [['Windows', 'new_Setup.exe'], ['Linux', 'new.tar.xz']]) {
+    for (const [platform, filename] of Object.entries(packages)) {
         // Match actions/download-artifact's layout for the CI upload paths.
-        const folder = path.join(directory, `${platform}-installer`, platform === 'Windows' ? 'Release' : '');
+        const folder = path.join(directory, `${platform}-installer`, platform === 'windows' ? 'Release' : '');
         await fs.mkdir(folder, { recursive: true });
         if (options.missing !== platform) {
             await fs.writeFile(path.join(folder, filename), platform);
@@ -41,7 +48,7 @@ async function fixture(t, options = {}) {
     };
     repos.listReleaseAssets = () => {};
     repos.uploadReleaseAsset = async args => {
-        if (options.failLinux && args.name.startsWith('new.tar.xz')) throw new Error('Upload failed');
+        if (options.failChecksum && args.name.startsWith('SHA256SUMS.txt')) throw new Error('Upload failed');
         return record('uploadReleaseAsset')(args);
     };
     const github = {
@@ -58,38 +65,55 @@ async function fixture(t, options = {}) {
         },
         paginate: async () => [
             { id: 100, name: 'old_Setup.exe' },
-            { id: 101, name: 'old.tar.xz' },
+            { id: 101, name: 'old-ubuntu24.04.tar.xz' },
             { id: 102, name: 'SHA256SUMS.txt' },
             { id: 103, name: 'manual-notes.txt' },
         ],
     };
     return {
         calls,
-        args: { github, directory, core: { info() {} },
+        args: { github, directory, core: { info() {} }, channel: publish.channels['windows-latest'],
             context: { repo: { owner: 'anne-skydancer', repo: 'vulkanstorm' }, runId: 200, sha: 'new-sha' } },
     };
 }
 
-test('publishes both binaries and verified checksums before moving latest', async t => {
-    const { args, calls } = await fixture(t);
-    await publish(args);
-    const uploads = calls.filter(call => call.name === 'uploadReleaseAsset');
-    assert.equal(uploads.length, 3);
-    const checksum = uploads[2].args.data.toString();
-    for (const [content, name] of [['Windows', 'new_Setup.exe'], ['Linux', 'new.tar.xz']]) {
-        assert.ok(checksum.includes(`${createHash('sha256').update(content).digest('hex')}  ${name}`));
-    }
-    const tagIndex = calls.findIndex(call => call.name === 'updateRef');
-    assert.ok(calls.slice(0, tagIndex).filter(call => call.name === 'updateReleaseAsset').length === 3);
-    assert.deepEqual(calls[tagIndex].args, {
-        owner: 'anne-skydancer', repo: 'vulkanstorm', ref: 'tags/latest', sha: 'new-sha', force: true,
+test('every line gives every platform its own tag', () => {
+    assert.deepEqual(Object.fromEntries(Object.values(publish.channels).map(channel => [channel.tag, channel.platforms])), {
+        'windows-latest': ['windows'], 'linux-latest': ['linux'], 'linux-lts': ['linux-lts'],
+        'experimental-windows': ['windows'], 'experimental-linux-latest': ['linux'], 'experimental-linux-lts': ['linux-lts'],
+        'preview-windows': ['windows'], 'preview-linux-latest': ['linux'], 'preview-linux-lts': ['linux-lts'],
     });
-    const release = calls.findLast(call => call.name === 'updateRelease').args;
-    assert.match(release.body, /vulkanstorm-latest-run:200/);
-    assert.match(release.body, /Maintainer notes/);
-    assert.equal(release.prerelease, false);
-    assert.ok(!calls.some(call => call.name === 'deleteReleaseAsset' && call.args.asset_id === 103));
-    assert.ok(calls.findIndex(call => call.name === 'deleteReleaseAsset' && call.args.asset_id === 100) > tagIndex);
+    // Only windows-latest takes GitHub's Latest badge; experimental and preview are pre-releases.
+    const tags = filter => Object.values(publish.channels).filter(filter).map(channel => channel.tag);
+    assert.deepEqual(tags(channel => channel.makeLatest), ['windows-latest']);
+    assert.deepEqual(tags(channel => !channel.prerelease), ['windows-latest', 'linux-latest', 'linux-lts']);
+});
+
+test('a channel publishes only its own package and checksum before moving its tag', async t => {
+    for (const [tag, platform] of [['windows-latest', 'windows'], ['linux-latest', 'linux'], ['linux-lts', 'linux-lts'], ['experimental-linux-lts', 'linux-lts']]) {
+        const name = packages[platform];
+        await t.test(tag, async t => {
+            const { args, calls } = await fixture(t);
+            await publish({ ...args, channel: publish.channels[tag] });
+            const uploads = calls.filter(call => call.name === 'uploadReleaseAsset');
+            assert.deepEqual(uploads.map(call => call.args.name), [`${name}.upload-200`, 'SHA256SUMS.txt.upload-200']);
+            assert.equal(uploads[1].args.data.toString(),
+                `${createHash('sha256').update(platform).digest('hex')}  ${name}\n`);
+            const tagIndex = calls.findIndex(call => call.name === 'updateRef');
+            assert.equal(calls.slice(0, tagIndex).filter(call => call.name === 'updateReleaseAsset').length, 2);
+            assert.deepEqual(calls[tagIndex].args, {
+                owner: 'anne-skydancer', repo: 'vulkanstorm', ref: `tags/${tag}`, sha: 'new-sha', force: true,
+            });
+            const release = calls.findLast(call => call.name === 'updateRelease').args;
+            assert.match(release.body, new RegExp(`vulkanstorm-${tag}-run:200`));
+            assert.match(release.body, /Maintainer notes/);
+            assert.equal(release.prerelease, tag.startsWith('experimental-'));
+            assert.equal(release.make_latest, tag === 'windows-latest' ? 'true' : 'false');
+            assert.ok(!calls.some(call => call.name === 'deleteReleaseAsset' && call.args.asset_id === 103));
+            // Superseded packages go only after the new one is live.
+            assert.ok(calls.findIndex(call => call.name === 'deleteReleaseAsset' && call.args.asset_id === 100) > tagIndex);
+        });
+    }
 });
 
 test('republishes an already published release, so its date and commit follow the build', async t => {
@@ -102,41 +126,44 @@ test('republishes an already published release, so its date and commit follow th
     assert.equal(updates[1].draft, false);
     assert.equal(updates[1].target_commitish, 'new-sha');
     assert.equal(updates[1].make_latest, 'true');
-    // only once the binaries are live and the tag has moved
     const tagIndex = calls.findIndex(call => call.name === 'updateRef');
     assert.ok(calls.findIndex(call => call.name === 'updateRelease') > tagIndex);
 });
 
-test('missing platform artifacts prevent all publication writes', async t => {
-    const { args, calls } = await fixture(t, { missing: 'Linux' });
-    await assert.rejects(publish(args), /Expected one Linux installer/);
+test('a missing package prevents all publication writes for its channel only', async t => {
+    const { args, calls } = await fixture(t, { missing: 'linux' });
+    await assert.rejects(publish({ ...args, channel: publish.channels['linux-latest'] }), /Expected one linux package/);
     assert.equal(calls.length, 0);
+    await publish({ ...args, channel: publish.channels['windows-latest'] });
+    assert.ok(calls.some(call => call.name === 'updateRef' && call.args.ref === 'tags/windows-latest'));
 });
 
-test('failed second upload leaves the tag and live assets untouched', async t => {
-    const { args, calls } = await fixture(t, { failLinux: true });
+test('a failed checksum upload leaves the tag and live assets untouched', async t => {
+    const { args, calls } = await fixture(t, { failChecksum: true });
     await assert.rejects(publish(args), /Upload failed/);
     assert.deepEqual(calls.map(call => call.name), ['uploadReleaseAsset']);
 });
 
 test('late completion of an older run cannot replace a newer publication', async t => {
-    const { args, calls } = await fixture(t, { body: '<!-- vulkanstorm-latest-run:201 -->' });
+    const { args, calls } = await fixture(t, { body: '<!-- vulkanstorm-windows-latest-run:201 -->' });
     await publish(args);
     assert.equal(calls.length, 0);
 });
 
-test('a newly dispatched build of older source cannot move latest backwards', async t => {
+test('a newly dispatched build of older source cannot move a tag backwards', async t => {
     const { args, calls } = await fixture(t, { comparison: 'behind' });
     await publish(args);
     assert.equal(calls.length, 0);
 });
 
-test('bootstraps a missing latest release and tag', async t => {
+test('bootstraps a missing release and tag', async t => {
     const { args, calls } = await fixture(t, { noRelease: true, noTag: true });
-    await publish(args);
+    await publish({ ...args, channel: publish.channels['preview-linux-lts'] });
     assert.equal(calls[0].name, 'createRelease');
+    assert.equal(calls[0].args.tag_name, 'preview-linux-lts');
     assert.equal(calls[0].args.draft, true);
-    assert.ok(calls.some(call => call.name === 'createRef' && call.args.ref === 'refs/tags/latest'));
+    assert.equal(calls[0].args.prerelease, true);
+    assert.ok(calls.some(call => call.name === 'createRef' && call.args.ref === 'refs/tags/preview-linux-lts'));
     assert.equal(calls.findLast(call => call.name === 'updateRelease').args.draft, false);
 });
 
@@ -148,40 +175,43 @@ test('a comparison API failure does not get treated as a missing tag', async t =
 
 test('rerunning the same run replaces its summary without losing maintainer notes', async t => {
     const { args, calls } = await fixture(t, {
-        body: '<!-- vulkanstorm-latest-start -->\n<!-- vulkanstorm-latest-run:200 -->\nold summary\n<!-- vulkanstorm-latest-end -->\n\nNotes.',
+        body: '<!-- vulkanstorm-windows-latest-start -->\n<!-- vulkanstorm-windows-latest-run:200 -->\nold summary\n<!-- vulkanstorm-windows-latest-end -->\n\nNotes.',
     });
     await publish(args);
     const body = calls.findLast(call => call.name === 'updateRelease').args.body;
-    assert.equal(body.match(/vulkanstorm-latest-start/g).length, 1);
+    assert.equal(body.match(/vulkanstorm-windows-latest-start/g).length, 1);
     assert.ok(body.endsWith('Notes.'));
     assert.ok(!body.includes('old summary'));
 });
 
-test('the experimental channel moves its own tag as a pre-release that never takes Latest', async t => {
-    const { args, calls } = await fixture(t);
-    await publish({ ...args, channel: publish.channels.experimental });
-    const tagUpdate = calls.find(call => call.name === 'updateRef').args;
-    assert.equal(tagUpdate.ref, 'tags/experimental');
-    assert.equal(tagUpdate.sha, 'new-sha');
-    const release = calls.findLast(call => call.name === 'updateRelease').args;
-    assert.equal(release.prerelease, true);
-    assert.equal(release.make_latest, 'false');
-    assert.match(release.name, /experimental/);
-    assert.match(release.body, /vulkanstorm-experimental-run:200/);
-    assert.ok(!/vulkanstorm-latest-/.test(release.body));
+test('a newer run on one channel does not block another', async t => {
+    const { args, calls } = await fixture(t, { body: '<!-- vulkanstorm-windows-latest-run:999 -->' });
+    await publish({ ...args, channel: publish.channels['linux-latest'] });
+    assert.ok(calls.some(call => call.name === 'updateRef' && call.args.ref === 'tags/linux-latest'));
 });
 
-test('bootstraps a missing experimental release as a draft pre-release', async t => {
-    const { args, calls } = await fixture(t, { noRelease: true, noTag: true });
-    await publish({ ...args, channel: publish.channels.experimental });
-    assert.equal(calls[0].name, 'createRelease');
-    assert.equal(calls[0].args.tag_name, 'experimental');
-    assert.equal(calls[0].args.prerelease, true);
-    assert.ok(calls.some(call => call.name === 'createRef' && call.args.ref === 'refs/tags/experimental'));
-});
-
-test('a newer run on one channel does not block the other', async t => {
-    const { args, calls } = await fixture(t, { body: '<!-- vulkanstorm-latest-run:999 -->' });
-    await publish({ ...args, channel: publish.channels.experimental });
-    assert.ok(calls.some(call => call.name === 'updateRef' && call.args.ref === 'tags/experimental'));
+test('planPlatform: each platform workflow plans its own build and tag', () => {
+    const { planPlatform } = publish;
+    const repository = 'anne-skydancer/vulkanstorm';
+    const at = (eventName, ref, platform, inputs) => planPlatform({ eventName, ref, repository, inputs, platform });
+    // vkstorm-release pushes publish windows-latest and linux-latest, never linux-lts.
+    assert.deepEqual([at('push', 'refs/heads/vkstorm-release', 'windows').tag, at('push', 'refs/heads/vkstorm-release', 'linux').tag,
+        at('push', 'refs/heads/vkstorm-release', 'linux-lts').tag], ['windows-latest', 'linux-latest', '']);
+    assert.equal(at('push', 'refs/heads/vkstorm-release', 'linux').release, true);
+    assert.equal(at('workflow_dispatch', 'refs/heads/vkstorm-release', 'linux-lts', { publish: true }).tag, 'linux-lts');
+    // canary and devel publish only on a dispatch with publish.
+    assert.equal(at('push', 'refs/heads/vkstorm-canary', 'windows').tag, '');
+    assert.equal(at('workflow_dispatch', 'refs/heads/vkstorm-canary', 'linux', { publish: 'true' }).tag, 'experimental-linux-latest');
+    assert.equal(at('workflow_dispatch', 'refs/heads/vkstorm-devel', 'linux-lts', { publish: true }).tag, 'preview-linux-lts');
+    assert.equal(at('workflow_dispatch', 'refs/heads/vkstorm-devel', 'windows', { publish: false }).release, false);
+    // Pull requests and other lines never publish; forks never publish.
+    const pr = at('pull_request', 'refs/pull/7/merge', 'linux-lts');
+    assert.deepEqual([pr.tag, pr.release, pr.entry.platform, pr.entry.container.image], ['', false, 'linux-lts', 'ubuntu:24.04']);
+    assert.equal(at('push', 'refs/heads/vkstorm-rust', 'linux').tag, '');
+    assert.equal(planPlatform({ eventName: 'push', ref: 'refs/heads/vkstorm-release', repository: 'someone/fork', platform: 'windows' }).tag, '');
+    // A tag never builds a Release package or publishes.
+    const tagged = at('push', 'refs/tags/v1', 'windows');
+    assert.deepEqual([tagged.release, tagged.tag], [false, '']);
+    assert.equal(at('push', 'refs/heads/vkstorm-release', 'linux').entry.os, 'ubuntu-26.04');
+    assert.throws(() => at('push', 'refs/heads/vkstorm-release', 'freebsd'));
 });

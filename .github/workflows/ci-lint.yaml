@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+#
+# A CI change is validated as a CI change, never by building the viewer:
+# actionlint (pinned), the publish and promote scripts' tests, the linux-lts
+# package list against autobuild.xml, and the CI files' parse and composite
+# action checks. Needs no autobuild and no compiler. The build workflows skip
+# pull requests that change only CI files and documentation.
+name: CI lint
+
+on:
+  pull_request:
+    paths:
+      - '.github/**'
+      - '.gitignore'
+      - 'scripts/ci_*'
+      - 'scripts/tests/ci_*'
+      - 'scripts/tests/test_ci_files.py'
+      - 'scripts/tests/test_linux_lts_packages.py'
+      - 'scripts/linux_lts_packages.json'
+      - 'autobuild.xml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-lint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ci-lint:
+    name: ci-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "$ACTIONLINT_SHA256  $archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
+          # The workflows this repository maintains; qatest.yaml and stale.yaml
+          # are upstream's. Shell and Python inside steps are not linted here.
+          "$RUNNER_TEMP/actionlint" -color -shellcheck= -pyflakes= \
+            .github/workflows/build-windows.yaml .github/workflows/build-linux.yaml \
+            .github/workflows/build-linux-lts.yaml .github/workflows/ci-lint.yaml \
+            .github/workflows/promote-stable.yaml .github/workflows/check-pr.yaml \
+            .github/workflows/freebsd-image.yaml .github/workflows/label.yaml
+      - name: Publish and promote scripts
+        run: node --test scripts/tests/ci_publish_latest.test.cjs scripts/tests/ci_promote_stable.test.cjs
+      - name: linux-lts package list
+        run: |
+          python3 scripts/tests/test_linux_lts_packages.py
+          if [ -f scripts/linux_lts_packages.json ]; then
+            python3 scripts/ci_autobuild_override.py scripts/linux_lts_packages.json --check
+          fi
+      - name: CI files parse; composite actions match their callers
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --user pyyaml
+          python3 scripts/tests/test_ci_files.py

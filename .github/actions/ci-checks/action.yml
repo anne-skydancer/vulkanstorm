@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+#
+# The source checks every build workflow runs before its build: the
+# publication scripts' tests and the repository's own checks. The calling
+# job checks the source out with full history first.
+name: CI checks
+description: Tests of the CI scripts and the repository checks that gate every viewer build.
+inputs:
+  publish:
+    description: "'true' for a dispatch with publish (vkstorm-canary keeps development hooks out then)."
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - run: node --test scripts/tests/ci_publish_latest.test.cjs scripts/tests/ci_promote_stable.test.cjs
+      shell: bash
+    - run: python3 scripts/tests/test_windows_symbol_archive.py
+      shell: bash
+    - run: python3 scripts/tests/test_version_schema.py
+      shell: bash
+    - run: python3 scripts/tests/test_contacts_layout.py
+      shell: bash
+    - run: python3 scripts/tests/test_ci_numeric_boundaries.py
+      shell: bash
+    - run: python3 scripts/tests/test_ndof_cmake.py
+      shell: bash
+    - run: python3 scripts/tests/test_slua_ui_resources.py
+      shell: bash
+    - run: python3 scripts/tests/test_canary_upstream_review.py
+      shell: bash
+    - run: python3 scripts/tests/test_slua_review.py
+      shell: bash
+    - run: python3 scripts/tests/test_licence_files.py
+      shell: bash
+    - run: python3 scripts/tests/test_msaa_bench_model.py
+      shell: bash
+    - name: Check update version parsing
+      shell: bash
+      run: |
+        g++ -std=c++20 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/viewer_version_parser_test.cpp -o "$RUNNER_TEMP/version-parser-test"
+        "$RUNNER_TEMP/version-parser-test"
+    - name: Check POSIX handshake file creation
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I indra/newview indra/newview/tests/llscripteditorposixfile_test.cpp -o "$RUNNER_TEMP/challenge-file-test"
+        "$RUNNER_TEMP/challenge-file-test"
+    - name: Keep development hooks out of release
+      shell: bash
+      if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.publish == 'true')
+      run: python3 scripts/tests/check_release_hooks.py

@@ -18,6 +18,9 @@ This procedure may or may not work on other Linux distributions (or you might ne
 > A system with a glibc version of at least 2.34 is required (Ubuntu 22.04 LTS meets this requirement) 
 > Building on a system with a glibc version older than 2.34 will likely result in linker errors.
 
+> [!NOTE]
+> Vulkanstorm's CI has one workflow per platform (doc/release_channels.md); two of them build Linux. Build Linux, `linux-latest` (`*-ubuntu-latest.tar.xz`) is built and linked on GitHub's `ubuntu-26.04` runner (the newest GitHub runner, bumped by hand), with the newest GCC its Ubuntu ships and packages built on ubuntu-26.04; it needs at least that runner's glibc, which CI reports. Build Linux LTS, `linux-lts` (`*-ubuntu24.04.tar.xz`), is built and linked inside an Ubuntu 24.04 container with GCC 14 and 24.04-built packages, and CI fails it if anything needs more than glibc 2.39 or GLIBCXX_3.4.33, so it runs on Ubuntu 24.04 and newer.
+
 > [!IMPORTANT]
 > Only 64 bit builds are possible - 32 bit support was dropped quite some time ago.
 
