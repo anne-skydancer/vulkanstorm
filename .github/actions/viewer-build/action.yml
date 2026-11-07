@@ -225,6 +225,9 @@ runs:
         python scripts/ci_viewer_version.py "$BUILD_DIRECTORY/newview/viewer_version.txt"
 
     - name: Compile statistics type coverage before viewer
+      # A compiled test source (llcommon/tests/lltrace_compile_test.cpp): not in Release builds,
+      # which build no tests.
+      if: env.VIEWER_BUILD_TYPE != 'Release'
       shell: bash
       run: |
         cmake -S indra -B ${{ inputs.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
