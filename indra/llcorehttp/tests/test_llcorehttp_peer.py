@@ -33,6 +33,7 @@ import os
 import sys
 import time
 import select
+import struct
 import getopt
 import zlib
 from io import StringIO
@@ -190,7 +191,44 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
             # and deflate itself and passes anything else through, as
             # libcurl 7.54.1 did.
             text = ("Vulkanstorm content encoding test body. " * 40).encode("utf-8")
-            if "/encoding/gzipzlib/" in self.path:
+            if "/encoding/rawbig/" in self.path:
+                # raw deflate whose last input leaves zlib output pending:
+                # 16,400 bytes from a few dozen
+                text = b"A" * 16400
+                c = zlib.compressobj(9, zlib.DEFLATED, -15)
+                body, enc = c.compress(text) + c.flush(), "deflate"
+            elif "/encoding/gzipbig/" in self.path:
+                text = b"A" * 70000
+                c = zlib.compressobj(9, zlib.DEFLATED, 16 + 15)
+                body, enc = c.compress(text) + c.flush(), "gzip"
+            elif "/encoding/zlibtwin" in self.path:
+                # a zlib stream (one 65,534-byte stored block) whose bytes,
+                # read as raw deflate, are also a complete stream: the two
+                # bytes 01 58. /zlibtwinbad/ breaks the Adler-32, which must
+                # be refused, not raw-decoded into those two bytes.
+                text = b"\x01\x00\xfe\xffX\x01\x00\x00\xff\xff" + b"A" * 65524
+                adler = zlib.adler32(text) ^ (1 if "/encoding/zlibtwinbad/" in self.path else 0)
+                body = (b"\x78\x01" + b"\x00\xfe\xff\x01\x00" + text
+                        + b"\x01\x00\x00\xff\xff" + struct.pack(">I", adler))
+                enc = "deflate"
+            elif "/encoding/deflatebadsum/" in self.path:
+                # a zlib stream with a wrong Adler-32
+                body = zlib.compress(text)
+                body, enc = body[:-1] + bytes([body[-1] ^ 1]), "deflate"
+            elif "/encoding/gzipbadcrc/" in self.path:
+                # a gzip stream with a wrong CRC-32 (the trailer's first byte)
+                c = zlib.compressobj(9, zlib.DEFLATED, 16 + 15)
+                body = c.compress(text) + c.flush()
+                body, enc = body[:-8] + bytes([body[-8] ^ 1]) + body[-7:], "gzip"
+            elif "/encoding/gzipraw/" in self.path:
+                # raw deflate labelled gzip: libcurl 7.54.1's raw fallback
+                c = zlib.compressobj(9, zlib.DEFLATED, -15)
+                body, enc = c.compress(text) + c.flush(), "gzip"
+            elif "/encoding/gziplist/" in self.path:
+                # a coding list: libcurl 7.54.1 used the first
+                c = zlib.compressobj(9, zlib.DEFLATED, 16 + 15)
+                body, enc = c.compress(text) + c.flush(), "gzip, identity"
+            elif "/encoding/gzipzlib/" in self.path:
                 # labelled gzip, zlib-wrapped: libcurl 7.54.1 accepted it
                 body, enc = zlib.compress(text), "gzip"
             elif "/encoding/gzipmulti/" in self.path:

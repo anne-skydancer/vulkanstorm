@@ -462,6 +462,21 @@ void LLProxy::applyProxySettings(CURL* handle)
     }
 }
 
+// <Vulkanstorm>
+std::string LLProxy::getHTTPProxyForCurl()
+{
+    if (sProxyInstance && sProxyInstance->mHTTPProxyEnabled)
+    {
+        LLMutexLock lock(&sProxyInstance->mProxyMutex);
+        if (sProxyInstance->mHTTPProxyEnabled && sProxyInstance->mProxyType != LLPROXY_SOCKS)
+        {
+            return sProxyInstance->mHTTPProxy.getIPString() + ":" + std::to_string(sProxyInstance->mHTTPProxy.getPort());
+        }
+    }
+    return std::string();
+}
+// </Vulkanstorm>
+
 /**
  * @brief Send one TCP packet and receive one in return.
  *

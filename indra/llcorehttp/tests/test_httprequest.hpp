@@ -3108,7 +3108,8 @@ void HttpRequestTestObjectType::test<23>()
 // <Vulkanstorm> Content-Encoding as libcurl 7.54.1 handled it: gzip and
 // deflate (zlib or raw) are undone, any other value (the asset CDN's
 // "binary/octet-stream") passes through untouched, and gzip data that does
-// not decode fails with CURLE_BAD_CONTENT_ENCODING.
+// not decode fails with CURLE_BAD_CONTENT_ENCODING, as does a zlib or gzip
+// stream that fails after its header (no raw-deflate retry then).
 namespace
 {
 class EncodingHandler : public LLCore::HttpHandler
@@ -3159,13 +3160,22 @@ void HttpRequestTestObjectType::test<24>()
         const Case cases[] = {
             { "/encoding/gzip/", true, true },
             { "/encoding/gzipzlib/", true, true },
+#if LIBCURL_VERSION_NUM >= 0x075300 // the viewer's decoder; libcurl 7.54.1's stops at the first member's end
             { "/encoding/gzipmulti/", true, true },
+#endif
             { "/encoding/gziptrail/", true, true },
+            { "/encoding/gzipraw/", true, true },
+            { "/encoding/gziplist/", true, true },
             { "/encoding/deflate/", true, true },
             { "/encoding/rawdeflate/", true, true },
             { "/encoding/binary/", true, false },
             { "/encoding/none/", true, false },
             { "/encoding/badgzip/", false, false },
+#if LIBCURL_VERSION_NUM >= 0x075300 // the viewer's decoder: no raw-deflate retry after a failure past the header
+            { "/encoding/deflatebadsum/", false, false },
+            { "/encoding/gzipbadcrc/", false, false },
+            { "/encoding/zlibtwinbad/", false, false },
+#endif
         };
         for (const Case & c : cases)
         {
@@ -3194,6 +3204,34 @@ void HttpRequestTestObjectType::test<24>()
                        handler.mStatus == HttpStatus(HttpStatus::EXT_CURL_EASY, CURLE_BAD_CONTENT_ENCODING));
             }
         }
+
+#if LIBCURL_VERSION_NUM >= 0x075300 // the viewer's decoder (inflate_reply()); libcurl 7.54.1's loses this output
+        // zlib output still pending when the input runs out must not be lost;
+        // a valid zlib stream that also reads as raw deflate decodes as zlib
+        const std::string twin(std::string("\x01\x00\xfe\xffX\x01\x00\x00\xff\xff", 10) + std::string(65524, 'A'));
+        for (const auto & big : { std::make_pair("/encoding/rawbig/", std::string(16400, 'A')),
+                                  std::make_pair("/encoding/gzipbig/", std::string(70000, 'A')),
+                                  std::make_pair("/encoding/zlibtwin/", twin) })
+        {
+            handler.mCalls = 0;
+            HttpHandle bh = req->requestGet(HttpRequest::DEFAULT_POLICY_ID,
+                                            get_base_url() + big.first,
+                                            HttpOptions::ptr_t(),
+                                            HttpHeaders::ptr_t(),
+                                            handlerp);
+            ensure(std::string("Valid handle for ") + big.first, bh != LLCORE_HTTP_HANDLE_INVALID);
+            int count(0);
+            while (count++ < LOOP_COUNT_LONG && handler.mCalls < 1)
+            {
+                req->update(1000000);
+                usleep(LOOP_SLEEP_INTERVAL);
+            }
+            ensure(std::string("Reply in time for ") + big.first, handler.mCalls == 1);
+            ensure(std::string("Success for ") + big.first, bool(handler.mStatus));
+            ensure_equals(std::string("Body size for ") + big.first, handler.mBody.size(), big.second.size());
+            ensure(std::string("Body for ") + big.first, handler.mBody == big.second);
+        }
+#endif
 
         handler.mCalls = 0;
         HttpHandle handle = req->requestStopThread(handlerp);
