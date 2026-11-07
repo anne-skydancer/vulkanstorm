@@ -31,6 +31,15 @@ on:
   # build.
   push:
     branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-vulkan-rhi", "vkstorm-vulkan-direct", "vkstorm-rust", "vkstorm-aleph"]
+    paths-ignore:
+      - '.github/**'
+      - '.gitignore'
+      - 'doc/**'
+      - '**/*.md'
+      - 'scripts/ci_*'
+      - 'scripts/tests/ci_*'
+      - 'scripts/tests/test_ci_files.py'
+      - 'scripts/tests/test_linux_lts_packages.py'
   workflow_dispatch:
     inputs:
       publish:
@@ -74,7 +83,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/ci-checks
@@ -110,7 +119,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - uses: ./.github/actions/viewer-build
         with:
