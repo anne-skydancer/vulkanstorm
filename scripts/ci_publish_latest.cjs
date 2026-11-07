@@ -1,40 +1,93 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
-// Called only after the complete Release build matrix succeeds, under the
-// workflow's shared publication concurrency lock.
+// Plans one platform workflow's run (build-<platform>.yaml) and publishes its
+// channel (a tag with its release) after that platform's build succeeded,
+// under the channel's publication concurrency lock. doc/release_channels.md
+// describes the channels.
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 
-// A channel is a tag with its release. latest follows vkstorm-release; experimental
-// is a manually dispatched Release build of vkstorm-canary, always a pre-release
-// that never takes GitHub's Latest badge.
-const channels = {
-    latest: {
-        tag: 'latest', name: 'Vulkanstorm — latest Windows and Linux Release',
-        summary: 'Latest successful Windows and Linux CI Release', prerelease: false, makeLatest: true,
-    },
-    experimental: {
-        tag: 'experimental', name: 'Vulkanstorm — experimental (vkstorm-canary) Windows and Linux Release',
-        summary: 'Experimental Windows and Linux Release build of vkstorm-canary', prerelease: true, makeLatest: false,
-    },
+// The CI platforms (.github/build-platforms.json): a FreeBSD build
+// (freebsd-latest, planned) is one more entry there.
+const platforms = Object.fromEntries(Object.entries(require('../.github/build-platforms.json'))
+    .filter(([name]) => !name.startsWith('_')));
+
+// The lines that publish, and the tag each gives a platform: vkstorm-release
+// publishes windows-latest, linux-latest and linux-lts; vkstorm-canary
+// experimental-<platform>, vkstorm-devel preview-<platform>, always as
+// pre-releases. Only windows-latest takes GitHub's Latest badge. No other line
+// publishes, and no channel is a freebsd-image-* (CI infrastructure) release.
+const lines = {
+    'refs/heads/vkstorm-release': { kind: 'main', source: 'vkstorm-release' },
+    'refs/heads/vkstorm-canary': { kind: 'experimental', source: 'vkstorm-canary' },
+    'refs/heads/vkstorm-devel': { kind: 'preview', source: 'vkstorm-devel' },
 };
 
-module.exports = async function publishLatest({ github, context, core, directory, channel = channels.latest }) {
+function channelFor(kind, platform) {
+    const { title, tags } = platforms[platform];
+    const source = Object.values(lines).find(line => line.kind === kind).source;
+    if (kind === 'main') {
+        return {
+            tag: tags.main, platforms: [platform], name: `Vulkanstorm — ${tags.main} (${title} Release)`,
+            summary: `${title} Release of ${source}`, prerelease: false, makeLatest: tags.main === 'windows-latest',
+        };
+    }
+    const tag = `${kind}-${tags.line}`;
+    return {
+        tag, platforms: [platform], name: `Vulkanstorm — ${tag} (${title} Release of ${source})`,
+        summary: `${kind[0].toUpperCase()}${kind.slice(1)} ${title} Release build of ${source}`,
+        prerelease: true, makeLatest: false,
+    };
+}
+const channels = Object.fromEntries(Object.values(lines).flatMap(({ kind }) =>
+    Object.keys(platforms).map(platform => channelFor(kind, platform))).map(channel => [channel.tag, channel]));
+
+// One platform workflow's plan (build-<platform>.yaml, doc/release_channels.md):
+// its build entry, whether it builds a Release package, and the tag it
+// publishes to ('' for none). vkstorm-release publishes its automatic
+// platforms (windows, linux) on every push; a dispatch with publish set
+// publishes the dispatched platform on the three publishing lines.
+function planPlatform({ eventName, ref, repository, inputs, platform }) {
+    if (!platforms[platform]) throw new Error(`Unknown platform ${platform}`);
+    inputs = inputs || {};
+    const truthy = value => value === true || value === 'true';
+    const dispatch = eventName === 'workflow_dispatch';
+    const line = lines[ref];
+    const publishes = repository === 'anne-skydancer/vulkanstorm' && line !== undefined
+        && ((line.kind === 'main' && platforms[platform].automatic && ['push', 'schedule'].includes(eventName))
+            || (dispatch && truthy(inputs.publish)));
+    return {
+        platform,
+        entry: { platform, ...platforms[platform].build },
+        release: ref === 'refs/heads/vkstorm-release' || (dispatch && truthy(inputs.publish)),
+        tag: publishes ? channelFor(line.kind, platform).tag : '',
+    };
+}
+
+// The one package of a platform's downloaded artifact.
+async function packageFile(directory, platform) {
+    const { subdirectory, suffix } = platforms[platform].package;
+    const folder = path.join(directory, `${platform}-installer`, subdirectory);
+    let names = [];
+    try {
+        names = (await fs.readdir(folder)).filter(name => name.endsWith(suffix));
+    } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+    }
+    if (names.length !== 1) throw new Error(`Expected one ${platform} package, found ${names.length}`);
+    const file = path.join(folder, names[0]);
+    const stat = await fs.stat(file);
+    if (!stat.isFile() || stat.size === 0) throw new Error(`Empty or invalid package: ${file}`);
+    return { name: names[0], file };
+}
+
+module.exports = async function publishLatest({ github, context, core, directory, channel }) {
     const repo = context.repo;
     const { tag } = channel;
     const runId = String(context.runId);
     const files = [];
-    // The upload paths in build.yaml preserve Release/ in the Windows artifact.
-    for (const [platform, subdirectory, suffix] of [['Windows', 'Release', '_Setup.exe'], ['Linux', '', '.tar.xz']]) {
-        const folder = path.join(directory, `${platform}-installer`, subdirectory);
-        const names = (await fs.readdir(folder)).filter(name => name.endsWith(suffix));
-        if (names.length !== 1) throw new Error(`Expected one ${platform} installer, found ${names.length}`);
-        const file = path.join(folder, names[0]);
-        const stat = await fs.stat(file);
-        if (!stat.isFile() || stat.size === 0) throw new Error(`Empty or invalid installer: ${file}`);
-        files.push({ name: names[0], file });
-    }
+    for (const platform of channel.platforms) files.push(await packageFile(directory, platform));
 
     let release;
     try {
@@ -93,7 +146,7 @@ module.exports = async function publishLatest({ github, context, core, directory
     }
     await upload('SHA256SUMS.txt', Buffer.from(checksums.join('\n') + '\n'));
 
-    // Both binaries and their checksums are uploaded before replacing live names
+    // The packages and their checksums are uploaded before replacing live names
     // or moving the source tag. GitHub does not offer an atomic release update.
     for (const asset of staged) {
         for (const old of assets.filter(old => old.name === asset.name)) {
@@ -130,7 +183,7 @@ module.exports = async function publishLatest({ github, context, core, directory
         body: `${summary}\n\n${notes}`.trim(), draft: false,
         prerelease: channel.prerelease || (release.prerelease ?? false), make_latest: channel.makeLatest ? 'true' : 'false',
     });
-    // Retire superseded binaries only after the new pair is published; preserve
+    // Retire superseded packages only after the new ones are published; preserve
     // unrelated manually attached release assets.
     const current = new Set(staged.map(asset => asset.name));
     for (const asset of assets) {
@@ -140,6 +193,9 @@ module.exports = async function publishLatest({ github, context, core, directory
             await github.rest.repos.deleteReleaseAsset({ ...repo, asset_id: asset.id });
         }
     }
-    core.info(`Published Windows and Linux Release binaries; ${tag} now points to ${context.sha}.`);
+    core.info(`Published ${channel.platforms.join(' and ')} for ${tag}; it now points to ${context.sha}.`);
 };
 module.exports.channels = channels;
+module.exports.platforms = platforms;
+module.exports.planPlatform = planPlatform;
+module.exports.packageFile = packageFile;

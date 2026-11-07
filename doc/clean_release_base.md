@@ -24,8 +24,9 @@ The branch policy is in AGENTS.md. `vkstorm-release` is the default release
 branch; `vkstorm-devel` starts at the same reconstruction commit. New features
 use branches from development and reach release through qualified, tested PRs.
 Only hotfixes, critical fixes and security patches may be committed directly.
-CI retains upstream packaging and advances `latest` only after successful
-Windows and Linux Release builds. Development builds stage complete runtime
+CI retains upstream packaging. Each Release platform advances its own tag
+only after its own build succeeds (`windows-latest`, `linux-latest`, and
+`linux-lts` on demand; doc/release_channels.md). Development builds stage complete runtime
 assets and do not create an installer.
 
 ## Archive and recovery
@@ -61,7 +62,8 @@ assets and complete retained skin are staged without an installer at
 `worktrees/clean-release-base/build-vc170-64/newview/RelWithDebInfo`.
 All retained character and skin runtime files were checked against their
 source paths. Linux build validation remains delegated to the Release CI
-matrix; `latest` must remain unchanged until both platform builds succeed.
+matrix; each platform's tag must remain unchanged until its own platform
+build succeeds.
 These checks do not establish improved viewer performance. Interactive grid login, logout,
 audio-device switching and visual skin/OIT qualification remain necessary.
 
