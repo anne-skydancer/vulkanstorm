@@ -1,0 +1,40 @@
+{
+  "_about": "The linux-lts build's packages (doc/release_channels.md): for each package of ours in autobuild.xml, the linux64-lts archive (built in ubuntu:24.04, glibc 2.39 at most) of the release whose linux64 archive (built on ubuntu-26.04) autobuild.xml names, at the same version. scripts/ci_autobuild_override.py applies it in the linux-lts job only; scripts/tests/test_linux_lts_packages.py checks that it follows autobuild.xml. Update it with every package update.",
+  "packages": {
+    "curl": {
+      "version": "8.23.0.5",
+      "linux64": {
+        "url": "https://github.com/anne-skydancer/3p-curl/releases/download/v8.23.0.5/curl-8.23.0.5-linux64-lts-42300056657.tar.zst",
+        "hash": "d67951e6b2ed157665cdf6090ebeedd9e4a07ae8",
+        "hash_algorithm": "sha1"
+      }
+    },
+    "openjpeg": {
+      "version": "2.5.4.42293961644",
+      "linux64": {
+        "url": "https://github.com/anne-skydancer/3p-openjpeg/releases/download/v2.5.4-cpu-avx2.3/openjpeg-2.5.4.42293961644-linux64-lts-42293961644.tar.zst",
+        "hash": "34aedbb9a8cd7efb71818be47e2aecf468720b209bb77679d9a48cc8ff4d727c",
+        "hash_algorithm": "sha256"
+      }
+    },
+    "openssl": {
+      "version": "3.5.9.3",
+      "linux64": {
+        "url": "https://github.com/anne-skydancer/3p-openssl/releases/download/v3.5.9.3/openssl-3.5.9.3-linux64-lts-42296958291.tar.zst",
+        "hash": "be425cf5f48a9d2ad2ba007b0d634c92eb03f1a5",
+        "hash_algorithm": "sha1"
+      }
+    },
+    "soloud": {
+      "version": "202002.e82fd32c1f.vulkanstorm5",
+      "linux64": {
+        "url": "https://github.com/anne-skydancer/3p-soloud/releases/download/v202002-e82fd32c1f-5/soloud-202002.e82fd32c1f.vulkanstorm5-linux64-lts-42293956310.tar.zst",
+        "hash": "895b4cea5646da0fefaeba9eb11323877efac76ca0ce66653dadc12f61707a48",
+        "hash_algorithm": "sha256"
+      }
+    }
+  },
+  "without_lts": {
+    "mesazink": "No CI build installs it: CI configures with USE_MESAZINK off (Zink withdrawn), and MesaZink.cmake installs the package only with USE_MESAZINK on."
+  }
+}
