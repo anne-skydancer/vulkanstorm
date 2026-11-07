@@ -169,7 +169,7 @@ namespace
             cases.push_back(c);
         }
         {
-            C2Case c = base_case(base, "marker_clear_cache", "FS DELETE_INV_GZ marker of the agent: the library is loaded from its cache first, then both files are deleted; logout writes the library back (survey 2 Q9)");
+            C2Case c = base_case(base, "marker_clear_cache", "FS DELETE_INV_GZ marker of the agent: the library's loadSkeleton() call, the first of the login, removes both cache files before anything is read, so the library loads with no cache; logout writes an empty library (survey 2 Q9, bug 27)");
             c.files[AGENT.asString() + "_DELETE_INV_GZ"] = "";
             c.logout = true;
             cases.push_back(c);
@@ -193,7 +193,7 @@ namespace
         {
             std::string g = gz(base.agent.plain());
             g[g.size() - 6] ^= 0x5a; // inside the CRC-32 of the trailer
-            C2Case c = with_agent("plain_and_corrupt_gz", "a corrupt .gz and a stale plain file: gunzip fails, the plain file is used", g);
+            C2Case c = with_agent("plain_and_corrupt_gz", "a corrupt .gz and a stale plain file: gunzip fails, nothing is loaded, every folder is unknown, and both files are removed (bug 20, Q7)", g);
             CacheBody stale = base.agent;
             (*stale.cat(F(SF_OBJECTS)))["version"] = 11;
             c.files[plain_name(AGENT)] = stale.plain();
@@ -380,7 +380,7 @@ namespace
             cases.push_back(c);
         }
         {
-            C2Case c = base_case(base, "skeleton_second_root", "a second FT_ROOT_INVENTORY folder named MY INVENTORY: the root-fix hack replaces the root id");
+            C2Case c = base_case(base, "skeleton_second_root", "a second FT_ROOT_INVENTORY folder named MY INVENTORY: the login's root is kept (bug 21); validation reports a non-fatal duplicate root");
             c.agent_skel.append(skel_entry(F(77), F(SF_ROOT), "MY INVENTORY", LLFolderType::FT_ROOT_INVENTORY, 1));
             cases.push_back(c);
         }
@@ -402,7 +402,7 @@ namespace
             cases.push_back(c);
         }
         {
-            C2Case c = base_case(base, "skeleton_three_roots", "two further FT_ROOT_INVENTORY folders named My Inventory (any case): the root-fix hack keeps the last match in parent-UUID, then vector order");
+            C2Case c = base_case(base, "skeleton_three_roots", "two further FT_ROOT_INVENTORY folders named My Inventory (any case): the login's root is kept (bug 21); validation reports a non-fatal duplicate root");
             c.agent_skel.append(skel_entry(F(78), F(SF_OBJECTS), "My Inventory", LLFolderType::FT_ROOT_INVENTORY, 1));
             c.agent_skel.append(skel_entry(F(79), F(SF_ROOT), "MY INVENTORY", LLFolderType::FT_ROOT_INVENTORY, 1));
             cases.push_back(c);

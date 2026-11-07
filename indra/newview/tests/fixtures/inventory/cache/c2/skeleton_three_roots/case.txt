@@ -1,4 +1,4 @@
-note two further FT_ROOT_INVENTORY folders named My Inventory (any case): the root-fix hack keeps the last match in parent-UUID, then vector order
+note two further FT_ROOT_INVENTORY folders named My Inventory (any case): the login's root is kept (bug 21); validation reports a non-fatal duplicate root
 second_instance 0
 production_grid 1
 grid_id util.agni.lindenlab.com

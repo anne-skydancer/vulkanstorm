@@ -1,4 +1,4 @@
-note FS DELETE_INV_GZ marker of the agent: the library is loaded from its cache first, then both files are deleted; logout writes the library back (survey 2 Q9)
+note FS DELETE_INV_GZ marker of the agent: the library's loadSkeleton() call, the first of the login, removes both cache files before anything is read, so the library loads with no cache; logout writes an empty library (survey 2 Q9, bug 27)
 second_instance 0
 production_grid 1
 grid_id util.agni.lindenlab.com

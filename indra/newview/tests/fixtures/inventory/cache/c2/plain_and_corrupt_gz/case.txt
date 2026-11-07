@@ -1,4 +1,4 @@
-note a corrupt .gz and a stale plain file: gunzip fails, the plain file is used
+note a corrupt .gz and a stale plain file: gunzip fails, nothing is loaded, every folder is unknown, and both files are removed (bug 20, Q7)
 second_instance 0
 production_grid 1
 grid_id util.agni.lindenlab.com

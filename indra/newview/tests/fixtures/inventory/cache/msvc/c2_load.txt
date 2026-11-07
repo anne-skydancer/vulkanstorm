@@ -465,7 +465,7 @@ step create_common_system_categories pending=0
 step startup_notify
   batch mask=0xffffffff tid=- changed=[] added=[]
 == marker_clear_cache
-note FS DELETE_INV_GZ marker of the agent: the library is loaded from its cache first, then both files are deleted; logout writes the library back (survey 2 Q9)
+note FS DELETE_INV_GZ marker of the agent: the library's loadSkeleton() call, the first of the login, removes both cache files before anything is read, so the library loads with no cache; logout writes an empty library (survey 2 Q9, bug 27)
 files before [11b00000-0000-4000-8000-000000000001.inv.llsd.gz gz; a9e00000-0000-4000-8000-000000000001.inv.llsd.gz gz; a9e00000-0000-4000-8000-000000000001_DELETE_INV_GZ 0]
 step load_library rv=1
 files after_library []
@@ -856,7 +856,7 @@ step startup_notify
   batch mask=0xffffffff tid=- changed=[] added=[]
 content a9e00000-0000-4000-8000-000000000001.inv.llsd sha256=2dc8e39d204a9d4c79a95ee09722a797bb7022c99d87aea2929815c08d35042f
 == plain_and_corrupt_gz
-note a corrupt .gz and a stale plain file: gunzip fails, the plain file is used
+note a corrupt .gz and a stale plain file: gunzip fails, nothing is loaded, every folder is unknown, and both files are removed (bug 20, Q7)
 files before [11b00000-0000-4000-8000-000000000001.inv.llsd.gz gz; a9e00000-0000-4000-8000-000000000001.inv.llsd 21847; a9e00000-0000-4000-8000-000000000001.inv.llsd.gz gz]
 step load_library rv=1
 files after_library [11b00000-0000-4000-8000-000000000001.inv.llsd.gz gz; a9e00000-0000-4000-8000-000000000001.inv.llsd 21847; a9e00000-0000-4000-8000-000000000001.inv.llsd.gz gz]
@@ -4871,7 +4871,7 @@ step create_common_system_categories pending=0
 step startup_notify
   batch mask=0xffffffff tid=- changed=[] added=[]
 == skeleton_second_root
-note a second FT_ROOT_INVENTORY folder named MY INVENTORY: the root-fix hack replaces the root id
+note a second FT_ROOT_INVENTORY folder named MY INVENTORY: the login's root is kept (bug 21); validation reports a non-fatal duplicate root
 files before [11b00000-0000-4000-8000-000000000001.inv.llsd.gz gz; a9e00000-0000-4000-8000-000000000001.inv.llsd.gz gz]
 step load_library rv=1
 files after_library [11b00000-0000-4000-8000-000000000001.inv.llsd.gz gz; a9e00000-0000-4000-8000-000000000001.inv.llsd.gz gz]
@@ -5213,7 +5213,7 @@ step create_common_system_categories pending=9
 step startup_notify
   batch mask=0xffffffff tid=- changed=[] added=[]
 == skeleton_three_roots
-note two further FT_ROOT_INVENTORY folders named My Inventory (any case): the root-fix hack keeps the last match in parent-UUID, then vector order
+note two further FT_ROOT_INVENTORY folders named My Inventory (any case): the login's root is kept (bug 21); validation reports a non-fatal duplicate root
 files before [11b00000-0000-4000-8000-000000000001.inv.llsd.gz gz; a9e00000-0000-4000-8000-000000000001.inv.llsd.gz gz]
 step load_library rv=1
 files after_library [11b00000-0000-4000-8000-000000000001.inv.llsd.gz gz; a9e00000-0000-4000-8000-000000000001.inv.llsd.gz gz]
