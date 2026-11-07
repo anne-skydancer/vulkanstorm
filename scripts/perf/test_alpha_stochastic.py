@@ -143,6 +143,7 @@ expand_before=program([(0x8B31,screen_vertex),(0x8B30,'#version 420\n'+subproces
 VIEWER_OFFSET=(-1/256,-1.,-2.,-3.)
 BEFORE_OFFSET=(-1.,-1.,-2.,-3.)
 composite=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCompositeF.glsl'))])
+resolve_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticResolveF.glsl'))])
 # per pixel, the samples of the stochastic depth nearer than the opaque depth, as bits
 readmask=program([(0x8B31,screen_vertex),(0x8B30,'''#version 420
 uniform sampler2DMS st_depth; uniform sampler2D opaque; uniform int samples; out uvec4 bits;
@@ -187,13 +188,17 @@ def set_opaque(z,occluder=None,slope=0.,slope_y=0.):
         cleardepth(zo);clear(0x100);disable(0x0C11)
     depthfunc(LEQUAL)
 
+LAYER_SCISSOR=None   # (x0, x1): the layers cover these columns only (the temporal tests move it)
+TEMPORAL_FRAME=[0]   # the frame in the masks' seeds (st_frame)
 def layer(prog,z,alpha=0.,rgb=(1.,1.,1.),seed=0,glow=0.,slope=0.,slope_y=0.):
     if isinstance(slope,tuple): slope,slope_y=slope
     use(prog);uniform1f(loc(prog,b'z'),z);uniform1f(loc(prog,b'slope'),slope);uniform1f(loc(prog,b'slope_y'),slope_y)
-    if prog==variant: uniform1f(loc(prog,b'test_alpha'),alpha);uniform1i(loc(prog,b'st_seed'),seed)
+    if prog==variant: uniform1f(loc(prog,b'test_alpha'),alpha);uniform1i(loc(prog,b'st_seed'),seed);uniform1i(loc(prog,b'st_frame'),TEMPORAL_FRAME[0])
     elif prog==shade: uniform1f(loc(prog,b'test_alpha'),alpha);uniform3f(loc(prog,b'test_rgb'),*rgb)
     else: uniform1f(loc(prog,b'test_glow'),glow)
+    if LAYER_SCISSOR: enable(0x0C11);fn('glScissor',None,I,I,I,I)(LAYER_SCISSOR[0],0,LAYER_SCISSOR[1]-LAYER_SCISSOR[0],H)
     draw(4,0,3)
+    if LAYER_SCISSOR: disable(0x0C11)
 
 def spread(n,prog):
     f=targets[n][0];bindfbo(FB,f);drawbuffer(NONE);disable(BLEND);disable(POLY_OFFSET)
@@ -201,7 +206,7 @@ def spread(n,prog):
     use(prog);bind_unit(0,TEX2D,opaque_depth);uniform1i(loc(prog,b'depthMap'),0);draw(4,0,3)
     depthfunc(LEQUAL)
 
-def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits=None,before=False):
+def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits=None,before=False,temporal=None):
     """LLDrawPoolAlpha::renderStochastic over `layers` [(z, alpha, rgb, seed, glow, slope)], then
     the composite over a scene of `scene_rgba`; returns the scene's pixels (RGBA float)."""
     f,accum,trans,depth=targets[n];iterations=total//n
@@ -238,11 +243,24 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
         for z,a,rgb,seed,glow,slope in layers:
             if glow>0: layer(glowprog,z,glow=glow,slope=slope)
     disable(POLY_OFFSET);disable(MULTISAMPLE)
+    # 3b. the temporal accumulation (alphaStochasticResolveF.glsl): this frame's colour blended with the history
+    if temporal is not None:
+        nxt=1-temporal['idx']
+        bindfbo(FB,temporal['fbo'][nxt]);drawbuffer(COLOR0);disable(BLEND);disable(DEPTH_TEST)
+        use(resolve_prog);bind_unit(4,TEXMS,accum);bind_unit(6,TEXMS,depth);bind_unit(7,TEX2D,temporal['tex'][temporal['idx']])
+        uniform1i(loc(resolve_prog,b'alpha_st_accum'),4);uniform1i(loc(resolve_prog,b'alpha_st_depth'),6);uniform1i(loc(resolve_prog,b'alpha_st_history'),7)
+        uniform1i(loc(resolve_prog,b'st_samples_hw'),n);uniform1i(loc(resolve_prog,b'st_samples'),total)
+        fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))(loc(resolve_prog,b'st_reproj'),1,0,(C.c_float*16)(*temporal['reproj']))
+        uniform1f(loc(resolve_prog,b'st_weight'),temporal.get('weight',1/8));uniform1i(loc(resolve_prog,b'st_history_valid'),1 if temporal['valid'] else 0)
+        draw(4,0,3)
+        temporal['idx']=nxt;temporal['valid']=True
     # 4. composite over the scene, then the glow into its alpha
     bindfbo(FB,scene_fbo);drawbuffer(COLOR0);clearcolor(*scene_rgba);clear(0x4000)
     disable(DEPTH_TEST);enable(BLEND);blendsep(ONE,ONE_MINUS_SRC_ALPHA,ZERO,ONE_MINUS_SRC_ALPHA)
     use(composite);bind_unit(4,TEXMS,accum);bind_unit(5,TEXMS,trans)
-    uniform1i(loc(composite,b'alpha_st_accum'),4);uniform1i(loc(composite,b'alpha_st_trans'),5)
+    bind_unit(7,TEX2D,temporal['tex'][temporal['idx']] if temporal is not None else opaque_depth)
+    uniform1i(loc(composite,b'alpha_st_accum'),4);uniform1i(loc(composite,b'alpha_st_trans'),5);uniform1i(loc(composite,b'alpha_st_resolved'),7)
+    uniform1i(loc(composite,b'st_temporal'),1 if temporal is not None else 0)
     uniform1i(loc(composite,b'st_samples_hw'),n);uniform1i(loc(composite,b'st_samples'),total);uniform1i(loc(composite,b'st_glow'),0)
     draw(4,0,3)
     blendsep(ZERO,ONE,ONE,ONE);uniform1i(loc(composite,b'st_glow'),1);draw(4,0,3)
@@ -579,6 +597,81 @@ for name,worst,count in before:
 assert before[0][2]==W*H and before[1][2]==W*H,('the old binding should change every pixel under the alpha 0 layer',before)
 assert before[2][2]==W*H,('the old binding should lose the shiny glass reflections',before)
 
+# ---- the temporal accumulation (alphaStochasticResolveF.glsl, the composite's st_temporal)
+# 8 samples in one pass, the masks' seeds changing every frame (st_frame), the last frame's colour moved
+# by the camera and clamped to this frame's 3 x 3 neighbourhood, blended at 1/8.
+IDENT=[1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., 0.,0.,0.,1.]
+def new_temporal(reproj=IDENT):
+    tex=[tex2d(RGBA16F,RGBA,FLOAT) for _ in range(2)]
+    fbos=[fbo((COLOR0,TEX2D,x)) for x in tex]
+    return dict(tex=tex,fbo=fbos,idx=0,valid=False,reproj=list(reproj))
+def rmse(pix,want,cols=None):
+    xs=range(W) if cols is None else cols
+    return math.sqrt(sum((pix[y*W+x][c]-want[c])**2 for y in range(H) for x in xs for c in range(3))/(3*H*len(xs)))
+def frame_rmse(a,b): return math.sqrt(sum((p[c]-q[c])**2 for p,q in zip(a,b) for c in range(3))/(3*len(a)))
+def scene(alphas=(0.2,0.4,0.5)): return [L(0.3,alphas[0],(1.,0.,0.),seed=5),L(0.45,alphas[1],(0.,1.,0.),seed=6),L(0.6,alphas[2],(0.,0.,1.),seed=7)]
+def exact(alphas=(0.2,0.4,0.5)): return (alphas[0],alphas[1]*(1-alphas[0]),alphas[2]*(1-alphas[0])*(1-alphas[1]))
+set_opaque(1.0)
+want=exact()
+# no history: the same image as the composite without the temporal accumulation
+TEMPORAL_FRAME[0]=1
+plain=stochastic(scene(),8,8,temporal=None)
+T=new_temporal();first=stochastic(scene(),8,8,temporal=T)
+assert frame_rmse(first,plain)<3e-3,('the first frame has no history',frame_rmse(first,plain))
+checks+=1
+# a static view: the noise averages over the frames
+single8=[];single16=None
+for f in range(1,9):
+    TEMPORAL_FRAME[0]=f;single8.append(rmse(stochastic(scene(),8,8),want))
+TEMPORAL_FRAME[0]=0;single16=rmse(stochastic(scene(),16,8),want)
+T=new_temporal();errs={};prev=None
+for f in range(1,41):
+    TEMPORAL_FRAME[0]=f;pix=stochastic(scene(),8,8,temporal=T)
+    if f in (1,8,16,40): errs[f]=rmse(pix,want)
+    if f==39: prev=pix
+flicker=frame_rmse(prev,pix)
+TEMPORAL_FRAME[0]=1;a=stochastic(scene(),8,8);TEMPORAL_FRAME[0]=2;b=stochastic(scene(),8,8);flicker8=frame_rmse(a,b)
+mean8=sum(single8)/len(single8)
+assert errs[40]<0.55*mean8,('8 samples with the temporal accumulation against 8 samples',errs,mean8)
+assert errs[40]<single16,('and against 16 samples in two passes',errs[40],single16)
+assert flicker<0.25*flicker8,('the grain holds still between frames',flicker,flicker8)
+checks+=1
+print(f'temporal accumulation, a static view (three layers of alpha 0.2, 0.4, 0.5, rmse/255): 8 samples {mean8*255:.2f}, 16 samples {single16*255:.2f}; 8 samples '
+      f'accumulated: frame 1 {errs[1]*255:.2f}, 8 {errs[8]*255:.2f}, 16 {errs[16]*255:.2f}, 40 {errs[40]*255:.2f}; '
+      f'rms change between frames {flicker*255:.2f} against {flicker8*255:.2f} without')
+# the camera moves 3 pixels: the history follows (reprojected), where without it the edges ghost
+def moved(reproj_shift):
+    global LAYER_SCISSOR
+    T=new_temporal();LAYER_SCISSOR=(8,40)
+    for f in range(1,25):
+        TEMPORAL_FRAME[0]=f;stochastic(scene(),8,8,temporal=T)
+    LAYER_SCISSOR=(11,43);T['reproj']=[1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., -2.0*reproj_shift/W,0.,0.,1.]
+    TEMPORAL_FRAME[0]=25;pix=stochastic(scene(),8,8,temporal=T);LAYER_SCISSOR=None
+    return pix
+edge_cols=list(range(9,15))+list(range(39,46))
+inside=lambda x:11<=x<43
+def region_error(pix):
+    e=0.;n=0
+    for y in range(H):
+        for x in edge_cols:
+            w=want if inside(x) else (0.,0.,0.)
+            e+=sum((pix[y*W+x][c]-w[c])**2 for c in range(3));n+=3
+    return math.sqrt(e/n)
+good=region_error(moved(3));wrong=region_error(moved(0))
+assert good<0.75*wrong,('the history follows the camera',good,wrong)
+checks+=1
+print(f'camera moved 3 pixels, the columns at the edges of the layers (rmse/255): history reprojected {good*255:.2f}, not reprojected {wrong*255:.2f}')
+# an alpha change is never ghosted: the correction uses this frame's total alpha
+T=new_temporal()
+for f in range(1,25):
+    TEMPORAL_FRAME[0]=f;stochastic(scene(),8,8,temporal=T)
+TEMPORAL_FRAME[0]=25;changed=stochastic(scene((0.05,0.1,0.1)),8,8,temporal=T);w2=exact((0.05,0.1,0.1))
+TEMPORAL_FRAME[0]=25;plain2=stochastic(scene((0.05,0.1,0.1)),8,8)
+e_t=rmse(changed,w2);e_p=rmse(plain2,w2)
+assert e_t<2.0*e_p+0.01,('after an alpha change the first frame is no worse than without history',e_t,e_p)
+checks+=1
+print(f'alpha 0.2/0.4/0.5 -> 0.05/0.1/0.1 after 24 frames: first frame rmse/255 {e_t*255:.2f} with the history, {e_p*255:.2f} without')
+TEMPORAL_FRAME[0]=0
 # ---- edge pixels: attributes at the centroid, not the pixel centre (the lattice on layered hair)
 # The stochastic passes draw into multisampled targets: a pixel that a triangle covers in part is
 # shaded once for that triangle, and without `centroid` its attributes are interpolated at the pixel
