@@ -45,6 +45,7 @@
 #include "_httpinternal.h"
 
 #include "llhttpconstants.h"
+#include "llstring.h" // <Vulkanstorm/>
 #include "llproxy.h"
 
 #include "httpstats.h"
@@ -145,6 +146,7 @@ HttpOpRequest::HttpOpRequest()
       mCurlTemp(NULL),
       mCurlTempLen(0),
       mReplyBody(NULL),
+      mDecodeReply(false),
       mReplyOffset(0),
       mReplyLength(0),
       mReplyFullLength(0),
@@ -200,10 +202,93 @@ HttpOpRequest::~HttpOpRequest()
 }
 
 
+// <Vulkanstorm>
+namespace
+{
+// "host:port" of a URL as libcurl keys its connections: host name in lower
+// case (an IPv6 literal with its brackets), the port given or the scheme's
+// default, userinfo dropped. `scheme` receives the scheme in lower case
+// (`default_scheme` if the URL has none); with no port given,
+// `default_port`, or if that is 0 the scheme's.
+std::string host_port(const std::string & url, const char * default_scheme, long default_port, std::string & scheme)
+{
+    const size_t sep(url.find("://"));
+    scheme = sep == std::string::npos ? std::string(default_scheme) : url.substr(0, sep);
+    std::transform(scheme.begin(), scheme.end(), scheme.begin(),
+                   [](unsigned char c) { return char(tolower(c)); });
+    const size_t start(sep == std::string::npos ? 0 : sep + 3);
+    const size_t end_auth(std::min(url.find_first_of("/?#", start), url.size()));
+    std::string auth(url.substr(start, end_auth - start));
+    const size_t at(auth.rfind('@'));
+    if (at != std::string::npos)
+    {
+        auth.erase(0, at + 1);
+    }
+    size_t host_end(auth.size());
+    if (! auth.empty() && auth[0] == '[')
+    {
+        const size_t close(auth.find(']'));
+        host_end = close == std::string::npos ? auth.size() : close + 1;
+    }
+    else
+    {
+        host_end = std::min(auth.find(':'), auth.size());
+    }
+    std::string host(auth.substr(0, host_end));
+    std::transform(host.begin(), host.end(), host.begin(),
+                   [](unsigned char c) { return char(tolower(c)); });
+    long port(0);
+    if (host_end < auth.size() && auth[host_end] == ':' && host_end + 1 < auth.size())
+    {
+        port = strtol(auth.c_str() + host_end + 1, NULL, 10);
+    }
+    if (port <= 0)
+    {
+        port = default_port > 0 ? default_port : scheme == "https" ? 443L : scheme == "http" ? 80L : 0L;
+    }
+    return host + ":" + std::to_string(port);
+}
+} // anonymous namespace
+
+std::string HttpOpRequest::admissionKey(const std::string & url, const std::string & http_proxy)
+{
+    std::string scheme;
+    const std::string origin(host_port(url, "http", 0L, scheme));
+    if (scheme == "http" && ! http_proxy.empty())
+    {
+        // libcurl sends a plain http request to an HTTP proxy over the
+        // proxy's own connection (no tunnel), so the proxy's limit applies.
+        // A proxy given without a port is on libcurl's default: 1080, an
+        // https:// proxy 443. A SOCKS proxy relays to the origin.
+        std::string proxy_scheme;
+        const size_t sep(http_proxy.find("://"));
+        if (sep != std::string::npos)
+        {
+            proxy_scheme = http_proxy.substr(0, sep);
+            std::transform(proxy_scheme.begin(), proxy_scheme.end(), proxy_scheme.begin(),
+                           [](unsigned char c) { return char(tolower(c)); });
+        }
+        if (proxy_scheme.compare(0, 5, "socks") != 0)
+        {
+            return "proxy " + host_port(http_proxy, "http", proxy_scheme == "https" ? 443L : 1080L, proxy_scheme);
+        }
+    }
+    return origin;
+}
+// </Vulkanstorm>
+
+
 void HttpOpRequest::stageFromRequest(HttpService * service)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
     HttpOpRequest::ptr_t self(std::dynamic_pointer_cast<HttpOpRequest>(shared_from_this()));
+    // <Vulkanstorm> the admission key, with the proxy prepareRequest() will
+    // set: on this (the worker) thread, which owns the global options
+    {
+        const HttpPolicyGlobal & gpolicy(service->getPolicy().getGlobalOptions());
+        mReqHost = admissionKey(mReqURL, gpolicy.mUseLLProxy ? LLProxy::getHTTPProxyForCurl() : gpolicy.mHttpProxy);
+    }
+    // </Vulkanstorm>
     service->getPolicy().addOp(self);           // transfers refcount
 }
 
@@ -276,9 +361,21 @@ void HttpOpRequest::visitNotifier(HttpRequest * request)
 
         HttpResponse::TransferStats::ptr_t stats = std::make_shared<HttpResponse::TransferStats>();
 
+#if LIBCURL_VERSION_NUM >= 0x073700 // 7.55.0
+        // <Vulkanstorm> the double-valued CURLINFO_SIZE/SPEED_DOWNLOAD are
+        // deprecated (a -Werror build error with curl 8 headers on GCC and
+        // clang); the curl_off_t forms hold the same values. </Vulkanstorm>
+        curl_off_t size_download(0), speed_download(0);
+        curl_easy_getinfo(mCurlHandle, CURLINFO_SIZE_DOWNLOAD_T, &size_download);
+        curl_easy_getinfo(mCurlHandle, CURLINFO_TOTAL_TIME, &stats->mTotalTime);
+        curl_easy_getinfo(mCurlHandle, CURLINFO_SPEED_DOWNLOAD_T, &speed_download);
+        stats->mSizeDownload = static_cast<F64>(size_download);
+        stats->mSpeedDownload = static_cast<F64>(speed_download);
+#else
         curl_easy_getinfo(mCurlHandle, CURLINFO_SIZE_DOWNLOAD, &stats->mSizeDownload);
         curl_easy_getinfo(mCurlHandle, CURLINFO_TOTAL_TIME, &stats->mTotalTime);
         curl_easy_getinfo(mCurlHandle, CURLINFO_SPEED_DOWNLOAD, &stats->mSpeedDownload);
+#endif
 
         response->setTransferStats(stats);
 
@@ -493,6 +590,7 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     mReplyFullLength = 0;
     mReplyHeaders.reset();
     mReplyConType.clear();
+    mDecodeReply = false;
 
     // *FIXME:  better error handling later
     HttpStatus status;
@@ -511,6 +609,12 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     }
 
     check_curl_easy_setopt(mCurlHandle, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+#if LIBCURL_VERSION_NUM >= 0x073e00 // 7.62.0
+    // <Vulkanstorm> libcurl 7.62 and later negotiate HTTP/2 over TLS by
+    // default; 7.54.1 spoke HTTP/1.1 to every server. Keep HTTP/1.1 so that
+    // no server sees a different protocol from this viewer. </Vulkanstorm>
+    check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_1_1);
+#endif
     check_curl_easy_setopt(mCurlHandle, CURLOPT_NOSIGNAL, 1);
     check_curl_easy_setopt(mCurlHandle, CURLOPT_NOPROGRESS, 1);
     check_curl_easy_setopt(mCurlHandle, CURLOPT_URL, mReqURL.c_str());
@@ -518,7 +622,17 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
 
 // <FS:ND/> Newer versions of curl are stricter with checkinng Cotent-Encoding: header
 // Aws returns Content-Encoding: binary/octet-stream which is no valid scheme defined by HTTP/1.1 (compress,deflate, gzip)
-#if LIBCURL_VERSION_NUM < 0x075100
+#if LIBCURL_VERSION_NUM >= 0x075300 // 7.83.0, curl_easy_header()
+    // <Vulkanstorm> Ask for gzip and deflate as 7.54.1 did, but undo them in
+    // llcorehttp (HttpLibcurl::completeRequest) instead of in libcurl: a
+    // Content-Encoding libcurl does not know, such as the asset CDN's
+    // "binary/octet-stream" on every texture, then passes through as it did
+    // with 7.54.1 rather than failing the transfer (CURLE_BAD_CONTENT_ENCODING).
+    // The header itself is added with the request headers below.
+    check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTP_CONTENT_DECODING, 0L);
+    mDecodeReply = true;
+    // </Vulkanstorm>
+#elif LIBCURL_VERSION_NUM < 0x075100
     check_curl_easy_setopt(mCurlHandle, CURLOPT_ENCODING, "");
 #endif
 
@@ -624,7 +738,9 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     case HOR_POST:
         {
             check_curl_easy_setopt(mCurlHandle, CURLOPT_POST, 1);
+#if LIBCURL_VERSION_NUM < 0x075300
             check_curl_easy_setopt(mCurlHandle, CURLOPT_ENCODING, "");
+#endif
             long data_size(0);
             if (mReqBody)
             {
@@ -733,39 +849,16 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     }
     if (cpolicy.mPipelining > 1L)
     {
-        // Pipelining affects both connection and transfer timeout values.
-        // Requests that are added to a pipeling immediately have completed
-        // their connection so the connection delay tends to be less than
-        // the non-pipelined value.  Transfers are the opposite.  Transfer
-        // timeout starts once the connection is established and completion
-        // can be delayed due to the pipelined requests ahead.  So, it's
-        // a handwave but bump the transfer timeout up by the pipelining
-        // depth to give some room.
-        //
-        // BUG-7698, BUG-7688, BUG-7694 (others).  Scylla and Charybdis
-        // situation.  Operating against a CDN having service issues may
-        // lead to requests stalling for an arbitrarily long time with only
-        // the CURLOPT_TIMEOUT value leading to a closed connection.  Sadly
-        // for pipelining, libcurl (7.39.0 and earlier, at minimum) starts
-        // the clock on this value as soon as a request is started down
-        // the wire.  We want a short value to recover and retry from the
-        // CDN.  We need a long value to safely deal with a succession of
-        // piled-up pipelined requests.
-        //
-        // *TODO:  Find a better scheme than timeouts to guarantee liveness.
-        // Progress on the connection is what we really want, not timeouts.
-        // But we don't have access to that and the request progress indicators
-        // (various libcurl callbacks) have the same problem TIMEOUT does.
-        //
-        // xfer_timeout *= cpolicy.mPipelining;
+        // <Vulkanstorm> A deep-queue class keeps the doubled transfer
+        // timeout it had under HTTP/1.1 pipelining (BUG-7698, BUG-7688,
+        // BUG-7694: a CDN with service issues can stall a request for as
+        // long as CURLOPT_TIMEOUT allows; short enough to retry, long enough
+        // for a full queue), so no request times out sooner than before.
+        // It runs one request per connection (HttpPolicyClass::activeLimit());
+        // PIPEWAIT only matters if a request ever negotiates h2. The
+        // VIEWERASSET test switch to HTTP/2 is gone. </Vulkanstorm>
         xfer_timeout *= 2L;
-
-        // Also try requesting HTTP/2.
-/******************************/
-        // but for test purposes, only if overriding VIEWERASSET
-        if (getenv("VIEWERASSET"))
-/******************************/
-        check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+        check_curl_easy_setopt(mCurlHandle, CURLOPT_PIPEWAIT, 1L);
     }
     // *DEBUG:  Enable following override for timeout handling and "[curl:bugs] #1420" tests
     //if (cpolicy.mPipelining)
@@ -781,6 +874,24 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     {
         // Caller's headers last to override
         mCurlHeaders = append_headers_to_slist(mReqHeaders, mCurlHeaders);
+    }
+    if (mDecodeReply)
+    {
+        // <Vulkanstorm> what libcurl 7.54.1's CURLOPT_ENCODING "" sent,
+        // unless the caller gave its own, which libcurl let win
+        bool caller_set(false);
+        if (mReqHeaders)
+        {
+            for (HttpHeaders::const_iterator it(mReqHeaders->begin()); it != mReqHeaders->end(); ++it)
+            {
+                caller_set = caller_set || LLStringUtil::compareInsensitive((*it).first, "Accept-Encoding") == 0;
+            }
+        }
+        if (!caller_set)
+        {
+            mCurlHeaders = curl_slist_append(mCurlHeaders, "Accept-Encoding: deflate, gzip");
+        }
+        // </Vulkanstorm>
     }
     check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTPHEADER, mCurlHeaders);
 
@@ -969,8 +1080,6 @@ size_t HttpOpRequest::headerCallback(void * data, size_t size, size_t nmemb, voi
     // <FS:ND> To detect pipelining going out of sync, save a x-ll-url header and later compare it with the requested URL.
     // We do not bail here already, but rather postpone it until the request is finised, then yield a 503 status
     // (request will be retried) and turn pipelining off.
-    if( value && std::string( "x-ll-url" ) == name )
-        op->mXLLURL = value;
     // </FS:ND>
 
     // Save header if caller wants them in the response

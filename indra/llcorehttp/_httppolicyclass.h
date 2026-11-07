@@ -29,6 +29,8 @@
 
 
 #include "httprequest.h"
+#include <curl/curl.h> // <Vulkanstorm/> LIBCURL_VERSION_NUM
+#include <algorithm>
 
 
 namespace LLCore
@@ -58,6 +60,36 @@ public:
 public:
     HttpStatus set(HttpRequest::EPolicyOption opt, long value);
     HttpStatus get(HttpRequest::EPolicyOption opt, long * value) const;
+
+    // <Vulkanstorm> The requests the class may have in flight at once, and
+    // the most to one host (0: no per-host admission). With HTTP/1.1
+    // pipelining (libcurl before 7.62) a deep-queue class (pipelining depth
+    // above 1) ran per-host limit x depth requests over per-host limit
+    // connections. libcurl 7.62 and later have no pipelining, and llcorehttp
+    // speaks HTTP/1.1 to every server, so such a class runs one request per
+    // connection: up to its connection limit in all and its per-host limit
+    // to any one host (HttpPolicy::processReadyQueue admits by host). The
+    // rest wait in llcorehttp's ready queue, where no timeout runs, not in
+    // libcurl's, where the wait for a connection would count against
+    // CURLOPT_CONNECTTIMEOUT. Other classes run up to their connection
+    // limit. </Vulkanstorm>
+    long activeLimit() const
+    {
+#if LIBCURL_VERSION_NUM >= 0x073e00 // 7.62.0
+        return mConnectionLimit;
+#else
+        return mPipelining > 1L ? mPerHostConnectionLimit * mPipelining : mConnectionLimit;
+#endif
+    }
+
+    long hostLimit() const
+    {
+#if LIBCURL_VERSION_NUM >= 0x073e00
+        return mPipelining > 1L ? (std::min)(mPerHostConnectionLimit, mConnectionLimit) : 0L;
+#else
+        return 0L;
+#endif
+    }
 
 public:
     long                        mConnectionLimit;
