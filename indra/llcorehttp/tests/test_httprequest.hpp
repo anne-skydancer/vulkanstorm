@@ -3159,7 +3159,9 @@ void HttpRequestTestObjectType::test<24>()
         const Case cases[] = {
             { "/encoding/gzip/", true, true },
             { "/encoding/gzipzlib/", true, true },
+#if LIBCURL_VERSION_NUM >= 0x075300 // the viewer's decoder; libcurl 7.54.1's stops at the first member's end
             { "/encoding/gzipmulti/", true, true },
+#endif
             { "/encoding/gziptrail/", true, true },
             { "/encoding/gzipraw/", true, true },
             { "/encoding/gziplist/", true, true },
