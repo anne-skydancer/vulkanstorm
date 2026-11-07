@@ -10,7 +10,8 @@
 ## Nicky: Ideally we want at least 3.21 for good preset support
 ##   We're not there yet, but once done, there is a kludge in Linking.cmake
 #    "if(${CMAKE_VERSION} VERSION_LESS "3.20.0")" that can also be removed
-cmake_minimum_required(VERSION 3.16.0 FATAL_ERROR)
+## 3.18 is needed for find_program(... REQUIRED) in BuildVersion.cmake
+cmake_minimum_required(VERSION 3.18.0 FATAL_ERROR)
 if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.29.0")
     cmake_policy(SET CMP0156 NEW)
 endif()

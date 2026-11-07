@@ -23,9 +23,12 @@ if (NOT DEFINED VIEWER_SHORT_VERSION) # will be true in indra/, false in indra/n
         execute_process(COMMAND ${GIT} rev-parse --is-shallow-repository
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             RESULT_VARIABLE _version_shallow_result
-            OUTPUT_VARIABLE _version_shallow OUTPUT_STRIP_TRAILING_WHITESPACE)
+            OUTPUT_VARIABLE _version_shallow OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_VARIABLE _version_shallow_error ERROR_STRIP_TRAILING_WHITESPACE)
         if (NOT _version_shallow_result EQUAL 0)
-            message(FATAL_ERROR "Source-count versions require a readable Git repository")
+            # <Vulkanstorm> say why the probe failed
+            message(FATAL_ERROR "Source-count versions require a readable Git repository "
+                "(git rev-parse --is-shallow-repository exited with ${_version_shallow_result}: ${_version_shallow_error})")
         endif ()
         if (NOT _version_shallow STREQUAL "false")
             # Archived or unrelated refs can retain shallow boundaries even
