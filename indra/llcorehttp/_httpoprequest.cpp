@@ -361,21 +361,13 @@ void HttpOpRequest::visitNotifier(HttpRequest * request)
 
         HttpResponse::TransferStats::ptr_t stats = std::make_shared<HttpResponse::TransferStats>();
 
-#if LIBCURL_VERSION_NUM >= 0x073700 // 7.55.0
-        // <Vulkanstorm> the double-valued CURLINFO_SIZE/SPEED_DOWNLOAD are
-        // deprecated (a -Werror build error with curl 8 headers on GCC and
-        // clang); the curl_off_t forms hold the same values. </Vulkanstorm>
-        curl_off_t size_download(0), speed_download(0);
-        curl_easy_getinfo(mCurlHandle, CURLINFO_SIZE_DOWNLOAD_T, &size_download);
-        curl_easy_getinfo(mCurlHandle, CURLINFO_TOTAL_TIME, &stats->mTotalTime);
-        curl_easy_getinfo(mCurlHandle, CURLINFO_SPEED_DOWNLOAD_T, &speed_download);
-        stats->mSizeDownload = static_cast<F64>(size_download);
-        stats->mSpeedDownload = static_cast<F64>(speed_download);
-#else
-        curl_easy_getinfo(mCurlHandle, CURLINFO_SIZE_DOWNLOAD, &stats->mSizeDownload);
-        curl_easy_getinfo(mCurlHandle, CURLINFO_TOTAL_TIME, &stats->mTotalTime);
-        curl_easy_getinfo(mCurlHandle, CURLINFO_SPEED_DOWNLOAD, &stats->mSpeedDownload);
-#endif
+        // <Vulkanstorm> read the stats captured in completeRequest; mCurlHandle
+        // is NULL by the time the reply queue runs visitNotifier, so asking
+        // libcurl here would always yield zeros
+        stats->mSizeDownload = static_cast<F64>(mStatsSizeDownload);
+        stats->mTotalTime = mStatsTotalTime;
+        stats->mSpeedDownload = static_cast<F64>(mStatsSpeedDownload);
+        // </Vulkanstorm>
 
         response->setTransferStats(stats);
 
@@ -596,6 +588,10 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     // and the stale 503 would hide the next response.
     mStatus = HttpStatus();
     mReplyRetryAfter = 0;
+    // <Vulkanstorm> captured again in HttpLibcurl::completeRequest
+    mStatsSizeDownload = 0;
+    mStatsTotalTime = 0.0;
+    mStatsSpeedDownload = 0;
     // </Vulkanstorm>
 
     // *FIXME:  better error handling later
