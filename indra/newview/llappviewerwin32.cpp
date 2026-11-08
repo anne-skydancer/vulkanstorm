@@ -1081,7 +1081,7 @@ void LLAppViewerWin32::bugsplatAddStaticAttributes(const LLSD& info)
         bugSplatMap.setAttribute("Audio Driver Version", info["AUDIO_DRIVER_VERSION"].asString());
     // bugSplatMap.setAttribute("CEF Info", info["LIBCEF_VERSION"].asString());
         bugSplatMap.setAttribute("LibVLC Version", info["LIBVLC_VERSION"].asString());
-        bugSplatMap.setAttribute("Vivox Version", info["VOICE_VERSION"].asString());
+        bugSplatMap.setAttribute("Voice Version", info["VOICE_VERSION"].asString());
         bugSplatMap.setAttribute("RLVa", info["RLV_VERSION"].asString());
         bugSplatMap.setAttribute("Mode", info["MODE"].asString());
         bugSplatMap.setAttribute("Skin", llformat("%s (%s)", info["SKIN"].asString().c_str(), info["THEME"].asString().c_str()));

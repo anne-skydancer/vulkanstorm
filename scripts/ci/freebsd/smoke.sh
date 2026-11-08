@@ -1,5 +1,5 @@
 #!/bin/sh
-# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 # Runs as the unprivileged runner in a fresh boot of the completed image.
 set -eu
