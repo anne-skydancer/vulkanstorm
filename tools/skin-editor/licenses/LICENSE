@@ -2,24 +2,21 @@ Vulkanstorm tools licence
 =========================
 
 The tools on this branch (Skin Studio, tools/skin-editor) are part of
-Vulkanstorm and are dual-licensed. You may use, modify and distribute them
-under either of these two licences, at your choice:
-
-  * the GNU Lesser General Public License, version 2.1 (LICENSE-LGPL-2.1; LGPL-license.txt in this folder), or
-  * the GNU General Public License, version 3 or (at your option) any later
-    version (LICENSE-GPL-3.0; GPL-3.0-license.txt in this folder).
+Vulkanstorm and are licensed under the GNU General Public License, version 3
+or (at your option) any later version (GPL-3.0-or-later; GPL-3.0-license.txt in
+this folder).
 
 The exact terms differ by origin:
 
   * Skin Studio's code (Python, JavaScript, HTML/CSS and the Rust desktop
     app), written for Vulkanstorm:
-        SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+        SPDX-License-Identifier: GPL-3.0-or-later
   * The skin library (tools/skin-editor/library: XUI definitions, themes,
     localized labels and commands.xml), copied from the Vulkanstorm viewer
-    and so from Linden Lab and Firestorm:
-        SPDX-License-Identifier: LGPL-2.1-only OR GPL-3.0-or-later
-    Linden Lab and Firestorm release it under LGPL-2.1 only; section 3 of
-    LGPL-2.1 lets any licensee apply the GNU GPL, version 3 or later, instead.
+    and so from Linden Lab and Firestorm. It stays LGPL-2.1
+    (LGPL-2.1-license.txt in this folder; their headers are unchanged) and is
+    combined into this GPL-3.0-or-later work (LGPL-2.1 is compatible with
+    inclusion in a GPL-3.0 work).
   * Artwork in the skin library keeps its own terms: Linden Lab's viewer
     artwork is under CC BY-SA 3.0 with its trademarks excluded
     (LICENSE-logos.txt in this folder); other skin artwork keeps
@@ -28,6 +25,6 @@ The exact terms differ by origin:
   * Third-party Rust crates and the bundled Python runtime keep their own
     licences (shipped in the desktop bundle's licenses/ folder).
 
-NOTICE.md in the source tree explains the groups and how to choose.
+NOTICE.md in the source tree explains the groups.
 
 Source code: https://github.com/anne-skydancer/vulkanstorm (branch vkstorm-tools)

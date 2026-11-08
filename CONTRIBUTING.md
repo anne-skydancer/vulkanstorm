@@ -2,27 +2,21 @@
 
 ## Licence of contributions
 
-The tools are dual-licensed under LGPL-2.1 and GPL-3.0-or-later (see
-[NOTICE.md](NOTICE.md)). By contributing you agree that your contribution is
-licensed:
+The tools are licensed under GPL-3.0-or-later (see [NOTICE.md](NOTICE.md)).
+By contributing you agree that your contribution is licensed under
+`GPL-3.0-or-later`. Changes to the skin library copied from the viewer
+(`tools/skin-editor/library/`) keep Linden Lab's and Firestorm's headers. Start
+new source files with
 
-- under `LGPL-2.1-or-later OR GPL-3.0-or-later` when it is Skin Studio code
-  (anything outside `tools/skin-editor/library/`). Start new source files with
+```
+SPDX-License-Identifier: GPL-3.0-or-later
+Copyright (C) <year>, <your name> (Vulkanstorm)
+```
 
-  ```
-  SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
-  Copyright (C) <year>, <your name> (Vulkanstorm)
-  ```
-
-  in the file's comment syntax;
-- under `LGPL-2.1-only OR GPL-3.0-or-later` when it changes the skin library
-  copied from the viewer (`tools/skin-editor/library/`).
-
-Do not contribute code that is available only under the GPL, such as code
-from the Aurora Viewer (GPL-3.0-or-later only): it would remove the LGPL
-option. Artwork keeps its authors' terms and must come with a licence that
-allows redistribution; add its notice under `tools/skin-editor/licenses/`.
-A new dependency must be compatible with both LGPL-2.1 and GPL-3.0.
+in the file's comment syntax. Artwork keeps its authors' terms and must come
+with a licence that allows redistribution; add its notice under
+`tools/skin-editor/licenses/`. A new dependency must be compatible with
+GPL-3.0 (no proprietary, GPL-2.0-only or extra-restriction licences).
 
 ## Workflow
 
