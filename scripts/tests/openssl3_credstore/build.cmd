@@ -1,5 +1,5 @@
 @echo off
-rem SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+rem SPDX-License-Identifier: GPL-3.0-or-later
 rem
 rem Build the credential-store harness twice: against the OpenSSL 1.1.1
 rem package the viewer uses (a build tree's packages directory) and against

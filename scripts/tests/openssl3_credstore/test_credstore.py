@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Credential-store compatibility gate for the OpenSSL 3 move.
 
 Builds credstore.cpp against the viewer's OpenSSL 1.1.1 package and

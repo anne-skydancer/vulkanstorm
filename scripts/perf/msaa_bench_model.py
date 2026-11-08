@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """CPU-side logic of the deferred MSAA bench (scripts/perf/bench_deferred_msaa.py).
 

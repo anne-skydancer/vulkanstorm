@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 // Plans one platform workflow's run (build-<platform>.yaml) and publishes its
 // channel (a tag with its release) after that platform's build succeeded,
