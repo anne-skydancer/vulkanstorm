@@ -419,10 +419,14 @@ public:
     void compositeAlphaStochastic(bool glow); // over mRT->screen; glow: the faces' glow into its alpha
     void allocateAlphaStochastic(U32 w, U32 h);
     void releaseAlphaStochastic();
+    void updateAlphaStochasticHistory();    // the history textures for the temporal accumulation: made or freed
+    void resolveAlphaStochasticTemporal();  // this frame's accumulation blended with the last frame's
     U32  getAlphaStochasticPassSamples() const { return mAlphaSTPassSamples; }
     U32  getAlphaStochasticSamples() const { return mAlphaSTSamples; }
     U32  getAlphaStochasticIterations() const { return mAlphaSTPassSamples ? mAlphaSTSamples / mAlphaSTPassSamples : 0; }
     U32  getAlphaStochasticMasks() const { return mAlphaSTMasks; }
+    // the frame in the masks' seeds: 0 (a fixed field) unless the temporal accumulation runs
+    U32  getAlphaStochasticFrame() const { return mAlphaSTTemporal ? mAlphaSTFrame : 0; }
     static std::vector<U32> alphaStochasticMaskTable(U32 samples); // [r * 2048 + seed]
     // </Vulkanstorm>
 
@@ -795,6 +799,21 @@ public:
     U32 mAlphaSTHeight = 0;
     U32 mAlphaSTPassSamples = 0;
     U32 mAlphaSTSamples = 0;
+    // the temporal accumulation: two full-size RGBA16F colours (the last frame's blended colour and
+    // this frame's), each with a framebuffer; mAlphaSTHistoryIndex holds the latest. The history is
+    // valid when the frame before ran the method at this size (mAlphaSTHistoryStamp + 1 == this frame).
+    U32 mAlphaSTHistory[2] = { 0, 0 };
+    U32 mAlphaSTHistoryFBO[2] = { 0, 0 };
+    U32 mAlphaSTHistoryIndex = 0;
+    U32 mAlphaSTHistoryWidth = 0;
+    U32 mAlphaSTHistoryHeight = 0;
+    U32 mAlphaSTHistoryStamp = 0;
+    U32 mAlphaSTFrame = 0;          // the frame counter of the seeds, never 0
+    bool mAlphaSTHistoryValid = false;
+    bool mAlphaSTTemporal = false;  // this frame accumulates over the frames
+    bool mAlphaSTHistoryUsed = false; // the history is read this frame
+    glm::mat4 mAlphaSTLastModelView = glm::mat4(1.f);
+    glm::mat4 mAlphaSTLastProjection = glm::mat4(1.f);
     // </Vulkanstorm>
 
     // </FS>
