@@ -14,6 +14,7 @@
 
 #include "llshadowcascadefit.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -191,6 +192,40 @@ namespace
         const auto a = LLShadowCascadeFit::lightUp({ 0.3f, 0.2f, -0.9f });
         const auto b = LLShadowCascadeFit::lightUp({ 0.3f, 0.2f, -0.9f });
         check(a.x == b.x && a.y == b.y && a.z == b.z, "up depends on the light only");
+        check(LLShadowCascadeFit::LIGHT_UP_SWITCH >= 0.9985f, "the up switch sits next to the north-south axis",
+              LLShadowCascadeFit::LIGHT_UP_SWITCH);
+
+        // A light moving slowly towards the north horizon (straight north, and slightly off
+        // it) turns the up continuously until it is right at the north-south axis: no step
+        // between two lights 0.01 degrees apart turns it more than 2 degrees while both stay
+        // outside the switch. The old switch at |y| > 0.9 (about 26 degrees) failed this.
+        for (float off : { 0.f, 0.02f, -0.05f })
+        {
+            double worst = 0.0;
+            LLShadowCascadeFit::Vec3 prev = {};
+            bool have_prev = false;
+            for (int i = 0; i <= 6000; ++i)
+            {
+                const double e = (60.0 - i * 0.01) * 3.14159265358979 / 180.0; // elevation 60..0 degrees
+                LLShadowCascadeFit::Vec3 d = { off, (float)std::cos(e), (float)-std::sin(e) };
+                const float dl = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+                if (std::fabs(d.y / dl) > 0.9985f)
+                {
+                    have_prev = false; // within about 3 degrees of the axis one turn is allowed
+                    continue;
+                }
+                const auto u = LLShadowCascadeFit::lightUp(d);
+                if (have_prev)
+                {
+                    const double dot = (double)u.x * prev.x + (double)u.y * prev.y + (double)u.z * prev.z;
+                    const double ang = std::acos(std::min(1.0, std::max(-1.0, dot))) * 180.0 / 3.14159265358979;
+                    worst = std::max(worst, ang);
+                }
+                prev = u;
+                have_prev = true;
+            }
+            check(worst < 2.0, "up turns continuously as the light nears the north horizon", worst, off);
+        }
     }
 
     void test_distance_steps()
