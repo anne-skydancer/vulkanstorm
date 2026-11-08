@@ -76,6 +76,7 @@
 		<string>RenderShaderLightingMaxLevel</string>
 		<string>RenderShadowDetail</string>
 		<string>RenderShadowPCSS</string>
+		<string>RenderShadowDistance</string>
 		<string>RenderShadowResolutionScale</string>
 		<string>RenderSkyAmbientScale</string>
 		<string>RenderSkyAutoAdjustAmbientScale</string>
