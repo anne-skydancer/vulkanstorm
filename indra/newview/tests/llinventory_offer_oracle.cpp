@@ -18,6 +18,8 @@
 
 #include "llapr.h"
 #include "llsdserialize.h"
+#include "lltransfermanager.h"
+#include <cstdlib>
 
 #include <algorithm>
 #include <cstring>
@@ -174,6 +176,13 @@ namespace r4b_oracle
         ll_init_apr();
         // port 0: the system picks one; nothing is ever sent
         start_messaging_system(template_file, 0, 1, 0, 0, false, "notasharedsecret", NULL, false, 5.f, 100.f);
+        // start_messaging_system() started the transfer manager. The viewer
+        // cleans it up at exit (llappviewer.cpp); ~LLTransferManager asserts
+        // it was, and without this it aborts the process (0xC0000409 on
+        // Windows) after the tests have passed. atexit handlers registered
+        // now run before the static gTransferManager is destroyed.
+        static bool transfer_cleanup_registered = (std::atexit([] { gTransferManager.cleanup(); }), true);
+        (void)transfer_cleanup_registered;
         llassert_always(::gMessageSystem);
     }
 
