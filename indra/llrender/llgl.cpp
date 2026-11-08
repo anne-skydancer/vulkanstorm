@@ -1329,6 +1329,7 @@ bool LLGLManager::initGL()
         if (gl_gpus_count > 0)
         {
             GLuint* ids = new GLuint[gl_gpus_count];
+            // (freed with delete[] below, after the probe loop)
             wglGetGPUIDsAMD(gl_gpus_count, ids);
 
             GLuint mem_mb = 0;
@@ -1345,6 +1346,7 @@ bool LLGLManager::initGL()
                     mVRAM = mem_mb;
                 }
             }
+            delete[] ids;
         }
         LL_INFOS("RenderInit") << "VRAM Detected (AMDAssociations):" << mVRAM << LL_ENDL;
     }

@@ -49,6 +49,7 @@ private:
     static void toggleClick(void* user_data);
     static void onClickNotification(void* user_data);
     LLNotificationChannelPtr mChannelPtr;
+    boost::signals2::connection mChannelChangedConnection;
 };
 
 LLNotificationChannelPanel::LLNotificationChannelPanel(const LLNotificationChannelPanel::Params& p)
@@ -60,6 +61,7 @@ LLNotificationChannelPanel::LLNotificationChannelPanel(const LLNotificationChann
 
 LLNotificationChannelPanel::~LLNotificationChannelPanel()
 {
+    mChannelChangedConnection.disconnect();
     // Userdata for all records is a LLNotification* we need to clean up
     std::vector<LLScrollListItem*> data_list = getChild<LLScrollListCtrl>("notifications_list")->getAllData();
     std::vector<LLScrollListItem*>::iterator data_itor;
@@ -78,7 +80,7 @@ bool LLNotificationChannelPanel::postBuild()
     header_button->setLabel(mChannelPtr->getName());
     header_button->setClickedCallback(toggleClick, this);
 
-    mChannelPtr->connectChanged(boost::bind(&LLNotificationChannelPanel::update, this, _1));
+    mChannelChangedConnection = mChannelPtr->connectChanged(boost::bind(&LLNotificationChannelPanel::update, this, _1));
 
     LLScrollListCtrl* scroll = getChild<LLScrollListCtrl>("notifications_list");
     scroll->setDoubleClickCallback(onClickNotification, this);
@@ -138,8 +140,20 @@ bool LLNotificationChannelPanel::update(const LLSD& payload)
         row["columns"][2]["column"] = "date";
         row["columns"][2]["type"] = "date";
 
-        LLScrollListItem* sli = getChild<LLScrollListCtrl>("notifications_list")->addElement(row);
+        LLScrollListCtrl* scroll = getChild<LLScrollListCtrl>("notifications_list");
+        LLScrollListItem* sli = scroll->addElement(row);
         sli->setUserdata(new LLNotification(notification->asLLSD()));
+
+        // keep the list bounded: once past the cap, drop the oldest rows
+        // along with their heap-allocated LLNotification userdata
+        const S32 MAX_ROWS = 200;
+        std::vector<LLScrollListItem*> rows = scroll->getAllData();
+        S32 excess = (S32)rows.size() - MAX_ROWS;
+        for (S32 i = 0; i < excess; ++i)
+        {
+            delete (LLNotification*)rows[i]->getUserdata();
+            scroll->deleteSingleItem(0); // deleting index 0 shifts the rest down
+        }
     }
 
     return false;

@@ -8316,7 +8316,8 @@ void LLObjectSelection::removeNode(LLSelectNode *nodep)
         mPrimaryObject = NULL;
     }
     nodep->setObject(NULL); // Will get erased in cleanupNodes()
-    mList.remove(nodep);
+    // NOTE: do not remove nodep from mList here; cleanupNodes() only scans
+    // mList and deletes NULL-object nodes, so removing it here would leak it
 }
 
 void LLObjectSelection::deleteAllNodes()
