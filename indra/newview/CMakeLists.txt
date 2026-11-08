@@ -1109,6 +1109,7 @@ set(viewer_HEADER_FILES
     llappearancemgr.h
     llappviewer.h
     llappviewerlistener.h
+    llatmosphericlight.h
     llattachmentsmgr.h
     llaudiosourcevo.h
     llautoreplace.h
