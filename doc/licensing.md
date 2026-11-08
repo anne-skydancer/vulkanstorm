@@ -19,7 +19,7 @@ and CI configure line (2026-11-08). The configure options match devel's except
 
 | Component | Licence | Status | Notes |
 |---|---|---|---|
-| vkstorm-ffi (`vkstorm-core-rust`, static library) | `GPL-3.0-or-later` with BSD-2-Clause, BSD-3-Clause and Zlib parts | OK | audited in the Rust core section below |
+| vkstorm-ffi 0.5.3 (`vkstorm-core-rust`, static library) | `GPL-3.0-or-later` from core-rust's licence PR on, with BSD-2-Clause, BSD-3-Clause and Zlib parts | OK | Package 0.5.3 (`ffi-v0.5.3`) still carries the earlier `LGPL-2.1-only OR GPL-3.0-or-later` expression in its metadata; a new ffi release after the core-rust licence PR updates it. The crates.io dependencies are audited in the Rust core section below |
 | FFmpeg 9.0.2, decoder-only shared libraries (libavcodec, libavutil, libswresample) | LGPL-2.1-or-later | OK | built without GPL or non-free parts (`3p-ffmpeg`); loaded at run time for HE-AAC and Opus parcel music. The licence is LGPL (compatible)  |
 | SoLoud, vlc-speakerfill | | not on this line | the vkstorm-ffi audio engine replaces SoLoud |
 
