@@ -528,7 +528,6 @@ private:
     U32             mCount;
     U32             mMode;
     U32             mCurrTextureUnitIndex;
-    U32             mDummyVAO; // core-profile dummy VAO created in init(), deleted in shutdown()
     bool                mCurrColorMask[4];
     F32             mLineWidth; // <FS> Line width OGL core profile fix by Rye Mutt
     // <FS:Ansariel> Don't ignore OpenGL max line width

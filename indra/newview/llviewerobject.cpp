@@ -439,10 +439,6 @@ void LLViewerObject::markDead()
         LL_PROFILE_ZONE_SCOPED;
         //LL_INFOS() << "Marking self " << mLocalID << " as dead." << LL_ENDL;
 
-        // Drop signaled-animation state for this object; the map is a
-        // process-lifetime singleton and would otherwise grow without bound
-        LLObjectSignaledAnimationMap::instance().getMap().erase(mID);
-
         // If this is a published root prim, notify the WS extension before teardown.
         auto ws_server = LLScriptEditorWSServer::getServer();
         if (ws_server && ws_server->isObjectPublished(mID))
@@ -983,8 +979,13 @@ bool LLViewerObject::setParent(LLViewerObject* parent)
 
 void LLViewerObject::addChild(LLViewerObject *childp)
 {
-    // no duplicate scan needed: setParent() below returns false when
-    // childp->mParent == this, so an already-added child is never pushed twice
+    for (child_list_t::iterator i = mChildList.begin(); i != mChildList.end(); ++i)
+    {
+        if (*i == childp)
+        {   //already has child
+            return;
+        }
+    }
 
     if (!isAvatar())
     {
