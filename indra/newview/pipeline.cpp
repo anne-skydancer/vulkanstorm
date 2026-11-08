@@ -8501,13 +8501,20 @@ void LLPipeline::compositeAlphaStochastic(bool glow)
     shader.uniform1i(sGlow, 0);
     static const LLStaticHashedString sTemporal("st_temporal");
     shader.uniform1i(sTemporal, mAlphaSTTemporal ? 1 : 0);
-    // a 2D texture on its unit whether or not it is read (a sampler of another type on a unit
-    // that holds a multisample texture would fail the draw): the mask table stands in
+    // A float 2D texture on its unit whether or not it is read: a sampler of another type on a
+    // unit that holds a multisample texture would fail the draw, and the R32UI mask table does
+    // not match this float sampler either. Without the accumulation the white image stands in.
     const S32 resolved = shader.enableTexture(LLShaderMgr::ALPHA_ST_RESOLVED, LLTexUnit::TT_TEXTURE);
     if (resolved > -1)
     {
-        gGL.getTexUnit(resolved)->bindManual(LLTexUnit::TT_TEXTURE,
-                                             mAlphaSTTemporal ? mAlphaSTHistory[mAlphaSTHistoryIndex] : mAlphaSTMasks);
+        if (mAlphaSTTemporal)
+        {
+            gGL.getTexUnit(resolved)->bindManual(LLTexUnit::TT_TEXTURE, mAlphaSTHistory[mAlphaSTHistoryIndex]);
+        }
+        else if (LLViewerFetchedTexture::sWhiteImagep.notNull())
+        {
+            gGL.getTexUnit(resolved)->bind(LLViewerFetchedTexture::sWhiteImagep);
+        }
     }
     const S32 accum = shader.enableTexture(LLShaderMgr::ALPHA_ST_ACCUM, LLTexUnit::TT_MULTISAMPLE_TEXTURE);
     if (accum > -1)
