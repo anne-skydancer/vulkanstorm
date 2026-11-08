@@ -23,7 +23,7 @@ import yaml
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 STEP_KEYS = {"name", "id", "if", "run", "shell", "env", "uses", "with", "working-directory", "continue-on-error"}
 
-# The build workflows are every .github/workflows/build-*.yaml (one per platform); the events
+# The build workflows are every .github/workflows/build-*.yaml or .yml (one per platform); the events
 # whose path filters must agree are the code-triggered ones they declare.
 FILTERED_EVENTS = ("pull_request", "push")
 SHOWN = 10  # differences listed in full before they are summarised
@@ -49,11 +49,13 @@ def triggers_of(workflow):
 
 
 def brief(patterns):
-    """A sorted pattern list, summarised beyond SHOWN entries."""
+    """Sorted patterns as comma-separated text, summarised beyond SHOWN entries."""
     items = sorted(patterns)
+    if not items:
+        return "none"
     if len(items) <= SHOWN:
-        return str(items)
-    return f"{items[:SHOWN]} and {len(items) - SHOWN} more"
+        return ", ".join(items)
+    return f"{', '.join(items[:SHOWN])} and {len(items) - SHOWN} more"
 
 
 def pattern_list(value):
@@ -66,13 +68,17 @@ def pattern_list(value):
 def check_path_lists(documents):
     """The build workflows ignore the same files per event; ci-lint lints every CI file they ignore."""
     errors = []
-    workflows = {path.name: doc for path, doc in documents.items()
-                 if path.parent.name == "workflows" and isinstance(doc, dict)}
+    # An empty or scalar workflow is kept as {} so a build workflow like that fails the
+    # trigger check instead of being skipped.
+    workflows = {path.name: doc if isinstance(doc, dict) else {} for path, doc in documents.items()
+                 if path.parent.name == "workflows"}
     by_event = {event: {} for event in FILTERED_EVENTS}  # event -> {workflow: set of patterns}
-    build_names = sorted(name for name in workflows if name.startswith("build-") and name.endswith(".yaml"))
+    build_names = sorted(name for name in workflows
+                         if name.startswith("build-") and name.endswith((".yaml", ".yml")))
     if not build_names:
-        errors.append("no .github/workflows/build-*.yaml build workflows found")
+        errors.append("no .github/workflows/build-*.yaml or build-*.yml build workflows found")
     for name in build_names:
+        shorthand = not isinstance(raw_triggers(workflows[name]), dict)
         triggers = triggers_of(workflows[name])
         if "pull_request" not in triggers:
             errors.append(f"{name}: no pull_request trigger")
@@ -80,7 +86,7 @@ def check_path_lists(documents):
             if event not in triggers:
                 continue  # e.g. Build Linux LTS has no push trigger
             config = triggers[event]
-            if config is None and not isinstance(raw_triggers(workflows[name]), dict):
+            if config is None and shorthand:
                 errors.append(f"{name}: {event} is a shorthand trigger; it must be a mapping to carry paths-ignore")
                 continue
             if not isinstance(config, dict) or "paths-ignore" not in config:
