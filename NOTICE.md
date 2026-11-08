@@ -12,36 +12,15 @@ withdrawn: the LGPL-2.1 option is dropped.
 | Group | SPDX expression | Where it lives |
 |---|---|---|
 | Original Vulkanstorm code, written for this project | `GPL-3.0-or-later` | Files carrying `SPDX-License-Identifier: GPL-3.0-or-later`; see [Original Vulkanstorm files](#original-vulkanstorm-files) |
-| Code from Linden Lab and the Phoenix Firestorm Project, and Vulkanstorm changes to that code | LGPL-2.1 headers, used under the GPL | Every file carrying a Linden Research or Phoenix Firestorm copyright and `$LicenseInfo` header (`license=viewerlgpl`, `fsviewerlgpl`, and the other LL/FS headers). Their headers are kept unchanged |
-| Rust ports of Linden Lab and Firestorm code ([vkstorm-core-rust](https://github.com/anne-skydancer/vkstorm-core-rust)) | LGPL-2.1 headers, used under the GPL | The crates of that repository; its own `NOTICE.md` lists each crate |
+| Code from Linden Lab and the Phoenix Firestorm Project, and Vulkanstorm changes to that code | LGPL-2.1, headers unchanged; part of a GPL-3.0-or-later whole | Every file carrying a Linden Research or Phoenix Firestorm copyright and `$LicenseInfo` header (`license=viewerlgpl`, `fsviewerlgpl`, and the other LL/FS headers). Their headers are kept unchanged |
+| Rust ports of Linden Lab and Firestorm code ([vkstorm-core-rust](https://github.com/anne-skydancer/vkstorm-core-rust)) | LGPL-2.1, headers unchanged; part of a GPL-3.0-or-later whole | The crates of that repository; its own `NOTICE.md` lists each crate |
 | Third-party components | Their own licences, all compatible with GPL-3.0 | Fonts, dictionaries, the Tycho-2 star data (`indra/newview/app_settings/stars/LICENSE-TYCHO2.md`, BSD-2-Clause), the GL registry symbol list (`doc/vulkan/gl-api-symbols.LICENSE.txt`, Apache-2.0), the Linden Lab artwork and logos (`doc/LICENSE-logos.txt`, CC BY-SA 3.0, trademarks excluded), and the prebuilt libraries listed in `autobuild.xml` (their texts ship in `licenses/` and `licenses.txt`) |
 
-## Linden Lab and Firestorm code: LGPL-2.1 used under the GPL
+## Linden Lab and Firestorm code
 
-Linden Lab and Firestorm license their code under LGPL-2.1 only. The text
-they refer to is kept in [`LICENSE-LGPL-2.1`](LICENSE-LGPL-2.1) (it ships in
-the installed viewer as `LGPL-2.1-license.txt`) so that their file headers
-stay accurate. Vulkanstorm uses that code under the ordinary GNU General
-Public License, as section 3 of LGPL-2.1 allows:
-
-> 3. You may opt to apply the terms of the ordinary GNU General Public
-> License instead of this License to a given copy of the Library.  To do
-> this, you must alter all the notices that refer to this License, so
-> that they refer to the ordinary GNU General Public License, version 2,
-> instead of to this License.  (If a newer version than version 2 of the
-> ordinary GNU General Public License has appeared, then you can specify
-> that version instead if you wish.)  Do not make any other change in
-> these notices.
->
-> Once this change is made in a given copy, it is irreversible for
-> that copy, so the ordinary GNU General Public License applies to all
-> subsequent copies and derivative works made from that copy.
-
-The source headers of Linden Lab and Firestorm files are left as they are
-(by decision of the project owner). Section 3 of LGPL-2.1 asks for the
-notices of a converted copy to be altered; this is recorded as a finding in
-[`doc/licensing.md`](doc/licensing.md#findings). Copyright notices in the
-source files remain in force.
+Linden Lab and Firestorm code stays LGPL-2.1, with its headers unchanged, and is combined into Vulkanstorm, which as a whole is licensed GPL-3.0-or-later (LGPL-2.1 is compatible with inclusion in a GPL-3.0 work). The text their headers refer to is kept in
+[`LICENSE-LGPL-2.1`](LICENSE-LGPL-2.1) (it ships in the installed viewer as
+`LGPL-2.1-license.txt`). Copyright notices in the source files remain in force.
 
 One exception to the GPL-only reading: `indra/media_plugins/libvlc/vlc_speakerfill.cpp`
 is a VLC module derived from LGPL-2.1-or-later VLC code. It ships with its
