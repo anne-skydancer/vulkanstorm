@@ -1,5 +1,5 @@
 #!/bin/sh
-# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 # vks-base-merge-check: refuse to merge a base line (origin/vkstorm-*, local
 # vkstorm-* branches; see check_no_base_merges.py) into a feature branch.

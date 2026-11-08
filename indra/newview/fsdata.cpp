@@ -1086,7 +1086,7 @@ LLSD FSData::getSystemInfo()
     sysinfo2 += llformat("%s\n", info["LIBCEF_VERSION"].asString().c_str());
     sysinfo2 += llformat("LibVLC Version: %s\n", info["LIBVLC_VERSION"].asString().c_str());
 
-    sysinfo2 += llformat("Vivox Version: %s\n", info["VOICE_VERSION"].asString().c_str());
+    sysinfo2 += llformat("Voice Version: %s\n", info["VOICE_VERSION"].asString().c_str());
     sysinfo2 += llformat("Packets Lost: %.0f/%.0f (%.1f%%)\n\n", info["PACKETS_LOST"].asReal(), info["PACKETS_IN"].asReal(), info["PACKETS_PCT"].asReal());
 
     sysinfo2 += llformat("RLVa: %s\n", info["RLV_VERSION"].asString().c_str());

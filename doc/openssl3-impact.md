@@ -173,7 +173,6 @@ algorithms, DH size, renegotiation) do still apply.
 | WebRTC voice (`llwebrtc.dll`/`.so`) | BoringSSL inside `webrtc.lib` | Windows: a separate DLL whose imports and exports contain no SSL symbols (verified with `dumpbin`), so no clash. Linux: built with `-fvisibility=hidden` and `-Wl,--exclude-libs,ALL` (`00-Common.cmake:204`, `:237-238`), so neither copy exports its symbols (inferred no clash). Same situation as today |
 | CEF/Dullahan | BoringSSL inside `libcef` | separate process (`dullahan_host.exe` under SLPlugin) |
 | VLC (media, speaker-fill) | VLC's GnuTLS modules | separate SLPlugin process |
-| SLVoice (Vivox) | its own | separate process; OpenSim builds only |
 | FFmpeg (`avcodec`/`avutil`/`swresample`) | none (no `avformat` staged) | none |
 | Linux `wrapper.sh:146-155` | `LD_PRELOAD`s `lib/libcrypto.so.1.0.0` if present | dead code (nothing is staged); remove when convenient |
 | Windows Inno installer | no OpenSSL files | no change while static |

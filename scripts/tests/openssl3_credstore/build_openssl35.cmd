@@ -1,5 +1,5 @@
 @echo off
-rem SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+rem SPDX-License-Identifier: GPL-3.0-or-later
 rem
 rem Build OpenSSL 3.5.x the way doc/openssl3-impact.md proposes to ship it:
 rem static (no-shared), legacy provider compiled into libcrypto (no-module),

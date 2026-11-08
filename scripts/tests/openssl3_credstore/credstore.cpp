@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Credential-store (bin_conf.dat) compatibility harness for the OpenSSL 3
 // study (doc/openssl3-impact.md). It reproduces the protected-data read and
