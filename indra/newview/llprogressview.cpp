@@ -494,7 +494,9 @@ void LLProgressView::initLogos()
     [[maybe_unused]] const S32 default_height = 28;
     [[maybe_unused]] const S32 default_pad = 15;
 
-    [[maybe_unused]] S32 icon_width, icon_height;  // only the optional (FMOD, Havok) logos use them
+    // only the optional (FMOD, Havok) logos use these
+    [[maybe_unused]] S32 icon_width;
+    [[maybe_unused]] S32 icon_height;
 
     // We don't know final screen rect yet, so we can't precalculate position fully
     [[maybe_unused]] S32 texture_start_x = (S32)mLogosLabel->getFont()->getWidthF32(mLogosLabel->getWText().c_str()) + default_pad;
