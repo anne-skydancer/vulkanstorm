@@ -919,13 +919,6 @@ set(viewer_SOURCE_FILES
     NACLfloaterexploresounds.cpp
     )
 
-# <FS:TJ> Keep Vivox only for OpenSim viewers
-if (OPENSIM)
-    list(APPEND viewer_SOURCE_FILES
-        llvoicevivox.cpp
-        )
-endif ()
-# </FS:TJ>
 
 # <FS:Ansariel> Group GLTF files into their subfolders
 set(viewer_GLTF_SOURCE_FILES
@@ -1794,13 +1787,6 @@ set(viewer_HEADER_FILES
     NACLfloaterexploresounds.h
     )
 
-# <FS:TJ> Keep Vivox only for OpenSim viewers
-if (OPENSIM)
-    list(APPEND viewer_HEADER_FILES
-        llvoicevivox.h
-        )
-endif ()
-# </FS:TJ>
 
   list(APPEND viewer_SOURCE_FILES llperfstats.cpp)
   list(APPEND viewer_HEADER_FILES llperfstats.h)
@@ -2260,9 +2246,9 @@ list(APPEND viewer_SOURCE_FILES ${viewer_POSER_PRESET_FILES})
 # NOTICE.md): re-run the staging and packaging steps when they change.
 set(VIEWER_MANIFEST_LICENCE_INPUTS
     ${CMAKE_CURRENT_SOURCE_DIR}/licence_texts.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/LGPL-license.txt
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE-GPL-3.0
     ${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE-LGPL-2.1
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../NOTICE.md
     )
 # </Vulkanstorm>
 
@@ -2344,10 +2330,6 @@ if (WINDOWS)
       #${SHARED_LIB_STAGING_DIR}/openjp2.dll # <FS:Ansariel> Only copy OpenJPEG dll if needed
       ${SHARED_LIB_STAGING_DIR}/llwebrtc.dll
       #${SHARED_LIB_STAGING_DIR}/${LL_INTDIR}/libsndfile-1.dll
-      # <FS:TJ> Keep Vivox only for OpenSim viewers
-      #${SHARED_LIB_STAGING_DIR}/${LL_INTDIR}/SLVoice.exe
-      #${SHARED_LIB_STAGING_DIR}/${LL_INTDIR}/vivoxoal.dll
-      # </FS:TJ>
       ${AUTOBUILD_INSTALL_DIR}/ca-bundle.crt
       ${CMAKE_CURRENT_SOURCE_DIR}/licenses-win32.txt
       ${CMAKE_CURRENT_SOURCE_DIR}/featuretable.txt
@@ -2370,21 +2352,6 @@ if (WINDOWS)
     endif (NOT USE_KDU)
     # </FS:Ansariel>
 
-    # <FS:TJ> Keep Vivox only for OpenSim viewers
-    if (OPENSIM)
-        if (ADDRESS_SIZE EQUAL 64)
-           list(APPEND COPY_INPUT_DEPENDENCIES
-                   ${SHARED_LIB_STAGING_DIR}/vivoxsdk_x64.dll
-                   ${SHARED_LIB_STAGING_DIR}/ortp_x64.dll
-                   )
-        else (ADDRESS_SIZE EQUAL 64)
-           list(APPEND COPY_INPUT_DEPENDENCIES
-                   ${SHARED_LIB_STAGING_DIR}/vivoxsdk.dll
-                   ${SHARED_LIB_STAGING_DIR}/ortp.dll
-                   )
-        endif (ADDRESS_SIZE EQUAL 64)
-    endif ()
-    # </FS:TJ>
 
     if (TARGET ll::discord_sdk)
         list(APPEND COPY_INPUT_DEPENDENCIES

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Offline GL check that a projector shadow does not depend on the camera's orientation, no viewer launch.
 
