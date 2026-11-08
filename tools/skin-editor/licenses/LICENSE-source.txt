@@ -2,9 +2,9 @@ Vulkanstorm
 ===========
 Vulkanstorm is licensed under the GNU General Public License, version 3 or
 any later version (GPL-3.0-or-later). Code from Linden Lab and the Phoenix
-Firestorm Project is released by them under LGPL-2.1 only and is used here
-under the ordinary GNU GPL, as section 3 of LGPL-2.1 allows; their file
-headers are kept unchanged. See LICENSE (the GPL-3.0 text), NOTICE.md and
+Firestorm Project stays LGPL-2.1, with its file headers unchanged, and is
+combined into Vulkanstorm, which as a whole is GPL-3.0-or-later (LGPL-2.1 is
+compatible with inclusion in a GPL-3.0 work). See LICENSE (the GPL-3.0 text), NOTICE.md and
 LICENSE-LGPL-2.1 at the top of the source tree. The Linden Lab terms below
 continue to describe Linden Lab's code.
 

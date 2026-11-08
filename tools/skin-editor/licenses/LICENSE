@@ -13,10 +13,10 @@ The exact terms differ by origin:
         SPDX-License-Identifier: GPL-3.0-or-later
   * The skin library (tools/skin-editor/library: XUI definitions, themes,
     localized labels and commands.xml), copied from the Vulkanstorm viewer
-    and so from Linden Lab and Firestorm. They release it under LGPL-2.1
-    only (LGPL-2.1-license.txt in this folder; their headers are unchanged);
-    Vulkanstorm uses it under the ordinary GNU GPL, as section 3 of LGPL-2.1
-    allows.
+    and so from Linden Lab and Firestorm. It stays LGPL-2.1
+    (LGPL-2.1-license.txt in this folder; their headers are unchanged) and is
+    combined into this GPL-3.0-or-later work (LGPL-2.1 is compatible with
+    inclusion in a GPL-3.0 work).
   * Artwork in the skin library keeps its own terms: Linden Lab's viewer
     artwork is under CC BY-SA 3.0 with its trademarks excluded
     (LICENSE-logos.txt in this folder); other skin artwork keeps

@@ -11,7 +11,7 @@ dual licence of 2026-11-03 is dropped.
 | Group | SPDX expression | Where it lives |
 |---|---|---|
 | Skin Studio code, written for Vulkanstorm | `GPL-3.0-or-later` | `tools/skin-editor/*.py`, `*.js`, `*.html`, `*.css`, `desktop/` (the Rust app, its packager and bridge), `tests/` |
-| Skin library copied from the viewer (Linden Lab and Firestorm XUI, themes, labels, `commands.xml`) | LGPL-2.1 headers, used under the GPL | `tools/skin-editor/library/` (see its README for the source commit). Their headers are unchanged |
+| Skin library copied from the viewer (Linden Lab and Firestorm XUI, themes, labels, `commands.xml`) | LGPL-2.1, headers unchanged; part of a GPL-3.0-or-later whole | `tools/skin-editor/library/` (see its README for the source commit). Their headers are unchanged |
 | Artwork in the skin library | Its own terms | Linden Lab viewer artwork: CC BY-SA 3.0, trademarks excluded (`tools/skin-editor/licenses/LICENSE-logos.txt`); other skin artwork: its authors' terms |
 | Third-party components | Their own licences | The Rust crates of the desktop app and the bundled Python runtime; the desktop bundle ships their notices in `licenses/` |
 
@@ -20,27 +20,9 @@ in [`LICENSE-LGPL-2.1`](LICENSE-LGPL-2.1). Copies of both texts ship in
 `tools/skin-editor/licenses/` (`GPL-3.0-license.txt`, `LGPL-2.1-license.txt`),
 which the desktop bundle includes, beside the statement `LICENSE`.
 
-## Linden Lab and Firestorm library: LGPL-2.1 used under the GPL
+## Linden Lab and Firestorm library
 
-Linden Lab and Firestorm license their viewer files under LGPL-2.1 only.
-Vulkanstorm uses them under the ordinary GPL, as section 3 of LGPL-2.1 allows:
-
-> 3. You may opt to apply the terms of the ordinary GNU General Public
-> License instead of this License to a given copy of the Library.  To do
-> this, you must alter all the notices that refer to this License, so
-> that they refer to the ordinary GNU General Public License, version 2,
-> instead of to this License.  (If a newer version than version 2 of the
-> ordinary GNU General Public License has appeared, then you can specify
-> that version instead if you wish.)  Do not make any other change in
-> these notices.
->
-> Once this change is made in a given copy, it is irreversible for
-> that copy, so the ordinary GNU General Public License applies to all
-> subsequent copies and derivative works made from that copy.
-
-Their headers are left unchanged (decision of the project owner, 2026-11-08);
-the viewer repository's `doc/licensing.md` records this as a finding, because
-section 3 asks for the notices of a converted copy to be altered.
+Linden Lab and Firestorm code stays LGPL-2.1, with its headers unchanged, and is combined into Vulkanstorm, which as a whole is licensed GPL-3.0-or-later (LGPL-2.1 is compatible with inclusion in a GPL-3.0 work). The LGPL-2.1 text their headers refer to is `LICENSE-LGPL-2.1`.
 
 ## Compatibility
 
