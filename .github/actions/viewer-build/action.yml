@@ -314,6 +314,8 @@ runs:
         fi
 
     - name: Run statistics, script metadata, transport, TLS and physics decomposition regression tests
+      # Release builds (vkstorm-release pushes, publishing dispatches) build no tests.
+      if: env.VIEWER_BUILD_TYPE != 'Release'
       shell: bash
       run: |
         set -euo pipefail
