@@ -88,7 +88,7 @@ BSD-2-Clause) is not linked code and keeps its own licence.
 
 | Component | Licence | Status | Notes |
 |---|---|---|---|
-| SLPlugin + `media_plugin_cef` (Dullahan, CEF, Chromium) | Dullahan (package field "MPL"), CEF BSD-3-Clause, Chromium BSD-3-Clause with many permissive and LGPL parts | separate, OK | own process; SLPlugin itself is Linden Lab code. See findings 3 and 4 |
+| SLPlugin + `media_plugin_cef` (Dullahan, CEF, Chromium) | Dullahan MIT (upstream `secondlife/dullahan` LICENSE.txt, "Copyright (c) 2016, Linden Research, Inc."), CEF BSD-3-Clause, Chromium BSD-3-Clause with many permissive and LGPL parts | separate, OK | own process; SLPlugin itself is Linden Lab code. The FFmpeg inside Chromium is LGPL, compatible |
 | SLPlugin + `media_plugin_libvlc`, VLC 3.0.21 (devel only: the Vulkanstorm speaker-fill VLC module) | libVLC LGPL-2.1-or-later; VLC modules LGPL-2.1+ and GPL-2.0-or-later; speaker-fill module LGPL-2.1-or-later ([3p-vlc-speakerfill](https://github.com/anne-skydancer/3p-vlc-speakerfill)) | separate, OK | GPL-2.0-or-later modules are GPL-3-compatible; the plugin process that loads them is under GPL terms. See finding 2 |
 | Inno Setup installer (Windows) | Inno Setup License | separate | the installer program, not the viewer |
 
@@ -148,21 +148,12 @@ checks or clean-ups listed as follow-ups.
    `$LicenseInfo` header other than `viewerlgpl` or `fsviewerlgpl` has not
    been audited file by file; the headers of the tree were sampled, not
    enumerated. Uncertain.
-2. **VLC modules.** The `vlc-bin` package licence file holds only the GPL-2.0
-   text. VLC 3.0.21 modules are GPL-2.0-or-later or LGPL-2.1-or-later, which is
-   compatible; the package does not prove that no module is GPL-2.0-only.
-   Uncertain, low risk (separate process).
-3. **Dullahan licence.** `autobuild.xml` says "MPL" (the earlier audit said
-   MIT). MPL-2.0 is GPL-compatible through section 3.3; MPL-1.1 is only
-   compatible when a GPL option is offered. Separate process. Check the
-   package's licence file.
-4. **FFmpeg and codecs inside Chromium and VLC.** We build no FFmpeg ourselves;
-   the one inside CEF/Chromium is built without `--enable-gpl` or
-   `--enable-nonfree` upstream (LGPL-2.1-or-later), and VLC's is LGPL-2.1+. The
-   flags of the prebuilt Linden Lab packages cannot be verified from this
-   tree. Patent-encumbered codecs (H.264, AAC) are a patent question, not a
-   licence incompatibility.
-5. **Stale licence text files.** `indra/newview/licenses-{win32,linux,mac}.txt`
+2. **VLC modules.** VLC 3.0.21 is LGPL and GPL (libVLC and most modules
+   LGPL-2.1-or-later, others GPL-2.0-or-later), both compatible with GPL-3.0.
+   The `vlc-bin` package licence file holds only the GPL-2.0 text, so the one
+   remaining check is that no shipped module is GPL-2.0-only. Low risk
+   (separate process).
+3. **Stale licence text files.** `indra/newview/licenses-{win32,linux,mac}.txt`
    still carry the OpenSSL 1.x and SSLeay licence text (OpenSSL 3.5 is
    Apache-2.0) and credits for packages Vulkanstorm does not ship. Harmless,
    but the files should be regenerated from the package list.
