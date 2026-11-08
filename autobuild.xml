@@ -707,7 +707,7 @@
           </map>
         </map>
         <key>license</key>
-        <string>MPL</string>
+        <string>MIT</string>
         <key>license_file</key>
         <string>LICENSES/LICENSE.txt</string>
         <key>copyright</key>
