@@ -45,9 +45,7 @@ Modes: fail_first=<n> fail_status=<code> (the first n AIS requests fail with
 that status and an empty LLSD map body), fail_subset=<n> (the first n subset
 fetches fail with 404), delay_ms=<ms> (every response is held that long),
 legacy_error=<n> (a legacy folder request naming an e0... folder gets a
-200-with-error body n times), order_ms=<n> (with delay_ms: legacy replies
-are held n ms longer per step of their smallest id's low byte, so they leave
-in id order, not in thread-scheduling order; negative n: the reverse).
+200-with-error body n times).
 
 Behaviour scripted by the first two hex digits of the folder or item id in
 the request path (AIS) or body (legacy):
@@ -65,7 +63,8 @@ the request path (AIS) or body (legacy):
   4c  every children fetch of that folder: 404
 
 Held replies (mode hold=1): each request is logged on arrival ("arr" with
-held=true) and answered only when POST /control/release names its seq (one
+held=true and its body base64 in "abody", so a test can pick the order it
+releases them in) and answered only when POST /control/release names its seq (one
 per line) or "all"; the reply is computed at release, so writes change the
 world in release order. A request whose head does not parse is logged as a
 "bad" event (the test fails on it).
@@ -537,7 +536,8 @@ class Connection(threading.Thread):
                         # the test sends after reading the arrival finds it.
                         with self.state.held_lock:
                             seq = self.rec.arrival(dict(ev="arr", conn=self.conn, t_in=round(req["t_in"], 3),
-                                                        method=req["method"], target=req["target"], held=True))
+                                                        method=req["method"], target=req["target"], held=True,
+                                                        abody=base64.b64encode(req["body"]).decode("ascii")))
                             self.state.held[seq] = ev
                         ev.wait()
                     else:
@@ -551,7 +551,7 @@ class Connection(threading.Thread):
                     record["mock_error"] = repr(e)
                 delay = int(self.state.mode.get("delay_ms", "0") or 0)
                 if delay and not control:
-                    time.sleep((delay + self.order_extra_ms(req)) / 1000.0)
+                    time.sleep(delay / 1000.0)
                 # The record is written before the response is sent, so the
                 # client never sees a response whose record is not yet logged.
                 record.update(t_out=round(self.rec.now_ms(), 3),
@@ -571,30 +571,6 @@ class Connection(threading.Thread):
                 self.sock.close()
             except OSError:
                 pass
-
-    def order_extra_ms(self, req):
-        """Mode order_ms=<n>: a legacy (fid2, fld2, fi2, fl2) reply is held n ms
-        longer for each step of the low byte of the smallest folder or item id
-        in the request below 0xff, so replies that would otherwise leave within
-        a few ms of each other (thread scheduling decides which) leave in the
-        order of their ids. Negative n reverses the order. 0 when unset."""
-        n = int(self.state.mode.get("order_ms", "0") or 0)
-        if not n or not req["target"].startswith(("/cap/fid2", "/cap/fld2", "/cap/fi2", "/cap/fl2")):
-            return 0
-        body = parse_llsd(req["body"]) or {}
-        if not isinstance(body, dict):
-            return 0
-        recs = list(body.get("folders") or []) + list(body.get("items") or [])
-        keys = []
-        for r in recs:
-            if isinstance(r, dict):
-                i = str(r.get("folder_id") or r.get("item_id") or "").replace("-", "")
-                if len(i) == 32:
-                    keys.append(int(i, 16) & 0xff)
-        if not keys:
-            return 0
-        k = min(keys)
-        return n * k if n > 0 else -n * (0xff - k)
 
     def send(self, rsp):
         lines = ["HTTP/1.1 %d %s" % (rsp.status, rsp.reason), "Content-Length: %d" % len(rsp.body)]

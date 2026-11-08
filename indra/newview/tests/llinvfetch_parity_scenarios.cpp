@@ -29,10 +29,12 @@
 #include "../llviewercontrol.h"
 #include "../llappviewer.h"
 #include "lldir.h"
+#include "llsdserialize.h"
 #include "llfile.h"
 
 #include <algorithm>
 #include <map>
+#include <sstream>
 #include <stdexcept>
 
 // R2's frozen copy of the inventory part of LLAppViewer::disconnectViewer()
@@ -1510,12 +1512,7 @@ namespace
         {
             for (size_t i = 0; i < n; ++i) gInventory.fetchDescendentsOf(pool[next++]);
         };
-        // Replies leave the mock in the order of their ids (order_ms), not in
-        // thread-scheduling order: requests sent within a few ms of each
-        // other would otherwise be answered in either order, and a child
-        // folder whose reply is processed before its parent's is complete
-        // when the parent's reply lists it (no timer reset, no changed id).
-        mock_mode("delay_ms=3000\norder_ms=-4\n");
+        mock_mode("delay_ms=3000\n");
         r.step("held_replies");
         // Batch size 10: 9, 10 and 11 folders queued at once.
         for (size_t n : { (size_t)9, (size_t)10, (size_t)11 })
@@ -1527,8 +1524,92 @@ namespace
             r.step("batch_" + std::to_string(n));
         }
         // The threshold: one POST per frame until more than 12 are out.
+        // The 13 requests leave within a few ms of each other, and a child
+        // folder whose reply is processed before its parent's is complete
+        // when the parent's reply lists it (no timer reset, no changed id),
+        // so which reply is processed first changes the record. The mock
+        // therefore holds every reply, and they are released one at a time,
+        // each one processed before the next: the last block of the queue
+        // (the children) first, the first block (the parents) last. No timing
+        // decides the order.
+        std::map<LLUUID, size_t> pool_index;
+        for (size_t i = 0; i < pool.size(); ++i) pool_index[pool[i]] = i;
+        // The folder ids a held request names, from its body.
+        auto folders_of = [](const Wire& w)
+        {
+            std::vector<LLUUID> ids;
+            LLSD body;
+            std::istringstream in(w.abody);
+            if (LLSDSerialize::fromXML(body, in) > 0 && body["folders"].isArray())
+            {
+                for (LLSD::array_const_iterator it = body["folders"].beginArray(); it != body["folders"].endArray(); ++it)
+                {
+                    ids.push_back((*it)["folder_id"].asUUID());
+                }
+            }
+            return ids;
+        };
+        // The lowest pool index a held request names (-1: none).
+        auto first_folder = [&](const Wire& w) -> long
+        {
+            long lowest = -1;
+            for (const LLUUID& id : folders_of(w))
+            {
+                auto it = pool_index.find(id);
+                if (it != pool_index.end() && (lowest < 0 || (long)it->second < lowest)) lowest = (long)it->second;
+            }
+            return lowest;
+        };
+        // Releases the given held requests, last block first, and waits
+        // until the viewer has processed each (its folders have a version).
+        auto release_children_first = [&](std::vector<int> seqs)
+        {
+            std::map<int, Wire> by_seq;
+            for (const Wire& w : r.wire()) by_seq[w.seq] = w;
+            std::sort(seqs.begin(), seqs.end(), [&](int a, int b) { return first_folder(by_seq[a]) > first_folder(by_seq[b]); });
+            for (int seq : seqs)
+            {
+                std::vector<LLUUID> ids = folders_of(by_seq[seq]);
+                r.release(std::vector<int>(1, seq));
+                r.until([&]
+                {
+                    for (const LLUUID& id : ids)
+                    {
+                        LLViewerInventoryCategory* c = gInventory.getCategory(id);
+                        if (c && c->getVersion() == LLViewerInventoryCategory::VERSION_UNKNOWN) return false;
+                    }
+                    return true;
+                }, true, 60.0);
+            }
+        };
+        mock_mode("hold=1\n");
         queue_folders(140);
         for (int k = 1; k <= 15; ++k) r.frame_note("threshold_" + std::string(k < 10 ? "0" : "") + std::to_string(k));
+        {
+            // Every request the viewer has out is at the mock.
+            auto t0 = std::chrono::steady_clock::now();
+            while ((S32)r.held().size() < sched_state().fetch_count)
+            {
+                if (std::chrono::steady_clock::now() - t0 > std::chrono::seconds(60))
+                {
+                    r.fail("threshold requests did not reach the mock");
+                    throw Abort("c11: threshold arrivals");
+                }
+                r.frames(1, false);
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+        }
+        release_children_first(r.held());
+        // What the processed replies sent on (held too), last block first.
+        for (int k = 0; k < 200; ++k)
+        {
+            r.frames(2, true);
+            std::vector<int> rest = r.held();
+            if (rest.empty() && sched_state().fetch_count == 0) break;
+            if (rest.empty()) { std::this_thread::sleep_for(std::chrono::milliseconds(2)); continue; }
+            release_children_first(rest);
+        }
+        mock_mode("delay_ms=3000\n");
         r.settle(true, true);
         r.step("threshold");
         // Library items into the model (the library sub-folders' parents).

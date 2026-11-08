@@ -164,6 +164,7 @@ namespace vks_fetch
         int conn = 0;
         double t_in = 0, t_out = 0;
         std::string method, target, head, body;
+        std::string abody;   // the body as logged on arrival (held requests only)
         int status = 0;
         std::string rbody;
         bool have_rbody = false;

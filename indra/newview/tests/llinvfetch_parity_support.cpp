@@ -915,6 +915,7 @@ namespace vks_fetch
                 w.target = jstr(o, "target");
                 auto h = o.find("held");
                 w.held = h != o.end() && h->value().is_bool() && h->value().as_bool();
+                w.abody = b64decode(jstr(o, "abody"));
                 w.round = mRound;
                 mBySeq[w.seq] = mWire.size();
                 mWire.push_back(w);
