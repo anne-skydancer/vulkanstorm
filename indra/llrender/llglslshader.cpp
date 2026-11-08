@@ -373,27 +373,9 @@ void LLGLSLShader::unloadInternal()
             glDetachShader(mProgramObject, obj[i]);
         }
 
-        // Shader objects owned by LLShaderMgr's shared feature maps
-        // (mVertexShaderObjects/mFragmentShaderObjects) are attached to many
-        // programs; deleting them here would leave dangling handles in the
-        // maps and in every other program that attached them (e.g. after a
-        // link-failure recompile). Detach only; the maps' owner deletes them.
-        LLShaderMgr* shader_mgr = LLShaderMgr::instance();
-        auto is_shared_object = [shader_mgr](GLuint shader)
-        {
-            for (const auto& kv : shader_mgr->mVertexShaderObjects)
-            {
-                if (kv.second == shader) return true;
-            }
-            for (const auto& kv : shader_mgr->mFragmentShaderObjects)
-            {
-                if (kv.second == shader) return true;
-            }
-            return false;
-        };
         for (GLsizei i = 0; i < count; i++)
         {
-            if (glIsShader(obj[i]) && !is_shared_object(obj[i]))
+            if (glIsShader(obj[i]))
             {
                 glDeleteShader(obj[i]);
             }
