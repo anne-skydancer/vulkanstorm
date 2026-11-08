@@ -1640,6 +1640,9 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("alpha_st_accum");
     mReservedUniforms.push_back("alpha_st_trans");
     mReservedUniforms.push_back("st_seed");
+    mReservedUniforms.push_back("alpha_st_depth");
+    mReservedUniforms.push_back("alpha_st_history");
+    mReservedUniforms.push_back("alpha_st_resolved");
     // </Vulkanstorm>
 
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);

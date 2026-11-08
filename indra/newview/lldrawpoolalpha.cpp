@@ -414,6 +414,8 @@ void LLDrawPoolAlpha::setStochasticUniforms(S32 mode, U32 iteration)
     static const LLStaticHashedString sSamplesHW("st_samples_hw");
     static const LLStaticHashedString sSamples("st_samples");
     static const LLStaticHashedString sIteration("st_iteration");
+    static const LLStaticHashedString sFrame("st_frame");
+    const S32 frame = (S32)gPipeline.getAlphaStochasticFrame();
     const S32 samples_hw = (S32)gPipeline.getAlphaStochasticPassSamples();
     const S32 samples = (S32)gPipeline.getAlphaStochasticSamples();
 
@@ -433,6 +435,7 @@ void LLDrawPoolAlpha::setStochasticUniforms(S32 mode, U32 iteration)
                 program->uniform1i(sSamplesHW, samples_hw);
                 program->uniform1i(sSamples, samples);
                 program->uniform1i(sIteration, (S32)iteration);
+                program->uniform1i(sFrame, frame);
             }
         }
     };

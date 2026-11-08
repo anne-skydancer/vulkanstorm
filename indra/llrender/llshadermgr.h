@@ -365,6 +365,9 @@ public:
         ALPHA_ST_ACCUM,                     //  "alpha_st_accum"
         ALPHA_ST_TRANS,                     //  "alpha_st_trans"
         ALPHA_ST_SEED,                      //  "st_seed"
+        ALPHA_ST_DEPTH,                     //  "alpha_st_depth"
+        ALPHA_ST_HISTORY,                   //  "alpha_st_history"
+        ALPHA_ST_RESOLVED,                  //  "alpha_st_resolved"
         // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
