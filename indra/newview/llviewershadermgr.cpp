@@ -224,6 +224,7 @@ LLGLSLShader            gLegacyPostGammaCorrectProgram;
 LLGLSLShader            gExposureProgram;
 LLGLSLShader            gExposureProgramNoFade;
 LLGLSLShader            gLuminanceProgram;
+LLGLSLShader            gCloudShadowMapProgram; // <Vulkanstorm/> stage L2
 LLGLSLShader            gFXAAProgram[4];
 LLGLSLShader            gSMAAEdgeDetectProgram[4];
 LLGLSLShader            gSMAABlendWeightsProgram[4];
@@ -1336,6 +1337,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gExposureProgram.unload();
         gExposureProgramNoFade.unload();
         gLuminanceProgram.unload();
+        gCloudShadowMapProgram.unload(); // <Vulkanstorm/>
         gDeferredPostGammaCorrectProgram.unload();
         gLegacyPostGammaCorrectProgram.unload();
         gDeferredPostTonemapProgram.unload();
@@ -2695,6 +2697,27 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gExposureProgramNoFade.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         success = gExposureProgramNoFade.createShader();
         llassert(success);
+    }
+
+    if (success)
+    {
+        // <Vulkanstorm> the cloud transmittance map (llcloudshadowmap.cpp). In the sky shader group so
+        // that it gets the sky's cloud uniforms (scroll, density, scale, variance) as they are drawn.
+        gCloudShadowMapProgram.mName = "Cloud Shadow Map";
+        gCloudShadowMapProgram.mShaderFiles.clear();
+        gCloudShadowMapProgram.clearPermutations();
+        gCloudShadowMapProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gCloudShadowMapProgram.mShaderFiles.push_back(make_pair("deferred/cloudShadowMapF.glsl", GL_FRAGMENT_SHADER));
+        gCloudShadowMapProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gCloudShadowMapProgram.mShaderGroup = LLGLSLShader::SG_SKY;
+        success = gCloudShadowMapProgram.createShader();
+        // an absent map only means no cloud shadows: the viewer runs without it
+        if (!success)
+        {
+            LL_WARNS("ShaderLoading") << "The cloud shadow map shader failed to load: no cloud shadows" << LL_ENDL;
+            success = true;
+        }
+        // </Vulkanstorm>
     }
 
     if (success)

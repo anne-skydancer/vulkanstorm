@@ -384,6 +384,11 @@ public:
         ALPHA_ST_HISTORY,                   //  "alpha_st_history"
         ALPHA_ST_RESOLVED,                  //  "alpha_st_resolved"
         // </Vulkanstorm>
+        // <Vulkanstorm> cloud shadows (windlight/atmosphericsFuncs.glsl, deferred/cloudShadowMapF.glsl)
+        CLOUD_SHADOW_MAP,                   //  "cloud_shadow_map"
+        CLOUD_SHADOW_MAT,                   //  "cloud_shadow_mat"
+        CLOUD_SHADOW_PARAMS,                //  "cloud_shadow_params"
+        // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
     // clang-format on
