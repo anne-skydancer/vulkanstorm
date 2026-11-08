@@ -44,6 +44,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I indra/newview indra/newview/tests/llscripteditorposixfile_test.cpp -o "$RUNNER_TEMP/challenge-file-test"
         "$RUNNER_TEMP/challenge-file-test"
+    - name: Check the stable sun shadow cascades
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llshadowcascadefit_test.cpp -o "$RUNNER_TEMP/shadow-cascade-fit-test"
+        "$RUNNER_TEMP/shadow-cascade-fit-test"
     - name: Keep development hooks out of release
       shell: bash
       if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.publish == 'true')
