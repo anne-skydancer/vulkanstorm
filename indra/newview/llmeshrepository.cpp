@@ -2418,6 +2418,27 @@ EMeshProcessingResult LLMeshRepoThread::headerReceived(const LLVolumeParams& mes
             LLMutexLock lock(mHeaderMutex);
             mMeshHeader[mesh_id] = header;
             LLMeshRepository::sCacheBytesHeaders += (U32)header_size;
+            // bound the header cache so it cannot grow without limit over a
+            // long session; 404 markers are kept forever (they stop repeated
+            // requests for missing meshes), other entries are evicted past
+            // the cap at the cost of an occasional header re-fetch
+            constexpr size_t MAX_CACHED_MESH_HEADERS = 16384;
+            if (mMeshHeader.size() > MAX_CACHED_MESH_HEADERS)
+            {
+                for (auto it = mMeshHeader.begin();
+                     it != mMeshHeader.end() && mMeshHeader.size() > MAX_CACHED_MESH_HEADERS;)
+                {
+                    if (it->second.m404)
+                    {
+                        ++it;
+                    }
+                    else
+                    {
+                        LLMeshRepository::sCacheBytesHeaders -= (U32)llmax(it->second.mHeaderSize, 0);
+                        it = mMeshHeader.erase(it);
+                    }
+                }
+            }
         }
 
         // immediately request SkinInfo since we'll need it before we can render any LoD if it is present
