@@ -319,7 +319,8 @@ runs:
         fi
 
     - name: Record the libstdc++ inventory fixtures (R2, R3b)
-      if: inputs.platform == 'linux' && inputs.record_inventory_fixtures == 'true'
+      # Release builds build no tests, so a recording dispatch must be a qualification build.
+      if: inputs.platform == 'linux' && inputs.record_inventory_fixtures == 'true' && env.VIEWER_BUILD_TYPE != 'Release'
       shell: bash
       run: |
         # GitHub runs bash with -e; the recorders exit non-zero in dump mode by
@@ -360,7 +361,7 @@ runs:
         echo "recorded at $commit: both dumps identical"
 
     - name: Upload the libstdc++ inventory fixtures
-      if: always() && inputs.platform == 'linux' && inputs.record_inventory_fixtures == 'true'
+      if: always() && inputs.platform == 'linux' && inputs.record_inventory_fixtures == 'true' && env.VIEWER_BUILD_TYPE != 'Release'
       uses: actions/upload-artifact@v7
       with:
         name: linux-inventory-fixtures
