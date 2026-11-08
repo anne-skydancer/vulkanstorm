@@ -139,11 +139,6 @@ SetOverwrite on							# Overwrite files by default
 
 UninstallText $(UninstallTextMsg)
 DirText $(DirectoryChooseTitle) $(DirectoryChooseSetup)
-# <FS:TJ> Keep Vivox only for OpenSim viewers
-!if ${ISOPENSIM} == "1"
-!insertmacro MUI_PAGE_LICENSE "VivoxAUP.txt"
-!endif
-# </FS:TJ>
 ##!insertmacro MULTIUSER_PAGE_INSTALLMODE
 !define MUI_PAGE_CUSTOMFUNCTION_PRE dirPre
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE dirLeave # <FS:Ansariel> Optional start menu entry
@@ -1090,8 +1085,6 @@ Delete "$INSTDIR\trial\*.html"
 Delete "$INSTDIR\newview.exe"
 Delete "$INSTDIR\SecondLife.exe"
 
-# MAINT-3099 workaround - prevent these log files, if present, from causing a user alert
-Delete "$INSTDIR\VivoxVoiceService-*.log"
 
 # Remove entire help directory
 RMDir /r  "$INSTDIR\help"

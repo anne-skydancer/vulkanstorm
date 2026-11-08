@@ -129,14 +129,11 @@ print(viewer_copyright)
 # <Vulkanstorm> The viewer's own licence (NOTICE.md in the source tree).
 # One line: the About box wraps it.
 print("Vulkanstorm is free software: you may use, modify and distribute it under "
-      "the GNU Lesser General Public License, version 2.1, or, at your choice, the "
-      "GNU General Public License, version 3 or any later version (LGPL-license.txt "
-      "and GPL-3.0-license.txt beside the viewer). Linden Lab and Firestorm code is "
-      "licensed by them under LGPL-2.1 only; section 3 of that licence allows the "
-      "GPL option. The components below keep their own licences. This build links "
-      "OpenSSL 1.1.1, which is not compatible with GPL-3.0; until it is "
-      "replaced, the GPL-3.0 option applies to the source code only and this program "
-      "is offered under LGPL-2.1.")
+      "the GNU General Public License, version 3 or any later version (LICENSE.txt "
+      "beside the viewer). Linden Lab and Firestorm code is licensed by them under "
+      "LGPL-2.1 with its headers unchanged and is combined into Vulkanstorm, which as "
+      "a whole is GPL-3.0-or-later (LGPL-2.1-license.txt and NOTICE.md beside the viewer). The components "
+      "below keep their own licences.")
 print()
 # </Vulkanstorm>
 # Luau is server-side and isn't listed in the viewer's autobuild packages.
