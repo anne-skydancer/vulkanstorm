@@ -8314,6 +8314,11 @@ void LLObjectSelection::removeNode(LLSelectNode *nodep)
     }
     nodep->setObject(NULL); // Will get erased in cleanupNodes()
     mList.remove(nodep);
+    // <Vulkanstorm> the node was taken out of mList, so cleanupNodes() (which only
+    // scans mList) can never find and delete it; it leaked on every removal. The
+    // selection owns its nodes (they are copied, never shared), so delete it here.
+    delete nodep;
+    // </Vulkanstorm>
 }
 
 void LLObjectSelection::deleteAllNodes()
