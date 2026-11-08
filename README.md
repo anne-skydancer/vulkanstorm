@@ -10,13 +10,13 @@ Firestorm is a third party viewer derived from the official [Second Life](https:
 
 ## Licence
 
-Vulkanstorm is dual-licensed: you may use, modify and distribute it under the [GNU Lesser General Public License, version 2.1](LICENSE-LGPL-2.1) or, at your choice, the [GNU General Public License, version 3 or later](LICENSE-GPL-3.0).
+Vulkanstorm is licensed under the [GNU General Public License, version 3 or (at your option) any later version](LICENSE) (`GPL-3.0-or-later`).
 
-- Code from Linden Lab and Firestorm, and Rust ports of it: `LGPL-2.1-only OR GPL-3.0-or-later`. Linden Lab and Firestorm license it under LGPL-2.1 only; section 3 of LGPL-2.1 lets every licensee apply the GPL, version 3 or later, instead.
-- Original Vulkanstorm code: `LGPL-2.1-or-later OR GPL-3.0-or-later`.
-- Third-party components keep their own licences.
+- Code from Linden Lab and Firestorm, and Rust ports of it: released by them under LGPL-2.1 only, and used here under the ordinary GPL as section 3 of LGPL-2.1 allows. Their file headers are kept unchanged ([LICENSE-LGPL-2.1](LICENSE-LGPL-2.1) is the text they refer to).
+- Original Vulkanstorm code: `GPL-3.0-or-later`.
+- Third-party components keep their own licences, all compatible with GPL-3.0.
 
-The viewer binaries link OpenSSL 3.5 (Apache-2.0), which is compatible with GPL-3.0. [NOTICE.md](NOTICE.md) explains the groups and how to choose; [doc/licensing.md](doc/licensing.md) audits the libraries the viewer links with. Contributions are accepted under the same dual licence ([CONTRIBUTING.md](CONTRIBUTING.md)).
+[NOTICE.md](NOTICE.md) explains the groups; [doc/licensing.md](doc/licensing.md) audits the libraries the viewer links with. Contributions are accepted under the same terms ([CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Download
 

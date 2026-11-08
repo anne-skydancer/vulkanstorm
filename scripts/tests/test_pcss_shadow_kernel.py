@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Check the PCSS kernel of shadowUtil.glsl: its Poisson disk, edge clamp and receiver-plane
 gradient (stage 1), and the blocker search, penumbra and projector depth linearisation of the

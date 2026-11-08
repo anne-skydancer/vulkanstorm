@@ -2,19 +2,16 @@
 
 ## Licence of contributions
 
-Vulkanstorm is dual-licensed under LGPL-2.1 and GPL-3.0-or-later (see [NOTICE.md](NOTICE.md)). By contributing you agree that your contribution is licensed:
-
-- under `LGPL-2.1-only OR GPL-3.0-or-later` when it changes a file from Linden Lab or Firestorm (a file with their copyright and `$LicenseInfo` header); keep that header unchanged;
-- under `LGPL-2.1-or-later OR GPL-3.0-or-later` when it is a new file or other original code. Start new files with
+Vulkanstorm is licensed under the GNU General Public License, version 3 or later (see [NOTICE.md](NOTICE.md)). By contributing you agree that your contribution is licensed under `GPL-3.0-or-later`. Changes to a file from Linden Lab or Firestorm (a file with their copyright and `$LicenseInfo` header) keep that header unchanged. New files and other original code start with
 
   ```
-  SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+  SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (C) <year>, <your name> (Vulkanstorm)
   ```
 
   in the file's comment syntax.
 
-Do not contribute code that is available only under the GPL, such as code from the Aurora Viewer (GPL-3.0-or-later only): it would remove the LGPL option for the whole viewer. Third-party code under another licence needs that licence to be compatible with both LGPL-2.1 and GPL-3.0; keep its licence text and note it in [doc/licensing.md](doc/licensing.md).
+Third-party code needs a licence that is compatible with GPL-3.0 (for example MIT, BSD, Zlib, Apache-2.0, LGPL, GPL-2.0-or-later or GPL-3.0). Code under GPL-2.0-only, proprietary code, and code with extra restrictions such as advertising clauses or a fixed venue is not acceptable. Keep its licence text and note it in [doc/licensing.md](doc/licensing.md).
 
 The guidelines below are Firestorm's and still describe how changes to upstream code are marked.
 
