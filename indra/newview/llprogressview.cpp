@@ -489,16 +489,16 @@ void LLProgressView::initLogos()
 {
     mLogosList.clear();
 
-    const U8 image_codec = IMG_CODEC_PNG;
-    const LLRectf default_clip(0.f, 1.f, 1.f, 0.f);
-    const S32 default_height = 28;
-    const S32 default_pad = 15;
+    [[maybe_unused]] const U8 image_codec = IMG_CODEC_PNG;
+    [[maybe_unused]] const LLRectf default_clip(0.f, 1.f, 1.f, 0.f);
+    [[maybe_unused]] const S32 default_height = 28;
+    [[maybe_unused]] const S32 default_pad = 15;
 
-    S32 icon_width, icon_height;
+    [[maybe_unused]] S32 icon_width, icon_height;  // only the optional (FMOD, Havok) logos use them
 
     // We don't know final screen rect yet, so we can't precalculate position fully
-    S32 texture_start_x = (S32)mLogosLabel->getFont()->getWidthF32(mLogosLabel->getWText().c_str()) + default_pad;
-    S32 texture_start_y = -7;
+    [[maybe_unused]] S32 texture_start_x = (S32)mLogosLabel->getFont()->getWidthF32(mLogosLabel->getWText().c_str()) + default_pad;
+    [[maybe_unused]] S32 texture_start_y = -7;
 
     // Normally we would just preload these textures from textures.xml,
     // and display them via icon control, but they are only needed on
