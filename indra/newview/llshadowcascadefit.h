@@ -142,14 +142,19 @@ namespace LLShadowCascadeFit
         return snapped < SHADOW_DISTANCE_MAX ? snapped : SHADOW_DISTANCE_MAX;
     }
 
-    // Up axis of the light view: world north (+y), or east (+x) when the light runs nearly
-    // north-south. The result is orthogonal to the light direction.
+    // Up axis of the light view: world north (+y) projected onto the light's plane, or east
+    // (+x) when the light is within about 2.6 degrees of the north-south axis. Some switch is
+    // unavoidable (no tangent field on the sphere is continuous everywhere), so it sits next
+    // to the singularity, where a light almost never is: a light crossing the switch turns the
+    // texel grid once, and anywhere else the up follows the light continuously. The result is
+    // orthogonal to the light direction.
+    constexpr float LIGHT_UP_SWITCH = 0.999f; // |light.y| beyond this uses east
     inline Vec3 lightUp(const Vec3& light_dir)
     {
         const float len = std::sqrt(light_dir.x * light_dir.x + light_dir.y * light_dir.y + light_dir.z * light_dir.z);
         const Vec3 d = { light_dir.x / len, light_dir.y / len, light_dir.z / len };
         Vec3 ref = { 0.f, 1.f, 0.f };
-        if (std::fabs(d.y) > 0.9f)
+        if (std::fabs(d.y) > LIGHT_UP_SWITCH)
         {
             ref = { 1.f, 0.f, 0.f };
         }
