@@ -41,7 +41,7 @@ faces run on their own multisampled targets, as Aurora does without MSAA:
 
 P, the samples of one pass, is the most the device takes for the three formats up to 8 (NVIDIA
 621.01 honours only the low 4 bits of a texture-fetched `gl_SampleMask` at 16 samples). S, the
-samples in all, is `RenderAlphaStochasticSamples` (4, 8 or 16); S / P iterations run the depth
+samples in all, is `RenderAlphaStochasticSamples` (4, 8 or 16; fixed at 8 on every line, see Settings); S / P iterations run the depth
 and accumulation passes with the next P bits of the same mask. Memory: 16 B per sample, 128 B per
 pixel at P = 8 (253 MiB at 1920x1080, 450 MiB at 2560x1440), allocated at the render resolution
 while the method is selected and freed otherwise; nothing grows with the depth of the scene.
@@ -115,10 +115,10 @@ sixteenth of a pixel behind sloped planes, and that the old passes show them on 
 per sample (it reads `gl_SamplePosition`): 0.26 ms instead of 0.03 ms per spread at 2560x1440 with
 8 samples on an RTX 5070 Ti (NVIDIA 621.01), run once at S = 4 or 8 and twice at S = 16.
 
-## Temporal accumulation (`RenderAlphaStochasticTemporal`, default on)
+## Temporal accumulation (`RenderAlphaStochasticTemporal`, always on)
 
 The accumulation is part of the method, not a user choice: it is not in Preferences. The debug setting
-exists for debugging only.
+exists for debugging only, and is not persisted (see Settings).
 
 8 samples in one run of the passes, with the noise averaged over the frames, instead of 16 samples in
 two runs: the second run of the stochastic depth and accumulation is gone. The design and the weights
@@ -279,16 +279,21 @@ Exactly the draws PPLL captured, with the same exclusions:
 | Setting | Values | Default |
 |---|---|---|
 | `RenderAlphaSortMethod` | 0 sorted alpha, 1 stochastic transparency | 1 |
-| `RenderAlphaStochasticSamples` | 4, 8, 16 (values in between take the next) | 8 |
-| `RenderAlphaStochasticTemporal` | debug only: accumulate over the frames | TRUE |
+| `RenderAlphaStochasticSamples` | debug only, not persisted: 4, 8, 16 (values in between take the next) | 8 |
+| `RenderAlphaStochasticTemporal` | debug only, not persisted: accumulate over the frames | TRUE |
 | `RenderAlphaStochasticAvailable` | runtime flag, not persisted | |
 
 Preferences › Graphics › Rendering 2: "Alpha rendering method" (Sorted alpha / Stochastic
-transparency) and "Samples per pixel" (4, 8, 16). Users who had chosen PPLL (1) get stochastic
+transparency) only. Stochastic transparency is the same on every line (owner decision, 2026-11-08):
+8 samples with the temporal accumulation, and no other settings. The two settings above are
+debug settings with Persist 0: the settings loader (`LLControlGroup::loadFromFile`) does not load a
+value for a non-persisted control from a user settings file, and does not write one back, so a
+value an older build saved (16 samples, accumulation off) is ignored and dropped at the next
+save. Only `--set` or the debug settings floater change them, for the session. Users who had chosen PPLL (1) get stochastic
 transparency; `RenderAlphaOITNodesPerPixel`, `RenderAlphaOITMemoryMB`, `RenderAlphaOITStats`
 and `RenderAlphaPPLLAvailable` are gone (a stale value in a settings file is ignored). Neither
 the method nor its samples are in the feature tables or the graphics presets, as PPLL's were
-not. 16 samples follow Aurora's default, which stays 16 there until the owner decides. Aurora's
+not. Aurora's default is 16 samples; here 8 with the accumulation is fixed. Aurora's
 findings: S = 8 (one run, one accumulation) costs what OIT off does on its hair fly-through,
 with a faint speckle on dark hair cards and more grain on broad glass; S = 16 runs the
 accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted alpha, S = 16
