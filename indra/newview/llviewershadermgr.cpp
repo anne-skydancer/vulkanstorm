@@ -152,6 +152,7 @@ LLGLSLShader            gDeferredPBRAlphaStochasticProgram[2];
 LLGLSLShader            gDeferredMaterialStochasticProgram[LLMaterial::SHADER_COUNT*2];
 LLGLSLShader            gAlphaStochasticExpandProgram;
 LLGLSLShader            gAlphaStochasticCompositeProgram;
+LLGLSLShader            gAlphaStochasticResolveProgram;
 bool                    gAlphaStochasticShadersReady = false;
 // </Vulkanstorm>
 
@@ -347,7 +348,8 @@ static void unload_stochastic_shaders()
                                   &gDeferredFullbrightAlphaMaskAlphaStochasticProgram[0],
                                   &gDeferredFullbrightAlphaMaskAlphaStochasticProgram[1],
                                   &gDeferredPBRAlphaStochasticProgram[0], &gDeferredPBRAlphaStochasticProgram[1],
-                                  &gAlphaStochasticExpandProgram, &gAlphaStochasticCompositeProgram })
+                                  &gAlphaStochasticExpandProgram, &gAlphaStochasticCompositeProgram,
+                                  &gAlphaStochasticResolveProgram })
     {
         shader->unload();
     }
@@ -3290,6 +3292,18 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticCompositeProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         bool ready = gAlphaStochasticExpandProgram.createShader() && gAlphaStochasticCompositeProgram.createShader();
+        // the temporal accumulation: optional, without it the method runs as before
+        gAlphaStochasticResolveProgram.mName = "Alpha Stochastic Temporal Resolve";
+        gAlphaStochasticResolveProgram.mShaderFiles.clear();
+        gAlphaStochasticResolveProgram.clearPermutations();
+        gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticResolveF.glsl", GL_FRAGMENT_SHADER));
+        gAlphaStochasticResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        if (ready && !gAlphaStochasticResolveProgram.createShader())
+        {
+            LL_WARNS("Shader") << "Stochastic transparency's temporal accumulation unavailable: its resolve shader failed to build" << LL_ENDL;
+            gAlphaStochasticResolveProgram.unload();
+        }
         LLGLSLShader* bases[] = { &gDeferredAlphaProgram, &gDeferredSkinnedAlphaProgram,
                                   &gDeferredFullbrightAlphaMaskAlphaProgram, &gDeferredSkinnedFullbrightAlphaMaskAlphaProgram,
                                   &gDeferredPBRAlphaProgram, &gDeferredSkinnedPBRAlphaProgram };
