@@ -934,6 +934,11 @@ void LLRender::resetVertexBuffer()
 
 void LLRender::shutdown()
 {
+    // <Vulkanstorm> release the UI immediate-mode buffer cache here, while the GL context
+    // is current and before LLVertexBuffer::cleanupClass() deletes sVBOPool; otherwise the
+    // cached buffers are only destroyed in static destruction, after the context is gone
+    sVBCache.clear();
+    // </Vulkanstorm>
     resetVertexBuffer();
 
     // <Vulkanstorm> sampler objects

@@ -497,6 +497,11 @@ LLImageGL::LLImageGL(
     LLGLenum formatPrimary,
     LLGLenum formatType,
     LLTexUnit::eTextureAddressMode addressMode)
+// <Vulkanstorm> this constructor never initialised mExternalTexture (init() does not
+// set it), so ~LLImageGL read an indeterminate bool and, when it was false, deleted the
+// caller-owned texture and decremented sCount for an image never counted
+:   mSaveData(0), mExternalTexture(true)
+// </Vulkanstorm>
 {
     init(false, true);
     mTexName = texName;
