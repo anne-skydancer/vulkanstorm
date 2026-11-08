@@ -528,6 +528,7 @@ private:
     U32             mCount;
     U32             mMode;
     U32             mCurrTextureUnitIndex;
+    U32             mDummyVAO; // core-profile dummy VAO created in init(), deleted in shutdown()
     bool            mCurrColorMask[4];
     F32             mLineWidth = 1.f;
     U32             mDepthFetchSampler = 0; // <Vulkanstorm/> see getDepthFetchSampler()

@@ -1198,6 +1198,12 @@ void LLVertexBuffer::destroyGLBuffer()
         {
             sVBOPool->free(GL_ARRAY_BUFFER, mSize, mGLBuffer, mMappedData);
         }
+        else if (mMappedData)
+        {
+            // no pool (after cleanupClass): free the CPU mirror directly;
+            // GL names are moot once the context is gone
+            ll_aligned_free_16(mMappedData);
+        }
 
         mSize = 0;
         mGLBuffer = 0;
@@ -1214,6 +1220,11 @@ void LLVertexBuffer::destroyGLIndices()
         if (sVBOPool)
         {
             sVBOPool->free(GL_ELEMENT_ARRAY_BUFFER, mIndicesSize, mGLIndices, mMappedIndexData);
+        }
+        else if (mMappedIndexData)
+        {
+            // no pool (after cleanupClass): free the CPU mirror directly
+            ll_aligned_free_16(mMappedIndexData);
         }
 
         mIndicesSize = 0;

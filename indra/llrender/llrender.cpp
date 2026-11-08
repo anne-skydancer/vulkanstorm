@@ -730,7 +730,8 @@ LLRender::LLRender()
   : mDirty(false),
     mCount(0),
     mMode(LLRender::TRIANGLES),
-    mCurrTextureUnitIndex(0)
+    mCurrTextureUnitIndex(0),
+    mDummyVAO(0)
 {
     for (U32 i = 0; i < LL_NUM_TEXTURE_LAYERS; i++)
     {
@@ -803,9 +804,8 @@ bool LLRender::init(bool needs_vertex_buffer)
 #endif
 
     { //bind a dummy vertex array object so we're core profile compliant
-        U32 ret;
-        glGenVertexArrays(1, &ret);
-        glBindVertexArray(ret);
+        glGenVertexArrays(1, &mDummyVAO);
+        glBindVertexArray(mDummyVAO);
     }
 
     if (needs_vertex_buffer)
@@ -844,6 +844,12 @@ void LLRender::resetVertexBuffer()
 void LLRender::shutdown()
 {
     resetVertexBuffer();
+
+    if (mDummyVAO)
+    {
+        glDeleteVertexArrays(1, &mDummyVAO);
+        mDummyVAO = 0;
+    }
 
     // <Vulkanstorm> sampler objects
     if (mDepthFetchSampler)
