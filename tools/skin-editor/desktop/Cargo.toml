@@ -2,7 +2,7 @@
 name = "skin-studio"
 version = "0.1.0"
 edition = "2024"
-license = "LGPL-2.1-or-later OR GPL-3.0-or-later"
+license = "GPL-3.0-or-later"
 publish = false
 
 [dependencies]
