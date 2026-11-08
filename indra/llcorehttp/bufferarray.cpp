@@ -93,9 +93,7 @@ const size_t BufferArray::BLOCK_ALLOC_SIZE;
 
 BufferArray::BufferArray()
     : LLCoreInt::RefCounted(true),
-      mLen(0),
-      mHintBlock(-1),
-      mHintStart(0)
+      mLen(0)
 {}
 
 
@@ -182,9 +180,6 @@ void * BufferArray::appendBufferAlloc(size_t len)
     block->mUsed = len;
     mBlocks.push_back(block);
     mLen += len;
-    // documented contract: the region is valid even if the caller does not
-    // write all of it, so zero-fill exactly the handed-out range
-    memset(block->mData, 0, len);
     return block->mData;
 }
 
@@ -294,25 +289,14 @@ int BufferArray::findBlock(size_t pos, size_t * ret_offset)
         return -1;      // Doesn't exist
 
     const int block_limit(narrow<size_t>(mBlocks.size()));
-    int i(0);
-    size_t block_start(0);      // absolute offset of block i
-    if (mHintBlock >= 0 && pos >= mHintStart)
-    {   // sequential access dominates: start from the last hit
-        i = mHintBlock;
-        block_start = mHintStart;
-        pos -= mHintStart;
-    }
-    for (; i < block_limit; ++i)
+    for (int i(0); i < block_limit; ++i)
     {
         if (pos < mBlocks[i]->mUsed)
         {
             *ret_offset = pos;
-            mHintBlock = i;
-            mHintStart = block_start;
             return i;
         }
         pos -= mBlocks[i]->mUsed;
-        block_start += mBlocks[i]->mUsed;
     }
 
     // Shouldn't get here but...
@@ -343,9 +327,7 @@ BufferArray::Block::Block(size_t len)
     : mUsed(0),
       mAlloced(len)
 {
-    // no zero-fill here: append() memcpys over the data immediately, and
-    // appendBufferAlloc() honours its "valid even if unwritten" contract
-    // by zero-filling only the range it hands out
+    memset(mData, 0, len);
 }
 
 

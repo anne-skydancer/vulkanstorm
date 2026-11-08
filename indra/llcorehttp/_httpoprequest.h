@@ -229,13 +229,6 @@ public:
     std::string         mReplyConType;
     bool                mDecodeReply;   // <Vulkanstorm/> llcorehttp, not libcurl, undoes gzip/deflate (_httplibcurl.cpp)
     int                 mReplyRetryAfter;
-    // <Vulkanstorm> transfer stats captured in HttpLibcurl::completeRequest
-    // before the easy handle is recycled; visitNotifier reads these (the
-    // handle itself is NULL by then)
-    curl_off_t          mStatsSizeDownload;
-    double              mStatsTotalTime;
-    curl_off_t          mStatsSpeedDownload;
-    // </Vulkanstorm>
     // Policy data
     int                 mPolicyRetries;
     int                 mPolicy503Retries;

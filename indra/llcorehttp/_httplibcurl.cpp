@@ -416,13 +416,10 @@ void HttpLibcurl::addOp(const HttpOpRequest::ptr_t &op)
     llassert_always(mMultiHandles[op->mReqPolicy] != NULL);
 
     // Create standard handle
-    HttpStatus prep_status(op->prepareRequest(mService));
-    if (! prep_status)
+    if (! op->prepareRequest(mService))
     {
-        // Couldn't issue request: deliver the failure so the caller's
-        // onCompleted fires instead of the request silently vanishing
-        op->mStatus = prep_status;
-        op->addAsReply();
+        // Couldn't issue request, fail with notification
+        // *TODO:  Need failure path
         return;
     }
 
@@ -431,12 +428,8 @@ void HttpLibcurl::addOp(const HttpOpRequest::ptr_t &op)
     code = curl_multi_add_handle(mMultiHandles[op->mReqPolicy], op->mCurlHandle);
     if (CURLM_OK != code)
     {
+        // *TODO:  Better cleanup and recovery but not much we can do here.
         check_curl_multi_code(code);
-        // recycle the handle and deliver the failure, same as above
-        mHandleCache.freeHandle(op->mCurlHandle);
-        op->mCurlHandle = NULL;
-        op->mStatus = HttpStatus(HttpStatus::EXT_CURL_MULTI, code);
-        op->addAsReply();
         return;
     }
     op->mCurlActive = true;
@@ -658,24 +651,6 @@ bool HttpLibcurl::completeRequest(CURLM * multi_handle, CURL * handle, CURLcode 
     {
         // Detach from multi and recycle handle
         curl_multi_remove_handle(multi_handle, handle);
-        // <Vulkanstorm> capture transfer stats while the handle is still
-        // valid; visitNotifier runs after the handle is recycled and would
-        // otherwise always report zeros
-#if LIBCURL_VERSION_NUM >= 0x073700 // 7.55.0
-        curl_easy_getinfo(handle, CURLINFO_SIZE_DOWNLOAD_T, &op->mStatsSizeDownload);
-        curl_easy_getinfo(handle, CURLINFO_TOTAL_TIME, &op->mStatsTotalTime);
-        curl_easy_getinfo(handle, CURLINFO_SPEED_DOWNLOAD_T, &op->mStatsSpeedDownload);
-#else
-        {
-            double size_download(0.0), speed_download(0.0);
-            curl_easy_getinfo(handle, CURLINFO_SIZE_DOWNLOAD, &size_download);
-            curl_easy_getinfo(handle, CURLINFO_TOTAL_TIME, &op->mStatsTotalTime);
-            curl_easy_getinfo(handle, CURLINFO_SPEED_DOWNLOAD, &speed_download);
-            op->mStatsSizeDownload = static_cast<curl_off_t>(size_download);
-            op->mStatsSpeedDownload = static_cast<curl_off_t>(speed_download);
-        }
-#endif
-        // </Vulkanstorm>
         mHandleCache.freeHandle(op->mCurlHandle);
     }
     else

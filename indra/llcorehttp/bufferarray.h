@@ -132,13 +132,6 @@ protected:
     container_t         mBlocks;
     size_t              mLen;
 
-    // findBlock() hint: index and absolute start offset of the last block
-    // found.  Blocks are only ever appended and mUsed only grows on the
-    // last block (write() is bounded by existing mUsed), so block start
-    // offsets never change and the hint never goes stale.
-    int                 mHintBlock;
-    size_t              mHintStart;
-
 };  // end class BufferArray
 
 
