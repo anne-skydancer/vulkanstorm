@@ -22,7 +22,7 @@ VULKANSTORM = 'SPDX-License-Identifier: GPL-3.0-or-later'
 # SPDX identifiers that can be part of a GPL-3.0-or-later work.
 GPL3_COMPATIBLE = {
     'GPL-3.0-or-later', 'GPL-3.0-only', 'GPL-2.0-or-later', 'LGPL-2.1-or-later',
-    'LGPL-2.1-only', 'LGPL-3.0-or-later', 'LGPL-3.0-only', 'AGPL-3.0-or-later',
+    'LGPL-2.1-only', 'LGPL-3.0-or-later', 'LGPL-3.0-only',
     'MIT', 'MIT-0', 'BSD-2-Clause', 'BSD-3-Clause', 'Zlib', 'Apache-2.0', 'ISC',
     'BSL-1.0', 'CC0-1.0', 'Unlicense', 'MPL-2.0', 'Libpng', 'FTL', 'OFL-1.1',
     'CC-BY-4.0', 'LicenseRef-Public-Domain',
@@ -102,11 +102,17 @@ class VivoxRemovedTest(unittest.TestCase):
         for name in ('autobuild.xml', 'indra/newview/CMakeLists.txt',
                      'indra/cmake/Copy3rdPartyLibs.cmake', 'indra/cmake/ViewerMiscLibs.cmake',
                      'indra/newview/viewer_manifest.py', 'indra/newview/llvoiceclient.cpp',
-                     'indra/newview/llvoiceclient.h', 'indra/newview/app_settings/settings.xml'):
+                     'indra/newview/llvoiceclient.h', 'indra/newview/app_settings/settings.xml',
+                     'indra/newview/installers/windows/installer_template.nsi'):
             text = (ROOT / name).read_text(encoding='utf-8', errors='replace').lower()
             with self.subTest(file=name):
                 self.assertNotIn('vivox', text)
                 self.assertNotIn('slvoice.exe', text)
+
+    def test_no_slvoice_settings(self):
+        text = (ROOT / 'indra/newview/app_settings/settings.xml').read_text(encoding='utf-8')
+        for key in ('VoiceHost', 'VoicePort', 'VoiceLogFile'):
+            self.assertNotIn('<key>%s</key>' % key, text)
 
 
 def tracked_text_files():

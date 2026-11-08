@@ -18181,45 +18181,6 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>1</integer>
     </map>
-    <key>VoiceHost</key>
-    <map>
-      <key>Comment</key>
-      <string>Client SLVoice host to connect to</string>
-      <key>Persist</key>
-      <integer>1</integer>
-      <key>Type</key>
-      <string>String</string>
-      <key>Value</key>
-      <string>127.0.0.1</string>
-      <key>Backup</key>
-      <integer>0</integer>
-    </map>
-    <key>VoiceLogFile</key>
-    <map>
-      <key>Comment</key>
-      <string>Log file to use when launching the voice daemon</string>
-      <key>Persist</key>
-      <integer>1</integer>
-      <key>Type</key>
-      <string>String</string>
-      <key>Value</key>
-      <string></string>
-      <key>Backup</key>
-      <integer>0</integer>
-    </map>
-    <key>VoicePort</key>
-    <map>
-      <key>Comment</key>
-      <string>Client SLVoice port to connect to</string>
-      <key>Persist</key>
-      <integer>1</integer>
-      <key>Type</key>
-      <string>U32</string>
-      <key>Value</key>
-      <integer>44125</integer>
-      <key>Backup</key>
-      <integer>0</integer>
-    </map>
     <!-- </FS:TJ> -->
 
     <key>VoiceCallsRejectGroup</key>
