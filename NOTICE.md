@@ -23,9 +23,9 @@ Linden Lab and Firestorm code stays LGPL-2.1, with its headers unchanged, and is
 `LGPL-2.1-license.txt`). Copyright notices in the source files remain in force.
 
 One exception to the GPL-only reading: `indra/media_plugins/libvlc/vlc_speakerfill.cpp`
-is a VLC module derived from LGPL-2.1-or-later VLC code. It ships with its
-source and `COPYING.LIB` (the LGPL-2.1 text) beside the viewer and stays under
-LGPL-2.1-or-later, so that VLC can load it.
+(on the lines that have it) is a VLC module derived from LGPL-2.1-or-later VLC code and stays
+under LGPL-2.1-or-later, so that VLC can load it. Where the viewer ships that module, its source
+and `COPYING.LIB` (the LGPL-2.1 text) go beside the viewer in `speakerfill-source`.
 
 ## Linking and bundling
 
