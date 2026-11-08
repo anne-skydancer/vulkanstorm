@@ -56,6 +56,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llatmosphericlight_test.cpp -o "$RUNNER_TEMP/atmospheric-light-test"
         "$RUNNER_TEMP/atmospheric-light-test"
+    - name: Check the cloud shadow map layout and its coupling to the sky
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llcloudshadow_test.cpp -o "$RUNNER_TEMP/cloud-shadow-test"
+        "$RUNNER_TEMP/cloud-shadow-test"
     - name: Keep development hooks out of release
       shell: bash
       if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.publish == 'true')

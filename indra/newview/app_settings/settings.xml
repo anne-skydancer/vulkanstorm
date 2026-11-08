@@ -11430,6 +11430,39 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>Backup</key>
     <integer>0</integer>
     </map>
+    <key>RenderCloudShadowStrength</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: how much of the sky clouds' dimming reaches the ground sunlight and moonlight (flat cloud layer). 1 = physical (what the sky draws, the ground gets), 0 = off (no cloud shadow, identical to before).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>RenderCloudShadowPenumbraHeight</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the flat cloud layer's height above the ground for the cloud shadow's edge softness, in metres (the penumbra is this x 0.0093 x the sun's size: 14 m at 1500).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1500.0</real>
+    </map>
+    <key>RenderCloudShadowExtent</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the width of the world area covered by the cloud shadow map around the camera, in metres (512 texels). Beyond it the mean cloud shadow applies.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>4096.0</real>
+    </map>
     <key>RenderDesaturateIrradiance</key>
     <map>
       <key>Comment</key>

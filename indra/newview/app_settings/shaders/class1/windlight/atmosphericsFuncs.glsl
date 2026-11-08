@@ -43,6 +43,42 @@ uniform float sky_sunlight_scale;
 uniform float sky_ambient_scale;
 uniform int classic_mode;
 
+// <Vulkanstorm> cloud shadows (stage L2 of the light study): the cloud transmittance map, a
+// world-anchored 512x512 R8 map of the share of the sun's or the moon's light the flat cloud layer
+// lets through, built every frame by deferred/cloudShadowMapF.glsl (LLCloudShadowMap).
+//   cloud_shadow_mat    eye space position -> map coordinate (xy)
+//   cloud_shadow_params x strength (0: off), y 1: use the map's mean (probes, cube snapshots),
+//                       z width of the fade to the mean at the map's edge, w the tap's mip level
+// Only the fragment shaders look it up; with the strength at 0 no tap is made.
+#ifdef FRAGMENT_SHADER
+uniform sampler2D cloud_shadow_map;
+uniform mat4 cloud_shadow_mat;
+uniform vec4 cloud_shadow_params;
+
+float cloudShadowTransmittance(vec3 pos_eye)
+{
+    if (cloud_shadow_params.x <= 0.0)
+    {
+        return 1.0;
+    }
+
+    // the top mip of the map is its mean
+    float t = textureLod(cloud_shadow_map, vec2(0.5), 9.0).r;
+    if (cloud_shadow_params.y < 0.5)
+    {
+        vec2 uv = (cloud_shadow_mat * vec4(pos_eye, 1.0)).xy;
+        vec2 edge = min(uv, vec2(1.0) - uv);
+        float w = clamp(min(edge.x, edge.y) / cloud_shadow_params.z, 0.0, 1.0);
+        if (w > 0.0)
+        {
+            t = mix(t, textureLod(cloud_shadow_map, uv, cloud_shadow_params.w).r, w);
+        }
+    }
+    return 1.0 - cloud_shadow_params.x * (1.0 - t);
+}
+#endif
+// </Vulkanstorm>
+
 float getAmbientClamp() { return 1.0f; }
 
 vec3 srgb_to_linear(vec3 col);
@@ -122,6 +158,11 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
     // brightness of surface both sunlight and ambient
 
     sunlit = sunlight.rgb;
+#ifdef FRAGMENT_SHADER
+    // <Vulkanstorm> the clouds dim the direct light (L2); the haze above is as it was
+    sunlit *= cloudShadowTransmittance(inPositionEye);
+    // </Vulkanstorm>
+#endif
     amblit = pow(tmpAmbient.rgb, vec3(0.9)) * 0.57;
 
     additive *= vec3(1.0 - combined_haze);
