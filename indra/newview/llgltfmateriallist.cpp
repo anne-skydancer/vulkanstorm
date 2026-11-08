@@ -212,20 +212,21 @@ void LLGLTFMaterialList::applyOverrideMessage(LLMessageSystem* msg, const std::s
             auto count = llmin(tes.size(), MAX_TES);
             for (size_t i = 0; i < count; ++i)
             {
-                LLGLTFMaterial* mat = new LLGLTFMaterial(); // setTEGLTFMaterialOverride and cache will take ownership
-                mat->applyOverrideLLSD(od[i]);
-
                 S32 te = tes[i].asInteger();
 
-                // te comes from the sim and is unvalidated; indexing has_te
-                // with an out-of-range value is a stack buffer overflow
+                // <Vulkanstorm> te comes from the simulator and was used unchecked to index
+                // has_te[MAX_TES] (stack) and the cache; skip out-of-range sides. Checked
+                // before the material is allocated so nothing has to be released.
                 if (te < 0 || te >= (S32)MAX_TES)
                 {
                     LL_WARNS("GLTF") << "GLTFMaterialOverride: side index " << te
                                      << " out of range [0," << MAX_TES << "), skipped" << LL_ENDL;
-                    mat->unref();
                     continue;
                 }
+                // </Vulkanstorm>
+
+                LLGLTFMaterial* mat = new LLGLTFMaterial(); // setTEGLTFMaterialOverride and cache will take ownership
+                mat->applyOverrideLLSD(od[i]);
 
                 has_te[te] = true;
                 cache.mSides[te] = od[i];
