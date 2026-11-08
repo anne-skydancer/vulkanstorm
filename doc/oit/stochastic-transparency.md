@@ -41,7 +41,7 @@ faces run on their own multisampled targets, as Aurora does without MSAA:
 
 P, the samples of one pass, is the most the device takes for the three formats up to 8 (NVIDIA
 621.01 honours only the low 4 bits of a texture-fetched `gl_SampleMask` at 16 samples). S, the
-samples in all, is `RenderAlphaStochasticSamples` (4, 8 or 16; fixed at 8 on every line, see Settings); S / P iterations run the depth
+samples in all, is `RenderAlphaStochasticSamples`, a debug setting that takes 4, 8 or 16; 8 is the default on every line and there is no user-facing choice (see Settings); S / P iterations run the depth
 and accumulation passes with the next P bits of the same mask. Memory: 16 B per sample, 128 B per
 pixel at P = 8 (253 MiB at 1920x1080, 450 MiB at 2560x1440), allocated at the render resolution
 while the method is selected and freed otherwise; nothing grows with the depth of the scene.
