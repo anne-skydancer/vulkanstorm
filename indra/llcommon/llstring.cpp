@@ -1732,6 +1732,7 @@ S32 LLStringUtil::format(std::string& s, const format_map_t& substitutions)
     S32 res = 0;
 
     std::string output;
+    output.reserve(s.size());
     std::vector<std::string> tokens;
 
     std::string::size_type start = 0;
@@ -1739,7 +1740,7 @@ S32 LLStringUtil::format(std::string& s, const format_map_t& substitutions)
     std::string::size_type key_start = 0;
     while ((key_start = getSubstitution(s, start, tokens)) != std::string::npos)
     {
-        output += std::string(s, prev_start, key_start-prev_start);
+        output.append(s, prev_start, key_start-prev_start);
         prev_start = start;
 
         bool found_replacement = false;
@@ -1787,12 +1788,12 @@ S32 LLStringUtil::format(std::string& s, const format_map_t& substitutions)
         {
             // we had no replacement, use the string as is
             // e.g. "hello [MISSING_REPLACEMENT]" or "-=[Stylized Name]=-"
-            output += std::string(s, key_start, start-key_start);
+            output.append(s, key_start, start-key_start);
         }
         tokens.clear();
     }
     // send the remainder of the string (with no further matches for bracketed names)
-    output += std::string(s, start);
+    output.append(s, start);
     s = output;
     return res;
 }
@@ -1810,6 +1811,7 @@ S32 LLStringUtil::format(std::string& s, const LLSD& substitutions)
     }
 
     std::string output;
+    output.reserve(s.size());
     std::vector<std::string> tokens;
 
     std::string::size_type start = 0;
@@ -1817,7 +1819,7 @@ S32 LLStringUtil::format(std::string& s, const LLSD& substitutions)
     std::string::size_type key_start = 0;
     while ((key_start = getSubstitution(s, start, tokens)) != std::string::npos)
     {
-        output += std::string(s, prev_start, key_start-prev_start);
+        output.append(s, prev_start, key_start-prev_start);
         prev_start = start;
 
         bool found_replacement = false;
@@ -1857,12 +1859,12 @@ S32 LLStringUtil::format(std::string& s, const LLSD& substitutions)
         {
             // we had no replacement, use the string as is
             // e.g. "hello [MISSING_REPLACEMENT]" or "-=[Stylized Name]=-"
-            output += std::string(s, key_start, start-key_start);
+            output.append(s, key_start, start-key_start);
         }
         tokens.clear();
     }
     // send the remainder of the string (with no further matches for bracketed names)
-    output += std::string(s, start);
+    output.append(s, start);
     s = output;
     return res;
 }

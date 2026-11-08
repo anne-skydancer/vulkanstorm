@@ -1519,7 +1519,8 @@ void FSChatHistory::appendMessage(const LLChat& chat, const LLSD &args, const LL
     std::string delimiter_style = "NORMAL";
 
     // FS:LO FIRE-2899 - Faded text for IMs in nearby chat
-    F32 FSIMChatHistoryFade = gSavedSettings.getF32("FSIMChatHistoryFade");
+    static LLCachedControl<F32> fsim_chat_history_fade(gSavedSettings, "FSIMChatHistoryFade");
+    F32 FSIMChatHistoryFade = fsim_chat_history_fade;
 
     if (FSIMChatHistoryFade > 1.0f)
     {

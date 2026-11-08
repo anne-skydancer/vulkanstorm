@@ -155,8 +155,10 @@ protected:
         // changes don't take affect.
         // So toast's lifetime should be updated each time it's added to the pool. Otherwise viewer would have
         // to be restarted so that changes take effect.
-        toast->setLifetime(gSavedSettings.getS32("NearbyToastLifeTime"));
-        toast->setFadingTime(gSavedSettings.getS32("NearbyToastFadingTime"));
+        static LLCachedControl<S32> nearby_toast_lifetime(gSavedSettings, "NearbyToastLifeTime");
+        static LLCachedControl<S32> nearby_toast_fading_time(gSavedSettings, "NearbyToastFadingTime");
+        toast->setLifetime(nearby_toast_lifetime);
+        toast->setFadingTime(nearby_toast_fading_time);
         m_toast_pool.push_back(toast->getHandle());
     }
 
@@ -290,7 +292,8 @@ void LLFloaterIMNearbyChatScreenChannel::onToastFade(LLToast* toast)
 
 void LLFloaterIMNearbyChatScreenChannel::updateToastsLifetime()
 {
-    S32 seconds = gSavedSettings.getS32("NearbyToastLifeTime");
+    static LLCachedControl<S32> nearby_toast_lifetime(gSavedSettings, "NearbyToastLifeTime");
+    S32 seconds = nearby_toast_lifetime;
     toast_list_t::iterator it;
 
     for(it = m_toast_pool.begin(); it != m_toast_pool.end(); ++it)
@@ -318,8 +321,10 @@ bool    LLFloaterIMNearbyChatScreenChannel::createPoolToast()
 
     LLToast::Params p;
     p.panel = panel;
-    p.lifetime_secs = (F32)gSavedSettings.getS32("NearbyToastLifeTime");
-    p.fading_time_secs = (F32)gSavedSettings.getS32("NearbyToastFadingTime");
+    static LLCachedControl<S32> nearby_toast_lifetime(gSavedSettings, "NearbyToastLifeTime");
+    static LLCachedControl<S32> nearby_toast_fading_time(gSavedSettings, "NearbyToastFadingTime");
+    p.lifetime_secs = (F32)nearby_toast_lifetime;
+    p.fading_time_secs = (F32)nearby_toast_fading_time;
 
     LLToast* toast = new LLFloaterIMNearbyChatToast(p, this);
 
@@ -462,8 +467,10 @@ void LLFloaterIMNearbyChatScreenChannel::arrangeToasts()
 
     // <FS:Ansariel> Configurable nearby chat toasts offset
     //S32       bottom = channel_bottom + 80;
-    S32     bottom = channel_bottom + gSavedSettings.getS32("FSNearbyChatToastsOffset");
-    S32     margin = gSavedSettings.getS32("ToastGap");
+    static LLCachedControl<S32> fs_nearby_chat_toasts_offset(gSavedSettings, "FSNearbyChatToastsOffset");
+    static LLCachedControl<S32> toast_gap(gSavedSettings, "ToastGap");
+    S32     bottom = channel_bottom + fs_nearby_chat_toasts_offset;
+    S32     margin = toast_gap;
 
     //sort active toasts
     std::sort(m_active_toasts.begin(),m_active_toasts.end(),sort_toasts_predicate);

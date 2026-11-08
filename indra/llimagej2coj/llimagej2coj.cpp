@@ -306,8 +306,9 @@ public:
         S32& components,
         S32& discard_level)
     {
-        parameters.flags |= OPJ_DPARAMETERS_DUMP_FLAG;
-
+        // <Vulkanstorm> do not set OPJ_DPARAMETERS_DUMP_FLAG here: readHeader
+        // runs for every getMetadata() call and the flag made OpenJPEG dump
+        // the whole codestream to stdout (debug leftover from SL-16542)
         decoder = opj_create_decompress(OPJ_CODEC_J2K);
 
         /* catch events using our callbacks and give a local context */
@@ -380,8 +381,6 @@ public:
 
     bool decode(U8* data, U32 dataSize, U32* channels, U8 discard_level)
     {
-        parameters.flags &= ~OPJ_DPARAMETERS_DUMP_FLAG;
-
         decoder = opj_create_decompress(OPJ_CODEC_J2K);
         opj_setup_decoder(decoder, &parameters);
 

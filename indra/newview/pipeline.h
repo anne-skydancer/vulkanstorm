@@ -949,6 +949,12 @@ protected:
 
     LLSpatialGroup::sg_vector_t     mGroupSaveQ1; // a place to save mGroupQ1 until it is safe to unref
 
+    // scratch vectors for the sun-shadow point-cloud setup, reused every
+    // frame instead of allocating fresh vectors in generateSunShadow
+    std::vector<LLVector3> mShadowPointScratch;
+    std::vector<LLVector3> mShadowFrustScratch;
+    std::vector<LLVector3> mShadowWorldScratch;
+
     LLSpatialGroup::sg_vector_t     mMeshDirtyGroup; //groups that need rebuildMesh called
     U32 mMeshDirtyQueryObject;
 
