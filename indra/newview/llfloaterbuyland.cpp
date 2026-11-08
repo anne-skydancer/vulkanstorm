@@ -120,6 +120,9 @@ private:
     std::string     mParcelLocation;
     LLUUID          mParcelSnapshot;
     std::string     mParcelSellerName;
+    // outstanding gCacheName->getGroup() request; disconnected on destruction
+    // so a late reply cannot call back into a dead floater
+    boost::signals2::connection mGroupNameCacheConnection;
 
     // user's choices
     S32             mUserPlanChoice;
@@ -306,6 +309,7 @@ LLFloaterBuyLandUI::LLFloaterBuyLandUI(const LLSD& key)
 
 LLFloaterBuyLandUI::~LLFloaterBuyLandUI()
 {
+    mGroupNameCacheConnection.disconnect();
     LLViewerParcelMgr::getInstance()->removeObserver(&mParcelSelectionObserver);
     LLViewerParcelMgr::getInstance()->deleteParcelBuy(&mParcelBuyInfo);
 
@@ -810,7 +814,7 @@ void LLFloaterBuyLandUI::updateNames()
     }
     else if (parcelp->getIsGroupOwned())
     {
-        gCacheName->getGroup(parcelp->getGroupID(),
+        mGroupNameCacheConnection = gCacheName->getGroup(parcelp->getGroupID(),
             boost::bind(&LLFloaterBuyLandUI::updateGroupName, this,
                 _1, _2, _3));
     }

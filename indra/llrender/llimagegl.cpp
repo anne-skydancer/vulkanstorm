@@ -497,6 +497,7 @@ LLImageGL::LLImageGL(
     LLGLenum formatPrimary,
     LLGLenum formatType,
     LLTexUnit::eTextureAddressMode addressMode)
+:   mSaveData(0), mExternalTexture(true)
 {
     init(false, true);
     mTexName = texName;
@@ -511,9 +512,15 @@ LLImageGL::LLImageGL(
 
 LLImageGL::~LLImageGL()
 {
-    if (!mExternalTexture && gGLManager.mInited)
+    if (!mExternalTexture)
     {
-        LLImageGL::cleanup();
+        // cleanup() issues GL calls, so it must wait for an initialized GL
+        // manager; the bookkeeping below is pure CPU and must run regardless,
+        // or sImageList keeps a dangling pointer after GL teardown
+        if (gGLManager.mInited)
+        {
+            LLImageGL::cleanup();
+        }
         sImageList.erase(this);
         freePickMask();
         sCount--;
@@ -1766,7 +1773,7 @@ void LLImageGL::syncToMainThread(LLGLuint new_tex_name)
             glFlush();
             auto sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
             glFlush();
-            LL::WorkQueue::postMaybe(
+            bool posted = LL::WorkQueue::postMaybe(
                 mMainQueue,
                 [=]()
                 {
@@ -1780,11 +1787,16 @@ void LLImageGL::syncToMainThread(LLGLuint new_tex_name)
                         glDeleteSync(sync);
                     }
                 });
+            if (!posted)
+            {
+                // main queue is gone (shutdown): don't leak the sync object
+                glDeleteSync(sync);
+            }
         }
     }
 
     ref();
-    LL::WorkQueue::postMaybe(
+    bool posted = LL::WorkQueue::postMaybe(
         mMainQueue,
         [=, this]()
         {
@@ -1792,6 +1804,10 @@ void LLImageGL::syncToMainThread(LLGLuint new_tex_name)
             syncTexName(new_tex_name);
             unref();
         });
+    if (!posted)
+    {
+        unref();
+    }
 
     LL_PROFILER_GPU_COLLECT;
 }

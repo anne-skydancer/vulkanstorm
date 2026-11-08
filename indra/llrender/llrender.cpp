@@ -810,6 +810,7 @@ LLRender::LLRender()
     mCount(0),
     mMode(LLRender::TRIANGLES),
     mCurrTextureUnitIndex(0),
+    mDummyVAO(0),
     mLineWidth(1.f), // <FS> Line width OGL core profile fix by Rye Mutt
     // <FS:Ansariel> Don't ignore OpenGL max line width
     mMaxLineWidthSmooth(1.f),
@@ -887,9 +888,8 @@ bool LLRender::init(bool needs_vertex_buffer)
 #endif
 
     { //bind a dummy vertex array object so we're core profile compliant
-        U32 ret;
-        glGenVertexArrays(1, &ret);
-        glBindVertexArray(ret);
+        glGenVertexArrays(1, &mDummyVAO);
+        glBindVertexArray(mDummyVAO);
     }
 
     if (needs_vertex_buffer)
@@ -947,6 +947,16 @@ void LLRender::shutdown()
     }
     // </Vulkanstorm>
     resetVertexBuffer();
+
+    // drop the immediate-mode VB cache so the cached buffers are destroyed
+    // while the GL context is still alive
+    sVBCache.clear();
+
+    if (mDummyVAO)
+    {
+        glDeleteVertexArrays(1, &mDummyVAO);
+        mDummyVAO = 0;
+    }
 
     // <Vulkanstorm> sampler objects
     if (mDepthFetchSampler)
