@@ -217,6 +217,16 @@ void LLGLTFMaterialList::applyOverrideMessage(LLMessageSystem* msg, const std::s
 
                 S32 te = tes[i].asInteger();
 
+                // te comes from the sim and is unvalidated; indexing has_te
+                // with an out-of-range value is a stack buffer overflow
+                if (te < 0 || te >= (S32)MAX_TES)
+                {
+                    LL_WARNS("GLTF") << "GLTFMaterialOverride: side index " << te
+                                     << " out of range [0," << MAX_TES << "), skipped" << LL_ENDL;
+                    mat->unref();
+                    continue;
+                }
+
                 has_te[te] = true;
                 cache.mSides[te] = od[i];
                 cache.mGLTFMaterial[te] = mat;
