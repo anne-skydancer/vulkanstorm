@@ -7,6 +7,10 @@ a composite action (.github/actions/*/action.yml) names its shell, uses only
 the keys composite steps support and only declared inputs; every workflow
 step that uses a local action passes only inputs it declares. actionlint
 checks the workflows themselves (ci-lint.yaml).
+
+The build workflows ignore the same CI and documentation files (paths-ignore, on
+every event), and ci-lint.yaml paths cover every ignored CI file; documentation
+(DOC_ONLY_IGNORES) is ignored by the builds without being linted.
 """
 import json
 import pathlib
@@ -18,6 +22,46 @@ import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 STEP_KEYS = {"name", "id", "if", "run", "shell", "env", "uses", "with", "working-directory", "continue-on-error"}
+
+BUILD_WORKFLOWS = ("build-windows.yaml", "build-linux.yaml", "build-linux-lts.yaml")
+# Build-ignored without being linted: documentation has nothing for ci-lint to check.
+DOC_ONLY_IGNORES = {"doc/**", "**/*.md"}
+
+
+def trigger_lists(workflow, key):
+    """{event: list} of the given path filter ('paths' or 'paths-ignore') in a workflow."""
+    triggers = workflow.get(True, workflow.get("on")) or {}  # YAML reads a bare `on` as True
+    return {event: config[key] for event, config in triggers.items()
+            if isinstance(config, dict) and key in config}
+
+
+def check_path_lists(documents):
+    """The build workflows ignore the same files; ci-lint lints every CI file they ignore."""
+    errors = []
+    workflows = {path.name: doc for path, doc in documents.items()
+                 if path.parent.name == "workflows" and isinstance(doc, dict)}
+    ignored = {}
+    for name in BUILD_WORKFLOWS:
+        if name not in workflows:
+            errors.append(f"{name}: build workflow missing")
+            continue
+        lists = trigger_lists(workflows[name], "paths-ignore")
+        if "pull_request" not in lists:
+            errors.append(f"{name}: pull_request has no paths-ignore")
+        for event, patterns in lists.items():
+            ignored[f"{name} {event}"] = set(patterns)
+    reference = next(iter(ignored.values()), set())
+    for where, patterns in ignored.items():
+        if patterns != reference:
+            errors.append(f"{where}: paths-ignore differs from the other build workflows "
+                          f"(only here: {sorted(patterns - reference)}; missing: {sorted(reference - patterns)})")
+    lint = trigger_lists(workflows.get("ci-lint.yaml", {}), "paths").get("pull_request")
+    if lint is None:
+        errors.append("ci-lint.yaml: pull_request has no paths")
+    else:
+        for pattern in sorted(reference - DOC_ONLY_IGNORES - set(lint)):
+            errors.append(f"ci-lint.yaml: paths lacks '{pattern}', which the build workflows ignore")
+    return errors
 
 
 def main():
@@ -75,6 +119,7 @@ def main():
                     elif set(step.get("with") or {}) - actions[uses]:
                         errors.append(f"{path.name} {job_name}: passes undeclared inputs "
                                       f"{sorted(set(step['with']) - actions[uses])} to {uses}")
+    errors += check_path_lists(documents)
     if errors:
         sys.exit("\n".join(errors))
     print(f"{len(documents)} YAML file(s) parse; {len(actions)} composite action(s) consistent with their callers")
