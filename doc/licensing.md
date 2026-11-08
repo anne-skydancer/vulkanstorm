@@ -2,8 +2,9 @@
 
 This document backs [`NOTICE.md`](../NOTICE.md). Vulkanstorm is licensed under
 `GPL-3.0-or-later` (decision of the owner, 2026-11-08). Linden Lab and
-Firestorm code, released by them under LGPL-2.1 only, is used under the
-ordinary GPL as section 3 of LGPL-2.1 allows. Distributing a *binary* under
+Firestorm code stays LGPL-2.1, with its headers unchanged, and is combined
+into Vulkanstorm, which as a whole is licensed GPL-3.0-or-later (LGPL-2.1 is
+compatible with inclusion in a GPL-3.0 work). Distributing a *binary* under
 GPL-3.0 is only honest if everything linked into it, or bundled with it as part
 of one work, can be distributed under GPL-3.0 too. This is the audit of what
 the shipped binaries link with, re-done on 2026-11-08 on `vkstorm-devel` (re-checked for each line below) from
@@ -18,7 +19,7 @@ follows upstream Firestorm `master`, which brings these package differences:
 
 | Component | Licence | Status | Notes |
 |---|---|---|---|
-| SDL3 3.2.24 (replaces SDL2) | Zlib upstream (`autobuild.xml` says "lgpl") | OK | either way; the package licence label should be checked (finding 8) |
+| SDL3 3.2.24 (replaces SDL2) | Zlib upstream (`autobuild.xml` says "lgpl") | OK | either way; the package licence label should be checked (finding 6) |
 | glext 2025.10.27 | Khronos (MIT-style) | OK | |
 | open-libndofdev 0.14 | BSD | OK | |
 | fltk, mesa (old), libuuid, glh_linear, llappearance_utility, vlc-speakerfill | | not on this line | |
@@ -87,20 +88,19 @@ code.
 | gntp-growl (Windows), libnotify (Linux) | BSD; LGPL-2.1 | OK | |
 | SDL3, glib, jemalloc, breakpad, pcre (Linux) | Zlib; LGPL-2.1+; BSD-2; BSD-3; BSD | OK | |
 | Microsoft C++ runtime (Windows) | Microsoft redistributable | OK | treated as a System Library under GPL-3.0 section 1 |
-| viewer-manager | Linden Lab LGPL-2.1 (`viewerlgpl`) | OK | Linden Lab code, used under the GPL |
+| viewer-manager | Linden Lab LGPL-2.1 (`viewerlgpl`) | OK | Linden Lab code, LGPL-2.1, part of the GPL-3.0 whole |
 
 Data shipped with the viewer (fonts under OFL-1.1, the Bitstream Vera/DejaVu
 licence and CC BY 4.0 for Twemoji artwork; spelling dictionaries; the CA
 bundle; `lsl_definitions`; emoji shortcodes; the Tycho-2 star data,
-BSD-2-Clause) is not linked code and keeps its own licence. See finding 3
-about one dictionary.
+BSD-2-Clause) is not linked code and keeps its own licence.
 
 ### Separate programs shipped with the viewer
 
 | Component | Licence | Status | Notes |
 |---|---|---|---|
-| SLPlugin + `media_plugin_cef` (Dullahan, CEF, Chromium) | Dullahan (package field "MPL"), CEF BSD-3-Clause, Chromium BSD-3-Clause with many permissive and LGPL parts | separate, OK | own process; SLPlugin itself is Linden Lab code. See findings 5 and 6 |
-| SLPlugin + `media_plugin_libvlc`, VLC 3.0.21 (devel only: the Vulkanstorm speaker-fill VLC module) | libVLC LGPL-2.1-or-later; VLC modules LGPL-2.1+ and GPL-2.0-or-later; speaker-fill module LGPL-2.1-or-later ([3p-vlc-speakerfill](https://github.com/anne-skydancer/3p-vlc-speakerfill)) | separate, OK | GPL-2.0-or-later modules are GPL-3-compatible; the plugin process that loads them is under GPL terms. See finding 4 |
+| SLPlugin + `media_plugin_cef` (Dullahan, CEF, Chromium) | Dullahan (package field "MPL"), CEF BSD-3-Clause, Chromium BSD-3-Clause with many permissive and LGPL parts | separate, OK | own process; SLPlugin itself is Linden Lab code. See findings 3 and 4 |
+| SLPlugin + `media_plugin_libvlc`, VLC 3.0.21 (devel only: the Vulkanstorm speaker-fill VLC module) | libVLC LGPL-2.1-or-later; VLC modules LGPL-2.1+ and GPL-2.0-or-later; speaker-fill module LGPL-2.1-or-later ([3p-vlc-speakerfill](https://github.com/anne-skydancer/3p-vlc-speakerfill)) | separate, OK | GPL-2.0-or-later modules are GPL-3-compatible; the plugin process that loads them is under GPL terms. See finding 2 |
 | Inno Setup installer (Windows) | Inno Setup License | separate | the installer program, not the viewer |
 
 ### Off in our builds (would need review before enabling)
@@ -127,7 +127,7 @@ binaries.
 
 Linked into the viewer on the `vkstorm-rust` line only (not on
 `vkstorm-devel`). Its crates are `GPL-3.0-or-later` (original code) or ports
-of Linden Lab code used under the GPL; the vendored ports keep their own
+of Linden Lab code (LGPL-2.1, part of the GPL-3.0 whole); the vendored ports keep their own
 licences (`vkstorm-openjp2` BSD-2-Clause, the libogg/libvorbis part of
 `vkstorm-vorbis` BSD-3-Clause, the SoLoud part of `vkstorm-audio` Zlib). The
 crates.io dependencies reachable from `vkstorm-ffi` with all features
@@ -151,56 +151,55 @@ above.
 
 ## Findings
 
-Open items from the audit. None is a linked incompatible library; items 1 to 3
-need a decision or a check by the owner.
+Open items from the audit. None is a linked incompatible library; all are
+checks or clean-ups listed as follow-ups.
 
-1. **Section 3 of LGPL-2.1 and the unchanged Linden Lab / Firestorm headers.**
-   Section 3 says that a licensee who applies the ordinary GPL to a copy
-   "must alter all the notices that refer to this License". By decision of the
-   owner (2026-11-08) the headers stay unchanged, and NOTICE.md states that
-   this code is used under the GPL. The strict reading of section 3 is a
-   notice change; the headers are untouched because they also record the
-   origin. Decision needed: keep as is, or alter the notices. (Linden Lab and
-   Firestorm themselves publish this code under LGPL-2.1, which also allows a
-   work that uses it to be distributed under other terms, section 6.)
-2. **Linden Lab and Firestorm code that is not LGPL.** The Linden Lab
+1. **Linden Lab and Firestorm code that is not LGPL.** The Linden Lab
    `llappearance_utility` is proprietary and off. Anything else with a
    `$LicenseInfo` header other than `viewerlgpl` or `fsviewerlgpl` has not
    been audited file by file; the headers of the tree were sampled, not
    enumerated. Uncertain.
-3. **Russian spelling dictionary (`ru_RU`).** Its licence reads "Permission to
-   use, copy, redistribute is granted. Permission to redistribute
-   modifications in patch form is granted. ... All other rights reserved."
-   That is not a free-software licence and is not GPL-compatible. It is data
-   read by Hunspell, shipped as a separate file (an aggregate, GPL-3.0 section
-   5), not combined with code. Recommended: replace it with a freely licensed
-   Russian dictionary or drop it. The other dictionaries are LGPL, MPL/GPL/LGPL
-   tri-licences or BSD (data).
-4. **VLC modules.** The `vlc-bin` package licence file holds only the GPL-2.0
+2. **VLC modules.** The `vlc-bin` package licence file holds only the GPL-2.0
    text. VLC 3.0.21 modules are GPL-2.0-or-later or LGPL-2.1-or-later, which is
    compatible; the package does not prove that no module is GPL-2.0-only.
    Uncertain, low risk (separate process).
-5. **Dullahan licence.** `autobuild.xml` says "MPL" (the earlier audit said
+3. **Dullahan licence.** `autobuild.xml` says "MPL" (the earlier audit said
    MIT). MPL-2.0 is GPL-compatible through section 3.3; MPL-1.1 is only
    compatible when a GPL option is offered. Separate process. Check the
    package's licence file.
-6. **FFmpeg and codecs inside Chromium and VLC.** We build no FFmpeg ourselves;
+4. **FFmpeg and codecs inside Chromium and VLC.** We build no FFmpeg ourselves;
    the one inside CEF/Chromium is built without `--enable-gpl` or
    `--enable-nonfree` upstream (LGPL-2.1-or-later), and VLC's is LGPL-2.1+. The
    flags of the prebuilt Linden Lab packages cannot be verified from this
    tree. Patent-encumbered codecs (H.264, AAC) are a patent question, not a
    licence incompatibility.
-7. **Stale licence text files.** `indra/newview/licenses-{win32,linux,mac}.txt`
+5. **Stale licence text files.** `indra/newview/licenses-{win32,linux,mac}.txt`
    still carry the OpenSSL 1.x and SSLeay licence text (OpenSSL 3.5 is
    Apache-2.0) and credits for packages Vulkanstorm does not ship. Harmless,
    but the files should be regenerated from the package list.
+6. **SDL3 licence label.** `autobuild.xml` labels the SDL3 package "lgpl"; SDL3 is Zlib-licensed upstream. Either is compatible; check the package's licence file and fix the label.
 
-8. **SDL3 licence label.** `autobuild.xml` labels the SDL3 package "lgpl"; SDL3 is Zlib-licensed upstream. Either is compatible; check the package's licence file and fix the label.
+## Spelling dictionary: Russian
+
+The `dictionaries` package ships a `ru_RU` dictionary whose licence ("use,
+copy, redistribute granted; modifications only as patches; all other rights
+reserved") is not a free-software licence. It is replaced by the LibreOffice
+Russian dictionary (<https://github.com/LibreOffice/dictionaries>, `ru_RU/`,
+commit eff9495b70722d8e590e97b1710cfc7c00f6ce72 of 2024-07-28). It is the
+same dictionary (Alexander I. Lebedev's Russian ispell data, converted for
+Hunspell, plus a `TRY` line by Laszlo Nemeth) under a BSD-3-Clause-style
+licence with a clause that modified versions be clearly marked, which is
+GPL-3.0 compatible. The files are `indra/newview/dictionaries-ru/ru_ru.aff`
+and `ru_ru.dic` (the names the package uses; the `.aff` is UTF-8 where the
+old one was KOI8-R, which Hunspell reads from its `SET` line) with the
+licence text beside them. `viewer_manifest.py` copies them over the package's
+files, so the viewer loads the same names. The other dictionaries are LGPL,
+MPL/GPL/LGPL tri-licences or BSD (data).
 
 ## Source headers
 
 Linden Lab and Firestorm headers (`$LicenseInfo` with `license=viewerlgpl`
-and the like) are not changed (see finding 1).
+and the like) are not changed.
 
 Original Vulkanstorm files carry
 
