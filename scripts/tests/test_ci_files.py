@@ -23,16 +23,37 @@ import yaml
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 STEP_KEYS = {"name", "id", "if", "run", "shell", "env", "uses", "with", "working-directory", "continue-on-error"}
 
-BUILD_WORKFLOWS = ("build-windows.yaml", "build-linux.yaml", "build-linux-lts.yaml")
+# The build workflows are every .github/workflows/build-*.yaml (one per platform); the events
+# whose path filters must agree are the code-triggered ones they declare.
 FILTERED_EVENTS = ("pull_request", "push")
+SHOWN = 10  # differences listed in full before they are summarised
 # Build-ignored without being linted: documentation has nothing for ci-lint to check.
 DOC_ONLY_IGNORES = {"doc/**", "**/*.md"}
 
 
+def raw_triggers(workflow):
+    """The `on` value as written: a mapping, a name or a list (YAML reads a bare `on` as True)."""
+    return workflow.get(True, workflow.get("on"))
+
+
 def triggers_of(workflow):
-    """The `on` mapping of a workflow ({} when `on` is a name or a list, which carry no filters)."""
-    triggers = workflow.get(True, workflow.get("on"))  # YAML reads a bare `on` as True
-    return triggers if isinstance(triggers, dict) else {}
+    """The `on` mapping of a workflow; a name or a list becomes {event: None} (no filters)."""
+    triggers = raw_triggers(workflow)
+    if isinstance(triggers, dict):
+        return triggers
+    if isinstance(triggers, str):
+        return {triggers: None}
+    if isinstance(triggers, list):
+        return {str(event): None for event in triggers}
+    return {}
+
+
+def brief(patterns):
+    """A sorted pattern list, summarised beyond SHOWN entries."""
+    items = sorted(patterns)
+    if len(items) <= SHOWN:
+        return str(items)
+    return f"{items[:SHOWN]} and {len(items) - SHOWN} more"
 
 
 def pattern_list(value):
@@ -48,10 +69,10 @@ def check_path_lists(documents):
     workflows = {path.name: doc for path, doc in documents.items()
                  if path.parent.name == "workflows" and isinstance(doc, dict)}
     by_event = {event: {} for event in FILTERED_EVENTS}  # event -> {workflow: set of patterns}
-    for name in BUILD_WORKFLOWS:
-        if name not in workflows:
-            errors.append(f"{name}: build workflow missing")
-            continue
+    build_names = sorted(name for name in workflows if name.startswith("build-") and name.endswith(".yaml"))
+    if not build_names:
+        errors.append("no .github/workflows/build-*.yaml build workflows found")
+    for name in build_names:
         triggers = triggers_of(workflows[name])
         if "pull_request" not in triggers:
             errors.append(f"{name}: no pull_request trigger")
@@ -59,6 +80,9 @@ def check_path_lists(documents):
             if event not in triggers:
                 continue  # e.g. Build Linux LTS has no push trigger
             config = triggers[event]
+            if config is None and not isinstance(raw_triggers(workflows[name]), dict):
+                errors.append(f"{name}: {event} is a shorthand trigger; it must be a mapping to carry paths-ignore")
+                continue
             if not isinstance(config, dict) or "paths-ignore" not in config:
                 errors.append(f"{name}: {event} has no paths-ignore")
                 continue
@@ -74,7 +98,7 @@ def check_path_lists(documents):
             ignored |= patterns
             if patterns != reference:
                 errors.append(f"{name} {event}: paths-ignore differs from {reference_name} "
-                              f"(only here: {sorted(patterns - reference)}; missing: {sorted(reference - patterns)})")
+                              f"(only here: {brief(patterns - reference)}; missing: {brief(reference - patterns)})")
     lint_trigger = triggers_of(workflows.get("ci-lint.yaml", {})).get("pull_request")
     if not isinstance(lint_trigger, dict) or "paths" not in lint_trigger:
         errors.append("ci-lint.yaml: pull_request has no paths")
