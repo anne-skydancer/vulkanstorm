@@ -67,6 +67,13 @@ uniform vec3 cloud_color;
 
 uniform float cloud_scale;
 
+// <Vulkanstorm> dome parallax (stage L2 of the light study): the camera's world position over
+// 2 * dome radius * cloud_scale, so the clouds stay where they are when the camera moves and the
+// ground's cloud shadow reads the cloud that is seen over the sun (llcloudshadow.h). Zero when the
+// cloud shadows are off.
+uniform vec2 cloud_parallax;
+// </Vulkanstorm>
+
 // NOTE: Keep these in sync!
 //       indra\newview\app_settings\shaders\class1\deferred\skyV.glsl
 //       indra\newview\app_settings\shaders\class1\deferred\cloudsV.glsl
@@ -85,6 +92,7 @@ void main()
     vary_texcoord0.xy -= 0.5;
     vary_texcoord0.xy /= cloud_scale;
     vary_texcoord0.xy += 0.5;
+    vary_texcoord0.xy += cloud_parallax; // <Vulkanstorm/>
 
     vary_texcoord1 = vary_texcoord0;
     vary_texcoord1.x += lightnorm.x * 0.0125;

@@ -28,6 +28,7 @@
 #define LL_DRAWPOOLWLSKY_H
 
 #include "lldrawpool.h"
+#include "llsettingssky.h" // <Vulkanstorm/> bindCloudNoise
 
 class LLGLSLShader;
 
@@ -68,6 +69,15 @@ private:
 
     void renderSkyHazeDeferred(const LLVector3& camPosLocal, F32 camHeightLocal) const;
     void renderSkyCloudsDeferred(const LLVector3& camPosLocal, F32 camHeightLocal, LLGLSLShader* cloudshader) const;
+
+public:
+    // <Vulkanstorm> shared with the cloud shadow map (llcloudshadowmap.cpp): bind the cloud noise
+    // textures of the sky and set blend_factor and cloud_variance, exactly as the cloud pass does.
+    // Returns false when there is no cloud texture, so no clouds are drawn.
+    static bool bindCloudNoise(LLGLSLShader* shader, const LLSettingsSky::ptr_t& psky);
+    // true when an HDRI replaces the EEP sky (no clouds are drawn then)
+    static bool usesHDRISky();
+    // </Vulkanstorm>
 
     void renderStarsDeferred(const LLVector3& camPosLocal) const;
     void renderHeavenlyBodies();
