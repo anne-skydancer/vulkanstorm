@@ -47,13 +47,12 @@ jobs:
             "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
           echo "$ACTIONLINT_SHA256  $archive" | sha256sum -c -
           tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
-          # The workflows this repository maintains; stale.yaml is upstream's. Shell and Python inside steps are not linted here.
-          "$RUNNER_TEMP/actionlint" -color -shellcheck= -pyflakes= \
-            .github/workflows/build-windows.yaml .github/workflows/build-linux.yaml \
-            .github/workflows/build-linux-lts.yaml .github/workflows/ci-lint.yaml \
-            .github/workflows/promote-stable.yaml .github/workflows/check-pr.yaml \
-            .github/workflows/freebsd-image.yaml .github/workflows/label.yaml \
-            .github/workflows/codeql.yaml
+          # Every workflow in .github/workflows (.yaml or .yml) except stale.yaml, which is upstream's,
+          # so a new workflow is linted without being listed here. Shell and Python inside steps are
+          # not linted here.
+          mapfile -t workflows < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yaml' -o -name '*.yml' \) \
+            ! -name stale.yaml | sort)
+          "$RUNNER_TEMP/actionlint" -color -shellcheck= -pyflakes= "${workflows[@]}"
       - name: Publish and promote scripts
         run: node --test scripts/tests/ci_publish_latest.test.cjs scripts/tests/ci_promote_stable.test.cjs
       - name: linux-lts package list
