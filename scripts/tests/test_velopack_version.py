@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Verify both packagers preserve the requested dotted source-count schema."""
 from pathlib import Path

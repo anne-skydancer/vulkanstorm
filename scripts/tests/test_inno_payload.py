@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Check the installer payload against staged files, including excluded artifacts."""
 from pathlib import Path
@@ -39,10 +39,10 @@ class InnoPayloadTest(unittest.TestCase):
             self.assertEqual(manifest.missing, [])
             root = Path(directory)
             self.assertEqual(sorted(p.name for p in root.iterdir()),
-                             ['GPL-3.0-license.txt', 'LGPL-license.txt', 'LICENSE.txt'])
-            self.assertIn('Version 3, 29 June 2007', (root / 'GPL-3.0-license.txt').read_text())
-            self.assertIn('Version 2.1, February 1999', (root / 'LGPL-license.txt').read_text())
-            self.assertIn('LICENSE-GPL-3.0', (root / 'LICENSE.txt').read_text())
+                             ['LGPL-2.1-license.txt', 'LICENSE.txt', 'NOTICE.md'])
+            self.assertIn('Version 3, 29 June 2007', (root / 'LICENSE.txt').read_text())
+            self.assertIn('Version 2.1, February 1999', (root / 'LGPL-2.1-license.txt').read_text())
+            self.assertIn('GPL-3.0-or-later', (root / 'NOTICE.md').read_text(encoding='utf-8'))
 
 if __name__ == '__main__':
     unittest.main()

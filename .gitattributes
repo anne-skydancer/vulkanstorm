@@ -31,7 +31,6 @@
 *.output binary
 
 # Files with Windows line endings
-VivoxAUP.txt text eol=crlf
 FILES_ARE_UNICODE_UTF-16LE.txt text eol=crlf
 
 # Windows Manifest files
@@ -39,3 +38,6 @@ FILES_ARE_UNICODE_UTF-16LE.txt text eol=crlf
 
 # Windows Installer Script files (normalization disabled)
 *.nsi -text
+
+# The Russian dictionary (doc/licensing.md) is Hunspell data: no line-ending conversion
+indra/newview/dictionaries-ru/ru_ru.* binary
