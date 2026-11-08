@@ -17,7 +17,7 @@ Package differences:
 
 | Component | Licence | Status | Notes |
 |---|---|---|---|
-| vkstorm-ffi 0.5.2 (`vkstorm-core-rust`, static library) | `LGPL-2.1-only OR GPL-3.0-or-later` with BSD-2-Clause, BSD-3-Clause and Zlib parts | OK | Package 0.5.2 (`ffi-v0.5.2`) carries this expression in its metadata and licence file. The crates.io dependencies are audited in the Rust core section below |
+| vkstorm-ffi 0.5.3 (`vkstorm-core-rust`, static library) | `LGPL-2.1-only OR GPL-3.0-or-later` with BSD-2-Clause, BSD-3-Clause and Zlib parts | OK | Package 0.5.3 (`ffi-v0.5.3`) carries this expression in its metadata and licence file. The crates.io dependencies are audited in the Rust core section below |
 | FFmpeg 9.0.2, decoder-only shared libraries (libavcodec, libavutil, libswresample) | LGPL-2.1-or-later | OK | Built without GPL or non-free parts (`3p-ffmpeg`) |
 | SoLoud, vlc-speakerfill | | not on this line | The vkstorm-ffi audio engine replaces SoLoud |
 
