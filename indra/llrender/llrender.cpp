@@ -36,6 +36,7 @@
 #include "lltexture.h"
 #include "llshadermgr.h"
 #include "hbxxh.h"
+#include "llthread.h" // <Vulkanstorm/> on_main_thread()
 #include "glm/gtc/type_ptr.hpp"
 
 #if LL_WINDOWS
@@ -936,8 +937,14 @@ void LLRender::shutdown()
 {
     // <Vulkanstorm> release the UI immediate-mode buffer cache here, while the GL context
     // is current and before LLVertexBuffer::cleanupClass() deletes sVBOPool; otherwise the
-    // cached buffers are only destroyed in static destruction, after the context is gone
-    sVBCache.clear();
+    // cached buffers are only destroyed in static destruction, after the context is gone.
+    // Only on the main thread: the cache belongs to the main thread's drawing, and the GL
+    // worker threads (LLImageGLThread, LLGLWorkerThread) also call shutdown() when they end,
+    // which freed the cache under the main thread at login (use after free in flush()).
+    if (on_main_thread())
+    {
+        sVBCache.clear();
+    }
     // </Vulkanstorm>
     resetVertexBuffer();
 
