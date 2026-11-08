@@ -1510,7 +1510,12 @@ namespace
         {
             for (size_t i = 0; i < n; ++i) gInventory.fetchDescendentsOf(pool[next++]);
         };
-        mock_mode("delay_ms=3000\n");
+        // Replies leave the mock in the order of their ids (order_ms), not in
+        // thread-scheduling order: requests sent within a few ms of each
+        // other would otherwise be answered in either order, and a child
+        // folder whose reply is processed before its parent's is complete
+        // when the parent's reply lists it (no timer reset, no changed id).
+        mock_mode("delay_ms=3000\norder_ms=-4\n");
         r.step("held_replies");
         // Batch size 10: 9, 10 and 11 folders queued at once.
         for (size_t n : { (size_t)9, (size_t)10, (size_t)11 })

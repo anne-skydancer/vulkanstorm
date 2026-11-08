@@ -75,6 +75,8 @@
 #include "lltemplatemessagebuilder.h"
 #include "lltemplatemessagereader.h"
 #include "message.h"
+#include "lltransfermanager.h"
+#include <cstdlib>
 
 #include "llinventorymodel_parity_stubs.h"
 
@@ -325,6 +327,13 @@ namespace vks_inv
         LLCore::HttpRequest::createService();
         // The real message system on the real template; no circuits are used.
         start_messaging_system(template_file, 0, 1, 0, 0, false, "notasharedsecret", NULL, false, 5.f, 100.f);
+        // start_messaging_system() started the transfer manager. The viewer
+        // cleans it up at exit (llappviewer.cpp); ~LLTransferManager asserts
+        // it was, and without this it aborts the process (0xC0000409 on
+        // Windows) after the tests have passed. atexit handlers registered
+        // now run before the static gTransferManager is destroyed.
+        static bool transfer_cleanup_registered = (std::atexit([] { gTransferManager.cleanup(); }), true);
+        (void)transfer_cleanup_registered;
 
         // Settings the sources read, at their app_settings defaults.
         gSavedSettings.declareU32("InventoryTrashMaxCapacity", 5000, "", LLControlVariable::PERSIST_NO);
