@@ -105,7 +105,5 @@ LangString DeleteDocumentAndSettingsDP ${LANG_GERMAN} 'Dateien unterhalb von "Do
 LangString UnChatlogsNoticeMB ${LANG_GERMAN} "Diese Deinstallation löscht NICHT die Firestorm-Chatprotokolle und andere private Dateien. Sollen diese gelöscht werden, muss das Firestorm-Verzeichnis im Anwendungsdaten-Verzeichnis manuell gelöscht werden."
 LangString UnRemovePasswordsDP ${LANG_GERMAN} "Lösche gespeicherte Firestorm-Passwörter."
 
-LangString MUI_TEXT_LICENSE_TITLE ${LANG_GERMAN} "VivoxVoice System Lizenz-Vereinbarung"
-LangString MUI_TEXT_LICENSE_SUBTITLE ${LANG_GERMAN} "Zusätzliche Lizenz-Vereinbarung für die Vivox-Voice-System-Komponenten."
 LangString MUI_INNERTEXT_LICENSE_TOP ${LANG_GERMAN} "Bitte lesen Sie die folgende Lizenz-Vereinbarung aufmerksam durch, bevor Sie mit der Installation fortfahren:"
 LangString MUI_INNERTEXT_LICENSE_BOTTOM ${LANG_GERMAN} "Sie müssen den Lizenzbestimmungen zustimmen, um mit der Installation fortfahren zu können."

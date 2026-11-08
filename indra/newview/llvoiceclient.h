@@ -288,11 +288,6 @@ public:
     virtual void removeObserver(LLVoiceClientParticipantObserver* observer)=0;
     //@}
 
-    // <FS:TJ> Keep Vivox only for OpenSim viewers
-#ifdef OPENSIM
-    virtual std::string sipURIFromID(const LLUUID &id) const=0;
-#endif
-    // </FS:TJ>
     virtual LLSD getP2PChannelInfoTemplate(const LLUUID& id) const=0;
     //@}
 
@@ -530,11 +525,6 @@ public:
     static void addObserver(LLVoiceClientParticipantObserver* observer);
     static void removeObserver(LLVoiceClientParticipantObserver* observer);
 
-    // <FS:TJ> Keep Vivox only for OpenSim viewers
-#ifdef OPENSIM
-    std::string sipURIFromID(const LLUUID &id) const;
-#endif
-    // </FS:TJ>
     LLSD getP2PChannelInfoTemplate(const LLUUID& id) const;
 
     //////////////////////////
