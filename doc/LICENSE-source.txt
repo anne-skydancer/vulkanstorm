@@ -1,14 +1,12 @@
 Vulkanstorm
 ===========
-Vulkanstorm is offered under the GNU Lesser General Public License,
-version 2.1, or, at your choice, the GNU General Public License, version 3
-or any later version. Code from Linden Lab and the Phoenix Firestorm
-Project is under LGPL-2.1-only OR GPL-3.0-or-later (section 3 of LGPL-2.1
-allows the GPL option); original Vulkanstorm code is under
-LGPL-2.1-or-later OR GPL-3.0-or-later. See LICENSE, NOTICE.md,
-LICENSE-LGPL-2.1 and LICENSE-GPL-3.0 at the top of the source tree, and
-doc/licensing.md. The Linden Lab terms below continue to apply to Linden
-Lab's code.
+Vulkanstorm is licensed under the GNU General Public License, version 3 or
+any later version (GPL-3.0-or-later). Code from Linden Lab and the Phoenix
+Firestorm Project stays LGPL-2.1, with its file headers unchanged, and is
+combined into Vulkanstorm, which as a whole is GPL-3.0-or-later (LGPL-2.1 is
+compatible with inclusion in a GPL-3.0 work). See LICENSE (the GPL-3.0 text), NOTICE.md and
+LICENSE-LGPL-2.1 at the top of the source tree, and doc/licensing.md. The
+Linden Lab terms below continue to describe Linden Lab's code.
 
 Source code
 ========
@@ -18,7 +16,7 @@ code in this distribution ("Source Code") is provided by Linden Lab to
 you under the terms of the GNU Lesser General Public License, version 2.1
 ("LGPL"), unless you have obtained a separate licensing agreement
 ("Other License"), formally executed by you and Linden Lab.  Terms of
-the GPL can be found in doc/LGPL-license.txt in this distribution, or
+the LGPL can be found in LICENSE-LGPL-2.1 in this distribution, or
 online at 
 
 https://wiki.secondlife.com/wiki/Linden_Lab_Official:GNU_Lesser_General_Public_License,_version_2.1

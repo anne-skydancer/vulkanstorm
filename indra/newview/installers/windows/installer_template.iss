@@ -1,7 +1,7 @@
 ; Vulkanstorm viewer installer (Inno Setup 7)
 ; Replaces the legacy NSIS installer for the VulkanStorm build.
 ;
-; SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+; SPDX-License-Identifier: GPL-3.0-or-later
 ; Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 ;
 ; This script is preprocessed by viewer_manifest.py before ISCC is invoked.
@@ -51,7 +51,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=6.1sp1
 ; Show the licence page before anything else: a short explanation of the
-; dual licence followed by the LGPL-2.1 and GPL-3.0 texts (licence_texts.py).
+; licence followed by the GPL-3.0 text (licence_texts.py).
 LicenseFile={#LicenseFile}
 ; OutputBaseFilename must NOT carry .exe (ISCC appends it). The manifest
 ; passes InstallerOut = <base>_Setup so the result is <base>_Setup.exe.

@@ -50,9 +50,9 @@ larger rungs.
   parts of `lib.rs` in `j2c.rs` and `llsd.rs`).
 - Required Release configuration for this track: Inno Setup as the installer,
   AVX2, OpenJPEG, no OpenSim, LTO, WebRTC voice. Release builds have WebRTC
-  voice only: Vivox is compiled only in OpenSim builds, as upstream Firestorm
-  does since 7.2.5 (`<FS:TJ> Keep Vivox only for OpenSim viewers` in
-  `llvoiceclient.cpp`, and the CMake `if (OPENSIM)`). This line keeps
+  voice only: Vivox was compiled only in OpenSim builds, as upstream Firestorm
+  does since 7.2.5, and was removed entirely on 2026-11-08 (proprietary SDK,
+  not distributable with a GPL-3.0 viewer; OpenSim voice uses WebRTC). This line keeps
   `vkstorm-release`'s build defaults except where a rung has replaced a part
   (for example `USE_VKS_AUDIO` instead of SoLoud, and the `vkstorm-ffi`
   package). CI's Release configure in `build.yaml` already matches.

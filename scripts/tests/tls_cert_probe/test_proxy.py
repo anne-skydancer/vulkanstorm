@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Minimal local proxies for the TLS qualification: an HTTP proxy (CONNECT
 tunnels and absolute-URI GET/POST) and a SOCKS5 proxy (no authentication,

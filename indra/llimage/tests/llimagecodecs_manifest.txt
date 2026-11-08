@@ -7,7 +7,6 @@
 8d775298 573 219 3 33393 html/unabletoconnect.png
 91144b03 364 96 4 10209 textures/3p_icons/fmod_logo.png
 70f3ebe8 342 113 4 32434 textures/3p_icons/havok_logo.png
-2567c85c 108 41 4 2208 textures/3p_icons/vivox_logo.png
 93571a9a 32 16 4 0 textures/active_speakers.tga
 0fb64abd 256 1 1 0 textures/alpha_gradient.tga
 ff438a41 16 16 4 0 textures/arrow_down.tga

@@ -489,16 +489,18 @@ void LLProgressView::initLogos()
 {
     mLogosList.clear();
 
-    const U8 image_codec = IMG_CODEC_PNG;
-    const LLRectf default_clip(0.f, 1.f, 1.f, 0.f);
-    const S32 default_height = 28;
-    const S32 default_pad = 15;
+    [[maybe_unused]] const U8 image_codec = IMG_CODEC_PNG;
+    [[maybe_unused]] const LLRectf default_clip(0.f, 1.f, 1.f, 0.f);
+    [[maybe_unused]] const S32 default_height = 28;
+    [[maybe_unused]] const S32 default_pad = 15;
 
-    S32 icon_width, icon_height;
+    // only the optional (FMOD, Havok) logos use these
+    [[maybe_unused]] S32 icon_width;
+    [[maybe_unused]] S32 icon_height;
 
     // We don't know final screen rect yet, so we can't precalculate position fully
-    S32 texture_start_x = (S32)mLogosLabel->getFont()->getWidthF32(mLogosLabel->getWText().c_str()) + default_pad;
-    S32 texture_start_y = -7;
+    [[maybe_unused]] S32 texture_start_x = (S32)mLogosLabel->getFont()->getWidthF32(mLogosLabel->getWText().c_str()) + default_pad;
+    [[maybe_unused]] S32 texture_start_y = -7;
 
     // Normally we would just preload these textures from textures.xml,
     // and display them via icon control, but they are only needed on
@@ -537,15 +539,6 @@ void LLProgressView::initLogos()
 
     texture_start_x += icon_width + default_pad;
 #endif //LL_HAVOK
-
-    // 108x41
-    icon_width = 74;
-    icon_height = default_height;
-    loadLogo(temp_str + "vivox_logo.png",
-        image_codec,
-        LLRect(texture_start_x, texture_start_y + icon_height, texture_start_x + icon_width, texture_start_y),
-        default_clip,
-        default_clip);
 }
 
 void LLProgressView::initStartTexture(S32 location_id, bool is_in_production)
