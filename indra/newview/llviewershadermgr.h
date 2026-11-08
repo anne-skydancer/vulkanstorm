@@ -273,6 +273,7 @@ extern LLGLSLShader         gNoPostTonemapLegacyGammaCorrectProgram;
 extern LLGLSLShader         gExposureProgram;
 extern LLGLSLShader         gExposureProgramNoFade;
 extern LLGLSLShader         gLuminanceProgram;
+extern LLGLSLShader         gCloudShadowMapProgram; // <Vulkanstorm/> stage L2
 extern LLGLSLShader         gDeferredAvatarShadowProgram;
 extern LLGLSLShader         gDeferredAvatarAlphaShadowProgram;
 extern LLGLSLShader         gDeferredAvatarAlphaMaskShadowProgram;
