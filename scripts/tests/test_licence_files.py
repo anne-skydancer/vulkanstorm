@@ -90,6 +90,16 @@ class RussianDictionaryTest(unittest.TestCase):
         self.assertIn('app_settings/dictionaries/ru_ru.dic', manifest)
 
 
+def read_text_any(path):
+    """A text file in UTF-8, UTF-8 with BOM, or UTF-16 with BOM."""
+    data = path.read_bytes()
+    if data[:2] in (b'\xff\xfe', b'\xfe\xff'):
+        return data.decode('utf-16')
+    if data[:3] == b'\xef\xbb\xbf':
+        data = data[3:]
+    return data.decode('utf-8', errors='replace')
+
+
 class VivoxRemovedTest(unittest.TestCase):
     """Vivox (SLVoice) is proprietary and cannot ship with a GPL-3.0 viewer."""
 
@@ -104,10 +114,18 @@ class VivoxRemovedTest(unittest.TestCase):
                      'indra/newview/viewer_manifest.py', 'indra/newview/llvoiceclient.cpp',
                      'indra/newview/llvoiceclient.h', 'indra/newview/app_settings/settings.xml',
                      'indra/newview/installers/windows/installer_template.nsi'):
-            text = (ROOT / name).read_text(encoding='utf-8', errors='replace').lower()
+            text = read_text_any(ROOT / name).lower()
             with self.subTest(file=name):
                 self.assertNotIn('vivox', text)
                 self.assertNotIn('slvoice.exe', text)
+
+    def test_no_vivox_in_installer_files(self):
+        # Every NSIS/Inno file of the Windows installers, decoded by its own encoding
+        # (the NSIS files are UTF-16 with a byte-order mark).
+        inst = ROOT / 'indra/newview/installers/windows'
+        for path in sorted(list(inst.glob('*.nsi')) + list(inst.glob('*.iss'))):
+            with self.subTest(file=path.name):
+                self.assertNotIn('vivox', read_text_any(path).lower())
 
     def test_no_slvoice_settings(self):
         text = (ROOT / 'indra/newview/app_settings/settings.xml').read_text(encoding='utf-8')
