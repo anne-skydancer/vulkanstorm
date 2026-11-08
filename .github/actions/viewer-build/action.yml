@@ -209,19 +209,34 @@ runs:
           printf '%s\n' "$LL_BUILD"
           echo 'VKSTORM_LL_BUILD'
         } >> "$GITHUB_ENV"
-        cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
-          -DCMAKE_BUILD_TYPE:STRING="$VIEWER_BUILD_TYPE" -DADDRESS_SIZE:STRING=64 \
-          -DPACKAGE:BOOL="$VIEWER_PACKAGE" \
-          -DVIEWER_CHANNEL:STRING=Vulkanstorm-Release -DROOT_PROJECT_NAME:STRING=Firestorm \
-          -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
-          -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
-          -DUSE_KDU:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
-          -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF \
-          -DUSE_AVX2_OPTIMIZATION:BOOL=ON -DUSE_AVX_OPTIMIZATION:BOOL=OFF -DUSE_LTO:BOOL=ON \
-          -DUSE_PRECOMPILED_HEADERS:BOOL=ON -DUSE_DISCORD:BOOL=OFF -DUSE_BUGSPLAT:BOOL=OFF \
-          -DUSE_TRACY:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF \
-          -DLL_TESTS:BOOL=OFF -DRELEASE_CRASH_REPORTING:BOOL=OFF \
-          -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
+        # The configure downloads the prebuilt packages. A transient GitHub server error
+        # (HTTP 5xx) is retried after 30 s and 90 s; packages already fetched stay in the
+        # cache. Any other configure failure stops at once.
+        configure() {
+          cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
+            -DCMAKE_BUILD_TYPE:STRING="$VIEWER_BUILD_TYPE" -DADDRESS_SIZE:STRING=64 \
+            -DPACKAGE:BOOL="$VIEWER_PACKAGE" \
+            -DVIEWER_CHANNEL:STRING=Vulkanstorm-Release -DROOT_PROJECT_NAME:STRING=Firestorm \
+            -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
+            -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
+            -DUSE_KDU:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
+            -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF \
+            -DUSE_AVX2_OPTIMIZATION:BOOL=ON -DUSE_AVX_OPTIMIZATION:BOOL=OFF -DUSE_LTO:BOOL=ON \
+            -DUSE_PRECOMPILED_HEADERS:BOOL=ON -DUSE_DISCORD:BOOL=OFF -DUSE_BUGSPLAT:BOOL=OFF \
+            -DUSE_TRACY:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF \
+            -DLL_TESTS:BOOL=OFF -DRELEASE_CRASH_REPORTING:BOOL=OFF \
+            -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
+        }
+        for delay in 0 30 90; do
+          sleep "$delay"
+          if configure 2>&1 | tee "$RUNNER_TEMP/configure.log"; then
+            break
+          fi
+          if [[ "$delay" == 90 ]] || ! grep -qE 'HTTP Error 5[0-9][0-9]|returned error: 5[0-9][0-9]|Gateway Time-?out' "$RUNNER_TEMP/configure.log"; then
+            exit 1
+          fi
+          echo "::warning::a package download hit a server error; retrying the configure"
+        done
         if [[ "$VIEWER_BUILD_TYPE" == Release ]]; then
           python scripts/ci_release_config.py "$BUILD_DIRECTORY/CMakeCache.txt" "$RUNNER_OS"
         fi
