@@ -1667,6 +1667,10 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("night_sky_cells");
     mReservedUniforms.push_back("night_sky_stars");
     mReservedUniforms.push_back("night_sky_milky_way");
+    // <Vulkanstorm> the cloud transmittance map and its lookup
+    mReservedUniforms.push_back("cloud_shadow_map");
+    mReservedUniforms.push_back("cloud_shadow_mat");
+    mReservedUniforms.push_back("cloud_shadow_params");
     // </Vulkanstorm>
 
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);

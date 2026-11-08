@@ -1444,6 +1444,7 @@ void LLPipeline::releaseLUTBuffers()
     mPbrBrdfLut.release();
 
     mExposureMap.release();
+    mCloudShadowMap.cleanup(); // <Vulkanstorm/>
     mLuminanceMap.release();
     mLastExposure.release();
 
@@ -9803,6 +9804,7 @@ void LLPipeline::bindDeferredShaderFast(LLGLSLShader& shader)
         shader.bind();
         bindLightFunc(shader);
         bindShadowMaps(shader);
+        bindCloudShadow(shader); // <Vulkanstorm/>
         bindReflectionProbes(shader);
     }
     else
@@ -9909,6 +9911,7 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
     stop_glerror();
 
     bindShadowMaps(shader);
+    bindCloudShadow(shader); // <Vulkanstorm/> stage L2
 
     stop_glerror();
 
@@ -10073,6 +10076,8 @@ void LLPipeline::renderDeferredLighting()
     }
 
     llassert(!sRenderingHUDs);
+
+    mCloudShadowMap.update(); // <Vulkanstorm/> stage L2: once a frame, 0 with no clouds
 
     F32 light_scale = 1.f;
 

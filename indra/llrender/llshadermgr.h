@@ -384,6 +384,11 @@ public:
         NIGHT_SKY_CELLS,                    //  "night_sky_cells"
         NIGHT_SKY_STARS,                    //  "night_sky_stars"
         NIGHT_SKY_MILKY_WAY,                //  "night_sky_milky_way"
+        // <Vulkanstorm> cloud shadows (windlight/atmosphericsFuncs.glsl, deferred/cloudShadowMapF.glsl)
+        CLOUD_SHADOW_MAP,                   //  "cloud_shadow_map"
+        CLOUD_SHADOW_MAT,                   //  "cloud_shadow_mat"
+        CLOUD_SHADOW_PARAMS,                //  "cloud_shadow_params"
+        // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
     // clang-format on
