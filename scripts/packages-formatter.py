@@ -131,8 +131,8 @@ print(viewer_copyright)
 print("Vulkanstorm is free software: you may use, modify and distribute it under "
       "the GNU General Public License, version 3 or any later version (LICENSE.txt "
       "beside the viewer). Linden Lab and Firestorm code is licensed by them under "
-      "LGPL-2.1 only and is used here under the GPL, as section 3 of that licence "
-      "allows (LGPL-2.1-license.txt and NOTICE.md beside the viewer). The components "
+      "LGPL-2.1 with its headers unchanged and is combined into Vulkanstorm, which as "
+      "a whole is GPL-3.0-or-later (LGPL-2.1-license.txt and NOTICE.md beside the viewer). The components "
       "below keep their own licences.")
 print()
 # </Vulkanstorm>

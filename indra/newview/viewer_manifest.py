@@ -91,6 +91,14 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         self.path('luau.txt', 'licenses/luau.txt')
         with self.prefix(src=pkgdir, dst="app_settings"):
             self.path("dictionaries")
+        # <Vulkanstorm> The package's ru_RU dictionary is not under a free licence
+        # (doc/licensing.md, "Spelling dictionary: Russian"); the LibreOffice one
+        # replaces it under the same file names, with its licence text.
+        with self.prefix(src="dictionaries-ru"):
+            self.path("ru_ru.aff", dst="app_settings/dictionaries/ru_ru.aff")
+            self.path("ru_ru.dic", dst="app_settings/dictionaries/ru_ru.dic")
+            self.path("LICENSE-ru_ru.txt", dst="licenses/ru_ru-dictionary-license.txt")
+        # </Vulkanstorm>
 
         # <FS:Ansariel> Copy 360 snapshot JavaScripts
         with self.prefix(src=pkgdir, dst="skins/default/html/common/equirectangular"):
