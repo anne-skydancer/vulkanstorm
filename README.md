@@ -12,7 +12,7 @@ Firestorm is a third party viewer derived from the official [Second Life](https:
 
 Vulkanstorm is licensed under the [GNU General Public License, version 3 or (at your option) any later version](LICENSE) (`GPL-3.0-or-later`).
 
-- Code from Linden Lab and Firestorm, and Rust ports of it: released by them under LGPL-2.1 only, and used here under the ordinary GPL as section 3 of LGPL-2.1 allows. Their file headers are kept unchanged ([LICENSE-LGPL-2.1](LICENSE-LGPL-2.1) is the text they refer to).
+- Code from Linden Lab and Firestorm, and Rust ports of it: stays LGPL-2.1, with its headers unchanged ([LICENSE-LGPL-2.1](LICENSE-LGPL-2.1) is the text they refer to), and is combined into Vulkanstorm, which as a whole is licensed GPL-3.0-or-later (LGPL-2.1 is compatible with inclusion in a GPL-3.0 work).
 - Original Vulkanstorm code: `GPL-3.0-or-later`.
 - Third-party components keep their own licences, all compatible with GPL-3.0.
 

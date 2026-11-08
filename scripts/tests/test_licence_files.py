@@ -46,7 +46,7 @@ class LicenceTextsTest(unittest.TestCase):
 
     def test_notice_states_gpl3_and_section_3(self):
         text = (ROOT / 'NOTICE.md').read_text(encoding='utf-8')
-        for needle in ('GPL-3.0-or-later', 'section 3 of LGPL-2.1', 'LICENSE-LGPL-2.1'):
+        for needle in ('GPL-3.0-or-later', 'LGPL-2.1 is compatible with inclusion in a GPL-3.0 work', 'LICENSE-LGPL-2.1'):
             self.assertIn(needle, text)
 
     def test_shipped_texts_exist(self):
@@ -74,6 +74,20 @@ class LicenceTextsTest(unittest.TestCase):
         self.assertTrue(text.startswith(INSTALLER_LICENCE_HEADER))
         self.assertIn(gpl.strip('\n'), text)
         self.assertNotIn('GNU LESSER GENERAL PUBLIC LICENSE', text)
+
+
+class RussianDictionaryTest(unittest.TestCase):
+    """The package's ru_RU dictionary is not freely licensed; the LibreOffice one replaces it."""
+
+    def test_replacement_files_and_licence(self):
+        folder = NEWVIEW / 'dictionaries-ru'
+        self.assertTrue((folder / 'ru_ru.dic').stat().st_size > 1000000)
+        self.assertTrue((folder / 'ru_ru.aff').read_bytes().startswith(b'SET UTF-8'))
+        text = (folder / 'LICENSE-ru_ru.txt').read_text(encoding='utf-8')
+        self.assertIn('Redistribution and use in source and binary forms', text)
+        self.assertNotIn('modifications in patch form', text)
+        manifest = (NEWVIEW / 'viewer_manifest.py').read_text(encoding='utf-8')
+        self.assertIn('app_settings/dictionaries/ru_ru.dic', manifest)
 
 
 class VivoxRemovedTest(unittest.TestCase):

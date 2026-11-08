@@ -21,11 +21,11 @@ INSTALLER_LICENCE_HEADER = """\
 Vulkanstorm is free software, licensed under the GNU General Public License,
 version 3 or (at your option) any later version (the text below).
 
-Linden Lab and the Phoenix Firestorm Project license their code under the
-GNU Lesser General Public License, version 2.1 only; Vulkanstorm uses that
-code under the ordinary GNU GPL as section 3 of LGPL-2.1 allows, and keeps
-their file headers unchanged (LGPL-2.1-license.txt and NOTICE.md beside the
-viewer). Third-party components keep their own licences: see licenses.txt
+Linden Lab and the Phoenix Firestorm Project code stays under the GNU Lesser
+General Public License, version 2.1, with its file headers unchanged
+(LGPL-2.1-license.txt and NOTICE.md beside the viewer), and is combined into
+Vulkanstorm, which as a whole is licensed GPL-3.0-or-later (LGPL-2.1 is
+compatible with inclusion in a GPL-3.0 work). Third-party components keep their own licences: see licenses.txt
 and the licenses folder after installation.
 
 The licence does not limit running the program; it sets the terms for
