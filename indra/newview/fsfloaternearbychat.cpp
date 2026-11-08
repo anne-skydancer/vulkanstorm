@@ -280,8 +280,8 @@ static std::string appendTime()
 void FSFloaterNearbyChat::addMessage(const LLChat& chat,bool archive,const LLSD &args)
 {
     LLChat& tmp_chat = const_cast<LLChat&>(chat);
-    static LLCachedControl<bool> use_plain_text_chat_history(gSavedSettings, "PlainTextChatHistory");
-    static LLCachedControl<bool> show_timestamps_nearby_chat(gSavedSettings, "FSShowTimestampsNearbyChat");
+    bool use_plain_text_chat_history = gSavedSettings.getBOOL("PlainTextChatHistory");
+    bool show_timestamps_nearby_chat = gSavedSettings.getBOOL("FSShowTimestampsNearbyChat");
     // [FIRE-1641 : SJ]: Option to hide timestamps in nearby chat - add Timestamp when show_timestamps_nearby_chat is true
     if (show_timestamps_nearby_chat)
     {

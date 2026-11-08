@@ -285,26 +285,6 @@ void LLPanelTopInfoBar::updateParcelInfoText()
 
     if (show_coords)
     {
-        // only rebuild the string when something it contains can have
-        // changed (agent position, region or parcel), not every frame
-        static LLVector3 last_pos;
-        static U64 last_region_handle = 0;
-        static LLUUID last_parcel_id;
-
-        LLViewerRegion* region = gAgent.getRegion();
-        LLParcel* parcel = LLViewerParcelMgr::getInstance()->getAgentParcel();
-        LLVector3 pos = gAgent.getPositionAgent();
-        U64 region_handle = region ? region->getHandle() : 0;
-        LLUUID parcel_id = parcel ? parcel->getID() : LLUUID::null;
-
-        if (pos == last_pos && region_handle == last_region_handle && parcel_id == last_parcel_id)
-        {
-            return;
-        }
-        last_pos = pos;
-        last_region_handle = region_handle;
-        last_parcel_id = parcel_id;
-
         std::string new_text;
 
         buildLocationString(new_text, show_coords);

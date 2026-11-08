@@ -2828,9 +2828,26 @@ void LLPipeline::doOcclusion(LLCamera& camera)
 
         gGL.setColorMask(true, true);
     }
-    // <Vulkanstorm> the second probe-occlusion block that used to follow here
-    // was a verbatim duplicate of the one above (same gate, same hero-probe
-    // call); it issued every hero-probe occlusion query twice per frame.
+
+    if (sReflectionProbesEnabled && sUseOcclusion > 1 && !LLPipeline::sShadowRender && !gCubeSnapshot)
+    {
+        gGL.setColorMask(false, false);
+        LLGLDepthTest depth(GL_TRUE, GL_FALSE);
+        LLGLDisable cull(GL_CULL_FACE);
+
+        gOcclusionCubeProgram.bind();
+
+        if (mCubeVB.isNull())
+        { //cube VB will be used for issuing occlusion queries
+            mCubeVB = ll_create_cube_vb(LLVertexBuffer::MAP_VERTEX);
+        }
+        mCubeVB->setBuffer();
+
+        mHeroProbeManager.doOcclusion();
+        gOcclusionCubeProgram.unbind();
+
+        gGL.setColorMask(true, true);
+    }
 
     if (LLPipeline::sUseOcclusion > 1 &&
         (sCull->hasOcclusionGroups() || LLVOCachePartition::sNeedsOcclusionCheck))
@@ -2999,10 +3016,7 @@ void LLPipeline::rebuildPriorityGroups()
         group->clearState(LLSpatialGroup::IN_BUILD_Q1);
     }
 
-    // move, not copy: the save buffer keeps the refs alive until it is safe
-    // to unref (cleared later this frame), and mGroupQ1 is refilled from
-    // scratch afterwards, so no per-frame copy is needed
-    mGroupSaveQ1 = std::move(mGroupQ1);
+    mGroupSaveQ1 = mGroupQ1;
     mGroupQ1.clear();
     mGroupQ1Locked = false;
 
@@ -3541,8 +3555,7 @@ void LLPipeline::stateSort(LLDrawable* drawablep, LLCamera& camera)
                 }
                 else
                 {
-                    // one pool-less face must not abort the remaining faces
-                    continue;
+                    break;
                 }
             }
         }
@@ -11043,9 +11056,8 @@ bool LLPipeline::getVisiblePointCloud(LLCamera& camera, LLVector3& min, LLVector
         LLPlane(max, LLVector3(0,1,0)),
         LLPlane(max, LLVector3(0,0,1))};
 
-    //potential points (scratch member, cleared per call)
-    std::vector<LLVector3>& pp = mShadowPointScratch;
-    pp.clear();
+    //potential points
+    std::vector<LLVector3> pp;
 
     //add corners of AABB
     pp.push_back(LLVector3(min.mV[0], min.mV[1], min.mV[2]));
@@ -11396,8 +11408,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     F32 near_clip = 0.f;
     {
         //get visible point cloud
-        std::vector<LLVector3>& fp = mShadowFrustScratch;
-        fp.clear();
+        std::vector<LLVector3> fp;
 
         main_camera.calcAgentFrustumPlanes(main_camera.mAgentFrustum);
 
@@ -11537,8 +11548,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                 mShadowCamera[j] = shadow_cam;
             }
 
-            std::vector<LLVector3>& fp = mShadowFrustScratch;
-            fp.clear();
+            std::vector<LLVector3> fp;
 
             if (!gPipeline.getVisiblePointCloud(shadow_cam, min, max, fp, lightDir)
                 || j > RenderShadowSplits)
@@ -11578,8 +11588,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             //get a temporary view projection
             view[j] = look(camera.getOrigin(), lightDir, -up);
 
-            std::vector<LLVector3>& wpf = mShadowWorldScratch;
-            wpf.clear();
+            std::vector<LLVector3> wpf;
 
             for (U32 i = 0; i < fp.size(); i++)
             {
