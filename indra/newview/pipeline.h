@@ -39,6 +39,7 @@
 #include "lldrawable.h"
 #include "llrendertarget.h"
 #include "llreflectionmapmanager.h"
+#include "llcloudshadowmap.h" // <Vulkanstorm/>
 #include "llheroprobemanager.h"
 
 #include <stack>
@@ -315,6 +316,10 @@ public:
     // bind shadow maps
     // if setup is true, wil lset texture compare mode function and filtering options
     void bindShadowMaps(LLGLSLShader& shader);
+    // <Vulkanstorm> stage L2: the cloud transmittance map (llcloudshadowmap.h)
+    void bindCloudShadow(LLGLSLShader& shader) { mCloudShadowMap.bind(shader); }
+    LLCloudShadowMap mCloudShadowMap;
+    // </Vulkanstorm>
     void bindShadowDepthFetch(LLGLSLShader& shader, bool bind); // <Vulkanstorm/> PCSS raw depth units
     void bindDeferredShaderFast(LLGLSLShader& shader);
     void bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_target = nullptr, LLRenderTarget* depth_target = nullptr);

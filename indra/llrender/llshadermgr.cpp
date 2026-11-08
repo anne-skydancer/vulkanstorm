@@ -1620,6 +1620,12 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("alpha_st_resolved");
     // </Vulkanstorm>
 
+    // <Vulkanstorm> the cloud transmittance map and its lookup
+    mReservedUniforms.push_back("cloud_shadow_map");
+    mReservedUniforms.push_back("cloud_shadow_mat");
+    mReservedUniforms.push_back("cloud_shadow_params");
+    // </Vulkanstorm>
+
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);
 
     std::set<std::string> dupe_check;
