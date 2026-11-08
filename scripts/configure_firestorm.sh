@@ -343,6 +343,9 @@ if [ ! -d `dirname "$LOG"` ] ; then
         mkdir -p `dirname "$LOG"`
 fi
 
+# Visual Studio 2026; autobuild.xml and build.sh use the same default.
+DEFAULT_AUTOBUILD_VSVER=180
+
 echo -e "configure_firestorm.sh" > "$LOG"
 echo -e "       PLATFORM: $TARGET_PLATFORM"                                    | tee -a "$LOG"
 echo -e "            KDU: `b2a $WANTS_KDU`"                                    | tee -a "$LOG"
@@ -387,7 +390,7 @@ then
     if [ -z "${AUTOBUILD_VSVER}" ]
     then
         echo "AUTOBUILD_VSVER not set, this can lead to Autobuild picking a higher VS version than desired."
-        echo "If you see this happen you should set the variable to e.g. 150 for Visual Studio 2017."
+        echo "If you see this happen you should set the variable to e.g. 180 for Visual Studio 2026."
     fi
 
     echo "Setting environment variables for Visual Studio..."
@@ -447,8 +450,8 @@ if [ \( $WANTS_CLEAN -eq $TRUE \) -a \( $WANTS_BUILD -eq $FALSE \) ] ; then
         fi
 
     elif [ $TARGET_PLATFORM == "windows" ] ; then
-        rm -rf build-vc${AUTOBUILD_VSVER:-150}-${AUTOBUILD_ADDRSIZE}
-        mkdir -p build-vc${AUTOBUILD_VSVER:-150}-${AUTOBUILD_ADDRSIZE}/logs
+        rm -rf build-vc${AUTOBUILD_VSVER:-$DEFAULT_AUTOBUILD_VSVER}-${AUTOBUILD_ADDRSIZE}
+        mkdir -p build-vc${AUTOBUILD_VSVER:-$DEFAULT_AUTOBUILD_VSVER}-${AUTOBUILD_ADDRSIZE}/logs
 
     elif [ $TARGET_PLATFORM == "linux" ] ; then
         if [ "${AUTOBUILD_ADDRSIZE}" == "64" ]
