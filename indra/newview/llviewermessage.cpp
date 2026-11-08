@@ -4742,9 +4742,7 @@ void process_kill_object(LLMessageSystem *mesgsys, void **user_data)
                     reason = "timer";
                     gFSRefreshAttachmentsTimer.triggerRefresh();
                 }
-                // regionp can be NULL if the sender host matches no known region
-                std::string region_name = regionp ? regionp->getName() : std::string("unknown region");
-                std::string message = "Region \"" + region_name + "\" tried to kill attachment: " + objectp->getAttachmentItemName() + " (" + reason + ") - Agent region: \"" + gAgent.getRegion()->getName() + "\"";
+                std::string message = "Region \"" + regionp->getName() + "\" tried to kill attachment: " + objectp->getAttachmentItemName() + " (" + reason + ") - Agent region: \"" + gAgent.getRegion()->getName() + "\"";
                 LL_WARNS("Messaging") << message << LL_ENDL;
 
                 if (gSavedSettings.getBOOL("FSExperimentalLostAttachmentsFixReport"))
