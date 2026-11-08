@@ -1,135 +1,107 @@
 # Licensing: compatibility audit and source headers
 
-This document backs [`NOTICE.md`](../NOTICE.md). Vulkanstorm is offered under
-`LGPL-2.1-only OR GPL-3.0-or-later` (Linden Lab and Firestorm code, and Rust
-ports of it) and `LGPL-2.1-or-later OR GPL-3.0-or-later` (original
-Vulkanstorm code). Offering GPL-3.0 for a *binary* is only honest if
-everything linked into it can be distributed under GPL-3.0 too. This is the
-audit of what the shipped binaries link with, as of 2026-11-05 on
-`vkstorm-devel`, re-checked for this line below.
+This document backs [`NOTICE.md`](../NOTICE.md). Vulkanstorm is licensed under
+`GPL-3.0-or-later` (decision of the owner, 2026-11-08). Linden Lab and
+Firestorm code, released by them under LGPL-2.1 only, is used under the
+ordinary GPL as section 3 of LGPL-2.1 allows. Distributing a *binary* under
+GPL-3.0 is only honest if everything linked into it, or bundled with it as part
+of one work, can be distributed under GPL-3.0 too. This is the audit of what
+the shipped binaries link with, re-done on 2026-11-08 on `vkstorm-devel` (re-checked for each line below) from
+`autobuild.xml`, the CMake configuration, the CI configure line and the package
+licence files in `packages/LICENSES/` of a local build.
 
 ## This line: `vkstorm-aleph`
 
-The audit below was made on `vkstorm-devel` and re-checked against this
-line's own `autobuild.xml` and CI configure line (2026-11-04). The configure
-options are the same as devel's. Aleph tracks upstream Firestorm `master`,
-which brings these package differences:
+Audited on `vkstorm-devel` and re-checked against this line's own `autobuild.xml`
+and CI configure line (2026-11-08). The configure options are devel's. This line
+follows upstream Firestorm `master`, which brings these package differences:
 
 | Component | Licence | Status | Notes |
 |---|---|---|---|
-| SDL3 3.2.24 (replaces SDL2) | Zlib upstream (`autobuild.xml` says "lgpl") | OK | either way |
+| SDL3 3.2.24 (replaces SDL2) | Zlib upstream (`autobuild.xml` says "lgpl") | OK | either way; the package licence label should be checked (finding 8) |
 | glext 2025.10.27 | Khronos (MIT-style) | OK | |
 | open-libndofdev 0.14 | BSD | OK | |
 | fltk, mesa (old), libuuid, glh_linear, llappearance_utility, vlc-speakerfill | | not on this line | |
 
-OpenSSL 3.5.9 is linked, as on devel, so the OpenSSL open point is
-resolved here too (GLOD has been removed). This line
-has no GPL-only code. Upstream Firestorm merges must keep it that way: check
-new upstream packages against this audit when integrating `upstream/master`.
+Confirmed on this line (2026-11-08): **Discord, BugSplat and KDU are off,
+Havok is a stub, FMOD is off, and Vivox is gone** (see below). Mesa/Zink is not
+shipped (`USE_MESAZINK` is off in the CI configuration). This line has no
+GPL-only code that is not compatible with GPL-3.0.
 
-This line does not have the night sky, `alphaOITPackF.glsl` or
-`vlc_cache_gen.cpp`. Their entries in the header lists below do not apply
-here.
+Upstream Firestorm merges must keep it that way: check new upstream packages
+against this audit when integrating `upstream/master`. This line does not have the
+night sky, `alphaOITPackF.glsl` or `vlc_cache_gen.cpp`; their entries in the
+header lists below do not apply here.
 
-## Open points (read first)
+## Vivox removed (2026-11-08)
 
-1. **OpenSSL: resolved by the move to OpenSSL 3.5.** Until 2026-11-05 the
-   viewer linked OpenSSL 1.1.1w (`openssl 1.1.1w-r4`), under the OpenSSL
-   License plus the original SSLeay License; both carry advertising
-   clauses, and the SSLeay License says the code "cannot simply be copied
-   and put under another distribution licence [including the GNU Public
-   Licence.]". The FSF lists that combination as GPL-incompatible, and
-   GPL-3.0's System Library exception does not cover a copy the viewer
-   bundles itself, so the binaries could not be offered under GPL-3.0. The
-   viewer now links OpenSSL 3.5.9 (`openssl 3.5.9.3`, built by
-   [anne-skydancer/3p-openssl](https://github.com/anne-skydancer/3p-openssl)),
-   statically into the viewer as before (through `llcorehttp`, libcurl and
-   the viewer itself). OpenSSL 3.x is under the **Apache License 2.0**,
-   which the FSF lists as compatible with GPL-3.0 and incompatible with
-   GPL-2.0 (its patent termination and indemnity terms are further
-   restrictions under GPL-2.0 section 6). The FSF gives no separate ruling
-   for LGPL-2.1; its section 10 forbids further restrictions in the same
-   words as GPL-2.0 section 6, so Apache-2.0 code linked into the viewer has
-   the standing under the LGPL-2.1 option that APR and the Apache-2.0 parts
-   of WebRTC already had. OpenSSL 3 therefore removes the GPL-3.0 blocker
-   and does not change the LGPL-2.1 position.
-2. **GLOD: resolved.** GLOD (GLOD Open-Source License 1.0, whose clause 6
-   fixes exclusive venue in the courts of Maryland, an additional term
-   GPL-3.0 section 7 does not permit) was the mesh uploader's second LOD
-   generator. It was removed from every viewer line on 2026-11-05 (#313
-   on devel, #315-#318 on release, rust, canary and aleph); meshoptimizer
-   is now the only LOD generator, and `scripts/tests/test_glod_retired.py`
-   keeps it out.
+Vivox (the SLVoice SDK) is proprietary and cannot be distributed with a
+GPL-3.0 viewer. Upstream Firestorm built it for OpenSim viewers only
+(`<FS:TJ> Keep Vivox only for OpenSim viewers`); Second Life builds, including
+every CI build, never contained it, so those builds behave exactly as before.
+Removed: `llvoicevivox.*`, its selection in `llvoiceclient.cpp`, the
+`slvoice` package in `autobuild.xml`, the SLVoice and Vivox library staging in
+`viewer_manifest.py`, `Copy3rdPartyLibs.cmake` and the installers, the Vivox
+acceptable use policy page (`VivoxAUP.*`), the Vivox logo of the start screen,
+the `Vivox*` debug settings and the Wine voice proxy settings, and the Vivox
+licence text in `licenses-*.txt`. OpenSim builds keep voice through WebRTC
+(`llwebrtc`, the os-webrtc-janus compatible path of Firestorm 7.1.10 and
+later); the voice-server selection no longer offers Vivox.
 
-Everything else linked in the shipped configuration is compatible with
-GPL-3.0 (most of it also with LGPL-2.1). Several components are compatible
-with GPL-3.0 but **not** with GPL-2.0 (Apache-2.0: OpenSSL 3, APR, OpenXR, and
-BoringSSL and others inside WebRTC; the FreeType License): one reason the
-GPL option is version 3 or later.
+## Status key
 
-## What is built and shipped
-
-The CI Release and development builds (`.github/workflows/build-*.yaml` with
-`.github/actions/viewer-build`, checked by `scripts/ci_release_config.py`) configure Windows and Linux with
-`OPENSIM=OFF INSTALL_PROPRIETARY=OFF USE_KDU=OFF USE_FMODSTUDIO=OFF
-USE_OPENAL=OFF USE_DISCORD=OFF USE_BUGSPLAT=OFF USE_TRACY=OFF
-USE_VELOPACK=OFF USE_SOLOUD=ON USE_MESAZINK=ON`, and Inno Setup on Windows.
-`HAVOK` and `HAVOK_TPV` are not set, so the Havok physics extensions are
-not linked. Package licence texts were read from the installed
-`packages/LICENSES/` of a Windows build and from `autobuild.xml`.
-
-Status key: **OK** compatible with GPL-3.0; **separate** a separate
-program, distributed alongside (an aggregate); **blocker** linked and not
-compatible; **off** not built or shipped in our configuration.
+**OK** compatible with GPL-3.0; **separate** a separate program, distributed
+alongside (an aggregate, GPL-3.0 section 5); **blocker** linked and not
+compatible; **off** not built or shipped in our configuration; **data** not
+code.
 
 ### Linked into the viewer
 
 | Component | Licence | Status | Notes |
 |---|---|---|---|
-| OpenSSL 3.5.9 | Apache-2.0 | OK | GPL-3 only, not GPL-2; replaced OpenSSL 1.1.1w (open point 1, resolved) |
-| GLOD 1.0pre3 | GLOD Open-Source License 1.0 | removed | Open point 2, resolved: retired on every line (#313, #315-#318) |
-| APR, apr-util | Apache-2.0 | OK | GPL-3 only, not GPL-2 |
+| OpenSSL 3.5.9 | Apache-2.0 | OK | GPL-3 only, not GPL-2; [3p-openssl](https://github.com/anne-skydancer/3p-openssl) |
+| APR, apr-util | Apache-2.0 | OK | GPL-3 only |
 | Boost | BSL-1.0 | OK | |
-| Collada DOM | MIT (package text; `autobuild.xml` says "SCEA") | OK | |
-| libcurl 8.23.0 | curl (MIT-style) | OK | built against OpenSSL 3.5.9, HTTP(S) only ([anne-skydancer/3p-curl](https://github.com/anne-skydancer/3p-curl)) |
+| Collada DOM | SCEA Shared Source License 1.0 (MIT-style; package text says MIT) | OK | |
+| libcurl 8.23 | curl (MIT-style) | OK | [3p-curl](https://github.com/anne-skydancer/3p-curl); HTTP and HTTPS only, OpenSSL 3.5, nghttp2, zlib-ng; no libssh2, brotli, zstd, GSS |
 | expat | MIT | OK | |
-| FreeType | FreeType License (or GPL-2.0) | OK | FTL is GPL-3-compatible, not GPL-2 |
-| Hunspell | MPL-1.1 / GPL-2.0 / LGPL-2.1 tri-licence | OK | taken under LGPL-2.1 |
+| FreeType | FreeType License (or GPL-2.0) | OK | FTL is GPL-3-compatible |
+| Hunspell | MPL-1.1 / GPL-2.0 / LGPL-2.1 tri-licence | OK | GPL-2.0-or-later option; taken under LGPL-2.1 or the GPL |
 | libjpeg-turbo | IJG, BSD-3-Clause, Zlib | OK | |
 | libndofdev (Windows), open-libndofdev (Linux) | BSD | OK | |
 | libpng | libpng | OK | |
 | libxml2 | MIT | OK | |
-| meshoptimizer | MIT | OK | |
+| meshoptimizer | MIT | OK | the only mesh LOD generator (GLOD is gone) |
 | mikktspace | Zlib upstream (`autobuild.xml`: Apache-2.0) | OK | either way |
 | minizip-ng, zlib-ng, nanosvg | Zlib | OK | |
 | nghttp2 | MIT | OK | |
 | NVAPI (Windows) | MIT | OK | |
 | Ogg, Vorbis | BSD-3-Clause | OK | |
-| OpenJPEG | BSD-2-Clause | OK | |
+| OpenJPEG 2.5.4 | BSD-2-Clause | OK | [3p-openjpeg](https://github.com/anne-skydancer/3p-openjpeg) |
 | OpenXR loader | Apache-2.0 | OK | GPL-3 only |
-| SoLoud, miniaudio | Zlib; public domain or MIT-0 | OK | |
-| WebRTC (voice) | BSD-3-Clause, with bundled abseil, BoringSSL, perfetto, libc++ (Apache-2.0, Apache-2.0 WITH LLVM-exception), opus, libvpx, libaom, dav1d, libyuv, protobuf (BSD) | OK | BoringSSL is Apache-2.0 in this release (per the package's licence file) |
+| SoLoud 202002 (miniaudio backend), miniaudio | Zlib; public domain or MIT-0 | OK | [3p-soloud](https://github.com/anne-skydancer/3p-soloud); built with `WITH_MINIAUDIO=1 WITH_NOSOUND=1 WITH_NULL=1` only |
+| WebRTC (voice) m144 | BSD-3-Clause, with bundled abseil, BoringSSL, perfetto, libc++ (Apache-2.0, Apache-2.0 WITH LLVM-exception), opus, libvpx, libaom, dav1d, libyuv, protobuf (BSD) | OK | the package licence file lists no FFmpeg, OpenH264 or GPL component |
 | xxHash | BSD-2-Clause | OK | |
 | V-HACD | BSD-3-Clause | OK | |
-| glh_linear, glext (Khronos), glm, tinygltf, tinyexr, websocketpp, cubemaptoequirectangular, three.js, jpeg_encoder_basic | BSD, MIT, Khronos | OK | headers or web content |
+| glh_linear, glext (Khronos), glm, tinygltf, tinyexr, websocketpp, vulkan_gltf, cubemaptoequirectangular, three.js, jpeg_encoder_basic | BSD, MIT, Khronos | OK | headers or web content; `jpegencoderbasic` is labelled "NONE" in `autobuild.xml` but its licence file is Adobe's BSD-style licence |
 | gntp-growl (Windows), libnotify (Linux) | BSD; LGPL-2.1 | OK | |
-| SDL2, glib, jemalloc, libuuid, breakpad, fltk (Linux) | Zlib; LGPL-2.1+; BSD-2; BSD-3; BSD-3; LGPL-2.0 with static-link exception | OK | |
-| Microsoft C++ runtime (Windows) | Microsoft redistributable | OK | a System Library under GPL-3.0 section 1 |
-| Mesa / Zink (`opengl32.dll`, `libgallium*`, Linux `libGLX_vulkanstorm`) | MIT | OK | the GL driver the viewer loads |
+| SDL3, glib, jemalloc, breakpad, pcre (Linux) | Zlib; LGPL-2.1+; BSD-2; BSD-3; BSD | OK | |
+| Microsoft C++ runtime (Windows) | Microsoft redistributable | OK | treated as a System Library under GPL-3.0 section 1 |
+| viewer-manager | Linden Lab LGPL-2.1 (`viewerlgpl`) | OK | Linden Lab code, used under the GPL |
 
 Data shipped with the viewer (fonts under OFL-1.1, the Bitstream Vera/DejaVu
 licence and CC BY 4.0 for Twemoji artwork; spelling dictionaries; the CA
 bundle; `lsl_definitions`; emoji shortcodes; the Tycho-2 star data,
-BSD-2-Clause) is not linked code and keeps its own licence.
+BSD-2-Clause) is not linked code and keeps its own licence. See finding 3
+about one dictionary.
 
 ### Separate programs shipped with the viewer
 
 | Component | Licence | Status | Notes |
 |---|---|---|---|
-| SLPlugin + `media_plugin_cef` (Dullahan, CEF, Chromium) | Dullahan MIT, CEF BSD-3-Clause, Chromium BSD-3-Clause with many permissive and LGPL parts | separate, OK | own process; SLPlugin itself is Linden Lab code (dual). Chromium's patent-encumbered codecs are a patent question, not a licence incompatibility |
-| SLPlugin + `media_plugin_libvlc`, VLC 3.0.21, the Vulkanstorm speaker-fill VLC module | libVLC LGPL-2.1-or-later; VLC modules LGPL-2.1+ and GPL-2.0-or-later; speaker-fill module LGPL-2.1-or-later | separate, OK | GPL-2.0-or-later modules are GPL-3-compatible. The plugin process that loads GPL modules is already under GPL terms under either option |
+| SLPlugin + `media_plugin_cef` (Dullahan, CEF, Chromium) | Dullahan (package field "MPL"), CEF BSD-3-Clause, Chromium BSD-3-Clause with many permissive and LGPL parts | separate, OK | own process; SLPlugin itself is Linden Lab code. See findings 5 and 6 |
+| SLPlugin + `media_plugin_libvlc`, VLC 3.0.21 (devel only: the Vulkanstorm speaker-fill VLC module) | libVLC LGPL-2.1-or-later; VLC modules LGPL-2.1+ and GPL-2.0-or-later; speaker-fill module LGPL-2.1-or-later ([3p-vlc-speakerfill](https://github.com/anne-skydancer/3p-vlc-speakerfill)) | separate, OK | GPL-2.0-or-later modules are GPL-3-compatible; the plugin process that loads them is under GPL terms. See finding 4 |
 | Inno Setup installer (Windows) | Inno Setup License | separate | the installer program, not the viewer |
-| SLVoice (Vivox) | proprietary | separate, off | OpenSim builds only; not in our Second Life builds |
 
 ### Off in our builds (would need review before enabling)
 
@@ -137,11 +109,14 @@ BSD-2-Clause) is not linked code and keeps its own licence.
 |---|---|---|
 | Kakadu (`USE_KDU`) | proprietary | blocker |
 | FMOD Studio (`USE_FMODSTUDIO`) | proprietary | blocker |
-| Havok / `llphysicsextensions_tpv` (`HAVOK`, `HAVOK_TPV`) | proprietary | blocker |
+| Havok / `llphysicsextensions_tpv` (`HAVOK`, `HAVOK_TPV`) | proprietary | blocker; the stub is used |
 | BugSplat (`USE_BUGSPLAT`) | proprietary | blocker |
 | Discord Social SDK (`discord_sdk`, commented out in `indra/cmake/Discord.cmake`) | proprietary | blocker |
+| `llappearance_utility` (Linux, `INSTALL_PROPRIETARY`) | Linden Lab proprietary | blocker |
+| Vivox / SLVoice | proprietary | removed from the tree on 2026-11-08 |
 | discord-rpc (`USE_DISCORD`) | MIT | OK |
 | OpenAL Soft (`USE_OPENAL`) | LGPL-2.1-or-later | OK |
+| Mesa / Zink (`USE_MESAZINK`) | MIT | OK, not shipped |
 | Tracy (`USE_TRACY`), Velopack (`USE_VELOPACK`) | BSD-3-Clause; MIT | OK |
 
 The About box's credits list (`floater_about.xml`) still names some of
@@ -151,33 +126,95 @@ binaries.
 ### Rust core (`vkstorm-core-rust`, the `vkstorm-ffi` static library)
 
 Linked into the viewer on the `vkstorm-rust` line only (not on
-`vkstorm-devel`). Its crates are `LGPL-2.1-only OR GPL-3.0-or-later`
-(ports of Linden Lab code); the vendored ports keep their own licences
-(`vkstorm-openjp2` BSD-2-Clause, the libogg/libvorbis part of
-`vkstorm-vorbis` BSD-3-Clause, the SoLoud part of `vkstorm-audio` Zlib).
-The crates.io dependencies reachable from `vkstorm-ffi` with all features
-(`cargo metadata --all-features`) are under MIT, Apache-2.0, Zlib, ISC,
-BSD, Unlicense, Unicode-3.0, IJG and MPL-2.0 (Symphonia); MPL-2.0 is
-GPL-compatible through its section 3.3 (Secondary Licenses), and none of
-them is GPL-only or proprietary. `vkstorm-http` loads the viewer's libcurl
-at run time, so it links OpenSSL 3.5 as part of the viewer (open point 1, resolved).
+`vkstorm-devel`). Its crates are `GPL-3.0-or-later` (original code) or ports
+of Linden Lab code used under the GPL; the vendored ports keep their own
+licences (`vkstorm-openjp2` BSD-2-Clause, the libogg/libvorbis part of
+`vkstorm-vorbis` BSD-3-Clause, the SoLoud part of `vkstorm-audio` Zlib). The
+crates.io dependencies reachable from `vkstorm-ffi` with all features
+(`cargo metadata --all-features`) are under MIT, Apache-2.0, Zlib, ISC, BSD,
+Unlicense, Unicode-3.0, IJG and MPL-2.0 (Symphonia); MPL-2.0 is
+GPL-compatible through its section 3.3 (Secondary Licenses), and none of them
+is GPL-only or proprietary. `vkstorm-http` loads the viewer's libcurl at run
+time, so it links OpenSSL 3.5 as part of the viewer.
+
+### Forks of third-party packages (`anne-skydancer/3p-*`)
+
+[3p-curl](https://github.com/anne-skydancer/3p-curl),
+[3p-openssl](https://github.com/anne-skydancer/3p-openssl),
+[3p-openjpeg](https://github.com/anne-skydancer/3p-openjpeg),
+[3p-soloud](https://github.com/anne-skydancer/3p-soloud),
+[3p-mesazink](https://github.com/anne-skydancer/3p-mesazink) and
+[3p-vlc-speakerfill](https://github.com/anne-skydancer/3p-vlc-speakerfill)
+carry their upstream licences (curl, Apache-2.0, BSD-2-Clause, Zlib, MIT,
+LGPL-2.1-or-later); they are not relicensed and stay listed in the tables
+above.
+
+## Findings
+
+Open items from the audit. None is a linked incompatible library; items 1 to 3
+need a decision or a check by the owner.
+
+1. **Section 3 of LGPL-2.1 and the unchanged Linden Lab / Firestorm headers.**
+   Section 3 says that a licensee who applies the ordinary GPL to a copy
+   "must alter all the notices that refer to this License". By decision of the
+   owner (2026-11-08) the headers stay unchanged, and NOTICE.md states that
+   this code is used under the GPL. The strict reading of section 3 is a
+   notice change; the headers are untouched because they also record the
+   origin. Decision needed: keep as is, or alter the notices. (Linden Lab and
+   Firestorm themselves publish this code under LGPL-2.1, which also allows a
+   work that uses it to be distributed under other terms, section 6.)
+2. **Linden Lab and Firestorm code that is not LGPL.** The Linden Lab
+   `llappearance_utility` is proprietary and off. Anything else with a
+   `$LicenseInfo` header other than `viewerlgpl` or `fsviewerlgpl` has not
+   been audited file by file; the headers of the tree were sampled, not
+   enumerated. Uncertain.
+3. **Russian spelling dictionary (`ru_RU`).** Its licence reads "Permission to
+   use, copy, redistribute is granted. Permission to redistribute
+   modifications in patch form is granted. ... All other rights reserved."
+   That is not a free-software licence and is not GPL-compatible. It is data
+   read by Hunspell, shipped as a separate file (an aggregate, GPL-3.0 section
+   5), not combined with code. Recommended: replace it with a freely licensed
+   Russian dictionary or drop it. The other dictionaries are LGPL, MPL/GPL/LGPL
+   tri-licences or BSD (data).
+4. **VLC modules.** The `vlc-bin` package licence file holds only the GPL-2.0
+   text. VLC 3.0.21 modules are GPL-2.0-or-later or LGPL-2.1-or-later, which is
+   compatible; the package does not prove that no module is GPL-2.0-only.
+   Uncertain, low risk (separate process).
+5. **Dullahan licence.** `autobuild.xml` says "MPL" (the earlier audit said
+   MIT). MPL-2.0 is GPL-compatible through section 3.3; MPL-1.1 is only
+   compatible when a GPL option is offered. Separate process. Check the
+   package's licence file.
+6. **FFmpeg and codecs inside Chromium and VLC.** We build no FFmpeg ourselves;
+   the one inside CEF/Chromium is built without `--enable-gpl` or
+   `--enable-nonfree` upstream (LGPL-2.1-or-later), and VLC's is LGPL-2.1+. The
+   flags of the prebuilt Linden Lab packages cannot be verified from this
+   tree. Patent-encumbered codecs (H.264, AAC) are a patent question, not a
+   licence incompatibility.
+7. **Stale licence text files.** `indra/newview/licenses-{win32,linux,mac}.txt`
+   still carry the OpenSSL 1.x and SSLeay licence text (OpenSSL 3.5 is
+   Apache-2.0) and credits for packages Vulkanstorm does not ship. Harmless,
+   but the files should be regenerated from the package list.
+
+8. **SDL3 licence label.** `autobuild.xml` labels the SDL3 package "lgpl"; SDL3 is Zlib-licensed upstream. Either is compatible; check the package's licence file and fix the label.
 
 ## Source headers
 
 Linden Lab and Firestorm headers (`$LicenseInfo` with `license=viewerlgpl`
-and the like) are not changed: LGPL-2.1-only is one of the two options, so
-the headers stay accurate.
+and the like) are not changed (see finding 1).
 
 Original Vulkanstorm files carry
 
 ```
-SPDX-License-Identifier: LGPL-2.1-or-later OR GPL-3.0-or-later
+SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 ```
 
-How the set was chosen (2026-11-04): files absent from upstream Firestorm
-(`upstream/7.2.5_preview` and `upstream/master`) that either carried a
-Vulkanstorm header claiming LGPL-2.1 only, or carried no header at all in
+On 2026-11-08 every file with the dual Vulkanstorm header
+(`LGPL-2.1-or-later OR GPL-3.0-or-later`) was changed to
+`GPL-3.0-or-later`, together with the licence prose of the C++ and GLSL
+headers. How the set had been chosen (2026-11-04): files absent from upstream
+Firestorm (`upstream/7.2.5_preview` and `upstream/master`) that either carried
+a Vulkanstorm header claiming LGPL-2.1 only, or carried no header at all in
 `scripts/` and `doc/vulkan/`:
 
 - Vulkanstorm `$LicenseInfo` LGPL-2.1-only header replaced:
@@ -192,17 +229,18 @@ Vulkanstorm header claiming LGPL-2.1 only, or carried no header at all in
 - Header added: every Vulkanstorm script in `scripts/` (Python, shell and
   JavaScript, including `scripts/ci/freebsd/`, `scripts/perf/` and
   `scripts/tests/`, but not the C++ fixtures) and `doc/vulkan/*.py`, plus
-  the new `indra/newview/licence_texts.py`.
+  `indra/newview/licence_texts.py`.
 
-`scripts/tests/test_licence_files.py` checks that no file with a Vulkanstorm
-copyright line still claims LGPL-2.1 only, and that no SPDX expression in
-the tree is GPL-only.
+`scripts/tests/test_licence_files.py` checks that the licence files are in
+place, that no file with a Vulkanstorm copyright line carries another SPDX
+expression than `GPL-3.0-or-later`, that every SPDX expression in the tree is
+compatible with GPL-3.0, and that Vivox stays out.
 
 ### Follow-up: Vulkanstorm files not yet marked
 
-Added by Vulkanstorm, but not marked in this change because their origin
-needs a look (they may adapt Linden Lab or Firestorm code, or stub it for
-tests). Until reviewed, take them under `LGPL-2.1-only OR GPL-3.0-or-later`.
+Added by Vulkanstorm, but not marked because their origin needs a look (they
+may adapt Linden Lab or Firestorm code, or stub it for tests). Until reviewed,
+take them under the GPL, version 3 or later.
 
 - No header: `indra/cmake/CompilerCacheHeaders.cmake`, `InnoSetup.cmake`,
   `LSLDefinitions.cmake`, `MesaZink.cmake`, `SOLOUD.cmake`,
@@ -224,4 +262,4 @@ tests). Until reviewed, take them under `LGPL-2.1-only OR GPL-3.0-or-later`.
   ("Firestorm Viewer Project"), `indra/llui/llmarkdown.*` and its test
   ("Phoenix Firestorm Project"), `alphaOITResolveF.glsl` ("Linden
   Research"). Left as they are; if they are wholly original, their headers
-  can move to the dual header.
+  can move to the GPL header.
