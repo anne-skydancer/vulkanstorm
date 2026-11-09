@@ -486,6 +486,15 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
     // </FS:Ansariel>
     mCommitCallbackRegistrar.add("Pref.SetCache",               boost::bind(&LLFloaterPreference::onClickSetCache, this));
     mCommitCallbackRegistrar.add("Pref.ResetCache",             boost::bind(&LLFloaterPreference::onClickResetCache, this));
+    // <Vulkanstorm/> Sky tuning tab: reset its settings to their defaults
+    mCommitCallbackRegistrar.add("Pref.ResetSkyTuning", [](LLUICtrl*, const LLSD&)
+    {
+        for (const char* name : { "RenderCloudShadowStrength", "RenderCloudShadowPenumbraHeight", "RenderCloudShadowExtent",
+                                  "RenderShadowBlurSize", "RenderShadowPCSSLightSize" })
+        {
+            gSavedSettings.getControl(name)->resetToDefault(true);
+        }
+    });
 //  mCommitCallbackRegistrar.add("Pref.ClickSkin",              boost::bind(&LLFloaterPreference::onClickSkin, this,_1, _2));
 //  mCommitCallbackRegistrar.add("Pref.SelectSkin",             boost::bind(&LLFloaterPreference::onSelectSkin, this));
     //<FS:KC> Handled centrally now
