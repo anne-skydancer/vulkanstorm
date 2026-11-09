@@ -548,6 +548,7 @@ void LLViewerShaderMgr::finalizeShaderList()
     mShaderList.push_back(&gEnvironmentMapProgram);
     mShaderList.push_back(&gDeferredWLSkyProgram);
     mShaderList.push_back(&gDeferredWLCloudProgram);
+    mShaderList.push_back(&gCloudShadowMapProgram); // <Vulkanstorm/> L2: gets the sky uniforms like the clouds
     mShaderList.push_back(&gDeferredWLMoonProgram);
     mShaderList.push_back(&gDeferredWLSunProgram);
     mShaderList.push_back(&gDeferredPBRAlphaProgram);
