@@ -11,7 +11,7 @@ Made by [3p-cloudnoise](https://github.com/anne-skydancer/3p-cloudnoise) (releas
 
 | Entry | Size | Source |
 |---|---|---|
-| base | 128 x 128 x 128 RGBA8 | TileableVolumeNoise (Sebastien Hillaire, MIT): the "unpacked" shape texture of its `main.cpp` (R Perlin-Worley, G/B/A Worley FBMs) |
+| base | 128 x 128 x 128 RGBA8 | TileableVolumeNoise (Sébastien Hillaire, MIT): the "unpacked" shape texture of its `main.cpp` (R Perlin-Worley, G/B/A Worley FBMs) |
 | erosion | 32 x 32 x 32 RGBA8 | TileableVolumeNoise: the "unpacked" erosion texture (R/G/B Worley FBMs, A 255) |
 | curl | 128 x 128 RGBA8 | **a Vulkanstorm derivation**, not TileableVolumeNoise (it has no curl noise): the curl of TileableVolumeNoise's own periodic Perlin noise (8 cells, one octave, z = 0), stored in R and G as `c * 0.5 + 0.5` |
 
@@ -30,14 +30,22 @@ mismatch; CI generates twice and compares the bytes and the pinned SHA-256.
 | The package hash (sha1) | `autobuild.xml`, entry `cloudnoise` |
 | CMake stops if the file is missing or is not the file the source tree names | `indra/cmake/CloudNoise.cmake`; `CLOUD_NOISE_SHA256` there is the one place the whole-file hash is written |
 | Staged next to the other app data, with the licence texts; read-only | `viewer_manifest.py` (`app_settings/clouds/`, `licenses/`; Inno `Attribs: readonly`; mode 0444 in the Linux tarball) |
-| CI opens the installer or tarball and checks the file and the licences | `.github/actions/viewer-build/action.yml`, `scripts/clouds/check_cloud_noise.py` |
+| CI checks the staged file and licences of every build, and for package builds installs the Windows installer silently (file, licences, read-only attribute, removal by the uninstaller) or extracts the Linux tarball | `.github/actions/viewer-build/action.yml`, `scripts/clouds/check_cloud_noise.py` |
 | Start-up check: SHA-256 of the whole file against the compiled-in hash, then the container and every entry's hash | `LLCloudNoise::loadAndVerify`, called from `LLAppViewer::init` after the cache |
 
-If the file is missing or damaged the viewer shows "A file Vulkanstorm needs is damaged or missing
-(app_settings/clouds/cloud_noise.vkcn). Please reinstall." and exits cleanly (a message box and `return false`, as for
-the cache; not `LL_ERRS`, so no crash report). It is checked on every machine, including GL 3 ones, because the
-check does not depend on the renderer. Only a user who edits the file in a user-writable install can hit it; the
-Windows install is per-machine (Program Files).
+If the file is missing or damaged the viewer shows "A file [APP_NAME] needs is damaged or missing
+(app_settings/clouds/cloud_noise.vkcn). Please reinstall [APP_NAME]." (`MBCloudNoiseDamaged`; the owner approved this
+text, 2026-11-10) and exits cleanly: a message box, the exec marker removed, and `return false`, as for the cache; not
+`LL_ERRS`, so no crash report. The check runs before the cache is opened, on every machine, including GL 3 ones,
+because it does not depend on the renderer. It reads the file once (size checked first), hashes it twice (the whole
+file, then each entry), and frees the 8.6 MB again; the clouds will load and verify it again when they first draw. An
+open that fails is logged with its reason and tried once more after 200 ms. Besides a user who edits the file in a
+user-writable install, the message can be caused by an antivirus quarantining or locking the file, disk errors, or an
+interrupted upgrade; reinstalling fixes all of them.
+
+Read-only: the Inno installer (the Windows installer CI builds) installs the file with the read-only attribute and the
+flags `overwritereadonly` and `uninsremovereadonly`, so upgrades replace it and the uninstaller removes it; the Linux
+tarball carries mode 0444. The Velopack installer, which these builds do not use (`USE_VELOPACK=OFF`), is not covered.
 
 ## Changing the noise
 
