@@ -435,12 +435,15 @@ class LeapSession:
         self._pending = {}      # reqid -> reply (or None while waiting)
         self._events = []       # (pump, data) not matched to a request
         self._discard = set()   # reqids of fire() operations: their replies are only checked for errors
+        self._until_ping = set()  # reqids of fire(scalar_reply=True) operations: a success reply is a bare non-map value
+                                  # that carries no reqid and so never removes its entry; settle() clears them after a ping
         self._fired_errors = []
         self._next_id = 1
         self._closed = False
         self.diag_dir = None     # where a protocol error writes bad_frame.bin / bad_frame.txt
         self._prev_frame = None
-        self._scalar_noted = False
+        self._nonmap_dropped = 0       # unstamped non-map replies dropped by the reader
+        self._nonmap_types = set()     # their types seen so far (the first of each type is logged)
         self._broken = None      # why the connection was given up on (protocol error), None if it was EOF
         self._thread = None
 
@@ -490,18 +493,21 @@ class LeapSession:
                         self._cv.notify_all()
                         continue
                     if pump == self.reply_pump and not isinstance(data, dict):
-                        # A scalar reply (the viewer's LLReqID::stamp cannot add a reqid to one, e.g. UI.setSelectedByValue):
-                        # it can match no request, so it is dropped rather than queued as an event.
-                        if not self._scalar_noted:
-                            self._scalar_noted = True
-                            self._log("debug: unstamped scalar reply %r on the reply pump ignored (further ones are silent)" % (data,))
+                        # A non-map reply (the viewer's LLReqID::stamp cannot add a reqid to one, e.g. UI.setSelectedByValue):
+                        # it can match no request, so it is counted and dropped rather than queued as an event.
+                        self._nonmap_dropped += 1
+                        if type(data).__name__ not in self._nonmap_types:
+                            self._nonmap_types.add(type(data).__name__)
+                            self._log("debug: unstamped non-map reply %r (%s) on the reply pump dropped (the first of each "
+                                      "type is logged; the count is in a timeout message)" % (data, type(data).__name__))
                         continue
                     reqid = data.get("reqid") if isinstance(data, dict) else None
                     if pump == self.reply_pump and reqid is not None:
                         if reqid in self._pending:
                             self._pending[reqid] = data
-                        elif reqid in self._discard:
+                        elif reqid in self._discard or reqid in self._until_ping:
                             self._discard.discard(reqid)
+                            self._until_ping.discard(reqid)
                             if data.get("error"):
                                 self._fired_errors.append(str(data["error"]))
                         # else: a late reply to a request that timed out: dropped
@@ -561,17 +567,26 @@ class LeapSession:
             except (BrokenPipeError, OSError) as exc:
                 raise ViewerGone("write failed: %s" % exc) from exc
 
-    def fire(self, pump, op, /, **args):
+    def fire(self, pump, op, /, scalar_reply=False, **args):
         """Send an operation whose reply we do not wait for. A reply key is still sent: an operation the viewer
         rejects (bad name or arguments) throws in the viewer's dispatcher when there is no reply pump to tell; the
-        reply is dropped by the reader and only its error, if any, is kept (see take_errors)."""
+        reply is dropped by the reader and only its error, if any, is kept (see take_errors).
+        scalar_reply=True is for an operation whose success reply is a bare non-map value (no reqid, so it can never
+        remove its own entry): its reqid is tracked only until the next settle(), so an error map, which does carry
+        the reqid, is still caught."""
         with self._cv:
             reqid = self._next_id
             self._next_id += 1
-            self._discard.add(reqid)
+            (self._until_ping if scalar_reply else self._discard).add(reqid)
         data = {"op": op, "reply": self.reply_pump, "reqid": reqid}
         data.update(args)
         self.post(pump, data)
+
+    def settle(self):
+        """Forget the scalar_reply fire() operations still waiting for a reply: call it after a ping, which the viewer
+        answers after all of their replies."""
+        with self._cv:
+            self._until_ping.clear()
 
     def take_errors(self):
         """Errors reported by fire() operations since the last call."""
@@ -597,7 +612,9 @@ class LeapSession:
                         raise self.gone("%s.%s" % (pump, op))
                     left = deadline - time.monotonic()
                     if left <= 0:
-                        raise LeapTimeout("no reply to %s.%s in %.0f s" % (pump, op, timeout))
+                        extra = (" (%d unstamped non-map replies were dropped)" % self._nonmap_dropped
+                                 if self._nonmap_dropped else "")
+                        raise LeapTimeout("no reply to %s.%s in %.0f s%s" % (pump, op, timeout, extra))
                     self._cv.wait(left)
                 reply = self._pending[reqid]
         finally:

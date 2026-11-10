@@ -194,16 +194,23 @@ class Viewer:
         pump = self.s.command_pump if api == "LLLeap" else api
         self.s.fire(pump, op, **args)
 
+    def fire_scalar(self, api, op, /, **args):
+        """Like fire() for an operation whose success reply is a bare non-map value (see LeapSession.fire)."""
+        pump = self.s.command_pump if api == "LLLeap" else api
+        self.s.fire(pump, op, scalar_reply=True, **args)
+
     def select_by_value(self, path, value):
-        """UI.setSelectedByValue moves a combo highlight. The viewer answers with a bare boolean, which LLReqID::stamp
-        cannot give a reqid, so request() would wait for a reply that never matches: fire it and wait for a ping
-        instead. Callers check the result by reading the combo with value_of."""
-        self.fire("UI", "setSelectedByValue", path=path, value=value)
+        """UI.setSelectedByValue moves a combo highlight. The viewer answers with a bare boolean (false when the combo
+        or the value is not found), which LLReqID::stamp cannot give a reqid, so request() would wait for a reply that
+        never matches: fire it and wait for a ping instead. A refusal is therefore NOT reported here; callers read the
+        combo back with value_of."""
+        self.fire_scalar("UI", "setSelectedByValue", path=path, value=value)
         self.barrier()
 
     def barrier(self):
         """Everything sent before has been handled; raises if a fire-and-forget operation reported an error."""
         self.s.ping(timeout=60)
+        self.s.settle()
         errs = self.s.take_errors()
         if errs:
             raise LeapError("viewer reported: " + "; ".join(errs[:3]))
@@ -1292,8 +1299,11 @@ def dry_run_ui(v, sc, rep, run, args):
     if combo and before not in (None, "None"):
         try:
             v.select_by_value(combo, as_value(before))
-        except LeapError:
-            pass
+            now = v.value_of(combo)
+            if str(now).lower() != str(before).lower():
+                log("WARNING the original sky combo value %r was not restored (it reads %r)" % (before, now))
+        except LeapError as exc:
+            log("WARNING the original sky combo value %r was not restored: %s" % (before, exc))
 
 
 def slider_checks(v, rep):

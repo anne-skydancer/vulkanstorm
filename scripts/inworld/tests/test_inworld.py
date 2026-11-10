@@ -24,7 +24,7 @@ import analyze_light_check as alc  # noqa: E402
 import viewer_cmdline as vc  # noqa: E402
 import light_check as lc  # noqa: E402
 from fake_viewer import FakeViewer, REGION_DEFAULT, SKIES  # noqa: E402
-from leap_client import (ConnectionLost, LeapError, LeapSession, ProtocolError, ViewerGone, binary_dumps, llsd_loads, notation_dumps,  # noqa: E402
+from leap_client import (ConnectionLost, LeapError, LeapTimeout, LeapSession, ProtocolError, ViewerGone, binary_dumps, llsd_loads, notation_dumps,  # noqa: E402
                          read_frame, write_frame)
 
 SCENARIO = HERE.parent / "scenarios" / "l3_at1_handover.json"
@@ -444,7 +444,6 @@ class FullRunTest(unittest.TestCase):
             self.assertEqual(fv.settings["RenderMoonAdaptationDepth"][1], 6.0)   # restored
 
 
-
 class ScalarReplyTest(unittest.TestCase):
     """The real UI.setSelectedByValue answers with a bare boolean that has no reqid; it must never cost a timeout."""
 
@@ -455,23 +454,45 @@ class ScalarReplyTest(unittest.TestCase):
         s._log = msgs.append
         for _ in range(3):
             s.fire("UI", "setSelectedByValue", path="x/WLPresetsCombo", value=SKIES["Default"][0])
+        fv._send(s.reply_pump, {"type": "error"})      # a map without reqid is still an event
         s.ping()
         self.assertEqual(s.take_errors(), [])
         self.assertIsNone(s._broken)
-        self.assertEqual(len([m for m in msgs if "scalar" in m]), 1)
+        self.assertEqual(len([m for m in msgs if "non-map" in m]), 1)
+        self.assertEqual(s.drain_events(), [(s.reply_pump, {"type": "error"})])
+        self.assertEqual(s._nonmap_dropped, 3)
+
+    def test_the_timeout_message_counts_dropped_non_map_replies(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        with self.assertRaises(LeapTimeout) as cm:
+            s.request("LLFloaterReg", "hideInstance", name="x", timeout=0.5)
+        self.assertNotIn("dropped", str(cm.exception))
+        for _ in range(2):
+            s.fire("UI", "setSelectedByValue", scalar_reply=True, path="x/WLPresetsCombo", value=SKIES["Default"][0])
+        s.ping()
+        with self.assertRaises(LeapTimeout) as cm:
+            s.request("LLFloaterReg", "hideInstance", name="x", timeout=0.5)
+        self.assertIn("2 unstamped non-map replies were dropped", str(cm.exception))
+
+    def test_select_by_value_leaves_nothing_in_the_discard_sets(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        v = lc.Viewer(s)
+        for val in (SKIES["Sunset"][0], "not-a-sky"):
+            v.select_by_value("a/b/WLPresetsCombo", val)
+        self.assertEqual((s._discard, s._until_ping), (set(), set()))
 
     def test_select_by_value_is_prompt_and_a_value_that_did_not_take_is_seen(self):
         fv = FakeViewer()
         s = session_for(fv)
-        s.default_timeout = 3
         v = lc.Viewer(s)
         t0 = time.monotonic()
         v.select_by_value("a/b/WLPresetsCombo", SKIES["Sunset"][0])
         self.assertLess(time.monotonic() - t0, 2.0)
-        self.assertEqual(fv.combo, SKIES["Sunset"][0])
+        self.assertEqual(v.value_of("a/b/WLPresetsCombo"), SKIES["Sunset"][0])
         v.select_by_value("a/b/WLPresetsCombo", "not-a-sky")       # the viewer refuses (false) and the combo stays
-        self.assertEqual(fv.combo, SKIES["Sunset"][0])
-        self.assertNotEqual(str(fv.combo), "not-a-sky")
+        self.assertEqual(v.value_of("a/b/WLPresetsCombo"), SKIES["Sunset"][0])
 
     def test_dry_run_and_full_run_with_scalar_replies_complete_promptly(self):
         for extra in (["--dry-run"], []):
