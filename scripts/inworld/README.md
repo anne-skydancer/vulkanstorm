@@ -16,55 +16,75 @@ The scripts install nothing.
 
 Close the running viewer first: LEAP is read once at startup.
 
-**Quoting rules (confirmed in the viewer).** `--leap` sets the LLSD setting `LeapCommand`, so its value must be
-**one single-quoted string** holding the whole command. The viewer's command-line parser (Windows) and then LEAP split
-that string again on spaces, treat `\` as an escape and treat quotes as grouping. Therefore: **every path must
-contain no spaces** (quotes do not protect them), and must be written with forward slashes. Use the real Python
-interpreter, not the Microsoft Store alias that `Get-Command python` may return (`py -c "import sys;print(sys.executable)"`
-prints the right one).
+**Quoting rules.** On Windows the viewer tokenises its raw command line itself (`LLCommandLineParser::parseCommandLineString`,
+`boost::escaped_list_separator`: the quote characters `"` and `'` toggle and are dropped, nothing can pass a quote through),
+so `--leap` cannot carry a quoted LLSD notation string: the value arrives without its quotes and is split at spaces.
+What works is giving **`--leap` twice**: with more than one value the setting `LeapCommand` becomes an array of plain
+strings (no notation parsing), and each string is then split on spaces by `LLLeap::create`. The second entry is a
+throw-away plugin (`light_check.py --noop`: it takes the handshake and exits 0). Consequences: **paths must contain no
+spaces** (quotes do not protect them) and are written with forward slashes. Use the real Python interpreter, not the
+Microsoft Store alias that `Get-Command python` may return (`py -c "import sys;print(sys.executable)"` prints the right one).
+This was derived from the source and simulated in `tests/viewer_cmdline.py` (a port of the two tokenisers and of the
+array branch); it has **not** been run in a viewer, hence step 1 below.
+
+Close the running viewer first: LEAP is read once at startup.
 
 ```powershell
 $exe     = 'C:\Users\annes\source\repos\vulkanstorm\work\l3at1\build-vc180-64\newview\RelWithDebInfo\vulkanstorm-bin.exe'
 $py      = 'C:/Users/annes/AppData/Local/Python/pythoncore-3.15-64/python.exe'      # py -c "import sys;print(sys.executable)"
 $scripts = 'C:/Users/annes/source/repos/vulkanstorm/work/leap-check/scripts/inworld'  # after the merge: the main checkout's scripts/inworld
 $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
-$out     = "C:/Users/annes/source/repos/vulkanstorm/.captures/l3at1-$stamp"           # a new folder for every launch
-$leap    = "'$py $scripts/light_check.py --scenario $scripts/scenarios/l3_at1_handover.json --out $out'"
+$noop    = "$py $scripts/light_check.py --noop"
 Set-Location (Split-Path $exe)
-& $exe --leap $leap
+```
+
+**Step 1, at the login screen (do not log in).** Confirms the launch line and the API side, changes nothing:
+
+```powershell
+$dry0 = "$py $scripts/light_check.py --dry-run --no-login-wait --out C:/Users/annes/source/repos/vulkanstorm/.captures/dry0-$stamp"
+& $exe --leap $dry0 --leap $noop
+```
+
+In the viewer log look for two `processing --leap "..."` lines (one per entry, each the whole command) and the
+`LIGHTCHECK PASS/WARN/FAIL` lines, or read `dry_run.json` in that folder. If there is only one `processing --leap` line, or
+the command is broken at a space, the line did not reach the viewer intact: stop. The `--noop` entry ends at once with exit
+code 0; if the viewer logs a launch warning for it, that is noise.
+
+**Step 2, in-world dry run** (log in, wait for it; a new folder per launch). Read-only: it checks that the viewer has every
+LEAP operation the script uses, that the debug settings exist, that Phototools opens with the widgets used (present and
+available), that the original environment can be restored, and that the inventory yields the scenario's skies (a required
+sky that would need the fallback button FAILS; an optional one warns). It does **not** open Personal Lighting or the fixed
+sky editor: opening Personal Lighting freezes the current sky into the local environment (`captureCurrentEnvironment`),
+which closing does not undo. Those are checked only when Personal Lighting is open already; `--deep` opens them and
+restores the environment afterwards as a run does.
+
+```powershell
+$dry = "$py $scripts/light_check.py --dry-run --out C:/Users/annes/source/repos/vulkanstorm/.captures/dry-$stamp"   # add --deep for Personal Lighting and the fixed editor
+& $exe --leap $dry --leap $noop
+```
+
+**Step 3, the run** (a new folder per launch):
+
+```powershell
+$run = "$py $scripts/light_check.py --scenario $scripts/scenarios/l3_at1_handover.json --out C:/Users/annes/source/repos/vulkanstorm/.captures/l3at1-$stamp"
+& $exe --leap $run --leap $noop
 ```
 
 Log in by hand. The script waits for `STATE_STARTED` (it logs the state changes), settles 20 s, waits for your
 inventory to load, and starts. Stay logged in, in an open spot with sky, ground and clouds in view (the camera is
 placed at your avatar, 2.5 m up, looking along the sun's azimuth). Do not use the viewer during the run: six skies
 are about 400 snapshots, expect 10 to 20 minutes. At the end it restores your settings and environment. To stop
-early create an empty file `STOP` in the run folder (it restores and exits). The relative `--out` is resolved to an
-absolute path first (the viewer's working directory is not yours); a stale `STOP` in a reused folder is deleted at
-the start.
-
-Do a **dry run** first, with its own `$out`. It is read-only: it checks that the viewer has every LEAP operation
-the script uses, that the debug settings exist, that Phototools opens with the widgets used (present and
-available), that the original environment can be restored, and that the inventory yields the scenario's skies
-(a required sky that would need the fallback button FAILS; an optional one warns). It does **not** open
-Personal Lighting or the fixed sky editor: opening Personal Lighting freezes the current sky into the local
-environment (`captureCurrentEnvironment`), which closing does not undo. Those are checked only when you have
-Personal Lighting open already; `--deep` opens them, and restores the environment afterwards exactly as a run does.
-
-```powershell
-$out  = "C:/Users/annes/source/repos/vulkanstorm/.captures/dry-$stamp"
-$leap = "'$py $scripts/light_check.py --dry-run --out $out'"        # add --deep to check Personal Lighting and the fixed editor too
-& $exe --leap $leap
-```
-
-Read the `LIGHTCHECK PASS/WARN/FAIL` lines in the viewer log (the plugin's stderr) or `dry_run.json`.
-`--dry-run --no-login-wait` checks the API and settings part at the login screen.
+early create an empty file `STOP` in the run folder (it restores and exits). A relative `--out` is resolved to an
+absolute path (the viewer's working directory is not yours); a stale `STOP` in a reused folder is deleted at the start.
+Select Region Default or a sky in the Phototools Environment tab beforehand and keep Personal Lighting closed: a sky you
+edited in Personal Lighting or the fixed editor cannot be put back, so the run refuses to start (changing nothing).
 
 Other options: `--list-skies` (prints and saves every settings item of the inventory with its asset id, to pick sky
 names), `--restore RUNDIR` (re-applies the settings and releases the camera recorded in `RUNDIR/restore.json` in a
 fresh viewer, if a run was cut short; it does not touch the environment and creates no folder), `--only
 pbr_default,classic_default`, `--step-limit 6` (quick test), `--set KEY=VALUE` (a debug setting for this run only,
 restored afterwards, repeatable; e.g. `--set RenderAtmospherePhysicalLight=false` for the A/B run of #447),
-`--max-wait-s N` (how long to wait for login; default the scenario's `login_timeout_s`, 3600), `--viewer-log PATH`
+`--noop` (the throw-away second plugin), `--max-wait-s N` (how long to wait for login; default the scenario's `login_timeout_s`, 3600), `--viewer-log PATH`
 (the viewer log for the excerpt; default: the newest `*.log` under `%APPDATA%\*\logs` or `%LOCALAPPDATA%\*\logs`
 touched in the last 10 minutes), `--scenario FILE`.
 
@@ -83,9 +103,9 @@ python "$scripts/analyze_light_check.py" <new run> --compare <baseline run>
 
 1. Checks the LEAP operations it needs, waits for login, then records your original state (the Phototools sky,
    water and day cycle combo values, the floaters, the settings it will change) and writes `restore.json`. If the
-   original environment cannot be restored faithfully (the sky combo shows a legacy name, nothing, or a day cycle
-   without its day-cycle entry) it **refuses to start** and changes nothing. Restorable: all Region Default; a sky
-   (with a water preset or the day cycle's water); a day cycle.
+   original environment cannot be restored faithfully (the sky combo shows a legacy name or nothing, Personal Lighting is open, the combos read Region
+   Default but the day cycle combo says `__None__` = a local sky with no asset, a sky over a day cycle) it **refuses to start** and changes nothing. Restorable: Region Default in all three combos; a sky (day cycle combo `__None__`);
+   a day cycle.
 2. Sets `FSEnvironmentManualTransitionTime` to 0 (instant sky changes) and the scenario's `knobs`/`settings`
    (`null` leaves a knob alone and only records it). A knob that does not exist in the viewer (the 82080 baseline has
    none of the #447 Sky-tab settings) is skipped with a warning, so the same scenario runs on both.
@@ -95,8 +115,7 @@ python "$scripts/analyze_light_check.py" <new run> --compare <baseline run>
    mismatch the quick-environment button is tried), applies the sky's `controls` and moon placement, reads the sun
    azimuth, points the camera along it, takes the noon snapshot (sun at 66 degrees) and the sweep.
 5. Restores the camera, the environment (Region Default button, or re-selecting the original sky and water, or the
-   day cycle; it then compares the combo values with the original and warns on a difference), reopens Personal
-   Lighting if it was open at the start, un-pauses the clouds if they are paused, closes the floaters it opened and
+   day cycle; it then compares the combo values with the original and warns on a difference), un-pauses the clouds if they are paused, closes the floaters it opened and
    puts every changed setting back. Also on an error or a stop file. Not possible if the viewer itself has gone
    (then `restore.json` has the old settings). Known limit: after a sky selection the water stays a copy of the
    region's water if the original water was Region Default.
@@ -172,7 +191,7 @@ Covers the LLSD notation/binary codecs and framing; the session (requests, error
 events, errors of fire-and-forget operations); the sweep and camera geometry; whole runs and dry runs against a fake
 viewer (`tests/fake_viewer.py`), which implements the operations as the viewer's source suggests: restoration on
 success, with a stop file after the camera was set, on a failing sky (exit 4), of an original sky and of a day cycle,
-refusal of an environment that cannot be restored, Personal Lighting reopened, missing knobs, a viewer missing an
+refusal of an environment that cannot be restored (a local sky edited in Personal Lighting, Personal Lighting open, a sky over a day cycle, a legacy name, nothing selected), missing knobs, a viewer missing an
 operation, the read-only dry run and the restored `--deep` dry run; `--restore`; the script as a real child process
 over pipes; and the analysis (synthetic images with an injected pop, no false pop at the 0.5/0.1 degree step change,
 `--compare` direction).
@@ -181,5 +200,5 @@ over pipes; and the analysis (synthetic images with an injected pop, no false po
 and class names, whether the `End`/`Backsp`/`Enter` key names and the focus handling edit the slider text field,
 `clickButton` on the Phototools buttons, the combo Next/Prev commit, `setCameraParams` with locked camera and focus,
 the fixed-editor `no_moon` path and its tab click, the Phototools sky names, `STATE_STARTED` handling, `LLStats` field
-names, the log excerpt lookup, snapshot timing, and the `--leap` quoting. The dry run (and `--deep`) is the quick check
+names, the log excerpt lookup, snapshot timing, and the `--leap` launch line itself (simulated only). The dry run (and `--deep`) is the quick check
 of most of these.

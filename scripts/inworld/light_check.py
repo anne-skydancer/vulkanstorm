@@ -476,9 +476,14 @@ def plan_restore(orig):
     the original selection cannot be restored faithfully (then the run refuses to start)."""
     sky, water, dc = orig.get("sky_combo"), orig.get("water_combo"), orig.get("daycycle_combo")
     is_id = lambda x: isinstance(x, str) and bool(UUID_RE.fullmatch(x))  # noqa: E731
-    if sky == REGION and water == REGION and dc in (REGION, NOCHOICE):
+    if orig.get("personal_open"):
+        return None     # Personal Lighting holds a frozen or edited local sky that has no asset to select again
+    # quickprefs.cpp sets every combo to Region Default first and then the day cycle combo to __None__ when a local
+    # environment without a day cycle is selected. So Region Default is REGION/REGION/REGION; REGION/REGION/__None__
+    # is a local sky with no asset (edited in Personal Lighting or the fixed editor) and cannot be selected again.
+    if sky == REGION and water == REGION and dc == REGION:
         return {"kind": "region"}
-    if is_id(sky) and (is_id(water) or water in (REGION, DAYCYCLE)):
+    if is_id(sky) and (is_id(water) or water in (REGION, DAYCYCLE)) and dc == NOCHOICE:
         return {"kind": "sky", "sky": sky, "water": water if is_id(water) else None}
     if sky == DAYCYCLE and is_id(dc) and (is_id(water) or water == DAYCYCLE):
         return {"kind": "daycycle", "dc": dc, "water": water if is_id(water) else None}
@@ -621,9 +626,6 @@ class Run:
         attempt("environment", self.restore_environment)
         if self.clouds_toggled:
             attempt("clouds", self.unpause_clouds)
-        orig = self.run_info.get("original_environment") or {}
-        if orig.get("personal_open"):
-            attempt("reopen " + PERSONAL, lambda: v.show_floater(PERSONAL))
         if PHOTOTOOLS in self.floaters_opened:
             attempt("hide " + PHOTOTOOLS, lambda: v.hide_floater(PHOTOTOOLS))
         for key, val in self.orig_settings.items():
@@ -780,8 +782,9 @@ class Run:
             if last.startswith("htab_") and rx.search(last):
                 v.mouse_click(p)
                 v._paths.pop(FIXED_SKY, None)
-                if v.find_widget(FIXED_SKY, "sun_elevation", required=False) is None:
-                    raise LeapError("clicked %s but the sun sliders did not appear" % last)
+                sl = v.find_widget(FIXED_SKY, "sun_elevation", required=False)
+                if sl is None or not v.widget_info(sl).get("available"):
+                    raise LeapError("clicked %s but the sun sliders are not available" % last)
                 return last
         raise LeapError("no tab button matching %r in the fixed sky editor (htab_* found: %s)" % (
             tab_regex, [q.rsplit("/", 1)[-1] for q in v.floater_paths(FIXED_SKY) if q.rsplit("/", 1)[-1].startswith("htab_")]))
@@ -965,8 +968,10 @@ class Run:
         if self.plan is None:
             raise NotRestorable(
                 "cannot restore your current environment safely (Phototools shows sky=%r, water=%r, day cycle=%r). "
-                "Select Region Default or a sky from the Phototools Environment tab and start again. Nothing was changed."
-                % (orig.get("sky_combo"), orig.get("water_combo"), orig.get("daycycle_combo")))
+                "Personal Lighting open: %s. Close Personal Lighting and select Region Default or a sky from the "
+                "Phototools Environment tab (a sky you edited in Personal Lighting or the fixed editor has no asset and "
+                "would be lost), then start again. Nothing was changed."
+                % (orig.get("sky_combo"), orig.get("water_combo"), orig.get("daycycle_combo"), orig.get("personal_open")))
         self.save_restore()
 
     def select_env_tab(self):
@@ -1207,7 +1212,7 @@ def dry_run_ui(v, sc, rep, run, args):
         else:
             rep.add("sky %s" % spec["id"], False, "no inventory sky from %s; a real run would use the fallback button %s "
                     "and the data would be of a different sky" % (spec.get("names"), fb))
-    if combo and before is not None:
+    if combo and before not in (None, "None"):
         try:
             v.req("UI", "setSelectedByValue", path=combo, value=as_value(before))
         except LeapError:
@@ -1283,6 +1288,8 @@ def parse_args(argv):
                          "it is restored afterwards, like a run)")
     ap.add_argument("--list-skies", action="store_true", help="print the settings items (skies, water, day cycles) of the inventory")
     ap.add_argument("--restore", default=None, metavar="RUNDIR", help="re-apply the settings saved in RUNDIR/restore.json")
+    ap.add_argument("--noop", action="store_true",
+                    help="do nothing: take the LEAP handshake and exit 0 (the second, throw-away --leap entry, see README)")
     ap.add_argument("--no-login-wait", action="store_true", help="do not wait for login (dry run: API checks only)")
     ap.add_argument("--only", default=None, help="comma-separated sky ids to run")
     ap.add_argument("--step-limit", type=int, default=0, help="only the first N sweep steps (quick test)")
@@ -1373,9 +1380,12 @@ def execute(session, args, sc, outdir):
 
 def main(argv=None):
     args = parse_args(sys.argv[1:] if argv is None else argv)
-    sc = load_scenario(args.scenario)
+    sc = load_scenario(args.scenario) if not args.noop else None
     outdir = pathlib.Path(args.out) if args.out else default_capture_root() / dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     session = LeapSession(sys.stdin.buffer, sys.stdout.buffer, log=log).start()
+    if args.noop:
+        log("noop plugin: handshake taken, exiting")
+        return 0
     return execute(session, args, sc, outdir)
 
 

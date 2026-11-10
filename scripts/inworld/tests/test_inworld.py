@@ -20,6 +20,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 
 import analyze_light_check as alc  # noqa: E402
+import viewer_cmdline as vc  # noqa: E402
 import light_check as lc  # noqa: E402
 from fake_viewer import FakeViewer, REGION_DEFAULT, SKIES  # noqa: E402
 from leap_client import (LeapError, LeapSession, ViewerGone, binary_dumps, llsd_loads, notation_dumps,  # noqa: E402
@@ -213,23 +214,28 @@ class FullRunTest(unittest.TestCase):
             code, run, _ = run_main(fv, tmp, skies=only("classic_default"))
             self.assertEqual(code, 0)
 
-    def test_original_sky_is_restored_and_personal_lighting_is_reopened(self):
+    def test_original_sky_is_restored(self):
         sky = SKIES["Sunset"][0]
-        fv = FakeViewer(initial_combo=sky, water_combo=REGION_DEFAULT, personal_open=True)
+        fv = FakeViewer(initial_combo=sky, water_combo=REGION_DEFAULT, dc_combo="__None__")
         with tempfile.TemporaryDirectory() as tmp:
             code, run, _ = run_main(fv, tmp, skies=only("classic_default"))
             self.assertEqual(code, 0)
             self.assertEqual(fv.current_sky, sky)
             self.assertEqual(fv.combo, sky)
-            self.assertTrue(fv.floaters["env_adjust_snapshot"])       # it was open: open again
 
     def test_an_environment_that_cannot_be_restored_is_refused_before_anything_changes(self):
-        for combo, dc in (("__Day_Cycle__", "__None__"), ("None", "None"), ("some legacy name", "__None__")):
-            fv = FakeViewer(initial_combo=combo, dc_combo=dc)
+        sky = SKIES["Sunset"][0]
+        cases = [("__Day_Cycle__", "__None__", False), ("None", "None", False), ("some legacy name", "__None__", False),
+                 (REGION_DEFAULT, "__None__", False),    # a local sky edited in Personal Lighting: no asset id
+                 (sky, REGION_DEFAULT, False),           # a fixed sky over a day cycle would lose the day cycle
+                 (REGION_DEFAULT, REGION_DEFAULT, True),  # Personal Lighting open
+                 (sky, "__None__", True)]
+        for combo, dc, personal in cases:
+            fv = FakeViewer(initial_combo=combo, dc_combo=dc, personal_open=personal)
             orig_settings = dict(fv.settings)
             with tempfile.TemporaryDirectory() as tmp:
                 code, run, _ = run_main(fv, tmp)
-                self.assertEqual(code, 1, combo)
+                self.assertEqual(code, 1, (combo, dc, personal))
                 self.assertEqual(fv.settings, orig_settings)
                 self.assertIsNone(fv.follow_cam)
                 self.assertEqual(fv.sky_applied_count, 0)
@@ -292,7 +298,7 @@ class FullRunTest(unittest.TestCase):
 
 class DryRunTest(unittest.TestCase):
     def test_dry_run_is_read_only(self):
-        fv = FakeViewer(initial_combo=SKIES["Default"][0])
+        fv = FakeViewer(initial_combo=SKIES["Default"][0], dc_combo="__None__")
         before = (dict(fv.settings), fv.current_sky, fv.combo, fv.water_combo, fv.dc_combo, fv.clouds_paused)
         with tempfile.TemporaryDirectory() as tmp:
             code, run, _ = run_main(fv, tmp, extra=["--dry-run"])
@@ -345,6 +351,45 @@ class DryRunTest(unittest.TestCase):
             self.assertFalse(rows["sky ghost"]["ok"])
             self.assertTrue(rows["sky ghost_opt"]["ok"])
             self.assertTrue(rows["sky ghost_opt"]["detail"].startswith("WARN"))
+
+
+class LaunchTest(unittest.TestCase):
+    """The --leap command line as the viewer reads it (viewer_cmdline.py ports llcommandlineparser.cpp and llleap.cpp)."""
+    PY = "C:/Users/annes/AppData/Local/Python/pythoncore-3.15-64/python.exe"
+    S = "C:/Users/annes/source/repos/vulkanstorm/work/leap-check/scripts/inworld"
+
+    def test_two_leap_options_give_two_plugin_commands(self):
+        real = "%s %s/light_check.py --dry-run --out C:/x/dry" % (self.PY, self.S)
+        noop = "%s %s/light_check.py --noop" % (self.PY, self.S)
+        cmdline = 'vulkanstorm-bin.exe --leap "%s" --leap "%s"' % (real, noop)
+        leap = vc.leap_command(cmdline)
+        self.assertIsInstance(leap, list)
+        self.assertEqual(leap, [real, noop])
+        self.assertEqual(vc.llleap_tokens(leap[0]), [self.PY, self.S + "/light_check.py", "--dry-run", "--out", "C:/x/dry"])
+        self.assertEqual(vc.llleap_tokens(leap[1])[-1], "--noop")
+
+    def test_the_single_option_forms_do_not_work(self):
+        real = "%s %s/light_check.py --dry-run" % (self.PY, self.S)
+        for quoted in ('--leap "%s"' % real, "--leap \"'%s'\"" % real):
+            leap = vc.leap_command("vulkanstorm-bin.exe " + quoted)
+            # one value: the viewer parses it as LLSD notation, and the text is not notation (no quote survives)
+            self.assertIsInstance(leap, str)
+            self.assertFalse(leap.startswith("'") or leap.startswith('"'), leap)
+
+    def test_a_path_with_spaces_is_split(self):
+        cmdline = 'x.exe --leap "C:/Program Files/Python/python.exe C:/a/light_check.py" --leap "p -c pass"'
+        tokens = vc.llleap_tokens(vc.leap_command(cmdline)[0])
+        self.assertEqual(tokens[0], "C:/Program")
+
+    def test_the_noop_plugin_exits_zero_after_the_handshake(self):
+        import subprocess
+        proc = subprocess.Popen([sys.executable, str(HERE.parent / "light_check.py"), "--noop"], stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        frame = binary_dumps({"pump": "r", "data": {"command": "c", "features": {}}})
+        proc.stdin.write(b"%d:" % len(frame) + frame)
+        proc.stdin.flush()
+        self.assertEqual(proc.wait(timeout=30), 0)
+        self.assertIn(b"noop", proc.stderr.read())
 
 
 class SubprocessTest(unittest.TestCase):
