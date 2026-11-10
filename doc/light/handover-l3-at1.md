@@ -36,34 +36,39 @@ it is gone. The handover is a function of the sun's elevation e alone (stateless
 | -0.3 to -0.6 deg | the moon's shadow fades 0 to 1, scaled by the moon's availability |
 
 No usable moon: the light's direction and colour only swing as far as the moon can take over (`moon_weight` = band x
-availability). The moon's availability is the product of two smoothsteps: its light before the compensation, luminance(source x moon_T), against the dark threshold
-`dark x luminance(source)` (the disc's visibility is in moon_T, so a moon rising or setting fades in and out), and its gain
-against 1 % of the physical moon (a sky with moon_brightness 0 has no moon). With no moon the light keeps the sun's
-direction and fades to dark with the sun's transmittance, with no shadow below +0.3 degree; a moon that rises during the
-band takes over smoothly. The dome, its glow and the clouds' sun term are not "staying with the sun" at night: they follow the
-band alone (`band_weight`, 1 below it whether or not a moon is there), so a moonless night has no sun colour and no sun
-glow, as before.
+availability). The moon's availability is the product of two smoothsteps: its light before the compensation,
+luminance(source x moon_T), against the dark threshold `dark x luminance(source)` (the disc's visibility is in moon_T, so a
+moon rising or setting fades in and out), and its gain against 1 % of the physical moon (a sky with moon_brightness 0 has no
+moon). With no moon the light keeps the sun's direction and fades to dark with the sun's transmittance, with no shadow below
++0.3 degree; a moon that rises during the band takes over smoothly. The dome, its glow and the clouds' sun term are not
+"staying with the sun" at night: they follow the band alone (`band_weight`, 1 below it whether or not a moon is there), so a
+moonless night has no sun colour and no sun glow, as before.
 
 The shadow and the handover do not depend on `sun_scale` (the sun's size): they used to, through the sun disc's sine, and a
 sun_scale of 16 at 1 degree elevation shadowed at 0.451, now 1.0. The size only reaches `light_scale` (the PCSS light size and
 the cloud shadow's penumbra), limited to 100. The test covers sun_scale 1, 4, 16 and 100 by day; above +0.6 degree the shadow
 is full for every size.
 
-A sky with `moon_brightness` 0 and the moon up has no moon: the availability is 0, so the ground light and the hardware
-light's moon are 0 by intent (not the unscaled moon colour of the pre-handover code).
+A sky with `moon_brightness` 0 and the moon up has no moon: the availability is 0, so the ground light is 0 and the classic
+dome's moon colour (diffuse B) is scaled to 0 (before the handover the ground light was the unscaled moon colour, and the
+dome kept the moon's). On a moonless night the same: the dome has no sun colour (the band) and no moon colour (the
+availability), it is dark, as before. By day (band 0, availability irrelevant) nothing changes.
 
-Hardware light 0 (`LLPipeline::setupHWLights`): its direction is the primary light's, and its colour reaches only the classic
-sky and cloud programs (`LLRender` sends it as `sunlight_color`; the moon's colour is diffuse B). Those programs blend the sun
-into the moon themselves, the dome with `sun_moon_blend` (the band weight) and the clouds' sun term with `cloud_light_transmittance`
-and `cloud_moon_blend` (the dip-shifted band), so light 0's colour is always the sun's own, taken before the "neither body up"
-zeroing: no step of the dome or the clouds at sun elevation 0 and no half-step for a sun just below the horizon. The pick
-`SUN_UP_FACTOR` of light 0 still follows `band_weight` < 0.5.
+Hardware light 0 (`LLPipeline::setupHWLights`): its direction is the primary light's. Its colours reach only the classic sky
+and cloud programs (`LLRender` sends diffuse A as `sunlight_color` and diffuse B as `moonlight_color`). Those programs blend
+the sun into the moon themselves: the dome with `sun_moon_blend` (the band weight), the clouds' sun term with
+`cloud_light_transmittance` and `cloud_moon_blend` (the dip-shifted band), and the haze below the clouds takes the sun
+scaled by (1 - `cloud_moon_blend`). So A is the sun's own colour and B the moon's own colour times `moon_avail`, both taken
+before the "neither body up" zeroing, with no hard switch at the band's middle. The dome is then continuous at sun elevation 0
+(its sun share falls with the band while the moon's colour, scaled by the availability, rises); with no usable moon it fades
+to dark across the band, as the non-classic dome does. The pick `SUN_UP_FACTOR` of light 0 follows `band_weight` < 0.5, but no
+shader reads `sun_up_factor` any more (the uniform is only declared).
 
 ## Moon compensation
 
 The moon is physical while the sun is up (2.5e-6 of the sun) and reaches `2^EV x moon_brightness` by
-`RenderMoonAdaptationDepth` degrees below the horizon (smoothstep). EV is limited to -8 .. -2 (never more than a quarter of a sun of the same
-colour). A sky with `moon_brightness` 0 has no direct light at night.
+`RenderMoonAdaptationDepth` degrees below the horizon (smoothstep). EV is limited to -8 .. -2 (never more than a quarter of a
+sun of the same colour). A sky with `moon_brightness` 0 has no direct light at night.
 
 ## Clouds
 
@@ -94,7 +99,7 @@ keeps `lightnorm`. The L2 cloud map composes: its weight is multiplied by `prima
 | `sun_moon_blend` (band weight) | `applySpecial` (sky group) | `skyV.glsl` |
 | `cloud_light_transmittance`, `cloud_moon_blend`, `cloud_light_dir` | `applySpecial` (sky group) | `cloudsV.glsl` |
 
-The shadow caster, the PCSS light size, the cloud map's penumbra and HW light 0 follow the primary light. The
+The shadow caster, the PCSS light size, the cloud map's penumbra and HW light 0's direction follow the primary light. The
 sun shadow pass is skipped while the shadow is invisible.
 
 ## Debug settings (Preferences > Graphics > Sky, devel only)
@@ -117,12 +122,16 @@ sun shadow pass is skipped while the shadow is invisible.
   by less than 15 degrees per 0.01 degree; the physical ground light is continuous while the sun is up; the clouds' sun
   term (1 - t_cloud) Y(cloud_T) steps by less than 0.05 per 0.01 degree (0.15 with the glow near the light).
 - The band: t = 0 above +0.3, 0.5 at 0, 1 below -0.3 degree, monotonic and C1; the shadow fades outside it; the limits of
-  the two widths (swing 0.05 .. 5 degrees: at +0.06 the weight is 0, and 0.0003 at 4.9 degrees for a swing of 5); no moon (below the horizon, or moon_brightness 0): the sun's direction stays; a moon rising during the
-  band: no jump in t.
+  the two widths (swing 0.05 .. 5 degrees: at +0.06 the weight is 0, and 0.0003 at 4.9 degrees for a swing of 5); no moon
+  (below the horizon, or moon_brightness 0): the sun's direction stays; a moon rising during the band: no jump in t.
 - The clouds' band (`band_weight`): 0.5 at -dip, 0 above -dip + swing, 1 below -dip - swing; the dip formula and its degenerate
-  inputs; the dip limit of 20 degrees (and a negative or non-finite dip counting as 0); dawn mirrors dusk; the ground is
+  inputs; the dip limit of 20 degrees (and a negative or non-finite dip counting as 0); dawn mirrors dusk (setting and rising sweeps
+  give the same weights, and the clouds' weight is never ahead of the ground's); the cloud height limit (0 .. 20 km: 1e9 is 20,
+  negative is 0); the ground is
   bit-identical with or without the cloud height; a dusk where the clouds are still sunlit after the ground switched.
-- Night with no moon: band weight 1, no availability, no ground light, no glow; daytime weights 0, shadow 1 and glow factor exactly 1 for any sun size (1 to 100); the availability is continuous; the moon never above a quarter of the sun's colour; no moon, no direct light at
-  night; 2033 horizon, NaN and hostile-setting cases are finite.
+- Night with no moon: band weight 1, no availability, no ground light, no glow; daytime weights 0, shadow 1 and glow
+  factor exactly 1 for any sun size (1 to 100); the availability is continuous; the moon never above a quarter of the sun's
+  colour; no moon, no direct light at night; 2033 horizon, NaN and hostile-setting cases are finite.
+- The test passes at -O2 and at -O0 (the direction checks are in 1e-6 degree).
 - `scripts/light/gen_atmosphere_vectors.py` (GLSL against C++ for `sunlit`/`amblit`), `check_cloud_shadow.py --check`
   (the lookup follows `primary_shadow_strength`) need a GPU.
