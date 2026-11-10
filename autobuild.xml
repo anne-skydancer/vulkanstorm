@@ -453,6 +453,40 @@
         <key>description</key>
         <string>Bugsplat crash reporting package</string>
       </map>
+      <key>cloudnoise</key>
+      <map>
+        <key>platforms</key>
+        <map>
+          <key>common</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>e5a9f1ba6c05afe5308c0f1e427a2d96e029c632</string>
+              <key>hash_algorithm</key>
+              <string>sha1</string>
+              <key>url</key>
+              <string>https://github.com/anne-skydancer/3p-cloudnoise/releases/download/v1.0.0/cloudnoise-1.0.0.2-common-2.tar.zst</string>
+            </map>
+            <key>name</key>
+            <string>common</string>
+          </map>
+        </map>
+        <key>license</key>
+        <string>MIT</string>
+        <key>license_file</key>
+        <string>LICENSES/TileableVolumeNoise.txt</string>
+        <key>copyright</key>
+        <string>Copyright (c) 2017 Sebastien Hillaire (TileableVolumeNoise); Copyright (c) 2005 - 2015 G-Truc Creation (GLM); Copyright (c) 2026 Anne Skydancer</string>
+        <key>version</key>
+        <string>1.0.0.2</string>
+        <key>name</key>
+        <string>cloudnoise</string>
+        <key>canonical_repo</key>
+        <string>https://github.com/anne-skydancer/3p-cloudnoise</string>
+        <key>description</key>
+        <string>Volumetric clouds noise textures (cloud_noise.vkcn): base and erosion volumes from TileableVolumeNoise, curl texture derived from its Perlin noise.</string>
+      </map>
       <key>colladadom</key>
       <map>
         <key>platforms</key>

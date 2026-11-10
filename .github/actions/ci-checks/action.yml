@@ -34,6 +34,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_licence_files.py
       shell: bash
+    - run: python3 scripts/tests/test_cloud_noise_package.py
+      shell: bash
     - name: Check update version parsing
       shell: bash
       run: |
@@ -69,6 +71,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llcloudshadow_test.cpp -o "$RUNNER_TEMP/cloud-shadow-test"
         "$RUNNER_TEMP/cloud-shadow-test"
+    - name: Check the cloud noise container reader
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llcloudnoise_test.cpp -o "$RUNNER_TEMP/cloud-noise-test" -lcrypto
+        "$RUNNER_TEMP/cloud-noise-test"
     - name: Keep development hooks out of release
       shell: bash
       if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.publish == 'true')
