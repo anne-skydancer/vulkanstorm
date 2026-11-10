@@ -39,7 +39,7 @@ class LegacyShadowCheck(unittest.TestCase):
         self.assertEqual(checker.check(''.join(lines)), [])
 
     def test_edit_inside_each_region_fails(self):
-        for name in checker.ALLOWED:
+        for name in sorted(checker.reference_set()):
             lines, a, b = region_span(TEXT, name)
             i = first_code_line(lines, a, b)
             edits = {
@@ -54,7 +54,7 @@ class LegacyShadowCheck(unittest.TestCase):
                     self.assertNotEqual(checker.check(''.join(changed)), [], f'edit of line {i + 1} in {name} passed')
 
     def test_deleted_line_and_extra_line_fail(self):
-        for name in checker.ALLOWED:
+        for name in sorted(checker.reference_set()):
             lines, a, b = region_span(TEXT, name)
             i = first_code_line(lines, a, b)
             deleted = lines[:i] + lines[i + 1:]
@@ -68,6 +68,27 @@ class LegacyShadowCheck(unittest.TestCase):
         self.assertNotEqual(checker.check(''.join(without)), [])
         self.assertNotEqual(checker.check(TEXT + '\n// <ShadowLegacy id="other">\nint x;\n// </ShadowLegacy>\n'), [])
         self.assertNotEqual(checker.check(''.join(lines[:b] + lines[b + 1:])), [])
+
+    def test_allowed_matches_reference_directory(self):
+        self.assertEqual(set(checker.ALLOWED), checker.reference_set())
+        self.assertTrue(checker.reference_set(), 'no reference excerpts: the check would pass vacuously')
+
+    def test_conditionals_and_block_comments_in_a_region_fail(self):
+        for name in sorted(checker.reference_set()):
+            lines, a, b = region_span(TEXT, name)
+            for extra in ('#if 0\n', '#else\n', '#ifdef X\n', '/* c */\n'):
+                changed = lines[:a] + [extra] + lines[a:]
+                with self.subTest(region=name, extra=extra.strip()):
+                    self.assertNotEqual(checker.check(''.join(changed)), [])
+
+    def test_legacy_calls_must_sit_in_the_legacy_branch(self):
+        for call in checker.LEGACY_CALLS:
+            self.assertNotEqual(checker.check(TEXT.replace(call, 'somethingElse(')), [], call)
+        # swap the branch test so the calls sit under PCSS
+        old = 'if (RenderShadowMethod == LLShadowMethod::LEGACY)\n    {\n        if (!computeSunSplitsLegacy'
+        swapped = TEXT.replace(old, old.replace('LEGACY', 'PCSS'))
+        self.assertNotEqual(swapped, TEXT)
+        self.assertNotEqual(checker.check(swapped), [])
 
     def test_allowed_substitution_is_exact(self):
         # computeSunSplitsLegacy returns false instead of leaving the function; any other return is a change

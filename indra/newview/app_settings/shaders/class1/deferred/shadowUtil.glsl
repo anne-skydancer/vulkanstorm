@@ -133,7 +133,7 @@ float pcfSpotShadow(sampler2DShadow shadowMap, vec4 stc, float bias_scale, vec2 
 
 #if defined(PCSS_SHADOW)
 // <Vulkanstorm> PCSS stage 1: rotated Poisson PCF with a receiver-plane depth bias.
-// Compiled only into the deferred sun program (gDeferredSunProgram) when RenderShadowPCSS is on;
+// Compiled only into the deferred sun program (gDeferredSunProgram) when the shadow method is PCSS;
 // every other consumer of this file gets the PCF above, unchanged. Licensed LGPL-2.1 or GPL-3.
 
 // angular size of the shadowing light, L = 2 tan(half angle) (physical sun times the sky's
