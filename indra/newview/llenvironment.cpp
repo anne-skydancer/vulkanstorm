@@ -2015,7 +2015,7 @@ void LLEnvironment::updatePrimaryLight()
     {
         st.cloud_dir = LLVector3(0.f, 0.f, 1.f);
     }
-    st.cloud_moon_weight = (F32)llclamp(rig.cloud_moon_weight, 0.0, 1.0);
+    st.cloud_band_weight = (F32)llclamp(rig.cloud_band_weight, 0.0, 1.0);
     st.color = LLColor3((F32)rig.color.x, (F32)rig.color.y, (F32)rig.color.z);
     st.shadow_strength = (F32)llclamp(rig.light.shadow_strength, 0.0, 1.0);
     st.band_weight = (F32)llclamp(rig.light.band_weight, 0.0, 1.0);

@@ -2,7 +2,8 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 //
 // Standalone checks of llatmosphericlight.h (no viewer libraries):
-//   g++ -std=c++20 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llatmosphericlight_test.cpp
+//   g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llatmosphericlight_test.cpp
+//   (also passes at -O0, where acos near 1 loses the last digits: the direction checks are in 1e-6 degree)
 // The vectors in llatmosphericlight_vectors.inc come from atmosphericsFuncs.glsl run on a GPU
 // (scripts/light/gen_atmosphere_vectors.py); the header must reproduce them to 1e-4 relative
 // (the GLSL is float). Since stage L3 the GLSL's ground light is the primary_light_color uniform (the sun's or the
@@ -1071,7 +1072,7 @@ int main()
     {
         // route_direction
         const Vec3 up = dir_of(60.0), low = dir_of(5.0, 40.0);
-        check(angle_between_deg(route_direction(up, low, 0.0), up) < 1e-9 && angle_between_deg(route_direction(up, low, 1.0), low) < 1e-9, "route ends");
+        check(angle_between_deg(route_direction(up, low, 0.0), up) < 1e-6 && angle_between_deg(route_direction(up, low, 1.0), low) < 1e-6, "route ends");
         const Vec3 sun = dir_of(0.0), moon = { -1.0, 0.0, 0.0 };
         for (double t = 0.0; t <= 1.0; t += 0.01)
         {
@@ -1147,9 +1148,9 @@ int main()
             check(c1, "the moon weight is C1 (no kink at the band's ends or middle)");
             // the direction is the sun's above the band and the moon's below it
             in.sun_dir = dir_of(0.31);
-            check(angle_between_deg(primary_light(in, p).dir, in.sun_dir) < 1e-9, "the sun's direction above the band");
+            check(angle_between_deg(primary_light(in, p).dir, in.sun_dir) < 1e-6, "the sun's direction above the band");
             in.sun_dir = dir_of(-0.31);
-            check(angle_between_deg(primary_light(in, p).dir, in.moon_dir) < 1e-9, "the moon's direction below the band");
+            check(angle_between_deg(primary_light(in, p).dir, in.moon_dir) < 1e-6, "the moon's direction below the band");
             // stateless: the same inputs, the same output
             const PrimaryLight x = primary_light(in, p), y = primary_light(in, p);
             check(x.dir.x == y.dir.x && x.dir.z == y.dir.z && x.T.x == y.T.x && x.shadow_strength == y.shadow_strength && x.moon_weight == y.moon_weight, "primary_light is stateless");
@@ -1199,7 +1200,7 @@ int main()
                 for (double e : { 0.5, 0.3, 0.1, 0.0, -0.1, -0.3, -0.6, -3.0 })
                 {
                     const auto r = light_at(e, moon_e, mb);
-                    check(r.first.moon_weight == 0.0 && angle_between_deg(r.first.dir, r.second.sun_dir) < 1e-9, "no moon: the direction stays with the sun", e, mb);
+                    check(r.first.moon_weight == 0.0 && angle_between_deg(r.first.dir, r.second.sun_dir) < 1e-6, "no moon: the direction stays with the sun", e, mb);
                     check(e > 0.3 + 1e-6 || r.first.shadow_strength < 1e-9, "no moon: no shadow once the sun's is gone", e, mb);
                 }
             }
@@ -1231,11 +1232,11 @@ int main()
             in.moon_gain = 0.1;
             in.sun_dir = dir_of(20.0);
             PrimaryLight a = primary_light(in, PrimaryLightParams{});
-            check(a.moon_weight == 0.0 && a.band_weight == 0.0 && a.shadow_strength == 1.0 && angle_between_deg(a.dir, in.sun_dir) < 1e-9, "dark: the sun while it is up");
+            check(a.moon_weight == 0.0 && a.band_weight == 0.0 && a.shadow_strength == 1.0 && angle_between_deg(a.dir, in.sun_dir) < 1e-6, "dark: the sun while it is up");
             in.sun_dir = dir_of(-20.0);
             a = primary_light(in, PrimaryLightParams{});
             // the direction stays with the sun: this moon has no light (moon_T is 0); the dome's band weight is the night's
-            check(a.band_weight == 1.0 && a.moon_avail == 0.0 && a.moon_weight == 0.0 && angle_between_deg(a.dir, in.sun_dir) < 1e-9, "dark: no usable moon, the sun's direction stays");
+            check(a.band_weight == 1.0 && a.moon_avail == 0.0 && a.moon_weight == 0.0 && angle_between_deg(a.dir, in.sun_dir) < 1e-6, "dark: no usable moon, the sun's direction stays");
             in.sun_dir = dir_of(0.0);
             a = primary_light(in, PrimaryLightParams{});
             check(near(a.band_weight, 0.5, 1e-9) && a.moon_weight == 0.0, "dark: even at the horizon", a.band_weight);
@@ -1350,7 +1351,7 @@ int main()
                 double& worst = physical ? worst_noon : worst_noon_ab;
                 worst = std::fmax(worst, err / scale);
                 check(err <= 1e-6 * scale + 1e-9, "noon identity: the ground light is today's", err / scale, 0.0);
-                check(angle_between_deg(r.light.dir, dir_of(90.0)) < 1e-9 && r.light.shadow_strength == 1.0 && r.light.moon_weight == 0.0,
+                check(angle_between_deg(r.light.dir, dir_of(90.0)) < 1e-6 && r.light.shadow_strength == 1.0 && r.light.moon_weight == 0.0,
                       "noon: the sun, full shadow", r.light.shadow_strength);
                 check(r.haze_glow_factor == 1.0 && near(r.light_scale, 1.5, 1e-12, 1e-12), "noon: the sun's glow and size", r.haze_glow_factor, r.light_scale);
                 check(r.shadow_visible || luminance(want) < 1e-4 * luminance(srgb_to_linear(legacy.source)), "noon: the shadow shows", luminance(want));
@@ -1406,7 +1407,7 @@ int main()
                     {
                         check(ratio > 0.75 && ratio < 1.35, "noon: the clouds' sun is within 35 % of today's", ratio, physical);
                     }
-                    check(r.cloud_moon_weight == 0.0, "noon: the clouds are the sun's", r.cloud_moon_weight);
+                    check(r.cloud_band_weight == 0.0, "noon: the clouds are the sun's", r.cloud_band_weight);
                 }
             }
             std::sort(ratios.begin(), ratios.end());
@@ -1461,7 +1462,7 @@ int main()
                                 max_shadow = std::max(max_shadow, dsh);
                                 max_glow = std::max(max_glow, dgl);
                                 // what the cloud shader multiplies: the clouds' sun term times (1 - cloud_moon_blend)
-                                const double yc0 = (1.0 - last.cloud_moon_weight) * luminance(last.cloud_T), yc1 = (1.0 - r.cloud_moon_weight) * luminance(r.cloud_T);
+                                const double yc0 = (1.0 - last.cloud_band_weight) * luminance(last.cloud_T), yc1 = (1.0 - r.cloud_band_weight) * luminance(r.cloud_T);
                                 if (std::max(yc0, yc1) > 1e-3)
                                 {
                                     max_cloud = std::max(max_cloud, std::fabs(yc1 - yc0) / std::max(yc0, yc1));
@@ -1477,7 +1478,7 @@ int main()
                                         const Vec3 d = q.cloud_dir;
                                         const double cosang = v.x * d.x + v.y * d.y + v.z * d.z;
                                         const double g = std::pow(5.0 * std::fmax(1.0 - cosang, 0.001), -0.5) + 0.25;
-                                        return std::make_pair((1.0 - q.cloud_moon_weight) * luminance(q.cloud_T) * g, g);
+                                        return std::make_pair((1.0 - q.cloud_band_weight) * luminance(q.cloud_T) * g, g);
                                     };
                                     const auto a = term(last, e + 0.01), c = term(r, e);
                                     max_cloud_glow = std::max(max_cloud_glow, std::fabs(c.first - a.first) / std::max(c.second, a.second));
@@ -1568,14 +1569,23 @@ int main()
                 }
             }
 
-            // dawn mirrors dusk: the band depends on the elevation alone (the sun on the other side of the sky, rising)
-            for (double e : { 1.0, 0.31, 0.0, -0.3, -dip15 + 0.2, -dip15, -dip15 - 0.2, -dip15 - 0.31, -3.0 })
+            // dawn mirrors dusk: the band depends on the elevation alone, so a setting and a rising sun (the other side of the sky)
+            // give the same weights, and at every elevation the clouds' weight is at most the ground's (the band is shifted down)
+            for (int rising = 0; rising < 2; ++rising)
             {
-                in.sun_dir = dir_of(e, 90.0);  // sets in the west...
-                const PrimaryLight dusk_l = primary_light(in, cloud);
-                in.sun_dir = dir_of(e, 270.0); // ...rises in the east: the same elevation, the same band
-                const PrimaryLight dawn_l = primary_light(in, cloud);
-                check(dusk_l.band_weight == dawn_l.band_weight && dusk_l.shadow_strength == dawn_l.shadow_strength, "clouds' band: dawn mirrors dusk", e);
+                bool ok = true, same = true;
+                for (int i = 0; i <= 400; ++i)
+                {
+                    const double e = rising ? -3.0 + 0.01 * i : 1.0 - 0.01 * i; // 1 to -3 degrees, and back
+                    in.sun_dir = dir_of(e, rising ? 270.0 : 90.0);
+                    const PrimaryLight g = primary_light(in, ground), c = primary_light(in, cloud);
+                    PrimaryLightInputs other = in;
+                    other.sun_dir = dir_of(e, rising ? 90.0 : 270.0);
+                    ok = ok && c.band_weight <= g.band_weight + 1e-12;
+                    same = same && primary_light(other, cloud).band_weight == c.band_weight && primary_light(other, ground).band_weight == g.band_weight;
+                }
+                check(ok, "clouds' band: never ahead of the ground's, setting or rising", rising);
+                check(same, "clouds' band: dawn mirrors dusk (the same elevation, the same weights)", rising);
             }
 
             // the chain: a sunset with the moon high; the ground has switched to the moon while the clouds are still the sun's
@@ -1586,11 +1596,19 @@ int main()
                 return compute_primary_light(s);
             };
             const PrimaryLightRig dusk = rig_at(-0.5, 1.5);
-            check(dusk.light.moon_weight == 1.0 && dusk.cloud_moon_weight == 0.0, "dusk: the clouds are still sunlit after the ground switched to the moon", dusk.light.moon_weight, dusk.cloud_moon_weight);
-            check(rig_at(-0.5, 0.0).cloud_moon_weight == 1.0, "h = 0: the clouds hand over with the ground");
+            check(dusk.light.moon_weight == 1.0 && dusk.cloud_band_weight == 0.0, "dusk: the clouds are still sunlit after the ground switched to the moon", dusk.light.moon_weight, dusk.cloud_band_weight);
+            check(rig_at(-0.5, 0.0).cloud_band_weight == 1.0, "h = 0: the clouds hand over with the ground");
+            // the cloud height is limited to 0 .. 20 km (once, for the light's path and the dip): huge is 20, negative is 0
+            for (double e : { -0.5, -2.0, -dip15 })
+            {
+                const PrimaryLightRig h20 = rig_at(e, 20.0), hbig = rig_at(e, 1e9), h0 = rig_at(e, 0.0), hneg = rig_at(e, -5.0);
+                check(h20.cloud_band_weight == hbig.cloud_band_weight && h20.cloud_T.x == hbig.cloud_T.x && h20.cloud_dir.z == hbig.cloud_dir.z,
+                      "cloud height limited to 20 km", e);
+                check(h0.cloud_band_weight == hneg.cloud_band_weight && h0.cloud_T.x == hneg.cloud_T.x, "a negative cloud height is 0", e);
+            }
             const PrimaryLightRig mid = rig_at(-dip15, 1.5);
-            check(near(mid.cloud_moon_weight, 0.5, 0.02), "the clouds are half way at -dip", mid.cloud_moon_weight);
-            check(rig_at(-dip15 - 0.5, 1.5).cloud_moon_weight == 1.0, "the clouds are the moon's below -dip - swing");
+            check(near(mid.cloud_band_weight, 0.5, 0.02), "the clouds are half way at -dip", mid.cloud_band_weight);
+            check(rig_at(-dip15 - 0.5, 1.5).cloud_band_weight == 1.0, "the clouds are the moon's below -dip - swing");
             double last = 0.0, step = 0.0, ground_diff = 0.0;
             for (int i = 0; i <= 600; ++i)
             {
@@ -1598,9 +1616,9 @@ int main()
                 const PrimaryLightRig a = rig_at(e, 1.5), z = rig_at(e, 0.0);
                 if (i > 0)
                 {
-                    step = std::max(step, std::fabs(a.cloud_moon_weight - last));
+                    step = std::max(step, std::fabs(a.cloud_band_weight - last));
                 }
-                last = a.cloud_moon_weight;
+                last = a.cloud_band_weight;
                 ground_diff = std::max(ground_diff, std::fabs(a.light.moon_weight - z.light.moon_weight) + std::fabs(a.light.shadow_strength - z.light.shadow_strength)
                                                        + std::fabs(a.light.dir.x - z.light.dir.x) + std::fabs(a.light.dir.z - z.light.dir.z));
             }
@@ -1618,7 +1636,7 @@ int main()
                 s.moon_brightness = variant == 0 ? 0.5 : 0.0;
                 const PrimaryLightRig r = compute_primary_light(s);
                 check(r.light.band_weight == 1.0 && r.light.moon_avail == 0.0 && r.light.moon_weight == 0.0, "no moon at night: the dome's band weight is the night's, no availability", variant);
-                check(r.cloud_moon_weight == 1.0, "no moon at night: the clouds have no sun term", variant);
+                check(r.cloud_band_weight == 1.0, "no moon at night: the clouds have no sun term", variant);
                 check(r.color.x == 0.0 && r.color.y == 0.0 && r.color.z == 0.0 && !r.shadow_visible && r.light.shadow_strength == 0.0, "no moon at night: no ground light, no shadow", variant);
                 check(r.haze_glow_factor == 0.0, "no moon at night: no glow", r.haze_glow_factor);
             }
@@ -1636,7 +1654,7 @@ int main()
                     PrimaryLightSetup d = setup_of(sky, dir_of(e), dir_of(40.0, 100.0));
                     d.sun_scale = scale;
                     const PrimaryLightRig r = compute_primary_light(d);
-                    check(r.haze_glow_factor == 1.0 && r.light.band_weight == 0.0 && r.light.moon_weight == 0.0 && r.cloud_moon_weight == 0.0 && r.light_scale == scale,
+                    check(r.haze_glow_factor == 1.0 && r.light.band_weight == 0.0 && r.light.moon_weight == 0.0 && r.cloud_band_weight == 0.0 && r.light_scale == scale,
                           "daytime: glow factor 1, weights 0 and the sun's size, for any sun_scale", scale, e);
                     check(r.light.shadow_strength == 1.0, "daytime: the full shadow for any sun_scale (sun_scale 16 at 1 degree included)", scale, e);
                 }
@@ -1769,9 +1787,9 @@ int main()
             s.moon_brightness = 0.8;
             const PrimaryLightRig n = compute_primary_light(s);
             check(n.light.moon_weight == 1.0 && near(n.haze_glow_factor, 0.8 * 0.25, 1e-12, 1e-12), "night: the moon's glow is moon_brightness / 4", n.haze_glow_factor);
-            check(near(n.light_scale, 2.0, 1e-12, 1e-12) && angle_between_deg(n.light.dir, s.moon_dir) < 1e-9, "night: the moon's size and direction", n.light_scale);
+            check(near(n.light_scale, 2.0, 1e-12, 1e-12) && angle_between_deg(n.light.dir, s.moon_dir) < 1e-6, "night: the moon's size and direction", n.light_scale);
             check(n.shadow_visible && n.light.shadow_strength == 1.0, "night: the moon casts a shadow");
-            check(n.cloud_moon_weight == 1.0 && n.cloud_T.x == 0.0, "night: the clouds have no sun term", n.cloud_moon_weight);
+            check(n.cloud_band_weight == 1.0 && n.cloud_T.x == 0.0, "night: the clouds have no sun term", n.cloud_band_weight);
             s.moon_dir = dir_of(-10.0, 100.0); // the moon is down too: both dark
             const PrimaryLightRig dark = compute_primary_light(s);
             check(dark.color.x == 0.0 && !dark.shadow_visible && finite_unit(dark.light.dir), "neither body up: no light, no shadow");
