@@ -35,7 +35,25 @@ class LeapTimeout(LeapError):
 
 
 class ViewerGone(LeapError):
-    """The pipe from the viewer closed (viewer quit or crashed)."""
+    """The pipe from the viewer reached end of file (the viewer exited, crashed or closed the pipe)."""
+
+
+class ProtocolError(LeapError):
+    """The bytes from the viewer cannot be parsed: the connection is lost, but the viewer has not necessarily exited."""
+
+
+def hexdump(data, center=0, span=64):
+    """Hex and ASCII of `span` bytes around `center`, for error messages."""
+    lo = max(0, center - span // 2)
+    chunk = data[lo:lo + span]
+    return "bytes %d..%d of %d: %s | %s" % (lo, lo + len(chunk), len(data), chunk.hex(" "),
+                                              "".join(chr(b) if 32 <= b < 127 else "." for b in chunk))
+
+
+class LlsdParseError(ValueError):
+    def __init__(self, msg, offset):
+        super().__init__(msg)
+        self.offset = offset
 
 
 # ---------------------------------------------------------------------------------------------
@@ -271,17 +289,26 @@ def _word(c):
 
 
 def llsd_loads(data):
-    """Parse a binary or notation LLSD document (with or without header)."""
+    """Parse a binary or notation LLSD document (with or without header). Raises LlsdParseError with the offset."""
     if data.startswith(_BINARY_HEADER):
-        c = _Cursor(data[len(_BINARY_HEADER):].lstrip(b"\n"))
-        return _binary_value(c)
-    if data.lower().startswith(_NOTATION_HEADER):
+        skip = len(_BINARY_HEADER)
+        while data[skip:skip + 1] == bytes([10]):
+            skip += 1
+        c = _Cursor(data[skip:])
+        base, parser = skip, _binary_value
+    elif data.lower().startswith(_NOTATION_HEADER):
         c = _Cursor(data[len(_NOTATION_HEADER):])
-        return _notation_value(c)
-    if data[:1] in (b"{", b"[", b"!"):
+        base, parser = len(_NOTATION_HEADER), _notation_value
+    elif data[:1] in (b"{", b"[", b"!"):
         # an unheadered document: the viewer's own default is notation
-        return _notation_value(_Cursor(data))
-    raise ValueError("unrecognised LLSD document start %r" % data[:12])
+        c = _Cursor(data)
+        base, parser = 0, _notation_value
+    else:
+        raise LlsdParseError("unrecognised LLSD document start %r" % data[:12], 0)
+    try:
+        return parser(c)
+    except ValueError as exc:
+        raise LlsdParseError(str(exc), base + c.pos) from exc
 
 
 # ---------------------------------------------------------------------------------------------
@@ -346,10 +373,10 @@ def read_frame(stream):
         if ch == b":":
             break
         if not ch.isdigit():
-            raise LeapError("protocol error: %r in the length prefix" % ch)
+            raise ProtocolError("%r in the length prefix after %r" % (ch, digits))
         digits += ch
         if len(digits) > 12:
-            raise LeapError("protocol error: length prefix too long")
+            raise ProtocolError("length prefix too long")
     n = int(digits or b"0")
     payload = b""
     while len(payload) < n:
@@ -361,7 +388,7 @@ def read_frame(stream):
 
 
 def _eof_in_frame():
-    raise ViewerGone("pipe closed in the middle of a frame")
+    raise ViewerGone("pipe reached end of file in the middle of a frame")
 
 
 def write_frame(stream, payload):
@@ -392,6 +419,7 @@ class LeapSession:
         self._fired_errors = []
         self._next_id = 1
         self._closed = False
+        self._broken = None      # why the connection was given up on (protocol error), None if it was EOF
         self._thread = None
 
     # -- startup --------------------------------------------------------------------------------
@@ -403,7 +431,7 @@ class LeapSession:
         with self._cv:
             while self.command_pump is None:
                 if self._closed:
-                    raise ViewerGone("pipe closed before the handshake")
+                    raise self.gone("the handshake")
                 left = deadline - time.monotonic()
                 if left <= 0:
                     raise LeapTimeout("no LEAP handshake from the viewer in %.0f s" % handshake_timeout)
@@ -418,9 +446,11 @@ class LeapSession:
                     break
                 try:
                     msg = llsd_loads(frame)
-                except Exception as exc:  # noqa: BLE001 - log and keep reading
-                    self._log("unparseable frame from the viewer: %s" % exc)
-                    continue
+                except LlsdParseError as exc:
+                    # A frame that cannot be parsed means the byte stream is damaged (the next length prefix cannot
+                    # be trusted either): give up with the evidence rather than guess.
+                    raise ProtocolError("frame of %d bytes is not LLSD: %s at offset %d; %s" % (
+                        len(frame), exc, exc.offset, hexdump(frame, exc.offset))) from exc
                 pump = msg.get("pump")
                 data = msg.get("data")
                 with self._cv:
@@ -445,8 +475,14 @@ class LeapSession:
                     else:
                         self._events.append((pump, data))
                     self._cv.notify_all()
-        except Exception as exc:  # noqa: BLE001
+        except ProtocolError as exc:
+            self._broken = str(exc)
+            self._log("PROTOCOL ERROR, connection from the viewer given up: %s" % exc)
+        except ViewerGone as exc:
             self._log("reader stopped: %s" % exc)
+        except Exception as exc:  # noqa: BLE001
+            self._broken = "reader failed: %r" % exc
+            self._log("reader failed: %r" % exc)
         finally:
             with self._cv:
                 self._closed = True
@@ -455,6 +491,14 @@ class LeapSession:
     @property
     def closed(self):
         return self._closed
+
+    def gone(self, what="a reply"):
+        """The exception to raise because the connection is gone: ProtocolError after a parse failure (the viewer may
+        well be running), ViewerGone after end of file."""
+        if self._broken:
+            return ProtocolError("connection to the viewer lost by a protocol error while waiting for %s: %s" % (
+                what, self._broken))
+        return ViewerGone("the pipe from the viewer reached end of file while waiting for %s" % what)
 
     # -- sending --------------------------------------------------------------------------------
     def post(self, pump, data):
@@ -498,7 +542,7 @@ class LeapSession:
             with self._cv:
                 while self._pending[reqid] is None:
                     if self._closed:
-                        raise ViewerGone("viewer closed while waiting for %s.%s" % (pump, op))
+                        raise self.gone("%s.%s" % (pump, op))
                     left = deadline - time.monotonic()
                     if left <= 0:
                         raise LeapTimeout("no reply to %s.%s in %.0f s" % (pump, op, timeout))
@@ -531,7 +575,7 @@ class LeapSession:
                         del self._events[i]
                         return d
                 if self._closed:
-                    raise ViewerGone("viewer closed while waiting for an event on %s" % pump)
+                    raise self.gone("an event on %s" % pump)
                 left = deadline - time.monotonic()
                 if left <= 0:
                     raise LeapTimeout("no event on %s in %.0f s" % (pump, timeout))

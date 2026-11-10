@@ -32,7 +32,7 @@ import uuid
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from leap_client import LeapError, LeapSession, LeapTimeout, ViewerGone  # noqa: E402
+from leap_client import LeapError, LeapSession, LeapTimeout, ProtocolError, ViewerGone  # noqa: E402
 
 REPO_ROOT = HERE.parents[1]
 
@@ -47,13 +47,14 @@ REQUIRED_OPS = {
     "LLViewerWindow": ["saveSnapshot"],
     "LLAgent": ["getPosition", "setCameraParams", "setFollowCamActive", "removeCameraParams"],
     "LLInventory": ["getBasicFolderID", "collectDescendantsIf", "getItemsInfo"],
-    "LLStats": ["getPerfData"],
 }
+OPTIONAL_OPS = {"LLStats": ["getPerfData"]}      # needed only with record_fps
 
 PHOTOTOOLS = "phototools"            # floater with the sky combo box (floater_phototools.xml)
 PERSONAL = "env_adjust_snapshot"     # Personal Lighting (floater_adjust_environment.xml)
 FIXED_SKY = "env_fixed_environmentent_sky"  # fixed sky editor (spelling as in the viewer)
 ENV_TAB_BUTTON = "htab_EnvironmentTab"      # tab button of the Phototools Environment tab
+FIXED_TAB_BUTTONS = ["htab_panel_settings_sky_hbodies", "htab_panel_fs_settings_sky_hbodies"]
 REGION_BUTTONS = ["Revert to Region Default", "ResetToRegionDefault"]
 REGION, DAYCYCLE, NOCHOICE = "__Regiondefault__", "__Day_Cycle__", "__None__"   # quickprefs.h
 SIGNATURE_WIDGETS = ["sun_azimuth", "sun_elevation", "probe_ambiance", "cloud_coverage", "haze_horizon",
@@ -182,7 +183,7 @@ class Viewer:
             if left <= 0:
                 return
             if self.s.closed:
-                raise ViewerGone("viewer closed")
+                raise self.s.gone("the next step")
             time.sleep(min(0.25, left))
 
     def req(self, api, op, /, timeout=None, **args):
@@ -247,27 +248,34 @@ class Viewer:
                 self.sleep(0.25)
             else:
                 raise LeapError("floater %s did not become visible" % name)
-        self._paths.pop(name, None)
+        self.forget(name)
 
     def hide_floater(self, name):
         self.fire("LLFloaterReg", "hideInstance", name=name)
         self.barrier()
-        self._paths.pop(name, None)
+        self.forget(name)
 
-    def floater_paths(self, floater):
-        """All view paths under a floater (cached until the floater is shown or hidden again)."""
-        if floater not in self._paths:
-            reply = self.req("LLWindow", "getPaths", under="//" + floater, timeout=60)
-            self._paths[floater] = list(reply.get("paths") or [])
-        return self._paths[floater]
+    def forget(self, floater):
+        """Drop the cached widget paths of a floater (they change when it is shown, hidden or switches tab)."""
+        for k in [k for k in self._paths if (isinstance(k, tuple) and k[1] == floater)]:
+            del self._paths[k]
 
     def find_widget(self, floater, name, required=True):
-        for p in self.floater_paths(floater):
-            if p.rsplit("/", 1)[-1] == name:
-                return p
-        if required:
+        """Absolute path of the first view called `name` under `floater`, found with one small getInfo reply on
+        "//floater//name". (A getPaths over a whole floater is a reply of 100 KB or more: the viewer's Windows pipe
+        writer can corrupt big frames, see README.)"""
+        key = ("widget", floater, name)
+        if key in self._paths:
+            return self._paths[key]
+        try:
+            path = str(self.req("LLWindow", "getInfo", path="//%s//%s" % (floater, name)).get("path") or "") or None
+        except LeapError:
+            path = None
+        if path:
+            self._paths[key] = path
+        elif required:
             raise LeapError("widget %r not found under floater %r" % (name, floater))
-        return None
+        return path
 
     def widget_info(self, path):
         return self.req("LLWindow", "getInfo", path=path)
@@ -356,7 +364,9 @@ class Viewer:
         self.barrier()
 
     def perf(self):
-        """(fps, frame_ms) from the viewer's frame recording, or (None, None)."""
+        """(fps, frame_ms) from the viewer's frame recording, or (None, None). LLStats.getPerfData replies with
+        about 200 values for each of a dozen statistics (tens of KB), which the viewer's Windows pipe writer can
+        corrupt: it is only called when the scenario sets record_fps."""
         try:
             stats = self.req("LLStats", "getPerfData", timeout=15).get("stats") or {}
             ft = stats.get("frametime") or stats.get("frame_time") or stats
@@ -401,11 +411,11 @@ class Viewer:
                 return state
 
 
-def check_apis(v):
+def check_apis(v, need_stats=False):
     """[(api, ok, detail)] for every API and operation in REQUIRED_OPS."""
     out = []
     apis = v.req("LLLeap", "getAPIs")
-    for api, ops in REQUIRED_OPS.items():
+    for api, ops in {**REQUIRED_OPS, **(OPTIONAL_OPS if need_stats else {})}.items():
         if api not in apis:
             out.append((api, False, "not registered"))
             continue
@@ -458,11 +468,11 @@ def find_settings_items(v, roots, name):
     return exact + partial
 
 
-def list_settings(v, roots):
+def list_settings(v, roots, name=""):
     out = {}
     for root in roots:
         try:
-            reply = v.req("LLInventory", "collectDescendantsIf", folder_id=root, name="", type="settings",
+            reply = v.req("LLInventory", "collectDescendantsIf", folder_id=root, name=name, type="settings",
                           timeout=120)
         except LeapError:
             continue
@@ -500,6 +510,7 @@ DEFAULTS = {
     "camera": {"enabled": True, "height_m": 2.5, "pitch_deg": 10.0, "look_distance_m": 200.0},
     "sweep": {"start": 10.0, "stop": -10.0, "step": 0.5, "fine_step": 0.1, "fine_half_width": 1.5},
     "noon_elevation_deg": 66.0,
+    "record_fps": False,
     "knobs": {},
     "settings": {},
     "pause_clouds": True,
@@ -765,7 +776,7 @@ class Run:
             if FIXED_SKY not in self.floaters_opened:
                 self.floaters_opened.append(FIXED_SKY)
                 self.save_restore()
-            self.select_fixed_tab(spec.get("tab_regex", "hbodies"))
+            self.select_fixed_tab(spec.get("tab_buttons", FIXED_TAB_BUTTONS))
             return FIXED_SKY
         v.show_floater(PERSONAL)
         if PERSONAL not in self.floaters_opened:
@@ -773,21 +784,24 @@ class Run:
             self.save_restore()
         return PERSONAL
 
-    def select_fixed_tab(self, tab_regex):
-        """Click the tab button (named htab_<panel name>) of the fixed editor that holds the sun and moon sliders."""
+    def select_fixed_tab(self, buttons):
+        """Click the tab button of the fixed editor that holds the sun and moon sliders. The tab buttons are named
+        htab_<panel name> (lltabcontainer.cpp); the panel is panel_settings_sky_hbodies, or the Firestorm compact
+        editor's panel_fs_settings_sky_hbodies."""
         v = self.v
-        rx = re.compile(tab_regex, re.I)
-        for p in v.floater_paths(FIXED_SKY):
-            last = p.rsplit("/", 1)[-1]
-            if last.startswith("htab_") and rx.search(last):
-                v.mouse_click(p)
-                v._paths.pop(FIXED_SKY, None)
-                sl = v.find_widget(FIXED_SKY, "sun_elevation", required=False)
-                if sl is None or not v.widget_info(sl).get("available"):
-                    raise LeapError("clicked %s but the sun sliders are not available" % last)
-                return last
-        raise LeapError("no tab button matching %r in the fixed sky editor (htab_* found: %s)" % (
-            tab_regex, [q.rsplit("/", 1)[-1] for q in v.floater_paths(FIXED_SKY) if q.rsplit("/", 1)[-1].startswith("htab_")]))
+        tried = []
+        for name in buttons:
+            p = v.find_widget(FIXED_SKY, name, required=False)
+            tried.append(name)
+            if not p:
+                continue
+            v.mouse_click(p)
+            v.forget(FIXED_SKY)
+            sl = v.find_widget(FIXED_SKY, "sun_elevation", required=False)
+            if sl is None or not v.widget_info(sl).get("available"):
+                raise LeapError("clicked %s but the sun sliders are not available" % name)
+            return name
+        raise LeapError("none of the tab buttons %s exists in the fixed sky editor" % tried)
 
     def prepare_sky(self, spec):
         v = self.v
@@ -854,12 +868,12 @@ class Run:
     def capture(self, spec, step, kind, elev, floater, az):
         v = self.v
         got = v.set_slider(floater, "sun_elevation", elev, tol=0.006)
-        fps, ms = v.perf()
+        fps, ms = v.perf() if self.sc["record_fps"] else (None, None)
         wait = self.sc["settle"]["per_step_s"]
         if fps and fps > 0:
             wait = max(wait, self.sc["settle"]["min_frames"] / fps)
         v.sleep(wait)
-        fps, ms = v.perf()
+        fps, ms = v.perf() if self.sc["record_fps"] else (None, None)
         base = "%s_%03d_%s" % (spec["id"], step, fmt_elev(elev))
         bmp = self.out / "snapshots" / (base + ".bmp")
         v.snapshot(str(bmp).replace("\\", "/"), self.sc["snapshot"].get("width"), self.sc["snapshot"].get("height"))
@@ -905,7 +919,7 @@ class Run:
                               "args": vars(self.args)})
         self.save_run_info()
         try:
-            bad = [(a, d) for a, ok, d in check_apis(v) if not ok]
+            bad = [(a, d) for a, ok, d in check_apis(v, sc['record_fps']) if not ok]
             if bad:
                 raise LeapError("this viewer lacks LEAP operations the script needs: %s" % bad)
             self.roots, self.user_roots = inventory_roots(v, sc["library_root_id"])
@@ -934,22 +948,28 @@ class Run:
                 self.cleanup()
 
     def wait_for_inventory(self, timeout=120.0, interval=4.0):
-        """Wait until the user's own settings folder exists and its item count has been stable for two polls."""
+        """Wait until the scenario's sky names resolve to the same set of settings items on two polls in a row
+        (small replies: a listing of the whole inventory would be a big frame), or until the timeout."""
+        names = sorted({n for sp in self.sc["skies"] for n in sp.get("names", [])})
         end = time.monotonic() + timeout
         last = None
         while True:
             if not self.user_roots:
                 self.roots, self.user_roots = inventory_roots(self.v, self.sc["library_root_id"])
-            count = len(list_settings(self.v, self.user_roots)) if self.user_roots else None
-            if count is not None and count == last:
-                if count == 0:
-                    self.warn("your inventory shows no settings items; skies fall back to the quick-environment buttons")
+            found = None
+            if self.user_roots:
+                found = sorted((a for n in names for _, a in find_settings_items(self.v, self.roots, n)))
+            if found is not None and found == last:
+                if not found and names:
+                    self.warn("none of the scenario's sky names is in your inventory; skies fall back to the "
+                              "quick-environment buttons")
                 return
-            last = count
+            last = found
             if time.monotonic() > end:
-                self.warn("the inventory did not settle in %.0f s (user settings items: %s); continuing" % (timeout, count))
+                self.warn("the inventory did not settle in %.0f s (%s matches); continuing" % (
+                    timeout, "no folder" if found is None else len(found)))
                 return
-            log("waiting for the inventory (user settings items: %s)" % count)
+            log("waiting for the inventory (%s matching items)" % ("no folder yet" if found is None else len(found)))
             self.v.sleep(interval)
 
     def snapshot_original_state(self):
@@ -1033,7 +1053,7 @@ class Run:
                     self.capture(spec, step, "sweep", e, floater, az)
             entry["status"] = "ok"
             entry["steps"] = step
-        except (Aborted, ViewerGone):
+        except (Aborted, ViewerGone, ProtocolError):
             entry["status"] = "aborted"
             raise
         except Exception as exc:  # noqa: BLE001 - a failed sky must not lose the others
@@ -1088,7 +1108,7 @@ def dry_run(v, sc, args, outdir):
     (Personal Lighting freezes the current sky into the local environment), so those are only checked when they are
     already open, or with --deep, which records the environment and restores it afterwards like a run."""
     rep = Report()
-    for api, ok, detail in check_apis(v):
+    for api, ok, detail in check_apis(v, sc['record_fps']):
         rep.add("api %s" % api, ok, detail)
     groups = v.req("LLViewerControl", "groups").get("groups") or []
     rep.add("control group Global", "Global" in groups, str(groups))
@@ -1137,7 +1157,7 @@ def dry_run_ui(v, sc, rep, run, args):
         rep.add("floater %s opens" % PHOTOTOOLS, False, str(exc))
         return
     run.select_env_tab()
-    v._paths.pop(PHOTOTOOLS, None)
+    v.forget(PHOTOTOOLS)
     check_widgets(v, rep, PHOTOTOOLS, ["WLPresetsCombo", "WLPrevPreset", "WLNextPreset", "WaterPresetsCombo", "WWPrevPreset",
                                        "WWNextPreset", "DCPresetsCombo", "DCPrevPreset", "DCNextPreset", "PauseClouds",
                                        "Noon", "Sunset", ENV_TAB_BUTTON])
@@ -1170,7 +1190,7 @@ def dry_run_ui(v, sc, rep, run, args):
                 try:
                     v.show_floater(FIXED_SKY, key="new")
                     run.floaters_opened.append(FIXED_SKY)
-                    tab = run.select_fixed_tab("hbodies")
+                    tab = run.select_fixed_tab(FIXED_TAB_BUTTONS)
                     rep.add("fixed editor tab", True, tab)
                     check_widgets(v, rep, FIXED_SKY, ["sun_azimuth", "sun_elevation", "moon_brightness"])
                 except LeapError as exc:
@@ -1287,6 +1307,8 @@ def parse_args(argv):
                     help="with --dry-run: also open Personal Lighting and the fixed sky editor (this changes the environment; "
                          "it is restored afterwards, like a run)")
     ap.add_argument("--list-skies", action="store_true", help="print the settings items (skies, water, day cycles) of the inventory")
+    ap.add_argument("--sky-filter", default="", help="with --list-skies: only items whose name contains this text "
+                    "(a listing of a big inventory is one big reply, which the viewer's pipe writer can corrupt)")
     ap.add_argument("--restore", default=None, metavar="RUNDIR", help="re-apply the settings saved in RUNDIR/restore.json")
     ap.add_argument("--noop", action="store_true",
                     help="do nothing: take the LEAP handshake and exit 0 (the second, throw-away --leap entry, see README)")
@@ -1341,7 +1363,7 @@ def execute(session, args, sc, outdir):
             v.sleep(sc["settle"]["post_login_s"])
         if args.list_skies:
             roots, _ = inventory_roots(v, sc["library_root_id"])
-            items = list_settings(v, roots)
+            items = list_settings(v, roots, args.sky_filter)
             for aid, name in sorted(items.items(), key=lambda kv: kv[1].lower()):
                 log("settings item: %-48s %s" % (name, aid))
             write_json_atomic(outdir / "settings_items.json", items)
@@ -1360,8 +1382,13 @@ def execute(session, args, sc, outdir):
         log("aborted: %s" % exc)
         code = 2
     except ViewerGone as exc:
-        log("viewer connection lost: %s (settings could not be restored by the script; see restore.json)" % exc)
+        log("the pipe from the viewer reached end of file: %s (the viewer exited or closed the plugin pipe; settings could "
+            "not be restored by the script; see restore.json)" % exc)
         code = 3
+    except ProtocolError as exc:
+        log("PROTOCOL ERROR, the connection to the viewer is lost (the viewer may still be running): %s. Settings could "
+            "not be restored by the script: use --restore on restore.json in a new viewer, and check the environment." % exc)
+        code = 5
     except Exception as exc:  # noqa: BLE001
         log("FAILED: %s" % exc)
         code = 1

@@ -82,11 +82,11 @@ names), `--restore RUNDIR` (re-applies the settings and releases the camera reco
 fresh viewer, if a run was cut short; it does not touch the environment and creates no folder), `--only
 pbr_default,classic_default`, `--step-limit 6` (quick test), `--set KEY=VALUE` (a debug setting for this run only,
 restored afterwards, repeatable; e.g. `--set RenderAtmospherePhysicalLight=false` for the A/B run of #447),
-`--noop` (the throw-away second plugin), `--max-wait-s N` (how long to wait for login; default the scenario's `login_timeout_s`, 3600), `--viewer-log PATH`
+`--sky-filter TEXT` (with `--list-skies`: only names containing TEXT), `--noop` (the throw-away second plugin), `--max-wait-s N` (how long to wait for login; default the scenario's `login_timeout_s`, 3600), `--viewer-log PATH`
 (the viewer log for the excerpt; default: the newest `*.log` under `%APPDATA%\*\logs` or `%LOCALAPPDATA%\*\logs`
 touched in the last 10 minutes), `--scenario FILE`.
 
-Exit codes: 0 ok, 1 error (a refused start included, see "What a run does") or dry-run failure, 2 stopped by `STOP`, 3 viewer connection lost, 4 a required sky failed
+Exit codes: 0 ok, 1 error (a refused start included, see "What a run does") or dry-run failure, 2 stopped by `STOP`, 3 the pipe from the viewer reached end of file (the viewer exited or closed it), 5 protocol error (the bytes from the viewer cannot be parsed: the connection is lost but the viewer may still be running), 4 a required sky failed
 (a final `LIGHTCHECK FAILED SKIES ...` line names them).
 
 Analysis (offline, any time):
@@ -126,15 +126,33 @@ How things are done (LEAP has no environment API, and its UI API cannot set a sl
 | Click a button | `LLFloaterReg.clickButton` (calls the button's commit); mouse events on the widget path if refused; a mouse event the widget does not handle is an error |
 | PBR or classic | Personal Lighting `probe_ambiance` (1 = PBR sky, 0 = classic; `doc/light/light-reference-numbers.md` explains why no shipped sky is PBR) |
 | Sun elevation, moon position | Personal Lighting `sun_elevation`, `moon_azimuth`, `moon_elevation`: the slider's text field is focused, emptied with Backspace, filled with `LLWindow.pasteText` and committed with Enter (`LLWindow.keyDown path=...`); the value is read back with `UI.getValue` and must match to 0.006 degrees, else the step fails |
-| Sky without a moon | the fixed sky editor (`env_fixed_environmentent_sky`, key `new`) has `moon_brightness`; Personal Lighting has not. The editor starts from a **clone of the current sky**, so the script selects Default first, opens the editor, clicks its Sun & Moon tab (`htab_panel_settings_sky_hbodies`) and sets `moon_brightness` 0. Optional, the least certain part; refuses if the editor is already open |
+| Sky without a moon | the fixed sky editor (`env_fixed_environmentent_sky`, key `new`) has `moon_brightness`; Personal Lighting has not. The editor starts from a **clone of the current sky**, so the script selects Default first, opens the editor, clicks its Sun & Moon tab (`htab_panel_settings_sky_hbodies`, or `htab_panel_fs_settings_sky_hbodies` of the compact editor; scenario field `tab_buttons`) and sets `moon_brightness` 0. Optional, the least certain part; refuses if the editor is already open |
 | Fixed camera | `LLAgent.setCameraParams` (follow cam, `camera_locked` and `focus_locked`, no lag): position = your avatar +2.5 m, focus 200 m away along the sun's azimuth, pitched up 10 degrees so the horizon sits at about 65 % of the frame height. `setFollowCamActive false` and `removeCameraParams` at the end |
 | Snapshot | `LLViewerWindow.saveSnapshot` (no UI, no HUD, window size unless the scenario gives a size). The viewer's LEAP operation passes no format, so the file is **BMP data whatever its name**: the script saves `.bmp` and converts to PNG with Pillow, deleting the BMP |
-| FPS | `LLStats.getPerfData` (mean of the last 30 frames of `frametime.fps`) per step; the wait per step is the larger of `per_step_s` and `min_frames` / fps |
+| FPS | off by default (scenario `record_fps`, then `LLStats.getPerfData`, mean of the last 30 frames of `frametime.fps` per step; the wait per step is the larger of `per_step_s` and `min_frames` / fps). `getPerfData` replies with tens of KB, see "Big replies"; with it off the manifest's fps column is empty |
 | Login | `listen` on the `StartupState` pump, `LLStartUp.postStartupState` for the current state, wait for the last entry of `getStateTable` |
 
 No `UI.call` is used (a wrong function name there makes the viewer abort), and every fire-and-forget operation is
 sent with a reply pump, because the viewer's dispatcher throws on a rejected operation that has none; errors in those
 replies surface at the next round trip.
+
+## Big replies (a viewer limitation the script avoids)
+
+The first in-world dry run lost the connection on the reply to `LLWindow.getPaths` for the whole Phototools floater (about
+100 KB). The serializer is not at fault: the binary LLSD the viewer writes (`llsdserialize.cpp`) matches the decoder
+(string, key, binary and URI lengths are byte counts, the `size:` prefix of `llleap.cpp` counts bytes of the serialized
+buffer, and every marker the formatter writes is handled; the only markers are `{ } [ ] ! 0 1 i r u s d l b k`).
+`llprocess.cpp:189-199` documents the likely cause: on Windows the viewer's pipe writer sends 4 KB chunks and a chunk can
+be written twice (`apr_file_write` reports EAGAIN with 0 bytes written although the chunk went out). A repeated chunk in the
+middle of a frame shifts everything after it: the decoder meets string bytes where it expects a type marker (the `b'o'`
+and `b'w'` of the log came from path names such as `phototools` and `View`) and the next length prefix is garbage. This
+is inferred from the source and reproduced offline with a damaged frame (`tests/test_inworld.py`); the actual bytes of the
+failed frame were not captured. The script therefore keeps replies small: widgets are found with one `LLWindow.getInfo`
+on `//floater//name` (a few hundred bytes) instead of listing a floater, inventory searches filter by name, FPS is off, and
+`getPaths` is used only under one slider. A frame that cannot be parsed ends the connection as a **protocol error** (exit 5,
+with a hex dump of 64 bytes around the failure in the viewer log, not a claim that the viewer exited); only end of file
+is reported as the pipe closing. Two things can still hit it: a long `--list-skies` (use `--sky-filter`) and any reply of
+the viewer that is large by nature.
 
 ## Skies of the #447 scenario (`scenarios/l3_at1_handover.json`)
 
@@ -152,7 +170,7 @@ from your inventory. If a name is not found the script uses the sky's `fallback_
 (`warnings`) — the data is then of a different sky, so pick better names with `--list-skies` and edit the scenario.
 Each sky entry takes `names`, `fallback_button`, `controls` (any slider of the editor by its XUI name),
 `azimuth_deg`, `moon` (`azimuth_offset_deg` from the sun, `elevation_deg`), `editor` (`personal`/`fixed`),
-`tab_regex`, `noon`/`sweep` (booleans), `optional`.
+`tab_buttons`, `noon`/`sweep` (booleans), `optional`.
 
 ## Output (run folder, git-ignored under `.captures/`)
 

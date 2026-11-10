@@ -75,8 +75,10 @@ class FakeViewer:
 
     # -- wire -----------------------------------------------------------------------------------
     def _send(self, pump, data):
+        payload = binary_dumps({"pump": pump, "data": data})
+        self.max_frame = max(getattr(self, "max_frame", 0), len(payload))
         with self.lock:
-            write_frame(self._to_plugin, binary_dumps({"pump": pump, "data": data}))
+            write_frame(self._to_plugin, payload)
 
     def _serve(self):
         self._send(self.reply_pump, {"command": self.command_pump, "features": {}})
@@ -218,6 +220,12 @@ class FakeViewer:
             else:
                 sel = [p for p in paths if p == under or p.startswith(under + "/")]
             return self._reply(d, {"paths": sel})
+        if op == "getInfo" and path.startswith("//"):
+            floater, _, name = path[2:].partition("//")
+            hit = next((p for p in paths if p.startswith(FL + floater) and p.rsplit("/", 1)[-1] == name), None)
+            if hit is None:
+                return self._reply(d, {"error": "getInfo request specified invalid \"path\": '%s'" % path})
+            return self._reply(d, {"path": hit, "class": "class LLView", "available": True})
         if path and path not in paths:
             return self._reply(d, {"error": "%s request specified invalid \"path\": '%s'" % (op, path)})
         last = path.rsplit("/", 1)[-1]

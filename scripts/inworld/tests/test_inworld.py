@@ -23,7 +23,7 @@ import analyze_light_check as alc  # noqa: E402
 import viewer_cmdline as vc  # noqa: E402
 import light_check as lc  # noqa: E402
 from fake_viewer import FakeViewer, REGION_DEFAULT, SKIES  # noqa: E402
-from leap_client import (LeapError, LeapSession, ViewerGone, binary_dumps, llsd_loads, notation_dumps,  # noqa: E402
+from leap_client import (LeapError, LeapSession, ProtocolError, ViewerGone, binary_dumps, llsd_loads, notation_dumps,  # noqa: E402
                          read_frame, write_frame)
 
 SCENARIO = HERE.parent / "scenarios" / "l3_at1_handover.json"
@@ -106,6 +106,52 @@ class SessionTest(unittest.TestCase):
             s.request("LLViewerControl", "get", group="Global", key="CameraAngle")
 
 
+class FrameDamageTest(unittest.TestCase):
+    PATHS = ["/main_view/menu_stack/world_panel/Floater View/phototools/" + n for n in
+             ["WLPresetsCombo", "Préréglage", "日本語ボタン", "emoji 🌞", "100%2F50"]] * 400
+
+    def test_non_ascii_strings_roundtrip_with_a_byte_length_prefix(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        fv._send("StartupState", {"paths": self.PATHS, "n": 3, "r": 0.5, "u": uuid.UUID(int=7), "b": b"\x00\xffo", "none": None})
+        ev = s.wait_event("StartupState", timeout=5)
+        self.assertEqual(ev["paths"], self.PATHS)
+        self.assertEqual(ev["b"], b"\x00\xffo")
+        s.ping()      # the frame after it still parses: the prefix counted bytes, not characters
+
+    def test_a_duplicated_4k_chunk_inside_a_big_frame_is_a_protocol_error_not_viewer_exit(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        s.default_timeout = 5
+        payload = binary_dumps({"pump": "StartupState", "data": {"paths": self.PATHS}})
+        self.assertGreater(len(payload), 20000)
+        damaged = payload[:9000] + payload[9000 - 4096:9000] + payload[9000:]    # the pipe writer repeated a chunk
+        with fv.lock:
+            fv._to_plugin.write(b"%d:" % len(payload) + damaged)
+        with self.assertRaises(ProtocolError) as cm:
+            s.ping()
+        msg = str(cm.exception)
+        self.assertIn("protocol error", msg)
+        self.assertNotIn("viewer closed", msg)
+        self.assertNotIsInstance(cm.exception, ViewerGone)
+        self.assertRegex(msg, r"bytes \d+\.\.\d+ of \d+: ([0-9a-f]{2} )+")
+
+    def test_end_of_file_is_viewer_gone(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        fv._to_plugin.close()
+        with self.assertRaises(ViewerGone) as cm:
+            s.request("LLViewerControl", "get", group="Global", key="CameraAngle")
+        self.assertIn("end of file", str(cm.exception))
+
+    def test_replies_of_a_run_stay_small(self):
+        fv = FakeViewer()
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, _ = run_main(fv, tmp, skies=only("classic_default"))
+            self.assertEqual(code, 0)
+            self.assertLess(fv.max_frame, 4096)       # the viewer's Windows pipe writer works in 4 KB chunks
+
+
 class SweepTest(unittest.TestCase):
     def test_default_sweep(self):
         e = lc.sweep_elevations()
@@ -156,7 +202,7 @@ class FullRunTest(unittest.TestCase):
         fv = FakeViewer(pop_in_sky="Sunset")
         orig_settings = dict(fv.settings)
         with tempfile.TemporaryDirectory() as tmp:
-            code, run, sc = run_main(fv, tmp, extra=["--set", "RenderAtmospherePhysicalLight=false"])
+            code, run, sc = run_main(fv, tmp, extra=["--set", "RenderAtmospherePhysicalLight=false"], record_fps=True)
             self.assertEqual(code, 0)
             with open(run / "manifest.csv", encoding="utf-8") as mf:
                 rows = list(csv.DictReader(mf))

@@ -6,6 +6,7 @@
   "camera": {"enabled": true, "height_m": 2.5, "pitch_deg": 10.0, "look_distance_m": 200.0},
   "sweep": {"start": 10.0, "stop": -10.0, "step": 0.5, "fine_step": 0.1, "fine_half_width": 1.5},
   "noon_elevation_deg": 66.0,
+  "record_fps": false,
   "pause_clouds": true,
   "knobs": {
     "RenderLightHandoverSwing": null,
@@ -65,7 +66,7 @@
       "editor": "fixed",
       "names": ["Default"],
       "fallback_button": "Noon",
-      "tab_regex": "hbodies",
+      "tab_buttons": ["htab_panel_settings_sky_hbodies", "htab_panel_fs_settings_sky_hbodies"],
       "optional": true,
       "controls": {"moon_brightness": 0.0}
     }
