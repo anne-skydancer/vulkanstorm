@@ -115,7 +115,9 @@ void main()
     float rel_pos_len  = length(rel_pos);
 
     // Initialize temp variables
-    vec3 sunlight = sunlight_color;
+    // <Vulkanstorm> the haze below the clouds takes the sun's light only as far as the clouds' band leaves it (L3): none at night
+    vec3 sunlight = sunlight_color * (1.0 - cloud_moon_blend);
+    // </Vulkanstorm>
     vec3 light_atten;
 
     // Sunlight attenuation effect (hue and brightness) due to atmosphere
