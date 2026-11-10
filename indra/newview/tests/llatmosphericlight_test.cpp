@@ -512,7 +512,7 @@ int main()
             check(near(lt.x * src.x, today.x, 1e-9, 1e-12) && near(lt.y * src.y, today.y, 1e-9, 1e-12) && near(lt.z * src.z, today.z, 1e-9, 1e-12),
                   "legacy_transmittance at the zenith", lt.x * src.x, today.x);
         }
-        // the five clamped rigs of the survey: only the clamped skies are allowed to differ
+        // the two clamped light rigs among the embedded skies (kSkies[7], kSkies[8]): only clamped skies may differ
         const LLAtmosphere rig = LLAtmosphere::fromLegacy(legacy_of(kSkies[7]));
         check((rig.clamped & LLAtmosphere::CLAMP_COLUMN) != 0 && rig.column.x == 8.0, "a light rig hits the column limit", rig.column.x);
         const LLAtmosphere def = LLAtmosphere::fromLegacy(legacy_of(kSkies[0]));
