@@ -20,19 +20,25 @@ fills `LLEnvironment::PrimaryLightState` by calling `compute_primary_light()`:
 4. `primary_light()` on the ground transmittances: direction, transmittance, shadow strength, moon weight t.
 5. `primary_light()` again on the cloud-layer transmittances: the clouds' own moon weight t_cloud.
 
-## Three phases
+## Three phases, by the sun's elevation
 
-r is the moon's share of the light, E_moon / (E_sun + E_moon), from luminances of source x transmittance.
-Stateless, no hysteresis. Cuts at r = 0.10 / 0.40 / 0.60 / 0.90 (smoothstep, C1):
+r is the moon's share of the light, E_moon / (E_sun + E_moon), from luminances of source x transmittance. It is still
+computed and reported (with the dark fallback), but it no longer drives the handover: r goes 0 to 1 within +-0.1 degree of
+the horizon because the sun's light collapses there, which made the switch abrupt (a 10x faster dimming than around it).
+The handover is a function of the sun's elevation e alone (stateless, no hysteresis, smoothstep so C1):
 
-| r | what happens |
+| sun elevation | what happens |
 |---|---|
-| 0.10 to 0.40 | the sun's shadow fades 1 to 0 |
-| 0.40 to 0.60 | the light's direction and colour swing from sun to moon (nlerp, bent over the zenith when the two face apart) |
-| 0.60 to 0.90 | the moon's shadow fades 0 to 1 |
+| +0.6 to +0.3 deg | the sun's shadow fades 1 to 0 |
+| +0.3 to -0.3 deg | the light's direction and colour swing from sun to moon, t = smoothstep(+0.3, -0.3, e) x moon availability (nlerp, bent over the zenith when the two face apart); no shadow |
+| -0.3 to -0.6 deg | the moon's shadow fades 0 to 1, scaled by the moon's availability |
 
-When both lights are dark (a moonless sunset) r follows the sun's disc: the sun's side while it is up. The swing
-takes 0.4 to 2.8 s of a 4-hour day cycle at the disc's edge, when both lights are about 0.
+No usable moon: the swing only goes as far as the moon can take over. The moon's availability is the product of two
+smoothsteps: its light before the compensation, luminance(source x moon_T), against the dark threshold
+`dark x luminance(source)` (the disc's visibility is in moon_T, so a moon rising or setting fades in and out), and its gain
+against 1 % of the physical moon (a sky with moon_brightness 0 has no moon). With no moon the light keeps the sun's
+direction and fades to dark with the sun's transmittance, with no shadow below +0.3 degree; a moon that rises during the
+band takes over smoothly. The dome's sun glow follows the sun's disc, so it ends with it when no moon takes over.
 
 ## Moon compensation
 
@@ -42,7 +48,7 @@ colour). A sky with `moon_brightness` 0 has no direct light at night.
 
 ## Clouds
 
-The clouds have their own handover: at 1.5 km the horizon dips 1.24 degrees, so the sun still shines on the
+The clouds have their own handover (the same elevation band and availability, on the cloud-layer transmittances): at 1.5 km the horizon dips 1.24 degrees, so the sun still shines on the
 clouds after the ground's sunset. The dome and the ground use t; the flat clouds' sun term (`cloudsV.glsl`) uses
 `cloud_moon_blend` = t_cloud and the sun's transmittance at the cloud layer (`cloud_light_transmittance`), taken
 from the raw `sunlight_color` (the auto-adjust scale of `RenderSkyAutoAdjustSunColorScale` is not applied to the
@@ -72,8 +78,8 @@ sun shadow pass is skipped while the shadow is invisible.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `RenderLightHandoverSwing` | 0.10 | half-width of the swing around r = 0.5 |
-| `RenderLightHandoverFade` | 0.30 | width of each shadow fade (swing + fade is kept under 0.49) |
+| `RenderLightHandoverSwing` | 0.30 | half-width of the swing, degrees of sun elevation (limit 0.05 .. 5) |
+| `RenderLightHandoverFade` | 0.30 | width of each shadow fade outside the swing, degrees (limit 0 .. 5) |
 | `RenderMoonlightCompensation` | -3 | EV of the moon's direct light against the sun's, limit -8 .. -2 |
 | `RenderMoonAdaptationDepth` | 6 | degrees of sun depression at which the compensation is reached |
 | `RenderAtmosphereHazeSlab` | 250 | ground haze layer height of the physical atmosphere, m |
@@ -83,10 +89,14 @@ sun shadow pass is skipped while the shadow is invisible.
 
 - Noon identity of the ground light, physical and A/B, for 12 embedded skies, the light rigs included.
 - Sunset sweeps in 0.01 degree steps from +10 to -20 degrees (4 skies, physical and A/B, moon high / opposite /
-  none): unit finite directions; direction, shadow and glow jump only where the ground light is below 0.5 % of the
-  source's; the physical ground light is continuous while the sun is up; the clouds' sun term
-  (1 - t_cloud) Y(cloud_T) steps by less than 0.05 per 0.01 degree.
-- Continuity across the four cuts; the moon never above a quarter of the sun's colour; no moon, no direct light at
+  none): unit finite directions; the sun's direction above +0.3 degree, no shadow inside the band, the moon's direction
+  below it (moon high), the sun's all the way with no moon; the shadow steps by less than 0.06 and the direction (physical)
+  by less than 15 degrees per 0.01 degree; the physical ground light is continuous while the sun is up; the clouds' sun
+  term (1 - t_cloud) Y(cloud_T) steps by less than 0.05 per 0.01 degree (0.25 with the glow near the light).
+- The band: t = 0 above +0.3, 0.5 at 0, 1 below -0.3 degree, monotonic and C1; the shadow fades outside it; the limits of
+  the two widths; no moon (below the horizon, or moon_brightness 0): the sun's direction stays; a moon rising during the
+  band: no jump in t.
+- The ratio r stays continuous; the moon never above a quarter of the sun's colour; no moon, no direct light at
   night; 2033 horizon, NaN and hostile-setting cases are finite.
 - `scripts/light/gen_atmosphere_vectors.py` (GLSL against C++ for `sunlit`/`amblit`), `check_cloud_shadow.py --check`
   (the lookup follows `primary_shadow_strength`) need a GPU.
