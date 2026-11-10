@@ -77,6 +77,6 @@ an upstream ref (run it, and update the excerpts and the allow-list, in canary u
 
 Measured on an RTX 5070 Ti (offline sun-light-pass bench, `scripts/perf/bench_shadow_pcss.py`, whose
 `legacy` variant is an alias of the PCSS-off shader, identical by construction because the shaders Legacy compiles
-are the PCSS-off ones): PCSS adds, over Legacy, +0.02 to +0.03 ms at High in the study (+0.01 ms in the
+are the PCSS-off ones): PCSS adds, over Legacy, +0.02 to +0.03 ms at High in the study (+0.02 to +0.03 ms in the
 latest bench run) and +0.07 to +0.13 ms at HighUltra (1080p and 1440p). Legacy costs what the PCF with the
 receiver-plane bias costs.
