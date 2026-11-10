@@ -41,6 +41,7 @@
 #include "llviewercamera.h"
 #include "pipeline.h"
 #include "llsky.h"
+#include "llatmosphericlight.h" // <Vulkanstorm/> stage L3
 
 #include "llviewershadermgr.h"
 
@@ -1667,6 +1668,12 @@ LLVector4 LLEnvironment::toLightNorm(const LLVector3 vec) const
 
 LLVector3 LLEnvironment::getLightDirection() const
 {
+    // <Vulkanstorm> the sun/moon handover's light (stage L3); before the first update, the sky's own
+    if (mPrimary.valid)
+    {
+        return mPrimary.dir;
+    }
+    // </Vulkanstorm>
     LLSettingsSky::ptr_t psky = mCurrentEnvironment->getSky();
     if (!psky)
     {
@@ -1861,8 +1868,156 @@ void LLEnvironment::updateShaderUniforms(LLGLSLShader* shader)
     mWaterUniforms[group].apply(shader);
 }
 
+// <Vulkanstorm> stage L3 of the item-4 plan: the sun/moon handover, driven by the physical atmosphere.
+// Everything here is CPU work, once per main-thread frame: LLAtmosphere::fromLegacy and four transmittances
+// (the sun and the moon, at the ground and at the cloud layer), then the stateless primary_light().
+LLColor3 LLEnvironment::getDeferredSunlight(bool with_auto_adjust) const
+{
+    LLSettingsSky::ptr_t psky = mCurrentEnvironment ? mCurrentEnvironment->getSky() : LLSettingsSky::ptr_t();
+    if (!psky)
+    {
+        return LLColor3(1.f, 1.f, 1.f);
+    }
+    // the normalisation LLPipeline::setupHWLights has always applied to mSunDiffuse
+    LLColor3 c = psky->getSunlightColor();
+    const F32 max_color = llmax(c.mV[0], c.mV[1], c.mV[2]);
+    if (max_color > 1.f)
+    {
+        c *= 1.f / max_color;
+    }
+    c.clamp();
+
+    // and bindDeferredShader's auto-adjust of a legacy sky
+    if (with_auto_adjust)
+    {
+        static LLCachedControl<bool> should_auto_adjust(gSavedSettings, "RenderSkyAutoAdjustLegacy", false);
+        static LLCachedControl<F32> auto_adjust_sun_color_scale(gSavedSettings, "RenderSkyAutoAdjustSunColorScale", 1.f);
+        if (should_auto_adjust && psky->canAutoAdjust())
+        {
+            c *= auto_adjust_sun_color_scale;
+        }
+    }
+    return c;
+}
+
+namespace
+{
+namespace AL = LLAtmosphericLight;
+
+AL::DensityProfile profile_from_llsd(const LLSD& cfg)
+{
+    AL::DensityProfile p;
+    p.count = 0; // an empty profile: fromLegacy() substitutes the default
+    if (cfg.isArray())
+    {
+        for (LLSD::array_const_iterator it = cfg.beginArray(); it != cfg.endArray() && p.count < 2; ++it)
+        {
+            AL::DensityLayer& l = p.layer[p.count++];
+            l.width_m = (*it)[LLSettingsSky::SETTING_DENSITY_PROFILE_WIDTH].asReal();
+            l.exp_term = (*it)[LLSettingsSky::SETTING_DENSITY_PROFILE_EXP_TERM].asReal();
+            l.exp_scale = (*it)[LLSettingsSky::SETTING_DENSITY_PROFILE_EXP_SCALE_FACTOR].asReal();
+            l.linear = (*it)[LLSettingsSky::SETTING_DENSITY_PROFILE_LINEAR_TERM].asReal();
+            l.constant = (*it)[LLSettingsSky::SETTING_DENSITY_PROFILE_CONSTANT_TERM].asReal();
+        }
+    }
+    return p;
+}
+
+LLVector3 to_llvec(const AL::Vec3& v) { return LLVector3((F32)v.x, (F32)v.y, (F32)v.z); }
+AL::Vec3 to_vec(const LLVector3& v) { return { v.mV[VX], v.mV[VY], v.mV[VZ] }; }
+}
+
+void LLEnvironment::updatePrimaryLight()
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_ENVIRONMENT;
+
+    LLSettingsSky::ptr_t psky = mCurrentEnvironment ? mCurrentEnvironment->getSky() : LLSettingsSky::ptr_t();
+    if (!psky)
+    {
+        mPrimary = PrimaryLightState(); // not valid: getLightDirection() falls back to the default
+        return;
+    }
+
+    static LLCachedControl<F32> swing_setting(gSavedSettings, "RenderLightHandoverSwing", 0.10f);
+    static LLCachedControl<F32> fade_setting(gSavedSettings, "RenderLightHandoverFade", 0.30f);
+    static LLCachedControl<F32> compensation_ev(gSavedSettings, "RenderMoonlightCompensation", -3.f);
+    static LLCachedControl<F32> adaptation_depth(gSavedSettings, "RenderMoonAdaptationDepth", 6.f);
+    static LLCachedControl<F32> haze_slab_m(gSavedSettings, "RenderAtmosphereHazeSlab", 250.f);
+    static LLCachedControl<bool> physical_light(gSavedSettings, "RenderAtmospherePhysicalLight", true);
+    static LLCachedControl<F32> cloud_height_m(gSavedSettings, "RenderCloudShadowPenumbraHeight", 1500.f);
+    static LLCachedControl<bool> should_auto_adjust(gSavedSettings, "RenderSkyAutoAdjustLegacy", false);
+    static LLCachedControl<F32> auto_adjust_blue_density_scale(gSavedSettings, "RenderSkyAutoAdjustBlueDensityScale", 1.f);
+
+    const LLVector3 sun_dir = psky->getSunDirection();
+    const LLVector3 moon_dir = psky->getMoonDirection();
+    const F32 sun_scale = llclamp(psky->getSunScale(), 0.f, 100.f);
+    const F32 moon_scale = llclamp(psky->getMoonScale(), 0.f, 100.f);
+
+    // the sky as the deferred pass receives it (survey 3.3): the source normalised, clamped and auto-adjusted
+    const LLColor3 deferred_sun = getDeferredSunlight(true);
+    AL::LegacySky legacy;
+    legacy.source = { deferred_sun.mV[0], deferred_sun.mV[1], deferred_sun.mV[2] };
+    LLColor3 blue_density = psky->getBlueDensity();
+    if (should_auto_adjust && psky->canAutoAdjust())
+    {
+        blue_density *= auto_adjust_blue_density_scale;
+    }
+    legacy.blue_density = { blue_density.mV[0], blue_density.mV[1], blue_density.mV[2] };
+    legacy.haze_density = psky->getHazeDensity();
+    legacy.density_multiplier = psky->getDensityMultiplier();
+    legacy.max_y = psky->getMaxY();
+    legacy.distance_multiplier = psky->getDistanceMultiplier();
+    legacy.rayleigh = profile_from_llsd(psky->getRayleighConfigs());
+    legacy.mie = profile_from_llsd(psky->getMieConfigs());
+    legacy.absorption = profile_from_llsd(psky->getAbsorptionConfigs());
+    legacy.planet_radius_km = psky->getSkyBottomRadius();
+    legacy.top_radius_km = psky->getSkyTopRadius();
+
+    AL::PrimaryLightSetup setup;
+    setup.sky = legacy;
+    setup.bounds.haze_slab_km = llclamp((F64)haze_slab_m, 0.0, 2000.0) / 1000.0;
+    setup.params.swing = swing_setting;
+    setup.params.fade = fade_setting;
+    setup.sun_dir = to_vec(sun_dir);
+    setup.moon_dir = to_vec(moon_dir);
+    setup.sun_scale = sun_scale;
+    setup.moon_scale = moon_scale;
+    setup.moon_brightness = psky->getMoonBrightness();
+    setup.compensation_ev = compensation_ev;
+    setup.adaptation_depth_deg = adaptation_depth;
+    setup.cloud_height_km = (F64)cloud_height_m / 1000.0;
+    setup.physical = physical_light;
+
+    const AL::PrimaryLightRig rig = AL::compute_primary_light(setup);
+
+    PrimaryLightState st;
+    st.dir = to_llvec(rig.light.dir);
+    if (!st.dir.isFinite())
+    {
+        st.dir = LLVector3(0.f, 0.f, 1.f);
+    }
+    st.ground_T = to_llvec(rig.light.T);
+    st.cloud_T = to_llvec(rig.cloud_T);
+    st.color = LLColor3((F32)rig.color.x, (F32)rig.color.y, (F32)rig.color.z);
+    st.shadow_strength = (F32)llclamp(rig.light.shadow_strength, 0.0, 1.0);
+    st.moon_weight = (F32)llclamp(rig.light.moon_weight, 0.0, 1.0);
+    st.haze_glow_factor = (F32)rig.haze_glow_factor;
+    st.light_scale = (F32)rig.light_scale;
+    st.shadow_visible = rig.shadow_visible;
+    st.valid = true;
+    mPrimary = st;
+}
+// </Vulkanstorm>
+
 void LLEnvironment::updateSettingsUniforms()
 {
+    // <Vulkanstorm> stage L3: once per main frame; the cube snapshots of the frame reuse it
+    if (!gCubeSnapshot || !mPrimary.valid)
+    {
+        updatePrimaryLight();
+    }
+    // </Vulkanstorm>
+
     if (mCurrentEnvironment->getWater())
     {
         updateGLVariablesForSettings(mWaterUniforms, mCurrentEnvironment->getWater());
