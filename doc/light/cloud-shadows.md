@@ -34,8 +34,11 @@ shadows depend only on the world and the sky, never on the camera.
   the sun calls (softenLight, alpha, pbralpha, material, water, pbrmetallicroughness / glTF, haze),
   multiplies `sunlit` by `1 - strength (1 - T)`. T is one trilinear tap of the map at the eye position's
   world (east, north); the LOD of the tap is the penumbra (`H_pen x 0.0093 x sun_scale`, 14 m at 1.5 km:
-  0.8 of a mip). The map fades to its mean over the outer 6 % of its width. `sunlit` is the sun's or the
-  moon's light by `sun_up_factor`, and the map is built for the same light direction. The haze (`additive`)
+  0.8 of a mip). The map fades to its mean over the outer 6 % of its width. `sunlit` is
+  `primary_light_color` (stage L3: the sun's or the moon's light, handed over smoothly, with its path
+  through the atmosphere taken; `doc/light/handover-l3-at1.md`), the map is built for the same light
+  direction (the primary light's), and its weight follows `primary_shadow_strength`: while the light swings
+  from one body to the other the map's mean applies, so the shadows neither slide nor bump the light. The haze (`additive`)
   keeps `cloud_shadow` as it was.
 - **Combination.** The result multiplies the sun shadow map and PCSS (`scol`): independent occluders of one
   source. The shadow passes are untouched.

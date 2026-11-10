@@ -222,7 +222,7 @@ void main()
 
     vec4 diffuse_linear = vec4(srgb_to_linear(diffuse_srgb.rgb), diffuse_srgb.a);
 
-    vec3 light_dir = primary_light_dir; // <Vulkanstorm/> L3: the sun/moon handover\'s light
+    vec3 light_dir = primary_light_dir; // <Vulkanstorm/> L3: the primary light
 
     float final_alpha = diffuse_linear.a;
 

@@ -343,7 +343,7 @@ void main()
 
     vec3 color = vec3(0,0,0);
 
-    vec3 light_dir = primary_light_dir; // <Vulkanstorm/> L3: the sun/moon handover\'s light
+    vec3 light_dir = primary_light_dir; // <Vulkanstorm/> L3: the primary light
 
     float bloom = 0.0;
     vec3 sunlit;
