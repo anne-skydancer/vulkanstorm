@@ -515,12 +515,13 @@ def plan_restore(orig):
     the original selection cannot be restored faithfully (then the run refuses to start)."""
     sky, water, dc = orig.get("sky_combo"), orig.get("water_combo"), orig.get("daycycle_combo")
     is_id = lambda x: isinstance(x, str) and bool(UUID_RE.fullmatch(x))  # noqa: E731
-    if orig.get("personal_open"):
-        return None     # Personal Lighting holds a frozen or edited local sky that has no asset to select again
-    # quickprefs.cpp sets every combo to Region Default first and then the day cycle combo to __None__ when a local
-    # environment without a day cycle is selected. So Region Default is REGION/REGION/REGION; REGION/REGION/__None__
-    # is a local sky with no asset (edited in Personal Lighting or the fixed editor) and cannot be selected again.
-    if sky == REGION and water == REGION and dc == REGION:
+    if orig.get("personal_open") or orig.get("fixed_open"):
+        return None     # an editor is open: a local edit may be in progress, and it has no asset to select again
+    # "Use Shared Environment" (llviewermenu.cpp) clears the local layer and selects it, so FloaterQuickPrefs::
+    # setSelectedEnvironment finds no day cycle and no fixed sky: the combos read REGION/REGION/__None__. Phototools'
+    # own button gives REGION/REGION/REGION. Both are the shared environment, restored with setSharedEnvironment (the
+    # "Revert to Region Default" button). A local sky edited without a saved asset reads the same: the combos cannot tell.
+    if sky == REGION and water == REGION and dc in (REGION, NOCHOICE):
         return {"kind": "region"}
     if is_id(sky) and (is_id(water) or water in (REGION, DAYCYCLE)) and dc == NOCHOICE:
         return {"kind": "sky", "sky": sky, "water": water if is_id(water) else None}
@@ -1011,16 +1012,25 @@ class Run:
         self.select_env_tab()
         orig.update(self.read_combos())
         orig["personal_open"] = v.floater_visible(PERSONAL)
+        orig["fixed_open"] = v.floater_visible(FIXED_SKY)
         self.run_info["original_environment"] = orig
         log("original environment: %s" % orig)
         self.plan = plan_restore(orig)
         if self.plan is None:
+            if orig.get("personal_open") or orig.get("fixed_open"):
+                todo = ("close Personal Lighting and the fixed sky editor (an edit in progress has no saved asset and "
+                        "would be lost), then relaunch")
+            else:
+                todo = ("in Phototools > Environment click 'Revert to Region Default' or select a sky from the list, "
+                        "then relaunch")
             raise NotRestorable(
-                "cannot restore your current environment safely (Phototools shows sky=%r, water=%r, day cycle=%r). "
-                "Personal Lighting open: %s. What to do: close Personal Lighting, open Phototools > Environment, click "
-                "'Revert to Region Default' (or select a sky from the list), then relaunch. A sky edited in Personal "
-                "Lighting or the fixed editor has no asset and would be lost. Nothing was changed."
-                % (orig.get("sky_combo"), orig.get("water_combo"), orig.get("daycycle_combo"), orig.get("personal_open")))
+                "cannot restore your current environment safely (Phototools shows sky=%r, water=%r, day cycle=%r; "
+                "Personal Lighting open: %s; fixed sky editor open: %s). What to do: %s. Nothing was changed."
+                % (orig.get("sky_combo"), orig.get("water_combo"), orig.get("daycycle_combo"), orig.get("personal_open"),
+                   orig.get("fixed_open"), todo))
+        if self.plan["kind"] == "region":
+            self.warn("If you had a locally edited sky (no saved asset), it will be replaced by the shared environment "
+                      "at the end.")
         self.save_restore()
 
     def select_env_tab(self):
@@ -1199,7 +1209,8 @@ def dry_run_ui(v, sc, rep, run, args):
     rg = [n for n in REGION_BUTTONS if v.find_widget(PHOTOTOOLS, n, required=False)]
     rep.add("region-default button", bool(rg), str(rg))
     orig = run.read_combos()
-    run.run_info["original_environment"] = dict(orig, personal_open=v.floater_visible(PERSONAL))
+    orig = dict(orig, personal_open=v.floater_visible(PERSONAL), fixed_open=v.floater_visible(FIXED_SKY))
+    run.run_info["original_environment"] = orig
     plan = plan_restore(orig)
     rep.add("original environment restorable", plan is not None,
             "%s -> %s" % (orig, plan) if plan else "a real run would refuse to start: %s" % orig)

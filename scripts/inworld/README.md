@@ -74,8 +74,8 @@ placed at your avatar, 2.5 m up, looking along the sun's azimuth). Do not use th
 are about 400 snapshots, expect 10 to 20 minutes. At the end it restores your settings and environment. To stop
 early create an empty file `STOP` in the run folder (it restores and exits). A relative `--out` is resolved to an
 absolute path (the viewer's working directory is not yours); a stale `STOP` in a reused folder is deleted at the start.
-Select Region Default or a sky in the Phototools Environment tab beforehand and keep Personal Lighting closed: a sky you
-edited in Personal Lighting or the fixed editor cannot be put back, so the run refuses to start (changing nothing).
+Keep Personal Lighting and the fixed sky editor closed: with one open the run refuses to start (changing nothing), because an
+edit in progress has no saved asset to put back. A locally edited sky left in place is replaced by the shared environment at the end.
 
 Other options: `--list-skies` (prints and saves every settings item of the inventory with its asset id, to pick sky
 names), `--restore RUNDIR` (re-applies the settings and releases the camera recorded in `RUNDIR/restore.json` in a
@@ -101,9 +101,13 @@ python "$scripts/analyze_light_check.py" <new run> --compare <baseline run>
 
 1. Checks the LEAP operations it needs, waits for login, then records your original state (the Phototools sky,
    water and day cycle combo values, the floaters, the settings it will change) and writes `restore.json`. If the
-   original environment cannot be restored faithfully (the sky combo shows a legacy name or nothing, Personal Lighting is open, the combos read Region
-   Default but the day cycle combo says `__None__` = a local sky with no asset, a sky over a day cycle) it **refuses to start** and changes nothing. Restorable: Region Default in all three combos; a sky (day cycle combo `__None__`);
-   a day cycle.
+   original environment cannot be restored faithfully (the sky combo shows a legacy name or nothing, Personal Lighting or the
+   fixed sky editor is open, a sky over a day cycle) it **refuses to start** and changes nothing, saying what to do.
+   Restorable: the shared environment (the combos read Region Default / Region Default / Region Default or / `__None__`, as
+   after Phototools' button or "Use Shared Environment"), restored with "Revert to Region Default"; a sky (day cycle combo
+   `__None__`); a day cycle. A locally edited sky without a saved asset reads like the shared environment, so the
+   combos cannot tell them apart: the run logs a warning at the start that it will be replaced by the shared environment
+   at the end (an open editor, the likely sign of such an edit, is refused).
 2. Sets `FSEnvironmentManualTransitionTime` to 0 (instant sky changes) and the scenario's `knobs`/`settings`
    (`null` leaves a knob alone and only records it). A knob that does not exist in the viewer (the 82080 baseline has
    none of the #447 Sky-tab settings) is skipped with a warning, so the same scenario runs on both.
@@ -219,7 +223,7 @@ Covers the LLSD notation/binary codecs and framing; the session (requests, error
 events, errors of fire-and-forget operations); the sweep and camera geometry; whole runs and dry runs against a fake
 viewer (`tests/fake_viewer.py`), which implements the operations as the viewer's source suggests: restoration on
 success, with a stop file after the camera was set, on a failing sky (exit 4), of an original sky and of a day cycle,
-refusal of an environment that cannot be restored (a local sky edited in Personal Lighting, Personal Lighting open, a sky over a day cycle, a legacy name, nothing selected), missing knobs, a viewer missing an
+refusal of an environment that cannot be restored (Personal Lighting or the fixed editor open, a sky over a day cycle, a legacy name, nothing selected; both shared forms accepted), missing knobs, a viewer missing an
 operation, the read-only dry run and the restored `--deep` dry run; `--restore`; the script as a real child process
 over pipes; and the analysis (synthetic images with an injected pop, no false pop at the 0.5/0.1 degree step change,
 `--compare` direction).

@@ -222,7 +222,7 @@ class InventoryLookupTest(unittest.TestCase):
 
     def test_the_refusal_says_what_to_do(self):
         import contextlib
-        fv = FakeViewer(initial_combo="__Regiondefault__", dc_combo="__None__")
+        fv = FakeViewer(initial_combo="some legacy name", dc_combo="__None__")
         err = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(err):
             code, run, _ = run_main(fv, tmp)
@@ -352,9 +352,9 @@ class FullRunTest(unittest.TestCase):
     def test_an_environment_that_cannot_be_restored_is_refused_before_anything_changes(self):
         sky = SKIES["Sunset"][0]
         cases = [("__Day_Cycle__", "__None__", False), ("None", "None", False), ("some legacy name", "__None__", False),
-                 (REGION_DEFAULT, "__None__", False),    # a local sky edited in Personal Lighting: no asset id
                  (sky, REGION_DEFAULT, False),           # a fixed sky over a day cycle would lose the day cycle
                  (REGION_DEFAULT, REGION_DEFAULT, True),  # Personal Lighting open
+                 (REGION_DEFAULT, "__None__", True),      # Personal Lighting open
                  (sky, "__None__", True)]
         for combo, dc, personal in cases:
             fv = FakeViewer(initial_combo=combo, dc_combo=dc, personal_open=personal)
@@ -365,6 +365,27 @@ class FullRunTest(unittest.TestCase):
                 self.assertEqual(fv.settings, orig_settings)
                 self.assertIsNone(fv.follow_cam)
                 self.assertEqual(fv.sky_applied_count, 0)
+
+    def test_both_shared_environment_forms_are_accepted_and_restored_by_the_region_button(self):
+        for dc in (REGION_DEFAULT, "__None__"):
+            fv = FakeViewer(dc_combo=dc)
+            with tempfile.TemporaryDirectory() as tmp:
+                code, run, _ = run_main(fv, tmp, skies=only("classic_default"))
+                self.assertEqual(code, 0, dc)
+                info = json.loads((run / "run.json").read_text(encoding="utf-8"))
+                self.assertTrue(any("locally edited sky" in w for w in info["warnings"]), info["warnings"])
+                self.assertEqual((fv.current_sky, fv.combo), (REGION_DEFAULT, REGION_DEFAULT))
+                self.assertFalse(fv.frozen)
+
+    def test_an_open_fixed_sky_editor_is_refused(self):
+        import contextlib
+        fv = FakeViewer(fixed_open=True)
+        err = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(err):
+            code, run, _ = run_main(fv, tmp)
+        self.assertEqual(code, 1)
+        self.assertIn("close Personal Lighting and the fixed sky editor", err.getvalue())
+        self.assertEqual(fv.sky_applied_count, 0)
 
     def test_a_day_cycle_original_is_restored_by_its_selection(self):
         dc = "22222222-0000-0000-0000-000000000009"

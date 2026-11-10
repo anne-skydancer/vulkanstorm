@@ -32,7 +32,7 @@ SETTINGS_FOLDER = "33333333-0000-0000-0000-000000000001"
 
 class FakeViewer:
     def __init__(self, pop_in_sky=None, snapshot_fails_for=None, drop_ops=(), initial_combo=REGION_DEFAULT,
-                 water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0, crowd=0):
+                 water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0, crowd=0, fixed_open=False):
         self.crowd = crowd             # inventory items named 'Default Day nnn' that come before the exact ones
         self.inv_queries = []
         self.break_after_ops = break_after_ops
@@ -72,6 +72,8 @@ class FakeViewer:
         self.text = {}
         self.fixed_tab_sun = False
         self.sky_applied_count = 0
+        if fixed_open:
+            self.floaters["env_fixed_environmentent_sky"] = True
         if personal_open:
             self.floaters["env_adjust_snapshot"] = True
             self._capture_sky()
