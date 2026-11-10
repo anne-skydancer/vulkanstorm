@@ -62,7 +62,7 @@ RenderShaderLightingMaxLevel	1	3
 RenderDeferred				1	1
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	2
-RenderShadowPCSS			1	1
+RenderShadowMethod			1	1
 RenderShadowDistance		1	256
 RenderUseStreamVBO			1	1
 RenderFSAAType			    1	2
@@ -113,7 +113,7 @@ RenderTreeLODFactor			1	0
 RenderVolumeLODFactor		1	1.5
 RenderDeferredSSAO			1	0
 RenderShadowDetail			1	0
-RenderShadowPCSS			1	0
+RenderShadowMethod			1	0
 RenderShadowDistance		1	64
 WLSkyDetail					1	96
 RenderFSAAType			    1	0
@@ -158,7 +158,7 @@ RenderTreeLODFactor			1	0.5
 RenderVolumeLODFactor		1	1.5
 RenderDeferredSSAO			1	0
 RenderShadowDetail			1	0
-RenderShadowPCSS			1	0
+RenderShadowMethod			1	0
 RenderShadowDistance		1	64
 WLSkyDetail					1	96
 RenderFSAAType			    1	0
@@ -203,7 +203,7 @@ RenderTreeLODFactor			1	0.5
 RenderVolumeLODFactor		1	1.5
 RenderDeferredSSAO			1	0
 RenderShadowDetail			1	0
-RenderShadowPCSS			1	0
+RenderShadowMethod			1	0
 RenderShadowDistance		1	96
 WLSkyDetail					1	96
 RenderFSAAType			    1	1
@@ -247,7 +247,7 @@ RenderTreeLODFactor			1	0.5
 RenderVolumeLODFactor		1	2.0
 RenderDeferredSSAO			1	0
 RenderShadowDetail			1	0
-RenderShadowPCSS			1	0
+RenderShadowMethod			1	0
 RenderShadowDistance		1	96
 WLSkyDetail					1	96
 RenderFSAAType			    1	1
@@ -291,7 +291,7 @@ RenderTreeLODFactor			1	0.5
 RenderVolumeLODFactor		1	2.0
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	1
-RenderShadowPCSS			1	0
+RenderShadowMethod			1	1
 RenderShadowDistance		1	128
 WLSkyDetail					1	96
 RenderFSAAType			    1	1
@@ -335,7 +335,7 @@ RenderTreeLODFactor			1	0.5
 RenderVolumeLODFactor		1	2.0
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	2
-RenderShadowPCSS			1	0
+RenderShadowMethod			1	1
 RenderShadowDistance		1	160
 WLSkyDetail					1	96
 RenderFSAAType			    1	2
@@ -380,7 +380,7 @@ WindLightUseAtmosShaders	1	1
 WLSkyDetail					1	128
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	2
-RenderShadowPCSS			1	1
+RenderShadowMethod			1	1
 RenderShadowDistance		1	192
 RenderFSAAType			    1	2
 RenderFSAASamples			1	3
@@ -405,7 +405,7 @@ RenderReflectionProbeCount  1   256
 //
 list Unknown
 RenderShadowDetail			1	0
-RenderShadowPCSS			1	0
+RenderShadowMethod			1	0
 RenderShadowDistance		1	64
 RenderDeferredSSAO			1	0
 RenderMirrors				1	0
@@ -430,7 +430,7 @@ RenderMaxPartCount			1	1024
 RenderTerrainDetail 		1	0
 RenderDeferredSSAO			0	0
 RenderShadowDetail			0	0
-RenderShadowPCSS			0	0
+RenderShadowMethod			0	0
 RenderShadowDistance		1	64
 RenderMirrors				0	0
 RenderDisableVintageMode           1   0
