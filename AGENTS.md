@@ -17,3 +17,19 @@
 - Licence: Vulkanstorm is licensed under `GPL-3.0-or-later` (`LICENSE`, `NOTICE.md`, `doc/licensing.md`; decided 2026-11-08, the LGPL-2.1 option is dropped). Linden Lab and Firestorm code stays LGPL-2.1, with its headers unchanged, and is combined into Vulkanstorm, which as a whole is licensed GPL-3.0-or-later (LGPL-2.1 is compatible with inclusion in a GPL-3.0 work). New files carry `SPDX-License-Identifier: GPL-3.0-or-later`; Linden Lab and Firestorm headers stay unchanged. A new linked or bundled library must be compatible with GPL-3.0 (no proprietary, GPL-2.0-only or extra-restriction licences); add it to the audit in `doc/licensing.md`. Proprietary SDKs (Vivox, KDU, FMOD, Havok, BugSplat, Discord Social SDK) are not built or shipped.
 
 - `vkstorm-canary` follows upstream 7.2.5 development while retaining the selected Vulkanstorm release changes. Integrate upstream updates through a dedicated integration branch and PR into canary, resolving conflicts and validating the result. Do not reset canary to upstream or merge canary into release/development. Canary builds never move `windows-latest`, `linux-latest`, `linux-lts`, `stable` or `oldstable`; they publish only `experimental-*`.
+
+## Working rules for agents
+
+These complete the rules above for every agent (planner, surveyor, coder, reviewer, auditor, checker) and for anyone else working in this repo.
+
+- Git: never force-push, on any branch. Bring base changes into a branch only by cherry-picking (`-x`) or by re-cutting the branch: a new branch from the base tip with the PR's commits cherry-picked, and a new PR that supersedes the old one. Once a PR is open, add commits only when the owner asks.
+- Worktrees go in `<repo>\work\<name>`, never beside the repository.
+- Compiled fixture and integration tests run with `TMPDIR` (POSIX) or `TEMP`/`TMP` (Windows) pointing to the repo's `.fixture-tmp` folder, which is excluded from Defender.
+- Smoke launches use a scratch APPDATA/LOCALAPPDATA with no saved credentials, so they can never log in. Changes that touch rendering, shutdown or login need a Release build that reaches the world (owner-assisted) before they are called safe.
+- Before adding cleanup, frees, caching or shared/static state to a function, check every caller and every thread that runs it (worker threads with shared GL contexts call the same `shutdown()` paths).
+- OpenGL behaviour outside the change must stay identical. Renderer-free logic gets equivalence tests where a GLSL twin exists.
+- Light and shadow work: everything new together, at the default tier, costs at most today's PCSS-on frame + 5 % (measured against the recorded baseline). Every stage's PR reports its own cost and the running total.
+- No Preferences entries unless the owner asks. Structural parts of a method are debug settings. Tuning panels (such as the Sky tab) and diagnostics live on `vkstorm-devel` only and are left out of every integration into `vkstorm-release`.
+- Bugs are hotfixes (see above), applied to every line the bug exists on. PRs are for features, studies and integrations.
+- CI and workflow changes are validated by `ci-lint` only, never by a viewer build; documentation-only changes are not linted and do not require a viewer build.
+- Review threads (Copilot or others) get a reply, with the fixing commit or the reason to decline, and are then resolved; none is left silent or open.
