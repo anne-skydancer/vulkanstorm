@@ -56,6 +56,25 @@ namespace LLShadowMethod
     {
         return file_has_old_flag && !file_has_method;
     }
+
+    struct PresetMapping
+    {
+        bool apply;  // set RenderShadowMethod after loading the preset
+        bool pcss;   // the old checkbox's value in the file
+    };
+
+    // The read path of LLPresetsManager::loadPreset: 'settings' is the preset file parsed as an
+    // LLSD map {name: {Comment, Type, Value}} (anything with has(name) and [name]["Value"].asBoolean());
+    // 'parsed' is false when the file could not be opened or parsed, which maps nothing.
+    template <class Settings>
+    PresetMapping readPreset(bool parsed, const Settings& settings)
+    {
+        if (!parsed || !presetNeedsMapping(settings.has("RenderShadowPCSS"), settings.has("RenderShadowMethod")))
+        {
+            return { false, false };
+        }
+        return { true, settings["RenderShadowPCSS"]["Value"].asBoolean() };
+    }
 }
 
 #endif  // LL_LLSHADOWMETHOD_H

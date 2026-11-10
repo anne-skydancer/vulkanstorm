@@ -11,8 +11,9 @@ indra/newview/pipeline.cpp marks that code with
     // </ShadowLegacy>
 
 This script extracts each marked region and compares it, ignoring indentation, blank lines and runs
-of spaces, with the excerpt stored in scripts/shadows/legacy_reference/NAME.cpp (upstream text,
-LGPL-2.1, recorded with the upstream commit it came from). The only differences allowed are the
+of spaces, with the excerpt stored in scripts/shadows/legacy_reference/NAME.cpp.txt (upstream text,
+LGPL-2.1-only, with the upstream header and the upstream commit it came from; the .txt suffix keeps
+source scanners and builds from treating the excerpts as Vulkanstorm source). The only differences allowed are the
 substitutions listed in ALLOWED below, per region. An edit inside a region, a missing or extra
 region or a changed excerpt makes the check fail, so the Legacy method cannot drift from upstream
 unnoticed.
@@ -80,8 +81,12 @@ def extract_regions(text):
     return regions
 
 
+def reference_set():
+    return {p.name[:-len('.cpp.txt')] for p in REFERENCE_DIR.glob('*.cpp.txt')}
+
+
 def load_reference(name):
-    path = REFERENCE_DIR / f'{name}.cpp'
+    path = REFERENCE_DIR / f'{name}.cpp.txt'
     lines = [l for l in path.read_text(encoding='utf-8').splitlines() if not l.startswith('//!')]
     return normalise(lines)
 
@@ -94,17 +99,51 @@ def expected_lines(name):
     return lines
 
 
+FORBIDDEN_IN_REGION = re.compile(r'^\s*#\s*(if|ifdef|ifndef|elif|else)\b|/\*')
+
+# generateSunShadow must call these from the Legacy branch of the method test
+LEGACY_CALLS = ('computeSunSplitsLegacy(', 'generateSunCascadesLegacy(')
+LEGACY_TEST = 'RenderShadowMethod == LLShadowMethod::LEGACY'
+
+
+def check_call_sites(text):
+    """The Legacy helpers are called under the Legacy test, not elsewhere or under PCSS."""
+    problems = []
+    lines = text.splitlines()
+    start = next((i for i, l in enumerate(lines) if 'void LLPipeline::generateSunShadow(' in l), None)
+    if start is None:
+        return ['LLPipeline::generateSunShadow not found']
+    body = lines[start:]
+    for call in LEGACY_CALLS:
+        at = next((i for i, l in enumerate(body) if call in l), None)
+        if at is None:
+            problems.append(f'generateSunShadow does not call {call[:-1]}')
+            continue
+        back = body[max(0, at - 8):at]
+        test = next((j for j in range(len(back) - 1, -1, -1) if LEGACY_TEST in back[j]), None)
+        if test is None or any(re.match(r'\s*(\}\s*)?else\b', l) for l in back[test + 1:]):
+            problems.append(f'generateSunShadow calls {call[:-1]} outside the Legacy branch ({LEGACY_TEST})')
+    return problems
+
+
 def check(pipeline_text):
     problems = []
+    if set(ALLOWED) != reference_set():
+        problems.append(f'ALLOWED ({sorted(ALLOWED)}) and the reference excerpts ({sorted(reference_set())}) are not the same set')
     try:
         regions = extract_regions(pipeline_text)
     except ValueError as e:
         return [str(e)]
-    reference_names = {p.stem for p in REFERENCE_DIR.glob('*.cpp')}
+    reference_names = reference_set()
     for name in sorted(reference_names - regions.keys()):
         problems.append(f'region "{name}" is missing from {PIPELINE}')
     for name in sorted(regions.keys() - reference_names):
         problems.append(f'region "{name}" in {PIPELINE} has no reference excerpt')
+    for name in sorted(regions):
+        for line in regions[name]:
+            if FORBIDDEN_IN_REGION.search(line):
+                problems.append(f'region "{name}" contains a preprocessor conditional or block comment: {line.strip()}')
+    problems += check_call_sites(pipeline_text)
     for name in sorted(reference_names & regions.keys()):
         want = expected_lines(name)
         got = normalise(regions[name])
@@ -131,9 +170,9 @@ def verify_reference(ref):
         return 1
     haystack = normalise(shown.stdout.splitlines())
     bad = 0
-    for path in sorted(REFERENCE_DIR.glob('*.cpp')):
-        found = contains_subsequence(haystack, load_reference(path.stem))
-        print(f'  {"ok  " if found else "FAIL"} {path.stem}: {"found unchanged" if found else "not found"} in {ref}')
+    for name in sorted(reference_set()):
+        found = contains_subsequence(haystack, load_reference(name))
+        print(f'  {"ok  " if found else "FAIL"} {name}: {"found unchanged" if found else "not found"} in {ref}')
         bad += not found
     return 1 if bad else 0
 

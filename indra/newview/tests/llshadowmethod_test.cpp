@@ -11,6 +11,8 @@
 
 #include <cstdio>
 #include <initializer_list>
+#include <map>
+#include <string>
 
 namespace
 {
@@ -58,6 +60,51 @@ namespace
         }
     }
 
+    // A stand-in for the LLSD map of a parsed preset file: {name: {Comment, Type, Value}}
+    struct Node
+    {
+        std::map<std::string, Node> children;
+        bool value = false;
+        bool has(const char* key) const { return children.count(key) != 0; }
+        const Node& operator[](const char* key) const
+        {
+            static const Node empty;
+            const auto it = children.find(key);
+            return it == children.end() ? empty : it->second;
+        }
+        bool asBoolean() const { return value; }
+    };
+
+    Node setting(bool value)
+    {
+        Node n;
+        n.children["Value"].value = value;
+        return n;
+    }
+
+    void test_preset_file()
+    {
+        using namespace LLShadowMethod;
+        Node old_on, old_off, both, only_new, no_value;
+        old_on.children["RenderShadowPCSS"] = setting(true);
+        old_off.children["RenderShadowPCSS"] = setting(false);
+        both.children["RenderShadowPCSS"] = setting(true);
+        both.children["RenderShadowMethod"] = setting(false);
+        only_new.children["RenderShadowMethod"] = setting(true);
+        no_value.children["RenderShadowPCSS"] = Node();   // an entry without a Value reads as off
+
+        PresetMapping m = readPreset(true, old_on);
+        check(m.apply && m.pcss, "old preset, checkbox on");
+        m = readPreset(true, old_off);
+        check(m.apply && !m.pcss, "old preset, checkbox off");
+        check(!readPreset(true, both).apply, "preset with both keys keeps the method");
+        check(!readPreset(true, only_new).apply, "new preset");
+        check(!readPreset(true, Node()).apply, "preset without shadow settings");
+        m = readPreset(true, no_value);
+        check(m.apply && !m.pcss, "old preset entry without a value");
+        check(!readPreset(false, old_on).apply, "unreadable or malformed file maps nothing");
+    }
+
     void test_presets()
     {
         using namespace LLShadowMethod;
@@ -73,6 +120,7 @@ int main()
     test_values();
     test_migration();
     test_presets();
+    test_preset_file();
     if (failures != 0)
     {
         std::printf("%d failure(s)\n", failures);
