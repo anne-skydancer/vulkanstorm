@@ -12551,7 +12551,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowMethod</key>
   <map>
     <key>Comment</key>
-    <string>Shadow method (needs RenderShadowDetail above 0): 0 = Legacy, the Firestorm 7.2.5 sun and moon cascades fitted to the view, screen-sized sun maps and its filtering; 1 = PCSS, stable world-anchored cascades, square sun maps, soft contact-hardening shadows and the later shadow stages. Default per graphics level in the feature table.</string>
+    <string>Shadow method (needs RenderShadowDetail above 0): 0 = Legacy, the Firestorm 7.2.5 sun and moon cascades fitted to the view and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias) and projector fade; 1 = PCSS, stable world-anchored cascades, square sun maps, soft contact-hardening shadows and the later shadow stages. Default per graphics level in the feature table.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>

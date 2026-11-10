@@ -10,7 +10,7 @@ Shadows heading. It replaces the "Soft shadows (PCSS)" checkbox (`RenderShadowPC
 |---|---|---|
 | Sun/moon cascades | Firestorm 7.2.5's: split distances from the visible point cloud, the camera-angle blend of the split exponent (x, y, z), each cascade fitted to the visible receivers, orthographic or perspective-warped | Stable (stage S1, `llshadowcascadefit.h`): splits from the shadow distance, each cascade the bounding sphere of its frustum slice, texel-snapped on a world-anchored grid, orthographic |
 | Sun map size | Screen-sized (`BlurHappySize(width)` x `BlurHappySize(height)`) | Square, same texel count (`sqrt(width * height)`) |
-| Filtering | Stock PCF | PCSS: rotated Poisson kernel, blocker search and contact hardening |
+| Filtering | PCF with the receiver-plane bias | PCSS: rotated Poisson kernel, blocker search and contact hardening |
 | Later shadow stages (S2-S9, S7b) | No | Yes |
 | Settings used | `RenderShadowSplitExponent` x/y/z, `RenderShadowErrorCutoff`, `RenderShadowFOVCutoff` | `RenderShadowDistance`, `RenderShadowSplitExponent` y, `RenderShadowPCSSLightSize` |
 
@@ -25,7 +25,7 @@ These are not gated by the method:
   has a receiver-plane bias (`pcfDepthGradient`), and the projector shadow fades with the
   Euclidean camera distance and `spot_shadow_reach`, not with the sun cascade splits.
 
-So Legacy is Firestorm 7.2.5's cascade fit and map sizes with the stock PCF shader as it is today
+So Legacy is Firestorm 7.2.5's cascade fit and map sizes with the PCF shader as it is today
 (the shader program is the one PCSS-off used before the switch); only the cascades and the map
 size differ in the C++ code. No shader define is needed (`SHADOW_LEGACY` does not exist).
 
@@ -50,8 +50,8 @@ The Legacy code is copied from Firestorm 7.2.5 (`upstream/Firestorm_7.2.5`, 4ac2
 
 `scripts/shadows/check_legacy_shadows.py` (in the ci-checks job) compares each region, ignoring
 indentation and blank lines, with the stored upstream excerpt in
-`scripts/shadows/legacy_reference/` (Linden Lab / Firestorm code, LGPL-2.1, stored unchanged as the
-oracle). The only difference allowed is `return;` becoming `return false;` in `sun-splits`.
+`scripts/shadows/legacy_reference/*.cpp.txt` (Linden Lab / Firestorm code, LGPL-2.1-only with the
+upstream header, stored unchanged as the oracle; the `.txt` suffix keeps them out of source scans). The only difference allowed is `return;` becoming `return false;` in `sun-splits`.
 `scripts/tests/test_check_legacy_shadows.py` shows that an edit, a deleted or added line, a missing
 or extra region makes the check fail. `--verify-reference <git-ref>` re-checks the excerpts against
 an upstream ref (run it, and update the excerpts and the allow-list, in canary upstream sync PRs).
@@ -76,5 +76,7 @@ an upstream ref (run it, and update the excerpts and the allow-list, in canary u
 ## Cost
 
 Measured on an RTX 5070 Ti (offline sun-light-pass bench, `scripts/perf/bench_shadow_pcss.py`, whose
-`legacy` variant is the shader Legacy compiles): PCSS adds +0.02 to +0.03 ms per frame over Legacy at
-High and +0.07 to +0.13 ms at HighUltra (1080p and 1440p). Legacy costs what the stock PCF costs.
+`legacy` variant is an alias of the PCSS-off shader, identical by construction because the shaders Legacy compiles
+are the PCSS-off ones): PCSS adds, over Legacy, +0.02 to +0.03 ms at High in the study (+0.01 ms in the
+latest bench run) and +0.07 to +0.13 ms at HighUltra (1080p and 1440p). Legacy costs what the PCF with the
+receiver-plane bias costs.
