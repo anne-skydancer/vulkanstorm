@@ -395,6 +395,7 @@ public:
         PRIMARY_SHADOW_STRENGTH,            //  "primary_shadow_strength"
         SUN_MOON_BLEND,                     //  "sun_moon_blend"
         CLOUD_LIGHT_TRANSMITTANCE,          //  "cloud_light_transmittance"
+        CLOUD_MOON_BLEND,                   //  "cloud_moon_blend"
         // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
