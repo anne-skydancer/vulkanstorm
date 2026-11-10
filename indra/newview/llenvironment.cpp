@@ -1945,7 +1945,7 @@ void LLEnvironment::updatePrimaryLight()
         return;
     }
 
-    static LLCachedControl<F32> swing_setting(gSavedSettings, "RenderLightHandoverSwing", 0.10f);
+    static LLCachedControl<F32> swing_setting(gSavedSettings, "RenderLightHandoverSwing", 0.30f);
     static LLCachedControl<F32> fade_setting(gSavedSettings, "RenderLightHandoverFade", 0.30f);
     static LLCachedControl<F32> compensation_ev(gSavedSettings, "RenderMoonlightCompensation", -3.f);
     static LLCachedControl<F32> adaptation_depth(gSavedSettings, "RenderMoonAdaptationDepth", 6.f);
