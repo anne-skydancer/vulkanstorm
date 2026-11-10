@@ -27,8 +27,6 @@ Microsoft Store alias that `Get-Command python` may return (`py -c "import sys;p
 This was derived from the source and simulated in `tests/viewer_cmdline.py` (a port of the two tokenisers and of the
 array branch); it has **not** been run in a viewer, hence step 1 below.
 
-Close the running viewer first: LEAP is read once at startup.
-
 ```powershell
 $exe     = 'C:\Users\annes\source\repos\vulkanstorm\work\l3at1\build-vc180-64\newview\RelWithDebInfo\vulkanstorm-bin.exe'
 $py      = 'C:/Users/annes/AppData/Local/Python/pythoncore-3.15-64/python.exe'      # py -c "import sys;print(sys.executable)"
@@ -88,7 +86,7 @@ restored afterwards, repeatable; e.g. `--set RenderAtmospherePhysicalLight=false
 (the viewer log for the excerpt; default: the newest `*.log` under `%APPDATA%\*\logs` or `%LOCALAPPDATA%\*\logs`
 touched in the last 10 minutes), `--scenario FILE`.
 
-Exit codes: 0 ok, 1 error or dry-run failure, 2 stopped by `STOP`, 3 viewer connection lost, 4 a required sky failed
+Exit codes: 0 ok, 1 error (a refused start included, see "What a run does") or dry-run failure, 2 stopped by `STOP`, 3 viewer connection lost, 4 a required sky failed
 (a final `LIGHTCHECK FAILED SKIES ...` line names them).
 
 Analysis (offline, any time):
