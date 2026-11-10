@@ -34,6 +34,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 namespace
@@ -1258,26 +1259,59 @@ int main()
         }
         std::printf("AT1 noon identity (%d skies, physical and A/B): worst relative error %.2e (physical), %.2e (A/B)\n", noon_skies, worst_noon, worst_noon_ab);
 
-        // the clouds' sun at noon against the old cloud light (lin(source e^-tau/2 airmass) = legacy_transmittance(.., 1, 0.5)): the ground light
-        // is identical at noon, the clouds' is not by design (physical: taken at the cloud layer; A/B: the same legacy formula, but the
-        // dome's glow now fades with the cloud handover)
+        // the clouds' sun at noon against the old cloud light, as the cloud shader has them: its sunlight_color is the sky's RAW colour
+        // (sRGB, up to 3), the old light was raw x exp(-tau/2 airmass), the new one sRGB(lin(raw) x cloud_T). The ground light is identical
+        // at noon; the clouds' is not by design (physical: T taken at the cloud layer). Bound: [0.75, 1.35] for every embedded sky
+        // except the two clamped light rigs (physical mode), which stay near black: ratio below 10, Y below 0.03.
         {
+            double lo = 1e9, hi = 0.0;
             std::vector<double> ratios;
-            for (const Sky& sky : kSkies)
+            for (int physical = 1; physical >= 0; --physical)
             {
-                const LegacySky legacy = legacy_of(sky);
-                PrimaryLightSetup s = setup_of(legacy, dir_of(90.0), dir_of(-90.0));
-                const PrimaryLightRig r = compute_primary_light(s);
-                const double old_y = luminance(legacy_transmittance(legacy, 1.0, 0.5));
-                if (old_y > 1e-3)
+                for (const Sky& sky : kSkies)
                 {
-                    ratios.push_back(luminance(r.cloud_T) / old_y);
+                    const LegacySky legacy = legacy_of(sky);
+                    PrimaryLightSetup s = setup_of(legacy, dir_of(90.0), dir_of(-90.0));
+                    s.physical = physical != 0;
+                    s.cloud_source = { sky.sun[0], sky.sun[1], sky.sun[2] };
+                    s.has_cloud_source = true;
+                    const PrimaryLightRig r = compute_primary_light(s);
+                    const Vec3 raw_lin = srgb_to_linear(s.cloud_source);
+                    const Vec3 shader_new = srgb_to_linear(linear_to_srgb(Vec3{ raw_lin.x * r.cloud_T.x, raw_lin.y * r.cloud_T.y, raw_lin.z * r.cloud_T.z }));
+                    const double bd[3] = { sky.blue[0], sky.blue[1], sky.blue[2] };
+                    const double rv[3] = { sky.sun[0], sky.sun[1], sky.sun[2] };
+                    double old_srgb[3];
+                    for (int k = 0; k < 3; ++k)
+                    {
+                        const double tau = (bd[k] + sky.haze * 0.25) * sky.density_multiplier * sky.max_y;
+                        old_srgb[k] = rv[k] * std::exp(-tau / 2.0);
+                    }
+                    const double old_y = luminance(srgb_to_linear(Vec3{ old_srgb[0], old_srgb[1], old_srgb[2] }));
+                    const double ratio = luminance(shader_new) / std::fmax(old_y, 1e-9);
+                    lo = std::fmin(lo, ratio);
+                    hi = std::fmax(hi, ratio);
+                    if (physical)
+                    {
+                        ratios.push_back(ratio);
+                        std::printf("  clouds' sun at noon, %-50s old %.4f new %.4f ratio %.3f\n", sky.name, old_y, luminance(shader_new), ratio);
+                    }
+                    const bool rig = std::strstr(sky.name, "clamped rig") != nullptr;
+                    if (rig && physical)
+                    {
+                        // a light rig asks for almost no sun (tau >= 8 at the ground): its clouds stay near black, but the physical model takes the
+                        // cloud layer above the ground haze, so they are up to 9x brighter than the old near-zero (0.009 .. 0.021 against 0.4 for a normal sky)
+                        check(ratio < 10.0 && luminance(shader_new) < 0.03, "noon: a light rig's clouds stay near black", ratio, luminance(shader_new));
+                    }
+                    else
+                    {
+                        check(ratio > 0.75 && ratio < 1.35, "noon: the clouds' sun is within 35 % of today's", ratio, physical);
+                    }
+                    check(r.cloud_moon_weight == 0.0, "noon: the clouds are the sun's", r.cloud_moon_weight);
                 }
-                check(r.cloud_moon_weight == 0.0, "noon: the clouds are the sun's", r.cloud_moon_weight);
             }
             std::sort(ratios.begin(), ratios.end());
-            std::printf("AT1 clouds' sun at noon, physical / old: median %.3f, min %.3f, max %.3f (%d skies)\n", ratios[ratios.size() / 2], ratios.front(), ratios.back(),
-                        static_cast<int>(ratios.size()));
+            std::printf("AT1 clouds' sun at noon, new / old as the shader has it: median %.3f, min %.3f, max %.3f over %d skies and both modes (bound 0.75 .. 1.35; the two clamped light rigs, physical: below 10 and Y below 0.03)\n",
+                        ratios[ratios.size() / 2], lo, hi, static_cast<int>(ratios.size()));
         }
 
         // 2. the handover through the whole chain, 0.01 degree steps from +10 to -20 degrees: physical and A/B, four skies,
@@ -1297,7 +1331,7 @@ int main()
                     {
                         PrimaryLightRig last = {};
                         bool have_last = false;
-                        double max_cloud_abs = 0.0, max_angle = 0.0, max_shadow = 0.0, max_glow = 0.0, max_cloud = 0.0, jump_level = 0.0, max_light_up = 0.0;
+                        double max_cloud_glow = 0.0, max_cloud_abs = 0.0, max_angle = 0.0, max_shadow = 0.0, max_glow = 0.0, max_cloud = 0.0, jump_level = 0.0, max_light_up = 0.0;
                         double min_z = 1.0;
                         bool all_ok = true;
                         const double ys = luminance(srgb_to_linear(c.sky.source));
@@ -1333,6 +1367,21 @@ int main()
                                     max_cloud = std::max(max_cloud, std::fabs(yc1 - yc0) / std::max(yc0, yc1));
                                 }
                                 max_cloud_abs = std::max(max_cloud_abs, std::fabs(yc1 - yc0));
+                                // the whole term including the glow near the light: cloudsV's haze_glow = (1 - t_cloud) (g + 0.25), g =
+                                // (5 max(1 - cos(angle to the clouds' light), 0.001))^-0.5 (glow.x 5, glow.z -0.5), seen 3, 10 and 20 degrees
+                                // from the sun; the step is bounded relative to the unattenuated glow (g + 0.25)
+                                for (double view_deg : { 3.0, 10.0, 20.0 })
+                                {
+                                    auto term = [&](const PrimaryLightRig& q, double elevation) {
+                                        const Vec3 v = dir_of(elevation + view_deg);
+                                        const Vec3 d = q.cloud_dir;
+                                        const double cosang = v.x * d.x + v.y * d.y + v.z * d.z;
+                                        const double g = std::pow(5.0 * std::fmax(1.0 - cosang, 0.001), -0.5) + 0.25;
+                                        return std::make_pair((1.0 - q.cloud_moon_weight) * luminance(q.cloud_T) * g, g);
+                                    };
+                                    const auto a = term(last, e + 0.01), c = term(r, e);
+                                    max_cloud_glow = std::max(max_cloud_glow, std::fabs(c.first - a.first) / std::max(c.second, a.second));
+                                }
                                 // a jump of the direction, the shadow or the glow only where the ground light is dark
                                 if (ang > 5.0 || dsh > 0.25 || dgl > 0.25)
                                 {
@@ -1346,10 +1395,11 @@ int main()
                             last = r;
                             have_last = true;
                         }
-                        std::printf("  %-9s %-8s %-13s: max step: direction %.2f deg, shadow %.3f, glow %.3f, cloud sun term step %.3f (abs %.4f), ground light (sun up) %.4f; light at the jumps %.4f\n",
-                                    c.name, physical ? "physical" : "A/B", moons[moon], max_angle, max_shadow, max_glow, max_cloud, max_cloud_abs, max_light_up, jump_level);
+                        std::printf("  %-9s %-8s %-13s: max step: direction %.2f deg, shadow %.3f, glow %.3f, cloud sun term step %.3f (abs %.4f, with glow %.4f), ground light (sun up) %.4f; light at the jumps %.4f\n",
+                                    c.name, physical ? "physical" : "A/B", moons[moon], max_angle, max_shadow, max_glow, max_cloud, max_cloud_abs, max_cloud_glow, max_light_up, jump_level);
                         // the clouds' sun term (1 - t_cloud) Y(cloud_T) per 0.01 degree: no pop (with t from the ground light it fell by 0.2-0.4 in one step)
                         check(max_cloud_abs < SWEEP_CLOUD_STEP, "AT1 sweep: the clouds' sun term is continuous", max_cloud_abs);
+                        check(max_cloud_glow < SWEEP_CLOUD_STEP, "AT1 sweep: the clouds' sun term with its glow is continuous (3, 10, 20 degrees from the sun)", max_cloud_glow);
                         check(all_ok, "AT1 sweep: unit directions, finite values in range");
                         check(jump_level < SWEEP_JUMP_LIGHT, "AT1 sweep: direction, shadow and glow jump only where the ground light is dark", jump_level);
                         // the A/B airmass is today's exp(-x / mu): steep by itself in a thin-air sky near the horizon, not bounded here
