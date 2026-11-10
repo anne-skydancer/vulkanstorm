@@ -13,6 +13,10 @@ at RenderShadowDetail 2 (SUN_SHADOW and SPOT_SHADOW) and 1 (SUN_SHADOW) with GL_
 queries for
   * "base"  -- both shaders from git ref PCSS_BENCH_BASE_REF (default 6ceaf3196c, the pre-PCSS devel tip)
   * "tree"  -- this working tree, PCSS_SHADOW undefined
+  * "legacy" -- the shadow method Legacy (RenderShadowMethod 0): its shaders are the working tree's
+               with PCSS_SHADOW undefined, because the receiver-plane bias, the projector fade and
+               the removed sun-bias altitude term stay in both methods; checked bit for bit
+               against "tree" (so Legacy's cost is tree's)
   * "pcss1" -- this working tree, PCSS_SHADOW: stage 1, the fixed radius rotated PCF (what the
                viewer compiles below GL 3.3, without sampler objects)
   * "pcss"  -- this working tree, PCSS_SHADOW and PCSS_SHADOW_FETCH: stage 2, blocker search and
@@ -186,8 +190,8 @@ uniform sampler2D normalMap;
 vec4 getPosition(vec2 pos_screen) { return texture(gbuf_pos, pos_screen); }
 vec4 getNorm(vec2 pos_screen) { return vec4(texture(normalMap, pos_screen).xyz, 0.0); }
 '''
-VARIANTS = ['base', 'tree', 'pcss1', 'pcss']
-VARIANT_DEFINES = {'base': [], 'tree': [], 'pcss1': ['PCSS_SHADOW'], 'pcss': ['PCSS_SHADOW', 'PCSS_SHADOW_FETCH']}
+VARIANTS = ['base', 'tree', 'legacy', 'pcss1', 'pcss']
+VARIANT_DEFINES = {'base': [], 'tree': [], 'legacy': [], 'pcss1': ['PCSS_SHADOW'], 'pcss': ['PCSS_SHADOW', 'PCSS_SHADOW_FETCH']}
 
 def git_show(ref, path):
     return subprocess.run(['git', 'show', f'{ref}:{path}'], cwd=root, capture_output=True, text=True, check=True).stdout
@@ -359,13 +363,14 @@ for (W, H) in RESOLUTIONS:
     # PCSS off differs from the base only by pcfShadow's receiver-plane bias (the altitude-bias
     # hotfix): on slanted lit surfaces, where the base had acne between the taps
     check(same <= W * H // 1000, f'tree (PCSS off) equals base except the receiver-plane bias ({same} pixels differ, at most 0.1 %)', label)
+    check(bytes(images['legacy']) == bytes(images['tree']), 'legacy (shadow method 0) equals tree bit for bit', label)
     for v in ('pcss1', 'pcss'):
         differ = sum(1 for i in range(W*H) if images['base'][i] != images[v][i])
         print(f'  info {v} differs from base in {differ} of {W*H} pixels')
     # across the right (+x) edge of box 2's shadow at z = -19.6, averaged along z
     lo, hi = TIMING_BOXES[1]
     edge_x = hi[0] - sc.sun[0] / sc.sun[1] * hi[1]
-    for v in ('base', 'pcss1', 'pcss'):
+    for v in ('base', 'legacy', 'pcss1', 'pcss'):
         xs = [edge_x - 0.5 + 0.01 * i for i in range(101)]
         prof = [sum(at(images[v], *sc.project((gx, 0.0, -20.2 + 1.2 * zi / 47))) for zi in range(48)) / 48 for gx in xs]
         worst = max(prof[i] - prof[i+1] for i in range(len(prof) - 1))
