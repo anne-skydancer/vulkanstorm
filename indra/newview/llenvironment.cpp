@@ -1945,7 +1945,7 @@ void LLEnvironment::updatePrimaryLight()
         return;
     }
 
-    static LLCachedControl<F32> swing_setting(gSavedSettings, "RenderLightHandoverSwing", 0.10f);
+    static LLCachedControl<F32> swing_setting(gSavedSettings, "RenderLightHandoverSwing", 0.30f);
     static LLCachedControl<F32> fade_setting(gSavedSettings, "RenderLightHandoverFade", 0.30f);
     static LLCachedControl<F32> compensation_ev(gSavedSettings, "RenderMoonlightCompensation", -3.f);
     static LLCachedControl<F32> adaptation_depth(gSavedSettings, "RenderMoonAdaptationDepth", 6.f);
@@ -2015,10 +2015,11 @@ void LLEnvironment::updatePrimaryLight()
     {
         st.cloud_dir = LLVector3(0.f, 0.f, 1.f);
     }
-    st.cloud_moon_weight = (F32)llclamp(rig.cloud_moon_weight, 0.0, 1.0);
+    st.cloud_band_weight = (F32)llclamp(rig.cloud_band_weight, 0.0, 1.0);
     st.color = LLColor3((F32)rig.color.x, (F32)rig.color.y, (F32)rig.color.z);
     st.shadow_strength = (F32)llclamp(rig.light.shadow_strength, 0.0, 1.0);
-    st.moon_weight = (F32)llclamp(rig.light.moon_weight, 0.0, 1.0);
+    st.band_weight = (F32)llclamp(rig.light.band_weight, 0.0, 1.0);
+    st.moon_avail = (F32)llclamp(rig.light.moon_avail, 0.0, 1.0);
     st.haze_glow_factor = (F32)rig.haze_glow_factor;
     st.light_scale = (F32)rig.light_scale;
     st.shadow_visible = rig.shadow_visible;

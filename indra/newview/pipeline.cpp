@@ -6447,6 +6447,11 @@ void LLPipeline::setupHWLights()
         }
         mMoonDiffuse.clamp();
 
+        // the sun's and the moon's own colours, before the zeroing below: the classic sky and cloud programs blend them
+        // themselves (L3)
+        const LLColor4 sky_sun_diffuse = mSunDiffuse;
+        const LLColor4 sky_moon_diffuse = mMoonDiffuse;
+
         // prevent underlighting from having neither lightsource facing us
         if (!sun_up && !moon_up)
         {
@@ -6456,21 +6461,27 @@ void LLPipeline::setupHWLights()
             mMoonDir.setVec(LLVector4(0.0, 1.0, 0.0, 0.0));
         }
 
-        // <Vulkanstorm> stage L3: the light is the sun/moon handover's (direction); the colour stays the sun's or the
-        // moon's own, for the classic dome (the ground light's colour is LLEnvironment's primary light)
+        // <Vulkanstorm> stage L3: the light's direction is the sun/moon handover's; the classic sky programs get the sun's and
+        // the moon's own colours (the ground light's colour is LLEnvironment's primary light)
         const LLEnvironment::PrimaryLightState& primary = environment.getPrimaryLight();
-        const bool primary_is_sun = primary.valid ? primary.moon_weight < 0.5f : sun_up;
+        const bool primary_is_sun = primary.valid ? primary.band_weight < 0.5f : sun_up;
         LLVector4 light_dir = primary.valid ? LLVector4(primary.dir, 0.0f) : (sun_up ? mSunDir : mMoonDir);
         // </Vulkanstorm>
 
-        mHWLightColors[0] = primary_is_sun ? mSunDiffuse : mMoonDiffuse;
+        // Light 0's colour (diffuse A) and diffuse B reach no lit shader but the classic sky and cloud programs (LLRender sends them
+        // as sunlight_color and moonlight_color). Those blend the sun into the moon themselves (the dome with sun_moon_blend, the
+        // band weight; the clouds' sun term through their own transmittance and cloud_moon_blend, the dip-shifted band), as the PBR
+        // sky does with the raw sunlight. So with the handover A is the sun's own colour and B the moon's own, scaled by how much of
+        // a moon there is (0 for moon_brightness 0), both taken before the "neither body up" zeroing: a hard switch of the colour at
+        // the band's middle was a step of the dome and the clouds at sun elevation 0.
+        mHWLightColors[0] = primary.valid ? sky_sun_diffuse : (primary_is_sun ? mSunDiffuse : mMoonDiffuse);
 
         LLLightState* light = gGL.getLight(0);
         light->setPosition(light_dir);
 
         light->setSunPrimary(primary_is_sun);
         light->setDiffuse(mHWLightColors[0]);
-        light->setDiffuseB(mMoonDiffuse);
+        light->setDiffuseB(primary.valid ? sky_moon_diffuse * primary.moon_avail : mMoonDiffuse);
         light->setAmbient(psky->getTotalAmbient());
         light->setSpecular(LLColor4::black);
         light->setConstantAttenuation(1.f);
