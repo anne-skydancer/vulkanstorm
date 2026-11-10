@@ -1509,6 +1509,11 @@ Please see: http://wiki.secondlife.com/wiki/Client_parameters
 Error:
 	</string>
 	<string name="MBCmdLineUsg">[APP_NAME] Command line usage:</string>
+	<string name="MBCloudNoiseDamaged">
+		A file [APP_NAME] needs is damaged or missing (app_settings/clouds/cloud_noise.vkcn).
+
+Please reinstall [APP_NAME].
+	</string>
 	<string name="MBUnableToAccessFile">
 		[APP_NAME] is unable to access a file that it needs.
 

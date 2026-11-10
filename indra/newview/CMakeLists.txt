@@ -52,6 +52,7 @@ include(UI)
 include(Velopack)
 include(InnoSetup)
 include(ViewerMiscLibs)
+include(CloudNoise) # <Vulkanstorm> the volumetric clouds' noise file; stops CMake if it is missing or wrong
 #include(ViewerManager) # <FS:Ansariel> Remove VMP
 include(VisualLeakDetector)
 include(ZLIBNG)
@@ -265,6 +266,7 @@ set(viewer_SOURCE_FILES
     llchiclet.cpp
     llchicletbar.cpp
     llclassifiedinfo.cpp
+    llcloudnoise.cpp
     llcloudshadowmap.cpp
     llcofwearables.cpp
     llcolorswatch.cpp
@@ -1135,6 +1137,7 @@ set(viewer_HEADER_FILES
     llchiclet.h
     llchicletbar.h
     llclassifiedinfo.h
+    llcloudnoise.h
     llcloudshadow.h
     llcloudshadowmap.h
     llcofwearables.h
@@ -1851,6 +1854,14 @@ if (NOT DISABLE_WEBRTC)
   LIST(APPEND viewer_SOURCE_FILES llvoicewebrtc.cpp)
   LIST(APPEND viewer_HEADER_FILES llvoicewebrtc.h)
 endif()
+
+# <Vulkanstorm> The hash start-up check of app_settings/clouds/cloud_noise.vkcn compares against the one
+# CloudNoise.cmake checked at configure time, so that there is one place to change.
+set_source_files_properties(
+   llcloudnoise.cpp
+   PROPERTIES
+   COMPILE_DEFINITIONS "LL_CLOUD_NOISE_SHA256=\"${CLOUD_NOISE_SHA256}\""
+   )
 
 if (DARWIN)
   LIST(APPEND viewer_SOURCE_FILES llappviewermacosx.cpp)

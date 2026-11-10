@@ -14,6 +14,7 @@ set(cmake_SOURCE_FILES
         BuildPackagesInfo.cmake
         BuildVersion.cmake
         CEFPlugin.cmake
+        CloudNoise.cmake
         CMakeCopyIfDifferent.cmake
         Copy3rdPartyLibs.cmake
         CURL.cmake
