@@ -28,6 +28,7 @@
 
 #include "pipeline.h"
 #include "llshadowcascadefit.h" // <Vulkanstorm/> stable sun cascades
+#include "llshadowmethod.h" // <Vulkanstorm/> shadow method
 
 // library includes
 #include "llimagepng.h"
@@ -1109,12 +1110,14 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
 
     F32 scale = gCubeSnapshot ? 1.0f : llmax(0.f, RenderShadowResolutionScale); // Don't scale probe shadow maps
     // <Vulkanstorm> shadow method: Legacy keeps the screen-sized sun maps; PCSS has square ones (the
-    // cascades are square boxes around their slice's bounding sphere) with the same texel count
+    // cascades are square boxes around their slice's bounding sphere) with the same texel count.
+    // The Legacy lines are kept verbatim (checked against upstream), so they are computed first and
+    // PCSS overrides them.
     // <ShadowLegacy id="sun-map-size">
     U32 sun_shadow_map_width = BlurHappySize(resX, scale);
     U32 sun_shadow_map_height = BlurHappySize(resY, scale);
     // </ShadowLegacy>
-    if (RenderShadowMethod != 0)
+    if (RenderShadowMethod == LLShadowMethod::PCSS)
     {
         sun_shadow_map_width = BlurHappySize((U32)sqrtf((F32)resX * (F32)resY), scale);
         sun_shadow_map_height = sun_shadow_map_width;
@@ -1292,7 +1295,7 @@ void LLPipeline::refreshCachedSettings()
     CameraFieldOfView = gSavedSettings.getF32("CameraFieldOfView");
     RenderShadowNoise = gSavedSettings.getF32("RenderShadowNoise");
     RenderShadowBlurSize = gSavedSettings.getF32("RenderShadowBlurSize");
-    RenderShadowMethod = gSavedSettings.getU32("RenderShadowMethod");                // <Vulkanstorm/> shadow method
+    RenderShadowMethod = LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")); // <Vulkanstorm/> shadow method, one clamp for every gate
     RenderShadowPCSSLightSize = gSavedSettings.getF32("RenderShadowPCSSLightSize");  // <Vulkanstorm/> PCSS
     RenderSSAOScale = gSavedSettings.getF32("RenderSSAOScale");
     RenderSSAOMaxScale = gSavedSettings.getU32("RenderSSAOMaxScale");
@@ -10096,7 +10099,7 @@ void LLPipeline::renderDeferredLighting()
                 // <Vulkanstorm> PCSS: the shadowing light's angular size, L = 2 tan(half angle):
                 // the physical sun (0.53 degrees) times the sky's sun scale times
                 // RenderShadowPCSSLightSize; the moon uses the same size
-                if (RenderShadowMethod == 1 && !gCubeSnapshot)
+                if (RenderShadowMethod == LLShadowMethod::PCSS && !gCubeSnapshot)
                 {
                     static const F32 sun_angular_size = 2.f * tanf(0.5f * 0.53f * DEG_TO_RAD);
                     // stage L3: the size of the light the scene is lit by, handing over from the sun's scale to the moon's
@@ -10109,7 +10112,7 @@ void LLPipeline::renderDeferredLighting()
                 }
                 // the blocker search reads cascades 0-1 and both spot maps a second time as
                 // plain depth, through a sampler object (only the PCSS sun program has these units)
-                const bool pcss_depth_fetch = RenderShadowMethod == 1 && !gCubeSnapshot && gGLManager.mGLVersion >= 3.29f;
+                const bool pcss_depth_fetch = RenderShadowMethod == LLShadowMethod::PCSS && !gCubeSnapshot && gGLManager.mGLVersion >= 3.29f;
                 if (pcss_depth_fetch)
                 {
                     bindShadowDepthFetch(sun_shader, true);
@@ -10132,8 +10135,8 @@ void LLPipeline::renderDeferredLighting()
         }
 
         // <Vulkanstorm> PCSS: the blur is the denoiser of the rotated shadow kernel, so it runs
-        // without SSAO too, and a blur size of 0 skips both passes. Unchanged with PCSS off.
-        const bool pcss_shadows = RenderShadowMethod == 1 && RenderShadowDetail > 0;
+        // without SSAO too, and a blur size of 0 skips both passes. Unchanged with the Legacy method.
+        const bool pcss_shadows = RenderShadowMethod == LLShadowMethod::PCSS && RenderShadowDetail > 0;
         const bool blur_light_map = pcss_shadows ? RenderShadowBlurSize > 0.f : RenderDeferredSSAO;
         if (blur_light_map && !gCubeSnapshot)
         // </Vulkanstorm>
@@ -11505,7 +11508,10 @@ public:
 // <Vulkanstorm> shadow method Legacy: the sun cascade splits of Firestorm 7.2.5 (point cloud of the visible
 // extents, camera-angle blend of the split exponent). Upstream code between the markers, unchanged but for the
 // early return; scripts/shadows/check_legacy_shadows.py compares it with scripts/shadows/legacy_reference.
-// Returns false when nothing is visible (the caller skips the sun shadows and the projector shadows, as upstream).
+// Returns false when nothing is visible; the caller then returns without the sun and projector shadows, as upstream
+// does. On that path the render-type mask is already popped and the attachment visibility restored (inside the
+// region below), and the colour mask stays false (gGL.setColorMask(false, false) is not undone; inherited from
+// upstream, behaviour left unchanged).
 bool LLPipeline::computeSunSplitsLegacy(LLCamera& camera, const LLVector3& lightDir, const glm::mat4& saved_view,
     bool skip_avatar_update, LLVector3& out_up, F32& out_near_clip)
 {
@@ -12304,10 +12310,12 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     // scripts/shadows/check_legacy_shadows.py); PCSS uses the stable cascades below.
     LLVector3 up;
     F32 near_clip;
-    if (RenderShadowMethod == 0)
+    if (RenderShadowMethod == LLShadowMethod::LEGACY)
     {
         if (!computeSunSplitsLegacy(camera, lightDir, saved_view, skip_avatar_update, up, near_clip))
         {
+            // false: the render-type mask is already popped and the attachment visibility restored (upstream
+            // behaviour); the colour mask stays false on this path, as upstream
             return;
         }
     }
@@ -12367,7 +12375,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     else
     {
         // <Vulkanstorm> shadow method: the cascades of the chosen method
-        if (RenderShadowMethod == 0)
+        if (RenderShadowMethod == LLShadowMethod::LEGACY)
         {
             generateSunCascadesLegacy(camera, lightDir, up, dist, shadow_near_clip, saved_view, saved_proj, inv_view, view, proj);
         }
