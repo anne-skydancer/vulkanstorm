@@ -120,9 +120,7 @@ uniform vec4 light_attenuation[8]; // linear, quadratic, is omni, unused, See: L
 uniform vec3 light_diffuse[8];
 uniform vec2 light_deferred_attenuation[8]; // light size and falloff
 
-uniform int sun_up_factor;
-uniform vec3 sun_dir;
-uniform vec3 moon_dir;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 
 void calcHalfVectors(vec3 lv, vec3 n, vec3 v, out vec3 h, out vec3 l, out float nh, out float nl, out float nv, out float vh, out float lightDist);
 float calcLegacyDistanceAttenuation(float distance, float falloff);
@@ -269,7 +267,7 @@ void main()
     light_dir = vec3(0,0,1);
     vec3 norm = vec3(0,0,1);
 #else
-    light_dir = (sun_up_factor == 1) ? sun_dir : moon_dir;
+    light_dir = primary_light_dir; // <Vulkanstorm/> L3: the primary light
 #endif
 
     calcAtmosphericVarsLinear(pos.xyz, norm, light_dir, sunlit, amblit, additive, atten);

@@ -911,6 +911,7 @@ public:
 
     LLVector4           mTransformedSunDir;
     LLVector4           mTransformedMoonDir;
+    LLVector4           mTransformedPrimaryDir; // <Vulkanstorm/> stage L3: the sun/moon handover's light, eye space
 
     bool                    mInitialized;
     bool                    mShadersLoaded;

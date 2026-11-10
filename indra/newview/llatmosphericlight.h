@@ -18,7 +18,9 @@
  * Stage AT0 of the item-4 plan adds the physical atmosphere (LLAtmosphere: the legacy EEP sky
  * fields mapped onto Rayleigh, aerosol and ozone densities, and the transmittance of the sun's and
  * the moon's light through them) and the stateless sun/moon handover helpers (primary_light and its
- * parts). Nothing in the viewer calls them yet: stage AT1 does. class1/windlight/
+ * parts). Stage AT1/L3 puts them to use: LLEnvironment::updatePrimaryLight calls compute_primary_light()
+ * once per frame, and the ground light (sunlit) is that result, not the GLSL's old sun-or-moon pick and
+ * airmass. class1/windlight/
  * physicalAtmosphereF.glsl is the GLSL twin of LLAtmosphere::transmittance (the physical part
  * and the excess factor of the capped columns), held equal by the vectors of
  * scripts/light/gen_transmittance_vectors.py.
@@ -45,20 +47,14 @@ struct Vec3
 };
 
 // The uniforms atmosphericsFuncs.glsl reads for these two terms. Colours are the viewer's
-// uniform values (sunlight_color etc.), `light_y` is lightnorm.y (the sine of the light's
-// elevation; the light direction is clamped to z >= -0.1 by LLEnvironment::getClampedLightNorm).
+// uniform values. Stage L3: the ground light is `primary_light_color` (sunlight_color's encoding), the
+// sun's or the moon's colour with its path through the atmosphere already taken
+// (LLEnvironment::updatePrimaryLight); the GLSL no longer picks the body or applies an airmass.
 struct Inputs
 {
-    Vec3 sunlight_color;
-    Vec3 moonlight_color;
-    int sun_up_factor = 1;
+    Vec3 primary_light_color;
     Vec3 ambient_color;
-    Vec3 blue_density;
-    double haze_density = 0.0;
     double cloud_shadow = 0.0;
-    double density_multiplier = 0.0;
-    double max_y = 0.0;
-    double light_y = 1.0;
     double sky_sunlight_scale = 1.0; // RenderSkySunlightScale / RenderHDRSkySunlightScale
     double sky_ambient_scale = 1.0;  // RenderSkyAmbientScale
     int classic_mode = 0;
@@ -88,17 +84,13 @@ inline double ambient_lighting(double n_dot_l)
 // calcAtmosphericVars() reduced to sunlit and amblit (sRGB), before calcAtmosphericVarsLinear.
 inline void calc_atmospheric_vars(const Inputs& in, Vec3& sunlit, Vec3& amblit)
 {
-    const Vec3& light = in.sun_up_factor == 1 ? in.sunlight_color : in.moonlight_color;
-    const double haze = in.haze_density * 0.25;
-    const double above_horizon_factor = 1.0 / std::max(1e-6, in.light_y);
-    const double bd[3] = { in.blue_density.x, in.blue_density.y, in.blue_density.z };
+    const Vec3& light = in.primary_light_color;
     const double lc[3] = { light.x, light.y, light.z };
     const double amb[3] = { in.ambient_color.x, in.ambient_color.y, in.ambient_color.z };
     double s[3], a[3];
     for (int i = 0; i < 3; ++i)
     {
-        const double light_atten = (bd[i] + haze) * (in.density_multiplier * in.max_y);
-        s[i] = lc[i] * std::exp(-light_atten * above_horizon_factor);
+        s[i] = lc[i];
         // increase ambient when there are more clouds
         const double tmp_ambient = amb[i] + (1.0 - amb[i]) * in.cloud_shadow * 0.5;
         a[i] = std::pow(tmp_ambient, 0.9) * 0.57;
@@ -132,7 +124,7 @@ inline Result calc_sunlit_amblit(const Inputs& in, double n_dot_l)
 }
 
 // ---------------------------------------------------------------------------------------------------
-// Stage AT0: the physical atmosphere and the sun/moon handover (nothing in the viewer calls these yet)
+// Stage AT0: the physical atmosphere and the sun/moon handover (stage AT1/L3 below puts them to use)
 // ---------------------------------------------------------------------------------------------------
 
 // --- colour helpers ---
@@ -479,7 +471,7 @@ inline double profile_column_km(const DensityProfile& p, double top_km)
 
 // today's airmass, as a transmittance (the A/B debug setting and the legacy cloud light):
 // per channel lin(source e^(-(bd + hd/4) dm max_y path_scale / max(1e-6, mu))) / lin(source)
-// path_scale 1: atmosphericsFuncs.glsl:111-112; 0.5: cloudsV.glsl:177-179
+// path_scale 1: the ground light (atmosphericsFuncs.glsl before L3); 0.5: the clouds' sun (cloudsV.glsl before L3)
 inline Vec3 legacy_transmittance(const LegacySky& sky, double mu, double path_scale)
 {
     using detail::finite_or;
@@ -684,8 +676,8 @@ struct LLAtmosphere
     // path_factor scales the excess only. In the physical model a light that is lower in the air than the sun's (the cloud light)
     // gets its thinner air from the altitude: T is taken AT THE CLOUD LAYER (h_km = the cloud height setting, 1500 m), not by
     // halving the path. The excess has no altitude dependence, so path_factor is there only for it: the legacy cloud light
-    // (cloudsV.glsl:177-179) has half the airmass, and path_factor 0.5 gives a rig's cloud light that same half airmass. So AT1's
-    // cloud light calls transmittance(h_cloud, mu, disc, 0.5); the sun and moon light (atmosphericsFuncs.glsl:111-112) use 1.
+    // (cloudsV.glsl, before L3) has half the airmass, and path_factor 0.5 gives a rig's cloud light that same half airmass. So AT1's
+    // cloud light calls transmittance(h_cloud, mu, disc, 0.5); the sun and moon light on the ground use 1.
     // A non-finite argument gives 0 (a non-finite path_factor counts as 1, as in the GLSL).
     Vec3 transmittance(double h_km, double mu, double disc_sin, double path_factor = 1.0) const
     {
@@ -980,6 +972,126 @@ inline PrimaryLight primary_light(const PrimaryLightInputs& in, const PrimaryLig
     out.moon_weight = t;
     out.ratio = r;
     return out;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Stage AT1/L3: the viewer's assembly of the sun/moon handover (LLEnvironment::updatePrimaryLight calls it
+// once per main-thread frame). Renderer-free so that the whole chain is tested offline: the physical (or the
+// old) transmittances at the ground and at the cloud layer, the moon's compensation, primary_light(), and the
+// values the shaders get.
+// ---------------------------------------------------------------------------------------------------
+
+struct PrimaryLightSetup
+{
+    LegacySky sky;                       // the sky as the deferred pass receives it (LegacySky::source)
+    AtmosphereBounds bounds;
+    PrimaryLightParams params;
+    Vec3   sun_dir, moon_dir;            // unit, z up
+    double sun_scale = 1.0, moon_scale = 1.0;
+    double moon_brightness = 0.5;        // the sky's, in [0, 1]
+    double compensation_ev = -3.0;       // RenderMoonlightCompensation, limited to [-8, -2]
+    double adaptation_depth_deg = 6.0;   // RenderMoonAdaptationDepth, limited to [1, 18]
+    double cloud_height_km = 1.5;        // the cloud layer the cloud light is taken at
+    bool   physical = true;              // RenderAtmospherePhysicalLight: the physical T, or today's airmass
+    // The colour the cloud shader multiplies the cloud transmittance with: the sky's RAW sunlight_color (not normalised,
+    // up to 3, sRGB; times the auto-adjust scale), which differs from sky.source for dim and bright skies. Its
+    // transmittances are built from it so that lin(raw) x T is what the old exp gave. Unset: sky.source.
+    Vec3   cloud_source;
+    bool   has_cloud_source = false;
+};
+
+struct PrimaryLightRig
+{
+    PrimaryLight light;        // direction, ground transmittance (moon gain included), shadow strength, moon weight, ratio
+    Vec3   cloud_T;            // the sun's transmittance at the cloud layer (the clouds' sun term; the moon's half is not used)
+    Vec3   cloud_dir;          // the clouds' own light direction (the glow near the light), unit, z up
+    double cloud_moon_weight = 0.0; // the clouds' own handover t_cloud: primary_light() on the cloud-layer transmittances
+    Vec3   color;              // the ground light in sunlight_color's encoding: sRGB(lin(source) x light.T), not clamped
+    double gain = 0.0;         // moon_brightness x moon_compensation
+    double light_scale = 1.0;  // mix(sun_scale, moon_scale, moon weight)
+    double haze_glow_factor = 1.0;
+    bool   shadow_visible = true;
+};
+
+inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
+{
+    using detail::finite_or;
+    constexpr double DEG = 3.14159265358979323846 / 180.0;
+    auto disc_sin = [&](double scale) {
+        return std::min(std::max(std::sin(0.265 * DEG * std::min(std::max(finite_or(scale, 1.0), 0.0), 100.0)), 1e-5), 0.2);
+    };
+    const double sun_disc = disc_sin(s.sun_scale), moon_disc = disc_sin(s.moon_scale);
+    const double sun_z = finite_or(s.sun_dir.z, 1.0), moon_z = finite_or(s.moon_dir.z, -1.0);
+
+    LegacySky cloud_sky = s.sky; // the clouds' light is made of the colour their shader has
+    if (s.has_cloud_source)
+    {
+        cloud_sky.source = s.cloud_source;
+    }
+    const Vec3 cloud_src_lin = srgb_to_linear(Vec3{ std::max(finite_or(cloud_sky.source.x, 0.0), 0.0), std::max(finite_or(cloud_sky.source.y, 0.0), 0.0),
+                                                     std::max(finite_or(cloud_sky.source.z, 0.0), 0.0) });
+
+    Vec3 sun_T, moon_T, sun_Tc, moon_Tc;
+    if (s.physical)
+    {
+        const LLAtmosphere atm = LLAtmosphere::fromLegacy(s.sky, s.bounds);
+        const double h_cloud = std::min(std::max(finite_or(s.cloud_height_km, 1.5), 0.0), 20.0);
+        sun_T = atm.transmittance(0.0, sun_z, sun_disc, 1.0);
+        moon_T = atm.transmittance(0.0, moon_z, moon_disc, 1.0);
+        // the cloud light thins through the cloud layer's altitude (and keeps half of the legacy path for a clamped rig)
+        const LLAtmosphere atm_c = s.has_cloud_source ? LLAtmosphere::fromLegacy(cloud_sky, s.bounds) : atm;
+        sun_Tc = atm_c.transmittance(h_cloud, sun_z, sun_disc, 0.5);
+        moon_Tc = atm_c.transmittance(h_cloud, moon_z, moon_disc, 0.5);
+    }
+    else
+    { // A/B: today's airmass
+        sun_T = legacy_transmittance(s.sky, sun_z, 1.0);
+        moon_T = legacy_transmittance(s.sky, moon_z, 1.0);
+        sun_Tc = legacy_transmittance(cloud_sky, sun_z, 0.5);
+        moon_Tc = legacy_transmittance(cloud_sky, moon_z, 0.5);
+    }
+
+    const double ev = std::min(std::max(finite_or(s.compensation_ev, -3.0), -8.0), -2.0); // never more than a quarter of a sun
+    const double depth_sin = std::sin(std::min(std::max(finite_or(s.adaptation_depth_deg, 6.0), 1.0), 18.0) * DEG);
+    const double mb = std::min(std::max(finite_or(s.moon_brightness, 0.5), 0.0), 1.0);
+
+    PrimaryLightRig rig;
+    rig.gain = mb * moon_compensation(std::exp2(ev), sun_z, depth_sin);
+
+    PrimaryLightInputs in;
+    in.sun_dir = s.sun_dir;
+    in.moon_dir = s.moon_dir;
+    in.sun_T = sun_T;
+    in.moon_T = moon_T;
+    in.source = { srgb_to_linear(std::max(finite_or(s.sky.source.x, 0.0), 0.0)), srgb_to_linear(std::max(finite_or(s.sky.source.y, 0.0), 0.0)),
+                  srgb_to_linear(std::max(finite_or(s.sky.source.z, 0.0), 0.0)) };
+    in.moon_gain = rig.gain;
+    in.sun_disc_sin = sun_disc;
+    rig.light = primary_light(in, s.params);
+
+    const double t = rig.light.moon_weight;
+    // The clouds hand over by their own light: at 1.5 km the sun is still seen after the ground's sunset (the horizon dips
+    // 1.24 degrees there), so t from the ground light would take the clouds' sun away while it still shines on them. The
+    // shader multiplies the sun term by (1 - t_cloud) and shows no moon term, so only the sun's transmittance is passed.
+    PrimaryLightInputs cin = in;
+    cin.sun_T = sun_Tc;
+    cin.moon_T = moon_Tc;
+    cin.source = cloud_src_lin;
+    const PrimaryLight cl = primary_light(cin, s.params);
+    rig.cloud_moon_weight = cl.moon_weight;
+    rig.cloud_dir = cl.dir;
+    rig.cloud_T = { std::min(std::max(finite_or(sun_Tc.x, 0.0), 0.0), 1.0), std::min(std::max(finite_or(sun_Tc.y, 0.0), 0.0), 1.0),
+                    std::min(std::max(finite_or(sun_Tc.z, 0.0), 0.0), 1.0) };
+    rig.light_scale = (1.0 - t) * std::min(std::max(finite_or(s.sun_scale, 1.0), 0.0), 100.0)
+                    + t * std::min(std::max(finite_or(s.moon_scale, 1.0), 0.0), 100.0);
+
+    // the dome's glow: the sun's, handing over to the moon's (a quarter of its brightness, once the moon is up)
+    rig.haze_glow_factor = (1.0 - t) + t * mb * 0.25 * smoothstep(-moon_disc, moon_disc, moon_z);
+
+    const Vec3 ground = { in.source.x * rig.light.T.x, in.source.y * rig.light.T.y, in.source.z * rig.light.T.z };
+    rig.color = linear_to_srgb(ground);
+    rig.shadow_visible = rig.light.shadow_strength > 1e-3 && luminance(ground) > 1e-4 * luminance(in.source);
+    return rig;
 }
 } // namespace LLAtmosphericLight
 

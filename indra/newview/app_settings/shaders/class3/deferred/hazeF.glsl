@@ -26,9 +26,7 @@
 out vec4 frag_color;
 
 // Inputs
-uniform vec3 sun_dir;
-uniform vec3 moon_dir;
-uniform int  sun_up_factor;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 in vec2 vary_fragcoord;
 
 vec4 getNorm(vec2 pos_screen);
@@ -52,7 +50,7 @@ void main()
     float depth        = getDepth(tc.xy);
     vec4  pos          = getPositionWithDepth(tc, depth);
     vec4  norm         = getNorm(tc);
-    vec3  light_dir   = (sun_up_factor == 1) ? sun_dir : moon_dir;
+    vec3  light_dir   = primary_light_dir; // <Vulkanstorm/> L3: the primary light
 
     vec3  color = vec3(0);
     float bloom = 0.0;

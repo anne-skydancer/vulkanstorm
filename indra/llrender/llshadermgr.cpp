@@ -1626,6 +1626,16 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("cloud_shadow_params");
     // </Vulkanstorm>
 
+    // <Vulkanstorm> the sun/moon handover (stage L3)
+    mReservedUniforms.push_back("primary_light_dir");
+    mReservedUniforms.push_back("primary_light_color");
+    mReservedUniforms.push_back("primary_shadow_strength");
+    mReservedUniforms.push_back("sun_moon_blend");
+    mReservedUniforms.push_back("cloud_light_transmittance");
+    mReservedUniforms.push_back("cloud_moon_blend");
+    mReservedUniforms.push_back("cloud_light_dir");
+    // </Vulkanstorm>
+
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);
 
     std::set<std::string> dupe_check;

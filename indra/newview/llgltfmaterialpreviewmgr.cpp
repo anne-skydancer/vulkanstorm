@@ -385,6 +385,10 @@ void fixup_shader_constants(LLGLSLShader& shader)
     // Sunlight intensity of 0 no matter what
     shader.uniform1i(LLShaderMgr::SUN_UP_FACTOR, 1);
     shader.uniform3fv(LLShaderMgr::SUNLIGHT_COLOR, 1, LLColor3::white.mV);
+    // <Vulkanstorm> the light of the sun/moon handover (L3): white, no atmosphere, no sun shadow
+    shader.uniform3fv(LLShaderMgr::PRIMARY_LIGHT_COLOR, 1, LLColor3::white.mV);
+    shader.uniform1f(LLShaderMgr::PRIMARY_SHADOW_STRENGTH, 0.f);
+    // </Vulkanstorm>
     shader.uniform1f(LLShaderMgr::DENSITY_MULTIPLIER, 0.0f);
 
     // Ignore sun shadow (if enabled)
@@ -475,6 +479,9 @@ bool LLGLTFPreviewTexture::render()
     glm::vec4 transformed_light_dir(light_dir);
     transformed_light_dir = mat * transformed_light_dir;
     SetTemporarily<LLVector4> force_sun_direction_high_graphics(&gPipeline.mTransformedSunDir, LLVector4(transformed_light_dir));
+    // <Vulkanstorm> the shaders read the primary light's direction (L3)
+    SetTemporarily<LLVector4> force_primary_direction_high_graphics(&gPipeline.mTransformedPrimaryDir, LLVector4(transformed_light_dir));
+    // </Vulkanstorm>
     // Override lights to ensure the sun is always shining from a certain direction (low graphics)
     // See also force_sun_direction_high_graphics and fixup_shader_constants
     {

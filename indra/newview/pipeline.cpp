@@ -6128,6 +6128,7 @@ void LLPipeline::setupAvatarLights(bool for_edit)
         backlight_pos.normalize();
 
         LLColor4 light_diffuse = sun_up ? mSunDiffuse : mMoonDiffuse;
+        light_diffuse.clamp(); // <Vulkanstorm/> mSunDiffuse can exceed 1 with the legacy auto-adjust (L3)
 
         LLColor4 backlight_diffuse(1.f - light_diffuse.mV[VRED], 1.f - light_diffuse.mV[VGREEN], 1.f - light_diffuse.mV[VBLUE], 1.f);
         F32 max_component = 0.001f;
@@ -6424,17 +6425,12 @@ void LLPipeline::setupHWLights()
         mSunDir.setVec(sun_dir);
         mMoonDir.setVec(moon_dir);
 
-        mSunDiffuse.setVec(psky->getSunlightColor());
+        // <Vulkanstorm> the sun's colour as the deferred pass sends it (normalised, clamped, auto-adjusted): one place (L3)
+        mSunDiffuse.setVec(environment.getDeferredSunlight());
+        // </Vulkanstorm>
         mMoonDiffuse.setVec(psky->getMoonlightColor());
 
-        F32 max_color = llmax(mSunDiffuse.mV[0], mSunDiffuse.mV[1], mSunDiffuse.mV[2]);
-        if (max_color > 1.f)
-        {
-            mSunDiffuse *= 1.f/max_color;
-        }
-        mSunDiffuse.clamp();
-
-        max_color = llmax(mMoonDiffuse.mV[0], mMoonDiffuse.mV[1], mMoonDiffuse.mV[2]);
+        F32 max_color = llmax(mMoonDiffuse.mV[0], mMoonDiffuse.mV[1], mMoonDiffuse.mV[2]);
         if (max_color > 1.f)
         {
             mMoonDiffuse *= 1.f/max_color;
@@ -6450,14 +6446,19 @@ void LLPipeline::setupHWLights()
             mMoonDir.setVec(LLVector4(0.0, 1.0, 0.0, 0.0));
         }
 
-        LLVector4 light_dir = sun_up ? mSunDir : mMoonDir;
+        // <Vulkanstorm> stage L3: the light is the sun/moon handover's (direction); the colour stays the sun's or the
+        // moon's own, for the classic dome (the ground light's colour is LLEnvironment's primary light)
+        const LLEnvironment::PrimaryLightState& primary = environment.getPrimaryLight();
+        const bool primary_is_sun = primary.valid ? primary.moon_weight < 0.5f : sun_up;
+        LLVector4 light_dir = primary.valid ? LLVector4(primary.dir, 0.0f) : (sun_up ? mSunDir : mMoonDir);
+        // </Vulkanstorm>
 
-        mHWLightColors[0] = sun_up ? mSunDiffuse : mMoonDiffuse;
+        mHWLightColors[0] = primary_is_sun ? mSunDiffuse : mMoonDiffuse;
 
         LLLightState* light = gGL.getLight(0);
         light->setPosition(light_dir);
 
-        light->setSunPrimary(sun_up);
+        light->setSunPrimary(primary_is_sun);
         light->setDiffuse(mHWLightColors[0]);
         light->setDiffuseB(mMoonDiffuse);
         light->setAmbient(psky->getTotalAmbient());
@@ -9962,6 +9963,7 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
 
     shader.uniform3fv(LLShaderMgr::DEFERRED_SUN_DIR, 1, mTransformedSunDir.mV);
     shader.uniform3fv(LLShaderMgr::DEFERRED_MOON_DIR, 1, mTransformedMoonDir.mV);
+    shader.uniform3fv(LLShaderMgr::PRIMARY_LIGHT_DIR, 1, mTransformedPrimaryDir.mV); // <Vulkanstorm/> stage L3
     shader.uniform2f(LLShaderMgr::DEFERRED_SHADOW_RES, (GLfloat)mRT->shadow[0].getWidth(), (GLfloat)mRT->shadow[0].getHeight());
     shader.uniform2f(LLShaderMgr::DEFERRED_PROJ_SHADOW_RES, (GLfloat)mSpotShadow[0].getWidth(), (GLfloat)mSpotShadow[0].getHeight());
     shader.uniform1f(LLShaderMgr::DEFERRED_DEPTH_CUTOFF, RenderEdgeDepthCutoff);
@@ -9978,15 +9980,10 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
         shader.uniformMatrix4fv(LLShaderMgr::DEFERRED_NORM_MATRIX, 1, false, glm::value_ptr(norm_mat));
     }
 
-    // auto adjust legacy sun color if needed
-    static LLCachedControl<bool> should_auto_adjust(gSavedSettings, "RenderSkyAutoAdjustLegacy", false);
-    static LLCachedControl<F32> auto_adjust_sun_color_scale(gSavedSettings, "RenderSkyAutoAdjustSunColorScale", 1.f);
-    LLSettingsSky::ptr_t psky = LLEnvironment::instance().getCurrentSky();
+    // <Vulkanstorm> the legacy sun colour was auto-adjusted here; setupHWLights now stores it that way in mSunDiffuse
+    // (LLEnvironment::getDeferredSunlight), and zeroes it when neither body is up
     LLColor3 sun_diffuse(mSunDiffuse.mV);
-    if (should_auto_adjust && psky->canAutoAdjust())
-    {
-        sun_diffuse *= auto_adjust_sun_color_scale;
-    }
+    // </Vulkanstorm>
 
     shader.uniform3fv(LLShaderMgr::SUNLIGHT_COLOR, 1, sun_diffuse.mV);
     shader.uniform3fv(LLShaderMgr::MOONLIGHT_COLOR, 1, mMoonDiffuse.mV);
@@ -10063,6 +10060,14 @@ void LLPipeline::renderDeferredLighting()
         tc_moon = mat * tc_moon;
         mTransformedMoonDir.set(tc_moon);
 
+        // <Vulkanstorm> stage L3: the sun/moon handover's light, in eye space
+        const LLEnvironment::PrimaryLightState& primary = LLEnvironment::instance().getPrimaryLight();
+        glm::vec4 tc_primary = primary.valid ? glm::vec4(primary.dir.mV[VX], primary.dir.mV[VY], primary.dir.mV[VZ], 0.f)
+                                             : glm::vec4(LLEnvironment::instance().getIsSunUp() ? mSunDir : mMoonDir);
+        tc_primary = mat * tc_primary;
+        mTransformedPrimaryDir.set(tc_primary);
+        // </Vulkanstorm>
+
         if ((RenderDeferredSSAO && !gCubeSnapshot) || RenderShadowDetail > 0)
         {
             LL_PROFILE_GPU_ZONE("sun program");
@@ -10087,9 +10092,13 @@ void LLPipeline::renderDeferredLighting()
                 if (RenderShadowPCSS && !gCubeSnapshot)
                 {
                     static const F32 sun_angular_size = 2.f * tanf(0.5f * 0.53f * DEG_TO_RAD);
+                    // stage L3: the size of the light the scene is lit by, handing over from the sun's scale to the moon's
+                    // <Vulkanstorm>
+                    const LLEnvironment::PrimaryLightState& primary_light = LLEnvironment::instance().getPrimaryLight();
                     LLSettingsSky::ptr_t sky = LLEnvironment::instance().getCurrentSky();
-                    const F32 sun_scale = sky ? sky->getSunScale() : 1.f;
+                    const F32 sun_scale = primary_light.valid ? primary_light.light_scale : (sky ? sky->getSunScale() : 1.f);
                     sun_shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE, sun_angular_size * sun_scale * RenderShadowPCSSLightSize);
+                    // </Vulkanstorm>
                 }
                 // the blocker search reads cascades 0-1 and both spot maps a second time as
                 // plain depth, through a sampler object (only the PCSS sun program has these units)
@@ -11596,7 +11605,11 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     glm::mat4 view[6];
     glm::mat4 proj[6];
 
-    LLVector3 caster_dir(environment.getIsSunUp() ? mSunDir : mMoonDir);
+    // <Vulkanstorm> stage L3: the shadow of the light the scene is lit by (this frame's: the environment is updated
+    // before the shadows are generated), not the sun's or the moon's by which is up
+    const LLEnvironment::PrimaryLightState& primary_light = environment.getPrimaryLight();
+    LLVector3 caster_dir(primary_light.valid ? primary_light.dir : LLVector3(environment.getIsSunUp() ? mSunDir : mMoonDir));
+    // </Vulkanstorm>
 
     //put together a universal "near clip" plane for shadow frusta
     LLPlane shadow_near_clip;
@@ -11654,7 +11667,9 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     // convenience array of 4 near clip plane distances
     F32 dist[] = { near_clip, mSunClipPlanes.mV[0], mSunClipPlanes.mV[1], mSunClipPlanes.mV[2], mSunClipPlanes.mV[3] };
 
-    if (mSunDiffuse == LLColor4::black)
+    // <Vulkanstorm> stage L3: skipped while the shadow is invisible (the light swings from one body to the other, or
+    // both are dark); the sun diffuse test stays for a missing sky
+    if (primary_light.valid ? !primary_light.shadow_visible : mSunDiffuse == LLColor4::black)
     { //sun diffuse is totally black shadows don't matter
         skipRenderingShadows();
     }
