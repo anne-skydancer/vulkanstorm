@@ -267,7 +267,7 @@ void main()
     light_dir = vec3(0,0,1);
     vec3 norm = vec3(0,0,1);
 #else
-    light_dir = primary_light_dir; // <Vulkanstorm/> L3: the sun/moon handover\'s light
+    light_dir = primary_light_dir; // <Vulkanstorm/> L3: the primary light
 #endif
 
     calcAtmosphericVarsLinear(pos.xyz, norm, light_dir, sunlit, amblit, additive, atten);

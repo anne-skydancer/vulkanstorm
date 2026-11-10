@@ -512,6 +512,8 @@ def bind_material(prog,diffuse,bump,spec,env,gloss):
     fn('glUniform4f',None,I,C.c_float,C.c_float,C.c_float,C.c_float)(loc(prog,b'specular_color'),1.,1.,1.,gloss)
     uniform1f(loc(prog,b'emissive_brightness'),0.);uniform1i(loc(prog,b'sun_up_factor'),1)
     uniform3f(loc(prog,b'sun_dir'),0.,0.6,0.8);uniform3f(loc(prog,b'moon_dir'),0.,0.6,0.8)
+    # stage L3: the ground light and the sun's direction the shaders read now
+    uniform3f(loc(prog,b'primary_light_dir'),0.,0.6,0.8);uniform3f(loc(prog,b'primary_light_color'),1.,1.,1.);uniform1f(loc(prog,b'primary_shadow_strength'),1.)
 light_func=rgba_tex(255,255,255,255)
 red_clear=rgba_tex(200,40,40,0)            # the layer's diffuse: alpha 0 (a tattoo or applier layer)
 red_fade=rgba_tex(200,40,40,255,ramp=True) # alpha 0 -> 1 across the face

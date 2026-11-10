@@ -284,6 +284,8 @@ class Scene:
         active(0x84C0)
         set_mat(prog, 'shadow_matrix', self.shadow_matrix); set_mat(prog, 'inv_proj', [inverse(self.proj)])
         u3f(loc(prog, b'sun_dir'), *self.sun_v); u3f(loc(prog, b'moon_dir'), *self.sun_v); u1i(loc(prog, b'sun_up_factor'), 1)
+        # stage L3: the shadow shader reads primary_light_dir and primary_shadow_strength (the old names stay for the pre-PCSS program of the git ref)
+        u3f(loc(prog, b'primary_light_dir'), *self.sun_v); u1f(loc(prog, b'primary_shadow_strength'), 1.0)
         u2f(loc(prog, b'shadow_res'), self.sw, self.sh); u2f(loc(prog, b'proj_shadow_res'), self.spot_res, self.spot_res)
         u2f(loc(prog, b'screen_res'), self.W, self.H); u4f(loc(prog, b'shadow_clip'), *self.clip)
         u1f(loc(prog, b'shadow_bias'), SHADOW_BIAS); u1f(loc(prog, b'shadow_offset'), SHADOW_OFFSET)

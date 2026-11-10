@@ -15,9 +15,11 @@ renderer changes in L1.
   beside `llshadowcascadefit_test.cpp`. Its 96 vectors (`llatmosphericlight_vectors.inc`) were
   produced by the viewer's GLSL on a GPU (`scripts/light/gen_atmosphere_vectors.py`; `--check`
   re-evaluates the GLSL and compares), so CI needs no GPU. C++ and GLSL agree to 1e-4 relative
-  (the GLSL is float). The test also pins the physical shape of the terms (a lower sun is dimmer
-  and redder, the moon replaces the sun when the sun is down, clouds leave `sunlit` alone and lift
-  the ambient, the ambient is grey outside classic mode).
+  (the GLSL is float). The test also pins the shape of the terms (since stage L3 `sunlit` is the
+  `primary_light_color` input, the sun's or the moon's colour already through the atmosphere, so the old
+  checks that a lower sun is dimmer and redder and that the moon replaces the sun moved to the transmittance
+  and handover checks of `doc/light/handover-l3-at1.md`; clouds leave `sunlit` alone and lift the ambient,
+  the ambient is grey outside classic mode).
 - `scripts/light/measure_sun_shade.py`: the measurement below, with the viewer's own shader code in
   a hidden OpenGL context (no viewer launch).
 
