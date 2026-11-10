@@ -1873,13 +1873,15 @@ set_source_files_properties(
 #   COMPILE_DEFINITIONS "${VIEWER_CHANNEL_VERSION_DEFINES}" # see BuildVersion.cmake
    )
 
-# <Vulkanstorm> The hash start-up check of app_settings/clouds/cloud_noise.vkcn compares against the one
-# CloudNoise.cmake checked at configure time, so that there is one place to change.
-set_source_files_properties(
-   llcloudnoise.cpp
-   PROPERTIES
-   COMPILE_DEFINITIONS "LL_CLOUD_NOISE_SHA256=\"${CLOUD_NOISE_SHA256}\""
-   )
+# <Vulkanstorm> The start-up check of app_settings/clouds/cloud_noise.vkcn compares against the hash
+# CloudNoise.cmake checked at configure time (CLOUD_NOISE_SHA256, the one place to change), through a generated
+# header rather than a compile definition, so that precompiled headers and /D flags cannot disagree.
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/llcloudnoisehash.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/llcloudnoisehash.h
+    @ONLY
+)
+list(APPEND viewer_HEADER_FILES ${CMAKE_CURRENT_BINARY_DIR}/llcloudnoisehash.h)
 
 if (DARWIN)
   LIST(APPEND viewer_SOURCE_FILES llappviewermacosx.cpp)

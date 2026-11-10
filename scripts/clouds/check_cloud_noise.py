@@ -3,15 +3,17 @@
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Check a cloud_noise.vkcn (the volumetric clouds' noise file, indra/newview/llcloudnoise.h).
 
-  check_cloud_noise.py FILE [--expect SHA256 | --expect-from-cmake CloudNoise.cmake] [--licences DIR]
+  check_cloud_noise.py FILE [--expect SHA256 | --expect-from-cmake CloudNoise.cmake] [--licences DIR] [--read-only]
 
 Checks the container structure and every entry's SHA-256 as the viewer does at start-up, the whole-file SHA-256
 against the expected one (by default the CLOUD_NOISE_SHA256 of indra/cmake/CloudNoise.cmake), and with --licences
-that the licence texts of the noise are in DIR. Exit code 0 when everything is right, 1 otherwise.
+that the licence texts of the noise are in DIR, with --read-only that the file is read-only (the Windows read-only
+attribute, or no write permission bit elsewhere). Exit code 0 when everything is right, 1 otherwise.
 """
 import argparse
 import hashlib
 import re
+import stat
 import struct
 import sys
 from pathlib import Path
@@ -72,7 +74,14 @@ def parse(data):
         raise NoiseError('trailing bytes')
 
 
-def check(path, expect, licences=None):
+def is_read_only(path):
+    info = Path(path).stat()
+    if hasattr(info, 'st_file_attributes'):  # Windows
+        return bool(info.st_file_attributes & stat.FILE_ATTRIBUTE_READONLY)
+    return not info.st_mode & 0o222
+
+
+def check(path, expect, licences=None, read_only=False):
     data = Path(path).read_bytes()
     actual = hashlib.sha256(data).hexdigest()
     if actual != expect:
@@ -83,6 +92,8 @@ def check(path, expect, licences=None):
             licence = Path(licences) / name
             if not licence.is_file() or licence.stat().st_size == 0:
                 raise NoiseError('missing licence text %s' % licence)
+    if read_only and not is_read_only(path):
+        raise NoiseError('%s is not read-only' % path)
     return actual
 
 
@@ -94,10 +105,11 @@ def main(argv=None):
     group.add_argument('--expect-from-cmake', default=str(DEFAULT_CMAKE),
                        help='read CLOUD_NOISE_SHA256 from this CloudNoise.cmake (default: the source tree\'s)')
     parser.add_argument('--licences', help='a directory that must hold the licence texts of the noise')
+    parser.add_argument('--read-only', action='store_true', help='require the file to be read-only')
     args = parser.parse_args(argv)
     try:
         expect = args.expect or expected_from_cmake(args.expect_from_cmake)
-        digest = check(args.file, expect.lower(), args.licences)
+        digest = check(args.file, expect.lower(), args.licences, args.read_only)
     except (NoiseError, OSError) as error:
         print('cloud noise check FAILED: %s' % error, file=sys.stderr)
         return 1

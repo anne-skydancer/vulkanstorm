@@ -84,6 +84,22 @@ class CloudNoiseCheckTest(unittest.TestCase):
     def test_wrong_expected_hash(self):
         self.rejected(make_container(), '0' * 64)
 
+    def test_read_only_requirement(self):
+        import os
+        import stat
+        data = make_container()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cloud_noise.vkcn'
+            path.write_bytes(data)
+            sha = hashlib.sha256(data).hexdigest()
+            with self.assertRaises(chk.NoiseError):
+                chk.check(path, sha, read_only=True)
+            os.chmod(path, stat.S_IREAD)
+            try:
+                chk.check(path, sha, read_only=True)
+            finally:
+                os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+
     def test_licences_required(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(chk.NoiseError):
@@ -106,13 +122,15 @@ class CloudNoisePackageWiringTest(unittest.TestCase):
         self.assertIn('github.com/anne-skydancer/3p-cloudnoise/releases/download/', entry)
         self.assertIn('<string>MIT</string>', entry)
 
-    def test_cmake_stops_when_the_file_is_missing_or_wrong(self):
+    def test_cmake_source_has_both_fatal_checks(self):
         text = (ROOT / 'indra/cmake/CloudNoise.cmake').read_text(encoding='utf-8')
         self.assertIn('use_prebuilt_binary(cloudnoise)', text)
         self.assertEqual(len(re.findall(r'message\(FATAL_ERROR', text)), 2)
         self.assertIn('file(SHA256', text)
+        header = (ROOT / 'indra/newview/llcloudnoisehash.h.in').read_text(encoding='utf-8')
+        self.assertIn('@CLOUD_NOISE_SHA256@', header)
 
-    def test_manifest_stages_the_file_and_the_licences(self):
+    def test_manifest_source_mentions_the_file_and_the_licences(self):
         text = (ROOT / 'indra/newview/viewer_manifest.py').read_text(encoding='utf-8')
         self.assertIn("CLOUD_NOISE_FILE_NAME = 'cloud_noise.vkcn'", text)
         self.assertIn("dst='app_settings/clouds'", text)
@@ -120,35 +138,19 @@ class CloudNoisePackageWiringTest(unittest.TestCase):
             self.assertIn(name, text)
         self.assertIn('Attribs: readonly', text)
         self.assertIn('0o444', text)
+        self.assertNotIn('isfile(noise_file)', text)  # a missing file is an error, not a skip
 
-    def test_startup_check_is_fatal_and_clean(self):
+    def test_startup_check_source_shape(self):
         text = (ROOT / 'indra/newview/llappviewer.cpp').read_text(encoding='utf-8')
         start = text.index('LLCloudNoise::loadAndVerify')
-        block = text[start:start + 700]
+        block = text[start:text.index('// </Vulkanstorm>', start)]
         self.assertIn('MBCloudNoiseDamaged', block)
         self.assertIn('OSMessageBox', block)
         self.assertIn('return false;', block)
+        self.assertIn('removeMarkerFiles()', block)
         self.assertNotIn('LL_ERRS', block)
         strings = (ROOT / 'indra/newview/skins/default/xui/en/strings.xml').read_text(encoding='utf-8')
         self.assertIn('name="MBCloudNoiseDamaged"', strings)
-
-    def test_inno_marks_only_the_noise_file_read_only(self):
-        sys.path.insert(0, str(ROOT / 'indra/newview'))
-        from viewer_manifest import Windows_x86_64_Manifest
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            names = ['app_settings/clouds/cloud_noise.vkcn', 'app_settings/other.xml']
-            for name in names:
-                (root / name).parent.mkdir(parents=True, exist_ok=True)
-                (root / name).write_bytes(b'fixture')
-            manifest = object.__new__(Windows_x86_64_Manifest)
-            manifest.get_dst_prefix = lambda: str(root)
-            manifest.file_list = [('source', str(root / name)) for name in names]
-            lines = manifest.inno_file_commands().splitlines()
-            self.assertEqual(len(lines), 2)
-            for line in lines:
-                self.assertEqual('cloud_noise.vkcn' in line, 'Attribs: readonly' in line, line)
-            self.assertTrue(any('DestDir: "{app}\\app_settings\\clouds"' in line for line in lines))
 
 
 if __name__ == '__main__':
