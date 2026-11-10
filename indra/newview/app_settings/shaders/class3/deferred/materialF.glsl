@@ -64,6 +64,7 @@ out vec4 frag_color;
 
 #ifdef HAS_SUN_SHADOW
 float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen);
+float sunShadowedDiffuse(float da, float shadow);
 #endif
 
 void sampleReflectionProbesLegacy(inout vec3 ambenv, inout vec3 glossenv, inout vec3 legacyenv,
@@ -367,14 +368,14 @@ void main()
     if (classic_mode > 0)
     {
         da = pow(da,1.2);
-        vec3 sun_contrib = vec3(min(da, shadow));
+        vec3 sun_contrib = vec3(sunShadowedDiffuse(da, shadow));
 
         color.rgb = srgb_to_linear(color.rgb * 0.9 + linear_to_srgb(sun_contrib) * sunlit_linear * 0.7);
         sunlit_linear = srgb_to_linear(sunlit_linear);
     }
     else
     {
-        vec3 sun_contrib = min(da, shadow) * sunlit_linear;
+        vec3 sun_contrib = sunShadowedDiffuse(da, shadow) * sunlit_linear;
         color.rgb += sun_contrib;
     }
 
