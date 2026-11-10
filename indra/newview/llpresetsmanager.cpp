@@ -536,15 +536,10 @@ void LLPresetsManager::loadPreset(const std::string& subdirectory, std::string n
     {
         llifstream preset_file(full_path.c_str());
         LLSD preset_settings;
-        if (preset_file.is_open() && LLSDParser::PARSE_FAILURE != LLSDSerialize::fromXML(preset_settings, preset_file))
-        {
-            map_old_pcss = LLShadowMethod::presetNeedsMapping(preset_settings.has("RenderShadowPCSS"),
-                                                              preset_settings.has("RenderShadowMethod"));
-            if (map_old_pcss)
-            {
-                old_pcss = preset_settings["RenderShadowPCSS"]["Value"].asBoolean();
-            }
-        }
+        const bool parsed = preset_file.is_open() && LLSDParser::PARSE_FAILURE != LLSDSerialize::fromXML(preset_settings, preset_file);
+        const LLShadowMethod::PresetMapping mapping = LLShadowMethod::readPreset(parsed, preset_settings);
+        map_old_pcss = mapping.apply;
+        old_pcss = mapping.pcss;
     }
     // </Vulkanstorm>
 
