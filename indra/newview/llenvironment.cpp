@@ -1994,12 +1994,10 @@ void LLEnvironment::updatePrimaryLight()
     setup.adaptation_depth_deg = adaptation_depth;
     setup.cloud_height_km = (F64)cloud_height_m / 1000.0;
     setup.physical = physical_light;
-    // the colour the cloud shader has: the sky's raw sunlight_color (SG_SKY), times the auto-adjust scale
+    // the colour the cloud shader has: the sky's raw sunlight_color (SG_SKY), not auto-adjusted
     {
-        static LLCachedControl<F32> auto_adjust_sun_color_scale(gSavedSettings, "RenderSkyAutoAdjustSunColorScale", 1.f);
         const LLColor3 raw = psky->getSunlightColor();
-        const F32 k = (should_auto_adjust && psky->canAutoAdjust()) ? (F32)auto_adjust_sun_color_scale : 1.f;
-        setup.cloud_source = { raw.mV[0] * k, raw.mV[1] * k, raw.mV[2] * k };
+        setup.cloud_source = { raw.mV[0], raw.mV[1], raw.mV[2] };
         setup.has_cloud_source = true;
     }
 
