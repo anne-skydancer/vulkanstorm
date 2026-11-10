@@ -56,6 +56,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llshadowmethod_test.cpp -o "$RUNNER_TEMP/shadow-method-test"
         "$RUNNER_TEMP/shadow-method-test"
+    - name: Check that the Legacy shadow method is still Firestorm 7.2.5's code
+      shell: bash
+      run: |
+        python3 scripts/tests/test_check_legacy_shadows.py
+        python3 scripts/shadows/check_legacy_shadows.py
     - name: Check the sun and sky light terms against the GLSL
       shell: bash
       run: |
