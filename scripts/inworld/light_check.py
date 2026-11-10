@@ -2,15 +2,15 @@
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """In-world light check driven over LEAP (the viewer's --leap plugin interface).
 
-Start it from the viewer:  vulkanstorm-bin.exe --leap "<python> <this file> --scenario <json> --out <dir>"
-(see README.md for the exact PowerShell line). The script waits until you have logged in and the scene
-has settled, then, for every sky of the scenario, selects the sky, points a fixed camera at the sun's
-azimuth, takes a noon snapshot and sweeps the sun through the horizon with a snapshot per step. It
-restores your environment and settings at the end and on error. Dev tooling only: nothing here is part
+Start it from the viewer with --leap (see README.md for the exact PowerShell lines). The script waits until you
+have logged in and the scene has settled, then, for every sky of the scenario, selects the sky, points a fixed
+camera at the sun's azimuth, takes a noon snapshot and sweeps the sun through the horizon with a snapshot per
+step. It restores your environment and settings at the end and on error. Dev tooling only: nothing here is part
 of the viewer.
 
-Modes:  (default) run | --dry-run (check APIs, controls and widget paths, change nothing) |
-        --list-skies (print the sky/settings items of your inventory) | --restore RUNDIR.
+Modes:  (default) run | --dry-run (read-only check of the APIs, settings and widget paths; --deep also opens
+        Personal Lighting and the fixed sky editor and restores the environment afterwards) |
+        --list-skies (print the settings items of your inventory) | --restore RUNDIR.
 
 stdout is the LEAP channel: this script only ever logs to stderr (the viewer copies it into its log).
 """
@@ -23,8 +23,10 @@ import math
 import os
 import pathlib
 import re
+import subprocess
 import sys
 import time
+import traceback
 import uuid
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -33,14 +35,13 @@ sys.path.insert(0, str(HERE))
 from leap_client import LeapError, LeapSession, LeapTimeout, ViewerGone  # noqa: E402
 
 REPO_ROOT = HERE.parents[1]
-OWNER_REPO = pathlib.Path("C:/Users/annes/source/repos/vulkanstorm")
 
-# Operations the script uses, per API; the dry run checks that the viewer has every one of them.
+# Operations the script uses, per API. Checked by the dry run and at the start of every real run: an operation
+# the viewer does not have is refused with a clear message instead of being sent.
 REQUIRED_OPS = {
-    "LLLeap": ["ping", "listen", "getAPIs", "getAPI"],
     "LLStartUp": ["postStartupState", "getStateTable"],
     "LLViewerControl": ["get", "set", "groups"],
-    "LLFloaterReg": ["showInstance", "hideInstance", "instanceVisible"],
+    "LLFloaterReg": ["showInstance", "hideInstance", "instanceVisible", "clickButton"],
     "UI": ["getValue", "setSelectedByValue"],
     "LLWindow": ["getPaths", "getInfo", "keyDown", "pasteText", "mouseDown", "mouseUp"],
     "LLViewerWindow": ["saveSnapshot"],
@@ -52,16 +53,29 @@ REQUIRED_OPS = {
 PHOTOTOOLS = "phototools"            # floater with the sky combo box (floater_phototools.xml)
 PERSONAL = "env_adjust_snapshot"     # Personal Lighting (floater_adjust_environment.xml)
 FIXED_SKY = "env_fixed_environmentent_sky"  # fixed sky editor (spelling as in the viewer)
+ENV_TAB_BUTTON = "htab_EnvironmentTab"      # tab button of the Phototools Environment tab
+REGION_BUTTONS = ["Revert to Region Default", "ResetToRegionDefault"]
+REGION, DAYCYCLE, NOCHOICE = "__Regiondefault__", "__Day_Cycle__", "__None__"   # quickprefs.h
 SIGNATURE_WIDGETS = ["sun_azimuth", "sun_elevation", "probe_ambiance", "cloud_coverage", "haze_horizon",
                      "haze_density", "scene_gamma"]
+BASE_SIGNATURE = ["sun_azimuth", "sun_elevation", "cloud_coverage", "haze_horizon", "haze_density", "scene_gamma"]
+UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+NULL_UUID = "00000000-0000-0000-0000-000000000000"
 
 
 def default_capture_root():
+    """VKSTORM_CAPTURES, else <main checkout>/.captures (found through git, so a worktree uses the main checkout's),
+    else <this checkout>/.captures. All are git-ignored."""
     env = os.environ.get("VKSTORM_CAPTURES")
     if env:
         return pathlib.Path(env)
-    if OWNER_REPO.is_dir():
-        return OWNER_REPO / ".captures"
+    try:
+        common = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                                capture_output=True, text=True, timeout=10).stdout.strip()
+        if common:
+            return pathlib.Path(common).parent / ".captures"
+    except (OSError, subprocess.SubprocessError):
+        pass
     return REPO_ROOT / ".captures"
 
 
@@ -78,12 +92,26 @@ def log(msg):
     sys.stderr.flush()
 
 
+def write_json_atomic(path, obj):
+    path = pathlib.Path(path)
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2, default=str)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
 class Aborted(Exception):
     pass
 
 
+class NotRestorable(LeapError):
+    pass
+
+
 # ---------------------------------------------------------------------------------------------
-# Sweep geometry
+# Geometry
 # ---------------------------------------------------------------------------------------------
 
 def sweep_elevations(start=10.0, stop=-10.0, step=0.5, fine_step=0.1, fine_half=1.5):
@@ -104,13 +132,9 @@ def sweep_elevations(start=10.0, stop=-10.0, step=0.5, fine_step=0.1, fine_half=
     return out
 
 
-def sun_direction(az_deg, el_deg):
-    """Region-coordinate sun direction for the Personal Lighting azimuth/elevation (llfloaterenvironmentadjust.cpp)."""
-    az, el = math.radians(az_deg), math.radians(el_deg)
-    return (math.cos(el) * math.cos(az), -math.cos(el) * math.sin(az), math.sin(el))
-
-
 def camera_params(pos, az_deg, pitch_deg, height_m, look_m):
+    """Camera and focus points (region coordinates) for a camera looking along the Personal Lighting azimuth
+    (azimuth turns clockwise from east: direction (cos az, -sin az), see llfloaterenvironmentadjust.cpp)."""
     az, pitch = math.radians(az_deg), math.radians(pitch_deg)
     cam = [pos[0], pos[1], pos[2] + height_m]
     focus = [cam[0] + look_m * math.cos(pitch) * math.cos(az),
@@ -170,7 +194,11 @@ class Viewer:
         self.s.fire(pump, op, **args)
 
     def barrier(self):
+        """Everything sent before has been handled; raises if a fire-and-forget operation reported an error."""
         self.s.ping(timeout=60)
+        errs = self.s.take_errors()
+        if errs:
+            raise LeapError("viewer reported: " + "; ".join(errs[:3]))
 
     # -- debug settings -------------------------------------------------------------------------
     def get_control(self, key, group="Global"):
@@ -250,14 +278,30 @@ class Viewer:
             raise LeapError("no value at %s (not a control?)" % path)
         return reply["value"]
 
-    def click(self, path):
-        a = self.req("LLWindow", "mouseDown", button="LEFT", path=path)
-        if a.get("error"):
-            raise LeapError(str(a["error"]))
-        b = self.req("LLWindow", "mouseUp", button="LEFT", path=path)
-        if b.get("error"):
-            raise LeapError(str(b["error"]))
+    def mouse_click(self, path):
+        for op in ("mouseDown", "mouseUp"):
+            r = self.req("LLWindow", op, button="LEFT", path=path)
+            if r.get("handled") is False:
+                raise LeapError("%s on %s was not handled by the widget" % (op, path))
         self.barrier()
+
+    def press(self, floater, name):
+        """Click the button `name` of `floater`: LLFloaterReg.clickButton (calls the button's commit) first, mouse
+        events on the button's path if that is refused."""
+        path = self.find_widget(floater, name)
+        try:
+            self.req("LLFloaterReg", "clickButton", name=floater, button=name)
+            self.barrier()
+        except LeapError as exc:
+            log("clickButton %s/%s refused (%s); using mouse events" % (floater, name, exc))
+            self.mouse_click(path)
+
+    def press_first(self, floater, names):
+        for n in names:
+            if self.find_widget(floater, n, required=False):
+                self.press(floater, n)
+                return n
+        raise LeapError("none of %s found under %s" % (names, floater))
 
     def slider_editor(self, slider_path):
         cached = self._paths.get("editor:" + slider_path)
@@ -277,6 +321,7 @@ class Viewer:
         slider = self.find_widget(floater, name)
         editor = self.slider_editor(slider)
         text = ("%.4f" % value).rstrip("0").rstrip(".") if value != int(value) else "%d" % int(value)
+        got = None
         for attempt in range(2):
             self.fire("LLWindow", "keyDown", path=editor, keysym="End")
             for _ in range(14):
@@ -356,22 +401,42 @@ class Viewer:
                 return state
 
 
+def check_apis(v):
+    """[(api, ok, detail)] for every API and operation in REQUIRED_OPS."""
+    out = []
+    apis = v.req("LLLeap", "getAPIs")
+    for api, ops in REQUIRED_OPS.items():
+        if api not in apis:
+            out.append((api, False, "not registered"))
+            continue
+        try:
+            detail = v.req("LLLeap", "getAPI", api=api)
+            blob = json.dumps(detail.get("ops"), default=str)
+            missing = [o for o in ops if '"%s"' % o not in blob]
+            out.append((api, not missing, ("missing ops: %s" % missing) if missing else "ops ok"))
+        except LeapError as exc:
+            out.append((api, False, str(exc)))
+    return out
+
+
 # ---------------------------------------------------------------------------------------------
 # Sky resolution
 # ---------------------------------------------------------------------------------------------
 
 def inventory_roots(v, library_root_id):
-    roots = []
+    """(roots, user_roots): folders to search, and the user's own (settings folder, inventory root)."""
+    user = []
     for ft in ("settings", "root_inv"):
         try:
             rid = str(v.req("LLInventory", "getBasicFolderID", ft_name=ft).get("id"))
         except LeapError:
             continue
-        if rid and rid != "00000000-0000-0000-0000-000000000000":
-            roots.append(rid)
+        if rid and rid != NULL_UUID:
+            user.append(rid)
+    roots = list(user)
     if library_root_id:
         roots.append(library_root_id)
-    return roots
+    return roots, user
 
 
 def find_settings_items(v, roots, name):
@@ -385,7 +450,7 @@ def find_settings_items(v, roots, name):
             continue
         for item in (reply.get("items") or {}).values():
             aid = str(item.get("asset_id"))
-            if aid in seen or aid == "00000000-0000-0000-0000-000000000000":
+            if aid in seen or aid == NULL_UUID:
                 continue
             seen.add(aid)
             (exact if str(item.get("name", "")).lower() == name.lower() else partial).append(
@@ -404,6 +469,20 @@ def list_settings(v, roots):
         for item in (reply.get("items") or {}).values():
             out[str(item.get("asset_id"))] = str(item.get("name"))
     return out
+
+
+def plan_restore(orig):
+    """How to put the original environment back, from the Phototools combo values recorded at the start; None if
+    the original selection cannot be restored faithfully (then the run refuses to start)."""
+    sky, water, dc = orig.get("sky_combo"), orig.get("water_combo"), orig.get("daycycle_combo")
+    is_id = lambda x: isinstance(x, str) and bool(UUID_RE.fullmatch(x))  # noqa: E731
+    if sky == REGION and water == REGION and dc in (REGION, NOCHOICE):
+        return {"kind": "region"}
+    if is_id(sky) and (is_id(water) or water in (REGION, DAYCYCLE)):
+        return {"kind": "sky", "sky": sky, "water": water if is_id(water) else None}
+    if sky == DAYCYCLE and is_id(dc) and (is_id(water) or water == DAYCYCLE):
+        return {"kind": "daycycle", "dc": dc, "water": water if is_id(water) else None}
+    return None
 
 
 # ---------------------------------------------------------------------------------------------
@@ -452,11 +531,16 @@ class Run:
         self.sc = scenario
         self.out = pathlib.Path(outdir)
         self.args = args
+        self.roots = []
+        self.user_roots = []
         self.orig_settings = {}
         self.floaters_opened = []
         self.clouds_toggled = False
         self.camera_set = False
         self.cleaned = False
+        self.plan = None
+        self.prev_base = None     # (names, base signature) of the previous sky, to verify that a sky took
+        self.failed_required = []
         self.run_info = {"scenario": scenario, "skies": {}, "warnings": []}
         self.manifest_rows = []
         self.csv_file = None
@@ -468,13 +552,14 @@ class Run:
         self.run_info["warnings"].append(msg)
 
     def save_run_info(self):
-        with open(self.out / "run.json", "w", encoding="utf-8") as f:
-            json.dump(self.run_info, f, indent=2, default=str)
+        write_json_atomic(self.out / "run.json", self.run_info)
 
     def save_restore(self):
-        with open(self.out / "restore.json", "w", encoding="utf-8") as f:
-            json.dump({"settings": self.orig_settings, "clouds_toggled": self.clouds_toggled,
-                       "floaters_opened": self.floaters_opened, "camera_set": self.camera_set}, f, indent=2)
+        # settings and camera_set are what --restore uses; the other fields are for the reader
+        write_json_atomic(self.out / "restore.json",
+                          {"settings": self.orig_settings, "camera_set": self.camera_set,
+                           "clouds_toggled": self.clouds_toggled, "floaters_opened": self.floaters_opened,
+                           "original_environment": self.run_info.get("original_environment")})
 
     def remember(self, key):
         if key not in self.orig_settings:
@@ -485,12 +570,9 @@ class Run:
             self.save_restore()
         return True
 
-    def change(self, key, value, required=False):
+    def change(self, key, value):
         if not self.remember(key):
-            msg = "control %s does not exist in this viewer; skipped" % key
-            if required:
-                raise LeapError(msg)
-            self.warn(msg)
+            self.warn("control %s does not exist in this viewer; skipped" % key)
             return False
         self.v.set_control(key, value)
         return True
@@ -502,8 +584,11 @@ class Run:
         for key in sorted(sc["knobs"]):
             cur = self.v.try_control(key)
             knob_values[key] = None if cur is None else cur.get("value")
+            if cur is None:
+                self.warn("knob %s does not exist in this viewer (a baseline viewer?); skipped" % key)
+                continue
             want = sc["knobs"][key]
-            if cur is not None and want is not None:
+            if want is not None:
                 self.change(key, want)
                 knob_values[key] = want
         for k, val in {**sc["settings"], **self.args.set_values}.items():
@@ -514,10 +599,11 @@ class Run:
         self.run_info["fov_deg"] = math.degrees(float(cam["value"])) if cam else 60.0
 
     def cleanup(self):
-        """Restore everything we touched. Safe to call twice; never raises."""
+        """Restore everything we touched. Safe to call twice; never raises. A stop file no longer applies."""
         if self.cleaned:
             return
         self.cleaned = True
+        self.v.abort_file = None
         log("restoring the viewer")
         v = self.v
 
@@ -534,32 +620,25 @@ class Run:
                 attempt("hide " + name, lambda n=name: v.hide_floater(n))
         attempt("environment", self.restore_environment)
         if self.clouds_toggled:
-            attempt("clouds", lambda: self.click_named(PHOTOTOOLS, ["PauseClouds"]))
+            attempt("clouds", self.unpause_clouds)
+        orig = self.run_info.get("original_environment") or {}
+        if orig.get("personal_open"):
+            attempt("reopen " + PERSONAL, lambda: v.show_floater(PERSONAL))
         if PHOTOTOOLS in self.floaters_opened:
             attempt("hide " + PHOTOTOOLS, lambda: v.hide_floater(PHOTOTOOLS))
         for key, val in self.orig_settings.items():
             attempt("setting " + key, lambda k=key, x=val: v.set_control(k, x))
 
-    def click_named(self, floater, names):
-        for n in names:
-            p = self.v.find_widget(floater, n, required=False)
-            if p:
-                self.v.click(p)
-                return p
-        raise LeapError("none of %s found under %s" % (names, floater))
-
-    def restore_environment(self):
-        orig = self.run_info.get("original_environment") or {}
-        if not self.run_info.get("environment_changed"):
-            return
-        self.ensure_floater(PHOTOTOOLS)
-        sky = orig.get("sky_combo")
-        if isinstance(sky, str) and re.fullmatch(r"[0-9a-fA-F-]{36}", sky):
-            self.select_sky_asset(sky)
+    def unpause_clouds(self):
+        p = self.v.find_widget(PHOTOTOOLS, "PauseClouds", required=False)
+        if not p:
+            raise LeapError("PauseClouds button not found")
+        if bool(self.v.value_of(p)):       # only toggle it back if it is paused now
+            self.v.press(PHOTOTOOLS, "PauseClouds")
         else:
-            self.click_named(PHOTOTOOLS, ["Revert to Region Default", "ResetToRegionDefault"])
-        self.v.sleep(1.0)
+            self.warn("clouds were toggled by the script but the button does not read as paused; left alone")
 
+    # -- environment ----------------------------------------------------------------------------
     def ensure_floater(self, name):
         if not self.v.floater_visible(name):
             self.v.show_floater(name)
@@ -567,23 +646,86 @@ class Run:
                 self.floaters_opened.append(name)
                 self.save_restore()
 
-    # -- sky selection --------------------------------------------------------------------------
-    def combo_path(self):
-        return self.v.find_widget(PHOTOTOOLS, "WLPresetsCombo")
-
-    def select_sky_asset(self, asset_id):
-        """Select a sky of the Phototools combo box and apply it. setSelectedByValue only moves the highlight (no
+    def select_combo(self, combo, prev_button, next_button, value):
+        """Select `value` in a Phototools combo box and apply it. setSelectedByValue only moves the highlight (no
         commit), so step Next then Prev: the pair ends on the same preset and applies it."""
         v = self.v
-        combo = self.combo_path()
-        v.req("UI", "setSelectedByValue", path=combo, value=uuid.UUID(asset_id))
-        got = str(v.value_of(combo))
-        if got.lower() != asset_id.lower():
+        path = v.find_widget(PHOTOTOOLS, combo)
+        v.req("UI", "setSelectedByValue", path=path, value=as_value(value))
+        if str(v.value_of(path)).lower() != str(value).lower():
             return False
-        self.click_named(PHOTOTOOLS, ["WLNextPreset"])
-        self.click_named(PHOTOTOOLS, ["WLPrevPreset"])
+        v.press(PHOTOTOOLS, next_button)
+        v.press(PHOTOTOOLS, prev_button)
         v.sleep(0.5)
-        return str(v.value_of(combo)).lower() == asset_id.lower()
+        return str(v.value_of(path)).lower() == str(value).lower()
+
+    def select_sky_asset(self, asset_id):
+        return self.select_combo("WLPresetsCombo", "WLPrevPreset", "WLNextPreset", asset_id)
+
+    def read_combos(self):
+        out = {}
+        for key, widget in (("sky_combo", "WLPresetsCombo"), ("water_combo", "WaterPresetsCombo"),
+                            ("daycycle_combo", "DCPresetsCombo")):
+            w = self.v.find_widget(PHOTOTOOLS, widget, required=False)
+            try:
+                out[key] = str(self.v.value_of(w)) if w else None
+            except LeapError:
+                out[key] = None
+        return out
+
+    def restore_environment(self):
+        if not self.run_info.get("environment_changed"):
+            return
+        plan = self.plan
+        if plan is None:
+            raise LeapError("no restore plan for the original environment")
+        self.ensure_floater(PHOTOTOOLS)
+        if plan["kind"] == "region":
+            self.v.press_first(PHOTOTOOLS, REGION_BUTTONS)
+        elif plan["kind"] == "sky":
+            ok = self.select_combo("WLPresetsCombo", "WLPrevPreset", "WLNextPreset", plan["sky"])
+            if plan["water"]:
+                ok = self.select_combo("WaterPresetsCombo", "WWPrevPreset", "WWNextPreset", plan["water"]) and ok
+            if not ok:
+                self.warn("could not re-select the original sky/water")
+        else:
+            ok = self.select_combo("DCPresetsCombo", "DCPrevPreset", "DCNextPreset", plan["dc"])
+            if plan["water"]:
+                ok = self.select_combo("WaterPresetsCombo", "WWPrevPreset", "WWNextPreset", plan["water"]) and ok
+            if not ok:
+                self.warn("could not re-select the original day cycle")
+        self.v.sleep(1.0)
+        now = self.read_combos()
+        orig = self.run_info.get("original_environment") or {}
+        diff = {k: (orig.get(k), now.get(k)) for k in now if orig.get(k) != now.get(k)}
+        if plan["kind"] == "sky" and not plan["water"]:
+            diff.pop("water_combo", None)     # a sky selection leaves the water as it is
+        if diff:
+            self.warn("environment after the restore differs from the original: %s" % diff)
+            log("environment restore differs: %s" % diff)
+
+    def choose_sky(self, spec, mode):
+        """Make the sky of `spec` the current local environment ("inventory": the combo trick; "button": the
+        quick-environment button of the scenario). Returns a description dict."""
+        v = self.v
+        self.run_info["environment_changed"] = True
+        if v.floater_visible(PERSONAL):
+            v.hide_floater(PERSONAL)
+        self.ensure_floater(PHOTOTOOLS)
+        if mode == "inventory":
+            tried = []
+            for nm in spec.get("names", []):
+                for name, aid in find_settings_items(v, self.roots, nm):
+                    tried.append("%s=%s" % (name, aid))
+                    if self.select_sky_asset(aid):
+                        return {"how": "inventory", "item": name, "asset_id": aid}
+            raise LeapError("no inventory sky from %s took (tried: %s)" % (spec.get("names"), tried))
+        fb = spec.get("fallback_button")
+        if not fb:
+            raise LeapError("no fallback button for %s" % spec["id"])
+        v.press(PHOTOTOOLS, fb)
+        v.sleep(1.0)
+        return {"how": "button", "item": fb}
 
     def read_signature(self):
         sig = {}
@@ -596,45 +738,32 @@ class Run:
                     pass
         return sig
 
-    def choose_sky(self, spec):
-        """Make the sky of `spec` the current local environment. Returns a description dict."""
-        v = self.v
-        self.run_info["environment_changed"] = True
-        if v.floater_visible(PERSONAL):
-            v.hide_floater(PERSONAL)
-        self.ensure_floater(PHOTOTOOLS)
-        tried = []
-        for nm in spec.get("names", []):
-            for name, aid in find_settings_items(v, self.roots, nm):
-                tried.append("%s=%s" % (name, aid))
-                if self.select_sky_asset(aid):
-                    return {"how": "inventory", "item": name, "asset_id": aid}
-        fb = spec.get("fallback_button")
-        if fb:
-            self.warn("sky %s: no inventory sky from %s took; using the %s quick-environment button (tried: %s)"
-                      % (spec["id"], spec.get("names"), fb, tried))
-            self.click_named(PHOTOTOOLS, [fb])
-            v.sleep(1.0)
-            return {"how": "button", "item": fb}
-        raise LeapError("no sky found for %s (names %s, tried %s)" % (spec["id"], spec.get("names"), tried))
+    def signature_ok(self, spec, sig):
+        """Did the sky take? Compare the signature (before any edit) with the previous sky's: it must be equal when
+        both specs name the same sky and different otherwise. No check for the first sky."""
+        base = {k: sig[k] for k in BASE_SIGNATURE if k in sig}
+        names = spec.get("names", [])
+        if self.prev_base is None or not base:
+            return True, base
+        pnames, pbase = self.prev_base
+        keys = [k for k in base if k in pbase]
+        same = all(abs(float(base[k]) - float(pbase[k])) < 1e-3 for k in keys)
+        return (same if names == pnames else not same), base
 
     # -- editing a sky --------------------------------------------------------------------------
     def open_editor(self, spec):
         v = self.v
-        editor = spec.get("editor", "personal")
-        if editor == "fixed":
+        if spec.get("editor", "personal") == "fixed":
+            if v.floater_visible(FIXED_SKY):
+                raise LeapError("the fixed sky editor is already open (closing it would discard your edit); "
+                                "close it and run again")
             if v.floater_visible(PERSONAL):
                 v.hide_floater(PERSONAL)
             v.show_floater(FIXED_SKY, key="new")
             if FIXED_SKY not in self.floaters_opened:
                 self.floaters_opened.append(FIXED_SKY)
                 self.save_restore()
-            tab_re = re.compile(spec.get("tab_regex", "sun"), re.I)
-            for p in v.floater_paths(FIXED_SKY):
-                if tab_re.search(p.rsplit("/", 1)[-1]) and "button" in str(v.widget_info(p).get("class", "")).lower():
-                    v.click(p)
-                    v._paths.pop(FIXED_SKY, None)
-                    break
+            self.select_fixed_tab(spec.get("tab_regex", "hbodies"))
             return FIXED_SKY
         v.show_floater(PERSONAL)
         if PERSONAL not in self.floaters_opened:
@@ -642,15 +771,65 @@ class Run:
             self.save_restore()
         return PERSONAL
 
+    def select_fixed_tab(self, tab_regex):
+        """Click the tab button (named htab_<panel name>) of the fixed editor that holds the sun and moon sliders."""
+        v = self.v
+        rx = re.compile(tab_regex, re.I)
+        for p in v.floater_paths(FIXED_SKY):
+            last = p.rsplit("/", 1)[-1]
+            if last.startswith("htab_") and rx.search(last):
+                v.mouse_click(p)
+                v._paths.pop(FIXED_SKY, None)
+                if v.find_widget(FIXED_SKY, "sun_elevation", required=False) is None:
+                    raise LeapError("clicked %s but the sun sliders did not appear" % last)
+                return last
+        raise LeapError("no tab button matching %r in the fixed sky editor (htab_* found: %s)" % (
+            tab_regex, [q.rsplit("/", 1)[-1] for q in v.floater_paths(FIXED_SKY) if q.rsplit("/", 1)[-1].startswith("htab_")]))
+
     def prepare_sky(self, spec):
         v = self.v
         info = {"selected": None, "signature": None, "controls": {}, "error": None}
-        if spec.get("editor", "personal") == "personal":
-            info["selected"] = self.choose_sky(spec)
-            v.sleep(self.sc["settle"]["after_sky_s"])
-        floater = self.open_editor(spec)
-        v.sleep(self.sc["settle"]["after_sky_s"])
-        info["floater"] = floater
+        settle = self.sc["settle"]["after_sky_s"]
+        if spec.get("editor", "personal") == "fixed":
+            # the fixed editor starts from a clone of the current sky: select the base sky first
+            modes = ["inventory", "button"] if spec.get("names") else ["button"]
+            last = None
+            for mode in modes:
+                try:
+                    info["selected"] = self.choose_sky(spec, mode)
+                    break
+                except LeapError as exc:
+                    last = exc
+            else:
+                raise last
+            v.sleep(settle)
+            floater = self.open_editor(spec)
+            v.sleep(settle)
+            base = None
+        else:
+            floater, base = None, None
+            modes = ["inventory", "button"] if spec.get("names") else ["button"]
+            last = None
+            for i, mode in enumerate(modes):
+                try:
+                    info["selected"] = self.choose_sky(spec, mode)
+                except LeapError as exc:
+                    last = exc
+                    self.warn("sky %s: %s" % (spec["id"], exc))
+                    continue
+                v.sleep(settle)
+                floater = self.open_editor(spec)
+                v.sleep(settle)
+                ok, base = self.signature_ok(spec, self.read_signature())
+                info["signature_verified"] = ok
+                if ok:
+                    break
+                self.warn("sky %s: the sky read from Personal Lighting does not match what was expected after "
+                          "selecting by %s (%s)" % (spec["id"], mode, base))
+                if i + 1 < len(modes):
+                    v.hide_floater(PERSONAL)
+            if floater is None:
+                raise last
         for name, val in (spec.get("controls") or {}).items():
             info["controls"][name] = v.set_slider(floater, name, float(val))
         if spec.get("azimuth_deg") is not None:
@@ -663,7 +842,9 @@ class Run:
             v.set_slider(floater, "moon_elevation", float(moon.get("elevation_deg", 30.0)))
             info["moon"] = {"azimuth": maz, "elevation": float(moon.get("elevation_deg", 30.0))}
         info["azimuth_deg"] = az
-        info["signature"] = self.read_signature() if floater == PERSONAL else {}
+        if floater == PERSONAL:
+            info["signature"] = self.read_signature()
+            self.prev_base = (spec.get("names", []), base or {})
         return floater, az, info
 
     # -- capture --------------------------------------------------------------------------------
@@ -718,13 +899,16 @@ class Run:
         self.csv.writeheader()
         started = dt.datetime.now(dt.timezone.utc)
         self.run_info.update({"started_utc": started.isoformat(), "script": str(pathlib.Path(__file__).resolve()),
-                              "args": vars(self.args) | {"set_values": self.args.set_values}})
+                              "args": vars(self.args)})
         self.save_run_info()
         try:
-            self.roots = inventory_roots(v, sc["library_root_id"])
+            bad = [(a, d) for a, ok, d in check_apis(v) if not ok]
+            if bad:
+                raise LeapError("this viewer lacks LEAP operations the script needs: %s" % bad)
+            self.roots, self.user_roots = inventory_roots(v, sc["library_root_id"])
             self.run_info["inventory_roots"] = self.roots
             self.wait_for_inventory()
-            self.snapshot_original_state()
+            self.snapshot_original_state()          # may refuse before anything is changed
             self.apply_settings()
             self.save_run_info()
             if sc["pause_clouds"]:
@@ -746,13 +930,24 @@ class Run:
             finally:
                 self.cleanup()
 
-    def wait_for_inventory(self):
-        for _ in range(12):
-            if list_settings(self.v, self.roots):
+    def wait_for_inventory(self, timeout=120.0, interval=4.0):
+        """Wait until the user's own settings folder exists and its item count has been stable for two polls."""
+        end = time.monotonic() + timeout
+        last = None
+        while True:
+            if not self.user_roots:
+                self.roots, self.user_roots = inventory_roots(self.v, self.sc["library_root_id"])
+            count = len(list_settings(self.v, self.user_roots)) if self.user_roots else None
+            if count is not None and count == last:
+                if count == 0:
+                    self.warn("your inventory shows no settings items; skies fall back to the quick-environment buttons")
                 return
-            log("no settings items in the inventory yet; waiting for the inventory to load")
-            self.v.sleep(10.0)
-        self.warn("the inventory shows no settings items; skies fall back to the quick-environment buttons")
+            last = count
+            if time.monotonic() > end:
+                self.warn("the inventory did not settle in %.0f s (user settings items: %s); continuing" % (timeout, count))
+                return
+            log("waiting for the inventory (user settings items: %s)" % count)
+            self.v.sleep(interval)
 
     def snapshot_original_state(self):
         v = self.v
@@ -761,32 +956,46 @@ class Run:
             orig["phototools_open"] = True
         else:
             self.ensure_floater(PHOTOTOOLS)
-        combo = self.combo_path()
-        orig["sky_combo"] = str(v.value_of(combo))
-        for key, widget in (("water_combo", "WaterPresetsCombo"), ("daycycle_combo", "DCPresetsCombo")):
-            w = v.find_widget(PHOTOTOOLS, widget, required=False)
-            try:
-                orig[key] = str(v.value_of(w)) if w else None
-            except LeapError:
-                orig[key] = None
+        self.select_env_tab()
+        orig.update(self.read_combos())
         orig["personal_open"] = v.floater_visible(PERSONAL)
         self.run_info["original_environment"] = orig
         log("original environment: %s" % orig)
+        self.plan = plan_restore(orig)
+        if self.plan is None:
+            raise NotRestorable(
+                "cannot restore your current environment safely (Phototools shows sky=%r, water=%r, day cycle=%r). "
+                "Select Region Default or a sky from the Phototools Environment tab and start again. Nothing was changed."
+                % (orig.get("sky_combo"), orig.get("water_combo"), orig.get("daycycle_combo")))
+        self.save_restore()
+
+    def select_env_tab(self):
+        p = self.v.find_widget(PHOTOTOOLS, ENV_TAB_BUTTON, required=False)
+        if p:
+            try:
+                self.v.mouse_click(p)
+            except LeapError as exc:
+                self.warn("could not select the Phototools Environment tab: %s" % exc)
+        else:
+            self.warn("Phototools Environment tab button %s not found" % ENV_TAB_BUTTON)
 
     def pause_clouds(self):
-        p = self.v.find_widget(PHOTOTOOLS, "PauseClouds", required=False)
+        v = self.v
+        p = v.find_widget(PHOTOTOOLS, "PauseClouds", required=False)
         if not p:
             self.warn("PauseClouds button not found; clouds keep drifting during the sweeps")
             return
-        try:
-            already = bool(self.v.value_of(p))
-        except LeapError:
-            already = False
-        if not already:
-            self.v.click(p)
-            self.clouds_toggled = True
-            self.save_restore()
-        self.run_info["clouds_paused_by_script"] = not already
+        before = bool(v.value_of(p))
+        if before:
+            self.run_info["clouds_paused_by_script"] = False
+            return
+        v.press(PHOTOTOOLS, "PauseClouds")
+        self.clouds_toggled = True
+        self.save_restore()
+        v.sleep(0.4)
+        if not bool(v.value_of(p)):
+            self.warn("the PauseClouds button does not read as paused after the click; clouds may still drift")
+        self.run_info["clouds_paused_by_script"] = True
 
     def run_sky(self, spec, elevs):
         v, sc = self.v, self.sc
@@ -794,13 +1003,16 @@ class Run:
         entry = {"label": spec.get("label"), "why": spec.get("why"), "status": "started"}
         self.run_info["skies"][sid] = entry
         log("sky %s: preparing" % sid)
+        opened_fixed = False
         try:
+            if spec.get("editor") == "fixed":
+                opened_fixed = FIXED_SKY not in self.floaters_opened
             floater, az, info = self.prepare_sky(spec)
             entry.update(info)
             if sc["camera"]["enabled"]:
-                cam, focus = v.point_camera(az, sc["camera"])
-                self.camera_set = True
+                self.camera_set = True            # set before the call: a failure half way is still released
                 self.save_restore()
+                cam, focus = v.point_camera(az, sc["camera"])
                 entry["camera"] = {"position": cam, "focus": focus}
                 self.run_info["regions"] = analysis_regions(sc["camera"]["pitch_deg"], self.run_info.get("fov_deg", 60.0))
             v.sleep(sc["settle"]["after_sky_s"])
@@ -826,13 +1038,14 @@ class Run:
                 self.warn("optional sky %s failed: %s" % (sid, exc))
             else:
                 self.warn("sky %s FAILED: %s" % (sid, exc))
+                self.failed_required.append(sid)
         finally:
-            for name in (FIXED_SKY,):
-                if name in self.floaters_opened and spec.get("editor") == "fixed":
-                    try:
-                        v.hide_floater(name)
-                    except LeapError:
-                        pass
+            if spec.get("editor") == "fixed" and opened_fixed and FIXED_SKY in self.floaters_opened:
+                try:
+                    v.hide_floater(FIXED_SKY)
+                    self.floaters_opened.remove(FIXED_SKY)
+                except LeapError:
+                    pass
 
 
 # ---------------------------------------------------------------------------------------------
@@ -843,109 +1056,175 @@ class Report:
     def __init__(self):
         self.rows = []
 
-    def add(self, name, ok, detail=""):
-        self.rows.append((name, bool(ok), detail))
-        log("%-4s %s %s" % ("PASS" if ok else "FAIL", name, detail))
+    def add(self, name, ok, detail="", warn=False):
+        self.rows.append((name, bool(ok), ("WARN: " if warn and ok else "") + str(detail)))
+        log("%-4s %s %s" % ("FAIL" if not ok else "WARN" if warn else "PASS", name, detail))
 
     @property
     def failed(self):
         return [r for r in self.rows if not r[1]]
 
 
+def check_widgets(v, rep, floater, widgets):
+    for w in widgets:
+        p = v.find_widget(floater, w, required=False)
+        avail = None
+        if p:
+            try:
+                avail = bool(v.widget_info(p).get("available"))
+            except LeapError:
+                avail = None
+        rep.add("widget %s/%s" % (floater, w), p is not None, p or "not found",
+                warn=p is not None and avail is False)
+
+
 def dry_run(v, sc, args, outdir):
+    """Read-only unless args.deep. Opening Personal Lighting or the fixed sky editor changes the environment
+    (Personal Lighting freezes the current sky into the local environment), so those are only checked when they are
+    already open, or with --deep, which records the environment and restores it afterwards like a run."""
     rep = Report()
-    # 1. APIs and operations
-    apis = v.req("LLLeap", "getAPIs")
-    for api, ops in REQUIRED_OPS.items():
-        if api == "LLLeap":
-            continue
-        if api not in apis:
-            rep.add("api %s" % api, False, "not registered")
-            continue
-        try:
-            detail = v.req("LLLeap", "getAPI", api=api)
-            blob = json.dumps(detail.get("ops"), default=str)
-            missing = [o for o in ops if '"%s"' % o not in blob]
-            rep.add("api %s" % api, not missing, ("missing ops: %s" % missing) if missing else "ops ok")
-        except LeapError as exc:
-            rep.add("api %s" % api, False, str(exc))
-    # 2. controls
+    for api, ok, detail in check_apis(v):
+        rep.add("api %s" % api, ok, detail)
     groups = v.req("LLViewerControl", "groups").get("groups") or []
     rep.add("control group Global", "Global" in groups, str(groups))
     for key in list(sc["knobs"]) + ["CameraAngle", "FSEnvironmentManualTransitionTime"]:
         cur = v.try_control(key)
-        rep.add("control %s" % key, cur is not None, "" if cur is None else "%s = %r" % (cur.get("type"), cur.get("value")))
-    # 3. login-dependent parts
+        is_knob = key in sc["knobs"]
+        rep.add("control %s" % key, cur is not None or is_knob,
+                "missing (a baseline viewer?); skipped in a real run" if cur is None else
+                "%s = %r" % (cur.get("type"), cur.get("value")), warn=cur is None)
+    run = None
     if args.no_login_wait:
         log("dry run before login: floaters, inventory and agent checks skipped")
     else:
+        run = Run(v, sc, outdir, args)
         try:
-            pos = v.agent_pos()
-            rep.add("agent position", len(pos) == 3 and any(pos), str(pos))
-        except Exception as exc:  # noqa: BLE001
-            rep.add("agent position", False, str(exc))
-        roots = inventory_roots(v, sc["library_root_id"])
-        rep.add("inventory roots", bool(roots), str(roots))
-        opened = []
-        try:
-            for fl, widgets in ((PHOTOTOOLS, ["WLPresetsCombo", "WLPrevPreset", "WLNextPreset", "PauseClouds"]),
-                                (PERSONAL, ["sun_azimuth", "sun_elevation", "moon_azimuth", "moon_elevation", "probe_ambiance",
-                                            "cloud_coverage"])):
-                was = v.floater_visible(fl)
-                try:
-                    v.show_floater(fl)
-                    if not was:
-                        opened.append(fl)
-                    rep.add("floater %s opens" % fl, True)
-                except LeapError as exc:
-                    rep.add("floater %s opens" % fl, False, str(exc))
-                    continue
-                for w in widgets:
-                    p = v.find_widget(fl, w, required=False)
-                    rep.add("widget %s/%s" % (fl, w), p is not None, p or "")
-                    if p and fl == PERSONAL and w in ("sun_azimuth", "sun_elevation", "probe_ambiance"):
-                        try:
-                            rep.add("slider editor %s" % w, bool(v.slider_editor(p)), v.slider_editor(p))
-                            rep.add("slider value %s" % w, True, repr(v.value_of(p)))
-                        except LeapError as exc:
-                            rep.add("slider editor %s" % w, False, str(exc))
-            ph = v.find_widget(PHOTOTOOLS, "Sunset", required=False)
-            rep.add("quick-environment button Sunset", ph is not None, ph or "")
-            rg = [n for n in ("Revert to Region Default", "ResetToRegionDefault") if v.find_widget(PHOTOTOOLS, n, False)]
-            rep.add("region-default button", bool(rg), str(rg))
-            # skies
-            combo = v.find_widget(PHOTOTOOLS, "WLPresetsCombo", required=False)
-            before = str(v.value_of(combo)) if combo else None
-            for spec in sc["skies"]:
-                found = []
-                for nm in spec.get("names", []):
-                    for name, aid in find_settings_items(v, roots, nm):
-                        v.req("UI", "setSelectedByValue", path=combo, value=uuid.UUID(aid))
-                        in_combo = str(v.value_of(combo)).lower() == aid.lower()
-                        found.append("%s [%s]%s" % (name, aid, "" if in_combo else " (not a sky of the combo)"))
-                        if in_combo:
-                            break
-                good = any("not a sky" not in f for f in found)
-                rep.add("sky %s" % spec["id"], good or bool(spec.get("fallback_button")) or bool(spec.get("optional")),
-                        "; ".join(found) if found else "no inventory item from %s; fallback button %s" % (
-                            spec.get("names"), spec.get("fallback_button")))
-            if combo and before:
-                try:
-                    v.req("UI", "setSelectedByValue", path=combo, value=as_value(before))
-                except LeapError:
-                    pass
+            dry_run_ui(v, sc, rep, run, args)
         finally:
-            for fl in opened:
-                try:
-                    v.hide_floater(fl)
-                except LeapError:
-                    pass
+            if args.deep:
+                run.cleanup()
+            else:
+                for fl in list(run.floaters_opened):
+                    try:
+                        v.hide_floater(fl)
+                    except LeapError:
+                        pass
     out = pathlib.Path(outdir)
     out.mkdir(parents=True, exist_ok=True)
-    with open(out / "dry_run.json", "w", encoding="utf-8") as f:
-        json.dump([{"check": n, "ok": ok, "detail": d} for n, ok, d in rep.rows], f, indent=2, default=str)
+    write_json_atomic(out / "dry_run.json", [{"check": n, "ok": ok, "detail": d} for n, ok, d in rep.rows])
     log("dry run: %d checks, %d failed; details in %s" % (len(rep.rows), len(rep.failed), out / "dry_run.json"))
     return 1 if rep.failed else 0
+
+
+def dry_run_ui(v, sc, rep, run, args):
+    try:
+        pos = v.agent_pos()
+        rep.add("agent position", len(pos) == 3 and any(pos), str(pos))
+    except LeapError as exc:
+        rep.add("agent position", False, str(exc))
+    run.roots, run.user_roots = inventory_roots(v, sc["library_root_id"])
+    rep.add("inventory roots", bool(run.roots), str(run.roots))
+    try:
+        if not v.floater_visible(PHOTOTOOLS):
+            v.show_floater(PHOTOTOOLS)
+            run.floaters_opened.append(PHOTOTOOLS)
+    except LeapError as exc:
+        rep.add("floater %s opens" % PHOTOTOOLS, False, str(exc))
+        return
+    run.select_env_tab()
+    v._paths.pop(PHOTOTOOLS, None)
+    check_widgets(v, rep, PHOTOTOOLS, ["WLPresetsCombo", "WLPrevPreset", "WLNextPreset", "WaterPresetsCombo", "WWPrevPreset",
+                                       "WWNextPreset", "DCPresetsCombo", "DCPrevPreset", "DCNextPreset", "PauseClouds",
+                                       "Noon", "Sunset", ENV_TAB_BUTTON])
+    rg = [n for n in REGION_BUTTONS if v.find_widget(PHOTOTOOLS, n, required=False)]
+    rep.add("region-default button", bool(rg), str(rg))
+    orig = run.read_combos()
+    run.run_info["original_environment"] = dict(orig, personal_open=v.floater_visible(PERSONAL))
+    plan = plan_restore(orig)
+    rep.add("original environment restorable", plan is not None,
+            "%s -> %s" % (orig, plan) if plan else "a real run would refuse to start: %s" % orig)
+    # Personal Lighting and the fixed sky editor
+    editor_widgets = ["sun_azimuth", "sun_elevation", "moon_azimuth", "moon_elevation", "probe_ambiance", "cloud_coverage"]
+    if v.floater_visible(PERSONAL):
+        check_widgets(v, rep, PERSONAL, editor_widgets)
+        slider_checks(v, rep)
+    elif args.deep:
+        run.plan = plan
+        if plan is None:
+            rep.add("deep checks", False, "skipped: the environment could not be restored afterwards")
+        else:
+            run.run_info["environment_changed"] = True
+            run.ensure_floater(PERSONAL)
+            check_widgets(v, rep, PERSONAL, editor_widgets)
+            slider_checks(v, rep)
+            v.hide_floater(PERSONAL)
+            run.floaters_opened.remove(PERSONAL)
+            if v.floater_visible(FIXED_SKY):
+                rep.add("fixed sky editor", True, "already open: not touched", warn=True)
+            else:
+                try:
+                    v.show_floater(FIXED_SKY, key="new")
+                    run.floaters_opened.append(FIXED_SKY)
+                    tab = run.select_fixed_tab("hbodies")
+                    rep.add("fixed editor tab", True, tab)
+                    check_widgets(v, rep, FIXED_SKY, ["sun_azimuth", "sun_elevation", "moon_brightness"])
+                except LeapError as exc:
+                    rep.add("fixed editor tab", False, str(exc))
+                finally:
+                    v.hide_floater(FIXED_SKY)
+                    if FIXED_SKY in run.floaters_opened:
+                        run.floaters_opened.remove(FIXED_SKY)
+    else:
+        rep.add("floater %s widgets" % PERSONAL, True,
+                "not checked: opening Personal Lighting freezes the sky into the local environment (use --deep)", warn=True)
+        rep.add("fixed sky editor tab", True, "not checked (use --deep)", warn=True)
+    # skies: highlight only, put back afterwards
+    combo = v.find_widget(PHOTOTOOLS, "WLPresetsCombo", required=False)
+    before = orig.get("sky_combo")
+    for spec in sc["skies"]:
+        found = []
+        for nm in spec.get("names", []):
+            for name, aid in find_settings_items(v, run.roots, nm):
+                if not combo:
+                    break
+                v.req("UI", "setSelectedByValue", path=combo, value=uuid.UUID(aid))
+                in_combo = str(v.value_of(combo)).lower() == aid.lower()
+                found.append((name, aid, in_combo))
+                if in_combo:
+                    break
+            if any(f[2] for f in found):
+                break
+        good = any(f[2] for f in found)
+        fb = spec.get("fallback_button")
+        if good:
+            rep.add("sky %s" % spec["id"], True, "; ".join("%s [%s]%s" % (n, a, "" if ok else " (not a sky of the combo)")
+                                                          for n, a, ok in found if ok))
+        elif spec.get("editor") == "fixed" and fb:
+            rep.add("sky %s" % spec["id"], True, "base sky by button %s (no inventory sky)" % fb, warn=True)
+        elif spec.get("optional"):
+            rep.add("sky %s" % spec["id"], True, "no inventory sky from %s: would be skipped or use button %s" % (
+                spec.get("names"), fb), warn=True)
+        else:
+            rep.add("sky %s" % spec["id"], False, "no inventory sky from %s; a real run would use the fallback button %s "
+                    "and the data would be of a different sky" % (spec.get("names"), fb))
+    if combo and before is not None:
+        try:
+            v.req("UI", "setSelectedByValue", path=combo, value=as_value(before))
+        except LeapError:
+            pass
+
+
+def slider_checks(v, rep):
+    for w in ("sun_azimuth", "sun_elevation", "probe_ambiance"):
+        p = v.find_widget(PERSONAL, w, required=False)
+        if not p:
+            continue
+        try:
+            ed = v.slider_editor(p)
+            rep.add("slider editor %s" % w, True, ed)
+            rep.add("slider value %s" % w, True, repr(v.value_of(p)))
+        except LeapError as exc:
+            rep.add("slider editor %s" % w, False, str(exc))
 
 
 def restore_run(v, args):
@@ -957,11 +1236,16 @@ def restore_run(v, args):
             log("restored %s = %r" % (key, val))
         except LeapError as exc:
             log("could not restore %s: %s" % (key, exc))
-    try:
-        v.release_camera()
-    except LeapError as exc:
-        log("camera: %s" % exc)
-    log("settings and camera restored. If the sky is still not yours, use Phototools > Revert to Region Default.")
+    if data.get("camera_set"):
+        try:
+            v.release_camera()
+            log("camera released")
+        except LeapError as exc:
+            log("camera: %s" % exc)
+    orig = data.get("original_environment")
+    log("settings%s restored. The environment is not touched by --restore: original was %s; "
+        "use the Phototools Environment tab (Revert to Region Default or the combo boxes) to set it." % (
+            " and camera" if data.get("camera_set") else "", orig))
     return 0
 
 
@@ -990,8 +1274,13 @@ def find_viewer_log(hint=None):
 def parse_args(argv):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--scenario", default=str(HERE / "scenarios" / "l3_at1_handover.json"))
-    ap.add_argument("--out", default=None, help="run folder (default: .captures/<date-time>)")
-    ap.add_argument("--dry-run", action="store_true", help="check APIs, controls and widget paths; change nothing")
+    ap.add_argument("--out", default=None, help="run folder (default: .captures/<date-time>); resolved to an absolute path")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="read-only check of the APIs, controls and Phototools widgets; Personal Lighting and the fixed "
+                         "editor are checked only if already open (or with --deep)")
+    ap.add_argument("--deep", action="store_true",
+                    help="with --dry-run: also open Personal Lighting and the fixed sky editor (this changes the environment; "
+                         "it is restored afterwards, like a run)")
     ap.add_argument("--list-skies", action="store_true", help="print the settings items (skies, water, day cycles) of the inventory")
     ap.add_argument("--restore", default=None, metavar="RUNDIR", help="re-apply the settings saved in RUNDIR/restore.json")
     ap.add_argument("--no-login-wait", action="store_true", help="do not wait for login (dry run: API checks only)")
@@ -999,27 +1288,34 @@ def parse_args(argv):
     ap.add_argument("--step-limit", type=int, default=0, help="only the first N sweep steps (quick test)")
     ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                     help="set a debug setting for the run (restored afterwards), e.g. RenderAtmospherePhysicalLight=false")
-    ap.add_argument("--viewer-log", default=None, help="path of the viewer log, for the excerpt")
-    ap.add_argument("--max-wait-s", type=float, default=None, help="override the login timeout")
+    ap.add_argument("--viewer-log", default=None, help="path of the viewer log, for the excerpt (default: newest log touched in the last 10 minutes)")
+    ap.add_argument("--max-wait-s", type=float, default=None, help="seconds to wait for login (default: the scenario's login_timeout_s, 3600)")
     args = ap.parse_args(argv)
     args.only = [s for s in (args.only or "").split(",") if s]
     vals = {}
     for item in args.set:
-        k, _, val = item.partition("=")
-        if not k or not _:
+        k, sep, val = item.partition("=")
+        if not k or not sep:
             ap.error("--set needs KEY=VALUE")
         low = val.lower()
         vals[k] = True if low == "true" else False if low == "false" else (
             int(val) if re.fullmatch(r"-?\d+", val) else float(val) if re.fullmatch(r"-?\d+\.\d*([eE][-+]?\d+)?", val) else val)
     args.set_values = vals
+    if args.deep and not args.dry_run:
+        ap.error("--deep only goes with --dry-run")
     return args
 
 
 def execute(session, args, sc, outdir):
     """Everything after the LEAP handshake. Returns the process exit code."""
-    outdir = pathlib.Path(outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
-    v = Viewer(session, abort_file=str(outdir / "STOP"))
+    outdir = pathlib.Path(outdir).resolve()
+    if not args.restore:
+        outdir.mkdir(parents=True, exist_ok=True)
+        stale = outdir / "STOP"
+        if stale.exists():
+            stale.unlink()
+            log("removed a stale STOP file from the run folder")
+    v = Viewer(session, abort_file=None if args.restore else str(outdir / "STOP"))
     log("connected; command pump %s; run folder %s" % (session.command_pump, outdir))
     code = 0
     log_start = None
@@ -1037,19 +1333,22 @@ def execute(session, args, sc, outdir):
             log("logged in; settling %.0f s" % sc["settle"]["post_login_s"])
             v.sleep(sc["settle"]["post_login_s"])
         if args.list_skies:
-            roots = inventory_roots(v, sc["library_root_id"])
+            roots, _ = inventory_roots(v, sc["library_root_id"])
             items = list_settings(v, roots)
             for aid, name in sorted(items.items(), key=lambda kv: kv[1].lower()):
                 log("settings item: %-48s %s" % (name, aid))
-            (outdir / "settings_items.json").write_text(json.dumps(items, indent=2), encoding="utf-8")
+            write_json_atomic(outdir / "settings_items.json", items)
             return 0
         if args.dry_run:
             return dry_run(v, sc, args, outdir)
-        (outdir / "scenario.json").write_text(json.dumps(sc, indent=2), encoding="utf-8")
+        write_json_atomic(outdir / "scenario.json", sc)
         run = Run(v, sc, outdir, args)
         run.go()
         log("done: %d snapshots in %s" % (len(run.manifest_rows), outdir))
         log("next: python %s %s" % (HERE / "analyze_light_check.py", outdir))
+        if run.failed_required:
+            log("FAILED SKIES %s (see run.json and the warnings above)" % ", ".join(run.failed_required))
+            code = 4
     except Aborted as exc:
         log("aborted: %s" % exc)
         code = 2
@@ -1062,7 +1361,7 @@ def execute(session, args, sc, outdir):
         if run is not None:
             run.cleanup()
     finally:
-        if vlog and log_start is not None:
+        if vlog and log_start is not None and not args.restore:
             try:
                 with open(vlog, "rb") as f:
                     f.seek(log_start)
@@ -1076,15 +1375,19 @@ def main(argv=None):
     args = parse_args(sys.argv[1:] if argv is None else argv)
     sc = load_scenario(args.scenario)
     outdir = pathlib.Path(args.out) if args.out else default_capture_root() / dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-    outdir.mkdir(parents=True, exist_ok=True)
     session = LeapSession(sys.stdin.buffer, sys.stdout.buffer, log=log).start()
     return execute(session, args, sc, outdir)
 
 
 if __name__ == "__main__":
-    code = main()
-    sys.stderr.flush()
-    sys.stdout.flush()
-    # Leave without interpreter finalisation: the reader thread is blocked in a read of stdin (daemon thread,
-    # holding the buffer lock), which makes a normal exit abort with a fatal error on Windows.
-    os._exit(code)
+    code = 1
+    try:
+        code = main()
+    except BaseException:  # noqa: BLE001 - report, then leave with a code
+        traceback.print_exc()
+    finally:
+        sys.stderr.flush()
+        sys.stdout.flush()
+        # Leave without interpreter finalisation: the reader thread is blocked in a read of stdin (daemon thread
+        # holding the buffer lock), which makes a normal exit abort with a fatal error on Windows.
+        os._exit(code)

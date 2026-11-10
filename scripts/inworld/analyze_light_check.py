@@ -6,7 +6,7 @@ Per sky and per sweep step it reports the mean luminance of three regions (groun
 the horizon, a cloud region) and of the whole frame, the largest step-to-step changes (a "pop" is a change whose rate per degree is much
 larger than its neighbours'), and writes a contact sheet per sky. Needs Pillow and numpy.
 
-  python analyze_light_check.py RUNDIR [--pop-factor 4] [--pop-floor 0.01] [--compare OTHER_RUNDIR]
+  python analyze_light_check.py RUNDIR [--pop-factor 4] [--pop-floor 0.01] [--compare BASELINE_RUNDIR]
 
 Luminance is Rec.709 luma of the sRGB-encoded image, scaled 0..1 (what you see), and the linear-light mean
 is given beside it. Output: RUNDIR/analysis.json, analysis_<sky>.csv, contact_<sky>.png, report.txt.
@@ -201,22 +201,33 @@ def analyse(rundir, factor=4.0, floor=0.01):
     return result, "\n".join(lines)
 
 
-def compare(rundir_a, rundir_b):
-    """Compare the noon rows of two runs (e.g. the 82080 baseline against #447): luma difference per sky and region."""
-    out = ["Noon comparison %s (A) against %s (B)" % (rundir_a, rundir_b)]
-    ra = json.loads((pathlib.Path(rundir_a) / "analysis.json").read_text(encoding="utf-8"))
-    rb = json.loads((pathlib.Path(rundir_b) / "analysis.json").read_text(encoding="utf-8"))
+def _read_csv(path):
+    with open(path, newline="", encoding="utf-8") as f:
+        return {r["step"]: r for r in csv.DictReader(f)}
+
+
+def compare(baseline, new):
+    """Noon rows of two runs: luma difference new - baseline per sky and region. A run without analysis.json is
+    analysed first."""
+    baseline, new = pathlib.Path(baseline), pathlib.Path(new)
+    for d in (baseline, new):
+        if not (d / "analysis.json").is_file():
+            analyse(d)
+    out = ["Noon comparison, baseline (A) %s, new (B) %s; delta = B - A" % (baseline, new)]
+    ra = json.loads((baseline / "analysis.json").read_text(encoding="utf-8"))
+    rb = json.loads((new / "analysis.json").read_text(encoding="utf-8"))
     for sky in ra["skies"]:
         if sky not in rb["skies"]:
+            out.append("  %s: not in the new run" % sky)
             continue
-        ta = {r["step"]: r for r in csv.DictReader(open(pathlib.Path(rundir_a) / ("analysis_%s.csv" % sky), encoding="utf-8"))}
-        tb = {r["step"]: r for r in csv.DictReader(open(pathlib.Path(rundir_b) / ("analysis_%s.csv" % sky), encoding="utf-8"))}
+        ta = _read_csv(baseline / ("analysis_%s.csv" % sky))
+        tb = _read_csv(new / ("analysis_%s.csv" % sky))
         for step in sorted(set(ta) & set(tb), key=int):
             if ta[step]["kind"] != "noon":
                 continue
             diffs = ["%s %+.4f" % (n, float(tb[step][n]) - float(ta[step][n])) for n in REGION_NAMES]
             out.append("  %s noon: %s" % (sky, ", ".join(diffs)))
-    return "\n".join(out)
+    return chr(10).join(out)
 
 
 def main(argv=None):
@@ -224,12 +235,13 @@ def main(argv=None):
     ap.add_argument("rundir")
     ap.add_argument("--pop-factor", type=float, default=4.0)
     ap.add_argument("--pop-floor", type=float, default=0.01)
-    ap.add_argument("--compare", default=None, help="another analysed run folder to compare the noon snapshots with")
+    ap.add_argument("--compare", default=None, metavar="BASELINE",
+                    help="a baseline run folder: compare the noon snapshots, delta = RUNDIR (new) minus BASELINE")
     args = ap.parse_args(argv)
     _, text = analyse(args.rundir, args.pop_factor, args.pop_floor)
     print(text)
     if args.compare:
-        print(compare(args.rundir, args.compare))
+        print(compare(args.compare, args.rundir))
     return 0
 
 

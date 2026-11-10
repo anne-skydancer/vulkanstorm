@@ -61,9 +61,11 @@
     {
       "id": "no_moon",
       "label": "No moon (moon brightness 0)",
-      "why": "Owner check 4: a sky with moon_brightness 0 has no direct light at night. Personal Lighting has no moon brightness slider, so this uses the fixed sky editor on a new sky (Default values) with moon_brightness 0 (classic, ambiance 0). Untested path; optional.",
+      "why": "Owner check 4: a sky with moon_brightness 0 has no direct light at night. Personal Lighting has no moon brightness slider, so this selects Default, opens the fixed sky editor (which starts from a clone of the current sky) and sets moon_brightness 0 there. Untested path; optional.",
       "editor": "fixed",
-      "tab_regex": "sun",
+      "names": ["Default"],
+      "fallback_button": "Noon",
+      "tab_regex": "hbodies",
       "optional": true,
       "controls": {"moon_brightness": 0.0}
     }

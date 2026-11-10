@@ -388,24 +388,26 @@ class LeapSession:
         self._cv = threading.Condition()
         self._pending = {}      # reqid -> reply (or None while waiting)
         self._events = []       # (pump, data) not matched to a request
+        self._discard = set()   # reqids of fire() operations: their replies are only checked for errors
+        self._fired_errors = []
         self._next_id = 1
         self._closed = False
         self._thread = None
 
     # -- startup --------------------------------------------------------------------------------
     def start(self, handshake_timeout=60.0):
-        frame = read_frame(self._r)   # blocking: the viewer sends the handshake right after launch
-        if frame is None:
-            raise ViewerGone("no handshake")
-        msg = llsd_loads(frame)
-        data = msg.get("data") or {}
-        self.reply_pump = msg.get("pump")
-        self.command_pump = data.get("command")
-        self.features = data.get("features") or {}
-        if not self.reply_pump or not self.command_pump:
-            raise LeapError("bad handshake: %r" % (msg,))
+        """Start the reader thread and wait up to handshake_timeout seconds for the viewer's handshake."""
         self._thread = threading.Thread(target=self._reader, name="leap-reader", daemon=True)
         self._thread.start()
+        deadline = time.monotonic() + handshake_timeout
+        with self._cv:
+            while self.command_pump is None:
+                if self._closed:
+                    raise ViewerGone("pipe closed before the handshake")
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    raise LeapTimeout("no LEAP handshake from the viewer in %.0f s" % handshake_timeout)
+                self._cv.wait(left)
         return self
 
     def _reader(self):
@@ -422,9 +424,24 @@ class LeapSession:
                 pump = msg.get("pump")
                 data = msg.get("data")
                 with self._cv:
+                    if self.command_pump is None:
+                        info = data if isinstance(data, dict) else {}
+                        self.reply_pump = pump
+                        self.features = info.get("features") or {}
+                        self.command_pump = info.get("command") or None
+                        if self.command_pump is None:
+                            self._log("bad handshake: %r" % (msg,))
+                        self._cv.notify_all()
+                        continue
                     reqid = data.get("reqid") if isinstance(data, dict) else None
-                    if pump == self.reply_pump and reqid in self._pending:
-                        self._pending[reqid] = data
+                    if pump == self.reply_pump and reqid is not None:
+                        if reqid in self._pending:
+                            self._pending[reqid] = data
+                        elif reqid in self._discard:
+                            self._discard.discard(reqid)
+                            if data.get("error"):
+                                self._fired_errors.append(str(data["error"]))
+                        # else: a late reply to a request that timed out: dropped
                     else:
                         self._events.append((pump, data))
                     self._cv.notify_all()
@@ -449,10 +466,22 @@ class LeapSession:
                 raise ViewerGone("write failed: %s" % exc) from exc
 
     def fire(self, pump, op, /, **args):
-        """Send an operation without asking for a reply (the viewer sends none)."""
-        data = {"op": op}
+        """Send an operation whose reply we do not wait for. A reply key is still sent: an operation the viewer
+        rejects (bad name or arguments) throws in the viewer's dispatcher when there is no reply pump to tell; the
+        reply is dropped by the reader and only its error, if any, is kept (see take_errors)."""
+        with self._cv:
+            reqid = self._next_id
+            self._next_id += 1
+            self._discard.add(reqid)
+        data = {"op": op, "reply": self.reply_pump, "reqid": reqid}
         data.update(args)
         self.post(pump, data)
+
+    def take_errors(self):
+        """Errors reported by fire() operations since the last call."""
+        with self._cv:
+            out, self._fired_errors = self._fired_errors, []
+        return out
 
     def request(self, pump, op, /, timeout=None, **args):
         """Send an operation and wait for its reply. Raises LeapError if the reply has an "error"."""

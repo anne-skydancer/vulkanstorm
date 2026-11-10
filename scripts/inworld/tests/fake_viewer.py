@@ -25,11 +25,12 @@ SKIES = {   # name -> (asset id, sun azimuth, sun elevation, cloud coverage, haz
     "[TOR] SUNSET - Bangko 1": (uuid.UUID("11111111-0000-0000-0000-000000000003"), 250.0, 1.0, 0.1, 0.1, 1.0),
 }
 DAYCYCLE_DEFAULT = uuid.UUID("22222222-0000-0000-0000-000000000009")  # same name as a sky, not in the combo
-REGION_DEFAULT = "PRESET_NAME_REGION_DEFAULT"
+REGION_DEFAULT = "__Regiondefault__"
 
 
 class FakeViewer:
-    def __init__(self, pop_in_sky=None, snapshot_fails_for=None, drop_ops=()):
+    def __init__(self, pop_in_sky=None, snapshot_fails_for=None, drop_ops=(), initial_combo=REGION_DEFAULT,
+                 water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False):
         v2p_r, v2p_w = os.pipe()
         p2v_r, p2v_w = os.pipe()
         self.plugin_in = os.fdopen(v2p_r, "rb", buffering=0)
@@ -51,8 +52,13 @@ class FakeViewer:
             "FSEnvironmentManualTransitionTime": 3.0}.items()}
         self.settings["RenderAtmospherePhysicalLight"] = ("Boolean", True)
         # environment
-        self.current_sky = REGION_DEFAULT
-        self.combo = REGION_DEFAULT
+        self.current_sky = initial_combo
+        self.combo = initial_combo
+        self.water_combo = water_combo
+        self.dc_combo = dc_combo
+        self.on_op = on_op
+        self.frozen = False          # Personal Lighting froze the sky into the local environment
+        self.shown = []              # floaters shown, in order
         self.clouds_paused = False
         self.floaters = {"phototools": False, "env_adjust_snapshot": False, "env_fixed_environmentent_sky": False}
         self.follow_cam = None
@@ -61,6 +67,9 @@ class FakeViewer:
         self.text = {}
         self.fixed_tab_sun = False
         self.sky_applied_count = 0
+        if personal_open:
+            self.floaters["env_adjust_snapshot"] = True
+            self._capture_sky()
         self.thread = threading.Thread(target=self._serve, daemon=True)
         self.thread.start()
 
@@ -94,6 +103,8 @@ class FakeViewer:
         if op in self.drop_ops:
             return
         self.log.append((pump, op))
+        if self.on_op:
+            self.on_op(op, d)
         if pump == self.command_pump:
             return self._leap(op, d)
         handler = getattr(self, "api_" + pump, None)
@@ -113,7 +124,7 @@ class FakeViewer:
                                                     "LLViewerWindow", "LLAgent", "LLInventory", "LLStats")})
         elif op == "getAPI":
             ops = {"LLStartUp": ["postStartupState", "getStateTable"], "LLViewerControl": ["get", "set", "groups"],
-                   "LLFloaterReg": ["showInstance", "hideInstance", "instanceVisible"],
+                   "LLFloaterReg": ["showInstance", "hideInstance", "instanceVisible", "clickButton"],
                    "UI": ["getValue", "setSelectedByValue"],
                    "LLWindow": ["getPaths", "getInfo", "keyDown", "pasteText", "mouseDown", "mouseUp"],
                    "LLViewerWindow": ["saveSnapshot"],
@@ -146,10 +157,17 @@ class FakeViewer:
 
     def api_LLFloaterReg(self, op, d):
         name = d["name"]
+        if op == "clickButton":
+            if not self.floaters.get(name) or d["button"] not in {p.rsplit("/", 1)[-1] for p in self._paths()}:
+                return self._reply(d, {"type": "LLButton", "error": "NULL"})
+            self._click(d["button"])
+            return self._reply(d, {})
         if op == "showInstance":
             self.floaters[name] = True
+            self.shown.append(name)
             self.text.clear()
             if name == "env_adjust_snapshot":
+                self.frozen = True
                 self._capture_sky()
             if name == "env_fixed_environmentent_sky":
                 self.sliders = {"sun_elevation": 0.0, "sun_azimuth": 0.0, "moon_brightness": 0.5}
@@ -173,7 +191,8 @@ class FakeViewer:
             base = FL + "phototools/"
             out += [FL + "phototools"] + [base + n for n in (
                 "WLPresetsCombo", "WLPrevPreset", "WLNextPreset", "WaterPresetsCombo", "DCPresetsCombo", "PauseClouds",
-                "Sunrise", "Noon", "Sunset", "Midnight", "Revert to Region Default")]
+                "Sunrise", "Noon", "Sunset", "Midnight", "Revert to Region Default", "WWPrevPreset", "WWNextPreset",
+                "DCPrevPreset", "DCNextPreset", "htab_EnvironmentTab")]
         if self.floaters["env_adjust_snapshot"]:
             base = FL + "env_adjust_snapshot/"
             out += [FL + "env_adjust_snapshot"]
@@ -182,7 +201,7 @@ class FakeViewer:
                 out += [base + n, base + n + "/slider_bar", base + n + "/value_editor"]
         if self.floaters["env_fixed_environmentent_sky"]:
             base = FL + "env_fixed_environmentent_sky/"
-            out += [FL + "env_fixed_environmentent_sky", base + "Sun & Moon"]
+            out += [FL + "env_fixed_environmentent_sky", base + "htab_panel_settings_sky_hbodies"]
             if self.fixed_tab_sun:
                 for n in ("sun_azimuth", "sun_elevation", "moon_brightness"):
                     out += [base + n, base + n + "/value_editor"]
@@ -204,7 +223,7 @@ class FakeViewer:
         last = path.rsplit("/", 1)[-1]
         if op == "getInfo":
             cls = "class LLLineEditor" if last == "value_editor" else "class LLButton" if (
-                last.startswith(("WL", "Paus", "Sun", "Noon", "Revert", "Mid"))) else "class LLSliderCtrl"
+                last.startswith(("WL", "WW", "DC", "Paus", "Sun", "Noon", "Revert", "Mid", "htab_"))) else "class LLSliderCtrl"
             return self._reply(d, {"path": path, "class": cls, "available": True})
         if op == "keyDown":
             if path.endswith("value_editor"):
@@ -245,9 +264,12 @@ class FakeViewer:
         elif name == "Revert to Region Default":
             self.current_sky = REGION_DEFAULT
             self.combo = REGION_DEFAULT
+            self.water_combo = REGION_DEFAULT
+            self.dc_combo = REGION_DEFAULT
+            self.frozen = False
         elif name in ("Sunset", "Noon"):
             self._apply(SKIES["Sunset" if name == "Sunset" else "Default"][0])
-        elif name == "Sun & Moon":
+        elif name == "htab_panel_settings_sky_hbodies":
             self.fixed_tab_sun = True
 
     def _apply(self, asset):
@@ -260,14 +282,22 @@ class FakeViewer:
         if op == "getValue":
             if last == "WLPresetsCombo":
                 return self._reply(d, {"value": self.combo})
-            if last in ("WaterPresetsCombo", "DCPresetsCombo"):
-                return self._reply(d, {"value": REGION_DEFAULT})
+            if last == "WaterPresetsCombo":
+                return self._reply(d, {"value": self.water_combo})
+            if last == "DCPresetsCombo":
+                return self._reply(d, {"value": self.dc_combo})
             if last == "PauseClouds":
                 return self._reply(d, {"value": self.clouds_paused})
             if last in self.sliders:
                 return self._reply(d, {"value": float(self.sliders[last])})
             return self._reply(d, {})
         if op == "setSelectedByValue":
+            if last in ("WaterPresetsCombo", "DCPresetsCombo"):
+                if last == "WaterPresetsCombo":
+                    self.water_combo = d["value"]
+                else:
+                    self.dc_combo = d["value"]
+                return self._reply(d, {})
             if last == "WLPresetsCombo" and d["value"] in [s[0] for s in SKIES.values()] + [REGION_DEFAULT]:
                 self.combo = d["value"]       # no commit, as in the viewer
                 return self._reply(d, {})     # the real reply loses the bool (stamp() on a scalar)
