@@ -6482,6 +6482,9 @@ void LLPipeline::setupHWLights()
         }
         mMoonDiffuse.clamp();
 
+        // the sun's own colour, before the zeroing below: the classic sky and cloud programs blend it themselves (L3)
+        const LLColor4 sky_sun_diffuse = mSunDiffuse;
+
         // prevent underlighting from having neither lightsource facing us
         if (!sun_up && !moon_up)
         {
@@ -6494,12 +6497,16 @@ void LLPipeline::setupHWLights()
         // <Vulkanstorm> stage L3: the light is the sun/moon handover's (direction); the colour stays the sun's or the
         // moon's own, for the classic dome (the ground light's colour is LLEnvironment's primary light)
         const LLEnvironment::PrimaryLightState& primary = environment.getPrimaryLight();
-        const bool primary_is_sun = primary.valid ? primary.moon_weight < 0.5f : sun_up;
+        const bool primary_is_sun = primary.valid ? primary.band_weight < 0.5f : sun_up;
         LLVector4 light_dir = primary.valid ? LLVector4(primary.dir, 0.0f) : (sun_up ? mSunDir : mMoonDir);
         // </Vulkanstorm>
 
-        // a moon that is not there (down, or moon_brightness 0) lights nothing
-        mHWLightColors[0] = primary_is_sun ? mSunDiffuse : (primary.valid ? mMoonDiffuse * primary.moon_avail : mMoonDiffuse);
+        // Light 0's colour reaches no lit shader but the classic sky and cloud programs (LLRender sends it as sunlight_color; the moon
+        // is diffuse B). Those blend the sun into the moon themselves (the dome with sun_moon_blend, the band weight; the clouds' sun
+        // term through their own transmittance and cloud_moon_blend, the dip-shifted band), as the PBR sky does with the raw sunlight.
+        // So with the handover the colour is the sun's own, whatever the pick: a hard switch of the colour at the band's middle was a
+        // visible step of the dome and the clouds at sun elevation 0.
+        mHWLightColors[0] = primary.valid ? sky_sun_diffuse : (primary_is_sun ? mSunDiffuse : mMoonDiffuse);
 
         LLLightState* light = gGL.getLight(0);
         light->setPosition(light_dir);
