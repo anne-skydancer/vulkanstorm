@@ -21,8 +21,9 @@ value changes with the splits), and the value must be the spot shadow itself (0)
 reach and 1 beyond it, with the fade in between.
 
 Uses the viewer's class2 deferred/sunLightF.glsl + shadowUtil.glsl, PCF and PCSS, and
-bench_shadow_pcss.py's ray-cast scene. Exit status 0 when all checks pass. The OLD shader is the
-one at git HEAD, the NEW one the working tree.
+bench_shadow_pcss.py's ray-cast scene. Exit status 0 when all checks pass. The OLD shader is the stored
+reference scripts/perf/reference/shadowUtil_before_spot_fade.glsl (shadowUtil.glsl before the fix,
+so the check keeps working once the fix is in HEAD), the NEW one the working tree.
 """
 import math, subprocess, sys
 from pathlib import Path
@@ -71,7 +72,7 @@ def ok(cond, msg):
 
 def main():
     print('GL:', get_string(0x1F01).decode(), flush=True)
-    old_text = subprocess.run(['git', 'show', f'HEAD:{UTIL_F}'], cwd=root, capture_output=True, text=True, check=True).stdout
+    old_text = (HERE / 'reference' / 'shadowUtil_before_spot_fade.glsl').read_text()
     new_text = (root / UTIL_F).read_text()
     for variant in ('tree', 'pcss'):
         name = 'PCF ' if variant == 'tree' else 'PCSS'
