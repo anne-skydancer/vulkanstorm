@@ -6164,6 +6164,7 @@ void LLPipeline::setupAvatarLights(bool for_edit)
         backlight_pos.normalize();
 
         LLColor4 light_diffuse = sun_up ? mSunDiffuse : mMoonDiffuse;
+        light_diffuse.clamp(); // <Vulkanstorm/> mSunDiffuse can exceed 1 with the legacy auto-adjust (L3)
 
         LLColor4 backlight_diffuse(1.f - light_diffuse.mV[VRED], 1.f - light_diffuse.mV[VGREEN], 1.f - light_diffuse.mV[VBLUE], 1.f);
         F32 max_component = 0.001f;
