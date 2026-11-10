@@ -597,7 +597,8 @@ struct LLAtmosphere
 
         // 2. ozone (Earth's values, never more than the column), aerosol (grey), Rayleigh (the rest)
         const double earth_ozone[3] = { 0.000650, 0.001881, 0.000085 }; // Bruneton and Neyret, /km at density 1
-        double tau_o[3], tau_r[3], share_sum = 0.0, tau_m_max = 1e30;
+        double tau_o[3], tau_r[3], share_sum = 0.0, tau_m_max = 1e30, tau_m_true_max = 1e30;
+        bool any_free = false;
         for (int k = 0; k < 3; ++k)
         {
             tau_o[k] = earth_ozone[k] * he_o;
@@ -607,15 +608,31 @@ struct LLAtmosphere
                 clamped |= CLAMP_OZONE;
             }
             const double total = bd[k] + hd * 0.25;
-            // the haze share of the true column (not the capped one: the cap is not a property of the air, so it does not shift the
-            // aerosol/Rayleigh split of the other channels); tau_m_max still bounds it by the capped columns
+            // the haze share of the true column (the cap is not a property of the air)
             share_sum += true_column[k] * (total > 0.0 ? hd * 0.25 / total : 0.0);
             tau_m_max = std::min(tau_m_max, column[k] - tau_o[k]);
+            tau_m_true_max = std::min(tau_m_true_max, true_column[k] - std::min(earth_ozone[k] * he_o, true_column[k]));
+            any_free = any_free || over[k] == 0.0;
+        }
+        // The aerosol is bounded by the true columns less ozone when some channel is under the cap, so a channel under the cap has
+        // exactly the aerosol/Rayleigh split of the uncapped sky, whatever the cap does to the other channels (a capped channel
+        // keeps its cap through the excess, below). That bound is at most the cap: some channel's column is under it. When every
+        // channel is capped (huge densities), the capped columns bound it.
+        if (any_free)
+        {
+            tau_m_max = tau_m_true_max;
         }
         const double tau_m = std::min(std::max(share_sum / 3.0, 0.0), std::max(tau_m_max, 0.0));
         for (int k = 0; k < 3; ++k)
         {
             tau_r[k] = std::max(column[k] - tau_m - tau_o[k], 0.0);
+            const double model = tau_m + tau_o[k] + tau_r[k];
+            if (model > column[k])
+            {
+                // a capped channel whose aerosol alone reaches the cap: the model column is above the cap, so the excess is what is left
+                over[k] = std::max(true_column[k] - model, 0.0);
+                column[k] = model;
+            }
         }
         a.rayleigh_ext = { tau_r[0] / he_r, tau_r[1] / he_r, tau_r[2] / he_r };
         // a profile with no column (a layer above the atmosphere, or the 10 km height clamp over ozone_profile: 2e-31 of round-off, or 0) has no ozone; tau_o / he_o would be 0/0
@@ -662,9 +679,14 @@ struct LLAtmosphere
     // plane-parallel in the angle above the horizon at the observer's altitude (mu_h, as visible_share has it; 0 on the ground),
     // so it goes to 0 at and below the horizon, continuously, where visible_share does; it has no other dependence on the
     // altitude (a property of the sky); and it is 1 where there is no excess. So T is continuous in the cap max_column at every
-    // altitude, and nothing switches as the sun moves. path_factor 1 is the sun and moon light
-    // (atmosphericsFuncs.glsl:111-112); the legacy cloud light (cloudsV.glsl:177-179) has half the airmass: AT1's cloud light
-    // must pass 0.5. A non-finite argument gives 0 (a non-finite path_factor counts as 1).
+    // altitude, and nothing switches as the sun moves.
+    //
+    // path_factor scales the excess only. In the physical model a light that is lower in the air than the sun's (the cloud light)
+    // gets its thinner air from the altitude: T is taken AT THE CLOUD LAYER (h_km = the cloud height setting, 1500 m), not by
+    // halving the path. The excess has no altitude dependence, so path_factor is there only for it: the legacy cloud light
+    // (cloudsV.glsl:177-179) has half the airmass, and path_factor 0.5 gives a rig's cloud light that same half airmass. So AT1's
+    // cloud light calls transmittance(h_cloud, mu, disc, 0.5); the sun and moon light (atmosphericsFuncs.glsl:111-112) use 1.
+    // A non-finite argument gives 0 (a non-finite path_factor counts as 1, as in the GLSL).
     Vec3 transmittance(double h_km, double mu, double disc_sin, double path_factor = 1.0) const
     {
         const Vec3 t = physical_transmittance(h_km, mu, disc_sin);
@@ -839,7 +861,7 @@ struct LLAtmosphere
 
     // Computes the cut altitudes once for this atmosphere (the clamp crossings take bisections, so not once per call). fromLegacy() calls it;
     // an atmosphere built or changed by hand (profiles, slab, planet radius, top) must call it after its last change, or transmittance()
-    // computes the cuts on every call. Cuts left stale by a later change are not detected.
+    // computes the cuts on every call. Cuts left stale by a later change are not detected. The rule: edit the fields, then call finalize().
     void finalize()
     {
         cut_count = cut_altitudes_km(cuts_km, detail::MAX_ALTITUDES);
@@ -857,8 +879,8 @@ struct LLAtmosphere
     double planet_radius_km = 6360.0, top_radius_km = 6420.0;   // clamped: Rg in [1000, 100000], Rt - Rg in [10, 1000]
     unsigned clamped = 0;               // bit mask of Clamp: the bounds that applied
 
-    double cuts_km[detail::MAX_ALTITUDES]; // the path integral's cut altitudes, from finalize()
-    int cut_count = -1;                    // -1: not computed
+    double cuts_km[detail::MAX_ALTITUDES] = {}; // the path integral's cut altitudes, from finalize()
+    int cut_count = -1;                         // -1: not computed (a copy or default struct never holds indeterminate values)
 };
 
 // --- L3: the sun/moon handover (stateless) ---

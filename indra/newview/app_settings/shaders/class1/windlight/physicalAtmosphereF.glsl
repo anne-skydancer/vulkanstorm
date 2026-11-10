@@ -16,8 +16,11 @@
  * does not occlude), times the share of the body's disc that is above the horizon, times the excess
  * factor exp(-pa_atm.excess x path_factor / max(mu - mu_h, 1e-6)) of the columns that were capped
  * (a light rig asking for almost no sun; 0 for every other sky). path_factor is 1 for the sun and
- * moon light; AT1's cloud light (today's half airmass) passes 0.5. The three-argument form is
- * path_factor 1. The atmosphere is the uniform pa_atm, which LLAtmosphere holds field for field.
+ * moon light. It scales the excess only: a light lower in the air than the sun's gets its thinner
+ * air from the altitude (AT1's cloud light takes T at the cloud layer, h_km = the cloud height
+ * setting, 1500 m, not by halving the path); the excess has no altitude dependence, so
+ * path_factor is there for it alone, and AT1's cloud light passes 0.5 so that a rig's cloud light
+ * has today's half airmass. A NaN or infinite path_factor counts as 1, as in llatmosphericlight.h. The atmosphere is the uniform pa_atm, which LLAtmosphere holds field for field.
  * Altitudes are in km, the profiles' widths and scales in metres, as in the EEP settings.
  * Segmented 8-point Gauss-Legendre along the path, cut at every profile kink (layer boundary,
  * clamp crossings), at the slab's 0.75 H and H, at 4, 10 and 20 scale heights of every
@@ -223,7 +226,8 @@ vec3 pa_transmittance(float h_km, float mu, float disc_sin, float path_factor)
         return vec3(0.0);
     }
     // plane-parallel on the excess, in the angle above the observer's horizon: 0 at and below it, continuously; 1 without excess
-    vec3 ex = exp(-pa_atm.excess * (clamp(path_factor, 0.0, 1e6) / max(mu - mu_h, 1e-6)));
+    float pf = (isnan(path_factor) || isinf(path_factor)) ? 1.0 : clamp(path_factor, 0.0, 1e6);
+    vec3 ex = exp(-pa_atm.excess * (pf / max(mu - mu_h, 1e-6)));
 
     float b = r0 * mu;
     float unused;
