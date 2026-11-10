@@ -27,8 +27,9 @@ STEP_KEYS = {"name", "id", "if", "run", "shell", "env", "uses", "with", "working
 # whose path filters must agree are the code-triggered ones they declare.
 FILTERED_EVENTS = ("pull_request", "push")
 SHOWN = 10  # differences listed in full before they are summarised
-# Build-ignored without being linted: documentation has nothing for ci-lint to check.
-DOC_ONLY_IGNORES = {"doc/**", "**/*.md"}
+# Build-ignored without being linted: documentation has nothing for ci-lint to check, and scripts/inworld is dev
+# tooling that no workflow runs.
+DOC_ONLY_IGNORES = {"doc/**", "**/*.md", "scripts/inworld/**"}
 
 
 def raw_triggers(workflow):
