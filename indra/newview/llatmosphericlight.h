@@ -14,6 +14,13 @@
  * gen_atmosphere_vectors.py) and are checked in CI without a GPU.
  *
  * Arithmetic is in double; the GLSL's is float, so the test allows 1e-4 relative.
+ *
+ * Stage AT0 of the item-4 plan adds the physical atmosphere (LLAtmosphere: the legacy EEP sky
+ * fields mapped onto Rayleigh, aerosol and ozone densities, and the transmittance of the sun's and
+ * the moon's light through them) and the stateless sun/moon handover helpers (primary_light and its
+ * parts). Nothing in the viewer calls them yet: stage AT1 does. class1/windlight/
+ * physicalAtmosphereF.glsl is the GLSL twin of LLAtmosphere::transmittance, held equal by
+ * the vectors of scripts/light/gen_transmittance_vectors.py.
  */
 
 #ifndef LL_LLATMOSPHERICLIGHT_H
@@ -114,6 +121,670 @@ inline Result calc_sunlit_amblit(const Inputs& in, double n_dot_l)
     r.sunlit = { r.sunlit.x * in.sky_sunlight_scale, r.sunlit.y * in.sky_sunlight_scale, r.sunlit.z * in.sky_sunlight_scale };
     r.amblit = { r.amblit.x * in.sky_ambient_scale, r.amblit.y * in.sky_ambient_scale, r.amblit.z * in.sky_ambient_scale };
     return r;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Stage AT0: the physical atmosphere and the sun/moon handover (nothing in the viewer calls these yet)
+// ---------------------------------------------------------------------------------------------------
+
+// --- colour helpers ---
+inline Vec3 srgb_to_linear(const Vec3& c)
+{
+    return { srgb_to_linear(c.x), srgb_to_linear(c.y), srgb_to_linear(c.z) };
+}
+
+// srgb_to_linear's inverse without linear_to_srgb's clamp to 1 (as skyF.glsl's night_sky_encode):
+// values above 1 are kept, negative values count as 0.
+inline double linear_to_srgb(double c)
+{
+    c = std::max(c, 0.0);
+    return c < 0.0031308 ? c * 12.92 : 1.055 * std::pow(c, 1.0 / 2.4) - 0.055;
+}
+inline Vec3 linear_to_srgb(const Vec3& c)
+{
+    return { linear_to_srgb(c.x), linear_to_srgb(c.y), linear_to_srgb(c.z) };
+}
+
+inline double luminance(const Vec3& c) // Rec. 709 weights on linear values
+{
+    return c.x * 0.2126 + c.y * 0.7152 + c.z * 0.0722;
+}
+
+// GLSL's smoothstep; the edges may be given in either order. Equal edges are a step.
+inline double smoothstep(double edge0, double edge1, double x)
+{
+    if (edge0 == edge1)
+    {
+        return x < edge0 ? 0.0 : 1.0;
+    }
+    const double t = std::min(std::max((x - edge0) / (edge1 - edge0), 0.0), 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+
+// --- EEP density profiles (Bruneton's form; metres) ---
+struct DensityLayer
+{
+    double width_m = 0.0;       // 0: the rest of the atmosphere
+    double exp_term = 0.0;
+    double exp_scale = 0.0;     // 1/m
+    double linear = 0.0;        // 1/m
+    double constant = 0.0;
+};
+
+struct DensityProfile
+{
+    DensityLayer layer[2];
+    int count = 1;
+
+    // clamp(exp_term e^(exp_scale h) + linear h + constant, 0, 1); layer[0] below its width
+    double density(double h_m) const
+    {
+        const DensityLayer& l = (count > 1 && h_m < layer[0].width_m) ? layer[0] : layer[count > 1 ? 1 : 0];
+        const double d = l.exp_term * std::exp(l.exp_scale * h_m) + l.linear * h_m + l.constant;
+        return d < 0.0 ? 0.0 : (d > 1.0 ? 1.0 : d);
+    }
+
+    // The altitudes (metres, in no particular order) where density() is not smooth: the layer boundary
+    // and the clamps of the linear layers (h where linear h + constant = 0 or 1, inside the layer).
+    // Returns the number written, at most max_count.
+    int kinks(double* out_m, int max_count) const
+    {
+        int n = 0;
+        auto add = [&](double h) {
+            if (!(h > 0.0) || !std::isfinite(h) || n >= max_count)
+            {
+                return;
+            }
+            for (int i = 0; i < n; ++i)
+            {
+                if (std::fabs(out_m[i] - h) <= 1e-9 * h)
+                {
+                    return;
+                }
+            }
+            out_m[n++] = h;
+        };
+        const int layers = count > 1 ? 2 : 1;
+        if (layers == 2)
+        {
+            add(layer[0].width_m);
+        }
+        for (int i = 0; i < layers; ++i)
+        {
+            const DensityLayer& l = layer[i];
+            if (l.exp_term != 0.0 || l.linear == 0.0)
+            {
+                continue;
+            }
+            const double lo = (i == 0) ? 0.0 : layer[0].width_m;
+            const double hi = (layers == 2 && i == 0) ? layer[0].width_m : 1e30;
+            for (double level : { 0.0, 1.0 })
+            {
+                const double h = (level - l.constant) / l.linear;
+                if (h > lo && h < hi)
+                {
+                    add(h);
+                }
+            }
+        }
+        return n;
+    }
+};
+
+inline DensityProfile rayleigh_profile() // llsettingssky.cpp rayleighConfigDefault()
+{
+    DensityProfile p;
+    p.layer[0].exp_term = 1.0;
+    p.layer[0].exp_scale = -1.0 / 8000.0;
+    return p;
+}
+
+inline DensityProfile mie_profile() // llsettingssky.cpp mieConfigDefault()
+{
+    DensityProfile p;
+    p.layer[0].exp_term = 1.0;
+    p.layer[0].exp_scale = -1.0 / 1200.0;
+    return p;
+}
+
+// Bruneton's: 0 below 10 km, ramps to 1 at 25 km, back to 0 at 40 km (15 km of column at density 1)
+inline DensityProfile ozone_profile()
+{
+    DensityProfile p;
+    p.count = 2;
+    p.layer[0].width_m = 25000.0;
+    p.layer[0].linear = 1.0 / 15000.0;
+    p.layer[0].constant = -2.0 / 3.0;
+    p.layer[1].linear = -1.0 / 15000.0;
+    p.layer[1].constant = 8.0 / 3.0;
+    return p;
+}
+
+// llsettingssky.cpp absorptionConfigDefault() before AT0 (its rising zone had the slope -1/25000, which
+// is 0 everywhere), to 1e-6 relative. Every EEP sky saved until then carries it.
+inline bool is_stored_ozone_default(const DensityProfile& p)
+{
+    if (p.count != 2)
+    {
+        return false;
+    }
+    auto same = [](double a, double b) { return std::fabs(a - b) <= 1e-6 * std::fmax(std::fabs(a), std::fabs(b)) + 1e-12; };
+    const DensityLayer& a = p.layer[0];
+    const DensityLayer& b = p.layer[1];
+    return same(a.width_m, 25000.0) && same(a.exp_term, 0.0) && same(a.exp_scale, 0.0) && same(a.linear, -1.0 / 25000.0)
+        && same(a.constant, -2.0 / 3.0) && same(b.width_m, 0.0) && same(b.exp_term, 0.0) && same(b.exp_scale, 0.0)
+        && same(b.linear, -1.0 / 15000.0) && same(b.constant, 8.0 / 3.0);
+}
+
+// --- the legacy fields, as the deferred pass receives them ---
+struct LegacySky
+{
+    Vec3 source;                 // sunlight_color as bindDeferredShader sends it: normalised to max 1, clamped [0,1],
+                                 // x RenderSkyAutoAdjustSunColorScale when auto-adjusting (pipeline.cpp:6427-6442, 9981-9988)
+    Vec3 blue_density;
+    double haze_density = 0.0;
+    double density_multiplier = 0.0;
+    double max_y = 0.0;          // m
+    double distance_multiplier = 0.0;
+    DensityProfile rayleigh = rayleigh_profile();
+    DensityProfile mie = mie_profile();
+    DensityProfile absorption = ozone_profile();
+    double planet_radius_km = 6360.0;
+    double top_radius_km = 6420.0;
+};
+
+struct AtmosphereBounds
+{
+    double haze_slab_km = 0.25;      // RenderAtmosphereHazeSlab / 1000
+    double max_column = 8.0;         // tau per channel
+    double max_ground_haze = 50.0;   // 1/km
+};
+
+namespace detail
+{
+// 8-point Gauss-Legendre
+constexpr double GL_X[8] = { -0.9602898564975363, -0.7966664774136267, -0.5255324099163290, -0.1834346424956498,
+                              0.1834346424956498,  0.5255324099163290,  0.7966664774136267,  0.9602898564975363 };
+constexpr double GL_W[8] = { 0.1012285362903763, 0.2223810344533745, 0.3137066458778873, 0.3626837833783620,
+                             0.3626837833783620, 0.3137066458778873, 0.2223810344533745, 0.1012285362903763 };
+
+constexpr int MAX_ALTITUDES = 32;                // cut altitudes of one atmosphere
+constexpr int MAX_CUTS = 2 * MAX_ALTITUDES + 3;  // two path roots per altitude, the perigee and the two ends
+// an exponential layer is cut at these multiples of its scale height: the segments between them hold 8-point
+// Gauss-Legendre to about 1e-11 of the layer's column, and nothing is left beyond the last (e^-20)
+constexpr double EXP_CUT_SCALES[3] = { 4.0, 10.0, 20.0 };
+
+inline double finite_or(double x, double fallback)
+{
+    return std::isfinite(x) ? x : fallback;
+}
+
+inline double dot(const Vec3& a, const Vec3& b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+// The altitudes (km, inside (0, top_km)) where a profile needs a cut: its kinks and, for an
+// exponential layer, the EXP_CUT_SCALES multiples of its scale height (so no segment spans many e-foldings).
+inline int profile_cuts_km(const DensityProfile& p, double top_km, double* out, int max_count)
+{
+    double m[8];
+    int n = 0;
+    const int k = p.kinks(m, 8);
+    for (int i = 0; i < k && n < max_count; ++i)
+    {
+        const double h = m[i] * 1e-3;
+        if (h > 0.0 && h < top_km)
+        {
+            out[n++] = h;
+        }
+    }
+    for (int i = 0; i < (p.count > 1 ? 2 : 1); ++i)
+    {
+        const DensityLayer& l = p.layer[i];
+        if (l.exp_term != 0.0 && l.exp_scale < 0.0)
+        {
+            for (double scales : EXP_CUT_SCALES)
+            {
+                const double h = scales / -l.exp_scale * 1e-3;
+                if (h > 0.0 && h < top_km && n < max_count)
+                {
+                    out[n++] = h;
+                }
+            }
+        }
+    }
+    return n;
+}
+
+// the vertical column of a profile from the ground to top_km (km at density 1)
+inline double profile_column_km(const DensityProfile& p, double top_km)
+{
+    double cut[MAX_ALTITUDES + 2];
+    int n = 0;
+    cut[n++] = 0.0;
+    n += profile_cuts_km(p, top_km, cut + n, MAX_ALTITUDES);
+    cut[n++] = top_km;
+    std::sort(cut, cut + n);
+    double sum = 0.0;
+    for (int i = 0; i + 1 < n; ++i)
+    {
+        const double hw = 0.5 * (cut[i + 1] - cut[i]), mid = 0.5 * (cut[i + 1] + cut[i]);
+        for (int k = 0; k < 8; ++k)
+        {
+            sum += hw * GL_W[k] * p.density((mid + hw * GL_X[k]) * 1e3);
+        }
+    }
+    return sum;
+}
+} // namespace detail
+
+// --- the physical atmosphere mapped from the legacy fields ---
+struct LLAtmosphere
+{
+    enum Clamp : unsigned // which bounds applied (diagnostics, tests)
+    {
+        CLAMP_COLUMN = 1u << 0,        // a channel's column hit max_column
+        CLAMP_GROUND_HAZE = 1u << 1,   // the apparent ground haze hit max_ground_haze
+        CLAMP_PLANET_RADIUS = 1u << 2,
+        CLAMP_ATMOSPHERE_HEIGHT = 1u << 3,
+        CLAMP_NON_FINITE = 1u << 4,    // a non-finite input was replaced
+        CLAMP_OZONE = 1u << 5,         // ozone capped at a channel's column
+        CLAMP_SLAB = 1u << 6,          // the ground haze slab capped at the aerosol column
+        CLAMP_PROFILE = 1u << 7,       // an empty density profile was replaced by the default
+    };
+
+    // The legacy fields mapped onto Rayleigh, aerosol, ground haze slab and ozone. At noon (the sun at the
+    // zenith, observer on the ground) T(0, 1) equals today's lin(source e^-tau) / lin(source) in every
+    // channel, except where CLAMP_COLUMN applied.
+    static LLAtmosphere fromLegacy(const LegacySky& sky, const AtmosphereBounds& bounds = {})
+    {
+        LLAtmosphere a;
+        unsigned clamped = 0;
+        auto fin = [&](double x, double fallback = 0.0) {
+            if (!std::isfinite(x))
+            {
+                clamped |= CLAMP_NON_FINITE;
+                return fallback;
+            }
+            return x;
+        };
+
+        double rg = fin(sky.planet_radius_km, 6360.0);
+        double height = fin(sky.top_radius_km, 6420.0) - rg;
+        if (rg < 1000.0 || rg > 100000.0)
+        {
+            rg = std::min(std::max(rg, 1000.0), 100000.0);
+            clamped |= CLAMP_PLANET_RADIUS;
+        }
+        if (height < 10.0 || height > 1000.0)
+        {
+            height = std::min(std::max(height, 10.0), 1000.0);
+            clamped |= CLAMP_ATMOSPHERE_HEIGHT;
+        }
+        a.planet_radius_km = rg;
+        a.top_radius_km = rg + height;
+
+        auto usable = [&](const DensityProfile& p, const DensityProfile& fallback) {
+            if (detail::profile_column_km(p, height) > 1e-9)
+            {
+                return p;
+            }
+            clamped |= CLAMP_PROFILE;
+            return fallback;
+        };
+        a.rayleigh = usable(sky.rayleigh, rayleigh_profile());
+        a.mie = usable(sky.mie, mie_profile());
+        a.absorption = usable(is_stored_ozone_default(sky.absorption) ? ozone_profile() : sky.absorption, ozone_profile());
+        const double he_r = detail::profile_column_km(a.rayleigh, height);
+        const double he_m = detail::profile_column_km(a.mie, height);
+        const double he_o = detail::profile_column_km(a.absorption, height);
+
+        const double src[3] = { std::max(fin(sky.source.x), 0.0), std::max(fin(sky.source.y), 0.0), std::max(fin(sky.source.z), 0.0) };
+        const double bd[3] = { std::max(fin(sky.blue_density.x), 0.0), std::max(fin(sky.blue_density.y), 0.0),
+                               std::max(fin(sky.blue_density.z), 0.0) };
+        const double hd = std::max(fin(sky.haze_density), 0.0);
+        const double dm = std::max(fin(sky.density_multiplier), 0.0);
+        const double my = std::max(fin(sky.max_y), 0.0);
+        const double dist = std::max(fin(sky.distance_multiplier), 0.0);
+
+        // 1. the column, per channel, as today's sunlight reaches the ground at noon
+        double column[3];
+        for (int k = 0; k < 3; ++k)
+        {
+            const double tau = (bd[k] + hd * 0.25) * dm * my;
+            const double lin = srgb_to_linear(src[k]);
+            double c = lin > 1e-9 ? -std::log(srgb_to_linear(src[k] * std::exp(-tau)) / lin) : 2.4 * tau;
+            if (!(c > 0.0))
+            {
+                c = 0.0;
+            }
+            if (c > bounds.max_column)
+            {
+                c = bounds.max_column;
+                clamped |= CLAMP_COLUMN;
+            }
+            column[k] = c;
+        }
+
+        // 2. ozone (Earth's values, never more than the column), aerosol (grey), Rayleigh (the rest)
+        const double earth_ozone[3] = { 0.000650, 0.001881, 0.000085 }; // Bruneton and Neyret, /km at density 1
+        double tau_o[3], tau_r[3], share_sum = 0.0, tau_m_max = 1e30;
+        for (int k = 0; k < 3; ++k)
+        {
+            tau_o[k] = earth_ozone[k] * he_o;
+            if (tau_o[k] > column[k])
+            {
+                tau_o[k] = column[k];
+                clamped |= CLAMP_OZONE;
+            }
+            const double total = bd[k] + hd * 0.25;
+            share_sum += column[k] * (total > 0.0 ? hd * 0.25 / total : 0.0);
+            tau_m_max = std::min(tau_m_max, column[k] - tau_o[k]);
+        }
+        const double tau_m = std::min(std::max(share_sum / 3.0, 0.0), std::max(tau_m_max, 0.0));
+        for (int k = 0; k < 3; ++k)
+        {
+            tau_r[k] = std::max(column[k] - tau_m - tau_o[k], 0.0);
+        }
+        a.rayleigh_ext = { tau_r[0] / he_r, tau_r[1] / he_r, tau_r[2] / he_r };
+        a.ozone_ext = { tau_o[0] / he_o, tau_o[1] / he_o, tau_o[2] / he_o };
+
+        // 3. the ground haze slab: what the legacy distance haze has beyond the exponential profiles, taken
+        //    from the aerosol column (never added to it)
+        double k_ap = (bd[0] + hd) * dm * dist * 1000.0;
+        if (k_ap > bounds.max_ground_haze)
+        {
+            k_ap = bounds.max_ground_haze;
+            clamped |= CLAMP_GROUND_HAZE;
+        }
+        const double slab_h = std::min(std::max(detail::finite_or(bounds.haze_slab_km, 0.0), 0.0), height);
+        double slab_ext = 0.0;
+        if (slab_h > 0.0)
+        {
+            slab_ext = std::max(k_ap - (tau_r[0] / he_r + tau_m / he_m), 0.0);
+            const double cap = tau_m / (0.875 * slab_h);
+            if (slab_ext > cap)
+            {
+                slab_ext = cap;
+                clamped |= CLAMP_SLAB;
+            }
+        }
+        a.slab_ext = slab_ext;
+        a.slab_top_km = slab_h;
+        a.aerosol_ext = std::max(tau_m - slab_ext * 0.875 * slab_h, 0.0) / he_m;
+        a.column = { column[0], column[1], column[2] };
+        a.clamped = clamped;
+        return a;
+    }
+
+    // Transmittance from altitude h_km above the ground, towards a body at zenith cosine mu, to the top of the
+    // atmosphere (the ground is not an occluder here), times the body's visible part over the horizon:
+    // smoothstep(mu_h - disc_sin, mu_h + disc_sin, mu), mu_h = -sqrt(1 - (Rg/(Rg+h))^2).
+    // Segmented 8-point Gauss-Legendre along the path, cut at every profile kink, at the slab's 0.75H and H,
+    // at EXP_CUT_SCALES scale heights of each exponential layer, where a ray crosses the ground and at the
+    // perigee of a downward ray.
+    // A non-finite argument gives 0.
+    Vec3 transmittance(double h_km, double mu, double disc_sin) const
+    {
+        if (!std::isfinite(h_km) || !std::isfinite(mu) || !std::isfinite(disc_sin))
+        {
+            return {};
+        }
+        const double rg = planet_radius_km;
+        const double top = top_radius_km - rg;
+        const double h0 = std::min(std::max(h_km, 0.0), top);
+        mu = std::min(std::max(mu, -1.0), 1.0);
+        const double d = std::min(std::max(disc_sin, 0.0), 1.0);
+        const double r0 = rg + h0;
+        const double q0 = h0 * (2.0 * rg + h0); // r0^2 - Rg^2, without the cancellation
+        const double mu_h = -std::sqrt(q0) / r0;
+        const double vis = d > 0.0 ? smoothstep(mu_h - d, mu_h + d, mu) : (mu >= mu_h ? 1.0 : 0.0);
+        if (!(vis > 0.0))
+        {
+            return {};
+        }
+
+        // path length s to the altitude a: s^2 + 2 b s - k = 0, b = r0 mu, k = (a - h0)(2 Rg + a + h0)
+        const double b = r0 * mu;
+        auto roots = [&](double alt, double& s_lo, double& s_hi) {
+            const double k = (alt - h0) * (2.0 * rg + alt + h0);
+            const double disc = b * b + k;
+            s_lo = s_hi = -1.0;
+            if (disc < 0.0)
+            {
+                return;
+            }
+            const double sq = std::sqrt(disc);
+            if (b >= 0.0)
+            {
+                s_hi = (b + sq) > 0.0 ? k / (b + sq) : -1.0; // -b + sq
+            }
+            else
+            {
+                s_hi = -b + sq;
+                s_lo = s_hi > 0.0 ? -k / s_hi : -1.0;         // -b - sq
+            }
+        };
+        double unused, path;
+        roots(top, unused, path);
+        if (!(path > 0.0))
+        {
+            return { vis, vis, vis };
+        }
+
+        double alts[detail::MAX_ALTITUDES];
+        const int na = cut_altitudes_km(alts, detail::MAX_ALTITUDES);
+        double cut[detail::MAX_CUTS];
+        int n = 0;
+        cut[n++] = 0.0;
+        cut[n++] = path;
+        for (int i = 0; i < na; ++i)
+        {
+            double s_lo, s_hi;
+            roots(alts[i], s_lo, s_hi);
+            if (s_lo > 0.0 && s_lo < path)
+            {
+                cut[n++] = s_lo;
+            }
+            if (s_hi > 0.0 && s_hi < path)
+            {
+                cut[n++] = s_hi;
+            }
+        }
+        if (b < 0.0 && -b < path)
+        {
+            cut[n++] = -b; // the perigee
+        }
+        for (int i = 1; i < n; ++i) // insertion sort
+        {
+            const double v = cut[i];
+            int j = i - 1;
+            while (j >= 0 && cut[j] > v)
+            {
+                cut[j + 1] = cut[j];
+                --j;
+            }
+            cut[j + 1] = v;
+        }
+
+        double tau[3] = { 0.0, 0.0, 0.0 };
+        const double slab_lo = 0.75 * slab_top_km;
+        for (int i = 0; i + 1 < n; ++i)
+        {
+            const double hw = 0.5 * (cut[i + 1] - cut[i]), mid = 0.5 * (cut[i + 1] + cut[i]);
+            if (!(hw > 0.0))
+            {
+                continue;
+            }
+            for (int k = 0; k < 8; ++k)
+            {
+                const double s = mid + hw * detail::GL_X[k];
+                const double r = std::sqrt(std::max(r0 * r0 + 2.0 * b * s + s * s, 0.0));
+                const double h = std::max((q0 + 2.0 * b * s + s * s) / (r + rg), 0.0); // altitude, without the cancellation
+                const double dr = rayleigh.density(h * 1e3), dm = mie.density(h * 1e3), dz = absorption.density(h * 1e3);
+                const double ds = slab_top_km > 0.0 ? 1.0 - smoothstep(slab_lo, slab_top_km, h) : 0.0;
+                const double grey = aerosol_ext * dm + slab_ext * ds;
+                const double w = hw * detail::GL_W[k];
+                tau[0] += w * (rayleigh_ext.x * dr + grey + ozone_ext.x * dz);
+                tau[1] += w * (rayleigh_ext.y * dr + grey + ozone_ext.y * dz);
+                tau[2] += w * (rayleigh_ext.z * dr + grey + ozone_ext.z * dz);
+            }
+        }
+        return { std::exp(-tau[0]) * vis, std::exp(-tau[1]) * vis, std::exp(-tau[2]) * vis };
+    }
+
+    // the altitudes (km above the ground, inside the atmosphere) where the path integral is cut
+    int cut_altitudes_km(double* out, int max_count) const
+    {
+        const double top = top_radius_km - planet_radius_km;
+        int n = 0;
+        out[n++] = 0.0; // where a ray below the horizon crosses the ground (the altitude is clamped there)
+        if (slab_ext > 0.0 && slab_top_km > 0.0 && slab_top_km < top && max_count >= 3)
+        {
+            out[n++] = 0.75 * slab_top_km;
+            out[n++] = slab_top_km;
+        }
+        for (const DensityProfile* p : { &rayleigh, &mie, &absorption })
+        {
+            double buf[detail::MAX_ALTITUDES];
+            const int k = detail::profile_cuts_km(*p, top, buf, detail::MAX_ALTITUDES);
+            for (int i = 0; i < k && n < max_count; ++i)
+            {
+                out[n++] = buf[i];
+            }
+        }
+        return n;
+    }
+
+    Vec3   column;                      // tau per channel, linear: lin(source) e^-column = lin(source e^-tau_legacy) (noon)
+    Vec3   rayleigh_ext;                // 1/km at density 1
+    double aerosol_ext = 0.0;           // 1/km at density 1 (the column part above the slab)
+    double slab_ext = 0.0;              // ground haze slab, 1/km: constant to 0.75 H, smooth to 0 at H
+    double slab_top_km = 0.25;
+    Vec3   ozone_ext;                   // Bruneton & Neyret's Earth values (0.000650, 0.001881, 0.000085) /km, capped at the column
+    DensityProfile rayleigh = rayleigh_profile(), mie = mie_profile(),
+                   absorption = ozone_profile(); // ozone_profile() if the stored default was the broken one
+    double planet_radius_km = 6360.0, top_radius_km = 6420.0;   // clamped: Rg in [1000, 100000], Rt - Rg in [10, 1000]
+    unsigned clamped = 0;               // bit mask of Clamp: the bounds that applied
+};
+
+// today's airmass, as a transmittance (the A/B debug setting and the legacy cloud light):
+// per channel lin(source e^(-(bd + hd/4) dm max_y path_scale / max(1e-6, mu))) / lin(source)
+// path_scale 1: atmosphericsFuncs.glsl:111-112; 0.5: cloudsV.glsl:177-179
+inline Vec3 legacy_transmittance(const LegacySky& sky, double mu, double path_scale)
+{
+    using detail::finite_or;
+    const double src[3] = { std::max(finite_or(sky.source.x, 0.0), 0.0), std::max(finite_or(sky.source.y, 0.0), 0.0),
+                            std::max(finite_or(sky.source.z, 0.0), 0.0) };
+    const double bd[3] = { sky.blue_density.x, sky.blue_density.y, sky.blue_density.z };
+    const double air = 1.0 / std::max(1e-6, finite_or(mu, 0.0));
+    double t[3];
+    for (int k = 0; k < 3; ++k)
+    {
+        double x = (finite_or(bd[k], 0.0) + finite_or(sky.haze_density, 0.0) * 0.25) * finite_or(sky.density_multiplier, 0.0)
+                 * finite_or(sky.max_y, 0.0) * path_scale * air;
+        x = std::max(x, 0.0);
+        const double lin = srgb_to_linear(src[k]);
+        t[k] = lin > 1e-9 ? srgb_to_linear(src[k] * std::exp(-x)) / lin : std::exp(-2.4 * x);
+    }
+    return { t[0], t[1], t[2] };
+}
+
+// --- L3: the sun/moon handover (stateless) ---
+constexpr double MOON_PHYSICAL = 2.5e-6;   // full moon / sun illuminance (0.25 lx / 100 klx)
+
+struct PrimaryLightParams
+{
+    double swing = 0.10;   // half-width of the direction/colour swing around r = 0.5      (RenderLightHandoverSwing)
+    double fade  = 0.30;   // width of each shadow fade beside the swing                    (RenderLightHandoverFade)
+                           // swing + fade is clamped to 0.49
+    double dark  = 1e-4;   // E_sun + E_moon below dark x luminance(source): both are dark (fallback)
+};
+
+struct PrimaryLightInputs
+{
+    Vec3 sun_dir, moon_dir;           // unit, z up (LLSettingsSky's frame)
+    Vec3 sun_T, moon_T;               // transmittance to each body at the ground observer, disc visibility included
+    Vec3 source;                      // linear light above the atmosphere (EEP's sunlight_color, shared by both bodies)
+    double moon_gain = 0.0;           // moon_brightness x moon_compensation(...)
+    double sun_disc_sin = 0.0047;     // sin(0.265 deg x sun_scale): the dark fallback's band
+};
+
+struct PrimaryLight
+{
+    Vec3   dir;              // unit: the one light the scene is lit and shadowed by
+    Vec3   T;                // its transmittance: ground light = source x T (cross-faded, moon gain included)
+    double shadow_strength;  // 1 full, 0 none
+    double moon_weight;      // t: 0 the sun, 1 the moon (dome colour, glow, cloud light, light size)
+    double ratio;            // r = E_moon / (E_sun + E_moon), after the dark fallback
+};
+
+// nlerp, bent over the zenith when the two face apart; never through zero, never below the horizon for two lights above it:
+// normalize((1-t) a + t b + 4 t (1-t) max(0, -a.b) Z). A zero-length argument counts as Z.
+inline Vec3 route_direction(const Vec3& from, const Vec3& to, double t)
+{
+    auto unit = [](const Vec3& v) {
+        const double len = std::sqrt(detail::dot(v, v));
+        return (len > 1e-12 && std::isfinite(len)) ? Vec3{ v.x / len, v.y / len, v.z / len } : Vec3{ 0.0, 0.0, 1.0 };
+    };
+    const Vec3 a = unit(from), b = unit(to);
+    t = std::min(std::max(detail::finite_or(t, 0.0), 0.0), 1.0);
+    const double bend = 4.0 * t * (1.0 - t) * std::max(0.0, -detail::dot(a, b));
+    return unit({ (1.0 - t) * a.x + t * b.x, (1.0 - t) * a.y + t * b.y, (1.0 - t) * a.z + t * b.z + bend });
+}
+
+// the moon's compensation, adapted over twilight: MOON_PHYSICAL while the sun is up, compensation at sun_z <= -depth_sin
+// MOON_PHYSICAL + (compensation - MOON_PHYSICAL) x smoothstep(0, -depth_sin, sun_z)
+inline double moon_compensation(double compensation, double sun_z, double depth_sin)
+{
+    return MOON_PHYSICAL + (compensation - MOON_PHYSICAL) * smoothstep(0.0, -std::max(depth_sin, 1e-9), sun_z);
+}
+
+inline Vec3 cross_fade(const Vec3& sun_T, const Vec3& moon_T, double moon_gain, double t)
+{
+    const double m = t * moon_gain, s = 1.0 - t;
+    return { s * sun_T.x + m * moon_T.x, s * sun_T.y + m * moon_T.y, s * sun_T.z + m * moon_T.z };
+}
+
+inline PrimaryLight primary_light(const PrimaryLightInputs& in, const PrimaryLightParams& p)
+{
+    using detail::finite_or;
+    auto clean = [](const Vec3& v) { // non-finite counts as 0, then clamped to [0,1]
+        auto c = [](double x) { return std::isfinite(x) ? std::min(std::max(x, 0.0), 1.0) : 0.0; };
+        return Vec3{ c(v.x), c(v.y), c(v.z) };
+    };
+    const Vec3 sun_T = clean(in.sun_T), moon_T = clean(in.moon_T);
+    const Vec3 src = { std::max(finite_or(in.source.x, 0.0), 0.0), std::max(finite_or(in.source.y, 0.0), 0.0),
+                       std::max(finite_or(in.source.z, 0.0), 0.0) };
+    const double gain = std::max(finite_or(in.moon_gain, 0.0), 0.0);
+    const double disc = std::max(finite_or(in.sun_disc_sin, 0.0), 1e-9);
+
+    const double y_src = luminance(src);
+    const double e_s = luminance({ src.x * sun_T.x, src.y * sun_T.y, src.z * sun_T.z });
+    const double e_m = luminance({ src.x * moon_T.x, src.y * moon_T.y, src.z * moon_T.z }) * gain;
+    const double sum = e_s + e_m;
+    const double r_phys = sum > 0.0 ? e_m / sum : 0.5;
+    const double sun_len = std::sqrt(detail::dot(in.sun_dir, in.sun_dir));
+    const double sun_z = (sun_len > 1e-12 && std::isfinite(sun_len)) ? in.sun_dir.z / sun_len : 1.0;
+    const double r_fb = smoothstep(disc, -disc, sun_z); // both dark: the sun's side while it is up
+    const double known = (p.dark * y_src > 0.0 && sum > 0.0) ? smoothstep(0.0, p.dark * y_src, sum) : 0.0;
+    const double r = std::min(std::max(r_fb + (r_phys - r_fb) * known, 0.0), 1.0);
+
+    const double swing = std::min(std::max(finite_or(p.swing, 0.1), 0.0), 0.49);
+    const double fade = std::min(std::max(finite_or(p.fade, 0.3), 0.0), 0.49 - swing);
+    const double a0 = 0.5 - swing - fade, b0 = 0.5 - swing, b1 = 0.5 + swing, c1 = 0.5 + swing + fade;
+    const double t = smoothstep(b0, b1, r); // phase b: direction and colour
+    // phase a: the sun's shadow 1 -> 0; phase c: the moon's 0 -> 1
+    const double s = std::max(1.0 - smoothstep(a0, b0, r), smoothstep(b1, c1, r));
+
+    PrimaryLight out;
+    out.dir = route_direction(in.sun_dir, in.moon_dir, t);
+    out.T = cross_fade(sun_T, moon_T, gain, t);
+    out.shadow_strength = s;
+    out.moon_weight = t;
+    out.ratio = r;
+    return out;
 }
 } // namespace LLAtmosphericLight
 
