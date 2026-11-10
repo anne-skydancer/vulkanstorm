@@ -396,6 +396,7 @@ public:
         SUN_MOON_BLEND,                     //  "sun_moon_blend"
         CLOUD_LIGHT_TRANSMITTANCE,          //  "cloud_light_transmittance"
         CLOUD_MOON_BLEND,                   //  "cloud_moon_blend"
+        CLOUD_LIGHT_DIR,                    //  "cloud_light_dir"
         // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;

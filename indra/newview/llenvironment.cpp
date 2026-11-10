@@ -1733,6 +1733,16 @@ LLVector4 LLEnvironment::getClampedLightNorm() const
     return toLightNorm(light_direction);
 }
 
+LLVector4 LLEnvironment::getClampedCloudLightNorm() const
+{
+    LLVector3 light_direction = mPrimary.valid ? mPrimary.cloud_dir : getLightDirection();
+    if (light_direction.mV[2] < -0.1f)
+    {
+        light_direction.mV[2] = -0.1f;
+    }
+    return toLightNorm(light_direction);
+}
+
 LLVector4 LLEnvironment::getClampedSunNorm() const
 {
     LLVector3 light_direction = getSunDirection();
@@ -1984,6 +1994,14 @@ void LLEnvironment::updatePrimaryLight()
     setup.adaptation_depth_deg = adaptation_depth;
     setup.cloud_height_km = (F64)cloud_height_m / 1000.0;
     setup.physical = physical_light;
+    // the colour the cloud shader has: the sky's raw sunlight_color (SG_SKY), times the auto-adjust scale
+    {
+        static LLCachedControl<F32> auto_adjust_sun_color_scale(gSavedSettings, "RenderSkyAutoAdjustSunColorScale", 1.f);
+        const LLColor3 raw = psky->getSunlightColor();
+        const F32 k = (should_auto_adjust && psky->canAutoAdjust()) ? (F32)auto_adjust_sun_color_scale : 1.f;
+        setup.cloud_source = { raw.mV[0] * k, raw.mV[1] * k, raw.mV[2] * k };
+        setup.has_cloud_source = true;
+    }
 
     const AL::PrimaryLightRig rig = AL::compute_primary_light(setup);
 
@@ -1994,6 +2012,11 @@ void LLEnvironment::updatePrimaryLight()
         st.dir = LLVector3(0.f, 0.f, 1.f);
     }
     st.cloud_T = to_llvec(rig.cloud_T);
+    st.cloud_dir = to_llvec(rig.cloud_dir);
+    if (!st.cloud_dir.isFinite())
+    {
+        st.cloud_dir = LLVector3(0.f, 0.f, 1.f);
+    }
     st.cloud_moon_weight = (F32)llclamp(rig.cloud_moon_weight, 0.0, 1.0);
     st.color = LLColor3((F32)rig.color.x, (F32)rig.color.y, (F32)rig.color.z);
     st.shadow_strength = (F32)llclamp(rig.light.shadow_strength, 0.0, 1.0);

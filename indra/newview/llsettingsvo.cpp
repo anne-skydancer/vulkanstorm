@@ -791,6 +791,7 @@ void LLSettingsVOSky::applySpecial(void *ptarget, bool force)
         shader->uniform1f(LLShaderMgr::SUN_MOON_BLEND, primary.moon_weight);
         shader->uniform3fv(LLShaderMgr::CLOUD_LIGHT_TRANSMITTANCE, primary.cloud_T);
         shader->uniform1f(LLShaderMgr::CLOUD_MOON_BLEND, primary.cloud_moon_weight);
+        shader->uniform3fv(LLShaderMgr::CLOUD_LIGHT_DIR, LLVector3(LLEnvironment::instance().getClampedCloudLightNorm().mV));
     }
     // </Vulkanstorm>
 

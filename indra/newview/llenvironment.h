@@ -194,6 +194,7 @@ public:
     {
         LLVector3 dir = LLVector3(0.f, 0.f, 1.f); // agent frame (z up), unit: the light's direction
         LLVector3 cloud_T = LLVector3(1.f, 1.f, 1.f);  // the sun's transmittance at the cloud layer (flat clouds' sun)
+        LLVector3 cloud_dir = LLVector3(0.f, 0.f, 1.f); // the clouds' own light direction (agent frame, unit)
         F32 cloud_moon_weight = 0.f;      // the clouds' own handover t_cloud (the clouds' sun fades with the light at their height)
         LLColor3  color;                  // the ground light in sunlight_color's encoding: sRGB(lin(deferred sunlight) x the light's transmittance)
         F32 shadow_strength = 1.f;        // 1 full, 0 none
@@ -223,6 +224,7 @@ public:
     // Returns light direction converted to OGL coord system
     // and clamped above -0.1f in Y to avoid render artifacts in sky shaders
     LLVector4                   getClampedLightNorm() const; // the primary light (the sun/moon handover)
+    LLVector4                   getClampedCloudLightNorm() const; // <Vulkanstorm/> the clouds' own light (their handover), as getClampedLightNorm
     LLVector4                   getClampedSunNorm() const;
     LLVector4                   getClampedMoonNorm() const;
 
