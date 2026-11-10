@@ -6459,17 +6459,12 @@ void LLPipeline::setupHWLights()
         mSunDir.setVec(sun_dir);
         mMoonDir.setVec(moon_dir);
 
-        mSunDiffuse.setVec(psky->getSunlightColor());
+        // <Vulkanstorm> the sun's colour as the deferred pass sends it (normalised, clamped, auto-adjusted): one place (L3)
+        mSunDiffuse.setVec(environment.getDeferredSunlight());
+        // </Vulkanstorm>
         mMoonDiffuse.setVec(psky->getMoonlightColor());
 
-        F32 max_color = llmax(mSunDiffuse.mV[0], mSunDiffuse.mV[1], mSunDiffuse.mV[2]);
-        if (max_color > 1.f)
-        {
-            mSunDiffuse *= 1.f/max_color;
-        }
-        mSunDiffuse.clamp();
-
-        max_color = llmax(mMoonDiffuse.mV[0], mMoonDiffuse.mV[1], mMoonDiffuse.mV[2]);
+        F32 max_color = llmax(mMoonDiffuse.mV[0], mMoonDiffuse.mV[1], mMoonDiffuse.mV[2]);
         if (max_color > 1.f)
         {
             mMoonDiffuse *= 1.f/max_color;
@@ -10019,15 +10014,10 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
         shader.uniformMatrix4fv(LLShaderMgr::DEFERRED_NORM_MATRIX, 1, false, glm::value_ptr(norm_mat));
     }
 
-    // auto adjust legacy sun color if needed
-    static LLCachedControl<bool> should_auto_adjust(gSavedSettings, "RenderSkyAutoAdjustLegacy", false);
-    static LLCachedControl<F32> auto_adjust_sun_color_scale(gSavedSettings, "RenderSkyAutoAdjustSunColorScale", 1.f);
-    LLSettingsSky::ptr_t psky = LLEnvironment::instance().getCurrentSky();
+    // <Vulkanstorm> the legacy sun colour was auto-adjusted here; setupHWLights now stores it that way in mSunDiffuse
+    // (LLEnvironment::getDeferredSunlight), and zeroes it when neither body is up
     LLColor3 sun_diffuse(mSunDiffuse.mV);
-    if (should_auto_adjust && psky->canAutoAdjust())
-    {
-        sun_diffuse *= auto_adjust_sun_color_scale;
-    }
+    // </Vulkanstorm>
 
     shader.uniform3fv(LLShaderMgr::SUNLIGHT_COLOR, 1, sun_diffuse.mV);
     shader.uniform3fv(LLShaderMgr::MOONLIGHT_COLOR, 1, mMoonDiffuse.mV);
@@ -10137,10 +10127,12 @@ void LLPipeline::renderDeferredLighting()
                 {
                     static const F32 sun_angular_size = 2.f * tanf(0.5f * 0.53f * DEG_TO_RAD);
                     // stage L3: the size of the light the scene is lit by, handing over from the sun's scale to the moon's
+                    // <Vulkanstorm>
                     const LLEnvironment::PrimaryLightState& primary_light = LLEnvironment::instance().getPrimaryLight();
                     LLSettingsSky::ptr_t sky = LLEnvironment::instance().getCurrentSky();
                     const F32 sun_scale = primary_light.valid ? primary_light.light_scale : (sky ? sky->getSunScale() : 1.f);
                     sun_shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE, sun_angular_size * sun_scale * RenderShadowPCSSLightSize);
+                    // </Vulkanstorm>
                 }
                 // the blocker search reads cascades 0-1 and both spot maps a second time as
                 // plain depth, through a sampler object (only the PCSS sun program has these units)

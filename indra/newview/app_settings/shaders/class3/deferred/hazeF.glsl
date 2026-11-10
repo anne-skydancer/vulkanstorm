@@ -50,7 +50,7 @@ void main()
     float depth        = getDepth(tc.xy);
     vec4  pos          = getPositionWithDepth(tc, depth);
     vec4  norm         = getNorm(tc);
-    vec3  light_dir   = primary_light_dir; // <Vulkanstorm/> L3: the sun/moon handover\'s light
+    vec3  light_dir   = primary_light_dir; // <Vulkanstorm/> L3: the primary light
 
     vec3  color = vec3(0);
     float bloom = 0.0;
