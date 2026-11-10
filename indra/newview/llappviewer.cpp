@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llappviewer.h"
+#include "llcloudnoise.h" // <Vulkanstorm> the volumetric clouds' noise file
 
 // Viewer includes
 #include "llversioninfo.h"
@@ -1221,6 +1222,23 @@ bool LLAppViewer::init()
         return false;
     }
     LL_INFOS("InitInfo") << "Cache initialization is done." << LL_ENDL ;
+
+    // <Vulkanstorm> The volumetric clouds' noise file is part of the installation and is required: if it is
+    // missing or is not the file this build was made with, say so and quit cleanly (no crash report), like
+    // the cache above. Checked on every machine, before any window or GL context exists.
+    {
+        std::string noise_path, noise_error;
+        if (!LLCloudNoise::loadAndVerify(noise_path, noise_error))
+        {
+            LL_WARNS("InitInfo") << "Cloud noise file " << noise_path << ": " << noise_error << LL_ENDL;
+            std::string msg = LLTrans::getString("MBCloudNoiseDamaged");
+            OSMessageBox(msg.c_str(), LLStringUtil::null, OSMB_OK);
+            LL_PROFILER_FRAME_END;
+            return false;
+        }
+        LL_INFOS("InitInfo") << "Cloud noise file verified: " << noise_path << LL_ENDL;
+    }
+    // </Vulkanstorm>
 
     // Initialize event recorder
     LLViewerEventRecorder::createInstance();
