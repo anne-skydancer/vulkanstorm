@@ -75,6 +75,7 @@ float getDepth(vec2 pos_screen);
 
 vec3 linear_to_srgb(vec3 c);
 vec3 srgb_to_linear(vec3 c);
+float sunShadowedDiffuse(float da, float shadow);
 
 uniform vec4 waterPlane;
 
@@ -224,14 +225,14 @@ void main()
         if (classic_mode > 0)
         {
             da = pow(da,1.2);
-            vec3 sun_contrib = vec3(min(da, scol));
+            vec3 sun_contrib = vec3(sunShadowedDiffuse(da, scol));
 
             color.rgb = srgb_to_linear(color.rgb * 0.9 + (linear_to_srgb(sun_contrib) * sunlit_linear * 0.7));
             sunlit_linear = srgb_to_linear(sunlit_linear);
         }
         else
         {
-            vec3 sun_contrib = min(da, scol) * sunlit_linear;
+            vec3 sun_contrib = sunShadowedDiffuse(da, scol) * sunlit_linear;
             color.rgb += sun_contrib;
         }
 

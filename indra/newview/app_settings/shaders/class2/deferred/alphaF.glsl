@@ -76,6 +76,7 @@ void calcAtmosphericVarsLinear(vec3 inPositionEye, vec3 norm, vec3 light_dir, ou
 #ifdef HAS_SUN_SHADOW
 float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen);
 #endif
+float sunShadowedDiffuse(float da, float shadow);
 
 float getAmbientClamp();
 
@@ -284,14 +285,14 @@ void main()
     if (classic_mode > 0)
     {
         final_da = pow(final_da,1.2);
-        vec3 sun_contrib = vec3(min(final_da, shadow));
+        vec3 sun_contrib = vec3(sunShadowedDiffuse(final_da, shadow));
 
         color.rgb = srgb_to_linear(color.rgb * 0.9 + linear_to_srgb(sun_contrib) * sunlit_linear * 0.7);
         sunlit_linear = srgb_to_linear(sunlit_linear);
     }
     else
     {
-        vec3 sun_contrib = min(final_da, shadow) * sunlit_linear;
+        vec3 sun_contrib = sunShadowedDiffuse(final_da, shadow) * sunlit_linear;
         color.rgb += sun_contrib;
     }
 
