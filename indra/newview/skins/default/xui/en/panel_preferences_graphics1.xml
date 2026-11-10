@@ -2029,7 +2029,7 @@ If you do not understand the distinction then leave this control alone."
       </radio_group>
       <!-- </Vulkanstorm> -->
 
-      <!-- <Vulkanstorm> PCSS soft shadows; enabled with shadows only (LLFloaterPreference::refreshEnabledState) -->
+      <!-- <Vulkanstorm> shadow method (Legacy / PCSS); enabled with shadows only (LLFloaterPreference::refreshEnabledState) -->
       <text
        follows="left|top"
        height="18"
@@ -2041,16 +2041,26 @@ If you do not understand the distinction then leave this control alone."
        name="ShadowsHeading">
         Shadows
       </text>
-      <check_box
-       control_name="RenderShadowPCSS"
-       height="18"
-       label="Soft shadows (PCSS)"
+      <combo_box
+       control_name="RenderShadowMethod"
+       height="20"
        layout="topleft"
        left_pad="5"
-       top_delta="0"
-       width="300"
-       name="ShadowPCSS"
-       tool_tip="Softens the edges of sun, moon and projector shadows with a wider, rotated filter and smooths the result with the shadow blur. Needs shadows (Sun/Moon or Sun/Moon + Projectors). Costs some GPU time."/>
+       top_delta="-2"
+       width="200"
+       name="ShadowMethod"
+       tool_tip="Shadow method. Legacy: the Firestorm 7.2.5 sun and moon cascades and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias). PCSS: stable cascades and square sun maps, with soft, contact-hardening shadows. Needs shadows (Sun/Moon or Sun/Moon + Projectors).">
+       <combo_box.commit_callback
+        function="Pref.RenderOptionUpdate" />
+       <combo_box.item
+        label="Legacy"
+        name="0"
+        value="0"/>
+       <combo_box.item
+        label="PCSS"
+        name="1"
+        value="1"/>
+      </combo_box>
       <!-- </Vulkanstorm> -->
 
     </panel>
@@ -2301,14 +2311,14 @@ If you do not understand the distinction then leave this control alone."
        follows="left|top"
        height="16"
        increment="0.05"
-       label="Soft shadow light size"
+       label="Soft shadow light size (PCSS only)"
        label_width="170"
        layout="topleft"
        left="10"
        max_val="3"
        min_val="0.1"
        name="ShadowPCSSLightSize"
-       tool_tip="Multiplier of the sun and moon's apparent size for soft (PCSS) shadows. Larger = softer penumbra."
+       tool_tip="Multiplier of the sun and moon's apparent size for soft (PCSS) shadows. Larger = softer penumbra. Only used with the PCSS shadow method."
        top_pad="8"
        width="500"/>
       <text

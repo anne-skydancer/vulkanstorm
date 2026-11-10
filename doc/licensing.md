@@ -242,3 +242,8 @@ take them under the GPL, version 3 or later.
   ("Phoenix Firestorm Project"), `alphaOITResolveF.glsl` ("Linden
   Research"). Left as they are; if they are wholly original, their headers
   can move to the GPL header.
+- Added by Vulkanstorm, upstream text kept: `scripts/shadows/legacy_reference/*.cpp.txt`
+  (excerpts of Firestorm 7.2.5's `pipeline.cpp` for the Legacy shadow method check,
+  with the Linden Research header and `SPDX-License-Identifier: LGPL-2.1-only`) and
+  `scripts/perf/reference/shadowUtil_before_spot_fade.glsl` (an earlier
+  `shadowUtil.glsl`, Linden Research header unchanged). Left under LGPL-2.1.

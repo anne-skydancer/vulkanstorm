@@ -30,6 +30,7 @@
 #include <boost/lexical_cast.hpp>
 
 #include "llfeaturemanager.h"
+#include "llshadowmethod.h" // <Vulkanstorm/> shadow method
 #include "llviewershadermgr.h"
 
 // <FS> Vulkanstorm: shader source digest for the shader binary cache version
@@ -361,10 +362,10 @@ static void unload_stochastic_shaders()
 }
 // </Vulkanstorm>
 
-// <Vulkanstorm> PCSS soft shadows: the deferred sun program's shadow filter
+// <Vulkanstorm> shadow method PCSS (RenderShadowMethod 1): the deferred sun program's shadow filter
 static bool use_pcss_shadows()
 {
-    return gSavedSettings.getBOOL("RenderShadowPCSS") && gSavedSettings.getS32("RenderShadowDetail") > 0;
+    return LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) == LLShadowMethod::PCSS && gSavedSettings.getS32("RenderShadowDetail") > 0;
 }
 // </Vulkanstorm>
 

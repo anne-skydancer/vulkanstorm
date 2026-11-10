@@ -73,7 +73,7 @@
 		<string>RenderScreenSpaceReflectionGlossySamples</string>
 		<string>RenderShaderLightingMaxLevel</string>
 		<string>RenderShadowDetail</string>
-		<string>RenderShadowPCSS</string>
+		<string>RenderShadowMethod</string>
 		<string>RenderShadowDistance</string>
 		<string>RenderShadowResolutionScale</string>
 		<string>RenderSkyAmbientScale</string>
