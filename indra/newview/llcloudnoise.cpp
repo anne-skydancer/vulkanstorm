@@ -21,14 +21,13 @@
 
 #include "llcloudnoise.h"
 
+#include "llcloudnoisehash.h" // LL_CLOUD_NOISE_SHA256, generated from indra/cmake/CloudNoise.cmake
 #include "lldir.h"
 #include "llfile.h"
+#include "lltimer.h"
 
-#include <iterator>
-
-#ifndef LL_CLOUD_NOISE_SHA256
-#error "LL_CLOUD_NOISE_SHA256 is set by indra/newview/CMakeLists.txt from indra/cmake/CloudNoise.cmake"
-#endif
+#include <cerrno>
+#include <cstring>
 
 namespace
 {
@@ -43,13 +42,48 @@ bool loadAndVerify(std::string& path, std::string& error)
 {
     release();
     path = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, APP_SETTINGS_DIR, FILE_NAME);
-    llifstream file(path.c_str(), std::ios::in | std::ios::binary);
+
+    // A virus scanner or an installer can hold the file for a moment: log why an open failed and try once more.
+    llifstream file;
+    for (int attempt = 0; attempt < 2; ++attempt)
+    {
+        errno = 0;
+        file.open(path.c_str(), std::ios::in | std::ios::binary);
+        if (file.is_open())
+        {
+            break;
+        }
+        const int reason = errno;
+        LL_WARNS("InitInfo") << "Cannot open " << path << " (attempt " << (attempt + 1) << "): "
+                             << (reason ? std::strerror(reason) : "unknown reason") << " (errno " << reason << ")" << LL_ENDL;
+        if (attempt == 0)
+        {
+            ms_sleep(200);
+        }
+    }
     if (!file.is_open())
     {
         error = "cannot open the file";
         return false;
     }
-    sFile.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+
+    // the size first: anything but the exact size is rejected before it is read
+    file.seekg(0, std::ios::end);
+    const std::streamoff size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    if (size < 0 || (uint64_t)size != FILE_BYTES)
+    {
+        error = "wrong file size " + std::to_string((long long)size);
+        return false;
+    }
+    sFile.resize((size_t)size);
+    file.read(reinterpret_cast<char*>(sFile.data()), size);
+    if (file.gcount() != size)
+    {
+        error = "short read (" + std::to_string((long long)file.gcount()) + " of " + std::to_string((long long)size) + " bytes)";
+        release();
+        return false;
+    }
     if (!LLCloudNoise::verify(sFile.data(), sFile.size(), LL_CLOUD_NOISE_SHA256, sParsed, error))
     {
         release();
