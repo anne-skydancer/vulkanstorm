@@ -880,12 +880,14 @@ constexpr double MOON_PHYSICAL = 2.5e-6;   // full moon / sun illuminance (0.25 
 
 struct PrimaryLightParams
 {
-    double swing = 0.30;   // half-width of the direction/colour swing, degrees of sun elevation: all sun at +swing, all moon at -swing (RenderLightHandoverSwing, 0.05 .. 5)
+    double swing = 0.30;   // half-width of the direction/colour swing, degrees of sun elevation: all sun at +swing, all moon at -swing
+                           // (RenderLightHandoverSwing, 0.05 .. 5)
     double fade  = 0.30;   // width of each shadow fade outside the swing, degrees: the sun's from swing + fade to swing, the moon's
                            // from -swing to -swing - fade                                   (RenderLightHandoverFade, 0 .. 5)
     double horizon_dip_deg = 0.0; // the swing's centre is at -this degrees of sun elevation instead of 0 (the cloud call sets it to the
                                   // cloud layer's horizon dip; the shadow fades are not shifted). 0 for the ground.
-    double dark  = 1e-4;   // the moon is available when its light (before the compensation) reaches dark x luminance(source); smooth from 0
+    double dark  = 1e-4;   // the moon is available when its light (before the compensation) reaches dark x luminance(source);
+                           // smooth from 0
 };
 
 struct PrimaryLightInputs
@@ -937,7 +939,8 @@ inline Vec3 cross_fade(const Vec3& sun_T, const Vec3& moon_T, double moon_gain, 
     return { s * sun_T.x + m * moon_T.x, s * sun_T.y + m * moon_T.y, s * sun_T.z + m * moon_T.z };
 }
 
-// the dip of the horizon seen from height h above a sphere of radius R, degrees: acos(R / (R + h)); 0 for a bad or non-positive input
+// the dip of the horizon seen from height h above a sphere of radius R, degrees: acos(R / (R + h));
+// 0 for a bad or non-positive input
 inline double horizon_dip_degrees(double R, double h)
 {
     if (!(std::isfinite(R) && std::isfinite(h) && R > 0.0 && h > 0.0))
@@ -963,24 +966,26 @@ inline PrimaryLight primary_light(const PrimaryLightInputs& in, const PrimaryLig
     const double sun_len = std::sqrt(detail::dot(in.sun_dir, in.sun_dir));
     const double sun_z = (sun_len > 1e-12 && std::isfinite(sun_len)) ? in.sun_dir.z / sun_len : 1.0;
 
-    // The swing and the shadow fades follow the sun's elevation (a moon's share of the light would go 0 -> 1 within +-0.1 degree, because
-    // the sun's light collapses at the horizon): the band weight is a smoothstep from all sun at +swing to all moon at -swing. The moon only takes over as
-    // far as it is available (up and bright enough): with no usable moon the light keeps the sun's direction (nothing swings to a moon that is
-    // not there) and fades to dark with the sun's transmittance, while the dome and the clouds blend as at night (band_weight).
+    // The swing and the shadow fades follow the sun's elevation (a moon's share of the light would go 0 -> 1 within +-0.1 degree,
+    // because the sun's light collapses at the horizon): the band weight is a smoothstep from all sun at +swing to all moon at
+    // -swing. The moon only takes over as far as it is available (up and bright enough): with no usable moon the light keeps the
+    // sun's direction (nothing swings to a moon that is not there) and fades to dark with the sun's transmittance, while the dome
+    // and the clouds blend as at night (band_weight). Neither the band nor the shadow depends on the sun's size (sun_scale).
     constexpr double RAD2DEG = 180.0 / 3.14159265358979323846;
     const double elev = std::asin(std::min(std::max(sun_z, -1.0), 1.0)) * RAD2DEG;
     const double swing = std::min(std::max(finite_or(p.swing, 0.3), 0.05), 5.0);
     const double fade = std::min(std::max(finite_or(p.fade, 0.3), 0.0), 5.0);
-    // the moon's availability: its light before the compensation against the dark threshold (the disc's visibility is in moon_T, so a
-    // moon rising or setting fades smoothly), and its gain against 1 % of the physical moon (a sky with moon_brightness 0 has no
-    // moon; 0.01 is the smallest moon_brightness that still counts)
+    // the moon's availability: its light before the compensation against the dark threshold (the disc's visibility is in
+    // moon_T, so a moon rising or setting fades smoothly), and its gain against 1 % of the physical moon (a sky with
+    // moon_brightness 0 has no moon; 0.01 is the smallest moon_brightness that still counts)
     const double e_m_raw = luminance({ src.x * moon_T.x, src.y * moon_T.y, src.z * moon_T.z });
     const double avail = (p.dark * y_src > 0.0 ? smoothstep(0.0, p.dark * y_src, e_m_raw) : 0.0)
                        * smoothstep(0.0, 0.01 * MOON_PHYSICAL, gain);
     const double dip = std::min(std::max(finite_or(p.horizon_dip_deg, 0.0), 0.0), 20.0);
     const double band = smoothstep(swing, -swing, elev + dip); // the band is centred on -dip
     const double t = band * avail;                             // direction and colour
-    // the sun's shadow 1 -> 0 from swing + fade to swing; the moon's 0 -> 1 from -swing to -swing - fade, scaled by its availability
+    // the sun's shadow 1 -> 0 from swing + fade to swing; the moon's 0 -> 1 from -swing to -swing - fade, scaled by its
+    // availability
     const double s = std::max(smoothstep(swing, swing + fade, elev), avail * (1.0 - smoothstep(-swing - fade, -swing, elev)));
 
     PrimaryLight out;
@@ -1021,10 +1026,12 @@ struct PrimaryLightSetup
 
 struct PrimaryLightRig
 {
-    PrimaryLight light;        // direction, ground transmittance (moon gain included), shadow strength, moon weight, band weight, moon availability
+    PrimaryLight light;        // direction, ground transmittance (moon gain included), shadow strength, moon weight, band weight,
+                               // moon availability
     Vec3   cloud_T;            // the sun's transmittance at the cloud layer (the clouds' sun term; the moon's half is not used)
     Vec3   cloud_dir;          // the clouds' own light direction (the glow near the light), unit, z up
-    double cloud_moon_weight = 0.0; // the clouds' own band weight: primary_light() on the cloud-layer transmittances, the band centred on -dip
+    double cloud_moon_weight = 0.0; // the clouds' own band weight: primary_light() on the cloud-layer transmittances, the band
+                                    // centred on -dip
     Vec3   color;              // the ground light in sunlight_color's encoding: sRGB(lin(source) x light.T), not clamped
     double gain = 0.0;         // moon_brightness x moon_compensation
     double light_scale = 1.0;  // mix(sun_scale, moon_scale, moon weight t)
@@ -1050,11 +1057,13 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
     const Vec3 cloud_src_lin = srgb_to_linear(Vec3{ std::max(finite_or(cloud_sky.source.x, 0.0), 0.0), std::max(finite_or(cloud_sky.source.y, 0.0), 0.0),
                                                      std::max(finite_or(cloud_sky.source.z, 0.0), 0.0) });
 
+    // the cloud layer's altitude: the cloud light's path and the horizon dip of the clouds' band
+    const double h_cloud = std::min(std::max(finite_or(s.cloud_height_km, 1.5), 0.0), 20.0);
+
     Vec3 sun_T, moon_T, sun_Tc, moon_Tc;
     if (s.physical)
     {
         const LLAtmosphere atm = LLAtmosphere::fromLegacy(s.sky, s.bounds);
-        const double h_cloud = std::min(std::max(finite_or(s.cloud_height_km, 1.5), 0.0), 20.0);
         sun_T = atm.transmittance(0.0, sun_z, sun_disc, 1.0);
         moon_T = atm.transmittance(0.0, moon_z, moon_disc, 1.0);
         // the cloud light thins through the cloud layer's altitude (and keeps half of the legacy path for a clamped rig)
@@ -1095,23 +1104,24 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
     cin.sun_T = sun_Tc;
     cin.moon_T = moon_Tc;
     cin.source = cloud_src_lin;
-    // the cloud layer's horizon dip, acos(R / (R + h)): the clouds' band is centred on -dip instead of 0 (the ground's shadow fades stay)
+    // the cloud layer's horizon dip, acos(R / (R + h)): the clouds' band is centred on -dip instead of 0
+    // (the ground's shadow fades stay)
     PrimaryLightParams cparams = s.params;
     {
         const double R = std::min(std::max(finite_or(s.sky.planet_radius_km, 6360.0), 1000.0), 100000.0); // as the atmosphere clamps it
-        cparams.horizon_dip_deg = horizon_dip_degrees(R, std::min(std::max(finite_or(s.cloud_height_km, 1.5), 0.0), 20.0));
+        cparams.horizon_dip_deg = horizon_dip_degrees(R, h_cloud);
     }
     const PrimaryLight cl = primary_light(cin, cparams);
-    rig.cloud_moon_weight = cl.band_weight; // the clouds' sun term ends with the band (as at night before), the glow direction follows cl.dir
+    // the clouds' sun term ends with the band (as at night before), the glow direction follows cl.dir
+    rig.cloud_moon_weight = cl.band_weight;
     rig.cloud_dir = cl.dir;
     rig.cloud_T = { std::min(std::max(finite_or(sun_Tc.x, 0.0), 0.0), 1.0), std::min(std::max(finite_or(sun_Tc.y, 0.0), 0.0), 1.0),
                     std::min(std::max(finite_or(sun_Tc.z, 0.0), 0.0), 1.0) };
     rig.light_scale = (1.0 - t) * std::min(std::max(finite_or(s.sun_scale, 1.0), 0.0), 100.0)
                     + t * std::min(std::max(finite_or(s.moon_scale, 1.0), 0.0), 100.0);
 
-    // the dome's glow: the sun's, handing over to the moon's with the band (a quarter of its brightness, once the moon is up): 1 above the
-    // band exactly, 0 below it when there is no moon
-
+    // the dome's glow: the sun's, handing over to the moon's with the band (a quarter of its brightness, once the moon is up):
+    // 1 above the band exactly, 0 below it when there is no moon
     rig.haze_glow_factor = (1.0 - tb) + tb * mb * 0.25 * smoothstep(-moon_disc, moon_disc, moon_z);
 
     const Vec3 ground = { in.source.x * rig.light.T.x, in.source.y * rig.light.T.y, in.source.z * rig.light.T.z };

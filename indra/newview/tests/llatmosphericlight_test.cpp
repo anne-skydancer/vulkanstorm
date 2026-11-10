@@ -1532,19 +1532,51 @@ int main()
                 in.sun_dir = dir_of(e);
                 const PrimaryLight g = primary_light(in, ground), c = primary_light(in, cloud);
                 const double u = std::min(std::max((-e - dip15 + 0.3) / 0.6, 0.0), 1.0);
-                check(near(c.moon_weight, u * u * (3.0 - 2.0 * u), 1e-9, 1e-12), "cloud band is centred on -dip", c.moon_weight, e);
+                check(near(c.band_weight, u * u * (3.0 - 2.0 * u), 1e-9, 1e-12), "cloud band is centred on -dip", c.band_weight, e);
                 check(g.shadow_strength == c.shadow_strength, "the shadow fades are not shifted by the dip", e);
                 PrimaryLightParams zero = ground;
                 zero.horizon_dip_deg = 0.0;
                 const PrimaryLight z = primary_light(in, zero);
-                check(z.moon_weight == g.moon_weight && z.dir.x == g.dir.x && z.dir.z == g.dir.z && z.shadow_strength == g.shadow_strength, "dip 0 is the ground band", e);
+                check(z.band_weight == g.band_weight && z.moon_weight == g.moon_weight && z.dir.x == g.dir.x && z.dir.z == g.dir.z && z.shadow_strength == g.shadow_strength, "dip 0 is the ground band", e);
             }
             in.sun_dir = dir_of(-dip15);
-            check(near(primary_light(in, cloud).moon_weight, 0.5, 1e-9), "t_cloud is 0.5 at -dip");
+            check(near(primary_light(in, cloud).band_weight, 0.5, 1e-9), "t_cloud is 0.5 at -dip");
             in.sun_dir = dir_of(-dip15 + 0.31);
-            check(primary_light(in, cloud).moon_weight == 0.0, "t_cloud is 0 above -dip + swing");
+            check(primary_light(in, cloud).band_weight == 0.0, "t_cloud is 0 above -dip + swing");
             in.sun_dir = dir_of(-dip15 - 0.31);
-            check(primary_light(in, cloud).moon_weight == 1.0, "t_cloud is 1 below -dip - swing");
+            check(primary_light(in, cloud).band_weight == 1.0, "t_cloud is 1 below -dip - swing");
+
+            // the dip is limited to 20 degrees (a huge or hostile dip must not push the band out of the sky); not finite or negative: 0
+            {
+                PrimaryLightParams big;
+                big.horizon_dip_deg = 30.0;
+                PrimaryLightParams huge = big;
+                huge.horizon_dip_deg = 1e9;
+                in.sun_dir = dir_of(-20.0);
+                check(near(primary_light(in, big).band_weight, 0.5, 1e-9) && near(primary_light(in, huge).band_weight, 0.5, 1e-9),
+                      "dip limited to 20: the band is half way at -20 degrees", primary_light(in, big).band_weight);
+                in.sun_dir = dir_of(-20.0 + 0.31);
+                check(primary_light(in, big).band_weight == 0.0, "dip limited to 20: the sun's above -20 + swing");
+                in.sun_dir = dir_of(-20.0 - 0.31);
+                check(primary_light(in, big).band_weight == 1.0, "dip limited to 20: the moon's below -20 - swing");
+                PrimaryLightParams bad;
+                for (double d : { -3.0, std::nan(""), -HUGE_VAL })
+                {
+                    bad.horizon_dip_deg = d;
+                    in.sun_dir = dir_of(0.0);
+                    check(near(primary_light(in, bad).band_weight, 0.5, 1e-9), "a negative or non-finite dip is 0: half way at the horizon", d);
+                }
+            }
+
+            // dawn mirrors dusk: the band depends on the elevation alone (the sun on the other side of the sky, rising)
+            for (double e : { 1.0, 0.31, 0.0, -0.3, -dip15 + 0.2, -dip15, -dip15 - 0.2, -dip15 - 0.31, -3.0 })
+            {
+                in.sun_dir = dir_of(e, 90.0);  // sets in the west...
+                const PrimaryLight dusk_l = primary_light(in, cloud);
+                in.sun_dir = dir_of(e, 270.0); // ...rises in the east: the same elevation, the same band
+                const PrimaryLight dawn_l = primary_light(in, cloud);
+                check(dusk_l.band_weight == dawn_l.band_weight && dusk_l.shadow_strength == dawn_l.shadow_strength, "clouds' band: dawn mirrors dusk", e);
+            }
 
             // the chain: a sunset with the moon high; the ground has switched to the moon while the clouds are still the sun's
             LegacySky sky = legacy_of(kSkies[0]);
@@ -1594,8 +1626,10 @@ int main()
             PrimaryLightSetup s = setup_of(sky, dir_of(-20.0), dir_of(40.0, 100.0));
             const PrimaryLightRig night = compute_primary_light(s);
             check(night.light.band_weight == 1.0 && night.light.moon_avail == 1.0 && night.light.moon_weight == 1.0 && night.haze_glow_factor > 0.0, "a moon at night is the light");
-            // daytime is unchanged for every sun size: the glow factor is 1 and the weights are 0, exactly
-            for (double scale : { 1.0, 4.0 })
+            // daytime is unchanged for every sun size: the glow factor is 1 and the weights are 0, exactly. Neither the shadow nor
+            // the handover depends on sun_scale (a 16 times larger sun at 1 degree used to shadow at 0.451, now 1); the size only
+            // reaches light_scale (PCSS), which is limited to 100
+            for (double scale : { 1.0, 4.0, 16.0, 100.0 })
             {
                 for (double e : { 1.0, 5.0 })
                 {
@@ -1604,6 +1638,7 @@ int main()
                     const PrimaryLightRig r = compute_primary_light(d);
                     check(r.haze_glow_factor == 1.0 && r.light.band_weight == 0.0 && r.light.moon_weight == 0.0 && r.cloud_moon_weight == 0.0 && r.light_scale == scale,
                           "daytime: glow factor 1, weights 0 and the sun's size, for any sun_scale", scale, e);
+                    check(r.light.shadow_strength == 1.0, "daytime: the full shadow for any sun_scale (sun_scale 16 at 1 degree included)", scale, e);
                 }
             }
         }
