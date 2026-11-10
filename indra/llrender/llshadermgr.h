@@ -389,6 +389,13 @@ public:
         CLOUD_SHADOW_MAT,                   //  "cloud_shadow_mat"
         CLOUD_SHADOW_PARAMS,                //  "cloud_shadow_params"
         // </Vulkanstorm>
+        // <Vulkanstorm> the sun/moon handover (stage L3): the one light the scene is lit by
+        PRIMARY_LIGHT_DIR,                  //  "primary_light_dir"
+        PRIMARY_LIGHT_COLOR,                //  "primary_light_color"
+        PRIMARY_SHADOW_STRENGTH,            //  "primary_shadow_strength"
+        SUN_MOON_BLEND,                     //  "sun_moon_blend"
+        CLOUD_LIGHT_TRANSMITTANCE,          //  "cloud_light_transmittance"
+        // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
     // clang-format on

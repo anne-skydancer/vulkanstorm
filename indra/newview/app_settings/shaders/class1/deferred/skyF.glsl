@@ -48,7 +48,6 @@ uniform vec3 camPosLocal;
 uniform vec3  lightnorm;
 uniform vec3  sunlight_color;
 uniform vec3  moonlight_color;
-uniform int   sun_up_factor;
 uniform vec3  ambient_color;
 uniform vec3  blue_horizon;
 uniform vec3  blue_density;
@@ -61,7 +60,9 @@ uniform float distance_multiplier;
 uniform float max_y;
 
 uniform vec3  glow;
-uniform float sun_moon_glow_factor;
+// <Vulkanstorm> stage L3: 0 the sun, 1 the moon; the dome hands over with the ground light
+uniform float sun_moon_blend;
+// </Vulkanstorm>
 
 uniform int cube_snapshot;
 
@@ -437,7 +438,9 @@ void main()
         float rel_pos_lightnorm_dot = dot(rel_pos_norm, lightnorm.xyz);
 
         // Initialize temp variables
-        vec3 sunlight = (sun_up_factor == 1) ? sunlight_color : moonlight_color * 0.7; //magic 0.7 to match legacy color
+        // <Vulkanstorm> the sun's light handing over to the moon's with the ground light (L3), no switch at the horizon
+        vec3 sunlight = mix(sunlight_color, moonlight_color * 0.7, sun_moon_blend); //magic 0.7 to match legacy color
+        // </Vulkanstorm>
 
         // Sunlight attenuation effect (hue and brightness) due to atmosphere
         // this is used later for sunlight modulation at various altitudes
@@ -472,7 +475,9 @@ void main()
 
         // Add "minimum anti-solar illumination"
         // For sun, add to glow.  For moon, remove glow entirely. SL-13768
-        haze_glow = (sun_moon_glow_factor < 1.0) ? 0.0 : (sun_moon_glow_factor * (haze_glow + 0.25));
+        // <Vulkanstorm> the sun's glow only (L3): it fades out as the light hands over to the moon
+        haze_glow = (1.0 - sun_moon_blend) * (haze_glow + 0.25);
+        // </Vulkanstorm>
 
         // Haze color above cloud
         color = (blue_horizon * blue_weight * (sunlight + ambient_color)

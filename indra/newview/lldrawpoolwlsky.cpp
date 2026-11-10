@@ -405,7 +405,7 @@ void LLDrawPoolWLSky::renderSkyHazeDeferred(const LLVector3& camPosLocal, F32 ca
         sky_shader->uniform1f(LLShaderMgr::DROPLET_RADIUS, droplet_radius);
         sky_shader->uniform1f(LLShaderMgr::ICE_LEVEL, ice_level);
 
-        sky_shader->uniform1f(LLShaderMgr::SUN_MOON_GLOW_FACTOR, psky->getSunMoonGlowFactor());
+        // <Vulkanstorm/> stage L3: the dome's glow follows sun_moon_blend (applySpecial), not a step at the horizon
 
         sky_shader->uniform1i(LLShaderMgr::SUN_UP_FACTOR, psky->getIsSunUp() ? 1 : 0);
 
@@ -579,7 +579,7 @@ void LLDrawPoolWLSky::renderSkyCloudsDeferred(const LLVector3& camPosLocal, F32 
         }
         // </Vulkanstorm>
 
-        cloudshader->uniform1f(LLShaderMgr::SUN_MOON_GLOW_FACTOR, psky->getSunMoonGlowFactor());
+        // <Vulkanstorm/> stage L3: the clouds' glow follows sun_moon_blend (applySpecial)
 
         /// Render the skydome
         renderDome(camPosLocal, camHeightLocal, cloudshader);

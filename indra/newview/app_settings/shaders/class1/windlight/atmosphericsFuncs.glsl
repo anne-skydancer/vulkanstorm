@@ -43,6 +43,13 @@ uniform float sky_sunlight_scale;
 uniform float sky_ambient_scale;
 uniform int classic_mode;
 
+// <Vulkanstorm> the sun/moon handover (stage L3): the one light the scene is lit by, with its path through the
+// atmosphere already taken (LLEnvironment::updatePrimaryLight), in sunlight_color's encoding; and the share of
+// the sun's shadow that shows (1 full, 0 none while the light swings from one body to the other)
+uniform vec3 primary_light_color;
+uniform float primary_shadow_strength;
+// </Vulkanstorm>
+
 // <Vulkanstorm> cloud shadows (stage L2 of the light study): the cloud transmittance map, a
 // world-anchored 512x512 R8 map of the share of the sun's or the moon's light the flat cloud layer
 // lets through, built every frame by deferred/cloudShadowMapF.glsl (LLCloudShadowMap).
@@ -68,7 +75,9 @@ float cloudShadowTransmittance(vec3 pos_eye)
     {
         vec2 uv = (cloud_shadow_mat * vec4(pos_eye, 1.0)).xy;
         vec2 edge = min(uv, vec2(1.0) - uv);
-        float w = clamp(min(edge.x, edge.y) / cloud_shadow_params.z, 0.0, 1.0);
+        // the map's weight follows the sun's shadow (L3): while the light swings, the mean applies, so the
+        // cloud shadows neither slide with the light nor bump its brightness
+        float w = clamp(min(edge.x, edge.y) / cloud_shadow_params.z, 0.0, 1.0) * primary_shadow_strength;
         if (w > 0.0)
         {
             t = mix(t, textureLod(cloud_shadow_map, uv, cloud_shadow_params.w).r, w);
@@ -95,21 +104,14 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
     vec3  rel_pos_norm = normalize(rel_pos);
     float rel_pos_len  = length(rel_pos);
 
-    vec3  sunlight     = (sun_up_factor == 1) ? sunlight_color: moonlight_color;
-
-    // sunlight attenuation effect (hue and brightness) due to atmosphere
-    // this is used later for sunlight modulation at various altitudes
-    vec3 light_atten = (blue_density + vec3(haze_density * 0.25)) * (density_multiplier * max_y);
-    // I had thought blue_density and haze_density should have equal weighting,
-    // but attenuation due to haze_density tends to seem too strong
+    // <Vulkanstorm> the sun's or the moon's light, through the physical atmosphere (L3). It replaces the
+    // sun/moon pick and the exp(-(blue_density + haze_density/4) density_multiplier max_y / lightnorm.y)
+    vec3  sunlight     = primary_light_color;
+    // </Vulkanstorm>
 
     vec3 combined_haze = max(blue_density + vec3(haze_density), vec3(1e-6));
     vec3 blue_weight   = blue_density / combined_haze;
     vec3 haze_weight   = vec3(haze_density) / combined_haze;
-
-    //(TERRAIN) compute sunlight from lightnorm y component. Factor is roughly cosecant(sun elevation) (for short rays like terrain)
-    float above_horizon_factor = 1.0 / max(1e-6, lightnorm.y);
-    sunlight *= exp(-light_atten * above_horizon_factor);  // for sun [horizon..overhead] this maps to an exp curve [0..1]
 
     // main atmospheric scattering line integral
     float density_dist = rel_pos_len * density_multiplier;

@@ -162,7 +162,8 @@ def random_dir(rnd, min_z):
             return [a / l for a in v]
 
 
-SKY_VS = "#version 400 compatibility\n" + EXTRA + read('class1/deferred/cloudsV.glsl')
+# cloudsV uses srgbF's functions; the viewer attaches that file to the vertex stage of programs that calculate atmospherics
+SKY_VS = "#version 400 compatibility\n" + EXTRA + read('class1/environment/srgbF.glsl') + read('class1/deferred/cloudsV.glsl')
 SKY_FS = "#version 400 compatibility\n" + EXTRA + read('class1/deferred/cloudsF.glsl').replace('/*[EXTRA_CODE_HERE]*/', '')
 # deferred/postDeferredNoTCV.glsl takes the screen triangle from a vertex buffer; here it comes from
 # gl_VertexID, with the same varying (0..1 over the target)
@@ -207,7 +208,7 @@ def check():
         for name, v in (('lightnorm', lightnorm), ('sunlight_color', (1, 1, 1)), ('moonlight_color', (1, 1, 1)), ('ambient_color', (0.3, 0.3, 0.3)),
                         ('blue_horizon', (0.5, 0.5, 0.6)), ('blue_density', (0.25, 0.45, 0.76)), ('glow', (5, 0.001, -0.5)), ('cloud_color', (0.4, 0.4, 0.4))):
             u(sky, name, *v)
-        u(sky, 'haze_horizon', 0.19); u(sky, 'haze_density', 0.7); u(sky, 'density_multiplier', 0.0002); u(sky, 'sun_up_factor', 1); u(sky, 'sun_moon_glow_factor', 1.0)
+        u(sky, 'haze_horizon', 0.19); u(sky, 'haze_density', 0.7); u(sky, 'density_multiplier', 0.0002); u(sky, 'sun_up_factor', 1); u(sky, 'sun_moon_blend', 0.0)
         common(sky)
         attrib3f(0, hit[0] / 1.0, hit[1] / 1.0, hit[2] / 1.0); attrib2f(1, (-z0 + 1) / 2, (-x0 + 1) / 2)
         draw(0, 0, 1)   # GL_POINTS
@@ -254,6 +255,7 @@ void main() {
 }
 """
 DEFAULT_UNIFORMS = dict(lightnorm=(0.3, 0.8, 0.5), sunlight_color=(0.73, 0.78, 0.9), moonlight_color=(0.2, 0.2, 0.3), sun_up_factor=1,
+                        primary_light_color=(0.73, 0.78, 0.9), primary_shadow_strength=1.0,
                         ambient_color=(1.05, 1.05, 1.05), blue_horizon=(0.5, 0.5, 0.6), blue_density=(0.24, 0.45, 0.76), haze_horizon=0.19,
                         haze_density=0.7, cloud_shadow=0.27, density_multiplier=0.00018, distance_multiplier=0.8, max_y=1605.0,
                         glow=(5.0, 0.001, -0.5), scene_light_strength=1.0, sun_moon_glow_factor=1.0, sky_sunlight_scale=1.0,

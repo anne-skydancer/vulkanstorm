@@ -80,6 +80,16 @@ vec3 linear_to_srgb(vec3 cl)
 
 }
 
+// <Vulkanstorm> linear_to_srgb without the clamp to 1 (values above 1 are kept), as skyF.glsl's night_sky_encode
+vec3 linear_to_srgb_unclamped(vec3 cl)
+{
+    cl = max(cl, vec3(0.0));
+    vec3 low_range  = cl * 12.92;
+    vec3 high_range = 1.055 * pow(cl, vec3(1.0 / 2.4)) - 0.055;
+    return mix(high_range, low_range, lessThan(cl, vec3(0.0031308)));
+}
+// </Vulkanstorm>
+
 vec3 ColorFromRadiance(vec3 radiance)
 {
     return vec3(1.0) - exp(-radiance * 0.0001);

@@ -63,7 +63,12 @@ uniform float density_multiplier;
 uniform float max_y;
 
 uniform vec3 glow;
-uniform float sun_moon_glow_factor;
+// <Vulkanstorm> stage L3: 0 the sun, 1 the moon; and the cloud light's transmittance at the cloud layer, cross-faded
+uniform float sun_moon_blend;
+uniform vec3 cloud_light_transmittance;
+vec3 srgb_to_linear(vec3 c);
+vec3 linear_to_srgb_unclamped(vec3 c);
+// </Vulkanstorm>
 
 uniform vec3 cloud_color;
 
@@ -143,11 +148,11 @@ void main()
     haze_glow = pow(haze_glow, glow.z);
     // glow.z should be negative, so we're doing a sort of (1 / "angle") function
 
-    haze_glow *= sun_moon_glow_factor;
-
     // Add "minimum anti-solar illumination"
     // For sun, add to glow.  For moon, remove glow entirely. SL-13768
-    haze_glow = (sun_moon_glow_factor < 1.0) ? 0.0 : (haze_glow + 0.25);
+    // <Vulkanstorm> the sun's glow only (L3): it fades out as the light hands over to the moon
+    haze_glow = (1.0 - sun_moon_blend) * (haze_glow + 0.25);
+    // </Vulkanstorm>
 
     // Increase ambient when there are more clouds
     vec3 tmpAmbient = ambient_color;
@@ -161,9 +166,9 @@ void main()
         (blue_horizon * blue_weight * (sunlight + tmpAmbient) + (haze_horizon * haze_weight) * (sunlight * haze_glow + tmpAmbient));
 
     // CLOUDS
-    sunlight = sunlight_color;
-    off_axis = 1.0 / max(1e-6, lightnorm.y * 2.);
-    sunlight *= exp(-light_atten * off_axis);
+    // <Vulkanstorm> the clouds' sun thins through the atmosphere up to the cloud layer (L3, physical)
+    sunlight = linear_to_srgb_unclamped(srgb_to_linear(sunlight_color) * cloud_light_transmittance);
+    // </Vulkanstorm>
 
     // Cloud color out
     vec3 cloudColorSun = (sunlight * haze_glow) * cloud_color;

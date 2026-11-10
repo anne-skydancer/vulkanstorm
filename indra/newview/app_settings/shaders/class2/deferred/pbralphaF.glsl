@@ -45,9 +45,7 @@ uniform vec3 emissiveColor;
 uniform sampler2D lightMap;
 #endif
 
-uniform int sun_up_factor;
-uniform vec3 sun_dir;
-uniform vec3 moon_dir;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 uniform int classic_mode;
 
 out vec4 frag_color;
@@ -133,7 +131,7 @@ void main()
 
     vec3 color = vec3(0,0,0);
 
-    vec3  light_dir   = (sun_up_factor == 1) ? sun_dir : moon_dir;
+    vec3  light_dir   = primary_light_dir; // <Vulkanstorm/> L3: the sun/moon handover\'s light
     vec3  pos         = vary_position;
 
     waterClip(pos);
