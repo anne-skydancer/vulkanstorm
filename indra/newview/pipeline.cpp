@@ -6463,7 +6463,8 @@ void LLPipeline::setupHWLights()
         LLVector4 light_dir = primary.valid ? LLVector4(primary.dir, 0.0f) : (sun_up ? mSunDir : mMoonDir);
         // </Vulkanstorm>
 
-        mHWLightColors[0] = primary_is_sun ? mSunDiffuse : mMoonDiffuse;
+        // a moon that is not there (down, or moon_brightness 0) lights nothing
+        mHWLightColors[0] = primary_is_sun ? mSunDiffuse : (primary.valid ? mMoonDiffuse * primary.moon_avail : mMoonDiffuse);
 
         LLLightState* light = gGL.getLight(0);
         light->setPosition(light_dir);
