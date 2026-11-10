@@ -361,10 +361,10 @@ static void unload_stochastic_shaders()
 }
 // </Vulkanstorm>
 
-// <Vulkanstorm> PCSS soft shadows: the deferred sun program's shadow filter
+// <Vulkanstorm> shadow method PCSS (RenderShadowMethod 1): the deferred sun program's shadow filter
 static bool use_pcss_shadows()
 {
-    return gSavedSettings.getBOOL("RenderShadowPCSS") && gSavedSettings.getS32("RenderShadowDetail") > 0;
+    return gSavedSettings.getU32("RenderShadowMethod") == 1 && gSavedSettings.getS32("RenderShadowDetail") > 0;
 }
 // </Vulkanstorm>
 

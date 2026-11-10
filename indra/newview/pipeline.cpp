@@ -212,7 +212,7 @@ F32 LLPipeline::CameraFocalLength;
 F32 LLPipeline::CameraFieldOfView;
 F32 LLPipeline::RenderShadowNoise;
 F32 LLPipeline::RenderShadowBlurSize;
-bool LLPipeline::RenderShadowPCSS;          // <Vulkanstorm/> PCSS
+U32 LLPipeline::RenderShadowMethod;          // <Vulkanstorm/> shadow method: 0 Legacy, 1 PCSS
 F32 LLPipeline::RenderShadowPCSSLightSize;  // <Vulkanstorm/> PCSS
 F32 LLPipeline::RenderSSAOScale;
 U32 LLPipeline::RenderSSAOMaxScale;
@@ -639,7 +639,7 @@ void LLPipeline::init()
     connectRefreshCachedSettingsSafe("CameraFieldOfView");
     connectRefreshCachedSettingsSafe("RenderShadowNoise");
     connectRefreshCachedSettingsSafe("RenderShadowBlurSize");
-    connectRefreshCachedSettingsSafe("RenderShadowPCSS");          // <Vulkanstorm/> PCSS
+    connectRefreshCachedSettingsSafe("RenderShadowMethod");        // <Vulkanstorm/> shadow method
     connectRefreshCachedSettingsSafe("RenderShadowPCSSLightSize"); // <Vulkanstorm/> PCSS
     connectRefreshCachedSettingsSafe("RenderSSAOScale");
     connectRefreshCachedSettingsSafe("RenderSSAOMaxScale");
@@ -1312,7 +1312,7 @@ void LLPipeline::refreshCachedSettings()
     CameraFieldOfView = gSavedSettings.getF32("CameraFieldOfView");
     RenderShadowNoise = gSavedSettings.getF32("RenderShadowNoise");
     RenderShadowBlurSize = gSavedSettings.getF32("RenderShadowBlurSize");
-    RenderShadowPCSS = gSavedSettings.getBOOL("RenderShadowPCSS");                    // <Vulkanstorm/> PCSS
+    RenderShadowMethod = gSavedSettings.getU32("RenderShadowMethod");                // <Vulkanstorm/> shadow method
     RenderShadowPCSSLightSize = gSavedSettings.getF32("RenderShadowPCSSLightSize");  // <Vulkanstorm/> PCSS
     RenderSSAOScale = gSavedSettings.getF32("RenderSSAOScale");
     RenderSSAOMaxScale = gSavedSettings.getU32("RenderSSAOMaxScale");
@@ -10124,7 +10124,7 @@ void LLPipeline::renderDeferredLighting()
                 // <Vulkanstorm> PCSS: the shadowing light's angular size, L = 2 tan(half angle):
                 // the physical sun (0.53 degrees) times the sky's sun scale times
                 // RenderShadowPCSSLightSize; the moon uses the same size
-                if (RenderShadowPCSS && !gCubeSnapshot)
+                if (RenderShadowMethod == 1 && !gCubeSnapshot)
                 {
                     static const F32 sun_angular_size = 2.f * tanf(0.5f * 0.53f * DEG_TO_RAD);
                     // stage L3: the size of the light the scene is lit by, handing over from the sun's scale to the moon's
@@ -10137,7 +10137,7 @@ void LLPipeline::renderDeferredLighting()
                 }
                 // the blocker search reads cascades 0-1 and both spot maps a second time as
                 // plain depth, through a sampler object (only the PCSS sun program has these units)
-                const bool pcss_depth_fetch = RenderShadowPCSS && !gCubeSnapshot && gGLManager.mGLVersion >= 3.29f;
+                const bool pcss_depth_fetch = RenderShadowMethod == 1 && !gCubeSnapshot && gGLManager.mGLVersion >= 3.29f;
                 if (pcss_depth_fetch)
                 {
                     bindShadowDepthFetch(sun_shader, true);
@@ -10161,7 +10161,7 @@ void LLPipeline::renderDeferredLighting()
 
         // <Vulkanstorm> PCSS: the blur is the denoiser of the rotated shadow kernel, so it runs
         // without SSAO too, and a blur size of 0 skips both passes. Unchanged with PCSS off.
-        const bool pcss_shadows = RenderShadowPCSS && RenderShadowDetail > 0;
+        const bool pcss_shadows = RenderShadowMethod == 1 && RenderShadowDetail > 0;
         const bool blur_light_map = pcss_shadows ? RenderShadowBlurSize > 0.f : RenderDeferredSSAO;
         if (blur_light_map && !gCubeSnapshot)
         // </Vulkanstorm>
