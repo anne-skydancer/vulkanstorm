@@ -323,6 +323,32 @@ runs:
         mv "${packages[0]}" "$renamed"
         echo "Linux package: $(basename "$renamed")" >> "$GITHUB_STEP_SUMMARY"
 
+    # The volumetric clouds' noise file is required (the viewer exits at start-up without it): open the
+    # package that will be uploaded and check the file in it against the hash in indra/cmake/CloudNoise.cmake,
+    # and that its licence texts are there.
+    - name: Check the cloud noise file in the installer
+      if: env.VIEWER_PACKAGE == 'ON'
+      shell: bash
+      run: |
+        set -euo pipefail
+        shopt -s nullglob
+        dest="$RUNNER_TEMP/installer-contents"
+        rm -rf "$dest"; mkdir -p "$dest"
+        if [ "$RUNNER_OS" = Windows ]; then
+          choco install innoextract --yes --no-progress
+          installers=("${{ inputs.directory }}"/newview/Release/*_Setup.exe)
+          test "${#installers[@]}" = 1 || { echo "Expected one installer, found ${#installers[@]}" >&2; exit 1; }
+          innoextract --silent --extract --output-dir "$dest" "${installers[0]}"
+        else
+          packages=("${{ inputs.directory }}"/newview/*.tar.xz)
+          test "${#packages[@]}" = 1 || { echo "Expected one Linux package, found ${#packages[@]}" >&2; exit 1; }
+          tar -xJf "${packages[0]}" -C "$dest"
+        fi
+        mapfile -t noise < <(find "$dest" -path '*/app_settings/clouds/cloud_noise.vkcn')
+        test "${#noise[@]}" = 1 || { echo "Expected one cloud_noise.vkcn in the package, found ${#noise[@]}" >&2; exit 1; }
+        licences="$(dirname "$(dirname "$(dirname "${noise[0]}")")")/licenses"
+        python scripts/clouds/check_cloud_noise.py "${noise[0]}" --licences "$licences"
+
     - name: Keep qualification builds free of installers
       if: env.VIEWER_PACKAGE != 'ON'
       shell: bash
