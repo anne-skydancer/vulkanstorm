@@ -19,7 +19,6 @@ log). Only the standard library is used.
 
 import datetime
 import io
-import queue
 import struct
 import threading
 import time

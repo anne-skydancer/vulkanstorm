@@ -24,7 +24,7 @@ import analyze_light_check as alc  # noqa: E402
 import viewer_cmdline as vc  # noqa: E402
 import light_check as lc  # noqa: E402
 from fake_viewer import FakeViewer, REGION_DEFAULT, SKIES  # noqa: E402
-from leap_client import (ConnectionLost, LeapError, LeapTimeout, LeapSession, ProtocolError, ViewerGone, binary_dumps, llsd_loads, notation_dumps,  # noqa: E402
+from leap_client import (LeapError, LeapTimeout, LeapSession, ProtocolError, ViewerGone, binary_dumps, llsd_loads, notation_dumps,  # noqa: E402
                          read_frame, write_frame)
 
 SCENARIO = HERE.parent / "scenarios" / "l3_at1_handover.json"
