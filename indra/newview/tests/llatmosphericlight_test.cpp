@@ -15,7 +15,7 @@
 //   - LLAtmosphere::transmittance equals physicalAtmosphereF.glsl on the GPU (llatmosphere_vectors.inc, from
 //     scripts/light/gen_transmittance_vectors.py) to 1e-4 relative, and a 200000-step integral to 1e-6;
 //   - noon identity: lin(source) T(0, 1) = lin(source e^-tau) for the embedded Windlight skies (except a clamped column);
-//   - the ozone default fix, the bounds on hostile input, monotonicity and the disc;
+//   - ozone: the validated stored default forms are recognised and replaced inside the model; the bounds on hostile input, monotonicity and the disc;
 //   - the stateless sun/moon handover (primary_light), its phases, fallback and a 0.01 degree sunset sweep.
 
 #include "llatmosphericlight.h"
@@ -183,6 +183,28 @@ const Sky kSkies[] = {
     { "Phototools- Yellow Stars 01 (negative distance)", { 3.0, 3.0, 1.5 }, { 1.0, 1.0, 2.0 }, 4.779999732971191, 0.00033069998607970774, 5691.0, -13761.5 },
 };
 
+// The absorption layers of a real sky: absorptionConfigDefault() is a = (25000, 0, 0, -1/25000, -2/3),
+// b = (0, 0, 0, -1/15000, 8/3), and the validator clamps a layer's linear term to [0,2] and its constant to [0,1]
+// in place (llsettingssky.cpp:211-232 via llsettingsbase.cpp:709-720 verifyFloatRange; every construction path
+// validates: llsettingsvo.cpp:461, 477, 529-541, 1564-1568). So the skies in use hold these. llinventory is not
+// linked in this standalone test, hence the literals.
+LLAtmosphericLight::DensityProfile validated_ozone(double rising_linear)
+{
+    LLAtmosphericLight::DensityProfile p;
+    p.count = 2;
+    p.layer[0].width_m = 25000.0;
+    p.layer[0].linear = rising_linear; // -1/25000 clamped to 0; or 1/15000 for the changed default
+    p.layer[0].constant = 0.0;         // -2/3 clamped to 0
+    p.layer[1].linear = 0.0;           // -1/15000 clamped to 0
+    p.layer[1].constant = 1.0;         // 8/3 clamped to 1
+    return p;
+}
+
+LLAtmosphericLight::DensityProfile validated_stock_ozone()
+{
+    return validated_ozone(0.0);
+}
+
 // sunlight_color as bindDeferredShader sends it (pipeline.cpp:6427-6442): normalised to a maximum of 1, clamped
 LLAtmosphericLight::LegacySky legacy_of(const Sky& s)
 {
@@ -196,6 +218,7 @@ LLAtmosphericLight::LegacySky legacy_of(const Sky& s)
     sky.density_multiplier = s.density_multiplier;
     sky.max_y = s.max_y;
     sky.distance_multiplier = s.distance_multiplier;
+    sky.absorption = validated_stock_ozone();
     return sky;
 }
 
@@ -314,8 +337,8 @@ SweepResult sunset_sweep(const LLAtmosphericLight::LLAtmosphere& atm, const LLAt
 }
 
 // limits of the sunset sweep's steps (per 0.01 degree of sun travel, i.e. 0.4 s of a 4-hour day cycle)
-const double SWEEP_LIGHT_STEP = 0.06;  // relative step of the ground light while the sun disc is up
-const double SWEEP_JUMP_LIGHT = 0.02;  // the ground light at a jump of direction (> 5 degrees) or shadow (> 0.25)
+const double SWEEP_LIGHT_STEP = 0.06;  // relative step of the ground light while the sun disc is up (measured at most 0.028)
+const double SWEEP_JUMP_LIGHT = 0.005; // the ground light at a jump of direction (> 5 degrees) or shadow (> 0.25) (measured at most 0.0020)
 } // namespace
 
 int main()
@@ -392,7 +415,7 @@ int main()
     // ================= stage AT0 =================
 
     // 1. GLSL vectors: LLAtmosphere::transmittance equals physicalAtmosphereF.glsl on the GPU (float) to 1e-4 relative
-    //    + 1e-7 absolute; 2. and the brute-force integral to 1e-6 absolute
+    //    + 1e-9 absolute; 2. and the brute-force integral to 1e-6 absolute
     const int tcount = static_cast<int>(sizeof(kTransmittanceVectors) / sizeof(kTransmittanceVectors[0]));
     check(tcount >= 128, "enough transmittance vectors", tcount);
     double worst_gpu = 0.0, worst_ref = 0.0, worst_ref_rel = 0.0, worst_smooth = 0.0;
@@ -406,12 +429,12 @@ int main()
         const double got[3] = { t.x, t.y, t.z }, gl[3] = { v[17], v[18], v[19] }, rf[3] = { ref.x, ref.y, ref.z };
         for (int k = 0; k < 3; ++k)
         {
-            if (!near(got[k], gl[k], 1e-4, 1e-7))
+            if (!near(got[k], gl[k], 1e-4, 1e-9))
             {
                 std::printf("transmittance vector %d channel %d: C++ %.9g GLSL %.9g\n", i, k, got[k], gl[k]);
                 check(false, "transmittance equals the GLSL");
             }
-            worst_gpu = std::fmax(worst_gpu, std::fabs(got[k] - gl[k]) / (1e-7 / 1e-4 + std::fabs(gl[k])));
+            worst_gpu = std::fmax(worst_gpu, std::fabs(got[k] - gl[k]) / (1e-9 / 1e-4 + std::fabs(gl[k])));
             if (static_cast<int>(v[11]) != 1) // variant 1 jumps at 12 km, which the brute-force integral itself cannot resolve to 1e-6
             {
                 worst_smooth = std::fmax(worst_smooth, std::fabs(got[k] - rf[k]));
@@ -524,6 +547,39 @@ int main()
         custom.layer[0].linear = 1.0 / 20000.0;
         check(!is_stored_ozone_default(custom), "a custom ozone layer is not the stored default");
 
+        // the forms real skies hold (see validated_ozone): all are recognised and replaced by Bruneton's
+        const DensityProfile validated = validated_stock_ozone(), validated_new = validated_ozone(1.0f / 15000.0f);
+        check(is_stored_ozone_default(validated) && is_stored_ozone_default(validated_new), "the validated stock forms are recognised");
+        check(validated.density(17500.0) == 0.0 && validated.density(30000.0) == 1.0, "a validated sky's ozone is flat (the premise of the replacement)");
+        check(!is_stored_ozone_default(oz), "Bruneton's is not a stored form");
+        DensityProfile near_custom = validated;
+        near_custom.layer[0].linear = 1.0 / 15000.0 * 1.001; // a custom slope 0.1 % off the changed default
+        check(!is_stored_ozone_default(near_custom), "a custom layer close to a stored form is kept");
+        {
+            // Default at 5 and 2 degrees: a sky holding any stored form gives the same light as the Bruneton profile
+            const Vec3 want5[1] = { { 0.0574, 0.0155, 0.00183 } }, want2[1] = { { 0.00310, 0.00030, 5e-6 } };
+            LegacySky base = legacy_of(kSkies[0]);
+            base.source = { 0.8160, 0.8686, 1.0 }; // Default's sunlight normalised to a maximum of 1, as the deferred pass receives it
+            base.absorption = oz;
+            const LLAtmosphere ref = LLAtmosphere::fromLegacy(base);
+            for (const DensityProfile* form : std::initializer_list<const DensityProfile*>{ &stored, &validated, &validated_new })
+            {
+                LegacySky s2 = base;
+                s2.absorption = *form;
+                const LLAtmosphere got = LLAtmosphere::fromLegacy(s2);
+                for (double deg : { 5.0, 2.0, 0.0 })
+                {
+                    const double mu = std::sin(deg * 3.14159265358979323846 / 180.0);
+                    const Vec3 a = got.transmittance(0.0, mu, 0.0047), b = ref.transmittance(0.0, mu, 0.0047);
+                    check(near(a.x, b.x, 1e-12, 1e-15) && near(a.y, b.y, 1e-12, 1e-15) && near(a.z, b.z, 1e-12, 1e-15), "a stored ozone form lights like Bruneton's", a.y, b.y);
+                }
+            }
+            const double s5 = std::sin(5.0 * 3.14159265358979323846 / 180.0), s2 = std::sin(2.0 * 3.14159265358979323846 / 180.0);
+            const Vec3 t5 = ref.transmittance(0.0, s5, 0.0047), t2 = ref.transmittance(0.0, s2, 0.0047);
+            std::printf("Default, Bruneton ozone: T at 5 deg %.4g %.4g %.4g, at 2 deg %.4g %.4g %.4g\n", t5.x, t5.y, t5.z, t2.x, t2.y, t2.z);
+            check(near(t5.x, want5[0].x, 1e-2, 0.0) && near(t5.y, want5[0].y, 1e-2, 0.0) && near(t5.z, want5[0].z, 1e-2, 0.0), "Default T at 5 degrees", t5.y);
+            check(near(t2.x, want2[0].x, 1e-2, 0.0) && near(t2.y, want2[0].y, 1e-2, 0.0) && near(t2.z, want2[0].z, 3e-1, 0.0), "Default T at 2 degrees", t2.y);
+        }
         LegacySky sky = legacy_of(kSkies[0]);
         sky.absorption = stored;
         const LLAtmosphere replaced = LLAtmosphere::fromLegacy(sky);
@@ -537,6 +593,23 @@ int main()
         const LLAtmosphere none = LLAtmosphere::fromLegacy(legacy_of(kSkies[9])); // zero density: no column, no ozone
         check(none.ozone_ext.x == 0.0 && (none.clamped & LLAtmosphere::CLAMP_OZONE) != 0, "ozone never exceeds the column", none.ozone_ext.x);
         check(near(none.transmittance(0.0, 1.0, 0.0047).y, 1.0, 1e-9), "zero density: the zenith is clear");
+        // a zero exp_term with an overflowing exponent is 0, not NaN (0 * inf)
+        DensityProfile overflow;
+        overflow.layer[0].exp_scale = 1e-3;
+        overflow.layer[0].constant = 0.25;
+        check(overflow.density(1e6) == 0.25, "exp_term 0 ignores its exponent", overflow.density(1e6));
+        overflow.layer[0].exp_term = 1.0;
+        check(overflow.density(1e6) == 1.0 && overflow.density(0.0) == 1.0, "a huge exponent clamps to 1");
+        overflow.layer[0].exp_scale = -1e-3;
+        check(near(overflow.density(1e6), 0.25, 1e-12, 1e-12), "a huge negative exponent leaves the constant");
+        // non-finite guards
+        check(std::isfinite(moon_compensation(0.125, std::nan(""), 0.1)) && std::isfinite(moon_compensation(0.125, -0.2, std::nan(""))), "moon_compensation: NaN guards");
+        check(std::isfinite(legacy_transmittance(legacy_of(kSkies[0]), 0.5, std::nan("")).x), "legacy_transmittance: NaN path_scale");
+        AtmosphereBounds badb;
+        badb.max_column = std::nan("");
+        badb.max_ground_haze = -3.0;
+        const LLAtmosphere bounded = LLAtmosphere::fromLegacy(legacy_of(kSkies[0]), badb);
+        check(near(bounded.column.x, LLAtmosphere::fromLegacy(legacy_of(kSkies[0])).column.x, 1e-12, 1e-12) && std::isfinite(bounded.slab_ext), "bad bounds become the defaults", bounded.column.x);
     }
 
     // 5. bounds: hostile inputs give a finite T in [0, 1]
@@ -615,19 +688,51 @@ int main()
         check(a.transmittance(0.0, -d - 1e-6, d).x == 0.0 && a.transmittance(0.0, -0.5, d).x == 0.0, "T is 0 below the horizon and the disc");
         const double mu_h = -std::sqrt(1.0 - (6360.0 / 6361.0) * (6360.0 / 6361.0));
         check(a.transmittance(1.0, mu_h - d - 1e-9, d).x == 0.0, "T is 0 below the horizon and the disc, at altitude");
-        double worst_jump = 0.0, prev = 0.0;
-        bool first = true;
-        for (double mu = -0.012; mu <= 0.012; mu += 1e-5) // continuous across the disc and the horizon
+        // continuity across the disc and the horizon, as a step relative to the largest T of the scan, where T is
+        // large: thin air and a clear sky (T near 1), from the ground and from 3 km. A smooth disc of half width d
+        // steps at most 1.5 x 1e-5 / (2 d) = 1.6e-3 per 1e-5 of mu; a jump of 1e-2 of T fails.
         {
-            const double t = a.transmittance(0.0, mu, d).x;
-            if (!first)
+            LLAtmosphere thin = LLAtmosphere::fromLegacy(legacy_of(kSkies[0]));
+            thin.rayleigh_ext = { thin.rayleigh_ext.x * 1e-3, thin.rayleigh_ext.y * 1e-3, thin.rayleigh_ext.z * 1e-3 };
+            thin.ozone_ext = { thin.ozone_ext.x * 1e-3, thin.ozone_ext.y * 1e-3, thin.ozone_ext.z * 1e-3 };
+            thin.aerosol_ext *= 1e-3;
+            thin.slab_ext *= 1e-3;
+            const LLAtmosphere clear = LLAtmosphere::fromLegacy(legacy_of(kSkies[9])); // zero density
+            const LLAtmosphere* atms[3] = { &thin, &clear, &a };
+            double worst_rel = 0.0, scan_max_thin = 0.0;
+            for (int ai = 0; ai < 3; ++ai)
             {
-                worst_jump = std::fmax(worst_jump, std::fabs(t - prev));
+                for (double h : { 0.0, 3.0 })
+                {
+                    const double mu_hor = -std::sqrt(h * (2.0 * 6360.0 + h)) / (6360.0 + h);
+                    double prev = 0.0, tmax = 0.0, step_max = 0.0;
+                    bool first = true;
+                    for (double mu = mu_hor - d - 0.002; mu <= mu_hor + d + 0.002; mu += 1e-5)
+                    {
+                        const double t = atms[ai]->transmittance(h, mu, d).y;
+                        if (!first)
+                        {
+                            step_max = std::fmax(step_max, std::fabs(t - prev));
+                        }
+                        tmax = std::fmax(tmax, t);
+                        prev = t;
+                        first = false;
+                    }
+                    if (ai < 2)
+                    {
+                        check(tmax > 0.5, "the continuity scan runs where T is large", tmax);
+                        scan_max_thin = std::fmax(scan_max_thin, tmax);
+                        worst_rel = std::fmax(worst_rel, step_max / tmax);
+                    }
+                    else
+                    {
+                        check(tmax > 0.0 && step_max / tmax < 0.02, "T is continuous across the disc (Default, relative to the scan's maximum)", step_max / tmax);
+                    }
+                }
             }
-            prev = t;
-            first = false;
+            std::printf("disc continuity: worst relative step %.3g per 1e-5 in mu (thin air and clear sky, scan max T %.3f)\n", worst_rel, scan_max_thin);
+            check(worst_rel < 2.5e-3, "T is continuous across the disc", worst_rel);
         }
-        check(worst_jump < 2e-3, "T is continuous across the disc", worst_jump);
         check(a.transmittance(0.0, 1.0, 0.0).x > 0.0 && a.transmittance(0.0, 0.0, 0.0).x > 0.0 && a.transmittance(0.0, -1e-9, 0.0).x == 0.0,
               "a point disc: a step at the horizon");
     }
