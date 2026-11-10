@@ -65,6 +65,7 @@ uniform float max_y;
 uniform vec3 glow;
 // <Vulkanstorm> stage L3: the sun's transmittance at the cloud layer, and the clouds' handover to the moon
 uniform vec3 cloud_light_transmittance;
+uniform vec3 cloud_light_dir; // lightnorm of the clouds' own light (the glow follows it)
 uniform float cloud_moon_blend; // the clouds' own handover: the sun still shines on them after the ground's sunset
 vec3 srgb_to_linear(vec3 c);
 vec3 linear_to_srgb_unclamped(vec3 c);
@@ -139,7 +140,7 @@ void main()
     combined_haze = exp(-combined_haze * density_dist);
 
     // Compute haze glow
-    float haze_glow = 1.0 - dot(rel_pos_norm, lightnorm.xyz);
+    float haze_glow = 1.0 - dot(rel_pos_norm, cloud_light_dir.xyz); // <Vulkanstorm/> L3: the clouds' own handover
     // haze_glow is 0 at the sun and increases away from sun
     haze_glow = max(haze_glow, .001);
     // Set a minimum "angle" (smaller glow.y allows tighter, brighter hotspot)
