@@ -198,8 +198,8 @@ public:
         F32 cloud_moon_weight = 0.f;      // the clouds' own band weight (the band is centred on -dip, the cloud layer's horizon dip)
         LLColor3  color;                  // the ground light in sunlight_color's encoding: sRGB(lin(deferred sunlight) x the light's transmittance)
         F32 shadow_strength = 1.f;        // 1 full, 0 none
-        F32 moon_weight = 0.f;            // the band weight: 0 the sun, 1 the moon (or night, with no moon): the dome's blend and the HW light's pick
-        F32 moon_avail = 1.f;             // 0 .. 1: how much of a moon there is (scales the moon's HW light colour)
+        F32 band_weight = 0.f;            // the swing band: 0 the sun, 1 the moon (or night, with no moon): the dome's blend and the HW light's pick
+        F32 moon_avail = 1.f;             // 0 .. 1: how much of a moon there is to take over (up and bright enough)
         F32 haze_glow_factor = 1.f;       // SUN_MOON_GLOW_FACTOR, continuous
         F32 light_scale = 1.f;            // mix(sun_scale, moon_scale, t): PCSS size and the cloud shadow penumbra
         bool shadow_visible = true;       // the sun shadow pass has something to show
