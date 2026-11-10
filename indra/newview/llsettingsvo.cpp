@@ -785,6 +785,14 @@ void LLSettingsVOSky::applySpecial(void *ptarget, bool force)
     shader->uniform3fv(LLShaderMgr::SUNLIGHT_COLOR, sun_light_color);
     shader->uniform3fv(LLShaderMgr::MOONLIGHT_COLOR, moon_light_color);
 
+    // <Vulkanstorm> stage L3: the dome and the clouds hand the sun over to the moon with the ground light
+    {
+        const LLEnvironment::PrimaryLightState& primary = LLEnvironment::instance().getPrimaryLight();
+        shader->uniform1f(LLShaderMgr::SUN_MOON_BLEND, primary.moon_weight);
+        shader->uniform3fv(LLShaderMgr::CLOUD_LIGHT_TRANSMITTANCE, primary.cloud_T);
+    }
+    // </Vulkanstorm>
+
     shader->uniform3fv(LLShaderMgr::CLOUD_COLOR, LLVector3(psky->getCloudColor().mV));
 
     shader = &((LLShaderUniforms*)ptarget)[LLGLSLShader::SG_ANY];
@@ -861,7 +869,17 @@ void LLSettingsVOSky::applySpecial(void *ptarget, bool force)
     shader->uniform1f(LLShaderMgr::REFLECTION_PROBE_AMBIANCE, probe_ambiance);
 
     shader->uniform1i(LLShaderMgr::SUN_UP_FACTOR, getIsSunUp() ? 1 : 0);
-    shader->uniform1f(LLShaderMgr::SUN_MOON_GLOW_FACTOR, getSunMoonGlowFactor());
+    // <Vulkanstorm> stage L3: continuous (the sun's glow handing over to the moon's), not the step at the horizon
+    {
+        const LLEnvironment::PrimaryLightState& primary = LLEnvironment::instance().getPrimaryLight();
+        shader->uniform1f(LLShaderMgr::SUN_MOON_GLOW_FACTOR, primary.valid ? primary.haze_glow_factor : getSunMoonGlowFactor());
+        // the ground light: the sun's or the moon's colour already through the atmosphere (sunlight_color's encoding),
+        // for every shader that lights or hazes (classic and PBR skies alike); the direction is in eye space and is set
+        // by LLPipeline::bindDeferredShader
+        shader->uniform3fv(LLShaderMgr::PRIMARY_LIGHT_COLOR, primary.color.mV);
+        shader->uniform1f(LLShaderMgr::PRIMARY_SHADOW_STRENGTH, primary.shadow_strength);
+    }
+    // </Vulkanstorm>
     shader->uniform1f(LLShaderMgr::DENSITY_MULTIPLIER, getDensityMultiplier());
     shader->uniform1f(LLShaderMgr::DISTANCE_MULTIPLIER, getDistanceMultiplier());
 

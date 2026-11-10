@@ -32,7 +32,7 @@ out vec4 frag_color;
 // Inputs
 in vec2 vary_fragcoord;
 
-uniform vec3 sun_dir;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 uniform float shadow_bias;
 
 vec4 getNorm(vec2 pos_screen);

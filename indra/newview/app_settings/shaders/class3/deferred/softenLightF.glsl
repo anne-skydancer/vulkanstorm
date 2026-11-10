@@ -49,9 +49,7 @@ uniform float ssao_irradiance_max;
 uniform vec4 clipPlane;
 uniform mat3 env_mat;
 uniform mat3  ssao_effect_mat;
-uniform vec3 sun_dir;
-uniform vec3 moon_dir;
-uniform int  sun_up_factor;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 uniform int classic_mode;
 
 in vec2 vary_fragcoord;
@@ -126,7 +124,7 @@ void main()
 
     vec3 colorEmissive = gb.emissive.rgb;
     float envIntensity = gb.envIntensity;
-    vec3  light_dir   = (sun_up_factor == 1) ? sun_dir : moon_dir;
+    vec3  light_dir   = primary_light_dir; // <Vulkanstorm/> L3: the sun/moon handover\'s light
 
     vec4 baseColor     = gb.albedo;
     vec4 spec        = gb.specular; // NOTE: PBR linear Emissive
