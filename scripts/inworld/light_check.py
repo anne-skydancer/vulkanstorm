@@ -32,7 +32,7 @@ import uuid
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from leap_client import LeapError, LeapSession, LeapTimeout, ProtocolError, ViewerGone  # noqa: E402
+from leap_client import ConnectionLost, LeapError, LeapSession, LeapTimeout, ProtocolError, ViewerGone  # noqa: E402
 
 REPO_ROOT = HERE.parents[1]
 
@@ -259,18 +259,20 @@ class Viewer:
         """Drop the cached widget paths of a floater (they change when it is shown, hidden or switches tab)."""
         for k in [k for k in self._paths if (isinstance(k, tuple) and k[1] == floater)]:
             del self._paths[k]
+        self._paths.pop("info", None)
 
     def find_widget(self, floater, name, required=True):
-        """Absolute path of the first view called `name` under `floater`, found with one small getInfo reply on
-        "//floater//name". (A getPaths over a whole floater is a reply of 100 KB or more: the viewer's Windows pipe
-        writer can corrupt big frames, see README.)"""
+        """Absolute path of the first view called `name` under `floater`: LLWindow.getPaths on "//floater//name" lists
+        only that widget's subtree (a few paths), unlike getPaths over a whole floater (100 KB or more) or getInfo on a
+        combo box (LLComboBox::addInfo lists every item). Cached until the floater is shown or hidden."""
         key = ("widget", floater, name)
         if key in self._paths:
             return self._paths[key]
         try:
-            path = str(self.req("LLWindow", "getInfo", path="//%s//%s" % (floater, name)).get("path") or "") or None
+            paths = self.req("LLWindow", "getPaths", under="//%s//%s" % (floater, name)).get("paths") or []
         except LeapError:
-            path = None
+            paths = []
+        path = str(paths[0]) if paths else None
         if path:
             self._paths[key] = path
         elif required:
@@ -278,7 +280,13 @@ class Viewer:
         return path
 
     def widget_info(self, path):
-        return self.req("LLWindow", "getInfo", path=path)
+        """getInfo of a SMALL widget (button, slider, text field). Never for a combo box: its reply lists every item."""
+        if path.rsplit("/", 1)[-1].endswith("Combo"):
+            raise LeapError("getInfo on a combo box is a big reply; not done (%s)" % path)
+        cache = self._paths.setdefault("info", {})
+        if path not in cache:
+            cache[path] = self.req("LLWindow", "getInfo", path=path)
+        return cache[path]
 
     def value_of(self, path):
         reply = self.req("UI", "getValue", path=path)
@@ -414,11 +422,7 @@ class Viewer:
 def check_apis(v, need_stats=False):
     """[(api, ok, detail)] for every API and operation in REQUIRED_OPS."""
     out = []
-    apis = v.req("LLLeap", "getAPIs")
     for api, ops in {**REQUIRED_OPS, **(OPTIONAL_OPS if need_stats else {})}.items():
-        if api not in apis:
-            out.append((api, False, "not registered"))
-            continue
         try:
             detail = v.req("LLLeap", "getAPI", api=api)
             blob = json.dumps(detail.get("ops"), default=str)
@@ -434,7 +438,9 @@ def check_apis(v, need_stats=False):
 # ---------------------------------------------------------------------------------------------
 
 def inventory_roots(v, library_root_id):
-    """(roots, user_roots): folders to search, and the user's own (settings folder, inventory root)."""
+    """(roots, user_roots): folders to search in order, and the user's own. The user's settings folder comes first;
+    the inventory root is used only when there is no settings folder (a search of the root would return every item
+    of the settings folder a second time); the library comes last."""
     user = []
     for ft in ("settings", "root_inv"):
         try:
@@ -443,28 +449,37 @@ def inventory_roots(v, library_root_id):
             continue
         if rid and rid != NULL_UUID:
             user.append(rid)
+            break
     roots = list(user)
     if library_root_id:
         roots.append(library_root_id)
     return roots, user
 
 
+ITEM_LIMIT = 25      # items per inventory reply: each is a few hundred bytes, replies stay small
+
+
 def find_settings_items(v, roots, name):
-    """Settings items whose name matches `name` (exact, case-insensitive first, then by substring)."""
+    """Settings items whose name matches `name`, exact (case-insensitive) matches first. Folders are searched in order
+    and the search stops at the first folder that has an exact match; each reply is limited to ITEM_LIMIT items."""
     exact, partial, seen = [], [], set()
     for root in roots:
         try:
             reply = v.req("LLInventory", "collectDescendantsIf", folder_id=root, name=name, type="settings",
-                          timeout=60)
+                          limit=ITEM_LIMIT, timeout=60)
         except LeapError:
             continue
+        found_exact = False
         for item in (reply.get("items") or {}).values():
             aid = str(item.get("asset_id"))
             if aid in seen or aid == NULL_UUID:
                 continue
             seen.add(aid)
-            (exact if str(item.get("name", "")).lower() == name.lower() else partial).append(
-                (str(item.get("name")), aid))
+            is_exact = str(item.get("name", "")).lower() == name.lower()
+            found_exact = found_exact or is_exact
+            (exact if is_exact else partial).append((str(item.get("name")), aid))
+        if found_exact:
+            break
     return exact + partial
 
 
@@ -473,7 +488,7 @@ def list_settings(v, roots, name=""):
     for root in roots:
         try:
             reply = v.req("LLInventory", "collectDescendantsIf", folder_id=root, name=name, type="settings",
-                          timeout=120)
+                          limit=ITEM_LIMIT, timeout=120)
         except LeapError:
             continue
         for item in (reply.get("items") or {}).values():
@@ -1053,7 +1068,7 @@ class Run:
                     self.capture(spec, step, "sweep", e, floater, az)
             entry["status"] = "ok"
             entry["steps"] = step
-        except (Aborted, ViewerGone, ProtocolError):
+        except (Aborted, ConnectionLost):
             entry["status"] = "aborted"
             raise
         except Exception as exc:  # noqa: BLE001 - a failed sky must not lose the others
@@ -1094,7 +1109,7 @@ def check_widgets(v, rep, floater, widgets):
     for w in widgets:
         p = v.find_widget(floater, w, required=False)
         avail = None
-        if p:
+        if p and not w.endswith("Combo"):      # getInfo of a combo box lists all its items
             try:
                 avail = bool(v.widget_info(p).get("available"))
             except LeapError:
@@ -1125,6 +1140,12 @@ def dry_run(v, sc, args, outdir):
         run = Run(v, sc, outdir, args)
         try:
             dry_run_ui(v, sc, rep, run, args)
+        except ConnectionLost:
+            out = pathlib.Path(outdir)
+            out.mkdir(parents=True, exist_ok=True)
+            write_json_atomic(out / "dry_run.json", [{"check": n, "ok": ok, "detail": d} for n, ok, d in rep.rows]
+                              + [{"check": "connection", "ok": None, "detail": "lost: the checks above are all there is"}])
+            raise
         finally:
             if args.deep:
                 run.cleanup()
@@ -1345,6 +1366,7 @@ def execute(session, args, sc, outdir):
             stale.unlink()
             log("removed a stale STOP file from the run folder")
     v = Viewer(session, abort_file=None if args.restore else str(outdir / "STOP"))
+    session.diag_dir = None if args.restore else outdir
     log("connected; command pump %s; run folder %s" % (session.command_pump, outdir))
     code = 0
     log_start = None

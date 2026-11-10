@@ -147,12 +147,24 @@ be written twice (`apr_file_write` reports EAGAIN with 0 bytes written although 
 middle of a frame shifts everything after it: the decoder meets string bytes where it expects a type marker (the `b'o'`
 and `b'w'` of the log came from path names such as `phototools` and `View`) and the next length prefix is garbage. This
 is inferred from the source and reproduced offline with a damaged frame (`tests/test_inworld.py`); the actual bytes of the
-failed frame were not captured. The script therefore keeps replies small: widgets are found with one `LLWindow.getInfo`
-on `//floater//name` (a few hundred bytes) instead of listing a floater, inventory searches filter by name, FPS is off, and
-`getPaths` is used only under one slider. A frame that cannot be parsed ends the connection as a **protocol error** (exit 5,
-with a hex dump of 64 bytes around the failure in the viewer log, not a claim that the viewer exited); only end of file
-is reported as the pipe closing. Two things can still hit it: a long `--list-skies` (use `--sky-filter`) and any reply of
-the viewer that is large by nature.
+failed frame were not captured: on a protocol error the script now writes the whole bad frame to `bad_frame.bin` in the run
+folder and the last 64 bytes of the previous good frame plus the diagnosis to `bad_frame.txt`, and says "repeated 4 KB
+block at offset N" if the frame contains a chunk written twice. The script keeps replies small:
+- A widget is found with `LLWindow.getPaths` on `//floater//name`, which lists only that widget's subtree. `getInfo` is not
+  used on combo boxes (`LLComboBox::addInfo` lists every item: a big reply with a large sky collection) nor on a whole
+  floater; it is used only on buttons, sliders and text fields, and cached. Combo values are read with `UI.getValue`.
+- Inventory searches filter by name, are limited to 25 items, go to the user's settings folder first (the inventory root
+  only when there is no settings folder), then the library, and stop at the first folder with an exact match.
+- FPS (`LLStats`) is off unless `record_fps`; `LLLeap.getAPIs` is not used.
+
+A frame that cannot be parsed ends the connection as a **protocol error** (exit 5, hex dump in the log, not a claim that the
+viewer exited). `ProtocolError` and `ViewerGone` are not `LeapError`s, so no handler of a failed operation can swallow a dead
+connection and carry on (an earlier version turned a dead connection into FAIL rows and exit 1); a dry run that loses the
+connection writes the rows it had. Only end of file is reported as the pipe closing (exit 3).
+
+Replies that can still be large: `LLLeap.getAPI` (the operation list of an API with the operations' descriptions; LLWindow
+and LLViewerControl are the largest, a few KB), `LLStartUp.getStateTable` (about 1 KB), a `--list-skies` without
+`--sky-filter` (25 items, 5 to 8 KB), and `LLWindow.getPaths` under a slider or a floater widget with many children.
 
 ## Skies of the #447 scenario (`scenarios/l3_at1_handover.json`)
 

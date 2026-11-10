@@ -30,7 +30,8 @@ REGION_DEFAULT = "__Regiondefault__"
 
 class FakeViewer:
     def __init__(self, pop_in_sky=None, snapshot_fails_for=None, drop_ops=(), initial_combo=REGION_DEFAULT,
-                 water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False):
+                 water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0):
+        self.break_after_ops = break_after_ops
         v2p_r, v2p_w = os.pipe()
         p2v_r, p2v_w = os.pipe()
         self.plugin_in = os.fdopen(v2p_r, "rb", buffering=0)
@@ -105,6 +106,11 @@ class FakeViewer:
         if op in self.drop_ops:
             return
         self.log.append((pump, op))
+        self.ops_seen = getattr(self, "ops_seen", 0) + 1
+        if self.break_after_ops and self.ops_seen == self.break_after_ops:
+            with self.lock:       # a frame that is not LLSD
+                self._to_plugin.write(b"20:" + b"garbage garbage garbage"[:20])
+            return
         if self.on_op:
             self.on_op(op, d)
         if pump == self.command_pump:
@@ -215,20 +221,26 @@ class FakeViewer:
         if op == "getPaths":
             under = d.get("under", "")
             if under.startswith("//"):
-                name = under[2:]
-                sel = [p for p in paths if p.startswith(FL + name)]
+                floater, _, widget = under[2:].partition("//")
+                if widget:
+                    sel = [p for p in paths if p.startswith(FL + floater) and (
+                        p.rsplit("/", 1)[-1] == widget or ("/" + widget + "/") in p)]
+                    sel = sorted(sel, key=len)
+                    if not sel:
+                        return self._reply(d, {"error": "getPaths request specified invalid \"under\" path: '%s'" % under})
+                else:
+                    sel = [p for p in paths if p.startswith(FL + floater)]
             else:
                 sel = [p for p in paths if p == under or p.startswith(under + "/")]
             return self._reply(d, {"paths": sel})
-        if op == "getInfo" and path.startswith("//"):
-            floater, _, name = path[2:].partition("//")
-            hit = next((p for p in paths if p.startswith(FL + floater) and p.rsplit("/", 1)[-1] == name), None)
-            if hit is None:
-                return self._reply(d, {"error": "getInfo request specified invalid \"path\": '%s'" % path})
-            return self._reply(d, {"path": hit, "class": "class LLView", "available": True})
         if path and path not in paths:
             return self._reply(d, {"error": "%s request specified invalid \"path\": '%s'" % (op, path)})
         last = path.rsplit("/", 1)[-1]
+        if op == "getInfo" and last.endswith("Combo"):
+            # the real LLComboBox::addInfo lists every item: a big reply
+            return self._reply(d, {"path": path, "class": "class LLComboBox", "available": True,
+                                   "items": [{"label": "sky number %d with a longish name" % i, "value": str(uuid.uuid4())}
+                                             for i in range(300)]})
         if op == "getInfo":
             cls = "class LLLineEditor" if last == "value_editor" else "class LLButton" if (
                 last.startswith(("WL", "WW", "DC", "Paus", "Sun", "Noon", "Revert", "Mid", "htab_"))) else "class LLSliderCtrl"

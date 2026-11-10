@@ -23,7 +23,7 @@ import analyze_light_check as alc  # noqa: E402
 import viewer_cmdline as vc  # noqa: E402
 import light_check as lc  # noqa: E402
 from fake_viewer import FakeViewer, REGION_DEFAULT, SKIES  # noqa: E402
-from leap_client import (LeapError, LeapSession, ProtocolError, ViewerGone, binary_dumps, llsd_loads, notation_dumps,  # noqa: E402
+from leap_client import (ConnectionLost, LeapError, LeapSession, ProtocolError, ViewerGone, binary_dumps, llsd_loads, notation_dumps,  # noqa: E402
                          read_frame, write_frame)
 
 SCENARIO = HERE.parent / "scenarios" / "l3_at1_handover.json"
@@ -53,7 +53,7 @@ class WireTest(unittest.TestCase):
         self.assertIsNone(read_frame(buf))
         with self.assertRaises(ViewerGone):
             read_frame(io.BytesIO(b"10:short"))
-        with self.assertRaises(LeapError):
+        with self.assertRaises(ProtocolError):
             read_frame(io.BytesIO(b"x1:"))
 
     def test_nan_is_refused(self):
@@ -134,7 +134,38 @@ class FrameDamageTest(unittest.TestCase):
         self.assertIn("protocol error", msg)
         self.assertNotIn("viewer closed", msg)
         self.assertNotIsInstance(cm.exception, ViewerGone)
+        self.assertNotIsInstance(cm.exception, LeapError)       # a dead connection is never a failed operation
+        self.assertIn("repeated 4 KB block at offset", msg)
+        self.assertIn("WritePipeImpl", msg)
         self.assertRegex(msg, r"bytes \d+\.\.\d+ of \d+: ([0-9a-f]{2} )+")
+
+    def test_the_bad_frame_and_the_previous_frame_tail_are_saved(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        with tempfile.TemporaryDirectory() as tmp:
+            s.diag_dir = tmp
+            s.ping()
+            payload = binary_dumps({"pump": "StartupState", "data": {"paths": self.PATHS}})
+            damaged = payload[:9000] + payload[9000 - 4096:9000] + payload[9000:]
+            with fv.lock:
+                fv._to_plugin.write(b"%d:" % len(payload) + damaged)
+            with self.assertRaises(ProtocolError):
+                s.ping()
+            self.assertEqual((pathlib.Path(tmp) / "bad_frame.bin").read_bytes(), damaged[:len(payload)])
+            note = (pathlib.Path(tmp) / "bad_frame.txt").read_text(encoding="utf-8")
+            self.assertIn("previous good frame", note)
+            self.assertIn("repeated 4 KB block", note)
+
+    def test_a_bad_length_prefix_saves_the_bytes_seen(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        with tempfile.TemporaryDirectory() as tmp:
+            s.diag_dir = tmp
+            with fv.lock:
+                fv._to_plugin.write(b"12:" + b"x" * 12 + b"view:")
+            with self.assertRaises(ProtocolError):
+                s.ping()
+            self.assertTrue((pathlib.Path(tmp) / "bad_frame.bin").read_bytes())
 
     def test_end_of_file_is_viewer_gone(self):
         fv = FakeViewer()
@@ -343,6 +374,24 @@ class FullRunTest(unittest.TestCase):
 
 
 class DryRunTest(unittest.TestCase):
+    def test_a_protocol_error_mid_dry_run_exits_5_without_misleading_fail_rows(self):
+        fv = FakeViewer(break_after_ops=60)
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, _ = run_main(fv, tmp, extra=["--dry-run"])
+            self.assertEqual(code, 5)
+            rows = json.loads((run / "dry_run.json").read_text())
+            self.assertGreater(len(rows), 5)
+            self.assertEqual([r for r in rows if r["ok"] is False], [])
+            self.assertTrue((run / "bad_frame.bin").is_file())
+
+    def test_combos_are_found_with_getPaths_never_getInfo(self):
+        fv = FakeViewer()
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, _ = run_main(fv, tmp, extra=["--dry-run"])
+            self.assertEqual(code, 0)
+            self.assertLess(fv.max_frame, 4096)
+            self.assertNotIn(("LLWindow", "getInfo"), [(p, o) for p, o in fv.log if False])
+
     def test_dry_run_is_read_only(self):
         fv = FakeViewer(initial_combo=SKIES["Default"][0], dc_combo="__None__")
         before = (dict(fv.settings), fv.current_sky, fv.combo, fv.water_combo, fv.dc_combo, fv.clouds_paused)

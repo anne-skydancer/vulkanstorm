@@ -34,12 +34,22 @@ class LeapTimeout(LeapError):
     pass
 
 
-class ViewerGone(LeapError):
+class ConnectionLost(Exception):
+    """The connection to the viewer is gone. Deliberately not a LeapError: handlers of a failed operation (a reply
+    carrying an "error", a timeout) must never swallow a dead connection and carry on."""
+
+
+class ViewerGone(ConnectionLost):
     """The pipe from the viewer reached end of file (the viewer exited, crashed or closed the pipe)."""
 
 
-class ProtocolError(LeapError):
+class ProtocolError(ConnectionLost):
     """The bytes from the viewer cannot be parsed: the connection is lost, but the viewer has not necessarily exited."""
+
+    def __init__(self, msg, evidence=b"", frame=None):
+        super().__init__(msg)
+        self.evidence = evidence      # bytes seen where a length prefix was expected
+        self.frame = frame            # the whole frame that did not parse
 
 
 def hexdump(data, center=0, span=64):
@@ -48,6 +58,15 @@ def hexdump(data, center=0, span=64):
     chunk = data[lo:lo + span]
     return "bytes %d..%d of %d: %s | %s" % (lo, lo + len(chunk), len(data), chunk.hex(" "),
                                               "".join(chr(b) if 32 <= b < 127 else "." for b in chunk))
+
+
+def find_repeated_block(data, gap=4096, block=64):
+    """Offset i where data[i:i+block] == data[i+gap:i+gap+block], or None: a chunk of `gap` bytes written twice, as the
+    viewer's WritePipeImpl can do on Windows (llprocess.cpp, EAGAIN with 0 bytes reported although the chunk went out)."""
+    for i in range(0, len(data) - gap - block + 1):
+        if data[i:i + block] == data[i + gap:i + gap + block]:
+            return i
+    return None
 
 
 class LlsdParseError(ValueError):
@@ -373,10 +392,10 @@ def read_frame(stream):
         if ch == b":":
             break
         if not ch.isdigit():
-            raise ProtocolError("%r in the length prefix after %r" % (ch, digits))
+            raise ProtocolError("%r in the length prefix after %r" % (ch, digits), evidence=digits + ch)
         digits += ch
         if len(digits) > 12:
-            raise ProtocolError("length prefix too long")
+            raise ProtocolError("length prefix too long", evidence=digits)
     n = int(digits or b"0")
     payload = b""
     while len(payload) < n:
@@ -419,6 +438,8 @@ class LeapSession:
         self._fired_errors = []
         self._next_id = 1
         self._closed = False
+        self.diag_dir = None     # where a protocol error writes bad_frame.bin / bad_frame.txt
+        self._prev_frame = None
         self._broken = None      # why the connection was given up on (protocol error), None if it was EOF
         self._thread = None
 
@@ -449,8 +470,12 @@ class LeapSession:
                 except LlsdParseError as exc:
                     # A frame that cannot be parsed means the byte stream is damaged (the next length prefix cannot
                     # be trusted either): give up with the evidence rather than guess.
-                    raise ProtocolError("frame of %d bytes is not LLSD: %s at offset %d; %s" % (
-                        len(frame), exc, exc.offset, hexdump(frame, exc.offset))) from exc
+                    dup = find_repeated_block(frame)
+                    raise ProtocolError("frame of %d bytes is not LLSD: %s at offset %d; %s%s" % (
+                        len(frame), exc, exc.offset, hexdump(frame, exc.offset),
+                        ("; repeated 4 KB block at offset %d: matches the viewer's WritePipeImpl EAGAIN duplicate "
+                         "(llprocess.cpp)" % dup) if dup is not None else ""), frame=frame) from exc
+                self._prev_frame = frame
                 pump = msg.get("pump")
                 data = msg.get("data")
                 with self._cv:
@@ -477,6 +502,7 @@ class LeapSession:
                     self._cv.notify_all()
         except ProtocolError as exc:
             self._broken = str(exc)
+            self._save_evidence(exc)
             self._log("PROTOCOL ERROR, connection from the viewer given up: %s" % exc)
         except ViewerGone as exc:
             self._log("reader stopped: %s" % exc)
@@ -487,6 +513,24 @@ class LeapSession:
             with self._cv:
                 self._closed = True
                 self._cv.notify_all()
+
+    def _save_evidence(self, exc):
+        """Write what was seen to <diag_dir>: bad_frame.bin (the whole frame that did not parse, or the bytes seen where a
+        length prefix was expected) and bad_frame.txt (the last 64 bytes of the previous good frame)."""
+        d = self.diag_dir
+        if not d:
+            return
+        try:
+            d = __import__("pathlib").Path(d)
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "bad_frame.bin").write_bytes(exc.frame if exc.frame is not None else exc.evidence)
+            nl = chr(10)
+            note = "%s%s%sprevious good frame, last 64 bytes (%d bytes long):%s%s%s" % (
+                exc, nl, nl, len(self._prev_frame or b""), nl, (self._prev_frame or b"")[-64:].hex(" "), nl)
+            (d / "bad_frame.txt").write_text(note, encoding="utf-8")
+            self._log("evidence written to %s (bad_frame.bin, bad_frame.txt)" % d)
+        except OSError as oserr:
+            self._log("could not write the evidence: %s" % oserr)
 
     @property
     def closed(self):
