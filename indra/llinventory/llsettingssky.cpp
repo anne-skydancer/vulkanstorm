@@ -867,8 +867,11 @@ LLSD LLSettingsSky::rayleighConfigDefault()
 
 LLSD LLSettingsSky::absorptionConfigDefault()
 {
-// absorption (ozone) has two linear ramping zones
-    LLSD dflt_absorption_layer_a = createDensityProfileLayer(25000.0f, 0.0f, 0.0f, -1.0f / 25000.0f, -2.0f / 3.0f);
+// absorption (ozone) has two linear ramping zones: 0 below 10 km, up to 1 at 25 km (rising), then down to 0 at 40 km.
+// <Vulkanstorm> the rising zone's slope was -1/25000, which keeps the density at 0 everywhere
+// (Bruneton's is +1/15000). Skies saved before this carry the old layer; llatmosphericlight.h's
+// is_stored_ozone_default() recognises it.
+    LLSD dflt_absorption_layer_a = createDensityProfileLayer(25000.0f, 0.0f, 0.0f, 1.0f / 15000.0f, -2.0f / 3.0f);
     LLSD dflt_absorption_layer_b = createDensityProfileLayer(0.0f, 0.0f, 0.0f, -1.0f / 15000.0f, 8.0f / 3.0f);
     LLSD dflt_absorption;
     dflt_absorption.append(dflt_absorption_layer_a);
