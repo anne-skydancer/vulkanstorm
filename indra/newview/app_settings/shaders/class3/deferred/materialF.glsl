@@ -64,8 +64,8 @@ out vec4 frag_color;
 
 #ifdef HAS_SUN_SHADOW
 float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen);
-float sunShadowedDiffuse(float da, float shadow);
 #endif
+float sunShadowedDiffuse(float da, float shadow);
 
 void sampleReflectionProbesLegacy(inout vec3 ambenv, inout vec3 glossenv, inout vec3 legacyenv,
         vec2 tc, vec3 pos, vec3 norm, float glossiness, float envIntensity, bool transparent, vec3 amblit_linear);
