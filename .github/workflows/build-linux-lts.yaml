@@ -23,6 +23,7 @@ on:
       - 'doc/**'
       - '**/*.md'
       - 'scripts/ci_*'
+      - 'scripts/inworld/**'
       - 'scripts/tests/ci_*'
       - 'scripts/tests/test_ci_files.py'
       - 'scripts/tests/test_linux_lts_packages.py'
