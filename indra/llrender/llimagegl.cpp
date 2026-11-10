@@ -343,6 +343,7 @@ S32 LLImageGL::dataFormatBits(S32 dataformat)
     case GL_RGB16F:                                 return 48;
     case GL_RGBA16F:                                return 64;
     case GL_R32F:                                   return 32;
+    case GL_R32UI:                                  return 32;      // <Vulkanstorm/> the stochastic mask table
     case GL_RG32F:                                  return 64;
     case GL_RGB32F:                                 return 96;
     case GL_RGBA32F:                                return 128;

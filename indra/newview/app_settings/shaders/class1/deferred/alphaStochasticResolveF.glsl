@@ -21,39 +21,37 @@
 
 out vec4 frag_color;
 
-// The accumulated colour of this frame (alpha x colour, alpha) averaged over the samples, blended
-// with the last frame's blended colour where this pixel's nearest transparent surface was, moved
-// by the camera's motion alone (the surfaces' own motion is not reprojected) and clamped to the
-// 3 x 3 neighbourhood of this frame as a TAA's history is, so that what moved shows no ghost
-// beyond what the neighbourhood holds. The design and the weights are the author's Aurora Viewer's
-// (oit_stochastic.wgsl `reprojected`, cs_resolve): the result is the next frame's history and the
-// composite's accumulated colour, whose alpha correction (total alpha over this alpha) is made there
-// with the current frame's total alpha, so that an alpha change is never ghosted.
+// The transparency's part of the stochastic engine's temporal resolve (stochasticResolveUtilF.glsl).
+// The accumulated colour of this frame (alpha x colour, alpha, averaged over the samples once by
+// alphaStochasticCurrentF.glsl) is blended with the last frame's blended colour where this
+// pixel's nearest transparent surface was, moved by the camera's motion alone (the surfaces' own
+// motion is not reprojected) and clamped to the 3 x 3 neighbourhood of this frame as a TAA's
+// history is. The result is the next frame's history and the composite's accumulated colour,
+// whose alpha correction (total alpha over this alpha) is made there with the current frame's
+// total alpha, so that an alpha change is never ghosted. This file gives the value of this frame
+// and the reprojection depth (the nearest stochastic depth); the rest is the engine's.
 
-uniform sampler2DMS alpha_st_accum;  // alpha x colour, alpha, additive, over the passes' samples
-uniform sampler2DMS alpha_st_depth;  // the stochastic depth: the nearest transparent surface, or the opaque one
-uniform sampler2D   alpha_st_history; // the last frame's blended colour
-uniform int   st_samples_hw;         // samples of the targets
-uniform int   st_samples;            // samples in all, over the iterations
-uniform mat4  st_reproj;             // this frame's clip space to the last frame's
-uniform float st_weight;             // the current frame's weight
-uniform int   st_history_valid;      // the history holds the last frame, of the same size
+uniform sampler2D   alpha_st_current;  // this frame's averaged accumulation (RGBA32F)
+uniform sampler2DMS alpha_st_depth;    // the stochastic depth: the nearest transparent surface, or the opaque one
+uniform sampler2D   alpha_st_history;  // the last frame's blended colour
+uniform int         st_samples_hw;     // samples of the targets
 
-vec4 st_resolve_pixel(ivec2 px)
+bool stoch_has_history();
+bool stoch_reproject(ivec2 px, float z, ivec2 size, out vec4 pp, out vec2 puv);
+vec4 stoch_history_nearest(sampler2D history, vec2 puv, ivec2 size);
+void stoch_neighbourhood(ivec2 px, ivec2 size, vec4 cur, out vec4 mn, out vec4 mx);
+vec4 stoch_accumulate(vec4 hist, vec4 mn, vec4 mx, vec4 cur);
+
+vec4 stoch_current(ivec2 px)
 {
-    vec4 sum = vec4(0.0);
-    for (int s = 0; s < st_samples_hw; ++s)
-    {
-        sum += texelFetch(alpha_st_accum, px, s);
-    }
-    return sum / float(max(st_samples, 1));
+    return texelFetch(alpha_st_current, px, 0);
 }
 
 void main()
 {
     ivec2 px = ivec2(gl_FragCoord.xy);
-    vec4 cur = st_resolve_pixel(px);
-    if (st_history_valid == 0 || cur.a <= 0.0)
+    vec4 cur = stoch_current(px);
+    if (!stoch_has_history() || cur.a <= 0.0)
     {
         frag_color = cur;
         return;
@@ -64,35 +62,16 @@ void main()
         z = min(z, texelFetch(alpha_st_depth, px, s).r);
     }
     ivec2 size = textureSize(alpha_st_history, 0);
-    if (z >= 1.0)
+    vec4 pp;
+    vec2 puv;
+    if (z >= 1.0 || !stoch_reproject(px, z, size, pp, puv))
     {
         frag_color = cur;
         return;
     }
-    vec4 clip = vec4((vec2(px) + 0.5) / vec2(size) * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
-    vec4 pp = st_reproj * clip;
-    if (pp.w <= 0.0)
-    {
-        frag_color = cur;
-        return;
-    }
-    vec2 puv = pp.xy / pp.w * 0.5 + 0.5;
-    if (puv.x < 0.0 || puv.y < 0.0 || puv.x >= 1.0 || puv.y >= 1.0)
-    {
-        frag_color = cur;
-        return;
-    }
-    vec4 old = texelFetch(alpha_st_history, ivec2(puv * vec2(size)), 0);
-    vec4 mn = cur;
-    vec4 mx = cur;
-    for (int dy = -1; dy <= 1; ++dy)
-    {
-        for (int dx = -1; dx <= 1; ++dx)
-        {
-            vec4 c = st_resolve_pixel(clamp(px + ivec2(dx, dy), ivec2(0), size - ivec2(1)));
-            mn = min(mn, c);
-            mx = max(mx, c);
-        }
-    }
-    frag_color = mix(clamp(old, mn, mx), cur, st_weight);
+    vec4 old = stoch_history_nearest(alpha_st_history, puv, size);
+    vec4 mn;
+    vec4 mx;
+    stoch_neighbourhood(px, size, cur, mn, mx);
+    frag_color = stoch_accumulate(old, mn, mx, cur);
 }
