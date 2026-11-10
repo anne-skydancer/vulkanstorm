@@ -24,7 +24,7 @@ These complete the rules above for every agent (planner, surveyor, coder, review
 
 - Git: never force-push, on any branch. Bring base changes into a branch only by cherry-picking (`-x`) or by re-cutting the branch: a new branch from the base tip with the PR's commits cherry-picked, and a new PR that supersedes the old one. Once a PR is open, add commits only when the owner asks.
 - Worktrees go in `<repo>\work\<name>`, never beside the repository.
-- Compiled fixture and integration tests run with TEMP/TMP pointing to the repo's `.fixture-tmp` folder, which is excluded from Defender.
+- Compiled fixture and integration tests run with `TMPDIR` (POSIX) or `TEMP`/`TMP` (Windows) pointing to the repo's `.fixture-tmp` folder, which is excluded from Defender.
 - Smoke launches use a scratch APPDATA/LOCALAPPDATA with no saved credentials, so they can never log in. Changes that touch rendering, shutdown or login need a Release build that reaches the world (owner-assisted) before they are called safe.
 - Before adding cleanup, frees, caching or shared/static state to a function, check every caller and every thread that runs it (worker threads with shared GL contexts call the same `shutdown()` paths).
 - OpenGL behaviour outside the change must stay identical. Renderer-free logic gets equivalence tests where a GLSL twin exists.
