@@ -11466,7 +11466,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>RenderLightHandoverSwing</key>
     <map>
       <key>Comment</key>
-      <string>Debug: half-width of the sun-to-moon swing, in degrees of sun elevation: the light's direction and colour change from the sun's at +this to the moon's at -this (a smooth S-curve; with no usable moon the light stays with the sun). Limited to 0.05 .. 5. The Sky tab (devel).</string>
+      <string>Debug: half-width of the sun-to-moon swing, in degrees of sun elevation: the light's direction and colour change from the sun's at +this to the moon's at -this (a smooth S-curve; with no usable moon the light stays with the sun). Limited to 0.05 .. 5 (the Sky tab slider goes to 2). The Sky tab (devel).</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -11477,7 +11477,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>RenderLightHandoverFade</key>
     <map>
       <key>Comment</key>
-      <string>Debug: width of each shadow fade outside the swing, in degrees of sun elevation (the sun's shadow fades out from swing + this to swing, the moon's in from -swing to -swing - this). Limited to 0 .. 5.</string>
+      <string>Debug: width of each shadow fade outside the swing, in degrees of sun elevation (the sun's shadow fades out from swing + this to swing, the moon's in from -swing to -swing - this). Limited to 0 .. 5 (the Sky tab slider goes to 2).</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
