@@ -15,7 +15,7 @@
  * occlude), times the share of the body's disc that is above the horizon. The atmosphere is the
  * uniform pa_atm, which LLAtmosphere holds field for field. Altitudes are in km, the profiles'
  * widths and scales in metres, as in the EEP settings. Segmented 8-point Gauss-Legendre along the
- * path, cut at every profile kink, at the slab's 0.75 H and H, at 4, 10 and 20 scale heights of every
+ * path, cut at every profile kink (layer boundary, clamp crossings), at the slab's 0.75 H and H, at 4, 10 and 20 scale heights of every
  * exponential layer, where a ray crosses the ground and at the perigee of a downward ray.
  */
 
@@ -56,15 +56,20 @@ const float PA_GL_X[8] = float[8](-0.9602898564975363, -0.7966664774136267, -0.5
 const float PA_GL_W[8] = float[8](0.1012285362903763, 0.2223810344533745, 0.3137066458778873, 0.3626837833783620,
                                   0.3626837833783620, 0.3137066458778873, 0.2223810344533745, 0.1012285362903763);
 
+// a layer's expression before the clamp (h in metres)
+float pa_layer_value(PADensityProfile p, int i, float h)
+{
+    // no exp when exp_term is 0 (0 * inf is NaN); the exponent is bounded so e^x stays finite
+    float e = p.exp_term[i] != 0.0 ? p.exp_term[i] * exp(clamp(p.exp_scale[i] * h, -80.0, 80.0)) : 0.0;
+    return e + p.linear_term[i] * h + p.constant_term[i];
+}
+
 // clamp(exp_term e^(exp_scale h) + linear h + constant, 0, 1); layer 0 below its width
 float pa_density(PADensityProfile p, float h_km)
 {
     float h = h_km * 1000.0;
     int i = (p.count > 1 && h >= p.width[0]) ? 1 : 0;
-    // no exp when exp_term is 0 (0 * inf is NaN); the exponent is bounded so e^x stays finite
-    float e = p.exp_term[i] != 0.0 ? p.exp_term[i] * exp(clamp(p.exp_scale[i] * h, -80.0, 80.0)) : 0.0;
-    float d = e + p.linear_term[i] * h + p.constant_term[i];
-    return clamp(d, 0.0, 1.0);
+    return clamp(pa_layer_value(p, i, h), 0.0, 1.0);
 }
 
 void pa_add_altitude(inout float alts[PA_MAX_ALT], inout int n, float h_km, float top_km)
@@ -76,8 +81,12 @@ void pa_add_altitude(inout float alts[PA_MAX_ALT], inout int n, float h_km, floa
     }
 }
 
-// the altitudes where a profile needs a cut: the layer boundary, the clamps of its linear layers
-// (inside the layer) and, for an exponential layer, 4, 10 and 20 scale heights
+// The altitudes where a profile needs a cut: the layer boundary, the clamps (where the unclamped
+// expression is 0 or 1, inside the layer) and, for an exponential layer, 4, 10 and 20 scale heights.
+// A linear layer has its clamps in closed form. A layer with an exponential term has f'' of the sign
+// of exp_term, so at most one stationary point; split there, each part is monotone, and a sign change
+// of f - level across it holds one crossing, found by 32 bisections. The stock forms (exp_term in
+// (0, 1], decaying, no linear or constant term) are always within [0, 1] and have none.
 void pa_profile_cuts(PADensityProfile p, float top_km, inout float alts[PA_MAX_ALT], inout int n)
 {
     int layers = p.count > 1 ? 2 : 1;
@@ -87,16 +96,67 @@ void pa_profile_cuts(PADensityProfile p, float top_km, inout float alts[PA_MAX_A
     }
     for (int i = 0; i < layers; ++i)
     {
-        if (p.exp_term[i] == 0.0 && p.linear_term[i] != 0.0)
+        float lo = (i == 0) ? 0.0 : p.width[0];
+        float hi = (layers == 2 && i == 0) ? p.width[0] : top_km * 1000.0;
+        if (p.exp_term[i] == 0.0)
         {
-            float lo = (i == 0) ? 0.0 : p.width[0];
-            float hi = (layers == 2 && i == 0) ? p.width[0] : 1e30;
-            for (int level = 0; level < 2; ++level)
+            if (p.linear_term[i] != 0.0)
             {
-                float h = (float(level) - p.constant_term[i]) / p.linear_term[i];
-                if (h > lo && h < hi)
+                for (int level = 0; level < 2; ++level)
                 {
-                    pa_add_altitude(alts, n, h * 0.001, top_km);
+                    float h = (float(level) - p.constant_term[i]) / p.linear_term[i];
+                    if (h > lo && h < hi)
+                    {
+                        pa_add_altitude(alts, n, h * 0.001, top_km);
+                    }
+                }
+            }
+        }
+        else if (!(p.linear_term[i] == 0.0 && p.constant_term[i] == 0.0 && p.exp_scale[i] <= 0.0
+                   && p.exp_term[i] > 0.0 && p.exp_term[i] <= 1.0))
+        {
+            float br[3];
+            int nb = 0;
+            br[nb++] = lo;
+            if (p.exp_scale[i] != 0.0 && p.linear_term[i] != 0.0)
+            {
+                float q = -p.linear_term[i] / (p.exp_term[i] * p.exp_scale[i]);
+                if (q > 0.0)
+                {
+                    float x = log(q) / p.exp_scale[i];
+                    if (x > lo && x < hi)
+                    {
+                        br[nb++] = x;
+                    }
+                }
+            }
+            br[nb++] = hi;
+            for (int j = 0; j + 1 < nb; ++j)
+            {
+                for (int level = 0; level < 2; ++level)
+                {
+                    float a = br[j];
+                    float b = br[j + 1];
+                    float ga = pa_layer_value(p, i, a) - float(level);
+                    float gb = pa_layer_value(p, i, b) - float(level);
+                    if ((ga < 0.0 && gb > 0.0) || (ga > 0.0 && gb < 0.0))
+                    {
+                        for (int it = 0; it < 32; ++it)
+                        {
+                            float m = 0.5 * (a + b);
+                            float gm = pa_layer_value(p, i, m) - float(level);
+                            if ((gm < 0.0) == (ga < 0.0))
+                            {
+                                a = m;
+                                ga = gm;
+                            }
+                            else
+                            {
+                                b = m;
+                            }
+                        }
+                        pa_add_altitude(alts, n, 0.5 * (a + b) * 0.001, top_km);
+                    }
                 }
             }
         }
