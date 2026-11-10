@@ -47,8 +47,10 @@ shadows depend only on the world and the sky, never on the camera.
   clouds); the shader or the target failed to load. Only a 2D R8 target, mips and a fragment pass are
   needed (GL 3.0), so the GL3 tier keeps the shadows. Shaders that do not call `calcAtmosphericVars` for the
   sun never see the sampler.
-- **Debug settings only** (no Preferences entry): `RenderCloudShadowStrength` (1.0), `RenderCloudShadowPenumbraHeight`
-  (1500 m), `RenderCloudShadowExtent` (4096 m).
+- **Settings:** `RenderCloudShadowStrength` (1.0), `RenderCloudShadowPenumbraHeight` (1500 m),
+  `RenderCloudShadowExtent` (4096 m). On devel they are tuned live in the **Sky** tab (Preferences →
+  Graphics → Sky), a tuning panel that is never integrated into vkstorm-release. The values settled there
+  become the defaults. In release builds they remain debug settings with no Preferences entry.
 
 ## Tests
 
@@ -104,7 +106,7 @@ is judged in-world.
 - Walking and turning change nothing: no crawl, no swimming.
 - Flying up or sideways: the sky's clouds drift (the parallax), the shadows do not slide against them.
 - Overcast presets look overcast.
-- Tuning: `RenderCloudShadowStrength`, `RenderCloudShadowPenumbraHeight`, `RenderCloudShadowExtent`.
+- Tuning: `RenderCloudShadowStrength`, `RenderCloudShadowPenumbraHeight`, `RenderCloudShadowExtent`, live in the devel-only Sky tab (Preferences → Graphics → Sky).
 
 ## Build and launch checks
 

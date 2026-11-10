@@ -2189,6 +2189,142 @@ If you do not understand the distinction then leave this control alone."
          top_pad="5"
          width="477"/>
     </panel>
+
+<!--Sky (tuning)-->
+    <panel
+     top_pad="5"
+     bottom="-1"
+     left="1"
+     right="-1"
+     follows="all"
+     label="Sky"
+     name="Sky panel" >
+      <text
+       follows="left|top"
+       height="16"
+       layout="topleft"
+       left="10"
+       name="SkyTuningNote"
+       top="8"
+       width="500">
+        Tuning panel: values found here become the defaults.
+      </text>
+      <text
+       follows="left|top"
+       font="SansSerifBold"
+       height="16"
+       layout="topleft"
+       left="10"
+       name="SkyCloudsLabel"
+       top_pad="14"
+       width="500">
+        Clouds
+      </text>
+      <slider
+       control_name="RenderCloudShadowStrength"
+       decimal_digits="2"
+       follows="left|top"
+       height="16"
+       increment="0.05"
+       label="Cloud shadow strength"
+       label_width="170"
+       layout="topleft"
+       left="10"
+       max_val="1"
+       min_val="0"
+       name="CloudShadowStrength"
+       tool_tip="How much of the clouds' dimming reaches the ground light. 1 = physical, 0 = no cloud shadows."
+       top_pad="8"
+       width="500"/>
+      <slider
+       control_name="RenderCloudShadowPenumbraHeight"
+       decimal_digits="0"
+       follows="left|top"
+       height="16"
+       increment="50"
+       label="Cloud layer height (m)"
+       label_width="170"
+       layout="topleft"
+       left="10"
+       max_val="5000"
+       min_val="100"
+       name="CloudShadowPenumbra"
+       tool_tip="Height of the flat cloud layer above the ground, in metres. Higher = softer cloud shadow edges."
+       top_pad="8"
+       width="500"/>
+      <slider
+       control_name="RenderCloudShadowExtent"
+       decimal_digits="0"
+       follows="left|top"
+       height="16"
+       increment="512"
+       label="Cloud shadow extent (m)"
+       label_width="170"
+       layout="topleft"
+       left="10"
+       max_val="16384"
+       min_val="1024"
+       name="CloudShadowExtent"
+       tool_tip="Width of the area around the camera covered by the cloud shadow map, in metres. Beyond it the mean cloud shadow applies."
+       top_pad="8"
+       width="500"/>
+      <text
+       follows="left|top"
+       font="SansSerifBold"
+       height="16"
+       layout="topleft"
+       left="10"
+       name="SkySoftShadowsLabel"
+       top_pad="14"
+       width="500">
+        Soft shadows
+      </text>
+      <slider
+       control_name="RenderShadowBlurSize"
+       decimal_digits="1"
+       follows="left|top"
+       height="16"
+       increment="0.1"
+       label="Shadow blur size"
+       label_width="170"
+       layout="topleft"
+       left="10"
+       max_val="4"
+       min_val="0"
+       name="ShadowBlurSize"
+       tool_tip="Scale of the shadow softening blur. 0 = no blur."
+       top_pad="8"
+       width="500"/>
+      <slider
+       control_name="RenderShadowPCSSLightSize"
+       decimal_digits="2"
+       follows="left|top"
+       height="16"
+       increment="0.05"
+       label="Soft shadow light size"
+       label_width="170"
+       layout="topleft"
+       left="10"
+       max_val="3"
+       min_val="0.1"
+       name="ShadowPCSSLightSize"
+       tool_tip="Multiplier of the sun and moon's apparent size for soft (PCSS) shadows. Larger = softer penumbra."
+       top_pad="8"
+       width="500"/>
+      <button
+       follows="left|top"
+       height="23"
+       label="Reset to defaults"
+       layout="topleft"
+       left="10"
+       name="SkyResetDefaults"
+       tool_tip="Set every slider on this tab back to its default value."
+       top_pad="20"
+       width="140">
+        <button.commit_callback
+         function="Pref.ResetSkyTuning" />
+      </button>
+    </panel>
 </tab_container>
 
 <!-- These two check boxes are dummies and will never be displayed.  They are here so the control variables
