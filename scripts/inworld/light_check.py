@@ -104,7 +104,21 @@ def write_json_atomic(path, obj):
         json.dump(obj, f, indent=2, default=str)
         f.flush()
         os.fsync(f.fileno())
-    os.replace(tmp, path)
+    delay = 0.02
+    for attempt in range(10):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            # Windows: another process (a concurrent run, a virus scanner) briefly holds the target. About 1 s in all.
+            if attempt == 9:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+                raise
+            time.sleep(delay)
+            delay = min(delay * 1.5, 0.2)
 
 
 class Aborted(Exception):

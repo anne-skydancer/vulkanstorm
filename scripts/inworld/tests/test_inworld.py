@@ -14,6 +14,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 import uuid
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -452,6 +453,37 @@ class FullRunTest(unittest.TestCase):
             self.assertTrue(any("RenderLightHandoverSwing" in w for w in info["warnings"]), info["warnings"])
             self.assertEqual(info["knobs"]["RenderMoonAdaptationDepth"], 8.0)
             self.assertEqual(fv.settings["RenderMoonAdaptationDepth"][1], 6.0)   # restored
+
+
+class WriteJsonAtomicTest(unittest.TestCase):
+    def test_a_briefly_denied_replace_is_retried(self):
+        real = lc.os.replace
+        calls = []
+
+        def flaky(src, dst):
+            calls.append(1)
+            if len(calls) <= 2:
+                raise PermissionError(13, "Access is denied")
+            return real(src, dst)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = pathlib.Path(tmp) / "restore.json"
+            with mock.patch.object(lc.os, "replace", flaky):
+                lc.write_json_atomic(target, {"a": 1})
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"a": 1})
+            self.assertEqual(len(calls), 3)
+            self.assertFalse((pathlib.Path(tmp) / "restore.json.tmp").exists())
+
+    def test_a_replace_that_is_always_denied_raises_and_leaves_no_tmp_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = pathlib.Path(tmp) / "restore.json"
+            t0 = time.monotonic()
+            with mock.patch.object(lc.os, "replace", side_effect=PermissionError(13, "Access is denied")) as m:
+                with self.assertRaises(PermissionError):
+                    lc.write_json_atomic(target, {"a": 1})
+            self.assertEqual(m.call_count, 10)
+            self.assertLess(time.monotonic() - t0, 3.0)
+            self.assertFalse(target.exists())
+            self.assertFalse((pathlib.Path(tmp) / "restore.json.tmp").exists())
 
 
 class ScalarReplyTest(unittest.TestCase):
