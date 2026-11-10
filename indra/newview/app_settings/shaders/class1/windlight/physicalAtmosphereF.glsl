@@ -5,18 +5,27 @@
  * Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
  *
  * The physical atmosphere's transmittance (stage AT0 of the item-4 plan): the GLSL twin of
- * LLAtmosphericLight::LLAtmosphere::transmittance (llatmosphericlight.h). Functions only. It is
+ * LLAtmosphericLight::LLAtmosphere::transmittance (llatmosphericlight.h), the excess factor of
+ * the capped columns included. Functions only. It is
  * NOT registered with the shader manager and no viewer shader includes it yet (AT2 does); it is
  * compiled and run on the GPU by scripts/light/gen_transmittance_vectors.py, whose vectors hold
  * the C++ equal to it (indra/newview/tests/llatmosphericlight_test.cpp).
  *
- * pa_transmittance(h_km, mu, disc_sin): the transmittance, per channel, from altitude h_km above
- * the ground towards a body at zenith cosine mu, to the top of the atmosphere (the ground does not
- * occlude), times the share of the body's disc that is above the horizon. The atmosphere is the
- * uniform pa_atm, which LLAtmosphere holds field for field. Altitudes are in km, the profiles'
- * widths and scales in metres, as in the EEP settings. Segmented 8-point Gauss-Legendre along the
- * path, cut at every profile kink (layer boundary, clamp crossings), at the slab's 0.75 H and H, at 4, 10 and 20 scale heights of every
+ * pa_transmittance(h_km, mu, disc_sin, path_factor): the transmittance, per channel, from altitude
+ * h_km above the ground towards a body at zenith cosine mu, to the top of the atmosphere (the ground
+ * does not occlude), times the share of the body's disc that is above the horizon, times the excess
+ * factor exp(-pa_atm.excess x path_factor / max(mu - mu_h, 1e-6)) of the columns that were capped
+ * (a light rig asking for almost no sun; 0 for every other sky). path_factor is 1 for the sun and
+ * moon light; AT1's cloud light (today's half airmass) passes 0.5. The three-argument form is
+ * path_factor 1. The atmosphere is the uniform pa_atm, which LLAtmosphere holds field for field.
+ * Altitudes are in km, the profiles' widths and scales in metres, as in the EEP settings.
+ * Segmented 8-point Gauss-Legendre along the path, cut at every profile kink (layer boundary,
+ * clamp crossings), at the slab's 0.75 H and H, at 4, 10 and 20 scale heights of every
  * exponential layer, where a ray crosses the ground and at the perigee of a downward ray.
+ *
+ * The cut altitudes are searched here on every call (the clamp crossings take 32 bisections);
+ * the C++ computes them once per atmosphere (LLAtmosphere::finalize). AT2 should upload them as a
+ * uniform array computed by the C++ when it binds a sky.
  */
 
 struct PADensityProfile
@@ -36,6 +45,7 @@ struct PAAtmosphere
     float slab_ext;             // ground haze slab, 1/km
     float slab_top_km;
     vec3  ozone_ext;
+    vec3  excess;               // what the capped columns lack (tau per channel); 0 unless a light rig asks for almost no sun
     PADensityProfile rayleigh;
     PADensityProfile mie;
     PADensityProfile absorption;
@@ -197,7 +207,7 @@ void pa_path_roots(float b, float h0, float rg, float alt, out float s_lo, out f
     }
 }
 
-vec3 pa_transmittance(float h_km, float mu, float disc_sin)
+vec3 pa_transmittance(float h_km, float mu, float disc_sin, float path_factor)
 {
     float rg = pa_atm.planet_radius_km;
     float top = pa_atm.top_radius_km - rg;
@@ -212,6 +222,8 @@ vec3 pa_transmittance(float h_km, float mu, float disc_sin)
     {
         return vec3(0.0);
     }
+    // plane-parallel on the excess, in the angle above the observer's horizon: 0 at and below it, continuously; 1 without excess
+    vec3 ex = exp(-pa_atm.excess * (clamp(path_factor, 0.0, 1e6) / max(mu - mu_h, 1e-6)));
 
     float b = r0 * mu;
     float unused;
@@ -219,7 +231,7 @@ vec3 pa_transmittance(float h_km, float mu, float disc_sin)
     pa_path_roots(b, h0, rg, top, unused, path);
     if (!(path > 0.0))
     {
-        return vec3(vis);
+        return vec3(vis) * ex;
     }
 
     float alts[PA_MAX_ALT];
@@ -291,5 +303,10 @@ vec3 pa_transmittance(float h_km, float mu, float disc_sin)
             tau += hw * PA_GL_W[k] * (pa_atm.rayleigh_ext * dr + grey + pa_atm.ozone_ext * dz);
         }
     }
-    return exp(-tau) * vis;
+    return exp(-tau) * vis * ex;
+}
+
+vec3 pa_transmittance(float h_km, float mu, float disc_sin)
+{
+    return pa_transmittance(h_km, mu, disc_sin, 1.0);
 }
