@@ -128,6 +128,7 @@
 #include "llfloaternotificationstabbed.h"   // <FS:SimonLsAlt/> FIRE-35118 - Add idle() processing to delete notifications
 
 #include "llspellcheck.h"
+#include "llshadowmethod.h" // <Vulkanstorm/> shadow method
 #include "llscenemonitor.h"
 #include "llavatarrenderinfoaccountant.h"
 #include "lllocalbitmaps.h"
@@ -3366,6 +3367,22 @@ bool LLAppViewer::initConfiguration()
     // <FS:AO> Re-read user settings again. This is a Firestorm hack to get user settings to override modes
     //Todo, find a cleaner way of doing this via the various set_default arguments.
     loadSettingsFromDirectory("User");
+
+    // <Vulkanstorm> shadow method: once per install, an existing install's soft shadows checkbox
+    // (RenderShadowPCSS) becomes the shadow method; before the command line and window creation
+    {
+        const LLShadowMethod::Migration migration = LLShadowMethod::migrateOnStartup(
+            gSavedSettings.getBOOL("RenderShadowMethodMigrated"), mIsFirstRun, gSavedSettings.getBOOL("RenderShadowPCSS"));
+        if (migration.setMethod)
+        {
+            gSavedSettings.setU32("RenderShadowMethod", migration.method);
+        }
+        if (migration.markMigrated)
+        {
+            gSavedSettings.setBOOL("RenderShadowMethodMigrated", true);
+        }
+    }
+    // </Vulkanstorm>
 
     // <FS:Ansariel> Debug setting to disable log throttle
     nd::logging::setThrottleEnabled(gSavedSettings.getBOOL("FSEnableLogThrottle"));
