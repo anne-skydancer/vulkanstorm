@@ -508,6 +508,26 @@ class ScalarReplyTest(unittest.TestCase):
         self.assertIn("viewer reported", str(cm.exception))
         self.assertEqual(s._discard, set())
 
+    def test_a_late_error_for_a_forgotten_fire_is_still_reported_and_unknown_ones_are_logged(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        msgs = []
+        s._log = msgs.append
+        v = lc.Viewer(s)
+        v.fire("LLFloaterReg", "hideInstance", name="x")        # never answered
+        reqid = s._next_id - 1
+        v.barrier()                                              # forgotten here
+        self.assertEqual(s._discard, set())
+        fv._send(s.reply_pump, {"reqid": reqid, "error": "late"})
+        with self.assertRaises(LeapError) as cm:
+            v.barrier()
+        self.assertIn("late", str(cm.exception))
+        for i in range(7):
+            fv._send(s.reply_pump, {"reqid": 9000 + i, "error": "unknown"})
+        s.ping()
+        self.assertEqual(s.late_errors, 7)
+        self.assertEqual(len([m for m in msgs if m.startswith("WARNING error reply for unknown reqid")]), 5)
+
     def test_a_barrier_empties_the_discard_set_and_a_failed_ping_keeps_it(self):
         fv = FakeViewer()
         s = session_for(fv)
@@ -589,6 +609,41 @@ class DryRunTest(unittest.TestCase):
         v.show_floater(lc.FIXED_SKY, key="new")
         self.assertIsNone(v.find_widget(lc.FIXED_SKY, "htab_panel_settings_sky_hbodies", required=False))
         self.assertTrue(v.find_widget(lc.FIXED_SKY_VIEW, "htab_panel_settings_sky_hbodies"))
+
+    def test_the_fixed_water_editor_is_refused_while_open_and_a_shadowed_sky_editor_is_explained(self):
+        for kind in ("open", "shadowed"):
+            fv = FakeViewer()
+            if kind == "open":
+                fv.floaters["env_fixed_environmentent_water"] = True
+            else:
+                fv.shown.append("env_fixed_environmentent_water")     # built earlier, now hidden: still found first
+            with tempfile.TemporaryDirectory() as tmp:
+                code, run, _ = run_main(fv, tmp, skies=only("no_moon") + only("pbr_default"))
+                info = json.loads((run / "run.json").read_text(encoding="utf-8"))
+                text = " ".join(info["warnings"])
+                self.assertIn("fixed water editor is open" if kind == "open" else "restart the viewer", text)
+
+    def test_hiding_and_showing_the_fixed_editor_drops_the_cached_widget_paths(self):
+        fv = FakeViewer()
+        v = lc.Viewer(session_for(fv))
+        v.show_floater(lc.FIXED_SKY, key="new")
+        v.find_widget(lc.FIXED_SKY_VIEW, "htab_panel_settings_sky_hbodies")
+        key = ("widget", lc.FIXED_SKY_VIEW, "htab_panel_settings_sky_hbodies")
+        self.assertIn(key, v._paths)
+        v.hide_floater(lc.FIXED_SKY)
+        self.assertNotIn(key, v._paths)
+        v.show_floater(lc.FIXED_SKY, key="new")
+        self.assertTrue(v.find_widget(lc.FIXED_SKY_VIEW, "htab_panel_settings_sky_hbodies"))
+
+    def test_dry_run_reports_an_original_sky_combo_value_that_did_not_come_back(self):
+        fv = FakeViewer()
+        fv.refuse_values.add(REGION_DEFAULT)          # the restore of the original combo value is refused
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, _ = run_main(fv, tmp, extra=["--dry-run"])
+            rows = json.loads((run / "dry_run.json").read_text())
+            row = [r for r in rows if r["check"] == "restore sky combo"][0]
+            self.assertTrue(row["detail"].startswith("WARN: "), row)
+            self.assertIn("was not restored", row["detail"])
 
     def test_dry_run_without_deep_warns_that_no_moon_needs_the_fixed_editor(self):
         fv = FakeViewer()

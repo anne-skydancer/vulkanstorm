@@ -435,6 +435,8 @@ class LeapSession:
         self._pending = {}      # reqid -> reply (or None while waiting)
         self._events = []       # (pump, data) not matched to a request
         self._discard = set()   # reqids of fire() operations: their replies are only checked for errors
+        self._recent = set()    # reqids forgotten by the last forget_fired(): a late error reply for one is still reported
+        self.late_errors = 0    # error replies for unknown reqids (the first 5 are logged at WARN)
         self._fired_errors = []
         self._next_id = 1
         self._closed = False
@@ -507,9 +509,17 @@ class LeapSession:
                             self._discard.discard(reqid)
                             if data.get("error"):
                                 self._fired_errors.append(str(data["error"]))
+                        elif reqid in self._recent:
+                            self._recent.discard(reqid)
+                            if data.get("error"):
+                                self._fired_errors.append(str(data["error"]))
                         elif data.get("error"):
-                            # a late reply to a request that timed out (or one whose entry was cleared): dropped
-                            self._log("debug: late error reply for unknown reqid %r dropped: %s" % (reqid, str(data["error"])[:200]))
+                            # a late reply to a request that timed out: dropped, but an error is worth a line
+                            self.late_errors += 1
+                            if self.late_errors <= 5:
+                                self._log("WARNING error reply for unknown reqid %r dropped: %s%s" % (
+                                    reqid, str(data["error"])[:200],
+                                    " (further ones are only counted)" if self.late_errors == 5 else ""))
                     else:
                         self._events.append((pump, data))
                     self._cv.notify_all()
@@ -584,9 +594,11 @@ class LeapSession:
         """Forget the fire() operations still waiting for a reply. Call it only after a ping reply: it follows every
         earlier reply on the wire (LLLeap posts each frame synchronously in order), so an error map for a fired
         operation has already been recorded for take_errors(). Single-threaded callers only; if the ping times out the
-        set is left as it is and a late error is reported at the next barrier."""
+        set is left as it is and a late error is reported at the next barrier. The forgotten reqids are kept in
+        _recent until the following call, so an error that still arrives late is reported by take_errors() too."""
         with self._cv:
-            self._discard.clear()
+            self._recent = self._discard
+            self._discard = set()
 
     def take_errors(self):
         """Errors reported by fire() operations since the last call."""

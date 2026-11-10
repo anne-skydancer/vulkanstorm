@@ -65,6 +65,7 @@ class FakeViewer:
         self.on_op = on_op
         self.frozen = False          # Personal Lighting froze the sky into the local environment
         self.shown = []              # floaters shown, in order
+        self.refuse_values = set()   # setSelectedByValue values the combo refuses (a bare false), to test a restore that fails
         self.clouds_paused = False
         self.floaters = {"phototools": False, "env_adjust_snapshot": False, "env_fixed_environmentent_sky": False}
         self.follow_cam = None
@@ -216,8 +217,10 @@ class FakeViewer:
                 out += [base + n, base + n + "/slider_bar", base + n + "/value_editor"]
         if self.floaters["env_fixed_environmentent_sky"]:
             # the view is named by the floater XML ("Fixed Environment"), not by its LLFloaterReg name
-            base = FL + "Fixed Environment/"
-            out += [FL + "Fixed Environment", base + "htab_panel_settings_sky_hbodies"]
+            # once the water editor (same XML, same view name) has been built it is found first by name
+            view = "Fixed Environment" if "env_fixed_environmentent_water" not in self.shown else "Fixed Environment (shadowed)"
+            base = FL + view + "/"
+            out += [FL + view, base + "htab_panel_settings_sky_hbodies"]
             if self.fixed_tab_sun:
                 for n in ("sun_azimuth", "sun_elevation", "moon_brightness"):
                     out += [base + n, base + n + "/value_editor"]
@@ -232,13 +235,13 @@ class FakeViewer:
                 floater, _, widget = under[2:].partition("//")
                 floater = urllib.parse.unquote(floater)      # LLUI::resolvePath unescapes each part
                 if widget:
-                    sel = [p for p in paths if p.startswith(FL + floater) and (
+                    sel = [p for p in paths if (p == FL + floater or p.startswith(FL + floater + "/")) and (
                         p.rsplit("/", 1)[-1] == widget or ("/" + widget + "/") in p)]
                     sel = sorted(sel, key=len)
                     if not sel:
                         return self._reply(d, {"error": "getPaths request specified invalid \"under\" path: '%s'" % under})
                 else:
-                    sel = [p for p in paths if p.startswith(FL + floater)]
+                    sel = [p for p in paths if p == FL + floater or p.startswith(FL + floater + "/")]
             else:
                 sel = [p for p in paths if p == under or p.startswith(under + "/")]
             return self._reply(d, {"paths": sel})
@@ -327,6 +330,8 @@ class FakeViewer:
             return
 
     def _select_by_value(self, last, d):
+        if d["value"] in self.refuse_values:
+            return False
         if last == "WaterPresetsCombo":
             self.water_combo = d["value"]
             return True
