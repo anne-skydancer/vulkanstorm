@@ -1108,10 +1108,17 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
     S32 shadow_detail = RenderShadowDetail;
 
     F32 scale = gCubeSnapshot ? 1.0f : llmax(0.f, RenderShadowResolutionScale); // Don't scale probe shadow maps
-    // <Vulkanstorm> square sun maps (the cascades are square boxes around their slice's bounding
-    // sphere), the same texel count as the screen-sized ones they replace
-    U32 sun_shadow_map_width = BlurHappySize((U32)sqrtf((F32)resX * (F32)resY), scale);
-    U32 sun_shadow_map_height = sun_shadow_map_width;
+    // <Vulkanstorm> shadow method: Legacy keeps the screen-sized sun maps; PCSS has square ones (the
+    // cascades are square boxes around their slice's bounding sphere) with the same texel count
+    // <ShadowLegacy id="sun-map-size">
+    U32 sun_shadow_map_width = BlurHappySize(resX, scale);
+    U32 sun_shadow_map_height = BlurHappySize(resY, scale);
+    // </ShadowLegacy>
+    if (RenderShadowMethod != 0)
+    {
+        sun_shadow_map_width = BlurHappySize((U32)sqrtf((F32)resX * (F32)resY), scale);
+        sun_shadow_map_height = sun_shadow_map_width;
+    }
     // </Vulkanstorm>
 
     if (shadow_detail > 0)
@@ -11495,6 +11502,676 @@ public:
     }
 };
 
+// <Vulkanstorm> shadow method Legacy: the sun cascade splits of Firestorm 7.2.5 (point cloud of the visible
+// extents, camera-angle blend of the split exponent). Upstream code between the markers, unchanged but for the
+// early return; scripts/shadows/check_legacy_shadows.py compares it with scripts/shadows/legacy_reference.
+// Returns false when nothing is visible (the caller skips the sun shadows and the projector shadows, as upstream).
+bool LLPipeline::computeSunSplitsLegacy(LLCamera& camera, const LLVector3& lightDir, const glm::mat4& saved_view,
+    bool skip_avatar_update, LLVector3& out_up, F32& out_near_clip)
+{
+    // <ShadowLegacy id="sun-splits">
+    //create light space camera matrix
+    LLVector3 at = lightDir;
+
+    LLVector3 up = camera.getAtAxis();
+
+    if (fabsf(up*lightDir) > 0.75f)
+    {
+        up = camera.getUpAxis();
+    }
+
+    up.normVec();
+    at.normVec();
+
+
+    LLCamera main_camera = camera;
+
+    F32 near_clip = 0.f;
+    {
+        //get visible point cloud
+        std::vector<LLVector3> fp;
+
+        main_camera.calcAgentFrustumPlanes(main_camera.mAgentFrustum);
+
+        LLVector3 min,max;
+        getVisiblePointCloud(main_camera,min,max,fp);
+
+        if (fp.empty())
+        {
+            if (!hasRenderDebugMask(RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+            {
+                mShadowCamera[0] = main_camera;
+                mShadowExtents[0][0] = min;
+                mShadowExtents[0][1] = max;
+
+                mShadowFrustPoints[0].clear();
+                mShadowFrustPoints[1].clear();
+                mShadowFrustPoints[2].clear();
+                mShadowFrustPoints[3].clear();
+            }
+            popRenderTypeMask();
+
+            if (!skip_avatar_update)
+            {
+                gAgentAvatarp->updateAttachmentVisibility(gAgentCamera.getCameraMode());
+            }
+
+            return false;
+        }
+
+        //get good split distances for frustum
+        for (U32 i = 0; i < fp.size(); ++i)
+        {
+            glm::vec3 v(fp[i]);
+            v = mul_mat4_vec3(saved_view, v);
+            fp[i] = LLVector3(v);
+        }
+
+        min = fp[0];
+        max = fp[0];
+
+        //get camera space bounding box
+        for (U32 i = 1; i < fp.size(); ++i)
+        {
+            update_min_max(min, max, fp[i]);
+        }
+
+        near_clip    = llclamp(-max.mV[2], 0.01f, 4.0f);
+        F32 far_clip = llclamp(-min.mV[2]*2.f, 16.0f, 512.0f);
+
+        //far_clip = llmin(far_clip, 128.f);
+        far_clip = llmin(far_clip, camera.getFar());
+
+        F32 range = far_clip-near_clip;
+
+        LLVector3 split_exp = RenderShadowSplitExponent;
+
+        F32 da = 1.f-llmax( fabsf(lightDir*up), fabsf(lightDir*camera.getLeftAxis()) );
+
+        da = powf(da, split_exp.mV[2]);
+
+        F32 sxp = split_exp.mV[1] + (split_exp.mV[0]-split_exp.mV[1])*da;
+
+        for (U32 i = 0; i < 4; ++i)
+        {
+            F32 x = (F32)(i+1)/4.f;
+            x = powf(x, sxp);
+            mSunClipPlanes.mV[i] = near_clip+range*x;
+        }
+
+        mSunClipPlanes.mV[0] *= 1.25f; //bump back first split for transition padding
+    }
+    // </ShadowLegacy>
+    out_up = up;
+    out_near_clip = near_clip;
+    return true;
+}
+// </Vulkanstorm>
+
+// <Vulkanstorm> shadow method Legacy: Firestorm 7.2.5's sun cascades, each fitted to the visible receivers in its
+// slice with an orthographic or perspective-warped light projection. Upstream code between the markers, unchanged.
+void LLPipeline::generateSunCascadesLegacy(LLCamera& camera, const LLVector3& lightDir, const LLVector3& up, const F32 (&dist)[5],
+    const LLPlane& shadow_near_clip, const glm::mat4& saved_view, const glm::mat4& saved_proj, const glm::mat4& inv_view,
+    glm::mat4 (&view)[6], glm::mat4 (&proj)[6])
+{
+    // <ShadowLegacy id="sun-cascades">
+    for (S32 j = 0; j < (gCubeSnapshot ? 2 : 4); j++)
+    {
+        if (!hasRenderDebugMask(RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+        {
+            mShadowFrustPoints[j].clear();
+        }
+
+        LLViewerCamera::sCurCameraID = (LLViewerCamera::eCameraID)(LLViewerCamera::CAMERA_SUN_SHADOW0+j);
+
+        //restore render matrices
+        set_current_modelview(saved_view);
+        set_current_projection(saved_proj);
+
+        LLVector3 eye = camera.getOrigin();
+        llassert(eye.isFinite());
+
+        //camera used for shadow cull/render
+        LLCamera shadow_cam;
+
+        //create world space camera frustum for this split
+        shadow_cam = camera;
+        shadow_cam.setFar(16.f);
+
+        LLViewerCamera::updateFrustumPlanes(shadow_cam, false, false, true);
+
+        LLVector3* frust = shadow_cam.mAgentFrustum;
+
+        LLVector3 pn = shadow_cam.getAtAxis();
+
+        LLVector3 min, max;
+
+        //construct 8 corners of split frustum section
+        for (U32 i = 0; i < 4; i++)
+        {
+            LLVector3 delta = frust[i+4]-eye;
+            delta += (frust[i+4]-frust[(i+2)%4+4])*0.05f;
+            delta.normVec();
+            F32 dp = delta*pn;
+            frust[i] = eye + (delta*dist[j]*0.75f)/dp;
+            frust[i+4] = eye + (delta*dist[j+1]*1.25f)/dp;
+        }
+
+        shadow_cam.calcAgentFrustumPlanes(frust);
+        shadow_cam.mFrustumCornerDist = 0.f;
+
+        if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+        {
+            mShadowCamera[j] = shadow_cam;
+        }
+
+        std::vector<LLVector3> fp;
+
+        if (!gPipeline.getVisiblePointCloud(shadow_cam, min, max, fp, lightDir)
+            || j > RenderShadowSplits)
+        {
+            //no possible shadow receivers
+            if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+            {
+                mShadowExtents[j][0] = LLVector3();
+                mShadowExtents[j][1] = LLVector3();
+                mShadowCamera[j+4] = shadow_cam;
+            }
+
+            mRT->shadow[j].bindTarget();
+            {
+                LLGLDepthTest depth(GL_TRUE);
+                mRT->shadow[j].clear();
+            }
+            mRT->shadow[j].flush();
+
+            mShadowError.mV[j] = 0.f;
+            mShadowFOV.mV[j] = 0.f;
+
+            continue;
+        }
+
+        if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+        {
+            mShadowExtents[j][0] = min;
+            mShadowExtents[j][1] = max;
+            mShadowFrustPoints[j] = fp;
+        }
+
+
+        //find a good origin for shadow projection
+        LLVector3 origin;
+
+        //get a temporary view projection
+        view[j] = look(camera.getOrigin(), lightDir, -up);
+
+        std::vector<LLVector3> wpf;
+
+        for (U32 i = 0; i < fp.size(); i++)
+        {
+            glm::vec3 p(fp[i]);
+            p = mul_mat4_vec3(view[j], p);
+            wpf.push_back(LLVector3(p));
+        }
+
+        min = wpf[0];
+        max = wpf[0];
+
+        for (U32 i = 0; i < fp.size(); ++i)
+        { //get AABB in camera space
+            update_min_max(min, max, wpf[i]);
+        }
+
+        // Construct a perspective transform with perspective along y-axis that contains
+        // points in wpf
+        //Known:
+        // - far clip plane
+        // - near clip plane
+        // - points in frustum
+        //Find:
+        // - origin
+
+        //get some "interesting" points of reference
+        LLVector3 center = (min+max)*0.5f;
+        LLVector3 size = (max-min)*0.5f;
+        LLVector3 near_center = center;
+        near_center.mV[1] += size.mV[1]*2.f;
+
+
+        //put all points in wpf in quadrant 0, reletive to center of min/max
+        //get the best fit line using least squares
+        F32 bfm = 0.f;
+        F32 bfb = 0.f;
+
+        for (U32 i = 0; i < wpf.size(); ++i)
+        {
+            wpf[i] -= center;
+            wpf[i].mV[0] = fabsf(wpf[i].mV[0]);
+            wpf[i].mV[2] = fabsf(wpf[i].mV[2]);
+        }
+
+        if (!wpf.empty())
+        {
+            F32 sx = 0.f;
+            F32 sx2 = 0.f;
+            F32 sy = 0.f;
+            F32 sxy = 0.f;
+
+            for (U32 i = 0; i < wpf.size(); ++i)
+            {
+                sx += wpf[i].mV[0];
+                sx2 += wpf[i].mV[0]*wpf[i].mV[0];
+                sy += wpf[i].mV[1];
+                sxy += wpf[i].mV[0]*wpf[i].mV[1];
+            }
+
+            bfm = (sy*sx-wpf.size()*sxy)/(sx*sx-wpf.size()*sx2);
+            bfb = (sx*sxy-sy*sx2)/(sx*sx-bfm*sx2);
+        }
+
+        {
+            // best fit line is y=bfm*x+bfb
+
+            //find point that is furthest to the right of line
+            F32 off_x = -1.f;
+            LLVector3 lp;
+
+            for (U32 i = 0; i < wpf.size(); ++i)
+            {
+                //y = bfm*x+bfb
+                //x = (y-bfb)/bfm
+                F32 lx = (wpf[i].mV[1]-bfb)/bfm;
+
+                lx = wpf[i].mV[0]-lx;
+
+                if (off_x < lx)
+                {
+                    off_x = lx;
+                    lp = wpf[i];
+                }
+            }
+
+            //get line with slope bfm through lp
+            // bfb = y-bfm*x
+            bfb = lp.mV[1]-bfm*lp.mV[0];
+
+            //calculate error
+            mShadowError.mV[j] = 0.f;
+
+            for (U32 i = 0; i < wpf.size(); ++i)
+            {
+                F32 lx = (wpf[i].mV[1]-bfb)/bfm;
+                mShadowError.mV[j] += fabsf(wpf[i].mV[0]-lx);
+            }
+
+            mShadowError.mV[j] /= wpf.size();
+            mShadowError.mV[j] /= size.mV[0];
+
+            if (mShadowError.mV[j] > RenderShadowErrorCutoff)
+            { //just use ortho projection
+                mShadowFOV.mV[j] = -1.f;
+                origin.clearVec();
+                proj[j] = glm::ortho(min.mV[0], max.mV[0],
+                                    min.mV[1], max.mV[1],
+                                    -max.mV[2], -min.mV[2]);
+            }
+            else
+            {
+                //origin is where line x = 0;
+                origin.setVec(0,bfb,0);
+
+                F32 fovz = 1.f;
+                F32 fovx = 1.f;
+
+                LLVector3 zp;
+                LLVector3 xp;
+
+                for (U32 i = 0; i < wpf.size(); ++i)
+                {
+                    LLVector3 atz = wpf[i]-origin;
+                    atz.mV[0] = 0.f;
+                    atz.normVec();
+                    if (fovz > -atz.mV[1])
+                    {
+                        zp = wpf[i];
+                        fovz = -atz.mV[1];
+                    }
+
+                    LLVector3 atx = wpf[i]-origin;
+                    atx.mV[2] = 0.f;
+                    atx.normVec();
+                    if (fovx > -atx.mV[1])
+                    {
+                        fovx = -atx.mV[1];
+                        xp = wpf[i];
+                    }
+                }
+
+                fovx = acos(fovx);
+                fovz = acos(fovz);
+
+                F32 cutoff = llmin((F32) RenderShadowFOVCutoff, 1.4f);
+
+                mShadowFOV.mV[j] = fovx;
+
+                if (fovx < cutoff && fovz > cutoff)
+                {
+                    //x is a good fit, but z is too big, move away from zp enough so that fovz matches cutoff
+                    F32 d = zp.mV[2]/tan(cutoff);
+                    F32 ny = zp.mV[1] + fabsf(d);
+
+                    origin.mV[1] = ny;
+
+                    fovz = 1.f;
+                    fovx = 1.f;
+
+                    for (U32 i = 0; i < wpf.size(); ++i)
+                    {
+                        LLVector3 atz = wpf[i]-origin;
+                        atz.mV[0] = 0.f;
+                        atz.normVec();
+                        fovz = llmin(fovz, -atz.mV[1]);
+
+                        LLVector3 atx = wpf[i]-origin;
+                        atx.mV[2] = 0.f;
+                        atx.normVec();
+                        fovx = llmin(fovx, -atx.mV[1]);
+                    }
+
+                    fovx = acos(fovx);
+                    fovz = acos(fovz);
+
+                    mShadowFOV.mV[j] = cutoff;
+                }
+
+
+                origin += center;
+
+                F32 ynear = -(max.mV[1]-origin.mV[1]);
+                F32 yfar = -(min.mV[1]-origin.mV[1]);
+
+                if (ynear < 0.1f) //keep a sensible near clip plane
+                {
+                    F32 diff = 0.1f-ynear;
+                    origin.mV[1] += diff;
+                    ynear += diff;
+                    yfar += diff;
+                }
+
+                if (fovx > cutoff)
+                { //just use ortho projection
+                    origin.clearVec();
+                    mShadowError.mV[j] = -1.f;
+                    proj[j] = glm::ortho(min.mV[0], max.mV[0],
+                            min.mV[1], max.mV[1],
+                            -max.mV[2], -min.mV[2]);
+                }
+                else
+                {
+                    //get perspective projection
+                    view[j] = glm::inverse(view[j]);
+                    //llassert(origin.isFinite());
+
+                    glm::vec3 origin_agent(origin);
+
+                    //translate view to origin
+                    origin_agent = mul_mat4_vec3(view[j], origin_agent);
+
+                    eye = LLVector3(origin_agent);
+                    //llassert(eye.isFinite());
+                    if (!hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+                    {
+                        mShadowFrustOrigin[j] = eye;
+                    }
+
+                    view[j] = look(LLVector3(origin_agent), lightDir, -up);
+
+                    F32 fx = 1.f/tanf(fovx);
+                    F32 fz = 1.f/tanf(fovz);
+
+                    proj[j] = glm::mat4(-fx, 0, 0, 0,
+                        0, (yfar + ynear) / (ynear - yfar), 0, -1.0f,
+                        0, 0, -fz, 0,
+                        0, (2.f * yfar * ynear) / (ynear - yfar), 0, 0);
+                }
+            }
+        }
+
+        //shadow_cam.setFar(128.f);
+        shadow_cam.setOriginAndLookAt(eye, up, center);
+
+        shadow_cam.setOrigin(0,0,0);
+
+        set_current_modelview(view[j]);
+        set_current_projection(proj[j]);
+
+        LLViewerCamera::updateFrustumPlanes(shadow_cam, false, false, true);
+
+        //shadow_cam.ignoreAgentFrustumPlane(LLCamera::AGENT_PLANE_NEAR);
+        shadow_cam.getAgentPlane(LLCamera::AGENT_PLANE_NEAR).set(shadow_near_clip);
+
+        //translate and scale to from [-1, 1] to [0, 1]
+        glm::mat4 trans(0.5f, 0.0f, 0.0f, 0.0f,
+                        0.0f, 0.5f, 0.0f, 0.0f,
+                        0.0f, 0.0f, 0.5f, 0.0f,
+                        0.5f, 0.5f, 0.5f, 1.0f);
+
+        set_current_modelview(view[j]);
+        set_current_projection(proj[j]);
+
+        set_last_modelview(mShadowModelview[j]);
+        set_last_projection(mShadowProjection[j]);
+
+        mShadowModelview[j] = view[j];
+        mShadowProjection[j] = proj[j];
+        mSunShadowMatrix[j] = trans*proj[j]*view[j]*inv_view;
+
+        stop_glerror();
+
+        mRT->shadow[j].bindTarget();
+        mRT->shadow[j].getViewport(gGLViewport);
+        mRT->shadow[j].clear();
+
+        {
+            static LLCullResult result[4];
+            renderShadow(view[j], proj[j], shadow_cam, result[j], true);
+        }
+
+        mRT->shadow[j].flush();
+
+        if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+        {
+            mShadowCamera[j+4] = shadow_cam;
+        }
+    }
+    // </ShadowLegacy>
+}
+// </Vulkanstorm>
+
+// <Vulkanstorm> shadow method PCSS: the stable sun cascades (stage S1)
+void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& lightDir, const LLVector3& up, const F32 (&dist)[5],
+    const LLPlane& shadow_near_clip, const glm::mat4& saved_view, const glm::mat4& saved_proj, const glm::mat4& inv_view,
+    glm::mat4 (&view)[6], glm::mat4 (&proj)[6])
+{
+    for (S32 j = 0; j < (gCubeSnapshot ? 2 : 4); j++)
+    {
+        if (!hasRenderDebugMask(RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+        {
+            mShadowFrustPoints[j].clear();
+        }
+
+        LLViewerCamera::sCurCameraID = (LLViewerCamera::eCameraID)(LLViewerCamera::CAMERA_SUN_SHADOW0+j);
+
+        //restore render matrices
+        set_current_modelview(saved_view);
+        set_current_projection(saved_proj);
+
+        LLVector3 eye = camera.getOrigin();
+        llassert(eye.isFinite());
+
+        //camera used for shadow cull/render
+        LLCamera shadow_cam;
+
+        //create world space camera frustum for this split
+        shadow_cam = camera;
+        shadow_cam.setFar(16.f);
+
+        LLViewerCamera::updateFrustumPlanes(shadow_cam, false, false, true);
+
+        LLVector3* frust = shadow_cam.mAgentFrustum;
+
+        LLVector3 pn = shadow_cam.getAtAxis();
+
+        // <Vulkanstorm> the slice's corner rays (widened 5 % as before); k = tan of the
+        // angle between a corner ray and the view axis, the same for all four corners
+        F32 corner_k = 0.f;
+        //construct 8 corners of split frustum section
+        for (U32 i = 0; i < 4; i++)
+        {
+            LLVector3 delta = frust[i+4]-eye;
+            delta += (frust[i+4]-frust[(i+2)%4+4])*0.05f;
+            delta.normVec();
+            F32 dp = delta*pn;
+            corner_k = llmax(corner_k, (delta - pn * dp).length() / llmax(dp, 0.001f));
+            frust[i] = eye + (delta*dist[j]*0.75f)/dp;
+            frust[i+4] = eye + (delta*dist[j+1]*1.25f)/dp;
+        }
+
+        shadow_cam.calcAgentFrustumPlanes(frust);
+        shadow_cam.mFrustumCornerDist = 0.f;
+
+        if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+        {
+            mShadowCamera[j] = shadow_cam;
+            mShadowFrustPoints[j].assign(frust, frust + 8);
+        }
+
+        if (j > RenderShadowSplits)
+        { // cascade turned off by RenderShadowSplits
+            if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+            {
+                mShadowExtents[j][0] = LLVector3();
+                mShadowExtents[j][1] = LLVector3();
+                mShadowCamera[j+4] = shadow_cam;
+            }
+
+            mRT->shadow[j].bindTarget();
+            {
+                LLGLDepthTest depth(GL_TRUE);
+                mRT->shadow[j].clear();
+            }
+            mRT->shadow[j].flush();
+
+            mShadowError.mV[j] = 0.f;
+            mShadowFOV.mV[j] = 0.f;
+
+            continue;
+        }
+
+        // the slice's bounding sphere and the snapped orthographic box around it
+        const LLShadowCascadeFit::Sphere sphere = LLShadowCascadeFit::sliceSphere(corner_k, dist[j] * 0.75f, dist[j+1] * 1.25f);
+        const F32 radius = LLShadowCascadeFit::quantizeRadius(sphere.radius);
+        const LLVector3 sphere_centre = eye + pn * sphere.distance;
+
+        if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+        {
+            mShadowExtents[j][0] = sphere_centre - LLVector3(radius, radius, radius);
+            mShadowExtents[j][1] = sphere_centre + LLVector3(radius, radius, radius);
+        }
+
+        view[j] = look(eye, lightDir, -up);
+        const glm::vec3 c = mul_mat4_vec3(view[j], glm::vec3(sphere_centre));
+        const glm::vec3 anchor = mul_mat4_vec3(view[j], glm::vec3(0.f));
+        const LLShadowCascadeFit::Rect box = LLShadowCascadeFit::snappedSquare(c.x, c.y, radius,
+            (F32)mRT->shadow[j].getWidth(), (F32)mRT->shadow[j].getHeight(), anchor.x, anchor.y);
+        const LLShadowCascadeFit::DepthRange depth = LLShadowCascadeFit::depthRange(c.z, radius);
+
+        mShadowError.mV[j] = -1.f; // orthographic (the perspective warp is gone)
+        mShadowFOV.mV[j] = -1.f;
+        proj[j] = glm::ortho(box.min_x, box.max_x, box.min_y, box.max_y, -depth.z_max, -depth.z_min);
+
+        // Caster culling depends only on the camera's frustum slice and the light, never on a
+        // set of visible objects: a caster can shadow a pixel of this cascade only if its
+        // light-space footprint overlaps the slice's (the shader picks the cascade by the
+        // pixel's view depth, inside this slice), so the cull box is the stable box narrowed
+        // to the slice corners' light-space bounds plus 16 texels (filter kernels) and 5 cm
+        // (shadow_offset), from the slice's far side up to the light. Only which casters
+        // are drawn depends on the view, never where the map sits.
+        glm::mat4 cull_proj = proj[j];
+        {
+            glm::vec3 lo = mul_mat4_vec3(view[j], glm::vec3(frust[0]));
+            glm::vec3 hi = lo;
+            for (U32 k = 1; k < 8; ++k)
+            {
+                const glm::vec3 q = mul_mat4_vec3(view[j], glm::vec3(frust[k]));
+                lo = glm::min(lo, q);
+                hi = glm::max(hi, q);
+            }
+            const F32 margin = 16.f * (box.max_x - box.min_x) / llmax((F32)mRT->shadow[j].getWidth(), 1.f) + 0.05f;
+            const F32 cx0 = llmax(box.min_x, lo.x - margin), cx1 = llmin(box.max_x, hi.x + margin);
+            const F32 cy0 = llmax(box.min_y, lo.y - margin), cy1 = llmin(box.max_y, hi.y + margin);
+            const F32 cz0 = llmax(depth.z_min, lo.z - margin);
+            if (cx0 < cx1 && cy0 < cy1 && cz0 < depth.z_max)
+            {
+                cull_proj = glm::ortho(cx0, cx1, cy0, cy1, -depth.z_max, -cz0);
+            }
+        }
+
+        const LLVector3 center(c.x, c.y, c.z);
+        // </Vulkanstorm>
+
+        //shadow_cam.setFar(128.f);
+        shadow_cam.setOriginAndLookAt(eye, up, center);
+
+        shadow_cam.setOrigin(0,0,0);
+
+        set_current_modelview(view[j]);
+        set_current_projection(cull_proj); // <Vulkanstorm/> cull with the receiver-bounded box
+
+        LLViewerCamera::updateFrustumPlanes(shadow_cam, false, false, true);
+
+        set_current_projection(proj[j]); // <Vulkanstorm/>
+
+        //shadow_cam.ignoreAgentFrustumPlane(LLCamera::AGENT_PLANE_NEAR);
+        shadow_cam.getAgentPlane(LLCamera::AGENT_PLANE_NEAR).set(shadow_near_clip);
+
+        //translate and scale to from [-1, 1] to [0, 1]
+        glm::mat4 trans(0.5f, 0.0f, 0.0f, 0.0f,
+                        0.0f, 0.5f, 0.0f, 0.0f,
+                        0.0f, 0.0f, 0.5f, 0.0f,
+                        0.5f, 0.5f, 0.5f, 1.0f);
+
+        set_current_modelview(view[j]);
+        set_current_projection(proj[j]);
+
+        set_last_modelview(mShadowModelview[j]);
+        set_last_projection(mShadowProjection[j]);
+
+        mShadowModelview[j] = view[j];
+        mShadowProjection[j] = proj[j];
+        mSunShadowMatrix[j] = trans*proj[j]*view[j]*inv_view;
+
+        stop_glerror();
+
+        mRT->shadow[j].bindTarget();
+        mRT->shadow[j].getViewport(gGLViewport);
+        mRT->shadow[j].clear();
+
+        {
+            static LLCullResult result[4];
+            renderShadow(view[j], proj[j], shadow_cam, result[j], true);
+        }
+
+        mRT->shadow[j].flush();
+
+        if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+        {
+            mShadowCamera[j+4] = shadow_cam;
+        }
+    }
+}
+// </Vulkanstorm>
+
 void LLPipeline::generateSunShadow(LLCamera& camera)
 {
     if (!sRenderDeferred || RenderShadowDetail <= 0)
@@ -11622,36 +12299,50 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     LLVector3 lightDir = -caster_dir;
     lightDir.normVec();
 
-    // <Vulkanstorm> stable sun cascades (stage S1; llshadowcascadefit.h). A cascade depends only
-    // on the shadow distance, the camera's field of view and position, and the light; no longer
-    // on what the camera happens to see, on which way it turns, or on a per-frame choice of a
-    // perspective warp:
-    //   - splits over [camera near, RenderShadowDistance (capped by the draw distance)] with the
-    //     split exponent's y (Phototools' shadow clarity); the camera-angle blend with x is gone;
-    //   - each cascade covers the bounding sphere of its frustum slice (orientation-invariant,
-    //     radius quantised), orthographic, light view "up" locked to world north, the box moved in
-    //     whole texels of a world-anchored grid;
-    //   - depth range: the sphere plus one radius towards the light; casters nearer the light are
-    //     depth-clamped (renderShadow), and culling keeps them (shadow_near_clip below);
-    //   - every enabled cascade renders, none is cleared for lack of visible receivers.
-    LLVector3 at = lightDir;
+    // <Vulkanstorm> shadow method (RenderShadowMethod): Legacy fits the cascades to what the camera sees, as
+    // Firestorm 7.2.5 does (computeSunSplitsLegacy, generateSunCascadesLegacy: unchanged upstream code, checked by
+    // scripts/shadows/check_legacy_shadows.py); PCSS uses the stable cascades below.
     LLVector3 up;
+    F32 near_clip;
+    if (RenderShadowMethod == 0)
     {
-        const LLShadowCascadeFit::Vec3 u = LLShadowCascadeFit::lightUp({ lightDir.mV[VX], lightDir.mV[VY], lightDir.mV[VZ] });
-        up.set(u.x, u.y, u.z);
-    }
-
-    up.normVec();
-    at.normVec();
-
-    static LLCachedControl<F32> shadow_distance(gSavedSettings, "RenderShadowDistance", 128.f);
-    const F32 near_clip = llclamp(camera.getNear(), 0.01f, 4.0f);
-    const F32 far_clip = llmax(llmin(LLShadowCascadeFit::snapShadowDistance(shadow_distance), camera.getFar()), near_clip + 1.f);
-    {
-        const std::array<F32, 5> splits = LLShadowCascadeFit::splitDistances(near_clip, far_clip, RenderShadowSplitExponent.mV[VY]);
-        for (U32 i = 0; i < 4; ++i)
+        if (!computeSunSplitsLegacy(camera, lightDir, saved_view, skip_avatar_update, up, near_clip))
         {
-            mSunClipPlanes.mV[i] = splits[i + 1];
+            return;
+        }
+    }
+    else
+    {
+        // stable sun cascades (stage S1; llshadowcascadefit.h). A cascade depends only
+        // on the shadow distance, the camera's field of view and position, and the light; no longer
+        // on what the camera happens to see, on which way it turns, or on a per-frame choice of a
+        // perspective warp:
+        //   - splits over [camera near, RenderShadowDistance (capped by the draw distance)] with the
+        //     split exponent's y (Phototools' shadow clarity); the camera-angle blend with x is gone;
+        //   - each cascade covers the bounding sphere of its frustum slice (orientation-invariant,
+        //     radius quantised), orthographic, light view "up" locked to world north, the box moved in
+        //     whole texels of a world-anchored grid;
+        //   - depth range: the sphere plus one radius towards the light; casters nearer the light are
+        //     depth-clamped (renderShadow), and culling keeps them (shadow_near_clip below);
+        //   - every enabled cascade renders, none is cleared for lack of visible receivers.
+        LLVector3 at = lightDir;
+        {
+            const LLShadowCascadeFit::Vec3 u = LLShadowCascadeFit::lightUp({ lightDir.mV[VX], lightDir.mV[VY], lightDir.mV[VZ] });
+            up.set(u.x, u.y, u.z);
+        }
+
+        up.normVec();
+        at.normVec();
+
+        static LLCachedControl<F32> shadow_distance(gSavedSettings, "RenderShadowDistance", 128.f);
+        near_clip = llclamp(camera.getNear(), 0.01f, 4.0f);
+        const F32 far_clip = llmax(llmin(LLShadowCascadeFit::snapShadowDistance(shadow_distance), camera.getFar()), near_clip + 1.f);
+        {
+            const std::array<F32, 5> splits = LLShadowCascadeFit::splitDistances(near_clip, far_clip, RenderShadowSplitExponent.mV[VY]);
+            for (U32 i = 0; i < 4; ++i)
+            {
+                mSunClipPlanes.mV[i] = splits[i + 1];
+            }
         }
     }
     // </Vulkanstorm>
@@ -11675,182 +12366,16 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     }
     else
     {
-        for (S32 j = 0; j < (gCubeSnapshot ? 2 : 4); j++)
+        // <Vulkanstorm> shadow method: the cascades of the chosen method
+        if (RenderShadowMethod == 0)
         {
-            if (!hasRenderDebugMask(RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
-            {
-                mShadowFrustPoints[j].clear();
-            }
-
-            LLViewerCamera::sCurCameraID = (LLViewerCamera::eCameraID)(LLViewerCamera::CAMERA_SUN_SHADOW0+j);
-
-            //restore render matrices
-            set_current_modelview(saved_view);
-            set_current_projection(saved_proj);
-
-            LLVector3 eye = camera.getOrigin();
-            llassert(eye.isFinite());
-
-            //camera used for shadow cull/render
-            LLCamera shadow_cam;
-
-            //create world space camera frustum for this split
-            shadow_cam = camera;
-            shadow_cam.setFar(16.f);
-
-            LLViewerCamera::updateFrustumPlanes(shadow_cam, false, false, true);
-
-            LLVector3* frust = shadow_cam.mAgentFrustum;
-
-            LLVector3 pn = shadow_cam.getAtAxis();
-
-            // <Vulkanstorm> the slice's corner rays (widened 5 % as before); k = tan of the
-            // angle between a corner ray and the view axis, the same for all four corners
-            F32 corner_k = 0.f;
-            //construct 8 corners of split frustum section
-            for (U32 i = 0; i < 4; i++)
-            {
-                LLVector3 delta = frust[i+4]-eye;
-                delta += (frust[i+4]-frust[(i+2)%4+4])*0.05f;
-                delta.normVec();
-                F32 dp = delta*pn;
-                corner_k = llmax(corner_k, (delta - pn * dp).length() / llmax(dp, 0.001f));
-                frust[i] = eye + (delta*dist[j]*0.75f)/dp;
-                frust[i+4] = eye + (delta*dist[j+1]*1.25f)/dp;
-            }
-
-            shadow_cam.calcAgentFrustumPlanes(frust);
-            shadow_cam.mFrustumCornerDist = 0.f;
-
-            if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
-            {
-                mShadowCamera[j] = shadow_cam;
-                mShadowFrustPoints[j].assign(frust, frust + 8);
-            }
-
-            if (j > RenderShadowSplits)
-            { // cascade turned off by RenderShadowSplits
-                if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
-                {
-                    mShadowExtents[j][0] = LLVector3();
-                    mShadowExtents[j][1] = LLVector3();
-                    mShadowCamera[j+4] = shadow_cam;
-                }
-
-                mRT->shadow[j].bindTarget();
-                {
-                    LLGLDepthTest depth(GL_TRUE);
-                    mRT->shadow[j].clear();
-                }
-                mRT->shadow[j].flush();
-
-                mShadowError.mV[j] = 0.f;
-                mShadowFOV.mV[j] = 0.f;
-
-                continue;
-            }
-
-            // the slice's bounding sphere and the snapped orthographic box around it
-            const LLShadowCascadeFit::Sphere sphere = LLShadowCascadeFit::sliceSphere(corner_k, dist[j] * 0.75f, dist[j+1] * 1.25f);
-            const F32 radius = LLShadowCascadeFit::quantizeRadius(sphere.radius);
-            const LLVector3 sphere_centre = eye + pn * sphere.distance;
-
-            if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
-            {
-                mShadowExtents[j][0] = sphere_centre - LLVector3(radius, radius, radius);
-                mShadowExtents[j][1] = sphere_centre + LLVector3(radius, radius, radius);
-            }
-
-            view[j] = look(eye, lightDir, -up);
-            const glm::vec3 c = mul_mat4_vec3(view[j], glm::vec3(sphere_centre));
-            const glm::vec3 anchor = mul_mat4_vec3(view[j], glm::vec3(0.f));
-            const LLShadowCascadeFit::Rect box = LLShadowCascadeFit::snappedSquare(c.x, c.y, radius,
-                (F32)mRT->shadow[j].getWidth(), (F32)mRT->shadow[j].getHeight(), anchor.x, anchor.y);
-            const LLShadowCascadeFit::DepthRange depth = LLShadowCascadeFit::depthRange(c.z, radius);
-
-            mShadowError.mV[j] = -1.f; // orthographic (the perspective warp is gone)
-            mShadowFOV.mV[j] = -1.f;
-            proj[j] = glm::ortho(box.min_x, box.max_x, box.min_y, box.max_y, -depth.z_max, -depth.z_min);
-
-            // Caster culling depends only on the camera's frustum slice and the light, never on a
-            // set of visible objects: a caster can shadow a pixel of this cascade only if its
-            // light-space footprint overlaps the slice's (the shader picks the cascade by the
-            // pixel's view depth, inside this slice), so the cull box is the stable box narrowed
-            // to the slice corners' light-space bounds plus 16 texels (filter kernels) and 5 cm
-            // (shadow_offset), from the slice's far side up to the light. Only which casters
-            // are drawn depends on the view, never where the map sits.
-            glm::mat4 cull_proj = proj[j];
-            {
-                glm::vec3 lo = mul_mat4_vec3(view[j], glm::vec3(frust[0]));
-                glm::vec3 hi = lo;
-                for (U32 k = 1; k < 8; ++k)
-                {
-                    const glm::vec3 q = mul_mat4_vec3(view[j], glm::vec3(frust[k]));
-                    lo = glm::min(lo, q);
-                    hi = glm::max(hi, q);
-                }
-                const F32 margin = 16.f * (box.max_x - box.min_x) / llmax((F32)mRT->shadow[j].getWidth(), 1.f) + 0.05f;
-                const F32 cx0 = llmax(box.min_x, lo.x - margin), cx1 = llmin(box.max_x, hi.x + margin);
-                const F32 cy0 = llmax(box.min_y, lo.y - margin), cy1 = llmin(box.max_y, hi.y + margin);
-                const F32 cz0 = llmax(depth.z_min, lo.z - margin);
-                if (cx0 < cx1 && cy0 < cy1 && cz0 < depth.z_max)
-                {
-                    cull_proj = glm::ortho(cx0, cx1, cy0, cy1, -depth.z_max, -cz0);
-                }
-            }
-
-            const LLVector3 center(c.x, c.y, c.z);
-            // </Vulkanstorm>
-
-            //shadow_cam.setFar(128.f);
-            shadow_cam.setOriginAndLookAt(eye, up, center);
-
-            shadow_cam.setOrigin(0,0,0);
-
-            set_current_modelview(view[j]);
-            set_current_projection(cull_proj); // <Vulkanstorm/> cull with the receiver-bounded box
-
-            LLViewerCamera::updateFrustumPlanes(shadow_cam, false, false, true);
-
-            set_current_projection(proj[j]); // <Vulkanstorm/>
-
-            //shadow_cam.ignoreAgentFrustumPlane(LLCamera::AGENT_PLANE_NEAR);
-            shadow_cam.getAgentPlane(LLCamera::AGENT_PLANE_NEAR).set(shadow_near_clip);
-
-            //translate and scale to from [-1, 1] to [0, 1]
-            glm::mat4 trans(0.5f, 0.0f, 0.0f, 0.0f,
-                            0.0f, 0.5f, 0.0f, 0.0f,
-                            0.0f, 0.0f, 0.5f, 0.0f,
-                            0.5f, 0.5f, 0.5f, 1.0f);
-
-            set_current_modelview(view[j]);
-            set_current_projection(proj[j]);
-
-            set_last_modelview(mShadowModelview[j]);
-            set_last_projection(mShadowProjection[j]);
-
-            mShadowModelview[j] = view[j];
-            mShadowProjection[j] = proj[j];
-            mSunShadowMatrix[j] = trans*proj[j]*view[j]*inv_view;
-
-            stop_glerror();
-
-            mRT->shadow[j].bindTarget();
-            mRT->shadow[j].getViewport(gGLViewport);
-            mRT->shadow[j].clear();
-
-            {
-                static LLCullResult result[4];
-                renderShadow(view[j], proj[j], shadow_cam, result[j], true);
-            }
-
-            mRT->shadow[j].flush();
-
-            if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
-            {
-                mShadowCamera[j+4] = shadow_cam;
-            }
+            generateSunCascadesLegacy(camera, lightDir, up, dist, shadow_near_clip, saved_view, saved_proj, inv_view, view, proj);
         }
+        else
+        {
+            generateSunCascadesStable(camera, lightDir, up, dist, shadow_near_clip, saved_view, saved_proj, inv_view, view, proj);
+        }
+        // </Vulkanstorm>
     }
 
     //hack to disable projector shadows
