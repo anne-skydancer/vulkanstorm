@@ -3,8 +3,8 @@
 
 The ground is lit by one light. It is the sun's by day and the moon's at night, and the two hand over
 smoothly while both are about dark. The sun's light comes from the physical atmosphere (`LLAtmosphere`,
-stage AT0, `indra/newview/llatmosphericlight.h`) instead of the old `exp(-(blue_density + haze_density / 4)
-density_multiplier max_y / lightnorm.y)`. At noon the result is today's, to 1e-11.
+stage AT0, `indra/newview/llatmosphericlight.h`) instead of the old `exp(-(blue_density + haze_density / 4) *
+density_multiplier * max_y / lightnorm.y)`. At noon the result is today's, to 1e-11.
 
 ## The chain (once per main-thread frame)
 
@@ -44,8 +44,17 @@ colour). A sky with `moon_brightness` 0 has no direct light at night.
 
 The clouds have their own handover: at 1.5 km the horizon dips 1.24 degrees, so the sun still shines on the
 clouds after the ground's sunset. The dome and the ground use t; the flat clouds' sun term (`cloudsV.glsl`) uses
-`cloud_moon_blend` = t_cloud and the sun's transmittance at the cloud layer (`cloud_light_transmittance`).
-The L2 cloud map composes: its weight is multiplied by `primary_shadow_strength` (`atmosphericsFuncs.glsl`).
+`cloud_moon_blend` = t_cloud and the sun's transmittance at the cloud layer (`cloud_light_transmittance`), taken
+from the raw `sunlight_color` (the auto-adjust scale of `RenderSkyAutoAdjustSunColorScale` is not applied to the
+clouds; the ground's sun keeps it). The clouds' glow direction (`cloud_light_dir`, the clamped `cloud_dir`) and
+the sun attenuation of the below-cloud haze (`off_axis` in `cloudsV.glsl`) follow the same handover; the dome
+keeps `lightnorm`. The L2 cloud map composes: its weight is multiplied by `primary_shadow_strength`
+(`atmosphericsFuncs.glsl`).
+
+## Limitations
+
+- The cloud self-shade offset (`vary_texcoord1` in `cloudsV.glsl`) stays on `lightnorm`, the ground's light
+  direction, on purpose: it matches the L2 cloud map.
 
 ## Uniforms
 
@@ -54,7 +63,7 @@ The L2 cloud map composes: its weight is multiplied by `primary_shadow_strength`
 | `primary_light_dir` (eye space) | `LLPipeline::bindDeferredShader` | the shaders that took `sun_dir`/`moon_dir` by `sun_up_factor` |
 | `primary_light_color`, `primary_shadow_strength` | `LLSettingsVOSky::applySpecial` (every shader) | `atmosphericsFuncs.glsl` (`sunlit`, the haze), `shadowUtil.glsl` |
 | `sun_moon_blend` (t) | `applySpecial` (sky group) | `skyV.glsl` |
-| `cloud_light_transmittance`, `cloud_moon_blend` | `applySpecial` (sky group) | `cloudsV.glsl` |
+| `cloud_light_transmittance`, `cloud_moon_blend`, `cloud_light_dir` | `applySpecial` (sky group) | `cloudsV.glsl` |
 
 The shadow caster, the PCSS light size, the cloud map's penumbra and HW light 0 follow the primary light. The
 sun shadow pass is skipped while the shadow is invisible.
