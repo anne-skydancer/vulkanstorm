@@ -1,0 +1,303 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+"""Offline tests of the LEAP client, the light check against a fake viewer, and the analysis.
+
+  python -m unittest discover -s scripts/inworld/tests -v
+
+Not covered (needs the live viewer): the real widget paths, key names, the follow camera, the real replies.
+"""
+import csv
+import io
+import json
+import pathlib
+import sys
+import tempfile
+import unittest
+import uuid
+
+HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent))
+
+import analyze_light_check as alc  # noqa: E402
+import light_check as lc  # noqa: E402
+from fake_viewer import FakeViewer, REGION_DEFAULT  # noqa: E402
+from leap_client import (LeapError, LeapSession, ViewerGone, binary_dumps, llsd_loads, notation_dumps,  # noqa: E402
+                         read_frame, write_frame)
+
+SCENARIO = HERE.parent / "scenarios" / "l3_at1_handover.json"
+
+
+class WireTest(unittest.TestCase):
+    SAMPLE = {"a": 1, "b": 2.5, "c": "it's a \\ test\nline", "d": [True, False, None, 7],
+              "e": {"x": uuid.UUID("11111111-2222-3333-4444-555555555555")}, "f": ""}
+
+    def test_notation_roundtrip(self):
+        self.assertEqual(llsd_loads(notation_dumps(self.SAMPLE).encode()), self.SAMPLE)
+
+    def test_binary_roundtrip(self):
+        self.assertEqual(llsd_loads(binary_dumps(self.SAMPLE)), self.SAMPLE)
+
+    def test_notation_literal_forms_the_viewer_accepts(self):
+        self.assertEqual(notation_dumps({"op": "ping", "n": 3, "r": 0.5, "ok": True, "u": None}),
+                         "{'op':'ping','n':i3,'r':r0.5,'ok':true,'u':!}")
+
+    def test_framing(self):
+        buf = io.BytesIO()
+        write_frame(buf, b"hello")
+        write_frame(buf, b"")
+        buf.seek(0)
+        self.assertEqual(read_frame(buf), b"hello")
+        self.assertEqual(read_frame(buf), b"")
+        self.assertIsNone(read_frame(buf))
+        with self.assertRaises(ViewerGone):
+            read_frame(io.BytesIO(b"10:short"))
+        with self.assertRaises(LeapError):
+            read_frame(io.BytesIO(b"x1:"))
+
+    def test_nan_is_refused(self):
+        with self.assertRaises(ValueError):
+            notation_dumps({"v": float("nan")})
+
+
+def session_for(fake):
+    return LeapSession(fake.plugin_in, fake.plugin_out, default_timeout=10).start()
+
+
+class SessionTest(unittest.TestCase):
+    def test_request_reply_events_and_errors(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        self.assertEqual(s.command_pump, "cmd-pump-1")
+        s.ping()
+        r = s.request("LLViewerControl", "get", group="Global", key="CameraAngle")
+        self.assertAlmostEqual(r["value"], 1.047)
+        with self.assertRaises(LeapError):
+            s.request("LLViewerControl", "get", group="Global", key="NoSuchKey")
+        s.listen("StartupState")
+        s.fire("LLStartUp", "postStartupState")
+        ev = s.wait_event("StartupState", lambda d: d["str"] == "STATE_STARTED", timeout=5)
+        self.assertEqual(ev["enum"], 2)
+
+    def test_timeout_when_the_viewer_never_replies(self):
+        fv = FakeViewer(drop_ops=["get"])
+        s = session_for(fv)
+        s.default_timeout = 0.3
+        with self.assertRaises(LeapError):
+            s.request("LLViewerControl", "get", group="Global", key="CameraAngle")
+
+
+class SweepTest(unittest.TestCase):
+    def test_default_sweep(self):
+        e = lc.sweep_elevations()
+        self.assertEqual(len(e), 65)
+        self.assertEqual((e[0], e[-1]), (10.0, -10.0))
+        self.assertIn(0.0, e)
+        self.assertEqual(sum(1 for x in e if abs(x) <= 1.5), 31)
+        self.assertEqual(e[e.index(2.0) + 1], 1.5)
+        steps = [round(abs(a - b), 3) for a, b in zip(e, e[1:])]
+        self.assertEqual(set(steps), {0.5, 0.1})
+        self.assertEqual(e, sorted(e, reverse=True))
+
+    def test_geometry(self):
+        d = lc.sun_direction(0.0, 0.0)
+        self.assertAlmostEqual(d[0], 1.0)
+        d = lc.sun_direction(90.0, 30.0)
+        self.assertAlmostEqual(d[1], -0.8660254, places=6)    # azimuth 90 turns clockwise from east, towards -y
+        cam, focus = lc.camera_params([10, 20, 30], 90.0, 10.0, 2.5, 100.0)
+        self.assertAlmostEqual(cam[2], 32.5)
+        self.assertLess(focus[1], cam[1])
+        self.assertGreater(focus[2], cam[2])
+        self.assertAlmostEqual(lc.horizon_fraction(0, 60), 0.5)
+        self.assertGreater(lc.horizon_fraction(10, 60), 0.6)
+
+
+def scenario_file(tmp, skies=None, **over):
+    sc = json.loads(SCENARIO.read_text(encoding="utf-8"))
+    sc["settle"] = {"post_login_s": 0.0, "after_sky_s": 0.0, "per_step_s": 0.0, "min_frames": 0, "login_timeout_s": 20}
+    sc["sweep"] = {"start": 4.0, "stop": -4.0, "step": 2.0, "fine_step": 0.5, "fine_half_width": 1.0}
+    sc["skies"] = skies or [s for s in sc["skies"] if s["id"] in ("pbr_default", "pbr_sunset_crescent_high", "classic_default")]
+    sc.update(over)
+    p = pathlib.Path(tmp) / "sc.json"
+    p.write_text(json.dumps(sc), encoding="utf-8")
+    return p, sc
+
+
+def run_main(fv, tmp, extra=(), **over):
+    p, sc = scenario_file(tmp, **over)
+    out = pathlib.Path(tmp) / "run"
+    args = lc.parse_args(["--scenario", str(p), "--out", str(out)] + list(extra))
+    s = session_for(fv)
+    code = lc.execute(s, args, lc.load_scenario(p), out)
+    return code, out, sc
+
+
+class FullRunTest(unittest.TestCase):
+    def test_full_run_restores_everything_and_finds_the_pop(self):
+        fv = FakeViewer(pop_in_sky="Sunset")
+        orig_settings = dict(fv.settings)
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, sc = run_main(fv, tmp, extra=["--set", "RenderAtmospherePhysicalLight=false"])
+            self.assertEqual(code, 0)
+            rows = list(csv.DictReader(open(run / "manifest.csv", encoding="utf-8")))
+            elevs = lc.sweep_elevations(4.0, -4.0, 2.0, 0.5, 1.0)
+            self.assertEqual(len(rows), 3 * (1 + len(elevs)))
+            for r in rows:
+                self.assertTrue((run / r["snapshot"]).is_file(), r["snapshot"])
+                self.assertTrue(r["snapshot"].endswith(".png"))
+                self.assertAlmostEqual(float(r["sun_elevation_readback"]), float(r["sun_elevation_deg"]), places=2)
+                self.assertEqual(r["fps"], "60.00")
+            self.assertEqual(rows[0]["kind"], "noon")
+            info = json.loads((run / "run.json").read_text(encoding="utf-8"))
+            self.assertTrue(all(v["status"] == "ok" for v in info["skies"].values()), info["skies"])
+            self.assertEqual(info["skies"]["pbr_default"]["selected"]["how"], "inventory")
+            self.assertEqual(info["skies"]["pbr_default"]["controls"]["probe_ambiance"], 1.0)
+            self.assertEqual(info["skies"]["pbr_sunset_crescent_high"]["moon"]["elevation"], 55.0)
+            # everything restored in the fake viewer
+            self.assertEqual(fv.settings, orig_settings)
+            self.assertIsNone(fv.follow_cam)
+            self.assertEqual(fv.current_sky, REGION_DEFAULT)
+            self.assertFalse(fv.clouds_paused)
+            self.assertFalse(any(fv.floaters.values()), fv.floaters)
+            self.assertIs(info["args"]["set_values"]["RenderAtmospherePhysicalLight"], False)
+            # the analysis finds the injected pop in Sunset only
+            result, text = alc.analyse(run)
+            self.assertTrue(any(p["region"] == "ground" for p in result["skies"]["pbr_sunset_crescent_high"]["pops"]), text)
+            self.assertEqual(result["skies"]["pbr_default"]["pops"], [], text)
+            self.assertTrue((run / "contact_pbr_default.png").is_file())
+            self.assertTrue((run / "analysis_classic_default.csv").is_file())
+
+    def test_stop_file_aborts_and_restores(self):
+        fv = FakeViewer()
+        orig_settings = dict(fv.settings)
+        with tempfile.TemporaryDirectory() as tmp:
+            (pathlib.Path(tmp) / "run").mkdir()
+            (pathlib.Path(tmp) / "run" / "STOP").write_text("")
+            code, run, _ = run_main(fv, tmp)
+            self.assertEqual(code, 2)
+            self.assertEqual(fv.settings, orig_settings)
+            self.assertFalse(any(fv.floaters.values()))
+
+    def test_a_failing_sky_does_not_stop_the_others(self):
+        fv = FakeViewer(snapshot_fails_for="Sunset")
+        orig_settings = dict(fv.settings)
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, _ = run_main(fv, tmp)
+            self.assertEqual(code, 0)
+            info = json.loads((run / "run.json").read_text(encoding="utf-8"))
+            self.assertEqual(info["skies"]["pbr_sunset_crescent_high"]["status"], "failed")
+            self.assertEqual(info["skies"]["classic_default"]["status"], "ok")
+            self.assertEqual(fv.settings, orig_settings)
+            self.assertEqual(fv.current_sky, REGION_DEFAULT)
+
+    def test_fixed_editor_sky_with_tab_switch(self):
+        fv = FakeViewer()
+        with tempfile.TemporaryDirectory() as tmp:
+            skies = [s for s in json.loads(SCENARIO.read_text(encoding="utf-8"))["skies"] if s["id"] == "no_moon"]
+            code, run, _ = run_main(fv, tmp, skies=skies)
+            self.assertEqual(code, 0)
+            info = json.loads((run / "run.json").read_text(encoding="utf-8"))
+            self.assertEqual(info["skies"]["no_moon"]["status"], "ok", info["skies"]["no_moon"])
+            self.assertEqual(fv.sliders.get("moon_brightness"), 0.0)
+
+    def test_knob_missing_on_the_baseline_viewer_is_skipped(self):
+        fv = FakeViewer()
+        del fv.settings["RenderLightHandoverSwing"]
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, sc = run_main(fv, tmp, knobs={"RenderLightHandoverSwing": 0.2, "RenderMoonAdaptationDepth": 8.0})
+            self.assertEqual(code, 0)
+            info = json.loads((run / "run.json").read_text(encoding="utf-8"))
+            self.assertIsNone(info["knobs"]["RenderLightHandoverSwing"])
+            self.assertEqual(info["knobs"]["RenderMoonAdaptationDepth"], 8.0)
+            self.assertEqual(fv.settings["RenderMoonAdaptationDepth"][1], 6.0)   # restored
+
+
+class DryRunTest(unittest.TestCase):
+    def test_dry_run_passes_and_changes_nothing(self):
+        fv = FakeViewer()
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, _ = run_main(fv, tmp, extra=["--dry-run"])
+            rows = json.loads((run / "dry_run.json").read_text())
+            self.assertEqual(code, 0, [r for r in rows if not r["ok"]])
+            self.assertTrue(any(r["check"] == "sky pbr_default" and r["ok"] for r in rows))
+            self.assertEqual(fv.combo, REGION_DEFAULT)   # the highlight was put back
+            self.assertEqual(fv.sky_applied_count, 0)
+            self.assertFalse(any(fv.floaters.values()))
+
+    def test_dry_run_reports_a_missing_operation(self):
+        fv = FakeViewer(drop_ops=["saveSnapshot"])
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, _ = run_main(fv, tmp, extra=["--dry-run"])
+            self.assertEqual(code, 1)
+            rows = json.loads((run / "dry_run.json").read_text())
+            self.assertTrue(any(r["check"] == "api LLViewerWindow" and not r["ok"] for r in rows))
+
+
+class SubprocessTest(unittest.TestCase):
+    def test_script_as_a_real_leap_plugin_over_pipes(self):
+        """light_check.py started as a child process, stdin/stdout carrying the protocol (as --leap does)."""
+        import subprocess
+        import threading
+        fv = FakeViewer()
+        with tempfile.TemporaryDirectory() as tmp:
+            p, _ = scenario_file(tmp)
+            out = pathlib.Path(tmp) / "run"
+            proc = subprocess.Popen([sys.executable, str(HERE.parent / "light_check.py"), "--dry-run", "--scenario", str(p),
+                                     "--out", str(out)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            def pump(src, dst):
+                while True:
+                    chunk = src.read(1)
+                    if not chunk:
+                        return
+                    try:
+                        dst.write(chunk)
+                        dst.flush()
+                    except (OSError, ValueError):
+                        return
+
+            threading.Thread(target=pump, args=(fv.plugin_in, proc.stdin), daemon=True).start()
+            threading.Thread(target=pump, args=(proc.stdout, fv.plugin_out), daemon=True).start()
+            try:
+                err = proc.stderr.read().decode("utf-8", "replace")   # EOF once the plugin has exited
+                proc.wait(timeout=30)
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+            self.assertEqual(proc.returncode, 0, err)
+            self.assertIn("LIGHTCHECK", err)
+            rows = json.loads((out / "dry_run.json").read_text())
+            self.assertTrue(all(r["ok"] for r in rows), [r for r in rows if not r["ok"]])
+
+
+class AnalysisTest(unittest.TestCase):
+    def test_find_pops_ignores_the_step_size_change(self):
+        # a smooth ramp of 0.1 luma per degree: coarse 0.5 steps give 0.05 changes, fine 0.1 steps 0.01: no pop
+        elevs = lc.sweep_elevations()
+        vals = [0.5 + 0.1 * e for e in elevs]
+        _, flagged = alc.find_pops(elevs, vals, 4.0, 0.005)
+        self.assertEqual(flagged, [])
+        vals2 = list(vals)
+        for i in range(30, len(vals2)):
+            vals2[i] -= 0.2        # a step of 0.2 at one place
+        _, flagged = alc.find_pops(elevs, vals2, 4.0, 0.005)
+        self.assertEqual(len(flagged), 1)
+
+    def test_regions_and_luma(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as tmp:
+            im = Image.new("RGB", (100, 100), (0, 0, 0))
+            for y in range(50, 100):
+                for x in range(100):
+                    im.putpixel((x, y), (255, 255, 255))
+            p = pathlib.Path(tmp) / "a.png"
+            im.save(p)
+            regions = {"ground": [0, 0.6, 1, 0.9], "horizon_sky": [0, 0.1, 1, 0.4], "cloud": [0, 0, 1, 0.2]}
+            m, _ = alc.measure(p, regions)
+            self.assertAlmostEqual(m["ground"][0], 1.0, places=3)
+            self.assertAlmostEqual(m["cloud"][0], 0.0, places=3)
+            self.assertAlmostEqual(m["frame"][1], 0.5, places=2)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,71 @@
+{
+  "name": "l3_at1_handover",
+  "description": "PR #447 (L3 + AT1): smooth sun/moon handover. Same scenario for the windows-latest 82080 baseline (the knobs below are then skipped as missing).",
+  "settle": {"post_login_s": 20.0, "after_sky_s": 3.0, "per_step_s": 0.6, "min_frames": 6, "login_timeout_s": 3600},
+  "snapshot": {"width": null, "height": null},
+  "camera": {"enabled": true, "height_m": 2.5, "pitch_deg": 10.0, "look_distance_m": 200.0},
+  "sweep": {"start": 10.0, "stop": -10.0, "step": 0.5, "fine_step": 0.1, "fine_half_width": 1.5},
+  "noon_elevation_deg": 66.0,
+  "pause_clouds": true,
+  "knobs": {
+    "RenderLightHandoverSwing": null,
+    "RenderLightHandoverFade": null,
+    "RenderMoonlightCompensation": null,
+    "RenderMoonAdaptationDepth": null,
+    "RenderAtmosphereHazeSlab": null,
+    "RenderAtmospherePhysicalLight": null
+  },
+  "settings": {},
+  "skies": [
+    {
+      "id": "pbr_default",
+      "label": "PBR Default",
+      "why": "The viewer's default sky made PBR (reflection probe ambiance 1); the reference sky of doc/light/light-reference-numbers.md (row 2), sun 66 degrees at noon.",
+      "names": ["Default"],
+      "fallback_button": "Noon",
+      "controls": {"probe_ambiance": 1.0}
+    },
+    {
+      "id": "pbr_sunset_crescent_high",
+      "label": "PBR sunset, moon high",
+      "why": "Owner check 1/3: a sunset with the moon high in the sky (the swing and the moon's fade-in are the most visible here). Moon 55 degrees up, 90 degrees from the sun.",
+      "names": ["Sunset"],
+      "fallback_button": "Sunset",
+      "controls": {"probe_ambiance": 1.0},
+      "moon": {"azimuth_offset_deg": 90.0, "elevation_deg": 55.0}
+    },
+    {
+      "id": "pbr_sunset_moon_opposite",
+      "label": "PBR sunset, moon rising opposite",
+      "why": "Owner check 1: a warm creator sunset (Bangko 1: the test's reddest low-sun sky) with the moon rising opposite the sun, 12 degrees up.",
+      "names": ["[TOR] SUNSET - Bangko 1", "Bangko 1"],
+      "fallback_button": "Sunset",
+      "controls": {"probe_ambiance": 1.0},
+      "moon": {"azimuth_offset_deg": 180.0, "elevation_deg": 12.0}
+    },
+    {
+      "id": "classic_default",
+      "label": "Classic Default",
+      "why": "Owner check 2: a classic sky (reflection probe ambiance 0, as every shipped sky): noon must match windows-latest, the low sun reddens, haze on fullbright objects.",
+      "names": ["Default"],
+      "fallback_button": "Noon",
+      "controls": {"probe_ambiance": 0.0}
+    },
+    {
+      "id": "yellow_stars_01",
+      "label": "Phototools Yellow Stars 01",
+      "why": "Owner check: the sky with a negative distance multiplier (cloud sun 1.22 against the old formula); noon plus sweep. Skipped if the item is not in the inventory.",
+      "names": ["Phototools- Yellow Stars 01", "Yellow Stars 01"],
+      "optional": true
+    },
+    {
+      "id": "no_moon",
+      "label": "No moon (moon brightness 0)",
+      "why": "Owner check 4: a sky with moon_brightness 0 has no direct light at night. Personal Lighting has no moon brightness slider, so this uses the fixed sky editor on a new sky (Default values) with moon_brightness 0 (classic, ambiance 0). Untested path; optional.",
+      "editor": "fixed",
+      "tab_regex": "sun",
+      "optional": true,
+      "controls": {"moon_brightness": 0.0}
+    }
+  ]
+}
