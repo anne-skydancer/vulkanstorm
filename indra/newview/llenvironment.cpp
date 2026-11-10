@@ -2018,7 +2018,8 @@ void LLEnvironment::updatePrimaryLight()
     st.cloud_moon_weight = (F32)llclamp(rig.cloud_moon_weight, 0.0, 1.0);
     st.color = LLColor3((F32)rig.color.x, (F32)rig.color.y, (F32)rig.color.z);
     st.shadow_strength = (F32)llclamp(rig.light.shadow_strength, 0.0, 1.0);
-    st.moon_weight = (F32)llclamp(rig.light.moon_weight, 0.0, 1.0);
+    st.moon_weight = (F32)llclamp(rig.light.band_weight, 0.0, 1.0);
+    st.moon_avail = (F32)llclamp(rig.light.moon_avail, 0.0, 1.0);
     st.haze_glow_factor = (F32)rig.haze_glow_factor;
     st.light_scale = (F32)rig.light_scale;
     st.shadow_visible = rig.shadow_visible;
