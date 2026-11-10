@@ -21,6 +21,13 @@
  * parts). Nothing in the viewer calls them yet: stage AT1 does. class1/windlight/
  * physicalAtmosphereF.glsl is the GLSL twin of LLAtmosphere::transmittance, held equal by
  * the vectors of scripts/light/gen_transmittance_vectors.py.
+ *
+ * Ozone: the EEP default absorption layer (llsettingssky.cpp absorptionConfigDefault) has a rising
+ * zone of slope -1/25000, which is 0 everywhere, and the sky validator clamps layer slopes and
+ * constants in place (llsettingssky.cpp:211-232, llsettingsbase.cpp verifyFloatRange), so the
+ * skies in use hold a flat layer. No stored default changes: fromLegacy() recognises these
+ * forms (is_stored_ozone_default) and uses Bruneton's ozone_profile() for them. The ozone
+ * coefficients are Bruneton & Neyret's (Precomputed Atmospheric Scattering, 2008).
  */
 
 #ifndef LL_LLATMOSPHERICLIGHT_H
@@ -180,8 +187,10 @@ struct DensityProfile
     double density(double h_m) const
     {
         const DensityLayer& l = (count > 1 && h_m < layer[0].width_m) ? layer[0] : layer[count > 1 ? 1 : 0];
-        const double d = l.exp_term * std::exp(l.exp_scale * h_m) + l.linear * h_m + l.constant;
-        return d < 0.0 ? 0.0 : (d > 1.0 ? 1.0 : d);
+        // no exp when exp_term is 0 (0 * inf is NaN); the exponent is bounded so e^x stays finite
+        const double e = l.exp_term != 0.0 ? l.exp_term * std::exp(std::min(std::max(l.exp_scale * h_m, -80.0), 80.0)) : 0.0;
+        const double d = e + l.linear * h_m + l.constant;
+        return !(d >= 0.0) ? 0.0 : (d > 1.0 ? 1.0 : d); // NaN gives 0
     }
 
     // The altitudes (metres, in no particular order) where density() is not smooth: the layer boundary
@@ -260,20 +269,31 @@ inline DensityProfile ozone_profile()
     return p;
 }
 
-// llsettingssky.cpp absorptionConfigDefault() before AT0 (its rising zone had the slope -1/25000, which
-// is 0 everywhere), to 1e-6 relative. Every EEP sky saved until then carries it.
+// The layer pairs of llsettingssky.cpp absorptionConfigDefault() (-1/25000 rising slope: 0 everywhere) that
+// fromLegacy replaces by ozone_profile(), to 1e-6 relative:
+//   1. as the function builds it:   a = (25000, 0, 0, -1/25000, -2/3), b = (0, 0, 0, -1/15000, 8/3)
+//   2. as a sky holds it after the validator clamped linear to [0,2] and constant to [0,1]
+//      (llsettingssky.cpp:211-232, llsettingsbase.cpp:709-720; every construction path validates):
+//                                   a = (25000, 0, 0, 0, 0),          b = (0, 0, 0, 0, 1)
+//   3. the same for a rising slope of +1/15000 (a sky saved by a build that changed the default):
+//                                   a = (25000, 0, 0, 1/15000, 0),    b = (0, 0, 0, 0, 1)
 inline bool is_stored_ozone_default(const DensityProfile& p)
 {
     if (p.count != 2)
     {
         return false;
     }
-    auto same = [](double a, double b) { return std::fabs(a - b) <= 1e-6 * std::fmax(std::fabs(a), std::fabs(b)) + 1e-12; };
+    auto same = [](double x, double y) { return std::fabs(x - y) <= 1e-6 * std::fmax(std::fabs(x), std::fabs(y)) + 1e-12; };
     const DensityLayer& a = p.layer[0];
     const DensityLayer& b = p.layer[1];
-    return same(a.width_m, 25000.0) && same(a.exp_term, 0.0) && same(a.exp_scale, 0.0) && same(a.linear, -1.0 / 25000.0)
-        && same(a.constant, -2.0 / 3.0) && same(b.width_m, 0.0) && same(b.exp_term, 0.0) && same(b.exp_scale, 0.0)
-        && same(b.linear, -1.0 / 15000.0) && same(b.constant, 8.0 / 3.0);
+    if (!(same(a.width_m, 25000.0) && same(a.exp_term, 0.0) && same(a.exp_scale, 0.0) && same(b.width_m, 0.0)
+          && same(b.exp_term, 0.0) && same(b.exp_scale, 0.0)))
+    {
+        return false;
+    }
+    const bool raw = same(a.linear, -1.0 / 25000.0) && same(a.constant, -2.0 / 3.0) && same(b.linear, -1.0 / 15000.0) && same(b.constant, 8.0 / 3.0);
+    const bool validated = (same(a.linear, 0.0) || same(a.linear, 1.0 / 15000.0)) && same(a.constant, 0.0) && same(b.linear, 0.0) && same(b.constant, 1.0);
+    return raw || validated;
 }
 
 // --- the legacy fields, as the deferred pass receives them ---
@@ -311,7 +331,8 @@ constexpr double GL_W[8] = { 0.1012285362903763, 0.2223810344533745, 0.313706645
 constexpr int MAX_ALTITUDES = 32;                // cut altitudes of one atmosphere
 constexpr int MAX_CUTS = 2 * MAX_ALTITUDES + 3;  // two path roots per altitude, the perigee and the two ends
 // an exponential layer is cut at these multiples of its scale height: the segments between them hold 8-point
-// Gauss-Legendre to about 1e-11 of the layer's column, and nothing is left beyond the last (e^-20)
+// Gauss-Legendre to about 1e-11 of the layer's column (measured for the stock profiles, not guaranteed for
+// others), and nothing is left beyond the last (e^-20)
 constexpr double EXP_CUT_SCALES[3] = { 4.0, 10.0, 20.0 };
 
 inline double finite_or(double x, double fallback)
@@ -447,6 +468,9 @@ struct LLAtmosphere
         const double dm = std::max(fin(sky.density_multiplier), 0.0);
         const double my = std::max(fin(sky.max_y), 0.0);
         const double dist = std::max(fin(sky.distance_multiplier), 0.0);
+        const AtmosphereBounds defaults;
+        const double max_column = (bounds.max_column >= 0.0 && std::isfinite(bounds.max_column)) ? bounds.max_column : defaults.max_column;
+        const double max_ground_haze = (bounds.max_ground_haze >= 0.0 && std::isfinite(bounds.max_ground_haze)) ? bounds.max_ground_haze : defaults.max_ground_haze;
 
         // 1. the column, per channel, as today's sunlight reaches the ground at noon
         double column[3];
@@ -459,9 +483,9 @@ struct LLAtmosphere
             {
                 c = 0.0;
             }
-            if (c > bounds.max_column)
+            if (c > max_column)
             {
-                c = bounds.max_column;
+                c = max_column;
                 clamped |= CLAMP_COLUMN;
             }
             column[k] = c;
@@ -493,9 +517,9 @@ struct LLAtmosphere
         // 3. the ground haze slab: what the legacy distance haze has beyond the exponential profiles, taken
         //    from the aerosol column (never added to it)
         double k_ap = (bd[0] + hd) * dm * dist * 1000.0;
-        if (k_ap > bounds.max_ground_haze)
+        if (k_ap > max_ground_haze)
         {
-            k_ap = bounds.max_ground_haze;
+            k_ap = max_ground_haze;
             clamped |= CLAMP_GROUND_HAZE;
         }
         const double slab_h = std::min(std::max(detail::finite_or(bounds.haze_slab_km, 0.0), 0.0), height);
@@ -523,7 +547,8 @@ struct LLAtmosphere
     // smoothstep(mu_h - disc_sin, mu_h + disc_sin, mu), mu_h = -sqrt(1 - (Rg/(Rg+h))^2).
     // Segmented 8-point Gauss-Legendre along the path, cut at every profile kink, at the slab's 0.75H and H,
     // at EXP_CUT_SCALES scale heights of each exponential layer, where a ray crosses the ground and at the
-    // perigee of a downward ray.
+    // perigee of a downward ray. Accuracy: about 1e-9 absolute for the stock profiles (exponential Rayleigh and
+    // aerosol, Bruneton's ozone), as measured by the test; other profiles are not guaranteed that.
     // A non-finite argument gives 0.
     Vec3 transmittance(double h_km, double mu, double disc_sin) const
     {
@@ -683,7 +708,7 @@ inline Vec3 legacy_transmittance(const LegacySky& sky, double mu, double path_sc
     for (int k = 0; k < 3; ++k)
     {
         double x = (finite_or(bd[k], 0.0) + finite_or(sky.haze_density, 0.0) * 0.25) * finite_or(sky.density_multiplier, 0.0)
-                 * finite_or(sky.max_y, 0.0) * path_scale * air;
+                 * finite_or(sky.max_y, 0.0) * finite_or(path_scale, 1.0) * air;
         x = std::max(x, 0.0);
         const double lin = srgb_to_linear(src[k]);
         t[k] = lin > 1e-9 ? srgb_to_linear(src[k] * std::exp(-x)) / lin : std::exp(-2.4 * x);
@@ -738,6 +763,8 @@ inline Vec3 route_direction(const Vec3& from, const Vec3& to, double t)
 // MOON_PHYSICAL + (compensation - MOON_PHYSICAL) x smoothstep(0, -depth_sin, sun_z)
 inline double moon_compensation(double compensation, double sun_z, double depth_sin)
 {
+    depth_sin = detail::finite_or(depth_sin, 1e-9);
+    sun_z = detail::finite_or(sun_z, 1.0); // not finite: the sun counts as up
     return MOON_PHYSICAL + (compensation - MOON_PHYSICAL) * smoothstep(0.0, -std::max(depth_sin, 1e-9), sun_z);
 }
 
