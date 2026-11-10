@@ -30,5 +30,5 @@ These complete the rules above for every agent (planner, surveyor, coder, review
 - Light and shadow work: everything new together, at the default tier, costs at most today's PCSS-on frame + 5 % (measured against the recorded baseline). Every stage's PR reports its own cost and the running total.
 - No Preferences entries unless the owner asks. Structural parts of a method are debug settings. Tuning panels (such as the Sky tab) and diagnostics live on `vkstorm-devel` only and are left out of every integration into `vkstorm-release`.
 - Bugs are hotfixes (see above), applied to every line the bug exists on. PRs are for features, studies and integrations.
-- CI, workflow and documentation-only changes are validated by `ci-lint` only, never by a viewer build.
+- CI and workflow changes are validated by `ci-lint`; documentation-only changes are not linted and do not require a viewer build.
 - Review threads (Copilot or others) get a reply, with the fixing commit or the reason to decline, and are then resolved; none is left silent or open.
