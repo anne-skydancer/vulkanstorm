@@ -438,11 +438,11 @@ def check_apis(v, need_stats=False):
 # ---------------------------------------------------------------------------------------------
 
 def inventory_roots(v, library_root_id):
-    """(roots, user_roots): folders to search in order, and the user's own. The user's settings folder comes first;
-    the inventory root is used only when there is no settings folder (a search of the root would return every item
-    of the settings folder a second time); the library comes last."""
+    """(roots, user_roots): folders to search, and the user's own. The inventory root contains the settings folder and
+    every other folder, so it is the one user root (searching the settings folder as well would return its items twice, and
+    settings items may be anywhere); the settings folder is used only if the root cannot be found. The library comes last."""
     user = []
-    for ft in ("settings", "root_inv"):
+    for ft in ("root_inv", "settings"):
         try:
             rid = str(v.req("LLInventory", "getBasicFolderID", ft_name=ft).get("id"))
         except LeapError:
@@ -456,31 +456,45 @@ def inventory_roots(v, library_root_id):
     return roots, user
 
 
-ITEM_LIMIT = 25      # items per inventory reply: each is a few hundred bytes, replies stay small
+ITEM_LIMITS = (25, 100, 400)    # replies of a few hundred bytes per item: grow only when the first one is full
 
 
 def find_settings_items(v, roots, name):
-    """Settings items whose name matches `name`, exact (case-insensitive) matches first. Folders are searched in order
-    and the search stops at the first folder that has an exact match; each reply is limited to ITEM_LIMIT items."""
-    exact, partial, seen = [], [], set()
+    """Settings items whose name contains `name`: exact matches (case-sensitive, then case-insensitive) first, then the
+    rest. The viewer's filter is a substring match with no exact option and no paging, and "Default" or "Sunset" are inside
+    dozens of other names, so the exact item can fall outside a small limit: when a reply is full and has no exact match the
+    query is repeated with a larger limit (ITEM_LIMITS). Folders are searched in order, stopping at the first with an exact
+    match."""
+    exact_cs, exact_ci, partial, seen = [], [], [], set()
     for root in roots:
-        try:
-            reply = v.req("LLInventory", "collectDescendantsIf", folder_id=root, name=name, type="settings",
-                          limit=ITEM_LIMIT, timeout=60)
-        except LeapError:
-            continue
         found_exact = False
-        for item in (reply.get("items") or {}).values():
-            aid = str(item.get("asset_id"))
-            if aid in seen or aid == NULL_UUID:
-                continue
-            seen.add(aid)
-            is_exact = str(item.get("name", "")).lower() == name.lower()
-            found_exact = found_exact or is_exact
-            (exact if is_exact else partial).append((str(item.get("name")), aid))
+        for limit in ITEM_LIMITS:
+            try:
+                reply = v.req("LLInventory", "collectDescendantsIf", folder_id=root, name=name, type="settings",
+                              limit=limit, timeout=60)
+            except LeapError:
+                break
+            items = list((reply.get("items") or {}).values())
+            for item in items:
+                aid = str(item.get("asset_id"))
+                iname = str(item.get("name", ""))
+                if aid in seen or aid == NULL_UUID:
+                    continue
+                seen.add(aid)
+                if iname == name:
+                    exact_cs.append((iname, aid))
+                    found_exact = True
+                elif iname.lower() == name.lower():
+                    exact_ci.append((iname, aid))
+                    found_exact = True
+                else:
+                    partial.append((iname, aid))
+            if found_exact or len(items) < limit:
+                break
+            log("inventory: %d items contain %r and none is exact; asking again with a larger limit" % (len(items), name))
         if found_exact:
             break
-    return exact + partial
+    return exact_cs + exact_ci + partial
 
 
 def list_settings(v, roots, name=""):
@@ -488,7 +502,7 @@ def list_settings(v, roots, name=""):
     for root in roots:
         try:
             reply = v.req("LLInventory", "collectDescendantsIf", folder_id=root, name=name, type="settings",
-                          limit=ITEM_LIMIT, timeout=120)
+                          limit=ITEM_LIMITS[0], timeout=120)
         except LeapError:
             continue
         for item in (reply.get("items") or {}).values():
@@ -1003,9 +1017,9 @@ class Run:
         if self.plan is None:
             raise NotRestorable(
                 "cannot restore your current environment safely (Phototools shows sky=%r, water=%r, day cycle=%r). "
-                "Personal Lighting open: %s. Close Personal Lighting and select Region Default or a sky from the "
-                "Phototools Environment tab (a sky you edited in Personal Lighting or the fixed editor has no asset and "
-                "would be lost), then start again. Nothing was changed."
+                "Personal Lighting open: %s. What to do: close Personal Lighting, open Phototools > Environment, click "
+                "'Revert to Region Default' (or select a sky from the list), then relaunch. A sky edited in Personal "
+                "Lighting or the fixed editor has no asset and would be lost. Nothing was changed."
                 % (orig.get("sky_combo"), orig.get("water_combo"), orig.get("daycycle_combo"), orig.get("personal_open")))
         self.save_restore()
 
@@ -1251,8 +1265,12 @@ def dry_run_ui(v, sc, rep, run, args):
             rep.add("sky %s" % spec["id"], True, "no inventory sky from %s: would be skipped or use button %s" % (
                 spec.get("names"), fb), warn=True)
         else:
-            rep.add("sky %s" % spec["id"], False, "no inventory sky from %s; a real run would use the fallback button %s "
-                    "and the data would be of a different sky" % (spec.get("names"), fb))
+            close = []
+            for nm in spec.get("names", []):
+                close += [n for n, _ in find_settings_items(v, run.roots, nm)][:5]
+            rep.add("sky %s" % spec["id"], False, "no inventory sky from %s (closest names: %s); a real run would use the "
+                    "fallback button %s and the data would be of a different sky" % (
+                        spec.get("names"), close[:8] or "none", fb))
     if combo and before not in (None, "None"):
         try:
             v.req("UI", "setSelectedByValue", path=combo, value=as_value(before))

@@ -38,8 +38,8 @@
     {
       "id": "pbr_sunset_moon_opposite",
       "label": "PBR sunset, moon rising opposite",
-      "why": "Owner check 1: a warm creator sunset (Bangko 1: the test's reddest low-sun sky) with the moon rising opposite the sun, 12 degrees up.",
-      "names": ["[TOR] SUNSET - Bangko 1", "Bangko 1"],
+      "why": "Owner check 1: a warm creator sunset (Bangko 2 is in the owner's inventory; Bangko 1, the test's reddest low-sun sky, is the second candidate) with the moon rising opposite the sun, 12 degrees up.",
+      "names": ["[TOR] SUNSET - Bangko 2", "[TOR] SUNSET - Bangko 1"],
       "fallback_button": "Sunset",
       "controls": {"probe_ambiance": 1.0},
       "moon": {"azimuth_offset_deg": 180.0, "elevation_deg": 12.0}

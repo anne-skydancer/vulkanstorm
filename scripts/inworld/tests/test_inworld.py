@@ -183,6 +183,55 @@ class FrameDamageTest(unittest.TestCase):
             self.assertLess(fv.max_frame, 4096)       # the viewer's Windows pipe writer works in 4 KB chunks
 
 
+class InventoryLookupTest(unittest.TestCase):
+    def test_the_exact_name_is_found_among_100_other_names_containing_it(self):
+        fv = FakeViewer(crowd=100)
+        v = lc.Viewer(session_for(fv))
+        roots, user = lc.inventory_roots(v, "00000112-000f-0000-0000-000100bba000")
+        self.assertEqual(user, ["33333333-0000-0000-0000-000000000002"])        # the inventory root, not the settings folder
+        found = lc.find_settings_items(v, roots, "Default")
+        self.assertEqual(found[0], ("Default", str(SKIES["Default"][0])))        # exact, case-sensitive, first
+        self.assertEqual([n for n, _ in found if n == "Default"].__len__(), 2)   # the sky and the day cycle of that name
+        limits = [q[2] for q in fv.inv_queries if q[1] == "Default"]
+        self.assertEqual(limits, [25, 100, 400])                                 # grown only because the replies were full
+        self.assertEqual(len({a for _, a in found}), len(found))                 # no item twice
+
+    def test_a_small_first_reply_is_not_repeated(self):
+        fv = FakeViewer()
+        v = lc.Viewer(session_for(fv))
+        roots, _ = lc.inventory_roots(v, "")
+        lc.find_settings_items(v, roots, "Sunset")
+        self.assertEqual([q[2] for q in fv.inv_queries], [25])
+
+    def test_case_insensitive_exact_name_comes_after_the_case_sensitive_one(self):
+        fv = FakeViewer()
+        v = lc.Viewer(session_for(fv))
+        roots, _ = lc.inventory_roots(v, "")
+        found = lc.find_settings_items(v, roots, "default")
+        self.assertEqual(found[0][0], "Default")                                 # exact only case-insensitively: still first
+
+    def test_a_dry_run_lists_the_closest_names_when_nothing_matches(self):
+        fv = FakeViewer(crowd=3)
+        with tempfile.TemporaryDirectory() as tmp:
+            skies = [{"id": "ghost", "names": ["Default Day"], "fallback_button": "Noon"}]
+            code, run, _ = run_main(fv, tmp, skies=skies, extra=["--dry-run"])
+            rows = {r["check"]: r for r in json.loads((run / "dry_run.json").read_text())}
+            self.assertFalse(rows["sky ghost"]["ok"])
+            self.assertIn("closest names", rows["sky ghost"]["detail"])
+            self.assertIn("Default Day 000", rows["sky ghost"]["detail"])
+
+    def test_the_refusal_says_what_to_do(self):
+        import contextlib
+        fv = FakeViewer(initial_combo="__Regiondefault__", dc_combo="__None__")
+        err = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(err):
+            code, run, _ = run_main(fv, tmp)
+        self.assertEqual(code, 1)
+        self.assertEqual(fv.sky_applied_count, 0)
+        self.assertIn("Revert to Region Default", err.getvalue())
+        self.assertIn("then relaunch", err.getvalue())
+
+
 class SweepTest(unittest.TestCase):
     def test_default_sweep(self):
         e = lc.sweep_elevations()

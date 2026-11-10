@@ -153,8 +153,8 @@ block at offset N" if the frame contains a chunk written twice. The script keeps
 - A widget is found with `LLWindow.getPaths` on `//floater//name`, which lists only that widget's subtree. `getInfo` is not
   used on combo boxes (`LLComboBox::addInfo` lists every item: a big reply with a large sky collection) nor on a whole
   floater; it is used only on buttons, sliders and text fields, and cached. Combo values are read with `UI.getValue`.
-- Inventory searches filter by name, are limited to 25 items, go to the user's settings folder first (the inventory root
-  only when there is no settings folder), then the library, and stop at the first folder with an exact match.
+- Inventory searches filter by name, ask for 25 items and again for 100 and 400 only if the reply was full and had no exact
+  name (the viewer's filter is a substring match: "Default" and "Sunset" sit inside dozens of names), search the inventory root (it contains the settings folder) and then the library, and prefer an exact name, case-sensitive, then case-insensitive.
 - FPS (`LLStats`) is off unless `record_fps`; `LLLeap.getAPIs` is not used.
 
 A frame that cannot be parsed ends the connection as a **protocol error** (exit 5, hex dump in the log, not a claim that the
@@ -172,7 +172,7 @@ and LLViewerControl are the largest, a few KB), `LLStartUp.getStateTable` (about
 |---|---|---|---|
 | `pbr_default` | Default | probe ambiance 1 | the default sky as a PBR sky: the reference of `light-reference-numbers.md` (row 2), sun 66 degrees; owner check 1 |
 | `pbr_sunset_crescent_high` | Sunset | probe 1, moon 55 degrees up, 90 degrees from the sun | owner checks 1 and 3: sunset with the moon high |
-| `pbr_sunset_moon_opposite` | [TOR] SUNSET - Bangko 1 | probe 1, moon 12 degrees up, opposite the sun | owner check 1: moon rising opposite the sun; the test's reddest low-sun sky |
+| `pbr_sunset_moon_opposite` | [TOR] SUNSET - Bangko 2 (Bangko 1 as second candidate) | probe 1, moon 12 degrees up, opposite the sun | owner check 1: moon rising opposite the sun; the test's reddest low-sun sky |
 | `classic_default` | Default | probe ambiance 0 | owner check 2: classic sky, noon must match windows-latest, reddening and haze |
 | `yellow_stars_01` | Phototools- Yellow Stars 01 | as is, optional | owner check: negative distance multiplier, where the cloud sun changes most (1.22); skipped if not in the inventory |
 | `no_moon` | Default, then the fixed editor | `moon_brightness` 0, optional | owner check 4: no direct light at night |

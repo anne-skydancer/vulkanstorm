@@ -26,11 +26,15 @@ SKIES = {   # name -> (asset id, sun azimuth, sun elevation, cloud coverage, haz
 }
 DAYCYCLE_DEFAULT = uuid.UUID("22222222-0000-0000-0000-000000000009")  # same name as a sky, not in the combo
 REGION_DEFAULT = "__Regiondefault__"
+INV_ROOT = "33333333-0000-0000-0000-000000000002"
+SETTINGS_FOLDER = "33333333-0000-0000-0000-000000000001"
 
 
 class FakeViewer:
     def __init__(self, pop_in_sky=None, snapshot_fails_for=None, drop_ops=(), initial_combo=REGION_DEFAULT,
-                 water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0):
+                 water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0, crowd=0):
+        self.crowd = crowd             # inventory items named 'Default Day nnn' that come before the exact ones
+        self.inv_queries = []
         self.break_after_ops = break_after_ops
         v2p_r, v2p_w = os.pipe()
         p2v_r, p2v_w = os.pipe()
@@ -333,14 +337,20 @@ class FakeViewer:
 
     def api_LLInventory(self, op, d):
         if op == "getBasicFolderID":
-            self._reply(d, {"id": uuid.UUID("33333333-0000-0000-0000-000000000001")})
+            self._reply(d, {"id": uuid.UUID(INV_ROOT if d["ft_name"] == "root_inv" else SETTINGS_FOLDER)})
         elif op == "collectDescendantsIf":
+            # the settings folder holds none of the items; they are elsewhere under the inventory root. The filter is a
+            # case-insensitive substring match with a limit, in traversal order, as in llinventorylistener.cpp
+            self.inv_queries.append((str(d["folder_id"]), d.get("name"), d.get("limit")))
             items = {}
-            name = d.get("name", "").lower()
-            entries = [(n, s[0]) for n, s in SKIES.items()] + [("Default", DAYCYCLE_DEFAULT)]
-            for i, (n, aid) in enumerate(entries):
-                if name in n.lower():
-                    items[str(uuid.uuid4())] = {"name": n, "asset_id": aid, "asset_type": "settings"}
+            if str(d["folder_id"]) == INV_ROOT:
+                name = d.get("name", "").lower()
+                limit = d.get("limit") or 10 ** 9
+                entries = ([("Default Day %03d" % i, uuid.uuid4()) for i in range(self.crowd)]
+                           + [(n, s[0]) for n, s in SKIES.items()] + [("Default", DAYCYCLE_DEFAULT)])
+                for n, aid in entries:
+                    if name in n.lower() and len(items) < limit:
+                        items[str(uuid.uuid4())] = {"name": n, "asset_id": aid, "asset_type": "settings"}
             self._reply(d, {"items": items})
 
     def api_LLStats(self, op, d):
