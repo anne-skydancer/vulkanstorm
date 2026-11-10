@@ -140,8 +140,8 @@ void main()
     vec3 blue_weight   = blue_density / combined_haze;
     vec3 haze_weight   = haze_density / combined_haze;
 
-    // Compute sunlight from rel_pos & lightnorm (for long rays like sky)
-    float off_axis = 1.0 / max(1e-6, max(0., rel_pos_norm.y) + lightnorm.y);
+    // Compute sunlight from rel_pos & cloud_light_dir (for long rays like sky); <Vulkanstorm/> L3: the clouds' own handover
+    float off_axis = 1.0 / max(1e-6, max(0., rel_pos_norm.y) + cloud_light_dir.y);
     sunlight *= exp(-light_atten * off_axis);
 
     // Distance
