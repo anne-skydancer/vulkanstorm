@@ -788,7 +788,7 @@ void LLSettingsVOSky::applySpecial(void *ptarget, bool force)
     // <Vulkanstorm> stage L3: the dome and the clouds hand the sun over to the moon with the ground light
     {
         const LLEnvironment::PrimaryLightState& primary = LLEnvironment::instance().getPrimaryLight();
-        shader->uniform1f(LLShaderMgr::SUN_MOON_BLEND, primary.moon_weight);
+        shader->uniform1f(LLShaderMgr::SUN_MOON_BLEND, primary.band_weight);
         shader->uniform3fv(LLShaderMgr::CLOUD_LIGHT_TRANSMITTANCE, primary.cloud_T);
         shader->uniform1f(LLShaderMgr::CLOUD_MOON_BLEND, primary.cloud_moon_weight);
         shader->uniform3fv(LLShaderMgr::CLOUD_LIGHT_DIR, LLVector3(LLEnvironment::instance().getClampedCloudLightNorm().mV));
