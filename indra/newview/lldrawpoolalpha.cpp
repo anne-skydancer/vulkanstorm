@@ -460,7 +460,7 @@ void LLDrawPoolAlpha::bindStochasticMasks(LLGLSLShader* shader)
 {
     if (shader && mStochasticMasks)
     {
-        const S32 channel = shader->enableTexture(LLShaderMgr::ALPHA_ST_MASKS);
+        const S32 channel = shader->enableTexture(LLShaderMgr::STOCH_MASKS);
         if (channel > -1)
         {
             gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, mStochasticMasks);
