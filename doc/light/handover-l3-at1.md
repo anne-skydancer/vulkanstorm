@@ -48,7 +48,7 @@ colour). A sky with `moon_brightness` 0 has no direct light at night.
 
 ## Clouds
 
-The clouds have their own handover (the same elevation band and availability, on the cloud-layer transmittances): at 1.5 km the horizon dips 1.24 degrees, so the sun still shines on the
+The clouds have their own handover (the same swing width and availability, on the cloud-layer transmittances, but the band is centred on -dip instead of 0, dip = acos(R / (R + h)) = 1.24 degrees for the 1.5 km layer on a 6360 km planet: at dusk the clouds stay sunlit after the ground has switched to the moon, at dawn they take the sun before it; the shadow fades are the ground's only; `PrimaryLightParams::horizon_dip_deg`, 0 for the ground, 0 for h <= 0): at 1.5 km the horizon dips 1.24 degrees, so the sun still shines on the
 clouds after the ground's sunset. The dome and the ground use t; the flat clouds' sun term (`cloudsV.glsl`) uses
 `cloud_moon_blend` = t_cloud and the sun's transmittance at the cloud layer (`cloud_light_transmittance`), taken
 from the raw `sunlight_color` (the auto-adjust scale of `RenderSkyAutoAdjustSunColorScale` is not applied to the
@@ -96,6 +96,7 @@ sun shadow pass is skipped while the shadow is invisible.
 - The band: t = 0 above +0.3, 0.5 at 0, 1 below -0.3 degree, monotonic and C1; the shadow fades outside it; the limits of
   the two widths; no moon (below the horizon, or moon_brightness 0): the sun's direction stays; a moon rising during the
   band: no jump in t.
+- The clouds' band: t_cloud 0.5 at -dip, 0 above -dip + swing, 1 below -dip - swing; the dip formula and its degenerate inputs; the ground is bit-identical with or without the cloud height; a dusk where the clouds are still sunlit after the ground switched.
 - The ratio r stays continuous; the moon never above a quarter of the sun's colour; no moon, no direct light at
   night; 2033 horizon, NaN and hostile-setting cases are finite.
 - `scripts/light/gen_atmosphere_vectors.py` (GLSL against C++ for `sunlit`/`amblit`), `check_cloud_shadow.py --check`
