@@ -1871,14 +1871,14 @@ void LLEnvironment::updateShaderUniforms(LLGLSLShader* shader)
 // <Vulkanstorm> stage L3 of the item-4 plan: the sun/moon handover, driven by the physical atmosphere.
 // Everything here is CPU work, once per main-thread frame: LLAtmosphere::fromLegacy and four transmittances
 // (the sun and the moon, at the ground and at the cloud layer), then the stateless primary_light().
-LLColor3 LLEnvironment::getDeferredSunlight(bool with_auto_adjust) const
+LLColor3 LLEnvironment::getDeferredSunlight() const
 {
     LLSettingsSky::ptr_t psky = mCurrentEnvironment ? mCurrentEnvironment->getSky() : LLSettingsSky::ptr_t();
     if (!psky)
     {
         return LLColor3(1.f, 1.f, 1.f);
     }
-    // the normalisation LLPipeline::setupHWLights has always applied to mSunDiffuse
+    // the normalisation LLPipeline::setupHWLights applies to mSunDiffuse
     LLColor3 c = psky->getSunlightColor();
     const F32 max_color = llmax(c.mV[0], c.mV[1], c.mV[2]);
     if (max_color > 1.f)
@@ -1887,15 +1887,12 @@ LLColor3 LLEnvironment::getDeferredSunlight(bool with_auto_adjust) const
     }
     c.clamp();
 
-    // and bindDeferredShader's auto-adjust of a legacy sky
-    if (with_auto_adjust)
+    // and the auto-adjust of a legacy sky
+    static LLCachedControl<bool> should_auto_adjust(gSavedSettings, "RenderSkyAutoAdjustLegacy", false);
+    static LLCachedControl<F32> auto_adjust_sun_color_scale(gSavedSettings, "RenderSkyAutoAdjustSunColorScale", 1.f);
+    if (should_auto_adjust && psky->canAutoAdjust())
     {
-        static LLCachedControl<bool> should_auto_adjust(gSavedSettings, "RenderSkyAutoAdjustLegacy", false);
-        static LLCachedControl<F32> auto_adjust_sun_color_scale(gSavedSettings, "RenderSkyAutoAdjustSunColorScale", 1.f);
-        if (should_auto_adjust && psky->canAutoAdjust())
-        {
-            c *= auto_adjust_sun_color_scale;
-        }
+        c *= auto_adjust_sun_color_scale;
     }
     return c;
 }
@@ -1950,11 +1947,11 @@ void LLEnvironment::updatePrimaryLight()
 
     const LLVector3 sun_dir = psky->getSunDirection();
     const LLVector3 moon_dir = psky->getMoonDirection();
-    const F32 sun_scale = llclamp(psky->getSunScale(), 0.f, 100.f);
-    const F32 moon_scale = llclamp(psky->getMoonScale(), 0.f, 100.f);
+    const F32 sun_scale = psky->getSunScale(); // clamped in compute_primary_light
+    const F32 moon_scale = psky->getMoonScale();
 
     // the sky as the deferred pass receives it (survey 3.3): the source normalised, clamped and auto-adjusted
-    const LLColor3 deferred_sun = getDeferredSunlight(true);
+    const LLColor3 deferred_sun = getDeferredSunlight();
     AL::LegacySky legacy;
     legacy.source = { deferred_sun.mV[0], deferred_sun.mV[1], deferred_sun.mV[2] };
     LLColor3 blue_density = psky->getBlueDensity();
@@ -1996,8 +1993,8 @@ void LLEnvironment::updatePrimaryLight()
     {
         st.dir = LLVector3(0.f, 0.f, 1.f);
     }
-    st.ground_T = to_llvec(rig.light.T);
     st.cloud_T = to_llvec(rig.cloud_T);
+    st.cloud_moon_weight = (F32)llclamp(rig.cloud_moon_weight, 0.0, 1.0);
     st.color = LLColor3((F32)rig.color.x, (F32)rig.color.y, (F32)rig.color.z);
     st.shadow_strength = (F32)llclamp(rig.light.shadow_strength, 0.0, 1.0);
     st.moon_weight = (F32)llclamp(rig.light.moon_weight, 0.0, 1.0);
