@@ -46,6 +46,7 @@
 #include "lldirpicker.h"
 #include "lleventtimer.h"
 #include "llfeaturemanager.h"
+#include "llshadowmethod.h" // <Vulkanstorm/> shadow method
 #include "llfocusmgr.h"
 //#include "llfirstuse.h"
 #include "llfloaterreg.h"
@@ -2242,7 +2243,7 @@ void LLFloaterPreference::refreshEnabledState()
     getChild<LLComboBox>("ShadowMethod")->setEnabled(shadow_method_enabled);
     // the light size only applies to the PCSS method
     getChild<LLSliderCtrl>("ShadowPCSSLightSize")->setEnabled(shadow_method_enabled
-        && gSavedSettings.getU32("RenderShadowMethod") == 1);
+        && LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) == LLShadowMethod::PCSS);
     // </Vulkanstorm>
 
     enabled = false;
